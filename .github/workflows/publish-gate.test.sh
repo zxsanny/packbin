@@ -159,9 +159,27 @@ gate_checks() {
   assert_eq "$(wc -l < "$miss_out/publish-plan.txt" | tr -d ' ')" "5" "AC-4 five languages"
 }
 
+manifest_checks() {
+  grep -q 'PackageLicenseExpression>MIT' "$root/csharp/Packbin.csproj" || fail "csharp license"
+  grep -q '"license": "MIT"' "$root/typescript/package.json" || fail "typescript license"
+  grep -q 'text = "MIT"' "$root/python/pyproject.toml" || fail "python license"
+  grep -q 'license = "MIT"' "$root/rust/Cargo.toml" || fail "rust license"
+  grep -q '<name>MIT</name>' "$root/.github/workflows/publish-inside.sh" || fail "java license"
+}
+
+workflow_checks() {
+  local test_yml="$root/.github/workflows/test.yml"
+  grep -q 'push:' "$test_yml" || fail "AC-5 push"
+  grep -q 'pull_request:' "$test_yml" || fail "AC-5 pull_request"
+  grep -q 'set -euo pipefail' "$test_yml" || fail "AC-5 a failing suite does not fail the job"
+  grep -q 'docker compose -f docker-compose.test.yml run --rm' "$test_yml" || fail "AC-5 suites"
+}
+
 static_checks
 registry_checks
 gate_checks
+manifest_checks
+workflow_checks
 
 if [ "$failures" -ne 0 ]; then
   echo "$failures failure(s)" >&2
