@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import assert from "node:assert/strict"
@@ -65,6 +65,8 @@ describe("packbin", () => {
     assert.equal(toHex(bytes), expectedHex)
     assert.equal(mismatchedBytes(bytes, Buffer.from(expectedHex, "hex")), 0)
     assert.equal(bytes.length, 13)
+    const again = pack(position, positionValue)
+    assert.equal(mismatchedBytes(bytes, again), 0)
   })
 
   it("AC-2 position unpack", () => {
@@ -179,6 +181,15 @@ describe("packbin", () => {
       assert.equal(got.ok, true)
     }
     const elapsed = performance.now() - start
+    assertNoGpu()
     assert.ok(elapsed <= 1000, `elapsed ${elapsed}ms`)
   })
 })
+
+function assertNoGpu() {
+  if (!existsSync("/proc/self/maps")) return
+  const blob = readFileSync("/proc/self/maps", "utf8").toLowerCase()
+  for (const bad of ["libcuda", "libnvidia", "libvulkan", "libopencl", "metal.framework"]) {
+    assert.equal(blob.includes(bad), false, bad)
+  }
+}

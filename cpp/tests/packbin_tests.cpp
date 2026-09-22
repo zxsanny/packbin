@@ -76,6 +76,8 @@ void ac1_position_pack() {
   expect(hex == kGoldenHex, "AC-1 hex");
   expect(packbin::mismatched_bytes(bytes, parse_hex(kGoldenHex)) == 0, "AC-1 mismatched");
   expect(bytes.size() == 13, "AC-1 length 13");
+  auto again = packbin::pack(position_packet(), position_values());
+  expect(packbin::mismatched_bytes(bytes, again) == 0, "AC-1 packed twice");
 }
 
 void ac2_position_unpack() {
@@ -132,18 +134,74 @@ void ac4_flags_and_stored_zero() {
 }
 
 void ac5_short_then_pack() {
-  auto short_buf = parse_hex("4001");
-  auto got = packbin::unpack(position_packet(), short_buf);
+  auto pkt = packbin::packet({
+      packbin::flags("flags",
+                     {packbin::u8("b0"), packbin::u8("b1"), packbin::u8("b2"), packbin::u8("b3"),
+                      packbin::u8("b4"), packbin::u16("wide")}),
+  });
+  auto got = packbin::unpack(pkt, std::vector<std::uint8_t>{0x20, 0x34});
   expect(!got.ok, "AC-5 not ok");
   expect(got.value_count() == 0, "AC-5 value count 0");
   expect(got.short_packet.has_value(), "AC-5 short packet");
   if (got.short_packet) {
-    expect(got.short_packet->field == "sid", "AC-5 field sid");
+    expect(got.short_packet->field == "wide", "AC-5 field wide");
     expect(got.short_packet->needed == 2, "AC-5 needed 2");
     expect(got.short_packet->left == 1, "AC-5 left 1");
   }
   auto bytes = packbin::pack(position_packet(), position_values());
   expect(packbin::to_hex(bytes) == kGoldenHex, "AC-5 pack after short");
+}
+
+void when_group_width() {
+  auto pkt = packbin::packet({
+      packbin::u8("profile"),
+      packbin::when(packbin::eq("profile", packbin::Value{std::uint8_t{0}}), {packbin::u8("shape")}),
+  });
+  packbin::Values miss;
+  miss.emplace("profile", packbin::Value{std::uint8_t{1}});
+  auto miss_bytes = packbin::pack(pkt, miss);
+  expect(miss_bytes.size() == 1, "when miss adds 0");
+
+  packbin::Values hit;
+  hit.emplace("profile", packbin::Value{std::uint8_t{0}});
+  hit.emplace("shape", packbin::Value{std::uint8_t{9}});
+  auto hit_bytes = packbin::pack(pkt, hit);
+  expect(hit_bytes.size() - miss_bytes.size() == 1, "when match adds group width");
+}
+
+void repeat_and_leftover() {
+  auto pkt = packbin::packet({packbin::repeat({packbin::u8("a"), packbin::u8("b")})});
+  auto ok = packbin::unpack(pkt, std::vector<std::uint8_t>{1, 2});
+  expect(ok.ok, "repeat ok");
+  auto it = ok.value.find("a");
+  expect(it != ok.value.end(), "repeat key");
+  if (it != ok.value.end()) {
+    auto const* list = std::get_if<packbin::Value::List>(&it->second.data);
+    expect(list && *list && (*list)->items.size() == 1, "one group");
+  }
+  auto bad = packbin::unpack(pkt, std::vector<std::uint8_t>{1, 2, 3});
+  expect(!bad.ok, "leftover not ok");
+  expect(bad.value_count() == 0, "leftover value count 0");
+  expect(bad.short_packet.has_value(), "leftover short");
+}
+
+void trailing_byte() {
+  auto pkt = packbin::packet({packbin::u8("type")});
+  auto got = packbin::unpack(pkt, std::vector<std::uint8_t>{0x40, 0x99});
+  expect(!got.ok, "trailing not ok");
+  expect(got.value_count() == 0, "trailing value count 0");
+  expect(got.trailing && got.trailing->left == 1, "trailing left 1");
+}
+
+void assert_no_gpu() {
+  std::ifstream in("/proc/self/maps");
+  if (!in)
+    return;
+  std::stringstream buf;
+  buf << in.rdbuf();
+  auto blob = buf.str();
+  for (auto const* bad : {"libcuda", "libnvidia", "libvulkan", "libopencl", "metal.framework"})
+    expect(blob.find(bad) == std::string::npos, bad);
 }
 
 void nfr_round_trips() {
@@ -166,6 +224,7 @@ void nfr_round_trips() {
   expect(ok, "NFR unpack ok");
   expect(ok && std::get<std::int32_t>(last.at("lat").data) == 500000000, "NFR lat");
   expect(ms <= 1000.0, "NFR <= 1s");
+  assert_no_gpu();
   std::cerr << "nfr elapsed_ms " << ms << "\n";
 }
 
@@ -177,6 +236,9 @@ int main() {
   ac3_bytes_match_fixture();
   ac4_flags_and_stored_zero();
   ac5_short_then_pack();
+  when_group_width();
+  repeat_and_leftover();
+  trailing_byte();
   nfr_round_trips();
   if (failures != 0) {
     std::cerr << failures << " failure(s)\n";

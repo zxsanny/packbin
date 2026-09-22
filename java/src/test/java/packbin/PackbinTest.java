@@ -59,6 +59,8 @@ public final class PackbinTest {
         expectEq("AC-1 hex", GOLDEN_HEX, hex);
         expectEq("AC-1 mismatched", 0, mismatched);
         expectEq("AC-1 length", 13, bytes.length);
+        byte[] again = Packbin.pack(TARGET, position());
+        expectEq("AC-1 packed twice", 0, mismatchedBytes(bytes, again));
     }
 
     private static void ac2PositionUnpack() {
@@ -121,11 +123,20 @@ public final class PackbinTest {
     }
 
     private static void ac5ShortBufferThenPositionPack() {
-        Packbin.UnpackResult got = Packbin.unpack(TARGET, parseHex("4001"));
+        Packbin.Packet packet = Packbin.packet(
+                Packbin.flags(
+                        "flags",
+                        Packbin.u8("b0"),
+                        Packbin.u8("b1"),
+                        Packbin.u8("b2"),
+                        Packbin.u8("b3"),
+                        Packbin.u8("b4"),
+                        Packbin.u16("wide")));
+        Packbin.UnpackResult got = Packbin.unpack(packet, new byte[] {0x20, 0x34});
         expectEq("AC-5 value count", 0, got.value.size());
         expectTrue("AC-5 error is ShortPacket", got.error instanceof Packbin.ShortPacket);
         Packbin.ShortPacket missing = (Packbin.ShortPacket) got.error;
-        expectEq("AC-5 field", "sid", missing.field);
+        expectEq("AC-5 field", "wide", missing.field);
         expectEq("AC-5 needed", 2, missing.needed);
         expectEq("AC-5 left", 1, missing.left);
 
@@ -172,7 +183,7 @@ public final class PackbinTest {
         expectEq("trailing left", 1, ((Packbin.TrailingBytes) got.error).left);
     }
 
-    private static void nfrRoundTripsWithinOneSecond() {
+    private static void nfrRoundTripsWithinOneSecond() throws IOException {
         long start = System.nanoTime();
         for (int i = 0; i < 100_000; i++) {
             byte[] bytes = Packbin.pack(TARGET, position());
@@ -186,11 +197,25 @@ public final class PackbinTest {
                 return;
             }
         }
+        assertNoGpu();
         double seconds = (System.nanoTime() - start) / 1_000_000_000.0;
         if (seconds > 1.0) {
             fail("NFR elapsed " + seconds + "s > 1s");
         } else {
             System.out.println("NFR round trips: " + seconds + "s");
+        }
+    }
+
+    private static void assertNoGpu() throws IOException {
+        Path maps = Path.of("/proc/self/maps");
+        if (!Files.exists(maps)) {
+            return;
+        }
+        String blob = Files.readString(maps).toLowerCase(Locale.ROOT);
+        for (String bad : new String[] {"libcuda", "libnvidia", "libvulkan", "libopencl", "metal.framework"}) {
+            if (blob.contains(bad)) {
+                fail("GPU library loaded: " + bad);
+            }
         }
     }
 

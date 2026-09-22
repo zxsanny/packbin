@@ -34,6 +34,8 @@ public class PackbinTests
         Assert.Equal(GoldenHex, hex);
         Assert.Equal(0, mismatched);
         Assert.Equal(13, bytes.Length);
+        var again = Pack.Run(Target, Position);
+        Assert.Equal(0, MismatchedBytes(bytes, again));
     }
 
     [Fact]
@@ -102,11 +104,18 @@ public class PackbinTests
     [Fact]
     public void Ac5_ShortBufferThenPositionPack()
     {
-        var shortBuf = ParseHex("4001");
-        var got = Unpack.Run(Target, shortBuf);
+        var packet = Packet.Of(
+            Field.Flags("flags",
+                Field.U8("b0"),
+                Field.U8("b1"),
+                Field.U8("b2"),
+                Field.U8("b3"),
+                Field.U8("b4"),
+                Field.U16("wide")));
+        var got = Unpack.Run(packet, new byte[] { 0x20, 0x34 });
         Assert.Empty(got.Values);
         var missing = Assert.IsType<ShortPacket>(got.Error);
-        Assert.Equal("sid", missing.Field);
+        Assert.Equal("wide", missing.Field);
         Assert.Equal(2, missing.Needed);
         Assert.Equal(1, missing.Left);
 
@@ -170,7 +179,23 @@ public class PackbinTests
             Assert.Equal(500_000_000, Convert.ToInt32(got.Values["lat"]!, CultureInfo.InvariantCulture));
         }
         watch.Stop();
+        AssertNoGpuLibrary();
         Assert.True(watch.Elapsed.TotalSeconds <= 1.0, $"elapsed {watch.Elapsed.TotalMilliseconds} ms");
+    }
+
+    private static void AssertNoGpuLibrary()
+    {
+        var blob = new System.Text.StringBuilder();
+        if (File.Exists("/proc/self/maps"))
+            blob.Append(File.ReadAllText("/proc/self/maps"));
+        foreach (ProcessModule module in Process.GetCurrentProcess().Modules)
+        {
+            blob.Append(module.ModuleName);
+            blob.Append(module.FileName);
+        }
+        var text = blob.ToString().ToLowerInvariant();
+        foreach (var bad in new[] { "libcuda", "libnvidia", "libvulkan", "libopencl", "metal.framework" })
+            Assert.DoesNotContain(bad, text);
     }
 
     private static int MismatchedBytes(byte[] actual, byte[] expected)

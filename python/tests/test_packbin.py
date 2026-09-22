@@ -59,6 +59,8 @@ def test_ac1_position_pack():
     assert _hex(raw) == POSITION_HEX
     assert _mismatched_bytes(raw, POSITION_HEX) == 0
     assert len(raw) == 13
+    again = pack(POSITION, POSITION_VALUES)
+    assert _mismatched_bytes(again, _hex(raw)) == 0
 
 
 def test_ac2_position_unpack():
@@ -198,4 +200,14 @@ def test_nfr_round_trips():
         got = unpack(POSITION, raw)
         assert got.ok is True
     elapsed = time.perf_counter() - start
+    _assert_no_gpu()
     assert elapsed <= 1.0, f"elapsed {elapsed:.3f}s"
+
+
+def _assert_no_gpu():
+    maps = Path("/proc/self/maps")
+    if not maps.exists():
+        return
+    blob = maps.read_text(errors="replace").lower()
+    for bad in ("libcuda", "libnvidia", "libvulkan", "libopencl", "metal.framework"):
+        assert bad not in blob

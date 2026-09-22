@@ -45,6 +45,8 @@ fn ac1_position_pack() {
     assert_eq!(hex, GOLDEN_HEX);
     assert_eq!(mismatched_bytes(&packed, &parse_hex(GOLDEN_HEX)), 0);
     assert_eq!(packed.len(), 13);
+    let again = pack(&position_packet(), &position_values()).expect("pack again");
+    assert_eq!(mismatched_bytes(&packed, &again), 0);
 }
 
 #[test]
@@ -121,8 +123,18 @@ fn ac4_flags_and_stored_zero() {
 
 #[test]
 fn ac5_short_buffer_then_position_pack() {
-    let pkt = packet(vec![u8("type"), flags("opts", vec![u16("heading")])]);
-    let short = [0x40u8, 0x01];
+    let pkt = packet(vec![flags(
+        "opts",
+        vec![
+            u8("b0"),
+            u8("b1"),
+            u8("b2"),
+            u8("b3"),
+            u8("b4"),
+            u16("wide"),
+        ],
+    )]);
+    let short = [0x20u8, 0x34];
     let err = unpack(&pkt, &short).expect_err("short");
     match err {
         UnpackError::Short(ShortPacket {
@@ -130,9 +142,9 @@ fn ac5_short_buffer_then_position_pack() {
             needed,
             left,
         }) => {
-            assert_eq!(field, "heading");
+            assert_eq!(field, "wide");
             assert_eq!(needed, 2);
-            assert_eq!(left, 0);
+            assert_eq!(left, 1);
         }
         other => panic!("expected ShortPacket, got {:?}", other),
     }
@@ -154,6 +166,7 @@ fn nfr_round_trips_under_one_second() {
     let elapsed = start.elapsed();
     assert_eq!(last.get("type"), Some(&Some(Value::U8(64))));
     assert_eq!(last.get("lat"), Some(&Some(Value::I32(500_000_000))));
+    assert_no_gpu();
     assert!(
         elapsed.as_secs_f64() <= 1.0,
         "elapsed {:?} > 1s",
@@ -246,4 +259,20 @@ fn split_flag_byte_and_be() {
     insert(&mut float_vals, "z", Some(Value::Bytes(vec![9, 8])));
     let float_pkt = packet(vec![f32("x"), f64("y"), bytes("z", 2)]);
     assert_eq!(pack(&float_pkt, &float_vals).unwrap().len(), 14);
+}
+
+fn assert_no_gpu() {
+    let Ok(text) = std::fs::read_to_string("/proc/self/maps") else {
+        return;
+    };
+    let blob = text.to_ascii_lowercase();
+    for bad in [
+        "libcuda",
+        "libnvidia",
+        "libvulkan",
+        "libopencl",
+        "metal.framework",
+    ] {
+        assert!(!blob.contains(bad), "{bad}");
+    }
 }
