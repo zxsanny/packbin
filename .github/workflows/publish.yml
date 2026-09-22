@@ -10,10 +10,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: refuse when the golden row mismatches
-        run: |
-          set -euo pipefail
-          if ! grep -qx 4001000065cd1d00a3e1110100 fixtures/golden.hex; then
-            echo "mismatch count above 0; publishing 0 packages"
-            exit 1
-          fi
+      - name: pack every present language
+        run: bash .github/workflows/publish-gate.sh
+      - name: publish present registries
+        if: success()
+        env:
+          PACKBIN_PUBLISH: "1"
+          PACKBIN_VERSION: ${{ github.ref_name }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NUGET_TOKEN: ${{ secrets.NUGET_TOKEN }}
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          MAVEN_CENTRAL_TOKEN: ${{ secrets.MAVEN_CENTRAL_TOKEN }}
+          MAVEN_GROUP_ID: ${{ secrets.MAVEN_GROUP_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/workflows/publish-registries.sh

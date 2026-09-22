@@ -10,3 +10,4 @@ cpp/build/
 **/__pycache__/
 **/*.pyc
 **/node_modules/
+.github/workflows/out/

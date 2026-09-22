@@ -38,3 +38,5 @@ jobs:
           for lang in csharp typescript python rust cpp java; do
             docker compose -f docker-compose.test.yml run --rm "$lang"
           done
+      - name: publish gate
+        run: bash .github/workflows/publish-gate.test.sh
