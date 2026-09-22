@@ -31,6 +31,8 @@ jobs:
             test -f "$f"
           done
           grep -qx 4001000065cd1d00a3e1110100 fixtures/golden.hex
+      - name: report columns
+        run: bash .github/workflows/report-row.test.sh
       - name: suites
         run: |
           set -euo pipefail

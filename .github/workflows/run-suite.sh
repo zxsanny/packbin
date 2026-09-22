@@ -6,6 +6,7 @@ root="${SRC_ROOT:-.}"
 fixture="${FIXTURE:-$root/fixtures/golden.hex}"
 results="${TEST_RESULTS:-$root/test-results}"
 ok=0
+started=$(date +%s)
 
 grep -qx '4001000065cd1d00a3e1110100' "$fixture" || ok=1
 
@@ -60,11 +61,14 @@ case "$lang" in
     ;;
 esac
 
-mkdir -p "$results"
-line="$lang,$ok"
-if command -v flock >/dev/null 2>&1; then
-  flock "$results/report.lock" sh -c "printf '%s\n' '$line' >> '$results/report.csv'"
+elapsed_ms=$(( ($(date +%s) - started) * 1000 ))
+if [ "$ok" -eq 0 ]; then
+  result=PASS
+  message=
 else
-  printf '%s\n' "$line" >> "$results/report.csv"
+  result=FAIL
+  message="suite failed"
 fi
+TEST_RESULTS="$results" SRC_ROOT="$root" bash "$root/.github/workflows/report-row.sh" \
+  "$lang" "$lang suite" "$elapsed_ms" "$result" "$message"
 exit "$ok"
