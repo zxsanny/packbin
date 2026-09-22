@@ -35,7 +35,6 @@ need typescript NPM_TOKEN
 need python PYPI_TOKEN
 need rust CARGO_REGISTRY_TOKEN
 need java MAVEN_CENTRAL_TOKEN
-need java MAVEN_GROUP_ID
 
 run_inside() {
   local lang="$1"
@@ -53,7 +52,6 @@ run_inside() {
     -e NPM_TOKEN \
     -e PYPI_TOKEN \
     -e CARGO_REGISTRY_TOKEN \
-    -e MAVEN_GROUP_ID \
     "$lang" "exec /src/.github/workflows/publish-inside.sh $lang"
 }
 

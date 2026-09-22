@@ -21,7 +21,7 @@ static_checks() {
   local test_yml="$root/.github/workflows/test.yml"
   local publish_yml="$root/.github/workflows/publish.yml"
   local registries="$root/.github/workflows/publish-registries.sh"
-  for token in NPM_TOKEN NUGET_TOKEN PYPI_TOKEN CARGO_REGISTRY_TOKEN MAVEN_CENTRAL_TOKEN MAVEN_GROUP_ID; do
+  for token in NPM_TOKEN NUGET_TOKEN PYPI_TOKEN CARGO_REGISTRY_TOKEN MAVEN_CENTRAL_TOKEN; do
     if grep -q "$token" "$test_yml"; then
       fail "test workflow contains $token"
     fi
@@ -65,19 +65,24 @@ exit 0
 EOF
   chmod +x "$bin/dotnet" "$bin/curl"
 
-  printf 'csharp\njava\n' > "$plan"
+  if grep -q 'MAVEN_GROUP_ID' "$here/publish-registries.sh" || grep -q 'MAVEN_GROUP_ID' "$here/publish-inside.sh"; then
+    fail "Java publish still reads MAVEN_GROUP_ID"
+  fi
+  if ! grep -q '<groupId>packbin</groupId>' "$here/publish-inside.sh"; then
+    fail "Java group id is not packbin"
+  fi
+  printf 'csharp\n' > "$plan"
   set +e
   PACKBIN_PUBLISH=1 PACKBIN_DOCKER=0 PACKBIN_PLAN="$plan" PACKBIN_OUT="$tmp" \
     PACKBIN_PUBLISH_LOG="$log" PATH="$bin:$PATH" \
-    NUGET_TOKEN=test \
     bash "$here/publish-registries.sh" >"$tmp/out.txt" 2>"$tmp/err.txt"
   local code=$?
   set -e
   if [ "$code" -eq 0 ]; then
-    fail "java publish ran without MAVEN_GROUP_ID"
+    fail "csharp publish ran without NUGET_TOKEN"
   fi
   if [ -s "$log" ]; then
-    fail "a registry write ran before the group id check"
+    fail "a registry write ran before the token check"
   fi
 
   : > "$log"
