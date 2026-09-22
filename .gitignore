@@ -1,0 +1,5 @@
+_docs/_autodev_state.md
+.env
+**/bin/
+**/obj/
+test-results/

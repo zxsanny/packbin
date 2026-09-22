@@ -1,0 +1,19 @@
+name: publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: refuse when the golden row mismatches
+        run: |
+          set -euo pipefail
+          if ! grep -qx 4001000065cd1d00a3e1110100 fixtures/golden.hex; then
+            echo "mismatch count above 0; publishing 0 packages"
+            exit 1
+          fi

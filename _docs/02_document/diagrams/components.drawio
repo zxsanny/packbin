@@ -1,0 +1,26 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="components" id="packbin-components">
+    <mxGraphModel>
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="caller" value="Caller" vertex="1" parent="1">
+          <mxGeometry x="40" y="120" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="cs" value="C# package" vertex="1" parent="1">
+          <mxGeometry x="240" y="40" width="160" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="ts" value="TypeScript package" vertex="1" parent="1">
+          <mxGeometry x="240" y="200" width="160" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="fix" value="Golden fixture" vertex="1" parent="1">
+          <mxGeometry x="480" y="120" width="140" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="caller" target="cs"/>
+        <mxCell id="e2" edge="1" parent="1" source="caller" target="ts"/>
+        <mxCell id="e3" edge="1" parent="1" source="cs" target="fix"/>
+        <mxCell id="e4" edge="1" parent="1" source="ts" target="fix"/>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

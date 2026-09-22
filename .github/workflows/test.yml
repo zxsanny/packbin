@@ -1,0 +1,40 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  scaffold:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: required files and golden row
+        run: |
+          set -euo pipefail
+          for d in csharp typescript python rust cpp; do
+            test -d "$d"
+            test -d "$d/tests"
+          done
+          test -d java
+          test -d java/src/test
+          for f in \
+            fixtures/golden.hex \
+            .github/workflows/test.yml \
+            .github/workflows/publish.yml \
+            .github/workflows/run-suite.sh \
+            docker-compose.test.yml \
+            .dockerignore \
+            .env.example \
+            LICENSE
+          do
+            test -f "$f"
+          done
+          grep -qx 4001000065cd1d00a3e1110100 fixtures/golden.hex
+      - name: suites
+        run: |
+          set -euo pipefail
+          mkdir -p test-results
+          for lang in csharp typescript python rust cpp java; do
+            docker compose -f docker-compose.test.yml run --rm "$lang"
+          done
