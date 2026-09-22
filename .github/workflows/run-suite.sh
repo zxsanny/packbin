@@ -45,18 +45,13 @@ case "$lang" in
     fi
     ;;
   cpp)
-    if [ -f "$root/cpp/CMakeLists.txt" ]; then
-      build="$root/cpp/build"
-      run cmake -S "$root/cpp" -B "$build"
-      run cmake --build "$build"
-      run ctest --test-dir "$build" --output-on-failure
+    if [ -f "$root/cpp/Makefile" ]; then
+      run make -C "$root/cpp" test
     fi
     ;;
   java)
-    if [ -f "$root/java/pom.xml" ]; then
-      run mvn -f "$root/java/pom.xml" -B test
-    elif [ -f "$root/java/build.gradle" ] || [ -f "$root/java/build.gradle.kts" ]; then
-      run bash -lc "cd '$root/java' && gradle test --info"
+    if [ -x "$root/java/test.sh" ] || [ -f "$root/java/test.sh" ]; then
+      run bash "$root/java/test.sh"
     fi
     ;;
   *)
