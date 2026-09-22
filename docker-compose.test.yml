@@ -2,7 +2,7 @@ services:
   csharp:
     image: mcr.microsoft.com/dotnet/sdk:10.0
     working_dir: /src
-    entrypoint: ["bash", "-lc"]
+    entrypoint: ["bash", "-c"]
     command: ["exec /src/.github/workflows/run-suite.sh csharp"]
     environment:
       SRC_ROOT: /src
@@ -15,7 +15,7 @@ services:
   typescript:
     image: node:24
     working_dir: /src
-    entrypoint: ["bash", "-lc"]
+    entrypoint: ["bash", "-c"]
     command: ["exec /src/.github/workflows/run-suite.sh typescript"]
     environment:
       SRC_ROOT: /src
@@ -28,7 +28,7 @@ services:
   python:
     image: python:3.14
     working_dir: /src
-    entrypoint: ["bash", "-lc"]
+    entrypoint: ["bash", "-c"]
     command: ["exec /src/.github/workflows/run-suite.sh python"]
     environment:
       SRC_ROOT: /src
@@ -41,7 +41,7 @@ services:
   rust:
     image: rust:1.98
     working_dir: /src
-    entrypoint: ["bash", "-lc"]
+    entrypoint: ["bash", "-c"]
     command: ["exec /src/.github/workflows/run-suite.sh rust"]
     environment:
       SRC_ROOT: /src
@@ -54,7 +54,7 @@ services:
   cpp:
     image: gcc:16
     working_dir: /src
-    entrypoint: ["bash", "-lc"]
+    entrypoint: ["bash", "-c"]
     command: ["exec /src/.github/workflows/run-suite.sh cpp"]
     environment:
       SRC_ROOT: /src
@@ -67,7 +67,7 @@ services:
   java:
     image: eclipse-temurin:26-jdk
     working_dir: /src
-    entrypoint: ["bash", "-lc"]
+    entrypoint: ["bash", "-c"]
     command: ["exec /src/.github/workflows/run-suite.sh java"]
     environment:
       SRC_ROOT: /src

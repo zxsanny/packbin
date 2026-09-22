@@ -3,3 +3,8 @@ _docs/_autodev_state.md
 **/bin/
 **/obj/
 test-results/
+.venv/
+**/.pytest_cache/
+**/__pycache__/
+**/*.pyc
+**/node_modules/

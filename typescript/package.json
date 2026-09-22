@@ -1,0 +1,19 @@
+{
+  "name": "packbin",
+  "version": "0.1.0",
+  "description": "Pack and unpack a caller-owned field list",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "node --test tests/*.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

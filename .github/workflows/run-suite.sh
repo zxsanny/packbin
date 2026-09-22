@@ -31,7 +31,12 @@ case "$lang" in
     ;;
   python)
     if [ -f "$root/python/pyproject.toml" ]; then
-      run python -m pytest -v --tb=short "$root/python/tests"
+      venv="${PACKBIN_PYTEST_VENV:-/tmp/packbin-pytest}"
+      if [ ! -x "$venv/bin/pytest" ]; then
+        python -m venv "$venv"
+        "$venv/bin/pip" install pytest
+      fi
+      run "$venv/bin/python" -m pytest -v --tb=short "$root/python/tests"
     fi
     ;;
   rust)

@@ -1,0 +1,10 @@
+[package]
+name = "packbin"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Pack and unpack a caller-owned field list"
+readme = false
+
+[lib]
+path = "src/lib.rs"
