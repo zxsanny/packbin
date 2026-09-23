@@ -1,6 +1,8 @@
 # packbin
 Binary packing and unpacking across languages, declarative mapping, and zero overhead in the binary data.
+
 Both sides keep the same field list. The bytes are only the values.
+
 Can be used for WebSocket, TCP, UDP, and other means of efficient communication
 
 ## Example
