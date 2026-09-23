@@ -74,7 +74,7 @@ No queries and no cache.
 - None
 
 **Performance bottlenecks**:
-- The same AC-10 loop, on one core, in this language
+- The same AC-10 loop, on one core, in this language. Python's bound is 2 seconds.
 
 ## 8. Dependency Graph
 

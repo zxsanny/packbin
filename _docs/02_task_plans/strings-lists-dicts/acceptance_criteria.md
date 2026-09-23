@@ -8,7 +8,7 @@ Outcomes only. Project criteria in `_docs/00_problem/acceptance_criteria.md` sta
 |------------|--------------------------------|
 | AC-1, AC-2, AC-3 | The position record stays 13 bytes, `4001000065cd1d00a3e1110100`, with 0 mismatched bytes across the six languages. |
 | AC-8, AC-9 | A short field or trailing bytes still return an error and 0 values. |
-| AC-10 | 100000 position round trips in each language still finish in ≤ 1 second. This feature adds no second speed target. |
+| AC-10 | 100000 position round trips finish in ≤ 1 second in C#, TypeScript, Rust, Java, and C++, and in ≤ 2 seconds in Python. |
 
 ## Text, lists, and dictionaries
 

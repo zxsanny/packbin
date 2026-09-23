@@ -3,6 +3,16 @@ set -euo pipefail
 
 root="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$root/.." && pwd)"
+
+if [ -n "${JAVA_HOME:-}" ] && [ -x "$JAVA_HOME/bin/javac" ]; then
+  export PATH="$JAVA_HOME/bin:$PATH"
+elif ! command -v javac >/dev/null 2>&1 && [ -x /usr/libexec/java_home ]; then
+  JAVA_HOME="$(/usr/libexec/java_home)"
+  export JAVA_HOME
+  export PATH="$JAVA_HOME/bin:$PATH"
+fi
+command -v javac >/dev/null 2>&1 || { echo "javac not found" >&2; exit 1; }
+command -v java >/dev/null 2>&1 || { echo "java not found" >&2; exit 1; }
 main_out="$root/out/main"
 test_out="$root/out/test"
 

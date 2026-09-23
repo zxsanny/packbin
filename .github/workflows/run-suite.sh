@@ -22,7 +22,7 @@ case "$lang" in
     shopt -s nullglob
     projects=("$root"/csharp/*.csproj)
     if [ "${#projects[@]}" -gt 0 ]; then
-      run dotnet test "$root/csharp" -v n --nologo
+      run env MSBUILDDISABLENODEREUSE=1 dotnet test "$root/csharp" -v n --nologo
     fi
     ;;
   typescript)

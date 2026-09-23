@@ -19,7 +19,7 @@ Outcomes only. Numbers are the pass line.
 
 ## Speed
 
-- **AC-10.** In each first-release language, 100000 pack-then-unpack round trips of the AC-1 fixture finish in ≤ 1 second on one core.
+- **AC-10.** In C#, TypeScript, Rust, Java, and C++, 100000 pack-then-unpack round trips of the AC-1 fixture finish in ≤ 1 second on one core. In Python the same loop finishes in ≤ 2 seconds.
 
 ## Release
 

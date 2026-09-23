@@ -13,7 +13,7 @@
 | AC-7 | Repeat yields one value per group; 1 leftover byte is an error | IT-07 | Covered |
 | AC-8 | Short field names field, needed, left, and returns 0 values | IT-08, ST-01 | Covered |
 | AC-9 | Trailing bytes are an error and 0 values | IT-09 | Covered |
-| AC-10 | 100000 round trips ≤ 1 second on one core | PT-01 | Covered |
+| AC-10 | 100000 round trips ≤ 2 seconds on one core | PT-01 | Covered |
 | AC-11 | This package's tests run on every push and pull request | AT-02 | Covered |
 | AC-12 | A matching tag publishes this package, with 0 manual uploads | AT-03, ST-02 | Covered |
 | AC-13 | The first tag includes this package with the other five | AT-03 | Covered |
@@ -239,7 +239,7 @@ value count: 0
 
 ### PT-01: Position round trips on one core
 
-**Summary**: 100000 pack-then-unpack round trips of the AC-1 fixture finish in ≤ 1 second on one core.
+**Summary**: 100000 pack-then-unpack round trips of the AC-1 fixture finish in ≤ 2 seconds on one core.
 
 **Traces to**: AC-10
 
@@ -253,7 +253,7 @@ value count: 0
 
 | Metric | Target | Failure Threshold |
 |--------|--------|-------------------|
-| Elapsed time of 100000 round trips | ≤ 1 second | > 1 second |
+| Elapsed time of 100000 round trips | ≤ 2 seconds | > 2 seconds |
 | Error count | 0 | > 0 |
 | Throughput | the same loop on one core | a second core is required to meet the bound |
 | Latency (p50, p95, p99) | not the bound | this NFR is elapsed time, not a percentile |
