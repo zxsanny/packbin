@@ -1,3 +1,4 @@
+#include "counted.hpp"
 #include "packbin/packbin.hpp"
 
 #include <algorithm>
@@ -97,10 +98,45 @@ void pack_scalar(Field const& field, Values const& values, std::vector<std::uint
 void pack_nodes(std::vector<Field> const& nodes, Values const& values,
                 std::vector<std::uint8_t>& out);
 
+bool scalar_or_bytes(Field::Kind kind) {
+  switch (kind) {
+    case Field::Kind::U8:
+    case Field::Kind::U16:
+    case Field::Kind::U32:
+    case Field::Kind::U64:
+    case Field::Kind::I8:
+    case Field::Kind::I16:
+    case Field::Kind::I32:
+    case Field::Kind::I64:
+    case Field::Kind::F32:
+    case Field::Kind::F64:
+    case Field::Kind::Bytes:
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool group_present(Field const& node, Values const& values) {
+  if (is_present(values, node.name))
+    return true;
+  for (auto const& child : node.children) {
+    if (scalar_or_bytes(child.kind) && is_present(values, child.name))
+      return true;
+  }
+  return false;
+}
+
+bool bit_on(Field const& bit, Values const& values) {
+  if (bit.inner && bit.inner->kind == Field::Kind::Group)
+    return group_present(*bit.inner, values);
+  return is_present(values, field_name(bit));
+}
+
 std::uint8_t compute_bits(FlagGroup const& group, Values const& values) {
   std::uint8_t flag = 0;
   for (std::size_t i = 0; i < group.bits.size(); ++i) {
-    if (is_present(values, field_name(group.bits[i])))
+    if (bit_on(group.bits[i], values))
       flag = static_cast<std::uint8_t>(flag | (1u << i));
   }
   return flag;
@@ -142,11 +178,19 @@ void pack_one(Field const& node, Values const& values, std::vector<std::uint8_t>
       out.push_back(compute_bits(*node.group, values));
       break;
     case Field::Kind::FlagBit: {
-      if (!is_present(values, field_name(node)))
+      if (!bit_on(node, values))
         break;
       pack_one(*node.inner, values, out);
       break;
     }
+    case Field::Kind::Group:
+      pack_nodes(node.children, values, out);
+      break;
+    case Field::Kind::Sized:
+    case Field::Kind::U2:
+    case Field::Kind::Bits:
+      pack_counted(node, values, out);
+      break;
     case Field::Kind::When: {
       auto it = values.find(node.pred.field);
       if (it != values.end() && values_equal(it->second, node.pred.value))
@@ -334,6 +378,17 @@ std::optional<ShortPacket> unpack_one(std::uint8_t const* data, std::size_t len,
       }
       return std::nullopt;
     }
+    case Field::Kind::Group: {
+      if (node.children.empty()) {
+        out[node.name] = Value{std::uint8_t{1}};
+        return std::nullopt;
+      }
+      return unpack_nodes(data, len, offset, node.children, out, as_list);
+    }
+    case Field::Kind::Sized:
+    case Field::Kind::U2:
+    case Field::Kind::Bits:
+      return unpack_counted(data, len, offset, node, out, as_list);
   }
   return std::nullopt;
 }

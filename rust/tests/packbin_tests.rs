@@ -1,6 +1,7 @@
 use packbin::{
-    bytes, eq, f32, f64, flag_byte, flags, i16, i32, insert, motion_field_count, mismatched_bytes,
-    pack, packet, repeat, to_hex, u16, u8, unpack, when, ShortPacket, UnpackError, Value, Values,
+    bits, bytes, eq, f32, f64, flag_byte, flags, group, i16, i32, insert, motion_field_count,
+    mismatched_bytes, pack, packet, repeat, sized, to_hex, u16, u2, u32, u8, unpack, when,
+    ShortPacket, UnpackError, Value, Values,
 };
 use std::fs;
 use std::time::Instant;
@@ -274,5 +275,191 @@ fn assert_no_gpu() {
         "metal.framework",
     ] {
         assert!(!blob.contains(bad), "{bad}");
+    }
+}
+
+#[test]
+fn empty_group_flag() {
+    let pkt = packet(vec![flags("f", vec![group("mark", vec![])])]);
+    let mut set = Values::new();
+    insert(&mut set, "mark", Some(Value::U8(1)));
+    assert_eq!(pack(&pkt, &set).unwrap(), vec![0x01]);
+    let clear = Values::new();
+    assert_eq!(pack(&pkt, &clear).unwrap(), vec![0x00]);
+}
+
+#[test]
+fn flags_five_u8_then_u16() {
+    let pkt = packet(vec![flags(
+        "f",
+        vec![
+            u8("a"),
+            u8("b"),
+            u8("c"),
+            u8("d"),
+            u8("e"),
+            u16("b5"),
+        ],
+    )]);
+    let mut a = Values::new();
+    insert(&mut a, "a", Some(Value::U8(1)));
+    assert_eq!(pack(&pkt, &a).unwrap().len(), 2);
+
+    let mut b5 = Values::new();
+    insert(&mut b5, "b5", Some(Value::U16(1)));
+    let wide = pack(&pkt, &b5).unwrap();
+    assert_eq!(wide[0], 0x20);
+    let clear = pack(&pkt, &Values::new()).unwrap();
+    assert_eq!(wide.len() - clear.len(), 2);
+}
+
+#[test]
+fn session_group_pack_unpack() {
+    let pkt = packet(vec![flags(
+        "f",
+        vec![group("session", vec![u16("login"), u32("ts")])],
+    )]);
+    let mut vals = Values::new();
+    insert(&mut vals, "login", Some(Value::U16(7)));
+    insert(&mut vals, "ts", Some(Value::U32(1000)));
+    let raw = pack(&pkt, &vals).unwrap();
+    assert_eq!(to_hex(&raw[1..]), "0700e8030000");
+    assert_eq!(raw.len() - 1, 6);
+
+    let clear = pack(&pkt, &Values::new()).unwrap();
+    assert_eq!(clear, vec![0x00]);
+    let got = unpack(&pkt, &clear).unwrap();
+    assert!(!got.contains_key("login"));
+    assert!(!got.contains_key("ts"));
+}
+
+#[test]
+fn group_one_u8_zero() {
+    let pkt = packet(vec![flags("f", vec![group("g", vec![u8("b")])])]);
+    let mut vals = Values::new();
+    insert(&mut vals, "b", Some(Value::U8(0)));
+    assert_eq!(pack(&pkt, &vals).unwrap(), vec![0x01, 0x00]);
+}
+
+#[test]
+fn session_group_short_read() {
+    let pkt = packet(vec![flags(
+        "f",
+        vec![group("session", vec![u16("login"), u32("ts")])],
+    )]);
+    let err = unpack(&pkt, &[0x01, 0x07]).expect_err("short");
+    match err {
+        UnpackError::Short(ShortPacket {
+            field,
+            needed,
+            left,
+        }) => {
+            assert_eq!(field, "login");
+            assert_eq!(needed, 2);
+            assert_eq!(left, 1);
+        }
+        other => panic!("expected ShortPacket, got {:?}", other),
+    }
+}
+
+#[test]
+fn sized_payload() {
+    let pkt = packet(vec![u16("n"), sized("payload", "n")]);
+    let mut vals = Values::new();
+    insert(&mut vals, "n", Some(Value::U16(3)));
+    insert(
+        &mut vals,
+        "payload",
+        Some(Value::Bytes(vec![0x75, 0x61, 0x76])),
+    );
+    let raw = pack(&pkt, &vals).unwrap();
+    assert_eq!(to_hex(&raw), "0300756176");
+
+    let mut empty = Values::new();
+    insert(&mut empty, "n", Some(Value::U16(0)));
+    insert(&mut empty, "payload", Some(Value::Bytes(vec![])));
+    let empty_raw = pack(&pkt, &empty).unwrap();
+    assert_eq!(to_hex(&empty_raw), "0000");
+    let empty_got = unpack(&pkt, &empty_raw).unwrap();
+    match empty_got.get("payload") {
+        Some(Some(Value::Bytes(b))) => assert_eq!(b.len(), 0),
+        other => panic!("expected empty payload, got {:?}", other),
+    }
+
+    let err = unpack(&pkt, &parse_hex("030075")).expect_err("short");
+    match err {
+        UnpackError::Short(ShortPacket {
+            field,
+            needed,
+            left,
+        }) => {
+            assert_eq!(field, "payload");
+            assert_eq!(needed, 3);
+            assert_eq!(left, 1);
+        }
+        other => panic!("expected ShortPacket, got {:?}", other),
+    }
+}
+
+#[test]
+fn u2_pack_unpack() {
+    let pkt = packet(vec![u2(&["a", "b", "c", "d"])]);
+    let mut vals = Values::new();
+    insert(&mut vals, "a", Some(Value::U8(0)));
+    insert(&mut vals, "b", Some(Value::U8(1)));
+    insert(&mut vals, "c", Some(Value::U8(2)));
+    insert(&mut vals, "d", Some(Value::U8(3)));
+    let raw = pack(&pkt, &vals).unwrap();
+    assert_eq!(to_hex(&raw), "e4");
+    let got = unpack(&pkt, &raw).unwrap();
+    assert_eq!(got.get("a"), Some(&Some(Value::U8(0))));
+    assert_eq!(got.get("b"), Some(&Some(Value::U8(1))));
+    assert_eq!(got.get("c"), Some(&Some(Value::U8(2))));
+    assert_eq!(got.get("d"), Some(&Some(Value::U8(3))));
+
+    let one = packet(vec![u2(&["a"])]);
+    let mut one_vals = Values::new();
+    insert(&mut one_vals, "a", Some(Value::U8(1)));
+    assert_eq!(to_hex(&pack(&one, &one_vals).unwrap()), "01");
+}
+
+#[test]
+fn bits_pack_unpack() {
+    let pkt = packet(vec![u8("n"), bits("segs", "n")]);
+    let mut eight = Values::new();
+    insert(&mut eight, "n", Some(Value::U8(8)));
+    insert(
+        &mut eight,
+        "segs",
+        Some(Value::List(vec![Value::U8(1); 8])),
+    );
+    let eight_raw = pack(&pkt, &eight).unwrap();
+    assert_eq!(to_hex(&eight_raw[1..]), "ff");
+    assert_eq!(eight_raw.len() - 1, 1);
+
+    let mut nine = Values::new();
+    insert(&mut nine, "n", Some(Value::U8(9)));
+    insert(
+        &mut nine,
+        "segs",
+        Some(Value::List(vec![Value::U8(1); 9])),
+    );
+    let nine_raw = pack(&pkt, &nine).unwrap();
+    assert_eq!(nine_raw.len() - 1, 2);
+    assert_eq!(nine_raw[1], 0xff);
+    assert_eq!(nine_raw[2] & 0xfe, 0);
+
+    let err = unpack(&pkt, &[9, 0x01]).expect_err("short");
+    match err {
+        UnpackError::Short(ShortPacket {
+            field,
+            needed,
+            left,
+        }) => {
+            assert_eq!(field, "segs");
+            assert_eq!(needed, 2);
+            assert_eq!(left, 1);
+        }
+        other => panic!("expected ShortPacket, got {:?}", other),
     }
 }

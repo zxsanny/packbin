@@ -168,6 +168,138 @@ public class PackbinTests
     }
 
     [Fact]
+    public void FlagGroup_EmptyMark()
+    {
+        var packet = Packet.Of(Field.Flags("f", Field.Group("mark")));
+        var setBit = Pack.Run(packet, new Dictionary<string, object?> { ["mark"] = true });
+        Assert.Equal(new byte[] { 0x01 }, setBit);
+        var clear = Pack.Run(packet, new Dictionary<string, object?>());
+        Assert.Equal(new byte[] { 0x00 }, clear);
+    }
+
+    [Fact]
+    public void FlagGroup_FiveU8ThenU16()
+    {
+        var packet = Packet.Of(Field.Flags("f",
+            Field.U8("a"), Field.U8("b"), Field.U8("c"), Field.U8("d"), Field.U8("e"), Field.U16("b5")));
+        Assert.Equal(2, Pack.Run(packet, new Dictionary<string, object?> { ["a"] = (byte)1 }).Length);
+        var empty = Pack.Run(packet, new Dictionary<string, object?>());
+        var wide = Pack.Run(packet, new Dictionary<string, object?> { ["b5"] = (ushort)1 });
+        Assert.Equal(0x20, wide[0]);
+        Assert.Equal(2, wide.Length - empty.Length);
+    }
+
+    [Fact]
+    public void FlagGroup_Session()
+    {
+        var packet = Packet.Of(Field.Flags("f",
+            Field.Group("session", Field.U16("login"), Field.U32("ts"))));
+        var raw = Pack.Run(packet, new Dictionary<string, object?>
+        {
+            ["login"] = (ushort)7,
+            ["ts"] = 1000u,
+        });
+        Assert.Equal("0700e8030000", Convert.ToHexString(raw.AsSpan(1)).ToLowerInvariant());
+        Assert.Equal(6, raw.Length - 1);
+        var absent = Pack.Run(packet, new Dictionary<string, object?>());
+        Assert.Equal(new byte[] { 0x00 }, absent);
+        var got = Unpack.Run(packet, absent);
+        Assert.Null(got.Error);
+        Assert.False(got.Values.ContainsKey("login"));
+        Assert.False(got.Values.ContainsKey("ts"));
+    }
+
+    [Fact]
+    public void FlagGroup_ZeroU8()
+    {
+        var packet = Packet.Of(Field.Flags("f", Field.Group("g", Field.U8("b"))));
+        var stored = Pack.Run(packet, new Dictionary<string, object?> { ["b"] = (byte)0 });
+        Assert.Equal(new byte[] { 0x01, 0x00 }, stored);
+    }
+
+    [Fact]
+    public void FlagGroup_SessionShort()
+    {
+        var packet = Packet.Of(Field.Flags("f",
+            Field.Group("session", Field.U16("login"), Field.U32("ts"))));
+        var got = Unpack.Run(packet, new byte[] { 0x01, 0x07 });
+        Assert.Empty(got.Values);
+        var missing = Assert.IsType<ShortPacket>(got.Error);
+        Assert.Equal("login", missing.Field);
+        Assert.Equal(2, missing.Needed);
+        Assert.Equal(1, missing.Left);
+    }
+
+    [Fact]
+    public void SizedPayload()
+    {
+        var packet = Packet.Of(Field.U16("n"), Field.Sized("payload", "n"));
+        var raw = Pack.Run(packet, new Dictionary<string, object?>
+        {
+            ["n"] = (ushort)3,
+            ["payload"] = ParseHex("756176"),
+        });
+        Assert.Equal("0300756176", Convert.ToHexString(raw).ToLowerInvariant());
+        var empty = Pack.Run(packet, new Dictionary<string, object?>
+        {
+            ["n"] = (ushort)0,
+            ["payload"] = Array.Empty<byte>(),
+        });
+        Assert.Equal("0000", Convert.ToHexString(empty).ToLowerInvariant());
+        var emptyGot = Unpack.Run(packet, empty);
+        Assert.Null(emptyGot.Error);
+        Assert.Empty((byte[])emptyGot.Values["payload"]!);
+        var shortGot = Unpack.Run(packet, ParseHex("030075"));
+        Assert.Empty(shortGot.Values);
+        var missing = Assert.IsType<ShortPacket>(shortGot.Error);
+        Assert.Equal("payload", missing.Field);
+        Assert.Equal(3, missing.Needed);
+        Assert.Equal(1, missing.Left);
+    }
+
+    [Fact]
+    public void U2AndBits()
+    {
+        var kinds = Packet.Of(Field.U2("a", "b", "c", "d"));
+        var raw = Pack.Run(kinds, new Dictionary<string, object?>
+        {
+            ["a"] = 0, ["b"] = 1, ["c"] = 2, ["d"] = 3,
+        });
+        Assert.Equal("e4", Convert.ToHexString(raw).ToLowerInvariant());
+        var got = Unpack.Run(kinds, raw);
+        Assert.Null(got.Error);
+        Assert.Equal(0, Convert.ToInt32(got.Values["a"]!, CultureInfo.InvariantCulture));
+        Assert.Equal(1, Convert.ToInt32(got.Values["b"]!, CultureInfo.InvariantCulture));
+        Assert.Equal(2, Convert.ToInt32(got.Values["c"]!, CultureInfo.InvariantCulture));
+        Assert.Equal(3, Convert.ToInt32(got.Values["d"]!, CultureInfo.InvariantCulture));
+        var one = Pack.Run(Packet.Of(Field.U2("a")), new Dictionary<string, object?> { ["a"] = 1 });
+        Assert.Equal("01", Convert.ToHexString(one).ToLowerInvariant());
+
+        var layout = Packet.Of(Field.U8("n"), Field.Bits("segs", "n"));
+        var eight = Pack.Run(layout, new Dictionary<string, object?>
+        {
+            ["n"] = (byte)8,
+            ["segs"] = new List<int> { 1, 1, 1, 1, 1, 1, 1, 1 },
+        });
+        Assert.Equal("ff", Convert.ToHexString(eight.AsSpan(1)).ToLowerInvariant());
+        Assert.Equal(1, eight.Length - 1);
+        var nine = Pack.Run(layout, new Dictionary<string, object?>
+        {
+            ["n"] = (byte)9,
+            ["segs"] = new List<int> { 1, 1, 1, 1, 1, 1, 1, 1, 1 },
+        });
+        Assert.Equal(2, nine.Length - 1);
+        Assert.Equal(0xFF, nine[1]);
+        Assert.Equal(0, nine[2] & 0xFE);
+        var shortGot = Unpack.Run(layout, new byte[] { 9, 1 });
+        Assert.Empty(shortGot.Values);
+        var missing = Assert.IsType<ShortPacket>(shortGot.Error);
+        Assert.Equal("segs", missing.Field);
+        Assert.Equal(2, missing.Needed);
+        Assert.Equal(1, missing.Left);
+    }
+
+    [Fact]
     public void Nfr_RoundTripsWithinOneSecond()
     {
         var watch = Stopwatch.StartNew();
@@ -181,6 +313,94 @@ public class PackbinTests
         watch.Stop();
         AssertNoGpuLibrary();
         Assert.True(watch.Elapsed.TotalSeconds <= 1.0, $"elapsed {watch.Elapsed.TotalMilliseconds} ms");
+    }
+
+    [Fact]
+    public void Object_round_trip_leaves_absent_flags_null()
+    {
+        var row = new PositionRow
+        {
+            type = 0x40,
+            sid = 1,
+            lat = 500_000_000,
+            lon = 300_000_000,
+            profile = 1,
+        };
+        var bytes = Pack.Run(Target, row);
+        Assert.Equal(GoldenHex, Convert.ToHexString(bytes).ToLowerInvariant());
+        var got = Unpack.Run<PositionRow>(Target, bytes);
+        Assert.True(got.Ok);
+        Assert.NotNull(got.Value);
+        Assert.Equal((byte)0x40, got.Value.type);
+        Assert.Equal((ushort)1, got.Value.sid);
+        Assert.Equal(500_000_000, got.Value.lat);
+        Assert.Equal(300_000_000, got.Value.lon);
+        Assert.Equal((byte)1, got.Value.profile);
+        Assert.Null(got.Value.heading);
+        Assert.Null(got.Value.speed);
+        Assert.Null(got.Value.altitude);
+    }
+
+    [Fact]
+    public void Object_zero_is_present_and_null_is_absent()
+    {
+        var packet = Packet.Of(Field.Flags(
+            "f", Field.U8("a"), Field.U8("b"), Field.U8("c"), Field.U8("d"), Field.U8("e"), Field.U16("b5")));
+        var absent = Pack.Run(packet, new WideRow());
+        Assert.Equal(new byte[] { 0x00 }, absent);
+        var present = Pack.Run(packet, new WideRow { b5 = 0 });
+        Assert.Equal(new byte[] { 0x20, 0x00, 0x00 }, present);
+    }
+
+    [Fact]
+    public void Object_nested_group_and_short_packet()
+    {
+        var packet = Packet.Of(Field.Flags("f", Field.Group("session", Field.U16("login"), Field.U32("ts"))));
+        var clear = Pack.Run(packet, new SessionRow());
+        Assert.Equal(new byte[] { 0x00 }, clear);
+        var set = Pack.Run(packet, new SessionRow { session = new Session { login = 7, ts = 1000 } });
+        Assert.Equal("010700e8030000", Convert.ToHexString(set).ToLowerInvariant());
+        var got = Unpack.Run<SessionRow>(packet, set);
+        Assert.True(got.Ok);
+        Assert.NotNull(got.Value);
+        Assert.NotNull(got.Value.session);
+        Assert.Equal((ushort)7, got.Value.session.login);
+        Assert.Equal(1000u, got.Value.session.ts);
+        var shortPacket = Unpack.Run<SessionRow>(packet, new byte[] { 0x01, 0x07 });
+        Assert.False(shortPacket.Ok);
+        Assert.Null(shortPacket.Value);
+        var err = Assert.IsType<ShortPacket>(shortPacket.Error);
+        Assert.Equal("login", err.Field);
+        Assert.Equal(2, err.Needed);
+        Assert.Equal(1, err.Left);
+    }
+
+    private sealed class PositionRow
+    {
+        public byte type { get; set; }
+        public ushort sid { get; set; }
+        public int lat { get; set; }
+        public int lon { get; set; }
+        public byte profile { get; set; }
+        public ushort? heading { get; set; }
+        public byte? speed { get; set; }
+        public short? altitude { get; set; }
+    }
+
+    private sealed class WideRow
+    {
+        public ushort? b5 { get; set; }
+    }
+
+    private sealed class Session
+    {
+        public ushort login { get; set; }
+        public uint ts { get; set; }
+    }
+
+    private sealed class SessionRow
+    {
+        public Session? session { get; set; }
     }
 
     private static void AssertNoGpuLibrary()

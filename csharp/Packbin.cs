@@ -69,6 +69,10 @@ public sealed class Field
         FlagBit,
         When,
         Repeat,
+        Group,
+        Sized,
+        U2,
+        Bits,
     }
 
     internal Kind Type { get; }
@@ -77,9 +81,11 @@ public sealed class Field
     internal int ByteCount { get; }
     internal Field[] Children { get; }
     internal Condition? Pred { get; }
-    internal FlagGroup? Group { get; }
+    internal FlagGroup? FlagOwner { get; }
     internal int BitIndex { get; }
     internal Field? Inner { get; }
+    internal string CountName { get; }
+    internal string[] Names { get; }
 
     private Field(
         Kind type,
@@ -88,9 +94,11 @@ public sealed class Field
         int byteCount = 0,
         Field[]? children = null,
         Condition? pred = null,
-        FlagGroup? group = null,
+        FlagGroup? flagOwner = null,
         int bitIndex = 0,
-        Field? inner = null)
+        Field? inner = null,
+        string countName = "",
+        string[]? names = null)
     {
         Type = type;
         Name = name;
@@ -98,19 +106,21 @@ public sealed class Field
         ByteCount = byteCount;
         Children = children ?? [];
         Pred = pred;
-        Group = group;
+        FlagOwner = flagOwner;
         BitIndex = bitIndex;
         Inner = inner;
+        CountName = countName;
+        Names = names ?? [];
     }
 
     public Field Be() =>
-        new(Type, Name, true, ByteCount, Children, Pred, Group, BitIndex, Inner);
+        new(Type, Name, true, ByteCount, Children, Pred, FlagOwner, BitIndex, Inner, CountName, Names);
 
     public Field Bit(Field field)
     {
-        if (Type != Kind.FlagByte || Group is null)
+        if (Type != Kind.FlagByte || FlagOwner is null)
             throw new InvalidOperationException("Bit requires FlagByte.");
-        return Group.AddBit(field);
+        return FlagOwner.AddBit(field);
     }
 
     public static Field U8(string name) => new(Kind.U8, name, byteCount: 1);
@@ -128,7 +138,7 @@ public sealed class Field
     public static Field FlagByte(string name)
     {
         var group = new FlagGroup(name);
-        return new Field(Kind.FlagByte, name, group: group);
+        return new Field(Kind.FlagByte, name, flagOwner: group);
     }
 
     public static Field Flags(string name, params Field[] fields)
@@ -137,7 +147,7 @@ public sealed class Field
         var bits = new Field[fields.Length];
         for (var i = 0; i < fields.Length; i++)
             bits[i] = group.AddBit(fields[i]);
-        return new Field(Kind.Flags, name, children: bits, group: group);
+        return new Field(Kind.Flags, name, children: bits, flagOwner: group);
     }
 
     public static Field When(Condition condition, params Field[] fields) =>
@@ -146,8 +156,24 @@ public sealed class Field
     public static Field Repeat(params Field[] fields) =>
         new(Kind.Repeat, "", children: fields);
 
+    public static Field Group(string name, params Field[] fields) =>
+        new(Kind.Group, name, children: fields);
+
+    public static Field Sized(string name, string countField) =>
+        new(Kind.Sized, name, countName: countField);
+
+    public static Field U2(params string[] names)
+    {
+        if (names.Length == 0)
+            throw new ArgumentException("u2 needs at least one name");
+        return new Field(Kind.U2, names[0], names: names);
+    }
+
+    public static Field Bits(string name, string countField) =>
+        new(Kind.Bits, name, countName: countField);
+
     internal static Field CreateFlagBit(FlagGroup group, int bitIndex, Field inner) =>
-        new(Kind.FlagBit, inner.Name, group: group, bitIndex: bitIndex, inner: inner);
+        new(Kind.FlagBit, inner.Name, flagOwner: group, bitIndex: bitIndex, inner: inner);
 }
 
 
@@ -159,6 +185,13 @@ public static class Pack
         foreach (var field in packet.Fields)
             Walker.PackField(field, values, buffer);
         return buffer.ToArray();
+    }
+
+    public static byte[] Run<T>(Packet packet, T? values) where T : class
+    {
+        if (values is IReadOnlyDictionary<string, object?> map)
+            return Run(packet, map);
+        return Run(packet, ObjectValues.From(values));
     }
 }
 
@@ -177,5 +210,13 @@ public static class Unpack
         if (offset < bytes.Length)
             return new UnpackResult([], new TrailingBytes(bytes.Length - offset));
         return new UnpackResult(values, null);
+    }
+
+    public static Bound<T> Run<T>(Packet packet, ReadOnlySpan<byte> bytes) where T : class, new()
+    {
+        var raw = Run(packet, bytes);
+        if (raw.Error is not null)
+            return new Bound<T>(null, raw.Error);
+        return new Bound<T>(ObjectValues.To<T>(raw.Values), null);
     }
 }

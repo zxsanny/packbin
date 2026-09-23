@@ -14,7 +14,11 @@ public final class Field {
         FLAG_BYTE,
         FLAG_BIT,
         WHEN,
-        REPEAT
+        REPEAT,
+        GROUP,
+        SIZED,
+        U2,
+        BITS
     }
 
     final Kind kind;
@@ -26,6 +30,8 @@ public final class Field {
     final FlagGroup group;
     final int bitIndex;
     final Field inner;
+    final String countName;
+    final List<String> names;
 
     private Field(
             Kind kind,
@@ -36,7 +42,9 @@ public final class Field {
             Packbin.Eq condition,
             FlagGroup group,
             int bitIndex,
-            Field inner) {
+            Field inner,
+            String countName,
+            List<String> names) {
         this.kind = kind;
         this.name = name;
         this.bigEndian = bigEndian;
@@ -46,14 +54,16 @@ public final class Field {
         this.group = group;
         this.bitIndex = bitIndex;
         this.inner = inner;
+        this.countName = countName;
+        this.names = names == null ? List.of() : List.copyOf(names);
     }
 
     static Field scalar(Kind kind, String name, int size) {
-        return new Field(kind, name, false, size, null, null, null, 0, null);
+        return new Field(kind, name, false, size, null, null, null, 0, null, null, null);
     }
 
     static Field bytes(String name, int n) {
-        return new Field(Kind.BYTES, name, false, n, null, null, null, 0, null);
+        return new Field(Kind.BYTES, name, false, n, null, null, null, 0, null, null, null);
     }
 
     static Field flags(String name, Field[] fields) {
@@ -62,24 +72,43 @@ public final class Field {
         for (Field field : fields) {
             bits.add(group.addBit(field));
         }
-        return new Field(Kind.FLAGS, name, false, 1, bits, null, group, 0, null);
+        return new Field(Kind.FLAGS, name, false, 1, bits, null, group, 0, null, null, null);
     }
 
     static Field flagByte(String name) {
         FlagGroup group = new FlagGroup(name);
-        return new Field(Kind.FLAG_BYTE, name, false, 1, null, null, group, 0, null);
+        return new Field(Kind.FLAG_BYTE, name, false, 1, null, null, group, 0, null, null, null);
     }
 
     static Field flagBit(FlagGroup group, int bitIndex, Field inner) {
-        return new Field(Kind.FLAG_BIT, inner.name, false, 0, null, null, group, bitIndex, inner);
+        return new Field(Kind.FLAG_BIT, inner.name, false, 0, null, null, group, bitIndex, inner, null, null);
     }
 
     static Field when(Packbin.Eq condition, Field[] fields) {
-        return new Field(Kind.WHEN, condition.field, false, 0, List.of(fields), condition, null, 0, null);
+        return new Field(Kind.WHEN, condition.field, false, 0, List.of(fields), condition, null, 0, null, null, null);
     }
 
     static Field repeat(Field[] fields) {
-        return new Field(Kind.REPEAT, "", false, 0, List.of(fields), null, null, 0, null);
+        return new Field(Kind.REPEAT, "", false, 0, List.of(fields), null, null, 0, null, null, null);
+    }
+
+    static Field group(String name, Field[] fields) {
+        return new Field(Kind.GROUP, name, false, 0, List.of(fields), null, null, 0, null, null, null);
+    }
+
+    static Field sized(String name, String countField) {
+        return new Field(Kind.SIZED, name, false, 0, null, null, null, 0, null, countField, null);
+    }
+
+    static Field u2(String[] names) {
+        if (names.length == 0) {
+            throw new IllegalArgumentException("u2 needs at least one name");
+        }
+        return new Field(Kind.U2, names[0], false, 0, null, null, null, 0, null, null, List.of(names));
+    }
+
+    static Field bits(String name, String countField) {
+        return new Field(Kind.BITS, name, false, 0, null, null, null, 0, null, countField, null);
     }
 
     Field withBigEndian() {
@@ -88,7 +117,7 @@ public final class Field {
                 && kind != Kind.F32 && kind != Kind.F64) {
             throw new IllegalArgumentException("be() expects a numeric field");
         }
-        return new Field(kind, name, true, size, children, condition, group, bitIndex, inner);
+        return new Field(kind, name, true, size, children, condition, group, bitIndex, inner, countName, names);
     }
 
     public Field bit(Field field) {
@@ -127,7 +156,11 @@ final class FlagGroup {
     int compute(java.util.Map<String, Object> values) {
         int flags = 0;
         for (int i = 0; i < bitInners.size(); i++) {
-            if (Walker.isPresent(values, bitInners.get(i).name)) {
+            Field inner = bitInners.get(i);
+            boolean on = inner.kind == Field.Kind.GROUP
+                    ? Walker.groupOn(values, inner)
+                    : Walker.isPresent(values, inner.name);
+            if (on) {
                 flags |= 1 << i;
             }
         }

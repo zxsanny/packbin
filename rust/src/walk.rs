@@ -2,7 +2,8 @@ use crate::field::{
     field_name, float_width, int_width, Field, FieldKind, FloatKind, IntKind, Packet,
 };
 use crate::value::{
-    name_of, present, values_eq, Name, PackError, ShortPacket, UnpackError, Value, Values,
+    as_bit, as_u2, as_usize, name_of, present, values_eq, Name, PackError, ShortPacket, UnpackError,
+    Value, Values,
 };
 use std::collections::HashMap;
 
@@ -56,10 +57,39 @@ fn collect_flag_bits(fields: &[Field], values: &Values, out: &mut HashMap<Name, 
                 }
             }
             FieldKind::Flags { members, .. }
+            | FieldKind::Group { members, .. }
             | FieldKind::When { members, .. }
             | FieldKind::Repeat { members } => collect_flag_bits(members, values, out),
             _ => {}
         }
+    }
+}
+
+fn group_on(name: &str, members: &[Field], values: &Values) -> bool {
+    if present(values, name) {
+        return true;
+    }
+    for child in members {
+        match &child.kind {
+            FieldKind::Int { name, .. }
+            | FieldKind::Float { name, .. }
+            | FieldKind::Bytes { name, .. } => {
+                if present(values, name) {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
+fn flag_member_on(member: &Field, values: &Values) -> bool {
+    match &member.kind {
+        FieldKind::Group { name, members } => group_on(name, members, values),
+        _ => field_name(member)
+            .map(|n| present(values, n))
+            .unwrap_or(false),
     }
 }
 
@@ -102,16 +132,19 @@ fn pack_one(
         FieldKind::Flags { members, .. } => {
             let mut bits: u8 = 0;
             for (i, member) in members.iter().enumerate() {
-                if let Some(n) = field_name(member) {
-                    if present(values, n) {
-                        bits |= 1 << i;
-                    }
+                if flag_member_on(member, values) {
+                    bits |= 1 << i;
                 }
             }
             out.push(bits);
             for (i, member) in members.iter().enumerate() {
                 if bits & (1 << i) != 0 {
-                    pack_one(member, values, flag_bits, out)?;
+                    match &member.kind {
+                        FieldKind::Group { members: g, .. } => {
+                            pack_fields(g, values, flag_bits, out)?;
+                        }
+                        _ => pack_one(member, values, flag_bits, out)?,
+                    }
                 }
             }
             Ok(())
@@ -150,6 +183,43 @@ fn pack_one(
                 pack_fields(members, group, &bits, out)?;
             }
             Ok(())
+        }
+        FieldKind::Group { members, .. } => pack_fields(members, values, flag_bits, out),
+        FieldKind::Sized { name, count } => {
+            let n = as_usize(require(values, count)?).ok_or_else(|| PackError::Type(count.to_string()))?;
+            match require(values, name)? {
+                Value::Bytes(b) if b.len() == n => {
+                    out.extend_from_slice(b);
+                    Ok(())
+                }
+                _ => Err(PackError::Type(name.to_string())),
+            }
+        }
+        FieldKind::U2 { names } => {
+            let nbytes = names.len().div_ceil(4);
+            let mut raw = vec![0u8; nbytes];
+            for (i, name) in names.iter().enumerate() {
+                let n = as_u2(require(values, name)?).ok_or_else(|| PackError::Type(name.to_string()))?;
+                raw[i / 4] |= n << ((i % 4) * 2);
+            }
+            out.extend_from_slice(&raw);
+            Ok(())
+        }
+        FieldKind::Bits { name, count } => {
+            let n = as_usize(require(values, count)?).ok_or_else(|| PackError::Type(count.to_string()))?;
+            match require(values, name)? {
+                Value::List(items) if items.len() == n => {
+                    let nbytes = n.div_ceil(8);
+                    let mut packed = vec![0u8; nbytes];
+                    for (i, item) in items.iter().enumerate() {
+                        let bit = as_bit(item).ok_or_else(|| PackError::Type(name.to_string()))?;
+                        packed[i / 8] |= bit << (i % 8);
+                    }
+                    out.extend_from_slice(&packed);
+                    Ok(())
+                }
+                _ => Err(PackError::Type(name.to_string())),
+            }
         }
     }
 }
@@ -284,7 +354,18 @@ fn unpack_one(
             values.insert(name.clone(), Some(Value::U8(bits)));
             for (i, member) in members.iter().enumerate() {
                 if bits & (1 << i) != 0 {
-                    unpack_one(member, cur, values, flag_bits, groups)?;
+                    match &member.kind {
+                        FieldKind::Group {
+                            name: gname,
+                            members: g,
+                        } => {
+                            if g.is_empty() {
+                                values.insert(gname.clone(), Some(Value::U8(1)));
+                            }
+                            unpack_fields(g, cur, values, flag_bits, groups)?;
+                        }
+                        _ => unpack_one(member, cur, values, flag_bits, groups)?,
+                    }
                 }
             }
         }
@@ -321,6 +402,63 @@ fn unpack_one(
                 unpack_fields(members, cur, &mut group, &mut group_flags, &mut nested_groups)?;
                 groups.push(group);
             }
+        }
+        FieldKind::Group { members, .. } => {
+            unpack_fields(members, cur, values, flag_bits, groups)?;
+        }
+        FieldKind::Sized { name, count } => {
+            let n = match values.get(count.as_ref()) {
+                Some(Some(v)) => as_usize(v).ok_or_else(|| {
+                    UnpackError::Short(ShortPacket {
+                        field: name.to_string(),
+                        needed: 0,
+                        left: cur.left(),
+                    })
+                })?,
+                _ => {
+                    return Err(UnpackError::Short(ShortPacket {
+                        field: name.to_string(),
+                        needed: 0,
+                        left: cur.left(),
+                    }))
+                }
+            };
+            let raw = cur.take(n, name)?;
+            values.insert(name.clone(), Some(Value::Bytes(raw.to_vec())));
+        }
+        FieldKind::U2 { names } => {
+            let nbytes = names.len().div_ceil(4);
+            let err_field = names.first().map(|n| n.as_ref()).unwrap_or("u2");
+            let raw = cur.take(nbytes, err_field)?;
+            for (i, name) in names.iter().enumerate() {
+                let v = (raw[i / 4] >> ((i % 4) * 2)) & 3;
+                values.insert(name.clone(), Some(Value::U8(v)));
+            }
+        }
+        FieldKind::Bits { name, count } => {
+            let n = match values.get(count.as_ref()) {
+                Some(Some(v)) => as_usize(v).ok_or_else(|| {
+                    UnpackError::Short(ShortPacket {
+                        field: name.to_string(),
+                        needed: 0,
+                        left: cur.left(),
+                    })
+                })?,
+                _ => {
+                    return Err(UnpackError::Short(ShortPacket {
+                        field: name.to_string(),
+                        needed: 0,
+                        left: cur.left(),
+                    }))
+                }
+            };
+            let nbytes = n.div_ceil(8);
+            let raw = cur.take(nbytes, name)?;
+            let mut items = Vec::with_capacity(n);
+            for i in 0..n {
+                items.push(Value::U8((raw[i / 8] >> (i % 8)) & 1));
+            }
+            values.insert(name.clone(), Some(Value::List(items)));
         }
     }
     Ok(())

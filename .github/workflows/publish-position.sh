@@ -31,7 +31,7 @@ case "$lang" in
   cpp)
     bin="${PACKBIN_CPP_BIN:-/tmp/packbin-position}"
     g++ -std=c++17 -O2 -Wall -Wextra -Werror -I"$root/cpp/include" -o "$bin" \
-      "$drivers/position.cpp" "$root/cpp/src/field.cpp" "$root/cpp/src/packbin.cpp"
+      "$drivers/position.cpp" "$root/cpp/src/field.cpp" "$root/cpp/src/packbin.cpp" "$root/cpp/src/counted.cpp"
     "$bin"
     ;;
   java)

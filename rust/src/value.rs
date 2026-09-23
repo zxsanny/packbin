@@ -17,6 +17,7 @@ pub enum Value {
     F32(f32),
     F64(f64),
     Bytes(Vec<u8>),
+    List(Vec<Value>),
     Groups(Vec<Values>),
 }
 
@@ -91,6 +92,52 @@ pub fn values_eq(a: &Value, b: &Value) -> bool {
         (Value::F32(x), Value::F32(y)) => x.to_bits() == y.to_bits(),
         (Value::F64(x), Value::F64(y)) => x.to_bits() == y.to_bits(),
         (Value::Bytes(x), Value::Bytes(y)) => x == y,
+        (Value::List(x), Value::List(y)) => {
+            x.len() == y.len() && x.iter().zip(y.iter()).all(|(a, b)| values_eq(a, b))
+        }
         _ => false,
+    }
+}
+
+pub(crate) fn as_usize(v: &Value) -> Option<usize> {
+    match v {
+        Value::U8(n) => Some(*n as usize),
+        Value::U16(n) => Some(*n as usize),
+        Value::U32(n) => Some(*n as usize),
+        Value::U64(n) => usize::try_from(*n).ok(),
+        Value::I8(n) if *n >= 0 => Some(*n as usize),
+        Value::I16(n) if *n >= 0 => Some(*n as usize),
+        Value::I32(n) if *n >= 0 => Some(*n as usize),
+        Value::I64(n) if *n >= 0 => usize::try_from(*n).ok(),
+        _ => None,
+    }
+}
+
+pub(crate) fn as_u2(v: &Value) -> Option<u8> {
+    let n = match v {
+        Value::U8(n) => *n as i64,
+        Value::U16(n) => *n as i64,
+        Value::U32(n) => *n as i64,
+        Value::U64(n) => *n as i64,
+        Value::I8(n) => *n as i64,
+        Value::I16(n) => *n as i64,
+        Value::I32(n) => *n as i64,
+        Value::I64(n) => *n,
+        _ => return None,
+    };
+    if (0..=3).contains(&n) {
+        Some(n as u8)
+    } else {
+        None
+    }
+}
+
+pub(crate) fn as_bit(v: &Value) -> Option<u8> {
+    match v {
+        Value::U8(0) | Value::U16(0) | Value::U32(0) | Value::U64(0) | Value::I8(0)
+        | Value::I16(0) | Value::I32(0) | Value::I64(0) => Some(0),
+        Value::U8(1) | Value::U16(1) | Value::U32(1) | Value::U64(1) | Value::I8(1)
+        | Value::I16(1) | Value::I32(1) | Value::I64(1) => Some(1),
+        _ => None,
     }
 }

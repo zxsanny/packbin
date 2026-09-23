@@ -6,15 +6,20 @@ from pathlib import Path
 from packbin import (
     ShortPacket,
     TrailingBytes,
+    bits,
     eq,
     flags,
+    group,
     i16,
     i32,
     pack,
     packet,
     repeat,
+    sized,
+    u2,
     u8,
     u16,
+    u32,
     unpack,
     when,
 )
@@ -211,3 +216,93 @@ def _assert_no_gpu():
     blob = maps.read_text(errors="replace").lower()
     for bad in ("libcuda", "libnvidia", "libvulkan", "libopencl", "metal.framework"):
         assert bad not in blob
+
+
+def test_flag_group():
+    empty = packet([flags("f", [group("mark", [])])])
+    set_bit = pack(empty, {"mark": True})
+    assert set_bit == b"\x01"
+    assert len(set_bit) - 1 == 0
+    clear = pack(empty, {})
+    assert clear == b"\x00"
+
+    one = packet([flags("f", [u8("a"), u8("b"), u8("c"), u8("d"), u8("e"), u16("b5")])])
+    assert len(pack(one, {"a": 1})) == 2
+    wide = pack(one, {"b5": 1})
+    assert wide[0] == 0x20
+    assert len(wide) - len(pack(one, {})) == 2
+
+    two = packet([flags("f", [group("session", [u16("login"), u32("ts")])])])
+    raw = pack(two, {"login": 7, "ts": 1000})
+    assert raw[1:].hex() == "0700e8030000"
+    assert len(raw) - 1 == 6
+    absent = pack(two, {})
+    assert absent == b"\x00"
+    got = unpack(two, absent)
+    assert got.ok is True
+    assert got.value is not None
+    assert "login" not in got.value
+    assert "ts" not in got.value
+
+    zero = packet([flags("f", [group("g", [u8("b")])])])
+    stored = pack(zero, {"b": 0})
+    assert stored == b"\x01\x00"
+
+    short = unpack(two, b"\x01\x07")
+    assert short.ok is False
+    assert short.value is None
+    assert isinstance(short.error, ShortPacket)
+    assert short.field == "login"
+    assert short.needed == 2
+    assert short.left == 1
+
+
+def test_sized_bytes():
+    layout = packet([u16("n"), sized("payload", "n")])
+    raw = pack(layout, {"n": 3, "payload": bytes.fromhex("756176")})
+    assert raw.hex() == "0300756176"
+    got = unpack(layout, raw)
+    assert got.ok is True
+    assert got.value is not None
+    assert got.value["payload"] == bytes.fromhex("756176")
+    empty = pack(layout, {"n": 0, "payload": b""})
+    assert empty.hex() == "0000"
+    empty_got = unpack(layout, empty)
+    assert empty_got.ok is True
+    assert empty_got.value is not None
+    assert empty_got.value["payload"] == b""
+    short = unpack(layout, bytes.fromhex("030075"))
+    assert short.ok is False
+    assert short.value is None
+    assert isinstance(short.error, ShortPacket)
+    assert short.field == "payload"
+    assert short.needed == 3
+    assert short.left == 1
+
+
+def test_u2_and_bits():
+    kinds = packet([u2("a", "b", "c", "d")])
+    raw = pack(kinds, {"a": 0, "b": 1, "c": 2, "d": 3})
+    assert raw.hex() == "e4"
+    got = unpack(kinds, raw)
+    assert got.ok is True
+    assert got.value is not None
+    assert [got.value[k] for k in ("a", "b", "c", "d")] == [0, 1, 2, 3]
+    one = pack(packet([u2("a")]), {"a": 1})
+    assert one.hex() == "01"
+
+    layout = packet([u8("n"), bits("segs", "n")])
+    eight = pack(layout, {"n": 8, "segs": [1] * 8})
+    assert eight[1:].hex() == "ff"
+    assert len(eight) - 1 == 1
+    nine = pack(layout, {"n": 9, "segs": [1] * 9})
+    assert len(nine) - 1 == 2
+    assert nine[1] == 0xFF
+    assert nine[2] & 0xFE == 0
+    short = unpack(layout, bytes([9, 0x01]))
+    assert short.ok is False
+    assert short.value is None
+    assert isinstance(short.error, ShortPacket)
+    assert short.field == "segs"
+    assert short.needed == 2
+    assert short.left == 1

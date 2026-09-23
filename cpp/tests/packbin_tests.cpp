@@ -204,6 +204,122 @@ void assert_no_gpu() {
     expect(blob.find(bad) == std::string::npos, bad);
 }
 
+void new_field_kinds() {
+  auto empty = packbin::packet({packbin::flags("f", {packbin::group("mark", {})})});
+  packbin::Values mark;
+  mark.emplace("mark", packbin::Value{std::uint8_t{1}});
+  auto set_bit = packbin::pack(empty, mark);
+  expect(set_bit.size() == 1 && set_bit[0] == 0x01, "group empty set");
+  auto clear = packbin::pack(empty, {});
+  expect(clear.size() == 1 && clear[0] == 0x00, "group empty clear");
+
+  auto one = packbin::packet({packbin::flags(
+      "f", {packbin::u8("a"), packbin::u8("b"), packbin::u8("c"), packbin::u8("d"),
+            packbin::u8("e"), packbin::u16("b5")})});
+  packbin::Values a;
+  a.emplace("a", packbin::Value{std::uint8_t{1}});
+  expect(packbin::pack(one, a).size() == 2, "one field bit length 2");
+  packbin::Values wide;
+  wide.emplace("b5", packbin::Value{std::uint16_t{1}});
+  auto wide_bytes = packbin::pack(one, wide);
+  expect(wide_bytes[0] == 0x20, "bit 5 is 0x20");
+  expect(wide_bytes.size() - packbin::pack(one, {}).size() == 2, "bit 5 adds 2");
+
+  auto two = packbin::packet({packbin::flags(
+      "f", {packbin::group("session", {packbin::u16("login"), packbin::u32("ts")})})});
+  packbin::Values session;
+  session.emplace("login", packbin::Value{std::uint16_t{7}});
+  session.emplace("ts", packbin::Value{std::uint32_t{1000}});
+  auto raw = packbin::pack(two, session);
+  expect(packbin::to_hex(std::vector<std::uint8_t>(raw.begin() + 1, raw.end())) == "0700e8030000",
+         "group adds 6 bytes");
+  expect(raw.size() - 1 == 6, "group width 6");
+  auto absent = packbin::pack(two, {});
+  expect(absent.size() == 1 && absent[0] == 0x00, "group clear adds 0");
+  auto absent_got = packbin::unpack(two, absent);
+  expect(absent_got.ok && !packbin::present(absent_got.value, "login") &&
+             !packbin::present(absent_got.value, "ts"),
+         "group clear unpacks no fields");
+
+  auto zero = packbin::packet({packbin::flags("f", {packbin::group("g", {packbin::u8("b")})})});
+  packbin::Values zero_v;
+  zero_v.emplace("b", packbin::Value{std::uint8_t{0}});
+  auto stored = packbin::pack(zero, zero_v);
+  expect(stored.size() == 2 && stored[0] == 0x01 && stored[1] == 0x00, "present 0 stored");
+
+  auto short_got = packbin::unpack(two, std::vector<std::uint8_t>{0x01, 0x07});
+  expect(!short_got.ok && short_got.value_count() == 0, "group short no value");
+  expect(short_got.short_packet && short_got.short_packet->field == "login" &&
+             short_got.short_packet->needed == 2 && short_got.short_packet->left == 1,
+         "group short login");
+
+  auto sized_pkt = packbin::packet({packbin::u16("n"), packbin::sized("payload", "n")});
+  packbin::Values sized_v;
+  sized_v.emplace("n", packbin::Value{std::uint16_t{3}});
+  sized_v.emplace("payload", packbin::Value{packbin::Value::Bytes{0x75, 0x61, 0x76}});
+  expect(packbin::to_hex(packbin::pack(sized_pkt, sized_v)) == "0300756176", "sized 3");
+  auto sized_got = packbin::unpack(sized_pkt, packbin::pack(sized_pkt, sized_v));
+  expect(sized_got.ok && std::get<packbin::Value::Bytes>(sized_got.value.at("payload").data) ==
+                             packbin::Value::Bytes{0x75, 0x61, 0x76},
+         "sized unpack");
+  packbin::Values empty_v;
+  empty_v.emplace("n", packbin::Value{std::uint16_t{0}});
+  empty_v.emplace("payload", packbin::Value{packbin::Value::Bytes{}});
+  expect(packbin::to_hex(packbin::pack(sized_pkt, empty_v)) == "0000", "sized 0");
+  auto empty_got = packbin::unpack(sized_pkt, packbin::pack(sized_pkt, empty_v));
+  expect(empty_got.ok &&
+             std::get<packbin::Value::Bytes>(empty_got.value.at("payload").data).empty(),
+         "sized 0 unpack");
+  auto sized_short = packbin::unpack(sized_pkt, parse_hex("030075"));
+  expect(!sized_short.ok && sized_short.value_count() == 0 && sized_short.short_packet &&
+             sized_short.short_packet->field == "payload" &&
+             sized_short.short_packet->needed == 3 && sized_short.short_packet->left == 1,
+         "sized short");
+
+  auto kinds = packbin::packet({packbin::u2({"a", "b", "c", "d"})});
+  packbin::Values kinds_v;
+  kinds_v.emplace("a", packbin::Value{std::uint8_t{0}});
+  kinds_v.emplace("b", packbin::Value{std::uint8_t{1}});
+  kinds_v.emplace("c", packbin::Value{std::uint8_t{2}});
+  kinds_v.emplace("d", packbin::Value{std::uint8_t{3}});
+  auto kind_bytes = packbin::pack(kinds, kinds_v);
+  expect(packbin::to_hex(kind_bytes) == "e4", "u2 e4");
+  auto kind_got = packbin::unpack(kinds, kind_bytes);
+  expect(kind_got.ok && std::get<std::uint8_t>(kind_got.value.at("a").data) == 0 &&
+             std::get<std::uint8_t>(kind_got.value.at("b").data) == 1 &&
+             std::get<std::uint8_t>(kind_got.value.at("c").data) == 2 &&
+             std::get<std::uint8_t>(kind_got.value.at("d").data) == 3,
+         "u2 unpack");
+  packbin::Values one_v;
+  one_v.emplace("a", packbin::Value{std::uint8_t{1}});
+  expect(packbin::to_hex(packbin::pack(packbin::packet({packbin::u2({"a"})}), one_v)) == "01",
+         "u2 one");
+
+  auto bits_pkt = packbin::packet({packbin::u8("n"), packbin::bits("segs", "n")});
+  auto eight = std::make_shared<packbin::ValueList>();
+  for (int i = 0; i < 8; ++i)
+    eight->items.push_back(packbin::Value{std::uint8_t{1}});
+  packbin::Values eight_v;
+  eight_v.emplace("n", packbin::Value{std::uint8_t{8}});
+  eight_v.emplace("segs", packbin::Value{eight});
+  auto eight_bytes = packbin::pack(bits_pkt, eight_v);
+  expect(eight_bytes.size() == 2 && eight_bytes[1] == 0xff, "bits 8");
+  auto nine = std::make_shared<packbin::ValueList>();
+  for (int i = 0; i < 9; ++i)
+    nine->items.push_back(packbin::Value{std::uint8_t{1}});
+  packbin::Values nine_v;
+  nine_v.emplace("n", packbin::Value{std::uint8_t{9}});
+  nine_v.emplace("segs", packbin::Value{nine});
+  auto nine_bytes = packbin::pack(bits_pkt, nine_v);
+  expect(nine_bytes.size() == 3 && nine_bytes[1] == 0xff && (nine_bytes[2] & 0xfe) == 0,
+         "bits 9 unused 0");
+  auto bits_short = packbin::unpack(bits_pkt, std::vector<std::uint8_t>{9, 0x01});
+  expect(!bits_short.ok && bits_short.value_count() == 0 && bits_short.short_packet &&
+             bits_short.short_packet->field == "segs" && bits_short.short_packet->needed == 2 &&
+             bits_short.short_packet->left == 1,
+         "bits short");
+}
+
 void nfr_round_trips() {
   auto pkt = position_packet();
   auto vals = position_values();
@@ -239,6 +355,7 @@ int main() {
   when_group_width();
   repeat_and_leftover();
   trailing_byte();
+  new_field_kinds();
   nfr_round_trips();
   if (failures != 0) {
     std::cerr << failures << " failure(s)\n";

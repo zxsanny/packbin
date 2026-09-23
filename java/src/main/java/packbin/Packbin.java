@@ -93,6 +93,22 @@ public final class Packbin {
         return Field.repeat(fields);
     }
 
+    public static Field group(String name, Field... fields) {
+        return Field.group(name, fields);
+    }
+
+    public static Field sized(String name, String countField) {
+        return Field.sized(name, countField);
+    }
+
+    public static Field u2(String... names) {
+        return Field.u2(names);
+    }
+
+    public static Field bits(String name, String countField) {
+        return Field.bits(name, countField);
+    }
+
     public static byte[] pack(Packet packet, Map<String, Object> values) {
         Objects.requireNonNull(packet, "packet");
         Map<String, Object> map = values == null ? Map.of() : values;
@@ -101,6 +117,13 @@ public final class Packbin {
             Walker.packField(field, map, sink);
         }
         return sink.toArray();
+    }
+
+    public static byte[] pack(Packet packet, Object values) {
+        if (values instanceof Map<?, ?> map) {
+            return pack(packet, ObjectValues.asMap(map));
+        }
+        return pack(packet, ObjectValues.read(values));
     }
 
     public static UnpackResult unpack(Packet packet, byte[] data) {
@@ -119,6 +142,14 @@ public final class Packbin {
             return UnpackResult.fail(new TrailingBytes(left));
         }
         return UnpackResult.ok(out);
+    }
+
+    public static <T> Bound<T> unpack(Packet packet, byte[] data, Class<T> type) {
+        UnpackResult raw = unpack(packet, data);
+        if (!raw.ok) {
+            return Bound.fail(raw.error);
+        }
+        return Bound.ok(ObjectValues.write(type, raw.value));
     }
 
     public static final class Packet {
@@ -184,6 +215,26 @@ public final class Packbin {
                 return t.left;
             }
             return null;
+        }
+    }
+
+    public static final class Bound<T> {
+        public final boolean ok;
+        public final T value;
+        public final Object error;
+
+        private Bound(boolean ok, T value, Object error) {
+            this.ok = ok;
+            this.value = value;
+            this.error = error;
+        }
+
+        static <T> Bound<T> ok(T value) {
+            return new Bound<>(true, value, null);
+        }
+
+        static <T> Bound<T> fail(Object error) {
+            return new Bound<>(false, null, error);
         }
     }
 }

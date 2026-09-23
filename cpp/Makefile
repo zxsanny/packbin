@@ -1,6 +1,6 @@
 CXX ?= g++
 CXXFLAGS ?= -std=c++17 -O2 -Wall -Wextra -Werror -Iinclude
-SRCS := src/field.cpp src/packbin.cpp
+SRCS := src/field.cpp src/packbin.cpp src/counted.cpp
 TEST_SRC := tests/packbin_tests.cpp
 TEST_BIN := build/packbin_tests
 

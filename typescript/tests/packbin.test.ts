@@ -7,12 +7,17 @@ import {
   packet,
   u8,
   u16,
+  u32,
   i16,
   i32,
   flags,
   when,
   eq,
   repeat,
+  group,
+  sized,
+  u2,
+  bits,
   pack,
   unpack,
 } from "../src/index.ts"
@@ -173,6 +178,107 @@ describe("packbin", () => {
     assert.equal(got.ok, false)
   })
 
+  it("flag empty group mark", () => {
+    const empty = packet([flags("f", [group("mark", [])])])
+    const setBit = pack(empty, { mark: true })
+    assert.equal(toHex(setBit), "01")
+    const clear = pack(empty, {})
+    assert.equal(toHex(clear), "00")
+  })
+
+  it("flag five u8 then u16 b5", () => {
+    const one = packet([
+      flags("f", [u8("a"), u8("b"), u8("c"), u8("d"), u8("e"), u16("b5")]),
+    ])
+    assert.equal(pack(one, { a: 1 }).length, 2)
+    const wide = pack(one, { b5: 1 })
+    assert.equal(wide[0], 0x20)
+    assert.equal(wide.length - pack(one, {}).length, 2)
+  })
+
+  it("flag session group login ts", () => {
+    const two = packet([
+      flags("f", [group("session", [u16("login"), u32("ts")])]),
+    ])
+    const raw = pack(two, { login: 7, ts: 1000 })
+    assert.equal(toHex(raw.subarray(1)), "0700e8030000")
+    const absent = pack(two, {})
+    assert.equal(toHex(absent), "00")
+    const got = unpack(two, absent)
+    assert.equal(got.ok, true)
+    if (!got.ok) return
+    assert.equal("login" in got, false)
+    assert.equal("ts" in got, false)
+  })
+
+  it("flag group u8 zero packs", () => {
+    const zero = packet([flags("f", [group("g", [u8("b")])])])
+    const stored = pack(zero, { b: 0 })
+    assert.equal(toHex(stored), "0100")
+  })
+
+  it("flag session group short read", () => {
+    const two = packet([
+      flags("f", [group("session", [u16("login"), u32("ts")])]),
+    ])
+    const short = unpack(two, Uint8Array.of(0x01, 0x07))
+    assert.equal(short.ok, false)
+    if (short.ok) return
+    assert.equal(short.field, "login")
+    assert.equal(short.needed, 2)
+    assert.equal(short.left, 1)
+  })
+
+  it("sized payload by count field", () => {
+    const layout = packet([u16("n"), sized("payload", "n")])
+    const raw = pack(layout, {
+      n: 3,
+      payload: Uint8Array.from(Buffer.from("756176", "hex")),
+    })
+    assert.equal(toHex(raw), "0300756176")
+    const empty = pack(layout, { n: 0, payload: new Uint8Array(0) })
+    assert.equal(toHex(empty), "0000")
+    const emptyGot = unpack(layout, empty)
+    assert.equal(emptyGot.ok, true)
+    if (!emptyGot.ok) return
+    assert.equal((emptyGot.payload as Uint8Array).length, 0)
+    const short = unpack(layout, Uint8Array.from(Buffer.from("030075", "hex")))
+    assert.equal(short.ok, false)
+    if (short.ok) return
+    assert.equal(short.field, "payload")
+    assert.equal(short.needed, 3)
+    assert.equal(short.left, 1)
+  })
+
+  it("u2 and bits", () => {
+    const kinds = packet([u2("a", "b", "c", "d")])
+    const raw = pack(kinds, { a: 0, b: 1, c: 2, d: 3 })
+    assert.equal(toHex(raw), "e4")
+    const got = unpack(kinds, raw)
+    assert.equal(got.ok, true)
+    if (!got.ok) return
+    assert.deepEqual([got.a, got.b, got.c, got.d], [0, 1, 2, 3])
+    const one = pack(packet([u2("a")]), { a: 1 })
+    assert.equal(toHex(one), "01")
+
+    const layout = packet([u8("n"), bits("segs", "n")])
+    const eight = pack(layout, { n: 8, segs: [1, 1, 1, 1, 1, 1, 1, 1] })
+    assert.equal(toHex(eight.subarray(1)), "ff")
+    const nine = pack(layout, {
+      n: 9,
+      segs: [1, 1, 1, 1, 1, 1, 1, 1, 1],
+    })
+    assert.equal(nine.length - 1, 2)
+    assert.equal(nine[1], 0xff)
+    assert.equal(nine[2]! & 0xfe, 0)
+    const short = unpack(layout, Uint8Array.of(9, 0x01))
+    assert.equal(short.ok, false)
+    if (short.ok) return
+    assert.equal(short.field, "segs")
+    assert.equal(short.needed, 2)
+    assert.equal(short.left, 1)
+  })
+
   it("NFR 100000 pack-then-unpack round trips ≤ 1s", () => {
     const start = performance.now()
     for (let i = 0; i < 100_000; i++) {
@@ -183,6 +289,45 @@ describe("packbin", () => {
     const elapsed = performance.now() - start
     assertNoGpu()
     assert.ok(elapsed <= 1000, `elapsed ${elapsed}ms`)
+  })
+
+  it("packs a class instance and flattens a nested group", () => {
+    class Row {
+      type = 0x40
+      sid = 1
+      lat = 500_000_000
+      lon = 300_000_000
+      profile = 1
+      heading: number | null = null
+    }
+    assert.equal(Buffer.from(pack(position, new Row())).toString("hex"), expectedHex)
+    class Session {
+      login = 7
+      ts = 1000
+    }
+    class Holder {
+      session: Session | null = new Session()
+    }
+    const layout = packet([flags("f", [group("session", [u16("login"), u32("ts")])])])
+    assert.equal(Buffer.from(pack(layout, new Holder())).toString("hex"), "010700e8030000")
+    assert.equal(Buffer.from(pack(layout, { session: null })).toString("hex"), "00")
+    const back = unpack(layout, pack(layout, new Holder()), Holder)
+    assert.equal(back.ok, true)
+    if (!back.ok) return
+    assert.equal(back.value instanceof Holder, true)
+    assert.equal(back.value.session instanceof Session, true)
+    assert.equal(back.value.session?.login, 7)
+    assert.equal(back.value.session?.ts, 1000)
+    const clear = unpack(layout, pack(layout, { session: null }), Holder)
+    assert.equal(clear.ok, true)
+    if (!clear.ok) return
+    assert.equal(clear.value.session, null)
+    const row = unpack(position, pack(position, new Row()), Row)
+    assert.equal(row.ok, true)
+    if (!row.ok) return
+    assert.equal(row.value instanceof Row, true)
+    assert.equal(row.value.lat, 500_000_000)
+    assert.equal(row.value.heading, null)
   })
 })
 

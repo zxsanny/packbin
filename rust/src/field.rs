@@ -56,6 +56,21 @@ pub(crate) enum FieldKind {
     Repeat {
         members: Vec<Field>,
     },
+    Group {
+        name: Name,
+        members: Vec<Field>,
+    },
+    Sized {
+        name: Name,
+        count: Name,
+    },
+    U2 {
+        names: Vec<Name>,
+    },
+    Bits {
+        name: Name,
+        count: Name,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -123,8 +138,11 @@ fn count_fields(fields: &[Field]) -> (usize, bool) {
             FieldKind::Int { .. }
             | FieldKind::Float { .. }
             | FieldKind::Bytes { .. }
-            | FieldKind::FlagByte { .. } => n += 1,
-            FieldKind::Flags { members, .. } => {
+            | FieldKind::FlagByte { .. }
+            | FieldKind::Sized { .. }
+            | FieldKind::Bits { .. } => n += 1,
+            FieldKind::U2 { names } => n += names.len(),
+            FieldKind::Flags { members, .. } | FieldKind::Group { members, .. } => {
                 n += 1 + count_fields(members).0;
             }
             FieldKind::FlagBit { inner, .. } => {
@@ -259,6 +277,41 @@ pub fn bytes(name: impl AsRef<str>, n: usize) -> Field {
     }
 }
 
+pub fn group(name: impl AsRef<str>, fields: Vec<Field>) -> Field {
+    Field {
+        kind: FieldKind::Group {
+            name: name_of(name),
+            members: fields,
+        },
+    }
+}
+
+pub fn sized(name: impl AsRef<str>, count_field: impl AsRef<str>) -> Field {
+    Field {
+        kind: FieldKind::Sized {
+            name: name_of(name),
+            count: name_of(count_field),
+        },
+    }
+}
+
+pub fn u2(names: &[&str]) -> Field {
+    Field {
+        kind: FieldKind::U2 {
+            names: names.iter().map(name_of).collect(),
+        },
+    }
+}
+
+pub fn bits(name: impl AsRef<str>, count_field: impl AsRef<str>) -> Field {
+    Field {
+        kind: FieldKind::Bits {
+            name: name_of(name),
+            count: name_of(count_field),
+        },
+    }
+}
+
 pub(crate) fn int_width(kind: IntKind) -> usize {
     match kind {
         IntKind::U8 | IntKind::I8 => 1,
@@ -281,7 +334,11 @@ pub(crate) fn field_name(field: &Field) -> Option<&str> {
         | FieldKind::Float { name, .. }
         | FieldKind::Bytes { name, .. }
         | FieldKind::Flags { name, .. }
-        | FieldKind::FlagByte { name } => Some(name.as_ref()),
+        | FieldKind::FlagByte { name }
+        | FieldKind::Group { name, .. }
+        | FieldKind::Sized { name, .. }
+        | FieldKind::Bits { name, .. } => Some(name.as_ref()),
+        FieldKind::U2 { names } => names.first().map(|n| n.as_ref()),
         FieldKind::FlagBit { inner, .. } => field_name(inner),
         FieldKind::When { .. } | FieldKind::Repeat { .. } => None,
     }

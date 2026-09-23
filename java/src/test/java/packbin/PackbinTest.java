@@ -34,7 +34,16 @@ public final class PackbinTest {
         whenGroupWidth();
         repeatBoundary();
         trailingBytesAreError();
+        flagGroupMark();
+        flagGroupWideBit();
+        flagGroupSession();
+        flagGroupStoredZero();
+        flagGroupShortLogin();
+        sizedPayload();
+        u2Kinds();
+        bitsSegs();
         nfrRoundTripsWithinOneSecond();
+        objectRoundTrip();
         if (failures > 0) {
             System.err.println(failures + " failure(s)");
             System.exit(1);
@@ -183,6 +192,153 @@ public final class PackbinTest {
         expectEq("trailing left", 1, ((Packbin.TrailingBytes) got.error).left);
     }
 
+    private static void flagGroupMark() {
+        Packbin.Packet empty = Packbin.packet(Packbin.flags("f", Packbin.group("mark")));
+        Map<String, Object> present = new HashMap<>();
+        present.put("mark", Boolean.TRUE);
+        byte[] setBit = Packbin.pack(empty, present);
+        expectEq("mark set length", 1, setBit.length);
+        expectEq("mark set byte", 0x01, setBit[0] & 0xFF);
+        expectEq("mark set adds", 0, setBit.length - 1);
+        byte[] clear = Packbin.pack(empty, Map.of());
+        expectEq("mark clear length", 1, clear.length);
+        expectEq("mark clear byte", 0x00, clear[0] & 0xFF);
+    }
+
+    private static void flagGroupWideBit() {
+        Packbin.Packet one = Packbin.packet(
+                Packbin.flags(
+                        "f",
+                        Packbin.u8("a"),
+                        Packbin.u8("b"),
+                        Packbin.u8("c"),
+                        Packbin.u8("d"),
+                        Packbin.u8("e"),
+                        Packbin.u16("b5")));
+        Map<String, Object> aOnly = new HashMap<>();
+        aOnly.put("a", 1);
+        expectEq("wide a length", 2, Packbin.pack(one, aOnly).length);
+        Map<String, Object> b5Only = new HashMap<>();
+        b5Only.put("b5", 1);
+        byte[] wide = Packbin.pack(one, b5Only);
+        expectEq("wide flags", 0x20, wide[0] & 0xFF);
+        expectEq("wide adds", 2, wide.length - Packbin.pack(one, Map.of()).length);
+    }
+
+    private static void flagGroupSession() {
+        Packbin.Packet two = Packbin.packet(
+                Packbin.flags(
+                        "f",
+                        Packbin.group("session", Packbin.u16("login"), Packbin.u32("ts"))));
+        Map<String, Object> values = new HashMap<>();
+        values.put("login", 7);
+        values.put("ts", 1000);
+        byte[] raw = Packbin.pack(two, values);
+        expectEq("session payload", "0700e8030000", toHex(java.util.Arrays.copyOfRange(raw, 1, raw.length)));
+        expectEq("session adds", 6, raw.length - 1);
+        byte[] absent = Packbin.pack(two, Map.of());
+        expectEq("session absent", "00", toHex(absent));
+        Packbin.UnpackResult got = Packbin.unpack(two, absent);
+        expectTrue("session absent ok", got.ok);
+        expectTrue("session no login", !got.value.containsKey("login"));
+        expectTrue("session no ts", !got.value.containsKey("ts"));
+    }
+
+    private static void flagGroupStoredZero() {
+        Packbin.Packet zero = Packbin.packet(
+                Packbin.flags("f", Packbin.group("g", Packbin.u8("b"))));
+        Map<String, Object> values = new HashMap<>();
+        values.put("b", 0);
+        byte[] stored = Packbin.pack(zero, values);
+        expectEq("group zero", "0100", toHex(stored));
+    }
+
+    private static void flagGroupShortLogin() {
+        Packbin.Packet two = Packbin.packet(
+                Packbin.flags(
+                        "f",
+                        Packbin.group("session", Packbin.u16("login"), Packbin.u32("ts"))));
+        Packbin.UnpackResult shortRead = Packbin.unpack(two, new byte[] {0x01, 0x07});
+        expectEq("short login values", 0, shortRead.value.size());
+        expectTrue("short login error", shortRead.error instanceof Packbin.ShortPacket);
+        Packbin.ShortPacket missing = (Packbin.ShortPacket) shortRead.error;
+        expectEq("short login field", "login", missing.field);
+        expectEq("short login needed", 2, missing.needed);
+        expectEq("short login left", 1, missing.left);
+    }
+
+    private static void sizedPayload() {
+        Packbin.Packet layout = Packbin.packet(Packbin.u16("n"), Packbin.sized("payload", "n"));
+        Map<String, Object> values = new HashMap<>();
+        values.put("n", 3);
+        values.put("payload", parseHex("756176"));
+        byte[] raw = Packbin.pack(layout, values);
+        expectEq("sized hex", "0300756176", toHex(raw));
+        Packbin.UnpackResult got = Packbin.unpack(layout, raw);
+        expectTrue("sized ok", got.ok);
+        expectEq("sized payload", 0, mismatchedBytes((byte[]) got.value.get("payload"), parseHex("756176")));
+        Map<String, Object> emptyValues = new HashMap<>();
+        emptyValues.put("n", 0);
+        emptyValues.put("payload", new byte[0]);
+        byte[] empty = Packbin.pack(layout, emptyValues);
+        expectEq("sized empty hex", "0000", toHex(empty));
+        Packbin.UnpackResult emptyGot = Packbin.unpack(layout, empty);
+        expectTrue("sized empty ok", emptyGot.ok);
+        expectEq("sized empty length", 0, ((byte[]) emptyGot.value.get("payload")).length);
+        Packbin.UnpackResult shortRead = Packbin.unpack(layout, parseHex("030075"));
+        expectEq("sized short values", 0, shortRead.value.size());
+        expectTrue("sized short error", shortRead.error instanceof Packbin.ShortPacket);
+        Packbin.ShortPacket missing = (Packbin.ShortPacket) shortRead.error;
+        expectEq("sized short field", "payload", missing.field);
+        expectEq("sized short needed", 3, missing.needed);
+        expectEq("sized short left", 1, missing.left);
+    }
+
+    private static void u2Kinds() {
+        Packbin.Packet kinds = Packbin.packet(Packbin.u2("a", "b", "c", "d"));
+        Map<String, Object> values = new HashMap<>();
+        values.put("a", 0);
+        values.put("b", 1);
+        values.put("c", 2);
+        values.put("d", 3);
+        byte[] raw = Packbin.pack(kinds, values);
+        expectEq("u2 hex", "e4", toHex(raw));
+        Packbin.UnpackResult got = Packbin.unpack(kinds, raw);
+        expectTrue("u2 ok", got.ok);
+        expectEq("u2 a", 0, ((Number) got.value.get("a")).intValue());
+        expectEq("u2 b", 1, ((Number) got.value.get("b")).intValue());
+        expectEq("u2 c", 2, ((Number) got.value.get("c")).intValue());
+        expectEq("u2 d", 3, ((Number) got.value.get("d")).intValue());
+        Map<String, Object> oneValues = new HashMap<>();
+        oneValues.put("a", 1);
+        byte[] one = Packbin.pack(Packbin.packet(Packbin.u2("a")), oneValues);
+        expectEq("u2 one", "01", toHex(one));
+    }
+
+    private static void bitsSegs() {
+        Packbin.Packet layout = Packbin.packet(Packbin.u8("n"), Packbin.bits("segs", "n"));
+        Map<String, Object> eightValues = new HashMap<>();
+        eightValues.put("n", 8);
+        eightValues.put("segs", List.of(1, 1, 1, 1, 1, 1, 1, 1));
+        byte[] eight = Packbin.pack(layout, eightValues);
+        expectEq("bits eight payload", "ff", toHex(java.util.Arrays.copyOfRange(eight, 1, eight.length)));
+        expectEq("bits eight adds", 1, eight.length - 1);
+        Map<String, Object> nineValues = new HashMap<>();
+        nineValues.put("n", 9);
+        nineValues.put("segs", List.of(1, 1, 1, 1, 1, 1, 1, 1, 1));
+        byte[] nine = Packbin.pack(layout, nineValues);
+        expectEq("bits nine adds", 2, nine.length - 1);
+        expectEq("bits nine lo", 0xFF, nine[1] & 0xFF);
+        expectEq("bits nine hi masked", 0, nine[2] & 0xFE);
+        Packbin.UnpackResult shortRead = Packbin.unpack(layout, new byte[] {9, 0x01});
+        expectEq("bits short values", 0, shortRead.value.size());
+        expectTrue("bits short error", shortRead.error instanceof Packbin.ShortPacket);
+        Packbin.ShortPacket missing = (Packbin.ShortPacket) shortRead.error;
+        expectEq("bits short field", "segs", missing.field);
+        expectEq("bits short needed", 2, missing.needed);
+        expectEq("bits short left", 1, missing.left);
+    }
+
     private static void nfrRoundTripsWithinOneSecond() throws IOException {
         long start = System.nanoTime();
         for (int i = 0; i < 100_000; i++) {
@@ -246,6 +402,57 @@ public final class PackbinTest {
             sb.append(String.format(Locale.ROOT, "%02x", b & 0xFF));
         }
         return sb.toString();
+    }
+
+    private static void objectRoundTrip() {
+        PositionRow row = new PositionRow();
+        row.type = 0x40;
+        row.sid = 1;
+        row.lat = 500_000_000;
+        row.lon = 300_000_000;
+        row.profile = 1;
+        byte[] bytes = Packbin.pack(TARGET, row);
+        expectEq("object hex", GOLDEN_HEX, toHex(bytes));
+        Packbin.Bound<PositionRow> got = Packbin.unpack(TARGET, bytes, PositionRow.class);
+        expectTrue("object ok", got.ok);
+        expectEq("object type", (byte) 0x40, got.value.type);
+        expectEq("object sid", 1, got.value.sid);
+        expectEq("object lat", 500_000_000, got.value.lat);
+        expectEq("object lon", 300_000_000, got.value.lon);
+        expectEq("object profile", (byte) 1, got.value.profile);
+        expectTrue("object heading absent", got.value.heading == null);
+        expectTrue("object speed absent", got.value.speed == null);
+        expectTrue("object altitude absent", got.value.altitude == null);
+
+        Packbin.Packet wide = Packbin.packet(Packbin.flags(
+                "f",
+                Packbin.u8("a"),
+                Packbin.u8("b"),
+                Packbin.u8("c"),
+                Packbin.u8("d"),
+                Packbin.u8("e"),
+                Packbin.u16("b5")));
+        expectEq("object absent bit", "00", toHex(Packbin.pack(wide, new WideRow())));
+        WideRow present = new WideRow();
+        present.b5 = 0;
+        expectEq("object present zero", "200000", toHex(Packbin.pack(wide, present)));
+
+        Packbin.Packet session = Packbin.packet(
+                Packbin.flags("f", Packbin.group("session", Packbin.u16("login"), Packbin.u32("ts"))));
+        expectEq("object group clear", "00", toHex(Packbin.pack(session, new SessionRow())));
+        SessionRow set = new SessionRow();
+        set.session = new Session();
+        set.session.login = 7;
+        set.session.ts = 1000;
+        byte[] packed = Packbin.pack(session, set);
+        expectEq("object group set", "010700e8030000", toHex(packed));
+        Packbin.Bound<SessionRow> back = Packbin.unpack(session, packed, SessionRow.class);
+        expectTrue("object group ok", back.ok && back.value.session != null);
+        expectEq("object login", 7, back.value.session.login);
+        expectEq("object ts", 1000L, back.value.session.ts);
+        Packbin.Bound<SessionRow> shortRow = Packbin.unpack(session, new byte[] {0x01, 0x07}, SessionRow.class);
+        expectTrue("object short", !shortRow.ok && shortRow.value == null);
+        expectEq("object short field", "login", ((Packbin.ShortPacket) shortRow.error).field);
     }
 
     private static byte[] parseHex(String hex) {

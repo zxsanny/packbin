@@ -1,8 +1,27 @@
+import {
+  asNumber,
+  groupOn,
+  present,
+  readBits,
+  readFloat,
+  readInt,
+  readSized,
+  readU2,
+  scalarChildNames,
+  writeBits,
+  writeFloat,
+  writeInt,
+  writeSized,
+  writeU2,
+  type ViewCursor,
+} from "./kinds.ts"
+
 export type Value = Record<string, unknown>
 
 export type UnpackOk = { ok: true } & Value
 export type UnpackErr = { ok: false; field: string; needed: number; left: number }
 export type UnpackResult = UnpackOk | UnpackErr
+export type EntityResult<T> = { ok: true; value: T } | UnpackErr
 
 type EndianField = { littleEndian: boolean }
 
@@ -15,7 +34,10 @@ export type Field =
   | { kind: "flagBit"; flagId: symbol; bit: number; field: Field }
   | { kind: "when"; field: string; value: unknown; fields: Field[] }
   | { kind: "repeat"; fields: Field[] }
-  | { kind: "group"; fields: Field[] }
+  | { kind: "group"; name: string; fields: Field[] }
+  | { kind: "sized"; name: string; count: string }
+  | { kind: "u2"; names: string[] }
+  | { kind: "bits"; name: string; count: string }
 
 export type Packet = { fields: Field[] }
 
@@ -83,8 +105,7 @@ export function packet(fields: Field[]): Packet {
 function flatten(fields: Field[]): Field[] {
   const out: Field[] = []
   for (const f of fields) {
-    if (f.kind === "group") out.push(...flatten(f.fields))
-    else if (f.kind === "flags") {
+    if (f.kind === "flags") {
       const fb = flagByte(f.name)
       out.push(fb)
       for (const child of f.fields) out.push(fb.bit(child))
@@ -127,49 +148,21 @@ export function repeat(fields: Field[]): Field {
   return { kind: "repeat", fields: flatten(fields) }
 }
 
-function present(v: unknown): boolean {
-  return v !== undefined && v !== null
+export function group(name: string, fields: Field[]): Field {
+  return { kind: "group", name, fields }
 }
 
-function asNumber(v: unknown): number | bigint {
-  if (typeof v === "bigint") return v
-  if (typeof v === "number") return v
-  throw new RangeError("expected number")
+export function sized(name: string, countField: string): Field {
+  return { kind: "sized", name, count: countField }
 }
 
-function writeInt(
-  out: number[],
-  value: number | bigint,
-  size: 1 | 2 | 4 | 8,
-  signed: boolean,
-  le: boolean,
-): void {
-  const buf = new ArrayBuffer(size)
-  const view = new DataView(buf)
-  if (size === 1) {
-    if (signed) view.setInt8(0, Number(value))
-    else view.setUint8(0, Number(value))
-  } else if (size === 2) {
-    if (signed) view.setInt16(0, Number(value), le)
-    else view.setUint16(0, Number(value), le)
-  } else if (size === 4) {
-    if (signed) view.setInt32(0, Number(value), le)
-    else view.setUint32(0, Number(value), le)
-  } else {
-    if (signed) view.setBigInt64(0, BigInt(value), le)
-    else view.setBigUint64(0, BigInt(value), le)
-  }
-  const bytes = new Uint8Array(buf)
-  for (let i = 0; i < size; i++) out.push(bytes[i]!)
+export function u2(...names: string[]): Field {
+  if (names.length === 0) throw new RangeError("u2 needs at least one name")
+  return { kind: "u2", names }
 }
 
-function writeFloat(out: number[], value: number, size: 4 | 8, le: boolean): void {
-  const buf = new ArrayBuffer(size)
-  const view = new DataView(buf)
-  if (size === 4) view.setFloat32(0, value, le)
-  else view.setFloat64(0, value, le)
-  const bytes = new Uint8Array(buf)
-  for (let i = 0; i < size; i++) out.push(bytes[i]!)
+export function bits(name: string, countField: string): Field {
+  return { kind: "bits", name, count: countField }
 }
 
 function collectFlagBits(fields: Field[], id: symbol): { bit: number; field: Field }[] {
@@ -182,10 +175,17 @@ function collectFlagBits(fields: Field[], id: symbol): { bit: number; field: Fie
   return bits
 }
 
+function bitOn(field: Field, values: Value): boolean {
+  if (field.kind === "group") {
+    return groupOn(values, field.name, scalarChildNames(field.fields))
+  }
+  return present(values[fieldName(field)])
+}
+
 function flagValueFor(fields: Field[], id: symbol, values: Value): number {
   let flags = 0
   for (const { bit, field } of collectFlagBits(fields, id)) {
-    if (present(values[fieldName(field)])) flags |= 1 << bit
+    if (bitOn(field, values)) flags |= 1 << bit
   }
   return flags
 }
@@ -196,11 +196,15 @@ function fieldName(field: Field): string {
     field.kind === "float" ||
     field.kind === "bytes" ||
     field.kind === "flags" ||
-    field.kind === "flagByte"
+    field.kind === "flagByte" ||
+    field.kind === "group" ||
+    field.kind === "sized" ||
+    field.kind === "bits"
   ) {
     return field.name
   }
   if (field.kind === "flagBit") return fieldName(field.field)
+  if (field.kind === "u2") return field.names[0] ?? ""
   return ""
 }
 
@@ -245,7 +249,11 @@ function packFields(
       case "flagBit": {
         const flags = flagBytes.get(f.flagId) ?? 0
         if ((flags & (1 << f.bit)) === 0) break
-        packFields([f.field], allFields, values, out, flagBytes)
+        if (f.field.kind === "group") {
+          packFields(f.field.fields, allFields, values, out, flagBytes)
+        } else {
+          packFields([f.field], allFields, values, out, flagBytes)
+        }
         break
       }
       case "when": {
@@ -275,65 +283,49 @@ function packFields(
         }
         break
       }
-      case "flags":
       case "group":
+        packFields(f.fields, allFields, values, out, flagBytes)
+        break
+      case "sized":
+        writeSized(out, f.name, values[f.count], values[f.name])
+        break
+      case "u2":
+        writeU2(out, f.names, (n) => values[n])
+        break
+      case "bits":
+        writeBits(out, f.name, Number(values[f.count]), values[f.name])
+        break
+      case "flags":
         packFields(flatten([f]), allFields, values, out, flagBytes)
         break
     }
   }
 }
 
-export function pack(pkt: Packet, values: Value): Uint8Array {
+export function pack(pkt: Packet, values: object): Uint8Array {
+  const flat = flattenValues(values)
   const out: number[] = []
   const flagBytes = new Map<symbol, number>()
-  packFields(pkt.fields, pkt.fields, values, out, flagBytes)
+  packFields(pkt.fields, pkt.fields, flat, out, flagBytes)
   return Uint8Array.from(out)
 }
 
-type Cursor = { buf: Uint8Array; view: DataView; offset: number }
+function flattenValues(values: object): Value {
+  const out: Value = {}
+  for (const [key, raw] of Object.entries(values)) {
+    if (raw === undefined || raw === null) continue
+    if (isPlainObject(raw)) Object.assign(out, flattenValues(raw))
+    else out[key] = raw
+  }
+  return out
+}
+
+function isPlainObject(raw: unknown): raw is object {
+  return typeof raw === "object" && raw !== null && !Array.isArray(raw) && !ArrayBuffer.isView(raw)
+}
 
 function short(field: string, needed: number, left: number): UnpackErr {
   return { ok: false, field, needed, left }
-}
-
-function readInt(
-  cur: Cursor,
-  name: string,
-  size: 1 | 2 | 4 | 8,
-  signed: boolean,
-  le: boolean,
-): { ok: true; value: number | bigint } | UnpackErr {
-  const left = cur.buf.length - cur.offset
-  if (left < size) return short(name, size, left)
-  const o = cur.offset
-  let value: number | bigint
-  if (size === 1) {
-    value = signed ? cur.view.getInt8(o) : cur.view.getUint8(o)
-  } else if (size === 2) {
-    value = signed ? cur.view.getInt16(o, le) : cur.view.getUint16(o, le)
-  } else if (size === 4) {
-    value = signed ? cur.view.getInt32(o, le) : cur.view.getUint32(o, le)
-  } else {
-    value = signed ? cur.view.getBigInt64(o, le) : cur.view.getBigUint64(o, le)
-  }
-  cur.offset += size
-  return { ok: true, value }
-}
-
-function readFloat(
-  cur: Cursor,
-  name: string,
-  size: 4 | 8,
-  le: boolean,
-): { ok: true; value: number } | UnpackErr {
-  const left = cur.buf.length - cur.offset
-  if (left < size) return short(name, size, left)
-  const value =
-    size === 4
-      ? cur.view.getFloat32(cur.offset, le)
-      : cur.view.getFloat64(cur.offset, le)
-  cur.offset += size
-  return { ok: true, value }
 }
 
 function appendRepeat(values: Value, name: string, value: unknown): void {
@@ -345,7 +337,7 @@ function appendRepeat(values: Value, name: string, value: unknown): void {
 
 function unpackFields(
   fields: Field[],
-  cur: Cursor,
+  cur: ViewCursor,
   values: Value,
   flagBytes: Map<symbol, number>,
   repeating: boolean,
@@ -387,8 +379,14 @@ function unpackFields(
       case "flagBit": {
         const flags = flagBytes.get(f.flagId) ?? 0
         if ((flags & (1 << f.bit)) === 0) break
-        const err = unpackFields([f.field], cur, values, flagBytes, repeating)
-        if (err) return err
+        if (f.field.kind === "group") {
+          if (f.field.fields.length === 0) values[f.field.name] = true
+          const err = unpackFields(f.field.fields, cur, values, flagBytes, repeating)
+          if (err) return err
+        } else {
+          const err = unpackFields([f.field], cur, values, flagBytes, repeating)
+          if (err) return err
+        }
         break
       }
       case "when": {
@@ -409,8 +407,37 @@ function unpackFields(
         }
         break
       }
-      case "flags":
       case "group": {
+        if (f.fields.length === 0) values[f.name] = true
+        const err = unpackFields(f.fields, cur, values, flagBytes, repeating)
+        if (err) return err
+        break
+      }
+      case "sized": {
+        const r = readSized(cur, f.name, values[f.count])
+        if (!r.ok) return r
+        if (repeating) appendRepeat(values, f.name, r.value)
+        else values[f.name] = r.value
+        break
+      }
+      case "u2": {
+        const r = readU2(cur, f.names)
+        if (!r.ok) return r
+        for (let i = 0; i < f.names.length; i++) {
+          const name = f.names[i]!
+          if (repeating) appendRepeat(values, name, r.values[i])
+          else values[name] = r.values[i]
+        }
+        break
+      }
+      case "bits": {
+        const r = readBits(cur, f.name, Number(values[f.count]))
+        if (!r.ok) return r
+        if (repeating) appendRepeat(values, f.name, r.values)
+        else values[f.name] = r.values
+        break
+      }
+      case "flags": {
         const err = unpackFields(flatten([f]), cur, values, flagBytes, repeating)
         if (err) return err
         break
@@ -420,10 +447,20 @@ function unpackFields(
   return null
 }
 
-export function unpack(pkt: Packet, bytes: Uint8Array | ArrayBuffer): UnpackResult {
+export function unpack(pkt: Packet, bytes: Uint8Array | ArrayBuffer): UnpackResult
+export function unpack<T extends object>(
+  pkt: Packet,
+  bytes: Uint8Array | ArrayBuffer,
+  ctor: new () => T,
+): EntityResult<T>
+export function unpack<T extends object>(
+  pkt: Packet,
+  bytes: Uint8Array | ArrayBuffer,
+  ctor?: new () => T,
+): UnpackResult | EntityResult<T> {
   const buf =
     bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
-  const cur: Cursor = {
+  const cur: ViewCursor = {
     buf,
     view: new DataView(buf.buffer, buf.byteOffset, buf.byteLength),
     offset: 0,
@@ -435,5 +472,39 @@ export function unpack(pkt: Packet, bytes: Uint8Array | ArrayBuffer): UnpackResu
   if (cur.offset < buf.length) {
     return short("", 0, buf.length - cur.offset)
   }
-  return { ok: true, ...values }
+  if (!ctor) return { ok: true, ...values }
+  return { ok: true, value: fillEntity(ctor, values) }
+}
+
+function fillEntity<T extends object>(ctor: new () => T, values: Value): T {
+  const entity = new ctor()
+  assignEntity(entity, values)
+  return entity
+}
+
+function assignEntity(target: object, values: Value): void {
+  const record = target as Value
+  for (const key of Object.keys(target)) {
+    const current = record[key]
+    if (isPlainObject(current)) {
+      if (nestedPresent(current, values)) assignEntity(current, values)
+      else record[key] = null
+      continue
+    }
+    if (Object.prototype.hasOwnProperty.call(values, key) && values[key] != null)
+      record[key] = values[key]
+  }
+}
+
+function nestedPresent(sample: object, values: Value): boolean {
+  const record = sample as Value
+  for (const key of Object.keys(sample)) {
+    const current = record[key]
+    if (isPlainObject(current)) {
+      if (nestedPresent(current, values)) return true
+    } else if (Object.prototype.hasOwnProperty.call(values, key) && values[key] != null) {
+      return true
+    }
+  }
+  return false
 }

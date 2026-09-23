@@ -27,6 +27,10 @@ __all__ = [
     "eq",
     "when",
     "repeat",
+    "group",
+    "sized",
+    "u2",
+    "bits",
     "pack",
     "unpack",
 ]
@@ -136,6 +140,29 @@ class _When(_Node):
 @dataclass(slots=True)
 class _Repeat(_Node):
     fields: list[_Node]
+
+
+@dataclass(slots=True)
+class _Group(_Node):
+    name: str
+    fields: list[_Node]
+
+
+@dataclass(slots=True)
+class _Sized(_Node):
+    name: str
+    count: str
+
+
+@dataclass(slots=True)
+class _U2(_Node):
+    names: list[str]
+
+
+@dataclass(slots=True)
+class _Bits(_Node):
+    name: str
+    count: str
 
 
 @dataclass(slots=True)
@@ -250,6 +277,76 @@ def repeat(fields: Sequence[_Node]) -> _Repeat:
     return _Repeat(fields=list(fields))
 
 
+def group(name: str, fields: Sequence[_Node]) -> _Group:
+    return _Group(name=name, fields=list(fields))
+
+
+def sized(name: str, count: str) -> _Sized:
+    return _Sized(name=name, count=count)
+
+
+def u2(*names: str) -> _U2:
+    if not names:
+        raise ValueError("u2 needs at least one name")
+    return _U2(names=list(names))
+
+
+def bits(name: str, count: str) -> _Bits:
+    return _Bits(name=name, count=count)
+
+
+def _group_on(values: dict[str, Any], node: _Group) -> bool:
+    if _present(values, node.name):
+        return True
+    for child in node.fields:
+        if isinstance(child, (_Scalar, _Bytes)) and _present(values, child.name):
+            return True
+    return False
+
+
+def _write_u2(buf: bytearray, names: Sequence[str], take: Callable[[str], Any]) -> None:
+    nbytes = (len(names) + 3) // 4
+    raw = bytearray(nbytes)
+    for i, name in enumerate(names):
+        value = take(name)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0 or value > 3:
+            raise ValueError(f"{name}: expected 2-bit int")
+        raw[i // 4] |= value << ((i % 4) * 2)
+    buf.extend(raw)
+
+
+def _read_u2(data: memoryview, offset: int, names: Sequence[str]) -> tuple[list[int], int] | ShortPacket:
+    nbytes = (len(names) + 3) // 4
+    left = len(data) - offset
+    if left < nbytes:
+        return ShortPacket(field=names[0], needed=nbytes, left=left)
+    out: list[int] = []
+    for i in range(len(names)):
+        out.append((data[offset + i // 4] >> ((i % 4) * 2)) & 3)
+    return out, offset + nbytes
+
+
+def _write_bits(buf: bytearray, name: str, count: int, raw: Any) -> None:
+    if not isinstance(raw, list) or len(raw) != count:
+        raise ValueError(f"{name}: expected {count} bits")
+    nbytes = (count + 7) // 8
+    packed = bytearray(nbytes)
+    for i, bit in enumerate(raw):
+        if bit not in (0, 1):
+            raise ValueError(f"{name}: expected 0 or 1")
+        packed[i // 8] |= int(bit) << (i % 8)
+    buf.extend(packed)
+
+
+def _read_bits(data: memoryview, offset: int, name: str, count: int) -> tuple[list[int], int] | ShortPacket:
+    nbytes = (count + 7) // 8
+    left = len(data) - offset
+    if left < nbytes:
+        return ShortPacket(field=name, needed=nbytes, left=left)
+    out = [((data[offset + i // 8] >> (i % 8)) & 1) for i in range(count)]
+    return out, offset + nbytes
+
+
 def _present(values: dict[str, Any], name: str) -> bool:
     return name in values and values[name] is not None
 
@@ -315,13 +412,27 @@ def _pack_nodes(
         elif isinstance(node, _Flags):
             flag = 0
             for i, child in enumerate(node.fields):
-                name = _field_name(child)
-                if _present(values, name):
+                on = _group_on(values, child) if isinstance(child, _Group) else _present(values, _field_name(child))
+                if on:
                     flag |= 1 << i
             buf.append(flag)
             for i, child in enumerate(node.fields):
                 if flag & (1 << i):
-                    _pack_nodes(buf, [child], values, get_value)
+                    fields = child.fields if isinstance(child, _Group) else [child]
+                    _pack_nodes(buf, fields, values, get_value)
+        elif isinstance(node, _Sized):
+            count = take(node.count) if get_value is not None else values[node.count]
+            raw = take(node.name)
+            if not isinstance(raw, (_builtin_bytes, bytearray, memoryview)):
+                raise TypeError(f"{node.name}: expected bytes")
+            if len(raw) != count:
+                raise ValueError(f"{node.name}: expected {count} bytes, got {len(raw)}")
+            buf.extend(raw)
+        elif isinstance(node, _U2):
+            _write_u2(buf, node.names, take)
+        elif isinstance(node, _Bits):
+            count = take(node.count) if get_value is not None else values[node.count]
+            _write_bits(buf, node.name, int(count), take(node.name))
         elif isinstance(node, _FlagByte):
             flag = 0
             for i, child in enumerate(node.bits):
@@ -414,7 +525,10 @@ def _unpack_nodes(
             out[node.name] = flag
             for i, child in enumerate(node.fields):
                 if flag & (1 << i):
-                    offset, err = _unpack_nodes(data, offset, [child], out, as_list=as_list, flag_state=flag_state)
+                    fields = child.fields if isinstance(child, _Group) else [child]
+                    if isinstance(child, _Group) and not child.fields:
+                        out[child.name] = True
+                    offset, err = _unpack_nodes(data, offset, fields, out, as_list=as_list, flag_state=flag_state)
                     if err is not None:
                         return offset, err
         elif isinstance(node, _FlagByte):
@@ -445,6 +559,32 @@ def _unpack_nodes(
                 )
                 if err is not None:
                     return offset, err
+        elif isinstance(node, _Sized):
+            count = out.get(node.count)
+            if not isinstance(count, int):
+                raise RuntimeError(f"{node.name}: count {node.count!r} is missing")
+            left = len(data) - offset
+            if left < count:
+                return offset, ShortPacket(field=node.name, needed=count, left=left)
+            raw = _builtin_bytes(data[offset : offset + count])
+            offset += count
+            _append_value(out, node.name, raw, as_list)
+        elif isinstance(node, _U2):
+            got = _read_u2(data, offset, node.names)
+            if isinstance(got, ShortPacket):
+                return offset, got
+            values_u2, offset = got
+            for name, value in zip(node.names, values_u2, strict=True):
+                _append_value(out, name, value, as_list)
+        elif isinstance(node, _Bits):
+            count = out.get(node.count)
+            if not isinstance(count, int):
+                raise RuntimeError(f"{node.name}: count {node.count!r} is missing")
+            got_bits = _read_bits(data, offset, node.name, count)
+            if isinstance(got_bits, ShortPacket):
+                return offset, got_bits
+            bits_value, offset = got_bits
+            _append_value(out, node.name, bits_value, as_list)
         else:
             raise TypeError(f"unknown field node: {type(node)!r}")
     return offset, None

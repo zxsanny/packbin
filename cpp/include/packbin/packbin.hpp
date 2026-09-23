@@ -93,6 +93,10 @@ class Field {
     FlagBit,
     When,
     Repeat,
+    Group,
+    Sized,
+    U2,
+    Bits,
   };
 
   Kind kind{};
@@ -104,6 +108,7 @@ class Field {
   int bit_index = 0;
   std::shared_ptr<Field> inner;
   Eq pred;
+  std::string count_name;
 
   Field be() const;
   Field bit(Field field) const;
@@ -130,6 +135,10 @@ Field flag_byte(std::string name);
 Eq eq(std::string field, Value value);
 Field when(Eq condition, std::vector<Field> fields);
 Field repeat(std::vector<Field> fields);
+Field group(std::string name, std::vector<Field> fields);
+Field sized(std::string name, std::string count_field);
+Field u2(std::vector<std::string> names);
+Field bits(std::string name, std::string count_field);
 Packet packet(std::vector<Field> fields);
 
 std::vector<std::uint8_t> pack(Packet const& target, Values const& values);

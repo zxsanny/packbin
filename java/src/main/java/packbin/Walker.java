@@ -7,50 +7,31 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-final class ByteSink {
-    private byte[] buf = new byte[32];
-    private int size;
-
-    void write(byte b) {
-        ensure(1);
-        buf[size++] = b;
-    }
-
-    void write(byte[] src) {
-        ensure(src.length);
-        System.arraycopy(src, 0, buf, size, src.length);
-        size += src.length;
-    }
-
-    void write(ByteBuffer src) {
-        int n = src.remaining();
-        ensure(n);
-        src.get(buf, size, n);
-        size += n;
-    }
-
-    byte[] toArray() {
-        byte[] out = new byte[size];
-        System.arraycopy(buf, 0, out, 0, size);
-        return out;
-    }
-
-    private void ensure(int extra) {
-        if (size + extra <= buf.length) {
-            return;
-        }
-        int next = Math.max(buf.length * 2, size + extra);
-        byte[] grown = new byte[next];
-        System.arraycopy(buf, 0, grown, 0, size);
-        buf = grown;
-    }
-}
-
 final class Walker {
     private Walker() {}
 
     static boolean isPresent(Map<String, Object> values, String name) {
         return values.containsKey(name) && values.get(name) != null;
+    }
+
+    static boolean groupOn(Map<String, Object> values, Field group) {
+        if (isPresent(values, group.name)) {
+            return true;
+        }
+        for (Field child : group.children) {
+            if ((isScalar(child.kind) || child.kind == Field.Kind.BYTES)
+                    && isPresent(values, child.name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isScalar(Field.Kind kind) {
+        return switch (kind) {
+            case U8, U16, U32, U64, I8, I16, I32, I64, F32, F64 -> true;
+            default -> false;
+        };
     }
 
     static void packField(Field field, Map<String, Object> values, ByteSink sink) {
@@ -61,6 +42,10 @@ final class Walker {
             case WHEN -> packWhen(field, values, sink);
             case REPEAT -> packRepeat(field, values, sink);
             case BYTES -> packBytes(field, values, sink);
+            case GROUP -> packGroup(field, values, sink);
+            case SIZED -> VarFields.packSized(field, values, sink);
+            case U2 -> VarFields.packU2(field, values, sink);
+            case BITS -> VarFields.packBits(field, values, sink);
             default -> packScalar(field, values, sink);
         }
     }
@@ -78,6 +63,10 @@ final class Walker {
             case WHEN -> unpackWhen(field, data, offset, values);
             case REPEAT -> unpackRepeat(field, data, offset, values);
             case BYTES -> unpackBytes(field, data, offset, values, asList);
+            case GROUP -> unpackGroup(field, data, offset, values);
+            case SIZED -> VarFields.unpackSized(field, data, offset, values, asList);
+            case U2 -> VarFields.unpackU2(field, data, offset, values, asList);
+            case BITS -> VarFields.unpackBits(field, data, offset, values, asList);
             default -> unpackScalar(field, data, offset, values, asList);
         };
     }
@@ -95,10 +84,24 @@ final class Walker {
     }
 
     private static void packFlagBit(Field field, Map<String, Object> values, ByteSink sink) {
+        Field inner = field.inner;
+        if (inner.kind == Field.Kind.GROUP) {
+            if (!groupOn(values, inner)) {
+                return;
+            }
+            packGroup(inner, values, sink);
+            return;
+        }
         if (!isPresent(values, field.name)) {
             return;
         }
-        packField(field.inner, values, sink);
+        packField(inner, values, sink);
+    }
+
+    private static void packGroup(Field field, Map<String, Object> values, ByteSink sink) {
+        for (Field child : field.children) {
+            packField(child, values, sink);
+        }
     }
 
     private static void packWhen(Field field, Map<String, Object> values, ByteSink sink) {
@@ -219,6 +222,21 @@ final class Walker {
         return unpackField(field.inner, data, offset, values, false);
     }
 
+    private static Object unpackGroup(
+            Field field, byte[] data, int[] offset, Map<String, Object> values) {
+        if (field.children.isEmpty()) {
+            values.put(field.name, true);
+            return null;
+        }
+        for (Field child : field.children) {
+            Object err = unpackField(child, data, offset, values, false);
+            if (err != null) {
+                return err;
+            }
+        }
+        return null;
+    }
+
     private static Object unpackWhen(
             Field field, byte[] data, int[] offset, Map<String, Object> values) {
         if (!conditionHolds(field.condition, values)) {
@@ -291,7 +309,7 @@ final class Walker {
     }
 
     @SuppressWarnings("unchecked")
-    private static void store(Map<String, Object> values, String name, Object value, boolean asList) {
+    static void store(Map<String, Object> values, String name, Object value, boolean asList) {
         if (!asList) {
             values.put(name, value);
             return;
@@ -362,6 +380,38 @@ final class Walker {
             case F64 -> buf.getDouble();
             default -> throw new IllegalStateException("Cannot read " + field.kind);
         };
+    }
+
+    private static int requireCount(String name, Object value) {
+        if (!(value instanceof Number) || value instanceof Float || value instanceof Double) {
+            throw new IllegalStateException(name + ": count is missing");
+        }
+        return ((Number) value).intValue();
+    }
+
+    private static int requireU2(String name, Object value) {
+        if (value instanceof Boolean
+                || !(value instanceof Number)
+                || value instanceof Float
+                || value instanceof Double) {
+            throw new IllegalArgumentException(name + ": expected 2-bit int");
+        }
+        int n = ((Number) value).intValue();
+        if (n < 0 || n > 3) {
+            throw new IllegalArgumentException(name + ": expected 2-bit int");
+        }
+        return n;
+    }
+
+    private static int requireBit(String name, Object value) {
+        if (!(value instanceof Number) || value instanceof Float || value instanceof Double) {
+            throw new IllegalArgumentException(name + ": expected 0 or 1");
+        }
+        int n = ((Number) value).intValue();
+        if (n != 0 && n != 1) {
+            throw new IllegalArgumentException(name + ": expected 0 or 1");
+        }
+        return n;
     }
 
     private static byte toUnsignedByte(String name, Object value, long max) {
