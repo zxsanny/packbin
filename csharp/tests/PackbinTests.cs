@@ -322,6 +322,100 @@ public class PackbinTests
     }
 
     [Fact]
+    public void CountedDict()
+    {
+        var packet = Packet.Of(
+            Field.Utf8("username"),
+            Field.List("roles", Field.Utf8("role")),
+            Field.Dict("access", Field.List("actions", Field.Utf8("action"))));
+        const string userHex =
+            "07007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e6e656c010004007265616403006d6170040004007265616407006770735f6669780300736574040065646974050073746f7265020004007265616405007772697465";
+        var user = new Dictionary<string, object?>
+        {
+            ["username"] = "zxsanny",
+            ["roles"] = new List<object?> { "user", "dispatcher" },
+            ["access"] = new Dictionary<string, object?>
+            {
+                ["channel"] = new List<object?> { "read" },
+                ["map"] = new List<object?> { "read", "gps_fix", "set", "edit" },
+                ["store"] = new List<object?> { "read", "write" },
+            },
+        };
+        var raw = Pack.Run(packet, user);
+        Assert.Equal(userHex, Convert.ToHexString(raw).ToLowerInvariant());
+        var got = Unpack.Run(packet, raw);
+        Assert.Null(got.Error);
+        Assert.Equal("zxsanny", got.Values["username"]);
+        var roles = Assert.IsAssignableFrom<System.Collections.IList>(got.Values["roles"]);
+        Assert.Equal(2, roles.Count);
+        Assert.Equal("user", roles[0]);
+        Assert.Equal("dispatcher", roles[1]);
+        var access = Assert.IsAssignableFrom<System.Collections.IDictionary>(got.Values["access"]);
+        Assert.Equal(3, access.Count);
+        var channel = Assert.IsAssignableFrom<System.Collections.IList>(access["channel"]);
+        Assert.Equal("read", Assert.Single(channel));
+        var map = Assert.IsAssignableFrom<System.Collections.IList>(access["map"]);
+        Assert.Equal(4, map.Count);
+        Assert.Equal("read", map[0]);
+        Assert.Equal("gps_fix", map[1]);
+        Assert.Equal("set", map[2]);
+        Assert.Equal("edit", map[3]);
+        var store = Assert.IsAssignableFrom<System.Collections.IList>(access["store"]);
+        Assert.Equal(2, store.Count);
+        Assert.Equal("read", store[0]);
+        Assert.Equal("write", store[1]);
+
+        var reordered = new Dictionary<string, object?>
+        {
+            ["username"] = "zxsanny",
+            ["roles"] = new List<object?> { "user", "dispatcher" },
+            ["access"] = new Dictionary<string, object?>
+            {
+                ["store"] = new List<object?> { "read", "write" },
+                ["channel"] = new List<object?> { "read" },
+                ["map"] = new List<object?> { "read", "gps_fix", "set", "edit" },
+            },
+        };
+        var reorderedRaw = Pack.Run(packet, reordered);
+        Assert.Equal(0, MismatchedBytes(raw, reorderedRaw));
+
+        var empties = Packet.Of(
+            Field.Utf8("a"),
+            Field.List("b", Field.Utf8("x")),
+            Field.Dict("c", Field.Utf8("v")));
+        var emptyRaw = Pack.Run(empties, new Dictionary<string, object?>
+        {
+            ["a"] = "",
+            ["b"] = new List<object?>(),
+            ["c"] = new Dictionary<string, object?>(),
+        });
+        Assert.Equal("000000000000", Convert.ToHexString(emptyRaw).ToLowerInvariant());
+
+        var onlyDict = Packet.Of(Field.Dict("access", Field.Utf8("v")));
+        var dup = Unpack.Run(onlyDict, ParseHex("0200010061010078010061010079"));
+        Assert.NotNull(dup.Error);
+        Assert.Empty(dup.Values);
+
+        var again = Pack.Run(packet, user);
+        Assert.Equal(0, MismatchedBytes(raw, again));
+        byte[]? left = null;
+        byte[]? right = null;
+        var first = new Thread(() => left = Pack.Run(packet, user));
+        var second = new Thread(() => right = Pack.Run(packet, user));
+        first.Start();
+        second.Start();
+        first.Join();
+        second.Join();
+        Assert.Equal(0, MismatchedBytes(left!, right!));
+
+        var over = new Dictionary<string, object?>();
+        for (var i = 0; i < 65536; i++)
+            over[i.ToString(CultureInfo.InvariantCulture)] = "x";
+        Assert.Throws<ArgumentException>(() =>
+            Pack.Run(onlyDict, new Dictionary<string, object?> { ["access"] = over }));
+    }
+
+    [Fact]
     public void U2AndBits()
     {
         var kinds = Packet.Of(Field.U2("a", "b", "c", "d"));

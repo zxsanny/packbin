@@ -20,7 +20,8 @@ public final class Field {
         U2,
         BITS,
         UTF8,
-        LIST
+        LIST,
+        DICT
     }
 
     final Kind kind;
@@ -122,6 +123,13 @@ public final class Field {
             throw new IllegalArgumentException("repeat is not a list element");
         }
         return new Field(Kind.LIST, name, false, 0, List.of(element), null, null, 0, null, null, null);
+    }
+
+    static Field dict(String name, Field element) {
+        if (element.kind == Kind.REPEAT) {
+            throw new IllegalArgumentException("repeat is not a dictionary element");
+        }
+        return new Field(Kind.DICT, name, false, 0, List.of(element), null, null, 0, null, null, null);
     }
 
     Field withBigEndian() {

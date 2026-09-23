@@ -195,4 +195,84 @@ internal static partial class Walker
         Store(values, field.Name, items, repeatLists);
         return null;
     }
+
+    private static void PackDict(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    {
+        if (values[field.Name] is not IDictionary map)
+            throw new ArgumentException($"{field.Name}: expected dictionary");
+        if (map.Count > 65535)
+            throw new ArgumentException($"{field.Name}: length {map.Count}");
+        var entries = new List<(byte[] KeyBytes, object? Value)>(map.Count);
+        foreach (DictionaryEntry entry in map)
+        {
+            if (entry.Key is not string key)
+                throw new ArgumentException($"{field.Name}: expected string keys");
+            var keyBytes = Encoding.UTF8.GetBytes(key);
+            if (keyBytes.Length > 65535)
+                throw new ArgumentException($"{field.Name}: utf-8 length {keyBytes.Length}");
+            entries.Add((keyBytes, entry.Value));
+        }
+        entries.Sort(static (a, b) => CompareUtf8Bytes(a.KeyBytes, b.KeyBytes));
+        buffer.Add((byte)entries.Count);
+        buffer.Add((byte)(entries.Count >> 8));
+        var child = field.Children[0];
+        foreach (var (keyBytes, value) in entries)
+        {
+            buffer.Add((byte)keyBytes.Length);
+            buffer.Add((byte)(keyBytes.Length >> 8));
+            buffer.AddRange(keyBytes);
+            var slice = new Dictionary<string, object?>(values) { [child.Name] = value };
+            PackField(child, slice, buffer);
+        }
+    }
+
+    private static object? UnpackDict(
+        Field field,
+        ReadOnlySpan<byte> bytes,
+        ref int offset,
+        Dictionary<string, object?> values,
+        bool repeatLists)
+    {
+        var left = bytes.Length - offset;
+        if (left < 2)
+            return new ShortPacket(field.Name, 2, left);
+        var count = bytes[offset] | (bytes[offset + 1] << 8);
+        offset += 2;
+        var child = field.Children[0];
+        var items = new Dictionary<string, object?>(count);
+        for (var i = 0; i < count; i++)
+        {
+            left = bytes.Length - offset;
+            if (left < 2)
+                return new ShortPacket(field.Name, 2, left);
+            var keyLen = bytes[offset] | (bytes[offset + 1] << 8);
+            offset += 2;
+            left = bytes.Length - offset;
+            if (left < keyLen)
+                return new ShortPacket(field.Name, keyLen, left);
+            var key = Encoding.UTF8.GetString(bytes.Slice(offset, keyLen));
+            offset += keyLen;
+            var one = new Dictionary<string, object?>();
+            var err = UnpackField(child, bytes, ref offset, one, false);
+            if (err is not null)
+                return err;
+            if (items.ContainsKey(key))
+                return new ShortPacket(field.Name, 0, 0);
+            items[key] = one[child.Name];
+        }
+        Store(values, field.Name, items, repeatLists);
+        return null;
+    }
+
+    private static int CompareUtf8Bytes(byte[] a, byte[] b)
+    {
+        var n = Math.Min(a.Length, b.Length);
+        for (var i = 0; i < n; i++)
+        {
+            var c = a[i].CompareTo(b[i]);
+            if (c != 0)
+                return c;
+        }
+        return a.Length.CompareTo(b.Length);
+    }
 }

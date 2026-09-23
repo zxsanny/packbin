@@ -78,6 +78,10 @@ pub(crate) enum FieldKind {
         name: Name,
         element: Box<Field>,
     },
+    Dict {
+        name: Name,
+        element: Box<Field>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -149,7 +153,8 @@ fn count_fields(fields: &[Field]) -> (usize, bool) {
             | FieldKind::Sized { .. }
             | FieldKind::Bits { .. }
             | FieldKind::Utf8 { .. }
-            | FieldKind::List { .. } => n += 1,
+            | FieldKind::List { .. }
+            | FieldKind::Dict { .. } => n += 1,
             FieldKind::U2 { names } => n += names.len(),
             FieldKind::Flags { members, .. } | FieldKind::Group { members, .. } => {
                 n += 1 + count_fields(members).0;
@@ -330,6 +335,18 @@ pub fn list(name: impl AsRef<str>, element: Field) -> Field {
     }
 }
 
+pub fn dict(name: impl AsRef<str>, element: Field) -> Field {
+    if matches!(element.kind, FieldKind::Repeat { .. }) {
+        panic!("repeat is not a dictionary element");
+    }
+    Field {
+        kind: FieldKind::Dict {
+            name: name_of(name),
+            element: Box::new(element),
+        },
+    }
+}
+
 pub fn bits(name: impl AsRef<str>, count_field: impl AsRef<str>) -> Field {
     Field {
         kind: FieldKind::Bits {
@@ -366,7 +383,8 @@ pub(crate) fn field_name(field: &Field) -> Option<&str> {
         | FieldKind::Sized { name, .. }
         | FieldKind::Bits { name, .. }
         | FieldKind::Utf8 { name }
-        | FieldKind::List { name, .. } => Some(name.as_ref()),
+        | FieldKind::List { name, .. }
+        | FieldKind::Dict { name, .. } => Some(name.as_ref()),
         FieldKind::U2 { names } => names.first().map(|n| n.as_ref()),
         FieldKind::FlagBit { inner, .. } => field_name(inner),
         FieldKind::When { .. } | FieldKind::Repeat { .. } => None,

@@ -2,9 +2,13 @@ package packbin;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 final class VarFields {
     private VarFields() {}
@@ -215,6 +219,82 @@ final class VarFields {
                 return err;
             }
             items.add(one.get(child.name));
+        }
+        Walker.store(values, field.name, items, asList);
+        return null;
+    }
+
+    static void packDict(Field field, Map<String, Object> values, ByteSink sink) {
+        Object raw = values.get(field.name);
+        if (!(raw instanceof Map<?, ?> items)) {
+            throw new IllegalArgumentException(field.name + ": expected dictionary");
+        }
+        if (items.size() > 65535) {
+            throw new IllegalArgumentException(field.name + ": length " + items.size());
+        }
+        List<String> keys = new ArrayList<>(items.size());
+        for (Object key : items.keySet()) {
+            if (!(key instanceof String text)) {
+                throw new IllegalArgumentException(field.name + ": expected string key");
+            }
+            keys.add(text);
+        }
+        keys.sort((a, b) -> Arrays.compareUnsigned(
+                a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8)));
+        sink.write((byte) keys.size());
+        sink.write((byte) (keys.size() >> 8));
+        Field child = field.children.get(0);
+        for (String key : keys) {
+            byte[] rawKey = key.getBytes(StandardCharsets.UTF_8);
+            if (rawKey.length > 65535) {
+                throw new IllegalArgumentException(field.name + ": key length " + rawKey.length);
+            }
+            sink.write((byte) rawKey.length);
+            sink.write((byte) (rawKey.length >> 8));
+            sink.write(rawKey);
+            Map<String, Object> slice = new HashMap<>();
+            slice.put(child.name, items.get(key));
+            Walker.packField(child, slice, sink);
+        }
+    }
+
+    static Object unpackDict(
+            Field field,
+            byte[] data,
+            int[] offset,
+            Map<String, Object> values,
+            boolean asList) {
+        int left = data.length - offset[0];
+        if (left < 2) {
+            return new Packbin.ShortPacket(field.name, 2, left);
+        }
+        int count = (data[offset[0]] & 0xff) | ((data[offset[0] + 1] & 0xff) << 8);
+        offset[0] += 2;
+        Field child = field.children.get(0);
+        Map<String, Object> items = new LinkedHashMap<>();
+        Set<String> seen = new HashSet<>();
+        for (int i = 0; i < count; i++) {
+            left = data.length - offset[0];
+            if (left < 2) {
+                return new Packbin.ShortPacket(field.name, 2, left);
+            }
+            int keyLen = (data[offset[0]] & 0xff) | ((data[offset[0] + 1] & 0xff) << 8);
+            offset[0] += 2;
+            left = data.length - offset[0];
+            if (left < keyLen) {
+                return new Packbin.ShortPacket(field.name, keyLen, left);
+            }
+            String key = new String(data, offset[0], keyLen, StandardCharsets.UTF_8);
+            offset[0] += keyLen;
+            if (!seen.add(key)) {
+                return new Packbin.ShortPacket(field.name, 0, 0);
+            }
+            Map<String, Object> one = new HashMap<>();
+            Object err = Walker.unpackField(child, data, offset, one, false);
+            if (err != null) {
+                return err;
+            }
+            items.put(key, one.get(child.name));
         }
         Walker.store(values, field.name, items, asList);
         return null;

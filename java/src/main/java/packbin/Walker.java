@@ -48,6 +48,7 @@ final class Walker {
             case BITS -> VarFields.packBits(field, values, sink);
             case UTF8 -> VarFields.packUtf8(field, values, sink);
             case LIST -> VarFields.packList(field, values, sink);
+            case DICT -> VarFields.packDict(field, values, sink);
             default -> packScalar(field, values, sink);
         }
     }
@@ -71,6 +72,7 @@ final class Walker {
             case BITS -> VarFields.unpackBits(field, data, offset, values, asList);
             case UTF8 -> VarFields.unpackUtf8(field, data, offset, values, asList);
             case LIST -> VarFields.unpackList(field, data, offset, values, asList);
+            case DICT -> VarFields.unpackDict(field, data, offset, values, asList);
             default -> unpackScalar(field, data, offset, values, asList);
         };
     }

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from packbin import (
     TrailingBytes,
     be,
     bits,
+    dict,
     eq,
     flags,
     group,
@@ -366,3 +368,81 @@ def test_counted_list():
     assert pack(two, {"xs": []}).hex() == "0000"
     with pytest.raises(ValueError):
         pack(two, {"xs": [1] * 65536})
+
+
+def test_dictionary():
+    user_hex = (
+        "07007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e"
+        "6e656c010004007265616403006d6170040004007265616407006770735f66697803007365"
+        "74040065646974050073746f7265020004007265616405007772697465"
+    )
+    layout = packet(
+        [
+            utf8("username"),
+            list("roles", utf8("role")),
+            dict("access", list("actions", utf8("action"))),
+        ]
+    )
+    values = {
+        "username": "zxsanny",
+        "roles": ["user", "dispatcher"],
+        "access": {
+            "channel": ["read"],
+            "map": ["read", "gps_fix", "set", "edit"],
+            "store": ["read", "write"],
+        },
+    }
+    raw = pack(layout, values)
+    assert raw.hex() == user_hex
+    got = unpack(layout, raw)
+    assert got.ok is True
+    assert got.value is not None
+    assert got.value["username"] == "zxsanny"
+    assert got.value["roles"] == ["user", "dispatcher"]
+    assert got.value["access"]["channel"] == ["read"]
+    assert got.value["access"]["map"] == ["read", "gps_fix", "set", "edit"]
+    assert got.value["access"]["store"] == ["read", "write"]
+
+    reordered = {
+        "username": "zxsanny",
+        "roles": ["user", "dispatcher"],
+        "access": {
+            "store": ["read", "write"],
+            "channel": ["read"],
+            "map": ["read", "gps_fix", "set", "edit"],
+        },
+    }
+    assert pack(layout, reordered).hex() == user_hex
+
+    empty = packet([utf8("s"), list("xs", u8("n")), dict("m", utf8("v"))])
+    assert pack(empty, {"s": "", "xs": [], "m": {}}).hex() == "000000000000"
+
+    dup = unpack(
+        packet([dict("access", utf8("v"))]),
+        bytes.fromhex("0200010061010078010061010079"),
+    )
+    assert dup.ok is False
+    assert dup.value is None
+
+    a = pack(layout, values)
+    b = pack(layout, values)
+    assert a == b
+    assert _mismatched_bytes(a, b.hex()) == 0
+
+    results: list[bytes | None] = [None, None]
+
+    def run(index: int) -> None:
+        results[index] = pack(layout, values)
+
+    t0 = threading.Thread(target=run, args=(0,))
+    t1 = threading.Thread(target=run, args=(1,))
+    t0.start()
+    t1.start()
+    t0.join()
+    t1.join()
+    assert results[0] is not None and results[1] is not None
+    assert _mismatched_bytes(results[0], results[1].hex()) == 0
+
+    huge = packet([dict("m", utf8("v"))])
+    with pytest.raises(ValueError):
+        pack(huge, {"m": {str(i): "x" for i in range(65536)}})

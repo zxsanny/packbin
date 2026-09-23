@@ -30,7 +30,8 @@ export function scalarChildNames(
         f.kind === "float" ||
         f.kind === "bytes" ||
         f.kind === "utf8" ||
-        f.kind === "list") &&
+        f.kind === "list" ||
+        f.kind === "dict") &&
       typeof f.name === "string"
     ) {
       names.push(f.name)

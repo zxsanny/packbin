@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 
 pub type Name = Rc<str>;
@@ -19,6 +19,7 @@ pub enum Value {
     Bytes(Vec<u8>),
     Str(String),
     List(Vec<Value>),
+    Map(BTreeMap<String, Value>),
     Groups(Vec<Values>),
 }
 
@@ -96,6 +97,12 @@ pub fn values_eq(a: &Value, b: &Value) -> bool {
         (Value::Str(x), Value::Str(y)) => x == y,
         (Value::List(x), Value::List(y)) => {
             x.len() == y.len() && x.iter().zip(y.iter()).all(|(a, b)| values_eq(a, b))
+        }
+        (Value::Map(x), Value::Map(y)) => {
+            x.len() == y.len()
+                && x.iter()
+                    .zip(y.iter())
+                    .all(|((ka, va), (kb, vb))| ka == kb && values_eq(va, vb))
         }
         _ => false,
     }

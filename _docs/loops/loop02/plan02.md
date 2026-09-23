@@ -28,10 +28,10 @@ ship: false
 ## Implementation
 
 ### Files that change
-Six language packages. String, list, and dictionary land after the flag-group batch already in the working tree.
+Six language packages. String, list, and dictionary landed in each language packer.
 
 ### Order of work
-Flag group, sized bytes, bit pack, UTF-8 string, and counted list are coded. Next batch is AZ-1940, then AZ-1941.
+Flag group, sized bytes, bit pack, UTF-8 string, counted list, and dictionary are coded. Next batch is AZ-1941.
 
 ### Proof
 Each language suite packs and unpacks the task hex with zero mismatched bytes.

@@ -20,6 +20,7 @@ import {
   bits,
   utf8,
   list,
+  dict,
   be,
   pack,
   unpack,
@@ -341,6 +342,90 @@ describe("packbin", () => {
       produced = pack(two, { xs: Array(65536).fill(1) })
     })
     assert.equal(produced, null)
+  })
+
+  it("dictionary field orders keys and nests lists", () => {
+    const userHex =
+      "07007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e6e656c010004007265616403006d6170040004007265616407006770735f6669780300736574040065646974050073746f7265020004007265616405007772697465"
+    const layout = packet([
+      utf8("username"),
+      list("roles", utf8("role")),
+      dict("access", list("actions", utf8("action"))),
+    ])
+    const userValue = {
+      username: "zxsanny",
+      roles: ["user", "dispatcher"],
+      access: {
+        channel: ["read"],
+        map: ["read", "gps_fix", "set", "edit"],
+        store: ["read", "write"],
+      },
+    }
+
+    const raw = pack(layout, userValue)
+    assert.equal(toHex(raw), userHex)
+    const got = unpack(layout, raw)
+    assert.equal(got.ok, true)
+    if (!got.ok) return
+    assert.equal(got.username, "zxsanny")
+    assert.deepEqual(got.roles, ["user", "dispatcher"])
+    const access = got.access as Record<string, string[]>
+    assert.deepEqual(access.channel, ["read"])
+    assert.deepEqual(access.map, ["read", "gps_fix", "set", "edit"])
+    assert.deepEqual(access.store, ["read", "write"])
+    assert.equal(Object.keys(access).length, 3)
+
+    const reordered = pack(layout, {
+      username: "zxsanny",
+      roles: ["user", "dispatcher"],
+      access: {
+        store: ["read", "write"],
+        channel: ["read"],
+        map: ["read", "gps_fix", "set", "edit"],
+      },
+    })
+    assert.equal(toHex(reordered), userHex)
+    assert.equal(mismatchedBytes(raw, reordered), 0)
+
+    const empties = packet([
+      utf8("name"),
+      list("xs", utf8("x")),
+      dict("d", utf8("v")),
+    ])
+    assert.equal(toHex(pack(empties, { name: "", xs: [], d: {} })), "000000000000")
+
+    const dup = packet([dict("access", utf8("v"))])
+    const bad = unpack(dup, Buffer.from("0200010061010078010061010079", "hex"))
+    assert.equal(bad.ok, false)
+    if (bad.ok) return
+    assert.equal(Object.keys(bad).filter((k) => k !== "ok" && k !== "field" && k !== "needed" && k !== "left").length, 0)
+
+    const a = pack(layout, userValue)
+    const b = pack(layout, userValue)
+    assert.equal(mismatchedBytes(a, b), 0)
+
+    let left: Uint8Array | null = null
+    let right: Uint8Array | null = null
+    return Promise.all([
+      Promise.resolve().then(() => {
+        left = pack(layout, userValue)
+      }),
+      Promise.resolve().then(() => {
+        right = pack(layout, userValue)
+      }),
+    ]).then(() => {
+      assert.ok(left)
+      assert.ok(right)
+      assert.equal(mismatchedBytes(left!, right!), 0)
+    }).then(() => {
+      let produced: Uint8Array | null = null
+      const huge: Record<string, string> = {}
+      for (let i = 0; i < 65536; i++) huge[`k${i}`] = "v"
+      assert.throws(() => {
+        produced = pack(packet([dict("d", utf8("v"))]), { d: huge })
+      })
+      assert.equal(produced, null)
+    })
   })
 
   it("NFR 100000 pack-then-unpack round trips ≤ 1s", () => {

@@ -75,7 +75,8 @@ fn group_on(name: &str, members: &[Field], values: &Values) -> bool {
             | FieldKind::Float { name, .. }
             | FieldKind::Bytes { name, .. }
             | FieldKind::Utf8 { name }
-            | FieldKind::List { name, .. } => {
+            | FieldKind::List { name, .. }
+            | FieldKind::Dict { name, .. } => {
                 if present(values, name) {
                     return true;
                 }
@@ -245,6 +246,30 @@ fn pack_one(
                 out.extend_from_slice(&n.to_le_bytes());
                 let child = field_name(element).ok_or_else(|| PackError::Type(name.to_string()))?;
                 for item in items {
+                    let mut slice = Values::new();
+                    slice.insert(name_of(child), Some(item.clone()));
+                    pack_fields(std::slice::from_ref(element), &slice, flag_bits, out)?;
+                }
+                Ok(())
+            }
+            _ => Err(PackError::Type(name.to_string())),
+        },
+        FieldKind::Dict { name, element } => match require(values, name)? {
+            Value::Map(map) => {
+                if map.len() > 65535 {
+                    return Err(PackError::Type(name.to_string()));
+                }
+                let n = map.len() as u16;
+                out.extend_from_slice(&n.to_le_bytes());
+                let child = field_name(element).ok_or_else(|| PackError::Type(name.to_string()))?;
+                for (key, item) in map {
+                    let raw = key.as_bytes();
+                    if raw.len() > 65535 {
+                        return Err(PackError::Type(name.to_string()));
+                    }
+                    let kn = raw.len() as u16;
+                    out.extend_from_slice(&kn.to_le_bytes());
+                    out.extend_from_slice(raw);
                     let mut slice = Values::new();
                     slice.insert(name_of(child), Some(item.clone()));
                     pack_fields(std::slice::from_ref(element), &slice, flag_bits, out)?;
@@ -525,6 +550,47 @@ fn unpack_one(
                 });
             }
             values.insert(name.clone(), Some(Value::List(items)));
+        }
+        FieldKind::Dict { name, element } => {
+            let count_raw = cur.take(2, name)?;
+            let count = u16::from_le_bytes([count_raw[0], count_raw[1]]) as usize;
+            let child = field_name(element).unwrap_or(name);
+            let mut map = std::collections::BTreeMap::new();
+            for _ in 0..count {
+                let key_len_raw = cur.take(2, name)?;
+                let key_len = u16::from_le_bytes([key_len_raw[0], key_len_raw[1]]) as usize;
+                let key_raw = cur.take(key_len, name)?;
+                let key = std::str::from_utf8(key_raw)
+                    .map_err(|_| {
+                        UnpackError::Short(ShortPacket {
+                            field: name.to_string(),
+                            needed: key_len,
+                            left: 0,
+                        })
+                    })?
+                    .to_string();
+                let mut one = Values::new();
+                unpack_fields(std::slice::from_ref(element), cur, &mut one, flag_bits, groups)?;
+                let item = match one.remove(child) {
+                    Some(Some(v)) => v,
+                    _ => {
+                        return Err(UnpackError::Short(ShortPacket {
+                            field: name.to_string(),
+                            needed: 0,
+                            left: cur.left(),
+                        }))
+                    }
+                };
+                if map.contains_key(&key) {
+                    return Err(UnpackError::Short(ShortPacket {
+                        field: name.to_string(),
+                        needed: 0,
+                        left: 0,
+                    }));
+                }
+                map.insert(key, item);
+            }
+            values.insert(name.clone(), Some(Value::Map(map)));
         }
     }
     Ok(())

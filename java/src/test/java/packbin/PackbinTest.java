@@ -42,6 +42,7 @@ public final class PackbinTest {
         sizedPayload();
         utf8String();
         countedList();
+        dictionary();
         u2Kinds();
         bitsSegs();
         nfrRoundTripsWithinOneSecond();
@@ -371,6 +372,74 @@ public final class PackbinTest {
             failed = true;
         }
         expectTrue("list too long", failed);
+    }
+
+    private static void dictionary() throws Exception {
+        String userHex =
+                "07007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e6e656c010004007265616403006d6170040004007265616407006770735f6669780300736574040065646974050073746f7265020004007265616405007772697465";
+        Packbin.Packet layout = Packbin.packet(
+                Packbin.utf8("username"),
+                Packbin.list("roles", Packbin.utf8("role")),
+                Packbin.dict("access", Packbin.list("actions", Packbin.utf8("action"))));
+        Map<String, Object> access = new java.util.LinkedHashMap<>();
+        access.put("store", List.of("read", "write"));
+        access.put("channel", List.of("read"));
+        access.put("map", List.of("read", "gps_fix", "set", "edit"));
+        Map<String, Object> values = new HashMap<>();
+        values.put("username", "zxsanny");
+        values.put("roles", List.of("user", "dispatcher"));
+        values.put("access", access);
+        byte[] raw = Packbin.pack(layout, values);
+        expectEq("dict hex", userHex, toHex(raw));
+        expectEq("dict len", 103, raw.length);
+        expectEq("dict twice", 0, mismatchedBytes(raw, Packbin.pack(layout, values)));
+        byte[][] parallel = new byte[2][];
+        Thread first = new Thread(() -> parallel[0] = Packbin.pack(layout, values));
+        Thread second = new Thread(() -> parallel[1] = Packbin.pack(layout, values));
+        first.start();
+        second.start();
+        first.join();
+        second.join();
+        expectEq("dict parallel", 0, mismatchedBytes(parallel[0], parallel[1]));
+        Packbin.UnpackResult got = Packbin.unpack(layout, raw);
+        expectTrue("dict ok", got.ok);
+        expectEq("dict user", "zxsanny", got.value.get("username"));
+        List<?> roles = (List<?>) got.value.get("roles");
+        expectEq("dict roles", 2, roles.size());
+        expectEq("dict role 0", "user", roles.get(0));
+        expectEq("dict role 1", "dispatcher", roles.get(1));
+        Map<?, ?> back = (Map<?, ?>) got.value.get("access");
+        expectEq("dict access", 3, back.size());
+        expectEq("dict channel", "read", ((List<?>) back.get("channel")).get(0));
+        expectEq("dict map", "gps_fix", ((List<?>) back.get("map")).get(1));
+        expectEq("dict store", "write", ((List<?>) back.get("store")).get(1));
+
+        Packbin.Packet empty = Packbin.packet(
+                Packbin.utf8("s"), Packbin.list("xs", Packbin.u8("n")), Packbin.dict("m", Packbin.utf8("v")));
+        Map<String, Object> emptyVals = new HashMap<>();
+        emptyVals.put("s", "");
+        emptyVals.put("xs", List.of());
+        emptyVals.put("m", Map.of());
+        expectEq("dict empty", "000000000000", toHex(Packbin.pack(empty, emptyVals)));
+
+        Packbin.Packet dup = Packbin.packet(Packbin.dict("access", Packbin.utf8("v")));
+        Packbin.UnpackResult bad = Packbin.unpack(dup, parseHex("0200010061010078010061010079"));
+        expectTrue("dict dup", !bad.ok);
+        expectEq("dict dup values", 0, bad.value.size());
+
+        Map<String, Object> huge = new HashMap<>();
+        for (int i = 0; i < 65536; i++) {
+            huge.put(Integer.toString(i), "x");
+        }
+        Map<String, Object> longVals = new HashMap<>();
+        longVals.put("access", huge);
+        boolean failed = false;
+        try {
+            Packbin.pack(dup, longVals);
+        } catch (IllegalArgumentException ex) {
+            failed = true;
+        }
+        expectTrue("dict too long", failed);
     }
 
     private static void u2Kinds() {

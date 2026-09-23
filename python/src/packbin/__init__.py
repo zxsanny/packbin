@@ -6,6 +6,7 @@ from typing import Any, Callable, Sequence
 
 _builtin_bytes = bytes
 _builtin_list = list
+_builtin_dict = dict
 __all__ = [
     "ShortPacket",
     "TrailingBytes",
@@ -34,6 +35,7 @@ __all__ = [
     "bits",
     "utf8",
     "list",
+    "dict",
     "pack",
     "unpack",
 ]
@@ -180,6 +182,12 @@ class _List(_Node):
 
 
 @dataclass(slots=True)
+class _Dict(_Node):
+    name: str
+    element: _Node
+
+
+@dataclass(slots=True)
 class Packet:
     fields: list[_Node]
 
@@ -319,6 +327,12 @@ def list(name: str, element: _Node) -> _List:
     return _List(name=name, element=element)
 
 
+def dict(name: str, element: _Node) -> _Dict:
+    if isinstance(element, _Repeat):
+        raise ValueError("repeat is not a dictionary element")
+    return _Dict(name=name, element=element)
+
+
 def _utf8_payload(name: str, value: Any) -> bytes:
     if not isinstance(value, str):
         raise TypeError(f"{name}: expected str")
@@ -332,7 +346,7 @@ def _group_on(values: dict[str, Any], node: _Group) -> bool:
     if _present(values, node.name):
         return True
     for child in node.fields:
-        if isinstance(child, (_Scalar, _Bytes, _Utf8, _List)) and _present(values, child.name):
+        if isinstance(child, (_Scalar, _Bytes, _Utf8, _List, _Dict)) and _present(values, child.name):
             return True
     return False
 
@@ -410,7 +424,7 @@ def _read_scalar(
 
 
 def _field_name(node: _Node) -> str:
-    if isinstance(node, (_Scalar, _Bytes, _Utf8, _List)):
+    if isinstance(node, (_Scalar, _Bytes, _Utf8, _List, _Dict)):
         return node.name
     if isinstance(node, _FlagBit):
         return _field_name(node.field)
@@ -520,6 +534,22 @@ def _pack_nodes(
             child_name = _field_name(node.element)
             for item in items:
                 _pack_nodes(buf, [node.element], {child_name: item})
+        elif isinstance(node, _Dict):
+            mapping = take(node.name)
+            if not isinstance(mapping, _builtin_dict):
+                raise TypeError(f"{node.name}: expected dict")
+            if len(mapping) > 65535:
+                raise ValueError(f"{node.name}: length {len(mapping)}")
+            pairs = sorted(mapping.items(), key=lambda kv: kv[0].encode("utf-8"))
+            buf.append(len(pairs) & 0xFF)
+            buf.append((len(pairs) >> 8) & 0xFF)
+            child_name = _field_name(node.element)
+            for key, value in pairs:
+                raw = _utf8_payload(node.name, key)
+                buf.append(len(raw) & 0xFF)
+                buf.append((len(raw) >> 8) & 0xFF)
+                buf.extend(raw)
+                _pack_nodes(buf, [node.element], {child_name: value})
         else:
             raise TypeError(f"unknown field node: {type(node)!r}")
 
@@ -661,6 +691,33 @@ def _unpack_nodes(
                     return offset, err
                 items.append(one.get(child_name))
             _append_value(out, node.name, items, as_list)
+        elif isinstance(node, _Dict):
+            left = len(data) - offset
+            if left < 2:
+                return offset, ShortPacket(field=node.name, needed=2, left=left)
+            count = struct.unpack_from("<H", data, offset)[0]
+            offset += 2
+            child_name = _field_name(node.element)
+            mapping: dict[str, Any] = {}
+            for _ in range(count):
+                left = len(data) - offset
+                if left < 2:
+                    return offset, ShortPacket(field=node.name, needed=2, left=left)
+                key_len = struct.unpack_from("<H", data, offset)[0]
+                offset += 2
+                left = len(data) - offset
+                if left < key_len:
+                    return offset, ShortPacket(field=node.name, needed=key_len, left=left)
+                key = _builtin_bytes(data[offset : offset + key_len]).decode("utf-8")
+                offset += key_len
+                one: dict[str, Any] = {}
+                offset, err = _unpack_nodes(data, offset, [node.element], one)
+                if err is not None:
+                    return offset, err
+                if key in mapping:
+                    return offset, ShortPacket(field=node.name, needed=0, left=0)
+                mapping[key] = one.get(child_name)
+            _append_value(out, node.name, mapping, as_list)
         else:
             raise TypeError(f"unknown field node: {type(node)!r}")
     return offset, None

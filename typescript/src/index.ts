@@ -42,6 +42,7 @@ export type Field =
   | { kind: "bits"; name: string; count: string }
   | { kind: "utf8"; name: string }
   | { kind: "list"; name: string; element: Field }
+  | { kind: "dict"; name: string; element: Field }
 
 export type Packet = { fields: Field[] }
 
@@ -181,6 +182,17 @@ export function list(name: string, element: Field): Field {
   return { kind: "list", name, element: flat[0]! }
 }
 
+export function dict(name: string, element: Field): Field {
+  const flat = flatten([element])
+  if (flat.length !== 1) {
+    throw new RangeError("dictionary element must be one field")
+  }
+  if (flat[0]!.kind === "repeat") {
+    throw new RangeError("repeat is not a dictionary element")
+  }
+  return { kind: "dict", name, element: flat[0]! }
+}
+
 function collectFlagBits(fields: Field[], id: symbol): { bit: number; field: Field }[] {
   const bits: { bit: number; field: Field }[] = []
   for (const f of fields) {
@@ -217,7 +229,8 @@ function fieldName(field: Field): string {
     field.kind === "sized" ||
     field.kind === "bits" ||
     field.kind === "utf8" ||
-    field.kind === "list"
+    field.kind === "list" ||
+    field.kind === "dict"
   ) {
     return field.name
   }
@@ -329,6 +342,31 @@ function packFields(
         }
         break
       }
+      case "dict": {
+        const items = values[f.name]
+        if (!isPlainObject(items)) throw new RangeError(`${f.name}: expected dictionary`)
+        const enc = new TextEncoder()
+        const keys = Object.keys(items).sort((a, b) => {
+          const ba = enc.encode(a)
+          const bb = enc.encode(b)
+          const n = Math.min(ba.length, bb.length)
+          for (let i = 0; i < n; i++) {
+            const d = ba[i]! - bb[i]!
+            if (d !== 0) return d
+          }
+          return ba.length - bb.length
+        })
+        if (keys.length > 65535) throw new RangeError(`${f.name}: length ${keys.length}`)
+        out.push(keys.length & 0xff, (keys.length >> 8) & 0xff)
+        const child = fieldName(f.element)
+        const record = items as Value
+        for (const key of keys) {
+          writeUtf8(out, f.name, key)
+          const slice: Value = { ...values, [child]: record[key] }
+          packFields([f.element], allFields, slice, out, flagBytes)
+        }
+        break
+      }
       case "flags":
         packFields(flatten([f]), allFields, values, out, flagBytes)
         break
@@ -348,8 +386,10 @@ function flattenValues(values: object): Value {
   const out: Value = {}
   for (const [key, raw] of Object.entries(values)) {
     if (raw === undefined || raw === null) continue
-    if (isPlainObject(raw)) Object.assign(out, flattenValues(raw))
-    else out[key] = raw
+    if (isPlainObject(raw)) {
+      out[key] = raw
+      Object.assign(out, flattenValues(raw))
+    } else out[key] = raw
   }
   return out
 }
@@ -489,6 +529,27 @@ function unpackFields(
           const err = unpackFields([f.element], cur, one, flagBytes, false)
           if (err) return err
           items.push(one[child])
+        }
+        if (repeating) appendRepeat(values, f.name, items)
+        else values[f.name] = items
+        break
+      }
+      case "dict": {
+        if (cur.offset + 2 > cur.buf.length) return short(f.name, 2, cur.buf.length - cur.offset)
+        const count = cur.view.getUint16(cur.offset, true)
+        cur.offset += 2
+        const items: Value = {}
+        const child = fieldName(f.element)
+        for (let i = 0; i < count; i++) {
+          const key = readUtf8(cur, f.name)
+          if (!key.ok) return key
+          const one: Value = {}
+          const err = unpackFields([f.element], cur, one, flagBytes, false)
+          if (err) return err
+          if (Object.prototype.hasOwnProperty.call(items, key.value)) {
+            return short(f.name, 0, 0)
+          }
+          items[key.value] = one[child]
         }
         if (repeating) appendRepeat(values, f.name, items)
         else values[f.name] = items

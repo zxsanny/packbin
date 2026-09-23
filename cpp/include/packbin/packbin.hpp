@@ -22,13 +22,15 @@ struct TrailingBytes {
 };
 
 struct ValueList;
+struct ValueMap;
 
 struct Value {
   using Bytes = std::vector<std::uint8_t>;
   using List = std::shared_ptr<ValueList>;
+  using Map = std::shared_ptr<ValueMap>;
   using Storage = std::variant<std::uint8_t, std::uint16_t, std::uint32_t, std::uint64_t,
                                std::int8_t, std::int16_t, std::int32_t, std::int64_t, float,
-                               double, Bytes, std::string, List>;
+                               double, Bytes, std::string, List, Map>;
   Storage data;
 
   Value() : data(std::uint8_t{0}) {}
@@ -46,10 +48,15 @@ struct Value {
   Value(std::string v) : data(std::move(v)) {}
   Value(char const* v) : data(std::string(v)) {}
   Value(List v) : data(std::move(v)) {}
+  Value(Map v) : data(std::move(v)) {}
 };
 
 struct ValueList {
   std::vector<Value> items;
+};
+
+struct ValueMap {
+  std::map<std::string, Value> items;
 };
 
 using Values = std::map<std::string, Value>;
@@ -101,6 +108,7 @@ class Field {
     Bits,
     Utf8,
     List,
+    Dict,
   };
 
   Kind kind{};
@@ -145,6 +153,7 @@ Field u2(std::vector<std::string> names);
 Field bits(std::string name, std::string count_field);
 Field utf8(std::string name);
 Field list(std::string name, Field element);
+Field dict(std::string name, Field element);
 Packet packet(std::vector<Field> fields);
 
 std::vector<std::uint8_t> pack(Packet const& target, Values const& values);

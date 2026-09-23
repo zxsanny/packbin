@@ -75,6 +75,7 @@ public sealed class Field
         Bits,
         Utf8,
         List,
+        Dict,
     }
 
     internal Kind Type { get; }
@@ -181,6 +182,13 @@ public sealed class Field
         if (element.Type == Kind.Repeat)
             throw new ArgumentException("repeat is not a list element");
         return new(Kind.List, name, children: [element]);
+    }
+
+    public static Field Dict(string name, Field element)
+    {
+        if (element.Type == Kind.Repeat)
+            throw new ArgumentException("repeat is not a dictionary element");
+        return new(Kind.Dict, name, children: [element]);
     }
 
     internal static Field CreateFlagBit(FlagGroup group, int bitIndex, Field inner) =>

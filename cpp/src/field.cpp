@@ -155,6 +155,16 @@ Field list(std::string name, Field element) {
   return f;
 }
 
+Field dict(std::string name, Field element) {
+  if (element.kind == Field::Kind::Repeat)
+    throw std::runtime_error("repeat is not a dictionary element");
+  Field f;
+  f.kind = Field::Kind::Dict;
+  f.name = std::move(name);
+  f.children.push_back(std::move(element));
+  return f;
+}
+
 Field bits(std::string name, std::string count_field) {
   Field f;
   f.kind = Field::Kind::Bits;

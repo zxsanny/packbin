@@ -1,9 +1,9 @@
 use packbin::{
-    be, bits, bytes, eq, f32, f64, flag_byte, flags, group, i16, i32, insert, list,
+    be, bits, bytes, dict, eq, f32, f64, flag_byte, flags, group, i16, i32, insert, list,
     mismatched_bytes, motion_field_count, pack, packet, repeat, sized, to_hex, u16, u2, u32, u8,
-    unpack, utf8, when,
-    ShortPacket, UnpackError, Value, Values,
+    unpack, utf8, when, PackError, ShortPacket, UnpackError, Value, Values,
 };
+use std::collections::BTreeMap;
 use std::fs;
 use std::time::Instant;
 
@@ -549,4 +549,242 @@ fn counted_list() {
         Some(Value::List(vec![Value::U16(1); 65536])),
     );
     assert!(pack(&two, &long_vals).is_err());
+}
+
+#[test]
+fn dictionary_field() {
+    const USER_HEX: &str = concat!(
+        "07007a7873616e6e7902000400757365720a0064697370617463686572",
+        "030007006368616e6e656c010004007265616403006d61700400040072656164",
+        "07006770735f6669780300736574040065646974050073746f7265020004007265616405007772697465"
+    );
+
+    let pkt = packet(vec![
+        utf8("username"),
+        list("roles", utf8("role")),
+        dict("access", list("actions", utf8("action"))),
+    ]);
+
+    let mut access = BTreeMap::new();
+    access.insert(
+        "channel".into(),
+        Value::List(vec![Value::Str("read".into())]),
+    );
+    access.insert(
+        "map".into(),
+        Value::List(vec![
+            Value::Str("read".into()),
+            Value::Str("gps_fix".into()),
+            Value::Str("set".into()),
+            Value::Str("edit".into()),
+        ]),
+    );
+    access.insert(
+        "store".into(),
+        Value::List(vec![Value::Str("read".into()), Value::Str("write".into())]),
+    );
+
+    let mut vals = Values::new();
+    insert(&mut vals, "username", Some(Value::Str("zxsanny".into())));
+    insert(
+        &mut vals,
+        "roles",
+        Some(Value::List(vec![
+            Value::Str("user".into()),
+            Value::Str("dispatcher".into()),
+        ])),
+    );
+    insert(&mut vals, "access", Some(Value::Map(access.clone())));
+
+    let raw = pack(&pkt, &vals).unwrap();
+    assert_eq!(to_hex(&raw), USER_HEX);
+
+    let got = unpack(&pkt, &raw).unwrap();
+    assert_eq!(got["username"], Some(Value::Str("zxsanny".into())));
+    assert_eq!(
+        got["roles"],
+        Some(Value::List(vec![
+            Value::Str("user".into()),
+            Value::Str("dispatcher".into()),
+        ]))
+    );
+    match &got["access"] {
+        Some(Value::Map(m)) => {
+            assert_eq!(m.len(), 3);
+            assert_eq!(
+                m.get("channel"),
+                Some(&Value::List(vec![Value::Str("read".into())]))
+            );
+            assert_eq!(
+                m.get("map"),
+                Some(&Value::List(vec![
+                    Value::Str("read".into()),
+                    Value::Str("gps_fix".into()),
+                    Value::Str("set".into()),
+                    Value::Str("edit".into()),
+                ]))
+            );
+            assert_eq!(
+                m.get("store"),
+                Some(&Value::List(vec![
+                    Value::Str("read".into()),
+                    Value::Str("write".into()),
+                ]))
+            );
+        }
+        other => panic!("expected access map, got {:?}", other),
+    }
+
+    let mut shuffled = BTreeMap::new();
+    shuffled.insert(
+        "store".into(),
+        Value::List(vec![Value::Str("read".into()), Value::Str("write".into())]),
+    );
+    shuffled.insert(
+        "channel".into(),
+        Value::List(vec![Value::Str("read".into())]),
+    );
+    shuffled.insert(
+        "map".into(),
+        Value::List(vec![
+            Value::Str("read".into()),
+            Value::Str("gps_fix".into()),
+            Value::Str("set".into()),
+            Value::Str("edit".into()),
+        ]),
+    );
+    let mut shuffled_vals = Values::new();
+    insert(
+        &mut shuffled_vals,
+        "username",
+        Some(Value::Str("zxsanny".into())),
+    );
+    insert(
+        &mut shuffled_vals,
+        "roles",
+        Some(Value::List(vec![
+            Value::Str("user".into()),
+            Value::Str("dispatcher".into()),
+        ])),
+    );
+    insert(&mut shuffled_vals, "access", Some(Value::Map(shuffled)));
+    assert_eq!(to_hex(&pack(&pkt, &shuffled_vals).unwrap()), USER_HEX);
+
+    let empty_pkt = packet(vec![
+        utf8("username"),
+        list("roles", utf8("role")),
+        dict("access", list("actions", utf8("action"))),
+    ]);
+    let mut empty_vals = Values::new();
+    insert(&mut empty_vals, "username", Some(Value::Str(String::new())));
+    insert(&mut empty_vals, "roles", Some(Value::List(vec![])));
+    insert(&mut empty_vals, "access", Some(Value::Map(BTreeMap::new())));
+    assert_eq!(to_hex(&pack(&empty_pkt, &empty_vals).unwrap()), "000000000000");
+
+    let dup_pkt = packet(vec![dict("access", utf8("v"))]);
+    let dup_err = unpack(&dup_pkt, &parse_hex("0200010061010078010061010079")).unwrap_err();
+    match dup_err {
+        UnpackError::Short(ShortPacket {
+            field,
+            needed,
+            left,
+        }) => {
+            assert_eq!(field, "access");
+            assert_eq!(needed, 0);
+            assert_eq!(left, 0);
+        }
+        other => panic!("expected ShortPacket, got {:?}", other),
+    }
+
+    let again = pack(&pkt, &vals).unwrap();
+    assert_eq!(raw, again);
+
+    let t1 = std::thread::spawn(|| {
+        let pkt = packet(vec![
+            utf8("username"),
+            list("roles", utf8("role")),
+            dict("access", list("actions", utf8("action"))),
+        ]);
+        let mut access = BTreeMap::new();
+        access.insert(
+            "channel".into(),
+            Value::List(vec![Value::Str("read".into())]),
+        );
+        access.insert(
+            "map".into(),
+            Value::List(vec![
+                Value::Str("read".into()),
+                Value::Str("gps_fix".into()),
+                Value::Str("set".into()),
+                Value::Str("edit".into()),
+            ]),
+        );
+        access.insert(
+            "store".into(),
+            Value::List(vec![Value::Str("read".into()), Value::Str("write".into())]),
+        );
+        let mut vals = Values::new();
+        insert(&mut vals, "username", Some(Value::Str("zxsanny".into())));
+        insert(
+            &mut vals,
+            "roles",
+            Some(Value::List(vec![
+                Value::Str("user".into()),
+                Value::Str("dispatcher".into()),
+            ])),
+        );
+        insert(&mut vals, "access", Some(Value::Map(access)));
+        pack(&pkt, &vals).unwrap()
+    });
+    let t2 = std::thread::spawn(|| {
+        let pkt = packet(vec![
+            utf8("username"),
+            list("roles", utf8("role")),
+            dict("access", list("actions", utf8("action"))),
+        ]);
+        let mut access = BTreeMap::new();
+        access.insert(
+            "channel".into(),
+            Value::List(vec![Value::Str("read".into())]),
+        );
+        access.insert(
+            "map".into(),
+            Value::List(vec![
+                Value::Str("read".into()),
+                Value::Str("gps_fix".into()),
+                Value::Str("set".into()),
+                Value::Str("edit".into()),
+            ]),
+        );
+        access.insert(
+            "store".into(),
+            Value::List(vec![Value::Str("read".into()), Value::Str("write".into())]),
+        );
+        let mut vals = Values::new();
+        insert(&mut vals, "username", Some(Value::Str("zxsanny".into())));
+        insert(
+            &mut vals,
+            "roles",
+            Some(Value::List(vec![
+                Value::Str("user".into()),
+                Value::Str("dispatcher".into()),
+            ])),
+        );
+        insert(&mut vals, "access", Some(Value::Map(access)));
+        pack(&pkt, &vals).unwrap()
+    });
+    assert_eq!(t1.join().unwrap(), t2.join().unwrap());
+
+    let mut long_map = BTreeMap::new();
+    for i in 0..65536u32 {
+        long_map.insert(format!("{:05}", i), Value::Str("x".into()));
+    }
+    let long_pkt = packet(vec![dict("access", utf8("v"))]);
+    let mut long_vals = Values::new();
+    insert(&mut long_vals, "access", Some(Value::Map(long_map)));
+    match pack(&long_pkt, &long_vals) {
+        Err(PackError::Type(_)) => {}
+        Ok(_) => panic!("expected PackError for 65536 pairs"),
+        Err(other) => panic!("expected PackError::Type, got {:?}", other),
+    }
 }

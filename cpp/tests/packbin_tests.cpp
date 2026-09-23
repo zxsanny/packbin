@@ -6,6 +6,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -409,6 +410,88 @@ void counted_list() {
   expect(failed, "list too long");
 }
 
+std::shared_ptr<packbin::ValueList> strs(std::initializer_list<char const*> names) {
+  auto list = std::make_shared<packbin::ValueList>();
+  for (auto const* name : names)
+    list->items.push_back(packbin::Value{std::string(name)});
+  return list;
+}
+
+void dictionary() {
+  auto const user_hex =
+      "07007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e6e656c010004007265"
+      "616403006d6170040004007265616407006770735f6669780300736574040065646974050073746f726502000400"
+      "7265616405007772697465";
+  auto layout = packbin::packet({
+      packbin::utf8("username"),
+      packbin::list("roles", packbin::utf8("role")),
+      packbin::dict("access", packbin::list("actions", packbin::utf8("action"))),
+  });
+  auto access = std::make_shared<packbin::ValueMap>();
+  access->items.emplace("store", packbin::Value{strs({"read", "write"})});
+  access->items.emplace("channel", packbin::Value{strs({"read"})});
+  access->items.emplace("map", packbin::Value{strs({"read", "gps_fix", "set", "edit"})});
+  packbin::Values values;
+  values.emplace("username", packbin::Value{std::string("zxsanny")});
+  values.emplace("roles", packbin::Value{strs({"user", "dispatcher"})});
+  values.emplace("access", packbin::Value{access});
+  auto raw = packbin::pack(layout, values);
+  expect(packbin::to_hex(raw) == user_hex, "dict hex");
+  expect(raw.size() == 103, "dict len");
+  auto again = packbin::pack(layout, values);
+  expect(packbin::mismatched_bytes(raw, again) == 0, "dict twice");
+  std::vector<std::uint8_t> left;
+  std::vector<std::uint8_t> right;
+  std::thread t1([&] { left = packbin::pack(layout, values); });
+  std::thread t2([&] { right = packbin::pack(layout, values); });
+  t1.join();
+  t2.join();
+  expect(packbin::mismatched_bytes(left, right) == 0, "dict parallel");
+  auto got = packbin::unpack(layout, raw);
+  expect(got.ok && std::get<std::string>(got.value.at("username").data) == "zxsanny", "dict user");
+  auto const& roles = std::get<packbin::Value::List>(got.value.at("roles").data);
+  expect(roles && roles->items.size() == 2, "dict roles");
+  expect(std::get<std::string>(roles->items[0].data) == "user", "dict role 0");
+  expect(std::get<std::string>(roles->items[1].data) == "dispatcher", "dict role 1");
+  auto const& back = std::get<packbin::Value::Map>(got.value.at("access").data);
+  expect(back && back->items.size() == 3, "dict access");
+  auto const& channel = std::get<packbin::Value::List>(back->items.at("channel").data);
+  expect(channel && channel->items.size() == 1 &&
+             std::get<std::string>(channel->items[0].data) == "read",
+         "dict channel");
+  auto const& map = std::get<packbin::Value::List>(back->items.at("map").data);
+  expect(map && map->items.size() == 4 && std::get<std::string>(map->items[1].data) == "gps_fix",
+         "dict map");
+  auto const& store = std::get<packbin::Value::List>(back->items.at("store").data);
+  expect(store && store->items.size() == 2 && std::get<std::string>(store->items[1].data) == "write",
+         "dict store");
+
+  auto empty = packbin::packet(
+      {packbin::utf8("s"), packbin::list("xs", packbin::u8("n")), packbin::dict("m", packbin::utf8("v"))});
+  packbin::Values empty_vals;
+  empty_vals.emplace("s", packbin::Value{std::string()});
+  empty_vals.emplace("xs", packbin::Value{std::make_shared<packbin::ValueList>()});
+  empty_vals.emplace("m", packbin::Value{std::make_shared<packbin::ValueMap>()});
+  expect(packbin::to_hex(packbin::pack(empty, empty_vals)) == "000000000000", "dict empty");
+
+  auto dup = packbin::packet({packbin::dict("access", packbin::utf8("v"))});
+  auto bad = packbin::unpack(dup, parse_hex("0200010061010078010061010079"));
+  expect(!bad.ok && bad.value_count() == 0 && bad.short_packet, "dict dup");
+
+  auto huge = std::make_shared<packbin::ValueMap>();
+  for (int i = 0; i < 65536; ++i)
+    huge->items.emplace(std::to_string(i), packbin::Value{std::string("x")});
+  packbin::Values long_vals;
+  long_vals.emplace("access", packbin::Value{huge});
+  bool failed = false;
+  try {
+    packbin::pack(dup, long_vals);
+  } catch (std::runtime_error const&) {
+    failed = true;
+  }
+  expect(failed, "dict too long");
+}
+
 void nfr_round_trips() {
   auto pkt = position_packet();
   auto vals = position_values();
@@ -447,6 +530,7 @@ int main() {
   new_field_kinds();
   utf8_string();
   counted_list();
+  dictionary();
   nfr_round_trips();
   if (failures != 0) {
     std::cerr << failures << " failure(s)\n";

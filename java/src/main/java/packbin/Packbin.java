@@ -117,6 +117,10 @@ public final class Packbin {
         return Field.list(name, element);
     }
 
+    public static Field dict(String name, Field element) {
+        return Field.dict(name, element);
+    }
+
     public static byte[] pack(Packet packet, Map<String, Object> values) {
         Objects.requireNonNull(packet, "packet");
         Map<String, Object> map = values == null ? Map.of() : values;
