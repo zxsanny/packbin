@@ -3,6 +3,8 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
+import pytest
+
 from packbin import (
     ShortPacket,
     TrailingBytes,
@@ -17,6 +19,7 @@ from packbin import (
     repeat,
     sized,
     u2,
+    utf8,
     u8,
     u16,
     u32,
@@ -306,3 +309,32 @@ def test_u2_and_bits():
     assert short.field == "segs"
     assert short.needed == 2
     assert short.left == 1
+
+
+def test_utf8_string():
+    layout = packet([utf8("name")])
+    raw = pack(layout, {"name": "zxsanny"})
+    assert raw.hex() == "07007a7873616e6e79"
+    assert len(raw) == 9
+    got = unpack(layout, raw)
+    assert got.ok is True
+    assert got.value is not None
+    assert got.value["name"] == "zxsanny"
+
+    empty = pack(layout, {"name": ""})
+    assert empty.hex() == "0000"
+    empty_got = unpack(layout, empty)
+    assert empty_got.ok is True
+    assert empty_got.value is not None
+    assert empty_got.value["name"] == ""
+
+    with pytest.raises(ValueError):
+        pack(layout, {"name": "a" * 65536})
+
+    short = unpack(layout, bytes([0x07, 0x00, 0x7A, 0x78]))
+    assert short.ok is False
+    assert short.value is None
+    assert isinstance(short.error, ShortPacket)
+    assert short.field == "name"
+    assert short.needed == 7
+    assert short.left == 2

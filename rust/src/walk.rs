@@ -73,7 +73,8 @@ fn group_on(name: &str, members: &[Field], values: &Values) -> bool {
         match &child.kind {
             FieldKind::Int { name, .. }
             | FieldKind::Float { name, .. }
-            | FieldKind::Bytes { name, .. } => {
+            | FieldKind::Bytes { name, .. }
+            | FieldKind::Utf8 { name } => {
                 if present(values, name) {
                     return true;
                 }
@@ -221,6 +222,19 @@ fn pack_one(
                 _ => Err(PackError::Type(name.to_string())),
             }
         }
+        FieldKind::Utf8 { name } => match require(values, name)? {
+            Value::Str(text) => {
+                let raw = text.as_bytes();
+                if raw.len() > 65535 {
+                    return Err(PackError::Type(name.to_string()));
+                }
+                let n = raw.len() as u16;
+                out.extend_from_slice(&n.to_le_bytes());
+                out.extend_from_slice(raw);
+                Ok(())
+            }
+            _ => Err(PackError::Type(name.to_string())),
+        },
     }
 }
 
@@ -459,6 +473,19 @@ fn unpack_one(
                 items.push(Value::U8((raw[i / 8] >> (i % 8)) & 1));
             }
             values.insert(name.clone(), Some(Value::List(items)));
+        }
+        FieldKind::Utf8 { name } => {
+            let count_raw = cur.take(2, name)?;
+            let count = u16::from_le_bytes([count_raw[0], count_raw[1]]) as usize;
+            let raw = cur.take(count, name)?;
+            let text = std::str::from_utf8(raw).map_err(|_| {
+                UnpackError::Short(ShortPacket {
+                    field: name.to_string(),
+                    needed: count,
+                    left: 0,
+                })
+            })?;
+            values.insert(name.clone(), Some(Value::Str(text.to_string())));
         }
     }
     Ok(())

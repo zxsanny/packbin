@@ -111,6 +111,7 @@ bool scalar_or_bytes(Field::Kind kind) {
     case Field::Kind::F32:
     case Field::Kind::F64:
     case Field::Kind::Bytes:
+    case Field::Kind::Utf8:
       return true;
     default:
       return false;
@@ -189,6 +190,7 @@ void pack_one(Field const& node, Values const& values, std::vector<std::uint8_t>
     case Field::Kind::Sized:
     case Field::Kind::U2:
     case Field::Kind::Bits:
+    case Field::Kind::Utf8:
       pack_counted(node, values, out);
       break;
     case Field::Kind::When: {
@@ -388,6 +390,7 @@ std::optional<ShortPacket> unpack_one(std::uint8_t const* data, std::size_t len,
     case Field::Kind::Sized:
     case Field::Kind::U2:
     case Field::Kind::Bits:
+    case Field::Kind::Utf8:
       return unpack_counted(data, len, offset, node, out, as_list);
   }
   return std::nullopt;

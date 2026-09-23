@@ -138,6 +138,13 @@ Field u2(std::vector<std::string> names) {
   return f;
 }
 
+Field utf8(std::string name) {
+  Field f;
+  f.kind = Field::Kind::Utf8;
+  f.name = std::move(name);
+  return f;
+}
+
 Field bits(std::string name, std::string count_field) {
   Field f;
   f.kind = Field::Kind::Bits;

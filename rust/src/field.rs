@@ -71,6 +71,9 @@ pub(crate) enum FieldKind {
         name: Name,
         count: Name,
     },
+    Utf8 {
+        name: Name,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -140,7 +143,8 @@ fn count_fields(fields: &[Field]) -> (usize, bool) {
             | FieldKind::Bytes { .. }
             | FieldKind::FlagByte { .. }
             | FieldKind::Sized { .. }
-            | FieldKind::Bits { .. } => n += 1,
+            | FieldKind::Bits { .. }
+            | FieldKind::Utf8 { .. } => n += 1,
             FieldKind::U2 { names } => n += names.len(),
             FieldKind::Flags { members, .. } | FieldKind::Group { members, .. } => {
                 n += 1 + count_fields(members).0;
@@ -303,6 +307,12 @@ pub fn u2(names: &[&str]) -> Field {
     }
 }
 
+pub fn utf8(name: impl AsRef<str>) -> Field {
+    Field {
+        kind: FieldKind::Utf8 { name: name_of(name) },
+    }
+}
+
 pub fn bits(name: impl AsRef<str>, count_field: impl AsRef<str>) -> Field {
     Field {
         kind: FieldKind::Bits {
@@ -337,7 +347,8 @@ pub(crate) fn field_name(field: &Field) -> Option<&str> {
         | FieldKind::FlagByte { name }
         | FieldKind::Group { name, .. }
         | FieldKind::Sized { name, .. }
-        | FieldKind::Bits { name, .. } => Some(name.as_ref()),
+        | FieldKind::Bits { name, .. }
+        | FieldKind::Utf8 { name } => Some(name.as_ref()),
         FieldKind::U2 { names } => names.first().map(|n| n.as_ref()),
         FieldKind::FlagBit { inner, .. } => field_name(inner),
         FieldKind::When { .. } | FieldKind::Repeat { .. } => None,

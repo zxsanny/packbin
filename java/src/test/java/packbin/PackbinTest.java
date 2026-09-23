@@ -40,6 +40,7 @@ public final class PackbinTest {
         flagGroupStoredZero();
         flagGroupShortLogin();
         sizedPayload();
+        utf8String();
         u2Kinds();
         bitsSegs();
         nfrRoundTripsWithinOneSecond();
@@ -292,6 +293,41 @@ public final class PackbinTest {
         expectEq("sized short field", "payload", missing.field);
         expectEq("sized short needed", 3, missing.needed);
         expectEq("sized short left", 1, missing.left);
+    }
+
+    private static void utf8String() {
+        Packbin.Packet layout = Packbin.packet(Packbin.utf8("name"));
+        Map<String, Object> values = new HashMap<>();
+        values.put("name", "zxsanny");
+        byte[] raw = Packbin.pack(layout, values);
+        expectEq("utf8 hex", "07007a7873616e6e79", toHex(raw));
+        expectEq("utf8 len", 9, raw.length);
+        Packbin.UnpackResult got = Packbin.unpack(layout, raw);
+        expectTrue("utf8 ok", got.ok);
+        expectEq("utf8 text", "zxsanny", got.value.get("name"));
+
+        values.put("name", "");
+        byte[] empty = Packbin.pack(layout, values);
+        expectEq("utf8 empty", "0000", toHex(empty));
+        Packbin.UnpackResult emptyGot = Packbin.unpack(layout, empty);
+        expectTrue("utf8 empty ok", emptyGot.ok);
+        expectEq("utf8 empty text", "", emptyGot.value.get("name"));
+
+        values.put("name", "a".repeat(65536));
+        boolean failed = false;
+        try {
+            Packbin.pack(layout, values);
+        } catch (IllegalArgumentException ex) {
+            failed = true;
+        }
+        expectTrue("utf8 too long", failed);
+
+        Packbin.UnpackResult shortGot = Packbin.unpack(layout, new byte[] {0x07, 0x00, 0x7a, 0x78});
+        expectTrue("utf8 short", !shortGot.ok);
+        expectEq("utf8 short values", 0, shortGot.value.size());
+        expectEq("utf8 short field", "name", shortGot.field());
+        expectEq("utf8 short needed", 7, shortGot.needed());
+        expectEq("utf8 short left", 2, shortGot.left());
     }
 
     private static void u2Kinds() {

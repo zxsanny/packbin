@@ -26,7 +26,10 @@ export function scalarChildNames(
   const names: string[] = []
   for (const f of fields) {
     if (
-      (f.kind === "int" || f.kind === "float" || f.kind === "bytes") &&
+      (f.kind === "int" ||
+        f.kind === "float" ||
+        f.kind === "bytes" ||
+        f.kind === "utf8") &&
       typeof f.name === "string"
     ) {
       names.push(f.name)
@@ -212,6 +215,29 @@ export function readInt(
   }
   cur.offset += size
   return { ok: true, value }
+}
+
+export function writeUtf8(out: number[], name: string, value: unknown): void {
+  if (typeof value !== "string") throw new RangeError(`${name}: expected string`)
+  const raw = new TextEncoder().encode(value)
+  if (raw.length > 65535) throw new RangeError(`${name}: utf-8 length ${raw.length}`)
+  out.push(raw.length & 0xff, (raw.length >> 8) & 0xff)
+  for (let i = 0; i < raw.length; i++) out.push(raw[i]!)
+}
+
+export function readUtf8(
+  cur: ViewCursor,
+  name: string,
+): { ok: true; value: string } | ShortErr {
+  const leftCount = cur.buf.length - cur.offset
+  if (leftCount < 2) return { ok: false, field: name, needed: 2, left: leftCount }
+  const count = cur.view.getUint16(cur.offset, true)
+  cur.offset += 2
+  const left = cur.buf.length - cur.offset
+  if (left < count) return { ok: false, field: name, needed: count, left }
+  const raw = cur.buf.subarray(cur.offset, cur.offset + count)
+  cur.offset += count
+  return { ok: true, value: new TextDecoder("utf-8", { fatal: true }).decode(raw) }
 }
 
 export function readFloat(

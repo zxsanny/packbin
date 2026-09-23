@@ -258,6 +258,34 @@ public class PackbinTests
     }
 
     [Fact]
+    public void Utf8String()
+    {
+        var packet = Packet.Of(Field.Utf8("name"));
+        var raw = Pack.Run(packet, new Dictionary<string, object?> { ["name"] = "zxsanny" });
+        Assert.Equal("07007a7873616e6e79", Convert.ToHexString(raw).ToLowerInvariant());
+        Assert.Equal(9, raw.Length);
+        var got = Unpack.Run(packet, raw);
+        Assert.Null(got.Error);
+        Assert.Equal("zxsanny", got.Values["name"]);
+
+        var empty = Pack.Run(packet, new Dictionary<string, object?> { ["name"] = "" });
+        Assert.Equal("0000", Convert.ToHexString(empty).ToLowerInvariant());
+        var emptyGot = Unpack.Run(packet, empty);
+        Assert.Null(emptyGot.Error);
+        Assert.Equal("", emptyGot.Values["name"]);
+
+        Assert.Throws<ArgumentException>(() =>
+            Pack.Run(packet, new Dictionary<string, object?> { ["name"] = new string('a', 65536) }));
+
+        var shortGot = Unpack.Run(packet, new byte[] { 0x07, 0x00, 0x7a, 0x78 });
+        Assert.Empty(shortGot.Values);
+        var missing = Assert.IsType<ShortPacket>(shortGot.Error);
+        Assert.Equal("name", missing.Field);
+        Assert.Equal(7, missing.Needed);
+        Assert.Equal(2, missing.Left);
+    }
+
+    [Fact]
     public void U2AndBits()
     {
         var kinds = Packet.Of(Field.U2("a", "b", "c", "d"));

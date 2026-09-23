@@ -17,6 +17,7 @@ pub enum Value {
     F32(f32),
     F64(f64),
     Bytes(Vec<u8>),
+    Str(String),
     List(Vec<Value>),
     Groups(Vec<Values>),
 }
@@ -92,6 +93,7 @@ pub fn values_eq(a: &Value, b: &Value) -> bool {
         (Value::F32(x), Value::F32(y)) => x.to_bits() == y.to_bits(),
         (Value::F64(x), Value::F64(y)) => x.to_bits() == y.to_bits(),
         (Value::Bytes(x), Value::Bytes(y)) => x == y,
+        (Value::Str(x), Value::Str(y)) => x == y,
         (Value::List(x), Value::List(y)) => {
             x.len() == y.len() && x.iter().zip(y.iter()).all(|(a, b)| values_eq(a, b))
         }

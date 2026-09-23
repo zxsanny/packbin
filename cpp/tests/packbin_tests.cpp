@@ -320,6 +320,41 @@ void new_field_kinds() {
          "bits short");
 }
 
+void utf8_string() {
+  auto pkt = packbin::packet({packbin::utf8("name")});
+  packbin::Values vals;
+  vals.emplace("name", packbin::Value{"zxsanny"});
+  auto raw = packbin::pack(pkt, vals);
+  expect(packbin::to_hex(raw) == "07007a7873616e6e79", "utf8 hex");
+  expect(raw.size() == 9, "utf8 len");
+  auto got = packbin::unpack(pkt, raw);
+  expect(got.ok && std::get<std::string>(got.value.at("name").data) == "zxsanny", "utf8 text");
+
+  packbin::Values empty_vals;
+  empty_vals.emplace("name", packbin::Value{""});
+  auto empty = packbin::pack(pkt, empty_vals);
+  expect(packbin::to_hex(empty) == "0000", "utf8 empty");
+  auto empty_got = packbin::unpack(pkt, empty);
+  expect(empty_got.ok && std::get<std::string>(empty_got.value.at("name").data).empty(),
+         "utf8 empty text");
+
+  packbin::Values long_vals;
+  long_vals.emplace("name", packbin::Value{std::string(65536, 'a')});
+  bool failed = false;
+  try {
+    packbin::pack(pkt, long_vals);
+  } catch (std::runtime_error const&) {
+    failed = true;
+  }
+  expect(failed, "utf8 too long");
+
+  auto short_got = packbin::unpack(pkt, parse_hex("07007a78"));
+  expect(!short_got.ok && short_got.value_count() == 0 && short_got.short_packet &&
+             short_got.short_packet->field == "name" && short_got.short_packet->needed == 7 &&
+             short_got.short_packet->left == 2,
+         "utf8 short");
+}
+
 void nfr_round_trips() {
   auto pkt = position_packet();
   auto vals = position_values();
@@ -356,6 +391,7 @@ int main() {
   repeat_and_leftover();
   trailing_byte();
   new_field_kinds();
+  utf8_string();
   nfr_round_trips();
   if (failures != 0) {
     std::cerr << failures << " failure(s)\n";

@@ -30,6 +30,15 @@ These risks land on each language package task:
 | Unpack returns part of a short buffer | AC-8 | each package |
 | A clear flag is stored as 0 | AC-4, AC-5 | each package |
 
+Strings, lists, and dictionaries:
+
+| Risk | AC | Owner |
+|------|----|-------|
+| A string count includes its own 2 bytes, so the next field starts inside the text | AZ-1938 AC-1 | AZ-1938 |
+| A list count consumes the following field | AZ-1939 AC-3 | AZ-1939 |
+| A dictionary pair count is read as a byte length | AZ-1940 AC-1, AZ-1940 AC-3 | AZ-1940 |
+| Two languages agree with a fixture but not with each other on a nested map | AZ-1941 AC-1, AZ-1941 AC-2 | AZ-1941 |
+
 ## Deferred
 
 None.

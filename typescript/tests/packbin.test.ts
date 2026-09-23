@@ -18,6 +18,7 @@ import {
   sized,
   u2,
   bits,
+  utf8,
   pack,
   unpack,
 } from "../src/index.ts"
@@ -277,6 +278,38 @@ describe("packbin", () => {
     assert.equal(short.field, "segs")
     assert.equal(short.needed, 2)
     assert.equal(short.left, 1)
+  })
+
+  it("utf8 string count is the payload", () => {
+    const layout = packet([utf8("name")])
+    const raw = pack(layout, { name: "zxsanny" })
+    assert.equal(toHex(raw), "07007a7873616e6e79")
+    assert.equal(raw.length, 9)
+    const got = unpack(layout, raw)
+    assert.equal(got.ok, true)
+    if (!got.ok) return
+    assert.equal(got.name, "zxsanny")
+
+    const empty = pack(layout, { name: "" })
+    assert.equal(toHex(empty), "0000")
+    const emptyGot = unpack(layout, empty)
+    assert.equal(emptyGot.ok, true)
+    if (!emptyGot.ok) return
+    assert.equal(emptyGot.name, "")
+
+    let produced: Uint8Array | null = null
+    assert.throws(() => {
+      produced = pack(layout, { name: "a".repeat(65536) })
+    })
+    assert.equal(produced, null)
+
+    const short = unpack(layout, Uint8Array.of(0x07, 0x00, 0x7a, 0x78))
+    assert.equal(short.ok, false)
+    if (short.ok) return
+    assert.equal(short.field, "name")
+    assert.equal(short.needed, 7)
+    assert.equal(short.left, 2)
+    assert.equal("name" in short, false)
   })
 
   it("NFR 100000 pack-then-unpack round trips ≤ 1s", () => {

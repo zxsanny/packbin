@@ -18,7 +18,8 @@ public final class Field {
         GROUP,
         SIZED,
         U2,
-        BITS
+        BITS,
+        UTF8
     }
 
     final Kind kind;
@@ -109,6 +110,10 @@ public final class Field {
 
     static Field bits(String name, String countField) {
         return new Field(Kind.BITS, name, false, 0, null, null, null, 0, null, countField, null);
+    }
+
+    static Field utf8(String name) {
+        return new Field(Kind.UTF8, name, false, 0, null, null, null, 0, null, null, null);
     }
 
     Field withBigEndian() {

@@ -1,5 +1,6 @@
 package packbin;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -136,5 +137,41 @@ final class VarFields {
             throw new IllegalArgumentException(name + ": expected 0 or 1");
         }
         return n;
+    }
+
+    static void packUtf8(Field field, Map<String, Object> values, ByteSink sink) {
+        Object raw = values.get(field.name);
+        if (!(raw instanceof String text)) {
+            throw new IllegalArgumentException(field.name + ": expected string");
+        }
+        byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length > 65535) {
+            throw new IllegalArgumentException(field.name + ": utf-8 length " + bytes.length);
+        }
+        sink.write((byte) bytes.length);
+        sink.write((byte) (bytes.length >> 8));
+        sink.write(bytes);
+    }
+
+    static Object unpackUtf8(
+            Field field,
+            byte[] data,
+            int[] offset,
+            Map<String, Object> values,
+            boolean asList) {
+        int left = data.length - offset[0];
+        if (left < 2) {
+            return new Packbin.ShortPacket(field.name, 2, left);
+        }
+        int count = (data[offset[0]] & 0xff) | ((data[offset[0] + 1] & 0xff) << 8);
+        offset[0] += 2;
+        left = data.length - offset[0];
+        if (left < count) {
+            return new Packbin.ShortPacket(field.name, count, left);
+        }
+        String text = new String(data, offset[0], count, StandardCharsets.UTF_8);
+        offset[0] += count;
+        Walker.store(values, field.name, text, asList);
+        return null;
     }
 }

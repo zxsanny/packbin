@@ -31,6 +31,7 @@ __all__ = [
     "sized",
     "u2",
     "bits",
+    "utf8",
     "pack",
     "unpack",
 ]
@@ -166,6 +167,11 @@ class _Bits(_Node):
 
 
 @dataclass(slots=True)
+class _Utf8(_Node):
+    name: str
+
+
+@dataclass(slots=True)
 class Packet:
     fields: list[_Node]
 
@@ -295,11 +301,24 @@ def bits(name: str, count: str) -> _Bits:
     return _Bits(name=name, count=count)
 
 
+def utf8(name: str) -> _Utf8:
+    return _Utf8(name=name)
+
+
+def _utf8_payload(name: str, value: Any) -> bytes:
+    if not isinstance(value, str):
+        raise TypeError(f"{name}: expected str")
+    raw = value.encode("utf-8")
+    if len(raw) > 65535:
+        raise ValueError(f"{name}: utf-8 length {len(raw)}")
+    return raw
+
+
 def _group_on(values: dict[str, Any], node: _Group) -> bool:
     if _present(values, node.name):
         return True
     for child in node.fields:
-        if isinstance(child, (_Scalar, _Bytes)) and _present(values, child.name):
+        if isinstance(child, (_Scalar, _Bytes, _Utf8)) and _present(values, child.name):
             return True
     return False
 
@@ -377,7 +396,7 @@ def _read_scalar(
 
 
 def _field_name(node: _Node) -> str:
-    if isinstance(node, (_Scalar, _Bytes)):
+    if isinstance(node, (_Scalar, _Bytes, _Utf8)):
         return node.name
     if isinstance(node, _FlagBit):
         return _field_name(node.field)
@@ -471,6 +490,11 @@ def _pack_nodes(
                     return val
 
                 _pack_nodes(buf, node.fields, values, at)
+        elif isinstance(node, _Utf8):
+            raw = _utf8_payload(node.name, take(node.name))
+            buf.append(len(raw) & 0xFF)
+            buf.append((len(raw) >> 8) & 0xFF)
+            buf.extend(raw)
         else:
             raise TypeError(f"unknown field node: {type(node)!r}")
 
@@ -585,6 +609,18 @@ def _unpack_nodes(
                 return offset, got_bits
             bits_value, offset = got_bits
             _append_value(out, node.name, bits_value, as_list)
+        elif isinstance(node, _Utf8):
+            left = len(data) - offset
+            if left < 2:
+                return offset, ShortPacket(field=node.name, needed=2, left=left)
+            count = struct.unpack_from("<H", data, offset)[0]
+            offset += 2
+            left = len(data) - offset
+            if left < count:
+                return offset, ShortPacket(field=node.name, needed=count, left=left)
+            raw = _builtin_bytes(data[offset : offset + count])
+            offset += count
+            _append_value(out, node.name, raw.decode("utf-8"), as_list)
         else:
             raise TypeError(f"unknown field node: {type(node)!r}")
     return offset, None

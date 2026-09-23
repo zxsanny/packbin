@@ -73,6 +73,7 @@ public sealed class Field
         Sized,
         U2,
         Bits,
+        Utf8,
     }
 
     internal Kind Type { get; }
@@ -171,6 +172,8 @@ public sealed class Field
 
     public static Field Bits(string name, string countField) =>
         new(Kind.Bits, name, countName: countField);
+
+    public static Field Utf8(string name) => new(Kind.Utf8, name);
 
     internal static Field CreateFlagBit(FlagGroup group, int bitIndex, Field inner) =>
         new(Kind.FlagBit, inner.Name, flagOwner: group, bitIndex: bitIndex, inner: inner);

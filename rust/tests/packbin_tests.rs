@@ -1,6 +1,6 @@
 use packbin::{
     bits, bytes, eq, f32, f64, flag_byte, flags, group, i16, i32, insert, motion_field_count,
-    mismatched_bytes, pack, packet, repeat, sized, to_hex, u16, u2, u32, u8, unpack, when,
+    mismatched_bytes, pack, packet, repeat, sized, to_hex, u16, u2, u32, u8, unpack, utf8, when,
     ShortPacket, UnpackError, Value, Values,
 };
 use std::fs;
@@ -459,6 +459,47 @@ fn bits_pack_unpack() {
             assert_eq!(field, "segs");
             assert_eq!(needed, 2);
             assert_eq!(left, 1);
+        }
+        other => panic!("expected ShortPacket, got {:?}", other),
+    }
+}
+
+#[test]
+fn utf8_string() {
+    let pkt = packet(vec![utf8("name")]);
+    let mut vals = Values::new();
+    insert(&mut vals, "name", Some(Value::Str("zxsanny".into())));
+    let raw = pack(&pkt, &vals).unwrap();
+    assert_eq!(to_hex(&raw), "07007a7873616e6e79");
+    assert_eq!(raw.len(), 9);
+    let got = unpack(&pkt, &raw).unwrap();
+    assert_eq!(got["name"], Some(Value::Str("zxsanny".into())));
+
+    let mut empty_vals = Values::new();
+    insert(&mut empty_vals, "name", Some(Value::Str(String::new())));
+    let empty = pack(&pkt, &empty_vals).unwrap();
+    assert_eq!(to_hex(&empty), "0000");
+    let empty_got = unpack(&pkt, &empty).unwrap();
+    assert_eq!(empty_got["name"], Some(Value::Str(String::new())));
+
+    let mut long_vals = Values::new();
+    insert(
+        &mut long_vals,
+        "name",
+        Some(Value::Str("a".repeat(65536))),
+    );
+    assert!(pack(&pkt, &long_vals).is_err());
+
+    let err = unpack(&pkt, &[0x07, 0x00, 0x7a, 0x78]).expect_err("short");
+    match err {
+        UnpackError::Short(ShortPacket {
+            field,
+            needed,
+            left,
+        }) => {
+            assert_eq!(field, "name");
+            assert_eq!(needed, 7);
+            assert_eq!(left, 2);
         }
         other => panic!("expected ShortPacket, got {:?}", other),
     }

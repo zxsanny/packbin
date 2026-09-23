@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Globalization;
+using System.Text;
 
 namespace Packbin;
 
@@ -117,6 +118,39 @@ internal static partial class Walker
             bits.Add((bytes[offset + i / 8] >> (i % 8)) & 1);
         offset += nbytes;
         Store(values, field.Name, bits, repeatLists);
+        return null;
+    }
+
+    private static void PackUtf8(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    {
+        if (!values.TryGetValue(field.Name, out var value) || value is not string text)
+            throw new ArgumentException($"{field.Name}: expected string");
+        var raw = Encoding.UTF8.GetBytes(text);
+        if (raw.Length > 65535)
+            throw new ArgumentException($"{field.Name}: utf-8 length {raw.Length}");
+        buffer.Add((byte)raw.Length);
+        buffer.Add((byte)(raw.Length >> 8));
+        buffer.AddRange(raw);
+    }
+
+    private static object? UnpackUtf8(
+        Field field,
+        ReadOnlySpan<byte> bytes,
+        ref int offset,
+        Dictionary<string, object?> values,
+        bool repeatLists)
+    {
+        var left = bytes.Length - offset;
+        if (left < 2)
+            return new ShortPacket(field.Name, 2, left);
+        var count = bytes[offset] | (bytes[offset + 1] << 8);
+        offset += 2;
+        left = bytes.Length - offset;
+        if (left < count)
+            return new ShortPacket(field.Name, count, left);
+        var text = Encoding.UTF8.GetString(bytes.Slice(offset, count));
+        offset += count;
+        Store(values, field.Name, text, repeatLists);
         return null;
     }
 }

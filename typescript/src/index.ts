@@ -7,12 +7,14 @@ import {
   readInt,
   readSized,
   readU2,
+  readUtf8,
   scalarChildNames,
   writeBits,
   writeFloat,
   writeInt,
   writeSized,
   writeU2,
+  writeUtf8,
   type ViewCursor,
 } from "./kinds.ts"
 
@@ -38,6 +40,7 @@ export type Field =
   | { kind: "sized"; name: string; count: string }
   | { kind: "u2"; names: string[] }
   | { kind: "bits"; name: string; count: string }
+  | { kind: "utf8"; name: string }
 
 export type Packet = { fields: Field[] }
 
@@ -165,6 +168,10 @@ export function bits(name: string, countField: string): Field {
   return { kind: "bits", name, count: countField }
 }
 
+export function utf8(name: string): Field {
+  return { kind: "utf8", name }
+}
+
 function collectFlagBits(fields: Field[], id: symbol): { bit: number; field: Field }[] {
   const bits: { bit: number; field: Field }[] = []
   for (const f of fields) {
@@ -199,7 +206,8 @@ function fieldName(field: Field): string {
     field.kind === "flagByte" ||
     field.kind === "group" ||
     field.kind === "sized" ||
-    field.kind === "bits"
+    field.kind === "bits" ||
+    field.kind === "utf8"
   ) {
     return field.name
   }
@@ -294,6 +302,10 @@ function packFields(
         break
       case "bits":
         writeBits(out, f.name, Number(values[f.count]), values[f.name])
+        break
+      case "utf8":
+        if (!present(values[f.name])) throw new RangeError(`missing ${f.name}`)
+        writeUtf8(out, f.name, values[f.name])
         break
       case "flags":
         packFields(flatten([f]), allFields, values, out, flagBytes)
@@ -435,6 +447,13 @@ function unpackFields(
         if (!r.ok) return r
         if (repeating) appendRepeat(values, f.name, r.values)
         else values[f.name] = r.values
+        break
+      }
+      case "utf8": {
+        const r = readUtf8(cur, f.name)
+        if (!r.ok) return r
+        if (repeating) appendRepeat(values, f.name, r.value)
+        else values[f.name] = r.value
         break
       }
       case "flags": {

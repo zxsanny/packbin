@@ -141,6 +141,34 @@ std::optional<ShortPacket> unpack_bits(std::uint8_t const* data, std::size_t len
   return std::nullopt;
 }
 
+void pack_utf8(Field const& node, Values const& values, std::vector<std::uint8_t>& out) {
+  auto const& text = std::get<std::string>(require(values, node.name).data);
+  if (text.size() > 65535)
+    throw std::runtime_error(node.name + ": utf-8 length");
+  auto n = static_cast<std::uint16_t>(text.size());
+  out.push_back(static_cast<std::uint8_t>(n & 0xff));
+  out.push_back(static_cast<std::uint8_t>((n >> 8) & 0xff));
+  out.insert(out.end(), reinterpret_cast<std::uint8_t const*>(text.data()),
+             reinterpret_cast<std::uint8_t const*>(text.data()) + text.size());
+}
+
+std::optional<ShortPacket> unpack_utf8(std::uint8_t const* data, std::size_t len,
+                                        std::size_t& offset, Field const& node, Values& out,
+                                        bool as_list) {
+  auto left = len - offset;
+  if (left < 2)
+    return missing(node.name, 2, left);
+  auto count = static_cast<std::size_t>(data[offset] | (data[offset + 1] << 8));
+  offset += 2;
+  left = len - offset;
+  if (left < count)
+    return missing(node.name, count, left);
+  std::string text(reinterpret_cast<char const*>(data + offset), count);
+  offset += count;
+  append_value(out, node.name, Value{std::move(text)}, as_list);
+  return std::nullopt;
+}
+
 }  // namespace
 
 void pack_counted(Field const& node, Values const& values, std::vector<std::uint8_t>& out) {
@@ -153,6 +181,9 @@ void pack_counted(Field const& node, Values const& values, std::vector<std::uint
       break;
     case Field::Kind::Bits:
       pack_bits(node, values, out);
+      break;
+    case Field::Kind::Utf8:
+      pack_utf8(node, values, out);
       break;
     default:
       throw std::runtime_error("not a counted field");
@@ -167,6 +198,8 @@ std::optional<ShortPacket> unpack_counted(std::uint8_t const* data, std::size_t 
       return unpack_sized(data, len, offset, node, out, as_list);
     case Field::Kind::U2:
       return unpack_u2(data, len, offset, node, out, as_list);
+    case Field::Kind::Utf8:
+      return unpack_utf8(data, len, offset, node, out, as_list);
     case Field::Kind::Bits:
       return unpack_bits(data, len, offset, node, out, as_list);
     default:

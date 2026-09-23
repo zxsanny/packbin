@@ -28,7 +28,7 @@ struct Value {
   using List = std::shared_ptr<ValueList>;
   using Storage = std::variant<std::uint8_t, std::uint16_t, std::uint32_t, std::uint64_t,
                                std::int8_t, std::int16_t, std::int32_t, std::int64_t, float,
-                               double, Bytes, List>;
+                               double, Bytes, std::string, List>;
   Storage data;
 
   Value() : data(std::uint8_t{0}) {}
@@ -43,6 +43,8 @@ struct Value {
   Value(float v) : data(v) {}
   Value(double v) : data(v) {}
   Value(Bytes v) : data(std::move(v)) {}
+  Value(std::string v) : data(std::move(v)) {}
+  Value(char const* v) : data(std::string(v)) {}
   Value(List v) : data(std::move(v)) {}
 };
 
@@ -97,6 +99,7 @@ class Field {
     Sized,
     U2,
     Bits,
+    Utf8,
   };
 
   Kind kind{};
@@ -139,6 +142,7 @@ Field group(std::string name, std::vector<Field> fields);
 Field sized(std::string name, std::string count_field);
 Field u2(std::vector<std::string> names);
 Field bits(std::string name, std::string count_field);
+Field utf8(std::string name);
 Packet packet(std::vector<Field> fields);
 
 std::vector<std::uint8_t> pack(Packet const& target, Values const& values);
