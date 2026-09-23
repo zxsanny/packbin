@@ -35,6 +35,17 @@ raw = pack(target, {
 ```ts
 import { flags, i16, i32, packet, u8, u16, unpack } from "packbin"
 
+class Target {
+  type = 0x40
+  sid = 1
+  lat = 500_000_000
+  lon = 300_000_000
+  profile = 1
+  heading: number | null = null
+  speed: number | null = null
+  altitude: number | null = null
+}
+
 const target = packet([
   u8("type"),
   u16("sid"),
@@ -44,7 +55,7 @@ const target = packet([
   flags("motion", [u16("heading"), u8("speed"), i16("altitude")]),
 ])
 
-const got = unpack(target, raw)
+const got = unpack(target, raw, Target)
 ```
 
 ```
@@ -62,19 +73,26 @@ Same type in C# and Rust. String, list, dictionary.
 ```csharp
 using Packbin;
 
-var user = Packet.Of(
+sealed class User
+{
+    public string username { get; set; } = "";
+    public List<string> roles { get; set; } = [];
+    public Dictionary<string, List<string>> access { get; set; } = [];
+}
+
+var userPacket = Packet.Of(
     Field.Utf8("username"),
     Field.List("roles", Field.Utf8("role")),
     Field.Dict("access", Field.List("actions", Field.Utf8("action"))));
 
-var raw = Pack.Run(user, new Dictionary<string, object?>
+var raw = Pack.Run(userPacket, new User
 {
-    ["username"] = "ada",
-    ["roles"] = new List<object?> { "user", "admin" },
-    ["access"] = new Dictionary<string, object?>
+    username = "ada",
+    roles = ["user", "admin"],
+    access = new()
     {
-        ["map"] = new List<object?> { "read", "edit" },
-        ["store"] = new List<object?> { "write" },
+        ["map"] = ["read", "edit"],
+        ["store"] = ["write"],
     },
 });
 ```
