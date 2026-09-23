@@ -35,9 +35,19 @@ if grep -qx typescript "$plan" && [ -z "${NPM_TOKEN:-}" ] && [ -z "${ACTIONS_ID_
   echo "NPM_TOKEN is required before any registry write" >&2
   exit 1
 fi
-need python PYPI_TOKEN
-need rust CARGO_REGISTRY_TOKEN
 need java MAVEN_CENTRAL_TOKEN
+
+skip_unset() {
+  local lang="$1" var="$2"
+  if grep -qx "$lang" "$plan" && [ -z "${!var:-}" ]; then
+    echo "skip $lang"
+    grep -vx "$lang" "$plan" > "$plan.skip"
+    mv "$plan.skip" "$plan"
+  fi
+}
+
+skip_unset python PYPI_TOKEN
+skip_unset rust CARGO_REGISTRY_TOKEN
 
 run_inside() {
   local lang="$1"
