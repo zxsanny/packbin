@@ -22,7 +22,7 @@ License is MIT.
 | nuget.org | `Packbin` | `dotnet add package Packbin` | First publish, with the C# package |
 | pypi.org | `packbin` | `pip install packbin` | First publish, with the Python package |
 | crates.io | `packbin` | `cargo add packbin` | First publish, with the Rust package |
-| Maven Central | `packbin` | Gradle / Maven coordinate | First publish, with the Java package |
+| Maven Central | `io.github.zxsanny:packbin` | Gradle / Maven coordinate | First publish, with the Java package |
 | vcpkg | `packbin` | `vcpkg install packbin` | First publish, with the C++ package |
 
 Public registries, not GitHub Packages. GitHub Packages asks for a token even for public installs, which fails the "install and import" path.

@@ -1,6 +1,13 @@
 # packbin
 Binary packing and unpacking across languages, declarative mapping, with zero overhead in the binary data.
 
+Both sides keep the same field list. The bytes are only the values.
+
+- A C# service and a Vue client on a WebSocket, either direction
+- TCP, UDP, or a queue, when the message is numbers, flags, and short text
+- A recording or file that another language reads back
+- A device or simulator using the layout the service already packs
+
 ## Example
 
 Python → binary → TypeScript

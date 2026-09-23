@@ -62,7 +62,7 @@ path.write_text(re.sub(r"(?m)^version = \".*\"$", f"version = \"{version}\"", te
     done < <(find "$root/java/src/main/java" -name '*.java' -print0 | sort -z)
     javac -encoding UTF-8 -d "$classes" "${sources[@]}"
     javadoc -encoding UTF-8 -d "$work/javadoc" -sourcepath "$root/java/src/main/java" packbin
-    path="packbin"
+    path="io/github/zxsanny"
     dest="$bundle/$path/packbin/$version"
     mkdir -p "$dest"
     jar --create --file "$dest/packbin-$version.jar" -C "$classes" .
@@ -72,7 +72,7 @@ path.write_text(re.sub(r"(?m)^version = \".*\"$", f"version = \"{version}\"", te
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0">
   <modelVersion>4.0.0</modelVersion>
-  <groupId>packbin</groupId>
+  <groupId>io.github.zxsanny</groupId>
   <artifactId>packbin</artifactId>
   <version>${version}</version>
   <name>packbin</name>

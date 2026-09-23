@@ -68,8 +68,8 @@ EOF
   if grep -q 'MAVEN_GROUP_ID' "$here/publish-registries.sh" || grep -q 'MAVEN_GROUP_ID' "$here/publish-inside.sh"; then
     fail "Java publish still reads MAVEN_GROUP_ID"
   fi
-  if ! grep -q '<groupId>packbin</groupId>' "$here/publish-inside.sh"; then
-    fail "Java group id is not packbin"
+  if ! grep -q '<groupId>io.github.zxsanny</groupId>' "$here/publish-inside.sh"; then
+    fail "Java group id is not io.github.zxsanny"
   fi
   printf 'csharp\n' > "$plan"
   set +e
@@ -205,10 +205,10 @@ maven_bundle_checks() {
 import sys, zipfile
 names = zipfile.ZipFile(sys.argv[1]).namelist()
 needed = (
-    "packbin/packbin/0.1.2/packbin-0.1.2.pom",
-    "packbin/packbin/0.1.2/packbin-0.1.2.jar",
-    "packbin/packbin/0.1.2/packbin-0.1.2-sources.jar",
-    "packbin/packbin/0.1.2/packbin-0.1.2-javadoc.jar",
+    "io/github/zxsanny/packbin/0.1.2/packbin-0.1.2.pom",
+    "io/github/zxsanny/packbin/0.1.2/packbin-0.1.2.jar",
+    "io/github/zxsanny/packbin/0.1.2/packbin-0.1.2-sources.jar",
+    "io/github/zxsanny/packbin/0.1.2/packbin-0.1.2-javadoc.jar",
 )
 for name in needed:
     for suffix in ("", ".asc", ".md5", ".sha1"):
