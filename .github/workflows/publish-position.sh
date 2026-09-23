@@ -30,7 +30,12 @@ case "$lang" in
     ;;
   cpp)
     bin="${PACKBIN_CPP_BIN:-/tmp/packbin-position}"
-    g++ -std=c++17 -O2 -Wall -Wextra -Werror -I"$root/cpp/include" -o "$bin" \
+    sdk="${PACKBIN_CXX_SYSROOT:-}"
+    flags=(-std=c++17 -O2 -Wall -Wextra -Werror -I"$root/cpp/include")
+    if [ -n "$sdk" ]; then
+      flags+=(-isysroot "$sdk" -I"$sdk/usr/include/c++/v1")
+    fi
+    "${CXX:-g++}" "${flags[@]}" -o "$bin" \
       "$drivers/position.cpp" "$root/cpp/src/field.cpp" "$root/cpp/src/packbin.cpp" "$root/cpp/src/counted.cpp"
     "$bin"
     ;;

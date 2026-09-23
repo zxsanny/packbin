@@ -28,13 +28,13 @@ ship: false
 ## Implementation
 
 ### Files that change
-Six language packages. String, list, and dictionary landed in each language packer.
+Six language packages. String, list, and dictionary landed in each language packer. Language-pair drivers live under `.github/workflows/drivers/`.
 
 ### Order of work
-Flag group, sized bytes, bit pack, UTF-8 string, counted list, and dictionary are coded. Next batch is AZ-1941.
+Flag group, sized bytes, bit pack, UTF-8 string, counted list, and dictionary are coded. AZ-1941 hands the packed bytes from one language to the next.
 
 ### Proof
-Each language suite packs and unpacks the task hex with zero mismatched bytes.
+Each language suite packs and unpacks the task hex with zero mismatched bytes. `.github/workflows/language-pair.sh` runs the six user handoffs, the six nested handoffs, and the position record.
 
 ### Risks
 A count that includes its own two bytes finishes inside the payload. Dict key order must be identical in every language.

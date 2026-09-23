@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
-    <BaseOutputPath>bin/position/</BaseOutputPath>
-    <BaseIntermediateOutputPath>obj/position/</BaseIntermediateOutputPath>
+    <BaseOutputPath>bin/handoff/</BaseOutputPath>
+    <BaseIntermediateOutputPath>obj/handoff/</BaseIntermediateOutputPath>
     <MSBuildProjectExtensionsPath>$(BaseIntermediateOutputPath)</MSBuildProjectExtensionsPath>
     <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;obj/**</DefaultItemExcludes>
   </PropertyGroup>
@@ -14,7 +14,7 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Remove="Handoff.cs" />
+    <Compile Remove="Position.cs" />
     <ProjectReference Include="../../../../csharp/Packbin.csproj" />
   </ItemGroup>
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
