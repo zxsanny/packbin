@@ -101,6 +101,7 @@ EOF
     rm -rf "$out/maven"
     mkdir -p "$out/maven"
     cp -R "$bundle/." "$out/maven/"
+    chmod -R a+rwX "$out/maven"
     ;;
   *)
     echo "unknown language: $lang" >&2
