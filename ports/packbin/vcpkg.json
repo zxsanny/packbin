@@ -1,6 +1,6 @@
 {
   "name": "packbin",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Pack and unpack a caller-owned field list",
   "license": "MIT",
   "homepage": "https://github.com/zxsanny/packbin"
