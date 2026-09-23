@@ -161,8 +161,11 @@ publish_npm_oidc() {
   work="$(mktemp -d)"
   cp -a "$root/typescript/." "$work/typescript"
   rm -rf "$work/typescript/node_modules"
-  npm version "$version" --no-git-tag-version --allow-same-version --prefix "$work/typescript"
-  npm publish --access public --prefix "$work/typescript"
+  (
+    cd "$work/typescript"
+    npm version "$version" --no-git-tag-version --allow-same-version
+    npm publish --access public
+  )
 }
 
 publish_java_upload() {
