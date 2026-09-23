@@ -11,7 +11,7 @@
 2. The packages do not import each other. There is no `shared/` code package.
 3. The golden fixture is data, owned by the bootstrap task. Every package reads it. None of them import it as a library.
 4. Public API is the file named below. Other files in that directory are internal.
-5. Tests live in `<language>/tests/`.
+5. Test paths are in the table below. Java tests live in `java/src/test/`.
 
 ## ADR-driven exceptions to the conventional layout
 

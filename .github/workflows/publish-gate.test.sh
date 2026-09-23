@@ -21,7 +21,7 @@ static_checks() {
   local test_yml="$root/.github/workflows/test.yml"
   local publish_yml="$root/.github/workflows/publish.yml"
   local registries="$root/.github/workflows/publish-registries.sh"
-  for token in NPM_TOKEN NUGET_TOKEN PYPI_TOKEN CARGO_REGISTRY_TOKEN MAVEN_CENTRAL_TOKEN; do
+  for token in NPM_TOKEN NUGET_TOKEN PYPI_TOKEN CARGO_REGISTRY_TOKEN MAVEN_CENTRAL_TOKEN MAVEN_GPG_PRIVATE_KEY; do
     if grep -q "$token" "$test_yml"; then
       fail "test workflow contains $token"
     fi
@@ -159,6 +159,65 @@ gate_checks() {
   assert_eq "$(wc -l < "$miss_out/publish-plan.txt" | tr -d ' ')" "5" "AC-4 five languages"
 }
 
+maven_bundle_checks() {
+  if ! grep -q 'publishingType=AUTOMATIC' "$here/publish-registries.sh"; then
+    fail "maven upload is not automatic"
+  fi
+  if grep -q 'maven-bundle.zip" -C' "$here/publish-inside.sh"; then
+    fail "maven bundle is still a jar archive"
+  fi
+  local tree out ring key
+  tree="$(mktemp -d)"
+  copy_tree "$tree"
+  out="$tree/.github/workflows/out"
+  mkdir -p "$out"
+  docker compose -f "$tree/docker-compose.test.yml" --project-directory "$tree" \
+    -p packbin-maven-bundle run -T --rm --no-deps \
+    -e SRC_ROOT=/src \
+    -e PACKBIN_VERSION=0.1.2 \
+    -e PACKBIN_OUT=/src/.github/workflows/out \
+    java "exec /src/.github/workflows/publish-inside.sh java"
+  if command -v gpg >/dev/null 2>&1; then
+    ring="$(mktemp -d)"
+    chmod 700 "$ring"
+    GNUPGHOME="$ring" gpg --batch --pinentry-mode loopback --passphrase '' \
+      --quick-generate-key "packbin-test" rsa4096 sign 0
+    key="$(GNUPGHOME="$ring" gpg --armor --export-secret-keys)"
+    PACKBIN_PUBLISH=1 PACKBIN_MAVEN_BUNDLE_ONLY=1 PACKBIN_OUT="$out" \
+      MAVEN_GPG_PRIVATE_KEY="$key" \
+      bash "$here/publish-registries.sh"
+  else
+    docker run --rm -v "$tree:/work" -e SRC_ROOT=/work ubuntu:24.04 bash -lc '
+      apt-get update -qq
+      DEBIAN_FRONTEND=noninteractive apt-get install -y -qq gnupg python3 >/dev/null
+      export GNUPGHOME="$(mktemp -d)"
+      chmod 700 "$GNUPGHOME"
+      gpg --batch --pinentry-mode loopback --passphrase "" \
+        --quick-generate-key "packbin-test" rsa4096 sign 0
+      export MAVEN_GPG_PRIVATE_KEY="$(gpg --armor --export-secret-keys)"
+      export PACKBIN_PUBLISH=1 PACKBIN_MAVEN_BUNDLE_ONLY=1
+      export PACKBIN_OUT=/work/.github/workflows/out
+      bash /work/.github/workflows/publish-registries.sh
+    '
+  fi
+  python3 - "$out/maven-bundle.zip" <<'PY'
+import sys, zipfile
+names = zipfile.ZipFile(sys.argv[1]).namelist()
+needed = (
+    "packbin/packbin/0.1.2/packbin-0.1.2.pom",
+    "packbin/packbin/0.1.2/packbin-0.1.2.jar",
+    "packbin/packbin/0.1.2/packbin-0.1.2-sources.jar",
+    "packbin/packbin/0.1.2/packbin-0.1.2-javadoc.jar",
+)
+for name in needed:
+    for suffix in ("", ".asc", ".md5", ".sha1"):
+        if name + suffix not in names:
+            raise SystemExit(f"missing {name}{suffix}")
+if any(name == "META-INF" or name.startswith("META-INF/") for name in names):
+    raise SystemExit("bundle contains META-INF")
+PY
+}
+
 manifest_checks() {
   grep -q 'PackageLicenseExpression>MIT' "$root/csharp/Packbin.csproj" || fail "csharp license"
   grep -q '"license": "MIT"' "$root/typescript/package.json" || fail "typescript license"
@@ -178,6 +237,7 @@ workflow_checks() {
 static_checks
 registry_checks
 gate_checks
+maven_bundle_checks
 manifest_checks
 workflow_checks
 

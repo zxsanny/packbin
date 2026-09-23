@@ -16,8 +16,8 @@
 
 | Method | Input | Output | Async | Error Types |
 |--------|-------|--------|-------|-------------|
-| `pack` | field list, value | bytes | No | integer does not fit |
-| `unpack` | field list, bytes | value or error | No | short packet, trailing bytes |
+| `Pack.Run` | field list, value | bytes | No | integer does not fit |
+| `Unpack.Run` | field list, bytes | value or error | No | short packet, trailing bytes |
 
 **Input DTOs**:
 

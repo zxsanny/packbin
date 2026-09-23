@@ -55,17 +55,19 @@ path.write_text(re.sub(r"(?m)^version = \".*\"$", f"version = \"{version}\"", te
   java)
     classes="$work/classes"
     bundle="$work/bundle"
-    mkdir -p "$classes"
+    mkdir -p "$classes" "$work/javadoc"
     sources=()
     while IFS= read -r -d '' f; do
       sources+=("$f")
     done < <(find "$root/java/src/main/java" -name '*.java' -print0 | sort -z)
     javac -encoding UTF-8 -d "$classes" "${sources[@]}"
-    jar --create --file "$work/packbin-$version.jar" -C "$classes" .
+    javadoc -encoding UTF-8 -d "$work/javadoc" -sourcepath "$root/java/src/main/java" packbin
     path="packbin"
     dest="$bundle/$path/packbin/$version"
     mkdir -p "$dest"
-    cp "$work/packbin-$version.jar" "$dest/packbin-$version.jar"
+    jar --create --file "$dest/packbin-$version.jar" -C "$classes" .
+    jar --create --file "$dest/packbin-$version-sources.jar" -C "$root/java/src/main/java" .
+    jar --create --file "$dest/packbin-$version-javadoc.jar" -C "$work/javadoc" .
     cat > "$dest/packbin-$version.pom" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0">
@@ -75,14 +77,30 @@ path.write_text(re.sub(r"(?m)^version = \".*\"$", f"version = \"{version}\"", te
   <version>${version}</version>
   <name>packbin</name>
   <description>Pack and unpack a caller-owned field list</description>
+  <url>https://github.com/zxsanny/packbin</url>
   <licenses>
-    <license><name>MIT</name></license>
+    <license>
+      <name>MIT</name>
+      <url>https://opensource.org/license/mit</url>
+    </license>
   </licenses>
+  <developers>
+    <developer>
+      <name>zxsanny</name>
+      <url>https://github.com/zxsanny</url>
+    </developer>
+  </developers>
+  <scm>
+    <connection>scm:git:https://github.com/zxsanny/packbin.git</connection>
+    <developerConnection>scm:git:https://github.com/zxsanny/packbin.git</developerConnection>
+    <url>https://github.com/zxsanny/packbin</url>
+  </scm>
 </project>
 EOF
     out="${PACKBIN_OUT:-$root/.github/workflows/out}"
-    mkdir -p "$out"
-    jar --create --file "$out/maven-bundle.zip" -C "$bundle" .
+    rm -rf "$out/maven"
+    mkdir -p "$out/maven"
+    cp -R "$bundle/." "$out/maven/"
     ;;
   *)
     echo "unknown language: $lang" >&2

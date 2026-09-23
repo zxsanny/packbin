@@ -17,7 +17,7 @@
 
 | Component | Host | Type / URL | Status | Notes |
 |-----------|------|------------|--------|-------|
-| git | github.com | https://github.com/zxsanny/packbin | intended | no local git repository yet |
+| git | github.com | https://github.com/zxsanny/packbin | present | local checkout on `dev` |
 | builder | github.com | GitHub Actions | intended | tests on push and pull request |
 | registry | npmjs.org | npm `packbin` | intended | first version tag |
 | registry | nuget.org | NuGet `Packbin` | intended | first version tag, same commit as npm |

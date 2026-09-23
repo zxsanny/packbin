@@ -17,7 +17,7 @@ plan="${PACKBIN_PLAN:-$root/.github/workflows/out/publish-plan.txt}"
 out="${PACKBIN_OUT:-$root/.github/workflows/out}"
 mkdir -p "$out"
 
-if [ ! -s "$plan" ]; then
+if [ ! -s "$plan" ] && [ "${PACKBIN_MAVEN_BUNDLE_ONLY:-}" != "1" ]; then
   echo "publishing 0 packages"
   exit 0
 fi
@@ -30,12 +30,15 @@ need() {
   fi
 }
 
-need csharp NUGET_TOKEN
-if grep -qx typescript "$plan" && [ -z "${NPM_TOKEN:-}" ] && [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
-  echo "NPM_TOKEN is required before any registry write" >&2
-  exit 1
+if [ "${PACKBIN_MAVEN_BUNDLE_ONLY:-}" != "1" ]; then
+  need csharp NUGET_TOKEN
+  if grep -qx typescript "$plan" && [ -z "${NPM_TOKEN:-}" ] && [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+    echo "NPM_TOKEN is required before any registry write" >&2
+    exit 1
+  fi
+  need java MAVEN_CENTRAL_TOKEN
+  need java MAVEN_GPG_PRIVATE_KEY
 fi
-need java MAVEN_CENTRAL_TOKEN
 
 skip_unset() {
   local lang="$1" var="$2"
@@ -46,8 +49,10 @@ skip_unset() {
   fi
 }
 
-skip_unset python PYPI_TOKEN
-skip_unset rust CARGO_REGISTRY_TOKEN
+if [ "${PACKBIN_MAVEN_BUNDLE_ONLY:-}" != "1" ]; then
+  skip_unset python PYPI_TOKEN
+  skip_unset rust CARGO_REGISTRY_TOKEN
+fi
 
 run_inside() {
   local lang="$1"
@@ -168,12 +173,74 @@ publish_npm_oidc() {
   )
 }
 
+prepare_maven_bundle() {
+  local src="$out/maven" ring file
+  if [ ! -d "$src" ]; then
+    echo "maven bundle directory is missing" >&2
+    exit 1
+  fi
+  if [ -z "${MAVEN_GPG_PRIVATE_KEY:-}" ]; then
+    echo "MAVEN_GPG_PRIVATE_KEY is required before any registry write" >&2
+    exit 1
+  fi
+  ring="$(mktemp -d)"
+  chmod 700 "$ring"
+  GNUPGHOME="$ring" gpg --batch --import <<EOF
+${MAVEN_GPG_PRIVATE_KEY}
+EOF
+  while IFS= read -r -d '' file; do
+    case "$file" in
+      *.pom|*.jar)
+        GNUPGHOME="$ring" gpg --batch --yes --pinentry-mode loopback \
+          --detach-sign --armor --output "$file.asc" "$file"
+        python3 - "$file" <<'PY'
+import hashlib, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+data = path.read_bytes()
+for name in ("md5", "sha1"):
+    path.with_name(path.name + "." + name).write_text(hashlib.new(name, data).hexdigest() + "\n")
+PY
+        ;;
+    esac
+  done < <(find "$src" -type f -print0)
+  python3 - "$src" "$out/maven-bundle.zip" <<'PY'
+import sys, zipfile
+from pathlib import Path
+src, dest = Path(sys.argv[1]), Path(sys.argv[2])
+with zipfile.ZipFile(dest, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+    for path in sorted(src.rglob("*")):
+        if path.is_file():
+            bundle.write(path, path.relative_to(src).as_posix())
+PY
+}
+
 publish_java_upload() {
-  curl --fail --silent --show-error \
+  local id state attempt
+  prepare_maven_bundle
+  id="$(curl --fail --silent --show-error \
     -H "Authorization: Bearer ${MAVEN_CENTRAL_TOKEN}" \
     -F "bundle=@${out}/maven-bundle.zip" \
-    https://central.sonatype.com/api/v1/publisher/upload
+    "https://central.sonatype.com/api/v1/publisher/upload?publishingType=AUTOMATIC")"
+  id="$(printf '%s' "$id" | tr -d '[:space:]')"
+  for attempt in $(seq 1 30); do
+    state="$(curl --fail --silent --show-error -X POST \
+      -H "Authorization: Bearer ${MAVEN_CENTRAL_TOKEN}" \
+      "https://central.sonatype.com/api/v1/publisher/status?id=${id}")"
+    printf '%s\n' "$state"
+    case "$state" in
+      *'"deploymentState":"PUBLISHED"'*) return 0 ;;
+      *'"deploymentState":"FAILED"'*) exit 1 ;;
+    esac
+    sleep 10
+  done
+  echo "maven central deployment did not finish" >&2
+  exit 1
 }
+
+if [ "${PACKBIN_MAVEN_BUNDLE_ONLY:-}" = "1" ]; then
+  prepare_maven_bundle
+  exit 0
+fi
 
 for lang in "${PACKBIN_LANGS[@]}"; do
   if ! grep -qx "$lang" "$plan"; then
