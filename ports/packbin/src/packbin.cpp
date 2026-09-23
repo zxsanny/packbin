@@ -1,3 +1,4 @@
+#include "counted.hpp"
 #include "packbin/packbin.hpp"
 
 #include <algorithm>
@@ -97,10 +98,48 @@ void pack_scalar(Field const& field, Values const& values, std::vector<std::uint
 void pack_nodes(std::vector<Field> const& nodes, Values const& values,
                 std::vector<std::uint8_t>& out);
 
+bool scalar_or_bytes(Field::Kind kind) {
+  switch (kind) {
+    case Field::Kind::U8:
+    case Field::Kind::U16:
+    case Field::Kind::U32:
+    case Field::Kind::U64:
+    case Field::Kind::I8:
+    case Field::Kind::I16:
+    case Field::Kind::I32:
+    case Field::Kind::I64:
+    case Field::Kind::F32:
+    case Field::Kind::F64:
+    case Field::Kind::Bytes:
+    case Field::Kind::Utf8:
+    case Field::Kind::List:
+    case Field::Kind::Dict:
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool group_present(Field const& node, Values const& values) {
+  if (is_present(values, node.name))
+    return true;
+  for (auto const& child : node.children) {
+    if (scalar_or_bytes(child.kind) && is_present(values, child.name))
+      return true;
+  }
+  return false;
+}
+
+bool bit_on(Field const& bit, Values const& values) {
+  if (bit.inner && bit.inner->kind == Field::Kind::Group)
+    return group_present(*bit.inner, values);
+  return is_present(values, field_name(bit));
+}
+
 std::uint8_t compute_bits(FlagGroup const& group, Values const& values) {
   std::uint8_t flag = 0;
   for (std::size_t i = 0; i < group.bits.size(); ++i) {
-    if (is_present(values, field_name(group.bits[i])))
+    if (bit_on(group.bits[i], values))
       flag = static_cast<std::uint8_t>(flag | (1u << i));
   }
   return flag;
@@ -142,9 +181,55 @@ void pack_one(Field const& node, Values const& values, std::vector<std::uint8_t>
       out.push_back(compute_bits(*node.group, values));
       break;
     case Field::Kind::FlagBit: {
-      if (!is_present(values, field_name(node)))
+      if (!bit_on(node, values))
         break;
       pack_one(*node.inner, values, out);
+      break;
+    }
+    case Field::Kind::Group:
+      pack_nodes(node.children, values, out);
+      break;
+    case Field::Kind::Sized:
+    case Field::Kind::U2:
+    case Field::Kind::Bits:
+    case Field::Kind::Utf8:
+      pack_counted(node, values, out);
+      break;
+    case Field::Kind::List: {
+      auto const& list = std::get<Value::List>(require(values, node.name).data);
+      if (!list || list->items.size() > 65535)
+        throw std::runtime_error(node.name + ": list length");
+      auto n = static_cast<std::uint16_t>(list->items.size());
+      out.push_back(static_cast<std::uint8_t>(n & 0xff));
+      out.push_back(static_cast<std::uint8_t>((n >> 8) & 0xff));
+      auto const& child = node.children.front();
+      for (auto const& item : list->items) {
+        Values slice;
+        slice.emplace(child.name, item);
+        pack_one(child, slice, out);
+      }
+      break;
+    }
+    case Field::Kind::Dict: {
+      auto const& map = std::get<Value::Map>(require(values, node.name).data);
+      if (!map || map->items.size() > 65535)
+        throw std::runtime_error(node.name + ": dictionary length");
+      auto n = static_cast<std::uint16_t>(map->items.size());
+      out.push_back(static_cast<std::uint8_t>(n & 0xff));
+      out.push_back(static_cast<std::uint8_t>((n >> 8) & 0xff));
+      auto const& child = node.children.front();
+      for (auto const& [key, item] : map->items) {
+        if (key.size() > 65535)
+          throw std::runtime_error(node.name + ": key length");
+        auto kn = static_cast<std::uint16_t>(key.size());
+        out.push_back(static_cast<std::uint8_t>(kn & 0xff));
+        out.push_back(static_cast<std::uint8_t>((kn >> 8) & 0xff));
+        out.insert(out.end(), reinterpret_cast<std::uint8_t const*>(key.data()),
+                   reinterpret_cast<std::uint8_t const*>(key.data()) + key.size());
+        Values slice;
+        slice.emplace(child.name, item);
+        pack_one(child, slice, out);
+      }
       break;
     }
     case Field::Kind::When: {
@@ -332,6 +417,62 @@ std::optional<ShortPacket> unpack_one(std::uint8_t const* data, std::size_t len,
         if (err)
           return err;
       }
+      return std::nullopt;
+    }
+    case Field::Kind::Group: {
+      if (node.children.empty()) {
+        out[node.name] = Value{std::uint8_t{1}};
+        return std::nullopt;
+      }
+      return unpack_nodes(data, len, offset, node.children, out, as_list);
+    }
+    case Field::Kind::Sized:
+    case Field::Kind::U2:
+    case Field::Kind::Bits:
+    case Field::Kind::Utf8:
+      return unpack_counted(data, len, offset, node, out, as_list);
+    case Field::Kind::List: {
+      if (left() < 2)
+        return make_short(node.name, 2, left());
+      auto count = static_cast<std::size_t>(data[offset] | (data[offset + 1] << 8));
+      offset += 2;
+      auto const& child = node.children.front();
+      auto items = std::make_shared<ValueList>();
+      items->items.reserve(count);
+      for (std::size_t i = 0; i < count; ++i) {
+        Values one;
+        auto err = unpack_one(data, len, offset, child, one, false);
+        if (err)
+          return err;
+        items->items.push_back(one.at(child.name));
+      }
+      append_value(out, node.name, Value{items}, as_list);
+      return std::nullopt;
+    }
+    case Field::Kind::Dict: {
+      if (left() < 2)
+        return make_short(node.name, 2, left());
+      auto count = static_cast<std::size_t>(data[offset] | (data[offset + 1] << 8));
+      offset += 2;
+      auto const& child = node.children.front();
+      auto items = std::make_shared<ValueMap>();
+      for (std::size_t i = 0; i < count; ++i) {
+        if (left() < 2)
+          return make_short(node.name, 2, left());
+        auto key_len = static_cast<std::size_t>(data[offset] | (data[offset + 1] << 8));
+        offset += 2;
+        if (left() < key_len)
+          return make_short(node.name, static_cast<int>(key_len), left());
+        std::string key(reinterpret_cast<char const*>(data + offset), key_len);
+        offset += key_len;
+        Values one;
+        auto err = unpack_one(data, len, offset, child, one, false);
+        if (err)
+          return err;
+        if (!items->items.emplace(std::move(key), one.at(child.name)).second)
+          return make_short(node.name, 0, 0);
+      }
+      append_value(out, node.name, Value{items}, as_list);
       return std::nullopt;
     }
   }

@@ -108,6 +108,71 @@ Field repeat(std::vector<Field> fields) {
   return f;
 }
 
+Field group(std::string name, std::vector<Field> fields) {
+  Field f;
+  f.kind = Field::Kind::Group;
+  f.name = std::move(name);
+  f.children = std::move(fields);
+  return f;
+}
+
+Field sized(std::string name, std::string count_field) {
+  Field f;
+  f.kind = Field::Kind::Sized;
+  f.name = std::move(name);
+  f.count_name = std::move(count_field);
+  return f;
+}
+
+Field u2(std::vector<std::string> names) {
+  if (names.empty())
+    throw std::runtime_error("u2 needs at least one name");
+  Field f;
+  f.kind = Field::Kind::U2;
+  f.children.reserve(names.size());
+  for (auto& name : names) {
+    Field child;
+    child.name = std::move(name);
+    f.children.push_back(std::move(child));
+  }
+  return f;
+}
+
+Field utf8(std::string name) {
+  Field f;
+  f.kind = Field::Kind::Utf8;
+  f.name = std::move(name);
+  return f;
+}
+
+Field list(std::string name, Field element) {
+  if (element.kind == Field::Kind::Repeat)
+    throw std::runtime_error("repeat is not a list element");
+  Field f;
+  f.kind = Field::Kind::List;
+  f.name = std::move(name);
+  f.children.push_back(std::move(element));
+  return f;
+}
+
+Field dict(std::string name, Field element) {
+  if (element.kind == Field::Kind::Repeat)
+    throw std::runtime_error("repeat is not a dictionary element");
+  Field f;
+  f.kind = Field::Kind::Dict;
+  f.name = std::move(name);
+  f.children.push_back(std::move(element));
+  return f;
+}
+
+Field bits(std::string name, std::string count_field) {
+  Field f;
+  f.kind = Field::Kind::Bits;
+  f.name = std::move(name);
+  f.count_name = std::move(count_field);
+  return f;
+}
+
 Packet packet(std::vector<Field> fields) { return Packet{std::move(fields)}; }
 
 std::string to_hex(std::vector<std::uint8_t> const& data) {
