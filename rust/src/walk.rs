@@ -74,7 +74,8 @@ fn group_on(name: &str, members: &[Field], values: &Values) -> bool {
             FieldKind::Int { name, .. }
             | FieldKind::Float { name, .. }
             | FieldKind::Bytes { name, .. }
-            | FieldKind::Utf8 { name } => {
+            | FieldKind::Utf8 { name }
+            | FieldKind::List { name, .. } => {
                 if present(values, name) {
                     return true;
                 }
@@ -231,6 +232,23 @@ fn pack_one(
                 let n = raw.len() as u16;
                 out.extend_from_slice(&n.to_le_bytes());
                 out.extend_from_slice(raw);
+                Ok(())
+            }
+            _ => Err(PackError::Type(name.to_string())),
+        },
+        FieldKind::List { name, element } => match require(values, name)? {
+            Value::List(items) => {
+                if items.len() > 65535 {
+                    return Err(PackError::Type(name.to_string()));
+                }
+                let n = items.len() as u16;
+                out.extend_from_slice(&n.to_le_bytes());
+                let child = field_name(element).ok_or_else(|| PackError::Type(name.to_string()))?;
+                for item in items {
+                    let mut slice = Values::new();
+                    slice.insert(name_of(child), Some(item.clone()));
+                    pack_fields(std::slice::from_ref(element), &slice, flag_bits, out)?;
+                }
                 Ok(())
             }
             _ => Err(PackError::Type(name.to_string())),
@@ -486,6 +504,27 @@ fn unpack_one(
                 })
             })?;
             values.insert(name.clone(), Some(Value::Str(text.to_string())));
+        }
+        FieldKind::List { name, element } => {
+            let count_raw = cur.take(2, name)?;
+            let count = u16::from_le_bytes([count_raw[0], count_raw[1]]) as usize;
+            let child = field_name(element).unwrap_or(name);
+            let mut items = Vec::with_capacity(count);
+            for _ in 0..count {
+                let mut one = Values::new();
+                unpack_fields(std::slice::from_ref(element), cur, &mut one, flag_bits, groups)?;
+                items.push(match one.remove(child) {
+                    Some(Some(v)) => v,
+                    _ => {
+                        return Err(UnpackError::Short(ShortPacket {
+                            field: name.to_string(),
+                            needed: 0,
+                            left: cur.left(),
+                        }))
+                    }
+                });
+            }
+            values.insert(name.clone(), Some(Value::List(items)));
         }
     }
     Ok(())

@@ -153,4 +153,46 @@ internal static partial class Walker
         Store(values, field.Name, text, repeatLists);
         return null;
     }
+
+    private static void PackList(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    {
+        if (values[field.Name] is not IList items)
+            throw new ArgumentException($"{field.Name}: expected list");
+        if (items.Count > 65535)
+            throw new ArgumentException($"{field.Name}: length {items.Count}");
+        buffer.Add((byte)items.Count);
+        buffer.Add((byte)(items.Count >> 8));
+        var child = field.Children[0];
+        foreach (var item in items)
+        {
+            var slice = new Dictionary<string, object?>(values) { [child.Name] = item };
+            PackField(child, slice, buffer);
+        }
+    }
+
+    private static object? UnpackList(
+        Field field,
+        ReadOnlySpan<byte> bytes,
+        ref int offset,
+        Dictionary<string, object?> values,
+        bool repeatLists)
+    {
+        var left = bytes.Length - offset;
+        if (left < 2)
+            return new ShortPacket(field.Name, 2, left);
+        var count = bytes[offset] | (bytes[offset + 1] << 8);
+        offset += 2;
+        var child = field.Children[0];
+        var items = new List<object?>(count);
+        for (var i = 0; i < count; i++)
+        {
+            var one = new Dictionary<string, object?>();
+            var err = UnpackField(child, bytes, ref offset, one, false);
+            if (err is not null)
+                return err;
+            items.Add(one[child.Name]);
+        }
+        Store(values, field.Name, items, repeatLists);
+        return null;
+    }
 }

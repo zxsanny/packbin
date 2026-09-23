@@ -19,7 +19,8 @@ public final class Field {
         SIZED,
         U2,
         BITS,
-        UTF8
+        UTF8,
+        LIST
     }
 
     final Kind kind;
@@ -114,6 +115,13 @@ public final class Field {
 
     static Field utf8(String name) {
         return new Field(Kind.UTF8, name, false, 0, null, null, null, 0, null, null, null);
+    }
+
+    static Field list(String name, Field element) {
+        if (element.kind == Kind.REPEAT) {
+            throw new IllegalArgumentException("repeat is not a list element");
+        }
+        return new Field(Kind.LIST, name, false, 0, List.of(element), null, null, 0, null, null, null);
     }
 
     Field withBigEndian() {

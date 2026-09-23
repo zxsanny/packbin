@@ -1,6 +1,7 @@
 use packbin::{
-    bits, bytes, eq, f32, f64, flag_byte, flags, group, i16, i32, insert, motion_field_count,
-    mismatched_bytes, pack, packet, repeat, sized, to_hex, u16, u2, u32, u8, unpack, utf8, when,
+    be, bits, bytes, eq, f32, f64, flag_byte, flags, group, i16, i32, insert, list,
+    mismatched_bytes, motion_field_count, pack, packet, repeat, sized, to_hex, u16, u2, u32, u8,
+    unpack, utf8, when,
     ShortPacket, UnpackError, Value, Values,
 };
 use std::fs;
@@ -503,4 +504,49 @@ fn utf8_string() {
         }
         other => panic!("expected ShortPacket, got {:?}", other),
     }
+}
+
+#[test]
+fn counted_list() {
+    let two = packet(vec![list("xs", u16("n"))]);
+    let mut vals = Values::new();
+    insert(
+        &mut vals,
+        "xs",
+        Some(Value::List(vec![Value::U16(1), Value::U16(2)])),
+    );
+    let raw = pack(&two, &vals).unwrap();
+    assert_eq!(to_hex(&raw), "020001000200");
+    let got = unpack(&two, &raw).unwrap();
+    assert_eq!(
+        got["xs"],
+        Some(Value::List(vec![Value::U16(1), Value::U16(2)]))
+    );
+
+    let be_one = packet(vec![list("xs", be(u16("n")))]);
+    let mut be_vals = Values::new();
+    insert(&mut be_vals, "xs", Some(Value::List(vec![Value::U16(1)])));
+    assert_eq!(to_hex(&pack(&be_one, &be_vals).unwrap()), "01000001");
+
+    let followed = packet(vec![list("xs", u8("n")), u8("y")]);
+    let mut both_vals = Values::new();
+    insert(&mut both_vals, "xs", Some(Value::List(vec![Value::U8(1)])));
+    insert(&mut both_vals, "y", Some(Value::U8(2)));
+    let both = pack(&followed, &both_vals).unwrap();
+    assert_eq!(to_hex(&both), "01000102");
+    let back = unpack(&followed, &both).unwrap();
+    assert_eq!(back["xs"], Some(Value::List(vec![Value::U8(1)])));
+    assert_eq!(back["y"], Some(Value::U8(2)));
+
+    let mut empty_vals = Values::new();
+    insert(&mut empty_vals, "xs", Some(Value::List(vec![])));
+    assert_eq!(to_hex(&pack(&two, &empty_vals).unwrap()), "0000");
+
+    let mut long_vals = Values::new();
+    insert(
+        &mut long_vals,
+        "xs",
+        Some(Value::List(vec![Value::U16(1); 65536])),
+    );
+    assert!(pack(&two, &long_vals).is_err());
 }

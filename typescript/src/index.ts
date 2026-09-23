@@ -41,6 +41,7 @@ export type Field =
   | { kind: "u2"; names: string[] }
   | { kind: "bits"; name: string; count: string }
   | { kind: "utf8"; name: string }
+  | { kind: "list"; name: string; element: Field }
 
 export type Packet = { fields: Field[] }
 
@@ -172,6 +173,14 @@ export function utf8(name: string): Field {
   return { kind: "utf8", name }
 }
 
+export function list(name: string, element: Field): Field {
+  const flat = flatten([element])
+  if (flat.length !== 1 || flat[0]!.kind === "repeat") {
+    throw new RangeError("list element must be one field")
+  }
+  return { kind: "list", name, element: flat[0]! }
+}
+
 function collectFlagBits(fields: Field[], id: symbol): { bit: number; field: Field }[] {
   const bits: { bit: number; field: Field }[] = []
   for (const f of fields) {
@@ -207,7 +216,8 @@ function fieldName(field: Field): string {
     field.kind === "group" ||
     field.kind === "sized" ||
     field.kind === "bits" ||
-    field.kind === "utf8"
+    field.kind === "utf8" ||
+    field.kind === "list"
   ) {
     return field.name
   }
@@ -307,6 +317,18 @@ function packFields(
         if (!present(values[f.name])) throw new RangeError(`missing ${f.name}`)
         writeUtf8(out, f.name, values[f.name])
         break
+      case "list": {
+        const items = values[f.name]
+        if (!Array.isArray(items)) throw new RangeError(`${f.name}: expected list`)
+        if (items.length > 65535) throw new RangeError(`${f.name}: length ${items.length}`)
+        out.push(items.length & 0xff, (items.length >> 8) & 0xff)
+        const child = fieldName(f.element)
+        for (const item of items) {
+          const slice: Value = { ...values, [child]: item }
+          packFields([f.element], allFields, slice, out, flagBytes)
+        }
+        break
+      }
       case "flags":
         packFields(flatten([f]), allFields, values, out, flagBytes)
         break
@@ -454,6 +476,22 @@ function unpackFields(
         if (!r.ok) return r
         if (repeating) appendRepeat(values, f.name, r.value)
         else values[f.name] = r.value
+        break
+      }
+      case "list": {
+        if (cur.offset + 2 > cur.buf.length) return short(f.name, 2, cur.buf.length - cur.offset)
+        const count = cur.view.getUint16(cur.offset, true)
+        cur.offset += 2
+        const items: unknown[] = []
+        const child = fieldName(f.element)
+        for (let i = 0; i < count; i++) {
+          const one: Value = {}
+          const err = unpackFields([f.element], cur, one, flagBytes, false)
+          if (err) return err
+          items.push(one[child])
+        }
+        if (repeating) appendRepeat(values, f.name, items)
+        else values[f.name] = items
         break
       }
       case "flags": {

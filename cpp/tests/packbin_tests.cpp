@@ -355,6 +355,60 @@ void utf8_string() {
          "utf8 short");
 }
 
+void counted_list() {
+  auto two = packbin::packet({packbin::list("xs", packbin::u16("n"))});
+  auto items = std::make_shared<packbin::ValueList>();
+  items->items.push_back(packbin::Value{std::uint16_t{1}});
+  items->items.push_back(packbin::Value{std::uint16_t{2}});
+  packbin::Values vals;
+  vals.emplace("xs", packbin::Value{items});
+  auto raw = packbin::pack(two, vals);
+  expect(packbin::to_hex(raw) == "020001000200", "list hex");
+  auto got = packbin::unpack(two, raw);
+  auto const& back = std::get<packbin::Value::List>(got.value.at("xs").data);
+  expect(got.ok && back && back->items.size() == 2, "list unpack");
+  expect(std::get<std::uint16_t>(back->items[0].data) == 1, "list 0");
+  expect(std::get<std::uint16_t>(back->items[1].data) == 2, "list 1");
+
+  auto be_items = std::make_shared<packbin::ValueList>();
+  be_items->items.push_back(packbin::Value{std::uint16_t{1}});
+  auto be_one = packbin::packet({packbin::list("xs", packbin::be(packbin::u16("n")))});
+  packbin::Values be_vals;
+  be_vals.emplace("xs", packbin::Value{be_items});
+  expect(packbin::to_hex(packbin::pack(be_one, be_vals)) == "01000001", "list be");
+
+  auto one = std::make_shared<packbin::ValueList>();
+  one->items.push_back(packbin::Value{std::uint8_t{1}});
+  auto followed = packbin::packet({packbin::list("xs", packbin::u8("n")), packbin::u8("y")});
+  packbin::Values both_vals;
+  both_vals.emplace("xs", packbin::Value{one});
+  both_vals.emplace("y", packbin::Value{std::uint8_t{2}});
+  auto both = packbin::pack(followed, both_vals);
+  expect(packbin::to_hex(both) == "01000102", "list next hex");
+  auto back_got = packbin::unpack(followed, both);
+  auto const& xs = std::get<packbin::Value::List>(back_got.value.at("xs").data);
+  expect(back_got.ok && xs && xs->items.size() == 1, "list next xs");
+  expect(std::get<std::uint8_t>(xs->items[0].data) == 1, "list next 1");
+  expect(std::get<std::uint8_t>(back_got.value.at("y").data) == 2, "list next y");
+
+  auto empty_items = std::make_shared<packbin::ValueList>();
+  packbin::Values empty_vals;
+  empty_vals.emplace("xs", packbin::Value{empty_items});
+  expect(packbin::to_hex(packbin::pack(two, empty_vals)) == "0000", "list empty");
+
+  auto huge = std::make_shared<packbin::ValueList>();
+  huge->items.assign(65536, packbin::Value{std::uint16_t{1}});
+  packbin::Values long_vals;
+  long_vals.emplace("xs", packbin::Value{huge});
+  bool failed = false;
+  try {
+    packbin::pack(two, long_vals);
+  } catch (std::runtime_error const&) {
+    failed = true;
+  }
+  expect(failed, "list too long");
+}
+
 void nfr_round_trips() {
   auto pkt = position_packet();
   auto vals = position_values();
@@ -392,6 +446,7 @@ int main() {
   trailing_byte();
   new_field_kinds();
   utf8_string();
+  counted_list();
   nfr_round_trips();
   if (failures != 0) {
     std::cerr << failures << " failure(s)\n";

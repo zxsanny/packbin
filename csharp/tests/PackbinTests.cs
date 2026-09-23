@@ -286,6 +286,42 @@ public class PackbinTests
     }
 
     [Fact]
+    public void CountedList()
+    {
+        var two = Packet.Of(Field.List("xs", Field.U16("n")));
+        var raw = Pack.Run(two, new Dictionary<string, object?> { ["xs"] = new ushort[] { 1, 2 } });
+        Assert.Equal("020001000200", Convert.ToHexString(raw).ToLowerInvariant());
+        var got = Unpack.Run(two, raw);
+        Assert.Null(got.Error);
+        var xs = Assert.IsAssignableFrom<System.Collections.IList>(got.Values["xs"]);
+        Assert.Equal(2, xs.Count);
+        Assert.Equal(1, Convert.ToInt32(xs[0], CultureInfo.InvariantCulture));
+        Assert.Equal(2, Convert.ToInt32(xs[1], CultureInfo.InvariantCulture));
+
+        var beOne = Packet.Of(Field.List("xs", Field.U16("n").Be()));
+        var beRaw = Pack.Run(beOne, new Dictionary<string, object?> { ["xs"] = new ushort[] { 1 } });
+        Assert.Equal("01000001", Convert.ToHexString(beRaw).ToLowerInvariant());
+
+        var followed = Packet.Of(Field.List("xs", Field.U8("n")), Field.U8("y"));
+        var both = Pack.Run(followed, new Dictionary<string, object?>
+        {
+            ["xs"] = new byte[] { 1 },
+            ["y"] = (byte)2,
+        });
+        Assert.Equal("01000102", Convert.ToHexString(both).ToLowerInvariant());
+        var back = Unpack.Run(followed, both);
+        Assert.Null(back.Error);
+        var one = Assert.IsAssignableFrom<System.Collections.IList>(back.Values["xs"]);
+        Assert.Equal(1, Convert.ToInt32(one[0], CultureInfo.InvariantCulture));
+        Assert.Equal(2, Convert.ToInt32(back.Values["y"], CultureInfo.InvariantCulture));
+
+        var empty = Pack.Run(two, new Dictionary<string, object?> { ["xs"] = Array.Empty<ushort>() });
+        Assert.Equal("0000", Convert.ToHexString(empty).ToLowerInvariant());
+        Assert.Throws<ArgumentException>(() =>
+            Pack.Run(two, new Dictionary<string, object?> { ["xs"] = new ushort[65536] }));
+    }
+
+    [Fact]
     public void U2AndBits()
     {
         var kinds = Packet.Of(Field.U2("a", "b", "c", "d"));

@@ -100,6 +100,7 @@ class Field {
     U2,
     Bits,
     Utf8,
+    List,
   };
 
   Kind kind{};
@@ -143,6 +144,7 @@ Field sized(std::string name, std::string count_field);
 Field u2(std::vector<std::string> names);
 Field bits(std::string name, std::string count_field);
 Field utf8(std::string name);
+Field list(std::string name, Field element);
 Packet packet(std::vector<Field> fields);
 
 std::vector<std::uint8_t> pack(Packet const& target, Values const& values);

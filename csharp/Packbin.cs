@@ -74,6 +74,7 @@ public sealed class Field
         U2,
         Bits,
         Utf8,
+        List,
     }
 
     internal Kind Type { get; }
@@ -174,6 +175,13 @@ public sealed class Field
         new(Kind.Bits, name, countName: countField);
 
     public static Field Utf8(string name) => new(Kind.Utf8, name);
+
+    public static Field List(string name, Field element)
+    {
+        if (element.Type == Kind.Repeat)
+            throw new ArgumentException("repeat is not a list element");
+        return new(Kind.List, name, children: [element]);
+    }
 
     internal static Field CreateFlagBit(FlagGroup group, int bitIndex, Field inner) =>
         new(Kind.FlagBit, inner.Name, flagOwner: group, bitIndex: bitIndex, inner: inner);

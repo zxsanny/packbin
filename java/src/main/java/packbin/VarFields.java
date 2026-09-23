@@ -2,6 +2,7 @@ package packbin;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -172,6 +173,50 @@ final class VarFields {
         String text = new String(data, offset[0], count, StandardCharsets.UTF_8);
         offset[0] += count;
         Walker.store(values, field.name, text, asList);
+        return null;
+    }
+
+    static void packList(Field field, Map<String, Object> values, ByteSink sink) {
+        Object raw = values.get(field.name);
+        if (!(raw instanceof List<?> items)) {
+            throw new IllegalArgumentException(field.name + ": expected list");
+        }
+        if (items.size() > 65535) {
+            throw new IllegalArgumentException(field.name + ": length " + items.size());
+        }
+        sink.write((byte) items.size());
+        sink.write((byte) (items.size() >> 8));
+        Field child = field.children.get(0);
+        for (Object item : items) {
+            Map<String, Object> slice = new HashMap<>();
+            slice.put(child.name, item);
+            Walker.packField(child, slice, sink);
+        }
+    }
+
+    static Object unpackList(
+            Field field,
+            byte[] data,
+            int[] offset,
+            Map<String, Object> values,
+            boolean asList) {
+        int left = data.length - offset[0];
+        if (left < 2) {
+            return new Packbin.ShortPacket(field.name, 2, left);
+        }
+        int count = (data[offset[0]] & 0xff) | ((data[offset[0] + 1] & 0xff) << 8);
+        offset[0] += 2;
+        Field child = field.children.get(0);
+        List<Object> items = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            Map<String, Object> one = new HashMap<>();
+            Object err = Walker.unpackField(child, data, offset, one, false);
+            if (err != null) {
+                return err;
+            }
+            items.add(one.get(child.name));
+        }
+        Walker.store(values, field.name, items, asList);
         return null;
     }
 }

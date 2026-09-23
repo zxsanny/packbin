@@ -112,6 +112,7 @@ bool scalar_or_bytes(Field::Kind kind) {
     case Field::Kind::F64:
     case Field::Kind::Bytes:
     case Field::Kind::Utf8:
+    case Field::Kind::List:
       return true;
     default:
       return false;
@@ -193,6 +194,21 @@ void pack_one(Field const& node, Values const& values, std::vector<std::uint8_t>
     case Field::Kind::Utf8:
       pack_counted(node, values, out);
       break;
+    case Field::Kind::List: {
+      auto const& list = std::get<Value::List>(require(values, node.name).data);
+      if (!list || list->items.size() > 65535)
+        throw std::runtime_error(node.name + ": list length");
+      auto n = static_cast<std::uint16_t>(list->items.size());
+      out.push_back(static_cast<std::uint8_t>(n & 0xff));
+      out.push_back(static_cast<std::uint8_t>((n >> 8) & 0xff));
+      auto const& child = node.children.front();
+      for (auto const& item : list->items) {
+        Values slice;
+        slice.emplace(child.name, item);
+        pack_one(child, slice, out);
+      }
+      break;
+    }
     case Field::Kind::When: {
       auto it = values.find(node.pred.field);
       if (it != values.end() && values_equal(it->second, node.pred.value))
@@ -392,6 +408,24 @@ std::optional<ShortPacket> unpack_one(std::uint8_t const* data, std::size_t len,
     case Field::Kind::Bits:
     case Field::Kind::Utf8:
       return unpack_counted(data, len, offset, node, out, as_list);
+    case Field::Kind::List: {
+      if (left() < 2)
+        return make_short(node.name, 2, left());
+      auto count = static_cast<std::size_t>(data[offset] | (data[offset + 1] << 8));
+      offset += 2;
+      auto const& child = node.children.front();
+      auto items = std::make_shared<ValueList>();
+      items->items.reserve(count);
+      for (std::size_t i = 0; i < count; ++i) {
+        Values one;
+        auto err = unpack_one(data, len, offset, child, one, false);
+        if (err)
+          return err;
+        items->items.push_back(one.at(child.name));
+      }
+      append_value(out, node.name, Value{items}, as_list);
+      return std::nullopt;
+    }
   }
   return std::nullopt;
 }

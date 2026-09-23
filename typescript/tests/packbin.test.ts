@@ -19,6 +19,8 @@ import {
   u2,
   bits,
   utf8,
+  list,
+  be,
   pack,
   unpack,
 } from "../src/index.ts"
@@ -310,6 +312,35 @@ describe("packbin", () => {
     assert.equal(short.needed, 7)
     assert.equal(short.left, 2)
     assert.equal("name" in short, false)
+  })
+
+  it("counted list leaves the next field", () => {
+    const two = packet([list("xs", u16("n"))])
+    const raw = pack(two, { xs: [1, 2] })
+    assert.equal(toHex(raw), "020001000200")
+    const got = unpack(two, raw)
+    assert.equal(got.ok, true)
+    if (!got.ok) return
+    assert.deepEqual(got.xs, [1, 2])
+
+    const beOne = packet([list("xs", be(u16("n")))])
+    assert.equal(toHex(pack(beOne, { xs: [1] })), "01000001")
+
+    const followed = packet([list("xs", u8("n")), u8("y")])
+    const both = pack(followed, { xs: [1], y: 2 })
+    assert.equal(toHex(both), "01000102")
+    const back = unpack(followed, both)
+    assert.equal(back.ok, true)
+    if (!back.ok) return
+    assert.deepEqual(back.xs, [1])
+    assert.equal(back.y, 2)
+
+    assert.equal(toHex(pack(two, { xs: [] })), "0000")
+    let produced: Uint8Array | null = null
+    assert.throws(() => {
+      produced = pack(two, { xs: Array(65536).fill(1) })
+    })
+    assert.equal(produced, null)
   })
 
   it("NFR 100000 pack-then-unpack round trips ≤ 1s", () => {

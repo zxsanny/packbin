@@ -8,12 +8,14 @@ import pytest
 from packbin import (
     ShortPacket,
     TrailingBytes,
+    be,
     bits,
     eq,
     flags,
     group,
     i16,
     i32,
+    list,
     pack,
     packet,
     repeat,
@@ -338,3 +340,29 @@ def test_utf8_string():
     assert short.field == "name"
     assert short.needed == 7
     assert short.left == 2
+
+
+def test_counted_list():
+    two = packet([list("xs", u16("n"))])
+    raw = pack(two, {"xs": [1, 2]})
+    assert raw.hex() == "020001000200"
+    got = unpack(two, raw)
+    assert got.ok is True
+    assert got.value is not None
+    assert got.value["xs"] == [1, 2]
+
+    be_one = packet([list("xs", be(u16("n")))])
+    assert pack(be_one, {"xs": [1]}).hex() == "01000001"
+
+    followed = packet([list("xs", u8("n")), u8("y")])
+    both = pack(followed, {"xs": [1], "y": 2})
+    assert both.hex() == "01000102"
+    back = unpack(followed, both)
+    assert back.ok is True
+    assert back.value is not None
+    assert back.value["xs"] == [1]
+    assert back.value["y"] == 2
+
+    assert pack(two, {"xs": []}).hex() == "0000"
+    with pytest.raises(ValueError):
+        pack(two, {"xs": [1] * 65536})

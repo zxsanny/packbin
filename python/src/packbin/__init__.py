@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 
 _builtin_bytes = bytes
+_builtin_list = list
 __all__ = [
     "ShortPacket",
     "TrailingBytes",
@@ -32,6 +33,7 @@ __all__ = [
     "u2",
     "bits",
     "utf8",
+    "list",
     "pack",
     "unpack",
 ]
@@ -172,12 +174,18 @@ class _Utf8(_Node):
 
 
 @dataclass(slots=True)
+class _List(_Node):
+    name: str
+    element: _Node
+
+
+@dataclass(slots=True)
 class Packet:
     fields: list[_Node]
 
 
 def packet(fields: Sequence[_Node]) -> Packet:
-    return Packet(list(fields))
+    return Packet(_builtin_list(fields))
 
 
 def _scalar(
@@ -264,7 +272,7 @@ def be(field: _Scalar) -> _Scalar:
 
 
 def flags(name: str, fields: Sequence[_Node]) -> _Flags:
-    return _Flags(name=name, fields=list(fields))
+    return _Flags(name=name, fields=_builtin_list(fields))
 
 
 def flag_byte(name: str) -> _FlagByte:
@@ -276,15 +284,15 @@ def eq(field: str, value: Any) -> _Eq:
 
 
 def when(condition: _Eq, fields: Sequence[_Node]) -> _When:
-    return _When(condition=condition, fields=list(fields))
+    return _When(condition=condition, fields=_builtin_list(fields))
 
 
 def repeat(fields: Sequence[_Node]) -> _Repeat:
-    return _Repeat(fields=list(fields))
+    return _Repeat(fields=_builtin_list(fields))
 
 
 def group(name: str, fields: Sequence[_Node]) -> _Group:
-    return _Group(name=name, fields=list(fields))
+    return _Group(name=name, fields=_builtin_list(fields))
 
 
 def sized(name: str, count: str) -> _Sized:
@@ -294,7 +302,7 @@ def sized(name: str, count: str) -> _Sized:
 def u2(*names: str) -> _U2:
     if not names:
         raise ValueError("u2 needs at least one name")
-    return _U2(names=list(names))
+    return _U2(names=_builtin_list(names))
 
 
 def bits(name: str, count: str) -> _Bits:
@@ -303,6 +311,12 @@ def bits(name: str, count: str) -> _Bits:
 
 def utf8(name: str) -> _Utf8:
     return _Utf8(name=name)
+
+
+def list(name: str, element: _Node) -> _List:
+    if isinstance(element, _Repeat):
+        raise ValueError("repeat is not a list element")
+    return _List(name=name, element=element)
 
 
 def _utf8_payload(name: str, value: Any) -> bytes:
@@ -318,7 +332,7 @@ def _group_on(values: dict[str, Any], node: _Group) -> bool:
     if _present(values, node.name):
         return True
     for child in node.fields:
-        if isinstance(child, (_Scalar, _Bytes, _Utf8)) and _present(values, child.name):
+        if isinstance(child, (_Scalar, _Bytes, _Utf8, _List)) and _present(values, child.name):
             return True
     return False
 
@@ -346,7 +360,7 @@ def _read_u2(data: memoryview, offset: int, names: Sequence[str]) -> tuple[list[
 
 
 def _write_bits(buf: bytearray, name: str, count: int, raw: Any) -> None:
-    if not isinstance(raw, list) or len(raw) != count:
+    if not isinstance(raw, _builtin_list) or len(raw) != count:
         raise ValueError(f"{name}: expected {count} bits")
     nbytes = (count + 7) // 8
     packed = bytearray(nbytes)
@@ -396,7 +410,7 @@ def _read_scalar(
 
 
 def _field_name(node: _Node) -> str:
-    if isinstance(node, (_Scalar, _Bytes, _Utf8)):
+    if isinstance(node, (_Scalar, _Bytes, _Utf8, _List)):
         return node.name
     if isinstance(node, _FlagBit):
         return _field_name(node.field)
@@ -474,7 +488,7 @@ def _pack_nodes(
                 val = values.get(name)
                 if val is None:
                     lengths.append(0)
-                elif isinstance(val, list):
+                elif isinstance(val, _builtin_list):
                     lengths.append(len(val))
                 else:
                     lengths.append(1)
@@ -485,7 +499,7 @@ def _pack_nodes(
 
                 def at(name: str, index: int = i) -> Any:
                     val = values[name]
-                    if isinstance(val, list):
+                    if isinstance(val, _builtin_list):
                         return val[index]
                     return val
 
@@ -495,6 +509,17 @@ def _pack_nodes(
             buf.append(len(raw) & 0xFF)
             buf.append((len(raw) >> 8) & 0xFF)
             buf.extend(raw)
+        elif isinstance(node, _List):
+            items = take(node.name)
+            if not isinstance(items, _builtin_list):
+                raise TypeError(f"{node.name}: expected list")
+            if len(items) > 65535:
+                raise ValueError(f"{node.name}: length {len(items)}")
+            buf.append(len(items) & 0xFF)
+            buf.append((len(items) >> 8) & 0xFF)
+            child_name = _field_name(node.element)
+            for item in items:
+                _pack_nodes(buf, [node.element], {child_name: item})
         else:
             raise TypeError(f"unknown field node: {type(node)!r}")
 
@@ -621,6 +646,21 @@ def _unpack_nodes(
             raw = _builtin_bytes(data[offset : offset + count])
             offset += count
             _append_value(out, node.name, raw.decode("utf-8"), as_list)
+        elif isinstance(node, _List):
+            left = len(data) - offset
+            if left < 2:
+                return offset, ShortPacket(field=node.name, needed=2, left=left)
+            count = struct.unpack_from("<H", data, offset)[0]
+            offset += 2
+            child_name = _field_name(node.element)
+            items: list[Any] = []
+            for _ in range(count):
+                one: dict[str, Any] = {}
+                offset, err = _unpack_nodes(data, offset, [node.element], one)
+                if err is not None:
+                    return offset, err
+                items.append(one.get(child_name))
+            _append_value(out, node.name, items, as_list)
         else:
             raise TypeError(f"unknown field node: {type(node)!r}")
     return offset, None

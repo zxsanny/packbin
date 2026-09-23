@@ -52,7 +52,7 @@ internal static partial class Walker
     }
 
     private static bool IsScalarOrBytes(Field field) =>
-        field.Type is (>= Field.Kind.U8 and <= Field.Kind.F64) or Field.Kind.Bytes or Field.Kind.Utf8;
+        field.Type is (>= Field.Kind.U8 and <= Field.Kind.F64) or Field.Kind.Bytes or Field.Kind.Utf8 or Field.Kind.List;
 
     public static void PackField(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
     {
@@ -91,6 +91,9 @@ internal static partial class Walker
             case Field.Kind.Utf8:
                 PackUtf8(field, values, buffer);
                 break;
+            case Field.Kind.List:
+                PackList(field, values, buffer);
+                break;
             default:
                 PackScalar(field, values, buffer);
                 break;
@@ -117,6 +120,7 @@ internal static partial class Walker
             Field.Kind.U2 => UnpackU2(field, bytes, ref offset, values, repeatLists),
             Field.Kind.Bits => UnpackBits(field, bytes, ref offset, values, repeatLists),
             Field.Kind.Utf8 => UnpackUtf8(field, bytes, ref offset, values, repeatLists),
+            Field.Kind.List => UnpackList(field, bytes, ref offset, values, repeatLists),
             _ => UnpackScalar(field, bytes, ref offset, values, repeatLists),
         };
     }

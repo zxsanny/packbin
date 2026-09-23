@@ -31,7 +31,7 @@ ship: false
 Six language packages. String, list, and dictionary land after the flag-group batch already in the working tree.
 
 ### Order of work
-Flag group, sized bytes, and bit pack are already coded. AZ-1938 UTF-8 string is coded. Next batch is AZ-1939, then AZ-1940, then AZ-1941.
+Flag group, sized bytes, bit pack, UTF-8 string, and counted list are coded. Next batch is AZ-1940, then AZ-1941.
 
 ### Proof
 Each language suite packs and unpacks the task hex with zero mismatched bytes.

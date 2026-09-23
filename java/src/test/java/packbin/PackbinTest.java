@@ -41,6 +41,7 @@ public final class PackbinTest {
         flagGroupShortLogin();
         sizedPayload();
         utf8String();
+        countedList();
         u2Kinds();
         bitsSegs();
         nfrRoundTripsWithinOneSecond();
@@ -328,6 +329,48 @@ public final class PackbinTest {
         expectEq("utf8 short field", "name", shortGot.field());
         expectEq("utf8 short needed", 7, shortGot.needed());
         expectEq("utf8 short left", 2, shortGot.left());
+    }
+
+    private static void countedList() {
+        Packbin.Packet two = Packbin.packet(Packbin.list("xs", Packbin.u16("n")));
+        Map<String, Object> values = new HashMap<>();
+        values.put("xs", List.of(1, 2));
+        byte[] raw = Packbin.pack(two, values);
+        expectEq("list hex", "020001000200", toHex(raw));
+        Packbin.UnpackResult got = Packbin.unpack(two, raw);
+        expectTrue("list ok", got.ok);
+        expectEq("list 0", 1, ((Number) ((List<?>) got.value.get("xs")).get(0)).intValue());
+        expectEq("list 1", 2, ((Number) ((List<?>) got.value.get("xs")).get(1)).intValue());
+
+        Packbin.Packet beOne = Packbin.packet(Packbin.list("xs", Packbin.be(Packbin.u16("n"))));
+        values.put("xs", List.of(1));
+        expectEq("list be", "01000001", toHex(Packbin.pack(beOne, values)));
+
+        Packbin.Packet followed = Packbin.packet(Packbin.list("xs", Packbin.u8("n")), Packbin.u8("y"));
+        values.put("xs", List.of(1));
+        values.put("y", 2);
+        byte[] both = Packbin.pack(followed, values);
+        expectEq("list next hex", "01000102", toHex(both));
+        Packbin.UnpackResult back = Packbin.unpack(followed, both);
+        expectTrue("list next ok", back.ok);
+        expectEq("list next xs", 1, ((Number) ((List<?>) back.value.get("xs")).get(0)).intValue());
+        expectEq("list next y", 2, ((Number) back.value.get("y")).intValue());
+
+        values.clear();
+        values.put("xs", List.of());
+        expectEq("list empty", "0000", toHex(Packbin.pack(two, values)));
+        List<Integer> huge = new java.util.ArrayList<>();
+        for (int i = 0; i < 65536; i++) {
+            huge.add(1);
+        }
+        values.put("xs", huge);
+        boolean failed = false;
+        try {
+            Packbin.pack(two, values);
+        } catch (IllegalArgumentException ex) {
+            failed = true;
+        }
+        expectTrue("list too long", failed);
     }
 
     private static void u2Kinds() {
