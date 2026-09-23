@@ -222,7 +222,7 @@ publish_java_upload() {
     -F "bundle=@${out}/maven-bundle.zip" \
     "https://central.sonatype.com/api/v1/publisher/upload?publishingType=AUTOMATIC")"
   id="$(printf '%s' "$id" | tr -d '[:space:]')"
-  for attempt in $(seq 1 30); do
+  for attempt in $(seq 1 60); do
     state="$(curl --fail --silent --show-error -X POST \
       -H "Authorization: Bearer ${MAVEN_CENTRAL_TOKEN}" \
       "https://central.sonatype.com/api/v1/publisher/status?id=${id}")"
@@ -231,7 +231,7 @@ publish_java_upload() {
       *'"deploymentState":"PUBLISHED"'*) return 0 ;;
       *'"deploymentState":"FAILED"'*) exit 1 ;;
     esac
-    sleep 10
+    sleep 15
   done
   echo "maven central deployment did not finish" >&2
   exit 1

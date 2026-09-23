@@ -227,6 +227,125 @@ manifest_checks() {
   grep -q '<name>MIT</name>' "$root/.github/workflows/publish-inside.sh" || fail "java license"
 }
 
+crates_token_checks() {
+  local publish_yml="$root/.github/workflows/publish.yml"
+  local exchange_line publish_line revoke_line
+  if grep -q 'crates-io-auth-action' "$publish_yml"; then
+    fail "publish workflow still uses crates-io-auth-action"
+  fi
+  if grep -q 'continue-on-error' "$publish_yml"; then
+    fail "publish workflow uses continue-on-error"
+  fi
+  exchange_line="$(grep -n 'crates-token.sh exchange' "$publish_yml" | head -n 1 | cut -d: -f1)"
+  publish_line="$(grep -n 'publish-registries.sh' "$publish_yml" | head -n 1 | cut -d: -f1)"
+  revoke_line="$(grep -n 'crates-token.sh revoke' "$publish_yml" | head -n 1 | cut -d: -f1)"
+  if [ -z "$exchange_line" ] || [ -z "$publish_line" ] || [ -z "$revoke_line" ]; then
+    fail "crates token steps are missing"
+  elif [ "$exchange_line" -ge "$publish_line" ] || [ "$publish_line" -ge "$revoke_line" ]; then
+    fail "crates token exchange, publish, and revoke are out of order"
+  fi
+
+  local tmp out code
+  tmp="$(mktemp -d)"
+  set +e
+  env -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_ID_TOKEN_REQUEST_TOKEN \
+    bash "$here/crates-token.sh" exchange >"$tmp/no-oidc.out" 2>"$tmp/no-oidc.err"
+  code=$?
+  set -e
+  if [ "$code" -eq 0 ]; then
+    fail "crates token exchange succeeded without an OIDC token"
+  fi
+
+  local bin count
+  bin="$tmp/bin"
+  count="$tmp/count"
+  mkdir -p "$bin"
+  cat > "$bin/curl" <<'EOF'
+#!/bin/bash
+nfile="${PACKBIN_CURL_COUNT:?}"
+n=0
+[ -f "$nfile" ] && n="$(cat "$nfile")"
+n=$((n + 1))
+printf '%s\n' "$n" > "$nfile"
+mode="${PACKBIN_CURL_MODE:?}"
+outfile=""
+prev=""
+for arg in "$@"; do
+  if [ "$prev" = "-o" ]; then
+    outfile="$arg"
+  fi
+  prev="$arg"
+done
+case "$mode" in
+  exchange-ok)
+    if [ "$n" -eq 1 ]; then
+      printf '%s\n' '{"value":"oidc-jwt"}'
+      exit 0
+    fi
+    printf '%s\n' '{"token":"cio-secret"}' > "$outfile"
+    printf '%s' "200"
+    ;;
+  exchange-denied)
+    if [ "$n" -eq 1 ]; then
+      printf '%s\n' '{"value":"oidc-jwt"}'
+      exit 0
+    fi
+    printf '%s\n' '{"errors":[{"detail":"denied"}]}' > "$outfile"
+    printf '%s' "403"
+    ;;
+  revoke-503)
+    printf '%s' "503"
+    ;;
+  revoke-200)
+    printf '%s' "200"
+    ;;
+esac
+EOF
+  chmod +x "$bin/curl"
+
+  out="$tmp/exchange-out"
+  : > "$count"
+  GITHUB_OUTPUT="$out" PACKBIN_CURL_COUNT="$count" PACKBIN_CURL_MODE="exchange-ok" \
+    ACTIONS_ID_TOKEN_REQUEST_URL="https://token.actions.githubusercontent.com/req?x=1" \
+    ACTIONS_ID_TOKEN_REQUEST_TOKEN="request-token" \
+    PATH="$bin:$PATH" \
+    bash "$here/crates-token.sh" exchange >"$tmp/exchange.log"
+  grep -q '^token=cio-secret$' "$out" || fail "crates token was not written"
+  grep -q '^::add-mask::cio-secret$' "$tmp/exchange.log" || fail "crates token was not masked"
+  if grep -v '^::add-mask::' "$tmp/exchange.log" | grep -q 'cio-secret'; then
+    fail "crates token was printed"
+  fi
+
+  : > "$count"
+  set +e
+  GITHUB_OUTPUT="$tmp/denied-out" PACKBIN_CURL_COUNT="$count" PACKBIN_CURL_MODE="exchange-denied" \
+    ACTIONS_ID_TOKEN_REQUEST_URL="https://token.actions.githubusercontent.com/req?x=1" \
+    ACTIONS_ID_TOKEN_REQUEST_TOKEN="request-token" \
+    PATH="$bin:$PATH" \
+    bash "$here/crates-token.sh" exchange >"$tmp/denied.log" 2>"$tmp/denied.err"
+  code=$?
+  set -e
+  if [ "$code" -eq 0 ]; then
+    fail "denied crates token exchange succeeded"
+  fi
+  if [ -s "$tmp/denied-out" ]; then
+    fail "denied crates token exchange wrote an output"
+  fi
+
+  : > "$count"
+  CARGO_REGISTRY_TOKEN="cio-secret" PACKBIN_CRATES_REVOKE_PAUSE=0 \
+    PACKBIN_CURL_COUNT="$count" PACKBIN_CURL_MODE="revoke-503" PATH="$bin:$PATH" \
+    bash "$here/crates-token.sh" revoke >"$tmp/revoke503.log"
+  assert_eq "$(grep -c 'revoke returned 503' "$tmp/revoke503.log")" "5" "crates revoke retries"
+  grep -q 'revoke still unavailable' "$tmp/revoke503.log" || fail "crates revoke 503 failed the step"
+
+  : > "$count"
+  CARGO_REGISTRY_TOKEN="cio-secret" PACKBIN_CURL_COUNT="$count" PACKBIN_CURL_MODE="revoke-200" \
+    PATH="$bin:$PATH" \
+    bash "$here/crates-token.sh" revoke >"$tmp/revoke200.log"
+  grep -q 'token revoked' "$tmp/revoke200.log" || fail "crates revoke 200"
+}
+
 workflow_checks() {
   local test_yml="$root/.github/workflows/test.yml"
   grep -q 'push:' "$test_yml" || fail "AC-5 push"
@@ -235,7 +354,18 @@ workflow_checks() {
   grep -q 'docker compose -f docker-compose.test.yml run --rm' "$test_yml" || fail "AC-5 suites"
 }
 
+if [ "${1:-}" = "--crates" ]; then
+  crates_token_checks
+  if [ "$failures" -ne 0 ]; then
+    echo "$failures failure(s)" >&2
+    exit 1
+  fi
+  echo "crates token checks passed"
+  exit 0
+fi
+
 static_checks
+crates_token_checks
 registry_checks
 gate_checks
 maven_bundle_checks
