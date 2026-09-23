@@ -31,7 +31,10 @@ need() {
 }
 
 need csharp NUGET_TOKEN
-need typescript NPM_TOKEN
+if grep -qx typescript "$plan" && [ -z "${NPM_TOKEN:-}" ] && [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+  echo "NPM_TOKEN is required before any registry write" >&2
+  exit 1
+fi
 need python PYPI_TOKEN
 need rust CARGO_REGISTRY_TOKEN
 need java MAVEN_CENTRAL_TOKEN
@@ -143,6 +146,15 @@ publish_cpp() {
   push_vcpkg "$reg" "$url"
 }
 
+publish_npm_oidc() {
+  local work
+  work="$(mktemp -d)"
+  cp -a "$root/typescript/." "$work/typescript"
+  rm -rf "$work/typescript/node_modules"
+  npm version "$version" --no-git-tag-version --allow-same-version --prefix "$work/typescript"
+  npm publish --access public --prefix "$work/typescript"
+}
+
 publish_java_upload() {
   curl --fail --silent --show-error \
     -H "Authorization: Bearer ${MAVEN_CENTRAL_TOKEN}" \
@@ -155,6 +167,13 @@ for lang in "${PACKBIN_LANGS[@]}"; do
     continue
   fi
   case "$lang" in
+    typescript)
+      if [ -z "${NPM_TOKEN:-}" ] && [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+        publish_npm_oidc
+      else
+        run_inside typescript
+      fi
+      ;;
     cpp) publish_cpp ;;
     java)
       run_inside java

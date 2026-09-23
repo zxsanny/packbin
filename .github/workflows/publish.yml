@@ -5,6 +5,10 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+  id-token: write
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -12,13 +16,21 @@ jobs:
       - uses: actions/checkout@v4
       - name: pack every present language
         run: bash .github/workflows/publish-gate.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: npm cli for trusted publishing
+        run: npm install -g npm@11
+      - uses: NuGet/login@v1
+        id: nuget
+        with:
+          user: zxsanny
       - name: publish present registries
         if: success()
         env:
           PACKBIN_PUBLISH: "1"
           PACKBIN_VERSION: ${{ github.ref_name }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NUGET_TOKEN: ${{ secrets.NUGET_TOKEN }}
+          NUGET_TOKEN: ${{ steps.nuget.outputs.NUGET_API_KEY }}
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
           MAVEN_CENTRAL_TOKEN: ${{ secrets.MAVEN_CENTRAL_TOKEN }}

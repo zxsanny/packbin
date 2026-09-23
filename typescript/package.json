@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "Pack and unpack a caller-owned field list",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zxsanny/packbin.git"
+  },
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
