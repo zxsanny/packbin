@@ -1,16 +1,25 @@
 # packbin
 Binary packing and unpacking across languages, declarative mapping, with zero overhead in the binary data.
 
-## Position
+## Example
 
-Same type in Python and TypeScript.
-
-`u8 type` · `u16 sid` · `i32 lat` · `i32 lon` · `u8 profile` · `flags motion`
+Python → binary → TypeScript
 
 ### Python
 
 ```python
 from packbin import flags, i16, i32, pack, packet, u8, u16
+
+class Position:
+    def __init__(self):
+        self.type = 0x40
+        self.sid = 1
+        self.lat = 500_000_000
+        self.lon = 300_000_000
+        self.profile = 1
+        self.heading = None
+        self.speed = None
+        self.altitude = None
 
 target = packet([
     u8("type"),
@@ -18,16 +27,14 @@ target = packet([
     i32("lat"),
     i32("lon"),
     u8("profile"),
-    flags("motion", [u16("heading"), u8("speed"), i16("altitude")]),
+    flags("motion", [u16("heading"), u8("speed"), i16("altitude")]),  # one byte; a set bit writes that field, a clear bit omits it
 ])
 
-raw = pack(target, {
-    "type": 0x40,
-    "sid": 1,
-    "lat": 500_000_000,
-    "lon": 300_000_000,
-    "profile": 1,
-})
+raw = pack(target, vars(Position()))
+```
+
+```
+40 01 00 00 65 cd 1d 00 a3 e1 11 01 00
 ```
 
 ### TypeScript
@@ -58,15 +65,32 @@ const target = packet([
 const got = unpack(target, raw, Target)
 ```
 
+`flags` is how an optional field takes no space when you have no value for it. `heading`, `speed`, and `altitude` are measurements, so `0` is still a value and has to be written. `None` means the field is not in the packet.
+
+`motion` is always one byte in front of those fields. Bit 0 is `heading`, bit 1 is `speed`, bit 2 is `altitude`. A set bit writes that field next. A clear bit skips it.
+
+| Field | Type | Bytes when present | Values |
+|---|---|---|---|
+| `heading` | `u16` | 2 | 0 … 65535 |
+| `speed` | `u8` | 1 | 0 … 255 |
+| `altitude` | `i16` | 2 | −32768 … 32767 |
+
+In this example all three are `None`, so `motion` is `00` and those 5 bytes are absent. The packet is 13 bytes: `type` 1, `sid` 2, `lat` 4, `lon` 4, `profile` 1, `motion` 1.
+
 ```
-40 01 00 00 65 cd 1d 00 a3 e1 11 01 00
+40          type
+01 00       sid
+00 65 cd 1d lat
+00 a3 e1 11 lon
+01          profile
+00          motion
 ```
 
-## User
+`heading = 90` sets bit 0, so `motion` is `01` and `5a 00` follows it. `heading = 0` sets the same bit and writes `00 00`. `speed = 10` sets bit 1 and writes one byte. The present fields are written in the order listed, and only those.
 
-Same type in C# and Rust. String, list, dictionary.
+## Example
 
-`utf8 username` · `list roles` · `dict access`
+C# → binary → Rust
 
 ### C#
 
@@ -97,6 +121,12 @@ var raw = Pack.Run(userPacket, new User
 });
 ```
 
+```
+03 00 61 64 61 02 00 04 00 75 73 65 72 05 00 61 64 6d 69 6e
+02 00 03 00 6d 61 70 02 00 04 00 72 65 61 64 04 00 65 64 69 74
+05 00 73 74 6f 72 65 01 00 05 00 77 72 69 74 65
+```
+
 ### Rust
 
 ```rust
@@ -109,12 +139,6 @@ let user = packet(vec![
 ]);
 
 let got = unpack(&user, &raw).unwrap();
-```
-
-```
-03 00 61 64 61 02 00 04 00 75 73 65 72 05 00 61 64 6d 69 6e
-02 00 03 00 6d 61 70 02 00 04 00 72 65 61 64 04 00 65 64 69 74
-05 00 73 74 6f 72 65 01 00 05 00 77 72 69 74 65
 ```
 
 ## Data types

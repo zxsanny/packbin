@@ -106,6 +106,7 @@ copy_tree() {
     --exclude .git \
     --exclude test-results \
     --exclude .github/workflows/out \
+    --exclude rust/target \
     -cf - . | tar -C "$dest" -xf -
 }
 
