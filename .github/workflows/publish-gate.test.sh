@@ -225,6 +225,14 @@ manifest_checks() {
   grep -q 'text = "MIT"' "$root/python/pyproject.toml" || fail "python license"
   grep -q 'license = "MIT"' "$root/rust/Cargo.toml" || fail "rust license"
   grep -q '<name>MIT</name>' "$root/.github/workflows/publish-inside.sh" || fail "java license"
+  grep -q 'PackageReadmeFile' "$root/csharp/Packbin.csproj" || fail "nuget readme"
+  grep -q '"README.md"' "$root/typescript/package.json" || fail "npm readme"
+  grep -q 'readme = "README.md"' "$root/rust/Cargo.toml" || fail "crates readme"
+  grep -q 'typescript/README.md' "$root/.github/workflows/publish-inside.sh" || fail "npm readme copy"
+  grep -q 'rust/README.md' "$root/.github/workflows/publish-inside.sh" || fail "crates readme copy"
+  grep -q 'readme = "README.md"' "$root/python/pyproject.toml" || fail "pypi readme"
+  grep -q 'python/README.md' "$root/.github/workflows/publish-inside.sh" || fail "pypi readme copy"
+  grep -q 'oidc/mint-token' "$root/.github/workflows/publish-registries.sh" || fail "pypi trusted publisher"
 }
 
 crates_token_checks() {

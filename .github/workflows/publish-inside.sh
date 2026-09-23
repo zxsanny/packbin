@@ -22,6 +22,7 @@ case "$lang" in
     ;;
   typescript)
     cp -a "$root/typescript/." "$work/typescript"
+    cp "$root/README.md" "$work/typescript/README.md"
     rm -rf "$work/typescript/node_modules"
     npm version "$version" --no-git-tag-version --allow-same-version --prefix "$work/typescript"
     printf '//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" > "$work/npmrc"
@@ -29,6 +30,8 @@ case "$lang" in
     ;;
   python)
     cp -a "$root/python/." "$work/python"
+    rm -f "$work/python/README.md"
+    cp "$root/README.md" "$work/python/README.md"
     python3 -c '
 import re, sys
 from pathlib import Path
@@ -42,6 +45,7 @@ path.write_text(re.sub(r"(?m)^version = \".*\"$", f"version = \"{version}\"", te
     ;;
   rust)
     cp -a "$root/rust/." "$work/rust"
+    cp "$root/README.md" "$work/rust/README.md"
     rm -rf "$work/rust/target"
     python3 -c '
 import re, sys

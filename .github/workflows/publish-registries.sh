@@ -50,7 +50,11 @@ skip_unset() {
 }
 
 if [ "${PACKBIN_MAVEN_BUNDLE_ONLY:-}" != "1" ]; then
-  skip_unset python PYPI_TOKEN
+  if grep -qx python "$plan" && [ -z "${PYPI_TOKEN:-}" ] && [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+    echo "skip python"
+    grep -vx python "$plan" > "$plan.skip"
+    mv "$plan.skip" "$plan"
+  fi
   skip_unset rust CARGO_REGISTRY_TOKEN
 fi
 
@@ -161,10 +165,60 @@ publish_cpp() {
   push_vcpkg "$reg" "$url"
 }
 
+publish_pypi_oidc() {
+  local work oidc jwt body code token
+  work="$(mktemp -d)"
+  cp -a "$root/python/." "$work/python"
+  rm -f "$work/python/README.md"
+  cp "$root/README.md" "$work/python/README.md"
+  python3 -c '
+import re, sys
+from pathlib import Path
+path, version = Path(sys.argv[1]), sys.argv[2]
+text = path.read_text()
+path.write_text(re.sub(r"(?m)^version = \".*\"$", f"version = \"{version}\"", text, count=1))
+' "$work/python/pyproject.toml" "$version"
+  python3 -m venv "$work/venv"
+  "$work/venv/bin/pip" install --quiet build twine
+  "$work/venv/bin/python" -m build "$work/python" --outdir "$work/pypi"
+  if [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
+    echo "id-token permission is required" >&2
+    exit 1
+  fi
+  oidc="$(curl -sS \
+    -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+    -H "User-Agent: packbin-publish" \
+    "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=pypi")"
+  jwt="$(printf '%s' "$oidc" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("value") or "")')"
+  if [ -z "$jwt" ]; then
+    echo "GitHub did not return an OIDC token" >&2
+    exit 1
+  fi
+  body="$(mktemp)"
+  code="$(curl -sS -o "$body" -w '%{http_code}' -X POST "https://pypi.org/_/oidc/mint-token" \
+    -H "Content-Type: application/json" \
+    -H "User-Agent: packbin-publish" \
+    --data-binary "{\"token\":\"${jwt}\"}")"
+  if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+    echo "PyPI token request failed: ${code}" >&2
+    rm -f "$body"
+    exit 1
+  fi
+  token="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("token") or "")' <"$body")"
+  rm -f "$body"
+  if [ -z "$token" ]; then
+    echo "PyPI token response had no token" >&2
+    exit 1
+  fi
+  echo "::add-mask::${token}"
+  "$work/venv/bin/twine" upload --non-interactive -u __token__ -p "$token" "$work/pypi"/*
+}
+
 publish_npm_oidc() {
   local work
   work="$(mktemp -d)"
   cp -a "$root/typescript/." "$work/typescript"
+  cp "$root/README.md" "$work/typescript/README.md"
   rm -rf "$work/typescript/node_modules"
   (
     cd "$work/typescript"
@@ -222,7 +276,7 @@ publish_java_upload() {
     -F "bundle=@${out}/maven-bundle.zip" \
     "https://central.sonatype.com/api/v1/publisher/upload?publishingType=AUTOMATIC")"
   id="$(printf '%s' "$id" | tr -d '[:space:]')"
-  for attempt in $(seq 1 60); do
+  for attempt in $(seq 1 90); do
     state="$(curl --fail --silent --show-error -X POST \
       -H "Authorization: Bearer ${MAVEN_CENTRAL_TOKEN}" \
       "https://central.sonatype.com/api/v1/publisher/status?id=${id}")"
@@ -258,6 +312,13 @@ for lang in "${PACKBIN_LANGS[@]}"; do
     java)
       run_inside java
       publish_java_upload
+      ;;
+    python)
+      if [ -z "${PYPI_TOKEN:-}" ] && [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+        publish_pypi_oidc
+      else
+        run_inside python
+      fi
       ;;
     *) run_inside "$lang" ;;
   esac

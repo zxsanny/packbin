@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 description = "Pack and unpack a caller-owned field list"
-readme = false
+readme = "README.md"
 
 [lib]
 path = "src/lib.rs"
