@@ -1,0 +1,8 @@
+{
+  "default": {
+    "packbin": {
+      "baseline": "0.1.2",
+      "port-version": 0
+    }
+  }
+}
