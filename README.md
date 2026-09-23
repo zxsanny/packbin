@@ -29,6 +29,8 @@ target = packet([
 
 Field order is wire order. Names are for your values and for errors. They are not written. Integers are little-endian unless you wrap a field in `be()`.
 
+A counted string, list, or dictionary stores its own unsigned 16-bit count in front of its payload. That count is part of the field, not a prefix on the packet. Dictionary keys are UTF-8 strings written in unsigned byte order. A repeated key is an error and returns no values. 65536 elements do not fit.
+
 ### Pack
 
 ```python

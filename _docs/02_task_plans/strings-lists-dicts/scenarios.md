@@ -16,6 +16,8 @@ Source of rows: `intake` (new-task Step 4.7). Status: confirmed / out-of-scope /
 | S10 | All six languages pack the user value | confirmed | 0 mismatched bytes between them | AZ-1940 AC-1 | intake |
 | S11 | Caller packs a list whose element is one big-endian 2-byte integer 1 | confirmed | 4 bytes `01000001` | AZ-1939 AC-2 | intake |
 | S12 | Caller unpacks the 103-byte user buffer | confirmed | username, two roles, three access keys; wrong fields 0 | AZ-1940 AC-3 | intake |
+| S13 | The C# handoff and the position driver build in one folder | confirmed | Each project writes its own output, and the handoff prints the user value | AZ-1941 AC-1 | assess-round-1 |
+| S14 | The C++ driver is built on a Mac whose clang needs the SDK headers | confirmed | `PACKBIN_CXX_SYSROOT` supplies the include; the position record stays 13 bytes | AZ-1941 AC-3 | assess-round-1 |
 
 ## Not walked
 

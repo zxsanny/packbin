@@ -23,7 +23,7 @@
 
 ```
 Value:
-  fields: name to integer or absence (required) — absence omits the field
+  fields: name to integer, string, list, dictionary, or absence (required) — absence omits the field
 ```
 
 **Output DTOs**:

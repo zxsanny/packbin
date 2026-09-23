@@ -20,6 +20,22 @@
 | AC-14 | A golden mismatch publishes 0 packages | FT-N-03 | Covered |
 | AC-15 | A missing language publishes 0 packages | FT-N-04 | Covered |
 | AC-16 | Published packages declare MIT | FT-P-08 | Covered |
+| AZ-1938 AC-1 | `zxsanny` packs to `07007a7873616e6e79` | FT-U-01 | Covered |
+| AZ-1938 AC-2 | An empty string is `0000` | FT-U-02 | Covered |
+| AZ-1938 AC-3 | 65536 UTF-8 bytes writes 0 bytes | FT-U-03 | Covered |
+| AZ-1938 AC-4 | A short string names needed 7 and left 2 | FT-U-04 | Covered |
+| AZ-1939 AC-1 | A list of 1 and 2 is `020001000200` | FT-L-01 | Covered |
+| AZ-1939 AC-2 | One big-endian 1 is `01000001` | FT-L-02 | Covered |
+| AZ-1939 AC-3 | A list leaves the next field as `01000102` | FT-L-03 | Covered |
+| AZ-1939 AC-4 | An empty list is `0000`; 65536 elements write 0 bytes | FT-L-04 | Covered |
+| AZ-1940 AC-1 | The user value is the 103-byte hex | FT-D-01 | Covered |
+| AZ-1940 AC-2 | Insert order does not change the hex | FT-D-02 | Covered |
+| AZ-1940 AC-3 | Unpack returns the username, roles, and access lists | FT-D-03 | Covered |
+| AZ-1940 AC-4 | Empty string, list, and dictionary are `000000000000` | FT-D-04 | Covered |
+| AZ-1940 AC-5 | A repeated key returns 0 values | FT-D-05 | Covered |
+| AZ-1941 AC-1 | Six handoffs unpack the user value | FT-H-01 | Covered |
+| AZ-1941 AC-2 | Six handoffs unpack the 58-byte nested dictionary | FT-H-02 | Covered |
+| AZ-1941 AC-3 | The position record stays 13 bytes | FT-H-03 | Covered |
 
 ## Restrictions Coverage
 
@@ -49,9 +65,9 @@
 
 | Category | Total Items | Covered | BLOCKED | WAIVED | Coverage |
 |----------|-----------|---------|---------|--------|----------|
-| Acceptance Criteria | 16 | 16 | 0 | 0 | every row Covered or WAIVED |
+| Acceptance Criteria | 32 | 32 | 0 | 0 | every row Covered or WAIVED |
 | Restrictions | 19 | 17 | 0 | 2 | every row Covered or WAIVED |
-| **Total** | 35 | 33 | 0 | 2 | every row Covered or WAIVED |
+| **Total** | 51 | 49 | 0 | 2 | every row Covered or WAIVED |
 
 ## Uncovered Items Analysis
 

@@ -15,3 +15,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-09-23_loop1.md
 - [2026-09-23] [architecture] Keep the six packages as peers with zero imports; a shared walker would contradict ADR-001.
   Source: _docs/06_metrics/retro_2026-09-23_loop1.md
+- [2026-09-23] [tooling] Two C# executables in one directory need separate output paths, or `dotnet run` builds the other `Main`.
+  Source: _docs/06_metrics/retro_2026-09-23_loop2.md
+- [2026-09-23] [testing] A language handoff must unpack the bytes the producer just wrote.
+  Source: _docs/06_metrics/retro_2026-09-23_loop2.md
+- [2026-09-23] [tooling] On this Mac, pass `PACKBIN_CXX_SYSROOT` so clang finds the SDK C++ headers.
+  Source: _docs/06_metrics/retro_2026-09-23_loop2.md
