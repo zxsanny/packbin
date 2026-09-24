@@ -20,7 +20,7 @@ C# packing a fixture that TypeScript can read does not prove the other direction
 
 ## Outcome
 
-- TypeScript `pack` writes each file in `fixtures/archangel/` (the same files as AZ-1948). C# `Unpack.Run<T>` yields that entity. Wrong fields: 0. Bytes left: 0. Hex matches the file.
+- TypeScript `pack` writes each file in `fixtures/archangel/` (the same files as AZ-1948). C# `BinaryPacker.Unpack<T>` yields that entity. Wrong fields: 0. Bytes left: 0. Hex matches the file.
 - The row has no type member. The type byte is the scheme type number (AZ-1945).
 - Drivers follow `.github/workflows/drivers/handoff.ts` and `.github/workflows/drivers/csharp/Handoff.cs`: TypeScript prints hex, C# unpacks that hex.
 - Real `pack` and real `unpack`. No stub.
@@ -56,7 +56,7 @@ Same table as AZ-1948. Do not add a second copy of the files.
 ### Included
 
 - TypeScript packs, C# unpacks, for every file in the table
-- C# bind to the class (`Unpack.Run<T>` / `Bound<T>`), not a dictionary
+- C# bind to the class (`BinaryPacker.Unpack<T>` / `Bound<T>`), not a dictionary
 
 ### Excluded
 
@@ -138,7 +138,7 @@ Then the bytes are `4001000065cd1d00a3e1110100`, sid 1, lat 500000000, lon 30000
 
 - The consumer uses the same scheme as the producer.
 - No registry call.
-- C# unpack uses `Unpack.Run<T>`, not a dictionary.
+- C# unpack uses `BinaryPacker.Unpack<T>`, not a dictionary.
 
 ## Risks & Mitigation
 

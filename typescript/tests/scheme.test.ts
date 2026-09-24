@@ -5,14 +5,13 @@ import { fileURLToPath } from "node:url"
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
+  BinaryPacker,
   flags,
   i16,
   i32,
-  pack,
   scheme,
   u8,
   u16,
-  unpack,
   utf8,
 } from "../src/index.ts"
 
@@ -77,18 +76,20 @@ function toHex(bytes: Uint8Array): string {
 }
 
 describe("scheme", () => {
-  it("AC-1 Packet and BinaryPacker are absent", () => {
+  it("AC-1 entry is BinaryPacker", () => {
     const source = readFileSync(join(here, "../src/index.ts"), "utf8")
     const fields = readFileSync(join(here, "../src/fields.ts"), "utf8")
     const walker = readFileSync(join(here, "../src/walker.ts"), "utf8")
+    assert.equal(/\bBinaryPacker\b/.test(source), true)
+    assert.equal(/\bexport function pack\b/.test(source), false)
+    assert.equal(/\bexport function unpack\b/.test(source), false)
     for (const blob of [source, fields, walker]) {
       assert.equal(/\bPacket\b/.test(blob), false)
-      assert.equal(/\bBinaryPacker\b/.test(blob), false)
       assert.equal(/\btypeNum\b/.test(blob), false)
     }
     const s = scheme(32, u8(0, (r: { sid: number }) => r.sid))
     assert.equal(s.typeNumber, 32)
-    assert.equal(toHex(pack(s, { sid: 23 })), "2017")
+    assert.equal(toHex(BinaryPacker.pack(s, { sid: 23 })), "2017")
   })
 
   it("AC-2 position golden has no type member", () => {
@@ -100,10 +101,10 @@ describe("scheme", () => {
     }
     const row = new PositionRow()
     assert.equal("type" in row, false)
-    const bytes = pack(position, row)
+    const bytes = BinaryPacker.pack(position, row)
     assert.equal(toHex(bytes), expectedHex)
     assert.equal(toHex(bytes), goldenHex)
-    const back = unpack(position, bytes)
+    const back = BinaryPacker.unpack(position, bytes)
     assert.equal(back.ok, true)
     if (!back.ok) return
     assert.equal("type" in back.value, false)
@@ -112,7 +113,7 @@ describe("scheme", () => {
 
   it("AC-3 known scheme checks the leading byte", () => {
     const layout = scheme(1, u8(0, (r: { sid: number }) => r.sid))
-    const got = unpack(layout, Uint8Array.of(2, 23))
+    const got = BinaryPacker.unpack(layout, Uint8Array.of(2, 23))
     assert.equal(got.ok, false)
     if (got.ok) return
     assert.equal("expected" in got, true)
@@ -132,13 +133,13 @@ describe("scheme", () => {
     row.userId = 7
     row.latitude = 8
     row.longitude = 9
-    const bytes = pack(PositionScheme, row)
+    const bytes = BinaryPacker.pack(PositionScheme, row)
     assert.equal(toHex(bytes), "02070000000800000009000000")
 
     let modified = 0
     let positionHits = 0
     let seen: UserPositionEvent | null = null
-    const result = unpack(
+    const result = BinaryPacker.unpack(
       bytes,
       ModifiedScheme.on(() => {
         modified++
@@ -161,7 +162,7 @@ describe("scheme", () => {
   it("AC-5 unknown type number", () => {
     let modified = 0
     let positionHits = 0
-    const result = unpack(
+    const result = BinaryPacker.unpack(
       Uint8Array.of(9),
       ModifiedScheme.on(() => {
         modified++
@@ -180,7 +181,7 @@ describe("scheme", () => {
 
   it("AC-6 type numbers in one call are unique", () => {
     assert.throws(() => {
-      unpack(
+      BinaryPacker.unpack(
         Uint8Array.of(1),
         ModifiedScheme.on(() => {}),
         scheme<UserModifiedEvent>(1, i32(0, (r) => r.userId)).on(() => {}),

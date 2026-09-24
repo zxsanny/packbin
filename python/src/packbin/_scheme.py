@@ -42,77 +42,79 @@ def _new_row(row_type: type[T]) -> T:
     return row_type()
 
 
-def pack(scheme: Scheme[T], row: T | Mapping[str, Any]) -> bytes:
-    buf = bytearray()
-    buf.append(scheme._type_number)
-    pack_nodes(buf, scheme._fields, row)
-    return _builtin_bytes(buf)
+class BinaryPacker:
+    @staticmethod
+    def pack(scheme: Scheme[T], row: T | Mapping[str, Any]) -> bytes:
+        buf = bytearray()
+        buf.append(scheme._type_number)
+        pack_nodes(buf, scheme._fields, row)
+        return _builtin_bytes(buf)
 
+    @staticmethod
+    def unpack(
+        first: Scheme[T] | bytes | bytearray | memoryview,
+        second: bytes | bytearray | memoryview | _Handler[Any] | None = None,
+        *rest: _Handler[Any],
+    ) -> UnpackResult[Any]:
+        if isinstance(first, Scheme):
+            if second is None:
+                raise TypeError("unpack() missing data")
+            if isinstance(second, _Handler):
+                raise TypeError("known unpack expects bytes")
+            return BinaryPacker._unpack_known(first, second)
+        if second is None and not rest:
+            raise TypeError("unpack() missing handlers")
+        handlers: list[_Handler[Any]] = []
+        if second is not None:
+            if not isinstance(second, _Handler):
+                raise TypeError("unknown unpack expects handlers")
+            handlers.append(second)
+        handlers.extend(rest)
+        return BinaryPacker._unpack_dispatch(first, tuple(handlers))
 
-def _unpack_fields(scheme: Scheme[T], view: memoryview, offset: int) -> UnpackResult[T]:
-    row = _new_row(scheme._row_type)
-    offset, err = unpack_nodes(view, offset, scheme._fields, row)
-    if err is not None:
-        return UnpackResult(ok=False, value=None, error=err)
-    left = len(view) - offset
-    if left > 0:
-        return UnpackResult(ok=False, value=None, error=TrailingBytes(left=left))
-    return UnpackResult(ok=True, value=row, error=None)
+    @staticmethod
+    def _unpack_fields(scheme: Scheme[T], view: memoryview, offset: int) -> UnpackResult[T]:
+        row = _new_row(scheme._row_type)
+        offset, err = unpack_nodes(view, offset, scheme._fields, row)
+        if err is not None:
+            return UnpackResult(ok=False, value=None, error=err)
+        left = len(view) - offset
+        if left > 0:
+            return UnpackResult(ok=False, value=None, error=TrailingBytes(left=left))
+        return UnpackResult(ok=True, value=row, error=None)
 
+    @staticmethod
+    def _unpack_known(scheme: Scheme[T], data: bytes | bytearray | memoryview) -> UnpackResult[T]:
+        view = memoryview(data)
+        left = len(view)
+        if left < 1:
+            return UnpackResult(ok=False, value=None, error=ShortPacket(field="", needed=1, left=left))
+        actual = int(view[0])
+        if actual != scheme._type_number:
+            return UnpackResult(ok=False, value=None, error=TypeMismatch(expected=scheme._type_number, actual=actual))
+        return BinaryPacker._unpack_fields(scheme, view, 1)
 
-def _unpack_known(scheme: Scheme[T], data: bytes | bytearray | memoryview) -> UnpackResult[T]:
-    view = memoryview(data)
-    left = len(view)
-    if left < 1:
-        return UnpackResult(ok=False, value=None, error=ShortPacket(field="", needed=1, left=left))
-    actual = int(view[0])
-    if actual != scheme._type_number:
-        return UnpackResult(ok=False, value=None, error=TypeMismatch(expected=scheme._type_number, actual=actual))
-    return _unpack_fields(scheme, view, 1)
-
-
-def _unpack_dispatch(
-    data: bytes | bytearray | memoryview,
-    handlers: tuple[_Handler[Any], ...],
-) -> UnpackResult[Any]:
-    by_type: dict[int, _Handler[Any]] = {}
-    for handler in handlers:
-        number = handler.scheme._type_number
-        if number in by_type:
-            raise ValueError(f"duplicate type number {number}")
-        by_type[number] = handler
-    view = memoryview(data)
-    left = len(view)
-    if left < 1:
-        return UnpackResult(ok=False, value=None, error=ShortPacket(field="", needed=1, left=left))
-    actual = int(view[0])
-    matched = by_type.get(actual)
-    if matched is None:
-        return UnpackResult(ok=False, value=None, error=TypeMismatch(expected=-1, actual=actual))
-    result = _unpack_fields(matched.scheme, view, 1)
-    if not result.ok or result.value is None:
+    @staticmethod
+    def _unpack_dispatch(
+        data: bytes | bytearray | memoryview,
+        handlers: tuple[_Handler[Any], ...],
+    ) -> UnpackResult[Any]:
+        by_type: dict[int, _Handler[Any]] = {}
+        for handler in handlers:
+            number = handler.scheme._type_number
+            if number in by_type:
+                raise ValueError(f"duplicate type number {number}")
+            by_type[number] = handler
+        view = memoryview(data)
+        left = len(view)
+        if left < 1:
+            return UnpackResult(ok=False, value=None, error=ShortPacket(field="", needed=1, left=left))
+        actual = int(view[0])
+        matched = by_type.get(actual)
+        if matched is None:
+            return UnpackResult(ok=False, value=None, error=TypeMismatch(expected=-1, actual=actual))
+        result = BinaryPacker._unpack_fields(matched.scheme, view, 1)
+        if not result.ok or result.value is None:
+            return result
+        matched.handler(result.value)
         return result
-    matched.handler(result.value)
-    return result
-
-
-def unpack(
-    first: Scheme[T] | bytes | bytearray | memoryview,
-    second: bytes | bytearray | memoryview | _Handler[Any] | None = None,
-    *rest: _Handler[Any],
-) -> UnpackResult[Any]:
-    if isinstance(first, Scheme):
-        if second is None:
-            raise TypeError("unpack() missing data")
-        if isinstance(second, _Handler):
-            raise TypeError("known unpack expects bytes")
-        return _unpack_known(first, second)
-    if second is None and not rest:
-        raise TypeError("unpack() missing handlers")
-    handlers: list[_Handler[Any]] = []
-    if second is not None:
-        if not isinstance(second, _Handler):
-            raise TypeError("unknown unpack expects handlers")
-        handlers.append(second)
-    handlers.extend(rest)
-    return _unpack_dispatch(first, tuple(handlers))

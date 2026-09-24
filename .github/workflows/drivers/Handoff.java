@@ -3,10 +3,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import packbin.Access;
-import packbin.Pack;
+import packbin.BinaryPacker;
 import packbin.Packbin;
 import packbin.Scheme;
-import packbin.Unpack;
 
 public final class Handoff {
     public static void main(String[] args) {
@@ -15,8 +14,8 @@ public final class Handoff {
         }
         String cmd = args[0];
         switch (cmd) {
-            case "pack-user" -> System.out.println(hex(Pack.run(userScheme(), userValues())));
-            case "pack-nested" -> System.out.println(hex(Pack.run(nestedScheme(), nestedValues())));
+            case "pack-user" -> System.out.println(hex(BinaryPacker.pack(userScheme(), userValues())));
+            case "pack-nested" -> System.out.println(hex(BinaryPacker.pack(nestedScheme(), nestedValues())));
             case "unpack-user" -> System.exit(userOk(requireHex(args)) ? 0 : 1);
             case "unpack-nested" -> System.exit(nestedOk(requireHex(args)) ? 0 : 1);
             default -> System.exit(2);
@@ -76,7 +75,7 @@ public final class Handoff {
     }
 
     private static boolean userOk(String hex) {
-        Packbin.Bound<Map> got = Unpack.run(userScheme(), parse(hex));
+        Packbin.Bound<Map> got = BinaryPacker.unpack(userScheme(), parse(hex));
         if (!got.ok || got.value.size() != 3) {
             return false;
         }
@@ -96,7 +95,7 @@ public final class Handoff {
     }
 
     private static boolean nestedOk(String hex) {
-        Packbin.Bound<Map> got = Unpack.run(nestedScheme(), parse(hex));
+        Packbin.Bound<Map> got = BinaryPacker.unpack(nestedScheme(), parse(hex));
         if (!got.ok) {
             return false;
         }

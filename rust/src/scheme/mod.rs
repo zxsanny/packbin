@@ -162,57 +162,61 @@ impl<'a, T: Default + 'static, F: FnMut(T)> DispatchHandler for On<'a, T, F> {
     }
 
     fn handle(&mut self, body: &[u8]) -> Result<(), UnpackError> {
-        let row = unpack(self.scheme, body)?;
+        let row = BinaryPacker::unpack(self.scheme, body)?;
         (self.handler)(row);
         Ok(())
     }
 }
 
-pub fn pack<T>(scheme: &Scheme<T>, row: &T) -> Result<Vec<u8>, PackError> {
-    let mut values = Values::new();
-    for binder in &scheme.binders {
-        values.insert(binder.name.clone(), (binder.get)(row));
-    }
-    walk::pack(&scheme.layout, &values)
-}
+pub struct BinaryPacker;
 
-pub fn unpack<T: Default>(scheme: &Scheme<T>, bytes: &[u8]) -> Result<T, UnpackError> {
-    let values = walk::unpack(&scheme.layout, bytes)?;
-    let mut row = T::default();
-    for binder in &scheme.binders {
-        if let Some(Some(value)) = values.get(&binder.name) {
-            (binder.set)(&mut row, value);
+impl BinaryPacker {
+    pub fn pack<T>(scheme: &Scheme<T>, row: &T) -> Result<Vec<u8>, PackError> {
+        let mut values = Values::new();
+        for binder in &scheme.binders {
+            values.insert(binder.name.clone(), (binder.get)(row));
         }
+        walk::pack(&scheme.layout, &values)
     }
-    Ok(row)
-}
 
-pub fn unpack_with(
-    bytes: &[u8],
-    handlers: &mut [&mut dyn DispatchHandler],
-) -> Result<(), UnpackError> {
-    let mut seen = HashSet::new();
-    for handler in handlers.iter() {
-        let n = handler.type_number();
-        if !seen.insert(n) {
-            return Err(UnpackError::DuplicateType { type_number: n });
+    pub fn unpack<T: Default>(scheme: &Scheme<T>, bytes: &[u8]) -> Result<T, UnpackError> {
+        let values = walk::unpack(&scheme.layout, bytes)?;
+        let mut row = T::default();
+        for binder in &scheme.binders {
+            if let Some(Some(value)) = values.get(&binder.name) {
+                (binder.set)(&mut row, value);
+            }
         }
+        Ok(row)
     }
-    if bytes.is_empty() {
-        return Err(UnpackError::Short(ShortPacket {
-            field: String::new(),
-            needed: 1,
-            left: 0,
-        }));
-    }
-    let actual = bytes[0];
-    for handler in handlers.iter_mut() {
-        if handler.type_number() == actual {
-            return handler.handle(bytes);
+
+    pub fn unpack_with(
+        bytes: &[u8],
+        handlers: &mut [&mut dyn DispatchHandler],
+    ) -> Result<(), UnpackError> {
+        let mut seen = HashSet::new();
+        for handler in handlers.iter() {
+            let n = handler.type_number();
+            if !seen.insert(n) {
+                return Err(UnpackError::DuplicateType { type_number: n });
+            }
         }
+        if bytes.is_empty() {
+            return Err(UnpackError::Short(ShortPacket {
+                field: String::new(),
+                needed: 1,
+                left: 0,
+            }));
+        }
+        let actual = bytes[0];
+        for handler in handlers.iter_mut() {
+            if handler.type_number() == actual {
+                return handler.handle(bytes);
+            }
+        }
+        Err(UnpackError::Type {
+            expected: 0,
+            actual,
+        })
     }
-    Err(UnpackError::Type {
-        expected: 0,
-        actual,
-    })
 }

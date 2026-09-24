@@ -79,7 +79,7 @@ bool same_strs(packbin::Value::List const& list, std::initializer_list<char cons
 }
 
 bool user_ok(std::string const& hex) {
-  auto got = packbin::unpack(user_scheme(), parse_hex(hex));
+  auto got = packbin::BinaryPacker::unpack(user_scheme(), parse_hex(hex));
   if (!got.ok || got.value.size() != 3)
     return false;
   if (std::get<std::string>(got.value.at("0").data) != "zxsanny")
@@ -101,7 +101,7 @@ bool op_is(packbin::Value const& row, char const* op) {
 }
 
 bool nested_ok(std::string const& hex) {
-  auto got = packbin::unpack(nested_scheme(), parse_hex(hex));
+  auto got = packbin::BinaryPacker::unpack(nested_scheme(), parse_hex(hex));
   if (!got.ok)
     return false;
   auto const& access = std::get<packbin::Value::Map>(got.value.at("access").data);
@@ -120,11 +120,11 @@ int main(int argc, char** argv) {
     return 2;
   std::string cmd = argv[1];
   if (cmd == "pack-user") {
-    std::cout << packbin::to_hex(packbin::pack(user_scheme(), user_values())) << '\n';
+    std::cout << packbin::to_hex(packbin::BinaryPacker::pack(user_scheme(), user_values())) << '\n';
     return 0;
   }
   if (cmd == "pack-nested") {
-    std::cout << packbin::to_hex(packbin::pack(nested_scheme(), nested_values())) << '\n';
+    std::cout << packbin::to_hex(packbin::BinaryPacker::pack(nested_scheme(), nested_values())) << '\n';
     return 0;
   }
   if (argc < 3)

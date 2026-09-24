@@ -14,6 +14,11 @@ public sealed class Scheme<T> where T : class, new()
         Fields = fields;
     }
 
+    public Scheme(int typeNumber, Func<Fields<T>, Field[]> define)
+        : this(typeNumber, define(new Fields<T>()))
+    {
+    }
+
     public SchemeHandler On(Action<T> handler) => new SchemeHandler<T>(this, handler);
 }
 
@@ -38,7 +43,7 @@ internal sealed class SchemeHandler<T> : SchemeHandler where T : class, new()
 
     internal override object? Dispatch(ReadOnlySpan<byte> fieldBytes)
     {
-        var raw = Unpack.ReadFields(_scheme.Fields, fieldBytes);
+        var raw = BinaryPacker.ReadFields(_scheme.Fields, fieldBytes);
         if (raw.Error is not null)
             return raw.Error;
         _action(ObjectValues.To<T>(raw.Values));
@@ -108,9 +113,9 @@ public sealed class UnpackResult
     }
 }
 
-public static class Pack
+public static class BinaryPacker
 {
-    public static byte[] Run<T>(Scheme<T> scheme, IReadOnlyDictionary<string, object?> values) where T : class, new()
+    public static byte[] Pack<T>(Scheme<T> scheme, IReadOnlyDictionary<string, object?> values) where T : class, new()
     {
         var buffer = new List<byte>(32);
         buffer.Add((byte)scheme.TypeNumber);
@@ -119,17 +124,14 @@ public static class Pack
         return buffer.ToArray();
     }
 
-    public static byte[] Run<T>(Scheme<T> scheme, T? values) where T : class, new()
+    public static byte[] Pack<T>(Scheme<T> scheme, T? values) where T : class, new()
     {
         if (values is IReadOnlyDictionary<string, object?> map)
-            return Run(scheme, map);
-        return Run(scheme, ObjectValues.From(values));
+            return Pack(scheme, map);
+        return Pack(scheme, ObjectValues.From(values));
     }
-}
 
-public static class Unpack
-{
-    public static Bound<T> Run<T>(Scheme<T> scheme, ReadOnlySpan<byte> bytes) where T : class, new()
+    public static Bound<T> Unpack<T>(Scheme<T> scheme, ReadOnlySpan<byte> bytes) where T : class, new()
     {
         var raw = Read(scheme, bytes);
         if (raw.Error is not null)
@@ -137,7 +139,7 @@ public static class Unpack
         return new Bound<T>(ObjectValues.To<T>(raw.Values), null);
     }
 
-    public static object? Run(ReadOnlySpan<byte> bytes, params SchemeHandler[] handlers)
+    public static object? Unpack(ReadOnlySpan<byte> bytes, params SchemeHandler[] handlers)
     {
         var seen = new HashSet<int>();
         foreach (var handler in handlers)

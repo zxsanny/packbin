@@ -76,45 +76,47 @@ export function scheme<T>(typeNumber: number, ...fields: Field[]): Scheme<T> {
   return new Scheme(typeNumber, flat)
 }
 
-export function pack<T extends object>(s: Scheme<T>, row: T): Uint8Array {
-  const out: number[] = [s.typeNumber & 0xff]
-  const flagBytes = new Map<symbol, number>()
-  packFields(s.fields, s.fields, flattenValues(row), out, flagBytes)
-  return Uint8Array.from(out)
-}
-
-export function unpack<T extends object>(
-  s: Scheme<T>,
-  bytes: Uint8Array | ArrayBuffer,
-): EntityResult<T>
-export function unpack<T extends object>(
-  s: Scheme<T>,
-  bytes: Uint8Array | ArrayBuffer,
-  ctor: new () => T,
-): EntityResult<T>
-export function unpack(
-  bytes: Uint8Array | ArrayBuffer,
-  first: SchemeHandler<object>,
-  ...rest: SchemeHandler<object>[]
-): DispatchResult
-export function unpack(
-  first: Scheme<object> | Uint8Array | ArrayBuffer,
-  second?: Uint8Array | ArrayBuffer | SchemeHandler<object>,
-  third?: (new () => object) | SchemeHandler<object>,
-  ...rest: SchemeHandler<object>[]
-): EntityResult<object> | DispatchResult {
-  if (first instanceof Scheme) {
-    const buf = toBuf(second as Uint8Array | ArrayBuffer)
-    const ctor =
-      typeof third === "function" ? (third as new () => object) : undefined
-    return unpackKnown(first, buf, ctor)
+export class BinaryPacker {
+  static pack<T extends object>(s: Scheme<T>, row: T): Uint8Array {
+    const out: number[] = [s.typeNumber & 0xff]
+    const flagBytes = new Map<symbol, number>()
+    packFields(s.fields, s.fields, flattenValues(row), out, flagBytes)
+    return Uint8Array.from(out)
   }
-  const buf = toBuf(first)
-  const handlers: SchemeHandler<object>[] = []
-  if (isHandler(second)) handlers.push(second)
-  if (isHandler(third)) handlers.push(third)
-  handlers.push(...rest)
-  return unpackDispatch(buf, handlers)
+
+  static unpack<T extends object>(
+    s: Scheme<T>,
+    bytes: Uint8Array | ArrayBuffer,
+  ): EntityResult<T>
+  static unpack<T extends object>(
+    s: Scheme<T>,
+    bytes: Uint8Array | ArrayBuffer,
+    ctor: new () => T,
+  ): EntityResult<T>
+  static unpack(
+    bytes: Uint8Array | ArrayBuffer,
+    first: SchemeHandler<object>,
+    ...rest: SchemeHandler<object>[]
+  ): DispatchResult
+  static unpack(
+    first: Scheme<object> | Uint8Array | ArrayBuffer,
+    second?: Uint8Array | ArrayBuffer | SchemeHandler<object>,
+    third?: (new () => object) | SchemeHandler<object>,
+    ...rest: SchemeHandler<object>[]
+  ): EntityResult<object> | DispatchResult {
+    if (first instanceof Scheme) {
+      const buf = toBuf(second as Uint8Array | ArrayBuffer)
+      const ctor =
+        typeof third === "function" ? (third as new () => object) : undefined
+      return unpackKnown(first, buf, ctor)
+    }
+    const buf = toBuf(first)
+    const handlers: SchemeHandler<object>[] = []
+    if (isHandler(second)) handlers.push(second)
+    if (isHandler(third)) handlers.push(third)
+    handlers.push(...rest)
+    return unpackDispatch(buf, handlers)
+  }
 }
 
 function isHandler(v: unknown): v is SchemeHandler<object> {

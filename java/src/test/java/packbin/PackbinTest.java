@@ -54,18 +54,18 @@ public final class PackbinTest {
     }
 
     private static void ac1PositionPack() {
-        byte[] bytes = Pack.run(TARGET, position());
+        byte[] bytes = BinaryPacker.pack(TARGET, position());
         String hex = toHex(bytes);
         int mismatched = mismatchedBytes(bytes, parseHex(GOLDEN_HEX));
         expectEq("AC-1 hex", GOLDEN_HEX, hex);
         expectEq("AC-1 mismatched", 0, mismatched);
         expectEq("AC-1 length", 13, bytes.length);
-        byte[] again = Pack.run(TARGET, position());
+        byte[] again = BinaryPacker.pack(TARGET, position());
         expectEq("AC-1 packed twice", 0, mismatchedBytes(bytes, again));
     }
 
     private static void ac2PositionUnpack() {
-        Packbin.Bound<PositionRow> got = Unpack.run(TARGET, parseHex(GOLDEN_HEX));
+        Packbin.Bound<PositionRow> got = BinaryPacker.unpack(TARGET, parseHex(GOLDEN_HEX));
         expectTrue("AC-2 ok", got.ok);
         expectEq("AC-2 sid", 1, got.value.sid);
         expectEq("AC-2 lat", 500_000_000, got.value.lat);
@@ -77,7 +77,7 @@ public final class PackbinTest {
     }
 
     private static void ac3BytesMatchFixture() throws IOException {
-        byte[] bytes = Pack.run(TARGET, position());
+        byte[] bytes = BinaryPacker.pack(TARGET, position());
         byte[] fixture = parseHex(Files.readString(findGoldenFixture()).trim());
         expectEq("AC-3 mismatched", 0, mismatchedBytes(bytes, fixture));
     }
@@ -92,26 +92,26 @@ public final class PackbinTest {
                 Packbin.u16(5, Access.get("wide"), Access.set("wide")));
         Scheme<Map> packet = Maps.scheme(1, flags);
 
-        byte[] clear = Pack.run(packet, new HashMap<>());
+        byte[] clear = BinaryPacker.pack(packet, new HashMap<>());
         expectEq("AC-4 clear length", 2, clear.length);
         expectEq("AC-4 clear type", 0x01, clear[0] & 0xFF);
         expectEq("AC-4 clear byte", 0x00, clear[1] & 0xFF);
         expectEq("AC-4 flags 0x00 adds", 0, clear.length - 2);
 
         Map<String, Object> setBit5 = Maps.map("wide", 0x1234);
-        byte[] withWide = Pack.run(packet, setBit5);
+        byte[] withWide = BinaryPacker.pack(packet, setBit5);
         expectEq("AC-4 0x20 length", 4, withWide.length);
         expectEq("AC-4 0x20 flags", 0x20, withWide[1] & 0xFF);
         expectEq("AC-4 0x20 adds 2", 2, withWide.length - clear.length);
 
         Map<String, Object> presentZero = Maps.map("wide", 0);
-        byte[] zero = Pack.run(packet, presentZero);
+        byte[] zero = BinaryPacker.pack(packet, presentZero);
         expectEq("AC-4 present 0 length", 4, zero.length);
         expectEq("AC-4 present 0 flags", 0x20, zero[1] & 0xFF);
         expectEq("AC-4 present 0 lo", 0x00, zero[2] & 0xFF);
         expectEq("AC-4 present 0 hi", 0x00, zero[3] & 0xFF);
 
-        byte[] absent = Pack.run(packet, new HashMap<>());
+        byte[] absent = BinaryPacker.pack(packet, new HashMap<>());
         expectEq("AC-4 absence length", 2, absent.length);
         expectEq("AC-4 absence does not write 0 payload", 0, absent.length - 2);
     }
@@ -125,7 +125,7 @@ public final class PackbinTest {
                 Packbin.u8(4, Access.get("b4"), Access.set("b4")),
                 Packbin.u16(5, Access.get("wide"), Access.set("wide")));
         Scheme<Map> packet = Maps.scheme(1, flags);
-        Packbin.Bound<Map> got = Unpack.run(packet, new byte[] {0x01, 0x20, 0x34});
+        Packbin.Bound<Map> got = BinaryPacker.unpack(packet, new byte[] {0x01, 0x20, 0x34});
         expectTrue("AC-5 not ok", !got.ok);
         expectTrue("AC-5 error is ShortPacket", got.error instanceof Packbin.ShortPacket);
         Packbin.ShortPacket missing = (Packbin.ShortPacket) got.error;
@@ -133,7 +133,7 @@ public final class PackbinTest {
         expectEq("AC-5 needed", 2, missing.needed);
         expectEq("AC-5 left", 1, missing.left);
 
-        byte[] bytes = Pack.run(TARGET, position());
+        byte[] bytes = BinaryPacker.pack(TARGET, position());
         expectEq("AC-5 next pack hex", GOLDEN_HEX, toHex(bytes));
     }
 
@@ -142,10 +142,10 @@ public final class PackbinTest {
                 Packbin.u8(0, Access.get("profile"), Access.set("profile")),
                 Packbin.when(Packbin.eq(0, 0), Packbin.u8(1, Access.get("shape"), Access.set("shape"))));
 
-        byte[] miss = Pack.run(packet, Maps.map("profile", 1));
+        byte[] miss = BinaryPacker.pack(packet, Maps.map("profile", 1));
         expectEq("when miss length", 2, miss.length);
 
-        byte[] hit = Pack.run(packet, Maps.map("profile", 0, "shape", 9));
+        byte[] hit = BinaryPacker.pack(packet, Maps.map("profile", 0, "shape", 9));
         expectEq("when hit length", 3, hit.length);
         expectEq("when added", 1, hit.length - miss.length);
     }
@@ -155,19 +155,19 @@ public final class PackbinTest {
                 Packbin.u8(0, Access.get("a"), Access.set("a")),
                 Packbin.u8(1, Access.get("b"), Access.set("b"))));
 
-        Packbin.Bound<Map> ok = Unpack.run(packet, new byte[] {0x01, 1, 2});
+        Packbin.Bound<Map> ok = BinaryPacker.unpack(packet, new byte[] {0x01, 1, 2});
         expectTrue("repeat ok", ok.ok);
         expectTrue("repeat list", ok.value.get("a") instanceof List);
         expectEq("repeat count", 1, ((List<?>) ok.value.get("a")).size());
 
-        Packbin.Bound<Map> bad = Unpack.run(packet, new byte[] {0x01, 1, 2, 3});
+        Packbin.Bound<Map> bad = BinaryPacker.unpack(packet, new byte[] {0x01, 1, 2, 3});
         expectTrue("repeat short", !bad.ok);
         expectTrue("repeat short error", bad.error instanceof Packbin.ShortPacket);
     }
 
     private static void trailingBytesAreError() {
         Scheme<Map> packet = Maps.scheme(1, Packbin.u8(0, Access.get("type"), Access.set("type")));
-        Packbin.Bound<Map> got = Unpack.run(packet, new byte[] {0x01, 0x40, (byte) 0x99});
+        Packbin.Bound<Map> got = BinaryPacker.unpack(packet, new byte[] {0x01, 0x40, (byte) 0x99});
         expectTrue("trailing error", got.error instanceof Packbin.TrailingBytes);
         expectEq("trailing left", 1, ((Packbin.TrailingBytes) got.error).left);
     }
@@ -175,8 +175,8 @@ public final class PackbinTest {
     private static void nfrRoundTripsWithinOneSecond() throws IOException {
         long start = System.nanoTime();
         for (int i = 0; i < 100_000; i++) {
-            byte[] bytes = Pack.run(TARGET, position());
-            Packbin.Bound<PositionRow> got = Unpack.run(TARGET, bytes);
+            byte[] bytes = BinaryPacker.pack(TARGET, position());
+            Packbin.Bound<PositionRow> got = BinaryPacker.unpack(TARGET, bytes);
             if (!got.ok) {
                 fail("NFR unpack failed");
                 return;
@@ -210,9 +210,9 @@ public final class PackbinTest {
 
     private static void objectRoundTrip() {
         PositionRow row = position();
-        byte[] bytes = Pack.run(TARGET, row);
+        byte[] bytes = BinaryPacker.pack(TARGET, row);
         expectEq("object hex", GOLDEN_HEX, toHex(bytes));
-        Packbin.Bound<PositionRow> got = Unpack.run(TARGET, bytes);
+        Packbin.Bound<PositionRow> got = BinaryPacker.unpack(TARGET, bytes);
         expectTrue("object ok", got.ok);
         expectEq("object sid", 1, got.value.sid);
         expectEq("object lat", 500_000_000, got.value.lat);
@@ -230,26 +230,26 @@ public final class PackbinTest {
                 Packbin.u8(4, Access.get((WideRow r) -> null), Access.set((WideRow r, Object v) -> {})),
                 Packbin.u16(5, Access.get((WideRow r) -> r.b5), Access.set((WideRow r, Object v) -> r.b5 = v == null ? null : ((Number) v).intValue())));
         Scheme<WideRow> wide = new Scheme<>(1, WideRow.class, wideFlags);
-        expectEq("object absent bit", "0100", toHex(Pack.run(wide, new WideRow())));
+        expectEq("object absent bit", "0100", toHex(BinaryPacker.pack(wide, new WideRow())));
         WideRow present = new WideRow();
         present.b5 = 0;
-        expectEq("object present zero", "01200000", toHex(Pack.run(wide, present)));
+        expectEq("object present zero", "01200000", toHex(BinaryPacker.pack(wide, present)));
 
         Scheme<SessionRow> session = new Scheme<>(1, SessionRow.class,
                 Packbin.flags(Packbin.group(
                         Packbin.u16(0, Access.get((SessionRow r) -> r.login), Access.set((SessionRow r, Object v) -> r.login = v == null ? null : ((Number) v).intValue())),
                         Packbin.u32(1, Access.get((SessionRow r) -> r.ts), Access.set((SessionRow r, Object v) -> r.ts = v == null ? null : ((Number) v).longValue())))));
-        expectEq("object group clear", "0100", toHex(Pack.run(session, new SessionRow())));
+        expectEq("object group clear", "0100", toHex(BinaryPacker.pack(session, new SessionRow())));
         SessionRow set = new SessionRow();
         set.login = 7;
         set.ts = 1000L;
-        byte[] packed = Pack.run(session, set);
+        byte[] packed = BinaryPacker.pack(session, set);
         expectEq("object group set", "01010700e8030000", toHex(packed));
-        Packbin.Bound<SessionRow> back = Unpack.run(session, packed);
+        Packbin.Bound<SessionRow> back = BinaryPacker.unpack(session, packed);
         expectTrue("object group ok", back.ok);
         expectEq("object login", 7, back.value.login);
         expectEq("object ts", 1000L, back.value.ts);
-        Packbin.Bound<SessionRow> shortRow = Unpack.run(session, new byte[] {0x01, 0x01, 0x07});
+        Packbin.Bound<SessionRow> shortRow = BinaryPacker.unpack(session, new byte[] {0x01, 0x01, 0x07});
         expectTrue("object short", !shortRow.ok && shortRow.value == null);
         expectEq("object short field", "0", ((Packbin.ShortPacket) shortRow.error).field);
     }

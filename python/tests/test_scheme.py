@@ -7,16 +7,15 @@ import pytest
 
 import packbin
 from packbin import (
+    BinaryPacker,
     Scheme,
     ShortPacket,
     TypeMismatch,
     flags,
     i16,
     i32,
-    pack,
     u8,
     u16,
-    unpack,
     utf8,
 )
 
@@ -25,20 +24,20 @@ from _bind import gs
 
 @dataclass
 class MarkerRow:
-    Sid: int = 0
+    sid: int = 0
 
 
 @dataclass
 class UserModifiedEvent:
-    userId: int = 0
-    userNameChange: str = ""
-    userEmailChange: str = ""
-    userStatusChange: int = 0
+    user_id: int = 0
+    user_name_change: str = ""
+    user_email_change: str = ""
+    user_status_change: int = 0
 
 
 @dataclass
 class UserPositionEvent:
-    userId: int = 0
+    user_id: int = 0
     latitude: int = 0
     longitude: int = 0
 
@@ -54,21 +53,21 @@ class PositionRow:
     altitude: int | None = None
 
 
-MARKER = Scheme(32, MarkerRow, u8(0, *gs("Sid")))
+MARKER = Scheme(32, MarkerRow, u8(0, *gs("sid")))
 
 MODIFIED = Scheme(
     1,
     UserModifiedEvent,
-    i32(0, *gs("userId")),
-    utf8(1, *gs("userNameChange")),
-    utf8(2, *gs("userEmailChange")),
-    u8(3, *gs("userStatusChange")),
+    i32(0, *gs("user_id")),
+    utf8(1, *gs("user_name_change")),
+    utf8(2, *gs("user_email_change")),
+    u8(3, *gs("user_status_change")),
 )
 
 POSITION_EVENT = Scheme(
     2,
     UserPositionEvent,
-    i32(0, *gs("userId")),
+    i32(0, *gs("user_id")),
     i32(1, *gs("latitude")),
     i32(2, *gs("longitude")),
 )
@@ -90,18 +89,20 @@ POSITION = Scheme(
 
 def test_ac1_scheme_replaces_packet():
     assert not hasattr(packbin, "Packet")
-    assert not hasattr(packbin, "BinaryPacker")
+    assert hasattr(packbin, "BinaryPacker")
     assert not hasattr(packbin, "TypeNum")
     assert not hasattr(packbin, "packet")
-    scheme = Scheme(1, MarkerRow, u8(0, *gs("Sid")))
+    assert not hasattr(packbin, "pack")
+    assert not hasattr(packbin, "unpack")
+    scheme = Scheme(1, MarkerRow, u8(0, *gs("sid")))
     assert scheme._type_number == 1
-    raw = pack(scheme, MarkerRow(Sid=7))
+    raw = BinaryPacker.pack(scheme, MarkerRow(sid=7))
     assert raw == bytes([0x01, 0x07])
 
 
 def test_ac2_position_row_has_no_type_member():
     row = PositionRow(sid=1, lat=500_000_000, lon=300_000_000, profile=1)
-    raw = pack(POSITION, row)
+    raw = BinaryPacker.pack(POSITION, row)
     assert raw.hex() == "4001000065cd1d00a3e1110100"
     src = inspect.getsource(PositionRow)
     assert "type" not in src
@@ -109,7 +110,7 @@ def test_ac2_position_row_has_no_type_member():
 
 
 def test_ac3_known_scheme_checks_leading_byte():
-    got = unpack(Scheme(1, MarkerRow, u8(0, *gs("Sid"))), bytes([2, 7]))
+    got = BinaryPacker.unpack(Scheme(1, MarkerRow, u8(0, *gs("sid"))), bytes([2, 7]))
     assert got.ok is False
     assert got.value is None
     assert isinstance(got.error, TypeMismatch)
@@ -127,19 +128,19 @@ def test_ac4_unknown_buffer_calls_matching_handler():
     def on_position(ev: UserPositionEvent) -> None:
         seen.append(("position", ev))
 
-    got = unpack(raw, MODIFIED.on(on_modified), POSITION_EVENT.on(on_position))
+    got = BinaryPacker.unpack(raw, MODIFIED.on(on_modified), POSITION_EVENT.on(on_position))
     assert got.ok is True
     assert len(seen) == 1
     assert seen[0][0] == "position"
     ev = seen[0][1]
     assert isinstance(ev, UserPositionEvent)
-    assert ev.userId == 7
+    assert ev.user_id == 7
     assert ev.latitude == 8
     assert ev.longitude == 9
     assert not hasattr(ev, "type")
-    assert pack(POSITION_EVENT, UserPositionEvent(userId=7, latitude=8, longitude=9)).hex() == (
-        "02070000000800000009000000"
-    )
+    assert BinaryPacker.pack(
+        POSITION_EVENT, UserPositionEvent(user_id=7, latitude=8, longitude=9)
+    ).hex() == ("02070000000800000009000000")
 
 
 def test_ac5_unknown_type_number():
@@ -151,7 +152,7 @@ def test_ac5_unknown_type_number():
     def on_position(ev: UserPositionEvent) -> None:
         called.append(ev)
 
-    got = unpack(bytes([9, 0]), MODIFIED.on(on_modified), POSITION_EVENT.on(on_position))
+    got = BinaryPacker.unpack(bytes([9, 0]), MODIFIED.on(on_modified), POSITION_EVENT.on(on_position))
     assert got.ok is False
     assert got.value is None
     assert isinstance(got.error, TypeMismatch)
@@ -160,26 +161,26 @@ def test_ac5_unknown_type_number():
 
 
 def test_ac6_type_numbers_in_one_call_are_unique():
-    other = Scheme(1, MarkerRow, u8(0, *gs("Sid")))
+    other = Scheme(1, MarkerRow, u8(0, *gs("sid")))
     with pytest.raises(ValueError):
-        unpack(b"\x01\x00", MODIFIED.on(lambda ev: None), other.on(lambda row: None))
+        BinaryPacker.unpack(b"\x01\x00", MODIFIED.on(lambda ev: None), other.on(lambda row: None))
 
 
 def test_scheme_argument_required():
-    row = MarkerRow(Sid=23)
+    row = MarkerRow(sid=23)
     with pytest.raises(TypeError):
-        pack(row)  # type: ignore[call-arg]
+        BinaryPacker.pack(row)  # type: ignore[call-arg]
 
 
 def test_type_number_range():
     with pytest.raises(ValueError):
-        Scheme(256, MarkerRow, u8(0, *gs("Sid")))
+        Scheme(256, MarkerRow, u8(0, *gs("sid")))
     with pytest.raises(ValueError):
-        Scheme(-1, MarkerRow, u8(0, *gs("Sid")))
+        Scheme(-1, MarkerRow, u8(0, *gs("sid")))
 
 
 def test_empty_buffer_short_packet():
-    got = unpack(MARKER, b"")
+    got = BinaryPacker.unpack(MARKER, b"")
     assert got.ok is False
     assert got.value is None
     assert isinstance(got.error, ShortPacket)
@@ -189,10 +190,10 @@ def test_empty_buffer_short_packet():
 
 
 def test_marker_pack_unpack():
-    row = MarkerRow(Sid=23)
-    raw = pack(MARKER, row)
+    row = MarkerRow(sid=23)
+    raw = BinaryPacker.pack(MARKER, row)
     assert raw.hex() == "2017"
-    got = unpack(MARKER, raw)
+    got = BinaryPacker.unpack(MARKER, raw)
     assert got.ok is True
     assert got.value is not None
-    assert got.value.Sid == 23
+    assert got.value.sid == 23

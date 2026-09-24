@@ -17,8 +17,8 @@
 | Method | Input | Output | Async | Error Types |
 |--------|-------|--------|-------|-------------|
 | `Scheme<T>` | type number, fields by order id | scheme | No | order is not the next index |
-| `Pack.Run` | scheme, row | bytes | No | integer does not fit |
-| `Unpack.Run` | scheme, bytes | row or error | No | short packet, trailing bytes, type mismatch |
+| `BinaryPacker.Pack` | scheme, row | bytes | No | integer does not fit |
+| `BinaryPacker.Unpack` | scheme, bytes | row or error | No | short packet, trailing bytes, type mismatch |
 
 **Input DTOs**:
 

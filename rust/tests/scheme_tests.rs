@@ -1,6 +1,5 @@
 use packbin::{
-    flags, i16, pack, to_hex, u16, u8, unpack, unpack_with, BoundField, Scheme, ShortPacket,
-    UnpackError,
+    flags, i16, to_hex, u16, u8, BinaryPacker, BoundField, Scheme, ShortPacket, UnpackError,
 };
 
 fn parse_hex(hex: &str) -> Vec<u8> {
@@ -143,12 +142,12 @@ fn position_row_scheme() -> Scheme<PositionRow> {
 #[test]
 fn ac1_scheme_replaces_packet() {
     let source = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/lib.rs"));
-    assert!(!source.contains("BinaryPacker"));
+    assert!(source.contains("BinaryPacker"));
     assert!(!source.contains("type_num"));
     assert!(!source.contains(" packet,"));
     assert!(!source.contains(" Packet"));
     let row = SidRow { sid: 23 };
-    let bytes = pack(&sid_scheme(), &row).expect("pack");
+    let bytes = BinaryPacker::pack(&sid_scheme(), &row).expect("pack");
     assert_eq!(to_hex(&bytes), "2017");
 }
 
@@ -160,7 +159,7 @@ fn ac2_position_row_no_type_member() {
         lon: 300_000_000,
         profile: 1,
     };
-    let bytes = pack(&position_row_scheme(), &row).expect("pack");
+    let bytes = BinaryPacker::pack(&position_row_scheme(), &row).expect("pack");
     assert_eq!(to_hex(&bytes), "4001000065cd1d00a3e1110100");
     let source = include_str!("scheme_tests.rs");
     let start = source.find("struct PositionRow").expect("PositionRow");
@@ -187,7 +186,7 @@ fn ac2_position_row_no_type_member() {
 
 #[test]
 fn ac3_known_scheme_checks_leading_byte() {
-    match unpack(&sid_scheme(), &parse_hex("2117")) {
+    match BinaryPacker::unpack(&sid_scheme(), &parse_hex("2117")) {
         Err(UnpackError::Type { expected, actual }) => {
             assert_eq!(expected, 32);
             assert_eq!(actual, 33);
@@ -199,7 +198,7 @@ fn ac3_known_scheme_checks_leading_byte() {
 
 #[test]
 fn ac3_empty_buffer_short_packet() {
-    match unpack::<SidRow>(&sid_scheme(), &[]) {
+    match BinaryPacker::unpack::<SidRow>(&sid_scheme(), &[]) {
         Err(UnpackError::Short(ShortPacket {
             field,
             needed,
@@ -226,7 +225,7 @@ fn ac4_unknown_buffer_calls_matching_handler() {
     let mut on_position = position.on(|ev| {
         position_got = Some(ev);
     });
-    unpack_with(&bytes, &mut [&mut on_modified, &mut on_position]).expect("dispatch");
+    BinaryPacker::unpack_with(&bytes, &mut [&mut on_modified, &mut on_position]).expect("dispatch");
     assert!(!modified_called);
     assert_eq!(
         position_got,
@@ -273,7 +272,7 @@ fn ac5_unknown_type_number() {
     let mut on_position = position.on(|_ev| {
         position_called = true;
     });
-    match unpack_with(&bytes, &mut [&mut on_modified, &mut on_position]) {
+    match BinaryPacker::unpack_with(&bytes, &mut [&mut on_modified, &mut on_position]) {
         Err(UnpackError::Type { actual, .. }) => assert_eq!(actual, 9),
         other => panic!("expected Type error, got {:?}", other),
     }
@@ -295,7 +294,7 @@ fn ac6_type_numbers_unique() {
     );
     let mut on_a = modified.on(|_ev| {});
     let mut on_b = other.on(|_ev| {});
-    match unpack_with(&[1], &mut [&mut on_a, &mut on_b]) {
+    match BinaryPacker::unpack_with(&[1], &mut [&mut on_a, &mut on_b]) {
         Err(UnpackError::DuplicateType { type_number }) => assert_eq!(type_number, 1),
         other => panic!("expected DuplicateType, got {:?}", other),
     }

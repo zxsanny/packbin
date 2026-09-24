@@ -303,75 +303,86 @@ void write_row(Scheme<T> const& s, T& row, Values const& raw) {
 
 }  // namespace detail
 
-template <typename T>
-std::vector<std::uint8_t> pack(Scheme<T> const& s, T const& row) {
-  auto body = pack_body(s.fields, detail::row_values(s, row));
-  std::vector<std::uint8_t> out;
-  out.reserve(body.size() + 1);
-  out.push_back(static_cast<std::uint8_t>(s.type_number));
-  out.insert(out.end(), body.begin(), body.end());
-  return out;
-}
-
-inline UnpackResult<> unpack(Scheme<Values> const& s, std::uint8_t const* data, std::size_t len) {
-  UnpackResult<> out;
-  if (len < 1) {
-    out.ok = false;
-    out.short_packet = ShortPacket{"", 1, 0};
+struct BinaryPacker {
+  template <typename T>
+  static std::vector<std::uint8_t> pack(Scheme<T> const& s, T const& row) {
+    auto body = pack_body(s.fields, detail::row_values(s, row));
+    std::vector<std::uint8_t> out;
+    out.reserve(body.size() + 1);
+    out.push_back(static_cast<std::uint8_t>(s.type_number));
+    out.insert(out.end(), body.begin(), body.end());
     return out;
   }
-  auto actual = static_cast<int>(data[0]);
-  if (actual != s.type_number) {
-    out.ok = false;
-    out.type_mismatch = TypeMismatch{s.type_number, actual};
+
+  static UnpackResult<> unpack(Scheme<Values> const& s, std::uint8_t const* data, std::size_t len) {
+    UnpackResult<> out;
+    if (len < 1) {
+      out.ok = false;
+      out.short_packet = ShortPacket{"", 1, 0};
+      return out;
+    }
+    auto actual = static_cast<int>(data[0]);
+    if (actual != s.type_number) {
+      out.ok = false;
+      out.type_mismatch = TypeMismatch{s.type_number, actual};
+      return out;
+    }
+    auto raw = unpack_body(s.fields, data, len, 1);
+    out.ok = raw.ok;
+    out.short_packet = raw.short_packet;
+    out.trailing = raw.trailing;
+    out.type_mismatch = raw.type_mismatch;
+    if (!raw.ok)
+      return out;
+    out.value = std::move(raw.value);
     return out;
   }
-  auto raw = unpack_body(s.fields, data, len, 1);
-  out.ok = raw.ok;
-  out.short_packet = raw.short_packet;
-  out.trailing = raw.trailing;
-  out.type_mismatch = raw.type_mismatch;
-  if (!raw.ok)
-    return out;
-  out.value = std::move(raw.value);
-  return out;
-}
 
-inline UnpackResult<> unpack(Scheme<Values> const& s, std::vector<std::uint8_t> const& data) {
-  return unpack(s, data.data(), data.size());
-}
+  static UnpackResult<> unpack(Scheme<Values> const& s, std::vector<std::uint8_t> const& data) {
+    return unpack(s, data.data(), data.size());
+  }
 
-template <typename T>
-UnpackResult<T> unpack(Scheme<T> const& s, std::uint8_t const* data, std::size_t len) {
-  UnpackResult<T> out;
-  if (len < 1) {
-    out.ok = false;
-    out.short_packet = ShortPacket{"", 1, 0};
+  template <typename T>
+  static UnpackResult<T> unpack(Scheme<T> const& s, std::uint8_t const* data, std::size_t len) {
+    UnpackResult<T> out;
+    if (len < 1) {
+      out.ok = false;
+      out.short_packet = ShortPacket{"", 1, 0};
+      return out;
+    }
+    auto actual = static_cast<int>(data[0]);
+    if (actual != s.type_number) {
+      out.ok = false;
+      out.type_mismatch = TypeMismatch{s.type_number, actual};
+      return out;
+    }
+    auto raw = unpack_body(s.fields, data, len, 1);
+    out.ok = raw.ok;
+    out.short_packet = raw.short_packet;
+    out.trailing = raw.trailing;
+    out.type_mismatch = raw.type_mismatch;
+    if (!raw.ok)
+      return out;
+    T row{};
+    detail::write_row(s, row, raw.value);
+    out.value = std::move(row);
     return out;
   }
-  auto actual = static_cast<int>(data[0]);
-  if (actual != s.type_number) {
-    out.ok = false;
-    out.type_mismatch = TypeMismatch{s.type_number, actual};
-    return out;
-  }
-  auto raw = unpack_body(s.fields, data, len, 1);
-  out.ok = raw.ok;
-  out.short_packet = raw.short_packet;
-  out.trailing = raw.trailing;
-  out.type_mismatch = raw.type_mismatch;
-  if (!raw.ok)
-    return out;
-  T row{};
-  detail::write_row(s, row, raw.value);
-  out.value = std::move(row);
-  return out;
-}
 
-template <typename T>
-UnpackResult<T> unpack(Scheme<T> const& s, std::vector<std::uint8_t> const& data) {
-  return unpack(s, data.data(), data.size());
-}
+  template <typename T>
+  static UnpackResult<T> unpack(Scheme<T> const& s, std::vector<std::uint8_t> const& data) {
+    return unpack(s, data.data(), data.size());
+  }
+
+  template <typename... Handlers>
+  static UnpackResult<> unpack(std::uint8_t const* data, std::size_t len,
+                               Handlers const&... handlers);
+
+  template <typename... Handlers>
+  static UnpackResult<> unpack(std::vector<std::uint8_t> const& data, Handlers const&... handlers) {
+    return unpack(data.data(), data.size(), handlers...);
+  }
+};
 
 namespace detail {
 
@@ -387,7 +398,7 @@ bool try_dispatch(UnpackResult<>& result, bool& matched, int actual, std::uint8_
   if (matched || h.type_number != actual)
     return false;
   matched = true;
-  auto row = unpack(h.scheme, data, len);
+  auto row = BinaryPacker::unpack(h.scheme, data, len);
   result.ok = row.ok;
   result.short_packet = row.short_packet;
   result.trailing = row.trailing;
@@ -400,7 +411,8 @@ bool try_dispatch(UnpackResult<>& result, bool& matched, int actual, std::uint8_
 }  // namespace detail
 
 template <typename... Handlers>
-UnpackResult<> unpack(std::uint8_t const* data, std::size_t len, Handlers const&... handlers) {
+UnpackResult<> BinaryPacker::unpack(std::uint8_t const* data, std::size_t len,
+                                    Handlers const&... handlers) {
   std::map<int, bool> seen;
   (detail::check_unique(seen, handlers), ...);
 
@@ -418,9 +430,4 @@ UnpackResult<> unpack(std::uint8_t const* data, std::size_t len, Handlers const&
     result.type_mismatch = TypeMismatch{std::nullopt, actual};
   }
   return result;
-}
-
-template <typename... Handlers>
-UnpackResult<> unpack(std::vector<std::uint8_t> const& data, Handlers const&... handlers) {
-  return unpack(data.data(), data.size(), handlers...);
 }

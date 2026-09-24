@@ -1,4 +1,4 @@
-import { dict, list, pack, scheme, unpack, utf8 } from "../../../typescript/src/index.ts";
+import { BinaryPacker, dict, list, scheme, utf8 } from "../../../typescript/src/index.ts";
 
 type UserRow = {
   username: string;
@@ -95,13 +95,13 @@ function fieldsMatch(result: { ok: true; value: object }, expected: object): boo
 const cmd = process.argv[2];
 
 if (cmd === "pack-user") {
-  const bytes = pack(userPacket, userValues);
+  const bytes = BinaryPacker.pack(userPacket, userValues);
   process.stdout.write(Buffer.from(bytes).toString("hex") + "\n");
   process.exit(0);
 }
 
 if (cmd === "pack-nested") {
-  const bytes = pack(nestedPacket, nestedValues);
+  const bytes = BinaryPacker.pack(nestedPacket, nestedValues);
   process.stdout.write(Buffer.from(bytes).toString("hex") + "\n");
   process.exit(0);
 }
@@ -109,7 +109,7 @@ if (cmd === "pack-nested") {
 if (cmd === "unpack-user") {
   const hex = process.argv[3] ?? "";
   const bytes = Buffer.from(hex, "hex");
-  const result = unpack(userPacket, bytes);
+  const result = BinaryPacker.unpack(userPacket, bytes);
   if (result.ok && fieldsMatch(result, userValues)) process.exit(0);
   process.exit(1);
 }
@@ -117,7 +117,7 @@ if (cmd === "unpack-user") {
 if (cmd === "unpack-nested") {
   const hex = process.argv[3] ?? "";
   const bytes = Buffer.from(hex, "hex");
-  const result = unpack(nestedPacket, bytes);
+  const result = BinaryPacker.unpack(nestedPacket, bytes);
   if (result.ok && fieldsMatch(result, nestedValues)) process.exit(0);
   process.exit(1);
 }

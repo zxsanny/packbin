@@ -4,10 +4,19 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-public final class Unpack {
-    private Unpack() {}
+public final class BinaryPacker {
+    private BinaryPacker() {}
 
-    public static <T> Packbin.Bound<T> run(Scheme<T> scheme, byte[] data) {
+    public static <T> byte[] pack(Scheme<T> scheme, T row) {
+        Objects.requireNonNull(scheme, "scheme");
+        Objects.requireNonNull(row, "row");
+        ByteSink sink = new ByteSink();
+        sink.write((byte) scheme.typeNumber);
+        Walker.packFields(scheme.fields, row, sink, new HashMap<>(), null);
+        return sink.toArray();
+    }
+
+    public static <T> Packbin.Bound<T> unpack(Scheme<T> scheme, byte[] data) {
         Objects.requireNonNull(scheme, "scheme");
         Objects.requireNonNull(data, "data");
         if (data.length < 1) {
@@ -30,7 +39,7 @@ public final class Unpack {
         return Packbin.Bound.ok(row);
     }
 
-    public static Object run(byte[] data, Scheme.Handler<?>... handlers) {
+    public static Object unpack(byte[] data, Scheme.Handler<?>... handlers) {
         Objects.requireNonNull(data, "data");
         Objects.requireNonNull(handlers, "handlers");
         Map<Integer, Scheme.Handler<?>> byType = new HashMap<>();
@@ -54,7 +63,7 @@ public final class Unpack {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static Object dispatch(Scheme.Handler<?> matched, byte[] data) {
-        Packbin.Bound bound = run(matched.scheme, data);
+        Packbin.Bound bound = unpack(matched.scheme, data);
         if (!bound.ok) {
             return bound.error;
         }

@@ -12,7 +12,7 @@ Python → binary → TypeScript
 ### Python
 
 ```python
-from packbin import Scheme, flags, i16, i32, pack, u8, u16
+from packbin import BinaryPacker, Scheme, flags, i16, i32, u8, u16
 
 class Position:
     def __init__(self):
@@ -41,7 +41,7 @@ target = Scheme(
     ),
 )
 
-raw = pack(target, Position())
+raw = BinaryPacker.pack(target, Position())
 ```
 
 ```
@@ -51,7 +51,7 @@ raw = pack(target, Position())
 ### TypeScript
 
 ```ts
-import { flags, i16, i32, scheme, u8, u16, unpack } from "packbin"
+import { BinaryPacker, flags, i16, i32, scheme, u8, u16 } from "packbin"
 
 class Target {
   sid = 1
@@ -76,7 +76,7 @@ const target = scheme<Target>(
   ]),
 )
 
-const got = unpack(target, raw)
+const got = BinaryPacker.unpack(target, raw)
 ```
 
 `flags` is how an optional field takes no space when you have no value for it. `heading`, `speed`, and `altitude` are measurements, so `0` is still a value and has to be written. `None` means the field is not in the packet.
@@ -113,28 +113,28 @@ using Packbin;
 
 sealed class User
 {
-    public string username { get; set; } = "";
-    public List<Role> roles { get; set; } = [];
-    public Dictionary<string, ActionList> access { get; set; } = [];
+    public string Username { get; set; } = "";
+    public List<Role> Roles { get; set; } = [];
+    public Dictionary<string, ActionList> Access { get; set; } = [];
 }
 
-sealed class Role { public string role { get; set; } = ""; }
-sealed class ActionName { public string action { get; set; } = ""; }
-sealed class ActionList { public List<ActionName> actions { get; set; } = []; }
+sealed class Role { public string RoleName { get; set; } = ""; }
+sealed class ActionName { public string Action { get; set; } = ""; }
+sealed class ActionList { public List<ActionName> Actions { get; set; } = []; }
 
-var userScheme = new Scheme<User>(1,
-    Field.Utf8<User>(0, x => x.username),
-    Field.List((User x) => x.roles, Field.Utf8<Role>(0, r => r.role)),
-    Field.Dict((User x) => x.access, Field.List((ActionList e) => e.actions, Field.Utf8<ActionName>(0, a => a.action))));
+var userScheme = new Scheme<User>(1, f => [
+    f.Utf8(0, x => x.Username),
+    f.List(x => x.Roles, r => r.Utf8(0, role => role.RoleName)),
+    f.Dict(x => x.Access, e => e.List(a => a.Actions, n => n.Utf8(0, action => action.Action)))]);
 
-var raw = Pack.Run(userScheme, new User
+var raw = BinaryPacker.Pack(userScheme, new User
 {
-    username = "ada",
-    roles = [new Role { role = "user" }, new Role { role = "admin" }],
-    access = new()
+    Username = "ada",
+    Roles = [new Role { RoleName = "user" }, new Role { RoleName = "admin" }],
+    Access = new()
     {
-        ["map"] = new ActionList { actions = [new ActionName { action = "read" }, new ActionName { action = "edit" }] },
-        ["store"] = new ActionList { actions = [new ActionName { action = "write" }] },
+        ["map"] = new ActionList { Actions = [new ActionName { Action = "read" }, new ActionName { Action = "edit" }] },
+        ["store"] = new ActionList { Actions = [new ActionName { Action = "write" }] },
     },
 });
 ```

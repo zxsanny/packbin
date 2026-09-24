@@ -5,54 +5,54 @@ static class Handoff
 {
     sealed class RoleEl
     {
-        public string role { get; set; } = "";
+        public string Role { get; set; } = "";
     }
 
     sealed class ActionEl
     {
-        public string action { get; set; } = "";
+        public string Action { get; set; } = "";
     }
 
     sealed class ActionList
     {
-        public List<object?>? actions { get; set; }
+        public List<object?>? Actions { get; set; }
     }
 
     sealed class UserRow
     {
-        public string username { get; set; } = "";
-        public List<object?>? roles { get; set; }
-        public Dictionary<string, object?>? access { get; set; }
+        public string Username { get; set; } = "";
+        public List<object?>? Roles { get; set; }
+        public Dictionary<string, object?>? Access { get; set; }
     }
 
     sealed class ValueEl
     {
-        public string value { get; set; } = "";
+        public string Value { get; set; } = "";
     }
 
     sealed class FieldDict
     {
-        public Dictionary<string, object?>? fields { get; set; }
+        public Dictionary<string, object?>? Fields { get; set; }
     }
 
     sealed class NestedRow
     {
-        public Dictionary<string, object?>? access { get; set; }
+        public Dictionary<string, object?>? Access { get; set; }
     }
 
     static readonly Scheme<UserRow> UserScheme = new(1,
-        Field.Utf8<UserRow>(0, x => x.username),
-        Field.List((UserRow x) => x.roles, Field.Utf8<RoleEl>(0, r => r.role)),
-        Field.Dict((UserRow x) => x.access, Field.List((ActionList e) => e.actions, Field.Utf8<ActionEl>(0, a => a.action))));
+        Field.Utf8<UserRow>(0, x => x.Username),
+        Field.List((UserRow x) => x.Roles, Field.Utf8<RoleEl>(0, r => r.Role)),
+        Field.Dict((UserRow x) => x.Access, Field.List((ActionList e) => e.Actions, Field.Utf8<ActionEl>(0, a => a.Action))));
 
     static readonly Scheme<NestedRow> NestedScheme = new(1,
-        Field.Dict((NestedRow x) => x.access, Field.List((FieldDict r) => r.fields, Field.Dict((FieldDict f) => f.fields, Field.Utf8<ValueEl>(0, v => v.value)))));
+        Field.Dict((NestedRow x) => x.Access, Field.List((FieldDict r) => r.Fields, Field.Dict((FieldDict f) => f.Fields, Field.Utf8<ValueEl>(0, v => v.Value)))));
 
     static readonly Dictionary<string, object?> UserValues = new()
     {
-        ["username"] = "zxsanny",
-        ["roles"] = new List<object?> { "user", "dispatcher" },
-        ["access"] = new Dictionary<string, object?>
+        ["Username"] = "zxsanny",
+        ["Roles"] = new List<object?> { "user", "dispatcher" },
+        ["Access"] = new Dictionary<string, object?>
         {
             ["channel"] = new List<object?> { "read" },
             ["map"] = new List<object?> { "read", "gps_fix", "set", "edit" },
@@ -62,7 +62,7 @@ static class Handoff
 
     static readonly Dictionary<string, object?> NestedValues = new()
     {
-        ["access"] = new Dictionary<string, object?>
+        ["Access"] = new Dictionary<string, object?>
         {
             ["map"] = new List<object?>
             {
@@ -84,10 +84,10 @@ static class Handoff
         switch (args[0])
         {
             case "pack-user":
-                Console.WriteLine(Convert.ToHexString(Pack.Run(UserScheme, UserValues)).ToLowerInvariant());
+                Console.WriteLine(Convert.ToHexString(BinaryPacker.Pack(UserScheme, UserValues)).ToLowerInvariant());
                 return 0;
             case "pack-nested":
-                Console.WriteLine(Convert.ToHexString(Pack.Run(NestedScheme, NestedValues)).ToLowerInvariant());
+                Console.WriteLine(Convert.ToHexString(BinaryPacker.Pack(NestedScheme, NestedValues)).ToLowerInvariant());
                 return 0;
             case "unpack-user":
                 if (args.Length < 2)
@@ -104,14 +104,14 @@ static class Handoff
 
     static bool UnpackUser(string hex)
     {
-        var got = Unpack.Run(UserScheme, Convert.FromHexString(hex));
+        var got = BinaryPacker.Unpack(UserScheme, Convert.FromHexString(hex));
         if (!got.Ok || got.Value is null)
             return false;
-        if (!EqualsString(got.Value.username, "zxsanny"))
+        if (!EqualsString(got.Value.Username, "zxsanny"))
             return false;
-        if (!EqualsStringList(got.Value.roles, "user", "dispatcher"))
+        if (!EqualsStringList(got.Value.Roles, "user", "dispatcher"))
             return false;
-        if (got.Value.access is not IDictionary access)
+        if (got.Value.Access is not IDictionary access)
             return false;
         if (!EqualsStringList(access["channel"], "read"))
             return false;
@@ -124,10 +124,10 @@ static class Handoff
 
     static bool UnpackNested(string hex)
     {
-        var got = Unpack.Run(NestedScheme, Convert.FromHexString(hex));
+        var got = BinaryPacker.Unpack(NestedScheme, Convert.FromHexString(hex));
         if (!got.Ok || got.Value is null)
             return false;
-        if (got.Value.access is not IDictionary access)
+        if (got.Value.Access is not IDictionary access)
             return false;
         if (access.Count != 2)
             return false;

@@ -29,27 +29,35 @@ Position record. Flags bits, in order: heading `u16`, speed `u8`, altitude `i16`
 Vue, React, and Node use this. No Vue plugin.
 
 ```ts
-import { packet, u8, u16, i16, i32, flags, pack, unpack } from "packbin"
+import { scheme, u8, u16, i16, i32, flags, BinaryPacker } from "packbin"
 
-export const target = packet([
-  u8("type"),
-  u16("sid"),
-  i32("lat"),
-  i32("lon"),
-  u8("profile"),
-  flags("motion", [u16("heading"), u8("speed"), i16("altitude")]),
-])
+class Target {
+  sid = 1
+  lat = 500_000_000
+  lon = 300_000_000
+  profile = 1
+  heading: number | null = null
+  speed: number | null = null
+  altitude: number | null = null
+}
 
-const bytes = pack(target, {
-  type: 0x40,
-  sid: 1,
-  lat: 500_000_000,
-  lon: 300_000_000,
-  profile: 1,
-})
+export const target = scheme<Target>(
+  0x40,
+  u16(0, (x) => x.sid),
+  i32(1, (x) => x.lat),
+  i32(2, (x) => x.lon),
+  u8(3, (x) => x.profile),
+  flags([
+    u16(4, (x) => x.heading),
+    u8(5, (x) => x.speed),
+    i16(6, (x) => x.altitude),
+  ]),
+)
+
+const bytes = BinaryPacker.pack(target, new Target())
 // 40 01 00 00 65 cd 1d 00 a3 e1 11 01 00
 
-const got = unpack(target, bytes)
+const got = BinaryPacker.unpack(target, bytes)
 if (!got.ok) {
   // got.field, got.needed, got.left
 }
@@ -60,27 +68,29 @@ if (!got.ok) {
 ```csharp
 using Packbin;
 
-public static class TargetPacket
+public sealed class Target
 {
-    public static readonly Packet Target = Packet.Of(
-        Field.U8("type"),
-        Field.U16("sid"),
-        Field.I32("lat"),
-        Field.I32("lon"),
-        Field.U8("profile"),
-        Field.Flags("motion", Field.U16("heading"), Field.U8("speed"), Field.I16("altitude")));
+    public ushort Sid { get; set; } = 1;
+    public int Lat { get; set; } = 500_000_000;
+    public int Lon { get; set; } = 300_000_000;
+    public byte Profile { get; set; } = 1;
+    public ushort? Heading { get; set; }
+    public byte? Speed { get; set; }
+    public short? Altitude { get; set; }
 }
 
-var bytes = Pack.Run(TargetPacket.Target, new Dictionary<string, object?>
-{
-    ["type"] = (byte)0x40,
-    ["sid"] = (ushort)1,
-    ["lat"] = 500_000_000,
-    ["lon"] = 300_000_000,
-    ["profile"] = (byte)1,
-});
+public static readonly Scheme<Target> TargetScheme = new(0x40, f => [
+    f.U16(0, x => x.Sid),
+    f.I32(1, x => x.Lat),
+    f.I32(2, x => x.Lon),
+    f.U8(3, x => x.Profile),
+    f.Flags(
+        f.U16(4, x => x.Heading),
+        f.U8(5, x => x.Speed),
+        f.I16(6, x => x.Altitude))]);
 
-var got = Unpack.Run(TargetPacket.Target, bytes);
+var bytes = BinaryPacker.Pack(TargetScheme, new Target());
+var got = BinaryPacker.Unpack(TargetScheme, bytes);
 if (got.Error is ShortPacket missing)
 {
     // missing.Field, missing.Needed, missing.Left

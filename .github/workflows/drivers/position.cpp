@@ -15,5 +15,5 @@ int main() {
   values.emplace("1", packbin::Value{std::int32_t{500000000}});
   values.emplace("2", packbin::Value{std::int32_t{300000000}});
   values.emplace("3", packbin::Value{std::uint8_t{1}});
-  std::cout << packbin::to_hex(packbin::pack(layout, values)) << '\n';
+  std::cout << packbin::to_hex(packbin::BinaryPacker::pack(layout, values)) << '\n';
 }

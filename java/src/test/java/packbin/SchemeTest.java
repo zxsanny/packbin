@@ -10,7 +10,6 @@ import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 public final class SchemeTest {
     private static int failures;
@@ -86,10 +85,12 @@ public final class SchemeTest {
     private static void ac1SchemeReplacesPacket() throws IOException {
         Path main = findMainSources();
         expectTrue("AC-1 no Packet.java use", !readTree(main).contains("class Packet"));
-        expectTrue("AC-1 no BinaryPacker", !Files.exists(main.resolve("BinaryPacker.java")));
+        expectTrue("AC-1 BinaryPacker", Files.exists(main.resolve("BinaryPacker.java")));
+        expectTrue("AC-1 no Pack entry", !Files.exists(main.resolve("Pack.java")));
+        expectTrue("AC-1 no Unpack entry", !Files.exists(main.resolve("Unpack.java")));
         MarkerRow row = new MarkerRow();
         row.sid = 23;
-        byte[] bytes = Pack.run(MARKER, row);
+        byte[] bytes = BinaryPacker.pack(MARKER, row);
         expectEq("AC-1 hex", "2017", toHex(bytes));
     }
 
@@ -99,7 +100,7 @@ public final class SchemeTest {
         row.lat = 500_000_000;
         row.lon = 300_000_000;
         row.profile = 1;
-        byte[] bytes = Pack.run(POSITION, row);
+        byte[] bytes = BinaryPacker.pack(POSITION, row);
         expectEq("AC-2 hex", GOLDEN_HEX, toHex(bytes));
         expectEq("AC-2 mismatched", 0, mismatchedBytes(bytes, parseHex(Files.readString(findGoldenFixture()).trim())));
         try {
@@ -110,7 +111,7 @@ public final class SchemeTest {
     }
 
     private static void ac3KnownWrongType() {
-        Packbin.Bound<MarkerRow> empty = Unpack.run(MARKER, new byte[0]);
+        Packbin.Bound<MarkerRow> empty = BinaryPacker.unpack(MARKER, new byte[0]);
         expectTrue("AC-3 empty not ok", !empty.ok);
         expectTrue("AC-3 empty no row", empty.value == null);
         expectTrue("AC-3 empty ShortPacket", empty.error instanceof Packbin.ShortPacket);
@@ -119,7 +120,7 @@ public final class SchemeTest {
 
         Scheme<MarkerRow> typeOne = new Scheme<>(1, MarkerRow.class,
                 Packbin.u8(0, Access.get((MarkerRow r) -> r.sid & 0xFF), Access.set((MarkerRow r, Object v) -> r.sid = ((Number) v).byteValue())));
-        Packbin.Bound<MarkerRow> back = Unpack.run(typeOne, parseHex("0217"));
+        Packbin.Bound<MarkerRow> back = BinaryPacker.unpack(typeOne, parseHex("0217"));
         expectTrue("AC-3 not ok", !back.ok);
         expectTrue("AC-3 no row", back.value == null);
         expectTrue("AC-3 TypeMismatch", back.error instanceof Packbin.TypeMismatch);
@@ -132,7 +133,7 @@ public final class SchemeTest {
         AtomicInteger modifiedCalls = new AtomicInteger();
         AtomicInteger positionCalls = new AtomicInteger();
         AtomicReference<UserPositionEvent> got = new AtomicReference<>();
-        Object err = Unpack.run(
+        Object err = BinaryPacker.unpack(
                 parseHex(AC4_HEX),
                 MODIFIED.on(ev -> modifiedCalls.incrementAndGet()),
                 USER_POSITION.on(ev -> {
@@ -151,13 +152,13 @@ public final class SchemeTest {
             fail("AC-4 type member present");
         } catch (NoSuchFieldException ex) {
         }
-        expectEq("AC-4 hex", AC4_HEX, toHex(Pack.run(USER_POSITION, got.get())));
+        expectEq("AC-4 hex", AC4_HEX, toHex(BinaryPacker.pack(USER_POSITION, got.get())));
     }
 
     private static void ac5UnknownTypeNumber() {
         AtomicInteger modifiedCalls = new AtomicInteger();
         AtomicInteger positionCalls = new AtomicInteger();
-        Object err = Unpack.run(
+        Object err = BinaryPacker.unpack(
                 new byte[] {9},
                 MODIFIED.on(ev -> modifiedCalls.incrementAndGet()),
                 USER_POSITION.on(ev -> positionCalls.incrementAndGet()));
@@ -170,7 +171,7 @@ public final class SchemeTest {
     private static void ac6DuplicateTypeNumbers() {
         boolean threw = false;
         try {
-            Unpack.run(
+            BinaryPacker.unpack(
                     new byte[] {1},
                     MODIFIED.on(ev -> {}),
                     new Scheme<>(1, UserPositionEvent.class,
@@ -202,15 +203,14 @@ public final class SchemeTest {
                 fixture.toString());
         pb.redirectErrorStream(true);
         Process process = pb.start();
-        String output;
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-            output = reader.lines().collect(Collectors.joining("\n"));
+            while (reader.readLine() != null) {
+            }
         }
         boolean finished = process.waitFor(60, TimeUnit.SECONDS);
         expectTrue("compile-fail finished", finished);
         expectTrue("compile-fail exit", process.exitValue() != 0);
-        expectTrue("compile-fail no BinaryPacker", !output.toLowerCase(Locale.ROOT).contains("binarypacker"));
     }
 
     private static void expectThrows(String label, Runnable action) {

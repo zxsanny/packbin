@@ -66,17 +66,17 @@ packbin::Values position_values() {
 constexpr char const* kGoldenHex = "4001000065cd1d00a3e1110100";
 
 void ac1_position_pack() {
-  auto bytes = packbin::pack(position_scheme(), position_values());
+  auto bytes = packbin::BinaryPacker::pack(position_scheme(), position_values());
   auto hex = packbin::to_hex(bytes);
   expect(hex == kGoldenHex, "AC-1 hex");
   expect(packbin::mismatched_bytes(bytes, parse_hex(kGoldenHex)) == 0, "AC-1 mismatched");
   expect(bytes.size() == 13, "AC-1 length 13");
-  auto again = packbin::pack(position_scheme(), position_values());
+  auto again = packbin::BinaryPacker::pack(position_scheme(), position_values());
   expect(packbin::mismatched_bytes(bytes, again) == 0, "AC-1 packed twice");
 }
 
 void ac2_position_unpack() {
-  auto got = packbin::unpack(position_scheme(), parse_hex(kGoldenHex));
+  auto got = packbin::BinaryPacker::unpack(position_scheme(), parse_hex(kGoldenHex));
   expect(got.ok, "AC-2 ok");
   expect(!packbin::present(got.value, "type"), "AC-2 no type");
   expect(std::get<std::uint16_t>(got.value.at("0").data) == 1, "AC-2 sid");
@@ -93,7 +93,7 @@ void ac3_bytes_match_fixture() {
   auto fixture_text = find_golden();
   expect(!fixture_text.empty(), "AC-3 golden.hex found");
   auto fixture = parse_hex(fixture_text);
-  auto bytes = packbin::pack(position_scheme(), position_values());
+  auto bytes = packbin::BinaryPacker::pack(position_scheme(), position_values());
   expect(packbin::mismatched_bytes(bytes, fixture) == 0, "AC-3 mismatched 0");
 }
 
@@ -103,25 +103,25 @@ void ac4_flags_and_stored_zero() {
                       packbin::u8(4), packbin::u16(5)}),
   });
 
-  auto clear = packbin::pack(layout, {});
+  auto clear = packbin::BinaryPacker::pack(layout, {});
   expect(clear.size() == 2, "AC-4 clear size 2");
   expect(clear[0] == 0x01 && clear[1] == 0x00, "AC-4 clear 0x01 0x00");
 
   packbin::Values set;
   set.emplace("5", packbin::Value{std::uint16_t{0x1234}});
-  auto set_bytes = packbin::pack(layout, set);
+  auto set_bytes = packbin::BinaryPacker::pack(layout, set);
   expect(set_bytes.size() == 4, "AC-4 0x20 size 4");
   expect(set_bytes[0] == 0x01 && set_bytes[1] == 0x20, "AC-4 flags 0x20");
   expect(set_bytes.size() - clear.size() == 2, "AC-4 adds 2 bytes");
 
   packbin::Values zero;
   zero.emplace("5", packbin::Value{std::uint16_t{0}});
-  auto zero_bytes = packbin::pack(layout, zero);
+  auto zero_bytes = packbin::BinaryPacker::pack(layout, zero);
   expect(zero_bytes.size() == 4, "AC-4 present 0 size");
   expect(zero_bytes[0] == 0x01 && zero_bytes[1] == 0x20, "AC-4 present 0 bit set");
   expect(zero_bytes[2] == 0x00 && zero_bytes[3] == 0x00, "AC-4 present 0 written");
 
-  auto absent = packbin::pack(layout, {});
+  auto absent = packbin::BinaryPacker::pack(layout, {});
   expect(absent.size() == 2, "AC-4 absence size");
   expect(absent[0] == 0x01 && absent[1] == 0x00, "AC-4 absence no substitute");
   expect(absent.size() != zero_bytes.size(), "AC-4 absence != present 0");
@@ -132,7 +132,7 @@ void ac5_short_then_pack() {
       packbin::flags({packbin::u8(0), packbin::u8(1), packbin::u8(2), packbin::u8(3),
                       packbin::u8(4), packbin::u16(5)}),
   });
-  auto got = packbin::unpack(layout, std::vector<std::uint8_t>{0x01, 0x20, 0x34});
+  auto got = packbin::BinaryPacker::unpack(layout, std::vector<std::uint8_t>{0x01, 0x20, 0x34});
   expect(!got.ok, "AC-5 not ok");
   expect(got.value_count() == 0, "AC-5 value count 0");
   expect(got.short_packet.has_value(), "AC-5 short packet");
@@ -141,7 +141,7 @@ void ac5_short_then_pack() {
     expect(got.short_packet->needed == 2, "AC-5 needed 2");
     expect(got.short_packet->left == 1, "AC-5 left 1");
   }
-  auto bytes = packbin::pack(position_scheme(), position_values());
+  auto bytes = packbin::BinaryPacker::pack(position_scheme(), position_values());
   expect(packbin::to_hex(bytes) == kGoldenHex, "AC-5 pack after short");
 }
 
@@ -151,19 +151,19 @@ void when_group_width() {
           packbin::when(packbin::eq(0, packbin::Value{std::uint8_t{0}}), {packbin::u8(1)})});
   packbin::Values miss;
   miss.emplace("0", packbin::Value{std::uint8_t{1}});
-  auto miss_bytes = packbin::pack(layout, miss);
+  auto miss_bytes = packbin::BinaryPacker::pack(layout, miss);
   expect(miss_bytes.size() == 2, "when miss adds 0");
 
   packbin::Values hit;
   hit.emplace("0", packbin::Value{std::uint8_t{0}});
   hit.emplace("1", packbin::Value{std::uint8_t{9}});
-  auto hit_bytes = packbin::pack(layout, hit);
+  auto hit_bytes = packbin::BinaryPacker::pack(layout, hit);
   expect(hit_bytes.size() - miss_bytes.size() == 1, "when match adds group width");
 }
 
 void repeat_and_leftover() {
   auto layout = packbin::scheme(1, {packbin::repeat({packbin::u8(0), packbin::u8(1)})});
-  auto ok = packbin::unpack(layout, std::vector<std::uint8_t>{1, 1, 2});
+  auto ok = packbin::BinaryPacker::unpack(layout, std::vector<std::uint8_t>{1, 1, 2});
   expect(ok.ok, "repeat ok");
   auto it = ok.value.find("0");
   expect(it != ok.value.end(), "repeat key");
@@ -171,14 +171,14 @@ void repeat_and_leftover() {
     auto const* list = std::get_if<packbin::Value::List>(&it->second.data);
     expect(list && *list && (*list)->items.size() == 1, "one group");
   }
-  auto bad = packbin::unpack(layout, std::vector<std::uint8_t>{1, 1, 2, 3});
+  auto bad = packbin::BinaryPacker::unpack(layout, std::vector<std::uint8_t>{1, 1, 2, 3});
   expect(!bad.ok, "leftover not ok");
   expect(bad.value_count() == 0, "leftover value count 0");
   expect(bad.short_packet.has_value(), "leftover short");
 }
 
 void trailing_byte() {
-  auto got = packbin::unpack(position_scheme(), parse_hex(std::string(kGoldenHex) + "99"));
+  auto got = packbin::BinaryPacker::unpack(position_scheme(), parse_hex(std::string(kGoldenHex) + "99"));
   expect(!got.ok, "trailing not ok");
   expect(got.value_count() == 0, "trailing value count 0");
   expect(got.trailing && got.trailing->left == 1, "trailing left 1");
@@ -202,8 +202,8 @@ void nfr_round_trips() {
   packbin::Values last;
   bool ok = true;
   for (int i = 0; i < 100000; ++i) {
-    auto bytes = packbin::pack(layout, vals);
-    auto got = packbin::unpack(layout, bytes);
+    auto bytes = packbin::BinaryPacker::pack(layout, vals);
+    auto got = packbin::BinaryPacker::unpack(layout, bytes);
     if (!got.ok) {
       ok = false;
       break;

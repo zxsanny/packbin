@@ -1,4 +1,4 @@
-import { flags, i16, i32, pack, scheme, u16, u8 } from "../../../typescript/src/index.ts";
+import { BinaryPacker, flags, i16, i32, scheme, u16, u8 } from "../../../typescript/src/index.ts";
 
 type Position = {
   sid: number;
@@ -10,7 +10,7 @@ type Position = {
   altitude?: number;
 };
 
-const bytes = pack(
+const bytes = BinaryPacker.pack(
   scheme<Position>(
     0x40,
     u16(0, (r) => r.sid),

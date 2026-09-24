@@ -1,5 +1,5 @@
 use packbin::{
-    eq, mismatched_bytes, pack, to_hex, unpack, BoundField, Scheme, SchemeItem, Value,
+    eq, mismatched_bytes, to_hex, BinaryPacker, BoundField, Scheme, SchemeItem, Value,
 };
 
 fn parse_hex(hex: &str) -> Vec<u8> {
@@ -96,9 +96,9 @@ fn field_id_ac1_member_names_not_wire_names() {
         hidden: None,
         delta: None,
     };
-    let bytes = pack(&marker_scheme(), &row).expect("pack");
+    let bytes = BinaryPacker::pack(&marker_scheme(), &row).expect("pack");
     assert_eq!(to_hex(&bytes), MARKER_AC1_HEX);
-    let back = unpack(&marker_scheme(), &bytes).expect("unpack");
+    let back = BinaryPacker::unpack(&marker_scheme(), &bytes).expect("unpack");
     assert_eq!(back.lat, 500_000_000);
     assert_eq!(back.sid, 1);
     assert_eq!(back.lon, 300_000_000);
@@ -138,8 +138,8 @@ fn field_id_ac2_when_uses_order() {
         hidden: None,
         delta: None,
     };
-    let bytes = pack(&marker_scheme(), &with_id).expect("pack");
-    let back = unpack(&marker_scheme(), &bytes).expect("unpack");
+    let bytes = BinaryPacker::pack(&marker_scheme(), &with_id).expect("pack");
+    let back = BinaryPacker::unpack(&marker_scheme(), &bytes).expect("unpack");
     assert_eq!(back.kind_id, Some(9));
 
     let without = MarkerRow {
@@ -152,8 +152,8 @@ fn field_id_ac2_when_uses_order() {
         hidden: None,
         delta: None,
     };
-    let bytes0 = pack(&marker_scheme(), &without).expect("pack");
-    let back0 = unpack(&marker_scheme(), &bytes0).expect("unpack");
+    let bytes0 = BinaryPacker::pack(&marker_scheme(), &without).expect("pack");
+    let back0 = BinaryPacker::unpack(&marker_scheme(), &bytes0).expect("unpack");
     assert_eq!(back0.kind_id, None);
     assert!(bytes0.len() < bytes.len());
 }
@@ -170,9 +170,9 @@ fn field_id_ac3_flags_child_accessors() {
         hidden: Some(true),
         delta: None,
     };
-    let bytes = pack(&marker_scheme(), &row).expect("pack");
+    let bytes = BinaryPacker::pack(&marker_scheme(), &row).expect("pack");
     assert_eq!(*bytes.last().unwrap(), 0x01);
-    let back = unpack(&marker_scheme(), &bytes).expect("unpack");
+    let back = BinaryPacker::unpack(&marker_scheme(), &bytes).expect("unpack");
     assert_eq!(back.hidden, Some(true));
     assert_eq!(back.delta, None);
 }
@@ -206,8 +206,8 @@ fn field_id_ac4_nested_row_ids() {
         tag: 7,
         items: vec![1, 2],
     };
-    let bytes = pack(&scheme, &row).expect("pack");
-    let back = unpack(&scheme, &bytes).expect("unpack");
+    let bytes = BinaryPacker::pack(&scheme, &row).expect("pack");
+    let back = BinaryPacker::unpack(&scheme, &bytes).expect("unpack");
     assert_eq!(back.tag, 7);
     assert_eq!(back.items, vec![1, 2]);
 }
@@ -240,7 +240,7 @@ fn field_id_ac6_ac1_bytes() {
         hidden: None,
         delta: None,
     };
-    let bytes = pack(&marker_scheme(), &row).expect("pack");
+    let bytes = BinaryPacker::pack(&marker_scheme(), &row).expect("pack");
     assert_eq!(to_hex(&bytes), MARKER_AC1_HEX);
     assert_eq!(mismatched_bytes(&bytes, &parse_hex(MARKER_AC1_HEX)), 0);
 }

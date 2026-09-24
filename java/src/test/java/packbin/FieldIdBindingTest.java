@@ -63,7 +63,7 @@ public final class FieldIdBindingTest {
     }
 
     private static void ac1MemberNamesAreNotWireNames() {
-        byte[] bytes = Pack.run(MARKER, marker());
+        byte[] bytes = BinaryPacker.pack(MARKER, marker());
         expectEq("AC-1 hex", AC1_HEX, toHex(bytes));
         expectEq("AC-1 type", 0x20, bytes[0] & 0xFF);
         int lat = (bytes[3] & 0xFF)
@@ -71,7 +71,7 @@ public final class FieldIdBindingTest {
                 | ((bytes[5] & 0xFF) << 16)
                 | ((bytes[6] & 0xFF) << 24);
         expectEq("AC-1 lat bytes", 500_000_000, lat);
-        Packbin.Bound<MarkerRow> back = Unpack.run(MARKER, bytes);
+        Packbin.Bound<MarkerRow> back = BinaryPacker.unpack(MARKER, bytes);
         expectTrue("AC-1 ok", back.ok);
         expectEq("AC-1 Lat", 500_000_000, back.value.lat);
         expectEq("AC-1 Sid", 1, back.value.sid);
@@ -84,19 +84,19 @@ public final class FieldIdBindingTest {
         withKind.sid = 1;
         withKind.kind = 1;
         withKind.kindId = 9;
-        byte[] hit = Pack.run(MARKER, withKind);
+        byte[] hit = BinaryPacker.pack(MARKER, withKind);
         int kindId = (hit[12] & 0xFF) | ((hit[13] & 0xFF) << 8);
         expectEq("AC-2 kindId bytes", 9, kindId);
-        Packbin.Bound<MarkerRow> backHit = Unpack.run(MARKER, hit);
+        Packbin.Bound<MarkerRow> backHit = BinaryPacker.unpack(MARKER, hit);
         expectTrue("AC-2 hit ok", backHit.ok);
         expectEq("AC-2 KindId", 9, backHit.value.kindId);
 
         MarkerRow without = new MarkerRow();
         without.sid = 1;
         without.kind = 0;
-        byte[] miss = Pack.run(MARKER, without);
+        byte[] miss = BinaryPacker.pack(MARKER, without);
         expectEq("AC-2 omitted", hit.length - 2, miss.length);
-        Packbin.Bound<MarkerRow> backMiss = Unpack.run(MARKER, miss);
+        Packbin.Bound<MarkerRow> backMiss = BinaryPacker.unpack(MARKER, miss);
         expectTrue("AC-2 miss ok", backMiss.ok);
         expectTrue("AC-2 KindId null", backMiss.value.kindId == null);
     }
@@ -106,9 +106,9 @@ public final class FieldIdBindingTest {
         row.sid = 1;
         row.kind = 0;
         row.hidden = true;
-        byte[] bytes = Pack.run(MARKER, row);
+        byte[] bytes = BinaryPacker.pack(MARKER, row);
         expectEq("AC-3 flag byte", 0x01, bytes[bytes.length - 1] & 0xFF);
-        Packbin.Bound<MarkerRow> back = Unpack.run(MARKER, bytes);
+        Packbin.Bound<MarkerRow> back = BinaryPacker.unpack(MARKER, bytes);
         expectTrue("AC-3 ok", back.ok);
         expectEq("AC-3 Hidden", Boolean.TRUE, back.value.hidden);
         expectTrue("AC-3 Delta null", back.value.delta == null);
@@ -126,7 +126,7 @@ public final class FieldIdBindingTest {
         PointsRow row = new PointsRow();
         row.sid = 1;
         row.points = java.util.List.of(7, 8);
-        byte[] bytes = Pack.run(scheme, row);
+        byte[] bytes = BinaryPacker.pack(scheme, row);
         expectEq("AC-4 type", 0x20, bytes[0] & 0xFF);
         expectEq("AC-4 sid", 1, (bytes[1] & 0xFF) | ((bytes[2] & 0xFF) << 8));
         expectEq("AC-4 count", 2, (bytes[3] & 0xFF) | ((bytes[4] & 0xFF) << 8));
@@ -146,9 +146,9 @@ public final class FieldIdBindingTest {
     }
 
     private static void ac6Ac1BytesStable() {
-        byte[] bytes = Pack.run(MARKER, marker());
+        byte[] bytes = BinaryPacker.pack(MARKER, marker());
         expectEq("AC-6 mismatched", 0, PackbinTest.mismatchedBytes(bytes, PackbinTest.parseHex(AC1_HEX)));
-        Packbin.Bound<MarkerRow> back = Unpack.run(MARKER, bytes);
+        Packbin.Bound<MarkerRow> back = BinaryPacker.unpack(MARKER, bytes);
         expectEq("AC-6 Lat", 500_000_000, back.value.lat);
     }
 

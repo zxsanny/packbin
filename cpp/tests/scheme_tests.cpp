@@ -53,15 +53,16 @@ std::string read_file(char const* path) {
 }
 
 std::string api_sources() {
-  char const* candidates[] = {
-      "include/packbin/packbin.hpp",
-      "cpp/include/packbin/packbin.hpp",
-      "../include/packbin/packbin.hpp",
+  char const* roots[] = {
+      "include/packbin/",
+      "cpp/include/packbin/",
+      "../include/packbin/",
   };
-  for (auto const* path : candidates) {
-    auto text = read_file(path);
-    if (!text.empty())
-      return text;
+  for (auto const* root : roots) {
+    auto main = read_file((std::string(root) + "packbin.hpp").c_str());
+    auto scheme = read_file((std::string(root) + "scheme.hpp").c_str());
+    if (!main.empty() && !scheme.empty())
+      return main + "\n" + scheme;
   }
   return {};
 }
@@ -78,14 +79,14 @@ struct PositionRow {
 };
 
 struct UserModifiedEvent {
-  std::int32_t userId = 0;
-  std::string userNameChange;
-  std::string userEmailChange;
-  std::uint8_t userStatusChange = 0;
+  std::int32_t user_id = 0;
+  std::string user_name_change;
+  std::string user_email_change;
+  std::uint8_t user_status_change = 0;
 };
 
 struct UserPositionEvent {
-  std::int32_t userId = 0;
+  std::int32_t user_id = 0;
   std::int32_t latitude = 0;
   std::int32_t longitude = 0;
 };
@@ -99,15 +100,15 @@ auto position_scheme() {
 
 auto modified_scheme() {
   return packbin::Scheme<UserModifiedEvent>(
-      1, packbin::i32(0, &UserModifiedEvent::userId),
-      packbin::utf8(1, &UserModifiedEvent::userNameChange),
-      packbin::utf8(2, &UserModifiedEvent::userEmailChange),
-      packbin::u8(3, &UserModifiedEvent::userStatusChange));
+      1, packbin::i32(0, &UserModifiedEvent::user_id),
+      packbin::utf8(1, &UserModifiedEvent::user_name_change),
+      packbin::utf8(2, &UserModifiedEvent::user_email_change),
+      packbin::u8(3, &UserModifiedEvent::user_status_change));
 }
 
 auto position_event_scheme() {
   return packbin::Scheme<UserPositionEvent>(
-      2, packbin::i32(0, &UserPositionEvent::userId),
+      2, packbin::i32(0, &UserPositionEvent::user_id),
       packbin::i32(1, &UserPositionEvent::latitude),
       packbin::i32(2, &UserPositionEvent::longitude));
 }
@@ -116,14 +117,14 @@ void ac1_scheme_replaces_packet() {
   auto source = api_sources();
   expect(!source.empty(), "AC-1 header found");
   expect(source.find("struct Packet") == std::string::npos, "AC-1 no struct Packet");
-  expect(source.find("BinaryPacker") == std::string::npos, "AC-1 no BinaryPacker");
+  expect(source.find("struct BinaryPacker") != std::string::npos, "AC-1 BinaryPacker");
   expect(source.find("TypeNum") == std::string::npos, "AC-1 no TypeNum");
   expect(source.find("type_num(") == std::string::npos, "AC-1 no type_num");
   packbin::Scheme<MarkerRow> s(32, packbin::u8(0, &MarkerRow::sid));
   expect(s.type_number == 32, "AC-1 type_number");
   MarkerRow row;
   row.sid = 23;
-  auto bytes = packbin::pack(s, row);
+  auto bytes = packbin::BinaryPacker::pack(s, row);
   expect(packbin::to_hex(bytes) == "2017", "AC-1 pack hex");
 }
 
@@ -133,7 +134,7 @@ void ac2_position_golden_no_type_member() {
   row.lat = 500000000;
   row.lon = 300000000;
   row.profile = 1;
-  auto bytes = packbin::pack(position_scheme(), row);
+  auto bytes = packbin::BinaryPacker::pack(position_scheme(), row);
   expect(packbin::to_hex(bytes) == "4001000065cd1d00a3e1110100", "AC-2 golden hex");
   auto fixture = find_golden();
   expect(!fixture.empty(), "AC-2 golden.hex found");
@@ -152,7 +153,7 @@ void ac2_position_golden_no_type_member() {
 
 void ac3_known_scheme_checks_leading_byte() {
   auto layout = packbin::Scheme<MarkerRow>(1, packbin::u8(0, &MarkerRow::sid));
-  auto got = packbin::unpack(layout, parse_hex("0217"));
+  auto got = packbin::BinaryPacker::unpack(layout, parse_hex("0217"));
   expect(!got.ok, "AC-3 not ok");
   expect(!got.value.has_value(), "AC-3 no row");
   expect(got.type_mismatch.has_value(), "AC-3 type_mismatch");
@@ -165,16 +166,16 @@ void ac3_known_scheme_checks_leading_byte() {
 
 void ac4_unknown_buffer_matching_handler() {
   UserPositionEvent row;
-  row.userId = 7;
+  row.user_id = 7;
   row.latitude = 8;
   row.longitude = 9;
-  auto bytes = packbin::pack(position_event_scheme(), row);
+  auto bytes = packbin::BinaryPacker::pack(position_event_scheme(), row);
   expect(packbin::to_hex(bytes) == "02070000000800000009000000", "AC-4 hex");
 
   int modified = 0;
   int position = 0;
   UserPositionEvent seen{};
-  auto result = packbin::unpack(
+  auto result = packbin::BinaryPacker::unpack(
       bytes, modified_scheme().on([&](UserModifiedEvent const&) { ++modified; }),
       position_event_scheme().on([&](UserPositionEvent const& ev) {
         ++position;
@@ -183,7 +184,7 @@ void ac4_unknown_buffer_matching_handler() {
   expect(result.ok, "AC-4 ok");
   expect(modified == 0, "AC-4 modified not called");
   expect(position == 1, "AC-4 position called");
-  expect(seen.userId == 7, "AC-4 userId");
+  expect(seen.user_id == 7, "AC-4 user_id");
   expect(seen.latitude == 8, "AC-4 latitude");
   expect(seen.longitude == 9, "AC-4 longitude");
 }
@@ -191,7 +192,7 @@ void ac4_unknown_buffer_matching_handler() {
 void ac5_unknown_type_number() {
   int modified = 0;
   int position = 0;
-  auto result = packbin::unpack(
+  auto result = packbin::BinaryPacker::unpack(
       std::vector<std::uint8_t>{9},
       modified_scheme().on([&](UserModifiedEvent const&) { ++modified; }),
       position_event_scheme().on([&](UserPositionEvent const&) { ++position; }));
@@ -207,9 +208,9 @@ void ac5_unknown_type_number() {
 void ac6_type_numbers_unique() {
   bool threw = false;
   try {
-    packbin::unpack(std::vector<std::uint8_t>{1},
+    packbin::BinaryPacker::unpack(std::vector<std::uint8_t>{1},
                     modified_scheme().on([](UserModifiedEvent const&) {}),
-                    packbin::Scheme<UserModifiedEvent>(1, packbin::i32(0, &UserModifiedEvent::userId))
+                    packbin::Scheme<UserModifiedEvent>(1, packbin::i32(0, &UserModifiedEvent::user_id))
                         .on([](UserModifiedEvent const&) {}));
   } catch (std::runtime_error const&) {
     threw = true;

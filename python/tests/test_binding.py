@@ -5,16 +5,15 @@ from dataclasses import dataclass
 import pytest
 
 from packbin import (
+    BinaryPacker,
     Scheme,
     bool as flag_bool,
     eq,
     flags,
     i32,
     list,
-    pack,
     u8,
     u16,
-    unpack,
     when,
 )
 
@@ -25,107 +24,107 @@ AC1_HEX = "2001000065cd1d00a3e111010000000000"
 
 @dataclass
 class MarkerRow:
-    Sid: int = 0
-    Lat: int = 0
-    Lon: int = 0
-    Kind: int = 0
-    KindId: int | None = None
-    Title: int = 0
-    Hidden: bool | None = None
-    Delta: bool | None = None
+    sid: int = 0
+    lat: int = 0
+    lon: int = 0
+    kind: int = 0
+    kind_id: int | None = None
+    title: int = 0
+    hidden: bool | None = None
+    delta: bool | None = None
 
 
 @dataclass
 class ParentRow:
-    Sid: int = 0
-    Items: list | None = None
+    sid: int = 0
+    items: list | None = None
 
 
 MARKER = Scheme(
     0x20,
     MarkerRow,
-    u16(0, *gs("Sid")),
-    i32(1, *gs("Lat")),
-    i32(2, *gs("Lon")),
-    u8(3, *gs("Kind")),
-    when(eq(3, 1), u16(4, *gs("KindId"))),
-    u16(5, *gs("Title")),
+    u16(0, *gs("sid")),
+    i32(1, *gs("lat")),
+    i32(2, *gs("lon")),
+    u8(3, *gs("kind")),
+    when(eq(3, 1), u16(4, *gs("kind_id"))),
+    u16(5, *gs("title")),
     flags(
-        flag_bool(6, *gs("Hidden")),
-        flag_bool(7, *gs("Delta")),
+        flag_bool(6, *gs("hidden")),
+        flag_bool(7, *gs("delta")),
     ),
 )
 
 
 def test_ac1_member_names_are_not_wire_names():
-    row = MarkerRow(Sid=1, Lat=500_000_000, Lon=300_000_000, Kind=1, KindId=0, Title=0)
-    raw = pack(MARKER, row)
+    row = MarkerRow(sid=1, lat=500_000_000, lon=300_000_000, kind=1, kind_id=0, title=0)
+    raw = BinaryPacker.pack(MARKER, row)
     assert raw.hex() == AC1_HEX
-    assert "Lat" not in raw.hex()
-    got = unpack(MARKER, raw)
+    assert "lat" not in raw.hex()
+    got = BinaryPacker.unpack(MARKER, raw)
     assert got.ok is True
     assert got.value is not None
-    assert got.value.Lat == 500_000_000
-    assert hasattr(got.value, "Lat")
+    assert got.value.lat == 500_000_000
+    assert hasattr(got.value, "lat")
 
 
 def test_ac1_positional_payload_bytes():
-    row = MarkerRow(Sid=1, Lat=500_000_000, Lon=300_000_000, Kind=1, KindId=0, Title=0)
-    raw = pack(MARKER, row)
+    row = MarkerRow(sid=1, lat=500_000_000, lon=300_000_000, kind=1, kind_id=0, title=0)
+    raw = BinaryPacker.pack(MARKER, row)
     assert raw.hex() == AC1_HEX
 
 
 def test_ac2_sibling_references_use_order():
-    with_kind = MarkerRow(Sid=1, Lat=0, Lon=0, Kind=1, KindId=9, Title=0)
-    raw = pack(MARKER, with_kind)
-    got = unpack(MARKER, raw)
+    with_kind = MarkerRow(sid=1, lat=0, lon=0, kind=1, kind_id=9, title=0)
+    raw = BinaryPacker.pack(MARKER, with_kind)
+    got = BinaryPacker.unpack(MARKER, raw)
     assert got.ok is True
     assert got.value is not None
-    assert got.value.KindId == 9
+    assert got.value.kind_id == 9
 
-    without = MarkerRow(Sid=1, Lat=0, Lon=0, Kind=0, Title=0)
-    raw0 = pack(MARKER, without)
-    got0 = unpack(MARKER, raw0)
+    without = MarkerRow(sid=1, lat=0, lon=0, kind=0, title=0)
+    raw0 = BinaryPacker.pack(MARKER, without)
+    got0 = BinaryPacker.unpack(MARKER, raw0)
     assert got0.ok is True
     assert got0.value is not None
-    assert got0.value.KindId is None
+    assert got0.value.kind_id is None
     assert len(raw) > len(raw0)
 
 
 def test_ac3_flags_use_child_accessors():
-    row = MarkerRow(Sid=1, Lat=0, Lon=0, Kind=0, Title=0, Hidden=True, Delta=None)
-    raw = pack(MARKER, row)
+    row = MarkerRow(sid=1, lat=0, lon=0, kind=0, title=0, hidden=True, delta=None)
+    raw = BinaryPacker.pack(MARKER, row)
     assert raw[-1] == 0x01
-    got = unpack(MARKER, raw)
+    got = BinaryPacker.unpack(MARKER, raw)
     assert got.ok is True
     assert got.value is not None
-    assert got.value.Hidden is True
-    assert got.value.Delta is None
+    assert got.value.hidden is True
+    assert got.value.delta is None
 
 
 def test_ac4_nested_row_type_has_own_ids():
     parent = Scheme(
         0x20,
         ParentRow,
-        u16(0, *gs("Sid")),
-        list(*gs("Items"), u16(0, *leaf())),
+        u16(0, *gs("sid")),
+        list(*gs("items"), u16(0, *leaf())),
     )
-    raw = pack(parent, ParentRow(Sid=1, Items=[7, 8]))
-    got = unpack(parent, raw)
+    raw = BinaryPacker.pack(parent, ParentRow(sid=1, items=[7, 8]))
+    got = BinaryPacker.unpack(parent, raw)
     assert got.ok is True
     assert got.value is not None
-    assert got.value.Sid == 1
-    assert got.value.Items == [7, 8]
+    assert got.value.sid == 1
+    assert got.value.items == [7, 8]
 
 
 def test_ac5_order_must_match_the_number():
     with pytest.raises(ValueError):
-        Scheme(1, MarkerRow, i32(2, *gs("Lat")))
+        Scheme(1, MarkerRow, i32(2, *gs("lat")))
 
 
 def test_ac6_ac1_bytes_match():
-    row = MarkerRow(Sid=1, Lat=500_000_000, Lon=300_000_000, Kind=1, KindId=0, Title=0)
-    raw = pack(MARKER, row)
+    row = MarkerRow(sid=1, lat=500_000_000, lon=300_000_000, kind=1, kind_id=0, title=0)
+    raw = BinaryPacker.pack(MARKER, row)
     expected = bytes.fromhex(AC1_HEX)
     mismatched = sum(1 for a, b in zip(raw, expected, strict=True) if a != b) + abs(len(raw) - len(expected))
     assert mismatched == 0

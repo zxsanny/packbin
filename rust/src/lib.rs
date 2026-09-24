@@ -8,7 +8,7 @@ pub use field::{
     repeat, sized, u16, u2, u32, u64, u8, utf8, when, Eq, Field, FieldKey, FlagByte, MapScheme,
 };
 pub use scheme::{
-    pack, unpack, unpack_with, BoundField, DispatchHandler, On, Scheme, SchemeItem,
+    BinaryPacker, BoundField, DispatchHandler, On, Scheme, SchemeItem,
 };
 pub use value::{
     insert, mismatched_bytes, motion_field_count, to_hex, Name, PackError, ShortPacket, UnpackError,

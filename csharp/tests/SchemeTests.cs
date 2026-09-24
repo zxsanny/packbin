@@ -7,64 +7,64 @@ public class SchemeTests
 {
     public sealed class MarkerRow
     {
-        public byte sid { get; set; }
+        public byte Sid { get; set; }
     }
 
     public sealed class UserModifiedEvent
     {
-        public int userId { get; set; }
-        public string userNameChange { get; set; } = "";
-        public string userEmailChange { get; set; } = "";
-        public byte userStatusChange { get; set; }
+        public int UserId { get; set; }
+        public string UserNameChange { get; set; } = "";
+        public string UserEmailChange { get; set; } = "";
+        public byte UserStatusChange { get; set; }
     }
 
     public sealed class UserPositionEvent
     {
-        public int userId { get; set; }
-        public int latitude { get; set; }
-        public int longitude { get; set; }
+        public int UserId { get; set; }
+        public int Latitude { get; set; }
+        public int Longitude { get; set; }
     }
 
     public sealed class PositionRow
     {
-        public ushort sid { get; set; }
-        public int lat { get; set; }
-        public int lon { get; set; }
-        public byte profile { get; set; }
-        public ushort? heading { get; set; }
-        public byte? speed { get; set; }
-        public short? altitude { get; set; }
+        public ushort Sid { get; set; }
+        public int Lat { get; set; }
+        public int Lon { get; set; }
+        public byte Profile { get; set; }
+        public ushort? Heading { get; set; }
+        public byte? Speed { get; set; }
+        public short? Altitude { get; set; }
     }
 
-    private static readonly Scheme<MarkerRow> MarkerScheme = new(32, Field.U8<MarkerRow>(0, x => x.sid));
+    private static readonly Scheme<MarkerRow> MarkerScheme = new(32, f => [f.U8(0, x => x.Sid)]);
 
-    private static readonly Scheme<UserModifiedEvent> ModifiedScheme = new(1,
-        Field.I32<UserModifiedEvent>(0, x => x.userId),
-        Field.Utf8<UserModifiedEvent>(1, x => x.userNameChange),
-        Field.Utf8<UserModifiedEvent>(2, x => x.userEmailChange),
-        Field.U8<UserModifiedEvent>(3, x => x.userStatusChange));
+    private static readonly Scheme<UserModifiedEvent> ModifiedScheme = new(1, f => [
+        f.I32(0, x => x.UserId),
+        f.Utf8(1, x => x.UserNameChange),
+        f.Utf8(2, x => x.UserEmailChange),
+        f.U8(3, x => x.UserStatusChange)]);
 
-    private static readonly Scheme<UserPositionEvent> PositionEventScheme = new(2,
-        Field.I32<UserPositionEvent>(0, x => x.userId),
-        Field.I32<UserPositionEvent>(1, x => x.latitude),
-        Field.I32<UserPositionEvent>(2, x => x.longitude));
+    private static readonly Scheme<UserPositionEvent> PositionEventScheme = new(2, f => [
+        f.I32(0, x => x.UserId),
+        f.I32(1, x => x.Latitude),
+        f.I32(2, x => x.Longitude)]);
 
-    private static readonly Scheme<PositionRow> PositionScheme = new(0x40,
-        Field.U16<PositionRow>(0, x => x.sid),
-        Field.I32<PositionRow>(1, x => x.lat),
-        Field.I32<PositionRow>(2, x => x.lon),
-        Field.U8<PositionRow>(3, x => x.profile),
-        Field.Flags(
-            Field.U16<PositionRow>(4, x => x.heading),
-            Field.U8<PositionRow>(5, x => x.speed),
-            Field.I16<PositionRow>(6, x => x.altitude)));
+    private static readonly Scheme<PositionRow> PositionScheme = new(0x40, f => [
+        f.U16(0, x => x.Sid),
+        f.I32(1, x => x.Lat),
+        f.I32(2, x => x.Lon),
+        f.U8(3, x => x.Profile),
+        f.Flags(
+            f.U16(4, x => x.Heading),
+            f.U8(5, x => x.Speed),
+            f.I16(6, x => x.Altitude))]);
 
     private static readonly Dictionary<string, object?> PositionValues = new()
     {
-        ["sid"] = (ushort)1,
-        ["lat"] = 500_000_000,
-        ["lon"] = 300_000_000,
-        ["profile"] = (byte)1,
+        ["Sid"] = (ushort)1,
+        ["Lat"] = 500_000_000,
+        ["Lon"] = 300_000_000,
+        ["Profile"] = (byte)1,
     };
 
     private const string GoldenHex = "4001000065cd1d00a3e1110100";
@@ -74,40 +74,40 @@ public class SchemeTests
     public void Ac1_SchemeReplacesPacket()
     {
         Assert.Null(typeof(Packbin.Scheme<MarkerRow>).Assembly.GetType("Packbin.Packet"));
-        Assert.Null(typeof(Packbin.Scheme<MarkerRow>).Assembly.GetType("Packbin.BinaryPacker"));
+        Assert.NotNull(typeof(Packbin.Scheme<MarkerRow>).Assembly.GetType("Packbin.BinaryPacker"));
         Assert.Null(typeof(Packbin.Scheme<MarkerRow>).Assembly.GetType("Packbin.TypeNum"));
-        var scheme = new Scheme<MarkerRow>(32, Field.U8<MarkerRow>(0, x => x.sid));
+        var scheme = new Scheme<MarkerRow>(32, Field.U8<MarkerRow>(0, x => x.Sid));
         Assert.Equal(32, scheme.TypeNumber);
         Assert.Single(scheme.Fields);
-        Assert.ThrowsAny<ArgumentException>(() => new Scheme<MarkerRow>(-1, Field.U8<MarkerRow>(0, x => x.sid)));
-        Assert.ThrowsAny<ArgumentException>(() => new Scheme<MarkerRow>(256, Field.U8<MarkerRow>(0, x => x.sid)));
-        var bytes = Pack.Run(scheme, new MarkerRow { sid = 23 });
+        Assert.ThrowsAny<ArgumentException>(() => new Scheme<MarkerRow>(-1, Field.U8<MarkerRow>(0, x => x.Sid)));
+        Assert.ThrowsAny<ArgumentException>(() => new Scheme<MarkerRow>(256, Field.U8<MarkerRow>(0, x => x.Sid)));
+        var bytes = BinaryPacker.Pack(scheme, new MarkerRow { Sid = 23 });
         Assert.Equal("2017", Convert.ToHexString(bytes).ToLowerInvariant());
     }
 
     [Fact]
     public void Ac2_RowHasNoTypeMember()
     {
-        var bytes = Pack.Run(PositionScheme, PositionValues);
+        var bytes = BinaryPacker.Pack(PositionScheme, PositionValues);
         Assert.Equal(GoldenHex, Convert.ToHexString(bytes).ToLowerInvariant());
         var fixture = ParseHex(File.ReadAllText(FindGoldenFixture()).Trim());
         Assert.Equal(0, MismatchedBytes(bytes, fixture));
         Assert.Null(typeof(PositionRow).GetProperty("type"));
         Assert.Null(typeof(PositionRow).GetField("type"));
-        var back = Unpack.Run(PositionScheme, bytes);
+        var back = BinaryPacker.Unpack(PositionScheme, bytes);
         Assert.True(back.Ok);
         Assert.NotNull(back.Value);
-        Assert.Equal((ushort)1, back.Value.sid);
-        Assert.Equal(500_000_000, back.Value.lat);
-        Assert.Equal(300_000_000, back.Value.lon);
-        Assert.Equal((byte)1, back.Value.profile);
+        Assert.Equal((ushort)1, back.Value.Sid);
+        Assert.Equal(500_000_000, back.Value.Lat);
+        Assert.Equal(300_000_000, back.Value.Lon);
+        Assert.Equal((byte)1, back.Value.Profile);
     }
 
     [Fact]
     public void Ac3_KnownSchemeChecksLeadingByte()
     {
-        var scheme = new Scheme<MarkerRow>(1, Field.U8<MarkerRow>(0, x => x.sid));
-        var back = Unpack.Run(scheme, ParseHex("0217"));
+        var scheme = new Scheme<MarkerRow>(1, Field.U8<MarkerRow>(0, x => x.Sid));
+        var back = BinaryPacker.Unpack(scheme, ParseHex("0217"));
         Assert.False(back.Ok);
         Assert.Null(back.Value);
         var mismatch = Assert.IsType<TypeMismatch>(back.Error);
@@ -120,23 +120,23 @@ public class SchemeTests
     {
         UserModifiedEvent? modified = null;
         UserPositionEvent? position = null;
-        var err = Unpack.Run(
+        var err = BinaryPacker.Unpack(
             ParseHex(Ac4Hex),
             ModifiedScheme.On(ev => modified = ev),
             PositionEventScheme.On(ev => position = ev));
         Assert.Null(err);
         Assert.Null(modified);
         Assert.NotNull(position);
-        Assert.Equal(7, position.userId);
-        Assert.Equal(8, position.latitude);
-        Assert.Equal(9, position.longitude);
+        Assert.Equal(7, position.UserId);
+        Assert.Equal(8, position.Latitude);
+        Assert.Equal(9, position.Longitude);
         Assert.Null(typeof(UserPositionEvent).GetProperty("type"));
         Assert.Null(typeof(UserPositionEvent).GetField("type"));
-        var packed = Pack.Run(PositionEventScheme, new UserPositionEvent
+        var packed = BinaryPacker.Pack(PositionEventScheme, new UserPositionEvent
         {
-            userId = 7,
-            latitude = 8,
-            longitude = 9,
+            UserId = 7,
+            Latitude = 8,
+            Longitude = 9,
         });
         Assert.Equal(Ac4Hex, Convert.ToHexString(packed).ToLowerInvariant());
     }
@@ -146,7 +146,7 @@ public class SchemeTests
     {
         var modifiedRan = false;
         var positionRan = false;
-        var err = Unpack.Run(
+        var err = BinaryPacker.Unpack(
             ParseHex("09070000000800000009000000"),
             ModifiedScheme.On(_ => modifiedRan = true),
             PositionEventScheme.On(_ => positionRan = true));
@@ -160,12 +160,12 @@ public class SchemeTests
     public void Ac6_TypeNumbersInOneCallAreUnique()
     {
         var other = new Scheme<UserModifiedEvent>(1,
-            Field.I32<UserModifiedEvent>(0, x => x.userId),
-            Field.Utf8<UserModifiedEvent>(1, x => x.userNameChange),
-            Field.Utf8<UserModifiedEvent>(2, x => x.userEmailChange),
-            Field.U8<UserModifiedEvent>(3, x => x.userStatusChange));
+            Field.I32<UserModifiedEvent>(0, x => x.UserId),
+            Field.Utf8<UserModifiedEvent>(1, x => x.UserNameChange),
+            Field.Utf8<UserModifiedEvent>(2, x => x.UserEmailChange),
+            Field.U8<UserModifiedEvent>(3, x => x.UserStatusChange));
         Assert.ThrowsAny<ArgumentException>(() =>
-            Unpack.Run(
+            BinaryPacker.Unpack(
                 ParseHex(Ac4Hex),
                 ModifiedScheme.On(_ => { }),
                 other.On(_ => { })));
@@ -174,7 +174,7 @@ public class SchemeTests
     [Fact]
     public void EmptyBufferIsShortPacket()
     {
-        var back = Unpack.Run(MarkerScheme, ReadOnlySpan<byte>.Empty);
+        var back = BinaryPacker.Unpack(MarkerScheme, ReadOnlySpan<byte>.Empty);
         Assert.False(back.Ok);
         Assert.Null(back.Value);
         var missing = Assert.IsType<ShortPacket>(back.Error);

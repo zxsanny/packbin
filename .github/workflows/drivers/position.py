@@ -1,9 +1,9 @@
-from packbin import Scheme, flags, i16, i32, pack, u8, u16
+from packbin import BinaryPacker, Scheme, flags, i16, i32, u8, u16
 
 def gs(key):
     return (lambda r, k=key: r.get(k), lambda r, v, k=key: r.__setitem__(k, v))
 
-raw = pack(
+raw = BinaryPacker.pack(
     Scheme(
         0x40,
         dict,

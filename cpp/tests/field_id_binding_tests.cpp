@@ -29,94 +29,94 @@ std::vector<std::uint8_t> parse_hex(std::string hex) {
 constexpr char const* kAc1Hex = "2001000065cd1d00a3e111010000000000";
 
 struct MarkerRow {
-  std::uint16_t Sid = 0;
-  std::int32_t Lat = 0;
-  std::int32_t Lon = 0;
-  std::uint8_t Kind = 0;
-  std::optional<std::uint16_t> KindId;
-  std::uint16_t Title = 0;
-  std::optional<bool> Hidden;
-  std::optional<bool> Delta;
+  std::uint16_t sid = 0;
+  std::int32_t lat = 0;
+  std::int32_t lon = 0;
+  std::uint8_t kind = 0;
+  std::optional<std::uint16_t> kind_id;
+  std::uint16_t title = 0;
+  std::optional<bool> hidden;
+  std::optional<bool> delta;
 };
 
 struct PointsRow {
-  std::uint16_t Sid = 0;
-  std::vector<std::uint16_t> Points;
+  std::uint16_t sid = 0;
+  std::vector<std::uint16_t> points;
 };
 
 auto marker_scheme() {
   return packbin::Scheme<MarkerRow>(
-      0x20, packbin::u16(0, &MarkerRow::Sid), packbin::i32(1, &MarkerRow::Lat),
-      packbin::i32(2, &MarkerRow::Lon), packbin::u8(3, &MarkerRow::Kind),
+      0x20, packbin::u16(0, &MarkerRow::sid), packbin::i32(1, &MarkerRow::lat),
+      packbin::i32(2, &MarkerRow::lon), packbin::u8(3, &MarkerRow::kind),
       packbin::when(packbin::eq(3, packbin::Value{std::uint8_t{1}}),
-                    {packbin::u16(4, &MarkerRow::KindId)}),
-      packbin::u16(5, &MarkerRow::Title),
-      packbin::flags({packbin::boolean(6, &MarkerRow::Hidden),
-                      packbin::boolean(7, &MarkerRow::Delta)}));
+                    {packbin::u16(4, &MarkerRow::kind_id)}),
+      packbin::u16(5, &MarkerRow::title),
+      packbin::flags({packbin::boolean(6, &MarkerRow::hidden),
+                      packbin::boolean(7, &MarkerRow::delta)}));
 }
 
 void ac1_member_names_are_not_wire_names() {
   MarkerRow row;
-  row.Sid = 1;
-  row.Lat = 500000000;
-  row.Lon = 300000000;
-  row.Kind = 1;
-  row.KindId = 0;
-  row.Title = 0;
-  auto bytes = packbin::pack(marker_scheme(), row);
+  row.sid = 1;
+  row.lat = 500000000;
+  row.lon = 300000000;
+  row.kind = 1;
+  row.kind_id = 0;
+  row.title = 0;
+  auto bytes = packbin::BinaryPacker::pack(marker_scheme(), row);
   expect(packbin::to_hex(bytes) == kAc1Hex, "AC-1 hex");
   expect(bytes[0] == 0x20, "AC-1 type 0x20");
   expect(bytes.size() == 17, "AC-1 length");
   std::int32_t lat = 0;
   std::memcpy(&lat, bytes.data() + 3, 4);
   expect(lat == 500000000, "AC-1 lat bytes");
-  auto back = packbin::unpack(marker_scheme(), bytes);
+  auto back = packbin::BinaryPacker::unpack(marker_scheme(), bytes);
   expect(back.ok && back.value.has_value(), "AC-1 unpack ok");
-  expect(back.value->Lat == 500000000, "AC-1 Lat");
-  expect(back.value->Sid == 1, "AC-1 Sid");
-  expect(back.value->Lon == 300000000, "AC-1 Lon");
-  expect(back.value->Kind == 1, "AC-1 Kind");
+  expect(back.value->lat == 500000000, "AC-1 lat");
+  expect(back.value->sid == 1, "AC-1 sid");
+  expect(back.value->lon == 300000000, "AC-1 lon");
+  expect(back.value->kind == 1, "AC-1 kind");
 }
 
 void ac2_sibling_references_use_order() {
   MarkerRow with_kind;
-  with_kind.Sid = 1;
-  with_kind.Kind = 1;
-  with_kind.KindId = 9;
-  auto hit = packbin::pack(marker_scheme(), with_kind);
-  auto back_hit = packbin::unpack(marker_scheme(), hit);
-  expect(back_hit.ok && back_hit.value && back_hit.value->KindId == 9, "AC-2 KindId 9");
+  with_kind.sid = 1;
+  with_kind.kind = 1;
+  with_kind.kind_id = 9;
+  auto hit = packbin::BinaryPacker::pack(marker_scheme(), with_kind);
+  auto back_hit = packbin::BinaryPacker::unpack(marker_scheme(), hit);
+  expect(back_hit.ok && back_hit.value && back_hit.value->kind_id == 9, "AC-2 kind_id 9");
 
   MarkerRow without;
-  without.Sid = 1;
-  without.Kind = 0;
-  auto miss = packbin::pack(marker_scheme(), without);
-  expect(hit.size() == miss.size() + 2, "AC-2 KindId width");
-  auto back_miss = packbin::unpack(marker_scheme(), miss);
-  expect(back_miss.ok && back_miss.value && !back_miss.value->KindId.has_value(),
-         "AC-2 KindId absent");
+  without.sid = 1;
+  without.kind = 0;
+  auto miss = packbin::BinaryPacker::pack(marker_scheme(), without);
+  expect(hit.size() == miss.size() + 2, "AC-2 kind_id width");
+  auto back_miss = packbin::BinaryPacker::unpack(marker_scheme(), miss);
+  expect(back_miss.ok && back_miss.value && !back_miss.value->kind_id.has_value(),
+         "AC-2 kind_id absent");
 }
 
 void ac3_flags_use_child_accessors() {
   MarkerRow row;
-  row.Sid = 1;
-  row.Hidden = true;
-  row.Delta = std::nullopt;
-  auto bytes = packbin::pack(marker_scheme(), row);
+  row.sid = 1;
+  row.hidden = true;
+  row.delta = std::nullopt;
+  auto bytes = packbin::BinaryPacker::pack(marker_scheme(), row);
   expect(bytes.back() == 0x01, "AC-3 flag byte");
-  auto back = packbin::unpack(marker_scheme(), bytes);
+  auto back = packbin::BinaryPacker::unpack(marker_scheme(), bytes);
   expect(back.ok && back.value, "AC-3 unpack");
-  expect(back.value->Hidden == true, "AC-3 Hidden");
-  expect(!back.value->Delta.has_value(), "AC-3 Delta null");
+  expect(back.value->hidden == true, "AC-3 hidden");
+  expect(!back.value->delta.has_value(), "AC-3 delta null");
 }
 
 void ac4_nested_row_type_has_own_ids() {
-  auto scheme = packbin::Scheme<PointsRow>(0x20, packbin::u16(0, &PointsRow::Sid),
-                                           packbin::list(&PointsRow::Points, packbin::u16(0)));
+  auto scheme = packbin::Scheme<PointsRow>(0x20, packbin::u16(0, &PointsRow::sid),
+                                           packbin::list(&PointsRow::points, packbin::u16(0)));
   PointsRow row;
-  row.Sid = 1;
-  row.Points = {7, 8};
-  auto bytes = packbin::pack(scheme, row);
+  row.sid = 1;
+  row.points = {7, 8};
+  auto bytes = packbin::BinaryPacker::pack(scheme, row);
   expect(bytes[0] == 0x20, "AC-4 type");
   expect(bytes.size() == 9, "AC-4 length");
   std::uint16_t sid = 0;
@@ -135,19 +135,19 @@ void ac5_order_must_match_the_number() {
   bool dup = false;
   bool skip = false;
   try {
-    packbin::Scheme<MarkerRow>(0x20, packbin::i32(2, &MarkerRow::Lat));
+    packbin::Scheme<MarkerRow>(0x20, packbin::i32(2, &MarkerRow::lat));
   } catch (std::runtime_error const&) {
     gap = true;
   }
   try {
-    packbin::Scheme<MarkerRow>(0x20, packbin::u16(0, &MarkerRow::Sid),
-                               packbin::i32(0, &MarkerRow::Lat));
+    packbin::Scheme<MarkerRow>(0x20, packbin::u16(0, &MarkerRow::sid),
+                               packbin::i32(0, &MarkerRow::lat));
   } catch (std::runtime_error const&) {
     dup = true;
   }
   try {
-    packbin::Scheme<MarkerRow>(0x20, packbin::u16(0, &MarkerRow::Sid),
-                               packbin::i32(2, &MarkerRow::Lat));
+    packbin::Scheme<MarkerRow>(0x20, packbin::u16(0, &MarkerRow::sid),
+                               packbin::i32(2, &MarkerRow::lat));
   } catch (std::runtime_error const&) {
     skip = true;
   }
@@ -156,16 +156,16 @@ void ac5_order_must_match_the_number() {
 
 void ac6_ac1_bytes_stable() {
   MarkerRow row;
-  row.Sid = 1;
-  row.Lat = 500000000;
-  row.Lon = 300000000;
-  row.Kind = 1;
-  row.KindId = 0;
-  row.Title = 0;
-  auto bytes = packbin::pack(marker_scheme(), row);
+  row.sid = 1;
+  row.lat = 500000000;
+  row.lon = 300000000;
+  row.kind = 1;
+  row.kind_id = 0;
+  row.title = 0;
+  auto bytes = packbin::BinaryPacker::pack(marker_scheme(), row);
   expect(packbin::mismatched_bytes(bytes, parse_hex(kAc1Hex)) == 0, "AC-6 mismatched 0");
-  auto back = packbin::unpack(marker_scheme(), bytes);
-  expect(back.ok && back.value && back.value->Lat == 500000000, "AC-6 Lat");
+  auto back = packbin::BinaryPacker::unpack(marker_scheme(), bytes);
+  expect(back.ok && back.value && back.value->lat == 500000000, "AC-6 lat");
 }
 
 }  // namespace

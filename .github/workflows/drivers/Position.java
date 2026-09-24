@@ -1,7 +1,7 @@
 import java.util.HashMap;
 import java.util.Map;
 import packbin.Access;
-import packbin.Pack;
+import packbin.BinaryPacker;
 import packbin.Packbin;
 import packbin.Scheme;
 
@@ -24,7 +24,7 @@ public final class Position {
         values.put("lat", 500_000_000);
         values.put("lon", 300_000_000);
         values.put("profile", 1);
-        byte[] raw = Pack.run(scheme, values);
+        byte[] raw = BinaryPacker.pack(scheme, values);
         StringBuilder hex = new StringBuilder();
         for (byte b : raw) {
             hex.append(String.format("%02x", b));

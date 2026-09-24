@@ -10,10 +10,9 @@ from packbin import (
     flags,
     i16,
     i32,
-    pack,
+    BinaryPacker,
     u8,
     u16,
-    unpack,
 )
 
 from _bind import gs
@@ -56,16 +55,16 @@ def _mismatched_bytes(actual: bytes, expected_hex: str) -> int:
 
 
 def test_ac1_position_pack():
-    raw = pack(POSITION, POSITION_VALUES)
+    raw = BinaryPacker.pack(POSITION, POSITION_VALUES)
     assert _hex(raw) == POSITION_HEX
     assert _mismatched_bytes(raw, POSITION_HEX) == 0
     assert len(raw) == 13
-    again = pack(POSITION, POSITION_VALUES)
+    again = BinaryPacker.pack(POSITION, POSITION_VALUES)
     assert _mismatched_bytes(again, _hex(raw)) == 0
 
 
 def test_ac2_position_unpack():
-    got = unpack(POSITION, bytes.fromhex(POSITION_HEX))
+    got = BinaryPacker.unpack(POSITION, bytes.fromhex(POSITION_HEX))
     assert got.ok is True
     assert got.value is not None
     assert "type" not in got.value
@@ -82,7 +81,7 @@ def test_ac2_position_unpack():
 
 
 def test_ac3_bytes_match_fixture():
-    raw = pack(POSITION, POSITION_VALUES)
+    raw = BinaryPacker.pack(POSITION, POSITION_VALUES)
     assert _mismatched_bytes(raw, GOLDEN_HEX) == 0
     assert GOLDEN_HEX == POSITION_HEX
 
@@ -100,21 +99,21 @@ def test_ac4_flags_and_stored_zero():
             u16(5, *gs("b5")),
         ),
     )
-    clear = pack(layout, {})
+    clear = BinaryPacker.pack(layout, {})
     assert clear[1] == 0x00
     assert len(clear) == 2
 
-    set_bit = pack(layout, {"b5": 0x1234})
+    set_bit = BinaryPacker.pack(layout, {"b5": 0x1234})
     assert set_bit[1] == 0x20
     assert len(set_bit) == 4
     assert len(set_bit) - len(clear) == 2
 
-    present_zero = pack(layout, {"b5": 0})
+    present_zero = BinaryPacker.pack(layout, {"b5": 0})
     assert present_zero[1] == 0x20
     assert present_zero[2:] == b"\x00\x00"
     assert len(present_zero) == 4
 
-    absent = pack(layout, {})
+    absent = BinaryPacker.pack(layout, {})
     assert absent[1] == 0x00
     assert len(absent) == 2
     assert absent != present_zero
@@ -134,7 +133,7 @@ def test_ac5_short_field_then_position_pack():
         ),
     )
     short = bytes([0x40, 0x20, 0x34])
-    got = unpack(layout, short)
+    got = BinaryPacker.unpack(layout, short)
     assert got.ok is False
     assert got.value is None
     assert isinstance(got.error, ShortPacket)
@@ -142,14 +141,14 @@ def test_ac5_short_field_then_position_pack():
     assert got.needed == 2
     assert got.left == 1
 
-    raw = pack(POSITION, POSITION_VALUES)
+    raw = BinaryPacker.pack(POSITION, POSITION_VALUES)
     assert _hex(raw) == GOLDEN_HEX
     assert _mismatched_bytes(raw, GOLDEN_HEX) == 0
 
 
 def test_trailing_bytes():
-    raw = pack(POSITION, POSITION_VALUES) + b"\x00"
-    got = unpack(POSITION, raw)
+    raw = BinaryPacker.pack(POSITION, POSITION_VALUES) + b"\x00"
+    got = BinaryPacker.unpack(POSITION, raw)
     assert got.ok is False
     assert got.value is None
     assert isinstance(got.error, TrailingBytes)
@@ -159,8 +158,8 @@ def test_trailing_bytes():
 def test_nfr_round_trips():
     start = time.perf_counter()
     for _ in range(100_000):
-        raw = pack(POSITION, POSITION_VALUES)
-        got = unpack(POSITION, raw)
+        raw = BinaryPacker.pack(POSITION, POSITION_VALUES)
+        got = BinaryPacker.unpack(POSITION, raw)
         assert got.ok is True
     elapsed = time.perf_counter() - start
     _assert_no_gpu()

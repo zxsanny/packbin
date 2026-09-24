@@ -8,79 +8,79 @@ public class PackbinTests
 {
     private sealed class FlagWideRow
     {
-        public byte? b0 { get; set; }
-        public byte? b1 { get; set; }
-        public byte? b2 { get; set; }
-        public byte? b3 { get; set; }
-        public byte? b4 { get; set; }
-        public ushort? wide { get; set; }
+        public byte? B0 { get; set; }
+        public byte? B1 { get; set; }
+        public byte? B2 { get; set; }
+        public byte? B3 { get; set; }
+        public byte? B4 { get; set; }
+        public ushort? Wide { get; set; }
     }
 
     public static readonly Scheme<PositionRow> Target = new(0x40,
-        Field.U16<PositionRow>(0, x => x.sid),
-        Field.I32<PositionRow>(1, x => x.lat),
-        Field.I32<PositionRow>(2, x => x.lon),
-        Field.U8<PositionRow>(3, x => x.profile),
+        Field.U16<PositionRow>(0, x => x.Sid),
+        Field.I32<PositionRow>(1, x => x.Lat),
+        Field.I32<PositionRow>(2, x => x.Lon),
+        Field.U8<PositionRow>(3, x => x.Profile),
         Field.Flags(
-            Field.U16<PositionRow>(4, x => x.heading),
-            Field.U8<PositionRow>(5, x => x.speed),
-            Field.I16<PositionRow>(6, x => x.altitude)));
+            Field.U16<PositionRow>(4, x => x.Heading),
+            Field.U8<PositionRow>(5, x => x.Speed),
+            Field.I16<PositionRow>(6, x => x.Altitude)));
 
     private static readonly Dictionary<string, object?> Position = new()
     {
-        ["sid"] = (ushort)1,
-        ["lat"] = 500_000_000,
-        ["lon"] = 300_000_000,
-        ["profile"] = (byte)1,
+        ["Sid"] = (ushort)1,
+        ["Lat"] = 500_000_000,
+        ["Lon"] = 300_000_000,
+        ["Profile"] = (byte)1,
     };
 
     private const string GoldenHex = "4001000065cd1d00a3e1110100";
 
     public sealed class PositionRow
     {
-        public ushort sid { get; set; }
-        public int lat { get; set; }
-        public int lon { get; set; }
-        public byte profile { get; set; }
-        public ushort? heading { get; set; }
-        public byte? speed { get; set; }
-        public short? altitude { get; set; }
+        public ushort Sid { get; set; }
+        public int Lat { get; set; }
+        public int Lon { get; set; }
+        public byte Profile { get; set; }
+        public ushort? Heading { get; set; }
+        public byte? Speed { get; set; }
+        public short? Altitude { get; set; }
     }
 
     [Fact]
     public void Ac1_PositionPack()
     {
-        var bytes = Pack.Run(Target, Position);
+        var bytes = BinaryPacker.Pack(Target, Position);
         var hex = Convert.ToHexString(bytes).ToLowerInvariant();
         var mismatched = MismatchedBytes(bytes, ParseHex(GoldenHex));
         Assert.Equal(GoldenHex, hex);
         Assert.Equal(0, mismatched);
         Assert.Equal(13, bytes.Length);
-        var again = Pack.Run(Target, Position);
+        var again = BinaryPacker.Pack(Target, Position);
         Assert.Equal(0, MismatchedBytes(bytes, again));
     }
 
     [Fact]
     public void Ac2_PositionUnpack()
     {
-        var got = Unpack.Read(Target, ParseHex(GoldenHex));
+        var got = BinaryPacker.Read(Target, ParseHex(GoldenHex));
         Assert.Null(got.Error);
-        Assert.Equal((ushort)1, Convert.ToUInt16(got.Values["sid"]!, CultureInfo.InvariantCulture));
-        Assert.Equal(500_000_000, Convert.ToInt32(got.Values["lat"]!, CultureInfo.InvariantCulture));
-        Assert.Equal(300_000_000, Convert.ToInt32(got.Values["lon"]!, CultureInfo.InvariantCulture));
-        Assert.Equal((byte)1, Convert.ToByte(got.Values["profile"]!, CultureInfo.InvariantCulture));
+        Assert.Equal((ushort)1, Convert.ToUInt16(got.Values["Sid"]!, CultureInfo.InvariantCulture));
+        Assert.Equal(500_000_000, Convert.ToInt32(got.Values["Lat"]!, CultureInfo.InvariantCulture));
+        Assert.Equal(300_000_000, Convert.ToInt32(got.Values["Lon"]!, CultureInfo.InvariantCulture));
+        Assert.Equal((byte)1, Convert.ToByte(got.Values["Profile"]!, CultureInfo.InvariantCulture));
         Assert.False(got.Values.ContainsKey("type"));
         var motionFields = 0;
-        if (got.Values.ContainsKey("heading")) motionFields++;
-        if (got.Values.ContainsKey("speed")) motionFields++;
-        if (got.Values.ContainsKey("altitude")) motionFields++;
+        if (got.Values.ContainsKey("Heading")) motionFields++;
+        if (got.Values.ContainsKey("Speed")) motionFields++;
+        if (got.Values.ContainsKey("Altitude")) motionFields++;
         Assert.Equal(0, motionFields);
     }
 
     [Fact]
     public void Ac3_BytesMatchFixture()
     {
-        var bytes = Pack.Run(Target, Position);
+        var bytes = BinaryPacker.Pack(Target, Position);
         var fixture = ParseHex(File.ReadAllText(FindGoldenFixture()).Trim());
         Assert.Equal(0, MismatchedBytes(bytes, fixture));
     }
@@ -90,30 +90,30 @@ public class PackbinTests
     {
         var scheme = new Scheme<FlagWideRow>(1,
             Field.Flags(
-                Field.U8<FlagWideRow>(0, x => x.b0),
-                Field.U8<FlagWideRow>(1, x => x.b1),
-                Field.U8<FlagWideRow>(2, x => x.b2),
-                Field.U8<FlagWideRow>(3, x => x.b3),
-                Field.U8<FlagWideRow>(4, x => x.b4),
-                Field.U16<FlagWideRow>(5, x => x.wide)));
+                Field.U8<FlagWideRow>(0, x => x.B0),
+                Field.U8<FlagWideRow>(1, x => x.B1),
+                Field.U8<FlagWideRow>(2, x => x.B2),
+                Field.U8<FlagWideRow>(3, x => x.B3),
+                Field.U8<FlagWideRow>(4, x => x.B4),
+                Field.U16<FlagWideRow>(5, x => x.Wide)));
 
-        var clear = Pack.Run(scheme, new Dictionary<string, object?>());
+        var clear = BinaryPacker.Pack(scheme, new Dictionary<string, object?>());
         Assert.Equal(2, clear.Length);
         Assert.Equal(0x01, clear[0]);
         Assert.Equal(0x00, clear[1]);
 
-        var setBit5 = Pack.Run(scheme, new Dictionary<string, object?>
+        var setBit5 = BinaryPacker.Pack(scheme, new Dictionary<string, object?>
         {
-            ["wide"] = (ushort)0x1234,
+            ["Wide"] = (ushort)0x1234,
         });
         Assert.Equal(4, setBit5.Length);
         Assert.Equal(0x01, setBit5[0]);
         Assert.Equal(0x20, setBit5[1]);
         Assert.Equal(2, setBit5.Length - clear.Length);
 
-        var presentZero = Pack.Run(scheme, new Dictionary<string, object?>
+        var presentZero = BinaryPacker.Pack(scheme, new Dictionary<string, object?>
         {
-            ["wide"] = (ushort)0,
+            ["Wide"] = (ushort)0,
         });
         Assert.Equal(4, presentZero.Length);
         Assert.Equal(0x01, presentZero[0]);
@@ -121,7 +121,7 @@ public class PackbinTests
         Assert.Equal(0x00, presentZero[2]);
         Assert.Equal(0x00, presentZero[3]);
 
-        var absent = Pack.Run(scheme, new Dictionary<string, object?>());
+        var absent = BinaryPacker.Pack(scheme, new Dictionary<string, object?>());
         Assert.Equal(2, absent.Length);
         Assert.Equal(0x01, absent[0]);
         Assert.Equal(0x00, absent[1]);
@@ -132,20 +132,20 @@ public class PackbinTests
     {
         var scheme = new Scheme<FlagWideRow>(1,
             Field.Flags(
-                Field.U8<FlagWideRow>(0, x => x.b0),
-                Field.U8<FlagWideRow>(1, x => x.b1),
-                Field.U8<FlagWideRow>(2, x => x.b2),
-                Field.U8<FlagWideRow>(3, x => x.b3),
-                Field.U8<FlagWideRow>(4, x => x.b4),
-                Field.U16<FlagWideRow>(5, x => x.wide)));
-        var got = Unpack.Read(scheme, new byte[] { 0x01, 0x20, 0x34 });
+                Field.U8<FlagWideRow>(0, x => x.B0),
+                Field.U8<FlagWideRow>(1, x => x.B1),
+                Field.U8<FlagWideRow>(2, x => x.B2),
+                Field.U8<FlagWideRow>(3, x => x.B3),
+                Field.U8<FlagWideRow>(4, x => x.B4),
+                Field.U16<FlagWideRow>(5, x => x.Wide)));
+        var got = BinaryPacker.Read(scheme, new byte[] { 0x01, 0x20, 0x34 });
         Assert.Empty(got.Values);
         var missing = Assert.IsType<ShortPacket>(got.Error);
-        Assert.Equal("wide", missing.Field);
+        Assert.Equal("Wide", missing.Field);
         Assert.Equal(2, missing.Needed);
         Assert.Equal(1, missing.Left);
 
-        var bytes = Pack.Run(Target, Position);
+        var bytes = BinaryPacker.Pack(Target, Position);
         Assert.Equal(GoldenHex, Convert.ToHexString(bytes).ToLowerInvariant());
     }
 
@@ -155,10 +155,10 @@ public class PackbinTests
         var watch = Stopwatch.StartNew();
         for (var i = 0; i < 100_000; i++)
         {
-            var bytes = Pack.Run(Target, Position);
-            var got = Unpack.Read(Target, bytes);
+            var bytes = BinaryPacker.Pack(Target, Position);
+            var got = BinaryPacker.Read(Target, bytes);
             Assert.Null(got.Error);
-            Assert.Equal(500_000_000, Convert.ToInt32(got.Values["lat"]!, CultureInfo.InvariantCulture));
+            Assert.Equal(500_000_000, Convert.ToInt32(got.Values["Lat"]!, CultureInfo.InvariantCulture));
         }
         watch.Stop();
         AssertNoGpuLibrary();
@@ -170,23 +170,23 @@ public class PackbinTests
     {
         var row = new PositionRow
         {
-            sid = 1,
-            lat = 500_000_000,
-            lon = 300_000_000,
-            profile = 1,
+            Sid = 1,
+            Lat = 500_000_000,
+            Lon = 300_000_000,
+            Profile = 1,
         };
-        var bytes = Pack.Run(Target, row);
+        var bytes = BinaryPacker.Pack(Target, row);
         Assert.Equal(GoldenHex, Convert.ToHexString(bytes).ToLowerInvariant());
-        var got = Unpack.Run(Target, bytes);
+        var got = BinaryPacker.Unpack(Target, bytes);
         Assert.True(got.Ok);
         Assert.NotNull(got.Value);
-        Assert.Equal((ushort)1, got.Value.sid);
-        Assert.Equal(500_000_000, got.Value.lat);
-        Assert.Equal(300_000_000, got.Value.lon);
-        Assert.Equal((byte)1, got.Value.profile);
-        Assert.Null(got.Value.heading);
-        Assert.Null(got.Value.speed);
-        Assert.Null(got.Value.altitude);
+        Assert.Equal((ushort)1, got.Value.Sid);
+        Assert.Equal(500_000_000, got.Value.Lat);
+        Assert.Equal(300_000_000, got.Value.Lon);
+        Assert.Equal((byte)1, got.Value.Profile);
+        Assert.Null(got.Value.Heading);
+        Assert.Null(got.Value.Speed);
+        Assert.Null(got.Value.Altitude);
     }
 
     private static void AssertNoGpuLibrary()

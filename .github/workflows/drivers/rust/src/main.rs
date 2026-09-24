@@ -1,26 +1,54 @@
+use packbin::{flags, i16, u16, u8, BoundField, BinaryPacker, Scheme};
+
+#[derive(Default)]
+struct PositionRow {
+    sid: u16,
+    lat: i32,
+    lon: i32,
+    profile: u8,
+}
+
 fn main() {
-    let scheme = packbin::MapScheme::new(
+    let scheme = Scheme::new(
         0x40,
-        vec![
-            packbin::u16("sid"),
-            packbin::i32("lat"),
-            packbin::i32("lon"),
-            packbin::u8("profile"),
-            packbin::flags(
+        [
+            BoundField::u16(
+                0,
+                |r: &PositionRow| r.sid,
+                |r: &mut PositionRow, v| r.sid = v,
+            )
+            .into(),
+            BoundField::i32(
+                1,
+                |r: &PositionRow| r.lat,
+                |r: &mut PositionRow, v| r.lat = v,
+            )
+            .into(),
+            BoundField::i32(
+                2,
+                |r: &PositionRow| r.lon,
+                |r: &mut PositionRow, v| r.lon = v,
+            )
+            .into(),
+            BoundField::u8(
+                3,
+                |r: &PositionRow| r.profile,
+                |r: &mut PositionRow, v| r.profile = v,
+            )
+            .into(),
+            flags(
                 "motion",
-                vec![
-                    packbin::u16("heading"),
-                    packbin::u8("speed"),
-                    packbin::i16("altitude"),
-                ],
-            ),
+                vec![u16("heading"), u8("speed"), i16("altitude")],
+            )
+            .into(),
         ],
     );
-    let mut values = packbin::Values::new();
-    packbin::insert(&mut values, "sid", Some(packbin::Value::U16(1)));
-    packbin::insert(&mut values, "lat", Some(packbin::Value::I32(500_000_000)));
-    packbin::insert(&mut values, "lon", Some(packbin::Value::I32(300_000_000)));
-    packbin::insert(&mut values, "profile", Some(packbin::Value::U8(1)));
-    let bytes = packbin::pack_map(&scheme, &values).expect("pack");
+    let row = PositionRow {
+        sid: 1,
+        lat: 500_000_000,
+        lon: 300_000_000,
+        profile: 1,
+    };
+    let bytes = BinaryPacker::pack(&scheme, &row).expect("pack");
     println!("{}", packbin::to_hex(&bytes));
 }

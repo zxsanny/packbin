@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 
-from packbin import Scheme, dict as map_field, list, pack, unpack, utf8
+from packbin import BinaryPacker, Scheme, dict as map_field, list, utf8
 
 
 def gs(key: str):
@@ -50,22 +50,22 @@ def main(argv: list[str]) -> int:
         return 2
     cmd = argv[0]
     if cmd == "pack-user":
-        print(pack(USER, USER_VALUES).hex())
+        print(BinaryPacker.pack(USER, USER_VALUES).hex())
         return 0
     if cmd == "pack-nested":
-        print(pack(NESTED, NESTED_VALUES).hex())
+        print(BinaryPacker.pack(NESTED, NESTED_VALUES).hex())
         return 0
     if cmd == "unpack-user":
         if len(argv) < 2:
             return 1
-        result = unpack(USER, bytes.fromhex(argv[1]))
+        result = BinaryPacker.unpack(USER, bytes.fromhex(argv[1]))
         if not result.ok or result.value is None:
             return 1
         return 0 if result.value == USER_VALUES else 1
     if cmd == "unpack-nested":
         if len(argv) < 2:
             return 1
-        result = unpack(NESTED, bytes.fromhex(argv[1]))
+        result = BinaryPacker.unpack(NESTED, bytes.fromhex(argv[1]))
         if not result.ok or result.value is None:
             return 1
         return 0 if result.value == NESTED_VALUES else 1

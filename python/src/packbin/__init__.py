@@ -28,9 +28,10 @@ from packbin._nodes import (
     utf8,
     when,
 )
-from packbin._scheme import Scheme, pack, unpack
+from packbin._scheme import BinaryPacker, Scheme
 
 __all__ = [
+    "BinaryPacker",
     "Scheme",
     "ShortPacket",
     "TrailingBytes",
@@ -61,6 +62,4 @@ __all__ = [
     "utf8",
     "list",
     "dict",
-    "pack",
-    "unpack",
 ]

@@ -20,7 +20,7 @@ A WebSocket receiver does not know which row is in the buffer. Today it would re
 
 ## Outcome
 
-- `Packet` is gone in all six languages. `BinaryPacker` and a `TypeNum` field node are gone. The layout type is `Scheme`.
+- `Packet` and a `TypeNum` field node are gone. The layout type is `Scheme`. Pack and unpack are `BinaryPacker`. A value field takes an order id and a member accessor, not a name string.
 - Every scheme is constructed with a type number in `0..255` and the fields. A scheme cannot be built without that number. The number is not a field and is not a member of the row.
 - Pack writes that number as the first byte, then the fields. It does not read a `type` member.
 - When the caller already has the scheme, unpack checks byte 0 against that scheme and returns the row. A mismatch returns expected and actual and no row.
@@ -36,42 +36,42 @@ C# is the reference. The other languages use the same shape. Casing follows the 
 ```csharp
 public sealed class UserModifiedEvent
 {
-    public int userId { get; set; }
-    public string userNameChange { get; set; }
-    public string userEmailChange { get; set; }
-    public byte userStatusChange { get; set; }
+    public int UserId { get; set; }
+    public string UserNameChange { get; set; }
+    public string UserEmailChange { get; set; }
+    public byte UserStatusChange { get; set; }
 }
 
 public sealed class UserPositionEvent
 {
-    public int userId { get; set; }
-    public int latitude { get; set; }
-    public int longitude { get; set; }
+    public int UserId { get; set; }
+    public int Latitude { get; set; }
+    public int Longitude { get; set; }
 }
 
-static readonly Scheme<UserModifiedEvent> ModifiedScheme = new(1,
-    Field.I32("userId"),
-    Field.Utf8("userNameChange"),
-    Field.Utf8("userEmailChange"),
-    Field.U8("userStatusChange"));
+static readonly Scheme<UserModifiedEvent> ModifiedScheme = new(1, f => [
+    f.I32(0, x => x.UserId),
+    f.Utf8(1, x => x.UserNameChange),
+    f.Utf8(2, x => x.UserEmailChange),
+    f.U8(3, x => x.UserStatusChange)]);
 
-static readonly Scheme<UserPositionEvent> PositionScheme = new(2,
-    Field.I32("userId"),
-    Field.I32("latitude"),
-    Field.I32("longitude"));
+static readonly Scheme<UserPositionEvent> PositionScheme = new(2, f => [
+    f.I32(0, x => x.UserId),
+    f.I32(1, x => x.Latitude),
+    f.I32(2, x => x.Longitude)]);
 
-Unpack.Run(bytes, ModifiedScheme.On(ev => { }), PositionScheme.On(ev => { }));
-Bound<UserModifiedEvent> known = Unpack.Run(ModifiedScheme, bytes);
+BinaryPacker.Unpack(bytes, ModifiedScheme.On(ev => { }), PositionScheme.On(ev => { }));
+Bound<UserModifiedEvent> known = BinaryPacker.Unpack(ModifiedScheme, bytes);
 ```
 
 | Language | Scheme | Known unpack | Unknown unpack |
 |---|---|---|---|
-| C# | `new Scheme<T>(int typeNumber, params Field[] fields)` | `Unpack.Run(scheme, bytes)` → `Bound<T>` | `Unpack.Run(bytes, scheme.On(Action<T>), ...)` |
-| TypeScript | `scheme<T>(typeNumber, ...fields)` | `unpack(scheme, bytes)` → result of `T` | `unpack(bytes, scheme.on(handler), ...)` |
-| Python | `Scheme(type_number, row_type, *fields)` | `unpack(scheme, data)` → row | `unpack(data, scheme.on(handler), ...)` |
-| Rust | `Scheme::new(type_number, fields)` | `unpack(&scheme, bytes)` → `Result<T, _>` | `unpack(bytes, scheme.on(handler), ...)` |
-| C++ | `Scheme<T>(type_number, fields)` | `unpack(scheme, bytes, len)` | `unpack(bytes, len, scheme.on(handler), ...)` |
-| Java | `new Scheme<>(typeNumber, rowClass, fields)` | `Unpack.run(scheme, bytes)` → `Bound<T>` | `Unpack.run(bytes, scheme.on(handler), ...)` |
+| C# | `new Scheme<T>(int typeNumber, Func<Fields<T>, Field[]> define)` | `BinaryPacker.Unpack(scheme, bytes)` → `Bound<T>` | `BinaryPacker.Unpack(bytes, scheme.On(Action<T>), ...)` |
+| TypeScript | `scheme<T>(typeNumber, ...fields)` | `BinaryPacker.unpack(scheme, bytes)` → result of `T` | `BinaryPacker.unpack(bytes, scheme.on(handler), ...)` |
+| Python | `Scheme(type_number, row_type, *fields)` | `BinaryPacker.unpack(scheme, data)` → row | `BinaryPacker.unpack(data, scheme.on(handler), ...)` |
+| Rust | `Scheme::new(type_number, fields)` | `BinaryPacker::unpack(&scheme, bytes)` → `Result<T, _>` | `BinaryPacker::unpack_with(bytes, scheme.on(handler), ...)` |
+| C++ | `Scheme<T>(type_number, fields)` | `BinaryPacker::unpack(scheme, bytes, len)` | `BinaryPacker::unpack(bytes, len, scheme.on(handler), ...)` |
+| Java | `new Scheme<>(typeNumber, rowClass, fields)` | `BinaryPacker.unpack(scheme, bytes)` → `Bound<T>` | `BinaryPacker.unpack(bytes, scheme.on(handler), ...)` |
 
 Python and Java take the row class because those runtimes do not reify `T`. The class is not a `type` field.
 
@@ -79,7 +79,7 @@ Python and Java take the row class because those runtimes do not reify `T`. The 
 
 ### Included
 
-- Delete `Packet`, `BinaryPacker`, and the type-number field node in C#, TypeScript, Python, Rust, C++, and Java.
+- Delete `Packet` and the type-number field node in C#, TypeScript, Python, Rust, C++, and Java. Pack and unpack stay on `BinaryPacker`.
 - Mandatory type number on every scheme. Pack always writes it. Unpack always consumes it before the fields.
 - Handler dispatch for an unknown buffer, in all six languages.
 - Position golden uses type number `0x40` and no `type` member. README examples follow that.
@@ -97,7 +97,7 @@ Python and Java take the row class because those runtimes do not reify `T`. The 
 **AC-1: Scheme replaces Packet.**
 Given each language package.
 When its public API is read.
-Then `Packet` and `BinaryPacker` are absent, and a scheme is constructed with a type number plus fields.
+Then `Packet` is absent, pack and unpack are `BinaryPacker`, and a scheme is constructed with a type number plus fields bound by accessor.
 
 **AC-2: The row has no type member.**
 Given a position row and scheme type number `0x40`.
