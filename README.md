@@ -12,11 +12,10 @@ Python → binary → TypeScript
 ### Python
 
 ```python
-from packbin import flags, i16, i32, pack, packet, u8, u16
+from packbin import Scheme, flags, i16, i32, pack, u8, u16
 
 class Position:
     def __init__(self):
-        self.type = 0x40
         self.sid = 1
         self.lat = 500_000_000
         self.lon = 300_000_000
@@ -25,16 +24,24 @@ class Position:
         self.speed = None
         self.altitude = None
 
-target = packet([
-    u8("type"),
-    u16("sid"),
-    i32("lat"),
-    i32("lon"),
-    u8("profile"),
-    flags("motion", [u16("heading"), u8("speed"), i16("altitude")]),  # one byte; a set bit writes that field, a clear bit omits it
-])
+def bind(name):
+    return (lambda row: getattr(row, name), lambda row, value: setattr(row, name, value))
 
-raw = pack(target, vars(Position()))
+target = Scheme(
+    0x40,
+    Position,
+    u16(0, *bind("sid")),
+    i32(1, *bind("lat")),
+    i32(2, *bind("lon")),
+    u8(3, *bind("profile")),
+    flags(
+        u16(4, *bind("heading")),
+        u8(5, *bind("speed")),
+        i16(6, *bind("altitude")),
+    ),
+)
+
+raw = pack(target, Position())
 ```
 
 ```
@@ -44,10 +51,9 @@ raw = pack(target, vars(Position()))
 ### TypeScript
 
 ```ts
-import { flags, i16, i32, packet, u8, u16, unpack } from "packbin"
+import { flags, i16, i32, scheme, u8, u16, unpack } from "packbin"
 
 class Target {
-  type = 0x40
   sid = 1
   lat = 500_000_000
   lon = 300_000_000
@@ -57,16 +63,20 @@ class Target {
   altitude: number | null = null
 }
 
-const target = packet([
-  u8("type"),
-  u16("sid"),
-  i32("lat"),
-  i32("lon"),
-  u8("profile"),
-  flags("motion", [u16("heading"), u8("speed"), i16("altitude")]),
-])
+const target = scheme<Target>(
+  0x40,
+  u16(0, (x) => x.sid),
+  i32(1, (x) => x.lat),
+  i32(2, (x) => x.lon),
+  u8(3, (x) => x.profile),
+  flags([
+    u16(4, (x) => x.heading),
+    u8(5, (x) => x.speed),
+    i16(6, (x) => x.altitude),
+  ]),
+)
 
-const got = unpack(target, raw, Target)
+const got = unpack(target, raw)
 ```
 
 `flags` is how an optional field takes no space when you have no value for it. `heading`, `speed`, and `altitude` are measurements, so `0` is still a value and has to be written. `None` means the field is not in the packet.
@@ -79,7 +89,7 @@ const got = unpack(target, raw, Target)
 | `speed` | `u8` | 1 | 0 … 255 |
 | `altitude` | `i16` | 2 | −32768 … 32767 |
 
-In this example all three are `None`, so `motion` is `00` and those 5 bytes are absent. The packet is 13 bytes: `type` 1, `sid` 2, `lat` 4, `lon` 4, `profile` 1, `motion` 1.
+In this example all three are `None`, so `motion` is `00` and those 5 bytes are absent. The packet is 13 bytes: type number 1, `sid` 2, `lat` 4, `lon` 4, `profile` 1, `motion` 1.
 
 ```
 40          type
@@ -104,23 +114,27 @@ using Packbin;
 sealed class User
 {
     public string username { get; set; } = "";
-    public List<string> roles { get; set; } = [];
-    public Dictionary<string, List<string>> access { get; set; } = [];
+    public List<Role> roles { get; set; } = [];
+    public Dictionary<string, ActionList> access { get; set; } = [];
 }
 
+sealed class Role { public string role { get; set; } = ""; }
+sealed class ActionName { public string action { get; set; } = ""; }
+sealed class ActionList { public List<ActionName> actions { get; set; } = []; }
+
 var userScheme = new Scheme<User>(1,
-    Field.Utf8("username"),
-    Field.List("roles", Field.Utf8("role")),
-    Field.Dict("access", Field.List("actions", Field.Utf8("action"))));
+    Field.Utf8<User>(0, x => x.username),
+    Field.List((User x) => x.roles, Field.Utf8<Role>(0, r => r.role)),
+    Field.Dict((User x) => x.access, Field.List((ActionList e) => e.actions, Field.Utf8<ActionName>(0, a => a.action))));
 
 var raw = Pack.Run(userScheme, new User
 {
     username = "ada",
-    roles = ["user", "admin"],
+    roles = [new Role { role = "user" }, new Role { role = "admin" }],
     access = new()
     {
-        ["map"] = ["read", "edit"],
-        ["store"] = ["write"],
+        ["map"] = new ActionList { actions = [new ActionName { action = "read" }, new ActionName { action = "edit" }] },
+        ["store"] = new ActionList { actions = [new ActionName { action = "write" }] },
     },
 });
 ```

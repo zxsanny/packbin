@@ -2,9 +2,9 @@
 
 ## 1. High-Level Overview
 
-**Purpose**: Pack and unpack a caller-owned field list for .NET.
+**Purpose**: Pack and unpack a caller-owned scheme for .NET.
 
-**Architectural Pattern**: stateless functions over a list.
+**Architectural Pattern**: stateless functions over a scheme.
 
 **Upstream dependencies**: none inside the repo.
 
@@ -16,8 +16,9 @@
 
 | Method | Input | Output | Async | Error Types |
 |--------|-------|--------|-------|-------------|
-| `Pack.Run` | field list, value | bytes | No | integer does not fit |
-| `Unpack.Run` | field list, bytes | value or error | No | short packet, trailing bytes |
+| `Scheme<T>` | type number, fields by order id | scheme | No | order is not the next index |
+| `Pack.Run` | scheme, row | bytes | No | integer does not fit |
+| `Unpack.Run` | scheme, bytes | row or error | No | short packet, trailing bytes, type mismatch |
 
 **Input DTOs**:
 

@@ -36,6 +36,32 @@
 | AZ-1941 AC-1 | Six handoffs unpack the user value | FT-H-01 | Covered |
 | AZ-1941 AC-2 | Six handoffs unpack the 58-byte nested dictionary | FT-H-02 | Covered |
 | AZ-1941 AC-3 | The position record stays 13 bytes | FT-H-03 | Covered |
+| AZ-1945 AC-1 | Constant type byte is not a row value | FT-S-01 | Covered |
+| AZ-1945 AC-2 | Unpack drops the constant | FT-S-02 | Covered |
+| AZ-1945 AC-3 | Wrong type byte | FT-S-03 | Covered |
+| AZ-1945 AC-4 | Absent type number keeps the golden position | FT-S-04 | Covered |
+| AZ-1945 AC-5 | Illegal type placement fails at scheme build | FT-S-05 | Covered |
+| AZ-1945 AC-6 | Six languages | FT-S-07 | Covered |
+| AZ-1946 AC-1 | Pack takes the scheme | FT-S-01 | Covered |
+| AZ-1946 AC-2 | Unpack takes the same scheme | FT-S-02 | Covered |
+| AZ-1946 AC-3 | The scheme argument is required | FT-S-05 | Covered |
+| AZ-1946 AC-4 | Wrong type byte | FT-S-03 | Covered |
+| AZ-1946 AC-5 | Untyped path stays the golden position | FT-S-04 | Covered |
+| AZ-1946 AC-6 | The row stays data | FT-S-05 | Covered |
+| AZ-1946 AC-7 | Six languages | FT-S-07 | Covered |
+| AZ-1949 AC-1 | Scheme replaces Packet | FT-S-06 | Covered |
+| AZ-1949 AC-2 | The row has no type member | FT-S-04 | Covered |
+| AZ-1949 AC-3 | Known scheme checks the leading byte | FT-S-03 | Covered |
+| AZ-1949 AC-4 | Unknown buffer calls the matching handler | FT-S-06 | Covered |
+| AZ-1949 AC-5 | Unknown type number | FT-S-06 | Covered |
+| AZ-1949 AC-6 | Type numbers in one call are unique | FT-S-06 | Covered |
+| AZ-1949 AC-7 | Six languages | FT-S-07 | Covered |
+| AZ-1950 AC-1 | Member names are not the wire names | FT-B-01 | Covered |
+| AZ-1950 AC-2 | Sibling references use the order | FT-B-02 | Covered |
+| AZ-1950 AC-3 | Flags use child accessors | FT-B-03 | Covered |
+| AZ-1950 AC-4 | Nested row type has its own ids | FT-B-04 | Covered |
+| AZ-1950 AC-5 | Order must match the number | FT-B-05 | Covered |
+| AZ-1950 AC-6 | Six languages | FT-S-07, FT-B-01 | Covered |
 
 ## Restrictions Coverage
 
@@ -65,9 +91,9 @@
 
 | Category | Total Items | Covered | BLOCKED | WAIVED | Coverage |
 |----------|-----------|---------|---------|--------|----------|
-| Acceptance Criteria | 32 | 32 | 0 | 0 | every row Covered or WAIVED |
+| Acceptance Criteria | 58 | 58 | 0 | 0 | every row Covered or WAIVED |
 | Restrictions | 19 | 17 | 0 | 2 | every row Covered or WAIVED |
-| **Total** | 51 | 49 | 0 | 2 | every row Covered or WAIVED |
+| **Total** | 77 | 75 | 0 | 2 | every row Covered or WAIVED |
 
 ## Uncovered Items Analysis
 

@@ -173,4 +173,4 @@ Unpack appends one point per complete pair. A trailing partial pair is `ShortPac
 
 - Degrees × 10_000_000, kilometers per hour, dictionary strings. Those are application values stored in the integer the list names.
 - Merging a missing field into the last object.
-- Choosing which packet list to use from the first byte. The application switches, then calls `unpack` on that list. The first field of the list is still that type byte when the layout has one.
+- Choosing a layout from the first byte. `unpack` dispatches to the scheme whose type number matches that byte. The type number is the scheme argument, and it is still written first.

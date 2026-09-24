@@ -21,3 +21,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-09-23_loop2.md
 - [2026-09-23] [tooling] On this Mac, pass `PACKBIN_CXX_SYSROOT` so clang finds the SDK C++ headers.
   Source: _docs/06_metrics/retro_2026-09-23_loop2.md
+- [2026-09-24] [testing] Compare a shared marker as the full hex in every language. A prefix match hides a different tail.
+  Source: _docs/06_metrics/retro_2026-09-24_loop4.md
+- [2026-09-24] [tooling] When a C++ file is split, add the new files to every driver compile line, including the publish gate.
+  Source: _docs/06_metrics/retro_2026-09-24_loop4.md
+- [2026-09-24] [architecture] A typed Rust scheme needs the same value kinds as the map scheme, including u2 and dict, or the spec must exclude them.
+  Source: _docs/06_metrics/retro_2026-09-24_loop4.md

@@ -2,9 +2,9 @@
 
 ## 1. High-Level Overview
 
-**Purpose**: Pack and unpack a caller-owned field list for tools and scripts.
+**Purpose**: Pack and unpack a caller-owned scheme for tools and scripts.
 
-**Architectural Pattern**: stateless functions over a list.
+**Architectural Pattern**: stateless functions over a scheme.
 
 **Upstream dependencies**: none inside the repo.
 
@@ -16,8 +16,9 @@
 
 | Method | Input | Output | Async | Error Types |
 |--------|-------|--------|-------|-------------|
-| `pack` | field list, value | bytes | No | integer does not fit |
-| `unpack` | field list, bytes | value or error | No | short packet, trailing bytes |
+| `Scheme` | type number, row class, fields by order id | scheme | No | order is not the next index |
+| `pack` | scheme, row | bytes | No | integer does not fit |
+| `unpack` | scheme, bytes | row or error | No | short packet, trailing bytes, type mismatch |
 
 **Input DTOs**:
 
