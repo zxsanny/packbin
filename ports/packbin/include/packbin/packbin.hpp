@@ -2,10 +2,15 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <initializer_list>
 #include <map>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -19,6 +24,11 @@ struct ShortPacket {
 
 struct TrailingBytes {
   std::size_t left = 0;
+};
+
+struct TypeMismatch {
+  std::optional<int> expected;
+  int actual = 0;
 };
 
 struct ValueList;
@@ -61,13 +71,27 @@ struct ValueMap {
 
 using Values = std::map<std::string, Value>;
 
-struct UnpackResult {
+template <typename T = void>
+struct UnpackResult;
+
+template <>
+struct UnpackResult<void> {
   bool ok = false;
   Values value;
   std::optional<ShortPacket> short_packet;
   std::optional<TrailingBytes> trailing;
+  std::optional<TypeMismatch> type_mismatch;
 
   std::size_t value_count() const { return value.size(); }
+};
+
+template <typename T>
+struct UnpackResult {
+  bool ok = false;
+  std::optional<T> value;
+  std::optional<ShortPacket> short_packet;
+  std::optional<TrailingBytes> trailing;
+  std::optional<TypeMismatch> type_mismatch;
 };
 
 class Field;
@@ -97,6 +121,7 @@ class Field {
     F32,
     F64,
     Bytes,
+    Bool,
     Flags,
     FlagByte,
     FlagBit,
@@ -112,58 +137,65 @@ class Field {
   };
 
   Kind kind{};
+  int id = -1;
   std::string name;
   bool big_endian = false;
   int byte_count = 0;
+  std::uint8_t constant = 0;
   std::vector<Field> children;
   std::shared_ptr<FlagGroup> group;
   int bit_index = 0;
   std::shared_ptr<Field> inner;
   Eq pred;
+  int count_id = -1;
   std::string count_name;
 
   Field be() const;
   Field bit(Field field) const;
 };
 
-struct Packet {
-  std::vector<Field> fields;
-};
+inline std::string id_name(int id) { return std::to_string(id); }
 
-Field u8(std::string name);
-Field u16(std::string name);
-Field u32(std::string name);
-Field u64(std::string name);
-Field i8(std::string name);
-Field i16(std::string name);
-Field i32(std::string name);
-Field i64(std::string name);
-Field f32(std::string name);
-Field f64(std::string name);
-Field bytes(std::string name, int n);
+Field u8(int id);
+Field u16(int id);
+Field u32(int id);
+Field u64(int id);
+Field i8(int id);
+Field i16(int id);
+Field i32(int id);
+Field i64(int id);
+Field f32(int id);
+Field f64(int id);
+Field bytes(int id, int n);
+Field boolean(int id);
 Field be(Field field);
-Field flags(std::string name, std::vector<Field> fields);
-Field flag_byte(std::string name);
-Eq eq(std::string field, Value value);
+Field flags(std::vector<Field> fields);
+Field flag_byte();
+Eq eq(int field_id, Value value);
 Field when(Eq condition, std::vector<Field> fields);
 Field repeat(std::vector<Field> fields);
+Field group(std::vector<Field> fields);
 Field group(std::string name, std::vector<Field> fields);
-Field sized(std::string name, std::string count_field);
-Field u2(std::vector<std::string> names);
-Field bits(std::string name, std::string count_field);
-Field utf8(std::string name);
+Field sized(int id, int count_id);
+Field u2(std::vector<int> ids);
+Field bits(int id, int count_id);
+Field utf8(int id);
 Field list(std::string name, Field element);
 Field dict(std::string name, Field element);
-Packet packet(std::vector<Field> fields);
 
-std::vector<std::uint8_t> pack(Packet const& target, Values const& values);
-UnpackResult unpack(Packet const& target, std::vector<std::uint8_t> const& data);
-UnpackResult unpack(Packet const& target, std::uint8_t const* data, std::size_t len);
+int validate_order(std::vector<Field> const& nodes, int next_id = 0);
 
 std::string to_hex(std::vector<std::uint8_t> const& data);
 std::size_t mismatched_bytes(std::vector<std::uint8_t> const& a,
                              std::vector<std::uint8_t> const& b);
 std::size_t motion_field_count(Values const& values);
 bool present(Values const& values, std::string const& name);
+bool present(Values const& values, int id);
+
+std::vector<std::uint8_t> pack_body(std::vector<Field> const& fields, Values const& values);
+UnpackResult<> unpack_body(std::vector<Field> const& fields, std::uint8_t const* data,
+                           std::size_t len, std::size_t offset);
+
+#include "packbin/scheme.hpp"
 
 }  // namespace packbin
