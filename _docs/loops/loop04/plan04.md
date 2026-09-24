@@ -11,7 +11,7 @@ ship: false
 |----|------|------|---------|--------|
 | new-task | 9 | New Task | no | Specs already in todo: AZ-1945, AZ-1946 |
 | decompose-feature | 9.5 | Decompose Feature | no | No feature-description handoff; tasks already split |
-| implement | 10 | Implement | yes | AZ-1945 then AZ-1946 |
+| implement | 10 | Implement | yes | AZ-1945, AZ-1946, then AZ-1949, then AZ-1950 |
 | feature-assess | 10.5 | Feature Assessment | yes | After implement |
 | run-tests | 11 | Run Tests | yes | Always |
 | test-spec-sync | 12 | Test-Spec Sync | yes | New ACs and scenarios |
@@ -33,7 +33,7 @@ Chat stays on the launcher. Implement on `dev`. No sibling worktree this session
 Six language packages: type-number node, then Scheme and BinaryPacker.
 
 ### Order of work
-AZ-1945, then AZ-1946.
+AZ-1945, then AZ-1946, then AZ-1949, then AZ-1950.
 
 ### Proof
 Each language suite covers AC-1 through AC-6. Golden position bytes stay the same.
@@ -42,4 +42,4 @@ Each language suite covers AC-1 through AC-6. Golden position bytes stay the sam
 A type tag written as two bytes fails `2017`.
 
 ### Divergence
-Python `Scheme.of` takes the row class. Java `Scheme.of` takes `Class<T>`. Rust binds `sid` with get/set closures. C++ binds `&MarkerRow::sid`. Those are how each language names the member without a generator.
+Python `Scheme` takes the row class. Java `Scheme` takes `Class<T>`. Rust binds members with get/set closures and dispatches with `unpack_with`. Rust value maps use `MapScheme`. C++ binds a member pointer. Those are how each language names the member without a generator.

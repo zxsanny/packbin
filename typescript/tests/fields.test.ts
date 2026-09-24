@@ -1,0 +1,233 @@
+import assert from "node:assert/strict"
+import { describe, it } from "node:test"
+import {
+  be,
+  bits,
+  dict,
+  list,
+  pack,
+  scheme,
+  sized,
+  u2,
+  u8,
+  u16,
+  unpack,
+  utf8,
+} from "../src/index.ts"
+
+function toHex(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString("hex")
+}
+
+function mismatchedBytes(a: Uint8Array, b: Uint8Array): number {
+  const n = Math.max(a.length, b.length)
+  let bad = 0
+  for (let i = 0; i < n; i++) {
+    if ((a[i] ?? -1) !== (b[i] ?? -1)) bad++
+  }
+  return bad
+}
+
+describe("packbin fields", () => {
+  it("sized payload by count field", () => {
+    const layout = scheme(1, u16("n"), sized("payload", "n"))
+    const raw = pack(layout, {
+      n: 3,
+      payload: Uint8Array.from(Buffer.from("756176", "hex")),
+    })
+    assert.equal(toHex(raw), "010300756176")
+    const empty = pack(layout, { n: 0, payload: new Uint8Array(0) })
+    assert.equal(toHex(empty), "010000")
+    const emptyGot = unpack(layout, empty)
+    assert.equal(emptyGot.ok, true)
+    if (!emptyGot.ok) return
+    assert.equal((emptyGot.value.payload as Uint8Array).length, 0)
+    const short = unpack(layout, Uint8Array.from(Buffer.from("01030075", "hex")))
+    assert.equal(short.ok, false)
+    if (short.ok) return
+    assert.equal(short.field, "payload")
+    assert.equal(short.needed, 3)
+    assert.equal(short.left, 1)
+  })
+
+  it("u2 and bits", () => {
+    const kinds = scheme(1, u2("a", "b", "c", "d"))
+    const raw = pack(kinds, { a: 0, b: 1, c: 2, d: 3 })
+    assert.equal(toHex(raw), "01e4")
+    const got = unpack(kinds, raw)
+    assert.equal(got.ok, true)
+    if (!got.ok) return
+    assert.deepEqual(
+      [got.value.a, got.value.b, got.value.c, got.value.d],
+      [0, 1, 2, 3],
+    )
+    const one = pack(scheme(1, u2("a")), { a: 1 })
+    assert.equal(toHex(one), "0101")
+
+    const layout = scheme(1, u8("n"), bits("segs", "n"))
+    const eight = pack(layout, { n: 8, segs: [1, 1, 1, 1, 1, 1, 1, 1] })
+    assert.equal(toHex(eight.subarray(2)), "ff")
+    const nine = pack(layout, {
+      n: 9,
+      segs: [1, 1, 1, 1, 1, 1, 1, 1, 1],
+    })
+    assert.equal(nine.length - 2, 2)
+    assert.equal(nine[2], 0xff)
+    assert.equal(nine[3]! & 0xfe, 0)
+    const short = unpack(layout, Uint8Array.of(1, 9, 0x01))
+    assert.equal(short.ok, false)
+    if (short.ok) return
+    assert.equal(short.field, "segs")
+    assert.equal(short.needed, 2)
+    assert.equal(short.left, 1)
+  })
+
+  it("utf8 string count is the payload", () => {
+    const layout = scheme(1, utf8("name"))
+    const raw = pack(layout, { name: "zxsanny" })
+    assert.equal(toHex(raw), "0107007a7873616e6e79")
+    assert.equal(raw.length, 10)
+    const got = unpack(layout, raw)
+    assert.equal(got.ok, true)
+    if (!got.ok) return
+    assert.equal(got.value.name, "zxsanny")
+
+    const empty = pack(layout, { name: "" })
+    assert.equal(toHex(empty), "010000")
+    const emptyGot = unpack(layout, empty)
+    assert.equal(emptyGot.ok, true)
+    if (!emptyGot.ok) return
+    assert.equal(emptyGot.value.name, "")
+
+    let produced: Uint8Array | null = null
+    assert.throws(() => {
+      produced = pack(layout, { name: "a".repeat(65536) })
+    })
+    assert.equal(produced, null)
+
+    const short = unpack(layout, Uint8Array.of(0x01, 0x07, 0x00, 0x7a, 0x78))
+    assert.equal(short.ok, false)
+    if (short.ok) return
+    assert.equal(short.field, "name")
+    assert.equal(short.needed, 7)
+    assert.equal(short.left, 2)
+    assert.equal("name" in short, false)
+  })
+
+  it("counted list leaves the next field", () => {
+    const two = scheme(1, list("xs", u16("n")))
+    const raw = pack(two, { xs: [1, 2] })
+    assert.equal(toHex(raw), "01020001000200")
+    const got = unpack(two, raw)
+    assert.equal(got.ok, true)
+    if (!got.ok) return
+    assert.deepEqual(got.value.xs, [1, 2])
+
+    const beOne = scheme(1, list("xs", be(u16("n"))))
+    assert.equal(toHex(pack(beOne, { xs: [1] })), "0101000001")
+
+    const followed = scheme(1, list("xs", u8("n")), u8("y"))
+    const both = pack(followed, { xs: [1], y: 2 })
+    assert.equal(toHex(both), "0101000102")
+    const back = unpack(followed, both)
+    assert.equal(back.ok, true)
+    if (!back.ok) return
+    assert.deepEqual(back.value.xs, [1])
+    assert.equal(back.value.y, 2)
+
+    assert.equal(toHex(pack(two, { xs: [] })), "010000")
+    let produced: Uint8Array | null = null
+    assert.throws(() => {
+      produced = pack(two, { xs: Array(65536).fill(1) })
+    })
+    assert.equal(produced, null)
+  })
+
+  it("dictionary field orders keys and nests lists", () => {
+    const userHex =
+      "0107007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e6e656c010004007265616403006d6170040004007265616407006770735f6669780300736574040065646974050073746f7265020004007265616405007772697465"
+    const layout = scheme(
+      1,
+      utf8("username"),
+      list("roles", utf8("role")),
+      dict("access", list("actions", utf8("action"))),
+    )
+    const userValue = {
+      username: "zxsanny",
+      roles: ["user", "dispatcher"],
+      access: {
+        channel: ["read"],
+        map: ["read", "gps_fix", "set", "edit"],
+        store: ["read", "write"],
+      },
+    }
+
+    const raw = pack(layout, userValue)
+    assert.equal(toHex(raw), userHex)
+    const got = unpack(layout, raw)
+    assert.equal(got.ok, true)
+    if (!got.ok) return
+    assert.equal(got.value.username, "zxsanny")
+    assert.deepEqual(got.value.roles, ["user", "dispatcher"])
+    const access = got.value.access as Record<string, string[]>
+    assert.deepEqual(access.channel, ["read"])
+    assert.deepEqual(access.map, ["read", "gps_fix", "set", "edit"])
+    assert.deepEqual(access.store, ["read", "write"])
+    assert.equal(Object.keys(access).length, 3)
+
+    const reordered = pack(layout, {
+      username: "zxsanny",
+      roles: ["user", "dispatcher"],
+      access: {
+        store: ["read", "write"],
+        channel: ["read"],
+        map: ["read", "gps_fix", "set", "edit"],
+      },
+    })
+    assert.equal(toHex(reordered), userHex)
+    assert.equal(mismatchedBytes(raw, reordered), 0)
+
+    const empties = scheme(1, utf8("name"), list("xs", utf8("x")), dict("d", utf8("v")))
+    assert.equal(toHex(pack(empties, { name: "", xs: [], d: {} })), "01000000000000")
+
+    const dup = scheme(1, dict("access", utf8("v")))
+    const bad = unpack(dup, Buffer.from("010200010061010078010061010079", "hex"))
+    assert.equal(bad.ok, false)
+    if (bad.ok) return
+    assert.equal(
+      Object.keys(bad).filter(
+        (k) => k !== "ok" && k !== "field" && k !== "needed" && k !== "left",
+      ).length,
+      0,
+    )
+
+    const a = pack(layout, userValue)
+    const b = pack(layout, userValue)
+    assert.equal(mismatchedBytes(a, b), 0)
+
+    let left: Uint8Array | null = null
+    let right: Uint8Array | null = null
+    return Promise.all([
+      Promise.resolve().then(() => {
+        left = pack(layout, userValue)
+      }),
+      Promise.resolve().then(() => {
+        right = pack(layout, userValue)
+      }),
+    ])
+      .then(() => {
+        assert.ok(left)
+        assert.ok(right)
+        assert.equal(mismatchedBytes(left!, right!), 0)
+      })
+      .then(() => {
+        let produced: Uint8Array | null = null
+        const huge: Record<string, string> = {}
+        for (let i = 0; i < 65536; i++) huge[`k${i}`] = "v"
+        assert.throws(() => {
+          produced = pack(scheme(1, dict("d", utf8("v"))), { d: huge })
+        })
+        assert.equal(produced, null)
+      })
+  })
+})

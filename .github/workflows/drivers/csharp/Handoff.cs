@@ -3,12 +3,24 @@ using Packbin;
 
 static class Handoff
 {
-    static readonly Packet UserPacket = Packet.Of(
+    sealed class UserRow
+    {
+        public string username { get; set; } = "";
+        public List<object?>? roles { get; set; }
+        public Dictionary<string, object?>? access { get; set; }
+    }
+
+    sealed class NestedRow
+    {
+        public Dictionary<string, object?>? access { get; set; }
+    }
+
+    static readonly Scheme<UserRow> UserScheme = new(1,
         Field.Utf8("username"),
         Field.List("roles", Field.Utf8("role")),
         Field.Dict("access", Field.List("actions", Field.Utf8("action"))));
 
-    static readonly Packet NestedPacket = Packet.Of(
+    static readonly Scheme<NestedRow> NestedScheme = new(1,
         Field.Dict("access", Field.List("rows", Field.Dict("fields", Field.Utf8("value")))));
 
     static readonly Dictionary<string, object?> UserValues = new()
@@ -47,10 +59,10 @@ static class Handoff
         switch (args[0])
         {
             case "pack-user":
-                Console.WriteLine(Convert.ToHexString(Pack.Run(UserPacket, UserValues)).ToLowerInvariant());
+                Console.WriteLine(Convert.ToHexString(Pack.Run(UserScheme, UserValues)).ToLowerInvariant());
                 return 0;
             case "pack-nested":
-                Console.WriteLine(Convert.ToHexString(Pack.Run(NestedPacket, NestedValues)).ToLowerInvariant());
+                Console.WriteLine(Convert.ToHexString(Pack.Run(NestedScheme, NestedValues)).ToLowerInvariant());
                 return 0;
             case "unpack-user":
                 if (args.Length < 2)
@@ -67,14 +79,14 @@ static class Handoff
 
     static bool UnpackUser(string hex)
     {
-        var got = Unpack.Run(UserPacket, Convert.FromHexString(hex));
-        if (got.Error is not null || got.Values.Count != 3)
+        var got = Unpack.Run(UserScheme, Convert.FromHexString(hex));
+        if (!got.Ok || got.Value is null)
             return false;
-        if (!EqualsString(got.Values.GetValueOrDefault("username"), "zxsanny"))
+        if (!EqualsString(got.Value.username, "zxsanny"))
             return false;
-        if (!EqualsStringList(got.Values.GetValueOrDefault("roles"), "user", "dispatcher"))
+        if (!EqualsStringList(got.Value.roles, "user", "dispatcher"))
             return false;
-        if (got.Values.GetValueOrDefault("access") is not IDictionary access)
+        if (got.Value.access is not IDictionary access)
             return false;
         if (!EqualsStringList(access["channel"], "read"))
             return false;
@@ -87,10 +99,10 @@ static class Handoff
 
     static bool UnpackNested(string hex)
     {
-        var got = Unpack.Run(NestedPacket, Convert.FromHexString(hex));
-        if (got.Error is not null)
+        var got = Unpack.Run(NestedScheme, Convert.FromHexString(hex));
+        if (!got.Ok || got.Value is null)
             return false;
-        if (got.Values.GetValueOrDefault("access") is not IDictionary access)
+        if (got.Value.access is not IDictionary access)
             return false;
         if (access.Count != 2)
             return false;

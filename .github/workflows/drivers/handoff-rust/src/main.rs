@@ -1,13 +1,16 @@
-use packbin::{dict, insert, list, pack, packet, to_hex, unpack, utf8, Packet, Value, Values};
+use packbin::{dict, insert, list, pack_map, to_hex, unpack_map, utf8, MapScheme, Value, Values};
 use std::collections::BTreeMap;
 use std::process::ExitCode;
 
-fn user_packet() -> Packet {
-    packet(vec![
-        utf8("username"),
-        list("roles", utf8("role")),
-        dict("access", list("actions", utf8("action"))),
-    ])
+fn user_scheme() -> MapScheme {
+    MapScheme::new(
+        1,
+        vec![
+            utf8("username"),
+            list("roles", utf8("role")),
+            dict("access", list("actions", utf8("action"))),
+        ],
+    )
 }
 
 fn user_values() -> Values {
@@ -44,11 +47,14 @@ fn user_values() -> Values {
     vals
 }
 
-fn nested_packet() -> Packet {
-    packet(vec![dict(
-        "access",
-        list("rows", dict("fields", utf8("value"))),
-    )])
+fn nested_scheme() -> MapScheme {
+    MapScheme::new(
+        1,
+        vec![dict(
+            "access",
+            list("rows", dict("fields", utf8("value"))),
+        )],
+    )
 }
 
 fn nested_values() -> Values {
@@ -109,12 +115,12 @@ fn run(args: &[String]) -> u8 {
     };
     match cmd {
         "pack-user" => {
-            let bytes = pack(&user_packet(), &user_values()).expect("pack");
+            let bytes = pack_map(&user_scheme(), &user_values()).expect("pack");
             println!("{}", to_hex(&bytes));
             0
         }
         "pack-nested" => {
-            let bytes = pack(&nested_packet(), &nested_values()).expect("pack");
+            let bytes = pack_map(&nested_scheme(), &nested_values()).expect("pack");
             println!("{}", to_hex(&bytes));
             0
         }
@@ -125,7 +131,7 @@ fn run(args: &[String]) -> u8 {
             let Some(raw) = from_hex(hex) else {
                 return 1;
             };
-            match unpack(&user_packet(), &raw) {
+            match unpack_map(&user_scheme(), &raw) {
                 Ok(got) if fields_match(&got, &user_values()) => 0,
                 _ => 1,
             }
@@ -137,7 +143,7 @@ fn run(args: &[String]) -> u8 {
             let Some(raw) = from_hex(hex) else {
                 return 1;
             };
-            match unpack(&nested_packet(), &raw) {
+            match unpack_map(&nested_scheme(), &raw) {
                 Ok(got) if fields_match(&got, &nested_values()) => 0,
                 _ => 1,
             }

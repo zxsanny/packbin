@@ -35,6 +35,7 @@ pub enum UnpackError {
     Short(ShortPacket),
     Trailing { left: usize },
     Type { expected: u8, actual: u8 },
+    DuplicateType { type_number: u8 },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

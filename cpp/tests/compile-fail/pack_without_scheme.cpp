@@ -6,6 +6,6 @@ struct MarkerRow {
 
 int main() {
   MarkerRow row{23};
-  (void)packbin::BinaryPacker::pack(row);
+  (void)packbin::pack(row);
   return 0;
 }

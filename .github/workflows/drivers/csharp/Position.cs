@@ -1,7 +1,6 @@
 using Packbin;
 
-var packet = Packet.Of(
-    Field.U8("type"),
+var scheme = new Scheme<PositionRow>(0x40,
     Field.U16("sid"),
     Field.I32("lat"),
     Field.I32("lon"),
@@ -10,11 +9,21 @@ var packet = Packet.Of(
 
 var values = new Dictionary<string, object?>
 {
-    ["type"] = (byte)0x40,
     ["sid"] = (ushort)1,
     ["lat"] = 500_000_000,
     ["lon"] = 300_000_000,
     ["profile"] = (byte)1,
 };
 
-Console.WriteLine(Convert.ToHexString(Pack.Run(packet, values)).ToLowerInvariant());
+Console.WriteLine(Convert.ToHexString(Pack.Run(scheme, values)).ToLowerInvariant());
+
+sealed class PositionRow
+{
+    public ushort sid { get; set; }
+    public int lat { get; set; }
+    public int lon { get; set; }
+    public byte profile { get; set; }
+    public ushort? heading { get; set; }
+    public byte? speed { get; set; }
+    public short? altitude { get; set; }
+}

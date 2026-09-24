@@ -8,6 +8,6 @@ final class PackWithoutScheme {
     public static void main(String[] args) {
         MarkerRow row = new MarkerRow();
         row.sid = 23;
-        BinaryPacker.pack(row);
+        Pack.run(row);
     }
 }

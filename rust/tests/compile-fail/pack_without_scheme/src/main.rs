@@ -1,4 +1,4 @@
-use packbin::BinaryPacker;
+use packbin::pack;
 
 struct MarkerRow {
     sid: u8,
@@ -6,5 +6,5 @@ struct MarkerRow {
 
 fn main() {
     let row = MarkerRow { sid: 23 };
-    let _ = BinaryPacker::pack(&row);
+    let _ = pack(&row);
 }

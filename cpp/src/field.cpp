@@ -173,49 +173,6 @@ Field bits(std::string name, std::string count_field) {
   return f;
 }
 
-Field type_num(int value) {
-  if (value < 0 || value > 255)
-    throw std::runtime_error("type number must be 0..255");
-  Field f;
-  f.kind = Field::Kind::TypeNum;
-  f.byte_count = 1;
-  f.constant = static_cast<std::uint8_t>(value);
-  return f;
-}
-
-namespace {
-
-void forbid_nested_type_num(Field const& field) {
-  if (field.kind == Field::Kind::TypeNum)
-    throw std::runtime_error("type number cannot be nested");
-  for (auto const& child : field.children)
-    forbid_nested_type_num(child);
-  if (field.inner)
-    forbid_nested_type_num(*field.inner);
-}
-
-void validate_type_nums(std::vector<Field> const& fields) {
-  bool seen = false;
-  for (std::size_t i = 0; i < fields.size(); ++i) {
-    if (fields[i].kind == Field::Kind::TypeNum) {
-      if (i != 0)
-        throw std::runtime_error("type number must be the first top-level field");
-      if (seen)
-        throw std::runtime_error("type number appears more than once");
-      seen = true;
-    } else {
-      forbid_nested_type_num(fields[i]);
-    }
-  }
-}
-
-}  // namespace
-
-Packet packet(std::vector<Field> fields) {
-  validate_type_nums(fields);
-  return Packet{std::move(fields)};
-}
-
 std::string to_hex(std::vector<std::uint8_t> const& data) {
   static char const* hex = "0123456789abcdef";
   std::string s;

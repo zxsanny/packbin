@@ -1,50 +1,7 @@
 use packbin::{
-    flags, i16, i32, insert, mismatched_bytes, pack, packet, to_hex, type_num, u16, u8,
-    BinaryPacker, BoundField, Scheme, UnpackError, Value, Values,
+    flags, i16, pack, to_hex, u16, u8, unpack, unpack_with, BoundField, Scheme, ShortPacket,
+    UnpackError,
 };
-use std::fs;
-use std::process::Command;
-
-#[derive(Default)]
-struct MarkerRow {
-    sid: u8,
-}
-
-fn marker_row_scheme() -> Scheme<MarkerRow> {
-    Scheme::of([
-        type_num(32).into(),
-        BoundField::u8(
-            "sid",
-            |r: &MarkerRow| r.sid,
-            |r: &mut MarkerRow, v| r.sid = v,
-        )
-        .into(),
-    ])
-}
-
-fn position_packet() -> packbin::Packet {
-    packet(vec![
-        u8("type"),
-        u16("sid"),
-        i32("lat"),
-        i32("lon"),
-        u8("profile"),
-        flags(
-            "motion",
-            vec![u16("heading"), u8("speed"), i16("altitude")],
-        ),
-    ])
-}
-
-fn position_values() -> Values {
-    let mut v = Values::new();
-    insert(&mut v, "type", Some(Value::U8(64)));
-    insert(&mut v, "sid", Some(Value::U16(1)));
-    insert(&mut v, "lat", Some(Value::I32(500_000_000)));
-    insert(&mut v, "lon", Some(Value::I32(300_000_000)));
-    insert(&mut v, "profile", Some(Value::U8(1)));
-    v
-}
 
 fn parse_hex(hex: &str) -> Vec<u8> {
     (0..hex.len())
@@ -53,22 +10,165 @@ fn parse_hex(hex: &str) -> Vec<u8> {
         .collect()
 }
 
-#[test]
-fn ac1_pack_takes_the_scheme() {
-    let row = MarkerRow { sid: 23 };
-    let bytes = BinaryPacker::pack(&marker_row_scheme(), &row).expect("pack");
-    assert_eq!(to_hex(&bytes), "2017");
-    assert_eq!(bytes, vec![0x20, 0x17]);
+#[derive(Default, Debug)]
+struct MarkerRow {
+    sid: u8,
+}
+
+fn marker_scheme() -> Scheme<MarkerRow> {
+    Scheme::new(
+        32,
+        [BoundField::u8(
+            "sid",
+            |r: &MarkerRow| r.sid,
+            |r: &mut MarkerRow, v| r.sid = v,
+        )
+        .into()],
+    )
+}
+
+#[derive(Default)]
+struct UserModifiedEvent {
+    user_id: i32,
+    user_name_change: String,
+    user_email_change: String,
+    user_status_change: u8,
+}
+
+#[derive(Default, Debug, PartialEq)]
+struct UserPositionEvent {
+    user_id: i32,
+    latitude: i32,
+    longitude: i32,
+}
+
+fn modified_scheme() -> Scheme<UserModifiedEvent> {
+    Scheme::new(
+        1,
+        [
+            BoundField::i32(
+                "userId",
+                |r: &UserModifiedEvent| r.user_id,
+                |r: &mut UserModifiedEvent, v| r.user_id = v,
+            )
+            .into(),
+            BoundField::utf8(
+                "userNameChange",
+                |r: &UserModifiedEvent| r.user_name_change.clone(),
+                |r: &mut UserModifiedEvent, v| r.user_name_change = v,
+            )
+            .into(),
+            BoundField::utf8(
+                "userEmailChange",
+                |r: &UserModifiedEvent| r.user_email_change.clone(),
+                |r: &mut UserModifiedEvent, v| r.user_email_change = v,
+            )
+            .into(),
+            BoundField::u8(
+                "userStatusChange",
+                |r: &UserModifiedEvent| r.user_status_change,
+                |r: &mut UserModifiedEvent, v| r.user_status_change = v,
+            )
+            .into(),
+        ],
+    )
+}
+
+fn position_event_scheme() -> Scheme<UserPositionEvent> {
+    Scheme::new(
+        2,
+        [
+            BoundField::i32(
+                "userId",
+                |r: &UserPositionEvent| r.user_id,
+                |r: &mut UserPositionEvent, v| r.user_id = v,
+            )
+            .into(),
+            BoundField::i32(
+                "latitude",
+                |r: &UserPositionEvent| r.latitude,
+                |r: &mut UserPositionEvent, v| r.latitude = v,
+            )
+            .into(),
+            BoundField::i32(
+                "longitude",
+                |r: &UserPositionEvent| r.longitude,
+                |r: &mut UserPositionEvent, v| r.longitude = v,
+            )
+            .into(),
+        ],
+    )
+}
+
+#[derive(Default)]
+struct PositionRow {
+    sid: u16,
+    lat: i32,
+    lon: i32,
+    profile: u8,
+}
+
+fn position_row_scheme() -> Scheme<PositionRow> {
+    Scheme::new(
+        0x40,
+        [
+            BoundField::u16(
+                "sid",
+                |r: &PositionRow| r.sid,
+                |r: &mut PositionRow, v| r.sid = v,
+            )
+            .into(),
+            BoundField::i32(
+                "lat",
+                |r: &PositionRow| r.lat,
+                |r: &mut PositionRow, v| r.lat = v,
+            )
+            .into(),
+            BoundField::i32(
+                "lon",
+                |r: &PositionRow| r.lon,
+                |r: &mut PositionRow, v| r.lon = v,
+            )
+            .into(),
+            BoundField::u8(
+                "profile",
+                |r: &PositionRow| r.profile,
+                |r: &mut PositionRow, v| r.profile = v,
+            )
+            .into(),
+            flags(
+                "motion",
+                vec![u16("heading"), u8("speed"), i16("altitude")],
+            )
+            .into(),
+        ],
+    )
 }
 
 #[test]
-fn ac2_unpack_takes_the_same_scheme() {
-    let back = BinaryPacker::unpack(&marker_row_scheme(), &parse_hex("2017")).expect("unpack");
-    assert_eq!(back.sid, 23);
+fn ac1_scheme_replaces_packet() {
+    let source = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/lib.rs"));
+    assert!(!source.contains("BinaryPacker"));
+    assert!(!source.contains("type_num"));
+    assert!(!source.contains(" packet,"));
+    assert!(!source.contains(" Packet"));
+    let row = MarkerRow { sid: 23 };
+    let bytes = pack(&marker_scheme(), &row).expect("pack");
+    assert_eq!(to_hex(&bytes), "2017");
+}
+
+#[test]
+fn ac2_position_row_no_type_member() {
+    let row = PositionRow {
+        sid: 1,
+        lat: 500_000_000,
+        lon: 300_000_000,
+        profile: 1,
+    };
+    let bytes = pack(&position_row_scheme(), &row).expect("pack");
+    assert_eq!(to_hex(&bytes), "4001000065cd1d00a3e1110100");
     let source = include_str!("scheme_tests.rs");
-    let start = source
-        .find("struct MarkerRow")
-        .expect("MarkerRow");
+    let start = source.find("struct PositionRow").expect("PositionRow");
     let brace = source[start..].find('{').expect("{") + start;
     let mut depth = 0;
     let mut end = brace;
@@ -91,7 +191,137 @@ fn ac2_unpack_takes_the_same_scheme() {
 }
 
 #[test]
-fn ac3_scheme_argument_is_required() {
+fn ac3_known_scheme_checks_leading_byte() {
+    match unpack(&marker_scheme(), &parse_hex("2117")) {
+        Err(UnpackError::Type { expected, actual }) => {
+            assert_eq!(expected, 32);
+            assert_eq!(actual, 33);
+        }
+        Ok(_) => panic!("expected UnpackError::Type, got row"),
+        Err(other) => panic!("expected UnpackError::Type, got {:?}", other),
+    }
+}
+
+#[test]
+fn ac3_empty_buffer_short_packet() {
+    match unpack::<MarkerRow>(&marker_scheme(), &[]) {
+        Err(UnpackError::Short(ShortPacket {
+            field,
+            needed,
+            left,
+        })) => {
+            assert_eq!(field, "");
+            assert_eq!(needed, 1);
+            assert_eq!(left, 0);
+        }
+        other => panic!("expected ShortPacket, got {:?}", other),
+    }
+}
+
+#[test]
+fn ac4_unknown_buffer_calls_matching_handler() {
+    let bytes = parse_hex("02070000000800000009000000");
+    let mut modified_called = false;
+    let mut position_got = None;
+    let modified = modified_scheme();
+    let position = position_event_scheme();
+    let mut on_modified = modified.on(|_ev| {
+        modified_called = true;
+    });
+    let mut on_position = position.on(|ev| {
+        position_got = Some(ev);
+    });
+    unpack_with(&bytes, &mut [&mut on_modified, &mut on_position]).expect("dispatch");
+    assert!(!modified_called);
+    assert_eq!(
+        position_got,
+        Some(UserPositionEvent {
+            user_id: 7,
+            latitude: 8,
+            longitude: 9,
+        })
+    );
+    let source = include_str!("scheme_tests.rs");
+    let start = source
+        .find("struct UserPositionEvent")
+        .expect("UserPositionEvent");
+    let brace = source[start..].find('{').expect("{") + start;
+    let mut depth = 0;
+    let mut end = brace;
+    for (i, ch) in source[brace..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    end = brace + i;
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let body = &source[start..=end];
+    assert!(!body.contains("type"));
+}
+
+#[test]
+fn ac5_unknown_type_number() {
+    let bytes = parse_hex("09070000000800000009000000");
+    let mut modified_called = false;
+    let mut position_called = false;
+    let modified = modified_scheme();
+    let position = position_event_scheme();
+    let mut on_modified = modified.on(|_ev| {
+        modified_called = true;
+    });
+    let mut on_position = position.on(|_ev| {
+        position_called = true;
+    });
+    match unpack_with(&bytes, &mut [&mut on_modified, &mut on_position]) {
+        Err(UnpackError::Type { actual, .. }) => assert_eq!(actual, 9),
+        other => panic!("expected Type error, got {:?}", other),
+    }
+    assert!(!modified_called);
+    assert!(!position_called);
+}
+
+#[test]
+fn ac6_type_numbers_unique() {
+    let modified = modified_scheme();
+    let other = Scheme::new(
+        1,
+        [BoundField::i32(
+            "userId",
+            |r: &UserPositionEvent| r.user_id,
+            |r: &mut UserPositionEvent, v| r.user_id = v,
+        )
+        .into()],
+    );
+    let mut on_a = modified.on(|_ev| {});
+    let mut on_b = other.on(|_ev| {});
+    match unpack_with(&[1], &mut [&mut on_a, &mut on_b]) {
+        Err(UnpackError::DuplicateType { type_number }) => assert_eq!(type_number, 1),
+        other => panic!("expected DuplicateType, got {:?}", other),
+    }
+}
+
+#[test]
+fn type_number_range() {
+    assert!(std::panic::catch_unwind(|| {
+        let _ = Scheme::<MarkerRow>::new(256, []);
+    })
+    .is_err());
+    assert!(std::panic::catch_unwind(|| {
+        let _ = Scheme::<MarkerRow>::new(-1, []);
+    })
+    .is_err());
+}
+
+#[test]
+fn scheme_argument_is_required() {
+    use std::fs;
+    use std::process::Command;
     let manifest = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/tests/compile-fail/pack_without_scheme/Cargo.toml"
@@ -118,55 +348,4 @@ fn ac3_scheme_argument_is_required() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
     );
-}
-
-#[test]
-fn ac4_wrong_type_byte() {
-    match BinaryPacker::unpack(&marker_row_scheme(), &parse_hex("2117")) {
-        Err(UnpackError::Type { expected, actual }) => {
-            assert_eq!(expected, 32);
-            assert_eq!(actual, 33);
-        }
-        Ok(_) => panic!("expected UnpackError::Type, got row"),
-        Err(other) => panic!("expected UnpackError::Type, got {:?}", other),
-    }
-}
-
-#[test]
-fn ac5_untyped_path() {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../fixtures/golden.hex");
-    let fixture = fs::read_to_string(path).expect("golden.hex").trim().to_string();
-    let packed = pack(&position_packet(), &position_values()).expect("pack");
-    assert_eq!(to_hex(&packed), fixture);
-    assert_eq!(mismatched_bytes(&packed, &parse_hex(&fixture)), 0);
-}
-
-#[test]
-fn ac6_row_stays_data() {
-    let source = include_str!("scheme_tests.rs");
-    let start = source
-        .find("struct MarkerRow")
-        .expect("MarkerRow");
-    let brace = source[start..].find('{').expect("{") + start;
-    let mut depth = 0;
-    let mut end = brace;
-    for (i, ch) in source[brace..].char_indices() {
-        match ch {
-            '{' => depth += 1,
-            '}' => {
-                depth -= 1;
-                if depth == 0 {
-                    end = brace + i;
-                    break;
-                }
-            }
-            _ => {}
-        }
-    }
-    let body = &source[start..=end];
-    assert!(body.contains("sid"));
-    assert!(!body.contains("Scheme"));
-    assert!(!body.contains("Pack"));
-    assert!(!body.contains("BinaryPacker"));
-    assert!(!body.contains("fn "));
 }

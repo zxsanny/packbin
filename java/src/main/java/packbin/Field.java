@@ -21,8 +21,7 @@ public final class Field {
         BITS,
         UTF8,
         LIST,
-        DICT,
-        TYPE_NUM
+        DICT
     }
 
     final Kind kind;
@@ -36,7 +35,6 @@ public final class Field {
     final Field inner;
     final String countName;
     final List<String> names;
-    final int constant;
 
     private Field(
             Kind kind,
@@ -49,8 +47,7 @@ public final class Field {
             int bitIndex,
             Field inner,
             String countName,
-            List<String> names,
-            int constant) {
+            List<String> names) {
         this.kind = kind;
         this.name = name;
         this.bigEndian = bigEndian;
@@ -62,100 +59,77 @@ public final class Field {
         this.inner = inner;
         this.countName = countName;
         this.names = names == null ? List.of() : List.copyOf(names);
-        this.constant = constant;
     }
 
     static Field scalar(Kind kind, String name, int size) {
-        return new Field(kind, name, false, size, null, null, null, 0, null, null, null, 0);
+        return new Field(kind, name, false, size, null, null, null, 0, null, null, null);
     }
 
     static Field bytes(String name, int n) {
-        return new Field(Kind.BYTES, name, false, n, null, null, null, 0, null, null, null, 0);
-    }
-
-    static Field typeNum(int value) {
-        return new Field(Kind.TYPE_NUM, "", false, 1, null, null, null, 0, null, null, null, value);
+        return new Field(Kind.BYTES, name, false, n, null, null, null, 0, null, null, null);
     }
 
     static Field flags(String name, Field[] fields) {
-        rejectNestedTypeNum(fields);
         FlagGroup group = new FlagGroup(name);
         List<Field> bits = new ArrayList<>(fields.length);
         for (Field field : fields) {
             bits.add(group.addBit(field));
         }
-        return new Field(Kind.FLAGS, name, false, 1, bits, null, group, 0, null, null, null, 0);
+        return new Field(Kind.FLAGS, name, false, 1, bits, null, group, 0, null, null, null);
     }
 
     static Field flagByte(String name) {
         FlagGroup group = new FlagGroup(name);
-        return new Field(Kind.FLAG_BYTE, name, false, 1, null, null, group, 0, null, null, null, 0);
+        return new Field(Kind.FLAG_BYTE, name, false, 1, null, null, group, 0, null, null, null);
     }
 
     static Field flagBit(FlagGroup group, int bitIndex, Field inner) {
-        return new Field(Kind.FLAG_BIT, inner.name, false, 0, null, null, group, bitIndex, inner, null, null, 0);
+        return new Field(Kind.FLAG_BIT, inner.name, false, 0, null, null, group, bitIndex, inner, null, null);
     }
 
     static Field when(Packbin.Eq condition, Field[] fields) {
-        rejectNestedTypeNum(fields);
-        return new Field(Kind.WHEN, condition.field, false, 0, List.of(fields), condition, null, 0, null, null, null, 0);
+        return new Field(Kind.WHEN, condition.field, false, 0, List.of(fields), condition, null, 0, null, null, null);
     }
 
     static Field repeat(Field[] fields) {
-        rejectNestedTypeNum(fields);
-        return new Field(Kind.REPEAT, "", false, 0, List.of(fields), null, null, 0, null, null, null, 0);
+        return new Field(Kind.REPEAT, "", false, 0, List.of(fields), null, null, 0, null, null, null);
     }
 
     static Field group(String name, Field[] fields) {
-        rejectNestedTypeNum(fields);
-        return new Field(Kind.GROUP, name, false, 0, List.of(fields), null, null, 0, null, null, null, 0);
+        return new Field(Kind.GROUP, name, false, 0, List.of(fields), null, null, 0, null, null, null);
     }
 
     static Field sized(String name, String countField) {
-        return new Field(Kind.SIZED, name, false, 0, null, null, null, 0, null, countField, null, 0);
+        return new Field(Kind.SIZED, name, false, 0, null, null, null, 0, null, countField, null);
     }
 
     static Field u2(String[] names) {
         if (names.length == 0) {
             throw new IllegalArgumentException("u2 needs at least one name");
         }
-        return new Field(Kind.U2, names[0], false, 0, null, null, null, 0, null, null, List.of(names), 0);
+        return new Field(Kind.U2, names[0], false, 0, null, null, null, 0, null, null, List.of(names));
     }
 
     static Field bits(String name, String countField) {
-        return new Field(Kind.BITS, name, false, 0, null, null, null, 0, null, countField, null, 0);
+        return new Field(Kind.BITS, name, false, 0, null, null, null, 0, null, countField, null);
     }
 
     static Field utf8(String name) {
-        return new Field(Kind.UTF8, name, false, 0, null, null, null, 0, null, null, null, 0);
+        return new Field(Kind.UTF8, name, false, 0, null, null, null, 0, null, null, null);
     }
 
     static Field list(String name, Field element) {
         if (element.kind == Kind.REPEAT) {
             throw new IllegalArgumentException("repeat is not a list element");
         }
-        rejectNestedTypeNum(element);
-        return new Field(Kind.LIST, name, false, 0, List.of(element), null, null, 0, null, null, null, 0);
+        return new Field(Kind.LIST, name, false, 0, List.of(element), null, null, 0, null, null, null);
     }
 
     static Field dict(String name, Field element) {
         if (element.kind == Kind.REPEAT) {
             throw new IllegalArgumentException("repeat is not a dictionary element");
         }
-        rejectNestedTypeNum(element);
-        return new Field(Kind.DICT, name, false, 0, List.of(element), null, null, 0, null, null, null, 0);
-    }
-
-    static void rejectNestedTypeNum(Field... fields) {
-        for (Field field : fields) {
-            if (field.kind == Kind.TYPE_NUM) {
-                throw new IllegalArgumentException("type number cannot be nested");
-            }
-            rejectNestedTypeNum(field.children.toArray(Field[]::new));
-            if (field.inner != null) {
-                rejectNestedTypeNum(field.inner);
-            }
-        }
+        return new Field(Kind.DICT, name, false, 0, List.of(element), null, null, 0, null, null, null);
     }
 
     Field withBigEndian() {
@@ -164,14 +138,13 @@ public final class Field {
                 && kind != Kind.F32 && kind != Kind.F64) {
             throw new IllegalArgumentException("be() expects a numeric field");
         }
-        return new Field(kind, name, true, size, children, condition, group, bitIndex, inner, countName, names, constant);
+        return new Field(kind, name, true, size, children, condition, group, bitIndex, inner, countName, names);
     }
 
     public Field bit(Field field) {
         if (kind != Kind.FLAG_BYTE || group == null) {
             throw new IllegalStateException("bit() requires flagByte");
         }
-        rejectNestedTypeNum(field);
         return group.addBit(field);
     }
 

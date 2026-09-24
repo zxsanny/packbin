@@ -10,6 +10,6 @@ public static class Program
     public static void Main()
     {
         var row = new MarkerRow { sid = 23 };
-        _ = BinaryPacker.Pack(row);
+        _ = Pack.Run(row);
     }
 }

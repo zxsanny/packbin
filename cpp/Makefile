@@ -3,8 +3,8 @@ CXXFLAGS ?= -std=c++17 -O2 -Wall -Wextra -Werror -Iinclude
 ifdef PACKBIN_CXX_SYSROOT
 CXXFLAGS += -isysroot $(PACKBIN_CXX_SYSROOT) -I$(PACKBIN_CXX_SYSROOT)/usr/include/c++/v1
 endif
-SRCS := src/field.cpp src/packbin.cpp src/counted.cpp
-TEST_SRC := tests/packbin_tests.cpp tests/scheme_tests.cpp
+SRCS := src/field.cpp src/packbin.cpp src/counted.cpp src/walk.cpp
+TEST_SRC := tests/packbin_tests.cpp tests/scheme_tests.cpp tests/kinds_tests.cpp
 TEST_BIN := build/packbin_tests
 COMPILE_FAIL_SRC := tests/compile-fail/pack_without_scheme.cpp
 

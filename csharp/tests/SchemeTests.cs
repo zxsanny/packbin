@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Reflection;
 using Packbin;
 
 namespace Packbin.Tests;
@@ -11,12 +10,46 @@ public class SchemeTests
         public byte sid { get; set; }
     }
 
-    private static readonly Scheme<MarkerRow> MarkerRowScheme = Scheme<MarkerRow>.Of(
-        TypeNum.Set(32),
-        Field.U8("sid"));
+    public sealed class UserModifiedEvent
+    {
+        public int userId { get; set; }
+        public string userNameChange { get; set; } = "";
+        public string userEmailChange { get; set; } = "";
+        public byte userStatusChange { get; set; }
+    }
 
-    private static readonly Packet Position = Packet.Of(
-        Field.U8("type"),
+    public sealed class UserPositionEvent
+    {
+        public int userId { get; set; }
+        public int latitude { get; set; }
+        public int longitude { get; set; }
+    }
+
+    public sealed class PositionRow
+    {
+        public ushort sid { get; set; }
+        public int lat { get; set; }
+        public int lon { get; set; }
+        public byte profile { get; set; }
+        public ushort? heading { get; set; }
+        public byte? speed { get; set; }
+        public short? altitude { get; set; }
+    }
+
+    private static readonly Scheme<MarkerRow> MarkerScheme = new(32, Field.U8("sid"));
+
+    private static readonly Scheme<UserModifiedEvent> ModifiedScheme = new(1,
+        Field.I32("userId"),
+        Field.Utf8("userNameChange"),
+        Field.Utf8("userEmailChange"),
+        Field.U8("userStatusChange"));
+
+    private static readonly Scheme<UserPositionEvent> PositionEventScheme = new(2,
+        Field.I32("userId"),
+        Field.I32("latitude"),
+        Field.I32("longitude"));
+
+    private static readonly Scheme<PositionRow> PositionScheme = new(0x40,
         Field.U16("sid"),
         Field.I32("lat"),
         Field.I32("lon"),
@@ -25,36 +58,130 @@ public class SchemeTests
 
     private static readonly Dictionary<string, object?> PositionValues = new()
     {
-        ["type"] = (byte)0x40,
         ["sid"] = (ushort)1,
         ["lat"] = 500_000_000,
         ["lon"] = 300_000_000,
         ["profile"] = (byte)1,
     };
 
+    private const string GoldenHex = "4001000065cd1d00a3e1110100";
+    private const string Ac4Hex = "02070000000800000009000000";
+
     [Fact]
-    public void Ac1_PackTakesTheScheme()
+    public void Ac1_SchemeReplacesPacket()
     {
-        var row = new MarkerRow { sid = 23 };
-        var bytes = BinaryPacker.Pack(MarkerRowScheme, row);
+        Assert.Null(typeof(Packbin.Scheme<MarkerRow>).Assembly.GetType("Packbin.Packet"));
+        Assert.Null(typeof(Packbin.Scheme<MarkerRow>).Assembly.GetType("Packbin.BinaryPacker"));
+        Assert.Null(typeof(Packbin.Scheme<MarkerRow>).Assembly.GetType("Packbin.TypeNum"));
+        var scheme = new Scheme<MarkerRow>(32, Field.U8("sid"));
+        Assert.Equal(32, scheme.TypeNumber);
+        Assert.Single(scheme.Fields);
+        Assert.ThrowsAny<ArgumentException>(() => new Scheme<MarkerRow>(-1, Field.U8("sid")));
+        Assert.ThrowsAny<ArgumentException>(() => new Scheme<MarkerRow>(256, Field.U8("sid")));
+        var bytes = Pack.Run(scheme, new MarkerRow { sid = 23 });
         Assert.Equal("2017", Convert.ToHexString(bytes).ToLowerInvariant());
-        Assert.Equal(new byte[] { 0x20, 0x17 }, bytes);
     }
 
     [Fact]
-    public void Ac2_UnpackTakesTheSameScheme()
+    public void Ac2_RowHasNoTypeMember()
     {
-        var back = BinaryPacker.Unpack(MarkerRowScheme, ParseHex("2017"));
+        var bytes = Pack.Run(PositionScheme, PositionValues);
+        Assert.Equal(GoldenHex, Convert.ToHexString(bytes).ToLowerInvariant());
+        var fixture = ParseHex(File.ReadAllText(FindGoldenFixture()).Trim());
+        Assert.Equal(0, MismatchedBytes(bytes, fixture));
+        Assert.Null(typeof(PositionRow).GetProperty("type"));
+        Assert.Null(typeof(PositionRow).GetField("type"));
+        var back = Unpack.Run(PositionScheme, bytes);
         Assert.True(back.Ok);
         Assert.NotNull(back.Value);
-        Assert.Equal((byte)23, back.Value.sid);
-        Assert.Null(typeof(MarkerRow).GetProperty("type"));
-        Assert.Null(typeof(MarkerRow).GetField("type"));
-        Assert.Single(typeof(MarkerRow).GetProperties(BindingFlags.Instance | BindingFlags.Public));
+        Assert.Equal((ushort)1, back.Value.sid);
+        Assert.Equal(500_000_000, back.Value.lat);
+        Assert.Equal(300_000_000, back.Value.lon);
+        Assert.Equal((byte)1, back.Value.profile);
     }
 
     [Fact]
-    public void Ac3_SchemeArgumentIsRequired()
+    public void Ac3_KnownSchemeChecksLeadingByte()
+    {
+        var scheme = new Scheme<MarkerRow>(1, Field.U8("sid"));
+        var back = Unpack.Run(scheme, ParseHex("0217"));
+        Assert.False(back.Ok);
+        Assert.Null(back.Value);
+        var mismatch = Assert.IsType<TypeMismatch>(back.Error);
+        Assert.Equal(1, mismatch.Expected);
+        Assert.Equal(2, mismatch.Actual);
+    }
+
+    [Fact]
+    public void Ac4_UnknownBufferCallsMatchingHandler()
+    {
+        UserModifiedEvent? modified = null;
+        UserPositionEvent? position = null;
+        var err = Unpack.Run(
+            ParseHex(Ac4Hex),
+            ModifiedScheme.On(ev => modified = ev),
+            PositionEventScheme.On(ev => position = ev));
+        Assert.Null(err);
+        Assert.Null(modified);
+        Assert.NotNull(position);
+        Assert.Equal(7, position.userId);
+        Assert.Equal(8, position.latitude);
+        Assert.Equal(9, position.longitude);
+        Assert.Null(typeof(UserPositionEvent).GetProperty("type"));
+        Assert.Null(typeof(UserPositionEvent).GetField("type"));
+        var packed = Pack.Run(PositionEventScheme, new UserPositionEvent
+        {
+            userId = 7,
+            latitude = 8,
+            longitude = 9,
+        });
+        Assert.Equal(Ac4Hex, Convert.ToHexString(packed).ToLowerInvariant());
+    }
+
+    [Fact]
+    public void Ac5_UnknownTypeNumber()
+    {
+        var modifiedRan = false;
+        var positionRan = false;
+        var err = Unpack.Run(
+            ParseHex("09070000000800000009000000"),
+            ModifiedScheme.On(_ => modifiedRan = true),
+            PositionEventScheme.On(_ => positionRan = true));
+        Assert.False(modifiedRan);
+        Assert.False(positionRan);
+        var mismatch = Assert.IsType<TypeMismatch>(err);
+        Assert.Equal(9, mismatch.Actual);
+    }
+
+    [Fact]
+    public void Ac6_TypeNumbersInOneCallAreUnique()
+    {
+        var other = new Scheme<UserModifiedEvent>(1,
+            Field.I32("userId"),
+            Field.Utf8("userNameChange"),
+            Field.Utf8("userEmailChange"),
+            Field.U8("userStatusChange"));
+        Assert.ThrowsAny<ArgumentException>(() =>
+            Unpack.Run(
+                ParseHex(Ac4Hex),
+                ModifiedScheme.On(_ => { }),
+                other.On(_ => { })));
+    }
+
+    [Fact]
+    public void EmptyBufferIsShortPacket()
+    {
+        var back = Unpack.Run(MarkerScheme, ReadOnlySpan<byte>.Empty);
+        Assert.False(back.Ok);
+        Assert.Null(back.Value);
+        var missing = Assert.IsType<ShortPacket>(back.Error);
+        Assert.Equal("", missing.Field);
+        Assert.Equal(1, missing.Needed);
+        Assert.Equal(0, missing.Left);
+    }
+
+    [Fact]
+    public void CompileFailRequiresScheme()
     {
         var fixtureDir = FindCompileFailDir();
         var project = Path.Combine(fixtureDir, "PackWithoutScheme.csproj");
@@ -74,56 +201,6 @@ public class SchemeTests
         Assert.True(
             process.ExitCode != 0,
             $"expected compile failure, exit={process.ExitCode}\n{stdout}\n{stderr}");
-    }
-
-    [Fact]
-    public void Ac4_WrongTypeByte()
-    {
-        var back = BinaryPacker.Unpack(MarkerRowScheme, ParseHex("2117"));
-        Assert.False(back.Ok);
-        Assert.Null(back.Value);
-        var mismatch = Assert.IsType<TypeMismatch>(back.Error);
-        Assert.Equal(32, mismatch.Expected);
-        Assert.Equal(33, mismatch.Actual);
-    }
-
-    [Fact]
-    public void Ac5_UntypedPath()
-    {
-        var bytes = Pack.Run(Position, PositionValues);
-        var fixture = ParseHex(File.ReadAllText(FindGoldenFixture()).Trim());
-        Assert.Equal(0, MismatchedBytes(bytes, fixture));
-    }
-
-    [Fact]
-    public void Ac6_RowStaysData()
-    {
-        var source = File.ReadAllText(FindMarkerRowSource());
-        var classStart = source.IndexOf("public sealed class MarkerRow", StringComparison.Ordinal);
-        Assert.True(classStart >= 0);
-        var brace = source.IndexOf('{', classStart);
-        var depth = 0;
-        var end = brace;
-        for (var i = brace; i < source.Length; i++)
-        {
-            if (source[i] == '{')
-                depth++;
-            else if (source[i] == '}')
-            {
-                depth--;
-                if (depth == 0)
-                {
-                    end = i;
-                    break;
-                }
-            }
-        }
-        var body = source[classStart..(end + 1)];
-        Assert.Contains("public byte sid", body);
-        Assert.DoesNotContain("Scheme", body);
-        Assert.DoesNotContain("Pack", body);
-        Assert.DoesNotContain("interface", body, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("IPack", body);
     }
 
     private static int MismatchedBytes(byte[] actual, byte[] expected)
@@ -174,21 +251,5 @@ public class SchemeTests
             dir = dir.Parent;
         }
         throw new DirectoryNotFoundException("csharp/tests/compile-fail");
-    }
-
-    private static string FindMarkerRowSource()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            var path = Path.Combine(dir.FullName, "csharp", "tests", "SchemeTests.cs");
-            if (File.Exists(path))
-                return path;
-            path = Path.Combine(dir.FullName, "tests", "SchemeTests.cs");
-            if (File.Exists(path))
-                return path;
-            dir = dir.Parent;
-        }
-        throw new FileNotFoundException("SchemeTests.cs");
     }
 }

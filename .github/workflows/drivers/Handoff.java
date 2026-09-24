@@ -2,17 +2,22 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import packbin.Pack;
 import packbin.Packbin;
+import packbin.Scheme;
+import packbin.Unpack;
 
 public final class Handoff {
+    private static final class Row {}
+
     public static void main(String[] args) {
         if (args.length < 1) {
             System.exit(2);
         }
         String cmd = args[0];
         switch (cmd) {
-            case "pack-user" -> System.out.println(hex(Packbin.pack(userPacket(), userValues())));
-            case "pack-nested" -> System.out.println(hex(Packbin.pack(nestedPacket(), nestedValues())));
+            case "pack-user" -> System.out.println(hex(Pack.run(userScheme(), userValues())));
+            case "pack-nested" -> System.out.println(hex(Pack.run(nestedScheme(), nestedValues())));
             case "unpack-user" -> System.exit(userOk(requireHex(args)) ? 0 : 1);
             case "unpack-nested" -> System.exit(nestedOk(requireHex(args)) ? 0 : 1);
             default -> System.exit(2);
@@ -26,8 +31,10 @@ public final class Handoff {
         return args[1];
     }
 
-    private static Packbin.Packet userPacket() {
-        return Packbin.packet(
+    private static Scheme<Row> userScheme() {
+        return new Scheme<>(
+                1,
+                Row.class,
                 Packbin.utf8("username"),
                 Packbin.list("roles", Packbin.utf8("role")),
                 Packbin.dict("access", Packbin.list("actions", Packbin.utf8("action"))));
@@ -45,8 +52,10 @@ public final class Handoff {
         return values;
     }
 
-    private static Packbin.Packet nestedPacket() {
-        return Packbin.packet(
+    private static Scheme<Row> nestedScheme() {
+        return new Scheme<>(
+                1,
+                Row.class,
                 Packbin.dict("access", Packbin.list("rows", Packbin.dict("fields", Packbin.utf8("value")))));
     }
 
@@ -60,7 +69,7 @@ public final class Handoff {
     }
 
     private static boolean userOk(String hex) {
-        Packbin.UnpackResult got = Packbin.unpack(userPacket(), parse(hex));
+        Packbin.UnpackResult got = Unpack.values(userScheme(), parse(hex));
         if (!got.ok || got.value.size() != 3) {
             return false;
         }
@@ -80,7 +89,7 @@ public final class Handoff {
     }
 
     private static boolean nestedOk(String hex) {
-        Packbin.UnpackResult got = Packbin.unpack(nestedPacket(), parse(hex));
+        Packbin.UnpackResult got = Unpack.values(nestedScheme(), parse(hex));
         if (!got.ok) {
             return false;
         }

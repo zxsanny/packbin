@@ -1,53 +1,47 @@
 namespace Packbin;
 
-public sealed class Packet
+public sealed class Scheme<T> where T : class, new()
 {
+    public int TypeNumber { get; }
     public IReadOnlyList<Field> Fields { get; }
 
-    private Packet(Field[] fields) => Fields = fields;
-
-    public static Packet Of(params Field[] fields)
+    public Scheme(int typeNumber, params Field[] fields)
     {
-        var typeNumAt = -1;
-        for (var i = 0; i < fields.Length; i++)
-        {
-            if (fields[i].Type != Field.Kind.TypeNum)
-                continue;
-            if (typeNumAt >= 0)
-                throw new ArgumentException("type number appears twice");
-            typeNumAt = i;
-        }
-        if (typeNumAt > 0)
-            throw new ArgumentException("type number must be the first top-level field");
-        return new(fields);
+        if (typeNumber is < 0 or > 255)
+            throw new ArgumentOutOfRangeException(nameof(typeNumber), typeNumber, "type number must be 0..255");
+        TypeNumber = typeNumber;
+        Fields = fields;
     }
+
+    public SchemeHandler On(Action<T> handler) => new SchemeHandler<T>(this, handler);
 }
 
-public sealed class Scheme<T> where T : class
+public abstract class SchemeHandler
 {
-    internal Packet Packet { get; }
-
-    private Scheme(Packet packet) => Packet = packet;
-
-    public static Scheme<T> Of(params Field[] fields) => new(Packet.Of(fields));
+    internal abstract int TypeNumber { get; }
+    internal abstract object? Dispatch(ReadOnlySpan<byte> fieldBytes);
 }
 
-public static class BinaryPacker
+internal sealed class SchemeHandler<T> : SchemeHandler where T : class, new()
 {
-    public static byte[] Pack<T>(Scheme<T> scheme, T row) where T : class =>
-        Packbin.Pack.Run(scheme.Packet, row);
+    private readonly Scheme<T> _scheme;
+    private readonly Action<T> _action;
 
-    public static Bound<T> Unpack<T>(Scheme<T> scheme, ReadOnlySpan<byte> bytes) where T : class, new() =>
-        Packbin.Unpack.Run<T>(scheme.Packet, bytes);
-}
-
-public static class TypeNum
-{
-    public static Field Set(int value)
+    internal SchemeHandler(Scheme<T> scheme, Action<T> action)
     {
-        if (value is < 0 or > 255)
-            throw new ArgumentOutOfRangeException(nameof(value), value, "type number must be 0..255");
-        return Field.CreateTypeNum(value);
+        _scheme = scheme;
+        _action = action;
+    }
+
+    internal override int TypeNumber => _scheme.TypeNumber;
+
+    internal override object? Dispatch(ReadOnlySpan<byte> fieldBytes)
+    {
+        var raw = Unpack.ReadFields(_scheme.Fields, fieldBytes);
+        if (raw.Error is not null)
+            return raw.Error;
+        _action(ObjectValues.To<T>(raw.Values));
+        return null;
     }
 }
 
@@ -130,7 +124,6 @@ public sealed class Field
         Utf8,
         List,
         Dict,
-        TypeNum,
     }
 
     internal Kind Type { get; }
@@ -144,7 +137,6 @@ public sealed class Field
     internal Field? Inner { get; }
     internal string CountName { get; }
     internal string[] Names { get; }
-    internal int Constant { get; }
 
     private Field(
         Kind type,
@@ -157,8 +149,7 @@ public sealed class Field
         int bitIndex = 0,
         Field? inner = null,
         string countName = "",
-        string[]? names = null,
-        int constant = 0)
+        string[]? names = null)
     {
         Type = type;
         Name = name;
@@ -171,30 +162,16 @@ public sealed class Field
         Inner = inner;
         CountName = countName;
         Names = names ?? [];
-        Constant = constant;
     }
 
     public Field Be() =>
-        new(Type, Name, true, ByteCount, Children, Pred, FlagOwner, BitIndex, Inner, CountName, Names, Constant);
+        new(Type, Name, true, ByteCount, Children, Pred, FlagOwner, BitIndex, Inner, CountName, Names);
 
     public Field Bit(Field field)
     {
         if (Type != Kind.FlagByte || FlagOwner is null)
             throw new InvalidOperationException("Bit requires FlagByte.");
-        RejectNestedTypeNum(field);
         return FlagOwner.AddBit(field);
-    }
-
-    private static void RejectNestedTypeNum(params Field[] fields)
-    {
-        foreach (var field in fields)
-        {
-            if (field.Type == Kind.TypeNum)
-                throw new ArgumentException("type number cannot be nested");
-            RejectNestedTypeNum(field.Children);
-            if (field.Inner is not null)
-                RejectNestedTypeNum(field.Inner);
-        }
     }
 
     public static Field U8(string name) => new(Kind.U8, name, byteCount: 1);
@@ -217,7 +194,6 @@ public sealed class Field
 
     public static Field Flags(string name, params Field[] fields)
     {
-        RejectNestedTypeNum(fields);
         var group = new FlagGroup(name);
         var bits = new Field[fields.Length];
         for (var i = 0; i < fields.Length; i++)
@@ -225,23 +201,14 @@ public sealed class Field
         return new Field(Kind.Flags, name, children: bits, flagOwner: group);
     }
 
-    public static Field When(Condition condition, params Field[] fields)
-    {
-        RejectNestedTypeNum(fields);
-        return new(Kind.When, condition.Field, children: fields, pred: condition);
-    }
+    public static Field When(Condition condition, params Field[] fields) =>
+        new(Kind.When, condition.Field, children: fields, pred: condition);
 
-    public static Field Repeat(params Field[] fields)
-    {
-        RejectNestedTypeNum(fields);
-        return new(Kind.Repeat, "", children: fields);
-    }
+    public static Field Repeat(params Field[] fields) =>
+        new(Kind.Repeat, "", children: fields);
 
-    public static Field Group(string name, params Field[] fields)
-    {
-        RejectNestedTypeNum(fields);
-        return new(Kind.Group, name, children: fields);
-    }
+    public static Field Group(string name, params Field[] fields) =>
+        new(Kind.Group, name, children: fields);
 
     public static Field Sized(string name, string countField) =>
         new(Kind.Sized, name, countName: countField);
@@ -262,7 +229,6 @@ public sealed class Field
     {
         if (element.Type == Kind.Repeat)
             throw new ArgumentException("repeat is not a list element");
-        RejectNestedTypeNum(element);
         return new(Kind.List, name, children: [element]);
     }
 
@@ -270,43 +236,81 @@ public sealed class Field
     {
         if (element.Type == Kind.Repeat)
             throw new ArgumentException("repeat is not a dictionary element");
-        RejectNestedTypeNum(element);
         return new(Kind.Dict, name, children: [element]);
     }
 
     internal static Field CreateFlagBit(FlagGroup group, int bitIndex, Field inner) =>
         new(Kind.FlagBit, inner.Name, flagOwner: group, bitIndex: bitIndex, inner: inner);
-
-    internal static Field CreateTypeNum(int value) =>
-        new(Kind.TypeNum, "", byteCount: 1, constant: value);
 }
 
 
 public static class Pack
 {
-    public static byte[] Run(Packet packet, IReadOnlyDictionary<string, object?> values)
+    public static byte[] Run<T>(Scheme<T> scheme, IReadOnlyDictionary<string, object?> values) where T : class, new()
     {
         var buffer = new List<byte>(32);
-        foreach (var field in packet.Fields)
+        buffer.Add((byte)scheme.TypeNumber);
+        foreach (var field in scheme.Fields)
             Walker.PackField(field, values, buffer);
         return buffer.ToArray();
     }
 
-    public static byte[] Run<T>(Packet packet, T? values) where T : class
+    public static byte[] Run<T>(Scheme<T> scheme, T? values) where T : class, new()
     {
         if (values is IReadOnlyDictionary<string, object?> map)
-            return Run(packet, map);
-        return Run(packet, ObjectValues.From(values));
+            return Run(scheme, map);
+        return Run(scheme, ObjectValues.From(values));
     }
 }
 
 public static class Unpack
 {
-    public static UnpackResult Run(Packet packet, ReadOnlySpan<byte> bytes)
+    public static Bound<T> Run<T>(Scheme<T> scheme, ReadOnlySpan<byte> bytes) where T : class, new()
+    {
+        var raw = Read(scheme, bytes);
+        if (raw.Error is not null)
+            return new Bound<T>(null, raw.Error);
+        return new Bound<T>(ObjectValues.To<T>(raw.Values), null);
+    }
+
+    public static object? Run(ReadOnlySpan<byte> bytes, params SchemeHandler[] handlers)
+    {
+        var seen = new HashSet<int>();
+        foreach (var handler in handlers)
+        {
+            if (!seen.Add(handler.TypeNumber))
+                throw new ArgumentException("duplicate type number");
+        }
+
+        if (bytes.Length < 1)
+            return new ShortPacket("", 1, 0);
+
+        var actual = bytes[0];
+        foreach (var handler in handlers)
+        {
+            if (handler.TypeNumber != actual)
+                continue;
+            return handler.Dispatch(bytes[1..]);
+        }
+
+        return new TypeMismatch(0, actual);
+    }
+
+    internal static UnpackResult Read<T>(Scheme<T> scheme, ReadOnlySpan<byte> bytes) where T : class, new()
+    {
+        if (bytes.Length < 1)
+            return new UnpackResult([], new ShortPacket("", 1, 0));
+        var actual = bytes[0];
+        if (actual != scheme.TypeNumber)
+            return new UnpackResult([], new TypeMismatch(scheme.TypeNumber, actual));
+        return ReadFields(scheme.Fields, bytes[1..]);
+    }
+
+    internal static UnpackResult ReadFields(IReadOnlyList<Field> fields, ReadOnlySpan<byte> bytes)
     {
         var values = new Dictionary<string, object?>();
         var offset = 0;
-        foreach (var field in packet.Fields)
+        foreach (var field in fields)
         {
             var err = Walker.UnpackField(field, bytes, ref offset, values, repeatLists: false);
             if (err is not null)
@@ -315,13 +319,5 @@ public static class Unpack
         if (offset < bytes.Length)
             return new UnpackResult([], new TrailingBytes(bytes.Length - offset));
         return new UnpackResult(values, null);
-    }
-
-    public static Bound<T> Run<T>(Packet packet, ReadOnlySpan<byte> bytes) where T : class, new()
-    {
-        var raw = Run(packet, bytes);
-        if (raw.Error is not null)
-            return new Bound<T>(null, raw.Error);
-        return new Bound<T>(ObjectValues.To<T>(raw.Values), null);
     }
 }

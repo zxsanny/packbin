@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import sys
 
-from packbin import dict, list, pack, packet, unpack, utf8
+from packbin import Scheme, dict as map_field, list, pack, unpack, utf8
 
-USER = packet(
-    [
-        utf8("username"),
-        list("roles", utf8("role")),
-        dict("access", list("actions", utf8("action"))),
-    ]
+USER = Scheme(
+    1,
+    dict,
+    utf8("username"),
+    list("roles", utf8("role")),
+    map_field("access", list("actions", utf8("action"))),
 )
 
 USER_VALUES = {
@@ -22,8 +22,10 @@ USER_VALUES = {
     },
 }
 
-NESTED = packet(
-    [dict("access", list("rows", dict("fields", utf8("value"))))]
+NESTED = Scheme(
+    1,
+    dict,
+    map_field("access", list("rows", map_field("fields", utf8("value")))),
 )
 
 NESTED_VALUES = {

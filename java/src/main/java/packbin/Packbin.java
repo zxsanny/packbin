@@ -1,44 +1,9 @@
 package packbin;
 
-import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 public final class Packbin {
     private Packbin() {}
-
-    public static Packet packet(Field... fields) {
-        validateTypeNum(fields);
-        return new Packet(fields);
-    }
-
-    public static final class TypeNum {
-        private TypeNum() {}
-
-        public static Field set(int value) {
-            if (value < 0 || value > 255) {
-                throw new IllegalArgumentException("type number must be 0..255");
-            }
-            return Field.typeNum(value);
-        }
-    }
-
-    private static void validateTypeNum(Field[] fields) {
-        int typeNumAt = -1;
-        for (int i = 0; i < fields.length; i++) {
-            if (fields[i].kind != Field.Kind.TYPE_NUM) {
-                continue;
-            }
-            if (typeNumAt >= 0) {
-                throw new IllegalArgumentException("type number appears twice");
-            }
-            typeNumAt = i;
-        }
-        if (typeNumAt > 0) {
-            throw new IllegalArgumentException("type number must be the first top-level field");
-        }
-    }
 
     public static Field u8(String name) {
         return Field.scalar(Field.Kind.U8, name, 1);
@@ -147,57 +112,6 @@ public final class Packbin {
 
     public static Field dict(String name, Field element) {
         return Field.dict(name, element);
-    }
-
-    public static byte[] pack(Packet packet, Map<String, Object> values) {
-        Objects.requireNonNull(packet, "packet");
-        Map<String, Object> map = values == null ? Map.of() : values;
-        ByteSink sink = new ByteSink();
-        for (Field field : packet.fields) {
-            Walker.packField(field, map, sink);
-        }
-        return sink.toArray();
-    }
-
-    public static byte[] pack(Packet packet, Object values) {
-        if (values instanceof Map<?, ?> map) {
-            return pack(packet, ObjectValues.asMap(map));
-        }
-        return pack(packet, ObjectValues.read(values));
-    }
-
-    public static UnpackResult unpack(Packet packet, byte[] data) {
-        Objects.requireNonNull(packet, "packet");
-        Objects.requireNonNull(data, "data");
-        java.util.LinkedHashMap<String, Object> out = new java.util.LinkedHashMap<>();
-        int[] offset = {0};
-        for (Field field : packet.fields) {
-            Object err = Walker.unpackField(field, data, offset, out, false);
-            if (err != null) {
-                return UnpackResult.fail(err);
-            }
-        }
-        int left = data.length - offset[0];
-        if (left > 0) {
-            return UnpackResult.fail(new TrailingBytes(left));
-        }
-        return UnpackResult.ok(out);
-    }
-
-    public static <T> Bound<T> unpack(Packet packet, byte[] data, Class<T> type) {
-        UnpackResult raw = unpack(packet, data);
-        if (!raw.ok) {
-            return Bound.fail(raw.error);
-        }
-        return Bound.ok(ObjectValues.write(type, raw.value));
-    }
-
-    public static final class Packet {
-        final List<Field> fields;
-
-        Packet(Field[] fields) {
-            this.fields = List.copyOf(Arrays.asList(fields));
-        }
     }
 
     public static final class ShortPacket {

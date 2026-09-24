@@ -1,7 +1,6 @@
 package packbin;
 
 final class PositionRow {
-    public byte type;
     public int sid;
     public int lat;
     public int lon;
@@ -23,3 +22,5 @@ final class Session {
 final class SessionRow {
     public Session session;
 }
+
+final class MapRow {}

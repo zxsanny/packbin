@@ -1,14 +1,16 @@
-import { dict, list, pack, packet, unpack, utf8 } from "../../../typescript/src/index.ts";
+import { dict, list, pack, scheme, unpack, utf8 } from "../../../typescript/src/index.ts";
 
-const userPacket = packet([
+const userPacket = scheme(
+  1,
   utf8("username"),
   list("roles", utf8("role")),
   dict("access", list("actions", utf8("action"))),
-]);
+);
 
-const nestedPacket = packet([
+const nestedPacket = scheme(
+  1,
   dict("access", list("rows", dict("fields", utf8("value")))),
-]);
+);
 
 const userValues = {
   username: "zxsanny",
@@ -58,9 +60,8 @@ function deepEqual(a: unknown, b: unknown): boolean {
   return false;
 }
 
-function fieldsMatch(result: Record<string, unknown>, expected: object): boolean {
-  const { ok: _ok, ...fields } = result;
-  return deepEqual(fields, expected);
+function fieldsMatch(result: { ok: true; value: object }, expected: object): boolean {
+  return deepEqual(result.value, expected);
 }
 
 const cmd = process.argv[2];

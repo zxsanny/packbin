@@ -108,12 +108,12 @@ sealed class User
     public Dictionary<string, List<string>> access { get; set; } = [];
 }
 
-var userPacket = Packet.Of(
+var userScheme = new Scheme<User>(1,
     Field.Utf8("username"),
     Field.List("roles", Field.Utf8("role")),
     Field.Dict("access", Field.List("actions", Field.Utf8("action"))));
 
-var raw = Pack.Run(userPacket, new User
+var raw = Pack.Run(userScheme, new User
 {
     username = "ada",
     roles = ["user", "admin"],
@@ -126,23 +126,28 @@ var raw = Pack.Run(userPacket, new User
 ```
 
 ```
-03 00 61 64 61 02 00 04 00 75 73 65 72 05 00 61 64 6d 69 6e
+01 03 00 61 64 61 02 00 04 00 75 73 65 72 05 00 61 64 6d 69 6e
 02 00 03 00 6d 61 70 02 00 04 00 72 65 61 64 04 00 65 64 69 74
 05 00 73 74 6f 72 65 01 00 05 00 77 72 69 74 65
 ```
 
+The first byte is the scheme type number.
+
 ### Rust
 
 ```rust
-use packbin::{dict, list, packet, unpack, utf8};
+use packbin::{dict, list, unpack_map, utf8, MapScheme};
 
-let user = packet(vec![
-    utf8("username"),
-    list("roles", utf8("role")),
-    dict("access", list("actions", utf8("action"))),
-]);
+let user = MapScheme::new(
+    1,
+    vec![
+        utf8("username"),
+        list("roles", utf8("role")),
+        dict("access", list("actions", utf8("action"))),
+    ],
+);
 
-let got = unpack(&user, &raw).unwrap();
+let got = unpack_map(&user, &raw).unwrap();
 ```
 
 ## Data types

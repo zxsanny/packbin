@@ -19,8 +19,8 @@ packbin::Value one_op(char const* op) {
   return packbin::Value{fields};
 }
 
-packbin::Packet user_packet() {
-  return packbin::packet({
+auto user_scheme() {
+  return packbin::scheme(1, {
       packbin::utf8("username"),
       packbin::list("roles", packbin::utf8("role")),
       packbin::dict("access", packbin::list("actions", packbin::utf8("action"))),
@@ -39,9 +39,10 @@ packbin::Values user_values() {
   return values;
 }
 
-packbin::Packet nested_packet() {
-  return packbin::packet(
-      {packbin::dict("access", packbin::list("rows", packbin::dict("fields", packbin::utf8("value"))))});
+auto nested_scheme() {
+  return packbin::scheme(
+      1, {packbin::dict("access",
+                        packbin::list("rows", packbin::dict("fields", packbin::utf8("value"))))});
 }
 
 packbin::Values nested_values() {
@@ -78,7 +79,7 @@ bool same_strs(packbin::Value::List const& list, std::initializer_list<char cons
 }
 
 bool user_ok(std::string const& hex) {
-  auto got = packbin::unpack(user_packet(), parse_hex(hex));
+  auto got = packbin::unpack(user_scheme(), parse_hex(hex));
   if (!got.ok || got.value.size() != 3)
     return false;
   if (std::get<std::string>(got.value.at("username").data) != "zxsanny")
@@ -100,7 +101,7 @@ bool op_is(packbin::Value const& row, char const* op) {
 }
 
 bool nested_ok(std::string const& hex) {
-  auto got = packbin::unpack(nested_packet(), parse_hex(hex));
+  auto got = packbin::unpack(nested_scheme(), parse_hex(hex));
   if (!got.ok)
     return false;
   auto const& access = std::get<packbin::Value::Map>(got.value.at("access").data);
@@ -119,11 +120,11 @@ int main(int argc, char** argv) {
     return 2;
   std::string cmd = argv[1];
   if (cmd == "pack-user") {
-    std::cout << packbin::to_hex(packbin::pack(user_packet(), user_values())) << '\n';
+    std::cout << packbin::to_hex(packbin::pack(user_scheme(), user_values())) << '\n';
     return 0;
   }
   if (cmd == "pack-nested") {
-    std::cout << packbin::to_hex(packbin::pack(nested_packet(), nested_values())) << '\n';
+    std::cout << packbin::to_hex(packbin::pack(nested_scheme(), nested_values())) << '\n';
     return 0;
   }
   if (argc < 3)

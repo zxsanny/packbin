@@ -43,19 +43,25 @@ std::string find_golden() {
   return {};
 }
 
-std::string find_marker_row_source() {
+std::string read_file(char const* path) {
+  std::ifstream in(path);
+  if (!in)
+    return {};
+  std::stringstream buf;
+  buf << in.rdbuf();
+  return buf.str();
+}
+
+std::string api_sources() {
   char const* candidates[] = {
-      "tests/scheme_tests.cpp",
-      "cpp/tests/scheme_tests.cpp",
-      "../tests/scheme_tests.cpp",
+      "include/packbin/packbin.hpp",
+      "cpp/include/packbin/packbin.hpp",
+      "../include/packbin/packbin.hpp",
   };
   for (auto const* path : candidates) {
-    std::ifstream in(path);
-    if (in) {
-      std::stringstream buf;
-      buf << in.rdbuf();
-      return buf.str();
-    }
+    auto text = read_file(path);
+    if (!text.empty())
+      return text;
   }
   return {};
 }
@@ -64,92 +70,188 @@ struct MarkerRow {
   std::uint8_t sid = 0;
 };
 
-auto const& marker_row_scheme() {
-  static auto const scheme =
-      packbin::Scheme<MarkerRow>::of(packbin::type_num(32),
-                                     packbin::bind(packbin::u8("sid"), &MarkerRow::sid));
-  return scheme;
-}
+struct PositionRow {
+  std::uint16_t sid = 0;
+  std::int32_t lat = 0;
+  std::int32_t lon = 0;
+  std::uint8_t profile = 0;
+};
 
-packbin::Packet position_packet() {
-  return packbin::packet({
-      packbin::u8("type"),
-      packbin::u16("sid"),
-      packbin::i32("lat"),
-      packbin::i32("lon"),
-      packbin::u8("profile"),
+struct UserModifiedEvent {
+  std::int32_t userId = 0;
+  std::string userNameChange;
+  std::string userEmailChange;
+  std::uint8_t userStatusChange = 0;
+};
+
+struct UserPositionEvent {
+  std::int32_t userId = 0;
+  std::int32_t latitude = 0;
+  std::int32_t longitude = 0;
+};
+
+auto position_scheme() {
+  return packbin::Scheme<PositionRow>(
+      0x40, packbin::bind(packbin::u16("sid"), &PositionRow::sid),
+      packbin::bind(packbin::i32("lat"), &PositionRow::lat),
+      packbin::bind(packbin::i32("lon"), &PositionRow::lon),
+      packbin::bind(packbin::u8("profile"), &PositionRow::profile),
       packbin::flags("motion",
-                     {packbin::u16("heading"), packbin::u8("speed"), packbin::i16("altitude")}),
-  });
+                     {packbin::u16("heading"), packbin::u8("speed"), packbin::i16("altitude")}));
 }
 
-packbin::Values position_values() {
-  packbin::Values v;
-  v.emplace("type", packbin::Value{std::uint8_t{64}});
-  v.emplace("sid", packbin::Value{std::uint16_t{1}});
-  v.emplace("lat", packbin::Value{std::int32_t{500000000}});
-  v.emplace("lon", packbin::Value{std::int32_t{300000000}});
-  v.emplace("profile", packbin::Value{std::uint8_t{1}});
-  return v;
+auto modified_scheme() {
+  return packbin::Scheme<UserModifiedEvent>(
+      1, packbin::bind(packbin::i32("userId"), &UserModifiedEvent::userId),
+      packbin::bind(packbin::utf8("userNameChange"), &UserModifiedEvent::userNameChange),
+      packbin::bind(packbin::utf8("userEmailChange"), &UserModifiedEvent::userEmailChange),
+      packbin::bind(packbin::u8("userStatusChange"), &UserModifiedEvent::userStatusChange));
 }
 
-void ac1_pack_takes_the_scheme() {
+auto position_event_scheme() {
+  return packbin::Scheme<UserPositionEvent>(
+      2, packbin::bind(packbin::i32("userId"), &UserPositionEvent::userId),
+      packbin::bind(packbin::i32("latitude"), &UserPositionEvent::latitude),
+      packbin::bind(packbin::i32("longitude"), &UserPositionEvent::longitude));
+}
+
+void ac1_scheme_replaces_packet() {
+  auto source = api_sources();
+  expect(!source.empty(), "AC-1 header found");
+  expect(source.find("struct Packet") == std::string::npos, "AC-1 no struct Packet");
+  expect(source.find("BinaryPacker") == std::string::npos, "AC-1 no BinaryPacker");
+  expect(source.find("TypeNum") == std::string::npos, "AC-1 no TypeNum");
+  expect(source.find("type_num(") == std::string::npos, "AC-1 no type_num");
+  packbin::Scheme<MarkerRow> s(32, packbin::bind(packbin::u8("sid"), &MarkerRow::sid));
+  expect(s.type_number == 32, "AC-1 type_number");
   MarkerRow row;
   row.sid = 23;
-  auto bytes = packbin::BinaryPacker::pack(marker_row_scheme(), row);
-  expect(packbin::to_hex(bytes) == "2017", "scheme AC-1 hex");
-  expect(bytes.size() == 2 && bytes[0] == 0x20 && bytes[1] == 0x17, "scheme AC-1 bytes");
+  auto bytes = packbin::pack(s, row);
+  expect(packbin::to_hex(bytes) == "2017", "AC-1 pack hex");
 }
 
-void ac2_unpack_takes_the_same_scheme() {
-  auto back = packbin::BinaryPacker::unpack(marker_row_scheme(), parse_hex("2017"));
-  expect(back.ok, "scheme AC-2 ok");
-  expect(back.value.has_value(), "scheme AC-2 has row");
-  if (back.value)
-    expect(back.value->sid == 23, "scheme AC-2 sid");
-  expect(!back.type_mismatch.has_value(), "scheme AC-2 no mismatch");
+void ac2_position_golden_no_type_member() {
+  PositionRow row;
+  row.sid = 1;
+  row.lat = 500000000;
+  row.lon = 300000000;
+  row.profile = 1;
+  auto bytes = packbin::pack(position_scheme(), row);
+  expect(packbin::to_hex(bytes) == "4001000065cd1d00a3e1110100", "AC-2 golden hex");
+  auto fixture = find_golden();
+  expect(!fixture.empty(), "AC-2 golden.hex found");
+  expect(packbin::mismatched_bytes(bytes, parse_hex(fixture)) == 0, "AC-2 fixture");
+  auto source = read_file("tests/scheme_tests.cpp");
+  if (source.empty())
+    source = read_file("cpp/tests/scheme_tests.cpp");
+  expect(!source.empty(), "AC-2 source found");
+  auto start = source.find("struct PositionRow");
+  expect(start != std::string::npos, "AC-2 PositionRow present");
+  auto end = source.find("};", start);
+  expect(end != std::string::npos, "AC-2 PositionRow body");
+  auto body = source.substr(start, end - start);
+  expect(body.find("type") == std::string::npos, "AC-2 no type member");
 }
 
-void ac4_wrong_type_byte() {
-  auto back = packbin::BinaryPacker::unpack(marker_row_scheme(), parse_hex("2117"));
-  expect(!back.ok, "scheme AC-4 not ok");
-  expect(!back.value.has_value(), "scheme AC-4 no row");
-  expect(back.type_mismatch.has_value(), "scheme AC-4 type_mismatch");
-  if (back.type_mismatch) {
-    expect(back.type_mismatch->expected == 32, "scheme AC-4 expected 32");
-    expect(back.type_mismatch->actual == 33, "scheme AC-4 actual 33");
+void ac3_known_scheme_checks_leading_byte() {
+  auto layout = packbin::Scheme<MarkerRow>(1, packbin::bind(packbin::u8("sid"), &MarkerRow::sid));
+  auto got = packbin::unpack(layout, parse_hex("0217"));
+  expect(!got.ok, "AC-3 not ok");
+  expect(!got.value.has_value(), "AC-3 no row");
+  expect(got.type_mismatch.has_value(), "AC-3 type_mismatch");
+  if (got.type_mismatch) {
+    expect(got.type_mismatch->expected.has_value() && *got.type_mismatch->expected == 1,
+           "AC-3 expected 1");
+    expect(got.type_mismatch->actual == 2, "AC-3 actual 2");
   }
 }
 
-void ac5_untyped_path() {
-  auto fixture_text = find_golden();
-  expect(!fixture_text.empty(), "scheme AC-5 golden.hex found");
-  auto fixture = parse_hex(fixture_text);
-  auto bytes = packbin::pack(position_packet(), position_values());
-  expect(packbin::mismatched_bytes(bytes, fixture) == 0, "scheme AC-5 mismatched 0");
+void ac4_unknown_buffer_matching_handler() {
+  UserPositionEvent row;
+  row.userId = 7;
+  row.latitude = 8;
+  row.longitude = 9;
+  auto bytes = packbin::pack(position_event_scheme(), row);
+  expect(packbin::to_hex(bytes) == "02070000000800000009000000", "AC-4 hex");
+
+  int modified = 0;
+  int position = 0;
+  UserPositionEvent seen{};
+  auto result = packbin::unpack(
+      bytes, modified_scheme().on([&](UserModifiedEvent const&) { ++modified; }),
+      position_event_scheme().on([&](UserPositionEvent const& ev) {
+        ++position;
+        seen = ev;
+      }));
+  expect(result.ok, "AC-4 ok");
+  expect(modified == 0, "AC-4 modified not called");
+  expect(position == 1, "AC-4 position called");
+  expect(seen.userId == 7, "AC-4 userId");
+  expect(seen.latitude == 8, "AC-4 latitude");
+  expect(seen.longitude == 9, "AC-4 longitude");
 }
 
-void ac6_row_stays_data() {
-  auto source = find_marker_row_source();
-  expect(!source.empty(), "scheme AC-6 source found");
-  auto start = source.find("struct MarkerRow");
-  expect(start != std::string::npos, "scheme AC-6 MarkerRow present");
-  auto end = source.find('}', start);
-  expect(end != std::string::npos, "scheme AC-6 MarkerRow body");
-  auto body = source.substr(start, end - start);
-  expect(body.find("sid") != std::string::npos, "scheme AC-6 sid");
-  expect(body.find("Scheme") == std::string::npos, "scheme AC-6 no Scheme");
-  expect(body.find("pack") == std::string::npos, "scheme AC-6 no pack");
-  expect(body.find("BinaryPacker") == std::string::npos, "scheme AC-6 no BinaryPacker");
+void ac5_unknown_type_number() {
+  int modified = 0;
+  int position = 0;
+  auto result = packbin::unpack(
+      std::vector<std::uint8_t>{9},
+      modified_scheme().on([&](UserModifiedEvent const&) { ++modified; }),
+      position_event_scheme().on([&](UserPositionEvent const&) { ++position; }));
+  expect(!result.ok, "AC-5 not ok");
+  expect(result.type_mismatch.has_value(), "AC-5 type_mismatch");
+  if (result.type_mismatch) {
+    expect(!result.type_mismatch->expected.has_value(), "AC-5 no expected");
+    expect(result.type_mismatch->actual == 9, "AC-5 actual 9");
+  }
+  expect(modified == 0 && position == 0, "AC-5 no handlers");
+}
+
+void ac6_type_numbers_unique() {
+  bool threw = false;
+  try {
+    packbin::unpack(std::vector<std::uint8_t>{1},
+                    modified_scheme().on([](UserModifiedEvent const&) {}),
+                    packbin::Scheme<UserModifiedEvent>(1, packbin::bind(packbin::i32("userId"),
+                                                                        &UserModifiedEvent::userId))
+                        .on([](UserModifiedEvent const&) {}));
+  } catch (std::runtime_error const&) {
+    threw = true;
+  }
+  expect(threw, "AC-6 duplicate throws");
+}
+
+void type_number_range() {
+  bool high = false;
+  bool low = false;
+  try {
+    packbin::scheme(256, {packbin::u8("sid")});
+  } catch (std::runtime_error const&) {
+    high = true;
+  }
+  try {
+    packbin::scheme(-1, {packbin::u8("sid")});
+  } catch (std::runtime_error const&) {
+    low = true;
+  }
+  bool typed_high = false;
+  try {
+    packbin::Scheme<MarkerRow>(256, packbin::bind(packbin::u8("sid"), &MarkerRow::sid));
+  } catch (std::runtime_error const&) {
+    typed_high = true;
+  }
+  expect(high && low && typed_high, "type number 0..255");
 }
 
 }  // namespace
 
 int run_scheme_tests() {
-  ac1_pack_takes_the_scheme();
-  ac2_unpack_takes_the_same_scheme();
-  ac4_wrong_type_byte();
-  ac5_untyped_path();
-  ac6_row_stays_data();
+  ac1_scheme_replaces_packet();
+  ac2_position_golden_no_type_member();
+  ac3_known_scheme_checks_leading_byte();
+  ac4_unknown_buffer_matching_handler();
+  ac5_unknown_type_number();
+  ac6_type_numbers_unique();
+  type_number_range();
   return failures;
 }
