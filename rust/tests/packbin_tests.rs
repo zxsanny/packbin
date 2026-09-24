@@ -1,7 +1,7 @@
 use packbin::{
     be, bits, bytes, dict, eq, f32, f64, flag_byte, flags, group, i16, i32, insert, list,
-    mismatched_bytes, motion_field_count, pack, packet, repeat, sized, to_hex, u16, u2, u32, u8,
-    unpack, utf8, when, PackError, ShortPacket, UnpackError, Value, Values,
+    mismatched_bytes, motion_field_count, pack, packet, repeat, sized, to_hex, type_num, u16, u2,
+    u32, u8, unpack, utf8, when, PackError, ShortPacket, UnpackError, Value, Values,
 };
 use std::collections::BTreeMap;
 use std::fs;
@@ -787,4 +787,88 @@ fn dictionary_field() {
         Ok(_) => panic!("expected PackError for 65536 pairs"),
         Err(other) => panic!("expected PackError::Type, got {:?}", other),
     }
+}
+
+fn type_num_packet() -> packbin::Packet {
+    packet(vec![type_num(32), u8("sid")])
+}
+
+#[test]
+fn type_num_ac1_pack() {
+    let mut vals = Values::new();
+    insert(&mut vals, "sid", Some(Value::U8(23)));
+    let packed = pack(&type_num_packet(), &vals).expect("pack");
+    assert_eq!(to_hex(&packed), "2017");
+    assert_eq!(packed, vec![0x20, 0x17]);
+}
+
+#[test]
+fn type_num_ac2_unpack() {
+    let got = unpack(&type_num_packet(), &parse_hex("2017")).expect("unpack");
+    assert_eq!(got.get("sid"), Some(&Some(Value::U8(23))));
+    assert!(!got.contains_key("type"));
+    assert_eq!(got.len(), 1);
+}
+
+#[test]
+fn type_num_ac3_wrong_byte() {
+    let err = unpack(&type_num_packet(), &parse_hex("2117")).expect_err("type mismatch");
+    match err {
+        UnpackError::Type { expected, actual } => {
+            assert_eq!(expected, 32);
+            assert_eq!(actual, 33);
+        }
+        other => panic!("expected UnpackError::Type, got {:?}", other),
+    }
+}
+
+#[test]
+fn type_num_ac4_absent_keeps_golden() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../fixtures/golden.hex");
+    let fixture = fs::read_to_string(path).expect("golden.hex").trim().to_string();
+    let packed = pack(&position_packet(), &position_values()).expect("pack");
+    assert_eq!(to_hex(&packed), fixture);
+    assert_eq!(to_hex(&packed), GOLDEN_HEX);
+    let got = unpack(&position_packet(), &packed).expect("unpack");
+    assert_eq!(got.get("type"), Some(&Some(Value::U8(64))));
+}
+
+#[test]
+fn type_num_ac5_scheme_rejected() {
+    assert!(std::panic::catch_unwind(|| {
+        let _ = packet(vec![u8("sid"), type_num(32)]);
+    })
+    .is_err());
+    assert!(std::panic::catch_unwind(|| {
+        let _ = packet(vec![type_num(32), type_num(33)]);
+    })
+    .is_err());
+    assert!(std::panic::catch_unwind(|| {
+        let _ = packet(vec![flags("f", vec![type_num(32)])]);
+    })
+    .is_err());
+    assert!(std::panic::catch_unwind(|| {
+        let _ = packet(vec![when(eq("x", Value::U8(1)), vec![type_num(32)])]);
+    })
+    .is_err());
+    assert!(std::panic::catch_unwind(|| {
+        let _ = packet(vec![repeat(vec![type_num(32)])]);
+    })
+    .is_err());
+    assert!(std::panic::catch_unwind(|| {
+        let _ = packet(vec![group("g", vec![type_num(32)])]);
+    })
+    .is_err());
+    assert!(std::panic::catch_unwind(|| {
+        let _ = packet(vec![list("xs", type_num(32))]);
+    })
+    .is_err());
+    assert!(std::panic::catch_unwind(|| {
+        let _ = packet(vec![dict("d", type_num(32))]);
+    })
+    .is_err());
+    assert!(std::panic::catch_unwind(|| {
+        let _ = type_num(256);
+    })
+    .is_err());
 }

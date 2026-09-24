@@ -15,13 +15,15 @@ import {
   writeSized,
   writeU2,
   writeUtf8,
+  type ShortErr,
+  type TypeMismatchErr,
   type ViewCursor,
 } from "./kinds.ts"
 
 export type Value = Record<string, unknown>
 
 export type UnpackOk = { ok: true } & Value
-export type UnpackErr = { ok: false; field: string; needed: number; left: number }
+export type UnpackErr = ShortErr | TypeMismatchErr
 export type UnpackResult = UnpackOk | UnpackErr
 export type EntityResult<T> = { ok: true; value: T } | UnpackErr
 
@@ -43,6 +45,7 @@ export type Field =
   | { kind: "utf8"; name: string }
   | { kind: "list"; name: string; element: Field }
   | { kind: "dict"; name: string; element: Field }
+  | { kind: "typeNum"; value: number }
 
 export type Packet = { fields: Field[] }
 
@@ -57,6 +60,13 @@ function intField(
   signed: boolean,
 ): Field {
   return { kind: "int", name, size, signed, littleEndian: true }
+}
+
+export function typeNum(value: number): Field {
+  if (!Number.isInteger(value) || value < 0 || value > 255) {
+    throw new RangeError("typeNum: expected 0..255")
+  }
+  return { kind: "typeNum", value }
 }
 
 export function u8(name: string): Field {
@@ -104,7 +114,9 @@ export function be(field: Field): Field {
 }
 
 export function packet(fields: Field[]): Packet {
-  return { fields: flatten(fields) }
+  const flat = flatten(fields)
+  assertTypeNumPlacement(flat)
+  return { fields: flat }
 }
 
 function flatten(fields: Field[]): Field[] {
@@ -117,6 +129,40 @@ function flatten(fields: Field[]): Field[] {
     } else out.push(f)
   }
   return out
+}
+
+function assertTypeNumPlacement(fields: Field[]): void {
+  for (let i = 0; i < fields.length; i++) {
+    const f = fields[i]!
+    if (f.kind === "typeNum") {
+      if (i !== 0) throw new RangeError("typeNum: must be the first top-level field")
+      continue
+    }
+    assertNoNestedTypeNum(f)
+  }
+  if (fields.filter((f) => f.kind === "typeNum").length > 1) {
+    throw new RangeError("typeNum: only once")
+  }
+}
+
+function assertNoNestedTypeNum(f: Field): void {
+  switch (f.kind) {
+    case "typeNum":
+      throw new RangeError("typeNum: cannot be nested")
+    case "flags":
+    case "when":
+    case "repeat":
+    case "group":
+      for (const child of f.fields) assertNoNestedTypeNum(child)
+      break
+    case "flagBit":
+      assertNoNestedTypeNum(f.field)
+      break
+    case "list":
+    case "dict":
+      assertNoNestedTypeNum(f.element)
+      break
+  }
 }
 
 export function flags(name: string, fields: Field[]): Field {
@@ -370,6 +416,9 @@ function packFields(
       case "flags":
         packFields(flatten([f]), allFields, values, out, flagBytes)
         break
+      case "typeNum":
+        out.push(f.value & 0xff)
+        break
     }
   }
 }
@@ -398,7 +447,7 @@ function isPlainObject(raw: unknown): raw is object {
   return typeof raw === "object" && raw !== null && !Array.isArray(raw) && !ArrayBuffer.isView(raw)
 }
 
-function short(field: string, needed: number, left: number): UnpackErr {
+function short(field: string, needed: number, left: number): ShortErr {
   return { ok: false, field, needed, left }
 }
 
@@ -558,6 +607,16 @@ function unpackFields(
       case "flags": {
         const err = unpackFields(flatten([f]), cur, values, flagBytes, repeating)
         if (err) return err
+        break
+      }
+      case "typeNum": {
+        const left = cur.buf.length - cur.offset
+        if (left < 1) return short("", 1, left)
+        const actual = cur.view.getUint8(cur.offset)
+        cur.offset += 1
+        if (actual !== f.value) {
+          return { ok: false, expected: f.value, actual }
+        }
         break
       }
     }

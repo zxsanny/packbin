@@ -278,6 +278,10 @@ fn pack_one(
             }
             _ => Err(PackError::Type(name.to_string())),
         },
+        FieldKind::TypeNum { value } => {
+            out.push(*value);
+            Ok(())
+        },
     }
 }
 
@@ -591,6 +595,16 @@ fn unpack_one(
                 map.insert(key, item);
             }
             values.insert(name.clone(), Some(Value::Map(map)));
+        }
+        FieldKind::TypeNum { value } => {
+            let raw = cur.take(1, "type")?;
+            let actual = raw[0];
+            if actual != *value {
+                return Err(UnpackError::Type {
+                    expected: *value,
+                    actual,
+                });
+            }
         }
     }
     Ok(())

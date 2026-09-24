@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstring>
 #include <stdexcept>
+#include <variant>
 
 namespace packbin {
 namespace {
@@ -147,6 +148,9 @@ std::uint8_t compute_bits(FlagGroup const& group, Values const& values) {
 
 void pack_one(Field const& node, Values const& values, std::vector<std::uint8_t>& out) {
   switch (node.kind) {
+    case Field::Kind::TypeNum:
+      out.push_back(node.constant);
+      break;
     case Field::Kind::U8:
     case Field::Kind::U16:
     case Field::Kind::U32:
@@ -306,16 +310,26 @@ void append_value(Values& out, std::string const& name, Value value, bool as_lis
   it->second = Value{list};
 }
 
-std::optional<ShortPacket> unpack_nodes(std::uint8_t const* data, std::size_t len,
-                                        std::size_t& offset, std::vector<Field> const& nodes,
-                                        Values& out, bool as_list);
+using WalkErr = std::variant<ShortPacket, TypeMismatch>;
 
-std::optional<ShortPacket> unpack_one(std::uint8_t const* data, std::size_t len,
-                                      std::size_t& offset, Field const& node, Values& out,
-                                      bool as_list) {
+std::optional<WalkErr> unpack_nodes(std::uint8_t const* data, std::size_t len,
+                                    std::size_t& offset, std::vector<Field> const& nodes,
+                                    Values& out, bool as_list);
+
+std::optional<WalkErr> unpack_one(std::uint8_t const* data, std::size_t len,
+                                  std::size_t& offset, Field const& node, Values& out,
+                                  bool as_list) {
   auto left = [&] { return len - offset; };
 
   switch (node.kind) {
+    case Field::Kind::TypeNum: {
+      if (left() < 1)
+        return WalkErr{make_short("", 1, left())};
+      std::uint8_t actual = data[offset++];
+      if (actual != node.constant)
+        return WalkErr{TypeMismatch{static_cast<int>(node.constant), static_cast<int>(actual)}};
+      return std::nullopt;
+    }
     case Field::Kind::U8:
     case Field::Kind::U16:
     case Field::Kind::U32:
@@ -327,7 +341,7 @@ std::optional<ShortPacket> unpack_one(std::uint8_t const* data, std::size_t len,
     case Field::Kind::F32:
     case Field::Kind::F64: {
       if (left() < static_cast<std::size_t>(node.byte_count))
-        return make_short(node.name, node.byte_count, left());
+        return WalkErr{make_short(node.name, node.byte_count, left())};
       std::uint8_t const* p = data + offset;
       Value value;
       switch (node.kind) {
@@ -370,7 +384,7 @@ std::optional<ShortPacket> unpack_one(std::uint8_t const* data, std::size_t len,
     }
     case Field::Kind::Bytes: {
       if (left() < static_cast<std::size_t>(node.byte_count))
-        return make_short(node.name, node.byte_count, left());
+        return WalkErr{make_short(node.name, node.byte_count, left())};
       Value::Bytes raw(data + offset, data + offset + node.byte_count);
       offset += static_cast<std::size_t>(node.byte_count);
       append_value(out, node.name, Value{std::move(raw)}, as_list);
@@ -378,7 +392,7 @@ std::optional<ShortPacket> unpack_one(std::uint8_t const* data, std::size_t len,
     }
     case Field::Kind::Flags: {
       if (left() < 1)
-        return make_short(node.name, 1, left());
+        return WalkErr{make_short(node.name, 1, left())};
       std::uint8_t flag = data[offset++];
       out[node.name] = Value{flag};
       node.group->unpacked = flag;
@@ -394,7 +408,7 @@ std::optional<ShortPacket> unpack_one(std::uint8_t const* data, std::size_t len,
     }
     case Field::Kind::FlagByte: {
       if (left() < 1)
-        return make_short(node.name, 1, left());
+        return WalkErr{make_short(node.name, 1, left())};
       std::uint8_t flag = data[offset++];
       out[node.name] = Value{flag};
       node.group->unpacked = flag;
@@ -429,11 +443,15 @@ std::optional<ShortPacket> unpack_one(std::uint8_t const* data, std::size_t len,
     case Field::Kind::Sized:
     case Field::Kind::U2:
     case Field::Kind::Bits:
-    case Field::Kind::Utf8:
-      return unpack_counted(data, len, offset, node, out, as_list);
+    case Field::Kind::Utf8: {
+      auto err = unpack_counted(data, len, offset, node, out, as_list);
+      if (err)
+        return WalkErr{*err};
+      return std::nullopt;
+    }
     case Field::Kind::List: {
       if (left() < 2)
-        return make_short(node.name, 2, left());
+        return WalkErr{make_short(node.name, 2, left())};
       auto count = static_cast<std::size_t>(data[offset] | (data[offset + 1] << 8));
       offset += 2;
       auto const& child = node.children.front();
@@ -451,18 +469,18 @@ std::optional<ShortPacket> unpack_one(std::uint8_t const* data, std::size_t len,
     }
     case Field::Kind::Dict: {
       if (left() < 2)
-        return make_short(node.name, 2, left());
+        return WalkErr{make_short(node.name, 2, left())};
       auto count = static_cast<std::size_t>(data[offset] | (data[offset + 1] << 8));
       offset += 2;
       auto const& child = node.children.front();
       auto items = std::make_shared<ValueMap>();
       for (std::size_t i = 0; i < count; ++i) {
         if (left() < 2)
-          return make_short(node.name, 2, left());
+          return WalkErr{make_short(node.name, 2, left())};
         auto key_len = static_cast<std::size_t>(data[offset] | (data[offset + 1] << 8));
         offset += 2;
         if (left() < key_len)
-          return make_short(node.name, static_cast<int>(key_len), left());
+          return WalkErr{make_short(node.name, static_cast<int>(key_len), left())};
         std::string key(reinterpret_cast<char const*>(data + offset), key_len);
         offset += key_len;
         Values one;
@@ -470,7 +488,7 @@ std::optional<ShortPacket> unpack_one(std::uint8_t const* data, std::size_t len,
         if (err)
           return err;
         if (!items->items.emplace(std::move(key), one.at(child.name)).second)
-          return make_short(node.name, 0, 0);
+          return WalkErr{make_short(node.name, 0, 0)};
       }
       append_value(out, node.name, Value{items}, as_list);
       return std::nullopt;
@@ -479,9 +497,9 @@ std::optional<ShortPacket> unpack_one(std::uint8_t const* data, std::size_t len,
   return std::nullopt;
 }
 
-std::optional<ShortPacket> unpack_nodes(std::uint8_t const* data, std::size_t len,
-                                        std::size_t& offset, std::vector<Field> const& nodes,
-                                        Values& out, bool as_list) {
+std::optional<WalkErr> unpack_nodes(std::uint8_t const* data, std::size_t len,
+                                    std::size_t& offset, std::vector<Field> const& nodes,
+                                    Values& out, bool as_list) {
   for (auto const& node : nodes) {
     auto err = unpack_one(data, len, offset, node, out, as_list);
     if (err)
@@ -506,7 +524,10 @@ UnpackResult unpack(Packet const& target, std::uint8_t const* data, std::size_t 
   if (err) {
     UnpackResult r;
     r.ok = false;
-    r.short_packet = std::move(err);
+    if (auto const* short_packet = std::get_if<ShortPacket>(&*err))
+      r.short_packet = *short_packet;
+    else if (auto const* mismatch = std::get_if<TypeMismatch>(&*err))
+      r.type_mismatch = *mismatch;
     return r;
   }
   if (offset < len) {

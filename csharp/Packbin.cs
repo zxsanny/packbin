@@ -6,7 +6,31 @@ public sealed class Packet
 
     private Packet(Field[] fields) => Fields = fields;
 
-    public static Packet Of(params Field[] fields) => new(fields);
+    public static Packet Of(params Field[] fields)
+    {
+        var typeNumAt = -1;
+        for (var i = 0; i < fields.Length; i++)
+        {
+            if (fields[i].Type != Field.Kind.TypeNum)
+                continue;
+            if (typeNumAt >= 0)
+                throw new ArgumentException("type number appears twice");
+            typeNumAt = i;
+        }
+        if (typeNumAt > 0)
+            throw new ArgumentException("type number must be the first top-level field");
+        return new(fields);
+    }
+}
+
+public static class TypeNum
+{
+    public static Field Set(int value)
+    {
+        if (value is < 0 or > 255)
+            throw new ArgumentOutOfRangeException(nameof(value), value, "type number must be 0..255");
+        return Field.CreateTypeNum(value);
+    }
 }
 
 public sealed class Condition
@@ -44,6 +68,18 @@ public sealed class TrailingBytes
     public TrailingBytes(int left) => Left = left;
 }
 
+public sealed class TypeMismatch
+{
+    public int Expected { get; }
+    public int Actual { get; }
+
+    public TypeMismatch(int expected, int actual)
+    {
+        Expected = expected;
+        Actual = actual;
+    }
+}
+
 public sealed class UnpackResult
 {
     public Dictionary<string, object?> Values { get; }
@@ -76,6 +112,7 @@ public sealed class Field
         Utf8,
         List,
         Dict,
+        TypeNum,
     }
 
     internal Kind Type { get; }
@@ -89,6 +126,7 @@ public sealed class Field
     internal Field? Inner { get; }
     internal string CountName { get; }
     internal string[] Names { get; }
+    internal int Constant { get; }
 
     private Field(
         Kind type,
@@ -101,7 +139,8 @@ public sealed class Field
         int bitIndex = 0,
         Field? inner = null,
         string countName = "",
-        string[]? names = null)
+        string[]? names = null,
+        int constant = 0)
     {
         Type = type;
         Name = name;
@@ -114,16 +153,30 @@ public sealed class Field
         Inner = inner;
         CountName = countName;
         Names = names ?? [];
+        Constant = constant;
     }
 
     public Field Be() =>
-        new(Type, Name, true, ByteCount, Children, Pred, FlagOwner, BitIndex, Inner, CountName, Names);
+        new(Type, Name, true, ByteCount, Children, Pred, FlagOwner, BitIndex, Inner, CountName, Names, Constant);
 
     public Field Bit(Field field)
     {
         if (Type != Kind.FlagByte || FlagOwner is null)
             throw new InvalidOperationException("Bit requires FlagByte.");
+        RejectNestedTypeNum(field);
         return FlagOwner.AddBit(field);
+    }
+
+    private static void RejectNestedTypeNum(params Field[] fields)
+    {
+        foreach (var field in fields)
+        {
+            if (field.Type == Kind.TypeNum)
+                throw new ArgumentException("type number cannot be nested");
+            RejectNestedTypeNum(field.Children);
+            if (field.Inner is not null)
+                RejectNestedTypeNum(field.Inner);
+        }
     }
 
     public static Field U8(string name) => new(Kind.U8, name, byteCount: 1);
@@ -146,6 +199,7 @@ public sealed class Field
 
     public static Field Flags(string name, params Field[] fields)
     {
+        RejectNestedTypeNum(fields);
         var group = new FlagGroup(name);
         var bits = new Field[fields.Length];
         for (var i = 0; i < fields.Length; i++)
@@ -153,14 +207,23 @@ public sealed class Field
         return new Field(Kind.Flags, name, children: bits, flagOwner: group);
     }
 
-    public static Field When(Condition condition, params Field[] fields) =>
-        new(Kind.When, condition.Field, children: fields, pred: condition);
+    public static Field When(Condition condition, params Field[] fields)
+    {
+        RejectNestedTypeNum(fields);
+        return new(Kind.When, condition.Field, children: fields, pred: condition);
+    }
 
-    public static Field Repeat(params Field[] fields) =>
-        new(Kind.Repeat, "", children: fields);
+    public static Field Repeat(params Field[] fields)
+    {
+        RejectNestedTypeNum(fields);
+        return new(Kind.Repeat, "", children: fields);
+    }
 
-    public static Field Group(string name, params Field[] fields) =>
-        new(Kind.Group, name, children: fields);
+    public static Field Group(string name, params Field[] fields)
+    {
+        RejectNestedTypeNum(fields);
+        return new(Kind.Group, name, children: fields);
+    }
 
     public static Field Sized(string name, string countField) =>
         new(Kind.Sized, name, countName: countField);
@@ -181,6 +244,7 @@ public sealed class Field
     {
         if (element.Type == Kind.Repeat)
             throw new ArgumentException("repeat is not a list element");
+        RejectNestedTypeNum(element);
         return new(Kind.List, name, children: [element]);
     }
 
@@ -188,11 +252,15 @@ public sealed class Field
     {
         if (element.Type == Kind.Repeat)
             throw new ArgumentException("repeat is not a dictionary element");
+        RejectNestedTypeNum(element);
         return new(Kind.Dict, name, children: [element]);
     }
 
     internal static Field CreateFlagBit(FlagGroup group, int bitIndex, Field inner) =>
         new(Kind.FlagBit, inner.Name, flagOwner: group, bitIndex: bitIndex, inner: inner);
+
+    internal static Field CreateTypeNum(int value) =>
+        new(Kind.TypeNum, "", byteCount: 1, constant: value);
 }
 
 

@@ -2,6 +2,8 @@ export type Value = Record<string, unknown>
 
 export type ShortErr = { ok: false; field: string; needed: number; left: number }
 
+export type TypeMismatchErr = { ok: false; expected: number; actual: number }
+
 export type Cursor = { buf: Uint8Array; offset: number }
 
 export function present(v: unknown): boolean {

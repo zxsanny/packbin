@@ -82,6 +82,9 @@ pub(crate) enum FieldKind {
         name: Name,
         element: Box<Field>,
     },
+    TypeNum {
+        value: u8,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -155,6 +158,7 @@ fn count_fields(fields: &[Field]) -> (usize, bool) {
             | FieldKind::Utf8 { .. }
             | FieldKind::List { .. }
             | FieldKind::Dict { .. } => n += 1,
+            FieldKind::TypeNum { .. } => {}
             FieldKind::U2 { names } => n += names.len(),
             FieldKind::Flags { members, .. } | FieldKind::Group { members, .. } => {
                 n += 1 + count_fields(members).0;
@@ -173,12 +177,59 @@ fn count_fields(fields: &[Field]) -> (usize, bool) {
     (n, split)
 }
 
+fn assert_no_nested_type_num(field: &Field) {
+    match &field.kind {
+        FieldKind::TypeNum { .. } => panic!("type number cannot be nested"),
+        FieldKind::Flags { members, .. }
+        | FieldKind::Group { members, .. }
+        | FieldKind::When { members, .. }
+        | FieldKind::Repeat { members } => {
+            for m in members {
+                assert_no_nested_type_num(m);
+            }
+        }
+        FieldKind::FlagBit { inner, .. }
+        | FieldKind::List { element: inner, .. }
+        | FieldKind::Dict { element: inner, .. } => assert_no_nested_type_num(inner),
+        _ => {}
+    }
+}
+
+fn validate_type_nums(fields: &[Field]) {
+    let mut seen = false;
+    for (i, field) in fields.iter().enumerate() {
+        if matches!(field.kind, FieldKind::TypeNum { .. }) {
+            if i != 0 {
+                panic!("type number must be first");
+            }
+            if seen {
+                panic!("type number appears twice");
+            }
+            seen = true;
+        } else {
+            assert_no_nested_type_num(field);
+        }
+    }
+}
+
 pub fn packet(fields: Vec<Field>) -> Packet {
+    validate_type_nums(&fields);
     let (field_count, has_split_flags) = count_fields(&fields);
     Packet {
         fields,
         has_split_flags,
         field_count,
+    }
+}
+
+pub fn type_num(value: i32) -> Field {
+    if !(0..=255).contains(&value) {
+        panic!("type number must be 0..=255");
+    }
+    Field {
+        kind: FieldKind::TypeNum {
+            value: value as u8,
+        },
     }
 }
 
@@ -387,6 +438,6 @@ pub(crate) fn field_name(field: &Field) -> Option<&str> {
         | FieldKind::Dict { name, .. } => Some(name.as_ref()),
         FieldKind::U2 { names } => names.first().map(|n| n.as_ref()),
         FieldKind::FlagBit { inner, .. } => field_name(inner),
-        FieldKind::When { .. } | FieldKind::Repeat { .. } => None,
+        FieldKind::When { .. } | FieldKind::Repeat { .. } | FieldKind::TypeNum { .. } => None,
     }
 }

@@ -34,3 +34,4 @@ javac -encoding UTF-8 -cp "$main_out" -d "$test_out" "${test_sources[@]}"
 
 cd "$repo"
 java -cp "$main_out:$test_out" packbin.PackbinTest
+java -cp "$main_out:$test_out" packbin.TypeNumTest

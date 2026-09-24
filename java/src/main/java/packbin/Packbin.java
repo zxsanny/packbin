@@ -9,7 +9,35 @@ public final class Packbin {
     private Packbin() {}
 
     public static Packet packet(Field... fields) {
+        validateTypeNum(fields);
         return new Packet(fields);
+    }
+
+    public static final class TypeNum {
+        private TypeNum() {}
+
+        public static Field set(int value) {
+            if (value < 0 || value > 255) {
+                throw new IllegalArgumentException("type number must be 0..255");
+            }
+            return Field.typeNum(value);
+        }
+    }
+
+    private static void validateTypeNum(Field[] fields) {
+        int typeNumAt = -1;
+        for (int i = 0; i < fields.length; i++) {
+            if (fields[i].kind != Field.Kind.TYPE_NUM) {
+                continue;
+            }
+            if (typeNumAt >= 0) {
+                throw new IllegalArgumentException("type number appears twice");
+            }
+            typeNumAt = i;
+        }
+        if (typeNumAt > 0) {
+            throw new IllegalArgumentException("type number must be the first top-level field");
+        }
     }
 
     public static Field u8(String name) {
@@ -189,6 +217,16 @@ public final class Packbin {
 
         public TrailingBytes(int left) {
             this.left = left;
+        }
+    }
+
+    public static final class TypeMismatch {
+        public final int expected;
+        public final int actual;
+
+        public TypeMismatch(int expected, int actual) {
+            this.expected = expected;
+            this.actual = actual;
         }
     }
 

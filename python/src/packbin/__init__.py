@@ -10,6 +10,8 @@ _builtin_dict = dict
 __all__ = [
     "ShortPacket",
     "TrailingBytes",
+    "TypeMismatch",
+    "TypeNum",
     "UnpackResult",
     "packet",
     "u8",
@@ -54,10 +56,16 @@ class TrailingBytes:
 
 
 @dataclass(frozen=True, slots=True)
+class TypeMismatch:
+    expected: int
+    actual: int
+
+
+@dataclass(frozen=True, slots=True)
 class UnpackResult:
     ok: bool
     value: dict[str, Any] | None = None
-    error: ShortPacket | TrailingBytes | None = None
+    error: ShortPacket | TrailingBytes | TypeMismatch | None = None
 
     @property
     def field(self) -> str | None:
@@ -73,9 +81,9 @@ class UnpackResult:
 
     @property
     def left(self) -> int | None:
-        if self.error is None:
-            return None
-        return self.error.left
+        if isinstance(self.error, (ShortPacket, TrailingBytes)):
+            return self.error.left
+        return None
 
 
 class _Node:
@@ -188,13 +196,72 @@ class _Dict(_Node):
 
 
 @dataclass(slots=True)
+class _TypeNum(_Node):
+    value: int
+
+
+class TypeNum:
+    @staticmethod
+    def set(value: int) -> _TypeNum:
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0 or value > 255:
+            raise ValueError(f"type number must be 0..255, got {value!r}")
+        return _TypeNum(value=value)
+
+
+@dataclass(slots=True)
 class Packet:
     fields: list[_Node]
 
 
-def packet(fields: Sequence[_Node]) -> Packet:
-    return Packet(_builtin_list(fields))
+def _forbid_nested_type_num(nodes: Sequence[_Node], where: str) -> None:
+    for node in nodes:
+        if isinstance(node, _TypeNum):
+            raise ValueError(f"type number cannot appear under {where}")
+        if isinstance(node, _Flags):
+            _forbid_nested_type_num(node.fields, "flags")
+        elif isinstance(node, _When):
+            _forbid_nested_type_num(node.fields, "when")
+        elif isinstance(node, _Repeat):
+            _forbid_nested_type_num(node.fields, "repeat")
+        elif isinstance(node, _Group):
+            _forbid_nested_type_num(node.fields, "group")
+        elif isinstance(node, _List):
+            _forbid_nested_type_num([node.element], "list")
+        elif isinstance(node, _Dict):
+            _forbid_nested_type_num([node.element], "dict")
+        elif isinstance(node, _FlagByte):
+            _forbid_nested_type_num(node.bits, "flags")
+        elif isinstance(node, _FlagBit):
+            _forbid_nested_type_num([node.field], "flags")
 
+
+def packet(fields: Sequence[_Node]) -> Packet:
+    nodes = _builtin_list(fields)
+    type_indices = [i for i, node in enumerate(nodes) if isinstance(node, _TypeNum)]
+    if len(type_indices) > 1:
+        raise ValueError("type number appears more than once")
+    if len(type_indices) == 1 and type_indices[0] != 0:
+        raise ValueError("type number must be the first top-level field")
+    for node in nodes:
+        if isinstance(node, _TypeNum):
+            continue
+        if isinstance(node, _Flags):
+            _forbid_nested_type_num(node.fields, "flags")
+        elif isinstance(node, _When):
+            _forbid_nested_type_num(node.fields, "when")
+        elif isinstance(node, _Repeat):
+            _forbid_nested_type_num(node.fields, "repeat")
+        elif isinstance(node, _Group):
+            _forbid_nested_type_num(node.fields, "group")
+        elif isinstance(node, _List):
+            _forbid_nested_type_num([node.element], "list")
+        elif isinstance(node, _Dict):
+            _forbid_nested_type_num([node.element], "dict")
+        elif isinstance(node, _FlagByte):
+            _forbid_nested_type_num(node.bits, "flags")
+        elif isinstance(node, _FlagBit):
+            _forbid_nested_type_num([node.field], "flags")
+    return Packet(nodes)
 
 def _scalar(
     name: str,
@@ -443,7 +510,9 @@ def _pack_nodes(
         return values[name]
 
     for node in nodes:
-        if isinstance(node, _Scalar):
+        if isinstance(node, _TypeNum):
+            buf.append(node.value)
+        elif isinstance(node, _Scalar):
             if not _present(values, node.name) and get_value is None:
                 raise KeyError(f"missing field {node.name!r}")
             _write_scalar(buf, node, take(node.name))
@@ -577,12 +646,20 @@ def _unpack_nodes(
     *,
     as_list: bool = False,
     flag_state: dict[int, int] | None = None,
-) -> tuple[int, ShortPacket | None]:
+) -> tuple[int, ShortPacket | TypeMismatch | None]:
     if flag_state is None:
         flag_state = {}
 
     for node in nodes:
-        if isinstance(node, _Scalar):
+        if isinstance(node, _TypeNum):
+            left = len(data) - offset
+            if left < 1:
+                return offset, ShortPacket(field="", needed=1, left=left)
+            actual = int(data[offset])
+            offset += 1
+            if actual != node.value:
+                return offset, TypeMismatch(expected=node.value, actual=actual)
+        elif isinstance(node, _Scalar):
             got = _read_scalar(data, offset, node)
             if isinstance(got, ShortPacket):
                 return offset, got

@@ -22,6 +22,7 @@ import {
   list,
   dict,
   be,
+  typeNum,
   pack,
   unpack,
 } from "../src/index.ts"
@@ -477,6 +478,63 @@ describe("packbin", () => {
     assert.equal(row.value instanceof Row, true)
     assert.equal(row.value.lat, 500_000_000)
     assert.equal(row.value.heading, null)
+  })
+
+  it("type number AC-1 constant u8 is not a value", () => {
+    const layout = packet([typeNum(32), u8("sid")])
+    const bytes = pack(layout, { sid: 23 })
+    assert.equal(toHex(bytes), "2017")
+  })
+
+  it("type number AC-2 unpack drops the constant", () => {
+    const layout = packet([typeNum(32), u8("sid")])
+    const got = unpack(layout, Buffer.from("2017", "hex"))
+    assert.equal(got.ok, true)
+    if (!got.ok) return
+    assert.equal(got.sid, 23)
+    assert.equal("type" in got, false)
+    assert.equal(Object.prototype.hasOwnProperty.call(got, "type"), false)
+  })
+
+  it("type number AC-3 wrong type byte", () => {
+    const layout = packet([typeNum(32), u8("sid")])
+    const got = unpack(layout, Buffer.from("2117", "hex"))
+    assert.equal(got.ok, false)
+    if (got.ok) return
+    assert.equal("expected" in got, true)
+    if (!("expected" in got)) return
+    assert.equal(got.expected, 32)
+    assert.equal(got.actual, 33)
+    assert.equal(
+      Object.keys(got).filter(
+        (k) => k !== "ok" && k !== "expected" && k !== "actual",
+      ).length,
+      0,
+    )
+  })
+
+  it("type number AC-4 absent type number", () => {
+    const bytes = pack(position, positionValue)
+    const fixture = Buffer.from(goldenHex, "hex")
+    assert.equal(mismatchedBytes(bytes, fixture), 0)
+    const got = unpack(position, fixture)
+    assert.equal(got.ok, true)
+    if (!got.ok) return
+    assert.equal(got.type, 0x40)
+    assert.equal(got.sid, 1)
+  })
+
+  it("type number AC-5 scheme rejected", () => {
+    assert.throws(() => packet([u8("sid"), typeNum(32)]))
+    assert.throws(() => packet([typeNum(32), typeNum(33)]))
+    assert.throws(() => packet([flags("f", [typeNum(32)])]))
+    assert.throws(() => packet([when(eq("x", 1), [typeNum(32)])]))
+    assert.throws(() => packet([repeat([typeNum(32)])]))
+    assert.throws(() => packet([group("g", [typeNum(32)])]))
+    assert.throws(() => packet([list("xs", typeNum(32))]))
+    assert.throws(() => packet([dict("d", typeNum(32))]))
+    assert.throws(() => typeNum(256))
+    assert.throws(() => typeNum(-1))
   })
 })
 

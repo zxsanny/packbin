@@ -21,6 +21,11 @@ struct TrailingBytes {
   std::size_t left = 0;
 };
 
+struct TypeMismatch {
+  int expected = 0;
+  int actual = 0;
+};
+
 struct ValueList;
 struct ValueMap;
 
@@ -66,6 +71,7 @@ struct UnpackResult {
   Values value;
   std::optional<ShortPacket> short_packet;
   std::optional<TrailingBytes> trailing;
+  std::optional<TypeMismatch> type_mismatch;
 
   std::size_t value_count() const { return value.size(); }
 };
@@ -109,12 +115,14 @@ class Field {
     Utf8,
     List,
     Dict,
+    TypeNum,
   };
 
   Kind kind{};
   std::string name;
   bool big_endian = false;
   int byte_count = 0;
+  std::uint8_t constant = 0;
   std::vector<Field> children;
   std::shared_ptr<FlagGroup> group;
   int bit_index = 0;
@@ -154,6 +162,7 @@ Field bits(std::string name, std::string count_field);
 Field utf8(std::string name);
 Field list(std::string name, Field element);
 Field dict(std::string name, Field element);
+Field type_num(int value);
 Packet packet(std::vector<Field> fields);
 
 std::vector<std::uint8_t> pack(Packet const& target, Values const& values);

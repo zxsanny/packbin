@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -516,6 +517,81 @@ void nfr_round_trips() {
   std::cerr << "nfr elapsed_ms " << ms << "\n";
 }
 
+packbin::Packet type_num_packet() {
+  return packbin::packet({packbin::type_num(32), packbin::u8("sid")});
+}
+
+void type_num_ac1_pack() {
+  packbin::Values vals;
+  vals.emplace("sid", packbin::Value{std::uint8_t{23}});
+  auto bytes = packbin::pack(type_num_packet(), vals);
+  expect(packbin::to_hex(bytes) == "2017", "type_num AC-1 hex");
+  expect(packbin::mismatched_bytes(bytes, parse_hex("2017")) == 0, "type_num AC-1 mismatched");
+}
+
+void type_num_ac2_unpack() {
+  auto got = packbin::unpack(type_num_packet(), parse_hex("2017"));
+  expect(got.ok, "type_num AC-2 ok");
+  expect(std::get<std::uint8_t>(got.value.at("sid").data) == 23, "type_num AC-2 sid");
+  expect(!packbin::present(got.value, "type"), "type_num AC-2 no type");
+  expect(got.value.size() == 1, "type_num AC-2 one member");
+}
+
+void type_num_ac3_wrong_byte() {
+  auto got = packbin::unpack(type_num_packet(), parse_hex("2117"));
+  expect(!got.ok, "type_num AC-3 not ok");
+  expect(got.value_count() == 0, "type_num AC-3 value count 0");
+  expect(got.type_mismatch.has_value(), "type_num AC-3 type_mismatch");
+  if (got.type_mismatch) {
+    expect(got.type_mismatch->expected == 32, "type_num AC-3 expected 32");
+    expect(got.type_mismatch->actual == 33, "type_num AC-3 actual 33");
+  }
+}
+
+void type_num_ac4_absent_golden() {
+  auto fixture_text = find_golden();
+  expect(!fixture_text.empty(), "type_num AC-4 golden.hex found");
+  auto fixture = parse_hex(fixture_text);
+  auto bytes = packbin::pack(position_packet(), position_values());
+  expect(packbin::mismatched_bytes(bytes, fixture) == 0, "type_num AC-4 mismatched 0");
+  auto got = packbin::unpack(position_packet(), fixture);
+  expect(got.ok, "type_num AC-4 unpack ok");
+}
+
+bool throws_scheme(std::function<void()> fn) {
+  try {
+    fn();
+    return false;
+  } catch (std::runtime_error const&) {
+    return true;
+  }
+}
+
+void type_num_ac5_scheme_rejected() {
+  expect(throws_scheme([] { packbin::packet({packbin::u8("sid"), packbin::type_num(32)}); }),
+         "type_num AC-5 not first");
+  expect(throws_scheme(
+             [] { packbin::packet({packbin::type_num(32), packbin::type_num(33), packbin::u8("sid")}); }),
+         "type_num AC-5 twice");
+  expect(throws_scheme([] { packbin::packet({packbin::flags("f", {packbin::type_num(32)})}); }),
+         "type_num AC-5 nested flags");
+  expect(throws_scheme([] {
+           packbin::packet({packbin::when(packbin::eq("x", packbin::Value{std::uint8_t{1}}),
+                                         {packbin::type_num(32)})});
+         }),
+         "type_num AC-5 nested when");
+  expect(throws_scheme([] { packbin::packet({packbin::repeat({packbin::type_num(32)})}); }),
+         "type_num AC-5 nested repeat");
+  expect(throws_scheme([] { packbin::packet({packbin::group("g", {packbin::type_num(32)})}); }),
+         "type_num AC-5 nested group");
+  expect(throws_scheme([] { packbin::packet({packbin::list("xs", packbin::type_num(32))}); }),
+         "type_num AC-5 nested list");
+  expect(throws_scheme([] { packbin::packet({packbin::dict("d", packbin::type_num(32))}); }),
+         "type_num AC-5 nested dict");
+  expect(throws_scheme([] { packbin::type_num(256); }), "type_num AC-5 above 255");
+  expect(throws_scheme([] { packbin::type_num(-1); }), "type_num AC-5 below 0");
+}
+
 }  // namespace
 
 int main() {
@@ -532,6 +608,11 @@ int main() {
   counted_list();
   dictionary();
   nfr_round_trips();
+  type_num_ac1_pack();
+  type_num_ac2_unpack();
+  type_num_ac3_wrong_byte();
+  type_num_ac4_absent_golden();
+  type_num_ac5_scheme_rejected();
   if (failures != 0) {
     std::cerr << failures << " failure(s)\n";
     return 1;

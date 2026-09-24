@@ -97,6 +97,9 @@ internal static partial class Walker
             case Field.Kind.Dict:
                 PackDict(field, values, buffer);
                 break;
+            case Field.Kind.TypeNum:
+                buffer.Add((byte)field.Constant);
+                break;
             default:
                 PackScalar(field, values, buffer);
                 break;
@@ -125,8 +128,20 @@ internal static partial class Walker
             Field.Kind.Utf8 => UnpackUtf8(field, bytes, ref offset, values, repeatLists),
             Field.Kind.List => UnpackList(field, bytes, ref offset, values, repeatLists),
             Field.Kind.Dict => UnpackDict(field, bytes, ref offset, values, repeatLists),
+            Field.Kind.TypeNum => UnpackTypeNum(field, bytes, ref offset),
             _ => UnpackScalar(field, bytes, ref offset, values, repeatLists),
         };
+    }
+
+    private static object? UnpackTypeNum(Field field, ReadOnlySpan<byte> bytes, ref int offset)
+    {
+        var left = bytes.Length - offset;
+        if (left < 1)
+            return new ShortPacket(field.Name, 1, left);
+        var actual = bytes[offset++];
+        if (actual != field.Constant)
+            return new TypeMismatch(field.Constant, actual);
+        return null;
     }
 
     private static void PackFlags(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)

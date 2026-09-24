@@ -9,6 +9,8 @@ import pytest
 from packbin import (
     ShortPacket,
     TrailingBytes,
+    TypeMismatch,
+    TypeNum,
     be,
     bits,
     dict,
@@ -446,3 +448,63 @@ def test_dictionary():
     huge = packet([dict("m", utf8("v"))])
     with pytest.raises(ValueError):
         pack(huge, {"m": {str(i): "x" for i in range(65536)}})
+
+
+TYPE_NUM_LAYOUT = packet([TypeNum.set(32), u8("sid")])
+
+
+def test_type_num_ac1_pack_constant_u8():
+    raw = pack(TYPE_NUM_LAYOUT, {"sid": 23})
+    assert raw.hex() == "2017"
+    assert raw == bytes([0x20, 0x17])
+
+
+def test_type_num_ac2_unpack_drops_constant():
+    got = unpack(TYPE_NUM_LAYOUT, bytes.fromhex("2017"))
+    assert got.ok is True
+    assert got.value is not None
+    assert got.value["sid"] == 23
+    assert "type" not in got.value
+    assert len(got.value) == 1
+
+
+def test_type_num_ac3_wrong_type_byte():
+    got = unpack(TYPE_NUM_LAYOUT, bytes.fromhex("2117"))
+    assert got.ok is False
+    assert got.value is None
+    assert isinstance(got.error, TypeMismatch)
+    assert got.error.expected == 32
+    assert got.error.actual == 33
+
+
+def test_type_num_ac4_absent_type_number_golden():
+    raw = pack(POSITION, POSITION_VALUES)
+    assert _mismatched_bytes(raw, GOLDEN_HEX) == 0
+    got = unpack(POSITION, bytes.fromhex(GOLDEN_HEX))
+    assert got.ok is True
+    assert got.value is not None
+    assert got.value["type"] == 64
+    assert got.value["sid"] == 1
+
+
+def test_type_num_ac5_illegal_schemes():
+    with pytest.raises(ValueError):
+        packet([u8("sid"), TypeNum.set(32)])
+    with pytest.raises(ValueError):
+        packet([TypeNum.set(32), TypeNum.set(33)])
+    with pytest.raises(ValueError):
+        packet([flags("f", [TypeNum.set(32)])])
+    with pytest.raises(ValueError):
+        packet([when(eq("x", 1), [TypeNum.set(32)])])
+    with pytest.raises(ValueError):
+        packet([repeat([TypeNum.set(32)])])
+    with pytest.raises(ValueError):
+        packet([group("g", [TypeNum.set(32)])])
+    with pytest.raises(ValueError):
+        packet([list("xs", TypeNum.set(32))])
+    with pytest.raises(ValueError):
+        packet([dict("m", TypeNum.set(32))])
+    with pytest.raises(ValueError):
+        TypeNum.set(256)
+    with pytest.raises(ValueError):
+        TypeNum.set(-1)

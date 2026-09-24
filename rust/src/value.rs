@@ -34,6 +34,7 @@ pub struct ShortPacket {
 pub enum UnpackError {
     Short(ShortPacket),
     Trailing { left: usize },
+    Type { expected: u8, actual: u8 },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

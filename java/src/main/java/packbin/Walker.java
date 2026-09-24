@@ -49,6 +49,7 @@ final class Walker {
             case UTF8 -> VarFields.packUtf8(field, values, sink);
             case LIST -> VarFields.packList(field, values, sink);
             case DICT -> VarFields.packDict(field, values, sink);
+            case TYPE_NUM -> sink.write((byte) field.constant);
             default -> packScalar(field, values, sink);
         }
     }
@@ -73,8 +74,21 @@ final class Walker {
             case UTF8 -> VarFields.unpackUtf8(field, data, offset, values, asList);
             case LIST -> VarFields.unpackList(field, data, offset, values, asList);
             case DICT -> VarFields.unpackDict(field, data, offset, values, asList);
+            case TYPE_NUM -> unpackTypeNum(field, data, offset);
             default -> unpackScalar(field, data, offset, values, asList);
         };
+    }
+
+    private static Object unpackTypeNum(Field field, byte[] data, int[] offset) {
+        int left = data.length - offset[0];
+        if (left < 1) {
+            return new Packbin.ShortPacket(field.name, 1, left);
+        }
+        int actual = data[offset[0]++] & 0xFF;
+        if (actual != field.constant) {
+            return new Packbin.TypeMismatch(field.constant, actual);
+        }
+        return null;
     }
 
     private static void packFlags(Field field, Map<String, Object> values, ByteSink sink) {
