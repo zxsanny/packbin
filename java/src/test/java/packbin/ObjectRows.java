@@ -14,13 +14,9 @@ final class WideRow {
     public Integer b5;
 }
 
-final class Session {
-    public int login;
-    public long ts;
-}
-
 final class SessionRow {
-    public Session session;
+    public Integer login;
+    public Long ts;
 }
 
 final class MapRow {}

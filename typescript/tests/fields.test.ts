@@ -30,7 +30,12 @@ function mismatchedBytes(a: Uint8Array, b: Uint8Array): number {
 
 describe("packbin fields", () => {
   it("sized payload by count field", () => {
-    const layout = scheme(1, u16("n"), sized("payload", "n"))
+    type Row = { n: number; payload: Uint8Array }
+    const layout = scheme<Row>(
+      1,
+      u16(0, (r) => r.n),
+      sized(1, (r) => r.payload, 0),
+    )
     const raw = pack(layout, {
       n: 3,
       payload: Uint8Array.from(Buffer.from("756176", "hex")),
@@ -51,7 +56,20 @@ describe("packbin fields", () => {
   })
 
   it("u2 and bits", () => {
-    const kinds = scheme(1, u2("a", "b", "c", "d"))
+    type Kinds = { a: number; b: number; c: number; d: number }
+    const kinds = scheme<Kinds>(
+      1,
+      u2(
+        0,
+        (r) => r.a,
+        1,
+        (r) => r.b,
+        2,
+        (r) => r.c,
+        3,
+        (r) => r.d,
+      ),
+    )
     const raw = pack(kinds, { a: 0, b: 1, c: 2, d: 3 })
     assert.equal(toHex(raw), "01e4")
     const got = unpack(kinds, raw)
@@ -61,10 +79,18 @@ describe("packbin fields", () => {
       [got.value.a, got.value.b, got.value.c, got.value.d],
       [0, 1, 2, 3],
     )
-    const one = pack(scheme(1, u2("a")), { a: 1 })
+    const one = pack(
+      scheme(1, u2(0, (r: { a: number }) => r.a)),
+      { a: 1 },
+    )
     assert.equal(toHex(one), "0101")
 
-    const layout = scheme(1, u8("n"), bits("segs", "n"))
+    type BitsRow = { n: number; segs: number[] }
+    const layout = scheme<BitsRow>(
+      1,
+      u8(0, (r) => r.n),
+      bits(1, (r) => r.segs, 0),
+    )
     const eight = pack(layout, { n: 8, segs: [1, 1, 1, 1, 1, 1, 1, 1] })
     assert.equal(toHex(eight.subarray(2)), "ff")
     const nine = pack(layout, {
@@ -83,7 +109,8 @@ describe("packbin fields", () => {
   })
 
   it("utf8 string count is the payload", () => {
-    const layout = scheme(1, utf8("name"))
+    type Row = { name: string }
+    const layout = scheme<Row>(1, utf8(0, (r) => r.name))
     const raw = pack(layout, { name: "zxsanny" })
     assert.equal(toHex(raw), "0107007a7873616e6e79")
     assert.equal(raw.length, 10)
@@ -115,7 +142,14 @@ describe("packbin fields", () => {
   })
 
   it("counted list leaves the next field", () => {
-    const two = scheme(1, list("xs", u16("n")))
+    type Two = { xs: number[]; y?: number }
+    const two = scheme<Two>(
+      1,
+      list(
+        (r) => r.xs,
+        u16(0, (n) => n),
+      ),
+    )
     const raw = pack(two, { xs: [1, 2] })
     assert.equal(toHex(raw), "01020001000200")
     const got = unpack(two, raw)
@@ -123,10 +157,23 @@ describe("packbin fields", () => {
     if (!got.ok) return
     assert.deepEqual(got.value.xs, [1, 2])
 
-    const beOne = scheme(1, list("xs", be(u16("n"))))
+    const beOne = scheme<Two>(
+      1,
+      list(
+        (r) => r.xs,
+        be(u16(0, (n) => n)),
+      ),
+    )
     assert.equal(toHex(pack(beOne, { xs: [1] })), "0101000001")
 
-    const followed = scheme(1, list("xs", u8("n")), u8("y"))
+    const followed = scheme<Two>(
+      1,
+      list(
+        (r) => r.xs,
+        u8(0, (n) => n),
+      ),
+      u8(0, (r) => r.y),
+    )
     const both = pack(followed, { xs: [1], y: 2 })
     assert.equal(toHex(both), "0101000102")
     const back = unpack(followed, both)
@@ -146,13 +193,27 @@ describe("packbin fields", () => {
   it("dictionary field orders keys and nests lists", () => {
     const userHex =
       "0107007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e6e656c010004007265616403006d6170040004007265616407006770735f6669780300736574040065646974050073746f7265020004007265616405007772697465"
-    const layout = scheme(
+    type User = {
+      username: string
+      roles: string[]
+      access: Record<string, string[]>
+    }
+    const layout = scheme<User>(
       1,
-      utf8("username"),
-      list("roles", utf8("role")),
-      dict("access", list("actions", utf8("action"))),
+      utf8(0, (r) => r.username),
+      list(
+        (r) => r.roles,
+        utf8(0, (s) => s),
+      ),
+      dict(
+        (r) => r.access,
+        list(
+          (a) => a,
+          utf8(0, (s) => s),
+        ),
+      ),
     )
-    const userValue = {
+    const userValue: User = {
       username: "zxsanny",
       roles: ["user", "dispatcher"],
       access: {
@@ -187,10 +248,28 @@ describe("packbin fields", () => {
     assert.equal(toHex(reordered), userHex)
     assert.equal(mismatchedBytes(raw, reordered), 0)
 
-    const empties = scheme(1, utf8("name"), list("xs", utf8("x")), dict("d", utf8("v")))
+    type Empties = { name: string; xs: string[]; d: Record<string, string> }
+    const empties = scheme<Empties>(
+      1,
+      utf8(0, (r) => r.name),
+      list(
+        (r) => r.xs,
+        utf8(0, (x) => x),
+      ),
+      dict(
+        (r) => r.d,
+        utf8(0, (v) => v),
+      ),
+    )
     assert.equal(toHex(pack(empties, { name: "", xs: [], d: {} })), "01000000000000")
 
-    const dup = scheme(1, dict("access", utf8("v")))
+    const dup = scheme(
+      1,
+      dict(
+        (r: { access: Record<string, string> }) => r.access,
+        utf8(0, (v) => v),
+      ),
+    )
     const bad = unpack(dup, Buffer.from("010200010061010078010061010079", "hex"))
     assert.equal(bad.ok, false)
     if (bad.ok) return
@@ -225,7 +304,16 @@ describe("packbin fields", () => {
         const huge: Record<string, string> = {}
         for (let i = 0; i < 65536; i++) huge[`k${i}`] = "v"
         assert.throws(() => {
-          produced = pack(scheme(1, dict("d", utf8("v"))), { d: huge })
+          produced = pack(
+            scheme(
+              1,
+              dict(
+                (r: { d: Record<string, string> }) => r.d,
+                utf8(0, (v) => v),
+              ),
+            ),
+            { d: huge },
+          )
         })
         assert.equal(produced, null)
       })

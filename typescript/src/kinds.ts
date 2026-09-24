@@ -31,6 +31,7 @@ export function scalarChildNames(
       (f.kind === "int" ||
         f.kind === "float" ||
         f.kind === "bytes" ||
+        f.kind === "bool" ||
         f.kind === "utf8" ||
         f.kind === "list" ||
         f.kind === "dict") &&
@@ -44,13 +45,13 @@ export function scalarChildNames(
 
 export function writeU2(
   out: number[],
-  names: string[],
+  slots: { name: string }[],
   take: (name: string) => unknown,
 ): void {
-  const nbytes = (names.length + 3) >> 2
+  const nbytes = (slots.length + 3) >> 2
   const raw = new Array<number>(nbytes).fill(0)
-  for (let i = 0; i < names.length; i++) {
-    const name = names[i]!
+  for (let i = 0; i < slots.length; i++) {
+    const name = slots[i]!.name
     const value = take(name)
     if (
       typeof value !== "number" ||
@@ -67,13 +68,15 @@ export function writeU2(
 
 export function readU2(
   cur: Cursor,
-  names: string[],
+  slots: { name: string }[],
 ): { ok: true; values: number[] } | ShortErr {
-  const nbytes = (names.length + 3) >> 2
+  const nbytes = (slots.length + 3) >> 2
   const left = cur.buf.length - cur.offset
-  if (left < nbytes) return { ok: false, field: names[0]!, needed: nbytes, left }
+  if (left < nbytes) {
+    return { ok: false, field: slots[0]!.name, needed: nbytes, left }
+  }
   const values: number[] = []
-  for (let i = 0; i < names.length; i++) {
+  for (let i = 0; i < slots.length; i++) {
     values.push((cur.buf[cur.offset + (i >> 2)]! >> ((i & 3) * 2)) & 3)
   }
   cur.offset += nbytes

@@ -18,6 +18,7 @@ public final class Scheme<T> {
         this.typeNumber = typeNumber;
         this.type = Objects.requireNonNull(type, "type");
         this.fields = List.copyOf(Arrays.asList(Objects.requireNonNull(fields, "fields")));
+        SchemeOrder.validate(this.fields);
     }
 
     public Handler<T> on(Consumer<T> handler) {

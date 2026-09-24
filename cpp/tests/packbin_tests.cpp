@@ -46,21 +46,20 @@ std::string find_golden() {
 
 auto position_scheme() {
   return packbin::scheme(0x40, {
-      packbin::u16("sid"),
-      packbin::i32("lat"),
-      packbin::i32("lon"),
-      packbin::u8("profile"),
-      packbin::flags("motion",
-                     {packbin::u16("heading"), packbin::u8("speed"), packbin::i16("altitude")}),
+      packbin::u16(0),
+      packbin::i32(1),
+      packbin::i32(2),
+      packbin::u8(3),
+      packbin::flags({packbin::u16(4), packbin::u8(5), packbin::i16(6)}),
   });
 }
 
 packbin::Values position_values() {
   packbin::Values v;
-  v.emplace("sid", packbin::Value{std::uint16_t{1}});
-  v.emplace("lat", packbin::Value{std::int32_t{500000000}});
-  v.emplace("lon", packbin::Value{std::int32_t{300000000}});
-  v.emplace("profile", packbin::Value{std::uint8_t{1}});
+  v.emplace("0", packbin::Value{std::uint16_t{1}});
+  v.emplace("1", packbin::Value{std::int32_t{500000000}});
+  v.emplace("2", packbin::Value{std::int32_t{300000000}});
+  v.emplace("3", packbin::Value{std::uint8_t{1}});
   return v;
 }
 
@@ -80,14 +79,14 @@ void ac2_position_unpack() {
   auto got = packbin::unpack(position_scheme(), parse_hex(kGoldenHex));
   expect(got.ok, "AC-2 ok");
   expect(!packbin::present(got.value, "type"), "AC-2 no type");
-  expect(std::get<std::uint16_t>(got.value.at("sid").data) == 1, "AC-2 sid");
-  expect(std::get<std::int32_t>(got.value.at("lat").data) == 500000000, "AC-2 lat");
-  expect(std::get<std::int32_t>(got.value.at("lon").data) == 300000000, "AC-2 lon");
-  expect(std::get<std::uint8_t>(got.value.at("profile").data) == 1, "AC-2 profile");
+  expect(std::get<std::uint16_t>(got.value.at("0").data) == 1, "AC-2 sid");
+  expect(std::get<std::int32_t>(got.value.at("1").data) == 500000000, "AC-2 lat");
+  expect(std::get<std::int32_t>(got.value.at("2").data) == 300000000, "AC-2 lon");
+  expect(std::get<std::uint8_t>(got.value.at("3").data) == 1, "AC-2 profile");
   expect(packbin::motion_field_count(got.value) == 0, "AC-2 motion count 0");
-  expect(!packbin::present(got.value, "heading"), "AC-2 no heading");
-  expect(!packbin::present(got.value, "speed"), "AC-2 no speed");
-  expect(!packbin::present(got.value, "altitude"), "AC-2 no altitude");
+  expect(!packbin::present(got.value, 4), "AC-2 no heading");
+  expect(!packbin::present(got.value, 5), "AC-2 no speed");
+  expect(!packbin::present(got.value, 6), "AC-2 no altitude");
 }
 
 void ac3_bytes_match_fixture() {
@@ -100,9 +99,8 @@ void ac3_bytes_match_fixture() {
 
 void ac4_flags_and_stored_zero() {
   auto layout = packbin::scheme(1, {
-      packbin::flags("flags",
-                     {packbin::u8("b0"), packbin::u8("b1"), packbin::u8("b2"), packbin::u8("b3"),
-                      packbin::u8("b4"), packbin::u16("wide")}),
+      packbin::flags({packbin::u8(0), packbin::u8(1), packbin::u8(2), packbin::u8(3),
+                      packbin::u8(4), packbin::u16(5)}),
   });
 
   auto clear = packbin::pack(layout, {});
@@ -110,14 +108,14 @@ void ac4_flags_and_stored_zero() {
   expect(clear[0] == 0x01 && clear[1] == 0x00, "AC-4 clear 0x01 0x00");
 
   packbin::Values set;
-  set.emplace("wide", packbin::Value{std::uint16_t{0x1234}});
+  set.emplace("5", packbin::Value{std::uint16_t{0x1234}});
   auto set_bytes = packbin::pack(layout, set);
   expect(set_bytes.size() == 4, "AC-4 0x20 size 4");
   expect(set_bytes[0] == 0x01 && set_bytes[1] == 0x20, "AC-4 flags 0x20");
   expect(set_bytes.size() - clear.size() == 2, "AC-4 adds 2 bytes");
 
   packbin::Values zero;
-  zero.emplace("wide", packbin::Value{std::uint16_t{0}});
+  zero.emplace("5", packbin::Value{std::uint16_t{0}});
   auto zero_bytes = packbin::pack(layout, zero);
   expect(zero_bytes.size() == 4, "AC-4 present 0 size");
   expect(zero_bytes[0] == 0x01 && zero_bytes[1] == 0x20, "AC-4 present 0 bit set");
@@ -131,16 +129,15 @@ void ac4_flags_and_stored_zero() {
 
 void ac5_short_then_pack() {
   auto layout = packbin::scheme(1, {
-      packbin::flags("flags",
-                     {packbin::u8("b0"), packbin::u8("b1"), packbin::u8("b2"), packbin::u8("b3"),
-                      packbin::u8("b4"), packbin::u16("wide")}),
+      packbin::flags({packbin::u8(0), packbin::u8(1), packbin::u8(2), packbin::u8(3),
+                      packbin::u8(4), packbin::u16(5)}),
   });
   auto got = packbin::unpack(layout, std::vector<std::uint8_t>{0x01, 0x20, 0x34});
   expect(!got.ok, "AC-5 not ok");
   expect(got.value_count() == 0, "AC-5 value count 0");
   expect(got.short_packet.has_value(), "AC-5 short packet");
   if (got.short_packet) {
-    expect(got.short_packet->field == "wide", "AC-5 field wide");
+    expect(got.short_packet->field == "5", "AC-5 field 5");
     expect(got.short_packet->needed == 2, "AC-5 needed 2");
     expect(got.short_packet->left == 1, "AC-5 left 1");
   }
@@ -149,27 +146,26 @@ void ac5_short_then_pack() {
 }
 
 void when_group_width() {
-  auto layout =
-      packbin::scheme(1, {packbin::u8("profile"),
-                          packbin::when(packbin::eq("profile", packbin::Value{std::uint8_t{0}}),
-                                        {packbin::u8("shape")})});
+  auto layout = packbin::scheme(
+      1, {packbin::u8(0),
+          packbin::when(packbin::eq(0, packbin::Value{std::uint8_t{0}}), {packbin::u8(1)})});
   packbin::Values miss;
-  miss.emplace("profile", packbin::Value{std::uint8_t{1}});
+  miss.emplace("0", packbin::Value{std::uint8_t{1}});
   auto miss_bytes = packbin::pack(layout, miss);
   expect(miss_bytes.size() == 2, "when miss adds 0");
 
   packbin::Values hit;
-  hit.emplace("profile", packbin::Value{std::uint8_t{0}});
-  hit.emplace("shape", packbin::Value{std::uint8_t{9}});
+  hit.emplace("0", packbin::Value{std::uint8_t{0}});
+  hit.emplace("1", packbin::Value{std::uint8_t{9}});
   auto hit_bytes = packbin::pack(layout, hit);
   expect(hit_bytes.size() - miss_bytes.size() == 1, "when match adds group width");
 }
 
 void repeat_and_leftover() {
-  auto layout = packbin::scheme(1, {packbin::repeat({packbin::u8("a"), packbin::u8("b")})});
+  auto layout = packbin::scheme(1, {packbin::repeat({packbin::u8(0), packbin::u8(1)})});
   auto ok = packbin::unpack(layout, std::vector<std::uint8_t>{1, 1, 2});
   expect(ok.ok, "repeat ok");
-  auto it = ok.value.find("a");
+  auto it = ok.value.find("0");
   expect(it != ok.value.end(), "repeat key");
   if (it != ok.value.end()) {
     auto const* list = std::get_if<packbin::Value::List>(&it->second.data);
@@ -217,7 +213,7 @@ void nfr_round_trips() {
   auto elapsed = std::chrono::steady_clock::now() - start;
   auto ms = std::chrono::duration<double, std::milli>(elapsed).count();
   expect(ok, "NFR unpack ok");
-  expect(ok && std::get<std::int32_t>(last.at("lat").data) == 500000000, "NFR lat");
+  expect(ok && std::get<std::int32_t>(last.at("1").data) == 500000000, "NFR lat");
   expect(ms <= 1000.0, "NFR <= 1s");
   assert_no_gpu();
   std::cerr << "nfr elapsed_ms " << ms << "\n";
@@ -227,6 +223,7 @@ void nfr_round_trips() {
 
 int run_kinds_tests();
 int run_scheme_tests();
+int run_field_id_binding_tests();
 
 int main() {
   ac1_position_pack();
@@ -240,6 +237,7 @@ int main() {
   nfr_round_trips();
   failures += run_kinds_tests();
   failures += run_scheme_tests();
+  failures += run_field_id_binding_tests();
   if (failures != 0) {
     std::cerr << failures << " failure(s)\n";
     return 1;

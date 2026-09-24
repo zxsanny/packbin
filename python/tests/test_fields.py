@@ -9,6 +9,7 @@ from packbin import (
     Scheme,
     be,
     bits,
+    bool as flag_bool,
     dict as map_field,
     eq,
     flags,
@@ -27,15 +28,22 @@ from packbin import (
     when,
 )
 
+from _bind import gs, leaf
+
 
 def test_when_group_width():
-    layout = Scheme(1, dict, u8("profile"), when(eq("profile", 0), [u8("shape")]))
+    g_profile, s_profile = gs("profile")
+    g_shape, s_shape = gs("shape")
+    layout = Scheme(1, dict, u8(0, g_profile, s_profile), when(eq(0, 0), u8(1, g_shape, s_shape)))
     assert len(pack(layout, {"profile": 1})) == 2
     assert len(pack(layout, {"profile": 0, "shape": 9})) == 3
 
 
 def test_repeat_group_boundary():
-    layout = Scheme(1, dict, u8("type"), repeat([i32("lat"), i32("lon")]))
+    g_type, s_type = gs("type")
+    g_lat, s_lat = gs("lat")
+    g_lon, s_lon = gs("lon")
+    layout = Scheme(1, dict, u8(0, g_type, s_type), repeat(i32(1, g_lat, s_lat), i32(2, g_lon, s_lon)))
     complete = pack(
         layout,
         {"type": 1, "lat": [10, 30], "lon": [20, 40]},
@@ -54,20 +62,32 @@ def test_repeat_group_boundary():
 
 
 def test_flag_group():
-    empty = Scheme(1, dict, flags("f", [group("mark", [])]))
+    g_mark, s_mark = gs("mark")
+    empty = Scheme(1, dict, flags(flag_bool(0, g_mark, s_mark)))
     set_bit = pack(empty, {"mark": True})
     assert set_bit == b"\x01\x01"
     assert len(set_bit) - 1 == 1
     clear = pack(empty, {})
     assert clear == b"\x01\x00"
 
-    one = Scheme(1, dict, flags("f", [u8("a"), u8("b"), u8("c"), u8("d"), u8("e"), u16("b5")]))
+    one = Scheme(
+        1,
+        dict,
+        flags(
+            u8(0, *gs("a")),
+            u8(1, *gs("b")),
+            u8(2, *gs("c")),
+            u8(3, *gs("d")),
+            u8(4, *gs("e")),
+            u16(5, *gs("b5")),
+        ),
+    )
     assert len(pack(one, {"a": 1})) == 3
     wide = pack(one, {"b5": 1})
     assert wide[1] == 0x20
     assert len(wide) - len(pack(one, {})) == 2
 
-    two = Scheme(1, dict, flags("f", [group("session", [u16("login"), u32("ts")])]))
+    two = Scheme(1, dict, flags(group(u16(0, *gs("login")), u32(1, *gs("ts")))))
     raw = pack(two, {"login": 7, "ts": 1000})
     assert raw[2:].hex() == "0700e8030000"
     assert len(raw) - 2 == 6
@@ -79,7 +99,7 @@ def test_flag_group():
     assert "login" not in got.value
     assert "ts" not in got.value
 
-    zero = Scheme(1, dict, flags("f", [group("g", [u8("b")])]))
+    zero = Scheme(1, dict, flags(group(u8(0, *gs("b")))))
     stored = pack(zero, {"b": 0})
     assert stored == b"\x01\x01\x00"
 
@@ -87,13 +107,13 @@ def test_flag_group():
     assert short.ok is False
     assert short.value is None
     assert isinstance(short.error, ShortPacket)
-    assert short.field == "login"
+    assert short.field == "0"
     assert short.needed == 2
     assert short.left == 1
 
 
 def test_sized_bytes():
-    layout = Scheme(1, dict, u16("n"), sized("payload", "n"))
+    layout = Scheme(1, dict, u16(0, *gs("n")), sized(1, *gs("payload"), 0))
     raw = pack(layout, {"n": 3, "payload": bytes.fromhex("756176")})
     assert raw.hex() == "010300756176"
     got = unpack(layout, raw)
@@ -110,23 +130,23 @@ def test_sized_bytes():
     assert short.ok is False
     assert short.value is None
     assert isinstance(short.error, ShortPacket)
-    assert short.field == "payload"
+    assert short.field == "1"
     assert short.needed == 3
     assert short.left == 1
 
 
 def test_u2_and_bits():
-    kinds = Scheme(1, dict, u2("a", "b", "c", "d"))
+    kinds = Scheme(1, dict, u2((0, *gs("a")), (1, *gs("b")), (2, *gs("c")), (3, *gs("d"))))
     raw = pack(kinds, {"a": 0, "b": 1, "c": 2, "d": 3})
     assert raw.hex() == "01e4"
     got = unpack(kinds, raw)
     assert got.ok is True
     assert got.value is not None
     assert [got.value[k] for k in ("a", "b", "c", "d")] == [0, 1, 2, 3]
-    one = pack(Scheme(1, dict, u2("a")), {"a": 1})
+    one = pack(Scheme(1, dict, u2((0, *gs("a")))), {"a": 1})
     assert one.hex() == "0101"
 
-    layout = Scheme(1, dict, u8("n"), bits("segs", "n"))
+    layout = Scheme(1, dict, u8(0, *gs("n")), bits(1, *gs("segs"), 0))
     eight = pack(layout, {"n": 8, "segs": [1] * 8})
     assert eight[2:].hex() == "ff"
     assert len(eight) - 2 == 1
@@ -138,13 +158,13 @@ def test_u2_and_bits():
     assert short.ok is False
     assert short.value is None
     assert isinstance(short.error, ShortPacket)
-    assert short.field == "segs"
+    assert short.field == "1"
     assert short.needed == 2
     assert short.left == 1
 
 
 def test_utf8_string():
-    layout = Scheme(1, dict, utf8("name"))
+    layout = Scheme(1, dict, utf8(0, *gs("name")))
     raw = pack(layout, {"name": "zxsanny"})
     assert raw.hex() == "0107007a7873616e6e79"
     assert len(raw) == 10
@@ -167,13 +187,13 @@ def test_utf8_string():
     assert short.ok is False
     assert short.value is None
     assert isinstance(short.error, ShortPacket)
-    assert short.field == "name"
+    assert short.field == "0"
     assert short.needed == 7
     assert short.left == 2
 
 
 def test_counted_list():
-    two = Scheme(1, dict, list("xs", u16("n")))
+    two = Scheme(1, dict, list(*gs("xs"), u16(0, *leaf())))
     raw = pack(two, {"xs": [1, 2]})
     assert raw.hex() == "01020001000200"
     got = unpack(two, raw)
@@ -181,10 +201,10 @@ def test_counted_list():
     assert got.value is not None
     assert got.value["xs"] == [1, 2]
 
-    be_one = Scheme(1, dict, list("xs", be(u16("n"))))
+    be_one = Scheme(1, dict, list(*gs("xs"), be(u16(0, *leaf()))))
     assert pack(be_one, {"xs": [1]}).hex() == "0101000001"
 
-    followed = Scheme(1, dict, list("xs", u8("n")), u8("y"))
+    followed = Scheme(1, dict, list(*gs("xs"), u8(0, *leaf())), u8(0, *gs("y")))
     both = pack(followed, {"xs": [1], "y": 2})
     assert both.hex() == "0101000102"
     back = unpack(followed, both)
@@ -207,9 +227,9 @@ def test_dictionary():
     layout = Scheme(
         1,
         dict,
-        utf8("username"),
-        list("roles", utf8("role")),
-        map_field("access", list("actions", utf8("action"))),
+        utf8(0, *gs("username")),
+        list(*gs("roles"), utf8(0, *leaf())),
+        map_field(*gs("access"), list(*gs("actions"), utf8(0, *leaf()))),
     )
     values = {
         "username": "zxsanny",
@@ -242,11 +262,17 @@ def test_dictionary():
     }
     assert pack(layout, reordered).hex() == user_hex
 
-    empty = Scheme(1, dict, utf8("s"), list("xs", u8("n")), map_field("m", utf8("v")))
+    empty = Scheme(
+        1,
+        dict,
+        utf8(0, *gs("s")),
+        list(*gs("xs"), u8(0, *leaf())),
+        map_field(*gs("m"), utf8(0, *leaf())),
+    )
     assert pack(empty, {"s": "", "xs": [], "m": {}}).hex() == "01000000000000"
 
     dup = unpack(
-        Scheme(1, dict, map_field("access", utf8("v"))),
+        Scheme(1, dict, map_field(*gs("access"), utf8(0, *leaf()))),
         bytes.fromhex("010200010061010078010061010079"),
     )
     assert dup.ok is False
@@ -270,6 +296,6 @@ def test_dictionary():
     assert results[0] is not None and results[1] is not None
     assert results[0] == results[1]
 
-    huge = Scheme(1, dict, map_field("m", utf8("v")))
+    huge = Scheme(1, dict, map_field(*gs("m"), utf8(0, *leaf())))
     with pytest.raises(ValueError):
         pack(huge, {"m": {str(i): "x" for i in range(65536)}})

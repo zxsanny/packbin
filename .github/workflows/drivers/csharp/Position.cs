@@ -1,11 +1,14 @@
 using Packbin;
 
 var scheme = new Scheme<PositionRow>(0x40,
-    Field.U16("sid"),
-    Field.I32("lat"),
-    Field.I32("lon"),
-    Field.U8("profile"),
-    Field.Flags("motion", Field.U16("heading"), Field.U8("speed"), Field.I16("altitude")));
+    Field.U16<PositionRow>(0, x => x.sid),
+    Field.I32<PositionRow>(1, x => x.lat),
+    Field.I32<PositionRow>(2, x => x.lon),
+    Field.U8<PositionRow>(3, x => x.profile),
+    Field.Flags(
+        Field.U16<PositionRow>(4, x => x.heading),
+        Field.U8<PositionRow>(5, x => x.speed),
+        Field.I16<PositionRow>(6, x => x.altitude)));
 
 var values = new Dictionary<string, object?>
 {

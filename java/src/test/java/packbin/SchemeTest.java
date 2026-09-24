@@ -35,35 +35,34 @@ public final class SchemeTest {
     private static final Scheme<MarkerRow> MARKER = new Scheme<>(
             32,
             MarkerRow.class,
-            Packbin.u8("sid"));
+            Packbin.u8(0, Access.get((MarkerRow r) -> r.sid & 0xFF), Access.set((MarkerRow r, Object v) -> r.sid = ((Number) v).byteValue())));
 
     private static final Scheme<PositionRow> POSITION = new Scheme<>(
             0x40,
             PositionRow.class,
-            Packbin.u16("sid"),
-            Packbin.i32("lat"),
-            Packbin.i32("lon"),
-            Packbin.u8("profile"),
+            Packbin.u16(0, Access.get((PositionRow r) -> r.sid), Access.set((PositionRow r, Object v) -> r.sid = ((Number) v).intValue())),
+            Packbin.i32(1, Access.get((PositionRow r) -> r.lat), Access.set((PositionRow r, Object v) -> r.lat = ((Number) v).intValue())),
+            Packbin.i32(2, Access.get((PositionRow r) -> r.lon), Access.set((PositionRow r, Object v) -> r.lon = ((Number) v).intValue())),
+            Packbin.u8(3, Access.get((PositionRow r) -> r.profile & 0xFF), Access.set((PositionRow r, Object v) -> r.profile = ((Number) v).byteValue())),
             Packbin.flags(
-                    "motion",
-                    Packbin.u16("heading"),
-                    Packbin.u8("speed"),
-                    Packbin.i16("altitude")));
+                    Packbin.u16(4, Access.get((PositionRow r) -> r.heading), Access.set((PositionRow r, Object v) -> r.heading = v == null ? null : ((Number) v).intValue())),
+                    Packbin.u8(5, Access.get((PositionRow r) -> r.speed), Access.set((PositionRow r, Object v) -> r.speed = v == null ? null : ((Number) v).intValue())),
+                    Packbin.i16(6, Access.get((PositionRow r) -> r.altitude), Access.set((PositionRow r, Object v) -> r.altitude = v == null ? null : ((Number) v).intValue()))));
 
     private static final Scheme<UserModifiedEvent> MODIFIED = new Scheme<>(
             1,
             UserModifiedEvent.class,
-            Packbin.i32("userId"),
-            Packbin.utf8("userNameChange"),
-            Packbin.utf8("userEmailChange"),
-            Packbin.u8("userStatusChange"));
+            Packbin.i32(0, Access.get((UserModifiedEvent r) -> r.userId), Access.set((UserModifiedEvent r, Object v) -> r.userId = ((Number) v).intValue())),
+            Packbin.utf8(1, Access.get((UserModifiedEvent r) -> r.userNameChange), Access.set((UserModifiedEvent r, Object v) -> r.userNameChange = (String) v)),
+            Packbin.utf8(2, Access.get((UserModifiedEvent r) -> r.userEmailChange), Access.set((UserModifiedEvent r, Object v) -> r.userEmailChange = (String) v)),
+            Packbin.u8(3, Access.get((UserModifiedEvent r) -> r.userStatusChange & 0xFF), Access.set((UserModifiedEvent r, Object v) -> r.userStatusChange = ((Number) v).byteValue())));
 
     private static final Scheme<UserPositionEvent> USER_POSITION = new Scheme<>(
             2,
             UserPositionEvent.class,
-            Packbin.i32("userId"),
-            Packbin.i32("latitude"),
-            Packbin.i32("longitude"));
+            Packbin.i32(0, Access.get((UserPositionEvent r) -> r.userId), Access.set((UserPositionEvent r, Object v) -> r.userId = ((Number) v).intValue())),
+            Packbin.i32(1, Access.get((UserPositionEvent r) -> r.latitude), Access.set((UserPositionEvent r, Object v) -> r.latitude = ((Number) v).intValue())),
+            Packbin.i32(2, Access.get((UserPositionEvent r) -> r.longitude), Access.set((UserPositionEvent r, Object v) -> r.longitude = ((Number) v).intValue())));
 
     private static final String GOLDEN_HEX = "4001000065cd1d00a3e1110100";
     private static final String AC4_HEX = "02070000000800000009000000";
@@ -107,7 +106,6 @@ public final class SchemeTest {
             PositionRow.class.getField("type");
             fail("AC-2 type member present");
         } catch (NoSuchFieldException ex) {
-            // expected
         }
     }
 
@@ -119,7 +117,8 @@ public final class SchemeTest {
         Packbin.ShortPacket shortPacket = (Packbin.ShortPacket) empty.error;
         expectEq("AC-3 empty field", "", shortPacket.field);
 
-        Scheme<MarkerRow> typeOne = new Scheme<>(1, MarkerRow.class, Packbin.u8("sid"));
+        Scheme<MarkerRow> typeOne = new Scheme<>(1, MarkerRow.class,
+                Packbin.u8(0, Access.get((MarkerRow r) -> r.sid & 0xFF), Access.set((MarkerRow r, Object v) -> r.sid = ((Number) v).byteValue())));
         Packbin.Bound<MarkerRow> back = Unpack.run(typeOne, parseHex("0217"));
         expectTrue("AC-3 not ok", !back.ok);
         expectTrue("AC-3 no row", back.value == null);
@@ -151,7 +150,6 @@ public final class SchemeTest {
             UserPositionEvent.class.getField("type");
             fail("AC-4 type member present");
         } catch (NoSuchFieldException ex) {
-            // expected
         }
         expectEq("AC-4 hex", AC4_HEX, toHex(Pack.run(USER_POSITION, got.get())));
     }
@@ -175,7 +173,8 @@ public final class SchemeTest {
             Unpack.run(
                     new byte[] {1},
                     MODIFIED.on(ev -> {}),
-                    new Scheme<>(1, UserPositionEvent.class, Packbin.i32("userId")).on(ev -> {}));
+                    new Scheme<>(1, UserPositionEvent.class,
+                            Packbin.i32(0, Access.get((UserPositionEvent r) -> r.userId), Access.set((UserPositionEvent r, Object v) -> r.userId = ((Number) v).intValue()))).on(ev -> {}));
         } catch (IllegalArgumentException ex) {
             threw = true;
         }
@@ -183,10 +182,12 @@ public final class SchemeTest {
     }
 
     private static void typeNumberRange() {
-        expectThrows("above 255", () -> new Scheme<>(256, MarkerRow.class, Packbin.u8("sid")));
-        expectThrows("below 0", () -> new Scheme<>(-1, MarkerRow.class, Packbin.u8("sid")));
-        new Scheme<>(0, MarkerRow.class, Packbin.u8("sid"));
-        new Scheme<>(255, MarkerRow.class, Packbin.u8("sid"));
+        expectThrows("above 255", () -> new Scheme<>(256, MarkerRow.class,
+                Packbin.u8(0, Access.get((MarkerRow r) -> r.sid & 0xFF), Access.set((MarkerRow r, Object v) -> r.sid = ((Number) v).byteValue()))));
+        expectThrows("below 0", () -> new Scheme<>(-1, MarkerRow.class,
+                Packbin.u8(0, Access.get((MarkerRow r) -> r.sid & 0xFF), Access.set((MarkerRow r, Object v) -> r.sid = ((Number) v).byteValue()))));
+        new Scheme<>(0, MarkerRow.class, Packbin.u8(0, Access.get((MarkerRow r) -> r.sid & 0xFF), Access.set((MarkerRow r, Object v) -> r.sid = ((Number) v).byteValue())));
+        new Scheme<>(255, MarkerRow.class, Packbin.u8(0, Access.get((MarkerRow r) -> r.sid & 0xFF), Access.set((MarkerRow r, Object v) -> r.sid = ((Number) v).byteValue())));
     }
 
     private static void compileFailRequiresScheme() throws Exception {
@@ -217,7 +218,6 @@ public final class SchemeTest {
             action.run();
             fail(label + ": expected exception");
         } catch (IllegalArgumentException ex) {
-            // ok
         }
     }
 

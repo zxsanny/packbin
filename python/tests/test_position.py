@@ -16,6 +16,8 @@ from packbin import (
     unpack,
 )
 
+from _bind import gs
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GOLDEN_HEX = (REPO_ROOT / "fixtures" / "golden.hex").read_text().strip()
 POSITION_HEX = "4001000065cd1d00a3e1110100"
@@ -23,11 +25,15 @@ POSITION_HEX = "4001000065cd1d00a3e1110100"
 POSITION = Scheme(
     0x40,
     dict,
-    u16("sid"),
-    i32("lat"),
-    i32("lon"),
-    u8("profile"),
-    flags("motion", [u16("heading"), u8("speed"), i16("altitude")]),
+    u16(0, *gs("sid")),
+    i32(1, *gs("lat")),
+    i32(2, *gs("lon")),
+    u8(3, *gs("profile")),
+    flags(
+        u16(4, *gs("heading")),
+        u8(5, *gs("speed")),
+        i16(6, *gs("altitude")),
+    ),
 )
 
 POSITION_VALUES = {
@@ -86,15 +92,12 @@ def test_ac4_flags_and_stored_zero():
         0x40,
         dict,
         flags(
-            "opt",
-            [
-                u8("b0"),
-                u8("b1"),
-                u8("b2"),
-                u8("b3"),
-                u8("b4"),
-                u16("b5"),
-            ],
+            u8(0, *gs("b0")),
+            u8(1, *gs("b1")),
+            u8(2, *gs("b2")),
+            u8(3, *gs("b3")),
+            u8(4, *gs("b4")),
+            u16(5, *gs("b5")),
         ),
     )
     clear = pack(layout, {})
@@ -122,15 +125,12 @@ def test_ac5_short_field_then_position_pack():
         0x40,
         dict,
         flags(
-            "opt",
-            [
-                u8("b0"),
-                u8("b1"),
-                u8("b2"),
-                u8("b3"),
-                u8("b4"),
-                u16("b5"),
-            ],
+            u8(0, *gs("b0")),
+            u8(1, *gs("b1")),
+            u8(2, *gs("b2")),
+            u8(3, *gs("b3")),
+            u8(4, *gs("b4")),
+            u16(5, *gs("b5")),
         ),
     )
     short = bytes([0x40, 0x20, 0x34])
@@ -138,7 +138,7 @@ def test_ac5_short_field_then_position_pack():
     assert got.ok is False
     assert got.value is None
     assert isinstance(got.error, ShortPacket)
-    assert got.field == "b5"
+    assert got.field == "5"
     assert got.needed == 2
     assert got.left == 1
 

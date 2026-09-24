@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any
 
 
+Get = Callable[[Any], Any]
+Set = Callable[[Any, Any], None]
 _builtin_list = list
 
 
@@ -13,7 +16,9 @@ class _Node:
 
 @dataclass(slots=True)
 class _Scalar(_Node):
-    name: str
+    field_id: int
+    get: Get
+    set: Set
     kind: str
     size: int
     fmt_le: str
@@ -29,19 +34,27 @@ class _Scalar(_Node):
 
 @dataclass(slots=True)
 class _Bytes(_Node):
-    name: str
+    field_id: int
+    get: Get
+    set: Set
     size: int
 
 
 @dataclass(slots=True)
+class _Bool(_Node):
+    field_id: int
+    get: Get
+    set: Set
+
+
+@dataclass(slots=True)
 class _FlagByte(_Node):
-    name: str
     bits: list[_Node]
 
     def bit(self, field: _Node) -> _FlagBit:
         index = len(self.bits)
         if index >= 8:
-            raise ValueError(f"flags {self.name!r} already has 8 bits")
+            raise ValueError("flags already has 8 bits")
         self.bits.append(field)
         return _FlagBit(self, field, index)
 
@@ -55,13 +68,12 @@ class _FlagBit(_Node):
 
 @dataclass(slots=True)
 class _Flags(_Node):
-    name: str
     fields: list[_Node]
 
 
 @dataclass(slots=True)
 class _Eq:
-    field: str
+    field_id: int
     value: Any
 
 
@@ -78,46 +90,62 @@ class _Repeat(_Node):
 
 @dataclass(slots=True)
 class _Group(_Node):
-    name: str
     fields: list[_Node]
 
 
 @dataclass(slots=True)
 class _Sized(_Node):
-    name: str
-    count: str
+    field_id: int
+    get: Get
+    set: Set
+    count: int
+
+
+@dataclass(slots=True)
+class _U2Slot(_Node):
+    field_id: int
+    get: Get
+    set: Set
 
 
 @dataclass(slots=True)
 class _U2(_Node):
-    names: list[str]
+    slots: list[_U2Slot]
 
 
 @dataclass(slots=True)
 class _Bits(_Node):
-    name: str
-    count: str
+    field_id: int
+    get: Get
+    set: Set
+    count: int
 
 
 @dataclass(slots=True)
 class _Utf8(_Node):
-    name: str
+    field_id: int
+    get: Get
+    set: Set
 
 
 @dataclass(slots=True)
 class _List(_Node):
-    name: str
+    get: Get
+    set: Set
     element: _Node
 
 
 @dataclass(slots=True)
 class _Dict(_Node):
-    name: str
+    get: Get
+    set: Set
     element: _Node
 
 
 def _scalar(
-    name: str,
+    field_id: int,
+    get: Get,
+    set: Set,
     kind: str,
     size: int,
     fmt: str,
@@ -126,7 +154,9 @@ def _scalar(
     max_v: int | float,
 ) -> _Scalar:
     return _Scalar(
-        name=name,
+        field_id=field_id,
+        get=get,
+        set=set,
         kind=kind,
         size=size,
         fmt_le="<" + fmt,
@@ -137,57 +167,63 @@ def _scalar(
     )
 
 
-def u8(name: str) -> _Scalar:
-    return _scalar(name, "u8", 1, "B", False, 0, 0xFF)
+def u8(field_id: int, get: Get, set: Set) -> _Scalar:
+    return _scalar(field_id, get, set, "u8", 1, "B", False, 0, 0xFF)
 
 
-def u16(name: str) -> _Scalar:
-    return _scalar(name, "u16", 2, "H", False, 0, 0xFFFF)
+def u16(field_id: int, get: Get, set: Set) -> _Scalar:
+    return _scalar(field_id, get, set, "u16", 2, "H", False, 0, 0xFFFF)
 
 
-def u32(name: str) -> _Scalar:
-    return _scalar(name, "u32", 4, "I", False, 0, 0xFFFFFFFF)
+def u32(field_id: int, get: Get, set: Set) -> _Scalar:
+    return _scalar(field_id, get, set, "u32", 4, "I", False, 0, 0xFFFFFFFF)
 
 
-def u64(name: str) -> _Scalar:
-    return _scalar(name, "u64", 8, "Q", False, 0, 0xFFFFFFFFFFFFFFFF)
+def u64(field_id: int, get: Get, set: Set) -> _Scalar:
+    return _scalar(field_id, get, set, "u64", 8, "Q", False, 0, 0xFFFFFFFFFFFFFFFF)
 
 
-def i8(name: str) -> _Scalar:
-    return _scalar(name, "i8", 1, "b", True, -0x80, 0x7F)
+def i8(field_id: int, get: Get, set: Set) -> _Scalar:
+    return _scalar(field_id, get, set, "i8", 1, "b", True, -0x80, 0x7F)
 
 
-def i16(name: str) -> _Scalar:
-    return _scalar(name, "i16", 2, "h", True, -0x8000, 0x7FFF)
+def i16(field_id: int, get: Get, set: Set) -> _Scalar:
+    return _scalar(field_id, get, set, "i16", 2, "h", True, -0x8000, 0x7FFF)
 
 
-def i32(name: str) -> _Scalar:
-    return _scalar(name, "i32", 4, "i", True, -0x80000000, 0x7FFFFFFF)
+def i32(field_id: int, get: Get, set: Set) -> _Scalar:
+    return _scalar(field_id, get, set, "i32", 4, "i", True, -0x80000000, 0x7FFFFFFF)
 
 
-def i64(name: str) -> _Scalar:
-    return _scalar(name, "i64", 8, "q", True, -0x8000000000000000, 0x7FFFFFFFFFFFFFFF)
+def i64(field_id: int, get: Get, set: Set) -> _Scalar:
+    return _scalar(field_id, get, set, "i64", 8, "q", True, -0x8000000000000000, 0x7FFFFFFFFFFFFFFF)
 
 
-def f32(name: str) -> _Scalar:
-    return _scalar(name, "f32", 4, "f", True, float("-inf"), float("inf"))
+def f32(field_id: int, get: Get, set: Set) -> _Scalar:
+    return _scalar(field_id, get, set, "f32", 4, "f", True, float("-inf"), float("inf"))
 
 
-def f64(name: str) -> _Scalar:
-    return _scalar(name, "f64", 8, "d", True, float("-inf"), float("inf"))
+def f64(field_id: int, get: Get, set: Set) -> _Scalar:
+    return _scalar(field_id, get, set, "f64", 8, "d", True, float("-inf"), float("inf"))
 
 
-def bytes(name: str, n: int) -> _Bytes:  # noqa: A001 — schema helper name
+def bool(field_id: int, get: Get, set: Set) -> _Bool:  # noqa: A001
+    return _Bool(field_id=field_id, get=get, set=set)
+
+
+def bytes(field_id: int, get: Get, set: Set, n: int) -> _Bytes:  # noqa: A001
     if n < 0:
         raise ValueError("bytes length must be >= 0")
-    return _Bytes(name=name, size=n)
+    return _Bytes(field_id=field_id, get=get, set=set, size=n)
 
 
 def be(field: _Scalar) -> _Scalar:
     if not isinstance(field, _Scalar):
         raise TypeError("be() expects a numeric field")
     return _Scalar(
-        name=field.name,
+        field_id=field.field_id,
+        get=field.get,
+        set=field.set,
         kind=field.kind,
         size=field.size,
         fmt_le=field.fmt_le,
@@ -199,55 +235,89 @@ def be(field: _Scalar) -> _Scalar:
     )
 
 
-def flags(name: str, fields: Sequence[_Node]) -> _Flags:
-    return _Flags(name=name, fields=_builtin_list(fields))
+def flags(*fields: _Node) -> _Flags:
+    return _Flags(fields=_builtin_list(fields))
 
 
-def flag_byte(name: str) -> _FlagByte:
-    return _FlagByte(name=name, bits=[])
+def flag_byte() -> _FlagByte:
+    return _FlagByte(bits=[])
 
 
-def eq(field: str, value: Any) -> _Eq:
-    return _Eq(field=field, value=value)
+def eq(field_id: int, value: Any) -> _Eq:
+    return _Eq(field_id=field_id, value=value)
 
 
-def when(condition: _Eq, fields: Sequence[_Node]) -> _When:
+def when(condition: _Eq, *fields: _Node) -> _When:
     return _When(condition=condition, fields=_builtin_list(fields))
 
 
-def repeat(fields: Sequence[_Node]) -> _Repeat:
+def repeat(*fields: _Node) -> _Repeat:
     return _Repeat(fields=_builtin_list(fields))
 
 
-def group(name: str, fields: Sequence[_Node]) -> _Group:
-    return _Group(name=name, fields=_builtin_list(fields))
+def group(*fields: _Node) -> _Group:
+    return _Group(fields=_builtin_list(fields))
 
 
-def sized(name: str, count: str) -> _Sized:
-    return _Sized(name=name, count=count)
+def sized(field_id: int, get: Get, set: Set, count: int) -> _Sized:
+    return _Sized(field_id=field_id, get=get, set=set, count=count)
 
 
-def u2(*names: str) -> _U2:
-    if not names:
-        raise ValueError("u2 needs at least one name")
-    return _U2(names=_builtin_list(names))
+def u2(*slots: _U2Slot | tuple[int, Get, Set]) -> _U2:
+    if not slots:
+        raise ValueError("u2 needs at least one slot")
+    out: list[_U2Slot] = []
+    for slot in slots:
+        if isinstance(slot, _U2Slot):
+            out.append(slot)
+        else:
+            field_id, get, set = slot
+            out.append(_U2Slot(field_id=field_id, get=get, set=set))
+    return _U2(slots=out)
 
 
-def bits(name: str, count: str) -> _Bits:
-    return _Bits(name=name, count=count)
+def bits(field_id: int, get: Get, set: Set, count: int) -> _Bits:
+    return _Bits(field_id=field_id, get=get, set=set, count=count)
 
 
-def utf8(name: str) -> _Utf8:
-    return _Utf8(name=name)
+def utf8(field_id: int, get: Get, set: Set) -> _Utf8:
+    return _Utf8(field_id=field_id, get=get, set=set)
 
 
-def list(name: str, element: _Node) -> _List:
+def list(get: Get, set: Set, element: _Node) -> _List:  # noqa: A001
     if isinstance(element, _Repeat):
         raise ValueError("repeat is not a list element")
-    return _List(name=name, element=element)
+    return _List(get=get, set=set, element=element)
 
 
-def dict(name: str, element: _Node) -> _Dict:
+def dict(get: Get, set: Set, element: _Node) -> _Dict:  # noqa: A001
     if isinstance(element, _Repeat):
         raise ValueError("repeat is not a dictionary element")
-    return _Dict(name=name, element=element)
+    return _Dict(get=get, set=set, element=element)
+
+
+def _validate_order(nodes: Sequence[_Node], next_id: int = 0) -> int:
+    for node in nodes:
+        if isinstance(node, (_Scalar, _Bytes, _Bool, _Utf8, _Sized, _Bits)):
+            if node.field_id != next_id:
+                raise ValueError(f"field id {node.field_id} is not the next order {next_id}")
+            next_id += 1
+        elif isinstance(node, _U2Slot):
+            if node.field_id != next_id:
+                raise ValueError(f"field id {node.field_id} is not the next order {next_id}")
+            next_id += 1
+        elif isinstance(node, _U2):
+            next_id = _validate_order(node.slots, next_id)
+        elif isinstance(node, _Flags):
+            next_id = _validate_order(node.fields, next_id)
+        elif isinstance(node, (_When, _Repeat, _Group)):
+            next_id = _validate_order(node.fields, next_id)
+        elif isinstance(node, _FlagByte):
+            next_id = _validate_order(node.bits, next_id)
+        elif isinstance(node, _FlagBit):
+            next_id = _validate_order([node.field], next_id)
+        elif isinstance(node, (_List, _Dict)):
+            _validate_order([node.element], 0)
+        else:
+            raise TypeError(f"unknown field node: {type(node)!r}")
+    return next_id

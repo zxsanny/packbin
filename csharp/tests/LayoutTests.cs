@@ -5,14 +5,150 @@ namespace Packbin.Tests;
 
 public class LayoutTests
 {
-    private sealed class Bag { }
+    private sealed class WhenRow
+    {
+        public byte profile { get; set; }
+        public byte? shape { get; set; }
+    }
+
+    private sealed class RepeatRow
+    {
+        public byte a { get; set; }
+        public byte b { get; set; }
+    }
+
+    private sealed class TrailingRow
+    {
+        public byte type { get; set; }
+    }
+
+    private sealed class MarkRow
+    {
+        public bool? mark { get; set; }
+    }
+
+    private sealed class WideRow
+    {
+        public byte? a { get; set; }
+        public byte? b { get; set; }
+        public byte? c { get; set; }
+        public byte? d { get; set; }
+        public byte? e { get; set; }
+        public ushort? b5 { get; set; }
+    }
+
+    private sealed class Session
+    {
+        public ushort login { get; set; }
+        public uint ts { get; set; }
+    }
+
+    private sealed class SessionFlagRow
+    {
+        public Session? session { get; set; }
+    }
+
+    private sealed class NestedByte
+    {
+        public byte b { get; set; }
+    }
+
+    private sealed class NestedByteRow
+    {
+        public NestedByte? g { get; set; }
+    }
+
+    private sealed class SizedRow
+    {
+        public ushort n { get; set; }
+        public byte[] payload { get; set; } = [];
+    }
+
+    private sealed class Utf8Row
+    {
+        public string name { get; set; } = "";
+    }
+
+    private sealed class U16El
+    {
+        public ushort n { get; set; }
+    }
+
+    private sealed class U8El
+    {
+        public byte n { get; set; }
+    }
+
+    private sealed class ListRow
+    {
+        public ushort[] xs { get; set; } = [];
+    }
+
+    private sealed class ListFollowRow
+    {
+        public byte[] xs { get; set; } = [];
+        public byte y { get; set; }
+    }
+
+    private sealed class Utf8El
+    {
+        public string role { get; set; } = "";
+    }
+
+    private sealed class ActionEl
+    {
+        public string action { get; set; } = "";
+    }
+
+    private sealed class ActionList
+    {
+        public List<object?>? actions { get; set; }
+    }
+
+    private sealed class UserRow
+    {
+        public string username { get; set; } = "";
+        public List<object?>? roles { get; set; }
+        public Dictionary<string, object?>? access { get; set; }
+    }
+
+    private sealed class EmptyPartsRow
+    {
+        public string a { get; set; } = "";
+        public List<object?>? b { get; set; }
+        public Dictionary<string, object?>? c { get; set; }
+    }
+
+    private sealed class DictOnlyRow
+    {
+        public Dictionary<string, object?>? access { get; set; }
+    }
+
+    private sealed class ValueEl
+    {
+        public string v { get; set; } = "";
+    }
+
+    private sealed class U2Row
+    {
+        public int a { get; set; }
+        public int b { get; set; }
+        public int c { get; set; }
+        public int d { get; set; }
+    }
+
+    private sealed class BitsRow
+    {
+        public byte n { get; set; }
+        public List<int>? segs { get; set; }
+    }
 
     [Fact]
     public void WhenGroupWidth()
     {
-        var scheme = new Scheme<Bag>(1,
-            Field.U8("profile"),
-            Field.When(Condition.Eq("profile", (byte)0), Field.U8("shape")));
+        var scheme = new Scheme<WhenRow>(1,
+            Field.U8<WhenRow>(0, x => x.profile),
+            Field.When(Condition.Eq(0, (byte)0), Field.U8<WhenRow>(1, x => x.shape)));
 
         var miss = Pack.Run(scheme, new Dictionary<string, object?> { ["profile"] = (byte)1 });
         Assert.Equal(2, miss.Length);
@@ -30,7 +166,7 @@ public class LayoutTests
     [Fact]
     public void RepeatBoundary()
     {
-        var scheme = new Scheme<Bag>(1, Field.Repeat(Field.U8("a"), Field.U8("b")));
+        var scheme = new Scheme<RepeatRow>(1, Field.Repeat(Field.U8<RepeatRow>(0, x => x.a), Field.U8<RepeatRow>(1, x => x.b)));
 
         var ok = Unpack.Read(scheme, new byte[] { 1, 1, 2 });
         Assert.Null(ok.Error);
@@ -45,7 +181,7 @@ public class LayoutTests
     [Fact]
     public void TrailingBytesAreError()
     {
-        var scheme = new Scheme<Bag>(1, Field.U8("type"));
+        var scheme = new Scheme<TrailingRow>(1, Field.U8<TrailingRow>(0, x => x.type));
         var got = Unpack.Read(scheme, new byte[] { 0x01, 0x40, 0x99 });
         Assert.Empty(got.Values);
         var trailing = Assert.IsType<TrailingBytes>(got.Error);
@@ -55,7 +191,7 @@ public class LayoutTests
     [Fact]
     public void FlagGroup_EmptyMark()
     {
-        var scheme = new Scheme<Bag>(1, Field.Flags("f", Field.Group("mark")));
+        var scheme = new Scheme<MarkRow>(1, Field.Flags(Field.Group((MarkRow x) => x.mark)));
         var setBit = Pack.Run(scheme, new Dictionary<string, object?> { ["mark"] = true });
         Assert.Equal(new byte[] { 0x01, 0x01 }, setBit);
         var clear = Pack.Run(scheme, new Dictionary<string, object?>());
@@ -65,8 +201,9 @@ public class LayoutTests
     [Fact]
     public void FlagGroup_FiveU8ThenU16()
     {
-        var scheme = new Scheme<Bag>(1, Field.Flags("f",
-            Field.U8("a"), Field.U8("b"), Field.U8("c"), Field.U8("d"), Field.U8("e"), Field.U16("b5")));
+        var scheme = new Scheme<WideRow>(1, Field.Flags(
+            Field.U8<WideRow>(0, x => x.a), Field.U8<WideRow>(1, x => x.b), Field.U8<WideRow>(2, x => x.c),
+            Field.U8<WideRow>(3, x => x.d), Field.U8<WideRow>(4, x => x.e), Field.U16<WideRow>(5, x => x.b5)));
         Assert.Equal(3, Pack.Run(scheme, new Dictionary<string, object?> { ["a"] = (byte)1 }).Length);
         var empty = Pack.Run(scheme, new Dictionary<string, object?>());
         var wide = Pack.Run(scheme, new Dictionary<string, object?> { ["b5"] = (ushort)1 });
@@ -78,8 +215,8 @@ public class LayoutTests
     [Fact]
     public void FlagGroup_Session()
     {
-        var scheme = new Scheme<Bag>(1, Field.Flags("f",
-            Field.Group("session", Field.U16("login"), Field.U32("ts"))));
+        var scheme = new Scheme<SessionFlagRow>(1, Field.Flags(
+            Field.Group((SessionFlagRow x) => x.session, Field.U16<Session>(0, s => s.login), Field.U32<Session>(1, s => s.ts))));
         var raw = Pack.Run(scheme, new Dictionary<string, object?>
         {
             ["login"] = (ushort)7,
@@ -98,7 +235,7 @@ public class LayoutTests
     [Fact]
     public void FlagGroup_ZeroU8()
     {
-        var scheme = new Scheme<Bag>(1, Field.Flags("f", Field.Group("g", Field.U8("b"))));
+        var scheme = new Scheme<NestedByteRow>(1, Field.Flags(Field.Group((NestedByteRow x) => x.g, Field.U8<NestedByte>(0, g => g.b))));
         var stored = Pack.Run(scheme, new Dictionary<string, object?> { ["b"] = (byte)0 });
         Assert.Equal(new byte[] { 0x01, 0x01, 0x00 }, stored);
     }
@@ -106,8 +243,8 @@ public class LayoutTests
     [Fact]
     public void FlagGroup_SessionShort()
     {
-        var scheme = new Scheme<Bag>(1, Field.Flags("f",
-            Field.Group("session", Field.U16("login"), Field.U32("ts"))));
+        var scheme = new Scheme<SessionFlagRow>(1, Field.Flags(
+            Field.Group((SessionFlagRow x) => x.session, Field.U16<Session>(0, s => s.login), Field.U32<Session>(1, s => s.ts))));
         var got = Unpack.Read(scheme, new byte[] { 0x01, 0x01, 0x07 });
         Assert.Empty(got.Values);
         var missing = Assert.IsType<ShortPacket>(got.Error);
@@ -119,7 +256,7 @@ public class LayoutTests
     [Fact]
     public void SizedPayload()
     {
-        var scheme = new Scheme<Bag>(1, Field.U16("n"), Field.Sized("payload", "n"));
+        var scheme = new Scheme<SizedRow>(1, Field.U16<SizedRow>(0, x => x.n), Field.Sized<SizedRow>(1, x => x.payload, 0));
         var raw = Pack.Run(scheme, new Dictionary<string, object?>
         {
             ["n"] = (ushort)3,
@@ -146,7 +283,7 @@ public class LayoutTests
     [Fact]
     public void Utf8String()
     {
-        var scheme = new Scheme<Bag>(1, Field.Utf8("name"));
+        var scheme = new Scheme<Utf8Row>(1, Field.Utf8<Utf8Row>(0, x => x.name));
         var raw = Pack.Run(scheme, new Dictionary<string, object?> { ["name"] = "zxsanny" });
         Assert.Equal("0107007a7873616e6e79", Convert.ToHexString(raw).ToLowerInvariant());
         Assert.Equal(10, raw.Length);
@@ -174,7 +311,7 @@ public class LayoutTests
     [Fact]
     public void CountedList()
     {
-        var two = new Scheme<Bag>(1, Field.List("xs", Field.U16("n")));
+        var two = new Scheme<ListRow>(1, Field.List((ListRow x) => x.xs, Field.U16<U16El>(0, n => n.n)));
         var raw = Pack.Run(two, new Dictionary<string, object?> { ["xs"] = new ushort[] { 1, 2 } });
         Assert.Equal("01020001000200", Convert.ToHexString(raw).ToLowerInvariant());
         var got = Unpack.Read(two, raw);
@@ -184,11 +321,13 @@ public class LayoutTests
         Assert.Equal(1, Convert.ToInt32(xs[0], CultureInfo.InvariantCulture));
         Assert.Equal(2, Convert.ToInt32(xs[1], CultureInfo.InvariantCulture));
 
-        var beOne = new Scheme<Bag>(1, Field.List("xs", Field.U16("n").Be()));
+        var beOne = new Scheme<ListRow>(1, Field.List((ListRow x) => x.xs, Field.U16<U16El>(0, n => n.n).Be()));
         var beRaw = Pack.Run(beOne, new Dictionary<string, object?> { ["xs"] = new ushort[] { 1 } });
         Assert.Equal("0101000001", Convert.ToHexString(beRaw).ToLowerInvariant());
 
-        var followed = new Scheme<Bag>(1, Field.List("xs", Field.U8("n")), Field.U8("y"));
+        var followed = new Scheme<ListFollowRow>(1,
+            Field.List((ListFollowRow x) => x.xs, Field.U8<U8El>(0, n => n.n)),
+            Field.U8<ListFollowRow>(0, x => x.y));
         var both = Pack.Run(followed, new Dictionary<string, object?>
         {
             ["xs"] = new byte[] { 1 },
@@ -210,10 +349,10 @@ public class LayoutTests
     [Fact]
     public void CountedDict()
     {
-        var scheme = new Scheme<Bag>(1,
-            Field.Utf8("username"),
-            Field.List("roles", Field.Utf8("role")),
-            Field.Dict("access", Field.List("actions", Field.Utf8("action"))));
+        var scheme = new Scheme<UserRow>(1,
+            Field.Utf8<UserRow>(0, x => x.username),
+            Field.List((UserRow x) => x.roles, Field.Utf8<Utf8El>(0, r => r.role)),
+            Field.Dict((UserRow x) => x.access, Field.List((ActionList e) => e.actions, Field.Utf8<ActionEl>(0, a => a.action))));
         const string userHex =
             "0107007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e6e656c010004007265616403006d6170040004007265616407006770735f6669780300736574040065646974050073746f7265020004007265616405007772697465";
         var user = new Dictionary<string, object?>
@@ -265,10 +404,10 @@ public class LayoutTests
         var reorderedRaw = Pack.Run(scheme, reordered);
         Assert.Equal(0, PackbinTests.MismatchedBytes(raw, reorderedRaw));
 
-        var empties = new Scheme<Bag>(1,
-            Field.Utf8("a"),
-            Field.List("b", Field.Utf8("x")),
-            Field.Dict("c", Field.Utf8("v")));
+        var empties = new Scheme<EmptyPartsRow>(1,
+            Field.Utf8<EmptyPartsRow>(0, x => x.a),
+            Field.List((EmptyPartsRow x) => x.b, Field.Utf8<ValueEl>(0, x => x.v)),
+            Field.Dict((EmptyPartsRow x) => x.c, Field.Utf8<ValueEl>(0, x => x.v)));
         var emptyRaw = Pack.Run(empties, new Dictionary<string, object?>
         {
             ["a"] = "",
@@ -277,7 +416,7 @@ public class LayoutTests
         });
         Assert.Equal("01000000000000", Convert.ToHexString(emptyRaw).ToLowerInvariant());
 
-        var onlyDict = new Scheme<Bag>(1, Field.Dict("access", Field.Utf8("v")));
+        var onlyDict = new Scheme<DictOnlyRow>(1, Field.Dict((DictOnlyRow x) => x.access, Field.Utf8<ValueEl>(0, v => v.v)));
         var dup = Unpack.Read(onlyDict, PackbinTests.ParseHex("010200010061010078010061010079"));
         Assert.NotNull(dup.Error);
         Assert.Empty(dup.Values);
@@ -304,7 +443,8 @@ public class LayoutTests
     [Fact]
     public void U2AndBits()
     {
-        var kinds = new Scheme<Bag>(1, Field.U2("a", "b", "c", "d"));
+        var kinds = new Scheme<U2Row>(1, Field.U2<U2Row>(
+            (0, x => x.a), (1, x => x.b), (2, x => x.c), (3, x => x.d)));
         var raw = Pack.Run(kinds, new Dictionary<string, object?>
         {
             ["a"] = 0, ["b"] = 1, ["c"] = 2, ["d"] = 3,
@@ -316,10 +456,10 @@ public class LayoutTests
         Assert.Equal(1, Convert.ToInt32(got.Values["b"]!, CultureInfo.InvariantCulture));
         Assert.Equal(2, Convert.ToInt32(got.Values["c"]!, CultureInfo.InvariantCulture));
         Assert.Equal(3, Convert.ToInt32(got.Values["d"]!, CultureInfo.InvariantCulture));
-        var one = Pack.Run(new Scheme<Bag>(1, Field.U2("a")), new Dictionary<string, object?> { ["a"] = 1 });
+        var one = Pack.Run(new Scheme<U2Row>(1, Field.U2<U2Row>((0, x => x.a))), new Dictionary<string, object?> { ["a"] = 1 });
         Assert.Equal("0101", Convert.ToHexString(one).ToLowerInvariant());
 
-        var layout = new Scheme<Bag>(1, Field.U8("n"), Field.Bits("segs", "n"));
+        var layout = new Scheme<BitsRow>(1, Field.U8<BitsRow>(0, x => x.n), Field.Bits<BitsRow>(1, x => x.segs, 0));
         var eight = Pack.Run(layout, new Dictionary<string, object?>
         {
             ["n"] = (byte)8,

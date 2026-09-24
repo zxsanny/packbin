@@ -21,9 +21,9 @@ packbin::Value one_op(char const* op) {
 
 auto user_scheme() {
   return packbin::scheme(1, {
-      packbin::utf8("username"),
-      packbin::list("roles", packbin::utf8("role")),
-      packbin::dict("access", packbin::list("actions", packbin::utf8("action"))),
+      packbin::utf8(0),
+      packbin::list("roles", packbin::utf8(0)),
+      packbin::dict("access", packbin::list("actions", packbin::utf8(0))),
   });
 }
 
@@ -33,7 +33,7 @@ packbin::Values user_values() {
   access->items.emplace("map", packbin::Value{strs({"read", "gps_fix", "set", "edit"})});
   access->items.emplace("store", packbin::Value{strs({"read", "write"})});
   packbin::Values values;
-  values.emplace("username", packbin::Value{std::string("zxsanny")});
+  values.emplace("0", packbin::Value{std::string("zxsanny")});
   values.emplace("roles", packbin::Value{strs({"user", "dispatcher"})});
   values.emplace("access", packbin::Value{access});
   return values;
@@ -42,7 +42,7 @@ packbin::Values user_values() {
 auto nested_scheme() {
   return packbin::scheme(
       1, {packbin::dict("access",
-                        packbin::list("rows", packbin::dict("fields", packbin::utf8("value"))))});
+                        packbin::list("rows", packbin::dict("fields", packbin::utf8(0))))});
 }
 
 packbin::Values nested_values() {
@@ -82,7 +82,7 @@ bool user_ok(std::string const& hex) {
   auto got = packbin::unpack(user_scheme(), parse_hex(hex));
   if (!got.ok || got.value.size() != 3)
     return false;
-  if (std::get<std::string>(got.value.at("username").data) != "zxsanny")
+  if (std::get<std::string>(got.value.at("0").data) != "zxsanny")
     return false;
   auto const& roles = std::get<packbin::Value::List>(got.value.at("roles").data);
   auto const& access = std::get<packbin::Value::Map>(got.value.at("access").data);

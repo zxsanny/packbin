@@ -9,6 +9,7 @@ public sealed class Scheme<T> where T : class, new()
     {
         if (typeNumber is < 0 or > 255)
             throw new ArgumentOutOfRangeException(nameof(typeNumber), typeNumber, "type number must be 0..255");
+        SchemeOrder.Validate(fields);
         TypeNumber = typeNumber;
         Fields = fields;
     }
@@ -47,16 +48,19 @@ internal sealed class SchemeHandler<T> : SchemeHandler where T : class, new()
 
 public sealed class Condition
 {
-    public string Field { get; }
+    public int FieldId { get; }
     public object Value { get; }
+    internal string FieldName { get; private set; } = "";
 
-    private Condition(string field, object value)
+    private Condition(int fieldId, object value)
     {
-        Field = field;
+        FieldId = fieldId;
         Value = value;
     }
 
-    public static Condition Eq(string field, object value) => new(field, value);
+    public static Condition Eq(int fieldId, object value) => new(fieldId, value);
+
+    internal void Resolve(string fieldName) => FieldName = fieldName;
 }
 
 public sealed class ShortPacket
@@ -103,146 +107,6 @@ public sealed class UnpackResult
         Error = error;
     }
 }
-
-public sealed class Field
-{
-    internal enum Kind : byte
-    {
-        U8, U16, U32, U64,
-        I8, I16, I32, I64,
-        F32, F64,
-        Bytes,
-        Flags,
-        FlagByte,
-        FlagBit,
-        When,
-        Repeat,
-        Group,
-        Sized,
-        U2,
-        Bits,
-        Utf8,
-        List,
-        Dict,
-    }
-
-    internal Kind Type { get; }
-    internal string Name { get; }
-    internal bool BigEndian { get; }
-    internal int ByteCount { get; }
-    internal Field[] Children { get; }
-    internal Condition? Pred { get; }
-    internal FlagGroup? FlagOwner { get; }
-    internal int BitIndex { get; }
-    internal Field? Inner { get; }
-    internal string CountName { get; }
-    internal string[] Names { get; }
-
-    private Field(
-        Kind type,
-        string name,
-        bool bigEndian = false,
-        int byteCount = 0,
-        Field[]? children = null,
-        Condition? pred = null,
-        FlagGroup? flagOwner = null,
-        int bitIndex = 0,
-        Field? inner = null,
-        string countName = "",
-        string[]? names = null)
-    {
-        Type = type;
-        Name = name;
-        BigEndian = bigEndian;
-        ByteCount = byteCount;
-        Children = children ?? [];
-        Pred = pred;
-        FlagOwner = flagOwner;
-        BitIndex = bitIndex;
-        Inner = inner;
-        CountName = countName;
-        Names = names ?? [];
-    }
-
-    public Field Be() =>
-        new(Type, Name, true, ByteCount, Children, Pred, FlagOwner, BitIndex, Inner, CountName, Names);
-
-    public Field Bit(Field field)
-    {
-        if (Type != Kind.FlagByte || FlagOwner is null)
-            throw new InvalidOperationException("Bit requires FlagByte.");
-        return FlagOwner.AddBit(field);
-    }
-
-    public static Field U8(string name) => new(Kind.U8, name, byteCount: 1);
-    public static Field U16(string name) => new(Kind.U16, name, byteCount: 2);
-    public static Field U32(string name) => new(Kind.U32, name, byteCount: 4);
-    public static Field U64(string name) => new(Kind.U64, name, byteCount: 8);
-    public static Field I8(string name) => new(Kind.I8, name, byteCount: 1);
-    public static Field I16(string name) => new(Kind.I16, name, byteCount: 2);
-    public static Field I32(string name) => new(Kind.I32, name, byteCount: 4);
-    public static Field I64(string name) => new(Kind.I64, name, byteCount: 8);
-    public static Field F32(string name) => new(Kind.F32, name, byteCount: 4);
-    public static Field F64(string name) => new(Kind.F64, name, byteCount: 8);
-    public static Field Bytes(string name, int n) => new(Kind.Bytes, name, byteCount: n);
-
-    public static Field FlagByte(string name)
-    {
-        var group = new FlagGroup(name);
-        return new Field(Kind.FlagByte, name, flagOwner: group);
-    }
-
-    public static Field Flags(string name, params Field[] fields)
-    {
-        var group = new FlagGroup(name);
-        var bits = new Field[fields.Length];
-        for (var i = 0; i < fields.Length; i++)
-            bits[i] = group.AddBit(fields[i]);
-        return new Field(Kind.Flags, name, children: bits, flagOwner: group);
-    }
-
-    public static Field When(Condition condition, params Field[] fields) =>
-        new(Kind.When, condition.Field, children: fields, pred: condition);
-
-    public static Field Repeat(params Field[] fields) =>
-        new(Kind.Repeat, "", children: fields);
-
-    public static Field Group(string name, params Field[] fields) =>
-        new(Kind.Group, name, children: fields);
-
-    public static Field Sized(string name, string countField) =>
-        new(Kind.Sized, name, countName: countField);
-
-    public static Field U2(params string[] names)
-    {
-        if (names.Length == 0)
-            throw new ArgumentException("u2 needs at least one name");
-        return new Field(Kind.U2, names[0], names: names);
-    }
-
-    public static Field Bits(string name, string countField) =>
-        new(Kind.Bits, name, countName: countField);
-
-    public static Field Utf8(string name) => new(Kind.Utf8, name);
-
-    public static Field List(string name, Field element)
-    {
-        if (element.Type == Kind.Repeat)
-            throw new ArgumentException("repeat is not a list element");
-        return new(Kind.List, name, children: [element]);
-    }
-
-    public static Field Dict(string name, Field element)
-    {
-        if (element.Type == Kind.Repeat)
-            throw new ArgumentException("repeat is not a dictionary element");
-        return new(Kind.Dict, name, children: [element]);
-    }
-
-    internal static Field CreateFlagBit(FlagGroup group, int bitIndex, Field inner) =>
-        new(Kind.FlagBit, inner.Name, flagOwner: group, bitIndex: bitIndex, inner: inner);
-}
-
 
 public static class Pack
 {
@@ -319,5 +183,117 @@ public static class Unpack
         if (offset < bytes.Length)
             return new UnpackResult([], new TrailingBytes(bytes.Length - offset));
         return new UnpackResult(values, null);
+    }
+}
+
+internal static class SchemeOrder
+{
+    public static void Validate(IReadOnlyList<Field> fields)
+    {
+        var scope = new Dictionary<int, string>();
+        var next = 0;
+        foreach (var field in fields)
+            Walk(field, scope, ref next);
+        Resolve(fields, scope);
+    }
+
+    private static void Walk(Field field, Dictionary<int, string> scope, ref int next)
+    {
+        switch (field.Type)
+        {
+            case Field.Kind.When:
+            case Field.Kind.Repeat:
+            case Field.Kind.Flags:
+                foreach (var child in field.Children)
+                    Walk(child, scope, ref next);
+                break;
+            case Field.Kind.FlagBit:
+                Walk(field.Inner!, scope, ref next);
+                break;
+            case Field.Kind.FlagByte:
+                break;
+            case Field.Kind.Group:
+                if (field.NestedRow)
+                {
+                    var nested = new Dictionary<int, string>();
+                    var nestedNext = 0;
+                    foreach (var child in field.Children)
+                        Walk(child, nested, ref nestedNext);
+                    Resolve(field.Children, nested);
+                }
+                else
+                {
+                    foreach (var child in field.Children)
+                        Walk(child, scope, ref next);
+                }
+                break;
+            case Field.Kind.List:
+            case Field.Kind.Dict:
+            {
+                var nested = new Dictionary<int, string>();
+                var nestedNext = 0;
+                Walk(field.Children[0], nested, ref nestedNext);
+                Resolve(field.Children, nested);
+                break;
+            }
+            case Field.Kind.U2:
+                for (var i = 0; i < field.SlotIds.Length; i++)
+                    Take(field.SlotIds[i], field.Names[i], scope, ref next);
+                break;
+            default:
+                if (Field.IsValueBearing(field))
+                    Take(field.Id, field.Name, scope, ref next);
+                break;
+        }
+    }
+
+    private static void Take(int id, string name, Dictionary<int, string> scope, ref int next)
+    {
+        if (id != next)
+            throw new ArgumentException($"field id {id} must be {next}");
+        if (!scope.TryAdd(id, name))
+            throw new ArgumentException($"duplicate field id {id}");
+        next++;
+    }
+
+    private static void Resolve(IReadOnlyList<Field> fields, Dictionary<int, string> scope)
+    {
+        foreach (var field in fields)
+            ResolveField(field, scope);
+    }
+
+    private static void ResolveField(Field field, Dictionary<int, string> scope)
+    {
+        switch (field.Type)
+        {
+            case Field.Kind.When:
+                if (!scope.TryGetValue(field.Pred!.FieldId, out var condName))
+                    throw new ArgumentException($"condition field id {field.Pred.FieldId} is unknown");
+                field.Pred.Resolve(condName);
+                foreach (var child in field.Children)
+                    ResolveField(child, scope);
+                break;
+            case Field.Kind.Sized:
+            case Field.Kind.Bits:
+                if (!scope.TryGetValue(field.CountId, out var countName))
+                    throw new ArgumentException($"count field id {field.CountId} is unknown");
+                field.SetCountName(countName);
+                break;
+            case Field.Kind.Flags:
+            case Field.Kind.Repeat:
+                foreach (var child in field.Children)
+                    ResolveField(child, scope);
+                break;
+            case Field.Kind.FlagBit:
+                ResolveField(field.Inner!, scope);
+                break;
+            case Field.Kind.Group:
+                if (!field.NestedRow)
+                {
+                    foreach (var child in field.Children)
+                        ResolveField(child, scope);
+                }
+                break;
+        }
     }
 }

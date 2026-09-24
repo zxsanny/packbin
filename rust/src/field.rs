@@ -193,9 +193,41 @@ impl MapScheme {
     }
 }
 
-pub fn eq(field: impl AsRef<str>, value: Value) -> Eq {
+pub trait FieldKey {
+    fn to_name(self) -> Name;
+}
+
+impl FieldKey for &str {
+    fn to_name(self) -> Name {
+        name_of(self)
+    }
+}
+
+impl FieldKey for String {
+    fn to_name(self) -> Name {
+        name_of(self)
+    }
+}
+
+impl FieldKey for u32 {
+    fn to_name(self) -> Name {
+        name_of(self.to_string())
+    }
+}
+
+impl FieldKey for i32 {
+    fn to_name(self) -> Name {
+        name_of((self as u32).to_string())
+    }
+}
+
+pub fn id_name(id: u32) -> Name {
+    name_of(id.to_string())
+}
+
+pub fn eq(field: impl FieldKey, value: Value) -> Eq {
     Eq {
-        field: name_of(field),
+        field: field.to_name(),
         value,
     }
 }
@@ -311,11 +343,11 @@ pub fn group(name: impl AsRef<str>, fields: Vec<Field>) -> Field {
     }
 }
 
-pub fn sized(name: impl AsRef<str>, count_field: impl AsRef<str>) -> Field {
+pub fn sized(name: impl FieldKey, count_field: impl FieldKey) -> Field {
     Field {
         kind: FieldKind::Sized {
-            name: name_of(name),
-            count: name_of(count_field),
+            name: name.to_name(),
+            count: count_field.to_name(),
         },
     }
 }
@@ -358,11 +390,11 @@ pub fn dict(name: impl AsRef<str>, element: Field) -> Field {
     }
 }
 
-pub fn bits(name: impl AsRef<str>, count_field: impl AsRef<str>) -> Field {
+pub fn bits(name: impl FieldKey, count_field: impl FieldKey) -> Field {
     Field {
         kind: FieldKind::Bits {
-            name: name_of(name),
-            count: name_of(count_field),
+            name: name.to_name(),
+            count: count_field.to_name(),
         },
     }
 }

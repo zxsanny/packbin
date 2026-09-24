@@ -1,18 +1,46 @@
 import { dict, list, pack, scheme, unpack, utf8 } from "../../../typescript/src/index.ts";
 
-const userPacket = scheme(
+type UserRow = {
+  username: string;
+  roles: string[];
+  access: Record<string, string[]>;
+};
+
+type NestedRow = {
+  access: Record<string, Record<string, string>[]>;
+};
+
+const userPacket = scheme<UserRow>(
   1,
-  utf8("username"),
-  list("roles", utf8("role")),
-  dict("access", list("actions", utf8("action"))),
+  utf8(0, (r) => r.username),
+  list(
+    (r) => r.roles,
+    utf8(0, (s) => s),
+  ),
+  dict(
+    (r) => r.access,
+    list(
+      (a) => a,
+      utf8(0, (s) => s),
+    ),
+  ),
 );
 
-const nestedPacket = scheme(
+const nestedPacket = scheme<NestedRow>(
   1,
-  dict("access", list("rows", dict("fields", utf8("value")))),
+  dict(
+    (r) => r.access,
+    list(
+      (rows) => rows,
+      dict(
+        (row) => row,
+        utf8(0, (s) => s),
+      ),
+    ),
+  ),
 );
 
-const userValues = {
+const userValues: UserRow = {
   username: "zxsanny",
   roles: ["user", "dispatcher"],
   access: {
@@ -22,7 +50,7 @@ const userValues = {
   },
 };
 
-const nestedValues = {
+const nestedValues: NestedRow = {
   access: {
     map: [{ op: "gps_fix" }],
     store: [{ op: "read" }, { op: "write" }],

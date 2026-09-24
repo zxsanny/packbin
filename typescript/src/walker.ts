@@ -3,6 +3,7 @@ import {
   flagValueFor,
   flatten,
   isPlainObject,
+  nameById,
   type Field,
 } from "./fields.ts"
 import {
@@ -71,6 +72,8 @@ export function packFields(
         for (let i = 0; i < arr.length; i++) out.push(arr[i]!)
         break
       }
+      case "bool":
+        break
       case "flagByte": {
         const v = flagValueFor(allFields, f.id, values)
         flagBytes.set(f.id, v)
@@ -88,7 +91,7 @@ export function packFields(
         break
       }
       case "when": {
-        if (values[f.field] === f.value) {
+        if (values[nameById(allFields, f.fieldId)] === f.value) {
           packFields(f.fields, allFields, values, out, flagBytes)
         }
         break
@@ -118,13 +121,18 @@ export function packFields(
         packFields(f.fields, allFields, values, out, flagBytes)
         break
       case "sized":
-        writeSized(out, f.name, values[f.count], values[f.name])
+        writeSized(out, f.name, values[nameById(allFields, f.countId)], values[f.name])
         break
       case "u2":
-        writeU2(out, f.names, (n) => values[n])
+        writeU2(out, f.slots, (n) => values[n])
         break
       case "bits":
-        writeBits(out, f.name, Number(values[f.count]), values[f.name])
+        writeBits(
+          out,
+          f.name,
+          Number(values[nameById(allFields, f.countId)]),
+          values[f.name],
+        )
         break
       case "utf8":
         if (!present(values[f.name])) throw new RangeError(`missing ${f.name}`)
@@ -176,6 +184,7 @@ export function packFields(
 
 export function unpackFields(
   fields: Field[],
+  allFields: Field[],
   cur: ViewCursor,
   values: Value,
   flagBytes: Map<symbol, number>,
@@ -207,6 +216,10 @@ export function unpackFields(
         else values[f.name] = copy
         break
       }
+      case "bool":
+        if (repeating) appendRepeat(values, f.name, true)
+        else values[f.name] = true
+        break
       case "flagByte": {
         const r = readInt(cur, f.name, 1, false, true)
         if (!r.ok) return r
@@ -220,17 +233,38 @@ export function unpackFields(
         if ((flags & (1 << f.bit)) === 0) break
         if (f.field.kind === "group") {
           if (f.field.fields.length === 0) values[f.field.name] = true
-          const err = unpackFields(f.field.fields, cur, values, flagBytes, repeating)
+          const err = unpackFields(
+            f.field.fields,
+            allFields,
+            cur,
+            values,
+            flagBytes,
+            repeating,
+          )
           if (err) return err
         } else {
-          const err = unpackFields([f.field], cur, values, flagBytes, repeating)
+          const err = unpackFields(
+            [f.field],
+            allFields,
+            cur,
+            values,
+            flagBytes,
+            repeating,
+          )
           if (err) return err
         }
         break
       }
       case "when": {
-        if (values[f.field] === f.value) {
-          const err = unpackFields(f.fields, cur, values, flagBytes, repeating)
+        if (values[nameById(allFields, f.fieldId)] === f.value) {
+          const err = unpackFields(
+            f.fields,
+            allFields,
+            cur,
+            values,
+            flagBytes,
+            repeating,
+          )
           if (err) return err
         }
         break
@@ -238,7 +272,7 @@ export function unpackFields(
       case "repeat": {
         while (cur.offset < cur.buf.length) {
           const before = cur.offset
-          const err = unpackFields(f.fields, cur, values, flagBytes, true)
+          const err = unpackFields(f.fields, allFields, cur, values, flagBytes, true)
           if (err) {
             if (cur.offset === before && "left" in err && err.left > 0) return err
             return err
@@ -248,29 +282,29 @@ export function unpackFields(
       }
       case "group": {
         if (f.fields.length === 0) values[f.name] = true
-        const err = unpackFields(f.fields, cur, values, flagBytes, repeating)
+        const err = unpackFields(f.fields, allFields, cur, values, flagBytes, repeating)
         if (err) return err
         break
       }
       case "sized": {
-        const r = readSized(cur, f.name, values[f.count])
+        const r = readSized(cur, f.name, values[nameById(allFields, f.countId)])
         if (!r.ok) return r
         if (repeating) appendRepeat(values, f.name, r.value)
         else values[f.name] = r.value
         break
       }
       case "u2": {
-        const r = readU2(cur, f.names)
+        const r = readU2(cur, f.slots)
         if (!r.ok) return r
-        for (let i = 0; i < f.names.length; i++) {
-          const name = f.names[i]!
+        for (let i = 0; i < f.slots.length; i++) {
+          const name = f.slots[i]!.name
           if (repeating) appendRepeat(values, name, r.values[i])
           else values[name] = r.values[i]
         }
         break
       }
       case "bits": {
-        const r = readBits(cur, f.name, Number(values[f.count]))
+        const r = readBits(cur, f.name, Number(values[nameById(allFields, f.countId)]))
         if (!r.ok) return r
         if (repeating) appendRepeat(values, f.name, r.values)
         else values[f.name] = r.values
@@ -284,14 +318,16 @@ export function unpackFields(
         break
       }
       case "list": {
-        if (cur.offset + 2 > cur.buf.length) return short(f.name, 2, cur.buf.length - cur.offset)
+        if (cur.offset + 2 > cur.buf.length) {
+          return short(f.name, 2, cur.buf.length - cur.offset)
+        }
         const count = cur.view.getUint16(cur.offset, true)
         cur.offset += 2
         const items: unknown[] = []
         const child = fieldName(f.element)
         for (let i = 0; i < count; i++) {
           const one: Value = {}
-          const err = unpackFields([f.element], cur, one, flagBytes, false)
+          const err = unpackFields([f.element], allFields, cur, one, flagBytes, false)
           if (err) return err
           items.push(one[child])
         }
@@ -300,7 +336,9 @@ export function unpackFields(
         break
       }
       case "dict": {
-        if (cur.offset + 2 > cur.buf.length) return short(f.name, 2, cur.buf.length - cur.offset)
+        if (cur.offset + 2 > cur.buf.length) {
+          return short(f.name, 2, cur.buf.length - cur.offset)
+        }
         const count = cur.view.getUint16(cur.offset, true)
         cur.offset += 2
         const items: Value = {}
@@ -309,7 +347,7 @@ export function unpackFields(
           const key = readUtf8(cur, f.name)
           if (!key.ok) return key
           const one: Value = {}
-          const err = unpackFields([f.element], cur, one, flagBytes, false)
+          const err = unpackFields([f.element], allFields, cur, one, flagBytes, false)
           if (err) return err
           if (Object.prototype.hasOwnProperty.call(items, key.value)) {
             return short(f.name, 0, 0)
@@ -321,7 +359,14 @@ export function unpackFields(
         break
       }
       case "flags": {
-        const err = unpackFields(flatten([f]), cur, values, flagBytes, repeating)
+        const err = unpackFields(
+          flatten([f]),
+          allFields,
+          cur,
+          values,
+          flagBytes,
+          repeating,
+        )
         if (err) return err
         break
       }
@@ -342,7 +387,7 @@ export function unpackBody(
   }
   const values: Value = {}
   const flagBytes = new Map<symbol, number>()
-  const err = unpackFields(fields, cur, values, flagBytes, false)
+  const err = unpackFields(fields, fields, cur, values, flagBytes, false)
   if (err) return err
   if (cur.offset < buf.length) {
     return short("", 0, buf.length - cur.offset)

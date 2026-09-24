@@ -6,14 +6,25 @@ namespace Packbin.Tests;
 
 public class PackbinTests
 {
-    private sealed class Bag { }
+    private sealed class FlagWideRow
+    {
+        public byte? b0 { get; set; }
+        public byte? b1 { get; set; }
+        public byte? b2 { get; set; }
+        public byte? b3 { get; set; }
+        public byte? b4 { get; set; }
+        public ushort? wide { get; set; }
+    }
 
     public static readonly Scheme<PositionRow> Target = new(0x40,
-        Field.U16("sid"),
-        Field.I32("lat"),
-        Field.I32("lon"),
-        Field.U8("profile"),
-        Field.Flags("motion", Field.U16("heading"), Field.U8("speed"), Field.I16("altitude")));
+        Field.U16<PositionRow>(0, x => x.sid),
+        Field.I32<PositionRow>(1, x => x.lat),
+        Field.I32<PositionRow>(2, x => x.lon),
+        Field.U8<PositionRow>(3, x => x.profile),
+        Field.Flags(
+            Field.U16<PositionRow>(4, x => x.heading),
+            Field.U8<PositionRow>(5, x => x.speed),
+            Field.I16<PositionRow>(6, x => x.altitude)));
 
     private static readonly Dictionary<string, object?> Position = new()
     {
@@ -77,14 +88,14 @@ public class PackbinTests
     [Fact]
     public void Ac4_FlagsAndStoredZero()
     {
-        var scheme = new Scheme<Bag>(1,
-            Field.Flags("flags",
-                Field.U8("b0"),
-                Field.U8("b1"),
-                Field.U8("b2"),
-                Field.U8("b3"),
-                Field.U8("b4"),
-                Field.U16("wide")));
+        var scheme = new Scheme<FlagWideRow>(1,
+            Field.Flags(
+                Field.U8<FlagWideRow>(0, x => x.b0),
+                Field.U8<FlagWideRow>(1, x => x.b1),
+                Field.U8<FlagWideRow>(2, x => x.b2),
+                Field.U8<FlagWideRow>(3, x => x.b3),
+                Field.U8<FlagWideRow>(4, x => x.b4),
+                Field.U16<FlagWideRow>(5, x => x.wide)));
 
         var clear = Pack.Run(scheme, new Dictionary<string, object?>());
         Assert.Equal(2, clear.Length);
@@ -119,14 +130,14 @@ public class PackbinTests
     [Fact]
     public void Ac5_ShortBufferThenPositionPack()
     {
-        var scheme = new Scheme<Bag>(1,
-            Field.Flags("flags",
-                Field.U8("b0"),
-                Field.U8("b1"),
-                Field.U8("b2"),
-                Field.U8("b3"),
-                Field.U8("b4"),
-                Field.U16("wide")));
+        var scheme = new Scheme<FlagWideRow>(1,
+            Field.Flags(
+                Field.U8<FlagWideRow>(0, x => x.b0),
+                Field.U8<FlagWideRow>(1, x => x.b1),
+                Field.U8<FlagWideRow>(2, x => x.b2),
+                Field.U8<FlagWideRow>(3, x => x.b3),
+                Field.U8<FlagWideRow>(4, x => x.b4),
+                Field.U16<FlagWideRow>(5, x => x.wide)));
         var got = Unpack.Read(scheme, new byte[] { 0x01, 0x20, 0x34 });
         Assert.Empty(got.Values);
         var missing = Assert.IsType<ShortPacket>(got.Error);

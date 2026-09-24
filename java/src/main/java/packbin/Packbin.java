@@ -1,71 +1,73 @@
 package packbin;
 
-import java.util.Map;
-
 public final class Packbin {
     private Packbin() {}
 
-    public static Field u8(String name) {
-        return Field.scalar(Field.Kind.U8, name, 1);
+    public static Field u8(int id, Getter get, Setter set) {
+        return Field.scalar(Field.Kind.U8, id, get, set, 1);
     }
 
-    public static Field u16(String name) {
-        return Field.scalar(Field.Kind.U16, name, 2);
+    public static Field u16(int id, Getter get, Setter set) {
+        return Field.scalar(Field.Kind.U16, id, get, set, 2);
     }
 
-    public static Field u32(String name) {
-        return Field.scalar(Field.Kind.U32, name, 4);
+    public static Field u32(int id, Getter get, Setter set) {
+        return Field.scalar(Field.Kind.U32, id, get, set, 4);
     }
 
-    public static Field u64(String name) {
-        return Field.scalar(Field.Kind.U64, name, 8);
+    public static Field u64(int id, Getter get, Setter set) {
+        return Field.scalar(Field.Kind.U64, id, get, set, 8);
     }
 
-    public static Field i8(String name) {
-        return Field.scalar(Field.Kind.I8, name, 1);
+    public static Field i8(int id, Getter get, Setter set) {
+        return Field.scalar(Field.Kind.I8, id, get, set, 1);
     }
 
-    public static Field i16(String name) {
-        return Field.scalar(Field.Kind.I16, name, 2);
+    public static Field i16(int id, Getter get, Setter set) {
+        return Field.scalar(Field.Kind.I16, id, get, set, 2);
     }
 
-    public static Field i32(String name) {
-        return Field.scalar(Field.Kind.I32, name, 4);
+    public static Field i32(int id, Getter get, Setter set) {
+        return Field.scalar(Field.Kind.I32, id, get, set, 4);
     }
 
-    public static Field i64(String name) {
-        return Field.scalar(Field.Kind.I64, name, 8);
+    public static Field i64(int id, Getter get, Setter set) {
+        return Field.scalar(Field.Kind.I64, id, get, set, 8);
     }
 
-    public static Field f32(String name) {
-        return Field.scalar(Field.Kind.F32, name, 4);
+    public static Field f32(int id, Getter get, Setter set) {
+        return Field.scalar(Field.Kind.F32, id, get, set, 4);
     }
 
-    public static Field f64(String name) {
-        return Field.scalar(Field.Kind.F64, name, 8);
+    public static Field f64(int id, Getter get, Setter set) {
+        return Field.scalar(Field.Kind.F64, id, get, set, 8);
     }
 
-    public static Field bytes(String name, int n) {
+    public static Field bytes(int id, Getter get, Setter set, int n) {
         if (n < 0) {
             throw new IllegalArgumentException("bytes length must be >= 0");
         }
-        return Field.bytes(name, n);
+        return Field.scalar(Field.Kind.BYTES, id, get, set, n);
+    }
+
+    public static Field boolField(int id, Getter get, Setter set) {
+        return Field.scalar(Field.Kind.BOOL, id, get, set, 0);
     }
 
     public static Field be(Field field) {
         return field.withBigEndian();
     }
 
-    public static Field flags(String name, Field... fields) {
-        return Field.flags(name, fields);
+    public static Field flags(Field... fields) {
+        return Field.flags(fields);
     }
 
-    public static Field flagByte(String name) {
-        return Field.flagByte(name);
+    public static Field flagByte() {
+        return Field.flagByte();
     }
 
-    public static Eq eq(String field, Object value) {
-        return new Eq(field, value);
+    public static Eq eq(int fieldId, Object value) {
+        return new Eq(fieldId, value);
     }
 
     public static Field when(Eq condition, Field... fields) {
@@ -73,11 +75,11 @@ public final class Packbin {
     }
 
     public static final class Eq {
-        final String field;
+        final int fieldId;
         final Object value;
 
-        Eq(String field, Object value) {
-            this.field = field;
+        Eq(int fieldId, Object value) {
+            this.fieldId = fieldId;
             this.value = value;
         }
     }
@@ -86,32 +88,40 @@ public final class Packbin {
         return Field.repeat(fields);
     }
 
-    public static Field group(String name, Field... fields) {
-        return Field.group(name, fields);
+    public static Field group(Field... fields) {
+        return Field.group(fields);
     }
 
-    public static Field sized(String name, String countField) {
-        return Field.sized(name, countField);
+    public static Field group(Getter get, Setter set, Field... fields) {
+        return Field.group(get, set, fields, true);
     }
 
-    public static Field u2(String... names) {
-        return Field.u2(names);
+    public static Field sized(int id, Getter get, Setter set, int countId) {
+        return Field.of(Field.Kind.SIZED, id, get, set, 0, countId);
     }
 
-    public static Field bits(String name, String countField) {
-        return Field.bits(name, countField);
+    public static Field u2(Field... slots) {
+        return Field.u2(java.util.List.of(slots));
     }
 
-    public static Field utf8(String name) {
-        return Field.utf8(name);
+    public static Field u2Slot(int id, Getter get, Setter set) {
+        return Field.scalar(Field.Kind.U8, id, get, set, 0);
     }
 
-    public static Field list(String name, Field element) {
-        return Field.list(name, element);
+    public static Field bits(int id, Getter get, Setter set, int countId) {
+        return Field.of(Field.Kind.BITS, id, get, set, 0, countId);
     }
 
-    public static Field dict(String name, Field element) {
-        return Field.dict(name, element);
+    public static Field utf8(int id, Getter get, Setter set) {
+        return Field.scalar(Field.Kind.UTF8, id, get, set, 0);
+    }
+
+    public static Field list(Getter get, Setter set, Field element) {
+        return Field.list(get, set, element);
+    }
+
+    public static Field dict(Getter get, Setter set, Field element) {
+        return Field.dict(get, set, element);
     }
 
     public static final class ShortPacket {
@@ -144,23 +154,23 @@ public final class Packbin {
         }
     }
 
-    public static final class UnpackResult {
+    public static final class Bound<T> {
         public final boolean ok;
-        public final Map<String, Object> value;
+        public final T value;
         public final Object error;
 
-        private UnpackResult(boolean ok, Map<String, Object> value, Object error) {
+        private Bound(boolean ok, T value, Object error) {
             this.ok = ok;
             this.value = value;
             this.error = error;
         }
 
-        static UnpackResult ok(Map<String, Object> value) {
-            return new UnpackResult(true, Map.copyOf(value), null);
+        static <T> Bound<T> ok(T value) {
+            return new Bound<>(true, value, null);
         }
 
-        static UnpackResult fail(Object error) {
-            return new UnpackResult(false, Map.of(), error);
+        static <T> Bound<T> fail(Object error) {
+            return new Bound<>(false, null, error);
         }
 
         public String field() {
@@ -179,26 +189,6 @@ public final class Packbin {
                 return t.left;
             }
             return null;
-        }
-    }
-
-    public static final class Bound<T> {
-        public final boolean ok;
-        public final T value;
-        public final Object error;
-
-        private Bound(boolean ok, T value, Object error) {
-            this.ok = ok;
-            this.value = value;
-            this.error = error;
-        }
-
-        static <T> Bound<T> ok(T value) {
-            return new Bound<>(true, value, null);
-        }
-
-        static <T> Bound<T> fail(Object error) {
-            return new Bound<>(false, null, error);
         }
     }
 }

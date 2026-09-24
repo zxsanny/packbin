@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <initializer_list>
 #include <map>
 #include <memory>
 #include <optional>
@@ -120,6 +121,7 @@ class Field {
     F32,
     F64,
     Bytes,
+    Bool,
     Flags,
     FlagByte,
     FlagBit,
@@ -135,6 +137,7 @@ class Field {
   };
 
   Kind kind{};
+  int id = -1;
   std::string name;
   bool big_endian = false;
   int byte_count = 0;
@@ -144,291 +147,55 @@ class Field {
   int bit_index = 0;
   std::shared_ptr<Field> inner;
   Eq pred;
+  int count_id = -1;
   std::string count_name;
 
   Field be() const;
   Field bit(Field field) const;
 };
 
-Field u8(std::string name);
-Field u16(std::string name);
-Field u32(std::string name);
-Field u64(std::string name);
-Field i8(std::string name);
-Field i16(std::string name);
-Field i32(std::string name);
-Field i64(std::string name);
-Field f32(std::string name);
-Field f64(std::string name);
-Field bytes(std::string name, int n);
+inline std::string id_name(int id) { return std::to_string(id); }
+
+Field u8(int id);
+Field u16(int id);
+Field u32(int id);
+Field u64(int id);
+Field i8(int id);
+Field i16(int id);
+Field i32(int id);
+Field i64(int id);
+Field f32(int id);
+Field f64(int id);
+Field bytes(int id, int n);
+Field boolean(int id);
 Field be(Field field);
-Field flags(std::string name, std::vector<Field> fields);
-Field flag_byte(std::string name);
-Eq eq(std::string field, Value value);
+Field flags(std::vector<Field> fields);
+Field flag_byte();
+Eq eq(int field_id, Value value);
 Field when(Eq condition, std::vector<Field> fields);
 Field repeat(std::vector<Field> fields);
+Field group(std::vector<Field> fields);
 Field group(std::string name, std::vector<Field> fields);
-Field sized(std::string name, std::string count_field);
-Field u2(std::vector<std::string> names);
-Field bits(std::string name, std::string count_field);
-Field utf8(std::string name);
+Field sized(int id, int count_id);
+Field u2(std::vector<int> ids);
+Field bits(int id, int count_id);
+Field utf8(int id);
 Field list(std::string name, Field element);
 Field dict(std::string name, Field element);
+
+int validate_order(std::vector<Field> const& nodes, int next_id = 0);
 
 std::string to_hex(std::vector<std::uint8_t> const& data);
 std::size_t mismatched_bytes(std::vector<std::uint8_t> const& a,
                              std::vector<std::uint8_t> const& b);
 std::size_t motion_field_count(Values const& values);
 bool present(Values const& values, std::string const& name);
+bool present(Values const& values, int id);
 
 std::vector<std::uint8_t> pack_body(std::vector<Field> const& fields, Values const& values);
 UnpackResult<> unpack_body(std::vector<Field> const& fields, std::uint8_t const* data,
                            std::size_t len, std::size_t offset);
 
-template <typename T, typename M>
-struct BoundMember {
-  Field field;
-  M T::* member;
-};
-
-template <typename T, typename Getter, typename Setter>
-struct BoundAccessors {
-  Field field;
-  Getter get;
-  Setter set;
-};
-
-template <typename T, typename M>
-BoundMember<T, M> bind(Field field, M T::* member) {
-  return BoundMember<T, M>{std::move(field), member};
-}
-
-template <typename T, typename Getter, typename Setter>
-BoundAccessors<T, Getter, Setter> bind(Field field, Getter get, Setter set) {
-  return BoundAccessors<T, Getter, Setter>{std::move(field), std::move(get), std::move(set)};
-}
-
-template <typename T>
-class Scheme;
-
-template <typename T>
-struct SchemeHandler {
-  int type_number = 0;
-  Scheme<T> scheme;
-  std::function<void(T const&)> handler;
-};
-
-template <typename T>
-class Scheme {
- public:
-  int type_number = 0;
-  std::vector<Field> fields;
-  struct Binding {
-    std::string name;
-    std::function<Value(T const&)> read;
-    std::function<void(T&, Value const&)> write;
-  };
-  std::vector<Binding> bindings;
-
-  Scheme() = default;
-
-  template <typename... Nodes>
-  Scheme(int type_number, Nodes&&... nodes) {
-    if (type_number < 0 || type_number > 255)
-      throw std::runtime_error("type number must be 0..255");
-    this->type_number = type_number;
-    (append(fields, std::forward<Nodes>(nodes)), ...);
-  }
-
-  template <typename F>
-  SchemeHandler<T> on(F handler) const {
-    return SchemeHandler<T>{type_number, *this, std::function<void(T const&)>(std::move(handler))};
-  }
-
- private:
-  void append(std::vector<Field>& out, Field field) { out.push_back(std::move(field)); }
-
-  template <typename M>
-  void append(std::vector<Field>& out, BoundMember<T, M> bound) {
-    auto member = bound.member;
-    std::string name = bound.field.name;
-    out.push_back(std::move(bound.field));
-    bindings.push_back(Binding{
-        std::move(name),
-        [member](T const& row) { return Value{row.*member}; },
-        [member](T& row, Value const& v) { row.*member = std::get<M>(v.data); },
-    });
-  }
-
-  template <typename Getter, typename Setter>
-  void append(std::vector<Field>& out, BoundAccessors<T, Getter, Setter> bound) {
-    using M = std::decay_t<decltype(bound.get(std::declval<T const&>()))>;
-    std::string name = bound.field.name;
-    out.push_back(std::move(bound.field));
-    auto get = std::move(bound.get);
-    auto set = std::move(bound.set);
-    bindings.push_back(Binding{
-        std::move(name),
-        [get](T const& row) { return Value{get(row)}; },
-        [set](T& row, Value const& v) { set(row, std::get<M>(v.data)); },
-    });
-  }
-};
-
-inline Scheme<Values> scheme(int type_number, std::vector<Field> fields) {
-  if (type_number < 0 || type_number > 255)
-    throw std::runtime_error("type number must be 0..255");
-  Scheme<Values> s;
-  s.type_number = type_number;
-  s.fields = std::move(fields);
-  return s;
-}
-
-namespace detail {
-
-inline Values row_values(Scheme<Values> const&, Values const& row) { return row; }
-
-template <typename T>
-Values row_values(Scheme<T> const& s, T const& row) {
-  Values values;
-  for (auto const& binding : s.bindings)
-    values.emplace(binding.name, binding.read(row));
-  return values;
-}
-
-inline void write_row(Scheme<Values> const&, Values& row, Values const& raw) { row = raw; }
-
-template <typename T>
-void write_row(Scheme<T> const& s, T& row, Values const& raw) {
-  for (auto const& binding : s.bindings) {
-    auto it = raw.find(binding.name);
-    if (it != raw.end())
-      binding.write(row, it->second);
-  }
-}
-
-}  // namespace detail
-
-template <typename T>
-std::vector<std::uint8_t> pack(Scheme<T> const& s, T const& row) {
-  auto body = pack_body(s.fields, detail::row_values(s, row));
-  std::vector<std::uint8_t> out;
-  out.reserve(body.size() + 1);
-  out.push_back(static_cast<std::uint8_t>(s.type_number));
-  out.insert(out.end(), body.begin(), body.end());
-  return out;
-}
-
-inline UnpackResult<> unpack(Scheme<Values> const& s, std::uint8_t const* data, std::size_t len) {
-  UnpackResult<> out;
-  if (len < 1) {
-    out.ok = false;
-    out.short_packet = ShortPacket{"", 1, 0};
-    return out;
-  }
-  auto actual = static_cast<int>(data[0]);
-  if (actual != s.type_number) {
-    out.ok = false;
-    out.type_mismatch = TypeMismatch{s.type_number, actual};
-    return out;
-  }
-  auto raw = unpack_body(s.fields, data, len, 1);
-  out.ok = raw.ok;
-  out.short_packet = raw.short_packet;
-  out.trailing = raw.trailing;
-  out.type_mismatch = raw.type_mismatch;
-  if (!raw.ok)
-    return out;
-  out.value = std::move(raw.value);
-  return out;
-}
-
-inline UnpackResult<> unpack(Scheme<Values> const& s, std::vector<std::uint8_t> const& data) {
-  return unpack(s, data.data(), data.size());
-}
-
-template <typename T>
-UnpackResult<T> unpack(Scheme<T> const& s, std::uint8_t const* data, std::size_t len) {
-  UnpackResult<T> out;
-  if (len < 1) {
-    out.ok = false;
-    out.short_packet = ShortPacket{"", 1, 0};
-    return out;
-  }
-  auto actual = static_cast<int>(data[0]);
-  if (actual != s.type_number) {
-    out.ok = false;
-    out.type_mismatch = TypeMismatch{s.type_number, actual};
-    return out;
-  }
-  auto raw = unpack_body(s.fields, data, len, 1);
-  out.ok = raw.ok;
-  out.short_packet = raw.short_packet;
-  out.trailing = raw.trailing;
-  out.type_mismatch = raw.type_mismatch;
-  if (!raw.ok)
-    return out;
-  T row{};
-  detail::write_row(s, row, raw.value);
-  out.value = std::move(row);
-  return out;
-}
-
-template <typename T>
-UnpackResult<T> unpack(Scheme<T> const& s, std::vector<std::uint8_t> const& data) {
-  return unpack(s, data.data(), data.size());
-}
-
-namespace detail {
-
-template <typename H>
-void check_unique(std::map<int, bool>& seen, H const& h) {
-  if (!seen.emplace(h.type_number, true).second)
-    throw std::runtime_error("duplicate type number");
-}
-
-template <typename H>
-bool try_dispatch(UnpackResult<>& result, bool& matched, int actual, std::uint8_t const* data,
-                  std::size_t len, H const& h) {
-  if (matched || h.type_number != actual)
-    return false;
-  matched = true;
-  auto row = unpack(h.scheme, data, len);
-  result.ok = row.ok;
-  result.short_packet = row.short_packet;
-  result.trailing = row.trailing;
-  result.type_mismatch = row.type_mismatch;
-  if (row.ok && row.value)
-    h.handler(*row.value);
-  return true;
-}
-
-}  // namespace detail
-
-template <typename... Handlers>
-UnpackResult<> unpack(std::uint8_t const* data, std::size_t len, Handlers const&... handlers) {
-  std::map<int, bool> seen;
-  (detail::check_unique(seen, handlers), ...);
-
-  UnpackResult<> result;
-  if (len < 1) {
-    result.ok = false;
-    result.short_packet = ShortPacket{"", 1, 0};
-    return result;
-  }
-  int actual = static_cast<int>(data[0]);
-  bool matched = false;
-  (detail::try_dispatch(result, matched, actual, data, len, handlers), ...);
-  if (!matched) {
-    result.ok = false;
-    result.type_mismatch = TypeMismatch{std::nullopt, actual};
-  }
-  return result;
-}
-
-template <typename... Handlers>
-UnpackResult<> unpack(std::vector<std::uint8_t> const& data, Handlers const&... handlers) {
-  return unpack(data.data(), data.size(), handlers...);
-}
+#include "packbin/scheme.hpp"
 
 }  // namespace packbin

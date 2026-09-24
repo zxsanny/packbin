@@ -4,8 +4,9 @@ from collections.abc import Callable, Mapping
 from typing import Any, Generic, TypeVar
 
 from packbin._errors import ShortPacket, TrailingBytes, TypeMismatch, UnpackResult
-from packbin._nodes import _Node
-from packbin._walk import bind_names, pack_nodes, unpack_nodes
+from packbin._nodes import _Node, _validate_order
+from packbin._pack import pack_nodes
+from packbin._unpack import unpack_nodes
 
 T = TypeVar("T")
 _builtin_bytes = bytes
@@ -18,6 +19,7 @@ class Scheme(Generic[T]):
     def __init__(self, type_number: int, row_type: type[T], *fields: _Node) -> None:
         if isinstance(type_number, bool) or not isinstance(type_number, int) or type_number < 0 or type_number > 255:
             raise ValueError(f"type number must be 0..255, got {type_number!r}")
+        _validate_order(fields)
         self._type_number = type_number
         self._row_type = row_type
         self._fields = list(fields)
@@ -34,39 +36,28 @@ class _Handler(Generic[T]):
         self.handler = handler
 
 
-def _row_values(scheme: Scheme[Any], row: Any) -> dict[str, Any]:
-    if isinstance(row, Mapping):
-        return dict(row)
-    values: dict[str, Any] = {}
-    for name in bind_names(scheme._fields):
-        if hasattr(row, name):
-            values[name] = getattr(row, name)
-    return values
-
-
-def _build_row(scheme: Scheme[T], values: dict[str, Any]) -> T:
-    if scheme._row_type is _builtin_dict:
-        return values  # type: ignore[return-value]
-    kwargs = {name: values[name] for name in bind_names(scheme._fields) if name in values}
-    return scheme._row_type(**kwargs)
+def _new_row(row_type: type[T]) -> T:
+    if row_type is _builtin_dict:
+        return {}  # type: ignore[return-value]
+    return row_type()
 
 
 def pack(scheme: Scheme[T], row: T | Mapping[str, Any]) -> bytes:
     buf = bytearray()
     buf.append(scheme._type_number)
-    pack_nodes(buf, scheme._fields, _row_values(scheme, row))
+    pack_nodes(buf, scheme._fields, row)
     return _builtin_bytes(buf)
 
 
 def _unpack_fields(scheme: Scheme[T], view: memoryview, offset: int) -> UnpackResult[T]:
-    out: dict[str, Any] = {}
-    offset, err = unpack_nodes(view, offset, scheme._fields, out)
+    row = _new_row(scheme._row_type)
+    offset, err = unpack_nodes(view, offset, scheme._fields, row)
     if err is not None:
         return UnpackResult(ok=False, value=None, error=err)
     left = len(view) - offset
     if left > 0:
         return UnpackResult(ok=False, value=None, error=TrailingBytes(left=left))
-    return UnpackResult(ok=True, value=_build_row(scheme, out), error=None)
+    return UnpackResult(ok=True, value=row, error=None)
 
 
 def _unpack_known(scheme: Scheme[T], data: bytes | bytearray | memoryview) -> UnpackResult[T]:

@@ -4,35 +4,49 @@ import { fileURLToPath } from "node:url"
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
+  eq,
+  flags,
+  group,
+  i16,
+  i32,
+  pack,
+  repeat,
   scheme,
   u8,
   u16,
   u32,
-  i16,
-  i32,
-  flags,
-  when,
-  eq,
-  repeat,
-  group,
-  pack,
   unpack,
+  when,
 } from "../src/index.ts"
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "../..")
 const goldenHex = readFileSync(join(root, "fixtures/golden.hex"), "utf8").trim()
 const expectedHex = "4001000065cd1d00a3e1110100"
 
-const position = scheme(
+type Position = {
+  sid: number
+  lat: number
+  lon: number
+  profile: number
+  heading?: number | null
+  speed?: number | null
+  altitude?: number | null
+}
+
+const position = scheme<Position>(
   0x40,
-  u16("sid"),
-  i32("lat"),
-  i32("lon"),
-  u8("profile"),
-  flags("motion", [u16("heading"), u8("speed"), i16("altitude")]),
+  u16(0, (r) => r.sid),
+  i32(1, (r) => r.lat),
+  i32(2, (r) => r.lon),
+  u8(3, (r) => r.profile),
+  flags([
+    u16(4, (r) => r.heading),
+    u8(5, (r) => r.speed),
+    i16(6, (r) => r.altitude),
+  ]),
 )
 
-const positionValue = {
+const positionValue: Position = {
   sid: 1,
   lat: 500_000_000,
   lon: 300_000_000,
@@ -90,15 +104,23 @@ describe("packbin", () => {
   })
 
   it("AC-4 flags width, present 0, absence", () => {
-    const list = scheme(
+    type Wide = {
+      b0?: number
+      b1?: number
+      b2?: number
+      b3?: number
+      b4?: number
+      extra?: number
+    }
+    const list = scheme<Wide>(
       1,
-      flags("opts", [
-        u8("b0"),
-        u8("b1"),
-        u8("b2"),
-        u8("b3"),
-        u8("b4"),
-        u16("extra"),
+      flags([
+        u8(0, (r) => r.b0),
+        u8(1, (r) => r.b1),
+        u8(2, (r) => r.b2),
+        u8(3, (r) => r.b3),
+        u8(4, (r) => r.b4),
+        u16(5, (r) => r.extra),
       ]),
     )
     const clear = pack(list, {})
@@ -127,15 +149,23 @@ describe("packbin", () => {
   })
 
   it("AC-5 short buffer then position pack still matches", () => {
-    const list = scheme(
+    type Wide = {
+      b0?: number
+      b1?: number
+      b2?: number
+      b3?: number
+      b4?: number
+      extra?: number
+    }
+    const list = scheme<Wide>(
       1,
-      flags("opts", [
-        u8("b0"),
-        u8("b1"),
-        u8("b2"),
-        u8("b3"),
-        u8("b4"),
-        u16("extra"),
+      flags([
+        u8(0, (r) => r.b0),
+        u8(1, (r) => r.b1),
+        u8(2, (r) => r.b2),
+        u8(3, (r) => r.b3),
+        u8(4, (r) => r.b4),
+        u16(5, (r) => r.extra),
       ]),
     )
     const shortBuf = Uint8Array.of(0x01, 0x20, 0x34)
@@ -151,7 +181,12 @@ describe("packbin", () => {
   })
 
   it("IT-06 when group width", () => {
-    const list = scheme(1, u8("profile"), when(eq("profile", 0), [u8("shape")]))
+    type Row = { profile: number; shape?: number }
+    const list = scheme<Row>(
+      1,
+      u8(0, (r) => r.profile),
+      when(eq(0, 0), [u8(1, (r) => r.shape)]),
+    )
     const miss = pack(list, { profile: 1 })
     assert.equal(miss.length, 2)
     const hit = pack(list, { profile: 0, shape: 9 })
@@ -160,7 +195,12 @@ describe("packbin", () => {
   })
 
   it("IT-07 repeat on group boundary", () => {
-    const list = scheme(1, u8("type"), repeat([u8("a"), u8("b")]))
+    type Row = { type: number; a?: number | number[]; b?: number | number[] }
+    const list = scheme<Row>(
+      1,
+      u8(0, (r) => r.type),
+      repeat([u8(1, (r) => r.a), u8(2, (r) => r.b)]),
+    )
     const complete = unpack(list, Uint8Array.of(1, 1, 2, 3))
     assert.equal(complete.ok, true)
     if (!complete.ok) return
@@ -178,7 +218,8 @@ describe("packbin", () => {
   })
 
   it("flag empty group mark", () => {
-    const empty = scheme(1, flags("f", [group("mark", [])]))
+    type Row = { mark?: boolean }
+    const empty = scheme<Row>(1, flags([group((r) => r.mark, [])]))
     const setBit = pack(empty, { mark: true })
     assert.equal(toHex(setBit), "0101")
     const clear = pack(empty, {})
@@ -186,9 +227,24 @@ describe("packbin", () => {
   })
 
   it("flag five u8 then u16 b5", () => {
-    const one = scheme(
+    type Row = {
+      a?: number
+      b?: number
+      c?: number
+      d?: number
+      e?: number
+      b5?: number
+    }
+    const one = scheme<Row>(
       1,
-      flags("f", [u8("a"), u8("b"), u8("c"), u8("d"), u8("e"), u16("b5")]),
+      flags([
+        u8(0, (r) => r.a),
+        u8(1, (r) => r.b),
+        u8(2, (r) => r.c),
+        u8(3, (r) => r.d),
+        u8(4, (r) => r.e),
+        u16(5, (r) => r.b5),
+      ]),
     )
     assert.equal(pack(one, { a: 1 }).length, 3)
     const wide = pack(one, { b5: 1 })
@@ -198,7 +254,17 @@ describe("packbin", () => {
   })
 
   it("flag session group login ts", () => {
-    const two = scheme(1, flags("f", [group("session", [u16("login"), u32("ts")])]))
+    type Session = { login: number; ts: number }
+    type Row = { session?: Session | null; login?: number; ts?: number }
+    const two = scheme<Row>(
+      1,
+      flags([
+        group((r) => r.session, [
+          u16(0, (r) => r.login),
+          u32(1, (r) => r.ts),
+        ]),
+      ]),
+    )
     const raw = pack(two, { login: 7, ts: 1000 })
     assert.equal(toHex(raw.subarray(2)), "0700e8030000")
     const absent = pack(two, {})
@@ -211,13 +277,26 @@ describe("packbin", () => {
   })
 
   it("flag group u8 zero packs", () => {
-    const zero = scheme(1, flags("f", [group("g", [u8("b")])]))
+    type Row = { g?: unknown; b?: number }
+    const zero = scheme<Row>(
+      1,
+      flags([group((r) => r.g, [u8(0, (r) => r.b)])]),
+    )
     const stored = pack(zero, { b: 0 })
     assert.equal(toHex(stored), "010100")
   })
 
   it("flag session group short read", () => {
-    const two = scheme(1, flags("f", [group("session", [u16("login"), u32("ts")])]))
+    type Row = { session?: unknown; login?: number; ts?: number }
+    const two = scheme<Row>(
+      1,
+      flags([
+        group((r) => r.session, [
+          u16(0, (r) => r.login),
+          u32(1, (r) => r.ts),
+        ]),
+      ]),
+    )
     const short = unpack(two, Uint8Array.of(0x01, 0x01, 0x07))
     assert.equal(short.ok, false)
     if (short.ok) return
@@ -254,7 +333,15 @@ describe("packbin", () => {
     class Holder {
       session: Session | null = new Session()
     }
-    const layout = scheme(1, flags("f", [group("session", [u16("login"), u32("ts")])]))
+    const layout = scheme<Holder>(
+      1,
+      flags([
+        group((r) => r.session, [
+          u16(0, (s: Session) => s.login),
+          u32(1, (s: Session) => s.ts),
+        ]),
+      ]),
+    )
     assert.equal(Buffer.from(pack(layout, new Holder())).toString("hex"), "01010700e8030000")
     assert.equal(Buffer.from(pack(layout, { session: null })).toString("hex"), "0100")
     const back = unpack(layout, pack(layout, new Holder()), Holder)
@@ -277,8 +364,8 @@ describe("packbin", () => {
   })
 
   it("type number outside 0..255 throws at construction", () => {
-    assert.throws(() => scheme(256, u8("sid")))
-    assert.throws(() => scheme(-1, u8("sid")))
+    assert.throws(() => scheme(256, u8(0, (r: { sid: number }) => r.sid)))
+    assert.throws(() => scheme(-1, u8(0, (r: { sid: number }) => r.sid)))
   })
 })
 

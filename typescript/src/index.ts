@@ -1,4 +1,9 @@
-import { flatten, flattenValues, type Field } from "./fields.ts"
+import {
+  flatten,
+  flattenValues,
+  validateFieldIds,
+  type Field,
+} from "./fields.ts"
 import {
   fillEntity,
   packFields,
@@ -7,7 +12,7 @@ import {
 } from "./walker.ts"
 import type { Value } from "./kinds.ts"
 
-export type { Field } from "./fields.ts"
+export type { Field, Acc } from "./fields.ts"
 export {
   u8,
   u16,
@@ -20,6 +25,7 @@ export {
   f32,
   f64,
   bytes,
+  bool,
   be,
   flags,
   flagByte,
@@ -65,7 +71,9 @@ export function scheme<T>(typeNumber: number, ...fields: Field[]): Scheme<T> {
   if (!Number.isInteger(typeNumber) || typeNumber < 0 || typeNumber > 255) {
     throw new RangeError("type number: expected 0..255")
   }
-  return new Scheme(typeNumber, flatten(fields))
+  const flat = flatten(fields)
+  validateFieldIds(flat)
+  return new Scheme(typeNumber, flat)
 }
 
 export function pack<T extends object>(s: Scheme<T>, row: T): Uint8Array {

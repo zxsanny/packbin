@@ -6,6 +6,11 @@ public class ObjectBindingTests
 {
     private sealed class WideRow
     {
+        public byte? a { get; set; }
+        public byte? b { get; set; }
+        public byte? c { get; set; }
+        public byte? d { get; set; }
+        public byte? e { get; set; }
         public ushort? b5 { get; set; }
     }
 
@@ -24,7 +29,8 @@ public class ObjectBindingTests
     public void Object_zero_is_present_and_null_is_absent()
     {
         var scheme = new Scheme<WideRow>(1, Field.Flags(
-            "f", Field.U8("a"), Field.U8("b"), Field.U8("c"), Field.U8("d"), Field.U8("e"), Field.U16("b5")));
+            Field.U8<WideRow>(0, x => x.a), Field.U8<WideRow>(1, x => x.b), Field.U8<WideRow>(2, x => x.c),
+            Field.U8<WideRow>(3, x => x.d), Field.U8<WideRow>(4, x => x.e), Field.U16<WideRow>(5, x => x.b5)));
         var absent = Pack.Run(scheme, new WideRow());
         Assert.Equal(new byte[] { 0x01, 0x00 }, absent);
         var present = Pack.Run(scheme, new WideRow { b5 = 0 });
@@ -34,7 +40,8 @@ public class ObjectBindingTests
     [Fact]
     public void Object_nested_group_and_short_packet()
     {
-        var scheme = new Scheme<SessionRow>(1, Field.Flags("f", Field.Group("session", Field.U16("login"), Field.U32("ts"))));
+        var scheme = new Scheme<SessionRow>(1, Field.Flags(
+            Field.Group((SessionRow x) => x.session, Field.U16<Session>(0, s => s.login), Field.U32<Session>(1, s => s.ts))));
         var clear = Pack.Run(scheme, new SessionRow());
         Assert.Equal(new byte[] { 0x01, 0x00 }, clear);
         var set = Pack.Run(scheme, new SessionRow { session = new Session { login = 7, ts = 1000 } });

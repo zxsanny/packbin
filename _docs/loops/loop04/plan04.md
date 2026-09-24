@@ -30,7 +30,7 @@ Chat stays on the launcher. Implement on `dev`. No sibling worktree this session
 ## Implementation
 
 ### Files that change
-Six language packages: type-number node, then Scheme and BinaryPacker.
+Six language packages. AZ-1945 writes the type number as the first byte. AZ-1946 and AZ-1949 replace Packet with Scheme. AZ-1950 binds value fields by order id plus an accessor.
 
 ### Order of work
 AZ-1945, then AZ-1946, then AZ-1949, then AZ-1950.

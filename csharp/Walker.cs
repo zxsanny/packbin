@@ -52,7 +52,8 @@ internal static partial class Walker
     }
 
     private static bool IsScalarOrBytes(Field field) =>
-        field.Type is (>= Field.Kind.U8 and <= Field.Kind.F64) or Field.Kind.Bytes or Field.Kind.Utf8 or Field.Kind.List or Field.Kind.Dict;
+        field.Type is (>= Field.Kind.U8 and <= Field.Kind.F64)
+            or Field.Kind.Bytes or Field.Kind.Utf8 or Field.Kind.List or Field.Kind.Dict or Field.Kind.Bool;
 
     public static void PackField(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
     {
@@ -97,6 +98,9 @@ internal static partial class Walker
             case Field.Kind.Dict:
                 PackDict(field, values, buffer);
                 break;
+            case Field.Kind.Bool:
+                PackBool(field, values, buffer);
+                break;
             default:
                 PackScalar(field, values, buffer);
                 break;
@@ -125,8 +129,29 @@ internal static partial class Walker
             Field.Kind.Utf8 => UnpackUtf8(field, bytes, ref offset, values, repeatLists),
             Field.Kind.List => UnpackList(field, bytes, ref offset, values, repeatLists),
             Field.Kind.Dict => UnpackDict(field, bytes, ref offset, values, repeatLists),
+            Field.Kind.Bool => UnpackBool(field, bytes, ref offset, values, repeatLists),
             _ => UnpackScalar(field, bytes, ref offset, values, repeatLists),
         };
+    }
+
+    private static void PackBool(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    {
+        _ = field;
+        _ = values;
+        _ = buffer;
+    }
+
+    private static object? UnpackBool(
+        Field field,
+        ReadOnlySpan<byte> bytes,
+        ref int offset,
+        Dictionary<string, object?> values,
+        bool repeatLists)
+    {
+        _ = bytes;
+        _ = offset;
+        Store(values, field.Name, true, repeatLists);
+        return null;
     }
 
     private static void PackFlags(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
@@ -247,7 +272,8 @@ internal static partial class Walker
         if (bytes.Length - offset < 1)
             return new ShortPacket(field.Name, 1, bytes.Length - offset);
         var flags = bytes[offset++];
-        values[field.Name] = flags;
+        if (field.Name.Length > 0)
+            values[field.Name] = flags;
         field.FlagOwner!.Unpacked = flags;
         foreach (var bit in field.Children)
         {
@@ -267,7 +293,8 @@ internal static partial class Walker
         if (bytes.Length - offset < 1)
             return new ShortPacket(field.Name, 1, bytes.Length - offset);
         var flags = bytes[offset++];
-        values[field.Name] = flags;
+        if (field.Name.Length > 0)
+            values[field.Name] = flags;
         field.FlagOwner!.Unpacked = flags;
         return null;
     }
@@ -400,7 +427,7 @@ internal static partial class Walker
 
     private static bool ConditionHolds(Condition condition, IReadOnlyDictionary<string, object?> values)
     {
-        if (!values.TryGetValue(condition.Field, out var actual) || actual is null)
+        if (!values.TryGetValue(condition.FieldName, out var actual) || actual is null)
             return false;
         return ValuesEqual(actual, condition.Value);
     }

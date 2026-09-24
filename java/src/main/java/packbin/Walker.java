@@ -10,129 +10,166 @@ import java.util.Map;
 final class Walker {
     private Walker() {}
 
-    static boolean isPresent(Map<String, Object> values, String name) {
-        return values.containsKey(name) && values.get(name) != null;
+    @FunctionalInterface
+    interface Take {
+        Object apply(Field field);
     }
 
-    static boolean groupOn(Map<String, Object> values, Field group) {
-        if (isPresent(values, group.name)) {
+    static boolean isPresent(Object value) {
+        return value != null;
+    }
+
+    static boolean boolOn(Object value) {
+        return Boolean.TRUE.equals(value);
+    }
+
+    static boolean childOn(Object row, Field child) {
+        return switch (child.kind) {
+            case GROUP -> groupOn(row, child);
+            case BOOL -> boolOn(child.get.get(row));
+            case FLAG_BIT -> childOn(row, child.inner);
+            case U8, U16, U32, U64, I8, I16, I32, I64, F32, F64, BYTES, UTF8, SIZED, BITS, LIST, DICT ->
+                    isPresent(child.get.get(row));
+            default -> false;
+        };
+    }
+
+    static boolean groupOn(Object row, Field group) {
+        if (group.get != null && isPresent(group.get.get(row))) {
             return true;
         }
         for (Field child : group.children) {
-            if ((isScalar(child.kind) || child.kind == Field.Kind.BYTES)
-                    && isPresent(values, child.name)) {
+            if (childOn(row, child)) {
                 return true;
             }
         }
         return false;
     }
 
-    private static boolean isScalar(Field.Kind kind) {
-        return switch (kind) {
-            case U8, U16, U32, U64, I8, I16, I32, I64, F32, F64 -> true;
-            default -> false;
-        };
+    static void packFields(
+            List<Field> fields,
+            Object row,
+            ByteSink sink,
+            Map<Integer, Object> seen,
+            Take take) {
+        for (Field field : fields) {
+            packField(field, row, sink, seen, take);
+        }
     }
 
-    static void packField(Field field, Map<String, Object> values, ByteSink sink) {
+    static void packField(Field field, Object row, ByteSink sink, Map<Integer, Object> seen, Take take) {
         switch (field.kind) {
-            case FLAGS -> packFlags(field, values, sink);
-            case FLAG_BYTE -> packFlagByte(field, values, sink);
-            case FLAG_BIT -> packFlagBit(field, values, sink);
-            case WHEN -> packWhen(field, values, sink);
-            case REPEAT -> packRepeat(field, values, sink);
-            case BYTES -> packBytes(field, values, sink);
-            case GROUP -> packGroup(field, values, sink);
-            case SIZED -> VarFields.packSized(field, values, sink);
-            case U2 -> VarFields.packU2(field, values, sink);
-            case BITS -> VarFields.packBits(field, values, sink);
-            case UTF8 -> VarFields.packUtf8(field, values, sink);
-            case LIST -> VarFields.packList(field, values, sink);
-            case DICT -> VarFields.packDict(field, values, sink);
-            default -> packScalar(field, values, sink);
+            case FLAGS -> packFlags(field, row, sink, seen, take);
+            case FLAG_BYTE -> sink.write((byte) field.group.compute(row));
+            case FLAG_BIT -> {
+                if (childOn(row, field.inner)) {
+                    packField(field.inner, row, sink, seen, take);
+                }
+            }
+            case WHEN -> {
+                if (conditionHolds(field.condition, seen)) {
+                    packFields(field.children, row, sink, seen, take);
+                }
+            }
+            case REPEAT -> packRepeat(field, row, sink, seen);
+            case BYTES -> packBytes(field, row, sink, seen, take);
+            case GROUP -> packGroup(field, row, sink, seen, take);
+            case SIZED -> VarFields.packSized(field, row, sink, seen, take);
+            case U2 -> VarFields.packU2(field, row, sink, seen);
+            case BITS -> VarFields.packBits(field, row, sink, seen, take);
+            case UTF8 -> VarFields.packUtf8(field, row, sink, seen, take);
+            case LIST -> VarFields.packList(field, takeValue(field, row, take), sink);
+            case DICT -> VarFields.packDict(field, takeValue(field, row, take), sink);
+            case BOOL -> seen.put(field.id, takeValue(field, row, take));
+            default -> packScalar(field, row, sink, seen, take);
         }
+    }
+
+    static Object unpackFields(
+            List<Field> fields,
+            byte[] data,
+            int[] offset,
+            Object row,
+            Map<Integer, Object> seen,
+            boolean asList) {
+        for (Field field : fields) {
+            Object err = unpackField(field, data, offset, row, seen, asList);
+            if (err != null) {
+                return err;
+            }
+        }
+        return null;
     }
 
     static Object unpackField(
             Field field,
             byte[] data,
             int[] offset,
-            Map<String, Object> values,
+            Object row,
+            Map<Integer, Object> seen,
             boolean asList) {
         return switch (field.kind) {
-            case FLAGS -> unpackFlags(field, data, offset, values);
-            case FLAG_BYTE -> unpackFlagByte(field, data, offset, values);
-            case FLAG_BIT -> unpackFlagBit(field, data, offset, values);
-            case WHEN -> unpackWhen(field, data, offset, values);
-            case REPEAT -> unpackRepeat(field, data, offset, values);
-            case BYTES -> unpackBytes(field, data, offset, values, asList);
-            case GROUP -> unpackGroup(field, data, offset, values);
-            case SIZED -> VarFields.unpackSized(field, data, offset, values, asList);
-            case U2 -> VarFields.unpackU2(field, data, offset, values, asList);
-            case BITS -> VarFields.unpackBits(field, data, offset, values, asList);
-            case UTF8 -> VarFields.unpackUtf8(field, data, offset, values, asList);
-            case LIST -> VarFields.unpackList(field, data, offset, values, asList);
-            case DICT -> VarFields.unpackDict(field, data, offset, values, asList);
-            default -> unpackScalar(field, data, offset, values, asList);
+            case FLAGS -> unpackFlags(field, data, offset, row, seen, asList);
+            case FLAG_BYTE -> unpackFlagByte(field, data, offset);
+            case FLAG_BIT -> unpackFlagBit(field, data, offset, row, seen, asList);
+            case WHEN -> unpackWhen(field, data, offset, row, seen, asList);
+            case REPEAT -> unpackRepeat(field, data, offset, row, seen);
+            case BYTES -> unpackBytes(field, data, offset, row, seen, asList);
+            case GROUP -> unpackGroup(field, data, offset, row, seen, asList);
+            case SIZED -> VarFields.unpackSized(field, data, offset, row, seen, asList);
+            case U2 -> VarFields.unpackU2(field, data, offset, row, seen, asList);
+            case BITS -> VarFields.unpackBits(field, data, offset, row, seen, asList);
+            case UTF8 -> VarFields.unpackUtf8(field, data, offset, row, seen, asList);
+            case LIST -> VarFields.unpackList(field, data, offset, row, asList);
+            case DICT -> VarFields.unpackDict(field, data, offset, row, asList);
+            case BOOL -> null;
+            default -> unpackScalar(field, data, offset, row, seen, asList);
         };
     }
 
-    private static void packFlags(Field field, Map<String, Object> values, ByteSink sink) {
-        int flags = field.group.compute(values);
+    private static Object takeValue(Field field, Object row, Take take) {
+        if (take != null) {
+            return take.apply(field);
+        }
+        return field.get.get(row);
+    }
+
+    private static void packFlags(
+            Field field, Object row, ByteSink sink, Map<Integer, Object> seen, Take take) {
+        int flags = field.group.compute(row);
         sink.write((byte) flags);
-        for (Field bit : field.children) {
-            packFlagBit(bit, values, sink);
+        for (int i = 0; i < field.children.size(); i++) {
+            if ((flags & (1 << i)) == 0) {
+                continue;
+            }
+            Field bit = field.children.get(i);
+            Field inner = bit.inner;
+            if (inner.kind == Field.Kind.BOOL) {
+                seen.put(inner.id, inner.get.get(row));
+            } else if (inner.kind == Field.Kind.GROUP) {
+                packGroup(inner, row, sink, seen, take);
+            } else {
+                packField(inner, row, sink, seen, take);
+            }
         }
     }
 
-    private static void packFlagByte(Field field, Map<String, Object> values, ByteSink sink) {
-        sink.write((byte) field.group.compute(values));
-    }
-
-    private static void packFlagBit(Field field, Map<String, Object> values, ByteSink sink) {
-        Field inner = field.inner;
-        if (inner.kind == Field.Kind.GROUP) {
-            if (!groupOn(values, inner)) {
+    private static void packGroup(
+            Field field, Object row, ByteSink sink, Map<Integer, Object> seen, Take take) {
+        Object target = row;
+        if (field.nestedRow) {
+            target = field.get.get(row);
+            if (target == null) {
                 return;
             }
-            packGroup(inner, values, sink);
-            return;
         }
-        if (!isPresent(values, field.name)) {
-            return;
-        }
-        packField(inner, values, sink);
+        packFields(field.children, target, sink, seen, take);
     }
 
-    private static void packGroup(Field field, Map<String, Object> values, ByteSink sink) {
-        for (Field child : field.children) {
-            packField(child, values, sink);
-        }
-    }
-
-    private static void packWhen(Field field, Map<String, Object> values, ByteSink sink) {
-        if (!conditionHolds(field.condition, values)) {
-            return;
-        }
-        for (Field child : field.children) {
-            packField(child, values, sink);
-        }
-    }
-
-    private static void packRepeat(Field field, Map<String, Object> values, ByteSink sink) {
-        int count = repeatCount(field, values);
-        for (int i = 0; i < count; i++) {
-            Map<String, Object> slice = sliceValues(field, values, i);
-            for (Field child : field.children) {
-                packField(child, slice, sink);
-            }
-        }
-    }
-
-    private static int repeatCount(Field field, Map<String, Object> values) {
+    private static void packRepeat(Field field, Object row, ByteSink sink, Map<Integer, Object> seen) {
         int count = 0;
         for (Field child : field.children) {
-            Object v = values.get(child.fieldName());
+            Object v = child.get.get(row);
             if (v == null) {
                 continue;
             }
@@ -142,136 +179,154 @@ final class Walker {
                 count = Math.max(count, 1);
             }
         }
-        return count;
-    }
-
-    private static Map<String, Object> sliceValues(Field field, Map<String, Object> values, int index) {
-        Map<String, Object> slice = new HashMap<>();
-        for (Field child : field.children) {
-            String name = child.fieldName();
-            Object v = values.get(name);
-            if (v == null) {
-                continue;
-            }
-            if (v instanceof List<?> list) {
-                if (index < list.size()) {
-                    slice.put(name, list.get(index));
+        for (int i = 0; i < count; i++) {
+            int index = i;
+            Take at = child -> {
+                Object v = child.get.get(row);
+                if (v instanceof List<?> list) {
+                    return index < list.size() ? list.get(index) : null;
                 }
-            } else if (index == 0) {
-                slice.put(name, v);
-            }
+                return v;
+            };
+            packFields(field.children, row, sink, seen, at);
         }
-        return slice;
     }
 
-    private static void packBytes(Field field, Map<String, Object> values, ByteSink sink) {
-        if (!isPresent(values, field.name)) {
-            throw new IllegalArgumentException("missing field '" + field.name + "'");
+    private static void packBytes(
+            Field field, Object row, ByteSink sink, Map<Integer, Object> seen, Take take) {
+        Object raw = takeValue(field, row, take);
+        if (!isPresent(raw) && take == null) {
+            throw new IllegalArgumentException("missing field " + field.id);
         }
-        Object raw = values.get(field.name);
+        seen.put(field.id, raw);
         if (!(raw instanceof byte[] bytes)) {
-            throw new IllegalArgumentException(field.name + ": expected bytes");
+            throw new IllegalArgumentException(field.id + ": expected bytes");
         }
         if (bytes.length != field.size) {
             throw new IllegalArgumentException(
-                    field.name + ": expected " + field.size + " bytes, got " + bytes.length);
+                    field.id + ": expected " + field.size + " bytes, got " + bytes.length);
         }
         sink.write(bytes);
     }
 
-    private static void packScalar(Field field, Map<String, Object> values, ByteSink sink) {
-        if (!isPresent(values, field.name)) {
-            throw new IllegalArgumentException("missing field '" + field.name + "'");
+    private static void packScalar(
+            Field field, Object row, ByteSink sink, Map<Integer, Object> seen, Take take) {
+        Object value = takeValue(field, row, take);
+        if (!isPresent(value) && take == null) {
+            throw new IllegalArgumentException("missing field " + field.id);
         }
+        seen.put(field.id, value);
         ByteBuffer buf = ByteBuffer.allocate(field.size);
         buf.order(field.bigEndian ? ByteOrder.BIG_ENDIAN : ByteOrder.LITTLE_ENDIAN);
-        writeScalar(field, values.get(field.name), buf);
+        writeScalar(field, value, buf);
         buf.flip();
         sink.write(buf);
     }
 
     private static Object unpackFlags(
-            Field field, byte[] data, int[] offset, Map<String, Object> values) {
+            Field field,
+            byte[] data,
+            int[] offset,
+            Object row,
+            Map<Integer, Object> seen,
+            boolean asList) {
         int left = data.length - offset[0];
         if (left < 1) {
-            return new Packbin.ShortPacket(field.name, 1, left);
+            return new Packbin.ShortPacket("", 1, left);
         }
         int flags = data[offset[0]++] & 0xFF;
-        values.put(field.name, flags);
         field.group.unpacked = flags;
-        for (Field bit : field.children) {
-            Object err = unpackFlagBit(bit, data, offset, values);
-            if (err != null) {
-                return err;
+        for (int i = 0; i < field.children.size(); i++) {
+            if ((flags & (1 << i)) == 0) {
+                continue;
+            }
+            Field bit = field.children.get(i);
+            Field inner = bit.inner;
+            if (inner.kind == Field.Kind.BOOL) {
+                seen.put(inner.id, true);
+                store(row, inner, true, asList);
+            } else {
+                Object err = unpackField(inner, data, offset, row, seen, asList);
+                if (err != null) {
+                    return err;
+                }
             }
         }
         return null;
     }
 
-    private static Object unpackFlagByte(
-            Field field, byte[] data, int[] offset, Map<String, Object> values) {
+    private static Object unpackFlagByte(Field field, byte[] data, int[] offset) {
         int left = data.length - offset[0];
         if (left < 1) {
-            return new Packbin.ShortPacket(field.name, 1, left);
+            return new Packbin.ShortPacket("", 1, left);
         }
-        int flags = data[offset[0]++] & 0xFF;
-        values.put(field.name, flags);
-        field.group.unpacked = flags;
+        field.group.unpacked = data[offset[0]++] & 0xFF;
         return null;
     }
 
     private static Object unpackFlagBit(
-            Field field, byte[] data, int[] offset, Map<String, Object> values) {
+            Field field,
+            byte[] data,
+            int[] offset,
+            Object row,
+            Map<Integer, Object> seen,
+            boolean asList) {
         if ((field.group.unpacked & (1 << field.bitIndex)) == 0) {
             return null;
         }
-        return unpackField(field.inner, data, offset, values, false);
+        return unpackField(field.inner, data, offset, row, seen, asList);
     }
 
     private static Object unpackGroup(
-            Field field, byte[] data, int[] offset, Map<String, Object> values) {
-        if (field.children.isEmpty()) {
-            values.put(field.name, true);
-            return null;
-        }
-        for (Field child : field.children) {
-            Object err = unpackField(child, data, offset, values, false);
+            Field field,
+            byte[] data,
+            int[] offset,
+            Object row,
+            Map<Integer, Object> seen,
+            boolean asList) {
+        if (field.nestedRow) {
+            Object child = newChild(field, row);
+            Object err = unpackFields(field.children, data, offset, child, seen, asList);
             if (err != null) {
                 return err;
             }
+            store(row, field, child, asList);
+            return null;
         }
-        return null;
+        if (field.children.isEmpty()) {
+            if (field.set != null) {
+                store(row, field, true, asList);
+            }
+            return null;
+        }
+        return unpackFields(field.children, data, offset, row, seen, asList);
+    }
+
+    private static Object newChild(Field field, Object parent) {
+        Object existing = field.get.get(parent);
+        if (existing != null) {
+            return existing;
+        }
+        return new HashMap<String, Object>();
     }
 
     private static Object unpackWhen(
-            Field field, byte[] data, int[] offset, Map<String, Object> values) {
-        if (!conditionHolds(field.condition, values)) {
+            Field field,
+            byte[] data,
+            int[] offset,
+            Object row,
+            Map<Integer, Object> seen,
+            boolean asList) {
+        if (!conditionHolds(field.condition, seen)) {
             return null;
         }
-        for (Field child : field.children) {
-            Object err = unpackField(child, data, offset, values, false);
-            if (err != null) {
-                return err;
-            }
-        }
-        return null;
+        return unpackFields(field.children, data, offset, row, seen, asList);
     }
 
     private static Object unpackRepeat(
-            Field field, byte[] data, int[] offset, Map<String, Object> values) {
+            Field field, byte[] data, int[] offset, Object row, Map<Integer, Object> seen) {
         while (offset[0] < data.length) {
-            Object err = unpackFieldGroup(field, data, offset, values);
-            if (err != null) {
-                return err;
-            }
-        }
-        return null;
-    }
-
-    private static Object unpackFieldGroup(
-            Field field, byte[] data, int[] offset, Map<String, Object> values) {
-        for (Field child : field.children) {
-            Object err = unpackField(child, data, offset, values, true);
+            Object err = unpackFields(field.children, data, offset, row, seen, true);
             if (err != null) {
                 return err;
             }
@@ -283,16 +338,18 @@ final class Walker {
             Field field,
             byte[] data,
             int[] offset,
-            Map<String, Object> values,
+            Object row,
+            Map<Integer, Object> seen,
             boolean asList) {
         int left = data.length - offset[0];
         if (left < field.size) {
-            return new Packbin.ShortPacket(field.name, field.size, left);
+            return new Packbin.ShortPacket(field.label(), field.size, left);
         }
         byte[] raw = new byte[field.size];
         System.arraycopy(data, offset[0], raw, 0, field.size);
         offset[0] += field.size;
-        store(values, field.name, raw, asList);
+        seen.put(field.id, raw);
+        store(row, field, raw, asList);
         return null;
     }
 
@@ -300,43 +357,48 @@ final class Walker {
             Field field,
             byte[] data,
             int[] offset,
-            Map<String, Object> values,
+            Object row,
+            Map<Integer, Object> seen,
             boolean asList) {
         int left = data.length - offset[0];
         if (left < field.size) {
-            return new Packbin.ShortPacket(field.name, field.size, left);
+            return new Packbin.ShortPacket(field.label(), field.size, left);
         }
         ByteBuffer buf = ByteBuffer.wrap(data, offset[0], field.size);
         buf.order(field.bigEndian ? ByteOrder.BIG_ENDIAN : ByteOrder.LITTLE_ENDIAN);
         Object value = readScalar(field, buf);
         offset[0] += field.size;
-        store(values, field.name, value, asList);
+        seen.put(field.id, value);
+        store(row, field, value, asList);
         return null;
     }
 
     @SuppressWarnings("unchecked")
-    static void store(Map<String, Object> values, String name, Object value, boolean asList) {
-        if (!asList) {
-            values.put(name, value);
+    static void store(Object row, Field field, Object value, boolean asList) {
+        if (row == null || field.set == null) {
             return;
         }
-        Object existing = values.get(name);
+        if (!asList) {
+            field.set.set(row, value);
+            return;
+        }
+        Object existing = field.get.get(row);
         if (existing instanceof List<?> list) {
             ((List<Object>) list).add(value);
         } else if (existing == null) {
             List<Object> list = new ArrayList<>();
             list.add(value);
-            values.put(name, list);
+            field.set.set(row, list);
         } else {
             List<Object> list = new ArrayList<>();
             list.add(existing);
             list.add(value);
-            values.put(name, list);
+            field.set.set(row, list);
         }
     }
 
-    private static boolean conditionHolds(Packbin.Eq condition, Map<String, Object> values) {
-        Object actual = values.get(condition.field);
+    private static boolean conditionHolds(Packbin.Eq condition, Map<Integer, Object> seen) {
+        Object actual = seen.get(condition.fieldId);
         if (actual == null) {
             return false;
         }
@@ -358,14 +420,14 @@ final class Walker {
 
     private static void writeScalar(Field field, Object value, ByteBuffer buf) {
         switch (field.kind) {
-            case U8 -> buf.put(toUnsignedByte(field.name, value, 0xFFL));
-            case I8 -> buf.put((byte) requireLong(field.name, value, -0x80L, 0x7FL));
-            case U16 -> buf.putShort(toUnsignedShort(field.name, value, 0xFFFFL));
-            case I16 -> buf.putShort((short) requireLong(field.name, value, -0x8000L, 0x7FFFL));
-            case U32 -> buf.putInt((int) requireLong(field.name, value, 0L, 0xFFFFFFFFL));
-            case I32 -> buf.putInt((int) requireLong(field.name, value, -0x80000000L, 0x7FFFFFFFL));
-            case U64 -> buf.putLong(requireU64(field.name, value));
-            case I64 -> buf.putLong(requireLong(field.name, value, Long.MIN_VALUE, Long.MAX_VALUE));
+            case U8 -> buf.put(toUnsignedByte(field.label(), value, 0xFFL));
+            case I8 -> buf.put((byte) requireLong(field.label(), value, -0x80L, 0x7FL));
+            case U16 -> buf.putShort(toUnsignedShort(field.label(), value, 0xFFFFL));
+            case I16 -> buf.putShort((short) requireLong(field.label(), value, -0x8000L, 0x7FFFL));
+            case U32 -> buf.putInt((int) requireLong(field.label(), value, 0L, 0xFFFFFFFFL));
+            case I32 -> buf.putInt((int) requireLong(field.label(), value, -0x80000000L, 0x7FFFFFFFL));
+            case U64 -> buf.putLong(requireU64(field.label(), value));
+            case I64 -> buf.putLong(requireLong(field.label(), value, Long.MIN_VALUE, Long.MAX_VALUE));
             case F32 -> buf.putFloat(((Number) value).floatValue());
             case F64 -> buf.putDouble(((Number) value).doubleValue());
             default -> throw new IllegalStateException("Cannot write " + field.kind);
@@ -388,46 +450,12 @@ final class Walker {
         };
     }
 
-    private static int requireCount(String name, Object value) {
-        if (!(value instanceof Number) || value instanceof Float || value instanceof Double) {
-            throw new IllegalStateException(name + ": count is missing");
-        }
-        return ((Number) value).intValue();
-    }
-
-    private static int requireU2(String name, Object value) {
-        if (value instanceof Boolean
-                || !(value instanceof Number)
-                || value instanceof Float
-                || value instanceof Double) {
-            throw new IllegalArgumentException(name + ": expected 2-bit int");
-        }
-        int n = ((Number) value).intValue();
-        if (n < 0 || n > 3) {
-            throw new IllegalArgumentException(name + ": expected 2-bit int");
-        }
-        return n;
-    }
-
-    private static int requireBit(String name, Object value) {
-        if (!(value instanceof Number) || value instanceof Float || value instanceof Double) {
-            throw new IllegalArgumentException(name + ": expected 0 or 1");
-        }
-        int n = ((Number) value).intValue();
-        if (n != 0 && n != 1) {
-            throw new IllegalArgumentException(name + ": expected 0 or 1");
-        }
-        return n;
-    }
-
     private static byte toUnsignedByte(String name, Object value, long max) {
-        long n = requireLong(name, value, 0L, max);
-        return (byte) n;
+        return (byte) requireLong(name, value, 0L, max);
     }
 
     private static short toUnsignedShort(String name, Object value, long max) {
-        long n = requireLong(name, value, 0L, max);
-        return (short) n;
+        return (short) requireLong(name, value, 0L, max);
     }
 
     private static long requireLong(String name, Object value, long min, long max) {

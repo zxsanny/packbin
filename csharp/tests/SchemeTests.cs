@@ -36,25 +36,28 @@ public class SchemeTests
         public short? altitude { get; set; }
     }
 
-    private static readonly Scheme<MarkerRow> MarkerScheme = new(32, Field.U8("sid"));
+    private static readonly Scheme<MarkerRow> MarkerScheme = new(32, Field.U8<MarkerRow>(0, x => x.sid));
 
     private static readonly Scheme<UserModifiedEvent> ModifiedScheme = new(1,
-        Field.I32("userId"),
-        Field.Utf8("userNameChange"),
-        Field.Utf8("userEmailChange"),
-        Field.U8("userStatusChange"));
+        Field.I32<UserModifiedEvent>(0, x => x.userId),
+        Field.Utf8<UserModifiedEvent>(1, x => x.userNameChange),
+        Field.Utf8<UserModifiedEvent>(2, x => x.userEmailChange),
+        Field.U8<UserModifiedEvent>(3, x => x.userStatusChange));
 
     private static readonly Scheme<UserPositionEvent> PositionEventScheme = new(2,
-        Field.I32("userId"),
-        Field.I32("latitude"),
-        Field.I32("longitude"));
+        Field.I32<UserPositionEvent>(0, x => x.userId),
+        Field.I32<UserPositionEvent>(1, x => x.latitude),
+        Field.I32<UserPositionEvent>(2, x => x.longitude));
 
     private static readonly Scheme<PositionRow> PositionScheme = new(0x40,
-        Field.U16("sid"),
-        Field.I32("lat"),
-        Field.I32("lon"),
-        Field.U8("profile"),
-        Field.Flags("motion", Field.U16("heading"), Field.U8("speed"), Field.I16("altitude")));
+        Field.U16<PositionRow>(0, x => x.sid),
+        Field.I32<PositionRow>(1, x => x.lat),
+        Field.I32<PositionRow>(2, x => x.lon),
+        Field.U8<PositionRow>(3, x => x.profile),
+        Field.Flags(
+            Field.U16<PositionRow>(4, x => x.heading),
+            Field.U8<PositionRow>(5, x => x.speed),
+            Field.I16<PositionRow>(6, x => x.altitude)));
 
     private static readonly Dictionary<string, object?> PositionValues = new()
     {
@@ -73,11 +76,11 @@ public class SchemeTests
         Assert.Null(typeof(Packbin.Scheme<MarkerRow>).Assembly.GetType("Packbin.Packet"));
         Assert.Null(typeof(Packbin.Scheme<MarkerRow>).Assembly.GetType("Packbin.BinaryPacker"));
         Assert.Null(typeof(Packbin.Scheme<MarkerRow>).Assembly.GetType("Packbin.TypeNum"));
-        var scheme = new Scheme<MarkerRow>(32, Field.U8("sid"));
+        var scheme = new Scheme<MarkerRow>(32, Field.U8<MarkerRow>(0, x => x.sid));
         Assert.Equal(32, scheme.TypeNumber);
         Assert.Single(scheme.Fields);
-        Assert.ThrowsAny<ArgumentException>(() => new Scheme<MarkerRow>(-1, Field.U8("sid")));
-        Assert.ThrowsAny<ArgumentException>(() => new Scheme<MarkerRow>(256, Field.U8("sid")));
+        Assert.ThrowsAny<ArgumentException>(() => new Scheme<MarkerRow>(-1, Field.U8<MarkerRow>(0, x => x.sid)));
+        Assert.ThrowsAny<ArgumentException>(() => new Scheme<MarkerRow>(256, Field.U8<MarkerRow>(0, x => x.sid)));
         var bytes = Pack.Run(scheme, new MarkerRow { sid = 23 });
         Assert.Equal("2017", Convert.ToHexString(bytes).ToLowerInvariant());
     }
@@ -103,7 +106,7 @@ public class SchemeTests
     [Fact]
     public void Ac3_KnownSchemeChecksLeadingByte()
     {
-        var scheme = new Scheme<MarkerRow>(1, Field.U8("sid"));
+        var scheme = new Scheme<MarkerRow>(1, Field.U8<MarkerRow>(0, x => x.sid));
         var back = Unpack.Run(scheme, ParseHex("0217"));
         Assert.False(back.Ok);
         Assert.Null(back.Value);
@@ -157,10 +160,10 @@ public class SchemeTests
     public void Ac6_TypeNumbersInOneCallAreUnique()
     {
         var other = new Scheme<UserModifiedEvent>(1,
-            Field.I32("userId"),
-            Field.Utf8("userNameChange"),
-            Field.Utf8("userEmailChange"),
-            Field.U8("userStatusChange"));
+            Field.I32<UserModifiedEvent>(0, x => x.userId),
+            Field.Utf8<UserModifiedEvent>(1, x => x.userNameChange),
+            Field.Utf8<UserModifiedEvent>(2, x => x.userEmailChange),
+            Field.U8<UserModifiedEvent>(3, x => x.userStatusChange));
         Assert.ThrowsAny<ArgumentException>(() =>
             Unpack.Run(
                 ParseHex(Ac4Hex),

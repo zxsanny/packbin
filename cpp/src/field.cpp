@@ -5,15 +5,85 @@
 namespace packbin {
 namespace {
 
-Field scalar(Field::Kind kind, std::string name, int width) {
+Field scalar(Field::Kind kind, int id, int width) {
   Field f;
   f.kind = kind;
-  f.name = std::move(name);
+  f.id = id;
+  f.name = id_name(id);
   f.byte_count = width;
   return f;
 }
 
+int validate_one(Field const& node, int next_id);
+
+int validate_children(std::vector<Field> const& nodes, int next_id) {
+  for (auto const& node : nodes)
+    next_id = validate_one(node, next_id);
+  return next_id;
+}
+
+void expect_id(int id, int next_id) {
+  if (id != next_id)
+    throw std::runtime_error("field id " + std::to_string(id) + " is not the next order " +
+                             std::to_string(next_id));
+}
+
+int validate_one(Field const& node, int next_id) {
+  switch (node.kind) {
+    case Field::Kind::U8:
+    case Field::Kind::U16:
+    case Field::Kind::U32:
+    case Field::Kind::U64:
+    case Field::Kind::I8:
+    case Field::Kind::I16:
+    case Field::Kind::I32:
+    case Field::Kind::I64:
+    case Field::Kind::F32:
+    case Field::Kind::F64:
+    case Field::Kind::Bytes:
+    case Field::Kind::Bool:
+    case Field::Kind::Utf8:
+    case Field::Kind::Sized:
+    case Field::Kind::Bits:
+      expect_id(node.id, next_id);
+      return next_id + 1;
+    case Field::Kind::U2:
+      for (auto const& child : node.children) {
+        expect_id(child.id, next_id);
+        ++next_id;
+      }
+      return next_id;
+    case Field::Kind::Flags:
+      for (auto const& bit : node.children) {
+        if (bit.inner)
+          next_id = validate_one(*bit.inner, next_id);
+        else
+          next_id = validate_one(bit, next_id);
+      }
+      return next_id;
+    case Field::Kind::FlagBit:
+      if (node.inner)
+        return validate_one(*node.inner, next_id);
+      return next_id;
+    case Field::Kind::FlagByte:
+      return next_id;
+    case Field::Kind::When:
+    case Field::Kind::Repeat:
+    case Field::Kind::Group:
+      return validate_children(node.children, next_id);
+    case Field::Kind::List:
+    case Field::Kind::Dict:
+      validate_children(node.children, 0);
+      return next_id;
+  }
+  return next_id;
+}
+
 }  // namespace
+
+int validate_order(std::vector<Field> const& nodes, int next_id) {
+  return validate_children(nodes, next_id);
+}
 
 Field Field::be() const {
   Field f = *this;
@@ -28,6 +98,7 @@ Field Field::bit(Field field) const {
     throw std::runtime_error("flags already has 8 bits");
   Field bit;
   bit.kind = Kind::FlagBit;
+  bit.id = field.id;
   bit.name = field.name;
   bit.group = group;
   bit.bit_index = static_cast<int>(group->bits.size());
@@ -36,40 +107,49 @@ Field Field::bit(Field field) const {
   return bit;
 }
 
-Field u8(std::string name) { return scalar(Field::Kind::U8, std::move(name), 1); }
-Field u16(std::string name) { return scalar(Field::Kind::U16, std::move(name), 2); }
-Field u32(std::string name) { return scalar(Field::Kind::U32, std::move(name), 4); }
-Field u64(std::string name) { return scalar(Field::Kind::U64, std::move(name), 8); }
-Field i8(std::string name) { return scalar(Field::Kind::I8, std::move(name), 1); }
-Field i16(std::string name) { return scalar(Field::Kind::I16, std::move(name), 2); }
-Field i32(std::string name) { return scalar(Field::Kind::I32, std::move(name), 4); }
-Field i64(std::string name) { return scalar(Field::Kind::I64, std::move(name), 8); }
-Field f32(std::string name) { return scalar(Field::Kind::F32, std::move(name), 4); }
-Field f64(std::string name) { return scalar(Field::Kind::F64, std::move(name), 8); }
+Field u8(int id) { return scalar(Field::Kind::U8, id, 1); }
+Field u16(int id) { return scalar(Field::Kind::U16, id, 2); }
+Field u32(int id) { return scalar(Field::Kind::U32, id, 4); }
+Field u64(int id) { return scalar(Field::Kind::U64, id, 8); }
+Field i8(int id) { return scalar(Field::Kind::I8, id, 1); }
+Field i16(int id) { return scalar(Field::Kind::I16, id, 2); }
+Field i32(int id) { return scalar(Field::Kind::I32, id, 4); }
+Field i64(int id) { return scalar(Field::Kind::I64, id, 8); }
+Field f32(int id) { return scalar(Field::Kind::F32, id, 4); }
+Field f64(int id) { return scalar(Field::Kind::F64, id, 8); }
 
-Field bytes(std::string name, int n) {
+Field bytes(int id, int n) {
   if (n < 0)
     throw std::runtime_error("bytes length must be >= 0");
   Field f;
   f.kind = Field::Kind::Bytes;
-  f.name = std::move(name);
+  f.id = id;
+  f.name = id_name(id);
   f.byte_count = n;
+  return f;
+}
+
+Field boolean(int id) {
+  Field f;
+  f.kind = Field::Kind::Bool;
+  f.id = id;
+  f.name = id_name(id);
   return f;
 }
 
 Field be(Field field) { return field.be(); }
 
-Field flags(std::string name, std::vector<Field> fields) {
+Field flags(std::vector<Field> fields) {
   auto group = std::make_shared<FlagGroup>();
-  group->name = name;
   Field f;
   f.kind = Field::Kind::Flags;
-  f.name = std::move(name);
+  f.name = "";
   f.group = group;
   f.children.reserve(fields.size());
   for (auto& child : fields) {
     Field bit;
     bit.kind = Field::Kind::FlagBit;
+    bit.id = child.id;
     bit.name = child.name;
     bit.group = group;
     bit.bit_index = static_cast<int>(group->bits.size());
@@ -80,17 +160,16 @@ Field flags(std::string name, std::vector<Field> fields) {
   return f;
 }
 
-Field flag_byte(std::string name) {
+Field flag_byte() {
   auto group = std::make_shared<FlagGroup>();
-  group->name = name;
   Field f;
   f.kind = Field::Kind::FlagByte;
-  f.name = std::move(name);
+  f.name = "";
   f.group = group;
   return f;
 }
 
-Eq eq(std::string field, Value value) { return Eq{std::move(field), std::move(value)}; }
+Eq eq(int field_id, Value value) { return Eq{id_name(field_id), std::move(value)}; }
 
 Field when(Eq condition, std::vector<Field> fields) {
   Field f;
@@ -108,6 +187,13 @@ Field repeat(std::vector<Field> fields) {
   return f;
 }
 
+Field group(std::vector<Field> fields) {
+  Field f;
+  f.kind = Field::Kind::Group;
+  f.children = std::move(fields);
+  return f;
+}
+
 Field group(std::string name, std::vector<Field> fields) {
   Field f;
   f.kind = Field::Kind::Group;
@@ -116,32 +202,37 @@ Field group(std::string name, std::vector<Field> fields) {
   return f;
 }
 
-Field sized(std::string name, std::string count_field) {
+Field sized(int id, int count_id) {
   Field f;
   f.kind = Field::Kind::Sized;
-  f.name = std::move(name);
-  f.count_name = std::move(count_field);
+  f.id = id;
+  f.name = id_name(id);
+  f.count_id = count_id;
+  f.count_name = id_name(count_id);
   return f;
 }
 
-Field u2(std::vector<std::string> names) {
-  if (names.empty())
+Field u2(std::vector<int> ids) {
+  if (ids.empty())
     throw std::runtime_error("u2 needs at least one name");
   Field f;
   f.kind = Field::Kind::U2;
-  f.children.reserve(names.size());
-  for (auto& name : names) {
+  f.id = ids.front();
+  f.children.reserve(ids.size());
+  for (auto id : ids) {
     Field child;
-    child.name = std::move(name);
+    child.id = id;
+    child.name = id_name(id);
     f.children.push_back(std::move(child));
   }
   return f;
 }
 
-Field utf8(std::string name) {
+Field utf8(int id) {
   Field f;
   f.kind = Field::Kind::Utf8;
-  f.name = std::move(name);
+  f.id = id;
+  f.name = id_name(id);
   return f;
 }
 
@@ -165,11 +256,13 @@ Field dict(std::string name, Field element) {
   return f;
 }
 
-Field bits(std::string name, std::string count_field) {
+Field bits(int id, int count_id) {
   Field f;
   f.kind = Field::Kind::Bits;
-  f.name = std::move(name);
-  f.count_name = std::move(count_field);
+  f.id = id;
+  f.name = id_name(id);
+  f.count_id = count_id;
+  f.count_name = id_name(count_id);
   return f;
 }
 
@@ -199,11 +292,13 @@ bool present(Values const& values, std::string const& name) {
   return values.find(name) != values.end();
 }
 
+bool present(Values const& values, int id) { return present(values, id_name(id)); }
+
 std::size_t motion_field_count(Values const& values) {
-  static char const* names[] = {"heading", "speed", "altitude", "frequency"};
+  static int const ids[] = {4, 5, 6};
   std::size_t n = 0;
-  for (auto const* name : names) {
-    if (present(values, name))
+  for (auto id : ids) {
+    if (present(values, id))
       ++n;
   }
   return n;

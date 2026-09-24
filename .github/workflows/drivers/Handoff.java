@@ -2,14 +2,13 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import packbin.Access;
 import packbin.Pack;
 import packbin.Packbin;
 import packbin.Scheme;
 import packbin.Unpack;
 
 public final class Handoff {
-    private static final class Row {}
-
     public static void main(String[] args) {
         if (args.length < 1) {
             System.exit(2);
@@ -31,13 +30,17 @@ public final class Handoff {
         return args[1];
     }
 
-    private static Scheme<Row> userScheme() {
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Scheme<Map> userScheme() {
         return new Scheme<>(
                 1,
-                Row.class,
-                Packbin.utf8("username"),
-                Packbin.list("roles", Packbin.utf8("role")),
-                Packbin.dict("access", Packbin.list("actions", Packbin.utf8("action"))));
+                (Class) Map.class,
+                Packbin.utf8(0, Access.get("username"), Access.set("username")),
+                Packbin.list(Access.get("roles"), Access.set("roles"),
+                        Packbin.utf8(0, Access.identity(), Access.ignore())),
+                Packbin.dict(Access.get("access"), Access.set("access"),
+                        Packbin.list(Access.identity(), Access.ignore(),
+                                Packbin.utf8(0, Access.identity(), Access.ignore()))));
     }
 
     private static Map<String, Object> userValues() {
@@ -52,11 +55,15 @@ public final class Handoff {
         return values;
     }
 
-    private static Scheme<Row> nestedScheme() {
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Scheme<Map> nestedScheme() {
         return new Scheme<>(
                 1,
-                Row.class,
-                Packbin.dict("access", Packbin.list("rows", Packbin.dict("fields", Packbin.utf8("value")))));
+                (Class) Map.class,
+                Packbin.dict(Access.get("access"), Access.set("access"),
+                        Packbin.list(Access.identity(), Access.ignore(),
+                                Packbin.dict(Access.identity(), Access.ignore(),
+                                        Packbin.utf8(0, Access.identity(), Access.ignore())))));
     }
 
     private static Map<String, Object> nestedValues() {
@@ -69,7 +76,7 @@ public final class Handoff {
     }
 
     private static boolean userOk(String hex) {
-        Packbin.UnpackResult got = Unpack.values(userScheme(), parse(hex));
+        Packbin.Bound<Map> got = Unpack.run(userScheme(), parse(hex));
         if (!got.ok || got.value.size() != 3) {
             return false;
         }
@@ -89,7 +96,7 @@ public final class Handoff {
     }
 
     private static boolean nestedOk(String hex) {
-        Packbin.UnpackResult got = Unpack.values(nestedScheme(), parse(hex));
+        Packbin.Bound<Map> got = Unpack.run(nestedScheme(), parse(hex));
         if (!got.ok) {
             return false;
         }

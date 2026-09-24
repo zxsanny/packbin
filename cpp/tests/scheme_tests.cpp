@@ -92,27 +92,24 @@ struct UserPositionEvent {
 
 auto position_scheme() {
   return packbin::Scheme<PositionRow>(
-      0x40, packbin::bind(packbin::u16("sid"), &PositionRow::sid),
-      packbin::bind(packbin::i32("lat"), &PositionRow::lat),
-      packbin::bind(packbin::i32("lon"), &PositionRow::lon),
-      packbin::bind(packbin::u8("profile"), &PositionRow::profile),
-      packbin::flags("motion",
-                     {packbin::u16("heading"), packbin::u8("speed"), packbin::i16("altitude")}));
+      0x40, packbin::u16(0, &PositionRow::sid), packbin::i32(1, &PositionRow::lat),
+      packbin::i32(2, &PositionRow::lon), packbin::u8(3, &PositionRow::profile),
+      packbin::flags({packbin::u16(4), packbin::u8(5), packbin::i16(6)}));
 }
 
 auto modified_scheme() {
   return packbin::Scheme<UserModifiedEvent>(
-      1, packbin::bind(packbin::i32("userId"), &UserModifiedEvent::userId),
-      packbin::bind(packbin::utf8("userNameChange"), &UserModifiedEvent::userNameChange),
-      packbin::bind(packbin::utf8("userEmailChange"), &UserModifiedEvent::userEmailChange),
-      packbin::bind(packbin::u8("userStatusChange"), &UserModifiedEvent::userStatusChange));
+      1, packbin::i32(0, &UserModifiedEvent::userId),
+      packbin::utf8(1, &UserModifiedEvent::userNameChange),
+      packbin::utf8(2, &UserModifiedEvent::userEmailChange),
+      packbin::u8(3, &UserModifiedEvent::userStatusChange));
 }
 
 auto position_event_scheme() {
   return packbin::Scheme<UserPositionEvent>(
-      2, packbin::bind(packbin::i32("userId"), &UserPositionEvent::userId),
-      packbin::bind(packbin::i32("latitude"), &UserPositionEvent::latitude),
-      packbin::bind(packbin::i32("longitude"), &UserPositionEvent::longitude));
+      2, packbin::i32(0, &UserPositionEvent::userId),
+      packbin::i32(1, &UserPositionEvent::latitude),
+      packbin::i32(2, &UserPositionEvent::longitude));
 }
 
 void ac1_scheme_replaces_packet() {
@@ -122,7 +119,7 @@ void ac1_scheme_replaces_packet() {
   expect(source.find("BinaryPacker") == std::string::npos, "AC-1 no BinaryPacker");
   expect(source.find("TypeNum") == std::string::npos, "AC-1 no TypeNum");
   expect(source.find("type_num(") == std::string::npos, "AC-1 no type_num");
-  packbin::Scheme<MarkerRow> s(32, packbin::bind(packbin::u8("sid"), &MarkerRow::sid));
+  packbin::Scheme<MarkerRow> s(32, packbin::u8(0, &MarkerRow::sid));
   expect(s.type_number == 32, "AC-1 type_number");
   MarkerRow row;
   row.sid = 23;
@@ -154,7 +151,7 @@ void ac2_position_golden_no_type_member() {
 }
 
 void ac3_known_scheme_checks_leading_byte() {
-  auto layout = packbin::Scheme<MarkerRow>(1, packbin::bind(packbin::u8("sid"), &MarkerRow::sid));
+  auto layout = packbin::Scheme<MarkerRow>(1, packbin::u8(0, &MarkerRow::sid));
   auto got = packbin::unpack(layout, parse_hex("0217"));
   expect(!got.ok, "AC-3 not ok");
   expect(!got.value.has_value(), "AC-3 no row");
@@ -212,8 +209,7 @@ void ac6_type_numbers_unique() {
   try {
     packbin::unpack(std::vector<std::uint8_t>{1},
                     modified_scheme().on([](UserModifiedEvent const&) {}),
-                    packbin::Scheme<UserModifiedEvent>(1, packbin::bind(packbin::i32("userId"),
-                                                                        &UserModifiedEvent::userId))
+                    packbin::Scheme<UserModifiedEvent>(1, packbin::i32(0, &UserModifiedEvent::userId))
                         .on([](UserModifiedEvent const&) {}));
   } catch (std::runtime_error const&) {
     threw = true;
@@ -225,18 +221,18 @@ void type_number_range() {
   bool high = false;
   bool low = false;
   try {
-    packbin::scheme(256, {packbin::u8("sid")});
+    packbin::scheme(256, {packbin::u8(0)});
   } catch (std::runtime_error const&) {
     high = true;
   }
   try {
-    packbin::scheme(-1, {packbin::u8("sid")});
+    packbin::scheme(-1, {packbin::u8(0)});
   } catch (std::runtime_error const&) {
     low = true;
   }
   bool typed_high = false;
   try {
-    packbin::Scheme<MarkerRow>(256, packbin::bind(packbin::u8("sid"), &MarkerRow::sid));
+    packbin::Scheme<MarkerRow>(256, packbin::u8(0, &MarkerRow::sid));
   } catch (std::runtime_error const&) {
     typed_high = true;
   }

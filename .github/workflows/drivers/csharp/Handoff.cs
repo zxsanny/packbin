@@ -3,11 +3,36 @@ using Packbin;
 
 static class Handoff
 {
+    sealed class RoleEl
+    {
+        public string role { get; set; } = "";
+    }
+
+    sealed class ActionEl
+    {
+        public string action { get; set; } = "";
+    }
+
+    sealed class ActionList
+    {
+        public List<object?>? actions { get; set; }
+    }
+
     sealed class UserRow
     {
         public string username { get; set; } = "";
         public List<object?>? roles { get; set; }
         public Dictionary<string, object?>? access { get; set; }
+    }
+
+    sealed class ValueEl
+    {
+        public string value { get; set; } = "";
+    }
+
+    sealed class FieldDict
+    {
+        public Dictionary<string, object?>? fields { get; set; }
     }
 
     sealed class NestedRow
@@ -16,12 +41,12 @@ static class Handoff
     }
 
     static readonly Scheme<UserRow> UserScheme = new(1,
-        Field.Utf8("username"),
-        Field.List("roles", Field.Utf8("role")),
-        Field.Dict("access", Field.List("actions", Field.Utf8("action"))));
+        Field.Utf8<UserRow>(0, x => x.username),
+        Field.List((UserRow x) => x.roles, Field.Utf8<RoleEl>(0, r => r.role)),
+        Field.Dict((UserRow x) => x.access, Field.List((ActionList e) => e.actions, Field.Utf8<ActionEl>(0, a => a.action))));
 
     static readonly Scheme<NestedRow> NestedScheme = new(1,
-        Field.Dict("access", Field.List("rows", Field.Dict("fields", Field.Utf8("value")))));
+        Field.Dict((NestedRow x) => x.access, Field.List((FieldDict r) => r.fields, Field.Dict((FieldDict f) => f.fields, Field.Utf8<ValueEl>(0, v => v.value)))));
 
     static readonly Dictionary<string, object?> UserValues = new()
     {

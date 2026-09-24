@@ -11,19 +11,14 @@ fn parse_hex(hex: &str) -> Vec<u8> {
 }
 
 #[derive(Default, Debug)]
-struct MarkerRow {
+struct SidRow {
     sid: u8,
 }
 
-fn marker_scheme() -> Scheme<MarkerRow> {
+fn sid_scheme() -> Scheme<SidRow> {
     Scheme::new(
         32,
-        [BoundField::u8(
-            "sid",
-            |r: &MarkerRow| r.sid,
-            |r: &mut MarkerRow, v| r.sid = v,
-        )
-        .into()],
+        [BoundField::u8(0, |r: &SidRow| r.sid, |r: &mut SidRow, v| r.sid = v).into()],
     )
 }
 
@@ -47,25 +42,25 @@ fn modified_scheme() -> Scheme<UserModifiedEvent> {
         1,
         [
             BoundField::i32(
-                "userId",
+                0,
                 |r: &UserModifiedEvent| r.user_id,
                 |r: &mut UserModifiedEvent, v| r.user_id = v,
             )
             .into(),
             BoundField::utf8(
-                "userNameChange",
+                1,
                 |r: &UserModifiedEvent| r.user_name_change.clone(),
                 |r: &mut UserModifiedEvent, v| r.user_name_change = v,
             )
             .into(),
             BoundField::utf8(
-                "userEmailChange",
+                2,
                 |r: &UserModifiedEvent| r.user_email_change.clone(),
                 |r: &mut UserModifiedEvent, v| r.user_email_change = v,
             )
             .into(),
             BoundField::u8(
-                "userStatusChange",
+                3,
                 |r: &UserModifiedEvent| r.user_status_change,
                 |r: &mut UserModifiedEvent, v| r.user_status_change = v,
             )
@@ -79,19 +74,19 @@ fn position_event_scheme() -> Scheme<UserPositionEvent> {
         2,
         [
             BoundField::i32(
-                "userId",
+                0,
                 |r: &UserPositionEvent| r.user_id,
                 |r: &mut UserPositionEvent, v| r.user_id = v,
             )
             .into(),
             BoundField::i32(
-                "latitude",
+                1,
                 |r: &UserPositionEvent| r.latitude,
                 |r: &mut UserPositionEvent, v| r.latitude = v,
             )
             .into(),
             BoundField::i32(
-                "longitude",
+                2,
                 |r: &UserPositionEvent| r.longitude,
                 |r: &mut UserPositionEvent, v| r.longitude = v,
             )
@@ -113,25 +108,25 @@ fn position_row_scheme() -> Scheme<PositionRow> {
         0x40,
         [
             BoundField::u16(
-                "sid",
+                0,
                 |r: &PositionRow| r.sid,
                 |r: &mut PositionRow, v| r.sid = v,
             )
             .into(),
             BoundField::i32(
-                "lat",
+                1,
                 |r: &PositionRow| r.lat,
                 |r: &mut PositionRow, v| r.lat = v,
             )
             .into(),
             BoundField::i32(
-                "lon",
+                2,
                 |r: &PositionRow| r.lon,
                 |r: &mut PositionRow, v| r.lon = v,
             )
             .into(),
             BoundField::u8(
-                "profile",
+                3,
                 |r: &PositionRow| r.profile,
                 |r: &mut PositionRow, v| r.profile = v,
             )
@@ -152,8 +147,8 @@ fn ac1_scheme_replaces_packet() {
     assert!(!source.contains("type_num"));
     assert!(!source.contains(" packet,"));
     assert!(!source.contains(" Packet"));
-    let row = MarkerRow { sid: 23 };
-    let bytes = pack(&marker_scheme(), &row).expect("pack");
+    let row = SidRow { sid: 23 };
+    let bytes = pack(&sid_scheme(), &row).expect("pack");
     assert_eq!(to_hex(&bytes), "2017");
 }
 
@@ -192,7 +187,7 @@ fn ac2_position_row_no_type_member() {
 
 #[test]
 fn ac3_known_scheme_checks_leading_byte() {
-    match unpack(&marker_scheme(), &parse_hex("2117")) {
+    match unpack(&sid_scheme(), &parse_hex("2117")) {
         Err(UnpackError::Type { expected, actual }) => {
             assert_eq!(expected, 32);
             assert_eq!(actual, 33);
@@ -204,7 +199,7 @@ fn ac3_known_scheme_checks_leading_byte() {
 
 #[test]
 fn ac3_empty_buffer_short_packet() {
-    match unpack::<MarkerRow>(&marker_scheme(), &[]) {
+    match unpack::<SidRow>(&sid_scheme(), &[]) {
         Err(UnpackError::Short(ShortPacket {
             field,
             needed,
@@ -292,7 +287,7 @@ fn ac6_type_numbers_unique() {
     let other = Scheme::new(
         1,
         [BoundField::i32(
-            "userId",
+            0,
             |r: &UserPositionEvent| r.user_id,
             |r: &mut UserPositionEvent, v| r.user_id = v,
         )
@@ -309,11 +304,11 @@ fn ac6_type_numbers_unique() {
 #[test]
 fn type_number_range() {
     assert!(std::panic::catch_unwind(|| {
-        let _ = Scheme::<MarkerRow>::new(256, []);
+        let _ = Scheme::<SidRow>::new(256, []);
     })
     .is_err());
     assert!(std::panic::catch_unwind(|| {
-        let _ = Scheme::<MarkerRow>::new(-1, []);
+        let _ = Scheme::<SidRow>::new(-1, []);
     })
     .is_err());
 }

@@ -36,34 +36,41 @@ class UserPositionEvent {
 
 const ModifiedScheme = scheme<UserModifiedEvent>(
   1,
-  i32("userId"),
-  utf8("userNameChange"),
-  utf8("userEmailChange"),
-  u8("userStatusChange"),
+  i32(0, (r) => r.userId),
+  utf8(1, (r) => r.userNameChange),
+  utf8(2, (r) => r.userEmailChange),
+  u8(3, (r) => r.userStatusChange),
 )
 
 const PositionScheme = scheme<UserPositionEvent>(
   2,
-  i32("userId"),
-  i32("latitude"),
-  i32("longitude"),
+  i32(0, (r) => r.userId),
+  i32(1, (r) => r.latitude),
+  i32(2, (r) => r.longitude),
 )
 
-const position = scheme(
-  0x40,
-  u16("sid"),
-  i32("lat"),
-  i32("lon"),
-  u8("profile"),
-  flags("motion", [u16("heading"), u8("speed"), i16("altitude")]),
-)
-
-const positionValue = {
-  sid: 1,
-  lat: 500_000_000,
-  lon: 300_000_000,
-  profile: 1,
+type Position = {
+  sid: number
+  lat: number
+  lon: number
+  profile: number
+  heading?: number
+  speed?: number
+  altitude?: number
 }
+
+const position = scheme<Position>(
+  0x40,
+  u16(0, (r) => r.sid),
+  i32(1, (r) => r.lat),
+  i32(2, (r) => r.lon),
+  u8(3, (r) => r.profile),
+  flags([
+    u16(4, (r) => r.heading),
+    u8(5, (r) => r.speed),
+    i16(6, (r) => r.altitude),
+  ]),
+)
 
 function toHex(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("hex")
@@ -79,7 +86,7 @@ describe("scheme", () => {
       assert.equal(/\bBinaryPacker\b/.test(blob), false)
       assert.equal(/\btypeNum\b/.test(blob), false)
     }
-    const s = scheme(32, u8("sid"))
+    const s = scheme(32, u8(0, (r: { sid: number }) => r.sid))
     assert.equal(s.typeNumber, 32)
     assert.equal(toHex(pack(s, { sid: 23 })), "2017")
   })
@@ -104,7 +111,7 @@ describe("scheme", () => {
   })
 
   it("AC-3 known scheme checks the leading byte", () => {
-    const layout = scheme(1, u8("sid"))
+    const layout = scheme(1, u8(0, (r: { sid: number }) => r.sid))
     const got = unpack(layout, Uint8Array.of(2, 23))
     assert.equal(got.ok, false)
     if (got.ok) return
@@ -129,7 +136,7 @@ describe("scheme", () => {
     assert.equal(toHex(bytes), "02070000000800000009000000")
 
     let modified = 0
-    let position = 0
+    let positionHits = 0
     let seen: UserPositionEvent | null = null
     const result = unpack(
       bytes,
@@ -137,13 +144,13 @@ describe("scheme", () => {
         modified++
       }),
       PositionScheme.on((ev) => {
-        position++
+        positionHits++
         seen = ev
       }),
     )
     assert.equal(result.ok, true)
     assert.equal(modified, 0)
-    assert.equal(position, 1)
+    assert.equal(positionHits, 1)
     assert.ok(seen)
     assert.equal(seen!.userId, 7)
     assert.equal(seen!.latitude, 8)
@@ -153,14 +160,14 @@ describe("scheme", () => {
 
   it("AC-5 unknown type number", () => {
     let modified = 0
-    let position = 0
+    let positionHits = 0
     const result = unpack(
       Uint8Array.of(9),
       ModifiedScheme.on(() => {
         modified++
       }),
       PositionScheme.on(() => {
-        position++
+        positionHits++
       }),
     )
     assert.equal(result.ok, false)
@@ -168,7 +175,7 @@ describe("scheme", () => {
     assert.equal(result.actual, 9)
     assert.equal("expected" in result && result.expected !== undefined, false)
     assert.equal(modified, 0)
-    assert.equal(position, 0)
+    assert.equal(positionHits, 0)
   })
 
   it("AC-6 type numbers in one call are unique", () => {
@@ -176,7 +183,7 @@ describe("scheme", () => {
       unpack(
         Uint8Array.of(1),
         ModifiedScheme.on(() => {}),
-        scheme<UserModifiedEvent>(1, i32("userId")).on(() => {}),
+        scheme<UserModifiedEvent>(1, i32(0, (r) => r.userId)).on(() => {}),
       )
     })
   })
