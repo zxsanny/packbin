@@ -27,7 +27,7 @@ case "$lang" in
     ;;
   typescript)
     if [ -f "$root/typescript/package.json" ]; then
-      run bash -lc "cd '$root/typescript' && npm test"
+      run bash -lc "cd '$root/typescript' && if [ ! -f node_modules/typescript/lib/tsc.js ]; then npm ci; fi && npm test"
     fi
     ;;
   python)
