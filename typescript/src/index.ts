@@ -24,8 +24,10 @@ export type Value = Record<string, unknown>
 
 export type UnpackOk = { ok: true } & Value
 export type UnpackErr = ShortErr | TypeMismatchErr
-export type UnpackResult = UnpackOk | UnpackErr
 export type EntityResult<T> = { ok: true; value: T } | UnpackErr
+export type UnpackResult<T = never> = [T] extends [never]
+  ? UnpackOk | UnpackErr
+  : EntityResult<T>
 
 type EndianField = { littleEndian: boolean }
 
@@ -117,6 +119,35 @@ export function packet(fields: Field[]): Packet {
   const flat = flatten(fields)
   assertTypeNumPlacement(flat)
   return { fields: flat }
+}
+
+export class Scheme<T> {
+  declare private readonly __row: T
+  readonly packet: Packet
+
+  private constructor(packet: Packet) {
+    this.packet = packet
+  }
+
+  static of<T>(...fields: Field[]): Scheme<T> {
+    return new Scheme(packet(fields))
+  }
+}
+
+export class BinaryPacker {
+  static pack<T extends object>(scheme: Scheme<T>, row: T): Uint8Array {
+    return pack(scheme.packet, row)
+  }
+
+  static unpack<T extends object>(
+    scheme: Scheme<T>,
+    bytes: Uint8Array,
+  ): UnpackResult<T> {
+    const raw = unpack(scheme.packet, bytes)
+    if (!raw.ok) return raw
+    const { ok: _ok, ...rest } = raw
+    return { ok: true, value: rest as T }
+  }
 }
 
 function flatten(fields: Field[]): Field[] {
@@ -524,7 +555,7 @@ function unpackFields(
           const before = cur.offset
           const err = unpackFields(f.fields, cur, values, flagBytes, true)
           if (err) {
-            if (cur.offset === before && err.left > 0) return err
+            if (cur.offset === before && "left" in err && err.left > 0) return err
             return err
           }
         }

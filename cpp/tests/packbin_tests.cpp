@@ -594,6 +594,8 @@ void type_num_ac5_scheme_rejected() {
 
 }  // namespace
 
+int run_scheme_tests();
+
 int main() {
   ac1_position_pack();
   ac2_position_unpack();
@@ -613,6 +615,7 @@ int main() {
   type_num_ac3_wrong_byte();
   type_num_ac4_absent_golden();
   type_num_ac5_scheme_rejected();
+  failures += run_scheme_tests();
   if (failures != 0) {
     std::cerr << failures << " failure(s)\n";
     return 1;

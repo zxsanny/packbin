@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import struct
 from dataclasses import dataclass
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Generic, Sequence, TypeVar
 
 _builtin_bytes = bytes
 _builtin_list = list
 _builtin_dict = dict
+T = TypeVar("T")
 __all__ = [
+    "BinaryPacker",
+    "Scheme",
     "ShortPacket",
     "TrailingBytes",
     "TypeMismatch",
@@ -62,9 +65,9 @@ class TypeMismatch:
 
 
 @dataclass(frozen=True, slots=True)
-class UnpackResult:
+class UnpackResult(Generic[T]):
     ok: bool
-    value: dict[str, Any] | None = None
+    value: T | None = None
     error: ShortPacket | TrailingBytes | TypeMismatch | None = None
 
     @property
@@ -211,6 +214,18 @@ class TypeNum:
 @dataclass(slots=True)
 class Packet:
     fields: list[_Node]
+
+
+class Scheme(Generic[T]):
+    __slots__ = ("_row_type", "_packet")
+
+    def __init__(self, row_type: type[T], *fields: _Node) -> None:
+        self._row_type = row_type
+        self._packet = packet(fields)
+
+    @staticmethod
+    def of(row_type: type[T], *fields: _Node) -> Scheme[T]:
+        return Scheme(row_type, *fields)
 
 
 def _forbid_nested_type_num(nodes: Sequence[_Node], where: str) -> None:
@@ -800,7 +815,7 @@ def _unpack_nodes(
     return offset, None
 
 
-def unpack(target: Packet, data: bytes | bytearray | memoryview) -> UnpackResult:
+def unpack(target: Packet, data: bytes | bytearray | memoryview) -> UnpackResult[dict[str, Any]]:
     view = memoryview(data)
     out: dict[str, Any] = {}
     offset, err = _unpack_nodes(view, 0, target.fields, out)
@@ -810,3 +825,50 @@ def unpack(target: Packet, data: bytes | bytearray | memoryview) -> UnpackResult
     if left > 0:
         return UnpackResult(ok=False, value=None, error=TrailingBytes(left=left))
     return UnpackResult(ok=True, value=out, error=None)
+
+
+def _bind_names(nodes: Sequence[_Node]) -> list[str]:
+    names: list[str] = []
+    for node in nodes:
+        if isinstance(node, _TypeNum):
+            continue
+        if isinstance(node, (_Scalar, _Bytes, _Utf8, _List, _Dict, _Sized, _Bits)):
+            names.append(node.name)
+        elif isinstance(node, _U2):
+            names.extend(node.names)
+        elif isinstance(node, _Flags):
+            for child in node.fields:
+                if isinstance(child, _Group):
+                    if child.fields:
+                        names.extend(_bind_names(child.fields))
+                    else:
+                        names.append(child.name)
+                else:
+                    names.extend(_bind_names([child]))
+        elif isinstance(node, (_When, _Repeat, _Group)):
+            names.extend(_bind_names(node.fields))
+        elif isinstance(node, _FlagByte):
+            for child in node.bits:
+                names.extend(_bind_names([child]))
+        elif isinstance(node, _FlagBit):
+            names.extend(_bind_names([node.field]))
+    return names
+
+
+class BinaryPacker:
+    @staticmethod
+    def pack(scheme: Scheme[T], row: T) -> bytes:
+        values = {name: getattr(row, name) for name in _bind_names(scheme._packet.fields)}
+        return pack(scheme._packet, values)
+
+    @staticmethod
+    def unpack(scheme: Scheme[T], data: bytes) -> UnpackResult[T]:
+        result = unpack(scheme._packet, data)
+        if not result.ok or result.value is None:
+            return UnpackResult(ok=False, value=None, error=result.error)
+        kwargs = {
+            name: result.value[name]
+            for name in _bind_names(scheme._packet.fields)
+            if name in result.value
+        }
+        return UnpackResult(ok=True, value=scheme._row_type(**kwargs), error=None)

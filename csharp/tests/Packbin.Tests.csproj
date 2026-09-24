@@ -22,4 +22,9 @@
     <ProjectReference Include="..\Packbin.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="compile-fail/**" />
+    <None Include="compile-fail/**" />
+  </ItemGroup>
+
 </Project>

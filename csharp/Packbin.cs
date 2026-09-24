@@ -23,6 +23,24 @@ public sealed class Packet
     }
 }
 
+public sealed class Scheme<T> where T : class
+{
+    internal Packet Packet { get; }
+
+    private Scheme(Packet packet) => Packet = packet;
+
+    public static Scheme<T> Of(params Field[] fields) => new(Packet.Of(fields));
+}
+
+public static class BinaryPacker
+{
+    public static byte[] Pack<T>(Scheme<T> scheme, T row) where T : class =>
+        Packbin.Pack.Run(scheme.Packet, row);
+
+    public static Bound<T> Unpack<T>(Scheme<T> scheme, ReadOnlySpan<byte> bytes) where T : class, new() =>
+        Packbin.Unpack.Run<T>(scheme.Packet, bytes);
+}
+
 public static class TypeNum
 {
     public static Field Set(int value)

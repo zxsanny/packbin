@@ -517,12 +517,12 @@ std::vector<std::uint8_t> pack(Packet const& target, Values const& values) {
   return out;
 }
 
-UnpackResult unpack(Packet const& target, std::uint8_t const* data, std::size_t len) {
+UnpackResult<> unpack(Packet const& target, std::uint8_t const* data, std::size_t len) {
   Values out;
   std::size_t offset = 0;
   auto err = unpack_nodes(data, len, offset, target.fields, out, false);
   if (err) {
-    UnpackResult r;
+    UnpackResult<> r;
     r.ok = false;
     if (auto const* short_packet = std::get_if<ShortPacket>(&*err))
       r.short_packet = *short_packet;
@@ -531,18 +531,18 @@ UnpackResult unpack(Packet const& target, std::uint8_t const* data, std::size_t 
     return r;
   }
   if (offset < len) {
-    UnpackResult r;
+    UnpackResult<> r;
     r.ok = false;
     r.trailing = TrailingBytes{len - offset};
     return r;
   }
-  UnpackResult r;
+  UnpackResult<> r;
   r.ok = true;
   r.value = std::move(out);
   return r;
 }
 
-UnpackResult unpack(Packet const& target, std::vector<std::uint8_t> const& data) {
+UnpackResult<> unpack(Packet const& target, std::vector<std::uint8_t> const& data) {
   return unpack(target, data.data(), data.size());
 }
 

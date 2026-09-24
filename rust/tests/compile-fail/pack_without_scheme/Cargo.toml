@@ -1,0 +1,8 @@
+[package]
+name = "pack_without_scheme"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+packbin = { path = "../../.." }

@@ -40,3 +40,6 @@ Each language suite covers AC-1 through AC-6. Golden position bytes stay the sam
 
 ### Risks
 A type tag written as two bytes fails `2017`.
+
+### Divergence
+Python `Scheme.of` takes the row class. Java `Scheme.of` takes `Class<T>`. Rust binds `sid` with get/set closures. C++ binds `&MarkerRow::sid`. Those are how each language names the member without a generator.
