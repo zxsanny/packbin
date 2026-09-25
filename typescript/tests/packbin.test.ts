@@ -85,15 +85,18 @@ describe("packbin", () => {
 
   it("AC-2 position unpack", () => {
     const bytes = Buffer.from(expectedHex, "hex")
-    const got = BinaryPacker.unpack(position, bytes)
-    assert.equal(got.ok, true)
-    if (!got.ok) return
-    assert.equal("type" in got.value, false)
-    assert.equal(got.value.sid, 1)
-    assert.equal(got.value.lat, 500_000_000)
-    assert.equal(got.value.lon, 300_000_000)
-    assert.equal(got.value.profile, 1)
-    assert.equal(motionFieldCount(got.value), 0)
+    let got: Position | undefined
+    const result = BinaryPacker.unpack(bytes, position.on((value) => {
+      got = value as Position
+    }))
+    assert.equal(result.ok, true)
+    assert.ok(got)
+    assert.equal("type" in got!, false)
+    assert.equal(got!.sid, 1)
+    assert.equal(got!.lat, 500_000_000)
+    assert.equal(got!.lon, 300_000_000)
+    assert.equal(got!.profile, 1)
+    assert.equal(motionFieldCount(got!), 0)
   })
 
   it("AC-3 bytes match fixtures/golden.hex", () => {
@@ -168,12 +171,16 @@ describe("packbin", () => {
       ]),
     )
     const shortBuf = Uint8Array.of(0x01, 0x20, 0x34)
-    const got = BinaryPacker.unpack(list, shortBuf)
+    let ran = false
+    const got = BinaryPacker.unpack(shortBuf, list.on(() => {
+      ran = true
+    }))
     assert.equal(got.ok, false)
     if (got.ok) return
     assert.equal(got.field, "extra")
     assert.equal(got.needed, 2)
     assert.equal(got.left, 1)
+    assert.equal(ran, false)
 
     const bytes = BinaryPacker.pack(position, positionValue)
     assert.equal(toHex(bytes), expectedHex)
@@ -200,20 +207,30 @@ describe("packbin", () => {
       u8(0, (r) => r.type),
       repeat([u8(1, (r) => r.a), u8(2, (r) => r.b)]),
     )
-    const complete = BinaryPacker.unpack(list, Uint8Array.of(1, 1, 2, 3))
+    let completeRow: Row | undefined
+    const complete = BinaryPacker.unpack(Uint8Array.of(1, 1, 2, 3), list.on((value) => {
+      completeRow = value as Row
+    }))
     assert.equal(complete.ok, true)
-    if (!complete.ok) return
-    assert.ok(Array.isArray(complete.value.a))
-    assert.equal((complete.value.a as number[]).length, 1)
+    assert.ok(Array.isArray(completeRow!.a))
+    assert.equal((completeRow!.a as number[]).length, 1)
 
-    const leftover = BinaryPacker.unpack(list, Uint8Array.of(1, 1, 2, 3, 4))
+    let leftoverRan = false
+    const leftover = BinaryPacker.unpack(Uint8Array.of(1, 1, 2, 3, 4), list.on(() => {
+      leftoverRan = true
+    }))
     assert.equal(leftover.ok, false)
+    assert.equal(leftoverRan, false)
   })
 
   it("IT-09 trailing bytes", () => {
     const bytes = Buffer.from(expectedHex + "ff", "hex")
-    const got = BinaryPacker.unpack(position, bytes)
+    let ran = false
+    const got = BinaryPacker.unpack(bytes, position.on(() => {
+      ran = true
+    }))
     assert.equal(got.ok, false)
+    assert.equal(ran, false)
   })
 
   it("flag empty group mark", () => {
@@ -268,11 +285,13 @@ describe("packbin", () => {
     assert.equal(toHex(raw.subarray(2)), "0700e8030000")
     const absent = BinaryPacker.pack(two, {})
     assert.equal(toHex(absent), "0100")
-    const got = BinaryPacker.unpack(two, absent)
-    assert.equal(got.ok, true)
-    if (!got.ok) return
-    assert.equal("login" in got.value, false)
-    assert.equal("ts" in got.value, false)
+    let got: Row | undefined
+    const result = BinaryPacker.unpack(absent, two.on((value) => {
+      got = value as Row
+    }))
+    assert.equal(result.ok, true)
+    assert.equal("login" in got!, false)
+    assert.equal("ts" in got!, false)
   })
 
   it("flag group u8 zero packs", () => {
@@ -296,20 +315,28 @@ describe("packbin", () => {
         ]),
       ]),
     )
-    const short = BinaryPacker.unpack(two, Uint8Array.of(0x01, 0x01, 0x07))
+    let ran = false
+    const short = BinaryPacker.unpack(Uint8Array.of(0x01, 0x01, 0x07), two.on(() => {
+      ran = true
+    }))
     assert.equal(short.ok, false)
     if (short.ok) return
     assert.equal(short.field, "login")
     assert.equal(short.needed, 2)
     assert.equal(short.left, 1)
+    assert.equal(ran, false)
   })
 
   it("NFR 100000 pack-then-unpack round trips ≤ 1s", () => {
     const start = performance.now()
     for (let i = 0; i < 100_000; i++) {
       const bytes = BinaryPacker.pack(position, positionValue)
-      const got = BinaryPacker.unpack(position, bytes)
+      let ok = false
+      const got = BinaryPacker.unpack(bytes, position.on(() => {
+        ok = true
+      }))
       assert.equal(got.ok, true)
+      assert.equal(ok, true)
     }
     const elapsed = performance.now() - start
     assertNoGpu()
@@ -343,23 +370,36 @@ describe("packbin", () => {
     )
     assert.equal(Buffer.from(BinaryPacker.pack(layout, new Holder())).toString("hex"), "01010700e8030000")
     assert.equal(Buffer.from(BinaryPacker.pack(layout, { session: null })).toString("hex"), "0100")
-    const back = BinaryPacker.unpack(layout, BinaryPacker.pack(layout, new Holder()), Holder)
-    assert.equal(back.ok, true)
-    if (!back.ok) return
-    assert.equal(back.value instanceof Holder, true)
-    assert.equal(back.value.session instanceof Session, true)
-    assert.equal(back.value.session?.login, 7)
-    assert.equal(back.value.session?.ts, 1000)
-    const clear = BinaryPacker.unpack(layout, BinaryPacker.pack(layout, { session: null }), Holder)
-    assert.equal(clear.ok, true)
-    if (!clear.ok) return
-    assert.equal(clear.value.session, null)
-    const row = BinaryPacker.unpack(position, BinaryPacker.pack(position, new Row()), Row)
-    assert.equal(row.ok, true)
-    if (!row.ok) return
-    assert.equal(row.value instanceof Row, true)
-    assert.equal(row.value.lat, 500_000_000)
-    assert.equal(row.value.heading, null)
+    let back: { login?: number; ts?: number } | undefined
+    const backResult = BinaryPacker.unpack(
+      BinaryPacker.pack(layout, new Holder()),
+      layout.on((value) => {
+        back = value as { login?: number; ts?: number }
+      }),
+    )
+    assert.equal(backResult.ok, true)
+    assert.equal(back!.login, 7)
+    assert.equal(back!.ts, 1000)
+    let clear: { login?: number; ts?: number } | undefined
+    const clearResult = BinaryPacker.unpack(
+      BinaryPacker.pack(layout, { session: null }),
+      layout.on((value) => {
+        clear = value as { login?: number; ts?: number }
+      }),
+    )
+    assert.equal(clearResult.ok, true)
+    assert.equal("login" in clear!, false)
+    assert.equal("ts" in clear!, false)
+    let row: Position | undefined
+    const rowResult = BinaryPacker.unpack(
+      BinaryPacker.pack(position, new Row()),
+      position.on((value) => {
+        row = value as Position
+      }),
+    )
+    assert.equal(rowResult.ok, true)
+    assert.equal(row!.lat, 500_000_000)
+    assert.equal(row!.heading, undefined)
   })
 
   it("type number outside 0..255 throws at construction", () => {

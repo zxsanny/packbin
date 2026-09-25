@@ -1,9 +1,7 @@
 use crate::field::{
     field_name, float_width, int_width, Field, FieldKind, FloatKind, IntKind, MapScheme,
 };
-use crate::value::{
-    as_usize, name_of, ShortPacket, UnpackError, Value, Values,
-};
+use crate::value::{as_usize, name_of, ShortPacket, UnpackError, Value, Values};
 use std::collections::HashMap;
 
 pub(crate) struct Cursor<'a> {
@@ -43,7 +41,12 @@ fn le_buf(raw: &[u8], be: bool) -> [u8; 8] {
     buf
 }
 
-fn read_int(cur: &mut Cursor<'_>, name: &str, kind: IntKind, be: bool) -> Result<Value, UnpackError> {
+fn read_int(
+    cur: &mut Cursor<'_>,
+    name: &str,
+    kind: IntKind,
+    be: bool,
+) -> Result<Value, UnpackError> {
     let n = int_width(kind);
     let raw = cur.take(n, name)?;
     let buf = le_buf(raw, be);
@@ -168,7 +171,13 @@ fn unpack_one(
                 let mut group = Values::with_capacity(members.len());
                 let mut group_flags = HashMap::new();
                 let mut nested_groups = Vec::new();
-                unpack_fields(members, cur, &mut group, &mut group_flags, &mut nested_groups)?;
+                unpack_fields(
+                    members,
+                    cur,
+                    &mut group,
+                    &mut group_flags,
+                    &mut nested_groups,
+                )?;
                 groups.push(group);
             }
         }
@@ -249,7 +258,13 @@ fn unpack_one(
             let mut items = Vec::with_capacity(count);
             for _ in 0..count {
                 let mut one = Values::new();
-                unpack_fields(std::slice::from_ref(element), cur, &mut one, flag_bits, groups)?;
+                unpack_fields(
+                    std::slice::from_ref(element),
+                    cur,
+                    &mut one,
+                    flag_bits,
+                    groups,
+                )?;
                 items.push(match one.remove(child) {
                     Some(Some(v)) => v,
                     _ => {
@@ -282,7 +297,13 @@ fn unpack_one(
                     })?
                     .to_string();
                 let mut one = Values::new();
-                unpack_fields(std::slice::from_ref(element), cur, &mut one, flag_bits, groups)?;
+                unpack_fields(
+                    std::slice::from_ref(element),
+                    cur,
+                    &mut one,
+                    flag_bits,
+                    groups,
+                )?;
                 let item = match one.remove(child) {
                     Some(Some(v)) => v,
                     _ => {
@@ -309,7 +330,10 @@ fn unpack_one(
 }
 
 pub fn unpack(scheme: &MapScheme, bytes: &[u8]) -> Result<Values, UnpackError> {
-    let mut cur = Cursor { data: bytes, pos: 0 };
+    let mut cur = Cursor {
+        data: bytes,
+        pos: 0,
+    };
     let type_raw = cur.take(1, "")?;
     let actual = type_raw[0];
     if actual != scheme.type_number {

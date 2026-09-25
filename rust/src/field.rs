@@ -362,7 +362,9 @@ pub fn u2(names: &[&str]) -> Field {
 
 pub fn utf8(name: impl AsRef<str>) -> Field {
     Field {
-        kind: FieldKind::Utf8 { name: name_of(name) },
+        kind: FieldKind::Utf8 {
+            name: name_of(name),
+        },
     }
 }
 

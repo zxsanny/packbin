@@ -394,36 +394,3 @@ export function unpackBody(
   }
   return { ok: true, values, offset: cur.offset }
 }
-
-export function fillEntity<T extends object>(ctor: new () => T, values: Value): T {
-  const entity = new ctor()
-  assignEntity(entity, values)
-  return entity
-}
-
-function assignEntity(target: object, values: Value): void {
-  const record = target as Value
-  for (const key of Object.keys(target)) {
-    const current = record[key]
-    if (isPlainObject(current)) {
-      if (nestedPresent(current, values)) assignEntity(current, values)
-      else record[key] = null
-      continue
-    }
-    if (Object.prototype.hasOwnProperty.call(values, key) && values[key] != null)
-      record[key] = values[key]
-  }
-}
-
-function nestedPresent(sample: object, values: Value): boolean {
-  const record = sample as Value
-  for (const key of Object.keys(sample)) {
-    const current = record[key]
-    if (isPlainObject(current)) {
-      if (nestedPresent(current, values)) return true
-    } else if (Object.prototype.hasOwnProperty.call(values, key) && values[key] != null) {
-      return true
-    }
-  }
-  return false
-}

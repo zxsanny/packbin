@@ -61,7 +61,7 @@ def test_ac1_member_names_are_not_wire_names():
     raw = BinaryPacker.pack(MARKER, row)
     assert raw.hex() == AC1_HEX
     assert "lat" not in raw.hex()
-    got = BinaryPacker.unpack(MARKER, raw)
+    got = BinaryPacker.unpack(raw, MARKER.on(lambda row: None))
     assert got.ok is True
     assert got.value is not None
     assert got.value.lat == 500_000_000
@@ -77,14 +77,14 @@ def test_ac1_positional_payload_bytes():
 def test_ac2_sibling_references_use_order():
     with_kind = MarkerRow(sid=1, lat=0, lon=0, kind=1, kind_id=9, title=0)
     raw = BinaryPacker.pack(MARKER, with_kind)
-    got = BinaryPacker.unpack(MARKER, raw)
+    got = BinaryPacker.unpack(raw, MARKER.on(lambda row: None))
     assert got.ok is True
     assert got.value is not None
     assert got.value.kind_id == 9
 
     without = MarkerRow(sid=1, lat=0, lon=0, kind=0, title=0)
     raw0 = BinaryPacker.pack(MARKER, without)
-    got0 = BinaryPacker.unpack(MARKER, raw0)
+    got0 = BinaryPacker.unpack(raw0, MARKER.on(lambda row: None))
     assert got0.ok is True
     assert got0.value is not None
     assert got0.value.kind_id is None
@@ -95,7 +95,7 @@ def test_ac3_flags_use_child_accessors():
     row = MarkerRow(sid=1, lat=0, lon=0, kind=0, title=0, hidden=True, delta=None)
     raw = BinaryPacker.pack(MARKER, row)
     assert raw[-1] == 0x01
-    got = BinaryPacker.unpack(MARKER, raw)
+    got = BinaryPacker.unpack(raw, MARKER.on(lambda row: None))
     assert got.ok is True
     assert got.value is not None
     assert got.value.hidden is True
@@ -110,7 +110,7 @@ def test_ac4_nested_row_type_has_own_ids():
         list(*gs("items"), u16(0, *leaf())),
     )
     raw = BinaryPacker.pack(parent, ParentRow(sid=1, items=[7, 8]))
-    got = BinaryPacker.unpack(parent, raw)
+    got = BinaryPacker.unpack(raw, parent.on(lambda row: None))
     assert got.ok is True
     assert got.value is not None
     assert got.value.sid == 1

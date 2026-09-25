@@ -111,21 +111,21 @@ public final class SchemeTest {
     }
 
     private static void ac3KnownWrongType() {
-        Packbin.Bound<MarkerRow> empty = BinaryPacker.unpack(MARKER, new byte[0]);
-        expectTrue("AC-3 empty not ok", !empty.ok);
-        expectTrue("AC-3 empty no row", empty.value == null);
-        expectTrue("AC-3 empty ShortPacket", empty.error instanceof Packbin.ShortPacket);
-        Packbin.ShortPacket shortPacket = (Packbin.ShortPacket) empty.error;
+        MarkerRow[] emptyGot = new MarkerRow[1];
+        Object emptyErr = BinaryPacker.unpack(new byte[0], MARKER.on(row -> emptyGot[0] = row));
+        expectTrue("AC-3 empty no row", emptyGot[0] == null);
+        expectTrue("AC-3 empty ShortPacket", emptyErr instanceof Packbin.ShortPacket);
+        Packbin.ShortPacket shortPacket = (Packbin.ShortPacket) emptyErr;
         expectEq("AC-3 empty field", "", shortPacket.field);
 
         Scheme<MarkerRow> typeOne = new Scheme<>(1, MarkerRow.class,
                 Packbin.u8(0, Access.get((MarkerRow r) -> r.sid & 0xFF), Access.set((MarkerRow r, Object v) -> r.sid = ((Number) v).byteValue())));
-        Packbin.Bound<MarkerRow> back = BinaryPacker.unpack(typeOne, parseHex("0217"));
-        expectTrue("AC-3 not ok", !back.ok);
-        expectTrue("AC-3 no row", back.value == null);
-        expectTrue("AC-3 TypeMismatch", back.error instanceof Packbin.TypeMismatch);
-        Packbin.TypeMismatch mismatch = (Packbin.TypeMismatch) back.error;
-        expectEq("AC-3 expected", 1, mismatch.expected);
+        MarkerRow[] got = new MarkerRow[1];
+        Object err = BinaryPacker.unpack(parseHex("0217"), typeOne.on(row -> got[0] = row));
+        expectTrue("AC-3 no row", got[0] == null);
+        expectTrue("AC-3 TypeMismatch", err instanceof Packbin.TypeMismatch);
+        Packbin.TypeMismatch mismatch = (Packbin.TypeMismatch) err;
+        expectEq("AC-3 expected", -1, mismatch.expected);
         expectEq("AC-3 actual", 2, mismatch.actual);
     }
 
@@ -165,6 +165,7 @@ public final class SchemeTest {
         expectEq("AC-5 modified calls", 0, modifiedCalls.get());
         expectEq("AC-5 position calls", 0, positionCalls.get());
         expectTrue("AC-5 TypeMismatch", err instanceof Packbin.TypeMismatch);
+        expectEq("AC-5 expected", -1, ((Packbin.TypeMismatch) err).expected);
         expectEq("AC-5 actual", 9, ((Packbin.TypeMismatch) err).actual);
     }
 

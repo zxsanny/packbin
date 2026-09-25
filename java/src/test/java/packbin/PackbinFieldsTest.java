@@ -48,6 +48,7 @@ final class PackbinFieldsTest {
         expectEq("wide adds", 2, wide.length - BinaryPacker.pack(one, new HashMap<>()).length);
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private static void flagGroupSession() {
         Scheme<Map> two = Maps.scheme(1, Packbin.flags(
                 Packbin.group(
@@ -58,10 +59,11 @@ final class PackbinFieldsTest {
         expectEq("session adds", 6, raw.length - 2);
         byte[] absent = BinaryPacker.pack(two, new HashMap<>());
         expectEq("session absent", "0100", PackbinTest.toHex(absent));
-        Packbin.Bound<Map> got = BinaryPacker.unpack(two, absent);
-        expectTrue("session absent ok", got.ok);
-        expectTrue("session no login", !got.value.containsKey("login"));
-        expectTrue("session no ts", !got.value.containsKey("ts"));
+        Map[] got = new Map[1];
+        Object err = BinaryPacker.unpack(absent, two.on(row -> got[0] = row));
+        expectTrue("session absent ok", err == null);
+        expectTrue("session no login", !got[0].containsKey("login"));
+        expectTrue("session no ts", !got[0].containsKey("ts"));
     }
 
     private static void flagGroupStoredZero() {
@@ -71,19 +73,23 @@ final class PackbinFieldsTest {
         expectEq("group zero", "010100", PackbinTest.toHex(stored));
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private static void flagGroupShortLogin() {
         Scheme<Map> two = Maps.scheme(1, Packbin.flags(
                 Packbin.group(
                         Packbin.u16(0, Access.get("login"), Access.set("login")),
                         Packbin.u32(1, Access.get("ts"), Access.set("ts")))));
-        Packbin.Bound<Map> shortRead = BinaryPacker.unpack(two, new byte[] {0x01, 0x01, 0x07});
-        expectTrue("short login error", shortRead.error instanceof Packbin.ShortPacket);
-        Packbin.ShortPacket missing = (Packbin.ShortPacket) shortRead.error;
+        Map[] shortGot = new Map[1];
+        Object shortRead = BinaryPacker.unpack(new byte[] {0x01, 0x01, 0x07}, two.on(row -> shortGot[0] = row));
+        expectTrue("short login handler did not run", shortGot[0] == null);
+        expectTrue("short login error", shortRead instanceof Packbin.ShortPacket);
+        Packbin.ShortPacket missing = (Packbin.ShortPacket) shortRead;
         expectEq("short login field", "0", missing.field);
         expectEq("short login needed", 2, missing.needed);
         expectEq("short login left", 1, missing.left);
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private static void sizedPayload() {
         Scheme<Map> layout = Maps.scheme(1,
                 Packbin.u16(0, Access.get("n"), Access.set("n")),
@@ -91,36 +97,43 @@ final class PackbinFieldsTest {
         Map<String, Object> values = Maps.map("n", 3, "payload", PackbinTest.parseHex("756176"));
         byte[] raw = BinaryPacker.pack(layout, values);
         expectEq("sized hex", "010300756176", PackbinTest.toHex(raw));
-        Packbin.Bound<Map> got = BinaryPacker.unpack(layout, raw);
-        expectTrue("sized ok", got.ok);
-        expectEq("sized payload", 0, PackbinTest.mismatchedBytes((byte[]) got.value.get("payload"), PackbinTest.parseHex("756176")));
+        Map[] got = new Map[1];
+        Object err = BinaryPacker.unpack(raw, layout.on(row -> got[0] = row));
+        expectTrue("sized ok", err == null);
+        expectEq("sized payload", 0, PackbinTest.mismatchedBytes((byte[]) got[0].get("payload"), PackbinTest.parseHex("756176")));
         byte[] empty = BinaryPacker.pack(layout, Maps.map("n", 0, "payload", new byte[0]));
         expectEq("sized empty hex", "010000", PackbinTest.toHex(empty));
-        Packbin.Bound<Map> emptyGot = BinaryPacker.unpack(layout, empty);
-        expectTrue("sized empty ok", emptyGot.ok);
-        expectEq("sized empty length", 0, ((byte[]) emptyGot.value.get("payload")).length);
-        Packbin.Bound<Map> shortRead = BinaryPacker.unpack(layout, PackbinTest.parseHex("01030075"));
-        expectTrue("sized short error", shortRead.error instanceof Packbin.ShortPacket);
-        Packbin.ShortPacket missing = (Packbin.ShortPacket) shortRead.error;
+        Map[] emptyGot = new Map[1];
+        Object emptyErr = BinaryPacker.unpack(empty, layout.on(row -> emptyGot[0] = row));
+        expectTrue("sized empty ok", emptyErr == null);
+        expectEq("sized empty length", 0, ((byte[]) emptyGot[0].get("payload")).length);
+        Map[] shortGot = new Map[1];
+        Object shortRead = BinaryPacker.unpack(PackbinTest.parseHex("01030075"), layout.on(row -> shortGot[0] = row));
+        expectTrue("sized short handler did not run", shortGot[0] == null);
+        expectTrue("sized short error", shortRead instanceof Packbin.ShortPacket);
+        Packbin.ShortPacket missing = (Packbin.ShortPacket) shortRead;
         expectEq("sized short field", "1", missing.field);
         expectEq("sized short needed", 3, missing.needed);
         expectEq("sized short left", 1, missing.left);
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private static void utf8String() {
         Scheme<Map> layout = Maps.scheme(1, Packbin.utf8(0, Access.get("name"), Access.set("name")));
         byte[] raw = BinaryPacker.pack(layout, Maps.map("name", "zxsanny"));
         expectEq("utf8 hex", "0107007a7873616e6e79", PackbinTest.toHex(raw));
         expectEq("utf8 len", 10, raw.length);
-        Packbin.Bound<Map> got = BinaryPacker.unpack(layout, raw);
-        expectTrue("utf8 ok", got.ok);
-        expectEq("utf8 text", "zxsanny", got.value.get("name"));
+        Map[] got = new Map[1];
+        Object err = BinaryPacker.unpack(raw, layout.on(row -> got[0] = row));
+        expectTrue("utf8 ok", err == null);
+        expectEq("utf8 text", "zxsanny", got[0].get("name"));
 
         byte[] empty = BinaryPacker.pack(layout, Maps.map("name", ""));
         expectEq("utf8 empty", "010000", PackbinTest.toHex(empty));
-        Packbin.Bound<Map> emptyGot = BinaryPacker.unpack(layout, empty);
-        expectTrue("utf8 empty ok", emptyGot.ok);
-        expectEq("utf8 empty text", "", emptyGot.value.get("name"));
+        Map[] emptyGot = new Map[1];
+        Object emptyErr = BinaryPacker.unpack(empty, layout.on(row -> emptyGot[0] = row));
+        expectTrue("utf8 empty ok", emptyErr == null);
+        expectEq("utf8 empty text", "", emptyGot[0].get("name"));
 
         boolean failed = false;
         try {
@@ -130,23 +143,28 @@ final class PackbinFieldsTest {
         }
         expectTrue("utf8 too long", failed);
 
-        Packbin.Bound<Map> shortGot = BinaryPacker.unpack(layout, new byte[] {0x01, 0x07, 0x00, 0x7a, 0x78});
-        expectTrue("utf8 short", !shortGot.ok);
-        expectEq("utf8 short field", "0", shortGot.field());
-        expectEq("utf8 short needed", 7, shortGot.needed());
-        expectEq("utf8 short left", 2, shortGot.left());
+        Map[] shortGot = new Map[1];
+        Object shortErr = BinaryPacker.unpack(new byte[] {0x01, 0x07, 0x00, 0x7a, 0x78}, layout.on(row -> shortGot[0] = row));
+        expectTrue("utf8 short", shortErr != null);
+        expectTrue("utf8 short handler did not run", shortGot[0] == null);
+        Packbin.ShortPacket missing = (Packbin.ShortPacket) shortErr;
+        expectEq("utf8 short field", "0", missing.field);
+        expectEq("utf8 short needed", 7, missing.needed);
+        expectEq("utf8 short left", 2, missing.left);
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private static void countedList() {
         Scheme<Map> two = Maps.scheme(1, Packbin.list(
                 Access.get("xs"), Access.set("xs"),
                 Packbin.u16(0, Access.identity(), Access.ignore())));
         byte[] raw = BinaryPacker.pack(two, Maps.map("xs", List.of(1, 2)));
         expectEq("list hex", "01020001000200", PackbinTest.toHex(raw));
-        Packbin.Bound<Map> got = BinaryPacker.unpack(two, raw);
-        expectTrue("list ok", got.ok);
-        expectEq("list 0", 1, ((Number) ((List<?>) got.value.get("xs")).get(0)).intValue());
-        expectEq("list 1", 2, ((Number) ((List<?>) got.value.get("xs")).get(1)).intValue());
+        Map[] got = new Map[1];
+        Object err = BinaryPacker.unpack(raw, two.on(row -> got[0] = row));
+        expectTrue("list ok", err == null);
+        expectEq("list 0", 1, ((Number) ((List<?>) got[0].get("xs")).get(0)).intValue());
+        expectEq("list 1", 2, ((Number) ((List<?>) got[0].get("xs")).get(1)).intValue());
 
         Scheme<Map> beOne = Maps.scheme(1, Packbin.list(
                 Access.get("xs"), Access.set("xs"),
@@ -158,10 +176,11 @@ final class PackbinFieldsTest {
                 Packbin.u8(0, Access.get("y"), Access.set("y")));
         byte[] both = BinaryPacker.pack(followed, Maps.map("xs", List.of(1), "y", 2));
         expectEq("list next hex", "0101000102", PackbinTest.toHex(both));
-        Packbin.Bound<Map> back = BinaryPacker.unpack(followed, both);
-        expectTrue("list next ok", back.ok);
-        expectEq("list next xs", 1, ((Number) ((List<?>) back.value.get("xs")).get(0)).intValue());
-        expectEq("list next y", 2, ((Number) back.value.get("y")).intValue());
+        Map[] back = new Map[1];
+        Object backErr = BinaryPacker.unpack(both, followed.on(row -> back[0] = row));
+        expectTrue("list next ok", backErr == null);
+        expectEq("list next xs", 1, ((Number) ((List<?>) back[0].get("xs")).get(0)).intValue());
+        expectEq("list next y", 2, ((Number) back[0].get("y")).intValue());
 
         expectEq("list empty", "010000", PackbinTest.toHex(BinaryPacker.pack(two, Maps.map("xs", List.of()))));
         List<Integer> huge = new java.util.ArrayList<>();
@@ -177,6 +196,7 @@ final class PackbinFieldsTest {
         expectTrue("list too long", failed);
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private static void dictionary() throws Exception {
         String userHex =
                 "0107007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e6e656c010004007265616403006d6170040004007265616407006770735f6669780300736574040065646974050073746f7265020004007265616405007772697465";
@@ -207,14 +227,15 @@ final class PackbinFieldsTest {
         first.join();
         second.join();
         expectEq("dict parallel", 0, PackbinTest.mismatchedBytes(parallel[0], parallel[1]));
-        Packbin.Bound<Map> got = BinaryPacker.unpack(layout, raw);
-        expectTrue("dict ok", got.ok);
-        expectEq("dict user", "zxsanny", got.value.get("username"));
-        List<?> roles = (List<?>) got.value.get("roles");
+        Map[] got = new Map[1];
+        Object err = BinaryPacker.unpack(raw, layout.on(row -> got[0] = row));
+        expectTrue("dict ok", err == null);
+        expectEq("dict user", "zxsanny", got[0].get("username"));
+        List<?> roles = (List<?>) got[0].get("roles");
         expectEq("dict roles", 2, roles.size());
         expectEq("dict role 0", "user", roles.get(0));
         expectEq("dict role 1", "dispatcher", roles.get(1));
-        Map<?, ?> back = (Map<?, ?>) got.value.get("access");
+        Map<?, ?> back = (Map<?, ?>) got[0].get("access");
         expectEq("dict access", 3, back.size());
         expectEq("dict channel", "read", ((List<?>) back.get("channel")).get(0));
         expectEq("dict map", "gps_fix", ((List<?>) back.get("map")).get(1));
@@ -229,8 +250,10 @@ final class PackbinFieldsTest {
         Scheme<Map> dup = Maps.scheme(1, Packbin.dict(
                 Access.get("access"), Access.set("access"),
                 Packbin.utf8(0, Access.identity(), Access.ignore())));
-        Packbin.Bound<Map> bad = BinaryPacker.unpack(dup, PackbinTest.parseHex("010200010061010078010061010079"));
-        expectTrue("dict dup", !bad.ok);
+        Map[] badGot = new Map[1];
+        Object bad = BinaryPacker.unpack(PackbinTest.parseHex("010200010061010078010061010079"), dup.on(row -> badGot[0] = row));
+        expectTrue("dict dup", bad != null);
+        expectTrue("dict dup handler did not run", badGot[0] == null);
 
         Map<String, Object> huge = new HashMap<>();
         for (int i = 0; i < 65536; i++) {
@@ -245,6 +268,7 @@ final class PackbinFieldsTest {
         expectTrue("dict too long", failed);
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private static void u2Kinds() {
         Scheme<Map> kinds = Maps.scheme(1, Packbin.u2(
                 Packbin.u2Slot(0, Access.get("a"), Access.set("a")),
@@ -253,16 +277,18 @@ final class PackbinFieldsTest {
                 Packbin.u2Slot(3, Access.get("d"), Access.set("d"))));
         byte[] raw = BinaryPacker.pack(kinds, Maps.map("a", 0, "b", 1, "c", 2, "d", 3));
         expectEq("u2 hex", "01e4", PackbinTest.toHex(raw));
-        Packbin.Bound<Map> got = BinaryPacker.unpack(kinds, raw);
-        expectTrue("u2 ok", got.ok);
-        expectEq("u2 a", 0, ((Number) got.value.get("a")).intValue());
-        expectEq("u2 b", 1, ((Number) got.value.get("b")).intValue());
-        expectEq("u2 c", 2, ((Number) got.value.get("c")).intValue());
-        expectEq("u2 d", 3, ((Number) got.value.get("d")).intValue());
+        Map[] got = new Map[1];
+        Object err = BinaryPacker.unpack(raw, kinds.on(row -> got[0] = row));
+        expectTrue("u2 ok", err == null);
+        expectEq("u2 a", 0, ((Number) got[0].get("a")).intValue());
+        expectEq("u2 b", 1, ((Number) got[0].get("b")).intValue());
+        expectEq("u2 c", 2, ((Number) got[0].get("c")).intValue());
+        expectEq("u2 d", 3, ((Number) got[0].get("d")).intValue());
         byte[] one = BinaryPacker.pack(Maps.scheme(1, Packbin.u2(Packbin.u2Slot(0, Access.get("a"), Access.set("a")))), Maps.map("a", 1));
         expectEq("u2 one", "0101", PackbinTest.toHex(one));
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private static void bitsSegs() {
         Scheme<Map> layout = Maps.scheme(1,
                 Packbin.u8(0, Access.get("n"), Access.set("n")),
@@ -274,9 +300,11 @@ final class PackbinFieldsTest {
         expectEq("bits nine adds", 2, nine.length - 2);
         expectEq("bits nine lo", 0xFF, nine[2] & 0xFF);
         expectEq("bits nine hi masked", 0, nine[3] & 0xFE);
-        Packbin.Bound<Map> shortRead = BinaryPacker.unpack(layout, new byte[] {0x01, 9, 0x01});
-        expectTrue("bits short error", shortRead.error instanceof Packbin.ShortPacket);
-        Packbin.ShortPacket missing = (Packbin.ShortPacket) shortRead.error;
+        Map[] shortGot = new Map[1];
+        Object shortRead = BinaryPacker.unpack(new byte[] {0x01, 9, 0x01}, layout.on(row -> shortGot[0] = row));
+        expectTrue("bits short handler did not run", shortGot[0] == null);
+        expectTrue("bits short error", shortRead instanceof Packbin.ShortPacket);
+        Packbin.ShortPacket missing = (Packbin.ShortPacket) shortRead;
         expectEq("bits short field", "1", missing.field);
         expectEq("bits short needed", 2, missing.needed);
         expectEq("bits short left", 1, missing.left);

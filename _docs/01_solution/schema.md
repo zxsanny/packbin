@@ -57,9 +57,12 @@ export const target = scheme<Target>(
 const bytes = BinaryPacker.pack(target, new Target())
 // 40 01 00 00 65 cd 1d 00 a3 e1 11 01 00
 
-const got = BinaryPacker.unpack(target, bytes)
-if (!got.ok) {
-  // got.field, got.needed, got.left
+let got: Target | undefined
+const result = BinaryPacker.unpack(bytes, target.on((row) => {
+  got = row
+}))
+if (!result.ok) {
+  // result.field, result.needed, result.left
 }
 ```
 
@@ -90,8 +93,9 @@ public static readonly Scheme<Target> TargetScheme = new(0x40, f => [
         f.I16(6, x => x.Altitude))]);
 
 var bytes = BinaryPacker.Pack(TargetScheme, new Target());
-var got = BinaryPacker.Unpack(TargetScheme, bytes);
-if (got.Error is ShortPacket missing)
+Target? got = null;
+var err = BinaryPacker.Unpack(bytes, TargetScheme.On(row => got = row));
+if (err is ShortPacket missing)
 {
     // missing.Field, missing.Needed, missing.Left
 }
@@ -183,4 +187,4 @@ Unpack appends one point per complete pair. A trailing partial pair is `ShortPac
 
 - Degrees × 10_000_000, kilometers per hour, dictionary strings. Those are application values stored in the integer the list names.
 - Merging a missing field into the last object.
-- Choosing a layout from the first byte. `unpack` dispatches to the scheme whose type number matches that byte. The type number is the scheme argument, and it is still written first.
+- Choosing a layout from the first byte. `unpack` takes handlers only. It reads byte 0 and runs the handler whose scheme type number matches. The type number is still written first.

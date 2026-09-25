@@ -1,6 +1,4 @@
-use packbin::{
-    eq, mismatched_bytes, to_hex, BinaryPacker, BoundField, Scheme, SchemeItem, Value,
-};
+use packbin::{eq, mismatched_bytes, to_hex, BinaryPacker, BoundField, Scheme, SchemeItem, Value};
 
 fn parse_hex(hex: &str) -> Vec<u8> {
     (0..hex.len())
@@ -27,30 +25,10 @@ fn marker_scheme() -> Scheme<MarkerRow> {
     Scheme::new(
         0x20,
         [
-            BoundField::u16(
-                0,
-                |r: &MarkerRow| r.sid,
-                |r: &mut MarkerRow, v| r.sid = v,
-            )
-            .into(),
-            BoundField::i32(
-                1,
-                |r: &MarkerRow| r.lat,
-                |r: &mut MarkerRow, v| r.lat = v,
-            )
-            .into(),
-            BoundField::i32(
-                2,
-                |r: &MarkerRow| r.lon,
-                |r: &mut MarkerRow, v| r.lon = v,
-            )
-            .into(),
-            BoundField::u8(
-                3,
-                |r: &MarkerRow| r.kind,
-                |r: &mut MarkerRow, v| r.kind = v,
-            )
-            .into(),
+            BoundField::u16(0, |r: &MarkerRow| r.sid, |r: &mut MarkerRow, v| r.sid = v).into(),
+            BoundField::i32(1, |r: &MarkerRow| r.lat, |r: &mut MarkerRow, v| r.lat = v).into(),
+            BoundField::i32(2, |r: &MarkerRow| r.lon, |r: &mut MarkerRow, v| r.lon = v).into(),
+            BoundField::u8(3, |r: &MarkerRow| r.kind, |r: &mut MarkerRow, v| r.kind = v).into(),
             SchemeItem::when(
                 eq(3, Value::U8(1)),
                 [BoundField::opt_u16(
@@ -96,9 +74,11 @@ fn field_id_ac1_member_names_not_wire_names() {
         hidden: None,
         delta: None,
     };
-    let bytes = BinaryPacker::pack(&marker_scheme(), &row).expect("pack");
+    let scheme = marker_scheme();
+    let bytes = BinaryPacker::pack(&scheme, &row).expect("pack");
     assert_eq!(to_hex(&bytes), MARKER_AC1_HEX);
-    let back = BinaryPacker::unpack(&marker_scheme(), &bytes).expect("unpack");
+    let mut back = MarkerRow::default();
+    BinaryPacker::unpack_with(&bytes, &mut [&mut scheme.on(|found| back = found)]).expect("unpack");
     assert_eq!(back.lat, 500_000_000);
     assert_eq!(back.sid, 1);
     assert_eq!(back.lon, 300_000_000);
@@ -138,8 +118,10 @@ fn field_id_ac2_when_uses_order() {
         hidden: None,
         delta: None,
     };
-    let bytes = BinaryPacker::pack(&marker_scheme(), &with_id).expect("pack");
-    let back = BinaryPacker::unpack(&marker_scheme(), &bytes).expect("unpack");
+    let scheme = marker_scheme();
+    let bytes = BinaryPacker::pack(&scheme, &with_id).expect("pack");
+    let mut back = MarkerRow::default();
+    BinaryPacker::unpack_with(&bytes, &mut [&mut scheme.on(|found| back = found)]).expect("unpack");
     assert_eq!(back.kind_id, Some(9));
 
     let without = MarkerRow {
@@ -152,8 +134,10 @@ fn field_id_ac2_when_uses_order() {
         hidden: None,
         delta: None,
     };
-    let bytes0 = BinaryPacker::pack(&marker_scheme(), &without).expect("pack");
-    let back0 = BinaryPacker::unpack(&marker_scheme(), &bytes0).expect("unpack");
+    let bytes0 = BinaryPacker::pack(&scheme, &without).expect("pack");
+    let mut back0 = MarkerRow::default();
+    BinaryPacker::unpack_with(&bytes0, &mut [&mut scheme.on(|found| back0 = found)])
+        .expect("unpack");
     assert_eq!(back0.kind_id, None);
     assert!(bytes0.len() < bytes.len());
 }
@@ -170,9 +154,11 @@ fn field_id_ac3_flags_child_accessors() {
         hidden: Some(true),
         delta: None,
     };
-    let bytes = BinaryPacker::pack(&marker_scheme(), &row).expect("pack");
+    let scheme = marker_scheme();
+    let bytes = BinaryPacker::pack(&scheme, &row).expect("pack");
     assert_eq!(*bytes.last().unwrap(), 0x01);
-    let back = BinaryPacker::unpack(&marker_scheme(), &bytes).expect("unpack");
+    let mut back = MarkerRow::default();
+    BinaryPacker::unpack_with(&bytes, &mut [&mut scheme.on(|found| back = found)]).expect("unpack");
     assert_eq!(back.hidden, Some(true));
     assert_eq!(back.delta, None);
 }
@@ -188,12 +174,7 @@ fn field_id_ac4_nested_row_ids() {
     let scheme = Scheme::new(
         1,
         [
-            BoundField::u16(
-                0,
-                |r: &ParentRow| r.tag,
-                |r: &mut ParentRow, v| r.tag = v,
-            )
-            .into(),
+            BoundField::u16(0, |r: &ParentRow| r.tag, |r: &mut ParentRow, v| r.tag = v).into(),
             BoundField::list_u16(
                 |r: &ParentRow| r.items.clone(),
                 |r: &mut ParentRow, v| r.items = v,
@@ -207,7 +188,8 @@ fn field_id_ac4_nested_row_ids() {
         items: vec![1, 2],
     };
     let bytes = BinaryPacker::pack(&scheme, &row).expect("pack");
-    let back = BinaryPacker::unpack(&scheme, &bytes).expect("unpack");
+    let mut back = ParentRow::default();
+    BinaryPacker::unpack_with(&bytes, &mut [&mut scheme.on(|found| back = found)]).expect("unpack");
     assert_eq!(back.tag, 7);
     assert_eq!(back.items, vec![1, 2]);
 }

@@ -63,15 +63,17 @@ describe("field id binding", () => {
     assert.equal(toHex(bytes), ac1Hex)
     assert.equal(Object.prototype.hasOwnProperty.call(row, "Lat"), false)
     assert.equal(Object.prototype.hasOwnProperty.call(row, "lat"), true)
-    const back = BinaryPacker.unpack(MarkerScheme, bytes, MarkerRow)
-    assert.equal(back.ok, true)
-    if (!back.ok) return
-    assert.equal(back.value.lat, 500_000_000)
-    assert.equal(back.value.sid, 1)
-    assert.equal(back.value.lon, 300_000_000)
-    assert.equal(back.value.kind, 1)
-    assert.equal(back.value.kindId, 0)
-    assert.equal(back.value.title, 0)
+    let back: MarkerRow | undefined
+    const result = BinaryPacker.unpack(bytes, MarkerScheme.on((value) => {
+      back = value as MarkerRow
+    }))
+    assert.equal(result.ok, true)
+    assert.equal(back!.lat, 500_000_000)
+    assert.equal(back!.sid, 1)
+    assert.equal(back!.lon, 300_000_000)
+    assert.equal(back!.kind, 1)
+    assert.equal(back!.kindId, 0)
+    assert.equal(back!.title, 0)
   })
 
   it("AC-2 sibling references use the order", () => {
@@ -84,10 +86,12 @@ describe("field id binding", () => {
     withKind.title = 7
     const hit = BinaryPacker.pack(MarkerScheme, withKind)
     assert.equal(toHex(hit), "2001000065cd1d00a3e111012800070000")
-    const backHit = BinaryPacker.unpack(MarkerScheme, hit, MarkerRow)
-    assert.equal(backHit.ok, true)
-    if (!backHit.ok) return
-    assert.equal(backHit.value.kindId, 40)
+    let backHit: MarkerRow | undefined
+    const hitResult = BinaryPacker.unpack(hit, MarkerScheme.on((value) => {
+      backHit = value as MarkerRow
+    }))
+    assert.equal(hitResult.ok, true)
+    assert.equal(backHit!.kindId, 40)
 
     const miss = new MarkerRow()
     miss.sid = 1
@@ -98,10 +102,12 @@ describe("field id binding", () => {
     const omitted = BinaryPacker.pack(MarkerScheme, miss)
     assert.equal(toHex(omitted), "2001000065cd1d00a3e11100070000")
     assert.equal(omitted.length, hit.length - 2)
-    const backMiss = BinaryPacker.unpack(MarkerScheme, omitted, MarkerRow)
-    assert.equal(backMiss.ok, true)
-    if (!backMiss.ok) return
-    assert.equal(backMiss.value.kindId, null)
+    let backMiss: MarkerRow | undefined
+    const missResult = BinaryPacker.unpack(omitted, MarkerScheme.on((value) => {
+      backMiss = value as MarkerRow
+    }))
+    assert.equal(missResult.ok, true)
+    assert.equal(backMiss!.kindId, undefined)
   })
 
   it("AC-3 flags use child accessors", () => {
@@ -116,11 +122,13 @@ describe("field id binding", () => {
     const bytes = BinaryPacker.pack(MarkerScheme, row)
     assert.equal(toHex(bytes), "2001000065cd1d00a3e11100070001")
     assert.equal(bytes[bytes.length - 1], 0x01)
-    const back = BinaryPacker.unpack(MarkerScheme, bytes, MarkerRow)
-    assert.equal(back.ok, true)
-    if (!back.ok) return
-    assert.equal(back.value.hidden, true)
-    assert.equal(back.value.delta, null)
+    let back: MarkerRow | undefined
+    const result = BinaryPacker.unpack(bytes, MarkerScheme.on((value) => {
+      back = value as MarkerRow
+    }))
+    assert.equal(result.ok, true)
+    assert.equal(back!.hidden, true)
+    assert.equal(back!.delta, undefined)
   })
 
   it("AC-4 nested row type has its own ids", () => {
@@ -135,11 +143,13 @@ describe("field id binding", () => {
     )
     const bytes = BinaryPacker.pack(layout, { sid: 1, items: [9, 10] })
     assert.equal(toHex(bytes), "200100020009000a00")
-    const back = BinaryPacker.unpack(layout, bytes)
-    assert.equal(back.ok, true)
-    if (!back.ok) return
-    assert.equal(back.value.sid, 1)
-    assert.deepEqual(back.value.items, [9, 10])
+    let back: Parent | undefined
+    const result = BinaryPacker.unpack(bytes, layout.on((value) => {
+      back = value as Parent
+    }))
+    assert.equal(result.ok, true)
+    assert.equal(back!.sid, 1)
+    assert.deepEqual(back!.items, [9, 10])
   })
 
   it("AC-5 order must match the number", () => {

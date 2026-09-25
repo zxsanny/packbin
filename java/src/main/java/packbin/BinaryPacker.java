@@ -16,29 +16,6 @@ public final class BinaryPacker {
         return sink.toArray();
     }
 
-    public static <T> Packbin.Bound<T> unpack(Scheme<T> scheme, byte[] data) {
-        Objects.requireNonNull(scheme, "scheme");
-        Objects.requireNonNull(data, "data");
-        if (data.length < 1) {
-            return Packbin.Bound.fail(new Packbin.ShortPacket("", 1, 0));
-        }
-        int actual = data[0] & 0xFF;
-        if (actual != scheme.typeNumber) {
-            return Packbin.Bound.fail(new Packbin.TypeMismatch(scheme.typeNumber, actual));
-        }
-        T row = newRow(scheme.type);
-        int[] offset = {1};
-        Object err = Walker.unpackFields(scheme.fields, data, offset, row, new HashMap<>(), false);
-        if (err != null) {
-            return Packbin.Bound.fail(err);
-        }
-        int left = data.length - offset[0];
-        if (left > 0) {
-            return Packbin.Bound.fail(new Packbin.TrailingBytes(left));
-        }
-        return Packbin.Bound.ok(row);
-    }
-
     public static Object unpack(byte[] data, Scheme.Handler<?>... handlers) {
         Objects.requireNonNull(data, "data");
         Objects.requireNonNull(handlers, "handlers");
@@ -63,12 +40,35 @@ public final class BinaryPacker {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static Object dispatch(Scheme.Handler<?> matched, byte[] data) {
-        Packbin.Bound bound = unpack(matched.scheme, data);
+        Packbin.Bound bound = decode(matched.scheme, data);
         if (!bound.ok) {
             return bound.error;
         }
         ((Scheme.Handler) matched).handler.accept(bound.value);
         return null;
+    }
+
+    private static <T> Packbin.Bound<T> decode(Scheme<T> scheme, byte[] data) {
+        Objects.requireNonNull(scheme, "scheme");
+        Objects.requireNonNull(data, "data");
+        if (data.length < 1) {
+            return Packbin.Bound.fail(new Packbin.ShortPacket("", 1, 0));
+        }
+        int actual = data[0] & 0xFF;
+        if (actual != scheme.typeNumber) {
+            return Packbin.Bound.fail(new Packbin.TypeMismatch(scheme.typeNumber, actual));
+        }
+        T row = newRow(scheme.type);
+        int[] offset = {1};
+        Object err = Walker.unpackFields(scheme.fields, data, offset, row, new HashMap<>(), false);
+        if (err != null) {
+            return Packbin.Bound.fail(err);
+        }
+        int left = data.length - offset[0];
+        if (left > 0) {
+            return Packbin.Bound.fail(new Packbin.TrailingBytes(left));
+        }
+        return Packbin.Bound.ok(row);
     }
 
     private static <T> T newRow(Class<T> type) {

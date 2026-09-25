@@ -177,16 +177,17 @@ public class PackbinTests
         };
         var bytes = BinaryPacker.Pack(Target, row);
         Assert.Equal(GoldenHex, Convert.ToHexString(bytes).ToLowerInvariant());
-        var got = BinaryPacker.Unpack(Target, bytes);
-        Assert.True(got.Ok);
-        Assert.NotNull(got.Value);
-        Assert.Equal((ushort)1, got.Value.Sid);
-        Assert.Equal(500_000_000, got.Value.Lat);
-        Assert.Equal(300_000_000, got.Value.Lon);
-        Assert.Equal((byte)1, got.Value.Profile);
-        Assert.Null(got.Value.Heading);
-        Assert.Null(got.Value.Speed);
-        Assert.Null(got.Value.Altitude);
+        PositionRow? got = null;
+        var err = BinaryPacker.Unpack(bytes, Target.On(v => got = v));
+        Assert.Null(err);
+        Assert.NotNull(got);
+        Assert.Equal((ushort)1, got.Sid);
+        Assert.Equal(500_000_000, got.Lat);
+        Assert.Equal(300_000_000, got.Lon);
+        Assert.Equal((byte)1, got.Profile);
+        Assert.Null(got.Heading);
+        Assert.Null(got.Speed);
+        Assert.Null(got.Altitude);
     }
 
     private static void AssertNoGpuLibrary()

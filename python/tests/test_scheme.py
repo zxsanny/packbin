@@ -110,12 +110,15 @@ def test_ac2_position_row_has_no_type_member():
 
 
 def test_ac3_known_scheme_checks_leading_byte():
-    got = BinaryPacker.unpack(Scheme(1, MarkerRow, u8(0, *gs("sid"))), bytes([2, 7]))
+    called = []
+    scheme = Scheme(1, MarkerRow, u8(0, *gs("sid")))
+    got = BinaryPacker.unpack(bytes([2, 7]), scheme.on(lambda row: called.append(row)))
     assert got.ok is False
     assert got.value is None
     assert isinstance(got.error, TypeMismatch)
-    assert got.error.expected == 1
+    assert got.error.expected == -1
     assert got.error.actual == 2
+    assert called == []
 
 
 def test_ac4_unknown_buffer_calls_matching_handler():
@@ -180,7 +183,7 @@ def test_type_number_range():
 
 
 def test_empty_buffer_short_packet():
-    got = BinaryPacker.unpack(MARKER, b"")
+    got = BinaryPacker.unpack(b"", MARKER.on(lambda row: None))
     assert got.ok is False
     assert got.value is None
     assert isinstance(got.error, ShortPacket)
@@ -193,7 +196,7 @@ def test_marker_pack_unpack():
     row = MarkerRow(sid=23)
     raw = BinaryPacker.pack(MARKER, row)
     assert raw.hex() == "2017"
-    got = BinaryPacker.unpack(MARKER, raw)
+    got = BinaryPacker.unpack(raw, MARKER.on(lambda row: None))
     assert got.ok is True
     assert got.value is not None
     assert got.value.sid == 23

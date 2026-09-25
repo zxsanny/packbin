@@ -74,19 +74,21 @@ public final class Handoff {
         return values;
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private static boolean userOk(String hex) {
-        Packbin.Bound<Map> got = BinaryPacker.unpack(userScheme(), parse(hex));
-        if (!got.ok || got.value.size() != 3) {
+        Map[] got = new Map[1];
+        Object err = BinaryPacker.unpack(parse(hex), userScheme().on(row -> got[0] = row));
+        if (err != null || got[0] == null || got[0].size() != 3) {
             return false;
         }
-        if (!"zxsanny".equals(got.value.get("username"))) {
+        if (!"zxsanny".equals(got[0].get("username"))) {
             return false;
         }
-        List<?> roles = (List<?>) got.value.get("roles");
+        List<?> roles = (List<?>) got[0].get("roles");
         if (roles == null || roles.size() != 2 || !"user".equals(roles.get(0)) || !"dispatcher".equals(roles.get(1))) {
             return false;
         }
-        Map<?, ?> access = (Map<?, ?>) got.value.get("access");
+        Map<?, ?> access = (Map<?, ?>) got[0].get("access");
         return access != null
                 && access.size() == 3
                 && List.of("read").equals(access.get("channel"))
@@ -94,12 +96,14 @@ public final class Handoff {
                 && List.of("read", "write").equals(access.get("store"));
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private static boolean nestedOk(String hex) {
-        Packbin.Bound<Map> got = BinaryPacker.unpack(nestedScheme(), parse(hex));
-        if (!got.ok) {
+        Map[] got = new Map[1];
+        Object err = BinaryPacker.unpack(parse(hex), nestedScheme().on(row -> got[0] = row));
+        if (err != null || got[0] == null) {
             return false;
         }
-        Map<?, ?> access = (Map<?, ?>) got.value.get("access");
+        Map<?, ?> access = (Map<?, ?>) got[0].get("access");
         if (access == null || access.size() != 2) {
             return false;
         }

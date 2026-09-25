@@ -47,14 +47,14 @@ def test_repeat_group_boundary():
         layout,
         {"type": 1, "lat": [10, 30], "lon": [20, 40]},
     )
-    got = BinaryPacker.unpack(layout, complete)
+    got = BinaryPacker.unpack(complete, layout.on(lambda row: None))
     assert got.ok is True
     assert got.value is not None
     assert got.value["lat"] == [10, 30]
     assert got.value["lon"] == [20, 40]
 
     leftover = complete + b"\xff"
-    bad = BinaryPacker.unpack(layout, leftover)
+    bad = BinaryPacker.unpack(leftover, layout.on(lambda row: None))
     assert bad.ok is False
     assert bad.value is None
     assert isinstance(bad.error, ShortPacket)
@@ -92,7 +92,7 @@ def test_flag_group():
     assert len(raw) - 2 == 6
     absent = BinaryPacker.pack(two, {})
     assert absent == b"\x01\x00"
-    got = BinaryPacker.unpack(two, absent)
+    got = BinaryPacker.unpack(absent, two.on(lambda row: None))
     assert got.ok is True
     assert got.value is not None
     assert "login" not in got.value
@@ -102,7 +102,7 @@ def test_flag_group():
     stored = BinaryPacker.pack(zero, {"b": 0})
     assert stored == b"\x01\x01\x00"
 
-    short = BinaryPacker.unpack(two, b"\x01\x01\x07")
+    short = BinaryPacker.unpack(b"\x01\x01\x07", two.on(lambda row: None))
     assert short.ok is False
     assert short.value is None
     assert isinstance(short.error, ShortPacket)
@@ -115,17 +115,17 @@ def test_sized_bytes():
     layout = Scheme(1, dict, u16(0, *gs("n")), sized(1, *gs("payload"), 0))
     raw = BinaryPacker.pack(layout, {"n": 3, "payload": bytes.fromhex("756176")})
     assert raw.hex() == "010300756176"
-    got = BinaryPacker.unpack(layout, raw)
+    got = BinaryPacker.unpack(raw, layout.on(lambda row: None))
     assert got.ok is True
     assert got.value is not None
     assert got.value["payload"] == bytes.fromhex("756176")
     empty = BinaryPacker.pack(layout, {"n": 0, "payload": b""})
     assert empty.hex() == "010000"
-    empty_got = BinaryPacker.unpack(layout, empty)
+    empty_got = BinaryPacker.unpack(empty, layout.on(lambda row: None))
     assert empty_got.ok is True
     assert empty_got.value is not None
     assert empty_got.value["payload"] == b""
-    short = BinaryPacker.unpack(layout, bytes.fromhex("01030075"))
+    short = BinaryPacker.unpack(bytes.fromhex("01030075"), layout.on(lambda row: None))
     assert short.ok is False
     assert short.value is None
     assert isinstance(short.error, ShortPacket)
@@ -138,7 +138,7 @@ def test_u2_and_bits():
     kinds = Scheme(1, dict, u2((0, *gs("a")), (1, *gs("b")), (2, *gs("c")), (3, *gs("d"))))
     raw = BinaryPacker.pack(kinds, {"a": 0, "b": 1, "c": 2, "d": 3})
     assert raw.hex() == "01e4"
-    got = BinaryPacker.unpack(kinds, raw)
+    got = BinaryPacker.unpack(raw, kinds.on(lambda row: None))
     assert got.ok is True
     assert got.value is not None
     assert [got.value[k] for k in ("a", "b", "c", "d")] == [0, 1, 2, 3]
@@ -153,7 +153,7 @@ def test_u2_and_bits():
     assert len(nine) - 2 == 2
     assert nine[2] == 0xFF
     assert nine[3] & 0xFE == 0
-    short = BinaryPacker.unpack(layout, bytes([1, 9, 0x01]))
+    short = BinaryPacker.unpack(bytes([1, 9, 0x01]), layout.on(lambda row: None))
     assert short.ok is False
     assert short.value is None
     assert isinstance(short.error, ShortPacket)
@@ -167,14 +167,14 @@ def test_utf8_string():
     raw = BinaryPacker.pack(layout, {"name": "zxsanny"})
     assert raw.hex() == "0107007a7873616e6e79"
     assert len(raw) == 10
-    got = BinaryPacker.unpack(layout, raw)
+    got = BinaryPacker.unpack(raw, layout.on(lambda row: None))
     assert got.ok is True
     assert got.value is not None
     assert got.value["name"] == "zxsanny"
 
     empty = BinaryPacker.pack(layout, {"name": ""})
     assert empty.hex() == "010000"
-    empty_got = BinaryPacker.unpack(layout, empty)
+    empty_got = BinaryPacker.unpack(empty, layout.on(lambda row: None))
     assert empty_got.ok is True
     assert empty_got.value is not None
     assert empty_got.value["name"] == ""
@@ -182,7 +182,7 @@ def test_utf8_string():
     with pytest.raises(ValueError):
         BinaryPacker.pack(layout, {"name": "a" * 65536})
 
-    short = BinaryPacker.unpack(layout, bytes([0x01, 0x07, 0x00, 0x7A, 0x78]))
+    short = BinaryPacker.unpack(bytes([0x01, 0x07, 0x00, 0x7A, 0x78]), layout.on(lambda row: None))
     assert short.ok is False
     assert short.value is None
     assert isinstance(short.error, ShortPacket)
@@ -195,7 +195,7 @@ def test_counted_list():
     two = Scheme(1, dict, list(*gs("xs"), u16(0, *leaf())))
     raw = BinaryPacker.pack(two, {"xs": [1, 2]})
     assert raw.hex() == "01020001000200"
-    got = BinaryPacker.unpack(two, raw)
+    got = BinaryPacker.unpack(raw, two.on(lambda row: None))
     assert got.ok is True
     assert got.value is not None
     assert got.value["xs"] == [1, 2]
@@ -206,7 +206,7 @@ def test_counted_list():
     followed = Scheme(1, dict, list(*gs("xs"), u8(0, *leaf())), u8(0, *gs("y")))
     both = BinaryPacker.pack(followed, {"xs": [1], "y": 2})
     assert both.hex() == "0101000102"
-    back = BinaryPacker.unpack(followed, both)
+    back = BinaryPacker.unpack(both, followed.on(lambda row: None))
     assert back.ok is True
     assert back.value is not None
     assert back.value["xs"] == [1]
@@ -241,7 +241,7 @@ def test_dictionary():
     }
     raw = BinaryPacker.pack(layout, values)
     assert raw.hex() == user_hex
-    got = BinaryPacker.unpack(layout, raw)
+    got = BinaryPacker.unpack(raw, layout.on(lambda row: None))
     assert got.ok is True
     assert got.value is not None
     assert got.value["username"] == "zxsanny"
@@ -271,8 +271,8 @@ def test_dictionary():
     assert BinaryPacker.pack(empty, {"s": "", "xs": [], "m": {}}).hex() == "01000000000000"
 
     dup = BinaryPacker.unpack(
-        Scheme(1, dict, map_field(*gs("access"), utf8(0, *leaf()))),
         bytes.fromhex("010200010061010078010061010079"),
+        Scheme(1, dict, map_field(*gs("access"), utf8(0, *leaf()))).on(lambda row: None),
     )
     assert dup.ok is False
     assert dup.value is None

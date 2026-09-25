@@ -71,12 +71,13 @@ public final class FieldIdBindingTest {
                 | ((bytes[5] & 0xFF) << 16)
                 | ((bytes[6] & 0xFF) << 24);
         expectEq("AC-1 lat bytes", 500_000_000, lat);
-        Packbin.Bound<MarkerRow> back = BinaryPacker.unpack(MARKER, bytes);
-        expectTrue("AC-1 ok", back.ok);
-        expectEq("AC-1 Lat", 500_000_000, back.value.lat);
-        expectEq("AC-1 Sid", 1, back.value.sid);
-        expectEq("AC-1 Lon", 300_000_000, back.value.lon);
-        expectEq("AC-1 Kind", (byte) 1, back.value.kind);
+        MarkerRow[] back = new MarkerRow[1];
+        Object err = BinaryPacker.unpack(bytes, MARKER.on(row -> back[0] = row));
+        expectTrue("AC-1 ok", err == null);
+        expectEq("AC-1 Lat", 500_000_000, back[0].lat);
+        expectEq("AC-1 Sid", 1, back[0].sid);
+        expectEq("AC-1 Lon", 300_000_000, back[0].lon);
+        expectEq("AC-1 Kind", (byte) 1, back[0].kind);
     }
 
     private static void ac2SiblingReferencesUseOrder() {
@@ -87,18 +88,20 @@ public final class FieldIdBindingTest {
         byte[] hit = BinaryPacker.pack(MARKER, withKind);
         int kindId = (hit[12] & 0xFF) | ((hit[13] & 0xFF) << 8);
         expectEq("AC-2 kindId bytes", 9, kindId);
-        Packbin.Bound<MarkerRow> backHit = BinaryPacker.unpack(MARKER, hit);
-        expectTrue("AC-2 hit ok", backHit.ok);
-        expectEq("AC-2 KindId", 9, backHit.value.kindId);
+        MarkerRow[] backHit = new MarkerRow[1];
+        Object hitErr = BinaryPacker.unpack(hit, MARKER.on(row -> backHit[0] = row));
+        expectTrue("AC-2 hit ok", hitErr == null);
+        expectEq("AC-2 KindId", 9, backHit[0].kindId);
 
         MarkerRow without = new MarkerRow();
         without.sid = 1;
         without.kind = 0;
         byte[] miss = BinaryPacker.pack(MARKER, without);
         expectEq("AC-2 omitted", hit.length - 2, miss.length);
-        Packbin.Bound<MarkerRow> backMiss = BinaryPacker.unpack(MARKER, miss);
-        expectTrue("AC-2 miss ok", backMiss.ok);
-        expectTrue("AC-2 KindId null", backMiss.value.kindId == null);
+        MarkerRow[] backMiss = new MarkerRow[1];
+        Object missErr = BinaryPacker.unpack(miss, MARKER.on(row -> backMiss[0] = row));
+        expectTrue("AC-2 miss ok", missErr == null);
+        expectTrue("AC-2 KindId null", backMiss[0].kindId == null);
     }
 
     private static void ac3FlagsUseChildAccessors() {
@@ -108,10 +111,11 @@ public final class FieldIdBindingTest {
         row.hidden = true;
         byte[] bytes = BinaryPacker.pack(MARKER, row);
         expectEq("AC-3 flag byte", 0x01, bytes[bytes.length - 1] & 0xFF);
-        Packbin.Bound<MarkerRow> back = BinaryPacker.unpack(MARKER, bytes);
-        expectTrue("AC-3 ok", back.ok);
-        expectEq("AC-3 Hidden", Boolean.TRUE, back.value.hidden);
-        expectTrue("AC-3 Delta null", back.value.delta == null);
+        MarkerRow[] back = new MarkerRow[1];
+        Object err = BinaryPacker.unpack(bytes, MARKER.on(r -> back[0] = r));
+        expectTrue("AC-3 ok", err == null);
+        expectEq("AC-3 Hidden", Boolean.TRUE, back[0].hidden);
+        expectTrue("AC-3 Delta null", back[0].delta == null);
     }
 
     private static void ac4NestedRowTypeHasOwnIds() {
@@ -148,8 +152,10 @@ public final class FieldIdBindingTest {
     private static void ac6Ac1BytesStable() {
         byte[] bytes = BinaryPacker.pack(MARKER, marker());
         expectEq("AC-6 mismatched", 0, PackbinTest.mismatchedBytes(bytes, PackbinTest.parseHex(AC1_HEX)));
-        Packbin.Bound<MarkerRow> back = BinaryPacker.unpack(MARKER, bytes);
-        expectEq("AC-6 Lat", 500_000_000, back.value.lat);
+        MarkerRow[] back = new MarkerRow[1];
+        Object err = BinaryPacker.unpack(bytes, MARKER.on(row -> back[0] = row));
+        expectTrue("AC-6 ok", err == null);
+        expectEq("AC-6 Lat", 500_000_000, back[0].lat);
     }
 
     private static void expectThrows(Runnable action) {

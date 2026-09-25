@@ -10,7 +10,7 @@ COMPILE_FAIL_SRC := tests/compile-fail/pack_without_scheme.cpp
 
 .PHONY: test clean compile-fail
 
-$(TEST_BIN): $(SRCS) $(TEST_SRC) include/packbin/packbin.hpp
+$(TEST_BIN): $(SRCS) $(TEST_SRC) include/packbin/packbin.hpp include/packbin/scheme.hpp
 	mkdir -p build
 	$(CXX) $(CXXFLAGS) -o $@ $(SRCS) $(TEST_SRC)
 

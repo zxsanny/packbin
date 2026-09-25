@@ -1,6 +1,7 @@
-use packbin::{
-    be, bits, dict, insert, list, pack_map, sized, to_hex, u16, u2, u8, unpack_map, utf8, MapScheme,
-    PackError, ShortPacket, UnpackError, Value, Values,
+use crate::walk::{pack, unpack};
+use crate::{
+    be, bits, dict, insert, list, sized, to_hex, u16, u2, u8, utf8, MapScheme, PackError,
+    ShortPacket, UnpackError, Value, Values,
 };
 use std::collections::BTreeMap;
 
@@ -21,21 +22,21 @@ fn sized_payload() {
         "payload",
         Some(Value::Bytes(vec![0x75, 0x61, 0x76])),
     );
-    let raw = pack_map(&scheme, &vals).unwrap();
+    let raw = pack(&scheme, &vals).unwrap();
     assert_eq!(to_hex(&raw), "010300756176");
 
     let mut empty = Values::new();
     insert(&mut empty, "n", Some(Value::U16(0)));
     insert(&mut empty, "payload", Some(Value::Bytes(vec![])));
-    let empty_raw = pack_map(&scheme, &empty).unwrap();
+    let empty_raw = pack(&scheme, &empty).unwrap();
     assert_eq!(to_hex(&empty_raw), "010000");
-    let empty_got = unpack_map(&scheme, &empty_raw).unwrap();
+    let empty_got = unpack(&scheme, &empty_raw).unwrap();
     match empty_got.get("payload") {
         Some(Some(Value::Bytes(b))) => assert_eq!(b.len(), 0),
         other => panic!("expected empty payload, got {:?}", other),
     }
 
-    let err = unpack_map(&scheme, &parse_hex("01030075")).expect_err("short");
+    let err = unpack(&scheme, &parse_hex("01030075")).expect_err("short");
     match err {
         UnpackError::Short(ShortPacket {
             field,
@@ -58,9 +59,9 @@ fn u2_pack_unpack() {
     insert(&mut vals, "b", Some(Value::U8(1)));
     insert(&mut vals, "c", Some(Value::U8(2)));
     insert(&mut vals, "d", Some(Value::U8(3)));
-    let raw = pack_map(&scheme, &vals).unwrap();
+    let raw = pack(&scheme, &vals).unwrap();
     assert_eq!(to_hex(&raw), "01e4");
-    let got = unpack_map(&scheme, &raw).unwrap();
+    let got = unpack(&scheme, &raw).unwrap();
     assert_eq!(got.get("a"), Some(&Some(Value::U8(0))));
     assert_eq!(got.get("b"), Some(&Some(Value::U8(1))));
     assert_eq!(got.get("c"), Some(&Some(Value::U8(2))));
@@ -69,7 +70,7 @@ fn u2_pack_unpack() {
     let one = MapScheme::new(1, vec![u2(&["a"])]);
     let mut one_vals = Values::new();
     insert(&mut one_vals, "a", Some(Value::U8(1)));
-    assert_eq!(to_hex(&pack_map(&one, &one_vals).unwrap()), "0101");
+    assert_eq!(to_hex(&pack(&one, &one_vals).unwrap()), "0101");
 }
 
 #[test]
@@ -77,28 +78,20 @@ fn bits_pack_unpack() {
     let scheme = MapScheme::new(1, vec![u8("n"), bits("segs", "n")]);
     let mut eight = Values::new();
     insert(&mut eight, "n", Some(Value::U8(8)));
-    insert(
-        &mut eight,
-        "segs",
-        Some(Value::List(vec![Value::U8(1); 8])),
-    );
-    let eight_raw = pack_map(&scheme, &eight).unwrap();
+    insert(&mut eight, "segs", Some(Value::List(vec![Value::U8(1); 8])));
+    let eight_raw = pack(&scheme, &eight).unwrap();
     assert_eq!(to_hex(&eight_raw[2..]), "ff");
     assert_eq!(eight_raw.len() - 2, 1);
 
     let mut nine = Values::new();
     insert(&mut nine, "n", Some(Value::U8(9)));
-    insert(
-        &mut nine,
-        "segs",
-        Some(Value::List(vec![Value::U8(1); 9])),
-    );
-    let nine_raw = pack_map(&scheme, &nine).unwrap();
+    insert(&mut nine, "segs", Some(Value::List(vec![Value::U8(1); 9])));
+    let nine_raw = pack(&scheme, &nine).unwrap();
     assert_eq!(nine_raw.len() - 2, 2);
     assert_eq!(nine_raw[2], 0xff);
     assert_eq!(nine_raw[3] & 0xfe, 0);
 
-    let err = unpack_map(&scheme, &[1, 9, 0x01]).expect_err("short");
+    let err = unpack(&scheme, &[1, 9, 0x01]).expect_err("short");
     match err {
         UnpackError::Short(ShortPacket {
             field,
@@ -118,28 +111,24 @@ fn utf8_string() {
     let scheme = MapScheme::new(1, vec![utf8("name")]);
     let mut vals = Values::new();
     insert(&mut vals, "name", Some(Value::Str("zxsanny".into())));
-    let raw = pack_map(&scheme, &vals).unwrap();
+    let raw = pack(&scheme, &vals).unwrap();
     assert_eq!(to_hex(&raw), "0107007a7873616e6e79");
     assert_eq!(raw.len(), 10);
-    let got = unpack_map(&scheme, &raw).unwrap();
+    let got = unpack(&scheme, &raw).unwrap();
     assert_eq!(got["name"], Some(Value::Str("zxsanny".into())));
 
     let mut empty_vals = Values::new();
     insert(&mut empty_vals, "name", Some(Value::Str(String::new())));
-    let empty = pack_map(&scheme, &empty_vals).unwrap();
+    let empty = pack(&scheme, &empty_vals).unwrap();
     assert_eq!(to_hex(&empty), "010000");
-    let empty_got = unpack_map(&scheme, &empty).unwrap();
+    let empty_got = unpack(&scheme, &empty).unwrap();
     assert_eq!(empty_got["name"], Some(Value::Str(String::new())));
 
     let mut long_vals = Values::new();
-    insert(
-        &mut long_vals,
-        "name",
-        Some(Value::Str("a".repeat(65536))),
-    );
-    assert!(pack_map(&scheme, &long_vals).is_err());
+    insert(&mut long_vals, "name", Some(Value::Str("a".repeat(65536))));
+    assert!(pack(&scheme, &long_vals).is_err());
 
-    let err = unpack_map(&scheme, &[0x01, 0x07, 0x00, 0x7a, 0x78]).expect_err("short");
+    let err = unpack(&scheme, &[0x01, 0x07, 0x00, 0x7a, 0x78]).expect_err("short");
     match err {
         UnpackError::Short(ShortPacket {
             field,
@@ -163,9 +152,9 @@ fn counted_list() {
         "xs",
         Some(Value::List(vec![Value::U16(1), Value::U16(2)])),
     );
-    let raw = pack_map(&two, &vals).unwrap();
+    let raw = pack(&two, &vals).unwrap();
     assert_eq!(to_hex(&raw), "01020001000200");
-    let got = unpack_map(&two, &raw).unwrap();
+    let got = unpack(&two, &raw).unwrap();
     assert_eq!(
         got["xs"],
         Some(Value::List(vec![Value::U16(1), Value::U16(2)]))
@@ -174,21 +163,21 @@ fn counted_list() {
     let be_one = MapScheme::new(1, vec![list("xs", be(u16("n")))]);
     let mut be_vals = Values::new();
     insert(&mut be_vals, "xs", Some(Value::List(vec![Value::U16(1)])));
-    assert_eq!(to_hex(&pack_map(&be_one, &be_vals).unwrap()), "0101000001");
+    assert_eq!(to_hex(&pack(&be_one, &be_vals).unwrap()), "0101000001");
 
     let followed = MapScheme::new(1, vec![list("xs", u8("n")), u8("y")]);
     let mut both_vals = Values::new();
     insert(&mut both_vals, "xs", Some(Value::List(vec![Value::U8(1)])));
     insert(&mut both_vals, "y", Some(Value::U8(2)));
-    let both = pack_map(&followed, &both_vals).unwrap();
+    let both = pack(&followed, &both_vals).unwrap();
     assert_eq!(to_hex(&both), "0101000102");
-    let back = unpack_map(&followed, &both).unwrap();
+    let back = unpack(&followed, &both).unwrap();
     assert_eq!(back["xs"], Some(Value::List(vec![Value::U8(1)])));
     assert_eq!(back["y"], Some(Value::U8(2)));
 
     let mut empty_vals = Values::new();
     insert(&mut empty_vals, "xs", Some(Value::List(vec![])));
-    assert_eq!(to_hex(&pack_map(&two, &empty_vals).unwrap()), "010000");
+    assert_eq!(to_hex(&pack(&two, &empty_vals).unwrap()), "010000");
 
     let mut long_vals = Values::new();
     insert(
@@ -196,7 +185,7 @@ fn counted_list() {
         "xs",
         Some(Value::List(vec![Value::U16(1); 65536])),
     );
-    assert!(pack_map(&two, &long_vals).is_err());
+    assert!(pack(&two, &long_vals).is_err());
 }
 
 #[test]
@@ -248,10 +237,10 @@ fn dictionary_field() {
     );
     insert(&mut vals, "access", Some(Value::Map(access.clone())));
 
-    let raw = pack_map(&scheme, &vals).unwrap();
+    let raw = pack(&scheme, &vals).unwrap();
     assert_eq!(to_hex(&raw), USER_HEX);
 
-    let got = unpack_map(&scheme, &raw).unwrap();
+    let got = unpack(&scheme, &raw).unwrap();
     assert_eq!(got["username"], Some(Value::Str("zxsanny".into())));
     assert_eq!(
         got["roles"],
@@ -320,7 +309,7 @@ fn dictionary_field() {
         ])),
     );
     insert(&mut shuffled_vals, "access", Some(Value::Map(shuffled)));
-    assert_eq!(to_hex(&pack_map(&scheme, &shuffled_vals).unwrap()), USER_HEX);
+    assert_eq!(to_hex(&pack(&scheme, &shuffled_vals).unwrap()), USER_HEX);
 
     let empty_scheme = MapScheme::new(
         1,
@@ -335,13 +324,12 @@ fn dictionary_field() {
     insert(&mut empty_vals, "roles", Some(Value::List(vec![])));
     insert(&mut empty_vals, "access", Some(Value::Map(BTreeMap::new())));
     assert_eq!(
-        to_hex(&pack_map(&empty_scheme, &empty_vals).unwrap()),
+        to_hex(&pack(&empty_scheme, &empty_vals).unwrap()),
         "01000000000000"
     );
 
     let dup_scheme = MapScheme::new(1, vec![dict("access", utf8("v"))]);
-    let dup_err =
-        unpack_map(&dup_scheme, &parse_hex("010200010061010078010061010079")).unwrap_err();
+    let dup_err = unpack(&dup_scheme, &parse_hex("010200010061010078010061010079")).unwrap_err();
     match dup_err {
         UnpackError::Short(ShortPacket {
             field,
@@ -355,7 +343,7 @@ fn dictionary_field() {
         other => panic!("expected ShortPacket, got {:?}", other),
     }
 
-    let again = pack_map(&scheme, &vals).unwrap();
+    let again = pack(&scheme, &vals).unwrap();
     assert_eq!(raw, again);
 
     let t1 = std::thread::spawn(|| {
@@ -396,7 +384,7 @@ fn dictionary_field() {
             ])),
         );
         insert(&mut vals, "access", Some(Value::Map(access)));
-        pack_map(&scheme, &vals).unwrap()
+        pack(&scheme, &vals).unwrap()
     });
     let t2 = std::thread::spawn(|| {
         let scheme = MapScheme::new(
@@ -436,7 +424,7 @@ fn dictionary_field() {
             ])),
         );
         insert(&mut vals, "access", Some(Value::Map(access)));
-        pack_map(&scheme, &vals).unwrap()
+        pack(&scheme, &vals).unwrap()
     });
     assert_eq!(t1.join().unwrap(), t2.join().unwrap());
 
@@ -447,7 +435,7 @@ fn dictionary_field() {
     let long_scheme = MapScheme::new(1, vec![dict("access", utf8("v"))]);
     let mut long_vals = Values::new();
     insert(&mut long_vals, "access", Some(Value::Map(long_map)));
-    match pack_map(&long_scheme, &long_vals) {
+    match pack(&long_scheme, &long_vals) {
         Err(PackError::Type(_)) => {}
         Ok(_) => panic!("expected PackError for 65536 pairs"),
         Err(other) => panic!("expected PackError::Type, got {:?}", other),

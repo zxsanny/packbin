@@ -5,7 +5,6 @@ import {
   type Field,
 } from "./fields.ts"
 import {
-  fillEntity,
   packFields,
   unpackBody,
   type UnpackErr,
@@ -43,7 +42,6 @@ export {
 export type { Value, ShortErr, TypeMismatchErr } from "./kinds.ts"
 export type { UnpackErr } from "./walker.ts"
 
-export type EntityResult<T> = { ok: true; value: T } | UnpackErr
 export type DispatchResult = { ok: true } | UnpackErr
 
 export type SchemeHandler<T> = {
@@ -84,69 +82,17 @@ export class BinaryPacker {
     return Uint8Array.from(out)
   }
 
-  static unpack<T extends object>(
-    s: Scheme<T>,
-    bytes: Uint8Array | ArrayBuffer,
-  ): EntityResult<T>
-  static unpack<T extends object>(
-    s: Scheme<T>,
-    bytes: Uint8Array | ArrayBuffer,
-    ctor: new () => T,
-  ): EntityResult<T>
   static unpack(
     bytes: Uint8Array | ArrayBuffer,
     first: SchemeHandler<object>,
     ...rest: SchemeHandler<object>[]
-  ): DispatchResult
-  static unpack(
-    first: Scheme<object> | Uint8Array | ArrayBuffer,
-    second?: Uint8Array | ArrayBuffer | SchemeHandler<object>,
-    third?: (new () => object) | SchemeHandler<object>,
-    ...rest: SchemeHandler<object>[]
-  ): EntityResult<object> | DispatchResult {
-    if (first instanceof Scheme) {
-      const buf = toBuf(second as Uint8Array | ArrayBuffer)
-      const ctor =
-        typeof third === "function" ? (third as new () => object) : undefined
-      return unpackKnown(first, buf, ctor)
-    }
-    const buf = toBuf(first)
-    const handlers: SchemeHandler<object>[] = []
-    if (isHandler(second)) handlers.push(second)
-    if (isHandler(third)) handlers.push(third)
-    handlers.push(...rest)
-    return unpackDispatch(buf, handlers)
+  ): DispatchResult {
+    return unpackDispatch(toBuf(bytes), [first, ...rest])
   }
-}
-
-function isHandler(v: unknown): v is SchemeHandler<object> {
-  return (
-    typeof v === "object" &&
-    v !== null &&
-    "typeNumber" in v &&
-    "scheme" in v &&
-    "handler" in v
-  )
 }
 
 function toBuf(bytes: Uint8Array | ArrayBuffer): Uint8Array {
   return bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
-}
-
-function unpackKnown<T extends object>(
-  s: Scheme<T>,
-  buf: Uint8Array,
-  ctor?: new () => T,
-): EntityResult<T> {
-  if (buf.length < 1) return { ok: false, field: "", needed: 1, left: 0 }
-  const actual = buf[0]!
-  if (actual !== s.typeNumber) {
-    return { ok: false, expected: s.typeNumber, actual }
-  }
-  const body = unpackBody(s.fields, buf, 1)
-  if (!body.ok) return body
-  if (ctor) return { ok: true, value: fillEntity(ctor, body.values) }
-  return { ok: true, value: body.values as T }
 }
 
 function unpackDispatch(
@@ -171,6 +117,4 @@ function unpackDispatch(
 }
 
 export type UnpackOk = { ok: true } & Value
-export type UnpackResult<T = never> = [T] extends [never]
-  ? UnpackOk | UnpackErr
-  : EntityResult<T>
+export type UnpackResult = UnpackOk | UnpackErr

@@ -104,26 +104,31 @@ describe("scheme", () => {
     const bytes = BinaryPacker.pack(position, row)
     assert.equal(toHex(bytes), expectedHex)
     assert.equal(toHex(bytes), goldenHex)
-    const back = BinaryPacker.unpack(position, bytes)
-    assert.equal(back.ok, true)
-    if (!back.ok) return
-    assert.equal("type" in back.value, false)
-    assert.equal(Object.prototype.hasOwnProperty.call(back.value, "type"), false)
+    let back: Position | undefined
+    const result = BinaryPacker.unpack(bytes, position.on((value) => {
+      back = value as Position
+    }))
+    assert.equal(result.ok, true)
+    assert.ok(back)
+    assert.equal("type" in back!, false)
+    assert.equal(Object.prototype.hasOwnProperty.call(back!, "type"), false)
   })
 
   it("AC-3 known scheme checks the leading byte", () => {
     const layout = scheme(1, u8(0, (r: { sid: number }) => r.sid))
-    const got = BinaryPacker.unpack(layout, Uint8Array.of(2, 23))
+    let ran = false
+    const got = BinaryPacker.unpack(
+      Uint8Array.of(2, 23),
+      layout.on(() => {
+        ran = true
+      }),
+    )
     assert.equal(got.ok, false)
     if (got.ok) return
-    assert.equal("expected" in got, true)
-    if (!("expected" in got)) return
-    assert.equal(got.expected, 1)
     assert.equal(got.actual, 2)
+    assert.equal(ran, false)
     assert.equal(
-      Object.keys(got).filter(
-        (k) => k !== "ok" && k !== "expected" && k !== "actual",
-      ).length,
+      Object.keys(got).filter((k) => k !== "ok" && k !== "actual").length,
       0,
     )
   })

@@ -46,18 +46,19 @@ public class ObjectBindingTests
         Assert.Equal(new byte[] { 0x01, 0x00 }, clear);
         var set = BinaryPacker.Pack(scheme, new SessionRow { Session = new Session { Login = 7, Ts = 1000 } });
         Assert.Equal("01010700e8030000", Convert.ToHexString(set).ToLowerInvariant());
-        var got = BinaryPacker.Unpack(scheme, set);
-        Assert.True(got.Ok);
-        Assert.NotNull(got.Value);
-        Assert.NotNull(got.Value.Session);
-        Assert.Equal((ushort)7, got.Value.Session.Login);
-        Assert.Equal(1000u, got.Value.Session.Ts);
-        var shortPacket = BinaryPacker.Unpack(scheme, new byte[] { 0x01, 0x01, 0x07 });
-        Assert.False(shortPacket.Ok);
-        Assert.Null(shortPacket.Value);
-        var err = Assert.IsType<ShortPacket>(shortPacket.Error);
-        Assert.Equal("Login", err.Field);
-        Assert.Equal(2, err.Needed);
-        Assert.Equal(1, err.Left);
+        SessionRow? row = null;
+        var err = BinaryPacker.Unpack(set, scheme.On(v => row = v));
+        Assert.Null(err);
+        Assert.NotNull(row);
+        Assert.NotNull(row.Session);
+        Assert.Equal((ushort)7, row.Session.Login);
+        Assert.Equal(1000u, row.Session.Ts);
+        SessionRow? shortRow = null;
+        var shortErr = BinaryPacker.Unpack(new byte[] { 0x01, 0x01, 0x07 }, scheme.On(v => shortRow = v));
+        Assert.Null(shortRow);
+        var missing = Assert.IsType<ShortPacket>(shortErr);
+        Assert.Equal("Login", missing.Field);
+        Assert.Equal(2, missing.Needed);
+        Assert.Equal(1, missing.Left);
     }
 }

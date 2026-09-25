@@ -1,7 +1,7 @@
 # packbin
 Binary packing and unpacking across languages, declarative mapping, and zero overhead in the binary data.
 
-Both sides keep the same field list. The bytes are only the values.
+Both sides keep the same field list. The bytes are only the values. Unpack takes the buffer and handlers. The first byte selects the handler, and that handler's scheme reads the rest.
 
 Can be used for WebSocket, TCP, UDP, and other means of efficient communication
 
@@ -12,7 +12,7 @@ Python → binary → TypeScript
 ### Python
 
 ```python
-from packbin import BinaryPacker, Scheme, flags, i16, i32, u8, u16
+from packbin import BinaryPacker, Scheme, flags, i16, i32, u8, u16, utf8
 
 class Position:
     def __init__(self):
@@ -42,6 +42,23 @@ target = Scheme(
 )
 
 raw = BinaryPacker.pack(target, Position())
+
+class Ping:
+    def __init__(self):
+        self.code = 0
+
+class Note:
+    def __init__(self):
+        self.id = 0
+        self.title = ""
+
+ping = Scheme(2, Ping, u8(0, *bind("code")))
+note = Scheme(3, Note, u16(0, *bind("id")), utf8(1, *bind("title")))
+
+got = []
+pinged = []
+noted = []
+BinaryPacker.unpack(raw, target.on(got.append), ping.on(pinged.append), note.on(noted.append))
 ```
 
 ```
@@ -51,7 +68,7 @@ raw = BinaryPacker.pack(target, Position())
 ### TypeScript
 
 ```ts
-import { BinaryPacker, flags, i16, i32, scheme, u8, u16 } from "packbin"
+import { BinaryPacker, flags, i16, i32, scheme, u8, u16, utf8 } from "packbin"
 
 class Target {
   sid = 1
@@ -76,7 +93,33 @@ const target = scheme<Target>(
   ]),
 )
 
-const got = BinaryPacker.unpack(target, raw)
+class Ping {
+  code = 0
+}
+
+class Note {
+  id = 0
+  title = ""
+}
+
+const ping = scheme<Ping>(2, u8(0, (x) => x.code))
+const note = scheme<Note>(3, u16(0, (x) => x.id), utf8(1, (x) => x.title))
+
+let got: Target | undefined
+let pinged: Ping | undefined
+let noted: Note | undefined
+BinaryPacker.unpack(
+  raw,
+  target.on((row) => {
+    got = row
+  }),
+  ping.on((row) => {
+    pinged = row
+  }),
+  note.on((row) => {
+    noted = row
+  }),
+)
 ```
 
 `flags` is how an optional field takes no space when you have no value for it. `heading`, `speed`, and `altitude` are measurements, so `0` is still a value and has to be written. `None` means the field is not in the packet.
@@ -137,6 +180,25 @@ var raw = BinaryPacker.Pack(userScheme, new User
         ["store"] = new ActionList { Actions = [new ActionName { Action = "write" }] },
     },
 });
+
+sealed class Ping { public byte Code { get; set; } }
+sealed class Note
+{
+    public ushort Id { get; set; }
+    public string Title { get; set; } = "";
+}
+
+var ping = new Scheme<Ping>(2, f => [f.U8(0, x => x.Code)]);
+var note = new Scheme<Note>(3, f => [f.U16(0, x => x.Id), f.Utf8(1, x => x.Title)]);
+
+User? got = null;
+Ping? pinged = null;
+Note? noted = null;
+BinaryPacker.Unpack(
+    raw,
+    userScheme.On(row => got = row),
+    ping.On(row => pinged = row),
+    note.On(row => noted = row));
 ```
 
 ```
@@ -150,18 +212,67 @@ The first byte is the scheme type number.
 ### Rust
 
 ```rust
-use packbin::{dict, list, unpack_map, utf8, MapScheme};
+use packbin::{BinaryPacker, BoundField, Scheme};
+use std::collections::BTreeMap;
 
-let user = MapScheme::new(
-    1,
-    vec![
-        utf8("username"),
-        list("roles", utf8("role")),
-        dict("access", list("actions", utf8("action"))),
+#[derive(Default)]
+struct User {
+    username: String,
+    roles: Vec<String>,
+    access: BTreeMap<String, Vec<String>>,
+}
+
+let user = Scheme::new(1, [
+    BoundField::utf8(
+        0,
+        |row: &User| row.username.clone(),
+        |row, value| row.username = value,
+    )
+    .into(),
+    BoundField::list_utf8(
+        |row: &User| row.roles.clone(),
+        |row, value| row.roles = value,
+    )
+    .into(),
+    BoundField::dict_list_utf8(
+        |row: &User| row.access.clone(),
+        |row, value| row.access = value,
+    )
+    .into(),
+]);
+
+#[derive(Default)]
+struct Ping {
+    code: u8,
+}
+
+#[derive(Default)]
+struct Note {
+    id: u16,
+    title: String,
+}
+
+let ping = Scheme::new(2, [
+    BoundField::u8(0, |row: &Ping| row.code, |row, value| row.code = value).into(),
+]);
+
+let note = Scheme::new(3, [
+    BoundField::u16(0, |row: &Note| row.id, |row, value| row.id = value).into(),
+    BoundField::utf8(1, |row: &Note| row.title.clone(), |row, value| row.title = value).into(),
+]);
+
+let mut got = User::default();
+let mut ping_row = Ping::default();
+let mut note_row = Note::default();
+BinaryPacker::unpack_with(
+    &raw,
+    &mut [
+        &mut user.on(|row| got = row),
+        &mut ping.on(|row| ping_row = row),
+        &mut note.on(|row| note_row = row),
     ],
-);
-
-let got = unpack_map(&user, &raw).unwrap();
+)
+.unwrap();
 ```
 
 ## Data types

@@ -145,10 +145,22 @@ pub(crate) fn as_u2(v: &Value) -> Option<u8> {
 
 pub(crate) fn as_bit(v: &Value) -> Option<u8> {
     match v {
-        Value::U8(0) | Value::U16(0) | Value::U32(0) | Value::U64(0) | Value::I8(0)
-        | Value::I16(0) | Value::I32(0) | Value::I64(0) => Some(0),
-        Value::U8(1) | Value::U16(1) | Value::U32(1) | Value::U64(1) | Value::I8(1)
-        | Value::I16(1) | Value::I32(1) | Value::I64(1) => Some(1),
+        Value::U8(0)
+        | Value::U16(0)
+        | Value::U32(0)
+        | Value::U64(0)
+        | Value::I8(0)
+        | Value::I16(0)
+        | Value::I32(0)
+        | Value::I64(0) => Some(0),
+        Value::U8(1)
+        | Value::U16(1)
+        | Value::U32(1)
+        | Value::U64(1)
+        | Value::I8(1)
+        | Value::I16(1)
+        | Value::I32(1)
+        | Value::I64(1) => Some(1),
         _ => None,
     }
 }

@@ -58,13 +58,14 @@ public class FieldIdBindingTests
         Assert.Equal("2001000065cd1d00a3e111010000000000", hex);
         Assert.Equal(0x20, bytes[0]);
         Assert.Equal(500_000_000, BitConverter.ToInt32(bytes.AsSpan(3, 4)));
-        var back = BinaryPacker.Unpack(MarkerScheme, bytes);
-        Assert.True(back.Ok);
-        Assert.NotNull(back.Value);
-        Assert.Equal(500_000_000, back.Value.Lat);
-        Assert.Equal((ushort)1, back.Value.Sid);
-        Assert.Equal(300_000_000, back.Value.Lon);
-        Assert.Equal((byte)1, back.Value.Kind);
+        MarkerRow? got = null;
+        var err = BinaryPacker.Unpack(bytes, MarkerScheme.On(v => got = v));
+        Assert.Null(err);
+        Assert.NotNull(got);
+        Assert.Equal(500_000_000, got.Lat);
+        Assert.Equal((ushort)1, got.Sid);
+        Assert.Equal(300_000_000, got.Lon);
+        Assert.Equal((byte)1, got.Kind);
     }
 
     [Fact]
@@ -81,9 +82,10 @@ public class FieldIdBindingTests
         };
         var hit = BinaryPacker.Pack(MarkerScheme, withKind);
         Assert.Equal((ushort)9, BitConverter.ToUInt16(hit.AsSpan(12, 2)));
-        var backHit = BinaryPacker.Unpack(MarkerScheme, hit);
-        Assert.True(backHit.Ok);
-        Assert.Equal((ushort)9, backHit.Value!.KindId);
+        MarkerRow? hitRow = null;
+        var hitErr = BinaryPacker.Unpack(hit, MarkerScheme.On(v => hitRow = v));
+        Assert.Null(hitErr);
+        Assert.Equal((ushort)9, hitRow!.KindId);
 
         var without = new MarkerRow
         {
@@ -95,9 +97,10 @@ public class FieldIdBindingTests
         };
         var miss = BinaryPacker.Pack(MarkerScheme, without);
         Assert.Equal(hit.Length - 2, miss.Length);
-        var backMiss = BinaryPacker.Unpack(MarkerScheme, miss);
-        Assert.True(backMiss.Ok);
-        Assert.Null(backMiss.Value!.KindId);
+        MarkerRow? missRow = null;
+        var missErr = BinaryPacker.Unpack(miss, MarkerScheme.On(v => missRow = v));
+        Assert.Null(missErr);
+        Assert.Null(missRow!.KindId);
     }
 
     [Fact]
@@ -115,10 +118,11 @@ public class FieldIdBindingTests
         };
         var bytes = BinaryPacker.Pack(MarkerScheme, row);
         Assert.Equal(0x01, bytes[^1]);
-        var back = BinaryPacker.Unpack(MarkerScheme, bytes);
-        Assert.True(back.Ok);
-        Assert.True(back.Value!.Hidden);
-        Assert.Null(back.Value.Delta);
+        MarkerRow? got = null;
+        var err = BinaryPacker.Unpack(bytes, MarkerScheme.On(v => got = v));
+        Assert.Null(err);
+        Assert.True(got!.Hidden);
+        Assert.Null(got.Delta);
     }
 
     [Fact]

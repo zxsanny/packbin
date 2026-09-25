@@ -79,13 +79,15 @@ bool same_strs(packbin::Value::List const& list, std::initializer_list<char cons
 }
 
 bool user_ok(std::string const& hex) {
-  auto got = packbin::BinaryPacker::unpack(user_scheme(), parse_hex(hex));
-  if (!got.ok || got.value.size() != 3)
+  packbin::Values got;
+  auto result = packbin::BinaryPacker::unpack(
+      parse_hex(hex), user_scheme().on([&](packbin::Values const& row) { got = row; }));
+  if (!result.ok || got.size() != 3)
     return false;
-  if (std::get<std::string>(got.value.at("0").data) != "zxsanny")
+  if (std::get<std::string>(got.at("0").data) != "zxsanny")
     return false;
-  auto const& roles = std::get<packbin::Value::List>(got.value.at("roles").data);
-  auto const& access = std::get<packbin::Value::Map>(got.value.at("access").data);
+  auto const& roles = std::get<packbin::Value::List>(got.at("roles").data);
+  auto const& access = std::get<packbin::Value::Map>(got.at("access").data);
   if (!same_strs(roles, {"user", "dispatcher"}) || !access || access->items.size() != 3)
     return false;
   return same_strs(std::get<packbin::Value::List>(access->items.at("channel").data), {"read"}) &&
@@ -101,10 +103,12 @@ bool op_is(packbin::Value const& row, char const* op) {
 }
 
 bool nested_ok(std::string const& hex) {
-  auto got = packbin::BinaryPacker::unpack(nested_scheme(), parse_hex(hex));
-  if (!got.ok)
+  packbin::Values got;
+  auto result = packbin::BinaryPacker::unpack(
+      parse_hex(hex), nested_scheme().on([&](packbin::Values const& row) { got = row; }));
+  if (!result.ok)
     return false;
-  auto const& access = std::get<packbin::Value::Map>(got.value.at("access").data);
+  auto const& access = std::get<packbin::Value::Map>(got.at("access").data);
   if (!access)
     return false;
   auto const& map = std::get<packbin::Value::List>(access->items.at("map").data);

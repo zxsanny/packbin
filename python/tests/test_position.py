@@ -64,7 +64,7 @@ def test_ac1_position_pack():
 
 
 def test_ac2_position_unpack():
-    got = BinaryPacker.unpack(POSITION, bytes.fromhex(POSITION_HEX))
+    got = BinaryPacker.unpack(bytes.fromhex(POSITION_HEX), POSITION.on(lambda row: None))
     assert got.ok is True
     assert got.value is not None
     assert "type" not in got.value
@@ -133,7 +133,7 @@ def test_ac5_short_field_then_position_pack():
         ),
     )
     short = bytes([0x40, 0x20, 0x34])
-    got = BinaryPacker.unpack(layout, short)
+    got = BinaryPacker.unpack(short, layout.on(lambda row: None))
     assert got.ok is False
     assert got.value is None
     assert isinstance(got.error, ShortPacket)
@@ -148,7 +148,7 @@ def test_ac5_short_field_then_position_pack():
 
 def test_trailing_bytes():
     raw = BinaryPacker.pack(POSITION, POSITION_VALUES) + b"\x00"
-    got = BinaryPacker.unpack(POSITION, raw)
+    got = BinaryPacker.unpack(raw, POSITION.on(lambda row: None))
     assert got.ok is False
     assert got.value is None
     assert isinstance(got.error, TrailingBytes)
@@ -159,7 +159,7 @@ def test_nfr_round_trips():
     start = time.perf_counter()
     for _ in range(100_000):
         raw = BinaryPacker.pack(POSITION, POSITION_VALUES)
-        got = BinaryPacker.unpack(POSITION, raw)
+        got = BinaryPacker.unpack(raw, POSITION.on(lambda row: None))
         assert got.ok is True
     elapsed = time.perf_counter() - start
     _assert_no_gpu()

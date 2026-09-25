@@ -58,14 +58,14 @@ def main(argv: list[str]) -> int:
     if cmd == "unpack-user":
         if len(argv) < 2:
             return 1
-        result = BinaryPacker.unpack(USER, bytes.fromhex(argv[1]))
+        result = BinaryPacker.unpack(bytes.fromhex(argv[1]), USER.on(lambda row: None))
         if not result.ok or result.value is None:
             return 1
         return 0 if result.value == USER_VALUES else 1
     if cmd == "unpack-nested":
         if len(argv) < 2:
             return 1
-        result = BinaryPacker.unpack(NESTED, bytes.fromhex(argv[1]))
+        result = BinaryPacker.unpack(bytes.fromhex(argv[1]), NESTED.on(lambda row: None))
         if not result.ok or result.value is None:
             return 1
         return 0 if result.value == NESTED_VALUES else 1

@@ -42,16 +42,25 @@ describe("packbin fields", () => {
     assert.equal(toHex(raw), "010300756176")
     const empty = BinaryPacker.pack(layout, { n: 0, payload: new Uint8Array(0) })
     assert.equal(toHex(empty), "010000")
-    const emptyGot = BinaryPacker.unpack(layout, empty)
-    assert.equal(emptyGot.ok, true)
-    if (!emptyGot.ok) return
-    assert.equal((emptyGot.value.payload as Uint8Array).length, 0)
-    const short = BinaryPacker.unpack(layout, Uint8Array.from(Buffer.from("01030075", "hex")))
+    let emptyGot: Row | undefined
+    const emptyResult = BinaryPacker.unpack(empty, layout.on((value) => {
+      emptyGot = value as Row
+    }))
+    assert.equal(emptyResult.ok, true)
+    assert.equal((emptyGot!.payload as Uint8Array).length, 0)
+    let shortRan = false
+    const short = BinaryPacker.unpack(
+      Uint8Array.from(Buffer.from("01030075", "hex")),
+      layout.on(() => {
+        shortRan = true
+      }),
+    )
     assert.equal(short.ok, false)
     if (short.ok) return
     assert.equal(short.field, "payload")
     assert.equal(short.needed, 3)
     assert.equal(short.left, 1)
+    assert.equal(shortRan, false)
   })
 
   it("u2 and bits", () => {
@@ -71,13 +80,12 @@ describe("packbin fields", () => {
     )
     const raw = BinaryPacker.pack(kinds, { a: 0, b: 1, c: 2, d: 3 })
     assert.equal(toHex(raw), "01e4")
-    const got = BinaryPacker.unpack(kinds, raw)
-    assert.equal(got.ok, true)
-    if (!got.ok) return
-    assert.deepEqual(
-      [got.value.a, got.value.b, got.value.c, got.value.d],
-      [0, 1, 2, 3],
-    )
+    let got: Kinds | undefined
+    const result = BinaryPacker.unpack(raw, kinds.on((value) => {
+      got = value as Kinds
+    }))
+    assert.equal(result.ok, true)
+    assert.deepEqual([got!.a, got!.b, got!.c, got!.d], [0, 1, 2, 3])
     const one = BinaryPacker.pack(
       scheme(1, u2(0, (r: { a: number }) => r.a)),
       { a: 1 },
@@ -99,12 +107,16 @@ describe("packbin fields", () => {
     assert.equal(nine.length - 2, 2)
     assert.equal(nine[2], 0xff)
     assert.equal(nine[3]! & 0xfe, 0)
-    const short = BinaryPacker.unpack(layout, Uint8Array.of(1, 9, 0x01))
+    let shortRan = false
+    const short = BinaryPacker.unpack(Uint8Array.of(1, 9, 0x01), layout.on(() => {
+      shortRan = true
+    }))
     assert.equal(short.ok, false)
     if (short.ok) return
     assert.equal(short.field, "segs")
     assert.equal(short.needed, 2)
     assert.equal(short.left, 1)
+    assert.equal(shortRan, false)
   })
 
   it("utf8 string count is the payload", () => {
@@ -113,17 +125,21 @@ describe("packbin fields", () => {
     const raw = BinaryPacker.pack(layout, { name: "zxsanny" })
     assert.equal(toHex(raw), "0107007a7873616e6e79")
     assert.equal(raw.length, 10)
-    const got = BinaryPacker.unpack(layout, raw)
-    assert.equal(got.ok, true)
-    if (!got.ok) return
-    assert.equal(got.value.name, "zxsanny")
+    let got: Row | undefined
+    const result = BinaryPacker.unpack(raw, layout.on((value) => {
+      got = value as Row
+    }))
+    assert.equal(result.ok, true)
+    assert.equal(got!.name, "zxsanny")
 
     const empty = BinaryPacker.pack(layout, { name: "" })
     assert.equal(toHex(empty), "010000")
-    const emptyGot = BinaryPacker.unpack(layout, empty)
-    assert.equal(emptyGot.ok, true)
-    if (!emptyGot.ok) return
-    assert.equal(emptyGot.value.name, "")
+    let emptyGot: Row | undefined
+    const emptyResult = BinaryPacker.unpack(empty, layout.on((value) => {
+      emptyGot = value as Row
+    }))
+    assert.equal(emptyResult.ok, true)
+    assert.equal(emptyGot!.name, "")
 
     let produced: Uint8Array | null = null
     assert.throws(() => {
@@ -131,13 +147,20 @@ describe("packbin fields", () => {
     })
     assert.equal(produced, null)
 
-    const short = BinaryPacker.unpack(layout, Uint8Array.of(0x01, 0x07, 0x00, 0x7a, 0x78))
+    let shortRan = false
+    const short = BinaryPacker.unpack(
+      Uint8Array.of(0x01, 0x07, 0x00, 0x7a, 0x78),
+      layout.on(() => {
+        shortRan = true
+      }),
+    )
     assert.equal(short.ok, false)
     if (short.ok) return
     assert.equal(short.field, "name")
     assert.equal(short.needed, 7)
     assert.equal(short.left, 2)
     assert.equal("name" in short, false)
+    assert.equal(shortRan, false)
   })
 
   it("counted list leaves the next field", () => {
@@ -151,10 +174,12 @@ describe("packbin fields", () => {
     )
     const raw = BinaryPacker.pack(two, { xs: [1, 2] })
     assert.equal(toHex(raw), "01020001000200")
-    const got = BinaryPacker.unpack(two, raw)
-    assert.equal(got.ok, true)
-    if (!got.ok) return
-    assert.deepEqual(got.value.xs, [1, 2])
+    let got: Two | undefined
+    const result = BinaryPacker.unpack(raw, two.on((value) => {
+      got = value as Two
+    }))
+    assert.equal(result.ok, true)
+    assert.deepEqual(got!.xs, [1, 2])
 
     const beOne = scheme<Two>(
       1,
@@ -175,11 +200,13 @@ describe("packbin fields", () => {
     )
     const both = BinaryPacker.pack(followed, { xs: [1], y: 2 })
     assert.equal(toHex(both), "0101000102")
-    const back = BinaryPacker.unpack(followed, both)
-    assert.equal(back.ok, true)
-    if (!back.ok) return
-    assert.deepEqual(back.value.xs, [1])
-    assert.equal(back.value.y, 2)
+    let back: Two | undefined
+    const backResult = BinaryPacker.unpack(both, followed.on((value) => {
+      back = value as Two
+    }))
+    assert.equal(backResult.ok, true)
+    assert.deepEqual(back!.xs, [1])
+    assert.equal(back!.y, 2)
 
     assert.equal(toHex(BinaryPacker.pack(two, { xs: [] })), "010000")
     let produced: Uint8Array | null = null
@@ -224,12 +251,14 @@ describe("packbin fields", () => {
 
     const raw = BinaryPacker.pack(layout, userValue)
     assert.equal(toHex(raw), userHex)
-    const got = BinaryPacker.unpack(layout, raw)
-    assert.equal(got.ok, true)
-    if (!got.ok) return
-    assert.equal(got.value.username, "zxsanny")
-    assert.deepEqual(got.value.roles, ["user", "dispatcher"])
-    const access = got.value.access as Record<string, string[]>
+    let got: User | undefined
+    const result = BinaryPacker.unpack(raw, layout.on((value) => {
+      got = value as User
+    }))
+    assert.equal(result.ok, true)
+    assert.equal(got!.username, "zxsanny")
+    assert.deepEqual(got!.roles, ["user", "dispatcher"])
+    const access = got!.access as Record<string, string[]>
     assert.deepEqual(access.channel, ["read"])
     assert.deepEqual(access.map, ["read", "gps_fix", "set", "edit"])
     assert.deepEqual(access.store, ["read", "write"])
@@ -269,7 +298,13 @@ describe("packbin fields", () => {
         utf8(0, (v) => v),
       ),
     )
-    const bad = BinaryPacker.unpack(dup, Buffer.from("010200010061010078010061010079", "hex"))
+    let badRan = false
+    const bad = BinaryPacker.unpack(
+      Buffer.from("010200010061010078010061010079", "hex"),
+      dup.on(() => {
+        badRan = true
+      }),
+    )
     assert.equal(bad.ok, false)
     if (bad.ok) return
     assert.equal(
@@ -278,6 +313,7 @@ describe("packbin fields", () => {
       ).length,
       0,
     )
+    assert.equal(badRan, false)
 
     const a = BinaryPacker.pack(layout, userValue)
     const b = BinaryPacker.pack(layout, userValue)

@@ -76,17 +76,19 @@ void ac1_position_pack() {
 }
 
 void ac2_position_unpack() {
-  auto got = packbin::BinaryPacker::unpack(position_scheme(), parse_hex(kGoldenHex));
-  expect(got.ok, "AC-2 ok");
-  expect(!packbin::present(got.value, "type"), "AC-2 no type");
-  expect(std::get<std::uint16_t>(got.value.at("0").data) == 1, "AC-2 sid");
-  expect(std::get<std::int32_t>(got.value.at("1").data) == 500000000, "AC-2 lat");
-  expect(std::get<std::int32_t>(got.value.at("2").data) == 300000000, "AC-2 lon");
-  expect(std::get<std::uint8_t>(got.value.at("3").data) == 1, "AC-2 profile");
-  expect(packbin::motion_field_count(got.value) == 0, "AC-2 motion count 0");
-  expect(!packbin::present(got.value, 4), "AC-2 no heading");
-  expect(!packbin::present(got.value, 5), "AC-2 no speed");
-  expect(!packbin::present(got.value, 6), "AC-2 no altitude");
+  packbin::Values got;
+  auto result = packbin::BinaryPacker::unpack(
+      parse_hex(kGoldenHex), position_scheme().on([&](packbin::Values const& row) { got = row; }));
+  expect(result.ok, "AC-2 ok");
+  expect(!packbin::present(got, "type"), "AC-2 no type");
+  expect(std::get<std::uint16_t>(got.at("0").data) == 1, "AC-2 sid");
+  expect(std::get<std::int32_t>(got.at("1").data) == 500000000, "AC-2 lat");
+  expect(std::get<std::int32_t>(got.at("2").data) == 300000000, "AC-2 lon");
+  expect(std::get<std::uint8_t>(got.at("3").data) == 1, "AC-2 profile");
+  expect(packbin::motion_field_count(got) == 0, "AC-2 motion count 0");
+  expect(!packbin::present(got, 4), "AC-2 no heading");
+  expect(!packbin::present(got, 5), "AC-2 no speed");
+  expect(!packbin::present(got, 6), "AC-2 no altitude");
 }
 
 void ac3_bytes_match_fixture() {
@@ -132,8 +134,12 @@ void ac5_short_then_pack() {
       packbin::flags({packbin::u8(0), packbin::u8(1), packbin::u8(2), packbin::u8(3),
                       packbin::u8(4), packbin::u16(5)}),
   });
-  auto got = packbin::BinaryPacker::unpack(layout, std::vector<std::uint8_t>{0x01, 0x20, 0x34});
+  bool ran = false;
+  auto got = packbin::BinaryPacker::unpack(
+      std::vector<std::uint8_t>{0x01, 0x20, 0x34},
+      layout.on([&](packbin::Values const&) { ran = true; }));
   expect(!got.ok, "AC-5 not ok");
+  expect(!ran, "AC-5 handler not run");
   expect(got.value_count() == 0, "AC-5 value count 0");
   expect(got.short_packet.has_value(), "AC-5 short packet");
   if (got.short_packet) {
@@ -163,23 +169,34 @@ void when_group_width() {
 
 void repeat_and_leftover() {
   auto layout = packbin::scheme(1, {packbin::repeat({packbin::u8(0), packbin::u8(1)})});
-  auto ok = packbin::BinaryPacker::unpack(layout, std::vector<std::uint8_t>{1, 1, 2});
+  packbin::Values ok_row;
+  auto ok = packbin::BinaryPacker::unpack(
+      std::vector<std::uint8_t>{1, 1, 2},
+      layout.on([&](packbin::Values const& row) { ok_row = row; }));
   expect(ok.ok, "repeat ok");
-  auto it = ok.value.find("0");
-  expect(it != ok.value.end(), "repeat key");
-  if (it != ok.value.end()) {
+  auto it = ok_row.find("0");
+  expect(it != ok_row.end(), "repeat key");
+  if (it != ok_row.end()) {
     auto const* list = std::get_if<packbin::Value::List>(&it->second.data);
     expect(list && *list && (*list)->items.size() == 1, "one group");
   }
-  auto bad = packbin::BinaryPacker::unpack(layout, std::vector<std::uint8_t>{1, 1, 2, 3});
+  bool bad_ran = false;
+  auto bad = packbin::BinaryPacker::unpack(
+      std::vector<std::uint8_t>{1, 1, 2, 3},
+      layout.on([&](packbin::Values const&) { bad_ran = true; }));
   expect(!bad.ok, "leftover not ok");
+  expect(!bad_ran, "leftover handler not run");
   expect(bad.value_count() == 0, "leftover value count 0");
   expect(bad.short_packet.has_value(), "leftover short");
 }
 
 void trailing_byte() {
-  auto got = packbin::BinaryPacker::unpack(position_scheme(), parse_hex(std::string(kGoldenHex) + "99"));
+  bool ran = false;
+  auto got = packbin::BinaryPacker::unpack(
+      parse_hex(std::string(kGoldenHex) + "99"),
+      position_scheme().on([&](packbin::Values const&) { ran = true; }));
   expect(!got.ok, "trailing not ok");
+  expect(!ran, "trailing handler not run");
   expect(got.value_count() == 0, "trailing value count 0");
   expect(got.trailing && got.trailing->left == 1, "trailing left 1");
 }
@@ -203,12 +220,14 @@ void nfr_round_trips() {
   bool ok = true;
   for (int i = 0; i < 100000; ++i) {
     auto bytes = packbin::BinaryPacker::pack(layout, vals);
-    auto got = packbin::BinaryPacker::unpack(layout, bytes);
+    packbin::Values row;
+    auto got = packbin::BinaryPacker::unpack(
+        bytes, layout.on([&](packbin::Values const& v) { row = v; }));
     if (!got.ok) {
       ok = false;
       break;
     }
-    last = std::move(got.value);
+    last = std::move(row);
   }
   auto elapsed = std::chrono::steady_clock::now() - start;
   auto ms = std::chrono::duration<double, std::milli>(elapsed).count();

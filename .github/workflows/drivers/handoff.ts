@@ -88,10 +88,6 @@ function deepEqual(a: unknown, b: unknown): boolean {
   return false;
 }
 
-function fieldsMatch(result: { ok: true; value: object }, expected: object): boolean {
-  return deepEqual(result.value, expected);
-}
-
 const cmd = process.argv[2];
 
 if (cmd === "pack-user") {
@@ -109,16 +105,22 @@ if (cmd === "pack-nested") {
 if (cmd === "unpack-user") {
   const hex = process.argv[3] ?? "";
   const bytes = Buffer.from(hex, "hex");
-  const result = BinaryPacker.unpack(userPacket, bytes);
-  if (result.ok && fieldsMatch(result, userValues)) process.exit(0);
+  let row: UserRow | undefined;
+  const result = BinaryPacker.unpack(bytes, userPacket.on((value) => {
+    row = value as UserRow;
+  }));
+  if (result.ok && row !== undefined && deepEqual(row, userValues)) process.exit(0);
   process.exit(1);
 }
 
 if (cmd === "unpack-nested") {
   const hex = process.argv[3] ?? "";
   const bytes = Buffer.from(hex, "hex");
-  const result = BinaryPacker.unpack(nestedPacket, bytes);
-  if (result.ok && fieldsMatch(result, nestedValues)) process.exit(0);
+  let row: NestedRow | undefined;
+  const result = BinaryPacker.unpack(bytes, nestedPacket.on((value) => {
+    row = value as NestedRow;
+  }));
+  if (result.ok && row !== undefined && deepEqual(row, nestedValues)) process.exit(0);
   process.exit(1);
 }
 

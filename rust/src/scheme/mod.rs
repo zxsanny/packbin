@@ -2,9 +2,7 @@ mod bound;
 
 pub use bound::BoundField;
 
-use crate::field::{
-    field_name, flags as layout_flags, when as layout_when, Eq, Field, MapScheme,
-};
+use crate::field::{field_name, flags as layout_flags, when as layout_when, Eq, Field, MapScheme};
 use crate::value::{Name, PackError, ShortPacket, UnpackError, Value, Values};
 use crate::walk;
 use std::collections::HashSet;
@@ -82,9 +80,7 @@ fn compile_items<T: 'static>(
                     take_id(next_id, id);
                 } else if let Some((elem_start, elem_end)) = bound.element_ids {
                     if elem_start != 0 {
-                        panic!(
-                            "list element id {elem_start} is not the next order 0"
-                        );
+                        panic!("list element id {elem_start} is not the next order 0");
                     }
                     let _ = elem_end;
                 }
@@ -99,16 +95,14 @@ fn compile_items<T: 'static>(
                 });
             }
             SchemeItem::When { cond, members } => {
-                let (child_fields, child_binders) =
-                    compile_items(members, next_id, flag_seq);
+                let (child_fields, child_binders) = compile_items(members, next_id, flag_seq);
                 fields.push(layout_when(cond, child_fields));
                 binders.extend(child_binders);
             }
             SchemeItem::Flags { members } => {
                 let name = format!("__flags_{}", *flag_seq);
                 *flag_seq = flag_seq.saturating_add(1);
-                let (child_fields, child_binders) =
-                    compile_items(members, next_id, flag_seq);
+                let (child_fields, child_binders) = compile_items(members, next_id, flag_seq);
                 fields.push(layout_flags(name.as_str(), child_fields));
                 binders.extend(child_binders);
             }
@@ -179,7 +173,7 @@ impl BinaryPacker {
         walk::pack(&scheme.layout, &values)
     }
 
-    pub fn unpack<T: Default>(scheme: &Scheme<T>, bytes: &[u8]) -> Result<T, UnpackError> {
+    fn unpack<T: Default>(scheme: &Scheme<T>, bytes: &[u8]) -> Result<T, UnpackError> {
         let values = walk::unpack(&scheme.layout, bytes)?;
         let mut row = T::default();
         for binder in &scheme.binders {

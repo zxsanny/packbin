@@ -1,87 +1,80 @@
-use packbin::{dict, insert, list, pack_map, to_hex, unpack_map, utf8, MapScheme, Value, Values};
+use packbin::{to_hex, BinaryPacker, BoundField, Scheme};
 use std::collections::BTreeMap;
 use std::process::ExitCode;
 
-fn user_scheme() -> MapScheme {
-    MapScheme::new(
+#[derive(Default, Debug, PartialEq)]
+struct User {
+    username: String,
+    roles: Vec<String>,
+    access: BTreeMap<String, Vec<String>>,
+}
+
+#[derive(Default, Debug, PartialEq)]
+struct Nested {
+    access: BTreeMap<String, Vec<BTreeMap<String, String>>>,
+}
+
+fn user_scheme() -> Scheme<User> {
+    Scheme::new(
         1,
-        vec![
-            utf8("username"),
-            list("roles", utf8("role")),
-            dict("access", list("actions", utf8("action"))),
+        [
+            BoundField::utf8(
+                0,
+                |row: &User| row.username.clone(),
+                |row, value| row.username = value,
+            )
+            .into(),
+            BoundField::list_utf8(
+                |row: &User| row.roles.clone(),
+                |row, value| row.roles = value,
+            )
+            .into(),
+            BoundField::dict_list_utf8(
+                |row: &User| row.access.clone(),
+                |row, value| row.access = value,
+            )
+            .into(),
         ],
     )
 }
 
-fn user_values() -> Values {
+fn user_row() -> User {
     let mut access = BTreeMap::new();
-    access.insert(
-        "channel".into(),
-        Value::List(vec![Value::Str("read".into())]),
-    );
+    access.insert("channel".into(), vec!["read".into()]);
     access.insert(
         "map".into(),
-        Value::List(vec![
-            Value::Str("read".into()),
-            Value::Str("gps_fix".into()),
-            Value::Str("set".into()),
-            Value::Str("edit".into()),
-        ]),
+        vec!["read".into(), "gps_fix".into(), "set".into(), "edit".into()],
     );
-    access.insert(
-        "store".into(),
-        Value::List(vec![Value::Str("read".into()), Value::Str("write".into())]),
-    );
-
-    let mut vals = Values::new();
-    insert(&mut vals, "username", Some(Value::Str("zxsanny".into())));
-    insert(
-        &mut vals,
-        "roles",
-        Some(Value::List(vec![
-            Value::Str("user".into()),
-            Value::Str("dispatcher".into()),
-        ])),
-    );
-    insert(&mut vals, "access", Some(Value::Map(access)));
-    vals
+    access.insert("store".into(), vec!["read".into(), "write".into()]);
+    User {
+        username: "zxsanny".into(),
+        roles: vec!["user".into(), "dispatcher".into()],
+        access,
+    }
 }
 
-fn nested_scheme() -> MapScheme {
-    MapScheme::new(
+fn nested_scheme() -> Scheme<Nested> {
+    Scheme::new(
         1,
-        vec![dict(
-            "access",
-            list("rows", dict("fields", utf8("value"))),
-        )],
+        [BoundField::dict_list_dict_utf8(
+            |row: &Nested| row.access.clone(),
+            |row, value| row.access = value,
+        )
+        .into()],
     )
 }
 
-fn nested_values() -> Values {
+fn nested_row() -> Nested {
     let mut map_row = BTreeMap::new();
-    map_row.insert("op".into(), Value::Str("gps_fix".into()));
+    map_row.insert("op".into(), "gps_fix".into());
     let mut read_row = BTreeMap::new();
-    read_row.insert("op".into(), Value::Str("read".into()));
+    read_row.insert("op".into(), "read".into());
     let mut write_row = BTreeMap::new();
-    write_row.insert("op".into(), Value::Str("write".into()));
-
+    write_row.insert("op".into(), "write".into());
     let mut access = BTreeMap::new();
-    access.insert("map".into(), Value::List(vec![Value::Map(map_row)]));
-    access.insert(
-        "store".into(),
-        Value::List(vec![Value::Map(read_row), Value::Map(write_row)]),
-    );
-
-    let mut vals = Values::new();
-    insert(&mut vals, "access", Some(Value::Map(access)));
-    vals
-}
-
-fn fields_match(got: &Values, expected: &Values) -> bool {
-    if got.len() != expected.len() {
-        return false;
-    }
-    expected.iter().all(|(k, ev)| got.get(k) == Some(ev))
+    access.insert("map".into(), vec![map_row]);
+    access.insert("store".into(), vec![read_row, write_row]);
+    Nested { access }
 }
 
 fn from_hex(s: &str) -> Option<Vec<u8>> {
@@ -115,12 +108,12 @@ fn run(args: &[String]) -> u8 {
     };
     match cmd {
         "pack-user" => {
-            let bytes = pack_map(&user_scheme(), &user_values()).expect("pack");
+            let bytes = BinaryPacker::pack(&user_scheme(), &user_row()).expect("pack");
             println!("{}", to_hex(&bytes));
             0
         }
         "pack-nested" => {
-            let bytes = pack_map(&nested_scheme(), &nested_values()).expect("pack");
+            let bytes = BinaryPacker::pack(&nested_scheme(), &nested_row()).expect("pack");
             println!("{}", to_hex(&bytes));
             0
         }
@@ -131,8 +124,10 @@ fn run(args: &[String]) -> u8 {
             let Some(raw) = from_hex(hex) else {
                 return 1;
             };
-            match unpack_map(&user_scheme(), &raw) {
-                Ok(got) if fields_match(&got, &user_values()) => 0,
+            let scheme = user_scheme();
+            let mut got = User::default();
+            match BinaryPacker::unpack_with(&raw, &mut [&mut scheme.on(|row| got = row)]) {
+                Ok(()) if got == user_row() => 0,
                 _ => 1,
             }
         }
@@ -143,8 +138,10 @@ fn run(args: &[String]) -> u8 {
             let Some(raw) = from_hex(hex) else {
                 return 1;
             };
-            match unpack_map(&nested_scheme(), &raw) {
-                Ok(got) if fields_match(&got, &nested_values()) => 0,
+            let scheme = nested_scheme();
+            let mut got = Nested::default();
+            match BinaryPacker::unpack_with(&raw, &mut [&mut scheme.on(|row| got = row)]) {
+                Ok(()) if got == nested_row() => 0,
                 _ => 1,
             }
         }

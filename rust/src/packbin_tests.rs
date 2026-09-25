@@ -1,7 +1,8 @@
-use packbin::{
+use crate::walk::{pack, unpack};
+use crate::{
     be, bytes, eq, f32, f64, flag_byte, flags, group, i16, i32, insert, mismatched_bytes,
-    motion_field_count, pack_map, repeat, to_hex, u16, u8, unpack_map, when, MapScheme, ShortPacket,
-    UnpackError, Value, Values,
+    motion_field_count, repeat, to_hex, u16, u8, when, MapScheme, ShortPacket, UnpackError, Value,
+    Values,
 };
 use std::fs;
 use std::time::Instant;
@@ -14,10 +15,7 @@ fn position_scheme() -> MapScheme {
             i32("lat"),
             i32("lon"),
             u8("profile"),
-            flags(
-                "motion",
-                vec![u16("heading"), u8("speed"), i16("altitude")],
-            ),
+            flags("motion", vec![u16("heading"), u8("speed"), i16("altitude")]),
         ],
     )
 }
@@ -42,18 +40,18 @@ fn parse_hex(hex: &str) -> Vec<u8> {
 
 #[test]
 fn ac1_position_pack() {
-    let packed = pack_map(&position_scheme(), &position_values()).expect("pack");
+    let packed = pack(&position_scheme(), &position_values()).expect("pack");
     let hex = to_hex(&packed);
     assert_eq!(hex, GOLDEN_HEX);
     assert_eq!(mismatched_bytes(&packed, &parse_hex(GOLDEN_HEX)), 0);
     assert_eq!(packed.len(), 13);
-    let again = pack_map(&position_scheme(), &position_values()).expect("pack again");
+    let again = pack(&position_scheme(), &position_values()).expect("pack again");
     assert_eq!(mismatched_bytes(&packed, &again), 0);
 }
 
 #[test]
 fn ac2_position_unpack() {
-    let got = unpack_map(&position_scheme(), &parse_hex(GOLDEN_HEX)).expect("unpack");
+    let got = unpack(&position_scheme(), &parse_hex(GOLDEN_HEX)).expect("unpack");
     assert!(!got.contains_key("type"));
     assert_eq!(got.get("sid"), Some(&Some(Value::U16(1))));
     assert_eq!(got.get("lat"), Some(&Some(Value::I32(500_000_000))));
@@ -68,8 +66,11 @@ fn ac2_position_unpack() {
 #[test]
 fn ac3_bytes_match_fixture() {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../fixtures/golden.hex");
-    let fixture = fs::read_to_string(path).expect("golden.hex").trim().to_string();
-    let packed = pack_map(&position_scheme(), &position_values()).expect("pack");
+    let fixture = fs::read_to_string(path)
+        .expect("golden.hex")
+        .trim()
+        .to_string();
+    let packed = pack(&position_scheme(), &position_values()).expect("pack");
     assert_eq!(to_hex(&packed), fixture);
     assert_eq!(mismatched_bytes(&packed, &parse_hex(&fixture)), 0);
 }
@@ -80,40 +81,33 @@ fn ac4_flags_and_stored_zero() {
         0x40,
         vec![flags(
             "opts",
-            vec![
-                u8("b0"),
-                u8("b1"),
-                u8("b2"),
-                u8("b3"),
-                u8("b4"),
-                u16("b5"),
-            ],
+            vec![u8("b0"), u8("b1"), u8("b2"), u8("b3"), u8("b4"), u16("b5")],
         )],
     );
 
     let clear = Values::new();
-    let clear_bytes = pack_map(&scheme, &clear).expect("pack clear");
+    let clear_bytes = pack(&scheme, &clear).expect("pack clear");
     assert_eq!(clear_bytes.len(), 2);
     assert_eq!(clear_bytes[0], 0x40);
     assert_eq!(clear_bytes[1], 0x00);
 
     let mut set = Values::new();
     insert(&mut set, "b5", Some(Value::U16(0x1234)));
-    let set_bytes = pack_map(&scheme, &set).expect("pack set");
+    let set_bytes = pack(&scheme, &set).expect("pack set");
     assert_eq!(set_bytes.len(), 4);
     assert_eq!(set_bytes[1], 0x20);
     assert_eq!(set_bytes.len() - clear_bytes.len(), 2);
 
     let mut zero = Values::new();
     insert(&mut zero, "b5", Some(Value::U16(0)));
-    let zero_bytes = pack_map(&scheme, &zero).expect("pack zero");
+    let zero_bytes = pack(&scheme, &zero).expect("pack zero");
     assert_eq!(zero_bytes.len(), 4);
     assert_eq!(zero_bytes[1], 0x20);
     assert_eq!(&zero_bytes[2..], &[0x00, 0x00]);
 
     let mut absent = Values::new();
     insert(&mut absent, "b5", None);
-    let absent_bytes = pack_map(&scheme, &absent).expect("pack absent");
+    let absent_bytes = pack(&scheme, &absent).expect("pack absent");
     assert_eq!(absent_bytes.len(), 2);
     assert_eq!(absent_bytes[1], 0x00);
     assert_eq!(absent_bytes.len(), clear_bytes.len());
@@ -137,7 +131,7 @@ fn ac5_short_buffer_then_position_pack() {
         )],
     );
     let short = [0x01u8, 0x20, 0x34];
-    let err = unpack_map(&scheme, &short).expect_err("short");
+    let err = unpack(&scheme, &short).expect_err("short");
     match err {
         UnpackError::Short(ShortPacket {
             field,
@@ -151,7 +145,7 @@ fn ac5_short_buffer_then_position_pack() {
         other => panic!("expected ShortPacket, got {:?}", other),
     }
 
-    let packed = pack_map(&position_scheme(), &position_values()).expect("pack after short");
+    let packed = pack(&position_scheme(), &position_values()).expect("pack after short");
     assert_eq!(to_hex(&packed), GOLDEN_HEX);
 }
 
@@ -162,18 +156,14 @@ fn nfr_round_trips_under_one_second() {
     let start = Instant::now();
     let mut last = Values::new();
     for _ in 0..100_000 {
-        let packed = pack_map(&scheme, &vals).expect("pack");
-        last = unpack_map(&scheme, &packed).expect("unpack");
+        let packed = pack(&scheme, &vals).expect("pack");
+        last = unpack(&scheme, &packed).expect("unpack");
     }
     let elapsed = start.elapsed();
     assert!(!last.contains_key("type"));
     assert_eq!(last.get("lat"), Some(&Some(Value::I32(500_000_000))));
     assert_no_gpu();
-    assert!(
-        elapsed.as_secs_f64() <= 1.0,
-        "elapsed {:?} > 1s",
-        elapsed
-    );
+    assert!(elapsed.as_secs_f64() <= 1.0, "elapsed {:?} > 1s", elapsed);
     eprintln!("nfr elapsed_ms {:.1}", elapsed.as_secs_f64() * 1000.0);
 }
 
@@ -189,12 +179,12 @@ fn when_group_width() {
     let mut miss = Values::new();
     insert(&mut miss, "profile", Some(Value::U8(1)));
     insert(&mut miss, "shape", Some(Value::U8(9)));
-    assert_eq!(pack_map(&scheme, &miss).unwrap().len(), 2);
+    assert_eq!(pack(&scheme, &miss).unwrap().len(), 2);
 
     let mut hit = Values::new();
     insert(&mut hit, "profile", Some(Value::U8(0)));
     insert(&mut hit, "shape", Some(Value::U8(9)));
-    assert_eq!(pack_map(&scheme, &hit).unwrap().len(), 3);
+    assert_eq!(pack(&scheme, &hit).unwrap().len(), 3);
 }
 
 #[test]
@@ -206,8 +196,8 @@ fn repeat_groups_and_leftover() {
     insert(&mut g1, "lat", Some(Value::I32(10)));
     insert(&mut g1, "lon", Some(Value::I32(20)));
     insert(&mut vals, "__repeat__", Some(Value::Groups(vec![g1])));
-    let packed = pack_map(&scheme, &vals).unwrap();
-    let got = unpack_map(&scheme, &packed).unwrap();
+    let packed = pack(&scheme, &vals).unwrap();
+    let got = unpack(&scheme, &packed).unwrap();
     match got.get("__repeat__") {
         Some(Some(Value::Groups(g))) => assert_eq!(g.len(), 1),
         other => panic!("expected one group, got {:?}", other),
@@ -215,7 +205,7 @@ fn repeat_groups_and_leftover() {
 
     let mut leftover = packed;
     leftover.push(0xff);
-    let err = unpack_map(&scheme, &leftover).expect_err("leftover");
+    let err = unpack(&scheme, &leftover).expect_err("leftover");
     match err {
         UnpackError::Short(ShortPacket { field, .. }) => {
             assert!(field == "lat" || field == "lon");
@@ -227,7 +217,7 @@ fn repeat_groups_and_leftover() {
 #[test]
 fn trailing_bytes_error() {
     let scheme = MapScheme::new(1, vec![u16("sid")]);
-    let err = unpack_map(&scheme, &[1, 2, 3, 4]).expect_err("trailing");
+    let err = unpack(&scheme, &[1, 2, 3, 4]).expect_err("trailing");
     assert!(matches!(err, UnpackError::Trailing { left: 1 }));
 }
 
@@ -245,7 +235,7 @@ fn split_flag_byte_and_be() {
     );
     let mut vals = Values::new();
     insert(&mut vals, "heading", Some(Value::U16(90)));
-    let packed = pack_map(&scheme, &vals).unwrap();
+    let packed = pack(&scheme, &vals).unwrap();
     assert_eq!(packed[0], 0x01);
     assert_eq!(packed[1], 0x01);
     assert_eq!(packed.len(), 4);
@@ -253,14 +243,14 @@ fn split_flag_byte_and_be() {
     let be_scheme = MapScheme::new(1, vec![be(u16("sid"))]);
     let mut be_vals = Values::new();
     insert(&mut be_vals, "sid", Some(Value::U16(0x0102)));
-    assert_eq!(pack_map(&be_scheme, &be_vals).unwrap(), vec![0x01, 0x01, 0x02]);
+    assert_eq!(pack(&be_scheme, &be_vals).unwrap(), vec![0x01, 0x01, 0x02]);
 
     let mut float_vals = Values::new();
     insert(&mut float_vals, "x", Some(Value::F32(1.0)));
     insert(&mut float_vals, "y", Some(Value::F64(2.0)));
     insert(&mut float_vals, "z", Some(Value::Bytes(vec![9, 8])));
     let float_scheme = MapScheme::new(1, vec![f32("x"), f64("y"), bytes("z", 2)]);
-    assert_eq!(pack_map(&float_scheme, &float_vals).unwrap().len(), 15);
+    assert_eq!(pack(&float_scheme, &float_vals).unwrap().len(), 15);
 }
 
 fn assert_no_gpu() {
@@ -284,9 +274,9 @@ fn empty_group_flag() {
     let scheme = MapScheme::new(1, vec![flags("f", vec![group("mark", vec![])])]);
     let mut set = Values::new();
     insert(&mut set, "mark", Some(Value::U8(1)));
-    assert_eq!(pack_map(&scheme, &set).unwrap(), vec![0x01, 0x01]);
+    assert_eq!(pack(&scheme, &set).unwrap(), vec![0x01, 0x01]);
     let clear = Values::new();
-    assert_eq!(pack_map(&scheme, &clear).unwrap(), vec![0x01, 0x00]);
+    assert_eq!(pack(&scheme, &clear).unwrap(), vec![0x01, 0x00]);
 }
 
 #[test]
@@ -295,25 +285,18 @@ fn flags_five_u8_then_u16() {
         1,
         vec![flags(
             "f",
-            vec![
-                u8("a"),
-                u8("b"),
-                u8("c"),
-                u8("d"),
-                u8("e"),
-                u16("b5"),
-            ],
+            vec![u8("a"), u8("b"), u8("c"), u8("d"), u8("e"), u16("b5")],
         )],
     );
     let mut a = Values::new();
     insert(&mut a, "a", Some(Value::U8(1)));
-    assert_eq!(pack_map(&scheme, &a).unwrap().len(), 3);
+    assert_eq!(pack(&scheme, &a).unwrap().len(), 3);
 
     let mut b5 = Values::new();
     insert(&mut b5, "b5", Some(Value::U16(1)));
-    let wide = pack_map(&scheme, &b5).unwrap();
+    let wide = pack(&scheme, &b5).unwrap();
     assert_eq!(wide[1], 0x20);
-    let clear = pack_map(&scheme, &Values::new()).unwrap();
+    let clear = pack(&scheme, &Values::new()).unwrap();
     assert_eq!(wide.len() - clear.len(), 2);
 }
 
@@ -323,19 +306,19 @@ fn session_group_pack_unpack() {
         1,
         vec![flags(
             "f",
-            vec![group("session", vec![u16("login"), packbin::u32("ts")])],
+            vec![group("session", vec![u16("login"), crate::u32("ts")])],
         )],
     );
     let mut vals = Values::new();
     insert(&mut vals, "login", Some(Value::U16(7)));
     insert(&mut vals, "ts", Some(Value::U32(1000)));
-    let raw = pack_map(&scheme, &vals).unwrap();
+    let raw = pack(&scheme, &vals).unwrap();
     assert_eq!(to_hex(&raw[2..]), "0700e8030000");
     assert_eq!(raw.len() - 2, 6);
 
-    let clear = pack_map(&scheme, &Values::new()).unwrap();
+    let clear = pack(&scheme, &Values::new()).unwrap();
     assert_eq!(clear, vec![0x01, 0x00]);
-    let got = unpack_map(&scheme, &clear).unwrap();
+    let got = unpack(&scheme, &clear).unwrap();
     assert!(!got.contains_key("login"));
     assert!(!got.contains_key("ts"));
 }
@@ -345,7 +328,7 @@ fn group_one_u8_zero() {
     let scheme = MapScheme::new(1, vec![flags("f", vec![group("g", vec![u8("b")])])]);
     let mut vals = Values::new();
     insert(&mut vals, "b", Some(Value::U8(0)));
-    assert_eq!(pack_map(&scheme, &vals).unwrap(), vec![0x01, 0x01, 0x00]);
+    assert_eq!(pack(&scheme, &vals).unwrap(), vec![0x01, 0x01, 0x00]);
 }
 
 #[test]
@@ -354,10 +337,10 @@ fn session_group_short_read() {
         1,
         vec![flags(
             "f",
-            vec![group("session", vec![u16("login"), packbin::u32("ts")])],
+            vec![group("session", vec![u16("login"), crate::u32("ts")])],
         )],
     );
-    let err = unpack_map(&scheme, &[0x01, 0x01, 0x07]).expect_err("short");
+    let err = unpack(&scheme, &[0x01, 0x01, 0x07]).expect_err("short");
     match err {
         UnpackError::Short(ShortPacket {
             field,

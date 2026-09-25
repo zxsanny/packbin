@@ -1,7 +1,5 @@
 use crate::field::{field_name, Field, FieldKind, FloatKind, IntKind, MapScheme};
-use crate::value::{
-    as_bit, as_u2, as_usize, present, values_eq, Name, PackError, Value, Values,
-};
+use crate::value::{as_bit, as_u2, as_usize, present, values_eq, Name, PackError, Value, Values};
 use std::collections::HashMap;
 
 fn require<'a>(values: &'a Values, name: &str) -> Result<&'a Value, PackError> {
@@ -34,7 +32,12 @@ fn write_int(out: &mut Vec<u8>, kind: IntKind, be: bool, value: &Value) -> Resul
     Ok(())
 }
 
-fn write_float(out: &mut Vec<u8>, kind: FloatKind, be: bool, value: &Value) -> Result<(), PackError> {
+fn write_float(
+    out: &mut Vec<u8>,
+    kind: FloatKind,
+    be: bool,
+    value: &Value,
+) -> Result<(), PackError> {
     match (kind, value) {
         (FloatKind::F32, Value::F32(v)) => write_bytes(out, &v.to_le_bytes(), be),
         (FloatKind::F64, Value::F64(v)) => write_bytes(out, &v.to_le_bytes(), be),

@@ -52,25 +52,12 @@ class BinaryPacker:
 
     @staticmethod
     def unpack(
-        first: Scheme[T] | bytes | bytearray | memoryview,
-        second: bytes | bytearray | memoryview | _Handler[Any] | None = None,
-        *rest: _Handler[Any],
+        data: bytes | bytearray | memoryview,
+        *handlers: _Handler[Any],
     ) -> UnpackResult[Any]:
-        if isinstance(first, Scheme):
-            if second is None:
-                raise TypeError("unpack() missing data")
-            if isinstance(second, _Handler):
-                raise TypeError("known unpack expects bytes")
-            return BinaryPacker._unpack_known(first, second)
-        if second is None and not rest:
+        if not handlers:
             raise TypeError("unpack() missing handlers")
-        handlers: list[_Handler[Any]] = []
-        if second is not None:
-            if not isinstance(second, _Handler):
-                raise TypeError("unknown unpack expects handlers")
-            handlers.append(second)
-        handlers.extend(rest)
-        return BinaryPacker._unpack_dispatch(first, tuple(handlers))
+        return BinaryPacker._unpack_dispatch(data, handlers)
 
     @staticmethod
     def _unpack_fields(scheme: Scheme[T], view: memoryview, offset: int) -> UnpackResult[T]:
@@ -82,17 +69,6 @@ class BinaryPacker:
         if left > 0:
             return UnpackResult(ok=False, value=None, error=TrailingBytes(left=left))
         return UnpackResult(ok=True, value=row, error=None)
-
-    @staticmethod
-    def _unpack_known(scheme: Scheme[T], data: bytes | bytearray | memoryview) -> UnpackResult[T]:
-        view = memoryview(data)
-        left = len(view)
-        if left < 1:
-            return UnpackResult(ok=False, value=None, error=ShortPacket(field="", needed=1, left=left))
-        actual = int(view[0])
-        if actual != scheme._type_number:
-            return UnpackResult(ok=False, value=None, error=TypeMismatch(expected=scheme._type_number, actual=actual))
-        return BinaryPacker._unpack_fields(scheme, view, 1)
 
     @staticmethod
     def _unpack_dispatch(

@@ -153,13 +153,13 @@ void ac2_position_golden_no_type_member() {
 
 void ac3_known_scheme_checks_leading_byte() {
   auto layout = packbin::Scheme<MarkerRow>(1, packbin::u8(0, &MarkerRow::sid));
-  auto got = packbin::BinaryPacker::unpack(layout, parse_hex("0217"));
+  bool ran = false;
+  auto got = packbin::BinaryPacker::unpack(
+      parse_hex("0217"), layout.on([&](MarkerRow const&) { ran = true; }));
   expect(!got.ok, "AC-3 not ok");
-  expect(!got.value.has_value(), "AC-3 no row");
+  expect(!ran, "AC-3 handler not run");
   expect(got.type_mismatch.has_value(), "AC-3 type_mismatch");
   if (got.type_mismatch) {
-    expect(got.type_mismatch->expected.has_value() && *got.type_mismatch->expected == 1,
-           "AC-3 expected 1");
     expect(got.type_mismatch->actual == 2, "AC-3 actual 2");
   }
 }

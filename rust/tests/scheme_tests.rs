@@ -130,11 +130,7 @@ fn position_row_scheme() -> Scheme<PositionRow> {
                 |r: &mut PositionRow, v| r.profile = v,
             )
             .into(),
-            flags(
-                "motion",
-                vec![u16("heading"), u8("speed"), i16("altitude")],
-            )
-            .into(),
+            flags("motion", vec![u16("heading"), u8("speed"), i16("altitude")]).into(),
         ],
     )
 }
@@ -186,19 +182,26 @@ fn ac2_position_row_no_type_member() {
 
 #[test]
 fn ac3_known_scheme_checks_leading_byte() {
-    match BinaryPacker::unpack(&sid_scheme(), &parse_hex("2117")) {
-        Err(UnpackError::Type { expected, actual }) => {
-            assert_eq!(expected, 32);
-            assert_eq!(actual, 33);
-        }
-        Ok(_) => panic!("expected UnpackError::Type, got row"),
-        Err(other) => panic!("expected UnpackError::Type, got {:?}", other),
+    let scheme = sid_scheme();
+    let mut called = false;
+    let mut on_sid = scheme.on(|_row| {
+        called = true;
+    });
+    match BinaryPacker::unpack_with(&parse_hex("2117"), &mut [&mut on_sid]) {
+        Err(UnpackError::Type { actual, .. }) => assert_eq!(actual, 33),
+        other => panic!("expected UnpackError::Type, got {:?}", other),
     }
+    assert!(!called);
 }
 
 #[test]
 fn ac3_empty_buffer_short_packet() {
-    match BinaryPacker::unpack::<SidRow>(&sid_scheme(), &[]) {
+    let scheme = sid_scheme();
+    let mut called = false;
+    let mut on_sid = scheme.on(|_row| {
+        called = true;
+    });
+    match BinaryPacker::unpack_with(&[], &mut [&mut on_sid]) {
         Err(UnpackError::Short(ShortPacket {
             field,
             needed,
@@ -210,6 +213,7 @@ fn ac3_empty_buffer_short_packet() {
         }
         other => panic!("expected ShortPacket, got {:?}", other),
     }
+    assert!(!called);
 }
 
 #[test]
@@ -342,4 +346,56 @@ fn scheme_argument_is_required() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
     );
+}
+
+#[derive(Default, Debug, PartialEq)]
+struct UserRow {
+    username: String,
+    roles: Vec<String>,
+    access: std::collections::BTreeMap<String, Vec<String>>,
+}
+
+fn user_row_scheme() -> Scheme<UserRow> {
+    Scheme::new(
+        1,
+        [
+            BoundField::utf8(
+                0,
+                |row: &UserRow| row.username.clone(),
+                |row, value| row.username = value,
+            )
+            .into(),
+            BoundField::list_utf8(
+                |row: &UserRow| row.roles.clone(),
+                |row, value| row.roles = value,
+            )
+            .into(),
+            BoundField::dict_list_utf8(
+                |row: &UserRow| row.access.clone(),
+                |row, value| row.access = value,
+            )
+            .into(),
+        ],
+    )
+}
+
+#[test]
+fn user_handler_reads_first_byte() {
+    let mut access = std::collections::BTreeMap::new();
+    access.insert("map".into(), vec!["read".into(), "edit".into()]);
+    access.insert("store".into(), vec!["write".into()]);
+    let row = UserRow {
+        username: "ada".into(),
+        roles: vec!["user".into(), "admin".into()],
+        access,
+    };
+    let scheme = user_row_scheme();
+    let raw = BinaryPacker::pack(&scheme, &row).expect("pack");
+    assert_eq!(
+        to_hex(&raw),
+        "0103006164610200040075736572050061646d696e020003006d61700200040072656164040065646974050073746f7265010005007772697465"
+    );
+    let mut got = UserRow::default();
+    BinaryPacker::unpack_with(&raw, &mut [&mut scheme.on(|found| got = found)]).expect("dispatch");
+    assert_eq!(got, row);
 }

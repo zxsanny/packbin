@@ -104,14 +104,15 @@ static class Handoff
 
     static bool UnpackUser(string hex)
     {
-        var got = BinaryPacker.Unpack(UserScheme, Convert.FromHexString(hex));
-        if (!got.Ok || got.Value is null)
+        UserRow? row = null;
+        var err = BinaryPacker.Unpack(Convert.FromHexString(hex), UserScheme.On(v => row = v));
+        if (err is not null || row is null)
             return false;
-        if (!EqualsString(got.Value.Username, "zxsanny"))
+        if (!EqualsString(row.Username, "zxsanny"))
             return false;
-        if (!EqualsStringList(got.Value.Roles, "user", "dispatcher"))
+        if (!EqualsStringList(row.Roles, "user", "dispatcher"))
             return false;
-        if (got.Value.Access is not IDictionary access)
+        if (row.Access is not IDictionary access)
             return false;
         if (!EqualsStringList(access["channel"], "read"))
             return false;
@@ -124,10 +125,11 @@ static class Handoff
 
     static bool UnpackNested(string hex)
     {
-        var got = BinaryPacker.Unpack(NestedScheme, Convert.FromHexString(hex));
-        if (!got.Ok || got.Value is null)
+        NestedRow? row = null;
+        var err = BinaryPacker.Unpack(Convert.FromHexString(hex), NestedScheme.On(v => row = v));
+        if (err is not null || row is null)
             return false;
-        if (got.Value.Access is not IDictionary access)
+        if (row.Access is not IDictionary access)
             return false;
         if (access.Count != 2)
             return false;

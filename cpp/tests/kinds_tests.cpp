@@ -58,9 +58,10 @@ void new_field_kinds() {
   expect(raw.size() - 2 == 6, "group width 6");
   auto absent = packbin::BinaryPacker::pack(two, {});
   expect(absent.size() == 2 && absent[0] == 0x01 && absent[1] == 0x00, "group clear adds 0");
-  auto absent_got = packbin::BinaryPacker::unpack(two, absent);
-  expect(absent_got.ok && !packbin::present(absent_got.value, 0) &&
-             !packbin::present(absent_got.value, 1),
+  packbin::Values absent_row;
+  auto absent_got = packbin::BinaryPacker::unpack(
+      absent, two.on([&](packbin::Values const& row) { absent_row = row; }));
+  expect(absent_got.ok && !packbin::present(absent_row, 0) && !packbin::present(absent_row, 1),
          "group clear unpacks no fields");
 
   auto zero = packbin::scheme(1, {packbin::flags({packbin::group({packbin::u8(0)})})});
@@ -70,7 +71,8 @@ void new_field_kinds() {
   expect(stored.size() == 3 && stored[0] == 0x01 && stored[1] == 0x01 && stored[2] == 0x00,
          "present 0 stored");
 
-  auto short_got = packbin::BinaryPacker::unpack(two, std::vector<std::uint8_t>{0x01, 0x01, 0x07});
+  auto short_got = packbin::BinaryPacker::unpack(
+      std::vector<std::uint8_t>{0x01, 0x01, 0x07}, two.on([&](packbin::Values const&) {}));
   expect(!short_got.ok && short_got.value_count() == 0, "group short no value");
   expect(short_got.short_packet && short_got.short_packet->field == "0" &&
              short_got.short_packet->needed == 2 && short_got.short_packet->left == 1,
@@ -81,19 +83,25 @@ void new_field_kinds() {
   sized_v.emplace("0", packbin::Value{std::uint16_t{3}});
   sized_v.emplace("1", packbin::Value{packbin::Value::Bytes{0x75, 0x61, 0x76}});
   expect(packbin::to_hex(packbin::BinaryPacker::pack(sized_layout, sized_v)) == "010300756176", "sized 3");
-  auto sized_got = packbin::BinaryPacker::unpack(sized_layout, packbin::BinaryPacker::pack(sized_layout, sized_v));
-  expect(sized_got.ok && std::get<packbin::Value::Bytes>(sized_got.value.at("1").data) ==
+  packbin::Values sized_row;
+  auto sized_got = packbin::BinaryPacker::unpack(
+      packbin::BinaryPacker::pack(sized_layout, sized_v),
+      sized_layout.on([&](packbin::Values const& row) { sized_row = row; }));
+  expect(sized_got.ok && std::get<packbin::Value::Bytes>(sized_row.at("1").data) ==
                              packbin::Value::Bytes{0x75, 0x61, 0x76},
          "sized unpack");
   packbin::Values empty_v;
   empty_v.emplace("0", packbin::Value{std::uint16_t{0}});
   empty_v.emplace("1", packbin::Value{packbin::Value::Bytes{}});
   expect(packbin::to_hex(packbin::BinaryPacker::pack(sized_layout, empty_v)) == "010000", "sized 0");
-  auto empty_got = packbin::BinaryPacker::unpack(sized_layout, packbin::BinaryPacker::pack(sized_layout, empty_v));
-  expect(empty_got.ok &&
-             std::get<packbin::Value::Bytes>(empty_got.value.at("1").data).empty(),
+  packbin::Values empty_row;
+  auto empty_got = packbin::BinaryPacker::unpack(
+      packbin::BinaryPacker::pack(sized_layout, empty_v),
+      sized_layout.on([&](packbin::Values const& row) { empty_row = row; }));
+  expect(empty_got.ok && std::get<packbin::Value::Bytes>(empty_row.at("1").data).empty(),
          "sized 0 unpack");
-  auto sized_short = packbin::BinaryPacker::unpack(sized_layout, parse_hex("01030075"));
+  auto sized_short = packbin::BinaryPacker::unpack(
+      parse_hex("01030075"), sized_layout.on([&](packbin::Values const&) {}));
   expect(!sized_short.ok && sized_short.value_count() == 0 && sized_short.short_packet &&
              sized_short.short_packet->field == "1" &&
              sized_short.short_packet->needed == 3 && sized_short.short_packet->left == 1,
@@ -107,11 +115,13 @@ void new_field_kinds() {
   kinds_v.emplace("3", packbin::Value{std::uint8_t{3}});
   auto kind_bytes = packbin::BinaryPacker::pack(kinds, kinds_v);
   expect(packbin::to_hex(kind_bytes) == "01e4", "u2 e4");
-  auto kind_got = packbin::BinaryPacker::unpack(kinds, kind_bytes);
-  expect(kind_got.ok && std::get<std::uint8_t>(kind_got.value.at("0").data) == 0 &&
-             std::get<std::uint8_t>(kind_got.value.at("1").data) == 1 &&
-             std::get<std::uint8_t>(kind_got.value.at("2").data) == 2 &&
-             std::get<std::uint8_t>(kind_got.value.at("3").data) == 3,
+  packbin::Values kind_row;
+  auto kind_got = packbin::BinaryPacker::unpack(
+      kind_bytes, kinds.on([&](packbin::Values const& row) { kind_row = row; }));
+  expect(kind_got.ok && std::get<std::uint8_t>(kind_row.at("0").data) == 0 &&
+             std::get<std::uint8_t>(kind_row.at("1").data) == 1 &&
+             std::get<std::uint8_t>(kind_row.at("2").data) == 2 &&
+             std::get<std::uint8_t>(kind_row.at("3").data) == 3,
          "u2 unpack");
   packbin::Values one_v;
   one_v.emplace("0", packbin::Value{std::uint8_t{1}});
@@ -137,7 +147,8 @@ void new_field_kinds() {
   expect(nine_bytes.size() == 4 && nine_bytes[0] == 0x01 && nine_bytes[2] == 0xff &&
              (nine_bytes[3] & 0xfe) == 0,
          "bits 9 unused 0");
-  auto bits_short = packbin::BinaryPacker::unpack(bits_layout, std::vector<std::uint8_t>{1, 9, 0x01});
+  auto bits_short = packbin::BinaryPacker::unpack(
+      std::vector<std::uint8_t>{1, 9, 0x01}, bits_layout.on([&](packbin::Values const&) {}));
   expect(!bits_short.ok && bits_short.value_count() == 0 && bits_short.short_packet &&
              bits_short.short_packet->field == "1" && bits_short.short_packet->needed == 2 &&
              bits_short.short_packet->left == 1,
@@ -151,16 +162,19 @@ void utf8_string() {
   auto raw = packbin::BinaryPacker::pack(layout, vals);
   expect(packbin::to_hex(raw) == "0107007a7873616e6e79", "utf8 hex");
   expect(raw.size() == 10, "utf8 len");
-  auto got = packbin::BinaryPacker::unpack(layout, raw);
-  expect(got.ok && std::get<std::string>(got.value.at("0").data) == "zxsanny", "utf8 text");
+  packbin::Values got;
+  auto got_err = packbin::BinaryPacker::unpack(
+      raw, layout.on([&](packbin::Values const& row) { got = row; }));
+  expect(got_err.ok && std::get<std::string>(got.at("0").data) == "zxsanny", "utf8 text");
 
   packbin::Values empty_vals;
   empty_vals.emplace("0", packbin::Value{""});
   auto empty = packbin::BinaryPacker::pack(layout, empty_vals);
   expect(packbin::to_hex(empty) == "010000", "utf8 empty");
-  auto empty_got = packbin::BinaryPacker::unpack(layout, empty);
-  expect(empty_got.ok && std::get<std::string>(empty_got.value.at("0").data).empty(),
-         "utf8 empty text");
+  packbin::Values empty_row;
+  auto empty_got = packbin::BinaryPacker::unpack(
+      empty, layout.on([&](packbin::Values const& row) { empty_row = row; }));
+  expect(empty_got.ok && std::get<std::string>(empty_row.at("0").data).empty(), "utf8 empty text");
 
   packbin::Values long_vals;
   long_vals.emplace("0", packbin::Value{std::string(65536, 'a')});
@@ -172,7 +186,8 @@ void utf8_string() {
   }
   expect(failed, "utf8 too long");
 
-  auto short_got = packbin::BinaryPacker::unpack(layout, parse_hex("0107007a78"));
+  auto short_got = packbin::BinaryPacker::unpack(
+      parse_hex("0107007a78"), layout.on([&](packbin::Values const&) {}));
   expect(!short_got.ok && short_got.value_count() == 0 && short_got.short_packet &&
              short_got.short_packet->field == "0" && short_got.short_packet->needed == 7 &&
              short_got.short_packet->left == 2,
@@ -188,9 +203,11 @@ void counted_list() {
   vals.emplace("xs", packbin::Value{items});
   auto raw = packbin::BinaryPacker::pack(two, vals);
   expect(packbin::to_hex(raw) == "01020001000200", "list hex");
-  auto got = packbin::BinaryPacker::unpack(two, raw);
-  auto const& back = std::get<packbin::Value::List>(got.value.at("xs").data);
-  expect(got.ok && back && back->items.size() == 2, "list unpack");
+  packbin::Values got;
+  auto got_err = packbin::BinaryPacker::unpack(
+      raw, two.on([&](packbin::Values const& row) { got = row; }));
+  auto const& back = std::get<packbin::Value::List>(got.at("xs").data);
+  expect(got_err.ok && back && back->items.size() == 2, "list unpack");
   expect(std::get<std::uint16_t>(back->items[0].data) == 1, "list 0");
   expect(std::get<std::uint16_t>(back->items[1].data) == 2, "list 1");
 
@@ -209,11 +226,13 @@ void counted_list() {
   both_vals.emplace("0", packbin::Value{std::uint8_t{2}});
   auto both = packbin::BinaryPacker::pack(followed, both_vals);
   expect(packbin::to_hex(both) == "0101000102", "list next hex");
-  auto back_got = packbin::BinaryPacker::unpack(followed, both);
-  auto const& xs = std::get<packbin::Value::List>(back_got.value.at("xs").data);
+  packbin::Values back_row;
+  auto back_got = packbin::BinaryPacker::unpack(
+      both, followed.on([&](packbin::Values const& row) { back_row = row; }));
+  auto const& xs = std::get<packbin::Value::List>(back_row.at("xs").data);
   expect(back_got.ok && xs && xs->items.size() == 1, "list next xs");
   expect(std::get<std::uint8_t>(xs->items[0].data) == 1, "list next 1");
-  expect(std::get<std::uint8_t>(back_got.value.at("0").data) == 2, "list next y");
+  expect(std::get<std::uint8_t>(back_row.at("0").data) == 2, "list next y");
 
   auto empty_items = std::make_shared<packbin::ValueList>();
   packbin::Values empty_vals;
@@ -270,13 +289,15 @@ void dictionary() {
   t1.join();
   t2.join();
   expect(packbin::mismatched_bytes(left, right) == 0, "dict parallel");
-  auto got = packbin::BinaryPacker::unpack(layout, raw);
-  expect(got.ok && std::get<std::string>(got.value.at("0").data) == "zxsanny", "dict user");
-  auto const& roles = std::get<packbin::Value::List>(got.value.at("roles").data);
+  packbin::Values got;
+  auto got_err = packbin::BinaryPacker::unpack(
+      raw, layout.on([&](packbin::Values const& row) { got = row; }));
+  expect(got_err.ok && std::get<std::string>(got.at("0").data) == "zxsanny", "dict user");
+  auto const& roles = std::get<packbin::Value::List>(got.at("roles").data);
   expect(roles && roles->items.size() == 2, "dict roles");
   expect(std::get<std::string>(roles->items[0].data) == "user", "dict role 0");
   expect(std::get<std::string>(roles->items[1].data) == "dispatcher", "dict role 1");
-  auto const& back = std::get<packbin::Value::Map>(got.value.at("access").data);
+  auto const& back = std::get<packbin::Value::Map>(got.at("access").data);
   expect(back && back->items.size() == 3, "dict access");
   auto const& channel = std::get<packbin::Value::List>(back->items.at("channel").data);
   expect(channel && channel->items.size() == 1 &&
@@ -298,7 +319,8 @@ void dictionary() {
   expect(packbin::to_hex(packbin::BinaryPacker::pack(empty, empty_vals)) == "01000000000000", "dict empty");
 
   auto dup = packbin::scheme(1, {packbin::dict("access", packbin::utf8(0))});
-  auto bad = packbin::BinaryPacker::unpack(dup, parse_hex("010200010061010078010061010079"));
+  auto bad = packbin::BinaryPacker::unpack(
+      parse_hex("010200010061010078010061010079"), dup.on([&](packbin::Values const&) {}));
   expect(!bad.ok && bad.value_count() == 0 && bad.short_packet, "dict dup");
 
   auto huge = std::make_shared<packbin::ValueMap>();

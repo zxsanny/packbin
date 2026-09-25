@@ -94,24 +94,24 @@ public class SchemeTests
         Assert.Equal(0, MismatchedBytes(bytes, fixture));
         Assert.Null(typeof(PositionRow).GetProperty("type"));
         Assert.Null(typeof(PositionRow).GetField("type"));
-        var back = BinaryPacker.Unpack(PositionScheme, bytes);
-        Assert.True(back.Ok);
-        Assert.NotNull(back.Value);
-        Assert.Equal((ushort)1, back.Value.Sid);
-        Assert.Equal(500_000_000, back.Value.Lat);
-        Assert.Equal(300_000_000, back.Value.Lon);
-        Assert.Equal((byte)1, back.Value.Profile);
+        PositionRow? row = null;
+        var err = BinaryPacker.Unpack(bytes, PositionScheme.On(v => row = v));
+        Assert.Null(err);
+        Assert.NotNull(row);
+        Assert.Equal((ushort)1, row.Sid);
+        Assert.Equal(500_000_000, row.Lat);
+        Assert.Equal(300_000_000, row.Lon);
+        Assert.Equal((byte)1, row.Profile);
     }
 
     [Fact]
     public void Ac3_KnownSchemeChecksLeadingByte()
     {
         var scheme = new Scheme<MarkerRow>(1, Field.U8<MarkerRow>(0, x => x.Sid));
-        var back = BinaryPacker.Unpack(scheme, ParseHex("0217"));
-        Assert.False(back.Ok);
-        Assert.Null(back.Value);
-        var mismatch = Assert.IsType<TypeMismatch>(back.Error);
-        Assert.Equal(1, mismatch.Expected);
+        MarkerRow? row = null;
+        var err = BinaryPacker.Unpack(ParseHex("0217"), scheme.On(v => row = v));
+        Assert.Null(row);
+        var mismatch = Assert.IsType<TypeMismatch>(err);
         Assert.Equal(2, mismatch.Actual);
     }
 
@@ -174,10 +174,10 @@ public class SchemeTests
     [Fact]
     public void EmptyBufferIsShortPacket()
     {
-        var back = BinaryPacker.Unpack(MarkerScheme, ReadOnlySpan<byte>.Empty);
-        Assert.False(back.Ok);
-        Assert.Null(back.Value);
-        var missing = Assert.IsType<ShortPacket>(back.Error);
+        MarkerRow? row = null;
+        var err = BinaryPacker.Unpack(ReadOnlySpan<byte>.Empty, MarkerScheme.On(v => row = v));
+        Assert.Null(row);
+        var missing = Assert.IsType<ShortPacket>(err);
         Assert.Equal("", missing.Field);
         Assert.Equal(1, missing.Needed);
         Assert.Equal(0, missing.Left);

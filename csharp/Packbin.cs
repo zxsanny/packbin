@@ -131,14 +131,6 @@ public static class BinaryPacker
         return Pack(scheme, ObjectValues.From(values));
     }
 
-    public static Bound<T> Unpack<T>(Scheme<T> scheme, ReadOnlySpan<byte> bytes) where T : class, new()
-    {
-        var raw = Read(scheme, bytes);
-        if (raw.Error is not null)
-            return new Bound<T>(null, raw.Error);
-        return new Bound<T>(ObjectValues.To<T>(raw.Values), null);
-    }
-
     public static object? Unpack(ReadOnlySpan<byte> bytes, params SchemeHandler[] handlers)
     {
         var seen = new HashSet<int>();
