@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import pytest
 
@@ -16,8 +17,6 @@ from packbin import (
     u16,
     when,
 )
-
-from _bind import gs, leaf
 
 AC1_HEX = "2001000065cd1d00a3e111010000000000"
 
@@ -43,15 +42,15 @@ class ParentRow:
 MARKER = Scheme(
     0x20,
     MarkerRow,
-    u16(0, *gs("sid")),
-    i32(1, *gs("lat")),
-    i32(2, *gs("lon")),
-    u8(3, *gs("kind")),
-    when(eq(3, 1), u16(4, *gs("kind_id"))),
-    u16(5, *gs("title")),
+    u16(0, lambda row: row.sid),
+    i32(1, lambda row: row.lat),
+    i32(2, lambda row: row.lon),
+    u8(3, lambda row: row.kind),
+    when(eq(3, 1), u16(4, lambda row: row.kind_id)),
+    u16(5, lambda row: row.title),
     flags(
-        flag_bool(6, *gs("hidden")),
-        flag_bool(7, *gs("delta")),
+        flag_bool(6, lambda row: row.hidden),
+        flag_bool(7, lambda row: row.delta),
     ),
 )
 
@@ -106,8 +105,8 @@ def test_ac4_nested_row_type_has_own_ids():
     parent = Scheme(
         0x20,
         ParentRow,
-        u16(0, *gs("sid")),
-        list(*gs("items"), u16(0, *leaf())),
+        u16(0, lambda row: row.sid),
+        list(lambda row: row.items, u16(0, lambda row: row)),
     )
     raw = BinaryPacker.pack(parent, ParentRow(sid=1, items=[7, 8]))
     got = BinaryPacker.unpack(raw, parent.on(lambda row: None))
@@ -117,9 +116,20 @@ def test_ac4_nested_row_type_has_own_ids():
     assert got.value.items == [7, 8]
 
 
+def test_non_member_accessor_is_rejected():
+    with pytest.raises(ValueError):
+        u16(0, lambda row: row.sid + 1)
+
+
+def test_readme_python_example_has_no_bind_helper():
+    readme = Path(__file__).resolve().parents[2].joinpath("README.md").read_text()
+    assert readme.count("def bind") == 0
+    assert readme.count("*bind(") == 0
+
+
 def test_ac5_order_must_match_the_number():
     with pytest.raises(ValueError):
-        Scheme(1, MarkerRow, i32(2, *gs("lat")))
+        Scheme(1, MarkerRow, i32(2, lambda row: row.lat))
 
 
 def test_ac6_ac1_bytes_match():

@@ -19,9 +19,6 @@ from packbin import (
     utf8,
 )
 
-from _bind import gs
-
-
 @dataclass
 class MarkerRow:
     sid: int = 0
@@ -53,36 +50,36 @@ class PositionRow:
     altitude: int | None = None
 
 
-MARKER = Scheme(32, MarkerRow, u8(0, *gs("sid")))
+MARKER = Scheme(32, MarkerRow, u8(0, lambda row: row.sid))
 
 MODIFIED = Scheme(
     1,
     UserModifiedEvent,
-    i32(0, *gs("user_id")),
-    utf8(1, *gs("user_name_change")),
-    utf8(2, *gs("user_email_change")),
-    u8(3, *gs("user_status_change")),
+    i32(0, lambda row: row.user_id),
+    utf8(1, lambda row: row.user_name_change),
+    utf8(2, lambda row: row.user_email_change),
+    u8(3, lambda row: row.user_status_change),
 )
 
 POSITION_EVENT = Scheme(
     2,
     UserPositionEvent,
-    i32(0, *gs("user_id")),
-    i32(1, *gs("latitude")),
-    i32(2, *gs("longitude")),
+    i32(0, lambda row: row.user_id),
+    i32(1, lambda row: row.latitude),
+    i32(2, lambda row: row.longitude),
 )
 
 POSITION = Scheme(
     0x40,
     PositionRow,
-    u16(0, *gs("sid")),
-    i32(1, *gs("lat")),
-    i32(2, *gs("lon")),
-    u8(3, *gs("profile")),
+    u16(0, lambda row: row.sid),
+    i32(1, lambda row: row.lat),
+    i32(2, lambda row: row.lon),
+    u8(3, lambda row: row.profile),
     flags(
-        u16(4, *gs("heading")),
-        u8(5, *gs("speed")),
-        i16(6, *gs("altitude")),
+        u16(4, lambda row: row.heading),
+        u8(5, lambda row: row.speed),
+        i16(6, lambda row: row.altitude),
     ),
 )
 
@@ -94,7 +91,7 @@ def test_ac1_scheme_replaces_packet():
     assert not hasattr(packbin, "packet")
     assert not hasattr(packbin, "pack")
     assert not hasattr(packbin, "unpack")
-    scheme = Scheme(1, MarkerRow, u8(0, *gs("sid")))
+    scheme = Scheme(1, MarkerRow, u8(0, lambda row: row.sid))
     assert scheme._type_number == 1
     raw = BinaryPacker.pack(scheme, MarkerRow(sid=7))
     assert raw == bytes([0x01, 0x07])
@@ -111,7 +108,7 @@ def test_ac2_position_row_has_no_type_member():
 
 def test_ac3_known_scheme_checks_leading_byte():
     called = []
-    scheme = Scheme(1, MarkerRow, u8(0, *gs("sid")))
+    scheme = Scheme(1, MarkerRow, u8(0, lambda row: row.sid))
     got = BinaryPacker.unpack(bytes([2, 7]), scheme.on(lambda row: called.append(row)))
     assert got.ok is False
     assert got.value is None
@@ -164,7 +161,7 @@ def test_ac5_unknown_type_number():
 
 
 def test_ac6_type_numbers_in_one_call_are_unique():
-    other = Scheme(1, MarkerRow, u8(0, *gs("sid")))
+    other = Scheme(1, MarkerRow, u8(0, lambda row: row.sid))
     with pytest.raises(ValueError):
         BinaryPacker.unpack(b"\x01\x00", MODIFIED.on(lambda ev: None), other.on(lambda row: None))
 
@@ -177,9 +174,9 @@ def test_scheme_argument_required():
 
 def test_type_number_range():
     with pytest.raises(ValueError):
-        Scheme(256, MarkerRow, u8(0, *gs("sid")))
+        Scheme(256, MarkerRow, u8(0, lambda row: row.sid))
     with pytest.raises(ValueError):
-        Scheme(-1, MarkerRow, u8(0, *gs("sid")))
+        Scheme(-1, MarkerRow, u8(0, lambda row: row.sid))
 
 
 def test_empty_buffer_short_packet():

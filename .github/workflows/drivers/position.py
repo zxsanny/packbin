@@ -1,20 +1,17 @@
 from packbin import BinaryPacker, Scheme, flags, i16, i32, u8, u16
 
-def gs(key):
-    return (lambda r, k=key: r.get(k), lambda r, v, k=key: r.__setitem__(k, v))
-
 raw = BinaryPacker.pack(
     Scheme(
         0x40,
         dict,
-        u16(0, *gs("sid")),
-        i32(1, *gs("lat")),
-        i32(2, *gs("lon")),
-        u8(3, *gs("profile")),
+        u16(0, lambda row: row["sid"]),
+        i32(1, lambda row: row["lat"]),
+        i32(2, lambda row: row["lon"]),
+        u8(3, lambda row: row["profile"]),
         flags(
-            u16(4, *gs("heading")),
-            u8(5, *gs("speed")),
-            i16(6, *gs("altitude")),
+            u16(4, lambda row: row["heading"]),
+            u8(5, lambda row: row["speed"]),
+            i16(6, lambda row: row["altitude"]),
         ),
     ),
     {

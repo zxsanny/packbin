@@ -7,7 +7,54 @@ from typing import Any
 
 Get = Callable[[Any], Any]
 Set = Callable[[Any, Any], None]
+Acc = Callable[[Any], Any]
 _builtin_list = list
+_builtin_dict = dict
+
+
+class _Hit:
+    def __init__(self, kind: str, key: Any) -> None:
+        self.kind = kind
+        self.key = key
+
+    def _bad(self, *_args: Any, **_kwargs: Any) -> Any:
+        raise TypeError("accessor must be a member access")
+
+    __add__ = __radd__ = __sub__ = __rsub__ = __mul__ = __bool__ = __getitem__ = __getattr__ = _bad
+
+
+class _Probe:
+    def __getattr__(self, name: str) -> _Hit:
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return _Hit("attr", name)
+
+    def __getitem__(self, key: Any) -> _Hit:
+        return _Hit("item", key)
+
+
+def _pair(acc: Acc) -> tuple[Get, Set]:
+    probe = _Probe()
+    try:
+        result = acc(probe)
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise ValueError("accessor must be a member access") from exc
+    if result is probe:
+        return (lambda row: row, lambda _row, _value: None)
+    if not isinstance(result, _Hit):
+        raise ValueError("accessor must be a member access")
+    key = result.key
+    if result.kind == "attr":
+        return (
+            lambda row, key=key: getattr(row, key, None),
+            lambda row, value, key=key: setattr(row, key, value),
+        )
+    return (
+        lambda row, key=key: row.get(key) if isinstance(row, _builtin_dict) else row[key],
+        lambda row, value, key=key: row.__setitem__(key, value),
+    )
 
 
 class _Node:
@@ -167,54 +214,66 @@ def _scalar(
     )
 
 
-def u8(field_id: int, get: Get, set: Set) -> _Scalar:
-    return _scalar(field_id, get, set, "u8", 1, "B", False, 0, 0xFF)
+def u8(field_id: int, acc: Acc) -> _Scalar:
+    get, set_ = _pair(acc)
+    return _scalar(field_id, get, set_, "u8", 1, "B", False, 0, 0xFF)
 
 
-def u16(field_id: int, get: Get, set: Set) -> _Scalar:
-    return _scalar(field_id, get, set, "u16", 2, "H", False, 0, 0xFFFF)
+def u16(field_id: int, acc: Acc) -> _Scalar:
+    get, set_ = _pair(acc)
+    return _scalar(field_id, get, set_, "u16", 2, "H", False, 0, 0xFFFF)
 
 
-def u32(field_id: int, get: Get, set: Set) -> _Scalar:
-    return _scalar(field_id, get, set, "u32", 4, "I", False, 0, 0xFFFFFFFF)
+def u32(field_id: int, acc: Acc) -> _Scalar:
+    get, set_ = _pair(acc)
+    return _scalar(field_id, get, set_, "u32", 4, "I", False, 0, 0xFFFFFFFF)
 
 
-def u64(field_id: int, get: Get, set: Set) -> _Scalar:
-    return _scalar(field_id, get, set, "u64", 8, "Q", False, 0, 0xFFFFFFFFFFFFFFFF)
+def u64(field_id: int, acc: Acc) -> _Scalar:
+    get, set_ = _pair(acc)
+    return _scalar(field_id, get, set_, "u64", 8, "Q", False, 0, 0xFFFFFFFFFFFFFFFF)
 
 
-def i8(field_id: int, get: Get, set: Set) -> _Scalar:
-    return _scalar(field_id, get, set, "i8", 1, "b", True, -0x80, 0x7F)
+def i8(field_id: int, acc: Acc) -> _Scalar:
+    get, set_ = _pair(acc)
+    return _scalar(field_id, get, set_, "i8", 1, "b", True, -0x80, 0x7F)
 
 
-def i16(field_id: int, get: Get, set: Set) -> _Scalar:
-    return _scalar(field_id, get, set, "i16", 2, "h", True, -0x8000, 0x7FFF)
+def i16(field_id: int, acc: Acc) -> _Scalar:
+    get, set_ = _pair(acc)
+    return _scalar(field_id, get, set_, "i16", 2, "h", True, -0x8000, 0x7FFF)
 
 
-def i32(field_id: int, get: Get, set: Set) -> _Scalar:
-    return _scalar(field_id, get, set, "i32", 4, "i", True, -0x80000000, 0x7FFFFFFF)
+def i32(field_id: int, acc: Acc) -> _Scalar:
+    get, set_ = _pair(acc)
+    return _scalar(field_id, get, set_, "i32", 4, "i", True, -0x80000000, 0x7FFFFFFF)
 
 
-def i64(field_id: int, get: Get, set: Set) -> _Scalar:
-    return _scalar(field_id, get, set, "i64", 8, "q", True, -0x8000000000000000, 0x7FFFFFFFFFFFFFFF)
+def i64(field_id: int, acc: Acc) -> _Scalar:
+    get, set_ = _pair(acc)
+    return _scalar(field_id, get, set_, "i64", 8, "q", True, -0x8000000000000000, 0x7FFFFFFFFFFFFFFF)
 
 
-def f32(field_id: int, get: Get, set: Set) -> _Scalar:
-    return _scalar(field_id, get, set, "f32", 4, "f", True, float("-inf"), float("inf"))
+def f32(field_id: int, acc: Acc) -> _Scalar:
+    get, set_ = _pair(acc)
+    return _scalar(field_id, get, set_, "f32", 4, "f", True, float("-inf"), float("inf"))
 
 
-def f64(field_id: int, get: Get, set: Set) -> _Scalar:
-    return _scalar(field_id, get, set, "f64", 8, "d", True, float("-inf"), float("inf"))
+def f64(field_id: int, acc: Acc) -> _Scalar:
+    get, set_ = _pair(acc)
+    return _scalar(field_id, get, set_, "f64", 8, "d", True, float("-inf"), float("inf"))
 
 
-def bool(field_id: int, get: Get, set: Set) -> _Bool:  # noqa: A001
-    return _Bool(field_id=field_id, get=get, set=set)
+def bool(field_id: int, acc: Acc) -> _Bool:  # noqa: A001
+    get, set_ = _pair(acc)
+    return _Bool(field_id=field_id, get=get, set=set_)
 
 
-def bytes(field_id: int, get: Get, set: Set, n: int) -> _Bytes:  # noqa: A001
+def bytes(field_id: int, acc: Acc, n: int) -> _Bytes:  # noqa: A001
     if n < 0:
         raise ValueError("bytes length must be >= 0")
-    return _Bytes(field_id=field_id, get=get, set=set, size=n)
+    get, set_ = _pair(acc)
+    return _Bytes(field_id=field_id, get=get, set=set_, size=n)
 
 
 def be(field: _Scalar) -> _Scalar:
@@ -259,11 +318,12 @@ def group(*fields: _Node) -> _Group:
     return _Group(fields=_builtin_list(fields))
 
 
-def sized(field_id: int, get: Get, set: Set, count: int) -> _Sized:
-    return _Sized(field_id=field_id, get=get, set=set, count=count)
+def sized(field_id: int, acc: Acc, count: int) -> _Sized:
+    get, set_ = _pair(acc)
+    return _Sized(field_id=field_id, get=get, set=set_, count=count)
 
 
-def u2(*slots: _U2Slot | tuple[int, Get, Set]) -> _U2:
+def u2(*slots: _U2Slot | tuple[int, Acc]) -> _U2:
     if not slots:
         raise ValueError("u2 needs at least one slot")
     out: list[_U2Slot] = []
@@ -271,29 +331,34 @@ def u2(*slots: _U2Slot | tuple[int, Get, Set]) -> _U2:
         if isinstance(slot, _U2Slot):
             out.append(slot)
         else:
-            field_id, get, set = slot
-            out.append(_U2Slot(field_id=field_id, get=get, set=set))
+            field_id, acc = slot
+            get, set_ = _pair(acc)
+            out.append(_U2Slot(field_id=field_id, get=get, set=set_))
     return _U2(slots=out)
 
 
-def bits(field_id: int, get: Get, set: Set, count: int) -> _Bits:
-    return _Bits(field_id=field_id, get=get, set=set, count=count)
+def bits(field_id: int, acc: Acc, count: int) -> _Bits:
+    get, set_ = _pair(acc)
+    return _Bits(field_id=field_id, get=get, set=set_, count=count)
 
 
-def utf8(field_id: int, get: Get, set: Set) -> _Utf8:
-    return _Utf8(field_id=field_id, get=get, set=set)
+def utf8(field_id: int, acc: Acc) -> _Utf8:
+    get, set_ = _pair(acc)
+    return _Utf8(field_id=field_id, get=get, set=set_)
 
 
-def list(get: Get, set: Set, element: _Node) -> _List:  # noqa: A001
+def list(acc: Acc, element: _Node) -> _List:  # noqa: A001
     if isinstance(element, _Repeat):
         raise ValueError("repeat is not a list element")
-    return _List(get=get, set=set, element=element)
+    get, set_ = _pair(acc)
+    return _List(get=get, set=set_, element=element)
 
 
-def dict(get: Get, set: Set, element: _Node) -> _Dict:  # noqa: A001
+def dict(acc: Acc, element: _Node) -> _Dict:  # noqa: A001
     if isinstance(element, _Repeat):
         raise ValueError("repeat is not a dictionary element")
-    return _Dict(get=get, set=set, element=element)
+    get, set_ = _pair(acc)
+    return _Dict(get=get, set=set_, element=element)
 
 
 def _validate_order(nodes: Sequence[_Node], next_id: int = 0) -> int:

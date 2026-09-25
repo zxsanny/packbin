@@ -15,8 +15,6 @@ from packbin import (
     u16,
 )
 
-from _bind import gs
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GOLDEN_HEX = (REPO_ROOT / "fixtures" / "golden.hex").read_text().strip()
 POSITION_HEX = "4001000065cd1d00a3e1110100"
@@ -24,14 +22,14 @@ POSITION_HEX = "4001000065cd1d00a3e1110100"
 POSITION = Scheme(
     0x40,
     dict,
-    u16(0, *gs("sid")),
-    i32(1, *gs("lat")),
-    i32(2, *gs("lon")),
-    u8(3, *gs("profile")),
+    u16(0, lambda row: row["sid"]),
+    i32(1, lambda row: row["lat"]),
+    i32(2, lambda row: row["lon"]),
+    u8(3, lambda row: row["profile"]),
     flags(
-        u16(4, *gs("heading")),
-        u8(5, *gs("speed")),
-        i16(6, *gs("altitude")),
+        u16(4, lambda row: row["heading"]),
+        u8(5, lambda row: row["speed"]),
+        i16(6, lambda row: row["altitude"]),
     ),
 )
 
@@ -91,12 +89,12 @@ def test_ac4_flags_and_stored_zero():
         0x40,
         dict,
         flags(
-            u8(0, *gs("b0")),
-            u8(1, *gs("b1")),
-            u8(2, *gs("b2")),
-            u8(3, *gs("b3")),
-            u8(4, *gs("b4")),
-            u16(5, *gs("b5")),
+            u8(0, lambda row: row["b0"]),
+            u8(1, lambda row: row["b1"]),
+            u8(2, lambda row: row["b2"]),
+            u8(3, lambda row: row["b3"]),
+            u8(4, lambda row: row["b4"]),
+            u16(5, lambda row: row["b5"]),
         ),
     )
     clear = BinaryPacker.pack(layout, {})
@@ -124,12 +122,12 @@ def test_ac5_short_field_then_position_pack():
         0x40,
         dict,
         flags(
-            u8(0, *gs("b0")),
-            u8(1, *gs("b1")),
-            u8(2, *gs("b2")),
-            u8(3, *gs("b3")),
-            u8(4, *gs("b4")),
-            u16(5, *gs("b5")),
+            u8(0, lambda row: row["b0"]),
+            u8(1, lambda row: row["b1"]),
+            u8(2, lambda row: row["b2"]),
+            u8(3, lambda row: row["b3"]),
+            u8(4, lambda row: row["b4"]),
+            u16(5, lambda row: row["b5"]),
         ),
     )
     short = bytes([0x40, 0x20, 0x34])

@@ -27,22 +27,24 @@ from packbin import (
     when,
 )
 
-from _bind import gs, leaf
-
-
 def test_when_group_width():
-    g_profile, s_profile = gs("profile")
-    g_shape, s_shape = gs("shape")
-    layout = Scheme(1, dict, u8(0, g_profile, s_profile), when(eq(0, 0), u8(1, g_shape, s_shape)))
+    layout = Scheme(
+        1,
+        dict,
+        u8(0, lambda row: row["profile"]),
+        when(eq(0, 0), u8(1, lambda row: row["shape"])),
+    )
     assert len(BinaryPacker.pack(layout, {"profile": 1})) == 2
     assert len(BinaryPacker.pack(layout, {"profile": 0, "shape": 9})) == 3
 
 
 def test_repeat_group_boundary():
-    g_type, s_type = gs("type")
-    g_lat, s_lat = gs("lat")
-    g_lon, s_lon = gs("lon")
-    layout = Scheme(1, dict, u8(0, g_type, s_type), repeat(i32(1, g_lat, s_lat), i32(2, g_lon, s_lon)))
+    layout = Scheme(
+        1,
+        dict,
+        u8(0, lambda row: row["type"]),
+        repeat(i32(1, lambda row: row["lat"]), i32(2, lambda row: row["lon"])),
+    )
     complete = BinaryPacker.pack(
         layout,
         {"type": 1, "lat": [10, 30], "lon": [20, 40]},
@@ -61,8 +63,7 @@ def test_repeat_group_boundary():
 
 
 def test_flag_group():
-    g_mark, s_mark = gs("mark")
-    empty = Scheme(1, dict, flags(flag_bool(0, g_mark, s_mark)))
+    empty = Scheme(1, dict, flags(flag_bool(0, lambda row: row["mark"])))
     set_bit = BinaryPacker.pack(empty, {"mark": True})
     assert set_bit == b"\x01\x01"
     assert len(set_bit) - 1 == 1
@@ -73,12 +74,12 @@ def test_flag_group():
         1,
         dict,
         flags(
-            u8(0, *gs("a")),
-            u8(1, *gs("b")),
-            u8(2, *gs("c")),
-            u8(3, *gs("d")),
-            u8(4, *gs("e")),
-            u16(5, *gs("b5")),
+            u8(0, lambda row: row["a"]),
+            u8(1, lambda row: row["b"]),
+            u8(2, lambda row: row["c"]),
+            u8(3, lambda row: row["d"]),
+            u8(4, lambda row: row["e"]),
+            u16(5, lambda row: row["b5"]),
         ),
     )
     assert len(BinaryPacker.pack(one, {"a": 1})) == 3
@@ -86,7 +87,7 @@ def test_flag_group():
     assert wide[1] == 0x20
     assert len(wide) - len(BinaryPacker.pack(one, {})) == 2
 
-    two = Scheme(1, dict, flags(group(u16(0, *gs("login")), u32(1, *gs("ts")))))
+    two = Scheme(1, dict, flags(group(u16(0, lambda row: row["login"]), u32(1, lambda row: row["ts"]))))
     raw = BinaryPacker.pack(two, {"login": 7, "ts": 1000})
     assert raw[2:].hex() == "0700e8030000"
     assert len(raw) - 2 == 6
@@ -98,7 +99,7 @@ def test_flag_group():
     assert "login" not in got.value
     assert "ts" not in got.value
 
-    zero = Scheme(1, dict, flags(group(u8(0, *gs("b")))))
+    zero = Scheme(1, dict, flags(group(u8(0, lambda row: row["b"]))))
     stored = BinaryPacker.pack(zero, {"b": 0})
     assert stored == b"\x01\x01\x00"
 
@@ -112,7 +113,7 @@ def test_flag_group():
 
 
 def test_sized_bytes():
-    layout = Scheme(1, dict, u16(0, *gs("n")), sized(1, *gs("payload"), 0))
+    layout = Scheme(1, dict, u16(0, lambda row: row["n"]), sized(1, lambda row: row["payload"], 0))
     raw = BinaryPacker.pack(layout, {"n": 3, "payload": bytes.fromhex("756176")})
     assert raw.hex() == "010300756176"
     got = BinaryPacker.unpack(raw, layout.on(lambda row: None))
@@ -135,17 +136,17 @@ def test_sized_bytes():
 
 
 def test_u2_and_bits():
-    kinds = Scheme(1, dict, u2((0, *gs("a")), (1, *gs("b")), (2, *gs("c")), (3, *gs("d"))))
+    kinds = Scheme(1, dict, u2((0, lambda row: row["a"]), (1, lambda row: row["b"]), (2, lambda row: row["c"]), (3, lambda row: row["d"])))
     raw = BinaryPacker.pack(kinds, {"a": 0, "b": 1, "c": 2, "d": 3})
     assert raw.hex() == "01e4"
     got = BinaryPacker.unpack(raw, kinds.on(lambda row: None))
     assert got.ok is True
     assert got.value is not None
     assert [got.value[k] for k in ("a", "b", "c", "d")] == [0, 1, 2, 3]
-    one = BinaryPacker.pack(Scheme(1, dict, u2((0, *gs("a")))), {"a": 1})
+    one = BinaryPacker.pack(Scheme(1, dict, u2((0, lambda row: row["a"]))), {"a": 1})
     assert one.hex() == "0101"
 
-    layout = Scheme(1, dict, u8(0, *gs("n")), bits(1, *gs("segs"), 0))
+    layout = Scheme(1, dict, u8(0, lambda row: row["n"]), bits(1, lambda row: row["segs"], 0))
     eight = BinaryPacker.pack(layout, {"n": 8, "segs": [1] * 8})
     assert eight[2:].hex() == "ff"
     assert len(eight) - 2 == 1
@@ -163,7 +164,7 @@ def test_u2_and_bits():
 
 
 def test_utf8_string():
-    layout = Scheme(1, dict, utf8(0, *gs("name")))
+    layout = Scheme(1, dict, utf8(0, lambda row: row["name"]))
     raw = BinaryPacker.pack(layout, {"name": "zxsanny"})
     assert raw.hex() == "0107007a7873616e6e79"
     assert len(raw) == 10
@@ -192,7 +193,7 @@ def test_utf8_string():
 
 
 def test_counted_list():
-    two = Scheme(1, dict, list(*gs("xs"), u16(0, *leaf())))
+    two = Scheme(1, dict, list(lambda row: row["xs"], u16(0, lambda row: row)))
     raw = BinaryPacker.pack(two, {"xs": [1, 2]})
     assert raw.hex() == "01020001000200"
     got = BinaryPacker.unpack(raw, two.on(lambda row: None))
@@ -200,10 +201,10 @@ def test_counted_list():
     assert got.value is not None
     assert got.value["xs"] == [1, 2]
 
-    be_one = Scheme(1, dict, list(*gs("xs"), be(u16(0, *leaf()))))
+    be_one = Scheme(1, dict, list(lambda row: row["xs"], be(u16(0, lambda row: row))))
     assert BinaryPacker.pack(be_one, {"xs": [1]}).hex() == "0101000001"
 
-    followed = Scheme(1, dict, list(*gs("xs"), u8(0, *leaf())), u8(0, *gs("y")))
+    followed = Scheme(1, dict, list(lambda row: row["xs"], u8(0, lambda row: row)), u8(0, lambda row: row["y"]))
     both = BinaryPacker.pack(followed, {"xs": [1], "y": 2})
     assert both.hex() == "0101000102"
     back = BinaryPacker.unpack(both, followed.on(lambda row: None))
@@ -226,9 +227,9 @@ def test_dictionary():
     layout = Scheme(
         1,
         dict,
-        utf8(0, *gs("username")),
-        list(*gs("roles"), utf8(0, *leaf())),
-        map_field(*gs("access"), list(*gs("actions"), utf8(0, *leaf()))),
+        utf8(0, lambda row: row["username"]),
+        list(lambda row: row["roles"], utf8(0, lambda row: row)),
+        map_field(lambda row: row["access"], list(lambda row: row["actions"], utf8(0, lambda row: row))),
     )
     values = {
         "username": "zxsanny",
@@ -264,15 +265,15 @@ def test_dictionary():
     empty = Scheme(
         1,
         dict,
-        utf8(0, *gs("s")),
-        list(*gs("xs"), u8(0, *leaf())),
-        map_field(*gs("m"), utf8(0, *leaf())),
+        utf8(0, lambda row: row["s"]),
+        list(lambda row: row["xs"], u8(0, lambda row: row)),
+        map_field(lambda row: row["m"], utf8(0, lambda row: row)),
     )
     assert BinaryPacker.pack(empty, {"s": "", "xs": [], "m": {}}).hex() == "01000000000000"
 
     dup = BinaryPacker.unpack(
         bytes.fromhex("010200010061010078010061010079"),
-        Scheme(1, dict, map_field(*gs("access"), utf8(0, *leaf()))).on(lambda row: None),
+        Scheme(1, dict, map_field(lambda row: row["access"], utf8(0, lambda row: row))).on(lambda row: None),
     )
     assert dup.ok is False
     assert dup.value is None
@@ -295,6 +296,6 @@ def test_dictionary():
     assert results[0] is not None and results[1] is not None
     assert results[0] == results[1]
 
-    huge = Scheme(1, dict, map_field(*gs("m"), utf8(0, *leaf())))
+    huge = Scheme(1, dict, map_field(lambda row: row["m"], utf8(0, lambda row: row)))
     with pytest.raises(ValueError):
         BinaryPacker.pack(huge, {"m": {str(i): "x" for i in range(65536)}})

@@ -1,8 +1,8 @@
 # Dependencies Table
 
 **Date**: 2026-09-24
-**Total Tasks**: 25
-**Total Complexity Points**: 124
+**Total Tasks**: 26
+**Total Complexity Points**: 127
 
 Estimation: `_docs/LESSONS.md` says the six packages stay peers. These four tasks do not add a shared walker. No point bump.
 
@@ -33,5 +33,6 @@ Estimation: `_docs/LESSONS.md` says the six packages stay peers. These four task
 | AZ-1946 | scheme | 8 | AZ-1945 | pending |
 | AZ-1949 | scheme_dispatch | 8 | AZ-1946 | pending |
 | AZ-1950 | field_id_binding | 8 | AZ-1949 | pending |
+| AZ-1963 | python_single_accessor | 3 | AZ-1950 | AZ-1861 |
 
 The six pack tasks do not depend on each other. AZ-1875 runs after all six. The five blackbox tasks run after AZ-1913 and do not depend on each other. The three earlier todo tasks do not depend on each other and still have no tracker id. AZ-1938 through AZ-1941 are under epic AZ-1937. The string count does not include itself; the list count does not consume the next field.

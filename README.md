@@ -24,20 +24,17 @@ class Position:
         self.speed = None
         self.altitude = None
 
-def bind(name):
-    return (lambda row: getattr(row, name), lambda row, value: setattr(row, name, value))
-
 target = Scheme(
     0x40,
     Position,
-    u16(0, *bind("sid")),
-    i32(1, *bind("lat")),
-    i32(2, *bind("lon")),
-    u8(3, *bind("profile")),
+    u16(0, lambda row: row.sid),
+    i32(1, lambda row: row.lat),
+    i32(2, lambda row: row.lon),
+    u8(3, lambda row: row.profile),
     flags(
-        u16(4, *bind("heading")),
-        u8(5, *bind("speed")),
-        i16(6, *bind("altitude")),
+        u16(4, lambda row: row.heading),
+        u8(5, lambda row: row.speed),
+        i16(6, lambda row: row.altitude),
     ),
 )
 
@@ -52,8 +49,8 @@ class Note:
         self.id = 0
         self.title = ""
 
-ping = Scheme(2, Ping, u8(0, *bind("code")))
-note = Scheme(3, Note, u16(0, *bind("id")), utf8(1, *bind("title")))
+ping = Scheme(2, Ping, u8(0, lambda row: row.code))
+note = Scheme(3, Note, u16(0, lambda row: row.id), utf8(1, lambda row: row.title))
 
 got = []
 pinged = []

@@ -5,20 +5,12 @@ import sys
 from packbin import BinaryPacker, Scheme, dict as map_field, list, utf8
 
 
-def gs(key: str):
-    return (lambda r, k=key: r.get(k), lambda r, v, k=key: r.__setitem__(k, v))
-
-
-def leaf():
-    return (lambda x: x, lambda _x, _v: None)
-
-
 USER = Scheme(
     1,
     dict,
-    utf8(0, *gs("username")),
-    list(*gs("roles"), utf8(0, *leaf())),
-    map_field(*gs("access"), list(*gs("actions"), utf8(0, *leaf()))),
+    utf8(0, lambda row: row["username"]),
+    list(lambda row: row["roles"], utf8(0, lambda row: row)),
+    map_field(lambda row: row["access"], list(lambda row: row["actions"], utf8(0, lambda row: row))),
 )
 
 USER_VALUES = {
@@ -34,7 +26,7 @@ USER_VALUES = {
 NESTED = Scheme(
     1,
     dict,
-    map_field(*gs("access"), list(*gs("rows"), map_field(*gs("fields"), utf8(0, *leaf())))),
+    map_field(lambda row: row["access"], list(lambda row: row["rows"], map_field(lambda row: row["fields"], utf8(0, lambda row: row)))),
 )
 
 NESTED_VALUES = {
