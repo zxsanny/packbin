@@ -284,9 +284,325 @@ BinaryPacker::unpack_with(
 | `utf8` | UTF-8 string, `u16` length |
 | `list` | `u16` count, then that many elements |
 | `dict` | `u16` pair count; keys in unsigned byte order |
-| `flags(name, fields)` | one `u8`; bit 0 is the first field; a clear bit omits that field |
-| `when(eq(field, value), fields)` | the group only when an earlier field equals `value` |
+| `flags(fields)` | one `u8`; bit 0 is the first field; a clear bit omits that field |
+| `bool` | a flag bit with no payload |
+| `when(eq(id, value), fields)` | the group only when an earlier field equals `value` |
 | `repeat(fields)` | the group until the buffer ends |
+| `sized` | raw bytes whose length is an earlier integer |
+| `u2` | fixed 2-bit slots, low bits first |
+| `bits` | 1-bit list; the count is an earlier integer |
+| `packed` | 1-bit or 2-bit list; the count is an earlier integer plus a bias |
+| `times` | the inner fields exactly N times, then the next field |
+
+Field numbers are the order in the scheme, starting at 0. They are not written. The snippets below are Python. The other languages use the same order and produce the same bytes. The first byte of every packet is the scheme type number.
+
+### Integers
+
+Little-endian. `u16` 1 is `01 00`. `i16` −2 is `fe ff`.
+
+```python
+row = Scheme(1, dict, u16(0, lambda row: row["n"]), i16(1, lambda row: row["d"]))
+BinaryPacker.pack(row, {"n": 1, "d": -2})
+```
+
+```
+01 01 00 fe ff
+```
+
+`0` is a value and is written. A missing optional field is absence, which only `flags` can express.
+
+### Floats
+
+IEEE 754, little-endian. `f32` 1.5 is `00 00 c0 3f`.
+
+```python
+row = Scheme(1, dict, f32(0, lambda row: row["x"]))
+BinaryPacker.pack(row, {"x": 1.5})
+```
+
+```
+01 00 00 c0 3f
+```
+
+`f64` is the same layout in eight bytes.
+
+### Fixed bytes
+
+`bytes(n)` writes exactly `n` bytes and no length. `b"abc"` with `n = 3` is the three characters.
+
+```python
+row = Scheme(1, dict, bytes(0, lambda row: row["b"], 3))
+BinaryPacker.pack(row, {"b": b"abc"})
+```
+
+```
+01 61 62 63
+```
+
+A shorter or longer value is rejected.
+
+### Big-endian
+
+`be` flips one number. The rest of the scheme stays little-endian. `u16` 1 becomes `00 01`.
+
+```python
+row = Scheme(1, dict, be(u16(0, lambda row: row["n"])))
+BinaryPacker.pack(row, {"n": 1})
+```
+
+```
+01 00 01
+```
+
+### UTF-8
+
+A `u16` byte count, then the UTF-8 bytes. `"zxsanny"` is 7 bytes. An empty string is `00 00`. More than 65535 bytes is rejected.
+
+```python
+row = Scheme(1, dict, utf8(0, lambda row: row["name"]))
+BinaryPacker.pack(row, {"name": "zxsanny"})
+```
+
+```
+01 07 00 7a 78 73 61 6e 6e 79
+```
+
+### List
+
+A `u16` count, then that many elements. The element is one field, and its id restarts at 0 inside the list. `[1, 2]` of `u16` is count 2, then `01 00`, then `02 00`. An empty list is `00 00` and still leaves the next scheme field readable.
+
+```python
+row = Scheme(1, dict, list(lambda row: row["xs"], u16(0, lambda row: row)))
+BinaryPacker.pack(row, {"xs": [1, 2]})
+```
+
+```
+01 02 00 01 00 02 00
+```
+
+### Dictionary
+
+A `u16` pair count. Each pair is a UTF-8 key, then one element. Keys are written in unsigned byte order, so insert order does not change the packet. `"a"` then `"b"`:
+
+```python
+from packbin import dict as map_field
+
+row = Scheme(1, dict, map_field(lambda row: row["m"], u8(0, lambda row: row)))
+BinaryPacker.pack(row, {"m": {"b": 1, "a": 2}})
+```
+
+```
+01 02 00 01 00 61 02 01 00 62 01
+```
+
+`02 00` is two pairs. `01 00 61` is the key `"a"`, then value `02`. `01 00 62` is `"b"`, then value `01`.
+
+### Flags
+
+One byte in front of the fields. Bit 0 is the first field. A set bit writes that field next. A clear bit skips it, so the field takes no space. `0` is still present: it sets the bit and writes a zero. `None` leaves the bit clear.
+
+`heading = 90` sets bit 0 and writes `5a 00`. `speed` is absent, so bit 1 stays clear.
+
+```python
+row = Scheme(
+    1,
+    dict,
+    flags(
+        u16(0, lambda row: row["heading"]),
+        u8(1, lambda row: row["speed"]),
+    ),
+)
+BinaryPacker.pack(row, {"heading": 90})
+```
+
+```
+01 01 5a 00
+```
+
+`group` gathers several fields under one bit. The bit is set when any of them is present, and those fields are written in order.
+
+### Bool
+
+A `bool` inside `flags` sets its bit and writes nothing after it. Here bit 0 is the bool and bit 1 is a `u8` of 7, so the flags byte is `03` and the only payload is `07`.
+
+```python
+row = Scheme(
+    1,
+    dict,
+    flags(
+        bool(0, lambda row: row["on"]),
+        u8(1, lambda row: row["n"]),
+    ),
+)
+BinaryPacker.pack(row, {"on": True, "n": 7})
+```
+
+```
+01 03 07
+```
+
+### When
+
+The group is written only when an earlier field equals the given value. The tested field must already have been read. `profile == 0` writes `shape`. Any other profile writes nothing after the profile byte.
+
+```python
+row = Scheme(
+    1,
+    dict,
+    u8(0, lambda row: row["profile"]),
+    when(eq(0, 0), u8(1, lambda row: row["shape"])),
+)
+BinaryPacker.pack(row, {"profile": 0, "shape": 9})
+```
+
+```
+01 00 09
+```
+
+`profile = 1` is `01 01`.
+
+### Repeat
+
+The group is repeated until the buffer ends. There is no count. Unpack stops on the last complete group. One leftover byte is a short packet: it names the field, the bytes needed, and the bytes left, and returns no row.
+
+Two points, `(10, 20)` then `(30, 40)`:
+
+```python
+row = Scheme(
+    1,
+    dict,
+    repeat(i32(0, lambda row: row["lat"]), i32(1, lambda row: row["lon"])),
+)
+BinaryPacker.pack(row, {"lat": [10, 30], "lon": [20, 40]})
+```
+
+```
+01 0a 00 00 00 14 00 00 00 1e 00 00 00 28 00 00 00
+```
+
+A field after `repeat` is eaten as another point. Use `times` when something follows the group.
+
+### Sized
+
+Raw bytes whose length is an earlier integer. No length of its own. The list must be that many bytes. Count 3 and `75 61 76`:
+
+```python
+row = Scheme(
+    1,
+    dict,
+    u16(0, lambda row: row["n"]),
+    sized(1, lambda row: row["payload"], 0),
+)
+BinaryPacker.pack(row, {"n": 3, "payload": b"uav"})
+```
+
+```
+01 03 00 75 61 76
+```
+
+A short buffer names the field, the bytes needed, and the bytes left, and returns no row.
+
+### Two-bit slots
+
+`u2` packs a fixed list of named slots, four values per byte, low bits first. Each value is 0 … 3. Slots `0, 1, 2, 3` are the single byte `e4`.
+
+```python
+row = Scheme(
+    1,
+    dict,
+    u2(
+        (0, lambda row: row["a"]),
+        (1, lambda row: row["b"]),
+        (2, lambda row: row["c"]),
+        (3, lambda row: row["d"]),
+    ),
+)
+BinaryPacker.pack(row, {"a": 0, "b": 1, "c": 2, "d": 3})
+```
+
+```
+01 e4
+```
+
+One slot whose value is 1 is `01 01`. Unused bits in the last byte are 0.
+
+### Bits
+
+A list of 0 and 1. The item count is an earlier integer, as stored. Eight 1-bits are `ff`. Nine spill into a second byte whose low bit is 1 and whose other bits are 0.
+
+```python
+row = Scheme(1, dict, u8(0, lambda row: row["n"]), bits(1, lambda row: row["segs"], 0))
+BinaryPacker.pack(row, {"n": 8, "segs": [1, 1, 1, 1, 1, 1, 1, 1]})
+```
+
+```
+01 08 ff
+```
+
+The list length must equal that count. `bits` cannot mean "one less than the count". That is `packed`.
+
+### Packed
+
+A list of small integers, width 1 or 2, with no length of its own. The item count is an earlier integer plus a bias of 0 or −1. Width 2 stores 0 … 3, four per byte, low bits first. Width 1 stores 0 or 1, eight per byte. Values `0, 1, 2, 3` are `e4`.
+
+```python
+kinds = Scheme(
+    1,
+    dict,
+    u8(0, lambda row: row["n"]),
+    packed(2, 1, lambda row: row["kinds"], 0),
+)
+BinaryPacker.pack(kinds, {"n": 4, "kinds": [0, 1, 2, 3]})
+```
+
+```
+01 04 e4
+```
+
+Bias −1 is the count minus one. A count of 9 and eight 1-bits is `ff`. A count of 1 writes no bitset bytes.
+
+```python
+legs = Scheme(
+    1,
+    dict,
+    u8(0, lambda row: row["n"]),
+    packed(1, 1, lambda row: row["legs"], 0, -1),
+)
+BinaryPacker.pack(legs, {"n": 9, "legs": [1, 1, 1, 1, 1, 1, 1, 1]})
+```
+
+```
+01 09 ff
+```
+
+A list whose length is not that count is rejected, and the error names the field.
+
+### Times
+
+The inner fields, exactly N times. N is an earlier integer. The next scheme field is then read as itself. `repeat` would keep going until the buffer ends.
+
+Count 2, points `(10, 20)` and `(30, 40)`, then a trailing `u8` of 7:
+
+```python
+row = Scheme(
+    1,
+    dict,
+    u8(0, lambda row: row["n"]),
+    times(0, i32(1, lambda row: row["lat"]), i32(2, lambda row: row["lon"])),
+    u8(3, lambda row: row["tail"]),
+)
+BinaryPacker.pack(row, {"n": 2, "lat": [10, 30], "lon": [20, 40], "tail": 7})
+```
+
+```
+01 02 0a 00 00 00 14 00 00 00 1e 00 00 00 28 00 00 00 07
+```
+
+`packed` and `times` together are how one scheme holds a route: a header, N two-bit point kinds, N latitude/longitude pairs, then N−1 straight-leg bits only when a flag is set. That packet is
+
+```
+34 10 00 15 00 06 2d 00 02 0d 00 65 cd 1d 00 a3 e1 11 10 8c cd 1d 10 ca e1 11 01
+```
 
 [`_docs/01_solution/schema.md`](_docs/01_solution/schema.md)
 
