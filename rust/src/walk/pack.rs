@@ -1,5 +1,7 @@
 use crate::field::{field_name, Field, FieldKind, FloatKind, IntKind, MapScheme};
-use crate::value::{as_bit, as_u2, as_usize, present, values_eq, Name, PackError, Value, Values};
+use crate::value::{
+    as_bit, as_packed, as_u2, as_usize, name_of, present, values_eq, Name, PackError, Value, Values,
+};
 use std::collections::HashMap;
 
 fn require<'a>(values: &'a Values, name: &str) -> Result<&'a Value, PackError> {
@@ -7,6 +9,46 @@ fn require<'a>(values: &'a Values, name: &str) -> Result<&'a Value, PackError> {
         Some(Some(v)) => Ok(v),
         _ => Err(PackError::Missing(name.to_string())),
     }
+}
+
+fn borrowed_count(
+    values: &Values,
+    count: &str,
+    bias: i8,
+    label: &str,
+) -> Result<usize, PackError> {
+    let raw = as_usize(require(values, count)?)
+        .ok_or_else(|| PackError::Type(count.to_string()))?;
+    let item_count = raw as i64 + bias as i64;
+    if item_count < 0 {
+        return Err(PackError::Type(format!("{label}: item count {item_count}")));
+    }
+    Ok(item_count as usize)
+}
+
+fn packed_bytes(width: u8, count: usize) -> usize {
+    (count * width as usize).div_ceil(8)
+}
+
+fn slice_times(members: &[Field], values: &Values, index: usize) -> Values {
+    let mut slice = Values::new();
+    for child in members {
+        let Some(name) = field_name(child) else {
+            continue;
+        };
+        match values.get(name) {
+            Some(Some(Value::List(items))) => {
+                if index < items.len() {
+                    slice.insert(name_of(name), Some(items[index].clone()));
+                }
+            }
+            Some(Some(v)) if index == 0 => {
+                slice.insert(name_of(name), Some(v.clone()));
+            }
+            _ => {}
+        }
+    }
+    slice
 }
 
 fn write_bytes(out: &mut Vec<u8>, bytes: &[u8], big_endian: bool) {
@@ -59,7 +101,8 @@ fn collect_flag_bits(fields: &[Field], values: &Values, out: &mut HashMap<Name, 
             FieldKind::Flags { members, .. }
             | FieldKind::Group { members, .. }
             | FieldKind::When { members, .. }
-            | FieldKind::Repeat { members } => collect_flag_bits(members, values, out),
+            | FieldKind::Repeat { members }
+            | FieldKind::Times { members, .. } => collect_flag_bits(members, values, out),
             _ => {}
         }
     }
@@ -226,6 +269,40 @@ fn pack_one(
                 }
                 _ => Err(PackError::Type(name.to_string())),
             }
+        }
+        FieldKind::Packed {
+            name,
+            count,
+            width,
+            bias,
+        } => {
+            let n = borrowed_count(values, count, *bias, name)?;
+            match require(values, name)? {
+                Value::List(items) if items.len() == n => {
+                    let max = if *width == 2 { 3 } else { 1 };
+                    let shift = if *width == 2 { 2 } else { 1 };
+                    let per = if *width == 2 { 4 } else { 8 };
+                    let mut packed = vec![0u8; packed_bytes(*width, n)];
+                    for (i, item) in items.iter().enumerate() {
+                        let v = as_packed(item, max)
+                            .ok_or_else(|| PackError::Type(name.to_string()))?;
+                        packed[i / per] |= v << ((i % per) * shift);
+                    }
+                    out.extend_from_slice(&packed);
+                    Ok(())
+                }
+                _ => Err(PackError::Type(name.to_string())),
+            }
+        }
+        FieldKind::Times { count, members } => {
+            let n = borrowed_count(values, count, 0, "times")?;
+            for i in 0..n {
+                let slice = slice_times(members, values, i);
+                let mut bits = HashMap::new();
+                collect_flag_bits(members, &slice, &mut bits);
+                pack_fields(members, &slice, &bits, out)?;
+            }
+            Ok(())
         }
         FieldKind::Utf8 { name } => match require(values, name)? {
             Value::Str(text) => {

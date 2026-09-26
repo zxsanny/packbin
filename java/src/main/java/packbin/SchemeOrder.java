@@ -18,7 +18,7 @@ final class SchemeOrder {
 
     private static void walk(Field field, Map<Integer, Field> scope, int[] next) {
         switch (field.kind) {
-            case WHEN, REPEAT, FLAGS -> {
+            case WHEN, REPEAT, TIMES, FLAGS -> {
                 for (Field child : field.children) {
                     walk(child, scope, next);
                 }
@@ -85,9 +85,17 @@ final class SchemeOrder {
                     resolveField(child, scope);
                 }
             }
-            case SIZED, BITS -> {
+            case SIZED, BITS, PACKED -> {
                 if (!scope.containsKey(field.countId)) {
                     throw new IllegalArgumentException("count field id " + field.countId + " is unknown");
+                }
+            }
+            case TIMES -> {
+                if (!scope.containsKey(field.countId)) {
+                    throw new IllegalArgumentException("count field id " + field.countId + " is unknown");
+                }
+                for (Field child : field.children) {
+                    resolveField(child, scope);
                 }
             }
             case FLAGS, REPEAT -> {

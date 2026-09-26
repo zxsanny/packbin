@@ -1,8 +1,8 @@
 use crate::field::{
     bits as field_bits, bytes as field_bytes, dict as field_dict, f32 as field_f32,
     f64 as field_f64, group, i16 as field_i16, i32 as field_i32, i64 as field_i64, i8 as field_i8,
-    id_name, list as field_list, sized as field_sized, u16 as field_u16, u32 as field_u32,
-    u64 as field_u64, u8 as field_u8, utf8 as field_utf8, Field,
+    id_name, list as field_list, packed as field_packed, sized as field_sized, u16 as field_u16,
+    u32 as field_u32, u64 as field_u64, u8 as field_u8, utf8 as field_utf8, Field,
 };
 use crate::value::Value;
 use std::collections::BTreeMap;
@@ -282,6 +282,38 @@ impl<T: 'static> BoundField<T> {
         required(
             id,
             field_bits(id, count_id),
+            get,
+            set,
+            |v| Value::List(v.into_iter().map(Value::U8).collect()),
+            |v| {
+                if let Value::List(items) = v {
+                    let mut out = Vec::with_capacity(items.len());
+                    for item in items {
+                        if let Value::U8(b) = item {
+                            out.push(*b);
+                        } else {
+                            return None;
+                        }
+                    }
+                    Some(out)
+                } else {
+                    None
+                }
+            },
+        )
+    }
+
+    pub fn packed(
+        width: u8,
+        id: u32,
+        count_id: u32,
+        bias: i8,
+        get: impl Fn(&T) -> Vec<u8> + 'static,
+        set: impl Fn(&mut T, Vec<u8>) + 'static,
+    ) -> Self {
+        required(
+            id,
+            field_packed(width, id, count_id, bias),
             get,
             set,
             |v| Value::List(v.into_iter().map(Value::U8).collect()),

@@ -12,12 +12,14 @@ import {
   readBits,
   readFloat,
   readInt,
+  readPacked,
   readSized,
   readU2,
   readUtf8,
   writeBits,
   writeFloat,
   writeInt,
+  writePacked,
   writeSized,
   writeU2,
   writeUtf8,
@@ -31,6 +33,23 @@ export type UnpackErr = ShortErr | TypeMismatchErr
 
 function short(field: string, needed: number, left: number): ShortErr {
   return { ok: false, field, needed, left }
+}
+
+function borrowedCount(
+  allFields: Field[],
+  countId: number,
+  bias: number,
+  label: string,
+  values: Value,
+): number {
+  const countName = nameById(allFields, countId)
+  const raw = values[countName]
+  if (typeof raw !== "number" || !Number.isInteger(raw)) {
+    throw new RangeError(`${label}: count missing`)
+  }
+  const count = raw + bias
+  if (count < 0) throw new RangeError(`${label}: item count ${count}`)
+  return count
 }
 
 function appendRepeat(values: Value, name: string, value: unknown): void {
@@ -134,6 +153,25 @@ export function packFields(
           values[f.name],
         )
         break
+      case "packed": {
+        const count = borrowedCount(allFields, f.countId, f.bias, f.name, values)
+        writePacked(out, f.name, f.width, count, values[f.name])
+        break
+      }
+      case "times": {
+        const count = borrowedCount(allFields, f.countId, 0, "times", values)
+        for (let i = 0; i < count; i++) {
+          const slice: Value = { ...values }
+          for (const child of f.fields) {
+            const n = fieldName(child)
+            if (!n) continue
+            const v = values[n]
+            slice[n] = Array.isArray(v) ? v[i] : v
+          }
+          packFields(f.fields, allFields, slice, out, flagBytes)
+        }
+        break
+      }
       case "utf8":
         if (!present(values[f.name])) throw new RangeError(`missing ${f.name}`)
         writeUtf8(out, f.name, values[f.name])
@@ -308,6 +346,30 @@ export function unpackFields(
         if (!r.ok) return r
         if (repeating) appendRepeat(values, f.name, r.values)
         else values[f.name] = r.values
+        break
+      }
+      case "packed": {
+        const count = borrowedCount(allFields, f.countId, f.bias, f.name, values)
+        const r = readPacked(cur, f.name, f.width, count)
+        if (!r.ok) return r
+        if (repeating) appendRepeat(values, f.name, r.values)
+        else values[f.name] = r.values
+        break
+      }
+      case "times": {
+        const count = borrowedCount(allFields, f.countId, 0, "times", values)
+        const built: Record<string, unknown[]> = {}
+        for (let i = 0; i < count; i++) {
+          const group: Value = {}
+          const err = unpackFields(f.fields, allFields, cur, group, flagBytes, false)
+          if (err) return err
+          for (const [key, value] of Object.entries(group)) {
+            const list = built[key]
+            if (list) list.push(value)
+            else built[key] = [value]
+          }
+        }
+        for (const [key, list] of Object.entries(built)) values[key] = list
         break
       }
       case "utf8": {

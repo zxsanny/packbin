@@ -20,6 +20,8 @@ public final class Field {
         SIZED,
         U2,
         BITS,
+        PACKED,
+        TIMES,
         UTF8,
         LIST,
         DICT
@@ -37,6 +39,7 @@ public final class Field {
     final int bitIndex;
     final Field inner;
     final int countId;
+    final int bias;
     final List<Integer> slotIds;
     final boolean nestedRow;
 
@@ -53,6 +56,7 @@ public final class Field {
             int bitIndex,
             Field inner,
             int countId,
+            int bias,
             List<Integer> slotIds,
             boolean nestedRow) {
         this.kind = kind;
@@ -67,18 +71,22 @@ public final class Field {
         this.bitIndex = bitIndex;
         this.inner = inner;
         this.countId = countId;
+        this.bias = bias;
         this.slotIds = slotIds == null ? List.of() : List.copyOf(slotIds);
         this.nestedRow = nestedRow;
     }
 
     String label() {
+        if (kind == Kind.TIMES) {
+            return "times";
+        }
         return Integer.toString(id);
     }
 
     static boolean isValueBearing(Field field) {
         return switch (field.kind) {
             case U8, U16, U32, U64, I8, I16, I32, I64, F32, F64,
-                    BYTES, BOOL, SIZED, BITS, UTF8, U2 -> true;
+                    BYTES, BOOL, SIZED, BITS, PACKED, UTF8, U2 -> true;
             default -> false;
         };
     }
@@ -97,6 +105,7 @@ public final class Field {
                 0,
                 null,
                 -1,
+                0,
                 null,
                 false);
     }
@@ -115,6 +124,45 @@ public final class Field {
                 0,
                 null,
                 countId,
+                0,
+                null,
+                false);
+    }
+
+    static Field packed(int width, int id, Getter get, Setter set, int countId, int bias) {
+        return new Field(
+                Kind.PACKED,
+                id,
+                get,
+                set,
+                false,
+                width,
+                null,
+                null,
+                null,
+                0,
+                null,
+                countId,
+                bias,
+                null,
+                false);
+    }
+
+    static Field times(int countId, Field[] fields) {
+        return new Field(
+                Kind.TIMES,
+                -1,
+                null,
+                null,
+                false,
+                0,
+                List.of(fields),
+                null,
+                null,
+                0,
+                null,
+                countId,
+                0,
                 null,
                 false);
     }
@@ -141,6 +189,7 @@ public final class Field {
                 0,
                 null,
                 -1,
+                0,
                 ids,
                 false);
     }
@@ -151,12 +200,12 @@ public final class Field {
         for (Field field : fields) {
             bits.add(group.addBit(field));
         }
-        return new Field(Kind.FLAGS, -1, null, null, false, 1, bits, null, group, 0, null, -1, null, false);
+        return new Field(Kind.FLAGS, -1, null, null, false, 1, bits, null, group, 0, null, -1, 0, null, false);
     }
 
     static Field flagByte() {
         FlagGroup group = new FlagGroup();
-        return new Field(Kind.FLAG_BYTE, -1, null, null, false, 1, null, null, group, 0, null, -1, null, false);
+        return new Field(Kind.FLAG_BYTE, -1, null, null, false, 1, null, null, group, 0, null, -1, 0, null, false);
     }
 
     static Field flagBit(FlagGroup group, int bitIndex, Field inner) {
@@ -173,16 +222,17 @@ public final class Field {
                 bitIndex,
                 inner,
                 -1,
+                0,
                 null,
                 false);
     }
 
     static Field when(Packbin.Eq condition, Field[] fields) {
-        return new Field(Kind.WHEN, -1, null, null, false, 0, List.of(fields), condition, null, 0, null, -1, null, false);
+        return new Field(Kind.WHEN, -1, null, null, false, 0, List.of(fields), condition, null, 0, null, -1, 0, null, false);
     }
 
     static Field repeat(Field[] fields) {
-        return new Field(Kind.REPEAT, -1, null, null, false, 0, List.of(fields), null, null, 0, null, -1, null, false);
+        return new Field(Kind.REPEAT, -1, null, null, false, 0, List.of(fields), null, null, 0, null, -1, 0, null, false);
     }
 
     static Field group(Getter get, Setter set, Field[] fields, boolean nested) {
@@ -199,12 +249,13 @@ public final class Field {
                 0,
                 null,
                 -1,
+                0,
                 null,
                 nested);
     }
 
     static Field group(Field[] fields) {
-        return new Field(Kind.GROUP, -1, null, null, false, 0, List.of(fields), null, null, 0, null, -1, null, false);
+        return new Field(Kind.GROUP, -1, null, null, false, 0, List.of(fields), null, null, 0, null, -1, 0, null, false);
     }
 
     static Field list(Getter get, Setter set, Field element) {
@@ -224,6 +275,7 @@ public final class Field {
                 0,
                 null,
                 -1,
+                0,
                 null,
                 false);
     }
@@ -245,6 +297,7 @@ public final class Field {
                 0,
                 null,
                 -1,
+                0,
                 null,
                 false);
     }
@@ -256,7 +309,7 @@ public final class Field {
             throw new IllegalArgumentException("be() expects a numeric field");
         }
         return new Field(
-                kind, id, get, set, true, size, children, condition, group, bitIndex, inner, countId, slotIds, nestedRow);
+                kind, id, get, set, true, size, children, condition, group, bitIndex, inner, countId, bias, slotIds, nestedRow);
     }
 
     public Field bit(Field field) {

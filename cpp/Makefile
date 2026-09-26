@@ -4,7 +4,7 @@ ifdef PACKBIN_CXX_SYSROOT
 CXXFLAGS += -isysroot $(PACKBIN_CXX_SYSROOT) -I$(PACKBIN_CXX_SYSROOT)/usr/include/c++/v1
 endif
 SRCS := src/field.cpp src/packbin.cpp src/counted.cpp src/walk_common.cpp src/walk.cpp src/unpack_walk.cpp
-TEST_SRC := tests/packbin_tests.cpp tests/scheme_tests.cpp tests/kinds_tests.cpp tests/field_id_binding_tests.cpp
+TEST_SRC := tests/packbin_tests.cpp tests/scheme_tests.cpp tests/kinds_tests.cpp tests/field_id_binding_tests.cpp tests/borrowed_count_tests.cpp
 TEST_BIN := build/packbin_tests
 COMPILE_FAIL_SRC := tests/compile-fail/pack_without_scheme.cpp
 

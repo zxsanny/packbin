@@ -5,7 +5,8 @@ mod walk;
 
 pub use field::{
     be, bits, bytes, dict, eq, f32, f64, flag_byte, flags, group, i16, i32, i64, i8, id_name, list,
-    repeat, sized, u16, u2, u32, u64, u8, utf8, when, Eq, Field, FieldKey, FlagByte, MapScheme,
+    packed, repeat, sized, times, u16, u2, u32, u64, u8, utf8, when, Eq, Field, FieldKey, FlagByte,
+    MapScheme,
 };
 pub use scheme::{BinaryPacker, BoundField, DispatchHandler, On, Scheme, SchemeItem};
 pub use value::{
@@ -15,5 +16,7 @@ pub use value::{
 
 #[cfg(test)]
 mod counted_tests;
+#[cfg(test)]
+mod borrowed_count_tests;
 #[cfg(test)]
 mod packbin_tests;

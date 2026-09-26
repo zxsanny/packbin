@@ -4,6 +4,8 @@ from packbin._errors import ShortPacket, TrailingBytes, TypeMismatch, UnpackResu
 from packbin._nodes import (
     be,
     bits,
+    packed,
+    times,
     bool,
     bytes,
     dict,
@@ -59,6 +61,8 @@ __all__ = [
     "sized",
     "u2",
     "bits",
+    "packed",
+    "times",
     "utf8",
     "list",
     "dict",

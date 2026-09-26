@@ -35,6 +35,8 @@ export {
   sized,
   u2,
   bits,
+  packed,
+  times,
   utf8,
   list,
   dict,

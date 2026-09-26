@@ -45,6 +45,7 @@ int validate_one(Field const& node, int next_id) {
     case Field::Kind::Utf8:
     case Field::Kind::Sized:
     case Field::Kind::Bits:
+    case Field::Kind::Packed:
       expect_id(node.id, next_id);
       return next_id + 1;
     case Field::Kind::U2:
@@ -69,6 +70,7 @@ int validate_one(Field const& node, int next_id) {
       return next_id;
     case Field::Kind::When:
     case Field::Kind::Repeat:
+    case Field::Kind::Times:
     case Field::Kind::Group:
       return validate_children(node.children, next_id);
     case Field::Kind::List:
@@ -263,6 +265,32 @@ Field bits(int id, int count_id) {
   f.name = id_name(id);
   f.count_id = count_id;
   f.count_name = id_name(count_id);
+  return f;
+}
+
+Field packed(int width, int id, int count_id, int bias) {
+  if (width != 1 && width != 2)
+    throw std::runtime_error("packed width must be 1 or 2");
+  if (bias != 0 && bias != -1)
+    throw std::runtime_error("packed bias must be 0 or -1");
+  Field f;
+  f.kind = Field::Kind::Packed;
+  f.id = id;
+  f.name = id_name(id);
+  f.byte_count = width;
+  f.count_id = count_id;
+  f.count_name = id_name(count_id);
+  f.bias = bias;
+  return f;
+}
+
+Field times(int count_id, std::vector<Field> fields) {
+  Field f;
+  f.kind = Field::Kind::Times;
+  f.name = "times";
+  f.count_id = count_id;
+  f.count_name = id_name(count_id);
+  f.children = std::move(fields);
   return f;
 }
 

@@ -32,6 +32,9 @@ public sealed class Fields<T>
     public Field Sized(int id, Expression<Func<T, byte[]>> accessor, int countId) => Field.Sized(id, accessor, countId);
     public Field Bits(int id, Expression<Func<T, List<int>?>> accessor, int countId) => Field.Bits(id, accessor, countId);
     public Field Bits(int id, Expression<Func<T, IList>> accessor, int countId) => Field.Bits(id, accessor, countId);
+    public Field Packed(int width, int id, Expression<Func<T, List<int>?>> accessor, int countId, int bias = 0) =>
+        Field.Packed(width, id, accessor, countId, bias);
+    public Field Times(int countId, params Field[] fields) => Field.Times(countId, fields);
     public Field U2(params (int Id, Expression<Func<T, int>> Accessor)[] slots) => Field.U2(slots);
 
     public Field Flags(params Field[] fields) => Field.Flags(fields);

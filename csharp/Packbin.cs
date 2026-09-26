@@ -197,6 +197,7 @@ internal static class SchemeOrder
         {
             case Field.Kind.When:
             case Field.Kind.Repeat:
+            case Field.Kind.Times:
             case Field.Kind.Flags:
                 foreach (var child in field.Children)
                     Walk(child, scope, ref next);
@@ -269,9 +270,17 @@ internal static class SchemeOrder
                 break;
             case Field.Kind.Sized:
             case Field.Kind.Bits:
+            case Field.Kind.Packed:
                 if (!scope.TryGetValue(field.CountId, out var countName))
                     throw new ArgumentException($"count field id {field.CountId} is unknown");
                 field.SetCountName(countName);
+                break;
+            case Field.Kind.Times:
+                if (!scope.TryGetValue(field.CountId, out var timesName))
+                    throw new ArgumentException($"count field id {field.CountId} is unknown");
+                field.SetCountName(timesName);
+                foreach (var child in field.Children)
+                    ResolveField(child, scope);
                 break;
             case Field.Kind.Flags:
             case Field.Kind.Repeat:

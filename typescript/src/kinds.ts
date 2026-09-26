@@ -120,6 +120,56 @@ export function readBits(
   return { ok: true, values }
 }
 
+export function packedBytes(width: 1 | 2, count: number): number {
+  return (count * width + 7) >> 3
+}
+
+export function writePacked(
+  out: number[],
+  name: string,
+  width: 1 | 2,
+  count: number,
+  raw: unknown,
+): void {
+  if (!Array.isArray(raw) || raw.length !== count) {
+    throw new RangeError(`${name}: expected ${count} items`)
+  }
+  const max = width === 2 ? 3 : 1
+  const shift = width === 2 ? 2 : 1
+  const per = width === 2 ? 4 : 8
+  const packed = new Array<number>(packedBytes(width, count)).fill(0)
+  for (let i = 0; i < count; i++) {
+    const n = raw[i]
+    if (typeof n !== "number" || !Number.isInteger(n) || n < 0 || n > max) {
+      throw new RangeError(`${name}: expected 0..${max}`)
+    }
+    packed[(i / per) | 0]! |= n << ((i % per) * shift)
+  }
+  for (const b of packed) out.push(b)
+}
+
+export function readPacked(
+  cur: Cursor,
+  name: string,
+  width: 1 | 2,
+  count: number,
+): { ok: true; values: number[] } | ShortErr {
+  const nbytes = packedBytes(width, count)
+  const left = cur.buf.length - cur.offset
+  if (left < nbytes) return { ok: false, field: name, needed: nbytes, left }
+  const mask = width === 2 ? 3 : 1
+  const shift = width === 2 ? 2 : 1
+  const per = width === 2 ? 4 : 8
+  const values: number[] = []
+  for (let i = 0; i < count; i++) {
+    values.push(
+      (cur.buf[cur.offset + ((i / per) | 0)]! >> ((i % per) * shift)) & mask,
+    )
+  }
+  cur.offset += nbytes
+  return { ok: true, values }
+}
+
 export function writeSized(
   out: number[],
   name: string,

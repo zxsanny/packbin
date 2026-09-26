@@ -169,6 +169,22 @@ class _Bits(_Node):
 
 
 @dataclass(slots=True)
+class _Packed(_Node):
+    field_id: int
+    get: Get
+    set: Set
+    count: int
+    width: int
+    bias: int
+
+
+@dataclass(slots=True)
+class _Times(_Node):
+    count: int
+    fields: list[_Node]
+
+
+@dataclass(slots=True)
 class _Utf8(_Node):
     field_id: int
     get: Get
@@ -342,6 +358,21 @@ def bits(field_id: int, acc: Acc, count: int) -> _Bits:
     return _Bits(field_id=field_id, get=get, set=set_, count=count)
 
 
+def packed(width: int, field_id: int, acc: Acc, count_id: int, bias: int = 0) -> _Packed:
+    if width not in (1, 2):
+        raise ValueError("packed width must be 1 or 2")
+    if bias not in (0, -1):
+        raise ValueError("packed bias must be 0 or -1")
+    get, set_ = _pair(acc)
+    return _Packed(
+        field_id=field_id, get=get, set=set_, count=count_id, width=width, bias=bias
+    )
+
+
+def times(count_id: int, *fields: _Node) -> _Times:
+    return _Times(count=count_id, fields=_builtin_list(fields))
+
+
 def utf8(field_id: int, acc: Acc) -> _Utf8:
     get, set_ = _pair(acc)
     return _Utf8(field_id=field_id, get=get, set=set_)
@@ -363,7 +394,7 @@ def dict(acc: Acc, element: _Node) -> _Dict:  # noqa: A001
 
 def _validate_order(nodes: Sequence[_Node], next_id: int = 0) -> int:
     for node in nodes:
-        if isinstance(node, (_Scalar, _Bytes, _Bool, _Utf8, _Sized, _Bits)):
+        if isinstance(node, (_Scalar, _Bytes, _Bool, _Utf8, _Sized, _Bits, _Packed)):
             if node.field_id != next_id:
                 raise ValueError(f"field id {node.field_id} is not the next order {next_id}")
             next_id += 1
@@ -375,7 +406,7 @@ def _validate_order(nodes: Sequence[_Node], next_id: int = 0) -> int:
             next_id = _validate_order(node.slots, next_id)
         elif isinstance(node, _Flags):
             next_id = _validate_order(node.fields, next_id)
-        elif isinstance(node, (_When, _Repeat, _Group)):
+        elif isinstance(node, (_When, _Repeat, _Group, _Times)):
             next_id = _validate_order(node.fields, next_id)
         elif isinstance(node, _FlagByte):
             next_id = _validate_order(node.bits, next_id)

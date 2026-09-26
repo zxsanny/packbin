@@ -19,6 +19,7 @@ final class PackbinFieldsTest {
         dictionary();
         u2Kinds();
         bitsSegs();
+        borrowedCount();
     }
 
     private static void flagGroupMark() {
@@ -308,6 +309,90 @@ final class PackbinFieldsTest {
         expectEq("bits short field", "1", missing.field);
         expectEq("bits short needed", 2, missing.needed);
         expectEq("bits short left", 1, missing.left);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static void borrowedCount() {
+        Scheme<Map> width2 = Maps.scheme(1,
+                Packbin.u8(0, Access.get("n"), Access.set("n")),
+                Packbin.packed(2, 1, Access.get("kinds"), Access.set("kinds"), 0, 0));
+        byte[] four = BinaryPacker.pack(width2, Maps.map("n", 4, "kinds", List.of(0, 1, 2, 3)));
+        expectEq("packed width2 payload", "e4", PackbinTest.toHex(java.util.Arrays.copyOfRange(four, 2, four.length)));
+        Map[] fourGot = new Map[1];
+        Object fourErr = BinaryPacker.unpack(four, width2.on(row -> fourGot[0] = row));
+        expectTrue("packed width2 ok", fourErr == null);
+        expectEq("packed width2 kinds", List.of(0, 1, 2, 3), fourGot[0].get("kinds"));
+
+        Scheme<Map> bias = Maps.scheme(1,
+                Packbin.u8(0, Access.get("n"), Access.set("n")),
+                Packbin.packed(1, 1, Access.get("kinds"), Access.set("kinds"), 0, -1));
+        byte[] eight = BinaryPacker.pack(bias, Maps.map("n", 9, "kinds", List.of(1, 1, 1, 1, 1, 1, 1, 1)));
+        expectEq("packed bias eight", "ff", PackbinTest.toHex(java.util.Arrays.copyOfRange(eight, 2, eight.length)));
+        byte[] none = BinaryPacker.pack(bias, Maps.map("n", 1, "kinds", List.of()));
+        expectEq("packed bias empty adds", 0, none.length - 2);
+        Map[] noneGot = new Map[1];
+        Object noneErr = BinaryPacker.unpack(none, bias.on(row -> noneGot[0] = row));
+        expectTrue("packed bias empty ok", noneErr == null);
+        expectEq("packed bias empty kinds", List.of(), noneGot[0].get("kinds"));
+
+        boolean named = false;
+        try {
+            BinaryPacker.pack(width2, Maps.map("n", 2, "kinds", List.of(1)));
+        } catch (IllegalArgumentException ex) {
+            named = ex.getMessage() != null && ex.getMessage().contains("1");
+        }
+        expectTrue("packed length names field", named);
+
+        Scheme<Map> tail = Maps.scheme(1,
+                Packbin.u8(0, Access.get("n"), Access.set("n")),
+                Packbin.times(0,
+                        Packbin.i32(1, Access.get("lat"), Access.set("lat")),
+                        Packbin.i32(2, Access.get("lon"), Access.set("lon"))),
+                Packbin.u8(3, Access.get("tail"), Access.set("tail")));
+        byte[] timesRaw = BinaryPacker.pack(tail, Maps.map(
+                "n", 2, "lat", List.of(10, 30), "lon", List.of(20, 40), "tail", 7));
+        expectEq("times body", "020a000000140000001e0000002800000007",
+                PackbinTest.toHex(java.util.Arrays.copyOfRange(timesRaw, 1, timesRaw.length)));
+        Map[] timesGot = new Map[1];
+        Object timesErr = BinaryPacker.unpack(timesRaw, tail.on(row -> timesGot[0] = row));
+        expectTrue("times ok", timesErr == null);
+        expectEq("times tail", 7, ((Number) timesGot[0].get("tail")).intValue());
+        expectEq("times lat", List.of(10, 30), timesGot[0].get("lat"));
+
+        Scheme<Map> route = Maps.scheme(0x34,
+                Packbin.u16(0, Access.get("sid"), Access.set("sid")),
+                Packbin.u16(1, Access.get("name"), Access.set("name")),
+                Packbin.flags(
+                        Packbin.u16(2, Access.get("unit"), Access.set("unit")),
+                        Packbin.boolField(3, Access.get("straight"), Access.set("straight")),
+                        Packbin.u16(4, Access.get("route_id"), Access.set("route_id"))),
+                Packbin.u8(5, Access.get("count"), Access.set("count")),
+                Packbin.packed(2, 6, Access.get("kinds"), Access.set("kinds"), 5, 0),
+                Packbin.times(5,
+                        Packbin.i32(7, Access.get("lat"), Access.set("lat")),
+                        Packbin.i32(8, Access.get("lon"), Access.set("lon"))),
+                Packbin.when(Packbin.eq(3, true),
+                        Packbin.packed(1, 9, Access.get("mask"), Access.set("mask"), 5, -1)));
+        String routeHex = "3410001500062d00020d0065cd1d00a3e111108ccd1d10cae11101";
+        byte[] routeRaw = PackbinTest.parseHex(routeHex);
+        Map[] routeGot = new Map[1];
+        Object routeErr = BinaryPacker.unpack(routeRaw, route.on(row -> routeGot[0] = row));
+        expectTrue("route ok", routeErr == null);
+        expectEq("route sid", 16, ((Number) routeGot[0].get("sid")).intValue());
+        expectEq("route kinds", List.of(1, 3), routeGot[0].get("kinds"));
+        expectEq("route lat count", 2, ((List<?>) routeGot[0].get("lat")).size());
+        expectEq("route mask", List.of(1), routeGot[0].get("mask"));
+        expectEq("route repack", routeHex, PackbinTest.toHex(BinaryPacker.pack(route, routeGot[0])));
+
+        Map[] shortGot = new Map[1];
+        Object shortErr = BinaryPacker.unpack(
+                java.util.Arrays.copyOf(routeRaw, 24), route.on(row -> shortGot[0] = row));
+        expectTrue("route short handler did not run", shortGot[0] == null);
+        expectTrue("route short error", shortErr instanceof Packbin.ShortPacket);
+        Packbin.ShortPacket shortPacket = (Packbin.ShortPacket) shortErr;
+        expectEq("route short field", "8", shortPacket.field);
+        expectEq("route short needed", 4, shortPacket.needed);
+        expectEq("route short left", 2, shortPacket.left);
     }
 
     private static void expectEq(String label, Object expected, Object actual) {

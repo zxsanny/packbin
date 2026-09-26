@@ -164,3 +164,22 @@ pub(crate) fn as_bit(v: &Value) -> Option<u8> {
         _ => None,
     }
 }
+
+pub(crate) fn as_packed(v: &Value, max: u8) -> Option<u8> {
+    let n = match v {
+        Value::U8(n) => *n as i64,
+        Value::U16(n) => *n as i64,
+        Value::U32(n) => *n as i64,
+        Value::U64(n) => *n as i64,
+        Value::I8(n) => *n as i64,
+        Value::I16(n) => *n as i64,
+        Value::I32(n) => *n as i64,
+        Value::I64(n) => *n,
+        _ => return None,
+    };
+    if n >= 0 && n <= max as i64 {
+        Some(n as u8)
+    } else {
+        None
+    }
+}

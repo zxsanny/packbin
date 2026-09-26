@@ -18,6 +18,8 @@ export type Field =
   | { kind: "sized"; id: number; name: string; countId: number }
   | { kind: "u2"; slots: { id: number; name: string }[] }
   | { kind: "bits"; id: number; name: string; countId: number }
+  | { kind: "packed"; id: number; name: string; width: 1 | 2; countId: number; bias: 0 | -1 }
+  | { kind: "times"; countId: number; fields: Field[] }
   | { kind: "utf8"; id: number; name: string }
   | { kind: "list"; name: string; element: Field }
   | { kind: "dict"; name: string; element: Field }
@@ -177,6 +179,33 @@ export function bits<T>(id: number, acc: Acc<T>, countId: number): Field {
   return { kind: "bits", id, name: memberName(acc), countId }
 }
 
+export function packed<T>(
+  width: number,
+  id: number,
+  acc: Acc<T>,
+  countId: number,
+  bias = 0,
+): Field {
+  if (width !== 1 && width !== 2) {
+    throw new RangeError("packed width must be 1 or 2")
+  }
+  if (bias !== 0 && bias !== -1) {
+    throw new RangeError("packed bias must be 0 or -1")
+  }
+  return {
+    kind: "packed",
+    id,
+    name: memberName(acc),
+    width,
+    countId,
+    bias,
+  }
+}
+
+export function times(countId: number, fields: Field[]): Field {
+  return { kind: "times", countId, fields: flatten(fields) }
+}
+
 export function utf8<T>(id: number, acc: Acc<T>): Field {
   return { kind: "utf8", id, name: memberName(acc) }
 }
@@ -209,6 +238,7 @@ export function collectFlagBits(
     if (f.kind === "flagBit" && f.flagId === id) bits.push({ bit: f.bit, field: f.field })
     if (f.kind === "when") bits.push(...collectFlagBits(f.fields, id))
     if (f.kind === "repeat") bits.push(...collectFlagBits(f.fields, id))
+    if (f.kind === "times") bits.push(...collectFlagBits(f.fields, id))
   }
   return bits
 }
@@ -238,6 +268,7 @@ export function fieldName(field: Field): string {
     field.kind === "group" ||
     field.kind === "sized" ||
     field.kind === "bits" ||
+    field.kind === "packed" ||
     field.kind === "utf8" ||
     field.kind === "list" ||
     field.kind === "dict"
@@ -265,6 +296,7 @@ function findNameById(field: Field, id: number): string | null {
     case "bool":
     case "sized":
     case "bits":
+    case "packed":
     case "utf8":
       return field.id === id ? field.name : null
     case "u2":
@@ -276,6 +308,7 @@ function findNameById(field: Field, id: number): string | null {
       return findNameById(field.field, id)
     case "when":
     case "repeat":
+    case "times":
     case "group":
     case "flags":
       for (const child of field.fields) {
@@ -297,6 +330,7 @@ export function validateFieldIds(fields: Field[], next = 0): number {
       case "bool":
       case "sized":
       case "bits":
+      case "packed":
       case "utf8":
         if (f.id !== next) {
           throw new RangeError(`field id: expected ${next}, got ${f.id}`)
@@ -316,6 +350,7 @@ export function validateFieldIds(fields: Field[], next = 0): number {
         break
       case "when":
       case "repeat":
+      case "times":
       case "group":
       case "flags":
         next = validateFieldIds(f.fields, next)

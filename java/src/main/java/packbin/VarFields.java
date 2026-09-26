@@ -141,6 +141,69 @@ final class VarFields {
         return null;
     }
 
+    static int borrowedCount(Field field, Map<Integer, Object> seen) {
+        Object countRaw = seen.get(field.countId);
+        if (!(countRaw instanceof Number) || countRaw instanceof Float || countRaw instanceof Double) {
+            throw new IllegalStateException(field.label() + ": count " + field.countId + " is missing");
+        }
+        int count = ((Number) countRaw).intValue() + field.bias;
+        if (count < 0) {
+            throw new IllegalArgumentException(field.label() + ": item count " + count);
+        }
+        return count;
+    }
+
+    static int packedBytes(int width, int count) {
+        return (count * width + 7) / 8;
+    }
+
+    static void packPacked(
+            Field field, Object row, ByteSink sink, Map<Integer, Object> seen, Walker.Take take) {
+        int count = borrowedCount(field, seen);
+        Object raw = take != null ? take.apply(field) : field.get.get(row);
+        seen.put(field.id, raw);
+        if (!(raw instanceof List<?> items) || items.size() != count) {
+            throw new IllegalArgumentException(field.id + ": expected " + count + " items");
+        }
+        int width = field.size;
+        int max = width == 2 ? 3 : 1;
+        int shift = width == 2 ? 2 : 1;
+        int per = width == 2 ? 4 : 8;
+        byte[] packed = new byte[packedBytes(width, count)];
+        for (int i = 0; i < count; i++) {
+            int n = requirePacked(field.label(), items.get(i), max);
+            packed[i / per] |= (byte) (n << ((i % per) * shift));
+        }
+        sink.write(packed);
+    }
+
+    static Object unpackPacked(
+            Field field,
+            byte[] data,
+            int[] offset,
+            Object row,
+            Map<Integer, Object> seen,
+            boolean asList) {
+        int count = borrowedCount(field, seen);
+        int width = field.size;
+        int nbytes = packedBytes(width, count);
+        int left = data.length - offset[0];
+        if (left < nbytes) {
+            return new Packbin.ShortPacket(field.label(), nbytes, left);
+        }
+        int mask = width == 2 ? 3 : 1;
+        int shift = width == 2 ? 2 : 1;
+        int per = width == 2 ? 4 : 8;
+        List<Integer> out = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            out.add((data[offset[0] + i / per] >> ((i % per) * shift)) & mask);
+        }
+        offset[0] += nbytes;
+        seen.put(field.id, out);
+        Walker.store(row, field, out, asList);
+        return null;
+    }
+
     private static int requireU2(String name, Object value) {
         if (value instanceof Boolean
                 || !(value instanceof Number)
@@ -162,6 +225,20 @@ final class VarFields {
         int n = ((Number) value).intValue();
         if (n != 0 && n != 1) {
             throw new IllegalArgumentException(name + ": expected 0 or 1");
+        }
+        return n;
+    }
+
+    private static int requirePacked(String name, Object value, int max) {
+        if (value instanceof Boolean
+                || !(value instanceof Number)
+                || value instanceof Float
+                || value instanceof Double) {
+            throw new IllegalArgumentException(name + ": expected 0.." + max);
+        }
+        int n = ((Number) value).intValue();
+        if (n < 0 || n > max) {
+            throw new IllegalArgumentException(name + ": expected 0.." + max);
         }
         return n;
     }
@@ -322,9 +399,28 @@ final class VarFields {
         return new Object[] {items, null};
     }
 
+    static void packTimes(Field field, Object row, ByteSink sink, Map<Integer, Object> seen) {
+        int count = borrowedCount(field, seen);
+        for (int i = 0; i < count; i++) {
+            Walker.packIndexed(field, row, sink, seen, i);
+        }
+    }
+
+    static Object unpackTimes(
+            Field field, byte[] data, int[] offset, Object row, Map<Integer, Object> seen) {
+        int count = borrowedCount(field, seen);
+        for (int i = 0; i < count; i++) {
+            Object err = Walker.unpackFields(field.children, data, offset, row, seen, true);
+            if (err != null) {
+                return err;
+            }
+        }
+        return null;
+    }
+
     private static boolean isLeaf(Field field) {
         return switch (field.kind) {
-            case U8, U16, U32, U64, I8, I16, I32, I64, F32, F64, BYTES, UTF8, BOOL, SIZED, BITS -> true;
+            case U8, U16, U32, U64, I8, I16, I32, I64, F32, F64, BYTES, UTF8, BOOL, SIZED, BITS, PACKED -> true;
             default -> false;
         };
     }

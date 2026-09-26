@@ -89,6 +89,12 @@ internal static partial class Walker
             case Field.Kind.Bits:
                 PackBits(field, values, buffer);
                 break;
+            case Field.Kind.Packed:
+                PackPacked(field, values, buffer);
+                break;
+            case Field.Kind.Times:
+                PackTimes(field, values, buffer);
+                break;
             case Field.Kind.Utf8:
                 PackUtf8(field, values, buffer);
                 break;
@@ -126,6 +132,8 @@ internal static partial class Walker
             Field.Kind.Sized => UnpackSized(field, bytes, ref offset, values, repeatLists),
             Field.Kind.U2 => UnpackU2(field, bytes, ref offset, values, repeatLists),
             Field.Kind.Bits => UnpackBits(field, bytes, ref offset, values, repeatLists),
+            Field.Kind.Packed => UnpackPacked(field, bytes, ref offset, values, repeatLists),
+            Field.Kind.Times => UnpackTimes(field, bytes, ref offset, values),
             Field.Kind.Utf8 => UnpackUtf8(field, bytes, ref offset, values, repeatLists),
             Field.Kind.List => UnpackList(field, bytes, ref offset, values, repeatLists),
             Field.Kind.Dict => UnpackDict(field, bytes, ref offset, values, repeatLists),

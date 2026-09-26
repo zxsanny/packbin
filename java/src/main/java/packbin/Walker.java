@@ -28,7 +28,7 @@ final class Walker {
             case GROUP -> groupOn(row, child);
             case BOOL -> boolOn(child.get.get(row));
             case FLAG_BIT -> childOn(row, child.inner);
-            case U8, U16, U32, U64, I8, I16, I32, I64, F32, F64, BYTES, UTF8, SIZED, BITS, LIST, DICT ->
+            case U8, U16, U32, U64, I8, I16, I32, I64, F32, F64, BYTES, UTF8, SIZED, BITS, PACKED, LIST, DICT ->
                     isPresent(child.get.get(row));
             default -> false;
         };
@@ -72,11 +72,13 @@ final class Walker {
                 }
             }
             case REPEAT -> packRepeat(field, row, sink, seen);
+            case TIMES -> VarFields.packTimes(field, row, sink, seen);
             case BYTES -> packBytes(field, row, sink, seen, take);
             case GROUP -> packGroup(field, row, sink, seen, take);
             case SIZED -> VarFields.packSized(field, row, sink, seen, take);
             case U2 -> VarFields.packU2(field, row, sink, seen);
             case BITS -> VarFields.packBits(field, row, sink, seen, take);
+            case PACKED -> VarFields.packPacked(field, row, sink, seen, take);
             case UTF8 -> VarFields.packUtf8(field, row, sink, seen, take);
             case LIST -> VarFields.packList(field, takeValue(field, row, take), sink);
             case DICT -> VarFields.packDict(field, takeValue(field, row, take), sink);
@@ -114,11 +116,13 @@ final class Walker {
             case FLAG_BIT -> unpackFlagBit(field, data, offset, row, seen, asList);
             case WHEN -> unpackWhen(field, data, offset, row, seen, asList);
             case REPEAT -> unpackRepeat(field, data, offset, row, seen);
+            case TIMES -> VarFields.unpackTimes(field, data, offset, row, seen);
             case BYTES -> unpackBytes(field, data, offset, row, seen, asList);
             case GROUP -> unpackGroup(field, data, offset, row, seen, asList);
             case SIZED -> VarFields.unpackSized(field, data, offset, row, seen, asList);
             case U2 -> VarFields.unpackU2(field, data, offset, row, seen, asList);
             case BITS -> VarFields.unpackBits(field, data, offset, row, seen, asList);
+            case PACKED -> VarFields.unpackPacked(field, data, offset, row, seen, asList);
             case UTF8 -> VarFields.unpackUtf8(field, data, offset, row, seen, asList);
             case LIST -> VarFields.unpackList(field, data, offset, row, asList);
             case DICT -> VarFields.unpackDict(field, data, offset, row, asList);
@@ -180,16 +184,20 @@ final class Walker {
             }
         }
         for (int i = 0; i < count; i++) {
-            int index = i;
-            Take at = child -> {
-                Object v = child.get.get(row);
-                if (v instanceof List<?> list) {
-                    return index < list.size() ? list.get(index) : null;
-                }
-                return v;
-            };
-            packFields(field.children, row, sink, seen, at);
+            packIndexed(field, row, sink, seen, i);
         }
+    }
+
+    static void packIndexed(
+            Field field, Object row, ByteSink sink, Map<Integer, Object> seen, int index) {
+        Take at = child -> {
+            Object v = child.get.get(row);
+            if (v instanceof List<?> list) {
+                return index < list.size() ? list.get(index) : null;
+            }
+            return v;
+        };
+        packFields(field.children, row, sink, seen, at);
     }
 
     private static void packBytes(

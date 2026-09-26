@@ -121,6 +121,104 @@ internal static partial class Walker
         return null;
     }
 
+    private static int BorrowedCount(Field field, IReadOnlyDictionary<string, object?> values)
+    {
+        var count = RequireCount(values, field.CountName, field.Name) + field.Bias;
+        if (count < 0)
+            throw new ArgumentException($"{field.Name}: item count {count}");
+        return count;
+    }
+
+    private static int PackedBytes(int width, int count) =>
+        width == 2 ? (count + 3) / 4 : (count + 7) / 8;
+
+    private static void PackPacked(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    {
+        var count = BorrowedCount(field, values);
+        if (values[field.Name] is not IList raw || raw.Count != count)
+            throw new ArgumentException($"{field.Name}: expected {count} items");
+        var width = field.ByteCount;
+        var max = width == 2 ? 3 : 1;
+        var shift = width == 2 ? 2 : 1;
+        var per = width == 2 ? 4 : 8;
+        var packed = new byte[PackedBytes(width, count)];
+        for (var i = 0; i < count; i++)
+        {
+            var n = Convert.ToInt32(raw[i], CultureInfo.InvariantCulture);
+            if (n < 0 || n > max)
+                throw new ArgumentException($"{field.Name}: expected 0..{max}");
+            packed[i / per] |= (byte)(n << ((i % per) * shift));
+        }
+        buffer.AddRange(packed);
+    }
+
+    private static object? UnpackPacked(
+        Field field,
+        ReadOnlySpan<byte> bytes,
+        ref int offset,
+        Dictionary<string, object?> values,
+        bool repeatLists)
+    {
+        var count = BorrowedCount(field, values);
+        var nbytes = PackedBytes(field.ByteCount, count);
+        var left = bytes.Length - offset;
+        if (left < nbytes)
+            return new ShortPacket(field.Name, nbytes, left);
+        var width = field.ByteCount;
+        var mask = width == 2 ? 3 : 1;
+        var shift = width == 2 ? 2 : 1;
+        var per = width == 2 ? 4 : 8;
+        var items = new List<int>(count);
+        for (var i = 0; i < count; i++)
+            items.Add((bytes[offset + i / per] >> ((i % per) * shift)) & mask);
+        offset += nbytes;
+        Store(values, field.Name, items, repeatLists);
+        return null;
+    }
+
+    private static void PackTimes(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    {
+        var count = BorrowedCount(field, values);
+        for (var i = 0; i < count; i++)
+        {
+            var slice = SliceValues(field, values, i);
+            foreach (var child in field.Children)
+                PackField(child, slice, buffer);
+        }
+    }
+
+    private static object? UnpackTimes(
+        Field field,
+        ReadOnlySpan<byte> bytes,
+        ref int offset,
+        Dictionary<string, object?> values)
+    {
+        var count = BorrowedCount(field, values);
+        var built = new Dictionary<string, List<object?>>();
+        for (var i = 0; i < count; i++)
+        {
+            var group = new Dictionary<string, object?>();
+            foreach (var child in field.Children)
+            {
+                var err = UnpackField(child, bytes, ref offset, group, repeatLists: false);
+                if (err is not null)
+                    return err;
+            }
+            foreach (var (key, value) in group)
+            {
+                if (!built.TryGetValue(key, out var list))
+                {
+                    list = [];
+                    built[key] = list;
+                }
+                list.Add(value);
+            }
+        }
+        foreach (var (key, list) in built)
+            values[key] = list;
+        return null;
+    }
+
     private static void PackUtf8(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
     {
         if (!values.TryGetValue(field.Name, out var value) || value is not string text)

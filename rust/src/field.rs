@@ -71,6 +71,16 @@ pub(crate) enum FieldKind {
         name: Name,
         count: Name,
     },
+    Packed {
+        name: Name,
+        count: Name,
+        width: u8,
+        bias: i8,
+    },
+    Times {
+        count: Name,
+        members: Vec<Field>,
+    },
     Utf8 {
         name: Name,
     },
@@ -153,6 +163,7 @@ fn count_fields(fields: &[Field]) -> (usize, bool) {
             | FieldKind::FlagByte { .. }
             | FieldKind::Sized { .. }
             | FieldKind::Bits { .. }
+            | FieldKind::Packed { .. }
             | FieldKind::Utf8 { .. }
             | FieldKind::List { .. }
             | FieldKind::Dict { .. } => n += 1,
@@ -164,7 +175,9 @@ fn count_fields(fields: &[Field]) -> (usize, bool) {
                 split = true;
                 n += count_fields(std::slice::from_ref(inner)).0;
             }
-            FieldKind::When { members, .. } | FieldKind::Repeat { members } => {
+            FieldKind::When { members, .. }
+            | FieldKind::Repeat { members }
+            | FieldKind::Times { members, .. } => {
                 let (c, s) = count_fields(members);
                 n += c;
                 split |= s;
@@ -401,6 +414,32 @@ pub fn bits(name: impl FieldKey, count_field: impl FieldKey) -> Field {
     }
 }
 
+pub fn packed(width: u8, name: impl FieldKey, count_field: impl FieldKey, bias: i8) -> Field {
+    if width != 1 && width != 2 {
+        panic!("packed width must be 1 or 2");
+    }
+    if bias != 0 && bias != -1 {
+        panic!("packed bias must be 0 or -1");
+    }
+    Field {
+        kind: FieldKind::Packed {
+            name: name.to_name(),
+            count: count_field.to_name(),
+            width,
+            bias,
+        },
+    }
+}
+
+pub fn times(count_field: impl FieldKey, fields: Vec<Field>) -> Field {
+    Field {
+        kind: FieldKind::Times {
+            count: count_field.to_name(),
+            members: fields,
+        },
+    }
+}
+
 pub(crate) fn int_width(kind: IntKind) -> usize {
     match kind {
         IntKind::U8 | IntKind::I8 => 1,
@@ -427,11 +466,12 @@ pub(crate) fn field_name(field: &Field) -> Option<&str> {
         | FieldKind::Group { name, .. }
         | FieldKind::Sized { name, .. }
         | FieldKind::Bits { name, .. }
+        | FieldKind::Packed { name, .. }
         | FieldKind::Utf8 { name }
         | FieldKind::List { name, .. }
         | FieldKind::Dict { name, .. } => Some(name.as_ref()),
         FieldKind::U2 { names } => names.first().map(|n| n.as_ref()),
         FieldKind::FlagBit { inner, .. } => field_name(inner),
-        FieldKind::When { .. } | FieldKind::Repeat { .. } => None,
+        FieldKind::When { .. } | FieldKind::Repeat { .. } | FieldKind::Times { .. } => None,
     }
 }

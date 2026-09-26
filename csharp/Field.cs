@@ -20,6 +20,8 @@ public sealed class Field
         Sized,
         U2,
         Bits,
+        Packed,
+        Times,
         Utf8,
         List,
         Dict,
@@ -41,6 +43,7 @@ public sealed class Field
     internal string[] Names { get; }
     internal int[] SlotIds { get; }
     internal bool NestedRow { get; }
+    internal int Bias { get; }
 
     private Field(
         Kind type,
@@ -57,7 +60,8 @@ public sealed class Field
         string countName = "",
         string[]? names = null,
         int[]? slotIds = null,
-        bool nestedRow = false)
+        bool nestedRow = false,
+        int bias = 0)
     {
         Type = type;
         Id = id;
@@ -74,12 +78,13 @@ public sealed class Field
         Names = names ?? [];
         SlotIds = slotIds ?? [];
         NestedRow = nestedRow;
+        Bias = bias;
     }
 
     internal void SetCountName(string name) => CountName = name;
 
     public Field Be() =>
-        new(Type, Id, Name, true, ByteCount, Children, Pred, FlagOwner, BitIndex, Inner, CountId, CountName, Names, SlotIds, NestedRow);
+        new(Type, Id, Name, true, ByteCount, Children, Pred, FlagOwner, BitIndex, Inner, CountId, CountName, Names, SlotIds, NestedRow, Bias);
 
     public Field Bit(Field field)
     {
@@ -129,6 +134,18 @@ public sealed class Field
 
     public static Field Bits<T>(int id, Expression<Func<T, IList>> accessor, int countId) =>
         new(Kind.Bits, id, MemberAccess.From(accessor).Name, countId: countId);
+
+    public static Field Packed<T>(int width, int id, Expression<Func<T, List<int>?>> accessor, int countId, int bias = 0)
+    {
+        if (width is not (1 or 2))
+            throw new ArgumentException("packed width must be 1 or 2");
+        if (bias is not (0 or -1))
+            throw new ArgumentException("packed bias must be 0 or -1");
+        return new Field(Kind.Packed, id, MemberAccess.From(accessor).Name, byteCount: width, countId: countId, bias: bias);
+    }
+
+    public static Field Times(int countId, params Field[] fields) =>
+        new(Kind.Times, -1, "times", children: fields, countId: countId);
 
     public static Field U2<T>(params (int Id, Expression<Func<T, int>> Accessor)[] slots)
     {
@@ -198,6 +215,6 @@ public sealed class Field
 
     internal static bool IsValueBearing(Field field) =>
         field.Type is (>= Kind.U8 and <= Kind.F64)
-            or Kind.Bytes or Kind.Sized or Kind.Bits or Kind.Utf8 or Kind.Bool
+            or Kind.Bytes or Kind.Sized or Kind.Bits or Kind.Packed or Kind.Utf8 or Kind.Bool
             or Kind.U2;
 }

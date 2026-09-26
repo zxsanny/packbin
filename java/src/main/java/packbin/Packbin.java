@@ -112,6 +112,20 @@ public final class Packbin {
         return Field.of(Field.Kind.BITS, id, get, set, 0, countId);
     }
 
+    public static Field packed(int width, int id, Getter get, Setter set, int countId, int bias) {
+        if (width != 1 && width != 2) {
+            throw new IllegalArgumentException("packed width must be 1 or 2");
+        }
+        if (bias != 0 && bias != -1) {
+            throw new IllegalArgumentException("packed bias must be 0 or -1");
+        }
+        return Field.packed(width, id, get, set, countId, bias);
+    }
+
+    public static Field times(int countId, Field... fields) {
+        return Field.times(countId, fields);
+    }
+
     public static Field utf8(int id, Getter get, Setter set) {
         return Field.scalar(Field.Kind.UTF8, id, get, set, 0);
     }

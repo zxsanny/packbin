@@ -238,6 +238,89 @@ fn unpack_one(
             }
             values.insert(name.clone(), Some(Value::List(items)));
         }
+        FieldKind::Packed {
+            name,
+            count,
+            width,
+            bias,
+        } => {
+            let raw_count = match values.get(count.as_ref()) {
+                Some(Some(v)) => as_usize(v).ok_or_else(|| {
+                    UnpackError::Short(ShortPacket {
+                        field: name.to_string(),
+                        needed: 0,
+                        left: cur.left(),
+                    })
+                })?,
+                _ => {
+                    return Err(UnpackError::Short(ShortPacket {
+                        field: name.to_string(),
+                        needed: 0,
+                        left: cur.left(),
+                    }))
+                }
+            };
+            let item_count = raw_count as i64 + *bias as i64;
+            if item_count < 0 {
+                return Err(UnpackError::Short(ShortPacket {
+                    field: name.to_string(),
+                    needed: 0,
+                    left: cur.left(),
+                }));
+            }
+            let n = item_count as usize;
+            let nbytes = (n * *width as usize).div_ceil(8);
+            let raw = cur.take(nbytes, name)?;
+            let mask = if *width == 2 { 3 } else { 1 };
+            let shift = if *width == 2 { 2 } else { 1 };
+            let per = if *width == 2 { 4 } else { 8 };
+            let mut items = Vec::with_capacity(n);
+            for i in 0..n {
+                items.push(Value::U8(
+                    (raw[i / per] >> ((i % per) * shift)) & mask,
+                ));
+            }
+            values.insert(name.clone(), Some(Value::List(items)));
+        }
+        FieldKind::Times { count, members } => {
+            let n = match values.get(count.as_ref()) {
+                Some(Some(v)) => as_usize(v).ok_or_else(|| {
+                    UnpackError::Short(ShortPacket {
+                        field: "times".to_string(),
+                        needed: 0,
+                        left: cur.left(),
+                    })
+                })?,
+                _ => {
+                    return Err(UnpackError::Short(ShortPacket {
+                        field: "times".to_string(),
+                        needed: 0,
+                        left: cur.left(),
+                    }))
+                }
+            };
+            let mut built: HashMap<crate::value::Name, Vec<Value>> = HashMap::new();
+            for _ in 0..n {
+                let mut group = Values::new();
+                let mut group_flags = HashMap::new();
+                let mut nested_groups = Vec::new();
+                unpack_fields(
+                    members,
+                    cur,
+                    &mut group,
+                    &mut group_flags,
+                    &mut nested_groups,
+                )?;
+                for (key, val) in group {
+                    if let Some(v) = val {
+                        built.entry(key).or_default().push(v);
+                    }
+                }
+            }
+            for (key, list) in built {
+                values.insert(key, Some(Value::List(list)));
+            }
+        }
         FieldKind::Utf8 { name } => {
             let count_raw = cur.take(2, name)?;
             let count = u16::from_le_bytes([count_raw[0], count_raw[1]]) as usize;

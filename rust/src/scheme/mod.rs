@@ -2,7 +2,10 @@ mod bound;
 
 pub use bound::BoundField;
 
-use crate::field::{field_name, flags as layout_flags, when as layout_when, Eq, Field, MapScheme};
+use crate::field::{
+    field_name, flags as layout_flags, id_name, times as layout_times, when as layout_when, Eq,
+    Field, MapScheme,
+};
 use crate::value::{Name, PackError, ShortPacket, UnpackError, Value, Values};
 use crate::walk;
 use std::collections::HashSet;
@@ -27,6 +30,10 @@ pub enum SchemeItem<T> {
         members: Vec<SchemeItem<T>>,
     },
     Flags {
+        members: Vec<SchemeItem<T>>,
+    },
+    Times {
+        count: crate::value::Name,
         members: Vec<SchemeItem<T>>,
     },
     Field(Field),
@@ -54,6 +61,13 @@ impl<T: 'static> SchemeItem<T> {
 
     pub fn flags(members: impl IntoIterator<Item = SchemeItem<T>>) -> Self {
         SchemeItem::Flags {
+            members: members.into_iter().collect(),
+        }
+    }
+
+    pub fn times(count_id: u32, members: impl IntoIterator<Item = SchemeItem<T>>) -> Self {
+        SchemeItem::Times {
+            count: id_name(count_id),
             members: members.into_iter().collect(),
         }
     }
@@ -104,6 +118,11 @@ fn compile_items<T: 'static>(
                 *flag_seq = flag_seq.saturating_add(1);
                 let (child_fields, child_binders) = compile_items(members, next_id, flag_seq);
                 fields.push(layout_flags(name.as_str(), child_fields));
+                binders.extend(child_binders);
+            }
+            SchemeItem::Times { count, members } => {
+                let (child_fields, child_binders) = compile_items(members, next_id, flag_seq);
+                fields.push(layout_times(count.as_ref(), child_fields));
                 binders.extend(child_binders);
             }
             SchemeItem::Field(field) => fields.push(field),

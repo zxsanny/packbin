@@ -6,6 +6,8 @@ from typing import Any
 
 from packbin._nodes import (
     _Bits,
+    _Packed,
+    _Times,
     _Bool,
     _Bytes,
     _Dict,
@@ -57,7 +59,7 @@ def _child_on(row: Any, child: _Node) -> bool:
         return _group_on(row, child)
     if isinstance(child, _Bool):
         return _bool_on(child.get(row))
-    if isinstance(child, (_Scalar, _Bytes, _Utf8, _Sized, _Bits, _List, _Dict)):
+    if isinstance(child, (_Scalar, _Bytes, _Utf8, _Sized, _Bits, _Packed, _List, _Dict)):
         return _present_value(child.get(row))
     if isinstance(child, _FlagBit):
         return _child_on(row, child.field)
@@ -77,14 +79,29 @@ def _write_u2(buf: bytearray, slots: Sequence[Any], row: Any, seen: dict[int, An
 
 
 def _write_bits(buf: bytearray, label: str, count: int, raw: Any) -> None:
+    _write_packed(buf, label, 1, count, raw)
+
+
+def _borrowed(label: str, count: Any, bias: int) -> int:
+    if isinstance(count, bool) or not isinstance(count, int):
+        raise RuntimeError(f"{label}: count is missing")
+    item_count = count + bias
+    if item_count < 0:
+        raise ValueError(f"{label}: item count {item_count}")
+    return item_count
+
+
+def _write_packed(buf: bytearray, label: str, width: int, count: int, raw: Any) -> None:
     if not isinstance(raw, _builtin_list) or len(raw) != count:
-        raise ValueError(f"{label}: expected {count} bits")
-    nbytes = (count + 7) // 8
-    packed = bytearray(nbytes)
-    for i, bit in enumerate(raw):
-        if bit not in (0, 1):
-            raise ValueError(f"{label}: expected 0 or 1")
-        packed[i // 8] |= int(bit) << (i % 8)
+        raise ValueError(f"{label}: expected {count} items")
+    per = 8 if width == 1 else 4
+    shift = 1 if width == 1 else 2
+    limit = 1 if width == 1 else 3
+    packed = bytearray((count * width + 7) // 8)
+    for i, item in enumerate(raw):
+        if isinstance(item, bool) or not isinstance(item, int) or item < 0 or item > limit:
+            raise ValueError(f"{label}: expected 0..{limit}")
+        packed[i // per] |= item << ((i % per) * shift)
     buf.extend(packed)
 
 
@@ -104,7 +121,7 @@ def _write_scalar(buf: bytearray, field: _Scalar, value: Any) -> None:
 
 
 def _is_leaf(node: _Node) -> bool:
-    return isinstance(node, (_Scalar, _Bytes, _Utf8, _Bool, _Sized, _Bits))
+    return isinstance(node, (_Scalar, _Bytes, _Utf8, _Bool, _Sized, _Bits, _Packed))
 
 
 def _pack_element(buf: bytearray, element: _Node, item: Any) -> None:
@@ -213,6 +230,23 @@ def pack_nodes(
             value = take(node)
             seen[node.field_id] = value
             _write_bits(buf, str(node.field_id), int(count), value)
+        elif isinstance(node, _Packed):
+            label = str(node.field_id)
+            item_count = _borrowed(label, seen.get(node.count), node.bias)
+            value = take(node)
+            seen[node.field_id] = value
+            _write_packed(buf, label, node.width, item_count, value)
+        elif isinstance(node, _Times):
+            item_count = _borrowed("times", seen.get(node.count), 0)
+            for i in range(item_count):
+
+                def at(child: _Node, index: int = i) -> Any:
+                    val = child.get(row)  # type: ignore[attr-defined]
+                    if isinstance(val, _builtin_list):
+                        return val[index]
+                    return val
+
+                pack_nodes(buf, node.fields, row, seen, at)
         elif isinstance(node, _FlagByte):
             flag = 0
             for i, child in enumerate(node.bits):

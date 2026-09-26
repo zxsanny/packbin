@@ -46,5 +46,7 @@ T read_num(std::uint8_t const* p, bool be) {
 Value const& require(Values const& values, std::string const& name);
 ShortPacket make_short(std::string const& name, int needed, std::size_t left);
 void append_value(Values& out, std::string const& name, Value value, bool as_list);
+std::int64_t value_as_int(Value const& value);
+std::int64_t borrowed_item_count(Field const& node, Values const& values);
 
 }  // namespace packbin
