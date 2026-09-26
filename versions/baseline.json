@@ -1,7 +1,7 @@
 {
   "default": {
     "packbin": {
-      "baseline": "0.1.11",
+      "baseline": "0.1.12",
       "port-version": 0
     }
   }
