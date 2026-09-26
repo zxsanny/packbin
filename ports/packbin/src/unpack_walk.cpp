@@ -119,6 +119,15 @@ std::optional<ShortPacket> unpack_one(std::uint8_t const* data, std::size_t len,
       }
       return std::nullopt;
     }
+    case Field::Kind::Times: {
+      auto count = borrowed_item_count(node, out);
+      for (std::int64_t i = 0; i < count; ++i) {
+        auto err = unpack_nodes(data, len, offset, node.children, out, true);
+        if (err)
+          return err;
+      }
+      return std::nullopt;
+    }
     case Field::Kind::Group: {
       if (node.children.empty()) {
         out[node.name] = Value{std::uint8_t{1}};
@@ -129,6 +138,7 @@ std::optional<ShortPacket> unpack_one(std::uint8_t const* data, std::size_t len,
     case Field::Kind::Sized:
     case Field::Kind::U2:
     case Field::Kind::Bits:
+    case Field::Kind::Packed:
     case Field::Kind::Utf8: {
       auto err = unpack_counted(data, len, offset, node, out, as_list);
       if (err)

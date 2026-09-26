@@ -131,6 +131,8 @@ class Field {
     Sized,
     U2,
     Bits,
+    Packed,
+    Times,
     Utf8,
     List,
     Dict,
@@ -149,6 +151,7 @@ class Field {
   Eq pred;
   int count_id = -1;
   std::string count_name;
+  int bias = 0;
 
   Field be() const;
   Field bit(Field field) const;
@@ -179,6 +182,8 @@ Field group(std::string name, std::vector<Field> fields);
 Field sized(int id, int count_id);
 Field u2(std::vector<int> ids);
 Field bits(int id, int count_id);
+Field packed(int width, int id, int count_id, int bias = 0);
+Field times(int count_id, std::vector<Field> fields);
 Field utf8(int id);
 Field list(std::string name, Field element);
 Field dict(std::string name, Field element);

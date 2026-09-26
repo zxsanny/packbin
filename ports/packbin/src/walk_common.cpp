@@ -59,4 +59,31 @@ void append_value(Values& out, std::string const& name, Value value, bool as_lis
   it->second = Value{list};
 }
 
+std::int64_t value_as_int(Value const& value) {
+  if (auto const* v = std::get_if<std::uint8_t>(&value.data))
+    return *v;
+  if (auto const* v = std::get_if<std::uint16_t>(&value.data))
+    return *v;
+  if (auto const* v = std::get_if<std::uint32_t>(&value.data))
+    return *v;
+  if (auto const* v = std::get_if<std::uint64_t>(&value.data))
+    return static_cast<std::int64_t>(*v);
+  if (auto const* v = std::get_if<std::int8_t>(&value.data))
+    return *v;
+  if (auto const* v = std::get_if<std::int16_t>(&value.data))
+    return *v;
+  if (auto const* v = std::get_if<std::int32_t>(&value.data))
+    return *v;
+  if (auto const* v = std::get_if<std::int64_t>(&value.data))
+    return *v;
+  throw std::runtime_error("expected integer count");
+}
+
+std::int64_t borrowed_item_count(Field const& node, Values const& values) {
+  auto count = value_as_int(require(values, node.count_name)) + node.bias;
+  if (count < 0)
+    throw std::runtime_error(node.name + ": item count " + std::to_string(count));
+  return count;
+}
+
 }  // namespace packbin

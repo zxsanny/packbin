@@ -144,6 +144,7 @@ void pack_one(Field const& node, Values const& values, std::vector<std::uint8_t>
     case Field::Kind::Sized:
     case Field::Kind::U2:
     case Field::Kind::Bits:
+    case Field::Kind::Packed:
     case Field::Kind::Utf8:
       pack_counted(node, values, out);
       break;
@@ -216,6 +217,26 @@ void pack_one(Field const& node, Values const& values, std::vector<std::uint8_t>
               slice.emplace(name, (*list)->items[i]);
           } else if (i == 0) {
             slice.emplace(name, it->second);
+          }
+        }
+        pack_nodes(node.children, slice, out);
+      }
+      break;
+    }
+    case Field::Kind::Times: {
+      auto count = borrowed_item_count(node, values);
+      for (std::int64_t i = 0; i < count; ++i) {
+        Values slice;
+        for (auto const& child : node.children) {
+          auto const& name = field_name(child);
+          auto vit = values.find(name);
+          if (vit == values.end())
+            continue;
+          if (auto const* list = std::get_if<Value::List>(&vit->second.data)) {
+            if (*list && static_cast<std::size_t>(i) < (*list)->items.size())
+              slice.emplace(name, (*list)->items[static_cast<std::size_t>(i)]);
+          } else if (i == 0) {
+            slice.emplace(name, vit->second);
           }
         }
         pack_nodes(node.children, slice, out);

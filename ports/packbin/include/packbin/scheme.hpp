@@ -139,6 +139,11 @@ BoundField<T> bits(int id, M T::* member, int count_id) {
   return bind_scalar<T, M>(bits(id, count_id), member);
 }
 
+template <typename T, typename M>
+BoundField<T> packed(int width, int id, M T::* member, int count_id, int bias = 0) {
+  return bind_scalar<T, M>(packed(width, id, count_id, bias), member);
+}
+
 template <typename T>
 BoundField<T> when(Eq condition, std::initializer_list<BoundField<T>> children) {
   std::vector<Field> fields;
@@ -178,6 +183,20 @@ BoundField<T> repeat(std::initializer_list<BoundField<T>> children) {
       out.bindings.push_back(b);
   }
   out.field = repeat(std::move(fields));
+  return out;
+}
+
+template <typename T>
+BoundField<T> times(int count_id, std::initializer_list<BoundField<T>> children) {
+  std::vector<Field> fields;
+  BoundField<T> out;
+  fields.reserve(children.size());
+  for (auto const& child : children) {
+    fields.push_back(child.field);
+    for (auto const& b : child.bindings)
+      out.bindings.push_back(b);
+  }
+  out.field = times(count_id, std::move(fields));
   return out;
 }
 

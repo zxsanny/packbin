@@ -1,4 +1,5 @@
 #include "counted.hpp"
+#include "walk.hpp"
 
 #include <stdexcept>
 
@@ -6,53 +7,7 @@ namespace packbin {
 namespace {
 
 std::uint64_t as_count(Value const& value) {
-  if (auto const* v = std::get_if<std::uint8_t>(&value.data))
-    return *v;
-  if (auto const* v = std::get_if<std::uint16_t>(&value.data))
-    return *v;
-  if (auto const* v = std::get_if<std::uint32_t>(&value.data))
-    return *v;
-  if (auto const* v = std::get_if<std::uint64_t>(&value.data))
-    return *v;
-  if (auto const* v = std::get_if<std::int8_t>(&value.data))
-    return static_cast<std::uint64_t>(*v);
-  if (auto const* v = std::get_if<std::int16_t>(&value.data))
-    return static_cast<std::uint64_t>(*v);
-  if (auto const* v = std::get_if<std::int32_t>(&value.data))
-    return static_cast<std::uint64_t>(*v);
-  if (auto const* v = std::get_if<std::int64_t>(&value.data))
-    return static_cast<std::uint64_t>(*v);
-  throw std::runtime_error("expected integer count");
-}
-
-Value const& require(Values const& values, std::string const& name) {
-  auto it = values.find(name);
-  if (it == values.end())
-    throw std::runtime_error("missing field " + name);
-  return it->second;
-}
-
-void append_value(Values& out, std::string const& name, Value value, bool as_list) {
-  if (!as_list) {
-    out[name] = std::move(value);
-    return;
-  }
-  auto it = out.find(name);
-  if (it == out.end()) {
-    auto list = std::make_shared<ValueList>();
-    list->items.push_back(std::move(value));
-    out.emplace(name, Value{list});
-    return;
-  }
-  if (auto* list = std::get_if<Value::List>(&it->second.data)) {
-    if (*list)
-      (*list)->items.push_back(std::move(value));
-    return;
-  }
-  auto list = std::make_shared<ValueList>();
-  list->items.push_back(it->second);
-  list->items.push_back(std::move(value));
-  it->second = Value{list};
+  return static_cast<std::uint64_t>(value_as_int(value));
 }
 
 ShortPacket missing(std::string const& name, std::size_t needed, std::size_t left) {
@@ -91,6 +46,30 @@ void pack_bits(Field const& node, Values const& values, std::vector<std::uint8_t
     if (bit > 1)
       throw std::runtime_error(node.name + ": expected 0 or 1");
     raw[i / 8] = static_cast<std::uint8_t>(raw[i / 8] | (bit << (i % 8)));
+  }
+  out.insert(out.end(), raw.begin(), raw.end());
+}
+
+std::size_t packed_bytes(int width, std::int64_t count) {
+  return static_cast<std::size_t>((count * width + 7) / 8);
+}
+
+void pack_packed(Field const& node, Values const& values, std::vector<std::uint8_t>& out) {
+  auto count = borrowed_item_count(node, values);
+  auto const& list = std::get<Value::List>(require(values, node.name).data);
+  if (!list || static_cast<std::int64_t>(list->items.size()) != count)
+    throw std::runtime_error(node.name + ": expected " + std::to_string(count) + " items");
+  auto width = node.byte_count;
+  auto max = width == 2 ? 3 : 1;
+  auto shift = width == 2 ? 2 : 1;
+  auto per = width == 2 ? 4 : 8;
+  std::vector<std::uint8_t> raw(packed_bytes(width, count), 0);
+  for (std::int64_t i = 0; i < count; ++i) {
+    auto n = as_count(list->items[static_cast<std::size_t>(i)]);
+    if (n > static_cast<std::uint64_t>(max))
+      throw std::runtime_error(node.name + ": expected 0.." + std::to_string(max));
+    auto idx = static_cast<std::size_t>(i / per);
+    raw[idx] = static_cast<std::uint8_t>(raw[idx] | (n << ((i % per) * shift)));
   }
   out.insert(out.end(), raw.begin(), raw.end());
 }
@@ -141,6 +120,30 @@ std::optional<ShortPacket> unpack_bits(std::uint8_t const* data, std::size_t len
   return std::nullopt;
 }
 
+std::optional<ShortPacket> unpack_packed(std::uint8_t const* data, std::size_t len,
+                                         std::size_t& offset, Field const& node, Values& out,
+                                         bool as_list) {
+  auto count = borrowed_item_count(node, out);
+  auto nbytes = packed_bytes(node.byte_count, count);
+  auto left = len - offset;
+  if (left < nbytes)
+    return missing(node.name, nbytes, left);
+  auto width = node.byte_count;
+  auto mask = width == 2 ? 3 : 1;
+  auto shift = width == 2 ? 2 : 1;
+  auto per = width == 2 ? 4 : 8;
+  auto list = std::make_shared<ValueList>();
+  list->items.reserve(static_cast<std::size_t>(count));
+  for (std::int64_t i = 0; i < count; ++i) {
+    auto value = static_cast<std::uint8_t>(
+        (data[offset + static_cast<std::size_t>(i / per)] >> ((i % per) * shift)) & mask);
+    list->items.push_back(Value{value});
+  }
+  offset += nbytes;
+  append_value(out, node.name, Value{list}, as_list);
+  return std::nullopt;
+}
+
 void pack_utf8(Field const& node, Values const& values, std::vector<std::uint8_t>& out) {
   auto const& text = std::get<std::string>(require(values, node.name).data);
   if (text.size() > 65535)
@@ -182,6 +185,9 @@ void pack_counted(Field const& node, Values const& values, std::vector<std::uint
     case Field::Kind::Bits:
       pack_bits(node, values, out);
       break;
+    case Field::Kind::Packed:
+      pack_packed(node, values, out);
+      break;
     case Field::Kind::Utf8:
       pack_utf8(node, values, out);
       break;
@@ -202,6 +208,8 @@ std::optional<ShortPacket> unpack_counted(std::uint8_t const* data, std::size_t 
       return unpack_utf8(data, len, offset, node, out, as_list);
     case Field::Kind::Bits:
       return unpack_bits(data, len, offset, node, out, as_list);
+    case Field::Kind::Packed:
+      return unpack_packed(data, len, offset, node, out, as_list);
     default:
       throw std::runtime_error("not a counted field");
   }
