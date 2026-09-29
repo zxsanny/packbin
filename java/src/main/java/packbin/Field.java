@@ -148,10 +148,10 @@ public final class Field {
                 false);
     }
 
-    static Field times(int countId, Field[] fields) {
+    static Field times(int id, int countId, Field[] fields) {
         return new Field(
                 Kind.TIMES,
-                -1,
+                id,
                 null,
                 null,
                 false,
@@ -194,13 +194,13 @@ public final class Field {
                 false);
     }
 
-    static Field flags(Field[] fields) {
+    static Field flags(int id, Field[] fields) {
         FlagGroup group = new FlagGroup();
         List<Field> bits = new ArrayList<>(fields.length);
         for (Field field : fields) {
             bits.add(group.addBit(field));
         }
-        return new Field(Kind.FLAGS, -1, null, null, false, 1, bits, null, group, 0, null, -1, 0, null, false);
+        return new Field(Kind.FLAGS, id, null, null, false, 1, bits, null, group, 0, null, -1, 0, null, false);
     }
 
     static Field flagByte() {
@@ -227,12 +227,12 @@ public final class Field {
                 false);
     }
 
-    static Field when(Packbin.Eq condition, Field[] fields) {
-        return new Field(Kind.WHEN, -1, null, null, false, 0, List.of(fields), condition, null, 0, null, -1, 0, null, false);
+    static Field when(int id, Packbin.Eq condition, Field[] fields) {
+        return new Field(Kind.WHEN, id, null, null, false, 0, List.of(fields), condition, null, 0, null, -1, 0, null, false);
     }
 
-    static Field repeat(Field[] fields) {
-        return new Field(Kind.REPEAT, -1, null, null, false, 0, List.of(fields), null, null, 0, null, -1, 0, null, false);
+    static Field repeat(int id, Field[] fields) {
+        return new Field(Kind.REPEAT, id, null, null, false, 0, List.of(fields), null, null, 0, null, -1, 0, null, false);
     }
 
     static Field group(Getter get, Setter set, Field[] fields, boolean nested) {
@@ -254,8 +254,8 @@ public final class Field {
                 nested);
     }
 
-    static Field group(Field[] fields) {
-        return new Field(Kind.GROUP, -1, null, null, false, 0, List.of(fields), null, null, 0, null, -1, 0, null, false);
+    static Field group(int id, Field[] fields) {
+        return new Field(Kind.GROUP, id, null, null, false, 0, List.of(fields), null, null, 0, null, -1, 0, null, false);
     }
 
     static Field list(Getter get, Setter set, Field element) {

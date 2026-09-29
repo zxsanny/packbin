@@ -37,6 +37,7 @@ fn main() {
             )
             .into(),
             flags(
+                4,
                 "motion",
                 vec![u16("heading"), u8("speed"), i16("altitude")],
             )

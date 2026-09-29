@@ -27,6 +27,7 @@ POSITION = Scheme(
     i32(2, lambda row: row["lon"]),
     u8(3, lambda row: row["profile"]),
     flags(
+        4,
         u16(4, lambda row: row["heading"]),
         u8(5, lambda row: row["speed"]),
         i16(6, lambda row: row["altitude"]),
@@ -89,6 +90,7 @@ def test_ac4_flags_and_stored_zero():
         0x40,
         dict,
         flags(
+            0,
             u8(0, lambda row: row["b0"]),
             u8(1, lambda row: row["b1"]),
             u8(2, lambda row: row["b2"]),
@@ -122,6 +124,7 @@ def test_ac5_short_field_then_position_pack():
         0x40,
         dict,
         flags(
+            0,
             u8(0, lambda row: row["b0"]),
             u8(1, lambda row: row["b1"]),
             u8(2, lambda row: row["b2"]),

@@ -19,6 +19,7 @@ public final class PackbinTest {
             Packbin.i32(2, Access.get((PositionRow r) -> r.lon), Access.set((PositionRow r, Object v) -> r.lon = ((Number) v).intValue())),
             Packbin.u8(3, Access.get((PositionRow r) -> r.profile & 0xFF), Access.set((PositionRow r, Object v) -> r.profile = ((Number) v).byteValue())),
             Packbin.flags(
+                    4,
                     Packbin.u16(4, Access.get((PositionRow r) -> r.heading), Access.set((PositionRow r, Object v) -> r.heading = v == null ? null : ((Number) v).intValue())),
                     Packbin.u8(5, Access.get((PositionRow r) -> r.speed), Access.set((PositionRow r, Object v) -> r.speed = v == null ? null : ((Number) v).intValue())),
                     Packbin.i16(6, Access.get((PositionRow r) -> r.altitude), Access.set((PositionRow r, Object v) -> r.altitude = v == null ? null : ((Number) v).intValue()))));
@@ -33,6 +34,7 @@ public final class PackbinTest {
         ac5ShortBufferThenPositionPack();
         whenGroupWidth();
         repeatBoundary();
+        repeatAnchorMustMatchNextId();
         trailingBytesAreError();
         nfrRoundTripsWithinOneSecond();
         objectRoundTrip();
@@ -85,6 +87,7 @@ public final class PackbinTest {
 
     private static void ac4FlagsAndStoredZero() {
         Field flags = Packbin.flags(
+                0,
                 Packbin.u8(0, Access.get("b0"), Access.set("b0")),
                 Packbin.u8(1, Access.get("b1"), Access.set("b1")),
                 Packbin.u8(2, Access.get("b2"), Access.set("b2")),
@@ -120,6 +123,7 @@ public final class PackbinTest {
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static void ac5ShortBufferThenPositionPack() {
         Field flags = Packbin.flags(
+                0,
                 Packbin.u8(0, Access.get("b0"), Access.set("b0")),
                 Packbin.u8(1, Access.get("b1"), Access.set("b1")),
                 Packbin.u8(2, Access.get("b2"), Access.set("b2")),
@@ -144,7 +148,7 @@ public final class PackbinTest {
     private static void whenGroupWidth() {
         Scheme<Map> packet = Maps.scheme(1,
                 Packbin.u8(0, Access.get("profile"), Access.set("profile")),
-                Packbin.when(Packbin.eq(0, 0), Packbin.u8(1, Access.get("shape"), Access.set("shape"))));
+                Packbin.when(1, Packbin.eq(0, 0), Packbin.u8(1, Access.get("shape"), Access.set("shape"))));
 
         byte[] miss = BinaryPacker.pack(packet, Maps.map("profile", 1));
         expectEq("when miss length", 2, miss.length);
@@ -157,6 +161,7 @@ public final class PackbinTest {
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static void repeatBoundary() {
         Scheme<Map> packet = Maps.scheme(1, Packbin.repeat(
+                0,
                 Packbin.u8(0, Access.get("a"), Access.set("a")),
                 Packbin.u8(1, Access.get("b"), Access.set("b"))));
 
@@ -171,6 +176,34 @@ public final class PackbinTest {
         expectTrue("repeat short", badErr != null);
         expectTrue("repeat handler did not run", bad[0] == null);
         expectTrue("repeat short error", badErr instanceof Packbin.ShortPacket);
+    }
+
+    private static void repeatAnchorMustMatchNextId() {
+        Scheme<Map> matching = Maps.scheme(1, Packbin.repeat(
+                0,
+                Packbin.u8(0, Access.get("a"), Access.set("a")),
+                Packbin.u8(1, Access.get("b"), Access.set("b"))));
+        Map<String, Object> row = Maps.map("a", List.of(1), "b", List.of(2));
+        byte[] matched = BinaryPacker.pack(matching, row);
+        expectEq("repeat matching hex", "010102", toHex(matched));
+
+        byte[] wrote = new byte[0];
+        boolean threw = false;
+        String message = "";
+        try {
+            Scheme<Map> mismatched = Maps.scheme(1, Packbin.repeat(
+                    1,
+                    Packbin.u8(0, Access.get("a"), Access.set("a")),
+                    Packbin.u8(1, Access.get("b"), Access.set("b"))));
+            wrote = BinaryPacker.pack(mismatched, row);
+        } catch (IllegalArgumentException ex) {
+            threw = true;
+            message = ex.getMessage() == null ? "" : ex.getMessage();
+        }
+        expectTrue("repeat mismatch throws", threw);
+        expectTrue("repeat mismatch names got", message.contains("1"));
+        expectTrue("repeat mismatch names expected", message.contains("0"));
+        expectEq("repeat mismatch writes", 0, wrote.length);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -236,6 +269,7 @@ public final class PackbinTest {
         expectTrue("object altitude absent", got[0].altitude == null);
 
         Field wideFlags = Packbin.flags(
+                0,
                 Packbin.u8(0, Access.get((WideRow r) -> null), Access.set((WideRow r, Object v) -> {})),
                 Packbin.u8(1, Access.get((WideRow r) -> null), Access.set((WideRow r, Object v) -> {})),
                 Packbin.u8(2, Access.get((WideRow r) -> null), Access.set((WideRow r, Object v) -> {})),
@@ -249,7 +283,8 @@ public final class PackbinTest {
         expectEq("object present zero", "01200000", toHex(BinaryPacker.pack(wide, present)));
 
         Scheme<SessionRow> session = new Scheme<>(1, SessionRow.class,
-                Packbin.flags(Packbin.group(
+                Packbin.flags(0, Packbin.group(
+                        0,
                         Packbin.u16(0, Access.get((SessionRow r) -> r.login), Access.set((SessionRow r, Object v) -> r.login = v == null ? null : ((Number) v).intValue())),
                         Packbin.u32(1, Access.get((SessionRow r) -> r.ts), Access.set((SessionRow r, Object v) -> r.ts = v == null ? null : ((Number) v).longValue())))));
         expectEq("object group clear", "0100", toHex(BinaryPacker.pack(session, new SessionRow())));

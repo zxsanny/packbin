@@ -95,7 +95,7 @@ auto position_scheme() {
   return packbin::Scheme<PositionRow>(
       0x40, packbin::u16(0, &PositionRow::sid), packbin::i32(1, &PositionRow::lat),
       packbin::i32(2, &PositionRow::lon), packbin::u8(3, &PositionRow::profile),
-      packbin::flags({packbin::u16(4), packbin::u8(5), packbin::i16(6)}));
+      packbin::flags(4, {packbin::u16(4), packbin::u8(5), packbin::i16(6)}));
 }
 
 auto modified_scheme() {

@@ -38,15 +38,15 @@ const route = scheme<RouteRow>(
   0x34,
   u16(0, (r) => r.sid),
   u16(1, (r) => r.name),
-  flags([
+  flags(2, [
     u16(2, (r) => r.unit),
     bool(3, (r) => r.straight),
     u16(4, (r) => r.routeId),
   ]),
   u8(5, (r) => r.count),
   packed(2, 6, (r) => r.kinds, 5),
-  times(5, [i32(7, (r) => r.lat), i32(8, (r) => r.lon)]),
-  when(eq(3, true), [packed(1, 9, (r) => r.mask, 5, -1)]),
+  times(7, 5, [i32(7, (r) => r.lat), i32(8, (r) => r.lon)]),
+  when(9, eq(3, true), [packed(1, 9, (r) => r.mask, 5, -1)]),
 )
 
 describe("borrowed-count fields", () => {
@@ -112,7 +112,7 @@ describe("borrowed-count fields", () => {
     const layout = scheme<TailRow>(
       1,
       u8(0, (r) => r.n),
-      times(0, [i32(1, (r) => r.lat), i32(2, (r) => r.lon)]),
+      times(1, 0, [i32(1, (r) => r.lat), i32(2, (r) => r.lon)]),
       u8(3, (r) => r.tail),
     )
     const raw = BinaryPacker.pack(layout, {

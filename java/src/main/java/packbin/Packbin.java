@@ -58,8 +58,8 @@ public final class Packbin {
         return field.withBigEndian();
     }
 
-    public static Field flags(Field... fields) {
-        return Field.flags(fields);
+    public static Field flags(int anchor, Field... fields) {
+        return Field.flags(anchor, fields);
     }
 
     public static Field flagByte() {
@@ -70,8 +70,8 @@ public final class Packbin {
         return new Eq(fieldId, value);
     }
 
-    public static Field when(Eq condition, Field... fields) {
-        return Field.when(condition, fields);
+    public static Field when(int anchor, Eq condition, Field... fields) {
+        return Field.when(anchor, condition, fields);
     }
 
     public static final class Eq {
@@ -84,12 +84,12 @@ public final class Packbin {
         }
     }
 
-    public static Field repeat(Field... fields) {
-        return Field.repeat(fields);
+    public static Field repeat(int anchor, Field... fields) {
+        return Field.repeat(anchor, fields);
     }
 
-    public static Field group(Field... fields) {
-        return Field.group(fields);
+    public static Field group(int anchor, Field... fields) {
+        return Field.group(anchor, fields);
     }
 
     public static Field group(Getter get, Setter set, Field... fields) {
@@ -122,8 +122,8 @@ public final class Packbin {
         return Field.packed(width, id, get, set, countId, bias);
     }
 
-    public static Field times(int countId, Field... fields) {
-        return Field.times(countId, fields);
+    public static Field times(int anchor, int countId, Field... fields) {
+        return Field.times(anchor, countId, fields);
     }
 
     public static Field utf8(int id, Getter get, Setter set) {

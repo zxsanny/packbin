@@ -9,17 +9,17 @@ export type Field =
   | ({ kind: "float"; id: number; name: string; size: 4 | 8 } & EndianField)
   | { kind: "bytes"; id: number; name: string; size: number }
   | { kind: "bool"; id: number; name: string }
-  | { kind: "flags"; fields: Field[] }
+  | { kind: "flags"; anchor: number; fields: Field[] }
   | { kind: "flagByte"; name: string; id: symbol }
   | { kind: "flagBit"; flagId: symbol; bit: number; field: Field }
-  | { kind: "when"; fieldId: number; value: unknown; fields: Field[] }
-  | { kind: "repeat"; fields: Field[] }
-  | { kind: "group"; name: string; fields: Field[] }
+  | { kind: "when"; anchor: number; fieldId: number; value: unknown; fields: Field[] }
+  | { kind: "repeat"; anchor: number; fields: Field[] }
+  | { kind: "group"; name: string; fields: Field[]; anchor?: number }
   | { kind: "sized"; id: number; name: string; countId: number }
   | { kind: "u2"; slots: { id: number; name: string }[] }
   | { kind: "bits"; id: number; name: string; countId: number }
   | { kind: "packed"; id: number; name: string; width: 1 | 2; countId: number; bias: 0 | -1 }
-  | { kind: "times"; countId: number; fields: Field[] }
+  | { kind: "times"; anchor: number; countId: number; fields: Field[] }
   | { kind: "utf8"; id: number; name: string }
   | { kind: "list"; name: string; element: Field }
   | { kind: "dict"; name: string; element: Field }
@@ -107,13 +107,23 @@ export function flatten(fields: Field[]): Field[] {
       const fb = flagByte("")
       out.push(fb)
       for (const child of f.fields) out.push(fb.bit(child))
+    } else if (
+      f.kind === "when" ||
+      f.kind === "repeat" ||
+      f.kind === "times" ||
+      f.kind === "group"
+    ) {
+      out.push({ ...f, fields: flatten(f.fields) })
+    } else if (f.kind === "list" || f.kind === "dict") {
+      const flat = flatten([f.element])
+      out.push({ ...f, element: flat[0]! })
     } else out.push(f)
   }
   return out
 }
 
-export function flags(fields: Field[]): Field {
-  return { kind: "flags", fields }
+export function flags(anchor: number, fields: Field[]): Field {
+  return { kind: "flags", anchor, fields }
 }
 
 export function flagByte(name: string): FlagByteHandle {
@@ -136,23 +146,44 @@ export function eq(fieldId: number, value: unknown): { fieldId: number; value: u
 }
 
 export function when(
+  anchor: number,
   cond: { fieldId: number; value: unknown },
   fields: Field[],
 ): Field {
   return {
     kind: "when",
+    anchor,
     fieldId: cond.fieldId,
     value: cond.value,
-    fields: flatten(fields),
+    fields,
   }
 }
 
-export function repeat(fields: Field[]): Field {
-  return { kind: "repeat", fields: flatten(fields) }
+export function repeat(anchor: number, fields: Field[]): Field {
+  return { kind: "repeat", anchor, fields }
 }
 
-export function group<T>(acc: Acc<T>, fields: Field[] = []): Field {
-  return { kind: "group", name: memberName(acc), fields }
+export function group<T>(acc: Acc<T>, fields?: Field[]): Field
+export function group<T>(anchor: number, acc: Acc<T>, fields?: Field[]): Field
+export function group<T>(
+  anchorOrAcc: number | Acc<T>,
+  accOrFields?: Acc<T> | Field[],
+  maybeFields: Field[] = [],
+): Field {
+  if (typeof anchorOrAcc === "number") {
+    const acc = accOrFields as Acc<T>
+    return {
+      kind: "group",
+      anchor: anchorOrAcc,
+      name: memberName(acc),
+      fields: maybeFields,
+    }
+  }
+  return {
+    kind: "group",
+    name: memberName(anchorOrAcc),
+    fields: Array.isArray(accOrFields) ? accOrFields : [],
+  }
 }
 
 export function sized<T>(id: number, acc: Acc<T>, countId: number): Field {
@@ -202,8 +233,8 @@ export function packed<T>(
   }
 }
 
-export function times(countId: number, fields: Field[]): Field {
-  return { kind: "times", countId, fields: flatten(fields) }
+export function times(anchor: number, countId: number, fields: Field[]): Field {
+  return { kind: "times", anchor, countId, fields }
 }
 
 export function utf8<T>(id: number, acc: Acc<T>): Field {
@@ -351,9 +382,21 @@ export function validateFieldIds(fields: Field[], next = 0): number {
       case "when":
       case "repeat":
       case "times":
-      case "group":
       case "flags":
+        if (f.anchor !== next) {
+          throw new RangeError(`field id: expected ${next}, got ${f.anchor}`)
+        }
         next = validateFieldIds(f.fields, next)
+        break
+      case "group":
+        if (f.anchor !== undefined) {
+          if (f.anchor !== next) {
+            throw new RangeError(`field id: expected ${next}, got ${f.anchor}`)
+          }
+          next = validateFieldIds(f.fields, next)
+        } else {
+          validateFieldIds(f.fields, 0)
+        }
         break
       case "list":
       case "dict":

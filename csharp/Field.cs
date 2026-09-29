@@ -144,8 +144,8 @@ public sealed class Field
         return new Field(Kind.Packed, id, MemberAccess.From(accessor).Name, byteCount: width, countId: countId, bias: bias);
     }
 
-    public static Field Times(int countId, params Field[] fields) =>
-        new(Kind.Times, -1, "times", children: fields, countId: countId);
+    public static Field Times(int anchor, int countId, params Field[] fields) =>
+        new(Kind.Times, anchor, "times", children: fields, countId: countId);
 
     public static Field U2<T>(params (int Id, Expression<Func<T, int>> Accessor)[] slots)
     {
@@ -167,30 +167,35 @@ public sealed class Field
         return new Field(Kind.FlagByte, -1, "", flagOwner: group);
     }
 
-    public static Field Flags(params Field[] fields)
+    public static Field Flags(int anchor, params Field[] fields)
     {
         var group = new FlagGroup("");
         var bits = new Field[fields.Length];
         for (var i = 0; i < fields.Length; i++)
             bits[i] = group.AddBit(fields[i]);
-        return new Field(Kind.Flags, -1, "", children: bits, flagOwner: group);
+        return new Field(Kind.Flags, anchor, "", children: bits, flagOwner: group);
     }
 
-    public static Field When(Condition condition, params Field[] fields) =>
-        new(Kind.When, -1, "", children: fields, pred: condition);
+    public static Field When(int anchor, Condition condition, params Field[] fields) =>
+        new(Kind.When, anchor, "", children: fields, pred: condition);
 
-    public static Field Repeat(params Field[] fields) =>
-        new(Kind.Repeat, -1, "", children: fields);
+    public static Field Repeat(int anchor, params Field[] fields) =>
+        new(Kind.Repeat, anchor, "", children: fields);
 
     public static Field Group<T, TChild>(Expression<Func<T, TChild>> accessor, params Field[] fields)
     {
         var access = MemberAccess.From(accessor);
-        var childType = Nullable.GetUnderlyingType(typeof(TChild)) ?? typeof(TChild);
-        var nested = childType.IsClass
-            && childType != typeof(string)
-            && childType != typeof(byte[])
-            && childType != typeof(bool);
-        return new Field(Kind.Group, -1, access.Name, children: fields, nestedRow: nested);
+        if (!IsNestedRow<TChild>())
+            throw new ArgumentException("continuing group requires an anchor");
+        return new Field(Kind.Group, -1, access.Name, children: fields, nestedRow: true);
+    }
+
+    public static Field Group<T, TChild>(int anchor, Expression<Func<T, TChild>> accessor, params Field[] fields)
+    {
+        var access = MemberAccess.From(accessor);
+        if (IsNestedRow<TChild>())
+            throw new ArgumentException("nested group does not take an anchor");
+        return new Field(Kind.Group, anchor, access.Name, children: fields, nestedRow: false);
     }
 
     public static Field List<T, TProp>(Expression<Func<T, TProp>> accessor, Field element)
@@ -217,4 +222,13 @@ public sealed class Field
         field.Type is (>= Kind.U8 and <= Kind.F64)
             or Kind.Bytes or Kind.Sized or Kind.Bits or Kind.Packed or Kind.Utf8 or Kind.Bool
             or Kind.U2;
+
+    private static bool IsNestedRow<TChild>()
+    {
+        var childType = Nullable.GetUnderlyingType(typeof(TChild)) ?? typeof(TChild);
+        return childType.IsClass
+            && childType != typeof(string)
+            && childType != typeof(byte[])
+            && childType != typeof(bool);
+    }
 }

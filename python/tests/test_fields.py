@@ -27,12 +27,25 @@ from packbin import (
     when,
 )
 
+def test_bad_anchor_raises_and_matching_packs():
+    matching = Scheme(
+        1,
+        dict,
+        flags(0, flag_bool(0, lambda row: row["mark"])),
+    )
+    packed = BinaryPacker.pack(matching, {"mark": True})
+    assert packed.hex() == "0101"
+    with pytest.raises(ValueError, match=r"anchor 99 is not the next order 0"):
+        Scheme(1, dict, flags(99, flag_bool(0, lambda row: row["mark"])))
+    assert BinaryPacker.pack(matching, {"mark": True}) == packed
+
+
 def test_when_group_width():
     layout = Scheme(
         1,
         dict,
         u8(0, lambda row: row["profile"]),
-        when(eq(0, 0), u8(1, lambda row: row["shape"])),
+        when(1, eq(0, 0), u8(1, lambda row: row["shape"])),
     )
     assert len(BinaryPacker.pack(layout, {"profile": 1})) == 2
     assert len(BinaryPacker.pack(layout, {"profile": 0, "shape": 9})) == 3
@@ -43,7 +56,7 @@ def test_repeat_group_boundary():
         1,
         dict,
         u8(0, lambda row: row["type"]),
-        repeat(i32(1, lambda row: row["lat"]), i32(2, lambda row: row["lon"])),
+        repeat(1, i32(1, lambda row: row["lat"]), i32(2, lambda row: row["lon"])),
     )
     complete = BinaryPacker.pack(
         layout,
@@ -63,7 +76,7 @@ def test_repeat_group_boundary():
 
 
 def test_flag_group():
-    empty = Scheme(1, dict, flags(flag_bool(0, lambda row: row["mark"])))
+    empty = Scheme(1, dict, flags(0, flag_bool(0, lambda row: row["mark"])))
     set_bit = BinaryPacker.pack(empty, {"mark": True})
     assert set_bit == b"\x01\x01"
     assert len(set_bit) - 1 == 1
@@ -74,6 +87,7 @@ def test_flag_group():
         1,
         dict,
         flags(
+            0,
             u8(0, lambda row: row["a"]),
             u8(1, lambda row: row["b"]),
             u8(2, lambda row: row["c"]),
@@ -87,7 +101,7 @@ def test_flag_group():
     assert wide[1] == 0x20
     assert len(wide) - len(BinaryPacker.pack(one, {})) == 2
 
-    two = Scheme(1, dict, flags(group(u16(0, lambda row: row["login"]), u32(1, lambda row: row["ts"]))))
+    two = Scheme(1, dict, flags(0, group(0, u16(0, lambda row: row["login"]), u32(1, lambda row: row["ts"]))))
     raw = BinaryPacker.pack(two, {"login": 7, "ts": 1000})
     assert raw[2:].hex() == "0700e8030000"
     assert len(raw) - 2 == 6
@@ -99,7 +113,7 @@ def test_flag_group():
     assert "login" not in got.value
     assert "ts" not in got.value
 
-    zero = Scheme(1, dict, flags(group(u8(0, lambda row: row["b"]))))
+    zero = Scheme(1, dict, flags(0, group(0, u8(0, lambda row: row["b"]))))
     stored = BinaryPacker.pack(zero, {"b": 0})
     assert stored == b"\x01\x01\x00"
 

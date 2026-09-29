@@ -148,7 +148,7 @@ public class LayoutTests
     {
         var scheme = new Scheme<WhenRow>(1,
             Field.U8<WhenRow>(0, x => x.Profile),
-            Field.When(Condition.Eq(0, (byte)0), Field.U8<WhenRow>(1, x => x.Shape)));
+            Field.When(1, Condition.Eq(0, (byte)0), Field.U8<WhenRow>(1, x => x.Shape)));
 
         var miss = BinaryPacker.Pack(scheme, new Dictionary<string, object?> { ["Profile"] = (byte)1 });
         Assert.Equal(2, miss.Length);
@@ -166,7 +166,7 @@ public class LayoutTests
     [Fact]
     public void RepeatBoundary()
     {
-        var scheme = new Scheme<RepeatRow>(1, Field.Repeat(Field.U8<RepeatRow>(0, x => x.A), Field.U8<RepeatRow>(1, x => x.B)));
+        var scheme = new Scheme<RepeatRow>(1, Field.Repeat(0, Field.U8<RepeatRow>(0, x => x.A), Field.U8<RepeatRow>(1, x => x.B)));
 
         var ok = BinaryPacker.Read(scheme, new byte[] { 1, 1, 2 });
         Assert.Null(ok.Error);
@@ -176,6 +176,38 @@ public class LayoutTests
         var bad = BinaryPacker.Read(scheme, new byte[] { 1, 1, 2, 3 });
         Assert.Empty(bad.Values);
         Assert.IsType<ShortPacket>(bad.Error);
+
+        var packed = BinaryPacker.Pack(scheme, new Dictionary<string, object?> { ["A"] = (byte)1, ["B"] = (byte)2 });
+        Assert.Equal("010102", Convert.ToHexString(packed).ToLowerInvariant());
+    }
+
+    [Fact]
+    public void Repeat_MatchingAnchor_SameBytes()
+    {
+        var scheme = new Scheme<RepeatRow>(1,
+            Field.U8<RepeatRow>(0, x => x.A),
+            Field.Repeat(1, Field.U8<RepeatRow>(1, x => x.B)));
+        var packed = BinaryPacker.Pack(scheme, new Dictionary<string, object?> { ["A"] = (byte)1, ["B"] = (byte)2 });
+        Assert.Equal("010102", Convert.ToHexString(packed).ToLowerInvariant());
+    }
+
+    [Fact]
+    public void Repeat_WrongAnchor_FailsConstruction()
+    {
+        var bytesWritten = 0;
+        var schemes = 0;
+        try
+        {
+            var scheme = new Scheme<RepeatRow>(1,
+                Field.Repeat(1, Field.U8<RepeatRow>(0, x => x.A), Field.U8<RepeatRow>(1, x => x.B)));
+            schemes++;
+            bytesWritten = BinaryPacker.Pack(scheme, new Dictionary<string, object?> { ["A"] = (byte)1, ["B"] = (byte)2 }).Length;
+        }
+        catch (ArgumentException)
+        {
+        }
+        Assert.Equal(0, schemes);
+        Assert.Equal(0, bytesWritten);
     }
 
     [Fact]
@@ -191,7 +223,7 @@ public class LayoutTests
     [Fact]
     public void FlagGroup_EmptyMark()
     {
-        var scheme = new Scheme<MarkRow>(1, Field.Flags(Field.Group((MarkRow x) => x.Mark)));
+        var scheme = new Scheme<MarkRow>(1, Field.Flags(0, Field.Group(0, (MarkRow x) => x.Mark)));
         var setBit = BinaryPacker.Pack(scheme, new Dictionary<string, object?> { ["Mark"] = true });
         Assert.Equal(new byte[] { 0x01, 0x01 }, setBit);
         var clear = BinaryPacker.Pack(scheme, new Dictionary<string, object?>());
@@ -201,7 +233,7 @@ public class LayoutTests
     [Fact]
     public void FlagGroup_FiveU8ThenU16()
     {
-        var scheme = new Scheme<WideRow>(1, Field.Flags(
+        var scheme = new Scheme<WideRow>(1, Field.Flags(0,
             Field.U8<WideRow>(0, x => x.A), Field.U8<WideRow>(1, x => x.B), Field.U8<WideRow>(2, x => x.C),
             Field.U8<WideRow>(3, x => x.D), Field.U8<WideRow>(4, x => x.E), Field.U16<WideRow>(5, x => x.B5)));
         Assert.Equal(3, BinaryPacker.Pack(scheme, new Dictionary<string, object?> { ["A"] = (byte)1 }).Length);
@@ -215,7 +247,7 @@ public class LayoutTests
     [Fact]
     public void FlagGroup_Session()
     {
-        var scheme = new Scheme<SessionFlagRow>(1, Field.Flags(
+        var scheme = new Scheme<SessionFlagRow>(1, Field.Flags(0,
             Field.Group((SessionFlagRow x) => x.Session, Field.U16<Session>(0, s => s.Login), Field.U32<Session>(1, s => s.Ts))));
         var raw = BinaryPacker.Pack(scheme, new Dictionary<string, object?>
         {
@@ -235,7 +267,7 @@ public class LayoutTests
     [Fact]
     public void FlagGroup_ZeroU8()
     {
-        var scheme = new Scheme<NestedByteRow>(1, Field.Flags(Field.Group((NestedByteRow x) => x.G, Field.U8<NestedByte>(0, g => g.B))));
+        var scheme = new Scheme<NestedByteRow>(1, Field.Flags(0, Field.Group((NestedByteRow x) => x.G, Field.U8<NestedByte>(0, g => g.B))));
         var stored = BinaryPacker.Pack(scheme, new Dictionary<string, object?> { ["B"] = (byte)0 });
         Assert.Equal(new byte[] { 0x01, 0x01, 0x00 }, stored);
     }
@@ -243,7 +275,7 @@ public class LayoutTests
     [Fact]
     public void FlagGroup_SessionShort()
     {
-        var scheme = new Scheme<SessionFlagRow>(1, Field.Flags(
+        var scheme = new Scheme<SessionFlagRow>(1, Field.Flags(0,
             Field.Group((SessionFlagRow x) => x.Session, Field.U16<Session>(0, s => s.Login), Field.U32<Session>(1, s => s.Ts))));
         var got = BinaryPacker.Read(scheme, new byte[] { 0x01, 0x01, 0x07 });
         Assert.Empty(got.Values);

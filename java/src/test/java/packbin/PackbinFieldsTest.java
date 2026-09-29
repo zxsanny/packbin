@@ -24,6 +24,7 @@ final class PackbinFieldsTest {
 
     private static void flagGroupMark() {
         Scheme<Map> empty = Maps.scheme(1, Packbin.flags(
+                0,
                 Packbin.boolField(0, Access.get("mark"), Access.set("mark"))));
         Map<String, Object> present = Maps.map("mark", Boolean.TRUE);
         byte[] setBit = BinaryPacker.pack(empty, present);
@@ -37,6 +38,7 @@ final class PackbinFieldsTest {
 
     private static void flagGroupWideBit() {
         Scheme<Map> one = Maps.scheme(1, Packbin.flags(
+                0,
                 Packbin.u8(0, Access.get("a"), Access.set("a")),
                 Packbin.u8(1, Access.get("b"), Access.set("b")),
                 Packbin.u8(2, Access.get("c"), Access.set("c")),
@@ -52,7 +54,9 @@ final class PackbinFieldsTest {
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static void flagGroupSession() {
         Scheme<Map> two = Maps.scheme(1, Packbin.flags(
+                0,
                 Packbin.group(
+                        0,
                         Packbin.u16(0, Access.get("login"), Access.set("login")),
                         Packbin.u32(1, Access.get("ts"), Access.set("ts")))));
         byte[] raw = BinaryPacker.pack(two, Maps.map("login", 7, "ts", 1000));
@@ -69,7 +73,8 @@ final class PackbinFieldsTest {
 
     private static void flagGroupStoredZero() {
         Scheme<Map> zero = Maps.scheme(1, Packbin.flags(
-                Packbin.group(Packbin.u8(0, Access.get("b"), Access.set("b")))));
+                0,
+                Packbin.group(0, Packbin.u8(0, Access.get("b"), Access.set("b")))));
         byte[] stored = BinaryPacker.pack(zero, Maps.map("b", 0));
         expectEq("group zero", "010100", PackbinTest.toHex(stored));
     }
@@ -77,7 +82,9 @@ final class PackbinFieldsTest {
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static void flagGroupShortLogin() {
         Scheme<Map> two = Maps.scheme(1, Packbin.flags(
+                0,
                 Packbin.group(
+                        0,
                         Packbin.u16(0, Access.get("login"), Access.set("login")),
                         Packbin.u32(1, Access.get("ts"), Access.set("ts")))));
         Map[] shortGot = new Map[1];
@@ -345,7 +352,7 @@ final class PackbinFieldsTest {
 
         Scheme<Map> tail = Maps.scheme(1,
                 Packbin.u8(0, Access.get("n"), Access.set("n")),
-                Packbin.times(0,
+                Packbin.times(1, 0,
                         Packbin.i32(1, Access.get("lat"), Access.set("lat")),
                         Packbin.i32(2, Access.get("lon"), Access.set("lon"))),
                 Packbin.u8(3, Access.get("tail"), Access.set("tail")));
@@ -363,15 +370,16 @@ final class PackbinFieldsTest {
                 Packbin.u16(0, Access.get("sid"), Access.set("sid")),
                 Packbin.u16(1, Access.get("name"), Access.set("name")),
                 Packbin.flags(
+                        2,
                         Packbin.u16(2, Access.get("unit"), Access.set("unit")),
                         Packbin.boolField(3, Access.get("straight"), Access.set("straight")),
                         Packbin.u16(4, Access.get("route_id"), Access.set("route_id"))),
                 Packbin.u8(5, Access.get("count"), Access.set("count")),
                 Packbin.packed(2, 6, Access.get("kinds"), Access.set("kinds"), 5, 0),
-                Packbin.times(5,
+                Packbin.times(7, 5,
                         Packbin.i32(7, Access.get("lat"), Access.set("lat")),
                         Packbin.i32(8, Access.get("lon"), Access.set("lon"))),
-                Packbin.when(Packbin.eq(3, true),
+                Packbin.when(9, Packbin.eq(3, true),
                         Packbin.packed(1, 9, Access.get("mask"), Access.set("mask"), 5, -1)));
         String routeHex = "3410001500062d00020d0065cd1d00a3e111108ccd1d10cae11101";
         byte[] routeRaw = PackbinTest.parseHex(routeHex);

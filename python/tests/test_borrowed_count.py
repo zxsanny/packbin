@@ -23,14 +23,15 @@ def _route():
         u16(0, lambda row: row["sid"]),
         u16(1, lambda row: row["name"]),
         flags(
+            2,
             u16(2, lambda row: row["unit"]),
             flag_bool(3, lambda row: row["straight"]),
             u16(4, lambda row: row["route_id"]),
         ),
         u8(5, lambda row: row["count"]),
         packed(2, 6, lambda row: row["kinds"], 5),
-        times(5, i32(7, lambda row: row["lat"]), i32(8, lambda row: row["lon"])),
-        when(eq(3, True), packed(1, 9, lambda row: row["mask"], 5, -1)),
+        times(7, 5, i32(7, lambda row: row["lat"]), i32(8, lambda row: row["lon"])),
+        when(9, eq(3, True), packed(1, 9, lambda row: row["mask"], 5, -1)),
     )
 
 
@@ -86,7 +87,7 @@ def test_times_stops_so_the_next_field_is_read():
         1,
         dict,
         u8(0, lambda row: row["n"]),
-        times(0, i32(1, lambda row: row["lat"]), i32(2, lambda row: row["lon"])),
+        times(1, 0, i32(1, lambda row: row["lat"]), i32(2, lambda row: row["lon"])),
         u8(3, lambda row: row["tail"]),
     )
     raw = BinaryPacker.pack(layout, {"n": 2, "lat": [10, 30], "lon": [20, 40], "tail": 7})

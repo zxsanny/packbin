@@ -5,7 +5,7 @@ var scheme = new Scheme<PositionRow>(0x40,
     Field.I32<PositionRow>(1, x => x.Lat),
     Field.I32<PositionRow>(2, x => x.Lon),
     Field.U8<PositionRow>(3, x => x.Profile),
-    Field.Flags(
+    Field.Flags(4,
         Field.U16<PositionRow>(4, x => x.Heading),
         Field.U8<PositionRow>(5, x => x.Speed),
         Field.I16<PositionRow>(6, x => x.Altitude)));

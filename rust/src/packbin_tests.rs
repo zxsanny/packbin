@@ -15,7 +15,7 @@ fn position_scheme() -> MapScheme {
             i32("lat"),
             i32("lon"),
             u8("profile"),
-            flags("motion", vec![u16("heading"), u8("speed"), i16("altitude")]),
+            flags(4, "motion", vec![u16("heading"), u8("speed"), i16("altitude")]),
         ],
     )
 }
@@ -80,6 +80,7 @@ fn ac4_flags_and_stored_zero() {
     let scheme = MapScheme::new(
         0x40,
         vec![flags(
+            0,
             "opts",
             vec![u8("b0"), u8("b1"), u8("b2"), u8("b3"), u8("b4"), u16("b5")],
         )],
@@ -119,6 +120,7 @@ fn ac5_short_buffer_then_position_pack() {
     let scheme = MapScheme::new(
         1,
         vec![flags(
+            0,
             "opts",
             vec![
                 u8("b0"),
@@ -173,7 +175,7 @@ fn when_group_width() {
         1,
         vec![
             u8("profile"),
-            when(eq("profile", Value::U8(0)), vec![u8("shape")]),
+            when(1, eq("profile", Value::U8(0)), vec![u8("shape")]),
         ],
     );
     let mut miss = Values::new();
@@ -189,7 +191,7 @@ fn when_group_width() {
 
 #[test]
 fn repeat_groups_and_leftover() {
-    let scheme = MapScheme::new(1, vec![u16("sid"), repeat(vec![i32("lat"), i32("lon")])]);
+    let scheme = MapScheme::new(1, vec![u16("sid"), repeat(1, vec![i32("lat"), i32("lon")])]);
     let mut vals = Values::new();
     insert(&mut vals, "sid", Some(Value::U16(2)));
     let mut g1 = Values::new();
@@ -197,6 +199,7 @@ fn repeat_groups_and_leftover() {
     insert(&mut g1, "lon", Some(Value::I32(20)));
     insert(&mut vals, "__repeat__", Some(Value::Groups(vec![g1])));
     let packed = pack(&scheme, &vals).unwrap();
+    assert_eq!(to_hex(&packed), "0102000a00000014000000");
     let got = unpack(&scheme, &packed).unwrap();
     match got.get("__repeat__") {
         Some(Some(Value::Groups(g))) => assert_eq!(g.len(), 1),
@@ -228,7 +231,7 @@ fn split_flag_byte_and_be() {
         1,
         vec![
             motion.byte(),
-            when(eq("type", Value::U8(0)), vec![u8("shape")]),
+            when(1, eq("type", Value::U8(0)), vec![u8("shape")]),
             motion.bit(u16("heading")),
             motion.bit(u8("speed")),
         ],
@@ -271,7 +274,7 @@ fn assert_no_gpu() {
 
 #[test]
 fn empty_group_flag() {
-    let scheme = MapScheme::new(1, vec![flags("f", vec![group("mark", vec![])])]);
+    let scheme = MapScheme::new(1, vec![flags(0, "f", vec![group(0, "mark", vec![])])]);
     let mut set = Values::new();
     insert(&mut set, "mark", Some(Value::U8(1)));
     assert_eq!(pack(&scheme, &set).unwrap(), vec![0x01, 0x01]);
@@ -284,6 +287,7 @@ fn flags_five_u8_then_u16() {
     let scheme = MapScheme::new(
         1,
         vec![flags(
+            0,
             "f",
             vec![u8("a"), u8("b"), u8("c"), u8("d"), u8("e"), u16("b5")],
         )],
@@ -305,8 +309,9 @@ fn session_group_pack_unpack() {
     let scheme = MapScheme::new(
         1,
         vec![flags(
+            0,
             "f",
-            vec![group("session", vec![u16("login"), crate::u32("ts")])],
+            vec![group(0, "session", vec![u16("login"), crate::u32("ts")])],
         )],
     );
     let mut vals = Values::new();
@@ -325,7 +330,7 @@ fn session_group_pack_unpack() {
 
 #[test]
 fn group_one_u8_zero() {
-    let scheme = MapScheme::new(1, vec![flags("f", vec![group("g", vec![u8("b")])])]);
+    let scheme = MapScheme::new(1, vec![flags(0, "f", vec![group(0, "g", vec![u8("b")])])]);
     let mut vals = Values::new();
     insert(&mut vals, "b", Some(Value::U8(0)));
     assert_eq!(pack(&scheme, &vals).unwrap(), vec![0x01, 0x01, 0x00]);
@@ -336,8 +341,9 @@ fn session_group_short_read() {
     let scheme = MapScheme::new(
         1,
         vec![flags(
+            0,
             "f",
-            vec![group("session", vec![u16("login"), crate::u32("ts")])],
+            vec![group(0, "session", vec![u16("login"), crate::u32("ts")])],
         )],
     );
     let err = unpack(&scheme, &[0x01, 0x01, 0x07]).expect_err("short");
@@ -361,4 +367,64 @@ fn map_scheme_type_number_range() {
         let _ = MapScheme::new(256, vec![]);
     })
     .is_err());
+}
+
+#[test]
+fn raw_field_list_gap_fails_closed() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let built = AtomicUsize::new(0);
+    let panicked = std::panic::catch_unwind(|| {
+        let _ = MapScheme::new(1, vec![u8("0"), u8("2")]);
+        built.fetch_add(1, Ordering::Relaxed);
+    });
+    assert!(panicked.is_err());
+    assert_eq!(built.load(Ordering::Relaxed), 0);
+}
+
+#[test]
+fn when_unknown_id_fails_at_build() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let built = AtomicUsize::new(0);
+    let panicked = std::panic::catch_unwind(|| {
+        let _ = MapScheme::new(
+            1,
+            vec![u8("0"), when(1, eq(9, Value::U8(1)), vec![u8("1")])],
+        );
+        built.fetch_add(1, Ordering::Relaxed);
+    });
+    assert!(panicked.is_err());
+    assert_eq!(built.load(Ordering::Relaxed), 0);
+}
+
+#[test]
+fn packed_unknown_count_fails_at_build() {
+    use crate::packed;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let built = AtomicUsize::new(0);
+    let panicked = std::panic::catch_unwind(|| {
+        let _ = MapScheme::new(1, vec![u8("0"), packed(2, "1", 9, 0)]);
+        built.fetch_add(1, Ordering::Relaxed);
+    });
+    assert!(panicked.is_err());
+    assert_eq!(built.load(Ordering::Relaxed), 0);
+}
+
+#[test]
+fn repeat_anchor_keeps_prior_hex() {
+    let scheme = MapScheme::new(
+        1,
+        vec![u16("0"), repeat(1, vec![i32("1"), i32("2")])],
+    );
+    let mut vals = Values::new();
+    insert(&mut vals, "0", Some(Value::U16(2)));
+    let mut g1 = Values::new();
+    insert(&mut g1, "1", Some(Value::I32(10)));
+    insert(&mut g1, "2", Some(Value::I32(20)));
+    insert(&mut vals, "__repeat__", Some(Value::Groups(vec![g1])));
+    let packed = pack(&scheme, &vals).unwrap();
+    assert_eq!(to_hex(&packed), "0102000a00000014000000");
+    assert_eq!(
+        mismatched_bytes(&packed, &parse_hex("0102000a00000014000000")),
+        0
+    );
 }

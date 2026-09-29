@@ -118,7 +118,7 @@ fn unpack_one(
             let raw = cur.take(*len, name)?;
             values.insert(name.clone(), Some(Value::Bytes(raw.to_vec())));
         }
-        FieldKind::Flags { name, members } => {
+        FieldKind::Flags { name, members, .. } => {
             let bits = match read_int(cur, name, IntKind::U8, false)? {
                 Value::U8(b) => b,
                 _ => 0,
@@ -130,6 +130,7 @@ fn unpack_one(
                         FieldKind::Group {
                             name: gname,
                             members: g,
+                            ..
                         } => {
                             if g.is_empty() {
                                 values.insert(gname.clone(), Some(Value::U8(1)));
@@ -159,6 +160,7 @@ fn unpack_one(
             field,
             expect,
             members,
+            ..
         } => {
             if let Some(Some(v)) = values.get(field.as_ref()) {
                 if crate::value::values_eq(v, expect) {
@@ -166,7 +168,7 @@ fn unpack_one(
                 }
             }
         }
-        FieldKind::Repeat { members } => {
+        FieldKind::Repeat { members, .. } => {
             while cur.left() > 0 {
                 let mut group = Values::with_capacity(members.len());
                 let mut group_flags = HashMap::new();
@@ -282,7 +284,9 @@ fn unpack_one(
             }
             values.insert(name.clone(), Some(Value::List(items)));
         }
-        FieldKind::Times { count, members } => {
+        FieldKind::Times {
+            count, members, ..
+        } => {
             let n = match values.get(count.as_ref()) {
                 Some(Some(v)) => as_usize(v).ok_or_else(|| {
                     UnpackError::Short(ShortPacket {

@@ -30,10 +30,11 @@ public final class FieldIdBindingTest {
             Packbin.i32(1, Access.get((MarkerRow r) -> r.lat), Access.set((MarkerRow r, Object v) -> r.lat = ((Number) v).intValue())),
             Packbin.i32(2, Access.get((MarkerRow r) -> r.lon), Access.set((MarkerRow r, Object v) -> r.lon = ((Number) v).intValue())),
             Packbin.u8(3, Access.get((MarkerRow r) -> r.kind & 0xFF), Access.set((MarkerRow r, Object v) -> r.kind = ((Number) v).byteValue())),
-            Packbin.when(Packbin.eq(3, 1),
+            Packbin.when(4, Packbin.eq(3, 1),
                     Packbin.u16(4, Access.get((MarkerRow r) -> r.kindId), Access.set((MarkerRow r, Object v) -> r.kindId = v == null ? null : ((Number) v).intValue()))),
             Packbin.u16(5, Access.get((MarkerRow r) -> r.title), Access.set((MarkerRow r, Object v) -> r.title = ((Number) v).intValue())),
             Packbin.flags(
+                    6,
                     Packbin.boolField(6, Access.get((MarkerRow r) -> r.hidden), Access.set((MarkerRow r, Object v) -> r.hidden = (Boolean) v)),
                     Packbin.boolField(7, Access.get((MarkerRow r) -> r.delta), Access.set((MarkerRow r, Object v) -> r.delta = (Boolean) v))));
 

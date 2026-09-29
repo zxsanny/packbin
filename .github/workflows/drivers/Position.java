@@ -16,6 +16,7 @@ public final class Position {
                 Packbin.i32(2, Access.get("lon"), Access.set("lon")),
                 Packbin.u8(3, Access.get("profile"), Access.set("profile")),
                 Packbin.flags(
+                        4,
                         Packbin.u16(4, Access.get("heading"), Access.set("heading")),
                         Packbin.u8(5, Access.get("speed"), Access.set("speed")),
                         Packbin.i16(6, Access.get("altitude"), Access.set("altitude"))));

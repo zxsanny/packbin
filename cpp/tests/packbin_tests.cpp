@@ -50,7 +50,7 @@ auto position_scheme() {
       packbin::i32(1),
       packbin::i32(2),
       packbin::u8(3),
-      packbin::flags({packbin::u16(4), packbin::u8(5), packbin::i16(6)}),
+      packbin::flags(4, {packbin::u16(4), packbin::u8(5), packbin::i16(6)}),
   });
 }
 
@@ -101,7 +101,7 @@ void ac3_bytes_match_fixture() {
 
 void ac4_flags_and_stored_zero() {
   auto layout = packbin::scheme(1, {
-      packbin::flags({packbin::u8(0), packbin::u8(1), packbin::u8(2), packbin::u8(3),
+      packbin::flags(0, {packbin::u8(0), packbin::u8(1), packbin::u8(2), packbin::u8(3),
                       packbin::u8(4), packbin::u16(5)}),
   });
 
@@ -131,7 +131,7 @@ void ac4_flags_and_stored_zero() {
 
 void ac5_short_then_pack() {
   auto layout = packbin::scheme(1, {
-      packbin::flags({packbin::u8(0), packbin::u8(1), packbin::u8(2), packbin::u8(3),
+      packbin::flags(0, {packbin::u8(0), packbin::u8(1), packbin::u8(2), packbin::u8(3),
                       packbin::u8(4), packbin::u16(5)}),
   });
   bool ran = false;
@@ -154,7 +154,7 @@ void ac5_short_then_pack() {
 void when_group_width() {
   auto layout = packbin::scheme(
       1, {packbin::u8(0),
-          packbin::when(packbin::eq(0, packbin::Value{std::uint8_t{0}}), {packbin::u8(1)})});
+          packbin::when(1, packbin::eq(0, packbin::Value{std::uint8_t{0}}), {packbin::u8(1)})});
   packbin::Values miss;
   miss.emplace("0", packbin::Value{std::uint8_t{1}});
   auto miss_bytes = packbin::BinaryPacker::pack(layout, miss);
@@ -168,7 +168,7 @@ void when_group_width() {
 }
 
 void repeat_and_leftover() {
-  auto layout = packbin::scheme(1, {packbin::repeat({packbin::u8(0), packbin::u8(1)})});
+  auto layout = packbin::scheme(1, {packbin::repeat(0, {packbin::u8(0), packbin::u8(1)})});
   packbin::Values ok_row;
   auto ok = packbin::BinaryPacker::unpack(
       std::vector<std::uint8_t>{1, 1, 2},
@@ -188,6 +188,25 @@ void repeat_and_leftover() {
   expect(!bad_ran, "leftover handler not run");
   expect(bad.value_count() == 0, "leftover value count 0");
   expect(bad.short_packet.has_value(), "leftover short");
+}
+
+void repeat_anchor_order() {
+  auto matching = packbin::scheme(1, {packbin::repeat(0, {packbin::u8(0), packbin::u8(1)})});
+  packbin::Values row;
+  row.emplace("0", packbin::Value{std::uint8_t{1}});
+  row.emplace("1", packbin::Value{std::uint8_t{2}});
+  expect(packbin::to_hex(packbin::BinaryPacker::pack(matching, row)) == "010102",
+         "repeat matching pack");
+
+  int schemes = 0;
+  bool threw = false;
+  try {
+    packbin::scheme(1, {packbin::repeat(1, {packbin::u8(0), packbin::u8(1)})});
+    ++schemes;
+  } catch (std::runtime_error const&) {
+    threw = true;
+  }
+  expect(threw && schemes == 0, "repeat mismatch builds 0");
 }
 
 void trailing_byte() {
@@ -253,6 +272,7 @@ int main() {
   ac5_short_then_pack();
   when_group_width();
   repeat_and_leftover();
+  repeat_anchor_order();
   trailing_byte();
   nfr_round_trips();
   failures += run_kinds_tests();

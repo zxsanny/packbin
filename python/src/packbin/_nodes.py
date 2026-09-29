@@ -115,6 +115,7 @@ class _FlagBit(_Node):
 
 @dataclass(slots=True)
 class _Flags(_Node):
+    anchor: int
     fields: list[_Node]
 
 
@@ -126,17 +127,20 @@ class _Eq:
 
 @dataclass(slots=True)
 class _When(_Node):
+    anchor: int
     condition: _Eq
     fields: list[_Node]
 
 
 @dataclass(slots=True)
 class _Repeat(_Node):
+    anchor: int
     fields: list[_Node]
 
 
 @dataclass(slots=True)
 class _Group(_Node):
+    anchor: int
     fields: list[_Node]
 
 
@@ -180,6 +184,7 @@ class _Packed(_Node):
 
 @dataclass(slots=True)
 class _Times(_Node):
+    anchor: int
     count: int
     fields: list[_Node]
 
@@ -310,8 +315,8 @@ def be(field: _Scalar) -> _Scalar:
     )
 
 
-def flags(*fields: _Node) -> _Flags:
-    return _Flags(fields=_builtin_list(fields))
+def flags(anchor: int, *fields: _Node) -> _Flags:
+    return _Flags(anchor=anchor, fields=_builtin_list(fields))
 
 
 def flag_byte() -> _FlagByte:
@@ -322,16 +327,16 @@ def eq(field_id: int, value: Any) -> _Eq:
     return _Eq(field_id=field_id, value=value)
 
 
-def when(condition: _Eq, *fields: _Node) -> _When:
-    return _When(condition=condition, fields=_builtin_list(fields))
+def when(anchor: int, condition: _Eq, *fields: _Node) -> _When:
+    return _When(anchor=anchor, condition=condition, fields=_builtin_list(fields))
 
 
-def repeat(*fields: _Node) -> _Repeat:
-    return _Repeat(fields=_builtin_list(fields))
+def repeat(anchor: int, *fields: _Node) -> _Repeat:
+    return _Repeat(anchor=anchor, fields=_builtin_list(fields))
 
 
-def group(*fields: _Node) -> _Group:
-    return _Group(fields=_builtin_list(fields))
+def group(anchor: int, *fields: _Node) -> _Group:
+    return _Group(anchor=anchor, fields=_builtin_list(fields))
 
 
 def sized(field_id: int, acc: Acc, count: int) -> _Sized:
@@ -369,8 +374,8 @@ def packed(width: int, field_id: int, acc: Acc, count_id: int, bias: int = 0) ->
     )
 
 
-def times(count_id: int, *fields: _Node) -> _Times:
-    return _Times(count=count_id, fields=_builtin_list(fields))
+def times(anchor: int, count_id: int, *fields: _Node) -> _Times:
+    return _Times(anchor=anchor, count=count_id, fields=_builtin_list(fields))
 
 
 def utf8(field_id: int, acc: Acc) -> _Utf8:
@@ -404,9 +409,9 @@ def _validate_order(nodes: Sequence[_Node], next_id: int = 0) -> int:
             next_id += 1
         elif isinstance(node, _U2):
             next_id = _validate_order(node.slots, next_id)
-        elif isinstance(node, _Flags):
-            next_id = _validate_order(node.fields, next_id)
-        elif isinstance(node, (_When, _Repeat, _Group, _Times)):
+        elif isinstance(node, (_Flags, _When, _Repeat, _Times, _Group)):
+            if node.anchor != next_id:
+                raise ValueError(f"anchor {node.anchor} is not the next order {next_id}")
             next_id = _validate_order(node.fields, next_id)
         elif isinstance(node, _FlagByte):
             next_id = _validate_order(node.bits, next_id)

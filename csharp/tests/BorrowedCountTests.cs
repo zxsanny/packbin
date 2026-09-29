@@ -36,16 +36,16 @@ public class BorrowedCountTests
     private static readonly Scheme<RouteRow> Route = new(0x34,
         Field.U16<RouteRow>(0, x => x.Sid),
         Field.U16<RouteRow>(1, x => x.Name),
-        Field.Flags(
+        Field.Flags(2,
             Field.U16<RouteRow>(2, x => x.Unit),
             Field.Bool<RouteRow>(3, x => x.Straight),
             Field.U16<RouteRow>(4, x => x.RouteId)),
         Field.U8<RouteRow>(5, x => x.Count),
         Field.Packed<RouteRow>(2, 6, x => x.Kinds, 5),
-        Field.Times(5,
+        Field.Times(7, 5,
             Field.I32<RouteRow>(7, x => x.Lat),
             Field.I32<RouteRow>(8, x => x.Lon)),
-        Field.When(Condition.Eq(3, true),
+        Field.When(9, Condition.Eq(3, true),
             Field.Packed<RouteRow>(1, 9, x => x.Mask, 5, -1)));
 
     private const string RouteHex = "3410001500062d00020d0065cd1d00a3e111108ccd1d10cae11101";
@@ -110,7 +110,7 @@ public class BorrowedCountTests
     {
         var scheme = new Scheme<TailRow>(1,
             Field.U8<TailRow>(0, x => x.N),
-            Field.Times(0, Field.I32<TailRow>(1, x => x.Lat), Field.I32<TailRow>(2, x => x.Lon)),
+            Field.Times(1, 0, Field.I32<TailRow>(1, x => x.Lat), Field.I32<TailRow>(2, x => x.Lon)),
             Field.U8<TailRow>(3, x => x.Tail));
         var raw = BinaryPacker.Pack(scheme, new Dictionary<string, object?>
         {

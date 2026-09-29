@@ -71,9 +71,8 @@ export function scheme<T>(typeNumber: number, ...fields: Field[]): Scheme<T> {
   if (!Number.isInteger(typeNumber) || typeNumber < 0 || typeNumber > 255) {
     throw new RangeError("type number: expected 0..255")
   }
-  const flat = flatten(fields)
-  validateFieldIds(flat)
-  return new Scheme(typeNumber, flat)
+  validateFieldIds(fields)
+  return new Scheme(typeNumber, flatten(fields))
 }
 
 export class BinaryPacker {

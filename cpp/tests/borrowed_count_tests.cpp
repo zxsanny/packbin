@@ -42,11 +42,11 @@ packbin::Scheme<packbin::Values> route_scheme() {
   return packbin::scheme(0x34, {
       packbin::u16(0),
       packbin::u16(1),
-      packbin::flags({packbin::u16(2), packbin::boolean(3), packbin::u16(4)}),
+      packbin::flags(2, {packbin::u16(2), packbin::boolean(3), packbin::u16(4)}),
       packbin::u8(5),
       packbin::packed(2, 6, 5),
-      packbin::times(5, {packbin::i32(7), packbin::i32(8)}),
-      packbin::when(packbin::eq(3, packbin::Value{std::uint8_t{1}}),
+      packbin::times(7, 5, {packbin::i32(7), packbin::i32(8)}),
+      packbin::when(9, packbin::eq(3, packbin::Value{std::uint8_t{1}}),
                     {packbin::packed(1, 9, 5, -1)}),
   });
 }
@@ -105,7 +105,7 @@ void length_mismatch_names_field() {
 
 void times_stops_for_next_field() {
   auto layout = packbin::scheme(
-      1, {packbin::u8(0), packbin::times(0, {packbin::i32(1), packbin::i32(2)}), packbin::u8(3)});
+      1, {packbin::u8(0), packbin::times(1, 0, {packbin::i32(1), packbin::i32(2)}), packbin::u8(3)});
   packbin::Values vals;
   vals.emplace("0", packbin::Value{std::uint8_t{2}});
   vals.emplace("1", packbin::Value{i32s({10, 30})});

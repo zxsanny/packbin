@@ -20,17 +20,19 @@ fn route_scheme() -> MapScheme {
             u16("sid"),
             u16("name"),
             flags(
+                2,
                 "opts",
                 vec![
                     u16("unit"),
-                    group("straight", vec![]),
+                    group(3, "straight", vec![]),
                     u16("route_id"),
                 ],
             ),
             u8("count"),
             packed(2, "kinds", "count", 0),
-            times("count", vec![i32("lat"), i32("lon")]),
+            times(7, "count", vec![i32("lat"), i32("lon")]),
             when(
+                9,
                 eq("straight", Value::U8(1)),
                 vec![packed(1, "mask", "count", -1)],
             ),
@@ -107,7 +109,7 @@ fn times_stops_so_the_next_field_is_read() {
         1,
         vec![
             u8("n"),
-            times("n", vec![i32("lat"), i32("lon")]),
+            times(1, "n", vec![i32("lat"), i32("lon")]),
             u8("tail"),
         ],
     );

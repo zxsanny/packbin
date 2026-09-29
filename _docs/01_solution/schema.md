@@ -2,7 +2,7 @@
 
 **Path:** `_docs/01_solution/schema.md`
 
-A packet is a list. Field order is wire order. Names are for the value object and for errors. They are not written.
+A packet is a list. Field order is wire order. A gap, a repeated id, or an anchor that is not the next value id fails construction. The anchor is not written, repeat still has no count, and a list, a dict, and a nested group still start at 0. Names are for the value object and for errors. They are not written.
 
 ## Types
 
@@ -12,11 +12,11 @@ A packet is a list. Field order is wire order. Names are for the value object an
 | `i8` `i16` `i32` `i64` | signed int | |
 | `f32` `f64` | IEEE float | |
 | `bytes(n)` | n raw bytes | fixed |
-| `flags(name, fields)` | one `u8` plus those fields | bit 0 is the first field |
-| `when(eq(field, value), fields)` | 0 or the group | tests a field already read |
-| `repeat(fields)` | the group until the buffer ends | must end on a boundary |
+| `flags(anchor, name, fields)` | one `u8` plus those fields | bit 0 is the first field; the anchor is the next value id and is not written |
+| `when(anchor, eq(field, value), fields)` | 0 or the group | tests a field already read; the anchor is not written |
+| `repeat(anchor, fields)` | the group until the buffer ends | must end on a boundary; no count; the anchor is not written |
 | `packed(width, id, count, bias)` | 1-bit or 2-bit list | item count is an earlier integer plus a bias of 0 or −1; no length byte; low bits first |
-| `times(count, fields)` | the inner fields N times | N is an earlier integer; the next field is then read as itself |
+| `times(anchor, count, fields)` | the inner fields N times | N is an earlier integer; the anchor is not written; the next field is then read as itself |
 
 `be(field)` switches that field to big-endian. The packet default stays little-endian.
 

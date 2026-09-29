@@ -48,10 +48,10 @@ auto marker_scheme() {
   return packbin::Scheme<MarkerRow>(
       0x20, packbin::u16(0, &MarkerRow::sid), packbin::i32(1, &MarkerRow::lat),
       packbin::i32(2, &MarkerRow::lon), packbin::u8(3, &MarkerRow::kind),
-      packbin::when(packbin::eq(3, packbin::Value{std::uint8_t{1}}),
+      packbin::when(4, packbin::eq(3, packbin::Value{std::uint8_t{1}}),
                     {packbin::u16(4, &MarkerRow::kind_id)}),
       packbin::u16(5, &MarkerRow::title),
-      packbin::flags({packbin::boolean(6, &MarkerRow::hidden),
+      packbin::flags(6, {packbin::boolean(6, &MarkerRow::hidden),
                       packbin::boolean(7, &MarkerRow::delta)}));
 }
 

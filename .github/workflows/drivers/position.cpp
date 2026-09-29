@@ -8,7 +8,7 @@ int main() {
       packbin::i32(1),
       packbin::i32(2),
       packbin::u8(3),
-      packbin::flags({packbin::u16(4), packbin::u8(5), packbin::i16(6)}),
+      packbin::flags(4, {packbin::u16(4), packbin::u8(5), packbin::i16(6)}),
   });
   packbin::Values values;
   values.emplace("0", packbin::Value{std::uint16_t{1}});

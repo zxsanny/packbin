@@ -55,6 +55,7 @@ int validate_one(Field const& node, int next_id) {
       }
       return next_id;
     case Field::Kind::Flags:
+      expect_id(node.id, next_id);
       for (auto const& bit : node.children) {
         if (bit.inner)
           next_id = validate_one(*bit.inner, next_id);
@@ -72,6 +73,7 @@ int validate_one(Field const& node, int next_id) {
     case Field::Kind::Repeat:
     case Field::Kind::Times:
     case Field::Kind::Group:
+      expect_id(node.id, next_id);
       return validate_children(node.children, next_id);
     case Field::Kind::List:
     case Field::Kind::Dict:
@@ -141,10 +143,11 @@ Field boolean(int id) {
 
 Field be(Field field) { return field.be(); }
 
-Field flags(std::vector<Field> fields) {
+Field flags(int id, std::vector<Field> fields) {
   auto group = std::make_shared<FlagGroup>();
   Field f;
   f.kind = Field::Kind::Flags;
+  f.id = id;
   f.name = "";
   f.group = group;
   f.children.reserve(fields.size());
@@ -173,32 +176,36 @@ Field flag_byte() {
 
 Eq eq(int field_id, Value value) { return Eq{id_name(field_id), std::move(value)}; }
 
-Field when(Eq condition, std::vector<Field> fields) {
+Field when(int id, Eq condition, std::vector<Field> fields) {
   Field f;
   f.kind = Field::Kind::When;
+  f.id = id;
   f.name = condition.field;
   f.pred = std::move(condition);
   f.children = std::move(fields);
   return f;
 }
 
-Field repeat(std::vector<Field> fields) {
+Field repeat(int id, std::vector<Field> fields) {
   Field f;
   f.kind = Field::Kind::Repeat;
+  f.id = id;
   f.children = std::move(fields);
   return f;
 }
 
-Field group(std::vector<Field> fields) {
+Field group(int id, std::vector<Field> fields) {
   Field f;
   f.kind = Field::Kind::Group;
+  f.id = id;
   f.children = std::move(fields);
   return f;
 }
 
-Field group(std::string name, std::vector<Field> fields) {
+Field group(int id, std::string name, std::vector<Field> fields) {
   Field f;
   f.kind = Field::Kind::Group;
+  f.id = id;
   f.name = std::move(name);
   f.children = std::move(fields);
   return f;
@@ -284,9 +291,10 @@ Field packed(int width, int id, int count_id, int bias) {
   return f;
 }
 
-Field times(int count_id, std::vector<Field> fields) {
+Field times(int id, int count_id, std::vector<Field> fields) {
   Field f;
   f.kind = Field::Kind::Times;
+  f.id = id;
   f.name = "times";
   f.count_id = count_id;
   f.count_name = id_name(count_id);

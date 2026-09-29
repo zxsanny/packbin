@@ -19,6 +19,7 @@ final class SchemeOrder {
     private static void walk(Field field, Map<Integer, Field> scope, int[] next) {
         switch (field.kind) {
             case WHEN, REPEAT, TIMES, FLAGS -> {
+                requireAnchor(field, next);
                 for (Field child : field.children) {
                     walk(child, scope, next);
                 }
@@ -34,6 +35,7 @@ final class SchemeOrder {
                     }
                     resolve(field.children, nested);
                 } else {
+                    requireAnchor(field, next);
                     for (Field child : field.children) {
                         walk(child, scope, next);
                     }
@@ -55,6 +57,12 @@ final class SchemeOrder {
                     take(field.id, field, scope, next);
                 }
             }
+        }
+    }
+
+    private static void requireAnchor(Field field, int[] next) {
+        if (field.id != next[0]) {
+            throw new IllegalArgumentException("field id " + field.id + " must be " + next[0]);
         }
     }
 

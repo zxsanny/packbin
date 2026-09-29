@@ -46,9 +46,10 @@ MARKER = Scheme(
     i32(1, lambda row: row.lat),
     i32(2, lambda row: row.lon),
     u8(3, lambda row: row.kind),
-    when(eq(3, 1), u16(4, lambda row: row.kind_id)),
+    when(4, eq(3, 1), u16(4, lambda row: row.kind_id)),
     u16(5, lambda row: row.title),
     flags(
+        6,
         flag_bool(6, lambda row: row.hidden),
         flag_bool(7, lambda row: row.delta),
     ),

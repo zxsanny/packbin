@@ -38,7 +38,7 @@ const position = scheme<Position>(
   i32(1, (r) => r.lat),
   i32(2, (r) => r.lon),
   u8(3, (r) => r.profile),
-  flags([
+  flags(4, [
     u16(4, (r) => r.heading),
     u8(5, (r) => r.speed),
     i16(6, (r) => r.altitude),
@@ -116,7 +116,7 @@ describe("packbin", () => {
     }
     const list = scheme<Wide>(
       1,
-      flags([
+      flags(0, [
         u8(0, (r) => r.b0),
         u8(1, (r) => r.b1),
         u8(2, (r) => r.b2),
@@ -161,7 +161,7 @@ describe("packbin", () => {
     }
     const list = scheme<Wide>(
       1,
-      flags([
+      flags(0, [
         u8(0, (r) => r.b0),
         u8(1, (r) => r.b1),
         u8(2, (r) => r.b2),
@@ -191,7 +191,7 @@ describe("packbin", () => {
     const list = scheme<Row>(
       1,
       u8(0, (r) => r.profile),
-      when(eq(0, 0), [u8(1, (r) => r.shape)]),
+      when(1, eq(0, 0), [u8(1, (r) => r.shape)]),
     )
     const miss = BinaryPacker.pack(list, { profile: 1 })
     assert.equal(miss.length, 2)
@@ -205,7 +205,7 @@ describe("packbin", () => {
     const list = scheme<Row>(
       1,
       u8(0, (r) => r.type),
-      repeat([u8(1, (r) => r.a), u8(2, (r) => r.b)]),
+      repeat(1, [u8(1, (r) => r.a), u8(2, (r) => r.b)]),
     )
     let completeRow: Row | undefined
     const complete = BinaryPacker.unpack(Uint8Array.of(1, 1, 2, 3), list.on((value) => {
@@ -235,7 +235,7 @@ describe("packbin", () => {
 
   it("flag empty group mark", () => {
     type Row = { mark?: boolean }
-    const empty = scheme<Row>(1, flags([group((r) => r.mark, [])]))
+    const empty = scheme<Row>(1, flags(0, [group((r) => r.mark, [])]))
     const setBit = BinaryPacker.pack(empty, { mark: true })
     assert.equal(toHex(setBit), "0101")
     const clear = BinaryPacker.pack(empty, {})
@@ -253,7 +253,7 @@ describe("packbin", () => {
     }
     const one = scheme<Row>(
       1,
-      flags([
+      flags(0, [
         u8(0, (r) => r.a),
         u8(1, (r) => r.b),
         u8(2, (r) => r.c),
@@ -274,7 +274,7 @@ describe("packbin", () => {
     type Row = { session?: Session | null; login?: number; ts?: number }
     const two = scheme<Row>(
       1,
-      flags([
+      flags(0, [
         group((r) => r.session, [
           u16(0, (r) => r.login),
           u32(1, (r) => r.ts),
@@ -298,7 +298,7 @@ describe("packbin", () => {
     type Row = { g?: unknown; b?: number }
     const zero = scheme<Row>(
       1,
-      flags([group((r) => r.g, [u8(0, (r) => r.b)])]),
+      flags(0, [group((r) => r.g, [u8(0, (r) => r.b)])]),
     )
     const stored = BinaryPacker.pack(zero, { b: 0 })
     assert.equal(toHex(stored), "010100")
@@ -308,7 +308,7 @@ describe("packbin", () => {
     type Row = { session?: unknown; login?: number; ts?: number }
     const two = scheme<Row>(
       1,
-      flags([
+      flags(0, [
         group((r) => r.session, [
           u16(0, (r) => r.login),
           u32(1, (r) => r.ts),
@@ -361,7 +361,7 @@ describe("packbin", () => {
     }
     const layout = scheme<Holder>(
       1,
-      flags([
+      flags(0, [
         group((r) => r.session, [
           u16(0, (s: Session) => s.login),
           u32(1, (s: Session) => s.ts),
@@ -405,6 +405,38 @@ describe("packbin", () => {
   it("type number outside 0..255 throws at construction", () => {
     assert.throws(() => scheme(256, u8(0, (r: { sid: number }) => r.sid)))
     assert.throws(() => scheme(-1, u8(0, (r: { sid: number }) => r.sid)))
+  })
+
+  it("bad container anchor throws before any byte is written", () => {
+    let produced: Uint8Array | null = null
+    assert.throws(
+      () => {
+        const layout = scheme<{ extra?: number }>(
+          1,
+          flags(1, [u16(0, (r) => r.extra)]),
+        )
+        produced = BinaryPacker.pack(layout, { extra: 1 })
+      },
+      (err: unknown) =>
+        err instanceof RangeError &&
+        String(err.message).includes("expected 0") &&
+        String(err.message).includes("got 1"),
+    )
+    assert.equal(produced, null)
+
+    const matched = scheme<Position>(
+      0x40,
+      u16(0, (r) => r.sid),
+      i32(1, (r) => r.lat),
+      i32(2, (r) => r.lon),
+      u8(3, (r) => r.profile),
+      flags(4, [
+        u16(4, (r) => r.heading),
+        u8(5, (r) => r.speed),
+        i16(6, (r) => r.altitude),
+      ]),
+    )
+    assert.equal(toHex(BinaryPacker.pack(matched, positionValue)), expectedHex)
   })
 })
 

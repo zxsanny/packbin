@@ -34,10 +34,10 @@ public class FieldIdBindingTests
         Field.I32<MarkerRow>(1, x => x.Lat),
         Field.I32<MarkerRow>(2, x => x.Lon),
         Field.U8<MarkerRow>(3, x => x.Kind),
-        Field.When(Condition.Eq(3, (byte)1),
+        Field.When(4, Condition.Eq(3, (byte)1),
             Field.U16<MarkerRow>(4, x => x.KindId)),
         Field.U16<MarkerRow>(5, x => x.Title),
-        Field.Flags(
+        Field.Flags(6,
             Field.Bool<MarkerRow>(6, x => x.Hidden),
             Field.Bool<MarkerRow>(7, x => x.Delta)));
 

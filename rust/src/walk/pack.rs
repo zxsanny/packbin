@@ -101,7 +101,7 @@ fn collect_flag_bits(fields: &[Field], values: &Values, out: &mut HashMap<Name, 
             FieldKind::Flags { members, .. }
             | FieldKind::Group { members, .. }
             | FieldKind::When { members, .. }
-            | FieldKind::Repeat { members }
+            | FieldKind::Repeat { members, .. }
             | FieldKind::Times { members, .. } => collect_flag_bits(members, values, out),
             _ => {}
         }
@@ -132,7 +132,7 @@ fn group_on(name: &str, members: &[Field], values: &Values) -> bool {
 
 fn flag_member_on(member: &Field, values: &Values) -> bool {
     match &member.kind {
-        FieldKind::Group { name, members } => group_on(name, members, values),
+        FieldKind::Group { name, members, .. } => group_on(name, members, values),
         _ => field_name(member)
             .map(|n| present(values, n))
             .unwrap_or(false),
@@ -210,6 +210,7 @@ fn pack_one(
             field,
             expect,
             members,
+            ..
         } => {
             if let Ok(v) = require(values, field) {
                 if values_eq(v, expect) {
@@ -218,7 +219,7 @@ fn pack_one(
             }
             Ok(())
         }
-        FieldKind::Repeat { members } => {
+        FieldKind::Repeat { members, .. } => {
             let groups = match values.get("__repeat__") {
                 Some(Some(Value::Groups(g))) => g.as_slice(),
                 _ => &[],
@@ -294,7 +295,9 @@ fn pack_one(
                 _ => Err(PackError::Type(name.to_string())),
             }
         }
-        FieldKind::Times { count, members } => {
+        FieldKind::Times {
+            count, members, ..
+        } => {
             let n = borrowed_count(values, count, 0, "times")?;
             for i in 0..n {
                 let slice = slice_times(members, values, i);

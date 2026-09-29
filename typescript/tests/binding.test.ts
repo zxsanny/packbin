@@ -30,9 +30,9 @@ const MarkerScheme = scheme<MarkerRow>(
   i32(1, (x) => x.lat),
   i32(2, (x) => x.lon),
   u8(3, (x) => x.kind),
-  when(eq(3, 1), [u16(4, (x) => x.kindId)]),
+  when(4, eq(3, 1), [u16(4, (x) => x.kindId)]),
   u16(5, (x) => x.title),
-  flags([bool(6, (x) => x.hidden), bool(7, (x) => x.delta)]),
+  flags(6, [bool(6, (x) => x.hidden), bool(7, (x) => x.delta)]),
 )
 
 const ac1Hex = "2001000065cd1d00a3e111010000000000"

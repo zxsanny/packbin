@@ -30,6 +30,7 @@ fn marker_scheme() -> Scheme<MarkerRow> {
             BoundField::i32(2, |r: &MarkerRow| r.lon, |r: &mut MarkerRow, v| r.lon = v).into(),
             BoundField::u8(3, |r: &MarkerRow| r.kind, |r: &mut MarkerRow, v| r.kind = v).into(),
             SchemeItem::when(
+                4,
                 eq(3, Value::U8(1)),
                 [BoundField::opt_u16(
                     4,
@@ -44,7 +45,7 @@ fn marker_scheme() -> Scheme<MarkerRow> {
                 |r: &mut MarkerRow, v| r.title = v,
             )
             .into(),
-            SchemeItem::flags([
+            SchemeItem::flags(6, [
                 BoundField::bool_flag(
                     6,
                     |r: &MarkerRow| r.hidden,

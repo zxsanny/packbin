@@ -17,7 +17,7 @@ const bytes = BinaryPacker.pack(
     i32(1, (r) => r.lat),
     i32(2, (r) => r.lon),
     u8(3, (r) => r.profile),
-    flags([
+    flags(4, [
       u16(4, (r) => r.heading),
       u8(5, (r) => r.speed),
       i16(6, (r) => r.altitude),

@@ -32,6 +32,7 @@ target = Scheme(
     i32(2, lambda row: row.lon),
     u8(3, lambda row: row.profile),
     flags(
+        4,
         u16(4, lambda row: row.heading),
         u8(5, lambda row: row.speed),
         i16(6, lambda row: row.altitude),
@@ -83,7 +84,7 @@ const target = scheme<Target>(
   i32(1, (x) => x.lat),
   i32(2, (x) => x.lon),
   u8(3, (x) => x.profile),
-  flags([
+  flags(4, [
     u16(4, (x) => x.heading),
     u8(5, (x) => x.speed),
     i16(6, (x) => x.altitude),
@@ -284,17 +285,17 @@ BinaryPacker::unpack_with(
 | `utf8` | UTF-8 string, `u16` length |
 | `list` | `u16` count, then that many elements |
 | `dict` | `u16` pair count; keys in unsigned byte order |
-| `flags(fields)` | one `u8`; bit 0 is the first field; a clear bit omits that field |
+| `flags(anchor, fields)` | one `u8`; bit 0 is the first field; a clear bit omits that field; the anchor is not written |
 | `bool` | a flag bit with no payload |
-| `when(eq(id, value), fields)` | the group only when an earlier field equals `value` |
-| `repeat(fields)` | the group until the buffer ends |
+| `when(anchor, eq(id, value), fields)` | the group only when an earlier field equals `value`; the anchor is not written |
+| `repeat(anchor, fields)` | the group until the buffer ends; no count; the anchor is not written |
 | `sized` | raw bytes whose length is an earlier integer |
 | `u2` | fixed 2-bit slots, low bits first |
 | `bits` | 1-bit list; the count is an earlier integer |
 | `packed` | 1-bit or 2-bit list; the count is an earlier integer plus a bias |
-| `times` | the inner fields exactly N times, then the next field |
+| `times(anchor, count, fields)` | the inner fields exactly N times, then the next field; the anchor is not written |
 
-Field numbers are the order in the scheme, starting at 0. They are not written. The snippets below are Python. The other languages use the same order and produce the same bytes. The first byte of every packet is the scheme type number.
+Field numbers are the order in the scheme, starting at 0. They are not written. A gap, a repeated id, or an anchor that is not the next value id fails construction. The anchor is not written, repeat still has no count, and a list, a dict, and a nested group still start at 0. The snippets below are Python. The other languages use the same order and produce the same bytes. The first byte of every packet is the scheme type number.
 
 ### Integers
 
@@ -408,6 +409,7 @@ row = Scheme(
     1,
     dict,
     flags(
+        0,
         u16(0, lambda row: row["heading"]),
         u8(1, lambda row: row["speed"]),
     ),
@@ -430,6 +432,7 @@ row = Scheme(
     1,
     dict,
     flags(
+        0,
         bool(0, lambda row: row["on"]),
         u8(1, lambda row: row["n"]),
     ),
@@ -450,7 +453,7 @@ row = Scheme(
     1,
     dict,
     u8(0, lambda row: row["profile"]),
-    when(eq(0, 0), u8(1, lambda row: row["shape"])),
+    when(1, eq(0, 0), u8(1, lambda row: row["shape"])),
 )
 BinaryPacker.pack(row, {"profile": 0, "shape": 9})
 ```
@@ -471,7 +474,7 @@ Two points, `(10, 20)` then `(30, 40)`:
 row = Scheme(
     1,
     dict,
-    repeat(i32(0, lambda row: row["lat"]), i32(1, lambda row: row["lon"])),
+    repeat(0, i32(0, lambda row: row["lat"]), i32(1, lambda row: row["lon"])),
 )
 BinaryPacker.pack(row, {"lat": [10, 30], "lon": [20, 40]})
 ```
@@ -588,7 +591,7 @@ row = Scheme(
     1,
     dict,
     u8(0, lambda row: row["n"]),
-    times(0, i32(1, lambda row: row["lat"]), i32(2, lambda row: row["lon"])),
+    times(1, 0, i32(1, lambda row: row["lat"]), i32(2, lambda row: row["lon"])),
     u8(3, lambda row: row["tail"]),
 )
 BinaryPacker.pack(row, {"n": 2, "lat": [10, 30], "lon": [20, 40], "tail": 7})

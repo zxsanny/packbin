@@ -1,3 +1,7 @@
+mod order;
+
+pub(crate) use order::{check_order, nested_element, take_id};
+
 use crate::value::{name_of, Name, Value};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -37,6 +41,7 @@ pub(crate) enum FieldKind {
         len: usize,
     },
     Flags {
+        anchor: u32,
         name: Name,
         members: Vec<Field>,
     },
@@ -49,14 +54,17 @@ pub(crate) enum FieldKind {
         inner: Box<Field>,
     },
     When {
+        anchor: u32,
         field: Name,
         expect: Value,
         members: Vec<Field>,
     },
     Repeat {
+        anchor: u32,
         members: Vec<Field>,
     },
     Group {
+        anchor: u32,
         name: Name,
         members: Vec<Field>,
     },
@@ -78,6 +86,7 @@ pub(crate) enum FieldKind {
         bias: i8,
     },
     Times {
+        anchor: u32,
         count: Name,
         members: Vec<Field>,
     },
@@ -176,7 +185,7 @@ fn count_fields(fields: &[Field]) -> (usize, bool) {
                 n += count_fields(std::slice::from_ref(inner)).0;
             }
             FieldKind::When { members, .. }
-            | FieldKind::Repeat { members }
+            | FieldKind::Repeat { members, .. }
             | FieldKind::Times { members, .. } => {
                 let (c, s) = count_fields(members);
                 n += c;
@@ -193,6 +202,7 @@ impl MapScheme {
             panic!("type number must be 0..=255");
         }
         let (field_count, has_split_flags) = count_fields(&fields);
+        check_order(&fields, 0);
         MapScheme {
             type_number: type_number as u8,
             fields,
@@ -245,9 +255,10 @@ pub fn eq(field: impl FieldKey, value: Value) -> Eq {
     }
 }
 
-pub fn when(cond: Eq, fields: Vec<Field>) -> Field {
+pub fn when(anchor: u32, cond: Eq, fields: Vec<Field>) -> Field {
     Field {
         kind: FieldKind::When {
+            anchor,
             field: cond.field,
             expect: cond.value,
             members: fields,
@@ -255,15 +266,19 @@ pub fn when(cond: Eq, fields: Vec<Field>) -> Field {
     }
 }
 
-pub fn repeat(fields: Vec<Field>) -> Field {
+pub fn repeat(anchor: u32, fields: Vec<Field>) -> Field {
     Field {
-        kind: FieldKind::Repeat { members: fields },
+        kind: FieldKind::Repeat {
+            anchor,
+            members: fields,
+        },
     }
 }
 
-pub fn flags(name: impl AsRef<str>, members: Vec<Field>) -> Field {
+pub fn flags(anchor: u32, name: impl AsRef<str>, members: Vec<Field>) -> Field {
     Field {
         kind: FieldKind::Flags {
+            anchor,
             name: name_of(name),
             members,
         },
@@ -347,9 +362,10 @@ pub fn bytes(name: impl AsRef<str>, n: usize) -> Field {
     }
 }
 
-pub fn group(name: impl AsRef<str>, fields: Vec<Field>) -> Field {
+pub fn group(anchor: u32, name: impl AsRef<str>, fields: Vec<Field>) -> Field {
     Field {
         kind: FieldKind::Group {
+            anchor,
             name: name_of(name),
             members: fields,
         },
@@ -431,9 +447,10 @@ pub fn packed(width: u8, name: impl FieldKey, count_field: impl FieldKey, bias: 
     }
 }
 
-pub fn times(count_field: impl FieldKey, fields: Vec<Field>) -> Field {
+pub fn times(anchor: u32, count_field: impl FieldKey, fields: Vec<Field>) -> Field {
     Field {
         kind: FieldKind::Times {
+            anchor,
             count: count_field.to_name(),
             members: fields,
         },

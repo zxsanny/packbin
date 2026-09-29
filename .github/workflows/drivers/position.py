@@ -9,6 +9,7 @@ raw = BinaryPacker.pack(
         i32(2, lambda row: row["lon"]),
         u8(3, lambda row: row["profile"]),
         flags(
+            4,
             u16(4, lambda row: row["heading"]),
             u8(5, lambda row: row["speed"]),
             i16(6, lambda row: row["altitude"]),

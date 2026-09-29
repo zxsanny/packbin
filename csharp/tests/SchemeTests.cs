@@ -54,7 +54,7 @@ public class SchemeTests
         f.I32(1, x => x.Lat),
         f.I32(2, x => x.Lon),
         f.U8(3, x => x.Profile),
-        f.Flags(
+        f.Flags(4,
             f.U16(4, x => x.Heading),
             f.U8(5, x => x.Speed),
             f.I16(6, x => x.Altitude))]);

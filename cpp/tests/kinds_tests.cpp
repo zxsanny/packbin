@@ -27,7 +27,7 @@ std::vector<std::uint8_t> parse_hex(std::string hex) {
 }
 
 void new_field_kinds() {
-  auto empty = packbin::scheme(1, {packbin::flags({packbin::group("mark", {})})});
+  auto empty = packbin::scheme(1, {packbin::flags(0, {packbin::group(0, "mark", {})})});
   packbin::Values mark;
   mark.emplace("mark", packbin::Value{std::uint8_t{1}});
   auto set_bit = packbin::BinaryPacker::pack(empty, mark);
@@ -36,7 +36,7 @@ void new_field_kinds() {
   expect(clear.size() == 2 && clear[0] == 0x01 && clear[1] == 0x00, "group empty clear");
 
   auto one = packbin::scheme(
-      1, {packbin::flags({packbin::u8(0), packbin::u8(1), packbin::u8(2), packbin::u8(3),
+      1, {packbin::flags(0, {packbin::u8(0), packbin::u8(1), packbin::u8(2), packbin::u8(3),
                           packbin::u8(4), packbin::u16(5)})});
   packbin::Values a;
   a.emplace("0", packbin::Value{std::uint8_t{1}});
@@ -48,7 +48,7 @@ void new_field_kinds() {
   expect(wide_bytes.size() - packbin::BinaryPacker::pack(one, {}).size() == 2, "bit 5 adds 2");
 
   auto two = packbin::scheme(
-      1, {packbin::flags({packbin::group({packbin::u16(0), packbin::u32(1)})})});
+      1, {packbin::flags(0, {packbin::group(0, {packbin::u16(0), packbin::u32(1)})})});
   packbin::Values session;
   session.emplace("0", packbin::Value{std::uint16_t{7}});
   session.emplace("1", packbin::Value{std::uint32_t{1000}});
@@ -64,7 +64,7 @@ void new_field_kinds() {
   expect(absent_got.ok && !packbin::present(absent_row, 0) && !packbin::present(absent_row, 1),
          "group clear unpacks no fields");
 
-  auto zero = packbin::scheme(1, {packbin::flags({packbin::group({packbin::u8(0)})})});
+  auto zero = packbin::scheme(1, {packbin::flags(0, {packbin::group(0, {packbin::u8(0)})})});
   packbin::Values zero_v;
   zero_v.emplace("0", packbin::Value{std::uint8_t{0}});
   auto stored = packbin::BinaryPacker::pack(zero, zero_v);

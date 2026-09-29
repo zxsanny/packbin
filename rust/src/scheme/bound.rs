@@ -343,7 +343,7 @@ impl<T: 'static> BoundField<T> {
         let name = id_name(id);
         BoundField {
             id: Some(id),
-            field: group(name, vec![]),
+            field: group(id, name, vec![]),
             get: Box::new(move |row| {
                 if get(row) == Some(true) {
                     Some(Value::U8(1))

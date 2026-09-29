@@ -130,7 +130,7 @@ fn position_row_scheme() -> Scheme<PositionRow> {
                 |r: &mut PositionRow, v| r.profile = v,
             )
             .into(),
-            flags("motion", vec![u16("heading"), u8("speed"), i16("altitude")]).into(),
+            flags(4, "motion", vec![u16("heading"), u8("speed"), i16("altitude")]).into(),
         ],
     )
 }

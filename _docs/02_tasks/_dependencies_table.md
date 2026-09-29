@@ -1,8 +1,8 @@
 # Dependencies Table
 
-**Date**: 2026-09-26
-**Total Tasks**: 27
-**Total Complexity Points**: 135
+**Date**: 2026-09-29
+**Total Tasks**: 34
+**Total Complexity Points**: 156
 
 Estimation: `_docs/LESSONS.md` says the six packages stay peers. These four tasks do not add a shared walker. No point bump.
 
@@ -35,5 +35,12 @@ Estimation: `_docs/LESSONS.md` says the six packages stay peers. These four task
 | AZ-1950 | field_id_binding | 8 | AZ-1949 | pending |
 | AZ-1963 | python_single_accessor | 3 | AZ-1950 | AZ-1861 |
 | 04_borrowed_count | borrowed_count | 8 | AZ-1950 | pending |
+| AZ-2010 | csharp_anchor | 3 | None | AZ-1859 |
+| AZ-2011 | typescript_anchor | 3 | None | AZ-1860 |
+| AZ-2012 | python_anchor | 3 | None | AZ-1861 |
+| AZ-2013 | rust_scheme_order | 5 | None | AZ-1862 |
+| AZ-2014 | cpp_anchor | 3 | None | AZ-1863 |
+| AZ-2015 | java_anchor | 3 | None | AZ-1864 |
+| AZ-2016 | order_sentence | 1 | None | AZ-1865 |
 
 The six pack tasks do not depend on each other. AZ-1875 runs after all six. The five blackbox tasks run after AZ-1913 and do not depend on each other. The three earlier todo tasks do not depend on each other and still have no tracker id. AZ-1938 through AZ-1941 are under epic AZ-1937. The string count does not include itself; the list count does not consume the next field.

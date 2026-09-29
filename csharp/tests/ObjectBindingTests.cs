@@ -28,7 +28,7 @@ public class ObjectBindingTests
     [Fact]
     public void Object_zero_is_present_and_null_is_absent()
     {
-        var scheme = new Scheme<WideRow>(1, Field.Flags(
+        var scheme = new Scheme<WideRow>(1, Field.Flags(0,
             Field.U8<WideRow>(0, x => x.A), Field.U8<WideRow>(1, x => x.B), Field.U8<WideRow>(2, x => x.C),
             Field.U8<WideRow>(3, x => x.D), Field.U8<WideRow>(4, x => x.E), Field.U16<WideRow>(5, x => x.B5)));
         var absent = BinaryPacker.Pack(scheme, new WideRow());
@@ -40,7 +40,7 @@ public class ObjectBindingTests
     [Fact]
     public void Object_nested_group_and_short_packet()
     {
-        var scheme = new Scheme<SessionRow>(1, Field.Flags(
+        var scheme = new Scheme<SessionRow>(1, Field.Flags(0,
             Field.Group((SessionRow x) => x.Session, Field.U16<Session>(0, s => s.Login), Field.U32<Session>(1, s => s.Ts))));
         var clear = BinaryPacker.Pack(scheme, new SessionRow());
         Assert.Equal(new byte[] { 0x01, 0x00 }, clear);

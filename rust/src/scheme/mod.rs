@@ -3,8 +3,8 @@ mod bound;
 pub use bound::BoundField;
 
 use crate::field::{
-    field_name, flags as layout_flags, id_name, times as layout_times, when as layout_when, Eq,
-    Field, MapScheme,
+    check_order, field_name, flags as layout_flags, id_name, nested_element, take_id,
+    times as layout_times, when as layout_when, Eq, Field, MapScheme,
 };
 use crate::value::{Name, PackError, ShortPacket, UnpackError, Value, Values};
 use crate::walk;
@@ -26,13 +26,16 @@ pub struct Scheme<T> {
 pub enum SchemeItem<T> {
     Bound(BoundField<T>),
     When {
+        anchor: u32,
         cond: Eq,
         members: Vec<SchemeItem<T>>,
     },
     Flags {
+        anchor: u32,
         members: Vec<SchemeItem<T>>,
     },
     Times {
+        anchor: u32,
         count: crate::value::Name,
         members: Vec<SchemeItem<T>>,
     },
@@ -52,32 +55,32 @@ impl<T> From<Field> for SchemeItem<T> {
 }
 
 impl<T: 'static> SchemeItem<T> {
-    pub fn when(cond: Eq, members: impl IntoIterator<Item = SchemeItem<T>>) -> Self {
+    pub fn when(anchor: u32, cond: Eq, members: impl IntoIterator<Item = SchemeItem<T>>) -> Self {
         SchemeItem::When {
+            anchor,
             cond,
             members: members.into_iter().collect(),
         }
     }
 
-    pub fn flags(members: impl IntoIterator<Item = SchemeItem<T>>) -> Self {
+    pub fn flags(anchor: u32, members: impl IntoIterator<Item = SchemeItem<T>>) -> Self {
         SchemeItem::Flags {
+            anchor,
             members: members.into_iter().collect(),
         }
     }
 
-    pub fn times(count_id: u32, members: impl IntoIterator<Item = SchemeItem<T>>) -> Self {
+    pub fn times(
+        anchor: u32,
+        count_id: u32,
+        members: impl IntoIterator<Item = SchemeItem<T>>,
+    ) -> Self {
         SchemeItem::Times {
+            anchor,
             count: id_name(count_id),
             members: members.into_iter().collect(),
         }
     }
-}
-
-fn take_id(next: &mut u32, id: u32) {
-    if id != *next {
-        panic!("field id {id} is not the next order {next}");
-    }
-    *next = next.saturating_add(1);
 }
 
 fn compile_items<T: 'static>(
@@ -92,11 +95,17 @@ fn compile_items<T: 'static>(
             SchemeItem::Bound(bound) => {
                 if let Some(id) = bound.id {
                     take_id(next_id, id);
-                } else if let Some((elem_start, elem_end)) = bound.element_ids {
-                    if elem_start != 0 {
-                        panic!("list element id {elem_start} is not the next order 0");
+                }
+                if let Some(element) = nested_element(&bound.field) {
+                    let end = check_order(std::slice::from_ref(element), 0);
+                    if let Some((elem_start, elem_end)) = bound.element_ids {
+                        if elem_start != 0 {
+                            panic!("list element id {elem_start} is not the next order 0");
+                        }
+                        if end != elem_end {
+                            panic!("field id {end} is not the next order {elem_end}");
+                        }
                     }
-                    let _ = elem_end;
                 }
                 let name = field_name(&bound.field)
                     .map(|s| crate::value::name_of(s))
@@ -108,24 +117,56 @@ fn compile_items<T: 'static>(
                     set: bound.set,
                 });
             }
-            SchemeItem::When { cond, members } => {
+            SchemeItem::When {
+                anchor,
+                cond,
+                members,
+            } => {
+                if anchor != *next_id {
+                    panic!("field id {anchor} is not the next order {next_id}");
+                }
+                let cond_name: &str = cond.field.as_ref();
+                if let Ok(id) = cond_name.parse::<u32>() {
+                    if id >= *next_id {
+                        panic!("field id {id} is not yet walked at order {next_id}");
+                    }
+                }
                 let (child_fields, child_binders) = compile_items(members, next_id, flag_seq);
-                fields.push(layout_when(cond, child_fields));
+                fields.push(layout_when(anchor, cond, child_fields));
                 binders.extend(child_binders);
             }
-            SchemeItem::Flags { members } => {
+            SchemeItem::Flags { anchor, members } => {
+                if anchor != *next_id {
+                    panic!("field id {anchor} is not the next order {next_id}");
+                }
                 let name = format!("__flags_{}", *flag_seq);
                 *flag_seq = flag_seq.saturating_add(1);
                 let (child_fields, child_binders) = compile_items(members, next_id, flag_seq);
-                fields.push(layout_flags(name.as_str(), child_fields));
+                fields.push(layout_flags(anchor, name.as_str(), child_fields));
                 binders.extend(child_binders);
             }
-            SchemeItem::Times { count, members } => {
+            SchemeItem::Times {
+                anchor,
+                count,
+                members,
+            } => {
+                if anchor != *next_id {
+                    panic!("field id {anchor} is not the next order {next_id}");
+                }
+                let count_name: &str = count.as_ref();
+                if let Ok(id) = count_name.parse::<u32>() {
+                    if id >= *next_id {
+                        panic!("field id {id} is not yet walked at order {next_id}");
+                    }
+                }
                 let (child_fields, child_binders) = compile_items(members, next_id, flag_seq);
-                fields.push(layout_times(count.as_ref(), child_fields));
+                fields.push(layout_times(anchor, count.as_ref(), child_fields));
                 binders.extend(child_binders);
             }
-            SchemeItem::Field(field) => fields.push(field),
+            SchemeItem::Field(field) => {
+                *next_id = check_order(std::slice::from_ref(&field), *next_id);
+                fields.push(field);
+            }
         }
     }
     (fields, binders)

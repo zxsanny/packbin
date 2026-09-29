@@ -199,6 +199,7 @@ internal static class SchemeOrder
             case Field.Kind.Repeat:
             case Field.Kind.Times:
             case Field.Kind.Flags:
+                RequireAnchor(field.Id, next);
                 foreach (var child in field.Children)
                     Walk(child, scope, ref next);
                 break;
@@ -218,6 +219,7 @@ internal static class SchemeOrder
                 }
                 else
                 {
+                    RequireAnchor(field.Id, next);
                     foreach (var child in field.Children)
                         Walk(child, scope, ref next);
                 }
@@ -240,6 +242,12 @@ internal static class SchemeOrder
                     Take(field.Id, field.Name, scope, ref next);
                 break;
         }
+    }
+
+    private static void RequireAnchor(int anchor, int next)
+    {
+        if (anchor != next)
+            throw new ArgumentException($"anchor {anchor} must be {next}");
     }
 
     private static void Take(int id, string name, Dictionary<int, string> scope, ref int next)
