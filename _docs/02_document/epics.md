@@ -42,5 +42,6 @@ flowchart TD
 | 2 | AZ-1863 | C++ package | component | M / 5 | AZ-1858 |
 | 2 | AZ-1864 | Java package | component | M / 5 | AZ-1858 |
 | 3 | AZ-1865 | Blackbox tests | tests | M / 5 | the six packages |
+| 4 | AZ-2018 | Pack session | feature | L / 13 | the six packages |
 
 The six language epics are the same order. Each is pack, unpack, and that registry's publish. Full descriptions are on the Jira issues.

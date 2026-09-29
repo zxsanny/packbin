@@ -1,10 +1,10 @@
 # Dependencies Table
 
 **Date**: 2026-09-29
-**Total Tasks**: 34
-**Total Complexity Points**: 156
+**Total Tasks**: 42
+**Total Complexity Points**: 181
 
-Estimation: `_docs/LESSONS.md` says the six packages stay peers. These four tasks do not add a shared walker. No point bump.
+Estimation: `_docs/LESSONS.md` says the six packages stay peers. The session is implemented in each package. No shared walker. Compare the full hex. No point bump.
 
 | Task | Name | Complexity | Dependencies | Epic |
 |------|------|-----------|-------------|------|
@@ -42,5 +42,13 @@ Estimation: `_docs/LESSONS.md` says the six packages stay peers. These four task
 | AZ-2014 | cpp_anchor | 3 | None | AZ-1863 |
 | AZ-2015 | java_anchor | 3 | None | AZ-1864 |
 | AZ-2016 | order_sentence | 1 | None | AZ-1865 |
+| AZ-2019 | csharp_session | 5 | None | AZ-2018 |
+| AZ-2020 | typescript_session | 3 | AZ-2019 | AZ-2018 |
+| AZ-2021 | python_session | 3 | AZ-2019 | AZ-2018 |
+| AZ-2022 | rust_session | 3 | AZ-2019 | AZ-2018 |
+| AZ-2023 | cpp_session | 3 | AZ-2019 | AZ-2018 |
+| AZ-2024 | java_session | 3 | AZ-2019 | AZ-2018 |
+| AZ-2025 | session_match | 3 | AZ-2019, AZ-2020, AZ-2021, AZ-2022, AZ-2023, AZ-2024 | AZ-2018 |
+| AZ-2026 | readme_session | 2 | AZ-2019 | AZ-2018 |
 
 The six pack tasks do not depend on each other. AZ-1875 runs after all six. The five blackbox tasks run after AZ-1913 and do not depend on each other. The three earlier todo tasks do not depend on each other and still have no tracker id. AZ-1938 through AZ-1941 are under epic AZ-1937. The string count does not include itself; the list count does not consume the next field.

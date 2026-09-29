@@ -107,7 +107,7 @@ A single `src/`, `crates/`, or `packages/` tree would put six languages in one c
 
 ## Shared / Cross-Cutting
 
-No shared code package. The library does not log, authenticate, or load configuration.
+No shared code package. The library does not log, authenticate, or load configuration. Each package implements the connection session in its own public entry. None imports another.
 
 ### fixtures
 
