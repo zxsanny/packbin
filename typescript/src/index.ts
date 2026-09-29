@@ -10,8 +10,8 @@ import {
   type UnpackErr,
 } from "./walker.ts"
 import type { Value } from "./kinds.ts"
-import { randomFillSync } from "node:crypto"
-import { hkdfSha256 } from "./hkdf.ts"
+import { hkdf } from "@noble/hashes/hkdf.js"
+import { sha256 } from "@noble/hashes/sha2.js"
 import { xorPad } from "./session-pad.ts"
 
 export type { Field, Acc } from "./fields.ts"
@@ -148,7 +148,7 @@ export class PackSession {
     if (nonce === undefined) {
       if (this.#send !== null || this.#seed === null) return null
       const drawn = new Uint8Array(PackSession.NonceSize)
-      randomFillSync(drawn)
+      globalThis.crypto.getRandomValues(drawn)
       if (!this.#open(drawn, true)) return null
       return drawn
     }
@@ -189,7 +189,7 @@ export class PackSession {
     ) {
       return false
     }
-    const both = hkdfSha256(this.#seed, nonce, SESSION_INFO, PackSession.SeedSize * 2)
+    const both = hkdf(sha256, this.#seed, nonce, SESSION_INFO, PackSession.SeedSize * 2)
     const first = both.subarray(0, PackSession.SeedSize)
     const second = both.subarray(PackSession.SeedSize)
     this.#send = Uint8Array.from(initiator ? first : second)

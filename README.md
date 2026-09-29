@@ -1,9 +1,11 @@
 # packbin
-Binary packing and unpacking across languages, declarative mapping, and zero overhead in the binary data.
+Binary packing and unpacking across languages with an optional encryption, declarative mapping, and zero overhead in the binary data.
 
 Both sides keep the same field list. The bytes are only the values. Unpack takes the buffer and handlers. The first byte selects the handler, and that handler's scheme reads the rest.
 
 Can be used for WebSocket, TCP, UDP, and other means of efficient communication
+
+Encryption is optional. `PackSession` hides the packed bytes on one connection and adds 0 bytes to each packet. The only extra send is 16 bytes, once, when the connection opens. It does not detect a changed byte, and anyone holding the 32-byte seed can read every session. See [Encrypted session](#encrypted-session).
 
 ## Example
 
@@ -273,9 +275,11 @@ BinaryPacker::unpack_with(
 .unwrap();
 ```
 
-## Example
+## Encrypted session
 
 One optional session beside clear pack. Load a 32-byte seed on each side. The opener calls start and sends those 16 bytes once. The waiter calls join with them. After that, pack and unpack use the same schemes as clear pack, and the payload stays the same length. A second client is a second session.
+
+The keys come from HKDF-SHA256 over the seed and the 16 bytes, one key per direction. Each packet is XORed with a ChaCha20 stream at the next counter. The counter is not sent, so the connection must deliver packets in order and drop none. Nothing checks that a byte was changed on the way. The seed never leaves the process. Replace it with a software update.
 
 ### C#
 
@@ -300,6 +304,233 @@ waiter.Unpack(payload, ping.On(row => got = row));
 ```
 
 The 16 bytes leave once. There is no second handshake on that connection.
+
+### WebSocket: Vue client, C# server
+
+The browser opens the socket, so it is the opener. Its first message is the 16 bytes. The server treats the first message on every socket as those bytes and keeps one session per socket. Every later message in either direction is one packed packet, encrypted.
+
+Both sides share the schemes:
+
+| Type | Scheme | Direction |
+|------|--------|-----------|
+| `0x40` | position: `sid` u16, `lat` i32, `lon` i32, `profile` u8 | client → server |
+| `0x41` | ack: `sid` u16, `accepted` u8 | server → client |
+
+#### Server — ASP.NET Core
+
+```csharp
+using System.Net.WebSockets;
+using Packbin;
+
+var builder = WebApplication.CreateBuilder(args);
+var app = builder.Build();
+
+byte[] seed = Convert.FromHexString(builder.Configuration["Packbin:Seed"]!); // 32 bytes
+var position = new Scheme<Position>(0x40, f => [
+    f.U16(0, x => x.Sid),
+    f.I32(1, x => x.Lat),
+    f.I32(2, x => x.Lon),
+    f.U8(3, x => x.Profile)]);
+var ack = new Scheme<Ack>(0x41, f => [
+    f.U16(0, x => x.Sid),
+    f.U8(1, x => x.Accepted)]);
+
+app.UseWebSockets();
+app.Map("/ws", async context =>
+{
+    if (!context.WebSockets.IsWebSocketRequest)
+    {
+        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        return;
+    }
+
+    using var socket = await context.WebSockets.AcceptWebSocketAsync();
+    var ct = context.RequestAborted;
+    var session = PackSession.Load(seed)!;
+
+    var nonce = await ReceiveAsync(socket, ct);
+    if (nonce is null || !session.Join(nonce))
+    {
+        await socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, "handshake", ct);
+        return;
+    }
+
+    while (await ReceiveAsync(socket, ct) is { } packet)
+    {
+        Position? got = null;
+        var err = session.Unpack(packet, position.On(row => got = row));
+        if (err is not null || got is null)
+        {
+            await socket.CloseAsync(WebSocketCloseStatus.InvalidPayloadData, "packet", ct);
+            return;
+        }
+
+        var reply = session.Pack(ack, new Ack { Sid = got.Sid, Accepted = 1 })!;
+        await socket.SendAsync(reply, WebSocketMessageType.Binary, true, ct);
+    }
+});
+
+app.Run();
+
+static async Task<byte[]?> ReceiveAsync(WebSocket socket, CancellationToken ct)
+{
+    var buffer = new byte[4096];
+    using var message = new MemoryStream();
+    while (true)
+    {
+        var result = await socket.ReceiveAsync(buffer, ct);
+        if (result.MessageType == WebSocketMessageType.Close)
+            return null;
+        message.Write(buffer, 0, result.Count);
+        if (result.EndOfMessage)
+            return message.ToArray();
+    }
+}
+
+sealed class Position
+{
+    public ushort Sid { get; set; }
+    public int Lat { get; set; }
+    public int Lon { get; set; }
+    public byte Profile { get; set; }
+}
+
+sealed class Ack
+{
+    public ushort Sid { get; set; }
+    public byte Accepted { get; set; }
+}
+```
+
+The `while` loop sends and receives on one task, so the send counter advances once per reply. If several tasks write to the same socket, send through one queue: the packets must leave in the order `Pack` numbered them.
+
+#### Client — Vue 3, TypeScript
+
+`src/live/packets.ts`:
+
+```ts
+import { i32, scheme, u16, u8 } from "packbin"
+
+export class Position {
+  sid = 0
+  lat = 0
+  lon = 0
+  profile = 0
+}
+
+export class Ack {
+  sid = 0
+  accepted = 0
+}
+
+export const position = scheme<Position>(
+  0x40,
+  u16(0, (x) => x.sid),
+  i32(1, (x) => x.lat),
+  i32(2, (x) => x.lon),
+  u8(3, (x) => x.profile),
+)
+
+export const ack = scheme<Ack>(
+  0x41,
+  u16(0, (x) => x.sid),
+  u8(1, (x) => x.accepted),
+)
+```
+
+`src/live/useLiveSocket.ts`:
+
+```ts
+import { onBeforeUnmount, ref } from "vue"
+import { PackSession } from "packbin"
+import { ack, position, type Ack, type Position } from "./packets"
+
+const seed = Uint8Array.from(
+  import.meta.env.VITE_PACKBIN_SEED.match(/../g)!.map((h: string) => parseInt(h, 16)),
+)
+
+export function useLiveSocket(url: string) {
+  const lastAck = ref<Ack | null>(null)
+  const open = ref(false)
+  let socket: WebSocket | null = null
+  let session: PackSession | null = null
+  let retry = 0
+
+  function connect() {
+    session = PackSession.load(seed)
+    socket = new WebSocket(url)
+    socket.binaryType = "arraybuffer"
+
+    socket.onopen = () => {
+      socket!.send(session!.start()!)
+      open.value = true
+    }
+
+    socket.onmessage = (ev: MessageEvent<ArrayBuffer>) => {
+      const result = session!.unpack(ev.data, ack.on((row) => (lastAck.value = row)))
+      if (!result.ok) socket!.close(4000, "packet")
+    }
+
+    socket.onclose = () => {
+      open.value = false
+      socket = null
+      session = null
+      retry = window.setTimeout(connect, 1000)
+    }
+  }
+
+  function sendPosition(row: Position) {
+    if (!open.value || !socket || !session) return false
+    socket.send(session.pack(position, row)!)
+    return true
+  }
+
+  connect()
+  onBeforeUnmount(() => {
+    window.clearTimeout(retry)
+    if (socket) {
+      socket.onclose = null
+      socket.close()
+    }
+  })
+
+  return { open, lastAck, sendPosition }
+}
+```
+
+`src/components/LivePosition.vue`:
+
+```vue
+<script setup lang="ts">
+import { useLiveSocket } from "../live/useLiveSocket"
+
+const { open, lastAck, sendPosition } = useLiveSocket(
+  `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`,
+)
+
+function send() {
+  sendPosition({ sid: 1, lat: 500_000_000, lon: 300_000_000, profile: 1 })
+}
+</script>
+
+<template>
+  <button :disabled="!open" @click="send">Send position</button>
+  <p v-if="lastAck">Server accepted sid {{ lastAck.sid }}</p>
+</template>
+```
+
+Each new socket needs a new session. `connect` loads a fresh one, because `start` and `join` erase the session's copy of the seed and a session opens only once. A reconnect sends new 16 bytes.
+
+What travels for one position:
+
+| Message | Bytes |
+|---------|-------|
+| Handshake, once per socket | 16 |
+| Position, clear pack | 12 |
+| Position, encrypted | 12 |
+| Ack, encrypted | 4 |
+
+`VITE_PACKBIN_SEED` is compiled into the JavaScript bundle, so anyone who downloads the app can read it. The session hides packets from a network observer. It does not hide them from a person who has the app. Change the seed with a release, and keep the old value on the server until clients have updated.
 
 ## Data types
 

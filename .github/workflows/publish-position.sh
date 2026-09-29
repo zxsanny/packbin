@@ -19,6 +19,9 @@ case "$lang" in
     dotnet run --project "$drivers/csharp/Position.csproj" -v q --nologo
     ;;
   typescript)
+    if [ ! -d "$root/typescript/node_modules/@noble/hashes" ]; then
+      npm ci --prefix "$root/typescript" >&2
+    fi
     node --experimental-strip-types "$drivers/position.ts"
     ;;
   python)
