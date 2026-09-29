@@ -3,9 +3,10 @@ set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 drivers="$root/.github/workflows/drivers"
-user_hex="07007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e6e656c010004007265616403006d6170040004007265616407006770735f6669780300736574040065646974050073746f7265020004007265616405007772697465"
-nested_hex="020003006d61700100010002006f7007006770735f666978050073746f72650200010002006f70040072656164010002006f7005007772697465"
+user_hex="0107007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e6e656c010004007265616403006d6170040004007265616407006770735f6669780300736574040065646974050073746f7265020004007265616405007772697465"
+nested_hex="01020003006d61700100010002006f7007006770735f666978050073746f72650200010002006f70040072656164010002006f7005007772697465"
 position_hex="4001000065cd1d00a3e1110100"
+session_hex="b55d0a29c56c203712b241232e"
 
 run_lang() {
   local lang="$1"
@@ -83,6 +84,21 @@ handoff python rust nested "$nested_hex"
 handoff rust java nested "$nested_hex"
 handoff java cpp nested "$nested_hex"
 handoff cpp csharp nested "$nested_hex"
+
+for lang in csharp typescript python rust cpp java; do
+  got="$(run_lang "$lang" "pack-session" | tr -d '[:space:]')"
+  if [ "$got" != "$session_hex" ]; then
+    echo "$lang pack-session mismatch" >&2
+    exit 1
+  fi
+done
+
+handoff csharp typescript session "$session_hex"
+handoff typescript python session "$session_hex"
+handoff python rust session "$session_hex"
+handoff rust java session "$session_hex"
+handoff java cpp session "$session_hex"
+handoff cpp csharp session "$session_hex"
 
 for lang in csharp typescript python rust cpp java; do
   got="$(bash "$root/.github/workflows/publish-position.sh" "$lang" | tr -d '[:space:]')"

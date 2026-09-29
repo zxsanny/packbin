@@ -2,7 +2,19 @@ from __future__ import annotations
 
 import sys
 
-from packbin import BinaryPacker, Scheme, dict as map_field, list, utf8
+from packbin import (
+    BinaryPacker,
+    PackSession,
+    Scheme,
+    dict as map_field,
+    flags,
+    i16,
+    i32,
+    list,
+    u8,
+    u16,
+    utf8,
+)
 
 
 USER = Scheme(
@@ -36,6 +48,46 @@ NESTED_VALUES = {
     },
 }
 
+POSITION = Scheme(
+    0x40,
+    dict,
+    u16(0, lambda row: row["sid"]),
+    i32(1, lambda row: row["lat"]),
+    i32(2, lambda row: row["lon"]),
+    u8(3, lambda row: row["profile"]),
+    flags(
+        4,
+        u16(4, lambda row: row["heading"]),
+        u8(5, lambda row: row["speed"]),
+        i16(6, lambda row: row["altitude"]),
+    ),
+)
+
+POSITION_VALUES = {
+    "sid": 1,
+    "lat": 500_000_000,
+    "lon": 300_000_000,
+    "profile": 1,
+}
+
+SESSION_SEED = bytes(range(1, 33))
+SESSION_NONCE = bytes.fromhex("01000000000000000000000000000000")
+
+
+def _session_fields_ok(row) -> bool:
+    if row.get("sid") != 1:
+        return False
+    if row.get("lat") != 500_000_000:
+        return False
+    if row.get("lon") != 300_000_000:
+        return False
+    if row.get("profile") != 1:
+        return False
+    for name in ("heading", "speed", "altitude"):
+        if name in row and row[name] is not None:
+            return False
+    return True
+
 
 def main(argv: list[str]) -> int:
     if len(argv) < 1:
@@ -46,6 +98,15 @@ def main(argv: list[str]) -> int:
         return 0
     if cmd == "pack-nested":
         print(BinaryPacker.pack(NESTED, NESTED_VALUES).hex())
+        return 0
+    if cmd == "pack-session":
+        opener = PackSession.load(SESSION_SEED)
+        if opener is None or opener.start(SESSION_NONCE) is None:
+            return 1
+        payload = opener.pack(POSITION, POSITION_VALUES)
+        if payload is None:
+            return 1
+        print(payload.hex())
         return 0
     if cmd == "unpack-user":
         if len(argv) < 2:
@@ -61,6 +122,16 @@ def main(argv: list[str]) -> int:
         if not result.ok or result.value is None:
             return 1
         return 0 if result.value == NESTED_VALUES else 1
+    if cmd == "unpack-session":
+        if len(argv) < 2:
+            return 1
+        waiter = PackSession.load(SESSION_SEED)
+        if waiter is None or not waiter.join(SESSION_NONCE):
+            return 1
+        result = waiter.unpack(bytes.fromhex(argv[1]), POSITION.on(lambda row: None))
+        if not result.ok or result.value is None:
+            return 1
+        return 0 if _session_fields_ok(result.value) else 1
     return 2
 
 

@@ -4,10 +4,14 @@ import java.util.List;
 import java.util.Map;
 import packbin.Access;
 import packbin.BinaryPacker;
+import packbin.PackSession;
 import packbin.Packbin;
 import packbin.Scheme;
 
 public final class Handoff {
+    private static final byte[] SESSION_SEED = seed();
+    private static final byte[] SESSION_NONCE = parse("01000000000000000000000000000000");
+
     public static void main(String[] args) {
         if (args.length < 1) {
             System.exit(2);
@@ -16,10 +20,68 @@ public final class Handoff {
         switch (cmd) {
             case "pack-user" -> System.out.println(hex(BinaryPacker.pack(userScheme(), userValues())));
             case "pack-nested" -> System.out.println(hex(BinaryPacker.pack(nestedScheme(), nestedValues())));
+            case "pack-session" -> System.exit(packSession());
             case "unpack-user" -> System.exit(userOk(requireHex(args)) ? 0 : 1);
             case "unpack-nested" -> System.exit(nestedOk(requireHex(args)) ? 0 : 1);
+            case "unpack-session" -> System.exit(sessionOk(requireHex(args)) ? 0 : 1);
             default -> System.exit(2);
         }
+    }
+
+    private static byte[] seed() {
+        byte[] bytes = new byte[32];
+        for (int i = 0; i < 32; i++) {
+            bytes[i] = (byte) (i + 1);
+        }
+        return bytes;
+    }
+
+    private static int packSession() {
+        PackSession opener = PackSession.load(SESSION_SEED);
+        if (opener == null || opener.start(SESSION_NONCE) == null) {
+            return 1;
+        }
+        byte[] payload = opener.pack(positionScheme(), positionValues());
+        if (payload == null) {
+            return 1;
+        }
+        System.out.println(hex(payload));
+        return 0;
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static boolean sessionOk(String hex) {
+        PackSession waiter = PackSession.load(SESSION_SEED);
+        if (waiter == null || !waiter.join(SESSION_NONCE)) {
+            return false;
+        }
+        Map[] got = new Map[1];
+        Object err = waiter.unpack(parse(hex), positionScheme().on(row -> got[0] = row));
+        if (err != null || got[0] == null) {
+            return false;
+        }
+        if (!Integer.valueOf(1).equals(asInt(got[0].get("sid")))) {
+            return false;
+        }
+        if (!Integer.valueOf(500_000_000).equals(asInt(got[0].get("lat")))) {
+            return false;
+        }
+        if (!Integer.valueOf(300_000_000).equals(asInt(got[0].get("lon")))) {
+            return false;
+        }
+        if (!Integer.valueOf(1).equals(asInt(got[0].get("profile")))) {
+            return false;
+        }
+        return got[0].get("heading") == null
+                && got[0].get("speed") == null
+                && got[0].get("altitude") == null;
+    }
+
+    private static Integer asInt(Object value) {
+        if (value instanceof Number n) {
+            return n.intValue();
+        }
+        return null;
     }
 
     private static String requireHex(String[] args) {
@@ -71,6 +133,31 @@ public final class Handoff {
         access.put("store", List.of(Map.of("op", "read"), Map.of("op", "write")));
         Map<String, Object> values = new HashMap<>();
         values.put("access", access);
+        return values;
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Scheme<Map> positionScheme() {
+        return new Scheme<>(
+                0x40,
+                (Class) Map.class,
+                Packbin.u16(0, Access.get("sid"), Access.set("sid")),
+                Packbin.i32(1, Access.get("lat"), Access.set("lat")),
+                Packbin.i32(2, Access.get("lon"), Access.set("lon")),
+                Packbin.u8(3, Access.get("profile"), Access.set("profile")),
+                Packbin.flags(
+                        4,
+                        Packbin.u16(4, Access.get("heading"), Access.set("heading")),
+                        Packbin.u8(5, Access.get("speed"), Access.set("speed")),
+                        Packbin.i16(6, Access.get("altitude"), Access.set("altitude"))));
+    }
+
+    private static Map<String, Object> positionValues() {
+        Map<String, Object> values = new HashMap<>();
+        values.put("sid", 1);
+        values.put("lat", 500_000_000);
+        values.put("lon", 300_000_000);
+        values.put("profile", 1);
         return values;
     }
 

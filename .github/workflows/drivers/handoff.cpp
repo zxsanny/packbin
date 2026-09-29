@@ -59,11 +59,57 @@ packbin::Values nested_values() {
   return values;
 }
 
+auto position_scheme() {
+  return packbin::scheme(0x40, {
+      packbin::u16(0),
+      packbin::i32(1),
+      packbin::i32(2),
+      packbin::u8(3),
+      packbin::flags(4, {packbin::u16(4), packbin::u8(5), packbin::i16(6)}),
+  });
+}
+
+packbin::Values position_values() {
+  packbin::Values values;
+  values.emplace("0", packbin::Value{std::uint16_t{1}});
+  values.emplace("1", packbin::Value{std::int32_t{500000000}});
+  values.emplace("2", packbin::Value{std::int32_t{300000000}});
+  values.emplace("3", packbin::Value{std::uint8_t{1}});
+  return values;
+}
+
 std::vector<std::uint8_t> parse_hex(std::string const& hex) {
   std::vector<std::uint8_t> out(hex.size() / 2);
   for (std::size_t i = 0; i < out.size(); ++i)
     out[i] = static_cast<std::uint8_t>(std::stoul(hex.substr(i * 2, 2), nullptr, 16));
   return out;
+}
+
+std::vector<std::uint8_t> session_seed() {
+  std::vector<std::uint8_t> seed(32);
+  for (std::size_t i = 0; i < seed.size(); ++i)
+    seed[i] = static_cast<std::uint8_t>(i + 1);
+  return seed;
+}
+
+std::vector<std::uint8_t> session_nonce() {
+  return parse_hex("01000000000000000000000000000000");
+}
+
+bool session_fields_ok(packbin::Values const& got) {
+  try {
+    if (std::get<std::uint16_t>(got.at("0").data) != 1)
+      return false;
+    if (std::get<std::int32_t>(got.at("1").data) != 500000000)
+      return false;
+    if (std::get<std::int32_t>(got.at("2").data) != 300000000)
+      return false;
+    if (std::get<std::uint8_t>(got.at("3").data) != 1)
+      return false;
+  } catch (...) {
+    return false;
+  }
+  return !packbin::present(got, 4) && !packbin::present(got, 5) && !packbin::present(got, 6);
 }
 
 bool same_strs(packbin::Value::List const& list, std::initializer_list<char const*> expect) {
@@ -117,6 +163,16 @@ bool nested_ok(std::string const& hex) {
          store->items.size() == 2 && op_is(store->items[0], "read") && op_is(store->items[1], "write");
 }
 
+bool session_ok(std::string const& hex) {
+  auto waiter = packbin::PackSession::load(session_seed());
+  if (!waiter || !waiter->join(session_nonce()))
+    return false;
+  packbin::Values got;
+  auto result = waiter->unpack(
+      parse_hex(hex), position_scheme().on([&](packbin::Values const& row) { got = row; }));
+  return result.ok && session_fields_ok(got);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -131,11 +187,23 @@ int main(int argc, char** argv) {
     std::cout << packbin::to_hex(packbin::BinaryPacker::pack(nested_scheme(), nested_values())) << '\n';
     return 0;
   }
+  if (cmd == "pack-session") {
+    auto opener = packbin::PackSession::load(session_seed());
+    if (!opener || !opener->start(session_nonce()))
+      return 1;
+    auto payload = opener->pack(position_scheme(), position_values());
+    if (!payload)
+      return 1;
+    std::cout << packbin::to_hex(*payload) << '\n';
+    return 0;
+  }
   if (argc < 3)
     return 2;
   if (cmd == "unpack-user")
     return user_ok(argv[2]) ? 0 : 1;
   if (cmd == "unpack-nested")
     return nested_ok(argv[2]) ? 0 : 1;
+  if (cmd == "unpack-session")
+    return session_ok(argv[2]) ? 0 : 1;
   return 2;
 }

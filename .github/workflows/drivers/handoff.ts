@@ -1,4 +1,16 @@
-import { BinaryPacker, dict, list, scheme, utf8 } from "../../../typescript/src/index.ts";
+import {
+  BinaryPacker,
+  PackSession,
+  dict,
+  flags,
+  i16,
+  i32,
+  list,
+  scheme,
+  u8,
+  u16,
+  utf8,
+} from "../../../typescript/src/index.ts";
 
 type UserRow = {
   username: string;
@@ -56,6 +68,39 @@ const nestedValues: NestedRow = {
     store: [{ op: "read" }, { op: "write" }],
   },
 };
+
+type PositionRow = {
+  sid: number;
+  lat: number;
+  lon: number;
+  profile: number;
+  heading?: number | null;
+  speed?: number | null;
+  altitude?: number | null;
+};
+
+const positionPacket = scheme<PositionRow>(
+  0x40,
+  u16(0, (r) => r.sid),
+  i32(1, (r) => r.lat),
+  i32(2, (r) => r.lon),
+  u8(3, (r) => r.profile),
+  flags(4, [
+    u16(4, (r) => r.heading),
+    u8(5, (r) => r.speed),
+    i16(6, (r) => r.altitude),
+  ]),
+);
+
+const positionValues: PositionRow = {
+  sid: 1,
+  lat: 500_000_000,
+  lon: 300_000_000,
+  profile: 1,
+};
+
+const sessionSeed = Uint8Array.from({ length: 32 }, (_, i) => i + 1);
+const sessionNonce = Buffer.from("01000000000000000000000000000000", "hex");
 
 function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
@@ -121,6 +166,39 @@ if (cmd === "unpack-nested") {
     row = value as NestedRow;
   }));
   if (result.ok && row !== undefined && deepEqual(row, nestedValues)) process.exit(0);
+  process.exit(1);
+}
+
+if (cmd === "pack-session") {
+  const opener = PackSession.load(sessionSeed);
+  if (!opener || !opener.start(sessionNonce)) process.exit(1);
+  const payload = opener.pack(positionPacket, positionValues);
+  if (!payload) process.exit(1);
+  process.stdout.write(Buffer.from(payload).toString("hex") + "\n");
+  process.exit(0);
+}
+
+if (cmd === "unpack-session") {
+  const hex = process.argv[3] ?? "";
+  const waiter = PackSession.load(sessionSeed);
+  if (!waiter || !waiter.join(sessionNonce)) process.exit(1);
+  let row: PositionRow | undefined;
+  const result = waiter.unpack(Buffer.from(hex, "hex"), positionPacket.on((value) => {
+    row = value as PositionRow;
+  }));
+  if (
+    result.ok &&
+    row !== undefined &&
+    row.sid === 1 &&
+    row.lat === 500_000_000 &&
+    row.lon === 300_000_000 &&
+    row.profile === 1 &&
+    (row.heading === undefined || row.heading === null) &&
+    (row.speed === undefined || row.speed === null) &&
+    (row.altitude === undefined || row.altitude === null)
+  ) {
+    process.exit(0);
+  }
   process.exit(1);
 }
 

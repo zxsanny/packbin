@@ -1,4 +1,4 @@
-use packbin::{to_hex, BinaryPacker, BoundField, Scheme};
+use packbin::{flags, i16, to_hex, u16, u8, BinaryPacker, BoundField, PackSession, Scheme};
 use std::collections::BTreeMap;
 use std::process::ExitCode;
 
@@ -77,6 +77,86 @@ fn nested_row() -> Nested {
     Nested { access }
 }
 
+#[derive(Default, Debug, PartialEq)]
+struct Position {
+    sid: u16,
+    lat: i32,
+    lon: i32,
+    profile: u8,
+    heading: Option<u16>,
+    speed: Option<u8>,
+    altitude: Option<i16>,
+}
+
+fn position_scheme() -> Scheme<Position> {
+    Scheme::new(
+        0x40,
+        [
+            BoundField::u16(
+                0,
+                |row: &Position| row.sid,
+                |row, value| row.sid = value,
+            )
+            .into(),
+            BoundField::i32(
+                1,
+                |row: &Position| row.lat,
+                |row, value| row.lat = value,
+            )
+            .into(),
+            BoundField::i32(
+                2,
+                |row: &Position| row.lon,
+                |row, value| row.lon = value,
+            )
+            .into(),
+            BoundField::u8(
+                3,
+                |row: &Position| row.profile,
+                |row, value| row.profile = value,
+            )
+            .into(),
+            flags(4, "motion", vec![u16("heading"), u8("speed"), i16("altitude")]).into(),
+        ],
+    )
+}
+
+fn position_row() -> Position {
+    Position {
+        sid: 1,
+        lat: 500_000_000,
+        lon: 300_000_000,
+        profile: 1,
+        heading: None,
+        speed: None,
+        altitude: None,
+    }
+}
+
+fn session_seed() -> [u8; 32] {
+    let mut seed = [0u8; 32];
+    for (i, b) in seed.iter_mut().enumerate() {
+        *b = (i + 1) as u8;
+    }
+    seed
+}
+
+fn session_nonce() -> [u8; 16] {
+    let mut nonce = [0u8; 16];
+    nonce[0] = 0x01;
+    nonce
+}
+
+fn session_fields_ok(row: &Position) -> bool {
+    row.sid == 1
+        && row.lat == 500_000_000
+        && row.lon == 300_000_000
+        && row.profile == 1
+        && row.heading.is_none()
+        && row.speed.is_none()
+        && row.altitude.is_none()
+}
+
 fn from_hex(s: &str) -> Option<Vec<u8>> {
     if s.len() % 2 != 0 {
         return None;
@@ -142,6 +222,39 @@ fn run(args: &[String]) -> u8 {
             let mut got = Nested::default();
             match BinaryPacker::unpack_with(&raw, &mut [&mut scheme.on(|row| got = row)]) {
                 Ok(()) if got == nested_row() => 0,
+                _ => 1,
+            }
+        }
+        "pack-session" => {
+            let Some(mut opener) = PackSession::load(&session_seed()) else {
+                return 1;
+            };
+            if opener.start_with(&session_nonce()).is_none() {
+                return 1;
+            }
+            let Some(payload) = opener.pack(&position_scheme(), &position_row()) else {
+                return 1;
+            };
+            println!("{}", to_hex(&payload));
+            0
+        }
+        "unpack-session" => {
+            let Some(hex) = args.get(1) else {
+                return 1;
+            };
+            let Some(raw) = from_hex(hex) else {
+                return 1;
+            };
+            let Some(mut waiter) = PackSession::load(&session_seed()) else {
+                return 1;
+            };
+            if !waiter.join(&session_nonce()) {
+                return 1;
+            }
+            let scheme = position_scheme();
+            let mut got = Position::default();
+            match waiter.unpack(&raw, &mut [&mut scheme.on(|row| got = row)]) {
+                Ok(()) if session_fields_ok(&got) => 0,
                 _ => 1,
             }
         }
