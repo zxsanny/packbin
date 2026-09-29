@@ -37,7 +37,8 @@ case "$lang" in
     fi
     "${CXX:-g++}" "${flags[@]}" -o "$bin" \
       "$drivers/position.cpp" "$root/cpp/src/field.cpp" "$root/cpp/src/packbin.cpp" "$root/cpp/src/counted.cpp" \
-      "$root/cpp/src/walk_common.cpp" "$root/cpp/src/walk.cpp" "$root/cpp/src/unpack_walk.cpp"
+      "$root/cpp/src/walk_common.cpp" "$root/cpp/src/walk.cpp" "$root/cpp/src/unpack_walk.cpp" \
+      "$root/cpp/src/session.cpp"
     "$bin"
     ;;
   java)

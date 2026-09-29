@@ -31,9 +31,11 @@ from packbin._nodes import (
     when,
 )
 from packbin._scheme import BinaryPacker, Scheme
+from packbin._session import PackSession
 
 __all__ = [
     "BinaryPacker",
+    "PackSession",
     "Scheme",
     "ShortPacket",
     "TrailingBytes",

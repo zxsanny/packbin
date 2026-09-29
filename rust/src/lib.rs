@@ -1,5 +1,6 @@
 mod field;
 mod scheme;
+mod session;
 mod value;
 mod walk;
 
@@ -9,6 +10,7 @@ pub use field::{
     MapScheme,
 };
 pub use scheme::{BinaryPacker, BoundField, DispatchHandler, On, Scheme, SchemeItem};
+pub use session::{PackSession, NONCE_SIZE, SEED_SIZE};
 pub use value::{
     insert, mismatched_bytes, motion_field_count, to_hex, Name, PackError, ShortPacket,
     UnpackError, Value, Values,

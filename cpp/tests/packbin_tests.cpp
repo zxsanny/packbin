@@ -263,6 +263,7 @@ int run_kinds_tests();
 int run_scheme_tests();
 int run_field_id_binding_tests();
 int run_borrowed_count_tests();
+int run_session_tests();
 
 int main() {
   ac1_position_pack();
@@ -279,6 +280,7 @@ int main() {
   failures += run_scheme_tests();
   failures += run_field_id_binding_tests();
   failures += run_borrowed_count_tests();
+  failures += run_session_tests();
   if (failures != 0) {
     std::cerr << failures << " failure(s)\n";
     return 1;
