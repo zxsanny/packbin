@@ -67,6 +67,12 @@
 | 04_borrowed_count AC-3 | The group stops, then the next field is read | FT-C-03 | Covered |
 | 04_borrowed_count AC-4 | One route scheme round-trips | FT-C-04 | Covered |
 | 04_borrowed_count AC-5 | Length and short tail fail closed | FT-C-05 | Covered |
+| scheme-field-order AC-1 | Value fields are numbered in list order | FT-O-01 | Covered |
+| scheme-field-order AC-2 | A continuing group shows the next value id | FT-O-02 | Covered |
+| scheme-field-order AC-3 | A nested list starts at 0 | FT-O-03 | Covered |
+| scheme-field-order AC-4 | Every Rust scheme build runs the check | FT-O-04 | Covered |
+| scheme-field-order AC-5 | The failure rule is written next to the order sentence | FT-O-05 | Covered |
+| scheme-field-order AC-6 | Existing packets keep their bytes | FT-O-06 | Covered |
 
 ## Restrictions Coverage
 
@@ -96,9 +102,9 @@
 
 | Category | Total Items | Covered | BLOCKED | WAIVED | Coverage |
 |----------|-----------|---------|---------|--------|----------|
-| Acceptance Criteria | 63 | 63 | 0 | 0 | every row Covered or WAIVED |
+| Acceptance Criteria | 69 | 69 | 0 | 0 | every row Covered or WAIVED |
 | Restrictions | 19 | 17 | 0 | 2 | every row Covered or WAIVED |
-| **Total** | 82 | 80 | 0 | 2 | every row Covered or WAIVED |
+| **Total** | 88 | 86 | 0 | 2 | every row Covered or WAIVED |
 
 ## Uncovered Items Analysis
 

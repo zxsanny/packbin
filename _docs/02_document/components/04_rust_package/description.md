@@ -16,7 +16,7 @@
 
 | Method | Input | Output | Async | Error Types |
 |--------|-------|--------|-------|-------------|
-| `Scheme` | type number, fields by order id | scheme | No | order is not the next index |
+| `Scheme` | type number, fields by order id | scheme | No | a gap, a repeated id, a bad anchor, or a reference to an id not yet walked |
 | `BinaryPacker::pack` | scheme, row | bytes | No | integer does not fit |
 | `BinaryPacker::unpack` | scheme, bytes | row or error | No | short packet, trailing bytes, type mismatch |
 | `BinaryPacker::unpack_with` | bytes, handlers | row or error | No | unknown leading byte |
