@@ -273,6 +273,34 @@ BinaryPacker::unpack_with(
 .unwrap();
 ```
 
+## Example
+
+One optional session beside clear pack. Load a 32-byte seed on each side. The opener calls start and sends those 16 bytes once. The waiter calls join with them. After that, pack and unpack use the same schemes as clear pack, and the payload stays the same length. A second client is a second session.
+
+### C#
+
+```csharp
+using Packbin;
+
+byte[] seed = /* 32 bytes shared out of band */;
+
+var opener = PackSession.Load(seed)!;
+byte[] nonce = opener.Start()!;
+
+var waiter = PackSession.Load(seed)!;
+waiter.Join(nonce);
+
+sealed class Ping { public byte Code { get; set; } }
+var ping = new Scheme<Ping>(2, f => [f.U8(0, x => x.Code)]);
+
+var payload = opener.Pack(ping, new Ping { Code = 7 })!;
+
+Ping? got = null;
+waiter.Unpack(payload, ping.On(row => got = row));
+```
+
+The 16 bytes leave once. There is no second handshake on that connection.
+
 ## Data types
 
 | Helper | What it writes |
