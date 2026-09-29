@@ -6,7 +6,7 @@ There is no database. The library does not store a packet after the call returns
 
 | Entity | Attributes | Constraints |
 |--------|------------|-------------|
-| Field list | ordered fields, each with a name, a width, and an endian | names are for the value and for errors; they are not written |
+| Field list | ordered fields, each with a name, a width, and an endian | names are for the value and for errors; they are not written. `packed` and `times` take their item count from an earlier field |
 | Bytes | the packed buffer | length is the sum of the fields that are present |
 | Short packet | field name, bytes needed, bytes left | returned instead of a value |
 

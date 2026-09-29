@@ -15,6 +15,8 @@ A packet is a list. Field order is wire order. Names are for the value object an
 | `flags(name, fields)` | one `u8` plus those fields | bit 0 is the first field |
 | `when(eq(field, value), fields)` | 0 or the group | tests a field already read |
 | `repeat(fields)` | the group until the buffer ends | must end on a boundary |
+| `packed(width, id, count, bias)` | 1-bit or 2-bit list | item count is an earlier integer plus a bias of 0 or −1; no length byte; low bits first |
+| `times(count, fields)` | the inner fields N times | N is an earlier integer; the next field is then read as itself |
 
 `be(field)` switches that field to big-endian. The packet default stays little-endian.
 
@@ -182,6 +184,14 @@ Packet.Of(
 ```
 
 Unpack appends one point per complete pair. A trailing partial pair is `ShortPacket` on `lat` or `lon`.
+
+## Borrowed count
+
+`packed` is a list of width 1 or 2. The item count is an earlier integer plus a bias of 0 or −1. Width 2 stores 0 … 3, four per byte. Values `0, 1, 2, 3` are the byte `e4`. Bias −1 with a count of 9 and eight 1-bits is `ff`. A count of 1 and bias −1 writes no bitset bytes. A list whose length is not that count fails and names the field.
+
+`times` writes the inner fields exactly N times, then the next field. A count of 2, two lat/lon pairs, and a following `u8` of 7 unpacks with bytes left 0. The `7` is not another latitude.
+
+One scheme uses both for a route: header, N two-bit kinds, N pairs, then N−1 straight-leg bits when that flag is set. The fixture hex is `3410001500062d00020d0065cd1d00a3e111108ccd1d10cae11101`.
 
 ## What stays outside the schema
 

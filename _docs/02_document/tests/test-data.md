@@ -11,6 +11,7 @@
 | lists | `[1, 2]`, one big-endian 1, list then a following byte, empty, 65536 elements | FT-L-01, FT-L-02, FT-L-03, FT-L-04 | inline | none |
 | dictionaries | the 103-byte user value, empty triple, a repeated key | FT-D-01, FT-D-02, FT-D-03, FT-D-04, FT-D-05 | inline | none |
 | handoffs | producer hex consumed by the next language | FT-H-01, FT-H-02, FT-H-03 | inline | none |
+| borrowed count | width-2 kinds `0,1,2,3`, width-1 bias −1, two pairs then `7`, and the route fixture | FT-C-01, FT-C-02, FT-C-03, FT-C-04, FT-C-05 | inline | none |
 
 ## Data Isolation Strategy
 
@@ -56,6 +57,11 @@ Each call gets its own input buffer. The packages do not keep the last packet.
 | FT-H-01 | six user-value handoffs | wrong fields 0, bytes left 0 | exact | N/A | AZ-1941 AC-1 |
 | FT-H-02 | nested map and store | 58-byte hex, wrong fields 0, bytes left 0 | exact | N/A | AZ-1941 AC-2 |
 | FT-H-03 | position record in each language | hex `4001000065cd1d00a3e1110100`, mismatch 0 | exact | N/A | AZ-1941 AC-3 |
+| FT-C-01 | count 4, values 0, 1, 2, 3, width 2, bias 0 | byte `e4`, four values, count not repeated, six-language mismatch 0 | exact | N/A | 04_borrowed_count AC-1 |
+| FT-C-02 | count 9 and eight bits of 1, bias −1; count 1, bias −1 | byte `ff`; 0 bitset bytes | exact | N/A | 04_borrowed_count AC-2 |
+| FT-C-03 | count 2, two lat/lon pairs, trailing `u8` 7 | pairs match, trailing byte 7, bytes left 0 | exact | N/A | 04_borrowed_count AC-3 |
+| FT-C-04 | route fixture | hex `3410001500062d00020d0065cd1d00a3e111108ccd1d10cae11101` twice, bytes left 0, schemes 1, mismatch 0 | exact | N/A | 04_borrowed_count AC-4 |
+| FT-C-05 | kinds length ≠ count; count 2 and one coordinate byte | pack names the field; unpack names field, needed, and left; value count 0 | exact | N/A | 04_borrowed_count AC-5 |
 
 ## External Dependency Mocks
 

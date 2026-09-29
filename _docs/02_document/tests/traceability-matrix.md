@@ -62,6 +62,11 @@
 | AZ-1950 AC-4 | Nested row type has its own ids | FT-B-04 | Covered |
 | AZ-1950 AC-5 | Order must match the number | FT-B-05 | Covered |
 | AZ-1950 AC-6 | Six languages | FT-S-07, FT-B-01 | Covered |
+| 04_borrowed_count AC-1 | Width-2 list borrows the count | FT-C-01 | Covered |
+| 04_borrowed_count AC-2 | Width-1 list uses count minus one | FT-C-02 | Covered |
+| 04_borrowed_count AC-3 | The group stops, then the next field is read | FT-C-03 | Covered |
+| 04_borrowed_count AC-4 | One route scheme round-trips | FT-C-04 | Covered |
+| 04_borrowed_count AC-5 | Length and short tail fail closed | FT-C-05 | Covered |
 
 ## Restrictions Coverage
 
@@ -91,9 +96,9 @@
 
 | Category | Total Items | Covered | BLOCKED | WAIVED | Coverage |
 |----------|-----------|---------|---------|--------|----------|
-| Acceptance Criteria | 58 | 58 | 0 | 0 | every row Covered or WAIVED |
+| Acceptance Criteria | 63 | 63 | 0 | 0 | every row Covered or WAIVED |
 | Restrictions | 19 | 17 | 0 | 2 | every row Covered or WAIVED |
-| **Total** | 77 | 75 | 0 | 2 | every row Covered or WAIVED |
+| **Total** | 82 | 80 | 0 | 2 | every row Covered or WAIVED |
 
 ## Uncovered Items Analysis
 
