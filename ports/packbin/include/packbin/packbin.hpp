@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -172,18 +173,18 @@ Field f64(int id);
 Field bytes(int id, int n);
 Field boolean(int id);
 Field be(Field field);
-Field flags(std::vector<Field> fields);
+Field flags(int id, std::vector<Field> fields);
 Field flag_byte();
 Eq eq(int field_id, Value value);
-Field when(Eq condition, std::vector<Field> fields);
-Field repeat(std::vector<Field> fields);
-Field group(std::vector<Field> fields);
-Field group(std::string name, std::vector<Field> fields);
+Field when(int id, Eq condition, std::vector<Field> fields);
+Field repeat(int id, std::vector<Field> fields);
+Field group(int id, std::vector<Field> fields);
+Field group(int id, std::string name, std::vector<Field> fields);
 Field sized(int id, int count_id);
 Field u2(std::vector<int> ids);
 Field bits(int id, int count_id);
 Field packed(int width, int id, int count_id, int bias = 0);
-Field times(int count_id, std::vector<Field> fields);
+Field times(int id, int count_id, std::vector<Field> fields);
 Field utf8(int id);
 Field list(std::string name, Field element);
 Field dict(std::string name, Field element);
@@ -202,5 +203,64 @@ UnpackResult<> unpack_body(std::vector<Field> const& fields, std::uint8_t const*
                            std::size_t len, std::size_t offset);
 
 #include "packbin/scheme.hpp"
+
+class PackSession {
+ public:
+  static constexpr std::size_t SeedSize = 32;
+  static constexpr std::size_t NonceSize = 16;
+
+  static std::optional<PackSession> load(std::uint8_t const* seed, std::size_t len);
+  static std::optional<PackSession> load(std::vector<std::uint8_t> const& seed) {
+    return load(seed.data(), seed.size());
+  }
+
+  std::optional<std::vector<std::uint8_t>> start();
+  std::optional<std::vector<std::uint8_t>> start(std::uint8_t const* nonce, std::size_t len);
+  std::optional<std::vector<std::uint8_t>> start(std::vector<std::uint8_t> const& nonce) {
+    return start(nonce.data(), nonce.size());
+  }
+
+  bool join(std::uint8_t const* nonce, std::size_t len);
+  bool join(std::vector<std::uint8_t> const& nonce) { return join(nonce.data(), nonce.size()); }
+
+  template <typename T>
+  std::optional<std::vector<std::uint8_t>> pack(Scheme<T> const& s, T const& row) {
+    if (!send_)
+      return std::nullopt;
+    auto clear = BinaryPacker::pack(s, row);
+    pad_xor(*send_, send_count_++, clear);
+    return clear;
+  }
+
+  template <typename... Handlers>
+  UnpackResult<> unpack(std::uint8_t const* data, std::size_t len, Handlers const&... handlers) {
+    if (!recv_) {
+      UnpackResult<> r;
+      r.ok = false;
+      r.short_packet = ShortPacket{"", 1, 0};
+      return r;
+    }
+    std::vector<std::uint8_t> clear(data, data + len);
+    pad_xor(*recv_, recv_count_++, clear);
+    return BinaryPacker::unpack(clear, handlers...);
+  }
+
+  template <typename... Handlers>
+  UnpackResult<> unpack(std::vector<std::uint8_t> const& data, Handlers const&... handlers) {
+    return unpack(data.data(), data.size(), handlers...);
+  }
+
+ private:
+  explicit PackSession(std::array<std::uint8_t, SeedSize> seed);
+  bool open(std::uint8_t const* nonce, std::size_t len, bool initiator);
+  static void pad_xor(std::array<std::uint8_t, SeedSize> const& key, std::uint64_t packet,
+                      std::vector<std::uint8_t>& data);
+
+  std::optional<std::array<std::uint8_t, SeedSize>> seed_;
+  std::optional<std::array<std::uint8_t, SeedSize>> send_;
+  std::optional<std::array<std::uint8_t, SeedSize>> recv_;
+  std::uint64_t send_count_ = 0;
+  std::uint64_t recv_count_ = 0;
+};
 
 }  // namespace packbin

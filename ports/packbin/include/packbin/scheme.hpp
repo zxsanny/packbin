@@ -145,7 +145,7 @@ BoundField<T> packed(int width, int id, M T::* member, int count_id, int bias = 
 }
 
 template <typename T>
-BoundField<T> when(Eq condition, std::initializer_list<BoundField<T>> children) {
+BoundField<T> when(int id, Eq condition, std::initializer_list<BoundField<T>> children) {
   std::vector<Field> fields;
   BoundField<T> out;
   fields.reserve(children.size());
@@ -154,12 +154,12 @@ BoundField<T> when(Eq condition, std::initializer_list<BoundField<T>> children) 
     for (auto const& b : child.bindings)
       out.bindings.push_back(b);
   }
-  out.field = when(std::move(condition), std::move(fields));
+  out.field = when(id, std::move(condition), std::move(fields));
   return out;
 }
 
 template <typename T>
-BoundField<T> flags(std::initializer_list<BoundField<T>> children) {
+BoundField<T> flags(int id, std::initializer_list<BoundField<T>> children) {
   std::vector<Field> fields;
   BoundField<T> out;
   fields.reserve(children.size());
@@ -168,12 +168,12 @@ BoundField<T> flags(std::initializer_list<BoundField<T>> children) {
     for (auto const& b : child.bindings)
       out.bindings.push_back(b);
   }
-  out.field = flags(std::move(fields));
+  out.field = flags(id, std::move(fields));
   return out;
 }
 
 template <typename T>
-BoundField<T> repeat(std::initializer_list<BoundField<T>> children) {
+BoundField<T> repeat(int id, std::initializer_list<BoundField<T>> children) {
   std::vector<Field> fields;
   BoundField<T> out;
   fields.reserve(children.size());
@@ -182,12 +182,12 @@ BoundField<T> repeat(std::initializer_list<BoundField<T>> children) {
     for (auto const& b : child.bindings)
       out.bindings.push_back(b);
   }
-  out.field = repeat(std::move(fields));
+  out.field = repeat(id, std::move(fields));
   return out;
 }
 
 template <typename T>
-BoundField<T> times(int count_id, std::initializer_list<BoundField<T>> children) {
+BoundField<T> times(int id, int count_id, std::initializer_list<BoundField<T>> children) {
   std::vector<Field> fields;
   BoundField<T> out;
   fields.reserve(children.size());
@@ -196,12 +196,12 @@ BoundField<T> times(int count_id, std::initializer_list<BoundField<T>> children)
     for (auto const& b : child.bindings)
       out.bindings.push_back(b);
   }
-  out.field = times(count_id, std::move(fields));
+  out.field = times(id, count_id, std::move(fields));
   return out;
 }
 
 template <typename T>
-BoundField<T> group(std::initializer_list<BoundField<T>> children) {
+BoundField<T> group(int id, std::initializer_list<BoundField<T>> children) {
   std::vector<Field> fields;
   BoundField<T> out;
   fields.reserve(children.size());
@@ -210,7 +210,7 @@ BoundField<T> group(std::initializer_list<BoundField<T>> children) {
     for (auto const& b : child.bindings)
       out.bindings.push_back(b);
   }
-  out.field = group(std::move(fields));
+  out.field = group(id, std::move(fields));
   return out;
 }
 
