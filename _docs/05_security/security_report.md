@@ -1,7 +1,7 @@
 # Security Audit Report
 
-**Date**: 2026-09-23
-**Scope**: packbin
+**Date**: 2026-09-29
+**Scope**: packbin, loop 9 session
 **Verdict**: PASS_WITH_WARNINGS
 
 ## Summary
@@ -11,7 +11,7 @@
 | Critical | 0 |
 | High | 0 |
 | Medium | 0 |
-| Low | 2 |
+| Low | 1 |
 
 ## OWASP Top 10 Assessment
 
@@ -20,11 +20,11 @@
 | A01 Broken Access Control | N/A | — |
 | A02 Security Misconfiguration | PASS | — |
 | A03 Software Supply Chain Failures | PASS | 1 Low |
-| A04 Cryptographic Failures | N/A | — |
+| A04 Cryptographic Failures | PASS | — |
 | A05 Injection | PASS | — |
 | A06 Insecure Design | PASS | — |
 | A07 Authentication Failures | N/A | — |
-| A08 Software or Data Integrity Failures | PASS | 1 Low |
+| A08 Software or Data Integrity Failures | PASS | — |
 | A09 Security Logging and Alerting Failures | N/A | — |
 | A10 Mishandling of Exceptional Conditions | PASS | — |
 
@@ -32,30 +32,26 @@
 
 | # | Severity | Category | Location | Title |
 |---|----------|----------|----------|-------|
-| 1 | Low | A03 | `.github/workflows/test.yml`, `.github/workflows/publish.yml` | `actions/checkout@v4` is not pinned to a commit |
-| 2 | Low | A08 | `.github/workflows/publish-inside.sh`, `publish-registries.sh` | Maven bundle upload has no detached signature |
+| 1 | Low | A03 | `.github/workflows/test.yml`, `.github/workflows/publish.yml` | `actions/checkout@v7` is not pinned to a commit |
 
-## Finding Details
+### Finding Details
 
 **F1: Actions checkout is a moving tag** (Low / A03)
-- Location: `.github/workflows/test.yml`, `.github/workflows/publish.yml`
-- Description: both workflows use `actions/checkout@v4`
-- Impact: a rewritten tag could change what CI checks out
-- Remediation: pin `actions/checkout` to a full commit SHA
 
-**F2: Maven upload is unsigned** (Low / A08)
-- Location: `.github/workflows/publish-registries.sh` `publish_java_upload`
-- Description: the bundle zip is posted to `https://central.sonatype.com/api/v1/publisher/upload` with a bearer token and no `.asc`
-- Impact: consumers cannot check a maintainer signature; Central may also reject the bundle
-- Remediation: sign the jar and POM before upload, using a key from the CI secret store
+- Location: `.github/workflows/test.yml`, `.github/workflows/publish.yml`
+- Description: both workflows use `actions/checkout@v7`. A new v7 commit changes what CI runs.
+- Impact: a compromised tag could change the checkout step on the next run.
+- Remediation: pin `actions/checkout` to a full commit SHA.
+
+The 2026-09-23 Maven finding is closed. `publish-registries.sh` writes `$file.asc`.
+
+The session has no authentication tag. That is the accepted session criterion, not a new finding.
 
 ## Dependency Vulnerabilities
 
 | Package | CVE | Severity | Fix Version |
 |---------|-----|----------|-------------|
-| — | — | — | — |
-
-`dotnet list package --vulnerable --include-transitive` reported no vulnerable packages for the C# test project. Other languages have no runtime dependencies. `cargo audit` could not load the advisory database because a RustSec file uses CVSS 4.0; `Cargo.toml` declares no dependencies.
+| none | — | — | — |
 
 ## Recommendations
 
@@ -69,4 +65,4 @@ None.
 
 ### Long-term (Low / Hardening)
 
-Pin `actions/checkout` to a commit. Add a Maven signature when the Central upload is turned on for real.
+Pin `actions/checkout` to a commit SHA.

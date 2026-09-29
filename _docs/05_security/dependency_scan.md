@@ -1,15 +1,15 @@
 # Dependency scan
 
-**Date**: 2026-09-23
-**Scope**: product manifests (not `_docs/00_research/`)
+**Date**: 2026-09-29
+**Scope**: loop 9, pack session
 
-| Manifest | Runtime dependencies | Tool | Result |
-|----------|----------------------|------|--------|
-| `typescript/package.json` | none | `npm audit` | no lockfile and no dependency entries |
-| `python/pyproject.toml` | `dependencies = []` | manifest read | `pip-audit` is not installed; nothing to audit |
-| `rust/Cargo.toml` | none, no `Cargo.lock` | `cargo audit` | advisory database failed to parse `CVSS:4.0` (`RUSTSEC-2026-0073`); the crate itself has no third-party dependencies |
-| `csharp/Packbin.csproj` | none | `dotnet list package --vulnerable` | no packages |
-| `csharp/tests/Packbin.Tests.csproj` | coverlet.collector 6.0.4, Microsoft.NET.Test.Sdk 17.14.1, xunit 2.9.3, xunit.runner.visualstudio 3.1.4 | `dotnet list package --vulnerable --include-transitive` | no vulnerable packages |
-| C++ and Java | none | manifest read | no package manager dependencies |
+| Manifest | Tool | Result |
+|----------|------|--------|
+| `typescript/package.json` | `npm audit` | 0 info, 0 low, 0 moderate, 0 high, 0 critical. Dev dependency: `typescript` |
+| `rust/Cargo.toml` | manifest | `[dependencies]` is empty. `cargo audit` could not load the RustSec database (`RUSTSEC-2026-0073` uses CVSS 4.0, which this `cargo audit` rejects). No crate in this package is in that graph |
+| `csharp/Packbin.csproj` | `dotnet list package --vulnerable --include-transitive` | no vulnerable packages |
+| `csharp/tests/Packbin.Tests.csproj` | same | no vulnerable packages. Test-only: xunit, the test SDK, coverlet |
+| `python/pyproject.toml` | manifest | `dependencies = []` |
+| Java, C++ | none | no package manifest |
 
-No CVE findings.
+No CVE applies to a library dependency of this repo.

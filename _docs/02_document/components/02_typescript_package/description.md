@@ -4,7 +4,7 @@
 
 **Purpose**: Pack and unpack a caller-owned scheme for Vue, React, and Node.
 
-**Architectural Pattern**: stateless functions over a scheme.
+**Architectural Pattern**: stateless clear pack, plus a session the caller holds.
 
 **Upstream dependencies**: none inside the repo.
 
@@ -38,6 +38,16 @@ ShortPacket:
   left: number
 ```
 
+### Interface: PackSession
+
+| Method | Input | Output | Async | Error Types |
+|--------|-------|--------|-------|-------------|
+| `load` | 32 bytes | a session, or nothing | No | length other than 32 creates 0 sessions |
+| `start` | none, or 16 bytes | 16 bytes | No | a nonce length other than 16 opens 0 sessions |
+| `join` | 16 bytes | the waiter | No | length other than 16 joins 0 sessions |
+| `pack` | scheme, row | payload the same length as clear pack | No | pack before start or join produces 0 payloads |
+| `unpack` | payload, scheme | the row, or the clear-unpack error | No | — |
+
 ## 4. Data Access Patterns
 
 No queries and no cache.
@@ -48,7 +58,7 @@ No queries and no cache.
 
 ## 5. Implementation Details
 
-**State Management**: stateless.
+**State Management**: clear pack is stateless. A session keeps one send counter and one receive counter.
 
 **Key Dependencies**:
 

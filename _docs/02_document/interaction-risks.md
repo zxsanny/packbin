@@ -8,6 +8,7 @@
 | F2 Unpack | caller → package | bytes |
 | F3 Publish | the six packages, via the golden fixture | the hex |
 | F3 Publish | Actions → the six registries | one package per language in the tag |
+| F4 Session | opener → waiter | 16 bytes, then a payload the same length as clear pack |
 
 ## Risks
 
@@ -17,8 +18,9 @@
 | Unpack returns part of a short buffer | value count is 0, and the next pack still matches the golden hex | AC-8 | each package |
 | A clear flag is stored as 0 | a present 0 is written; absence adds 0 bytes | AC-4, AC-5 | each package |
 | A language missing from the tag still publishes | that registry receives 0 packages | AC-15 | AZ-1875 |
+| A session payload is dropped | the next unpack on that direction is not the sent row | pack-session AC-4 | each package |
 
-No new acceptance criterion. Each material risk already has a numeric AC.
+The dropped-payload row is accepted: the library adds no tag. Each other material risk already has a numeric AC.
 
 ## Pending Step 2
 

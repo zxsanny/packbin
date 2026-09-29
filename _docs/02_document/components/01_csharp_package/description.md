@@ -4,7 +4,7 @@
 
 **Purpose**: Pack and unpack a caller-owned scheme for .NET.
 
-**Architectural Pattern**: stateless functions over a scheme.
+**Architectural Pattern**: stateless clear pack, plus a session the caller holds.
 
 **Upstream dependencies**: none inside the repo.
 
@@ -38,6 +38,16 @@ ShortPacket:
   left: int
 ```
 
+### Interface: PackSession
+
+| Method | Input | Output | Async | Error Types |
+|--------|-------|--------|-------|-------------|
+| `Load` | 32 bytes | a session, or nothing | No | length other than 32 creates 0 sessions |
+| `Start` | none, or 16 bytes | 16 bytes | No | a nonce length other than 16 opens 0 sessions |
+| `Join` | 16 bytes | the waiter | No | length other than 16 joins 0 sessions |
+| `Pack` | scheme, row | payload the same length as clear pack | No | pack before start or join produces 0 payloads |
+| `Unpack` | payload, scheme | the row, or the clear-unpack error | No | — |
+
 ## 4. Data Access Patterns
 
 No queries and no cache. The call does not store the packet.
@@ -48,7 +58,7 @@ No queries and no cache. The call does not store the packet.
 
 ## 5. Implementation Details
 
-**State Management**: stateless. A failed unpack does not change the next call.
+**State Management**: clear pack is stateless. A failed clear unpack does not change the next clear pack. A session keeps one send counter and one receive counter.
 
 **Key Dependencies**:
 
@@ -72,7 +82,7 @@ No queries and no cache. The call does not store the packet.
 - The first release has no code generator
 
 **Potential race conditions**:
-- None. The functions do not keep a packet.
+- Clear pack keeps no packet. A dropped session payload desynchronizes that direction. There is no tag.
 
 **Performance bottlenecks**:
 - AC-10 is the bound: 100000 position round trips ≤ 1 second on one core

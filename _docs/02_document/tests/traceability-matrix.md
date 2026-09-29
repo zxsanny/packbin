@@ -73,6 +73,46 @@
 | scheme-field-order AC-4 | Every Rust scheme build runs the check | FT-O-04 | Covered |
 | scheme-field-order AC-5 | The failure rule is written next to the order sentence | FT-O-05 | Covered |
 | scheme-field-order AC-6 | Existing packets keep their bytes | FT-O-06 | Covered |
+| pack-session AC-1 | Clear pack is unchanged | FT-P-01 | Covered |
+| pack-session AC-2 | One connection round-trips | FT-K-02 | Covered |
+| pack-session AC-3 | The waiter can send | FT-K-03 | Covered |
+| pack-session AC-4 | A second packet round-trips | FT-K-04 | Covered |
+| pack-session AC-5 | Two clients do not share a stream | FT-K-05 | Covered |
+| pack-session AC-6 | A bad setup creates nothing | FT-K-06 | Covered |
+| pack-session AC-7 | Pack before the connection is open fails | FT-K-07 | Covered |
+| pack-session AC-8 | The README shows both ways | FT-K-08 | Covered |
+| AZ-2019 AC-1 | Clear pack is unchanged | FT-P-01 | Covered |
+| AZ-2019 AC-2 | The opener and the waiter round-trip | FT-K-02 | Covered |
+| AZ-2019 AC-3 | The waiter sends | FT-K-03 | Covered |
+| AZ-2019 AC-4 | A second packet round-trips | FT-K-04 | Covered |
+| AZ-2019 AC-5 | Two sessions stay apart | FT-K-05 | Covered |
+| AZ-2019 AC-6 | Bad lengths create nothing | FT-K-06 | Covered |
+| AZ-2019 AC-7 | Pack before open fails | FT-K-07 | Covered |
+| AZ-2020 AC-1 | The ciphertext matches C# | FT-K-09 | Covered |
+| AZ-2020 AC-2 | The waiter recovers the row | FT-K-02 | Covered |
+| AZ-2020 AC-3 | Clear pack is unchanged | FT-P-01 | Covered |
+| AZ-2020 AC-4 | Bad lengths create nothing | FT-K-06 | Covered |
+| AZ-2021 AC-1 | The ciphertext matches C# | FT-K-09 | Covered |
+| AZ-2021 AC-2 | The waiter recovers the row | FT-K-02 | Covered |
+| AZ-2021 AC-3 | Clear pack is unchanged | FT-P-01 | Covered |
+| AZ-2021 AC-4 | Bad lengths create nothing | FT-K-06 | Covered |
+| AZ-2022 AC-1 | The ciphertext matches C# | FT-K-09 | Covered |
+| AZ-2022 AC-2 | The waiter recovers the row | FT-K-02 | Covered |
+| AZ-2022 AC-3 | Clear pack is unchanged | FT-P-01 | Covered |
+| AZ-2022 AC-4 | Bad lengths create nothing | FT-K-06 | Covered |
+| AZ-2023 AC-1 | The ciphertext matches C# | FT-K-09 | Covered |
+| AZ-2023 AC-2 | The waiter recovers the row | FT-K-02 | Covered |
+| AZ-2023 AC-3 | Clear pack is unchanged | FT-P-01 | Covered |
+| AZ-2023 AC-4 | Bad lengths create nothing | FT-K-06 | Covered |
+| AZ-2024 AC-1 | The ciphertext matches C# | FT-K-09 | Covered |
+| AZ-2024 AC-2 | The waiter recovers the row | FT-K-02 | Covered |
+| AZ-2024 AC-3 | Clear pack is unchanged | FT-P-01 | Covered |
+| AZ-2024 AC-4 | Bad lengths create nothing | FT-K-06 | Covered |
+| AZ-2025 AC-1 | One ciphertext | FT-K-09 | Covered |
+| AZ-2025 AC-2 | A peer unpacks it | FT-K-09 | Covered |
+| AZ-2025 AC-3 | Clear pack still matches | FT-P-01 | Covered |
+| AZ-2026 AC-1 | Both examples are in the README | FT-K-08 | Covered |
+| AZ-2026 AC-2 | The session example matches the contract | FT-K-08 | Covered |
 
 ## Restrictions Coverage
 
@@ -102,9 +142,9 @@
 
 | Category | Total Items | Covered | BLOCKED | WAIVED | Coverage |
 |----------|-----------|---------|---------|--------|----------|
-| Acceptance Criteria | 69 | 69 | 0 | 0 | every row Covered or WAIVED |
+| Acceptance Criteria | 109 | 109 | 0 | 0 | every row Covered or WAIVED |
 | Restrictions | 19 | 17 | 0 | 2 | every row Covered or WAIVED |
-| **Total** | 88 | 86 | 0 | 2 | every row Covered or WAIVED |
+| **Total** | 128 | 126 | 0 | 2 | every row Covered or WAIVED |
 
 ## Uncovered Items Analysis
 

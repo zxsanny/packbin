@@ -4,7 +4,7 @@
 **Producer task**: AZ-2019 — csharp_session
 **Consumer tasks**: AZ-2020, AZ-2021, AZ-2022, AZ-2023, AZ-2024, AZ-2025, AZ-2026
 **Version**: 1.0.0
-**Status**: draft
+**Status**: current
 **Last Updated**: 2026-09-29
 
 ## Purpose

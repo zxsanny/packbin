@@ -7,6 +7,7 @@
 | F1 | Pack | caller has a value | any of the six language packages | High |
 | F2 | Unpack | caller has bytes | any of the six language packages | High |
 | F3 | Publish | version tag | GitHub Actions | High |
+| F4 | Session | caller has a 32-byte seed | any of the six language packages | High |
 
 ## Flow Dependencies
 
@@ -15,6 +16,7 @@
 | F1 | a field list | F2, via the golden fixture |
 | F2 | F1's byte layout | F1 |
 | F3 | F1 and F2 passing on that commit | the same hex |
+| F4 | F1's clear bytes | the other side of the same session |
 
 ## Flow F1: Pack
 
@@ -179,3 +181,37 @@ flowchart TD
 |--------|--------|-------|
 | End-to-end latency | the check fails the workflow | not a latency SLO |
 | Throughput | one publish per tag | first tag is exactly six packages |
+
+## Flow F4: Session
+
+### Description
+
+The caller loads a 32-byte seed, the opener sends 16 bytes once, and the waiter joins. Later payloads are the clear packed bytes XORed to the same length.
+
+### Preconditions
+
+- Clear pack of the row is already the golden hex
+- The caller holds the seed. The library does not store it and does not open a socket
+
+### Data Flow
+
+| Step | From | To | Data | Format |
+|------|------|----|------|--------|
+| 1 | Opener | Waiter | 16 bytes | raw |
+| 2 | Opener | Waiter | payload | same length as clear pack |
+| 3 | Waiter | Opener | the row | the five fields |
+
+### Error Scenarios
+
+| Error | Where | Detection | Recovery |
+|-------|-------|-----------|----------|
+| Seed length is not 32, or join length is not 16 | Load or Join | the call returns nothing | 0 sessions |
+| Pack before start or join | Pack | no payload | 0 payloads |
+| A payload is dropped | the next unpack on that direction | the row does not match | that direction stays out of step. There is no tag |
+
+### Performance Expectations
+
+| Metric | Target | Notes |
+|--------|--------|-------|
+| Payload length | equal to clear pack | added bytes 0 |
+| Six languages | one payload | mismatched bytes 0 |

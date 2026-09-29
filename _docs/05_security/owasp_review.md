@@ -1,17 +1,17 @@
 # OWASP Top 10 review
 
-**Date**: 2026-09-23
-**List**: OWASP Top 10:2025 (https://owasp.org/Top10/2025/)
+**Date**: 2026-09-29
+**List**: OWASP Top 10 2025, current release on owasp.org
 
-| Category | Status | Why |
-|----------|--------|-----|
-| A01 Broken Access Control | N/A | No server, account, or object id |
-| A02 Security Misconfiguration | PASS | Test workflow does not contain registry token names. Publish reads GitHub secrets |
-| A03 Software Supply Chain Failures | PASS | Runtime trees have no third-party packages. Test NuGet packages reported no vulnerabilities. See Low findings in the security report for unpinned Actions and image tags |
-| A04 Cryptographic Failures | N/A | The library does not hash, encrypt, or store secrets |
-| A05 Injection | PASS | No shell, SQL, or eval on caller input. Callers pass a field list and values in process |
-| A06 Insecure Design | PASS | Callers own the field list. A short buffer returns an error and zero values |
-| A07 Authentication Failures | N/A | No login |
-| A08 Software or Data Integrity Failures | PASS | A tag runs the golden gate before registry writes. Maven upload is HTTPS with a bearer token and no detached signature (Low) |
-| A09 Security Logging and Alerting Failures | N/A | The library does not log. Failures are return values |
-| A10 Mishandling of Exceptional Conditions | PASS | Short and trailing inputs fail the call. The next pack of the position row still matches the golden hex |
+| Category | Status | Notes |
+|----------|--------|-------|
+| A01 Broken Access Control | N/A | library. No request path |
+| A02 Security Misconfiguration | PASS | test compose publishes no port. Tokens come from Actions secrets |
+| A03 Software Supply Chain Failures | PASS | 1 Low: `actions/checkout@v7` is a moving tag in `test.yml` and `publish.yml` |
+| A04 Cryptographic Failures | PASS | session pad is HKDF-SHA256 then ChaCha20. No authentication tag, by the session acceptance criteria |
+| A05 Injection | PASS | no shell, SQL, or template built from a packet |
+| A06 Insecure Design | PASS | a short buffer returns an error and zero values. A bad seed length creates no session |
+| A07 Authentication Failures | N/A | no login |
+| A08 Software or Data Integrity Failures | PASS | Maven artifacts are detached-signed (`.asc`) in `publish-registries.sh`. The session still has no tag, which the criteria accept |
+| A09 Security Logging and Alerting Failures | N/A | the library returns the error. The caller logs |
+| A10 Mishandling of Exceptional Conditions | PASS | pack before the session is open produces 0 payloads |

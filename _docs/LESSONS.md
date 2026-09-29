@@ -27,3 +27,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-09-24_loop4.md
 - [2026-09-24] [architecture] A typed Rust scheme needs the same value kinds as the map scheme, including u2 and dict, or the spec must exclude them.
   Source: _docs/06_metrics/retro_2026-09-24_loop4.md
+- [2026-09-29] [testing] Delete `cpp/build` before the container C++ suite, or the container runs the host binary.
+  Source: _docs/06_metrics/retro_2026-09-29_loop9.md
+- [2026-09-29] [process] Implement a product loop in its worktree. Loop 9's commits landed on launcher `dev` while `loop/9-pack-session` stayed at the start commit.
+  Source: _docs/06_metrics/retro_2026-09-29_loop9.md
+- [2026-09-29] [tooling] When `cargo audit` rejects a CVSS 4.0 advisory file, record the empty dependency list. That failure is not a CVE in this crate.
+  Source: _docs/06_metrics/retro_2026-09-29_loop9.md

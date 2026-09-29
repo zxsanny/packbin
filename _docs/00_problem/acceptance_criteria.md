@@ -42,3 +42,7 @@ Outcomes only. Numbers are the pass line.
 - Authentication, secrets, or TLS inside the library
 - GitHub Packages as the install path
 - A calendar deadline
+
+## Later features
+
+Session criteria are in `_docs/02_task_plans/pack-session/acceptance_criteria.md`. They do not replace AC-1 through AC-16.
