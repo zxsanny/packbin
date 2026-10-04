@@ -65,8 +65,12 @@ constexpr int check_subtree(Field const* t, std::size_t i, int next, Check& c) {
     case Kind::U2:
       return check_children(t, i, next, c);
     case Kind::List:
-    case Kind::Dict:
       check_children(t, i, 0, c);
+      return next;
+    case Kind::Dict:
+      // The first child is the entry key, which has no order id.
+      if (f.span > 2)
+        check_subtree(t, i + 2, 0, c);
       return next;
     case Kind::Flags:
     case Kind::When:
@@ -104,10 +108,52 @@ constexpr int find_ref(Field const* t, std::size_t scope, std::size_t before, in
   return -1;
 }
 
+// Index of the flag byte numbered `number` before `before` in the scope, or -1.
+constexpr int find_flag_byte(Field const* t, std::size_t scope, std::size_t before, int number) {
+  int found = -1;
+  std::size_t j = scope;
+  while (j < before) {
+    Field const& f = t[j];
+    if (is_container(f.kind) && j + f.span <= before) {
+      j += f.span;
+      continue;
+    }
+    if (f.kind == Kind::FlagByte && f.size == number)
+      found = static_cast<int>(j);
+    ++j;
+  }
+  return found;
+}
+
+// Position of the flag bit at `at` among the bits of its flag byte.
+constexpr int bit_position(Field const* t, std::size_t byte, std::size_t at) {
+  int n = 0;
+  for (std::size_t j = byte + 1; j < at; ++j) {
+    if (t[j].kind == Kind::FlagBit && t[j].ref == static_cast<std::int16_t>(byte))
+      ++n;
+  }
+  return n;
+}
+
 constexpr void resolve(Field* t, std::size_t begin, std::size_t end, std::size_t scope,
                        Check& c) {
   for (std::size_t j = begin; j < end && !c.failed; j += t[j].span) {
     Field& f = t[j];
+    if (f.kind == Kind::FlagBit) {
+      int byte = find_flag_byte(t, scope, j, f.size);
+      int child = f.span > 1 ? t[j + 1].id : -1;
+      if (byte < 0) {
+        c.fail_at(child);
+        return;
+      }
+      f.ref = static_cast<std::int16_t>(byte);
+      int position = bit_position(t, static_cast<std::size_t>(byte), j);
+      if (position > 7) {
+        c.fail_at(child);
+        return;
+      }
+      f.bit = static_cast<std::uint8_t>(position);
+    }
     if (f.ref_id >= 0) {
       int at = find_ref(t, scope, j, f.ref_id);
       if (at < 0) {
@@ -127,7 +173,7 @@ constexpr void check_shape(Field const* t, std::size_t begin, std::size_t end, C
     std::size_t children = 0;
     for (std::size_t k = j + 1; k < j + f.span; k += t[k].span)
       ++children;
-    if (f.kind == Kind::Flags && children > 8)
+    if ((f.kind == Kind::Flags && children > 8) || (f.flags & flag::Invalid) != 0)
       c.fail_at(f.id);
     if (f.span > 1)
       check_shape(t, j + 1, j + f.span, c);

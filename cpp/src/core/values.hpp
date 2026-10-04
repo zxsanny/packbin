@@ -74,6 +74,14 @@ bool read_int(Field const& f, void* obj, std::int64_t& out);
 void clear_scope(Field const* t, std::size_t begin, std::size_t end, void* obj);
 void set_bool(Field const& f, void* m);
 
+// The bytes of a string or byte-block member: a View, a Text/Blob, or a std::uint8_t[n].
+void text_bytes(Field const& f, void* m, std::uint8_t const*& data, std::size_t& len);
+// Stores `n` read bytes at `p` into that member (nothing when m is null). A Text/Blob shorter
+// than `n` is TooMany at `offset`.
+Result store_text(Field const& f, void* m, std::uint8_t const* p, std::size_t n,
+                  std::size_t offset);
+void clear_text(Field const& f, void* m);
+
 Result put_number(Field const& f, void* m, Writer& w);
 Result get_number(Field const& f, void* m, Reader& r);
 

@@ -98,3 +98,6 @@ constexpr auto when(int id, Eq condition, Ns const&... children) {
 }
 
 }  // namespace packbin
+
+#include "packbin/fields_grouped.hpp"
+#include "packbin/fields_counted.hpp"
