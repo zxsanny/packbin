@@ -3,7 +3,7 @@
 ## Hardware and environment
 
 - packbin is a library. It has no server, no GPU requirement, and no deploy host.
-- It runs on the operating system that hosts the language runtime.
+- It runs on the operating system that hosts the language runtime. Exception: the C++ package also runs bare-metal on 32-bit microcontrollers with no exceptions, no RTTI and no heap (`_docs/02_task_plans/cpp-microcontroller/restrictions.md`, decided 2026-10-04).
 
 ## Software
 

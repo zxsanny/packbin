@@ -38,7 +38,7 @@ Outcomes only. Numbers are the pass line.
 - Replacing Protobuf where a new protocol can accept its tags
 - Kotlin, a wiki, or a seventh language before the six languages agree on the golden bytes
 - A code generator in the first release
-- Any speed target other than AC-10, including allocation budgets, SIMD, and a zero-copy API
+- Any speed target other than AC-10, including allocation budgets, SIMD, and a zero-copy API. Exception: C++ has a no-heap, flash and stack budget and borrowed (zero-copy) strings and bytes (`_docs/02_task_plans/cpp-microcontroller/acceptance_criteria.md` AC-2, AC-5, AC-8, decided 2026-10-04).
 - Authentication, secrets, or TLS inside the library
 - GitHub Packages as the install path
 - A calendar deadline
