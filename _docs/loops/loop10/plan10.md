@@ -28,7 +28,9 @@ ship: false
 ## Implementation
 
 ### Files that change
-`cpp/` (new core headers and sources, host suite ported, dynamic walker removed), embedded build files and examples, CI test workflow and test compose, publish script, README C++ section, `_docs/01_solution/languages.md`.
+`cpp/` (new core headers and sources, host suite ported, dynamic walker removed),
+Until AZ-2064 the core builds as its own test binary (`build/core_tests`, `-fno-exceptions -fno-rtti`) from `include/packbin/core.hpp` and `tests/core/`, so the old and new `packbin::` symbols never link together.
+ embedded build files and examples, CI test workflow and test compose, publish script, README C++ section, `_docs/01_solution/languages.md`.
 
 ### Order of work
 T1, then T2 and T6, then T3 and T4, then T5 and T7, then T8. T9 last, stretch only.

@@ -1,8 +1,8 @@
 # Dependencies Table
 
-**Date**: 2026-09-29
-**Total Tasks**: 42
-**Total Complexity Points**: 181
+**Date**: 2026-10-04
+**Total Tasks**: 51
+**Total Complexity Points**: 213
 
 Estimation: `_docs/LESSONS.md` says the six packages stay peers. The session is implemented in each package. No shared walker. Compare the full hex. No point bump.
 
@@ -50,5 +50,16 @@ Estimation: `_docs/LESSONS.md` says the six packages stay peers. The session is 
 | AZ-2024 | java_session | 3 | AZ-2019 | AZ-2018 |
 | AZ-2025 | session_match | 3 | AZ-2019, AZ-2020, AZ-2021, AZ-2022, AZ-2023, AZ-2024 | AZ-2018 |
 | AZ-2026 | readme_session | 2 | AZ-2019 | AZ-2018 |
+| AZ-2060 | cpp_core_scalars | 3 | None | AZ-2059 |
+| AZ-2061 | cpp_core_schemes | 5 | AZ-2060 | AZ-2059 |
+| AZ-2062 | cpp_core_grouped_kinds | 3 | AZ-2061 | AZ-2059 |
+| AZ-2063 | cpp_core_counted_kinds | 5 | AZ-2061 | AZ-2059 |
+| AZ-2065 | cpp_core_session | 2 | AZ-2061 | AZ-2059 |
+| AZ-2064 | cpp_host_on_core | 5 | AZ-2062, AZ-2063, AZ-2065 | AZ-2059 |
+| AZ-2066 | cpp_target_ci | 3 | AZ-2062, AZ-2063, AZ-2065 | AZ-2059 |
+| AZ-2067 | cpp_embedded_packaging | 3 | AZ-2066 | AZ-2059 |
+| AZ-2068 | cpp_avr_build | 3 | AZ-2066 | AZ-2059 |
 
 The six pack tasks do not depend on each other. AZ-1875 runs after all six. The five blackbox tasks run after AZ-1913 and do not depend on each other. The three earlier todo tasks do not depend on each other and still have no tracker id. AZ-1938 through AZ-1941 are under epic AZ-1937. The string count does not include itself; the list count does not consume the next field.
+
+AZ-2060 through AZ-2068 are under epic AZ-2059 (C++ on microcontrollers). All nine touch only `cpp/` and the C++ CI and publish files, so they run in order, not in parallel. The session task depends on the scheme task, not only on the scalars, because it packs through a core scheme. The host port (AZ-2064) waits for the session so the old walker is deleted once. AZ-2068 is a stretch task (D-3 A). Estimation: `_docs/LESSONS.md` asks to keep the six packages as peers; this feature is C++ only, so no point bump.

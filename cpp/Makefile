@@ -3,16 +3,24 @@ CXXFLAGS ?= -std=c++17 -O2 -Wall -Wextra -Werror -Iinclude
 ifdef PACKBIN_CXX_SYSROOT
 CXXFLAGS += -isysroot $(PACKBIN_CXX_SYSROOT) -I$(PACKBIN_CXX_SYSROOT)/usr/include/c++/v1
 endif
+CORE_FLAGS := -fno-exceptions -fno-rtti
 SRCS := src/field.cpp src/packbin.cpp src/counted.cpp src/walk_common.cpp src/walk.cpp src/unpack_walk.cpp src/session.cpp
 TEST_SRC := tests/packbin_tests.cpp tests/scheme_tests.cpp tests/kinds_tests.cpp tests/field_id_binding_tests.cpp tests/borrowed_count_tests.cpp tests/session_tests.cpp
 TEST_BIN := build/packbin_tests
 COMPILE_FAIL_SRC := tests/compile-fail/pack_without_scheme.cpp
+CORE_HDRS := include/packbin/core.hpp
+CORE_TEST_SRC := tests/core/main.cpp tests/core/scalar_tests.cpp
+CORE_TEST_BIN := build/core_tests
 
-.PHONY: test clean compile-fail
+.PHONY: test clean compile-fail core-test core-compile-fail
 
 $(TEST_BIN): $(SRCS) $(TEST_SRC) include/packbin/packbin.hpp include/packbin/scheme.hpp
 	mkdir -p build
 	$(CXX) $(CXXFLAGS) -o $@ $(SRCS) $(TEST_SRC)
+
+$(CORE_TEST_BIN): $(CORE_HDRS) $(CORE_TEST_SRC) tests/core/check.hpp
+	mkdir -p build
+	$(CXX) $(CXXFLAGS) $(CORE_FLAGS) -o $@ $(CORE_TEST_SRC)
 
 compile-fail: include/packbin/packbin.hpp $(COMPILE_FAIL_SRC)
 	@if $(CXX) $(CXXFLAGS) -fsyntax-only $(COMPILE_FAIL_SRC) >/tmp/packbin_compile_fail.out 2>&1; then \
@@ -23,7 +31,16 @@ compile-fail: include/packbin/packbin.hpp $(COMPILE_FAIL_SRC)
 		echo "AC-3: pack without scheme correctly rejected by compiler"; \
 	fi
 
-test: $(TEST_BIN) compile-fail
+# Each case must fail to compile, and the compiler output must contain the expected text.
+core-compile-fail: $(CORE_HDRS)
+	@mkdir -p build
+	@./tests/compile-fail/expect-fail.sh "$(CXX) $(CXXFLAGS) $(CORE_FLAGS) -fsyntax-only" \
+		tests/compile-fail/f64_needs_8_byte_double.cpp "f64 needs an 8-byte double"
+
+core-test: $(CORE_TEST_BIN) core-compile-fail
+	./$(CORE_TEST_BIN)
+
+test: $(TEST_BIN) compile-fail core-test
 	./$(TEST_BIN)
 
 clean:
