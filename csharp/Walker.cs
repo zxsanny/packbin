@@ -7,48 +7,52 @@ internal static partial class Walker
     public static bool IsPresent(IReadOnlyDictionary<string, object?> values, string name) =>
         values.TryGetValue(name, out var v) && v is not null;
 
-    public static void PackField(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    public static void PackField(
+        Field field,
+        IReadOnlyDictionary<string, object?> values,
+        List<byte> buffer,
+        Scope seen)
     {
         switch (field.Type)
         {
             case Field.Kind.Flags:
-                PackFlags(field, values, buffer);
+                PackFlags(field, values, buffer, seen);
                 break;
             case Field.Kind.FlagByte:
                 PackFlagByte(field, values, buffer);
                 break;
             case Field.Kind.FlagBit:
-                PackFlagBit(field, values, buffer);
+                PackFlagBit(field, values, buffer, seen);
                 break;
             case Field.Kind.When:
-                PackWhen(field, values, buffer);
+                PackWhen(field, values, buffer, seen);
                 break;
             case Field.Kind.Repeat:
                 PackRepeat(field, values, buffer);
                 break;
             case Field.Kind.Bytes:
-                PackBytes(field, values, buffer);
+                PackBytes(field, values, buffer, seen);
                 break;
             case Field.Kind.Group:
-                PackGroup(field, values, buffer);
+                PackGroup(field, values, buffer, seen);
                 break;
             case Field.Kind.Sized:
-                PackSized(field, values, buffer);
+                PackSized(field, values, buffer, seen);
                 break;
             case Field.Kind.U2:
-                PackU2(field, values, buffer);
+                PackU2(field, values, buffer, seen);
                 break;
             case Field.Kind.Bits:
-                PackBits(field, values, buffer);
+                PackBits(field, values, buffer, seen);
                 break;
             case Field.Kind.Packed:
-                PackPacked(field, values, buffer);
+                PackPacked(field, values, buffer, seen);
                 break;
             case Field.Kind.Times:
-                PackTimes(field, values, buffer);
+                PackTimes(field, values, buffer, seen);
                 break;
             case Field.Kind.Utf8:
-                PackUtf8(field, values, buffer);
+                PackUtf8(field, values, buffer, seen);
                 break;
             case Field.Kind.List:
                 PackList(field, values, buffer);
@@ -57,10 +61,10 @@ internal static partial class Walker
                 PackDict(field, values, buffer);
                 break;
             case Field.Kind.Bool:
-                PackBool(field, values, buffer);
+                PackBool(field, seen);
                 break;
             default:
-                PackScalar(field, values, buffer);
+                PackScalar(field, values, buffer, seen);
                 break;
         }
     }
@@ -94,12 +98,8 @@ internal static partial class Walker
         };
     }
 
-    private static void PackBool(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
-    {
-        _ = field;
-        _ = values;
-        _ = buffer;
-    }
+    // A bool is a flag bit with no payload; only a set bit reaches here.
+    private static void PackBool(Field field, Scope seen) => seen[field.Name] = true;
 
     private static object? UnpackBool(
         Field field,
@@ -114,7 +114,11 @@ internal static partial class Walker
         return null;
     }
 
-    private static void PackFlags(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    private static void PackFlags(
+        Field field,
+        IReadOnlyDictionary<string, object?> values,
+        List<byte> buffer,
+        Scope seen)
     {
         var flags = field.FlagOwner!.Compute(values);
         buffer.Add(flags);
@@ -122,7 +126,7 @@ internal static partial class Walker
         {
             if ((flags & (1 << i)) == 0)
                 continue;
-            PackBitField(field.Children[i].Inner!, values, buffer);
+            PackBitField(field.Children[i].Inner!, values, buffer, seen);
         }
     }
 
@@ -131,36 +135,58 @@ internal static partial class Walker
         buffer.Add(field.FlagOwner!.Compute(values));
     }
 
-    private static void PackFlagBit(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    private static void PackFlagBit(
+        Field field,
+        IReadOnlyDictionary<string, object?> values,
+        List<byte> buffer,
+        Scope seen)
     {
         if (!BitOn(values, field.Inner!))
             return;
-        PackBitField(field.Inner!, values, buffer);
+        PackBitField(field.Inner!, values, buffer, seen);
     }
 
-    private static void PackWhen(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    // Decided on the fields written so far in this scope, as unpack decides it on the fields read.
+    private static void PackWhen(
+        Field field,
+        IReadOnlyDictionary<string, object?> values,
+        List<byte> buffer,
+        Scope seen)
     {
-        if (!ConditionHolds(field.Pred!, values))
+        if (!ConditionHolds(field.Pred!, seen))
             return;
         foreach (var child in field.Children)
-            PackField(child, values, buffer);
+            PackField(child, values, buffer, seen);
     }
 
-    private static void PackBytes(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    private static void PackBytes(
+        Field field,
+        IReadOnlyDictionary<string, object?> values,
+        List<byte> buffer,
+        Scope seen)
     {
         var raw = (byte[])RequireValue(field, values);
         if (raw.Length != field.ByteCount)
             throw new ArgumentException($"Field '{field.Name}' needs {field.ByteCount} bytes.");
         buffer.AddRange(raw);
+        seen[field.Name] = raw;
     }
 
-    private static void PackGroup(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    private static void PackGroup(
+        Field field,
+        IReadOnlyDictionary<string, object?> values,
+        List<byte> buffer,
+        Scope seen)
     {
         foreach (var child in field.Children)
-            PackField(child, values, buffer);
+            PackField(child, values, buffer, seen);
     }
 
-    private static void PackScalar(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    private static void PackScalar(
+        Field field,
+        IReadOnlyDictionary<string, object?> values,
+        List<byte> buffer,
+        Scope seen)
     {
         var value = RequireValue(field, values);
         Span<byte> tmp = stackalloc byte[8];
@@ -168,6 +194,7 @@ internal static partial class Walker
         WriteScalar(field, value, tmp[..width]);
         for (var i = 0; i < width; i++)
             buffer.Add(tmp[i]);
+        seen[field.Name] = value;
     }
 
     private static object? UnpackFlags(

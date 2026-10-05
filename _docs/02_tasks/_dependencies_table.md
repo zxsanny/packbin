@@ -101,11 +101,11 @@ Estimation: `_docs/LESSONS.md` says the six packages stay peers. The session is 
 | AZ-2110 | java_zero_width_elements | 3 | None | AZ-2069 |
 | AZ-2111 | rust_zero_width_elements | 3 | None | AZ-2069 |
 | AZ-2112 | typescript_u64_counts | 2 | AZ-2072 | AZ-2069 |
-| AZ-2113 | python_later_field_refs | 2 | None | AZ-2069 |
+| AZ-2113 | python_later_field_refs | 3 | None | AZ-2069 |
 | AZ-2114 | hostile_session_tests | 2 | None | AZ-2069 |
 | AZ-2115 | split_form_reference_bytes | 2 | AZ-2091 | AZ-2069 |
 | AZ-2116 | csharp_exact_integers | 3 | None | AZ-2069 |
-| AZ-2117 | rust_named_reference_scope | 3 | AZ-2075 | AZ-2069 |
+| AZ-2117 | rust_named_reference_scope | 4 | AZ-2075 | AZ-2069 |
 | AZ-2118 | rust_pack_checked_count | 1 | None | AZ-2069 |
 | AZ-2119 | csharp_group_list_element | 3 | None | AZ-2069 |
 | AZ-2120 | csharp_when_under_flags_pack | 2 | None | AZ-2069 |
@@ -125,6 +125,26 @@ Estimation: `_docs/LESSONS.md` says the six packages stay peers. The session is 
 | AZ-2134 | aligned_round_values | 2 | AZ-2083, AZ-2087, AZ-2091 | AZ-2069 |
 | AZ-2135 | split_bits_field_order | 5 | AZ-2079, AZ-2080, AZ-2089 | AZ-2069 |
 | AZ-2147 | cpp_empty_group_without_member | 1 | AZ-2081 | AZ-2069 |
+| AZ-2175 | csharp_when_on_written_values | 5 | AZ-2087, AZ-2088 | AZ-2069 |
+| AZ-2176 | csharp_nested_round_refused | 2 | AZ-2175, AZ-2087, AZ-2088 | AZ-2069 |
+| AZ-2177 | typescript_nested_round_refused | 3 | AZ-2090, AZ-2091 | AZ-2069 |
+| AZ-2178 | rust_typed_times_pins | 1 | AZ-2086 | AZ-2069 |
+| AZ-2179 | rounds_ring | 5 | AZ-2087, AZ-2091, AZ-2086, AZ-2175 | AZ-2069 |
+| AZ-2180 | csharp_flag_group_clone | 2 | AZ-2087, AZ-2088 | AZ-2069 |
+| AZ-2181 | csharp_count_integer_only | 2 | AZ-2087 | AZ-2069 |
+| AZ-2182 | csharp_nonlist_round_value | 2 | AZ-2087, AZ-2088 | AZ-2069 |
+| AZ-2183 | typescript_flags_under_split_bit | 2 | AZ-2091, AZ-2128 | AZ-2069 |
+| AZ-2184 | typescript_dict_keys_not_flattened | 2 | AZ-2091 | AZ-2069 |
+| AZ-2185 | typescript_times_list_longer | 1 | AZ-2091 | AZ-2069 |
+| AZ-2186 | python_times_list_longer | 1 | AZ-2083 | AZ-2069 |
+| AZ-2187 | java_times_list_longer | 1 | AZ-2089 | AZ-2069 |
+| AZ-2188 | typescript_duplicate_member_names | 1 | AZ-2091 | AZ-2069 |
+| AZ-2189 | rust_map_times_list_under_flags | 1 | AZ-2086 | AZ-2069 |
+| AZ-2190 | java_pack_integer_float_strict | 1 | AZ-2089 | AZ-2069 |
+| AZ-2191 | csharp_dict_pack_strict | 1 | AZ-2088 | AZ-2069 |
+| AZ-2192 | python_float_pack_strict | 1 | AZ-2083 | AZ-2069 |
+| AZ-2193 | ci_cross_language_ring | 3 | AZ-2179 | AZ-2069 |
+| AZ-2194 | hostile_pack_stage | 2 | AZ-2070, AZ-2179 | AZ-2069 |
 
 The six pack tasks do not depend on each other. AZ-1875 runs after all six. The five blackbox tasks run after AZ-1913 and do not depend on each other. The three earlier todo tasks do not depend on each other and still have no tracker id. AZ-1938 through AZ-1941 are under epic AZ-1937. The string count does not include itself; the list count does not consume the next field.
 
@@ -135,3 +155,4 @@ AZ-2070 through AZ-2105 are under epic AZ-2069 (cross-language bug fixes; order 
 AZ-2107 through AZ-2111 are loop 11 follow-through from feature-assess round 1 (zero-width list and dict elements; orphan split flag bit). AZ-2112 through AZ-2118 are follow-ups from the same assessment, unclaimed. The Python orphan-flag-bit rule rides on AZ-2100.
 AZ-2119 and AZ-2120 are C# bugs found by the loop 11 round 2 worker; both predate the loop and are unclaimed.
 AZ-2122 through AZ-2125 are loop 11 security-audit fixes (F4-F9), claimed by loop 11 at the owner's request. AZ-2116 (exact C# integers) and AZ-2119 (C# group list element) stay open; F4 here only stops the exception.
+AZ-2175 through AZ-2179 are loop 13 feature-assessment round 1 tasks (owner scope A, 2026-10-05), claimed by loop 13. AZ-2180 through AZ-2194 are the deferred follow-ups of that assessment, unclaimed; AZ-2117 and AZ-2113 gained acceptance criteria from it (4 and 3 points). Decisions marked open in them wait for the owner before the loop that takes them.

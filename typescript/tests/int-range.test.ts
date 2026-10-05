@@ -130,6 +130,23 @@ describe("integer range", () => {
     }
   })
 
+  it("negative zero packs as zero", () => {
+    // Arrange
+    const rows: [Kind, string][] = [
+      ["u8", "0100"],
+      ["i8", "0100"],
+      ["u64", "010000000000000000"],
+    ]
+
+    for (const [kind, wire] of rows) {
+      // Act
+      const packed = hex(BinaryPacker.pack(single(kind), { a: -0 }))
+
+      // Assert
+      assert.equal(packed, wire, kind)
+    }
+  })
+
   it("big-endian fields are checked and keep their byte order", () => {
     const layout = scheme<Row>(1, be(u16(0, (x) => x.a)))
     assert.equal(hex(BinaryPacker.pack(layout, { a: 0x1234 })), "011234")

@@ -8,6 +8,7 @@ import { unpackBody, type UnpackErr } from "./walker.ts"
 import { packFields } from "./pack-fields.ts"
 import { validateFlagScopes, validatePresenceMarks } from "./flag-scope.ts"
 import { validateMemberNames } from "./member-names.ts"
+import { validateRoundNesting } from "./rounds.ts"
 import { bindReferences } from "./ref-scope.ts"
 import type { Value } from "./kinds.ts"
 import { hkdf } from "@noble/hashes/hkdf.js"
@@ -70,6 +71,7 @@ export class Scheme<T> {
     validateFlagScopes(flat)
     validatePresenceMarks(flat)
     validateMemberNames(flat)
+    validateRoundNesting(flat)
     this.typeNumber = typeNumber
     this.fields = bindReferences(flat)
   }

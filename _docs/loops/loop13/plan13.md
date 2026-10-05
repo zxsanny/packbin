@@ -65,6 +65,14 @@ Divergence recorded at the batch 1 commit: the first C# review FAILed AZ-2087 (A
 ### Risks
 - Rust typed `times` is a public API change and its unpack costs about 8x memory (README note); C# `pack` now throws where it silently dropped data (AZ-2088); TypeScript pack refuses out-of-range and unsafe 64-bit numbers (README note); Rust refuses `when` on non-integer sources and composite list/dict elements (a `when` on a utf8 source with a same-type `eq` worked before); C# unpacked rows change shape for values under `when` / `flags` / groups inside a round (aligned lists with `null`), and unpack memory grows to about packet bytes × names per round
 
+## Release
+
+Owner decision 2026-10-05: cut **v0.2.2** after this loop closes (smoke PASS, local merge, `dev` push, loop-end `stage` fast-forward). `v0.1.2` already exists (2026-09-23) and `v0.2.1` is the loop 12 close commit `ce85fe0`, so v0.2.2 is the next free number (v0.3.0 was offered because of the breaking changes; the owner chose v0.2.2). Mechanics: an annotated tag `v0.2.2` on the pushed loop-close commit; `.github/workflows/publish.yml` publishes on any `v*` tag and the version comes from the tag, not the manifests. Conditions before the tag push (it publishes to six public registries and cannot be undone): the commit is on `origin/dev`; `test.yml` is green on that commit (AZ-2095 is open: publish does not wait for tests); the README upgrade notes for this loop are written (step 13). The tag push itself needs one final explicit confirmation from the owner with the exact commit; whether `origin/main` should also be fast-forwarded (v0.2.1 is reachable from it) is asked then.
+
 ## Assessment rounds
 
-Optional. Appended by `protocols/feature-reentry.md` when `feature-assess` returns `EXTEND` / `CLARIFY`.
+| round | verdict | new specs | report |
+|-------|---------|-----------|--------|
+| 1 | CLARIFY (owner chose scope A: a small extension; every other gap deferred to follow-up tickets AZ-2180..AZ-2194 and notes on existing tickets) | AZ-2175 (C# `when` on written values + pins, 4 pts), AZ-2176 (C# refuses nested rounds, 2), AZ-2177 (TypeScript refuses nested rounds + `-0` pin, 3), AZ-2178 (Rust typed `times` pins, 1), AZ-2179 (cross-language rounds ring, 5) | _docs/loops/loop13/assessment13.md |
+
+Extension batches (plan step `implement`, continuing batch numbers): batch 4 = AZ-2175 → AZ-2176 (C#, one worker, serialized), AZ-2177 (TypeScript), AZ-2178 (Rust), three workers in parallel; batch 5 = AZ-2179 (drivers in C#, TypeScript, Java, Rust and C++ by package workers, `language-pair.sh` by the parent). The loop total becomes 12 tasks, 40 points.

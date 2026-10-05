@@ -52,11 +52,15 @@ internal static partial class Walker
 
     // The field behind a set flag bit. A group there has no presence per value, so it is written in full: every value
     // in it, and in the groups nested in it, must be there. A missing one would give a packet its own unpack rejects.
-    private static void PackBitField(Field inner, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    private static void PackBitField(
+        Field inner,
+        IReadOnlyDictionary<string, object?> values,
+        List<byte> buffer,
+        Scope seen)
     {
         if (inner.Type == Field.Kind.Group)
             RequireGroupValues(inner, inner, values);
-        PackField(inner, values, buffer);
+        PackField(inner, values, buffer, seen);
     }
 
     private static void RequireGroupValues(Field flagged, Field group, IReadOnlyDictionary<string, object?> values)

@@ -12,10 +12,14 @@ internal static partial class Walker
         PackRounds(field, names, RoundCount(names, values), values, buffer);
     }
 
-    private static void PackTimes(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    private static void PackTimes(
+        Field field,
+        IReadOnlyDictionary<string, object?> values,
+        List<byte> buffer,
+        Scope seen)
     {
         var names = RoundNames(field, packing: true);
-        var count = BorrowedCount(field, values);
+        var count = BorrowedCount(field, seen);
         RequireNoExtraRounds(names, count, values);
         PackRounds(field, names, count, values, buffer);
     }
@@ -38,16 +42,18 @@ internal static partial class Walker
         IReadOnlyDictionary<string, object?> values,
         List<byte> buffer)
     {
+        var seen = new Scope();
         for (var i = 0; i < count; i++)
         {
             var slice = SliceRound(names, values, i);
+            seen.Clear();
             foreach (var child in field.Children)
-                PackField(child, slice, buffer);
+                PackField(child, slice, buffer, seen);
         }
     }
 
-    // The names a round can hold: its own fields and the ones under when, flags, flag bits and groups. A repeat or times
-    // inside the round and a list or dict element keep values of their own, so they are not looked into.
+    // The names a round can hold: its own fields and the ones under when, flags, flag bits and groups. A list or dict
+    // element keeps values of its own, so it is not looked into. A repeat or times cannot be in a round (RoundScopes).
     // `packing`: a group's own member is read on pack (it can turn the group's flag bit on); unpack stores it only for
     // an empty group.
     private static List<string> RoundNames(Field round, bool packing)
@@ -62,8 +68,6 @@ internal static partial class Walker
     {
         switch (field.Type)
         {
-            case Field.Kind.Repeat:
-            case Field.Kind.Times:
             case Field.Kind.FlagByte:
                 break;
             case Field.Kind.When:

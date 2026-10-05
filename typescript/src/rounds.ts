@@ -5,10 +5,41 @@ import { present, type Value } from "./kinds.ts"
 // unpack gives every name a round can hold one entry per round, `undefined` where the round
 // skipped it, so a repack gives the same bytes.
 
+// A round packs item i of each value list, so a repeat or times inside it would read every inner
+// round from the same item. Refused wherever it sits in the round (directly, or under when, flags,
+// flag bits and groups). A list or dict element is a row of its own and starts outside any round.
+export function validateRoundNesting(fields: Field[], inRound = false): void {
+  for (const f of fields) {
+    switch (f.kind) {
+      case "repeat":
+      case "times":
+        if (inRound) {
+          throw new RangeError(
+            `${f.kind} ${f.anchor} is inside a repeat or times round; a round cannot hold another repeat or times`,
+          )
+        }
+        validateRoundNesting(f.fields, true)
+        break
+      case "when":
+      case "flags":
+      case "group":
+        validateRoundNesting(f.fields, inRound)
+        break
+      case "flagBit":
+        validateRoundNesting([f.field], inRound)
+        break
+      case "list":
+      case "dict":
+        validateRoundNesting([f.element])
+        break
+    }
+  }
+}
+
 // The names a round can hold: its own fields and the ones under when, flags, flag bits and groups.
-// A repeat or times inside the round and a list or dict element keep values of their own, so they
-// are not looked into. `packing`: a group's own member is read on pack (it can turn the group's
-// flag bit on); unpack stores it only for an empty group.
+// A list or dict element keeps values of its own, so it is not looked into. `packing`: a group's
+// own member is read on pack (it can turn the group's flag bit on); unpack stores it only for an
+// empty group.
 export function roundNames(fields: Field[], packing: boolean): Set<string> {
   const names = new Set<string>()
   for (const f of fields) addNames(f, packing, names)
@@ -17,6 +48,7 @@ export function roundNames(fields: Field[], packing: boolean): Set<string> {
 
 function addNames(f: Field, packing: boolean, names: Set<string>): void {
   switch (f.kind) {
+    // A repeat or times never sits in a round (refused at construction); the case only narrows the union.
     case "repeat":
     case "times":
     case "flagByte":
@@ -71,8 +103,7 @@ function padTo(list: unknown[], length: number): void {
 
 // The lists a repeat or times builds from its rounds. A name the round can hold is padded with
 // `undefined` when a round sets it after skipping others, and once more when the rounds end, so the
-// cost follows the values a round sets and not every name it could hold. A value a nested repeat or
-// times left in the round stays as it was: one entry per round that set it.
+// cost follows the values a round sets and not every name it could hold.
 export class RoundLists {
   readonly #lists = new Map<string, unknown[]>()
   readonly #names: Set<string>

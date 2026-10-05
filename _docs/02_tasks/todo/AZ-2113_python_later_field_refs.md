@@ -3,7 +3,7 @@
 **Task**: AZ-2113_python_later_field_refs
 **Name**: Python refuses when and count names that point to a later field
 **Description**: Python builds the schemes of vectors `when_names_later_field` and `count_names_later_field` (expected `scheme_error`).
-**Complexity**: 2 points
+**Complexity**: 3 points
 **Dependencies**: None
 **Component**: python
 **Tracker**: AZ-2113
@@ -37,6 +37,9 @@ Given `sized` counting on a later field, When built, Then it raises `ValueError`
 **AC-3**
 Given every existing scheme test, When they run, Then they pass unchanged
 
+**AC-4** (added by the loop 13 feature assessment, X4)
+Given `u8 mode(0)` and `repeat(1, when(1, eq(0, 1), u8 v(1)))`, When Python builds it, Then it raises `ValueError` naming the outer id (a reference inside a `repeat` / `times` body may name only an earlier field of the same body); the three reference construct vectors `when_names_later_field`, `count_names_later_field` and `when_names_outer_field_in_repeat` are built by the Python construct test and refused
+
 ## Constraints
 
 - ADR-001: no shared walker, no import from another package.
@@ -51,3 +54,4 @@ Given every existing scheme test, When they run, Then they pass unchanged
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Written from a feature-assess row; refine the Given/When/Then with the implementer before the loop that takes it | coordinator | open | Low |
+| Loop 13 assessment (X4): Python builds the `when_names_outer_field_in_repeat` scheme; `CONSTRUCT_SCHEMES` in the Python construct test omits all three reference vectors. AC-4 added | coordinator | open | Medium |

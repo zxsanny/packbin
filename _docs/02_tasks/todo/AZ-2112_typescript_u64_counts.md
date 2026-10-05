@@ -51,3 +51,4 @@ Given every existing test, When they run, Then they pass unchanged
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Written from a feature-assess row; refine the Given/When/Then with the implementer before the loop that takes it | coordinator | open | Low |
+| Loop 13 assessment (T6): the pack leg is unwritten here. A `u64` field takes a bigint on pack, but `sized` / `packed` / `times` refuse a bigint as the count ("bad count" / "count missing"), so an unpacked row cannot be repacked; `bits` works both ways. Cover the pack leg with the unpack ACs | coordinator | open | Low |

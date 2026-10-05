@@ -10,16 +10,25 @@ internal static partial class Walker
     // utf8 length, list count and dictionary count are written as u16.
     private const int MaxLength = ushort.MaxValue;
 
-    private static void PackSized(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    private static void PackSized(
+        Field field,
+        IReadOnlyDictionary<string, object?> values,
+        List<byte> buffer,
+        Scope seen)
     {
-        var count = RequireCount(values, field.CountName, field.Name);
+        var count = RequireCount(seen, field.CountName, field.Name);
         var raw = (byte[])RequireValue(field, values);
         if (raw.Length != count)
             throw new ArgumentException($"{field.Name}: expected {count} bytes, got {raw.Length}");
         buffer.AddRange(raw);
+        seen[field.Name] = raw;
     }
 
-    private static void PackU2(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    private static void PackU2(
+        Field field,
+        IReadOnlyDictionary<string, object?> values,
+        List<byte> buffer,
+        Scope seen)
     {
         var names = field.Names;
         var nbytes = (names.Length + 3) / 4;
@@ -32,13 +41,18 @@ internal static partial class Walker
             if (n is < 0 or > 3)
                 throw new ArgumentException($"{names[i]}: expected 2-bit int");
             raw[i / 4] |= (byte)(n << ((i % 4) * 2));
+            seen[names[i]] = value;
         }
         buffer.AddRange(raw);
     }
 
-    private static void PackBits(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    private static void PackBits(
+        Field field,
+        IReadOnlyDictionary<string, object?> values,
+        List<byte> buffer,
+        Scope seen)
     {
-        var count = RequireCount(values, field.CountName, field.Name);
+        var count = RequireCount(seen, field.CountName, field.Name);
         if (RequireValue(field, values) is not IList raw || raw.Count != count)
             throw new ArgumentException($"{field.Name}: expected {count} bits");
         var nbytes = (count + 7) / 8;
@@ -51,14 +65,14 @@ internal static partial class Walker
             packed[i / 8] |= (byte)(bit << (i % 8));
         }
         buffer.AddRange(packed);
+        seen[field.Name] = raw;
     }
 
-    private static int RequireCount(
-        IReadOnlyDictionary<string, object?> values,
-        string countName,
-        string fieldName)
+    // The count is read from what pack wrote in this scope, as unpack reads it from what it read: a count field that a
+    // `when` or a clear flag bit skipped is missing.
+    private static int RequireCount(Scope seen, string countName, string fieldName)
     {
-        if (!values.TryGetValue(countName, out var v) || v is null)
+        if (!seen.TryGetValue(countName, out var v) || v is null)
             throw new InvalidOperationException($"{fieldName}: count '{countName}' is missing");
         return Convert.ToInt32(v, CultureInfo.InvariantCulture);
     }
@@ -183,9 +197,9 @@ internal static partial class Walker
         return null;
     }
 
-    private static int BorrowedCount(Field field, IReadOnlyDictionary<string, object?> values)
+    private static int BorrowedCount(Field field, Scope seen)
     {
-        var count = RequireCount(values, field.CountName, field.Name) + field.Bias;
+        var count = RequireCount(seen, field.CountName, field.Name) + field.Bias;
         if (count < 0)
             throw new ArgumentException($"{field.Name}: item count {count}");
         return count;
@@ -194,9 +208,13 @@ internal static partial class Walker
     private static int PackedBytes(int width, int count) =>
         width == 2 ? (count + 3) / 4 : (count + 7) / 8;
 
-    private static void PackPacked(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    private static void PackPacked(
+        Field field,
+        IReadOnlyDictionary<string, object?> values,
+        List<byte> buffer,
+        Scope seen)
     {
-        var count = BorrowedCount(field, values);
+        var count = BorrowedCount(field, seen);
         if (RequireValue(field, values) is not IList raw || raw.Count != count)
             throw new ArgumentException($"{field.Name}: expected {count} items");
         var width = field.ByteCount;
@@ -212,6 +230,7 @@ internal static partial class Walker
             packed[i / per] |= (byte)(n << ((i % per) * shift));
         }
         buffer.AddRange(packed);
+        seen[field.Name] = raw;
     }
 
     private static object? UnpackPacked(
@@ -268,7 +287,11 @@ internal static partial class Walker
         return null;
     }
 
-    private static void PackUtf8(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    private static void PackUtf8(
+        Field field,
+        IReadOnlyDictionary<string, object?> values,
+        List<byte> buffer,
+        Scope seen)
     {
         if (!values.TryGetValue(field.Name, out var value) || value is not string text)
             throw new ArgumentException($"{field.Name}: expected string");
@@ -278,6 +301,7 @@ internal static partial class Walker
         buffer.Add((byte)raw.Length);
         buffer.Add((byte)(raw.Length >> 8));
         buffer.AddRange(raw);
+        seen[field.Name] = text;
     }
 
     private static object? UnpackUtf8(
@@ -314,7 +338,7 @@ internal static partial class Walker
         foreach (var item in items)
         {
             var slice = new Dictionary<string, object?>(values) { [child.Name] = item };
-            PackField(child, slice, buffer);
+            PackField(child, slice, buffer, new Scope());
         }
     }
 
@@ -375,7 +399,7 @@ internal static partial class Walker
             buffer.Add((byte)(keyBytes.Length >> 8));
             buffer.AddRange(keyBytes);
             var slice = new Dictionary<string, object?>(values) { [child.Name] = value };
-            PackField(child, slice, buffer);
+            PackField(child, slice, buffer, new Scope());
         }
     }
 

@@ -120,8 +120,9 @@ public static class BinaryPacker
     {
         var buffer = new List<byte>(32);
         buffer.Add((byte)scheme.TypeNumber);
+        var seen = new Scope();
         foreach (var field in scheme.Fields)
-            Walker.PackField(field, values, buffer);
+            Walker.PackField(field, values, buffer, seen);
         return buffer.ToArray();
     }
 
@@ -193,6 +194,7 @@ internal static class SchemeOrder
         for (var i = 0; i < resolved.Length; i++)
             resolved[i] = Walk(fields[i], row, scope, ref next);
         FlagScopes.Validate(resolved);
+        RoundScopes.Validate(resolved);
         return resolved;
     }
 

@@ -45,3 +45,4 @@ Then the bytes are `010102`, `g == [{v:1},{v:2}]`, and `BinaryPacker.unpack` ret
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Written from a review finding; refine before the loop that takes it | coordinator | open | Low |
+| Loop 13 assessment (C16, T28, X8): until this lands TypeScript (AZ-2177) and C# (AZ-2176) refuse a `repeat` / `times` nested inside a round at construction, as Java does; the per-round nested list design here is the one all packages follow. Rust still allows a `times` inside a `repeat` round (a documented difference) | owner | open | Low |

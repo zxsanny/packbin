@@ -173,8 +173,6 @@ export function unpackFields(
         break
       }
       case "times": {
-        // A times inside a repeat round finds no count: round values wait in the round, and its
-        // lists could keep only the last round's.
         const count = validCount(values[refName(f)])
         if (count === null) return unreadable(firstName(f.fields), cur)
         const rounds = new RoundLists(roundNames(f.fields, false))

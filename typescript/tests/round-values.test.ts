@@ -360,20 +360,20 @@ describe("repeat and times round values are addressed by round index", () => {
     assert.equal(again, wire)
   })
 
-  it("values of a times nested in a round keep one entry per round that set them", () => {
+  it("values of a when in a times round keep one entry per round that set them", () => {
     // Arrange
     const layout = scheme<Row>(
       1,
       u8(0, (x) => x.a),
-      times(1, 0, [u8(1, (x) => x.b), times(2, 1, [u8(2, (x) => x.c)])]),
+      times(1, 0, [u8(1, (x) => x.b), when(2, eq(1, 1), [u8(2, (x) => x.c)])]),
     )
 
     // Act
-    const row = unpackRow(layout, "0103010700020809")
+    const row = unpackRow(layout, "01030107000109")
 
     // Assert
-    assert.deepEqual(row.b, [1, 0, 2])
-    assert.deepEqual(row.c, [[7], [8, 9]])
+    assert.deepEqual(row.b, [1, 0, 1])
+    assert.deepEqual(row.c, [7, undefined, 9])
   })
 
   it("an anchored group in a round packs its fields by round index", () => {
