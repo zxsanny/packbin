@@ -18,18 +18,21 @@ ph_write_stub() {
 built=0
 if [ -f "$PACKBIN_OUT/artifacts/build.log" ]; then built="$(grep -c '^build ok ' "$PACKBIN_OUT/artifacts/build.log")"; fi
 record() { printf '%s %s %s\n' "$built" "$(basename "$0")" "$*" >> "$PACKBIN_PUBLISH_LOG"; }
+has() { [ -f "${PACKBIN_SCENARIO:-}" ] && grep -qx "$1" "$PACKBIN_SCENARIO"; }
+fail_if_asked() { if has "fail $(basename "$0")"; then echo "stub: forced failure" >&2; exit 1; fi; }
 EOF
     printf '%s\n' "$body"
   } > "$ph_bin/$name"
   chmod +x "$ph_bin/$name"
 }
 
-# A stub that logs only the registry write and hands every other call to the real tool, the next
-# executable of that name on PATH after the stub directory.
+# A stub that logs only the registry write (and answers `extra_case`, a shell case branch) and hands every
+# other call to the real tool, the next executable of that name on PATH after the stub directory.
 ph_write_spy() {
-  local name="$1" write_pattern="$2"
+  local name="$1" write_pattern="$2" extra_case="${3:-}"
   ph_write_stub "$name" "case \"\$*\" in
-  *\"$write_pattern\"*) record \"\$@\"; exit 0 ;;
+  $extra_case
+  *\"$write_pattern\"*) record \"\$@\"; fail_if_asked; exit 0 ;;
 esac
 real=\"\"
 IFS=:
@@ -40,8 +43,54 @@ unset IFS
 exec \"\$real\" \"\$@\""
 }
 
+# Registry queries answer from the scenario file (publish-rerun.test.sh describes its lines); the Central
+# upload and status calls answer as a successful deployment unless the scenario says otherwise.
+ph_write_curl_stub() {
+  ph_write_stub curl 'record "$@"
+out=""; url=""; prev=""
+for a in "$@"; do
+  if [ "$prev" = "-o" ]; then out="$a"; fi
+  prev="$a"
+  url="$a"
+done
+query() {
+  if has "503 $1"; then printf 503; exit 0; fi
+  if has "503-once $1" && [ ! -e "$PACKBIN_SCENARIO.$1.seen" ]; then : > "$PACKBIN_SCENARIO.$1.seen"; printf 503; exit 0; fi
+  if has "published $1"; then printf "%s" "$2" > "$out"; printf 200; else printf 404; fi
+  exit 0
+}
+pypi_files() {
+  files=""
+  for f in "$PACKBIN_OUT"/artifacts/python/*; do
+    n="$(basename "$f")"
+    if has "partial python" && [ "${n%.whl}" = "$n" ]; then continue; fi
+    files="$files{\"filename\":\"$n\"},"
+  done
+  printf "{\"urls\":[%s]}" "${files%,}"
+}
+case "$url" in
+  *publisher/status*)
+    if has maven-exists; then
+      printf "%s\n" "{\"deploymentState\":\"FAILED\",\"errors\":{\"pkg:maven/io.github.zxsanny/packbin@0.1.9\":[\"Component with package url: pkg:maven/io.github.zxsanny/packbin@0.1.9 already exists\"]}}"
+    else
+      printf "%s\n" "{\"deploymentState\":\"PUBLISHED\"}"
+    fi ;;
+  *publisher/upload*) printf "%s\n" "deployment-1" ;;
+  *publisher/published*) query java "{\"published\":true}" ;;
+  *api.nuget.org/v3-flatcontainer*) query csharp "{\"versions\":[\"0.1.9\"]}" ;;
+  *registry.npmjs.org*) query typescript "{}" ;;
+  *pypi.org/pypi*) query python "$(pypi_files)" ;;
+  *crates.io/api*) query rust "{}" ;;
+  *api.registry.platformio.org*) query platformio "{\"versions\":[{\"name\":\"0.1.9\"}]}" ;;
+  *components.espressif.com*) query esp-idf "{\"versions\":[{\"version\":\"0.1.9\"}]}" ;;
+  *) printf "%s\n" "unexpected curl url: $url" >&2; exit 1 ;;
+esac'
+}
+
 ph_setup() {
   ph_dir="$(mktemp -d)"
+  ph_scenario="$ph_dir/scenario.txt"
+  : > "$ph_scenario"
   ph_bin="$ph_dir/bin"
   ph_tree="$ph_dir/tree"
   ph_plan="$ph_dir/plan.txt"
@@ -51,14 +100,11 @@ ph_setup() {
   python3 -m venv "$ph_dir/tools/venv"
   "$ph_dir/tools/venv/bin/pip" install --quiet platformio idf-component-manager
   for tool in dotnet npm twine cargo; do
-    ph_write_stub "$tool" 'record "$@"'
+    ph_write_stub "$tool" 'record "$@"
+fail_if_asked'
   done
-  ph_write_stub curl 'record "$@"
-case "$*" in
-  *publisher/status*) printf "%s\n" "{\"deploymentState\":\"PUBLISHED\"}" ;;
-  *) printf "%s\n" "deployment-1" ;;
-esac'
-  ph_write_spy pio "pkg publish"
+  ph_write_curl_stub
+  ph_write_spy pio "pkg publish" '"account show"*) record "$@"; printf "%s\n" "{\"profile\":{\"username\":\"zxsanny\"}}"; exit 0 ;;'
   ph_write_spy compote "component upload"
   if ! command -v gpg >/dev/null; then
     cat > "$ph_bin/gpg" <<'EOF'
@@ -109,6 +155,7 @@ ph_publish() {
   env $unset_args \
     PACKBIN_PUBLISH=1 PACKBIN_PLAN="$ph_plan" PACKBIN_VERSION=v0.1.9 SRC_ROOT="$ph_tree" \
     PACKBIN_OUT="$ph_out" PACKBIN_TOOLS="$ph_dir/tools" PACKBIN_PUBLISH_LOG="$ph_log" \
+    PACKBIN_SCENARIO="$ph_scenario" PACKBIN_QUERY_PAUSE=0 \
     VCPKG_REGISTRY_URL="$ph_vcpkg" ARDUINO_REGISTRY_URL="$ph_arduino" \
     PATH="$front:$ph_bin:$PATH:$ph_dir/tools/venv/bin" "$@" \
     bash "$here/publish-registries.sh" > "$ph_dir/$name.out" 2>&1
@@ -432,6 +479,7 @@ phase_checks() {
   ph_full_publish
   ph_failure_injection
   ph_pipeline_violations
+  ph_rerun_checks
   if ! rm -rf "$ph_dir"; then
     echo "note: could not remove $ph_dir (files written by a build container)"
   fi

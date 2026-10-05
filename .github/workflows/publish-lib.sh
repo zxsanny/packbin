@@ -3,6 +3,84 @@ set -euo pipefail
 
 PACKBIN_LANGS=(csharp typescript python rust cpp java)
 
+# The publish targets: name, the language whose presence plans it, and its tier. A required target
+# with a missing credential fails the run before any write and a failed upload fails it; an
+# optional target with a missing credential is skipped with a warning, and a failed upload of
+# one that has its credential fails the run too. Uploads run required targets first.
+PACKBIN_TARGETS=(
+  "csharp csharp required"
+  "typescript typescript required"
+  "python python required"
+  "rust rust required"
+  "java java required"
+  "vcpkg cpp required"
+  "platformio cpp optional"
+  "esp-idf cpp optional"
+  "arduino cpp optional"
+)
+
+targets_of_lang() {
+  local row name lang tier
+  for row in "${PACKBIN_TARGETS[@]}"; do
+    read -r name lang tier <<< "$row"
+    if [ "$lang" = "$1" ]; then
+      printf '%s\n' "$name"
+    fi
+  done
+}
+
+target_tier() {
+  local row name lang tier
+  for row in "${PACKBIN_TARGETS[@]}"; do
+    read -r name lang tier <<< "$row"
+    if [ "$name" = "$1" ]; then
+      printf '%s\n' "$tier"
+      return 0
+    fi
+  done
+  echo "unknown target: $1" >&2
+  return 1
+}
+
+# The credential variables a target needs, space separated. a|b means either one will do.
+# A git registry on GitHub needs GITHUB_TOKEN; any other URL (the bare repositories of the tests) needs none.
+target_credentials() {
+  case "$1" in
+    csharp) echo "NUGET_TOKEN" ;;
+    typescript) echo "NPM_TOKEN|ACTIONS_ID_TOKEN_REQUEST_URL" ;;
+    python) echo "PYPI_TOKEN|ACTIONS_ID_TOKEN_REQUEST_URL" ;;
+    rust) echo "CARGO_REGISTRY_TOKEN" ;;
+    java) echo "MAVEN_CENTRAL_TOKEN MAVEN_GPG_PRIVATE_KEY" ;;
+    platformio) echo "PLATFORMIO_AUTH_TOKEN" ;;
+    esp-idf) echo "IDF_COMPONENT_API_TOKEN" ;;
+    vcpkg) if [[ "$(vcpkg_url)" == https://github.com/* ]]; then echo "GITHUB_TOKEN"; fi ;;
+    arduino) if [[ "$(arduino_url)" == https://github.com/* ]]; then echo "GITHUB_TOKEN"; fi ;;
+    *)
+      echo "unknown target: $1" >&2
+      return 1
+      ;;
+  esac
+}
+
+# The credentials of target $1 that are not set, as one line ("A or B" for alternatives). Empty when it has all.
+missing_credentials() {
+  local spec word var alternatives found missing=""
+  spec="$(target_credentials "$1")"
+  for word in $spec; do
+    found=0
+    IFS='|' read -r -a alternatives <<< "$word"
+    for var in "${alternatives[@]}"; do
+      if [ -n "${!var:-}" ]; then
+        found=1
+      fi
+    done
+    if [ "$found" = 0 ]; then
+      missing="${missing:+$missing }${word//|/ or }"
+    fi
+  done
+  printf '%s\n' "$missing"
+}
+
 # Every secret the publish scripts can read. The build phase runs without them (except the Maven
 # signing key in a real publish) and a build-only run unsets all of them.
 PACKBIN_CREDENTIALS=(
@@ -56,7 +134,8 @@ ensure_tool() {
   export PATH
 }
 
-# Pushes HEAD of the repository at $1 to branch $3 (and the existing tag $4 when given) of remote URL $2.
+# Pushes HEAD of the repository at $1 to branch $3 (and the existing tag $4 when given) of remote URL $2,
+# all or nothing: a tag that already points elsewhere is refused and the branch stays where it was.
 # With GITHUB_TOKEN set and a github.com URL, the token answers the credential prompt.
 push_branch() {
   local reg="$1" url="$2" branch="$3" tag="${4:-}" ask code=0
@@ -75,11 +154,11 @@ esac
 EOF
     chmod +x "$ask"
     GIT_ASKPASS="$ask" GIT_TERMINAL_PROMPT=0 git -C "$reg" -c credential.helper= \
-      push "$url" "${refs[@]}" || code=$?
+      push --atomic "$url" "${refs[@]}" || code=$?
     rm -f "$ask"
     return "$code"
   fi
-  git -C "$reg" push "$url" "${refs[@]}"
+  git -C "$reg" push --atomic "$url" "${refs[@]}"
 }
 
 fixture_hex() {

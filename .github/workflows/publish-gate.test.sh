@@ -79,8 +79,9 @@ EOF
     PACKBIN_PUBLISH=1 PACKBIN_DOCKER=0 PACKBIN_PLAN="$plan" PACKBIN_VERSION=0.1.0 \
     PACKBIN_OUT="$tmp/cpp-out" VCPKG_REGISTRY_URL="$bare" \
     bash "$here/publish-registries.sh" | tee "$tmp/cpp.txt"
-  for skipped in "skip platformio" "skip esp-idf component" "skip arduino"; do
-    grep -qx "$skipped" "$tmp/cpp.txt" || fail "embedded publish without a token: $skipped"
+  for skipped in "platformio: PLATFORMIO_AUTH_TOKEN" "esp-idf: IDF_COMPONENT_API_TOKEN" "arduino: GITHUB_TOKEN"; do
+    grep -qx "::warning::skipping optional target $skipped is not set" "$tmp/cpp.txt" \
+      || fail "embedded publish without a token: $skipped"
   done
 
   local arduino="$tmp/arduino.git"
@@ -348,6 +349,13 @@ else
   errors << "publish permissions are not contents: write and id-token: write" unless publish["permissions"] == expected
   errors << "publish has no timeout-minutes" unless publish.key?("timeout-minutes")
 end
+concurrency = publish_wf["concurrency"] || (publish && publish["concurrency"])
+if concurrency.is_a?(Hash)
+  errors << "publish concurrency group is not keyed by the ref" unless concurrency["group"].to_s.include?("github.ref")
+  errors << "publish concurrency cancels a run in progress" if concurrency["cancel-in-progress"]
+else
+  errors << "publish.yml has no concurrency group"
+end
 jobs.each do |name, job|
   next if name == "publish"
   if (job["permissions"] || {}).values.include?("write")
@@ -392,7 +400,10 @@ workflow_checks() {
     "$publish_yml" > "$tmp/secrets-inherit.yml"
   awk '/^    branches: \["\*\*"\]$/ { print "    tags: [\"v*\"]"; next } { print }' \
     "$test_yml" > "$tmp/test-tags.yml"
-  for copy in no-needs workflow-id-token secrets-inherit; do
+  grep -v '^concurrency:$\|^  group: publish-\|^  cancel-in-progress: false$' "$publish_yml" > "$tmp/no-concurrency.yml"
+  sed 's/^  cancel-in-progress: false$/  cancel-in-progress: true/' "$publish_yml" > "$tmp/cancel.yml"
+  sed 's/^  group: publish-.*$/  group: publish/' "$publish_yml" > "$tmp/group.yml"
+  for copy in no-needs workflow-id-token secrets-inherit no-concurrency cancel group; do
     cmp -s "$publish_yml" "$tmp/$copy.yml" && fail "AZ-2095 temp copy $copy is unchanged"
   done
   cmp -s "$test_yml" "$tmp/test-tags.yml" && fail "AZ-2095 temp copy test-tags is unchanged"
@@ -400,6 +411,9 @@ workflow_checks() {
   expect_structure_failure "id-token at workflow level" "$test_yml" "$tmp/workflow-id-token.yml"
   expect_structure_failure "secrets on the test call" "$test_yml" "$tmp/secrets-inherit.yml"
   expect_structure_failure "test.yml push on tags" "$tmp/test-tags.yml" "$publish_yml"
+  expect_structure_failure "no concurrency group" "$test_yml" "$tmp/no-concurrency.yml"
+  expect_structure_failure "cancel-in-progress true" "$test_yml" "$tmp/cancel.yml"
+  expect_structure_failure "concurrency group not keyed by the ref" "$test_yml" "$tmp/group.yml"
   rm -rf "$tmp"
 }
 
@@ -415,6 +429,8 @@ fi
 
 # shellcheck source=publish-phases.test.sh
 source "$here/publish-phases.test.sh"
+# shellcheck source=publish-rerun.test.sh
+source "$here/publish-rerun.test.sh"
 
 static_checks
 crates_token_checks

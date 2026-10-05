@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Publish entry point: plans the targets, builds and checks every one (publish-build.sh), and only
-# then uploads the built files (publish-upload.sh).
+# Publish entry point: plans the targets from the declared table in publish-lib.sh (a required target
+# without its credential stops the run before any write, an optional one is skipped with a warning),
+# builds and checks every one (publish-build.sh), and only then uploads what is not yet published
+# (publish-upload.sh). Re-running a tag finishes whatever an earlier run left out.
 # PACKBIN_BUILD_ONLY=1 runs the build phase alone as a dry run: it needs no credential, unsets every
 # one it finds, signs the Maven bundle with a throwaway key, writes nothing to any registry and
 # exits 0. It is for CI tests and dry runs, never a way to publish.
@@ -36,14 +38,6 @@ if [ "$build_only" = "1" ]; then
   done
 fi
 
-need() {
-  local lang="$1" var="$2"
-  if grep -qx "$lang" "$plan" && [ -z "${!var:-}" ]; then
-    echo "$var is required before any registry write" >&2
-    exit 1
-  fi
-}
-
 require_tool() {
   if ! command -v "$1" >/dev/null; then
     echo "$1 is required before any registry write" >&2
@@ -51,62 +45,43 @@ require_tool() {
   fi
 }
 
-# True when the target's credential is set, or in a build-only run, which plans every target.
-credentialed() {
-  [ "$build_only" = "1" ] || [ -n "${!1:-}" ]
+# An optional target without its credential is skipped, visibly: a GitHub annotation and a line in the job summary.
+skip_optional() {
+  local message="skipping optional target $1: $2 is not set"
+  echo "::warning::$message"
+  if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+    printf -- '- %s\n' "$message" >> "$GITHUB_STEP_SUMMARY"
+  fi
 }
 
-if [ "$build_only" != "1" ]; then
-  need csharp NUGET_TOKEN
-  if grep -qx typescript "$plan" && [ -z "${NPM_TOKEN:-}" ] && [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
-    echo "NPM_TOKEN is required before any registry write" >&2
-    exit 1
-  fi
-  need java MAVEN_CENTRAL_TOKEN
-  need java MAVEN_GPG_PRIVATE_KEY
-fi
-
+# Plans the targets of every language in the plan. A build-only run plans them all. Otherwise a required
+# target without its credential stops the run, all of them named, before anything is built or written.
 targets=()
+refused=()
 for lang in "${PACKBIN_LANGS[@]}"; do
   if ! grep -qx "$lang" "$plan"; then
     continue
   fi
-  case "$lang" in
-    python)
-      if credentialed PYPI_TOKEN || [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
-        targets+=(python)
-      else
-        echo "skip python"
-      fi
-      ;;
-    rust)
-      if credentialed CARGO_REGISTRY_TOKEN; then
-        targets+=(rust)
-      else
-        echo "skip rust"
-      fi
-      ;;
-    cpp)
-      targets+=(vcpkg)
-      if credentialed PLATFORMIO_AUTH_TOKEN; then
-        targets+=(platformio)
-      else
-        echo "skip platformio"
-      fi
-      if credentialed IDF_COMPONENT_API_TOKEN; then
-        targets+=(esp-idf)
-      else
-        echo "skip esp-idf component"
-      fi
-      if credentialed GITHUB_TOKEN || [ -n "${ARDUINO_REGISTRY_URL:-}" ]; then
-        targets+=(arduino)
-      else
-        echo "skip arduino"
-      fi
-      ;;
-    *) targets+=("$lang") ;;
-  esac
+  for target in $(targets_of_lang "$lang"); do
+    lacking=""
+    if [ "$build_only" != "1" ]; then
+      lacking="$(missing_credentials "$target")"
+    fi
+    if [ -z "$lacking" ]; then
+      targets+=("$target")
+    elif [ "$(target_tier "$target")" = "required" ]; then
+      refused+=("$target is required and lacks: $lacking")
+    else
+      skip_optional "$target" "$lacking"
+    fi
+  done
 done
+
+if [ "${#refused[@]}" -gt 0 ]; then
+  printf '%s\n' "${refused[@]}" >&2
+  echo "${#refused[@]} required target(s) lack a credential; nothing was built or written" >&2
+  exit 1
+fi
 
 if [ "${#targets[@]}" -eq 0 ]; then
   echo "publishing 0 packages"
@@ -114,13 +89,14 @@ if [ "${#targets[@]}" -eq 0 ]; then
 fi
 
 if [ "$build_only" != "1" ]; then
+  require_tool curl
+  require_tool python3
   for target in "${targets[@]}"; do
     case "$target" in
       csharp) require_tool dotnet ;;
       typescript) require_tool npm ;;
-      python | platformio | esp-idf) require_tool python3 ;;
       rust) require_tool cargo ;;
-      java) require_tool curl; require_tool gpg ;;
+      java) require_tool gpg ;;
       vcpkg | arduino) require_tool git ;;
     esac
   done

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Upload phase. Transmits the files publish-build.sh built and checked; it builds nothing and
-# refuses to start unless build.log holds `build ok` for every target given. Registry tools run
-# on the host. Cargo is the one tool that archives again: `cargo publish --no-verify` re-archives
+# refuses to start unless build.log holds `build ok` for every target given. Before each upload it
+# asks the registry whether the version is already there (publish-query.sh) and skips the target
+# with `already published <target> <version>`, so a re-run finishes a partial publish. Required
+# targets go first; the first failure stops the run. Registry tools run on the host. Cargo is the one tool that archives again: `cargo publish --no-verify` re-archives
 # the staged directory that the build phase already compiled and checked.
 # Usage: publish-upload.sh <target>...
 set -euo pipefail
@@ -9,6 +11,8 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=publish-lib.sh
 source "$here/publish-lib.sh"
+# shellcheck source=publish-query.sh
+source "$here/publish-query.sh"
 
 if [ "$#" -eq 0 ]; then
   echo "usage: publish-upload.sh <target>..." >&2
@@ -20,6 +24,8 @@ version="${version#v}"
 out="${PACKBIN_OUT:?PACKBIN_OUT is required}"
 artifacts="$out/artifacts"
 export PACKBIN_OUT="$out"
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
 
 for target in "$@"; do
   if ! grep -qx "build ok $target" "$artifacts/build.log"; then
@@ -88,7 +94,7 @@ upload_pypi() {
     token="$(pypi_oidc_token)"
     echo "::add-mask::${token}"
   fi
-  twine upload --non-interactive -u __token__ -p "$token" "$artifacts/python"/*
+  twine upload --non-interactive --skip-existing -u __token__ -p "$token" "$artifacts/python"/*
 }
 
 upload_maven() {
@@ -105,7 +111,13 @@ upload_maven() {
     printf '%s\n' "$state"
     case "$state" in
       *'"deploymentState":"PUBLISHED"'*) return 0 ;;
-      *'"deploymentState":"FAILED"'*) return 1 ;;
+      *'"deploymentState":"FAILED"'*)
+        if [[ "$state" == *"already exists"* ]]; then
+          echo "already published java $version"
+          return 0
+        fi
+        return 1
+        ;;
     esac
     sleep 15
   done
@@ -127,9 +139,8 @@ prepare_tools() {
 
 prepare_tools "$@"
 
-for target in "$@"; do
-  echo "upload $target"
-  case "$target" in
+upload_target() {
+  case "$1" in
     csharp)
       dotnet nuget push "$artifacts/csharp/Packbin.$version.nupkg" \
         --api-key "$NUGET_TOKEN" \
@@ -149,12 +160,26 @@ for target in "$@"; do
       ;;
     esp-idf)
       compote component upload --archive "$artifacts/esp-idf/packbin_$version.tgz" \
-        --namespace zxsanny --name packbin
+        --namespace zxsanny --name packbin --allow-existing
       ;;
     arduino) push_branch "$artifacts/arduino/reg" "$(arduino_url)" arduino "arduino-$version" ;;
     *)
-      echo "unknown target: $target" >&2
+      echo "unknown target: $1" >&2
       exit 1
       ;;
   esac
+}
+
+for tier in required optional; do
+  for target in "$@"; do
+    if [ "$(target_tier "$target")" != "$tier" ]; then
+      continue
+    fi
+    if target_published "$target"; then
+      echo "already published $target $version"
+      continue
+    fi
+    echo "upload $target"
+    upload_target "$target"
+  done
 done
