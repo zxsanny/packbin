@@ -42,3 +42,12 @@ Batch 4: the old walker is gone (one walker, `cpp/src/core/`). Embedded proof li
 
 ### Risks
 D-2 B is a breaking C++ release. AC-12 needs a published tag and registry tokens, so it cannot be proven inside this loop.
+
+## Course change (user, 2026-10-05)
+
+After batch 4 the user asked for, in order: (1) a whole-project refactor check, (2) a security check, (3) the `v0.2.0` tag.
+
+- Done: refactor Quick Assessment phases 0–1 — `_docs/04_refactoring/02-whole-project-assessment/` (baseline, discovery per package, `list-of-changes.md` C01–C31). It found cross-language logic bugs (bool bytes differ between packages, hangs on hostile packets, a thread race in C#/Java, Rust silent corruption, an unloadable Java jar, a non-atomic publish).
+- Done: bug-fix epic **AZ-2069** with 36 task specs `_docs/02_tasks/todo/01_*.md` … `36_*.md` (most serious first; order and user decisions in `analysis/bugfix_task_plan.md`). Jira tickets for the 36 specs are not created yet (`Tracker: pending`).
+- Next session: create the 36 Jira tickets under AZ-2069 and rename the specs to their AZ ids; add them to `_dependencies_table.md`; implement them (this loop, before the tag), then feature-assess, run tests, security audit (step 14, include the hostile-packet findings), update docs (incl. the 38-row `discovery/doc_drift.md`), then the `v0.2.0` tag (user-requested ship: deploy/release rows become `include: yes` at that point).
+- AZ-2068 (AVR, stretch) stays in `todo/` behind the bug fixes.
