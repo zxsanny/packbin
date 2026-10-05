@@ -106,7 +106,11 @@ export function flatten(fields: Field[]): Field[] {
     if (f.kind === "flags") {
       const fb = flagByte("")
       out.push(fb)
-      for (const child of f.fields) out.push(fb.bit(child))
+      // A member that holds flags of its own is flattened too, or its bits would get a new flag
+      // byte on every walk and pack could not find them.
+      for (const child of f.fields) {
+        out.push(fb.bit(child.kind === "flags" ? child : flatten([child])[0]!))
+      }
     } else if (
       f.kind === "when" ||
       f.kind === "repeat" ||
@@ -279,10 +283,17 @@ export function collectFlagBits(
 ): { bit: number; field: Field }[] {
   const bits: { bit: number; field: Field }[] = []
   for (const f of fields) {
-    if (f.kind === "flagBit" && f.flagId === id) bits.push({ bit: f.bit, field: f.field })
-    if (f.kind === "when") bits.push(...collectFlagBits(f.fields, id))
-    if (f.kind === "repeat") bits.push(...collectFlagBits(f.fields, id))
-    if (f.kind === "times") bits.push(...collectFlagBits(f.fields, id))
+    if (f.kind === "flagBit") {
+      if (f.flagId === id) bits.push({ bit: f.bit, field: f.field })
+      bits.push(...collectFlagBits([f.field], id))
+    } else if (
+      f.kind === "when" ||
+      f.kind === "repeat" ||
+      f.kind === "times" ||
+      f.kind === "group"
+    ) {
+      bits.push(...collectFlagBits(f.fields, id))
+    }
   }
   return bits
 }

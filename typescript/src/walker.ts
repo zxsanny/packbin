@@ -1,7 +1,7 @@
 import { fieldName, flatten, type Field } from "./fields.ts"
 import { refName } from "./ref-scope.ts"
+import { RoundLists, appendList, roundNames } from "./rounds.ts"
 import {
-  present,
   readBits,
   readFloat,
   readInt,
@@ -41,20 +41,17 @@ function firstName(fields: Field[]): string {
   return ""
 }
 
-// Inside a repeat a field is collected into a list; `round` also holds the value of the
-// round being read, which is what a `when` in that round tests.
+// Inside a repeat round a value waits in `round` until the round ends, so a name written twice in
+// one round still has one entry for it.
 function store(values: Value, round: Value | null, name: string, value: unknown): void {
-  if (round) {
-    appendRepeat(values, name, value)
-    round[name] = value
-  } else values[name] = value
+  if (round) round[name] = value
+  else values[name] = value
 }
 
-function appendRepeat(values: Value, name: string, value: unknown): void {
-  const prev = values[name]
-  if (Array.isArray(prev)) prev.push(value)
-  else if (present(prev)) values[name] = [prev, value]
-  else values[name] = [value]
+// What a `when` or a count reads: the value of the round being read, or of the scope.
+function seen(values: Value, round: Value | null, name: string): unknown {
+  const scope = round ?? values
+  return Object.hasOwn(scope, name) ? scope[name] : undefined
 }
 
 export function unpackFields(
@@ -96,14 +93,13 @@ export function unpackFields(
         if (!r.ok) return r
         const v = Number(r.value)
         flagBytes.set(f.id, v)
-        values[f.name] = v
         break
       }
       case "flagBit": {
         const flags = flagBytes.get(f.flagId) ?? 0
         if ((flags & (1 << f.bit)) === 0) break
         if (f.field.kind === "group") {
-          if (f.field.fields.length === 0) values[f.field.name] = true
+          if (f.field.fields.length === 0) store(values, round, f.field.name, true)
           const err = unpackFields(f.field.fields, cur, values, flagBytes, round)
           if (err) return err
         } else {
@@ -113,22 +109,25 @@ export function unpackFields(
         break
       }
       case "when": {
-        const name = refName(f)
-        const seen = round !== null && Object.hasOwn(round, name) ? round[name] : values[name]
-        if (sameValue(seen, f.value)) {
+        if (sameValue(seen(values, round, refName(f)), f.value)) {
           const err = unpackFields(f.fields, cur, values, flagBytes, round)
           if (err) return err
         }
         break
       }
       case "repeat": {
+        const names = roundNames(f.fields, false)
+        const rounds = new RoundLists(names)
         while (cur.offset < cur.buf.length) {
           const before = cur.offset
-          const err = unpackFields(f.fields, cur, values, flagBytes, {})
+          const one: Value = {}
+          const err = unpackFields(f.fields, cur, values, flagBytes, one)
           if (err) return err
+          rounds.add(one)
           // A round that reads nothing would repeat forever; the unread bytes are trailing.
           if (cur.offset === before) break
         }
+        for (const [name, list] of rounds.finish()) appendList(values, name, list)
         break
       }
       case "group": {
@@ -137,7 +136,7 @@ export function unpackFields(
         break
       }
       case "sized": {
-        const count = validCount(values[refName(f)])
+        const count = validCount(seen(values, round, refName(f)))
         if (count === null) return unreadable(f.name, cur)
         const r = readSized(cur, f.name, count)
         if (!r.ok) return r
@@ -155,7 +154,7 @@ export function unpackFields(
       }
       case "bits": {
         // bits has always taken a bigint count (u64 source); past 2^53 it cannot be exact.
-        const raw = values[refName(f)]
+        const raw = seen(values, round, refName(f))
         const count = validCount(
           typeof raw === "bigint" && raw <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(raw) : raw,
         )
@@ -166,7 +165,7 @@ export function unpackFields(
         break
       }
       case "packed": {
-        const count = validCount(values[refName(f)], f.bias)
+        const count = validCount(seen(values, round, refName(f)), f.bias)
         if (count === null) return unreadable(f.name, cur)
         const r = readPacked(cur, f.name, f.width, count)
         if (!r.ok) return r
@@ -174,23 +173,21 @@ export function unpackFields(
         break
       }
       case "times": {
+        // A times inside a repeat round finds no count: round values wait in the round, and its
+        // lists could keep only the last round's.
         const count = validCount(values[refName(f)])
         if (count === null) return unreadable(firstName(f.fields), cur)
-        const built: Record<string, unknown[]> = {}
+        const rounds = new RoundLists(roundNames(f.fields, false))
         for (let i = 0; i < count; i++) {
-          const group: Value = {}
+          const one: Value = {}
           const before = cur.offset
-          const err = unpackFields(f.fields, cur, group, flagBytes, null)
+          const err = unpackFields(f.fields, cur, one, flagBytes, null)
           if (err) return err
           // A round that reads nothing would repeat up to `count` times for no input.
           if (cur.offset === before) return unreadable(firstName(f.fields), cur)
-          for (const [key, value] of Object.entries(group)) {
-            const list = built[key]
-            if (list) list.push(value)
-            else built[key] = [value]
-          }
+          rounds.add(one)
         }
-        for (const [key, list] of Object.entries(built)) values[key] = list
+        for (const [name, list] of rounds.finish()) values[name] = list
         break
       }
       case "utf8": {

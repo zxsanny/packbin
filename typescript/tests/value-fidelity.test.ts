@@ -73,7 +73,7 @@ describe("when inside repeat", () => {
   it("later rounds see their own value, not the first round's", () => {
     const rows = unpackRow(layout, "010001" + "0b")
     assert.deepEqual(rows.result, { ok: true })
-    assert.deepEqual(rows.row, { k: [0, 1], v: [11] })
+    assert.deepEqual(rows.row, { k: [0, 1], v: [undefined, 11] })
   })
 
   it("when in a repeat naming a field outside it is refused", () => {

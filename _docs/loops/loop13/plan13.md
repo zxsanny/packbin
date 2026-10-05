@@ -51,11 +51,12 @@ Divergence recorded at the batch 1 commit: the first C# review FAILed AZ-2087 (A
 - batch 2 typescript (AZ-2090): `src/ref-scope.ts`, `tests/reference-scope.test.ts` (new); `src/{fields,index,kinds,pack-fields,walker}.ts`, `tests/{flag-scope,hostile,value-fidelity}.test.ts`, `tests/support/hostile-cases.ts` (edit)
 - batch 2 rust (AZ-2086): `src/scheme/times.rs`, `src/walk/times.rs`, `src/times_tests.rs`, `src/times_stale_tests.rs`, `tests/times_tests.rs`, `tests/times_names_tests.rs`, `tests/times_route_tests.rs` (new); `src/scheme/mod.rs`, `src/walk/{mod,pack,unpack}.rs`, `src/field/mod.rs`, `src/value.rs`, `src/lib.rs`, `src/{flag_bits,round}_tests.rs` (edit)
 - batch 2 csharp (AZ-2088): `Field.cs`, `Packbin.cs`, `Walker.cs`, `Walker.Counted.cs`, `Walker.Presence.cs`, `Walker.Rounds.cs` (edit); tests `LoudPackTests.cs`, `SchemeOwnershipTests.cs`, `FloatWhenTests.cs` (new), `FieldIdBindingTests.cs` (edit)
+- batch 3 typescript (AZ-2091): `src/rounds.ts`, `src/member-names.ts`, `tests/nested-group.test.ts`, `tests/round-values.test.ts`, `tests/round-roundtrip.test.ts` (new); `src/{fields,index,pack-fields,walker}.ts`, `tests/{value-fidelity,reference-scope}.test.ts` (edit)
 - shared (parent): README upgrade notes and component docs at step 13; `_docs/02_tasks/` spec and dependency-table updates
 
 ### Order of work
 1. Batch 1: TypeScript, Rust, C# workers in parallel; three fresh reviewers; C# FAIL, owner decision, C# round 2 and 3, C# re-review (PASS_WITH_WARNINGS)
-2. Batch 2: AZ-2090, AZ-2086, AZ-2088 (reviews: TypeScript PASS_WITH_WARNINGS, C# PASS_WITH_WARNINGS, Rust FAIL then fixed by owner decision A and re-reviewed PASS_WITH_WARNINGS); batch 3: AZ-2091 including the TypeScript round slicing
+2. Batch 2: AZ-2090, AZ-2086, AZ-2088 (reviews: TypeScript PASS_WITH_WARNINGS, C# PASS_WITH_WARNINGS, Rust FAIL then fixed by owner decision A and re-reviewed PASS_WITH_WARNINGS); batch 3: AZ-2091 including the TypeScript round slicing (review PASS_WITH_WARNINGS; one test-only fix round)
 
 ### Proof
 - `int-range.test.ts`, `integrity_tests.rs` / `bound_names_tests.rs`, `ReferenceScopeTests.cs` / `RoundValueTests.cs` (each red before, green after); hostile construct vectors `when_names_later_field`, `count_names_later_field`, `when_names_outer_field_in_repeat` in C#

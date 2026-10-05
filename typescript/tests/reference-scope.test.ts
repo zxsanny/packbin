@@ -123,7 +123,7 @@ describe("reference scope: which field an id names", () => {
     const { result, row } = unpacked(layout, "01010700")
     assert.deepEqual(result, { ok: true })
     assert.deepEqual(row!.k, [1, 0])
-    assert.deepEqual(row!.v, [7])
+    assert.deepEqual(row!.v, [7, undefined])
   })
 })
 

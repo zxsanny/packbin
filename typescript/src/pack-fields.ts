@@ -6,6 +6,7 @@ import {
   type Field,
 } from "./fields.ts"
 import { refName } from "./ref-scope.ts"
+import { roundCount, roundNames, sliceRound } from "./rounds.ts"
 import {
   present,
   sameValue,
@@ -32,6 +33,20 @@ function borrowedCount(ref: string, bias: number, label: string, values: Value):
     )
   }
   return count
+}
+
+function packRounds(
+  fields: Field[],
+  names: Set<string>,
+  count: number,
+  allFields: Field[],
+  values: Value,
+  out: number[],
+  flagBytes: Map<symbol, number>,
+): void {
+  for (let i = 0; i < count; i++) {
+    packFields(fields, allFields, sliceRound(values, names, i), out, flagBytes)
+  }
 }
 
 export function packFields(
@@ -91,24 +106,8 @@ export function packFields(
         break
       }
       case "repeat": {
-        let count = 0
-        for (const child of f.fields) {
-          const n = fieldName(child)
-          if (!n) continue
-          const v = values[n]
-          if (Array.isArray(v)) count = Math.max(count, v.length)
-          else if (present(v)) count = Math.max(count, 1)
-        }
-        for (let i = 0; i < count; i++) {
-          const slice: Value = { ...values }
-          for (const child of f.fields) {
-            const n = fieldName(child)
-            if (!n) continue
-            const v = values[n]
-            slice[n] = Array.isArray(v) ? v[i] : v
-          }
-          packFields(f.fields, allFields, slice, out, flagBytes)
-        }
+        const names = roundNames(f.fields, true)
+        packRounds(f.fields, names, roundCount(names, values), allFields, values, out, flagBytes)
         break
       }
       case "group":
@@ -135,16 +134,7 @@ export function packFields(
       }
       case "times": {
         const count = borrowedCount(refName(f), 0, "times", values)
-        for (let i = 0; i < count; i++) {
-          const slice: Value = { ...values }
-          for (const child of f.fields) {
-            const n = fieldName(child)
-            if (!n) continue
-            const v = values[n]
-            slice[n] = Array.isArray(v) ? v[i] : v
-          }
-          packFields(f.fields, allFields, slice, out, flagBytes)
-        }
+        packRounds(f.fields, roundNames(f.fields, true), count, allFields, values, out, flagBytes)
         break
       }
       case "utf8":
