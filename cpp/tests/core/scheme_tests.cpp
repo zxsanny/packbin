@@ -268,6 +268,31 @@ void empty_group_outside_flags_is_refused() {
   expect(packbin::validate(in_list).error == Error::SchemeInvalid, "AC-2 empty group in a list");
 }
 
+void empty_group_without_member_is_refused() {
+  // A group with no fields and no member can never set its bit, so it is refused even where a
+  // presence bit is allowed.
+  auto in_flags = packbin::scheme<Presence>(1, packbin::flags(0, packbin::group(0)));
+  auto v = packbin::validate(in_flags);
+  expect(v.error == Error::SchemeInvalid && v.field == 0, "AZ-2147 AC-1 empty group in flags");
+  auto as_bit = packbin::scheme<Presence>(1, packbin::flag_byte(0),
+                                          packbin::flag_bit(0, packbin::group(0)));
+  expect(packbin::validate(as_bit).error == Error::SchemeInvalid,
+         "AZ-2147 AC-1 empty group as a flag bit");
+
+  auto bound = packbin::scheme<Presence>(1, packbin::flags(0, packbin::group<&Presence::on>(0)));
+  Presence row;
+  row.on = true;
+  std::uint8_t buf[4];
+  auto t = packbin::pack(bound, row, buf, sizeof(buf));
+  expect(t.ok() && check::same_hex(buf, t.offset, "0101"), "AZ-2147 AC-2 bool group true");
+  Presence back;
+  auto u = packbin::unpack(bound, buf, t.offset, back);
+  expect(u.ok() && back.on.has && back.on.value, "AZ-2147 AC-2 bool group unpacks true");
+  row.on = false;
+  auto f = packbin::pack(bound, row, buf, sizeof(buf));
+  expect(f.ok() && check::same_hex(buf, f.offset, "0100"), "AZ-2147 AC-2 bool group false");
+}
+
 void bool_inside_flags_is_unchanged() {
   auto in_flags = packbin::scheme<Presence>(
       1, packbin::flags(0, packbin::boolean<&Presence::on>(0), packbin::u8<&Presence::n>(1)));
@@ -390,6 +415,7 @@ int run_core_scheme_tests() {
   unbound_fields_skip();
   bool_outside_flags_is_refused();
   empty_group_outside_flags_is_refused();
+  empty_group_without_member_is_refused();
   bool_inside_flags_is_unchanged();
   u2_limit();
   return check::failures();

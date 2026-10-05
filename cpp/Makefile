@@ -33,6 +33,7 @@ compile-fail: $(HDRS)
 	@$(EXPECT_FAIL) tests/compile-fail/flags_overflow.cpp "breaks_order<0>|Id = 0\]"
 	@$(EXPECT_FAIL) tests/compile-fail/bool_outside_flags.cpp "breaks_order<0>|Id = 0\]"
 	@$(EXPECT_FAIL) tests/compile-fail/empty_group_outside_flags.cpp "breaks_order<1>|Id = 1\]"
+	@$(EXPECT_FAIL) tests/compile-fail/empty_group_without_member.cpp "breaks_order<0>|Id = 0\]"
 	@$(EXPECT_FAIL) tests/compile-fail/u2_too_wide.cpp "breaks_order<0>|Id = 0\]"
 
 test: $(TEST_BIN) compile-fail

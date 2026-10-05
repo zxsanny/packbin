@@ -5,28 +5,28 @@
 set -euo pipefail
 
 examples_tools() {
-  local venv="$build/examples-venv"
-  # Toolchain caches live in the (gitignored) build tree so a rerun does not download again.
-  export ARDUINO_DIRECTORIES_DATA="$build/arduino-data"
-  export ARDUINO_DIRECTORIES_DOWNLOADS="$build/arduino-downloads"
-  export PLATFORMIO_CORE_DIR="$build/platformio"
+  local venv="$cache/examples-venv"
+  # Toolchains live in the (gitignored) cache dir so a rerun does not download again.
+  export ARDUINO_DIRECTORIES_DATA="$cache/arduino-data"
+  export ARDUINO_DIRECTORIES_DOWNLOADS="$cache/arduino-downloads"
+  export PLATFORMIO_CORE_DIR="$cache/platformio"
   if [ ! -x "$venv/bin/pio" ]; then
     python3 -m venv "$venv"
     "$venv/bin/pip" install --disable-pip-version-check platformio
   fi
-  if [ ! -x "$build/bin/arduino-cli" ]; then
+  if [ ! -x "$cache/bin/arduino-cli" ]; then
     local arch version=1.1.1
     case "$(uname -m)" in
       x86_64) arch=64bit ;;
       aarch64 | arm64) arch=ARM64 ;;
       *) fail "no arduino-cli build for $(uname -m)" ;;
     esac
-    mkdir -p "$build/bin"
-    curl -fsSL -o "$build/arduino-cli.tar.gz" \
+    mkdir -p "$cache/bin"
+    curl -fsSL -o "$cache/arduino-cli.tar.gz" \
       "https://github.com/arduino/arduino-cli/releases/download/v${version}/arduino-cli_${version}_Linux_${arch}.tar.gz"
-    tar -xzf "$build/arduino-cli.tar.gz" -C "$build/bin" arduino-cli
+    tar -xzf "$cache/arduino-cli.tar.gz" -C "$cache/bin" arduino-cli
   fi
-  export PATH="$venv/bin:$build/bin:$PATH"
+  export PATH="$venv/bin:$cache/bin:$PATH"
 }
 
 # Pico (PlatformIO, raspberrypi platform) against `pio pkg pack` of cpp/.

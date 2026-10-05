@@ -15,7 +15,8 @@ use crate::value::{PackError, UnpackError, Values};
 /// - The bits of a `flags` byte or flag byte come from its fields; a value under its own name
 ///   is not read. A bool (an empty `group`) sets its bit for `1` and leaves it clear for `0` or
 ///   no value.
-/// - Each field inside a `times` takes a [`Value::List`] with one item per round.
+/// - Each direct field of a `times` takes a [`Value::List`] with one item per round. Fields under
+///   a `flags` or `when` inside a `times` round are not aligned per round yet (AZ-2086).
 /// - A `repeat` takes its rounds as [`Value::Groups`] (one [`Values`] per round) under the name
 ///   `"__repeat__"`; no value there packs no rounds.
 ///

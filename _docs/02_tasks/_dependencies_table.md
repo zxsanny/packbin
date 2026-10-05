@@ -124,6 +124,7 @@ Estimation: `_docs/LESSONS.md` says the six packages stay peers. The session is 
 | AZ-2133 | rust_cpp_bitwhen | 1 | AZ-2082 | AZ-2069 |
 | AZ-2134 | aligned_round_values | 5 | AZ-2079, AZ-2080, AZ-2083 | AZ-2069 |
 | AZ-2135 | split_bits_field_order | 5 | AZ-2079, AZ-2080, AZ-2089 | AZ-2069 |
+| AZ-2147 | cpp_empty_group_without_member | 1 | AZ-2081 | AZ-2069 |
 
 The six pack tasks do not depend on each other. AZ-1875 runs after all six. The five blackbox tasks run after AZ-1913 and do not depend on each other. The three earlier todo tasks do not depend on each other and still have no tracker id. AZ-1938 through AZ-1941 are under epic AZ-1937. The string count does not include itself; the list count does not consume the next field.
 

@@ -17,10 +17,14 @@ constexpr auto flags(int id, Ns const&... children) {
 }
 
 // Fields written one after another. The group id is the anchor. Under `flags` the group is
-// present when any of its direct children is present.
+// present when any of its direct children is present. With no children and no member its bit
+// could never be set, so the scheme is invalid wherever it stands.
 template <typename... Ns>
 constexpr auto group(int id, Ns const&... children) {
-  return detail::nest(detail::leaf(Kind::Group, id), children...);
+  auto out = detail::nest(detail::leaf(Kind::Group, id), children...);
+  if constexpr (sizeof...(Ns) == 0)
+    detail::mark_invalid(out.f[0]);
+  return out;
 }
 
 // A group with no fields under `flags`: only its bit is on the wire, bound to a bool member.

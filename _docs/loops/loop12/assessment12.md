@@ -2,9 +2,9 @@
 
 loop: 12
 feature: bool-flag-limit (epic AZ-2069: AZ-2079, AZ-2080, AZ-2082, AZ-2083, AZ-2089)
-rounds: 1
-verdict: CLARIFY
-report_of_round: 1
+rounds: 2
+verdict: EXTEND
+report_of_round: 2
 
 ## Round 1
 
@@ -133,3 +133,77 @@ report_of_round: 1
 - Per-round bools (U2, G5) and split-form numbering (G4) are in no shared vector or ring.
 
 FEATURE ASSESSMENT loop 12 round 1: CLARIFY — 19 covered / 11 out-of-scope / 6 gap-clear / 4 gap-unclear
+
+## Round 2
+
+**Date**: 2026-10-05
+**Implement pass**: batch 02 (AZ-2129, AZ-2130, AZ-2131, AZ-2132, AZ-2133), batch report `_docs/03_implementation/batch_02_loop12_report.md`, commit 8b392c1 (diff `f4c92f0..8b392c1`)
+**Verdict**: EXTEND — 13 covered / 12 out-of-scope / 1 gap-clear / 0 gap-unclear
+
+**Owner decisions applied (not re-asked).** Round 1 answers U1 A, U2 A (deferred to AZ-2134), U3 A, U4 A; loop scope = bool follow-through (U1, U3, U4, G3). Deferred: G1 + G4 → AZ-2135, U2 + G5 → AZ-2134, G6 → AZ-2128 (extended), G2 → AZ-2127 (AC-4). Batch 2 review decisions: Rust public map `pack`/`unpack` exported and failing loudly; Rust nested-round rule narrower than Java's; Java typed empty nested row accepted as an AZ-2101 dependency.
+
+**Method note.** `git archive 8b392c1` extracted into the scratchpad; suites re-run there (TS 108 + 3 todo, Python 103, Rust 135, C# 204, Java 0 failures, C++ all passed); the five `bitwhen` handoffs run with the ring's own functions; scratch probes in all six languages (C# and C++ also against `7a5a235`). No repository file touched.
+
+### Coverage matrix
+
+| id | scenario | status | evidence | source |
+|----|----------|--------|----------|--------|
+| U1 | TypeScript `new Scheme(...)` runs every `scheme()` check | covered | AZ-2129 AC-1/AC-2. Tests: `typescript/tests/scheme-constructor.test.ts` (bool outside flags, wrong id, split bit outside scope, type number 256; same valid scheme as `scheme()`). Code: `typescript/src/index.ts:62-72`, `79-81` | round-1 U1 |
+| U3 | An empty group that can never carry `true` fails construction wherever it stands (C#, Java, Python); groups that can carry it are unchanged | covered | AZ-2130 AC-1/AC-2, AZ-2131 AC-1/AC-2, AZ-2132 AC-1/AC-2. Tests: `csharp/tests/EmptyGroupTests.cs::*`; `BoolPlacementTest.java::emptyGroupWithoutFieldsIsRefusedEverywhere`, `::emptyNestedRowBitRoundTripsPresence`; `test_bool_placement.py::test_empty_group_is_scheme_error_everywhere`. Code: `csharp/Field.cs:190,199,204-211`; `java/.../SchemeOrder.java:105-110`; `python/src/packbin/_nodes.py:410-411`. C++ not covered: W1 | round-1 U3 |
+| U4 | `bitwhen`: `{k:0,v:5}` → `010001`, `{k:1,v:5}` → `01010105`; project AC-4 reworded | covered | Project AC-4; AZ-2129/2130/2131 AC-4; AZ-2133 AC-1/AC-2. Tests in TS, C#, Java, Rust, C++; ring `language-pair.sh:108-112` (all five handoffs pass, consumers reject `01010105`). Python: W3 | round-1 U4 |
+| G3 | A non-`true` value leaves the bit clear | covered | AZ-2129..2132 AC-3. Tests in TS, C#, Java, Python; Rust map `U8(2)` → `Type` (S11) | round-1 G3 |
+| O9 | Python empty `group(anchor)` refused everywhere; meets `empty_group_outside_flags` | covered | AZ-2132 AC-1/AC-2; README exception removed | round-1 O9 |
+| U2 | Per-round optional values in `repeat`/`times` | out-of-scope | Owner U2 A, deferred: AZ-2134 | round-1 U2 |
+| G5 | C# drops values under `flags` in a round | out-of-scope | AZ-2134 | round-1 G5 |
+| G1 | C++ binds a split bit to a byte read inside an earlier `when` | out-of-scope | AZ-2135 AC-2 | round-1 G1 |
+| G4 | Split-bit numbering by field order in TS, C#, Java | out-of-scope | AZ-2135 AC-1 | round-1 G4 |
+| G2 | Java nested-row group in a `repeat` round | out-of-scope | AZ-2127 AC-4 | round-1 G2 |
+| G6 | TS/Python u2/bits/sized/packed-only flags groups | out-of-scope | AZ-2128 (extended) | round-1 G6 |
+| D1 | TS: already-flattened fields build and pack through `new Scheme` | covered | AZ-2129 AC-2; `flatten` passes `flagByte`/`flagBit` through (`fields.ts:103-122`). Probe: `new Scheme(2, s1.fields)` → `020103070105` | batch 2 #1 |
+| D2 | TS: unpack puts the flag byte value (`m: 1`) in the row | out-of-scope | AZ-2091 | batch 2 #2 |
+| D3 | C#: an anchored empty group on a non-`bool` member is refused | covered | AZ-2130; `EmptyGroupTests.cs::Ac1_EmptyGroupOnANonBoolMember_FailsUnderFlags`; `Field.cs:199,204-211` | batch 2 #3 |
+| D4 | C#: refusal in the `Field.Group` factory | covered | AZ-2130 AC-1; `Field.cs:190,199`; fluent `Fields<T>.Group` refused the same way | batch 2 #4 |
+| D5 | Java: typed nested row throws `ClassCastException` on unpack | out-of-scope | AZ-2131 flagged concern (accepted-risk); AZ-2101 Defect 1 | batch 2 #5 |
+| D6 | Java: empty nested row carries presence only | covered | AZ-2131 AC-2; `BoolPlacementTest.java::emptyNestedRowBitRoundTripsPresence`; README | batch 2 #6 |
+| D7 | Rust: exported map `pack`/`unpack` reach the split form | covered | AZ-2133 AC-1; `flag_presence_tests.rs::bitwhen_*`; driver `handoff-rust/src/main.rs:141-195`; `lib.rs:18`, `walk/mod.rs:28,49`; README:278. Exception W2 | batch 2 #7 |
+| D9 | AC-10 NFR failed once in a loaded container | covered | Project AC-10; NFR tests in C# and TS; batch 2 touched no hot path; re-runs pass | batch 2 #9 |
+| D10 | Rust map: `times`/`when` as a `flags` member never written | out-of-scope | AZ-2128 flagged concern | batch 2 #10 |
+| D11 | Rust map: `repeat`/`times` in a list/dict group element ignored | out-of-scope | AZ-2086 flagged concern | batch 2 #11 |
+| V1 | Rust public `pack` fails loudly (`__repeat__` non-Groups; nested rounds that lose data) | covered | Owner decision; `rust/src/round_tests.rs::*` (10 tests); `walk/pack.rs:248`, `field/shape.rs:90-109,156,161`; README:978 | batch 2 review |
+| V2 | Rust keeps `times` inside a `repeat` round; elements start outside any round | covered | Owner confirmed; `round_tests.rs::times_inside_a_repeat_round_still_builds`, `::repeat_and_times_inside_list_or_dict_elements_still_build`; `scope_tests.rs::times_count_reads_the_enclosing_scope` | batch 2 review |
+| W1 | C++ `group(id)` with no children and no member builds directly in `flags` or as a `flag_bit`; its bit is always clear and unpack of a set bit drops it | gap-clear | Probe: `flags(0, group(0))` and `flag_byte(0), flag_bit(0, group(0))` compile, pack `0100`, unpack `0101` ok (same at 7a5a235). Code: `cpp/include/packbin/fields_grouped.hpp:22`, `order.hpp:182`, `src/core/values.cpp:54-56` | assess-round-2 |
+| W2 | Rust public `pack` doc says every field inside a `times` takes one list item per round, but fields under `flags`/`when` inside a `times` round do not | out-of-scope | AZ-2086 Outcome / Included (per-round alignment for optional members). Probe: `times(n,[flags(f,[u8 x])])` → `01020000` (dropped); `times(n,[u8 k, when(k==1,[u8 x])])` → `Missing("x")` | assess-round-2 |
+| W3 | Python not in the `bitwhen` ring | out-of-scope | AZ-2132 Problem; AZ-2100 | assess-round-2 |
+
+### Gaps that need a decision (gap-unclear)
+
+None.
+
+### Gaps that are clear (gap-clear)
+
+| id | new AC (Given / When / Then) | quoted basis | proposed owner task |
+|----|------------------------------|--------------|---------------------|
+| W1 | Given C++ `scheme<Row>(1, flags(0, group(0)))` and `scheme<Row>(1, flag_byte(0), flag_bit(0, group(0)))`, where `group(0)` has no children and no member; When the scheme is compiled; Then it fails like `tests/compile-fail/empty_group_outside_flags.cpp`; and `flags(0, group<&Row::b>(0))` on a `bool` member still packs `0101` / `0100` | AZ-2130 owner decision U3: "any empty group that can never carry `true` fails construction wherever it stands. An empty group whose member is a `bool` / `bool?` stays a presence bit."; `README.md:974`: "Every package refuses a violation at construction" | new C++ task under AZ-2069 (1 point) |
+
+### Not walked
+
+- C# `List`/`Dict` whose element is `Flags` packs `00` for every item (members dropped); predates loop 12; no C# ticket (TS AZ-2102, Rust AZ-2085).
+- Java empty nested row: any non-null member value (`false`, `0`) sets its bit (presence = non-null).
+- TS `case "flags"` in `pack-fields.ts:197` and `walker.ts:272` no longer reachable through `Scheme` (constructor flattens): candidate dead code.
+- README / `schema.md` do not mention the `bitwhen` behavior (only project AC-4 and the ring comment).
+- Empty `flags(anchor)` with no members, across packages.
+- Round-1 Not-walked items carry over.
+
+### Harness gaps
+
+- `implementation_report_bool_flag_limit_loop12.md` and `implementation_completeness_loop12_report.md` list only batch 1; no `batch_02_loop12_review.md` (review outcomes live in the batch report).
+- `language-pair.sh` (boolflag, booltrue, bitwhen rings) is not run by CI; recorded only as DR6 in `_docs/04_refactoring/02-whole-project-assessment/discovery/components/08_drivers_embedded.md:60`, no ticket.
+- AZ-2100 does not name the `bitwhen` vector.
+- AZ-2090 and AZ-2091 still say their checks run "at `scheme(...)`"; after AZ-2129 they belong in the `Scheme` constructor.
+- AZ-2086 does not name the Rust map `when`-inside-`times` symptom (W2); the public `pack` doc has no caveat for it.
+- No ticket covers Rust nested-round parity once AZ-2127 lands in Java.
+- `fixtures/hostile/README.md:28` still says an empty group is allowed inside `flags`, with no U3 exception.
+- No test feeds already-flattened fields to `new Scheme`.
+- Still open from round 1: the boolflag/booltrue rings cover only the single-bool scheme.
+
+FEATURE ASSESSMENT loop 12 round 2: EXTEND — 13 covered / 12 out-of-scope / 1 gap-clear / 0 gap-unclear

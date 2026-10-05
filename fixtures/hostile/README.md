@@ -25,7 +25,7 @@
 
 **Hex provenance.** The scan files describe each probe's scheme and result but did not record its exact bytes, apart from the C# and Java counts. Every hex value was derived from the wire rules and was not replayed against every package. A package task replays its cases on the current code first, checks that the documented failure reproduces, and corrects the file here, with the reason, if a value does not.
 
-**Decision (2026-10-05).** The flags bit is set only for `true`; `false` and absent leave it clear. A `bool` (and an empty group) is allowed only inside `flags` or a flag byte. Anywhere else is a scheme construction error.
+**Decision (2026-10-05).** The flags bit is set only for `true`; `false` and absent leave it clear. A `bool` (and an empty group) is allowed only inside `flags` or a flag byte. Anywhere else is a scheme construction error. An empty group that could never set its bit (no member and no fields) is a construction error everywhere, inside `flags` too (decision 2026-10-05, loop 12).
 
 ## zero_progress_repeat_bool
 

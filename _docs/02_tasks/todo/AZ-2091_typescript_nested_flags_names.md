@@ -139,5 +139,6 @@ Then the bytes are unchanged
 
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
+| Loop 12 (AZ-2129): the TypeScript `Scheme` constructor now runs every scheme check and `scheme()` delegates to it; put this task's new construction checks in the constructor, not only in `scheme(...)`, or `new Scheme` diverges again | coordinator | open | Low |
 | Nested containers inside `repeat`/`times` are not sliced per item on pack (repro in task 21's concerns). It belongs with this structural work, but is not in the plan's scope for task 22 | coordinator | open | Medium |
 | TS keeps flat rows while `Scheme<T>` suggests nested objects (scan C4). Design question, not fixed here | user | open | Low |

@@ -128,5 +128,6 @@ Then they construct and the bytes are unchanged
 
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
+| Loop 12 (AZ-2129): the TypeScript `Scheme` constructor now runs every scheme check and `scheme()` delegates to it; put this task's new construction checks in the constructor, not only in `scheme(...)`, or `new Scheme` diverges again | coordinator | open | Low |
 | The unanchored `group` opens a scope in TS only (ids restart at 0); other packages have no such group | coordinator / C04 | accepted-risk | Low |
 | Found while writing this spec: `repeat`/`times` pack only per-item slices of **direct** children. `u8(0, n)`, `times(1, 0, [u8(1, mode), when(2, eq(1, 1), [u8(2, v)])])` with `{n:2, mode:[1,1], v:[3,4]}` throws `RangeError: expected number` on pack; same for an anchored `group(1, g, [u8(1, a)])` inside `times`. Not owned by any task. Proposal: add it to task 22 or open a new TS task | coordinator | open | Medium |
