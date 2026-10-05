@@ -346,6 +346,86 @@ void times_and_route() {
          "route short lon");
 }
 
+// A container that reuses a flag-byte number keeps its own byte; the outer bit after it reads
+// the outer byte (AZ-2078, AC-1 and AC-2).
+struct Item {
+  Opt<std::uint8_t> x;
+};
+
+struct Reused {
+  std::uint8_t n = 0;
+  Array<Item, 4> items;
+  Opt<std::uint16_t> tail;
+};
+
+constexpr auto reused = packbin::scheme<Reused>(
+    1, packbin::u8<&Reused::n>(0), packbin::flag_byte(0),
+    packbin::times<&Reused::items>(1, 0, packbin::flag_byte(0),
+                                   packbin::flag_bit(0, packbin::u8<&Item::x>(1))),
+    packbin::flag_bit(0, packbin::u16<&Reused::tail>(2)));
+
+void flag_byte_per_scope() {
+  Reused row;
+  row.n = 1;
+  row.items.count = 1;
+  row.tail = 0x0302;
+  std::uint8_t buf[16];
+  auto p = packbin::pack(reused, row, buf, sizeof(buf));
+  expect(p.ok() && check::same_hex(buf, p.offset, "010101000203"), "AC-1 reused byte packs");
+  Reused back;
+  auto u = packbin::unpack(reused, buf, p.offset, back);
+  expect(u.ok() && u.offset == 6 && back.tail.has && back.tail.value == 0x0302 &&
+             back.items.count == 1 && !back.items.items[0].x.has,
+         "AC-1 reused byte unpacks");
+
+  Reused inner;
+  inner.n = 1;
+  inner.items.count = 1;
+  inner.items.items[0].x = 7;
+  auto q = packbin::pack(reused, inner, buf, sizeof(buf));
+  expect(q.ok() && check::same_hex(buf, q.offset, "0101000107"), "AC-2 inner bit packs");
+  Reused again;
+  auto v = packbin::unpack(reused, buf, q.offset, again);
+  expect(v.ok() && !again.tail.has && again.items.count == 1 && again.items.items[0].x.has &&
+             again.items.items[0].x.value == 7,
+         "AC-2 inner bit unpacks");
+}
+
+// A repeat round that reads no bytes ends the repeat; the bytes left are trailing (AC-3).
+struct Zero {
+  std::uint8_t k = 0;
+};
+
+struct ZeroBound {
+  std::uint8_t k = 0;
+  Array<Zero, 4> items;
+};
+
+void zero_progress_repeat() {
+  auto unbound = packbin::scheme<Zero>(1, packbin::u8<&Zero::k>(0), packbin::repeat(1));
+  auto bound = packbin::scheme<ZeroBound>(1, packbin::u8<&ZeroBound::k>(0),
+                                          packbin::repeat<&ZeroBound::items>(1));
+  std::uint8_t data[3] = {1, 5, 9};
+  Zero a;
+  auto u = packbin::unpack(unbound, data, sizeof(data), a);
+  expect(u.error == Error::TrailingBytes && u.offset == 2, "AC-3 unbound empty repeat");
+  ZeroBound b;
+  auto w = packbin::unpack(bound, data, sizeof(data), b);
+  expect(w.error == Error::TrailingBytes && w.offset == 2 && b.items.count == 0,
+         "AC-3 bound empty repeat");
+
+  // An unbound times with an empty body reads nothing in any round, so a huge count returns
+  // at once instead of spinning through it.
+  struct Spin {
+    std::uint32_t n = 0;
+  };
+  auto spin = packbin::scheme<Spin>(1, packbin::u32<&Spin::n>(0), packbin::times(1, 0));
+  std::uint8_t huge[5] = {1, 0xff, 0xff, 0xff, 0xff};
+  Spin s;
+  auto t = packbin::unpack(spin, huge, sizeof(huge), s);
+  expect(t.ok() && t.offset == 5 && s.n == 0xffffffffu, "empty-body times ends at once");
+}
+
 }  // namespace
 
 int run_core_container_tests() {
@@ -355,5 +435,7 @@ int run_core_container_tests() {
   dict_of_lists_of_dicts();
   repeat_to_the_end();
   times_and_route();
+  flag_byte_per_scope();
+  zero_progress_repeat();
   return check::failures();
 }

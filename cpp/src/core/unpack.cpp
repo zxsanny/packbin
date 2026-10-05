@@ -12,9 +12,10 @@ namespace {
 struct Walk {
   Field const* t;
   Reader& r;
-  // The last value read for each flag byte number (0..7).
+  // The last value read for each flag byte number (0..7) in the scope being read.
   std::uint8_t flag_bytes[8];
 };
+
 
 Result unpack_one(Walk& w, std::size_t i, void* obj);
 
@@ -186,8 +187,13 @@ std::size_t item_count(Walk& w, std::size_t i, void* obj, void* m, Result& out) 
 Result unpack_items(Walk& w, std::size_t i, void* m, std::size_t count) {
   Field const& f = w.t[i];
   bool to_end = f.kind == Kind::Repeat;
+  // The rounds read their own flag bytes, which may reuse the numbers of the outer scope; the
+  // outer values come back when the container ends (an error ends the whole unpack).
+  std::uint8_t outer[8];
+  std::memcpy(outer, w.flag_bytes, sizeof(outer));
   for (std::size_t k = 0; to_end ? w.r.pos < w.r.len : k < count; ++k) {
     std::size_t at = w.r.pos;
+    std::memset(w.flag_bytes, 0, sizeof(w.flag_bytes));
     void* item = nullptr;
     if (m != nullptr) {
       std::uint16_t filled = *f.count(m);
@@ -201,6 +207,13 @@ Result unpack_items(Walk& w, std::size_t i, void* m, std::size_t count) {
       if (!res.ok())
         return res;
     }
+    // A round that reads nothing reads nothing every time. A repeat would never reach the end:
+    // it adds no item and the bytes left are reported as trailing. An unbound times would only
+    // spin through its count.
+    if (w.r.pos == at && (to_end || m == nullptr)) {
+      std::memcpy(w.flag_bytes, outer, sizeof(outer));
+      return Result{};
+    }
     if (m != nullptr)
       ++*f.count(m);
     if (f.kind == Kind::Dict) {
@@ -209,6 +222,7 @@ Result unpack_items(Walk& w, std::size_t i, void* m, std::size_t count) {
         return res;
     }
   }
+  std::memcpy(w.flag_bytes, outer, sizeof(outer));
   return Result{};
 }
 

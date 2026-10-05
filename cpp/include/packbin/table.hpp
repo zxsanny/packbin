@@ -217,7 +217,7 @@ constexpr Node<typename JoinAll<typename Ns::Class...>::type, 1 + total<Ns...>()
   Node<typename JoinAll<typename Ns::Class...>::type, 1 + total<Ns...>()> out{};
   head.span = static_cast<std::uint16_t>(1 + total<Ns...>());
   out.f[0] = head;
-  std::size_t at = 1;
+  [[maybe_unused]] std::size_t at = 1;
   ((void)copy_fields(out.f, at, children), ...);
   return out;
 }

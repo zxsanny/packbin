@@ -167,16 +167,25 @@ constexpr void resolve(Field* t, std::size_t begin, std::size_t end, std::size_t
   }
 }
 
-constexpr void check_shape(Field const* t, std::size_t begin, std::size_t end, Check& c) {
+// A u2 packs into a 16-byte buffer: at most 64 two-bit children.
+constexpr std::size_t kMaxU2Children = 64;
+
+// `presence_ok`: the entries here are children of `flags` or of a flag bit. A bool or an empty
+// group is only a presence bit, so it is accepted nowhere else.
+constexpr void check_shape(Field const* t, std::size_t begin, std::size_t end, bool presence_ok,
+                           Check& c) {
   for (std::size_t j = begin; j < end && !c.failed; j += t[j].span) {
     Field const& f = t[j];
     std::size_t children = 0;
     for (std::size_t k = j + 1; k < j + f.span; k += t[k].span)
       ++children;
-    if ((f.kind == Kind::Flags && children > 8) || (f.flags & flag::Invalid) != 0)
+    bool is_presence = f.kind == Kind::Bool || (f.kind == Kind::Group && f.span == 1);
+    bool too_wide = (f.kind == Kind::Flags && children > 8) ||
+                    (f.kind == Kind::U2 && children > kMaxU2Children);
+    if (too_wide || (is_presence && !presence_ok) || (f.flags & flag::Invalid) != 0)
       c.fail_at(f.id);
     if (f.span > 1)
-      check_shape(t, j + 1, j + f.span, c);
+      check_shape(t, j + 1, j + f.span, f.kind == Kind::Flags || f.kind == Kind::FlagBit, c);
   }
 }
 
@@ -189,7 +198,7 @@ constexpr Result check_table(Field* t, std::size_t n) {
   for (std::size_t j = 0; j < n && !c.failed; j += t[j].span)
     next = detail::check_subtree(t, j, next, c);
   if (!c.failed)
-    detail::check_shape(t, 0, n, c);
+    detail::check_shape(t, 0, n, false, c);
   if (!c.failed)
     detail::resolve(t, 0, n, 0, c);
   if (c.failed)

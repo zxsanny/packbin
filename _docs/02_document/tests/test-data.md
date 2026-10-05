@@ -12,6 +12,7 @@
 | dictionaries | the 103-byte user value, empty triple, a repeated key | FT-D-01, FT-D-02, FT-D-03, FT-D-04, FT-D-05 | inline | none |
 | handoffs | producer hex consumed by the next language | FT-H-01, FT-H-02, FT-H-03 | inline | none |
 | borrowed count | width-2 kinds `0,1,2,3`, width-1 bias −1, two pairs then `7`, and the route fixture | FT-C-01, FT-C-02, FT-C-03, FT-C-04, FT-C-05 | inline | none |
+| hostile packets | `fixtures/hostile/cases.txt`: 17 packets and invalid schemes with the outcome kinds each may return (zero-progress repeat, hostile counts, invalid UTF-8, nine flag bits, later and outer references, bool outside flags) | AZ-2069 package tasks (AZ-2071 to AZ-2075, AZ-2078 and later), format check in the `scaffold` job | each package reads the file by path and writes the scheme by hand from `fixtures/hostile/README.md` | none; the file is read only |
 
 ## Data Isolation Strategy
 
