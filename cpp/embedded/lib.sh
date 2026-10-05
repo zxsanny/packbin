@@ -8,9 +8,10 @@ here="$cpp/embedded"
 results="${TEST_RESULTS:-$root/test-results}"
 out="$results/embedded"
 build="$cpp/build/embedded"
-# Downloaded toolchains (arduino-cli, the Arduino ESP32 core, PlatformIO). Kept outside build/ so
-# `make clean` and build cleanups do not throw away several hundred MB of downloads.
-cache="${PACKBIN_EMBEDDED_CACHE:-$here/.cache}"
+# Downloaded toolchains (arduino-cli, the Arduino ESP32 core, PlatformIO; several GB). Kept outside
+# cpp/: `make clean` would delete them from build/, and the package tools (compote, pio pkg pack)
+# walk every file under cpp/ before applying their include lists.
+cache="${PACKBIN_EMBEDDED_CACHE:-$root/.cache/embedded}"
 
 # Feature AC-1 flags; every core and test source on every target builds with these.
 core_flags=(-std=c++17 -fno-exceptions -fno-rtti -Os -Wall -Wextra -Werror)

@@ -123,6 +123,8 @@ copy_tree() {
     --exclude test-results \
     --exclude .github/workflows/out \
     --exclude rust/target \
+    --exclude .cache \
+    --exclude cpp/build \
     -cf - . | tar -C "$dest" -xf -
 }
 

@@ -2,9 +2,9 @@
 
 loop: 12
 feature: bool-flag-limit (epic AZ-2069: AZ-2079, AZ-2080, AZ-2082, AZ-2083, AZ-2089)
-rounds: 2
-verdict: EXTEND
-report_of_round: 2
+rounds: 3
+verdict: COMPLETE
+report_of_round: 3
 
 ## Round 1
 
@@ -207,3 +207,26 @@ None.
 - Still open from round 1: the boolflag/booltrue rings cover only the single-bool scheme.
 
 FEATURE ASSESSMENT loop 12 round 2: EXTEND — 13 covered / 12 out-of-scope / 1 gap-clear / 0 gap-unclear
+
+## Round 3
+
+**Date**: 2026-10-05
+**Implement pass**: batch 03 (AZ-2147), batch report `_docs/03_implementation/batch_03_loop12_report.md`, commit 37ed334
+**Verdict**: COMPLETE — 3 covered / 0 out-of-scope / 0 gap-clear / 0 gap-unclear (round-2 out-of-scope rows unchanged)
+
+Re-walk limited to what batch 3 changed: the C++ `group(id, children...)` factory, `check_shape` (unchanged at HEAD), the embedded toolchain cache location, and the README empty-group sentence.
+
+### Coverage matrix
+
+| id | scenario | status | evidence | source |
+|----|----------|--------|----------|--------|
+| W1 | C++ `group(id)` with no children and no member fails construction directly in `flags` and as a `flag_bit`; a `bool`-member empty group keeps packing `0101` / `0100` | covered | AZ-2147 AC-1/AC-2. Tests: `cpp/tests/core/scheme_tests.cpp::empty_group_without_member_is_refused` (red before: `FAIL: AZ-2147 AC-1 empty group in flags`, `... as a flag bit`); compile-fail `cpp/tests/compile-fail/empty_group_without_member.cpp` (`breaks_order<0>`). Code: `cpp/include/packbin/fields_grouped.hpp` (`if constexpr (sizeof...(Ns) == 0) detail::mark_invalid(out.f[0])`), refused by `check_shape` through `flag::Invalid` (`order.hpp`). GCC 16 container, Cortex-M0+/M3/M4F, s390x and ESP-IDF builds pass | round-2 W1 |
+| X1 | No valid C++ shape uses a zero-child `group(id)`: every call site (tests only) expects a refusal; list/dict element empty groups were already refused | covered | `grep` of `cpp/include`, `src`, `tests`, `examples`, `embedded`, drivers, README: only `scheme_tests.cpp:267,274,278` and the compile-fail case, all asserting `SchemeInvalid` / a compile error | assess-round-3 |
+| X2 | README empty-group sentence names C++ | covered | `README.md:974` now lists "a C++ `group(id)` with no fields and no member" (fixed in this round) | assess-round-3 |
+
+### Not walked
+
+- The embedded toolchain cache move (`cpp/embedded/.cache/`) is build infrastructure, not a usage angle; it was exercised by the ESP stage (Arduino-ESP32 example built from the new cache).
+- `cpp-example-pico` is not runnable on an arm64 host (known since loop 10); CI covers it on x86_64.
+
+FEATURE ASSESSMENT loop 12 round 3: COMPLETE — 3 covered / 0 out-of-scope / 0 gap-clear / 0 gap-unclear

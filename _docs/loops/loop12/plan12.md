@@ -72,3 +72,4 @@ Divergence recorded at the batch commit: review fix rounds widened the C#, Java 
 |-------|---------|-----------|--------|
 | 1 | CLARIFY (owner answered U1–U4: all A; scope: bool follow-through only) | AZ-2129, AZ-2130, AZ-2131, AZ-2132, AZ-2133 (this loop); deferred AZ-2134, AZ-2135; AZ-2127 / AZ-2128 extended (G2, G6) | _docs/loops/loop12/assessment12.md |
 | 2 | EXTEND (W1, C++ empty group without member) | AZ-2147 | _docs/loops/loop12/assessment12.md |
+| 3 | COMPLETE | — | _docs/loops/loop12/assessment12.md |
