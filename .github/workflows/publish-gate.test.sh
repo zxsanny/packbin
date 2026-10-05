@@ -196,6 +196,24 @@ maven_bundle_checks() {
     -e PACKBIN_VERSION=0.1.2 \
     -e PACKBIN_OUT=/src/.github/workflows/out \
     java "exec /src/.github/workflows/publish-inside.sh java"
+  local jar_dir=/src/.github/workflows/out/maven/io/github/zxsanny/packbin/0.1.2
+  local class_check='
+    set -euo pipefail
+    jar="'"$jar_dir"'/packbin-0.1.2.jar"
+    classes="$(jar tf "$jar" | grep "\.class$" | sed -e "s/\.class$//" -e "s|/|.|g")"
+    total="$(printf "%s\n" "$classes" | wc -l)"
+    java17="$(javap -v -cp "$jar" $classes | grep -c "major version: 61" || true)"
+    printf "%s %s\n" "$total" "$java17"
+  '
+  local counts total_classes java17_classes
+  counts="$(docker compose -f "$tree/docker-compose.test.yml" --project-directory "$tree" \
+    -p packbin-maven-bundle run -T --rm --no-deps -e SRC_ROOT=/src java "$class_check")"
+  total_classes="${counts% *}"
+  java17_classes="${counts#* }"
+  if [ "$total_classes" -lt 1 ]; then
+    fail "AZ-2094 AC-1 jar holds no classes"
+  fi
+  assert_eq "$java17_classes" "$total_classes" "AZ-2094 AC-1 classes with major version 61"
   if command -v gpg >/dev/null 2>&1; then
     ring="$(mktemp -d)"
     chmod 700 "$ring"

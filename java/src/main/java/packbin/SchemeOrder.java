@@ -1,5 +1,6 @@
 package packbin;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -32,11 +33,11 @@ final class SchemeOrder {
                         throw new IllegalArgumentException(
                                 "flag bit " + bitName(field.inner) + " has no flagByte before it in the same scope");
                     }
-                    requireFlagBytes(List.of(field.inner), new HashSet<>(visible));
+                    requireFlagBytes(Collections.singletonList(field.inner), new HashSet<>(visible));
                 }
                 case FLAGS -> {
                     for (Field bit : field.children) {
-                        requireFlagBytes(List.of(bit.inner), new HashSet<>(visible));
+                        requireFlagBytes(Collections.singletonList(bit.inner), new HashSet<>(visible));
                     }
                 }
                 case WHEN -> requireFlagBytes(field.children, new HashSet<>(visible));

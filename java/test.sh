@@ -14,10 +14,8 @@ elif [ -x /usr/libexec/java_home ]; then
 fi
 if ! command -v javac >/dev/null 2>&1; then
   for candidate in /Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home \
-                   /Library/Java/JavaVirtualMachines/jdk-11.jdk/Contents/Home \
                    /opt/homebrew/opt/openjdk@21 \
-                   /opt/homebrew/opt/openjdk@17 \
-                   /opt/homebrew/opt/openjdk@11; do
+                   /opt/homebrew/opt/openjdk@17; do
     if [ -x "$candidate/bin/javac" ]; then
       export JAVA_HOME="$candidate"
       export PATH="$JAVA_HOME/bin:$PATH"
@@ -30,7 +28,7 @@ command -v java >/dev/null 2>&1 || { echo "java not found" >&2; exit 1; }
 main_out="$root/out/main"
 test_out="$root/out/test"
 
-rm -rf "$root/out"
+rm -rf "$main_out" "$test_out"
 mkdir -p "$main_out" "$test_out"
 
 main_sources=()
@@ -43,8 +41,9 @@ while IFS= read -r -d '' f; do
   test_sources+=("$f")
 done < <(find "$root/src/test/java" -name '*.java' -print0 | sort -z)
 
-javac -encoding UTF-8 -d "$main_out" "${main_sources[@]}"
-javac -encoding UTF-8 -cp "$main_out" -d "$test_out" "${test_sources[@]}"
+javac --release 17 -encoding UTF-8 -d "$main_out" "${main_sources[@]}"
+javac --release 17 -encoding UTF-8 -cp "$main_out" -d "$test_out" "${test_sources[@]}"
+bash "$root/api-check.sh" "$main_out"
 
 cd "$repo"
 java -cp "$main_out:$test_out" packbin.PackbinTest

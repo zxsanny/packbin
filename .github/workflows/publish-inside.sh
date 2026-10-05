@@ -64,8 +64,8 @@ path.write_text(re.sub(r"(?m)^version = \".*\"$", f"version = \"{version}\"", te
     while IFS= read -r -d '' f; do
       sources+=("$f")
     done < <(find "$root/java/src/main/java" -name '*.java' -print0 | sort -z)
-    javac -encoding UTF-8 -d "$classes" "${sources[@]}"
-    javadoc -encoding UTF-8 -d "$work/javadoc" -sourcepath "$root/java/src/main/java" packbin
+    javac --release 17 -encoding UTF-8 -d "$classes" "${sources[@]}"
+    javadoc --release 17 -encoding UTF-8 -d "$work/javadoc" -sourcepath "$root/java/src/main/java" packbin
     path="io/github/zxsanny"
     dest="$bundle/$path/packbin/$version"
     mkdir -p "$dest"

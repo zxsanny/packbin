@@ -1,6 +1,7 @@
 package packbin;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -127,7 +128,7 @@ final class Rounds {
         for (Field field : body) {
             switch (field.kind) {
                 case FLAGS, WHEN, U2 -> collect(field.children, out);
-                case FLAG_BIT -> collect(List.of(field.inner), out);
+                case FLAG_BIT -> collect(Collections.singletonList(field.inner), out);
                 case GROUP -> {
                     if (field.nestedRow) {
                         out.add(field);

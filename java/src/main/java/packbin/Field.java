@@ -1,8 +1,11 @@
 package packbin;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 public final class Field {
     enum Kind {
@@ -65,15 +68,27 @@ public final class Field {
         this.set = set;
         this.bigEndian = bigEndian;
         this.size = size;
-        this.children = children == null ? List.of() : List.copyOf(children);
+        this.children = immutableCopy(children);
         this.condition = condition;
         this.group = group;
         this.bitIndex = bitIndex;
         this.inner = inner;
         this.countId = countId;
         this.bias = bias;
-        this.slotIds = slotIds == null ? List.of() : List.copyOf(slotIds);
+        this.slotIds = immutableCopy(slotIds);
         this.nestedRow = nestedRow;
+    }
+
+    /** An unmodifiable copy that rejects null items, as List.copyOf does (that call needs Android API 30). */
+    static <T> List<T> immutableCopy(Collection<? extends T> items) {
+        if (items == null) {
+            return Collections.emptyList();
+        }
+        List<T> copy = new ArrayList<>(items);
+        for (T item : copy) {
+            Objects.requireNonNull(item);
+        }
+        return Collections.unmodifiableList(copy);
     }
 
     String label() {
@@ -156,7 +171,7 @@ public final class Field {
                 null,
                 false,
                 0,
-                List.of(fields),
+                Arrays.asList(fields),
                 null,
                 null,
                 0,
@@ -183,7 +198,7 @@ public final class Field {
                 first.set,
                 false,
                 0,
-                List.copyOf(slots),
+                slots,
                 null,
                 null,
                 0,
@@ -228,11 +243,11 @@ public final class Field {
     }
 
     static Field when(int id, Packbin.Eq condition, Field[] fields) {
-        return new Field(Kind.WHEN, id, null, null, false, 0, List.of(fields), condition, null, 0, null, -1, 0, null, false);
+        return new Field(Kind.WHEN, id, null, null, false, 0, Arrays.asList(fields), condition, null, 0, null, -1, 0, null, false);
     }
 
     static Field repeat(int id, Field[] fields) {
-        return new Field(Kind.REPEAT, id, null, null, false, 0, List.of(fields), null, null, 0, null, -1, 0, null, false);
+        return new Field(Kind.REPEAT, id, null, null, false, 0, Arrays.asList(fields), null, null, 0, null, -1, 0, null, false);
     }
 
     static Field group(Getter get, Setter set, Field[] fields, boolean nested) {
@@ -243,7 +258,7 @@ public final class Field {
                 set,
                 false,
                 0,
-                List.of(fields),
+                Arrays.asList(fields),
                 null,
                 null,
                 0,
@@ -255,7 +270,7 @@ public final class Field {
     }
 
     static Field group(int id, Field[] fields) {
-        return new Field(Kind.GROUP, id, null, null, false, 0, List.of(fields), null, null, 0, null, -1, 0, null, false);
+        return new Field(Kind.GROUP, id, null, null, false, 0, Arrays.asList(fields), null, null, 0, null, -1, 0, null, false);
     }
 
     static Field list(Getter get, Setter set, Field element) {
@@ -269,7 +284,7 @@ public final class Field {
                 set,
                 false,
                 0,
-                List.of(element),
+                Collections.singletonList(element),
                 null,
                 null,
                 0,
@@ -291,7 +306,7 @@ public final class Field {
                 set,
                 false,
                 0,
-                List.of(element),
+                Collections.singletonList(element),
                 null,
                 null,
                 0,

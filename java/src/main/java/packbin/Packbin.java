@@ -101,7 +101,7 @@ public final class Packbin {
     }
 
     public static Field u2(Field... slots) {
-        return Field.u2(java.util.List.of(slots));
+        return Field.u2(java.util.Arrays.asList(slots));
     }
 
     public static Field u2Slot(int id, Getter get, Setter set) {

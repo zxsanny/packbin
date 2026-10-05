@@ -25,6 +25,8 @@ License is MIT.
 | Maven Central | `io.github.zxsanny:packbin` | Gradle / Maven coordinate | First publish, with the Java package |
 | vcpkg | `packbin` | `vcpkg install packbin` | First publish, with the C++ package |
 
+The Java jar targets Java 17+, Android API 26+.
+
 Public registries, not GitHub Packages. GitHub Packages asks for a token even for public installs, which fails the "install and import" path.
 
 ## Publish

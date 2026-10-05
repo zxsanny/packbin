@@ -19,6 +19,8 @@ Can be used for WebSocket, TCP, UDP, and other means of efficient communication
 
 Encryption is optional. `PackSession` hides the packed bytes on one connection and adds 0 bytes to each packet. The only extra send is 16 bytes, once, when the connection opens. It does not detect a changed byte, and anyone holding the 32-byte seed can read every session. See [Encrypted session](#encrypted-session).
 
+Java: Java 17+, Android API 26+.
+
 ## Example
 
 Python → binary → TypeScript

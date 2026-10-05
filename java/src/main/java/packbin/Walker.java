@@ -1,5 +1,6 @@
 package packbin;
 
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
@@ -189,7 +190,7 @@ final class Walker {
         ByteBuffer buf = ByteBuffer.allocate(field.size);
         buf.order(field.bigEndian ? ByteOrder.BIG_ENDIAN : ByteOrder.LITTLE_ENDIAN);
         Scalars.writeScalar(field, value, buf);
-        buf.flip();
+        ((Buffer) buf).flip();
         sink.write(buf);
     }
 

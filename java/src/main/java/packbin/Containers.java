@@ -2,7 +2,7 @@ package packbin;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -40,7 +40,7 @@ final class Containers {
     private static Object[] unpackListItems(Field element, byte[] data, int[] offset) {
         int left = data.length - offset[0];
         if (left < 2) {
-            return new Object[] {List.of(), new Packbin.ShortPacket("", 2, left)};
+            return new Object[] {Collections.emptyList(), new Packbin.ShortPacket("", 2, left)};
         }
         int count = (data[offset[0]] & 0xff) | ((data[offset[0] + 1] & 0xff) << 8);
         offset[0] += 2;
@@ -69,7 +69,7 @@ final class Containers {
             }
             keys.add(text);
         }
-        keys.sort((a, b) -> Arrays.compareUnsigned(
+        keys.sort((a, b) -> compareUnsigned(
                 a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8)));
         sink.write((byte) keys.size());
         sink.write((byte) (keys.size() >> 8));
@@ -86,6 +86,18 @@ final class Containers {
         }
     }
 
+    /** Unsigned byte order, then length; Arrays.compareUnsigned needs Android API 33. */
+    private static int compareUnsigned(byte[] a, byte[] b) {
+        int common = Math.min(a.length, b.length);
+        for (int i = 0; i < common; i++) {
+            int diff = (a[i] & 0xff) - (b[i] & 0xff);
+            if (diff != 0) {
+                return diff;
+            }
+        }
+        return a.length - b.length;
+    }
+
     static Object unpackDict(Field field, byte[] data, int[] offset, Object row, boolean asList) {
         Object[] got = unpackDictItems(field.children.get(0), data, offset);
         if (got[1] != null) {
@@ -98,7 +110,7 @@ final class Containers {
     private static Object[] unpackDictItems(Field element, byte[] data, int[] offset) {
         int left = data.length - offset[0];
         if (left < 2) {
-            return new Object[] {Map.of(), new Packbin.ShortPacket("", 2, left)};
+            return new Object[] {Collections.emptyMap(), new Packbin.ShortPacket("", 2, left)};
         }
         int count = (data[offset[0]] & 0xff) | ((data[offset[0] + 1] & 0xff) << 8);
         offset[0] += 2;
@@ -145,9 +157,9 @@ final class Containers {
         } else if (element.kind == Field.Kind.DICT) {
             packDict(element, item, sink);
         } else if (isLeaf(element)) {
-            Walker.packFields(List.of(element), item, sink, new HashMap<>(), field -> item);
+            Walker.packFields(Collections.singletonList(element), item, sink, new HashMap<>(), field -> item);
         } else {
-            Walker.packFields(List.of(element), item, sink, new HashMap<>(), null);
+            Walker.packFields(Collections.singletonList(element), item, sink, new HashMap<>(), null);
         }
     }
 
@@ -177,7 +189,7 @@ final class Containers {
             return new Object[] {seen.get(element.id), null};
         }
         Map<String, Object> child = new HashMap<>();
-        Object err = Walker.unpackFields(List.of(element), data, offset, child, new HashMap<>(), false);
+        Object err = Walker.unpackFields(Collections.singletonList(element), data, offset, child, new HashMap<>(), false);
         return new Object[] {child, err};
     }
 }
