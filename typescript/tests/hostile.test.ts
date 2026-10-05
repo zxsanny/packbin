@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { describe, it } from "node:test"
 import { Worker } from "node:worker_threads"
-import { BinaryPacker, bits, i32, repeat, scheme, u64, type DispatchResult } from "../src/index.ts"
+import { BinaryPacker, bits, bytes, i32, list, repeat, scheme, u64, type DispatchResult } from "../src/index.ts"
 import type { Outcome, SessionOutcome } from "./support/hostile-cases.ts"
 
 // A hang or an out-of-memory loop ends the worker, not the test run. The cases share one
@@ -79,6 +79,10 @@ const SPEC: Record<string, string> = {
   row4_times_behind_clear_flag: "0100",
   row6_times_zero_width_oversize: "01ffffffff",
   row6_times_zero_width_small: "0103",
+  row7_list_of_list_zero_width: "01ffffffff",
+  row7_dict_zero_width_value: "01ffff010061",
+  row7_dict_zero_width_value_one: "010100010061",
+  row7_never_matching_when_element: "01000300",
   row5_list_oversize: "01ffff0100",
   row5_utf8_oversize: "01ffff61",
   row5_times_oversize: "01ff0102",
@@ -162,6 +166,30 @@ describe("hostile packets", () => {
   it("times round that reads nothing is an error", async () => {
     assertError(await run("row6_times_zero_width_oversize"), "v", 0)
     assertError(await run("row6_times_zero_width_small"), "v", 0)
+  })
+
+  it("zero_width_list_element_is_error", async () => {
+    assertError(await run("row7_list_of_list_zero_width"), "inner", 0)
+  })
+
+  it("zero_width_dict_value_is_error", async () => {
+    assertError(await run("row7_dict_zero_width_value"), "d", 0)
+    assertError(await run("row7_dict_zero_width_value_one"), "d", 0)
+  })
+
+  it("never_matching_when_element_is_error", async () => {
+    assertError(await run("row7_never_matching_when_element"), "xs", 0)
+  })
+
+  it("empty_list_of_zero_width_still_unpacks", () => {
+    type Row = { xs: unknown[] }
+    const layout = scheme<Row>(1, list((r) => r.xs, bytes(0, (r) => r.e, 0)))
+    let got: Row | undefined
+    const result = BinaryPacker.unpack(Buffer.from("010000", "hex"), layout.on((row) => {
+      got = row as Row
+    }))
+    assert.deepEqual(result, { ok: true })
+    assert.deepEqual(got!.xs, [])
   })
 
   it("oversize counts stay short packets", async () => {

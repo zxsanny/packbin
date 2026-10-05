@@ -4,11 +4,9 @@ import {
   validateFieldIds,
   type Field,
 } from "./fields.ts"
-import {
-  packFields,
-  unpackBody,
-  type UnpackErr,
-} from "./walker.ts"
+import { unpackBody, type UnpackErr } from "./walker.ts"
+import { packFields } from "./pack-fields.ts"
+import { validateFlagScopes } from "./flag-scope.ts"
 import type { Value } from "./kinds.ts"
 import { hkdf } from "@noble/hashes/hkdf.js"
 import { sha256 } from "@noble/hashes/sha2.js"
@@ -75,7 +73,9 @@ export function scheme<T>(typeNumber: number, ...fields: Field[]): Scheme<T> {
     throw new RangeError("type number: expected 0..255")
   }
   validateFieldIds(fields)
-  return new Scheme(typeNumber, flatten(fields))
+  const flat = flatten(fields)
+  validateFlagScopes(flat)
+  return new Scheme(typeNumber, flat)
 }
 
 export class BinaryPacker {

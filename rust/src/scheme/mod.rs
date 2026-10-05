@@ -3,8 +3,8 @@ mod bound;
 pub use bound::BoundField;
 
 use crate::field::{
-    check_order, field_name, flags as layout_flags, id_name, nested_element, take_id,
-    times as layout_times, when as layout_when, Eq, Field, MapScheme,
+    check_order, check_order_part, field_name, flags as layout_flags, id_name, nested_element,
+    take_id, times as layout_times, when as layout_when, Eq, Field, MapScheme,
 };
 use crate::value::{Name, PackError, ShortPacket, UnpackError, Value, Values};
 use crate::walk;
@@ -164,7 +164,7 @@ fn compile_items<T: 'static>(
                 binders.extend(child_binders);
             }
             SchemeItem::Field(field) => {
-                *next_id = check_order(std::slice::from_ref(&field), *next_id, 0);
+                *next_id = check_order_part(std::slice::from_ref(&field), *next_id, 0);
                 fields.push(field);
             }
         }

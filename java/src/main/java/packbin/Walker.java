@@ -278,7 +278,7 @@ final class Walker {
             Object row,
             Map<Object, Object> seen,
             boolean asList) {
-        // The byte lives in this call's map under its group; a bit whose byte this scope never read stays clear.
+        // The byte lives in this call's map under its group. Validated schemes always read it first; 0 is a safety net.
         int flags = seen.get(field.group) instanceof Integer read ? read : 0;
         if ((flags & (1 << field.bitIndex)) == 0) {
             return null;

@@ -259,7 +259,7 @@ internal static partial class Walker
         for (long i = 0; i < count; i++)
         {
             var roundStart = offset;
-            var group = new Scope(values);
+            var group = new Scope();
             foreach (var child in field.Children)
             {
                 var err = UnpackField(child, bytes, ref offset, group, repeatLists: false);
@@ -350,10 +350,14 @@ internal static partial class Walker
         var items = new List<object?>(count);
         for (var i = 0; i < count; i++)
         {
-            var one = new Scope(values);
+            var one = new Scope();
+            var elementStart = offset;
             var err = UnpackField(child, bytes, ref offset, one, false);
             if (err is not null)
                 return err;
+            // An element that reads nothing would let a few bytes ask for millions of empty items.
+            if (offset == elementStart)
+                return InterimBadValue(field.Name, bytes.Length - elementStart);
             items.Add(one[child.Name]);
         }
         Store(values, field.Name, items, repeatLists);
@@ -417,10 +421,14 @@ internal static partial class Walker
             if (!TryUtf8(bytes.Slice(offset, keyLen), out var key))
                 return InterimBadValue(field.Name, left);
             offset += keyLen;
-            var one = new Scope(values);
+            var one = new Scope();
+            var valueStart = offset;
             var err = UnpackField(child, bytes, ref offset, one, false);
             if (err is not null)
                 return err;
+            // A zero-width value would let a few bytes ask for 65 535 empty entries.
+            if (offset == valueStart)
+                return InterimBadValue(field.Name, bytes.Length - valueStart);
             if (items.ContainsKey(key))
                 return new ShortPacket(field.Name, 0, 0);
             items[key] = one[child.Name];

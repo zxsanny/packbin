@@ -189,6 +189,7 @@ internal static class SchemeOrder
         foreach (var field in fields)
             Walk(field, scope, ref next);
         Resolve(fields, scope);
+        FlagScopes.Validate(fields);
     }
 
     private static void Walk(Field field, Dictionary<int, string> scope, ref int next)

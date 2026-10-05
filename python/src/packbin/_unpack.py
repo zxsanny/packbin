@@ -165,9 +165,12 @@ def _unpack_list_items(
     offset += 2
     items: list[Any] = []
     for _ in range(count):
+        before = offset
         value, offset, err = _unpack_element(data, offset, element)
         if err is not None:
             return items, offset, err
+        if offset == before:
+            return items, offset, _bad_value(data, before, "")
         items.append(value)
     return items, offset, None
 
@@ -186,9 +189,12 @@ def _unpack_dict_items(
         if isinstance(got, ShortPacket):
             return mapping, offset, got
         key, offset = got
+        before = offset
         value, offset, err = _unpack_element(data, offset, element)
         if err is not None:
             return mapping, offset, err
+        if offset == before:
+            return mapping, offset, _bad_value(data, before, "")
         if key in mapping:
             return mapping, offset, ShortPacket(field="", needed=0, left=0)
         mapping[key] = value

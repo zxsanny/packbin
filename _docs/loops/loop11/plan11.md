@@ -55,3 +55,11 @@ Divergence recorded at the batch commit: the plan listed seven tasks; a cross-la
 
 ### Risks
 - Wire-visible change only for degenerate packets (zero-width `times` body) and for packets that used to hang, throw or misread
+
+## Assessment rounds
+
+| round | verdict | new specs | report |
+|-------|---------|-----------|--------|
+| 1 | CLARIFY | AZ-2107_python_zero_width_elements, AZ-2108_typescript_zero_width_elements, AZ-2109_csharp_zero_width_elements, AZ-2110_java_zero_width_elements, AZ-2111_rust_zero_width_elements | _docs/loops/loop11/assessment11.md |
+
+Owner answers (2026-10-05): U1 A (zero-width list/dict element is an error at unpack), U2 A (orphan split flag bit refused at construction; Python rides on AZ-2100), U3/U4/U5 become tickets AZ-2116/2117/2118, clear gaps G1-G4 become follow-up tickets AZ-2112..2115 for later loops.

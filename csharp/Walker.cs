@@ -330,7 +330,7 @@ internal static partial class Walker
         while (offset < bytes.Length)
         {
             var roundStart = offset;
-            var group = new Scope(values);
+            var group = new Scope();
             foreach (var child in field.Children)
             {
                 var err = UnpackField(child, bytes, ref offset, group, repeatLists: false);

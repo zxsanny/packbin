@@ -1,3 +1,4 @@
+use super::element::unpack_element;
 use crate::field::{
     field_name, float_width, int_width, Field, FieldKind, FloatKind, IntKind, MapScheme,
 };
@@ -366,24 +367,9 @@ fn unpack_one(
             let child = field_name(element).unwrap_or(name);
             let mut items = Vec::with_capacity(count);
             for _ in 0..count {
-                let mut one = Values::new();
-                unpack_fields(
-                    std::slice::from_ref(element),
-                    cur,
-                    &mut one,
-                    flag_bits,
-                    groups,
-                )?;
-                items.push(match one.remove(child) {
-                    Some(Some(v)) => v,
-                    _ => {
-                        return Err(UnpackError::Short(ShortPacket {
-                            field: name.to_string(),
-                            needed: 0,
-                            left: cur.left(),
-                        }))
-                    }
-                });
+                items.push(unpack_element(
+                    element, name, child, cur, flag_bits, groups,
+                )?);
             }
             values.insert(name.clone(), Some(Value::List(items)));
         }
@@ -405,24 +391,7 @@ fn unpack_one(
                         })
                     })?
                     .to_string();
-                let mut one = Values::new();
-                unpack_fields(
-                    std::slice::from_ref(element),
-                    cur,
-                    &mut one,
-                    flag_bits,
-                    groups,
-                )?;
-                let item = match one.remove(child) {
-                    Some(Some(v)) => v,
-                    _ => {
-                        return Err(UnpackError::Short(ShortPacket {
-                            field: name.to_string(),
-                            needed: 0,
-                            left: cur.left(),
-                        }))
-                    }
-                };
+                let item = unpack_element(element, name, child, cur, flag_bits, groups)?;
                 if map.contains_key(&key) {
                     return Err(UnpackError::Short(ShortPacket {
                         field: name.to_string(),

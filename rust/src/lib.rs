@@ -21,6 +21,8 @@ mod borrowed_count_tests;
 #[cfg(test)]
 mod counted_tests;
 #[cfg(test)]
+mod element_tests;
+#[cfg(test)]
 mod hostile_tests;
 #[cfg(test)]
 mod packbin_tests;

@@ -95,9 +95,26 @@ Estimation: `_docs/LESSONS.md` says the six packages stay peers. The session is 
 | AZ-2103 | typescript_npm_javascript | 3 | None | AZ-2069 |
 | AZ-2104 | python_session_star_import | 1 | None | AZ-2069 |
 | AZ-2105 | rust_session_pack_error | 1 | None | AZ-2069 |
+| AZ-2107 | python_zero_width_elements | 2 | None | AZ-2069 |
+| AZ-2108 | typescript_zero_width_elements | 3 | None | AZ-2069 |
+| AZ-2109 | csharp_zero_width_elements | 3 | None | AZ-2069 |
+| AZ-2110 | java_zero_width_elements | 3 | None | AZ-2069 |
+| AZ-2111 | rust_zero_width_elements | 3 | None | AZ-2069 |
+| AZ-2112 | typescript_u64_counts | 2 | AZ-2072 | AZ-2069 |
+| AZ-2113 | python_later_field_refs | 2 | None | AZ-2069 |
+| AZ-2114 | hostile_session_tests | 2 | None | AZ-2069 |
+| AZ-2115 | split_form_reference_bytes | 2 | AZ-2091 | AZ-2069 |
+| AZ-2116 | csharp_exact_integers | 3 | None | AZ-2069 |
+| AZ-2117 | rust_named_reference_scope | 3 | AZ-2075 | AZ-2069 |
+| AZ-2118 | rust_pack_checked_count | 1 | None | AZ-2069 |
+| AZ-2119 | csharp_group_list_element | 3 | None | AZ-2069 |
+| AZ-2120 | csharp_when_under_flags_pack | 2 | None | AZ-2069 |
 
 The six pack tasks do not depend on each other. AZ-1875 runs after all six. The five blackbox tasks run after AZ-1913 and do not depend on each other. The three earlier todo tasks do not depend on each other and still have no tracker id. AZ-1938 through AZ-1941 are under epic AZ-1937. The string count does not include itself; the list count does not consume the next field.
 
 AZ-2060 through AZ-2068 are under epic AZ-2059 (C++ on microcontrollers). All nine touch only `cpp/` and the C++ CI and publish files, so they run in order, not in parallel. The session task depends on the scheme task, not only on the scalars, because it packs through a core scheme. The host port (AZ-2064) waits for the session so the old walker is deleted once. AZ-2068 is a stretch task (D-3 A). Estimation: `_docs/LESSONS.md` asks to keep the six packages as peers; this feature is C++ only, so no point bump.
 
 AZ-2070 through AZ-2105 are under epic AZ-2069 (cross-language bug fixes; order and severity in `_docs/04_refactoring/02-whole-project-assessment/analysis/bugfix_task_plan.md`). Loop 10 claims only AZ-2070, AZ-2078 and AZ-2081; the rest are loop 11 onward. A task that lists a dependency on another AZ-2069 task in the same package lands after it.
+
+AZ-2107 through AZ-2111 are loop 11 follow-through from feature-assess round 1 (zero-width list and dict elements; orphan split flag bit). AZ-2112 through AZ-2118 are follow-ups from the same assessment, unclaimed. The Python orphan-flag-bit rule rides on AZ-2100.
+AZ-2119 and AZ-2120 are C# bugs found by the loop 11 round 2 worker; both predate the loop and are unclaimed.

@@ -151,7 +151,17 @@ final class Containers {
         }
     }
 
+    /** An element that reads 0 bytes would repeat for a count the packet controls; it is an error. */
     private static Object[] unpackElement(Field element, byte[] data, int[] offset) {
+        int before = offset[0];
+        Object[] got = readElement(element, data, offset);
+        if (got[1] == null && offset[0] == before) {
+            return new Object[] {null, new Packbin.ShortPacket("", 0, data.length - before)};
+        }
+        return got;
+    }
+
+    private static Object[] readElement(Field element, byte[] data, int[] offset) {
         if (element.kind == Field.Kind.LIST) {
             return unpackListItems(element.children.get(0), data, offset);
         }

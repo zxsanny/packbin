@@ -1,6 +1,6 @@
 mod order;
 
-pub(crate) use order::{check_order, nested_element, take_id};
+pub(crate) use order::{check_order, check_order_part, nested_element, take_id};
 
 use crate::value::{name_of, Name, Value};
 use std::cell::RefCell;

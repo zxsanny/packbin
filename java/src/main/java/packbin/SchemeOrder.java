@@ -1,8 +1,10 @@
 package packbin;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 final class SchemeOrder {
     private SchemeOrder() {}
@@ -14,6 +16,40 @@ final class SchemeOrder {
             walk(field, scope, next);
         }
         resolve(fields, scope);
+        requireFlagBytes(fields, new HashSet<>());
+    }
+
+    /**
+     * A split flag bit reads the byte its own flagByte read earlier in the same container (top level,
+     * repeat or times round, list or dict element). A byte inside a when or flags child is visible only there.
+     */
+    private static void requireFlagBytes(List<Field> fields, Set<FlagGroup> visible) {
+        for (Field field : fields) {
+            switch (field.kind) {
+                case FLAG_BYTE -> visible.add(field.group);
+                case FLAG_BIT -> {
+                    if (!visible.contains(field.group)) {
+                        throw new IllegalArgumentException(
+                                "flag bit " + bitName(field.inner) + " has no flagByte before it in the same scope");
+                    }
+                    requireFlagBytes(List.of(field.inner), new HashSet<>(visible));
+                }
+                case FLAGS -> {
+                    for (Field bit : field.children) {
+                        requireFlagBytes(List.of(bit.inner), new HashSet<>(visible));
+                    }
+                }
+                case WHEN -> requireFlagBytes(field.children, new HashSet<>(visible));
+                case GROUP -> requireFlagBytes(field.children, visible);
+                case REPEAT, TIMES, LIST, DICT -> requireFlagBytes(field.children, new HashSet<>());
+                default -> {}
+            }
+        }
+    }
+
+    /** Fields carry no names, so a bit is named by its kind and, when it has one, its id (ids restart per scope). */
+    private static String bitName(Field inner) {
+        return inner.id >= 0 ? inner.kind + " " + inner.id : inner.kind.toString();
     }
 
     private static void walk(Field field, Map<Integer, Field> scope, int[] next) {

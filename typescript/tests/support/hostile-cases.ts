@@ -3,6 +3,7 @@ import {
   PackSession,
   bits,
   bool,
+  bytes,
   dict,
   eq,
   flags,
@@ -32,6 +33,8 @@ export type Outcome = {
 
 // Count 0 is the first value of the scheme; flag-guarded counts hide it behind a clear bit.
 const clearFlag = () => flags(0, [u8(0, (x: Row) => x.n)])
+
+const dictZeroWidthValue = scheme<Row>(1, dict((x) => x.d, bytes(0, (x) => x.v, 0)))
 
 export const SCHEMES: Record<string, Scheme<Row>> = {
   // fixtures/hostile/cases.txt, unpack stage
@@ -124,6 +127,20 @@ export const SCHEMES: Record<string, Scheme<Row>> = {
     1,
     u8(0, (x) => x.n),
     times(1, 0, [when(1, eq(0, 9), [u8(1, (x) => x.v)])]),
+  ),
+  row7_list_of_list_zero_width: scheme<Row>(
+    1,
+    list(
+      (x) => x.outer,
+      list((x) => x.inner, bytes(0, (x) => x.e, 0)),
+    ),
+  ),
+  row7_dict_zero_width_value: dictZeroWidthValue,
+  row7_dict_zero_width_value_one: dictZeroWidthValue,
+  row7_never_matching_when_element: scheme<Row>(
+    1,
+    u8(0, (x) => x.mode),
+    list((x) => x.xs, when(0, eq(0, 9), [u8(0, (x) => x.v)])),
   ),
   row5_bits_oversize: scheme<Row>(
     1,

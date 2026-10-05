@@ -42,6 +42,7 @@ public final class PackbinTest {
         HostileUnpackTest.run();
         HostileVectorTest.run();
         FlagStateTest.run();
+        ZeroWidthElementTest.run();
         if (failures + PackbinFieldsTest.failures > 0) {
             System.err.println((failures + PackbinFieldsTest.failures) + " failure(s)");
             System.exit(1);
