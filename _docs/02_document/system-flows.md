@@ -75,7 +75,7 @@ flowchart TD
 
 ### Description
 
-The caller passes a buffer. Unpack returns the value, or an error and no value. In C++ unpack fills the caller's row and returns a `Result`; on failure the fields read before it keep their values.
+The caller passes a buffer. Unpack returns the value, or an error and no value. The buffer is untrusted: in C#, TypeScript, Python, Rust and Java a bad buffer is always an error value, never an exception or a panic, and unpack ends within a time and memory bound set by the buffer length. In C++ unpack fills the caller's row and returns a `Result`; on failure the fields read before it keep their values.
 
 ### Preconditions
 
@@ -96,14 +96,17 @@ sequenceDiagram
 ```mermaid
 flowchart TD
     Start([Caller calls unpack]) --> Enough{Field fits in the bytes left?}
-    Enough -->|Yes| Next[Read the field]
+    Enough -->|Yes| Valid{Count, text and round valid?}
     Enough -->|No| Short[Error, value count 0. C++: ShortPacket with offset and order id]
+    Valid -->|Yes| Next[Read the field]
+    Valid -->|No| Bad[Interim error, value count 0]
     Next --> More{Another field?}
     More -->|Yes| Enough
     More -->|No| Tail{Bytes left?}
     Tail -->|0| Ok([Value])
     Tail -->|1 or more| Trail[Error, value count 0. C++: TrailingBytes]
     Short --> EndNode([Stop])
+    Bad --> EndNode
     Trail --> EndNode
 ```
 
@@ -119,7 +122,9 @@ flowchart TD
 | Error | Where | Detection | Recovery |
 |-------|-------|-----------|----------|
 | Short field | Unpack | remaining bytes are fewer than the width | no value; the next call is independent. C++ keeps the fields read before the failure in the row |
-| Trailing bytes | Unpack | bytes remain after the list | no value |
+| Trailing bytes | Unpack | bytes remain after the list, or a `repeat` round read 0 bytes with bytes left | no value; the `repeat` ends instead of looping |
+| Bad value (C#, TypeScript, Python, Rust, Java) | Unpack | a negative count; a count whose source field is absent behind a clear flag bit; invalid UTF-8 in a string or dictionary key; a `times` round or a `list` or `dict` element that reads 0 bytes | no value, no exception. The error is a short-packet-style value, interim until C15 sets its kind and label |
+| Count above the bytes left | Unpack | a string length, or a `sized`, `bits` or `packed` run, that needs more bytes than remain | short packet; the count is compared with the bytes left before it sizes anything |
 | Count over capacity, bad count, duplicate dict key (C++) | Unpack | `TooMany` or `BadValue` with the offset | no value; no truncation |
 
 ### Performance Expectations

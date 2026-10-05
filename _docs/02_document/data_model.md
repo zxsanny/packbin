@@ -8,7 +8,7 @@ There is no database. The library does not store a packet after the call returns
 |--------|------------|-------------|
 | Field list | ordered fields, each with a name, a width, and an endian | names are for the value and for errors; they are not written. A continuing group takes an anchor equal to the next value id. The anchor is not written and does not consume a slot. `packed` and `times` take their item count from an earlier field. In C++ a field has an order id and a bound struct member, not a name; the order id is what errors report |
 | Bytes | the packed buffer | length is the sum of the fields that are present |
-| Short packet | field name, bytes needed, bytes left. C++: field order id, byte offset, bytes needed | returned instead of a value. C++ returns a `Result` and keeps the fields read before the failure |
+| Short packet | field name, bytes needed, bytes left. C++: field order id, byte offset, bytes needed | returned instead of a value. C++ returns a `Result` and keeps the fields read before the failure. Outside C++ the same shape is also the interim error for a bad value (negative or absent count, invalid UTF-8, a round that reads nothing); each package sets its own `needed` and `left` until C15 |
 
 ## Relationships
 

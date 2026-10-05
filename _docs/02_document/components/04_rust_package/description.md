@@ -16,9 +16,9 @@
 
 | Method | Input | Output | Async | Error Types |
 |--------|-------|--------|-------|-------------|
-| `Scheme` | type number, fields by order id | scheme | No | a gap, a repeated id, a bad anchor, or a reference to an id not yet walked |
+| `Scheme` | type number, fields by order id | scheme | No | a gap, a repeated id, a bad anchor, a reference to an id not yet walked, a `when`, count or flag-bit reference to an id outside the enclosing `repeat` or `times` body, or a flag bit whose flag byte is not read earlier in the same scope. Construction failures are panics that name the id |
 | `BinaryPacker::pack` | scheme, row | bytes | No | integer does not fit |
-| `BinaryPacker::unpack` | scheme, bytes | row or error | No | short packet, trailing bytes, type mismatch |
+| `BinaryPacker::unpack` | scheme, bytes | row or error | No | short packet, trailing bytes, type mismatch; never panics on bytes (see §7) |
 | `BinaryPacker::unpack_with` | bytes, handlers | row or error | No | unknown leading byte |
 
 **Input DTOs**:
@@ -69,6 +69,7 @@ No queries and no cache.
 
 **Error Handling Strategy**:
 - A short field returns an error and zero values
+- Hostile bytes return `Err`, never a panic (§7)
 - No retry
 
 ## 6. Extensions and Helpers
@@ -81,6 +82,25 @@ No queries and no cache.
 
 **Known limitations**:
 - The first release has no code generator
+- References by name (map layout) are not scope-checked; only numeric ids are. The run-time zero-progress guard still stops a hang (AZ-2117)
+- A bound list whose element is a bare flag bit panics at construction; no test covers it
+- Pack `borrowed_count` still adds its bias unchecked (AZ-2118)
+
+**Hostile input** (loop 11). Unpack of untrusted bytes returns an error value and no row, within a time and memory bound set by the input length. It does not throw and does not loop on input it cannot consume. The cases:
+- a `repeat` round that reads 0 bytes ends the repeat; the bytes left come back as trailing bytes
+- a `times` round, or a `list` or `dict` element, that reads 0 bytes is an error, even for a small count (a few bytes could otherwise ask for 65 535 empty items)
+- a negative count, a count larger than the bytes left, invalid UTF-8 in a string or a dictionary key, and a count whose source field is absent (it sat behind a clear flag bit)
+
+The error shape is interim: a short-packet-style value. Its kind, label, `needed` and `left` are decided under C15, so no new public error type was added. In Rust it is `UnpackError::Short` with `needed` 0. A zero-width `times` round is labelled `"times"`; the `repeat` case is `UnpackError::Trailing`. A `packed` count goes through checked arithmetic (`packed_layout` in `walk/unpack.rs`), so a count of 2^63 or more, or one that overflows a 32-bit `usize`, is an error, not a wrap. `walk/element.rs` reads one `list` or `dict` element and rejects a zero-width one.
+
+**Construction rules** (`field/order.rs`, for both the map layout and the typed `Scheme::new`):
+- a `when`, a `sized`, `bits`, `packed` or `times` count, or a flag bit may only name an id inside its own `repeat` or `times` body, because each round reads into its own values
+- a split-form flag bit must follow its flag byte, read earlier in the same scope; a flag byte read inside a `when` is not visible after it, and one outside a `repeat` or `times` body is not visible inside
+
+**Breaking changes for callers** (pack output is unchanged):
+- A flag byte read in one `when` with its bit in another `when` worked before. It is now refused at construction.
+- A flag byte outside a `list`, `repeat` or `times` body with its bit inside that body is refused at construction.
+- A `times`, `list` or `dict` element that reads nothing is now an error instead of an empty item.
 
 **Potential race conditions**:
 - None

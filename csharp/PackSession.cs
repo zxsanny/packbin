@@ -43,8 +43,8 @@ public sealed class PackSession
         if (_send is null)
             return null;
         var clear = BinaryPacker.Pack(scheme, value);
-        SessionPad.Xor(_send, _sendCount, clear);
-        _sendCount++;
+        // Each call takes its own counter, so concurrent packs never reuse a keystream.
+        SessionPad.Xor(_send, Interlocked.Increment(ref _sendCount) - 1, clear);
         return clear;
     }
 

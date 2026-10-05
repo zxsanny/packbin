@@ -1,4 +1,4 @@
-use super::element::unpack_element;
+use super::element::{capacity_hint, unpack_element};
 use crate::field::{
     field_name, float_width, int_width, Field, FieldKind, FloatKind, IntKind, MapScheme,
 };
@@ -365,7 +365,7 @@ fn unpack_one(
             let count_raw = cur.take(2, name)?;
             let count = u16::from_le_bytes([count_raw[0], count_raw[1]]) as usize;
             let child = field_name(element).unwrap_or(name);
-            let mut items = Vec::with_capacity(count);
+            let mut items = Vec::with_capacity(capacity_hint(count, cur.left()));
             for _ in 0..count {
                 items.push(unpack_element(
                     element, name, child, cur, flag_bits, groups,

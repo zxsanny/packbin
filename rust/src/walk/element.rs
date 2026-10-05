@@ -40,3 +40,9 @@ pub(super) fn unpack_element(
         })),
     }
 }
+
+/// Capacity to reserve for `count` decoded elements. Every element reads at least one byte,
+/// so more than the bytes left can never be filled; the packet's own count is not trusted.
+pub(crate) fn capacity_hint(count: usize, left: usize) -> usize {
+    count.min(left)
+}

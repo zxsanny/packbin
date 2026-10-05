@@ -1,5 +1,5 @@
 use crate::hostile_tests::within_one_second;
-use crate::walk::unpack;
+use crate::walk::{capacity_hint, unpack};
 use crate::{
     bytes, dict, eq, flag_byte, list, times, u8, when, BoundField, MapScheme, Scheme, SchemeItem,
     ShortPacket, UnpackError, Value,
@@ -194,4 +194,33 @@ fn same_scope_flag_bit_still_builds() {
     let scheme = MapScheme::new(1, vec![f.byte(), f.bit(u8("1"))]);
     let got = unpack(&scheme, &[0x01, 0x01, 0x07]).expect("unpack");
     assert_eq!(got.get("1"), Some(&Some(Value::U8(7))));
+}
+
+#[test]
+fn capacity_hint_is_capped_by_bytes_left() {
+    assert_eq!(capacity_hint(65535, 1), 1);
+    assert_eq!(capacity_hint(65535, 0), 0);
+    assert_eq!(capacity_hint(3, 100), 3);
+}
+
+#[test]
+fn count_ffff_short_packet_unchanged() {
+    let list_scheme = MapScheme::new(1, vec![list("0", u8("0"))]);
+    assert_eq!(
+        unpack(&list_scheme, &[0x01, 0xff, 0xff]).map(|_| ()),
+        Err(UnpackError::Short(ShortPacket {
+            field: "0".to_string(),
+            needed: 1,
+            left: 0,
+        }))
+    );
+    let dict_scheme = MapScheme::new(1, vec![dict("0", u8("0"))]);
+    assert_eq!(
+        unpack(&dict_scheme, &[0x01, 0xff, 0xff]).map(|_| ()),
+        Err(UnpackError::Short(ShortPacket {
+            field: "0".to_string(),
+            needed: 2,
+            left: 0,
+        }))
+    );
 }

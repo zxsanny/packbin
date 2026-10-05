@@ -109,6 +109,11 @@ Estimation: `_docs/LESSONS.md` says the six packages stay peers. The session is 
 | AZ-2118 | rust_pack_checked_count | 1 | None | AZ-2069 |
 | AZ-2119 | csharp_group_list_element | 3 | None | AZ-2069 |
 | AZ-2120 | csharp_when_under_flags_pack | 2 | None | AZ-2069 |
+| AZ-2121 | flag_scope_container_tests | 2 | None | AZ-2069 |
+| AZ-2122 | typescript_proto_key_when_scope_bom | 3 | None | AZ-2069 |
+| AZ-2123 | csharp_top_range_ints_capacity_session_counter | 3 | None | AZ-2069 |
+| AZ-2124 | java_atomic_session_counter | 2 | None | AZ-2069 |
+| AZ-2125 | rust_capacity_hint_bounded | 1 | None | AZ-2069 |
 
 The six pack tasks do not depend on each other. AZ-1875 runs after all six. The five blackbox tasks run after AZ-1913 and do not depend on each other. The three earlier todo tasks do not depend on each other and still have no tracker id. AZ-1938 through AZ-1941 are under epic AZ-1937. The string count does not include itself; the list count does not consume the next field.
 
@@ -118,3 +123,4 @@ AZ-2070 through AZ-2105 are under epic AZ-2069 (cross-language bug fixes; order 
 
 AZ-2107 through AZ-2111 are loop 11 follow-through from feature-assess round 1 (zero-width list and dict elements; orphan split flag bit). AZ-2112 through AZ-2118 are follow-ups from the same assessment, unclaimed. The Python orphan-flag-bit rule rides on AZ-2100.
 AZ-2119 and AZ-2120 are C# bugs found by the loop 11 round 2 worker; both predate the loop and are unclaimed.
+AZ-2122 through AZ-2125 are loop 11 security-audit fixes (F4-F9), claimed by loop 11 at the owner's request. AZ-2116 (exact C# integers) and AZ-2119 (C# group list element) stay open; F4 here only stops the exception.

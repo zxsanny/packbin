@@ -39,6 +39,15 @@ function firstName(fields: Field[]): string {
   return ""
 }
 
+// Inside a repeat a field is collected into a list; `round` also holds the value of the
+// round being read, which is what a `when` in that round tests.
+function store(values: Value, round: Value | null, name: string, value: unknown): void {
+  if (round) {
+    appendRepeat(values, name, value)
+    round[name] = value
+  } else values[name] = value
+}
+
 function appendRepeat(values: Value, name: string, value: unknown): void {
   const prev = values[name]
   if (Array.isArray(prev)) prev.push(value)
@@ -52,22 +61,20 @@ export function unpackFields(
   cur: ViewCursor,
   values: Value,
   flagBytes: Map<symbol, number>,
-  repeating: boolean,
+  round: Value | null,
 ): UnpackErr | null {
   for (const f of fields) {
     switch (f.kind) {
       case "int": {
         const r = readInt(cur, f.name, f.size, f.signed, f.littleEndian)
         if (!r.ok) return r
-        if (repeating) appendRepeat(values, f.name, r.value)
-        else values[f.name] = r.value
+        store(values, round, f.name, r.value)
         break
       }
       case "float": {
         const r = readFloat(cur, f.name, f.size, f.littleEndian)
         if (!r.ok) return r
-        if (repeating) appendRepeat(values, f.name, r.value)
-        else values[f.name] = r.value
+        store(values, round, f.name, r.value)
         break
       }
       case "bytes": {
@@ -76,13 +83,11 @@ export function unpackFields(
         const slice = cur.buf.subarray(cur.offset, cur.offset + f.size)
         cur.offset += f.size
         const copy = new Uint8Array(slice)
-        if (repeating) appendRepeat(values, f.name, copy)
-        else values[f.name] = copy
+        store(values, round, f.name, copy)
         break
       }
       case "bool":
-        if (repeating) appendRepeat(values, f.name, true)
-        else values[f.name] = true
+        store(values, round, f.name, true)
         break
       case "flagByte": {
         const r = readInt(cur, f.name, 1, false, true)
@@ -103,7 +108,7 @@ export function unpackFields(
             cur,
             values,
             flagBytes,
-            repeating,
+            round,
           )
           if (err) return err
         } else {
@@ -113,21 +118,23 @@ export function unpackFields(
             cur,
             values,
             flagBytes,
-            repeating,
+            round,
           )
           if (err) return err
         }
         break
       }
       case "when": {
-        if (values[nameById(allFields, f.fieldId)] === f.value) {
+        const name = nameById(allFields, f.fieldId)
+        const seen = round !== null && Object.hasOwn(round, name) ? round[name] : values[name]
+        if (seen === f.value) {
           const err = unpackFields(
             f.fields,
             allFields,
             cur,
             values,
             flagBytes,
-            repeating,
+            round,
           )
           if (err) return err
         }
@@ -136,7 +143,7 @@ export function unpackFields(
       case "repeat": {
         while (cur.offset < cur.buf.length) {
           const before = cur.offset
-          const err = unpackFields(f.fields, allFields, cur, values, flagBytes, true)
+          const err = unpackFields(f.fields, allFields, cur, values, flagBytes, {})
           if (err) return err
           // A round that reads nothing would repeat forever; the unread bytes are trailing.
           if (cur.offset === before) break
@@ -145,7 +152,7 @@ export function unpackFields(
       }
       case "group": {
         if (f.fields.length === 0) values[f.name] = true
-        const err = unpackFields(f.fields, allFields, cur, values, flagBytes, repeating)
+        const err = unpackFields(f.fields, allFields, cur, values, flagBytes, round)
         if (err) return err
         break
       }
@@ -154,8 +161,7 @@ export function unpackFields(
         if (count === null) return unreadable(f.name, cur)
         const r = readSized(cur, f.name, count)
         if (!r.ok) return r
-        if (repeating) appendRepeat(values, f.name, r.value)
-        else values[f.name] = r.value
+        store(values, round, f.name, r.value)
         break
       }
       case "u2": {
@@ -163,8 +169,7 @@ export function unpackFields(
         if (!r.ok) return r
         for (let i = 0; i < f.slots.length; i++) {
           const name = f.slots[i]!.name
-          if (repeating) appendRepeat(values, name, r.values[i])
-          else values[name] = r.values[i]
+          store(values, round, name, r.values[i])
         }
         break
       }
@@ -177,8 +182,7 @@ export function unpackFields(
         if (count === null) return unreadable(f.name, cur)
         const r = readBits(cur, f.name, count)
         if (!r.ok) return r
-        if (repeating) appendRepeat(values, f.name, r.values)
-        else values[f.name] = r.values
+        store(values, round, f.name, r.values)
         break
       }
       case "packed": {
@@ -186,8 +190,7 @@ export function unpackFields(
         if (count === null) return unreadable(f.name, cur)
         const r = readPacked(cur, f.name, f.width, count)
         if (!r.ok) return r
-        if (repeating) appendRepeat(values, f.name, r.values)
-        else values[f.name] = r.values
+        store(values, round, f.name, r.values)
         break
       }
       case "times": {
@@ -197,7 +200,7 @@ export function unpackFields(
         for (let i = 0; i < count; i++) {
           const group: Value = {}
           const before = cur.offset
-          const err = unpackFields(f.fields, allFields, cur, group, flagBytes, false)
+          const err = unpackFields(f.fields, allFields, cur, group, flagBytes, null)
           if (err) return err
           // A round that reads nothing would repeat up to `count` times for no input.
           if (cur.offset === before) return unreadable(firstName(f.fields), cur)
@@ -213,8 +216,7 @@ export function unpackFields(
       case "utf8": {
         const r = readUtf8(cur, f.name)
         if (!r.ok) return r
-        if (repeating) appendRepeat(values, f.name, r.value)
-        else values[f.name] = r.value
+        store(values, round, f.name, r.value)
         break
       }
       case "list": {
@@ -228,14 +230,13 @@ export function unpackFields(
         for (let i = 0; i < count; i++) {
           const one: Value = {}
           const before = cur.offset
-          const err = unpackFields([f.element], allFields, cur, one, flagBytes, false)
+          const err = unpackFields([f.element], allFields, cur, one, flagBytes, null)
           if (err) return err
           // An element that reads nothing would be repeated up to 65535 times for no input.
           if (cur.offset === before) return unreadable(f.name, cur)
           items.push(one[child])
         }
-        if (repeating) appendRepeat(values, f.name, items)
-        else values[f.name] = items
+        store(values, round, f.name, items)
         break
       }
       case "dict": {
@@ -251,16 +252,21 @@ export function unpackFields(
           if (!key.ok) return key
           const one: Value = {}
           const before = cur.offset
-          const err = unpackFields([f.element], allFields, cur, one, flagBytes, false)
+          const err = unpackFields([f.element], allFields, cur, one, flagBytes, null)
           if (err) return err
           if (cur.offset === before) return unreadable(f.name, cur)
-          if (Object.prototype.hasOwnProperty.call(items, key.value)) {
+          if (Object.hasOwn(items, key.value)) {
             return short(f.name, 0, 0)
           }
-          items[key.value] = one[child]
+          // Keys come from the wire: define them, so "__proto__" is an entry, not a prototype.
+          Object.defineProperty(items, key.value, {
+            value: one[child],
+            enumerable: true,
+            writable: true,
+            configurable: true,
+          })
         }
-        if (repeating) appendRepeat(values, f.name, items)
-        else values[f.name] = items
+        store(values, round, f.name, items)
         break
       }
       case "flags": {
@@ -270,7 +276,7 @@ export function unpackFields(
           cur,
           values,
           flagBytes,
-          repeating,
+          round,
         )
         if (err) return err
         break
@@ -292,7 +298,7 @@ export function unpackBody(
   }
   const values: Value = {}
   const flagBytes = new Map<symbol, number>()
-  const err = unpackFields(fields, fields, cur, values, flagBytes, false)
+  const err = unpackFields(fields, fields, cur, values, flagBytes, null)
   if (err) return err
   if (cur.offset < buf.length) {
     return short("", 0, buf.length - cur.offset)

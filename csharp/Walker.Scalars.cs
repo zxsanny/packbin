@@ -76,7 +76,26 @@ internal static partial class Walker
         }
     }
 
-    private static object ReadScalar(Field field, ReadOnlySpan<byte> src) =>
+    // The switch below has natural type double, so the narrower scalars box as double (exact types: AZ-2116).
+    // 64-bit integers are read separately so the top of their range does not round and overflow on conversion.
+    private static object ReadScalar(Field field, ReadOnlySpan<byte> src)
+    {
+        switch (field.Type)
+        {
+            case Field.Kind.U64:
+                return field.BigEndian
+                    ? BinaryPrimitives.ReadUInt64BigEndian(src)
+                    : BinaryPrimitives.ReadUInt64LittleEndian(src);
+            case Field.Kind.I64:
+                return field.BigEndian
+                    ? BinaryPrimitives.ReadInt64BigEndian(src)
+                    : BinaryPrimitives.ReadInt64LittleEndian(src);
+            default:
+                return ReadNarrowScalar(field, src);
+        }
+    }
+
+    private static object ReadNarrowScalar(Field field, ReadOnlySpan<byte> src) =>
         field.Type switch
         {
             Field.Kind.U8 => src[0],
@@ -93,12 +112,6 @@ internal static partial class Walker
             Field.Kind.I32 => field.BigEndian
                 ? BinaryPrimitives.ReadInt32BigEndian(src)
                 : BinaryPrimitives.ReadInt32LittleEndian(src),
-            Field.Kind.U64 => field.BigEndian
-                ? BinaryPrimitives.ReadUInt64BigEndian(src)
-                : BinaryPrimitives.ReadUInt64LittleEndian(src),
-            Field.Kind.I64 => field.BigEndian
-                ? BinaryPrimitives.ReadInt64BigEndian(src)
-                : BinaryPrimitives.ReadInt64LittleEndian(src),
             Field.Kind.F32 => field.BigEndian
                 ? BinaryPrimitives.ReadSingleBigEndian(src)
                 : BinaryPrimitives.ReadSingleLittleEndian(src),

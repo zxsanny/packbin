@@ -16,9 +16,9 @@
 
 | Method | Input | Output | Async | Error Types |
 |--------|-------|--------|-------|-------------|
-| `Scheme` | type number, row class, fields by order id | scheme | No | a gap, a repeated id, or an anchor that is not the next value id |
+| `Scheme` | type number, row class, fields by order id | scheme | No | a gap, a repeated id, an anchor that is not the next value id, or a flag bit whose flagByte is not read earlier in the same scope |
 | `BinaryPacker.pack` | scheme, row | bytes | No | integer does not fit |
-| `BinaryPacker.unpack` | scheme, bytes | row or error | No | short packet, trailing bytes, type mismatch |
+| `BinaryPacker.unpack` | scheme, bytes | row or error | No | short packet, trailing bytes, type mismatch; never throws on bytes (see §7) |
 
 **Input DTOs**:
 
@@ -58,7 +58,7 @@ No queries and no cache.
 
 ## 5. Implementation Details
 
-**State Management**: clear pack is stateless. A session keeps one send counter and one receive counter.
+**State Management**: clear pack is stateless. Unpack keeps the flag bytes it reads in the call's own map, keyed by flag group, so a scheme holds no per-call state and is shared by threads (two threads, 200 000 unpacks each, in the race test). Source layout: `Walker.java` walks fields, `Containers.java` holds `list`, `dict` and `times`, `Scalars.java` the numbers, `SchemeOrder.java` the construction checks (id order, references, flag scope). A session keeps one send counter and one receive counter.
 
 **Key Dependencies**:
 
@@ -68,6 +68,7 @@ No queries and no cache.
 
 **Error Handling Strategy**:
 - A short field returns an error and zero values
+- Hostile bytes return an error value, never an exception (§7)
 - No retry
 
 ## 6. Extensions and Helpers
@@ -80,6 +81,20 @@ No queries and no cache.
 
 **Known limitations**:
 - The first release has no code generator
+
+**Hostile input** (loop 11). Unpack of untrusted bytes returns an error value and no row, within a time and memory bound set by the input length. It does not throw and does not loop on input it cannot consume. The cases:
+- a `repeat` round that reads 0 bytes ends the repeat; the bytes left come back as trailing bytes
+- a `times` round, or a `list` or `dict` element, that reads 0 bytes is an error, even for a small count (a few bytes could otherwise ask for 65 535 empty items)
+- a negative count, a count larger than the bytes left, invalid UTF-8 in a string or a dictionary key, and a count whose source field is absent (it sat behind a clear flag bit)
+
+The error shape is interim: a short-packet-style value. Its kind, label, `needed` and `left` are decided under C15, so no new public error type was added. In Java it is a `ShortPacket` and the numbers differ by case: an absent or negative count reports `needed` as `Integer.MAX_VALUE`, invalid UTF-8 reports `needed` as the string length with `left` 0, and a zero-width `times`, `list` or `dict` round reports `needed` 0. A zero-width `times` round is labelled with the `times` field, a list or dict element with `""`. Counts stay `long` until compared with the bytes left.
+
+**Construction rule**: a split-form flag bit must follow its flag byte, read earlier in the same scope. A scope is the top level, one `repeat` or `times` round, or one `list` or `dict` element. A `when` body sees the bytes read before it, but a flag byte read inside a `when` is not visible after it. `SchemeOrder.validate` runs `requireFlagBytes`; a violation is an `IllegalArgumentException` that names the bit by kind and id.
+
+**Breaking changes for callers** (pack output is unchanged):
+- A flag byte read in one `when` with its bit in another `when` worked before. It is now refused at construction.
+- A flag byte outside a `list`, `repeat` or `times` body with its bit inside that body is refused at construction.
+- A `times`, `list` or `dict` element that reads nothing is now an error instead of an empty item.
 
 **Potential race conditions**:
 - None

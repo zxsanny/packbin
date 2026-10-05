@@ -99,8 +99,8 @@ internal static partial class Walker
                 count = big > long.MaxValue ? long.MaxValue : (long)big;
                 break;
             case float or double:
-                // ReadScalar's switch has natural type double, so every unpacked scalar (u8 ... u64, f32)
-                // arrives here as a double; the typed cases above cover counts from any other source.
+                // u8 ... u32 and f32 arrive here as a double (ReadScalar's switch has natural type double);
+                // u64 and i64 are boxed as ulong and long and handled by the typed cases above.
                 var rounded = Math.Round(Convert.ToDouble(value, CultureInfo.InvariantCulture));
                 if (double.IsNaN(rounded))
                     return false;
@@ -109,6 +109,8 @@ internal static partial class Walker
             default:
                 return false;
         }
+        if (count < 0)
+            return false;
         count += field.Bias;
         return count >= 0;
     }
@@ -347,7 +349,8 @@ internal static partial class Walker
         var count = bytes[offset] | (bytes[offset + 1] << 8);
         offset += 2;
         var child = field.Children[0];
-        var items = new List<object?>(count);
+        // Each element reads at least one byte, so the bytes left bound the count a packet can really hold.
+        var items = new List<object?>(Math.Min(count, bytes.Length - offset));
         for (var i = 0; i < count; i++)
         {
             var one = new Scope();
@@ -407,7 +410,7 @@ internal static partial class Walker
         var count = bytes[offset] | (bytes[offset + 1] << 8);
         offset += 2;
         var child = field.Children[0];
-        var items = new Dictionary<string, object?>(count);
+        var items = new Dictionary<string, object?>(Math.Min(count, bytes.Length - offset));
         for (var i = 0; i < count; i++)
         {
             left = bytes.Length - offset;

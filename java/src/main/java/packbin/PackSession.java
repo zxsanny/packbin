@@ -2,6 +2,7 @@ package packbin;
 
 import java.security.SecureRandom;
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicLong;
 
 public final class PackSession {
     public static final int SEED_SIZE = 32;
@@ -10,7 +11,7 @@ public final class PackSession {
     private byte[] seed;
     private byte[] send;
     private byte[] recv;
-    private long sendCount;
+    private final AtomicLong sendCount = new AtomicLong();
     private long recvCount;
 
     private PackSession(byte[] seed) {
@@ -49,8 +50,7 @@ public final class PackSession {
             return null;
         }
         byte[] clear = BinaryPacker.pack(scheme, value);
-        SessionPad.xor(send, sendCount, clear);
-        sendCount++;
+        SessionPad.xor(send, sendCount.getAndIncrement(), clear);
         return clear;
     }
 

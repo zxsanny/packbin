@@ -809,7 +809,7 @@ BinaryPacker.pack(row, {"profile": 0, "shape": 9})
 
 ### Repeat
 
-The group is repeated until the buffer ends. There is no count. Unpack stops on the last complete group. One leftover byte is a short packet: it names the field, the bytes needed, and the bytes left, and returns no row.
+The group is repeated until the buffer ends. There is no count. Unpack stops on the last complete group. One leftover byte is a short packet: it names the field, the bytes needed, and the bytes left, and returns no row. A group that reads no bytes at all ends the repeat, and the bytes left are trailing bytes.
 
 Two points, `(10, 20)` then `(30, 40)`:
 
@@ -951,6 +951,31 @@ BinaryPacker.pack(row, {"n": 2, "lat": [10, 30], "lon": [20, 40], "tail": 7})
 ```
 
 [`_docs/01_solution/schema.md`](_docs/01_solution/schema.md)
+
+## Untrusted input
+
+Unpack reads bytes from the network, so a packet may be built to hurt. In C#, TypeScript, Python, Rust and Java, `unpack` answers every packet it cannot read with an error value and no row. It does not throw, and it stops within time and memory set by the length of the packet. The cases it refuses:
+
+- a count that is negative, or larger than the bytes left
+- a count whose field is absent because its flag bit was clear
+- invalid UTF-8 in a string or a dictionary key
+- a `times` round, or a `list` or `dict` element, that reads no bytes. A `repeat` round that reads none ends the repeat, and the bytes left are trailing bytes
+
+The kind of error for these is not settled yet. Today they come back as a short-packet-style error, so test for failure, not for its exact kind. The C++ package already reports every failure as a `Result`; it does not check that a string is valid UTF-8.
+
+Two mistakes in a scheme are refused when you build it, not when a packet arrives:
+
+- A split-form flag bit must come after its flag byte, in the same place: the top level, one `repeat` or `times` round, or one `list` or `dict` element. A flag byte read inside a `when` is not visible after it. TypeScript, C#, Java and Rust refuse a violation at construction; Python does not check yet.
+- In Rust, a `when`, a count or a flag bit inside a `repeat` or `times` may name only a field inside that group. Each round reads into its own values, so an outer field was never visible there.
+
+If you upgrade, three schemes that built before now do not (the first two in TypeScript, C#, Java and Rust): a flag byte in one `when` with its bit in another `when`, a flag byte outside a `list`, `repeat` or `times` with its bit inside it, and (Rust) a reference from inside a `repeat` or `times` to a field outside it. Packet bytes do not change. A `times`, `list` or `dict` element that reads nothing used to unpack as an empty item and is now an error.
+
+Limits to keep in mind:
+
+- Unpack has no packet-size budget. Time and memory grow with the length of the packet, so cap the packet length where you read it from the network.
+- In TypeScript a decoded dictionary keeps a key named `__proto__` as an ordinary own entry. Copy or merge decoded dictionaries with care: `Object.assign({}, dict)` sets the target's prototype from that entry. Read them with `Object.hasOwn`.
+- In C# a `u64` or `i64` field arrives in `UnpackResult.Values` as `ulong` or `long`. Read through the row type and nothing changes for you; code that reads those two kinds straight from `Values` as `double` must change.
+- A session packs from several threads safely in C# and Java (each packet gets its own number). Unpacking on one session must be called in packet order, one caller at a time.
 
 ## License
 

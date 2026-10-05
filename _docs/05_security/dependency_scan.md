@@ -11,3 +11,15 @@
 | `typescript`, `rust`, `csharp`, `python`, `java` | not changed in loop 10 | results of 2026-09-29 stand: no vulnerable packages |
 
 The C++ core ships no third-party code.
+
+## Loop 11 addendum
+
+**Date**: 2026-10-05
+**Scope**: Python, TypeScript, C#, Java and Rust unpack changes (`git diff 9a7847f..HEAD`)
+
+| Manifest | Tool | Result |
+|----------|------|--------|
+| `typescript/package.json`, `package-lock.json` | manifest read | unchanged since loop 10: `@noble/hashes` 2.4.0, dev `typescript` |
+| `rust/Cargo.toml`, `Cargo.lock` | manifest read | unchanged, no dependencies |
+| `python/pyproject.toml`, `csharp/Packbin.csproj`, `java/` | manifest read | unchanged, no dependencies |
+| all | `npm audit`, `cargo audit`, `dotnet list package --vulnerable` | not run: they need the network. Results of 2026-09-29 stand; no manifest changed |

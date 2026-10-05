@@ -61,5 +61,12 @@ Divergence recorded at the batch commit: the plan listed seven tasks; a cross-la
 | round | verdict | new specs | report |
 |-------|---------|-----------|--------|
 | 1 | CLARIFY | AZ-2107_python_zero_width_elements, AZ-2108_typescript_zero_width_elements, AZ-2109_csharp_zero_width_elements, AZ-2110_java_zero_width_elements, AZ-2111_rust_zero_width_elements | _docs/loops/loop11/assessment11.md |
+| 2 | EXTEND (2 gap-clear, test-only) | none this loop: R2-G1 extends AZ-2114, R2-G2 is AZ-2121 (follow-ups, same rule the owner chose for round 1 clear gaps) | _docs/loops/loop11/assessment11.md |
 
 Owner answers (2026-10-05): U1 A (zero-width list/dict element is an error at unpack), U2 A (orphan split flag bit refused at construction; Python rides on AZ-2100), U3/U4/U5 become tickets AZ-2116/2117/2118, clear gaps G1-G4 become follow-up tickets AZ-2112..2115 for later loops.
+
+## Security audit follow-through (step 14)
+
+Verdict PASS_WITH_WARNINGS (0 Critical, 0 High, 3 Medium, 6 Low). Owner answers (2026-10-05): fix F4 (C# top-range integers), F5 (TypeScript `__proto__`) now, and F6, F7, F8, F9 also in this loop. New tasks: AZ-2122 (TypeScript F5, F6, F8), AZ-2123 (C# F4, F7, F9), AZ-2124 (Java F9), AZ-2125 (Rust F7). Report: `_docs/05_security/security_report.md`.
+
+Re-verification by the auditor: F4, F5, F6, F8, F9 fixed; F7 residual (no packet-size budget) documented in the README; no new findings. Open Low from loop 10 (F1-F3, CI pins) unchanged.

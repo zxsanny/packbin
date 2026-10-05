@@ -37,11 +37,11 @@ Unpack found that a present field does not fit in the bytes that remain. The err
 
 ## Split form
 
-The flags byte is stored now, and each bit's field is placed later in the list. (source: schema.md)
+The flags byte is stored now, and each bit's field is placed later in the list. The bit must come after its flag byte in the same scope (top level, one `repeat` or `times` round, or one `list` or `dict` element); a flag byte read inside a `when` is not visible after it. TypeScript, C#, Java and Rust refuse a violation at construction; Python does so with AZ-2100. (source: schema.md; loop 11)
 
 ## Unpack
 
-The call that turns bytes back into a value, or into a short-packet or trailing-bytes error. (source: problem.md)
+The call that turns bytes back into a value, or into a short-packet or trailing-bytes error. In C#, TypeScript, Python, Rust and Java it returns an error value for every bad buffer and never throws; a negative count, a count with no source field, invalid UTF-8, and a `times`, `list` or `dict` round that reads nothing come back as an interim short-packet-style error until C15 sets their kind. (source: problem.md; loop 11)
 
 ## Version tag
 

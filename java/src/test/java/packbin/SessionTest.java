@@ -1,5 +1,11 @@
 package packbin;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 public final class SessionTest {
     private static int failures;
 
@@ -25,6 +31,8 @@ public final class SessionTest {
         ac2WaiterRecoversRow();
         ac3ClearPackUnchanged();
         ac4BadLengthsCreateNothing();
+        concurrentPackYieldsDistinctCiphertexts();
+        sequentialSessionBytesUnchanged();
         if (failures > 0) {
             System.err.println(failures + " failure(s)");
             System.exit(1);
@@ -136,6 +144,71 @@ public final class SessionTest {
         }
         expectEq("AC-4 sessions created", 0, created);
         expectTrue("AC-4 pack before open", loaded.pack(POSITION, position()) == null);
+    }
+
+    /** The key the opener sends with: first half of the HKDF output, as PackSession derives it. */
+    private static byte[] openerSendKey() {
+        return Arrays.copyOfRange(SessionPad.hkdfSha256(seed(), NONCE, 64), 0, 32);
+    }
+
+    /** The ciphertext for plaintext {@code clear} when it is the packet numbered {@code count} of the session. */
+    private static String ciphertextFor(byte[] key, long count, byte[] clear) {
+        byte[] copy = Arrays.copyOf(clear, clear.length);
+        SessionPad.xor(key, count, copy);
+        return PackbinTest.toHex(copy);
+    }
+
+    private static void concurrentPackYieldsDistinctCiphertexts() {
+        int threads = 8;
+        int each = 2000;
+        PackSession opener = PackSession.load(seed());
+        opener.start(NONCE);
+        List<String> sent = java.util.Collections.synchronizedList(new ArrayList<>());
+        List<Thread> workers = new ArrayList<>();
+        for (int t = 0; t < threads; t++) {
+            Thread worker = new Thread(() -> {
+                for (int i = 0; i < each; i++) {
+                    sent.add(PackbinTest.toHex(opener.pack(POSITION, position())));
+                }
+            });
+            workers.add(worker);
+        }
+        for (Thread worker : workers) {
+            worker.start();
+        }
+        for (Thread worker : workers) {
+            try {
+                worker.join();
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                fail("concurrent pack interrupted");
+                return;
+            }
+        }
+        Set<String> distinct = new HashSet<>(sent);
+        expectEq("concurrent pack distinct ciphertexts of " + threads * each, threads * each, distinct.size());
+
+        byte[] clear = BinaryPacker.pack(POSITION, position());
+        byte[] key = openerSendKey();
+        Set<String> expected = new HashSet<>();
+        for (int c = 0; c < threads * each; c++) {
+            expected.add(ciphertextFor(key, c, clear));
+        }
+        expectTrue("concurrent pack used packet numbers 0..15999 exactly once", distinct.equals(expected));
+    }
+
+    private static void sequentialSessionBytesUnchanged() {
+        PackSession opener = PackSession.load(seed());
+        opener.start(NONCE);
+        byte[] clear = BinaryPacker.pack(POSITION, position());
+        byte[] key = openerSendKey();
+        for (int c = 0; c < 3; c++) {
+            String got = PackbinTest.toHex(opener.pack(POSITION, position()));
+            expectEq("sequential packet " + c, ciphertextFor(key, c, clear), got);
+            if (c == 0) {
+                expectEq("sequential packet 0 is the cross-language vector", CIPHERTEXT_HEX, got);
+            }
+        }
     }
 
     private static void expectEq(String label, Object expected, Object actual) {

@@ -164,6 +164,8 @@ Packet.Of(
 
 `flags(...)` is the short form of a flag byte plus immediate `.bit` fields. Prefer it when the bytes really are adjacent.
 
+A bit must come after its flag byte, in the same container. The top level, each `repeat` or `times` round, and each `list` or `dict` element is its own container. A flag byte read inside a `when`, or outside the container that holds the bit, is not visible to that bit, and building the scheme fails naming the bit. A `when` body may use a flag byte read earlier in the container around it, as the example above does for `motion`. This check runs in TypeScript, C#, Java and Rust; Python gets it with its split form (AZ-2100).
+
 ## Repeat
 
 A trail whose count is "whatever is left":

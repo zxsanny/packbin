@@ -300,7 +300,7 @@ export function readUtf8(
   const raw = cur.buf.subarray(cur.offset, cur.offset + count)
   cur.offset += count
   try {
-    return { ok: true, value: new TextDecoder("utf-8", { fatal: true }).decode(raw) }
+    return { ok: true, value: new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(raw) }
   } catch (e) {
     // The fatal decoder reports invalid UTF-8 with a TypeError; anything else is not ours.
     if (e instanceof TypeError) return { ok: false, field: name, needed: 0, left: leftCount }

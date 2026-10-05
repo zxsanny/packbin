@@ -20,6 +20,7 @@ packbin is a library: the caller writes a field list, pack and unpack move the e
 - The bytes are only the fields
 - The first release has no code generator
 - A short packet returns an error and no value. In C++ the error is a `Result` and the row keeps the fields read before it
+- Unpack treats its bytes as hostile (loop 11). In C#, TypeScript, Python, Rust and Java it returns an error value, within a time and memory bound set by the input length, and never throws. A `times` round or a `list`/`dict` element that reads nothing is an error; a `repeat` round that reads nothing ends the repeat and the rest is trailing bytes (C++ ends a `times`, `list` or `dict` container on such a round instead of failing, see below). The error shape is interim until C15
 - The C++ core allocates nothing and throws nothing
 
 > See ADR 001 (Walk field lists with runtime primitives).

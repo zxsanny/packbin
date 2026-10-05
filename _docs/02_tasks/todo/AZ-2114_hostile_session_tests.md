@@ -34,6 +34,10 @@ Given an opened session pair in each of C#, Java and Rust, When the waiter unpac
 **AC-2**
 Given the same pair, When a valid message follows, Then it unpacks (the receive counter advanced by one)
 
+## Added by loop 11 feature-assess round 2 (R2-G1)
+
+Extend the scope to all five packages and to the zero-width element packets: Given an opened session pair, When the waiter unpacks the session-padded packet whose clear bytes are `01 ff ff ff ff` (list of lists of `bytes(0)`) or `01 ff ff 01 00 61` (dict with a zero-width value), Then it returns the same error as clear unpack within 1 s and the next valid message still unpacks. Python and TypeScript need only these new packets; C#, Java and Rust need both the zero-progress and the element packets.
+
 ## Constraints
 
 - ADR-001: no shared walker, no import from another package.
