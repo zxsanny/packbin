@@ -80,7 +80,7 @@ Estimation: `_docs/LESSONS.md` says the six packages stay peers. The session is 
 | AZ-2088 | csharp_pack_fails_loudly | 3 | AZ-2087, AZ-2079 | AZ-2069 |
 | AZ-2089 | java_forward_refs_bool | 2 | AZ-2070, AZ-2077, AZ-2074 | AZ-2069 |
 | AZ-2090 | typescript_reference_scope | 3 | AZ-2072, AZ-2080 | AZ-2069 |
-| AZ-2091 | typescript_nested_flags_names | 3 | AZ-2080, AZ-2090 | AZ-2069 |
+| AZ-2091 | typescript_nested_flags_names | 6 | AZ-2080, AZ-2090 | AZ-2069 |
 | AZ-2092 | csharp_scoped_binding | 5 | AZ-2088, AZ-2079, AZ-2076 | AZ-2069 |
 | AZ-2093 | csharp_ac10_public_path | 1 | AZ-2092 | AZ-2069 |
 | AZ-2094 | java_release_17 | 2 | AZ-2096 | AZ-2069 |
@@ -122,7 +122,7 @@ Estimation: `_docs/LESSONS.md` says the six packages stay peers. The session is 
 | AZ-2131 | java_empty_group_refused | 2 | AZ-2089 | AZ-2069 |
 | AZ-2132 | python_empty_group_refused | 1 | AZ-2083 | AZ-2069 |
 | AZ-2133 | rust_cpp_bitwhen | 1 | AZ-2082 | AZ-2069 |
-| AZ-2134 | aligned_round_values | 3 | AZ-2079, AZ-2080, AZ-2083, AZ-2087 | AZ-2069 |
+| AZ-2134 | aligned_round_values | 2 | AZ-2083, AZ-2087, AZ-2091 | AZ-2069 |
 | AZ-2135 | split_bits_field_order | 5 | AZ-2079, AZ-2080, AZ-2089 | AZ-2069 |
 | AZ-2147 | cpp_empty_group_without_member | 1 | AZ-2081 | AZ-2069 |
 

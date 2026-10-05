@@ -3,11 +3,12 @@ import {
   flagValueFor,
   flatten,
   isPlainObject,
-  nameById,
   type Field,
 } from "./fields.ts"
+import { refName } from "./ref-scope.ts"
 import {
   present,
+  sameValue,
   validCount,
   writeBits,
   writeFloat,
@@ -19,14 +20,8 @@ import {
   type Value,
 } from "./kinds.ts"
 
-function borrowedCount(
-  allFields: Field[],
-  countId: number,
-  bias: number,
-  label: string,
-  values: Value,
-): number {
-  const raw = values[nameById(allFields, countId)]
+function borrowedCount(ref: string, bias: number, label: string, values: Value): number {
+  const raw = values[ref]
   const count = validCount(raw, bias)
   if (count === null) {
     // Pack keeps throwing; the message tells a missing count from a negative one.
@@ -90,7 +85,7 @@ export function packFields(
         break
       }
       case "when": {
-        if (values[nameById(allFields, f.fieldId)] === f.value) {
+        if (sameValue(values[refName(f)], f.value)) {
           packFields(f.fields, allFields, values, out, flagBytes)
         }
         break
@@ -120,7 +115,7 @@ export function packFields(
         packFields(f.fields, allFields, values, out, flagBytes)
         break
       case "sized":
-        writeSized(out, f.name, values[nameById(allFields, f.countId)], values[f.name])
+        writeSized(out, f.name, values[refName(f)], values[f.name])
         break
       case "u2":
         writeU2(out, f.slots, (n) => values[n])
@@ -129,17 +124,17 @@ export function packFields(
         writeBits(
           out,
           f.name,
-          Number(values[nameById(allFields, f.countId)]),
+          Number(values[refName(f)]),
           values[f.name],
         )
         break
       case "packed": {
-        const count = borrowedCount(allFields, f.countId, f.bias, f.name, values)
+        const count = borrowedCount(refName(f), f.bias, f.name, values)
         writePacked(out, f.name, f.width, count, values[f.name])
         break
       }
       case "times": {
-        const count = borrowedCount(allFields, f.countId, 0, "times", values)
+        const count = borrowedCount(refName(f), 0, "times", values)
         for (let i = 0; i < count; i++) {
           const slice: Value = { ...values }
           for (const child of f.fields) {

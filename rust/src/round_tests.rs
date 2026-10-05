@@ -148,7 +148,15 @@ fn typed_times_inside_times_is_refused() {
     #[derive(Default)]
     struct Row {
         n: u8,
+        rounds: Vec<Round>,
+    }
+    #[derive(Default)]
+    struct Round {
         m: u8,
+        legs: Vec<Leg>,
+    }
+    #[derive(Default)]
+    struct Leg {
         v: u8,
     }
     let _ = Scheme::<Row>::new(
@@ -158,12 +166,16 @@ fn typed_times_inside_times_is_refused() {
             SchemeItem::times(
                 1,
                 0,
+                |r: &Row| &r.rounds[..],
+                |r: &mut Row, x| r.rounds = x,
                 [
-                    BoundField::u8(1, |r: &Row| r.m, |r: &mut Row, x| r.m = x).into(),
+                    BoundField::u8(1, |r: &Round| r.m, |r: &mut Round, x| r.m = x).into(),
                     SchemeItem::times(
                         2,
                         1,
-                        [BoundField::u8(2, |r: &Row| r.v, |r: &mut Row, x| r.v = x).into()],
+                        |r: &Round| &r.legs[..],
+                        |r: &mut Round, x| r.legs = x,
+                        [BoundField::u8(2, |l: &Leg| l.v, |l: &mut Leg, x| l.v = x).into()],
                     ),
                 ],
             ),

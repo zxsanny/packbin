@@ -181,8 +181,9 @@ describe("split flag bit scope", () => {
     assert.doesNotThrow(() =>
       scheme<Row>(
         1,
+        u8(0, (x) => x.k),
         fb,
-        when(0, eq(0, 1), [fb.bit(u8(0, (x) => x.a))]),
+        when(1, eq(0, 1), [fb.bit(u8(1, (x) => x.a))]),
       ),
     )
   })

@@ -148,9 +148,7 @@ internal static partial class Walker
 
     private static void PackBytes(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
     {
-        if (!IsPresent(values, field.Name))
-            return;
-        var raw = (byte[])values[field.Name]!;
+        var raw = (byte[])RequireValue(field, values);
         if (raw.Length != field.ByteCount)
             throw new ArgumentException($"Field '{field.Name}' needs {field.ByteCount} bytes.");
         buffer.AddRange(raw);
@@ -164,9 +162,7 @@ internal static partial class Walker
 
     private static void PackScalar(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
     {
-        if (!IsPresent(values, field.Name))
-            return;
-        var value = values[field.Name]!;
+        var value = RequireValue(field, values);
         Span<byte> tmp = stackalloc byte[8];
         var width = field.ByteCount;
         WriteScalar(field, value, tmp[..width]);
@@ -350,20 +346,19 @@ internal static partial class Walker
     {
         if (a is byte[] aa && b is byte[] bb)
             return aa.AsSpan().SequenceEqual(bb);
-        if (a is float or double && !IsDecimalRange(a))
-            return false;
-        if (IsNumber(a) && IsNumber(b))
-            return Convert.ToDecimal(a, CultureInfo.InvariantCulture)
-                == Convert.ToDecimal(b, CultureInfo.InvariantCulture);
-        return Equals(a, b);
+        if (!IsNumber(a) || !IsNumber(b))
+            return Equals(a, b);
+        if (a is float or double || b is float or double)
+            return SameDouble(
+                Convert.ToDouble(a, CultureInfo.InvariantCulture),
+                Convert.ToDouble(b, CultureInfo.InvariantCulture));
+        return Convert.ToDecimal(a, CultureInfo.InvariantCulture)
+            == Convert.ToDecimal(b, CultureInfo.InvariantCulture);
     }
 
-    // NaN, infinity and huge floats read from a packet have no decimal form; they equal nothing.
-    private static bool IsDecimalRange(object value)
-    {
-        var d = Convert.ToDouble(value, CultureInfo.InvariantCulture);
-        return double.IsFinite(d) && Math.Abs(d) < 7.9e28;
-    }
+    // A float compares as a double by Java's Double.compare: NaN equals NaN and -0.0 differs from 0.0.
+    private static bool SameDouble(double a, double b) =>
+        double.IsNaN(a) ? double.IsNaN(b) : a == b && double.IsNegative(a) == double.IsNegative(b);
 
     private static bool IsNumber(object value) =>
         value is byte or sbyte or ushort or short or uint or int or ulong or long or float or double or decimal;

@@ -10,6 +10,13 @@ export function present(v: unknown): boolean {
   return v !== undefined && v !== null
 }
 
+// A `when` value and a field value are the same when equal; a number and a bigint compare by
+// value, so `1`, `1n` and an unpacked `1n` all match.
+export function sameValue(seen: unknown, want: unknown): boolean {
+  const numeric = (v: unknown): v is number | bigint => typeof v === "number" || typeof v === "bigint"
+  return numeric(seen) && numeric(want) ? seen == want : seen === want
+}
+
 export function groupOn(
   values: Value,
   name: string,

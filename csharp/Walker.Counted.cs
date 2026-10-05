@@ -13,7 +13,7 @@ internal static partial class Walker
     private static void PackSized(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
     {
         var count = RequireCount(values, field.CountName, field.Name);
-        var raw = (byte[])values[field.Name]!;
+        var raw = (byte[])RequireValue(field, values);
         if (raw.Length != count)
             throw new ArgumentException($"{field.Name}: expected {count} bytes, got {raw.Length}");
         buffer.AddRange(raw);
@@ -39,7 +39,7 @@ internal static partial class Walker
     private static void PackBits(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
     {
         var count = RequireCount(values, field.CountName, field.Name);
-        if (values[field.Name] is not IList raw || raw.Count != count)
+        if (RequireValue(field, values) is not IList raw || raw.Count != count)
             throw new ArgumentException($"{field.Name}: expected {count} bits");
         var nbytes = (count + 7) / 8;
         var packed = new byte[nbytes];
@@ -197,7 +197,7 @@ internal static partial class Walker
     private static void PackPacked(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
     {
         var count = BorrowedCount(field, values);
-        if (values[field.Name] is not IList raw || raw.Count != count)
+        if (RequireValue(field, values) is not IList raw || raw.Count != count)
             throw new ArgumentException($"{field.Name}: expected {count} items");
         var width = field.ByteCount;
         var max = width == 2 ? 3 : 1;
@@ -304,7 +304,7 @@ internal static partial class Walker
 
     private static void PackList(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
     {
-        if (values[field.Name] is not IList items)
+        if (RequireValue(field, values) is not IList items)
             throw new ArgumentException($"{field.Name}: expected list");
         if (items.Count > MaxLength)
             throw new ArgumentException($"{field.Name}: length {items.Count}");
@@ -351,7 +351,7 @@ internal static partial class Walker
 
     private static void PackDict(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
     {
-        if (values[field.Name] is not IDictionary map)
+        if (RequireValue(field, values) is not IDictionary map)
             throw new ArgumentException($"{field.Name}: expected dictionary");
         if (map.Count > MaxLength)
             throw new ArgumentException($"{field.Name}: length {map.Count}");

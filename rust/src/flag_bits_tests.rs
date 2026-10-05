@@ -166,7 +166,13 @@ fn ac4_typed_bool_inside_times_is_refused() {
         1,
         [
             n_field(0).into(),
-            SchemeItem::times(1, 0, [on_field(1).into()]),
+            SchemeItem::times(
+                1,
+                0,
+                |_: &BoolRow| &[] as &[BoolRow],
+                |_, _| {},
+                [on_field(1).into()],
+            ),
         ],
     );
 }

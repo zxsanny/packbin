@@ -1,10 +1,12 @@
 mod bound;
+mod times;
 
 pub use bound::BoundField;
+use times::TimesItem;
 
 use crate::field::{
-    check_order, field_name, flags as layout_flags, id_name, nested_element, rename_container,
-    take_id, times as layout_times, when as layout_when, Eq, Field, MapScheme,
+    check_order, field_name, flags as layout_flags, nested_element, rename_container, take_id,
+    times as layout_times, when as layout_when, Eq, Field, MapScheme,
 };
 use crate::value::{Name, PackError, ShortPacket, UnpackError, Value, Values};
 use crate::walk;
@@ -34,11 +36,7 @@ pub enum SchemeItem<T> {
         anchor: u32,
         members: Vec<SchemeItem<T>>,
     },
-    Times {
-        anchor: u32,
-        count: crate::value::Name,
-        members: Vec<SchemeItem<T>>,
-    },
+    Times(TimesItem<T>),
     Field(Field),
 }
 
@@ -73,17 +71,44 @@ impl<T: 'static> SchemeItem<T> {
         }
     }
 
-    pub fn times(
+    /// One round per element of a `Vec<E>`, as many as the integer field `count_id` says. `get`
+    /// lends the elements and `set` takes the ones unpacked, one `E::default()` filled by
+    /// `members` per round. `members` are items on `E`, numbered from `anchor` on like the
+    /// items of a `when`; a reference among them names an id of the same element. Pack fails
+    /// when the count differs from the number of elements.
+    pub fn times<E: Default + 'static>(
         anchor: u32,
         count_id: u32,
-        members: impl IntoIterator<Item = SchemeItem<T>>,
+        get: impl Fn(&T) -> &[E] + 'static,
+        set: impl Fn(&mut T, Vec<E>) + 'static,
+        members: impl IntoIterator<Item = SchemeItem<E>>,
     ) -> Self {
-        SchemeItem::Times {
+        SchemeItem::Times(TimesItem::new(
             anchor,
-            count: id_name(count_id),
-            members: members.into_iter().collect(),
+            count_id,
+            get,
+            set,
+            members.into_iter().collect(),
+        ))
+    }
+}
+
+fn read_values<T>(binders: &[Binder<T>], row: &T) -> Values {
+    let mut values = Values::new();
+    for binder in binders {
+        values.insert(binder.name.clone(), (binder.get)(row));
+    }
+    values
+}
+
+fn build_row<T: Default>(binders: &[Binder<T>], values: &Values) -> T {
+    let mut row = T::default();
+    for binder in binders {
+        if let Some(Some(value)) = values.get(&binder.name) {
+            (binder.set)(&mut row, value);
         }
     }
+    row
 }
 
 fn compile_items<T: 'static>(
@@ -152,23 +177,20 @@ fn compile_items<T: 'static>(
                 fields.push(layout_flags(anchor, name.as_str(), child_fields));
                 binders.extend(child_binders);
             }
-            SchemeItem::Times {
-                anchor,
-                count,
-                members,
-            } => {
-                if anchor != *next_id {
-                    panic!("field id {anchor} is not the next order {next_id}");
+            SchemeItem::Times(item) => {
+                if item.anchor != *next_id {
+                    panic!("field id {} is not the next order {next_id}", item.anchor);
                 }
-                let count_name: &str = count.as_ref();
+                let count_name: &str = item.count.as_ref();
                 if let Ok(id) = count_name.parse::<u32>() {
                     if id >= *next_id {
                         panic!("field id {id} is not yet walked at order {next_id}");
                     }
                 }
-                let (child_fields, child_binders) = compile_items(members, next_id, name_seq);
-                fields.push(layout_times(anchor, count.as_ref(), child_fields));
-                binders.extend(child_binders);
+                let compiled = (item.compile)(name_seq);
+                *next_id = compiled.end;
+                fields.push(layout_times(item.anchor, count_name, compiled.fields));
+                binders.push(compiled.binder);
             }
             SchemeItem::Field(field) => {
                 *next_id = check_order(std::slice::from_ref(&field), *next_id, 0);
@@ -233,22 +255,12 @@ pub struct BinaryPacker;
 
 impl BinaryPacker {
     pub fn pack<T>(scheme: &Scheme<T>, row: &T) -> Result<Vec<u8>, PackError> {
-        let mut values = Values::new();
-        for binder in &scheme.binders {
-            values.insert(binder.name.clone(), (binder.get)(row));
-        }
-        walk::pack(&scheme.layout, &values)
+        walk::pack(&scheme.layout, &read_values(&scheme.binders, row))
     }
 
     fn unpack<T: Default>(scheme: &Scheme<T>, bytes: &[u8]) -> Result<T, UnpackError> {
         let values = walk::unpack(&scheme.layout, bytes)?;
-        let mut row = T::default();
-        for binder in &scheme.binders {
-            if let Some(Some(value)) = values.get(&binder.name) {
-                (binder.set)(&mut row, value);
-            }
-        }
-        Ok(row)
+        Ok(build_row(&scheme.binders, &values))
     }
 
     pub fn unpack_with(

@@ -1,4 +1,5 @@
-use crate::field::{field_name, Field, FieldKind, FloatKind, IntKind, MapScheme};
+use super::times::check_lists;
+use crate::field::{field_name, times_name, Field, FieldKind, FloatKind, IntKind, MapScheme};
 use crate::value::{
     as_bit, as_packed, as_u2, as_usize, name_of, present, when_matches, PackError, Value, Values,
 };
@@ -49,6 +50,12 @@ fn slice_times(members: &[Field], values: &Values, index: usize) -> Values {
         }
     }
     slice
+}
+
+fn pack_round(members: &[Field], round: &Values, out: &mut Vec<u8>) -> Result<(), PackError> {
+    let mut bits = HashMap::new();
+    collect_flag_bits(members, round, &mut bits)?;
+    pack_fields(members, round, &bits, out)
 }
 
 fn write_bytes(out: &mut Vec<u8>, bytes: &[u8], big_endian: bool) {
@@ -320,14 +327,31 @@ fn pack_one(
             }
         }
         FieldKind::Times {
-            count, members, ..
+            anchor,
+            count,
+            members,
         } => {
             let n = borrowed_count(values, count, 0, "times")?;
-            for i in 0..n {
-                let slice = slice_times(members, values, i);
-                let mut bits = HashMap::new();
-                collect_flag_bits(members, &slice, &mut bits)?;
-                pack_fields(members, &slice, &bits, out)?;
+            let key = times_name(*anchor);
+            match values.get(key.as_ref()) {
+                Some(Some(Value::Groups(rounds))) => {
+                    if rounds.len() != n {
+                        return Err(PackError::Type(format!(
+                            "times at id {anchor}: count {n}, {} rounds",
+                            rounds.len()
+                        )));
+                    }
+                    check_lists(*anchor, members, rounds, values)?;
+                    for round in rounds {
+                        pack_round(members, round, out)?;
+                    }
+                }
+                Some(Some(_)) => return Err(PackError::Type(key.to_string())),
+                _ => {
+                    for i in 0..n {
+                        pack_round(members, &slice_times(members, values, i), out)?;
+                    }
+                }
             }
             Ok(())
         }

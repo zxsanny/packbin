@@ -3,7 +3,7 @@
 **Task**: AZ-2091_typescript_nested_flags_names
 **Name**: TypeScript nested-group structure fixes
 **Description**: Flags inside a group are packed, a member name that would be silently overwritten by group flattening fails at `scheme(...)`, and the raw flag-byte value no longer appears in unpacked rows.
-**Complexity**: 3 points
+**Complexity**: 6 points (3 for the structure fixes; 3 for the round slicing the owner added in loop 13, see Outcome)
 **Dependencies**: AZ-2080_typescript_bool_flag_limit, AZ-2090_typescript_reference_scope (same construction pass and walker)
 **Component**: typescript
 **Tracker**: AZ-2091
@@ -42,6 +42,7 @@ Unpack already handles these (it reads bits through the per-call flag map), so t
 - Both rows in table 1 pack to `0101020103` and round-trip.
 - Schemes with an ambiguous member name fail at construction. Every scheme in tests, README and drivers still constructs.
 - `unpack(4001000065cd1d00a3e1110100)` gives exactly `{sid, lat, lon, profile}`, with no `""` key.
+- Added by the owner in loop 13 (2026-10-05, after the C# twin failed its review): in a `repeat` / `times` round, pack reads every value by round index, including values under `when`, `flags`, flag bits and anchored/unanchored groups, so `repeat(0,[u8(0,k), when(1,eq(0,1),[u8(1,v)])])` with `{k:[1,2], v:[9]}` packs `01010902` instead of throwing `RangeError: expected number`; unpack returns one list entry per round, `undefined` for a skipped round. This is the TypeScript part of AZ-2134 (owner decision U2: A), mirroring the C# implementation (`csharp/Walker.Rounds.cs`, loop 13 batch 1): `repeat` round count = the longest list among every name the round holds; `times` keeps its borrowed count.
 
 ## Scope
 
@@ -53,7 +54,7 @@ Unpack already handles these (it reads bits through the per-call flag map), so t
 ### Excluded
 - List/dict elements of kind `group`/`flags` (task 33).
 - Changing the flat-row design (TS rows stay flat; documented as C4 in the scan).
-- `repeat`/`times` slicing of nested containers (see flagged concern).
+- Values of a `repeat` / `times` nested inside another round, and list/dict element contents, are not packed from the outer round (unchanged; Java and Rust refuse such schemes at construction; owner decision pending).
 
 ## Acceptance Criteria
 
@@ -140,5 +141,5 @@ Then the bytes are unchanged
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Loop 12 (AZ-2129): the TypeScript `Scheme` constructor now runs every scheme check and `scheme()` delegates to it; put this task's new construction checks in the constructor, not only in `scheme(...)`, or `new Scheme` diverges again | coordinator | open | Low |
-| Nested containers inside `repeat`/`times` are not sliced per item on pack (repro in task 21's concerns). It belongs with this structural work, but is not in the plan's scope for task 22 | coordinator | open | Medium |
+| Nested containers inside `repeat`/`times` are not sliced per item on pack (repro in task 21's concerns). Owner decision 2026-10-05: fixed in this task (the TypeScript part of AZ-2134), aligned unpack with `undefined` for a skipped round; the unpacked TS row shape changes for values under `when` / `flags` / groups inside a round (README upgrade note). Unpack memory grows to about packet bytes × names per round, as in C# (accepted) | owner | resolved | Medium |
 | TS keeps flat rows while `Scheme<T>` suggests nested objects (scan C4). Design question, not fixed here | user | open | Low |

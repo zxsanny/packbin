@@ -40,6 +40,16 @@ internal static partial class Walker
     private static bool IsGroupValue(Field child) =>
         Field.IsValueBearing(child) || child.Type is Field.Kind.List or Field.Kind.Dict;
 
+    // The value of a field the pack walks. Only a flag bit may be left clear; a missing value anywhere else would give a
+    // shorter packet that the peer reads wrongly, so it is an error that names the field.
+    private static object RequireValue(Field field, IReadOnlyDictionary<string, object?> values)
+    {
+        if (values.TryGetValue(field.Name, out var value) && value is not null)
+            return value;
+        var id = field.Id >= 0 ? $" (field id {field.Id})" : "";
+        throw new ArgumentException($"'{field.Name}'{id} has no value; a field that may be absent belongs in Flags");
+    }
+
     // The field behind a set flag bit. A group there has no presence per value, so it is written in full: every value
     // in it, and in the groups nested in it, must be there. A missing one would give a packet its own unpack rejects.
     private static void PackBitField(Field inner, IReadOnlyDictionary<string, object?> values, List<byte> buffer)

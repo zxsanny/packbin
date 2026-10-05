@@ -7,6 +7,7 @@ import {
 import { unpackBody, type UnpackErr } from "./walker.ts"
 import { packFields } from "./pack-fields.ts"
 import { validateFlagScopes, validatePresenceMarks } from "./flag-scope.ts"
+import { bindReferences } from "./ref-scope.ts"
 import type { Value } from "./kinds.ts"
 import { hkdf } from "@noble/hashes/hkdf.js"
 import { sha256 } from "@noble/hashes/sha2.js"
@@ -68,7 +69,7 @@ export class Scheme<T> {
     validateFlagScopes(flat)
     validatePresenceMarks(flat)
     this.typeNumber = typeNumber
-    this.fields = flat
+    this.fields = bindReferences(flat)
   }
 
   on(handler: (row: T) => void): SchemeHandler<T> {

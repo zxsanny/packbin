@@ -129,7 +129,7 @@ public class FieldIdBindingTests
     public void Ac4_NestedRowTypeHasOwnIds()
     {
         var scheme = new Scheme<PointsRow>(0x20,
-            Field.U16<MarkerRow>(0, x => x.Sid),
+            Field.U16<PointsRow>(0, x => x.Sid),
             Field.List((PointsRow x) => x.Points, Field.U16<PointEl>(0, p => p.Id)));
         var bytes = BinaryPacker.Pack(scheme, new PointsRow
         {

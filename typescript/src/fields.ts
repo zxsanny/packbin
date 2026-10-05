@@ -327,47 +327,6 @@ export function fieldName(field: Field): string {
   return ""
 }
 
-export function nameById(fields: Field[], id: number): string {
-  for (const f of fields) {
-    const hit = findNameById(f, id)
-    if (hit !== null) return hit
-  }
-  throw new RangeError(`unknown field id ${id}`)
-}
-
-function findNameById(field: Field, id: number): string | null {
-  switch (field.kind) {
-    case "int":
-    case "float":
-    case "bytes":
-    case "bool":
-    case "sized":
-    case "bits":
-    case "packed":
-    case "utf8":
-      return field.id === id ? field.name : null
-    case "u2":
-      for (const slot of field.slots) {
-        if (slot.id === id) return slot.name
-      }
-      return null
-    case "flagBit":
-      return findNameById(field.field, id)
-    case "when":
-    case "repeat":
-    case "times":
-    case "group":
-    case "flags":
-      for (const child of field.fields) {
-        const hit = findNameById(child, id)
-        if (hit !== null) return hit
-      }
-      return null
-    default:
-      return null
-  }
-}
-
 export function validateFieldIds(fields: Field[], next = 0): number {
   for (const f of fields) {
     switch (f.kind) {

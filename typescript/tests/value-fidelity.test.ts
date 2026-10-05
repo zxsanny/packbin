@@ -76,18 +76,15 @@ describe("when inside repeat", () => {
     assert.deepEqual(rows.row, { k: [0, 1], v: [11] })
   })
 
-  it("when outside the repeat still reads the earlier field", () => {
-    const outer = scheme<Row>(
-      1,
-      u8(0, (x) => x.mode),
-      repeat(1, [u8(1, (x) => x.a), when(2, eq(0, 1), [u8(2, (x) => x.b)])]),
+  it("when in a repeat naming a field outside it is refused", () => {
+    assert.throws(
+      () => scheme<Row>(
+        1,
+        u8(0, (x) => x.mode),
+        repeat(1, [u8(1, (x) => x.a), when(2, eq(0, 1), [u8(2, (x) => x.b)])]),
+      ),
+      /^RangeError: when 2: eq names field id 0, which is not declared earlier in the same scope$/,
     )
-    const hit = unpackRow(outer, "0101" + "0506" + "0708")
-    assert.deepEqual(hit.result, { ok: true })
-    assert.deepEqual(hit.row, { mode: 1, a: [5, 7], b: [6, 8] })
-    const skip = unpackRow(outer, "0100" + "05" + "07")
-    assert.deepEqual(skip.result, { ok: true })
-    assert.deepEqual(skip.row, { mode: 0, a: [5, 7] })
   })
 })
 

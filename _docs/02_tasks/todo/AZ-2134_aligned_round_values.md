@@ -1,11 +1,11 @@
-# Per-round aligned values in TypeScript and Python rounds (C# shipped in AZ-2087)
+# Per-round aligned values in Python rounds (C# shipped in AZ-2087, TypeScript in AZ-2091)
 
 **Task**: AZ-2134_aligned_round_values
 **Name**: Aligned round values
-**Description**: Values under `flags` / `when` inside a `repeat` / `times` round keep one list entry per round in TypeScript and Python (the C# part shipped in loop 13 under AZ-2087).
-**Complexity**: 3 points (TypeScript and Python; C# done in AZ-2087)
+**Description**: Values under `flags` / `when` inside a `repeat` / `times` round keep one list entry per round in Python (the C# part shipped in loop 13 under AZ-2087, the TypeScript part under AZ-2091).
+**Complexity**: 2 points (Python only; C# done in AZ-2087, TypeScript in AZ-2091)
 **Dependencies**: AZ-2079, AZ-2080, AZ-2083
-**Component**: typescript, python
+**Component**: python
 **Tracker**: AZ-2134
 **Epic**: AZ-2069
 
@@ -22,7 +22,7 @@ U2: A — aligned everywhere: one list entry per round (`null` / `None` / `undef
 
 ## Loop 13 progress
 
-The C# part shipped under AZ-2087 (owner decision 2026-10-05, after the AZ-2087 review): C# pack reads every round value by round index through `when` / `flags` / flag bits / continuing groups, and C# unpack returns aligned lists. Covered there: AC-1, AC-2 and AC-3 for C# (G5 closed). Remaining here: TypeScript and Python only (about 3 points), AC-1 and AC-2 for those two packages. C# round count rule for `repeat`: the longest list among every name the round holds.
+The C# part shipped under AZ-2087 (owner decision 2026-10-05, after the AZ-2087 review): C# pack reads every round value by round index through `when` / `flags` / flag bits / continuing groups, and C# unpack returns aligned lists. Covered there: AC-1, AC-2 and AC-3 for C# (G5 closed). The TypeScript part moves to AZ-2091 (owner decision 2026-10-05, same loop). Remaining here: Python only (about 2 points), AC-1 and AC-2 for Python. C# round count rule for `repeat`: the longest list among every name the round holds.
 
 ## Acceptance Criteria
 

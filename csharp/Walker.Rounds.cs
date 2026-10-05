@@ -12,8 +12,24 @@ internal static partial class Walker
         PackRounds(field, names, RoundCount(names, values), values, buffer);
     }
 
-    private static void PackTimes(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer) =>
-        PackRounds(field, RoundNames(field, packing: true), BorrowedCount(field, values), values, buffer);
+    private static void PackTimes(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    {
+        var names = RoundNames(field, packing: true);
+        var count = BorrowedCount(field, values);
+        RequireNoExtraRounds(names, count, values);
+        PackRounds(field, names, count, values, buffer);
+    }
+
+    // A list longer than the count would have its last items dropped. A shorter one runs out in a round that walks
+    // the field, and that pack refuses.
+    private static void RequireNoExtraRounds(List<string> names, int count, IReadOnlyDictionary<string, object?> values)
+    {
+        foreach (var name in names)
+        {
+            if (values.TryGetValue(name, out var v) && v is IList list && list.Count > count)
+                throw new ArgumentException($"'{name}' holds {list.Count} items, but the times count is {count}");
+        }
+    }
 
     private static void PackRounds(
         Field field,

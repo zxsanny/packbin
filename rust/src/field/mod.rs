@@ -191,6 +191,12 @@ pub fn id_name(id: u32) -> Name {
     name_of(id.to_string())
 }
 
+/// The key a `times` keeps its rounds under in the values: a `Value::Groups` with one `Values` per
+/// round. Its anchor tells one `times` of a scheme from another.
+pub(crate) fn times_name(anchor: u32) -> Name {
+    name_of(format!("__times_{anchor}"))
+}
+
 pub fn eq(field: impl FieldKey, value: Value) -> Eq {
     Eq {
         field: field.to_name(),

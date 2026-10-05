@@ -39,11 +39,12 @@ public sealed class Field
     internal int BitIndex { get; }
     internal Field? Inner { get; }
     internal int CountId { get; }
-    internal string CountName { get; private set; }
+    internal string CountName { get; }
     internal string[] Names { get; }
     internal int[] SlotIds { get; }
     internal bool NestedRow { get; }
     internal int Bias { get; }
+    internal Type? RowType { get; }
 
     private Field(
         Kind type,
@@ -61,7 +62,8 @@ public sealed class Field
         string[]? names = null,
         int[]? slotIds = null,
         bool nestedRow = false,
-        int bias = 0)
+        int bias = 0,
+        Type? rowType = null)
     {
         Type = type;
         Id = id;
@@ -79,12 +81,16 @@ public sealed class Field
         SlotIds = slotIds ?? [];
         NestedRow = nestedRow;
         Bias = bias;
+        RowType = rowType;
     }
 
-    internal void SetCountName(string name) => CountName = name;
+    // A scheme keeps its own copy of each field it resolves; a Field is never changed after it is built.
+    internal Field With(Field[]? children = null, Condition? pred = null, string? countName = null, Field? inner = null) =>
+        new(Type, Id, Name, BigEndian, ByteCount, children ?? Children, pred ?? Pred, FlagOwner, BitIndex, inner ?? Inner,
+            CountId, countName ?? CountName, Names, SlotIds, NestedRow, Bias, RowType);
 
     public Field Be() =>
-        new(Type, Id, Name, true, ByteCount, Children, Pred, FlagOwner, BitIndex, Inner, CountId, CountName, Names, SlotIds, NestedRow, Bias);
+        new(Type, Id, Name, true, ByteCount, Children, Pred, FlagOwner, BitIndex, Inner, CountId, CountName, Names, SlotIds, NestedRow, Bias, RowType);
 
     public Field Bit(Field field)
     {
@@ -118,22 +124,22 @@ public sealed class Field
         Scalar(Kind.Bytes, id, accessor, n);
 
     public static Field Bool<T>(int id, Expression<Func<T, bool>> accessor) =>
-        new(Kind.Bool, id, MemberAccess.From(accessor).Name);
+        new(Kind.Bool, id, MemberAccess.From(accessor).Name, rowType: typeof(T));
 
     public static Field Bool<T>(int id, Expression<Func<T, bool?>> accessor) =>
-        new(Kind.Bool, id, MemberAccess.From(accessor).Name);
+        new(Kind.Bool, id, MemberAccess.From(accessor).Name, rowType: typeof(T));
 
     public static Field Utf8<T>(int id, Expression<Func<T, string>> accessor) =>
-        new(Kind.Utf8, id, MemberAccess.From(accessor).Name);
+        new(Kind.Utf8, id, MemberAccess.From(accessor).Name, rowType: typeof(T));
 
     public static Field Sized<T>(int id, Expression<Func<T, byte[]>> accessor, int countId) =>
-        new(Kind.Sized, id, MemberAccess.From(accessor).Name, countId: countId);
+        new(Kind.Sized, id, MemberAccess.From(accessor).Name, countId: countId, rowType: typeof(T));
 
     public static Field Bits<T>(int id, Expression<Func<T, List<int>?>> accessor, int countId) =>
-        new(Kind.Bits, id, MemberAccess.From(accessor).Name, countId: countId);
+        new(Kind.Bits, id, MemberAccess.From(accessor).Name, countId: countId, rowType: typeof(T));
 
     public static Field Bits<T>(int id, Expression<Func<T, IList>> accessor, int countId) =>
-        new(Kind.Bits, id, MemberAccess.From(accessor).Name, countId: countId);
+        new(Kind.Bits, id, MemberAccess.From(accessor).Name, countId: countId, rowType: typeof(T));
 
     public static Field Packed<T>(int width, int id, Expression<Func<T, List<int>?>> accessor, int countId, int bias = 0)
     {
@@ -141,7 +147,8 @@ public sealed class Field
             throw new ArgumentException("packed width must be 1 or 2");
         if (bias is not (0 or -1))
             throw new ArgumentException("packed bias must be 0 or -1");
-        return new Field(Kind.Packed, id, MemberAccess.From(accessor).Name, byteCount: width, countId: countId, bias: bias);
+        return new Field(
+            Kind.Packed, id, MemberAccess.From(accessor).Name, byteCount: width, countId: countId, bias: bias, rowType: typeof(T));
     }
 
     public static Field Times(int anchor, int countId, params Field[] fields) =>
@@ -158,7 +165,7 @@ public sealed class Field
             ids[i] = slots[i].Id;
             names[i] = MemberAccess.From(slots[i].Accessor).Name;
         }
-        return new Field(Kind.U2, ids[0], names[0], names: names, slotIds: ids);
+        return new Field(Kind.U2, ids[0], names[0], names: names, slotIds: ids, rowType: typeof(T));
     }
 
     public static Field FlagByte()
@@ -188,7 +195,7 @@ public sealed class Field
         if (!IsNestedRow<TChild>())
             throw new ArgumentException("continuing group requires an anchor");
         RequirePresenceMember<TChild>(access.Name, fields);
-        return new Field(Kind.Group, -1, access.Name, children: fields, nestedRow: true);
+        return new Field(Kind.Group, -1, access.Name, children: fields, nestedRow: true, rowType: typeof(T));
     }
 
     public static Field Group<T, TChild>(int anchor, Expression<Func<T, TChild>> accessor, params Field[] fields)
@@ -197,7 +204,7 @@ public sealed class Field
         if (IsNestedRow<TChild>())
             throw new ArgumentException("nested group does not take an anchor");
         RequirePresenceMember<TChild>(access.Name, fields);
-        return new Field(Kind.Group, anchor, access.Name, children: fields, nestedRow: false);
+        return new Field(Kind.Group, anchor, access.Name, children: fields, nestedRow: false, rowType: typeof(T));
     }
 
     // An empty group is a presence bit, set only for true; bound to anything but a bool it could never be set.
@@ -214,21 +221,21 @@ public sealed class Field
     {
         if (element.Type == Kind.Repeat)
             throw new ArgumentException("repeat is not a list element");
-        return new Field(Kind.List, -1, MemberAccess.From(accessor).Name, children: [element]);
+        return new Field(Kind.List, -1, MemberAccess.From(accessor).Name, children: [element], rowType: typeof(T));
     }
 
     public static Field Dict<T, TProp>(Expression<Func<T, TProp>> accessor, Field element)
     {
         if (element.Type == Kind.Repeat)
             throw new ArgumentException("repeat is not a dictionary element");
-        return new Field(Kind.Dict, -1, MemberAccess.From(accessor).Name, children: [element]);
+        return new Field(Kind.Dict, -1, MemberAccess.From(accessor).Name, children: [element], rowType: typeof(T));
     }
 
     internal static Field CreateFlagBit(FlagGroup group, int bitIndex, Field inner) =>
         new(Kind.FlagBit, inner.Id, inner.Name, flagOwner: group, bitIndex: bitIndex, inner: inner);
 
     private static Field Scalar<T, TProp>(Kind kind, int id, Expression<Func<T, TProp>> accessor, int byteCount) =>
-        new(kind, id, MemberAccess.From(accessor).Name, byteCount: byteCount);
+        new(kind, id, MemberAccess.From(accessor).Name, byteCount: byteCount, rowType: typeof(T));
 
     internal static bool IsValueBearing(Field field) =>
         field.Type is (>= Kind.U8 and <= Kind.F64)

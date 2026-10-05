@@ -9,9 +9,8 @@ public sealed class Scheme<T> where T : class, new()
     {
         if (typeNumber is < 0 or > 255)
             throw new ArgumentOutOfRangeException(nameof(typeNumber), typeNumber, "type number must be 0..255");
-        SchemeOrder.Validate(fields);
         TypeNumber = typeNumber;
-        Fields = fields;
+        Fields = Array.AsReadOnly(SchemeOrder.Resolve(typeof(T), fields));
     }
 
     public Scheme(int typeNumber, Func<Fields<T>, Field[]> define)
@@ -55,17 +54,19 @@ public sealed class Condition
 {
     public int FieldId { get; }
     public object Value { get; }
-    internal string FieldName { get; private set; } = "";
+    internal string FieldName { get; }
 
-    private Condition(int fieldId, object value)
+    private Condition(int fieldId, object value, string fieldName)
     {
         FieldId = fieldId;
         Value = value;
+        FieldName = fieldName;
     }
 
-    public static Condition Eq(int fieldId, object value) => new(fieldId, value);
+    public static Condition Eq(int fieldId, object value) => new(fieldId, value, "");
 
-    internal void Resolve(string fieldName) => FieldName = fieldName;
+    // The scheme's own copy, bound to the member its field id names there. A Condition is never changed.
+    internal Condition Resolved(string fieldName) => new(FieldId, Value, fieldName);
 }
 
 public sealed class ShortPacket
@@ -182,80 +183,98 @@ public static class BinaryPacker
 
 internal static class SchemeOrder
 {
-    public static void Validate(IReadOnlyList<Field> fields)
+    // The scheme's own copy of its fields, with each count and `when` bound to the member its field id names. The
+    // caller's Field and Condition objects are never changed, so one can be reused in many schemes.
+    public static Field[] Resolve(Type row, IReadOnlyList<Field> fields)
     {
         var scope = new Dictionary<int, string>();
         var next = 0;
-        foreach (var field in fields)
-            Walk(field, scope, ref next);
-        FlagScopes.Validate(fields);
+        var resolved = new Field[fields.Count];
+        for (var i = 0; i < resolved.Length; i++)
+            resolved[i] = Walk(fields[i], row, scope, ref next);
+        FlagScopes.Validate(resolved);
+        return resolved;
     }
 
     // Ids number straight through repeat and times bodies, but a reference finds only the fields `scope` already holds:
     // the earlier ones of its own top level, repeat or times body, list or dict element, or nested row.
+    // `row`: the row type every field here must be declared for; null in a list or dict element and a nested row, which
+    // bind their own row types.
     // `flagBit`: the field is a direct child of Flags or the field of a FlagByte bit, the only place a bool or an empty
     // group has a bit to live in.
-    private static void Walk(Field field, Dictionary<int, string> scope, ref int next, bool flagBit = false)
+    private static Field Walk(Field field, Type? row, Dictionary<int, string> scope, ref int next, bool flagBit = false)
     {
         RequireFlagBit(field, flagBit);
+        RequireRow(field, row);
         switch (field.Type)
         {
             case Field.Kind.When:
                 RequireAnchor(field.Id, next);
-                field.Pred!.Resolve(Earlier(scope, field.Pred.FieldId, $"when {field.Id}"));
-                WalkChildren(field, scope, ref next);
-                break;
+                var pred = field.Pred!.Resolved(Earlier(scope, field.Pred.FieldId, $"when {field.Id}"));
+                return field.With(children: WalkChildren(field, row, scope, ref next), pred: pred);
             case Field.Kind.Flags:
             case Field.Kind.Group when !field.NestedRow:
                 RequireAnchor(field.Id, next);
-                WalkChildren(field, scope, ref next);
-                break;
+                return field.With(children: WalkChildren(field, row, scope, ref next));
             case Field.Kind.Repeat:
                 RequireAnchor(field.Id, next);
-                WalkChildren(field, [], ref next);
-                break;
+                return field.With(children: WalkChildren(field, row, [], ref next));
             case Field.Kind.Times:
                 RequireAnchor(field.Id, next);
-                field.SetCountName(Earlier(scope, field.CountId, $"count of times {field.Id}"));
-                WalkChildren(field, [], ref next);
-                break;
+                var count = Earlier(scope, field.CountId, $"count of times {field.Id}");
+                return field.With(children: WalkChildren(field, row, [], ref next), countName: count);
             case Field.Kind.FlagBit:
-                Walk(field.Inner!, scope, ref next, flagBit: true);
-                break;
+                return field.With(inner: Walk(field.Inner!, row, scope, ref next, flagBit: true));
             case Field.Kind.Group:
             case Field.Kind.List:
             case Field.Kind.Dict:
-                WalkFromZero(field);
-                break;
+                return field.With(children: WalkFromZero(field));
             case Field.Kind.U2:
                 for (var i = 0; i < field.SlotIds.Length; i++)
                     Take(field.SlotIds[i], field.Names[i], scope, ref next);
-                break;
+                return field;
             case Field.Kind.Sized:
             case Field.Kind.Bits:
             case Field.Kind.Packed:
-                field.SetCountName(Earlier(scope, field.CountId, $"count of field id {field.Id}"));
+                var counted = field.With(countName: Earlier(scope, field.CountId, $"count of field id {field.Id}"));
                 Take(field.Id, field.Name, scope, ref next);
-                break;
+                return counted;
             default:
                 if (Field.IsValueBearing(field))
                     Take(field.Id, field.Name, scope, ref next);
-                break;
+                return field;
         }
     }
 
-    private static void WalkChildren(Field field, Dictionary<int, string> scope, ref int next)
+    private static Field[] WalkChildren(Field field, Type? row, Dictionary<int, string> scope, ref int next)
     {
-        foreach (var child in field.Children)
-            Walk(child, scope, ref next);
+        var children = new Field[field.Children.Length];
+        for (var i = 0; i < children.Length; i++)
+            children[i] = Walk(field.Children[i], row, scope, ref next);
+        return children;
     }
 
     // A nested row, list element or dict element numbers its own fields from 0.
-    private static void WalkFromZero(Field field)
+    private static Field[] WalkFromZero(Field field)
     {
         var next = 0;
-        WalkChildren(field, [], ref next);
+        return WalkChildren(field, null, [], ref next);
     }
+
+    // A value is found by member name, so a field declared for another row type would be silently left out.
+    // A field declared for a base type of the row is the row's own member.
+    private static void RequireRow(Field field, Type? row)
+    {
+        if (row is not null && field.RowType is { } declared && !declared.IsAssignableFrom(row))
+            throw new ArgumentException(
+                $"'{field.Name}' is declared for row type {TypeName(declared)}, but this scheme is for {TypeName(row)}");
+    }
+
+    // `List<Int32>` rather than the reflection name `List`1`, so two closed generic rows read apart.
+    private static string TypeName(Type type) =>
+        type.IsGenericType
+            ? $"{type.Name[..type.Name.IndexOf('`')]}<{string.Join(", ", type.GetGenericArguments().Select(TypeName))}>"
+            : type.Name;
 
     private static void RequireFlagBit(Field field, bool flagBit)
     {

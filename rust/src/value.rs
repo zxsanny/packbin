@@ -103,6 +103,26 @@ pub(crate) fn when_matches(source: &Value, expect: &Value) -> bool {
     matches!((as_int(source), as_int(expect)), (Some(a), Some(b)) if a == b)
 }
 
+/// Equal values, a float equal to itself (NaN included) so that a value read from a packet is
+/// the same as a copy of it.
+pub(crate) fn same_value(a: &Value, b: &Value) -> bool {
+    match (a, b) {
+        (Value::F32(x), Value::F32(y)) => x.to_bits() == y.to_bits(),
+        (Value::F64(x), Value::F64(y)) => x.to_bits() == y.to_bits(),
+        (Value::List(x), Value::List(y)) => same_values(x, y),
+        (Value::Map(x), Value::Map(y)) => {
+            x.len() == y.len()
+                && x.iter()
+                    .all(|(key, v)| y.get(key).is_some_and(|w| same_value(v, w)))
+        }
+        _ => a == b,
+    }
+}
+
+pub(crate) fn same_values(a: &[Value], b: &[Value]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(x, y)| same_value(x, y))
+}
+
 pub(crate) fn as_usize(v: &Value) -> Option<usize> {
     match v {
         Value::U8(n) => Some(*n as usize),

@@ -2,12 +2,14 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { describe, it } from "node:test"
 import { Worker } from "node:worker_threads"
-import { BinaryPacker, bits, bytes, i32, list, repeat, scheme, u64, type DispatchResult } from "../src/index.ts"
+import { BinaryPacker, bits, bytes, eq, i32, list, repeat, scheme, u64, u8, when, type DispatchResult } from "../src/index.ts"
 import { CONSTRUCT, type Outcome, type SessionOutcome } from "./support/hostile-cases.ts"
 
 // A hang or an out-of-memory loop ends the worker, not the test run. The cases share one
 // worker; the case that hangs is reported and the rest restart in a fresh worker.
 const KILL_AFTER_MS = 5000
+
+type Row = Record<string, unknown>
 
 type Job = { key: string; id?: string; hex?: string; session?: boolean }
 type Settled = Outcome | SessionOutcome | Error
@@ -65,13 +67,6 @@ const allCases = readFileSync(new URL("../../fixtures/hostile/cases.txt", import
 const cases = allCases.filter((c) => c.stage === "unpack")
 const constructCases = allCases.filter((c) => c.stage === "construct")
 
-// Construct vectors whose rule TypeScript does not enforce yet, with the task that adds it.
-const PENDING_CONSTRUCT: Record<string, string> = {
-  when_names_later_field: "AZ-2090",
-  count_names_later_field: "AZ-2090",
-  when_names_outer_field_in_repeat: "AZ-2090",
-}
-
 const SPEC: Record<string, string> = {
   row1_zero_progress_repeat: "010005",
   row2a_sized_negative: "01fd616263",
@@ -90,7 +85,6 @@ const SPEC: Record<string, string> = {
   row7_list_of_list_zero_width: "01ffffffff",
   row7_dict_zero_width_value: "01ffff010061",
   row7_dict_zero_width_value_one: "010100010061",
-  row7_never_matching_when_element: "01000300",
   row5_list_oversize: "01ffff0100",
   row5_utf8_oversize: "01ffff61",
   row5_times_oversize: "01ff0102",
@@ -188,8 +182,16 @@ describe("hostile packets", () => {
     assertError(await run("row7_dict_zero_width_value_one"), "d", 0)
   })
 
-  it("never_matching_when_element_is_error", async () => {
-    assertError(await run("row7_never_matching_when_element"), "xs", 0)
+  // The element scope holds only the element, so a `when` there has nothing earlier to name.
+  it("never_matching_when_element_is_error", () => {
+    assert.throws(
+      () => scheme<Row>(
+        1,
+        u8(0, (x) => x.mode),
+        list((x) => x.xs, when(0, eq(0, 9), [u8(0, (x) => x.v)])),
+      ),
+      /^RangeError: when 0: eq names field id 0, which is not declared earlier in the same scope$/,
+    )
   })
 
   it("empty_list_of_zero_width_still_unpacks", () => {
@@ -298,11 +300,6 @@ describe("shared hostile vectors (fixtures/hostile/cases.txt)", () => {
 describe("shared construct vectors (fixtures/hostile/cases.txt)", () => {
   for (const c of constructCases) {
     const entry = CONSTRUCT[c.id]
-    const pending = PENDING_CONSTRUCT[c.id]
-    if (!entry && pending) {
-      it.todo(`${c.id} is refused at construction (${pending})`)
-      continue
-    }
     it(`${c.id} is refused at construction`, () => {
       assert.ok(entry, `no TypeScript scheme for construct case ${c.id}`)
       assert.ok(c.expected.includes("scheme_error"), `${c.id}: vector expects ${c.expected.join("|")}`)

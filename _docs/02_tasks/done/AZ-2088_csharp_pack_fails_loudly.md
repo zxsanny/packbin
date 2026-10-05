@@ -26,6 +26,8 @@ Each probe below was reproduced against a copy of the sources at `d108141` unles
 - An existing test already mixes row types by accident: `FieldIdBindingTests.cs:131-133` builds `Scheme<PointsRow>` with `Field.U16<MarkerRow>(0, x => x.Sid)`. It passes only because both rows have a member named `Sid`.
 
 ### Defect 3 — `when` on a float throws
+
+> Loop 13 note: the literal probe below (data `F` = NaN, infinity, 1e30) already passed on HEAD (`IsDecimalRange`, loop 9). What was still broken, and is fixed here, is a `Condition` value out of decimal range (`OverflowException`) and the Java rule (NaN equals NaN, -0.0 differs from 0.0).
 - `Walker.cs:443-451` `ValuesEqual` compares numbers with `Convert.ToDecimal` (line 448), which throws for NaN, ±∞ and |x| > 7.9·10²⁸.
 - Probe: `new Scheme<FloatRow>(1, Field.F64<FloatRow>(0, x => x.F), Field.When(1, Condition.Eq(0, 1.0), Field.U8<FloatRow>(1, x => x.B)))`, `{ F = double.NaN, B = 1 }` → **`OverflowException`** from `Pack`. Unpack throws the same.
 - Java compares floats with `Double.compare` (`Walker.java:416-427`).

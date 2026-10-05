@@ -16,6 +16,7 @@ import {
   scheme,
   sized,
   times,
+  u16,
   u32,
   u8,
   utf8,
@@ -39,6 +40,13 @@ export type Outcome = {
 const clearFlag = () => flags(0, [u8(0, (x: Row) => x.n)])
 
 const dictZeroWidthValue = () => scheme<Row>(1, dict((x) => x.d, bytes(0, (x) => x.v, 0)))
+
+// A `when` names only a field read earlier in its own round, so a round that reads nothing is a
+// zero-width field and a `when` on it that never matches. Ids 1 and 2 follow one field before it.
+const emptyRound = () => [
+  bytes(1, (x: Row) => x.v, 0),
+  when(2, eq(1, 9), [u8(2, (x: Row) => x.w)]),
+]
 
 const nineU8 = () => [
   u8(0, (x: Row) => x.f0),
@@ -65,6 +73,27 @@ export const CONSTRUCT: Record<string, { build: () => unknown; rule: RegExp }> =
       return scheme<Row>(1, fb, ...nineU8().map((f) => fb.bit(f)))
     },
     rule: /^flag byte "fb": ninth bit \(f8\); a flag byte holds 8 bits$/,
+  },
+  when_names_later_field: {
+    build: () => scheme<Row>(
+      1,
+      u8(0, (x) => x.a),
+      when(1, eq(2, 1), [u8(1, (x) => x.b)]),
+      u8(2, (x) => x.c),
+    ),
+    rule: /^when 1: eq names field id 2, which is not declared earlier in the same scope$/,
+  },
+  count_names_later_field: {
+    build: () => scheme<Row>(1, sized(0, (x) => x.payload, 1), u16(1, (x) => x.n)),
+    rule: /^sized 0: count names field id 1, which is not declared earlier in the same scope$/,
+  },
+  when_names_outer_field_in_repeat: {
+    build: () => scheme<Row>(
+      1,
+      u8(0, (x) => x.mode),
+      repeat(1, [when(1, eq(0, 1), [u8(1, (x) => x.v)])]),
+    ),
+    rule: /^when 1: eq names field id 0, which is not declared earlier in the same scope$/,
   },
   bool_outside_flags: {
     build: () => scheme<Row>(1, u8(0, (x) => x.a), bool(1, (x) => x.on)),
@@ -107,11 +136,7 @@ export const SCHEMES: Record<string, () => Scheme<Row>> = {
   count_behind_clear_flag_bits: () => scheme<Row>(1, clearFlag(), bits(1, (x) => x.segs, 0)),
 
   // AZ-2072 problem table
-  row1_zero_progress_repeat: () => scheme<Row>(
-    1,
-    u8(0, (x) => x.k),
-    repeat(1, [when(1, eq(0, 9), [u8(1, (x) => x.v)])]),
-  ),
+  row1_zero_progress_repeat: () => scheme<Row>(1, u8(0, (x) => x.k), repeat(1, emptyRound())),
   row2a_sized_negative: () => scheme<Row>(
     1,
     i8(0, (x) => x.n),
@@ -159,16 +184,8 @@ export const SCHEMES: Record<string, () => Scheme<Row>> = {
     u8(0, (x) => x.n),
     sized(1, (x) => x.p, 0),
   ),
-  row6_times_zero_width_oversize: () => scheme<Row>(
-    1,
-    u32(0, (x) => x.n),
-    times(1, 0, [when(1, eq(0, 9), [u8(1, (x) => x.v)])]),
-  ),
-  row6_times_zero_width_small: () => scheme<Row>(
-    1,
-    u8(0, (x) => x.n),
-    times(1, 0, [when(1, eq(0, 9), [u8(1, (x) => x.v)])]),
-  ),
+  row6_times_zero_width_oversize: () => scheme<Row>(1, u32(0, (x) => x.n), times(1, 0, emptyRound())),
+  row6_times_zero_width_small: () => scheme<Row>(1, u8(0, (x) => x.n), times(1, 0, emptyRound())),
   row7_list_of_list_zero_width: () => scheme<Row>(
     1,
     list(
@@ -178,11 +195,6 @@ export const SCHEMES: Record<string, () => Scheme<Row>> = {
   ),
   row7_dict_zero_width_value: dictZeroWidthValue,
   row7_dict_zero_width_value_one: dictZeroWidthValue,
-  row7_never_matching_when_element: () => scheme<Row>(
-    1,
-    u8(0, (x) => x.mode),
-    list((x) => x.xs, when(0, eq(0, 9), [u8(0, (x) => x.v)])),
-  ),
   row5_bits_oversize: () => scheme<Row>(
     1,
     u32(0, (x) => x.n),
@@ -239,11 +251,7 @@ export function runSession(): SessionOutcome {
     u8(0, (x) => x.k),
     u8(1, (x) => x.extra),
   )
-  const receiver = scheme<Row>(
-    1,
-    u8(0, (x) => x.k),
-    repeat(1, [when(1, eq(0, 9), [u8(1, (x) => x.v)])]),
-  )
+  const receiver = scheme<Row>(1, u8(0, (x) => x.k), repeat(1, emptyRound()))
   const next = scheme<Row>(2, u8(0, (x) => x.k))
   const out: SessionOutcome = { ms: 0 }
   const start = performance.now()

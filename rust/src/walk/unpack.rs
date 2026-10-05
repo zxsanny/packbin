@@ -1,6 +1,7 @@
 use super::element::{capacity_hint, unpack_element};
+use super::times::round_lists;
 use crate::field::{
-    field_name, float_width, int_width, Field, FieldKind, FloatKind, IntKind, MapScheme,
+    field_name, float_width, int_width, times_name, Field, FieldKind, FloatKind, IntKind, MapScheme,
 };
 use crate::value::{as_usize, name_of, ShortPacket, UnpackError, Value, Values};
 use std::collections::HashMap;
@@ -293,7 +294,9 @@ fn unpack_one(
             values.insert(name.clone(), Some(Value::List(items)));
         }
         FieldKind::Times {
-            count, members, ..
+            anchor,
+            count,
+            members,
         } => {
             let n = match values.get(count.as_ref()) {
                 Some(Some(v)) => as_usize(v).ok_or_else(|| {
@@ -311,7 +314,7 @@ fn unpack_one(
                     }))
                 }
             };
-            let mut built: HashMap<crate::value::Name, Vec<Value>> = HashMap::new();
+            let mut rounds = Vec::new();
             for _ in 0..n {
                 let before = cur.left();
                 let mut group = Values::new();
@@ -324,11 +327,6 @@ fn unpack_one(
                     &mut group_flags,
                     &mut nested_groups,
                 )?;
-                for (key, val) in group {
-                    if let Some(v) = val {
-                        built.entry(key).or_default().push(v);
-                    }
-                }
                 // Every later round would read nothing too, so a huge count must not spin.
                 if cur.left() == before {
                     return Err(UnpackError::Short(ShortPacket {
@@ -337,10 +335,12 @@ fn unpack_one(
                         left: before,
                     }));
                 }
+                rounds.push(group);
             }
-            for (key, list) in built {
+            for (key, list) in round_lists(&rounds) {
                 values.insert(key, Some(Value::List(list)));
             }
+            values.insert(times_name(*anchor), Some(Value::Groups(rounds)));
         }
         FieldKind::Utf8 { name } => {
             let count_raw = cur.take(2, name)?;

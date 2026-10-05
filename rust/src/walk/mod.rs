@@ -1,5 +1,6 @@
 mod element;
 mod pack;
+mod times;
 mod unpack;
 
 #[cfg(test)]
@@ -15,14 +16,22 @@ use crate::value::{PackError, UnpackError, Values};
 /// - The bits of a `flags` byte or flag byte come from its fields; a value under its own name
 ///   is not read. A bool (an empty `group`) sets its bit for `1` and leaves it clear for `0` or
 ///   no value.
-/// - Each direct field of a `times` takes a [`Value::List`] with one item per round. Fields under
-///   a `flags` or `when` inside a `times` round are not aligned per round yet (AZ-2086).
+/// - A `times` takes its rounds as [`Value::Groups`] (one [`Values`] per round) under the name
+///   `"__times_<anchor>"`, as many as its count; a member under a `flags` or `when` stays in its
+///   round. Without that value each direct field of the `times` takes a [`Value::List`] with one
+///   item per round, and a field under a `flags` or `when` is not aligned per round. With both,
+///   a value kept for a name of the rounds (a non-list counts as a list of one item) must be
+///   what the rounds hold. To change a value after `unpack`, edit the rounds and drop or rewrite
+///   the per-name lists, or edit the lists and drop the `"__times_<anchor>"` key; leaving both
+///   and changing one is an error.
 /// - A `repeat` takes its rounds as [`Value::Groups`] (one [`Values`] per round) under the name
 ///   `"__repeat__"`; no value there packs no rounds.
 ///
 /// Returns the packet bytes, or a [`PackError`]: [`PackError::Missing`] when a field that is
 /// written has no value; [`PackError::Type`] when a value does not fit its field, a bool value
-/// is not `0` or `1`, or `"__repeat__"` holds anything but [`Value::Groups`].
+/// is not `0` or `1`, `"__repeat__"` or a `times` holds anything but [`Value::Groups`], the
+/// rounds of a `times` are not as many as its count, or a value kept beside them differs from
+/// them.
 ///
 /// [`Value::List`]: crate::Value::List
 /// [`Value::Groups`]: crate::Value::Groups
@@ -36,7 +45,8 @@ pub fn pack(scheme: &MapScheme, values: &Values) -> Result<Vec<u8>, PackError> {
 ///   byte read (for example `m = U8(1)`).
 /// - A field behind a clear bit or an untaken `when` is absent; a set bool is `Value::U8(1)`.
 /// - Each field inside a `times` is one [`Value::List`] with an item for every round that read
-///   it; a field no round read is absent.
+///   it; a field no round read is absent. The rounds also come as [`Value::Groups`] under
+///   `"__times_<anchor>"`, empty for count 0; pack takes them back in place of the lists.
 /// - `repeat` rounds are [`Value::Groups`] under `"__repeat__"`, absent when there are none.
 ///
 /// Returns an [`UnpackError`] instead: [`UnpackError::Type`] for another type number;
