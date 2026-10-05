@@ -1,3 +1,7 @@
+---
+loop: 12
+---
+
 # Rust flag bits from field order, 8-bit limit, `bool` only inside flags
 
 **Task**: AZ-2082_rust_flag_bits_bool

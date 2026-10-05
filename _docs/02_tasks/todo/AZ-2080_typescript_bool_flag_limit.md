@@ -1,3 +1,7 @@
+---
+loop: 12
+---
+
 # TypeScript bool rule and 8-bit flag limit
 
 **Task**: AZ-2080_typescript_bool_flag_limit

@@ -1,3 +1,7 @@
+---
+loop: 12
+---
+
 # Java rejects later/outer references and keeps `bool` inside flags
 
 **Task**: AZ-2089_java_forward_refs_bool

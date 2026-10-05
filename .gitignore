@@ -12,3 +12,4 @@ cpp/build/
 **/node_modules/
 .github/workflows/out/
 .github/workflows/drivers/handoff-rust/target/
+.DS_Store

@@ -1,3 +1,7 @@
+---
+loop: 12
+---
+
 # C# bool rule and the 8-bit flags limit
 
 **Task**: AZ-2079_csharp_bool_rule_flag_limit

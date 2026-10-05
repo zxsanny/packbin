@@ -1,3 +1,7 @@
+---
+loop: 12
+---
+
 # Python bool only inside flags and 8-bit flag limit
 
 **Task**: AZ-2083_python_bool_flag_limit
