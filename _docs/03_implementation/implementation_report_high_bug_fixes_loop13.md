@@ -1,9 +1,9 @@
 # Implementation report — High bug fixes, loop 13
 
-**Tasks**: AZ-2084 (TypeScript), AZ-2085 and AZ-2086 (Rust), AZ-2087 and AZ-2088 (C#), AZ-2090 and AZ-2091 (TypeScript) — epic AZ-2069, bug-fix plan tasks 15–19, 21, 22
-**Batches**: 3 — `batch_01_loop13_report.md` (`625c168`), `batch_02_loop13_report.md` (`b4e8662`), `batch_03_loop13_report.md` (`8d70244`)
+**Tasks**: AZ-2084 (TypeScript), AZ-2085 and AZ-2086 (Rust), AZ-2087 and AZ-2088 (C#), AZ-2090 and AZ-2091 (TypeScript) — epic AZ-2069, bug-fix plan tasks 15–19, 21, 22; assessment round 1 extension (owner scope A): AZ-2175 and AZ-2176 (C#), AZ-2177 (TypeScript), AZ-2178 (Rust tests), AZ-2179 (rounds ring, drivers)
+**Batches**: 5 — `batch_01_loop13_report.md` (`625c168`), `batch_02_loop13_report.md` (`b4e8662`), `batch_03_loop13_report.md` (`8d70244`), `batch_04_loop13_report.md` (`a9c18e7`), `batch_05_loop13_report.md` (`fb9e34c`)
 **Completeness**: PASS — `implementation_completeness_loop13_report.md`
-**Review**: PASS_WITH_WARNINGS in every batch; two owner escalations (C# AC-4 pack gap, option B; Rust AZ-2086 two High bugs, option A); one C# review resumed after a stall; other owner decisions: C# `FlagGroup` as a follow-up, TypeScript round slicing into AZ-2091
-**Tests**: C# 345, TypeScript 224, Python 103, Rust 206, Java 0 failures, C++ all passed; `language-pair.sh` rings pass across all six languages
-**Tracker**: all seven In Testing after their batch commits
-**Follow-ups** (to file at the assessment step): see the `Discovered during implementation` tables of the three batch reports; highlights: C# shared `FlagGroup`; Rust `times` as a `flags` member; TypeScript split-form flag bit wrapping nested flags; typed-row `Unpack` of repeat/times rows in C#; nested repeat/times in a round (Java and Rust refuse, C# and TypeScript drop); lone scalar round 0 vs broadcast; `times` list entries beyond the count in TypeScript
+**Review**: PASS_WITH_WARNINGS in every batch; two owner escalations (C# AC-4 pack gap, option B; Rust AZ-2086 two High bugs, option A); one C# review resumed after a stall; other owner decisions: C# `FlagGroup` as a follow-up, TypeScript round slicing into AZ-2091, assessment scope A (small extension, the rest filed as tickets)
+**Tests**: C# 390, TypeScript 241, Python 103, Rust 217, Java 0 failures, C++ all passed; `language-pair.sh` rings pass across all six languages (new `roundflags` and `roundwhen` rings)
+**Tracker**: all twelve In Testing after their batch commits
+**Follow-ups**: filed at the assessment step (round 1): AZ-2180 to AZ-2194 and notes on AZ-2092, AZ-2112, AZ-2113, AZ-2117, AZ-2126, AZ-2127, AZ-2128; see `_docs/loops/loop13/assessment13.md` and the `Discovered during implementation` tables of the five batch reports; highlights: C# shared `FlagGroup`; Rust `times` as a `flags` member; TypeScript split-form flag bit wrapping nested flags; typed-row `Unpack` of repeat/times rows in C#; nested repeat/times in a round (Java and Rust refuse, C# and TypeScript drop); lone scalar round 0 vs broadcast; `times` list entries beyond the count in TypeScript

@@ -16,7 +16,7 @@ After the true-only rule (loop 12), a `false` bool leaves its bit clear and is a
 | Package | Scheme | Row | Pack | Own unpack |
 |---------|--------|-----|------|------------|
 | TypeScript | `flags(0,[bool(0,on)]), when(1, eq(0,false), [u8(1,v)])` | `{on:false, v:5}` | `010005` | `{ok:false, needed:0, left:1}` |
-| C# | `Flags(0, Bool S), When(1, Eq(0,false), U8 W)` | `S=false, W=7` | `010007` | `TrailingBytes` |
+| C# | `Flags(0, Bool S), When(1, Eq(0,false), U8 W)` | `S=false, W=7` | `0100` (loop 13 AZ-2175 AC-7: a `when` on a bool whose bit is clear never matches on pack; was `010007`, `TrailingBytes`) | ok, `W` absent |
 | Python | same shape | `{on: False, v: 5}` | `0100` | ok, `v` absent |
 
 Same row, different bytes (project AC-3), and two packages write packets they cannot read.

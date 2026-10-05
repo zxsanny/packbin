@@ -23,3 +23,19 @@ The C++ core ships no third-party code.
 | `rust/Cargo.toml`, `Cargo.lock` | manifest read | unchanged, no dependencies |
 | `python/pyproject.toml`, `csharp/Packbin.csproj`, `java/` | manifest read | unchanged, no dependencies |
 | all | `npm audit`, `cargo audit`, `dotnet list package --vulnerable` | not run: they need the network. Results of 2026-09-29 stand; no manifest changed |
+
+## Loop 13 addendum
+
+**Date**: 2026-10-06
+**Scope**: loops 12 and 13 (`git diff 39d3a88..HEAD`); the registries were reachable this time
+
+| Manifest | Tool | Result |
+|----------|------|--------|
+| `typescript/package.json`, `package-lock.json` | `npm audit` | 0 vulnerabilities (`@noble/hashes` 2.4.0, dev `typescript`) |
+| `csharp/tests/Packbin.Tests.csproj` (xunit 2.9.3, Test.Sdk 17.14.1, coverlet 6.0.4, runner 3.1.4), `.github/workflows/drivers/csharp/Handoff.csproj` | `dotnet list package --vulnerable --include-transitive` | no vulnerable packages |
+| `rust/Cargo.toml`, `Cargo.lock` | `cargo audit` | could not run: the installed 0.21.1 fails to parse a CVSS 4.0 advisory (`RUSTSEC-2026-0073`). `Cargo.lock` lists one package, the crate itself; the driver crate `.github/workflows/drivers/handoff-rust` depends only on it. Nothing to audit |
+| `python/pyproject.toml` | manifest read | `dependencies = []` (build requires `setuptools>=61`) |
+| `java/` | manifest read | no build file with dependencies; the JDK only |
+| `cpp/` | manifest read | no dependencies |
+
+No manifest or lockfile changed in loops 12 and 13. No vulnerable package; no finding.

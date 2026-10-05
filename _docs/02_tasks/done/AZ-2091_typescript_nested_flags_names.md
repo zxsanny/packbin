@@ -131,7 +131,7 @@ Then the bytes are unchanged
 
 **Risk 1: A caller reads the flag byte from the row**
 - *Risk*: `row.motion` or `row[""]` disappear.
-- *Mitigation*: They were never part of the documented API. Note it in the v0.2.0 release notes.
+- *Mitigation*: They were never part of the documented API. Tag v0.2.1 is already out, so note it in the README upgrade block that ships with the next release (v0.2.2).
 
 **Risk 2: The collision rule rejects a legitimate scheme**
 - *Mitigation*: The rule targets only names that flattening overwrites; same-scope duplicates stay legal (AC-5).

@@ -22,6 +22,7 @@ packbin is a library: the caller writes a field list, pack and unpack move the e
 - A short packet returns an error and no value. In C++ the error is a `Result` and the row keeps the fields read before it
 - Unpack treats its bytes as hostile (loop 11). In C#, TypeScript, Python, Rust and Java it returns an error value, within a time and memory bound set by the input length, and never throws. A `times` round or a `list`/`dict` element that reads nothing is an error; a `repeat` round that reads nothing ends the repeat and the rest is trailing bytes (C++ ends a `times`, `list` or `dict` container on such a round instead of failing, see below). The error shape is interim until C15
 - A `bool` is a flag bit with no payload, set only for `true`, and stands only directly under `flags` or a flag-byte bit; one flags byte holds 8 bits; an empty group that could never set its bit is refused (loop 12). Every package refuses a violation when the field list is built, not when a packet arrives
+- A `when` condition or borrowed count names a field read earlier in its own scope (the top level, one `repeat` or `times` round, one `list` or `dict` element, or a nested row), and a `repeat` or `times` round cannot hold another round (loop 13). C#, TypeScript, Java and C++ refuse a bad reference when the field list is built, and Rust refuses a bad numeric id (a Rust reference by name and every Python reference are not checked yet, AZ-2117 and AZ-2113). C#, TypeScript and Java refuse a nested round; Rust refuses all but a `times` inside a `repeat` (AZ-2127). In C#, TypeScript and Java a round unpacks to one list entry per round, `null` or `undefined` for a skipped round, and pack reads item i of each list for round i
 - The C++ core allocates nothing and throws nothing
 
 > See ADR 001 (Walk field lists with runtime primitives).
@@ -112,7 +113,7 @@ The C++ package is one core for host programs and firmware. It writes into a cal
 
 **Key relationships**:
 - One field list describes one packet shape
-- One value plus one field list produces one byte buffer, or pack refuses an integer that does not fit
+- One value plus one field list produces one byte buffer, or pack refuses an integer that does not fit (TypeScript range-checks every integer and float width since loop 13; C# refuses a required value that is missing)
 
 **Data flow summary**:
 - Value → pack → bytes: the caller sends the bytes on their own socket

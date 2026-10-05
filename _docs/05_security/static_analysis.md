@@ -31,3 +31,19 @@
 | Capacity | C# `List(count)`/`Dictionary(count)` and Rust `Vec::with_capacity(count)` for `list`/`dict` use the `u16` count before the bytes are checked (F7) |
 | Shared state | C# `Scope` and Java `seen` hold flag bytes per call; 2.4 million concurrent unpacks per package returned 0 wrong rows. The session counter is shared and not atomic (F9) |
 | Secrets, shell, markup | no change in these files |
+
+## Loop 13 addendum
+
+**Date**: 2026-10-06
+**Scope**: unpack in `csharp/Walker*.cs`, `typescript/src/{rounds,walker,member-names,pack-fields}.ts`, `rust/src/walk/{unpack,times,element}.rs`, `rust/src/scheme/times.rs`, `java/.../Rounds.java` (loop 12); the loop 12 and 13 diffs
+
+| Check | Result |
+|-------|--------|
+| Differential fuzz, loop 11 corpora | 276 855 packets in five packages, 3 s no-progress watchdog: 0 hangs, 0 crashes, 0 walker exceptions. Against the loop 11 results, the only change is three schemes (`list_when`, `repeat_when`, `times_zero_u32`) that now fail at construction in TypeScript, C# and Java |
+| Differential fuzz, loop 13 corpus | 245 523 packets over `repeat(flags)`, `repeat(k, flags, when)`, `times(flags)` in TypeScript, C#, Java and Rust: identical accept / refuse verdict on every packet, 0 exceptions, 0 hangs |
+| Typed `times` (Rust) | 260 379 packets over three `Vec<E>` schemes: 0 panics, 0 hangs |
+| Amplification | F10, measured per package; linear in the packet length |
+| Allocation from a count | C# `Math.Min(count, bytes left)` (`Walker.Counted.cs:359,419`), Rust `capacity_hint` (`walk/unpack.rs:362`); `bits` and `packed` lists reserve up to 8 (4) slots per byte left, bounded by the packet. No new reservation from a packet count |
+| Panics in decode paths | no `unwrap`, `expect`, `unsafe` or unchecked index added to Rust decode code; the added `panic!` calls are in scheme construction and name the rule |
+| Object injection | TypeScript rounds are keyed by member names the scheme declares; `dict` keys from the wire are defined as own entries (`walker.ts:236`), probe on `__proto__` returns an own key and no inherited `admin` |
+| Secrets, shell, markup | no key, token or password in the diff; changed scripts (`language-pair.sh`, `publish-gate.test.sh`, `examples.sh`, `lib.sh`) have no `eval`, `curl | sh`, `sudo`; the GPG key in `publish-gate.test.sh` is generated into a temporary keyring |

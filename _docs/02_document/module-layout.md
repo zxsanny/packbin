@@ -29,6 +29,8 @@ A single `src/`, `crates/`, or `packages/` tree would put six languages in one c
   - `csharp/Packbin.cs`
 - **Internal (do NOT import from other components)**:
   - `csharp/**` except `csharp/Packbin.cs`
+  - Construction checks: `csharp/FlagScopes.cs`, `csharp/RoundScopes.cs` (a `repeat` or `times` inside a round, loop 13); the reference scope and row-type checks are `SchemeOrder` in `Packbin.cs`
+  - Walkers: `csharp/Walker*.cs`, with `csharp/Walker.Rounds.cs` (round pack and aligned unpack, loop 13); per-call state in `csharp/Scope.cs`
 - **Owns (exclusive write during implementation)**: `csharp/**`
 - **Imports from**: none
 - **Consumed by**: the caller's server
@@ -43,6 +45,8 @@ A single `src/`, `crates/`, or `packages/` tree would put six languages in one c
   - `typescript/src/index.ts`
 - **Internal (do NOT import from other components)**:
   - `typescript/src/**` except `typescript/src/index.ts`
+  - Construction checks: `typescript/src/flag-scope.ts`, `typescript/src/member-names.ts` (name collisions) and `typescript/src/ref-scope.ts` (reference binder), the last two new in loop 13; the nested-round refusal is `validateRoundNesting` in `typescript/src/rounds.ts`
+  - Walkers: `typescript/src/walker.ts` (unpack), `typescript/src/pack-fields.ts` (pack), `typescript/src/rounds.ts` (round names, count, slice and aligned lists, loop 13)
 - **Owns (exclusive write during implementation)**: `typescript/**`
 - **Imports from**: none
 - **Consumed by**: Vue, React, and Node
@@ -71,6 +75,9 @@ A single `src/`, `crates/`, or `packages/` tree would put six languages in one c
   - `rust/src/lib.rs`
 - **Internal (do NOT import from other components)**:
   - `rust/src/**` except `rust/src/lib.rs`
+  - Construction checks (`MapScheme::new`): `rust/src/field/order.rs`, `field/shape.rs`, `field/integrity.rs` (`when` source and element kinds, loop 13)
+  - Typed layer: `rust/src/scheme/mod.rs` and `scheme/bound.rs`; `scheme/times.rs` (the typed `times` over a `Vec<E>`, loop 13) is reached through `SchemeItem::times`
+  - Walkers: `rust/src/walk/pack.rs`, `walk/unpack.rs`, `walk/element.rs`, and `walk/times.rs` (round lists and the list/rounds agreement check, loop 13)
 - **Owns (exclusive write during implementation)**: `rust/**`
 - **Imports from**: none
 - **Consumed by**: a native node
@@ -135,7 +142,7 @@ No shared code package. The library does not log, authenticate, or load configur
 ### workflows
 
 - **Directory**: `.github/workflows/`
-- **Purpose**: test on every push and pull request (including the `embedded` job for the C++ targets); publish on a version tag. The helper scripts (`run-suite.sh`, `publish-*.sh`, `stage-arduino.sh`, `report-row.sh`) and the `drivers/` for the language-pair run live in the same directory
+- **Purpose**: test on every push and pull request (including the `embedded` job for the C++ targets); publish on a version tag. The helper scripts (`run-suite.sh`, `publish-*.sh`, `stage-arduino.sh`, `report-row.sh`) and the `drivers/` for the language-pair run live in the same directory. `language-pair.sh` has the `roundflags` and `roundwhen` rings since loop 13 (AZ-2179): producers C#, TypeScript, Rust, Java and C++, readers TypeScript, Rust, Java and C++ (C# has no public reader, AZ-2092); the Rust driver builds them in `drivers/handoff-rust/src/rounds.rs`
 - **Owned by**: AZ-1866 owns `test.yml` and the workflow files existing. AZ-1875 owns the publish behavior in `publish.yml`
 - **Consumed by**: the six registries
 

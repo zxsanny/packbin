@@ -33,3 +33,21 @@
 | A08 Software or Data Integrity Failures | PASS_WITH_WARNINGS | F5 (`__proto__` key), F8 (BOM), F2. The session has no authentication tag; accepted criterion |
 | A09 Security Logging and Alerting Failures | N/A | the libraries do not log |
 | A10 Mishandling of Exceptional Conditions | PASS_WITH_WARNINGS | hangs, negative and wide counts, invalid UTF-8 and walker exceptions are fixed in all five packages. F4: C# row binding still throws on the top of `u64`/`i64`; AZ-2119 is the same class |
+
+## Loop 13 addendum
+
+**Date**: 2026-10-06
+**Scope**: unpack of attacker-controlled bytes in all six packages, loops 12 and 13; list as above
+
+| Category | Status | Notes |
+|----------|--------|-------|
+| A01 Broken Access Control | N/A | library. No request path |
+| A02 Security Misconfiguration | PASS | no configuration, port or image changed |
+| A03 Software Supply Chain Failures | PASS_WITH_WARNINGS | F1, F2, F3 unchanged. `npm audit` and `dotnet list package --vulnerable` clean; no dependency in the other four packages |
+| A04 Cryptographic Failures | PASS | session code unchanged; F9 fix verified (`Interlocked`, `Atomic*`) |
+| A05 Injection | PASS | no query, command or markup built from input; no `eval` or `curl | sh` in the changed scripts |
+| A06 Insecure Design | PASS_WITH_WARNINGS | F10: unpack of a `repeat` / `times` round costs memory and time per name per round and has no budget (Medium, owner-accepted in the loop 13 assessment, documented in the README). F11: no test bounds unpack cost by packet size |
+| A07 Authentication Failures | N/A | no accounts |
+| A08 Software or Data Integrity Failures | PASS | F5 (`__proto__`) and F8 (BOM) fixes verified on HEAD. The session has no authentication tag; accepted criterion |
+| A09 Security Logging and Alerting Failures | N/A | the libraries do not log |
+| A10 Mishandling of Exceptional Conditions | PASS | 2.63 million unpack calls: 0 walker exceptions, 0 panics, 0 hangs. F4 fix verified. The C# typed `Unpack` of a round throws on a valid packet (AZ-2092, ticketed, in the README) |

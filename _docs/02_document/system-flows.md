@@ -61,10 +61,12 @@ flowchart TD
 
 | Error | Where | Detection | Recovery |
 |-------|-------|-----------|----------|
-| Integer outside the width | Pack | the value does not fit | 0 bytes written |
+| Integer outside the width | Pack | the value does not fit (TypeScript, loop 13: also a non-number, a fractional or unsafe number, a `bigint` in a float) | 0 bytes written |
 | Output buffer too small (C++) | Pack | `BufferFull` with the offset and the bytes needed | nothing is written past the reported offset |
-| Field list refused | Building the field list | a `bool` or empty group outside `flags` / a flag-byte bit, a ninth flag bit, an empty group that could never set its bit, a reference to a later or outer field (Java, Rust), a nested `repeat` / `times` round (Java; Rust where it would lose data) | no scheme; the error names the field |
+| Field list refused | Building the field list | a `bool` or empty group outside `flags` / a flag-byte bit, a ninth flag bit, an empty group that could never set its bit, a reference to a later, outer or undeclared field (C#, TypeScript, Java, C++; Rust numeric ids), a nested `repeat` / `times` round (Java, C#, TypeScript; Rust where it would lose data), a field declared for another row type (C#), a member name used inside an unanchored group and outside it (TypeScript), a `when` on a non-integer source or a composite `list` / `dict` element (Rust) | no scheme; the error names the field |
 | Set flag group misses a value (C#) | Pack | a value-bearing child of a group whose bit is on is null | `ArgumentException` naming the child; nothing returned |
+| Required value missing (C#) | Pack | a walked field outside a flag bit has no value, or a `times` list holds more items than its count | `ArgumentException` naming the member and its field id; nothing returned |
+| Times count and `Vec` disagree (Rust typed) | Pack | the count field is not the length of the `Vec` | `PackError::Type` naming the `times`; nothing returned |
 | Bool value not 0 / 1 (Rust map API) | Pack | `PackError::Type` | nothing returned |
 
 ### Performance Expectations

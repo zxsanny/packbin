@@ -127,7 +127,7 @@ Write first; each "refuse" row must fail on `d108141`.
 
 **Risk 1: Callers relied on wrapping**
 - *Risk*: A caller passing `-1` to a `u16` to mean `0xffff` now gets an error.
-- *Mitigation*: That is the bug the architecture names. Note it in the v0.2.0 release notes.
+- *Mitigation*: That is the bug the architecture names. Tag v0.2.1 is already out, so note it in the README upgrade block that ships with the next release (v0.2.2).
 
 **Risk 2: 64-bit numbers above 2^53**
 - *Risk*: Callers passing large `number`s to `u64` now get an error.

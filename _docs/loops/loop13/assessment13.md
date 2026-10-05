@@ -2,9 +2,9 @@
 
 loop: 13
 feature: high-bug-fixes (epic AZ-2069: AZ-2084, AZ-2085, AZ-2086, AZ-2087, AZ-2088, AZ-2090, AZ-2091)
-rounds: 1
-verdict: CLARIFY
-report_of_round: 1
+rounds: 2
+verdict: COMPLETE
+report_of_round: 2
 
 ## Round 1
 
@@ -199,3 +199,57 @@ Handled by plan step 13 (update-docs): README lines on reference scope (now all 
 ### Harness note
 
 Batch reports 1–3 all carry the mandatory `## Discovered during implementation` table (20, 18 and 14 rows).
+
+## Round 2
+
+**Date**: 2026-10-05
+**Implement pass**: batches 04–05 (commits `a9c18e7`, `fb9e34c`; AZ-2175 to AZ-2179), batch reports `_docs/03_implementation/batch_04_loop13_report.md` and `batch_05_loop13_report.md`, completeness `_docs/03_implementation/implementation_completeness_loop13_report.md` (all 12 tasks PASS)
+**Verdict**: COMPLETE — 13 covered / 11 out-of-scope / 0 gap-clear / 0 gap-unclear
+
+Method: read-only. The nine rows round 1 sent to the extension were re-checked against the code, the new tests and the review reports; the 15 rows of the batch 4 and 5 Discovered tables were classified. No gap-clear or gap-unclear row remains: every deferred row is `out-of-scope` by the owner's scope A decision of 2026-10-05 and carried by a ticket.
+
+### Coverage matrix
+
+| id | scenario | status | evidence | source |
+|----|----------|--------|----------|--------|
+| C17 | A `when` naming a field an earlier `when` skipped no longer packs bytes its own read rejects or misparses | covered | AZ-2175 AC-1, AC-2; `WrittenWhenTests.cs::Ac1_*`, `::Ac2_*` (typed chain packs `01 01`, round packs `01 00`); `Walker.cs` / `Walker.Presence.cs` `seen`; review differential: 900 000 cases, 0 readable-and-correct packets changed | assess round 1 |
+| C9 | A failed `PackSession.Pack` does not advance the counter | covered | AZ-2175 AC-4; `WrittenWhenTests.cs::Ac4_*`; `PackSession.cs:45-47`; counter-before-pack mutant killed | assess round 1 |
+| C29 | A split-form flag byte in a round packs by index, reads back aligned, repacks | covered | AZ-2175 AC-5; `WrittenWhenTests.cs::Ac5_*` (`01 03 01 02 01 03`); `Walker.Rounds.cs`; three mutants killed | assess round 1 |
+| C16 | `repeat`/`times` nested in a round is refused in C# | covered | AZ-2176 AC-1; `NestedRoundTests.cs` (9 shapes, also through when/flags/groups); `RoundScopes.cs`; 450 000 fuzz cases vs Java's rule, 0 false refusals, 0 misses | assess round 1 |
+| T28 | `repeat`/`times` nested in a round is refused in TypeScript | covered | AZ-2177 AC-1; `nested-round.test.ts` (13 shapes + list/dict descent); `rounds.ts` `validateRoundNesting`; 240 000 fuzz schemes vs Java's rule, 0 misses | assess round 1 |
+| X8 | The nested-round rule is the same in Java, C#, TypeScript (Rust keeps its documented difference) | covered | AZ-2176 AC-1, AZ-2177 AC-1; the message text matches Java word for word; Rust difference recorded in AZ-2127 | assess round 1 |
+| T2 | `-0` into u8, i8, u64 packs as 0 | covered | AZ-2177 AC-4; `int-range.test.ts` "negative zero packs as zero"; `kinds.ts` integer path; four mutants killed | assess round 1 |
+| R31 | Seven typed `times` shapes pinned | covered | AZ-2178 AC-1..AC-7; `rust/tests/times_shapes_tests.rs` (11 tests, hex re-derived by hand by the reviewer, 18 of 20 mutants killed, 2 more killed after the fixes); production code unchanged | assess round 1 |
+| X1 | Aligned rounds have a cross-language byte check | covered | AZ-2179 AC-1..AC-4; `language-pair.sh` `roundflags` and `roundwhen` (producers C#, TypeScript, Rust, Java, C++; readers TypeScript, Rust, Java, C++); every mutant of the review failed the ring | assess round 1 |
+| N1 | `Eq(bool, false)` with a clear bit no longer matches on pack (HEAD wrote an unreadable body) | covered | AZ-2175 AC-7; `WrittenWhenTests.cs::Ac7_*`; README/component doc/AZ-2126 row at step 13 | b4#1 |
+| N2 | A missing count throws `InvalidOperationException`, other pack failures `ArgumentException` | out-of-scope | Owner scope A; note added to AZ-2181 (open Low) | b4#2 |
+| N3 | An f32 field supplied as a double with `Eq(f, 0.1f)` compares unnarrowed on pack, narrowed on unpack | out-of-scope | AZ-2126 (kinds a `when` may name) | b4#3 |
+| N4 | `seen` keeps the caller's object, not what unpack reads back (dictionary path) | out-of-scope | AZ-2191 | b4#4 |
+| N5 | A nested-row (continuing) group in a round inherits "in a round" | covered | AZ-2176 Included; `NestedRoundTests.cs` continuing-group shape; Java does the same | b4#5 |
+| N6 | A list/dict element that is a group holding a round only builds (group elements do not pack per item) | out-of-scope | AZ-2119; AZ-2176 AC-2 amended | b4#6 |
+| N7 | TypeScript non-empty group elements do not pack per item even outside rounds | out-of-scope | AZ-2102; AZ-2177 AC-2 amended | b4#7 |
+| N8 | Unreachable round code kept while nested rounds are refused | out-of-scope | AZ-2127 (becomes load-bearing again when it lifts the refusal) | b4#8 |
+| N9 | Rust still allows a `times` inside a `repeat` round | out-of-scope | AZ-2127 note (documented difference) | b4#9 |
+| N10 | `cargo fmt --check` diffs in older Rust files | out-of-scope | Pre-existing; CI has no format gate | b4#10 |
+| N11 | C# pack allocation per list/dict element and per written field | covered | Project AC-10; `PackbinTests.cs::Nfr_RoundTripsWithinOneSecond` (163 ms per 100 000 typed round trips); rounds back at HEAD's allocation after the review fix | b4#11 |
+| N12 | C# has no public API that reads an aligned round row; the C# read side of the new rings is unchecked | out-of-scope | AZ-2092; AZ-2179 AC-3 named omission and flagged concern | b5#1 |
+| N13 | Rust expresses the ring rows as `Value::Groups` rounds with a bool as an empty group | covered | AZ-2179 AC-1, AC-2; `drivers/handoff-rust/src/rounds.rs`; ring run | b5#2 |
+| N14 | The C++ driver's `parse_hex` drops an odd last nibble | out-of-scope | Pre-existing, not reachable from the ring; AZ-2194 | b5#3 |
+| N15 | The ring is still not run by CI | out-of-scope | AZ-2193 | b5#4 |
+
+### Gaps that need a decision (gap-unclear)
+
+none
+
+### Gaps that are clear (gap-clear)
+
+none
+
+### Not walked
+
+- Everything listed under `Not walked` in round 1 stays unwalked.
+- The README upgrade notes themselves (step 13) are written next; this round checked only that the batch reports list every behavior change they must carry.
+
+### Harness gaps
+
+- `fixtures/hostile/cases.txt` still has no `pack` stage (AZ-2194); the ring is still a manual gate (AZ-2193).

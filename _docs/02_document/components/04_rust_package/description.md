@@ -16,11 +16,12 @@
 
 | Method | Input | Output | Async | Error Types |
 |--------|-------|--------|-------|-------------|
-| `Scheme` | type number, fields by order id | scheme | No | a gap, a repeated id, a bad anchor, a reference to an id not yet walked, a `when`, count or flag-bit reference to an id outside the enclosing `repeat` or `times` body, a flag bit whose flag byte is not read earlier in the same scope, a 9th member in one `flags` or a 9th bit in one flag-byte read, a bool (an empty `group`) not directly inside `flags` or under a flag bit, a `repeat` inside a `repeat` or `times` round, or a `times` inside a `times` round (see §7). Construction failures are panics that name the field |
-| `BinaryPacker::pack` | scheme, row | bytes | No | integer does not fit |
+| `Scheme` | type number, fields by order id | scheme | No | a gap, a repeated id, a bad anchor, a reference to an id not yet walked, a `when`, count or flag-bit reference to an id outside the enclosing `repeat` or `times` body, a flag bit whose flag byte is not read earlier in the same scope, a 9th member in one `flags` or a 9th bit in one flag-byte read, a bool (an empty `group`) not directly inside `flags` or under a flag bit, a `repeat` inside a `repeat` or `times` round, a `times` inside a `times` round, a `when` on a float, bytes, utf8, `sized`, `bits`, `packed`, `list` or `dict` source or with an `eq` value that is not an integer, or a `list` or `dict` element that is a group, flags, `when`, `repeat`, `times`, flag byte or bit, `sized`, `bits`, `packed` or a `u2` with several names (see §7). Construction failures are panics that name the field |
+| `SchemeItem::times` | anchor, count id, `get` (`&T` to `&[E]`), `set` (`&mut T`, `Vec<E>`), element items on `E` | scheme item | No | the construction panics above, raised in `Scheme::new`; an element that holds a `times` or names an id outside the element |
+| `BinaryPacker::pack` | scheme, row | bytes | No | integer does not fit; `PackError::Type` naming the `times` when its count differs from its `Vec` length |
 | `BinaryPacker::unpack` | scheme, bytes | row or error | No | short packet, trailing bytes, type mismatch; never panics on bytes (see §7) |
 | `BinaryPacker::unpack_with` | bytes, handlers | row or error | No | unknown leading byte |
-| `pack` | `MapScheme`, values by field name | bytes | No | `PackError::Missing` for a written field with no value; `PackError::Type` for a value that does not fit, a bool value other than 0 or 1, or a `"__repeat__"` value that is not `Value::Groups` |
+| `pack` | `MapScheme`, values by field name | bytes | No | `PackError::Missing` for a written field with no value; `PackError::Type` for a value that does not fit, a bool value other than 0 or 1, a `"__repeat__"` or `"__times_<anchor>"` value that is not `Value::Groups`, a `times` whose rounds are not as many as its count, or a list kept beside the rounds that disagrees with them |
 | `unpack` | `MapScheme`, bytes | values by field name, or error | No | `UnpackError::Type` (another type number), `Short`, `Trailing`; never panics on bytes (see §7) |
 
 **Input DTOs**:
@@ -61,7 +62,7 @@ No queries and no cache.
 
 ## 5. Implementation Details
 
-**State Management**: clear pack is stateless. A session keeps one send counter and one receive counter. A `FlagByte` handle holds only its name: `MapScheme::new` gives each flag-byte read a slot and numbers its bits by field order, so one handle can build any number of schemes.
+**State Management**: clear pack is stateless. A session keeps one send counter and one receive counter. A `FlagByte` handle holds only its name: `MapScheme::new` gives each flag-byte read a slot and numbers its bits by field order, so one handle can build any number of schemes. The typed `Scheme` names what it generates, `__flags_N` for a `flags` and `__bound_N` for a bound `list`, `dict` or `list_u16` (loop 13), from one counter that every `times` element shares with the row, so two unnamed containers, or one in a `times` element, never get the same name. Before, the container constructors hard-coded `__list` and `__dict`, and a second bound list overwrote the first.
 
 **Key Dependencies**:
 
@@ -84,12 +85,13 @@ No queries and no cache.
 
 **Known limitations**:
 - The first release has no code generator
-- References by name (map layout) are not scope-checked; only numeric ids are. The run-time zero-progress guard still stops a hang (AZ-2117)
-- A bound list whose element is a bare flag bit panics at construction; no test covers it
+- References by name (map layout) are not scope-checked; only numeric ids are. A `when` or count that names a name declared only inside an earlier `repeat` or `times` body, or never declared, still builds and never fires, and the run-time zero-progress guard still stops a hang (AZ-2117)
+- A `list` or `dict` element must be one integer, float, bytes, utf8, list or dict, or a `u2` with one name; any composite element panics at construction instead of losing data (loop 13). The typed API still binds only those: `list_u16` keeps an `element_id` argument that must be 0 (C18)
 - Pack `borrowed_count` still adds its bias unchecked (AZ-2118)
-- The typed API has no flag-byte form (C18); a split flag byte is built with the map API (`MapScheme`, `pack`, `unpack`) or a raw `SchemeItem::Field`
+- The typed API has no flag-byte, `repeat` or `u2` form and no generic `list` or `dict` binder (C18); a split flag byte or a `repeat` is built with the map API (`MapScheme`, `pack`, `unpack`) or a raw `SchemeItem::Field`. A raw `SchemeItem::Field(repeat/when/flags ...)` in a typed scheme packs nothing and drops on unpack
 - Map API: a `flags` group is on only when its own value, a direct integer, float, bytes, utf8, list or dict value, or one of its flag bits is present; values held only in `u2`, `sized`, `bits`, `packed`, a nested group or a `when` are dropped with no error, and a `times` or `when` as a `flags` member or flag-bit field is never written (AZ-2128)
-- Map API: fields under a `flags`, `when` or `group` inside a `times` round are not aligned per round (`slice_times` slices only direct children); a `repeat` or `times` inside a `list` or `dict` element builds but does not round-trip (AZ-2086)
+- Map API: a hand-built `times` fed per-name lists only (no `"__times_<anchor>"` key) slices direct children only (`slice_times`), so a member under `flags`, `when` or a group in the round is dropped without an error (AZ-2189). A `times` inside a `repeat` round stays allowed, where Java, C# and TypeScript refuse it (AZ-2127). A map scheme that reuses one member name in two `times` cannot repack unedited values (it fails loudly)
+- Typed `times`: `PackSession::pack` of a row whose count and `Vec` length differ returns plain `None` (AZ-2105). Unpack keeps one `Values` per round, about 300 to 500 MB of peak memory for 1 MB of one-byte rounds (the count is never pre-allocated); accepted, no cap
 
 **Hostile input** (loop 11). Unpack of untrusted bytes returns an error value and no row, within a time and memory bound set by the input length. It does not throw and does not loop on input it cannot consume. The cases:
 - a `repeat` round that reads 0 bytes ends the repeat; the bytes left come back as trailing bytes
@@ -98,17 +100,23 @@ No queries and no cache.
 
 The error shape is interim: a short-packet-style value. Its kind, label, `needed` and `left` are decided under C15, so no new public error type was added. In Rust it is `UnpackError::Short` with `needed` 0. A zero-width `times` round is labelled `"times"`; the `repeat` case is `UnpackError::Trailing`. A `packed` count goes through checked arithmetic (`packed_layout` in `walk/unpack.rs`), so a count of 2^63 or more, or one that overflows a 32-bit `usize`, is an error, not a wrap. `walk/element.rs` reads one `list` or `dict` element and rejects a zero-width one.
 
-**Construction rules** (`field/order.rs` for ids and scope, then `check_shape` in `field/shape.rs` for flag bits, bools and rounds; `MapScheme::new` runs both, also for the typed `Scheme::new`):
+**Construction rules** (`field/order.rs` for ids and scope, then `check_shape` in `field/shape.rs` for flag bits, bools and rounds, then `check_integrity` in `field/integrity.rs` for `when` and elements; `MapScheme::new` runs all three, also for the typed `Scheme::new`):
 - a `when`, a `sized`, `bits`, `packed` or `times` count, or a flag bit may only name an id inside its own `repeat` or `times` body, because each round reads into its own values
 - a split-form flag bit binds to the latest read of its flag byte that it can see, earlier in the same scope; a flag byte read inside a `when`, a `flags` member or a flag bit is not visible after it, and one outside a `repeat`, `times`, `list` or `dict` body is not visible inside
 - a bit's position is its order among the bits of that read, not the order of `bit()` calls; a second read of the same flag byte starts its own bits (as C++)
 - one `flags` holds at most 8 members and one flag-byte read at most 8 bits (a bit inside a `when` counts against the same read); the 9th panics naming that field
 - a bool (an empty `group`, typed `BoundField::bool_flag`) stands only directly inside `flags` or under a flag bit; at the top level, inside `when`, `repeat`, `times`, a plain group (also one under `flags`) or as a `list` or `dict` element it panics naming its id
 - no `repeat` inside a `repeat` or `times` round and no `times` inside a `times` round, at any depth (also through `when`, `group`, `flags` or a flag bit); a `times` inside a `repeat` round stays allowed, and a `list` or `dict` element starts outside any round
+- a `when` tests an integer or bool field (an empty group counts) against an integer `eq` value; a float, bytes, utf8, `sized`, `bits`, `packed`, `list` or `dict` source, or a float, text or other non-integer `eq`, panics naming the `when` (a `when` on a utf8, bytes or f32 source with a same-type `eq` built before). The check applies to a tested name that scope declared before the `when`
+- a `list` or `dict` element is one integer, float, bytes, utf8, list or dict, or a `u2` with one name; the walker keeps one value per element, so a group, flags, `when`, `repeat`, `times`, flag byte or bit, `sized`, `bits`, `packed` or a `u2` with several names would lose values, and panics naming the owner and the element
 
 **Bool** (loop 12): the bit is set only for true (typed `Some(true)`, map value `1`); `0` or no value leaves it clear, and a map value other than 0 or 1 fails pack with `PackError::Type`. A set bit unpacks as `Value::U8(1)` (typed `Some(true)`), under `flags` and under a flag-byte bit alike; a clear one is absent (`None`).
 
-**Map `pack` / `unpack`** (public since loop 12, `walk/mod.rs`): values are keyed by field name. A `flags` byte or flag byte is computed from its fields on pack and returned under its own name on unpack as `Value::U8` of the byte read. Each direct field of a `times` takes and returns a `Value::List`, one item per round; `repeat` rounds are `Value::Groups` under `"__repeat__"` (no value packs no rounds). A flag bit inside a `when` that is not taken still sets its bit on pack; unpack checks the `when` first and never reads the field (`bitwhen` vector: `{k:0, v:5}` packs `010001`, `{k:1, v:5}` packs `01010105`).
+**Typed `times`** (loop 13, `scheme/times.rs`). `SchemeItem::times(anchor, count_id, get, set, members)` binds a `Vec<E>` with `E: Default + 'static`: `get` lends `&[E]`, `set` takes the `Vec<E>`, and `members` are items on `E`, numbered from `anchor` on like the items of a `when`. A reference among them names an id of the same element. It replaces the three-argument form and the `SchemeItem::Times` struct variant. The element items compile lazily, inside `Scheme::new`, with the scheme's name counter, so an element panic fires there and no element reuses a generated name. The rounds travel as `Value::Groups` under `"__times_<anchor>"`, built by `read_values` and read back by `build_row` in `scheme/mod.rs`. Pack fails with `PackError::Type` (`times at id N: count C, R rounds`) when the count differs from the `Vec` length. Unpack makes one `E::default()` per round and sets the `Vec`, also for count 0 (it replaces a non-empty default). A `times` inside a `times` element is refused at construction. The README times and route vectors pack the same bytes as the other five packages.
+
+**Integer `when`** (loop 13, `value.rs`). `when_matches` takes the members when `eq` and the source are integers of the same number, whatever their width or sign, so `Value::U16(1)` matches a `u8` source and a `u64` above `i64::MAX` matches by value. It replaced `values_eq`, which was true only for the same variant, so such a `when` never fired and dropped its group without an error. `same_value` (floats by bits, so NaN equals itself) compares the rounds with the lists beside them.
+
+**Map `pack` / `unpack`** (public since loop 12, `walk/mod.rs`): values are keyed by field name. A `flags` byte or flag byte is computed from its fields on pack and returned under its own name on unpack as `Value::U8` of the byte read. `repeat` rounds are `Value::Groups` under `"__repeat__"` (no value packs no rounds). A `times` unpacks to one `Value::List` per name (an item for every round that read it) and also to its rounds as `Value::Groups` under `"__times_<anchor>"`, one `Values` per round, always present and empty for count 0 (`walk/times.rs`, `times_name` in `field/mod.rs`). Pack takes the Groups when the key is there: as many as the count, else `PackError::Type`, and a member under `flags`, `when` or a group stays in its round. Without the key each direct field takes a `Value::List` with one item per round (`slice_times`). With both, a value kept for a name of the rounds (a non-list counts as a list of one item) must equal what the rounds hold, else `PackError::Type` (`times at id N: list for 'x' disagrees with its rounds`). To change a value after `unpack`, edit the rounds and drop or rewrite the lists, or edit the lists and drop the `"__times_<anchor>"` key; leaving both and changing one is an error. A flag bit inside a `when` that is not taken still sets its bit on pack; unpack checks the `when` first and never reads the field (`bitwhen` vector: `{k:0, v:5}` packs `010001`, `{k:1, v:5}` packs `01010105`).
 
 **Breaking changes for callers** (pack output is unchanged):
 - A flag byte read in one `when` with its bit in another `when` worked before. It is now refused at construction.
@@ -120,6 +128,13 @@ The error shape is interim: a short-packet-style value. Its kind, label, `needed
 - A map bool value `0` now leaves its bit clear (it set it before); a bool value other than 0 or 1, or a `"__repeat__"` value that is not `Value::Groups` (before: no rounds), fails pack with `PackError::Type`.
 - A bool or empty group outside `flags` or a flag bit (it packed nothing and came back missing), a 9th `flags` member or flag-byte bit (a shift panic in debug, an aliased bit in release), a `repeat` inside a `repeat` or `times` round and a `times` inside a `times` round now fail at construction.
 - A bool under a flag-byte bit now unpacks as set (it was missing).
+
+**Breaking changes in loop 13** (wire bytes of valid schemes are unchanged):
+- `SchemeItem::times` has a new signature (above) and the `SchemeItem::Times` struct variant is gone. The old form shipped in `v0.2.1` and never worked past a count of 1. Its construction panics moved from the call to `Scheme::new`.
+- A `when` on a utf8, bytes, f32 or other non-integer source, or with a non-integer `eq`, now panics at construction. A list or dict whose element is a group, flags, `when`, `repeat`, `times`, flag byte or bit, `sized`, `bits`, `packed` or a multi-name `u2` now panics at construction (it lost values or failed at run time).
+- A `when` matches by integer value at any width (it needed the same variant); two or more bound lists, dicts or `list_u16` fields keep their own members (they overwrote each other).
+- Map `unpack` of a `times` also returns `"__times_<anchor>"` Groups, and map `pack` with both the Groups and a list that disagrees fails with `PackError::Type`. Before, the lists were the only form.
+- Unpack keeps one `Values` per `times` round, about eight times the memory it used (312 MB peak for 1 MB of one-byte rounds, 37 MB before).
 
 **Potential race conditions**:
 - None

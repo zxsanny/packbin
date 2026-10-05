@@ -143,7 +143,7 @@ Add these first; AC-1, AC-2 (count 1 unpack), AC-4 and AC-5 fail today.
 
 **Risk 1: Public API change**
 - *Risk*: `SchemeItem::times` changes signature (adds `Vec<E>` accessors and an element type). The old scalar form never worked beyond count 1 and has no users in the repo.
-- *Mitigation*: change it before the `v0.2.0` tag; list it in the README Rust section and the changelog.
+- *Mitigation*: the old form already shipped in tag `v0.2.1` (there is no changelog), so list the new signature in the README upgrade block that ships with the next release (v0.2.2).
 
 **Risk 2: Element ids vs parent ids**
 - *Risk*: element binders use ids that continue the parent numbering but live on `E`, which can confuse the order check that today threads one `next_id`.

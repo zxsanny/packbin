@@ -13,10 +13,10 @@ A packet is a list. Field order is wire order. A gap, a repeated id, or an ancho
 | `f32` `f64` | IEEE float | |
 | `bytes(n)` | n raw bytes | fixed |
 | `flags(anchor, name, fields)` | one `u8` plus those fields | bit 0 is the first field; the anchor is the next value id and is not written |
-| `when(anchor, eq(field, value), fields)` | 0 or the group | tests a field already read; the anchor is not written |
+| `when(anchor, eq(field, value), fields)` | 0 or the group | tests a field already read in the same scope (see References); the anchor is not written |
 | `repeat(anchor, fields)` | the group until the buffer ends | must end on a boundary; no count; the anchor is not written |
-| `packed(width, id, count, bias)` | 1-bit or 2-bit list | item count is an earlier integer plus a bias of 0 or −1; no length byte; low bits first |
-| `times(anchor, count, fields)` | the inner fields N times | N is an earlier integer; the anchor is not written; the next field is then read as itself |
+| `packed(width, id, count, bias)` | 1-bit or 2-bit list | item count is an earlier integer of the same scope plus a bias of 0 or −1; no length byte; low bits first |
+| `times(anchor, count, fields)` | the inner fields N times | N is an earlier integer of the same scope; the anchor is not written; the next field is then read as itself |
 
 `be(field)` switches that field to big-endian. The packet default stays little-endian.
 
@@ -166,6 +166,12 @@ Packet.Of(
 
 A bit must come after its flag byte, in the same container. The top level, each `repeat` or `times` round, and each `list` or `dict` element is its own container. A flag byte read inside a `when`, or outside the container that holds the bit, is not visible to that bit, and building the scheme fails naming the bit. A `when` body may use a flag byte read earlier in the container around it, as the example above does for `motion`. This check runs in TypeScript, C#, Java and Rust; Python gets it with its split form (AZ-2100).
 
+## References
+
+The field id inside `eq(...)` and the count id of `packed`, `sized`, `bits` and `times` name a value field that was read earlier in the same scope. The scopes are the ones above (the top level, each `repeat` or `times` round, each `list` or `dict` element), plus a nested row: an unanchored group in TypeScript, a nested-row group in C# and Java. `flags`, `when` and an ordinary group share the scope around them. A reference to a later field, to an id nobody declared, to a field inside a `repeat` or `times` body from outside it, or to an outer field from inside the body fails when the scheme is built, naming both ids (loop 13). A count names an integer field (which other kinds a package refuses differs; AZ-2126, AZ-2181). TypeScript, C#, Java, C++ and Rust check the scope (Rust checks numeric ids; a map-layout reference by name is not checked, AZ-2117); Python builds such a scheme today (AZ-2113).
+
+Unpack decides a `when` on the fields it has read. C# since loop 13, like Java, decides it on pack from the fields it wrote in the same scope, so a `when` that names a field an earlier `when` skipped does not match on either side and pack never returns bytes that unpack reads differently.
+
 ## Repeat
 
 A trail whose count is "whatever is left":
@@ -185,13 +191,17 @@ Packet.Of(
     Field.Repeat(Field.I32("lat"), Field.I32("lon")));
 ```
 
-Unpack appends one point per complete pair. A trailing partial pair is `ShortPacket` on `lat` or `lon`.
+Unpack gives each field one list entry per round, so `lat` and `lon` hold one entry per complete pair. A trailing partial pair is `ShortPacket` on `lat` or `lon`.
+
+A round may hold optional fields (`when`, `flags`, a flag bit, a group). Then every name the round can hold gets one entry per round, `null` (`undefined` in TypeScript) for a round that skipped it, so the lists line up by round index and a repack gives the same bytes. Pack reads item i of each list for round i, and a `repeat` runs as many rounds as its longest list. C# and TypeScript do this since loop 13, as Java does; Rust returns the rounds as groups, one per round (`"__repeat__"`, `"__times_<anchor>"` in the map form); Python waits for AZ-2134. A `repeat` or `times` cannot hold another `repeat` or `times`: Java, C# and TypeScript refuse it when the scheme is built, Rust refuses all but a `times` inside a `repeat` (AZ-2127 defines per-round nested lists).
 
 ## Borrowed count
 
 `packed` is a list of width 1 or 2. The item count is an earlier integer plus a bias of 0 or −1. Width 2 stores 0 … 3, four per byte. Values `0, 1, 2, 3` are the byte `e4`. Bias −1 with a count of 9 and eight 1-bits is `ff`. A count of 1 and bias −1 writes no bitset bytes. A list whose length is not that count fails and names the field.
 
 `times` writes the inner fields exactly N times, then the next field. A count of 2, two lat/lon pairs, and a following `u8` of 7 unpacks with bytes left 0. The `7` is not another latitude.
+
+Pack takes N from the count field, and the lists must hold N items. C# refuses a list with more or fewer, C++ refuses an array that does not match a non-zero count, and a Rust typed `times` refuses a `Vec` whose length is not N (a `PackError` naming the `times`). TypeScript, Python and Java refuse a short list but drop the items beyond N without a word (AZ-2185, AZ-2186, AZ-2187).
 
 One scheme uses both for a route: header, N two-bit kinds, N pairs, then N−1 straight-leg bits when that flag is set. The fixture hex is `3410001500062d00020d0065cd1d00a3e111108ccd1d10cae11101`.
 

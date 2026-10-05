@@ -74,5 +74,6 @@ Owner decision 2026-10-05: cut **v0.2.2** after this loop closes (smoke PASS, lo
 | round | verdict | new specs | report |
 |-------|---------|-----------|--------|
 | 1 | CLARIFY (owner chose scope A: a small extension; every other gap deferred to follow-up tickets AZ-2180..AZ-2194 and notes on existing tickets) | AZ-2175 (C# `when` on written values + pins, 4 pts), AZ-2176 (C# refuses nested rounds, 2), AZ-2177 (TypeScript refuses nested rounds + `-0` pin, 3), AZ-2178 (Rust typed `times` pins, 1), AZ-2179 (cross-language rounds ring, 5) | _docs/loops/loop13/assessment13.md |
+| 2 | COMPLETE (9 round-1 rows closed by AZ-2175..AZ-2179; 15 new rows covered or out-of-scope by owner scope A) | none | _docs/loops/loop13/assessment13.md |
 
 Extension batches (plan step `implement`, continuing batch numbers): batch 4 = AZ-2175 → AZ-2176 (C#, one worker, serialized), AZ-2177 (TypeScript), AZ-2178 (Rust), three workers in parallel; batch 5 = AZ-2179 (drivers in C#, TypeScript, Java, Rust and C++ by package workers, `language-pair.sh` by the parent). The loop total becomes 12 tasks, 40 points.

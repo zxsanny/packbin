@@ -129,7 +129,7 @@
 
 - Scheme: the scheme of `zero_progress_repeat_when`: the `when` inside the `repeat` names `mode`, a field outside it.
 - No packet: construction must fail.
-- Expected: `scheme_error`. Rust (task 06) and Java (task 20) refuse it at construction; the other packages follow under their reference-scope tasks.
+- Expected: `scheme_error`. C++, Rust (task 06), Java (task 20), C# (AZ-2087) and TypeScript (AZ-2090) refuse it at construction; only Python still builds it (AZ-2113).
 - Source: Rust LB1.
 
 ## bool_outside_flags

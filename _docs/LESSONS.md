@@ -9,10 +9,6 @@ Downstream skills consume this file:
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
 
-- [2026-09-23] [tooling] Two C# executables in one directory need separate output paths, or `dotnet run` builds the other `Main`.
-  Source: _docs/06_metrics/retro_2026-09-23_loop2.md
-- [2026-09-23] [testing] A language handoff must unpack the bytes the producer just wrote.
-  Source: _docs/06_metrics/retro_2026-09-23_loop2.md
 - [2026-09-23] [tooling] On this Mac, pass `PACKBIN_CXX_SYSROOT` so clang finds the SDK C++ headers.
   Source: _docs/06_metrics/retro_2026-09-23_loop2.md
 - [2026-09-24] [testing] Compare a shared marker as the full hex in every language. A prefix match hides a different tail.
@@ -39,3 +35,7 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-05_loop11.md
 - [2026-10-05] [testing] Keep the auditor's cross-package fuzz generators and drivers in the repo and run them whenever unpack changes; the scratch differential over 276 855 packets per package found three Medium defects (u64 top-range exception, `__proto__` dict key, `when` in `repeat`) that eight reviewer reports missed.
   Source: _docs/06_metrics/retro_2026-10-05_loop11.md
+- [2026-10-06] [estimation] Give every task that changes the shape an unpack returns an amplification check (a 1 MiB packet of one-byte rounds with 1 and 36 names, peak memory and time): padding each name per round took TypeScript from 130 to 401 MB, C# from 93 to 525 MB and Rust from 36 to 311 MB.
+  Source: _docs/06_metrics/retro_2026-10-06_loop13.md
+- [2026-10-06] [testing] Re-derive every hex string and example row in a spec by hand or from a reference build before the batch starts; AZ-2087 AC-4, AZ-2177 AC-2 and two AZ-2178 hex strings were wrong, and only fresh-reviewer oracles caught them.
+  Source: _docs/06_metrics/retro_2026-10-06_loop13.md
