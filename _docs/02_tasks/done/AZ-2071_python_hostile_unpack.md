@@ -1,6 +1,5 @@
 ---
 loop: 11
-branch: loop/11-hostile-unpack
 ---
 
 # Python unpack never hangs or throws on hostile packets

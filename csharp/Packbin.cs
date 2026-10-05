@@ -166,7 +166,7 @@ public static class BinaryPacker
 
     internal static UnpackResult ReadFields(IReadOnlyList<Field> fields, ReadOnlySpan<byte> bytes)
     {
-        var values = new Dictionary<string, object?>();
+        var values = new Scope();
         var offset = 0;
         foreach (var field in fields)
         {

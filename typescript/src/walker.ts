@@ -16,6 +16,7 @@ import {
   readSized,
   readU2,
   readUtf8,
+  validCount,
   writeBits,
   writeFloat,
   writeInt,
@@ -35,6 +36,24 @@ function short(field: string, needed: number, left: number): ShortErr {
   return { ok: false, field, needed, left }
 }
 
+// A negative or absent count is reported with the duplicate-key shape: the counted field,
+// nothing more needed, the bytes left where it starts.
+function unreadable(field: string, cur: ViewCursor): ShortErr {
+  return short(field, 0, cur.buf.length - cur.offset)
+}
+
+function firstName(fields: Field[]): string {
+  for (const f of fields) {
+    const n = fieldName(f)
+    if (n) return n
+    if (f.kind === "when" || f.kind === "repeat" || f.kind === "times") {
+      const inner = firstName(f.fields)
+      if (inner) return inner
+    }
+  }
+  return ""
+}
+
 function borrowedCount(
   allFields: Field[],
   countId: number,
@@ -42,13 +61,16 @@ function borrowedCount(
   label: string,
   values: Value,
 ): number {
-  const countName = nameById(allFields, countId)
-  const raw = values[countName]
-  if (typeof raw !== "number" || !Number.isInteger(raw)) {
-    throw new RangeError(`${label}: count missing`)
+  const raw = values[nameById(allFields, countId)]
+  const count = validCount(raw, bias)
+  if (count === null) {
+    // Pack keeps throwing; the message tells a missing count from a negative one.
+    throw new RangeError(
+      typeof raw === "number" && Number.isInteger(raw)
+        ? `${label}: item count ${raw + bias}`
+        : `${label}: count missing`,
+    )
   }
-  const count = raw + bias
-  if (count < 0) throw new RangeError(`${label}: item count ${count}`)
   return count
 }
 
@@ -311,10 +333,9 @@ export function unpackFields(
         while (cur.offset < cur.buf.length) {
           const before = cur.offset
           const err = unpackFields(f.fields, allFields, cur, values, flagBytes, true)
-          if (err) {
-            if (cur.offset === before && "left" in err && err.left > 0) return err
-            return err
-          }
+          if (err) return err
+          // A round that reads nothing would repeat forever; the unread bytes are trailing.
+          if (cur.offset === before) break
         }
         break
       }
@@ -325,7 +346,9 @@ export function unpackFields(
         break
       }
       case "sized": {
-        const r = readSized(cur, f.name, values[nameById(allFields, f.countId)])
+        const count = validCount(values[nameById(allFields, f.countId)])
+        if (count === null) return unreadable(f.name, cur)
+        const r = readSized(cur, f.name, count)
         if (!r.ok) return r
         if (repeating) appendRepeat(values, f.name, r.value)
         else values[f.name] = r.value
@@ -342,14 +365,21 @@ export function unpackFields(
         break
       }
       case "bits": {
-        const r = readBits(cur, f.name, Number(values[nameById(allFields, f.countId)]))
+        // bits has always taken a bigint count (u64 source); past 2^53 it cannot be exact.
+        const raw = values[nameById(allFields, f.countId)]
+        const count = validCount(
+          typeof raw === "bigint" && raw <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(raw) : raw,
+        )
+        if (count === null) return unreadable(f.name, cur)
+        const r = readBits(cur, f.name, count)
         if (!r.ok) return r
         if (repeating) appendRepeat(values, f.name, r.values)
         else values[f.name] = r.values
         break
       }
       case "packed": {
-        const count = borrowedCount(allFields, f.countId, f.bias, f.name, values)
+        const count = validCount(values[nameById(allFields, f.countId)], f.bias)
+        if (count === null) return unreadable(f.name, cur)
         const r = readPacked(cur, f.name, f.width, count)
         if (!r.ok) return r
         if (repeating) appendRepeat(values, f.name, r.values)
@@ -357,12 +387,16 @@ export function unpackFields(
         break
       }
       case "times": {
-        const count = borrowedCount(allFields, f.countId, 0, "times", values)
+        const count = validCount(values[nameById(allFields, f.countId)])
+        if (count === null) return unreadable(firstName(f.fields), cur)
         const built: Record<string, unknown[]> = {}
         for (let i = 0; i < count; i++) {
           const group: Value = {}
+          const before = cur.offset
           const err = unpackFields(f.fields, allFields, cur, group, flagBytes, false)
           if (err) return err
+          // A round that reads nothing would repeat up to `count` times for no input.
+          if (cur.offset === before) return unreadable(firstName(f.fields), cur)
           for (const [key, value] of Object.entries(group)) {
             const list = built[key]
             if (list) list.push(value)

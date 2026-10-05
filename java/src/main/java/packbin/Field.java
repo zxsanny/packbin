@@ -322,7 +322,6 @@ public final class Field {
 
 final class FlagGroup {
     final List<Field> bitInners = new ArrayList<>();
-    int unpacked;
 
     Field addBit(Field inner) {
         int index = bitInners.size();

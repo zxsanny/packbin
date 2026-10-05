@@ -202,7 +202,7 @@ impl MapScheme {
             panic!("type number must be 0..=255");
         }
         let (field_count, has_split_flags) = count_fields(&fields);
-        check_order(&fields, 0);
+        check_order(&fields, 0, 0);
         MapScheme {
             type_number: type_number as u8,
             fields,

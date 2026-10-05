@@ -1,6 +1,5 @@
 ---
 loop: 11
-branch: loop/11-hostile-unpack
 ---
 
 # Java unpack keeps flags state per call, incl. the split flag-byte form

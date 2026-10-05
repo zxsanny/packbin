@@ -97,7 +97,7 @@ fn compile_items<T: 'static>(
                     take_id(next_id, id);
                 }
                 if let Some(element) = nested_element(&bound.field) {
-                    let end = check_order(std::slice::from_ref(element), 0);
+                    let end = check_order(std::slice::from_ref(element), 0, 0);
                     if let Some((elem_start, elem_end)) = bound.element_ids {
                         if elem_start != 0 {
                             panic!("list element id {elem_start} is not the next order 0");
@@ -164,7 +164,7 @@ fn compile_items<T: 'static>(
                 binders.extend(child_binders);
             }
             SchemeItem::Field(field) => {
-                *next_id = check_order(std::slice::from_ref(&field), *next_id);
+                *next_id = check_order(std::slice::from_ref(&field), *next_id, 0);
                 fields.push(field);
             }
         }

@@ -104,12 +104,20 @@ export function writeBits(
   for (const b of packed) out.push(b)
 }
 
+// A count is a non-negative integer number; anything else (absent, negative, fractional,
+// bigint) cannot be read. `bias` is added before the sign check.
+export function validCount(raw: unknown, bias = 0): number | null {
+  if (typeof raw !== "number" || !Number.isInteger(raw)) return null
+  const count = raw + bias
+  return count < 0 ? null : count
+}
+
 export function readBits(
   cur: Cursor,
   name: string,
   count: number,
 ): { ok: true; values: number[] } | ShortErr {
-  const nbytes = (count + 7) >> 3
+  const nbytes = Math.ceil(count / 8)
   const left = cur.buf.length - cur.offset
   if (left < nbytes) return { ok: false, field: name, needed: nbytes, left }
   const values: number[] = []
@@ -121,7 +129,7 @@ export function readBits(
 }
 
 export function packedBytes(width: 1 | 2, count: number): number {
-  return (count * width + 7) >> 3
+  return Math.ceil((count * width) / 8)
 }
 
 export function writePacked(
@@ -195,11 +203,8 @@ export function writeSized(
 export function readSized(
   cur: Cursor,
   name: string,
-  count: unknown,
+  count: number,
 ): { ok: true; value: Uint8Array } | ShortErr {
-  if (typeof count !== "number" || !Number.isInteger(count)) {
-    throw new RangeError(`${name}: count missing`)
-  }
   const left = cur.buf.length - cur.offset
   if (left < count) return { ok: false, field: name, needed: count, left }
   const value = new Uint8Array(cur.buf.subarray(cur.offset, cur.offset + count))
@@ -294,7 +299,13 @@ export function readUtf8(
   if (left < count) return { ok: false, field: name, needed: count, left }
   const raw = cur.buf.subarray(cur.offset, cur.offset + count)
   cur.offset += count
-  return { ok: true, value: new TextDecoder("utf-8", { fatal: true }).decode(raw) }
+  try {
+    return { ok: true, value: new TextDecoder("utf-8", { fatal: true }).decode(raw) }
+  } catch (e) {
+    // The fatal decoder reports invalid UTF-8 with a TypeError; anything else is not ours.
+    if (e instanceof TypeError) return { ok: false, field: name, needed: 0, left: leftCount }
+    throw e
+  }
 }
 
 export function readFloat(

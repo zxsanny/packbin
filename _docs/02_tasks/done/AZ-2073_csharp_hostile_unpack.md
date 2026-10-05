@@ -1,6 +1,5 @@
 ---
 loop: 11
-branch: loop/11-hostile-unpack
 ---
 
 # C# unpack never hangs or throws on hostile packets
@@ -153,4 +152,4 @@ Interim rule from task 01 (until C15): if C# has no type for a listed kind, any 
 |---------|----------------|--------|----------|
 | C# has no `bad_value` type. Task 01's interim rule accepts any non-ok, non-exception result (here `ShortPacket` for `negative_count`, `invalid_utf8` and `count_behind_clear_flag`), and the test states the kind returned. A real `BadValue` error is a public API addition that waits for C15. Do not add it in this task. | user / C15 | open | Medium |
 | `ShortPacket.Needed` is `int`. A `u32` count above `int.MaxValue` cannot be reported exactly. Take the value from task 01's vector. Propose `int.MaxValue` if the vector leaves it open. | task 01 author | open | Low |
-| `times` with a zero-width body and a huge count (`u32`) still runs up to 2³²−1 empty rounds: finite but slow. Not covered by C03. | security audit | accepted-risk | Low |
+| `times` with a zero-width body and a huge count looped for up to 2³²−1 rounds (u64: effectively forever). Superseded in loop 11 (owner decision): a `times` round that reads 0 bytes returns the interim error. | security audit | resolved | Low |

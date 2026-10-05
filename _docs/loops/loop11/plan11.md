@@ -1,0 +1,57 @@
+# Autodev Loop Plan — Loop 11
+
+loop: 11
+kind: product
+confirmed: true
+branch:
+ship: false
+
+Loop works on `dev` (no worktree — user decision, 2026-10-05). Scope: AZ-2071..2077 (epic AZ-2069), the first group from the loop 10 record.
+
+## Steps
+| id | step | name | include | reason |
+|----|------|------|---------|--------|
+| new-task | 9 | New Task | no | specs already in `todo/` |
+| decompose-feature | 9.5 | Decompose Feature | no | seven 2-point specs exist |
+| implement | 10 | Implement | yes | AZ-2071..2077 |
+| feature-assess | 10.5 | Feature Assessment | yes | always after implement |
+| run-tests | 11 | Run Tests | yes | always |
+| test-spec-sync | 12 | Test-Spec Sync | no | ACs unchanged; vectors came from AZ-2070 |
+| update-docs | 13 | Update Docs | yes | unpack error behavior and Rust constructor change touch module docs; no other loop in flight |
+| security | 14 | Security Audit | yes | untrusted network input (hostile unpack) |
+| performance | 15 | Performance Test | no | AC-10 round-trip budget is an existing test in Run Tests |
+| deploy | 16 | Deploy | no | not a ship loop |
+| release | 16.5 | Release | no | no deploy |
+| migration | 16.7 | Data/Traffic Cutover | no | none |
+| retrospective | 17 | Retrospective | yes | 14 points across 7 tasks |
+| local-deploy | — | Local deploy + open site | yes | always at close |
+| smoke | — | Smoke acceptance | yes | always at close |
+
+## Task groups (disjoint write sets)
+- python: AZ-2071
+- typescript: AZ-2072
+- csharp: AZ-2073, AZ-2076 (same package; serialize)
+- java: AZ-2074, AZ-2077 (same package; serialize)
+- rust: AZ-2075
+
+## Implementation
+
+Divergence recorded at the batch commit: the plan listed seven tasks; a cross-language decision (zero-progress `times` round is an error) was taken at review and applied to all five packages.
+
+### Files that change
+- python/src/packbin/_unpack.py (edit); python/tests/hostile_support.py, test_hostile_unpack.py, test_hostile_vectors.py (new)
+- typescript/src/kinds.ts, walker.ts (edit); typescript/tests/hostile.test.ts, tests/support/* (new)
+- csharp/Walker.cs, Walker.Counted.cs, Packbin.cs (edit); csharp/FlagGroup.cs, Scope.cs, tests (new)
+- java/src/main/java/packbin/Walker.java, VarFields.java, Field.java (edit); Containers.java, Scalars.java and tests (new)
+- rust/src/field/{mod,order}.rs, scheme/mod.rs, walk/{mod,unpack}.rs, lib.rs (edit); hostile_tests.rs, scope_tests.rs (new)
+
+### Order of work
+1. Batch 1: python, typescript, rust, csharp (2073 then 2076) in parallel; Java (2074 then 2077) as soon as a slot freed
+2. Fresh-reviewer pass per package group, fixes, then the `times` decision applied to all five
+
+### Proof
+- Each package's `*hostile*` unit and vector tests, FlagState/Scope race tests (C#, Java), Rust scope tests
+- Docker CI suites for all six languages PASS
+
+### Risks
+- Wire-visible change only for degenerate packets (zero-width `times` body) and for packets that used to hang, throw or misread

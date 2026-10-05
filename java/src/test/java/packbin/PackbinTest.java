@@ -39,6 +39,9 @@ public final class PackbinTest {
         nfrRoundTripsWithinOneSecond();
         objectRoundTrip();
         PackbinFieldsTest.run();
+        HostileUnpackTest.run();
+        HostileVectorTest.run();
+        FlagStateTest.run();
         if (failures + PackbinFieldsTest.failures > 0) {
             System.err.println((failures + PackbinFieldsTest.failures) + " failure(s)");
             System.exit(1);

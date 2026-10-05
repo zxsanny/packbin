@@ -17,8 +17,12 @@ pub use value::{
 };
 
 #[cfg(test)]
-mod counted_tests;
-#[cfg(test)]
 mod borrowed_count_tests;
 #[cfg(test)]
+mod counted_tests;
+#[cfg(test)]
+mod hostile_tests;
+#[cfg(test)]
 mod packbin_tests;
+#[cfg(test)]
+mod scope_tests;

@@ -1,11 +1,15 @@
 using System.Collections;
 using System.Globalization;
 using System.Text;
+using System.Text.Unicode;
 
 namespace Packbin;
 
 internal static partial class Walker
 {
+    // utf8 length, list count and dictionary count are written as u16.
+    private const int MaxLength = ushort.MaxValue;
+
     private static void PackSized(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
     {
         var count = RequireCount(values, field.CountName, field.Name);
@@ -59,21 +63,79 @@ internal static partial class Walker
         return Convert.ToInt32(v, CultureInfo.InvariantCulture);
     }
 
+    // No bad-value error type until C15: the same stand-in the duplicate dictionary key already uses.
+    // Every bad-value return goes through here, so C15 changes this one method.
+    private static ShortPacket InterimBadValue(string field, int left) => new(field, 0, left);
+
+    private static int ClampToInt(long value) => value > int.MaxValue ? int.MaxValue : (int)value;
+
+    private static long CeilDiv(long count, int per) => count / per + (count % per == 0 ? 0 : 1);
+
+    // Item count and byte length of a bit/packed run. False when the run does not fit in the bytes left, or when its
+    // item count does not fit an int (possible once a buffer holds more than 2^28 bytes).
+    internal static bool FitsItems(long wanted, int per, int left, out int count, out int needed)
+    {
+        var bytesNeeded = CeilDiv(wanted, per);
+        needed = ClampToInt(bytesNeeded);
+        count = 0;
+        if (bytesNeeded > left || wanted > int.MaxValue)
+            return false;
+        count = (int)wanted;
+        return true;
+    }
+
+    // False when the count field has no value (behind a clear flag bit), is not a number, or is negative.
+    private static bool TryUnpackCount(Field field, IReadOnlyDictionary<string, object?> values, out long count)
+    {
+        count = 0;
+        if (!values.TryGetValue(field.CountName, out var value))
+            return false;
+        switch (value)
+        {
+            case byte or sbyte or ushort or short or uint or int or long:
+                count = Convert.ToInt64(value, CultureInfo.InvariantCulture);
+                break;
+            case ulong big:
+                count = big > long.MaxValue ? long.MaxValue : (long)big;
+                break;
+            case float or double:
+                // ReadScalar's switch has natural type double, so every unpacked scalar (u8 ... u64, f32)
+                // arrives here as a double; the typed cases above cover counts from any other source.
+                var rounded = Math.Round(Convert.ToDouble(value, CultureInfo.InvariantCulture));
+                if (double.IsNaN(rounded))
+                    return false;
+                count = rounded >= long.MaxValue ? long.MaxValue : rounded <= long.MinValue ? long.MinValue : (long)rounded;
+                break;
+            default:
+                return false;
+        }
+        count += field.Bias;
+        return count >= 0;
+    }
+
+    private static bool TryUtf8(ReadOnlySpan<byte> raw, out string text)
+    {
+        text = "";
+        if (!Utf8.IsValid(raw))
+            return false;
+        text = Encoding.UTF8.GetString(raw);
+        return true;
+    }
+
     private static object? UnpackSized(
         Field field,
         ReadOnlySpan<byte> bytes,
         ref int offset,
-        Dictionary<string, object?> values,
+        Scope values,
         bool repeatLists)
     {
-        if (!values.TryGetValue(field.CountName, out var countObj) || countObj is null || countObj is bool)
-            throw new InvalidOperationException($"{field.Name}: count '{field.CountName}' is missing");
-        var count = Convert.ToInt32(countObj, CultureInfo.InvariantCulture);
         var left = bytes.Length - offset;
+        if (!TryUnpackCount(field, values, out var count))
+            return InterimBadValue(field.Name, left);
         if (left < count)
-            return new ShortPacket(field.Name, count, left);
-        var slice = bytes.Slice(offset, count).ToArray();
-        offset += count;
+            return new ShortPacket(field.Name, ClampToInt(count), left);
+        var slice = bytes.Slice(offset, (int)count).ToArray();
+        offset += (int)count;
         Store(values, field.Name, slice, repeatLists);
         return null;
     }
@@ -82,7 +144,7 @@ internal static partial class Walker
         Field field,
         ReadOnlySpan<byte> bytes,
         ref int offset,
-        Dictionary<string, object?> values,
+        Scope values,
         bool repeatLists)
     {
         var names = field.Names;
@@ -103,20 +165,18 @@ internal static partial class Walker
         Field field,
         ReadOnlySpan<byte> bytes,
         ref int offset,
-        Dictionary<string, object?> values,
+        Scope values,
         bool repeatLists)
     {
-        if (!values.TryGetValue(field.CountName, out var countObj) || countObj is null || countObj is bool)
-            throw new InvalidOperationException($"{field.Name}: count '{field.CountName}' is missing");
-        var count = Convert.ToInt32(countObj, CultureInfo.InvariantCulture);
-        var nbytes = (count + 7) / 8;
         var left = bytes.Length - offset;
-        if (left < nbytes)
-            return new ShortPacket(field.Name, nbytes, left);
+        if (!TryUnpackCount(field, values, out var wanted))
+            return InterimBadValue(field.Name, left);
+        if (!FitsItems(wanted, 8, left, out var count, out var needed))
+            return new ShortPacket(field.Name, needed, left);
         var bits = new List<int>(count);
         for (var i = 0; i < count; i++)
             bits.Add((bytes[offset + i / 8] >> (i % 8)) & 1);
-        offset += nbytes;
+        offset += needed;
         Store(values, field.Name, bits, repeatLists);
         return null;
     }
@@ -156,22 +216,22 @@ internal static partial class Walker
         Field field,
         ReadOnlySpan<byte> bytes,
         ref int offset,
-        Dictionary<string, object?> values,
+        Scope values,
         bool repeatLists)
     {
-        var count = BorrowedCount(field, values);
-        var nbytes = PackedBytes(field.ByteCount, count);
         var left = bytes.Length - offset;
-        if (left < nbytes)
-            return new ShortPacket(field.Name, nbytes, left);
+        if (!TryUnpackCount(field, values, out var wanted))
+            return InterimBadValue(field.Name, left);
         var width = field.ByteCount;
         var mask = width == 2 ? 3 : 1;
         var shift = width == 2 ? 2 : 1;
         var per = width == 2 ? 4 : 8;
+        if (!FitsItems(wanted, per, left, out var count, out var needed))
+            return new ShortPacket(field.Name, needed, left);
         var items = new List<int>(count);
         for (var i = 0; i < count; i++)
             items.Add((bytes[offset + i / per] >> ((i % per) * shift)) & mask);
-        offset += nbytes;
+        offset += needed;
         Store(values, field.Name, items, repeatLists);
         return null;
     }
@@ -191,19 +251,24 @@ internal static partial class Walker
         Field field,
         ReadOnlySpan<byte> bytes,
         ref int offset,
-        Dictionary<string, object?> values)
+        Scope values)
     {
-        var count = BorrowedCount(field, values);
+        if (!TryUnpackCount(field, values, out var count))
+            return InterimBadValue(field.Name, bytes.Length - offset);
         var built = new Dictionary<string, List<object?>>();
-        for (var i = 0; i < count; i++)
+        for (long i = 0; i < count; i++)
         {
-            var group = new Dictionary<string, object?>();
+            var roundStart = offset;
+            var group = new Scope(values);
             foreach (var child in field.Children)
             {
                 var err = UnpackField(child, bytes, ref offset, group, repeatLists: false);
                 if (err is not null)
                     return err;
             }
+            // A round that reads nothing would only burn through a huge count.
+            if (offset == roundStart)
+                return InterimBadValue(field.Name, bytes.Length - roundStart);
             foreach (var (key, value) in group)
             {
                 if (!built.TryGetValue(key, out var list))
@@ -224,7 +289,7 @@ internal static partial class Walker
         if (!values.TryGetValue(field.Name, out var value) || value is not string text)
             throw new ArgumentException($"{field.Name}: expected string");
         var raw = Encoding.UTF8.GetBytes(text);
-        if (raw.Length > 65535)
+        if (raw.Length > MaxLength)
             throw new ArgumentException($"{field.Name}: utf-8 length {raw.Length}");
         buffer.Add((byte)raw.Length);
         buffer.Add((byte)(raw.Length >> 8));
@@ -235,7 +300,7 @@ internal static partial class Walker
         Field field,
         ReadOnlySpan<byte> bytes,
         ref int offset,
-        Dictionary<string, object?> values,
+        Scope values,
         bool repeatLists)
     {
         var left = bytes.Length - offset;
@@ -246,7 +311,8 @@ internal static partial class Walker
         left = bytes.Length - offset;
         if (left < count)
             return new ShortPacket(field.Name, count, left);
-        var text = Encoding.UTF8.GetString(bytes.Slice(offset, count));
+        if (!TryUtf8(bytes.Slice(offset, count), out var text))
+            return InterimBadValue(field.Name, left);
         offset += count;
         Store(values, field.Name, text, repeatLists);
         return null;
@@ -256,7 +322,7 @@ internal static partial class Walker
     {
         if (values[field.Name] is not IList items)
             throw new ArgumentException($"{field.Name}: expected list");
-        if (items.Count > 65535)
+        if (items.Count > MaxLength)
             throw new ArgumentException($"{field.Name}: length {items.Count}");
         buffer.Add((byte)items.Count);
         buffer.Add((byte)(items.Count >> 8));
@@ -272,7 +338,7 @@ internal static partial class Walker
         Field field,
         ReadOnlySpan<byte> bytes,
         ref int offset,
-        Dictionary<string, object?> values,
+        Scope values,
         bool repeatLists)
     {
         var left = bytes.Length - offset;
@@ -284,7 +350,7 @@ internal static partial class Walker
         var items = new List<object?>(count);
         for (var i = 0; i < count; i++)
         {
-            var one = new Dictionary<string, object?>();
+            var one = new Scope(values);
             var err = UnpackField(child, bytes, ref offset, one, false);
             if (err is not null)
                 return err;
@@ -298,7 +364,7 @@ internal static partial class Walker
     {
         if (values[field.Name] is not IDictionary map)
             throw new ArgumentException($"{field.Name}: expected dictionary");
-        if (map.Count > 65535)
+        if (map.Count > MaxLength)
             throw new ArgumentException($"{field.Name}: length {map.Count}");
         var entries = new List<(byte[] KeyBytes, object? Value)>(map.Count);
         foreach (DictionaryEntry entry in map)
@@ -306,7 +372,7 @@ internal static partial class Walker
             if (entry.Key is not string key)
                 throw new ArgumentException($"{field.Name}: expected string keys");
             var keyBytes = Encoding.UTF8.GetBytes(key);
-            if (keyBytes.Length > 65535)
+            if (keyBytes.Length > MaxLength)
                 throw new ArgumentException($"{field.Name}: utf-8 length {keyBytes.Length}");
             entries.Add((keyBytes, entry.Value));
         }
@@ -328,7 +394,7 @@ internal static partial class Walker
         Field field,
         ReadOnlySpan<byte> bytes,
         ref int offset,
-        Dictionary<string, object?> values,
+        Scope values,
         bool repeatLists)
     {
         var left = bytes.Length - offset;
@@ -348,9 +414,10 @@ internal static partial class Walker
             left = bytes.Length - offset;
             if (left < keyLen)
                 return new ShortPacket(field.Name, keyLen, left);
-            var key = Encoding.UTF8.GetString(bytes.Slice(offset, keyLen));
+            if (!TryUtf8(bytes.Slice(offset, keyLen), out var key))
+                return InterimBadValue(field.Name, left);
             offset += keyLen;
-            var one = new Dictionary<string, object?>();
+            var one = new Scope(values);
             var err = UnpackField(child, bytes, ref offset, one, false);
             if (err is not null)
                 return err;

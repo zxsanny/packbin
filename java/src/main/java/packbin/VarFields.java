@@ -1,20 +1,47 @@
 package packbin;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 final class VarFields {
+    static final int MAX_U16 = 65535;
+
     private VarFields() {}
 
+    /**
+     * The count a field borrows from an earlier field, or -1 when the packet gave none (clear flag bit)
+     * or a negative one. A u64 above Long.MAX_VALUE reads negative and lands here too. The value stays a
+     * long until it has been compared with the bytes left.
+     */
+    private static long unpackCount(Field field, Map<Object, Object> seen) {
+        Object raw = seen.get(field.countId);
+        if (!(raw instanceof Number) || raw instanceof Float || raw instanceof Double) {
+            return -1;
+        }
+        long count = ((Number) raw).longValue();
+        if (count < 0) {
+            return -1;
+        }
+        return count + field.bias < 0 ? -1 : count + field.bias;
+    }
+
+    /** ShortPacket for a count the packet cannot satisfy; {@code needed} is clamped because the field is an int. */
+    private static Packbin.ShortPacket shortCount(Field field, long needed, int left) {
+        long reported = needed < 0 ? Integer.MAX_VALUE : Math.min(needed, Integer.MAX_VALUE);
+        return new Packbin.ShortPacket(field.label(), (int) reported, left);
+    }
+
+    private static long bytesFor(long count, int perByte) {
+        return count / perByte + (count % perByte == 0 ? 0 : 1);
+    }
+
     static void packSized(
-            Field field, Object row, ByteSink sink, Map<Integer, Object> seen, Walker.Take take) {
+            Field field, Object row, ByteSink sink, Map<Object, Object> seen, Walker.Take take) {
         Object countRaw = seen.get(field.countId);
         if (!(countRaw instanceof Number) || countRaw instanceof Float || countRaw instanceof Double) {
             throw new IllegalStateException(field.id + ": count " + field.countId + " is missing");
@@ -37,26 +64,22 @@ final class VarFields {
             byte[] data,
             int[] offset,
             Object row,
-            Map<Integer, Object> seen,
+            Map<Object, Object> seen,
             boolean asList) {
-        Object countRaw = seen.get(field.countId);
-        if (!(countRaw instanceof Number) || countRaw instanceof Float || countRaw instanceof Double) {
-            throw new IllegalStateException(field.id + ": count " + field.countId + " is missing");
-        }
-        int count = ((Number) countRaw).intValue();
+        long count = unpackCount(field, seen);
         int left = data.length - offset[0];
-        if (left < count) {
-            return new Packbin.ShortPacket(field.label(), count, left);
+        if (count < 0 || count > left) {
+            return shortCount(field, count, left);
         }
-        byte[] raw = new byte[count];
-        System.arraycopy(data, offset[0], raw, 0, count);
-        offset[0] += count;
+        byte[] raw = new byte[(int) count];
+        System.arraycopy(data, offset[0], raw, 0, raw.length);
+        offset[0] += raw.length;
         seen.put(field.id, raw);
         Walker.store(row, field, raw, asList);
         return null;
     }
 
-    static void packU2(Field field, Object row, ByteSink sink, Map<Integer, Object> seen) {
+    static void packU2(Field field, Object row, ByteSink sink, Map<Object, Object> seen) {
         List<Field> slots = field.children;
         int nbytes = (slots.size() + 3) / 4;
         byte[] raw = new byte[nbytes];
@@ -75,7 +98,7 @@ final class VarFields {
             byte[] data,
             int[] offset,
             Object row,
-            Map<Integer, Object> seen,
+            Map<Object, Object> seen,
             boolean asList) {
         List<Field> slots = field.children;
         int nbytes = (slots.size() + 3) / 4;
@@ -94,7 +117,7 @@ final class VarFields {
     }
 
     static void packBits(
-            Field field, Object row, ByteSink sink, Map<Integer, Object> seen, Walker.Take take) {
+            Field field, Object row, ByteSink sink, Map<Object, Object> seen, Walker.Take take) {
         Object countRaw = seen.get(field.countId);
         if (!(countRaw instanceof Number) || countRaw instanceof Float || countRaw instanceof Double) {
             throw new IllegalStateException(field.id + ": count " + field.countId + " is missing");
@@ -119,29 +142,26 @@ final class VarFields {
             byte[] data,
             int[] offset,
             Object row,
-            Map<Integer, Object> seen,
+            Map<Object, Object> seen,
             boolean asList) {
-        Object countRaw = seen.get(field.countId);
-        if (!(countRaw instanceof Number) || countRaw instanceof Float || countRaw instanceof Double) {
-            throw new IllegalStateException(field.id + ": count " + field.countId + " is missing");
-        }
-        int count = ((Number) countRaw).intValue();
-        int nbytes = (count + 7) / 8;
+        long wanted = unpackCount(field, seen);
+        long nbytes = bytesFor(wanted, 8);
         int left = data.length - offset[0];
-        if (left < nbytes) {
-            return new Packbin.ShortPacket(field.label(), nbytes, left);
+        if (wanted < 0 || wanted > Integer.MAX_VALUE || nbytes > left) {
+            return shortCount(field, wanted < 0 || wanted > Integer.MAX_VALUE ? wanted : nbytes, left);
         }
+        int count = (int) wanted;
         List<Integer> out = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             out.add((data[offset[0] + i / 8] >> (i % 8)) & 1);
         }
-        offset[0] += nbytes;
+        offset[0] += (int) nbytes;
         seen.put(field.id, out);
         Walker.store(row, field, out, asList);
         return null;
     }
 
-    static int borrowedCount(Field field, Map<Integer, Object> seen) {
+    static int borrowedCount(Field field, Map<Object, Object> seen) {
         Object countRaw = seen.get(field.countId);
         if (!(countRaw instanceof Number) || countRaw instanceof Float || countRaw instanceof Double) {
             throw new IllegalStateException(field.label() + ": count " + field.countId + " is missing");
@@ -158,7 +178,7 @@ final class VarFields {
     }
 
     static void packPacked(
-            Field field, Object row, ByteSink sink, Map<Integer, Object> seen, Walker.Take take) {
+            Field field, Object row, ByteSink sink, Map<Object, Object> seen, Walker.Take take) {
         int count = borrowedCount(field, seen);
         Object raw = take != null ? take.apply(field) : field.get.get(row);
         seen.put(field.id, raw);
@@ -182,23 +202,24 @@ final class VarFields {
             byte[] data,
             int[] offset,
             Object row,
-            Map<Integer, Object> seen,
+            Map<Object, Object> seen,
             boolean asList) {
-        int count = borrowedCount(field, seen);
+        long wanted = unpackCount(field, seen);
         int width = field.size;
-        int nbytes = packedBytes(width, count);
+        int per = width == 2 ? 4 : 8;
+        long nbytes = bytesFor(wanted, per);
         int left = data.length - offset[0];
-        if (left < nbytes) {
-            return new Packbin.ShortPacket(field.label(), nbytes, left);
+        if (wanted < 0 || wanted > Integer.MAX_VALUE || nbytes > left) {
+            return shortCount(field, wanted < 0 || wanted > Integer.MAX_VALUE ? wanted : nbytes, left);
         }
+        int count = (int) wanted;
         int mask = width == 2 ? 3 : 1;
         int shift = width == 2 ? 2 : 1;
-        int per = width == 2 ? 4 : 8;
         List<Integer> out = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             out.add((data[offset[0] + i / per] >> ((i % per) * shift)) & mask);
         }
-        offset[0] += nbytes;
+        offset[0] += (int) nbytes;
         seen.put(field.id, out);
         Walker.store(row, field, out, asList);
         return null;
@@ -244,14 +265,14 @@ final class VarFields {
     }
 
     static void packUtf8(
-            Field field, Object row, ByteSink sink, Map<Integer, Object> seen, Walker.Take take) {
+            Field field, Object row, ByteSink sink, Map<Object, Object> seen, Walker.Take take) {
         Object value = take != null ? take.apply(field) : field.get.get(row);
         seen.put(field.id, value);
         if (!(value instanceof String text)) {
             throw new IllegalArgumentException(field.id + ": expected string");
         }
         byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
-        if (bytes.length > 65535) {
+        if (bytes.length > MAX_U16) {
             throw new IllegalArgumentException(field.id + ": utf-8 length " + bytes.length);
         }
         sink.write((byte) bytes.length);
@@ -264,7 +285,7 @@ final class VarFields {
             byte[] data,
             int[] offset,
             Object row,
-            Map<Integer, Object> seen,
+            Map<Object, Object> seen,
             boolean asList) {
         int left = data.length - offset[0];
         if (left < 2) {
@@ -276,130 +297,30 @@ final class VarFields {
         if (left < count) {
             return new Packbin.ShortPacket(field.label(), count, left);
         }
-        String text = new String(data, offset[0], count, StandardCharsets.UTF_8);
+        String text = decodeUtf8(data, offset[0], count);
+        if (text == null) {
+            return new Packbin.ShortPacket(field.label(), count, 0);
+        }
         offset[0] += count;
         seen.put(field.id, text);
         Walker.store(row, field, text, asList);
         return null;
     }
 
-    static void packList(Field field, Object itemsRaw, ByteSink sink) {
-        if (!(itemsRaw instanceof List<?> items)) {
-            throw new IllegalArgumentException("list: expected list");
-        }
-        if (items.size() > 65535) {
-            throw new IllegalArgumentException("list: length " + items.size());
-        }
-        sink.write((byte) items.size());
-        sink.write((byte) (items.size() >> 8));
-        Field child = field.children.get(0);
-        for (Object item : items) {
-            packElement(child, item, sink);
+    /** Strict decode: malformed input yields null instead of U+FFFD replacements. */
+    static String decodeUtf8(byte[] data, int from, int length) {
+        try {
+            return StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(data, from, length))
+                    .toString();
+        } catch (CharacterCodingException ex) {
+            return null;
         }
     }
 
-    static Object unpackList(Field field, byte[] data, int[] offset, Object row, boolean asList) {
-        Object[] got = unpackListItems(field.children.get(0), data, offset);
-        if (got[1] != null) {
-            return got[1];
-        }
-        Walker.store(row, field, got[0], asList);
-        return null;
-    }
-
-    private static Object[] unpackListItems(Field element, byte[] data, int[] offset) {
-        int left = data.length - offset[0];
-        if (left < 2) {
-            return new Object[] {List.of(), new Packbin.ShortPacket("", 2, left)};
-        }
-        int count = (data[offset[0]] & 0xff) | ((data[offset[0] + 1] & 0xff) << 8);
-        offset[0] += 2;
-        List<Object> items = new ArrayList<>();
-        for (int i = 0; i < count; i++) {
-            Object[] got = unpackElement(element, data, offset);
-            if (got[1] != null) {
-                return new Object[] {items, got[1]};
-            }
-            items.add(got[0]);
-        }
-        return new Object[] {items, null};
-    }
-
-    static void packDict(Field field, Object mappingRaw, ByteSink sink) {
-        if (!(mappingRaw instanceof Map<?, ?> items)) {
-            throw new IllegalArgumentException("dict: expected dictionary");
-        }
-        if (items.size() > 65535) {
-            throw new IllegalArgumentException("dict: length " + items.size());
-        }
-        List<String> keys = new ArrayList<>(items.size());
-        for (Object key : items.keySet()) {
-            if (!(key instanceof String text)) {
-                throw new IllegalArgumentException("dict: expected string key");
-            }
-            keys.add(text);
-        }
-        keys.sort((a, b) -> Arrays.compareUnsigned(
-                a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8)));
-        sink.write((byte) keys.size());
-        sink.write((byte) (keys.size() >> 8));
-        Field child = field.children.get(0);
-        for (String key : keys) {
-            byte[] rawKey = key.getBytes(StandardCharsets.UTF_8);
-            if (rawKey.length > 65535) {
-                throw new IllegalArgumentException("dict: key length " + rawKey.length);
-            }
-            sink.write((byte) rawKey.length);
-            sink.write((byte) (rawKey.length >> 8));
-            sink.write(rawKey);
-            packElement(child, items.get(key), sink);
-        }
-    }
-
-    static Object unpackDict(Field field, byte[] data, int[] offset, Object row, boolean asList) {
-        Object[] got = unpackDictItems(field.children.get(0), data, offset);
-        if (got[1] != null) {
-            return got[1];
-        }
-        Walker.store(row, field, got[0], asList);
-        return null;
-    }
-
-    private static Object[] unpackDictItems(Field element, byte[] data, int[] offset) {
-        int left = data.length - offset[0];
-        if (left < 2) {
-            return new Object[] {Map.of(), new Packbin.ShortPacket("", 2, left)};
-        }
-        int count = (data[offset[0]] & 0xff) | ((data[offset[0] + 1] & 0xff) << 8);
-        offset[0] += 2;
-        Map<String, Object> items = new LinkedHashMap<>();
-        Set<String> seenKeys = new HashSet<>();
-        for (int i = 0; i < count; i++) {
-            left = data.length - offset[0];
-            if (left < 2) {
-                return new Object[] {items, new Packbin.ShortPacket("", 2, left)};
-            }
-            int keyLen = (data[offset[0]] & 0xff) | ((data[offset[0] + 1] & 0xff) << 8);
-            offset[0] += 2;
-            left = data.length - offset[0];
-            if (left < keyLen) {
-                return new Object[] {items, new Packbin.ShortPacket("", keyLen, left)};
-            }
-            String key = new String(data, offset[0], keyLen, StandardCharsets.UTF_8);
-            offset[0] += keyLen;
-            if (!seenKeys.add(key)) {
-                return new Object[] {items, new Packbin.ShortPacket("", 0, 0)};
-            }
-            Object[] got = unpackElement(element, data, offset);
-            if (got[1] != null) {
-                return new Object[] {items, got[1]};
-            }
-            items.put(key, got[0]);
-        }
-        return new Object[] {items, null};
-    }
-
-    static void packTimes(Field field, Object row, ByteSink sink, Map<Integer, Object> seen) {
+    static void packTimes(Field field, Object row, ByteSink sink, Map<Object, Object> seen) {
         int count = borrowedCount(field, seen);
         for (int i = 0; i < count; i++) {
             Walker.packIndexed(field, row, sink, seen, i);
@@ -407,56 +328,22 @@ final class VarFields {
     }
 
     static Object unpackTimes(
-            Field field, byte[] data, int[] offset, Object row, Map<Integer, Object> seen) {
-        int count = borrowedCount(field, seen);
-        for (int i = 0; i < count; i++) {
+            Field field, byte[] data, int[] offset, Object row, Map<Object, Object> seen) {
+        long count = unpackCount(field, seen);
+        if (count < 0) {
+            return shortCount(field, count, data.length - offset[0]);
+        }
+        for (long i = 0; i < count; i++) {
+            int before = offset[0];
             Object err = Walker.unpackFields(field.children, data, offset, row, seen, true);
             if (err != null) {
                 return err;
             }
+            if (offset[0] == before) {
+                // An empty round repeats the same nothing for the rest of a count the packet controls.
+                return new Packbin.ShortPacket(field.label(), 0, data.length - before);
+            }
         }
         return null;
-    }
-
-    private static boolean isLeaf(Field field) {
-        return switch (field.kind) {
-            case U8, U16, U32, U64, I8, I16, I32, I64, F32, F64, BYTES, UTF8, BOOL, SIZED, BITS, PACKED -> true;
-            default -> false;
-        };
-    }
-
-    private static void packElement(Field element, Object item, ByteSink sink) {
-        if (element.kind == Field.Kind.LIST) {
-            packList(element, item, sink);
-        } else if (element.kind == Field.Kind.DICT) {
-            packDict(element, item, sink);
-        } else if (isLeaf(element)) {
-            Walker.packFields(List.of(element), item, sink, new HashMap<>(), field -> item);
-        } else {
-            Walker.packFields(List.of(element), item, sink, new HashMap<>(), null);
-        }
-    }
-
-    private static Object[] unpackElement(Field element, byte[] data, int[] offset) {
-        if (element.kind == Field.Kind.LIST) {
-            return unpackListItems(element.children.get(0), data, offset);
-        }
-        if (element.kind == Field.Kind.DICT) {
-            return unpackDictItems(element.children.get(0), data, offset);
-        }
-        if (isLeaf(element)) {
-            Map<Integer, Object> seen = new HashMap<>();
-            Object err = Walker.unpackField(element, data, offset, null, seen, false);
-            if (err != null) {
-                return new Object[] {null, err};
-            }
-            if (element.kind == Field.Kind.BOOL) {
-                return new Object[] {true, null};
-            }
-            return new Object[] {seen.get(element.id), null};
-        }
-        Map<String, Object> child = new HashMap<>();
-        Object err = Walker.unpackFields(List.of(element), data, offset, child, new HashMap<>(), false);
-        return new Object[] {child, err};
     }
 }

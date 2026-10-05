@@ -7,9 +7,11 @@ pub(crate) fn take_id(next: &mut u32, id: u32) {
     *next = next.saturating_add(1);
 }
 
-pub(crate) fn check_order(fields: &[Field], mut next: u32) -> u32 {
+/// Walks `fields` in order. `scope` is the first id of the enclosing container: a
+/// `when`, count or flag-bit reference must name an id in `scope..next`.
+pub(crate) fn check_order(fields: &[Field], mut next: u32, scope: u32) -> u32 {
     for field in fields {
-        next = check_one(field, next);
+        next = check_one(field, next, scope);
     }
     next
 }
@@ -33,10 +35,20 @@ fn take_value_slot(next: &mut u32, name: &str) {
     }
 }
 
-fn require_walked(next: u32, name: &str) {
+fn require_walked(next: u32, scope: u32, name: &str) {
     if let Some(id) = parse_id(name) {
         if id >= next {
             panic!("field id {id} is not yet walked at order {next}");
+        }
+    }
+    require_in_scope(scope, name);
+}
+
+// A repeat or times round reads into its own values, so an outer id is never visible there.
+fn require_in_scope(scope: u32, name: &str) {
+    if let Some(id) = parse_id(name) {
+        if id < scope {
+            panic!("field id {id} is not in the same scope (the container starts at id {scope})");
         }
     }
 }
@@ -47,7 +59,7 @@ fn check_anchor(next: u32, anchor: u32) {
     }
 }
 
-fn check_one(field: &Field, mut next: u32) -> u32 {
+fn check_one(field: &Field, mut next: u32, scope: u32) -> u32 {
     match &field.kind {
         FieldKind::Int { name, .. }
         | FieldKind::Float { name, .. }
@@ -58,12 +70,12 @@ fn check_one(field: &Field, mut next: u32) -> u32 {
             next
         }
         FieldKind::Sized { name, count } | FieldKind::Bits { name, count } => {
-            require_walked(next, count);
+            require_walked(next, scope, count);
             take_value_slot(&mut next, name);
             next
         }
         FieldKind::Packed { name, count, .. } => {
-            require_walked(next, count);
+            require_walked(next, scope, count);
             take_value_slot(&mut next, name);
             next
         }
@@ -77,7 +89,7 @@ fn check_one(field: &Field, mut next: u32) -> u32 {
             anchor, members, ..
         } => {
             check_anchor(next, *anchor);
-            check_order(members, next)
+            check_order(members, next, scope)
         }
         FieldKind::When {
             anchor,
@@ -86,12 +98,12 @@ fn check_one(field: &Field, mut next: u32) -> u32 {
             ..
         } => {
             check_anchor(next, *anchor);
-            require_walked(next, field);
-            check_order(members, next)
+            require_walked(next, scope, field);
+            check_order(members, next, scope)
         }
         FieldKind::Repeat { anchor, members } => {
             check_anchor(next, *anchor);
-            check_order(members, next)
+            check_order(members, next, *anchor)
         }
         FieldKind::Times {
             anchor,
@@ -99,8 +111,8 @@ fn check_one(field: &Field, mut next: u32) -> u32 {
             members,
         } => {
             check_anchor(next, *anchor);
-            require_walked(next, count);
-            check_order(members, next)
+            require_walked(next, scope, count);
+            check_order(members, next, *anchor)
         }
         FieldKind::Group { anchor, name, members } => {
             check_anchor(next, *anchor);
@@ -108,12 +120,15 @@ fn check_one(field: &Field, mut next: u32) -> u32 {
                 take_value_slot(&mut next, name);
                 next
             } else {
-                check_order(members, next)
+                check_order(members, next, scope)
             }
         }
-        FieldKind::FlagBit { inner, .. } => check_one(inner, next),
+        FieldKind::FlagBit { flag, inner, .. } => {
+            require_in_scope(scope, flag);
+            check_one(inner, next, scope)
+        }
         FieldKind::List { element, .. } | FieldKind::Dict { element, .. } => {
-            let _ = check_one(element, 0);
+            let _ = check_one(element, 0, 0);
             next
         }
     }

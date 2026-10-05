@@ -1,6 +1,5 @@
 ---
 loop: 11
-branch: loop/11-hostile-unpack
 ---
 
 # C# unpack keeps flags state per call

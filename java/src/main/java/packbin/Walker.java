@@ -50,14 +50,14 @@ final class Walker {
             List<Field> fields,
             Object row,
             ByteSink sink,
-            Map<Integer, Object> seen,
+            Map<Object, Object> seen,
             Take take) {
         for (Field field : fields) {
             packField(field, row, sink, seen, take);
         }
     }
 
-    static void packField(Field field, Object row, ByteSink sink, Map<Integer, Object> seen, Take take) {
+    static void packField(Field field, Object row, ByteSink sink, Map<Object, Object> seen, Take take) {
         switch (field.kind) {
             case FLAGS -> packFlags(field, row, sink, seen, take);
             case FLAG_BYTE -> sink.write((byte) field.group.compute(row));
@@ -80,8 +80,8 @@ final class Walker {
             case BITS -> VarFields.packBits(field, row, sink, seen, take);
             case PACKED -> VarFields.packPacked(field, row, sink, seen, take);
             case UTF8 -> VarFields.packUtf8(field, row, sink, seen, take);
-            case LIST -> VarFields.packList(field, takeValue(field, row, take), sink);
-            case DICT -> VarFields.packDict(field, takeValue(field, row, take), sink);
+            case LIST -> Containers.packList(field, takeValue(field, row, take), sink);
+            case DICT -> Containers.packDict(field, takeValue(field, row, take), sink);
             case BOOL -> seen.put(field.id, takeValue(field, row, take));
             default -> packScalar(field, row, sink, seen, take);
         }
@@ -92,7 +92,7 @@ final class Walker {
             byte[] data,
             int[] offset,
             Object row,
-            Map<Integer, Object> seen,
+            Map<Object, Object> seen,
             boolean asList) {
         for (Field field : fields) {
             Object err = unpackField(field, data, offset, row, seen, asList);
@@ -108,11 +108,11 @@ final class Walker {
             byte[] data,
             int[] offset,
             Object row,
-            Map<Integer, Object> seen,
+            Map<Object, Object> seen,
             boolean asList) {
         return switch (field.kind) {
             case FLAGS -> unpackFlags(field, data, offset, row, seen, asList);
-            case FLAG_BYTE -> unpackFlagByte(field, data, offset);
+            case FLAG_BYTE -> unpackFlagByte(field, data, offset, seen);
             case FLAG_BIT -> unpackFlagBit(field, data, offset, row, seen, asList);
             case WHEN -> unpackWhen(field, data, offset, row, seen, asList);
             case REPEAT -> unpackRepeat(field, data, offset, row, seen);
@@ -124,8 +124,8 @@ final class Walker {
             case BITS -> VarFields.unpackBits(field, data, offset, row, seen, asList);
             case PACKED -> VarFields.unpackPacked(field, data, offset, row, seen, asList);
             case UTF8 -> VarFields.unpackUtf8(field, data, offset, row, seen, asList);
-            case LIST -> VarFields.unpackList(field, data, offset, row, asList);
-            case DICT -> VarFields.unpackDict(field, data, offset, row, asList);
+            case LIST -> Containers.unpackList(field, data, offset, row, asList);
+            case DICT -> Containers.unpackDict(field, data, offset, row, asList);
             case BOOL -> null;
             default -> unpackScalar(field, data, offset, row, seen, asList);
         };
@@ -139,7 +139,7 @@ final class Walker {
     }
 
     private static void packFlags(
-            Field field, Object row, ByteSink sink, Map<Integer, Object> seen, Take take) {
+            Field field, Object row, ByteSink sink, Map<Object, Object> seen, Take take) {
         int flags = field.group.compute(row);
         sink.write((byte) flags);
         for (int i = 0; i < field.children.size(); i++) {
@@ -159,7 +159,7 @@ final class Walker {
     }
 
     private static void packGroup(
-            Field field, Object row, ByteSink sink, Map<Integer, Object> seen, Take take) {
+            Field field, Object row, ByteSink sink, Map<Object, Object> seen, Take take) {
         Object target = row;
         if (field.nestedRow) {
             target = field.get.get(row);
@@ -170,7 +170,7 @@ final class Walker {
         packFields(field.children, target, sink, seen, take);
     }
 
-    private static void packRepeat(Field field, Object row, ByteSink sink, Map<Integer, Object> seen) {
+    private static void packRepeat(Field field, Object row, ByteSink sink, Map<Object, Object> seen) {
         int count = 0;
         for (Field child : field.children) {
             Object v = child.get.get(row);
@@ -189,7 +189,7 @@ final class Walker {
     }
 
     static void packIndexed(
-            Field field, Object row, ByteSink sink, Map<Integer, Object> seen, int index) {
+            Field field, Object row, ByteSink sink, Map<Object, Object> seen, int index) {
         Take at = child -> {
             Object v = child.get.get(row);
             if (v instanceof List<?> list) {
@@ -201,7 +201,7 @@ final class Walker {
     }
 
     private static void packBytes(
-            Field field, Object row, ByteSink sink, Map<Integer, Object> seen, Take take) {
+            Field field, Object row, ByteSink sink, Map<Object, Object> seen, Take take) {
         Object raw = takeValue(field, row, take);
         if (!isPresent(raw) && take == null) {
             throw new IllegalArgumentException("missing field " + field.id);
@@ -218,7 +218,7 @@ final class Walker {
     }
 
     private static void packScalar(
-            Field field, Object row, ByteSink sink, Map<Integer, Object> seen, Take take) {
+            Field field, Object row, ByteSink sink, Map<Object, Object> seen, Take take) {
         Object value = takeValue(field, row, take);
         if (!isPresent(value) && take == null) {
             throw new IllegalArgumentException("missing field " + field.id);
@@ -226,7 +226,7 @@ final class Walker {
         seen.put(field.id, value);
         ByteBuffer buf = ByteBuffer.allocate(field.size);
         buf.order(field.bigEndian ? ByteOrder.BIG_ENDIAN : ByteOrder.LITTLE_ENDIAN);
-        writeScalar(field, value, buf);
+        Scalars.writeScalar(field, value, buf);
         buf.flip();
         sink.write(buf);
     }
@@ -236,14 +236,13 @@ final class Walker {
             byte[] data,
             int[] offset,
             Object row,
-            Map<Integer, Object> seen,
+            Map<Object, Object> seen,
             boolean asList) {
         int left = data.length - offset[0];
         if (left < 1) {
             return new Packbin.ShortPacket("", 1, left);
         }
         int flags = data[offset[0]++] & 0xFF;
-        field.group.unpacked = flags;
         for (int i = 0; i < field.children.size(); i++) {
             if ((flags & (1 << i)) == 0) {
                 continue;
@@ -263,12 +262,12 @@ final class Walker {
         return null;
     }
 
-    private static Object unpackFlagByte(Field field, byte[] data, int[] offset) {
+    private static Object unpackFlagByte(Field field, byte[] data, int[] offset, Map<Object, Object> seen) {
         int left = data.length - offset[0];
         if (left < 1) {
             return new Packbin.ShortPacket("", 1, left);
         }
-        field.group.unpacked = data[offset[0]++] & 0xFF;
+        seen.put(field.group, data[offset[0]++] & 0xFF);
         return null;
     }
 
@@ -277,9 +276,11 @@ final class Walker {
             byte[] data,
             int[] offset,
             Object row,
-            Map<Integer, Object> seen,
+            Map<Object, Object> seen,
             boolean asList) {
-        if ((field.group.unpacked & (1 << field.bitIndex)) == 0) {
+        // The byte lives in this call's map under its group; a bit whose byte this scope never read stays clear.
+        int flags = seen.get(field.group) instanceof Integer read ? read : 0;
+        if ((flags & (1 << field.bitIndex)) == 0) {
             return null;
         }
         return unpackField(field.inner, data, offset, row, seen, asList);
@@ -290,7 +291,7 @@ final class Walker {
             byte[] data,
             int[] offset,
             Object row,
-            Map<Integer, Object> seen,
+            Map<Object, Object> seen,
             boolean asList) {
         if (field.nestedRow) {
             Object child = newChild(field, row);
@@ -323,7 +324,7 @@ final class Walker {
             byte[] data,
             int[] offset,
             Object row,
-            Map<Integer, Object> seen,
+            Map<Object, Object> seen,
             boolean asList) {
         if (!conditionHolds(field.condition, seen)) {
             return null;
@@ -332,11 +333,16 @@ final class Walker {
     }
 
     private static Object unpackRepeat(
-            Field field, byte[] data, int[] offset, Object row, Map<Integer, Object> seen) {
+            Field field, byte[] data, int[] offset, Object row, Map<Object, Object> seen) {
         while (offset[0] < data.length) {
+            int before = offset[0];
             Object err = unpackFields(field.children, data, offset, row, seen, true);
             if (err != null) {
                 return err;
+            }
+            if (offset[0] == before) {
+                // A round that reads nothing would read nothing forever; the bytes left are not part of the packet.
+                return new Packbin.TrailingBytes(data.length - offset[0]);
             }
         }
         return null;
@@ -347,7 +353,7 @@ final class Walker {
             byte[] data,
             int[] offset,
             Object row,
-            Map<Integer, Object> seen,
+            Map<Object, Object> seen,
             boolean asList) {
         int left = data.length - offset[0];
         if (left < field.size) {
@@ -366,7 +372,7 @@ final class Walker {
             byte[] data,
             int[] offset,
             Object row,
-            Map<Integer, Object> seen,
+            Map<Object, Object> seen,
             boolean asList) {
         int left = data.length - offset[0];
         if (left < field.size) {
@@ -374,7 +380,7 @@ final class Walker {
         }
         ByteBuffer buf = ByteBuffer.wrap(data, offset[0], field.size);
         buf.order(field.bigEndian ? ByteOrder.BIG_ENDIAN : ByteOrder.LITTLE_ENDIAN);
-        Object value = readScalar(field, buf);
+        Object value = Scalars.readScalar(field, buf);
         offset[0] += field.size;
         seen.put(field.id, value);
         store(row, field, value, asList);
@@ -405,7 +411,7 @@ final class Walker {
         }
     }
 
-    private static boolean conditionHolds(Packbin.Eq condition, Map<Integer, Object> seen) {
+    private static boolean conditionHolds(Packbin.Eq condition, Map<Object, Object> seen) {
         Object actual = seen.get(condition.fieldId);
         if (actual == null) {
             return false;
@@ -424,74 +430,5 @@ final class Walker {
             return na.longValue() == nb.longValue();
         }
         return a.equals(b);
-    }
-
-    private static void writeScalar(Field field, Object value, ByteBuffer buf) {
-        switch (field.kind) {
-            case U8 -> buf.put(toUnsignedByte(field.label(), value, 0xFFL));
-            case I8 -> buf.put((byte) requireLong(field.label(), value, -0x80L, 0x7FL));
-            case U16 -> buf.putShort(toUnsignedShort(field.label(), value, 0xFFFFL));
-            case I16 -> buf.putShort((short) requireLong(field.label(), value, -0x8000L, 0x7FFFL));
-            case U32 -> buf.putInt((int) requireLong(field.label(), value, 0L, 0xFFFFFFFFL));
-            case I32 -> buf.putInt((int) requireLong(field.label(), value, -0x80000000L, 0x7FFFFFFFL));
-            case U64 -> buf.putLong(requireU64(field.label(), value));
-            case I64 -> buf.putLong(requireLong(field.label(), value, Long.MIN_VALUE, Long.MAX_VALUE));
-            case F32 -> buf.putFloat(((Number) value).floatValue());
-            case F64 -> buf.putDouble(((Number) value).doubleValue());
-            default -> throw new IllegalStateException("Cannot write " + field.kind);
-        }
-    }
-
-    private static Object readScalar(Field field, ByteBuffer buf) {
-        return switch (field.kind) {
-            case U8 -> buf.get() & 0xFF;
-            case I8 -> (int) buf.get();
-            case U16 -> buf.getShort() & 0xFFFF;
-            case I16 -> (int) buf.getShort();
-            case U32 -> buf.getInt() & 0xFFFFFFFFL;
-            case I32 -> buf.getInt();
-            case U64 -> buf.getLong();
-            case I64 -> buf.getLong();
-            case F32 -> buf.getFloat();
-            case F64 -> buf.getDouble();
-            default -> throw new IllegalStateException("Cannot read " + field.kind);
-        };
-    }
-
-    private static byte toUnsignedByte(String name, Object value, long max) {
-        return (byte) requireLong(name, value, 0L, max);
-    }
-
-    private static short toUnsignedShort(String name, Object value, long max) {
-        return (short) requireLong(name, value, 0L, max);
-    }
-
-    private static long requireLong(String name, Object value, long min, long max) {
-        if (!(value instanceof Number) || value instanceof Float || value instanceof Double) {
-            throw new IllegalArgumentException(name + ": expected int, got " + typeName(value));
-        }
-        long n = ((Number) value).longValue();
-        if (n < min || n > max) {
-            throw new ArithmeticException(name + ": " + n + " does not fit");
-        }
-        return n;
-    }
-
-    private static long requireU64(String name, Object value) {
-        if (value instanceof Long l) {
-            return l;
-        }
-        if (value instanceof Integer || value instanceof Short || value instanceof Byte) {
-            long n = ((Number) value).longValue();
-            if (n < 0) {
-                throw new ArithmeticException(name + ": " + n + " does not fit");
-            }
-            return n;
-        }
-        throw new IllegalArgumentException(name + ": expected int, got " + typeName(value));
-    }
-
-    private static String typeName(Object value) {
-        return value == null ? "null" : value.getClass().getSimpleName();
     }
 }

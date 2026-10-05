@@ -31,6 +31,26 @@ _builtin_list = list
 _builtin_dict = dict
 
 
+def _bad_value(data: memoryview, offset: int, label: str) -> ShortPacket:
+    return ShortPacket(field=label, needed=0, left=len(data) - offset)
+
+
+def _read_utf8(data: memoryview, offset: int, label: str) -> tuple[str, int] | ShortPacket:
+    left = len(data) - offset
+    if left < 2:
+        return ShortPacket(field=label, needed=2, left=left)
+    count = struct.unpack_from("<H", data, offset)[0]
+    body = offset + 2
+    left = len(data) - body
+    if left < count:
+        return ShortPacket(field=label, needed=count, left=left)
+    try:
+        text = _builtin_bytes(data[body : body + count]).decode("utf-8")
+    except UnicodeDecodeError:
+        return _bad_value(data, offset, label)
+    return text, body + count
+
+
 def _read_u2(data: memoryview, offset: int, count: int, label: str) -> tuple[list[int], int] | ShortPacket:
     nbytes = (count + 3) // 4
     left = len(data) - offset
@@ -49,6 +69,8 @@ def _read_bits(data: memoryview, offset: int, label: str, count: int) -> tuple[l
 def _read_packed(
     data: memoryview, offset: int, label: str, width: int, count: int
 ) -> tuple[list[int], int] | ShortPacket:
+    if count < 0:
+        return _bad_value(data, offset, label)
     nbytes = (count * width + 7) // 8
     left = len(data) - offset
     if left < nbytes:
@@ -106,17 +128,10 @@ def _unpack_leaf(
         seen[node.field_id] = raw
         return raw, offset, None
     if isinstance(node, _Utf8):
-        left = len(data) - offset
-        if left < 2:
-            return None, offset, ShortPacket(field=str(node.field_id), needed=2, left=left)
-        count = struct.unpack_from("<H", data, offset)[0]
-        offset += 2
-        left = len(data) - offset
-        if left < count:
-            return None, offset, ShortPacket(field=str(node.field_id), needed=count, left=left)
-        raw = _builtin_bytes(data[offset : offset + count])
-        offset += count
-        value = raw.decode("utf-8")
+        got = _read_utf8(data, offset, str(node.field_id))
+        if isinstance(got, ShortPacket):
+            return None, offset, got
+        value, offset = got
         seen[node.field_id] = value
         return value, offset, None
     if isinstance(node, _Bool):
@@ -167,16 +182,10 @@ def _unpack_dict_items(
     offset += 2
     mapping: dict[str, Any] = {}
     for _ in range(count):
-        left = len(data) - offset
-        if left < 2:
-            return mapping, offset, ShortPacket(field="", needed=2, left=left)
-        key_len = struct.unpack_from("<H", data, offset)[0]
-        offset += 2
-        left = len(data) - offset
-        if left < key_len:
-            return mapping, offset, ShortPacket(field="", needed=key_len, left=left)
-        key = _builtin_bytes(data[offset : offset + key_len]).decode("utf-8")
-        offset += key_len
+        got = _read_utf8(data, offset, "")
+        if isinstance(got, ShortPacket):
+            return mapping, offset, got
+        key, offset = got
         value, offset, err = _unpack_element(data, offset, element)
         if err is not None:
             return mapping, offset, err
@@ -268,15 +277,18 @@ def unpack_nodes(
                     return offset, err
         elif isinstance(node, _Repeat):
             while offset < len(data):
+                before = offset
                 offset, err = unpack_nodes(
                     data, offset, node.fields, row, seen, as_list=True, flag_state=flag_state
                 )
                 if err is not None:
                     return offset, err
+                if offset == before:
+                    break
         elif isinstance(node, _Sized):
             count = seen.get(node.count)
-            if not isinstance(count, int):
-                raise RuntimeError(f"{node.field_id}: count {node.count} is missing")
+            if not isinstance(count, int) or count < 0:
+                return offset, _bad_value(data, offset, str(node.field_id))
             left = len(data) - offset
             if left < count:
                 return offset, ShortPacket(field=str(node.field_id), needed=count, left=left)
@@ -296,7 +308,7 @@ def unpack_nodes(
         elif isinstance(node, _Bits):
             count = seen.get(node.count)
             if not isinstance(count, int):
-                raise RuntimeError(f"{node.field_id}: count {node.count} is missing")
+                return offset, _bad_value(data, offset, str(node.field_id))
             got_bits = _read_bits(data, offset, str(node.field_id), count)
             if isinstance(got_bits, ShortPacket):
                 return offset, got_bits
@@ -307,7 +319,7 @@ def unpack_nodes(
             label = str(node.field_id)
             raw_count = seen.get(node.count)
             if isinstance(raw_count, bool) or not isinstance(raw_count, int):
-                raise RuntimeError(f"{label}: count is missing")
+                return offset, _bad_value(data, offset, label)
             item_count = raw_count + node.bias
             got_packed = _read_packed(data, offset, label, node.width, item_count)
             if isinstance(got_packed, ShortPacket):
@@ -317,26 +329,22 @@ def unpack_nodes(
             _append(row, node, packed_value, as_list)
         elif isinstance(node, _Times):
             raw_count = seen.get(node.count)
-            if isinstance(raw_count, bool) or not isinstance(raw_count, int):
-                raise RuntimeError("times: count is missing")
+            if isinstance(raw_count, bool) or not isinstance(raw_count, int) or raw_count < 0:
+                return offset, _bad_value(data, offset, str(node.anchor))
             for _ in range(raw_count):
+                before = offset
                 offset, err = unpack_nodes(
                     data, offset, node.fields, row, seen, as_list=True, flag_state=flag_state
                 )
                 if err is not None:
                     return offset, err
+                if offset == before:
+                    return offset, _bad_value(data, before, str(node.anchor))
         elif isinstance(node, _Utf8):
-            left = len(data) - offset
-            if left < 2:
-                return offset, ShortPacket(field=str(node.field_id), needed=2, left=left)
-            count = struct.unpack_from("<H", data, offset)[0]
-            offset += 2
-            left = len(data) - offset
-            if left < count:
-                return offset, ShortPacket(field=str(node.field_id), needed=count, left=left)
-            raw = _builtin_bytes(data[offset : offset + count])
-            offset += count
-            value = raw.decode("utf-8")
+            got_text = _read_utf8(data, offset, str(node.field_id))
+            if isinstance(got_text, ShortPacket):
+                return offset, got_text
+            value, offset = got_text
             seen[node.field_id] = value
             _append(row, node, value, as_list)
         elif isinstance(node, _List):

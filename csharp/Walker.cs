@@ -3,37 +3,6 @@ using System.Globalization;
 
 namespace Packbin;
 
-internal sealed class FlagGroup
-{
-    public string Name { get; }
-    public List<Field> BitInners { get; } = [];
-    public byte Unpacked { get; set; }
-
-    public FlagGroup(string name) => Name = name;
-
-    public Field AddBit(Field inner)
-    {
-        var index = BitInners.Count;
-        BitInners.Add(inner);
-        return Field.CreateFlagBit(this, index, inner);
-    }
-
-    public byte Compute(IReadOnlyDictionary<string, object?> values)
-    {
-        byte flags = 0;
-        for (var i = 0; i < BitInners.Count; i++)
-        {
-            var inner = BitInners[i];
-            var on = inner.Type == Field.Kind.Group
-                ? Walker.GroupOn(values, inner)
-                : Walker.IsPresent(values, inner.Name);
-            if (on)
-                flags |= (byte)(1 << i);
-        }
-        return flags;
-    }
-}
-
 internal static partial class Walker
 {
     public static bool IsPresent(IReadOnlyDictionary<string, object?> values, string name) =>
@@ -117,14 +86,14 @@ internal static partial class Walker
         Field field,
         ReadOnlySpan<byte> bytes,
         ref int offset,
-        Dictionary<string, object?> values,
+        Scope values,
         bool repeatLists)
     {
         return field.Type switch
         {
             Field.Kind.Flags => UnpackFlags(field, bytes, ref offset, values),
             Field.Kind.FlagByte => UnpackFlagByte(field, bytes, ref offset, values),
-            Field.Kind.FlagBit => UnpackFlagBit(field, bytes, ref offset, values),
+            Field.Kind.FlagBit => UnpackFlagBit(field, values.FlagByte(field.FlagOwner!), bytes, ref offset, values),
             Field.Kind.When => UnpackWhen(field, bytes, ref offset, values),
             Field.Kind.Repeat => UnpackRepeat(field, bytes, ref offset, values),
             Field.Kind.Bytes => UnpackBytes(field, bytes, ref offset, values, repeatLists),
@@ -153,7 +122,7 @@ internal static partial class Walker
         Field field,
         ReadOnlySpan<byte> bytes,
         ref int offset,
-        Dictionary<string, object?> values,
+        Scope values,
         bool repeatLists)
     {
         _ = bytes;
@@ -275,17 +244,16 @@ internal static partial class Walker
         Field field,
         ReadOnlySpan<byte> bytes,
         ref int offset,
-        Dictionary<string, object?> values)
+        Scope values)
     {
         if (bytes.Length - offset < 1)
             return new ShortPacket(field.Name, 1, bytes.Length - offset);
         var flags = bytes[offset++];
         if (field.Name.Length > 0)
             values[field.Name] = flags;
-        field.FlagOwner!.Unpacked = flags;
         foreach (var bit in field.Children)
         {
-            var err = UnpackFlagBit(bit, bytes, ref offset, values);
+            var err = UnpackFlagBit(bit, flags, bytes, ref offset, values);
             if (err is not null)
                 return err;
         }
@@ -296,25 +264,25 @@ internal static partial class Walker
         Field field,
         ReadOnlySpan<byte> bytes,
         ref int offset,
-        Dictionary<string, object?> values)
+        Scope values)
     {
         if (bytes.Length - offset < 1)
             return new ShortPacket(field.Name, 1, bytes.Length - offset);
         var flags = bytes[offset++];
         if (field.Name.Length > 0)
             values[field.Name] = flags;
-        field.FlagOwner!.Unpacked = flags;
+        values.SetFlagByte(field.FlagOwner!, flags);
         return null;
     }
 
     private static object? UnpackFlagBit(
         Field field,
+        byte flags,
         ReadOnlySpan<byte> bytes,
         ref int offset,
-        Dictionary<string, object?> values)
+        Scope values)
     {
-        var bit = 1 << field.BitIndex;
-        if ((field.FlagOwner!.Unpacked & bit) == 0)
+        if ((flags & (1 << field.BitIndex)) == 0)
             return null;
         return UnpackField(field.Inner!, bytes, ref offset, values, repeatLists: false);
     }
@@ -323,7 +291,7 @@ internal static partial class Walker
         Field field,
         ReadOnlySpan<byte> bytes,
         ref int offset,
-        Dictionary<string, object?> values)
+        Scope values)
     {
         if (field.Children.Length == 0)
             values[field.Name] = true;
@@ -340,7 +308,7 @@ internal static partial class Walker
         Field field,
         ReadOnlySpan<byte> bytes,
         ref int offset,
-        Dictionary<string, object?> values)
+        Scope values)
     {
         if (!ConditionHolds(field.Pred!, values))
             return null;
@@ -357,17 +325,21 @@ internal static partial class Walker
         Field field,
         ReadOnlySpan<byte> bytes,
         ref int offset,
-        Dictionary<string, object?> values)
+        Scope values)
     {
         while (offset < bytes.Length)
         {
-            var group = new Dictionary<string, object?>();
+            var roundStart = offset;
+            var group = new Scope(values);
             foreach (var child in field.Children)
             {
                 var err = UnpackField(child, bytes, ref offset, group, repeatLists: false);
                 if (err is not null)
                     return err;
             }
+            // A round that reads nothing can never reach the end of the buffer.
+            if (offset == roundStart)
+                return new TrailingBytes(bytes.Length - offset);
             foreach (var (key, value) in group)
                 Append(values, key, value);
         }
@@ -393,7 +365,7 @@ internal static partial class Walker
         Field field,
         ReadOnlySpan<byte> bytes,
         ref int offset,
-        Dictionary<string, object?> values,
+        Scope values,
         bool repeatLists)
     {
         var left = bytes.Length - offset;
@@ -409,7 +381,7 @@ internal static partial class Walker
         Field field,
         ReadOnlySpan<byte> bytes,
         ref int offset,
-        Dictionary<string, object?> values,
+        Scope values,
         bool repeatLists)
     {
         var left = bytes.Length - offset;
@@ -444,10 +416,19 @@ internal static partial class Walker
     {
         if (a is byte[] aa && b is byte[] bb)
             return aa.AsSpan().SequenceEqual(bb);
+        if (a is float or double && !IsDecimalRange(a))
+            return false;
         if (IsNumber(a) && IsNumber(b))
             return Convert.ToDecimal(a, CultureInfo.InvariantCulture)
                 == Convert.ToDecimal(b, CultureInfo.InvariantCulture);
         return Equals(a, b);
+    }
+
+    // NaN, infinity and huge floats read from a packet have no decimal form; they equal nothing.
+    private static bool IsDecimalRange(object value)
+    {
+        var d = Convert.ToDouble(value, CultureInfo.InvariantCulture);
+        return double.IsFinite(d) && Math.Abs(d) < 7.9e28;
     }
 
     private static bool IsNumber(object value) =>

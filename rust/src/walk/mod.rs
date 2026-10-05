@@ -1,6 +1,9 @@
 mod pack;
 mod unpack;
 
+#[cfg(test)]
+pub(crate) use unpack::packed_layout;
+
 use crate::field::MapScheme;
 use crate::value::{PackError, UnpackError, Values};
 

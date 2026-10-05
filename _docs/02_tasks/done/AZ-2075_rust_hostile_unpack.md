@@ -1,6 +1,5 @@
 ---
 loop: 11
-branch: loop/11-hostile-unpack
 ---
 
 # Rust unpack never hangs on hostile packets
@@ -89,7 +88,7 @@ Then construction succeeds and the route bytes equal `3410001500062d00020d0065cd
 **AC-4: Zero-progress repeat ends with an error**
 Given `MapScheme::new(1, vec![u8("0"), repeat(1, vec![])])` and the bytes `01 05 09`
 When it is unpacked
-Then unpack returns `Err(UnpackError::Trailing { left: 2 })` within 1 s. No value is returned and no panic occurs.
+Then unpack returns `Err(UnpackError::Trailing { left: 1 })` within 1 s. No value is returned and no panic occurs.
 
 **AC-5: Hostile vectors**
 Given the cases in `fixtures/hostile/cases.txt`
@@ -113,7 +112,7 @@ Add these first; they must fail (or time out) on the current tree.
 | AC-1 | `#[should_panic]` build of the R-P5 scheme (map) and of the typed `SchemeItem::Field(repeat(…when…))` form | panics with "field id 0" (today: builds) |
 | AC-2 | `#[should_panic]` build of `times` whose `sized` names an outer id | panics naming id 1 (today: builds) |
 | AC-3 | existing `route_matches_fixture_and_rejects_a_short_tail`, `times_stops_so_the_next_field_is_read`, `repeat_groups_and_leftover` | unchanged, green |
-| AC-4 | unpack of an empty `repeat` with bytes `01 05 09`, run on a thread with a 1 s `recv_timeout` | `Err(Trailing { left: 2 })` (today: timeout) |
+| AC-4 | unpack of an empty `repeat` with bytes `01 05 09`, run on a thread with a 1 s `recv_timeout` | `Err(Trailing { left: 1 })` (today: timeout) |
 | AC-4 | `repeat` round with a real body and 1 leftover byte (AC-7 of the project) | still `Short` naming the field, needed and left |
 
 ## Blackbox Tests

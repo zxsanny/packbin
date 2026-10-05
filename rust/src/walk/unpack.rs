@@ -77,6 +77,17 @@ fn read_float(
     })
 }
 
+/// Item count and byte length of a packed field, or `None` when the count is negative or
+/// does not fit the target's integer sizes (32-bit targets included).
+pub(crate) fn packed_layout(raw_count: usize, bias: i8, width: usize) -> Option<(usize, usize)> {
+    let items = i64::try_from(raw_count)
+        .ok()?
+        .checked_add(i64::from(bias))?;
+    let n = usize::try_from(items).ok()?;
+    let bits = n.checked_mul(width)?;
+    Some((n, bits.div_ceil(8)))
+}
+
 pub(crate) fn unpack_fields(
     fields: &[Field],
     cur: &mut Cursor<'_>,
@@ -170,6 +181,7 @@ fn unpack_one(
         }
         FieldKind::Repeat { members, .. } => {
             while cur.left() > 0 {
+                let before = cur.left();
                 let mut group = Values::with_capacity(members.len());
                 let mut group_flags = HashMap::new();
                 let mut nested_groups = Vec::new();
@@ -180,6 +192,10 @@ fn unpack_one(
                     &mut group_flags,
                     &mut nested_groups,
                 )?;
+                // A round that reads nothing would repeat forever; the bytes left are trailing.
+                if cur.left() == before {
+                    return Err(UnpackError::Trailing { left: before });
+                }
                 groups.push(group);
             }
         }
@@ -262,16 +278,13 @@ fn unpack_one(
                     }))
                 }
             };
-            let item_count = raw_count as i64 + *bias as i64;
-            if item_count < 0 {
+            let Some((n, nbytes)) = packed_layout(raw_count, *bias, *width as usize) else {
                 return Err(UnpackError::Short(ShortPacket {
                     field: name.to_string(),
                     needed: 0,
                     left: cur.left(),
                 }));
-            }
-            let n = item_count as usize;
-            let nbytes = (n * *width as usize).div_ceil(8);
+            };
             let raw = cur.take(nbytes, name)?;
             let mask = if *width == 2 { 3 } else { 1 };
             let shift = if *width == 2 { 2 } else { 1 };
@@ -305,6 +318,7 @@ fn unpack_one(
             };
             let mut built: HashMap<crate::value::Name, Vec<Value>> = HashMap::new();
             for _ in 0..n {
+                let before = cur.left();
                 let mut group = Values::new();
                 let mut group_flags = HashMap::new();
                 let mut nested_groups = Vec::new();
@@ -319,6 +333,14 @@ fn unpack_one(
                     if let Some(v) = val {
                         built.entry(key).or_default().push(v);
                     }
+                }
+                // Every later round would read nothing too, so a huge count must not spin.
+                if cur.left() == before {
+                    return Err(UnpackError::Short(ShortPacket {
+                        field: "times".to_string(),
+                        needed: 0,
+                        left: before,
+                    }));
                 }
             }
             for (key, list) in built {
