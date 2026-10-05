@@ -100,11 +100,12 @@ def _nine_bits_split():
 
 # Construct vectors in fixtures/hostile/cases.txt that this package can build today.
 # nine_flag_bits_split: the 9th bit() of a flag_byte raises before any Scheme exists.
-# when/count naming a later field (AZ-2113), empty groups (no accessor, see AZ-2083) are not covered here.
+# when/count naming a later field (AZ-2113) are not covered here.
 CONSTRUCT_SCHEMES = {
     "nine_flag_bits": lambda: _scheme(flags(0, *_nine_children())),
     "nine_flag_bits_split": _nine_bits_split,
     "bool_outside_flags": lambda: _scheme(_u8(0, "a"), _on(1)),
+    "empty_group_outside_flags": lambda: _scheme(_u8(0, "a"), group(1)),
 }
 
 
@@ -126,5 +127,33 @@ def test_construct_vectors_are_in_the_case_file():
 
 @pytest.mark.parametrize("case_id", sorted(CONSTRUCT_SCHEMES))
 def test_construct_vector_is_scheme_error(case_id: str):
-    with pytest.raises(ValueError, match="8 bits|flags"):
+    with pytest.raises(ValueError, match="8 bits|flags|no fields"):
         CONSTRUCT_SCHEMES[case_id]()
+
+
+EMPTY_GROUP_PLACES = {
+    "top_level": lambda: _scheme(_u8(0, "a"), group(1)),
+    "in_flags": lambda: _scheme(flags(0, group(0))),
+    "in_when": lambda: _scheme(_u8(0, "k"), when(1, eq(0, 1), group(1))),
+    "in_repeat": lambda: _scheme(repeat(0, group(0))),
+    "in_times": lambda: _scheme(_u8(0, "n"), times(1, 0, group(1))),
+    "list_element": lambda: _scheme(list_field(lambda row: row["xs"], group(0))),
+}
+
+
+@pytest.mark.parametrize("place", sorted(EMPTY_GROUP_PLACES))
+def test_empty_group_is_scheme_error_everywhere(place: str):
+    with pytest.raises(ValueError, match=r"group \d+ has no fields"):
+        EMPTY_GROUP_PLACES[place]()
+
+
+@pytest.mark.parametrize("value", [1, "yes"])
+def test_bool_value_other_than_true_clears_the_bit(value):
+    scheme = _scheme(flags(0, _on(0)))
+
+    packed = BinaryPacker.pack(scheme, {"on": value}).hex()
+
+    assert packed == "0100"
+    result = BinaryPacker.unpack(bytes.fromhex(packed), scheme.on(lambda _row: None))
+    assert result.ok
+    assert "on" not in result.value

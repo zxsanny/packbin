@@ -15,6 +15,7 @@ pub use value::{
     insert, mismatched_bytes, motion_field_count, to_hex, Name, PackError, ShortPacket,
     UnpackError, Value, Values,
 };
+pub use walk::{pack, unpack};
 
 #[cfg(test)]
 mod borrowed_count_tests;
@@ -30,5 +31,7 @@ mod flag_presence_tests;
 mod hostile_tests;
 #[cfg(test)]
 mod packbin_tests;
+#[cfg(test)]
+mod round_tests;
 #[cfg(test)]
 mod scope_tests;

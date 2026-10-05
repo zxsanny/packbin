@@ -23,6 +23,7 @@ final class FlagStateTest {
         splitFormShortPacket();
         splitFormClearByte();
         repeatRoundKeepsItsOwnFlagByte();
+        splitBitInsideUntakenWhen();
     }
 
     private static Scheme<Map> splitAb() {
@@ -156,6 +157,30 @@ final class FlagStateTest {
         HostileRun extra = HostileRun.of(scheme, "01010099");
         PackbinTest.expectTrue("AC-4 clear byte with leftover -> " + extra.kind(), extra.result instanceof Packbin.TrailingBytes);
         PackbinTest.expectTrue("AC-4 clear byte with leftover handler not called", !extra.handled);
+    }
+
+    /**
+     * AZ-2131 AC-4 (U4 A, shared vector bitwhen): the bit is set from the row even when its when is not taken;
+     * unpack tests the when first and never reads the value.
+     */
+    private static void splitBitInsideUntakenWhen() {
+        packbin.Field m = Packbin.flagByte();
+        Scheme<Map> scheme = Maps.scheme(1,
+                Packbin.u8(0, Access.get("k"), Access.set("k")),
+                m,
+                Packbin.when(1, Packbin.eq(0, 1), m.bit(Packbin.u8(1, Access.get("v"), Access.set("v")))));
+        PackbinTest.expectEq("AZ-2131 AC-4 bitwhen {k:0, v:5}", "010001",
+                PackbinTest.toHex(BinaryPacker.pack(scheme, Maps.map("k", 0, "v", 5))));
+        PackbinTest.expectEq("AZ-2131 AC-4 bitwhen {k:1, v:5}", "01010105",
+                PackbinTest.toHex(BinaryPacker.pack(scheme, Maps.map("k", 1, "v", 5))));
+        Map[] untaken = new Map[1];
+        Object untakenErr = BinaryPacker.unpack(PackbinTest.parseHex("010001"), scheme.on(row -> untaken[0] = row));
+        PackbinTest.expectTrue("AZ-2131 AC-4 bitwhen 010001 ok", untakenErr == null);
+        PackbinTest.expectEq("AZ-2131 AC-4 bitwhen 010001 row", Maps.map("k", 0), untaken[0]);
+        Map[] taken = new Map[1];
+        Object takenErr = BinaryPacker.unpack(PackbinTest.parseHex("01010105"), scheme.on(row -> taken[0] = row));
+        PackbinTest.expectTrue("AZ-2131 AC-4 bitwhen 01010105 ok", takenErr == null);
+        PackbinTest.expectEq("AZ-2131 AC-4 bitwhen 01010105 row", Maps.map("k", 1, "v", 5), taken[0]);
     }
 
     private static void repeatRoundKeepsItsOwnFlagByte() {

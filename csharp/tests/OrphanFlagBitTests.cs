@@ -24,7 +24,39 @@ public class OrphanFlagBitTests
         public byte? V { get; set; }
     }
 
+    private sealed class BitWhenRow
+    {
+        public byte K { get; set; }
+        public byte? V { get; set; }
+    }
+
     private static int Int(object? value) => Convert.ToInt32(value, CultureInfo.InvariantCulture);
+
+    // Cross-language vector `bitwhen` (owner decision U4 A): the bit comes from the row even when its `when` is not
+    // taken, and unpack tests the `when` first, so it never reads the field.
+    [Theory]
+    [InlineData(0, "010001")]
+    [InlineData(1, "01010105")]
+    public void BitWhen_BitFollowsTheRowAndTheFieldFollowsTheWhen(byte k, string expected)
+    {
+        // Arrange
+        var m = Field.FlagByte();
+        var scheme = new Scheme<BitWhenRow>(1,
+            Field.U8<BitWhenRow>(0, x => x.K),
+            m,
+            Field.When(1, Condition.Eq(0, 1), m.Bit(Field.U8<BitWhenRow>(1, x => x.V))));
+
+        // Act
+        var raw = BinaryPacker.Pack(scheme, new BitWhenRow { K = k, V = 5 });
+        BitWhenRow? got = null;
+        var err = BinaryPacker.Unpack(raw, scheme.On(v => got = v));
+
+        // Assert
+        Assert.Equal(expected, Convert.ToHexString(raw).ToLowerInvariant());
+        Assert.Null(err);
+        Assert.Equal(k, got!.K);
+        Assert.Equal(k == 1 ? (byte)5 : null, got.V);
+    }
 
     [Fact]
     public void FlagByteInsideWhen_BitOutside_FailsNamingTheBit()

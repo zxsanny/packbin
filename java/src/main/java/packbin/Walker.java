@@ -264,12 +264,6 @@ final class Walker {
             store(row, field, child, asList);
             return null;
         }
-        if (field.children.isEmpty()) {
-            if (field.set != null) {
-                store(row, field, true, asList);
-            }
-            return null;
-        }
         return unpackFields(field.children, data, offset, row, seen, asList);
     }
 

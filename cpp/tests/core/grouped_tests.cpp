@@ -75,6 +75,16 @@ constexpr auto motion = packbin::scheme<Motion>(
     1, packbin::flag_byte(0), packbin::flag_bit(0, packbin::u16<&Motion::heading>(0)),
     packbin::flag_bit(0, packbin::u8<&Motion::speed>(1)));
 
+// U4 `bitwhen` vector: a split bit inside a `when` that is not taken keeps its bit.
+struct BitWhen {
+  std::uint8_t k = 0;
+  Opt<std::uint8_t> v;
+};
+
+constexpr auto bitwhen = packbin::scheme<BitWhen>(
+    1, packbin::u8<&BitWhen::k>(0), packbin::flag_byte(0),
+    packbin::when(1, packbin::eq(0, 1), packbin::flag_bit(0, packbin::u8<&BitWhen::v>(1))));
+
 template <typename Row, typename S>
 packbin::Result packed(S const& s, Row const& row, std::uint8_t* buf, std::size_t cap) {
   return packbin::pack(s, row, buf, cap);
@@ -212,6 +222,25 @@ void flag_byte_bits() {
   expect(both.ok() && check::same_hex(buf, both.offset, "01035a0004"), "two flag bits");
 }
 
+void flag_bit_inside_untaken_when() {
+  BitWhen row;
+  row.v = 5;
+  std::uint8_t buf[8];
+  auto skipped = packed(bitwhen, row, buf, sizeof(buf));
+  expect(skipped.ok() && check::same_hex(buf, skipped.offset, "010001"), "bitwhen k=0 hex");
+  BitWhen back;
+  back.v = 9;
+  auto u = packbin::unpack(bitwhen, buf, skipped.offset, back);
+  expect(u.ok() && back.k == 0 && !back.v.has, "bitwhen k=0 unpack has no v");
+
+  row.k = 1;
+  auto taken = packed(bitwhen, row, buf, sizeof(buf));
+  expect(taken.ok() && check::same_hex(buf, taken.offset, "01010105"), "bitwhen k=1 hex");
+  BitWhen again;
+  auto t = packbin::unpack(bitwhen, buf, taken.offset, again);
+  expect(t.ok() && again.k == 1 && again.v.has && again.v.value == 5, "bitwhen k=1 round trip");
+}
+
 void flags_overflow() {
   struct Wide {
     std::uint8_t v = 0;
@@ -234,6 +263,7 @@ int run_core_grouped_tests() {
   groups_under_flags();
   marker_when_and_booleans();
   flag_byte_bits();
+  flag_bit_inside_untaken_when();
   flags_overflow();
   return check::failures();
 }

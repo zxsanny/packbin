@@ -9,14 +9,17 @@ final class BoolPlacementTest {
     private BoolPlacementTest() {}
 
     private static final String ONLY_A_BIT = " is allowed only as a bit of flags or a flagByte";
+    private static final String NEVER_SET = " has no fields and no accessor, so its bit can never be set";
 
     static void run() {
         boolOutsideFlagsIsRejected();
         boolAsFlagBitStillBuilds();
         emptyGroupOutsideFlagsIsRejected();
-        emptyGroupAsFlagBitStillBuilds();
+        emptyGroupWithoutFieldsIsRefusedEverywhere();
+        emptyNestedRowBitRoundTripsPresence();
         splitFormBoolUnpacksTrue();
         combinedFormBitRuleUnchanged();
+        nonTrueValuesClearTheBit();
     }
 
     private static Field u8(int id, String name) {
@@ -95,31 +98,57 @@ final class BoolPlacementTest {
 
     private static void emptyGroupOutsideFlagsIsRejected() {
         expectRefused("AC-6 empty group alone", () -> Maps.scheme(1, Packbin.group(0)),
-                "empty group 0" + ONLY_A_BIT);
+                "empty group 0" + NEVER_SET);
         expectRefused("AC-6 vector empty_group_outside_flags", () -> Maps.scheme(1, u8(0, "a"), Packbin.group(1)),
-                "empty group 1" + ONLY_A_BIT);
+                "empty group 1" + NEVER_SET);
         expectRefused("AC-6 empty group in a group", () -> Maps.scheme(1,
                 Packbin.group(0, u8(0, "a"), Packbin.group(1))),
-                "empty group 1" + ONLY_A_BIT);
+                "empty group 1" + NEVER_SET);
         expectRefused("AC-6 empty group in when", () -> Maps.scheme(1,
                 u8(0, "m"), Packbin.when(1, Packbin.eq(0, 1), Packbin.group(1))),
-                "empty group 1" + ONLY_A_BIT);
+                "empty group 1" + NEVER_SET);
         expectRefused("AC-6 empty group in repeat", () -> Maps.scheme(1,
                 Packbin.repeat(0, u8(0, "k"), Packbin.group(1))),
-                "empty group 1" + ONLY_A_BIT);
+                "empty group 1" + NEVER_SET);
         expectRefused("AC-6 empty group as list element", () -> Maps.scheme(1, Packbin.list(
                 Access.get("xs"), Access.set("xs"), Packbin.group(0))),
-                "empty group 0" + ONLY_A_BIT);
+                "empty group 0" + NEVER_SET);
         expectRefused("AC-6 empty nested row", () -> Maps.scheme(1, Packbin.group(Access.get("g"), Access.set("g"))),
                 "empty group" + ONLY_A_BIT);
     }
 
-    private static void emptyGroupAsFlagBitStillBuilds() {
-        expectBuilds("AC-6 empty group in flags", () -> Maps.scheme(1, Packbin.flags(0, Packbin.group(0))));
-        expectBuilds("AC-6 empty group as a flag byte bit", () -> {
+    /** AZ-2131 AC-1 (U3 A): group(anchor) with no fields has no accessor, so even as a bit it can never be set. */
+    private static void emptyGroupWithoutFieldsIsRefusedEverywhere() {
+        expectRefused("AZ-2131 AC-1 empty group at top level", () -> Maps.scheme(1, Packbin.group(0)),
+                "empty group 0" + NEVER_SET);
+        expectRefused("AZ-2131 AC-1 (was AC-6 builds) empty group in flags", () -> Maps.scheme(1,
+                Packbin.flags(0, Packbin.group(0))),
+                "empty group 0" + NEVER_SET);
+        expectRefused("AZ-2131 AC-1 empty group in flags after a member", () -> Maps.scheme(1,
+                Packbin.flags(0, u8(0, "a"), Packbin.group(1))),
+                "empty group 1" + NEVER_SET);
+        expectRefused("AZ-2131 AC-1 (was AC-6 builds) empty group as a flag byte bit", () -> {
             Field fb = Packbin.flagByte();
             return Maps.scheme(1, fb, fb.bit(Packbin.group(0)));
-        });
+        }, "empty group 0" + NEVER_SET);
+    }
+
+    /** AZ-2131 AC-2: an empty nested row's bit follows whether its member is present, so it stays allowed. */
+    private static void emptyNestedRowBitRoundTripsPresence() {
+        Scheme<Map> combined = Maps.scheme(1, Packbin.flags(0, Packbin.group(Access.get("g"), Access.set("g"))));
+        Field fb = Packbin.flagByte();
+        Scheme<Map> split = Maps.scheme(1, fb, fb.bit(Packbin.group(Access.get("g"), Access.set("g"))));
+        for (Object[] form : new Object[][] {{"flags", combined}, {"flag byte", split}}) {
+            String label = "AZ-2131 AC-2 empty nested row in " + form[0];
+            Scheme<Map> scheme = (Scheme<Map>) form[1];
+            PackbinTest.expectEq(label + " present {g: {}}", "0101",
+                    PackbinTest.toHex(BinaryPacker.pack(scheme, Maps.map("g", Map.of()))));
+            PackbinTest.expectEq(label + " present {g: {x: 1}}", "0101",
+                    PackbinTest.toHex(BinaryPacker.pack(scheme, Maps.map("g", Map.of("x", 1)))));
+            PackbinTest.expectEq(label + " absent", "0100", PackbinTest.toHex(BinaryPacker.pack(scheme, Maps.map())));
+            PackbinTest.expectEq(label + " 0101 member present", Maps.map("g", Map.of()), unpackOk(label + " 0101", scheme, "0101"));
+            PackbinTest.expectEq(label + " 0100 member absent", Map.of(), unpackOk(label + " 0100", scheme, "0100"));
+        }
     }
 
     private static Map unpackOk(String label, Scheme<Map> scheme, String hex) {
@@ -166,6 +195,20 @@ final class BoolPlacementTest {
         if (back[0] != null) {
             PackbinTest.expectEq("AC-7 split typed row hidden", Boolean.TRUE, back[0].hidden);
         }
+    }
+
+    /** AZ-2131 AC-3 (G3): only Boolean.TRUE sets the bit; 1 and "true" leave it clear and unpack has no member. */
+    private static void nonTrueValuesClearTheBit() {
+        Scheme<Map> combined = Maps.scheme(1, Packbin.flags(0, bool(0, "on")));
+        Field fb = Packbin.flagByte();
+        Scheme<Map> split = Maps.scheme(1, fb, fb.bit(bool(0, "on")));
+        for (Object value : new Object[] {1, "true"}) {
+            PackbinTest.expectEq("AZ-2131 AC-3 flags {on: " + value + "}", "0100",
+                    PackbinTest.toHex(BinaryPacker.pack(combined, Maps.map("on", value))));
+            PackbinTest.expectEq("AZ-2131 AC-3 flag byte {on: " + value + "}", "0100",
+                    PackbinTest.toHex(BinaryPacker.pack(split, Maps.map("on", value))));
+        }
+        PackbinTest.expectEq("AZ-2131 AC-3 unpack 0100 has no on", Map.of(), unpackOk("AZ-2131 AC-3 0100", combined, "0100"));
     }
 
     private static void combinedFormBitRuleUnchanged() {

@@ -31,6 +31,11 @@ Given the same nesting with `times` outer, and `repeat` inner, When packed and u
 **AC-3: matches C++**
 Given the AC-1 scheme in C++ with the same values, When packed, Then the same bytes
 
+**AC-4: nested row in a round (loop 12 assessment G2)**
+Given `repeat(0, group(get g, set g, u8(0, v)))` on a `Map` row
+When `{g:[{v:1},{v:2}]}` is packed and `010102` is unpacked
+Then the bytes are `010102`, `g == [{v:1},{v:2}]`, and `BinaryPacker.unpack` returns an error value (never throws) for any packet of this scheme. Today pack throws `0: expected int, got null` and unpack throws `IllegalArgumentException: expected map` (same before loop 12; AZ-2101's Excluded line points back to AZ-2089, which did not fix it).
+
 ## Constraints
 
 - ADR-001: Java only. Files stay at or under 500 lines.

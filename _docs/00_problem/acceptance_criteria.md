@@ -7,7 +7,7 @@ Outcomes only. Numbers are the pass line.
 - **AC-1.** Pack of type `64`, sid `1`, latitude `500000000`, longitude `300000000`, profile `1`, and motion flags clear yields exactly 13 bytes: `4001000065cd1d00a3e1110100`. Mismatched bytes: 0.
 - **AC-2.** Unpack of that hex yields those same five fields. Field mismatches: 0. Motion fields in the result: 0.
 - **AC-3.** On every shared golden fixture, the bytes from all six first-release languages are identical. Mismatched bytes: 0.
-- **AC-4.** A clear flags bit adds 0 bytes for that field. A set bit adds exactly that field's width. For a list whose bit 5 is a `uint16`, flags `0x20` add 2 bytes and flags `0x00` add 0 bytes.
+- **AC-4.** A clear flags bit adds 0 bytes for that field. A set bit adds exactly that field's width when its field is walked; a split bit inside a `when` that is not taken may be set and adds 0 bytes (owner decision 2026-10-05, vector `bitwhen`). For a list whose bit 5 is a `uint16`, flags `0x20` add 2 bytes and flags `0x00` add 0 bytes.
 - **AC-5.** A stored `0` is written, so that field's bit is set. Omission is the absence of the field, and the result does not substitute `0`.
 - **AC-6.** A conditional group whose tested field does not match adds 0 bytes. A match adds exactly that group's width.
 - **AC-7.** A repeated group that stops on a group boundary unpacks one value per complete group. A buffer that ends with 1 leftover byte returns an error and 0 values.

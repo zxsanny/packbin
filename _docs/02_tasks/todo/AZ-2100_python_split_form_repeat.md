@@ -52,7 +52,7 @@ TS starts each list empty.
 
 ### Excluded
 - Element row style for list/dict of group with attribute accessors (B14, user decision pending).
-- Positional alignment of optional members inside `repeat` (absent items are not appended, same as TS).
+- Positional alignment of optional members inside `repeat` (absent items are not appended, same as TS). Superseded 2026-10-05 (loop 12 U2, owner: aligned everywhere): AZ-2134 makes Python, TS and C# keep one entry per round.
 - Error labels (C15). Walker split (C21).
 
 ## Acceptance Criteria

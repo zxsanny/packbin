@@ -200,3 +200,34 @@ fn flag_byte_read_inside_a_when_is_not_seen_after_it() {
     let got = round_trip(&scheme, &vals, "010101010506");
     assert_eq!(got.get("4"), Some(&Some(Value::U8(6))));
 }
+
+// AZ-2133 / U4: a split bit inside a `when` that is not taken keeps its bit (`bitwhen` vector).
+
+fn bitwhen_scheme() -> MapScheme {
+    let m = flag_byte("m");
+    MapScheme::new(
+        1,
+        vec![
+            u8("k"),
+            m.byte(),
+            when(2, eq("k", Value::U8(1)), vec![m.bit(u8("v"))]),
+        ],
+    )
+}
+
+#[test]
+fn bitwhen_untaken_when_keeps_the_bit_and_skips_the_value() {
+    let vals = values(&[("k", Value::U8(0)), ("v", Value::U8(5))]);
+    let got = round_trip(&bitwhen_scheme(), &vals, "010001");
+    assert_eq!(got.get("k"), Some(&Some(Value::U8(0))));
+    assert_eq!(got.get("m"), Some(&Some(Value::U8(1))));
+    assert_eq!(got.get("v"), None);
+}
+
+#[test]
+fn bitwhen_taken_when_round_trips() {
+    let vals = values(&[("k", Value::U8(1)), ("v", Value::U8(5))]);
+    let got = round_trip(&bitwhen_scheme(), &vals, "01010105");
+    assert_eq!(got.get("k"), Some(&Some(Value::U8(1))));
+    assert_eq!(got.get("v"), Some(&Some(Value::U8(5))));
+}

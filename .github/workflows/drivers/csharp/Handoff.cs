@@ -112,6 +112,24 @@ static class Handoff
 
     static readonly Scheme<BoolFlagRow> BoolFlagScheme = new(1, Field.Flags(0, Field.Bool<BoolFlagRow>(0, x => x.On)));
 
+    sealed class BitWhenRow
+    {
+        public byte K { get; set; }
+        public byte? V { get; set; }
+    }
+
+    // u8 k; split flag byte m; when (k == 1) { m.bit(u8 v) }. The bit follows the row even when the when is not taken.
+    static readonly Scheme<BitWhenRow> BitWhenScheme = BitWhen();
+
+    static Scheme<BitWhenRow> BitWhen()
+    {
+        var m = Field.FlagByte();
+        return new Scheme<BitWhenRow>(1,
+            Field.U8<BitWhenRow>(0, x => x.K),
+            m,
+            Field.When(1, Condition.Eq(0, 1), m.Bit(Field.U8<BitWhenRow>(1, x => x.V))));
+    }
+
     static readonly byte[] SessionSeed = Enumerable.Range(1, 32).Select(i => (byte)i).ToArray();
     static readonly byte[] SessionNonce = Convert.FromHexString("01000000000000000000000000000000");
 
@@ -132,6 +150,9 @@ static class Handoff
                 return PackSessionOpener();
             case "pack-boolflag":
                 Console.WriteLine(Convert.ToHexString(BinaryPacker.Pack(BoolFlagScheme, new BoolFlagRow { On = false })).ToLowerInvariant());
+                return 0;
+            case "pack-bitwhen":
+                Console.WriteLine(Convert.ToHexString(BinaryPacker.Pack(BitWhenScheme, new BitWhenRow { K = 0, V = 5 })).ToLowerInvariant());
                 return 0;
             case "pack-booltrue":
                 Console.WriteLine(Convert.ToHexString(BinaryPacker.Pack(BoolFlagScheme, new BoolFlagRow { On = true })).ToLowerInvariant());
@@ -156,6 +177,10 @@ static class Handoff
                 if (args.Length < 2)
                     return 2;
                 return UnpackBoolFlag(args[1], expectOn: true);
+            case "unpack-bitwhen":
+                if (args.Length < 2)
+                    return 2;
+                return UnpackBitWhen(args[1]);
             default:
                 return 2;
         }
@@ -207,6 +232,23 @@ static class Handoff
             var wanted = expectOn ? "true" : "absent or false";
             var got = row.On switch { true => "true", false => "false", null => "absent" };
             Console.Error.WriteLine($"{command}: on is {got}, expected {wanted}");
+            return 1;
+        }
+        return 0;
+    }
+
+    static int UnpackBitWhen(string hex)
+    {
+        BitWhenRow? row = null;
+        var err = BinaryPacker.Unpack(Convert.FromHexString(hex), BitWhenScheme.On(v => row = v));
+        if (err is not null || row is null)
+        {
+            Console.Error.WriteLine($"unpack-bitwhen: not ok ({err?.GetType().Name ?? "no row"})");
+            return 1;
+        }
+        if (row.K != 0 || row.V is not null)
+        {
+            Console.Error.WriteLine($"unpack-bitwhen: k = {row.K}, v = {row.V?.ToString() ?? "absent"}; expected k = 0 and no v");
             return 1;
         }
         return 0;

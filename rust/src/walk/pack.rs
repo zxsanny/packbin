@@ -245,6 +245,7 @@ fn pack_one(
         FieldKind::Repeat { members, .. } => {
             let groups = match values.get("__repeat__") {
                 Some(Some(Value::Groups(g))) => g.as_slice(),
+                Some(Some(_)) => return Err(PackError::Type("__repeat__".to_string())),
                 _ => &[],
             };
             for group in groups {

@@ -50,10 +50,12 @@ Divergence recorded at the batch commit: review fix rounds widened the C#, Java 
 - rust: `field/{mod,order}.rs`, `scheme/mod.rs`, `walk/{pack,unpack,element}.rs`, `lib.rs`, `hostile_tests.rs`, `element_tests.rs` (edit); `field/{shape,map_scheme}.rs`, `flag_bits_tests.rs`, `flag_presence_tests.rs` (new)
 - java: `Containers.java`, `Field.java`, `SchemeOrder.java`, `VarFields.java`, `Walker.java` (edit); `Rounds.java` (new); tests `BoolPlacementTest`, `ReferenceScopeTest`, `RepeatRoundTest` (new), `FlagStateTest`, `HostileUnpackTest`, `HostileVectorTest`, `PackbinTest`, `ZeroWidthElementTest` (edit)
 - shared: `.github/workflows/language-pair.sh`, all six `drivers/` handoffs, `README.md`, `fixtures/hostile/README.md`
+- batch 2: `typescript/src/index.ts`; `csharp/Field.cs`; `java/.../SchemeOrder.java`, `Walker.java`; `python/src/packbin/_nodes.py`; `rust/src/{lib.rs, walk/mod.rs, walk/pack.rs, field/shape.rs}`; tests incl. new `scheme-constructor.test.ts`, `EmptyGroupTests.cs`, `round_tests.rs`, C++ `grouped_tests.cpp`; `_docs/00_problem/acceptance_criteria.md` (AC-4)
 
 ### Order of work
 1. Batch 1: C#, TypeScript, Rust, Java workers in parallel; Python by the parent
 2. Fresh-reviewer pass per package group; owner decisions; fix round 2 (all five packages); re-review of C#, Java, Rust; Java fix round 3
+3. Batch 2 (assessment round 1, AZ-2129..AZ-2133): TypeScript `Scheme` constructor checks; C#, Java, Python refuse empty groups that can never set their bit; non-`true` pins; `bitwhen` ring (C#, TS, Rust, Java, C++); Rust exports map `pack` / `unpack` and refuses data-losing nested rounds; project AC-4 reworded
 
 ### Proof
 - Each package's new bool/flag tests (red before, green after), hostile construct vectors, `language-pair.sh` `boolflag` + `booltrue` rings
@@ -61,3 +63,9 @@ Divergence recorded at the batch commit: review fix rounds widened the C#, Java 
 
 ### Risks
 - Wire change for `bool false` in C#, TypeScript and Rust map schemes (README upgrade note); Java unpack of `repeat`/`times` now returns per-round aligned lists
+
+## Assessment rounds
+
+| round | verdict | new specs | report |
+|-------|---------|-----------|--------|
+| 1 | CLARIFY (owner answered U1–U4: all A; scope: bool follow-through only) | AZ-2129, AZ-2130, AZ-2131, AZ-2132, AZ-2133 (this loop); deferred AZ-2134, AZ-2135; AZ-2127 / AZ-2128 extended (G2, G6) | _docs/loops/loop12/assessment12.md |

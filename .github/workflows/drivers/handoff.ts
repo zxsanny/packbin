@@ -3,6 +3,8 @@ import {
   PackSession,
   bool,
   dict,
+  eq,
+  flagByte,
   flags,
   i16,
   i32,
@@ -11,6 +13,7 @@ import {
   u8,
   u16,
   utf8,
+  when,
 } from "../../../typescript/src/index.ts";
 
 type UserRow = {
@@ -74,6 +77,20 @@ function unpackBoolFlag(cmdName: string, hex: string): BoolFlagRow {
   }
   return row;
 }
+
+type BitWhenRow = { k: number; v?: number };
+
+// A split bit inside a when that is not taken: the bit comes from the row (01), the when is
+// tested first on unpack, so v is never read. {k:0, v:5} packs 010001.
+const bitWhenFlag = flagByte("m");
+const bitWhenPacket = scheme<BitWhenRow>(
+  1,
+  u8(0, (r) => r.k),
+  bitWhenFlag,
+  when(1, eq(0, 1), [bitWhenFlag.bit(u8(1, (r) => r.v))]),
+);
+
+const bitWhenValues: BitWhenRow = { k: 0, v: 5 };
 
 const userValues: UserRow = {
   username: "zxsanny",
@@ -182,6 +199,12 @@ if (cmd === "pack-booltrue") {
   process.exit(0);
 }
 
+if (cmd === "pack-bitwhen") {
+  const bytes = BinaryPacker.pack(bitWhenPacket, bitWhenValues);
+  process.stdout.write(Buffer.from(bytes).toString("hex") + "\n");
+  process.exit(0);
+}
+
 if (cmd === "unpack-user") {
   const hex = process.argv[3] ?? "";
   const bytes = Buffer.from(hex, "hex");
@@ -217,6 +240,25 @@ if (cmd === "unpack-booltrue") {
   const row = unpackBoolFlag(cmd, process.argv[3] ?? "");
   if (row.on !== true) {
     process.stderr.write(`unpack-booltrue: on is ${String(row.on)}, expected true\n`);
+    process.exit(1);
+  }
+  process.exit(0);
+}
+
+if (cmd === "unpack-bitwhen") {
+  const bytes = Buffer.from(process.argv[3] ?? "", "hex");
+  let row: BitWhenRow | undefined;
+  const result = BinaryPacker.unpack(bytes, bitWhenPacket.on((value) => {
+    row = value as BitWhenRow;
+  }));
+  if (!result.ok || row === undefined) {
+    process.stderr.write(`unpack-bitwhen: ${JSON.stringify(result)}\n`);
+    process.exit(1);
+  }
+  if (row.k !== 0 || "v" in row) {
+    process.stderr.write(
+      `unpack-bitwhen: k is ${String(row.k)}, v is ${String(row.v)}; expected k 0, no v\n`,
+    );
     process.exit(1);
   }
   process.exit(0);

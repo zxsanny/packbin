@@ -136,6 +136,15 @@ struct BoolFlag {
 constexpr auto boolflag_scheme =
     packbin::scheme<BoolFlag>(1, packbin::flags(0, packbin::boolean<&BoolFlag::on>(0)));
 
+struct BitWhen {
+  std::uint8_t k = 0;
+  packbin::Opt<std::uint8_t> v;
+};
+
+constexpr auto bitwhen_scheme = packbin::scheme<BitWhen>(
+    1, packbin::u8<&BitWhen::k>(0), packbin::flag_byte(0),
+    packbin::when(1, packbin::eq(0, 1), packbin::flag_bit(0, packbin::u8<&BitWhen::v>(1))));
+
 constexpr std::size_t kMax = 512;
 
 std::size_t parse_hex(std::string const& hex, std::uint8_t* out) {
@@ -204,6 +213,13 @@ bool booltrue_ok(std::uint8_t const* data, std::size_t len) {
   return got.on.has && got.on.value;
 }
 
+bool bitwhen_ok(std::uint8_t const* data, std::size_t len) {
+  BitWhen got;
+  if (!packbin::unpack(bitwhen_scheme, data, len, got).ok())
+    return false;
+  return got.k == 0 && !got.v.has;
+}
+
 bool session_ok(std::uint8_t* data, std::size_t len) {
   packbin::PackSession waiter;
   Position got;
@@ -234,6 +250,11 @@ int main(int argc, char** argv) {
     row.on = true;
     return print(packbin::pack(boolflag_scheme, row, buf, sizeof(buf)), buf);
   }
+  if (cmd == "pack-bitwhen") {
+    BitWhen row;
+    row.v = 5;
+    return print(packbin::pack(bitwhen_scheme, row, buf, sizeof(buf)), buf);
+  }
   if (cmd == "pack-session") {
     packbin::PackSession opener;
     if (!open_session(opener, true))
@@ -251,6 +272,8 @@ int main(int argc, char** argv) {
     return boolflag_ok(buf, len) ? 0 : 1;
   if (cmd == "unpack-booltrue")
     return booltrue_ok(buf, len) ? 0 : 1;
+  if (cmd == "unpack-bitwhen")
+    return bitwhen_ok(buf, len) ? 0 : 1;
   if (cmd == "unpack-session")
     return session_ok(buf, len) ? 0 : 1;
   return 2;

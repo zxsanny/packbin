@@ -1,5 +1,6 @@
 use packbin::{
-    flags, i16, to_hex, u16, u8, BinaryPacker, BoundField, PackSession, Scheme, SchemeItem,
+    eq, flag_byte, flags, i16, insert, pack, to_hex, u16, u8, unpack, when, BinaryPacker,
+    BoundField, MapScheme, PackSession, Scheme, SchemeItem, Value, Values,
 };
 use std::collections::BTreeMap;
 use std::process::ExitCode;
@@ -135,6 +136,64 @@ fn pack_boolflag(on: bool) -> u8 {
     0
 }
 
+/// `u8 k`, split flag byte `m`, `when(k == 1)` holding `m.bit(u8 v)`: the bit of `v` is set
+/// from the row even when the `when` is not taken.
+fn bitwhen_scheme() -> MapScheme {
+    let m = flag_byte("m");
+    MapScheme::new(
+        1,
+        vec![
+            u8("k"),
+            m.byte(),
+            when(2, eq("k", Value::U8(1)), vec![m.bit(u8("v"))]),
+        ],
+    )
+}
+
+fn pack_bitwhen() -> u8 {
+    let mut values = Values::new();
+    insert(&mut values, "k", Some(Value::U8(0)));
+    insert(&mut values, "v", Some(Value::U8(5)));
+    match pack(&bitwhen_scheme(), &values) {
+        Ok(bytes) => {
+            println!("{}", to_hex(&bytes));
+            0
+        }
+        Err(err) => {
+            eprintln!("pack-bitwhen: {err:?}");
+            1
+        }
+    }
+}
+
+/// Exit 0 when `hex` unpacks with `k == 0` and no `v`.
+fn unpack_bitwhen(hex: Option<&String>) -> u8 {
+    let Some(hex) = hex else {
+        eprintln!("unpack-bitwhen: missing hex argument");
+        return 1;
+    };
+    let Some(raw) = from_hex(hex) else {
+        eprintln!("unpack-bitwhen: {hex:?} is not hex");
+        return 1;
+    };
+    match unpack(&bitwhen_scheme(), &raw) {
+        Ok(values) => {
+            let k = values.get("k").cloned().flatten();
+            let v = values.get("v").cloned().flatten();
+            if k == Some(Value::U8(0)) && v.is_none() {
+                0
+            } else {
+                eprintln!("unpack-bitwhen: k = {k:?}, v = {v:?}, expected k = 0 and no v");
+                1
+            }
+        }
+        Err(err) => {
+            eprintln!("unpack-bitwhen: {err:?}");
+            1
+        }
+    }
+}
+
 #[derive(Default, Debug, PartialEq)]
 struct Position {
     sid: u16,
@@ -258,6 +317,8 @@ fn run(args: &[String]) -> u8 {
         "pack-boolflag" => pack_boolflag(false),
         "unpack-boolflag" => unpack_boolflag(cmd, args.get(1), false),
         "pack-booltrue" => pack_boolflag(true),
+        "pack-bitwhen" => pack_bitwhen(),
+        "unpack-bitwhen" => unpack_bitwhen(args.get(1)),
         "unpack-booltrue" => unpack_boolflag(cmd, args.get(1), true),
         "unpack-user" => {
             let Some(hex) = args.get(1) else {

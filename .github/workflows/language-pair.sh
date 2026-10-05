@@ -10,6 +10,9 @@ session_hex="b55d0a29c56c203712b241232e"
 # flags { bool on }: the bit is set only for true (README, bool).
 boolflag_hex="0100"
 booltrue_hex="0101"
+# u8 k; split flag byte m; when(k == 1) { m.bit(u8 v) }, row {k:0, v:5}: the bit is set although the
+# when is not taken, and unpack never reads it (project AC-4). Python joins with its split form (AZ-2100).
+bitwhen_hex="010001"
 
 run_lang() {
   local lang="$1"
@@ -41,7 +44,8 @@ run_lang() {
       ;;
     java)
       local out="${PACKBIN_JAVA_HANDOFF:-/tmp/packbin-handoff-java}"
-      if [ ! -f "$out/Handoff.class" ]; then
+      # Rebuild when the driver or any package source is newer than the last build.
+      if [ ! -f "$out/Handoff.class" ] || [ -n "$(find "$root/java/src/main/java" "$drivers/Handoff.java" -newer "$out/Handoff.class" -print -quit)" ]; then
         rm -rf "$out"
         mkdir -p "$out"
         local sources=()
@@ -100,6 +104,12 @@ handoff python rust booltrue "$booltrue_hex"
 handoff rust java booltrue "$booltrue_hex"
 handoff java cpp booltrue "$booltrue_hex"
 handoff cpp csharp booltrue "$booltrue_hex"
+
+handoff csharp typescript bitwhen "$bitwhen_hex"
+handoff typescript rust bitwhen "$bitwhen_hex"
+handoff rust java bitwhen "$bitwhen_hex"
+handoff java cpp bitwhen "$bitwhen_hex"
+handoff cpp csharp bitwhen "$bitwhen_hex"
 
 for lang in csharp typescript python rust cpp java; do
   got="$(run_lang "$lang" "pack-session" | tr -d '[:space:]')"

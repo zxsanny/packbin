@@ -187,6 +187,7 @@ public sealed class Field
         var access = MemberAccess.From(accessor);
         if (!IsNestedRow<TChild>())
             throw new ArgumentException("continuing group requires an anchor");
+        RequirePresenceMember<TChild>(access.Name, fields);
         return new Field(Kind.Group, -1, access.Name, children: fields, nestedRow: true);
     }
 
@@ -195,7 +196,18 @@ public sealed class Field
         var access = MemberAccess.From(accessor);
         if (IsNestedRow<TChild>())
             throw new ArgumentException("nested group does not take an anchor");
+        RequirePresenceMember<TChild>(access.Name, fields);
         return new Field(Kind.Group, anchor, access.Name, children: fields, nestedRow: false);
+    }
+
+    // An empty group is a presence bit, set only for true; bound to anything but a bool it could never be set.
+    private static void RequirePresenceMember<TChild>(string name, Field[] fields)
+    {
+        var member = Nullable.GetUnderlyingType(typeof(TChild)) ?? typeof(TChild);
+        if (fields.Length > 0 || member == typeof(bool))
+            return;
+        throw new ArgumentException(
+            $"empty group '{name}' binds a {member.Name}, so its flag bit could never be set; give it fields or bind a bool or bool? member");
     }
 
     public static Field List<T, TProp>(Expression<Func<T, TProp>> accessor, Field element)

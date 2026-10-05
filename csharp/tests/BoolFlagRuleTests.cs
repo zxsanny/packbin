@@ -153,6 +153,25 @@ public class BoolFlagRuleTests
         Assert.Equal(unpacked, UnpackRow(scheme, raw).Mark);
     }
 
+    public static TheoryData<object> NotTrueValues() => new() { 1, "true" };
+
+    [Theory]
+    [MemberData(nameof(NotTrueValues))]
+    public void DictionaryValueOtherThanTrue_ClearsTheBit(object value)
+    {
+        // Arrange
+        var scheme = new Scheme<MaybeRow>(1, Field.Flags(0, Field.Bool<MaybeRow>(0, x => x.Straight)));
+
+        // Act
+        var raw = BinaryPacker.Pack(scheme, new Dictionary<string, object?> { ["Straight"] = value });
+        var got = BinaryPacker.Read(scheme, raw);
+
+        // Assert
+        Assert.Equal("0100", Hex(raw));
+        Assert.Null(got.Error);
+        Assert.False(got.Values.ContainsKey("Straight"));
+    }
+
     public static TheoryData<string, Func<Scheme<PlacedRow>>> BoolOutsideFlags() => new()
     {
         { "top level", () => new Scheme<PlacedRow>(1, Field.Bool<PlacedRow>(0, x => x.On)) },

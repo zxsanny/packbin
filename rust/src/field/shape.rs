@@ -14,21 +14,36 @@ const FLAG_BITS: usize = 8;
 ///   in the same scope (the top level, or one `repeat` / `times` round or `list` / `dict`
 ///   element), outside any part that may not run (`when`, a `flags` member, a flag bit). Its
 ///   position is its order among the bits of that read.
+/// - No `repeat` inside a `repeat` or `times` round, and no `times` inside a `times` round, at
+///   any depth: unpack keeps no inner `repeat` rounds, and a `times` round passes no values to
+///   an inner `times`. A `times` inside a `repeat` round works. A `list` or `dict` element
+///   starts outside any round.
 pub(crate) fn check_shape(fields: &mut [Field]) -> usize {
-    let mut flags = FlagBytes::default();
-    shape_seq(fields, false, &mut flags);
-    flags.bits.len()
+    let mut scope = Scope::default();
+    shape_seq(fields, false, &mut scope);
+    scope.bits.len()
 }
 
+#[derive(Clone, Copy, Default, PartialEq)]
+enum Round {
+    #[default]
+    None,
+    Repeat,
+    Times,
+}
+
+/// What the shape pass knows at one point of the scheme.
 #[derive(Default)]
-struct FlagBytes {
+struct Scope {
     /// Flag bytes this point can see: name and slot, latest last.
     visible: Vec<(Name, usize)>,
     /// Bits bound so far to each flag byte read, by slot (one slot per read in the scheme).
     bits: Vec<u8>,
+    /// The innermost `repeat` or `times` round around this point.
+    round: Round,
 }
 
-impl FlagBytes {
+impl Scope {
     fn read(&mut self, name: &Name) -> usize {
         let slot = self.bits.len();
         self.bits.push(0);
@@ -62,22 +77,45 @@ impl FlagBytes {
         self.visible.truncate(mark);
     }
 
-    /// A container with its own values, which sees none of the flag bytes around it.
-    fn nested(&mut self, run: impl FnOnce(&mut Self)) {
+    /// A container with its own values, which sees none of the flag bytes around it: a round
+    /// or a `list` / `dict` element (`Round::None`).
+    fn nested(&mut self, round: Round, run: impl FnOnce(&mut Self)) {
         let outer = std::mem::take(&mut self.visible);
+        let outer_round = std::mem::replace(&mut self.round, round);
         run(self);
         self.visible = outer;
+        self.round = outer_round;
+    }
+
+    fn enter_repeat(&mut self, anchor: u32, run: impl FnOnce(&mut Self)) {
+        if self.round != Round::None {
+            panic!(
+                "repeat at id {anchor} is inside a repeat or times round; a round keeps no inner \
+                 repeat rounds"
+            );
+        }
+        self.nested(Round::Repeat, run);
+    }
+
+    fn enter_times(&mut self, anchor: u32, run: impl FnOnce(&mut Self)) {
+        if self.round == Round::Times {
+            panic!(
+                "times at id {anchor} is inside a times round; a times round passes no values to \
+                 an inner times"
+            );
+        }
+        self.nested(Round::Times, run);
     }
 }
 
 /// `presence_ok`: the fields are direct children of `flags` or of a flag bit.
-fn shape_seq(fields: &mut [Field], presence_ok: bool, flags: &mut FlagBytes) {
+fn shape_seq(fields: &mut [Field], presence_ok: bool, flags: &mut Scope) {
     for field in fields {
         shape_one(field, presence_ok, flags);
     }
 }
 
-fn shape_one(field: &mut Field, presence_ok: bool, flags: &mut FlagBytes) {
+fn shape_one(field: &mut Field, presence_ok: bool, flags: &mut Scope) {
     match &mut field.kind {
         FieldKind::Group {
             anchor, members, ..
@@ -114,11 +152,16 @@ fn shape_one(field: &mut Field, presence_ok: bool, flags: &mut FlagBytes) {
         FieldKind::When { members, .. } => {
             flags.conditional(|f| shape_seq(members, false, f));
         }
-        FieldKind::Repeat { members, .. } | FieldKind::Times { members, .. } => {
-            flags.nested(|f| shape_seq(members, false, f));
+        FieldKind::Repeat { anchor, members } => {
+            flags.enter_repeat(*anchor, |f| shape_seq(members, false, f));
+        }
+        FieldKind::Times {
+            anchor, members, ..
+        } => {
+            flags.enter_times(*anchor, |f| shape_seq(members, false, f));
         }
         FieldKind::List { element, .. } | FieldKind::Dict { element, .. } => {
-            flags.nested(|f| shape_one(element, false, f));
+            flags.nested(Round::None, |f| shape_one(element, false, f));
         }
         FieldKind::Int { .. }
         | FieldKind::Float { .. }

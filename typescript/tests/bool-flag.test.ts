@@ -69,6 +69,13 @@ describe("bool presence and the 8-bit flag limit", () => {
     assert.equal("on" in back, false)
   })
 
+  it("bool values other than true leave the bit clear", () => {
+    const layout = scheme<Row>(1, flags(0, [bool(0, (x) => x.on)]))
+    assert.equal(hex(BinaryPacker.pack(layout, { on: 1 })), "0100")
+    assert.equal(hex(BinaryPacker.pack(layout, { on: "yes" })), "0100")
+    assert.equal("on" in unpackRow(layout, "0100"), false)
+  })
+
   it("split form bool false", () => {
     const m = flagByte("m")
     const layout = scheme<Row>(1, m, m.bit(bool(0, (x) => x.on)))
@@ -124,7 +131,12 @@ describe("bool presence and the 8-bit flag limit", () => {
     rejects(() => scheme<Row>(1, u8(0, (x) => x.n), group((x) => x.mark, [])), "mark")
     const m = flagByte("m")
     rejects(
-      () => scheme<Row>(1, m, m.bit(group((x) => x.g, [u8(0, (x) => x.n), group((x) => x.inner, [])]))),
+      () =>
+        scheme<Row>(
+          1,
+          m,
+          m.bit(group((x) => x.g, [u8(0, (x) => x.n), group((x) => x.inner, [])])),
+        ),
       "inner",
     )
   })

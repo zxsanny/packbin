@@ -58,9 +58,17 @@ export class Scheme<T> {
   readonly typeNumber: number
   readonly fields: Field[]
 
+  // Every check runs here, so `new Scheme(...)` refuses what `scheme(...)` refuses.
   constructor(typeNumber: number, fields: Field[]) {
+    if (!Number.isInteger(typeNumber) || typeNumber < 0 || typeNumber > 255) {
+      throw new RangeError("type number: expected 0..255")
+    }
+    validateFieldIds(fields)
+    const flat = flatten(fields)
+    validateFlagScopes(flat)
+    validatePresenceMarks(flat)
     this.typeNumber = typeNumber
-    this.fields = fields
+    this.fields = flat
   }
 
   on(handler: (row: T) => void): SchemeHandler<T> {
@@ -69,14 +77,7 @@ export class Scheme<T> {
 }
 
 export function scheme<T>(typeNumber: number, ...fields: Field[]): Scheme<T> {
-  if (!Number.isInteger(typeNumber) || typeNumber < 0 || typeNumber > 255) {
-    throw new RangeError("type number: expected 0..255")
-  }
-  validateFieldIds(fields)
-  const flat = flatten(fields)
-  validateFlagScopes(flat)
-  validatePresenceMarks(flat)
-  return new Scheme(typeNumber, flat)
+  return new Scheme(typeNumber, fields)
 }
 
 export class BinaryPacker {

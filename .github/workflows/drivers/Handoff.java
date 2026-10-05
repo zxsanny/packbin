@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import packbin.Access;
 import packbin.BinaryPacker;
+import packbin.Field;
 import packbin.PackSession;
 import packbin.Packbin;
 import packbin.Scheme;
@@ -22,11 +23,13 @@ public final class Handoff {
             case "pack-nested" -> System.out.println(hex(BinaryPacker.pack(nestedScheme(), nestedValues())));
             case "pack-boolflag" -> System.out.println(hex(BinaryPacker.pack(boolFlagScheme(), boolFlagValues(false))));
             case "pack-booltrue" -> System.out.println(hex(BinaryPacker.pack(boolFlagScheme(), boolFlagValues(true))));
+            case "pack-bitwhen" -> System.out.println(hex(BinaryPacker.pack(bitWhenScheme(), bitWhenValues())));
             case "pack-session" -> System.exit(packSession());
             case "unpack-user" -> System.exit(userOk(requireHex(args)) ? 0 : 1);
             case "unpack-nested" -> System.exit(nestedOk(requireHex(args)) ? 0 : 1);
             case "unpack-boolflag" -> System.exit(boolFlagOk(requireHex(args), false) ? 0 : 1);
             case "unpack-booltrue" -> System.exit(boolFlagOk(requireHex(args), true) ? 0 : 1);
+            case "unpack-bitwhen" -> System.exit(bitWhenOk(requireHex(args)) ? 0 : 1);
             case "unpack-session" -> System.exit(sessionOk(requireHex(args)) ? 0 : 1);
             default -> System.exit(2);
         }
@@ -166,6 +169,44 @@ public final class Handoff {
         }
         if (Boolean.TRUE.equals(got[0].get("on")) != on) {
             System.err.println(cmd + ": on is " + got[0].get("on") + ", expected " + (on ? "true" : "absent or false"));
+            return false;
+        }
+        return true;
+    }
+
+    /** u8 k, split flag byte m, when(k == 1) { m.bit(u8 v) }: the bit follows the row even when the when is not taken. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Scheme<Map> bitWhenScheme() {
+        Field m = Packbin.flagByte();
+        return new Scheme<>(
+                1,
+                (Class) Map.class,
+                Packbin.u8(0, Access.get("k"), Access.set("k")),
+                m,
+                Packbin.when(1, Packbin.eq(0, 1), m.bit(Packbin.u8(1, Access.get("v"), Access.set("v")))));
+    }
+
+    private static Map<String, Object> bitWhenValues() {
+        Map<String, Object> values = new HashMap<>();
+        values.put("k", 0);
+        values.put("v", 5);
+        return values;
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static boolean bitWhenOk(String hex) {
+        Map[] got = new Map[1];
+        Object err = BinaryPacker.unpack(parse(hex), bitWhenScheme().on(row -> got[0] = row));
+        if (err != null || got[0] == null) {
+            System.err.println("unpack-bitwhen: not ok (" + (err == null ? "no row" : err.getClass().getSimpleName()) + ")");
+            return false;
+        }
+        if (!Integer.valueOf(0).equals(asInt(got[0].get("k")))) {
+            System.err.println("unpack-bitwhen: k is " + got[0].get("k") + ", expected 0");
+            return false;
+        }
+        if (got[0].get("v") != null) {
+            System.err.println("unpack-bitwhen: v is " + got[0].get("v") + ", expected absent");
             return false;
         }
         return true;

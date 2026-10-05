@@ -134,6 +134,7 @@ AC-1, AC-2, AC-4 and AC-5 must fail first.
 
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
+| Loop 12 (AZ-2131 AC-2, owner 2026-10-05: accept the dependency): an empty nested row `group(get, set)` under a flag bit round-trips presence for Map rows; for typed rows it hits Defect 1 like every nested row. Add the typed empty-nested-row case to this task's tests | coordinator | open | Low |
 | Public API change: new `Packbin.group(Getter, Setter, Supplier<?>, Field...)` overload, approved in the bug-fix plan (task 32 / C19). Must be noted in the README Java section and release notes. | user (plan 2026-10-05) | accepted-risk | Medium |
 | Whether the old overload on a typed row should fail at construction (AC-2) or be allowed when the member is pre-initialized (Risk 1). | user | open | Medium |
 | Defect 3 (row-typed list elements) was found by code reading, not probed. The AC-5 test must first be run on the current code to confirm the failure. | implementer | open | Low |

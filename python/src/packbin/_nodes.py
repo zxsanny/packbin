@@ -407,6 +407,8 @@ def _validate_order(nodes: Sequence[_Node], next_id: int = 0, flag_bits: bool = 
             raise ValueError(
                 f"field id {node.field_id}: bool is allowed only as a direct child of flags or a flag-byte bit"
             )
+        if isinstance(node, _Group) and not node.fields:
+            raise ValueError(f"group {node.anchor} has no fields, so it can never carry a value")
         if isinstance(node, (_Scalar, _Bytes, _Bool, _Utf8, _Sized, _Bits, _Packed)):
             if node.field_id != next_id:
                 raise ValueError(f"field id {node.field_id} is not the next order {next_id}")

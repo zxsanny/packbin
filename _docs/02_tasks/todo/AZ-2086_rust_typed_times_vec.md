@@ -153,6 +153,7 @@ Add these first; AC-1, AC-2 (count 1 unpack), AC-4 and AC-5 fail today.
 
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
+| Loop 12 (AZ-2133 discovery, Rust map): a `repeat` / `times` inside a `list` / `dict` group element builds but does not work — the map walker passes a group element only its own name: `list("L", group(0,"g",[repeat(0,[u8 "0"])]))` with `L=[1]` packs `010100` (item ignored), unpack fails `Short`; a `times` in a dict group element fails pack `Missing`. Refuse a non-empty group as a map element or fix it with the per-round rows here | coordinator | open | Medium |
 | Public API change: `SchemeItem::times(anchor, count_id, members)` → a form with `Vec<E>` get/set and element items for `E` (exact name/signature chosen by the implementer, documented in README) | user decision 2026-10-05 ("fix it") | resolved | Medium |
 | Typed `repeat`, `u2`, flag byte and generic list/dict remain unbindable in Rust | C18 (undecided) | open | Medium |
 | `times` nested in a `times` element is refused at construction (no AC requires it) | refactor owner | accepted-risk | Low |

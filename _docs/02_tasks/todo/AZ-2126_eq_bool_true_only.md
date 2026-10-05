@@ -66,4 +66,5 @@ Then `scheme_error`
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Written from loop 12 review findings; refine before the loop that takes it | coordinator | open | Low |
-| A count naming a `bool` builds in Java and C++ (C++ `read_int` reads it as 0/1) but Java pack/unpack fail and TS/Python refuse at pack. Decide here: refuse a bool count everywhere, or read it as 0/1 everywhere | coordinator | open | Low |
+| Loop 12 assessment G3: also pin that a non-`true` value (`1`, `"yes"`) clears the bit — done for TS/C#/Java/Python in AZ-2129..AZ-2132 | coordinator | resolved | Low |
+| A count naming a `bool` builds in Java and C++ (C++ `read_int` reads it as 0/1) but Java pack/unpack fail, TS refuses at pack, and Python packs and round-trips it when the bool is true (`010161`) but fails when it is false or absent. Decide here: refuse a bool count everywhere, or read it as 0/1 everywhere | coordinator | open | Low |

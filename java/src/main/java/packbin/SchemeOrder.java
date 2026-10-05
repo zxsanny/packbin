@@ -10,6 +10,7 @@ final class SchemeOrder {
 
     private static final String NOT_EARLIER = ", which is not an earlier integer or bool field in its scope";
     private static final String ONLY_A_BIT = " is allowed only as a bit of flags or a flagByte";
+    private static final String NEVER_SET = " has no fields and no accessor, so its bit can never be set";
     private static final String NESTED_ROUND =
             " is inside a repeat or times round; a round cannot hold another repeat or times";
 
@@ -69,7 +70,8 @@ final class SchemeOrder {
     /**
      * {@code earlier} holds the ids of the integer and bool fields read before this field in its scope. {@code isBit} is true only for
      * the direct payload of a flags bit or a flagByte bit: a bool or an empty group is a presence bit and
-     * nothing else (C++ {@code check_shape}).
+     * nothing else (C++ {@code check_shape}). An empty anchored group has no accessor, so its bit could never be
+     * set: it is refused wherever it stands. An empty nested row sets its bit when its member is present.
      */
     private static void walk(Field field, Set<Integer> earlier, int[] next, boolean isBit, boolean inRound) {
         switch (field.kind) {
@@ -100,9 +102,11 @@ final class SchemeOrder {
                 walkScope(field.children, next, true);
             }
             case GROUP -> {
+                if (field.children.isEmpty() && !field.nestedRow) {
+                    throw new IllegalArgumentException("empty group " + field.id + NEVER_SET);
+                }
                 if (field.children.isEmpty() && !isBit) {
-                    throw new IllegalArgumentException(
-                            "empty group" + (field.id >= 0 ? " " + field.id : "") + ONLY_A_BIT);
+                    throw new IllegalArgumentException("empty group" + ONLY_A_BIT);
                 }
                 if (field.nestedRow) {
                     walkScope(field.children, new int[] {0}, inRound);

@@ -186,4 +186,34 @@ describe("split flag bit scope", () => {
       ),
     )
   })
+
+  // Shared bitwhen vector: the bit comes from the row even when the when is not taken; unpack
+  // tests the when first and never reads that bit.
+  it("split bit inside an untaken when keeps its bit (bitwhen)", () => {
+    const m = flagByte("m")
+    const layout = scheme<Row>(
+      1,
+      u8(0, (x) => x.k),
+      m,
+      when(1, eq(0, 1), [m.bit(u8(1, (x) => x.v))]),
+    )
+    const untaken = hex(BinaryPacker.pack(layout, { k: 0, v: 5 }))
+    assert.equal(untaken, "010001")
+    let got: Row | undefined
+    const result = BinaryPacker.unpack(Buffer.from(untaken, "hex"), layout.on((r) => {
+      got = r as Row
+    }))
+    assert.deepEqual(result, { ok: true })
+    assert.equal(got!.k, 0)
+    assert.equal("v" in got!, false)
+
+    const taken = hex(BinaryPacker.pack(layout, { k: 1, v: 5 }))
+    assert.equal(taken, "01010105")
+    const back = BinaryPacker.unpack(Buffer.from(taken, "hex"), layout.on((r) => {
+      got = r as Row
+    }))
+    assert.deepEqual(back, { ok: true })
+    assert.equal(got!.k, 1)
+    assert.equal(got!.v, 5)
+  })
 })
