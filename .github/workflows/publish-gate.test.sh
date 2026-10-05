@@ -36,16 +36,6 @@ static_checks() {
   if [ -z "$gate_line" ] || [ -z "$publish_line" ] || [ "$gate_line" -ge "$publish_line" ]; then
     fail "registries run before the golden gate"
   fi
-  local inside="$root/.github/workflows/publish-inside.sh"
-  for cmd in "dotnet nuget push" "npm publish" "twine upload" "cargo publish" "https://api.nuget.org" "https://central.sonatype.com"; do
-    if ! grep -q "$cmd" "$inside" && ! grep -q "$cmd" "$registries"; then
-      fail "missing publish command: $cmd"
-    fi
-  done
-  if ! grep -q 'push_branch "$1" "$2" vcpkg' "$registries" ||
-    ! grep -q 'git -C "$reg" push' "$here/publish-lib.sh"; then
-    fail "cpp publish does not git push"
-  fi
 }
 
 registry_checks() {
@@ -67,12 +57,6 @@ exit 0
 EOF
   chmod +x "$bin/dotnet" "$bin/curl"
 
-  if grep -q 'MAVEN_GROUP_ID' "$here/publish-registries.sh" || grep -q 'MAVEN_GROUP_ID' "$here/publish-inside.sh"; then
-    fail "Java publish still reads MAVEN_GROUP_ID"
-  fi
-  if ! grep -q '<groupId>io.github.zxsanny</groupId>' "$here/publish-inside.sh"; then
-    fail "Java group id is not io.github.zxsanny"
-  fi
   printf 'csharp\n' > "$plan"
   set +e
   PACKBIN_PUBLISH=1 PACKBIN_DOCKER=0 PACKBIN_PLAN="$plan" PACKBIN_OUT="$tmp" \
@@ -93,7 +77,7 @@ EOF
   git init --bare "$bare" >/dev/null
   env -u GITHUB_TOKEN -u PLATFORMIO_AUTH_TOKEN -u IDF_COMPONENT_API_TOKEN \
     PACKBIN_PUBLISH=1 PACKBIN_DOCKER=0 PACKBIN_PLAN="$plan" PACKBIN_VERSION=0.1.0 \
-    VCPKG_REGISTRY_URL="$bare" \
+    PACKBIN_OUT="$tmp/cpp-out" VCPKG_REGISTRY_URL="$bare" \
     bash "$here/publish-registries.sh" | tee "$tmp/cpp.txt"
   for skipped in "skip platformio" "skip esp-idf component" "skip arduino"; do
     grep -qx "$skipped" "$tmp/cpp.txt" || fail "embedded publish without a token: $skipped"
@@ -102,8 +86,9 @@ EOF
   local arduino="$tmp/arduino.git"
   git init --bare "$arduino" >/dev/null
   env -u GITHUB_TOKEN -u PLATFORMIO_AUTH_TOKEN -u IDF_COMPONENT_API_TOKEN \
-    PACKBIN_PUBLISH=1 PACKBIN_VERSION=0.1.0 ARDUINO_REGISTRY_URL="$arduino" \
-    bash "$here/publish-embedded.sh"
+    PACKBIN_PUBLISH=1 PACKBIN_PLAN="$plan" PACKBIN_VERSION=0.1.0 PACKBIN_OUT="$tmp/cpp-out2" \
+    VCPKG_REGISTRY_URL="$bare" ARDUINO_REGISTRY_URL="$arduino" \
+    bash "$here/publish-registries.sh"
   git --git-dir="$arduino" show arduino:library.properties | grep -qx 'version=0.1.0' \
     || fail "arduino library version"
   git --git-dir="$arduino" show arduino-0.1.0:src/packbin.h >/dev/null \
@@ -178,83 +163,6 @@ gate_checks() {
   assert_eq "$(wc -l < "$miss_out/publish-plan.txt" | tr -d ' ')" "5" "AC-4 five languages"
 }
 
-maven_bundle_checks() {
-  if ! grep -q 'publishingType=AUTOMATIC' "$here/publish-registries.sh"; then
-    fail "maven upload is not automatic"
-  fi
-  if grep -q 'maven-bundle.zip" -C' "$here/publish-inside.sh"; then
-    fail "maven bundle is still a jar archive"
-  fi
-  local tree out ring key
-  tree="$(mktemp -d)"
-  copy_tree "$tree"
-  out="$tree/.github/workflows/out"
-  mkdir -p "$out"
-  docker compose -f "$tree/docker-compose.test.yml" --project-directory "$tree" \
-    -p packbin-maven-bundle run -T --rm --no-deps \
-    -e SRC_ROOT=/src \
-    -e PACKBIN_VERSION=0.1.2 \
-    -e PACKBIN_OUT=/src/.github/workflows/out \
-    java "exec /src/.github/workflows/publish-inside.sh java"
-  local jar_dir=/src/.github/workflows/out/maven/io/github/zxsanny/packbin/0.1.2
-  local class_check='
-    set -euo pipefail
-    jar="'"$jar_dir"'/packbin-0.1.2.jar"
-    classes="$(jar tf "$jar" | grep "\.class$" | sed -e "s/\.class$//" -e "s|/|.|g")"
-    total="$(printf "%s\n" "$classes" | wc -l)"
-    java17="$(javap -v -cp "$jar" $classes | grep -c "major version: 61" || true)"
-    printf "%s %s\n" "$total" "$java17"
-  '
-  local counts total_classes java17_classes
-  counts="$(docker compose -f "$tree/docker-compose.test.yml" --project-directory "$tree" \
-    -p packbin-maven-bundle run -T --rm --no-deps -e SRC_ROOT=/src java "$class_check")"
-  total_classes="${counts% *}"
-  java17_classes="${counts#* }"
-  if [ "$total_classes" -lt 1 ]; then
-    fail "AZ-2094 AC-1 jar holds no classes"
-  fi
-  assert_eq "$java17_classes" "$total_classes" "AZ-2094 AC-1 classes with major version 61"
-  if command -v gpg >/dev/null 2>&1; then
-    ring="$(mktemp -d)"
-    chmod 700 "$ring"
-    GNUPGHOME="$ring" gpg --batch --pinentry-mode loopback --passphrase '' \
-      --quick-generate-key "packbin-test" rsa4096 sign 0
-    key="$(GNUPGHOME="$ring" gpg --armor --export-secret-keys)"
-    PACKBIN_PUBLISH=1 PACKBIN_MAVEN_BUNDLE_ONLY=1 PACKBIN_OUT="$out" \
-      MAVEN_GPG_PRIVATE_KEY="$key" \
-      bash "$here/publish-registries.sh"
-  else
-    docker run --rm -v "$tree:/work" -e SRC_ROOT=/work ubuntu:24.04 bash -lc '
-      apt-get update -qq
-      DEBIAN_FRONTEND=noninteractive apt-get install -y -qq gnupg python3 >/dev/null
-      export GNUPGHOME="$(mktemp -d)"
-      chmod 700 "$GNUPGHOME"
-      gpg --batch --pinentry-mode loopback --passphrase "" \
-        --quick-generate-key "packbin-test" rsa4096 sign 0
-      export MAVEN_GPG_PRIVATE_KEY="$(gpg --armor --export-secret-keys)"
-      export PACKBIN_PUBLISH=1 PACKBIN_MAVEN_BUNDLE_ONLY=1
-      export PACKBIN_OUT=/work/.github/workflows/out
-      bash /work/.github/workflows/publish-registries.sh
-    '
-  fi
-  python3 - "$out/maven-bundle.zip" <<'PY'
-import sys, zipfile
-names = zipfile.ZipFile(sys.argv[1]).namelist()
-needed = (
-    "io/github/zxsanny/packbin/0.1.2/packbin-0.1.2.pom",
-    "io/github/zxsanny/packbin/0.1.2/packbin-0.1.2.jar",
-    "io/github/zxsanny/packbin/0.1.2/packbin-0.1.2-sources.jar",
-    "io/github/zxsanny/packbin/0.1.2/packbin-0.1.2-javadoc.jar",
-)
-for name in needed:
-    for suffix in ("", ".asc", ".md5", ".sha1"):
-        if name + suffix not in names:
-            raise SystemExit(f"missing {name}{suffix}")
-if any(name == "META-INF" or name.startswith("META-INF/") for name in names):
-    raise SystemExit("bundle contains META-INF")
-PY
-}
-
 manifest_checks() {
   grep -q 'PackageLicenseExpression>MIT' "$root/csharp/Packbin.csproj" || fail "csharp license"
   grep -q '"license": "MIT"' "$root/typescript/package.json" || fail "typescript license"
@@ -265,10 +173,10 @@ manifest_checks() {
   grep -q '"README.md"' "$root/typescript/package.json" || fail "npm readme"
   grep -q 'readme = "README.md"' "$root/rust/Cargo.toml" || fail "crates readme"
   grep -q 'typescript/README.md' "$root/.github/workflows/publish-inside.sh" || fail "npm readme copy"
-  grep -q 'rust/README.md' "$root/.github/workflows/publish-inside.sh" || fail "crates readme copy"
+  grep -q 'cp "$root/README.md" "$stage/README.md"' "$root/.github/workflows/publish-inside.sh" || fail "crates readme copy"
   grep -q 'readme = "README.md"' "$root/python/pyproject.toml" || fail "pypi readme"
   grep -q 'python/README.md' "$root/.github/workflows/publish-inside.sh" || fail "pypi readme copy"
-  grep -q 'oidc/mint-token' "$root/.github/workflows/publish-registries.sh" || fail "pypi trusted publisher"
+  grep -q 'oidc/mint-token' "$root/.github/workflows/publish-upload.sh" || fail "pypi trusted publisher"
 }
 
 crates_token_checks() {
@@ -505,13 +413,16 @@ if [ "${1:-}" = "--crates" ]; then
   exit 0
 fi
 
+# shellcheck source=publish-phases.test.sh
+source "$here/publish-phases.test.sh"
+
 static_checks
 crates_token_checks
 registry_checks
 gate_checks
-maven_bundle_checks
 manifest_checks
 workflow_checks
+phase_checks
 
 if [ "$failures" -ne 0 ]; then
   echo "$failures failure(s)" >&2

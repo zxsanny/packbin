@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Builds one language's package inside its toolchain image and leaves the artifact in
+# $PACKBIN_OUT/artifacts/<lang>/. It holds no registry credential and makes no network write;
+# publish-upload.sh sends what this builds.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -9,56 +12,59 @@ lang="${1:?language}"
 root="$(publish_root)"
 version="${PACKBIN_VERSION:-0.1.0}"
 version="${version#v}"
-work="${PACKBIN_WORK:-$(mktemp -d)}"
+out="${PACKBIN_OUT:?PACKBIN_OUT is required}"
+dest="$out/artifacts/$lang"
+work="${PACKBIN_WORK:-}"
+if [ -z "$work" ]; then
+  work="$(mktemp -d)"
+  trap 'rm -rf "$work"' EXIT
+fi
+mkdir -p "$dest"
+
+set_version() {
+  python3 -c '
+import re, sys
+from pathlib import Path
+path, version = Path(sys.argv[1]), sys.argv[2]
+text = path.read_text()
+path.write_text(re.sub(r"(?m)^version = \".*\"$", f"version = \"{version}\"", text, count=1))
+' "$1" "$version"
+}
 
 case "$lang" in
   csharp)
     dotnet pack "$root/csharp/Packbin.csproj" -c Release -o "$work/nupkg" \
       -p:Version="$version" -v q --nologo
-    dotnet nuget push "$work/nupkg/"*.nupkg \
-      --api-key "$NUGET_TOKEN" \
-      --source https://api.nuget.org/v3/index.json \
-      --skip-duplicate
+    cp "$work/nupkg/"*.nupkg "$dest/"
     ;;
   typescript)
     cp -a "$root/typescript/." "$work/typescript"
     cp "$root/README.md" "$work/typescript/README.md"
     rm -rf "$work/typescript/node_modules"
     npm version "$version" --no-git-tag-version --allow-same-version --prefix "$work/typescript"
-    printf '//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" > "$work/npmrc"
-    npm publish --userconfig "$work/npmrc" --access public --prefix "$work/typescript"
+    npm pack "$work/typescript" --pack-destination "$dest"
     ;;
   python)
     cp -a "$root/python/." "$work/python"
     rm -f "$work/python/README.md"
     cp "$root/README.md" "$work/python/README.md"
-    python3 -c '
-import re, sys
-from pathlib import Path
-path, version = Path(sys.argv[1]), sys.argv[2]
-text = path.read_text()
-path.write_text(re.sub(r"(?m)^version = \".*\"$", f"version = \"{version}\"", text, count=1))
-' "$work/python/pyproject.toml" "$version"
-    python3 -m pip install --quiet build twine
-    python3 -m build "$work/python" --outdir "$work/pypi"
-    python3 -m twine upload --non-interactive -u __token__ -p "$PYPI_TOKEN" "$work/pypi"/*
+    set_version "$work/python/pyproject.toml"
+    python3 -m pip install --quiet build
+    python3 -m build "$work/python" --outdir "$dest"
     ;;
   rust)
-    cp -a "$root/rust/." "$work/rust"
-    cp "$root/README.md" "$work/rust/README.md"
-    rm -rf "$work/rust/target"
-    python3 -c '
-import re, sys
-from pathlib import Path
-path, version = Path(sys.argv[1]), sys.argv[2]
-text = path.read_text()
-path.write_text(re.sub(r"(?m)^version = \".*\"$", f"version = \"{version}\"", text, count=1))
-' "$work/rust/Cargo.toml" "$version"
-    cargo publish --token "$CARGO_REGISTRY_TOKEN" --allow-dirty --manifest-path "$work/rust/Cargo.toml"
+    stage="$dest/stage"
+    cp -a "$root/rust/." "$stage"
+    cp "$root/README.md" "$stage/README.md"
+    rm -rf "$stage/target"
+    set_version "$stage/Cargo.toml"
+    cargo package --allow-dirty --manifest-path "$stage/Cargo.toml"
+    cp "$stage/target/package/packbin-$version.crate" "$dest/"
+    rm -rf "$stage/target"
     ;;
   java)
     classes="$work/classes"
-    bundle="$work/bundle"
+    bundle="$dest/maven"
     mkdir -p "$classes" "$work/javadoc"
     sources=()
     while IFS= read -r -d '' f; do
@@ -67,12 +73,12 @@ path.write_text(re.sub(r"(?m)^version = \".*\"$", f"version = \"{version}\"", te
     javac --release 17 -encoding UTF-8 -d "$classes" "${sources[@]}"
     javadoc --release 17 -encoding UTF-8 -d "$work/javadoc" -sourcepath "$root/java/src/main/java" packbin
     path="io/github/zxsanny"
-    dest="$bundle/$path/packbin/$version"
-    mkdir -p "$dest"
-    jar --create --file "$dest/packbin-$version.jar" -C "$classes" .
-    jar --create --file "$dest/packbin-$version-sources.jar" -C "$root/java/src/main/java" .
-    jar --create --file "$dest/packbin-$version-javadoc.jar" -C "$work/javadoc" .
-    cat > "$dest/packbin-$version.pom" <<EOF
+    pkg="$bundle/$path/packbin/$version"
+    mkdir -p "$pkg"
+    jar --create --file "$pkg/packbin-$version.jar" -C "$classes" .
+    jar --create --file "$pkg/packbin-$version-sources.jar" -C "$root/java/src/main/java" .
+    jar --create --file "$pkg/packbin-$version-javadoc.jar" -C "$work/javadoc" .
+    cat > "$pkg/packbin-$version.pom" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0">
   <modelVersion>4.0.0</modelVersion>
@@ -101,11 +107,6 @@ path.write_text(re.sub(r"(?m)^version = \".*\"$", f"version = \"{version}\"", te
   </scm>
 </project>
 EOF
-    out="${PACKBIN_OUT:-$root/.github/workflows/out}"
-    rm -rf "$out/maven"
-    mkdir -p "$out/maven"
-    cp -R "$bundle/." "$out/maven/"
-    chmod -R a+rwX "$out/maven"
     ;;
   *)
     echo "unknown language: $lang" >&2

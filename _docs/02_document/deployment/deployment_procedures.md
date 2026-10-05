@@ -4,7 +4,7 @@
 
 1. Tests are green on the commit. The tag run enforces it: `publish.yml` first calls `test.yml` (read-only token, no secrets) on the tagged commit, and the `publish` job needs that call. A failing test job skips `publish`. `test.yml` does not run on its own for a tag, so a tag runs the tests once.
 2. The C# bytes and the TypeScript bytes of each golden fixture match. Mismatch count is 0.
-3. Push a version tag. Actions publishes npm `packbin`, NuGet `Packbin`, PyPI `packbin`, crates.io `packbin`, Maven Central `packbin`, and vcpkg `packbin`. The same tag also publishes the C++ sources to PlatformIO, the ESP-IDF component registry and an Arduino branch and tag.
+3. Push a version tag. Actions first builds and checks every artifact (build phase: version, MIT, payload; any failure stops the run before any upload), then uploads the built files (upload phase). `PACKBIN_BUILD_ONLY=1` runs the build phase alone with no credential and no network write. Actions publishes npm `packbin`, NuGet `Packbin`, PyPI `packbin`, crates.io `packbin`, Maven Central `packbin`, and vcpkg `packbin`. The same tag also publishes the C++ sources to PlatformIO, the ESP-IDF component registry and an Arduino branch and tag.
 
 ## Health check
 
