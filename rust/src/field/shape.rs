@@ -174,7 +174,7 @@ fn shape_one(field: &mut Field, presence_ok: bool, flags: &mut Scope) {
     }
 }
 
-fn label(field: &Field) -> String {
+pub(super) fn label(field: &Field) -> String {
     if let Some(name) = field_name(field) {
         return format!("\"{name}\"");
     }

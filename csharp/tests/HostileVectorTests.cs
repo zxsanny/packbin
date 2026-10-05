@@ -76,6 +76,19 @@ public class HostileVectorTests
         public bool? On { get; set; }
     }
 
+    private sealed class LaterRow
+    {
+        public byte A { get; set; }
+        public byte? B { get; set; }
+        public byte C { get; set; }
+    }
+
+    private sealed class CountLaterRow
+    {
+        public byte[] Payload { get; set; } = [];
+        public ushort N { get; set; }
+    }
+
     private static Field[] NineU8() =>
     [
         Field.U8<NineRow>(0, x => x.F0), Field.U8<NineRow>(1, x => x.F1), Field.U8<NineRow>(2, x => x.F2),
@@ -135,6 +148,16 @@ public class HostileVectorTests
         ["empty_group_outside_flags"] = () => _ = new Scheme<PresenceRow>(1,
             Field.U8<PresenceRow>(0, x => x.A),
             Field.Group(1, (PresenceRow x) => x.On)),
+        ["when_names_later_field"] = () => _ = new Scheme<LaterRow>(1,
+            Field.U8<LaterRow>(0, x => x.A),
+            Field.When(1, Condition.Eq(2, (byte)1), Field.U8<LaterRow>(1, x => x.B)),
+            Field.U8<LaterRow>(2, x => x.C)),
+        ["count_names_later_field"] = () => _ = new Scheme<CountLaterRow>(1,
+            Field.Sized<CountLaterRow>(0, x => x.Payload, 1),
+            Field.U16<CountLaterRow>(1, x => x.N)),
+        ["when_names_outer_field_in_repeat"] = () => _ = new Scheme<ModeRow>(1,
+            Field.U8<ModeRow>(0, x => x.Mode),
+            Field.Repeat(1, Field.When(1, Condition.Eq(0, 1), Field.U8<ModeRow>(1, x => x.V)))),
     };
 
     // A message fragment for each case refused at construction, so a refusal by some other rule does not pass.
@@ -145,15 +168,11 @@ public class HostileVectorTests
         ["bool_outside_flags"] = "put it directly in Flags",
         ["empty_group_outside_flags"] = "put it directly in Flags",
         ["zero_progress_repeat_bool"] = "put it directly in Flags",
+        ["zero_progress_repeat_when"] = "not an earlier field in the same scope",
+        ["when_names_later_field"] = "not an earlier field in the same scope",
+        ["count_names_later_field"] = "not an earlier field in the same scope",
+        ["when_names_outer_field_in_repeat"] = "not an earlier field in the same scope",
     };
-
-    // References to later or outer fields are refused at construction by AZ-2087 (C# forward references), not yet.
-    private static readonly HashSet<string> ConstructNotOwnedHere =
-    [
-        "when_names_later_field",
-        "count_names_later_field",
-        "when_names_outer_field_in_repeat",
-    ];
 
     // C# has no bad_value or too_many type yet (C15); ShortPacket stands in for both.
     private static readonly Dictionary<string, Type> KindOfTerm = new()
@@ -182,18 +201,16 @@ public class HostileVectorTests
         Cases("unpack").Select(parts => new object[] { parts[0], parts[2], parts[3] });
 
     public static IEnumerable<object[]> ConstructCases() =>
-        Cases("construct")
-            .Where(parts => !ConstructNotOwnedHere.Contains(parts[0]))
-            .Select(parts => new object[] { parts[0], parts[2] });
+        Cases("construct").Select(parts => new object[] { parts[0], parts[2] });
 
     [Fact]
-    public void EveryConstructCase_HasACSharpSchemeOrANamedOwner()
+    public void EveryConstructCase_HasACSharpScheme()
     {
         // Arrange
         var ids = Cases("construct").Select(parts => parts[0]).ToList();
 
         // Act
-        var unclaimed = ids.Where(id => !ConstructSchemes.ContainsKey(id) && !ConstructNotOwnedHere.Contains(id)).ToList();
+        var unclaimed = ids.Where(id => !ConstructSchemes.ContainsKey(id)).ToList();
 
         // Assert
         Assert.NotEmpty(ids);

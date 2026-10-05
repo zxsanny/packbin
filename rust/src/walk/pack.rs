@@ -1,6 +1,6 @@
 use crate::field::{field_name, Field, FieldKind, FloatKind, IntKind, MapScheme};
 use crate::value::{
-    as_bit, as_packed, as_u2, as_usize, name_of, present, values_eq, PackError, Value, Values,
+    as_bit, as_packed, as_u2, as_usize, name_of, present, when_matches, PackError, Value, Values,
 };
 use std::collections::HashMap;
 
@@ -236,7 +236,7 @@ fn pack_one(
             ..
         } => {
             if let Ok(v) = require(values, field) {
-                if values_eq(v, expect) {
+                if when_matches(v, expect) {
                     pack_fields(members, values, flag_bits, out)?;
                 }
             }

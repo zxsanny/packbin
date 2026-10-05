@@ -30,6 +30,8 @@ mod flag_presence_tests;
 #[cfg(test)]
 mod hostile_tests;
 #[cfg(test)]
+mod integrity_tests;
+#[cfg(test)]
 mod packbin_tests;
 #[cfg(test)]
 mod round_tests;

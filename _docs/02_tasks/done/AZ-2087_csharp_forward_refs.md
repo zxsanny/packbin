@@ -3,7 +3,7 @@
 **Task**: AZ-2087_csharp_forward_refs
 **Name**: C# reference scope check
 **Description**: A `when` condition or a borrowed count must name an earlier field in the same scope; anything else fails `Scheme<T>` construction.
-**Complexity**: 2 points
+**Complexity**: 5 points (2 for the reference check; 3 for the round slicing the owner added in loop 13, see Flagged concerns)
 **Dependencies**: AZ-2070_hostile_vectors (construct vectors), AZ-2079_csharp_bool_rule_flag_limit (both add construction checks to `SchemeOrder` in `csharp/Packbin.cs`)
 **Component**: csharp
 **Tracker**: AZ-2087
@@ -32,6 +32,7 @@
 - A `when` condition id and a borrowed count id must name a value field that comes **earlier in the same scope**. A scope is the top-level list; each `repeat` body, `times` body, `list`/`dict` element and nested row opens a new one. `flags`, `when` and continuing groups stay in their parent's scope.
 - Anything else fails `new Scheme<T>(…)` with `ArgumentException` naming the referring id and the referenced id.
 - All existing schemes and bytes keep working.
+- Added by the owner in loop 13 (review F1 of the first C# review: AC-4's pack leg did not hold): in a `repeat` / `times` round, pack reads every value by round index, including values under `when`, `flags`, flag bits and continuing groups, and unpack returns one list entry per round (`null` for a skipped round). This is the C# part of AZ-2134 (owner decision U2: A).
 
 ## Scope
 
@@ -115,5 +116,8 @@ AC-1, AC-2 and AC-3 must fail on the current code (they construct today).
 
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
-| The sibling reference inside `repeat` (AC-4, first row) relies on the per-round value slice containing direct children only. A `when` nested two levels deep inside the body must still see the round's earlier fields. Covered by test; re-check after task 23 changes binding. | task 23 | open | Low |
+| The sibling reference inside `repeat` (AC-4, first row) relies on the per-round value slice. Loop 13: the slice now descends through `when` / `flags` / flag bits / continuing groups, and a nested `when` has pack, unpack and repack tests. Re-check after task 23 changes binding. | task 23 | resolved | Low |
 | C# and Java must apply the same scope rule as C++ (`order.hpp`). Java task 20 copies these ACs. | tasks 18/20 | open | Low |
+| Loop 13 owner decision (2026-10-05, after the first review FAILed AC-4's pack leg): fix C# round slicing here, not in a follow-up. Round count for `repeat` = the longest list among every name the round holds (a superset of the old direct-child rule); `times` keeps its borrowed count. | owner | resolved | Medium |
+| Aligned unpack pads one `null` per optional name per round, so unpack memory is about packet bytes × names in the round (337 MB heap for a 1 MB packet and a 36-name `when` body, against 57 MB before). Linear and bounded by the scheme; Java, Rust and C++ behave the same. README untrusted-input note, no cap. | owner decision U2 | accepted-risk | Medium |
+| Not fixed here (review Lows, follow-ups): a lone `byte[]` / `List<int>` for a Bytes / Sized / Bits / Packed name under `when` / `flags` is read as a list of rounds (`InvalidCastException` on pack); values of a `repeat` / `times` nested inside a round are not packed from the outer round (Java and Rust refuse the scheme); a lone scalar goes to round 0 only (Java broadcasts it); a `when` that holds with its value absent packs a packet its own unpack rejects (AZ-2088 area); typed-row `Unpack` of any repeat/times row throws `InvalidCastException` (pre-existing). | coordinator | open | Low |

@@ -1,4 +1,4 @@
-use super::{check_order, shape, Field, FieldKind};
+use super::{check_order, integrity, shape, Field, FieldKind};
 
 #[derive(Clone, Debug)]
 pub struct MapScheme {
@@ -39,8 +39,10 @@ fn count_fields(fields: &[Field]) -> usize {
 impl MapScheme {
     /// Panics, naming the field, on a scheme that cannot round-trip: a field out of order or
     /// scope, a flag bit with no flag byte before it in its scope, a 9th member or bit in one
-    /// flags byte or flag byte, or a bool (an empty `group`) not directly inside `flags` or
-    /// under a flag bit. Binds each flag bit to its flag byte and numbers it by field order.
+    /// flags byte or flag byte, a bool (an empty `group`) not directly inside `flags` or
+    /// under a flag bit, a `when` that tests a field or value that is not an integer, or a `list`
+    /// or `dict` element that is not one integer, float, bytes, utf8, list or dict (a `u2` with
+    /// one name). Binds each flag bit to its flag byte and numbers it by field order.
     pub fn new(type_number: i32, mut fields: Vec<Field>) -> Self {
         if !(0..=255).contains(&type_number) {
             panic!("type number must be 0..=255");
@@ -48,6 +50,7 @@ impl MapScheme {
         let field_count = count_fields(&fields);
         check_order(&fields, 0, 0);
         let flag_bytes = shape::check_shape(&mut fields);
+        integrity::check_integrity(&fields);
         MapScheme {
             type_number: type_number as u8,
             fields,

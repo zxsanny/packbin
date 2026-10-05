@@ -3,8 +3,8 @@ mod bound;
 pub use bound::BoundField;
 
 use crate::field::{
-    check_order, field_name, flags as layout_flags, id_name, nested_element, take_id,
-    times as layout_times, when as layout_when, Eq, Field, MapScheme,
+    check_order, field_name, flags as layout_flags, id_name, nested_element, rename_container,
+    take_id, times as layout_times, when as layout_when, Eq, Field, MapScheme,
 };
 use crate::value::{Name, PackError, ShortPacket, UnpackError, Value, Values};
 use crate::walk;
@@ -89,15 +89,19 @@ impl<T: 'static> SchemeItem<T> {
 fn compile_items<T: 'static>(
     items: Vec<SchemeItem<T>>,
     next_id: &mut u32,
-    flag_seq: &mut u32,
+    name_seq: &mut u32,
 ) -> (Vec<Field>, Vec<Binder<T>>) {
     let mut fields = Vec::new();
     let mut binders = Vec::new();
     for item in items {
         match item {
-            SchemeItem::Bound(bound) => {
-                if let Some(id) = bound.id {
-                    take_id(next_id, id);
+            SchemeItem::Bound(mut bound) => {
+                match bound.id {
+                    Some(id) => take_id(next_id, id),
+                    None => {
+                        rename_container(&mut bound.field, &format!("__bound_{}", *name_seq));
+                        *name_seq = name_seq.saturating_add(1);
+                    }
                 }
                 if let Some(element) = nested_element(&bound.field) {
                     let end = check_order(std::slice::from_ref(element), 0, 0);
@@ -134,7 +138,7 @@ fn compile_items<T: 'static>(
                         panic!("field id {id} is not yet walked at order {next_id}");
                     }
                 }
-                let (child_fields, child_binders) = compile_items(members, next_id, flag_seq);
+                let (child_fields, child_binders) = compile_items(members, next_id, name_seq);
                 fields.push(layout_when(anchor, cond, child_fields));
                 binders.extend(child_binders);
             }
@@ -142,9 +146,9 @@ fn compile_items<T: 'static>(
                 if anchor != *next_id {
                     panic!("field id {anchor} is not the next order {next_id}");
                 }
-                let name = format!("__flags_{}", *flag_seq);
-                *flag_seq = flag_seq.saturating_add(1);
-                let (child_fields, child_binders) = compile_items(members, next_id, flag_seq);
+                let name = format!("__flags_{}", *name_seq);
+                *name_seq = name_seq.saturating_add(1);
+                let (child_fields, child_binders) = compile_items(members, next_id, name_seq);
                 fields.push(layout_flags(anchor, name.as_str(), child_fields));
                 binders.extend(child_binders);
             }
@@ -162,7 +166,7 @@ fn compile_items<T: 'static>(
                         panic!("field id {id} is not yet walked at order {next_id}");
                     }
                 }
-                let (child_fields, child_binders) = compile_items(members, next_id, flag_seq);
+                let (child_fields, child_binders) = compile_items(members, next_id, name_seq);
                 fields.push(layout_times(anchor, count.as_ref(), child_fields));
                 binders.extend(child_binders);
             }
@@ -178,9 +182,9 @@ fn compile_items<T: 'static>(
 impl<T: 'static> Scheme<T> {
     pub fn new(type_number: i32, fields: impl IntoIterator<Item = SchemeItem<T>>) -> Self {
         let mut next_id = 0u32;
-        let mut flag_seq = 0u32;
+        let mut name_seq = 0u32;
         let (layout_fields, binders) =
-            compile_items(fields.into_iter().collect(), &mut next_id, &mut flag_seq);
+            compile_items(fields.into_iter().collect(), &mut next_id, &mut name_seq);
         Scheme {
             layout: MapScheme::new(type_number, layout_fields),
             binders,

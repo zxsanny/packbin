@@ -9,6 +9,7 @@ public partial class HostileUnpackTests
     private sealed class ZeroRow
     {
         public byte[] B { get; set; } = [];
+        public byte V { get; set; }
     }
 
     private sealed class SignedCountRow
@@ -87,6 +88,7 @@ public partial class HostileUnpackTests
     private sealed class GuardedTimesRow
     {
         public uint N { get; set; }
+        public byte[] B { get; set; } = [];
         public byte V { get; set; }
     }
 
@@ -127,6 +129,24 @@ public partial class HostileUnpackTests
 
         // Act
         var outcome = HostileProbe.Unpack(scheme, "0109");
+
+        // Assert
+        Assert.False(outcome.HandlerCalled);
+        var error = Assert.IsType<TrailingBytes>(outcome.Error);
+        Assert.Equal(1, error.Left);
+    }
+
+    [Fact]
+    public void Ac1_RepeatBodyWithANeverMatchingWhen_ReturnsTrailingBytes()
+    {
+        // Arrange
+        var scheme = new Scheme<ZeroRow>(1,
+            Field.Repeat(0,
+                Field.Bytes<ZeroRow>(0, x => x.B, 0),
+                Field.When(1, Condition.Eq(0, new byte[] { 1 }), Field.U8<ZeroRow>(1, x => x.V))));
+
+        // Act
+        var outcome = HostileProbe.Unpack(scheme, "01ff");
 
         // Assert
         Assert.False(outcome.HandlerCalled);

@@ -211,19 +211,48 @@ export function readSized(
   return { ok: true, value }
 }
 
-export function asNumber(v: unknown): number | bigint {
-  if (typeof v === "bigint") return v
-  if (typeof v === "number") return v
-  throw new RangeError("expected number")
+function intKind(size: 1 | 2 | 4 | 8, signed: boolean): string {
+  return `${signed ? "i" : "u"}${size * 8}`
+}
+
+function notNumber(name: string, kind: string, value: unknown): RangeError {
+  return new RangeError(`${name}: expected a number for ${kind}, got ${typeof value}`)
+}
+
+// A number is taken only as a safe integer: past 2^53 it may already have lost digits, so it
+// is refused even where the width could hold it. A bigint is exact at every width.
+function fitsInt(value: number | bigint, size: 1 | 2 | 4 | 8, signed: boolean): boolean {
+  const bits = size * 8
+  if (typeof value === "bigint") {
+    const min = signed ? -(1n << BigInt(bits - 1)) : 0n
+    const max = (1n << BigInt(signed ? bits - 1 : bits)) - 1n
+    return value >= min && value <= max
+  }
+  if (!Number.isSafeInteger(value)) return false
+  if (size === 8) return signed || value >= 0
+  const min = signed ? -(2 ** (bits - 1)) : 0
+  const max = 2 ** (signed ? bits - 1 : bits) - 1
+  return value >= min && value <= max
+}
+
+function intRefused(name: string, value: unknown, size: 1 | 2 | 4 | 8, signed: boolean): RangeError {
+  const kind = intKind(size, signed)
+  if (typeof value !== "number" && typeof value !== "bigint") return notNumber(name, kind, value)
+  const exact = typeof value === "number" && Number.isInteger(value) && fitsInt(BigInt(value), size, signed)
+  return new RangeError(`${name}: ${value} does not fit in ${kind}${exact ? "; pass a bigint" : ""}`)
 }
 
 export function writeInt(
   out: number[],
-  value: number | bigint,
+  name: string,
+  value: unknown,
   size: 1 | 2 | 4 | 8,
   signed: boolean,
   le: boolean,
 ): void {
+  if ((typeof value !== "number" && typeof value !== "bigint") || !fitsInt(value, size, signed)) {
+    throw intRefused(name, value, size, signed)
+  }
   const buf = new ArrayBuffer(size)
   const view = new DataView(buf)
   if (size === 1) {
@@ -243,7 +272,14 @@ export function writeInt(
   for (let i = 0; i < size; i++) out.push(bytes[i]!)
 }
 
-export function writeFloat(out: number[], value: number, size: 4 | 8, le: boolean): void {
+// NaN and the infinities are written as given; a finite value is refused only where the
+// narrower width would turn it into an infinity.
+export function writeFloat(out: number[], name: string, value: unknown, size: 4 | 8, le: boolean): void {
+  const kind = `f${size * 8}`
+  if (typeof value !== "number") throw notNumber(name, kind, value)
+  if (size === 4 && Number.isFinite(value) && !Number.isFinite(Math.fround(value))) {
+    throw new RangeError(`${name}: ${value} does not fit in ${kind}`)
+  }
   const buf = new ArrayBuffer(size)
   const view = new DataView(buf)
   if (size === 4) view.setFloat32(0, value, le)

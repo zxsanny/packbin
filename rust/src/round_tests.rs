@@ -171,14 +171,20 @@ fn typed_times_inside_times_is_refused() {
     );
 }
 
-// A list or dict element starts outside any round, so the rule does not reach it.
+// A list or dict element is a single value, so a repeat or times inside one is refused.
 
 #[test]
-fn repeat_and_times_inside_list_or_dict_elements_still_build() {
+#[should_panic(expected = "list \"L\" cannot carry element \"g\"")]
+fn repeat_inside_a_list_element_is_refused() {
     MapScheme::new(
         1,
         vec![list("L", group(0, "g", vec![repeat(0, vec![u8("0")])]))],
     );
+}
+
+#[test]
+#[should_panic(expected = "dict \"D\" cannot carry element \"g\"")]
+fn times_inside_a_dict_element_is_refused() {
     MapScheme::new(
         1,
         vec![dict(
@@ -186,6 +192,11 @@ fn repeat_and_times_inside_list_or_dict_elements_still_build() {
             group(0, "g", vec![u8("0"), times(1, "0", vec![u8("1")])]),
         )],
     );
+}
+
+#[test]
+#[should_panic(expected = "list \"L\" cannot carry element \"g\"")]
+fn repeat_inside_a_list_element_inside_times_is_refused() {
     MapScheme::new(
         1,
         vec![

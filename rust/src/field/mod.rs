@@ -1,3 +1,4 @@
+mod integrity;
 mod map_scheme;
 mod order;
 mod shape;
@@ -420,6 +421,14 @@ pub(crate) fn float_width(kind: FloatKind) -> usize {
         FloatKind::F32 => 4,
         FloatKind::F64 => 8,
     }
+}
+
+/// Gives a bound `list` or `dict` the internal name its scheme assigned; the caller picks none.
+pub(crate) fn rename_container(field: &mut Field, new_name: &str) {
+    let (FieldKind::List { name, .. } | FieldKind::Dict { name, .. }) = &mut field.kind else {
+        panic!("only a list or dict takes an internal name");
+    };
+    *name = name_of(new_name);
 }
 
 pub(crate) fn field_name(field: &Field) -> Option<&str> {

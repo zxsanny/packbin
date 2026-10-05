@@ -83,31 +83,24 @@ pub fn motion_field_count(values: &Values) -> usize {
         .count()
 }
 
-pub fn values_eq(a: &Value, b: &Value) -> bool {
-    match (a, b) {
-        (Value::U8(x), Value::U8(y)) => x == y,
-        (Value::U16(x), Value::U16(y)) => x == y,
-        (Value::U32(x), Value::U32(y)) => x == y,
-        (Value::U64(x), Value::U64(y)) => x == y,
-        (Value::I8(x), Value::I8(y)) => x == y,
-        (Value::I16(x), Value::I16(y)) => x == y,
-        (Value::I32(x), Value::I32(y)) => x == y,
-        (Value::I64(x), Value::I64(y)) => x == y,
-        (Value::F32(x), Value::F32(y)) => x.to_bits() == y.to_bits(),
-        (Value::F64(x), Value::F64(y)) => x.to_bits() == y.to_bits(),
-        (Value::Bytes(x), Value::Bytes(y)) => x == y,
-        (Value::Str(x), Value::Str(y)) => x == y,
-        (Value::List(x), Value::List(y)) => {
-            x.len() == y.len() && x.iter().zip(y.iter()).all(|(a, b)| values_eq(a, b))
-        }
-        (Value::Map(x), Value::Map(y)) => {
-            x.len() == y.len()
-                && x.iter()
-                    .zip(y.iter())
-                    .all(|((ka, va), (kb, vb))| ka == kb && values_eq(va, vb))
-        }
-        _ => false,
+pub(crate) fn as_int(v: &Value) -> Option<i128> {
+    match v {
+        Value::U8(n) => Some(i128::from(*n)),
+        Value::U16(n) => Some(i128::from(*n)),
+        Value::U32(n) => Some(i128::from(*n)),
+        Value::U64(n) => Some(i128::from(*n)),
+        Value::I8(n) => Some(i128::from(*n)),
+        Value::I16(n) => Some(i128::from(*n)),
+        Value::I32(n) => Some(i128::from(*n)),
+        Value::I64(n) => Some(i128::from(*n)),
+        _ => None,
     }
+}
+
+/// A `when` takes its members when both values are integers of the same number, whatever their
+/// width or sign.
+pub(crate) fn when_matches(source: &Value, expect: &Value) -> bool {
+    matches!((as_int(source), as_int(expect)), (Some(a), Some(b)) if a == b)
 }
 
 pub(crate) fn as_usize(v: &Value) -> Option<usize> {

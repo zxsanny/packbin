@@ -238,17 +238,6 @@ internal static partial class Walker
         return null;
     }
 
-    private static void PackTimes(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
-    {
-        var count = BorrowedCount(field, values);
-        for (var i = 0; i < count; i++)
-        {
-            var slice = SliceValues(field, values, i);
-            foreach (var child in field.Children)
-                PackField(child, slice, buffer);
-        }
-    }
-
     private static object? UnpackTimes(
         Field field,
         ReadOnlySpan<byte> bytes,
@@ -257,7 +246,8 @@ internal static partial class Walker
     {
         if (!TryUnpackCount(field, values, out var count))
             return InterimBadValue(field.Name, bytes.Length - offset);
-        var built = new Dictionary<string, List<object?>>();
+        var names = RoundNames(field, packing: false);
+        var built = new Dictionary<string, object?>();
         for (long i = 0; i < count; i++)
         {
             var roundStart = offset;
@@ -271,15 +261,7 @@ internal static partial class Walker
             // A round that reads nothing would only burn through a huge count.
             if (offset == roundStart)
                 return InterimBadValue(field.Name, bytes.Length - roundStart);
-            foreach (var (key, value) in group)
-            {
-                if (!built.TryGetValue(key, out var list))
-                {
-                    list = [];
-                    built[key] = list;
-                }
-                list.Add(value);
-            }
+            AppendRound(built, group, names);
         }
         foreach (var (key, list) in built)
             values[key] = list;

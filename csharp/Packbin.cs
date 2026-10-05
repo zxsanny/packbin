@@ -188,66 +188,80 @@ internal static class SchemeOrder
         var next = 0;
         foreach (var field in fields)
             Walk(field, scope, ref next);
-        Resolve(fields, scope);
         FlagScopes.Validate(fields);
     }
 
+    // Ids number straight through repeat and times bodies, but a reference finds only the fields `scope` already holds:
+    // the earlier ones of its own top level, repeat or times body, list or dict element, or nested row.
     // `flagBit`: the field is a direct child of Flags or the field of a FlagByte bit, the only place a bool or an empty
     // group has a bit to live in.
     private static void Walk(Field field, Dictionary<int, string> scope, ref int next, bool flagBit = false)
     {
-        if (!flagBit && IsPresenceOnly(field))
-            throw new ArgumentException(
-                $"'{field.Name}': a bool or an empty group is a flag bit with no payload; put it directly in Flags or a FlagByte bit");
+        RequireFlagBit(field, flagBit);
         switch (field.Type)
         {
             case Field.Kind.When:
-            case Field.Kind.Repeat:
-            case Field.Kind.Times:
-            case Field.Kind.Flags:
                 RequireAnchor(field.Id, next);
-                foreach (var child in field.Children)
-                    Walk(child, scope, ref next);
+                field.Pred!.Resolve(Earlier(scope, field.Pred.FieldId, $"when {field.Id}"));
+                WalkChildren(field, scope, ref next);
+                break;
+            case Field.Kind.Flags:
+            case Field.Kind.Group when !field.NestedRow:
+                RequireAnchor(field.Id, next);
+                WalkChildren(field, scope, ref next);
+                break;
+            case Field.Kind.Repeat:
+                RequireAnchor(field.Id, next);
+                WalkChildren(field, [], ref next);
+                break;
+            case Field.Kind.Times:
+                RequireAnchor(field.Id, next);
+                field.SetCountName(Earlier(scope, field.CountId, $"count of times {field.Id}"));
+                WalkChildren(field, [], ref next);
                 break;
             case Field.Kind.FlagBit:
                 Walk(field.Inner!, scope, ref next, flagBit: true);
                 break;
-            case Field.Kind.FlagByte:
-                break;
             case Field.Kind.Group:
-                if (field.NestedRow)
-                {
-                    var nested = new Dictionary<int, string>();
-                    var nestedNext = 0;
-                    foreach (var child in field.Children)
-                        Walk(child, nested, ref nestedNext);
-                    Resolve(field.Children, nested);
-                }
-                else
-                {
-                    RequireAnchor(field.Id, next);
-                    foreach (var child in field.Children)
-                        Walk(child, scope, ref next);
-                }
-                break;
             case Field.Kind.List:
             case Field.Kind.Dict:
-            {
-                var nested = new Dictionary<int, string>();
-                var nestedNext = 0;
-                Walk(field.Children[0], nested, ref nestedNext);
-                Resolve(field.Children, nested);
+                WalkFromZero(field);
                 break;
-            }
             case Field.Kind.U2:
                 for (var i = 0; i < field.SlotIds.Length; i++)
                     Take(field.SlotIds[i], field.Names[i], scope, ref next);
+                break;
+            case Field.Kind.Sized:
+            case Field.Kind.Bits:
+            case Field.Kind.Packed:
+                field.SetCountName(Earlier(scope, field.CountId, $"count of field id {field.Id}"));
+                Take(field.Id, field.Name, scope, ref next);
                 break;
             default:
                 if (Field.IsValueBearing(field))
                     Take(field.Id, field.Name, scope, ref next);
                 break;
         }
+    }
+
+    private static void WalkChildren(Field field, Dictionary<int, string> scope, ref int next)
+    {
+        foreach (var child in field.Children)
+            Walk(child, scope, ref next);
+    }
+
+    // A nested row, list element or dict element numbers its own fields from 0.
+    private static void WalkFromZero(Field field)
+    {
+        var next = 0;
+        WalkChildren(field, [], ref next);
+    }
+
+    private static void RequireFlagBit(Field field, bool flagBit)
+    {
+        if (!flagBit && IsPresenceOnly(field))
+            throw new ArgumentException(
+                $"'{field.Name}': a bool or an empty group is a flag bit with no payload; put it directly in Flags or a FlagByte bit");
     }
 
     private static bool IsPresenceOnly(Field field) =>
@@ -268,52 +282,12 @@ internal static class SchemeOrder
         next++;
     }
 
-    private static void Resolve(IReadOnlyList<Field> fields, Dictionary<int, string> scope)
+    private static string Earlier(Dictionary<int, string> scope, int id, string by)
     {
-        foreach (var field in fields)
-            ResolveField(field, scope);
-    }
-
-    private static void ResolveField(Field field, Dictionary<int, string> scope)
-    {
-        switch (field.Type)
-        {
-            case Field.Kind.When:
-                if (!scope.TryGetValue(field.Pred!.FieldId, out var condName))
-                    throw new ArgumentException($"condition field id {field.Pred.FieldId} is unknown");
-                field.Pred.Resolve(condName);
-                foreach (var child in field.Children)
-                    ResolveField(child, scope);
-                break;
-            case Field.Kind.Sized:
-            case Field.Kind.Bits:
-            case Field.Kind.Packed:
-                if (!scope.TryGetValue(field.CountId, out var countName))
-                    throw new ArgumentException($"count field id {field.CountId} is unknown");
-                field.SetCountName(countName);
-                break;
-            case Field.Kind.Times:
-                if (!scope.TryGetValue(field.CountId, out var timesName))
-                    throw new ArgumentException($"count field id {field.CountId} is unknown");
-                field.SetCountName(timesName);
-                foreach (var child in field.Children)
-                    ResolveField(child, scope);
-                break;
-            case Field.Kind.Flags:
-            case Field.Kind.Repeat:
-                foreach (var child in field.Children)
-                    ResolveField(child, scope);
-                break;
-            case Field.Kind.FlagBit:
-                ResolveField(field.Inner!, scope);
-                break;
-            case Field.Kind.Group:
-                if (!field.NestedRow)
-                {
-                    foreach (var child in field.Children)
-                        ResolveField(child, scope);
-                }
-                break;
-        }
+        if (scope.TryGetValue(id, out var name))
+            return name;
+        throw new ArgumentException(
+            $"{by} names field id {id}, which is not an earlier field in the same scope "
+            + "(the top level, a repeat or times body, a list or dict element and a nested row are separate scopes)");
     }
 }

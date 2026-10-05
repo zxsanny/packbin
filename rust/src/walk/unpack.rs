@@ -165,7 +165,7 @@ fn unpack_one(
             ..
         } => {
             if let Some(Some(v)) = values.get(field.as_ref()) {
-                if crate::value::values_eq(v, expect) {
+                if crate::value::when_matches(v, expect) {
                     unpack_fields(members, cur, values, flag_bits, groups)?;
                 }
             }

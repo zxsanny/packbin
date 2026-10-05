@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Globalization;
 
 namespace Packbin;
@@ -147,55 +146,6 @@ internal static partial class Walker
             PackField(child, values, buffer);
     }
 
-    private static void PackRepeat(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
-    {
-        var count = RepeatCount(field, values);
-        for (var i = 0; i < count; i++)
-        {
-            var slice = SliceValues(field, values, i);
-            foreach (var child in field.Children)
-                PackField(child, slice, buffer);
-        }
-    }
-
-    private static int RepeatCount(Field field, IReadOnlyDictionary<string, object?> values)
-    {
-        var count = 0;
-        foreach (var child in field.Children)
-        {
-            if (!values.TryGetValue(child.Name, out var v) || v is null)
-                continue;
-            if (v is IList list)
-                count = Math.Max(count, list.Count);
-            else
-                count = Math.Max(count, 1);
-        }
-        return count;
-    }
-
-    private static Dictionary<string, object?> SliceValues(
-        Field field,
-        IReadOnlyDictionary<string, object?> values,
-        int index)
-    {
-        var slice = new Dictionary<string, object?>();
-        foreach (var child in field.Children)
-        {
-            if (!values.TryGetValue(child.Name, out var v) || v is null)
-                continue;
-            if (v is IList list)
-            {
-                if (index < list.Count)
-                    slice[child.Name] = list[index];
-            }
-            else if (index == 0)
-            {
-                slice[child.Name] = v;
-            }
-        }
-        return slice;
-    }
-
     private static void PackBytes(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
     {
         if (!IsPresent(values, field.Name))
@@ -311,6 +261,7 @@ internal static partial class Walker
         ref int offset,
         Scope values)
     {
+        var names = RoundNames(field, packing: false);
         while (offset < bytes.Length)
         {
             var roundStart = offset;
@@ -324,8 +275,7 @@ internal static partial class Walker
             // A round that reads nothing can never reach the end of the buffer.
             if (offset == roundStart)
                 return new TrailingBytes(bytes.Length - offset);
-            foreach (var (key, value) in group)
-                Append(values, key, value);
+            AppendRound(values, group, names);
         }
         return null;
     }

@@ -22,6 +22,10 @@ struct MarkerRow {
 }
 
 fn marker_scheme() -> Scheme<MarkerRow> {
+    marker_scheme_when(Value::U8(1))
+}
+
+fn marker_scheme_when(expect: Value) -> Scheme<MarkerRow> {
     Scheme::new(
         0x20,
         [
@@ -31,7 +35,7 @@ fn marker_scheme() -> Scheme<MarkerRow> {
             BoundField::u8(3, |r: &MarkerRow| r.kind, |r: &mut MarkerRow, v| r.kind = v).into(),
             SchemeItem::when(
                 4,
-                eq(3, Value::U8(1)),
+                eq(3, expect),
                 [BoundField::opt_u16(
                     4,
                     |r: &MarkerRow| r.kind_id,
@@ -226,4 +230,94 @@ fn field_id_ac6_ac1_bytes() {
     let bytes = BinaryPacker::pack(&marker_scheme(), &row).expect("pack");
     assert_eq!(to_hex(&bytes), MARKER_AC1_HEX);
     assert_eq!(mismatched_bytes(&bytes, &parse_hex(MARKER_AC1_HEX)), 0);
+}
+
+fn marker_with_kind_id() -> MarkerRow {
+    MarkerRow {
+        sid: 1,
+        lat: 500_000_000,
+        lon: 300_000_000,
+        kind: 1,
+        kind_id: Some(7),
+        title: 0,
+        hidden: None,
+        delta: None,
+    }
+}
+
+#[test]
+fn field_id_when_matches_a_wider_eq_value_by_number() {
+    for expect in [Value::U16(1), Value::I64(1)] {
+        // Arrange
+        let scheme = marker_scheme_when(expect.clone());
+        let reference = BinaryPacker::pack(&marker_scheme(), &marker_with_kind_id()).expect("pack");
+
+        // Act
+        let bytes = BinaryPacker::pack(&scheme, &marker_with_kind_id()).expect("pack");
+        let mut back = MarkerRow::default();
+        BinaryPacker::unpack_with(&bytes, &mut [&mut scheme.on(|found| back = found)])
+            .expect("unpack");
+
+        // Assert
+        assert_eq!(bytes, reference, "{expect:?}");
+        assert_eq!(back.kind_id, Some(7), "{expect:?}");
+    }
+}
+
+#[derive(Default)]
+struct FloatTested {
+    ratio: f32,
+    tail: u8,
+}
+
+fn float_tested_scheme(expect: Value) {
+    let _ = Scheme::<FloatTested>::new(
+        1,
+        [
+            BoundField::f32(
+                0,
+                |r: &FloatTested| r.ratio,
+                |r: &mut FloatTested, v| r.ratio = v,
+            )
+            .into(),
+            SchemeItem::when(
+                1,
+                eq(0, expect),
+                [BoundField::u8(
+                    1,
+                    |r: &FloatTested| r.tail,
+                    |r: &mut FloatTested, v| r.tail = v,
+                )
+                .into()],
+            ),
+        ],
+    );
+}
+
+#[test]
+#[should_panic(expected = "tests field \"0\"")]
+fn field_id_when_on_a_float_field_is_refused() {
+    float_tested_scheme(Value::U8(1));
+}
+
+#[derive(Default)]
+struct KindRow {
+    kind: u8,
+    tail: u8,
+}
+
+#[test]
+#[should_panic(expected = "compares field \"0\" with a value that is not an integer")]
+fn field_id_when_with_a_float_eq_value_is_refused() {
+    let _ = Scheme::<KindRow>::new(
+        1,
+        [
+            BoundField::u8(0, |r: &KindRow| r.kind, |r: &mut KindRow, v| r.kind = v).into(),
+            SchemeItem::when(
+                1,
+                eq(0, Value::F32(1.0)),
+                [BoundField::u8(1, |r: &KindRow| r.tail, |r: &mut KindRow, v| r.tail = v).into()],
+            ),
+        ],
+    );
 }

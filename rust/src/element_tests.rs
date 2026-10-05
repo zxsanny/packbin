@@ -32,15 +32,12 @@ fn zero_width_dict_value_is_error() {
 }
 
 #[test]
-fn never_matching_when_element_is_error() {
-    let result = within_one_second("list of never-matching when", || {
-        let scheme = MapScheme::new(
-            1,
-            vec![list("0", when(0, eq("x", Value::U8(1)), vec![u8("0")]))],
-        );
-        unpack(&scheme, &[0x01, 0x03, 0x00]).map(|_| ())
-    });
-    assert_eq!(result, Err(zero_width("0", 0)));
+#[should_panic(expected = "list \"0\" cannot carry element at id 0")]
+fn when_element_is_refused() {
+    MapScheme::new(
+        1,
+        vec![list("0", when(0, eq("x", Value::U8(1)), vec![u8("0")]))],
+    );
 }
 
 #[test]

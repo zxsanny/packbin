@@ -7,7 +7,6 @@ import {
   type Field,
 } from "./fields.ts"
 import {
-  asNumber,
   present,
   validCount,
   writeBits,
@@ -51,12 +50,12 @@ export function packFields(
     switch (f.kind) {
       case "int": {
         if (!present(values[f.name])) throw new RangeError(`missing ${f.name}`)
-        writeInt(out, asNumber(values[f.name]), f.size, f.signed, f.littleEndian)
+        writeInt(out, f.name, values[f.name], f.size, f.signed, f.littleEndian)
         break
       }
       case "float": {
         if (!present(values[f.name])) throw new RangeError(`missing ${f.name}`)
-        writeFloat(out, Number(values[f.name]), f.size, f.littleEndian)
+        writeFloat(out, f.name, values[f.name], f.size, f.littleEndian)
         break
       }
       case "bytes": {
