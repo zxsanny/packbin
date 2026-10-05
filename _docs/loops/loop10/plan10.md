@@ -28,7 +28,11 @@ ship: false
 ## Implementation
 
 ### Files that change
-`cpp/` (new core headers and sources, host suite ported, dynamic walker removed), embedded build files and examples, CI test workflow and test compose, publish script, README C++ section, `_docs/01_solution/languages.md`.
+`cpp/` (new core headers and sources, host suite ported, dynamic walker removed),
+Until AZ-2064 the core builds as its own test binary (`build/core_tests`, `-fno-exceptions -fno-rtti`) from `include/packbin/core.hpp` and `tests/core/`, so the old and new `packbin::` symbols never link together.
+ embedded build files and examples, CI test workflow and test compose, publish script, README C++ section, `_docs/01_solution/languages.md`.
+
+Batch 5 adds `fixtures/hostile/` (shared hostile-packet vectors and their format check, run in the `scaffold` job), the host-only runner `cpp/tests/core/hostile_host_tests.cpp`, per-container flag-byte scope and the zero-progress guard in `cpp/src/core/unpack.cpp`, and the bool/empty-group placement and `u2` limit checks in `cpp/include/packbin/order.hpp`.
 
 ### Order of work
 T1, then T2 and T6, then T3 and T4, then T5 and T7, then T8. T9 last, stretch only.
@@ -36,5 +40,17 @@ T1, then T2 and T6, then T3 and T4, then T5 and T7, then T8. T9 last, stretch on
 ### Proof
 Every hex vector asserted in `cpp/tests` before the port still asserted after it, and the same bytes on QEMU `mps2-an385` and a big-endian host.
 
+Batch 4: the old walker is gone (one walker, `cpp/src/core/`). Embedded proof lives in `cpp/embedded/` (`run.sh arm|esp`, CI job `embedded` in `test.yml`, compose services `cpp-embedded`, `cpp-embedded-esp`). The Pico example runs on x86_64 only (no arm64 PlatformIO toolchain). The dict key order rule and the `flag_bit` rename (Arduino `bit` macro) came out of the embedded runs.
+
 ### Risks
 D-2 B is a breaking C++ release. AC-12 needs a published tag and registry tokens, so it cannot be proven inside this loop.
+
+## Course change (user, 2026-10-05)
+
+After batch 4 the user asked for, in order: (1) a whole-project refactor check, (2) a security check, (3) the `v0.2.0` tag.
+
+- Done: refactor Quick Assessment phases 0–1 — `_docs/04_refactoring/02-whole-project-assessment/` (baseline, discovery per package, `list-of-changes.md` C01–C31). It found cross-language logic bugs (bool bytes differ between packages, hangs on hostile packets, a thread race in C#/Java, Rust silent corruption, an unloadable Java jar, a non-atomic publish).
+- Done: bug-fix epic **AZ-2069** with 36 task specs `_docs/02_tasks/todo/01_*.md` … `36_*.md` (most serious first; order and user decisions in `analysis/bugfix_task_plan.md`). Jira tickets for the 36 specs are not created yet (`Tracker: pending`).
+- Split (user, 2026-10-05): **loop 10 finishes the C++ microcontroller feature only.** Next session: create the 36 Jira tickets under AZ-2069 and rename the specs to their AZ ids; claim for loop 10 only `01_hostile_vectors`, `09_cpp_flag_byte_scope`, `12_cpp_bool_u2_construction` (bugs in loop 10's own C++ core + the vectors they test against) and implement them; then feature-assess, run tests, test-spec sync, update docs (C++ rows of `discovery/doc_drift.md`), security audit (C++ core), performance, retrospective, local smoke, merge to `dev`. AZ-2068 (AVR stretch) optional.
+- Done (batch 5): the 36 Jira tickets are AZ-2070 to AZ-2105 (spec NN = AZ-(2069+NN)); specs renamed. Loop 10 shipped AZ-2070, AZ-2078 and AZ-2081.
+- The other 33 AZ-2069 tasks are **loop 11 onward** (own sessions, by severity: 02–08, then 10–24, then 25–29 release blockers, then 30–36). `v0.2.0` is tagged only after 25–29 land.

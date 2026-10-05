@@ -4,7 +4,7 @@
 
 1. Tests are green on the commit.
 2. The C# bytes and the TypeScript bytes of each golden fixture match. Mismatch count is 0.
-3. Push a version tag. Actions publishes npm `packbin`, NuGet `Packbin`, PyPI `packbin`, crates.io `packbin`, Maven Central `packbin`, and vcpkg `packbin`.
+3. Push a version tag. Actions publishes npm `packbin`, NuGet `Packbin`, PyPI `packbin`, crates.io `packbin`, Maven Central `packbin`, and vcpkg `packbin`. The same tag also publishes the C++ sources to PlatformIO, the ESP-IDF component registry and an Arduino branch and tag.
 
 ## Health check
 

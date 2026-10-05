@@ -1,0 +1,19 @@
+# Hostile packets and invalid schemes shared by every package. Format: id stage expected hex
+# (see README.md). The schemes are not in this file; each package writes them by hand.
+zero_progress_repeat_bool         unpack     trailing_bytes|scheme_error  01ff
+zero_progress_repeat_when         unpack     trailing_bytes|scheme_error  0100ff
+negative_count                    unpack     bad_value|short_packet       01ff61
+oversize_count                    unpack     short_packet                 01ffffffff61
+oversize_count_times              unpack     short_packet                 01ffffffff00
+oversize_list_count               unpack     short_packet|too_many        01ffff
+invalid_utf8                      unpack     bad_value|short_packet       010200c328
+invalid_utf8_dict_key             unpack     bad_value|short_packet       0101000100ff00
+count_behind_clear_flag           unpack     bad_value|scheme_error       0100
+count_behind_clear_flag_bits      unpack     bad_value|scheme_error       0100
+nine_flag_bits                    construct  scheme_error                 -
+nine_flag_bits_split              construct  scheme_error                 -
+when_names_later_field            construct  scheme_error                 -
+count_names_later_field           construct  scheme_error                 -
+when_names_outer_field_in_repeat  construct  scheme_error                 -
+bool_outside_flags                construct  scheme_error                 -
+empty_group_outside_flags         construct  scheme_error                 -

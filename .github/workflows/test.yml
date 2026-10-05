@@ -33,6 +33,8 @@ jobs:
           grep -qx 4001000065cd1d00a3e1110100 fixtures/golden.hex
       - name: report columns
         run: bash .github/workflows/report-row.test.sh
+      - name: hostile case file
+        run: bash fixtures/hostile/cases.test.sh
       - name: suites
         run: |
           set -euo pipefail
@@ -42,3 +44,16 @@ jobs:
           done
       - name: publish gate
         run: bash .github/workflows/publish-gate.test.sh
+
+  embedded:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: C++ embedded targets (Cortex-M QEMU, big-endian, ESP-IDF)
+        run: |
+          set -euo pipefail
+          mkdir -p test-results
+          bash cpp/embedded/run.sh
+      - name: embedded report
+        if: always()
+        run: cat test-results/report.csv

@@ -39,9 +39,8 @@ case "$lang" in
       flags+=(-isysroot "$sdk" -I"$sdk/usr/include/c++/v1")
     fi
     "${CXX:-g++}" "${flags[@]}" -o "$bin" \
-      "$drivers/position.cpp" "$root/cpp/src/field.cpp" "$root/cpp/src/packbin.cpp" "$root/cpp/src/counted.cpp" \
-      "$root/cpp/src/walk_common.cpp" "$root/cpp/src/walk.cpp" "$root/cpp/src/unpack_walk.cpp" \
-      "$root/cpp/src/session.cpp"
+      "$drivers/position.cpp" "$root/cpp/src/core/values.cpp" "$root/cpp/src/core/pack.cpp" \
+      "$root/cpp/src/core/unpack.cpp" "$root/cpp/src/core/session.cpp" "$root/cpp/src/os_random.cpp"
     "$bin"
     ;;
   java)

@@ -275,6 +275,90 @@ BinaryPacker::unpack_with(
 .unwrap();
 ```
 
+### C++
+
+The C++ package packs into a buffer you own and reads from one. It throws nothing and allocates nothing, so the same code builds for a server and for a microcontroller (`-fno-exceptions -fno-rtti`). Strings and lists land in caller storage: `View` borrows bytes from the input buffer, `Text<N>` and `Array<T, N>` hold up to N, and more than N is the error `TooMany`, never a cut.
+
+```cpp
+#include <packbin/packbin.hpp>
+
+using namespace packbin;
+
+using Actions = Array<View, 8>;
+
+struct User {
+    View username;
+    Array<View, 8> roles;
+    Array<Entry<Actions>, 8> access;  // keys in unsigned byte order
+};
+
+struct Ping { std::uint8_t code = 0; };
+struct Note { std::uint16_t id = 0; Text<32> title; };
+
+constexpr auto user = scheme<User>(1,
+    utf8<&User::username>(0),
+    list<&User::roles>(utf8(0)),
+    dict<&User::access>(list(utf8(0))));
+constexpr auto ping = scheme<Ping>(2, u8<&Ping::code>(0));
+constexpr auto note = scheme<Note>(3, u16<&Note::id>(0), utf8<&Note::title>(1));
+
+User row;  // fill it like the C# example: "ada", two roles, map and store
+std::uint8_t buf[128];
+Result packed = pack(user, row, buf, sizeof(buf));  // packed.offset is the packet length
+
+User got;
+Ping pinged;
+Note noted;
+Result r = unpack(buf, packed.offset,
+    on(user, got, [](User const& u) { /* ... */ }),
+    on(ping, pinged, [](Ping const& p) { /* ... */ }),
+    on(note, noted, [](Note const& n) { /* ... */ }));
+```
+
+The first byte picks the scheme; its handler runs only after the whole packet reads. A failure is a value: `r.error` is one of `ShortPacket`, `TrailingBytes`, `TypeMismatch`, `BufferFull`, `TooMany`, `BadValue`, `SchemeInvalid`, with `r.offset` (the byte) and `r.field` (the order id). A `constexpr` scheme with a gap, a repeated id or a wrong anchor does not compile, and the compiler names the id; a scheme built at run time reports it through `validate(scheme)`. A member that may be absent is `Opt<T>`.
+
+#### Microcontrollers
+
+The same package builds for 32-bit microcontrollers — Cortex-M0+/M3/M4/M33, ESP32, RP2040, nRF52, STM32 — with `-std=c++17 -fno-exceptions -fno-rtti`. It references no `malloc`, no `operator new` and no exception runtime, keeps no global state, and the scheme tables live in flash.
+
+| Tool | Add packbin |
+|------|-------------|
+| PlatformIO | `lib_deps = zxsanny/packbin` and `build_src_flags = -std=gnu++17` in `platformio.ini` |
+| Arduino IDE / arduino-cli | Library Manager: `packbin`, then `#include <packbin.h>` |
+| ESP-IDF ≥ 5.1 | `idf.py add-dependency "zxsanny/packbin"` |
+| CMake / vcpkg (host) | vcpkg port `packbin`, or `add_subdirectory(cpp)` → target `packbin` |
+
+Examples: [`cpp/examples/pico`](cpp/examples/pico) (PlatformIO, Raspberry Pi Pico), [`cpp/examples/esp32_arduino`](cpp/examples/esp32_arduino) (Arduino-ESP32), [`cpp/examples/esp_idf`](cpp/examples/esp_idf) (ESP-IDF with the hardware RNG).
+
+`PackSession::start` takes the board's random source as a `RandomFn` (`bool(std::uint8_t* out, std::size_t n, void* ctx)`): `esp_fill_random` on ESP32, the RNG peripheral on STM32 or nRF52. When it returns false, no session opens. Host programs pass `packbin::os_random`. `f64` needs an 8-byte `double`; where `double` is 4 bytes (avr-gcc), a scheme with `f64` does not compile.
+
+Moving from 0.1.x — the C++ API changed; the bytes did not:
+
+| 0.1.x | Now |
+|-------|-----|
+| `BinaryPacker::pack(scheme, row)` → `std::vector` | `pack(scheme, row, out, cap)` → `Result` (`offset` = length) |
+| `BinaryPacker::unpack(bytes, scheme.on(handler)...)` | `unpack(data, len, on(scheme, row, handler)...)`, or `unpack(scheme, data, len, row)` |
+| `Scheme<T>(type, ...)`, `scheme(type, {...})`, `SchemeHandler` | `constexpr auto s = scheme<T>(type, ...)`; `on(s, row, handler)` |
+| `Value`, `Values`, `ValueList`, `ValueMap` (map rows) | struct rows with `Opt<T>`, `View`, `Text<N>`, `Blob<N>`, `Array<T, N>`, `Entry<V>` members |
+| `u16(0, &T::m)`, `bind_scalar`, `bind_optional`, `bind_accessors`, `BoundField<T>` | `u16<&T::m>(0)` (member binding only; no getter/setter) |
+| `std::optional<T>` / `std::string` / `std::vector<T>` members | `Opt<T>` / `View` or `Text<N>` / `Array<T, N>` |
+| `flags(id, {a, b})`, `when(id, eq, {a})`, `repeat(id, {a})`, `times(id, n, {a})`, `group(id, {a})` | the same without braces: `flags(id, a, b)` …; `repeat` and `times` bind an `Array<E, N>` member: `repeat<&T::m>(id, ...)` |
+| `group(id, "name", {})` | `group<&T::flag>(id)` on a `bool` member |
+| `flag_byte()`, `Field::bit(field)` | `flag_byte(n)`, `flag_bit(n, field)` with n = 0..7 |
+| `list("name", element)`, `dict("name", element)` | `list<&T::m>(element)`, `dict<&T::m>(element)` |
+| `u2({0, 1})`, `sized(id, n)`, `bits(id, n)`, `packed(w, id, n, bias)` | `u2(u8<&T::a>(0), u8<&T::b>(1))`, `sized<&T::m>(id, n)`, `bits<&T::m>(id, n)`, `packed<&T::m>(w, id, n, bias)` |
+| `bytes(id, n)` with `std::vector<std::uint8_t>` | `bytes<&T::m>(id)` on `std::uint8_t[n]`, or `bytes<&T::m>(id, n)` on a `View` |
+| `eq(id, Value{...})` | `eq(id, number)` |
+| `UnpackResult`, `ShortPacket`, `TrailingBytes`, `TypeMismatch`, `std::runtime_error` | `Result` and `Error` |
+| `validate_order(fields)` | `validate(scheme)`, or a compile error for a `constexpr` scheme |
+| `to_hex`, `mismatched_bytes`, `present`, `motion_field_count`, `id_name`, `pack_body`, `unpack_body`, `Field` | removed |
+| `PackSession::load(seed)` → `std::optional` | `PackSession s; s.load(seed, 32)` → `bool` |
+| `start()`, `start(nonce)`, `join(nonce)` | `start(os_random, nullptr, nonce_out)` (or your `RandomFn`), `start(nonce, 16)`, `join(nonce, 16)` |
+| `session.pack(scheme, row)` → `std::optional<std::vector>` | `session.pack(scheme, row, out, cap)` → `Result` |
+| `session.unpack(bytes, handlers...)` | `session.unpack(data, len, ...)`; removes the pad in place |
+
+Two kinds of scheme fail construction (`SchemeInvalid`, or a compile error for a `constexpr` scheme), because neither can round-trip: a `boolean` or an empty `group` anywhere except directly under `flags(...)` or `flag_bit(...)`, and a `u2` with more than 64 children. The wire bytes of every valid scheme are unchanged.
+
 ## Encrypted session
 
 One optional session beside clear pack. Load a 32-byte seed on each side. The opener calls start and sends those 16 bytes once. The waiter calls join with them. After that, pack and unpack use the same schemes as clear pack, and the payload stays the same length. A second client is a second session.

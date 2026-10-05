@@ -6,9 +6,9 @@ There is no database. The library does not store a packet after the call returns
 
 | Entity | Attributes | Constraints |
 |--------|------------|-------------|
-| Field list | ordered fields, each with a name, a width, and an endian | names are for the value and for errors; they are not written. A continuing group takes an anchor equal to the next value id. The anchor is not written and does not consume a slot. `packed` and `times` take their item count from an earlier field |
+| Field list | ordered fields, each with a name, a width, and an endian | names are for the value and for errors; they are not written. A continuing group takes an anchor equal to the next value id. The anchor is not written and does not consume a slot. `packed` and `times` take their item count from an earlier field. In C++ a field has an order id and a bound struct member, not a name; the order id is what errors report |
 | Bytes | the packed buffer | length is the sum of the fields that are present |
-| Short packet | field name, bytes needed, bytes left | returned instead of a value |
+| Short packet | field name, bytes needed, bytes left. C++: field order id, byte offset, bytes needed | returned instead of a value. C++ returns a `Result` and keeps the fields read before the failure |
 
 ## Relationships
 
@@ -19,7 +19,7 @@ erDiagram
     FIELD_LIST ||--o| VALUE : unpacks
 ```
 
-One field list describes one packet shape. One pack call yields one buffer or an error and zero bytes. One unpack call yields one value or one error and zero values.
+One field list describes one packet shape. One pack call yields one buffer or an error and zero bytes. One unpack call yields one value or one error and zero values. In C++ pack writes into the caller's buffer and reports the length or the failing offset, and unpack fills the caller's row.
 
 ## Migration
 
@@ -27,7 +27,7 @@ No table and no migration tool. There is nothing to reverse. A change to a calle
 
 ## Seed data
 
-The golden hex in `_docs/00_problem/input_data/expected_results/results_report.md` is the seed for every environment. Development and the CI run use the same file. There is no staging database to seed.
+The golden hex in `fixtures/golden.hex` (the position row; CI reads this file) is the seed for every environment. Development and the CI run use the same file. There is no staging database to seed.
 
 ## Compatibility
 

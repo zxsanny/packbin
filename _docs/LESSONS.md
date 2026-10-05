@@ -33,3 +33,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-09-29_loop9.md
 - [2026-09-29] [tooling] When `cargo audit` rejects a CVSS 4.0 advisory file, record the empty dependency list. That failure is not a CVE in this crate.
   Source: _docs/06_metrics/retro_2026-09-29_loop9.md
+- [2026-10-05] [testing] A 64-bit host fuzz cannot show 32-bit narrowing faults. Put a vector for every packet-count path in a `VECTOR_TESTS` file so the Cortex-M3 QEMU run executes it; that run caught the `size_t` wrap that 20 M sanitizer-checked packets missed.
+  Source: _docs/06_metrics/retro_2026-10-05_loop10.md
+- [2026-10-05] [architecture] Clamp every count read from a packet just under `SIZE_MAX` before narrowing it, so the short-packet and capacity checks fail it instead of a wrapped small number passing.
+  Source: _docs/06_metrics/retro_2026-10-05_loop10.md
+- [2026-10-05] [process] Ask a fresh reviewer to read the batch diff before the commit. In loop 10 it found a zero-width `times` that spun for seconds and a stack budget used to the byte.
+  Source: _docs/06_metrics/retro_2026-10-05_loop10.md

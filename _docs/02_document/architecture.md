@@ -11,7 +11,7 @@ packbin is a library: the caller writes a field list, pack and unpack move the e
 - TypeScript package — pack and unpack for Vue, React, and Node
 - Python package — pack and unpack for tools and scripts
 - Rust package — pack and unpack for a native node
-- C++ package — pack and unpack for a C++ program
+- C++ package — pack and unpack for a C++ program or 32-bit firmware, from one allocation-free core
 - Java package — pack and unpack for a Java program
 - GitHub Actions — tests on every push and pull request, publish on a version tag
 
@@ -19,7 +19,8 @@ packbin is a library: the caller writes a field list, pack and unpack move the e
 
 - The bytes are only the fields
 - The first release has no code generator
-- A short packet returns no value
+- A short packet returns an error and no value. In C++ the error is a `Result` and the row keeps the fields read before it
+- The C++ core allocates nothing and throws nothing
 
 > See ADR 001 (Walk field lists with runtime primitives).
 
@@ -40,6 +41,7 @@ packbin is a library: the caller writes a field list, pack and unpack move the e
 | crates.io | registry upload | Outbound | Rust package |
 | Maven Central | registry upload | Outbound | Java package |
 | vcpkg | git registry push | Outbound | C++ package `packbin` |
+| PlatformIO, ESP-IDF component registry, Arduino | registry upload and git branch | Outbound | the same C++ sources for firmware |
 
 > See ADR 003 (Publish C++ through a vcpkg git registry).
 
@@ -51,7 +53,7 @@ packbin is a library: the caller writes a field list, pack and unpack move the e
 | Language | TypeScript | current Node LTS at first publish | Vue, React, and Node |
 | Language | Python | current stable at first publish | Tools and scripts |
 | Language | Rust | current stable at first publish | A native node |
-| Language | C++ | current stable at first publish | A C++ program |
+| Language | C++ | C++17, freestanding core (`-fno-exceptions -fno-rtti`, no heap) | A C++ program or 32-bit firmware: Cortex-M, ESP32, RP2040 |
 | Language | Java | current stable at first publish | A Java program |
 | Framework | none | — | A library, not an application |
 | Database | none | — | No stored packets |
@@ -68,6 +70,15 @@ packbin is a library: the caller writes a field list, pack and unpack move the e
 - Vue and React do not get their own package
 - Registry credentials stay in the CI secret store
 
+### C++ core
+
+The C++ package is one core for host programs and firmware. It writes into a caller buffer and reads from one, keeps no global state, and reports every failure as a `Result` (error kind, byte offset, field order id, bytes needed). Scheme tables are built with `scheme<Row>(...)`, at compile time when `constexpr`, and live in flash. The walker follows these rules (loop 10, batch 5):
+
+- Flag bytes are scoped per container. Each round of a `repeat`, `times`, `list` or `dict` reads its own flag bytes, and the outer ones come back at the end of the container.
+- A `repeat` round, or a round of a container with no bound member (`times`, `list`, `dict`), that reads no bytes ends the container. Bound containers stop at their capacity.
+- A `boolean` or an empty `group` is valid only directly under `flags` or `flag_bit`; elsewhere the scheme is `SchemeInvalid` (a compile error when `constexpr`).
+- A `u2` holds at most 64 children.
+
 ## 3. Deployment Model
 
 **Environments**: a workstation for development, GitHub Actions for the test run, and the public registries for the published packages. There is no staging host.
@@ -76,6 +87,7 @@ packbin is a library: the caller writes a field list, pack and unpack move the e
 - No cloud application host
 - No container orchestration for the product
 - The test containers are the current .NET LTS SDK, the current Node LTS image, and the current stable images for Python, Rust, C++, and Java
+- Two more images run the C++ embedded targets: `cpp-embedded` (arm-none-eabi GCC, QEMU, cross g++ for s390x) and `cpp-embedded-esp` (`espressif/idf:v5.3.2`)
 
 **Environment-specific configuration**:
 
@@ -93,7 +105,7 @@ packbin is a library: the caller writes a field list, pack and unpack move the e
 |--------|-------------|--------------------|
 | Field list | Order, widths, endian, and flag bits | Caller |
 | Bytes | The packed buffer | Caller, after pack |
-| Short packet | Field name, bytes needed, bytes left | unpack |
+| Short packet | Field name, bytes needed, bytes left (C++: order id, byte offset, bytes needed) | unpack |
 
 **Key relationships**:
 - One field list describes one packet shape
@@ -101,7 +113,7 @@ packbin is a library: the caller writes a field list, pack and unpack move the e
 
 **Data flow summary**:
 - Value → pack → bytes: the caller sends the bytes on their own socket
-- Bytes → unpack → value or error: a short buffer does not yield a partial value
+- Bytes → unpack → value or error: a short buffer does not yield a partial value. In C++ the fields read before a failure keep their values in the caller's row
 
 ## 5. Integration Points
 

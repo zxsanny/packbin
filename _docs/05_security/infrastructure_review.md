@@ -1,15 +1,14 @@
 # Infrastructure review
 
-**Date**: 2026-09-29
+**Date**: 2026-10-05
 
-No production Dockerfile. Tests use `docker-compose.test.yml` with no published ports.
+No production Dockerfile. Tests and the embedded job use `docker-compose.test.yml` with no published ports.
 
 | Check | Result |
 |-------|--------|
-| Secrets in CI | `publish.yml` injects `secrets.*`. `test.yml` does not |
-| `.env.example` | token names only, values empty |
-| Containers | test images have no `USER` directive and use floating tags |
-| Actions checkout | `actions/checkout@v7` in `test.yml` and `publish.yml`, not a commit SHA |
-| Network | compose publishes no port |
-| TLS | registry calls use https URLs |
-| Maven | `publish-registries.sh` writes a detached `.asc` signature when `MAVEN_GPG_PRIVATE_KEY` is set |
+| `cpp/embedded/Dockerfile` | base `ubuntu:24.04` by tag, packages from the distribution, no `curl | sh`, no secrets, no user data. The tag is not a digest (F3) |
+| `cpp-embedded-esp` | `espressif/idf:v5.3.2` by tag (F3) |
+| `test.yml` `embedded` job | runs `cpp/embedded/run.sh`; no secrets; `actions/checkout@v7` is a moving tag (F1) |
+| `test.yml` `scaffold` job | new hostile-case step runs a local script; no network |
+| `cpp/embedded/examples.sh` | downloads `arduino-cli` v1.1.1 over HTTPS from the official GitHub release and runs it, with no checksum (F2) |
+| Publish scripts for PlatformIO, ESP-IDF, Arduino | skip without their tokens; tokens come from the CI secret store (gate test) |

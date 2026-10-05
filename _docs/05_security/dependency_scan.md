@@ -1,15 +1,13 @@
 # Dependency scan
 
-**Date**: 2026-09-29
-**Scope**: loop 9, pack session
+**Date**: 2026-10-05
+**Scope**: loop 10, the C++ core and the embedded CI
 
 | Manifest | Tool | Result |
 |----------|------|--------|
-| `typescript/package.json` | `npm audit` | 0 info, 0 low, 0 moderate, 0 high, 0 critical. Dev dependency: `typescript` |
-| `rust/Cargo.toml` | manifest | `[dependencies]` is empty. `cargo audit` could not load the RustSec database (`RUSTSEC-2026-0073` uses CVSS 4.0, which this `cargo audit` rejects). No crate in this package is in that graph |
-| `csharp/Packbin.csproj` | `dotnet list package --vulnerable --include-transitive` | no vulnerable packages |
-| `csharp/tests/Packbin.Tests.csproj` | same | no vulnerable packages. Test-only: xunit, the test SDK, coverlet |
-| `python/pyproject.toml` | manifest | `dependencies = []` |
-| Java, C++ | none | no package manifest |
+| `cpp/library.json`, `cpp/idf_component.yml`, `cpp/CMakeLists.txt`, `cpp/arduino/library.properties` | manifest read | no dependencies. The core includes only `<cstdint> <cstddef> <cstring> <type_traits> <limits> <array> <utility>` and its own headers |
+| `cpp/embedded/Dockerfile` | manifest read | Ubuntu 24.04 packages from the distribution: `gcc-arm-none-eabi`, `qemu-system-arm`, `qemu-user-static`, `g++-s390x-linux-gnu`. Build-time only; nothing ships to users |
+| `cpp/embedded/examples.sh` | manifest read | downloads `arduino-cli` 1.1.1 from GitHub releases with no checksum (F2); PlatformIO and Python packages installed into a venv |
+| `typescript`, `rust`, `csharp`, `python`, `java` | not changed in loop 10 | results of 2026-09-29 stand: no vulnerable packages |
 
-No CVE applies to a library dependency of this repo.
+The C++ core ships no third-party code.

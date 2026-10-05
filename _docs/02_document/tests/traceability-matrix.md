@@ -110,6 +110,33 @@
 | AZ-2024 AC-4 | Bad lengths create nothing | FT-K-06 | Covered |
 | AZ-2025 AC-1 | One ciphertext | FT-K-09 | Covered |
 | AZ-2025 AC-2 | A peer unpacks it | FT-K-09 | Covered |
+| cpp-microcontroller AC-1 | The core builds the embedded way | FT-E-01 | Covered |
+| cpp-microcontroller AC-2 | No heap and no exceptions in a firmware image | FT-E-02 | Covered |
+| cpp-microcontroller AC-3 | The same bytes on the target CPU | FT-E-03 | Covered |
+| cpp-microcontroller AC-4 | The same bytes on a big-endian CPU | FT-E-04 | Covered |
+| cpp-microcontroller AC-5 | Flash and stack budget | FT-E-05 | Covered |
+| cpp-microcontroller AC-6 | Errors are values | FT-E-06 | Covered |
+| cpp-microcontroller AC-7 | Scheme order is checked without throwing | FT-E-07 | Covered |
+| cpp-microcontroller AC-8 | Strings and bytes are borrowed | FT-E-08 | Covered |
+| cpp-microcontroller AC-9 | `f64` needs an 8-byte double | FT-E-09 | Covered |
+| cpp-microcontroller AC-10 | The session runs on the board | FT-E-10 | Covered |
+| cpp-microcontroller AC-11 | Host programs use the core API | FT-E-11 | Covered |
+| cpp-microcontroller AC-12 | Installable from the embedded registries | FT-E-12 | Covered |
+| cpp-microcontroller AC-13 | Every target runs in CI | FT-E-13 | Covered |
+| AZ-2070 AC-1 | Every listed hostile case is present and well formed | FT-X-01 | Covered |
+| AZ-2070 AC-2 | A malformed line fails the check | FT-X-01 | Covered |
+| AZ-2070 AC-3 | Each case is described | FT-X-01 | Covered |
+| AZ-2070 AC-4 | CI runs the check | FT-X-01 | Covered |
+| AZ-2078 AC-1 | A reused flag-byte number round-trips | FT-X-02 | Covered |
+| AZ-2078 AC-2 | Inner bits still read their own byte | FT-X-02 | Covered |
+| AZ-2078 AC-3 | A zero-progress repeat ends | FT-X-03 | Covered |
+| AZ-2078 AC-4 | Hostile vectors on the host | FT-X-04 | Covered |
+| AZ-2078 AC-5 | Embedded profile and budgets hold | FT-E-05 | Covered |
+| AZ-2081 AC-1 | A bool outside flags is refused | FT-X-05 | Covered |
+| AZ-2081 AC-2 | An empty group outside flags is refused | FT-X-05 | Covered |
+| AZ-2081 AC-3 | A bool inside flags is unchanged | FT-X-06 | Covered |
+| AZ-2081 AC-4 | A u2 over 64 children is refused | FT-X-07 | Covered |
+| AZ-2081 AC-5 | Embedded runner and budgets hold | FT-E-05 | Covered |
 | AZ-2025 AC-3 | Clear pack still matches | FT-P-01 | Covered |
 | AZ-2026 AC-1 | Both examples are in the README | FT-K-08 | Covered |
 | AZ-2026 AC-2 | The session example matches the contract | FT-K-08 | Covered |
@@ -142,9 +169,9 @@
 
 | Category | Total Items | Covered | BLOCKED | WAIVED | Coverage |
 |----------|-----------|---------|---------|--------|----------|
-| Acceptance Criteria | 109 | 109 | 0 | 0 | every row Covered or WAIVED |
+| Acceptance Criteria | 136 | 136 | 0 | 0 | every row Covered or WAIVED |
 | Restrictions | 19 | 17 | 0 | 2 | every row Covered or WAIVED |
-| **Total** | 128 | 126 | 0 | 2 | every row Covered or WAIVED |
+| **Total** | 155 | 153 | 0 | 2 | every row Covered or WAIVED |
 
 ## Uncovered Items Analysis
 

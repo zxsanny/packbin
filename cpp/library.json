@@ -1,0 +1,24 @@
+{
+  "name": "packbin",
+  "version": "0.1.0",
+  "description": "Pack and unpack a field list into a caller buffer: no heap, no exceptions, the same bytes as the C#, TypeScript, Python, Rust and Java packages.",
+  "keywords": ["binary", "serialization", "packet", "radio", "no-heap"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zxsanny/packbin.git"
+  },
+  "homepage": "https://github.com/zxsanny/packbin",
+  "license": "MIT",
+  "frameworks": "*",
+  "platforms": "*",
+  "headers": ["packbin/packbin.hpp"],
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src/core",
+    "flags": ["-std=gnu++17"]
+  },
+  "export": {
+    "include": ["include", "src/core", "examples", "library.json"]
+  },
+  "examples": ["examples/pico"]
+}
