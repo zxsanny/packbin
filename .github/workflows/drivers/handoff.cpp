@@ -145,6 +145,54 @@ constexpr auto bitwhen_scheme = packbin::scheme<BitWhen>(
     1, packbin::u8<&BitWhen::k>(0), packbin::flag_byte(0),
     packbin::when(1, packbin::eq(0, 1), packbin::flag_bit(0, packbin::u8<&BitWhen::v>(1))));
 
+struct FlagRound {
+  packbin::Opt<bool> on;
+  packbin::Opt<std::uint8_t> n;
+};
+
+struct RoundFlags {
+  Array<FlagRound, 4> rounds;
+};
+
+constexpr auto roundflags_scheme = packbin::scheme<RoundFlags>(
+    1, packbin::repeat<&RoundFlags::rounds>(
+           0, packbin::flags(0, packbin::boolean<&FlagRound::on>(0),
+                             packbin::u8<&FlagRound::n>(1))));
+
+RoundFlags roundflags_row() {
+  RoundFlags row;
+  row.rounds.count = 3;
+  row.rounds.items[0].on = true;
+  row.rounds.items[1].on = false;
+  row.rounds.items[2].on = true;
+  for (std::size_t i = 0; i < row.rounds.count; ++i)
+    row.rounds.items[i].n = static_cast<std::uint8_t>(i + 1);
+  return row;
+}
+
+struct WhenRound {
+  std::uint8_t k = 0;
+  packbin::Opt<std::uint8_t> v;
+};
+
+struct RoundWhen {
+  Array<WhenRound, 4> rounds;
+};
+
+constexpr auto roundwhen_scheme = packbin::scheme<RoundWhen>(
+    1, packbin::repeat<&RoundWhen::rounds>(
+           0, packbin::u8<&WhenRound::k>(0),
+           packbin::when(1, packbin::eq(0, 1), packbin::u8<&WhenRound::v>(1))));
+
+RoundWhen roundwhen_row() {
+  RoundWhen row;
+  row.rounds.count = 2;
+  row.rounds.items[0].k = 1;
+  row.rounds.items[0].v = 9;
+  row.rounds.items[1].k = 2;
+  return row;
+}
+
 constexpr std::size_t kMax = 512;
 
 std::size_t parse_hex(std::string const& hex, std::uint8_t* out) {
@@ -220,6 +268,35 @@ bool bitwhen_ok(std::uint8_t const* data, std::size_t len) {
   return got.k == 0 && !got.v.has;
 }
 
+bool same_bytes(packbin::Result r, std::uint8_t const* got, std::uint8_t const* want,
+                std::size_t want_len) {
+  return r.ok() && r.offset == want_len && std::memcmp(got, want, want_len) == 0;
+}
+
+bool roundflags_ok(std::uint8_t const* data, std::size_t len) {
+  RoundFlags got;
+  if (!packbin::unpack(roundflags_scheme, data, len, got).ok() || got.rounds.count != 3)
+    return false;
+  auto const* r = got.rounds.items;
+  bool read = r[0].on.has && r[0].on.value && !r[1].on.has && r[2].on.has && r[2].on.value &&
+              r[0].n.has && r[0].n.value == 1 && r[1].n.has && r[1].n.value == 2 &&
+              r[2].n.has && r[2].n.value == 3;
+  std::uint8_t again[kMax];
+  return read && same_bytes(packbin::pack(roundflags_scheme, got, again, sizeof(again)), again,
+                            data, len);
+}
+
+bool roundwhen_ok(std::uint8_t const* data, std::size_t len) {
+  RoundWhen got;
+  if (!packbin::unpack(roundwhen_scheme, data, len, got).ok() || got.rounds.count != 2)
+    return false;
+  auto const* r = got.rounds.items;
+  bool read = r[0].k == 1 && r[0].v.has && r[0].v.value == 9 && r[1].k == 2 && !r[1].v.has;
+  std::uint8_t again[kMax];
+  return read && same_bytes(packbin::pack(roundwhen_scheme, got, again, sizeof(again)), again,
+                            data, len);
+}
+
 bool session_ok(std::uint8_t* data, std::size_t len) {
   packbin::PackSession waiter;
   Position got;
@@ -255,6 +332,10 @@ int main(int argc, char** argv) {
     row.v = 5;
     return print(packbin::pack(bitwhen_scheme, row, buf, sizeof(buf)), buf);
   }
+  if (cmd == "pack-roundflags")
+    return print(packbin::pack(roundflags_scheme, roundflags_row(), buf, sizeof(buf)), buf);
+  if (cmd == "pack-roundwhen")
+    return print(packbin::pack(roundwhen_scheme, roundwhen_row(), buf, sizeof(buf)), buf);
   if (cmd == "pack-session") {
     packbin::PackSession opener;
     if (!open_session(opener, true))
@@ -274,6 +355,10 @@ int main(int argc, char** argv) {
     return booltrue_ok(buf, len) ? 0 : 1;
   if (cmd == "unpack-bitwhen")
     return bitwhen_ok(buf, len) ? 0 : 1;
+  if (cmd == "unpack-roundflags")
+    return roundflags_ok(buf, len) ? 0 : 1;
+  if (cmd == "unpack-roundwhen")
+    return roundwhen_ok(buf, len) ? 0 : 1;
   if (cmd == "unpack-session")
     return session_ok(buf, len) ? 0 : 1;
   return 2;

@@ -22,7 +22,7 @@ Loop 13 feature assessment (X1), owner scope A on 2026-10-05. Aligned rounds (`r
 
 ### Included
 - A `roundflags` ring and a `roundwhen` ring in `language-pair.sh`.
-- Pack and unpack commands in the drivers of C#, TypeScript, Java and Rust (map form); C++ if its array rows can express the shapes.
+- Pack and unpack commands in the drivers of TypeScript, Java, Rust (map form) and C++ (`Opt<>` members in fixed-capacity arrays); C# packs only: no public C# API reads an aligned round row (`BinaryPacker.Read` is internal and the typed `Unpack` throws `InvalidCastException` for a round list; AZ-2092), and reaching into the internal reader by reflection would not test what a NuGet consumer has.
 - The expected hex constants next to the existing ones.
 
 ### Excluded
@@ -35,12 +35,12 @@ Loop 13 feature assessment (X1), owner scope A on 2026-10-05. Aligned rounds (`r
 **AC-1: `roundflags`**
 Given `repeat(flags(bool on, u8 n))` with `on = [true, false, true]` and `n = [1, 2, 3]`
 When any ring member packs it
-Then the bytes are `01030102020303`, and every other member reads `on = [true, null, true]` and `n = [1, 2, 3]` (null is each language's absent value).
+Then the bytes are `01030102020303`, and every member that has a public reader reads `on = [true, null, true]` and `n = [1, 2, 3]` (null is each language's absent value; Rust reads three round rows, C++ `Opt<>` members) and repacks it to the same bytes.
 
 **AC-2: `roundwhen`**
 Given `repeat(u8 k, when(k == 1, u8 v))` with `k = [1, 2]` and `v = [9]`
 When any ring member packs it
-Then the bytes are `01010902`, and every other member reads `k = [1, 2]` and `v = [9, null]`, and repacking that row gives `01010902`.
+Then the bytes are `01010902`, and every member that has a public reader reads `k = [1, 2]` and `v = [9, null]` (Rust and C++: two rounds, the second without a `v`), and repacking that row gives `01010902`.
 
 **AC-3: Omissions are explicit**
 Given a language whose rows cannot express a shape
@@ -89,4 +89,5 @@ Then they all pass with unchanged hex constants.
 
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
-| The ring script is not run by CI (project AC-3 is gated manually) | follow-up (assessment X2; analysts recommend a CI job) | open | Medium |
+| The ring script is not run by CI (project AC-3 is gated manually) | follow-up AZ-2193 (assessment X2; analysts recommend a CI job) | open | Medium |
+| C# is a producer-only member of both rings: no public C# API reads an aligned round row, so the C# reading side is unchecked across languages until AZ-2092 lands a public reader (loop 13 batch 5; the driver worker stopped at the missing API instead of using reflection) | AZ-2092 | open | Medium |

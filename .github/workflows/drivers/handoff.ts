@@ -1,6 +1,7 @@
 import {
   BinaryPacker,
   PackSession,
+  Scheme,
   bool,
   dict,
   eq,
@@ -9,6 +10,7 @@ import {
   i16,
   i32,
   list,
+  repeat,
   scheme,
   u8,
   u16,
@@ -91,6 +93,55 @@ const bitWhenPacket = scheme<BitWhenRow>(
 );
 
 const bitWhenValues: BitWhenRow = { k: 0, v: 5 };
+
+type RoundRow = Record<string, unknown>;
+
+// Aligned rounds: one list entry per round. A bool whose bit is clear and a when that is not
+// taken leave the entry absent (undefined).
+const roundFlagsPacket = scheme<RoundRow>(
+  1,
+  repeat(0, [flags(0, [bool(0, (r) => r.on), u8(1, (r) => r.n)])]),
+);
+
+const roundFlagsValues: RoundRow = { on: [true, false, true], n: [1, 2, 3] };
+
+const roundWhenPacket = scheme<RoundRow>(
+  1,
+  repeat(0, [u8(0, (r) => r.k), when(1, eq(0, 1), [u8(1, (r) => r.v)])]),
+);
+
+const roundWhenValues: RoundRow = { k: [1, 2], v: [9] };
+
+function unpackRound(cmdName: string, hex: string, packet: Scheme<RoundRow>): RoundRow {
+  let row: RoundRow | undefined;
+  const result = BinaryPacker.unpack(Buffer.from(hex, "hex"), packet.on((value) => {
+    row = value as RoundRow;
+  }));
+  if (!result.ok || row === undefined) {
+    process.stderr.write(`${cmdName}: ${JSON.stringify(result)}\n`);
+    process.exit(1);
+  }
+  return row;
+}
+
+function checkRound(
+  cmdName: string,
+  hex: string,
+  packet: Scheme<RoundRow>,
+  expected: RoundRow,
+): void {
+  const row = unpackRound(cmdName, hex, packet);
+  if (!deepEqual(row, expected)) {
+    process.stderr.write(`${cmdName}: read ${JSON.stringify(row)}, expected ${JSON.stringify(expected)}\n`);
+    process.exit(1);
+  }
+  const again = Buffer.from(BinaryPacker.pack(packet, row)).toString("hex");
+  if (again !== hex) {
+    process.stderr.write(`${cmdName}: repacked ${again}, expected ${hex}\n`);
+    process.exit(1);
+  }
+  process.exit(0);
+}
 
 const userValues: UserRow = {
   username: "zxsanny",
@@ -205,6 +256,18 @@ if (cmd === "pack-bitwhen") {
   process.exit(0);
 }
 
+if (cmd === "pack-roundflags") {
+  const bytes = BinaryPacker.pack(roundFlagsPacket, roundFlagsValues);
+  process.stdout.write(Buffer.from(bytes).toString("hex") + "\n");
+  process.exit(0);
+}
+
+if (cmd === "pack-roundwhen") {
+  const bytes = BinaryPacker.pack(roundWhenPacket, roundWhenValues);
+  process.stdout.write(Buffer.from(bytes).toString("hex") + "\n");
+  process.exit(0);
+}
+
 if (cmd === "unpack-user") {
   const hex = process.argv[3] ?? "";
   const bytes = Buffer.from(hex, "hex");
@@ -262,6 +325,24 @@ if (cmd === "unpack-bitwhen") {
     process.exit(1);
   }
   process.exit(0);
+}
+
+if (cmd === "unpack-roundflags") {
+  checkRound(
+    cmd,
+    process.argv[3] ?? "",
+    roundFlagsPacket,
+    { on: [true, undefined, true], n: [1, 2, 3] },
+  );
+}
+
+if (cmd === "unpack-roundwhen") {
+  checkRound(
+    cmd,
+    process.argv[3] ?? "",
+    roundWhenPacket,
+    { k: [1, 2], v: [9, undefined] },
+  );
 }
 
 if (cmd === "pack-session") {

@@ -13,6 +13,12 @@ booltrue_hex="0101"
 # u8 k; split flag byte m; when(k == 1) { m.bit(u8 v) }, row {k:0, v:5}: the bit is set although the
 # when is not taken, and unpack never reads it (project AC-4). Python joins with its split form (AZ-2100).
 bitwhen_hex="010001"
+# repeat(flags(bool on, u8 n)), on [true, false, true], n [1, 2, 3]: a clear bit is never read, so the
+# aligned entry is null (AZ-2087, AZ-2091). C# only produces: no public C# API reads an aligned round
+# row yet (AZ-2092). Python joins with AZ-2134.
+roundflags_hex="01030102020303"
+# repeat(u8 k, when(k == 1, u8 v)), k [1, 2], v [9]: v unpacks aligned as [9, null]. Same omissions.
+roundwhen_hex="01010902"
 
 run_lang() {
   local lang="$1"
@@ -110,6 +116,18 @@ handoff typescript rust bitwhen "$bitwhen_hex"
 handoff rust java bitwhen "$bitwhen_hex"
 handoff java cpp bitwhen "$bitwhen_hex"
 handoff cpp csharp bitwhen "$bitwhen_hex"
+
+handoff csharp typescript roundflags "$roundflags_hex"
+handoff typescript rust roundflags "$roundflags_hex"
+handoff rust java roundflags "$roundflags_hex"
+handoff java cpp roundflags "$roundflags_hex"
+handoff cpp typescript roundflags "$roundflags_hex"
+
+handoff csharp typescript roundwhen "$roundwhen_hex"
+handoff typescript rust roundwhen "$roundwhen_hex"
+handoff rust java roundwhen "$roundwhen_hex"
+handoff java cpp roundwhen "$roundwhen_hex"
+handoff cpp typescript roundwhen "$roundwhen_hex"
 
 for lang in csharp typescript python rust cpp java; do
   got="$(run_lang "$lang" "pack-session" | tr -d '[:space:]')"

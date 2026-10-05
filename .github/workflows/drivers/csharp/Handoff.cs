@@ -130,6 +130,41 @@ static class Handoff
             Field.When(1, Condition.Eq(0, 1), m.Bit(Field.U8<BitWhenRow>(1, x => x.V))));
     }
 
+    sealed class RoundFlagsRow
+    {
+        public bool? On { get; set; }
+        public byte? N { get; set; }
+    }
+
+    sealed class RoundWhenRow
+    {
+        public byte? K { get; set; }
+        public byte? V { get; set; }
+    }
+
+    // repeat(flags(bool on, u8 n)): one list entry per round, so the row is a dictionary of lists.
+    static readonly Scheme<RoundFlagsRow> RoundFlagsScheme = new(1,
+        Field.Repeat(0,
+            Field.Flags(0, Field.Bool<RoundFlagsRow>(0, x => x.On), Field.U8<RoundFlagsRow>(1, x => x.N))));
+
+    static readonly Dictionary<string, object?> RoundFlagsValues = new()
+    {
+        ["On"] = new object?[] { true, false, true },
+        ["N"] = new object?[] { (byte)1, (byte)2, (byte)3 },
+    };
+
+    // repeat(u8 k, when(k == 1, u8 v)): v has no entry for a round that skips it.
+    static readonly Scheme<RoundWhenRow> RoundWhenScheme = new(1,
+        Field.Repeat(0,
+            Field.U8<RoundWhenRow>(0, x => x.K),
+            Field.When(1, Condition.Eq(0, (byte)1), Field.U8<RoundWhenRow>(1, x => x.V))));
+
+    static readonly Dictionary<string, object?> RoundWhenValues = new()
+    {
+        ["K"] = new object?[] { (byte)1, (byte)2 },
+        ["V"] = new object?[] { (byte)9 },
+    };
+
     static readonly byte[] SessionSeed = Enumerable.Range(1, 32).Select(i => (byte)i).ToArray();
     static readonly byte[] SessionNonce = Convert.FromHexString("01000000000000000000000000000000");
 
@@ -156,6 +191,12 @@ static class Handoff
                 return 0;
             case "pack-booltrue":
                 Console.WriteLine(Convert.ToHexString(BinaryPacker.Pack(BoolFlagScheme, new BoolFlagRow { On = true })).ToLowerInvariant());
+                return 0;
+            case "pack-roundflags":
+                Console.WriteLine(Convert.ToHexString(BinaryPacker.Pack(RoundFlagsScheme, RoundFlagsValues)).ToLowerInvariant());
+                return 0;
+            case "pack-roundwhen":
+                Console.WriteLine(Convert.ToHexString(BinaryPacker.Pack(RoundWhenScheme, RoundWhenValues)).ToLowerInvariant());
                 return 0;
             case "unpack-user":
                 if (args.Length < 2)

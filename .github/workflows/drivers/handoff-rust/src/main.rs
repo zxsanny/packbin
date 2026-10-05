@@ -5,6 +5,8 @@ use packbin::{
 use std::collections::BTreeMap;
 use std::process::ExitCode;
 
+mod rounds;
+
 #[derive(Default, Debug, PartialEq)]
 struct User {
     username: String,
@@ -320,6 +322,10 @@ fn run(args: &[String]) -> u8 {
         "pack-bitwhen" => pack_bitwhen(),
         "unpack-bitwhen" => unpack_bitwhen(args.get(1)),
         "unpack-booltrue" => unpack_boolflag(cmd, args.get(1), true),
+        "pack-roundflags" => rounds::pack_roundflags(),
+        "unpack-roundflags" => rounds::unpack_roundflags(args.get(1)),
+        "pack-roundwhen" => rounds::pack_roundwhen(),
+        "unpack-roundwhen" => rounds::unpack_roundwhen(args.get(1)),
         "unpack-user" => {
             let Some(hex) = args.get(1) else {
                 return 1;

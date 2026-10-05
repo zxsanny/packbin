@@ -2,6 +2,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import packbin.Access;
 import packbin.BinaryPacker;
 import packbin.Field;
@@ -24,12 +25,16 @@ public final class Handoff {
             case "pack-boolflag" -> System.out.println(hex(BinaryPacker.pack(boolFlagScheme(), boolFlagValues(false))));
             case "pack-booltrue" -> System.out.println(hex(BinaryPacker.pack(boolFlagScheme(), boolFlagValues(true))));
             case "pack-bitwhen" -> System.out.println(hex(BinaryPacker.pack(bitWhenScheme(), bitWhenValues())));
+            case "pack-roundflags" -> System.out.println(hex(BinaryPacker.pack(roundFlagsScheme(), roundFlagsValues())));
+            case "pack-roundwhen" -> System.out.println(hex(BinaryPacker.pack(roundWhenScheme(), roundWhenValues())));
             case "pack-session" -> System.exit(packSession());
             case "unpack-user" -> System.exit(userOk(requireHex(args)) ? 0 : 1);
             case "unpack-nested" -> System.exit(nestedOk(requireHex(args)) ? 0 : 1);
             case "unpack-boolflag" -> System.exit(boolFlagOk(requireHex(args), false) ? 0 : 1);
             case "unpack-booltrue" -> System.exit(boolFlagOk(requireHex(args), true) ? 0 : 1);
             case "unpack-bitwhen" -> System.exit(bitWhenOk(requireHex(args)) ? 0 : 1);
+            case "unpack-roundflags" -> System.exit(roundFlagsOk(requireHex(args)) ? 0 : 1);
+            case "unpack-roundwhen" -> System.exit(roundWhenOk(requireHex(args)) ? 0 : 1);
             case "unpack-session" -> System.exit(sessionOk(requireHex(args)) ? 0 : 1);
             default -> System.exit(2);
         }
@@ -208,6 +213,108 @@ public final class Handoff {
         if (got[0].get("v") != null) {
             System.err.println("unpack-bitwhen: v is " + got[0].get("v") + ", expected absent");
             return false;
+        }
+        return true;
+    }
+
+    /** repeat(flags(bool on, u8 n)): one flag byte per round; a clear bool bit is never read, so its entry comes back null. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Scheme<Map> roundFlagsScheme() {
+        return new Scheme<>(
+                1,
+                (Class) Map.class,
+                Packbin.repeat(
+                        0,
+                        Packbin.flags(
+                                0,
+                                Packbin.boolField(0, Access.get("on"), Access.set("on")),
+                                Packbin.u8(1, Access.get("n"), Access.set("n")))));
+    }
+
+    private static Map<String, Object> roundFlagsValues() {
+        Map<String, Object> values = new HashMap<>();
+        values.put("on", List.of(true, false, true));
+        values.put("n", List.of(1, 2, 3));
+        return values;
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static boolean roundFlagsOk(String hex) {
+        Map got = unpackRounds("unpack-roundflags", roundFlagsScheme(), hex);
+        if (got == null) {
+            return false;
+        }
+        if (!listIs(got.get("on"), true, null, true) || !listIs(got.get("n"), 1, 2, 3)) {
+            System.err.println("unpack-roundflags: on is " + got.get("on") + ", n is " + got.get("n")
+                    + ", expected [true, null, true] and [1, 2, 3]");
+            return false;
+        }
+        return repacks("unpack-roundflags", roundFlagsScheme(), got, hex);
+    }
+
+    /** repeat(u8 k, when(k == 1, u8 v)): the round with k == 2 skips v, so its entry comes back null. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Scheme<Map> roundWhenScheme() {
+        return new Scheme<>(
+                1,
+                (Class) Map.class,
+                Packbin.repeat(
+                        0,
+                        Packbin.u8(0, Access.get("k"), Access.set("k")),
+                        Packbin.when(1, Packbin.eq(0, 1), Packbin.u8(1, Access.get("v"), Access.set("v")))));
+    }
+
+    private static Map<String, Object> roundWhenValues() {
+        Map<String, Object> values = new HashMap<>();
+        values.put("k", List.of(1, 2));
+        values.put("v", List.of(9));
+        return values;
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static boolean roundWhenOk(String hex) {
+        Map got = unpackRounds("unpack-roundwhen", roundWhenScheme(), hex);
+        if (got == null) {
+            return false;
+        }
+        if (!listIs(got.get("k"), 1, 2) || !listIs(got.get("v"), 9, null)) {
+            System.err.println("unpack-roundwhen: k is " + got.get("k") + ", v is " + got.get("v")
+                    + ", expected [1, 2] and [9, null]");
+            return false;
+        }
+        return repacks("unpack-roundwhen", roundWhenScheme(), got, hex);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Map unpackRounds(String cmd, Scheme<Map> scheme, String hex) {
+        Map[] got = new Map[1];
+        Object err = BinaryPacker.unpack(parse(hex), scheme.on(row -> got[0] = row));
+        if (err != null || got[0] == null) {
+            System.err.println(cmd + ": not ok (" + (err == null ? "no row" : err.getClass().getSimpleName()) + ")");
+            return null;
+        }
+        return got[0];
+    }
+
+    @SuppressWarnings("rawtypes")
+    private static boolean repacks(String cmd, Scheme<Map> scheme, Map<?, ?> row, String hex) {
+        String again = hex(BinaryPacker.pack(scheme, row));
+        if (!again.equals(hex)) {
+            System.err.println(cmd + ": repacked " + again + ", expected " + hex);
+            return false;
+        }
+        return true;
+    }
+
+    private static boolean listIs(Object raw, Object... expected) {
+        if (!(raw instanceof List<?> list) || list.size() != expected.length) {
+            return false;
+        }
+        for (int i = 0; i < expected.length; i++) {
+            Object entry = expected[i] instanceof Integer ? asInt(list.get(i)) : list.get(i);
+            if (!Objects.equals(entry, expected[i])) {
+                return false;
+            }
         }
         return true;
     }
