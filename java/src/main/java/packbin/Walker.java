@@ -23,23 +23,24 @@ final class Walker {
         return Boolean.TRUE.equals(value);
     }
 
-    static boolean childOn(Object row, Field child) {
+    /** Whether a flag bit is set. {@code take} is the repeat or times round's item lookup, null outside rounds. */
+    static boolean childOn(Object row, Field child, Take take) {
         return switch (child.kind) {
-            case GROUP -> groupOn(row, child);
-            case BOOL -> boolOn(child.get.get(row));
-            case FLAG_BIT -> childOn(row, child.inner);
+            case GROUP -> groupOn(row, child, take);
+            case BOOL -> boolOn(takeValue(child, row, take));
+            case FLAG_BIT -> childOn(row, child.inner, take);
             case U8, U16, U32, U64, I8, I16, I32, I64, F32, F64, BYTES, UTF8, SIZED, BITS, PACKED, LIST, DICT ->
-                    isPresent(child.get.get(row));
+                    isPresent(takeValue(child, row, take));
             default -> false;
         };
     }
 
-    static boolean groupOn(Object row, Field group) {
-        if (group.get != null && isPresent(group.get.get(row))) {
+    private static boolean groupOn(Object row, Field group, Take take) {
+        if (group.get != null && isPresent(takeValue(group, row, take))) {
             return true;
         }
         for (Field child : group.children) {
-            if (childOn(row, child)) {
+            if (childOn(row, child, take)) {
                 return true;
             }
         }
@@ -60,9 +61,9 @@ final class Walker {
     static void packField(Field field, Object row, ByteSink sink, Map<Object, Object> seen, Take take) {
         switch (field.kind) {
             case FLAGS -> packFlags(field, row, sink, seen, take);
-            case FLAG_BYTE -> sink.write((byte) field.group.compute(row));
+            case FLAG_BYTE -> sink.write((byte) field.group.compute(row, take));
             case FLAG_BIT -> {
-                if (childOn(row, field.inner)) {
+                if (childOn(row, field.inner, take)) {
                     packField(field.inner, row, sink, seen, take);
                 }
             }
@@ -71,7 +72,7 @@ final class Walker {
                     packFields(field.children, row, sink, seen, take);
                 }
             }
-            case REPEAT -> packRepeat(field, row, sink, seen);
+            case REPEAT -> Rounds.packRepeat(field, row, sink, seen);
             case TIMES -> VarFields.packTimes(field, row, sink, seen);
             case BYTES -> packBytes(field, row, sink, seen, take);
             case GROUP -> packGroup(field, row, sink, seen, take);
@@ -115,7 +116,7 @@ final class Walker {
             case FLAG_BYTE -> unpackFlagByte(field, data, offset, seen);
             case FLAG_BIT -> unpackFlagBit(field, data, offset, row, seen, asList);
             case WHEN -> unpackWhen(field, data, offset, row, seen, asList);
-            case REPEAT -> unpackRepeat(field, data, offset, row, seen);
+            case REPEAT -> Rounds.unpackRepeat(field, data, offset, row, seen);
             case TIMES -> VarFields.unpackTimes(field, data, offset, row, seen);
             case BYTES -> unpackBytes(field, data, offset, row, seen, asList);
             case GROUP -> unpackGroup(field, data, offset, row, seen, asList);
@@ -126,7 +127,7 @@ final class Walker {
             case UTF8 -> VarFields.unpackUtf8(field, data, offset, row, seen, asList);
             case LIST -> Containers.unpackList(field, data, offset, row, asList);
             case DICT -> Containers.unpackDict(field, data, offset, row, asList);
-            case BOOL -> null;
+            case BOOL -> unpackSetBool(field, row, seen, asList);
             default -> unpackScalar(field, data, offset, row, seen, asList);
         };
     }
@@ -140,20 +141,11 @@ final class Walker {
 
     private static void packFlags(
             Field field, Object row, ByteSink sink, Map<Object, Object> seen, Take take) {
-        int flags = field.group.compute(row);
+        int flags = field.group.compute(row, take);
         sink.write((byte) flags);
         for (int i = 0; i < field.children.size(); i++) {
-            if ((flags & (1 << i)) == 0) {
-                continue;
-            }
-            Field bit = field.children.get(i);
-            Field inner = bit.inner;
-            if (inner.kind == Field.Kind.BOOL) {
-                seen.put(inner.id, inner.get.get(row));
-            } else if (inner.kind == Field.Kind.GROUP) {
-                packGroup(inner, row, sink, seen, take);
-            } else {
-                packField(inner, row, sink, seen, take);
+            if ((flags & (1 << i)) != 0) {
+                packField(field.children.get(i).inner, row, sink, seen, take);
             }
         }
     }
@@ -168,36 +160,6 @@ final class Walker {
             }
         }
         packFields(field.children, target, sink, seen, take);
-    }
-
-    private static void packRepeat(Field field, Object row, ByteSink sink, Map<Object, Object> seen) {
-        int count = 0;
-        for (Field child : field.children) {
-            Object v = child.get.get(row);
-            if (v == null) {
-                continue;
-            }
-            if (v instanceof List<?> list) {
-                count = Math.max(count, list.size());
-            } else {
-                count = Math.max(count, 1);
-            }
-        }
-        for (int i = 0; i < count; i++) {
-            packIndexed(field, row, sink, seen, i);
-        }
-    }
-
-    static void packIndexed(
-            Field field, Object row, ByteSink sink, Map<Object, Object> seen, int index) {
-        Take at = child -> {
-            Object v = child.get.get(row);
-            if (v instanceof List<?> list) {
-                return index < list.size() ? list.get(index) : null;
-            }
-            return v;
-        };
-        packFields(field.children, row, sink, seen, at);
     }
 
     private static void packBytes(
@@ -247,18 +209,18 @@ final class Walker {
             if ((flags & (1 << i)) == 0) {
                 continue;
             }
-            Field bit = field.children.get(i);
-            Field inner = bit.inner;
-            if (inner.kind == Field.Kind.BOOL) {
-                seen.put(inner.id, true);
-                store(row, inner, true, asList);
-            } else {
-                Object err = unpackField(inner, data, offset, row, seen, asList);
-                if (err != null) {
-                    return err;
-                }
+            Object err = unpackField(field.children.get(i).inner, data, offset, row, seen, asList);
+            if (err != null) {
+                return err;
             }
         }
+        return null;
+    }
+
+    /** A bool is only ever a flag bit's payload (SchemeOrder), read here because its bit is set: TRUE, no bytes. */
+    private static Object unpackSetBool(Field field, Object row, Map<Object, Object> seen, boolean asList) {
+        seen.put(field.id, Boolean.TRUE);
+        store(row, field, Boolean.TRUE, asList);
         return null;
     }
 
@@ -330,22 +292,6 @@ final class Walker {
             return null;
         }
         return unpackFields(field.children, data, offset, row, seen, asList);
-    }
-
-    private static Object unpackRepeat(
-            Field field, byte[] data, int[] offset, Object row, Map<Object, Object> seen) {
-        while (offset[0] < data.length) {
-            int before = offset[0];
-            Object err = unpackFields(field.children, data, offset, row, seen, true);
-            if (err != null) {
-                return err;
-            }
-            if (offset[0] == before) {
-                // A round that reads nothing would read nothing forever; the bytes left are not part of the packet.
-                return new Packbin.TrailingBytes(data.length - offset[0]);
-            }
-        }
-        return null;
     }
 
     private static Object unpackBytes(

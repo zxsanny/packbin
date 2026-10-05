@@ -29,7 +29,12 @@ def test_every_unpack_vector_has_a_declared_scheme():
 
 @pytest.mark.parametrize("case_id,expected,hex_bytes", UNPACK_CASES, ids=[c[0] for c in UNPACK_CASES])
 def test_vector_is_rejected(case_id: str, expected: set[str], hex_bytes: str):
-    scheme = VECTOR_SCHEMES[case_id]()
+    try:
+        scheme = VECTOR_SCHEMES[case_id]()
+    except ValueError as exc:
+        assert "scheme_error" in expected, f"{case_id}: scheme refused ({exc}), vector accepts {sorted(expected)}"
+        assert "allowed only" in str(exc), f"{case_id}: refused for another reason: {exc}"
+        return
     result, seen, elapsed = unpack_guarded(scheme, bytes.fromhex(hex_bytes))
     assert_rejected(result, seen, elapsed)
     kind = error_kind(result)

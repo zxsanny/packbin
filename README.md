@@ -628,8 +628,8 @@ What travels for one position:
 | `utf8` | UTF-8 string, `u16` length |
 | `list` | `u16` count, then that many elements |
 | `dict` | `u16` pair count; keys in unsigned byte order |
-| `flags(anchor, fields)` | one `u8`; bit 0 is the first field; a clear bit omits that field; the anchor is not written |
-| `bool` | a flag bit with no payload |
+| `flags(anchor, fields)` | one `u8`; bit 0 is the first field; a clear bit omits that field; at most 8 fields; the anchor is not written |
+| `bool` | a flag bit with no payload; set only for `true`; allowed only directly under `flags` or a flag-byte bit |
 | `when(anchor, eq(id, value), fields)` | the group only when an earlier field equals `value`; the anchor is not written |
 | `repeat(anchor, fields)` | the group until the buffer ends; no count; the anchor is not written |
 | `sized` | raw bytes whose length is an earlier integer |
@@ -769,6 +769,8 @@ BinaryPacker.pack(row, {"heading": 90})
 ### Bool
 
 A `bool` inside `flags` sets its bit and writes nothing after it. Here bit 0 is the bool and bit 1 is a `u8` of 7, so the flags byte is `03` and the only payload is `07`.
+
+The bit is set only for `true`; `false` and a missing value leave it clear, and unpack gives `true` only when the bit is set. A `bool` anywhere except directly under `flags` or a flag-byte bit fails scheme construction, because it has no bit to live in. So does a ninth bit in one flags byte.
 
 ```python
 row = Scheme(
@@ -963,12 +965,15 @@ Unpack reads bytes from the network, so a packet may be built to hurt. In C#, Ty
 
 The kind of error for these is not settled yet. Today they come back as a short-packet-style error, so test for failure, not for its exact kind. The C++ package already reports every failure as a `Result`; it does not check that a string is valid UTF-8.
 
-Two mistakes in a scheme are refused when you build it, not when a packet arrives:
+These mistakes in a scheme are refused when you build it, not when a packet arrives:
 
 - A split-form flag bit must come after its flag byte, in the same place: the top level, one `repeat` or `times` round, or one `list` or `dict` element. A flag byte read inside a `when` is not visible after it. TypeScript, C#, Java and Rust refuse a violation at construction; Python does not check yet.
-- In Rust, a `when`, a count or a flag bit inside a `repeat` or `times` may name only a field inside that group. Each round reads into its own values, so an outer field was never visible there.
+- In Rust and Java, a `when` or a count may name only a field read earlier in its own place: the top level, one `repeat` or `times` round, one `list` or `dict` element, or (Java) one nested row. A field inside a `repeat` or `times` is not visible after it, and an outer field is not visible inside it. In Java the named field must be an integer or a `bool`.
+- A `bool` stands only directly under `flags` or a flag-byte bit, and one flags byte holds at most 8 bits. Every package refuses a violation at construction. An empty group follows the same rule, except in Python, where an empty group carries no value.
 
 If you upgrade, three schemes that built before now do not (the first two in TypeScript, C#, Java and Rust): a flag byte in one `when` with its bit in another `when`, a flag byte outside a `list`, `repeat` or `times` with its bit inside it, and (Rust) a reference from inside a `repeat` or `times` to a field outside it. Packet bytes do not change. A `times`, `list` or `dict` element that reads nothing used to unpack as an empty item and is now an error.
+
+The `bool` rule changes more when you upgrade. A `bool` that is `false` now packs a clear bit (`01 00`) in C#, TypeScript and Rust, as Java, Python and C++ already did, so mixed versions read that row differently until both sides upgrade. A `bool` or empty group outside `flags`, and a ninth flag bit, now fail at construction. In C#, packing a flags group whose bit is on throws when one of its values is missing, instead of writing a packet that cannot be read, and a group whose only values are `u2`, `sized`, `bits`, `packed` or a nested group now sets its bit. In C# and TypeScript, a value other than `true` (for example `1`) leaves a bool's bit clear. In Java, a `when` or a count that names a later field, a field outside its round, or a field that is not an integer or a `bool` now fails at construction, a `repeat` or `times` nested inside a `repeat` or `times` round fails at construction, and unpacking a `repeat` or `times` gives every field one list entry per round, `null` where the round skipped it. In Rust, a map bool value other than 0 or 1 fails pack, a `FlagByte` handle no longer counts bits across schemes, and a second read of a flag byte with the same name starts its own bits, as in C++.
 
 Limits to keep in mind:
 

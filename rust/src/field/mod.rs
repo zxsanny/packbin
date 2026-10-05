@@ -1,10 +1,11 @@
+mod map_scheme;
 mod order;
+mod shape;
 
-pub(crate) use order::{check_order, check_order_part, nested_element, take_id};
+pub use map_scheme::MapScheme;
+pub(crate) use order::{check_order, nested_element, take_id};
 
 use crate::value::{name_of, Name, Value};
-use std::cell::RefCell;
-use std::rc::Rc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum IntKind {
@@ -45,11 +46,15 @@ pub(crate) enum FieldKind {
         name: Name,
         members: Vec<Field>,
     },
+    /// `slot` and a bit's `slot` / `bit` are set by `MapScheme::new`: `slot` tells one read
+    /// of a flag byte from another, `bit` is the bit's order among that read's bits.
     FlagByte {
         name: Name,
+        slot: usize,
     },
     FlagBit {
         flag: Name,
+        slot: usize,
         bit: u8,
         inner: Box<Field>,
     },
@@ -108,18 +113,12 @@ pub struct Field {
     pub(crate) kind: FieldKind,
 }
 
-#[derive(Clone, Debug)]
-pub struct MapScheme {
-    pub(crate) type_number: u8,
-    pub(crate) fields: Vec<Field>,
-    pub(crate) has_split_flags: bool,
-    pub(crate) field_count: usize,
-}
-
+/// A split-form flag byte. A bit belongs to the latest `byte()` of this name it can see in its
+/// scope, and its position is its order among that byte's bits in the scheme, not the order
+/// of `bit` calls, so one handle may build any number of schemes.
 #[derive(Clone, Debug)]
 pub struct FlagByte {
     name: Name,
-    next_bit: Rc<RefCell<u8>>,
 }
 
 #[derive(Clone, Debug)]
@@ -133,21 +132,20 @@ impl FlagByte {
         Field {
             kind: FieldKind::FlagByte {
                 name: self.name.clone(),
+                slot: 0,
             },
         }
     }
 
+    /// `field` is written when its bit is set. The bit is set when the value is present (a
+    /// `group`: any of its values); for a bool (an empty `group`) only when the value is `1`,
+    /// and a bool value other than `0` or `1` fails pack with `PackError::Type`.
     pub fn bit(&self, field: Field) -> Field {
-        let bit = {
-            let mut n = self.next_bit.borrow_mut();
-            let b = *n;
-            *n = n.saturating_add(1);
-            b
-        };
         Field {
             kind: FieldKind::FlagBit {
                 flag: self.name.clone(),
-                bit,
+                slot: 0,
+                bit: 0,
                 inner: Box::new(field),
             },
         }
@@ -157,62 +155,6 @@ impl FlagByte {
 pub fn flag_byte(name: impl AsRef<str>) -> FlagByte {
     FlagByte {
         name: name_of(name),
-        next_bit: Rc::new(RefCell::new(0)),
-    }
-}
-
-fn count_fields(fields: &[Field]) -> (usize, bool) {
-    let mut n = 0;
-    let mut split = false;
-    for f in fields {
-        match &f.kind {
-            FieldKind::Int { .. }
-            | FieldKind::Float { .. }
-            | FieldKind::Bytes { .. }
-            | FieldKind::FlagByte { .. }
-            | FieldKind::Sized { .. }
-            | FieldKind::Bits { .. }
-            | FieldKind::Packed { .. }
-            | FieldKind::Utf8 { .. }
-            | FieldKind::List { .. }
-            | FieldKind::Dict { .. } => n += 1,
-            FieldKind::U2 { names } => n += names.len(),
-            FieldKind::Flags { members, .. } | FieldKind::Group { members, .. } => {
-                n += 1 + count_fields(members).0;
-            }
-            FieldKind::FlagBit { inner, .. } => {
-                split = true;
-                n += count_fields(std::slice::from_ref(inner)).0;
-            }
-            FieldKind::When { members, .. }
-            | FieldKind::Repeat { members, .. }
-            | FieldKind::Times { members, .. } => {
-                let (c, s) = count_fields(members);
-                n += c;
-                split |= s;
-            }
-        }
-    }
-    (n, split)
-}
-
-impl MapScheme {
-    pub fn new(type_number: i32, fields: Vec<Field>) -> Self {
-        if !(0..=255).contains(&type_number) {
-            panic!("type number must be 0..=255");
-        }
-        let (field_count, has_split_flags) = count_fields(&fields);
-        check_order(&fields, 0, 0);
-        MapScheme {
-            type_number: type_number as u8,
-            fields,
-            has_split_flags,
-            field_count,
-        }
-    }
-
-    pub fn type_number(&self) -> u8 {
-        self.type_number
     }
 }
 
@@ -275,6 +217,9 @@ pub fn repeat(anchor: u32, fields: Vec<Field>) -> Field {
     }
 }
 
+/// One byte with a bit per member (at most 8), then each member whose bit is set. A member
+/// is on when its value is present; a bool member (an empty `group`) only when it is `1`, and
+/// a bool value other than `0` or `1` fails pack with `PackError::Type`.
 pub fn flags(anchor: u32, name: impl AsRef<str>, members: Vec<Field>) -> Field {
     Field {
         kind: FieldKind::Flags {
@@ -362,6 +307,10 @@ pub fn bytes(name: impl AsRef<str>, n: usize) -> Field {
     }
 }
 
+/// Fields gathered under one `flags` bit, on when its own value, a direct integer, float, bytes,
+/// utf8, list or dict value, or one of its flag bits is present (other child kinds do not count
+/// yet). With no fields it is a bool: allowed only directly inside `flags` or under a flag bit,
+/// set by the value `1` (cleared by `0` or no value), and unpacked as `1` when set.
 pub fn group(anchor: u32, name: impl AsRef<str>, fields: Vec<Field>) -> Field {
     Field {
         kind: FieldKind::Group {
@@ -479,7 +428,7 @@ pub(crate) fn field_name(field: &Field) -> Option<&str> {
         | FieldKind::Float { name, .. }
         | FieldKind::Bytes { name, .. }
         | FieldKind::Flags { name, .. }
-        | FieldKind::FlagByte { name }
+        | FieldKind::FlagByte { name, .. }
         | FieldKind::Group { name, .. }
         | FieldKind::Sized { name, .. }
         | FieldKind::Bits { name, .. }

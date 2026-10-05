@@ -321,10 +321,7 @@ final class VarFields {
     }
 
     static void packTimes(Field field, Object row, ByteSink sink, Map<Object, Object> seen) {
-        int count = borrowedCount(field, seen);
-        for (int i = 0; i < count; i++) {
-            Walker.packIndexed(field, row, sink, seen, i);
-        }
+        Rounds.packTimes(field, row, sink, seen, borrowedCount(field, seen));
     }
 
     static Object unpackTimes(
@@ -333,17 +330,6 @@ final class VarFields {
         if (count < 0) {
             return shortCount(field, count, data.length - offset[0]);
         }
-        for (long i = 0; i < count; i++) {
-            int before = offset[0];
-            Object err = Walker.unpackFields(field.children, data, offset, row, seen, true);
-            if (err != null) {
-                return err;
-            }
-            if (offset[0] == before) {
-                // An empty round repeats the same nothing for the rest of a count the packet controls.
-                return new Packbin.ShortPacket(field.label(), 0, data.length - before);
-            }
-        }
-        return null;
+        return Rounds.unpackTimes(field, count, data, offset, row, seen);
     }
 }

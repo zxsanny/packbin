@@ -122,7 +122,15 @@ export function flatten(fields: Field[]): Field[] {
   return out
 }
 
+// One flag byte holds 8 bits.
+const FLAG_BITS = 8
+
 export function flags(anchor: number, fields: Field[]): Field {
+  if (fields.length > FLAG_BITS) {
+    throw new RangeError(
+      `flags: ninth bit (${fieldName(fields[FLAG_BITS]!)}); a flag byte holds ${FLAG_BITS} bits`,
+    )
+  }
   return { kind: "flags", anchor, fields }
 }
 
@@ -134,6 +142,11 @@ export function flagByte(name: string): FlagByteHandle {
     name,
     id,
     bit(field: Field): Field {
+      if (next === FLAG_BITS) {
+        throw new RangeError(
+          `flag byte "${name}": ninth bit (${fieldName(field)}); a flag byte holds ${FLAG_BITS} bits`,
+        )
+      }
       const bit = next++
       return { kind: "flagBit", flagId: id, bit, field }
     },
@@ -274,8 +287,11 @@ export function collectFlagBits(
   return bits
 }
 
+// A bool or an empty group is a mark with no bytes of its own: only `true` sets its bit.
 export function bitOn(field: Field, values: Value): boolean {
+  if (field.kind === "bool") return values[field.name] === true
   if (field.kind === "group") {
+    if (field.fields.length === 0) return values[field.name] === true
     return groupOn(values, field.name, scalarChildNames(field.fields))
   }
   return present(values[fieldName(field)])

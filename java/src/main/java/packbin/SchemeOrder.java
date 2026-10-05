@@ -1,21 +1,20 @@
 package packbin;
 
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Locale;
 import java.util.Set;
 
 final class SchemeOrder {
     private SchemeOrder() {}
 
+    private static final String NOT_EARLIER = ", which is not an earlier integer or bool field in its scope";
+    private static final String ONLY_A_BIT = " is allowed only as a bit of flags or a flagByte";
+    private static final String NESTED_ROUND =
+            " is inside a repeat or times round; a round cannot hold another repeat or times";
+
     static void validate(List<Field> fields) {
-        Map<Integer, Field> scope = new HashMap<>();
-        int[] next = {0};
-        for (Field field : fields) {
-            walk(field, scope, next);
-        }
-        resolve(fields, scope);
+        walkScope(fields, new int[] {0}, false);
         requireFlagBytes(fields, new HashSet<>());
     }
 
@@ -52,45 +51,87 @@ final class SchemeOrder {
         return inner.id >= 0 ? inner.kind + " " + inner.id : inner.kind.toString();
     }
 
-    private static void walk(Field field, Map<Integer, Field> scope, int[] next) {
+    /**
+     * One reference scope: the top level, a repeat or times round, a list or dict element, or a nested row.
+     * A when condition or a borrowed count may name only an integer or bool field read earlier in the same scope
+     * (C++ {@code find_ref}, {@code is_count_source}). Order ids continue through repeat and times rounds;
+     * {@code next} carries them. {@code inRound} is true inside a repeat or times round, including a nested row
+     * there: a round packs item i of each list, so an inner repeat or times would read every inner round from the
+     * same item. A list or dict element is a row of its own and starts outside any round.
+     */
+    private static void walkScope(List<Field> fields, int[] next, boolean inRound) {
+        Set<Integer> earlier = new HashSet<>();
+        for (Field field : fields) {
+            walk(field, earlier, next, false, inRound);
+        }
+    }
+
+    /**
+     * {@code earlier} holds the ids of the integer and bool fields read before this field in its scope. {@code isBit} is true only for
+     * the direct payload of a flags bit or a flagByte bit: a bool or an empty group is a presence bit and
+     * nothing else (C++ {@code check_shape}).
+     */
+    private static void walk(Field field, Set<Integer> earlier, int[] next, boolean isBit, boolean inRound) {
         switch (field.kind) {
-            case WHEN, REPEAT, TIMES, FLAGS -> {
+            case FLAGS -> {
                 requireAnchor(field, next);
-                for (Field child : field.children) {
-                    walk(child, scope, next);
+                for (Field bit : field.children) {
+                    walk(bit.inner, earlier, next, true, inRound);
                 }
             }
-            case FLAG_BIT -> walk(field.inner, scope, next);
+            case FLAG_BIT -> walk(field.inner, earlier, next, true, inRound);
             case FLAG_BYTE -> {}
+            case WHEN -> {
+                requireAnchor(field, next);
+                requireEarlier(field.condition.fieldId, earlier, "when " + field.id + " tests field ");
+                for (Field child : field.children) {
+                    walk(child, earlier, next, false, inRound);
+                }
+            }
+            case REPEAT -> {
+                requireOutsideRound(field, inRound);
+                requireAnchor(field, next);
+                walkScope(field.children, next, true);
+            }
+            case TIMES -> {
+                requireOutsideRound(field, inRound);
+                requireAnchor(field, next);
+                requireCount(field, earlier);
+                walkScope(field.children, next, true);
+            }
             case GROUP -> {
+                if (field.children.isEmpty() && !isBit) {
+                    throw new IllegalArgumentException(
+                            "empty group" + (field.id >= 0 ? " " + field.id : "") + ONLY_A_BIT);
+                }
                 if (field.nestedRow) {
-                    Map<Integer, Field> nested = new HashMap<>();
-                    int[] nestedNext = {0};
-                    for (Field child : field.children) {
-                        walk(child, nested, nestedNext);
-                    }
-                    resolve(field.children, nested);
+                    walkScope(field.children, new int[] {0}, inRound);
                 } else {
                     requireAnchor(field, next);
                     for (Field child : field.children) {
-                        walk(child, scope, next);
+                        walk(child, earlier, next, false, inRound);
                     }
                 }
             }
-            case LIST, DICT -> {
-                Map<Integer, Field> nested = new HashMap<>();
-                int[] nestedNext = {0};
-                walk(field.children.get(0), nested, nestedNext);
-                resolve(field.children, nested);
-            }
+            case LIST, DICT -> walkScope(field.children, new int[] {0}, false);
             case U2 -> {
                 for (Field slot : field.children) {
-                    take(slot.id, slot, scope, next);
+                    take(slot, earlier, next);
                 }
+            }
+            case SIZED, BITS, PACKED -> {
+                requireCount(field, earlier);
+                take(field, earlier, next);
+            }
+            case BOOL -> {
+                if (!isBit) {
+                    throw new IllegalArgumentException("bool " + field.id + ONLY_A_BIT);
+                }
+                take(field, earlier, next);
             }
             default -> {
                 if (Field.isValueBearing(field)) {
-                    take(field.id, field, scope, next);
+                    take(field, earlier, next);
                 }
             }
         }
@@ -102,60 +143,38 @@ final class SchemeOrder {
         }
     }
 
-    private static void take(int id, Field field, Map<Integer, Field> scope, int[] next) {
-        if (id != next[0]) {
-            throw new IllegalArgumentException("field id " + id + " must be " + next[0]);
+    private static void requireOutsideRound(Field field, boolean inRound) {
+        if (inRound) {
+            throw new IllegalArgumentException(field.kind.name().toLowerCase(Locale.ROOT) + " " + field.id + NESTED_ROUND);
         }
-        if (scope.put(id, field) != null) {
-            throw new IllegalArgumentException("duplicate field id " + id);
+    }
+
+    private static void requireCount(Field field, Set<Integer> earlier) {
+        requireEarlier(field.countId, earlier,
+                field.kind.name().toLowerCase(Locale.ROOT) + " " + field.id + " takes its count from field ");
+    }
+
+    private static void requireEarlier(int id, Set<Integer> earlier, String referrer) {
+        if (!earlier.contains(id)) {
+            throw new IllegalArgumentException(referrer + id + NOT_EARLIER);
+        }
+    }
+
+    private static void take(Field field, Set<Integer> earlier, int[] next) {
+        if (field.id != next[0]) {
+            throw new IllegalArgumentException("field id " + field.id + " must be " + next[0]);
+        }
+        if (isCountSource(field)) {
+            earlier.add(field.id);
         }
         next[0]++;
     }
 
-    private static void resolve(List<Field> fields, Map<Integer, Field> scope) {
-        for (Field field : fields) {
-            resolveField(field, scope);
-        }
-    }
-
-    private static void resolveField(Field field, Map<Integer, Field> scope) {
-        switch (field.kind) {
-            case WHEN -> {
-                if (!scope.containsKey(field.condition.fieldId)) {
-                    throw new IllegalArgumentException(
-                            "condition field id " + field.condition.fieldId + " is unknown");
-                }
-                for (Field child : field.children) {
-                    resolveField(child, scope);
-                }
-            }
-            case SIZED, BITS, PACKED -> {
-                if (!scope.containsKey(field.countId)) {
-                    throw new IllegalArgumentException("count field id " + field.countId + " is unknown");
-                }
-            }
-            case TIMES -> {
-                if (!scope.containsKey(field.countId)) {
-                    throw new IllegalArgumentException("count field id " + field.countId + " is unknown");
-                }
-                for (Field child : field.children) {
-                    resolveField(child, scope);
-                }
-            }
-            case FLAGS, REPEAT -> {
-                for (Field child : field.children) {
-                    resolveField(child, scope);
-                }
-            }
-            case FLAG_BIT -> resolveField(field.inner, scope);
-            case GROUP -> {
-                if (!field.nestedRow) {
-                    for (Field child : field.children) {
-                        resolveField(child, scope);
-                    }
-                }
-            }
-            default -> {}
-        }
+    /** The kinds whose value a when or a count can read (C++ {@code is_count_source}); a u2 slot is a u8. */
+    private static boolean isCountSource(Field field) {
+        return switch (field.kind) {
+            case U8, U16, U32, U64, I8, I16, I32, I64, BOOL -> true;
+            default -> false;
+        };
     }
 }

@@ -3,8 +3,8 @@ mod bound;
 pub use bound::BoundField;
 
 use crate::field::{
-    check_order, check_order_part, field_name, flags as layout_flags, id_name, nested_element,
-    take_id, times as layout_times, when as layout_when, Eq, Field, MapScheme,
+    check_order, field_name, flags as layout_flags, id_name, nested_element, take_id,
+    times as layout_times, when as layout_when, Eq, Field, MapScheme,
 };
 use crate::value::{Name, PackError, ShortPacket, UnpackError, Value, Values};
 use crate::walk;
@@ -63,6 +63,9 @@ impl<T: 'static> SchemeItem<T> {
         }
     }
 
+    /// One byte with a bit per member (at most 8), then each member whose bit is set. This is
+    /// the only place for a `BoundField::bool_flag`: its bit is set only for `Some(true)`, and
+    /// it unpacks as `Some(true)` when set, `None` when clear.
     pub fn flags(anchor: u32, members: impl IntoIterator<Item = SchemeItem<T>>) -> Self {
         SchemeItem::Flags {
             anchor,
@@ -164,7 +167,7 @@ fn compile_items<T: 'static>(
                 binders.extend(child_binders);
             }
             SchemeItem::Field(field) => {
-                *next_id = check_order_part(std::slice::from_ref(&field), *next_id, 0);
+                *next_id = check_order(std::slice::from_ref(&field), *next_id, 0);
                 fields.push(field);
             }
         }

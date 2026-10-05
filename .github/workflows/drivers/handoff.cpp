@@ -129,6 +129,13 @@ Position position_row() {
   return row;
 }
 
+struct BoolFlag {
+  packbin::Opt<bool> on;
+};
+
+constexpr auto boolflag_scheme =
+    packbin::scheme<BoolFlag>(1, packbin::flags(0, packbin::boolean<&BoolFlag::on>(0)));
+
 constexpr std::size_t kMax = 512;
 
 std::size_t parse_hex(std::string const& hex, std::uint8_t* out) {
@@ -183,6 +190,20 @@ bool nested_ok(std::uint8_t const* data, std::size_t len) {
          op_is(store.value.items[0], "read") && op_is(store.value.items[1], "write");
 }
 
+bool boolflag_ok(std::uint8_t const* data, std::size_t len) {
+  BoolFlag got;
+  if (!packbin::unpack(boolflag_scheme, data, len, got).ok())
+    return false;
+  return !(got.on.has && got.on.value);
+}
+
+bool booltrue_ok(std::uint8_t const* data, std::size_t len) {
+  BoolFlag got;
+  if (!packbin::unpack(boolflag_scheme, data, len, got).ok())
+    return false;
+  return got.on.has && got.on.value;
+}
+
 bool session_ok(std::uint8_t* data, std::size_t len) {
   packbin::PackSession waiter;
   Position got;
@@ -203,6 +224,16 @@ int main(int argc, char** argv) {
     return print(packbin::pack(user_scheme, user_row(), buf, sizeof(buf)), buf);
   if (cmd == "pack-nested")
     return print(packbin::pack(nested_scheme, nested_row(), buf, sizeof(buf)), buf);
+  if (cmd == "pack-boolflag") {
+    BoolFlag row;
+    row.on = false;
+    return print(packbin::pack(boolflag_scheme, row, buf, sizeof(buf)), buf);
+  }
+  if (cmd == "pack-booltrue") {
+    BoolFlag row;
+    row.on = true;
+    return print(packbin::pack(boolflag_scheme, row, buf, sizeof(buf)), buf);
+  }
   if (cmd == "pack-session") {
     packbin::PackSession opener;
     if (!open_session(opener, true))
@@ -216,6 +247,10 @@ int main(int argc, char** argv) {
     return user_ok(buf, len) ? 0 : 1;
   if (cmd == "unpack-nested")
     return nested_ok(buf, len) ? 0 : 1;
+  if (cmd == "unpack-boolflag")
+    return boolflag_ok(buf, len) ? 0 : 1;
+  if (cmd == "unpack-booltrue")
+    return booltrue_ok(buf, len) ? 0 : 1;
   if (cmd == "unpack-session")
     return session_ok(buf, len) ? 0 : 1;
   return 2;

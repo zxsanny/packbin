@@ -31,7 +31,6 @@ export function scalarChildNames(
       (f.kind === "int" ||
         f.kind === "float" ||
         f.kind === "bytes" ||
-        f.kind === "bool" ||
         f.kind === "utf8" ||
         f.kind === "list" ||
         f.kind === "dict") &&

@@ -20,9 +20,13 @@ public final class Handoff {
         switch (cmd) {
             case "pack-user" -> System.out.println(hex(BinaryPacker.pack(userScheme(), userValues())));
             case "pack-nested" -> System.out.println(hex(BinaryPacker.pack(nestedScheme(), nestedValues())));
+            case "pack-boolflag" -> System.out.println(hex(BinaryPacker.pack(boolFlagScheme(), boolFlagValues(false))));
+            case "pack-booltrue" -> System.out.println(hex(BinaryPacker.pack(boolFlagScheme(), boolFlagValues(true))));
             case "pack-session" -> System.exit(packSession());
             case "unpack-user" -> System.exit(userOk(requireHex(args)) ? 0 : 1);
             case "unpack-nested" -> System.exit(nestedOk(requireHex(args)) ? 0 : 1);
+            case "unpack-boolflag" -> System.exit(boolFlagOk(requireHex(args), false) ? 0 : 1);
+            case "unpack-booltrue" -> System.exit(boolFlagOk(requireHex(args), true) ? 0 : 1);
             case "unpack-session" -> System.exit(sessionOk(requireHex(args)) ? 0 : 1);
             default -> System.exit(2);
         }
@@ -134,6 +138,37 @@ public final class Handoff {
         Map<String, Object> values = new HashMap<>();
         values.put("access", access);
         return values;
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Scheme<Map> boolFlagScheme() {
+        return new Scheme<>(
+                1,
+                (Class) Map.class,
+                Packbin.flags(0, Packbin.boolField(0, Access.get("on"), Access.set("on"))));
+    }
+
+    private static Map<String, Object> boolFlagValues(boolean on) {
+        Map<String, Object> values = new HashMap<>();
+        values.put("on", on);
+        return values;
+    }
+
+    /** Only true sets the bit: {@code on} comes back true for a set bit, and absent (never true) for a clear one. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static boolean boolFlagOk(String hex, boolean on) {
+        String cmd = on ? "unpack-booltrue" : "unpack-boolflag";
+        Map[] got = new Map[1];
+        Object err = BinaryPacker.unpack(parse(hex), boolFlagScheme().on(row -> got[0] = row));
+        if (err != null || got[0] == null) {
+            System.err.println(cmd + ": not ok (" + (err == null ? "no row" : err.getClass().getSimpleName()) + ")");
+            return false;
+        }
+        if (Boolean.TRUE.equals(got[0].get("on")) != on) {
+            System.err.println(cmd + ": on is " + got[0].get("on") + ", expected " + (on ? "true" : "absent or false"));
+            return false;
+        }
+        return true;
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

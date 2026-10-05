@@ -39,3 +39,37 @@ export function validateFlagScopes(fields: Field[], seen: Set<symbol> = new Set(
     }
   }
 }
+
+// A bool or an empty group is a presence mark: it has no bytes, only a flag bit. It is
+// allowed only as the field of a flag bit or a direct member of `flags`; anywhere else
+// (top level, a non-empty group, `when`, `repeat`, `times`, a list or dict element) it
+// would always read as true.
+export function validatePresenceMarks(fields: Field[], onFlagBit = false): void {
+  for (const f of fields) {
+    const mark =
+      f.kind === "bool" ? "bool" : f.kind === "group" && f.fields.length === 0 ? "empty group" : null
+    if (mark !== null && !onFlagBit) {
+      throw new RangeError(
+        `${mark} ${fieldName(f)}: allowed only directly inside flags or a flag bit; move it into flags`,
+      )
+    }
+    switch (f.kind) {
+      case "flagBit":
+        validatePresenceMarks([f.field], true)
+        break
+      case "flags":
+        validatePresenceMarks(f.fields, true)
+        break
+      case "group":
+      case "when":
+      case "repeat":
+      case "times":
+        validatePresenceMarks(f.fields)
+        break
+      case "list":
+      case "dict":
+        validatePresenceMarks([f.element])
+        break
+    }
+  }
+}

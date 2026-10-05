@@ -1,6 +1,6 @@
 use crate::field::{field_name, Field, FieldKind, FloatKind, IntKind, MapScheme};
 use crate::value::{
-    as_bit, as_packed, as_u2, as_usize, name_of, present, values_eq, Name, PackError, Value, Values,
+    as_bit, as_packed, as_u2, as_usize, name_of, present, values_eq, PackError, Value, Values,
 };
 use std::collections::HashMap;
 
@@ -88,61 +88,82 @@ fn write_float(
     Ok(())
 }
 
-fn collect_flag_bits(fields: &[Field], values: &Values, out: &mut HashMap<Name, u8>) {
-    for field in fields {
-        match &field.kind {
-            FieldKind::FlagBit { flag, bit, inner } => {
-                if let Some(n) = field_name(inner) {
-                    if present(values, n) {
-                        *out.entry(flag.clone()).or_insert(0) |= 1 << *bit;
-                    }
-                }
-            }
-            FieldKind::Flags { members, .. }
-            | FieldKind::Group { members, .. }
-            | FieldKind::When { members, .. }
-            | FieldKind::Repeat { members, .. }
-            | FieldKind::Times { members, .. } => collect_flag_bits(members, values, out),
-            _ => {}
-        }
+/// A bool (an empty group) is on for `1` and off for `0` or no value; any other value is a
+/// type error, as for `bits`.
+fn bool_on(values: &Values, name: &str) -> Result<bool, PackError> {
+    match values.get(name) {
+        Some(Some(v)) => as_bit(v)
+            .map(|bit| bit == 1)
+            .ok_or_else(|| PackError::Type(name.to_string())),
+        _ => Ok(false),
     }
 }
 
-fn group_on(name: &str, members: &[Field], values: &Values) -> bool {
+/// Sets the bits of the flag bytes read in this scope, by slot. A repeat or times round
+/// collects its own.
+fn collect_flag_bits(
+    fields: &[Field],
+    values: &Values,
+    out: &mut HashMap<usize, u8>,
+) -> Result<(), PackError> {
+    for field in fields {
+        match &field.kind {
+            FieldKind::FlagBit {
+                slot, bit, inner, ..
+            } => {
+                if member_on(inner, values)? {
+                    *out.entry(*slot).or_insert(0) |= 1 << *bit;
+                }
+                collect_flag_bits(std::slice::from_ref(inner), values, out)?;
+            }
+            FieldKind::Flags { members, .. }
+            | FieldKind::Group { members, .. }
+            | FieldKind::When { members, .. } => collect_flag_bits(members, values, out)?,
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+/// A group is on when it or one of its values is present, or one of its flag bits is on.
+fn group_on(name: &str, members: &[Field], values: &Values) -> Result<bool, PackError> {
+    if members.is_empty() {
+        return bool_on(values, name);
+    }
     if present(values, name) {
-        return true;
+        return Ok(true);
     }
     for child in members {
-        match &child.kind {
+        let on = match &child.kind {
             FieldKind::Int { name, .. }
             | FieldKind::Float { name, .. }
             | FieldKind::Bytes { name, .. }
             | FieldKind::Utf8 { name }
             | FieldKind::List { name, .. }
-            | FieldKind::Dict { name, .. } => {
-                if present(values, name) {
-                    return true;
-                }
-            }
-            _ => {}
+            | FieldKind::Dict { name, .. } => present(values, name),
+            FieldKind::FlagBit { inner, .. } => member_on(inner, values)?,
+            _ => false,
+        };
+        if on {
+            return Ok(true);
         }
     }
-    false
+    Ok(false)
 }
 
-fn flag_member_on(member: &Field, values: &Values) -> bool {
-    match &member.kind {
+/// Whether a `flags` member or the field under a flag bit is on, so its bit is set.
+fn member_on(field: &Field, values: &Values) -> Result<bool, PackError> {
+    match &field.kind {
         FieldKind::Group { name, members, .. } => group_on(name, members, values),
-        _ => field_name(member)
-            .map(|n| present(values, n))
-            .unwrap_or(false),
+        FieldKind::FlagBit { inner, .. } => member_on(inner, values),
+        _ => Ok(field_name(field).is_some_and(|n| present(values, n))),
     }
 }
 
 pub(crate) fn pack_fields(
     fields: &[Field],
     values: &Values,
-    flag_bits: &HashMap<Name, u8>,
+    flag_bits: &HashMap<usize, u8>,
     out: &mut Vec<u8>,
 ) -> Result<(), PackError> {
     for field in fields {
@@ -154,7 +175,7 @@ pub(crate) fn pack_fields(
 fn pack_one(
     field: &Field,
     values: &Values,
-    flag_bits: &HashMap<Name, u8>,
+    flag_bits: &HashMap<usize, u8>,
     out: &mut Vec<u8>,
 ) -> Result<(), PackError> {
     match &field.kind {
@@ -178,7 +199,7 @@ fn pack_one(
         FieldKind::Flags { members, .. } => {
             let mut bits: u8 = 0;
             for (i, member) in members.iter().enumerate() {
-                if flag_member_on(member, values) {
+                if member_on(member, values)? {
                     bits |= 1 << i;
                 }
             }
@@ -195,12 +216,14 @@ fn pack_one(
             }
             Ok(())
         }
-        FieldKind::FlagByte { name } => {
-            out.push(*flag_bits.get(name.as_ref()).unwrap_or(&0));
+        FieldKind::FlagByte { slot, .. } => {
+            out.push(*flag_bits.get(slot).unwrap_or(&0));
             Ok(())
         }
-        FieldKind::FlagBit { flag, bit, inner } => {
-            let bits = *flag_bits.get(flag.as_ref()).unwrap_or(&0);
+        FieldKind::FlagBit {
+            slot, bit, inner, ..
+        } => {
+            let bits = *flag_bits.get(slot).unwrap_or(&0);
             if bits & (1 << bit) != 0 {
                 pack_one(inner, values, flag_bits, out)?;
             }
@@ -226,7 +249,7 @@ fn pack_one(
             };
             for group in groups {
                 let mut bits = HashMap::new();
-                collect_flag_bits(members, group, &mut bits);
+                collect_flag_bits(members, group, &mut bits)?;
                 pack_fields(members, group, &bits, out)?;
             }
             Ok(())
@@ -302,7 +325,7 @@ fn pack_one(
             for i in 0..n {
                 let slice = slice_times(members, values, i);
                 let mut bits = HashMap::new();
-                collect_flag_bits(members, &slice, &mut bits);
+                collect_flag_bits(members, &slice, &mut bits)?;
                 pack_fields(members, &slice, &bits, out)?;
             }
             Ok(())
@@ -367,7 +390,7 @@ fn pack_one(
 pub fn pack(scheme: &MapScheme, values: &Values) -> Result<Vec<u8>, PackError> {
     let flag_bits = if scheme.has_split_flags {
         let mut bits = HashMap::new();
-        collect_flag_bits(&scheme.fields, values, &mut bits);
+        collect_flag_bits(&scheme.fields, values, &mut bits)?;
         bits
     } else {
         HashMap::new()

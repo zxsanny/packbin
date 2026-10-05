@@ -134,7 +134,7 @@ final class Containers {
 
     private static boolean isLeaf(Field field) {
         return switch (field.kind) {
-            case U8, U16, U32, U64, I8, I16, I32, I64, F32, F64, BYTES, UTF8, BOOL, SIZED, BITS, PACKED -> true;
+            case U8, U16, U32, U64, I8, I16, I32, I64, F32, F64, BYTES, UTF8, SIZED, BITS, PACKED -> true;
             default -> false;
         };
     }
@@ -173,9 +173,6 @@ final class Containers {
             Object err = Walker.unpackField(element, data, offset, null, seen, false);
             if (err != null) {
                 return new Object[] {null, err};
-            }
-            if (element.kind == Field.Kind.BOOL) {
-                return new Object[] {true, null};
             }
             return new Object[] {seen.get(element.id), null};
         }

@@ -9,7 +9,6 @@ public partial class HostileUnpackTests
     private sealed class ZeroRow
     {
         public byte[] B { get; set; } = [];
-        public bool Straight { get; set; }
     }
 
     private sealed class SignedCountRow
@@ -133,20 +132,6 @@ public partial class HostileUnpackTests
         Assert.False(outcome.HandlerCalled);
         var error = Assert.IsType<TrailingBytes>(outcome.Error);
         Assert.Equal(1, error.Left);
-    }
-
-    [Fact]
-    public void Ac1_ZeroWidthBoolRepeatBody_DoesNotHang()
-    {
-        // Arrange: a bool body is only legal until the bool rule (task 10) rejects it at construction
-        var scheme = new Scheme<ZeroRow>(1, Field.Repeat(0, Field.Bool<ZeroRow>(0, x => x.Straight)));
-
-        // Act
-        var outcome = HostileProbe.Unpack(scheme, "0109");
-
-        // Assert
-        Assert.False(outcome.HandlerCalled);
-        Assert.IsType<TrailingBytes>(outcome.Error);
     }
 
     [Fact]

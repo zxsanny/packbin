@@ -1,4 +1,6 @@
-use packbin::{flags, i16, to_hex, u16, u8, BinaryPacker, BoundField, PackSession, Scheme};
+use packbin::{
+    flags, i16, to_hex, u16, u8, BinaryPacker, BoundField, PackSession, Scheme, SchemeItem,
+};
 use std::collections::BTreeMap;
 use std::process::ExitCode;
 
@@ -75,6 +77,62 @@ fn nested_row() -> Nested {
     access.insert("map".into(), vec![map_row]);
     access.insert("store".into(), vec![read_row, write_row]);
     Nested { access }
+}
+
+#[derive(Default, Debug, PartialEq)]
+struct BoolFlag {
+    on: Option<bool>,
+}
+
+fn boolflag_scheme() -> Scheme<BoolFlag> {
+    Scheme::new(
+        1,
+        [SchemeItem::flags(
+            0,
+            [
+                BoundField::bool_flag(0, |row: &BoolFlag| row.on, |row, value| row.on = value)
+                    .into(),
+            ],
+        )],
+    )
+}
+
+/// Unpacks `hex` with the boolflag scheme. Exit 0 when it reads and `on` is what `want_on`
+/// asks for: `Some(true)` for a set bit, absent or `false` for a clear one.
+fn unpack_boolflag(cmd: &str, hex: Option<&String>, want_on: bool) -> u8 {
+    let Some(hex) = hex else {
+        eprintln!("{cmd}: missing hex argument");
+        return 1;
+    };
+    let Some(raw) = from_hex(hex) else {
+        eprintln!("{cmd}: {hex:?} is not hex");
+        return 1;
+    };
+    let scheme = boolflag_scheme();
+    let mut got = BoolFlag::default();
+    match BinaryPacker::unpack_with(&raw, &mut [&mut scheme.on(|row| got = row)]) {
+        Ok(()) if (got.on == Some(true)) == want_on => 0,
+        Ok(()) => {
+            let want = if want_on {
+                "Some(true)"
+            } else {
+                "absent or false"
+            };
+            eprintln!("{cmd}: on = {:?}, expected {want}", got.on);
+            1
+        }
+        Err(err) => {
+            eprintln!("{cmd}: {err:?}");
+            1
+        }
+    }
+}
+
+fn pack_boolflag(on: bool) -> u8 {
+    let row = BoolFlag { on: Some(on) };
+    let bytes = BinaryPacker::pack(&boolflag_scheme(), &row).expect("pack");
+    println!("{}", to_hex(&bytes));
+    0
 }
 
 #[derive(Default, Debug, PartialEq)]
@@ -197,6 +255,10 @@ fn run(args: &[String]) -> u8 {
             println!("{}", to_hex(&bytes));
             0
         }
+        "pack-boolflag" => pack_boolflag(false),
+        "unpack-boolflag" => unpack_boolflag(cmd, args.get(1), false),
+        "pack-booltrue" => pack_boolflag(true),
+        "unpack-booltrue" => unpack_boolflag(cmd, args.get(1), true),
         "unpack-user" => {
             let Some(hex) = args.get(1) else {
                 return 1;

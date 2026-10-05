@@ -8,24 +8,36 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 
-/** AZ-2074: replays every {@code unpack} case of fixtures/hostile/cases.txt through BinaryPacker.unpack. */
+/**
+ * AZ-2074: replays every {@code unpack} case of fixtures/hostile/cases.txt through BinaryPacker.unpack.
+ * AZ-2089: every {@code construct} case must fail at scheme construction.
+ */
 @SuppressWarnings({"unchecked", "rawtypes"})
 final class HostileVectorTest {
     private HostileVectorTest() {}
 
-    private record Case(String id, List<String> expected, String hex) {}
+    private record Case(String id, String stage, List<String> expected, String hex) {}
 
     static void run() throws IOException {
         Set<String> seen = new HashSet<>();
-        for (Case c : readUnpackCases()) {
+        for (Case c : readCases()) {
             seen.add(c.id);
-            replay(c);
+            if (c.stage.equals("construct")) {
+                replayConstruct(c);
+            } else if (c.stage.equals("unpack")) {
+                replay(c);
+            } else {
+                PackbinTest.fail("hostile case " + c.id + " has unknown stage " + c.stage);
+            }
         }
         for (String id : List.of(
                 "zero_progress_repeat_bool", "zero_progress_repeat_when", "negative_count", "oversize_count",
                 "oversize_count_times", "oversize_list_count", "invalid_utf8", "invalid_utf8_dict_key",
-                "count_behind_clear_flag", "count_behind_clear_flag_bits")) {
+                "count_behind_clear_flag", "count_behind_clear_flag_bits", "nine_flag_bits", "nine_flag_bits_split",
+                "when_names_later_field", "count_names_later_field", "when_names_outer_field_in_repeat",
+                "bool_outside_flags", "empty_group_outside_flags")) {
             PackbinTest.expectTrue("hostile vector " + id + " present in cases.txt", seen.contains(id));
         }
     }
@@ -39,6 +51,8 @@ final class HostileVectorTest {
                 return;
             }
         } catch (IllegalArgumentException ex) {
+            System.out.println("hostile vector " + c.id + " -> scheme_error: " + ex.getMessage()
+                    + " (expected " + String.join("|", c.expected) + ")");
             PackbinTest.expectTrue(c.id + " -> scheme_error accepted by " + c.expected, c.expected.contains("scheme_error"));
             return;
         }
@@ -50,6 +64,56 @@ final class HostileVectorTest {
         PackbinTest.expectTrue(label + " is a non-ok result", run.result != null);
         PackbinTest.expectTrue(label + " leaves the handler uncalled", !run.handled);
         PackbinTest.expectTrue(label + " is a kind Java can report", kindAccepted(c, run.result));
+    }
+
+    /** A construct case passes only when building its scheme throws IllegalArgumentException: 0 schemes. */
+    private static void replayConstruct(Case c) {
+        PackbinTest.expectTrue(c.id + " construct case expects scheme_error", c.expected.contains("scheme_error"));
+        Supplier<Scheme<Map>> build = constructFor(c.id);
+        if (build == null) {
+            PackbinTest.fail("hostile case " + c.id + " has no Java scheme in HostileVectorTest");
+            return;
+        }
+        try {
+            build.get();
+        } catch (IllegalArgumentException ex) {
+            System.out.println("hostile vector " + c.id + " -> scheme_error: " + ex.getMessage());
+            return;
+        }
+        PackbinTest.fail("hostile vector " + c.id + ": scheme built, expected scheme_error");
+    }
+
+    private static Field u8(int id, String name) {
+        return Packbin.u8(id, Access.get(name), Access.set(name));
+    }
+
+    /** Java numbering: a flag byte takes no order id, so the split-form bits are ids 0 to 8. */
+    private static Supplier<Scheme<Map>> constructFor(String id) {
+        return switch (id) {
+            case "nine_flag_bits" -> () -> Maps.scheme(1, Packbin.flags(0,
+                    u8(0, "f0"), u8(1, "f1"), u8(2, "f2"), u8(3, "f3"), u8(4, "f4"),
+                    u8(5, "f5"), u8(6, "f6"), u8(7, "f7"), u8(8, "f8")));
+            case "nine_flag_bits_split" -> () -> {
+                Field fb = Packbin.flagByte();
+                Field[] fields = new Field[10];
+                fields[0] = fb;
+                for (int i = 0; i < 9; i++) {
+                    fields[i + 1] = fb.bit(u8(i, "f" + i));
+                }
+                return Maps.scheme(1, fields);
+            };
+            case "when_names_later_field" -> () -> Maps.scheme(1,
+                    u8(0, "a"), Packbin.when(1, Packbin.eq(2, 1), u8(1, "b")), u8(2, "c"));
+            case "count_names_later_field" -> () -> Maps.scheme(1,
+                    Packbin.sized(0, Access.get("payload"), Access.set("payload"), 1),
+                    Packbin.u16(1, Access.get("n"), Access.set("n")));
+            case "when_names_outer_field_in_repeat" -> () -> Maps.scheme(1,
+                    u8(0, "mode"), Packbin.repeat(1, Packbin.when(1, Packbin.eq(0, 1), u8(1, "v"))));
+            case "bool_outside_flags" -> () -> Maps.scheme(1,
+                    u8(0, "a"), Packbin.boolField(1, Access.get("on"), Access.set("on")));
+            case "empty_group_outside_flags" -> () -> Maps.scheme(1, u8(0, "a"), Packbin.group(1));
+            default -> null;
+        };
     }
 
     /** Java has no BadValue/TooMany type yet (C15): any non-ok, non-exception result passes the interim rule. */
@@ -104,7 +168,7 @@ final class HostileVectorTest {
         };
     }
 
-    private static List<Case> readUnpackCases() throws IOException {
+    private static List<Case> readCases() throws IOException {
         List<Case> cases = new ArrayList<>();
         for (String line : Files.readAllLines(findCases())) {
             String text = line.trim();
@@ -112,9 +176,11 @@ final class HostileVectorTest {
                 continue;
             }
             String[] parts = text.split("\\s+");
-            if (parts.length == 4 && parts[1].equals("unpack")) {
-                cases.add(new Case(parts[0], List.of(parts[2].split("\\|")), parts[3]));
+            if (parts.length != 4) {
+                PackbinTest.fail("hostile cases line is not 'id stage expected hex': " + text);
+                continue;
             }
+            cases.add(new Case(parts[0], parts[1], List.of(parts[2].split("\\|")), parts[3]));
         }
         return cases;
     }

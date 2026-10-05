@@ -1,7 +1,7 @@
 use crate::walk::unpack;
 use crate::{
-    bits, dict, eq, flags, group, i8, list, repeat, sized, times, u16, u32, u8, utf8, when,
-    MapScheme, UnpackError, Value,
+    bits, dict, eq, flag_byte, flags, group, i8, list, repeat, sized, times, u16, u32, u8, utf8,
+    when, BoundField, MapScheme, Scheme, UnpackError, Value,
 };
 use std::collections::HashSet;
 use std::fs;
@@ -11,15 +11,6 @@ use std::thread;
 use std::time::Duration;
 
 const CASES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../fixtures/hostile/cases.txt");
-
-// The 9th flag bit, a bool outside flags and an empty group outside flags: Rust has no
-// construction rule for them yet, so no scheme is built for these four cases here.
-const NOT_OWNED_HERE: [&str; 4] = [
-    "nine_flag_bits",
-    "nine_flag_bits_split",
-    "bool_outside_flags",
-    "empty_group_outside_flags",
-];
 
 /// Runs `job` on its own thread and fails the test when it does not finish in one second.
 pub(crate) fn within_one_second<R: Send + 'static>(
@@ -83,13 +74,51 @@ fn scheme_for(id: &str) -> MapScheme {
             ],
         ),
         "count_names_later_field" => MapScheme::new(1, vec![sized("0", "1"), u16("1")]),
+        "nine_flag_bits" => MapScheme::new(
+            1,
+            vec![flags(0, "f", (0..9).map(|i| u8(i.to_string())).collect())],
+        ),
+        "nine_flag_bits_split" => {
+            let byte = flag_byte("0");
+            let mut fields = vec![byte.byte()];
+            fields.extend((1..10).map(|i| byte.bit(u8(i.to_string()))));
+            MapScheme::new(1, fields)
+        }
+        "empty_group_outside_flags" => MapScheme::new(1, vec![u8("0"), group(1, "1", vec![])]),
         other => panic!("no scheme written for hostile case {other}"),
     }
 }
 
-/// A refusal must come from the scope / order rule, not from a malformed hand-written scheme.
+#[derive(Default)]
+struct BoolRow {
+    a: u8,
+    on: Option<bool>,
+}
+
+/// Builds the scheme of a `construct` case. The Rust `bool` is the typed `bool_flag`.
+fn construct(id: &str) {
+    if id == "bool_outside_flags" {
+        let _ = Scheme::<BoolRow>::new(
+            1,
+            [
+                BoundField::u8(0, |r: &BoolRow| r.a, |r: &mut BoolRow, v| r.a = v).into(),
+                BoundField::bool_flag(1, |r: &BoolRow| r.on, |r: &mut BoolRow, v| r.on = v).into(),
+            ],
+        );
+    } else {
+        let _ = scheme_for(id);
+    }
+}
+
+/// A refusal must come from a scheme rule, not from a malformed hand-written scheme.
 fn assert_refusal_names_the_rule(id: &str, msg: &str) {
-    let rules = ["same scope", "next order", "not yet walked"];
+    let rules = [
+        "same scope",
+        "next order",
+        "not yet walked",
+        "more than 8",
+        "allowed only directly inside flags",
+    ];
     assert!(
         rules.iter().any(|rule| msg.contains(rule)),
         "{id}: construction panic does not name the scope/order rule: {msg:?}"
@@ -109,7 +138,11 @@ fn panic_text(panic: &(dyn std::any::Any + Send)) -> String {
 /// What Rust returns for each case today; the labels are undecided until C15.
 fn rust_outcome(id: &str) -> &'static str {
     match id {
-        "zero_progress_repeat_bool" => "Trailing",
+        "zero_progress_repeat_bool"
+        | "nine_flag_bits"
+        | "nine_flag_bits_split"
+        | "bool_outside_flags"
+        | "empty_group_outside_flags" => "scheme_error",
         "zero_progress_repeat_when" | "when_names_outer_field_in_repeat" => "scheme_error",
         "negative_count"
         | "oversize_count"
@@ -161,15 +194,12 @@ fn hostile_vectors_error_without_panic_or_hang() {
         assert_eq!(cols.len(), 4, "bad case line: {line}");
         let (id, stage, expected, hex) = (cols[0], cols[1], cols[2], cols[3]);
         assert!(seen.insert(id.to_string()), "duplicate case {id}");
-        if NOT_OWNED_HERE.contains(&id) {
-            continue;
-        }
         let allows_scheme_error = expected.split('|').any(|t| t == "scheme_error");
         match stage {
             "construct" => {
                 let id_owned = id.to_string();
                 let refusal = within_one_second(id, move || {
-                    catch_unwind(AssertUnwindSafe(|| scheme_for(&id_owned)))
+                    catch_unwind(AssertUnwindSafe(|| construct(&id_owned)))
                         .err()
                         .map(|panic| panic_text(panic.as_ref()))
                 });

@@ -192,8 +192,13 @@ internal static class SchemeOrder
         FlagScopes.Validate(fields);
     }
 
-    private static void Walk(Field field, Dictionary<int, string> scope, ref int next)
+    // `flagBit`: the field is a direct child of Flags or the field of a FlagByte bit, the only place a bool or an empty
+    // group has a bit to live in.
+    private static void Walk(Field field, Dictionary<int, string> scope, ref int next, bool flagBit = false)
     {
+        if (!flagBit && IsPresenceOnly(field))
+            throw new ArgumentException(
+                $"'{field.Name}': a bool or an empty group is a flag bit with no payload; put it directly in Flags or a FlagByte bit");
         switch (field.Type)
         {
             case Field.Kind.When:
@@ -205,7 +210,7 @@ internal static class SchemeOrder
                     Walk(child, scope, ref next);
                 break;
             case Field.Kind.FlagBit:
-                Walk(field.Inner!, scope, ref next);
+                Walk(field.Inner!, scope, ref next, flagBit: true);
                 break;
             case Field.Kind.FlagByte:
                 break;
@@ -244,6 +249,9 @@ internal static class SchemeOrder
                 break;
         }
     }
+
+    private static bool IsPresenceOnly(Field field) =>
+        field.Type == Field.Kind.Bool || (field.Type == Field.Kind.Group && field.Children.Length == 0);
 
     private static void RequireAnchor(int anchor, int next)
     {

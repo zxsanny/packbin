@@ -1,6 +1,7 @@
 import {
   BinaryPacker,
   PackSession,
+  bool,
   dict,
   flags,
   i16,
@@ -51,6 +52,28 @@ const nestedPacket = scheme<NestedRow>(
     ),
   ),
 );
+
+type BoolFlagRow = { on?: boolean };
+
+// flags { bool on } with on = false: the bit is set only for true, so it packs 0100.
+const boolFlagPacket = scheme<BoolFlagRow>(1, flags(0, [bool(0, (r) => r.on)]));
+
+const boolFlagValues: BoolFlagRow = { on: false };
+
+// The same scheme with on = true sets the bit: 0101.
+const boolTrueValues: BoolFlagRow = { on: true };
+
+function unpackBoolFlag(cmdName: string, hex: string): BoolFlagRow {
+  let row: BoolFlagRow | undefined;
+  const result = BinaryPacker.unpack(Buffer.from(hex, "hex"), boolFlagPacket.on((value) => {
+    row = value as BoolFlagRow;
+  }));
+  if (!result.ok || row === undefined) {
+    process.stderr.write(`${cmdName}: ${JSON.stringify(result)}\n`);
+    process.exit(1);
+  }
+  return row;
+}
 
 const userValues: UserRow = {
   username: "zxsanny",
@@ -147,6 +170,18 @@ if (cmd === "pack-nested") {
   process.exit(0);
 }
 
+if (cmd === "pack-boolflag") {
+  const bytes = BinaryPacker.pack(boolFlagPacket, boolFlagValues);
+  process.stdout.write(Buffer.from(bytes).toString("hex") + "\n");
+  process.exit(0);
+}
+
+if (cmd === "pack-booltrue") {
+  const bytes = BinaryPacker.pack(boolFlagPacket, boolTrueValues);
+  process.stdout.write(Buffer.from(bytes).toString("hex") + "\n");
+  process.exit(0);
+}
+
 if (cmd === "unpack-user") {
   const hex = process.argv[3] ?? "";
   const bytes = Buffer.from(hex, "hex");
@@ -167,6 +202,24 @@ if (cmd === "unpack-nested") {
   }));
   if (result.ok && row !== undefined && deepEqual(row, nestedValues)) process.exit(0);
   process.exit(1);
+}
+
+if (cmd === "unpack-boolflag") {
+  const row = unpackBoolFlag(cmd, process.argv[3] ?? "");
+  if (row.on === true) {
+    process.stderr.write("unpack-boolflag: on is true, expected absent or false\n");
+    process.exit(1);
+  }
+  process.exit(0);
+}
+
+if (cmd === "unpack-booltrue") {
+  const row = unpackBoolFlag(cmd, process.argv[3] ?? "");
+  if (row.on !== true) {
+    process.stderr.write(`unpack-booltrue: on is ${String(row.on)}, expected true\n`);
+    process.exit(1);
+  }
+  process.exit(0);
 }
 
 if (cmd === "pack-session") {

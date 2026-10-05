@@ -1,6 +1,6 @@
 use super::unpack::{unpack_fields, Cursor};
 use crate::field::Field;
-use crate::value::{Name, ShortPacket, UnpackError, Value, Values};
+use crate::value::{ShortPacket, UnpackError, Value, Values};
 use std::collections::HashMap;
 
 /// Reads one `list` or `dict` element and returns its value.
@@ -12,7 +12,7 @@ pub(super) fn unpack_element(
     owner: &str,
     child: &str,
     cur: &mut Cursor<'_>,
-    flag_bits: &mut HashMap<Name, u8>,
+    flag_bits: &mut HashMap<usize, u8>,
     groups: &mut Vec<Values>,
 ) -> Result<Value, UnpackError> {
     let before = cur.left();

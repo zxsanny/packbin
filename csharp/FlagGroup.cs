@@ -2,6 +2,8 @@ namespace Packbin;
 
 internal sealed class FlagGroup
 {
+    private const int MaxBits = 8;
+
     public string Name { get; }
     public List<Field> BitInners { get; } = [];
 
@@ -10,6 +12,8 @@ internal sealed class FlagGroup
     public Field AddBit(Field inner)
     {
         var index = BitInners.Count;
+        if (index == MaxBits)
+            throw new ArgumentException($"flag bit '{inner.Name}': one flags byte holds at most {MaxBits} bits");
         BitInners.Add(inner);
         return Field.CreateFlagBit(this, index, inner);
     }
@@ -19,11 +23,7 @@ internal sealed class FlagGroup
         byte flags = 0;
         for (var i = 0; i < BitInners.Count; i++)
         {
-            var inner = BitInners[i];
-            var on = inner.Type == Field.Kind.Group
-                ? Walker.GroupOn(values, inner)
-                : Walker.IsPresent(values, inner.Name);
-            if (on)
+            if (Walker.BitOn(values, BitInners[i]))
                 flags |= (byte)(1 << i);
         }
         return flags;

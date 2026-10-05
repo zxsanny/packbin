@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs"
 import { describe, it } from "node:test"
 import { Worker } from "node:worker_threads"
 import { BinaryPacker, bits, bytes, i32, list, repeat, scheme, u64, type DispatchResult } from "../src/index.ts"
-import type { Outcome, SessionOutcome } from "./support/hostile-cases.ts"
+import { CONSTRUCT, type Outcome, type SessionOutcome } from "./support/hostile-cases.ts"
 
 // A hang or an out-of-memory loop ends the worker, not the test run. The cases share one
 // worker; the case that hangs is reported and the rest restart in a fresh worker.
@@ -54,7 +54,7 @@ async function runAll(jobs: Job[]): Promise<Map<string, Settled>> {
   return done
 }
 
-const cases = readFileSync(new URL("../../fixtures/hostile/cases.txt", import.meta.url), "utf8")
+const allCases = readFileSync(new URL("../../fixtures/hostile/cases.txt", import.meta.url), "utf8")
   .split("\n")
   .map((line) => line.trim())
   .filter((line) => line !== "" && !line.startsWith("#"))
@@ -62,7 +62,15 @@ const cases = readFileSync(new URL("../../fixtures/hostile/cases.txt", import.me
     const [id, stage, expected, hex] = line.split(/\s+/)
     return { id: id!, stage: stage!, expected: expected!.split("|"), hex: hex! }
   })
-  .filter((c) => c.stage === "unpack")
+const cases = allCases.filter((c) => c.stage === "unpack")
+const constructCases = allCases.filter((c) => c.stage === "construct")
+
+// Construct vectors whose rule TypeScript does not enforce yet, with the task that adds it.
+const PENDING_CONSTRUCT: Record<string, string> = {
+  when_names_later_field: "AZ-2090",
+  count_names_later_field: "AZ-2090",
+  when_names_outer_field_in_repeat: "AZ-2090",
+}
 
 const SPEC: Record<string, string> = {
   row1_zero_progress_repeat: "010005",
@@ -110,7 +118,10 @@ async function outcome(key: string): Promise<Outcome> {
 const run = (id: string) => outcome(id)
 
 // Interim error mapping (until C15): trailing bytes, short packet, or a value that cannot be read.
-function kindOf(result: DispatchResult | undefined): string {
+// A scheme refused at construction is `scheme_error`.
+function kindOf(out: Outcome): string {
+  if (out.schemeError !== undefined) return "scheme_error"
+  const result: DispatchResult | undefined = out.result
   if (!result || result.ok || !("field" in result)) return "other"
   if (result.field === "" && result.needed === 0) return "trailing_bytes"
   if (result.needed > 0) return "short_packet"
@@ -196,7 +207,7 @@ describe("hostile packets", () => {
     for (const id of Object.keys(SPEC).filter((k) => k.startsWith("row5_"))) {
       const out = await run(id)
       assertRejected(out)
-      assert.equal(kindOf(out.result), "short_packet", id)
+      assert.equal(kindOf(out), "short_packet", id)
     }
   })
 
@@ -274,12 +285,32 @@ describe("shared hostile vectors (fixtures/hostile/cases.txt)", () => {
   for (const c of cases) {
     it(`${c.id} returns an error value`, async () => {
       const out = await run(`vector:${c.id}`)
-      assertRejected(out)
-      const kind = kindOf(out.result)
+      if (out.schemeError === undefined) assertRejected(out)
+      const kind = kindOf(out)
       assert.ok(
         c.expected.includes(kind),
         `${c.id}: returned ${kind} ${JSON.stringify(out.result)}, vector accepts ${c.expected.join("|")}`,
       )
+    })
+  }
+})
+
+describe("shared construct vectors (fixtures/hostile/cases.txt)", () => {
+  for (const c of constructCases) {
+    const entry = CONSTRUCT[c.id]
+    const pending = PENDING_CONSTRUCT[c.id]
+    if (!entry && pending) {
+      it.todo(`${c.id} is refused at construction (${pending})`)
+      continue
+    }
+    it(`${c.id} is refused at construction`, () => {
+      assert.ok(entry, `no TypeScript scheme for construct case ${c.id}`)
+      assert.ok(c.expected.includes("scheme_error"), `${c.id}: vector expects ${c.expected.join("|")}`)
+      assert.throws(entry.build, (e: unknown) => {
+        assert.ok(e instanceof RangeError, `${c.id}: expected RangeError, got ${String(e)}`)
+        assert.match(e.message, entry.rule, `${c.id}: wrong rule fired`)
+        return true
+      })
     })
   }
 })

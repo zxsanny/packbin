@@ -6,7 +6,9 @@ import {
   bytes,
   dict,
   eq,
+  flagByte,
   flags,
+  group,
   i8,
   list,
   packed,
@@ -28,107 +30,146 @@ export type Outcome = {
   result?: DispatchResult
   called: boolean
   threw?: string
+  // Set when building the scheme threw RangeError: the `scheme_error` outcome.
+  schemeError?: string
   ms: number
 }
 
 // Count 0 is the first value of the scheme; flag-guarded counts hide it behind a clear bit.
 const clearFlag = () => flags(0, [u8(0, (x: Row) => x.n)])
 
-const dictZeroWidthValue = scheme<Row>(1, dict((x) => x.d, bytes(0, (x) => x.v, 0)))
+const dictZeroWidthValue = () => scheme<Row>(1, dict((x) => x.d, bytes(0, (x) => x.v, 0)))
 
-export const SCHEMES: Record<string, Scheme<Row>> = {
+const nineU8 = () => [
+  u8(0, (x: Row) => x.f0),
+  u8(1, (x: Row) => x.f1),
+  u8(2, (x: Row) => x.f2),
+  u8(3, (x: Row) => x.f3),
+  u8(4, (x: Row) => x.f4),
+  u8(5, (x: Row) => x.f5),
+  u8(6, (x: Row) => x.f6),
+  u8(7, (x: Row) => x.f7),
+  u8(8, (x: Row) => x.f8),
+]
+
+// fixtures/hostile/cases.txt, construct stage: each builder must throw RangeError whose
+// message matches `rule`, so an error from a typo in the builder does not pass the case.
+export const CONSTRUCT: Record<string, { build: () => unknown; rule: RegExp }> = {
+  nine_flag_bits: {
+    build: () => scheme<Row>(1, flags(0, nineU8())),
+    rule: /^flags: ninth bit \(f8\); a flag byte holds 8 bits$/,
+  },
+  nine_flag_bits_split: {
+    build: () => {
+      const fb = flagByte("fb")
+      return scheme<Row>(1, fb, ...nineU8().map((f) => fb.bit(f)))
+    },
+    rule: /^flag byte "fb": ninth bit \(f8\); a flag byte holds 8 bits$/,
+  },
+  bool_outside_flags: {
+    build: () => scheme<Row>(1, u8(0, (x) => x.a), bool(1, (x) => x.on)),
+    rule: /^bool on: allowed only directly inside flags or a flag bit/,
+  },
+  empty_group_outside_flags: {
+    build: () => scheme<Row>(1, u8(0, (x) => x.a), group((x) => x.mark, [])),
+    rule: /^empty group mark: allowed only directly inside flags or a flag bit/,
+  },
+}
+
+// Built per case, so a scheme a package refuses is reported for that case alone.
+export const SCHEMES: Record<string, () => Scheme<Row>> = {
   // fixtures/hostile/cases.txt, unpack stage
-  zero_progress_repeat_bool: scheme<Row>(1, repeat(0, [bool(0, (x) => x.on)])),
-  zero_progress_repeat_when: scheme<Row>(
+  zero_progress_repeat_bool: () => scheme<Row>(1, repeat(0, [bool(0, (x) => x.on)])),
+  zero_progress_repeat_when: () => scheme<Row>(
     1,
     u8(0, (x) => x.mode),
     repeat(1, [when(1, eq(0, 1), [u8(1, (x) => x.v)])]),
   ),
-  negative_count: scheme<Row>(
+  negative_count: () => scheme<Row>(
     1,
     i8(0, (x) => x.n),
     sized(1, (x) => x.payload, 0),
   ),
-  oversize_count: scheme<Row>(
+  oversize_count: () => scheme<Row>(
     1,
     u32(0, (x) => x.n),
     sized(1, (x) => x.payload, 0),
   ),
-  oversize_count_times: scheme<Row>(
+  oversize_count_times: () => scheme<Row>(
     1,
     u32(0, (x) => x.n),
     times(1, 0, [u8(1, (x) => x.v)]),
   ),
-  oversize_list_count: scheme<Row>(1, list((x) => x.xs, u8(0, (x) => x.x))),
-  invalid_utf8: scheme<Row>(1, utf8(0, (x) => x.name)),
-  invalid_utf8_dict_key: scheme<Row>(1, dict((x) => x.m, u8(0, (x) => x.v))),
-  count_behind_clear_flag: scheme<Row>(1, clearFlag(), sized(1, (x) => x.payload, 0)),
-  count_behind_clear_flag_bits: scheme<Row>(1, clearFlag(), bits(1, (x) => x.segs, 0)),
+  oversize_list_count: () => scheme<Row>(1, list((x) => x.xs, u8(0, (x) => x.x))),
+  invalid_utf8: () => scheme<Row>(1, utf8(0, (x) => x.name)),
+  invalid_utf8_dict_key: () => scheme<Row>(1, dict((x) => x.m, u8(0, (x) => x.v))),
+  count_behind_clear_flag: () => scheme<Row>(1, clearFlag(), sized(1, (x) => x.payload, 0)),
+  count_behind_clear_flag_bits: () => scheme<Row>(1, clearFlag(), bits(1, (x) => x.segs, 0)),
 
   // AZ-2072 problem table
-  row1_zero_progress_repeat: scheme<Row>(
+  row1_zero_progress_repeat: () => scheme<Row>(
     1,
     u8(0, (x) => x.k),
     repeat(1, [when(1, eq(0, 9), [u8(1, (x) => x.v)])]),
   ),
-  row2a_sized_negative: scheme<Row>(
+  row2a_sized_negative: () => scheme<Row>(
     1,
     i8(0, (x) => x.n),
     sized(1, (x) => x.p, 0),
   ),
-  row2b_bits_negative: scheme<Row>(
+  row2b_bits_negative: () => scheme<Row>(
     1,
     i8(0, (x) => x.n),
     bits(1, (x) => x.b, 0),
   ),
-  row2c_packed_negative: scheme<Row>(
+  row2c_packed_negative: () => scheme<Row>(
     1,
     i8(0, (x) => x.n),
     packed(2, 1, (x) => x.k, 0),
   ),
-  row2c_times_negative: scheme<Row>(
+  row2c_times_negative: () => scheme<Row>(
     1,
     i8(0, (x) => x.n),
     times(1, 0, [u8(1, (x) => x.v)]),
   ),
-  row2d_packed_negative_bias: scheme<Row>(
+  row2d_packed_negative_bias: () => scheme<Row>(
     1,
     u8(0, (x) => x.n),
     packed(1, 1, (x) => x.legs, 0, -1),
   ),
-  row3_invalid_utf8_string: scheme<Row>(1, utf8(0, (x) => x.s)),
-  row3_invalid_utf8_dict_key: scheme<Row>(1, dict((x) => x.d, u8(0, (x) => x.v))),
-  row4_sized_behind_clear_flag: scheme<Row>(1, clearFlag(), sized(1, (x) => x.p, 0)),
-  row4_bits_behind_clear_flag: scheme<Row>(1, clearFlag(), bits(1, (x) => x.b, 0)),
-  row4_packed_behind_clear_flag: scheme<Row>(1, clearFlag(), packed(2, 1, (x) => x.k, 0)),
-  row4_times_behind_clear_flag: scheme<Row>(
+  row3_invalid_utf8_string: () => scheme<Row>(1, utf8(0, (x) => x.s)),
+  row3_invalid_utf8_dict_key: () => scheme<Row>(1, dict((x) => x.d, u8(0, (x) => x.v))),
+  row4_sized_behind_clear_flag: () => scheme<Row>(1, clearFlag(), sized(1, (x) => x.p, 0)),
+  row4_bits_behind_clear_flag: () => scheme<Row>(1, clearFlag(), bits(1, (x) => x.b, 0)),
+  row4_packed_behind_clear_flag: () => scheme<Row>(1, clearFlag(), packed(2, 1, (x) => x.k, 0)),
+  row4_times_behind_clear_flag: () => scheme<Row>(
     1,
     clearFlag(),
     times(1, 0, [u8(1, (x) => x.v)]),
   ),
-  row5_list_oversize: scheme<Row>(1, list((x) => x.xs, u8(0, (x) => x.x))),
-  row5_utf8_oversize: scheme<Row>(1, utf8(0, (x) => x.s)),
-  row5_times_oversize: scheme<Row>(
+  row5_list_oversize: () => scheme<Row>(1, list((x) => x.xs, u8(0, (x) => x.x))),
+  row5_utf8_oversize: () => scheme<Row>(1, utf8(0, (x) => x.s)),
+  row5_times_oversize: () => scheme<Row>(
     1,
     u8(0, (x) => x.n),
     times(1, 0, [u8(1, (x) => x.v)]),
   ),
-  row5_sized_oversize: scheme<Row>(
+  row5_sized_oversize: () => scheme<Row>(
     1,
     u8(0, (x) => x.n),
     sized(1, (x) => x.p, 0),
   ),
-  row6_times_zero_width_oversize: scheme<Row>(
+  row6_times_zero_width_oversize: () => scheme<Row>(
     1,
     u32(0, (x) => x.n),
     times(1, 0, [when(1, eq(0, 9), [u8(1, (x) => x.v)])]),
   ),
-  row6_times_zero_width_small: scheme<Row>(
+  row6_times_zero_width_small: () => scheme<Row>(
     1,
     u8(0, (x) => x.n),
     times(1, 0, [when(1, eq(0, 9), [u8(1, (x) => x.v)])]),
   ),
-  row7_list_of_list_zero_width: scheme<Row>(
+  row7_list_of_list_zero_width: () => scheme<Row>(
     1,
     list(
       (x) => x.outer,
@@ -137,28 +178,36 @@ export const SCHEMES: Record<string, Scheme<Row>> = {
   ),
   row7_dict_zero_width_value: dictZeroWidthValue,
   row7_dict_zero_width_value_one: dictZeroWidthValue,
-  row7_never_matching_when_element: scheme<Row>(
+  row7_never_matching_when_element: () => scheme<Row>(
     1,
     u8(0, (x) => x.mode),
     list((x) => x.xs, when(0, eq(0, 9), [u8(0, (x) => x.v)])),
   ),
-  row5_bits_oversize: scheme<Row>(
+  row5_bits_oversize: () => scheme<Row>(
     1,
     u32(0, (x) => x.n),
     bits(1, (x) => x.b, 0),
   ),
-  row5_packed_oversize: scheme<Row>(
+  row5_packed_oversize: () => scheme<Row>(
     1,
     u32(0, (x) => x.n),
     packed(2, 1, (x) => x.k, 0),
   ),
-  row5_dict_oversize: scheme<Row>(1, dict((x) => x.d, u8(0, (x) => x.v))),
+  row5_dict_oversize: () => scheme<Row>(1, dict((x) => x.d, u8(0, (x) => x.v))),
 }
 
 export function runCase(id: string, hex: string): Outcome {
-  const layout = SCHEMES[id]
-  if (!layout) throw new Error(`no scheme declared for hostile case ${id}`)
+  const build = SCHEMES[id]
+  if (!build) throw new Error(`no scheme declared for hostile case ${id}`)
   const out: Outcome = { called: false, ms: 0 }
+  let layout: Scheme<Row>
+  try {
+    layout = build()
+  } catch (e) {
+    if (e instanceof RangeError) out.schemeError = e.message
+    else out.threw = `construction: ${String(e)}`
+    return out
+  }
   const start = performance.now()
   try {
     out.result = BinaryPacker.unpack(

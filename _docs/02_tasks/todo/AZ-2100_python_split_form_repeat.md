@@ -147,3 +147,4 @@ Then the bytes are unchanged
 | TS numbers split-form bits by `.bit()` call order (`fields.ts:131-138`), not by placement; same result for in-order creation. Align under C05 | coordinator / C05 | open | Low |
 | Decision 2026-10-05 (loop 11 feature-assess U2): a split flag bit whose flag byte is not in its scope (byte inside a `when`, or outside the list/repeat/times round) is a scheme construction error in every package. Python gets the rule here; the other five are AZ-2108..AZ-2111 | user | open | Medium |
 | A `times` with count 0 leaves the member as the row had it (TS leaves it absent); defaults then show as a scalar | coordinator | open | Low |
+| Loop 12 review (AZ-2083 F2): the `_FlagBit` → `_Bool` unpack path is `pass`, so a split-form bool never unpacks `True`; and a flag byte listed without its bits (`Scheme(1, dict, fb)`) constructs and drops the bool, while listing both validates the bit's id twice. Fix all three here | coordinator | open | Medium |

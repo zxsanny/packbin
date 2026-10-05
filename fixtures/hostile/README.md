@@ -106,7 +106,7 @@
 
 ## nine_flag_bits_split
 
-- Scheme: id0 split-form `flag_byte`; nine `bit(...)` fields id1 to id9, each a `u8`.
+- Scheme: id0 split-form `flag_byte`; nine `bit(...)` fields id1 to id9, each a `u8`. In packages whose flag byte takes no order id (C#, Java, C++) the bits are id0 to id8.
 - No packet: construction must fail.
 - Expected: `scheme_error`.
 - Source: Rust LB2 (`field/mod.rs:144`); Python already rejects it.
@@ -129,7 +129,7 @@
 
 - Scheme: the scheme of `zero_progress_repeat_when`: the `when` inside the `repeat` names `mode`, a field outside it.
 - No packet: construction must fail.
-- Expected: `scheme_error`. Open question: today only Rust (task 06) plans this as a cross-language rule.
+- Expected: `scheme_error`. Rust (task 06) and Java (task 20) refuse it at construction; the other packages follow under their reference-scope tasks.
 - Source: Rust LB1.
 
 ## bool_outside_flags

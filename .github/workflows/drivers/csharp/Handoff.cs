@@ -105,6 +105,13 @@ static class Handoff
         Profile = 1,
     };
 
+    sealed class BoolFlagRow
+    {
+        public bool? On { get; set; }
+    }
+
+    static readonly Scheme<BoolFlagRow> BoolFlagScheme = new(1, Field.Flags(0, Field.Bool<BoolFlagRow>(0, x => x.On)));
+
     static readonly byte[] SessionSeed = Enumerable.Range(1, 32).Select(i => (byte)i).ToArray();
     static readonly byte[] SessionNonce = Convert.FromHexString("01000000000000000000000000000000");
 
@@ -123,6 +130,12 @@ static class Handoff
                 return 0;
             case "pack-session":
                 return PackSessionOpener();
+            case "pack-boolflag":
+                Console.WriteLine(Convert.ToHexString(BinaryPacker.Pack(BoolFlagScheme, new BoolFlagRow { On = false })).ToLowerInvariant());
+                return 0;
+            case "pack-booltrue":
+                Console.WriteLine(Convert.ToHexString(BinaryPacker.Pack(BoolFlagScheme, new BoolFlagRow { On = true })).ToLowerInvariant());
+                return 0;
             case "unpack-user":
                 if (args.Length < 2)
                     return 2;
@@ -135,6 +148,14 @@ static class Handoff
                 if (args.Length < 2)
                     return 2;
                 return UnpackSession(args[1]) ? 0 : 1;
+            case "unpack-boolflag":
+                if (args.Length < 2)
+                    return 2;
+                return UnpackBoolFlag(args[1], expectOn: false);
+            case "unpack-booltrue":
+                if (args.Length < 2)
+                    return 2;
+                return UnpackBoolFlag(args[1], expectOn: true);
             default:
                 return 2;
         }
@@ -168,6 +189,27 @@ static class Handoff
             && got.Heading is null
             && got.Speed is null
             && got.Altitude is null;
+    }
+
+    // expectOn: the row must read on = true; otherwise on must be absent or false.
+    static int UnpackBoolFlag(string hex, bool expectOn)
+    {
+        var command = expectOn ? "unpack-booltrue" : "unpack-boolflag";
+        BoolFlagRow? row = null;
+        var err = BinaryPacker.Unpack(Convert.FromHexString(hex), BoolFlagScheme.On(v => row = v));
+        if (err is not null || row is null)
+        {
+            Console.Error.WriteLine($"{command}: not ok ({err?.GetType().Name ?? "no row"})");
+            return 1;
+        }
+        if ((row.On is true) != expectOn)
+        {
+            var wanted = expectOn ? "true" : "absent or false";
+            var got = row.On switch { true => "true", false => "false", null => "absent" };
+            Console.Error.WriteLine($"{command}: on is {got}, expected {wanted}");
+            return 1;
+        }
+        return 0;
     }
 
     static bool UnpackUser(string hex)

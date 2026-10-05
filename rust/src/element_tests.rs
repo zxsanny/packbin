@@ -73,7 +73,7 @@ fn list_of_real_elements_is_unchanged() {
 }
 
 #[test]
-#[should_panic(expected = "flag bit 0 of flag byte \"f\" is not in the same scope")]
+#[should_panic(expected = "flag bit \"2\" of flag byte \"f\" is not in the same scope")]
 fn orphan_flag_bit_after_a_when_is_a_construction_error() {
     let f = flag_byte("f");
     MapScheme::new(
@@ -87,21 +87,21 @@ fn orphan_flag_bit_after_a_when_is_a_construction_error() {
 }
 
 #[test]
-#[should_panic(expected = "flag bit 0 of flag byte \"f\" is not in the same scope")]
+#[should_panic(expected = "flag bit \"0\" of flag byte \"f\" is not in the same scope")]
 fn flag_bit_in_a_list_element_with_the_byte_outside_is_refused() {
     let f = flag_byte("f");
     MapScheme::new(1, vec![f.byte(), list("L", f.bit(u8("0")))]);
 }
 
 #[test]
-#[should_panic(expected = "flag bit 0 of flag byte \"f\" is not in the same scope")]
+#[should_panic(expected = "flag bit \"0\" of flag byte \"f\" is not in the same scope")]
 fn flag_bit_in_a_dict_element_with_the_byte_outside_is_refused() {
     let f = flag_byte("f");
     MapScheme::new(1, vec![f.byte(), dict("D", f.bit(u8("0")))]);
 }
 
 #[test]
-#[should_panic(expected = "flag bit 0 of flag byte \"f\" is not in the same scope")]
+#[should_panic(expected = "flag bit \"2\" of flag byte \"f\" is not in the same scope")]
 fn flag_bit_in_a_times_round_with_the_byte_outside_is_refused() {
     let f = flag_byte("f");
     MapScheme::new(
@@ -111,7 +111,7 @@ fn flag_bit_in_a_times_round_with_the_byte_outside_is_refused() {
 }
 
 #[test]
-#[should_panic(expected = "flag bit 0 of flag byte \"f\" is not in the same scope")]
+#[should_panic(expected = "flag bit \"0\" of flag byte \"f\" is not in the same scope")]
 fn flag_bit_before_its_byte_is_refused() {
     let f = flag_byte("f");
     MapScheme::new(1, vec![f.bit(u8("0")), f.byte()]);
@@ -164,7 +164,7 @@ fn flag_bit_inside_a_when_may_use_the_byte_of_the_enclosing_scope() {
 }
 
 #[test]
-#[should_panic(expected = "flag bit 0 of flag byte")]
+#[should_panic(expected = "flag bit \"2\" of flag byte")]
 fn typed_scheme_with_orphan_flag_bit_is_refused() {
     #[derive(Default)]
     struct Row {
@@ -182,7 +182,7 @@ fn typed_scheme_with_orphan_flag_bit_is_refused() {
 }
 
 #[test]
-#[should_panic(expected = "flag bit 0 of flag byte \"f\" is not in the same scope")]
+#[should_panic(expected = "flag bit \"0\" of flag byte \"f\" is not in the same scope")]
 fn orphan_flag_bit_is_construction_error() {
     let f = flag_byte("f");
     MapScheme::new(1, vec![f.bit(u8("0")), f.byte()]);

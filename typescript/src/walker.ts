@@ -87,6 +87,7 @@ export function unpackFields(
         break
       }
       case "bool":
+        // Reached only through a set flag bit: a bool anywhere else is refused by scheme().
         store(values, round, f.name, true)
         break
       case "flagByte": {
@@ -151,7 +152,6 @@ export function unpackFields(
         break
       }
       case "group": {
-        if (f.fields.length === 0) values[f.name] = true
         const err = unpackFields(f.fields, allFields, cur, values, flagBytes, round)
         if (err) return err
         break

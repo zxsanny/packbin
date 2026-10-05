@@ -7,6 +7,9 @@ user_hex="0107007a7873616e6e7902000400757365720a00646973706174636865720300070063
 nested_hex="01020003006d61700100010002006f7007006770735f666978050073746f72650200010002006f70040072656164010002006f7005007772697465"
 position_hex="4001000065cd1d00a3e1110100"
 session_hex="b55d0a29c56c203712b241232e"
+# flags { bool on }: the bit is set only for true (README, bool).
+boolflag_hex="0100"
+booltrue_hex="0101"
 
 run_lang() {
   local lang="$1"
@@ -83,6 +86,20 @@ handoff python rust nested "$nested_hex"
 handoff rust java nested "$nested_hex"
 handoff java cpp nested "$nested_hex"
 handoff cpp csharp nested "$nested_hex"
+
+handoff csharp typescript boolflag "$boolflag_hex"
+handoff typescript python boolflag "$boolflag_hex"
+handoff python rust boolflag "$boolflag_hex"
+handoff rust java boolflag "$boolflag_hex"
+handoff java cpp boolflag "$boolflag_hex"
+handoff cpp csharp boolflag "$boolflag_hex"
+
+handoff csharp typescript booltrue "$booltrue_hex"
+handoff typescript python booltrue "$booltrue_hex"
+handoff python rust booltrue "$booltrue_hex"
+handoff rust java booltrue "$booltrue_hex"
+handoff java cpp booltrue "$booltrue_hex"
+handoff cpp csharp booltrue "$booltrue_hex"
 
 for lang in csharp typescript python rust cpp java; do
   got="$(run_lang "$lang" "pack-session" | tr -d '[:space:]')"

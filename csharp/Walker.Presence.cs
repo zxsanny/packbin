@@ -1,0 +1,69 @@
+namespace Packbin;
+
+// When a flag bit is on, and what the field behind a set bit must hold.
+internal static partial class Walker
+{
+    // A bool or an empty group is only a presence bit: on for true, off for false or no value. A group with children is
+    // on when its own member or any value-bearing child (or a nested group's) has a value.
+    public static bool BitOn(IReadOnlyDictionary<string, object?> values, Field inner) =>
+        inner.Type switch
+        {
+            Field.Kind.Bool => IsTrue(values, inner.Name),
+            Field.Kind.Group when inner.Children.Length == 0 => IsTrue(values, inner.Name),
+            Field.Kind.Group => GroupOn(values, inner),
+            _ => IsPresent(values, inner.Name),
+        };
+
+    private static bool IsTrue(IReadOnlyDictionary<string, object?> values, string name) =>
+        values.TryGetValue(name, out var v) && v is true;
+
+    private static bool GroupOn(IReadOnlyDictionary<string, object?> values, Field group)
+    {
+        if (IsPresent(values, group.Name))
+            return true;
+        foreach (var child in group.Children)
+        {
+            if (ChildPresent(values, child))
+                return true;
+        }
+        return false;
+    }
+
+    private static bool ChildPresent(IReadOnlyDictionary<string, object?> values, Field child) =>
+        child.Type switch
+        {
+            Field.Kind.Group => GroupOn(values, child),
+            Field.Kind.U2 => child.Names.Any(name => IsPresent(values, name)),
+            _ => IsGroupValue(child) && IsPresent(values, child.Name),
+        };
+
+    private static bool IsGroupValue(Field child) =>
+        Field.IsValueBearing(child) || child.Type is Field.Kind.List or Field.Kind.Dict;
+
+    // The field behind a set flag bit. A group there has no presence per value, so it is written in full: every value
+    // in it, and in the groups nested in it, must be there. A missing one would give a packet its own unpack rejects.
+    private static void PackBitField(Field inner, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    {
+        if (inner.Type == Field.Kind.Group)
+            RequireGroupValues(inner, inner, values);
+        PackField(inner, values, buffer);
+    }
+
+    private static void RequireGroupValues(Field flagged, Field group, IReadOnlyDictionary<string, object?> values)
+    {
+        foreach (var child in group.Children)
+        {
+            if (child.Type == Field.Kind.Group)
+            {
+                RequireGroupValues(flagged, child, values);
+                continue;
+            }
+            string[] names = child.Type == Field.Kind.U2 ? child.Names : IsGroupValue(child) ? [child.Name] : [];
+            foreach (var name in names)
+            {
+                if (!IsPresent(values, name))
+                    throw new ArgumentException($"'{name}': flag group '{flagged.Name}' is set, so it needs a value");
+            }
+        }
+    }
+}

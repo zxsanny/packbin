@@ -170,4 +170,21 @@ describe("borrowed-count fields", () => {
     )
     assert.equal(shortRan, false)
   })
+
+  it("route with straight false clears its bit and skips the mask", () => {
+    const raw = Uint8Array.from(Buffer.from(ROUTE_HEX, "hex"))
+    let got: RouteRow | undefined
+    BinaryPacker.unpack(raw, route.on((value) => {
+      got = value as RouteRow
+    }))
+    const wire = BinaryPacker.pack(route, { ...got!, straight: false })
+    assert.equal(toHex(wire), "3410001500042d00020d0065cd1d00a3e111108ccd1d10cae111")
+    let back: RouteRow | undefined
+    const result = BinaryPacker.unpack(wire, route.on((value) => {
+      back = value as RouteRow
+    }))
+    assert.deepEqual(result, { ok: true })
+    assert.equal("straight" in back!, false)
+    assert.equal("mask" in back!, false)
+  })
 })

@@ -166,6 +166,7 @@ final class FlagStateTest {
         Map[] got = new Map[1];
         Object err = BinaryPacker.unpack(PackbinTest.parseHex("010107000109"), scheme.on(row -> got[0] = row));
         PackbinTest.expectTrue("scope repeat rounds ok", err == null);
-        PackbinTest.expectEq("scope repeat rounds use their own flag byte", java.util.List.of(7, 9), got[0].get("a"));
+        // AZ-2089 F2: one entry per round; the round whose bit was clear holds null.
+        PackbinTest.expectEq("scope repeat rounds use their own flag byte", java.util.Arrays.asList(7, null, 9), got[0].get("a"));
     }
 }

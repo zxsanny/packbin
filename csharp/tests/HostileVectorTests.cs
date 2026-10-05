@@ -2,8 +2,8 @@ using Packbin;
 
 namespace Packbin.Tests;
 
-// Runs every `unpack` case of fixtures/hostile/cases.txt. The file holds bytes and outcomes only (ADR-001), so each
-// case id maps to a hand-written C# scheme below, written from fixtures/hostile/README.md.
+// Runs the cases of fixtures/hostile/cases.txt. The file holds bytes and outcomes only (ADR-001), so each case id maps
+// to a hand-written C# scheme below, written from fixtures/hostile/README.md.
 public class HostileVectorTests
 {
     private sealed class BoolRow
@@ -57,6 +57,38 @@ public class HostileVectorTests
         public byte V { get; set; }
     }
 
+    private sealed class NineRow
+    {
+        public byte? F0 { get; set; }
+        public byte? F1 { get; set; }
+        public byte? F2 { get; set; }
+        public byte? F3 { get; set; }
+        public byte? F4 { get; set; }
+        public byte? F5 { get; set; }
+        public byte? F6 { get; set; }
+        public byte? F7 { get; set; }
+        public byte? F8 { get; set; }
+    }
+
+    private sealed class PresenceRow
+    {
+        public byte A { get; set; }
+        public bool? On { get; set; }
+    }
+
+    private static Field[] NineU8() =>
+    [
+        Field.U8<NineRow>(0, x => x.F0), Field.U8<NineRow>(1, x => x.F1), Field.U8<NineRow>(2, x => x.F2),
+        Field.U8<NineRow>(3, x => x.F3), Field.U8<NineRow>(4, x => x.F4), Field.U8<NineRow>(5, x => x.F5),
+        Field.U8<NineRow>(6, x => x.F6), Field.U8<NineRow>(7, x => x.F7), Field.U8<NineRow>(8, x => x.F8),
+    ];
+
+    private static Scheme<NineRow> NineSplitBits()
+    {
+        var m = Field.FlagByte();
+        return new Scheme<NineRow>(1, [m, .. NineU8().Select(m.Bit)]);
+    }
+
     private static readonly Dictionary<string, Func<string, HostileProbe.Outcome>> Schemes = new()
     {
         ["zero_progress_repeat_bool"] = hex => HostileProbe.Unpack(
@@ -93,6 +125,36 @@ public class HostileVectorTests
                 Field.Bits<GatedRow>(1, x => x.Segs, 0)), hex, 1),
     };
 
+    private static readonly Dictionary<string, Action> ConstructSchemes = new()
+    {
+        ["nine_flag_bits"] = () => _ = new Scheme<NineRow>(1, Field.Flags(0, NineU8())),
+        ["nine_flag_bits_split"] = () => _ = NineSplitBits(),
+        ["bool_outside_flags"] = () => _ = new Scheme<PresenceRow>(1,
+            Field.U8<PresenceRow>(0, x => x.A),
+            Field.Bool<PresenceRow>(1, x => x.On)),
+        ["empty_group_outside_flags"] = () => _ = new Scheme<PresenceRow>(1,
+            Field.U8<PresenceRow>(0, x => x.A),
+            Field.Group(1, (PresenceRow x) => x.On)),
+    };
+
+    // A message fragment for each case refused at construction, so a refusal by some other rule does not pass.
+    private static readonly Dictionary<string, string> RefusalRule = new()
+    {
+        ["nine_flag_bits"] = "at most 8 bits",
+        ["nine_flag_bits_split"] = "at most 8 bits",
+        ["bool_outside_flags"] = "put it directly in Flags",
+        ["empty_group_outside_flags"] = "put it directly in Flags",
+        ["zero_progress_repeat_bool"] = "put it directly in Flags",
+    };
+
+    // References to later or outer fields are refused at construction by AZ-2087 (C# forward references), not yet.
+    private static readonly HashSet<string> ConstructNotOwnedHere =
+    [
+        "when_names_later_field",
+        "count_names_later_field",
+        "when_names_outer_field_in_repeat",
+    ];
+
     // C# has no bad_value or too_many type yet (C15); ShortPacket stands in for both.
     private static readonly Dictionary<string, Type> KindOfTerm = new()
     {
@@ -103,7 +165,7 @@ public class HostileVectorTests
         ["type_mismatch"] = typeof(TypeMismatch),
     };
 
-    public static IEnumerable<object[]> UnpackCases()
+    private static IEnumerable<string[]> Cases(string stage)
     {
         foreach (var line in File.ReadLines(FindCases()))
         {
@@ -111,9 +173,49 @@ public class HostileVectorTests
             if (trimmed.Length == 0 || trimmed[0] == '#')
                 continue;
             var parts = trimmed.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-            if (parts[1] == "unpack")
-                yield return [parts[0], parts[2], parts[3]];
+            if (parts[1] == stage)
+                yield return parts;
         }
+    }
+
+    public static IEnumerable<object[]> UnpackCases() =>
+        Cases("unpack").Select(parts => new object[] { parts[0], parts[2], parts[3] });
+
+    public static IEnumerable<object[]> ConstructCases() =>
+        Cases("construct")
+            .Where(parts => !ConstructNotOwnedHere.Contains(parts[0]))
+            .Select(parts => new object[] { parts[0], parts[2] });
+
+    [Fact]
+    public void EveryConstructCase_HasACSharpSchemeOrANamedOwner()
+    {
+        // Arrange
+        var ids = Cases("construct").Select(parts => parts[0]).ToList();
+
+        // Act
+        var unclaimed = ids.Where(id => !ConstructSchemes.ContainsKey(id) && !ConstructNotOwnedHere.Contains(id)).ToList();
+
+        // Assert
+        Assert.NotEmpty(ids);
+        Assert.Empty(unclaimed);
+    }
+
+    [Theory]
+    [MemberData(nameof(ConstructCases))]
+    public void ConstructCase_FailsSchemeConstruction(string id, string expected)
+    {
+        // Arrange
+        Assert.Equal("scheme_error", expected);
+        Assert.True(ConstructSchemes.TryGetValue(id, out var build), $"{id}: no C# scheme declared for this case");
+
+        Assert.True(RefusalRule.TryGetValue(id, out var rule), $"{id}: no refusal rule declared for this case");
+
+        // Act
+        var refused = Record.Exception(build!);
+
+        // Assert
+        var error = Assert.IsType<ArgumentException>(refused);
+        Assert.True(error.Message.Contains(rule!, StringComparison.Ordinal), $"{id}: refused by another rule: {error.Message}");
     }
 
     [Theory]
@@ -124,7 +226,20 @@ public class HostileVectorTests
         Assert.True(Schemes.TryGetValue(id, out var run), $"{id}: no C# scheme declared for this case");
 
         // Act
-        var outcome = run!(hex);
+        HostileProbe.Outcome outcome;
+        try
+        {
+            outcome = run!(hex);
+        }
+        catch (ArgumentException refused)
+        {
+            // The case's scheme fails construction; that is a valid outcome only where the file allows scheme_error,
+            // and only by the rule declared for the case.
+            Assert.True(expected.Split('|').Contains("scheme_error"), $"{id}: construction failed ({refused.Message}), expected {expected}");
+            Assert.True(RefusalRule.TryGetValue(id, out var rule), $"{id}: construction failed ({refused.Message}), no refusal rule declared");
+            Assert.True(refused.Message.Contains(rule!, StringComparison.Ordinal), $"{id}: refused by another rule: {refused.Message}");
+            return;
+        }
 
         // Assert
         Assert.False(outcome.HandlerCalled, $"{id}: handler called");

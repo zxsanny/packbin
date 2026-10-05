@@ -6,7 +6,7 @@ import {
 } from "./fields.ts"
 import { unpackBody, type UnpackErr } from "./walker.ts"
 import { packFields } from "./pack-fields.ts"
-import { validateFlagScopes } from "./flag-scope.ts"
+import { validateFlagScopes, validatePresenceMarks } from "./flag-scope.ts"
 import type { Value } from "./kinds.ts"
 import { hkdf } from "@noble/hashes/hkdf.js"
 import { sha256 } from "@noble/hashes/sha2.js"
@@ -75,6 +75,7 @@ export function scheme<T>(typeNumber: number, ...fields: Field[]): Scheme<T> {
   validateFieldIds(fields)
   const flat = flatten(fields)
   validateFlagScopes(flat)
+  validatePresenceMarks(flat)
   return new Scheme(typeNumber, flat)
 }
 

@@ -8,22 +8,6 @@ internal static partial class Walker
     public static bool IsPresent(IReadOnlyDictionary<string, object?> values, string name) =>
         values.TryGetValue(name, out var v) && v is not null;
 
-    public static bool GroupOn(IReadOnlyDictionary<string, object?> values, Field group)
-    {
-        if (IsPresent(values, group.Name))
-            return true;
-        foreach (var child in group.Children)
-        {
-            if (IsScalarOrBytes(child) && IsPresent(values, child.Name))
-                return true;
-        }
-        return false;
-    }
-
-    private static bool IsScalarOrBytes(Field field) =>
-        field.Type is (>= Field.Kind.U8 and <= Field.Kind.F64)
-            or Field.Kind.Bytes or Field.Kind.Utf8 or Field.Kind.List or Field.Kind.Dict or Field.Kind.Bool;
-
     public static void PackField(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
     {
         switch (field.Type)
@@ -139,7 +123,7 @@ internal static partial class Walker
         {
             if ((flags & (1 << i)) == 0)
                 continue;
-            PackField(field.Children[i].Inner!, values, buffer);
+            PackBitField(field.Children[i].Inner!, values, buffer);
         }
     }
 
@@ -150,9 +134,9 @@ internal static partial class Walker
 
     private static void PackFlagBit(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
     {
-        if (!IsPresent(values, field.Name))
+        if (!BitOn(values, field.Inner!))
             return;
-        PackField(field.Inner!, values, buffer);
+        PackBitField(field.Inner!, values, buffer);
     }
 
     private static void PackWhen(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)

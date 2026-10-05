@@ -23,6 +23,10 @@ mod counted_tests;
 #[cfg(test)]
 mod element_tests;
 #[cfg(test)]
+mod flag_bits_tests;
+#[cfg(test)]
+mod flag_presence_tests;
+#[cfg(test)]
 mod hostile_tests;
 #[cfg(test)]
 mod packbin_tests;

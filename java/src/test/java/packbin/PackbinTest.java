@@ -43,6 +43,9 @@ public final class PackbinTest {
         HostileVectorTest.run();
         FlagStateTest.run();
         ZeroWidthElementTest.run();
+        ReferenceScopeTest.run();
+        BoolPlacementTest.run();
+        RepeatRoundTest.run();
         if (failures + PackbinFieldsTest.failures > 0) {
             System.err.println((failures + PackbinFieldsTest.failures) + " failure(s)");
             System.exit(1);
@@ -363,5 +366,19 @@ public final class PackbinTest {
     static void fail(String message) {
         failures++;
         System.err.println("FAIL " + message);
+    }
+
+    /** Passes only when {@code action} throws IllegalArgumentException with exactly {@code message}. */
+    static void expectThrows(String label, Runnable action, String message) {
+        try {
+            action.run();
+        } catch (IllegalArgumentException ex) {
+            expectEq(label + " message", message, ex.getMessage());
+            return;
+        } catch (RuntimeException ex) {
+            fail(label + ": threw " + ex + ", expected IllegalArgumentException \"" + message + "\"");
+            return;
+        }
+        fail(label + ": no exception, expected IllegalArgumentException \"" + message + "\"");
     }
 }

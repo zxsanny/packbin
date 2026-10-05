@@ -38,3 +38,26 @@ Placement rule for all five, from the C++ precedent (`cpp/include/packbin/order.
 - parent: `.github/workflows/language-pair.sh`, `.github/workflows/drivers/handoff.cpp` (new `boolflag` handoff ring), README, `_docs/`
 
 Cross-language vector `boolflag`: scheme type 1 = `flags(0, [bool(0, on)])`, row `{on: false}` packs `0100` in every package; unpack of `0100` is ok and `on` is not `true`.
+
+## Implementation
+
+Divergence recorded at the batch commit: review fix rounds widened the C#, Java and Rust changes beyond the five specs (owner decisions 2026-10-05, batch 1 report); three follow-ups filed (AZ-2126, AZ-2127, AZ-2128); a `booltrue` (`0101`) leg joined the cross-language ring.
+
+### Files that change
+- csharp: `FlagGroup.cs`, `Packbin.cs`, `Walker.cs` (edit); `Walker.Presence.cs` (new); tests `BoolFlagRuleTests.cs`, `FlagGroupValueTests.cs` (new), `HostileVectorTests.cs`, `HostileUnpackTests.cs` (edit)
+- typescript: `src/fields.ts`, `flag-scope.ts`, `index.ts`, `kinds.ts`, `walker.ts` (edit); tests `bool-flag.test.ts` (new), `borrowed-count.test.ts`, `hostile.test.ts`, `support/hostile-cases.ts` (edit)
+- python: `src/packbin/_nodes.py` (edit); tests `test_bool_placement.py` (new), `test_hostile_vectors.py` (edit)
+- rust: `field/{mod,order}.rs`, `scheme/mod.rs`, `walk/{pack,unpack,element}.rs`, `lib.rs`, `hostile_tests.rs`, `element_tests.rs` (edit); `field/{shape,map_scheme}.rs`, `flag_bits_tests.rs`, `flag_presence_tests.rs` (new)
+- java: `Containers.java`, `Field.java`, `SchemeOrder.java`, `VarFields.java`, `Walker.java` (edit); `Rounds.java` (new); tests `BoolPlacementTest`, `ReferenceScopeTest`, `RepeatRoundTest` (new), `FlagStateTest`, `HostileUnpackTest`, `HostileVectorTest`, `PackbinTest`, `ZeroWidthElementTest` (edit)
+- shared: `.github/workflows/language-pair.sh`, all six `drivers/` handoffs, `README.md`, `fixtures/hostile/README.md`
+
+### Order of work
+1. Batch 1: C#, TypeScript, Rust, Java workers in parallel; Python by the parent
+2. Fresh-reviewer pass per package group; owner decisions; fix round 2 (all five packages); re-review of C#, Java, Rust; Java fix round 3
+
+### Proof
+- Each package's new bool/flag tests (red before, green after), hostile construct vectors, `language-pair.sh` `boolflag` + `booltrue` rings
+- Docker CI suites for all six languages PASS
+
+### Risks
+- Wire change for `bool false` in C#, TypeScript and Rust map schemes (README upgrade note); Java unpack of `repeat`/`times` now returns per-round aligned lists

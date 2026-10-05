@@ -93,7 +93,7 @@ pub(crate) fn unpack_fields(
     fields: &[Field],
     cur: &mut Cursor<'_>,
     values: &mut Values,
-    flag_bits: &mut HashMap<crate::value::Name, u8>,
+    flag_bits: &mut HashMap<usize, u8>,
     groups: &mut Vec<Values>,
 ) -> Result<(), UnpackError> {
     for field in fields {
@@ -106,7 +106,7 @@ fn unpack_one(
     field: &Field,
     cur: &mut Cursor<'_>,
     values: &mut Values,
-    flag_bits: &mut HashMap<crate::value::Name, u8>,
+    flag_bits: &mut HashMap<usize, u8>,
     groups: &mut Vec<Values>,
 ) -> Result<(), UnpackError> {
     match &field.kind {
@@ -138,32 +138,22 @@ fn unpack_one(
             values.insert(name.clone(), Some(Value::U8(bits)));
             for (i, member) in members.iter().enumerate() {
                 if bits & (1 << i) != 0 {
-                    match &member.kind {
-                        FieldKind::Group {
-                            name: gname,
-                            members: g,
-                            ..
-                        } => {
-                            if g.is_empty() {
-                                values.insert(gname.clone(), Some(Value::U8(1)));
-                            }
-                            unpack_fields(g, cur, values, flag_bits, groups)?;
-                        }
-                        _ => unpack_one(member, cur, values, flag_bits, groups)?,
-                    }
+                    unpack_one(member, cur, values, flag_bits, groups)?;
                 }
             }
         }
-        FieldKind::FlagByte { name } => {
+        FieldKind::FlagByte { name, slot } => {
             let bits = match read_int(cur, name, IntKind::U8, false)? {
                 Value::U8(b) => b,
                 _ => 0,
             };
-            flag_bits.insert(name.clone(), bits);
+            flag_bits.insert(*slot, bits);
             values.insert(name.clone(), Some(Value::U8(bits)));
         }
-        FieldKind::FlagBit { flag, bit, inner } => {
-            let bits = *flag_bits.get(flag.as_ref()).unwrap_or(&0);
+        FieldKind::FlagBit {
+            slot, bit, inner, ..
+        } => {
+            let bits = *flag_bits.get(slot).unwrap_or(&0);
             if bits & (1 << bit) != 0 {
                 unpack_one(inner, cur, values, flag_bits, groups)?;
             }
@@ -200,7 +190,11 @@ fn unpack_one(
                 groups.push(group);
             }
         }
-        FieldKind::Group { members, .. } => {
+        FieldKind::Group { name, members, .. } => {
+            // Only reached when its flags bit or flag bit is set: a bool reads as true.
+            if members.is_empty() {
+                values.insert(name.clone(), Some(Value::U8(1)));
+            }
             unpack_fields(members, cur, values, flag_bits, groups)?;
         }
         FieldKind::Sized { name, count } => {

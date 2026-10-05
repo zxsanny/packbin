@@ -316,6 +316,8 @@ def be(field: _Scalar) -> _Scalar:
 
 
 def flags(anchor: int, *fields: _Node) -> _Flags:
+    if len(fields) > 8:
+        raise ValueError(f"flags {anchor} has {len(fields)} children; one flags byte holds 8 bits")
     return _Flags(anchor=anchor, fields=_builtin_list(fields))
 
 
@@ -397,8 +399,14 @@ def dict(acc: Acc, element: _Node) -> _Dict:  # noqa: A001
     return _Dict(get=get, set=set_, element=element)
 
 
-def _validate_order(nodes: Sequence[_Node], next_id: int = 0) -> int:
+def _validate_order(nodes: Sequence[_Node], next_id: int = 0, flag_bits: bool = False) -> int:
+    """`flag_bits`: the nodes are the direct children of `flags` or of a flag-byte bit, the only
+    places a bool may stand (its value is the bit itself)."""
     for node in nodes:
+        if isinstance(node, _Bool) and not flag_bits:
+            raise ValueError(
+                f"field id {node.field_id}: bool is allowed only as a direct child of flags or a flag-byte bit"
+            )
         if isinstance(node, (_Scalar, _Bytes, _Bool, _Utf8, _Sized, _Bits, _Packed)):
             if node.field_id != next_id:
                 raise ValueError(f"field id {node.field_id} is not the next order {next_id}")
@@ -412,11 +420,11 @@ def _validate_order(nodes: Sequence[_Node], next_id: int = 0) -> int:
         elif isinstance(node, (_Flags, _When, _Repeat, _Times, _Group)):
             if node.anchor != next_id:
                 raise ValueError(f"anchor {node.anchor} is not the next order {next_id}")
-            next_id = _validate_order(node.fields, next_id)
+            next_id = _validate_order(node.fields, next_id, isinstance(node, _Flags))
         elif isinstance(node, _FlagByte):
-            next_id = _validate_order(node.bits, next_id)
+            next_id = _validate_order(node.bits, next_id, True)
         elif isinstance(node, _FlagBit):
-            next_id = _validate_order([node.field], next_id)
+            next_id = _validate_order([node.field], next_id, True)
         elif isinstance(node, (_List, _Dict)):
             _validate_order([node.element], 0)
         else:
