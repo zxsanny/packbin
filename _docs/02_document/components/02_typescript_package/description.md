@@ -16,7 +16,8 @@
 
 | Method | Input | Output | Async | Error Types |
 |--------|-------|--------|-------|-------------|
-| `scheme` | type number, fields by order id | scheme | No | a gap, a repeated id, an anchor that is not the next value id, or a flag bit whose flag byte is not read earlier in the same scope |
+| `scheme`, `new Scheme` | type number, fields by order id | scheme | No | a type number outside 0..255, a gap, a repeated id, an anchor that is not the next value id, a flag bit whose flag byte is not read earlier in the same scope, or a bool or empty group that is not directly in `flags` or a flag-byte bit (§7) |
+| `flags`, `flagByte(...).bit` | fields | field | No | a ninth bit on one flag byte (§7) |
 | `BinaryPacker.pack` | scheme, row | bytes | No | integer does not fit |
 | `BinaryPacker.unpack` | scheme, bytes | row or error | No | short packet, trailing bytes, type mismatch; never throws on bytes (see §7) |
 
@@ -58,7 +59,7 @@ No queries and no cache.
 
 ## 5. Implementation Details
 
-**State Management**: clear pack is stateless. Source layout: `walker.ts` is the unpack walker, `pack-fields.ts` the pack walker (split out of `walker.ts` in loop 11), `flag-scope.ts` the construction check for flag bits. A session keeps one send counter and one receive counter.
+**State Management**: clear pack is stateless. Source layout: `walker.ts` is the unpack walker, `pack-fields.ts` the pack walker (split out of `walker.ts` in loop 11), `flag-scope.ts` the construction checks for flag bits (`validateFlagScopes`) and for where a bool or empty group may stand (`validatePresenceMarks`). A session keeps one send counter and one receive counter.
 
 **Key Dependencies**:
 
@@ -82,6 +83,8 @@ No queries and no cache.
 **Known limitations**:
 - The first release has no code generator
 - A `when` inside a `list` or `dict` element resolves its condition id against the top-level ids, because element-local ids restart at 0 (pre-existing)
+- A flags group with fields is on only when its own member or an `int`, `float`, `bytes`, `utf8`, `list` or `dict` child has a value (`scalarChildNames` in `kinds.ts`). Values only in `u2`, `bits`, `sized` or `packed` children leave the bit clear and are dropped (AZ-2128)
+- `when(eq(boolId, false))` packs its body, but `false` is absent on the wire, so the package's own unpack never matches it and fails (AZ-2126)
 
 **Hostile input** (loop 11). Unpack of untrusted bytes returns an error value and no row, within a time and memory bound set by the input length. It does not throw and does not loop on input it cannot consume. The cases:
 - a `repeat` round that reads 0 bytes ends the repeat; the bytes left come back as trailing bytes
@@ -90,12 +93,22 @@ No queries and no cache.
 
 The error shape is interim: a short-packet-style value. Its kind, label, `needed` and `left` are decided under C15, so no new public error type was added. In TypeScript it is a short-packet result built by `unreadable` in `walker.ts` (and `readUtf8` in `kinds.ts`): the counted field, `needed` 0, the bytes left. A `times` round uses the name of its first body field as the label, a list or dict element uses the list's name. `bits` keeps accepting a `u64` (bigint) count up to `Number.MAX_SAFE_INTEGER`; a bigint above that cannot be exact and fails as a bad count.
 
-**Construction rule**: a split-form flag bit must follow its flag byte, read earlier in the same scope. A scope is the top level, one `repeat` or `times` round, or one `list` or `dict` element. A `when` body sees the bytes read before it, but a flag byte read inside a `when` is not visible after it. `scheme()` runs `validateFlagScopes` (`flag-scope.ts`) after `flatten`; a violation is a `RangeError`.
+**Construction rule**: a split-form flag bit must follow its flag byte, read earlier in the same scope. A scope is the top level, one `repeat` or `times` round, or one `list` or `dict` element. A `when` body sees the bytes read before it, but a flag byte read inside a `when` is not visible after it. The `Scheme` constructor runs `validateFlagScopes` (`flag-scope.ts`) after `flatten`; a violation is a `RangeError`.
 
-**Breaking changes for callers** (pack output is unchanged):
+**Bool rule** (loop 12). A `bool` or an empty group is a mark with no bytes, only a flag bit. It is allowed only as a direct member of `flags` or the field of a flag-byte bit; anywhere else (top level, a non-empty group, `when`, `repeat`, `times`, a list or dict element) `validatePresenceMarks` throws a `RangeError` naming the member. Its bit is set only for `true` (`bitOn` in `fields.ts`): `false`, no value, and any other value (`1`, `"yes"`) leave it clear. Unpack sets the member to `true` only under a set bit; a clear bit leaves it out of the row. A ninth bit throws a `RangeError` when it is declared: `flags(...)` with nine fields, or the ninth `.bit(...)` on a flag-byte handle.
+
+**Constructor** (loop 12). `new Scheme(typeNumber, fields)` runs every check: the type number (0..255), `validateFieldIds`, then `flatten`, `validateFlagScopes` and `validatePresenceMarks` on the flat list. `scheme(...)` only calls it, so both refuse the same schemes with the same message. `Scheme.fields` holds the flattened fields.
+
+**Breaking changes for callers, loop 11** (pack output is unchanged):
 - A flag byte read in one `when` with its bit in another `when` worked before. It is now refused at construction.
 - A flag byte outside a `list`, `repeat` or `times` body with its bit inside that body is refused at construction.
 - A `times`, `list` or `dict` element that reads nothing is now an error instead of an empty item.
+
+**Breaking changes for callers, loop 12**:
+- A `bool` or empty-group mark that is `false` (or any value other than `true`) packs a clear bit (`0100`, was `0101`), as in Python. Unpack leaves the member out; it used to read `true`.
+- A `bool` or empty group outside a flag bit is refused at construction. It never round-tripped: it always unpacked `true`.
+- A ninth flag bit is refused when declared. Pack used to write it, and the package's own unpack then failed with trailing bytes.
+- `new Scheme(...)` refuses what `scheme(...)` refuses, and its `fields` is the flattened list. The constructor used to run no check.
 
 **Potential race conditions**:
 - None

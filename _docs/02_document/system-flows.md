@@ -22,7 +22,7 @@
 
 ### Description
 
-The caller passes a value. Pack writes only the fields that are present and returns the bytes. In C++ pack writes into the caller's buffer and returns a `Result` whose `offset` is the packet length.
+The caller passes a value. Pack writes only the fields that are present and returns the bytes. A `bool` sets its flag bit only for `true`. In C++ pack writes into the caller's buffer and returns a `Result` whose `offset` is the packet length.
 
 ### Preconditions
 
@@ -63,6 +63,9 @@ flowchart TD
 |-------|-------|-----------|----------|
 | Integer outside the width | Pack | the value does not fit | 0 bytes written |
 | Output buffer too small (C++) | Pack | `BufferFull` with the offset and the bytes needed | nothing is written past the reported offset |
+| Field list refused | Building the field list | a `bool` or empty group outside `flags` / a flag-byte bit, a ninth flag bit, an empty group that could never set its bit, a reference to a later or outer field (Java, Rust), a nested `repeat` / `times` round (Java; Rust where it would lose data) | no scheme; the error names the field |
+| Set flag group misses a value (C#) | Pack | a value-bearing child of a group whose bit is on is null | `ArgumentException` naming the child; nothing returned |
+| Bool value not 0 / 1 (Rust map API) | Pack | `PackError::Type` | nothing returned |
 
 ### Performance Expectations
 

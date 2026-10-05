@@ -16,7 +16,7 @@
 
 | Method | Input | Output | Async | Error Types |
 |--------|-------|--------|-------|-------------|
-| `Scheme` | type number, row class, fields by order id | scheme | No | a gap, a repeated id, or an anchor that is not the next value id |
+| `Scheme` | type number, row class, fields by order id | scheme | No | a gap, a repeated id, an anchor that is not the next value id, a `bool` that is not a direct child of `flags` or of a flag-byte bit, or a `group(anchor)` with no fields (see §7). Each is a `ValueError` naming the id; a ninth `flags` child already fails at `flags(...)` |
 | `BinaryPacker.pack` | scheme, row | bytes | No | integer does not fit |
 | `BinaryPacker.unpack` | scheme, bytes | row or error | No | short packet, trailing bytes, type mismatch; never raises on bytes (see §7) |
 
@@ -82,6 +82,7 @@ No queries and no cache.
 **Known limitations**:
 - The first release has no code generator
 - The split-form construction rule below is not enforced in Python yet; it arrives with AZ-2100
+- A `bool` under a flag-byte bit passes the bool rule below, but the split form does not round-trip it yet: unpack of the bit's field reaches the `_Bool` `pass` in `_unpack.py` (AZ-2100)
 
 **Hostile input** (loop 11). Unpack of untrusted bytes returns an error value and no row, within a time and memory bound set by the input length. It does not throw and does not loop on input it cannot consume. The cases:
 - a `repeat` round that reads 0 bytes ends the repeat; the bytes left come back as trailing bytes
@@ -92,10 +93,14 @@ The error shape is interim: a short-packet-style value. Its kind, label, `needed
 
 **Construction rule**: in the other split-form languages a flag bit must follow its flag byte in the same scope (top level, one `repeat` or `times` round, or one `list` or `dict` element). Python does not check this at construction yet (AZ-2100).
 
+**Bool rule** (loop 12, `_validate_order` in `_nodes.py`): a `bool` stands only as a direct child of `flags(...)` or as the field of a flag-byte bit. Anywhere else (top level, inside any `group`, also one under `flags`, inside `when`, `repeat` or `times`, or as a `list` or `dict` element) `Scheme(...)` raises `ValueError` naming its id. A `group(anchor)` with no fields has no accessor, so it can never carry `true`; `Scheme(...)` refuses it wherever it stands, inside `flags` too. `flags(...)` with a ninth child raises `ValueError` naming the anchor when it is declared. The bit is set only for `True`; `False`, a missing value and any other value (`1`, `"yes"`) leave it clear, and unpack gives `True` only when the bit is set.
+
 **Breaking changes for callers** (pack output is unchanged):
 - A flag byte read in one `when` with its bit in another `when` worked before. It is now refused at construction.
 - A flag byte outside a `list`, `repeat` or `times` body with its bit inside that body is refused at construction.
 - A `times`, `list` or `dict` element that reads nothing is now an error instead of an empty item.
+- A `bool` outside `flags` (its value never reached the wire) and a `group(anchor)` with no fields now fail at construction (loop 12).
+- A ninth `flags` child now fails at `flags(...)`, instead of at pack only when its value was present (loop 12).
 
 **Potential race conditions**:
 - None

@@ -70,7 +70,9 @@ No queries and no cache.
 **Unpack rules (loop 10)**:
 - Flag bytes are scoped per container. `flag_byte(n)` and `flag_bit(n, field)` pair by the number n (0..7) inside one scope. Each round of a `repeat`, `times`, `list` or `dict` starts with its own cleared flag bytes, and the outer values come back when the container ends.
 - A `repeat` round, or a round of a container with no bound member (`times`, `list`, `dict`), that reads no bytes ends the container. A repeat would otherwise never reach the end of the packet, and an unbound container would only spin through its count. A bound container stops at its capacity.
-- A `boolean` or an empty `group` is a presence bit. It is valid only directly under `flags(...)` or `flag_bit(...)`; anywhere else, including inside a plain `group` under `flags`, the scheme is `SchemeInvalid` (a compile error for a `constexpr` scheme).
+- A `boolean`, or an empty group bound to a `bool` or `Opt<bool>` member (`group<&Row::m>(id)`), is a presence bit. It is valid only directly under `flags(...)` or `flag_bit(...)`; anywhere else, including inside a plain `group` under `flags`, the scheme is `SchemeInvalid` (a compile error for a `constexpr` scheme).
+- A `group(id)` with no children and no member could never set its bit, so the factory marks it invalid: the scheme is `SchemeInvalid` at that field wherever it stands, including directly in `flags` or as a `flag_bit` (loop 12; a compile error for a `constexpr` scheme).
+- A split flag bit inside a `when` that is not taken still has its bit set from the row on pack; unpack tests the `when` first and never reads that field. The shared `bitwhen` vector pins it (loop 12): `{k:0, v:5}` packs `010001` and unpacks with no `v`; `{k:1, v:5}` packs `01010105`.
 - A `u2` holds at most 64 children. More is `SchemeInvalid`.
 - A `flags` byte holds at most 8 children.
 - A dictionary entry whose key repeats an earlier key is `BadValue` at the entry's offset.

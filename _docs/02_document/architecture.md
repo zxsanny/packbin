@@ -21,6 +21,7 @@ packbin is a library: the caller writes a field list, pack and unpack move the e
 - The first release has no code generator
 - A short packet returns an error and no value. In C++ the error is a `Result` and the row keeps the fields read before it
 - Unpack treats its bytes as hostile (loop 11). In C#, TypeScript, Python, Rust and Java it returns an error value, within a time and memory bound set by the input length, and never throws. A `times` round or a `list`/`dict` element that reads nothing is an error; a `repeat` round that reads nothing ends the repeat and the rest is trailing bytes (C++ ends a `times`, `list` or `dict` container on such a round instead of failing, see below). The error shape is interim until C15
+- A `bool` is a flag bit with no payload, set only for `true`, and stands only directly under `flags` or a flag-byte bit; one flags byte holds 8 bits; an empty group that could never set its bit is refused (loop 12). Every package refuses a violation when the field list is built, not when a packet arrives
 - The C++ core allocates nothing and throws nothing
 
 > See ADR 001 (Walk field lists with runtime primitives).
@@ -78,6 +79,7 @@ The C++ package is one core for host programs and firmware. It writes into a cal
 - Flag bytes are scoped per container. Each round of a `repeat`, `times`, `list` or `dict` reads its own flag bytes, and the outer ones come back at the end of the container.
 - A `repeat` round, or a round of a container with no bound member (`times`, `list`, `dict`), that reads no bytes ends the container. Bound containers stop at their capacity.
 - A `boolean` or an empty `group` is valid only directly under `flags` or `flag_bit`; elsewhere the scheme is `SchemeInvalid` (a compile error when `constexpr`).
+- A `group(id)` with no children and no member can never set its bit, so it is `SchemeInvalid` wherever it stands, inside `flags` too (loop 12).
 - A `u2` holds at most 64 children.
 
 ## 3. Deployment Model

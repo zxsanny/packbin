@@ -16,8 +16,9 @@
 
 | Method | Input | Output | Async | Error Types |
 |--------|-------|--------|-------|-------------|
-| `Scheme<T>` | type number, fields by order id | scheme | No | a gap, a repeated id, an anchor that is not the next value id, or a flag bit whose flag byte is not read earlier in the same scope |
-| `BinaryPacker.Pack` | scheme, row | bytes | No | integer does not fit |
+| `Scheme<T>` | type number, fields by order id | scheme | No | a gap, a repeated id, an anchor that is not the next value id, a flag bit whose flag byte is not read earlier in the same scope, or a bool or empty group that is not directly in `Flags` or a `FlagByte` bit (§7) |
+| `Field.Flags`, `.Bit` on a `FlagByte`, `Field.Group` | fields | field | No | a ninth bit on one flags byte; an empty group bound to a member that is not `bool` or `bool?` (§7) |
+| `BinaryPacker.Pack` | scheme, row | bytes | No | integer does not fit; a set flags group with a missing value (§7) |
 | `BinaryPacker.Unpack` | scheme, bytes | row or error | No | short packet, trailing bytes, type mismatch; never throws on bytes (see §7) |
 
 **Input DTOs**:
@@ -69,6 +70,7 @@ No queries and no cache. The call does not store the packet.
 **Error Handling Strategy**:
 - A short field returns an error and zero values
 - Hostile bytes return an error value, never an exception (§7)
+- Pack of a set flags group with a missing value throws `ArgumentException` naming it, instead of writing a packet its own unpack rejects (§7)
 - No retry
 
 ## 6. Extensions and Helpers
@@ -83,6 +85,8 @@ No queries and no cache. The call does not store the packet.
 - The first release has no code generator
 - `u8` to `u32`, `i8` to `i32`, `f32` and `f64` are boxed as `double`; `u64` and `i64` are read exactly and boxed as `ulong` and `long`, so `UnpackResult.Values` holds those types for them (a breaking change for callers that read a 64-bit value straight from `Values`; callers going through the row type are unaffected). Exact types for the other kinds are AZ-2116
 - A `Group` as a list or dictionary element throws `KeyNotFoundException` on unpack (AZ-2119). A `When` directly under combined `Flags` is dropped on pack (AZ-2120)
+- A flags group whose only present values sit under a nested `Flags`, a split bit, `When`, `Repeat` or `Times` leaves its bit clear and drops them (AZ-2128)
+- `When(Eq(boolId, false))` packs its body, but `false` is absent on the wire, so unpack never matches it and fails with trailing bytes (AZ-2126)
 
 **Hostile input** (loop 11). Unpack of untrusted bytes returns an error value and no row, within a time and memory bound set by the input length. It does not throw and does not loop on input it cannot consume. The cases:
 - a `repeat` round that reads 0 bytes ends the repeat; the bytes left come back as trailing bytes
@@ -93,10 +97,22 @@ The error shape is interim: a short-packet-style value. Its kind, label, `needed
 
 **Construction rule**: a split-form flag bit must follow its flag byte, read earlier in the same scope. A scope is the top level, one `repeat` or `times` round, or one `list` or `dict` element. A `when` body sees the bytes read before it, but a flag byte read inside a `when` is not visible after it. `Packbin.cs` `SchemeOrder` runs `FlagScopes.Validate`; a violation is an `ArgumentException`.
 
-**Breaking changes for callers** (pack output is unchanged):
+**Bool rule** (loop 12). A `bool` or an empty group is a flag bit with no payload. It is allowed only directly in `Flags` or as the field of a `FlagByte` bit; anywhere else (top level, a group with fields, `When`, `Repeat`, `Times`, a list or dict element) `SchemeOrder.Walk` throws `ArgumentException`. Its bit is set only for `true`: `false`, no value, and any other value (`1` or `"true"` in a dictionary row) leave it clear. Unpack stores `true` only under a set bit; a clear bit leaves the member at its default (`false`, or `null` for `bool?`). An empty group must bind a `bool` or `bool?` member: on any other member (a nested row, `byte?`, `string`) its bit could never be set, so the `Field.Group` factory throws `ArgumentException` before `new Scheme<T>` runs. A ninth bit on one flags byte (a ninth child of `Flags`, or a ninth `.Bit(...)` on a `FlagByte`) throws `ArgumentException` in `FlagGroup.AddBit`.
+
+**Flag group presence** (`Walker.Presence.cs`). A group with fields under a flag bit is on when its own member is not null or any value-bearing child has a value: numbers, bytes, strings, lists, dicts, `U2`, `Sized`, `Bits`, `Packed`, and nested groups at any depth. A set group is written in full, so pack throws `ArgumentException` naming the first missing value, also inside a nested group.
+
+**Breaking changes for callers, loop 11** (pack output is unchanged):
 - A flag byte read in one `when` with its bit in another `when` worked before. It is now refused at construction.
 - A flag byte outside a `list`, `repeat` or `times` body with its bit inside that body is refused at construction.
 - A `times`, `list` or `dict` element that reads nothing is now an error instead of an empty item.
+
+**Breaking changes for callers, loop 12**:
+- A `bool` or empty group that is `false` packs a clear bit (`01 00`, was `01 01`), as in Java and Python. Mixed C# versions disagree on `false` until both sides upgrade.
+- A `bool` or empty group outside a flag bit is refused at construction. It never round-tripped: it packed 0 bytes and always unpacked `true`.
+- A ninth flag bit is refused. It was dropped without an error.
+- An empty group bound to a member that is not `bool` or `bool?` is refused in `Field.Group`.
+- A flags group whose only values are `U2`, `Sized`, `Bits`, `Packed` or a nested group sets its bit and writes them. They were dropped.
+- Pack of a set flags group with a missing value throws. It wrote a packet its own unpack rejected.
 
 **Potential race conditions**:
 - Clear pack keeps no packet. A dropped session payload desynchronizes that direction. There is no tag.

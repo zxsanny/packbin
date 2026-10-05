@@ -7,9 +7,17 @@
 
 The ordered description of one packet: widths, endian, and which flag bit includes the next field. The caller owns it. The packages do not ship a product's lists. (source: problem.md; solution.md)
 
+## Bool
+
+A flag bit with no payload. The bit is set only for `true`; `false` and a missing value leave it clear, and unpack gives `true` only for a set bit. A bool stands only directly under `flags` or a flag-byte bit; anywhere else the field list fails when it is built. (source: user decision 2026-10-05; README)
+
+## Empty group
+
+A group with no fields: a presence bit like a bool, bound to something that can carry `true` (its own value in TypeScript and Rust, a `bool` member in C# and C++, a nested-row accessor in Java). One that could never set its bit (Python and Java `group(anchor)` with no fields, a C++ `group(id)` with no member, a C# empty group on a non-`bool` member) fails when the field list is built. (source: user decision 2026-10-05, loop 12 U3)
+
 ## Flags
 
-A byte whose bits say which following fields are present. A set bit writes the field. A clear bit skips it. Zero is a real value, so a missing field is absence, not `0`. (source: solution.md)
+A byte whose bits say which following fields are present. A set bit writes the field. A clear bit skips it. Zero is a real value, so a missing field is absence, not `0`. One flags byte holds at most 8 bits; a ninth fails when the field list is built. (source: solution.md; loop 12)
 
 ## Golden fixture
 
