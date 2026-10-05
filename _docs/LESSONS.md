@@ -9,12 +9,6 @@ Downstream skills consume this file:
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
 
-- [2026-09-23] [process] Publish packbin by pushing a `v*` tag; do not add `scripts/deploy.sh` beside `.github/workflows/publish.yml`.
-  Source: _docs/06_metrics/retro_2026-09-23_loop1.md
-- [2026-09-23] [testing] Measure the one-second bound with the 100000-iteration loop inside each language suite.
-  Source: _docs/06_metrics/retro_2026-09-23_loop1.md
-- [2026-09-23] [architecture] Keep the six packages as peers with zero imports; a shared walker would contradict ADR-001.
-  Source: _docs/06_metrics/retro_2026-09-23_loop1.md
 - [2026-09-23] [tooling] Two C# executables in one directory need separate output paths, or `dotnet run` builds the other `Main`.
   Source: _docs/06_metrics/retro_2026-09-23_loop2.md
 - [2026-09-23] [testing] A language handoff must unpack the bytes the producer just wrote.
@@ -39,3 +33,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-05_loop10.md
 - [2026-10-05] [process] Ask a fresh reviewer to read the batch diff before the commit. In loop 10 it found a zero-width `times` that spun for seconds and a stack budget used to the byte.
   Source: _docs/06_metrics/retro_2026-10-05_loop10.md
+- [2026-10-05] [testing] Run a hostile-input fix's new test against the pre-fix tree and require it to fail; the spec's literal packets (`01ffffffff`) passed on the old code in several packages, and only a longer amplifier packet or an exact-shape assert (`needed`, `left`, kind) discriminated.
+  Source: _docs/06_metrics/retro_2026-10-05_loop11.md
+- [2026-10-05] [tooling] CI has no typecheck job, so tests and Docker CI pass a TypeScript type error; run `tsc --noEmit --strict` over `typescript/src` before each TypeScript commit until a CI job exists (a reviewer FAIL caught four TS2345 call sites in loop 11).
+  Source: _docs/06_metrics/retro_2026-10-05_loop11.md
+- [2026-10-05] [testing] Keep the auditor's cross-package fuzz generators and drivers in the repo and run them whenever unpack changes; the scratch differential over 276 855 packets per package found three Medium defects (u64 top-range exception, `__proto__` dict key, `when` in `repeat`) that eight reviewer reports missed.
+  Source: _docs/06_metrics/retro_2026-10-05_loop11.md
