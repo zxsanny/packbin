@@ -1,6 +1,6 @@
 # Deployment procedures
 
-1. Tests are green on the commit.
+1. Tests are green on the commit. `publish.yml` calls `test.yml` on the tagged commit first; the `publish` job needs it, so a red test job publishes nothing. A tag runs the tests once, through `publish.yml`.
 2. The golden hex matches in every present language.
 3. Push a version tag. GitHub Actions publishes the six registries.
 

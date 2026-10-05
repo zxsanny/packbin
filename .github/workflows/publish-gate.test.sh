@@ -390,12 +390,109 @@ EOF
   grep -q 'token revoked' "$tmp/revoke200.log" || fail "crates revoke 200"
 }
 
+workflow_structure() {
+  ruby -ryaml - "$1" "$2" <<'RUBY'
+test_path, publish_path = ARGV
+errors = []
+load_yaml = ->(path) { YAML.safe_load(File.read(path)) }
+triggers = ->(wf) { wf.key?("on") ? wf["on"] : wf[true] }
+as_list = ->(v) { v.is_a?(Array) ? v : [v].compact }
+read_only = { "contents" => "read" }
+test_wf = load_yaml.call(test_path)
+publish_wf = load_yaml.call(publish_path)
+
+on = triggers.call(test_wf)
+errors << "test.yml has no workflow_call" unless on.is_a?(Hash) && on.key?("workflow_call")
+errors << "test.yml has no pull_request" unless on.is_a?(Hash) && on.key?("pull_request")
+push = on.is_a?(Hash) ? on["push"] : nil
+unless push.is_a?(Hash) && !as_list.call(push["branches"]).empty? &&
+       !push.key?("tags") && !push.key?("tags-ignore")
+  errors << "test.yml push is not limited to branches"
+end
+errors << "test.yml permissions are not contents: read" unless test_wf["permissions"] == read_only
+%w[scaffold embedded].each do |name|
+  job = test_wf["jobs"][name]
+  errors << "test.yml has no #{name} job" if job.nil?
+  errors << "test.yml #{name} has no timeout-minutes" if job && !job.key?("timeout-minutes")
+end
+
+on = triggers.call(publish_wf)
+tags = on.is_a?(Hash) && on["push"].is_a?(Hash) ? as_list.call(on["push"]["tags"]) : []
+errors << "publish.yml does not trigger on v* tags" unless tags.include?("v*")
+if on.is_a?(Hash) && on["push"].is_a?(Hash) && on["push"].key?("branches")
+  errors << "publish.yml triggers on branches"
+end
+errors << "publish.yml workflow permissions are not contents: read" unless publish_wf["permissions"] == read_only
+jobs = publish_wf["jobs"]
+test_ids = jobs.select { |_, j| j["uses"] == "./.github/workflows/test.yml" }.keys
+errors << "publish.yml must call ./.github/workflows/test.yml exactly once" unless test_ids.size == 1
+test_job = jobs[test_ids.first]
+if test_job
+  errors << "test call permissions are not contents: read" unless test_job["permissions"] == read_only
+  errors << "test call passes secrets" if test_job.key?("secrets")
+end
+publish = jobs["publish"]
+if publish.nil?
+  errors << "publish.yml has no publish job"
+else
+  errors << "publish does not need the test call" unless (test_ids - as_list.call(publish["needs"])).empty?
+  expected = { "contents" => "write", "id-token" => "write" }
+  errors << "publish permissions are not contents: write and id-token: write" unless publish["permissions"] == expected
+  errors << "publish has no timeout-minutes" unless publish.key?("timeout-minutes")
+end
+jobs.each do |name, job|
+  next if name == "publish"
+  if (job["permissions"] || {}).values.include?("write")
+    errors << "#{name} holds a write permission"
+  end
+end
+
+errors.each { |e| puts e }
+exit(errors.empty? ? 0 : 1)
+RUBY
+}
+
+expect_structure_failure() {
+  local label="$1" test_yml="$2" publish_yml="$3" out
+  if out="$(workflow_structure "$test_yml" "$publish_yml")"; then
+    fail "AZ-2095 structure check passed a violating copy: $label"
+  else
+    echo "structure check rejects: $label ($out)"
+  fi
+}
+
 workflow_checks() {
   local test_yml="$root/.github/workflows/test.yml"
-  grep -q 'push:' "$test_yml" || fail "AC-5 push"
-  grep -q 'pull_request:' "$test_yml" || fail "AC-5 pull_request"
+  local publish_yml="$root/.github/workflows/publish.yml"
+  local out
+  if ! command -v ruby >/dev/null 2>&1; then
+    fail "AZ-2095 ruby is required to parse the workflow YAML"
+    return
+  fi
+  if ! out="$(workflow_structure "$test_yml" "$publish_yml")"; then
+    fail "AZ-2095 workflow structure: $out"
+  fi
   grep -q 'set -euo pipefail' "$test_yml" || fail "AC-5 a failing suite does not fail the job"
   grep -q 'docker compose -f docker-compose.test.yml run --rm' "$test_yml" || fail "AC-5 suites"
+
+  local tmp
+  tmp="$(mktemp -d)"
+  grep -v '^    needs: test$' "$publish_yml" > "$tmp/no-needs.yml"
+  awk '/^  contents: read$/ && !done { print; print "  id-token: write"; done = 1; next } { print }' \
+    "$publish_yml" > "$tmp/workflow-id-token.yml"
+  awk '/^    uses: .\/.github\/workflows\/test.yml$/ { print; print "    secrets: inherit"; next } { print }' \
+    "$publish_yml" > "$tmp/secrets-inherit.yml"
+  awk '/^    branches: \["\*\*"\]$/ { print "    tags: [\"v*\"]"; next } { print }' \
+    "$test_yml" > "$tmp/test-tags.yml"
+  for copy in no-needs workflow-id-token secrets-inherit; do
+    cmp -s "$publish_yml" "$tmp/$copy.yml" && fail "AZ-2095 temp copy $copy is unchanged"
+  done
+  cmp -s "$test_yml" "$tmp/test-tags.yml" && fail "AZ-2095 temp copy test-tags is unchanged"
+  expect_structure_failure "publish without needs" "$test_yml" "$tmp/no-needs.yml"
+  expect_structure_failure "id-token at workflow level" "$test_yml" "$tmp/workflow-id-token.yml"
+  expect_structure_failure "secrets on the test call" "$test_yml" "$tmp/secrets-inherit.yml"
+  expect_structure_failure "test.yml push on tags" "$tmp/test-tags.yml" "$publish_yml"
+  rm -rf "$tmp"
 }
 
 if [ "${1:-}" = "--crates" ]; then

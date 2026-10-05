@@ -71,10 +71,10 @@ services:
 
 ## CI/CD Integration
 
-**When to run**: every push and every pull request
-**Pipeline stage**: test, before a tag is allowed to publish
+**When to run**: every branch push and every pull request; a version tag runs the tests once, through `publish.yml`
+**Pipeline stage**: test, before a tag is allowed to publish: `publish.yml` calls `test.yml` and the `publish` job needs it
 **Gate behavior**: a failing test fails the check
-**Timeout**: 5 minutes for the whole suite
+**Timeout**: `timeout-minutes` on every job: 60 for `scaffold`, 90 for `embedded` (about 40 minutes cold), 60 for `publish`
 
 ## Reporting
 

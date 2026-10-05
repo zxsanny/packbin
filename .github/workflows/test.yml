@@ -2,11 +2,17 @@ name: test
 
 on:
   push:
+    branches: ["**"]
   pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
   scaffold:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
       - name: required files and golden row
@@ -47,6 +53,7 @@ jobs:
 
   embedded:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
       - name: C++ embedded targets (Cortex-M QEMU, big-endian, ESP-IDF)

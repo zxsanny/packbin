@@ -143,11 +143,11 @@ flowchart TD
 
 ### Description
 
-A version tag on GitHub builds the languages in that commit and pushes the matching public packages. For C++ the same tag also feeds the embedded registries (PlatformIO, ESP-IDF component, Arduino).
+A version tag on GitHub first runs the test workflow on that commit (read-only token, no secrets; the `publish` job `needs:` it, so any failing test job skips the publish). It then builds the languages in that commit and pushes the matching public packages. For C++ the same tag also feeds the embedded registries (PlatformIO, ESP-IDF component, Arduino).
 
 ### Preconditions
 
-- Tests passed on the commit
+- Tests passed on the commit, in the same workflow run: the `publish` job runs only after the called `test.yml` jobs succeed
 - All six languages' golden bytes match
 
 ### Sequence Diagram
@@ -158,6 +158,7 @@ sequenceDiagram
     participant Actions
     participant Registries
     Maintainer->>Actions: version tag
+    Actions->>Actions: test.yml jobs on the tagged commit
     Actions->>Actions: golden check
     Actions->>Registries: the six packages
 ```
@@ -166,7 +167,9 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    Start([Version tag]) --> Match{Golden mismatch count is 0?}
+    Start([Version tag]) --> Tests{Every test job passed?}
+    Tests -->|No| None
+    Tests -->|Yes| Match{Golden mismatch count is 0?}
     Match -->|Yes| Pub[Publish each language in the tree]
     Match -->|No| None[Publish 0 packages]
     Pub --> EndNode([Registries])
