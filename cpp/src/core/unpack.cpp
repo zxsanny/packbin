@@ -23,6 +23,14 @@ bool ref_value(Walk const& w, Field const& f, void* obj, std::int64_t& out) {
   return f.ref >= 0 && read_int(w.t[f.ref], obj, out);
 }
 
+// A count read from the packet is a non-negative 64-bit value. Where size_t is 32 bits it must
+// not wrap to a small number: clamp it, so the ordinary short-packet or capacity checks fail it.
+constexpr std::size_t kCountCap = static_cast<std::size_t>(-1) - 2;
+
+std::size_t clamp_count(std::int64_t v) {
+  return static_cast<std::uint64_t>(v) > kCountCap ? kCountCap : static_cast<std::size_t>(v);
+}
+
 Result get_u16(Reader& r, std::size_t& out, int id) {
   std::uint16_t n = 0;
   Result res = get_num<std::uint16_t>(r, n, false, id);
@@ -54,7 +62,7 @@ Result unpack_text(Walk& w, std::size_t i, void* obj) {
     std::int64_t count = 0;
     if (!ref_value(w, f, obj, count) || count < 0)
       return fail(Error::BadValue, r.pos, f.id);
-    len = static_cast<std::size_t>(count);
+    len = clamp_count(count);
   }
   std::size_t at = r.pos;
   std::uint8_t const* p = nullptr;
@@ -79,13 +87,15 @@ Result unpack_small(Walk& w, std::size_t i, void* obj) {
   if (count < 0)
     return fail(Error::BadValue, r.pos, f.id);
   std::size_t at = r.pos;
-  std::size_t nbytes = (static_cast<std::size_t>(count) * width + 7) / 8;
+  // count <= INT64_MAX and width <= 2, so the bit count fits in 64 bits.
+  std::uint64_t nbits = static_cast<std::uint64_t>(count) * width;
+  std::size_t nbytes = clamp_count(static_cast<std::int64_t>(nbits / 8 + (nbits % 8 != 0)));
   std::uint8_t const* p = nullptr;
   Result res = get_bytes(r, p, nbytes, f.id);
   if (!res.ok() || m == nullptr)
     return res;
-  if (static_cast<std::size_t>(count) > f.size)
-    return fail(Error::TooMany, at, f.id, static_cast<std::size_t>(count));
+  if (count > static_cast<std::int64_t>(f.size))
+    return fail(Error::TooMany, at, f.id, clamp_count(count));
   unsigned per = 8 / width;
   unsigned mask = (1u << width) - 1;
   for (std::int64_t k = 0; k < count; ++k) {
@@ -169,7 +179,7 @@ std::size_t item_count(Walk& w, std::size_t i, void* obj, void* m, Result& out) 
       out = fail(Error::BadValue, w.r.pos, f.id);
       return stop;
     }
-    count = static_cast<std::size_t>(value);
+    count = clamp_count(value);
   } else {
     out = get_u16(w.r, count, f.id);
     if (!out.ok())

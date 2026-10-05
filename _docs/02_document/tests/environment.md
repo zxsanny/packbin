@@ -17,6 +17,8 @@
 | rust-tests | current stable Rust image | Runs the Rust pack and unpack checks | none |
 | cpp-tests | current stable C++ image | Runs the C++ pack and unpack checks | none |
 | java-tests | current stable Java image | Runs the Java pack and unpack checks | none |
+| cpp-embedded | Ubuntu 24.04 image with arm-none-eabi GCC and QEMU | Builds the C++ core for Cortex-M0+, M3, M4F and s390x; runs the vectors on QEMU `mps2-an385` and `qemu-s390x`; reports size and stack | none |
+| cpp-embedded-esp | `espressif/idf:v5.3.2` | Builds the C++ core for ESP32-S3 and ESP32-C3 and the packaged examples | none |
 
 ### Networks
 
@@ -83,6 +85,6 @@ services:
 ## Test Execution
 
 1. **Decision**: docker
-2. **Hardware dependencies found**: none. Restrictions forbid a GPU. The research MVE is a CPU loop. No product source imports a GPU, camera, or device API.
+2. **Hardware dependencies found**: none. The embedded targets run on emulators: QEMU Cortex-M (`mps2-an385`, `mps2-an386`) and `qemu-s390x`; ESP32 targets are build-only. Restrictions forbid a GPU. The research MVE is a CPU loop. No product source imports a GPU, camera, or device API.
 3. **Execution instructions**:
-   - **Docker mode**: one container per language: current .NET LTS SDK, current Node LTS, and the current stable images for Python, Rust, C++, and Java. Each runs its package suite against the fixture file. Results are the CSV written to `./test-results/report.csv`. No port is published.
+   - **Docker mode**: one container per language, plus the two embedded containers for C++: current .NET LTS SDK, current Node LTS, and the current stable images for Python, Rust, C++, and Java. Each runs its package suite against the fixture file. Results are the CSV written to `./test-results/report.csv`. No port is published.

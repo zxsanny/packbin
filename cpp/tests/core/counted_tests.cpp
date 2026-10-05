@@ -246,6 +246,22 @@ void packed_numbers() {
   expect(t.error == Error::TooMany && t.field == 1 && t.needed == 12, "packed 12 into 8");
 }
 
+// A 64-bit count whose low 32 bits are small must not shrink to that value where size_t is
+// 32 bits: the packet has one byte, the count asks for 2^29 bytes.
+void wide_count_is_not_truncated() {
+  struct Wide {
+    std::uint64_t n = 0;
+    packbin::Array<std::uint8_t, 4> bits;
+  };
+  auto s = packbin::scheme<Wide>(1, packbin::u64<&Wide::n>(0),
+                                 packbin::bits<&Wide::bits>(1, 0));
+  std::uint8_t data[10] = {1, 4, 0, 0, 0, 1, 0, 0, 0, 0x0f};
+  Wide row;
+  auto r = packbin::unpack(s, data, sizeof(data), row);
+  expect(r.error == Error::ShortPacket && row.bits.count == 0,
+         "wide bits count is not cut to 32 bits");
+}
+
 }  // namespace
 
 int run_core_container_tests();
@@ -257,5 +273,6 @@ int run_core_counted_tests() {
   two_bit_values();
   bit_lists();
   packed_numbers();
+  wide_count_is_not_truncated();
   return run_core_container_tests();
 }

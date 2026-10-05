@@ -3,14 +3,14 @@
 **Language**: mixed
 **Layout Convention**: custom
 **Root**: ./
-**Last Updated**: 2026-09-22
+**Last Updated**: 2026-10-05
 
 ## Layout Rules
 
 1. Each language package owns one top-level directory.
 2. The packages do not import each other. There is no `shared/` code package.
 3. The golden fixture is data, owned by the bootstrap task. Every package reads it. None of them import it as a library.
-4. Public API is the file named below. Other files in that directory are internal.
+4. Public API is the file or headers named below. Other files in that directory are internal.
 5. Test paths are in the table below. Java tests live in `java/src/test/`.
 
 ## ADR-driven exceptions to the conventional layout
@@ -81,13 +81,22 @@ A single `src/`, `crates/`, or `packages/` tree would put six languages in one c
 
 - **Epic**: AZ-1863
 - **Directory**: `cpp/`
-- **Public API**:
-  - `cpp/include/packbin/packbin.hpp`
+- **Public API**: the headers in `cpp/include/packbin/`
+  - `codec.hpp` (`scheme`, `pack`, `unpack`, `on`, `validate`), `session.hpp` (`PackSession`, `RandomFn`), `os_random.hpp` (host random source)
+  - `core.hpp` (`Result`, `Error`, `Reader`, `Writer`), `fields.hpp`, `fields_grouped.hpp`, `fields_counted.hpp` (field builders), `order.hpp` (field-order rules), `table.hpp` (`Field`, `Opt`, `View`, `Text`, `Blob`, `Array`, `Entry`)
+  - `packbin.hpp` includes `codec.hpp`, `os_random.hpp` and `session.hpp`; `cpp/arduino/packbin.h` includes `codec.hpp` and `session.hpp`
 - **Internal (do NOT import from other components)**:
-  - `cpp/**` except `cpp/include/packbin/packbin.hpp`
+  - `cpp/src/core/*.cpp` and `cpp/src/core/values.hpp` (the walker: `pack.cpp`, `unpack.cpp`, `values.cpp`, `session.cpp`)
+  - `cpp/src/os_random.cpp` (host only; firmware does not compile it)
+- **Tests**: `cpp/tests/core/*_tests.cpp` (the vector suites also run on firmware), `cpp/tests/core/hostile_host_tests.cpp` (runs `fixtures/hostile/cases.txt` on the host), `cpp/tests/compile-fail/` (cases that must not compile)
+- **Embedded and packaging**:
+  - `cpp/embedded/` — the target driver `run.sh`, the arm and ESP stages, the Dockerfile for the `cpp-embedded` image
+  - `cpp/examples/` — the Pico (PlatformIO), Arduino-ESP32 and ESP-IDF examples
+  - `cpp/arduino/` — `library.properties` and `packbin.h` for the Arduino layout
+  - `cpp/library.json` (PlatformIO), `cpp/idf_component.yml` and `cpp/CMakeLists.txt` (ESP-IDF component and plain CMake library)
 - **Owns (exclusive write during implementation)**: `cpp/**`
 - **Imports from**: none
-- **Consumed by**: a C++ program
+- **Consumed by**: a C++ program or firmware
 
 > See ADR 001_runtime-primitives-no-generator, ADR 003_cpp-vcpkg-git-registry.
 
@@ -116,10 +125,17 @@ No shared code package. The library does not log, authenticate, or load configur
 - **Owned by**: AZ-1866
 - **Consumed by**: all six packages, as a file read, not an import
 
+### fixtures/hostile
+
+- **Directory**: `fixtures/hostile/`
+- **Purpose**: `cases.txt`, packets and schemes that crafted input can send, with the expected outcome kinds; `check-cases.sh` checks the file format and `cases.test.sh` proves that check fails on corrupted copies
+- **Owned by**: AZ-2070
+- **Consumed by**: every package, as a file read. The C++ runner is `cpp/tests/core/hostile_host_tests.cpp`
+
 ### workflows
 
 - **Directory**: `.github/workflows/`
-- **Purpose**: test on every push and pull request; publish on a version tag
+- **Purpose**: test on every push and pull request (including the `embedded` job for the C++ targets); publish on a version tag. The helper scripts (`run-suite.sh`, `publish-*.sh`, `stage-arduino.sh`, `report-row.sh`) and the `drivers/` for the language-pair run live in the same directory
 - **Owned by**: AZ-1866 owns `test.yml` and the workflow files existing. AZ-1875 owns the publish behavior in `publish.yml`
 - **Consumed by**: the six registries
 
@@ -142,5 +158,5 @@ The six packages are peers. None imports another.
 | TypeScript | `typescript/` | `typescript/src/` | `typescript/src/index.ts` | `typescript/tests/` |
 | Python | `python/` | `python/src/packbin/` | `python/src/packbin/__init__.py` | `python/tests/` |
 | Rust | `rust/` | `rust/src/` | `rust/src/lib.rs` | `rust/tests/` |
-| C++ | `cpp/` | `cpp/include/packbin/` | `cpp/include/packbin/packbin.hpp` | `cpp/tests/` |
+| C++ | `cpp/` | `cpp/include/packbin/`, `cpp/src/core/` | the headers in `cpp/include/packbin/` | `cpp/tests/core/`, `cpp/tests/compile-fail/` |
 | Java | `java/` | `java/src/main/java/packbin/` | `java/src/main/java/packbin/Packbin.java` | `java/src/test/` |

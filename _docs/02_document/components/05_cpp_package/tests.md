@@ -11,7 +11,7 @@
 | AC-5 | A stored 0 is written | IT-05 | Covered |
 | AC-6 | Conditional group adds 0 bytes or its width | IT-06 | Covered |
 | AC-7 | Repeat yields one value per group; 1 leftover byte is an error | IT-07 | Covered |
-| AC-8 | Short field names field, needed, left, and returns 0 values | IT-08, ST-01 | Covered |
+| AC-8 | A short field returns `ShortPacket` with the order id, the byte offset and the bytes needed; the fields read before it keep their values. The project wording ("names the field", "bytes remaining", "0 values") is open for C++: see the note under the traceability table | IT-08, ST-01 | Covered for the C++ result |
 | AC-9 | Trailing bytes are an error and 0 values | IT-09 | Covered |
 | AC-10 | 100000 round trips ≤ 1 second on one core | PT-01 | Covered |
 | AC-11 | This package's tests run on every push and pull request | AT-02 | Covered |
@@ -20,6 +20,10 @@
 | AC-14 | A golden mismatch publishes 0 packages, including this one | AT-04 | Covered |
 | AC-15 | This package absent from the tagged tree publishes 0 packages | AT-05 | Covered |
 | AC-16 | This published package declares MIT | AT-06 | Covered |
+
+C++ differs from the other five languages on AC-8. `Result` carries `error`, `offset` (the byte where the failure was found), `field` (the order id, not a name) and `needed`. `unpack(scheme, data, len, row)` does not clear the row on failure. The feature restriction (`_docs/02_task_plans/cpp-microcontroller/restrictions.md`) approves the id and the offset. The project-level AC-8 text has no C++ exception yet.
+
+Loop 10 adds the tests below, which are not part of the project AC table above: the feature criteria AC-1 to AC-13 of `_docs/02_task_plans/cpp-microcontroller/`.
 
 ## Blackbox Tests
 
@@ -191,7 +195,7 @@ leftover byte: error, value count 0
 
 ### IT-08: Short field
 
-**Summary**: A buffer that ends inside a field returns an error and 0 values.
+**Summary**: A buffer that ends inside a field returns `ShortPacket`.
 
 **Traces to**: AC-8
 
@@ -204,8 +208,10 @@ a buffer shorter than the field width
 
 **Expected result**:
 ```
-error names the field, the byte count it needed, and the byte count that remained
-value count: 0
+error: ShortPacket
+offset: the byte where the field starts
+field: the order id of that field
+needed: the width of that field in bytes
 ```
 
 **Max execution time**: 1s
@@ -267,7 +273,7 @@ value count: 0
 
 ### ST-01: A short buffer returns no value
 
-**Summary**: Unpack of a short field does not return a partial value.
+**Summary**: Unpack of a short field returns an error value and no handler runs.
 
 **Traces to**: AC-8
 
@@ -277,11 +283,11 @@ value count: 0
 1. Unpack a buffer that ends inside a field
 2. Read the returned value
 
-**Expected behavior**: the call returns the error and 0 values
+**Expected behavior**: the call returns `ShortPacket`. With `unpack(data, len, on(...))` the handler does not run
 
-**Pass criteria**: value count is 0, and the error names the field, needed, and left
+**Pass criteria**: handler calls are 0, and the result carries the order id, the offset and the bytes needed
 
-**Fail criteria**: any field value is returned
+**Fail criteria**: a handler runs, or the call does not return
 
 ### ST-02: The published archive has no registry token
 
@@ -338,7 +344,7 @@ value count: 0
 
 ### AT-03: A matching tag publishes this package
 
-**Summary**: A version tag whose golden mismatch count is 0 publishes this package with the other five, and the upload is not manual.
+**Summary**: A version tag whose golden mismatch count is 0 publishes this package with the other five, and the upload is not manual. The same tag also publishes the PlatformIO, ESP-IDF and Arduino releases of the C++ sources.
 
 **Traces to**: AC-12, AC-13
 
@@ -351,7 +357,7 @@ value count: 0
 | Step | Action | Expected Result |
 |------|--------|-----------------|
 | 1 | push a version tag | this package is on vcpkg `packbin` |
-| 2 | install with `vcpkg install packbin` | the package imports |
+| 2 | install with `vcpkg install packbin` | the headers are in `include/packbin` and the sources are in `share/packbin/src` |
 | 3 | count manual uploads | 0 |
 
 ### AT-04: A golden mismatch publishes nothing
@@ -401,6 +407,22 @@ value count: 0
 | 2 | count identifiers other than MIT | 0 |
 
 Rollback if this version must not be used: publish a later vcpkg port version. A pushed port version stays.
+
+## Embedded and Compile-Time Tests (loop 10)
+
+Run by `make test` in `cpp/` and by `cpp/embedded/run.sh` (the `cpp-embedded` and `cpp-embedded-esp` services of `docker-compose.test.yml`; the `embedded` job of `test.yml`). One result row per target goes to `test-results/report.csv`.
+
+| Test | What it proves | Where |
+|------|----------------|-------|
+| Core suites | scalars, schemes, grouped kinds, counted kinds, containers and the session, built with `-fno-exceptions -fno-rtti` | `cpp/tests/core/*_tests.cpp`, `make test` |
+| Compile-fail cases | ten cases that must not compile and must print the expected text (`pack_without_scheme`, `f64_needs_8_byte_double`, `scheme_gap`, `scheme_repeated_id`, `scheme_wrong_anchor`, `scheme_when_ahead`, `flags_overflow`, `bool_outside_flags`, `empty_group_outside_flags`, `u2_too_wide`) | `cpp/tests/compile-fail/`, `make compile-fail` |
+| Hostile vectors | every case of `fixtures/hostile/cases.txt` returns an error value or refuses the scheme, and returns within the time guard | `cpp/tests/core/hostile_host_tests.cpp` |
+| Cortex-M0+ build | 0 errors, 0 warnings, 0 references to `__cxa_*` or the heap | `cpp-m0plus` |
+| Cortex-M3 on QEMU `mps2-an385` | every vector run equals the number asserted; malloc and new wrapper calls are 0; session vectors | `cpp-m3-qemu` |
+| Cortex-M4F size and stack | flash for the core plus a 14-field table ≤ 8192 bytes; deepest pack or unpack ≤ 512 bytes of stack; `.data` and `.bss` 0 | `cpp-m4f` |
+| s390x big-endian on QEMU user | the same vectors, the same bytes | `cpp-s390x` |
+| ESP32-S3 and ESP32-C3 builds | ESP-IDF builds with 0 warnings | `cpp-esp32s3`, `cpp-esp32c3` |
+| Packaged examples | ESP-IDF component, Arduino-ESP32 library layout and Pico PlatformIO archive each build the README example | `cpp-example-esp-idf`, `cpp-example-esp32-arduino`, `cpp-example-pico` |
 
 ## Test Data Management
 

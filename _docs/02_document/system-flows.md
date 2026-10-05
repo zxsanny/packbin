@@ -22,7 +22,7 @@
 
 ### Description
 
-The caller passes a value. Pack writes only the fields that are present and returns the bytes.
+The caller passes a value. Pack writes only the fields that are present and returns the bytes. In C++ pack writes into the caller's buffer and returns a `Result` whose `offset` is the packet length.
 
 ### Preconditions
 
@@ -45,7 +45,7 @@ sequenceDiagram
 flowchart TD
     Start([Caller calls pack]) --> Fit{Integer fits the width?}
     Fit -->|Yes| Write[Write each present field]
-    Fit -->|No| Err[Return an error and 0 bytes]
+    Fit -->|No| Err[Return an error and 0 bytes. C++: BufferFull or BadValue at an offset]
     Write --> EndNode([Bytes])
     Err --> EndNode
 ```
@@ -62,6 +62,7 @@ flowchart TD
 | Error | Where | Detection | Recovery |
 |-------|-------|-----------|----------|
 | Integer outside the width | Pack | the value does not fit | 0 bytes written |
+| Output buffer too small (C++) | Pack | `BufferFull` with the offset and the bytes needed | nothing is written past the reported offset |
 
 ### Performance Expectations
 
@@ -74,7 +75,7 @@ flowchart TD
 
 ### Description
 
-The caller passes a buffer. Unpack returns the value, or an error and no value.
+The caller passes a buffer. Unpack returns the value, or an error and no value. In C++ unpack fills the caller's row and returns a `Result`; on failure the fields read before it keep their values.
 
 ### Preconditions
 
@@ -96,12 +97,12 @@ sequenceDiagram
 flowchart TD
     Start([Caller calls unpack]) --> Enough{Field fits in the bytes left?}
     Enough -->|Yes| Next[Read the field]
-    Enough -->|No| Short[Error, value count 0]
+    Enough -->|No| Short[Error, value count 0. C++: ShortPacket with offset and order id]
     Next --> More{Another field?}
     More -->|Yes| Enough
     More -->|No| Tail{Bytes left?}
     Tail -->|0| Ok([Value])
-    Tail -->|1 or more| Trail[Error, value count 0]
+    Tail -->|1 or more| Trail[Error, value count 0. C++: TrailingBytes]
     Short --> EndNode([Stop])
     Trail --> EndNode
 ```
@@ -111,14 +112,15 @@ flowchart TD
 | Step | From | To | Data | Format |
 |------|------|----|------|--------|
 | 1 | Caller | Unpack | packet | raw bytes |
-| 2 | Unpack | Caller | fields or a short packet | value, or field name plus two counts |
+| 2 | Unpack | Caller | fields or a short packet | value, or field name plus two counts. C++: `Result` with error kind, byte offset, field order id and bytes needed |
 
 ### Error Scenarios
 
 | Error | Where | Detection | Recovery |
 |-------|-------|-----------|----------|
-| Short field | Unpack | remaining bytes are fewer than the width | no value; the next call is independent |
+| Short field | Unpack | remaining bytes are fewer than the width | no value; the next call is independent. C++ keeps the fields read before the failure in the row |
 | Trailing bytes | Unpack | bytes remain after the list | no value |
+| Count over capacity, bad count, duplicate dict key (C++) | Unpack | `TooMany` or `BadValue` with the offset | no value; no truncation |
 
 ### Performance Expectations
 
@@ -131,7 +133,7 @@ flowchart TD
 
 ### Description
 
-A version tag on GitHub builds the languages in that commit and pushes the matching public packages.
+A version tag on GitHub builds the languages in that commit and pushes the matching public packages. For C++ the same tag also feeds the embedded registries (PlatformIO, ESP-IDF component, Arduino).
 
 ### Preconditions
 
@@ -186,7 +188,7 @@ flowchart TD
 
 ### Description
 
-The caller loads a 32-byte seed, the opener sends 16 bytes once, and the waiter joins. Later payloads are the clear packed bytes XORed to the same length.
+The caller loads a 32-byte seed, the opener sends 16 bytes once, and the waiter joins. Later payloads are the clear packed bytes XORed to the same length. In C++ the opener passes a `RandomFn` (`packbin::os_random` on a host, a hardware RNG on firmware) or its own nonce, and the pad is applied in place on the caller's buffer.
 
 ### Preconditions
 
@@ -205,8 +207,9 @@ The caller loads a 32-byte seed, the opener sends 16 bytes once, and the waiter 
 
 | Error | Where | Detection | Recovery |
 |-------|-------|-----------|----------|
-| Seed length is not 32, or join length is not 16 | Load or Join | the call returns nothing | 0 sessions |
-| Pack before start or join | Pack | no payload | 0 payloads |
+| Seed length is not 32, or join length is not 16 | Load or Join | the call returns nothing (C++: `false`) | 0 sessions |
+| The random function fails (C++) | Start | `start` returns `false` | the session does not open; the nonce output is unchanged |
+| Pack before start or join | Pack | no payload (C++: `BadValue`) | 0 payloads |
 | A payload is dropped | the next unpack on that direction | the row does not match | that direction stays out of step. There is no tag |
 
 ### Performance Expectations

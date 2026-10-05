@@ -1256,3 +1256,403 @@
 
 **Expected outcome**: mismatched bytes among the six payloads 0. Length 13. Field mismatches 0.
 **Max execution time**: 1s
+
+### FT-E-01: The core builds the embedded way
+
+**Summary**: The core builds the embedded way (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
+**Traces to**: cpp-microcontroller AC-1
+**Category**: Resource
+
+**Preconditions**:
+- The C++ core as built in loop 10
+
+**Input data**: core sources with `-std=c++17 -fno-exceptions -fno-rtti -Os -Wall -Wextra -Werror`
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | compile for Cortex-M0+, Cortex-M4F, ESP32-S3 and ESP32-C3 | each build: errors 0, warnings 0 |
+
+**Expected outcome**: each build: errors 0, warnings 0.
+**Max execution time**: 60s
+
+### FT-E-02: No heap and no exceptions in a firmware image
+
+**Summary**: No heap and no exceptions in a firmware image (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
+**Traces to**: cpp-microcontroller AC-2
+**Category**: Resource
+
+**Preconditions**:
+- The C++ core as built in loop 10
+
+**Input data**: one firmware using every field kind, linked with aborting malloc/new wrappers
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | link, then run on QEMU `mps2-an385` | `__cxa_throw` and `__cxa_allocate_exception` references 0; wrapper calls 0 |
+
+**Expected outcome**: `__cxa_throw` and `__cxa_allocate_exception` references 0; wrapper calls 0.
+**Max execution time**: 60s
+
+### FT-E-03: The same bytes on the target CPU
+
+**Summary**: The same bytes on the target CPU (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
+**Traces to**: cpp-microcontroller AC-3
+**Category**: Bytes
+
+**Preconditions**:
+- The C++ core as built in loop 10
+
+**Input data**: every hex vector asserted in `cpp/tests/core` and `fixtures/golden.hex`
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | pack each row and unpack each hex on QEMU `mps2-an385` | differing bytes 0; differing fields 0; vectors run equals vectors asserted (213) |
+
+**Expected outcome**: differing bytes 0; differing fields 0; vectors run equals vectors asserted (213).
+**Max execution time**: 60s
+
+### FT-E-04: The same bytes on a big-endian CPU
+
+**Summary**: The same bytes on a big-endian CPU (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
+**Traces to**: cpp-microcontroller AC-4
+**Category**: Bytes
+
+**Preconditions**:
+- The C++ core as built in loop 10
+
+**Input data**: the same vectors
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | run the core test under QEMU user `s390x` | mismatched bytes 0; mismatched fields 0 |
+
+**Expected outcome**: mismatched bytes 0; mismatched fields 0.
+**Max execution time**: 60s
+
+### FT-E-05: Flash and stack budget
+
+**Summary**: Flash and stack budget (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
+**Traces to**: cpp-microcontroller AC-5, AZ-2078 AC-5, AZ-2081 AC-5
+**Category**: Resource
+
+**Preconditions**:
+- The C++ core as built in loop 10
+
+**Input data**: the all-kinds firmware on Cortex-M4F
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | read `size` and `-fstack-usage` reports | core plus a 14-field table at most 8192 B of flash; deepest pack or unpack at most 512 B of stack; `.data` and `.bss` 0 B |
+
+**Expected outcome**: core plus a 14-field table at most 8192 B of flash; deepest pack or unpack at most 512 B of stack; `.data` and `.bss` 0 B.
+**Max execution time**: 60s
+
+### FT-E-06: Errors are values
+
+**Summary**: Errors are values (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
+**Traces to**: cpp-microcontroller AC-6
+**Category**: Errors
+
+**Preconditions**:
+- The C++ core as built in loop 10
+
+**Input data**: a packet one byte short, one trailing byte, a wrong type number, an output one byte small, one group too many
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | unpack or pack each | `ShortPacket`, `TrailingBytes`, `TypeMismatch`, `BufferFull`, `TooMany`, each with offset and field id; bytes written past the offset 0; aborts 0 |
+
+**Expected outcome**: `ShortPacket`, `TrailingBytes`, `TypeMismatch`, `BufferFull`, `TooMany`, each with offset and field id; bytes written past the offset 0; aborts 0.
+**Max execution time**: 1s
+
+### FT-E-07: Scheme order is checked without throwing
+
+**Summary**: Scheme order is checked without throwing (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
+**Traces to**: cpp-microcontroller AC-7
+**Category**: Errors
+
+**Preconditions**:
+- The C++ core as built in loop 10
+
+**Input data**: a gap, a repeated id, a wrong anchor and a `when` naming an id not yet walked
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | compile a `constexpr` scheme; validate a runtime scheme | compile error naming the id; `SchemeInvalid` with that id; bytes written 0 |
+
+**Expected outcome**: compile error naming the id; `SchemeInvalid` with that id; bytes written 0.
+**Max execution time**: 1s
+
+### FT-E-08: Strings and bytes are borrowed
+
+**Summary**: Strings and bytes are borrowed (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
+**Traces to**: cpp-microcontroller AC-8
+**Category**: Bytes
+
+**Preconditions**:
+- The C++ core as built in loop 10
+
+**Input data**: a 40-byte `utf8` field and a 16-byte `bytes` field
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | unpack into a `View` row; unpack into `Text<16>` | view points into the input with length 40, bytes copied 0; the fixed destination gives `TooMany` |
+
+**Expected outcome**: view points into the input with length 40, bytes copied 0; the fixed destination gives `TooMany`.
+**Max execution time**: 1s
+
+### FT-E-09: `f64` needs an 8-byte double
+
+**Summary**: `f64` needs an 8-byte double (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
+**Traces to**: cpp-microcontroller AC-9
+**Category**: Errors
+
+**Preconditions**:
+- The C++ core as built in loop 10
+
+**Input data**: a build whose `double` is 4 bytes
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | compile a scheme with `f64`; compile one with `f32` only | a `static_assert` naming `f64`; the `f32` build succeeds (host stand-in until the avr-gcc task) |
+
+**Expected outcome**: a `static_assert` naming `f64`; the `f32` build succeeds (host stand-in until the avr-gcc task).
+**Max execution time**: 60s
+
+### FT-E-10: The session runs on the board
+
+**Summary**: The session runs on the board (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
+**Traces to**: cpp-microcontroller AC-10
+**Category**: Bytes
+
+**Preconditions**:
+- The C++ core as built in loop 10
+
+**Input data**: a 32-byte seed, a caller random function and the pack-session vectors
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | run `start`, `join`, `pack` and `unpack` on QEMU `mps2-an385` | padded bytes equal the vectors; OS random references 0; a failing random function makes `start` return an error with 0 bytes padded |
+
+**Expected outcome**: padded bytes equal the vectors; OS random references 0; a failing random function makes `start` return an error with 0 bytes padded.
+**Max execution time**: 60s
+
+### FT-E-11: Host programs use the core API
+
+**Summary**: Host programs use the core API (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
+**Traces to**: cpp-microcontroller AC-11
+**Category**: Bytes
+
+**Preconditions**:
+- The C++ core as built in loop 10
+
+**Input data**: `make test` in `cpp/`, the compile-fail check and the C++ side of the language pairs
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | run on the host | failures 0; vectors dropped 0; 100000 round trips within 1 s; old walker references 0; each removed symbol has a README migration row |
+
+**Expected outcome**: failures 0; vectors dropped 0; 100000 round trips within 1 s; old walker references 0; each removed symbol has a README migration row.
+**Max execution time**: 10s
+
+### FT-E-12: Installable from the embedded registries
+
+**Summary**: Installable from the embedded registries (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
+**Traces to**: cpp-microcontroller AC-12
+**Category**: Bytes
+
+**Preconditions**:
+- The C++ core as built in loop 10
+
+**Input data**: a published tag
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | a fresh PlatformIO, Arduino-ESP32 and ESP-IDF project add packbin by name and build the README example | three builds succeed; local overrides 0; installed version equals the tag |
+
+**Expected outcome**: three builds succeed; local overrides 0; installed version equals the tag.
+**Max execution time**: —
+
+### FT-E-13: Every target runs in CI
+
+**Summary**: Every target runs in CI (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
+**Traces to**: cpp-microcontroller AC-13
+**Category**: Resource
+
+**Preconditions**:
+- The C++ core as built in loop 10
+
+**Input data**: a push to any branch
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | the `embedded` job of `test.yml` runs | one report row per target; a failing target fails the workflow |
+
+**Expected outcome**: one report row per target; a failing target fails the workflow.
+**Max execution time**: —
+
+### FT-X-01: The hostile case file is well formed
+
+**Summary**: The hostile case file is well formed (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
+**Traces to**: AZ-2070 AC-1, AZ-2070 AC-2, AZ-2070 AC-3, AZ-2070 AC-4
+**Category**: Errors
+
+**Preconditions**:
+- The C++ core as built in loop 10
+
+**Input data**: `fixtures/hostile/cases.txt` and four corrupted copies
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | run `fixtures/hostile/cases.test.sh` (the `scaffold` job runs it) | 17 ids pass; each corrupted copy exits non-zero and names its line; every id has a README section |
+
+**Expected outcome**: 17 ids pass; each corrupted copy exits non-zero and names its line; every id has a README section.
+**Max execution time**: 5s
+
+### FT-X-02: A reused flag-byte number keeps its own scope
+
+**Summary**: A reused flag-byte number keeps its own scope (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
+**Traces to**: AZ-2078 AC-1, AZ-2078 AC-2
+**Category**: Bytes
+
+**Preconditions**:
+- The C++ core as built in loop 10
+
+**Input data**: a scheme whose `times` items use `flag_byte(0)` like the outer scope
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | pack and unpack the row with the inner bit clear, then set | bytes `010101000203` and `0101000107`; both round-trip |
+
+**Expected outcome**: bytes `010101000203` and `0101000107`; both round-trip.
+**Max execution time**: 1s
+
+### FT-X-03: A round that reads nothing ends the container
+
+**Summary**: A round that reads nothing ends the container (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
+**Traces to**: AZ-2078 AC-3
+**Category**: Errors
+
+**Preconditions**:
+- The C++ core as built in loop 10
+
+**Input data**: an empty `repeat`, bound and unbound, and bytes `01 05 09`; an unbound empty `times` with count `0xffffffff`
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | unpack | `TrailingBytes` at offset 2 and count 0; the `times` returns Ok at once |
+
+**Expected outcome**: `TrailingBytes` at offset 2 and count 0; the `times` returns Ok at once.
+**Max execution time**: 1s
+
+### FT-X-04: The hostile vectors give allowed outcomes in C++
+
+**Summary**: The hostile vectors give allowed outcomes in C++ (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
+**Traces to**: AZ-2078 AC-4
+**Category**: Errors
+
+**Preconditions**:
+- The C++ core as built in loop 10
+
+**Input data**: all 17 cases of `fixtures/hostile/cases.txt`
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | the host runner builds each scheme by hand and unpacks or validates it | each outcome is one the file allows; each case within 1 s; bytes written outside the row 0 |
+
+**Expected outcome**: each outcome is one the file allows; each case within 1 s; bytes written outside the row 0.
+**Max execution time**: 17s
+
+### FT-X-05: A bool or empty group outside flags is refused
+
+**Summary**: A bool or empty group outside flags is refused (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
+**Traces to**: AZ-2081 AC-1, AZ-2081 AC-2
+**Category**: Errors
+
+**Preconditions**:
+- The C++ core as built in loop 10
+
+**Input data**: schemes with a top-level `boolean`, an empty `group` at top level, in a `group`, a `when`, a `repeat`, a `times` and a `list`
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | build, then pack or unpack | compile error naming the id (`constexpr`); `SchemeInvalid` at run time with 0 bytes written |
+
+**Expected outcome**: compile error naming the id (`constexpr`); `SchemeInvalid` at run time with 0 bytes written.
+**Max execution time**: 1s
+
+### FT-X-06: A bool inside flags is unchanged
+
+**Summary**: A bool inside flags is unchanged (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
+**Traces to**: AZ-2081 AC-3
+**Category**: Bytes
+
+**Preconditions**:
+- The C++ core as built in loop 10
+
+**Input data**: `flags(boolean, u8)` with the bool true and false; `flag_byte` with `flag_bit(boolean)` true, false and absent
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | pack and unpack | `010307` and `010207`; `0101` and `0100`; unpack sets the bool only for a set bit |
+
+**Expected outcome**: `010307` and `010207`; `0101` and `0100`; unpack sets the bool only for a set bit.
+**Max execution time**: 1s
+
+### FT-X-07: A u2 holds at most 64 children
+
+**Summary**: A u2 holds at most 64 children (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
+**Traces to**: AZ-2081 AC-4
+**Category**: Errors
+
+**Preconditions**:
+- The C++ core as built in loop 10
+
+**Input data**: a `u2` with 64 and with 65 `u8` children
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | build; for 64 pack and unpack | 65 fails construction; 64 packs to 16 bytes and round-trips |
+
+**Expected outcome**: 65 fails construction; 64 packs to 16 bytes and round-trips.
+**Max execution time**: 1s

@@ -33,7 +33,7 @@ The flags byte and the fields it controls sit next to each other. (source: schem
 
 ## Short packet
 
-Unpack found that a present field does not fit in the bytes that remain. The error names the field, how many bytes it needed, and how many remained. No value is returned. (source: problem.md; acceptance_criteria.md AC-8)
+Unpack found that a present field does not fit in the bytes that remain. The error names the field, how many bytes it needed, and how many remained. No value is returned. In C++ the `ShortPacket` result carries the field order id, the byte offset and the bytes needed, and the fields read before it keep their values in the caller's row. (source: problem.md; acceptance_criteria.md AC-8; cpp-microcontroller restrictions.md)
 
 ## Split form
 
