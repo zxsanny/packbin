@@ -1,21 +1,21 @@
 #include "values.hpp"
 
+#include <cstring>
+
 namespace packbin {
 namespace detail {
 
 namespace {
 
-Result pack_one(Field const* t, std::size_t n, std::size_t i, void* obj, Writer& w);
+// One pack walk. The walk recurses once per nesting level through pack_one and, for counted
+// kinds, pack_items; everything else stays out of that path to keep the stack small.
+struct Pack {
+  Field const* t;
+  std::size_t n;
+  Writer& w;
+};
 
-Result pack_range(Field const* t, std::size_t n, std::size_t begin, std::size_t end, void* obj,
-                  Writer& w) {
-  for (std::size_t j = begin; j < end; j += t[j].span) {
-    Result r = pack_one(t, n, j, obj, w);
-    if (!r.ok())
-      return r;
-  }
-  return Result{};
-}
+Result pack_one(Pack& p, std::size_t i, void* obj);
 
 Result bad(Writer const& w, Field const& f) { return fail(Error::BadValue, w.len, f.id); }
 
@@ -28,31 +28,79 @@ bool ref_value(Field const* t, Field const& f, void* obj, std::int64_t& out) {
   return f.ref >= 0 && read_int(t[f.ref], obj, out);
 }
 
-std::uint8_t flags_byte(Field const* t, std::size_t i, void* obj) {
+// The children of entry i, in order, on the same object.
+Result pack_children(Pack& p, std::size_t i, void* obj) {
+  for (std::size_t j = i + 1; j < i + p.t[i].span; j += p.t[j].span) {
+    Result r = pack_one(p, j, obj);
+    if (!r.ok())
+      return r;
+  }
+  return Result{};
+}
+
+// `count` items of a repeat, times, list or dict: the children of entry i on each item.
+Result pack_items(Pack& p, std::size_t i, void* m, std::size_t count) {
+  Field const& f = p.t[i];
+  for (std::size_t k = 0; k < count; ++k) {
+    void* item = f.item(m, k);
+    for (std::size_t j = i + 1; j < i + f.span; j += p.t[j].span) {
+      Result r = pack_one(p, j, item);
+      if (!r.ok())
+        return r;
+    }
+  }
+  return Result{};
+}
+
+PACKBIN_NOINLINE
+Result pack_flags(Pack& p, std::size_t i, void* obj) {
+  Field const* t = p.t;
   std::uint8_t byte = 0;
   unsigned k = 0;
   for (std::size_t j = i + 1; j < i + t[i].span; j += t[j].span, ++k) {
     if (present(t, j, obj))
       byte = static_cast<std::uint8_t>(byte | (1u << k));
   }
-  return byte;
+  Result r = put_num<std::uint8_t>(p.w, byte, false, t[i].id);
+  k = 0;
+  for (std::size_t j = i + 1; r.ok() && j < i + t[i].span; j += t[j].span, ++k) {
+    if (byte & (1u << k))
+      r = pack_one(p, j, obj);
+  }
+  return r;
 }
 
-std::uint8_t flag_byte_value(Field const* t, std::size_t n, std::size_t i, void* obj) {
+PACKBIN_NOINLINE
+Result pack_flag_byte(Pack& p, std::size_t i, void* obj) {
+  Field const* t = p.t;
   std::uint8_t byte = 0;
-  for (std::size_t j = i + 1; j < n; ++j) {
+  for (std::size_t j = i + 1; j < p.n; ++j) {
     if (t[j].kind == Kind::FlagBit && t[j].ref == static_cast<std::int16_t>(i) &&
         present(t, j + 1, obj))
       byte = static_cast<std::uint8_t>(byte | (1u << t[j].bit));
   }
-  return byte;
+  return put_num<std::uint8_t>(p.w, byte, false, t[i].id);
 }
 
-Result pack_text(Field const& f, void* m, Writer& w, bool with_length) {
+// Bytes, utf8 (with its u16 length) and sized (length checked against its count).
+PACKBIN_NOINLINE
+Result pack_text(Pack& p, std::size_t i, void* obj) {
+  Field const& f = p.t[i];
+  Writer& w = p.w;
+  void* m = member(f, obj);
+  if (m == nullptr)
+    return bad(w, f);
   std::uint8_t const* data = nullptr;
   std::size_t len = 0;
   text_bytes(f, m, data, len);
-  if (with_length) {
+  if (f.kind == Kind::Bytes && len != f.size)
+    return bad(w, f);
+  if (f.kind == Kind::Sized) {
+    std::int64_t count = 0;
+    if (!ref_value(p.t, f, obj, count) || count < 0 || len != static_cast<std::size_t>(count))
+      return bad(w, f);
+  }
+  if (f.kind == Kind::Utf8) {
     if (len > 65535)
       return bad(w, f);
     Result r = put_u16(w, len, f.id);
@@ -63,7 +111,17 @@ Result pack_text(Field const& f, void* m, Writer& w, bool with_length) {
 }
 
 // Bits (width 1) or packed numbers (width 1 or 2) from an Array<std::uint8_t, N>.
-Result pack_small(Field const& f, void* m, std::int64_t count, unsigned width, Writer& w) {
+PACKBIN_NOINLINE
+Result pack_small(Pack& p, std::size_t i, void* obj) {
+  Field const& f = p.t[i];
+  Writer& w = p.w;
+  void* m = member(f, obj);
+  std::int64_t count = 0;
+  if (!ref_value(p.t, f, obj, count))
+    return bad(w, f);
+  unsigned width = f.kind == Kind::Bits ? 1 : f.width;
+  if (f.kind == Kind::Packed)
+    count += f.bias;
   if (m == nullptr || count < 0 || *f.count(m) != count)
     return bad(w, f);
   unsigned per = 8 / width;
@@ -85,8 +143,11 @@ Result pack_small(Field const& f, void* m, std::int64_t count, unsigned width, W
   return Result{};
 }
 
-Result pack_u2(Field const* t, std::size_t i, void* obj, Writer& w) {
+PACKBIN_NOINLINE
+Result pack_u2(Pack& p, std::size_t i, void* obj) {
+  Field const* t = p.t;
   Field const& f = t[i];
+  Writer& w = p.w;
   std::size_t k = f.span - 1;
   std::size_t nbytes = (k + 3) / 4;
   if (w.cap - w.len < nbytes)
@@ -104,97 +165,91 @@ Result pack_u2(Field const* t, std::size_t i, void* obj, Writer& w) {
   return put_bytes(w, raw, nbytes, f.id);
 }
 
-Result pack_items(Field const* t, std::size_t n, std::size_t i, void* m, std::size_t count,
-                  Writer& w) {
+// Dict keys go on the wire in strictly increasing unsigned byte order, as in every package.
+PACKBIN_NOINLINE
+bool keys_ascending(Field const* t, std::size_t i, void* m) {
   Field const& f = t[i];
-  for (std::size_t k = 0; k < count; ++k) {
-    Result r = pack_range(t, n, i + 1, i + f.span, f.item(m, k), w);
-    if (!r.ok())
-      return r;
+  Field const& key = t[i + 1];
+  std::size_t count = *f.count(m);
+  for (std::size_t k = 1; k < count; ++k) {
+    std::uint8_t const *a = nullptr, *b = nullptr;
+    std::size_t la = 0, lb = 0;
+    text_bytes(key, member(key, f.item(m, k - 1)), a, la);
+    text_bytes(key, member(key, f.item(m, k)), b, lb);
+    std::size_t common = la < lb ? la : lb;
+    int c = common == 0 ? 0 : std::memcmp(a, b, common);
+    if (c > 0 || (c == 0 && la >= lb))
+      return false;
   }
-  return Result{};
+  return true;
 }
 
-Result pack_one(Field const* t, std::size_t n, std::size_t i, void* obj, Writer& w) {
-  Field const& f = t[i];
-  void* m = member(f, obj);
+// How many items a repeat, times, list or dict writes, after writing a list/dict count.
+// SIZE_MAX means the pack already failed with `out`.
+PACKBIN_NOINLINE
+std::size_t item_count(Pack& p, std::size_t i, void* obj, void* m, Result& out) {
+  Field const& f = p.t[i];
+  constexpr std::size_t stop = static_cast<std::size_t>(-1);
+  if (f.kind == Kind::Repeat)
+    return m == nullptr ? 0 : *f.count(m);
+  if (f.kind == Kind::Times) {
+    std::int64_t count = 0;
+    if (!ref_value(p.t, f, obj, count) || count < 0 ||
+        (count != 0 && (m == nullptr || *f.count(m) != count))) {
+      out = bad(p.w, f);
+      return stop;
+    }
+    return static_cast<std::size_t>(count);
+  }
+  if (m == nullptr || (f.kind == Kind::Dict && !keys_ascending(p.t, i, m))) {
+    out = bad(p.w, f);
+    return stop;
+  }
+  out = put_u16(p.w, *f.count(m), f.id);
+  return out.ok() ? *f.count(m) : stop;
+}
+
+Result pack_one(Pack& p, std::size_t i, void* obj) {
+  Field const& f = p.t[i];
   if (is_number(f.kind))
-    return present(t, i, obj) ? put_number(f, m, w) : bad(w, f);
-  std::int64_t count = 0;
+    return present(p.t, i, obj) ? put_number(f, member(f, obj), p.w) : bad(p.w, f);
   switch (f.kind) {
     case Kind::Bool:
       return Result{};
-    case Kind::Bytes: {
-      if (m == nullptr)
-        return bad(w, f);
-      if (f.borrowed() && static_cast<View*>(m)->len != f.size)
-        return bad(w, f);
-      return pack_text(f, m, w, false);
-    }
+    case Kind::Bytes:
     case Kind::Utf8:
-      return m == nullptr ? bad(w, f) : pack_text(f, m, w, true);
-    case Kind::Sized: {
-      std::uint8_t const* data = nullptr;
-      std::size_t len = 0;
-      if (m == nullptr || !ref_value(t, f, obj, count))
-        return bad(w, f);
-      text_bytes(f, m, data, len);
-      if (count < 0 || len != static_cast<std::size_t>(count))
-        return bad(w, f);
-      return put_bytes(w, data, len, f.id);
-    }
+    case Kind::Sized:
+      return pack_text(p, i, obj);
     case Kind::When:
-      if (ref_value(t, f, obj, count) && count == f.eq)
-        return pack_range(t, n, i + 1, i + f.span, obj, w);
-      return Result{};
-    case Kind::Flags: {
-      std::uint8_t byte = flags_byte(t, i, obj);
-      Result r = put_num<std::uint8_t>(w, byte, false, f.id);
-      unsigned k = 0;
-      for (std::size_t j = i + 1; r.ok() && j < i + f.span; j += t[j].span, ++k) {
-        if (byte & (1u << k))
-          r = pack_one(t, n, j, obj, w);
-      }
-      return r;
-    }
+      return when_matches(p.t, f, obj) ? pack_children(p, i, obj) : Result{};
+    case Kind::Flags:
+      return pack_flags(p, i, obj);
     case Kind::FlagByte:
-      return put_num<std::uint8_t>(w, flag_byte_value(t, n, i, obj), false, f.id);
+      return pack_flag_byte(p, i, obj);
     case Kind::FlagBit:
-      return present(t, i + 1, obj) ? pack_one(t, n, i + 1, obj, w) : Result{};
+      return present(p.t, i + 1, obj) ? pack_one(p, i + 1, obj) : Result{};
     case Kind::Group:
-      return pack_range(t, n, i + 1, i + f.span, obj, w);
+      return pack_children(p, i, obj);
     case Kind::U2:
-      return pack_u2(t, i, obj, w);
+      return pack_u2(p, i, obj);
     case Kind::Bits:
-      if (!ref_value(t, f, obj, count))
-        return bad(w, f);
-      return pack_small(f, m, count, 1, w);
     case Kind::Packed:
-      if (!ref_value(t, f, obj, count))
-        return bad(w, f);
-      return pack_small(f, m, count + f.bias, f.width, w);
+      return pack_small(p, i, obj);
     case Kind::Repeat:
-      return m == nullptr ? Result{} : pack_items(t, n, i, m, *f.count(m), w);
     case Kind::Times:
-      if (!ref_value(t, f, obj, count) || count < 0)
-        return bad(w, f);
-      if (count == 0)
-        return Result{};
-      if (m == nullptr || *f.count(m) != count)
-        return bad(w, f);
-      return pack_items(t, n, i, m, static_cast<std::size_t>(count), w);
     case Kind::List:
     case Kind::Dict: {
-      if (m == nullptr)
-        return bad(w, f);
-      std::size_t items = *f.count(m);
-      Result r = put_u16(w, items, f.id);
-      return r.ok() ? pack_items(t, n, i, m, items, w) : r;
+      void* m = member(f, obj);
+      Result r{};
+      std::size_t count = item_count(p, i, obj, m, r);
+      if (count == static_cast<std::size_t>(-1) || count == 0)
+        return r;
+      return pack_items(p, i, m, count);
     }
     default:
       break;
   }
-  return fail(Error::SchemeInvalid, w.len, f.id);
+  return fail(Error::SchemeInvalid, p.w.len, f.id);
 }
 
 }  // namespace
@@ -204,11 +259,15 @@ Result pack_table(Field const* t, std::size_t n, std::uint8_t type_number, void 
   Result r = put_num<std::uint8_t>(w, type_number, false, -1);
   if (!r.ok())
     return r;
+  Pack p{t, n, w};
   // Pack only reads through the accessors; they return non-const pointers because unpack uses
   // the same table to write.
-  r = pack_range(t, n, 0, n, const_cast<void*>(row), w);
-  if (!r.ok())
-    return r;
+  void* obj = const_cast<void*>(row);
+  for (std::size_t j = 0; j < n; j += t[j].span) {
+    r = pack_one(p, j, obj);
+    if (!r.ok())
+      return r;
+  }
   return Result{Error::Ok, w.len};
 }
 

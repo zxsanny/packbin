@@ -43,7 +43,8 @@ void utf8_string() {
   auto h = packbin::pack(name_scheme, huge, buf, sizeof(buf));
   expect(h.error == Error::BadValue && h.field == 0, "utf8 too long");
 
-  std::uint8_t cut[5] = {0x01, 0x07, 0x00, 0x7a, 0x78};
+  std::uint8_t cut[5];
+  check::parse_hex("0107007a78", cut, sizeof(cut));
   auto s = packbin::unpack(name_scheme, cut, sizeof(cut), back);
   expect(s.error == Error::ShortPacket && s.field == 0 && s.needed == 7 && s.offset == 3,
          "utf8 short");
@@ -125,7 +126,8 @@ void sized_bytes() {
   auto z = packbin::pack(sized_scheme, none, buf, sizeof(buf));
   expect(z.ok() && check::same_hex(buf, z.offset, "010000"), "sized 0");
 
-  std::uint8_t cut[4] = {0x01, 0x03, 0x00, 0x75};
+  std::uint8_t cut[4];
+  check::parse_hex("01030075", cut, sizeof(cut));
   auto s = packbin::unpack(sized_scheme, cut, sizeof(cut), back);
   expect(s.error == Error::ShortPacket && s.field == 1 && s.needed == 3 && s.offset == 3,
          "AC-5 sized count past the end");

@@ -21,7 +21,8 @@ static_checks() {
   local test_yml="$root/.github/workflows/test.yml"
   local publish_yml="$root/.github/workflows/publish.yml"
   local registries="$root/.github/workflows/publish-registries.sh"
-  for token in NPM_TOKEN NUGET_TOKEN PYPI_TOKEN CARGO_REGISTRY_TOKEN MAVEN_CENTRAL_TOKEN MAVEN_GPG_PRIVATE_KEY; do
+  for token in NPM_TOKEN NUGET_TOKEN PYPI_TOKEN CARGO_REGISTRY_TOKEN MAVEN_CENTRAL_TOKEN \
+    MAVEN_GPG_PRIVATE_KEY PLATFORMIO_AUTH_TOKEN IDF_COMPONENT_API_TOKEN; do
     if grep -q "$token" "$test_yml"; then
       fail "test workflow contains $token"
     fi
@@ -41,7 +42,8 @@ static_checks() {
       fail "missing publish command: $cmd"
     fi
   done
-  if ! grep -q 'git -C "$reg" push' "$registries" && ! grep -q 'push "$url"' "$registries"; then
+  if ! grep -q 'push_branch "$1" "$2" vcpkg' "$registries" ||
+    ! grep -q 'git -C "$reg" push' "$here/publish-lib.sh"; then
     fail "cpp publish does not git push"
   fi
 }
@@ -89,9 +91,23 @@ EOF
   printf 'cpp\n' > "$plan"
   local bare="$tmp/vcpkg.git"
   git init --bare "$bare" >/dev/null
-  PACKBIN_PUBLISH=1 PACKBIN_DOCKER=0 PACKBIN_PLAN="$plan" PACKBIN_VERSION=0.1.0 \
+  env -u GITHUB_TOKEN -u PLATFORMIO_AUTH_TOKEN -u IDF_COMPONENT_API_TOKEN \
+    PACKBIN_PUBLISH=1 PACKBIN_DOCKER=0 PACKBIN_PLAN="$plan" PACKBIN_VERSION=0.1.0 \
     VCPKG_REGISTRY_URL="$bare" \
-    bash "$here/publish-registries.sh"
+    bash "$here/publish-registries.sh" | tee "$tmp/cpp.txt"
+  for skipped in "skip platformio" "skip esp-idf component" "skip arduino"; do
+    grep -qx "$skipped" "$tmp/cpp.txt" || fail "embedded publish without a token: $skipped"
+  done
+
+  local arduino="$tmp/arduino.git"
+  git init --bare "$arduino" >/dev/null
+  env -u GITHUB_TOKEN -u PLATFORMIO_AUTH_TOKEN -u IDF_COMPONENT_API_TOKEN \
+    PACKBIN_PUBLISH=1 PACKBIN_VERSION=0.1.0 ARDUINO_REGISTRY_URL="$arduino" \
+    bash "$here/publish-embedded.sh"
+  git --git-dir="$arduino" show arduino:library.properties | grep -qx 'version=0.1.0' \
+    || fail "arduino library version"
+  git --git-dir="$arduino" show arduino-0.1.0:src/packbin.h >/dev/null \
+    || fail "arduino tag layout"
   git --git-dir="$bare" show vcpkg:ports/packbin/vcpkg.json | grep -q '"name": "packbin"' \
     || fail "vcpkg port name"
   git --git-dir="$bare" show vcpkg:ports/packbin/vcpkg.json | grep -q '"license": "MIT"' \

@@ -11,3 +11,4 @@ cpp/build/
 **/*.pyc
 **/node_modules/
 .github/workflows/out/
+.github/workflows/drivers/handoff-rust/target/

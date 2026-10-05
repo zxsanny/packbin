@@ -77,3 +77,27 @@ services:
       - ./:/src
       - ./fixtures/golden.hex:/fixture/golden.hex:ro
       - ./test-results:/test-results
+  cpp-embedded:
+    build:
+      context: ./cpp/embedded
+    image: packbin-embedded:local
+    working_dir: /src
+    entrypoint: ["bash", "-c"]
+    command: ["exec /src/cpp/embedded/run.sh arm"]
+    environment:
+      SRC_ROOT: /src
+      TEST_RESULTS: /test-results
+    volumes:
+      - ./:/src
+      - ./test-results:/test-results
+  cpp-embedded-esp:
+    image: espressif/idf:v5.3.2
+    working_dir: /src
+    entrypoint: ["bash", "-c"]
+    command: [". \"$$IDF_PATH/export.sh\" >/dev/null && exec /src/cpp/embedded/run.sh esp"]
+    environment:
+      SRC_ROOT: /src
+      TEST_RESULTS: /test-results
+    volumes:
+      - ./:/src
+      - ./test-results:/test-results

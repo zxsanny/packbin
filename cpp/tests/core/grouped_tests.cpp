@@ -72,8 +72,8 @@ struct Motion {
 };
 
 constexpr auto motion = packbin::scheme<Motion>(
-    1, packbin::flag_byte(0), packbin::bit(0, packbin::u16<&Motion::heading>(0)),
-    packbin::bit(0, packbin::u8<&Motion::speed>(1)));
+    1, packbin::flag_byte(0), packbin::flag_bit(0, packbin::u16<&Motion::heading>(0)),
+    packbin::flag_bit(0, packbin::u8<&Motion::speed>(1)));
 
 template <typename Row, typename S>
 packbin::Result packed(S const& s, Row const& row, std::uint8_t* buf, std::size_t cap) {
@@ -156,6 +156,7 @@ void groups_under_flags() {
   session.since = 1000;
   auto s = packed(login, session, buf, sizeof(buf));
   expect(s.ok() && check::same_hex(buf, s.offset, "01010700e8030000"), "AC-1 group adds 6");
+  expect(check::same_hex(buf + 2, 6, "0700e8030000"), "AC-1 group body");
   auto a = packed(login, none, buf, sizeof(buf));
   expect(a.ok() && check::same_hex(buf, a.offset, "0100"), "AC-1 group clear adds 0");
   Login absent;
@@ -221,7 +222,7 @@ void flags_overflow() {
                         packbin::u8(8)));
   auto v = packbin::validate(nine);
   expect(v.error == Error::SchemeInvalid && v.field == 0, "AC-2 nine flag bits");
-  auto lost = packbin::scheme<Wide>(1, packbin::bit(0, packbin::u8<&Wide::v>(0)));
+  auto lost = packbin::scheme<Wide>(1, packbin::flag_bit(0, packbin::u8<&Wide::v>(0)));
   expect(packbin::validate(lost).error == Error::SchemeInvalid, "bit without its flag byte");
 }
 

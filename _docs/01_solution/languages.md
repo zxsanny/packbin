@@ -16,8 +16,11 @@ The schema rules in [`schema.md`](schema.md) are the language contract. A langua
 | 1 | Rust | crates.io `packbin` | A native node |
 | 1 | Java | Maven Central `packbin` | Android and other Java programs |
 | 1 | C++ | vcpkg `packbin` | A C++ program |
+| 2 | C++ (microcontrollers) | PlatformIO `zxsanny/packbin`, Arduino Library Manager `packbin`, ESP-IDF component `zxsanny/packbin` | Firmware on 32-bit microcontrollers (Cortex-M, ESP32, RP2040, nRF52, STM32) |
 
 Vue and React are not separate languages. Kotlin is not in the first publish.
+
+The C++ package is one allocation-free, exception-free core (no heap, no RTTI) for host programs and firmware alike; the embedded registries publish the same sources from the same tag. The Arduino layout is a generated `arduino` branch with an `arduino-<version>` tag, like the vcpkg port. 8-bit AVR is a stretch target, not a supported one.
 
 The first tag waits until all six match the golden hex. A language left out of that tree is not published.
 

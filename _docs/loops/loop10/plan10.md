@@ -38,5 +38,7 @@ T1, then T2 and T6, then T3 and T4, then T5 and T7, then T8. T9 last, stretch on
 ### Proof
 Every hex vector asserted in `cpp/tests` before the port still asserted after it, and the same bytes on QEMU `mps2-an385` and a big-endian host.
 
+Batch 4: the old walker is gone (one walker, `cpp/src/core/`). Embedded proof lives in `cpp/embedded/` (`run.sh arm|esp`, CI job `embedded` in `test.yml`, compose services `cpp-embedded`, `cpp-embedded-esp`). The Pico example runs on x86_64 only (no arm64 PlatformIO toolchain). The dict key order rule and the `flag_bit` rename (Arduino `bit` macro) came out of the embedded runs.
+
 ### Risks
 D-2 B is a breaking C++ release. AC-12 needs a published tag and registry tokens, so it cannot be proven inside this loop.

@@ -1,0 +1,14 @@
+version: "0.1.0"
+description: "Pack and unpack a field list into a caller buffer: no heap, no exceptions, the same bytes as the C#, TypeScript, Python, Rust and Java packages."
+url: "https://github.com/zxsanny/packbin"
+repository: "https://github.com/zxsanny/packbin.git"
+license: "MIT"
+dependencies:
+  idf: ">=5.1"
+files:
+  include:
+    - "CMakeLists.txt"
+    - "idf_component.yml"
+    - "include/**/*"
+    - "src/core/**/*"
+    - "examples/esp_idf/**/*"

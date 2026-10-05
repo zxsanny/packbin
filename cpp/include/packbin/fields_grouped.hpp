@@ -37,7 +37,8 @@ constexpr Node<typename detail::Member<decltype(M)>::Class, 1> group(int id) {
 }
 
 // A presence byte whose bits belong to fields placed later in the same scope with
-// `bit(byte_number, field)`. `byte_number` (0..7) pairs a byte with its bits.
+// `flag_bit(byte_number, field)`. `byte_number` (0..7) pairs a byte with its bits. Not named
+// `bit`: Arduino.h defines a `bit(b)` macro.
 constexpr Node<void, 1> flag_byte(int byte_number) {
   Field f = detail::leaf(Kind::FlagByte, -1);
   f.size = static_cast<std::uint16_t>(byte_number);
@@ -47,7 +48,7 @@ constexpr Node<void, 1> flag_byte(int byte_number) {
 }
 
 template <typename C, std::size_t N>
-constexpr Node<C, N + 1> bit(int byte_number, Node<C, N> const& child) {
+constexpr Node<C, N + 1> flag_bit(int byte_number, Node<C, N> const& child) {
   Field head = detail::leaf(Kind::FlagBit, -1);
   head.size = static_cast<std::uint16_t>(byte_number);
   if (byte_number < 0 || byte_number > 7)

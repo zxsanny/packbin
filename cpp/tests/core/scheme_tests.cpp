@@ -65,7 +65,8 @@ void ac1_unknown_type_number() {
   expect(r.error == Error::TypeMismatch && r.offset == 0, "AC-1 TypeMismatch");
   expect(calls == 0, "AC-1 no handler runs");
 
-  std::uint8_t one[2] = {0x02, 0x17};
+  std::uint8_t one[2];
+  check::parse_hex("0217", one, sizeof(one));
   MarkerRow m;
   auto single = packbin::unpack(marker, one, sizeof(one), m);
   expect(single.error == Error::TypeMismatch && one[0] == 2, "AC-1 single scheme mismatch");

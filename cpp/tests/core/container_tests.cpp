@@ -162,6 +162,27 @@ void dictionary() {
   auto e = packbin::pack(empty_scheme, none, buf, sizeof(buf));
   expect(e.ok() && check::same_hex(buf, e.offset, "01000000000000"), "dict empty");
 
+  struct Scores {
+    Array<Entry<std::uint8_t>, 4> m;
+  };
+  constexpr auto scores = packbin::scheme<Scores>(1, packbin::dict<&Scores::m>(packbin::u8(0)));
+  Scores sorted;
+  sorted.m.count = 2;
+  sorted.m.items[0] = Entry<std::uint8_t>{view("a"), 2};
+  sorted.m.items[1] = Entry<std::uint8_t>{view("b"), 1};
+  auto so = packbin::pack(scores, sorted, buf, sizeof(buf));
+  expect(so.ok() && check::same_hex(buf, so.offset, "0102000100610201006201"),
+         "dict README example");
+  Scores unsorted;
+  unsorted.m.count = 2;
+  unsorted.m.items[0] = Entry<std::uint8_t>{view("b"), 1};
+  unsorted.m.items[1] = Entry<std::uint8_t>{view("a"), 2};
+  auto us = packbin::pack(scores, unsorted, buf, sizeof(buf));
+  expect(us.error == Error::BadValue, "dict keys must ascend in unsigned byte order");
+  unsorted.m.items[0] = Entry<std::uint8_t>{view("a"), 1};
+  auto same = packbin::pack(scores, unsorted, buf, sizeof(buf));
+  expect(same.error == Error::BadValue, "dict pack refuses a repeated key");
+
   struct Plain {
     Array<Entry<View>, 4> access;
   };
@@ -171,6 +192,48 @@ void dictionary() {
   Plain dup_row;
   auto d = packbin::unpack(dup, dup_bytes, sizeof(dup_bytes), dup_row);
   expect(d.error == Error::BadValue && d.offset == 9, "dict duplicate key");
+}
+
+using OpFields = Array<Entry<View>, 2>;
+using OpRows = Array<OpFields, 2>;
+
+struct Nested {
+  Array<Entry<OpRows>, 2> access;
+};
+
+constexpr auto nested = packbin::scheme<Nested>(
+    1, packbin::dict<&Nested::access>(packbin::list(packbin::dict(packbin::utf8(0)))));
+
+constexpr char const* kNestedHex =
+    "01020003006d61700100010002006f7007006770735f666978050073746f72650200010002006f700400726561"
+    "64010002006f7005007772697465";
+
+void set_op(OpFields& fields, char const* op) {
+  fields.count = 1;
+  fields.items[0].key = view("op");
+  fields.items[0].value = view(op);
+}
+
+void dict_of_lists_of_dicts() {
+  Nested row;
+  row.access.count = 2;
+  row.access.items[0].key = view("map");
+  row.access.items[0].value.count = 1;
+  set_op(row.access.items[0].value.items[0], "gps_fix");
+  row.access.items[1].key = view("store");
+  row.access.items[1].value.count = 2;
+  set_op(row.access.items[1].value.items[0], "read");
+  set_op(row.access.items[1].value.items[1], "write");
+  std::uint8_t buf[64];
+  auto p = packbin::pack(nested, row, buf, sizeof(buf));
+  expect(p.ok() && check::same_hex(buf, p.offset, kNestedHex), "nested pair hex");
+
+  Nested back;
+  auto u = packbin::unpack(nested, buf, p.offset, back);
+  expect(u.ok() && back.access.count == 2 && back.access.items[1].value.count == 2 &&
+             view_is(back.access.items[1].value.items[1].items[0].value, "write") &&
+             view_is(back.access.items[0].value.items[0].items[0].key, "op"),
+         "nested pair unpack");
 }
 
 struct Pair {
@@ -289,6 +352,7 @@ int run_core_container_tests() {
   counted_list();
   element_ids_start_at_zero();
   dictionary();
+  dict_of_lists_of_dicts();
   repeat_to_the_end();
   times_and_route();
   return check::failures();

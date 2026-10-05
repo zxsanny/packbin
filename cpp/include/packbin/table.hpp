@@ -334,7 +334,7 @@ template <typename T>
 constexpr void bind_element(Field* f) {
   if constexpr (IsArray<T>::value) {
     using Item = typename T::value_type;
-    if (f[0].kind == Kind::List && f[0].span == 2) {
+    if (f[0].kind == Kind::List && f[0].span == 1 + f[1].span) {
       bind_array<T>(f[0]);
       f[1].access = &self;
       bind_element<Item>(f + 1);

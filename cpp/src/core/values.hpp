@@ -5,8 +5,42 @@
 #include <cstddef>
 #include <cstdint>
 
+// The walkers recurse once per nesting level, so their frames set the stack budget. Leaf
+// helpers with large locals stay out of line to keep those frames small.
+#if defined(__GNUC__)
+#define PACKBIN_NOINLINE __attribute__((noinline))
+#else
+#define PACKBIN_NOINLINE
+#endif
+
 namespace packbin {
 namespace detail {
+
+// Calls `fn(T{})` with the C++ type of an integer kind. Returns BadValue for other kinds;
+// counts and `when` read only integers, so no floating-point code is pulled in for them.
+template <typename Fn>
+Result visit_integer(Kind kind, int id, Fn&& fn) {
+  switch (kind) {
+    case Kind::U8:
+      return fn(std::uint8_t{});
+    case Kind::U16:
+      return fn(std::uint16_t{});
+    case Kind::U32:
+      return fn(std::uint32_t{});
+    case Kind::U64:
+      return fn(std::uint64_t{});
+    case Kind::I8:
+      return fn(std::int8_t{});
+    case Kind::I16:
+      return fn(std::int16_t{});
+    case Kind::I32:
+      return fn(std::int32_t{});
+    case Kind::I64:
+      return fn(std::int64_t{});
+    default:
+      return fail(Error::BadValue, 0, id);
+  }
+}
 
 // The bound member of `f` inside `obj`, or nullptr when the field is unbound or the object is
 // being skipped.
@@ -71,6 +105,8 @@ constexpr bool is_number(Kind k) {
 
 bool present(Field const* t, std::size_t i, void* obj);
 bool read_int(Field const& f, void* obj, std::int64_t& out);
+// True when the `when` entry `f` matches: its source field is present and equals `f.eq`.
+bool when_matches(Field const* t, Field const& f, void* obj);
 void clear_scope(Field const* t, std::size_t begin, std::size_t end, void* obj);
 void set_bool(Field const& f, void* m);
 

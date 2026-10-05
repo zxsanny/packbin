@@ -79,10 +79,10 @@ run_inside() {
 
 stage_vcpkg_port() {
   local reg="$1"
+  rm -rf "$reg/ports/packbin/include/packbin" "$reg/ports/packbin/src"
   mkdir -p "$reg/ports/packbin/include" "$reg/ports/packbin/src" "$reg/versions/p-"
-  rm -rf "$reg/ports/packbin/include/packbin"
   cp -R "$root/cpp/include/packbin" "$reg/ports/packbin/include/packbin"
-  cp "$root/cpp/src/"*.cpp "$reg/ports/packbin/src/"
+  cp -R "$root/cpp/src/." "$reg/ports/packbin/src/"
   cat > "$reg/ports/packbin/vcpkg.json" <<EOF
 {
   "name": "packbin",
@@ -120,22 +120,7 @@ PY
 }
 
 push_vcpkg() {
-  local reg="$1" url="$2" ask
-  if [ -n "${GITHUB_TOKEN:-}" ] && [[ "$url" == https://github.com/* ]]; then
-    ask="$(mktemp)"
-    cat > "$ask" <<'EOF'
-#!/bin/sh
-case "$1" in
-  *sername*) printf '%s' "x-access-token" ;;
-  *) printf '%s' "$GITHUB_TOKEN" ;;
-esac
-EOF
-    chmod +x "$ask"
-    GIT_ASKPASS="$ask" GIT_TERMINAL_PROMPT=0 git -C "$reg" -c credential.helper= \
-      push "$url" HEAD:refs/heads/vcpkg
-    return
-  fi
-  git -C "$reg" push "$url" HEAD:refs/heads/vcpkg
+  push_branch "$1" "$2" vcpkg
 }
 
 publish_cpp() {
@@ -308,7 +293,10 @@ for lang in "${PACKBIN_LANGS[@]}"; do
         run_inside typescript
       fi
       ;;
-    cpp) publish_cpp ;;
+    cpp)
+      publish_cpp
+      PACKBIN_VERSION="$version" SRC_ROOT="$root" bash "$here/publish-embedded.sh"
+      ;;
     java)
       run_inside java
       publish_java_upload

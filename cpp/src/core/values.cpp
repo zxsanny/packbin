@@ -75,12 +75,17 @@ bool read_int(Field const& f, void* obj, std::int64_t& out) {
   }
   if (!present(&f, 0, obj))
     return false;
-  Result r = visit_number(f.kind, f.id, [&](auto zero) {
+  Result r = visit_integer(f.kind, f.id, [&](auto zero) {
     using T = decltype(zero);
     out = static_cast<std::int64_t>(load_member<T>(f, m));
     return Result{};
   });
   return r.ok();
+}
+
+bool when_matches(Field const* t, Field const& f, void* obj) {
+  std::int64_t value = 0;
+  return f.ref >= 0 && read_int(t[f.ref], obj, value) && value == f.eq;
 }
 
 void clear_scope(Field const* t, std::size_t begin, std::size_t end, void* obj) {
