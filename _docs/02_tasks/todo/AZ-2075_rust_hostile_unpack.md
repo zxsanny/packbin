@@ -1,3 +1,8 @@
+---
+loop: 11
+branch: loop/11-hostile-unpack
+---
+
 # Rust unpack never hangs on hostile packets
 
 **Task**: AZ-2075_rust_hostile_unpack

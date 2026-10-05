@@ -1,3 +1,8 @@
+---
+loop: 11
+branch: loop/11-hostile-unpack
+---
+
 # C# unpack never hangs or throws on hostile packets
 
 **Task**: AZ-2073_csharp_hostile_unpack

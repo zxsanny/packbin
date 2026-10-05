@@ -1,3 +1,8 @@
+---
+loop: 11
+branch: loop/11-hostile-unpack
+---
+
 # Java unpack never hangs or throws on hostile packets
 
 **Task**: AZ-2074_java_hostile_unpack

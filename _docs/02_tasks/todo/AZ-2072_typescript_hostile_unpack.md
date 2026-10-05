@@ -1,3 +1,8 @@
+---
+loop: 11
+branch: loop/11-hostile-unpack
+---
+
 # TypeScript unpack never hangs or throws on hostile packets
 
 **Task**: AZ-2072_typescript_hostile_unpack

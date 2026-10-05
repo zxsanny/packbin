@@ -1,3 +1,8 @@
+---
+loop: 11
+branch: loop/11-hostile-unpack
+---
+
 # Java unpack keeps flags state per call, incl. the split flag-byte form
 
 **Task**: AZ-2077_java_unpack_state_per_call
