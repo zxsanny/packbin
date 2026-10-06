@@ -11,6 +11,8 @@ Nothing of loop 16 is started: no plan, no claim, no commit for it. This note is
 
 Owner answers 2026-10-06: the hopper comes first, as many tasks as possible, Go after loop 16; AZ-2126 and AZ-2181 decided (integer-only counts; `when` names an integer or a bool). The other held decisions were asked as proposed defaults and are not yet answered.
 
+Owner answer 2026-10-06 on the uncommitted C# multi-target work: leave it uncommitted, it lands after loop 16. Consequence: the C# specs edit the same files (`csharp/*.cs`, both `.csproj`), so loop 16 plans the non-C# specs first (TypeScript, Java, Python, Rust, cross-package, harness) and holds the C# specs until that work is committed, unless the owner says to run them on the dirty tree.
+
 ## Do not start before checking
 
 1. **Uncommitted work in the tree that is not the agent's** (seen 2026-10-06): C# multi-target compatibility (`csharp/Compat.cs`, `csharp/tests/TargetParityTests.cs`, changes in `csharp/{PackSession,Packbin,SessionPad,Walker*}.cs`, both `.csproj` files, `csharp/tests/SessionTests.cs`), `.github/workflows/{publish-check.py, publish-phases.test.sh, run-suite.sh}`, a "Supported languages" list in `README.md` and `_docs/02_document/epics.md`. Ask the owner whether to commit it first or finish it, before any C# or CI task of loop 16 (eight of the C# specs overlap those files). Never `git add -A`: commit explicit paths.
