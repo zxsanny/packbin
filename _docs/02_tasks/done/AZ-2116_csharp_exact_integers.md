@@ -9,6 +9,10 @@
 **Tracker**: AZ-2116
 **Epic**: AZ-2069
 
+## Status
+
+Done by AZ-2123 (loop 11, commit `c9c6572`), found in the loop 15 todo audit (2026-10-06): `ReadScalar` (`csharp/Walker.Scalars.cs:79-93`) now returns `ulong` and `long` for `u64` and `i64`, so values above 2^53 keep their exact value (`TopRangeU64_DoesNotThrowAndKeepsTheExactValue`, `csharp/tests/TopRangeAndSessionTests.cs:53-57`, and the round trip at line 80); the README documents the change (`README.md`, "In C# a `u64` or `i64` field arrives ... as `ulong` or `long`"). The narrower kinds (`u8` to `u32`, `f32`) still box as `double`, which is exact for every value they can hold. The Problem text below describes the code before AZ-2123.
+
 ## Problem
 
 `ReadScalar` (`csharp/Walker.Scalars.cs:79-109`) boxes every unpacked integer as `double`, so `u64`/`i64` above 2^53 come back rounded. Counts clamp around it (`TryUnpackCount`).
