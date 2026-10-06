@@ -28,6 +28,10 @@ trap 'code=$?; if [ "$code" -ne 0 ]; then echo "build failed: ${current:-setup}"
 rm -rf "$artifacts"
 mkdir -p "$artifacts"
 : > "$artifacts/build.log"
+# A build-only run marks its artifacts before building, so even a failed run can never be uploaded.
+if [ "${PACKBIN_BUILD_ONLY:-}" = "1" ]; then
+  : > "$artifacts/dry-run"
+fi
 
 # Language packages build in their toolchain image; the artifact lands in $artifacts/<lang>.
 run_inside() {

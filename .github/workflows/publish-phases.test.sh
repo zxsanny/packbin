@@ -223,6 +223,7 @@ ph_build_only() {
     grep -qx "check ok: $target" "$ph_dir/build-only.out" || fail "AZ-2096 AC-3 no check ok for $target"
   done
   grep -q '^upload ' "$ph_dir/build-only.out" && fail "AZ-2096 AC-3 build-only printed an upload"
+  [ -e "$ph_out/artifacts/dry-run" ] || fail "AZ-2096 AC-3 build-only left no dry-run marker"
   python3 - "$ph_out/artifacts/java/maven-bundle.zip" <<'PY' || fail "maven bundle layout"
 import sys, zipfile
 names = zipfile.ZipFile(sys.argv[1]).namelist()
@@ -301,6 +302,16 @@ ph_failure_injection() {
   if git --git-dir="$ph_vcpkg" rev-parse --verify --quiet vcpkg >/dev/null; then
     fail "AZ-2096 AC-2 vcpkg ref exists"
   fi
+
+  ph_bares gpg-dry
+  ph_publish gpg-dry "$fail_bin" PACKBIN_BUILD_ONLY=1
+  [ "$ph_code" -ne 0 ] || fail "AZ-2096 AC-3 build-only passed with a failing gpg"
+  [ -e "$ph_out/artifacts/dry-run" ] || fail "AZ-2096 AC-3 a failed build-only run left no dry-run marker"
+  if env PACKBIN_PUBLISH=1 PACKBIN_OUT="$ph_out" PACKBIN_VERSION=v0.1.9 \
+    bash "$here/publish-upload.sh" csharp >"$ph_dir/dry-failed-upload.out" 2>&1; then
+    fail "AZ-2096 AC-3 the upload phase accepted the artifacts of a failed build-only run"
+  fi
+  grep -q 'build-only run; refusing to upload' "$ph_dir/dry-failed-upload.out" || fail "AZ-2096 AC-3 upload did not refuse for the dry-run marker"
 
   printf 'cpp\n' > "$ph_plan"
   printf '#!/bin/sh\necho "pio stub: pack failed" >&2\nexit 1\n' > "$fail_bin/pio"

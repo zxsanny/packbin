@@ -88,16 +88,21 @@ if [ "${#targets[@]}" -eq 0 ]; then
   exit 0
 fi
 
+# Host tools the build phase needs (signing, git clones, the artifact checker), also in a build-only run.
+require_tool python3
+for target in "${targets[@]}"; do
+  case "$target" in
+    java) require_tool gpg ;;
+    vcpkg | arduino) require_tool git ;;
+  esac
+done
 if [ "$build_only" != "1" ]; then
   require_tool curl
-  require_tool python3
   for target in "${targets[@]}"; do
     case "$target" in
       csharp) require_tool dotnet ;;
       typescript) require_tool npm ;;
       rust) require_tool cargo ;;
-      java) require_tool gpg ;;
-      vcpkg | arduino) require_tool git ;;
     esac
   done
 fi
@@ -113,7 +118,6 @@ fi
 )
 
 if [ "$build_only" = "1" ]; then
-  : > "$out/artifacts/dry-run"
   echo "build only: ${#targets[@]} target(s) built and checked, nothing uploaded"
   exit 0
 fi
