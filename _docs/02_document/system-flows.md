@@ -143,7 +143,7 @@ flowchart TD
 
 ### Description
 
-A version tag on GitHub first runs the test workflow on that commit (read-only token, no secrets; the `publish` job `needs:` it, so any failing test job skips the publish). It then builds the languages in that commit and pushes the matching public packages. For C++ the same tag also feeds the embedded registries (PlatformIO, ESP-IDF component, Arduino).
+A version tag on GitHub first runs the test workflow on that commit (read-only token, no secrets; the `publish` job `needs:` it, so any failing test job skips the publish). It then builds and checks every package of that commit, and only then uploads the ones a registry does not yet hold. For C++ the same tag also feeds the embedded registries (PlatformIO, ESP-IDF component, Arduino).
 
 ### Preconditions
 
@@ -181,7 +181,8 @@ flowchart TD
 | Step | From | To | Data | Format |
 |------|------|----|------|--------|
 | 1 | Git tag | Actions | commit | git |
-| 2 | Actions | the six registries | packages | one artifact per language |
+| 2 | Actions | the runner's `artifacts/<target>/` | built and checked packages (version, MIT, payload) | one artifact per target |
+| 3 | Actions (runner host) | the registries | the checked files, each skipped when the registry already holds the version | registry tools |
 
 ### Error Scenarios
 
@@ -189,6 +190,10 @@ flowchart TD
 |-------|-------|-----------|----------|
 | Golden mismatch | Actions | byte mismatch count greater than 0 | 0 packages published |
 | Language absent | Actions | that project is not in the tree | 0 packages for that registry |
+| Test job fails | Actions | a job of the called `test.yml` fails | `publish` is skipped, 0 packages |
+| Build or check fails | Actions | a target does not build, or `publish-check.py` rejects it | the run fails before the first upload, 0 packages |
+| Required credential missing | Actions | a required target has no credential | the run fails before anything is built or written; an optional target is skipped with a warning |
+| Upload fails after others succeeded | Actions | a registry tool or an existence query fails | the run fails; re-running the tag skips what is published and uploads the rest |
 
 ### Performance Expectations
 

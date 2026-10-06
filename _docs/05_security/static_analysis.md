@@ -1,49 +1,42 @@
 # Static analysis
 
-**Date**: 2026-10-05
-**Scope**: `cpp/src/core`, `cpp/include/packbin`, `fixtures/hostile`, `.github/workflows`
-
-| Check | Result |
-|-------|--------|
-| Heap, exceptions, RTTI in the core | none. The M0+ link check finds `__cxa_*` 0 and heap references 0 (embedded job) |
-| Unbounded copies and formatted output | `strcpy`, `sprintf`, `malloc`, `new` do not appear. Every `memcpy` is guarded: `put_bytes` checks `cap - len < n` (`core.hpp:119`); `get_bytes` checks `left() < n` (`core.hpp:129`); `store_text` checks `n > f.size` for fixed storage (`values.cpp:145`); the session copies fixed 16/32/64-byte blocks |
-| Integer overflow in sizes | F0 (fixed): a 64-bit count was narrowed to a 32-bit `size_t` in `unpack_small`, `unpack_text` and `item_count`. Counts are now clamped by `clamp_count` before narrowing; the `bits`/`packed` byte length is computed in 64 bits; the capacity check compares in `int64`. Regression vector `wide_count_is_not_truncated` runs on Cortex-M3 QEMU |
-| Untrusted-input fuzz | the all-kinds scheme (49 table entries, every kind) packed once (132 bytes), then 20 000 000 mutated packets (byte set, bit flip, truncate, append, 0x00/0xff) were unpacked from exact-size heap copies under AddressSanitizer + UndefinedBehaviorSanitizer (`-fno-sanitize-recover`): 5 711 734 unpacked, 14 288 266 returned an error, 0 sanitizer reports. The host is 64-bit, so the fuzz could not show F0 |
-| Hostile vectors | the 17 shared cases run on the host with a 1 s watchdog and canary bytes around the row: 0 hangs, 0 writes outside the row |
-| Termination | a repeat round that reads nothing now ends the repeat; any container round that reads nothing ends an unbound container. The earlier path (an unbound `times` with a zero-width body and a `u32` count of 0xffffffff ran about 10 s) was found by review and fixed in batch 5 |
-| Secrets | none in the tree. `.env` is untracked; `.env.example` holds no values |
-| Shell injection in new scripts | `fixtures/hostile/check-cases.sh` reads a data file with `set -f` and quoted expansions; no `eval` |
-| CI downloads | `cpp/embedded/examples.sh:25` fetches the `arduino-cli` tarball without a checksum (F2) |
-
-## Loop 11 addendum
-
-**Date**: 2026-10-05
-**Scope**: unpack in `python/src/packbin/_unpack.py`, `typescript/src/{walker,kinds,pack-fields,flag-scope}.ts`, `csharp/{Walker*,Scope,FlagGroup,FlagScopes}.cs`, `java/.../{Walker,Containers,VarFields,Scalars,SchemeOrder}.java`, `rust/src/{walk,field}/*.rs`
-
-| Check | Result |
-|-------|--------|
-| Differential fuzz | 45 hand-written schemes in each package, 276 855 packets (boundary counts, negative counts, structured tails, mutations, count bytes overwritten at every offset), 3 s no-progress watchdog, per-packet allocation: 0 hangs, 0 panics, 0 walker exceptions, slowest 2.9 ms. Python, Java and Rust agree on every verdict; TypeScript and C# differ only in F5/F6 and AZ-2112 |
-| Termination | every packet-driven loop (`repeat`, `times`, `list`, `dict`) stops when a round or element reads nothing; the other loops (`bits`, `packed`, `u2`) are bounded by bytes checked first. Nesting depth comes from the scheme, not the packet |
-| Count narrowing | Python and TypeScript hold the count exactly (TypeScript errors on a bigint count); Java reads a count as `long` and compares with the bytes left before narrowing; C# clamps to `long` and `int` before use (`FitsItems`); Rust uses `try_from` and `checked_*` (`packed_layout`). No wrong-but-ok result for an oversize, negative, wrapped or biased count |
-| Invalid UTF-8 | Python, TypeScript, C# (`Utf8.IsValid`), Java (`REPORT` decoder), Rust (`from_utf8`) return an error value. TypeScript drops a leading BOM (F8) |
-| Uncaught exceptions | C# row binding overflows on the top of `u64`/`i64` (F4) and on a list or dict element that stores no value under its name (AZ-2119, also for `Flags` elements). TypeScript: none. Java, Rust, Python: none |
-| Object injection | TypeScript `dict` keys write into a plain object: `__proto__` replaces the prototype (F5). The other four use maps |
-| Capacity | C# `List(count)`/`Dictionary(count)` and Rust `Vec::with_capacity(count)` for `list`/`dict` use the `u16` count before the bytes are checked (F7) |
-| Shared state | C# `Scope` and Java `seen` hold flag bytes per call; 2.4 million concurrent unpacks per package returned 0 wrong rows. The session counter is shared and not atomic (F9) |
-| Secrets, shell, markup | no change in these files |
-
-## Loop 13 addendum
-
 **Date**: 2026-10-06
-**Scope**: unpack in `csharp/Walker*.cs`, `typescript/src/{rounds,walker,member-names,pack-fields}.ts`, `rust/src/walk/{unpack,times,element}.rs`, `rust/src/scheme/times.rs`, `java/.../Rounds.java` (loop 12); the loop 12 and 13 diffs
+**Scope**: loop 14 (`git diff c6c389c..HEAD`): `.github/workflows/publish*.sh|py|yml`, `crates-token.sh`, `test.yml`, `java/api-check.sh`, `java/tools/*.java`, `java/test.sh`, the Java API-26 replacements. Earlier loops condensed at the end.
+
+## Loop 14
+
+### Injection and shell safety (publish scripts)
 
 | Check | Result |
 |-------|--------|
-| Differential fuzz, loop 11 corpora | 276 855 packets in five packages, 3 s no-progress watchdog: 0 hangs, 0 crashes, 0 walker exceptions. Against the loop 11 results, the only change is three schemes (`list_when`, `repeat_when`, `times_zero_u32`) that now fail at construction in TypeScript, C# and Java |
-| Differential fuzz, loop 13 corpus | 245 523 packets over `repeat(flags)`, `repeat(k, flags, when)`, `times(flags)` in TypeScript, C#, Java and Rust: identical accept / refuse verdict on every packet, 0 exceptions, 0 hangs |
-| Typed `times` (Rust) | 260 379 packets over three `Vec<E>` schemes: 0 panics, 0 hangs |
-| Amplification | F10, measured per package; linear in the packet length |
-| Allocation from a count | C# `Math.Min(count, bytes left)` (`Walker.Counted.cs:359,419`), Rust `capacity_hint` (`walk/unpack.rs:362`); `bits` and `packed` lists reserve up to 8 (4) slots per byte left, bounded by the packet. No new reservation from a packet count |
-| Panics in decode paths | no `unwrap`, `expect`, `unsafe` or unchecked index added to Rust decode code; the added `panic!` calls are in scheme construction and name the rule |
-| Object injection | TypeScript rounds are keyed by member names the scheme declares; `dict` keys from the wire are defined as own entries (`walker.ts:236`), probe on `__proto__` returns an own key and no inherited `admin` |
-| Secrets, shell, markup | no key, token or password in the diff; changed scripts (`language-pair.sh`, `publish-gate.test.sh`, `examples.sh`, `lib.sh`) have no `eval`, `curl | sh`, `sudo`; the GPG key in `publish-gate.test.sh` is generated into a temporary keyring |
+| `${{ }}` expressions in `run:` | none. `github.ref_name` reaches the scripts only through `env: PACKBIN_VERSION` (`publish.yml:48`), so the YAML layer cannot inject; `github.ref` is used only in `concurrency.group` (`publish.yml:12`) |
+| `eval`, `bash -c "<built string>"`, `curl | sh`, `sudo`, `set -x` in `publish-*.sh`, `crates-token.sh` | none |
+| `$version` in shell | always double-quoted (`publish-build.sh:47,48`, `publish-upload.sh:77,145,159,162`, `publish-query.sh:104,106,109`). Heredocs expand it once as text (`publish-inside.sh:81-109`, `publish-embedded.sh:59-67`); command text inside a value is not re-evaluated. A tag `v1.0.0$(x)` becomes the literal string `1.0.0$(x)` everywhere. **No shell injection found** |
+| Version validation | **none anywhere**: the only filter is the trigger glob `v*` (`publish.yml:6`) and `${version#v}`. `git check-ref-format` accepts `v1.0.0$(x)`, `v1.0.0;Foo=1`, `v1/x`, `v1"2`, `v1#2` (rejects spaces and `..`). Consequences, none of which gains a tag writer anything they lack (F15): `dotnet pack -p:Version=...;Foo=1` splits into two MSBuild properties (`publish-inside.sh:36-37`); a `"` breaks `set_version` / `vcpkg.json` / the pom (the checks then refuse: `publish-check.py:86,99,113,131,180`); `/` and `#` change URL paths in `publish-query.sh:104-109` |
+| Registry answers | `publish-published.py` parses with `json.loads` and indexes fixed keys; a wrong shape raises and `publish-query.sh:49-50` turns that into a stop. Responses are never passed to a shell: only the string `yes`/`no`, and for PlatformIO the `profile.username` that is placed in one URL path (`publish-query.sh:91-94,119`); the registry's own API is the source. No `-L` on any curl, so no redirect is followed and no `Authorization` header can be forwarded to another host; TLS verification is the default (no `-k`, no `http://`) |
+| Untrusted archive parsing | `publish-check.py` reads archives the repo's own build produced (`zip_members`, `tar_members` read every member into memory; no extraction to disk, so no path traversal). Not attacker input unless the build container is compromised (F13) |
+| `git` pushes | `push_branch` (`publish-lib.sh:140-162`) pushes `--atomic`, never `--force`; the askpass helper is a `mktemp` file (mode 0700) that reads `$GITHUB_TOKEN` from the environment, the token is not written to it or to argv (`publish-lib.sh:148-157`) |
+
+### Secrets handling
+
+| Check | Result |
+|-------|--------|
+| Token on argv (visible in `ps` to local processes) | yes, six sites: `twine -p "$token"` (`publish-upload.sh:97`), `dotnet nuget push --api-key` (`:146`), `cargo publish --token` (`:153`), `curl -H "Authorization: Bearer $MAVEN_CENTRAL_TOKEN"` (`:103,109`, `publish-query.sh:113`), `curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN"` (`publish-upload.sh:49`, `crates-token.sh:18`), revoke (`crates-token.sh:57`). GitHub masks them in logs, and a process that can read another's argv can also read its environment, so the extra exposure is real only on a shared or self-hosted runner. F16 |
+| Token echoed to the log | no. `printf '%s\n' "$state"` (`publish-upload.sh:111`) prints Central's status JSON (deployment id, state, purls, error text), not the bearer. The npm `.npmrc` is `mktemp` (0600) and removed on both paths (`:82-88`); only used when `NPM_TOKEN` is set, which `publish.yml` never sets, so npm uses OIDC. `crates-token.sh:42` masks before writing `GITHUB_OUTPUT`; the PyPI token is minted in `$(...)` and masked (`publish-upload.sh:94-95`) |
+| GPG key | imported by pipe, not argv (`publish-sign.sh:22`); keyring is `mktemp -d` mode 0700 and removed on exit (`:16-18`). The key stays in the environment of the whole build subshell, including host-side `pip install` (F12). The key must be passphrase-less (loopback pinentry, no passphrase) |
+| Build-only mode | `PACKBIN_BUILD_ONLY=1` unsets all 11 credential variables (`publish-registries.sh:35-39`, list at `publish-lib.sh:86-90`); `publish-sign.sh:23-25` generates a throwaway key only in that mode; `publish-registries.sh:116` writes `artifacts/dry-run`, and `publish-upload.sh:36-39` refuses to start when it exists. A later real run does `rm -rf "$artifacts"` first (`publish-build.sh:28`), so the marker cannot linger. Nothing in `publish-build.sh`, `publish-inside.sh`, `publish-embedded.sh`, `publish-sign.sh`, `publish-check.py` holds `push`, `publish`, `upload` or a write call (read: `git ls-remote`/`clone` of the registry URL, local `git commit`/`tag`, `pip install`). The throwaway key never reaches an upload |
+
+### Java (`java/api-check.sh`, `tools/Fetch.java`, `tools/ApiCheck.java`)
+
+| Check | Result |
+|-------|--------|
+| Download integrity | `Fetch.java:34-37` hashes the body and throws on mismatch **before** `Files.write` (`:38`); a cached file is reused only if its hash matches (`:25`). `HttpClient.newHttpClient()` does not follow redirects (default `NEVER`); a non-200 throws (`:31-33`). Host `repo1.maven.org`, HTTPS, hardcoded in `api-check.sh:9`. All three hashes verified against Central (dependency_scan.md) |
+| Where the jars run | `java -cp animal-sniffer:asm ApiCheck.java` (`api-check.sh:19`) inside the `java` test container, which holds no credential; it is the `test` job (`contents: read`, no secrets). The jars execute with the repo mounted read-write (F13 applies to the publish job only, where this script does not run) |
+| Cache path | `java/out/api-tools` (gitignored); a poisoned cache file fails the hash check |
+| API-26 replacements | `Field.immutableCopy` (`Field.java:83-91`) copies and rejects null items like `List.copyOf`; `Arrays.asList(fields)` passed to the constructor is copied there, so the caller's array is not aliased. `Containers.compareUnsigned` is byte-identical in order to `Arrays.compareUnsigned` (unsigned bytes, then length); `Collections.emptyList()` replaces `List.of()` for results that are read, not mutated; `((Buffer) buf).flip()` is the API-26-safe form. No behavior change that affects unpack of hostile bytes |
+
+### Earlier loops (condensed)
+
+- Loop 10: C++ core: no heap, exceptions or RTTI; every `memcpy` guarded; 20 M ASan/UBSan fuzz packets, 0 reports; F0 (32-bit count truncation, High) found and fixed.
+- Loop 11: unpack paths in five packages hardened (F4 to F9, fixed; re-verified in loop 13, no production source in those packages changed in loop 14).
+- Loop 13: 2.63 million unpack calls, 0 hang, 0 panic, 0 walker exception; F10 (cost per round, Medium) and F11 (no size-scaled test, Low) recorded; GPG key in `publish-gate.test.sh:199-205` is generated into a temporary keyring.

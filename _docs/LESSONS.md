@@ -9,12 +9,6 @@ Downstream skills consume this file:
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
 
-- [2026-09-23] [tooling] On this Mac, pass `PACKBIN_CXX_SYSROOT` so clang finds the SDK C++ headers.
-  Source: _docs/06_metrics/retro_2026-09-23_loop2.md
-- [2026-09-24] [testing] Compare a shared marker as the full hex in every language. A prefix match hides a different tail.
-  Source: _docs/06_metrics/retro_2026-09-24_loop4.md
-- [2026-09-24] [tooling] When a C++ file is split, add the new files to every driver compile line, including the publish gate.
-  Source: _docs/06_metrics/retro_2026-09-24_loop4.md
 - [2026-09-24] [architecture] A typed Rust scheme needs the same value kinds as the map scheme, including u2 and dict, or the spec must exclude them.
   Source: _docs/06_metrics/retro_2026-09-24_loop4.md
 - [2026-09-29] [testing] Delete `cpp/build` before the container C++ suite, or the container runs the host binary.
@@ -39,3 +33,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-06_loop13.md
 - [2026-10-06] [testing] Re-derive every hex string and example row in a spec by hand or from a reference build before the batch starts; AZ-2087 AC-4, AZ-2177 AC-2 and two AZ-2178 hex strings were wrong, and only fresh-reviewer oracles caught them.
   Source: _docs/06_metrics/retro_2026-10-06_loop13.md
+- [2026-10-06] [estimation] Size a CI or publish restructure by the scripts and tests it touches, not by its AC count: AZ-2096 was 3 points and became 15 files and +1 313 lines (two new scripts, a checker and a test harness).
+  Source: _docs/06_metrics/retro_2026-10-06_loop14.md
+- [2026-10-06] [testing] Under `set -o pipefail`, `cmd | grep -q .` reads an early grep exit as a failure (SIGPIPE) or a network error as an empty answer; capture the output first. The worker's tests passed and only the high-effort review found it.
+  Source: _docs/06_metrics/retro_2026-10-06_loop14.md
+- [2026-10-06] [dependencies] Pin or hash-check every tool the credentialed publish job installs (pip tools, `npm@11`, `NuGet/login`), and let the build step see no write access to the scripts the host runs next with the tokens.
+  Source: _docs/06_metrics/retro_2026-10-06_loop14.md

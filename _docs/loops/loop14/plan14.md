@@ -37,8 +37,20 @@ Only rows with `include: yes` are executed (plus close steps).
 
 ## Implementation
 
-Optional. Created or patched when a batch diverges (`protocols/plan-diff-sync.md`).
+Divergences from the plan, patched in the commit that made them (`protocols/plan-diff-sync.md`):
+
+- AZ-2096 grew from the expected one-script split into two phases over seven scripts (`publish-build.sh`, `publish-upload.sh`, `publish-sign.sh`, `publish-check.py` new; `publish-registries.sh`, `publish-inside.sh`, `publish-embedded.sh` rewritten) plus a sibling test file; uploads now run on the runner host.
+- AZ-2097 added `publish-query.sh`, `publish-published.py` and `publish-rerun.test.sh`; the `concurrency` group on `publish.yml` is workflow-level.
+- Smoke-time fix (commit `3a6b5f2`, under AZ-2096): `PACKBIN_BUILD_ONLY=1` now checks `python3`, `gpg` and `git` up front and writes the `dry-run` marker before the first build.
+- Run Tests used two extra manual Pico builds (arm64 GCC 9.3.1 and amd64 GCC 9.2.1) outside the stage script; the owner approved the toolchain downloads into `.cache/embedded`.
+
+### Files that change
+### Order of work
+### Proof
+### Risks
 
 ## Assessment rounds
 
-None yet.
+| round | verdict | new specs | report |
+|-------|---------|-----------|--------|
+| 1 | CLARIFY (3 gap-unclear: token lifetime, PlatformIO owner lookup, Central shape); the owner typed `continue` after declining the question prompt, recorded as accepted with the recommended option A for all three | none | _docs/loops/loop14/assessment14.md |

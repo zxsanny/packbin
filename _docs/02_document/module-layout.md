@@ -3,7 +3,7 @@
 **Language**: mixed
 **Layout Convention**: custom
 **Root**: ./
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-06
 
 ## Layout Rules
 
@@ -115,6 +115,7 @@ A single `src/`, `crates/`, or `packages/` tree would put six languages in one c
   - `java/src/main/java/packbin/Packbin.java`
 - **Internal (do NOT import from other components)**:
   - `java/src/**` except `java/src/main/java/packbin/Packbin.java`
+  - API-level check (loop 14, AZ-2094): `java/api-check.sh`, `java/tools/ApiCheck.java`, `java/tools/Fetch.java`, run from `java/test.sh`; tool cache `java/out/api-tools` (gitignored)
 - **Owns (exclusive write during implementation)**: `java/**`
 - **Imports from**: none
 - **Consumed by**: Android and other Java programs
@@ -142,8 +143,10 @@ No shared code package. The library does not log, authenticate, or load configur
 ### workflows
 
 - **Directory**: `.github/workflows/`
-- **Purpose**: test on every push and pull request (including the `embedded` job for the C++ targets); publish on a version tag. The helper scripts (`run-suite.sh`, `publish-*.sh`, `stage-arduino.sh`, `report-row.sh`) and the `drivers/` for the language-pair run live in the same directory. `language-pair.sh` has the `roundflags` and `roundwhen` rings since loop 13 (AZ-2179): producers C#, TypeScript, Rust, Java and C++, readers TypeScript, Rust, Java and C++ (C# has no public reader, AZ-2092); the Rust driver builds them in `drivers/handoff-rust/src/rounds.rs`
-- **Owned by**: AZ-1866 owns `test.yml` and the workflow files existing. AZ-1875 owns the publish behavior in `publish.yml`
+- **Purpose**: test on every branch push and pull request (including the `embedded` job for the C++ targets); publish on a version tag, after `publish.yml` has called `test.yml` on the tagged commit (loop 14). The helper scripts (`run-suite.sh`, `publish-*.sh`, `stage-arduino.sh`, `report-row.sh`) and the `drivers/` for the language-pair run live in the same directory. `language-pair.sh` has the `roundflags` and `roundwhen` rings since loop 13 (AZ-2179): producers C#, TypeScript, Rust, Java and C++, readers TypeScript, Rust, Java and C++ (C# has no public reader, AZ-2092); the Rust driver builds them in `drivers/handoff-rust/src/rounds.rs`
+- **Publish scripts** (loop 14, AZ-2095 to AZ-2097): `publish-gate.sh` (golden check, writes the plan), `publish-registries.sh` (entry point: plan, credential and tool preflight, build, upload; `PACKBIN_BUILD_ONLY=1` is the build-only dry run), `publish-build.sh` with `publish-inside.sh` (language packages in their toolchain image), `publish-embedded.sh` (vcpkg, PlatformIO, ESP-IDF, Arduino) and `publish-sign.sh` (Maven bundle signature), `publish-check.py` (artifact checks), `publish-upload.sh` with `publish-query.sh` and `publish-published.py` (existence queries), `publish-lib.sh` (target table `PACKBIN_TARGETS`, credentials), `crates-token.sh`, `publish-position.sh`
+- **Publish tests**: `publish-gate.test.sh` (workflow structure parsed with Ruby `yaml`, gate and static checks; it sources `publish-phases.test.sh` for the two-phase scenarios and `publish-rerun.test.sh` for the credential matrix, re-run and registry scenarios); each file stays under 500 lines (`publish-phases.test.sh` is 486)
+- **Owned by**: AZ-1866 owns `test.yml` and the workflow files existing. AZ-1875 owns the publish behavior in `publish.yml`; AZ-2095 to AZ-2097 own the structure of `publish.yml` and the publish scripts and tests above
 - **Consumed by**: the six registries
 
 > See ADR 002_publish-from-version-tag.

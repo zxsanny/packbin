@@ -1,7 +1,7 @@
 # Security Audit Report
 
 **Date**: 2026-10-06
-**Scope**: packbin, loop 13 and the loop 12 changes that had no audit: unpack of attacker-controlled bytes in all six packages (`git diff 39d3a88..HEAD`, HEAD fb9e34c; production sources changed in C#, TypeScript and Rust in loop 13, in Java, Python and C++ in loop 12 only), supply chain and CI
+**Scope**: packbin, loop 14 (`git diff c6c389c..HEAD`, HEAD 43af2f6): the publish pipeline (`publish.yml`, `test.yml`, `publish-{registries,build,upload,query,sign,inside,embedded,lib}.sh`, `publish-{check,published}.py`, `crates-token.sh`, the three publish test scripts) and the Java API-26 work (`java/api-check.sh`, `tools/Fetch.java`, `tools/ApiCheck.java`, `java/test.sh`, `Field.immutableCopy`, `Containers.compareUnsigned`, the `Buffer` cast). Loop 13 findings carried forward.
 **Verdict**: PASS_WITH_WARNINGS
 
 ## Summary
@@ -10,91 +10,91 @@
 |----------|-------|
 | Critical | 0 |
 | High | 0 |
-| Medium | 1 |
-| Low | 4 |
+| Medium | 3 |
+| Low | 7 |
 
-The loop 13 changes hold against hostile packets. Over 2.63 million unpack calls (the loop 11 corpora, 276 855 packets in each of five packages, plus two new corpora aimed at loop 13's aligned rounds and Rust's typed `times`: 245 523 packets in four packages and 260 379 in Rust) there was no hang, no panic, no walker exception, no out-of-bounds access and no allocation from a count before the bytes were checked. Against the loop 11 results the only differences are three schemes that now fail at construction, as intended (a `when` that names a field outside its own scope).
-
-One finding is new and Medium: unpacking a `repeat` or `times` round now costs memory and time that grow with the names the round can hold (F10). A 1 MiB packet of one-byte rounds peaks at 401 MB in TypeScript, 525 MB in C#, 570 MB in Java and 311 MB (1.4 GB with eight set flag bits) in Rust. It is linear in the packet length and never grows with a count the packet states, so a packet-length cap contains it, but the library has no budget of its own. The owner accepted it during the loop 13 assessment (X10) and the README states it; it is rated Medium, and High for a service that reads packets of a megabyte or more without a cap. F11 (Low) is the missing test that would catch a regression.
-
-F4 to F9 (loop 11) are fixed and still hold on HEAD. F1 to F3 (Low, supply chain) are unchanged.
+No Critical or High. The pipeline is fail-closed where it matters (a registry query that cannot answer stops the run; a required target without its credential stops it before anything is built; build-only mode cannot write to a registry or push), job permissions are least-privilege, and no shell injection through `github.ref_name` or a registry answer exists. Two Medium findings are new and both concern the credentialed part of the publish job: it installs unpinned code while holding every registry secret (F12), and the build/upload separation of AZ-2096 holds for environment variables but not for the filesystem (F13). F10 (Medium) and F11, F1 to F3 (Low) are carried unchanged; F14 to F16 are new Low items. The Java API-26 replacements do not change unpack behavior, and the three jars fetched at test time match their pinned SHA-256 and Maven Central's checksums.
 
 ## OWASP Top 10 Assessment
 
-List: OWASP Top 10 2025, as in the earlier reviews (not re-fetched).
+List: OWASP Top 10 2025, confirmed at owasp.org at the start of the audit.
 
 | Category | Status | Findings |
 |----------|--------|----------|
-| A01 Broken Access Control | N/A | — |
-| A02 Security Misconfiguration | PASS | — |
-| A03 Software Supply Chain Failures | PASS_WITH_WARNINGS | F1, F2, F3 (unchanged) |
-| A04 Cryptographic Failures | PASS | — (session code unchanged since loop 11; F9 fix verified) |
-| A05 Injection | PASS | — |
+| A01 Broken Access Control | PASS_WITH_WARNINGS | F14 |
+| A02 Security Misconfiguration | PASS_WITH_WARNINGS | F13 (root containers, repo mounted read-write) |
+| A03 Software Supply Chain Failures | PASS_WITH_WARNINGS | F12, F1, F2, F3 |
+| A04 Cryptographic Failures | PASS | — |
+| A05 Injection | PASS_WITH_WARNINGS | F15 |
 | A06 Insecure Design | PASS_WITH_WARNINGS | F10, F11 |
 | A07 Authentication Failures | N/A | — |
-| A08 Software or Data Integrity Failures | PASS | — (F5, F8 fixes verified) |
+| A08 Software or Data Integrity Failures | PASS_WITH_WARNINGS | F13, F16 (token handling) |
 | A09 Security Logging and Alerting Failures | N/A | — |
-| A10 Mishandling of Exceptional Conditions | PASS | — (F4 fix verified; the C# typed `Unpack` of a round is the known AZ-2092, below) |
+| A10 Mishandling of Exceptional Conditions | PASS | — (fail-closed queries verified) |
 
 ## Findings
 
-| # | Severity | Category | Location | Title |
-|---|----------|----------|----------|-------|
-| 10 | Medium | A06 | `csharp/Walker.Rounds.cs`, `typescript/src/rounds.ts`, `java/.../Rounds.java`, `rust/src/walk/{unpack,times}.rs` | Unpack of a `repeat` / `times` round costs memory and time per name per round, with no budget |
-| 11 | Low | A06 | `fixtures/hostile/cases.test.sh`, the six hostile replays | No test bounds unpack cost by packet size |
-| 1 | Low | A03 | `.github/workflows/test.yml`, `publish.yml` | `actions/checkout@v7` is not pinned to a commit (open since 2026-09-29, unchanged) |
-| 2 | Low | A03 / A08 | `cpp/embedded/examples.sh:25` | `arduino-cli` tarball is downloaded and run without a checksum (unchanged) |
-| 3 | Low | A03 | `cpp/embedded/Dockerfile:4`, `docker-compose.test.yml` | Base images are pinned by tag, not by digest (unchanged) |
+| # | Severity | Category | Location | Title | Status |
+|---|----------|----------|----------|-------|--------|
+| 10 | Medium | A06 | `csharp/Walker.Rounds.cs`, `typescript/src/rounds.ts`, `java/.../Rounds.java`, `rust/src/walk/{unpack,times}.rs` | Unpack of a `repeat` / `times` round costs memory and time per name per round, no budget | carried (open, unchanged: no production source of those packages changed in loop 14 beyond Java API-26 replacements) |
+| 12 | Medium | A03 | `publish-upload.sh:129-140`, `publish-lib.sh:123-135`, `publish-embedded.sh:128,134`, `publish.yml:32,36,37,50` | Unpinned code runs in the credentialed job: pip installs of `twine`, `platformio`, `idf-component-manager` with all tokens in the environment, `npm@11`, `NuGet/login@v1` | new |
+| 13 | Medium | A08 / A02 | `docker-compose.test.yml:12` (and 25, 38, 51, 64, 77), `publish-build.sh:44-50`, `publish-upload.sh:153` | Build containers mount the whole repo read-write; what is checked is not what is later run or uploaded | new |
+| 11 | Low | A06 | `fixtures/hostile/cases.test.sh`, the six hostile replays | No test bounds unpack cost by packet size | carried (open) |
+| 1 | Low | A03 | `publish.yml:29,32`, `test.yml:17,58` | `actions/checkout@v7`, `actions/setup-node@v7` not pinned to a commit | carried (open since 2026-09-29; line numbers moved; `setup-node` added to scope) |
+| 2 | Low | A03 / A08 | `cpp/embedded/examples.sh:25` | `arduino-cli` tarball downloaded and run without a checksum | carried (open, file unchanged) |
+| 3 | Low | A03 | `cpp/embedded/Dockerfile:4`, `docker-compose.test.yml` | Base images pinned by tag, not by digest | carried (open, unchanged) |
+| 14 | Low | A01 | `publish.yml:3-6,21-26` | Any writer's `v*` tag publishes; no deployment environment, approval or documented tag protection | new |
+| 15 | Low | A05 | `publish.yml:48`, `publish-registries.sh:22-23`, `publish-inside.sh:36-37,81-109` | Tag name is the version with no validation | new |
+| 16 | Low | A08 | `publish-upload.sh:49,97,103,109,146,153`, `publish-query.sh:113`, `crates-token.sh:18,57` | Registry tokens on the command line | new |
 
 ### Finding Details
 
-**F10: Unpack of a round amplifies memory and time** (Medium / A06)
-- Location: C# `Walker.Rounds.cs` (round slicing and alignment), TypeScript `rounds.ts` (`RoundLists`, padding with `undefined`), Java `Rounds.java` (aligned unpack, loop 12), Rust `walk/unpack.rs` and `walk/times.rs` (one `Values` per round).
-- Description: since the aligned-round change (AZ-2087, AZ-2091, AZ-2086 in loop 13; AZ-2089 in Java in loop 12) a `repeat` or `times` round keeps one slot for every name it can hold, even for a round that read nothing, so a row packs again to the same bytes. The cost per round grows with the names in the body. Rust keeps one `Values` map per round instead, about 300 bytes per one-byte round regardless of the names, and about 1.3 KB when the round sets eight flag bits.
-- Evidence (1 MiB packet of one-byte rounds, one `when` body of N `u8` names, every round skipping the body; peak resident set and time of one `unpack`, one process each; macOS arm64, Node 22.23, .NET 10.0.103, Java 21.0.2, Rust 1.79 release build with overflow checks):
+**F12: Unpinned code runs in the credentialed job** (Medium / A03)
+- Location: `publish-upload.sh:129-140` (`prepare_tools` runs `ensure_tool twine twine`, `ensure_tool pio platformio`, `ensure_tool compote idf-component-manager`), `publish-lib.sh:132` (`pip install --quiet "$pkg"`: no version, no hash, no `--only-binary`), `publish.yml:36` (`npm install -g npm@11`), `publish.yml:37-40` (`NuGet/login@v1`), `publish.yml:50-55` (long-lived secrets), `publish-embedded.sh:128,134` (the same pip installs in the build phase).
+- Description: `publish-upload.sh` runs in the same shell and step as all secrets: `NUGET_TOKEN`, `PYPI_TOKEN`, `CARGO_REGISTRY_TOKEN`, `MAVEN_CENTRAL_TOKEN`, `MAVEN_GPG_PRIVATE_KEY`, `PLATFORMIO_AUTH_TOKEN`, `IDF_COMPONENT_API_TOKEN`, `GITHUB_TOKEN` (`contents: write`), and the OIDC request token. `prepare_tools` runs before the first upload (`:140`) and installs whatever PyPI serves today, plus 12 to 15 transitive packages (`platformio`: `requests`, `starlette`, `uvicorn`, `bottle`, ...; `idf-component-manager`: `pydantic`, `psutil`, ...). In the build phase the same installs run with `MAVEN_GPG_PRIVATE_KEY` in the environment, because the subshell keeps it for every target (`publish-registries.sh:108`) although only `publish-sign.sh` needs it. `npm install -g npm@11` and `NuGet/login@v1` (a third-party action, tag-pinned) run with the OIDC request variables present. The checkout step also leaves the job's `contents: write` token on the runner (`publish.yml:29`, no `persist-credentials: false`; storage in v7 not verified).
+- Attacker scenario: an attacker who publishes a malicious new release of `twine`, `platformio`, `idf-component-manager` or one of their dependencies (or of `npm@11`, or who moves the `NuGet/login@v1` tag), or a dependency-confusion upload, gets code execution in the next publish. It reads `os.environ`, and either exfiltrates every token or, without exfiltrating, mints OIDC tokens for npm, PyPI and crates.io and pushes a trojaned release of packbin to all registries and to the repository branches. Likelihood is low (requires a compromise upstream) and the impact is a compromise of every distribution channel, which is why this is Medium and not Low. No advisory exists today for those packages (OSV, 2026-10-06).
+- Remediation: (1) install the tools in a step before the credentialed step, from a hash-locked `requirements.txt` (`pip install --require-hashes --only-binary=:all:`) and pin the action and npm versions (commit SHA for `NuGet/login`, `setup-node`, `checkout`; `npm@11.x.y`); (2) run the build phase without `MAVEN_GPG_PRIVATE_KEY` and pass it only to `publish-sign.sh`; (3) drop the `PYPI_TOKEN` secret and use the OIDC path already coded in `pypi_oidc_token`; (4) `persist-credentials: false` on the publish checkout.
 
-| Package | Names | Before (`ce85fe0`) | HEAD |
-|---------|-------|--------------------|------|
-| TypeScript | 1 / 4 / 16 / 36 | 130 MB, 62 ms (1) / 129 MB, 64 ms (36) | 138 / 160 / 240 / 401 MB; 77 / 90 / 135 / 228 ms |
-| C# | 1 / 4 / 16 / 36 | 94 MB, 312 ms (1) / 93 MB, 314 ms (36) | 109 / 142 / 289 / 525 MB; 328 / 474 / 752 / 1300 to 1538 ms |
-| Java (not changed in loop 13) | 1 / 4 / 16 / 36 | not measured | 106 / 162 / 361 / 570 MB; 94 / 142 / 541 / 715 to 1185 ms |
-| Python (lists only the rounds that read a name) | 1 to 36 | not measured | 33 MB; 700 to 865 ms |
-| Rust map `repeat` | any | 277 MB, 125 to 141 ms | 278 MB, 130 to 185 ms |
-| Rust map `times` | 1 / 36 | 36 MB, 136 ms | 311 MB, 184 to 211 ms |
-| Rust typed `times` (`Vec<E>`) | 1 byte per round | not measured (3-argument form removed) | 311 MB, 178 ms |
-| Rust typed `times`, flags with 8 bool members all set | 1 byte per round | not measured | 1346 to 1425 MB, 1294 to 1400 ms |
+**F13: Build containers mount the whole repo read-write; the check does not bind the upload** (Medium / A08, A02)
+- Location: `docker-compose.test.yml:12,25,38,51,64,77` (`./:/src`, read-write, root); `publish-build.sh:44-50`; `publish-upload.sh:150-155` (cargo), `publish-build.sh:50` (`chmod -R a+rwX`); `publish-check.py:125-138`; `python/pyproject.toml:12` (`setuptools>=61`), `publish-inside.sh:52-53` (`pip install build`).
+- Description: the build runs without credentials in its environment (verified: containers receive only `SRC_ROOT`, `PACKBIN_VERSION`, `PACKBIN_OUT` and the compose constants), but each language container sees `/src`, which holds (a) `.github/workflows/publish-upload.sh`, `publish-lib.sh`, `publish-query.sh`, the scripts the host runs next with every credential, (b) `PACKBIN_OUT`, i.e. the artifacts of the targets built earlier (order: csharp, typescript, python, rust, then cpp, then java), already checked, and (c) `.git` and any `.cargo/config.toml`. The Python container downloads the newest `setuptools` and `build` from PyPI as root before it builds. Separately, `check` approves files but `build.log` records only `build ok <target>` with no digest, artifacts are made world-writable, and for Rust `cargo publish --no-verify --allow-dirty` on the host re-archives `artifacts/rust/stage/` (only its `Cargo.toml` version and the absence of `target/` are checked, `publish-check.py:135-138`), not the `.crate` that was checked.
+- Attacker scenario: a compromised `setuptools` (or any build-time download in a container) runs as root in the python container, rewrites `/src/.github/workflows/publish-upload.sh` (or drops `/src/.cargo/config.toml` redirecting `cargo publish`, or replaces `artifacts/csharp/Packbin.<v>.nupkg` after it passed its check, or adds a file to `artifacts/rust/stage/`). The host then executes the modified script, or uploads the replaced artifact, with all registry credentials. The no-credential build phase therefore does not contain a compromised build dependency. Only the Python build downloads code from a registry at build time today (csharp, typescript, rust, java builds have no dependencies), so exploitability rests on the same upstream-compromise precondition as F12.
+- Remediation: mount only the source directories read-only (`./csharp:/src/csharp:ro`, ...) plus one writable `artifacts/<lang>` directory per container; run the upload scripts from a copy made before any container starts (or fail if `git status --porcelain` shows a change under `.github/` before upload); write `sha256sum` of every artifact at check time and verify it immediately before upload; upload the checked `.crate` for Rust (`cargo publish` cannot upload a prebuilt crate, so verify the staged tree by hash, or publish from a clean checkout in the upload step); pin `setuptools` and `build` with hashes; drop the world-writable `chmod` (use `chown` to the runner user inside the container or `--user`).
 
-- The cost is linear in the packet length (the loop 11 checks hold: no allocation from a count before the bytes exist) and grows by about 7.5 (TypeScript), 12 (C#) and 13 (Java) bytes per name per round.
-- Impact: one packet of about 1 MiB makes the reader allocate 0.3 to 1.4 GB and burn up to 1.5 s of one core. Ten concurrent 1 MiB packets hold about 5 GB in C# and about 14 GB in the Rust eight-flag case. A packet-length cap contains it (64 KiB costs 16 times less); without one this is a remote denial of service from an unauthenticated peer.
-- README: "Limits to keep in mind" states the cap requirement and the figures. Corrected in this audit: C# "about 550 MB" to 530 MB, Java "about 540 MB" to 570 MB, Rust eight flag bits "about 1.3 GB" to 1.4 GB, C# "about a second" to 1.4 seconds.
-- Remediation (owner decision; the first is today's state): (1) keep the documented cap requirement; (2) add an optional per-call budget (maximum rounds and maximum slots), default off, refused with the existing short-packet error; (3) shrink the representation: keep one list per name that held a value plus the round indices, and pad on demand; in Rust decode a typed `times` straight into its `Vec<E>` instead of through `Values`.
+**F14: A tag push by any writer publishes; no approval gate** (Low / A01)
+- Location: `publish.yml:3-6` (tags `v*`), `:21-26`, secrets at repository level (`:50-55`); no `environment:` key.
+- Description: by design a `v*` tag triggers the publish. The workflow file used is the one at the tagged commit and secrets are repository-wide, so any user with write access (or a compromised account or token with it) can publish unreviewed content: push a branch, tag it. `needs: test` only proves the tests of that same commit pass. A re-run of a run publishes the same commit again and is harmless (registries refuse a duplicate). Whether tag rulesets, branch protection or registry-side trusted-publisher restrictions (workflow, environment) exist cannot be seen from the repository. vcpkg is the only target where an existing version's entry can be rewritten (`publish-embedded.sh:88-90`).
+- Impact: a stolen writer credential equals a release of arbitrary code to six ecosystems.
+- Remediation: put the job in a GitHub `environment` with required reviewers (move the secrets there and bind the registries' trusted publishers to the environment name); protect `v*` tags with a ruleset; document both in `_docs/04_deploy/`.
 
-**F11: No test bounds unpack cost by packet size** (Low / A06)
-- Location: `fixtures/hostile/README.md` (1 s per case), `cases.txt`, the six replays.
-- Description: every hostile vector is a few bytes, so the 1 s budget never trips. A change that doubles the per-name cost, or makes a round quadratic, passes all six suites. F10 was found by measuring by hand, not by a test.
-- Remediation: one size-scaled case (a 256 KiB packet of one-byte rounds with a body of 16 names) replayed against each package with a time budget and, where the runtime exposes it, an allocation budget per packet byte. Ticket it with F10's decision.
+**F15: The tag name is the version, unvalidated** (Low / A05)
+- Location: `publish.yml:48`, `publish-registries.sh:22-23`, `publish-inside.sh:36-37`, `:81-109`, `publish-embedded.sh:59-67`, `publish-query.sh:104-109`.
+- Description: `git check-ref-format` accepts `v1.0.0$(x)`, `v1.0.0;Foo=1`, `v1/x`, `v1"2`, `v1#2`. No shell executes the value (env transport, quoting, no `eval`), but it flows to `dotnet pack -p:Version=` (a `;` adds MSBuild properties), to TOML/JSON/XML templates, to URL paths and to the tag `arduino-<version>`. The artifact checks (`publish-check.py`) refuse most distortions after the fact, so this is defence in depth, not an exploit; the only party who can pick the tag name is a writer (F14).
+- Remediation: first step of `publish-registries.sh`: `[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo ...; exit 1; }`; same check in `publish-build.sh` and `publish-upload.sh`.
 
-**F1, F2, F3** (Low / A03): unchanged and still open. `actions/checkout@v7` in `test.yml` (lines 11, 51) and `publish.yml` (line 16); `examples.sh` downloads `arduino-cli` without a checksum (the file changed only to move its cache to `.cache/embedded/`); base images and the six test images in `docker-compose.test.yml` are tags, not digests.
+**F16: Registry tokens on the command line** (Low / A08)
+- Location: `publish-upload.sh:97` (`twine -p`), `:146` (`dotnet nuget push --api-key`), `:153` (`cargo publish --token`), `:103,109` and `publish-query.sh:113` (`curl -H "Authorization: Bearer ..."`), `publish-upload.sh:49`, `crates-token.sh:18,57` (OIDC request token, crates.io token).
+- Description: arguments are readable in `/proc/<pid>/cmdline` by every local process for the lifetime of the command (up to 22 min for the Maven poll loop). Logs are safe (GitHub masks the values; nothing prints them; the Maven status JSON holds no token). On a hosted runner the processes that could read it can already read the environment, so the added risk is limited to shared or self-hosted runners.
+- Remediation: pass tokens through the tools' environment variables or stdin where supported (`TWINE_PASSWORD`, `CARGO_REGISTRY_TOKEN` alone, `curl -H @file` with a 0600 temp file or `--config -`, `dotnet nuget push` has no env form: use a `NuGet.Config` source with an API key file or accept).
 
-## Closed since loop 11 and verified on HEAD
+**F10, F11, F1, F2, F3** are carried as in loop 13: see the table. F10 detail (measured peak resident set per package, remediation options 1 to 3) is unchanged: 0.3 to 1.4 GB per 1 MiB packet of one-byte rounds; the README states the cap requirement; a packet-length cap contains it; High for a service that reads packets of a megabyte or more without a cap. F1 now also covers `actions/setup-node@v7` (`publish.yml:32`); the third-party `NuGet/login@v1` is treated in F12.
 
-| # | What | How it was checked |
-|---|------|--------------------|
-| F4 | C# row binding threw `OverflowException` on the top of `u64` / `i64` | 0 occurrences of `Overflow` in 276 855 packets; AZ-2123 |
-| F5 | TypeScript `dict` key `__proto__` replaced the prototype | probe packet `01 0100 0900 5f5f70726f746f5f5f 0100 0500 61646d696e 01`: `ok`, own keys `["__proto__"]`, `acl.admin` undefined |
-| F6 | TypeScript `when` inside `repeat` never matched a field of its round | `repeat_when2` and `times_when2` (a `when` on a field of its own round): all five packages return the same verdict on every one of their 12 420 packets; AZ-2090 |
-| F7 | capacity reserved from the count | `Math.Min(count, bytes left)` in C# (2 sites), `capacity_hint` in Rust (2 sites) |
-| F8 | TypeScript dropped a leading byte order mark | `ignoreBOM: true` at `typescript/src/kinds.ts:345` |
-| F9 | session counter not thread-safe in C# and Java | `Interlocked` in `PackSession.cs`, `Atomic*` in `PackSession.java` |
+## Loop 13 findings: status
 
-## Known open items confirmed (ticketed; not re-opened)
+| # | Status | Why |
+|---|--------|-----|
+| F1 | open, carried | moving tags still in use; scope widened to `setup-node`; credentialed use of `NuGet/login` raised under F12 |
+| F2 | open, carried | `cpp/embedded/examples.sh:25-27` unchanged, only runs in the embedded job, no secret |
+| F3 | open, carried | no image or Dockerfile changed in loop 14 |
+| F4 to F9 | fixed, unchanged | C#, TypeScript, Rust production sources untouched in loop 14; Java changes limited to API-26 replacements that keep behavior |
+| F10 | open, carried (Medium) | no change to round handling; owner-accepted in the loop 13 assessment |
+| F11 | open, carried (Low) | no test added |
 
-| Ticket | What the probes showed |
-|--------|------------------------|
-| AZ-2092 | C# typed `Unpack` of a packet that holds a `repeat` or `times` round throws `InvalidCastException`: 95 064 of the 95 703 packets the walker accepted in corpus 3. It is the valid packet that throws, not a hostile one; the README says so |
-| AZ-2112 | TypeScript rejects a `u64` / `i64` count even when small: 87 packets in corpus 1, 1 779 in corpus 2, as in loop 11 |
-| AZ-2126, AZ-2181 | which kinds a `when` or a count may name; open, Medium, unchanged |
-| AZ-2197 | TypeScript pack tests a `when` on the row you give it; pack-side, no untrusted input |
+## Dependency Vulnerabilities
+
+| Package | CVE | Severity | Fix Version |
+|---------|-----|----------|-------------|
+| none known | `npm audit` 0; OSV 0 for `twine`, `platformio`, `idf-component-manager`, `build`; `cargo audit` could not run (CVSS 4.0 parse failure), lockfile holds only the crate itself | — | — |
 
 ## Recommendations
 
@@ -102,22 +102,14 @@ List: OWASP Top 10 2025, as in the earlier reviews (not re-fetched).
 None.
 
 ### Short-term (Medium)
-- F10: the owner picks (1) keep, (2) budget, or (3) compact representation, and records it; if (2) or (3), one ticket per package family (C#, TypeScript and Java share the padded form; Rust has its own).
+- F12 and F13 together, in one change to the publish job: hash-locked tool install before the credentialed step, key and tokens only where used, repo mounted read-only (or upload from a pre-container copy), digests between check and upload. Do this before the first real release.
+- F10: the owner picks keep, budget, or compact representation.
 
 ### Long-term (Low / Hardening)
-- F11: one size-scaled hostile case.
-- F1 to F3: pin the action to a commit, check the `arduino-cli` checksum, pin base images by digest (all unchanged).
+- F14 environment with reviewers and tag ruleset; F15 version regex; F16 tokens off argv; F11 size-scaled hostile case; F1 to F3 pin actions to commit SHAs, check the `arduino-cli` checksum, pin base images by digest.
 
-## Evidence
+## Evidence and limits
 
-Method: scratch programs outside the repository (`/private/tmp/claude-501/-Users-zxsanny-dev-zxsanny-packbin/b668625c-993b-4bc1-972f-098e72477246/scratchpad/`: `fuzz/` for the corpora, `amp/` for the amplification probes); the sources were read from the repository or copied from it (the Rust copy and the baseline come from `git archive`); nothing in the repository was changed by the audit.
+Method: read every changed file in full (`git diff c6c389c..HEAD --stat`: 43 files); read-only network queries (OSV, PyPI JSON, Maven Central, owasp.org); `npm audit`; `cargo audit` (failed to parse the advisory database); the three Maven Central artifacts of `api-check.sh` were downloaded to a throwaway directory, hashed, compared with the pinned values and Central's `.sha1`, and deleted. Nothing in the repository other than `_docs/05_security/` was changed; no publish, no registry write, no credential used; the test scripts were not run.
 
-| Item | Result |
-|------|--------|
-| Corpora 1 and 2 (loop 11) | 97 514 and 179 341 packets, 45 hand-written schemes, five packages. 0 hangs, 0 crashes, 0 walker exceptions in all five; slowest packet 37.5 ms (TypeScript), 31.1 ms (Python), 11.5 ms (Java), 3.4 ms (C#), 0.2 ms (Rust). Against the loop 11 results: no difference in Python or Rust; in TypeScript, C# and Java the only differences are `list_when`, `repeat_when` and `times_zero_u32` (2 652 / 2 652 / 2 874 packets in corpus 1), which now fail at construction because their `when` names a field outside its own scope (AZ-2087, AZ-2090; Java since loop 12) |
-| Corpus 3 (new) | 245 523 packets over `repeat(flags(bool on, u8 n))`, `repeat(u8 k, flags(bool on, u8 n), when(k == 1, u8 v))` and `u8 c; times(c, u8 k, flags(bool on, u8 m))`: every 0 to 2 byte body, 4 000 structured and 2 000 random streams per repeat scheme, mutations of valid packets, every count 0 to 299 plus 255 / 256 / 257 / 511 / 512. TypeScript, C#, Java and Rust: 95 703 accepted, 149 820 refused, **0 packets differ between the four packages**, 0 exceptions, 0 hangs, slowest 25.7 ms (Rust) |
-| Corpus 4 (new, Rust only) | 260 379 packets over three typed `times` schemes (`Vec<Point>`, `Vec<Leg>` with `flags(opt_u8)`, `Vec<Item>` with `when` + `utf8` + `flags(bool)`), counts matched to the rounds in 60% of the valid-shaped packets: 14 337 accepted, 246 042 refused, 0 panics, 0 hangs, slowest 0.15 ms |
-| Amplification | table in F10, one process per measurement, `/usr/bin/time -l` for the peak resident set |
-| Static analysis | no `unsafe`, `unwrap` or `expect` added to a Rust decode path (the added `panic!` calls are in scheme construction and name the rule); allocations in the new C#, TypeScript and Rust unpack code are bounded by the packet length (`Math.Min(count, bytes left)`, `capacity_hint`); no `eval`, `curl | sh`, `sudo` or `chmod 777` in the changed scripts; no key, token or password in the diff; the GPG key the publish-gate test imports is generated into a temporary keyring by the test (`publish-gate.test.sh:199-205`) |
-| Dependencies | `npm audit` (registry reachable): 0 vulnerabilities; `dotnet list package --vulnerable --include-transitive` for the test project and the C# driver: none; `cargo audit` failed to load the advisory database (the installed 0.21.1 cannot parse CVSS 4.0 entries), but `rust/Cargo.lock` lists only the crate itself and the driver crate depends only on it; Python, Java and C++ have no dependencies |
-| Not covered | C++ (no production source changed since the loop 10 audit's 20 M sanitizer run, apart from the loop 12 bool rule at construction); the session code (unchanged); DAST (library, no service) |
+Could not verify: (1) how `actions/checkout@v7` stores the job token (F12); (2) repository settings: tag rulesets, branch protection, environments, and the registries' trusted-publisher bindings (F14); (3) whether `twine` is preinstalled on `ubuntu-latest` (if it is, only `platformio` and `idf-component-manager` are installed from PyPI, F12 stands); (4) which transitive dependencies of `platformio` and `idf-component-manager` ship only as sdists (those run setup code at install); (5) DAST (not applicable); `cargo audit` result (tool failure). Test scripts (`publish-gate.test.sh`, `publish-phases.test.sh`, `publish-rerun.test.sh`) use stubbed `curl`, `dotnet`, `npm`, `twine`, `cargo`, `pio` and local bare git repositories; they were searched (not read line by line) for tokens, `curl`, `push`, `PATH=` and `gpg`: none contains a real credential, and the registry URLs they match are stub patterns.

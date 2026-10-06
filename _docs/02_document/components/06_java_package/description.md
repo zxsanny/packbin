@@ -66,6 +66,8 @@ No queries and no cache.
 |---------|---------|---------|
 | none | — | the runtime writes little-endian fields |
 
+**Target platform** (loop 14, AZ-2094): the jar targets Java 17 and Android API 26. `java/test.sh` compiles main and tests with `javac --release 17`, and the publish build (`publish-inside.sh`) compiles the jar and its javadoc with `--release 17`; `publish-check.py` reads class major version 61 from the class bytes. Main sources may use no API above Android API 26: `java/api-check.sh` runs Animal Sniffer 1.28 (`java/tools/ApiCheck.java`) with the `android-api-level-26` signature on the compiled main classes, inside `java/test.sh`. The tool jars and the signature are pinned by version and SHA-256 and fetched from Maven Central by `java/tools/Fetch.java` into `java/out/api-tools` (gitignored, kept between runs); a hash mismatch fails the check. Replacements that keep the wire bytes and the immutability: `Containers.compareUnsigned` for dict key order (unsigned UTF-8 bytes, then length; `Arrays.compareUnsigned` needs API 33), `Field.immutableCopy` for `Field.children`, `Field.slotIds` and `Scheme.fields` (unmodifiable copy that rejects null items, as `List.copyOf` does; that call needs API 30), and `((Buffer) buf).flip()` in `Walker` (under `--release 17` the `ByteBuffer.flip()` call resolves to a Java 9 method that API 26 lacks).
+
 **Error Handling Strategy**:
 - A short field returns an error and zero values
 - Hostile bytes return an error value, never an exception (§7)

@@ -402,6 +402,18 @@ value count: 0
 
 Rollback if this version must not be used: publish a later Maven Central version. A published version stays.
 
+## Platform Checks (AZ-2094, loop 14)
+
+No AC number; they hold the Java 17 and Android API 26 target. All run in `java/test.sh` (the `java` service of `docker-compose.test.yml`) except the last.
+
+| Check | What it proves | Where |
+|-------|----------------|-------|
+| `javac --release 17` on main and test sources | no Java 18+ language feature or API in main or tests | `java/test.sh` |
+| `api-check` | the compiled main classes call no API above Android API 26 (Animal Sniffer, `android-api-level-26` signature) | `java/api-check.sh` |
+| `ApiSafeReplacementsTest.dictKeysSortAsUnsignedBytes` | dict keys with `""`, ASCII and non-ASCII sort as unsigned UTF-8 bytes; the packed hex is the one recorded before the change | `java/src/test/java/packbin/ApiSafeReplacementsTest.java`, run from `PackbinTest` |
+| `ApiSafeReplacementsTest.fieldChildrenAreAnImmutableCopy`, `schemeFieldsAreAnImmutableCopy` | `Field.children` and `Scheme.fields` are copies of their source and refuse modification with `UnsupportedOperationException` | same file |
+| class major version 61 on every jar class | the published jar targets Java 17 | `publish-check.py` in the publish build phase |
+
 ## Test Data Management
 
 **Required test data**:

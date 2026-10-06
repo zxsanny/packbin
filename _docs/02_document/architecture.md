@@ -2,7 +2,7 @@
 
 ## Architecture Vision
 
-packbin is a library: the caller writes a field list, pack and unpack move the exact bytes, and GitHub Actions tests every push and publishes C#, TypeScript, Python, Rust, C++, and Java on a version tag after every one of them matches the golden hex.
+packbin is a library: the caller writes a field list, pack and unpack move the exact bytes, and GitHub Actions tests every branch push and pull request and publishes C#, TypeScript, Python, Rust, C++, and Java on a version tag after every one of them matches the golden hex.
 
 **Components and ownership**
 
@@ -13,7 +13,7 @@ packbin is a library: the caller writes a field list, pack and unpack move the e
 - Rust package — pack and unpack for a native node
 - C++ package — pack and unpack for a C++ program or 32-bit firmware, from one allocation-free core
 - Java package — pack and unpack for a Java program
-- GitHub Actions — tests on every push and pull request, publish on a version tag
+- GitHub Actions — tests on every branch push and pull request, publish on a version tag (after the tests pass on the tagged commit)
 
 **Principles**
 
@@ -57,13 +57,13 @@ packbin is a library: the caller writes a field list, pack and unpack move the e
 | Language | Python | current stable at first publish | Tools and scripts |
 | Language | Rust | current stable at first publish | A native node |
 | Language | C++ | C++17, freestanding core (`-fno-exceptions -fno-rtti`, no heap) | A C++ program or 32-bit firmware: Cortex-M, ESP32, RP2040 |
-| Language | Java | current stable at first publish | A Java program |
+| Language | Java | Java 17 (`--release 17`), Android API 26 | A Java program, including Android |
 | Framework | none | — | A library, not an application |
 | Database | none | — | No stored packets |
 | Cache | none | — | Each call is independent |
 | Message Queue | none | — | The caller owns the socket |
 | Hosting | none | — | No server |
-| CI/CD | GitHub Actions | — | Tests on push and pull request. Publish on a version tag |
+| CI/CD | GitHub Actions | — | Tests on branch push and pull request. Publish on a version tag, after the called tests pass |
 
 > See ADR 002 (Publish six packages from a version tag).
 
@@ -140,6 +140,8 @@ The C++ package is one core for host programs and firmware. It writes into a cal
 | vcpkg | git push of the registry | CI secret | registry policy | same commit, or none on a mismatch. A pushed port version stays |
 
 > See ADR 002 (Publish six packages from a version tag), ADR 003 (Publish C++ through a vcpkg git registry).
+
+The publish builds and checks every artifact before the first upload, and the registry tools then run on the runner host (loop 14). Before each upload the registry is asked whether the version is already there, so a re-run of the tag finishes a partial publish. PlatformIO, ESP-IDF and Arduino are optional targets; the other six registries are required (`_docs/04_deploy/packages.md`).
 
 There is no inbound vendor callback. The bytes the library reads are the caller's packet, checked against the golden fixture, not a vendor schema.
 

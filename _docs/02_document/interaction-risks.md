@@ -18,9 +18,10 @@
 | Unpack returns part of a short buffer | value count is 0, and the next pack still matches the golden hex | AC-8 | each package |
 | A clear flag is stored as 0 | a present 0 is written; absence adds 0 bytes | AC-4, AC-5 | each package |
 | A language missing from the tag still publishes | that registry receives 0 packages | AC-15 | AZ-1875 |
+| The crates.io token (and the NuGet key) is exchanged before the whole build phase; if it expires before the upload, earlier registries are published and crates.io is not | a partial release; re-running the tag with a fresh token finishes it. Token lifetime and cold-runner build time are unmeasured, watch both on the first real tag and split `publish.yml` into build, exchange and upload if the build nears 10 minutes (loop 14 assessment U1, batch 3 review finding 1) | accepted, no AC | AZ-2096 |
 | A session payload is dropped | the next unpack on that direction is not the sent row | pack-session AC-4 | each package |
 
-The dropped-payload row is accepted: the library adds no tag. Each other material risk already has a numeric AC.
+The dropped-payload row is accepted: the library adds no tag. The token-lifetime row is accepted in loop 14 and has no AC. Each other material risk already has a numeric AC.
 
 ## Pending Step 2
 
