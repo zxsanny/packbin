@@ -15,11 +15,26 @@ version="${version#v}"
 out="${PACKBIN_OUT:?PACKBIN_OUT is required}"
 dest="$out/artifacts/$lang"
 work="${PACKBIN_WORK:-}"
+made_work=0
 if [ -z "$work" ]; then
   work="$(mktemp -d)"
-  trap 'rm -rf "$work"' EXIT
+  made_work=1
 fi
 mkdir -p "$dest"
+
+# The container runs as root; the host user must own what it leaves, or the host cannot chmod,
+# sign or delete it (a Linux runner is not the owner, unlike Docker Desktop on a Mac).
+finish() {
+  local code=$?
+  if [ "$made_work" = 1 ]; then
+    rm -rf "$work"
+  fi
+  if [ -n "${PACKBIN_HOST_UID:-}" ]; then
+    chown -R "$PACKBIN_HOST_UID:${PACKBIN_HOST_GID:-$PACKBIN_HOST_UID}" "$dest" || code=$?
+  fi
+  exit "$code"
+}
+trap finish EXIT
 
 set_version() {
   python3 -c '

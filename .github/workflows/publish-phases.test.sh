@@ -191,6 +191,9 @@ ph_static_checks() {
   if grep -Eq 'dotnet pack|npm pack|python3? -m build|cargo package|zipfile|javac|pkg pack|component pack|gpg' "$here/publish-upload.sh"; then
     fail "AZ-2096 AC-5 publish-upload.sh builds or signs"
   fi
+  grep -q 'PACKBIN_HOST_UID' "$here/publish-build.sh" || fail "AZ-2096 build containers are not told the host user"
+  grep -q 'chown -R' "$here/publish-inside.sh" || fail "AZ-2096 build containers do not hand the artifacts to the host user"
+  ! grep -q 'chmod -R a+rwX' "$here/publish-build.sh" || fail "AZ-2096 the host chmods root-owned artifacts (a Linux runner cannot)"
   if grep -Eq 'microsoft/vcpkg|gh pr' $publish_scripts; then
     fail "cpp publish is not a git push of this registry"
   fi

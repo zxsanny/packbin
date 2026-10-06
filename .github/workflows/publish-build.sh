@@ -50,8 +50,9 @@ run_inside() {
     -e SRC_ROOT=/src \
     -e PACKBIN_VERSION="$version" \
     -e PACKBIN_OUT="/src/$rel" \
+    -e PACKBIN_HOST_UID="$(id -u)" \
+    -e PACKBIN_HOST_GID="$(id -g)" \
     "$lang" "exec /src/.github/workflows/publish-inside.sh $lang"
-  chmod -R a+rwX "$artifacts/$lang"
 }
 
 for target in "$@"; do
