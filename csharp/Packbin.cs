@@ -4,6 +4,8 @@ public sealed class Scheme<T> where T : class, new()
 {
     public int TypeNumber { get; }
     public IReadOnlyList<Field> Fields { get; }
+    public int MaxRounds { get; } = BinaryPacker.DefaultMaxRounds;
+    public long MaxSlots { get; } = BinaryPacker.DefaultMaxSlots;
 
     public Scheme(int typeNumber, params Field[] fields)
     {
@@ -17,6 +19,22 @@ public sealed class Scheme<T> where T : class, new()
         : this(typeNumber, define(new Fields<T>()))
     {
     }
+
+    private Scheme(Scheme<T> source, int maxRounds, long maxSlots)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxRounds, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxSlots, 1L);
+        TypeNumber = source.TypeNumber;
+        Fields = source.Fields;
+        MaxRounds = maxRounds;
+        MaxSlots = maxSlots;
+    }
+
+    // The same scheme with other limits: an omitted limit is the default, not this scheme's current value.
+    public Scheme<T> WithLimits(
+        int maxRounds = BinaryPacker.DefaultMaxRounds,
+        long maxSlots = BinaryPacker.DefaultMaxSlots) =>
+        new(this, maxRounds, maxSlots);
 
     public SchemeHandler On(Action<T> handler) => new SchemeHandler<T>(this, handler);
 }
@@ -42,7 +60,7 @@ internal sealed class SchemeHandler<T> : SchemeHandler where T : class, new()
 
     internal override object? Dispatch(ReadOnlySpan<byte> fieldBytes)
     {
-        var raw = BinaryPacker.ReadFields(_scheme.Fields, fieldBytes);
+        var raw = BinaryPacker.ReadFields(_scheme, fieldBytes);
         if (raw.Error is not null)
             return raw.Error;
         _action(ObjectValues.To<T>(raw.Values));
@@ -116,6 +134,9 @@ public sealed class UnpackResult
 
 public static class BinaryPacker
 {
+    public const int DefaultMaxRounds = 65_535;
+    public const long DefaultMaxSlots = 4_194_304;
+
     public static byte[] Pack<T>(Scheme<T> scheme, IReadOnlyDictionary<string, object?> values) where T : class, new()
     {
         var buffer = new List<byte>(32);
@@ -163,14 +184,14 @@ public static class BinaryPacker
         var actual = bytes[0];
         if (actual != scheme.TypeNumber)
             return new UnpackResult([], new TypeMismatch(scheme.TypeNumber, actual));
-        return ReadFields(scheme.Fields, bytes[1..]);
+        return ReadFields(scheme, bytes[1..]);
     }
 
-    internal static UnpackResult ReadFields(IReadOnlyList<Field> fields, ReadOnlySpan<byte> bytes)
+    internal static UnpackResult ReadFields<T>(Scheme<T> scheme, ReadOnlySpan<byte> bytes) where T : class, new()
     {
-        var values = new Scope();
+        var values = new Scope(new RoundBudget(scheme.MaxRounds, scheme.MaxSlots));
         var offset = 0;
-        foreach (var field in fields)
+        foreach (var field in scheme.Fields)
         {
             var err = Walker.UnpackField(field, bytes, ref offset, values, repeatLists: false);
             if (err is not null)

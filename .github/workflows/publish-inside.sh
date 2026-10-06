@@ -64,8 +64,9 @@ case "$lang" in
     rm -f "$work/python/README.md"
     cp "$root/README.md" "$work/python/README.md"
     set_version "$work/python/pyproject.toml"
-    python3 -m pip install --quiet build
-    python3 -m build "$work/python" --outdir "$dest"
+    build_pin="$(bash "$here/tool-pin.sh" build)"
+    python3 -m pip install --quiet --only-binary=:all: "build==$build_pin"
+    PIP_CONSTRAINT="$here/tool-pins.txt" python3 -m build "$work/python" --outdir "$dest"
     ;;
   rust)
     stage="$dest/stage"

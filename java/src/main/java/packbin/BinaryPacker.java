@@ -59,12 +59,12 @@ public final class BinaryPacker {
             return Packbin.Bound.fail(new Packbin.TypeMismatch(scheme.typeNumber, actual));
         }
         T row = newRow(scheme.type);
-        int[] offset = {1};
-        Object err = Walker.unpackFields(scheme.fields, data, offset, row, new HashMap<>(), false);
+        Cursor cur = new Cursor(1, scheme.maxRounds, scheme.maxSlots);
+        Object err = Walker.unpackFields(scheme.fields, data, cur, row, new HashMap<>(), false);
         if (err != null) {
             return Packbin.Bound.fail(err);
         }
-        int left = data.length - offset[0];
+        int left = data.length - cur.pos;
         if (left > 0) {
             return Packbin.Bound.fail(new Packbin.TrailingBytes(left));
         }

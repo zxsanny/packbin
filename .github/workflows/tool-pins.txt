@@ -1,0 +1,12 @@
+# Exact version of every tool the publish and test scripts install, one name==version per line.
+# tool-pin.sh prints one version; publish-lib.sh, run-suite.sh, cpp/embedded/examples.sh,
+# publish.yml and the gate tests read it. A bump is one edit here, followed by a green test.yml.
+# pip also reads this file as a constraints file for the isolated build of the Python package,
+# which is how setuptools is held; the npm line is ignored there because npm is not a pip package.
+npm==11.21.0
+twine==7.0.0
+platformio==6.2.0
+idf-component-manager==3.1.2
+build==1.6.1
+setuptools==84.0.0
+pytest==9.1.1

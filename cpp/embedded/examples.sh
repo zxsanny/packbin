@@ -12,7 +12,8 @@ examples_tools() {
   export PLATFORMIO_CORE_DIR="$cache/platformio"
   if [ ! -x "$venv/bin/pio" ]; then
     python3 -m venv "$venv"
-    "$venv/bin/pip" install --disable-pip-version-check platformio
+    pio_pin="$(bash "$root/.github/workflows/tool-pin.sh" platformio)"
+    "$venv/bin/pip" install --disable-pip-version-check --only-binary=:all: "platformio==$pio_pin"
   fi
   if [ ! -x "$cache/bin/arduino-cli" ]; then
     local arch version=1.1.1

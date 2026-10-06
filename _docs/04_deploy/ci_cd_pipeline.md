@@ -16,6 +16,14 @@ The publish job builds and checks every artifact first (`publish-build.sh`; `PAC
 
 `publish-gate.test.sh` (run by the `scaffold` job) checks this structure by parsing the workflow YAML with Ruby `yaml`.
 
+## Pins and how to bump them
+
+Every non-local `uses:` in `.github/workflows/*.yml` is `owner/repo@<40 lowercase hex commit> # <tag>`, and every tool the publish and test scripts install has one exact version in `.github/workflows/tool-pins.txt` (`name==version` per line: `npm`, `twine`, `platformio`, `idf-component-manager`, `build`, `setuptools`, `pytest`). `.github/workflows/tool-pin.sh <name>` prints one version and fails for a name that is not pinned. `publish-lib.sh` (`ensure_tool`), `publish-inside.sh` (the Python build, where the same file is the pip constraints file that holds `setuptools`), `run-suite.sh`, `cpp/embedded/examples.sh`, the npm step of `publish.yml` and the gate tests all read it, so a second copy of a version number is a defect. `publish-gate.test.sh` (through `publish-pins.test.sh`) fails on a tag, a branch, a short or upper-case SHA, a missing tag comment, two SHAs for one action, a literal `npm@<digit>`, and a pin that is missing or has become a range.
+
+- Bump an action: `git ls-remote --tags https://github.com/<owner>/<repo>.git <tag> '<tag>^{}'`. Take the `^{}` (peeled) line when one is listed, otherwise the single line; it is the commit of that tag in that repository (an annotated tag has its own object, the peeled line is the commit behind it). Edit every `uses:` line of that action, in every workflow file, to that SHA and the new tag comment. Paste the lookup output into the commit message.
+- Bump a tool: edit its one line in `tool-pins.txt`, then wait for a green `test.yml` (the `scaffold` job installs the pip tools and runs the real `pio pkg pack`, `compote component pack` and the Python build; pytest runs in the suite container). `npm` and the two actions that only the publish job runs are proven by the first `v*` tag run.
+- Not covered: the transitive Python dependencies of the tools still float (no hash lock), and `ensure_tool` keeps a tool that is already on `PATH`.
+
 ## Post-deploy polling (agent configuration)
 
 enabled: yes

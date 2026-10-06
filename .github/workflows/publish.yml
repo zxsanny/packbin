@@ -26,15 +26,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: pack every present language
         run: bash .github/workflows/publish-gate.sh
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"
       - name: npm cli for trusted publishing
-        run: npm install -g npm@11
-      - uses: NuGet/login@v1
+        run: npm install -g "npm@$(bash .github/workflows/tool-pin.sh npm)"
+      - uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
         id: nuget
         with:
           user: zxsanny

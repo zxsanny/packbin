@@ -56,13 +56,30 @@ export type SchemeHandler<T> = {
   handler: (row: T) => void
 }
 
+export type SchemeLimits = { maxRounds?: number; maxSlots?: number }
+
+function checkedLimit(name: string, value: number | undefined, fallback: number): number {
+  if (value === undefined) return fallback
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new RangeError(`${name}: expected a positive integer up to ${Number.MAX_SAFE_INTEGER}`)
+  }
+  return value
+}
+
 export class Scheme<T> {
+  static readonly DefaultMaxRounds = 65_535
+  static readonly DefaultMaxSlots = 4_194_304
+
   declare private readonly __row: T
   readonly typeNumber: number
   readonly fields: Field[]
+  // An unpack refuses a repeat or times field past `maxRounds` rounds, and rounds that together
+  // would hold more than `maxSlots` entries, so a packet's length does not set its memory cost.
+  readonly maxRounds: number
+  readonly maxSlots: number
 
   // Every check runs here, so `new Scheme(...)` refuses what `scheme(...)` refuses.
-  constructor(typeNumber: number, fields: Field[]) {
+  constructor(typeNumber: number, fields: Field[], limits: SchemeLimits = {}) {
     if (!Number.isInteger(typeNumber) || typeNumber < 0 || typeNumber > 255) {
       throw new RangeError("type number: expected 0..255")
     }
@@ -72,8 +89,15 @@ export class Scheme<T> {
     validatePresenceMarks(flat)
     validateMemberNames(flat)
     validateRoundNesting(flat)
+    this.maxRounds = checkedLimit("maxRounds", limits.maxRounds, Scheme.DefaultMaxRounds)
+    this.maxSlots = checkedLimit("maxSlots", limits.maxSlots, Scheme.DefaultMaxSlots)
     this.typeNumber = typeNumber
     this.fields = bindReferences(flat)
+  }
+
+  // A member left out takes the default, not this scheme's value; this scheme is unchanged.
+  withLimits(limits: SchemeLimits = {}): Scheme<T> {
+    return new Scheme<T>(this.typeNumber, this.fields, limits)
   }
 
   on(handler: (row: T) => void): SchemeHandler<T> {
@@ -121,7 +145,7 @@ function unpackDispatch(
   const actual = buf[0]!
   const match = handlers.find((h) => h.typeNumber === actual)
   if (!match) return { ok: false, actual }
-  const body = unpackBody(match.scheme.fields, buf, 1)
+  const body = unpackBody(match.scheme.fields, buf, 1, match.scheme.maxRounds, match.scheme.maxSlots)
   if (!body.ok) return body
   match.handler(body.values as object)
   return { ok: true }

@@ -98,7 +98,7 @@ ph_setup() {
   copy_tree "$ph_tree"
   printf 'csharp\ntypescript\npython\nrust\ncpp\njava\n' > "$ph_plan"
   python3 -m venv "$ph_dir/tools/venv"
-  "$ph_dir/tools/venv/bin/pip" install --quiet platformio idf-component-manager
+  "$ph_dir/tools/venv/bin/pip" install --quiet --only-binary=:all: "platformio==$(bash "$here/tool-pin.sh" platformio)" "idf-component-manager==$(bash "$here/tool-pin.sh" idf-component-manager)"
   for tool in dotnet npm twine cargo; do
     ph_write_stub "$tool" 'record "$@"
 fail_if_asked'

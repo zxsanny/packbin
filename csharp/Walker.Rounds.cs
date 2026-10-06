@@ -64,6 +64,9 @@ internal static partial class Walker
         return names;
     }
 
+    // The entries a round adds to the row: one per distinct name, as AppendRound does.
+    private static int SlotsPerRound(List<string> names) => names.Distinct().Count();
+
     private static void AddRoundNames(Field field, bool packing, List<string> names)
     {
         switch (field.Type)

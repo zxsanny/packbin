@@ -285,10 +285,14 @@ internal static partial class Walker
         Scope values)
     {
         var names = RoundNames(field, packing: false);
+        var slots = SlotsPerRound(names);
+        var rounds = 0;
         while (offset < bytes.Length)
         {
+            if (!values.Budget.TryStartRound(rounds++, slots))
+                return InterimBadValue(field.Name, bytes.Length - offset);
             var roundStart = offset;
-            var group = new Scope();
+            var group = new Scope(values.Budget);
             foreach (var child in field.Children)
             {
                 var err = UnpackField(child, bytes, ref offset, group, repeatLists: false);

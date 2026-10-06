@@ -62,18 +62,18 @@ final class VarFields {
     static Object unpackSized(
             Field field,
             byte[] data,
-            int[] offset,
+            Cursor cur,
             Object row,
             Map<Object, Object> seen,
             boolean asList) {
         long count = unpackCount(field, seen);
-        int left = data.length - offset[0];
+        int left = data.length - cur.pos;
         if (count < 0 || count > left) {
             return shortCount(field, count, left);
         }
         byte[] raw = new byte[(int) count];
-        System.arraycopy(data, offset[0], raw, 0, raw.length);
-        offset[0] += raw.length;
+        System.arraycopy(data, cur.pos, raw, 0, raw.length);
+        cur.pos += raw.length;
         seen.put(field.id, raw);
         Walker.store(row, field, raw, asList);
         return null;
@@ -96,23 +96,23 @@ final class VarFields {
     static Object unpackU2(
             Field field,
             byte[] data,
-            int[] offset,
+            Cursor cur,
             Object row,
             Map<Object, Object> seen,
             boolean asList) {
         List<Field> slots = field.children;
         int nbytes = (slots.size() + 3) / 4;
-        int left = data.length - offset[0];
+        int left = data.length - cur.pos;
         if (left < nbytes) {
             return new Packbin.ShortPacket(slots.get(0).label(), nbytes, left);
         }
         for (int i = 0; i < slots.size(); i++) {
-            int value = (data[offset[0] + i / 4] >> ((i % 4) * 2)) & 3;
+            int value = (data[cur.pos + i / 4] >> ((i % 4) * 2)) & 3;
             Field slot = slots.get(i);
             seen.put(slot.id, value);
             Walker.store(row, slot, value, asList);
         }
-        offset[0] += nbytes;
+        cur.pos += nbytes;
         return null;
     }
 
@@ -140,22 +140,22 @@ final class VarFields {
     static Object unpackBits(
             Field field,
             byte[] data,
-            int[] offset,
+            Cursor cur,
             Object row,
             Map<Object, Object> seen,
             boolean asList) {
         long wanted = unpackCount(field, seen);
         long nbytes = bytesFor(wanted, 8);
-        int left = data.length - offset[0];
+        int left = data.length - cur.pos;
         if (wanted < 0 || wanted > Integer.MAX_VALUE || nbytes > left) {
             return shortCount(field, wanted < 0 || wanted > Integer.MAX_VALUE ? wanted : nbytes, left);
         }
         int count = (int) wanted;
         List<Integer> out = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            out.add((data[offset[0] + i / 8] >> (i % 8)) & 1);
+            out.add((data[cur.pos + i / 8] >> (i % 8)) & 1);
         }
-        offset[0] += (int) nbytes;
+        cur.pos += (int) nbytes;
         seen.put(field.id, out);
         Walker.store(row, field, out, asList);
         return null;
@@ -200,7 +200,7 @@ final class VarFields {
     static Object unpackPacked(
             Field field,
             byte[] data,
-            int[] offset,
+            Cursor cur,
             Object row,
             Map<Object, Object> seen,
             boolean asList) {
@@ -208,7 +208,7 @@ final class VarFields {
         int width = field.size;
         int per = width == 2 ? 4 : 8;
         long nbytes = bytesFor(wanted, per);
-        int left = data.length - offset[0];
+        int left = data.length - cur.pos;
         if (wanted < 0 || wanted > Integer.MAX_VALUE || nbytes > left) {
             return shortCount(field, wanted < 0 || wanted > Integer.MAX_VALUE ? wanted : nbytes, left);
         }
@@ -217,9 +217,9 @@ final class VarFields {
         int shift = width == 2 ? 2 : 1;
         List<Integer> out = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
-            out.add((data[offset[0] + i / per] >> ((i % per) * shift)) & mask);
+            out.add((data[cur.pos + i / per] >> ((i % per) * shift)) & mask);
         }
-        offset[0] += (int) nbytes;
+        cur.pos += (int) nbytes;
         seen.put(field.id, out);
         Walker.store(row, field, out, asList);
         return null;
@@ -283,25 +283,25 @@ final class VarFields {
     static Object unpackUtf8(
             Field field,
             byte[] data,
-            int[] offset,
+            Cursor cur,
             Object row,
             Map<Object, Object> seen,
             boolean asList) {
-        int left = data.length - offset[0];
+        int left = data.length - cur.pos;
         if (left < 2) {
             return new Packbin.ShortPacket(field.label(), 2, left);
         }
-        int count = (data[offset[0]] & 0xff) | ((data[offset[0] + 1] & 0xff) << 8);
-        offset[0] += 2;
-        left = data.length - offset[0];
+        int count = (data[cur.pos] & 0xff) | ((data[cur.pos + 1] & 0xff) << 8);
+        cur.pos += 2;
+        left = data.length - cur.pos;
         if (left < count) {
             return new Packbin.ShortPacket(field.label(), count, left);
         }
-        String text = decodeUtf8(data, offset[0], count);
+        String text = decodeUtf8(data, cur.pos, count);
         if (text == null) {
             return new Packbin.ShortPacket(field.label(), count, 0);
         }
-        offset[0] += count;
+        cur.pos += count;
         seen.put(field.id, text);
         Walker.store(row, field, text, asList);
         return null;
@@ -325,11 +325,11 @@ final class VarFields {
     }
 
     static Object unpackTimes(
-            Field field, byte[] data, int[] offset, Object row, Map<Object, Object> seen) {
+            Field field, byte[] data, Cursor cur, Object row, Map<Object, Object> seen) {
         long count = unpackCount(field, seen);
         if (count < 0) {
-            return shortCount(field, count, data.length - offset[0]);
+            return shortCount(field, count, data.length - cur.pos);
         }
-        return Rounds.unpackTimes(field, count, data, offset, row, seen);
+        return Rounds.unpackTimes(field, count, data, cur, row, seen);
     }
 }

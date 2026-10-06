@@ -118,6 +118,18 @@ arduino_url() {
   printf '%s\n' "${ARDUINO_REGISTRY_URL:-https://github.com/zxsanny/packbin.git}"
 }
 
+# Installs pip packages $2... into venv $1 at the exact versions of tool-pins.txt, wheels only.
+# A package with no pin fails before pip runs.
+pip_install_pinned() {
+  local venv="$1" pkg pin specs=()
+  shift
+  for pkg in "$@"; do
+    pin="$(bash "$(dirname "${BASH_SOURCE[0]}")/tool-pin.sh" "$pkg")" || return 1
+    specs+=("$pkg==$pin")
+  done
+  "$venv/bin/pip" install --quiet --only-binary=:all: "${specs[@]}"
+}
+
 # Puts command $1 on PATH. A tool already on PATH wins; otherwise pip package $2 goes into a venv
 # under $PACKBIN_TOOLS (default $PACKBIN_OUT/tools), which is appended to PATH.
 ensure_tool() {
@@ -129,7 +141,7 @@ ensure_tool() {
   if [ ! -x "$venv/bin/python" ]; then
     python3 -m venv "$venv"
   fi
-  "$venv/bin/pip" install --quiet "$pkg"
+  pip_install_pinned "$venv" "$pkg"
   PATH="$PATH:$venv/bin"
   export PATH
 }

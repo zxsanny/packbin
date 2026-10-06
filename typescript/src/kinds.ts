@@ -295,7 +295,16 @@ export function writeFloat(out: number[], name: string, value: unknown, size: 4 
   for (let i = 0; i < size; i++) out.push(bytes[i]!)
 }
 
-export type ViewCursor = { buf: Uint8Array; view: DataView; offset: number }
+// `slots` counts the entries every round of this unpack call has made so far, against the
+// scheme's `maxSlots`; `maxRounds` bounds the rounds of one repeat or times field.
+export type ViewCursor = {
+  buf: Uint8Array
+  view: DataView
+  offset: number
+  maxRounds: number
+  maxSlots: number
+  slots: number
+}
 
 export function readInt(
   cur: ViewCursor,

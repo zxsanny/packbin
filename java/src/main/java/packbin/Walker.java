@@ -92,12 +92,12 @@ final class Walker {
     static Object unpackFields(
             List<Field> fields,
             byte[] data,
-            int[] offset,
+            Cursor cur,
             Object row,
             Map<Object, Object> seen,
             boolean asList) {
         for (Field field : fields) {
-            Object err = unpackField(field, data, offset, row, seen, asList);
+            Object err = unpackField(field, data, cur, row, seen, asList);
             if (err != null) {
                 return err;
             }
@@ -108,28 +108,28 @@ final class Walker {
     static Object unpackField(
             Field field,
             byte[] data,
-            int[] offset,
+            Cursor cur,
             Object row,
             Map<Object, Object> seen,
             boolean asList) {
         return switch (field.kind) {
-            case FLAGS -> unpackFlags(field, data, offset, row, seen, asList);
-            case FLAG_BYTE -> unpackFlagByte(field, data, offset, seen);
-            case FLAG_BIT -> unpackFlagBit(field, data, offset, row, seen, asList);
-            case WHEN -> unpackWhen(field, data, offset, row, seen, asList);
-            case REPEAT -> Rounds.unpackRepeat(field, data, offset, row, seen);
-            case TIMES -> VarFields.unpackTimes(field, data, offset, row, seen);
-            case BYTES -> unpackBytes(field, data, offset, row, seen, asList);
-            case GROUP -> unpackGroup(field, data, offset, row, seen, asList);
-            case SIZED -> VarFields.unpackSized(field, data, offset, row, seen, asList);
-            case U2 -> VarFields.unpackU2(field, data, offset, row, seen, asList);
-            case BITS -> VarFields.unpackBits(field, data, offset, row, seen, asList);
-            case PACKED -> VarFields.unpackPacked(field, data, offset, row, seen, asList);
-            case UTF8 -> VarFields.unpackUtf8(field, data, offset, row, seen, asList);
-            case LIST -> Containers.unpackList(field, data, offset, row, asList);
-            case DICT -> Containers.unpackDict(field, data, offset, row, asList);
+            case FLAGS -> unpackFlags(field, data, cur, row, seen, asList);
+            case FLAG_BYTE -> unpackFlagByte(field, data, cur, seen);
+            case FLAG_BIT -> unpackFlagBit(field, data, cur, row, seen, asList);
+            case WHEN -> unpackWhen(field, data, cur, row, seen, asList);
+            case REPEAT -> Rounds.unpackRepeat(field, data, cur, row, seen);
+            case TIMES -> VarFields.unpackTimes(field, data, cur, row, seen);
+            case BYTES -> unpackBytes(field, data, cur, row, seen, asList);
+            case GROUP -> unpackGroup(field, data, cur, row, seen, asList);
+            case SIZED -> VarFields.unpackSized(field, data, cur, row, seen, asList);
+            case U2 -> VarFields.unpackU2(field, data, cur, row, seen, asList);
+            case BITS -> VarFields.unpackBits(field, data, cur, row, seen, asList);
+            case PACKED -> VarFields.unpackPacked(field, data, cur, row, seen, asList);
+            case UTF8 -> VarFields.unpackUtf8(field, data, cur, row, seen, asList);
+            case LIST -> Containers.unpackList(field, data, cur, row, asList);
+            case DICT -> Containers.unpackDict(field, data, cur, row, asList);
             case BOOL -> unpackSetBool(field, row, seen, asList);
-            default -> unpackScalar(field, data, offset, row, seen, asList);
+            default -> unpackScalar(field, data, cur, row, seen, asList);
         };
     }
 
@@ -197,20 +197,20 @@ final class Walker {
     private static Object unpackFlags(
             Field field,
             byte[] data,
-            int[] offset,
+            Cursor cur,
             Object row,
             Map<Object, Object> seen,
             boolean asList) {
-        int left = data.length - offset[0];
+        int left = data.length - cur.pos;
         if (left < 1) {
             return new Packbin.ShortPacket("", 1, left);
         }
-        int flags = data[offset[0]++] & 0xFF;
+        int flags = data[cur.pos++] & 0xFF;
         for (int i = 0; i < field.children.size(); i++) {
             if ((flags & (1 << i)) == 0) {
                 continue;
             }
-            Object err = unpackField(field.children.get(i).inner, data, offset, row, seen, asList);
+            Object err = unpackField(field.children.get(i).inner, data, cur, row, seen, asList);
             if (err != null) {
                 return err;
             }
@@ -225,19 +225,19 @@ final class Walker {
         return null;
     }
 
-    private static Object unpackFlagByte(Field field, byte[] data, int[] offset, Map<Object, Object> seen) {
-        int left = data.length - offset[0];
+    private static Object unpackFlagByte(Field field, byte[] data, Cursor cur, Map<Object, Object> seen) {
+        int left = data.length - cur.pos;
         if (left < 1) {
             return new Packbin.ShortPacket("", 1, left);
         }
-        seen.put(field.group, data[offset[0]++] & 0xFF);
+        seen.put(field.group, data[cur.pos++] & 0xFF);
         return null;
     }
 
     private static Object unpackFlagBit(
             Field field,
             byte[] data,
-            int[] offset,
+            Cursor cur,
             Object row,
             Map<Object, Object> seen,
             boolean asList) {
@@ -246,26 +246,26 @@ final class Walker {
         if ((flags & (1 << field.bitIndex)) == 0) {
             return null;
         }
-        return unpackField(field.inner, data, offset, row, seen, asList);
+        return unpackField(field.inner, data, cur, row, seen, asList);
     }
 
     private static Object unpackGroup(
             Field field,
             byte[] data,
-            int[] offset,
+            Cursor cur,
             Object row,
             Map<Object, Object> seen,
             boolean asList) {
         if (field.nestedRow) {
             Object child = newChild(field, row);
-            Object err = unpackFields(field.children, data, offset, child, seen, asList);
+            Object err = unpackFields(field.children, data, cur, child, seen, asList);
             if (err != null) {
                 return err;
             }
             store(row, field, child, asList);
             return null;
         }
-        return unpackFields(field.children, data, offset, row, seen, asList);
+        return unpackFields(field.children, data, cur, row, seen, asList);
     }
 
     private static Object newChild(Field field, Object parent) {
@@ -279,30 +279,30 @@ final class Walker {
     private static Object unpackWhen(
             Field field,
             byte[] data,
-            int[] offset,
+            Cursor cur,
             Object row,
             Map<Object, Object> seen,
             boolean asList) {
         if (!conditionHolds(field.condition, seen)) {
             return null;
         }
-        return unpackFields(field.children, data, offset, row, seen, asList);
+        return unpackFields(field.children, data, cur, row, seen, asList);
     }
 
     private static Object unpackBytes(
             Field field,
             byte[] data,
-            int[] offset,
+            Cursor cur,
             Object row,
             Map<Object, Object> seen,
             boolean asList) {
-        int left = data.length - offset[0];
+        int left = data.length - cur.pos;
         if (left < field.size) {
             return new Packbin.ShortPacket(field.label(), field.size, left);
         }
         byte[] raw = new byte[field.size];
-        System.arraycopy(data, offset[0], raw, 0, field.size);
-        offset[0] += field.size;
+        System.arraycopy(data, cur.pos, raw, 0, field.size);
+        cur.pos += field.size;
         seen.put(field.id, raw);
         store(row, field, raw, asList);
         return null;
@@ -311,18 +311,18 @@ final class Walker {
     private static Object unpackScalar(
             Field field,
             byte[] data,
-            int[] offset,
+            Cursor cur,
             Object row,
             Map<Object, Object> seen,
             boolean asList) {
-        int left = data.length - offset[0];
+        int left = data.length - cur.pos;
         if (left < field.size) {
             return new Packbin.ShortPacket(field.label(), field.size, left);
         }
-        ByteBuffer buf = ByteBuffer.wrap(data, offset[0], field.size);
+        ByteBuffer buf = ByteBuffer.wrap(data, cur.pos, field.size);
         buf.order(field.bigEndian ? ByteOrder.BIG_ENDIAN : ByteOrder.LITTLE_ENDIAN);
         Object value = Scalars.readScalar(field, buf);
-        offset[0] += field.size;
+        cur.pos += field.size;
         seen.put(field.id, value);
         store(row, field, value, asList);
         return null;

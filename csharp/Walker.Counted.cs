@@ -266,11 +266,14 @@ internal static partial class Walker
         if (!TryUnpackCount(field, values, out var count))
             return InterimBadValue(field.Name, bytes.Length - offset);
         var names = RoundNames(field, packing: false);
+        var slots = SlotsPerRound(names);
         var built = new Dictionary<string, object?>();
         for (long i = 0; i < count; i++)
         {
+            if (!values.Budget.TryStartRound(i, slots))
+                return InterimBadValue(field.Name, bytes.Length - offset);
             var roundStart = offset;
-            var group = new Scope();
+            var group = new Scope(values.Budget);
             foreach (var child in field.Children)
             {
                 var err = UnpackField(child, bytes, ref offset, group, repeatLists: false);
@@ -359,7 +362,7 @@ internal static partial class Walker
         var items = new List<object?>(Math.Min(count, bytes.Length - offset));
         for (var i = 0; i < count; i++)
         {
-            var one = new Scope();
+            var one = new Scope(values.Budget);
             var elementStart = offset;
             var err = UnpackField(child, bytes, ref offset, one, false);
             if (err is not null)
@@ -430,7 +433,7 @@ internal static partial class Walker
             if (!TryUtf8(bytes.Slice(offset, keyLen), out var key))
                 return InterimBadValue(field.Name, left);
             offset += keyLen;
-            var one = new Scope();
+            var one = new Scope(values.Budget);
             var valueStart = offset;
             var err = UnpackField(child, bytes, ref offset, one, false);
             if (err is not null)

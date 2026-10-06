@@ -34,8 +34,12 @@ case "$lang" in
     if [ -f "$root/python/pyproject.toml" ]; then
       venv="${PACKBIN_PYTEST_VENV:-/tmp/packbin-pytest}"
       if [ ! -x "$venv/bin/pytest" ]; then
-        python -m venv "$venv"
-        "$venv/bin/pip" install pytest
+        if pytest_pin="$(bash "$root/.github/workflows/tool-pin.sh" pytest)"; then
+          python -m venv "$venv"
+          "$venv/bin/pip" install --only-binary=:all: "pytest==$pytest_pin" || ok=1
+        else
+          ok=1
+        fi
       fi
       run "$venv/bin/python" -m pytest -v --tb=short "$root/python/tests"
     fi

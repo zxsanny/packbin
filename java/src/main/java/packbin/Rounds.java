@@ -43,37 +43,49 @@ final class Rounds {
         }
     }
 
-    static Object unpackRepeat(Field field, byte[] data, int[] offset, Object row, Map<Object, Object> seen) {
+    static Object unpackRepeat(Field field, byte[] data, Cursor cur, Object row, Map<Object, Object> seen) {
         List<Field> values = values(field.children);
-        while (offset[0] < data.length) {
-            int before = offset[0];
-            Object err = unpackRound(field, values, data, offset, row, seen);
+        long started = 0;
+        while (cur.pos < data.length) {
+            if (!cur.startRound(started++, values.size())) {
+                return refused(field, data, cur);
+            }
+            int before = cur.pos;
+            Object err = unpackRound(field, values, data, cur, row, seen);
             if (err != null) {
                 return err;
             }
-            if (offset[0] == before) {
+            if (cur.pos == before) {
                 // A round that reads nothing would read nothing forever; the bytes left are not part of the packet.
-                return new Packbin.TrailingBytes(data.length - offset[0]);
+                return new Packbin.TrailingBytes(data.length - cur.pos);
             }
         }
         return null;
     }
 
     static Object unpackTimes(
-            Field field, long count, byte[] data, int[] offset, Object row, Map<Object, Object> seen) {
+            Field field, long count, byte[] data, Cursor cur, Object row, Map<Object, Object> seen) {
         List<Field> values = values(field.children);
         for (long i = 0; i < count; i++) {
-            int before = offset[0];
-            Object err = unpackRound(field, values, data, offset, row, seen);
+            if (!cur.startRound(i, values.size())) {
+                return refused(field, data, cur);
+            }
+            int before = cur.pos;
+            Object err = unpackRound(field, values, data, cur, row, seen);
             if (err != null) {
                 return err;
             }
-            if (offset[0] == before) {
+            if (cur.pos == before) {
                 // An empty round repeats the same nothing for the rest of a count the packet controls.
                 return new Packbin.ShortPacket(field.label(), 0, data.length - before);
             }
         }
         return null;
+    }
+
+    /** A round past the limits of the scheme; the interim error, like the empty `times` round. */
+    private static Object refused(Field field, byte[] data, Cursor cur) {
+        return new Packbin.ShortPacket(field.label(), 0, data.length - cur.pos);
     }
 
     /**
@@ -82,13 +94,13 @@ final class Rounds {
      * earlier round.
      */
     private static Object unpackRound(
-            Field field, List<Field> values, byte[] data, int[] offset, Object row, Map<Object, Object> seen) {
+            Field field, List<Field> values, byte[] data, Cursor cur, Object row, Map<Object, Object> seen) {
         clear(values, seen);
         int[] before = new int[values.size()];
         for (int i = 0; i < before.length; i++) {
             before[i] = entries(values.get(i).get.get(row));
         }
-        Object err = Walker.unpackFields(field.children, data, offset, row, seen, true);
+        Object err = Walker.unpackFields(field.children, data, cur, row, seen, true);
         if (err != null) {
             return err;
         }

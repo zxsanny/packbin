@@ -29,6 +29,14 @@ function unreadable(field: string, cur: ViewCursor): ShortErr {
   return short(field, 0, cur.buf.length - cur.offset)
 }
 
+// Called as a repeat or times round starts. `started` is the rounds this field has begun, `width` the
+// entries the round pads; a refused round is reported with the bad-value shape, before it allocates.
+function refuseRound(cur: ViewCursor, started: number, width: number): boolean {
+  if (started >= cur.maxRounds || cur.slots + width > cur.maxSlots) return true
+  cur.slots += width
+  return false
+}
+
 function firstName(fields: Field[]): string {
   for (const f of fields) {
     const n = fieldName(f)
@@ -118,7 +126,9 @@ export function unpackFields(
       case "repeat": {
         const names = roundNames(f.fields, false)
         const rounds = new RoundLists(names)
+        let started = 0
         while (cur.offset < cur.buf.length) {
+          if (refuseRound(cur, started++, names.size)) return unreadable(firstName(f.fields), cur)
           const before = cur.offset
           const one: Value = {}
           const err = unpackFields(f.fields, cur, values, flagBytes, one)
@@ -175,8 +185,10 @@ export function unpackFields(
       case "times": {
         const count = validCount(values[refName(f)])
         if (count === null) return unreadable(firstName(f.fields), cur)
-        const rounds = new RoundLists(roundNames(f.fields, false))
+        const names = roundNames(f.fields, false)
+        const rounds = new RoundLists(names)
         for (let i = 0; i < count; i++) {
+          if (refuseRound(cur, i, names.size)) return unreadable(firstName(f.fields), cur)
           const one: Value = {}
           const before = cur.offset
           const err = unpackFields(f.fields, cur, one, flagBytes, null)
@@ -258,11 +270,16 @@ export function unpackBody(
   fields: Field[],
   buf: Uint8Array,
   offset: number,
+  maxRounds: number,
+  maxSlots: number,
 ): { ok: true; values: Value; offset: number } | UnpackErr {
   const cur: ViewCursor = {
     buf,
     view: new DataView(buf.buffer, buf.byteOffset, buf.byteLength),
     offset,
+    maxRounds,
+    maxSlots,
+    slots: 0,
   }
   const values: Value = {}
   const flagBytes = new Map<symbol, number>()
