@@ -357,7 +357,7 @@ value count: 0
 | Step | Action | Expected Result |
 |------|--------|-----------------|
 | 1 | push a version tag | this package is on vcpkg `packbin` |
-| 2 | install with `vcpkg install packbin` | the headers are in `include/packbin` and the sources are in `share/packbin/src` |
+| 2 | install with `vcpkg install packbin` from this git registry and link `packbin::packbin` (`find_package(packbin CONFIG REQUIRED)`) | the headers are in `include/packbin`, `lib/libpackbin.a` and `lib/cmake/packbin` are installed, the consumer builds and prints the golden hex, and `share/packbin/copyright` is the repository `LICENSE` |
 | 3 | count manual uploads | 0 |
 
 ### AT-04: A golden mismatch publishes nothing
@@ -424,6 +424,19 @@ Run by `make test` in `cpp/` and by `cpp/embedded/run.sh` (the `cpp-embedded` an
 | ESP32-S3 and ESP32-C3 builds | ESP-IDF builds with 0 warnings | `cpp-esp32s3`, `cpp-esp32c3` |
 | Packaged examples | ESP-IDF component, Arduino-ESP32 library layout and Pico PlatformIO archive each build the README example | `cpp-example-esp-idf`, `cpp-example-esp32-arduino`, `cpp-example-pico` |
 | Harness result rule (AZ-2099) | `run_target` always returns 0; a target is FAIL when its function exits non-zero (errexit is on in a child process, and the log names the failed command: `target command failed: ...`) or when a `fail` left the marker `<id>.failed`, and the stage exits 1 when any target failed. With a broken `arm-none-eabi-nm` the old harness reported 4 PASS; the new one reports FAIL for `cpp-m0plus`, `cpp-m3-qemu` and `cpp-m4f` and exits 1 (measured on a Mac). `run_stage_target` is removed | `cpp/embedded/lib.test.sh` (30 checks against fake targets, run by the `scaffold` job), `cpp/embedded/lib.sh`, `cpp/embedded/run.sh` |
+
+## vcpkg Port Checks (AZ-2098, loop 16)
+
+`.github/workflows/publish-vcpkg.test.sh` is sourced by `publish-gate.test.sh` (the `scaffold` job); `bash publish-gate.test.sh --vcpkg` runs only it. It stages the port into a local bare git registry through the real `publish-registries.sh` (`PACKBIN_DOCKER=0`, the optional targets skipped for lack of a token) and then:
+
+| Test | What it proves | AC |
+|------|----------------|----|
+| consumer install | a project with `vcpkg.json` (`packbin`) and a `vcpkg-configuration.json` that names the bare registry and a baseline for the builtin one installs the port through the vcpkg toolchain, builds with `find_package(packbin CONFIG REQUIRED)` and `packbin::packbin`, and the program prints the golden hex | AC-1, AC-2 |
+| `add_subdirectory` | `add_subdirectory(<repo>/cpp packbin)` builds with the targets `packbin` and `packbin::packbin`, and both programs print the golden hex | AC-3 |
+| port content | the registry holds `CMakeLists.txt` (equal to `cpp/CMakeLists.txt`), `LICENSE` (equal to the repository one), `portfile.cmake` with the four vcpkg CMake calls, `vcpkg.json` (name, version, MIT, host dependencies `vcpkg-cmake` and `vcpkg-cmake-config`), the headers and `src`; `versions/p-/packbin.json` has the git-tree of the port and `versions/baseline.json` the version; the installed `share/packbin/copyright` is the repository `LICENSE` | AC-4 |
+| re-staging | staging the same version a second time adds no commit | AC-5 |
+
+The consumer check uses the vcpkg of the GitHub runner (`VCPKG_INSTALLATION_ROOT`), or `VCPKG_ROOT`, or the one on `PATH`; it has no pin. A missing vcpkg or cmake fails the job on GitHub Actions. Anywhere else it prints `vcpkg consumer check NOT RUN: no vcpkg tool`, and the last line of the gate reads `publish gate: no failures, NOT RUN: <checks>`: a check that did not run is not a pass. The script honors `PACKBIN_CXX_SYSROOT` itself (macOS): it adds the sysroot flags to the cmake builds (`add_subdirectory` and the consumer) and writes a temporary overlay triplet with `VCPKG_C_FLAGS` and `VCPKG_CXX_FLAGS` for the vcpkg consumer, because vcpkg ignores `CXXFLAGS`; unset, as on the CI runner, nothing of it exists.
 
 ## Test Data Management
 

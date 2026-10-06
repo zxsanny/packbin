@@ -50,26 +50,38 @@ idf.write_text(re.sub(r'(?m)^version: ".*"$', f'version: "{version}"', idf.read_
 PY
 }
 
+# The port carries what it builds (owner decision 2026-10-06): the host CMakeLists.txt, include/, src/ and
+# LICENSE are vendored into ports/packbin, so installing it downloads nothing from a tag archive.
 stage_vcpkg_port() {
-  local reg="$1"
-  rm -rf "$reg/ports/packbin/include/packbin" "$reg/ports/packbin/src"
-  mkdir -p "$reg/ports/packbin/include" "$reg/ports/packbin/src" "$reg/versions/p-"
-  cp -R "$root/cpp/include/packbin" "$reg/ports/packbin/include/packbin"
-  cp -R "$root/cpp/src/." "$reg/ports/packbin/src/"
-  cat > "$reg/ports/packbin/vcpkg.json" <<EOF
+  local port="$1/ports/packbin"
+  rm -rf "$port"
+  mkdir -p "$port/include" "$1/versions/p-"
+  cp "$root/cpp/CMakeLists.txt" "$port/CMakeLists.txt"
+  cp "$root/LICENSE" "$port/LICENSE"
+  cp -R "$root/cpp/include/packbin" "$port/include/packbin"
+  cp -R "$root/cpp/src" "$port/src"
+  cat > "$port/vcpkg.json" <<EOF
 {
   "name": "packbin",
   "version": "$version",
   "description": "Pack and unpack a caller-owned field list",
   "license": "MIT",
-  "homepage": "https://github.com/zxsanny/packbin"
+  "homepage": "https://github.com/zxsanny/packbin",
+  "dependencies": [
+    { "name": "vcpkg-cmake", "host": true },
+    { "name": "vcpkg-cmake-config", "host": true }
+  ]
 }
 EOF
-  cat > "$reg/ports/packbin/portfile.cmake" <<'EOF'
-set(SRC "${CURRENT_PORT_DIR}")
-file(INSTALL "${SRC}/include/packbin" DESTINATION "${CURRENT_PACKAGES_DIR}/include")
-file(INSTALL "${SRC}/src/" DESTINATION "${CURRENT_PACKAGES_DIR}/share/packbin/src")
-file(WRITE "${CURRENT_PACKAGES_DIR}/share/packbin/copyright" "MIT\n")
+  cat > "$port/portfile.cmake" <<'EOF'
+vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
+vcpkg_cmake_configure(
+  SOURCE_PATH "${CURRENT_PORT_DIR}"
+  OPTIONS "-DPACKBIN_VERSION=${VERSION}")
+vcpkg_cmake_install()
+vcpkg_cmake_config_fixup(PACKAGE_NAME packbin CONFIG_PATH lib/cmake/packbin)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
+vcpkg_install_copyright(FILE_LIST "${CURRENT_PORT_DIR}/LICENSE")
 EOF
 }
 

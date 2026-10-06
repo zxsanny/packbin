@@ -5,6 +5,8 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(cd "$here/../.." && pwd)"
 expected="4001000065cd1d00a3e1110100"
 failures=0
+# Checks that could not run here (a missing tool outside GitHub Actions): named in the last line, never counted as passed.
+not_run=""
 
 fail() {
   echo "FAIL: $*" >&2
@@ -419,6 +421,8 @@ workflow_checks() {
 
 # shellcheck source=publish-npm.test.sh
 source "$here/publish-npm.test.sh"
+# shellcheck source=publish-vcpkg.test.sh
+source "$here/publish-vcpkg.test.sh"
 
 if [ "${1:-}" = "--npm" ]; then
   npm_dist_checks
@@ -440,6 +444,20 @@ if [ "${1:-}" = "--crates" ]; then
   exit 0
 fi
 
+if [ "${1:-}" = "--vcpkg" ]; then
+  vcpkg_checks
+  if [ "$failures" -ne 0 ]; then
+    echo "$failures failure(s)" >&2
+    exit 1
+  fi
+  if [ -n "$not_run" ]; then
+    echo "vcpkg port checks: no failures, NOT RUN: $not_run"
+  else
+    echo "vcpkg port checks passed"
+  fi
+  exit 0
+fi
+
 # shellcheck source=publish-phases.test.sh
 source "$here/publish-phases.test.sh"
 # shellcheck source=publish-rerun.test.sh
@@ -452,6 +470,7 @@ source "$here/publish-readonly.test.sh"
 static_checks
 crates_token_checks
 registry_checks
+vcpkg_checks
 gate_checks
 manifest_checks
 npm_dist_checks
@@ -464,4 +483,9 @@ if [ "$failures" -ne 0 ]; then
   echo "$failures failure(s)" >&2
   exit 1
 fi
-echo "publish gate tests passed"
+# A run with a check that did not run must not read like a pass (smoke scripts grep for the phrase).
+if [ -n "$not_run" ]; then
+  echo "publish gate: no failures, NOT RUN: $not_run"
+else
+  echo "publish gate tests passed"
+fi

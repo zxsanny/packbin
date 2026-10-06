@@ -399,7 +399,26 @@ The same package builds for 32-bit microcontrollers — Cortex-M0+/M3/M4/M33, ES
 | PlatformIO | `lib_deps = zxsanny/packbin` and `build_src_flags = -std=gnu++17` in `platformio.ini` |
 | Arduino IDE / arduino-cli | Library Manager: `packbin`, then `#include <packbin.h>` |
 | ESP-IDF ≥ 5.1 | `idf.py add-dependency "zxsanny/packbin"` |
-| CMake / vcpkg (host) | vcpkg port `packbin`, or `add_subdirectory(cpp)` → target `packbin` |
+| CMake / vcpkg (host) | vcpkg port `packbin` (git registry: this repository, branch `vcpkg`): `find_package(packbin CONFIG REQUIRED)`, then `target_link_libraries(app PRIVATE packbin::packbin)`. Or `add_subdirectory(cpp)` and link `packbin` (alias `packbin::packbin`) |
+
+vcpkg finds the port through the project's `vcpkg-configuration.json`, and refuses a git registry unless the default registry has a baseline too. `vcpkg.json` then lists `"dependencies": ["packbin"]`:
+
+```json
+{
+  "default-registry": { "kind": "builtin", "baseline": "<a microsoft/vcpkg commit>" },
+  "registries": [
+    {
+      "kind": "git",
+      "repository": "https://github.com/zxsanny/packbin.git",
+      "reference": "vcpkg",
+      "baseline": "<a commit of the vcpkg branch>",
+      "packages": ["packbin"]
+    }
+  ]
+}
+```
+
+The port builds the static library from the vendored sources of the release. Port versions published before this change only copy the headers and the sources and do not link: use the next port version.
 
 Examples: [`cpp/examples/pico`](cpp/examples/pico) (PlatformIO, Raspberry Pi Pico), [`cpp/examples/esp32_arduino`](cpp/examples/esp32_arduino) (Arduino-ESP32), [`cpp/examples/esp_idf`](cpp/examples/esp_idf) (ESP-IDF with the hardware RNG).
 

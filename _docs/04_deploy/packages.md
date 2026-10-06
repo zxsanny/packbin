@@ -23,7 +23,7 @@ License is MIT.
 | pypi.org | `packbin` | `pip install packbin` | First publish, with the Python package |
 | crates.io | `packbin` | `cargo add packbin` | First publish, with the Rust package |
 | Maven Central | `io.github.zxsanny:packbin` | Gradle / Maven coordinate | First publish, with the Java package |
-| vcpkg | `packbin` | `vcpkg install packbin` | First publish, with the C++ package |
+| vcpkg | `packbin` | `vcpkg install packbin`, with this repository's `vcpkg` branch as a git registry in `vcpkg-configuration.json` (README); then `find_package(packbin CONFIG REQUIRED)` and `packbin::packbin` | First publish, with the C++ package |
 
 The Java jar targets Java 17+, Android API 26+.
 
@@ -31,7 +31,7 @@ Public registries, not GitHub Packages. GitHub Packages asks for a token even fo
 
 ## Publish
 
-A version tag on the GitHub repository builds each language in that commit and pushes the matching registry. The C++ publish is a git push of a public vcpkg registry. vcpkg has no upload API. The first tag publishes all six packages from the same commit, after the golden hex matches on every one of them.
+A version tag on the GitHub repository builds each language in that commit and pushes the matching registry. The C++ publish is a git push of a public vcpkg registry. vcpkg has no upload API. The port vendors `CMakeLists.txt`, `LICENSE`, `include/packbin` and `src` and builds the static library with the vcpkg CMake helpers (AZ-2098); port versions pushed before that only hold headers and sources and do not link. The first tag publishes all six packages from the same commit, after the golden hex matches on every one of them.
 
 The publish has two phases. The build phase builds every artifact for every planned target (nupkg, npm tarball with compiled `dist/` JavaScript and `.d.ts` files built from the committed lockfile, wheel and sdist, crate, vcpkg port and Arduino library as prepared local clones, PlatformIO and ESP-IDF archives, the signed Maven bundle zip) into `.github/workflows/out/artifacts/<target>/` and checks each one: it carries the tag version, declares MIT and holds its main payload (`publish-check.py`). The upload phase starts only when every planned target logged `build ok`, and it sends those files with the registry tools on the runner (`dotnet`, `npm`, `twine`, `cargo`, `curl`, `git`, `pio`, `compote`); `pio pkg publish` and `compote component upload --archive` take the prebuilt archive as is. The build containers see the repo read-only (`docker-compose.publish.yml`) and write only their own folder, mounted at `/out/artifacts/<lang>` with `PACKBIN_OUT=/out`; the C# pack runs from a copy, so no build step can change a script the host runs next with the credentials. A failed build or check therefore leaves every registry untouched. Cargo is the exception to "no second pack": `cargo publish --no-verify` re-archives the staged directory that `cargo package` already compiled. A dry run is `PACKBIN_BUILD_ONLY=1 PACKBIN_PUBLISH=1 bash .github/workflows/publish-registries.sh`: it unsets every credential, signs the Maven bundle with a throwaway key, writes to no registry and exits 0. It is for CI tests, not a way to publish.
 
