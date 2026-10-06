@@ -390,7 +390,23 @@ ro_full_run_check() {
   fi
 }
 
+# A symlink in the tree of a container-built target is refused before any other check, for each of the five.
+ro_symlink_check() {
+  local dir out target
+  dir="$(mktemp -d)"
+  for target in csharp typescript python rust java; do
+    mkdir -p "$dir/$target"
+    out="$(python3 "$here/publish-check.py" "$target" "$dir/$target" 0.1.9 2>&1)" && fail "AZ-2215 $target: an empty tree passed the check"
+    case "$out" in *"is a symlink"*) fail "AZ-2215 $target: the control tree was refused as a symlink: $out" ;; esac
+    ln -s /etc/hostname "$dir/$target/planted"
+    out="$(python3 "$here/publish-check.py" "$target" "$dir/$target" 0.1.9 2>&1)" && fail "AZ-2215 $target: a tree with a symlink passed the check"
+    case "$out" in *"planted is a symlink"*) ;; *) fail "AZ-2215 $target: the symlink was not the reason: $out" ;; esac
+  done
+  rm -rf "$dir"
+}
+
 readonly_checks() {
+  ro_symlink_check
   ro_static_checks
   ro_probe_checks
   ro_out_checks

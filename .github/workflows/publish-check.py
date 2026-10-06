@@ -227,6 +227,16 @@ def check_idf(directory, version):
     need("CMakeLists.txt" in members, "CMakeLists.txt is missing")
 
 
+# The five targets built in a container: a symlink in their tree could make the host tools that run
+# next (cargo package, publish-sign.sh, publish-upload.sh) read or write a file outside it.
+CONTAINER_TARGETS = ("csharp", "typescript", "python", "rust", "java")
+
+
+def refuse_symlinks(directory):
+    for path in sorted(directory.rglob("*")):
+        need(not path.is_symlink(), f"{path.relative_to(directory)} is a symlink")
+
+
 def main(argv):
     if len(argv) != 4 or argv[1] not in TARGETS:
         print(f"usage: publish-check.py <{'|'.join(TARGETS)}> <directory> <version>", file=sys.stderr)
@@ -234,6 +244,8 @@ def main(argv):
     name, directory, version = argv[1], Path(argv[2]), argv[3].removeprefix("v")
     try:
         need(directory.is_dir(), f"{directory} is not a directory")
+        if name in CONTAINER_TARGETS:
+            refuse_symlinks(directory)
         TARGETS[name](directory, version)
     except (CheckFailed, OSError, KeyError, IndexError, ValueError, zipfile.BadZipFile, tarfile.TarError, ET.ParseError) as error:
         reason = error if isinstance(error, CheckFailed) else f"{type(error).__name__}: {error}"

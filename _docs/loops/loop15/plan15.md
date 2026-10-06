@@ -41,4 +41,6 @@ Optional. Created or patched when a batch diverges (`protocols/plan-diff-sync.md
 
 ## Assessment rounds
 
-None yet.
+| round | verdict | new specs | report |
+|-------|---------|-----------|--------|
+| 1 | CLARIFY (Q1 slot count per package, Q2 digest between check and upload); the owner answered A and A on 2026-10-06, so COMPLETE | none | _docs/loops/loop15/assessment15.md |

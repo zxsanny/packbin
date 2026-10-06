@@ -9,12 +9,6 @@ Downstream skills consume this file:
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
 
-- [2026-09-24] [architecture] A typed Rust scheme needs the same value kinds as the map scheme, including u2 and dict, or the spec must exclude them.
-  Source: _docs/06_metrics/retro_2026-09-24_loop4.md
-- [2026-09-29] [testing] Delete `cpp/build` before the container C++ suite, or the container runs the host binary.
-  Source: _docs/06_metrics/retro_2026-09-29_loop9.md
-- [2026-09-29] [process] Implement a product loop in its worktree. Loop 9's commits landed on launcher `dev` while `loop/9-pack-session` stayed at the start commit.
-  Source: _docs/06_metrics/retro_2026-09-29_loop9.md
 - [2026-09-29] [tooling] When `cargo audit` rejects a CVSS 4.0 advisory file, record the empty dependency list. That failure is not a CVE in this crate.
   Source: _docs/06_metrics/retro_2026-09-29_loop9.md
 - [2026-10-05] [testing] A 64-bit host fuzz cannot show 32-bit narrowing faults. Put a vector for every packet-count path in a `VECTOR_TESTS` file so the Cortex-M3 QEMU run executes it; that run caught the `size_t` wrap that 20 M sanitizer-checked packets missed.
@@ -39,3 +33,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-06_loop14.md
 - [2026-10-06] [dependencies] Pin or hash-check every tool the credentialed publish job installs (pip tools, `npm@11`, `NuGet/login`), and let the build step see no write access to the scripts the host runs next with the tokens.
   Source: _docs/06_metrics/retro_2026-10-06_loop14.md
+- [2026-10-06] [process] Prototype a design against each package's existing suite while writing the spec: the first draft of the eager `times` check broke three existing assertions, and the spec pass found it at the cost of one resumed writer instead of an implementation round.
+  Source: _docs/06_metrics/retro_2026-10-06_loop15.md
+- [2026-10-06] [testing] Before writing "bounded" in the README, grep every counted field type: after the round limits the audit still found `bits` and `packed` at 36 to 257 times the packet, so the claim "memory is bounded by the round limits, not by the packet" had to be narrowed.
+  Source: _docs/06_metrics/retro_2026-10-06_loop15.md
+- [2026-10-06] [process] A fix for something only the Linux runner shows (root-owned files, mount modes, Compose version) cannot be proven on Docker Desktop: list its Linux-only parts in the batch report, push `dev` and watch the first CI run before any tag, as loop 14's `chmod` failure showed.
+  Source: _docs/06_metrics/retro_2026-10-06_loop15.md
