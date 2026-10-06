@@ -183,6 +183,14 @@ ro_static_checks() {
   rm -rf "$tmp"
 }
 
+# Hands a tree that a container wrote into as root back to the host user, so the host can delete it.
+# Docker Desktop maps ownership and never needs this; a Linux runner does (loop 15: the negative proof
+# below leaves root-owned files and `rm -rf` failed on the runner). The typescript service image is
+# already pulled by the suites that run before this test.
+ro_reclaim() {
+  docker run --rm -v "$1:/w" --entrypoint chown node:24 -R "$(id -u):$(id -g)" /w
+}
+
 # AC-1 and AC-7: every service refuses every write through the shared function and through the build
 # script; the same probe through a copy of the function without the override writes (negative proof).
 ro_probe_checks() {
@@ -220,6 +228,7 @@ ro_probe_checks() {
   else
     fail "AZ-2215 AC-7 the probe did not notice a missing override: $out"
   fi
+  ro_reclaim "$tree"
   rm -rf "$tree"
 }
 
