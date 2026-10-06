@@ -9,14 +9,6 @@ Downstream skills consume this file:
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
 
-- [2026-09-29] [tooling] When `cargo audit` rejects a CVSS 4.0 advisory file, record the empty dependency list. That failure is not a CVE in this crate.
-  Source: _docs/06_metrics/retro_2026-09-29_loop9.md
-- [2026-10-05] [testing] A 64-bit host fuzz cannot show 32-bit narrowing faults. Put a vector for every packet-count path in a `VECTOR_TESTS` file so the Cortex-M3 QEMU run executes it; that run caught the `size_t` wrap that 20 M sanitizer-checked packets missed.
-  Source: _docs/06_metrics/retro_2026-10-05_loop10.md
-- [2026-10-05] [architecture] Clamp every count read from a packet just under `SIZE_MAX` before narrowing it, so the short-packet and capacity checks fail it instead of a wrapped small number passing.
-  Source: _docs/06_metrics/retro_2026-10-05_loop10.md
-- [2026-10-05] [process] Ask a fresh reviewer to read the batch diff before the commit. In loop 10 it found a zero-width `times` that spun for seconds and a stack budget used to the byte.
-  Source: _docs/06_metrics/retro_2026-10-05_loop10.md
 - [2026-10-05] [testing] Run a hostile-input fix's new test against the pre-fix tree and require it to fail; the spec's literal packets (`01ffffffff`) passed on the old code in several packages, and only a longer amplifier packet or an exact-shape assert (`needed`, `left`, kind) discriminated.
   Source: _docs/06_metrics/retro_2026-10-05_loop11.md
 - [2026-10-05] [tooling] CI has no typecheck job, so tests and Docker CI pass a TypeScript type error; run `tsc --noEmit --strict` over `typescript/src` before each TypeScript commit until a CI job exists (a reviewer FAIL caught four TS2345 call sites in loop 11).
@@ -39,3 +31,11 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-06_loop15.md
 - [2026-10-06] [process] A fix for something only the Linux runner shows (root-owned files, mount modes, Compose version) cannot be proven on Docker Desktop: list its Linux-only parts in the batch report, push `dev` and watch the first CI run before any tag, as loop 14's `chmod` failure showed.
   Source: _docs/06_metrics/retro_2026-10-06_loop15.md
+- [2026-10-06] [process] Run the workers' own suites per batch, then ONE total review and ONE total test run for the loop; per-batch reviewers, fix passes and Docker overlay runs were most of loop 16's wall time, and every assessment round added specs until the owner stopped it.
+  Source: _docs/06_metrics/retro_2026-10-06_loop16.md
+- [2026-10-06] [estimation] Before asking the owner an all-packages question, check in each package that the rule is decidable and run a differential for who breaks: Java has no field names (only `Access.set(String)` can be named) and the claim "no break for schemes that unpack today" for Python element accessors was false (pack-only callers break).
+  Source: _docs/06_metrics/retro_2026-10-06_loop16.md
+- [2026-10-06] [testing] For every pack-side rule add an unpack-random-bytes then repack differential against the HEAD export: the Rust round-name regression (`0101000007` repacked to `Missing`) was invisible to forward tests and found only by repacking unpacked packets.
+  Source: _docs/06_metrics/retro_2026-10-06_loop16.md
+- [2026-10-06] [tooling] A subagent shell command must end on its own (stdin from `/dev/null`, a `timeout`, no leftover background processes): a bare `cat > /dev/null` sat 2.5 hours and showed as a running task; put the shell-hygiene paragraph in every worker and reviewer prompt.
+  Source: _docs/06_metrics/retro_2026-10-06_loop16.md
