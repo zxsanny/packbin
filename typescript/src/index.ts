@@ -157,7 +157,7 @@ export type UnpackResult = UnpackOk | UnpackErr
 
 const SESSION_INFO = new TextEncoder().encode("packbin")
 
-// The brand, not instanceof: a Uint8Array made in another realm (node:vm, a Jest
+// The brand, not instanceof: a Uint8Array made in another realm (a vm context, a Jest
 // environment, an iframe) has another prototype. isView runs first so no caller code runs.
 function isUint8Array(v: unknown): v is Uint8Array {
   return ArrayBuffer.isView(v) && Object.prototype.toString.call(v) === "[object Uint8Array]"
