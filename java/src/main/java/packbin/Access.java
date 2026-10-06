@@ -17,7 +17,19 @@ public final class Access {
     }
 
     public static Setter set(String key) {
-        return (row, value) -> {
+        return new KeySetter(key);
+    }
+
+    /** The setter of {@code Access.set(String)}: it holds its key, so a scheme can name the member (MemberNames). */
+    static final class KeySetter implements Setter {
+        final String key;
+
+        KeySetter(String key) {
+            this.key = key;
+        }
+
+        @Override
+        public void set(Object row, Object value) {
             if (row instanceof Map<?, ?> map) {
                 @SuppressWarnings("unchecked")
                 Map<Object, Object> out = (Map<Object, Object>) map;
@@ -25,7 +37,7 @@ public final class Access {
                 return;
             }
             throw new IllegalArgumentException("expected map");
-        };
+        }
     }
 
     public static Getter identity() {

@@ -417,7 +417,7 @@ No AC number; they hold the F10 limit on the rounds of one unpack call. All run 
 The hostile `limit` stage of `fixtures/hostile/cases.txt` (`repeat_rounds_over_limit`, `times_rounds_over_limit`, AZ-2220) is replayed with a scheme whose `max_rounds` is 3: the refusal is the interim bad-value error with `needed` 0 and the one byte of the round that would start left, and the handler is not called.
 
 
-## Loop 16 Tests (AZ-2105, AZ-2114, AZ-2117, AZ-2118, AZ-2121, AZ-2128, AZ-2189, AZ-2237)
+## Loop 16 Tests (AZ-2105, AZ-2114, AZ-2117, AZ-2118, AZ-2121, AZ-2128, AZ-2189, AZ-2237, AZ-2247)
 
 All run in the `rust` service of `docker-compose.test.yml` with `cargo test`.
 
@@ -433,6 +433,7 @@ All run in the `rust` service of `docker-compose.test.yml` with `cargo test`.
 | `ac8_*` kept-bytes tests | the chains, rounds, split flag byte, `u2` slot and flags byte that already packed correctly keep their bytes (AZ-2237; 7 tests) | `rust/src/when_kept_tests.rs` |
 | `a_when_on_a_flags_byte_*`, `a_count_that_names_*`, `a_name_a_times_round_wrote_*` | a `when` or count that names a `flags` byte or a split flag byte reads the byte pack wrote, not a value kept in the row (`0105010709`, `0101010508`, `010105aa`); after a `times` the names its rounds wrote are lists, so a `when` on one does not match and its body is not written (`0101000007`), with rounds or per-name lists; a count of such a name is not an integer (AZ-2237 review fixes; 11 tests) | `rust/src/when_names_tests.rs` |
 | `ac6_*`, `ac7_*` and three later tests | a map `times` without rounds refuses a list longer than the count by name (`times at id 1: '1' has 3 items, count is 2`), also for count 0, and names the first member in field order; a list as long as the count, a shorter list, an empty or absent list and a lone value keep their results; a list under the name of a `flags` member is not refused, a flag-bit inner longer than the count is (AZ-2237; 14 tests) | `rust/src/times_longer_tests.rs` |
+| `AZ-2247 a data member name declared twice is refused` (29 tests) | `MapScheme::new` and `Scheme::new` panic with the whole message for the same name twice at one level, once outside and once inside a `times` round (both orders), two `times` bodies that share a name, a `times` body that names a member twice, a name inside and outside a `repeat` round, and 14 shapes (every data kind and every container that shares the scope), and for a raw `SchemeItem::Field` twice in a typed scheme; alternate `when` branches, a name outside then under a `when` and two in one `when` body, a flag byte read twice, two `flags` bytes named alike, and a list element named like a row member build; typed bound fields with one id keep the id message; five schemes keep their existing message after a duplicate (10 tests refuse, 19 pin; two files, `duplicate_names_tests.rs` 320 lines and `duplicate_names_kept_tests.rs` 210 lines) | `rust/src/duplicate_names_tests.rs`, `rust/src/duplicate_names_kept_tests.rs` |
 | orphan split-bit tests | a typed list whose element is a bare flag bit, and a `flags` member split bit without or before its flag byte, are refused at construction (AZ-2121) | `rust/src/element_tests.rs` |
 
 ## Test Data Management

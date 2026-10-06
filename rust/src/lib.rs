@@ -22,6 +22,10 @@ mod borrowed_count_tests;
 #[cfg(test)]
 mod counted_tests;
 #[cfg(test)]
+mod duplicate_names_kept_tests;
+#[cfg(test)]
+mod duplicate_names_tests;
+#[cfg(test)]
 mod element_tests;
 #[cfg(test)]
 mod flag_bits_tests;

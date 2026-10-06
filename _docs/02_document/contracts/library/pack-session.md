@@ -5,7 +5,7 @@
 **Consumer tasks**: AZ-2020, AZ-2021, AZ-2022, AZ-2023, AZ-2024, AZ-2025, AZ-2026
 **Version**: 1.0.0
 **Status**: current
-**Last Updated**: 2026-10-05
+**Last Updated**: 2026-10-06
 
 ## Purpose
 
@@ -22,6 +22,8 @@ One optional connection session beside clear pack. The opener sends 16 bytes onc
 | Join | the loaded session and 16 bytes | the session is the waiter | length other than 16 joins 0 sessions |
 | Pack | an open session, a scheme, a row | a payload the same length as clear pack | pack before start or join produces 0 payloads |
 | Unpack | an open session and a payload | the row, or the same error clear unpack would return | — |
+
+A seed or nonce of the wrong type is not a length case but opens 0 sessions as well, in the two dynamically typed packages: TypeScript `load` returns `null` for anything that is not a `Uint8Array` (a `Buffer` is one), and Python `load`, `start` and `join` return no session (`None`, `None`, `False`) for anything that is not `bytes`, `bytearray` or `memoryview`, raising nothing (AZ-2243, AZ-2231, AZ-2244). TypeScript `start` and `join` still throw for a nonce that is not a `Uint8Array`. The typed packages refuse such a value at compile time.
 
 C++ shape: `load` and `join` return `bool`, and `start` has two forms, `start(nonce, len)` and `start(random, ctx, nonce_out)`; the second draws the 16 bytes from the caller's `RandomFn` (a host passes `packbin::os_random`, firmware passes its hardware RNG) and writes them to `nonce_out`. If the random function fails, nothing opens. `pack(scheme, row, out, cap)` and `unpack(...)` return a `Result`; before `start` or `join` they return `BadValue`. Unpack removes the pad in place, so it takes a non-const buffer. A failed pack zeroes the bytes before the reported offset and does not advance the send index. The receive index advances for every payload that is unpadded, whether or not it then reads. The bytes on the wire are the same as in the other languages.
 

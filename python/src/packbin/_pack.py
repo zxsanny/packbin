@@ -148,12 +148,18 @@ def _round_length(value: Any) -> int:
     return len(value) if isinstance(value, _builtin_list) else 1
 
 
-def _at_round(row: Any, index: int) -> Callable[[_Node], Any]:
-    """The value of a leaf in round `index`: entry `index` of its list, or the lone value every round shares."""
+def _at_round(row: Any, index: int, optional: set[int] | None = None) -> Callable[[_Node], Any]:
+    """The value of a leaf in round `index`: entry `index` of its list, or the lone value every round shares.
+    A leaf in `optional` (the ids of those a `times` body holds under `flags` or a flag bit) has no entry
+    past the end of its list: it is absent in that round, as a `None` entry is."""
 
     def at(leaf: _Node) -> Any:
         value = leaf.get(row)  # type: ignore[attr-defined]
-        return value[index] if isinstance(value, _builtin_list) else value
+        if not isinstance(value, _builtin_list):
+            return value
+        if optional and index >= len(value) and id(leaf) in optional:
+            return None
+        return value[index]
 
     return at
 
@@ -274,7 +280,7 @@ def pack_nodes(
             item_count = _borrowed("times", seen.get(node.count), 0)
             _check_round_lists(node.leaves, row, item_count)
             for i in range(item_count):
-                pack_nodes(buf, node.fields, row, seen, _at_round(row, i))
+                pack_nodes(buf, node.fields, row, seen, _at_round(row, i, node.optional))
         elif isinstance(node, _FlagByte):
             flag = 0
             for i, child in enumerate(node.bits):

@@ -1,5 +1,6 @@
 mod integrity;
 mod map_scheme;
+mod names;
 mod order;
 mod shape;
 

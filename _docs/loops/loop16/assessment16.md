@@ -2,9 +2,9 @@
 
 loop: 16
 feature: hopper of epic AZ-2069 (41 open specs, 25 finished this loop)
-rounds: 1
+rounds: 2
 verdict: CLARIFY
-report_of_round: 1
+report_of_round: 2
 
 ## Round 1
 
@@ -216,3 +216,121 @@ The package version file uses "same major version", so an installed 0.9 satisfie
 | Review 3 | CP-F1 O5, HW-F1 O8, TS-F2 CP-F2 Q6, HW-F4 HW-F7 HW-F8 Q9, CP-F4 N1, TS-F4 D5, docs D5, JA-F2 JA-F5 Not walked |
 | Review 4 | F1 F2 F3 F6a S9, F4 Q10, F5 G4, F6b S9 (documented) |
 | Open flagged rows of finished specs | AZ-2100 S4 and Q1, AZ-2101 S3, AZ-2102 Q7 and G5, AZ-2103 D5, AZ-2105 O9, AZ-2117 O4, AZ-2127 Q4, DECISION rows of AZ-2188, 2189, 2190, 2192, 2193 resolved by their `## Owner decision` sections |
+
+## Round 2
+
+**Date**: 2026-10-06
+**Implement pass**: batch 5 = AZ-2230 to AZ-2240 (`_docs/03_implementation/batch_05_loop16_report.md`, review `reviews/batch_05_loop16_review.md`; still no `implementation_report_*_loop16.md` and no completeness report)
+**Verdict**: CLARIFY — 11 covered / 11 out-of-scope / 2 gap-clear / 3 gap-unclear
+
+`scenarios.md absent (hopper loop)`: there is none under `_docs/loops/loop16/` and no loop 16 plan slug, so nothing was appended; the five `_docs/02_task_plans/*/scenarios.md` files belong to earlier features and were not touched. Intent baseline: `handoff16.md`, `plan16.md` (`### Round 2`, `## Assessment rounds`), the round 1 answers (take all recommendations, implement everything now), the specs AZ-2230 to AZ-2240 in `done/`, the project ACs. Suite numbers are the batch 5 numbers (TypeScript 463, Python 326, Rust 331, Java 1501 checks); as a spot check I re-ran TypeScript (463 pass) and Rust (253 + 78 pass) on the scratch export and compiled the Java main sources with `--release 17`, the publish target (clean).
+
+**How the new rows were found.** All probes ran on a `git archive` export of `35544ed` under the session scratchpad (`.../scratchpad/assess2/`; no repo file was touched; node 22.23, Python 3.14.6, cargo 1.79, JDK 21, cmake 4.1.1). For every round 2 rule I asked which other package has the same shape and was not changed, and ran it there. Besides hand probes there is a three-way differential: a seeded generator of schemes (`u8`/`u16`, `when`, `flags` with `bool`, `u8`, `u2`, nested `flags` and anchored `group`, `times`, `repeat`, split flag bytes whose bits are created in shuffled order, `list` and `dict` of group, of flags and of scalars, flag bytes and bits inside elements) with random packets and random rows, built and run by a Python, a TypeScript and a Java runner (a Rust runner for the subset Rust shares), compared on: scheme accepted or refused, unpack ok or error, the unpacked row, the bytes of repack and of pack. About 49,000 schemes for Python and TypeScript, 38,000 of them also for Java, 1,622 for Rust.
+Result: no byte difference in any pair. Python, TypeScript and Java agree on every accepted scheme, on the refused set (59 of 4,000 and 196 of 3,000 schemes refused by all three, "its flag byte is not read earlier in the same scope"), on every unpack result and on every packed byte; Rust agrees with TypeScript on build, unpack accept or refuse, and repack bytes for 3,634 packets. The differences left are the rows below (what a package accepts, not what it writes) and two artefacts of my harness (two `times` sharing one count field; TypeScript's `$` name for an identity group).
+
+### Coverage matrix
+
+Specs of round 2
+
+| id | scenario | status | evidence | source |
+|----|----------|--------|----------|--------|
+| S11 | AZ-2230: Python numbers split flag bits by place in the scheme; one `flag_byte()` handle serves any number of schemes and reads; an unplaced bit leaves its bit clear | covered | AC-1 to AC-10; tests `python/tests/test_split_bits_field_order.py` (16), `test_split_form.py::test_ac3_*`, `test_bool_placement.py`; code `python/src/packbin/_flag_scope.py:31` `_bind_flag_bits`. Cross-package probe: Python, TypeScript and Java build, refuse and pack identically over 22,000 random schemes with bits created in shuffled order (`[m, early a, late b]` with only `b` set packs `010209` in Python, as in the spec) | batch 5 AZ-2230, assess-round-2 |
+| S12 | AZ-2231: Python `PackSession.load` returns `None` for anything that is not `bytes`, `bytearray` or `memoryview` of 32 bytes | covered | AC-1 to AC-5; tests `python/tests/test_session.py::test_ac1_load_of_an_integer_returns_none`, `test_ac3_anything_not_bytes_like_returns_none_and_raises_nothing`, `test_ac3_a_released_memoryview_returns_none_and_raises_nothing`; code `python/src/packbin/_session.py:31-39`. The same hole in TypeScript and in Python `start` and `join` is X1 and X2 | batch 5 AZ-2231 |
+| S13 | AZ-2232: the vcpkg port declares `linux \| osx` and a 0.x install answers only its own minor | covered | AC-1 to AC-6; tests `publish-vcpkg.test.sh` (`vcpkg_supports_check`, `vcpkg_version_rule_check`, the second consumer), `publish-gate.test.sh --vcpkg`; code `cpp/CMakeLists.txt:46-52` (`PACKBIN_VERSION_RULE`), `.github/workflows/publish-embedded.sh:70`. Probe, cmake 4.1.1: `cpp/` installed with `-DPACKBIN_VERSION=0.9.0` refuses `find_package(packbin 0.2 CONFIG REQUIRED)` ("compatible with requested version "0.2" ... version: 0.9.0"); installed without the variable the config file has "version: unknown" and no versioned request can match (the README documents only the vcpkg and `add_subdirectory` paths) | batch 5 AZ-2232 |
+| S14 | AZ-2233: a Java flag bit whose only flag byte lies outside its nested row is refused when the scheme is built | covered | AC-1 to AC-6; tests `SplitBitOrderTest.az2233Ac1` to `az2233Ac5`; code `java/src/main/java/packbin/SchemeOrder.java` (`bind`: a nested row gets its own `HashMap`). TypeScript has no nested-row scope for flag bytes and round-trips the same shape (probe `[m, group(get, [m.bit(u8 v)])]`, `{g:{v:5}}` packs `010105` and unpacks), see O17 | batch 5 AZ-2233 |
+| S15 | AZ-2234: Java pack throws `missing group`, `missing list element I`, `missing dict element "k"` for null or absent nested rows and elements; `u2` in a round packs the round item | covered | AC-1 to AC-9; tests `MissingNestedValueTest`, `FlagPresenceTest.az2234Ac6NullNestedRowClearsTheBit`, `RepeatRoundTest.az2234Ac7U2PacksTheRoundItem`; code `Walker.java:181`, `Containers.java:29,92`, `VarFields.packU2`. Other packages, probes: TypeScript is loud for the same rows (`RangeError: missing v` for `{}`, `{g:null}`, `{g:[null,null]}`, `{g:[{v:1},null]}`; `RangeError: l: expected an object for each item` for a null list or dict item), Python is loud (`TypeError: 'NoneType' object is not subscriptable`, `KeyError: 'missing field 0'`); `repeat(u2 a, b)` with `{a:[1,2], b:[3,0]}` packs `010d02` in TypeScript, Python and Java | batch 5 AZ-2234 |
+| S16 | AZ-2235: a Java list or dict element group without a factory on a typed row is refused when the scheme is built | covered | AC-1 to AC-6; tests `TypedNestedRowTest.az2235Ac1` to `Ac5`, `TypedElementScopeTest`; code `SchemeOrder.java:182` `requireElementFactory`. The same shape in Python is unchecked: X5 | batch 5 AZ-2235 |
+| S17 | AZ-2236: TypeScript refuses an anchored group as a direct list or dict element at any depth | covered | AC-1 to AC-7; test `typescript/tests/list-element-kinds.test.ts` (26); code `typescript/src/element-kinds.ts`, called last in the `Scheme` constructor. Probe on a `tsc` build of `dist`: `RangeError: list g: element is an anchored group (p); use a group without an anchor` | batch 5 AZ-2236 |
+| S18 | AZ-2237: Rust map and typed pack decide every `when` and count from what they wrote, publish round names as lists after a `times`, and refuse a longer `times` list | covered | AC-1 to AC-8; tests `rust/src/when_written_tests.rs`, `when_kept_tests.rs`, `when_names_tests.rs`, `times_longer_tests.rs`; code `rust/src/walk/pack.rs:14` `Written`, `:124` `RoundLists`, `rust/src/walk/times.rs:95` `check_longer`, `walk/flag_bits.rs`. Probes of the spec's shapes in the other packages: chain A packs `0101` in Python and Java; a count that names a skipped field fails (`RuntimeError: 2: count 1 is missing` in Python, `IllegalStateException: 2: count 1 is missing` in Java); a `repeat` round chain packs `0100` in both, `eq(bool, false)` on a clear bit `0100` in Java. A round name published into the parent cannot clash in Python, TypeScript or Java: ids are unique and a `when` may not name a round field after the round (refused when built: `when 2: eq names field id 1 is allowed only if declared earlier in the same scope` in Python, `when 2: eq names field id 1, which is not declared earlier in the same scope` in TypeScript, `when 2 tests field 1, which is not an earlier integer or bool field in its scope` in Java); the clash of equal names is X3 | batch 5 AZ-2237 |
+| S19 | AZ-2238: position gate installs through a symlinked temp path, the examples scan cannot fail on SIGPIPE, a failing ring consumer is named | covered | AC-1 to AC-5; tests `publish-position.test.sh`, `ring-wiring.test.sh` (`consumer_failure_checks`), `cpp/embedded/lib.test.sh` (`find_head_hits`); code `publish-position.sh:40-48`, `language-pair.sh` `handoff()`, `cpp/embedded/examples.sh`. Linux-only proofs wait for the first CI run (as D7) | batch 5 AZ-2238 |
+| S20 | AZ-2239: rings `listgroup`, `dictgroup`, `listflags` among TypeScript, Python and Java with pinned bytes; every participant refuses the cut-short packets | covered | AC-1 to AC-6; test `ring-wiring.test.sh` and the ring run (65 s); code `language-pair.sh:153-181`, `drivers/HandoffElements.java`, `handoff.ts`, `handoff.py`. Beyond the pinned packets: 6,000 random schemes with list and dict of group, of flags and of scalars, with flag bytes and bits inside the elements, 14 packets and 10 rows each, give identical builds, refusals, unpack results and bytes in the three packages | batch 5 AZ-2239 |
+| S21 | AZ-2240: the tag-time guard asserts the npm `exports`, `types`, every `dist` file the entry points import and no `src/`, and the vcpkg port `CMakeLists.txt`, `LICENSE` and host dependencies | covered | AC-1 to AC-6; tests `publish-npm.test.sh` (`npm_guard_checks`), `publish-vcpkg.test.sh` (`vcpkg_guard_checks`); code `.github/workflows/publish-check.py:92-123` (npm), `:194-211` (vcpkg). A `tsc` build of `typescript/` gives `dist/element-kinds.js` and `.d.ts`, so the closure holds for the file this loop added | batch 5 AZ-2240 |
+
+Held or declared (not re-walked)
+
+| id | scenario | status | evidence | source |
+|----|----------|--------|----------|--------|
+| O10 | The C# specs, AZ-2126, AZ-2194, AZ-2068 and the C# parts of AZ-2114, 2115, 2121, 2128, 2135 | out-of-scope | plan16 `## Scope`: "Held (stay in `todo/`): AZ-2092, AZ-2093, AZ-2119, AZ-2120, AZ-2180, AZ-2181, AZ-2182, AZ-2191 (C#); AZ-2126 ...; AZ-2194 ...; the C# parts of AZ-2114, AZ-2115, AZ-2121, AZ-2128, AZ-2135; AZ-2068" | plan16 |
+| O11 | `when`, `times` or `repeat` as a `flags` member or flag-bit field is dropped on pack | out-of-scope | batch 5 report discovery row 10: "The held decisions are unchanged: `when`/`times`/`repeat` as a `flags` member (all packages)" | batch 5 #10 |
+| O12 | C++ keeps a flags member and a flag-bit child visible to later bits | out-of-scope | batch 5 report discovery row 10: "C++ flags/flag-bit scope parity" | batch 5 #10 |
+| O13 | Go and Swift packages | out-of-scope | plan16 line 7: "the Go package follows loop 16"; handoff16 epics AZ-2222, AZ-2223 | plan16 |
+| O14 | Container hardening of the `gcc:16` ring wrapper (`--network none`, read-only mount, `--cap-drop ALL`) | out-of-scope | plan16 `## Assessment rounds` row 1: "Q9 container hardening of the `gcc:16` wrapper waits for the first green `ring` run" | plan16 |
+| O15 | The open Low items of the batch 5 discovery table: unplaced bit leaves its bit clear (#1), Java S4, S5, S8 typed accessors in anchored, flags and `Map` elements (#2), Java "typed row" wording (#3), `missing group` without a path (#4), TypeScript `u2`, `flagByte`, `when`, `times` direct elements (#5), Rust flat-scheme cost 1.3x to 1.57x (#6), Rust multi-name `u2` in a map `times` (#7), no `supports` assert and the import regex at tag time (#8), Ubuntu-only proofs (#9) | out-of-scope | the owner's instruction for this round (rows 1 to 10 of the batch 5 table are recorded, do not re-raise); the shape of none of them changed in round 2 (see Not walked for the cross-package facts found about #5 and #8) | batch 5 #1-#10 |
+| O16 | Rust refuses list and dict elements that are a group, `flags`, flag byte, `sized`, `bits`, `packed`, `when`, `times` or a multi-name `u2`, which TypeScript, Python and Java accept | out-of-scope | AZ-2239 `### Excluded`: "Making Rust or C++ accept these shapes"; README 1093 and 1108 state the Rust refusal; probe: `list` of any of them panics `an element is one integer, float, bytes, utf8, list or dict, or a u2 with one name` | AZ-2239 |
+| O17 | A Java nested row is a scope of its own for flag bytes, a TypeScript nested row is not; a scheme valid in TypeScript can be refused by Java | out-of-scope | AZ-2233 `### Excluded`: "Other packages: TypeScript, Rust, C++ and Python decide their own scope rules (ADR-001)"; batch 5 AZ-2233 result: "this is Java-specific" | AZ-2233 |
+| O18 | TypeScript refuses an anchored group element, Python accepts it | out-of-scope | AZ-2236 `### Excluded`: "Making the anchored group work as an element (Q7 option B), and Python's behaviour (it accepts them)"; README 1091 | AZ-2236 |
+| O19 | `PackSession([7] * 32)` builds a Python session through the constructor | out-of-scope | AZ-2231 `### Excluded`: "The constructor `PackSession(seed)` ... It still builds a session from a list of 32 integers ... it is reported, not changed here" | AZ-2231 |
+| O20 | Windows for the port and the other C++ registries (PlatformIO `"platforms": "*"`, Arduino `architectures=*`, ESP-IDF) | out-of-scope | AZ-2232 `### Excluded`: "Proving Windows ... Q3 option B, only when Windows is wanted" and "The PlatformIO, Arduino and ESP-IDF packages (embedded targets; they do not go through vcpkg)"; AZ-2068 (AVR) is held | AZ-2232 |
+
+Round 1 rows closed by round 2: G1 by S18, G2 by S19, G3 by S21, G5 by S20, Q1 by S11, Q2 by S12 (Python only), Q3 and Q10 by S13, Q4 (b to e) by S14 and S15 (a stays documented), Q5 by S16, Q7 by S17; G4 and Q8 by the docs pass (README 402 to 423 read: the `find_package` row, the `vcpkg-configuration.json` with `default-registry`, "do not link: use the next port version"); Q6 joined O11; Q9 is O14.
+
+### Gaps that need a decision (gap-unclear)
+
+Ask in this order. Every probe below was run on the scratch export.
+
+#### X3: Python, Java and Rust accept a member name used twice and lose a value (Medium)
+
+**What is not decided**
+In TypeScript a name used twice in one scope, or once outside and once inside a `repeat` or `times`, is refused when the scheme is built (AZ-2188, your option B: "a row holds one value per name, so one would be lost"). Python, Java and Rust build the same schemes. Same scope, `u8 x` then `u8 x`: all three pack `{x:5}` as `010505`; unpack of `010708` gives `{x: 8}` (the 7 is gone) and packing that row again writes `010808`. Outside and inside a round (`u8 x; u8 c; times(c, [u8 x])`): unpack of `0105020708` gives `{x:[7,8], c:2}` in Python (the outer 5 is gone), `{c=2, x=[5, 7, 8]}` in Java (the outer value became the first entry) and `x=List([7,8])` in Rust, and the row cannot be packed again (`0: expected int, got list` in Python, `IllegalArgumentException: 0: expected int, got ArrayList` in Java, `Type("int")` in Rust). AZ-2188 was a TypeScript task, so no spec says what the other three do.
+
+**Options**
+- **A: refuse it when the scheme is built in Python and Java, as TypeScript does** (same exemption for names that sit under different `when`s); Rust refuses a repeated data name too but not a flag-byte handle read in two scopes, which is legal there. Trade-off: a scheme that built and packed before now fails to build; none of them could read its own bytes back.
+- **B: leave it**, and state in the README that only TypeScript checks. Trade-off: the same scheme is an error in one package and a silent loss in three.
+- **C: refuse only the round case** (a name outside and inside a `repeat` or `times`), where the row cannot be packed again. Trade-off: the same-scope case stays silent.
+
+**Recommendation**: A, for Python and Java, and for Rust data names; the cross-language rule is "same scheme, same result".
+
+#### X4: a `times` list shorter than the count, for a member that may be absent (Low to Medium)
+
+**What is not decided**
+README says a `times` list has "entry `i` for round `i`, `null` for a round that skipped the name" and refuses a longer list in every package. It says nothing about a list that is shorter than the count when the member sits under `flags`. `u8 c; times(c, [flags([bool on])])` with `{c:2, on:[true]}`: TypeScript packs `01020100` (the second round is a clear bit), Python raises `IndexError: list index out of range`, and an empty list `[]` packs `01020000` in TypeScript but raises in Python (while a row with no `on` at all packs in both). `flags([u8 v])` with `{c:2, v:[5]}`: TypeScript and Java pack `0102010500`, Python raises `IndexError`, Rust refuses (`times at id 1: '1' is under a flags or when; give its values per round under '__times_1'`; Rust lists hold only the rounds that had a value, so it cannot align them). A plain member refuses in all four (`missing x`, `1: expected int, got null`, `IndexError`, `Missing("1")`), and a member under `when` refuses in TypeScript and Java. Error label differences are decided (C15); this is accept or refuse.
+
+**Options**
+- **A: accept a short or empty list for an optional member in Python too** (a missing trailing entry means absent, as TypeScript and Java do); Rust stays as it is by design. Trade-off: a forgotten entry becomes a clear bit with no message.
+- **B: refuse it in TypeScript and Java**; the way to say absent stays `[true, null]`. Trade-off: breaks callers who rely on the short list today.
+- **C: leave it**, documented per package.
+
+**Recommendation**: A, because it only turns an error into a result and breaks no working caller.
+
+#### X5: Python builds a typed list or dict element group whose unpack then raises (Medium)
+
+**What is not decided**
+The Python README shows rows as classes with attribute accessors (`lambda row: row.sid`). A `list` or `dict` whose element is a `group` creates each element as a `dict`, so an attribute accessor inside it cannot set its value. Probe: `Scheme(1, Row, list(lambda r: r.pts, group(0, u8(0, lambda p: p.x))))` builds, packs `Row.pts = [Pt(1), Pt(2)]` as `0102000102`, and unpacking that valid packet raises `AttributeError: 'dict' object has no attribute 'x' and no __dict__ for setting new attributes`, out of `BinaryPacker.unpack` instead of returning an error value. This is the Java shape of AZ-2235 (a typed element group fails on unpack with `ClassCastException`), which you answered by refusing it when the scheme is built (Q5, option A). Python has no factory for an element, and nothing in the README or the Python description mentions the limit.
+
+**Options**
+- **A: refuse it when the scheme is built** (an attribute-style accessor inside a list or dict element group; the accessor probe already tells attribute from key access), with a message that says to use `row["x"]` accessors. Trade-off: none for schemes that unpack today; it only moves a crash earlier.
+- **B: let the element group take a factory** (`group(0, ..., factory=Pt)`), so typed elements work as they do in Java. Trade-off: a new API surface in Python.
+- **C: leave it** and document it. Trade-off: unpack of a valid packet crashes with a raw `AttributeError`.
+
+**Recommendation**: A now (same rule as Java), B only if typed element rows are wanted.
+
+### Gaps that are clear (gap-clear)
+
+| id | new AC (Given / When / Then) | quoted basis | proposed owner task |
+|----|------------------------------|--------------|---------------------|
+| X1 | Given TypeScript `PackSession.load` called with a 32-character string, `{length: 32}`, a plain `Array` of 32 items, a `Uint16Array(32)`, an `ArrayBuffer(32)`, a number, `null` or `undefined`, When it runs, Then it returns `null` and throws nothing. A `Uint8Array` or `Buffer` of exactly 32 bytes still opens a session and the session vector `b55d0a29c56c203712b241232e` is unchanged. Today (probe on the source and on a `tsc` build of `dist`): `"a".repeat(32)`, `{length:32}` and `new Array(32).fill("x")` give a session keyed by 32 zero bytes (it packs `{a:0}` under nonce `01`x16 as `5781`, exactly what `load(new Uint8Array(32))` packs); `"0123456789abcdef0123456789abcdef"`, a 32-character env text like README's `VITE_PACKBIN_SEED`, gives a key of its digits with every letter turned to 0 (`d31a`); a `Uint16Array(32)` of `0x0107` is taken as 32 bytes of `07` (`5e43`); `null` and `undefined` throw `TypeError: Cannot read properties of null (reading 'length')`; Java `load(null)` and Python (AZ-2231) return no session | "Load \| 32 bytes \| a session that is not yet open \| length other than 32 creates 0 sessions" (`_docs/02_document/contracts/library/pack-session.md:20`); "For anything else it returns `None`. It never raises for the type of its argument" (AZ-2231 Outcome, your answer A to Q2) | new TypeScript task, twin of AZ-2231 (1 point); the npm package ships JavaScript (AZ-2103), so untyped callers are first-class |
+| X2 | Given Python `start(16)`, `start([1] * 16)`, `start("a" * 16)`, `join(16)`, `join([1] * 16)`, `join("a" * 16)` and `join(None)`, When called, Then `start` returns `None`, `join` returns `False`, nothing is raised and the session stays closed. `bytes`, `bytearray` and `memoryview` of 16 bytes still open it. Today: `start(16)` returns `00000000000000000000000000000000` and opens a session that packs `{a:0}` as `d2bf`, byte for byte `start(bytes(16))` (a fixed zero nonce means two sessions with the same seed use the same pad); `join(16)` and `join([1]*16)` return `True`; `start([1]*16)` opens with nonce `0101...01`; `start("a"*16)`, `join("a"*16)` and `join(None)` raise `TypeError`. TypeScript for the same inputs throws `TypeError: "key" expected Uint8Array` (loud) | "Start ... a nonce length other than 16 opens 0 sessions" and "Join ... length other than 16 joins 0 sessions" (`pack-session.md:21-22`); AZ-2231 Outcome as above; AZ-2231 `### Excluded` names `start` and `join` as scope only, not as a decision | new Python task, twin of AZ-2231 (1 point), same worker as X1's twin |
+
+### Not walked
+
+- Tag-time guard for the Python wheel and sdist and the Java jar (hardening, the other targets are `### Excluded` in AZ-2240): a wheel built from `python/src/packbin/*.py` without `_flag_scope.py` (the module `_scheme.py` imports, new in this loop) and an sdist holding only `src/packbin/__init__.py` give `check ok: python`, and importing that wheel fails with `ModuleNotFoundError: No module named 'packbin._flag_scope'`; Java asserts only that some `packbin/` class exists (`publish-check.py:181`). By construction `setuptools` (`packages.find`), `cargo package` (it compiles the packaged crate) and `javac` over every source file include every module, and the golden-byte check runs on the source tree (`publish-position.sh`), so no artifact is executed before upload. A crafted crate with only `lib.rs` also prints `check ok: rust`, but `cargo package` would have refused it.
+- Batch 5 row 5 (O15), cross-package facts: a multi-slot `u2` as a direct list element packs `01010009` in Python and Java and fails at pack in TypeScript (`a: expected 2-bit int`); a `flag_byte` as a direct element writes `0102000000` and drops the values identically in TypeScript, Python and Java. Batch 5 row 8: the guard also lacks a `supports` assert (O15).
+- Carried flagged concerns, Low, owner: a `find_package(packbin 0 ...)` that names only the major finds nothing for a 0.x install (AZ-2232); the ring is three kinds, not one packet, and nothing guards that it stays in the script (AZ-2239); `missing group` has no round index (AZ-2234); the TypeScript `unpack` handler variance under `strict` (plan16 `### Round 2`: "an open item, not a spec"; README casts).
+- Pre-existing and recorded: `when` and `times` direct elements say "eq names field id N", not their kind (AZ-2236 Excluded).
+- `grep -q` after a pipe under `pipefail` in the publish tests (the SIGPIPE class of AZ-2238): the outputs are tiny, not reproduced. Two concurrent `publish-position.sh java` runs share `/tmp/packbin-position-java`: 3 of 3 pairs passed, not reproduced.
+- Python 3.10 to 3.13 stdlib calls, Rust 1.79 against 1.98, wall-clock Rust AC-10 test under load (all as D7).
+
+### Harness gaps
+
+- Batch 5 has its discovery table (10 rows). Still no `implementation_report_*_loop16.md` and no `implementation_completeness_loop16_report.md`.
+- `scenarios.md absent (hopper loop)`; Round 2 rows could not be appended, so X1 to X5 and S11 to S21 live only in this report.
+- AZ-2231, AZ-2232 and AZ-2240 each name an excluded sibling (constructor, `start` and `join`, other targets' guards) that this round shows as X1, X2 and the Not walked guard row; the specs' `### Excluded` lists are scope notes, not owner decisions.
+
+### Source map (round 2)
+
+| source | rows |
+|--------|------|
+| Batch 5 #1-#10 | #1 O15, #2 O15, #3 O15, #4 O15, #5 O15 and Not walked, #6 O15, #7 O15, #8 O15 and Not walked, #9 S19 S20 and D7, #10 O10 O11 O12 |
+| Review 5 | Python F1 F2 F4 S11 S12, F3 O15; TypeScript F1 F2 F3 S17; Java F1 S14, F2 S16, F3 O15, F4 S15; Rust F1 F2 F3 S18, F4 O15, F5 F6 S18; harness F1 F3 F5 S19 S20, F2 F6 S13, F4 O15 and Not walked |
+| Open flagged rows of round 2 specs | AZ-2232 (major-only, version moved to 0.9.0) Not walked, AZ-2234 and AZ-2235 wording O15, AZ-2238 producer row S19, AZ-2239 three kinds and ring guard Not walked, AZ-2240 `supports` O15 |
+| This walk | X1, X2, X3, X4, X5 and the Not walked rows |

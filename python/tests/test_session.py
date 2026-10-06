@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 from array import array
 
 import pytest
@@ -209,3 +210,245 @@ def test_ac3_a_released_memoryview_returns_none_and_raises_nothing():
     released.release()
 
     assert PackSession.load(released) is None
+
+
+A_SCHEME = Scheme(1, dict, u8(0, lambda row: row["a"]))
+
+
+class _NonceBytes(bytes):
+    pass
+
+
+class _NonceBytearray(bytearray):
+    pass
+
+
+class _HasBytes:
+    """Not a bytes type: its `__bytes__` must never be called."""
+
+    def __bytes__(self) -> bytes:
+        return bytes(range(1, 17))
+
+
+class _RaisingBytes:
+    def __bytes__(self) -> bytes:
+        raise RuntimeError("__bytes__ must not be called")
+
+
+class _HostileObject(_RaisingBytes):
+    def __len__(self) -> int:
+        raise RuntimeError("__len__ must not be called")
+
+
+def _released() -> memoryview:
+    view = memoryview(bytes(16))
+    view.release()
+    return view
+
+
+NOT_A_NONCE = {
+    "int_16": 16,
+    "int_15": 15,
+    "int_0": 0,
+    "true": True,
+    "list": [1] * 16,
+    "tuple": tuple(range(16)),
+    "range": range(16),
+    "str": "a" * 16,
+    "float": 16.0,
+    "array_B": array("B", range(16)),
+    "ctypes": (ctypes.c_ubyte * 16)(*range(1, 17)),
+    "object": object(),
+    "dunder_bytes": _HasBytes(),
+}
+
+
+def _opener() -> PackSession:
+    session = PackSession.load(_seed())
+    assert session is not None
+    return session
+
+
+@pytest.mark.parametrize("nonce", NOT_A_NONCE.values(), ids=NOT_A_NONCE.keys())
+def test_az2244_ac1_start_refuses_a_nonce_that_is_not_bytes_like(nonce):
+    session = _opener()
+
+    assert session.start(nonce) is None
+    assert session.pack(A_SCHEME, {"a": 5}) is None
+
+
+@pytest.mark.parametrize("nonce", [*NOT_A_NONCE.values(), None], ids=[*NOT_A_NONCE.keys(), "none"])
+def test_az2244_ac2_join_refuses_a_nonce_that_is_not_bytes_like(nonce):
+    session = _opener()
+
+    assert session.join(nonce) is False
+    assert session.unpack(bytes.fromhex("f459"), A_SCHEME.on(lambda row: None)).ok is False
+
+
+def test_az2244_ac3_a_refused_start_leaves_the_session_closed_and_usable():
+    session = _opener()
+
+    refused = session.start(16)
+    started = session.start(NONCE)
+
+    assert (refused, started) == (None, NONCE)
+    assert session.pack(A_SCHEME, {"a": 5}).hex() == "f459"
+
+
+def test_az2244_ac3_a_refused_join_leaves_the_session_closed_and_usable():
+    opener = _opener()
+    waiter = _opener()
+    refused = waiter.join(16)
+    assert opener.start(NONCE) == NONCE
+    received = []
+
+    joined = waiter.join(NONCE)
+    got = waiter.unpack(opener.pack(A_SCHEME, {"a": 6}), A_SCHEME.on(received.append))
+
+    assert (refused, joined, got.ok, received) == (False, True, True, [{"a": 6}])
+
+
+@pytest.mark.parametrize("draw", [lambda s: s.start(), lambda s: s.start(None)], ids=["no_argument", "none"])
+def test_az2244_ac4_start_without_a_nonce_still_draws_one(draw):
+    session = _opener()
+
+    drawn = draw(session)
+
+    assert (type(drawn), len(drawn)) == (bytes, 16)
+    assert session.pack(A_SCHEME, {"a": 5}) is not None
+
+
+NONCE_1_TO_16 = bytes(range(1, 17))
+BYTES_LIKE_NONCES = {
+    "bytes": (bytes(16), bytes(16)),
+    "bytearray": (bytearray(NONCE_1_TO_16), NONCE_1_TO_16),
+    "memoryview": (memoryview(NONCE_1_TO_16), NONCE_1_TO_16),
+    "strided_memoryview": (memoryview(bytes(32))[::2], bytes(16)),
+    "memoryview_of_32_bit_items": (memoryview(array("I", range(4))), bytes.fromhex("00000000010000000200000003000000")),
+    "two_dimensional_memoryview": (memoryview(bytes(16)).cast("B", shape=[4, 4]), bytes(16)),
+    "bytes_subclass": (_NonceBytes(NONCE_1_TO_16), NONCE_1_TO_16),
+}
+
+
+@pytest.mark.parametrize("nonce,expected", BYTES_LIKE_NONCES.values(), ids=BYTES_LIKE_NONCES.keys())
+def test_az2244_ac5_a_bytes_like_nonce_of_16_bytes_opens_the_session_with_those_bytes(nonce, expected):
+    opener = _opener()
+    waiter = _opener()
+    reference = _opener()
+    reference.start(expected)
+
+    started = opener.start(nonce)
+    joined = waiter.join(nonce)
+
+    assert (started, joined) == (expected, True)
+    assert opener.pack(A_SCHEME, {"a": 5}) == reference.pack(A_SCHEME, {"a": 5})
+
+
+def test_az2244_ac5_packets_under_known_nonces_are_unchanged():
+    zero, ones = _opener(), _opener()
+    zero.start(bytes(16))
+    ones.start(bytes([1] * 16))
+
+    assert (zero.pack(A_SCHEME, {"a": 5}).hex(), ones.pack(A_SCHEME, {"a": 5}).hex()) == ("518d", "d9b9")
+
+
+WRONG_LENGTH_NONCES = {
+    "bytes_15": bytes(15),
+    "bytes_17": bytes(17),
+    "empty_bytes": b"",
+    "empty_memoryview": memoryview(b""),
+    "memoryview_64_bytes_in_16_items": memoryview(array("I", range(16))),
+    "zero_dimensional_memoryview": memoryview(b"\x07").cast("B", shape=[]),
+}
+
+
+@pytest.mark.parametrize("nonce", WRONG_LENGTH_NONCES.values(), ids=WRONG_LENGTH_NONCES.keys())
+def test_az2244_ac6_a_wrong_length_is_refused_by_start_and_join(nonce):
+    assert (_opener().start(nonce), _opener().join(nonce)) == (None, False)
+
+
+HOSTILE_NONCES = {
+    "released_memoryview": _released,
+    "dunder_bytes_that_raises": _RaisingBytes,
+    "raising_len_and_dunder_bytes": _HostileObject,
+}
+
+
+@pytest.mark.parametrize("make", HOSTILE_NONCES.values(), ids=HOSTILE_NONCES.keys())
+def test_az2244_ac7_a_released_view_and_a_hostile_object_are_refused_not_raised(make):
+    assert (_opener().start(make()), _opener().join(make())) == (None, False)
+
+
+def _with_size(size: int, kind: str):
+    if kind == "released":
+        view = memoryview(bytes(size))
+        view.release()
+        return view
+    if kind == "plain_object":
+        return _HostileObject()
+    return {
+        "bytes_subclass": lambda: _NonceBytes(range(1, size + 1)),
+        "two_dimensional": lambda: memoryview(bytes(size)).cast("B", shape=[4, size // 4]),
+        "zero_dimensional": lambda: memoryview(b"\x07").cast("B", shape=[]),
+        "four_byte_items": lambda: memoryview(array("I", range(size // 4))),
+        "strided": lambda: memoryview(bytes(size * 2))[::2],
+        "read_only": lambda: memoryview(bytes(size)).toreadonly(),
+        "bytearray_view": lambda: memoryview(bytearray(size)),
+    }[kind]()
+
+
+SHAPES = ["released", "plain_object", "bytes_subclass", "two_dimensional", "zero_dimensional", "four_byte_items", "strided", "read_only", "bytearray_view"]
+
+
+@pytest.mark.parametrize("kind", SHAPES)
+def test_az2244_ac8_load_start_and_join_agree(kind):
+    loaded = PackSession.load(_with_size(32, kind)) is not None
+    started = _opener().start(_with_size(16, kind)) is not None
+    joined = _opener().join(_with_size(16, kind))
+
+    assert loaded is started is joined
+
+
+@pytest.mark.parametrize("base", [_NonceBytes, _NonceBytearray], ids=["bytes", "bytearray"])
+def test_az2244_ac8_a_subclass_whose_dunder_bytes_raises_raises_in_all_three(base):
+    class Sub(base):
+        def __bytes__(self):
+            raise RuntimeError("held")
+
+    for call in (PackSession.load, _opener().start, _opener().join):
+        with pytest.raises(RuntimeError, match="held"):
+            call(Sub(bytes(32)))
+
+
+@pytest.mark.parametrize("base", [_NonceBytes, _NonceBytearray], ids=["bytes", "bytearray"])
+def test_az2244_ac8_a_subclass_whose_dunder_bytes_gives_another_length_is_refused_in_all_three(base):
+    class Sub(base):
+        def __bytes__(self):
+            return bytes(3)
+
+    value = Sub(bytes(32))
+
+    assert (PackSession.load(value), _opener().start(value), _opener().join(value)) == (None, None, False)
+
+
+@pytest.mark.parametrize("base", [_NonceBytes, _NonceBytearray], ids=["bytes", "bytearray"])
+def test_az2244_ac8_a_subclass_whose_dunder_bytes_gives_other_bytes_opens_on_those_bytes(base):
+    def holding_zeros_giving(given: bytes):
+        class Sub(base):
+            def __bytes__(self):
+                return given
+
+        return Sub(bytes(len(given)))
+
+    seed = holding_zeros_giving(bytes(range(1, 33)))
+    nonce = holding_zeros_giving(NONCE_1_TO_16)
+
+    assert PackSession.load(seed).start(nonce) == NONCE_1_TO_16
+    assert _opener().join(nonce) is True
+
+
+def test_az2244_ac9_an_open_session_refuses_a_second_start_or_join():
+    session = _opener()
+    session.start(NONCE)
+
+    assert (session.start(16), session.join(16), session.join(NONCE), session.start(NONCE)) == (None, False, False, None)

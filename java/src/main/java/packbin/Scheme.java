@@ -28,6 +28,7 @@ public final class Scheme<T> {
         this.fields = Field.immutableCopy(SchemeOrder.bindFlagBits(declared));
         this.maxRounds = DEFAULT_MAX_ROUNDS;
         this.maxSlots = DEFAULT_MAX_SLOTS;
+        MemberNames.validate(this.fields);
     }
 
     private Scheme(Scheme<T> base, int maxRounds, long maxSlots) {

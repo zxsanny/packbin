@@ -33,6 +33,14 @@ class _Probe:
         return _Hit("item", key)
 
 
+def _marked(get: Get, set_: Set, access: tuple[str, Any]) -> tuple[Get, Set]:
+    """`access` is the `(kind, key)` of the accessor. It travels with both closures (a node, `be()` and a flag bit
+    reuse them), so the construction checks can name a member and tell attribute access from key access. The
+    identity accessor has none."""
+    get.access = set_.access = access  # type: ignore[attr-defined]
+    return get, set_
+
+
 def _pair(acc: Acc) -> tuple[Get, Set]:
     probe = _Probe()
     try:
@@ -47,13 +55,15 @@ def _pair(acc: Acc) -> tuple[Get, Set]:
         raise ValueError("accessor must be a member access")
     key = result.key
     if result.kind == "attr":
-        return (
+        return _marked(
             lambda row, key=key: getattr(row, key, None),
             lambda row, value, key=key: setattr(row, key, value),
+            ("attr", key),
         )
-    return (
+    return _marked(
         lambda row, key=key: row.get(key) if isinstance(row, _builtin_dict) else row[key],
         lambda row, value, key=key: row.__setitem__(key, value),
+        ("item", key),
     )
 
 
@@ -190,6 +200,7 @@ class _Times(_Node):
     count: int
     fields: list[_Node]
     leaves: list[Any] = field(default_factory=_builtin_list, init=False, repr=False, compare=False)
+    optional: set[int] = field(default_factory=set, init=False, repr=False, compare=False)
 
 
 @dataclass(slots=True)
@@ -384,6 +395,7 @@ def packed(width: int, field_id: int, acc: Acc, count_id: int, bias: int = 0) ->
 def times(anchor: int, count_id: int, *fields: _Node) -> _Times:
     node = _Times(anchor=anchor, count=count_id, fields=_builtin_list(fields))
     node.leaves = _round_leaves(node.fields)
+    node.optional = _optional_leaves(node.fields)
     return node
 
 
@@ -424,3 +436,21 @@ def _round_leaves(nodes: Sequence[_Node]) -> _builtin_list[Any]:
             out.extend(_round_leaves([node.field]))
     return out
 
+
+def _optional_leaves(nodes: Sequence[_Node], under_flags: bool = False) -> set[int]:
+    """The `id` of each leaf of a `times` body that a flag bit can leave absent: the ones reached through `flags`
+    or a flag bit (also through `when` and groups below them). Only these may lack the last entries of a round
+    list; a leaf outside `flags` is read in every round that reaches it."""
+    out: set[int] = set()
+    for node in nodes:
+        if isinstance(node, _Flags):
+            out |= _optional_leaves(node.fields, True)
+        elif isinstance(node, _FlagBit):
+            out |= _optional_leaves([node.field], True)
+        elif isinstance(node, (_When, _Group)):
+            out |= _optional_leaves(node.fields, under_flags)
+        elif under_flags and isinstance(node, _LEAVES):
+            out.add(id(node))
+        elif under_flags and isinstance(node, _U2):
+            out.update(id(slot) for slot in node.slots)
+    return out

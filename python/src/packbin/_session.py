@@ -14,6 +14,19 @@ SEED_SIZE = 32
 NONCE_SIZE = 16
 
 
+def _exact_bytes(value: Any, size: int) -> bytes | None:
+    """The bytes of a `bytes`, `bytearray` or `memoryview` of exactly `size` bytes, counted in bytes, as one
+    copy to check and use; `None` for anything else, a released view included. A subclass's own `__bytes__` is
+    still called by `bytes(value)`."""
+    if not isinstance(value, (bytes, bytearray, memoryview)):
+        return None
+    try:
+        raw = bytes(value)
+    except ValueError:  # a released memoryview holds no bytes to read
+        return None
+    return raw if len(raw) == size else None
+
+
 class PackSession:
     __slots__ = ("_seed", "_send", "_recv", "_send_count", "_recv_count")
 
@@ -28,15 +41,8 @@ class PackSession:
 
     @staticmethod
     def load(seed: bytes | bytearray | memoryview) -> PackSession | None:
-        if not isinstance(seed, (bytes, bytearray, memoryview)):
-            return None
-        try:
-            raw = bytes(seed)
-        except ValueError:  # a released memoryview holds no bytes to read
-            return None
-        if len(raw) != SEED_SIZE:
-            return None
-        return PackSession(raw)
+        raw = _exact_bytes(seed, SEED_SIZE)
+        return None if raw is None else PackSession(raw)
 
     def start(self, nonce: bytes | bytearray | memoryview | None = None) -> bytes | None:
         if self._send is not None or self._seed is None:
@@ -46,13 +52,14 @@ class PackSession:
             if not self._open(drawn, initiator=True):
                 return None
             return drawn
-        raw = bytes(nonce)
-        if not self._open(raw, initiator=True):
+        raw = _exact_bytes(nonce, NONCE_SIZE)
+        if raw is None or not self._open(raw, initiator=True):
             return None
         return raw
 
     def join(self, nonce: bytes | bytearray | memoryview) -> bool:
-        return self._open(bytes(nonce), initiator=False)
+        raw = _exact_bytes(nonce, NONCE_SIZE)
+        return raw is not None and self._open(raw, initiator=False)
 
     def pack(self, scheme: Scheme[T], row: T | Mapping[str, Any]) -> bytes | None:
         if self._send is None:
@@ -75,7 +82,7 @@ class PackSession:
         return BinaryPacker.unpack(bytes(clear), *handlers)
 
     def _open(self, nonce: bytes, initiator: bool) -> bool:
-        if self._seed is None or self._send is not None or len(nonce) != NONCE_SIZE:
+        if self._seed is None or self._send is not None:
             return False
         both = hkdf_sha256(bytes(self._seed), nonce, SEED_SIZE * 2)
         first = both[:SEED_SIZE]

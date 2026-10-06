@@ -9,7 +9,12 @@ from packbin._flag_scope import _bind_flag_bits
 from packbin._nodes import _Node
 from packbin._pack import pack_nodes
 from packbin._unpack import DEFAULT_MAX_ROUNDS, DEFAULT_MAX_SLOTS, _Budget, unpack_nodes
-from packbin._validate import _validate_order, _validate_round_nesting
+from packbin._validate import (
+    _validate_element_accessors,
+    _validate_names,
+    _validate_order,
+    _validate_round_nesting,
+)
 
 T = TypeVar("T")
 _builtin_bytes = bytes
@@ -38,6 +43,8 @@ class Scheme(Generic[T]):
         _validate_order(fields)
         bound = _bind_flag_bits(fields)
         _validate_round_nesting(bound)
+        _validate_names(bound)
+        _validate_element_accessors(bound)
         self._type_number = type_number
         self._row_type = row_type
         self._fields = bound

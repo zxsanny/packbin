@@ -1,4 +1,4 @@
-use super::{check_order, integrity, shape, Field, FieldKind};
+use super::{check_order, integrity, names, shape, Field, FieldKind};
 
 /// The most rounds one `repeat` or `times` field may start in one unpack call.
 pub const DEFAULT_MAX_ROUNDS: usize = 65_535;
@@ -50,7 +50,8 @@ impl MapScheme {
     /// flags byte or flag byte, a bool (an empty `group`) not directly inside `flags` or
     /// under a flag bit, a `when` that tests a field or value that is not an integer, or a `list`
     /// or `dict` element that is not one integer, float, bytes, utf8, list or dict (a `u2` with
-    /// one name). Binds each flag bit to its flag byte and numbers it by field order.
+    /// one name), or a data name declared twice in one scope (see `names.rs`). Binds each flag
+    /// bit to its flag byte and numbers it by field order.
     pub fn new(type_number: i32, mut fields: Vec<Field>) -> Self {
         if !(0..=255).contains(&type_number) {
             panic!("type number must be 0..=255");
@@ -59,6 +60,7 @@ impl MapScheme {
         check_order(&fields, 0, 0);
         let flag_bytes = shape::check_shape(&mut fields);
         integrity::check_integrity(&fields);
+        names::check_names(&fields);
         MapScheme {
             type_number: type_number as u8,
             fields,
