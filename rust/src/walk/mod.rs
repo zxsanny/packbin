@@ -49,9 +49,18 @@ pub fn pack(scheme: &MapScheme, values: &Values) -> Result<Vec<u8>, PackError> {
 ///   `"__times_<anchor>"`, empty for count 0; pack takes them back in place of the lists.
 /// - `repeat` rounds are [`Value::Groups`] under `"__repeat__"`, absent when there are none.
 ///
+/// - A packet that would start more than `max_rounds` rounds of one `repeat` or `times` field
+///   (default [`DEFAULT_MAX_ROUNDS`](crate::DEFAULT_MAX_ROUNDS)), or whose rounds together would hold more than
+///   `max_slots` slots (default [`DEFAULT_MAX_SLOTS`](crate::DEFAULT_MAX_SLOTS); a round holds one slot per name it can
+///   read, counted from every round of a `times` inside a `repeat` too), is refused when the
+///   round that crosses the limit would start, before anything is built for it. A `times`
+///   count is not refused up front: a huge count whose packet ends early is a short read.
+///   `MapScheme::with_limits` and `Scheme::with_limits` change the limits of one scheme.
+///
 /// Returns an [`UnpackError`] instead: [`UnpackError::Type`] for another type number;
 /// [`UnpackError::Short`] for a packet that ends early or holds a value that cannot be read
-/// (a count that does not fit, invalid UTF-8, an element that reads nothing);
+/// (a count that does not fit, invalid UTF-8, an element that reads nothing, a round past a
+/// limit, with `needed` 0 and the field `"repeat"` or `"times"`);
 /// [`UnpackError::Trailing`] for bytes left over, including after a `repeat` round that reads
 /// nothing.
 ///

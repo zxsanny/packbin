@@ -7,7 +7,7 @@ mod walk;
 pub use field::{
     be, bits, bytes, dict, eq, f32, f64, flag_byte, flags, group, i16, i32, i64, i8, id_name, list,
     packed, repeat, sized, times, u16, u2, u32, u64, u8, utf8, when, Eq, Field, FieldKey, FlagByte,
-    MapScheme,
+    MapScheme, DEFAULT_MAX_ROUNDS, DEFAULT_MAX_SLOTS,
 };
 pub use scheme::{BinaryPacker, BoundField, DispatchHandler, On, Scheme, SchemeItem};
 pub use session::{PackSession, NONCE_SIZE, SEED_SIZE};

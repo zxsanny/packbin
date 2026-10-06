@@ -218,6 +218,22 @@ impl<T: 'static> Scheme<T> {
         self.layout.type_number()
     }
 
+    /// Returns the scheme with other unpack limits: the most rounds one `repeat` or `times`
+    /// field may start, and the most slots all rounds of one unpack call may create together
+    /// (see [`MapScheme::with_limits`]). Panics when either is 0.
+    pub fn with_limits(mut self, max_rounds: usize, max_slots: usize) -> Self {
+        self.layout = self.layout.with_limits(max_rounds, max_slots);
+        self
+    }
+
+    pub fn max_rounds(&self) -> usize {
+        self.layout.max_rounds()
+    }
+
+    pub fn max_slots(&self) -> usize {
+        self.layout.max_slots()
+    }
+
     pub fn on<'a, F>(&'a self, handler: F) -> On<'a, T, F>
     where
         F: FnMut(T),

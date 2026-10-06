@@ -3,7 +3,8 @@ mod map_scheme;
 mod order;
 mod shape;
 
-pub use map_scheme::MapScheme;
+use map_scheme::count_fields;
+pub use map_scheme::{MapScheme, DEFAULT_MAX_ROUNDS, DEFAULT_MAX_SLOTS};
 pub(crate) use order::{check_order, nested_element, take_id};
 
 use crate::value::{name_of, Name, Value};
@@ -68,6 +69,8 @@ pub(crate) enum FieldKind {
     Repeat {
         anchor: u32,
         members: Vec<Field>,
+        /// The slots one round adds to the unpacked values, counted once at construction.
+        slots: usize,
     },
     Group {
         anchor: u32,
@@ -95,6 +98,8 @@ pub(crate) enum FieldKind {
         anchor: u32,
         count: Name,
         members: Vec<Field>,
+        /// The slots one round adds to the unpacked values, counted once at construction.
+        slots: usize,
     },
     Utf8 {
         name: Name,
@@ -219,6 +224,7 @@ pub fn repeat(anchor: u32, fields: Vec<Field>) -> Field {
     Field {
         kind: FieldKind::Repeat {
             anchor,
+            slots: count_fields(&fields),
             members: fields,
         },
     }
@@ -408,6 +414,7 @@ pub fn times(anchor: u32, count_field: impl FieldKey, fields: Vec<Field>) -> Fie
         kind: FieldKind::Times {
             anchor,
             count: count_field.to_name(),
+            slots: count_fields(&fields),
             members: fields,
         },
     }

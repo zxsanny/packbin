@@ -13,6 +13,8 @@ The first tag publishes npm `packbin`, NuGet `Packbin`, PyPI `packbin`, crates.i
 
 The `publish` job runs `publish-gate.sh` (the golden check and the plan), exchanges the NuGet and crates.io tokens, then runs `publish-registries.sh`, which has two phases. The build phase (`publish-build.sh`) builds and checks every planned target into `.github/workflows/out/artifacts/<target>/` with no registry token in its environment. The upload phase (`publish-upload.sh`) starts only when every planned target logged `build ok`, queries each registry for the version, skips what is already published and uploads the rest with the registry tools on the runner host. A re-run of the tag finishes a partial publish. NuGet, npm, PyPI, crates.io, Maven Central and vcpkg are required: a missing credential fails the run before anything is built or written. PlatformIO, ESP-IDF and Arduino are optional: a missing credential is a `::warning::` and a job-summary line, a failed upload fails the run. `PACKBIN_BUILD_ONLY=1` runs the build phase alone with no credential and no registry write. Details: `_docs/04_deploy/packages.md`.
 
+The containers of the golden gate and of the build phase mount the repo read-only (`docker-compose.publish.yml`, passed by `publish_container` in `publish-lib.sh`) and write only their own `artifacts/<lang>` folder, so nothing they run can change a script the host executes next with the credentials. `publish-readonly.test.sh` probes this in every service and fails if the read-only mount is dropped. Details: `_docs/04_deploy/ci_cd_pipeline.md`.
+
 Lint and the byte tests run in the test stage. There is no separate security scanner stage in this plan. The publish stage is the deploy.
 
 ## Loop close and CI watch

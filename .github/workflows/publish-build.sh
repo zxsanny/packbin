@@ -35,21 +35,19 @@ fi
 
 # Language packages build in their toolchain image; the artifact lands in $artifacts/<lang>.
 run_inside() {
-  local lang="$1" rel
+  local lang="$1" mount
   if [ "${PACKBIN_DOCKER:-1}" = "0" ]; then
     bash "$here/publish-inside.sh" "$lang"
     return
   fi
-  if [[ "$out" != "$root"/* ]]; then
-    echo "PACKBIN_OUT must be inside $root when the build runs in containers" >&2
-    return 1
-  fi
-  rel="${out#"$root"/}"
-  docker compose -f "$root/docker-compose.test.yml" --project-directory "$root" \
-    -p packbin-publish run -T --rm --no-deps \
+  # The repo is read-only in the container; its own artifacts folder is the one writable host path.
+  # The host made it (mkdir below), so Docker does not create it as root.
+  mount="$(cd "$artifacts/$lang" && pwd)"
+  publish_container \
+    -v "$mount:/out/artifacts/$lang" \
     -e SRC_ROOT=/src \
     -e PACKBIN_VERSION="$version" \
-    -e PACKBIN_OUT="/src/$rel" \
+    -e PACKBIN_OUT=/out \
     -e PACKBIN_HOST_UID="$(id -u)" \
     -e PACKBIN_HOST_GID="$(id -g)" \
     "$lang" "exec /src/.github/workflows/publish-inside.sh $lang"

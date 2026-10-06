@@ -30,6 +30,7 @@ jobs:
             .github/workflows/publish.yml \
             .github/workflows/run-suite.sh \
             docker-compose.test.yml \
+            docker-compose.publish.yml \
             .dockerignore \
             .env.example \
             LICENSE

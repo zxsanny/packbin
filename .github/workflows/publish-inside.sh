@@ -48,7 +48,12 @@ path.write_text(re.sub(r"(?m)^version = \".*\"$", f"version = \"{version}\"", te
 
 case "$lang" in
   csharp)
-    dotnet pack "$root/csharp/Packbin.csproj" -c Release -o "$work/nupkg" \
+    # The repo may be read-only: pack from a copy. The project packs ..\README.md, so that goes along.
+    mkdir -p "$work/tree"
+    cp -a "$root/csharp" "$work/tree/csharp"
+    rm -rf "$work/tree/csharp/bin" "$work/tree/csharp/obj"
+    cp "$root/README.md" "$work/tree/README.md"
+    dotnet pack "$work/tree/csharp/Packbin.csproj" -c Release -o "$work/nupkg" \
       -p:Version="$version" -v q --nologo
     cp "$work/nupkg/"*.nupkg "$dest/"
     ;;

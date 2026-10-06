@@ -102,7 +102,9 @@ fn check_one(field: &Field, mut next: u32, scope: u32) -> u32 {
             require_walked(next, scope, field);
             check_order(members, next, scope)
         }
-        FieldKind::Repeat { anchor, members } => {
+        FieldKind::Repeat {
+            anchor, members, ..
+        } => {
             check_anchor(next, *anchor);
             check_order(members, next, *anchor)
         }
@@ -110,6 +112,7 @@ fn check_one(field: &Field, mut next: u32, scope: u32) -> u32 {
             anchor,
             count,
             members,
+            ..
         } => {
             check_anchor(next, *anchor);
             require_walked(next, scope, count);

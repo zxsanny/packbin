@@ -1,0 +1,24 @@
+# Second compose file for the publish run ONLY (publish_container in .github/workflows/publish-lib.sh
+# passes it after docker-compose.test.yml). It makes the repo read-only inside the build and golden-gate
+# containers, so nothing they run can change a script the host executes next with the registry
+# credentials (AZ-2215). Volumes merge by target: these entries replace the ones of the base file.
+# Never pass this file to the test suites: they build in bin, obj, node_modules and target.
+# A bind added with `run -v` over an existing target is silently ignored, so it must live here.
+x-publish-volumes: &publish-volumes
+  - ./:/src:ro
+  - type: tmpfs
+    target: /test-results
+
+services:
+  csharp:
+    volumes: *publish-volumes
+  typescript:
+    volumes: *publish-volumes
+  python:
+    volumes: *publish-volumes
+  rust:
+    volumes: *publish-volumes
+  cpp:
+    volumes: *publish-volumes
+  java:
+    volumes: *publish-volumes

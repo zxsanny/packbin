@@ -95,6 +95,17 @@ publish_root() {
   printf '%s\n' "${SRC_ROOT:-$(cd "$here/../.." && pwd)}"
 }
 
+# The one way the publish run starts a container (build phase and golden gate): the repo is mounted
+# read-only by docker-compose.publish.yml, merged over the base file. Arguments go to `compose run`:
+# options, then the service and its command. Never add a `run -v` for /src: Compose ignores it
+# for a target the service already mounts.
+publish_container() {
+  local root
+  root="$(publish_root)"
+  docker compose -f "$root/docker-compose.test.yml" -f "$root/docker-compose.publish.yml" \
+    --project-directory "$root" -p packbin-publish run -T --rm --no-deps "$@"
+}
+
 language_present() {
   local root="$1" lang="$2"
   case "$lang" in

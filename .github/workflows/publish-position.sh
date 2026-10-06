@@ -14,15 +14,38 @@ if ! language_present "$root" "$lang"; then
   exit 2
 fi
 
+work=""
+trap '[ -z "$work" ] || rm -rf "$work"' EXIT
+
+# Copies the repo paths $@ (relative) into a fresh $work, keeping their relative layout.
+copy_to_work() {
+  local rel
+  work="$(mktemp -d)"
+  for rel in "$@"; do
+    mkdir -p "$work/$(dirname "$rel")"
+    cp -a "$root/$rel" "$work/$rel"
+  done
+}
+
 case "$lang" in
   csharp)
-    dotnet run --project "$drivers/csharp/Position.csproj" -v q --nologo
+    # dotnet builds in the project folders, so it runs on a copy that keeps the layout the driver
+    # references (../../../../csharp); the repo itself may be read-only.
+    copy_to_work "csharp" ".github/workflows/drivers/csharp"
+    rm -rf "$work/csharp/bin" "$work/csharp/obj" "$work/.github/workflows/drivers/csharp/bin" \
+      "$work/.github/workflows/drivers/csharp/obj"
+    dotnet run --project "$work/.github/workflows/drivers/csharp/Position.csproj" -v q --nologo
     ;;
   typescript)
-    if [ ! -d "$root/typescript/node_modules/@noble/hashes" ]; then
-      npm ci --prefix "$root/typescript" >&2
+    # npm ci writes node_modules next to package.json, so without one it runs on a copy that keeps
+    # the layout position.ts imports (../../../typescript/src).
+    if [ -d "$root/typescript/node_modules/@noble/hashes" ]; then
+      node --experimental-strip-types "$drivers/position.ts"
+    else
+      copy_to_work "typescript" ".github/workflows/drivers/position.ts"
+      npm ci --prefix "$work/typescript" >&2
+      node --experimental-strip-types "$work/.github/workflows/drivers/position.ts"
     fi
-    node --experimental-strip-types "$drivers/position.ts"
     ;;
   python)
     PYTHONPATH="$root/python/src${PYTHONPATH:+:$PYTHONPATH}" python3 "$drivers/position.py"

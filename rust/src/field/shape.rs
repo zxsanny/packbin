@@ -152,7 +152,9 @@ fn shape_one(field: &mut Field, presence_ok: bool, flags: &mut Scope) {
         FieldKind::When { members, .. } => {
             flags.conditional(|f| shape_seq(members, false, f));
         }
-        FieldKind::Repeat { anchor, members } => {
+        FieldKind::Repeat {
+            anchor, members, ..
+        } => {
             flags.enter_repeat(*anchor, |f| shape_seq(members, false, f));
         }
         FieldKind::Times {

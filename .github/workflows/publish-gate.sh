@@ -19,8 +19,7 @@ run_pack() {
     SRC_ROOT="$root" bash "$here/publish-position.sh" "$lang"
     return
   fi
-  docker compose -f "$root/docker-compose.test.yml" --project-directory "$root" \
-    -p packbin-publish run -T --rm --no-deps \
+  publish_container \
     -e SRC_ROOT=/src \
     "$lang" "exec /src/.github/workflows/publish-position.sh $lang"
 }

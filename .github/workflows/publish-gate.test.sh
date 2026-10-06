@@ -433,6 +433,8 @@ source "$here/publish-phases.test.sh"
 source "$here/publish-rerun.test.sh"
 # shellcheck source=publish-pins.test.sh
 source "$here/publish-pins.test.sh"
+# shellcheck source=publish-readonly.test.sh
+source "$here/publish-readonly.test.sh"
 
 static_checks
 crates_token_checks
@@ -442,6 +444,7 @@ manifest_checks
 workflow_checks
 pins_checks
 phase_checks
+readonly_checks
 
 if [ "$failures" -ne 0 ]; then
   echo "$failures failure(s)" >&2

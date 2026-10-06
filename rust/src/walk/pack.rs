@@ -330,6 +330,7 @@ fn pack_one(
             anchor,
             count,
             members,
+            ..
         } => {
             let n = borrowed_count(values, count, 0, "times")?;
             let key = times_name(*anchor);

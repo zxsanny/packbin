@@ -1,5 +1,11 @@
 use super::{check_order, integrity, shape, Field, FieldKind};
 
+/// The most rounds one `repeat` or `times` field may start in one unpack call.
+pub const DEFAULT_MAX_ROUNDS: usize = 65_535;
+/// The most slots (names a round can hold, summed over every round started) one unpack call
+/// may create.
+pub const DEFAULT_MAX_SLOTS: usize = 4_194_304;
+
 #[derive(Clone, Debug)]
 pub struct MapScheme {
     pub(crate) type_number: u8,
@@ -7,9 +13,11 @@ pub struct MapScheme {
     /// The scheme reads at least one split-form flag byte.
     pub(crate) has_split_flags: bool,
     pub(crate) field_count: usize,
+    pub(crate) max_rounds: usize,
+    pub(crate) max_slots: usize,
 }
 
-fn count_fields(fields: &[Field]) -> usize {
+pub(super) fn count_fields(fields: &[Field]) -> usize {
     let mut n = 0;
     for f in fields {
         match &f.kind {
@@ -56,7 +64,34 @@ impl MapScheme {
             fields,
             has_split_flags: flag_bytes > 0,
             field_count,
+            max_rounds: DEFAULT_MAX_ROUNDS,
+            max_slots: DEFAULT_MAX_SLOTS,
         }
+    }
+
+    /// Returns the scheme with other unpack limits (clone first to keep the original): the
+    /// most rounds one `repeat` or `times` field may start, and the most slots all rounds of
+    /// one unpack call may create together. `unpack` refuses a packet that would pass either
+    /// when the round that crosses it would start. Panics when either is 0; `usize::MAX` is
+    /// valid.
+    pub fn with_limits(mut self, max_rounds: usize, max_slots: usize) -> Self {
+        if max_rounds == 0 {
+            panic!("max_rounds must be at least 1");
+        }
+        if max_slots == 0 {
+            panic!("max_slots must be at least 1");
+        }
+        self.max_rounds = max_rounds;
+        self.max_slots = max_slots;
+        self
+    }
+
+    pub fn max_rounds(&self) -> usize {
+        self.max_rounds
+    }
+
+    pub fn max_slots(&self) -> usize {
+        self.max_slots
     }
 
     pub fn type_number(&self) -> u8 {

@@ -6,12 +6,47 @@ use crate::field::{
 use crate::value::{as_usize, name_of, ShortPacket, UnpackError, Value, Values};
 use std::collections::HashMap;
 
+/// The state of one unpack call: the read position, and the slots its rounds have started so
+/// far, shared by every field of the call and checked against the limits of its scheme.
 pub(crate) struct Cursor<'a> {
     data: &'a [u8],
     pos: usize,
+    max_rounds: usize,
+    max_slots: usize,
+    slots: usize,
 }
 
 impl<'a> Cursor<'a> {
+    fn new(data: &'a [u8], scheme: &MapScheme) -> Self {
+        Cursor {
+            data,
+            pos: 0,
+            max_rounds: scheme.max_rounds,
+            max_slots: scheme.max_slots,
+            slots: 0,
+        }
+    }
+
+    /// Admits a round of `field` that is about to start, taking its `round_slots`; `started` is
+    /// the rounds the same field has already started in this walk. Refuses, as a bad value,
+    /// the round that would pass either limit, before it allocates anything.
+    fn start_round(
+        &mut self,
+        field: &str,
+        started: usize,
+        round_slots: usize,
+    ) -> Result<(), UnpackError> {
+        if started >= self.max_rounds || round_slots > self.max_slots - self.slots {
+            return Err(UnpackError::Short(ShortPacket {
+                field: field.to_string(),
+                needed: 0,
+                left: self.left(),
+            }));
+        }
+        self.slots += round_slots;
+        Ok(())
+    }
+
     pub(crate) fn left(&self) -> usize {
         self.data.len().saturating_sub(self.pos)
     }
@@ -171,8 +206,11 @@ fn unpack_one(
                 }
             }
         }
-        FieldKind::Repeat { members, .. } => {
+        FieldKind::Repeat { members, slots, .. } => {
+            let mut started = 0;
             while cur.left() > 0 {
+                cur.start_round("repeat", started, *slots)?;
+                started += 1;
                 let before = cur.left();
                 let mut group = Values::with_capacity(members.len());
                 let mut group_flags = HashMap::new();
@@ -297,6 +335,7 @@ fn unpack_one(
             anchor,
             count,
             members,
+            slots,
         } => {
             let n = match values.get(count.as_ref()) {
                 Some(Some(v)) => as_usize(v).ok_or_else(|| {
@@ -315,7 +354,8 @@ fn unpack_one(
                 }
             };
             let mut rounds = Vec::new();
-            for _ in 0..n {
+            for started in 0..n {
+                cur.start_round("times", started, *slots)?;
                 let before = cur.left();
                 let mut group = Values::new();
                 let mut group_flags = HashMap::new();
@@ -402,10 +442,7 @@ fn unpack_one(
 }
 
 pub fn unpack(scheme: &MapScheme, bytes: &[u8]) -> Result<Values, UnpackError> {
-    let mut cur = Cursor {
-        data: bytes,
-        pos: 0,
-    };
+    let mut cur = Cursor::new(bytes, scheme);
     let type_raw = cur.take(1, "")?;
     let actual = type_raw[0];
     if actual != scheme.type_number {
