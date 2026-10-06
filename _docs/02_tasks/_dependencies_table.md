@@ -146,6 +146,13 @@ Estimation: `_docs/LESSONS.md` says the six packages stay peers. The session is 
 | AZ-2193 | ci_cross_language_ring | 3 | AZ-2179 | AZ-2069 |
 | AZ-2194 | hostile_pack_stage | 2 | AZ-2070, AZ-2179 | AZ-2069 |
 | AZ-2197 | typescript_when_on_written_values | 3 | AZ-2091, AZ-2177 | AZ-2069 |
+| AZ-2214 | ci_pin_credentialed_job | 3 | None | AZ-2069 |
+| AZ-2215 | build_containers_read_only | 5 | None (implement after AZ-2214: shared files) | AZ-2069 |
+| AZ-2216 | csharp_round_limits | 3 | None | AZ-2069 |
+| AZ-2217 | typescript_round_limits | 3 | None | AZ-2069 |
+| AZ-2218 | java_round_limits | 3 | None | AZ-2069 |
+| AZ-2219 | rust_round_limits | 3 | None | AZ-2069 |
+| AZ-2220 | round_limits_hostile_and_docs | 3 | AZ-2216, AZ-2217, AZ-2218, AZ-2219 | AZ-2069 |
 
 The six pack tasks do not depend on each other. AZ-1875 runs after all six. The five blackbox tasks run after AZ-1913 and do not depend on each other. The three earlier todo tasks do not depend on each other and still have no tracker id. AZ-1938 through AZ-1941 are under epic AZ-1937. The string count does not include itself; the list count does not consume the next field.
 
@@ -157,3 +164,4 @@ AZ-2107 through AZ-2111 are loop 11 follow-through from feature-assess round 1 (
 AZ-2119 and AZ-2120 are C# bugs found by the loop 11 round 2 worker; both predate the loop and are unclaimed.
 AZ-2122 through AZ-2125 are loop 11 security-audit fixes (F4-F9), claimed by loop 11 at the owner's request. AZ-2116 (exact C# integers) and AZ-2119 (C# group list element) stay open; F4 here only stops the exception.
 AZ-2175 through AZ-2179 are loop 13 feature-assessment round 1 tasks (owner scope A, 2026-10-05), claimed by loop 13. AZ-2180 through AZ-2194 are the deferred follow-ups of that assessment, unclaimed; AZ-2197 (TypeScript twin of AZ-2175, found by the loop 13 README writer) is unclaimed too; AZ-2117 and AZ-2113 gained acceptance criteria from it (4 and 3 points). Decisions marked open in them wait for the owner before the loop that takes them.
+AZ-2214 through AZ-2220 are loop 15 (security findings F12, F13 and F10, owner request 2026-10-06), claimed by loop 15. AZ-2214 and AZ-2215 edit the same publish files, so AZ-2214 lands first; AZ-2220 follows the four round-limit tasks.
