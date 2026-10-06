@@ -1,4 +1,16 @@
 # packbin
+
+[![npm](https://img.shields.io/npm/v/packbin)](https://www.npmjs.com/package/packbin)
+[![nuget](https://img.shields.io/nuget/v/Packbin)](https://www.nuget.org/packages/Packbin)
+[![pypi](https://img.shields.io/pypi/v/packbin)](https://pypi.org/project/packbin/)
+[![crates.io](https://img.shields.io/crates/v/packbin)](https://crates.io/crates/packbin)
+[![maven-central](https://img.shields.io/maven-central/v/io.github.zxsanny/packbin)](https://central.sonatype.com/artifact/io.github.zxsanny/packbin)
+[![license](https://img.shields.io/github/license/zxsanny/packbin)](LICENSE)
+
+[![build (dev)](https://img.shields.io/github/actions/workflow/status/zxsanny/packbin/test.yml?branch=dev&label=build%20(dev))](https://github.com/zxsanny/packbin/actions/workflows/test.yml?query=branch%3Adev)
+[![build (main)](https://img.shields.io/github/actions/workflow/status/zxsanny/packbin/test.yml?branch=main&label=build%20(main))](https://github.com/zxsanny/packbin/actions/workflows/test.yml?query=branch%3Amain)
+[![publish](https://img.shields.io/github/actions/workflow/status/zxsanny/packbin/publish.yml?label=publish)](https://github.com/zxsanny/packbin/actions/workflows/publish.yml)
+
 Binary packing and unpacking across languages with an optional encryption, declarative mapping, and zero overhead in the binary data.
 
 Both sides keep the same field list. The bytes are only the values. Unpack takes the buffer and handlers. The first byte selects the handler, and that handler's scheme reads the rest.
@@ -6,6 +18,8 @@ Both sides keep the same field list. The bytes are only the values. Unpack takes
 Can be used for WebSocket, TCP, UDP, and other means of efficient communication
 
 Encryption is optional. `PackSession` hides the packed bytes on one connection and adds 0 bytes to each packet. The only extra send is 16 bytes, once, when the connection opens. It does not detect a changed byte, and anyone holding the 32-byte seed can read every session. See [Encrypted session](#encrypted-session).
+
+Java: Java 17+, Android API 26+.
 
 ## Example
 
@@ -275,7 +289,62 @@ BinaryPacker::unpack_with(
 .unwrap();
 ```
 
-Schemes built from field lists (`MapScheme`) pack and unpack values keyed by field name with `packbin::pack(&scheme, &values)` and `packbin::unpack(&scheme, &bytes)`. That is the Rust path for the split flag-byte form, which the typed `Scheme` does not have yet.
+Schemes built from field lists (`MapScheme`) pack and unpack values keyed by field name with `packbin::pack(&scheme, &values)` and `packbin::unpack(&scheme, &bytes)`. That is the Rust path for the split flag-byte form, which the typed `Scheme` does not have yet. The typed `Scheme` has no `repeat` or `u2` either.
+
+#### Times
+
+A typed `times` binds a `Vec<E>` of element rows. `get` lends the elements, `set` takes the ones unpacked (one `E::default()` per round, filled by the members), and the members are items on `E`, numbered from the anchor on. The count is an earlier integer field of the row. Pack fails with a `PackError::Type` that names the `times` when the count differs from the number of elements: `times at id 1: count 3, 2 rounds`.
+
+```rust
+use packbin::{BinaryPacker, BoundField, Scheme, SchemeItem};
+
+#[derive(Default, Debug, PartialEq)]
+struct Point {
+    lat: i32,
+    lon: i32,
+}
+
+#[derive(Default, Debug, PartialEq)]
+struct Route {
+    n: u8,
+    points: Vec<Point>,
+    tail: u8,
+}
+
+let route = Scheme::new(1, [
+    BoundField::u8(0, |row: &Route| row.n, |row, value| row.n = value).into(),
+    SchemeItem::times(
+        1,
+        0,
+        |row: &Route| &row.points[..],
+        |row, value| row.points = value,
+        [
+            BoundField::i32(1, |p: &Point| p.lat, |p, value| p.lat = value).into(),
+            BoundField::i32(2, |p: &Point| p.lon, |p, value| p.lon = value).into(),
+        ],
+    ),
+    BoundField::u8(3, |row: &Route| row.tail, |row, value| row.tail = value).into(),
+]);
+
+let row = Route {
+    n: 2,
+    points: vec![Point { lat: 10, lon: 20 }, Point { lat: 30, lon: 40 }],
+    tail: 7,
+};
+let raw = BinaryPacker::pack(&route, &row).unwrap();
+
+let mut got = Route::default();
+BinaryPacker::unpack_with(&raw, &mut [&mut route.on(|row| got = row)]).unwrap();
+assert_eq!(got, row);
+```
+
+```
+01 02 0a 00 00 00 14 00 00 00 1e 00 00 00 28 00 00 00 07
+```
+
+An optional member of `E` (a `BoundField::opt_u16` under `SchemeItem::flags`, or a `SchemeItem::when`) keeps its own round. The three-argument form `SchemeItem::times(anchor, count_id, members)` and the `SchemeItem::Times { .. }` struct variant are removed. The old form bound each member to one scalar of the row, so it lost every round after the first.
+
+In a `MapScheme`, `times` unpacks to the per-name lists and also to the rounds, as `Value::Groups` under `__times_<anchor>` (present, and empty for a count of 0). A list holds only the rounds that read its name, so the rounds tell which round a value belongs to. `repeat` gives its rounds under `__repeat__`. Pack reads the rounds, and it fails with `PackError::Type("times at id 1: list for '1' disagrees with its rounds")` when a per-name list differs from them. To change a value, edit the rounds and drop or rewrite the per-name lists, or edit the lists and remove the `__times_<anchor>` key.
 
 ### C++
 
@@ -632,7 +701,7 @@ What travels for one position:
 | `dict` | `u16` pair count; keys in unsigned byte order |
 | `flags(anchor, fields)` | one `u8`; bit 0 is the first field; a clear bit omits that field; at most 8 fields; the anchor is not written |
 | `bool` | a flag bit with no payload; set only for `true`; allowed only directly under `flags` or a flag-byte bit |
-| `when(anchor, eq(id, value), fields)` | the group only when an earlier field equals `value`; the anchor is not written |
+| `when(anchor, eq(id, value), fields)` | the group only when an earlier field of the same scope equals `value`; the anchor is not written |
 | `repeat(anchor, fields)` | the group until the buffer ends; no count; the anchor is not written |
 | `sized` | raw bytes whose length is an earlier integer |
 | `u2` | fixed 2-bit slots, low bits first |
@@ -657,6 +726,8 @@ BinaryPacker.pack(row, {"n": 1, "d": -2})
 
 `0` is a value and is written. A missing optional field is absence, which only `flags` can express.
 
+Pack refuses a value that does not fit. TypeScript takes an integer `number` or a `bigint` and throws a `RangeError` that names the member: `n: 300 does not fit in u8` for a value out of range, a fraction or `NaN`, and `n: expected a number for u8, got string` for anything else. It used to wrap 300 to `2c` and cut 1.5 to 1. Pass a `bigint` for a 64-bit value: a `number` that is not a safe integer is refused even where the width could hold it (`n: 9007199254740992 does not fit in u64; pass a bigint`). A row that unpack returned packs again.
+
 ### Floats
 
 IEEE 754, little-endian. `f32` 1.5 is `00 00 c0 3f`.
@@ -671,6 +742,8 @@ BinaryPacker.pack(row, {"x": 1.5})
 ```
 
 `f64` is the same layout in eight bytes.
+
+TypeScript pack takes only a `number` for a float. A `bigint` or a numeric string throws a `RangeError` (`x: expected a number for f64, got string`), and so does a finite value too large for `f32` (`x: 1e+39 does not fit in f32`). `NaN` and the infinities are written as given.
 
 ### Fixed bytes
 
@@ -791,9 +864,11 @@ BinaryPacker.pack(row, {"on": True, "n": 7})
 01 03 07
 ```
 
+A `when` that tests a bool matches only when the bit is set, so test it with `eq(id, true)`. A clear bit is absent when a packet is read, so `eq(id, false)` never matches. C# pack agrees. TypeScript pack and Rust pack (map form) still write the `when` body for `eq(id, false)` on a clear bit, and their own unpack then rejects the packet.
+
 ### When
 
-The group is written only when an earlier field equals the given value. The tested field must already have been read. `profile == 0` writes `shape`. Any other profile writes nothing after the profile byte.
+The group is written only when an earlier field equals the given value. The tested field must already have been read, and it must be in the same scope. The top level, the body of a `repeat` or `times`, a `list` or `dict` element and a nested row are separate scopes, and a `when` sees only the fields before it in its own. A field that was skipped (inside a `when` that did not match, or behind a clear flag bit) is absent, so a `when` that tests it does not match when a packet is read. `profile == 0` writes `shape`. Any other profile writes nothing after the profile byte.
 
 ```python
 row = Scheme(
@@ -810,6 +885,8 @@ BinaryPacker.pack(row, {"profile": 0, "shape": 9})
 ```
 
 `profile = 1` is `01 01`.
+
+A scheme whose `when` names a later field, an id that does not exist, or a field of another scope fails when you build it (every package but Python; see [Untrusted input](#untrusted-input)). C# pack decides every `when` from the fields it wrote, as unpack does from the fields it read. TypeScript pack still tests the row you give it, so a `when` on a field that another `when` skipped can write a body its own unpack rejects. Do not test a field that something else can skip.
 
 ### Repeat
 
@@ -830,7 +907,13 @@ BinaryPacker.pack(row, {"lat": [10, 30], "lon": [20, 40]})
 01 0a 00 00 00 14 00 00 00 1e 00 00 00 28 00 00 00
 ```
 
-A field after `repeat` is eaten as another point. Use `times` when something follows the group.
+A field after `repeat` is eaten as another point. Use `times` when something follows the group. C#, TypeScript, Java and Rust refuse a packet with more rounds than the scheme's `maxRounds` (65,535 by default); see [Untrusted input](#untrusted-input).
+
+A round can hold more than plain fields: a `when`, `flags` or a group. Give every name the round holds one list. Entry `i` is the value for round `i`, and `repeat` runs as many rounds as its longest list. `repeat(k, when(k == 1, v))` with `k = [1, 2]` and `v = [9]` packs `01 01 09 02`. Unpack gives the same shape: every name a round can hold has one entry per round, and a round that skipped the name has `null` (`undefined` in TypeScript), so a row packs again to the same bytes. TypeScript, C# and Java do this. Python lists only the rounds that read a name. Rust and C++ keep each round as a row: a `Vec<E>` for a typed Rust `times`, `Value::Groups` in the map form of Rust (see Times under Rust), and an `Array<E, N>` in C++. TypeScript rows are flat, so give a group's members as lists under their own names: the nested form `{mark: {v: [7, undefined, 9]}}` throws `missing v`.
+
+A `repeat` or `times` cannot sit inside a `repeat` or `times` round, directly or under a `when`, `flags` or group. TypeScript, C# and Java refuse the scheme when you build it. Rust refuses all of these but a `times` inside a `repeat`. Python does not check yet. A `list` or `dict` element starts outside any round.
+
+C# packs such a row from a dictionary of lists (`BinaryPacker.Pack(scheme, IReadOnlyDictionary<string, object?>)`). It has no public call that reads one yet: a typed `Unpack` of a packet that holds a `repeat` or `times` round throws `InvalidCastException`.
 
 ### Sized
 
@@ -948,6 +1031,8 @@ BinaryPacker.pack(row, {"n": 2, "lat": [10, 30], "lon": [20, 40], "tail": 7})
 01 02 0a 00 00 00 14 00 00 00 1e 00 00 00 28 00 00 00 07
 ```
 
+The rules of Repeat hold for the rounds of `times`: one list per name, entry `i` for round `i`, `null` (`undefined` in TypeScript) for a round that skipped the name, and no `repeat` or `times` inside a round. The count is the number of rounds. C# refuses a list longer than the count (`'V' holds 2 items, but the times count is 1`) and a list too short for a round that walks the field. Rust binds a `Vec<E>`; see Times under Rust. The round limits of Repeat apply to the rounds of `times` as well (a count above `maxRounds` is refused when the round past the limit would start); see [Untrusted input](#untrusted-input).
+
 `packed` and `times` together are how one scheme holds a route: a header, N two-bit point kinds, N latitude/longitude pairs, then N−1 straight-leg bits only when a flag is set. That packet is
 
 ```
@@ -958,7 +1043,7 @@ BinaryPacker.pack(row, {"n": 2, "lat": [10, 30], "lon": [20, 40], "tail": 7})
 
 ## Untrusted input
 
-Unpack reads bytes from the network, so a packet may be built to hurt. In C#, TypeScript, Python, Rust and Java, `unpack` answers every packet it cannot read with an error value and no row. It does not throw, and it stops within time and memory set by the length of the packet. The cases it refuses:
+Unpack reads bytes from the network, so a packet may be built to hurt. In C#, TypeScript, Python, Rust and Java, `unpack` answers every packet it cannot read with an error value and no row. It does not throw, except the typed C# `Unpack` of a packet that holds a `repeat` or `times` round (see Limits to keep in mind). Its time grows with the length of the packet. In C#, TypeScript, Java and Rust the memory the rounds of a `repeat` or `times` can take is bounded by the scheme's round limits, not by the packet: a packet with more rounds than the limits allow is refused (see Limits to keep in mind). That is the only amplification the limits remove: a `bits` or `packed` count is bounded only by the bytes left, so those items still cost memory in a straight line with the length of the packet (a 1 MiB packet of 8,388,608 `bits` items measured about 38 MB in C# and Java, about 230 MB in TypeScript and about 270 MB in Rust, net of the runtime), and the limits are per call, so concurrent calls add up. Cap the packet length where you read it from the network. C++ and Python need no round limit; their memory stays small for the reasons given there. The cases it refuses:
 
 - a count that is negative, or larger than the bytes left
 - a count whose field is absent because its flag bit was clear
@@ -970,16 +1055,34 @@ The kind of error for these is not settled yet. Today they come back as a short-
 These mistakes in a scheme are refused when you build it, not when a packet arrives:
 
 - A split-form flag bit must come after its flag byte, in the same place: the top level, one `repeat` or `times` round, or one `list` or `dict` element. A flag byte read inside a `when` is not visible after it. TypeScript, C#, Java and Rust refuse a violation at construction; Python does not check yet.
-- In Rust and Java, a `when` or a count may name only a field read earlier in its own place: the top level, one `repeat` or `times` round, one `list` or `dict` element, or (Java) one nested row. A field inside a `repeat` or `times` is not visible after it, and an outer field is not visible inside it. In Java the named field must be an integer or a `bool`.
+- A `when` or a count may name only a field read earlier in its own place: the top level, one `repeat` or `times` round, one `list` or `dict` element, or (C#, TypeScript, Java) one nested row. A field inside a `repeat` or `times` is not visible after it, and an outer field is not visible inside it. C#, TypeScript, Java and C++ refuse a violation at construction. Rust does too for a numeric id that names a later field or an outer field from inside a round; it does not check yet a field inside an earlier `repeat` or `times` body, or a name the scheme never declares. Python does not check yet. TypeScript refuses a count that names a `bool` or a float. In Java the named field of a `when` or a count must be an integer or a `bool`.
 - A `bool` stands only directly under `flags` or a flag-byte bit, and one flags byte holds at most 8 bits. An empty group follows the same rule when something carries its `true` (its own value in TypeScript and Rust, a `bool` member in C# and C++, a nested-row accessor in Java, where the nested row carries presence only: `{g: {x: 1}}` comes back as `{g: {}}`). An empty group that could never set its bit (Python and Java `group(anchor)` with no fields, a C++ `group(id)` with no fields and no member, a C# empty group bound to a non-`bool` member) fails construction wherever it stands. Every package refuses a violation at construction; in TypeScript `new Scheme(...)` checks the same as `scheme(...)`.
+- A `repeat` or `times` inside a `repeat` or `times` round, directly or under a `when`, `flags` or group. C#, TypeScript and Java refuse it at construction (`repeat 1 is inside a repeat or times round; a round cannot hold another repeat or times`). Rust refuses all of these but a `times` inside a `repeat`. Python does not check yet. A `list` or `dict` element starts outside any round.
+- In TypeScript, a member name that group flattening would overwrite: a name declared inside an unanchored group and also outside it or in another unanchored group, or a group named like one of its own members (`member sid: declared inside a group and outside it; a group's members are flattened into the row, so one would overwrite the other`).
+- In C#, a field declared for another row type, such as `Field.U16<Other>` in a `Scheme<Row>`: `'Q' is declared for row type Other, but this scheme is for R`. A field of a nested row goes inside its `Group`, not in the parent scheme.
+- In Rust, a `when` on a field that is not an integer or a `bool`, or compared with a value that is not an integer; and a `list` or `dict` element that is a group, `flags`, `when`, `repeat`, `times`, `sized`, `bits`, `packed` or a `u2` with more than one name, which could not round-trip.
 
 If you upgrade, three schemes that built before now do not (the first two in TypeScript, C#, Java and Rust): a flag byte in one `when` with its bit in another `when`, a flag byte outside a `list`, `repeat` or `times` with its bit inside it, and (Rust) a reference from inside a `repeat` or `times` to a field outside it. Packet bytes do not change. A `times`, `list` or `dict` element that reads nothing used to unpack as an empty item and is now an error.
 
 The `bool` rule changes more when you upgrade. A `bool` that is `false` now packs a clear bit (`01 00`) in C#, TypeScript and Rust, as Java, Python and C++ already did, so mixed versions read that row differently until both sides upgrade. A `bool` or empty group outside `flags`, an empty group that could never set its bit, and a ninth flag bit now fail at construction. In C#, packing a flags group whose bit is on throws when one of its values is missing, instead of writing a packet that cannot be read, and a group whose only values are `u2`, `sized`, `bits`, `packed` or a nested group now sets its bit. In C# and TypeScript, a value other than `true` (for example `1`) leaves a bool's bit clear. In TypeScript, `new Scheme(...)` now refuses everything `scheme(...)` refuses (a type number above 255, a wrong field id, a split bit outside its scope, a bool outside flags) instead of building it, and its `fields` come back flattened (`flagByte` / `flagBit` in place of `flags`), as `scheme(...)` already returned them. In Java, a `when` or a count that names a later field, a field outside its round, or a field that is not an integer or a `bool` now fails at construction, a `repeat` or `times` nested inside a `repeat` or `times` round fails at construction, and unpacking a `repeat` or `times` gives every field one list entry per round, `null` where the round skipped it. In Rust, `packbin::pack` and `packbin::unpack` for map schemes are now public, a map bool value other than 0 or 1 or a `__repeat__` value that is not groups fails pack, a `repeat` inside a `repeat` or `times` round and a `times` inside a `times` round fail at construction (a `times` inside a `repeat` round still works), a `FlagByte` handle no longer counts bits across schemes, and a second read of a flag byte with the same name starts its own bits, as in C++.
 
+Reference scope is now checked in C# and TypeScript too, as it already was in Java, Rust (numeric ids) and C++. If you upgrade, a `when` or a count that names a later field, an id that does not exist, or a field of another scope throws at construction: `ArgumentException` in C# (`when 0 names field id 1, which is not an earlier field in the same scope ...`), `RangeError` in TypeScript (`when 0: eq names field id 1, which is not declared earlier in the same scope`). C# used to resolve a later id and pack a packet its own unpack rejected. TypeScript used to search the whole scheme for the id, so a `when` inside an unanchored group could match a field outside it that had the same id; it now reads its own scope. A `sized`, `bits` or `packed` counted by a field of the same `repeat` round now unpacks in TypeScript (it was an error). Python still builds these schemes. A `repeat` or `times` inside a `repeat` or `times` round now fails at construction in C# and TypeScript, as in Java.
+
+TypeScript pack throws where it used to write wrong bytes. A `RangeError` names the member for an integer out of range (`n: 300 does not fit in u8`; it wrote `2c`), a fraction or `NaN` in an integer field (1.5 was cut to 1), a value that is not a number (`n: expected a number for u8, got string`), a `bigint` or a numeric string in a float field, a finite value too large for an `f32` (`x: 1e+39 does not fit in f32`; it wrote an infinity), and a 64-bit `number` that is not a safe integer (`n: 9007199254740992 does not fit in u64; pass a bigint`). A field under `flags` inside a group is now written: a group of `u8 a` and `flags(u8 c, u8 d)` with `{g: {a: 7, c: 2}}` packed `01 07 00` and packs `01 07 01 02`. A member name that group flattening would overwrite fails at construction. These checks run in `new Scheme(...)` too. `eq` compares numbers and bigints by value, so a `when` on a `u64` field matches on pack and on unpack. `Scheme.fields` holds copies of the `when`, `sized`, `bits`, `packed` and `times` fields with the name they refer to filled in, not the objects you passed in.
+
+TypeScript unpacked rows changed. The flag-byte value is no longer a member (`flags` used to add a `""` key, and `flagByte("m")` added `m`). In a `repeat` or `times` round every name the round can hold is a list with one entry per round, `undefined` where the round skipped it (a `bool` under `flags` is `true` or `undefined`); the list used to hold only the rounds that read the name. Pack reads these lists by round index, so a row packs again to the same bytes, and a `when`, `flags` or group inside a round packs. `repeat(k, when(k == 1, v))` with `{k: [1, 2], v: [9]}` packs `01 01 09 02`; it threw `expected number`.
+
+C# pack no longer drops data. `Pack` throws `ArgumentException` where a value is missing outside a flag bit (`'N' (field id 1) has no value; a field that may be absent belongs in Flags`). It used to write a shorter packet that the peer misread, or throw `KeyNotFoundException` for an absent list, dictionary or `Sized`. The same error comes when a round runs out of list, and when a `times` list is shorter than its count. A longer one throws `'V' holds 2 items, but the times count is 1`. A count whose field pack did not write (a `when` or a clear flag bit skipped it) throws `InvalidOperationException`: `D: count 'N' is missing`. A scheme that holds a field declared for another row type throws `ArgumentException` at construction: `Field.U16<Other>` in a `Scheme<Row>` used to leave its value out, and a child row's field used directly in the parent scheme, which packed, now goes inside its `Group`. Pack decides every `when` from what it wrote, as unpack does from what it read. A `when` on a field that an earlier `when` or a clear flag bit skipped no longer matches (a row that packed `01 01 04` now packs `01 01`), and `Eq(bool, false)` on a clear bit no longer matches. A float `when` follows Java's `Double.compare`: NaN equals NaN and -0.0 differs from 0.0. Give an `f32` field a `float` in `Eq` (`Eq(0, 0.1f)`): `Eq(0, 0.1)` matches nothing now. A scheme owns a copy of its fields, so one `Field` or `Condition` can be used in several schemes (a second scheme with the same `Condition` used to rebind the first). A `FlagByte` handle is still shared: add all its bits before you build the scheme. In a round, pack reads values under `when`, `flags` and groups by round index, and a read gives aligned lists with `null` for a skipped round; there is no public call that returns such a row yet (see Repeat).
+
+Rust `times` and `when` changed. A typed `times` is now `SchemeItem::times(anchor, count_id, get, set, members)` and binds a `Vec<E>` (see Times under Rust). The three-argument form and the `SchemeItem::Times { .. }` struct variant are removed, so typed code that used them does not compile. A scheme that built before can now fail at construction: a `when` on a float, utf8 or bytes field or compared with a value that is not an integer (`when at id 1 tests field "0", which is not an integer or bool`), and a `list` or `dict` element that is a group, `flags`, `when`, `repeat`, `times`, `sized`, `bits`, `packed` or a `u2` with more than one name. A `when` now compares by integer value at any width; `eq` of a `u8` against a `u16` field used to never match. Two bound lists or dicts in one typed scheme now keep their own members; the second used to overwrite the first, and pack wrote it twice. The map form of `times` also returns its rounds under `__times_<anchor>`, and pack refuses a list that disagrees with them: `times at id 1: list for '1' disagrees with its rounds`. Edit the rounds and drop or rewrite the per-name lists, or edit the lists and remove the `__times_<anchor>` key.
+
+Round limits change what unpack accepts. If you upgrade C#, TypeScript, Java or Rust, a packet with more than 65,535 rounds in one `repeat` or `times` field, or whose rounds together hold more than 4,194,304 slots, that unpacked before is now refused until its scheme raises the limit; packet bytes and every result for a smaller packet do not change. In C# and TypeScript, an omitted argument of `WithLimits` or `withLimits` is the default, not the scheme's current value, so `scheme.WithLimits(maxRounds: 200_000).WithLimits(maxSlots: 16_000_000)` ends with the default `maxRounds` again: give both in one call. Java and Rust take both values every time.
+
 Limits to keep in mind:
 
-- Unpack has no packet-size budget. Time and memory grow with the length of the packet, so cap the packet length where you read it from the network.
+- Round limits (C#, TypeScript, Java and Rust). A scheme carries two limits on one unpack call. `maxRounds`, default 65,535, is the most rounds one `repeat` or `times` field may start. `maxSlots`, default 4,194,304, is the most slots all the rounds of the call may create together. A slot is one entry of a round's lists, one for each name the round can hold, even where the round read nothing, so a round of a 36-name `when` body takes 36 slots. The packages count the names a little differently (C# distinct member names, TypeScript the names of the round, Java its value fields, Rust its fields), so a packet right at the slot limit can pass in one package and fail in another. A packet that would pass either limit is refused when the round that crosses it starts, before the round's bytes are read and before anything is allocated for it, with the same bad-value error as any other unreadable value (see above): no row, handler not called. A `times` count above `maxRounds` is not refused up front; a packet that states a huge count and holds few rounds still ends in a short read. Raise or lower the limits where you declare the scheme: `scheme.WithLimits(maxRounds: 200_000, maxSlots: 16_000_000)` (C#, `Scheme<T>`), `scheme.withLimits({ maxRounds: 200_000, maxSlots: 16_000_000 })` (TypeScript), `scheme.withLimits(200_000, 16_000_000L)` (Java) and `scheme.with_limits(200_000, 16_000_000)` (Rust, on `MapScheme` and the typed `Scheme`; it takes and returns the scheme). The defaults are constants (`BinaryPacker.DefaultMaxRounds` and `DefaultMaxSlots`, `Scheme.DefaultMaxRounds` and `DefaultMaxSlots`, `Scheme.DEFAULT_MAX_ROUNDS` and `DEFAULT_MAX_SLOTS`, `packbin::DEFAULT_MAX_ROUNDS` and `DEFAULT_MAX_SLOTS`). A value below 1 is refused when you call it (an exception in C#, TypeScript and Java; a panic in Rust). C++ and Python have no limit and need none: C++ unpacks into `Array<T, N>` storage you own, of capacity at most 65,535, and returns `Error::TooMany` for a longer count, and Python keeps only the values it reads (an unread name costs nothing), so its memory does not grow with the names of a round (about 36 MiB for the packet above, measured with Python 3.14). Time still grows with the length of the packet, so cap the packet length where you read it from the network as well.
+- Memory at the defaults, for a 1 MiB packet of one-byte rounds in a `repeat` with a 36-name `when` body (resident set, runtime included; measured on a macOS arm64 laptop with Node 22, .NET 10, Java 21 and Rust 1.79 in release mode, three runs each; your figures will differ). Refused at round 65,536: about 86 MiB in TypeScript, 86 MiB in C# and 92 MiB in Java, where an unlimited run took about 400, 530 and 560 MiB. A Rust one-byte round cannot hold 36 names, so Rust is measured on a `times` of one-byte rounds, about 21 MiB (about 310 MiB unlimited), and on rounds that each set eight flag bits, about 64 MiB (about 1.3 to 1.4 GiB unlimited). A packet that stays inside the limits costs up to the limits and no more: 65,535 rounds of the 36-name body, accepted, peaked at about 106 MiB in TypeScript and 86 MiB in Java, and a 64-name body stopped by the slot limit at about 110 MiB in Java and C#. The C# packet that took 1.4 seconds to read is now refused in about 0.1 seconds. The ceiling is higher when the rounds set their names: a 300-name body stopped by the slot limit peaked at about 190 MB in C#, 350 MB in Java and 130 MB in TypeScript (net of the runtime, measured by the security audit), and 64 set flag bits per round in Rust peaked at about 430 MB; raise the limits only as far as your memory per concurrent call allows.
+- In C#, a typed `Unpack` of a packet that holds a `repeat` or `times` round throws `InvalidCastException` instead of returning an error value: the row type has no member that can hold a list per round, and no public C# call returns one yet.
 - In TypeScript a decoded dictionary keeps a key named `__proto__` as an ordinary own entry. Copy or merge decoded dictionaries with care: `Object.assign({}, dict)` sets the target's prototype from that entry. Read them with `Object.hasOwn`.
 - In C# a `u64` or `i64` field arrives in `UnpackResult.Values` as `ulong` or `long`. Read through the row type and nothing changes for you; code that reads those two kinds straight from `Values` as `double` must change.
 - A session packs from several threads safely in C# and Java (each packet gets its own number). Unpacking on one session must be called in packet order, one caller at a time.
