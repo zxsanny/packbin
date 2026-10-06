@@ -9,6 +9,8 @@ Nothing of loop 16 is started: no plan, no claim, no commit for it. This note is
 - Loop end channel is `main` (`_docs/04_deploy/ci_cd_pipeline.md`); polling is `enabled: yes` (GitHub API, one call per poll, 90 s or more). A tag push needs the owner's explicit go with the exact commit.
 - Epics: AZ-2069 (cross-language bug fixes, the hopper below), AZ-2222 (Go package), AZ-2223 (Swift, created by the owner on 2026-10-06, no order set).
 
+Owner answers 2026-10-06: the hopper comes first, as many tasks as possible, Go after loop 16; AZ-2126 and AZ-2181 decided (integer-only counts; `when` names an integer or a bool). The other held decisions were asked as proposed defaults and are not yet answered.
+
 ## Do not start before checking
 
 1. **Uncommitted work in the tree that is not the agent's** (seen 2026-10-06): C# multi-target compatibility (`csharp/Compat.cs`, `csharp/tests/TargetParityTests.cs`, changes in `csharp/{PackSession,Packbin,SessionPad,Walker*}.cs`, both `.csproj` files, `csharp/tests/SessionTests.cs`), `.github/workflows/{publish-check.py, publish-phases.test.sh, run-suite.sh}`, a "Supported languages" list in `README.md` and `_docs/02_document/epics.md`. Ask the owner whether to commit it first or finish it, before any C# or CI task of loop 16 (eight of the C# specs overlap those files). Never `git add -A`: commit explicit paths.
@@ -36,7 +38,7 @@ User-visible bugs worth taking first: AZ-2112 (TypeScript cannot repack a u64 co
 |------|----------|-------------------------|
 | AZ-2098 vcpkg port builds (3) | vendored sources or `vcpkg_from_github` | vendored |
 | AZ-2101 Java typed nested rows (3) | the old overload on a typed row fails at construction or is allowed when pre-initialized | decide with the owner |
-| AZ-2126 `eq` on bool (3) and AZ-2181 C# count integer only (2) | which kinds a `when` or count may name (integer or bool only everywhere, or keep floats with a defined equality) | integer only, which reverses C# AZ-2088 AC-6 |
+| ~~AZ-2126 `eq` on bool (3) and AZ-2181 C# count integer only (2)~~ DECIDED 2026-10-06: integer only (see the specs), now ready | which kinds a `when` or count may name (integer or bool only everywhere, or keep floats with a defined equality) | integer only, which reverses C# AZ-2088 AC-6 |
 | AZ-2182 C# non-list round value (2) | A broadcast a lone scalar and refuse a lone collection, B refuse when more than one round, C round 0 only | A |
 | AZ-2184 TypeScript dict keys (2) | keep accepting an anchored group given as a nested object | keep, same bytes |
 | AZ-2188 TypeScript duplicate member names (1) | A leave, B refuse outside every `when`, C refuse all but `when` siblings | B |
