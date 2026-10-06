@@ -152,17 +152,24 @@ public class PackbinTests
     [Fact]
     public void Nfr_RoundTripsWithinOneSecond()
     {
-        var watch = Stopwatch.StartNew();
-        for (var i = 0; i < 100_000; i++)
+        // The fastest of up to three passes counts: a loaded machine can stall one pass (1.1 s at load average 30
+        // in loop 15 against 0.25 s when quiet), while a real slowdown makes every pass slow. A pass inside the bound ends it.
+        var fastest = double.MaxValue;
+        for (var pass = 0; pass < 3 && fastest > 1.0; pass++)
         {
-            var bytes = BinaryPacker.Pack(Target, Position);
-            var got = BinaryPacker.Read(Target, bytes);
-            Assert.Null(got.Error);
-            Assert.Equal(500_000_000, Convert.ToInt32(got.Values["Lat"]!, CultureInfo.InvariantCulture));
+            var watch = Stopwatch.StartNew();
+            for (var i = 0; i < 100_000; i++)
+            {
+                var bytes = BinaryPacker.Pack(Target, Position);
+                var got = BinaryPacker.Read(Target, bytes);
+                Assert.Null(got.Error);
+                Assert.Equal(500_000_000, Convert.ToInt32(got.Values["Lat"]!, CultureInfo.InvariantCulture));
+            }
+            watch.Stop();
+            fastest = Math.Min(fastest, watch.Elapsed.TotalSeconds);
         }
-        watch.Stop();
         AssertNoGpuLibrary();
-        Assert.True(watch.Elapsed.TotalSeconds <= 1.0, $"elapsed {watch.Elapsed.TotalMilliseconds} ms");
+        Assert.True(fastest <= 1.0, $"fastest of the passes: {fastest * 1000} ms");
     }
 
     [Fact]
