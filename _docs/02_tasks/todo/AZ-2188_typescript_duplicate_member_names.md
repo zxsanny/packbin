@@ -117,3 +117,7 @@ Then they build (a scheme that no longer builds is listed in the task notes), an
 | DECISION (ticket): A) leave, B) refuse a name declared twice when both declarations are outside every `when`, C) refuse every duplicate except across `when` siblings. These ACs are written for B (recommended). The owner confirms the option before implementation | owner | open | Medium |
 | Under B, a name declared once outside any `when` and once inside one still builds (`u8 shape` plus `when(...)` with `u16 shape`); only C refuses it. Confirm with the decision | owner | open | Low |
 | Two unanchored groups in mutually exclusive `when` branches that share a member are already refused (batch 3 discovered 9); unchanged | owner | accepted-risk | Low |
+
+## Owner decision (2026-10-06)
+
+DECIDED, the proposed default: option B: refuse duplicate member names outside every `when`. The open DECISION rows above are resolved by this section.

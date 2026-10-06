@@ -102,3 +102,7 @@ Then the first gives `01 02 0a000000 14000000 1e000000 28000000` and the second 
 | DECISION: A) refuse (recommended; these ACs); B) leave it, documented; C) add an aligned list value with nulls. A narrows the documented per-name list form, so the owner confirms the option before implementation | owner | open | Medium |
 | Ticket text says the value vanishes under `flags` or `when`; reading the code, a matching `when` already fails with `PackError::Missing`, so the new rule changes the error there and adds one when no round matches. Confirm that a value kept for a member whose `when` matches no round also errors | owner | open | Low |
 | A single (non-list) value kept for such a member is treated like a list of one item, as the rounds check does; the ticket text names lists only | implementer | open | Low |
+
+## Owner decision (2026-10-06)
+
+DECIDED, the proposed default: option A: refuse a map `times` list under `flags`. The open DECISION rows above are resolved by this section.

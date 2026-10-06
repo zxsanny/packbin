@@ -124,3 +124,7 @@ Then it says the cross-language ring runs on every push and pull request.
 | DECISION: A) a CI job on every push (written above; recommended: catches drift, slower, multi-toolchain jobs already exist) or B) keep the ring a manual release gate and say so in project AC-3 and the docs (AC-1 to AC-6 replaced by one doc change). The owner confirms the option before implementation | owner | open | Medium |
 | The assessment says CI runs only "the publish-gate position bytes"; that step is in the scaffold job on every push, so the golden half of AC-3 is already enforced and this task closes the rest | spec corrected | resolved | Low |
 | Making the check required (branch protection) is a repository setting outside this change | owner | open | Low |
+
+## Owner decision (2026-10-06)
+
+DECIDED, the proposed default: option A: a CI job runs `language-pair.sh` on every push. The open DECISION rows above are resolved by this section.

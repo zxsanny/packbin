@@ -118,3 +118,7 @@ Then the bytes are unchanged.
 |---------|----------------|--------|----------|
 | An anchored group given as a nested object (`{a:1, g:{b:2}}`) packs today only because every nested object is flattened (verified: `01 01 02`). The ticket lists only unanchored groups. Recommendation: keep accepting it, same bytes; the owner confirms before implementation | owner | open | Medium |
 | AZ-2102 AC-3 (dict of group keeps each entry) shares this root cause; land both in one loop or let the second only add tests | coordinator | open | Low |
+
+## Owner decision (2026-10-06)
+
+DECIDED, the proposed default: keep accepting an anchored group given as a nested object; the bytes are the same. The open DECISION rows above are resolved by this section.

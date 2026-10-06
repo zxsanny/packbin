@@ -138,3 +138,7 @@ AC-1, AC-2, AC-4 and AC-5 must fail first.
 | Public API change: new `Packbin.group(Getter, Setter, Supplier<?>, Field...)` overload, approved in the bug-fix plan (task 32 / C19). Must be noted in the README Java section and release notes. | user (plan 2026-10-05) | accepted-risk | Medium |
 | Whether the old overload on a typed row should fail at construction (AC-2) or be allowed when the member is pre-initialized (Risk 1). | user | open | Medium |
 | Defect 3 (row-typed list elements) was found by code reading, not probed. The AC-5 test must first be run on the current code to confirm the failure. | implementer | open | Low |
+
+## Owner decision (2026-10-06)
+
+DECIDED, the proposed default: the old overload on a typed nested row fails at construction (no pre-initialized exception); chosen by the owner by taking the proposed default. The open DECISION rows above are resolved by this section.

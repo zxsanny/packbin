@@ -118,3 +118,7 @@ Then the bytes are `01 00 00 c0 3f` both times.
 |---------|----------------|--------|----------|
 | `Decimal` and `Fraction` pack today (probe: both give `01 00 00 00 00 00 00 f8 3f` for 1.5). These ACs refuse them with every non-number (as TypeScript and the integer path do); the owner confirms before implementation | owner | open | Low |
 | An integer too large for any float (`10**400` into `f64`) raises `OverflowError: int too large to convert to float` with no field. Folding it into AC-4 is one line; left out because the ticket names only `f32` | owner | open | Low |
+
+## Owner decision (2026-10-06)
+
+DECIDED, the proposed default: refuse `Decimal` and `Fraction`. The open DECISION rows above are resolved by this section.

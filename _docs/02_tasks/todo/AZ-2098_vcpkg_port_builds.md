@@ -129,3 +129,7 @@ Then no new commit is created (idempotent re-run, consistent with task 28).
 | Where the consumer check runs: `scaffold` job on the runner host (vcpkg preinstalled) vs a container (no vcpkg/cmake in `gcc:16`). The runner host is not the compose canonical env — record the choice | implementer | open | Low |
 | `PACKBIN_OS_RANDOM` defaults ON, so the port builds `os_random.cpp` (needs `getrandom`/`arc4random`). Fine for host triplets; a vcpkg feature to turn it off is out of scope | C++ owner | accepted-risk | Low |
 | Ports already in the registry (`0.1.x`) remain unbuildable; registries are immutable | release owner | accepted-risk | Low |
+
+## Owner decision (2026-10-06)
+
+DECIDED, the proposed default: vendored sources in the port (not `vcpkg_from_github`). The open DECISION rows above are resolved by this section.

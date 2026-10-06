@@ -130,3 +130,7 @@ Then it throws as clear pack does, and a valid row packed next is read by the pe
 | The ticket text asks to refuse `Long` -1 for `u64`. The spec keeps it, because Java unpack returns `u64` values above 2^63 as negative `Long`, so refusing it would break unpack-then-repack. Owner confirms | owner | open | Medium |
 | A `BigInteger` in 0..2^64-1 is refused for `u64` as a wrong type today, so a caller has only the `Long` bit pattern; accepting it would be API growth | owner | open | Low |
 | Exception type change for out-of-range values (above) | accepted by the ticket text | accepted-risk | Low |
+
+## Owner decision (2026-10-06)
+
+DECIDED, the proposed default: keep `Long -1` for u64 so unpack then repack works; refuse `BigInteger`. The open DECISION rows above are resolved by this section.

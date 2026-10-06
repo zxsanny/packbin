@@ -114,3 +114,7 @@ Then the bytes are `4001000065cd1d00a3e1110100` and `3410001500062d00020d0065cd1
 | DECISION (cross-package parity): A) broadcast a lone scalar everywhere and refuse a lone collection (recommended; these ACs); B) refuse a lone value when there is more than one round; C) round 0 only. The owner confirms the option before implementation | owner | open | Medium |
 | Ticket text says only C# differs from the others. Reading the code, Rust's map `times` also gives a lone scalar to round 0 only, so option A needs a Rust follow-up that has no ticket yet | coordinator | open | Medium |
 | `List` and `Dict` names in a round have the same lone-versus-per-round shape; the ticket names only `Bytes`, `Sized`, `Bits`, `Packed`. Confirm whether the loud error covers them | owner | open | Low |
+
+## Owner decision (2026-10-06)
+
+DECIDED, the proposed default: option A: broadcast a lone scalar to every round, refuse a lone collection. The open DECISION rows above are resolved by this section.
