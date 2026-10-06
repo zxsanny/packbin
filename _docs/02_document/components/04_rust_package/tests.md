@@ -402,6 +402,21 @@ value count: 0
 
 Rollback if this version must not be used: yank that crates.io version.
 
+## Round Limits (AZ-2219, AZ-2220, loop 15)
+
+No AC number; they hold the F10 limit on the rounds of one unpack call. All run in the `rust` service of `docker-compose.test.yml`.
+
+| Test | What it proves | Where |
+|------|----------------|-------|
+| `ac1_*` | the defaults and constants; `with_limits` on a `MapScheme`; existing call sites unchanged | `rust/tests/round_limits_tests.rs` |
+| `ac2_*` to `ac5_*` | `repeat` and `times` accept 65,535 rounds and refuse the next one as `Short { field: "repeat" | "times", needed: 0 }` | same file |
+| `ac6_*` to `ac8_*` | the slot limit refuses the round that would pass it; the slot total is shared by the fields of one call; a `times` inside a `repeat` counts its rounds afresh and its slots together | same file |
+| `ac9_*`, `ac10_*` | a typed `times` row is limited and its handler is not called; refused 1 MiB packets stop at round 65,536 | same file |
+| `ac11_*`, `ac12_*` | limits belong to the scheme; a zero limit panics on a map and a typed scheme; `usize::MAX` is valid | same file |
+
+The hostile `limit` stage of `fixtures/hostile/cases.txt` (`repeat_rounds_over_limit`, `times_rounds_over_limit`, AZ-2220) is replayed with a scheme whose `max_rounds` is 3: the refusal is the interim bad-value error with `needed` 0 and the one byte of the round that would start left, and the handler is not called.
+
+
 ## Test Data Management
 
 **Required test data**:

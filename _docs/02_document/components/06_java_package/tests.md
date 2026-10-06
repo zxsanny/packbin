@@ -414,6 +414,20 @@ No AC number; they hold the Java 17 and Android API 26 target. All run in `java/
 | `ApiSafeReplacementsTest.fieldChildrenAreAnImmutableCopy`, `schemeFieldsAreAnImmutableCopy` | `Field.children` and `Scheme.fields` are copies of their source and refuse modification with `UnsupportedOperationException` | same file |
 | class major version 61 on every jar class | the published jar targets Java 17 | `publish-check.py` in the publish build phase |
 
+## Round Limits (AZ-2218, AZ-2220, loop 15)
+
+No AC number; they hold the F10 limit on the rounds of one unpack call. All run in `java/test.sh` (`RoundLimitsTest.run()` is called from `PackbinTest`).
+
+| Test | What it proves | Where |
+|------|----------------|-------|
+| `defaultsAndSurface`, `existingCallSitesAreUnchanged` | the defaults and accessors; `withLimits(int, long)` returns a new scheme; existing call shapes unchanged | `java/src/test/java/packbin/RoundLimitsTest.java` |
+| `repeat*`, `times*` | `maxRounds` rounds are accepted at the default limit and the next round is refused with `ShortPacket(label, 0, left)` for `repeat`, `times` and a `u32` count | same file |
+| `slotLimit`, `slotTotalSpansFieldsAndElements` | the slot limit counts the value fields of the body; the total spans fields and elements of one call | same file |
+| `refusedMegabyteIsBoundedByTheLimits`, `limitsBelongToTheScheme`, `invalidLimitsAreRefused` | a refused 1 MiB packet is bounded; each scheme has its own limits; a limit below 1 is an `IllegalArgumentException` | same file |
+
+The hostile `limit` stage of `fixtures/hostile/cases.txt` (`repeat_rounds_over_limit`, `times_rounds_over_limit`, AZ-2220) is replayed with a scheme whose `maxRounds` is 3: the refusal is the interim bad-value error with `needed` 0 and the one byte of the round that would start left, and the handler is not called.
+
+
 ## Test Data Management
 
 **Required test data**:

@@ -15,6 +15,8 @@ The `publish` job runs `publish-gate.sh` (the golden check and the plan), exchan
 
 The containers of the golden gate and of the build phase mount the repo read-only (`docker-compose.publish.yml`, passed by `publish_container` in `publish-lib.sh`) and write only their own `artifacts/<lang>` folder, so nothing they run can change a script the host executes next with the credentials. `publish-readonly.test.sh` probes this in every service and fails if the read-only mount is dropped. Details: `_docs/04_deploy/ci_cd_pipeline.md`.
 
+The publish and test workflows pin every non-local `uses:` to a 40-hex commit with a tag comment, and every tool the scripts install has one exact version in `.github/workflows/tool-pins.txt` (read through `tool-pin.sh`); `publish-pins.test.sh`, run by `publish-gate.test.sh`, fails on a tag, a branch, a range or a missing pin. How to bump a pin: `_docs/04_deploy/ci_cd_pipeline.md`.
+
 Lint and the byte tests run in the test stage. There is no separate security scanner stage in this plan. The publish stage is the deploy.
 
 ## Loop close and CI watch

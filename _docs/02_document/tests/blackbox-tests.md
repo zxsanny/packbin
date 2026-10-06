@@ -1526,7 +1526,7 @@
 **Preconditions**:
 - The C++ core as built in loop 10
 
-**Input data**: `fixtures/hostile/cases.txt` and four corrupted copies
+**Input data**: `fixtures/hostile/cases.txt`, nine corrupted copies of it and a README copy without one section
 
 **Steps**:
 

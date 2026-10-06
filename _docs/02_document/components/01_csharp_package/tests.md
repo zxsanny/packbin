@@ -402,6 +402,21 @@ value count: 0
 
 Rollback if this version must not be used: unlist that NuGet version.
 
+## Round Limits (AZ-2216, AZ-2220, loop 15)
+
+No AC number; they hold the F10 limit on the rounds of one unpack call. All run in the `csharp` service of `docker-compose.test.yml`.
+
+| Test | What it proves | Where |
+|------|----------------|-------|
+| `Ac1_*` | the defaults and constants (65,535 and 4,194,304); `WithLimits` takes the default, not the receiver's value, for an omitted argument | `csharp/tests/RoundLimitTests.cs` |
+| `Ac2_*` to `Ac5_*` | a `Repeat` of `MaxRounds` one-byte rounds is accepted and one more is refused; a `Times` is refused when the next round would start, also for a `u32` count | same file |
+| `Ac6_*`, `Ac7_*` | the slot limit counts every name a round can hold; the slot total is shared by the fields of one call, not by two calls | same file |
+| `Ac8_*` | a refused 1 MiB packet allocates a bounded amount | same file |
+| `Ac9_*` to `Ac11_*` | limits belong to the scheme; a limit below 1 is refused at construction; the largest limits are valid; the existing call shapes compile and behave as before | same file |
+
+The hostile `limit` stage of `fixtures/hostile/cases.txt` (`repeat_rounds_over_limit`, `times_rounds_over_limit`, AZ-2220) is replayed with a scheme whose `maxRounds` is 3: the refusal is the interim bad-value error with `needed` 0 and the one byte of the round that would start left, and the handler is not called.
+
+
 ## Test Data Management
 
 **Required test data**:

@@ -80,7 +80,7 @@ flowchart TD
 
 ### Description
 
-The caller passes a buffer. Unpack returns the value, or an error and no value. The buffer is untrusted: in C#, TypeScript, Python, Rust and Java a bad buffer is always an error value, never an exception or a panic, and unpack ends within a time and memory bound set by the buffer length. In C++ unpack fills the caller's row and returns a `Result`; on failure the fields read before it keep their values.
+The caller passes a buffer. Unpack returns the value, or an error and no value. The buffer is untrusted: in C#, TypeScript, Python, Rust and Java a bad buffer is always an error value, never an exception or a panic, and unpack ends within a time and memory bound set by the buffer length. In C#, TypeScript, Java and Rust each scheme also carries two limits, 65,535 rounds per `repeat` or `times` field and 4,194,304 slots per call by default, and refuses the round that would pass either before it is read (loop 15). In C++ unpack fills the caller's row and returns a `Result`; on failure the fields read before it keep their values.
 
 ### Preconditions
 
@@ -129,6 +129,7 @@ flowchart TD
 | Short field | Unpack | remaining bytes are fewer than the width | no value; the next call is independent. C++ keeps the fields read before the failure in the row |
 | Trailing bytes | Unpack | bytes remain after the list, or a `repeat` round read 0 bytes with bytes left | no value; the `repeat` ends instead of looping |
 | Bad value (C#, TypeScript, Python, Rust, Java) | Unpack | a negative count; a count whose source field is absent behind a clear flag bit; invalid UTF-8 in a string or dictionary key; a `times` round or a `list` or `dict` element that reads 0 bytes | no value, no exception. The error is a short-packet-style value, interim until C15 sets its kind and label |
+| Round past a limit (C#, TypeScript, Java, Rust) | Unpack | the round that would be the 65,536th of one `repeat` or `times` field, or would take the slots of the call past 4,194,304 (defaults; the scheme sets them) | no value, no handler call; the same interim short-packet-style value, `needed` 0 and the bytes left. A `times` count is not refused up front |
 | Count above the bytes left | Unpack | a string length, or a `sized`, `bits` or `packed` run, that needs more bytes than remain | short packet; the count is compared with the bytes left before it sizes anything |
 | Count over capacity, bad count, duplicate dict key (C++) | Unpack | `TooMany` or `BadValue` with the offset | no value; no truncation |
 
@@ -143,7 +144,7 @@ flowchart TD
 
 ### Description
 
-A version tag on GitHub first runs the test workflow on that commit (read-only token, no secrets; the `publish` job `needs:` it, so any failing test job skips the publish). It then builds and checks every package of that commit, and only then uploads the ones a registry does not yet hold. For C++ the same tag also feeds the embedded registries (PlatformIO, ESP-IDF component, Arduino).
+A version tag on GitHub first runs the test workflow on that commit (read-only token, no secrets; the `publish` job `needs:` it, so any failing test job skips the publish). It then builds and checks every package of that commit, in containers that mount the repo read-only, and only then uploads the ones a registry does not yet hold. For C++ the same tag also feeds the embedded registries (PlatformIO, ESP-IDF component, Arduino).
 
 ### Preconditions
 

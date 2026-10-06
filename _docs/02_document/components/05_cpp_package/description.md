@@ -107,6 +107,8 @@ No queries and no cache.
 - `invalid_utf8` and `invalid_utf8_dict_key` unpack Ok in C++: strings are borrowed bytes and are not validated. The hostile runner accepts that for those two ids
 - The deepest pack or unpack call uses 488 of the 512-byte stack budget. A change that deepens the unpack recursion must free stack first
 
+**No round limit** (loop 15, AZ-2220). C#, TypeScript, Java and Rust refuse a `repeat` or `times` round past a scheme limit; C++ has none and needs none: unpack fills `Array<T, N>` storage the caller owns (`N` is at most 65535, `table.hpp`) and returns `TooMany` for a longer count. The two `limit` cases of `fixtures/hostile/cases.txt` are skipped by `hostile_host_tests.cpp`.
+
 **Potential race conditions**:
 - None
 

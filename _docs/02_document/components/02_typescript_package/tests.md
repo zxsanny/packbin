@@ -402,6 +402,20 @@ value count: 0
 
 Rollback if this version must not be used: deprecate that npm version.
 
+## Round Limits (AZ-2217, AZ-2220, loop 15)
+
+No AC number; they hold the F10 limit on the rounds of one unpack call. All run in the `typescript` service of `docker-compose.test.yml`.
+
+| Test | What it proves | Where |
+|------|----------------|-------|
+| `scheme limits surface` | the defaults and constants; `withLimits` takes the default for a member left out and keeps the type number; existing call sites unchanged; a derived scheme with a bound reference packs and unpacks like its source | `typescript/tests/round-limits.test.ts` |
+| `repeat limits`, `times limits`, `times at the default limit` | `maxRounds` rounds are accepted and round `maxRounds` + 1 is refused with its byte unread; a huge `times` count that never reaches the limit keeps its short read | same file |
+| `slot limit`, `limits of a large packet` | the slot total is shared by every field of one call; a 1 MiB packet of one-byte rounds with 36 names is refused after 65,535 rounds | same file |
+| `limits belong to the scheme`, `invalid limits` | each scheme and each dispatch handler uses its own limits; a limit that is not a positive safe integer is a `RangeError`, in `withLimits` and in the constructor | same file |
+
+The hostile `limit` stage of `fixtures/hostile/cases.txt` (`repeat_rounds_over_limit`, `times_rounds_over_limit`, AZ-2220) is replayed with a scheme whose `maxRounds` is 3: the refusal is the interim bad-value error with `needed` 0 and the one byte of the round that would start left, and the handler is not called.
+
+
 ## Test Data Management
 
 **Required test data**:

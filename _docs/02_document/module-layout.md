@@ -30,7 +30,8 @@ A single `src/`, `crates/`, or `packages/` tree would put six languages in one c
 - **Internal (do NOT import from other components)**:
   - `csharp/**` except `csharp/Packbin.cs`
   - Construction checks: `csharp/FlagScopes.cs`, `csharp/RoundScopes.cs` (a `repeat` or `times` inside a round, loop 13); the reference scope and row-type checks are `SchemeOrder` in `Packbin.cs`
-  - Walkers: `csharp/Walker*.cs`, with `csharp/Walker.Rounds.cs` (round pack and aligned unpack, loop 13); per-call state in `csharp/Scope.cs`
+  - Walkers: `csharp/Walker*.cs`, with `csharp/Walker.Rounds.cs` (round pack and aligned unpack, loop 13); per-call state in `csharp/Scope.cs`, which also holds the round budget (`RoundBudget`, loop 15)
+  - Tests: `csharp/tests/RoundLimitTests.cs` (round limits, AZ-2216); the hostile `limit` cases are replayed in `csharp/tests/HostileVectorTests.cs`
 - **Owns (exclusive write during implementation)**: `csharp/**`
 - **Imports from**: none
 - **Consumed by**: the caller's server
@@ -46,7 +47,8 @@ A single `src/`, `crates/`, or `packages/` tree would put six languages in one c
 - **Internal (do NOT import from other components)**:
   - `typescript/src/**` except `typescript/src/index.ts`
   - Construction checks: `typescript/src/flag-scope.ts`, `typescript/src/member-names.ts` (name collisions) and `typescript/src/ref-scope.ts` (reference binder), the last two new in loop 13; the nested-round refusal is `validateRoundNesting` in `typescript/src/rounds.ts`
-  - Walkers: `typescript/src/walker.ts` (unpack), `typescript/src/pack-fields.ts` (pack), `typescript/src/rounds.ts` (round names, count, slice and aligned lists, loop 13)
+  - Walkers: `typescript/src/walker.ts` (unpack), `typescript/src/pack-fields.ts` (pack), `typescript/src/rounds.ts` (round names, count, slice and aligned lists, loop 13); the unpack round counters live on `ViewCursor` in `typescript/src/kinds.ts` and `refuseRound` in `walker.ts` checks them (loop 15)
+  - Tests: `typescript/tests/round-limits.test.ts` (round limits, AZ-2217); the hostile `limit` cases are replayed in `typescript/tests/hostile.test.ts`
 - **Owns (exclusive write during implementation)**: `typescript/**`
 - **Imports from**: none
 - **Consumed by**: Vue, React, and Node
@@ -77,7 +79,8 @@ A single `src/`, `crates/`, or `packages/` tree would put six languages in one c
   - `rust/src/**` except `rust/src/lib.rs`
   - Construction checks (`MapScheme::new`): `rust/src/field/order.rs`, `field/shape.rs`, `field/integrity.rs` (`when` source and element kinds, loop 13)
   - Typed layer: `rust/src/scheme/mod.rs` and `scheme/bound.rs`; `scheme/times.rs` (the typed `times` over a `Vec<E>`, loop 13) is reached through `SchemeItem::times`
-  - Walkers: `rust/src/walk/pack.rs`, `walk/unpack.rs`, `walk/element.rs`, and `walk/times.rs` (round lists and the list/rounds agreement check, loop 13)
+  - Walkers: `rust/src/walk/pack.rs`, `walk/unpack.rs`, `walk/element.rs`, and `walk/times.rs` (round lists and the list/rounds agreement check, loop 13); `walk/unpack.rs` holds the per-call `Cursor` with the round limits (loop 15)
+  - Tests: `rust/tests/round_limits_tests.rs` (round limits, AZ-2219); the hostile `limit` cases are replayed in `rust/src/hostile_tests.rs`
 - **Owns (exclusive write during implementation)**: `rust/**`
 - **Imports from**: none
 - **Consumed by**: a native node
@@ -116,6 +119,7 @@ A single `src/`, `crates/`, or `packages/` tree would put six languages in one c
 - **Internal (do NOT import from other components)**:
   - `java/src/**` except `java/src/main/java/packbin/Packbin.java`
   - API-level check (loop 14, AZ-2094): `java/api-check.sh`, `java/tools/ApiCheck.java`, `java/tools/Fetch.java`, run from `java/test.sh`; tool cache `java/out/api-tools` (gitignored)
+  - Round limits (loop 15, AZ-2218): `Cursor.java` (read position and round budget of one unpack call, replaces the `int[] offset` of every unpack method), `Scheme.java` (`withLimits`), `Rounds.java`; tests `java/src/test/java/packbin/RoundLimitsTest.java` (run from `PackbinTest`), the hostile `limit` cases in `HostileVectorTest.java`
 - **Owns (exclusive write during implementation)**: `java/**`
 - **Imports from**: none
 - **Consumed by**: Android and other Java programs
@@ -136,7 +140,7 @@ No shared code package. The library does not log, authenticate, or load configur
 ### fixtures/hostile
 
 - **Directory**: `fixtures/hostile/`
-- **Purpose**: `cases.txt`, packets and schemes that crafted input can send, with the expected outcome kinds; `check-cases.sh` checks the file format and `cases.test.sh` proves that check fails on corrupted copies
+- **Purpose**: `cases.txt`, packets and schemes that crafted input can send, with the expected outcome kinds; `check-cases.sh` checks the file format and `cases.test.sh` proves that check fails on corrupted copies. Since loop 15 (AZ-2220) the file holds 19 cases; the `limit` stage (two cases, a `repeat` and a `times` past a low round limit) is replayed by C#, TypeScript, Java and Rust, and skipped by C++ and Python
 - **Owned by**: AZ-2070
 - **Consumed by**: every package, as a file read. The C++ runner is `cpp/tests/core/hostile_host_tests.cpp`
 
@@ -144,9 +148,10 @@ No shared code package. The library does not log, authenticate, or load configur
 
 - **Directory**: `.github/workflows/`
 - **Purpose**: test on every branch push and pull request (including the `embedded` job for the C++ targets); publish on a version tag, after `publish.yml` has called `test.yml` on the tagged commit (loop 14). The helper scripts (`run-suite.sh`, `publish-*.sh`, `stage-arduino.sh`, `report-row.sh`) and the `drivers/` for the language-pair run live in the same directory. `language-pair.sh` has the `roundflags` and `roundwhen` rings since loop 13 (AZ-2179): producers C#, TypeScript, Rust, Java and C++, readers TypeScript, Rust, Java and C++ (C# has no public reader, AZ-2092); the Rust driver builds them in `drivers/handoff-rust/src/rounds.rs`
-- **Publish scripts** (loop 14, AZ-2095 to AZ-2097): `publish-gate.sh` (golden check, writes the plan), `publish-registries.sh` (entry point: plan, credential and tool preflight, build, upload; `PACKBIN_BUILD_ONLY=1` is the build-only dry run), `publish-build.sh` with `publish-inside.sh` (language packages in their toolchain image), `publish-embedded.sh` (vcpkg, PlatformIO, ESP-IDF, Arduino) and `publish-sign.sh` (Maven bundle signature), `publish-check.py` (artifact checks), `publish-upload.sh` with `publish-query.sh` and `publish-published.py` (existence queries), `publish-lib.sh` (target table `PACKBIN_TARGETS`, credentials), `crates-token.sh`, `publish-position.sh`
-- **Publish tests**: `publish-gate.test.sh` (workflow structure parsed with Ruby `yaml`, gate and static checks; it sources `publish-phases.test.sh` for the two-phase scenarios and `publish-rerun.test.sh` for the credential matrix, re-run and registry scenarios); each file stays under 500 lines (`publish-phases.test.sh` is 486)
-- **Owned by**: AZ-1866 owns `test.yml` and the workflow files existing. AZ-1875 owns the publish behavior in `publish.yml`; AZ-2095 to AZ-2097 own the structure of `publish.yml` and the publish scripts and tests above
+- **Publish scripts** (loop 14, AZ-2095 to AZ-2097): `publish-gate.sh` (golden check, writes the plan), `publish-registries.sh` (entry point: plan, credential and tool preflight, build, upload; `PACKBIN_BUILD_ONLY=1` is the build-only dry run), `publish-build.sh` with `publish-inside.sh` (language packages in their toolchain image), `publish-embedded.sh` (vcpkg, PlatformIO, ESP-IDF, Arduino) and `publish-sign.sh` (Maven bundle signature), `publish-check.py` (artifact checks), `publish-upload.sh` with `publish-query.sh` and `publish-published.py` (existence queries), `publish-lib.sh` (target table `PACKBIN_TARGETS`, credentials, `publish_container` and `pip_install_pinned` since loop 15), `crates-token.sh`, `publish-position.sh`
+- **Pins and read-only containers** (loop 15, AZ-2214, AZ-2215): `tool-pins.txt` (one exact version per tool) and `tool-pin.sh` (prints one) are read by `publish-lib.sh`, `publish-inside.sh`, `run-suite.sh`, `publish.yml` and `cpp/embedded/examples.sh`; every non-local `uses:` is a commit SHA with a tag comment. `docker-compose.publish.yml` (repo root, the second compose file) mounts the repo read-only in the golden-gate and build containers, and only `publish_container` passes it
+- **Publish tests**: `publish-gate.test.sh` (workflow structure parsed with Ruby `yaml`, gate and static checks; it sources `publish-phases.test.sh` for the two-phase scenarios and `publish-rerun.test.sh` for the credential matrix, re-run and registry scenarios); each file stays at or under 500 lines (`publish-phases.test.sh` is exactly 500, `publish-gate.test.sh` 453, so a new check goes in a new sibling file). Loop 15 added two such files, sourced by `publish-gate.test.sh`: `publish-pins.test.sh` (the `uses:` pin check, the pins file and its reader, the pip install lines, AZ-2214) and `publish-readonly.test.sh` (the read-only mount in every service, the artifacts mount, the unchanged tree after a gate and a build-only run, AZ-2215)
+- **Owned by**: AZ-1866 owns `test.yml` and the workflow files existing. AZ-1875 owns the publish behavior in `publish.yml`; AZ-2095 to AZ-2097 own the structure of `publish.yml` and the publish scripts and tests above; AZ-2214 and AZ-2215 own the pins and the read-only containers
 - **Consumed by**: the six registries
 
 > See ADR 002_publish-from-version-tag.

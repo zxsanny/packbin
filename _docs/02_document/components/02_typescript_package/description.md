@@ -19,7 +19,8 @@
 | `scheme`, `new Scheme` | type number, fields by order id | scheme | No | a type number outside 0..255, a gap, a repeated id, an anchor that is not the next value id, a flag bit whose flag byte is not read earlier in the same scope, a bool or empty group that is not directly in `flags` or a flag-byte bit, an `eq` or count id that is not an earlier field of the same scope, a member name used inside an unanchored group and outside it, or a `repeat` or `times` inside a `repeat` or `times` round (§7) |
 | `flags`, `flagByte(...).bit` | fields | field | No | a ninth bit on one flag byte (§7) |
 | `BinaryPacker.pack` | scheme, row | bytes | No | `RangeError` for an integer or float that does not fit its width or is not a number (§7) |
-| `BinaryPacker.unpack` | scheme, bytes | row or error | No | short packet, trailing bytes, type mismatch; never throws on bytes (see §7) |
+| `BinaryPacker.unpack` | scheme, bytes | row or error | No | short packet, trailing bytes, type mismatch, a `repeat` or `times` round past the scheme's limits; never throws on bytes (see §7) |
+| `Scheme.withLimits`, `maxRounds`, `maxSlots`, `Scheme.DefaultMaxRounds`, `Scheme.DefaultMaxSlots`, type `SchemeLimits` | `{ maxRounds?, maxSlots? }` | a new scheme with those unpack limits | No | `RangeError` for a limit that is not a positive safe integer (§7) |
 
 **Input DTOs**:
 
@@ -59,7 +60,7 @@ No queries and no cache.
 
 ## 5. Implementation Details
 
-**State Management**: clear pack is stateless. Source layout: `walker.ts` is the unpack walker, `pack-fields.ts` the pack walker (split out of `walker.ts` in loop 11), `flag-scope.ts` the construction checks for flag bits (`validateFlagScopes`) and for where a bool or empty group may stand (`validatePresenceMarks`). Added in loop 13: `ref-scope.ts` binds every `eq` and count id to a member name (`bindReferences`, `refName`), `member-names.ts` refuses a name with two places (`validateMemberNames`), and `rounds.ts` holds the round logic (`validateRoundNesting`, `roundNames`, `roundCount`, `sliceRound`, `RoundLists`, `appendList`), used by both walkers. A session keeps one send counter and one receive counter.
+**State Management**: clear pack is stateless. Source layout: `walker.ts` is the unpack walker, `pack-fields.ts` the pack walker (split out of `walker.ts` in loop 11), `flag-scope.ts` the construction checks for flag bits (`validateFlagScopes`) and for where a bool or empty group may stand (`validatePresenceMarks`). Added in loop 13: `ref-scope.ts` binds every `eq` and count id to a member name (`bindReferences`, `refName`), `member-names.ts` refuses a name with two places (`validateMemberNames`), and `rounds.ts` holds the round logic (`validateRoundNesting`, `roundNames`, `roundCount`, `sliceRound`, `RoundLists`, `appendList`), used by both walkers. Loop 15: the unpack counters (`maxRounds`, `maxSlots`, `slots`) live on `ViewCursor` in `kinds.ts`, and `refuseRound` in `walker.ts` checks them. A session keeps one send counter and one receive counter.
 
 **Key Dependencies**:
 
@@ -90,7 +91,7 @@ No queries and no cache.
 - A lone non-list value for a name in a round is broadcast to every round, pinned by a test; C# packs it into round 0 only (AZ-2182). A group written as a nested object inside a round counts as present in every round, so `{mark:{v:[7,undefined,9]}}` throws `missing v`; a round takes flat per-round lists
 - With `u64(n)` driving `sized`, `times` or `packed`, the unpacked row holds `n` as a `bigint` and pack refuses a `bigint` count, so that row cannot repack (AZ-2112)
 
-**Hostile input** (loop 11). Unpack of untrusted bytes returns an error value and no row, within a time and memory bound set by the input length. It does not throw and does not loop on input it cannot consume. The cases:
+**Hostile input** (loop 11). Unpack of untrusted bytes returns an error value and no row, within a time bound set by the input length and, for rounds, a memory bound set by the scheme's round limits (below). It does not throw and does not loop on input it cannot consume. The cases:
 - a `repeat` round that reads 0 bytes ends the repeat; the bytes left come back as trailing bytes
 - a `times` round, or a `list` or `dict` element, that reads 0 bytes is an error, even for a small count (a few bytes could otherwise ask for 65 535 empty items)
 - a negative count, a count larger than the bytes left, invalid UTF-8 in a string or a dictionary key, and a count whose source field is absent (it sat behind a clear flag bit)
@@ -111,6 +112,8 @@ The error shape is interim: a short-packet-style value. Its kind, label, `needed
 
 **Flags in groups** (loop 13, `fields.ts`). `flatten` also flattens the members of a `flags`, and `collectFlagBits` descends into groups and into a flag bit's field, so a `flags` inside an anchored or unanchored group is packed (`{a:1, g:{b:2, c:3}}` packs `0101020103`). The value of a flag byte is walk state only: unpacked rows have no `""` key, no `motion` key for a split-form byte, and no list of flag bytes inside a round.
 
+**Round limits** (loop 15, AZ-2217; `index.ts`, `kinds.ts`, `walker.ts`). A `Scheme` carries `maxRounds` (default `Scheme.DefaultMaxRounds`, 65,535) and `maxSlots` (default `Scheme.DefaultMaxSlots`, 4,194,304). `scheme.withLimits({ maxRounds, maxSlots })` returns a new `Scheme` with the same type number and fields; a member left out takes the default, not the receiver's value, so two chained calls drop the first, and the receiver is unchanged. The constructor takes the same object as an optional third argument (`SchemeLimits`, exported), and `scheme(...)` does not. A limit that is not a positive safe integer throws a `RangeError` (`checkedLimit`); there is no unlimited value. `unpackBody` puts both limits and a slot counter on the call's `ViewCursor`, and the `repeat` and `times` branches of `unpackFields` call `refuseRound(cur, started, width)` as each round starts, before the round is read or padded; `width` is the size of `roundNames` of the body. The round that would be the 65,536th of one field, or would take the slot total past `maxSlots`, returns `unreadable(...)` (the first body field's name, `needed` 0, the bytes left): no row, no handler call. A `times` count is not refused up front. Dispatch uses the limits of the matched handler's scheme.
+
 **Rounds** (loop 13, `rounds.ts`). A round is addressed by index. The names a round can hold are its own fields and those under `when`, `flags`, flag bits and groups. Pack reads item i of each name's list for round i (`sliceRound`), so a `when`, flags or group inside a round packs (it threw); a `repeat` runs as many rounds as its longest list and a `times` its borrowed count. Unpack builds one list per name with one entry per round, `undefined` where the round skipped it (`RoundLists`, padded as rounds set values; `JSON.stringify` shows `null`), and a bool under flags is `true` or `undefined`. A `when` or count read inside a round sees only that round's own value, with no fallback to a same-named outer value. `validateRoundNesting` refuses a `repeat` or `times` inside a round, directly or under `when`, `flags`, a flag bit or a group, with a `RangeError` naming the nested container; a `list` or `dict` element starts outside any round. `walker.ts` and `pack-fields.ts` call `rounds.ts`; the branches that handle a nested round there are unreachable while the refusal stands and matter again when AZ-2127 lifts it.
 
 **Breaking changes for callers, loop 11** (pack output is unchanged):
@@ -130,7 +133,10 @@ The error shape is interim: a short-packet-style value. Its kind, label, `needed
 - The unpacked row has no `""` or flag-byte member. In a round, every name the round can hold is a list with one entry per round, `undefined` for a skipped round (it appended only the rounds that set it). A `sized`, `bits` or `packed` whose count is a field of the same round now unpacks (it failed with `needed 0`).
 - A `when` in a round reads only the round's own value (it fell back to a same-named outer value).
 - `Scheme.fields` holds copies of the five reference kinds, with `nameById` and the `allFields` parameter of `unpackFields` removed (internal; `index.d.ts` is identical).
-- Unpack of a round costs about 8 bytes times the names a round can hold times the packet bytes in memory (1 MB zero packet with a 36-name `when` body: 299 to 313 MB heap, 11 to 19 MB before); linear, not count-driven, accepted without a cap.
+- Unpack of a round costs about 8 bytes times the names a round can hold times the packet bytes in memory (1 MB zero packet with a 36-name `when` body: 299 to 313 MB heap, 11 to 19 MB before); linear, not count-driven. Capped by the round limits since loop 15.
+
+**Breaking changes for callers, loop 15** (AZ-2217; pack output and the bytes of every packet within the limits are unchanged):
+- Unpack refuses a packet whose `repeat` or `times` starts more than 65,535 rounds, or whose rounds hold more than 4,194,304 slots together, until the scheme raises the limits with `withLimits`.
 
 **Potential race conditions**:
 - None
