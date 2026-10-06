@@ -2,7 +2,11 @@
 
 ## Loop-end channel (ordinary product loops)
 
-loop_end_merge: stage
+loop_end_merge: main
+
+Owner decision 2026-10-06: this project closes every product loop on `main`, not on `stage`. `origin` has no `stage` branch (`arduino`, `dev` and `main` only) and none is wanted. The value `main` is this project's own definition; the autodev protocol table lists only `none`, `stage` and `stage+main`.
+
+At every loop close, after smoke PASS, the local merge on `dev` and the `dev` push, the agent does one more step from the launcher: it fast-forwards `origin/main` to `HEAD` (`git push origin HEAD:main`) and then watches the `test.yml` run on `main` as set in the polling section below. It never force-pushes. If `origin/main` is not an ancestor of `HEAD`, it stops and reports. Pushing `main` publishes nothing: a registry publish happens only on a `v*` tag (`publish.yml`), and a tag is always a separate, explicit owner decision.
 
 ## Pipeline
 
@@ -14,6 +18,22 @@ The publish job builds and checks every artifact first (`publish-build.sh`; `PAC
 
 ## Post-deploy polling (agent configuration)
 
-enabled: no
+enabled: yes
+long_running: yes (the `embedded` job alone takes about 40 minutes cold; a green `test.yml` takes 45 to 60 minutes)
+poll_interval_seconds: 90
+applies_after: a push of `dev` or `main`, and a push of a `v*` tag
+status_tool: the GitHub Actions REST API read with `curl` (no `gh` on the agent host, no token needed: the repository is public)
+primary_gate: `test.yml` (jobs `scaffold`, `embedded`) on the pushed commit; for a tag, the `publish` workflow run (`test`, then `publish`)
+report_to: the chat; on FAIL, `autodev/protocols/ci-fail-triage.md`
 
 There is no deploy host to probe. The test and publish results are the GitHub Actions checks.
+
+### Post-deploy pipeline watch (procedure)
+
+1. Take the pushed commit: `sha=$(git rev-parse HEAD)` for a branch push, or the tag's commit for a tag push.
+2. Every `poll_interval_seconds`, read the runs of that commit: `curl -s "https://api.github.com/repos/zxsanny/packbin/actions/runs?head_sha=$sha"` and take `workflow_runs[].name`, `status`, `conclusion`. Unauthenticated calls are limited to 60 per hour per address, so the interval is 90 seconds (about 40 calls per hour). A `403` with `x-ratelimit-remaining: 0` means wait for `x-ratelimit-reset`; it is not a test result.
+3. Terminal states: `status: completed` with `conclusion` `success` (PASS), or `failure`, `cancelled`, `timed_out` (FAIL). No run for the commit after 5 minutes is a blocked trigger (report it; do not start a run by hand).
+4. On FAIL read the failed job's log through the run page the API returns (`html_url`) and apply `ci-fail-triage.md`: three lines, read only. Do not re-run, re-tag or push a fix without the owner.
+5. Report PASS or FAIL in the chat as soon as the run is terminal. Never end a turn with "check CI later".
+
+A `v*` tag push also has uploads to six registries; its run is the only proof of the registry-side checks (see `packages.md`).
