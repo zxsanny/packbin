@@ -1,54 +1,70 @@
 # Infrastructure review
 
 **Date**: 2026-10-06
-**Scope**: loop 15: `.github/workflows/publish.yml`, `test.yml`, `tool-pins.txt`, `tool-pin.sh`, `publish-{lib,build,gate,inside,position,upload,sign,check}`, `docker-compose.test.yml`, `docker-compose.publish.yml`, `cpp/embedded/{examples.sh,Dockerfile}`, the two new test scripts. No production Dockerfile; no deployed service.
+**Scope**: loop 16 (`git diff 9db438e..HEAD`, HEAD 5c95950): `.github/workflows/test.yml` (new `ring` job, two new steps in `scaffold`), `ring-cxx.sh`, `ring-toolchains.sh`, `language-pair.sh`, `publish-inside.sh` (npm build), `publish-embedded.sh` (vcpkg port), `publish-check.py` (committed hunks only), `publish-position.sh`, `cpp/embedded/{lib,arm,esp,examples,run}.sh`, `cpp/embedded/lib.test.sh`, the new gate tests. `publish.yml`, `docker-compose.test.yml`, `docker-compose.publish.yml`, `publish-{lib,registries,upload,sign,query,build,gate}.sh`, `crates-token.sh`, `tool-pin*` are unchanged since loop 15 (empty `git diff`), so their loop 15 results and line numbers stand. No production Dockerfile; no deployed service. Not run: Docker (not allowed in this audit), so the compose and wrapper behavior below is from reading, not from a container run.
 
 ## GitHub Actions permissions, triggers and pins
 
 | Check | Evidence | Result |
 |-------|----------|--------|
-| Workflow default permissions | `publish.yml:8-9`, `test.yml:9-10` | `contents: read` |
-| Who holds write / id-token | `publish.yml:23-25` | only job `publish`: `contents: write`, `id-token: write`; job `test` (reusable call) `contents: read` (`:16-19`) |
-| `secrets: inherit` | grep over `.github/` | none (the only hit is a negative test in `publish-gate.test.sh:399`) |
-| Secrets in the publish job | `publish.yml:44-57` | passed by `env:` to one step: `PYPI_TOKEN`, `MAVEN_CENTRAL_TOKEN`, `MAVEN_GPG_PRIVATE_KEY`, `PLATFORMIO_AUTH_TOKEN`, `IDF_COMPONENT_API_TOKEN`, `GITHUB_TOKEN`, plus step outputs for NuGet and crates.io. Not job-level env. `ACTIONS_ID_TOKEN_REQUEST_*` are present in every step |
-| Triggers | `test.yml:3-7`, `publish.yml:3-6` | unchanged: `test` on push, PR and `workflow_call`; `publish` on tags `v*` |
-| Action pinning (F1) | `publish.yml:29,32,37`, `test.yml:17,59` | **all five `uses:` are 40-hex commits with a `# <tag>` comment**. `git ls-remote --tags`: `actions/checkout` `v7.0.1` and `v7` = `3d3c42e5...90b1`; `actions/setup-node` `v7.0.0` and `v7` = `82076278...0fe5020`; `NuGet/login` `v1.2.0` = `8d196754...1028841`, and the annotated `v1` peels (`v1^{}`) to the same commit. The two third-party-code actions run a bundled `dist/index.js` (`node24`), so the commit fixes what runs. `publish.yml:19` is the one local `uses:`. `publish-pins.test.sh` fails on any non-local reference that is not owner/repo plus 40 lowercase hex plus a tag comment |
-| Tool pins | `tool-pins.txt`, `publish.yml:36` | `npm install -g "npm@11.21.0"` via `tool-pin.sh`; npm's own dependencies are bundled in its tarball, so no transitive float; pip tools in `ensure_tool` and `run-suite.sh`, `examples.sh:15-16`, `publish-inside.sh:72-74`: exact version plus `--only-binary=:all:`. Every `pip install`, `npm install` and `npm ci` in `.github/`, `cpp/embedded/` and the compose files was grepped: the only installs that are not exact are the transitive pip dependencies (F12), `npm ci` (locked by `package-lock.json`, `publish-position.sh:46`, `run-suite.sh:30`), `apt-get install` in `cpp/embedded/Dockerfile:7-8`, and `arduino-cli core install esp32:esp32` (`examples.sh:66`). No `curl | sh`, no `cargo install`, no `dotnet tool` anywhere |
-| `PIP_CONSTRAINT` | `publish-inside.sh:74` | holds `setuptools`: probe with a copy of the pins file set to `setuptools==83.0.0` made `python -m build` install `setuptools-83.0.0` (pip log); the committed pin is 84.0.0, also the latest. The `npm==` line in the same file is ignored by pip (the build ran with it present). The constraint is a version, not a hash |
-| `actions/checkout` credential | `publish.yml:29` | `persist-credentials` not set to `false`. v7.0.1 writes the token into a separate file under `RUNNER_TEMP` and adds `includeIf.gitdir:<repo>/.git.path = <that file>` to `.git/config` (`git-auth-helper.ts:327-375` at the pinned commit). Not in the repo, so not in a container's writable mount; a container can read the file's path from `/src/.git/config`; host processes can read the file. `GITHUB_TOKEN` is also passed to the publish step by `env:` (needed for the vcpkg and Arduino pushes), so `persist-credentials: false` mainly shortens exposure in the other steps |
-| Timeouts, concurrency | `publish.yml:11-13,27`, `test.yml:15,56` | unchanged |
+| Workflow default permissions | `test.yml:9-10`, `publish.yml:8-9` | `contents: read` |
+| Who holds write or id-token | `publish.yml:23-25` | only job `publish`; the `test` call (`publish.yml:16-19`) and so the new `ring` job hold `contents: read`; no `secrets: inherit` |
+| Triggers | `test.yml:3-7`, `publish.yml:3-6` | `test` on push to any branch, pull request, `workflow_call`; `publish` on `v*` tags. The `ring` job therefore runs repository code on every push and pull request with a read-only token and no secret; fork pull requests get no secret either |
+| Action pinning (F1) | `test.yml:17,63,92,93,96,99,102`, `publish.yml:29,32,37` | all 10 non-local `uses:` are 40-hex commits with a tag comment; each equals its tag by `git ls-remote --tags` (see `dependency_scan.md`) |
+| `ring` job inputs | `test.yml:73-122` | `timeout-minutes: 30`; versions in job `env` (`RING_*`); `setup-dotnet`, `setup-node`, `setup-python`, `setup-java` pinned; `rustup toolchain install "$RING_RUST" --profile minimal --no-self-update` (exact version, official channel, no checksum); `docker pull "gcc:$RING_GCC"` (tag); `npm ci --prefix typescript` (lockfile integrity; neither locked package has an install script, but `--ignore-scripts` is not passed, unlike `publish-inside.sh:66`); `dotnet build` of the driver project and `cargo build` of `handoff-rust` (path dependencies only) |
+| Checkout credential | `test.yml:92`, `publish.yml:29` | `persist-credentials` not set to `false` (F12 item, unchanged); in the `ring` job the token is `contents: read` |
+| Secrets in new steps | `test.yml`, `ring-toolchains.sh` | none passed; the job prints toolchain versions only |
+
+## The `ring` compiler wrapper (F20, known item Q9)
+
+`ring-cxx.sh:15-25` runs `docker run --rm -i --user "$(id -u):$(id -g)" -v /tmp:/tmp -v "<repo>:<repo>" -w "$PWD" gcc:16 g++ "$@" -static`.
+
+| Aspect | Today | Effect | Needed by the ring? |
+|--------|-------|--------|---------------------|
+| User | runner uid and gid, not root | files it writes belong to the runner; cannot touch root-owned files | yes, kept |
+| Repository mount | read-write at its host path (`:21`) | a tampered image, or a compiler plugin, could rewrite any file the host runs next, `language-pair.sh` itself included (bash reads a script while it runs), the other drivers, or a source that `dotnet`, `node`, `java` and `cargo` then execute on the runner: a false green ring, with the job's read-only token. No secret is in reach | no: g++ only reads the sources and writes `-o <path under /tmp>`; `:ro` works |
+| Host `/tmp` | mounted read-write at `/tmp` (`:15`) | the container can plant `/tmp/packbin-handoff-java/Handoff.class` and `HandoffElements.class` (reused by `language-pair.sh:67-68` when newer than the sources, then run with `java -cp`) or any file the ring later reads | the ring writes only `$PACKBIN_CPP_HANDOFF`, `$PACKBIN_CPP_BIN`, which default under `/tmp` but are overridable (`language-pair.sh:50`, `publish-position.sh:60`); a per-run `mktemp -d` bound at its own path is enough |
+| Network | default bridge | outbound access, including the runner's metadata endpoint | no: the compile needs none |
+| Capabilities, `no-new-privileges`, pids and memory limits | defaults | a larger escape surface than needed | no |
+| Image | `gcc:16` by tag (F3) | a moved tag changes the compiler of the ring | pin by digest |
+| What it cannot reach | the checkout credential file (it lives under `RUNNER_TEMP`, not `/tmp`, and is not mounted; the repository's `.git/config` only names it), the other runners' files | | |
+
+Remediation: `--network none --cap-drop ALL --security-opt no-new-privileges --pids-limit 256`, `-v "$dir:$dir:ro"` for the repository and the working directory, a private output directory (`mktemp -d`, exported through `PACKBIN_CPP_HANDOFF` and `PACKBIN_CPP_BIN`, mounted read-write at its own path) in place of `/tmp:/tmp`, and the image by digest. Q9 waits for the first green `ring` run; none of this changes a ring result.
+
+## Publish: build, check, upload (loop 15 design, loop 16 changes)
+
+| Check | Result |
+|-------|--------|
+| Build phase holds no registry credential | unchanged: `publish-registries.sh:111-118` (loop 15). The new `build_vcpkg` and the npm build run in that phase: `build_vcpkg` clones the `vcpkg` branch of this repository anonymously (`publish-lib.sh:124-130`, no token in the URL), commits locally and leaves the push to `publish-upload.sh` |
+| npm build container | `publish-inside.sh:60-68` in the `node:24` image with the repository mounted read-only (`docker-compose.publish.yml:9-12`): copy, delete `node_modules` and `dist`, `npm version` (semver only), `npm ci --ignore-scripts`, `npm run build`, `npm pack`. Network is needed for `npm ci` (lockfile integrity protects the packages). The tarball is checked on the host by `publish-check.py:100-122` before upload; a scratch pack of the HEAD tree passed (26 files, no `src/`) |
+| vcpkg staging | `publish-embedded.sh:55-87` on the host from the checkout; `rm -rf` is scoped to `$reg/ports/packbin`; the push stays in `publish-upload.sh` (unchanged) with `GITHUB_TOKEN` (`contents: write`) |
+| Tag-time guard | committed hunks of `publish-check.py` only. `refuse_symlinks` (`:257-276`) refuses a symlink in the five container trees (probed). npm assertions `:93-122`, vcpkg assertions `:193-217`. Gaps: F23, F13 residue |
+| Container-written trees | unchanged otherwise: root in the container, default network and capabilities, digest between check and upload not recorded, Rust uploads `stage/` rather than the checked `.crate` (F13) |
+| Embedded harness | `lib.sh` `run_target` now fails a target on any non-zero command and counts it (`lib.sh:62-104`); `lib.test.sh` runs it against fake targets in `mktemp -d` trees with a `trap` cleanup. `examples.sh:29-31` still downloads `arduino-cli` 1.1.1 with no checksum and `:71-72` installs the ESP32 core without a version (F2); these run in the `embedded` job, which has no secret |
+| `ring-toolchains.sh` | reads version strings only; `printf ... \| "$CXX" -E -P -x c++ -` feeds a fixed program to the wrapper's stdin |
 
 ## Secrets and credential flow
 
 | Check | Evidence | Result |
 |-------|----------|--------|
-| Build phase holds no registry credential | `publish-registries.sh:111-118` | the subshell unsets every variable of `PACKBIN_CREDENTIALS` (11) except `MAVEN_GPG_PRIVATE_KEY`, then `exec`s `publish-build.sh`. Containers receive only what `publish_container` and compose give them: `SRC_ROOT`, `PACKBIN_VERSION`, `PACKBIN_OUT`, `PACKBIN_HOST_UID/GID`, `FIXTURE`, `TEST_RESULTS`. `docker compose config` on the merged files: six services, `environment` keys `FIXTURE`, `SRC_ROOT`, `TEST_RESULTS` only; no `env_file`, no `${...}` interpolation in either file. **(d) verified: no secret reaches a container** |
-| Key visible to host-side pip | `publish-embedded.sh:128,134` | the Maven key is in the environment when `ensure_tool pio` and `compote` run in the build phase (F12) |
-| Test scripts | `publish-pins.test.sh`, `publish-readonly.test.sh`, `publish-gate.test.sh` hook | no real credential; builds under `PACKBIN_BUILD_ONLY=1`; the readonly test's container probes write only into `/src` (expecting refusal) and its own `/out/artifacts/<lang>`; pip downloads are read-only. **(d) verified: no registry write path added** |
-| Token on argv | see `static_analysis.md` | six sites, unchanged (F16) |
+| No secret reaches a container | `publish-registries.sh:111-118`, `publish_container` (`publish-lib.sh:102-107`) unchanged; `ring-cxx.sh` passes no `-e` | verified by reading: containers get only `SRC_ROOT`, `PACKBIN_VERSION`, `PACKBIN_OUT`, `PACKBIN_HOST_UID/GID` and the compose constants; the `ring` wrapper passes none |
+| New test scripts | `publish-vcpkg.test.sh:92` runs `env -u GITHUB_TOKEN -u PLATFORMIO_AUTH_TOKEN -u IDF_COMPONENT_API_TOKEN`, stages into a local bare repository (`git init --bare` in `mktemp -d`); `publish-npm.test.sh`, `publish-position.test.sh`, `ring-wiring.test.sh`, `lib.test.sh` use `mktemp -d` and cleanup traps, no registry URL, no token, no docker | no registry write path and no credential added |
+| Secrets in the diff | grep of the added lines | none |
+| Token on argv | see `static_analysis.md` | unchanged (F16) |
+| Local note | `.env` is gitignored and untracked; every test container mounts the repository root, so a developer-machine `.env` is readable by test code; CI has none, a laptop publish is forbidden (`restrictions.md`) | unchanged |
 
-## Containers (F13)
+## Temp directories
 
-| Check | Result |
-|-------|--------|
-| Merged compose config | `docker compose -f docker-compose.test.yml -f docker-compose.publish.yml --project-directory . config --format json` (Compose v2.24.3): `csharp`, `typescript`, `python`, `rust`, `cpp`, `java` each have `/src` bind of the repo with `read_only: true`, `/fixture/golden.hex` bind read-only, `/test-results` tmpfs. `cpp-embedded` and `cpp-embedded-esp` stay read-write; they run only in the `embedded` test job. The override lists the six by hand (a seventh service added to the base file would stay read-write; the config test checks the same fixed list) |
-| What a build container can still write | its own `artifacts/<lang>` bind at `/out/artifacts/<lang>` (host directory); `/test-results` (tmpfs, memory); the container root filesystem, `/tmp`, `$HOME` (discarded with `--rm`). It cannot see the other languages' folders (`ls /out/artifacts` lists only its own, asserted by `publish-readonly.test.sh`), a script, a source file or `.git` |
-| What it can still do | read all of `/src`, including `/src/.git/config` (names the checkout credential file); run as root with default capabilities, no `no-new-privileges`, no seccomp change; open outbound connections on the default bridge (needed by `npm ci`, pip and the compiler caches) |
-| What the host still runs or reads from a container-written folder | `publish-check.py` (parses archives into memory; no `lstat`, no symlink or file-type check, `:100-175`), `publish-sign.sh:30-53` (signs, hashes and zips the Java tree; writes `.asc`, `.md5`, `.sha1` through planted symlinks; `find -type f` skips links, `rglob` plus `is_file()` includes them), `twine upload artifacts/python/*` (every file in the folder), `dotnet nuget push` and `npm publish` of fixed names, and `cargo publish --no-verify --allow-dirty --manifest-path artifacts/rust/stage/Cargo.toml`, which re-archives the whole `stage/` tree and follows file symlinks (probe). The checked object for Rust is the `.crate`, the uploaded object is the re-archived `stage/`; only `stage/Cargo.toml`'s version and the absence of `stage/target` are checked (`publish-check.py:135-138`). vcpkg, Arduino, PlatformIO and ESP-IDF are built on the host from the repository, not in a container, and their folders are made by the host |
-| Digest between check and upload | none recorded (`build.log` is `build ok <target>`). Reduced: nothing but the host's own scripts and the pinned pip tools run between the container's exit and the upload, and a container is gone (`--rm`) before its folder is checked. Not closed |
-| Ownership | `publish-inside.sh:33` chowns the folder to the host user inside the container; the loop 14 `chmod -R a+rwX` is gone. Linux ownership is proven only by the first CI run (Docker Desktop cannot show it) |
-| C# pack from a copy | `publish-inside.sh:50-58`: verified on a scratch tree, see `static_analysis.md` |
-| Image pinning | tags only: `mcr.microsoft.com/dotnet/sdk:10.0`, `node:24`, `python:3.14`, `rust:1.98`, `gcc:16`, `eclipse-temurin:26-jdk`, `espressif/idf:v5.3.2`, `ubuntu:24.04` (F3, unchanged). These are now the trust base of the build phase: a moved tag is the remaining route into F13 |
-| Local note | a `.env` file exists untracked in the working tree of the audit host (not read); every test container mounts the repo root, so on a developer machine it is readable by test code. CI has none, and a laptop publish is forbidden (`restrictions.md`) |
+All new scripts that create state use `mktemp -d` with a `trap ... EXIT` (`publish-position.sh:17-18`, `publish-inside.sh:20,37`, `publish-embedded.sh:18-19`, `lib.test.sh:48-49`, `ring-wiring.test.sh:13-14`, `publish-position.test.sh:19-20`). Two kinds of fixed names remain (F24): `/tmp/packbin-handoff`, `/tmp/packbin-handoff-java`, `/tmp/packbin-position`, `/tmp/packbin-position-java`, `/tmp/packbin-position-rust` as defaults of the cross-language ring and the position gate, one of which is executed when it already exists. Harmless on a single-user runner (the CI case); on a shared developer or self-hosted machine another user can plant a class file or a binary there. `publish-vcpkg.test.sh:471` sets an `EXIT` trap inside a function, which replaces an earlier trap of the sourcing shell: hygiene only.
 
-## Network and registry traffic
+## Image pinning
 
-Unchanged from loop 14: all registry calls HTTPS with default verification, no `-L`, `--max-time 20` on queries. New read-only traffic: pip to `pypi.org` for the pinned wheels (`--only-binary=:all:`), `npm` registry for `npm@11.21.0`.
+Tags only: `mcr.microsoft.com/dotnet/sdk:10.0`, `node:24`, `python:3.14`, `rust:1.98`, `gcc:16` (also the ring compiler), `eclipse-temurin:26-jdk`, `espressif/idf:v5.3.2`, `ubuntu:24.04` (F3, unchanged).
 
 ## Findings carried and new
 
-F1 fixed. F2 (`examples.sh:26-28,66`), F3 (images by tag, `apt-get` unpinned) carried. F12 reduced (Medium), F13 reduced (Low), F14, F15, F16 carried; F17 and F10 are library findings. Details in `security_report.md`.
+Carried: F1 fixed, F2 (lines moved to `examples.sh:29-31,71-72`), F3 (extended by `gcc:16` in the `ring` job), F12 (unchanged), F13 (symlink route closed by commit 049d27c, residue as listed), F14, F15 (the vcpkg heredoc added), F16, F17. New: F18 (library), F19 (library), F20 (ring wrapper), F21 (library), F22 (library), F23 (tag-time guard), F24 (fixed `/tmp` names). Details in `security_report.md`.
 
 ## Earlier loops (condensed)
 
-Loop 10: `cpp/embedded/Dockerfile` base by tag, packages from the distribution, no secrets; `examples.sh` downloads `arduino-cli` 1.1.1 with no checksum (F2). Loop 11: F3 extended to the six test images. Loop 13: toolchain cache moved to the gitignored `.cache/embedded/`; the gate test generates its GPG key into a `mktemp` keyring. Loop 14: `timeout-minutes` on every job; build phase credential stripping; F12 to F16 recorded.
+Loop 15: read-only build containers, tool pins, action pins, credential flow, symlink behavior of `cargo package`. Loop 14: `timeout-minutes` on every job; build phase credential stripping; F12 to F16. Loop 13: toolchain cache moved to the gitignored `.cache/embedded/`; gate test generates its GPG key into a `mktemp` keyring. Loop 11: F3 extended to the six test images. Loop 10: `cpp/embedded/Dockerfile` base by tag, packages from the distribution, no secrets; `examples.sh` downloads `arduino-cli` 1.1.1 with no checksum (F2).
