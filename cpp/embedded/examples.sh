@@ -40,8 +40,11 @@ target_example_pico() {
   rm -rf "$dir"
   mkdir -p "$dir/pkg"
   pio pkg pack "$cpp" --output "$dir/pkg"
-  local archive
-  archive="$(find "$dir/pkg" -name '*.tar.gz' | head -n 1)"
+  local found archive
+  # The first match from captured output: `find | head -n 1` ends in SIGPIPE (status 141) under pipefail
+  # when find has more to write than head reads.
+  found="$(find "$dir/pkg" -name '*.tar.gz')"
+  archive="${found%%$'\n'*}"
   if [ -z "$archive" ]; then
     fail "pio pkg pack wrote no archive"
     return 1
@@ -86,8 +89,9 @@ target_example_esp_idf() {
   rm -rf "$dir"
   mkdir -p "$dir"
   (cd "$cpp" && compote component pack --name packbin --version 0.0.0 --dest-dir "$dir/dist")
-  local archive
-  archive="$(find "$dir/dist" -name '*.tgz' | head -n 1)"
+  local found archive
+  found="$(find "$dir/dist" -name '*.tgz')"
+  archive="${found%%$'\n'*}"
   if [ -z "$archive" ]; then
     fail "compote component pack wrote no archive"
     return 1

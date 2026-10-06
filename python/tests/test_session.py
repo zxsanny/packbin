@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from array import array
+
 import pytest
 
 from packbin import BinaryPacker, PackSession, Scheme, flags, i16, i32, u8, u16
@@ -130,3 +132,80 @@ def test_load_and_constructor_open_the_same_session_for_a_32_byte_seed():
     assert loaded is not None
     assert loaded.start(NONCE) == built.start(NONCE) == NONCE
     assert loaded.pack(POSITION, POSITION_VALUES) == built.pack(POSITION, POSITION_VALUES)
+
+
+def test_ac1_load_of_an_integer_returns_none():
+    assert PackSession.load(32) is None  # type: ignore[arg-type]
+
+
+WRONG_SEEDS = {
+    "33": 33,
+    "0": 0,
+    "true": True,
+    "bytes_31": bytes(31),
+    "bytes_33": bytes(33),
+    "empty_bytes": b"",
+    "empty_memoryview": memoryview(b""),
+}
+
+
+@pytest.mark.parametrize("seed", WRONG_SEEDS.values(), ids=WRONG_SEEDS.keys())
+def test_ac2_wrong_sizes_and_values_still_return_none(seed):
+    assert PackSession.load(seed) is None
+
+
+NOT_BYTES_LIKE = {
+    "str": "a" * 32,
+    "none": None,
+    "float": 32.0,
+    "list": [7] * 32,
+    "tuple": tuple(range(32)),
+    "range": range(32),
+    "array_B": array("B", range(32)),
+}
+
+
+@pytest.mark.parametrize("seed", NOT_BYTES_LIKE.values(), ids=NOT_BYTES_LIKE.keys())
+def test_ac3_anything_not_bytes_like_returns_none_and_raises_nothing(seed):
+    assert PackSession.load(seed) is None
+
+
+class _SeedBytes(bytes):
+    pass
+
+
+BYTES_LIKE_SEEDS = {
+    "bytes": bytes(range(1, 33)),
+    "bytearray": bytearray(range(1, 33)),
+    "memoryview": memoryview(bytes(range(1, 33))),
+    "strided_memoryview": memoryview(bytes(64))[::2],
+    "memoryview_of_32_bit_items": memoryview(array("I", range(8))),
+    "bytes_subclass": _SeedBytes(range(1, 33)),
+}
+
+
+@pytest.mark.parametrize("seed", BYTES_LIKE_SEEDS.values(), ids=BYTES_LIKE_SEEDS.keys())
+def test_ac4_a_bytes_like_seed_of_32_bytes_opens_a_session(seed):
+    assert PackSession.load(seed) is not None
+
+
+def test_ac4_the_bytes_seed_packs_the_csharp_vector():
+    opener = PackSession.load(bytes(range(1, 33)))
+
+    assert opener is not None
+    assert opener.start(NONCE) == NONCE
+    assert opener.pack(POSITION, POSITION_VALUES).hex() == CIPHERTEXT_HEX
+
+
+def test_ac5_the_constructor_keeps_its_errors():
+    with pytest.raises(TypeError):
+        PackSession(32)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="^seed must be 32 bytes, got 31$"):
+        PackSession(bytes(31))
+
+
+def test_ac3_a_released_memoryview_returns_none_and_raises_nothing():
+    released = memoryview(bytes(32))
+    released.release()
+
+    assert PackSession.load(released) is None

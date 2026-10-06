@@ -10,6 +10,7 @@ script prints `check failed: <target>: <what>` to stderr and exits 1; on success
 import hashlib
 import io
 import json
+import posixpath
 import re
 import subprocess
 import sys
@@ -89,6 +90,13 @@ def check_csharp(directory, version):
     need("README.md" in members, "README.md is missing")
 
 
+# The npm entry points and the relative imports of the compiled files (`from "./x.js"`, `import "./x.js"`,
+# `import("./x.js")`); the .d.ts files keep a `.ts` specifier.
+NPM_TYPES = "./dist/index.d.ts"
+NPM_EXPORTS = {".": {"types": NPM_TYPES, "import": "./dist/index.js"}}
+NPM_RELATIVE_IMPORT = re.compile(r"""(?:\bfrom\s*|\bimport\s*\(?\s*)["'](\.{1,2}/[^"']+)["']""")
+
+
 @target("typescript")
 def check_typescript(directory, version):
     package = single(directory, "*.tgz")
@@ -98,10 +106,20 @@ def check_typescript(directory, version):
     need(manifest.get("name") == "packbin", "package.json name is not packbin")
     need(manifest.get("version") == version, f"package.json version {manifest.get('version')} is not {version}")
     need(manifest.get("license") == "MIT", "license MIT is not declared in package.json")
+    need(manifest.get("types") == NPM_TYPES, f"package.json types is {manifest.get('types')!r}, not {NPM_TYPES!r}")
+    need(manifest.get("exports") == NPM_EXPORTS, f"package.json exports is {manifest.get('exports')!r}, not {NPM_EXPORTS!r}")
     need("package/dist/index.js" in members, "dist/index.js is missing")
     need("package/dist/index.d.ts" in members, "dist/index.d.ts is missing")
     need(not any(name.startswith("package/src/") for name in members), "src/ is in the tarball")
     need("package/README.md" in members, "README.md is missing")
+    for name in sorted(members):
+        if name.startswith("package/dist/") and name.endswith((".js", ".d.ts")):
+            for specifier in NPM_RELATIVE_IMPORT.findall(members[name].decode()):
+                path = posixpath.normpath(posixpath.join(posixpath.dirname(name), specifier))
+                if name.endswith(".d.ts"):
+                    path = path.removesuffix(".ts").removesuffix(".js") + ".d.ts"
+                shown = name.removeprefix("package/")
+                need(path in members, f"{shown} imports {specifier}, but {path.removeprefix('package/')} is not in the tarball")
 
 
 @target("python")
@@ -184,6 +202,13 @@ def check_vcpkg(directory, version):
     need((port / "portfile.cmake").is_file(), "portfile.cmake is missing")
     need((port / "include" / "packbin" / "packbin.hpp").is_file(), "include/packbin/packbin.hpp is missing from the port")
     need(any((port / "src").rglob("*.cpp")), "the port holds no sources")
+    cmake, licence = port / "CMakeLists.txt", port / "LICENSE"
+    need(cmake.is_file() and "add_library(packbin" in cmake.read_text(), "CMakeLists.txt is missing or does not build the packbin library")
+    need(licence.is_file() and "MIT License" in licence.read_text(), "LICENSE is missing or is not the MIT license text")
+    dependencies = manifest.get("dependencies")
+    hosts = {entry.get("name") for entry in dependencies if isinstance(entry, dict) and entry.get("host") is True} if isinstance(dependencies, list) else set()
+    for name in ("vcpkg-cmake", "vcpkg-cmake-config"):
+        need(name in hosts, f"vcpkg.json lacks the host dependency {name}")
     baseline = json.loads((repo / "versions" / "baseline.json").read_text())
     need(baseline["default"]["packbin"]["baseline"] == version, f"baseline.json is not {version}")
     history = json.loads((repo / "versions" / "p-" / "packbin.json").read_text())["versions"][0]

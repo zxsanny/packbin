@@ -20,6 +20,11 @@ final class SplitBitOrderTest {
         ac1BitsAcrossAWhenAndAFlagsMember();
         ac1NestedRowReadsStayInsideTheRow();
         ac1NestedRowInARound();
+        az2233Ac1OrphanBitInANestedRowIsRefused();
+        az2233Ac2EveryShapeWithTheReadOutsideIsRefused();
+        az2233Ac3ShapesRefusedBeforeKeepTheirError();
+        az2233Ac4ReadsInsideTheRowStillBuild();
+        az2233Ac5TypedRowIsRefusedTheSameWay();
         ac1BitsAreCountedPerRead();
         ac3GoldenAndMotionUnchanged();
     }
@@ -36,6 +41,27 @@ final class SplitBitOrderTest {
             fields[i + 1] = m.bit(u8(i, "f" + i));
         }
         return Maps.scheme(typeNumber, fields);
+    }
+
+    private static final String ORPHAN_U8_0 = "flag bit U8 0 has no flagByte before it in the same scope";
+
+    private static Field nested(String name, Field... fields) {
+        return Packbin.group(Access.get(name), Access.set(name), fields);
+    }
+
+    private static Field element(Field... fields) {
+        return Packbin.group(Access.identity(), Access.ignore(), fields);
+    }
+
+    private static Field listOf(String name, Field element) {
+        return Packbin.list(Access.get(name), Access.set(name), element);
+    }
+
+    private static void expectRefused(String label, java.util.function.Function<Field, Field[]> shape, String message) {
+        PackbinTest.expectThrows(label, () -> {
+            Field m = Packbin.flagByte();
+            Maps.scheme(1, shape.apply(m));
+        }, message);
     }
 
     private static void expectPacks(String label, String hex, Scheme<Map> scheme, Map<String, Object> row) {
@@ -120,8 +146,8 @@ final class SplitBitOrderTest {
 
     /**
      * A flag byte read inside a nested row (an accessor group) is the row's own: it is not visible after the row, so
-     * the bits of the row around it keep their own read. A byte read outside the row stays visible inside it, as for
-     * a when.
+     * the bits of the row around it keep their own read. A byte read outside the row is not visible inside it either
+     * (AZ-2233): the row around it cannot write the byte of a bit whose field it does not hold.
      */
     private static void ac1NestedRowReadsStayInsideTheRow() {
         Field m = Packbin.flagByte();
@@ -149,10 +175,10 @@ final class SplitBitOrderTest {
             Maps.scheme(1, Packbin.group(Access.get("g"), Access.set("g"), byteInRow), byteInRow.bit(u8(0, "a")));
         }, "flag bit U8 0 has no flagByte before it in the same scope");
 
-        Field outside = Packbin.flagByte();
-        Scheme<Map> seenInside = Maps.scheme(1, outside,
-                Packbin.group(Access.get("g"), Access.set("g"), outside.bit(u8(0, "x"))));
-        PackbinTest.expectTrue("AC-1 a byte read outside a nested row stays visible inside it", seenInside != null);
+        PackbinTest.expectThrows("AC-1 a byte read outside a nested row is not visible inside it", () -> {
+            Field outside = Packbin.flagByte();
+            Maps.scheme(1, outside, Packbin.group(Access.get("g"), Access.set("g"), outside.bit(u8(0, "x"))));
+        }, ORPHAN_U8_0);
     }
 
     /** The same rule in a round: the byte the nested row of a round reads is not the byte of the round. */
@@ -165,6 +191,83 @@ final class SplitBitOrderTest {
         Map<String, Object> row = Maps.map("a", Arrays.asList(1, 4),
                 "g", Arrays.asList(Maps.map("x", 2), Maps.map("x", 5)), "b", Arrays.asList(3, 6));
         expectPacks("AC-1 nested row in a round, one handle", "01" + "0301010203" + "0304010506", scheme, row);
+    }
+
+    /** AZ-2233 AC-1 (probe 1): the byte is read by the row around the nested row, which does not hold the bit's field. */
+    private static void az2233Ac1OrphanBitInANestedRowIsRefused() {
+        expectRefused("AZ-2233 AC-1 [m, group(g, m.bit x)]",
+                m -> new Field[] {m, nested("g", m.bit(u8(0, "x")))}, ORPHAN_U8_0);
+    }
+
+    /** AZ-2233 AC-2: every shape in which the only read the bit can see lies outside its nested row. */
+    private static void az2233Ac2EveryShapeWithTheReadOutsideIsRefused() {
+        expectRefused("AZ-2233 AC-2 a bit of the outer read before the row (probe 2)",
+                m -> new Field[] {m, m.bit(u8(0, "a")), nested("g", m.bit(u8(0, "x")))}, ORPHAN_U8_0);
+        expectRefused("AZ-2233 AC-2 the byte read after the bit",
+                m -> new Field[] {m, nested("g", m.bit(u8(0, "x")), m)}, ORPHAN_U8_0);
+        expectRefused("AZ-2233 AC-2 the bit in a when in the row",
+                m -> new Field[] {m, nested("g", u8(0, "k"), Packbin.when(1, Packbin.eq(0, 1), m.bit(u8(1, "x"))))},
+                "flag bit U8 1 has no flagByte before it in the same scope");
+        expectRefused("AZ-2233 AC-2 two rows deep, read outside both",
+                m -> new Field[] {m, nested("g1", nested("g2", m.bit(u8(0, "x"))))}, ORPHAN_U8_0);
+        expectRefused("AZ-2233 AC-2 two rows deep, read in the outer row only",
+                m -> new Field[] {nested("g1", m, nested("g2", m.bit(u8(0, "x"))))}, ORPHAN_U8_0);
+        expectRefused("AZ-2233 AC-2 the row under a when",
+                m -> new Field[] {m, u8(0, "k"), Packbin.when(1, Packbin.eq(0, 1), nested("g", m.bit(u8(0, "x"))))},
+                ORPHAN_U8_0);
+        expectRefused("AZ-2233 AC-2 the row as the payload of a bit of the same byte",
+                m -> new Field[] {m, m.bit(nested("g", m.bit(u8(0, "x"))))}, ORPHAN_U8_0);
+        expectRefused("AZ-2233 AC-2 the row under flags",
+                m -> new Field[] {m, Packbin.flags(0, nested("g", m.bit(u8(0, "x"))))}, ORPHAN_U8_0);
+    }
+
+    /** AZ-2233 AC-3: a repeat, a list element or a repeat round already started with no visible byte. */
+    private static void az2233Ac3ShapesRefusedBeforeKeepTheirError() {
+        expectRefused("AZ-2233 AC-3 a repeat in the row",
+                m -> new Field[] {m, nested("g", Packbin.repeat(0, m.bit(u8(0, "x"))))}, ORPHAN_U8_0);
+        expectRefused("AZ-2233 AC-3 a list element",
+                m -> new Field[] {m, listOf("l", element(m.bit(u8(0, "x"))))}, ORPHAN_U8_0);
+        expectRefused("AZ-2233 AC-3 a row in a repeat round",
+                m -> new Field[] {m, Packbin.repeat(0, nested("g", m.bit(u8(0, "x"))))}, ORPHAN_U8_0);
+    }
+
+    /** AZ-2233 AC-4: a byte read inside the row, an anchored group and the README shape keep their bytes. */
+    private static void az2233Ac4ReadsInsideTheRowStillBuild() {
+        Field read = Packbin.flagByte();
+        expectPacks("AZ-2233 AC-4 byte read in the row", "01000105",
+                Maps.scheme(1, read, nested("g", read, read.bit(u8(0, "x")))), Maps.map("g", Maps.map("x", 5)));
+
+        Field deep = Packbin.flagByte();
+        expectPacks("AZ-2233 AC-4 byte read two rows deep", "01000105",
+                Maps.scheme(1, deep, nested("g1", nested("g2", deep, deep.bit(u8(0, "x"))))),
+                Maps.map("g1", Maps.map("g2", Maps.map("x", 5))));
+
+        Field inElement = Packbin.flagByte();
+        expectPacks("AZ-2233 AC-4 byte read in a list element row", "0101000105",
+                Maps.scheme(1, listOf("l", element(inElement, inElement.bit(u8(0, "x"))))),
+                Maps.map("l", java.util.List.of(Maps.map("x", 5))));
+
+        Field anchored = Packbin.flagByte();
+        expectPacks("AZ-2233 AC-4 anchored group", "010105",
+                Maps.scheme(1, anchored, Packbin.group(0, anchored.bit(u8(0, "x")))), Maps.map("x", 5));
+
+        Field readme = Packbin.flagByte();
+        expectPacks("AZ-2233 AC-4 README shape", "010301010203",
+                Maps.scheme(1, readme, readme.bit(u8(0, "a")), nested("g", readme, readme.bit(u8(0, "x"))),
+                        readme.bit(u8(1, "b"))),
+                Maps.map("a", 1, "g", Maps.map("x", 2), "b", 3));
+    }
+
+    /** AZ-2233 AC-5 (probe 4): a typed row is refused at construction; at HEAD pack threw ClassCastException. */
+    private static void az2233Ac5TypedRowIsRefusedTheSameWay() {
+        Field m = Packbin.flagByte();
+        Field x = Packbin.u8(0, Access.get((TypedNestedRowTest.Inner i) -> i.v),
+                Access.set((TypedNestedRowTest.Inner i, Object v) -> i.v = ((Number) v).intValue()));
+        Field inner = Packbin.group(Access.get((TypedNestedRowTest.Outer o) -> o.inner),
+                Access.set((TypedNestedRowTest.Outer o, Object v) -> o.inner = (TypedNestedRowTest.Inner) v),
+                TypedNestedRowTest.Inner::new, m.bit(x));
+        PackbinTest.expectThrows("AZ-2233 AC-5 typed nested row",
+                () -> new Scheme<>(1, TypedNestedRowTest.Outer.class, m, inner), ORPHAN_U8_0);
     }
 
     /** Eight bits are the limit of one read, not of a handle or of a scheme; the ninth bit of a read is refused. */

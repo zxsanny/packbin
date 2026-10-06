@@ -21,6 +21,8 @@ final class RepeatRoundTest {
         roundsDoNotSeeEarlierRounds();
         nestedRoundsInsideElementsStillBuild();
         paddingIsLinear();
+        az2234Ac7U2PacksTheRoundItem();
+        az2234Ac8PresenceAndU2AgreeInARound();
     }
 
     /** A list or dict element is a row of its own, so a repeat inside it is not inside the enclosing round. */
@@ -50,6 +52,52 @@ final class RepeatRoundTest {
         HostileRun run = HostileRun.of(ignored, packet, HostileRun.LIMIT_MS);
         PackbinTest.expectTrue("#2 64 KB repeat into an ignoring setter unpacks within " + HostileRun.LIMIT_MS
                 + " ms -> " + run.kind(), run.finished && run.result == null && run.handled);
+    }
+
+    private static Field slot(int id, String name) {
+        return Packbin.u2Slot(id, Access.get(name), Access.set(name));
+    }
+
+    /** AZ-2234 AC-7: a u2 in a repeat or times round packs the item of the round, as every other value field does. */
+    private static void az2234Ac7U2PacksTheRoundItem() {
+        Scheme<Map> repeat = Maps.scheme(1, Packbin.repeat(0, Packbin.u2(slot(0, "a"), slot(1, "b"))));
+        expectPack("AC-7 repeat(u2) {a:[1,2], b:[3,0]}", repeat,
+                Maps.map("a", List.of(1, 2), "b", List.of(3, 0)), "01" + "0d" + "02");
+        expectPack("AC-7 repeat(u2) {a:[1], b:[2]}", repeat, Maps.map("a", List.of(1), "b", List.of(2)), "01" + "09");
+        expectPack("AC-7 repeat(u2) a lone value is the item of every round", repeat, Maps.map("a", 1, "b", 2), "01" + "09");
+        expectUnpackRepack("AC-7 repeat(u2) 010e09", repeat, "01" + "0e" + "09",
+                Maps.map("a", List.of(2, 1), "b", List.of(3, 2)));
+
+        Scheme<Map> times = Maps.scheme(1, u8(0, "n"), Packbin.times(1, 0, Packbin.u2(slot(1, "a"), slot(2, "b"))));
+        expectPack("AC-7 times(u2) {n:2, a:[1,2], b:[3,0]}", times,
+                Maps.map("n", 2, "a", List.of(1, 2), "b", List.of(3, 0)), "01" + "02" + "0d" + "02");
+        expectUnpackRepack("AC-7 times(u2) 0102 0d02", times, "01" + "02" + "0d" + "02",
+                Maps.map("n", 2, "a", List.of(1, 2), "b", List.of(3, 0)));
+    }
+
+    /** AZ-2234 AC-8: the bit of a flags member or flag byte and the u2 written under it read the same round item. */
+    private static void az2234Ac8PresenceAndU2AgreeInARound() {
+        Field fb = Packbin.flagByte();
+        Scheme<Map> flags = Maps.scheme(1, Packbin.repeat(0, Packbin.flags(0, Packbin.u2(slot(0, "a"), slot(1, "b")))));
+        Scheme<Map> split = Maps.scheme(1, Packbin.repeat(0, fb, fb.bit(Packbin.u2(slot(0, "a"), slot(1, "b")))));
+        for (Object[] form : new Object[][] {{"flags", flags}, {"flag byte", split}}) {
+            String label = "AC-8 " + form[0];
+            Scheme<Map> scheme = (Scheme<Map>) form[1];
+            expectPack(label + " round 0 present, round 1 absent", scheme,
+                    Maps.map("a", Arrays.asList(1, null), "b", Arrays.asList(2, null)), "01" + "01" + "09" + "00");
+            expectUnpackRepack(label + " 01010900", scheme, "01010900",
+                    Maps.map("a", Arrays.asList(1, null), "b", Arrays.asList(2, null)));
+            expectPack(label + " no round has a slot", scheme,
+                    Maps.map("a", Arrays.asList((Object) null), "b", Arrays.asList((Object) null)), "01" + "00");
+            PackbinTest.expectThrows(label + " a round with one of two slots", () -> BinaryPacker.pack(scheme,
+                    Maps.map("a", Arrays.asList(1, null), "b", Arrays.asList(2, 3))), "0: expected 2-bit int");
+        }
+
+        Scheme<Map> when = Maps.scheme(1, Packbin.repeat(0, Packbin.u2(slot(0, "a"), slot(1, "b")),
+                Packbin.when(2, Packbin.eq(1, 2), u8(2, "w"))));
+        expectPack("AC-8 when after a u2 sees the round's slot", when,
+                Maps.map("a", List.of(1, 1), "b", List.of(2, 0), "w", Arrays.asList(9, null)),
+                "01" + "09" + "09" + "01");
     }
 
     private static Field u8(int id, String name) {

@@ -98,9 +98,9 @@ public final class Packbin {
     /**
      * A nested row of Map rows: the member is a {@code Map}, unpacked into a new {@code HashMap} when the row has
      * none yet (each element of a list or dict that holds this group is a new {@code HashMap}). As a member of a row
-     * whose class is not a {@code Map}, or of a group that has a child factory, it is refused at construction; use
-     * the overload with a child factory there. The fields of the nested row number their ids from 0 and see no
-     * id of the row around it.
+     * whose class is not a {@code Map}, or of a group that has a child factory, and as the element of a list or dict
+     * that such a row holds, it is refused at construction; use the overload with a child factory there. The fields
+     * of the nested row number their ids from 0 and see no id of the row around it.
      */
     public static Field group(Getter get, Setter set, Field... fields) {
         return Field.group(get, set, null, fields);
@@ -110,10 +110,11 @@ public final class Packbin {
      * A nested row of a typed row. Unpack calls {@code create} for the child whenever the member is null (for each
      * round of a repeat or times, and for each element of a list or dict that holds this group), reads the fields
      * of the nested row into it and sets it through {@code set}. The nested fields' accessors receive that child.
-     * Construction checks only nested-row members: a nested row member below this group built with the overload
-     * without a factory is refused. It does not check list and dict element groups, anchored groups, {@code when}
-     * or flags elements; those unpack into a {@code Map} (a new {@code HashMap}), so typed accessors in them fail
-     * when the row is unpacked. The fields number their ids from 0 and see no id of the row around it.
+     * Construction refuses a nested row member, or a list or dict element group, below this group that is built with
+     * the overload without a factory. It does not check anchored group, flags or u2 elements, which unpack into a
+     * {@code Map} (a new {@code HashMap}), so typed accessors in them fail when the row is unpacked: wrap such an
+     * element in a group with a factory. The same holds for typed accessors on an element group of a {@code Map} row.
+     * The fields number their ids from 0 and see no id of the row around it.
      */
     public static Field group(Getter get, Setter set, Supplier<?> create, Field... fields) {
         return Field.group(get, set, Objects.requireNonNull(create, "create"), fields);

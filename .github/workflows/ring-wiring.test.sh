@@ -2,13 +2,16 @@
 # Wiring check for the cross-language ring (AZ-2193 AC-1, AC-6): test.yml must run language-pair.sh from a
 # job that runs on every push and pull request, as its own check, and that a failing ring fails. It parses
 # the workflow with Ruby yaml like the publish gate does, then runs the same check against copies of
-# test.yml that each break one rule: every copy must be rejected.
+# test.yml that each break one rule: every copy must be rejected. It also runs language-pair.sh against PATH
+# shims for its toolchains (consumer_failure_checks), to check the line a failing pair prints.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 test_yml="$here/test.yml"
 compose_yml="$here/../../docker-compose.test.yml"
 failures=0
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
 
 fail() {
   echo "FAIL: $*" >&2
@@ -168,13 +171,75 @@ drop_step() {
   awk -v head="      - name: $1" '$0 == head { skip = 1; next } skip { skip = 0; next } { print }' "$test_yml"
 }
 
+# write_shim <dir> <tool> <pack output> <pack exit status> <unpack exit status>: a stand-in for the toolchain
+# command <tool> that language-pair.sh runs. A pack-* driver command prints <pack output> and exits with the
+# pack status, an unpack-* command exits with the unpack status; every call is logged to $SHIM_LOG.
+write_shim() {
+  cat > "$1/$2" <<SHIM
+#!/bin/sh
+echo "$2 \$*" >> "\$SHIM_LOG"
+for arg in "\$@"; do
+  case "\$arg" in
+    pack-*) printf '%s\n' '$3'; exit $4 ;;
+    unpack-*) exit $5 ;;
+  esac
+done
+SHIM
+  chmod +x "$1/$2"
+}
+
+# expect_ring <label> <expected output> <expected exit status>: runs language-pair.sh from the temp tree
+# with the shims first on PATH; stdout and stderr together must be exactly the expected text.
+expect_ring() {
+  local label="$1" want="$2" want_rc="$3" out rc=0
+  : > "$shim_log"
+  out="$(PATH="$shims:$PATH" SHIM_LOG="$shim_log" bash "$ring_tree/.github/workflows/language-pair.sh" 2>&1)" || rc=$?
+  if [ "$out" != "$want" ] || [ "$rc" -ne "$want_rc" ]; then
+    fail "$label: exit $rc, output [$out], expected exit $want_rc, output [$want]"
+  else
+    echo "names the pair: $label ($out)"
+  fi
+}
+
+# AZ-2238 AC-4, AC-5: a pair that fails ends the script with exit 1 and one line that names it. The first
+# pair is csharp -> typescript, the second typescript -> python; the script stops at the first failure.
+consumer_failure_checks() {
+  # expect_ring reads these three (bash scopes a local to the functions it calls).
+  local user_hex shim_log="$tmp/shim.log" shims="$tmp/shims" ring_tree="$tmp/ring-tree"
+  user_hex="$(sed -n 's/^user_hex="\([0-9a-f]*\)"$/\1/p' "$here/language-pair.sh")"
+  if [ -z "$user_hex" ]; then
+    fail "language-pair.sh has no user_hex line to feed the shims"
+    return
+  fi
+  mkdir -p "$shims" "$ring_tree/.github/workflows"
+  cp "$here/language-pair.sh" "$ring_tree/.github/workflows/language-pair.sh"
+
+  write_shim "$shims" dotnet "$user_hex" 0 0
+  write_shim "$shims" python3 "$user_hex" 0 0
+  write_shim "$shims" node "$user_hex" 0 1
+  expect_ring "the node consumer fails" "typescript unpack-user failed on the bytes packed by csharp" 1
+
+  write_shim "$shims" node "$user_hex" 0 0
+  write_shim "$shims" python3 "$user_hex" 0 1
+  expect_ring "the python consumer fails after a passing node" \
+    "python unpack-user failed on the bytes packed by typescript" 1
+
+  write_shim "$shims" python3 "$user_hex" 0 0
+  write_shim "$shims" dotnet 00 0 0
+  expect_ring "the csharp producer prints other bytes" "csharp pack-user mismatch" 1
+  if grep -q 'unpack' "$shim_log"; then
+    fail "a consumer ran after a producer mismatch: $(cat "$shim_log")"
+  fi
+
+  write_shim "$shims" dotnet "$user_hex" 1 0
+  expect_ring "the csharp producer exits 1 while packing" "csharp pack-user failed" 1
+}
+
 if ! command -v ruby > /dev/null; then
   fail "ruby is required to parse the workflow YAML"
 elif ! out="$(ring_wiring "$test_yml")"; then
   fail "test.yml: $out"
 else
-  tmp="$(mktemp -d)"
-  trap 'rm -rf "$tmp"' EXIT
   sed '/language-pair\.sh/d' "$test_yml" > "$tmp/call-removed.yml"
   sed 's#language-pair\.sh#language-pairs.sh#' "$test_yml" > "$tmp/call-renamed.yml"
   sed 's|run: bash \.github/workflows/language-pair\.sh|run: echo skipped # bash .github/workflows/language-pair.sh|' \
@@ -239,6 +304,8 @@ else
   expect_rejected "CXX is the runner's g++" "$tmp/cxx-runner-gcc.yml"
   expect_rejected "the ring step overrides CXX" "$tmp/cxx-step-override.yml"
 fi
+
+consumer_failure_checks
 
 if [ "$failures" -ne 0 ]; then
   echo "$failures failure(s)" >&2

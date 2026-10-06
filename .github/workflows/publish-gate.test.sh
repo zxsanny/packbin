@@ -426,6 +426,7 @@ source "$here/publish-vcpkg.test.sh"
 
 if [ "${1:-}" = "--npm" ]; then
   npm_dist_checks
+  bash "$here/publish-position.test.sh" || fail "AZ-2238 AC-1 AC-2 publish-position.test.sh failed"
   if [ "$failures" -ne 0 ]; then
     echo "$failures failure(s)" >&2
     exit 1
@@ -474,6 +475,7 @@ vcpkg_checks
 gate_checks
 manifest_checks
 npm_dist_checks
+bash "$here/publish-position.test.sh" || fail "AZ-2238 AC-1 AC-2 publish-position.test.sh failed"
 workflow_checks
 pins_checks
 phase_checks

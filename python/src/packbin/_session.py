@@ -28,7 +28,12 @@ class PackSession:
 
     @staticmethod
     def load(seed: bytes | bytearray | memoryview) -> PackSession | None:
-        raw = bytes(seed)
+        if not isinstance(seed, (bytes, bytearray, memoryview)):
+            return None
+        try:
+            raw = bytes(seed)
+        except ValueError:  # a released memoryview holds no bytes to read
+            return None
         if len(raw) != SEED_SIZE:
             return None
         return PackSession(raw)

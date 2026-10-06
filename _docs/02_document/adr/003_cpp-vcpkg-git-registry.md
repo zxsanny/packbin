@@ -45,6 +45,7 @@ Consumers install with `vcpkg install packbin`. The tag job does not open a pull
 
 - vcpkg consumers must point at this git registry. `vcpkg install packbin` does not resolve from the curated registry alone
 - A pushed port version cannot be deleted. Callers move forward (R02)
+- The port is for Linux and macOS only (`"supports": "linux | osx"`); vcpkg refuses other triplets, and `--allow-unsupported` overrides that. Windows is not supported: the C++ core is built and tested only with gcc on Linux and clang on macOS, and `os_random` has no Windows branch (its fallback opens `/dev/urandom`, so `PackSession::start` would fail at run time there; read from the code, not run). Port versions 0.1.x keep no `supports` line
 - The port directory holds a copy of the C++ sources: each C++ source change is a new port tree. Port versions pushed before AZ-2098 hold headers and sources but no CMake build, so they do not link; callers move to a later version
 
 ### Neutral / Open
@@ -62,3 +63,5 @@ Consumers install with `vcpkg install packbin`. The tag job does not open a pull
 ## Notes
 
 Amended 2026-10-06 (AZ-2098): the port builds and exports `packbin::packbin`; the owner decided vendored sources over `vcpkg_from_github`. The decision above is unchanged.
+
+Amended 2026-10-06 (AZ-2232): the staged port declares `supports` `linux | osx`, and the installed `packbin-config-version.cmake` uses `SameMinorVersion` below 1.0 and `SameMajorVersion` from 1.0.

@@ -26,6 +26,7 @@ final class PackStrictTest {
         ac6ValidRowsKeepTheirBytes();
         ac7SessionPackRefusesTheSame();
         refusalsReachEveryPlaceAScalarIsPacked();
+        az2234Ac9U2OutsideRoundsIsUnchanged();
     }
 
     private static Field scalar(String kind) {
@@ -276,5 +277,25 @@ final class PackStrictTest {
                 Packbin.i8(0, Access.identity(), Access.ignore())));
         PackbinTest.expectThrows("places: i8 200 in a dict element", () ->
                 BinaryPacker.pack(dict, Maps.map("a", Maps.map("k", 200))), "0: 200 does not fit");
+    }
+
+    /** AZ-2234 AC-9: a u2 outside a round, in a nested row and in a nested row of a round keeps its bytes and errors. */
+    private static void az2234Ac9U2OutsideRoundsIsUnchanged() {
+        Field a = Packbin.u2Slot(0, Access.get("a"), Access.set("a"));
+        Field b = Packbin.u2Slot(1, Access.get("b"), Access.set("b"));
+        Scheme<Map> top = Maps.scheme(1, Packbin.u2(a, b));
+        PackbinTest.expectEq("AC-9 u2 {a:1, b:2}", "0109", PackbinTest.toHex(BinaryPacker.pack(top, Maps.map("a", 1, "b", 2))));
+        PackbinTest.expectThrows("AC-9 u2 {a:1}", () -> BinaryPacker.pack(top, Maps.map("a", 1)), "1: expected 2-bit int");
+        PackbinTest.expectThrows("AC-9 u2 {a:1, b:4}", () -> BinaryPacker.pack(top, Maps.map("a", 1, "b", 4)),
+                "1: expected 2-bit int");
+
+        Field slotA = Packbin.u2Slot(0, Access.get("a"), Access.set("a"));
+        Field slotB = Packbin.u2Slot(1, Access.get("b"), Access.set("b"));
+        Field nestedU2 = Packbin.group(Access.get("g"), Access.set("g"), Packbin.u2(slotA, slotB));
+        PackbinTest.expectEq("AC-9 u2 in a nested row", "0109", PackbinTest.toHex(BinaryPacker.pack(
+                Maps.scheme(1, nestedU2), Maps.map("g", Maps.map("a", 1, "b", 2)))));
+        PackbinTest.expectEq("AC-9 u2 in a nested row of a round", "010903", PackbinTest.toHex(BinaryPacker.pack(
+                Maps.scheme(1, Packbin.repeat(0, nestedU2)),
+                Maps.map("g", List.of(Maps.map("a", 1, "b", 2), Maps.map("a", 3, "b", 0))))));
     }
 }

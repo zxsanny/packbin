@@ -23,8 +23,13 @@ final class Containers {
         sink.write((byte) items.size());
         sink.write((byte) (items.size() >> 8));
         Field child = field.children.get(0);
+        int index = 0;
         for (Object item : items) {
+            if (item == null && isNestedRow(child)) {
+                throw new IllegalArgumentException("missing list element " + index);
+            }
             packElement(child, item, sink);
+            index++;
         }
     }
 
@@ -82,7 +87,11 @@ final class Containers {
             sink.write((byte) rawKey.length);
             sink.write((byte) (rawKey.length >> 8));
             sink.write(rawKey);
-            packElement(child, items.get(key), sink);
+            Object value = items.get(key);
+            if (value == null && isNestedRow(child)) {
+                throw new IllegalArgumentException("missing dict element \"" + key + "\"");
+            }
+            packElement(child, value, sink);
         }
     }
 
@@ -142,6 +151,10 @@ final class Containers {
             items.put(key, got[0]);
         }
         return new Object[] {items, null};
+    }
+
+    private static boolean isNestedRow(Field element) {
+        return element.kind == Field.Kind.GROUP && element.nestedRow;
     }
 
     private static boolean isLeaf(Field field) {

@@ -19,6 +19,16 @@ bitwhen_hex="010001"
 roundflags_hex="01030102020303"
 # repeat(u8 k, when(k == 1, u8 v)), k [1, 2], v [9]: v unpacks aligned as [9, null]. Same omissions.
 roundwhen_hex="01010902"
+# AZ-2239: a list of group, a dict of group and a list of flags (AZ-2102), each element u8 a and u8 b (u16 b in
+# the flags): [{a:1,b:2},{a:3,b:4}]; {y:{a:3,b:4}, x:{a:1,b:2}} written in unsigned key order; and
+# [{a:1},{},{b:2}], where a missing value is a clear flag bit.
+listgroup_hex="01020001020304"
+dictgroup_hex="01020001007801020100790304"
+listflags_hex="010300010100020200"
+# The same packets with the last element cut short: its second value (or the flags item's u16) is missing.
+listgroup_short_hex="010200010203"
+dictgroup_short_hex="010200010078010201007903"
+listflags_short_hex="0103000101000202"
 
 run_lang() {
   local lang="$1"
@@ -43,22 +53,26 @@ run_lang() {
       if [ -n "$sdk" ]; then
         flags+=(-isysroot "$sdk" -I"$sdk/usr/include/c++/v1")
       fi
+      # `|| return` on the compile: handoff() runs run_lang under `if`, where set -e is off, and a stale
+      # binary must not stand in for a build that failed.
       "${CXX:-c++}" "${flags[@]}" -o "$bin" \
         "$drivers/handoff.cpp" "$root/cpp/src/core/values.cpp" "$root/cpp/src/core/pack.cpp" \
-        "$root/cpp/src/core/unpack.cpp" "$root/cpp/src/core/session.cpp" "$root/cpp/src/os_random.cpp"
+        "$root/cpp/src/core/unpack.cpp" "$root/cpp/src/core/session.cpp" "$root/cpp/src/os_random.cpp" \
+        || return
       "$bin" "$@"
       ;;
     java)
       local out="${PACKBIN_JAVA_HANDOFF:-/tmp/packbin-handoff-java}"
-      # Rebuild when the driver or any package source is newer than the last build.
-      if [ ! -f "$out/Handoff.class" ] || [ -n "$(find "$root/java/src/main/java" "$drivers/Handoff.java" -newer "$out/Handoff.class" -print -quit)" ]; then
+      # Rebuild when a driver file or any package source is newer than the last build, or a driver class is missing.
+      if [ ! -f "$out/Handoff.class" ] || [ ! -f "$out/HandoffElements.class" ] \
+        || [ -n "$(find "$root/java/src/main/java" "$drivers/Handoff.java" "$drivers/HandoffElements.java" -newer "$out/Handoff.class" -print -quit)" ]; then
         rm -rf "$out"
         mkdir -p "$out"
         local sources=()
         while IFS= read -r -d '' f; do
           sources+=("$f")
         done < <(find "$root/java/src/main/java" -name '*.java' -print0 | sort -z)
-        javac -encoding UTF-8 -d "$out" "${sources[@]}" "$drivers/Handoff.java"
+        javac -encoding UTF-8 -d "$out" "${sources[@]}" "$drivers/Handoff.java" "$drivers/HandoffElements.java" || return
       fi
       java -cp "$out" Handoff "$@"
       ;;
@@ -75,12 +89,18 @@ handoff() {
   local kind="$3"
   local expect="$4"
   local packed
-  packed="$(run_lang "$producer" "pack-$kind" | tr -d '[:space:]')"
+  if ! packed="$(run_lang "$producer" "pack-$kind" | tr -d '[:space:]')"; then
+    echo "$producer pack-$kind failed" >&2
+    exit 1
+  fi
   if [ "$packed" != "$expect" ]; then
     echo "$producer pack-$kind mismatch" >&2
     exit 1
   fi
-  run_lang "$consumer" "unpack-$kind" "$packed"
+  if ! run_lang "$consumer" "unpack-$kind" "$packed"; then
+    echo "$consumer unpack-$kind failed on the bytes packed by $producer" >&2
+    exit 1
+  fi
 }
 
 handoff csharp typescript user "$user_hex"
@@ -129,6 +149,34 @@ handoff typescript rust roundwhen "$roundwhen_hex"
 handoff rust java roundwhen "$roundwhen_hex"
 handoff java cpp roundwhen "$roundwhen_hex"
 handoff cpp typescript roundwhen "$roundwhen_hex"
+
+# AZ-2239: only TypeScript, Python and Java take part in the listgroup, dictgroup and listflags rings. Rust
+# refuses these schemes when it builds them (a list or dict element is one integer, float, bytes, utf8, list
+# or dict; README upgrade notes, integrity_tests.rs), C++ builds an invalid scheme for them (bind_element in
+# table.hpp), and C# throws KeyNotFoundException on unpack until AZ-2119 lands, so none of the three is run.
+# A package that joins gets its handoff lines here and the commands in its driver.
+handoff typescript python listgroup "$listgroup_hex"
+handoff python java listgroup "$listgroup_hex"
+handoff java typescript listgroup "$listgroup_hex"
+
+handoff typescript python dictgroup "$dictgroup_hex"
+handoff python java dictgroup "$dictgroup_hex"
+handoff java typescript dictgroup "$dictgroup_hex"
+
+handoff typescript python listflags "$listflags_hex"
+handoff python java listflags "$listflags_hex"
+handoff java typescript listflags "$listflags_hex"
+
+# Each participant refuses a packet whose last element is short, and hands no row to its handler.
+for lang in typescript python java; do
+  for row in "listgroup $listgroup_short_hex" "dictgroup $dictgroup_short_hex" "listflags $listflags_short_hex"; do
+    read -r kind short <<< "$row"
+    if ! run_lang "$lang" "unpack-$kind-short" "$short"; then
+      echo "$lang unpack-$kind-short failed: it read a short element or the driver crashed (see the output above)" >&2
+      exit 1
+    fi
+  done
+done
 
 for lang in csharp typescript python rust cpp java; do
   got="$(run_lang "$lang" "pack-session" | tr -d '[:space:]')"

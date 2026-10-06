@@ -23,7 +23,7 @@ License is MIT.
 | pypi.org | `packbin` | `pip install packbin` | First publish, with the Python package |
 | crates.io | `packbin` | `cargo add packbin` | First publish, with the Rust package |
 | Maven Central | `io.github.zxsanny:packbin` | Gradle / Maven coordinate | First publish, with the Java package |
-| vcpkg | `packbin` | `vcpkg install packbin`, with this repository's `vcpkg` branch as a git registry in `vcpkg-configuration.json` (README); then `find_package(packbin CONFIG REQUIRED)` and `packbin::packbin` | First publish, with the C++ package |
+| vcpkg | `packbin` | `vcpkg install packbin`, with this repository's `vcpkg` branch as a git registry in `vcpkg-configuration.json` (README); then `find_package(packbin CONFIG REQUIRED)` and `packbin::packbin`; Linux and macOS only (`supports` is `linux \| osx`) | First publish, with the C++ package |
 
 The Java jar targets Java 17+, Android API 26+.
 

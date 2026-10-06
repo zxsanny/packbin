@@ -89,6 +89,43 @@ pub(super) fn check_aligned(
     }
 }
 
+/// Without rounds pack takes item `i` of each direct field's list for round `i` of the `count`
+/// rounds, so the items past the count would be dropped without a word. Fails on the first such
+/// field. A list that is too short fails when its round runs out of items.
+pub(super) fn check_longer(
+    anchor: u32,
+    members: &[Field],
+    values: &Values,
+    count: usize,
+) -> Result<(), PackError> {
+    for member in members {
+        let Some(name) = data_name(member) else {
+            continue;
+        };
+        if let Some(Some(Value::List(items))) = values.get(name) {
+            if items.len() > count {
+                return Err(PackError::Type(format!(
+                    "times at id {anchor}: '{name}' has {} items, count is {count}",
+                    items.len()
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The name of the value pack reads for a direct member of a `times`. A `flags`, a flag byte and
+/// a `group` at the top of the round are made from their members, so a list kept under their
+/// name is not read (unpack publishes one under each flags and flag byte name, one item per
+/// round). Under a flag bit the field is data.
+fn data_name(member: &Field) -> Option<&str> {
+    match &member.kind {
+        FieldKind::Flags { .. } | FieldKind::FlagByte { .. } | FieldKind::Group { .. } => None,
+        FieldKind::FlagBit { inner, .. } => field_name(inner),
+        _ => field_name(member),
+    }
+}
+
 fn holds_items(values: &Values, name: &str) -> bool {
     match values.get(name) {
         Some(Some(Value::List(items))) => !items.is_empty(),

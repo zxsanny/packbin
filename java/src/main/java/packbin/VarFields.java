@@ -79,13 +79,14 @@ final class VarFields {
         return null;
     }
 
-    static void packU2(Field field, Object row, ByteSink sink, Map<Object, Object> seen) {
+    static void packU2(
+            Field field, Object row, ByteSink sink, Map<Object, Object> seen, Walker.Take take) {
         List<Field> slots = field.children;
         int nbytes = (slots.size() + 3) / 4;
         byte[] raw = new byte[nbytes];
         for (int i = 0; i < slots.size(); i++) {
             Field slot = slots.get(i);
-            Object value = slot.get.get(row);
+            Object value = take != null ? take.apply(slot) : slot.get.get(row);
             seen.put(slot.id, value);
             int n = requireU2(slot.label(), value);
             raw[i / 4] |= (byte) (n << ((i % 4) * 2));

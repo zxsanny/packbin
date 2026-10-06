@@ -34,6 +34,13 @@ final class TypedNestedRowTest {
     public static final class Holder {
         public List<Item> items;
         public Map<String, Item> byName;
+        public List<Map<String, Object>> maps;
+        public List<List<Item>> nested;
+    }
+
+    public static final class Mixed {
+        public Integer k;
+        public List<Item> items;
     }
 
     public static final class RoundRow {
@@ -65,6 +72,11 @@ final class TypedNestedRowTest {
         typedNestedRowUnderAFlagBitWithAnAbsentMember();
         mapNestedRowWithAbsentMemberWritesNoBit();
         nullFactory();
+        az2235Ac1ListElementWithoutAFactoryIsRefused();
+        az2235Ac2DictAndInnerContainers();
+        az2235Ac3WhereverTheHoldingScopeIsTyped();
+        az2235Ac4AFactoryBuilds();
+        az2235Ac5MapSchemesAndUndecidableShapesAreUnchanged();
     }
 
     private static Field innerV() {
@@ -340,5 +352,145 @@ final class TypedNestedRowTest {
             refused = true;
         }
         PackbinTest.expectTrue("a factory that returns null is a caller bug, not a silent drop", refused);
+    }
+
+    private static final String LIST_NEEDS_FACTORY = "list element: nested group on a typed row needs a child factory";
+    private static final String DICT_NEEDS_FACTORY = "dict element: nested group on a typed row needs a child factory";
+    private static final Getter GET_ITEMS = Access.get((Holder h) -> h.items);
+    private static final Setter SET_ITEMS = Access.set((Holder h, Object v) -> h.items = (List<Item>) v);
+    private static final Getter GET_MAPS = Access.get((Holder h) -> h.maps);
+    private static final Setter SET_MAPS = Access.set((Holder h, Object v) -> h.maps = (List<Map<String, Object>>) v);
+    private static final Getter GET_BY_NAME = Access.get((Holder h) -> h.byName);
+    private static final Setter SET_BY_NAME = Access.set((Holder h, Object v) -> h.byName = (Map<String, Item>) v);
+    private static final Getter GET_NESTED = Access.get((Holder h) -> h.nested);
+    private static final Setter SET_NESTED = Access.set((Holder h, Object v) -> h.nested = (List<List<Item>>) v);
+    private static final Getter GET_MIXED_ITEMS = Access.get((Mixed m) -> m.items);
+    private static final Setter SET_MIXED_ITEMS = Access.set((Mixed m, Object v) -> m.items = (List<Item>) v);
+
+    private static Field mapV() {
+        return Packbin.u8(0, Access.get("v"), Access.set("v"));
+    }
+
+    /** An element nested-row group, with the factory when {@code create} is not null. */
+    private static Field elementGroup(Supplier<?> create, Field... fields) {
+        return create == null
+                ? Packbin.group(Access.identity(), Access.ignore(), fields)
+                : Packbin.group(Access.identity(), Access.ignore(), create, fields);
+    }
+
+    private static Field itemsOf(Field element) {
+        return Packbin.list(GET_ITEMS, SET_ITEMS, element);
+    }
+
+    private static Field mixedItemsOf(Field element) {
+        return Packbin.list(GET_MIXED_ITEMS, SET_MIXED_ITEMS, element);
+    }
+
+    /** Unpacking {@code hex} throws the ClassCastException that a typed accessor gets from a HashMap row. */
+    private static void expectUnpackClassCast(String label, Scheme<?> scheme, String hex) {
+        try {
+            BinaryPacker.unpack(PackbinTest.parseHex(hex), scheme.on(row -> {}));
+        } catch (ClassCastException ex) {
+            return;
+        }
+        PackbinTest.fail(label + ": unpack did not throw ClassCastException");
+    }
+
+    /** AZ-2235 AC-1 (S2): a list element group without a factory on a typed row is refused at construction. */
+    private static void az2235Ac1ListElementWithoutAFactoryIsRefused() {
+        Scheme<Holder>[] built = new Scheme[1];
+        PackbinTest.expectThrows("AZ-2235 AC-1 list of element groups without a factory",
+                () -> built[0] = new Scheme<>(1, Holder.class, itemsOf(elementGroup(null, itemV()))), LIST_NEEDS_FACTORY);
+        PackbinTest.expectTrue("AZ-2235 AC-1 no scheme built", built[0] == null);
+    }
+
+    /** AZ-2235 AC-2 (S6, S7): a dict, and the element of an inner list or dict, name the container that holds it. */
+    private static void az2235Ac2DictAndInnerContainers() {
+        PackbinTest.expectThrows("AZ-2235 AC-2 dict of element groups without a factory", () -> new Scheme<>(1, Holder.class,
+                Packbin.dict(GET_BY_NAME, SET_BY_NAME, elementGroup(null, itemV()))), DICT_NEEDS_FACTORY);
+        PackbinTest.expectThrows("AZ-2235 AC-2 list of lists", () -> new Scheme<>(1, Holder.class,
+                Packbin.list(GET_NESTED, SET_NESTED,
+                        Packbin.list(Access.identity(), Access.ignore(), elementGroup(null, itemV())))),
+                LIST_NEEDS_FACTORY);
+        PackbinTest.expectThrows("AZ-2235 AC-2 list of dicts", () -> new Scheme<>(1, Holder.class,
+                Packbin.list(GET_NESTED, SET_NESTED,
+                        Packbin.dict(Access.identity(), Access.ignore(), elementGroup(null, itemV())))),
+                DICT_NEEDS_FACTORY);
+        PackbinTest.expectThrows("AZ-2235 AC-2 dict of lists", () -> new Scheme<>(1, Holder.class,
+                Packbin.dict(GET_BY_NAME, SET_BY_NAME,
+                        Packbin.list(Access.identity(), Access.ignore(), elementGroup(null, itemV())))),
+                LIST_NEEDS_FACTORY);
+    }
+
+    /** AZ-2235 AC-3 (S10, S11 and the carriers of AZ-2101): the holding scope is typed whatever stands around it. */
+    private static void az2235Ac3WhereverTheHoldingScopeIsTyped() {
+        PackbinTest.expectThrows("AZ-2235 AC-3 a typed nested row with a factory", () -> new Scheme<>(1, Holder.class,
+                Packbin.group(Access.identity(), Access.ignore(), Holder::new, itemsOf(elementGroup(null, itemV())))),
+                LIST_NEEDS_FACTORY);
+        PackbinTest.expectThrows("AZ-2235 AC-3 a repeat", () -> new Scheme<>(1, Holder.class,
+                Packbin.repeat(0, itemsOf(elementGroup(null, itemV())))), LIST_NEEDS_FACTORY);
+        Field k = Packbin.u8(0, Access.get((Mixed m) -> m.k), Access.set((Mixed m, Object v) -> m.k = ((Number) v).intValue()));
+        PackbinTest.expectThrows("AZ-2235 AC-3 below a when", () -> new Scheme<>(1, Mixed.class, k,
+                Packbin.when(1, Packbin.eq(0, 1), mixedItemsOf(elementGroup(null, itemV())))), LIST_NEEDS_FACTORY);
+        PackbinTest.expectThrows("AZ-2235 AC-3 as a flags member", () -> new Scheme<>(1, Mixed.class,
+                Packbin.flags(0, mixedItemsOf(elementGroup(null, itemV())))), LIST_NEEDS_FACTORY);
+        Field m = Packbin.flagByte();
+        PackbinTest.expectThrows("AZ-2235 AC-3 as the payload of a flag byte bit", () -> new Scheme<>(1, Mixed.class, m,
+                m.bit(mixedItemsOf(elementGroup(null, itemV())))), LIST_NEEDS_FACTORY);
+        PackbinTest.expectThrows("AZ-2235 AC-3 inside an anchored group", () -> new Scheme<>(1, Mixed.class,
+                Packbin.group(0, mixedItemsOf(elementGroup(null, itemV())))), LIST_NEEDS_FACTORY);
+    }
+
+    /** AZ-2235 AC-4 (S1, S3, S3b): a factory builds, with typed rows and with Map rows; the old overload is refused. */
+    private static void az2235Ac4AFactoryBuilds() {
+        Scheme<Holder> typed = new Scheme<>(1, Holder.class, itemsOf(elementGroup(Item::new, itemV())));
+        Holder row = new Holder();
+        row.items = List.of(item(3));
+        PackbinTest.expectEq("AZ-2235 AC-4 typed factory bytes", "01010003", PackbinTest.toHex(BinaryPacker.pack(typed, row)));
+        Holder back = unpackOne("AZ-2235 AC-4 typed factory", typed, "01010003");
+        PackbinTest.expectTrue("AZ-2235 AC-4 the element is an Item",
+                back.items != null && back.items.size() == 1 && ((Object) back.items.get(0)) instanceof Item
+                        && back.items.get(0).v == 3);
+
+        Scheme<Holder> maps = new Scheme<>(1, Holder.class,
+                Packbin.list(GET_MAPS, SET_MAPS, elementGroup(java.util.HashMap::new, mapV())));
+        Holder mapRow = new Holder();
+        mapRow.maps = List.of(Maps.map("v", 3));
+        PackbinTest.expectEq("AZ-2235 AC-4 HashMap factory bytes", "01010003", PackbinTest.toHex(BinaryPacker.pack(maps, mapRow)));
+        PackbinTest.expectEq("AZ-2235 AC-4 HashMap factory row", List.of(Maps.map("v", 3)),
+                unpackOne("AZ-2235 AC-4 HashMap factory", maps, "01010003").maps);
+
+        PackbinTest.expectThrows("AZ-2235 AC-4 the old overload with Map accessors on a List of Map", () -> new Scheme<>(1,
+                Holder.class, Packbin.list(GET_MAPS, SET_MAPS, elementGroup(null, mapV()))), LIST_NEEDS_FACTORY);
+        PackbinTest.expectTrue("AZ-2235 AC-4 holderScheme (list and dict with Item::new) builds", holderScheme() != null);
+    }
+
+    /** AZ-2235 AC-5 (S4, S5, S8, S12): Map schemes and the shapes construction cannot decide build as before. */
+    private static void az2235Ac5MapSchemesAndUndecidableShapesAreUnchanged() {
+        Scheme<Map> mapScheme = Maps.scheme(1, Packbin.list(Access.get("items"), Access.set("items"),
+                elementGroup(null, itemV())));
+        Item three = item(3);
+        PackbinTest.expectEq("AZ-2235 AC-5 Map scheme with typed accessors packs", "01010003",
+                PackbinTest.toHex(BinaryPacker.pack(mapScheme, Maps.map("items", List.of(three)))));
+        expectUnpackClassCast("AZ-2235 AC-5 Map scheme with typed accessors", mapScheme, "01010003");
+
+        Scheme<Map> hashMapScheme = new Scheme<>(1, (Class) java.util.HashMap.class,
+                Packbin.list(Access.get("maps"), Access.set("maps"), elementGroup(null, mapV())));
+        PackbinTest.expectEq("AZ-2235 AC-5 HashMap class with Map accessors", Maps.map("maps", List.of(Maps.map("v", 3))),
+                unpackOne("AZ-2235 AC-5 HashMap class", hashMapScheme, "01010003"));
+
+        Scheme<Holder> anchoredTyped = new Scheme<>(1, Holder.class, itemsOf(Packbin.group(0, itemV())));
+        expectUnpackClassCast("AZ-2235 AC-5 anchored element, typed accessors", anchoredTyped, "01010003");
+        Scheme<Holder> anchoredMap = new Scheme<>(1, Holder.class,
+                Packbin.list(GET_MAPS, SET_MAPS, Packbin.group(0, mapV())));
+        PackbinTest.expectEq("AZ-2235 AC-5 anchored element, Map accessors", List.of(Maps.map("v", 3)),
+                unpackOne("AZ-2235 AC-5 anchored element", anchoredMap, "01010003").maps);
+
+        Scheme<Holder> flagsTyped = new Scheme<>(1, Holder.class, itemsOf(Packbin.flags(0, itemV())));
+        expectUnpackClassCast("AZ-2235 AC-5 flags element, typed accessors", flagsTyped, "0101000103");
+        Scheme<Holder> flagsMap = new Scheme<>(1, Holder.class,
+                Packbin.list(GET_MAPS, SET_MAPS, Packbin.flags(0, mapV())));
+        PackbinTest.expectEq("AZ-2235 AC-5 flags element, Map accessors", List.of(Maps.map("v", 3)),
+                unpackOne("AZ-2235 AC-5 flags element", flagsMap, "0101000103").maps);
     }
 }

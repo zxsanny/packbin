@@ -358,8 +358,9 @@ public final class Field {
 
     /**
      * A bit of this flag byte: {@code field} is written when it is present. The bit is not numbered here. A scheme
-     * binds it to the latest read of this flag byte before it and numbers it by its order among the bits of that
-     * read (at most 8), so one flagByte may be a member of any number of schemes and may be read more than once.
+     * binds it to the latest read of this flag byte before it in the same container (a nested row is a scope of its
+     * own, also when its member is the row itself) and numbers it by its order among the bits of that read (at most
+     * 8), so one flagByte may be a member of any number of schemes and may be read more than once.
      *
      * @param field the field the bit guards
      * @return the flag bit, to be placed in a scheme after a read of this flag byte

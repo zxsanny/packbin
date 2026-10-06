@@ -373,7 +373,7 @@ nupkg("csharp-license", license_xml="")
 nupkg("csharp-payload", dll=False)
 
 def npm(case, version=V, license="MIT", index=True):
-    manifest = json.dumps({"name": "packbin", "version": version, "license": license}).encode()
+    manifest = json.dumps({"name": "packbin", "version": version, "license": license, "types": "./dist/index.d.ts", "exports": {".": {"types": "./dist/index.d.ts", "import": "./dist/index.js"}}}).encode()
     files = {"package/package.json": manifest, "package/README.md": b"r"}
     if index:
         files["package/dist/index.js"] = b"x"

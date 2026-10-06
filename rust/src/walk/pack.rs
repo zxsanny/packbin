@@ -1,9 +1,54 @@
-use super::times::{check_aligned, check_lists};
+use super::flag_bits::{collect_flag_bits, member_on};
+use super::times::{check_aligned, check_lists, check_longer};
 use crate::field::{field_name, times_name, Field, FieldKind, FloatKind, IntKind, MapScheme};
 use crate::value::{
-    as_bit, as_packed, as_u2, as_usize, name_of, present, when_matches, PackError, Value, Values,
+    as_bit, as_packed, as_u2, as_usize, name_of, when_matches, Name, PackError, Value, Values,
 };
+use std::borrow::Cow;
 use std::collections::HashMap;
+
+/// What pack has written in one scope (the top level, a round of a `repeat` or `times`, a list or
+/// dict element), by name, as unpack holds what it has read: each value, each `u2` slot, a flags
+/// byte and a flag byte under their own name, and a set bool as `1`. A `when` and a count read
+/// it, so one that names a field pack skipped finds nothing, as on unpack.
+struct Written<'v> {
+    /// False for a list or dict element: it cannot hold a `when` or a count (`check_element`), so
+    /// nothing would read what it wrote.
+    kept: bool,
+    items: Vec<(Name, Cow<'v, Value>)>,
+}
+
+impl<'v> Written<'v> {
+    fn new() -> Self {
+        // Most scopes write a handful of fields: one allocation, not a growth from 4 to 8.
+        Written {
+            kept: true,
+            items: Vec::with_capacity(8),
+        }
+    }
+
+    fn unread() -> Self {
+        Written {
+            kept: false,
+            items: Vec::new(),
+        }
+    }
+
+    fn insert(&mut self, name: &Name, value: Cow<'v, Value>) {
+        if self.kept {
+            self.items.push((name.clone(), value));
+        }
+    }
+
+    /// The latest value written under `name`, as a later read replaces an earlier one.
+    fn get(&self, name: &str) -> Option<&Value> {
+        self.items
+            .iter()
+            .rev()
+            .find(|(own, _)| own.as_ref() == name)
+            .map(|(_, value)| &**value)
+    }
+}
 
 fn require<'a>(values: &'a Values, name: &str) -> Result<&'a Value, PackError> {
     match values.get(name) {
@@ -12,14 +57,19 @@ fn require<'a>(values: &'a Values, name: &str) -> Result<&'a Value, PackError> {
     }
 }
 
+fn written<'a>(wrote: &'a Written<'_>, name: &str) -> Result<&'a Value, PackError> {
+    wrote
+        .get(name)
+        .ok_or_else(|| PackError::Missing(name.to_string()))
+}
+
 fn borrowed_count(
-    values: &Values,
+    wrote: &Written<'_>,
     count: &str,
     bias: i8,
     label: &str,
 ) -> Result<usize, PackError> {
-    let raw = as_usize(require(values, count)?)
-        .ok_or_else(|| PackError::Type(count.to_string()))?;
+    let raw = as_usize(written(wrote, count)?).ok_or_else(|| PackError::Type(count.to_string()))?;
     let item_count = i64::try_from(raw)
         .ok()
         .and_then(|n| n.checked_add(i64::from(bias)));
@@ -55,10 +105,44 @@ fn slice_times(members: &[Field], values: &Values, index: usize) -> Values {
     slice
 }
 
-fn pack_round(members: &[Field], round: &Values, out: &mut Vec<u8>) -> Result<(), PackError> {
+/// Packs one round and returns what it wrote.
+fn pack_round<'r>(
+    members: &[Field],
+    round: &'r Values,
+    out: &mut Vec<u8>,
+) -> Result<Written<'r>, PackError> {
     let mut bits = HashMap::new();
     collect_flag_bits(members, round, &mut bits)?;
-    pack_fields(members, round, &bits, out)
+    let mut wrote = Written::new();
+    pack_fields(members, round, &bits, &mut wrote, out)?;
+    Ok(wrote)
+}
+
+/// One list per name the rounds of a `times` wrote, with an item for every round that wrote it,
+/// and the round that last added to it (counted from 1).
+#[derive(Default)]
+struct RoundLists(HashMap<Name, (usize, Vec<Value>)>);
+
+impl RoundLists {
+    /// A name written twice in one round keeps the later value, as in the values unpack builds.
+    fn add(&mut self, round: usize, wrote: &Written<'_>) {
+        for (name, value) in &wrote.items {
+            let (last, items) = self.0.entry(name.clone()).or_default();
+            if *last == round + 1 {
+                items.pop();
+            }
+            items.push((**value).clone());
+            *last = round + 1;
+        }
+    }
+
+    /// Unpack gives the scope around a `times` these lists in place of what it held under those
+    /// names, so a later `when` or count on one finds a list.
+    fn leave_in(self, wrote: &mut Written<'_>) {
+        for (name, (_, items)) in self.0 {
+            wrote.insert(&name, Cow::Owned(Value::List(items)));
+        }
+    }
 }
 
 fn write_bytes(out: &mut Vec<u8>, bytes: &[u8], big_endian: bool) {
@@ -98,97 +182,24 @@ fn write_float(
     Ok(())
 }
 
-/// A bool (an empty group) is on for `1` and off for `0` or no value; any other value is a
-/// type error, as for `bits`.
-fn bool_on(values: &Values, name: &str) -> Result<bool, PackError> {
-    match values.get(name) {
-        Some(Some(v)) => as_bit(v)
-            .map(|bit| bit == 1)
-            .ok_or_else(|| PackError::Type(name.to_string())),
-        _ => Ok(false),
-    }
-}
-
-/// Sets the bits of the flag bytes read in this scope, by slot. A repeat or times round
-/// collects its own.
-fn collect_flag_bits(
+fn pack_fields<'v>(
     fields: &[Field],
-    values: &Values,
-    out: &mut HashMap<usize, u8>,
-) -> Result<(), PackError> {
-    for field in fields {
-        match &field.kind {
-            FieldKind::FlagBit {
-                slot, bit, inner, ..
-            } => {
-                if member_on(inner, values)? {
-                    *out.entry(*slot).or_insert(0) |= 1 << *bit;
-                }
-                collect_flag_bits(std::slice::from_ref(inner), values, out)?;
-            }
-            FieldKind::Flags { members, .. }
-            | FieldKind::Group { members, .. }
-            | FieldKind::When { members, .. } => collect_flag_bits(members, values, out)?,
-            _ => {}
-        }
-    }
-    Ok(())
-}
-
-/// A group is on when it or one of its values, at any depth, is present, or one of its flag
-/// bits is on. A `when`, `repeat` or `times` inside it does not count, and neither does a flag
-/// byte, whose value comes from its bits.
-fn group_on(name: &str, members: &[Field], values: &Values) -> Result<bool, PackError> {
-    if members.is_empty() {
-        return bool_on(values, name);
-    }
-    if present(values, name) {
-        return Ok(true);
-    }
-    any_member_on(members, values)
-}
-
-fn any_member_on(members: &[Field], values: &Values) -> Result<bool, PackError> {
-    for member in members {
-        if !matches!(member.kind, FieldKind::FlagByte { .. }) && member_on(member, values)? {
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
-/// Whether a `flags` member or the field under a flag bit is on, so its bit is set.
-fn member_on(field: &Field, values: &Values) -> Result<bool, PackError> {
-    match &field.kind {
-        FieldKind::Group { name, members, .. } => group_on(name, members, values),
-        FieldKind::FlagBit { inner, .. } => member_on(inner, values),
-        FieldKind::Flags { name, members, .. } => {
-            if present(values, name) {
-                return Ok(true);
-            }
-            any_member_on(members, values)
-        }
-        FieldKind::U2 { names } => Ok(names.iter().any(|n| present(values, n))),
-        _ => Ok(field_name(field).is_some_and(|n| present(values, n))),
-    }
-}
-
-pub(crate) fn pack_fields(
-    fields: &[Field],
-    values: &Values,
+    values: &'v Values,
     flag_bits: &HashMap<usize, u8>,
+    wrote: &mut Written<'v>,
     out: &mut Vec<u8>,
 ) -> Result<(), PackError> {
     for field in fields {
-        pack_one(field, values, flag_bits, out)?;
+        pack_one(field, values, flag_bits, wrote, out)?;
     }
     Ok(())
 }
 
-fn pack_one(
+fn pack_one<'v>(
     field: &Field,
-    values: &Values,
+    values: &'v Values,
     flag_bits: &HashMap<usize, u8>,
+    wrote: &mut Written<'v>,
     out: &mut Vec<u8>,
 ) -> Result<(), PackError> {
     match &field.kind {
@@ -196,20 +207,34 @@ fn pack_one(
             name,
             kind,
             big_endian,
-        } => write_int(out, *kind, *big_endian, require(values, name)?),
+        } => {
+            let v = require(values, name)?;
+            write_int(out, *kind, *big_endian, v)?;
+            wrote.insert(name, Cow::Borrowed(v));
+            Ok(())
+        }
         FieldKind::Float {
             name,
             kind,
             big_endian,
-        } => write_float(out, *kind, *big_endian, require(values, name)?),
-        FieldKind::Bytes { name, len } => match require(values, name)? {
-            Value::Bytes(b) if b.len() == *len => {
-                out.extend_from_slice(b);
-                Ok(())
+        } => {
+            let v = require(values, name)?;
+            write_float(out, *kind, *big_endian, v)?;
+            wrote.insert(name, Cow::Borrowed(v));
+            Ok(())
+        }
+        FieldKind::Bytes { name, len } => {
+            let v = require(values, name)?;
+            match v {
+                Value::Bytes(b) if b.len() == *len => {
+                    out.extend_from_slice(b);
+                    wrote.insert(name, Cow::Borrowed(v));
+                    Ok(())
+                }
+                _ => Err(PackError::Type(name.to_string())),
             }
-            _ => Err(PackError::Type(name.to_string())),
-        },
-        FieldKind::Flags { members, .. } => {
+        }
+        FieldKind::Flags { name, members, .. } => {
             let mut bits: u8 = 0;
             for (i, member) in members.iter().enumerate() {
                 if member_on(member, values)? {
@@ -217,20 +242,18 @@ fn pack_one(
                 }
             }
             out.push(bits);
+            wrote.insert(name, Cow::Owned(Value::U8(bits)));
             for (i, member) in members.iter().enumerate() {
                 if bits & (1 << i) != 0 {
-                    match &member.kind {
-                        FieldKind::Group { members: g, .. } => {
-                            pack_fields(g, values, flag_bits, out)?;
-                        }
-                        _ => pack_one(member, values, flag_bits, out)?,
-                    }
+                    pack_one(member, values, flag_bits, wrote, out)?;
                 }
             }
             Ok(())
         }
-        FieldKind::FlagByte { slot, .. } => {
-            out.push(*flag_bits.get(slot).unwrap_or(&0));
+        FieldKind::FlagByte { name, slot } => {
+            let bits = *flag_bits.get(slot).unwrap_or(&0);
+            out.push(bits);
+            wrote.insert(name, Cow::Owned(Value::U8(bits)));
             Ok(())
         }
         FieldKind::FlagBit {
@@ -238,7 +261,7 @@ fn pack_one(
         } => {
             let bits = *flag_bits.get(slot).unwrap_or(&0);
             if bits & (1 << bit) != 0 {
-                pack_one(inner, values, flag_bits, out)?;
+                pack_one(inner, values, flag_bits, wrote, out)?;
             }
             Ok(())
         }
@@ -248,10 +271,8 @@ fn pack_one(
             members,
             ..
         } => {
-            if let Ok(v) = require(values, field) {
-                if when_matches(v, expect) {
-                    pack_fields(members, values, flag_bits, out)?;
-                }
+            if wrote.get(field).is_some_and(|v| when_matches(v, expect)) {
+                pack_fields(members, values, flag_bits, wrote, out)?;
             }
             Ok(())
         }
@@ -262,19 +283,24 @@ fn pack_one(
                 _ => &[],
             };
             for group in groups {
-                let mut bits = HashMap::new();
-                collect_flag_bits(members, group, &mut bits)?;
-                pack_fields(members, group, &bits, out)?;
+                pack_round(members, group, out)?;
             }
             Ok(())
         }
-        FieldKind::Group { members, .. } => pack_fields(members, values, flag_bits, out),
+        FieldKind::Group { name, members, .. } => {
+            if members.is_empty() {
+                wrote.insert(name, Cow::Owned(Value::U8(1)));
+            }
+            pack_fields(members, values, flag_bits, wrote, out)
+        }
         FieldKind::Sized { name, count } => {
-            let n = as_usize(require(values, count)?)
+            let n = as_usize(written(wrote, count)?)
                 .ok_or_else(|| PackError::Type(count.to_string()))?;
-            match require(values, name)? {
+            let v = require(values, name)?;
+            match v {
                 Value::Bytes(b) if b.len() == n => {
                     out.extend_from_slice(b);
+                    wrote.insert(name, Cow::Borrowed(v));
                     Ok(())
                 }
                 _ => Err(PackError::Type(name.to_string())),
@@ -284,17 +310,19 @@ fn pack_one(
             let nbytes = names.len().div_ceil(4);
             let mut raw = vec![0u8; nbytes];
             for (i, name) in names.iter().enumerate() {
-                let n = as_u2(require(values, name)?)
-                    .ok_or_else(|| PackError::Type(name.to_string()))?;
+                let v = require(values, name)?;
+                let n = as_u2(v).ok_or_else(|| PackError::Type(name.to_string()))?;
                 raw[i / 4] |= n << ((i % 4) * 2);
+                wrote.insert(name, Cow::Borrowed(v));
             }
             out.extend_from_slice(&raw);
             Ok(())
         }
         FieldKind::Bits { name, count } => {
-            let n = as_usize(require(values, count)?)
+            let n = as_usize(written(wrote, count)?)
                 .ok_or_else(|| PackError::Type(count.to_string()))?;
-            match require(values, name)? {
+            let v = require(values, name)?;
+            match v {
                 Value::List(items) if items.len() == n => {
                     let nbytes = n.div_ceil(8);
                     let mut packed = vec![0u8; nbytes];
@@ -303,6 +331,7 @@ fn pack_one(
                         packed[i / 8] |= bit << (i % 8);
                     }
                     out.extend_from_slice(&packed);
+                    wrote.insert(name, Cow::Borrowed(v));
                     Ok(())
                 }
                 _ => Err(PackError::Type(name.to_string())),
@@ -314,19 +343,21 @@ fn pack_one(
             width,
             bias,
         } => {
-            let n = borrowed_count(values, count, *bias, name)?;
-            match require(values, name)? {
+            let n = borrowed_count(wrote, count, *bias, name)?;
+            let v = require(values, name)?;
+            match v {
                 Value::List(items) if items.len() == n => {
                     let max = if *width == 2 { 3 } else { 1 };
                     let shift = if *width == 2 { 2 } else { 1 };
                     let per = if *width == 2 { 4 } else { 8 };
                     let mut packed = vec![0u8; packed_bytes(*width, n)];
                     for (i, item) in items.iter().enumerate() {
-                        let v = as_packed(item, max)
+                        let slot = as_packed(item, max)
                             .ok_or_else(|| PackError::Type(name.to_string()))?;
-                        packed[i / per] |= v << ((i % per) * shift);
+                        packed[i / per] |= slot << ((i % per) * shift);
                     }
                     out.extend_from_slice(&packed);
+                    wrote.insert(name, Cow::Borrowed(v));
                     Ok(())
                 }
                 _ => Err(PackError::Type(name.to_string())),
@@ -338,7 +369,7 @@ fn pack_one(
             members,
             ..
         } => {
-            let n = borrowed_count(values, count, 0, "times")?;
+            let n = borrowed_count(wrote, count, 0, "times")?;
             let key = times_name(*anchor);
             match values.get(key.as_ref()) {
                 Some(Some(Value::Groups(rounds))) => {
@@ -349,74 +380,98 @@ fn pack_one(
                         )));
                     }
                     check_lists(*anchor, members, rounds, values)?;
-                    for round in rounds {
-                        pack_round(members, round, out)?;
+                    let mut lists = RoundLists::default();
+                    for (i, round) in rounds.iter().enumerate() {
+                        lists.add(i, &pack_round(members, round, out)?);
                     }
+                    lists.leave_in(wrote);
                 }
                 Some(Some(_)) => return Err(PackError::Type(key.to_string())),
                 _ => {
                     check_aligned(*anchor, members, values)?;
+                    check_longer(*anchor, members, values, n)?;
+                    let mut lists = RoundLists::default();
                     for i in 0..n {
-                        pack_round(members, &slice_times(members, values, i), out)?;
+                        let round = slice_times(members, values, i);
+                        lists.add(i, &pack_round(members, &round, out)?);
                     }
+                    lists.leave_in(wrote);
                 }
             }
             Ok(())
         }
-        FieldKind::Utf8 { name } => match require(values, name)? {
-            Value::Str(text) => {
-                let raw = text.as_bytes();
-                if raw.len() > 65535 {
-                    return Err(PackError::Type(name.to_string()));
-                }
-                let n = raw.len() as u16;
-                out.extend_from_slice(&n.to_le_bytes());
-                out.extend_from_slice(raw);
-                Ok(())
-            }
-            _ => Err(PackError::Type(name.to_string())),
-        },
-        FieldKind::List { name, element } => match require(values, name)? {
-            Value::List(items) => {
-                if items.len() > 65535 {
-                    return Err(PackError::Type(name.to_string()));
-                }
-                let n = items.len() as u16;
-                out.extend_from_slice(&n.to_le_bytes());
-                let child = field_name(element).ok_or_else(|| PackError::Type(name.to_string()))?;
-                for item in items {
-                    let mut slice = Values::new();
-                    slice.insert(crate::value::name_of(child), Some(item.clone()));
-                    pack_fields(std::slice::from_ref(element), &slice, flag_bits, out)?;
-                }
-                Ok(())
-            }
-            _ => Err(PackError::Type(name.to_string())),
-        },
-        FieldKind::Dict { name, element } => match require(values, name)? {
-            Value::Map(map) => {
-                if map.len() > 65535 {
-                    return Err(PackError::Type(name.to_string()));
-                }
-                let n = map.len() as u16;
-                out.extend_from_slice(&n.to_le_bytes());
-                let child = field_name(element).ok_or_else(|| PackError::Type(name.to_string()))?;
-                for (key, item) in map {
-                    let raw = key.as_bytes();
+        FieldKind::Utf8 { name } => {
+            let v = require(values, name)?;
+            match v {
+                Value::Str(text) => {
+                    let raw = text.as_bytes();
                     if raw.len() > 65535 {
                         return Err(PackError::Type(name.to_string()));
                     }
-                    let kn = raw.len() as u16;
-                    out.extend_from_slice(&kn.to_le_bytes());
+                    let n = raw.len() as u16;
+                    out.extend_from_slice(&n.to_le_bytes());
                     out.extend_from_slice(raw);
-                    let mut slice = Values::new();
-                    slice.insert(crate::value::name_of(child), Some(item.clone()));
-                    pack_fields(std::slice::from_ref(element), &slice, flag_bits, out)?;
+                    wrote.insert(name, Cow::Borrowed(v));
+                    Ok(())
                 }
-                Ok(())
+                _ => Err(PackError::Type(name.to_string())),
             }
-            _ => Err(PackError::Type(name.to_string())),
-        },
+        }
+        FieldKind::List { name, element } => {
+            let v = require(values, name)?;
+            match v {
+                Value::List(items) => {
+                    if items.len() > 65535 {
+                        return Err(PackError::Type(name.to_string()));
+                    }
+                    let n = items.len() as u16;
+                    out.extend_from_slice(&n.to_le_bytes());
+                    let child =
+                        field_name(element).ok_or_else(|| PackError::Type(name.to_string()))?;
+                    for item in items {
+                        let mut slice = Values::new();
+                        slice.insert(name_of(child), Some(item.clone()));
+                        let mut elem_wrote = Written::unread();
+                        let one = std::slice::from_ref(&**element);
+                        pack_fields(one, &slice, flag_bits, &mut elem_wrote, out)?;
+                    }
+                    wrote.insert(name, Cow::Borrowed(v));
+                    Ok(())
+                }
+                _ => Err(PackError::Type(name.to_string())),
+            }
+        }
+        FieldKind::Dict { name, element } => {
+            let v = require(values, name)?;
+            match v {
+                Value::Map(map) => {
+                    if map.len() > 65535 {
+                        return Err(PackError::Type(name.to_string()));
+                    }
+                    let n = map.len() as u16;
+                    out.extend_from_slice(&n.to_le_bytes());
+                    let child =
+                        field_name(element).ok_or_else(|| PackError::Type(name.to_string()))?;
+                    for (key, item) in map {
+                        let raw = key.as_bytes();
+                        if raw.len() > 65535 {
+                            return Err(PackError::Type(name.to_string()));
+                        }
+                        let kn = raw.len() as u16;
+                        out.extend_from_slice(&kn.to_le_bytes());
+                        out.extend_from_slice(raw);
+                        let mut slice = Values::new();
+                        slice.insert(name_of(child), Some(item.clone()));
+                        let mut elem_wrote = Written::unread();
+                        let one = std::slice::from_ref(&**element);
+                        pack_fields(one, &slice, flag_bits, &mut elem_wrote, out)?;
+                    }
+                    wrote.insert(name, Cow::Borrowed(v));
+                    Ok(())
+                }
+                _ => Err(PackError::Type(name.to_string())),
+            }
+        }
     }
 }
 
@@ -430,6 +485,12 @@ pub fn pack(scheme: &MapScheme, values: &Values) -> Result<Vec<u8>, PackError> {
     };
     let mut out = Vec::with_capacity(32);
     out.push(scheme.type_number);
-    pack_fields(&scheme.fields, values, &flag_bits, &mut out)?;
+    pack_fields(
+        &scheme.fields,
+        values,
+        &flag_bits,
+        &mut Written::new(),
+        &mut out,
+    )?;
     Ok(out)
 }

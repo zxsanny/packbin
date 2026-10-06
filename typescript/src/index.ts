@@ -10,6 +10,7 @@ import { bindFlagBits, validatePresenceMarks } from "./flag-scope.ts"
 import { validateMemberNames } from "./member-names.ts"
 import { validateRoundNesting } from "./rounds.ts"
 import { bindReferences } from "./ref-scope.ts"
+import { validateElementKinds } from "./element-kinds.ts"
 import type { Value } from "./kinds.ts"
 import { hkdf } from "@noble/hashes/hkdf.js"
 import { sha256 } from "@noble/hashes/sha2.js"
@@ -92,6 +93,7 @@ export class Scheme<T> {
     this.maxSlots = checkedLimit("maxSlots", limits.maxSlots, Scheme.DefaultMaxSlots)
     this.typeNumber = typeNumber
     this.fields = bindReferences(flat)
+    validateElementKinds(this.fields)
   }
 
   // A member left out takes the default, not this scheme's value; this scheme is unchanged.

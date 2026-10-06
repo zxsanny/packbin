@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
 
 from packbin._nodes import (
     _U2,
@@ -87,55 +86,6 @@ def _validate_order(
         else:
             raise TypeError(f"unknown field node: {type(node)!r}")
     return next_id
-
-
-def _bit_label(field: _Node) -> str:
-    if isinstance(field, _U2):
-        return str(field.slots[0].field_id)
-    named: Any = getattr(field, "field_id", getattr(field, "anchor", None))
-    return type(field).__name__.lstrip("_").lower() if named is None else str(named)
-
-
-def _check_flag_scopes(
-    nodes: Sequence[_Node], visible: set[int], read: list[_FlagByte], placed: set[int]
-) -> None:
-    """A split flag bit reads the flag byte of its own scope, and only after that byte. `visible` holds the
-    flag bytes read so far in this scope: a `when` body and a `flags` or flag-bit member see the ones read
-    before them but leave theirs behind, and a `repeat` or `times` body or a list or dict element starts empty."""
-    for node in nodes:
-        if isinstance(node, _FlagByte):
-            visible.add(id(node))
-            read.append(node)
-        elif isinstance(node, _FlagBit):
-            if id(node.owner) not in visible:
-                raise ValueError(
-                    f"flag bit {_bit_label(node.field)}: its flag byte is not read earlier in the same scope"
-                )
-            placed.add(id(node.field))
-            _check_flag_scopes([node.field], set(visible), read, placed)
-        elif isinstance(node, _Flags):
-            for member in node.fields:
-                _check_flag_scopes([member], set(visible), read, placed)
-        elif isinstance(node, _Group):
-            _check_flag_scopes(node.fields, visible, read, placed)
-        elif isinstance(node, _When):
-            _check_flag_scopes(node.fields, set(visible), read, placed)
-        elif isinstance(node, (_Repeat, _Times)):
-            _check_flag_scopes(node.fields, set(), read, placed)
-        elif isinstance(node, (_List, _Dict)):
-            _check_flag_scopes([node.element], set(), read, placed)
-
-
-def _validate_flag_bits(nodes: Sequence[_Node]) -> None:
-    """Every split flag bit follows its flag byte in the same scope, and every bit of a flag byte that the
-    scheme reads is in the scheme: a bit left out would be set in the byte and never written."""
-    read: list[_FlagByte] = []
-    placed: set[int] = set()
-    _check_flag_scopes(nodes, set(), read, placed)
-    for byte in read:
-        for field in byte.bits:
-            if id(field) not in placed:
-                raise ValueError(f"flag byte: bit {_bit_label(field)} is not in the scheme")
 
 
 def _validate_round_nesting(nodes: Sequence[_Node], in_round: bool = False) -> None:

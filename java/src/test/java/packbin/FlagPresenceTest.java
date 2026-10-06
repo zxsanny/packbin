@@ -17,6 +17,7 @@ final class FlagPresenceTest {
         ac1SplitBitInAGroupSetsTheBit();
         ac2MissingSiblingValueFailsPackNamingIt();
         absentMembersStillLeaveTheBitClear();
+        az2234Ac6NullNestedRowClearsTheBit();
     }
 
     private static Field u8(int id, String name) {
@@ -97,5 +98,21 @@ final class FlagPresenceTest {
         PackbinTest.expectEq("flags byte follows each member", "01" + "07" + "01" + "01" + "01" + "09" + "01" + "04",
                 PackbinTest.toHex(BinaryPacker.pack(scheme,
                         Maps.map("mark", 1, "b", 1, "p", 1, "q", 2, "c", 4))));
+    }
+
+    /** AZ-2234 AC-6: a nested row that is null or absent under flags or a flag bit clears the bit and writes nothing. */
+    private static void az2234Ac6NullNestedRowClearsTheBit() {
+        Field member = Packbin.group(Access.get("g"), Access.set("g"), u8(0, "v"));
+        Field fb = Packbin.flagByte();
+        Scheme<Map> combined = Maps.scheme(1, Packbin.flags(0, member));
+        Scheme<Map> split = Maps.scheme(1, fb, fb.bit(member));
+        for (Object[] form : new Object[][] {{"flags", combined}, {"flag byte", split}}) {
+            String label = "AZ-2234 AC-6 " + form[0];
+            Scheme<Map> scheme = (Scheme<Map>) form[1];
+            PackbinTest.expectEq(label + " absent", "0100", PackbinTest.toHex(BinaryPacker.pack(scheme, Maps.map())));
+            PackbinTest.expectEq(label + " null", "0100",
+                    PackbinTest.toHex(BinaryPacker.pack(scheme, Maps.map("g", null))));
+            expectRoundTrip(label + " present", scheme, Maps.map("g", Maps.map("v", 4)), "01" + "01" + "04");
+        }
     }
 }

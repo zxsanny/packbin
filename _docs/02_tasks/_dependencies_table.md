@@ -153,6 +153,17 @@ Estimation: `_docs/LESSONS.md` says the six packages stay peers. The session is 
 | AZ-2218 | java_round_limits | 3 | None | AZ-2069 |
 | AZ-2219 | rust_round_limits | 3 | None | AZ-2069 |
 | AZ-2220 | round_limits_hostile_and_docs | 3 | AZ-2216, AZ-2217, AZ-2218, AZ-2219 | AZ-2069 |
+| AZ-2230 | python_split_bits_scheme_order | 3 | AZ-2135, AZ-2100 | AZ-2069 |
+| AZ-2231 | python_session_load_bytes_only | 1 | AZ-2104 | AZ-2069 |
+| AZ-2232 | vcpkg_supported_platforms_minor_version | 2 | AZ-2098 | AZ-2069 |
+| AZ-2233 | java_nested_row_orphan_bit_refused | 2 | AZ-2135 | AZ-2069 |
+| AZ-2234 | java_pack_fails_loudly_nulls_u2 | 3 | AZ-2101, AZ-2127 | AZ-2069 |
+| AZ-2235 | java_typed_element_groups_checked | 2 | AZ-2101 | AZ-2069 |
+| AZ-2236 | typescript_direct_element_kinds_refused | 2 | AZ-2102 | AZ-2069 |
+| AZ-2237 | rust_map_pack_when_written_values | 3 | AZ-2189, AZ-2197 | AZ-2069 |
+| AZ-2238 | harness_hygiene_prefix_find_consumer | 2 | AZ-2193, AZ-2099 | AZ-2069 |
+| AZ-2239 | listgroup_cross_language_ring | 3 | AZ-2193, AZ-2102 | AZ-2069 |
+| AZ-2240 | publish_guard_dist_and_port_asserts | 1 | AZ-2103, AZ-2098 | AZ-2069 |
 
 The six pack tasks do not depend on each other. AZ-1875 runs after all six. The five blackbox tasks run after AZ-1913 and do not depend on each other. The three earlier todo tasks do not depend on each other and still have no tracker id. AZ-1938 through AZ-1941 are under epic AZ-1937. The string count does not include itself; the list count does not consume the next field.
 
@@ -165,3 +176,4 @@ AZ-2119 and AZ-2120 are C# bugs found by the loop 11 round 2 worker; both predat
 AZ-2122 through AZ-2125 are loop 11 security-audit fixes (F4-F9), claimed by loop 11 at the owner's request. AZ-2116 (exact C# integers) and AZ-2119 (C# group list element) stay open; F4 here only stops the exception.
 AZ-2175 through AZ-2179 are loop 13 feature-assessment round 1 tasks (owner scope A, 2026-10-05), claimed by loop 13. AZ-2180 through AZ-2194 are the deferred follow-ups of that assessment, unclaimed; AZ-2197 (TypeScript twin of AZ-2175, found by the loop 13 README writer) is unclaimed too; AZ-2117 and AZ-2113 gained acceptance criteria from it (4 and 3 points). Decisions marked open in them wait for the owner before the loop that takes them.
 AZ-2214 through AZ-2220 are loop 15 (security findings F12, F13 and F10, owner request 2026-10-06), claimed by loop 15. AZ-2214 and AZ-2215 edit the same publish files, so AZ-2214 lands first; AZ-2220 follows the four round-limit tasks.
+AZ-2230 through AZ-2240 are loop 16 round 2 (feature assessment round 1 CLARIFY, owner answer 2026-10-06: implement everything now), claimed by loop 16. AZ-2234 and AZ-2233 and AZ-2235 edit the same Java files and run in one worker; AZ-2238 and AZ-2239 both edit `language-pair.sh` and run in one worker; AZ-2232 and AZ-2240 both touch the vcpkg port checks and run in one worker. All eleven are Done in loop 16: the specs are in `done/`, each with a `## Loop 16 result` section; the table has no status column, so the rows above are unchanged.

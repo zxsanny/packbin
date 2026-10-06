@@ -11,7 +11,8 @@ npm_layout_checks() {
 import io, json, sys, tarfile
 from pathlib import Path
 
-manifest = json.dumps({"name": "packbin", "version": "0.1.9", "license": "MIT"}).encode()
+entry = {"types": "./dist/index.d.ts", "import": "./dist/index.js"}
+manifest = json.dumps({"name": "packbin", "version": "0.1.9", "license": "MIT", "types": entry["types"], "exports": {".": entry}}).encode()
 base = {"package/package.json": manifest, "package/README.md": b"r"}
 dist = {"package/dist/index.js": b"x", "package/dist/index.d.ts": b"x"}
 src = {"package/src/index.ts": b"x"}
@@ -38,6 +39,76 @@ PY
     fi
   done
   rm -rf "$tmp"
+}
+
+# AZ-2240: the tag-time guard (publish-check.py typescript) on the real tarball $1 and on mutants of it, in scratch
+# directory $2. The real tarball must pass; each mutant must fail with a message that names the missing part.
+npm_guard_checks() {
+  python3 - "$here/publish-check.py" "$1" "$2/guard" <<'PY' || fail "AZ-2240 the npm guard did not behave as expected"
+import io, json, re, shutil, subprocess, sys, tarfile
+from pathlib import Path
+
+check, tgz, work = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
+version = tgz.name.removeprefix("packbin-").removesuffix(".tgz")
+with tarfile.open(tgz) as archive:
+    real = {m.name: archive.extractfile(m).read() for m in archive.getmembers() if m.isfile()}
+manifest = json.loads(real["package/package.json"])
+
+
+def with_manifest(**changes):
+    edited = {key: value for key, value in manifest.items() if key not in changes}
+    edited.update({key: value for key, value in changes.items() if value is not None})
+    return {**real, "package/package.json": json.dumps(edited).encode()}
+
+
+def without(name):
+    return {key: value for key, value in real.items() if key != name}
+
+
+def appended(name, text):
+    return {**real, name: real[name] + text.encode()}
+
+
+def gone(importer, specifier, member):
+    return f"{importer} imports {re.escape(specifier)}, but {re.escape(member)} is not in the tarball"
+
+
+src = "./src/index.ts"
+any_js, any_dts = r"dist/\S+\.js", r"dist/\S+\.d\.ts"
+cases = [
+    ("control", real, None),
+    ("exports removed", with_manifest(exports=None), r"package\.json exports is None, not .*"),
+    ("exports to src", with_manifest(exports={".": {"types": src, "import": src}}), r"package\.json exports is .*"),
+    ("exports without types", with_manifest(exports={".": {"import": "./dist/index.js"}}), r"package\.json exports is .*"),
+    ("types removed", with_manifest(types=None), r"package\.json types is None, not .*"),
+    ("types to src", with_manifest(types=src), r"package\.json types is '\./src/index\.ts', not .*"),
+    ("walker.js removed", without("package/dist/walker.js"), gone(any_js, "./walker.js", "dist/walker.js")),
+    ("walker.d.ts removed", without("package/dist/walker.d.ts"), gone(any_dts, "./walker.ts", "dist/walker.d.ts")),
+    ("index.js imports ./nope.js", appended("package/dist/index.js", 'export * from "./nope.js";\n'),
+     gone(r"dist/index\.js", "./nope.js", "dist/nope.js")),
+    ("index.d.ts imports ./nope.ts", appended("package/dist/index.d.ts", 'export * from "./nope.ts";\n'),
+     gone(r"dist/index\.d\.ts", "./nope.ts", "dist/nope.d.ts")),
+]
+errors = 0
+for name, files, wanted in cases:
+    folder = work / name.replace(" ", "-")
+    folder.mkdir(parents=True)
+    with tarfile.open(folder / tgz.name, "w:gz") as archive:
+        for member, data in files.items():
+            info = tarfile.TarInfo(member)
+            info.size = len(data)
+            archive.addfile(info, io.BytesIO(data))
+    result = subprocess.run([sys.executable, check, "typescript", str(folder), f"v{version}"], capture_output=True, text=True)
+    if wanted is None:
+        ok = result.returncode == 0 and result.stdout.strip() == "check ok: typescript"
+    else:
+        ok = result.returncode == 1 and re.fullmatch(f"check failed: typescript: {wanted}", result.stderr.strip())
+    if not ok:
+        errors += 1
+        print(f"{name}: exit {result.returncode}, stdout {result.stdout.strip()!r}, stderr {result.stderr.strip()!r}")
+shutil.rmtree(work)
+sys.exit(1 if errors else 0)
+PY
 }
 
 # AZ-2103: the npm tarball holds the compiled package and a consumer can use it. The tarball comes from
@@ -90,6 +161,7 @@ PY
   if grep -qx 'package/dist/stale.js' <<< "$members"; then
     fail "AZ-2103 a stale dist from the checkout was packed"
   fi
+  npm_guard_checks "$tgz" "$tmp"
 
   # AC-4: the only bare import is the locked dependency, and nothing reaches for Node.
   tar -xzf "$tgz" -C "$tmp"

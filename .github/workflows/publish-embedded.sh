@@ -67,6 +67,7 @@ stage_vcpkg_port() {
   "description": "Pack and unpack a caller-owned field list",
   "license": "MIT",
   "homepage": "https://github.com/zxsanny/packbin",
+  "supports": "linux | osx",
   "dependencies": [
     { "name": "vcpkg-cmake", "host": true },
     { "name": "vcpkg-cmake-config", "host": true }

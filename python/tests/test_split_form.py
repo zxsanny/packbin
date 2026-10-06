@@ -114,12 +114,14 @@ def test_ac3_bit_whose_flag_byte_is_not_in_the_scheme_is_scheme_error():
         _scheme(bit)
 
 
-def test_ac3_flag_byte_listed_without_its_bits_is_scheme_error():
+def test_ac3_flag_byte_listed_without_its_bits_leaves_them_clear():
     flag = flag_byte()
     flag.bit(_on(0))
+    scheme = _scheme(flag)
 
-    with pytest.raises(ValueError, match=r"flag byte.*bit 0\b.*not in the scheme"):
-        _scheme(flag)
+    packed = BinaryPacker.pack(scheme, {"on": True}).hex()
+
+    assert packed == "0100"
 
 
 def test_flag_byte_takes_no_id_and_each_bit_is_checked_at_its_place():

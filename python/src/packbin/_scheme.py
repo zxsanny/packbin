@@ -5,10 +5,11 @@ from collections.abc import Callable, Mapping
 from typing import Any, Generic, TypeVar
 
 from packbin._errors import ShortPacket, TrailingBytes, TypeMismatch, UnpackResult
+from packbin._flag_scope import _bind_flag_bits
 from packbin._nodes import _Node
 from packbin._pack import pack_nodes
 from packbin._unpack import DEFAULT_MAX_ROUNDS, DEFAULT_MAX_SLOTS, _Budget, unpack_nodes
-from packbin._validate import _validate_flag_bits, _validate_order, _validate_round_nesting
+from packbin._validate import _validate_order, _validate_round_nesting
 
 T = TypeVar("T")
 _builtin_bytes = bytes
@@ -35,11 +36,11 @@ class Scheme(Generic[T]):
         if isinstance(type_number, bool) or not isinstance(type_number, int) or type_number < 0 or type_number > 255:
             raise ValueError(f"type number must be 0..255, got {type_number!r}")
         _validate_order(fields)
-        _validate_flag_bits(fields)
-        _validate_round_nesting(fields)
+        bound = _bind_flag_bits(fields)
+        _validate_round_nesting(bound)
         self._type_number = type_number
         self._row_type = row_type
-        self._fields = list(fields)
+        self._fields = bound
         self._max_rounds = DEFAULT_MAX_ROUNDS
         self._max_slots = DEFAULT_MAX_SLOTS
 

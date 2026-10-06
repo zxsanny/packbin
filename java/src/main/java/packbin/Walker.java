@@ -96,7 +96,7 @@ final class Walker {
             case BYTES -> packBytes(field, row, sink, seen, take);
             case GROUP -> packGroup(field, row, sink, seen, take);
             case SIZED -> VarFields.packSized(field, row, sink, seen, take);
-            case U2 -> VarFields.packU2(field, row, sink, seen);
+            case U2 -> VarFields.packU2(field, row, sink, seen, take);
             case BITS -> VarFields.packBits(field, row, sink, seen, take);
             case PACKED -> VarFields.packPacked(field, row, sink, seen, take);
             case UTF8 -> VarFields.packUtf8(field, row, sink, seen, take);
@@ -177,7 +177,8 @@ final class Walker {
         }
         Object target = takeValue(field, row, take);
         if (target == null) {
-            return;
+            // Unpack creates the member and reads every field of it, so no bytes read back as a missing row.
+            throw new IllegalArgumentException("missing group");
         }
         // The nested row is a row of its own: in a round it is that round's row, not an item of a list.
         Map<Object, Object> outer = enterRow(seen);

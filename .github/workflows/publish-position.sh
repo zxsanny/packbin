@@ -38,12 +38,14 @@ case "$lang" in
     ;;
   typescript)
     # npm ci writes node_modules next to package.json, so without one it runs on a copy that keeps
-    # the layout position.ts imports (../../../typescript/src).
+    # the layout position.ts imports (../../../typescript/src). It runs after a cd: with --prefix, npm
+    # refuses the lock file ("Missing: ... from lock file") when the path has a symlink, and macOS
+    # mktemp -d lands in /var, a link to /private/var.
     if [ -d "$root/typescript/node_modules/@noble/hashes" ]; then
       node --experimental-strip-types "$drivers/position.ts"
     else
       copy_to_work "typescript" ".github/workflows/drivers/position.ts"
-      npm ci --prefix "$work/typescript" >&2
+      (cd "$work/typescript" && npm ci >&2)
       node --experimental-strip-types "$work/.github/workflows/drivers/position.ts"
     fi
     ;;

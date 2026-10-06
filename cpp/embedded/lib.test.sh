@@ -1,11 +1,42 @@
 #!/usr/bin/env bash
 # Self-test of the embedded harness (AZ-2099). Runs the real run.sh, lib.sh and report-row.sh from a
 # temp tree against fake targets and checks the report rows, the logs and the stage exit code.
-# It needs GNU date (lib.sh times a target with date +%s%N), so it runs on the Linux scaffold job.
+# It needs GNU date (lib.sh times a target with date +%s%N), so it runs on the Linux scaffold job; only the
+# find | head scan below it runs everywhere.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
+
+# The file:line of every `find ... | head` command in the harness scripts (AZ-2238 AC-3). Under pipefail head
+# closes the pipe, a find that still has output gets SIGPIPE, and the pipeline ends with status 141, which
+# set -e turns into a silent exit of the stage. A scan, not a run: the two examples.sh functions that had it
+# need pio, compote and idf.py, which only the espressif/idf image has. Comment lines are skipped, lines
+# that end in a backslash or a pipe join the next line, and the line reported is the first of the command.
+find_head_hits() {
+  local file
+  for file in "$here"/*.sh; do
+    case "$file" in
+      *.test.sh) continue ;;
+    esac
+    awk -v name="$(basename "$file")" '
+      { if (joined == "") first = NR
+        line = $0
+        more = sub(/\\[ \t]*$/, "", line) || line ~ /\|[ \t]*$/
+        joined = joined " " line
+        if (more) next
+        if (joined !~ /^[ \t]*#/ && joined ~ /find.*\|[ \t]*head([^a-zA-Z0-9_-]|$)/) print name ":" first
+        joined = "" }
+    ' "$file"
+  done
+}
+
+find_head="$(find_head_hits)"
+if [ -n "$find_head" ]; then
+  echo "FAIL find | head under pipefail in the embedded harness: $(tr '\n' ' ' <<< "$find_head")" >&2
+  exit 1
+fi
+echo "PASS no find | head in the embedded harness scripts"
 
 case "$(date +%s%N)" in
   *[!0-9]*)

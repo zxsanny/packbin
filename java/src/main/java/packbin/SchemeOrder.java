@@ -24,9 +24,11 @@ final class SchemeOrder {
     /**
      * Binds the split flag bits of a scheme (AZ-2135) and returns the fields rebuilt for it. A bit belongs to the
      * latest read of its flagByte earlier in the same container (top level, repeat or times round, list or dict
-     * element); a byte read inside a when, a flags child or a nested row is visible only there. Its position is its
-     * order among the bits of that read, so the flagByte handle itself holds no bit and may be a member of any
-     * number of schemes.
+     * element); a byte read inside a when or a flags child is visible only there. A nested row is a scope of its own
+     * that starts with no byte visible: a byte read inside it is not visible after it, and a byte read outside it is
+     * not visible inside it (AZ-2233). The rule is by scope, not by what the member is: it also holds when the member
+     * is the row around itself ({@code group(identity(), ignore(), ...)}). Its position is its order among the bits
+     * of that read, so the flagByte handle itself holds no bit and may be a member of any number of schemes.
      * Each read gets a {@link FlagGroup} of its own in the rebuilt fields.
      */
     static List<Field> bindFlagBits(List<Field> fields) {
@@ -68,7 +70,7 @@ final class SchemeOrder {
                 yield Field.flags(field.id, members);
             }
             case WHEN -> field.withChildren(bindAll(field.children, new HashMap<>(visible)));
-            case GROUP -> field.withChildren(bindAll(field.children, field.nestedRow ? new HashMap<>(visible) : visible));
+            case GROUP -> field.withChildren(bindAll(field.children, field.nestedRow ? new HashMap<>() : visible));
             case REPEAT, TIMES, LIST, DICT -> field.withChildren(bindAll(field.children, new HashMap<>()));
             default -> field;
         };
@@ -145,7 +147,10 @@ final class SchemeOrder {
                     }
                 }
             }
-            case LIST, DICT -> walkScope(field.children, new int[] {0}, false);
+            case LIST, DICT -> {
+                requireElementFactory(field, typed);
+                walkScope(field.children, new int[] {0}, false);
+            }
             case U2 -> {
                 for (Field slot : field.children) {
                     take(slot, earlier, next);
@@ -166,6 +171,22 @@ final class SchemeOrder {
                     take(field, earlier, next);
                 }
             }
+        }
+    }
+
+    /**
+     * An element group without a factory unpacks into a HashMap, which a typed row's accessors cannot take: refused
+     * where the list or dict is held by a typed row, also as the element of an inner list or dict (AZ-2235). An
+     * anchored group, flags or u2 element has no factory overload, so it is left to the caller.
+     */
+    private static void requireElementFactory(Field container, boolean typed) {
+        Field element = container.children.get(0);
+        if (typed && element.kind == Field.Kind.GROUP && element.nestedRow && element.create == null) {
+            throw new IllegalArgumentException(
+                    container.kind.name().toLowerCase(Locale.ROOT) + " element: " + NEEDS_FACTORY);
+        }
+        if (element.kind == Field.Kind.LIST || element.kind == Field.Kind.DICT) {
+            requireElementFactory(element, typed);
         }
     }
 

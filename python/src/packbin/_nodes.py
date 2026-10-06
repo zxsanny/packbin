@@ -96,18 +96,19 @@ class _Bool(_Node):
 
 @dataclass(slots=True)
 class _FlagByte(_Node):
+    """What `flag_byte()` returns holds no bit. `Scheme(...)` builds one of these for each read of it, and that
+    read lists the fields of the bits that follow it, by number (`_flag_scope._bind_flag_bits`)."""
+
     bits: list[_Node]
 
     def bit(self, field: _Node) -> _FlagBit:
-        index = len(self.bits)
-        if index >= 8:
-            raise ValueError("flags already has 8 bits")
-        self.bits.append(field)
-        return _FlagBit(self, field, index)
+        return _FlagBit(self, field, -1)
 
 
 @dataclass(slots=True)
 class _FlagBit(_Node):
+    """`owner` is the handle, or the read of it in a scheme; `index` is -1 until the scheme numbers the bit."""
+
     owner: _FlagByte
     field: _Node
     index: int

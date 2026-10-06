@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# vcpkg port checks (AZ-2098). Sourced by publish-gate.test.sh, which defines fail, assert_eq, $root and
-# $here, and reports $not_run in its last line; `bash publish-gate.test.sh --vcpkg` runs only these.
+# vcpkg port checks (AZ-2098, AZ-2232, AZ-2240). Sourced by publish-gate.test.sh, which defines fail, assert_eq,
+# $root and $here, and reports $not_run in its last line; `bash publish-gate.test.sh --vcpkg` runs only these.
 # The port is staged into a local bare git registry by the real publish-registries.sh, a consumer
 # project installs it through the vcpkg toolchain from that registry, builds, links and runs it.
 # vcpkg is the one on GitHub-hosted Ubuntu runners ($VCPKG_INSTALLATION_ROOT), or $VCPKG_ROOT, or the
@@ -10,7 +10,9 @@
 # and writes an overlay triplet for the vcpkg consumer into the temp dir; unset, nothing of it exists.
 
 # shellcheck disable=SC2154
-vcpkg_version="0.1.0"
+# AZ-2232: 0.9.0, not 0.1.0. An installed 0.1.0 is older than every other 0.x minor, so a request for another
+# minor would fail for that reason alone and could not show that the version rule is "same minor".
+vcpkg_version="0.9.0"
 
 # A missing tool fails the gate on GitHub Actions and is a visible NOT RUN anywhere else.
 vcpkg_tool_missing() {
@@ -125,7 +127,7 @@ def show(path):
 errors = []
 manifest = json.loads(show("ports/packbin/vcpkg.json"))
 hosts = {d["name"]: d.get("host") for d in manifest.get("dependencies", []) if isinstance(d, dict)}
-for key, want in (("name", "packbin"), ("version", version), ("license", "MIT")):
+for key, want in (("name", "packbin"), ("version", version), ("license", "MIT"), ("supports", "linux | osx")):
     if manifest.get(key) != want:
         errors.append(f"vcpkg.json {key} is {manifest.get(key)!r}, not {want!r}")
 if hosts != {"vcpkg-cmake": True, "vcpkg-cmake-config": True}:
@@ -192,28 +194,15 @@ EOF
   done
 }
 
-# AC-1, AC-2 and the installed copyright of AC-4: a consumer installs packbin from bare registry $1 through
-# the vcpkg toolchain, with find_package(packbin CONFIG REQUIRED) and packbin::packbin. $2 is a scratch dir.
-vcpkg_consumer_check() {
-  local bare="$1" tmp="$2" vroot app log copyright="" got want flags overlay builtin dir cmake_flags=()
-  if ! vroot="$(vcpkg_root)"; then
-    vcpkg_tool_missing "vcpkg consumer check" "vcpkg tool"
-    return 0
-  fi
-  if ! command -v cmake >/dev/null; then
-    vcpkg_tool_missing "vcpkg consumer check" "cmake"
-    return 0
-  fi
-  # vcpkg needs a baseline for the default registry once another registry is configured; the checkout of
-  # this vcpkg is its own baseline.
+# Writes the vcpkg.json and vcpkg-configuration.json of directory $1: a project that depends on packbin from
+# bare registry $2. vcpkg needs a baseline for the default registry once another registry is configured; the
+# checkout of vcpkg root $3 is its own baseline. Returns 1 when that root has no git checkout.
+vcpkg_manifest_project() {
+  local app="$1" bare="$2" vroot="$3" builtin
   if [ ! -e "$vroot/.git" ] || ! builtin="$(git -C "$vroot" rev-parse HEAD)" || [ -z "$builtin" ]; then
-    fail "AZ-2098 AC-1 vcpkg root has no git checkout: no builtin baseline ($vroot)"
-    return 0
+    return 1
   fi
-  app="$tmp/consumer"
-  log="$app/vcpkg-consumer.log"
-  mkdir -p "$app" "$tmp/binary-cache" "$tmp/registries-cache"
-  cp "$here/drivers/position.cpp" "$app/main.cpp"
+  mkdir -p "$app"
   cat > "$app/vcpkg.json" <<'EOF'
 {
   "name": "packbin-consumer",
@@ -238,6 +227,120 @@ EOF
   ]
 }
 EOF
+}
+
+# vcpkg_configure <log> <vroot> <tmp> <overlay triplets> <app> [cmake option]...: configures manifest project <app>
+# through the vcpkg toolchain, with a binary cache and a registries cache of their own under <tmp>.
+vcpkg_configure() {
+  local log="$1" vroot="$2" tmp="$3" overlay="$4" app="$5"
+  shift 5
+  vcpkg_run "$log" env VCPKG_DISABLE_METRICS=1 VCPKG_ROOT="$vroot" \
+    VCPKG_DEFAULT_BINARY_CACHE="$tmp/binary-cache" X_VCPKG_REGISTRIES_CACHE="$tmp/registries-cache" \
+    ${overlay:+"VCPKG_OVERLAY_TRIPLETS=$overlay"} \
+    cmake -S "$app" -B "$app/build" -DCMAKE_TOOLCHAIN_FILE="$vroot/scripts/buildsystems/vcpkg.cmake" "$@"
+}
+
+# AZ-2232 AC-2: vcpkg refuses the port on a triplet that does not match `linux | osx`, and plans it on one that does.
+# `--dry-run` makes the plan and checks the platform expression without building: a triplet of another system
+# (x64-linux on a Mac) is accepted without a compiler for it, and a port without `supports` shows up as planned.
+vcpkg_supports_check() {
+  local bare="$1" tmp="$2" vroot app out status
+  if ! vroot="$(vcpkg_root)"; then
+    vcpkg_tool_missing "vcpkg supports check" "vcpkg tool"
+    return 0
+  fi
+  app="$tmp/supports"
+  mkdir -p "$tmp/registries-cache"
+  if ! vcpkg_manifest_project "$app" "$bare" "$vroot"; then
+    fail "AZ-2232 AC-2 vcpkg root has no git checkout: no builtin baseline ($vroot)"
+    return 0
+  fi
+  status=0
+  out="$(cd "$app" && env VCPKG_DISABLE_METRICS=1 VCPKG_ROOT="$vroot" X_VCPKG_REGISTRIES_CACHE="$tmp/registries-cache" \
+    "$vroot/vcpkg" install --dry-run --triplet x64-windows 2>&1)" || status=$?
+  if [ "$status" -ne 1 ] || ! grep -qF "packbin is only supported on 'linux | osx', which does not match x64-windows." <<< "$out"; then
+    fail "AZ-2232 AC-2 vcpkg did not refuse the port on x64-windows (exit $status): $out"
+  fi
+  status=0
+  out="$(cd "$app" && env VCPKG_DISABLE_METRICS=1 VCPKG_ROOT="$vroot" X_VCPKG_REGISTRIES_CACHE="$tmp/registries-cache" \
+    "$vroot/vcpkg" install --dry-run --triplet x64-linux 2>&1)" || status=$?
+  if [ "$status" -ne 0 ] || grep -qF 'only supported' <<< "$out" || ! grep -qF "packbin:x64-linux@$vcpkg_version" <<< "$out"; then
+    fail "AZ-2232 AC-2 vcpkg did not plan the port on x64-linux (exit $status): $out"
+  fi
+}
+
+# AZ-2232 AC-4: the version rule of the installed packbin-config-version.cmake, without vcpkg. cpp/ is built once, then
+# installed under three versions (a reconfigure with another -DPACKBIN_VERSION rewrites only the version file, so the
+# next build is a no-op), and an empty project asks find_package for each request. A row is
+# `installed|requests that find it|requests that do not`.
+vcpkg_version_rule_check() {
+  local tmp="$1" dir row installed found refused request flags cmake_flags=()
+  if ! command -v cmake >/dev/null; then
+    vcpkg_tool_missing "version rule check" "cmake"
+    return 0
+  fi
+  dir="$tmp/rule"
+  flags="$(vcpkg_sysroot_flags)"
+  if [ -n "$flags" ]; then
+    cmake_flags+=("-DCMAKE_CXX_FLAGS=$flags")
+  fi
+  mkdir -p "$dir/consumer"
+  cat > "$dir/consumer/CMakeLists.txt" <<'EOF'
+cmake_minimum_required(VERSION 3.16)
+project(packbin_rule LANGUAGES NONE)
+find_package(packbin ${REQUEST} CONFIG)
+if(packbin_FOUND)
+  message(STATUS "packbin found")
+else()
+  message(STATUS "packbin not found")
+endif()
+EOF
+  for row in "0.9.0|0.9 0.9.0|0.1 0.2 0.10 0.1.0 0.9.1 0 1.0" "0.10.2|0.10|0.1 0.2 0.9 0.9.0 1.0" "1.4.0|1.0 1.2 1.4|1.5 2.0 0.9"; do
+    IFS='|' read -r installed found refused <<< "$row"
+    if ! vcpkg_run "$dir/build.log" cmake -S "$root/cpp" -B "$dir/build" -DPACKBIN_VERSION="$installed" ${cmake_flags[@]+"${cmake_flags[@]}"} \
+      || ! vcpkg_run "$dir/build.log" cmake --build "$dir/build" \
+      || ! vcpkg_run "$dir/build.log" cmake --install "$dir/build" --prefix "$dir/prefix-$installed"; then
+      fail "AZ-2232 AC-4 cpp/ did not configure, build and install at version $installed"
+      return 0
+    fi
+    # shellcheck disable=SC2086
+    for request in $found $refused; do
+      if ! vcpkg_run "$dir/find-$installed-$request.log" cmake -S "$dir/consumer" -B "$dir/find-$installed-$request" \
+        -DREQUEST="$request" -DCMAKE_PREFIX_PATH="$dir/prefix-$installed"; then
+        fail "AZ-2232 AC-4 find_package(packbin $request) did not configure against $installed"
+        continue
+      fi
+      if [[ " $found " == *" $request "* ]]; then
+        grep -qF 'packbin found' "$dir/find-$installed-$request.log" \
+          || fail "AZ-2232 AC-4 installed $installed: a request for $request was refused"
+      else
+        grep -qF 'packbin not found' "$dir/find-$installed-$request.log" \
+          || fail "AZ-2232 AC-4 installed $installed: a request for $request was satisfied"
+      fi
+    done
+  done
+}
+
+# AC-1, AC-2 and the installed copyright of AC-4: a consumer installs packbin from bare registry $1 through
+# the vcpkg toolchain, with find_package(packbin CONFIG REQUIRED) and packbin::packbin. $2 is a scratch dir.
+vcpkg_consumer_check() {
+  local bare="$1" tmp="$2" vroot app log copyright="" got want flags overlay dir cmake_flags=()
+  if ! vroot="$(vcpkg_root)"; then
+    vcpkg_tool_missing "vcpkg consumer check" "vcpkg tool"
+    return 0
+  fi
+  if ! command -v cmake >/dev/null; then
+    vcpkg_tool_missing "vcpkg consumer check" "cmake"
+    return 0
+  fi
+  app="$tmp/consumer"
+  log="$app/vcpkg-consumer.log"
+  mkdir -p "$app" "$tmp/binary-cache" "$tmp/registries-cache"
+  if ! vcpkg_manifest_project "$app" "$bare" "$vroot"; then
+    fail "AZ-2098 AC-1 vcpkg root has no git checkout: no builtin baseline ($vroot)"
+    return 0
+  fi
+  cp "$here/drivers/position.cpp" "$app/main.cpp"
   # The version in find_package fails the check when the port installs no packbin-config-version.cmake.
   cat > "$app/CMakeLists.txt" <<EOF
 cmake_minimum_required(VERSION 3.16)
@@ -259,11 +362,7 @@ EOF
     cmake_flags+=("-DCMAKE_CXX_FLAGS=$flags")
     overlay="$overlay${VCPKG_OVERLAY_TRIPLETS:+:$VCPKG_OVERLAY_TRIPLETS}"
   fi
-  if ! vcpkg_run "$log" env VCPKG_DISABLE_METRICS=1 VCPKG_ROOT="$vroot" \
-    VCPKG_DEFAULT_BINARY_CACHE="$tmp/binary-cache" X_VCPKG_REGISTRIES_CACHE="$tmp/registries-cache" \
-    ${overlay:+"VCPKG_OVERLAY_TRIPLETS=$overlay"} \
-    cmake -S "$app" -B "$app/build" -DCMAKE_TOOLCHAIN_FILE="$vroot/scripts/buildsystems/vcpkg.cmake" \
-    ${cmake_flags[@]+"${cmake_flags[@]}"}; then
+  if ! vcpkg_configure "$log" "$vroot" "$tmp" "$overlay" "$app" ${cmake_flags[@]+"${cmake_flags[@]}"}; then
     tail -n 60 "$vroot"/buildtrees/packbin/*.log >&2 || true
     fail "AZ-2098 AC-1 the consumer did not install packbin and configure through the port"
     return 0
@@ -287,6 +386,83 @@ EOF
   if [ ! -f "$copyright" ] || ! cmp -s "$copyright" "$root/LICENSE"; then
     fail "AZ-2098 AC-4 share/packbin/copyright is not the repository LICENSE"
   fi
+  # AZ-2232 AC-3: the installed 0.9.0 answers a request for 0.9 (above) and not one for another 0.x minor. The
+  # second project of the same manifest takes the port from the binary cache of the first.
+  app="$tmp/consumer-minor"
+  vcpkg_manifest_project "$app" "$bare" "$vroot"
+  cat > "$app/CMakeLists.txt" <<'EOF'
+cmake_minimum_required(VERSION 3.16)
+project(packbin_other_minor LANGUAGES NONE)
+find_package(packbin 0.2 CONFIG)
+if(packbin_FOUND)
+  message(STATUS "packbin 0.2 found")
+else()
+  message(STATUS "packbin 0.2 not found")
+endif()
+EOF
+  if ! vcpkg_configure "$app/vcpkg-consumer.log" "$vroot" "$tmp" "$overlay" "$app" ${cmake_flags[@]+"${cmake_flags[@]}"}; then
+    fail "AZ-2232 AC-3 the second project did not configure"
+  elif ! grep -qF 'packbin 0.2 not found' "$app/vcpkg-consumer.log"; then
+    fail "AZ-2232 AC-3 a request for another 0.x minor was satisfied by the installed port"
+  fi
+}
+
+# AZ-2240: the tag-time guard (publish-check.py vcpkg) on the real staged port, the artifact directory $1 that
+# vcpkg_stage_registry left, and on mutants of its working tree (copies in scratch directory $2). The real port must
+# pass; each mutant must fail with exactly the message that names the missing part.
+vcpkg_guard_checks() {
+  python3 - "$here/publish-check.py" "$1" "$2/guard" "$vcpkg_version" <<'PY' || fail "AZ-2240 the vcpkg guard did not behave as expected"
+import json, shutil, subprocess, sys
+from pathlib import Path
+
+check, artifact, work, version = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4]
+cmake = "CMakeLists.txt is missing or does not build the packbin library"
+licence = "LICENSE is missing or is not the MIT license text"
+host = "vcpkg.json lacks the host dependency "
+
+
+def manifest(change):
+    def mutate(port):
+        data = json.loads((port / "vcpkg.json").read_text())
+        change(data)
+        (port / "vcpkg.json").write_text(json.dumps(data, indent=2))
+    return mutate
+
+
+def without(name):
+    return manifest(lambda data: data.update(dependencies=[d for d in data["dependencies"] if d["name"] != name]))
+
+
+def host_off(data):
+    for entry in data["dependencies"]:
+        entry["host"] = False
+
+
+cases = [
+    ("control", lambda port: None, None),
+    ("no CMakeLists.txt", lambda port: (port / "CMakeLists.txt").unlink(), cmake),
+    ("CMakeLists.txt is a comment", lambda port: (port / "CMakeLists.txt").write_text("# no library\n"), cmake),
+    ("no LICENSE", lambda port: (port / "LICENSE").unlink(), licence),
+    ("empty LICENSE", lambda port: (port / "LICENSE").write_text(""), licence),
+    ("no vcpkg-cmake", without("vcpkg-cmake"), host + "vcpkg-cmake"),
+    ("no vcpkg-cmake-config", without("vcpkg-cmake-config"), host + "vcpkg-cmake-config"),
+    ("no dependencies", manifest(lambda data: data.pop("dependencies")), host + "vcpkg-cmake"),
+    ("both host entries off", manifest(host_off), host + "vcpkg-cmake"),
+]
+errors = 0
+for name, mutate, wanted in cases:
+    copy = work / name.replace(" ", "-")
+    shutil.copytree(artifact, copy, symlinks=True)
+    mutate(copy / "reg" / "ports" / "packbin")
+    result = subprocess.run([sys.executable, check, "vcpkg", str(copy), f"v{version}"], capture_output=True, text=True)
+    want = (0, "check ok: vcpkg") if wanted is None else (1, f"check failed: vcpkg: {wanted}")
+    got = (result.returncode, (result.stdout if wanted is None else result.stderr).strip())
+    if got != want:
+        errors += 1
+        print(f"{name}: expected {want}, got {got}")
+shutil.rmtree(work)
+sys.exit(1 if errors else 0)
+PY
 }
 
 vcpkg_checks() {
@@ -306,6 +482,9 @@ vcpkg_checks() {
   fi
   assert_eq "$(git --git-dir="$bare" rev-list --count vcpkg)" "$before" "AZ-2098 AC-5 commits after re-staging the same version"
   vcpkg_port_checks "$bare"
+  vcpkg_guard_checks "$vcpkg_tmp/out-first/artifacts/vcpkg" "$vcpkg_tmp"
   vcpkg_subdirectory_check "$vcpkg_tmp"
+  vcpkg_version_rule_check "$vcpkg_tmp"
+  vcpkg_supports_check "$bare" "$vcpkg_tmp"
   vcpkg_consumer_check "$bare" "$vcpkg_tmp"
 }

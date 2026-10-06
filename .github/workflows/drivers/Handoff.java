@@ -36,7 +36,7 @@ public final class Handoff {
             case "unpack-roundflags" -> System.exit(roundFlagsOk(requireHex(args)) ? 0 : 1);
             case "unpack-roundwhen" -> System.exit(roundWhenOk(requireHex(args)) ? 0 : 1);
             case "unpack-session" -> System.exit(sessionOk(requireHex(args)) ? 0 : 1);
-            default -> System.exit(2);
+            default -> System.exit(HandoffElements.run(cmd, args));
         }
     }
 
@@ -398,7 +398,7 @@ public final class Handoff {
         return oneOp(List.of(rows.get(0)), a) && oneOp(List.of(rows.get(1)), b);
     }
 
-    private static String hex(byte[] raw) {
+    static String hex(byte[] raw) {
         StringBuilder out = new StringBuilder();
         for (byte b : raw) {
             out.append(String.format("%02x", b));
@@ -406,7 +406,7 @@ public final class Handoff {
         return out.toString();
     }
 
-    private static byte[] parse(String hex) {
+    static byte[] parse(String hex) {
         byte[] out = new byte[hex.length() / 2];
         for (int i = 0; i < out.length; i++) {
             out[i] = (byte) Integer.parseInt(hex.substring(i * 2, i * 2 + 2), 16);

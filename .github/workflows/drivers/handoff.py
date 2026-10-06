@@ -11,6 +11,7 @@ from packbin import (
     eq,
     flag_byte,
     flags,
+    group,
     i16,
     i32,
     list,
@@ -87,6 +88,57 @@ BITWHEN = Scheme(
     when(1, eq(0, 1), _BITWHEN_FLAG.bit(u8(1, lambda row: row["v"]))),
 )
 BITWHEN_VALUES = {"k": 0, "v": 5}
+
+# A list of group, a dict of group and a list of flags (AZ-2102, AZ-2239). An absent value is a clear
+# flag bit, so the flags item {"b": 2} packs its flag byte as 02.
+def _point():
+    return (u8(0, lambda p: p["a"]), u8(1, lambda p: p["b"]))
+
+
+ELEMENT_CASES = {
+    "listgroup": (
+        Scheme(1, dict, list(lambda row: row["pts"], group(0, *_point()))),
+        {"pts": [{"a": 1, "b": 2}, {"a": 3, "b": 4}]},
+    ),
+    "dictgroup": (
+        Scheme(1, dict, map_field(lambda row: row["m"], group(0, *_point()))),
+        {"m": {"y": {"a": 3, "b": 4}, "x": {"a": 1, "b": 2}}},
+    ),
+    "listflags": (
+        Scheme(
+            1,
+            dict,
+            list(lambda row: row["pts"], flags(0, u8(0, lambda p: p["a"]), u16(1, lambda p: p["b"]))),
+        ),
+        {"pts": [{"a": 1}, {}, {"b": 2}]},
+    ),
+}
+
+
+def _element_command(cmd: str, argv: list[str]) -> int | None:
+    """Runs pack-, unpack- and unpack-...-short for one of ELEMENT_CASES; None when cmd is not one."""
+    for kind, (packet, values) in ELEMENT_CASES.items():
+        if cmd == f"pack-{kind}":
+            print(BinaryPacker.pack(packet, values).hex())
+            return 0
+        if cmd not in (f"unpack-{kind}", f"unpack-{kind}-short"):
+            continue
+        if len(argv) < 2 or not argv[1]:
+            return 2
+        delivered = []
+        result = BinaryPacker.unpack(bytes.fromhex(argv[1]), packet.on(delivered.append))
+        if cmd.endswith("-short"):
+            # A short element is refused and no row reaches the handler.
+            if not result.ok and not delivered:
+                return 0
+            print(f"{cmd}: {result!r}, delivered {delivered!r}; expected a refusal and no row", file=sys.stderr)
+            return 1
+        if not result.ok or result.value != values:
+            print(f"{cmd}: {result!r}, expected {values!r}", file=sys.stderr)
+            return 1
+        return 0
+    return None
+
 
 SESSION_SEED = bytes(range(1, 33))
 SESSION_NONCE = bytes.fromhex("01000000000000000000000000000000")
@@ -180,7 +232,8 @@ def main(argv: list[str]) -> int:
         if not result.ok or result.value is None:
             return 1
         return 0 if _session_fields_ok(result.value) else 1
-    return 2
+    element = _element_command(cmd, argv)
+    return 2 if element is None else element
 
 
 if __name__ == "__main__":

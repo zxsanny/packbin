@@ -1,4 +1,5 @@
 mod element;
+mod flag_bits;
 mod pack;
 mod times;
 mod unpack;
@@ -13,9 +14,18 @@ use crate::value::{PackError, UnpackError, Values};
 
 /// Packs `values`, keyed by field name, with a map scheme: the type number, then each field.
 ///
-/// - The bits of a `flags` byte or flag byte come from its fields; a value under its own name
-///   is not read. A bool (an empty `group`) sets its bit for `1` and leaves it clear for `0` or
-///   no value.
+/// - The bits of a `flags` byte or flag byte come from its members: a `flags` member or a field
+///   under a flag bit that has no value leaves its bit clear and is not written, while any other
+///   field with no value is a [`PackError::Missing`]. A value kept under the name of the `flags`
+///   byte or flag byte itself is not read. A bool (an empty `group`) is read from its own value:
+///   `1` sets its bit, `0` or no value leaves it clear.
+/// - A `when` and a count (`sized`, `bits`, `packed`, `times`) read what pack wrote in the same
+///   scope (the top level, one round of a `repeat` or `times`, one `list` or `dict` element), as
+///   unpack reads what it has read. A field behind an untaken `when` or a clear bit is skipped,
+///   not written, so a `when` on it does not match and a count that names it is a
+///   [`PackError::Missing`] naming the count's field. A `flags` byte or flag byte is the byte pack
+///   wrote, and a set bool is `1`. A `times` leaves, under each name its rounds wrote, one list
+///   in the scope around it, as unpack does: a `when` or count on that name finds a list.
 /// - A `times` takes its rounds as [`Value::Groups`] (one [`Values`] per round) under the name
 ///   `"__times_<anchor>"`, as many as its count; a member under a `flags` or `when` stays in its
 ///   round. Without that value each direct field of the `times` takes a [`Value::List`] with one
@@ -25,7 +35,9 @@ use crate::value::{PackError, UnpackError, Values};
 ///   With both, a value kept for a name of the rounds must be what the rounds hold. To change a
 ///   value after `unpack`, edit the rounds and drop or rewrite the per-name lists, or edit the
 ///   lists and drop the `"__times_<anchor>"` key (not for a field under a `flags` or `when`:
-///   edit its rounds); leaving both and changing one is an error.
+///   edit its rounds); leaving both and changing one is an error. Without rounds, a list longer
+///   than the count is a [`PackError::Type`] naming the field, the items and the count, not
+///   dropped items.
 /// - A `repeat` takes its rounds as [`Value::Groups`] (one [`Values`] per round) under the name
 ///   `"__repeat__"`; no value there packs no rounds.
 ///
@@ -33,7 +45,8 @@ use crate::value::{PackError, UnpackError, Values};
 /// written has no value; [`PackError::Type`] when a value does not fit its field, a bool value
 /// is not `0` or `1`, `"__repeat__"` or a `times` holds anything but [`Value::Groups`], the
 /// rounds of a `times` are not as many as its count, a value kept beside them differs from
-/// them, or a `times` without rounds has a value kept under a field below a `flags` or `when`.
+/// them, a `times` without rounds has a value kept under a field below a `flags` or `when`, or
+/// a list of a `times` without rounds is longer than its count.
 ///
 /// [`Value::List`]: crate::Value::List
 /// [`Value::Groups`]: crate::Value::Groups

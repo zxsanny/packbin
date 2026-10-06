@@ -1,5 +1,6 @@
 import {
   BinaryPacker,
+  type Field,
   PackSession,
   Scheme,
   bool,
@@ -7,6 +8,7 @@ import {
   eq,
   flagByte,
   flags,
+  group,
   i16,
   i32,
   list,
@@ -93,6 +95,30 @@ const bitWhenPacket = scheme<BitWhenRow>(
 );
 
 const bitWhenValues: BitWhenRow = { k: 0, v: 5 };
+
+type Point = { a?: number; b?: number };
+
+const pointFields = (): Field[] => [u8(0, (p: Point) => p.a), u8(1, (p: Point) => p.b)];
+
+// A list of group, a dict of group and a list of flags (AZ-2102, AZ-2239). An absent value is a
+// clear flag bit, so the flags item {b: 2} packs its flag byte as 02.
+const elementCases: Record<string, { packet: Scheme<Record<string, unknown>>; values: Record<string, unknown> }> = {
+  listgroup: {
+    packet: scheme(1, list((r: { pts: Point[] }) => r.pts, group((e: { p: Point }) => e.p, pointFields()))),
+    values: { pts: [{ a: 1, b: 2 }, { a: 3, b: 4 }] },
+  },
+  dictgroup: {
+    packet: scheme(1, dict((r: { m: Record<string, Point> }) => r.m, group((e: { p: Point }) => e.p, pointFields()))),
+    values: { m: { y: { a: 3, b: 4 }, x: { a: 1, b: 2 } } },
+  },
+  listflags: {
+    packet: scheme(
+      1,
+      list((r: { pts: Point[] }) => r.pts, flags(0, [u8(0, (p: Point) => p.a), u16(1, (p: Point) => p.b)])),
+    ),
+    values: { pts: [{ a: 1 }, {}, { b: 2 }] },
+  },
+};
 
 type RoundRow = Record<string, unknown>;
 
@@ -376,6 +402,32 @@ if (cmd === "unpack-session") {
     process.exit(0);
   }
   process.exit(1);
+}
+
+for (const [kind, { packet, values }] of Object.entries(elementCases)) {
+  if (cmd === `pack-${kind}`) {
+    process.stdout.write(Buffer.from(BinaryPacker.pack(packet, values)).toString("hex") + "\n");
+    process.exit(0);
+  }
+  if (cmd === `unpack-${kind}` || cmd === `unpack-${kind}-short`) {
+    const hex = process.argv[3];
+    if (!hex) process.exit(2);
+    let row: Record<string, unknown> | undefined;
+    const result = BinaryPacker.unpack(Buffer.from(hex, "hex"), packet.on((value) => {
+      row = value as Record<string, unknown>;
+    }));
+    if (cmd === `unpack-${kind}-short`) {
+      // A short element is refused and no row reaches the handler.
+      if (!result.ok && row === undefined) process.exit(0);
+      process.stderr.write(`${cmd}: read ${JSON.stringify(result)} ${JSON.stringify(row)}, expected a refusal\n`);
+      process.exit(1);
+    }
+    if (!result.ok || row === undefined || !deepEqual(row, values)) {
+      process.stderr.write(`${cmd}: ${JSON.stringify(result)} read ${JSON.stringify(row)}, expected ${JSON.stringify(values)}\n`);
+      process.exit(1);
+    }
+    process.exit(0);
+  }
 }
 
 process.exit(2);

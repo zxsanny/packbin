@@ -44,6 +44,14 @@ mod scope_tests;
 #[cfg(test)]
 mod session_hostile_tests;
 #[cfg(test)]
+mod times_longer_tests;
+#[cfg(test)]
 mod times_stale_tests;
 #[cfg(test)]
 mod times_tests;
+#[cfg(test)]
+mod when_kept_tests;
+#[cfg(test)]
+mod when_names_tests;
+#[cfg(test)]
+mod when_written_tests;

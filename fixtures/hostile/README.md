@@ -111,7 +111,7 @@
 - Scheme: id0 split-form `flag_byte`; nine `bit(...)` fields id1 to id9, each a `u8`. In packages whose flag byte takes no order id (C#, TypeScript, Python, Java, C++) the bits are id0 to id8.
 - No packet: construction must fail.
 - Expected: `scheme_error`.
-- Source: Rust LB2 (`field/mod.rs:144`); Python already rejects it.
+- Source: Rust LB2 (`field/mod.rs:144`); Python already rejects it. In TypeScript, Java and (since AZ-2230) Python a `flag_byte` handle holds no bit, so the ninth `bit(...)` call builds and the scheme refuses it when it is built.
 
 ## when_names_later_field
 

@@ -409,7 +409,7 @@ No AC number; they hold the F10 limit on the rounds of one unpack call. All run 
 | Test | What it proves | Where |
 |------|----------------|-------|
 | `ac1_*` | the defaults and constants; `with_limits` on a `MapScheme`; existing call sites unchanged | `rust/tests/round_limits_tests.rs` |
-| `ac2_*` to `ac5_*` | `repeat` and `times` accept 65,535 rounds and refuse the next one as `Short { field: "repeat" | "times", needed: 0 }` | same file |
+| `ac2_*` to `ac5_*` | `repeat` and `times` accept 65,535 rounds and refuse the next one as `Short { field: "repeat" \| "times", needed: 0 }` | same file |
 | `ac6_*` to `ac8_*` | the slot limit refuses the round that would pass it; the slot total is shared by the fields of one call; a `times` inside a `repeat` counts its rounds afresh and its slots together | same file |
 | `ac9_*`, `ac10_*` | a typed `times` row is limited and its handler is not called; refused 1 MiB packets stop at round 65,536 | same file |
 | `ac11_*`, `ac12_*` | limits belong to the scheme; a zero limit panics on a map and a typed scheme; `usize::MAX` is valid | same file |
@@ -417,7 +417,7 @@ No AC number; they hold the F10 limit on the rounds of one unpack call. All run 
 The hostile `limit` stage of `fixtures/hostile/cases.txt` (`repeat_rounds_over_limit`, `times_rounds_over_limit`, AZ-2220) is replayed with a scheme whose `max_rounds` is 3: the refusal is the interim bad-value error with `needed` 0 and the one byte of the round that would start left, and the handler is not called.
 
 
-## Loop 16 Tests (AZ-2105, AZ-2114, AZ-2117, AZ-2118, AZ-2121, AZ-2128, AZ-2189)
+## Loop 16 Tests (AZ-2105, AZ-2114, AZ-2117, AZ-2118, AZ-2121, AZ-2128, AZ-2189, AZ-2237)
 
 All run in the `rust` service of `docker-compose.test.yml` with `cargo test`.
 
@@ -429,6 +429,10 @@ All run in the `rust` service of `docker-compose.test.yml` with `cargo test`.
 | map `times` under `flags` and `when` | a non-empty list or a single value under such a member is refused naming it; an empty list, an absent member, rounds and direct members still pack (AZ-2189) | `rust/src/times_tests.rs` |
 | `ac1_*` and `ac2_*` flag group tests | a group of `u2`, `sized`, `bits`, `packed`, a nested group or nested `flags` sets its bit, at any depth; a missing sibling fails with `PackError::Missing` naming it (AZ-2128) | `rust/src/flag_group_tests.rs` |
 | `ac1_*`, `ac2_*`, `r2_g1_*` hostile session tests | a waiter unpacking a zero-progress packet, a list of zero-width lists or a dict with a zero-width value returns the clear-unpack error, and the next valid message unpacks (AZ-2114; the zero-progress scheme uses a zero-width `bytes` repeat, because the README `when` scheme is refused at construction) | `rust/src/session_hostile_tests.rs` |
+| `ac1_*` to `ac5_*` written-value tests | a `when` on a field that an earlier `when` or a clear bit skipped does not match; the typed scheme agrees; `eq(bool, false)` on a clear bit writes no body; a `sized`, `bits`, `packed` or `times` count that names a skipped field is `PackError::Missing`; a `repeat` or `times` round decides from what the round wrote (AZ-2237; 11 tests) | `rust/src/when_written_tests.rs` |
+| `ac8_*` kept-bytes tests | the chains, rounds, split flag byte, `u2` slot and flags byte that already packed correctly keep their bytes (AZ-2237; 7 tests) | `rust/src/when_kept_tests.rs` |
+| `a_when_on_a_flags_byte_*`, `a_count_that_names_*`, `a_name_a_times_round_wrote_*` | a `when` or count that names a `flags` byte or a split flag byte reads the byte pack wrote, not a value kept in the row (`0105010709`, `0101010508`, `010105aa`); after a `times` the names its rounds wrote are lists, so a `when` on one does not match and its body is not written (`0101000007`), with rounds or per-name lists; a count of such a name is not an integer (AZ-2237 review fixes; 11 tests) | `rust/src/when_names_tests.rs` |
+| `ac6_*`, `ac7_*` and three later tests | a map `times` without rounds refuses a list longer than the count by name (`times at id 1: '1' has 3 items, count is 2`), also for count 0, and names the first member in field order; a list as long as the count, a shorter list, an empty or absent list and a lone value keep their results; a list under the name of a `flags` member is not refused, a flag-bit inner longer than the count is (AZ-2237; 14 tests) | `rust/src/times_longer_tests.rs` |
 | orphan split-bit tests | a typed list whose element is a bare flag bit, and a `flags` member split bit without or before its flag byte, are refused at construction (AZ-2121) | `rust/src/element_tests.rs` |
 
 ## Test Data Management
