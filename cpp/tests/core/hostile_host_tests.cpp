@@ -307,6 +307,8 @@ bool read_cases(std::vector<Case>& out) {
       if (!(fields >> c.id) || c.id[0] == '#')
         continue;
       fields >> c.stage >> c.expected >> c.hex;
+      if (c.stage == "limit")  // round limits: C++ unpacks into fixed arrays and has none (README)
+        continue;
       out.push_back(c);
     }
     return true;

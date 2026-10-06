@@ -66,6 +66,7 @@ const allCases = readFileSync(new URL("../../fixtures/hostile/cases.txt", import
   })
 const cases = allCases.filter((c) => c.stage === "unpack")
 const constructCases = allCases.filter((c) => c.stage === "construct")
+const limitCases = allCases.filter((c) => c.stage === "limit")
 
 const SPEC: Record<string, string> = {
   row1_zero_progress_repeat: "010005",
@@ -97,6 +98,7 @@ const SPEC: Record<string, string> = {
 const jobs: Job[] = [
   ...Object.entries(SPEC).map(([id, hex]) => ({ key: id, id, hex })),
   ...cases.map((c) => ({ key: `vector:${c.id}`, id: c.id, hex: c.hex })),
+  ...limitCases.map((c) => ({ key: `limit:${c.id}`, id: c.id, hex: c.hex })),
   { key: "session", session: true },
 ]
 
@@ -293,6 +295,25 @@ describe("shared hostile vectors (fixtures/hostile/cases.txt)", () => {
         c.expected.includes(kind),
         `${c.id}: returned ${kind} ${JSON.stringify(out.result)}, vector accepts ${c.expected.join("|")}`,
       )
+    })
+  }
+})
+
+describe("shared limit vectors (fixtures/hostile/cases.txt)", () => {
+  it("reads at least one limit vector", () => {
+    assert.ok(limitCases.length > 0)
+  })
+
+  for (const c of limitCases) {
+    it(`${c.id} is refused by the round limit`, async () => {
+      const out = await run(`limit:${c.id}`)
+      assertRejected(out)
+      assert.ok(c.expected.includes(kindOf(out)), `${c.id}: returned ${kindOf(out)}, vector accepts ${c.expected.join("|")}`)
+      // The refusal comes when a round would start: no bytes needed, the byte of that round left.
+      // A short read of a field would have needed > 0.
+      const result = out.result as { needed: number; left: number }
+      assert.equal(result.needed, 0, `${c.id}: ${JSON.stringify(out.result)}`)
+      assert.equal(result.left, 1, `${c.id}: ${JSON.stringify(out.result)}`)
     })
   }
 })

@@ -42,8 +42,8 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   else
     seen="$seen$id "
   fi
-  if [[ "$stage" != unpack && "$stage" != construct ]]; then
-    bad "stage '$stage' must be unpack or construct"
+  if [[ "$stage" != unpack && "$stage" != construct && "$stage" != limit ]]; then
+    bad "stage '$stage' must be unpack, construct or limit"
   fi
   if [[ ! "$expected" =~ ^[a-z_]+(\|[a-z_]+)*$ ]]; then
     bad "expected '$expected' must be outcome terms joined by |"

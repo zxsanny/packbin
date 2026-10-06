@@ -79,6 +79,16 @@ List: OWASP Top 10 2025, confirmed at owasp.org at the start of the audit.
 
 **F10, F11, F1, F2, F3** are carried as in loop 13: see the table. F10 detail (measured peak resident set per package, remediation options 1 to 3) is unchanged: 0.3 to 1.4 GB per 1 MiB packet of one-byte rounds; the README states the cap requirement; a packet-length cap contains it; High for a service that reads packets of a megabyte or more without a cap. F1 now also covers `actions/setup-node@v7` (`publish.yml:32`); the third-party `NuGet/login@v1` is treated in F12.
 
+## Loop 15 status: F10 and F11 (AZ-2216 to AZ-2220)
+
+The loop's security audit rewrites this report; this block records only the F10 and F11 status after the implementation.
+
+| # | Status | Why |
+|---|--------|-----|
+| F10 | fixed for C#, TypeScript, Java and Rust (AZ-2216 to AZ-2219) | A scheme carries `maxRounds` (default 65,535 per `repeat` or `times` field) and `maxSlots` (default 4,194,304 per unpack call). A round past either is refused when it would start, with the package's interim bad-value error, no row, handler not called; a scheme raises the limits with `WithLimits`, `withLimits` or `with_limits`. A refused 1 MiB packet of one-byte rounds now peaks at 86 to 92 MiB (36-name body in C#, TypeScript, Java) and 21 to 64 MiB (Rust) instead of 0.3 to 1.4 GB; measured again in AZ-2220 (README, Untrusted input). Tests: `csharp/tests/RoundLimitTests.cs`, `typescript/tests/round-limits.test.ts`, `java/.../RoundLimitsTest.java`, `rust/tests/round_limits_tests.rs`; each suite passes in its container (C# 410 tests, TypeScript 279, Rust 234, Java all runners) |
+| F11 | closed for C#, TypeScript, Java and Rust | The four size tests above hold a packet of `maxRounds` one-byte rounds accepted, one of `maxRounds + 1` refused, and a refused 1 MiB packet with `left` 983,041; the two shared `limit` cases (`repeat_rounds_over_limit`, `times_rounds_over_limit`, `fixtures/hostile/cases.txt`) are replayed by the four packages against a scheme with `maxRounds` 3 |
+| F10 and F11, C++ and Python | bounded by design, no size test added | C++ unpacks into caller-owned `Array<T, N>` storage of capacity at most 65,535 and returns `Error::TooMany` for a longer count (`cpp/include/packbin/table.hpp`, `core.hpp`); Python keeps only the values it reads (`python/src/packbin/_unpack.py`, `_append`), about 36 MiB for the packet above. F11 is closed with this stated limit, not fully |
+
 ## Loop 13 findings: status
 
 | # | Status | Why |

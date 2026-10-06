@@ -7,9 +7,10 @@
 - UTF-8, LF line endings. Lines starting with `#` and blank lines are ignored.
 - Data line: four fields separated by spaces or tabs: `id stage expected hex`.
   - `id`: `[a-z0-9_]+`, unique. Every id has a `## <id>` section below.
-  - `stage`: `unpack` (build the scheme, unpack `hex`) or `construct` (building the scheme must fail).
+  - `stage`: `unpack` (build the scheme, unpack `hex`), `construct` (building the scheme must fail) or `limit` (build the scheme with the limits the section gives, unpack `hex`).
   - `expected`: outcome terms joined by `|`; any listed term is accepted, the first is preferred.
-  - `hex`: lowercase, even length, starting with `01` for `unpack`; `-` for `construct`.
+  - `hex`: lowercase, even length, starting with `01` for `unpack` and `limit`; `-` for `construct`.
+- A `limit` case is a small packet that a scheme with a low round limit refuses. The file holds bytes and outcomes only, so the limit is not in it: the `## <id>` section names it and each package writes it by hand with its own call (`WithLimits`, `withLimits`, `with_limits`). A literal packet over the default limit (65,535 rounds, about 1 MiB) cannot live in the file; each package's own default-limit tests cover it. Only C#, TypeScript, Java and Rust run `limit` cases. C++ unpacks into fixed arrays and Python keeps only the values it reads, so neither has a round limit; their replays skip the stage.
 - `check-cases.sh` checks all of this and that every id has a section here. `cases.test.sh` proves the check passes on the committed file and fails on corrupted copies. Both run in the `scaffold` job of `.github/workflows/test.yml`.
 
 ## Notation
@@ -20,6 +21,7 @@
 - Outcome terms:
   - `short_packet`, `trailing_bytes`, `bad_value`, `too_many`, `type_mismatch`: unpack returns that error value, with no exception and no row.
   - `scheme_error`: construction fails (an exception in C#, Java, TypeScript, Python and Rust; a compile error or `SchemeInvalid` in C++).
+- A `limit` case returns an error value whose kind is `too_many` or `bad_value`, with `needed` 0 and `left` 1: the limit refuses a round when it would start, before the round's bytes are read, so a short read of a field (`needed` above 0) does not satisfy it. Packages that have no `too_many` or `bad_value` type yet return their interim bad-value error (a short-packet value with `needed` 0). The field label in that error differs by package and is not asserted.
 - Until the error-kind decision (C15) is taken, a package without a type for a kind passes the case with any non-ok unpack result that is not an exception, and names the kind it returned in the test name or message.
 - Every `unpack` case returns within 1 second on CI hardware. A hang is a failure; each package test supplies its own time guard.
 
@@ -145,3 +147,23 @@
 - No packet: an empty group is a presence bit and is allowed only inside `flags` or a flag byte.
 - Expected: `scheme_error`.
 - Source: C++ LB7. User decision 2026-10-05.
+
+## repeat_rounds_over_limit
+
+- Scheme: id0 `repeat` anchor 0 { id0 `u8 v` }.
+- Limit: `maxRounds` 3; `maxSlots` at its default (4,194,304).
+- Packet `01 11 22 33 44`: type `01`; four one-byte rounds. The fourth round would be the fourth started, above the limit, so it is refused when it would start, with its byte `44` left.
+- Expected: `too_many` or `bad_value`, with `needed` 0 and `left` 1. No handler call, no row. The label of the error is not asserted.
+- Source: loop 15, AZ-2216 to AZ-2219 (round limits); the bytes were run against each package's real code.
+- Run by: C# (`Scheme<T>.WithLimits(maxRounds: 3)`), TypeScript (`withLimits({ maxRounds: 3 })`), Java (`withLimits(3, Scheme.DEFAULT_MAX_SLOTS)`), Rust (`with_limits(3, DEFAULT_MAX_SLOTS)`).
+- Not run by: C++ (fixed `Array<T, N>` storage and `Error::TooMany`, so no round budget to set) and Python (keeps only the values it reads, flat memory). Their replays skip the stage.
+
+## times_rounds_over_limit
+
+- Scheme: id0 `u8 n`; id1 `times` anchor 1, count = id0 { id1 `u8 v` }.
+- Limit: `maxRounds` 3; `maxSlots` at its default (4,194,304).
+- Packet `01 04 11 22 33 44`: type `01`; `n` = 4; four one-byte rounds. The count 4 is above the limit but is not refused up front (the check is lazy, so `oversize_count_times` keeps its short read); round 4 is refused when it would start, with its byte `44` left.
+- Expected: `too_many` or `bad_value`, with `needed` 0 and `left` 1. No handler call, no row. The label of the error is not asserted.
+- Source: loop 15, AZ-2216 to AZ-2219; the bytes were run against each package's real code.
+- Run by: C#, TypeScript, Java, Rust (calls as in `repeat_rounds_over_limit`).
+- Not run by: C++ and Python, for the reason given there.

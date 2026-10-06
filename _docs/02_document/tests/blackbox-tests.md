@@ -1532,9 +1532,9 @@
 
 | Step | Consumer Action | Expected System Response |
 |------|----------------|------------------------|
-| 1 | run `fixtures/hostile/cases.test.sh` (the `scaffold` job runs it) | 17 ids pass; each corrupted copy exits non-zero and names its line; every id has a README section |
+| 1 | run `fixtures/hostile/cases.test.sh` (the `scaffold` job runs it) | 19 ids pass; each corrupted copy exits non-zero and names its line; every id has a README section |
 
-**Expected outcome**: 17 ids pass; each corrupted copy exits non-zero and names its line; every id has a README section.
+**Expected outcome**: 19 ids pass; each corrupted copy exits non-zero and names its line; every id has a README section.
 **Max execution time**: 5s
 
 ### FT-X-02: A reused flag-byte number keeps its own scope
@@ -1586,7 +1586,7 @@
 **Preconditions**:
 - The C++ core as built in loop 10
 
-**Input data**: all 17 cases of `fixtures/hostile/cases.txt`
+**Input data**: the 17 `unpack` and `construct` cases of the 19 in `fixtures/hostile/cases.txt` (the 2 `limit` cases are skipped: C++ has no round limit, AZ-2220)
 
 **Steps**:
 

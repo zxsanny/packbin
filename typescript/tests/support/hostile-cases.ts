@@ -135,6 +135,14 @@ export const SCHEMES: Record<string, () => Scheme<Row>> = {
   count_behind_clear_flag: () => scheme<Row>(1, clearFlag(), sized(1, (x) => x.payload, 0)),
   count_behind_clear_flag_bits: () => scheme<Row>(1, clearFlag(), bits(1, (x) => x.segs, 0)),
 
+  // fixtures/hostile/cases.txt, limit stage: maxRounds 3, the default maxSlots.
+  repeat_rounds_over_limit: () => scheme<Row>(1, repeat(0, [u8(0, (x) => x.v)])).withLimits({ maxRounds: 3 }),
+  times_rounds_over_limit: () => scheme<Row>(
+    1,
+    u8(0, (x) => x.n),
+    times(1, 0, [u8(1, (x) => x.v)]),
+  ).withLimits({ maxRounds: 3 }),
+
   // AZ-2072 problem table
   row1_zero_progress_repeat: () => scheme<Row>(1, u8(0, (x) => x.k), repeat(1, emptyRound())),
   row2a_sized_negative: () => scheme<Row>(

@@ -1,7 +1,7 @@
 use crate::walk::unpack;
 use crate::{
     bits, dict, eq, flag_byte, flags, group, i8, list, repeat, sized, times, u16, u32, u8, utf8,
-    when, BoundField, MapScheme, Scheme, UnpackError, Value,
+    when, BoundField, MapScheme, Scheme, UnpackError, Value, DEFAULT_MAX_SLOTS,
 };
 use std::collections::HashSet;
 use std::fs;
@@ -89,6 +89,20 @@ fn scheme_for(id: &str) -> MapScheme {
     }
 }
 
+/// Rounds the scheme of a `limit` case allows; max_slots stays at its default.
+const LOW_ROUNDS: usize = 3;
+
+/// The scheme a `limit` case names: written by hand from fixtures/hostile/README.md.
+fn limit_scheme_for(id: &str) -> MapScheme {
+    match id {
+        "repeat_rounds_over_limit" => MapScheme::new(1, vec![repeat(0, vec![u8("0")])])
+            .with_limits(LOW_ROUNDS, DEFAULT_MAX_SLOTS),
+        "times_rounds_over_limit" => MapScheme::new(1, vec![u8("0"), times(1, "0", vec![u8("1")])])
+            .with_limits(LOW_ROUNDS, DEFAULT_MAX_SLOTS),
+        other => panic!("no scheme written for hostile limit case {other}"),
+    }
+}
+
 #[derive(Default)]
 struct BoolRow {
     a: u8,
@@ -168,10 +182,18 @@ fn variant(err: &UnpackError) -> &'static str {
 
 /// Builds the case scheme and unpacks `hex`. `Err(text)` is a construction failure.
 fn run_unpack(id: &str, hex: &str) -> Result<Result<(), UnpackError>, String> {
+    run_with(id, hex, scheme_for)
+}
+
+fn run_with(
+    id: &str,
+    hex: &str,
+    build: fn(&str) -> MapScheme,
+) -> Result<Result<(), UnpackError>, String> {
     let id = id.to_string();
     let bytes = parse_hex(hex);
     within_one_second(&id.clone(), move || {
-        let scheme = match catch_unwind(AssertUnwindSafe(|| scheme_for(&id))) {
+        let scheme = match catch_unwind(AssertUnwindSafe(|| build(&id))) {
             Ok(scheme) => scheme,
             Err(panic) => return Err(panic_text(panic.as_ref())),
         };
@@ -224,6 +246,16 @@ fn hostile_vectors_error_without_panic_or_hang() {
                     assert_eq!(rust_outcome(id), variant(&err), "{id}: {err:?}");
                     outcomes.push(format!("{id} -> {} {err:?}", variant(&err)));
                 }
+            },
+            // The round that would start is refused: no bytes needed, the one byte of that round left.
+            "limit" => match run_with(id, hex, limit_scheme_for) {
+                Err(msg) => panic!("{id}: the limit scheme was refused at construction: {msg}"),
+                Ok(Ok(())) => panic!("{id}: unpack returned a value, expected {expected}"),
+                Ok(Err(UnpackError::Short(short))) => {
+                    assert_eq!((short.needed, short.left), (0, 1), "{id}: {short:?}");
+                    outcomes.push(format!("{id} -> Short {short:?}"));
+                }
+                Ok(Err(err)) => panic!("{id}: expected the interim bad-value error, got {err:?}"),
             },
             other => panic!("{id}: unknown stage {other}"),
         }

@@ -17,6 +17,12 @@ public class HostileVectorTests
         public byte V { get; set; }
     }
 
+    private sealed class RoundRow
+    {
+        public byte N { get; set; }
+        public byte V { get; set; }
+    }
+
     private sealed class SignedRow
     {
         public sbyte N { get; set; }
@@ -138,6 +144,21 @@ public class HostileVectorTests
                 Field.Bits<GatedRow>(1, x => x.Segs, 0)), hex, 1),
     };
 
+    // fixtures/hostile/README.md, stage limit: the scheme carries maxRounds 3 and the default maxSlots.
+    private const int LowRounds = 3;
+
+    private static readonly Dictionary<string, Func<string, HostileProbe.Outcome>> LimitSchemes = new()
+    {
+        ["repeat_rounds_over_limit"] = hex => HostileProbe.Unpack(
+            new Scheme<RoundRow>(1, Field.Repeat(0, Field.U8<RoundRow>(0, x => x.V)))
+                .WithLimits(maxRounds: LowRounds), hex, 1),
+        ["times_rounds_over_limit"] = hex => HostileProbe.Unpack(
+            new Scheme<RoundRow>(1,
+                Field.U8<RoundRow>(0, x => x.N),
+                Field.Times(1, 0, Field.U8<RoundRow>(1, x => x.V)))
+                .WithLimits(maxRounds: LowRounds), hex, 1),
+    };
+
     private static readonly Dictionary<string, Action> ConstructSchemes = new()
     {
         ["nine_flag_bits"] = () => _ = new Scheme<NineRow>(1, Field.Flags(0, NineU8())),
@@ -202,6 +223,42 @@ public class HostileVectorTests
 
     public static IEnumerable<object[]> ConstructCases() =>
         Cases("construct").Select(parts => new object[] { parts[0], parts[2] });
+
+    public static IEnumerable<object[]> LimitCases() =>
+        Cases("limit").Select(parts => new object[] { parts[0], parts[2], parts[3] });
+
+    [Fact]
+    public void EveryLimitCase_HasACSharpScheme()
+    {
+        // Arrange
+        var ids = Cases("limit").Select(parts => parts[0]).ToList();
+
+        // Act
+        var unclaimed = ids.Where(id => !LimitSchemes.ContainsKey(id)).ToList();
+
+        // Assert
+        Assert.NotEmpty(ids);
+        Assert.Empty(unclaimed);
+    }
+
+    [Theory]
+    [MemberData(nameof(LimitCases))]
+    public void LimitCase_IsRefusedByTheRoundLimit(string id, string expected, string hex)
+    {
+        // Arrange
+        Assert.True(LimitSchemes.TryGetValue(id, out var run), $"{id}: no C# scheme declared for this case");
+
+        // Act
+        var outcome = run!(hex);
+
+        // Assert: the interim bad-value error of the round that would start, not a short read of a field.
+        Assert.False(outcome.HandlerCalled, $"{id}: handler called");
+        var refusal = Assert.IsType<ShortPacket>(outcome.Error);
+        Assert.Equal(0, refusal.Needed);
+        Assert.Equal(1, refusal.Left);
+        var accepted = expected.Split('|').Where(KindOfTerm.ContainsKey).Select(term => KindOfTerm[term]).ToList();
+        Assert.True(accepted.Contains(refusal.GetType()), $"{id} -> {refusal.GetType().Name}, expected one of {expected}");
+    }
 
     [Fact]
     public void EveryConstructCase_HasACSharpScheme()

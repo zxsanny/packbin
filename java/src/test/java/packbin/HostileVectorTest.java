@@ -28,6 +28,8 @@ final class HostileVectorTest {
                 replayConstruct(c);
             } else if (c.stage.equals("unpack")) {
                 replay(c);
+            } else if (c.stage.equals("limit")) {
+                replayLimit(c);
             } else {
                 PackbinTest.fail("hostile case " + c.id + " has unknown stage " + c.stage);
             }
@@ -37,7 +39,8 @@ final class HostileVectorTest {
                 "oversize_count_times", "oversize_list_count", "invalid_utf8", "invalid_utf8_dict_key",
                 "count_behind_clear_flag", "count_behind_clear_flag_bits", "nine_flag_bits", "nine_flag_bits_split",
                 "when_names_later_field", "count_names_later_field", "when_names_outer_field_in_repeat",
-                "bool_outside_flags", "empty_group_outside_flags")) {
+                "bool_outside_flags", "empty_group_outside_flags",
+                "repeat_rounds_over_limit", "times_rounds_over_limit")) {
             PackbinTest.expectTrue("hostile vector " + id + " present in cases.txt", seen.contains(id));
         }
     }
@@ -64,6 +67,47 @@ final class HostileVectorTest {
         PackbinTest.expectTrue(label + " is a non-ok result", run.result != null);
         PackbinTest.expectTrue(label + " leaves the handler uncalled", !run.handled);
         PackbinTest.expectTrue(label + " is a kind Java can report", kindAccepted(c, run.result));
+    }
+
+    /** Rounds the scheme of a {@code limit} case allows; maxSlots stays at its default. */
+    private static final int LOW_ROUNDS = 3;
+
+    /**
+     * A limit case is unpacked with a scheme whose maxRounds is {@value #LOW_ROUNDS}. It must come back as the interim
+     * bad-value error of the round that would start: no bytes needed, the one byte of that round left, no handler call.
+     */
+    private static void replayLimit(Case c) {
+        Scheme<Map> scheme = limitSchemeFor(c.id);
+        if (scheme == null) {
+            PackbinTest.fail("hostile case " + c.id + " has no Java scheme in HostileVectorTest");
+            return;
+        }
+        HostileRun run = HostileRun.of(scheme, c.hex);
+        String label = c.id + " -> " + run.kind();
+        System.out.println("hostile vector " + label + " (expected " + String.join("|", c.expected) + ")");
+        PackbinTest.expectTrue(c.id + " returns within " + HostileRun.LIMIT_MS + " ms (hang?)", run.finished);
+        PackbinTest.expectTrue(label + " does not throw", run.thrown == null);
+        PackbinTest.expectTrue(label + " leaves the handler uncalled", !run.handled);
+        PackbinTest.expectTrue(label + " is a kind Java can report", kindAccepted(c, run.result));
+        if (run.result instanceof Packbin.ShortPacket refusal) {
+            PackbinTest.expectEq(c.id + " needed", 0, refusal.needed);
+            PackbinTest.expectEq(c.id + " left", 1, refusal.left);
+        } else {
+            PackbinTest.fail(label + " is not the interim bad-value error (ShortPacket with needed 0)");
+        }
+    }
+
+    private static Scheme<Map> limitSchemeFor(String id) {
+        return switch (id) {
+            case "repeat_rounds_over_limit" -> Maps.scheme(1,
+                    Packbin.repeat(0, Packbin.u8(0, Access.get("v"), Access.set("v"))))
+                    .withLimits(LOW_ROUNDS, Scheme.DEFAULT_MAX_SLOTS);
+            case "times_rounds_over_limit" -> Maps.scheme(1,
+                    Packbin.u8(0, Access.get("n"), Access.set("n")),
+                    Packbin.times(1, 0, Packbin.u8(1, Access.get("v"), Access.set("v"))))
+                    .withLimits(LOW_ROUNDS, Scheme.DEFAULT_MAX_SLOTS);
+            default -> null;
+        };
     }
 
     /** A construct case passes only when building its scheme throws IllegalArgumentException: 0 schemes. */
