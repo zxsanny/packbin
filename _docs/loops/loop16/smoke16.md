@@ -30,15 +30,17 @@ assert PackSession.load(32) is None, "load(32) must return None"
 s = PackSession.load(bytes(32)); assert s is not None
 assert s.start(16) is None, "start(16) must return None"
 assert PackSession.load(bytes(32)).join(16) is False
-x = lambda k: (lambda r: r[k], lambda r, v: r.__setitem__(k, v))
+k = lambda n: (lambda r: r[n])
 try:
-    Scheme(1, dict, u8(0, *x("x")), u8(1, *x("x")))
+    Scheme(1, dict, u8(0, k("x")), u8(1, k("x")))
 except ValueError as e:
     assert "declared twice" in str(e), str(e)
 else:
     raise AssertionError("a name declared twice was not refused")
-sch = Scheme(1, dict, u8(0, *x("c")), times(1, 0, flags(1, u8(1, *x("v")))))
-print("python: seeds and nonces strict, duplicate name refused, short times list packs", BinaryPacker.pack(sch, {"c": 2, "v": [5]}).hex())
+sch = Scheme(1, dict, u8(0, k("c")), times(1, 0, flags(1, u8(1, k("v")))))
+out = BinaryPacker.pack(sch, {"c": 2, "v": [5]}).hex()
+assert out == "0102010500", out
+print("python: seeds and nonces strict, duplicate name refused, short times list packs", out)
 '; }
 check_ts() { node --experimental-strip-types --no-warnings --input-type=module -e '
 import { PackSession } from "./typescript/src/index.ts";
@@ -47,7 +49,7 @@ if (PackSession.load(null) !== null) throw new Error("load(null) must be null");
 if (PackSession.load(new Uint8Array(32)) === null) throw new Error("a 32-byte Uint8Array must open");
 console.log("typescript: PackSession.load takes only a 32-byte Uint8Array");
 '; }
-check_rust() { o="$(cargo test --manifest-path rust/Cargo.toml --lib duplicate_names when_written when_names times_longer 2>&1)"; c=$?; printf '%s\n' "$o" | grep -E '^test result' | head -3
+check_rust() { o="$(cargo test --manifest-path rust/Cargo.toml --lib -- duplicate_names when_written when_names times_longer 2>&1)"; c=$?; printf '%s\n' "$o" | grep -E '^test result' | head -3
   [ "$c" -eq 0 ] && echo "rust: duplicate names, when from written values, longer times list"; }
 check_java() { o="$(bash java/test.sh 2>&1)"; c=$?; printf '%s\n' "$o" | tail -n 4
   [ "$c" -eq 0 ] && echo "java: all checks pass, api-check, duplicate names"; }
@@ -79,4 +81,4 @@ Only the first CI run on the Ubuntu runner proves: the `ring` job (node 24, JDK 
 
 ## Agent walk
 
-No browser surface. The agent trial-ran the script before asking you (see the loop record).
+No browser surface. The agent trial-ran the script on 2026-10-07: 7/7 (the first trial found two mistakes in the script itself, a wrong Python call and a Rust test filter, both fixed).
