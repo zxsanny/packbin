@@ -4,15 +4,16 @@ set -euo pipefail
 
 arm_link_common=(-nostartfiles -T "$here/arm/mps2.ld" -Wl,--gc-sections -Wl,--cref)
 heap_wraps=(-Wl,--wrap=malloc,--wrap=calloc,--wrap=realloc,--wrap=_Znwj,--wrap=_Znaj)
+# Longest one QEMU image may run, in seconds; `timeout` kills a hung image (exit 124), which fails the target.
+qemu_timeout_s=300
 
 # Compiles one C++ source with the AC-1 flags; output (warnings included) goes to the log.
 arm_cxx() {
-  local dir="$1" src="$2" obj="$3"
+  local dir="$1" src="$2" obj="$3" status=0
   shift 3
   arm-none-eabi-g++ "${core_flags[@]}" "$@" -ffunction-sections -fdata-sections \
     -I"$cpp/include" -I"$cpp/tests/core" -I"$here/common" -I"$here/arm" \
-    -c "$src" -o "$dir/$obj" 2>&1 | tee -a "$dir/compile.log"
-  local status=${PIPESTATUS[0]}
+    -c "$src" -o "$dir/$obj" 2>&1 | tee -a "$dir/compile.log" || status=$?
   if [ "$status" -ne 0 ]; then
     fail "compile $(basename "$src") exit $status"
     return 1
@@ -20,11 +21,10 @@ arm_cxx() {
 }
 
 arm_cc() {
-  local dir="$1" src="$2" obj="$3"
+  local dir="$1" src="$2" obj="$3" status=0
   shift 3
   arm-none-eabi-gcc "${c_flags[@]}" "$@" -ffunction-sections -fdata-sections \
-    -I"$here/arm" -c "$src" -o "$dir/$obj" 2>&1 | tee -a "$dir/compile.log"
-  local status=${PIPESTATUS[0]}
+    -I"$here/arm" -c "$src" -o "$dir/$obj" 2>&1 | tee -a "$dir/compile.log" || status=$?
   if [ "$status" -ne 0 ]; then
     fail "compile $(basename "$src") exit $status"
     return 1
@@ -53,11 +53,10 @@ arm_firmware_objects() {
 }
 
 arm_link() {
-  local dir="$1" elf="$2"
+  local dir="$1" elf="$2" status=0
   shift 2
   arm-none-eabi-g++ "$@" -Wl,-Map="$dir/${elf%.elf}.map" -o "$dir/$elf" 2>&1 \
-    | tee "$dir/${elf%.elf}.link.log"
-  local status=${PIPESTATUS[0]}
+    | tee "$dir/${elf%.elf}.link.log" || status=$?
   if [ "$status" -ne 0 ]; then
     fail "link $elf exit $status"
     return 1
@@ -99,7 +98,7 @@ image_checks() {
 # Runs an image on a QEMU Cortex-M machine; the exit code is the image's failure count.
 qemu_run() {
   local machine="$1" elf="$2" log="$3" rc=0
-  timeout 300 qemu-system-arm -M "$machine" -display none -monitor none -serial none \
+  timeout "$qemu_timeout_s" qemu-system-arm -M "$machine" -display none -monitor none -serial none \
     -semihosting-config enable=on,target=native -kernel "$elf" > "$log" 2>&1 || rc=$?
   cat "$log"
   echo "qemu $machine exit $rc"
@@ -108,9 +107,10 @@ qemu_run() {
 
 # Compares assert sites run per file with the `expect(` calls in each VECTOR_TESTS file.
 check_vectors() {
-  local runlog="$1" asserted=0 run=0 bad=0 t f a r golden in_tests=0
+  local runlog="$1" asserted=0 run=0 bad=0 t f a r golden listed in_tests=0
   local -a tests
-  read -r -a tests <<< "$(vector_tests)"
+  listed="$(vector_tests)"
+  read -r -a tests <<< "$listed"
   [ "${#tests[@]}" -gt 0 ] || fail "VECTOR_TESTS is empty in cpp/Makefile"
   golden="$(tr -d '[:space:]' < "$root/fixtures/golden.hex")"
   for t in "${tests[@]}"; do
@@ -142,9 +142,10 @@ target_m3() {
   local dir="$build/m3"
   local arch=(-mthumb -mcpu=cortex-m3 -mfloat-abi=soft)
   arm_firmware_objects "$dir" "${arch[@]}"
-  local t objs=()
+  local t listed objs=()
   local -a tests
-  read -r -a tests <<< "$(vector_tests)"
+  listed="$(vector_tests)"
+  read -r -a tests <<< "$listed"
   for t in "${tests[@]}"; do
     arm_cxx "$dir" "$cpp/$t" "test-$(basename "${t%.cpp}").o" "${arch[@]}"
     objs+=("$dir/test-$(basename "${t%.cpp}").o")
@@ -232,13 +233,15 @@ target_s390x() {
   local dir="$build/s390x"
   rm -rf "$dir"
   mkdir -p "$dir"
+  local listed
   local -a tests srcs
-  read -r -a tests <<< "$(vector_tests)"
+  listed="$(vector_tests)"
+  read -r -a tests <<< "$listed"
   srcs=("${core_srcs[@]/#/$cpp/}" "${tests[@]/#/$cpp/}" "$here/common/all_kinds.cpp"
     "$here/common/vectors_main.cpp")
+  local status=0
   s390x-linux-gnu-g++ "${core_flags[@]}" -static -I"$cpp/include" -I"$cpp/tests/core" \
-    -I"$here/common" -o "$dir/vectors" "${srcs[@]}" 2>&1 | tee "$dir/compile.log"
-  local status=${PIPESTATUS[0]}
+    -I"$here/common" -o "$dir/vectors" "${srcs[@]}" 2>&1 | tee "$dir/compile.log" || status=$?
   if [ "$status" -ne 0 ]; then
     fail "s390x build exit $status"
     return 1

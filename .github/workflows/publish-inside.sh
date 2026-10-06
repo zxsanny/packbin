@@ -60,8 +60,10 @@ case "$lang" in
   typescript)
     cp -a "$root/typescript/." "$work/typescript"
     cp "$root/README.md" "$work/typescript/README.md"
-    rm -rf "$work/typescript/node_modules"
+    # dist is built here from this commit: a dist or node_modules in the checkout is never packed.
+    rm -rf "$work/typescript/node_modules" "$work/typescript/dist"
     npm version "$version" --no-git-tag-version --allow-same-version --prefix "$work/typescript"
+    (cd "$work/typescript" && npm ci --ignore-scripts && npm run build)
     npm pack "$work/typescript" --pack-destination "$dest"
     ;;
   python)

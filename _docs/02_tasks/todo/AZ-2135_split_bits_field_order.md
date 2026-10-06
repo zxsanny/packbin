@@ -35,3 +35,14 @@ Loop 12 feature assessment (`_docs/loops/loop12/assessment12.md` G4, G1), deferr
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Wire change for handle-reuse and re-read shapes in TS, C#, Java; split into one task per package when the loop takes it | coordinator | open | Medium |
+
+## Loop 16 progress (2026-10-06)
+
+| Part | Package | State |
+|------|---------|-------|
+| G4: split bits numbered by field order per flag-byte read, handle shareable, eight bits per read | TypeScript | done in batch 3 (`bindFlagBits`; the three probes give the Rust bytes; the ninth-bit error is thrown by `scheme(...)`) |
+| G4, same | Java | done in batch 3 (`SchemeOrder.bindFlagBits`; a flag byte read inside a nested row belongs to that row only, owner decision) |
+| G1: a bit binds only to a flag byte of the same container read before it and not inside a closed `when` | C++ | done in batch 3 (`find_flag_byte`, plus an unpack fix the AC rows needed: `unpack_when` restores the flag-byte values when a taken `when` ends); flash 7728 B to 7784 B of 8192 B |
+| G4 | C# | held until the C# multi-target work is committed |
+| numbering by scheme order (AZ-2100 Included line) | Python | open: Python numbers by `.bit()` call order and refuses a handle shared by two schemes; not in this spec's component list |
+| flag byte inside a `flags` member or a flag-bit child stays visible to later bits | C++ | open, owner decision 2026-10-06: follow-up spec (Rust, TypeScript and Java treat all three as conditional scopes) |

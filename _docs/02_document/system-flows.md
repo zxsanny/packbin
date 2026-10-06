@@ -80,7 +80,7 @@ flowchart TD
 
 ### Description
 
-The caller passes a buffer. Unpack returns the value, or an error and no value. The buffer is untrusted: in C#, TypeScript, Python, Rust and Java a bad buffer is always an error value, never an exception or a panic, and unpack ends within a time and memory bound set by the buffer length. In C#, TypeScript, Java and Rust each scheme also carries two limits, 65,535 rounds per `repeat` or `times` field and 4,194,304 slots per call by default, and refuses the round that would pass either before it is read (loop 15). In C++ unpack fills the caller's row and returns a `Result`; on failure the fields read before it keep their values.
+The caller passes a buffer. Unpack returns the value, or an error and no value. The buffer is untrusted: in C#, TypeScript, Python, Rust and Java a bad buffer is always an error value, never an exception or a panic, and unpack ends within a time and memory bound set by the buffer length. In C#, TypeScript, Java, Rust and Python each scheme also carries two limits, 65,535 rounds per `repeat` or `times` field and 4,194,304 slots per call by default, and refuses the round that would pass either before it is read (loop 15; Python since loop 16). In C++ unpack fills the caller's row and returns a `Result`; on failure the fields read before it keep their values.
 
 ### Preconditions
 
@@ -144,7 +144,7 @@ flowchart TD
 
 ### Description
 
-A version tag on GitHub first runs the test workflow on that commit (read-only token, no secrets; the `publish` job `needs:` it, so any failing test job skips the publish). It then builds and checks every package of that commit, in containers that mount the repo read-only, and only then uploads the ones a registry does not yet hold. For C++ the same tag also feeds the embedded registries (PlatformIO, ESP-IDF component, Arduino).
+A version tag on GitHub first runs the test workflow on that commit (jobs `scaffold`, `embedded` and the cross-language `ring`; read-only token, no secrets; the `publish` job `needs:` it, so any failing test job, the ring included, skips the publish). It then builds and checks every package of that commit (the TypeScript package is compiled with `tsc` after `npm ci` from the committed lockfile, so the npm tarball holds `dist/` and no `.ts` sources), in containers that mount the repo read-only, and only then uploads the ones a registry does not yet hold. For C++ the same tag also feeds the embedded registries (PlatformIO, ESP-IDF component, Arduino).
 
 ### Preconditions
 

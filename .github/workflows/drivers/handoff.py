@@ -8,6 +8,8 @@ from packbin import (
     Scheme,
     bool as flag_bool,
     dict as map_field,
+    eq,
+    flag_byte,
     flags,
     i16,
     i32,
@@ -15,6 +17,7 @@ from packbin import (
     u8,
     u16,
     utf8,
+    when,
 )
 
 
@@ -73,6 +76,18 @@ POSITION_VALUES = {
 
 BOOLFLAG = Scheme(1, dict, flags(0, flag_bool(0, lambda row: row["on"])))
 
+# A split bit inside a when that is not taken: the bit comes from the row (01), the when is tested
+# first on unpack, so v is never read. {k: 0, v: 5} packs 010001.
+_BITWHEN_FLAG = flag_byte()
+BITWHEN = Scheme(
+    1,
+    dict,
+    u8(0, lambda row: row["k"]),
+    _BITWHEN_FLAG,
+    when(1, eq(0, 1), _BITWHEN_FLAG.bit(u8(1, lambda row: row["v"]))),
+)
+BITWHEN_VALUES = {"k": 0, "v": 5}
+
 SESSION_SEED = bytes(range(1, 33))
 SESSION_NONCE = bytes.fromhex("01000000000000000000000000000000")
 
@@ -107,6 +122,9 @@ def main(argv: list[str]) -> int:
         return 0
     if cmd == "pack-booltrue":
         print(BinaryPacker.pack(BOOLFLAG, {"on": True}).hex())
+        return 0
+    if cmd == "pack-bitwhen":
+        print(BinaryPacker.pack(BITWHEN, BITWHEN_VALUES).hex())
         return 0
     if cmd == "pack-session":
         opener = PackSession.load(SESSION_SEED)
@@ -145,6 +163,13 @@ def main(argv: list[str]) -> int:
         if not result.ok or result.value is None:
             return 1
         return 0 if result.value.get("on") is True else 1
+    if cmd == "unpack-bitwhen":
+        if len(argv) < 2:
+            return 1
+        result = BinaryPacker.unpack(bytes.fromhex(argv[1]), BITWHEN.on(lambda row: None))
+        if not result.ok or result.value is None:
+            return 1
+        return 0 if result.value == {"k": 0} else 1
     if cmd == "unpack-session":
         if len(argv) < 2:
             return 1

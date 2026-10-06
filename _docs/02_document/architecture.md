@@ -13,16 +13,16 @@ packbin is a library: the caller writes a field list, pack and unpack move the e
 - Rust package — pack and unpack for a native node
 - C++ package — pack and unpack for a C++ program or 32-bit firmware, from one allocation-free core
 - Java package — pack and unpack for a Java program
-- GitHub Actions — tests on every branch push and pull request, publish on a version tag (after the tests pass on the tagged commit)
+- GitHub Actions — tests (three jobs: `scaffold`, `embedded` and the cross-language `ring`) on every branch push and pull request, publish on a version tag (after the tests pass on the tagged commit)
 
 **Principles**
 
 - The bytes are only the fields
 - The first release has no code generator
 - A short packet returns an error and no value. In C++ the error is a `Result` and the row keeps the fields read before it
-- Unpack treats its bytes as hostile (loop 11). In C#, TypeScript, Python, Rust and Java it returns an error value, within a time and memory bound set by the input length, and never throws. In C#, TypeScript, Java and Rust a scheme also refuses a `repeat` or `times` round past 65,535 rounds, or past 4,194,304 slots for the whole call, so the memory of the rounds is set by the scheme's limits, not by the packet (loop 15; the scheme can raise them; C++ unpacks into fixed arrays and Python keeps only values it read, so neither needs a limit). A `times` round or a `list`/`dict` element that reads nothing is an error; a `repeat` round that reads nothing ends the repeat and the rest is trailing bytes (C++ ends a `times`, `list` or `dict` container on such a round instead of failing, see below). The error shape is interim until C15
+- Unpack treats its bytes as hostile (loop 11). In C#, TypeScript, Python, Rust and Java it returns an error value, within a time and memory bound set by the input length, and never throws. In C#, TypeScript, Java, Rust and Python a scheme also refuses a `repeat` or `times` round past 65,535 rounds, or past 4,194,304 slots for the whole call, so the memory of the rounds is set by the scheme's limits, not by the packet (loop 15, Python since loop 16; the scheme can raise them; C++ unpacks into fixed arrays, so it needs no limit). A `times` round or a `list`/`dict` element that reads nothing is an error; a `repeat` round that reads nothing ends the repeat and the rest is trailing bytes (C++ ends a `times`, `list` or `dict` container on such a round instead of failing, see below). The error shape is interim until C15
 - A `bool` is a flag bit with no payload, set only for `true`, and stands only directly under `flags` or a flag-byte bit; one flags byte holds 8 bits; an empty group that could never set its bit is refused (loop 12). Every package refuses a violation when the field list is built, not when a packet arrives
-- A `when` condition or borrowed count names a field read earlier in its own scope (the top level, one `repeat` or `times` round, one `list` or `dict` element, or a nested row), and a `repeat` or `times` round cannot hold another round (loop 13). C#, TypeScript, Java and C++ refuse a bad reference when the field list is built, and Rust refuses a bad numeric id (a Rust reference by name and every Python reference are not checked yet, AZ-2117 and AZ-2113). C#, TypeScript and Java refuse a nested round; Rust refuses all but a `times` inside a `repeat` (AZ-2127). In C#, TypeScript and Java a round unpacks to one list entry per round, `null` or `undefined` for a skipped round, and pack reads item i of each list for round i
+- A `when` condition or borrowed count names a field read earlier in its own scope (the top level, one `repeat` or `times` round, one `list` or `dict` element, or a nested row), and a `repeat` or `times` round cannot hold another round (loop 13). Every package refuses a bad reference when the field list is built (Rust by name as well as by numeric id and Python since loop 16, AZ-2117 and AZ-2113). C#, TypeScript and Python refuse a nested round; Rust refuses all but a `times` inside a `repeat`; Java and C++ support it (Java gives each inner name one list per outer round, AZ-2127). In C#, TypeScript, Java and Python a round unpacks to one list entry per round, `null` or `undefined` for a skipped round, and pack reads item i of each list for round i
 - The C++ core allocates nothing and throws nothing
 
 > See ADR 001 (Walk field lists with runtime primitives).
@@ -91,7 +91,8 @@ The C++ package is one core for host programs and firmware. It writes into a cal
 - No cloud application host
 - No container orchestration for the product
 - The test containers are the current .NET LTS SDK, the current Node LTS image, and the current stable images for Python, Rust, C++, and Java
-- Two more images run the C++ embedded targets: `cpp-embedded` (arm-none-eabi GCC, QEMU, cross g++ for s390x) and `cpp-embedded-esp` (`espressif/idf:v5.3.2`)
+- Two more images run the C++ embedded targets: `cpp-embedded` (arm-none-eabi GCC, QEMU, cross g++ for s390x) and `cpp-embedded-esp` (`espressif/idf:v5.3.2`). The embedded harness reports a target as FAIL on a non-zero exit of its function or on a recorded failed check, and the stage exits 1 (loop 16, AZ-2099)
+- The `ring` job of `test.yml` runs the cross-language hand-offs (`language-pair.sh`) on the runner itself: it installs the six toolchains of the suites (versions in the job env `RING_*`, checked by `ring-toolchains.sh`) and compiles C++ in the `gcc:16` image through `ring-cxx.sh`, because the runner has no GCC 16 release (loop 16, AZ-2193)
 
 **Environment-specific configuration**:
 

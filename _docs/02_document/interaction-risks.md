@@ -21,7 +21,7 @@
 | The crates.io token (and the NuGet key) is exchanged before the whole build phase; if it expires before the upload, earlier registries are published and crates.io is not | a partial release; re-running the tag with a fresh token finishes it. Token lifetime and cold-runner build time are unmeasured, watch both on the first real tag and split `publish.yml` into build, exchange and upload if the build nears 10 minutes (loop 14 assessment U1, batch 3 review finding 1) | accepted, no AC | AZ-2096 |
 | A session payload is dropped | the next unpack on that direction is not the sent row | pack-session AC-4 | each package |
 
-The dropped-payload row is accepted: the library adds no tag. The token-lifetime row is accepted in loop 14 and has no AC. Each other material risk already has a numeric AC.
+The dropped-payload row is accepted: the library adds no tag. The token-lifetime row is accepted in loop 14 and has no AC. Each other material risk already has a numeric AC. For the first row, loop 16 (AZ-2193) added a second detector besides the golden fixture: the `ring` job of `test.yml` runs the cross-language hand-offs (`language-pair.sh`, bytes packed by one package and read by the next) on every push and pull request, and gates a tag publish like any other test job. It is unproven until its first run on the Ubuntu runner.
 
 ## Pending Step 2
 

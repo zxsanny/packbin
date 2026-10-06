@@ -416,6 +416,24 @@ No AC number; they hold the F10 limit on the rounds of one unpack call. All run 
 The hostile `limit` stage of `fixtures/hostile/cases.txt` (`repeat_rounds_over_limit`, `times_rounds_over_limit`, AZ-2220) is replayed with a scheme whose `maxRounds` is 3: the refusal is the interim bad-value error with `needed` 0 and the one byte of the round that would start left, and the handler is not called.
 
 
+## Loop 16 Tests (AZ-2112 to AZ-2197, AZ-2128, AZ-2135, AZ-2115, AZ-2103)
+
+No AC number from the first acceptance set; each file names the task and its ACs in its test titles. All but the package check run in the `typescript` service of `docker-compose.test.yml` with `node --test tests/*.ts`.
+
+| Test | What it proves | Where |
+|------|----------------|-------|
+| `u64 counts` | `sized`, `packed`, `times` and `bits` take a count from a `u64` or `i64` field; a count above 2^53, a negative one and the `i64` minimum are refused (error value on unpack, `RangeError` on pack); a row that unpack returned packs again | `typescript/tests/u64-count.test.ts` |
+| `list and dict elements of kind group and flags` | each item packs from its own members and unpacks to one object, with the bytes of Python; a short element is an error; an element is a scope of its own | `typescript/tests/list-group-elements.test.ts` |
+| `times with a list longer than its count` | pack throws `x: 3 items, times count 2`; count 0 refuses a non-empty list; valid rows keep their bytes | `typescript/tests/times-longer-list.test.ts` |
+| `flags under a split flag bit and flags directly inside flags` | their values pack (`01 01 07 01 02`); a repack identity fuzz with the seeded generator | `typescript/tests/flags-under-split-bit.test.ts`, `typescript/tests/support/random.ts` |
+| `dict entries are not members of the row` and the three groups after it | a dict key cannot overwrite or supply a row member in either key order; declared groups still merge; a decoded `__proto__` key stays an entry; the fixtures that use dictionaries are unchanged | `typescript/tests/dict-keys-not-flattened.test.ts` |
+| `a member name declared twice in one scope` | the schemes of AZ-2188 fail at construction; two `when` branches may share a name; a list or dict element has its own names | `typescript/tests/duplicate-names.test.ts` |
+| `when and counts read what pack wrote`, `pack never writes what its own unpack cannot read` | a `when` on a skipped field does not match, `eq(id, undefined)` follows unpack, `eq(bool, false)` on a clear bit writes no body, a count that was not written throws | `typescript/tests/when-on-written-values.test.ts` |
+| `a flags group is on when any value inside it is present` | `u2`, `bits`, `sized`, `packed`, nested `flags` and groups set the bit; a set group lacking a member throws naming it | `typescript/tests/flag-group-presence.test.ts` |
+| `AZ-2135 split bits are numbered by field order` | a handle shared by two schemes packs `010105` twice; `[m, early, late]` packs `010209`; a second read starts its own bits (`01000109`); nested bits number the outer one first; the ninth bit of one read is refused when the scheme is built; the position golden bytes in split form | `typescript/tests/split-bits-field-order.test.ts` (the ninth-bit case of `bool-flag.test.ts` now builds a scheme) |
+| `AZ-2115 split-form reference bytes` | `{sid: 9, shape: 4, heading: 90}` packs `01 09 01 04 5a 00` and `{sid: 1}` packs `01 01 00`, and both unpack to the same row | `typescript/tests/split-form-reference.test.ts` |
+| npm package layout (AZ-2103) | `publish-check.py` accepts the compiled layout and refuses sources-only and dist-plus-sources tarballs; `package.json` points at `dist`; `publish-inside.sh` builds before it packs from a copy that holds a stale `dist`; the tarball holds `dist/index.js`, `dist/index.d.ts`, `README.md` and `package.json` and no `src/` or `tests/`; the built JavaScript has no Node-only name and imports only `@noble/hashes`; an empty project with no TypeScript installs the tarball and packs the golden row under plain Node; a strict `tsc` consumer with no `allowImportingTsExtensions` type-checks and cannot pack without a scheme | `.github/workflows/publish-npm.test.sh` (run by `publish-gate.test.sh`, or alone with `--npm`; the `scaffold` job) |
+
 ## Test Data Management
 
 **Required test data**:

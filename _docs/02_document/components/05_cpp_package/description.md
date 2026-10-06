@@ -69,6 +69,7 @@ No queries and no cache.
 
 **Unpack rules (loop 10)**:
 - Flag bytes are scoped per container. `flag_byte(n)` and `flag_bit(n, field)` pair by the number n (0..7) inside one scope. Each round of a `repeat`, `times`, `list` or `dict` starts with its own cleared flag bytes, and the outer values come back when the container ends.
+- A split flag bit binds to the latest flag byte of its number that is in its own container, was read before it, and is not inside a `when` that ended before it (`find_flag_byte` in `order.hpp`; loop 16, AZ-2135). A bit with no such byte is `SchemeInvalid` naming the bit, or a compile error for a `constexpr` scheme: `u8 k; when(k == 1, flag_byte(0), flag_bit(0, a)); flag_bit(0, b)` is refused at `b`. Unpack saves the flag byte values when a taken `when` starts and restores them when it ends (`unpack_when` in `unpack.cpp`), so a byte read inside a `when` never reaches a bit after it, and sibling `when` branches each read their own byte. The wire bytes of schemes that worked do not change: with an outer `flag_byte(0)` before the `when`, `{k: 0, b: 6}` packs `01 00 01 06` and `{k: 1, a: 5, b: 6}` packs `01 01 01 01 05 06`.
 - A `repeat` round, or a round of a container with no bound member (`times`, `list`, `dict`), that reads no bytes ends the container. A repeat would otherwise never reach the end of the packet, and an unbound container would only spin through its count. A bound container stops at its capacity.
 - A `boolean`, or an empty group bound to a `bool` or `Opt<bool>` member (`group<&Row::m>(id)`), is a presence bit. It is valid only directly under `flags(...)` or `flag_bit(...)`; anywhere else, including inside a plain `group` under `flags`, the scheme is `SchemeInvalid` (a compile error for a `constexpr` scheme).
 - A `group(id)` with no children and no member could never set its bit, so the factory marks it invalid: the scheme is `SchemeInvalid` at that field wherever it stands, including directly in `flags` or as a `flag_bit` (loop 12; a compile error for a `constexpr` scheme).
@@ -105,9 +106,11 @@ No queries and no cache.
 - CI builds Cortex-M0+, M3, M4F, s390x (big-endian), ESP32-S3, ESP32-C3 and RP2040 (Pico example); other 32-bit parts are expected to work but are not built in CI
 - `f64` needs an 8-byte `double`; otherwise a `static_assert` stops the build
 - `invalid_utf8` and `invalid_utf8_dict_key` unpack Ok in C++: strings are borrowed bytes and are not validated. The hostile runner accepts that for those two ids
-- The deepest pack or unpack call uses 488 of the 512-byte stack budget. A change that deepens the unpack recursion must free stack first
+- The deepest pack or unpack call uses 488 of the 512-byte stack budget. A change that deepens the unpack recursion must free stack first. After loop 16 the Cortex-M4F image of the core plus the 14-field table is 7784 of 8192 bytes of flash (7728 before) and the stack stays at 488 of 512
+- A `flags` member and the child of a `flag_bit` stay visible scopes after they end: a flag byte read inside one still binds a bit placed after it, where Rust, TypeScript and Java drop it (AZ-2135 follow-up, open)
+- A `flag_bit` used directly as a `flags` member is never present on pack: `flag_byte(0), flags(0, flag_bit(0, p), q)` with `p` and `q` set packs `01 01 02 06`, so the bit of the flag byte is set and `p` is not written (open)
 
-**No round limit** (loop 15, AZ-2220). C#, TypeScript, Java and Rust refuse a `repeat` or `times` round past a scheme limit; C++ has none and needs none: unpack fills `Array<T, N>` storage the caller owns (`N` is at most 65535, `table.hpp`) and returns `TooMany` for a longer count. The two `limit` cases of `fixtures/hostile/cases.txt` are skipped by `hostile_host_tests.cpp`.
+**No round limit** (loop 15, AZ-2220). C#, TypeScript, Java, Rust and Python (since loop 16) refuse a `repeat` or `times` round past a scheme limit; C++ has none and needs none: unpack fills `Array<T, N>` storage the caller owns (`N` is at most 65535, `table.hpp`) and returns `TooMany` for a longer count. The two `limit` cases of `fixtures/hostile/cases.txt` are skipped by `hostile_host_tests.cpp`.
 
 **Potential race conditions**:
 - None

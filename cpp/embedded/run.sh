@@ -27,32 +27,28 @@ fi
 # shellcheck source=lib.sh
 source "$here/lib.sh"
 
-failed=0
-run_stage_target() {
-  run_target "$@" || failed=$((failed + 1))
-}
-
+# Plain calls: run_target never returns non-zero, and an `||` list would turn errexit off inside it.
 case "$stage" in
   arm)
     # shellcheck source=arm.sh
     source "$here/arm.sh"
-    run_stage_target cpp-m0plus "C++ core Cortex-M0+ build (AC-1 AC-2 link)" target_m0plus
-    run_stage_target cpp-m3-qemu "C++ core Cortex-M3 QEMU mps2-an385 (AC-2 AC-3 AC-6)" target_m3
-    run_stage_target cpp-m4f "C++ core Cortex-M4F size and stack (AC-1 AC-5)" target_m4f
-    run_stage_target cpp-s390x "C++ core big-endian s390x QEMU user (AC-4)" target_s390x
+    run_target cpp-m0plus "C++ core Cortex-M0+ build (AC-1 AC-2 link)" target_m0plus
+    run_target cpp-m3-qemu "C++ core Cortex-M3 QEMU mps2-an385 (AC-2 AC-3 AC-6)" target_m3
+    run_target cpp-m4f "C++ core Cortex-M4F size and stack (AC-1 AC-5)" target_m4f
+    run_target cpp-s390x "C++ core big-endian s390x QEMU user (AC-4)" target_s390x
     ;;
   esp)
     # shellcheck source=esp.sh
     source "$here/esp.sh"
-    run_stage_target cpp-esp32s3 "C++ core ESP32-S3 ESP-IDF build (AC-1)" target_esp32s3
-    run_stage_target cpp-esp32c3 "C++ core ESP32-C3 ESP-IDF build (AC-1)" target_esp32c3
+    run_target cpp-esp32s3 "C++ core ESP32-S3 ESP-IDF build (AC-1)" target_esp32s3
+    run_target cpp-esp32c3 "C++ core ESP32-C3 ESP-IDF build (AC-1)" target_esp32c3
     # shellcheck source=examples.sh
     source "$here/examples.sh"
-    run_stage_target cpp-example-esp-idf "C++ ESP-IDF example from the packed component" \
+    run_target cpp-example-esp-idf "C++ ESP-IDF example from the packed component" \
       target_example_esp_idf
-    run_stage_target cpp-example-esp32-arduino "C++ Arduino-ESP32 example from the library layout" \
+    run_target cpp-example-esp32-arduino "C++ Arduino-ESP32 example from the library layout" \
       target_example_esp32_arduino
-    run_stage_target cpp-example-pico "C++ Pico PlatformIO example from the package archive" \
+    run_target cpp-example-pico "C++ Pico PlatformIO example from the package archive" \
       target_example_pico
     ;;
   *)

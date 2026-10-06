@@ -3,15 +3,17 @@
 set -euo pipefail
 
 target_esp() {
-  local chip="$1" dir="$build/$1" log="$build/$1.build.log"
-  command -v idf.py > /dev/null || fail "idf.py not on PATH (not the ESP-IDF image)"
+  local chip="$1" dir="$build/$1" log="$build/$1.build.log" status=0
+  if ! command -v idf.py > /dev/null; then
+    fail "idf.py not on PATH (not the ESP-IDF image)"
+    return 1
+  fi
   mkdir -p "$build"
   rm -rf "$dir"
   echo "ESP-IDF $(idf.py --version)"
   IDF_COMPONENT_MANAGER=0 idf.py -C "$here/esp" -B "$dir" -D SDKCONFIG="$dir/sdkconfig" \
     -D SDKCONFIG_DEFAULTS="$here/esp/sdkconfig.defaults" set-target "$chip" build 2>&1 \
-    | tee "$log"
-  local status=${PIPESTATUS[0]}
+    | tee "$log" || status=$?
   if [ "$status" -ne 0 ]; then
     fail "idf.py build exit $status"
     return 1
@@ -28,7 +30,8 @@ with open(sys.argv[2], "w") as out:
 PY
   local file cmd std flag checked=0
   while IFS=$'\t' read -r file cmd || [ -n "${file:-}" ]; do
-    std="$(printf '%s\n' "$cmd" | grep -o -e '-std=[^ ]*' | tail -n 1)"
+    # No -std= is an empty $std, which the check below reports; it is not a failure here.
+    std="$(printf '%s\n' "$cmd" | grep -o -e '-std=[^ ]*' | tail -n 1 || true)"
     [ "$std" = "-std=c++17" ] || fail "$(basename "$file") compiles with $std"
     for flag in -fno-exceptions -fno-rtti -Os -Wall -Wextra -Werror; do
       case " $cmd " in

@@ -428,6 +428,21 @@ No AC number; they hold the F10 limit on the rounds of one unpack call. All run 
 The hostile `limit` stage of `fixtures/hostile/cases.txt` (`repeat_rounds_over_limit`, `times_rounds_over_limit`, AZ-2220) is replayed with a scheme whose `maxRounds` is 3: the refusal is the interim bad-value error with `needed` 0 and the one byte of the round that would start left, and the handler is not called.
 
 
+## Loop 16 Tests (AZ-2101, AZ-2114, AZ-2121, AZ-2127, AZ-2128, AZ-2135, AZ-2187, AZ-2190)
+
+All run in `java/test.sh` (the `java` service of `docker-compose.test.yml`); each class is called from `PackbinTest`.
+
+| Test | What it proves | Where |
+|------|----------------|-------|
+| `NestedRoundTest` | a `repeat` or `times` inside a round packs and unpacks one inner list per outer round (`null` for a skipped round, `[]` for a group that read no round); a repeat written a second time in one call is refused; an exhaustive short-packet sweep never throws (AZ-2127) | `java/src/test/java/packbin/NestedRoundTest.java` |
+| `TimesLongerTest` | a body list longer than the count is refused (`1: list has 3 entries for a count of 2`); a nested row, list or dict member is named by its kind (AZ-2187) | `java/src/test/java/packbin/TimesLongerTest.java` |
+| `PackStrictTest` | out-of-range integers, a wrapping `BigInteger`, fractions, strings, booleans, an oversize float and odd `Number` types are refused with `IllegalArgumentException` naming the field id; valid rows keep their bytes; `PackSession.pack` refuses the same (AZ-2190) | `java/src/test/java/packbin/PackStrictTest.java` |
+| `TypedNestedRowTest` | a typed nested row is created by its factory in a round and as a list or dict element; the old overload on a typed row fails at construction; nested ids never shadow the ids of the row around them (`010001`) (AZ-2101) | `java/src/test/java/packbin/TypedNestedRowTest.java` |
+| `FlagPresenceTest` | `u2`, nested `flags` and a split bit in a group set the bit of the group; a missing sibling fails pack naming it (AZ-2128) | `java/src/test/java/packbin/FlagPresenceTest.java` |
+| `HostileSessionTest` | a session waiter gets the clear-unpack error for the zero-progress packet and the zero-width elements, and the next valid message unpacks (AZ-2114) | `java/src/test/java/packbin/HostileSessionTest.java` |
+| `FlagScopeContainerTest` | a split bit in a dict element, or held by a combined `flags` member, with no flag byte earlier in its scope is refused; the same-scope shapes build (AZ-2121) | `java/src/test/java/packbin/FlagScopeContainerTest.java` |
+| `SplitBitOrderTest` | a handle shared by two schemes packs `010105` twice; a second read starts its own bits (`01000109`); `[m, early, late]` packs `010209`; the ninth bit of one read is refused at construction; a flag byte read inside a nested row belongs to that row (`010301010203`); a bit after a row whose only byte was read inside it is refused (AZ-2135) | `java/src/test/java/packbin/SplitBitOrderTest.java` |
+
 ## Test Data Management
 
 **Required test data**:

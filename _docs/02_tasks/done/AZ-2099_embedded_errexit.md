@@ -136,3 +136,7 @@ Then `cpp-m0plus` reports `FAIL`. Today it reports `PASS`: the symbol file is em
 |---------|----------------|--------|----------|
 | Making errexit effective may surface currently hidden failures in the examples targets (downloads, `pio`, `compote`) that need network; flaky network then shows as FAIL instead of silent PASS | CI owner | accepted-risk | Medium |
 | `lib.sh` uses GNU `date +%s%N`, so the harness (and its self-test) cannot run on macOS hosts | CI owner | open | Low |
+
+## Loop 16 result (2026-10-06)
+
+Done in loop 16 (batch 3). `run_target` runs the target in a child with errexit and always returns 0; `fail` records the reason and a `<id>.failed` marker; the row is FAIL on a non-zero exit or the marker; the log names the failed command; `run_stage_target` is removed; the QEMU timeout is named. `cpp/embedded/lib.test.sh` (30 checks, red against the old harness) runs in the `scaffold` job. AC-5: the ARM stage reports 4 PASS on this Mac and the ESP stage 4 of 5 (the Pico example fails on this arm64 host by design); the full 10 PASS needs the CI `embedded` job. AC-6 measured on `packbin-embedded:local` with an `arm-none-eabi-nm` shim that exits 1: old harness exit 0 and 4 PASS, new harness exit 1 and FAIL for `cpp-m0plus`, `cpp-m3-qemu`, `cpp-m4f`. Call sites converted (`cmd | tee log || status=$?`, listed `read` input, `if ! command -v`, `|| true` with a reason, `return 1` after `fail`): newly effective errexit may expose a hidden failure in a healthy CI run; the first run decides.

@@ -16,9 +16,10 @@
 
 | Method | Input | Output | Async | Error Types |
 |--------|-------|--------|-------|-------------|
-| `Scheme` | type number, row class, fields by order id | scheme | No | a gap, a repeated id, an anchor that is not the next value id, a `bool` that is not a direct child of `flags` or of a flag-byte bit, or a `group(anchor)` with no fields (see §7). Each is a `ValueError` naming the id; a ninth `flags` child already fails at `flags(...)` |
-| `BinaryPacker.pack` | scheme, row | bytes | No | integer does not fit |
-| `BinaryPacker.unpack` | scheme, bytes | row or error | No | short packet, trailing bytes, type mismatch; never raises on bytes (see §7) |
+| `Scheme` | type number, row class, fields by order id | scheme | No | a gap, a repeated id, an anchor that is not the next value id, a `bool` that is not a direct child of `flags` or of a flag-byte bit, a `group(anchor)` with no fields, a `when` or count that names a later field, an id that does not exist or a field of another scope, a split flag bit before its flag byte or in another scope, a flag byte listed without all its bits, or a `repeat` or `times` inside a `repeat` or `times` round (see §7). Each is a `ValueError` naming the id; a ninth `flags` child already fails at `flags(...)` |
+| `Scheme.with_limits`, `max_rounds`, `max_slots`, `Scheme.DEFAULT_MAX_ROUNDS`, `Scheme.DEFAULT_MAX_SLOTS` | `max_rounds`, `max_slots` (whole numbers) | a new scheme with those unpack limits | No | `ValueError` for a limit below 1 or not a whole number (§7) |
+| `BinaryPacker.pack` | scheme, row | bytes | No | integer does not fit; `TypeError` for a float field given anything but an `int` or a `float`; `OverflowError` for a finite value too large for `f32`; `ValueError` for a `times` list longer than its count (§7) |
+| `BinaryPacker.unpack` | scheme, bytes | row or error | No | short packet, trailing bytes, type mismatch, a `repeat` or `times` round past the scheme's limits; never raises on bytes (see §7) |
 
 **Input DTOs**:
 
@@ -42,6 +43,7 @@ ShortPacket:
 
 | Method | Input | Output | Async | Error Types |
 |--------|-------|--------|-------|-------------|
+| `PackSession(seed)` | 32 bytes | a session | No | length other than 32 raises `ValueError` |
 | `load` | 32 bytes | a session, or nothing | No | length other than 32 creates 0 sessions |
 | `start` | none, or 16 bytes | 16 bytes | No | a nonce length other than 16 opens 0 sessions |
 | `join` | 16 bytes | the waiter | No | length other than 16 joins 0 sessions |
@@ -58,7 +60,7 @@ No queries and no cache.
 
 ## 5. Implementation Details
 
-**State Management**: clear pack is stateless. A session keeps one send counter and one receive counter.
+**State Management**: clear pack is stateless. A session keeps one send counter and one receive counter. Source layout (`python/src/packbin/`): `_nodes.py` the field builders and nodes, `_validate.py` the construction checks (`_validate_order` for ids, references and bool placement, `_validate_flag_bits` for split flag bits, `_validate_round_nesting`; new in loop 16, `_validate_order` moved out of `_nodes.py`), `_pack.py` and `_unpack.py` the walkers, `_scheme.py` `Scheme`, `BinaryPacker` and the round limits, `_session.py` and `_session_pad.py` the session, `_errors.py` the result types.
 
 **Key Dependencies**:
 
@@ -81,21 +83,32 @@ No queries and no cache.
 
 **Known limitations**:
 - The first release has no code generator
-- The split-form construction rule below is not enforced in Python yet; it arrives with AZ-2100
-- A `bool` under a flag-byte bit passes the bool rule below, but the split form does not round-trip it yet: unpack of the bit's field reaches the `_Bool` `pass` in `_unpack.py` (AZ-2100)
+- Bit numbers of a split flag byte follow the order of the `.bit()` calls, not the order the bits stand in the scheme (Rust, C++, TypeScript and Java number by the scheme since loop 16, AZ-2135; C# is not changed yet, and Python is not in that spec). One `flag_byte()` handle keeps every bit made from it, so a second scheme that places only some of them fails at construction
+- A `repeat` whose lists differ in length raises `ValueError` (`repeat fields must have equal lengths`), where TypeScript, C# and Java let the longest list set the round count; a `times` list shorter than its count raises a bare `IndexError`
+- A `when`, `repeat` or `times` as a member of `flags` or as the field of a flag bit never sets its bit and is not written, with no error (`_child_on` in `_pack.py`). The owner holds it for the loop that lands the C# work, so the six packages are decided together (AZ-2128, AZ-2120)
+- `PackSession.load` of an `int` returns a session keyed by that many zero bytes (`bytes(32)`); only a bytes-like seed is meant
+- A float field takes only an `int` or a `float`: a numpy `float32` or integer is refused (a numpy `float64` is a `float`), and an `int` too large for `f64` (`10**400`) raises an unnamed `OverflowError`
 
-**Hostile input** (loop 11). Unpack of untrusted bytes returns an error value and no row, within a time and memory bound set by the input length. It does not throw and does not loop on input it cannot consume. The cases:
+**Hostile input** (loop 11). Unpack of untrusted bytes returns an error value and no row, within a time bound set by the input length and, for rounds, a memory bound set by the scheme's round limits (below). It does not throw and does not loop on input it cannot consume. The cases:
 - a `repeat` round that reads 0 bytes ends the repeat; the bytes left come back as trailing bytes
 - a `times` round, or a `list` or `dict` element, that reads 0 bytes is an error, even for a small count (a few bytes could otherwise ask for 65 535 empty items)
 - a negative count, a count larger than the bytes left, invalid UTF-8 in a string or a dictionary key, and a count whose source field is absent (it sat behind a clear flag bit)
 
 The error shape is interim: a short-packet-style value. Its kind, label, `needed` and `left` are decided under C15, so no new public error type was added. In Python it is `ShortPacket(field, needed=0, left)` built by `_bad_value` in `_unpack.py`. A count error is labelled with the counted field's id, a `times` error with its anchor id, and a zero-width list or dict element or an invalid dictionary key with `""`. Session unpack removes the pad and then runs the same clear unpack.
 
-**No round limit** (loop 15, AZ-2220). C#, TypeScript, Java and Rust refuse a `repeat` or `times` round past a scheme limit; Python has none and needs none, because it lists only the rounds that read a name, so an unread name costs nothing and memory does not grow with the names of a round (README, Untrusted input).
+**Round limits** (loop 16, owner decision after the review of AZ-2134; `_scheme.py`, `_unpack.py`). Before this, Python had no limit because it listed only the rounds that read a name (loop 15, AZ-2220). Since AZ-2134 every name a round can hold keeps one list entry per round, so memory grows with names times rounds and Python needs the same limits as C#, TypeScript, Java and Rust. A `Scheme` carries `max_rounds` (default `Scheme.DEFAULT_MAX_ROUNDS`, 65,535) and `max_slots` (default `Scheme.DEFAULT_MAX_SLOTS`, 4,194,304), read through `scheme.max_rounds` and `scheme.max_slots`. `scheme.with_limits(max_rounds=..., max_slots=...)` returns a copy of the scheme with the new limits and the same fields; an omitted argument is the default, not the receiver's value, so give both in one call. A value below 1, a `bool` or anything that is not an `int` raises `ValueError`; there is no unlimited value. `BinaryPacker._unpack_fields` builds a `_Budget` for the call and `unpack_nodes` passes it to every `repeat`, `times`, `list` and `dict`. `_Budget.refuses(started, width)` runs as each round starts, before the round is read: `width` is the number of value-holding nodes of the body (`leaves`; a `u2` counts each slot), a round costs `width` slots, and the first round of a run costs `width * 9` (eight more per node for the list that holds the run's entries), so a short run in each of many `list` or `dict` elements pays for its own lists. The round that would be the 65,536th of one field, or would take the slot total past `max_slots`, returns `ShortPacket(field=<anchor id>, needed=0, left=<bytes left>)` (the interim bad-value error): no row, no handler call. A `times` count is not refused up front. Memory at the defaults (Python 3.14, macOS arm64, resident set above the idle interpreter), 1 MiB packet of one-byte rounds, a `repeat` with a 36-name `when` body: refused at round 65,536 after about 39 MiB in 0.27 s (about 390 MiB unlimited); the same body in 65,535 `list` elements is refused after about 53 MiB in 0.3 s.
 
-**Construction rule**: in the other split-form languages a flag bit must follow its flag byte in the same scope (top level, one `repeat` or `times` round, or one `list` or `dict` element). Python does not check this at construction yet (AZ-2100).
+**Construction rule** (loop 16, AZ-2100; `_validate_flag_bits` in `_validate.py`): a split-form flag bit must follow its flag byte, read earlier in the same scope. A scope is the top level, one `repeat` or `times` round, or one `list` or `dict` element. A `when` body, a `flags` member and a flag bit see the flag bytes read before them but leave theirs behind. A violation is a `ValueError` (`flag bit 0: its flag byte is not read earlier in the same scope`), and so is a flag byte listed without all its bits (`flag byte: bit 1 is not in the scheme`). A flag byte takes no field id: each bit takes the id where it stands, and a ninth `.bit(...)` raises `ValueError`. `flag_byte()` and `.bit(...)` build in a `Scheme`, unpack reads a bit's field like any other field, and a `bool` under a bit round-trips.
 
-**Bool rule** (loop 12, `_validate_order` in `_nodes.py`): a `bool` stands only as a direct child of `flags(...)` or as the field of a flag-byte bit. Anywhere else (top level, inside any `group`, also one under `flags`, inside `when`, `repeat` or `times`, or as a `list` or `dict` element) `Scheme(...)` raises `ValueError` naming its id. A `group(anchor)` with no fields has no accessor, so it can never carry `true`; `Scheme(...)` refuses it wherever it stands, inside `flags` too. `flags(...)` with a ninth child raises `ValueError` naming the anchor when it is declared. The bit is set only for `True`; `False`, a missing value and any other value (`1`, `"yes"`) leave it clear, and unpack gives `True` only when the bit is set.
+**Reference scope** (loop 16, AZ-2113; `_validate_order`). Every `eq` field id, and the count id of `sized`, `bits`, `packed` and `times`, must name a value field declared earlier in the same scope: the top level, a `repeat` or `times` body, or a `list` or `dict` element (ids restart at 0 in an element). `flags`, flag bits, `when` and `group` share the scope around them; a Python `group` has no scope of its own. A later field, an id that does not exist, an outer field from inside a body and a field inside an earlier body are a `ValueError` (`when 1: eq names field id 2 is allowed only if declared earlier in the same scope`, `sized 0: count field id 5 is allowed only if declared earlier in the same scope`). The count is not checked for its kind, and `eq` may name any value field.
+
+**Rounds** (loop 16, AZ-2134; `_unpack.py`, `_pack.py`, `_validate.py`). Every node of a `repeat` or `times` body that holds a value (`leaves`, found once at construction through `flags`, `when`, groups, flag bits and `u2` slots by `_round_leaves` in `_nodes.py`) gets one list for the run, with one entry per round and `None` where the round skipped it (`_align_lists`). The lists are stored on the row when the run ends (`_store_lists`), so a default the row class carries, a number or a list its class shares, is never part of them (before, a class-level list was appended to in place). Two nodes that bind one member, the arms of two `when`s, share one list. Pack reads the lists by round index (`_at_round`), so `flags`, `when` and groups inside a round pack, and a `bool` under `flags` inside a `times` reads its own round. A `repeat` takes its round count from its lists, which must be equally long. A `times` list longer than the count raises `ValueError` before any round is written (`_check_round_lists`: `1: 3 items, times count is 2`), for every kind of member, `bool` and `u2` included. A `repeat` or `times` inside a `repeat` or `times` round, directly or under `when`, `flags`, a flag bit or a group, raises `ValueError` at construction (`_validate_round_nesting`: `repeat 1 is inside a repeat or times round; a round cannot hold another repeat or times`); a `list` or `dict` element starts outside any round, so a round inside an element of a round is allowed.
+
+**Float pack** (loop 16, AZ-2192; `_require_int` and `_write_scalar` in `_pack.py`). An `f32` or `f64` field takes only an `int` or a `float`. A `bool`, string, bytes, `Decimal` or `Fraction` raises `TypeError` naming the field (`0: expected number, got str`; a `bool` used to pack as 1.0 and a string raised an unnamed `ValueError`), and a finite value too large for `f32` raises `OverflowError` (`0: 1e+39 does not fit in f32`). `nan` and the infinities are written as given.
+
+**Star import** (loop 16, AZ-2104; `__init__.py`). `__all__` leaves out `bool`, `bytes`, `dict` and `list`, so `from packbin import *` no longer replaces the builtins with field builders; they stay importable by name (`from packbin import dict as map_field`). `PackSession(seed)` raises `ValueError` unless the seed is 32 bytes.
+
+**Bool rule** (loop 12, `_validate_order` in `_validate.py` since loop 16): a `bool` stands only as a direct child of `flags(...)` or as the field of a flag-byte bit. Anywhere else (top level, inside any `group`, also one under `flags`, inside `when`, `repeat` or `times`, or as a `list` or `dict` element) `Scheme(...)` raises `ValueError` naming its id. A `group(anchor)` with no fields has no accessor, so it can never carry `true`; `Scheme(...)` refuses it wherever it stands, inside `flags` too. `flags(...)` with a ninth child raises `ValueError` naming the anchor when it is declared. The bit is set only for `True`; `False`, a missing value and any other value (`1`, `"yes"`) leave it clear, and unpack gives `True` only when the bit is set.
 
 **Breaking changes for callers** (pack output is unchanged):
 - A flag byte read in one `when` with its bit in another `when` worked before. It is now refused at construction.
@@ -103,6 +116,14 @@ The error shape is interim: a short-packet-style value. Its kind, label, `needed
 - A `times`, `list` or `dict` element that reads nothing is now an error instead of an empty item.
 - A `bool` outside `flags` (its value never reached the wire) and a `group(anchor)` with no fields now fail at construction (loop 12).
 - A ninth `flags` child now fails at `flags(...)`, instead of at pack only when its value was present (loop 12).
+
+**Breaking changes for callers, loop 16** (the bytes of a row that packed before are unchanged except where noted):
+- `PackSession(seed)` raises `ValueError` unless the seed is 32 bytes (`load` still returns `None`).
+- `from packbin import *` no longer imports `bool`, `bytes`, `dict` and `list`; import them by name.
+- `Scheme(...)` refuses a `when` or count that names a later field, an id that does not exist or a field of another scope, split flag bits outside their scope, and a `repeat` or `times` inside a `repeat` or `times` round. `flag_byte()` and `.bit(...)` now build.
+- Pack refuses a `times` list longer than the count and a float field given anything but an `int` or a `float` (a `bool` packed as 1.0); a flags group holding only a `u2` or a nested `flags` now sets its bit (`{p:1, q:2}` packs `010109`, it packed `0100`).
+- Unpack of a `repeat` or `times` gives every name one list entry per round, `None` where the round skipped it, and no longer appends to a list the row class carries; `flags`, `when` and groups inside a round pack, and a `bool` under `flags` in a `times` reads its own round (`{a:2, on:[True,False]}` packs `01020100`, it packed `01020000`).
+- Unpack refuses a packet whose `repeat` or `times` starts more than 65,535 rounds, or whose rounds hold more than 4,194,304 slots together, until the scheme raises the limits with `with_limits`.
 
 **Potential race conditions**:
 - None

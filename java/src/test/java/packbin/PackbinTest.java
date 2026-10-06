@@ -55,6 +55,7 @@ public final class PackbinTest {
         PackStrictTest.run();
         RoundLimitsTest.run();
         ApiSafeReplacementsTest.run();
+        SplitBitOrderTest.run();
         if (failures + PackbinFieldsTest.failures > 0) {
             System.err.println((failures + PackbinFieldsTest.failures) + " failure(s)");
             System.exit(1);

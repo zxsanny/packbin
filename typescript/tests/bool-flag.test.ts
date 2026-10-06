@@ -148,7 +148,9 @@ describe("bool presence and the 8-bit flag limit", () => {
 
     const m = flagByte("m")
     const eight = eightU8().map((f) => m.bit(f))
-    assert.throws(() => m.bit(u8(8, (x: Row) => x.f8)), RangeError)
+    // A handle can be shared by many schemes (AZ-2135), so the ninth bit is refused when the scheme
+    // is built, not when `bit` is called.
+    assert.throws(() => scheme<Row>(1, m, ...eight, m.bit(u8(8, (x: Row) => x.f8))), RangeError)
 
     const short = scheme<Row>(1, flags(0, eightU8()))
     const split = scheme<Row>(1, m, ...eight)

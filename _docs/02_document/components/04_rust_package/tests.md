@@ -417,6 +417,20 @@ No AC number; they hold the F10 limit on the rounds of one unpack call. All run 
 The hostile `limit` stage of `fixtures/hostile/cases.txt` (`repeat_rounds_over_limit`, `times_rounds_over_limit`, AZ-2220) is replayed with a scheme whose `max_rounds` is 3: the refusal is the interim bad-value error with `needed` 0 and the one byte of the round that would start left, and the handler is not called.
 
 
+## Loop 16 Tests (AZ-2105, AZ-2114, AZ-2117, AZ-2118, AZ-2121, AZ-2128, AZ-2189)
+
+All run in the `rust` service of `docker-compose.test.yml` with `cargo test`.
+
+| Test | What it proves | Where |
+|------|----------------|-------|
+| `ac1_*` to `ac4_*` name-scope tests | a `when` or count naming an outer field, an earlier body's field, a later field or an undeclared name, by name or by id, panics at construction naming the owner; same-scope references still build and round-trip (AZ-2117) | `rust/src/name_scope_tests.rs` |
+| session pack tests | `PackSession::pack` returns `Err(NotOpen)` before open and leaves the counter at zero, returns the `PackError` of clear pack, and a failed pack uses no pad position (AZ-2105) | `rust/tests/session_tests.rs`, `rust/tests/times_shapes_tests.rs` |
+| `ac1_count_2_pow_63_with_bias_minus_one_is_a_pack_error` | a `packed` count of 2^63 with bias -1 is a `PackError::Type` (AZ-2118) | `rust/src/borrowed_count_tests.rs` |
+| map `times` under `flags` and `when` | a non-empty list or a single value under such a member is refused naming it; an empty list, an absent member, rounds and direct members still pack (AZ-2189) | `rust/src/times_tests.rs` |
+| `ac1_*` and `ac2_*` flag group tests | a group of `u2`, `sized`, `bits`, `packed`, a nested group or nested `flags` sets its bit, at any depth; a missing sibling fails with `PackError::Missing` naming it (AZ-2128) | `rust/src/flag_group_tests.rs` |
+| `ac1_*`, `ac2_*`, `r2_g1_*` hostile session tests | a waiter unpacking a zero-progress packet, a list of zero-width lists or a dict with a zero-width value returns the clear-unpack error, and the next valid message unpacks (AZ-2114; the zero-progress scheme uses a zero-width `bytes` repeat, because the README `when` scheme is refused at construction) | `rust/src/session_hostile_tests.rs` |
+| orphan split-bit tests | a typed list whose element is a bare flag bit, and a `flags` member split bit without or before its flag byte, are refused at construction (AZ-2121) | `rust/src/element_tests.rs` |
+
 ## Test Data Management
 
 **Required test data**:

@@ -42,6 +42,10 @@ jobs:
         run: bash .github/workflows/report-row.test.sh
       - name: hostile case file
         run: bash fixtures/hostile/cases.test.sh
+      - name: embedded harness
+        run: bash cpp/embedded/lib.test.sh
+      - name: cross-language ring wiring
+        run: bash .github/workflows/ring-wiring.test.sh
       - name: suites
         run: |
           set -euo pipefail
@@ -65,3 +69,54 @@ jobs:
       - name: embedded report
         if: always()
         run: cat test-results/report.csv
+
+  ring:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # The versions of the per-package suites (docker-compose.test.yml); the setup steps install
+      # them and ring-toolchains.sh checks them before the ring runs.
+      RING_DOTNET: "10.0"
+      RING_NODE: "24"
+      RING_PYTHON: "3.14"
+      RING_RUST: "1.98"
+      RING_GCC: "16"
+      RING_JDK: "26"
+      # ubuntu-latest has no GCC 16 release (13; 26.04 has 15), so the ring compiles in the gcc:16 image the
+      # cpp suite uses, through ring-cxx.sh. The macOS sysroot recipe of language-pair.sh stays off.
+      CXX: ${{ github.workspace }}/.github/workflows/ring-cxx.sh
+      PACKBIN_CXX_SYSROOT: ""
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ env.RING_DOTNET }}.x
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.RING_NODE }}
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.RING_PYTHON }}
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: ${{ env.RING_JDK }}
+      - name: Rust toolchain
+        run: |
+          set -euo pipefail
+          rustup toolchain install "$RING_RUST" --profile minimal --no-self-update
+          rustup default "$RING_RUST"
+      - name: GCC image
+        run: docker pull "gcc:$RING_GCC"
+      - name: toolchain versions
+        run: bash .github/workflows/ring-toolchains.sh
+      - name: driver dependencies and builds
+        run: |
+          set -euo pipefail
+          npm ci --prefix typescript
+          dotnet build .github/workflows/drivers/csharp/Handoff.csproj --nologo
+          cargo build --quiet --manifest-path .github/workflows/drivers/handoff-rust/Cargo.toml
+      - name: cross-language ring
+        run: bash .github/workflows/language-pair.sh

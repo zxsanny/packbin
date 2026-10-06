@@ -376,7 +376,8 @@ def npm(case, version=V, license="MIT", index=True):
     manifest = json.dumps({"name": "packbin", "version": version, "license": license}).encode()
     files = {"package/package.json": manifest, "package/README.md": b"r"}
     if index:
-        files["package/src/index.ts"] = b"x"
+        files["package/dist/index.js"] = b"x"
+        files["package/dist/index.d.ts"] = b"x"
     put(case, f"packbin-{V}.tgz", tarred(files))
 
 npm("typescript-ok")

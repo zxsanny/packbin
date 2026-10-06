@@ -98,7 +98,9 @@ def check_typescript(directory, version):
     need(manifest.get("name") == "packbin", "package.json name is not packbin")
     need(manifest.get("version") == version, f"package.json version {manifest.get('version')} is not {version}")
     need(manifest.get("license") == "MIT", "license MIT is not declared in package.json")
-    need("package/src/index.ts" in members, "src/index.ts is missing")
+    need("package/dist/index.js" in members, "dist/index.js is missing")
+    need("package/dist/index.d.ts" in members, "dist/index.d.ts is missing")
+    need(not any(name.startswith("package/src/") for name in members), "src/ is in the tarball")
     need("package/README.md" in members, "README.md is missing")
 
 

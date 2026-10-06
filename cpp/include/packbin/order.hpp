@@ -108,13 +108,14 @@ constexpr int find_ref(Field const* t, std::size_t scope, std::size_t before, in
   return -1;
 }
 
-// Index of the flag byte numbered `number` before `before` in the scope, or -1.
+// Index of the flag byte numbered `number` before `before` in the scope, or -1. A byte read
+// inside a `when` that ends before `before` is not visible there.
 constexpr int find_flag_byte(Field const* t, std::size_t scope, std::size_t before, int number) {
   int found = -1;
   std::size_t j = scope;
   while (j < before) {
     Field const& f = t[j];
-    if (is_container(f.kind) && j + f.span <= before) {
+    if ((is_container(f.kind) || f.kind == Kind::When) && j + f.span <= before) {
       j += f.span;
       continue;
     }

@@ -331,6 +331,21 @@ public final class Field {
                 null);
     }
 
+    /** A copy with other children: the container of a scheme whose flag bits are bound (SchemeOrder). */
+    Field withChildren(List<Field> bound) {
+        return copy(bound, group);
+    }
+
+    /** A copy that reads and writes through {@code read}, the flag byte group of one read in one scheme. */
+    Field withGroup(FlagGroup read) {
+        return copy(children, read);
+    }
+
+    private Field copy(List<Field> newChildren, FlagGroup newGroup) {
+        return new Field(
+                kind, id, get, set, bigEndian, size, newChildren, condition, newGroup, bitIndex, inner, countId, bias, slotIds, nestedRow, create);
+    }
+
     Field withBigEndian() {
         if (kind != Kind.U8 && kind != Kind.U16 && kind != Kind.U32 && kind != Kind.U64
                 && kind != Kind.I8 && kind != Kind.I16 && kind != Kind.I32 && kind != Kind.I64
@@ -341,24 +356,38 @@ public final class Field {
                 kind, id, get, set, true, size, children, condition, group, bitIndex, inner, countId, bias, slotIds, nestedRow, create);
     }
 
+    /**
+     * A bit of this flag byte: {@code field} is written when it is present. The bit is not numbered here. A scheme
+     * binds it to the latest read of this flag byte before it and numbers it by its order among the bits of that
+     * read (at most 8), so one flagByte may be a member of any number of schemes and may be read more than once.
+     *
+     * @param field the field the bit guards
+     * @return the flag bit, to be placed in a scheme after a read of this flag byte
+     */
     public Field bit(Field field) {
         if (kind != Kind.FLAG_BYTE || group == null) {
             throw new IllegalStateException("bit() requires flagByte");
         }
-        return group.addBit(field);
+        // Unbound: SchemeOrder.bindFlagBits sets the group and the position when a scheme is built.
+        return flagBit(group, 0, field);
     }
 }
 
 final class FlagGroup {
     final List<Field> bitInners = new ArrayList<>();
 
-    Field addBit(Field inner) {
+    /** Takes the next bit position of this read for {@code inner}. */
+    int reserve(Field inner) {
         int index = bitInners.size();
         if (index >= 8) {
             throw new IllegalArgumentException("flags already has 8 bits");
         }
         bitInners.add(inner);
-        return Field.flagBit(this, index, inner);
+        return index;
+    }
+
+    Field addBit(Field inner) {
+        return Field.flagBit(this, reserve(inner), inner);
     }
 
     int compute(Object row, Walker.Take take) {
@@ -369,9 +398,5 @@ final class FlagGroup {
             }
         }
         return flags;
-    }
-
-    List<Field> bits() {
-        return Collections.unmodifiableList(bitInners);
     }
 }

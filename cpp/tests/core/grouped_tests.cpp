@@ -3,6 +3,7 @@
 #include "check.hpp"
 
 using check::expect;
+using packbin::Array;
 using packbin::Error;
 using packbin::Opt;
 
@@ -241,6 +242,192 @@ void flag_bit_inside_untaken_when() {
   expect(t.ok() && again.k == 1 && again.v.has && again.v.value == 5, "bitwhen k=1 round trip");
 }
 
+// AZ-2135 AC-2: a flag byte read inside a `when` is not seen by a bit after it. The bit binds to
+// the byte read before the `when`; a byte only inside the `when` leaves the bit without one.
+struct ByteInWhen {
+  std::uint8_t k = 0;
+  Opt<std::uint8_t> a;
+  Opt<std::uint8_t> b;
+};
+
+constexpr auto byte_in_when = packbin::scheme<ByteInWhen>(
+    1, packbin::u8<&ByteInWhen::k>(0), packbin::flag_byte(0),
+    packbin::when(1, packbin::eq(0, 1), packbin::flag_byte(0),
+                  packbin::flag_bit(0, packbin::u8<&ByteInWhen::a>(1))),
+    packbin::flag_bit(0, packbin::u8<&ByteInWhen::b>(2)));
+
+void flag_byte_inside_when_is_not_seen_after_it() {
+  ByteInWhen row;
+  row.b = 6;
+  std::uint8_t buf[8];
+  auto p = packed(byte_in_when, row, buf, sizeof(buf));
+  expect(p.ok() && check::same_hex(buf, p.offset, "01000106"), "AC-2 k=0 hex");
+  ByteInWhen back;
+  back.a = 9;
+  auto u = packbin::unpack(byte_in_when, buf, p.offset, back);
+  expect(u.ok() && back.k == 0 && !back.a.has && back.b.has && back.b.value == 6,
+         "AC-2 k=0 unpack");
+
+  row.k = 1;
+  row.a = 5;
+  auto q = packed(byte_in_when, row, buf, sizeof(buf));
+  expect(q.ok() && check::same_hex(buf, q.offset, "010101010506"), "AC-2 k=1 hex");
+  ByteInWhen again;
+  auto v = packbin::unpack(byte_in_when, buf, q.offset, again);
+  expect(v.ok() && again.a.has && again.a.value == 5 && again.b.has && again.b.value == 6,
+         "AC-2 k=1 unpack");
+
+  // The inner byte is 00 here, and the outer byte, not the inner one, decides `b`.
+  row.a.reset();
+  auto r = packed(byte_in_when, row, buf, sizeof(buf));
+  expect(r.ok() && check::same_hex(buf, r.offset, "0101010006"), "AC-2 k=1 without a hex");
+  ByteInWhen last;
+  auto w = packbin::unpack(byte_in_when, buf, r.offset, last);
+  expect(w.ok() && !last.a.has && last.b.has && last.b.value == 6, "AC-2 k=1 without a unpack");
+
+  auto lone = packbin::scheme<ByteInWhen>(
+      1, packbin::u8<&ByteInWhen::k>(0),
+      packbin::when(1, packbin::eq(0, 1), packbin::flag_byte(0),
+                    packbin::flag_bit(0, packbin::u8<&ByteInWhen::a>(1))),
+      packbin::flag_bit(0, packbin::u8<&ByteInWhen::b>(2)));
+  auto v2 = packbin::validate(lone);
+  expect(v2.error == Error::SchemeInvalid && v2.field == 2, "AC-2 no outer byte names b");
+}
+
+// Sibling `when` branches each read their own byte of the same number (Rust F5).
+constexpr auto two_branches = packbin::scheme<ByteInWhen>(
+    1, packbin::u8<&ByteInWhen::k>(0),
+    packbin::when(1, packbin::eq(0, 1), packbin::flag_byte(0),
+                  packbin::flag_bit(0, packbin::u8<&ByteInWhen::a>(1))),
+    packbin::when(2, packbin::eq(0, 2), packbin::flag_byte(0),
+                  packbin::flag_bit(0, packbin::u8<&ByteInWhen::b>(2))));
+
+void sibling_when_bytes_stay_apart() {
+  ByteInWhen row;
+  row.k = 2;
+  row.b = 9;
+  std::uint8_t buf[8];
+  auto p = packed(two_branches, row, buf, sizeof(buf));
+  expect(p.ok() && check::same_hex(buf, p.offset, "01020109"), "sibling when bytes hex");
+  ByteInWhen back;
+  auto u = packbin::unpack(two_branches, buf, p.offset, back);
+  expect(u.ok() && !back.a.has && back.b.has && back.b.value == 9, "sibling when bytes unpack");
+}
+
+// Unpacks `hex` into `back`, packs it again and reports whether the bytes come out the same.
+template <typename Row, typename S>
+bool unpacks_and_repacks(S const& s, char const* hex, Row& back) {
+  std::uint8_t in[32];
+  std::size_t n = check::parse_hex(hex, in, sizeof(in));
+  if (!packbin::unpack(s, in, n, back).ok())
+    return false;
+  std::uint8_t out[32];
+  auto p = packbin::pack(s, back, out, sizeof(out));
+  return p.ok() && check::same_hex(out, p.offset, hex);
+}
+
+// A `when` inside a round: the round's own byte comes back when the `when` ends, while the
+// outer byte of the packet stays apart from both (a round reads its own bytes).
+struct Round {
+  std::uint8_t k = 0;
+  Opt<std::uint8_t> a;
+  Opt<std::uint8_t> b;
+};
+
+struct Rounds {
+  std::uint8_t n = 0;
+  Opt<std::uint8_t> x;
+  Array<Round, 4> items;
+  Opt<std::uint8_t> y;
+};
+
+constexpr auto rounds = packbin::scheme<Rounds>(
+    1, packbin::u8<&Rounds::n>(0), packbin::flag_byte(0),
+    packbin::flag_bit(0, packbin::u8<&Rounds::x>(1)),
+    packbin::times<&Rounds::items>(
+        2, 0, packbin::u8<&Round::k>(2), packbin::flag_byte(0),
+        packbin::when(3, packbin::eq(2, 1), packbin::flag_byte(0),
+                      packbin::flag_bit(0, packbin::u8<&Round::a>(3))),
+        packbin::flag_bit(0, packbin::u8<&Round::b>(4))),
+    packbin::flag_bit(0, packbin::u8<&Rounds::y>(5)));
+
+void when_in_a_round_keeps_the_round_byte() {
+  Rounds row;
+  row.n = 3;
+  row.x = 3;
+  row.y = 4;
+  row.items.count = 3;
+  row.items.items[0].k = 1;
+  row.items.items[0].a = 5;
+  row.items.items[0].b = 6;
+  row.items.items[1].k = 1;
+  row.items.items[1].b = 7;
+  row.items.items[2].b = 8;
+  char const* hex = "0103030301010105060101000700010804";
+  std::uint8_t buf[32];
+  auto p = packed(rounds, row, buf, sizeof(buf));
+  expect(p.ok() && check::same_hex(buf, p.offset, hex), "round when bytes hex");
+  Rounds back;
+  expect(unpacks_and_repacks(rounds, hex, back), "round when bytes repack");
+  expect(back.items.count == 3 && back.x.has && back.y.has && back.y.value == 4 &&
+             back.items.items[0].a.has && back.items.items[0].a.value == 5 &&
+             back.items.items[0].b.value == 6 && !back.items.items[1].a.has &&
+             back.items.items[1].b.has && back.items.items[1].b.value == 7 &&
+             !back.items.items[2].a.has && back.items.items[2].b.value == 8,
+         "round when bytes values");
+}
+
+// A `when` inside a `when`: each level reads its own byte, and a bit after a `when` reads the
+// byte of the level it sits in.
+struct Nest {
+  std::uint8_t k = 0;
+  std::uint8_t m = 0;
+  Opt<std::uint8_t> a;
+  Opt<std::uint8_t> b;
+  Opt<std::uint8_t> c;
+};
+
+constexpr auto nested = packbin::scheme<Nest>(
+    1, packbin::u8<&Nest::k>(0), packbin::flag_byte(0),
+    packbin::when(1, packbin::eq(0, 1), packbin::u8<&Nest::m>(1), packbin::flag_byte(0),
+                  packbin::when(2, packbin::eq(1, 1), packbin::flag_byte(0),
+                                packbin::flag_bit(0, packbin::u8<&Nest::a>(2))),
+                  packbin::flag_bit(0, packbin::u8<&Nest::b>(3))),
+    packbin::flag_bit(0, packbin::u8<&Nest::c>(4)));
+
+void nested_when_bytes_shadow_in_turn() {
+  Nest row;
+  row.k = 1;
+  row.m = 1;
+  row.b = 6;
+  std::uint8_t buf[16];
+  auto p = packed(nested, row, buf, sizeof(buf));
+  expect(p.ok() && check::same_hex(buf, p.offset, "01010001010006"), "nested when inner hex");
+  Nest back;
+  expect(unpacks_and_repacks(nested, "01010001010006", back) && !back.a.has && back.b.has &&
+             back.b.value == 6 && !back.c.has,
+         "nested when inner repack");
+
+  row.m = 0;
+  auto q = packed(nested, row, buf, sizeof(buf));
+  expect(q.ok() && check::same_hex(buf, q.offset, "010100000106"), "nested when outer hex");
+  Nest again;
+  expect(unpacks_and_repacks(nested, "010100000106", again) && !again.a.has && again.b.has &&
+             again.b.value == 6 && !again.c.has,
+         "nested when outer repack");
+
+  row.m = 1;
+  row.a = 5;
+  row.b.reset();
+  row.c = 7;
+  auto r = packed(nested, row, buf, sizeof(buf));
+  expect(r.ok() && check::same_hex(buf, r.offset, "0101010100010507"), "nested when c hex");
+  Nest last;
+  expect(unpacks_and_repacks(nested, "0101010100010507", last) && last.a.has &&
+             last.a.value == 5 && !last.b.has && last.c.has && last.c.value == 7,
+         "nested when c repack");
+}
+
 void flags_overflow() {
   struct Wide {
     std::uint8_t v = 0;
@@ -264,6 +451,10 @@ int run_core_grouped_tests() {
   marker_when_and_booleans();
   flag_byte_bits();
   flag_bit_inside_untaken_when();
+  flag_byte_inside_when_is_not_seen_after_it();
+  sibling_when_bytes_stay_apart();
+  when_in_a_round_keeps_the_round_byte();
+  nested_when_bytes_shadow_in_turn();
   flags_overflow();
   return check::failures();
 }

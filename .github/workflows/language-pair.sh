@@ -11,7 +11,7 @@ session_hex="b55d0a29c56c203712b241232e"
 boolflag_hex="0100"
 booltrue_hex="0101"
 # u8 k; split flag byte m; when(k == 1) { m.bit(u8 v) }, row {k:0, v:5}: the bit is set although the
-# when is not taken, and unpack never reads it (project AC-4). Python joins with its split form (AZ-2100).
+# when is not taken, and unpack never reads it (project AC-4). Python writes it as a flag_byte split.
 bitwhen_hex="010001"
 # repeat(flags(bool on, u8 n)), on [true, false, true], n [1, 2, 3]: a clear bit is never read, so the
 # aligned entry is null (AZ-2087, AZ-2091). C# only produces: no public C# API reads an aligned round
@@ -112,7 +112,8 @@ handoff java cpp booltrue "$booltrue_hex"
 handoff cpp csharp booltrue "$booltrue_hex"
 
 handoff csharp typescript bitwhen "$bitwhen_hex"
-handoff typescript rust bitwhen "$bitwhen_hex"
+handoff typescript python bitwhen "$bitwhen_hex"
+handoff python rust bitwhen "$bitwhen_hex"
 handoff rust java bitwhen "$bitwhen_hex"
 handoff java cpp bitwhen "$bitwhen_hex"
 handoff cpp csharp bitwhen "$bitwhen_hex"

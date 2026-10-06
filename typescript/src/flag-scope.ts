@@ -1,43 +1,65 @@
-import { fieldName, type Field } from "./fields.ts"
+import { FLAG_BITS, fieldName, type Field } from "./fields.ts"
 
 // A split flag bit reads the flag byte of its own scope, and only after that byte: the top
 // level, a repeat or times round, a list or dict element, or a `when` body (which also sees
 // the bytes read before it in the scope around it). A byte that comes later, sits in a
 // `when`, or sits in another round or element is never read for the bit.
-export function validateFlagScopes(fields: Field[], seen: Set<symbol> = new Set()): void {
-  for (const f of fields) {
+//
+// Each read of a flag byte gets an id of its own, and its bits are numbered by their place in
+// the scheme: bit 0 is the first bit that follows the read, as in the combined form. A handle
+// can be read again and shared by other schemes; the copies returned here belong to this scheme.
+type Read = { id: symbol; name: string; taken: number }
+
+export function bindFlagBits(fields: Field[]): Field[] {
+  // The bits met so far per flag byte, in any scope: the number a bit with no byte to follow is named by.
+  const met = new Map<symbol, number>()
+
+  const bindAll = (list: Field[], seen: Map<symbol, Read>): Field[] =>
+    list.map((f) => bindOne(f, seen))
+
+  const bindOne = (f: Field, seen: Map<symbol, Read>): Field => {
     switch (f.kind) {
-      case "flagByte":
-        seen.add(f.id)
-        break
-      case "flagBit":
-        if (!seen.has(f.flagId)) {
+      case "flagByte": {
+        const read = { id: Symbol(f.name), name: f.name, taken: 0 }
+        seen.set(f.id, read)
+        return { ...f, id: read.id }
+      }
+      case "flagBit": {
+        const read = seen.get(f.flagId)
+        const before = met.get(f.flagId) ?? 0
+        met.set(f.flagId, before + 1)
+        if (read === undefined) {
           throw new RangeError(
-            `flag bit ${f.bit} (${fieldName(f.field)}): its flag byte is not read earlier in the same scope`,
+            `flag bit ${before} (${fieldName(f.field)}): its flag byte is not read earlier in the same scope`,
           )
         }
-        validateFlagScopes([f.field], new Set(seen))
-        break
+        if (read.taken === FLAG_BITS) {
+          throw new RangeError(
+            `flag byte "${read.name}": ninth bit (${fieldName(f.field)}); a flag byte holds ${FLAG_BITS} bits`,
+          )
+        }
+        const bit = read.taken++
+        return { ...f, flagId: read.id, bit, field: bindOne(f.field, new Map(seen)) }
+      }
       case "flags":
         // Combined form: the members are not flattened yet; each is checked on its own.
-        for (const member of f.fields) validateFlagScopes([member], new Set(seen))
-        break
+        return { ...f, fields: f.fields.map((member) => bindOne(member, new Map(seen))) }
       case "group":
-        validateFlagScopes(f.fields, seen)
-        break
+        return { ...f, fields: bindAll(f.fields, seen) }
       case "when":
-        validateFlagScopes(f.fields, new Set(seen))
-        break
+        return { ...f, fields: bindAll(f.fields, new Map(seen)) }
       case "repeat":
       case "times":
-        validateFlagScopes(f.fields)
-        break
+        return { ...f, fields: bindAll(f.fields, new Map()) }
       case "list":
       case "dict":
-        validateFlagScopes([f.element])
-        break
+        return { ...f, element: bindOne(f.element, new Map()) }
+      default:
+        return f
     }
   }
+
+  return bindAll(fields, new Map())
 }
 
 // A bool or an empty group is a presence mark: it has no bytes, only a flag bit. It is

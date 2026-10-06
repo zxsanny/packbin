@@ -48,6 +48,17 @@ Result unpack_children(Walk& w, std::size_t i, void* obj) {
   return Result{};
 }
 
+// A flag byte read inside a `when` is not seen after it: the values of the scope around the
+// `when` come back when it ends (an error ends the whole unpack).
+PACKBIN_NOINLINE
+Result unpack_when(Walk& w, std::size_t i, void* obj) {
+  std::uint8_t outer[8];
+  std::memcpy(outer, w.flag_bytes, sizeof(outer));
+  Result res = unpack_children(w, i, obj);
+  std::memcpy(w.flag_bytes, outer, sizeof(outer));
+  return res;
+}
+
 // Bytes, utf8 (after its u16 length) and sized (length from its count).
 PACKBIN_NOINLINE
 Result unpack_text(Walk& w, std::size_t i, void* obj) {
@@ -249,7 +260,7 @@ Result unpack_one(Walk& w, std::size_t i, void* obj) {
     case Kind::Sized:
       return unpack_text(w, i, obj);
     case Kind::When:
-      return when_matches(w.t, f, obj) ? unpack_children(w, i, obj) : Result{};
+      return when_matches(w.t, f, obj) ? unpack_when(w, i, obj) : Result{};
     case Kind::Flags:
       return unpack_flags(w, i, obj);
     case Kind::FlagByte:

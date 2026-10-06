@@ -23,8 +23,9 @@ public final class Scheme<T> {
         }
         this.typeNumber = typeNumber;
         this.type = Objects.requireNonNull(type, "type");
-        this.fields = Field.immutableCopy(Arrays.asList(Objects.requireNonNull(fields, "fields")));
-        SchemeOrder.validate(this.fields, !Map.class.isAssignableFrom(type));
+        List<Field> declared = Field.immutableCopy(Arrays.asList(Objects.requireNonNull(fields, "fields")));
+        SchemeOrder.validate(declared, !Map.class.isAssignableFrom(type));
+        this.fields = Field.immutableCopy(SchemeOrder.bindFlagBits(declared));
         this.maxRounds = DEFAULT_MAX_ROUNDS;
         this.maxSlots = DEFAULT_MAX_SLOTS;
     }

@@ -6,7 +6,7 @@ import {
 } from "./fields.ts"
 import { unpackBody, type UnpackErr } from "./walker.ts"
 import { newScope, packFields } from "./pack-fields.ts"
-import { validateFlagScopes, validatePresenceMarks } from "./flag-scope.ts"
+import { bindFlagBits, validatePresenceMarks } from "./flag-scope.ts"
 import { validateMemberNames } from "./member-names.ts"
 import { validateRoundNesting } from "./rounds.ts"
 import { bindReferences } from "./ref-scope.ts"
@@ -84,8 +84,7 @@ export class Scheme<T> {
       throw new RangeError("type number: expected 0..255")
     }
     validateFieldIds(fields)
-    const flat = flatten(fields)
-    validateFlagScopes(flat)
+    const flat = bindFlagBits(flatten(fields))
     validatePresenceMarks(flat)
     validateMemberNames(flat)
     validateRoundNesting(flat)

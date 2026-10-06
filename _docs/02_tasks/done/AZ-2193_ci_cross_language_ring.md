@@ -128,3 +128,7 @@ Then it says the cross-language ring runs on every push and pull request.
 ## Owner decision (2026-10-06)
 
 DECIDED, the proposed default: option A: a CI job runs `language-pair.sh` on every push. The open DECISION rows above are resolved by this section.
+
+## Loop 16 result (2026-10-06)
+
+Done in loop 16 (batch 3), proof pending the first CI run. A `ring` job in `test.yml` (no `needs`, `if` or filter, 30 minute cap) runs `language-pair.sh` with the six toolchains of the suites (`RING_*` in the job env, tied to `docker-compose.test.yml` by the wiring check, verified by `ring-toolchains.sh`); `ring-wiring.test.sh` in the `scaffold` job rejects 28 corrupted copies. GCC 16 is not on any hosted runner: owner decision 2026-10-06, option A, C++ is compiled in the `gcc:16` image through the `CXX` wrapper `ring-cxx.sh` (`-static`). New actions pinned by commit: setup-dotnet v6.0.0, setup-python v7.0.0, setup-java v6.0.1, setup-node v7.0.0. `publish.yml` calls `test.yml`, so `ring` also gates a `v*` tag publish (accepted). The `bitwhen` ring gained a Python participant (flagged concern of AZ-2100). Open, only the Ubuntu runner can prove: container uid/gid and bind mounts, the static link on x86_64, run time against the 15 minute target, the unauthenticated pull of `gcc:16`; a failing consumer is not named in the log (AC-3 names producer mismatches).

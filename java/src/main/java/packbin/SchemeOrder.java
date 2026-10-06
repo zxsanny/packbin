@@ -1,9 +1,11 @@
 package packbin;
 
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 final class SchemeOrder {
@@ -17,35 +19,59 @@ final class SchemeOrder {
     /** {@code typedRow} is true when the scheme's row class is not a Map. */
     static void validate(List<Field> fields, boolean typedRow) {
         walkScope(fields, new int[] {0}, typedRow);
-        requireFlagBytes(fields, new HashSet<>());
     }
 
     /**
-     * A split flag bit reads the byte its own flagByte read earlier in the same container (top level,
-     * repeat or times round, list or dict element). A byte inside a when or flags child is visible only there.
+     * Binds the split flag bits of a scheme (AZ-2135) and returns the fields rebuilt for it. A bit belongs to the
+     * latest read of its flagByte earlier in the same container (top level, repeat or times round, list or dict
+     * element); a byte read inside a when, a flags child or a nested row is visible only there. Its position is its
+     * order among the bits of that read, so the flagByte handle itself holds no bit and may be a member of any
+     * number of schemes.
+     * Each read gets a {@link FlagGroup} of its own in the rebuilt fields.
      */
-    private static void requireFlagBytes(List<Field> fields, Set<FlagGroup> visible) {
+    static List<Field> bindFlagBits(List<Field> fields) {
+        return bindAll(fields, new HashMap<>());
+    }
+
+    /** {@code visible} maps a flagByte handle to the group of its latest read that this point can see. */
+    private static List<Field> bindAll(List<Field> fields, Map<FlagGroup, FlagGroup> visible) {
+        List<Field> bound = new ArrayList<>(fields.size());
         for (Field field : fields) {
-            switch (field.kind) {
-                case FLAG_BYTE -> visible.add(field.group);
-                case FLAG_BIT -> {
-                    if (!visible.contains(field.group)) {
-                        throw new IllegalArgumentException(
-                                "flag bit " + bitName(field.inner) + " has no flagByte before it in the same scope");
-                    }
-                    requireFlagBytes(Collections.singletonList(field.inner), new HashSet<>(visible));
-                }
-                case FLAGS -> {
-                    for (Field bit : field.children) {
-                        requireFlagBytes(Collections.singletonList(bit.inner), new HashSet<>(visible));
-                    }
-                }
-                case WHEN -> requireFlagBytes(field.children, new HashSet<>(visible));
-                case GROUP -> requireFlagBytes(field.children, visible);
-                case REPEAT, TIMES, LIST, DICT -> requireFlagBytes(field.children, new HashSet<>());
-                default -> {}
-            }
+            bound.add(bind(field, visible));
         }
+        return bound;
+    }
+
+    private static Field bind(Field field, Map<FlagGroup, FlagGroup> visible) {
+        return switch (field.kind) {
+            case FLAG_BYTE -> {
+                FlagGroup read = new FlagGroup();
+                visible.put(field.group, read);
+                yield field.withGroup(read);
+            }
+            case FLAG_BIT -> {
+                FlagGroup read = visible.get(field.group);
+                if (read == null) {
+                    throw new IllegalArgumentException(
+                            "flag bit " + bitName(field.inner) + " has no flagByte before it in the same scope");
+                }
+                int index = read.reserve(field.inner);
+                Field inner = bind(field.inner, new HashMap<>(visible));
+                read.bitInners.set(index, inner);
+                yield Field.flagBit(read, index, inner);
+            }
+            case FLAGS -> {
+                Field[] members = new Field[field.children.size()];
+                for (int i = 0; i < members.length; i++) {
+                    members[i] = bind(field.children.get(i).inner, new HashMap<>(visible));
+                }
+                yield Field.flags(field.id, members);
+            }
+            case WHEN -> field.withChildren(bindAll(field.children, new HashMap<>(visible)));
+            case GROUP -> field.withChildren(bindAll(field.children, field.nestedRow ? new HashMap<>(visible) : visible));
+            case REPEAT, TIMES, LIST, DICT -> field.withChildren(bindAll(field.children, new HashMap<>()));
+            default -> field;
+        };
     }
 
     /** Fields carry no names, so a bit is named by its kind and, when it has one, its id (ids restart per scope). */

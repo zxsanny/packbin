@@ -11,6 +11,7 @@ cpp/build/
 **/__pycache__/
 **/*.pyc
 **/node_modules/
+typescript/dist/
 .github/workflows/out/
 .github/workflows/drivers/handoff-rust/target/
 .DS_Store

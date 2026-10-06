@@ -45,3 +45,10 @@ Given `u8 sid`, split `flagByte m`, `when(sid==9) u8 shape`, `m.bit(u16 heading)
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Written from a feature-assess row; refine the Given/When/Then with the implementer before the loop that takes it | coordinator | open | Low |
+
+## Loop 16 progress (2026-10-06)
+
+| Part | Package | State |
+|------|---------|-------|
+| AC-1 reference rows `010901045a00` and `010100` | TypeScript | done in batch 3 (tests only; both rows already packed correctly at HEAD) |
+| AC-1 | C# | held until the C# multi-target work is committed |

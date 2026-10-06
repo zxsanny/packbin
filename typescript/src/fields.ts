@@ -108,9 +108,10 @@ export function flatten(fields: Field[]): Field[] {
       out.push(fb)
       // A member that holds flags of its own is flattened too, or its bits would get a new flag
       // byte on every walk and pack could not find them.
-      for (const child of f.fields) {
-        out.push(fb.bit(child.kind === "flags" ? child : flatten([child])[0]!))
-      }
+      f.fields.forEach((child, bit) => {
+        const field = child.kind === "flags" ? child : flatten([child])[0]!
+        out.push({ kind: "flagBit", flagId: fb.id, bit, field })
+      })
     } else if (
       f.kind === "when" ||
       f.kind === "repeat" ||
@@ -127,7 +128,7 @@ export function flatten(fields: Field[]): Field[] {
 }
 
 // One flag byte holds 8 bits.
-const FLAG_BITS = 8
+export const FLAG_BITS = 8
 
 export function flags(anchor: number, fields: Field[]): Field {
   if (fields.length > FLAG_BITS) {
@@ -138,24 +139,16 @@ export function flags(anchor: number, fields: Field[]): Field {
   return { kind: "flags", anchor, fields }
 }
 
+// A handle can be read more than once and shared by any number of schemes, so a bit has no number of
+// its own: `Scheme` numbers it (0 here) by its place among the bits of the flag byte read it follows.
 export function flagByte(name: string): FlagByteHandle {
   const id = Symbol(name)
-  let next = 0
-  const handle = {
-    kind: "flagByte" as const,
+  return {
+    kind: "flagByte",
     name,
     id,
-    bit(field: Field): Field {
-      if (next === FLAG_BITS) {
-        throw new RangeError(
-          `flag byte "${name}": ninth bit (${fieldName(field)}); a flag byte holds ${FLAG_BITS} bits`,
-        )
-      }
-      const bit = next++
-      return { kind: "flagBit", flagId: id, bit, field }
-    },
+    bit: (field) => ({ kind: "flagBit", flagId: id, bit: 0, field }),
   }
-  return handle
 }
 
 export function eq(fieldId: number, value: unknown): { fieldId: number; value: unknown } {

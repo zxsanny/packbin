@@ -45,7 +45,7 @@ Unpack found that a present field does not fit in the bytes that remain. The err
 
 ## Split form
 
-The flags byte is stored now, and each bit's field is placed later in the list. The bit must come after its flag byte in the same scope (top level, one `repeat` or `times` round, or one `list` or `dict` element); a flag byte read inside a `when` is not visible after it. TypeScript, C#, Java and Rust refuse a violation at construction; Python does so with AZ-2100. (source: schema.md; loop 11)
+The flags byte is stored now, and each bit's field is placed later in the list. The bit must come after its flag byte in the same scope (top level, one `repeat` or `times` round, or one `list` or `dict` element); a flag byte read inside a `when` is not visible after it. TypeScript, C#, Java, Rust and Python refuse a violation at construction (Python since loop 16, AZ-2100). A bit's number is its place among the bits of the flag byte read it follows (Rust, C++, and TypeScript and Java since loop 16, AZ-2135). (source: schema.md; loop 11)
 
 ## Unpack
 

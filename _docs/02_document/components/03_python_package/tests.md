@@ -402,6 +402,22 @@ value count: 0
 
 Rollback if this version must not be used: yank that PyPI version.
 
+## Loop 16 Tests (AZ-2100 to AZ-2192, AZ-2128, AZ-2134, round limits)
+
+All run in the `python` service of `docker-compose.test.yml` with pytest.
+
+| Test | What it proves | Where |
+|------|----------------|-------|
+| `test_reference_scope` | a `when` or count naming a later field, an id that does not exist or a field of another scope raises `ValueError` at construction; valid references still build and pack; the three reference vectors of `fixtures/hostile/cases.txt` are scheme errors (AZ-2113) | `python/tests/test_reference_scope.py` |
+| `test_star_import`, `test_session` | `from packbin import *` keeps the builtins and the other public names; the builder names import by name; `PackSession(seed)` raises `ValueError` unless the seed is 32 bytes (AZ-2104) | `python/tests/test_star_import.py`, `python/tests/test_session.py` |
+| `test_times_longer_list` | a `times` list longer than the count raises `1: 3 items, times count is 2`, for every member kind including `bool` and `u2`; valid rows keep their bytes (AZ-2186) | `python/tests/test_times_longer_list.py` |
+| `test_float_pack_strict` | a float field takes only an `int` or a `float`; a `bool`, string, bytes, `Decimal` or `Fraction` raises `TypeError` naming the field; an `f32` overflow raises `OverflowError`; the README float example round-trips (AZ-2192) | `python/tests/test_float_pack_strict.py` |
+| `test_split_form` | `flag_byte()` and `.bit(...)` build and match the TypeScript bytes; a bit before its flag byte, in another scope or whose byte is not in the scheme, and a flag byte listed without all its bits, raise `ValueError`; scope rules of `when`, `repeat`, `times` and list elements (AZ-2100) | `python/tests/test_split_form.py` |
+| `test_round_lists` | one list entry per round with `None` for a skipped round, no default carried from the row class, `flags`, `when` and groups inside a round pack, a `bool` under `flags` in a `times` reads its own round, a round inside a round is refused at construction (AZ-2134) | `python/tests/test_round_lists.py` |
+| `test_flag_group_presence` | a group of `u2` or nested `flags` sets its bit and round-trips; a missing sibling fails pack naming it (AZ-2128) | `python/tests/test_flag_group_presence.py` |
+| `test_round_limits` | defaults and surface, an omitted limit is the default, `repeat` and `times` refused at round 65,536 with the interim error (`needed` 0), the slot total is per call and shared with list and dict elements, a short run in each element pays for its own lists, a 1 MiB packet is refused at round 65,536, invalid limits raise `ValueError` | `python/tests/test_round_limits.py` |
+| hostile `limit` stage | `repeat_rounds_over_limit` and `times_rounds_over_limit` run with `with_limits(max_rounds=3)` and return the bad-value error with `needed` 0 and `left` 1 | `python/tests/test_hostile_vectors.py`, `python/tests/hostile_support.py` |
+
 ## Test Data Management
 
 **Required test data**:

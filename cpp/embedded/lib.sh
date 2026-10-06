@@ -45,40 +45,62 @@ log_value() {
   awk -v k="$key" '$1 == k { print $2; found = 1; exit } END { if (!found) print "missing" }' "$file"
 }
 
-# Runs one target function in a subshell with errexit, tees its log, writes one report row.
-# The function may write a one-line summary (no commas) to "$out/<id>.msg".
+# Targets that did not pass in this run; run.sh exits 1 when it is not 0.
+failed=0
+
+# Runs one target function in a child process with errexit on, tees its log, writes one report row
+# and counts a failed target in $failed. The function may write a one-line summary (no commas) to
+# "$out/<id>.msg".
+#
+# A target fails when the function exits non-zero (a command nobody checked failed, or a helper
+# returned non-zero) or when `fail` was called, which leaves the marker "$out/<id>.failed". The
+# summary text plays no part in the decision.
+#
+# Bash ignores errexit for every command inside a function that an `||`, `&&` or `if` list calls,
+# even where that code sets it again, so run_target must be called as a plain command. It returns 0
+# whatever the target did: the result is the report row and $failed.
 run_target() {
   local id="$1" name="$2" fn="$3"
-  local log="$out/$id.log" msg="$out/$id.msg" started rc elapsed result message
+  local log="$out/$id.log" msg="$out/$id.msg" marker="$out/$id.failed"
+  local errexit=off probe started rc elapsed result message
+  case $- in *e*) errexit=on ;; esac
+  set +e
+  ( set -e; false; exit 0 )
+  probe=$?
+  [ "$errexit" = off ] || set -e
+  if [ "$probe" -ne 1 ]; then
+    echo "run_target $id: errexit is ignored in this call (called from an ||, && or if list)" >&2
+    exit 2
+  fi
   mkdir -p "$out"
   : > "$msg"
+  rm -f "$marker"
   CURRENT_TARGET="$id"
   started=$(date +%s%N)
   echo "=== $id: $name ==="
   set +e
   (
-    set -euo pipefail
+    set -Eeuo pipefail
+    # errexit ends the target without a word; the ERR trap (inherited by functions through -E) names the
+    # command first. It does not run in an `||`, `&&` or `if` condition, so explicit checks stay quiet.
+    # In a pipeline the command is the last member; the member statuses show which one failed.
+    trap 'echo "target command failed: $BASH_COMMAND (exit $?, pipe ${PIPESTATUS[*]})" >&2' ERR
     "$fn"
   ) 2>&1 | tee "$log"
   rc=${PIPESTATUS[0]}
-  set -e
-  # A failed check inside a target function does not always stop it (errexit is not reliable
-  # inside functions), so any recorded FAIL note fails the target.
-  if [ "$rc" -eq 0 ] && grep -q "FAIL" "$msg"; then
-    rc=1
-  fi
+  [ "$errexit" = off ] || set -e
   elapsed=$(( ($(date +%s%N) - started) / 1000000 ))
   message="$(tr ',\n' '; ' < "$msg")"
-  if [ "$rc" -eq 0 ]; then
-    result=PASS
-  else
+  result=PASS
+  if [ "$rc" -ne 0 ] || [ -e "$marker" ]; then
     result=FAIL
-    message="${message:-exit $rc} (log: test-results/embedded/$id.log)"
+    [ "$rc" -eq 0 ] || message="${message}exit $rc "
+    message="${message}(log: test-results/embedded/$id.log)"
+    failed=$((failed + 1))
   fi
   echo "=== $id: $result $message ==="
   TEST_RESULTS="$results" SRC_ROOT="$root" bash "$root/.github/workflows/report-row.sh" \
     "$id" "$name" "$elapsed" "$result" "$message"
-  return "$rc"
 }
 
 # Appends to the target summary (run inside a target function).
@@ -87,8 +109,10 @@ note() {
   echo "NOTE $*"
 }
 
-# Fails the target with a reason.
+# Records a failed check and returns 0, so the target goes on and reports every violated check. The
+# marker file is what fails the target, also when `fail` ran in a subshell. Where going on makes no
+# sense (a compile that produced no object), follow it with `return 1`: errexit ends the target.
 fail() {
   note "FAIL $*"
-  return 1
+  : > "$out/$CURRENT_TARGET.failed"
 }

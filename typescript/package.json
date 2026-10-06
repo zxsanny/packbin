@@ -8,14 +8,19 @@
     "url": "git+https://github.com/zxsanny/packbin.git"
   },
   "type": "module",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
   "files": [
-    "src",
+    "dist",
     "README.md"
   ],
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "test": "node --test tests/*.ts"
   },
   "devDependencies": {

@@ -417,6 +417,19 @@ workflow_checks() {
   rm -rf "$tmp"
 }
 
+# shellcheck source=publish-npm.test.sh
+source "$here/publish-npm.test.sh"
+
+if [ "${1:-}" = "--npm" ]; then
+  npm_dist_checks
+  if [ "$failures" -ne 0 ]; then
+    echo "$failures failure(s)" >&2
+    exit 1
+  fi
+  echo "npm dist checks passed"
+  exit 0
+fi
+
 if [ "${1:-}" = "--crates" ]; then
   crates_token_checks
   if [ "$failures" -ne 0 ]; then
@@ -441,6 +454,7 @@ crates_token_checks
 registry_checks
 gate_checks
 manifest_checks
+npm_dist_checks
 workflow_checks
 pins_checks
 phase_checks

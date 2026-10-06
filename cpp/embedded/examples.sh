@@ -20,7 +20,10 @@ examples_tools() {
     case "$(uname -m)" in
       x86_64) arch=64bit ;;
       aarch64 | arm64) arch=ARM64 ;;
-      *) fail "no arduino-cli build for $(uname -m)" ;;
+      *)
+        fail "no arduino-cli build for $(uname -m)"
+        return 1
+        ;;
     esac
     mkdir -p "$cache/bin"
     curl -fsSL -o "$cache/arduino-cli.tar.gz" \
@@ -32,7 +35,7 @@ examples_tools() {
 
 # Pico (PlatformIO, raspberrypi platform) against `pio pkg pack` of cpp/.
 target_example_pico() {
-  local dir="$build/example-pico"
+  local dir="$build/example-pico" status=0
   examples_tools
   rm -rf "$dir"
   mkdir -p "$dir/pkg"
@@ -45,8 +48,7 @@ target_example_pico() {
   fi
   cp -a "$cpp/examples/pico" "$dir/project"
   sed -i "s|^lib_deps = .*|lib_deps = file://$archive|" "$dir/project/platformio.ini"
-  pio run -d "$dir/project" 2>&1 | tee "$dir/build.log"
-  local status=${PIPESTATUS[0]}
+  pio run -d "$dir/project" 2>&1 | tee "$dir/build.log" || status=$?
   if [ "$status" -ne 0 ]; then
     fail "pio run exit $status"
     return 1
@@ -57,7 +59,7 @@ target_example_pico() {
 
 # ESP32 Arduino sketch against the staged Arduino library layout.
 target_example_esp32_arduino() {
-  local dir="$build/example-esp32-arduino"
+  local dir="$build/example-esp32-arduino" status=0
   examples_tools
   rm -rf "$dir"
   bash "$root/.github/workflows/stage-arduino.sh" "$dir/packbin" 0.0.0
@@ -66,8 +68,7 @@ target_example_esp32_arduino() {
   arduino-cli core install esp32:esp32 \
     --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
   arduino-cli compile --fqbn esp32:esp32:esp32 --library "$dir/packbin" \
-    "$dir/packbin/examples/esp32_arduino" 2>&1 | tee "$dir/build.log"
-  local status=${PIPESTATUS[0]}
+    "$dir/packbin/examples/esp32_arduino" 2>&1 | tee "$dir/build.log" || status=$?
   if [ "$status" -ne 0 ]; then
     fail "arduino-cli compile exit $status"
     return 1
@@ -77,8 +78,11 @@ target_example_esp32_arduino() {
 
 # ESP-IDF example against `compote component pack` of cpp/.
 target_example_esp_idf() {
-  local dir="$build/example-esp-idf"
-  command -v idf.py > /dev/null || fail "idf.py not on PATH (not the ESP-IDF image)"
+  local dir="$build/example-esp-idf" status=0
+  if ! command -v idf.py > /dev/null; then
+    fail "idf.py not on PATH (not the ESP-IDF image)"
+    return 1
+  fi
   rm -rf "$dir"
   mkdir -p "$dir"
   (cd "$cpp" && compote component pack --name packbin --version 0.0.0 --dest-dir "$dir/dist")
@@ -96,8 +100,8 @@ dependencies:
   zxsanny/packbin:
     path: $dir/packbin
 EOF
-  idf.py -C "$dir/project" -B "$dir/build" set-target esp32 build 2>&1 | tee "$dir/build.log"
-  local status=${PIPESTATUS[0]}
+  idf.py -C "$dir/project" -B "$dir/build" set-target esp32 build 2>&1 | tee "$dir/build.log" \
+    || status=$?
   if [ "$status" -ne 0 ]; then
     fail "idf.py build exit $status"
     return 1
