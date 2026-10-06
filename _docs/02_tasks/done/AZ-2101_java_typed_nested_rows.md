@@ -142,3 +142,7 @@ AC-1, AC-2, AC-4 and AC-5 must fail first.
 ## Owner decision (2026-10-06)
 
 DECIDED, the proposed default: the old overload on a typed nested row fails at construction (no pre-initialized exception); chosen by the owner by taking the proposed default. The open DECISION rows above are resolved by this section.
+
+## Loop 16 result (2026-10-06)
+
+Done in loop 16 (batch 2), owner decision followed: new overload `group(get, set, create, fields...)`; the old `group(get, set, fields...)` on a typed nested row (or below a group with a factory) fails at construction with `IllegalArgumentException("nested group on a typed row needs a child factory")`, with no pre-initialized exception. Also breaks a typed row with a Map-valued member that used the old overload (it worked at HEAD): use `group(get, set, HashMap::new, ...)`. List and dict element groups, anchored groups, `when` and flags elements on a typed row still unpack into a `Map` (documented in the Javadoc). A nested row's field ids now live in a scope of their own: `u8 profile(0), group(g, u8 inner(0)), when(1, eq(0,1), u8 shape)` with `profile` 0 packs `010001` (was `01000109`, as the other five packages). A nested row's presence under `flags` is its member alone. Open, pre-existing, not changed: a flag byte outside a nested row with its bit inside builds and packs unreadable bytes; a null nested member or null list element is dropped silently on pack.

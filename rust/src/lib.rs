@@ -26,6 +26,8 @@ mod element_tests;
 #[cfg(test)]
 mod flag_bits_tests;
 #[cfg(test)]
+mod flag_group_tests;
+#[cfg(test)]
 mod flag_presence_tests;
 #[cfg(test)]
 mod hostile_tests;
@@ -39,6 +41,8 @@ mod packbin_tests;
 mod round_tests;
 #[cfg(test)]
 mod scope_tests;
+#[cfg(test)]
+mod session_hostile_tests;
 #[cfg(test)]
 mod times_stale_tests;
 #[cfg(test)]

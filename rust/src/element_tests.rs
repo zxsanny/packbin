@@ -1,8 +1,8 @@
 use crate::hostile_tests::within_one_second;
 use crate::walk::{capacity_hint, unpack};
 use crate::{
-    bytes, dict, eq, flag_byte, list, times, u8, when, BoundField, MapScheme, Scheme, SchemeItem,
-    ShortPacket, UnpackError, Value,
+    bytes, dict, eq, flag_byte, flags, list, times, u8, when, BoundField, MapScheme, Scheme,
+    SchemeItem, ShortPacket, UnpackError, Value,
 };
 
 fn zero_width(label: &str, left: usize) -> UnpackError {
@@ -192,6 +192,37 @@ fn ac3_typed_list_whose_element_is_a_bare_flag_bit_is_refused() {
             BoundField::u8(0, |r: &Row| r.a, |r: &mut Row, v| r.a = v).into(),
             SchemeItem::Field(f.byte()),
             SchemeItem::Field(list("L", f.bit(u8("0")))),
+        ],
+    );
+}
+
+#[test]
+#[should_panic(expected = "flag bit \"0\" of flag byte \"f\" is not in the same scope")]
+fn az2121_ac4_flags_member_split_bit_without_its_flag_byte_is_refused() {
+    let f = flag_byte("f");
+    MapScheme::new(1, vec![flags(0, "m", vec![f.bit(u8("0"))])]);
+}
+
+#[test]
+#[should_panic(expected = "flag bit \"0\" of flag byte \"f\" is not in the same scope")]
+fn az2121_ac4_flags_member_split_bit_before_its_flag_byte_is_refused() {
+    let f = flag_byte("f");
+    MapScheme::new(1, vec![flags(0, "m", vec![f.bit(u8("0"))]), f.byte()]);
+}
+
+#[test]
+#[should_panic(expected = "flag bit \"1\" of flag byte \"f\" is not in the same scope")]
+fn az2121_ac4_typed_flags_member_split_bit_without_its_flag_byte_is_refused() {
+    #[derive(Default)]
+    struct Row {
+        a: u8,
+    }
+    let f = flag_byte("f");
+    let _ = Scheme::new(
+        1,
+        [
+            BoundField::u8(0, |r: &Row| r.a, |r: &mut Row, v| r.a = v).into(),
+            SchemeItem::flags(1, [SchemeItem::Field(f.bit(u8("1")))]),
         ],
     );
 }

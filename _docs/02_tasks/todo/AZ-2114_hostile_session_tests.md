@@ -52,3 +52,12 @@ Extend the scope to all five packages and to the zero-width element packets: Giv
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Written from a feature-assess row; refine the Given/When/Then with the implementer before the loop that takes it | coordinator | open | Low |
+
+## Loop 16 progress (2026-10-06)
+
+| Part | Package | State |
+|------|---------|-------|
+| AC-1, AC-2 and the R2-G1 element packets | Rust | done in batch 2 (`rust/src/session_hostile_tests.rs`, tests only; the README scheme for `01 00 ff` is refused at construction in Rust, so the test uses `u8 "0"; repeat(1,[bytes("1",0)])`) |
+| AC-1, AC-2 and the R2-G1 element packets | Java | done in batch 2 (`HostileSessionTest`, tests only; same note: a zero-width `bytes` repeat stands in for the refused `when` scheme) |
+| all | C# | held until the C# multi-target work is committed |
+| R2-G1 element packets | Python, TypeScript | already covered (AZ-2071 / AZ-2072) |

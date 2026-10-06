@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { BinaryPacker, packed, scheme, sized, times, u8, u64, type Scheme } from "../src/index.ts"
+import { BinaryPacker, i64, packed, scheme, sized, times, u8, u64, type Scheme } from "../src/index.ts"
 
 type Row = Record<string, unknown>
 
@@ -38,6 +38,26 @@ const KINDS: { name: string; layout: Scheme<Row>; body: string; list: string; fi
     field: "x",
     row: { n: 3n, x: [1, 2, 3] },
   },
+]
+
+// The same three counted kinds, counted by an i64: the count can be negative or past 2^53.
+const SIGNED_KINDS = KINDS.map((k) => ({
+  ...k,
+  layout: scheme<Row>(
+    1,
+    i64(0, (r) => r.n),
+    ...(k.name === "sized"
+      ? [sized(1, (r) => r.p, 0)]
+      : k.name === "packed"
+        ? [packed(2, 1, (r) => r.p, 0)]
+        : [times(1, 0, [u8(1, (r) => r.x)])]),
+  ),
+}))
+
+const SIGNED_COUNTS: { label: string; wire: string; value: bigint }[] = [
+  { label: "-1", wire: "ffffffffffffffff", value: -1n },
+  { label: "i64 min", wire: "0000000000000080", value: -(2n ** 63n) },
+  { label: "2^63-1", wire: "ffffffffffffff7f", value: 2n ** 63n - 1n },
 ]
 
 function unpack(layout: Scheme<Row>, h: string): { result: unknown; row: Row | undefined } {
@@ -101,6 +121,33 @@ describe("u64 counts", () => {
       // Assert
       assert.throws(pack, RangeError)
     })
+  }
+
+  for (const k of SIGNED_KINDS) {
+    for (const c of SIGNED_COUNTS) {
+      it(`TS-F4 ${k.name} counted by an i64 of ${c.label} is an error value on unpack`, () => {
+        // Arrange
+        const wire = `01${c.wire}${k.body}`
+
+        // Act
+        const { result, row } = unpack(k.layout, wire)
+
+        // Assert
+        assert.deepEqual(result, { ok: false, field: k.field, needed: 0, left: k.body.length / 2 })
+        assert.equal(row, undefined)
+      })
+
+      it(`TS-F4 ${k.name} counted by an i64 of ${c.label} is a RangeError on pack`, () => {
+        // Arrange
+        const row = { ...k.row, n: c.value }
+
+        // Act
+        const pack = () => BinaryPacker.pack(k.layout, row)
+
+        // Assert
+        assert.throws(pack, RangeError)
+      })
+    }
   }
 
   it("AC-2 the largest exact count (2^53-1) reads as a count, so sized reports the bytes it lacks", () => {

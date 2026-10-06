@@ -5,7 +5,7 @@ import {
   type Field,
 } from "./fields.ts"
 import { unpackBody, type UnpackErr } from "./walker.ts"
-import { packFields } from "./pack-fields.ts"
+import { newScope, packFields } from "./pack-fields.ts"
 import { validateFlagScopes, validatePresenceMarks } from "./flag-scope.ts"
 import { validateMemberNames } from "./member-names.ts"
 import { validateRoundNesting } from "./rounds.ts"
@@ -113,7 +113,7 @@ export class BinaryPacker {
   static pack<T extends object>(s: Scheme<T>, row: T): Uint8Array {
     const out: number[] = [s.typeNumber & 0xff]
     const flagBytes = new Map<symbol, number>()
-    packFields(s.fields, s.fields, flattenValues(row), out, flagBytes)
+    packFields(s.fields, s.fields, flattenValues(row, s.fields), out, flagBytes, newScope())
     return Uint8Array.from(out)
   }
 

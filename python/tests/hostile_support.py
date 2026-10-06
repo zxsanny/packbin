@@ -106,6 +106,21 @@ def list_of_u8() -> Scheme[Any]:
     return _scheme(list_field(lambda row: row["xs"], u8(0, lambda row: row["v"])))
 
 
+def repeat_rounds_over_limit() -> Scheme[Any]:
+    return _scheme(repeat(0, u8(0, lambda row: row["v"]))).with_limits(max_rounds=3)
+
+
+def times_rounds_over_limit() -> Scheme[Any]:
+    return _scheme(u8(0, lambda row: row["n"]), times(1, 0, u8(1, lambda row: row["v"]))).with_limits(max_rounds=3)
+
+
+# Scheme each limit vector in fixtures/hostile/cases.txt names, with the limit its README section gives.
+LIMIT_SCHEMES = {
+    "repeat_rounds_over_limit": repeat_rounds_over_limit,
+    "times_rounds_over_limit": times_rounds_over_limit,
+}
+
+
 # Scheme each unpack vector in fixtures/hostile/cases.txt names (README: fixtures/hostile/README.md).
 VECTOR_SCHEMES = {
     "zero_progress_repeat_bool": zero_progress_bool,

@@ -320,10 +320,12 @@ pub fn bytes(name: impl AsRef<str>, n: usize) -> Field {
     }
 }
 
-/// Fields gathered under one `flags` bit, on when its own value, a direct integer, float, bytes,
-/// utf8, list or dict value, or one of its flag bits is present (other child kinds do not count
-/// yet). With no fields it is a bool: allowed only directly inside `flags` or under a flag bit,
-/// set by the value `1` (cleared by `0` or no value), and unpacked as `1` when set.
+/// Fields gathered under one `flags` bit, on when its own value, or any value inside it at any
+/// depth (an integer, float, bytes, utf8, list, dict, `sized`, `bits`, `packed`, `u2`, a nested
+/// `group` or `flags`), or one of its flag bits is present; a `when`, `repeat` or `times` inside
+/// it does not count yet. With no fields it is a bool: allowed only directly inside `flags` or
+/// under a flag bit, set by the value `1` (cleared by `0` or no value), and unpacked as `1` when
+/// set.
 pub fn group(anchor: u32, name: impl AsRef<str>, fields: Vec<Field>) -> Field {
     Field {
         kind: FieldKind::Group {

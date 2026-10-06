@@ -2,6 +2,7 @@ package packbin;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 
@@ -23,7 +24,7 @@ public final class Scheme<T> {
         this.typeNumber = typeNumber;
         this.type = Objects.requireNonNull(type, "type");
         this.fields = Field.immutableCopy(Arrays.asList(Objects.requireNonNull(fields, "fields")));
-        SchemeOrder.validate(this.fields);
+        SchemeOrder.validate(this.fields, !Map.class.isAssignableFrom(type));
         this.maxRounds = DEFAULT_MAX_ROUNDS;
         this.maxSlots = DEFAULT_MAX_SLOTS;
     }

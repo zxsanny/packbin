@@ -36,3 +36,7 @@ The C# part shipped under AZ-2087 (owner decision 2026-10-05, after the AZ-2087 
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Unpacked row shape changes in three packages (README upgrade note); split into one task per package when the loop takes it | coordinator | open | Medium |
+
+## Loop 16 result (2026-10-06)
+
+Python part done in loop 16 (batch 2): unpack of `repeat` / `times` gives every name one list entry per round, `None` where the round skipped it, and no longer starts from a default the row class carries; pack reads every value by round index. This costs names x rounds per unpack, so Python got round and slot limits in the same batch (owner decision 2026-10-06). TypeScript and C# were done earlier.

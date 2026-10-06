@@ -325,15 +325,31 @@ describe("member names flattening would overwrite", () => {
     // Arrange
     const layout = scheme<Row>(
       1,
+      u8(0, (x) => x.kind),
+      when(1, eq(0, 0), [group(1, (x) => x.g, [u8(1, (x) => x.shape)])]),
+      when(2, eq(0, 1), [u16(2, (x) => x.shape)]),
+    )
+
+    // Act
+    const wire = hex(BinaryPacker.pack(layout, { kind: 1, shape: 300 }))
+
+    // Assert
+    assert.equal(wire, "01012c01")
+  })
+
+  it("AZ-2188 an anchored group member named like an outer member is a duplicate", () => {
+    // Arrange
+    const build = () => scheme<Row>(
+      1,
       u8(0, (x) => x.a),
       group(1, (x) => x.g, [u8(1, (x) => x.a)]),
     )
 
     // Act
-    const wire = hex(BinaryPacker.pack(layout, { a: 7 }))
+    const message = refusal(build)
 
     // Assert
-    assert.equal(wire, "010707")
+    assert.match(message, /\ba\b.*twice/)
   })
 
   it("members of different groups with distinct names build", () => {

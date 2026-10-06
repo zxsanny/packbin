@@ -5,8 +5,10 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 final class Walker {
     private Walker() {}
@@ -28,6 +30,8 @@ final class Walker {
     static boolean childOn(Object row, Field child, Take take) {
         return switch (child.kind) {
             case GROUP -> groupOn(row, child, take);
+            case FLAGS -> anyOn(row, child.children, take);
+            case U2 -> anySlotPresent(row, child.children, take);
             case BOOL -> boolOn(takeValue(child, row, take));
             case FLAG_BIT -> childOn(row, child.inner, take);
             case U8, U16, U32, U64, I8, I16, I32, I64, F32, F64, BYTES, UTF8, SIZED, BITS, PACKED, LIST, DICT ->
@@ -37,11 +41,25 @@ final class Walker {
     }
 
     private static boolean groupOn(Object row, Field group, Take take) {
-        if (group.get != null && isPresent(takeValue(group, row, take))) {
-            return true;
+        if (group.nestedRow) {
+            // The fields of a nested row belong to its member, not to this row: the member alone decides.
+            return isPresent(takeValue(group, row, take));
         }
-        for (Field child : group.children) {
+        return anyOn(row, group.children, take);
+    }
+
+    private static boolean anyOn(Object row, List<Field> children, Take take) {
+        for (Field child : children) {
             if (childOn(row, child, take)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean anySlotPresent(Object row, List<Field> slots, Take take) {
+        for (Field slot : slots) {
+            if (isPresent(takeValue(slot, row, take))) {
                 return true;
             }
         }
@@ -153,16 +171,41 @@ final class Walker {
 
     private static void packGroup(
             Field field, Object row, ByteSink sink, Map<Object, Object> seen, Take take) {
-        Object target = row;
-        if (field.nestedRow) {
-            target = takeValue(field, row, take);
-            if (target == null) {
-                return;
-            }
-            // The nested row is a row of its own: in a round it is that round's map, not an item of a list.
-            take = null;
+        if (!field.nestedRow) {
+            packFields(field.children, row, sink, seen, take);
+            return;
         }
-        packFields(field.children, target, sink, seen, take);
+        Object target = takeValue(field, row, take);
+        if (target == null) {
+            return;
+        }
+        // The nested row is a row of its own: in a round it is that round's row, not an item of a list.
+        Map<Object, Object> outer = enterRow(seen);
+        packFields(field.children, target, sink, seen, null);
+        leaveRow(seen, outer);
+    }
+
+    /**
+     * A nested row numbers its field ids from 0 in a scope of its own, so none of them may shadow an id of the row
+     * around it. Takes the id entries out of {@code seen} and returns them; the flag bytes and the repeats written
+     * are keyed by group and by field, not by id, and stay shared by every row of the call.
+     */
+    private static Map<Object, Object> enterRow(Map<Object, Object> seen) {
+        Map<Object, Object> ids = new HashMap<>();
+        for (Iterator<Map.Entry<Object, Object>> it = seen.entrySet().iterator(); it.hasNext(); ) {
+            Map.Entry<Object, Object> entry = it.next();
+            if (entry.getKey() instanceof Integer) {
+                ids.put(entry.getKey(), entry.getValue());
+                it.remove();
+            }
+        }
+        return ids;
+    }
+
+    /** Drops the ids of the nested row and puts back those of the row around it. */
+    private static void leaveRow(Map<Object, Object> seen, Map<Object, Object> outer) {
+        seen.keySet().removeIf(key -> key instanceof Integer);
+        seen.putAll(outer);
     }
 
     private static void packBytes(
@@ -258,25 +301,36 @@ final class Walker {
             Object row,
             Map<Object, Object> seen,
             boolean asList) {
-        if (field.nestedRow) {
-            // A round adds one nested row per round; a row of its own never reads its fields into lists.
-            Object child = asList ? new HashMap<String, Object>() : newChild(field, row);
-            Object err = unpackFields(field.children, data, cur, child, seen, false);
-            if (err != null) {
-                return err;
-            }
-            store(row, field, child, asList);
-            return null;
+        if (!field.nestedRow) {
+            return unpackFields(field.children, data, cur, row, seen, asList);
         }
-        return unpackFields(field.children, data, cur, row, seen, asList);
+        // A round adds one nested row per round; a row of its own never reads its fields into lists.
+        Object child = newChild(field, row, asList);
+        Map<Object, Object> outer = enterRow(seen);
+        Object err = unpackFields(field.children, data, cur, child, seen, false);
+        leaveRow(seen, outer);
+        if (err != null) {
+            return err;
+        }
+        store(row, field, child, asList);
+        return null;
     }
 
-    private static Object newChild(Field field, Object parent) {
-        Object existing = field.get.get(parent);
+    /** The member when the row has one (never inside a round, whose member is a list), else a new row. */
+    private static Object newChild(Field field, Object parent, boolean asList) {
+        Object existing = asList ? null : field.get.get(parent);
         if (existing != null) {
             return existing;
         }
-        return new HashMap<String, Object>();
+        return newRow(field);
+    }
+
+    /** The factory's row for a typed nested row, a HashMap for a Map row. */
+    static Object newRow(Field group) {
+        if (group.create == null) {
+            return new HashMap<String, Object>();
+        }
+        return Objects.requireNonNull(group.create.get(), "the child factory of a nested group returned null");
     }
 
     private static Object unpackWhen(

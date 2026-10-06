@@ -188,7 +188,7 @@ final class Containers {
             }
             return new Object[] {seen.get(element.id), null};
         }
-        Map<String, Object> child = new HashMap<>();
+        Object child = Walker.newRow(element);
         Object err = Walker.unpackFields(Collections.singletonList(element), data, cur, child, new HashMap<>(), false);
         return new Object[] {child, err};
     }

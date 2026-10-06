@@ -1,4 +1,4 @@
-import { groupOn, present, scalarChildNames, type Value } from "./kinds.ts"
+import type { Value } from "./kinds.ts"
 
 type EndianField = { littleEndian: boolean }
 
@@ -287,45 +287,6 @@ export function dict<T>(acc: Acc<T>, element: Field): Field {
   return { kind: "dict", name: memberName(acc), element: one }
 }
 
-export function collectFlagBits(
-  fields: Field[],
-  id: symbol,
-): { bit: number; field: Field }[] {
-  const bits: { bit: number; field: Field }[] = []
-  for (const f of fields) {
-    if (f.kind === "flagBit") {
-      if (f.flagId === id) bits.push({ bit: f.bit, field: f.field })
-      bits.push(...collectFlagBits([f.field], id))
-    } else if (
-      f.kind === "when" ||
-      f.kind === "repeat" ||
-      f.kind === "times" ||
-      f.kind === "group"
-    ) {
-      bits.push(...collectFlagBits(f.fields, id))
-    }
-  }
-  return bits
-}
-
-// A bool or an empty group is a mark with no bytes of its own: only `true` sets its bit.
-export function bitOn(field: Field, values: Value): boolean {
-  if (field.kind === "bool") return values[field.name] === true
-  if (field.kind === "group") {
-    if (field.fields.length === 0) return values[field.name] === true
-    return groupOn(values, field.name, scalarChildNames(field.fields))
-  }
-  return present(values[fieldName(field)])
-}
-
-export function flagValueFor(fields: Field[], id: symbol, values: Value): number {
-  let flags = 0
-  for (const { bit, field } of collectFlagBits(fields, id)) {
-    if (bitOn(field, values)) flags |= 1 << bit
-  }
-  return flags
-}
-
 export function fieldName(field: Field): string {
   if (
     field.kind === "int" ||
@@ -409,14 +370,74 @@ export function isPlainObject(raw: unknown): raw is object {
   return typeof raw === "object" && raw !== null && !Array.isArray(raw) && !ArrayBuffer.isView(raw)
 }
 
-export function flattenValues(values: object): Value {
+// The row a pack walks: the values given, plus the members of each declared group that is given as an
+// object, merged in beside it. Only a declared group is merged, and only its declared members: the
+// entries of a dict and the items of a list are values, so a key never becomes a member of the row.
+// A member given both flat and inside its group's object takes the group object's value.
+export function flattenValues(values: object, fields: Field[]): Value {
   const out: Value = {}
-  for (const [key, raw] of Object.entries(values)) {
-    if (raw === undefined || raw === null) continue
-    if (isPlainObject(raw)) {
-      out[key] = raw
-      Object.assign(out, flattenValues(raw))
-    } else out[key] = raw
-  }
+  copyKeys(out, values, null)
+  mergeGroups(out, fields)
   return out
+}
+
+function copyKeys(out: Value, from: object, only: Set<string> | null): void {
+  for (const [key, raw] of Object.entries(from)) {
+    if (raw === undefined || raw === null || (only !== null && !only.has(key))) continue
+    // Keys can come from untrusted JSON: define "__proto__", so it is an entry, not the row's prototype.
+    if (key === "__proto__") Object.defineProperty(out, key, { value: raw, enumerable: true, writable: true, configurable: true })
+    else out[key] = raw
+  }
+}
+
+function mergeGroups(out: Value, fields: Field[]): void {
+  for (const f of fields) {
+    switch (f.kind) {
+      case "group": {
+        const own = out[f.name]
+        if (isPlainObject(own)) copyKeys(out, own, memberNames(f.fields, new Set()))
+        mergeGroups(out, f.fields)
+        break
+      }
+      case "flagBit":
+        mergeGroups(out, [f.field])
+        break
+      case "when":
+      case "flags":
+      case "repeat":
+      case "times":
+        mergeGroups(out, f.fields)
+        break
+    }
+  }
+}
+
+// The names `fields` declare, looking through the kinds that share their scope; a list or dict element
+// is a row of its own.
+function memberNames(fields: Field[], names: Set<string>): Set<string> {
+  for (const f of fields) {
+    switch (f.kind) {
+      case "u2":
+        for (const slot of f.slots) names.add(slot.name)
+        break
+      case "flagBit":
+        memberNames([f.field], names)
+        break
+      case "when":
+      case "flags":
+      case "repeat":
+      case "times":
+        memberNames(f.fields, names)
+        break
+      case "group":
+        names.add(f.name)
+        memberNames(f.fields, names)
+        break
+      case "flagByte":
+        break
+      default:
+        names.add(f.name)
+    }
+  }
+  return names
 }

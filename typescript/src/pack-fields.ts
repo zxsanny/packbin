@@ -1,12 +1,12 @@
 import {
   fieldName,
-  flagValueFor,
   flatten,
   flattenValues,
   isPlainObject,
   itemGroup,
   type Field,
 } from "./fields.ts"
+import { flagValueFor } from "./flag-bits.ts"
 import { refName } from "./ref-scope.ts"
 import { refuseLongLists, roundCount, roundNames, sliceRound } from "./rounds.ts"
 import {
@@ -23,8 +23,19 @@ import {
   type Value,
 } from "./kinds.ts"
 
-function borrowedCount(ref: string, bias: number, label: string, values: Value): number {
-  const raw = values[ref]
+// What a `when` or a count reads is what pack wrote in the scope, as unpack reads what it has read: a
+// field that was skipped or absent was not written, and a `when` sees it as `undefined`, as unpack does.
+function seen(wrote: Value, ref: string): unknown {
+  return Object.hasOwn(wrote, ref) ? wrote[ref] : undefined
+}
+
+function writtenCount(ref: string, label: string, wrote: Value): unknown {
+  if (!Object.hasOwn(wrote, ref)) throw new RangeError(`${label}: count ${ref} was not written`)
+  return wrote[ref]
+}
+
+function borrowedCount(ref: string, bias: number, label: string, wrote: Value): number {
+  const raw = writtenCount(ref, label, wrote)
   const count = validCount(raw, bias)
   if (count === null) {
     // Pack keeps throwing; the message tells a missing count from a negative one.
@@ -52,11 +63,11 @@ function packItem(
   const group = itemGroup(f.element)
   if (group === null) {
     const slice: Value = { ...values, [fieldName(f.element)]: item }
-    packFields([f.element], allFields, slice, out, flagBytes)
+    packFields([f.element], allFields, slice, out, flagBytes, newScope())
     return
   }
   if (!isPlainObject(item)) throw new RangeError(`${f.name}: expected an object for each item`)
-  packFields(group.fields, group.fields, flattenValues(item), out, flagBytes)
+  packFields(group.fields, group.fields, flattenValues(item, group.fields), out, flagBytes, newScope())
 }
 
 function packRounds(
@@ -69,8 +80,13 @@ function packRounds(
   flagBytes: Map<symbol, number>,
 ): void {
   for (let i = 0; i < count; i++) {
-    packFields(fields, allFields, sliceRound(values, names, i), out, flagBytes)
+    packFields(fields, allFields, sliceRound(values, names, i), out, flagBytes, newScope())
   }
+}
+
+// The values pack has written in one scope: the top level, a round, or a list or dict item.
+export function newScope(): Value {
+  return {}
 }
 
 export function packFields(
@@ -79,17 +95,21 @@ export function packFields(
   values: Value,
   out: number[],
   flagBytes: Map<symbol, number>,
+  wrote: Value,
 ): void {
   for (const f of fields) {
     switch (f.kind) {
       case "int": {
         if (!present(values[f.name])) throw new RangeError(`missing ${f.name}`)
         writeInt(out, f.name, values[f.name], f.size, f.signed, f.littleEndian)
+        wrote[f.name] = values[f.name]
         break
       }
       case "float": {
         if (!present(values[f.name])) throw new RangeError(`missing ${f.name}`)
         writeFloat(out, f.name, values[f.name], f.size, f.littleEndian)
+        // A reader sees an f32 as it was rounded to 32 bits.
+        wrote[f.name] = f.size === 4 ? Math.fround(values[f.name] as number) : values[f.name]
         break
       }
       case "bytes": {
@@ -103,9 +123,12 @@ export function packFields(
               : null
         if (!arr || arr.length !== f.size) throw new RangeError(`bad bytes ${f.name}`)
         for (let i = 0; i < arr.length; i++) out.push(arr[i]!)
+        wrote[f.name] = values[f.name]
         break
       }
       case "bool":
+        // Reached only through a set flag bit: a clear bit writes nothing, so the bool is not written.
+        wrote[f.name] = true
         break
       case "flagByte": {
         const v = flagValueFor(allFields, f.id, values)
@@ -117,15 +140,15 @@ export function packFields(
         const flags = flagBytes.get(f.flagId) ?? 0
         if ((flags & (1 << f.bit)) === 0) break
         if (f.field.kind === "group") {
-          packFields(f.field.fields, allFields, values, out, flagBytes)
+          packFields(f.field.fields, allFields, values, out, flagBytes, wrote)
         } else {
-          packFields([f.field], allFields, values, out, flagBytes)
+          packFields([f.field], allFields, values, out, flagBytes, wrote)
         }
         break
       }
       case "when": {
-        if (sameValue(values[refName(f)], f.value)) {
-          packFields(f.fields, allFields, values, out, flagBytes)
+        if (sameValue(seen(wrote, refName(f)), f.value)) {
+          packFields(f.fields, allFields, values, out, flagBytes, wrote)
         }
         break
       }
@@ -135,29 +158,28 @@ export function packFields(
         break
       }
       case "group":
-        packFields(f.fields, allFields, values, out, flagBytes)
+        packFields(f.fields, allFields, values, out, flagBytes, wrote)
         break
       case "sized":
-        writeSized(out, f.name, values[refName(f)], values[f.name])
+        writeSized(out, f.name, writtenCount(refName(f), f.name, wrote), values[f.name])
+        wrote[f.name] = values[f.name]
         break
       case "u2":
         writeU2(out, f.slots, (n) => values[n])
+        for (const slot of f.slots) wrote[slot.name] = values[slot.name]
         break
       case "bits":
-        writeBits(
-          out,
-          f.name,
-          Number(values[refName(f)]),
-          values[f.name],
-        )
+        writeBits(out, f.name, Number(writtenCount(refName(f), f.name, wrote)), values[f.name])
+        wrote[f.name] = values[f.name]
         break
       case "packed": {
-        const count = borrowedCount(refName(f), f.bias, f.name, values)
+        const count = borrowedCount(refName(f), f.bias, f.name, wrote)
         writePacked(out, f.name, f.width, count, values[f.name])
+        wrote[f.name] = values[f.name]
         break
       }
       case "times": {
-        const count = borrowedCount(refName(f), 0, "times", values)
+        const count = borrowedCount(refName(f), 0, "times", wrote)
         const names = roundNames(f.fields, true)
         refuseLongLists(names, count, values)
         packRounds(f.fields, names, count, allFields, values, out, flagBytes)
@@ -166,6 +188,7 @@ export function packFields(
       case "utf8":
         if (!present(values[f.name])) throw new RangeError(`missing ${f.name}`)
         writeUtf8(out, f.name, values[f.name])
+        wrote[f.name] = values[f.name]
         break
       case "list": {
         const items = values[f.name]
@@ -198,9 +221,12 @@ export function packFields(
         }
         break
       }
-      case "flags":
-        packFields(flatten([f]), allFields, values, out, flagBytes)
+      case "flags": {
+        // Its flag byte is made here, so its bits are looked up among the fields made with it.
+        const flat = flatten([f])
+        packFields(flat, flat, values, out, flagBytes, wrote)
         break
+      }
     }
   }
 }

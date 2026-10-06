@@ -47,6 +47,10 @@ public final class PackbinTest {
         BoolPlacementTest.run();
         RepeatRoundTest.run();
         NestedRoundTest.run();
+        TypedNestedRowTest.run();
+        FlagPresenceTest.run();
+        HostileSessionTest.run();
+        FlagScopeContainerTest.run();
         TimesLongerTest.run();
         PackStrictTest.run();
         RoundLimitsTest.run();

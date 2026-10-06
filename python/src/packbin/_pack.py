@@ -47,30 +47,26 @@ def _bool_on(value: Any) -> bool:
     return value is True
 
 
-def _group_on(row: Any, node: _Group) -> bool:
-    for child in node.fields:
-        if _child_on(row, child):
-            return True
-    return False
-
-
-def _child_on(row: Any, child: _Node) -> bool:
-    if isinstance(child, _Group):
-        return _group_on(row, child)
+def _child_on(child: _Node, take: Callable[[_Node], Any]) -> bool:
+    """`take` gives the value of a leaf for the row, or for the round being packed."""
+    if isinstance(child, (_Group, _Flags)):
+        return any(_child_on(inner, take) for inner in child.fields)
+    if isinstance(child, _U2):
+        return any(_present_value(take(slot)) for slot in child.slots)
     if isinstance(child, _Bool):
-        return _bool_on(child.get(row))
+        return _bool_on(take(child))
     if isinstance(child, (_Scalar, _Bytes, _Utf8, _Sized, _Bits, _Packed, _List, _Dict)):
-        return _present_value(child.get(row))
+        return _present_value(take(child))
     if isinstance(child, _FlagBit):
-        return _child_on(row, child.field)
+        return _child_on(child.field, take)
     return False
 
 
-def _write_u2(buf: bytearray, slots: Sequence[Any], row: Any, seen: dict[int, Any]) -> None:
+def _write_u2(buf: bytearray, slots: Sequence[Any], take: Callable[[_Node], Any], seen: dict[int, Any]) -> None:
     nbytes = (len(slots) + 3) // 4
     raw = bytearray(nbytes)
     for i, slot in enumerate(slots):
-        value = slot.get(row)
+        value = take(slot)
         seen[slot.field_id] = value
         if isinstance(value, bool) or not isinstance(value, int) or value < 0 or value > 3:
             raise ValueError(f"{slot.field_id}: expected 2-bit int")
@@ -138,17 +134,28 @@ def _member_label(node: Any) -> str:
     return str(node.field_id)
 
 
-def _check_round_lists(nodes: Sequence[_Node], row: Any, count: int) -> None:
+def _check_round_lists(leaves: Sequence[Any], row: Any, count: int) -> None:
     """A list a `times` body holds may not be longer than the count: the entries past it would be dropped."""
-    for node in nodes:
-        if isinstance(node, (_Flags, _When, _Group)):
-            _check_round_lists(node.fields, row, count)
-        elif isinstance(node, _FlagBit):
-            _check_round_lists([node.field], row, count)
-        elif isinstance(node, (_Scalar, _Bytes, _Utf8, _Sized, _Bits, _Packed, _List, _Dict)):
-            value = node.get(row)
-            if isinstance(value, _builtin_list) and len(value) > count:
-                raise ValueError(f"{_member_label(node)}: {len(value)} items, times count is {count}")
+    for node in leaves:
+        value = node.get(row)
+        if isinstance(value, _builtin_list) and len(value) > count:
+            raise ValueError(f"{_member_label(node)}: {len(value)} items, times count is {count}")
+
+
+def _round_length(value: Any) -> int:
+    if value is None:
+        return 0
+    return len(value) if isinstance(value, _builtin_list) else 1
+
+
+def _at_round(row: Any, index: int) -> Callable[[_Node], Any]:
+    """The value of a leaf in round `index`: entry `index` of its list, or the lone value every round shares."""
+
+    def at(leaf: _Node) -> Any:
+        value = leaf.get(row)  # type: ignore[attr-defined]
+        return value[index] if isinstance(value, _builtin_list) else value
+
+    return at
 
 
 def _pack_element(buf: bytearray, element: _Node, item: Any) -> None:
@@ -226,13 +233,13 @@ def pack_nodes(
         elif isinstance(node, _Flags):
             flag = 0
             for i, child in enumerate(node.fields):
-                if _child_on(row, child):
+                if _child_on(child, take):
                     flag |= 1 << i
             buf.append(flag)
             for i, child in enumerate(node.fields):
                 if flag & (1 << i):
                     if isinstance(child, _Bool):
-                        seen[child.field_id] = child.get(row)
+                        seen[child.field_id] = take(child)
                     elif isinstance(child, _Group):
                         pack_nodes(buf, child.fields, row, seen, get_value)
                     else:
@@ -249,7 +256,7 @@ def pack_nodes(
                 raise ValueError(f"{node.field_id}: expected {count} bytes, got {len(raw)}")
             buf.extend(raw)
         elif isinstance(node, _U2):
-            _write_u2(buf, node.slots, row, seen)
+            _write_u2(buf, node.slots, take, seen)
         elif isinstance(node, _Bits):
             count = seen.get(node.count)
             if count is None:
@@ -265,50 +272,28 @@ def pack_nodes(
             _write_packed(buf, label, node.width, item_count, value)
         elif isinstance(node, _Times):
             item_count = _borrowed("times", seen.get(node.count), 0)
-            _check_round_lists(node.fields, row, item_count)
+            _check_round_lists(node.leaves, row, item_count)
             for i in range(item_count):
-
-                def at(child: _Node, index: int = i) -> Any:
-                    val = child.get(row)  # type: ignore[attr-defined]
-                    if isinstance(val, _builtin_list):
-                        return val[index]
-                    return val
-
-                pack_nodes(buf, node.fields, row, seen, at)
+                pack_nodes(buf, node.fields, row, seen, _at_round(row, i))
         elif isinstance(node, _FlagByte):
             flag = 0
             for i, child in enumerate(node.bits):
-                if _child_on(row, child):
+                if _child_on(child, take):
                     flag |= 1 << i
             buf.append(flag)
         elif isinstance(node, _FlagBit):
-            if _child_on(row, node.field):
+            if _child_on(node.field, take):
                 pack_nodes(buf, [node.field], row, seen, get_value)
         elif isinstance(node, _When):
             if seen.get(node.condition.field_id) == node.condition.value:
                 pack_nodes(buf, node.fields, row, seen, get_value)
         elif isinstance(node, _Repeat):
-            lengths = []
-            for child in node.fields:
-                val = child.get(row)  # type: ignore[attr-defined]
-                if val is None:
-                    lengths.append(0)
-                elif isinstance(val, _builtin_list):
-                    lengths.append(len(val))
-                else:
-                    lengths.append(1)
-            count = max(lengths) if lengths else 0
+            lengths = [_round_length(leaf.get(row)) for leaf in node.leaves]
+            count = max(lengths, default=0)
             if any(n not in (0, count) for n in lengths):
                 raise ValueError("repeat fields must have equal lengths")
             for i in range(count):
-
-                def at(child: _Node, index: int = i) -> Any:
-                    val = child.get(row)  # type: ignore[attr-defined]
-                    if isinstance(val, _builtin_list):
-                        return val[index]
-                    return val
-
-                pack_nodes(buf, node.fields, row, seen, at)
+                pack_nodes(buf, node.fields, row, seen, _at_round(row, i))
         elif isinstance(node, _Utf8):
             value = take(node)
             seen[node.field_id] = value

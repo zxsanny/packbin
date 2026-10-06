@@ -245,15 +245,15 @@ describe("repeat and times round values are addressed by round index", () => {
     assert.deepEqual(row.v, [new Uint8Array(0)])
   })
 
-  it("a repeat member named like an earlier scalar joins it, as before", () => {
+  it("AZ-2188 a repeat member named like an earlier scalar is a duplicate, not a join", () => {
     // Arrange
-    const layout = scheme<Row>(1, u8(0, (x) => x.x), repeat(1, [u8(1, (x) => x.x)]))
+    const build = () => scheme<Row>(1, u8(0, (x) => x.x), repeat(1, [u8(1, (x) => x.x)]))
 
     // Act
-    const row = unpackRow(layout, "01050607")
+    const act = () => build()
 
     // Assert
-    assert.deepEqual(row.x, [5, 6, 7])
+    assert.throws(act, (e: unknown) => e instanceof RangeError && /\bx\b.*twice/.test(e.message))
   })
 
   it("a list under a group inside flags sets the repeat count", () => {

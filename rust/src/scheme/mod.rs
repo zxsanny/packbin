@@ -63,7 +63,8 @@ impl<T: 'static> SchemeItem<T> {
 
     /// One byte with a bit per member (at most 8), then each member whose bit is set. This is
     /// the only place for a `BoundField::bool_flag`: its bit is set only for `Some(true)`, and
-    /// it unpacks as `Some(true)` when set, `None` when clear.
+    /// it unpacks as `Some(true)` when set, `None` when clear. A `flags` nested in a `flags` is
+    /// on when any value inside it is present.
     pub fn flags(anchor: u32, members: impl IntoIterator<Item = SchemeItem<T>>) -> Self {
         SchemeItem::Flags {
             anchor,

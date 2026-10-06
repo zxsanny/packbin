@@ -12,9 +12,11 @@ final class SchemeOrder {
     private static final String NOT_EARLIER = ", which is not an earlier integer or bool field in its scope";
     private static final String ONLY_A_BIT = " is allowed only as a bit of flags or a flagByte";
     private static final String NEVER_SET = " has no fields and no accessor, so its bit can never be set";
+    private static final String NEEDS_FACTORY = "nested group on a typed row needs a child factory";
 
-    static void validate(List<Field> fields) {
-        walkScope(fields, new int[] {0});
+    /** {@code typedRow} is true when the scheme's row class is not a Map. */
+    static void validate(List<Field> fields, boolean typedRow) {
+        walkScope(fields, new int[] {0}, typedRow);
         requireFlagBytes(fields, new HashSet<>());
     }
 
@@ -56,12 +58,13 @@ final class SchemeOrder {
      * A when condition or a borrowed count may name only an integer or bool field read earlier in the same scope
      * (C++ {@code find_ref}, {@code is_count_source}). Order ids continue through repeat and times rounds;
      * {@code next} carries them. A repeat or times inside a round is a group of its own (AZ-2127): its value
-     * fields hold one list per outer round.
+     * fields hold one list per outer round. {@code typed} is true when the row of this scope is not a Map: a
+     * nested row in it needs a child factory (AZ-2101), as one below a nested row that has a factory does.
      */
-    private static void walkScope(List<Field> fields, int[] next) {
+    private static void walkScope(List<Field> fields, int[] next, boolean typed) {
         Set<Integer> earlier = new HashSet<>();
         for (Field field : fields) {
-            walk(field, earlier, next, false);
+            walk(field, earlier, next, false, typed);
         }
     }
 
@@ -71,31 +74,31 @@ final class SchemeOrder {
      * nothing else (C++ {@code check_shape}). An empty anchored group has no accessor, so its bit could never be
      * set: it is refused wherever it stands. An empty nested row sets its bit when its member is present.
      */
-    private static void walk(Field field, Set<Integer> earlier, int[] next, boolean isBit) {
+    private static void walk(Field field, Set<Integer> earlier, int[] next, boolean isBit, boolean typed) {
         switch (field.kind) {
             case FLAGS -> {
                 requireAnchor(field, next);
                 for (Field bit : field.children) {
-                    walk(bit.inner, earlier, next, true);
+                    walk(bit.inner, earlier, next, true, typed);
                 }
             }
-            case FLAG_BIT -> walk(field.inner, earlier, next, true);
+            case FLAG_BIT -> walk(field.inner, earlier, next, true, typed);
             case FLAG_BYTE -> {}
             case WHEN -> {
                 requireAnchor(field, next);
                 requireEarlier(field.condition.fieldId, earlier, "when " + field.id + " tests field ");
                 for (Field child : field.children) {
-                    walk(child, earlier, next, false);
+                    walk(child, earlier, next, false, typed);
                 }
             }
             case REPEAT -> {
                 requireAnchor(field, next);
-                walkScope(field.children, next);
+                walkScope(field.children, next, typed);
             }
             case TIMES -> {
                 requireAnchor(field, next);
                 requireCount(field, earlier);
-                walkScope(field.children, next);
+                walkScope(field.children, next, typed);
             }
             case GROUP -> {
                 if (field.children.isEmpty() && !field.nestedRow) {
@@ -105,15 +108,18 @@ final class SchemeOrder {
                     throw new IllegalArgumentException("empty group" + ONLY_A_BIT);
                 }
                 if (field.nestedRow) {
-                    walkScope(field.children, new int[] {0});
+                    if (typed && field.create == null) {
+                        throw new IllegalArgumentException(NEEDS_FACTORY);
+                    }
+                    walkScope(field.children, new int[] {0}, field.create != null);
                 } else {
                     requireAnchor(field, next);
                     for (Field child : field.children) {
-                        walk(child, earlier, next, false);
+                        walk(child, earlier, next, false, typed);
                     }
                 }
             }
-            case LIST, DICT -> walkScope(field.children, new int[] {0});
+            case LIST, DICT -> walkScope(field.children, new int[] {0}, false);
             case U2 -> {
                 for (Field slot : field.children) {
                     take(slot, earlier, next);

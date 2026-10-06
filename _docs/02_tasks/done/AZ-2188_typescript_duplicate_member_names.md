@@ -121,3 +121,7 @@ Then they build (a scheme that no longer builds is listed in the task notes), an
 ## Owner decision (2026-10-06)
 
 DECIDED, the proposed default: option B: refuse duplicate member names outside every `when`. The open DECISION rows above are resolved by this section.
+
+## Loop 16 result (2026-10-06)
+
+Done in loop 16 (batch 2), option B. A list or dict element is its own scope (batch 1 review TS-F2): duplicates inside it are refused and it may reuse names of the row around it. Two existing tests pinned duplicates that AC-3 and AC-4 refuse and were rewritten (`nested-group.test.ts` "an anchored group shares the scope around it" now uses `when` branches, `01012c01`; `round-values.test.ts` "a repeat member named like an earlier scalar joins it" is now a refusal test). An anchored group named like its own child (`group(0, g, [u8(0, g)])`, which packed `0107` at HEAD) is also refused. Open: two declarations inside the same `when` body still build and write the value twice.

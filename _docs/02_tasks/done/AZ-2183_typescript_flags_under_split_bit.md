@@ -117,3 +117,7 @@ Then the bytes are unchanged (golden `4001000065cd1d00a3e1110100`).
 |---------|----------------|--------|----------|
 | AZ-2128 (group presence at any depth, TypeScript included) is still in todo; AC-4 holds today, and the presence of a group whose only value sits in nested `flags` follows it | coordinator (land AZ-2128 first or in the same loop) | open | Medium |
 | Flat unpacked row of a group made only of flag-bit, `u2` or `sized` members does not repack (batch 3 discovered 5) | AZ-2128 | open | Low |
+
+## Loop 16 result (2026-10-06)
+
+Done in loop 16 (batch 2). Root causes: a `flags` inside a group under a split bit got a new flag byte on every walk, and a `flags` directly inside `flags` was packed against the wrong field list. A `when`, `times` or `repeat` under a split bit's group still has no presence: the open concern of AZ-2128, held for the C# loop by the owner.

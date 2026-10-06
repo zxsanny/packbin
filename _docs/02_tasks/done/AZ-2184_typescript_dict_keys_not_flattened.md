@@ -122,3 +122,7 @@ Then the bytes are unchanged.
 ## Owner decision (2026-10-06)
 
 DECIDED, the proposed default: keep accepting an anchored group given as a nested object; the bytes are the same. The open DECISION rows above are resolved by this section.
+
+## Loop 16 result (2026-10-06)
+
+Done in loop 16 (batch 2). `flattenValues(values, fields)` is guided by the scheme: only the declared members of declared groups that the row holds as an object are merged; dict entries, list items and undeclared nested objects never are (batch 1 review TS-F1 covered at both flatten sites, both key orders). If a flat key and the group's object give the same member, the nested value wins in both key orders (pinned by a test). The flattened row is a plain object; an own `__proto__` key from `JSON.parse` stays an ordinary data key. Open, pre-existing: a group inside a `repeat` round given as `g:[{a:1},{a:2}]` and an anchored group as a direct list or dict element throw `missing a`.

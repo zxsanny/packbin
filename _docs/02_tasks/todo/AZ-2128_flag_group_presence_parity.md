@@ -45,3 +45,14 @@ C++ `present()` recurses into nested groups. C# already counts u2/sized/bits/pac
 | Loop 12 (AZ-2133 discovery, Rust map): a `times` or `when` as a `flags` member or flag-bit field is never written, no error (`member_on` finds no name): `flags(1,"f",[times(1,"0",[u8 "1"])])` with `0=1`, `1=[5]` → `010100`; same for `when`. Refuse at construction or define their presence here | coordinator | open | Medium |
 | Written from review findings; refine before the loop that takes it. TypeScript and Python added from loop 12 assessment G6 | coordinator | open | Low |
 | Loop 13 assessment (T25, T26, R24): TypeScript flat unpacked rows of a group under flags whose only members are flags/u2/sized/bits/packed/nested group leave the group bit clear and do not repack (`{n:5}` → `0100`; the nested form `{g:{n:5}}` works); a `when` or `times` as a `flags` member never sets its bit in TypeScript (`k:1 v:9` packs `01 01 00`) and Rust (typed `times` Vec form now reaches it: n = 1, pts = [5] packs `01 01 00`). Decide: refuse at construction or define their presence | coordinator | open | Medium |
+
+## Loop 16 progress (2026-10-06)
+
+| Part | Package | State |
+|------|---------|-------|
+| AC-1 to AC-3 (u2, sized, bits, packed, nested group and nested flags count; a set group lacking a required value fails naming it) | TypeScript | done in batch 2 (`flag-bits.ts`, `bitOn` recursion) |
+| same | Rust (map API) | done in batch 2 (`group_on` / `member_on`) |
+| same | Java | done in batch 2 (`Walker.childOn` FLAGS and U2 cases) |
+| same | Python | done in batch 2 (u2 and nested flags presence) |
+| same | C# | held until the C# multi-target work is committed (C# already counts u2, sized, bits, packed and nested groups, AZ-2079 AC-7) |
+| flagged concern: `when`, `times`, `repeat` as a `flags` member or flag-bit field | all | NOT implemented or refused. Owner decision 2026-10-06: hold for the loop that lands the C# work, so the five packages are decided together (today they all give the same bytes for the AZ-2120 shape, `01 01 02 5a00`; AZ-2120 will make C# `01 01 03 07 5a00` and requires the other five to match) |

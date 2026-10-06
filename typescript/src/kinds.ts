@@ -17,38 +17,6 @@ export function sameValue(seen: unknown, want: unknown): boolean {
   return numeric(seen) && numeric(want) ? seen == want : seen === want
 }
 
-export function groupOn(
-  values: Value,
-  name: string,
-  childNames: string[],
-): boolean {
-  if (present(values[name])) return true
-  for (const n of childNames) {
-    if (present(values[n])) return true
-  }
-  return false
-}
-
-export function scalarChildNames(
-  fields: { kind: string; name?: string }[],
-): string[] {
-  const names: string[] = []
-  for (const f of fields) {
-    if (
-      (f.kind === "int" ||
-        f.kind === "float" ||
-        f.kind === "bytes" ||
-        f.kind === "utf8" ||
-        f.kind === "list" ||
-        f.kind === "dict") &&
-      typeof f.name === "string"
-    ) {
-      names.push(f.name)
-    }
-  }
-  return names
-}
-
 export function writeU2(
   out: number[],
   slots: { name: string }[],

@@ -135,7 +135,9 @@ fn collect_flag_bits(
     Ok(())
 }
 
-/// A group is on when it or one of its values is present, or one of its flag bits is on.
+/// A group is on when it or one of its values, at any depth, is present, or one of its flag
+/// bits is on. A `when`, `repeat` or `times` inside it does not count, and neither does a flag
+/// byte, whose value comes from its bits.
 fn group_on(name: &str, members: &[Field], values: &Values) -> Result<bool, PackError> {
     if members.is_empty() {
         return bool_on(values, name);
@@ -143,18 +145,12 @@ fn group_on(name: &str, members: &[Field], values: &Values) -> Result<bool, Pack
     if present(values, name) {
         return Ok(true);
     }
-    for child in members {
-        let on = match &child.kind {
-            FieldKind::Int { name, .. }
-            | FieldKind::Float { name, .. }
-            | FieldKind::Bytes { name, .. }
-            | FieldKind::Utf8 { name }
-            | FieldKind::List { name, .. }
-            | FieldKind::Dict { name, .. } => present(values, name),
-            FieldKind::FlagBit { inner, .. } => member_on(inner, values)?,
-            _ => false,
-        };
-        if on {
+    any_member_on(members, values)
+}
+
+fn any_member_on(members: &[Field], values: &Values) -> Result<bool, PackError> {
+    for member in members {
+        if !matches!(member.kind, FieldKind::FlagByte { .. }) && member_on(member, values)? {
             return Ok(true);
         }
     }
@@ -166,6 +162,13 @@ fn member_on(field: &Field, values: &Values) -> Result<bool, PackError> {
     match &field.kind {
         FieldKind::Group { name, members, .. } => group_on(name, members, values),
         FieldKind::FlagBit { inner, .. } => member_on(inner, values),
+        FieldKind::Flags { name, members, .. } => {
+            if present(values, name) {
+                return Ok(true);
+            }
+            any_member_on(members, values)
+        }
+        FieldKind::U2 { names } => Ok(names.iter().any(|n| present(values, n))),
         _ => Ok(field_name(field).is_some_and(|n| present(values, n))),
     }
 }

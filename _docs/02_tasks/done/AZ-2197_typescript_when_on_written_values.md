@@ -112,3 +112,7 @@ Then every ring passes with the TypeScript driver in both directions.
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Which kinds a `when` / count may name (TypeScript accepts any value field) | AZ-2126 (decide integer or bool only everywhere) | open | Medium |
+
+## Loop 16 result (2026-10-06)
+
+Done in loop 16 (batch 2). Pack records what it wrote per scope (top level, each round, each list or dict item); a `when` reads that record, a count (`sized`, `bits`, `packed`, `times`) that names a skipped or absent field throws (`data: count n was not written`). Review decision (owner A): `eq(id, undefined)` follows unpack (an unread field is `undefined`), so rows that packed readable bytes at HEAD keep them. An f32 tested by `eq` is compared after rounding to 32 bits, as unpack reads it.
