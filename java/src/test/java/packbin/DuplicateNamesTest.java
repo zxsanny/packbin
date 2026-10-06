@@ -28,6 +28,7 @@ final class DuplicateNamesTest {
         ac4EveryNamedKindAndSharedContainerIsChecked();
         ac4EveryScalarKindIsNamed();
         ac5ElementsAndNestedRowsAreScopesOfTheirOwn();
+        ac5ElementUnderAWhenIsStillAScopeOfItsOwn();
         ac6AlternateWhenBranchesKeepSharingAKey();
         ac7HandleReadTwiceAndGetterOnlyEchoesStayLegal();
         ac8NestedRowKeysAndUnnamedAccessorsAreNotChecked();
@@ -199,6 +200,19 @@ final class DuplicateNamesTest {
         Scheme<Map> nested = Maps.scheme(1, u8(0, "a"), nestedRow("g", u8(0, "a")));
         expectRoundTrip("AC-5 a beside a nested row that holds a", nested,
                 Maps.map("a", 7, "g", Maps.map("a", 9)), "010709");
+    }
+
+    /** A list or dict element starts a scope that is not under the `when` around the list: its repeats are refused. */
+    private static void ac5ElementUnderAWhenIsStillAScopeOfItsOwn() {
+        expectRefused("AC-5 list element under a when", () -> Maps.scheme(1,
+                u8(0, "k"),
+                Packbin.when(1, Packbin.eq(0, 0), list("xs", Packbin.group(0, u8(0, "a"), u8(1, "a"))))), "a");
+        expectRefused("AC-5 dict element under a when", () -> Maps.scheme(1,
+                u8(0, "k"),
+                Packbin.when(1, Packbin.eq(0, 0), dict("m", Packbin.group(0, u8(0, "a"), u8(1, "a"))))), "a");
+        expectBuilds("AC-5 list element under a when, distinct keys", () -> Maps.scheme(1,
+                u8(0, "k"),
+                Packbin.when(1, Packbin.eq(0, 0), list("xs", Packbin.group(0, u8(0, "a"), u8(1, "b"))))));
     }
 
     private static void ac6AlternateWhenBranchesKeepSharingAKey() {

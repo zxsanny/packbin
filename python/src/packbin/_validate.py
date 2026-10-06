@@ -109,27 +109,50 @@ def _validate_round_nesting(nodes: Sequence[_Node], in_round: bool = False) -> N
             _validate_round_nesting([node.element])
 
 
-def _declare_name(node: _Node, seen: list[tuple[str, Any]], under_when: bool) -> None:
+class _Seen:
+    """The names declared so far in one scope, as `(kind, key)` pairs. A hashable pair goes in a set, so the check
+    is linear in the fields of a scope; a pair with an unhashable key (a list, or a slice before Python 3.12)
+    goes in a list and is compared by `==`. Either way two names are the same when their keys are equal."""
+
+    __slots__ = ("hashed", "unhashed")
+
+    def __init__(self) -> None:
+        self.hashed: set[tuple[str, Any]] = set()
+        self.unhashed: list[tuple[str, Any]] = []
+
+    def add(self, access: tuple[str, Any]) -> bool:
+        """False when the name was declared already."""
+        try:
+            hash(access)
+        except TypeError:  # an unhashable key
+            if access in self.unhashed:
+                return False
+            self.unhashed.append(access)
+            return True
+        if access in self.hashed:
+            return False
+        self.hashed.add(access)
+        return True
+
+
+def _declare_name(node: _Node, seen: _Seen, under_when: bool) -> None:
     access = getattr(node.get, "access", None)  # type: ignore[attr-defined]
     if access is None or under_when:
         return
-    if access in seen:
+    if not seen.add(access):
         raise ValueError(
             f"member {access[1]}: declared twice in one scope; a row holds one value per name, so one would be lost"
         )
-    seen.append(access)
 
 
-def _validate_names(
-    nodes: Sequence[_Node], seen: list[tuple[str, Any]] | None = None, under_when: bool = False
-) -> None:
+def _validate_names(nodes: Sequence[_Node], seen: _Seen | None = None, under_when: bool = False) -> None:
     """A row holds one value per accessor name (`row["x"]` and `row.x` are different accessors; the identity has
     none), so a name declared twice in one scope loses a value. A scope is the top level or one list or dict
     element; `repeat`, `times`, `flags`, `when`, `group` and a flag bit share the scope around them, and a
     flag byte holds no name. A declaration under a `when` is not counted: the branches of a chain may share a
     member. `seen` holds the names declared outside any `when` in this scope."""
     if seen is None:
-        seen = []
+        seen = _Seen()
     for node in nodes:
         if isinstance(node, _U2):
             for slot in node.slots:

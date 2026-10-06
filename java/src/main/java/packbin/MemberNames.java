@@ -9,7 +9,8 @@ import java.util.Set;
  * no names: only a setter made by {@code Access.set(String)} is named, so a typed accessor and a hand-written lambda
  * are not checked. The scope is the top level, one nested row, or one list or dict element; a when body, flags, a
  * flag bit, an anchored group and a repeat or times round belong to the scope around them (a round stores its values
- * in the row around it). A name under a when is not counted, so the branches of a chain may share one.
+ * in the row around it). A name under a when is not counted, so the branches of a chain may share one;
+ * a list or dict element is a row of its own and is checked even when the list sits under a when.
  */
 final class MemberNames {
     private MemberNames() {}
@@ -38,7 +39,7 @@ final class MemberNames {
             }
             case LIST, DICT -> {
                 declare(field, declared, underWhen);
-                walk(field.children, new HashSet<>(), underWhen);
+                walk(field.children, new HashSet<>(), false);
             }
             default -> declare(field, declared, underWhen);
         }

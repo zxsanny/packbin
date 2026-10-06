@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from packbin import (
@@ -265,3 +267,49 @@ def test_ac9_a_ninth_flag_bit_keeps_its_message():
     bits_of_one_byte = [m.bit(_u8(i + 1, "x" if i == 0 else f"b{i}")) for i in range(9)]
 
     assert _refused(_u8(0, "x"), m, *bits_of_one_byte) == "flags already has 8 bits"
+
+
+@pytest.mark.parametrize(
+    "first,second",
+    [(0, False), (1, True), (1, 1.0)],
+    ids=["zero_and_false", "one_and_true", "one_and_float"],
+)
+def test_ac5_keys_that_compare_equal_are_one_name(first, second):
+    assert _refused(u8(0, lambda row: row[first]), u8(1, lambda row: row[second])) == _message(str(second))
+
+
+def test_ac5_keys_that_compare_different_are_two_names():
+    _scheme(u8(0, lambda row: row[0]), u8(1, lambda row: row["0"]), u8(2, lambda row: row[1]))
+
+
+def test_ac5_an_unhashable_key_is_a_name_like_any_other():
+    first = u8(0, lambda row: row[[1]])
+    again = u8(1, lambda row: row[[1]])
+    other = u8(1, lambda row: row[[2]])
+
+    assert _refused(first, again) == _message("[1]")
+    _scheme(first, other)
+
+
+def test_ac5_a_slice_key_is_a_name_like_any_other():
+    assert _refused(u8(0, lambda row: row[1:2]), u8(1, lambda row: row[1:2])) == _message("slice(1, 2, None)")
+    _scheme(u8(0, lambda row: row[1:2]), u8(1, lambda row: row[1:3]))
+
+
+def _build_time(fields: list) -> float:
+    best = float("inf")
+    for _ in range(3):
+        started = time.perf_counter()
+        _scheme(*fields)
+        best = min(best, time.perf_counter() - started)
+    return best
+
+
+def test_ac5_the_name_check_is_linear_in_the_fields_of_a_scope():
+    small = [u8(i, lambda row, i=i: row[f"n{i}"]) for i in range(2_000)]
+    large = [u8(i, lambda row, i=i: row[f"n{i}"]) for i in range(20_000)]
+
+    ratio = _build_time(large) / _build_time(small)
+
+    # Ten times the fields cost about ten times as much; a scan of every earlier name costs about a hundred.
+    assert ratio < 40, ratio
