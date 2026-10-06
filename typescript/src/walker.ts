@@ -1,4 +1,4 @@
-import { fieldName, flatten, type Field } from "./fields.ts"
+import { fieldName, flatten, itemGroup, type Field } from "./fields.ts"
 import { refName } from "./ref-scope.ts"
 import { RoundLists, appendList, roundNames } from "./rounds.ts"
 import {
@@ -163,11 +163,7 @@ export function unpackFields(
         break
       }
       case "bits": {
-        // bits has always taken a bigint count (u64 source); past 2^53 it cannot be exact.
-        const raw = seen(values, round, refName(f))
-        const count = validCount(
-          typeof raw === "bigint" && raw <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(raw) : raw,
-        )
+        const count = validCount(seen(values, round, refName(f)))
         if (count === null) return unreadable(f.name, cur)
         const r = readBits(cur, f.name, count)
         if (!r.ok) return r
@@ -214,6 +210,7 @@ export function unpackFields(
         cur.offset += 2
         const items: unknown[] = []
         const child = fieldName(f.element)
+        const object = itemGroup(f.element) !== null
         for (let i = 0; i < count; i++) {
           const one: Value = {}
           const before = cur.offset
@@ -221,7 +218,7 @@ export function unpackFields(
           if (err) return err
           // An element that reads nothing would be repeated up to 65535 times for no input.
           if (cur.offset === before) return unreadable(f.name, cur)
-          items.push(one[child])
+          items.push(object ? one : one[child])
         }
         store(values, round, f.name, items)
         break
@@ -234,6 +231,7 @@ export function unpackFields(
         cur.offset += 2
         const items: Value = {}
         const child = fieldName(f.element)
+        const object = itemGroup(f.element) !== null
         for (let i = 0; i < count; i++) {
           const key = readUtf8(cur, f.name)
           if (!key.ok) return key
@@ -247,7 +245,7 @@ export function unpackFields(
           }
           // Keys come from the wire: define them, so "__proto__" is an entry, not a prototype.
           Object.defineProperty(items, key.value, {
-            value: one[child],
+            value: object ? one : one[child],
             enumerable: true,
             writable: true,
             configurable: true,

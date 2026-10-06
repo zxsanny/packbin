@@ -1,6 +1,6 @@
 use packbin::{
-    eq, to_hex, BinaryPacker, BoundField, PackError, PackSession, Scheme, SchemeItem, UnpackError,
-    Value, NONCE_SIZE, SEED_SIZE,
+    eq, to_hex, BinaryPacker, BoundField, PackError, PackSession, Scheme, SchemeItem,
+    SessionPackError, UnpackError, Value, NONCE_SIZE, SEED_SIZE,
 };
 
 fn unpack_row<T: Default + 'static>(scheme: &Scheme<T>, bytes: &[u8]) -> Result<T, UnpackError> {
@@ -477,6 +477,9 @@ fn a_session_pack_that_fails_on_the_count_leaves_the_next_pack_readable() {
     let back = receive(&mut waiter, &scheme, &sealed);
 
     // Assert
-    assert!(failed.is_none());
+    assert!(matches!(
+        failed,
+        Err(SessionPackError::Pack(PackError::Type(_)))
+    ));
     assert_eq!(back, good);
 }

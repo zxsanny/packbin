@@ -7,8 +7,9 @@ import java.util.Map;
 /**
  * AZ-2089 review fixes: every repeat or times round packs and unpacks its own values, as C++ per-round items do.
  * F1 flag bits come from the round's value; F2 unpacked lists hold one entry per round (null where the round
- * skipped the field); F3 a round never sees a value read in an earlier round. Round 3: a round cannot hold
- * another repeat or times (#1), and padding a round costs one store, not one per earlier round (#2).
+ * skipped the field); F3 a round never sees a value read in an earlier round. Round 3: padding a round costs one
+ * store, not one per earlier round (#2). The loop 12 refusal of a repeat or times inside a round (#1) was
+ * removed by AZ-2127; NestedRoundTest covers those shapes.
  */
 @SuppressWarnings({"unchecked", "rawtypes"})
 final class RepeatRoundTest {
@@ -18,42 +19,8 @@ final class RepeatRoundTest {
         flagBitsUseTheRoundValue();
         roundListsStayAligned();
         roundsDoNotSeeEarlierRounds();
-        nestedRoundsAreRefused();
         nestedRoundsInsideElementsStillBuild();
         paddingIsLinear();
-    }
-
-    private static final String NESTED = " is inside a repeat or times round; a round cannot hold another repeat or times";
-
-    private static void expectRefused(String label, java.util.function.Supplier<Scheme<Map>> build, String message) {
-        PackbinTest.expectThrows(label, build::get, message);
-    }
-
-    private static void nestedRoundsAreRefused() {
-        Scheme[] built = new Scheme[1];
-        byte[][] wrote = {new byte[0]};
-        PackbinTest.expectThrows("#1 times inside repeat", () -> {
-            built[0] = Maps.scheme(1, Packbin.repeat(0, u8(0, "n"), Packbin.times(1, 0, u8(1, "v"))));
-            wrote[0] = BinaryPacker.pack(built[0], Maps.map("n", List.of(1, 1), "v", List.of(5, 7)));
-        }, "times 1" + NESTED);
-        PackbinTest.expectTrue("#1 times inside repeat: 0 schemes", built[0] == null);
-        PackbinTest.expectEq("#1 times inside repeat: 0 bytes", 0, wrote[0].length);
-
-        expectRefused("#1 times inside times", () -> Maps.scheme(1, u8(0, "n"),
-                Packbin.times(1, 0, u8(1, "m"), Packbin.times(2, 1, u8(2, "v")))), "times 2" + NESTED);
-        expectRefused("#1 repeat inside repeat", () -> Maps.scheme(1,
-                Packbin.repeat(0, u8(0, "a"), Packbin.repeat(1, u8(1, "b")))), "repeat 1" + NESTED);
-        expectRefused("#1 repeat inside times", () -> Maps.scheme(1, u8(0, "n"),
-                Packbin.times(1, 0, Packbin.repeat(1, u8(1, "v")))), "repeat 1" + NESTED);
-        expectRefused("#1 repeat inside a when in a repeat", () -> Maps.scheme(1, Packbin.repeat(0,
-                u8(0, "k"), Packbin.when(1, Packbin.eq(0, 1), Packbin.repeat(1, u8(1, "v"))))), "repeat 1" + NESTED);
-        expectRefused("#1 times inside a group in a repeat", () -> Maps.scheme(1, Packbin.repeat(0,
-                Packbin.group(0, u8(0, "n"), Packbin.times(1, 0, u8(1, "v"))))), "times 1" + NESTED);
-        expectRefused("#1 repeat as a flags bit in a repeat", () -> Maps.scheme(1, Packbin.repeat(0,
-                u8(0, "k"), Packbin.flags(1, Packbin.repeat(1, u8(1, "v"))))), "repeat 1" + NESTED);
-        expectRefused("#1 repeat inside a nested row in a repeat", () -> Maps.scheme(1, Packbin.repeat(0,
-                u8(0, "k"), Packbin.group(Access.get("g"), Access.set("g"), Packbin.repeat(0, u8(0, "v"))))),
-                "repeat 0" + NESTED);
     }
 
     /** A list or dict element is a row of its own, so a repeat inside it is not inside the enclosing round. */

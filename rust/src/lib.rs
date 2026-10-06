@@ -10,7 +10,7 @@ pub use field::{
     MapScheme, DEFAULT_MAX_ROUNDS, DEFAULT_MAX_SLOTS,
 };
 pub use scheme::{BinaryPacker, BoundField, DispatchHandler, On, Scheme, SchemeItem};
-pub use session::{PackSession, NONCE_SIZE, SEED_SIZE};
+pub use session::{PackSession, SessionPackError, NONCE_SIZE, SEED_SIZE};
 pub use value::{
     insert, mismatched_bytes, motion_field_count, to_hex, Name, PackError, ShortPacket,
     UnpackError, Value, Values,
@@ -31,6 +31,8 @@ mod flag_presence_tests;
 mod hostile_tests;
 #[cfg(test)]
 mod integrity_tests;
+#[cfg(test)]
+mod name_scope_tests;
 #[cfg(test)]
 mod packbin_tests;
 #[cfg(test)]

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from packbin import BinaryPacker, Scheme, ShortPacket, bytes as raw_bytes, dict as map_field, eq, list as list_field, u8, when
+from packbin import BinaryPacker, Scheme, ShortPacket, bytes as raw_bytes, dict as map_field, eq, group, list as list_field, u8, when
 
 from hostile_support import assert_rejected, error_kind, unpack_guarded
 
@@ -54,8 +54,16 @@ def test_zero_width_dict_value_is_error():
 
 
 def test_never_matching_when_element_is_error():
-    _assert_bad_value(_list_of(_never_matches()), "010300", 0)
-    _assert_bad_value(_list_of(_never_matches()), "0103000a", 1)
+    # The element scope holds only the element, so a `when` there has nothing earlier to name (AZ-2113).
+    with pytest.raises(ValueError, match=r"when 0: .*field id 0\b"):
+        _list_of(_never_matches())
+
+
+def test_never_matching_when_in_a_group_element_is_error():
+    # Group-wrapped so the `when` names a field earlier in its own element (AZ-2113 refuses the bare element).
+    element = group(0, raw_bytes(0, lambda row: row["e"], 0), when(1, eq(0, 9), u8(1, lambda row: row["v"])))
+    _assert_bad_value(_list_of(element), "010300", 0)
+    _assert_bad_value(_list_of(element), "0103000a", 1)
 
 
 @pytest.mark.parametrize("make", [_list_of, _dict_of], ids=["list", "dict"])

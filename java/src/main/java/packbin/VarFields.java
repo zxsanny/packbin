@@ -320,16 +320,17 @@ final class VarFields {
         }
     }
 
-    static void packTimes(Field field, Object row, ByteSink sink, Map<Object, Object> seen) {
-        Rounds.packTimes(field, row, sink, seen, borrowedCount(field, seen));
+    static void packTimes(
+            Field field, Object row, ByteSink sink, Map<Object, Object> seen, Walker.Take take) {
+        Rounds.packTimes(field, row, sink, seen, borrowedCount(field, seen), take);
     }
 
     static Object unpackTimes(
-            Field field, byte[] data, Cursor cur, Object row, Map<Object, Object> seen) {
+            Field field, byte[] data, Cursor cur, Object row, Map<Object, Object> seen, boolean nested) {
         long count = unpackCount(field, seen);
         if (count < 0) {
             return shortCount(field, count, data.length - cur.pos);
         }
-        return Rounds.unpackTimes(field, count, data, cur, row, seen);
+        return Rounds.unpackTimes(field, count, data, cur, row, seen, nested);
     }
 }

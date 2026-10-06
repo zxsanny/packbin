@@ -100,7 +100,7 @@ def _nine_bits_split():
 
 # Construct vectors in fixtures/hostile/cases.txt that this package can build today.
 # nine_flag_bits_split: the 9th bit() of a flag_byte raises before any Scheme exists.
-# when/count naming a later field (AZ-2113) are not covered here.
+# The three reference vectors (when/count naming a later or outer field, AZ-2113) are in test_reference_scope.py.
 CONSTRUCT_SCHEMES = {
     "nine_flag_bits": lambda: _scheme(flags(0, *_nine_children())),
     "nine_flag_bits_split": _nine_bits_split,

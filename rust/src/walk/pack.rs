@@ -1,4 +1,4 @@
-use super::times::check_lists;
+use super::times::{check_aligned, check_lists};
 use crate::field::{field_name, times_name, Field, FieldKind, FloatKind, IntKind, MapScheme};
 use crate::value::{
     as_bit, as_packed, as_u2, as_usize, name_of, present, when_matches, PackError, Value, Values,
@@ -20,11 +20,14 @@ fn borrowed_count(
 ) -> Result<usize, PackError> {
     let raw = as_usize(require(values, count)?)
         .ok_or_else(|| PackError::Type(count.to_string()))?;
-    let item_count = raw as i64 + bias as i64;
-    if item_count < 0 {
-        return Err(PackError::Type(format!("{label}: item count {item_count}")));
+    let item_count = i64::try_from(raw)
+        .ok()
+        .and_then(|n| n.checked_add(i64::from(bias)));
+    match item_count {
+        Some(n) if n >= 0 => Ok(n as usize),
+        Some(n) => Err(PackError::Type(format!("{label}: item count {n}"))),
+        None => Err(PackError::Type(format!("{label}: item count out of range"))),
     }
-    Ok(item_count as usize)
 }
 
 fn packed_bytes(width: u8, count: usize) -> usize {
@@ -349,6 +352,7 @@ fn pack_one(
                 }
                 Some(Some(_)) => return Err(PackError::Type(key.to_string())),
                 _ => {
+                    check_aligned(*anchor, members, values)?;
                     for i in 0..n {
                         pack_round(members, &slice_times(members, values, i), out)?;
                     }

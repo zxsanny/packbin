@@ -180,6 +180,24 @@ fn typed_scheme_with_orphan_flag_bit_is_refused() {
 
 #[test]
 #[should_panic(expected = "flag bit \"0\" of flag byte \"f\" is not in the same scope")]
+fn ac3_typed_list_whose_element_is_a_bare_flag_bit_is_refused() {
+    #[derive(Default)]
+    struct Row {
+        a: u8,
+    }
+    let f = flag_byte("f");
+    let _ = Scheme::new(
+        1,
+        [
+            BoundField::u8(0, |r: &Row| r.a, |r: &mut Row, v| r.a = v).into(),
+            SchemeItem::Field(f.byte()),
+            SchemeItem::Field(list("L", f.bit(u8("0")))),
+        ],
+    );
+}
+
+#[test]
+#[should_panic(expected = "flag bit \"0\" of flag byte \"f\" is not in the same scope")]
 fn orphan_flag_bit_is_construction_error() {
     let f = flag_byte("f");
     MapScheme::new(1, vec![f.bit(u8("0")), f.byte()]);

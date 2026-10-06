@@ -399,9 +399,28 @@ def dict(acc: Acc, element: _Node) -> _Dict:  # noqa: A001
     return _Dict(get=get, set=set_, element=element)
 
 
-def _validate_order(nodes: Sequence[_Node], next_id: int = 0, flag_bits: bool = False) -> int:
+_COUNTED = {_Sized: "sized", _Bits: "bits", _Packed: "packed"}
+
+
+def _require_visible(label: str, what: str, field_id: int, visible: set[int]) -> None:
+    if field_id not in visible:
+        raise ValueError(
+            f"{label}: {what} field id {field_id} is allowed only if declared earlier in the same scope"
+        )
+
+
+def _validate_order(
+    nodes: Sequence[_Node],
+    next_id: int = 0,
+    flag_bits: bool = False,
+    visible: set[int] | None = None,
+) -> int:
     """`flag_bits`: the nodes are the direct children of `flags` or of a flag-byte bit, the only
-    places a bool may stand (its value is the bit itself)."""
+    places a bool may stand (its value is the bit itself).
+    `visible`: the ids a `when` or a count may name here, the ones declared earlier in this scope.
+    The top level, a `repeat` or `times` body and a list or dict element are separate scopes."""
+    if visible is None:
+        visible = set()
     for node in nodes:
         if isinstance(node, _Bool) and not flag_bits:
             raise ValueError(
@@ -410,23 +429,32 @@ def _validate_order(nodes: Sequence[_Node], next_id: int = 0, flag_bits: bool = 
         if isinstance(node, _Group) and not node.fields:
             raise ValueError(f"group {node.anchor} has no fields, so it can never carry a value")
         if isinstance(node, (_Scalar, _Bytes, _Bool, _Utf8, _Sized, _Bits, _Packed)):
+            if isinstance(node, (_Sized, _Bits, _Packed)):
+                _require_visible(f"{_COUNTED[type(node)]} {node.field_id}", "count", node.count, visible)
             if node.field_id != next_id:
                 raise ValueError(f"field id {node.field_id} is not the next order {next_id}")
+            visible.add(node.field_id)
             next_id += 1
         elif isinstance(node, _U2Slot):
             if node.field_id != next_id:
                 raise ValueError(f"field id {node.field_id} is not the next order {next_id}")
+            visible.add(node.field_id)
             next_id += 1
         elif isinstance(node, _U2):
-            next_id = _validate_order(node.slots, next_id)
+            next_id = _validate_order(node.slots, next_id, visible=visible)
         elif isinstance(node, (_Flags, _When, _Repeat, _Times, _Group)):
             if node.anchor != next_id:
                 raise ValueError(f"anchor {node.anchor} is not the next order {next_id}")
-            next_id = _validate_order(node.fields, next_id, isinstance(node, _Flags))
+            if isinstance(node, _When):
+                _require_visible(f"when {node.anchor}", "eq names", node.condition.field_id, visible)
+            if isinstance(node, _Times):
+                _require_visible(f"times {node.anchor}", "count", node.count, visible)
+            body = set() if isinstance(node, (_Repeat, _Times)) else visible
+            next_id = _validate_order(node.fields, next_id, isinstance(node, _Flags), body)
         elif isinstance(node, _FlagByte):
-            next_id = _validate_order(node.bits, next_id, True)
+            next_id = _validate_order(node.bits, next_id, True, visible)
         elif isinstance(node, _FlagBit):
-            next_id = _validate_order([node.field], next_id, True)
+            next_id = _validate_order([node.field], next_id, True, visible)
         elif isinstance(node, (_List, _Dict)):
             _validate_order([node.element], 0)
         else:

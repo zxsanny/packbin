@@ -54,3 +54,12 @@ Given a combined `flags(...)` member that holds a split bit whose byte is missin
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Written from a feature-assess row; refine before the loop that takes it | coordinator | open | Low |
+
+## Loop 16 progress (2026-10-06)
+
+| Part | Package | State |
+|------|---------|-------|
+| AC-3 typed bound list with a bare flag bit | Rust | done in loop 16 batch 1 (test only, no production change: the construction already panicked naming the bit) |
+| AC-4 combined flags member without its byte | Rust | open (loop 16 batch 2) |
+| AC-2 dict element, AC-4 | Java | open (loop 16 batch 2) |
+| AC-1, AC-4 | C# | held until the C# multi-target work is committed |

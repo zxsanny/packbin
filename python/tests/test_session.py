@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from packbin import BinaryPacker, PackSession, Scheme, flags, i16, i32, u8, u16
 
 CIPHERTEXT_HEX = "b55d0a29c56c203712b241232e"
@@ -105,3 +107,26 @@ def test_ac4_bad_lengths_create_nothing():
         created += 1
     assert created == 0
     assert loaded.pack(POSITION, POSITION_VALUES) is None
+
+
+WRONG_SEED_SIZES = [0, 3, 31, 33]
+
+
+@pytest.mark.parametrize("size", WRONG_SEED_SIZES)
+def test_constructor_rejects_wrong_seed_length(size: int):
+    with pytest.raises(ValueError, match="32 bytes"):
+        PackSession(bytes(size))
+
+
+@pytest.mark.parametrize("size", WRONG_SEED_SIZES)
+def test_load_returns_none_for_a_wrong_seed_length(size: int):
+    assert PackSession.load(bytes(size)) is None
+
+
+def test_load_and_constructor_open_the_same_session_for_a_32_byte_seed():
+    loaded = PackSession.load(_seed())
+    built = PackSession(_seed())
+
+    assert loaded is not None
+    assert loaded.start(NONCE) == built.start(NONCE) == NONCE
+    assert loaded.pack(POSITION, POSITION_VALUES) == built.pack(POSITION, POSITION_VALUES)

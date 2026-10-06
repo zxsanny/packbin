@@ -83,6 +83,16 @@ export function roundCount(names: Set<string>, values: Value): number {
   return count
 }
 
+// A times writes exactly `count` rounds, so a list that holds more entries would lose its tail.
+export function refuseLongLists(names: Set<string>, count: number, values: Value): void {
+  for (const name of names) {
+    const v = values[name]
+    if (Array.isArray(v) && v.length > count) {
+      throw new RangeError(`${name}: ${v.length} items, times count ${count}`)
+    }
+  }
+}
+
 // `values` with each list among the round's names read at `index`; a value that is not a list
 // stays as it is.
 export function sliceRound(values: Value, names: Set<string>, index: number): Value {

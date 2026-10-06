@@ -19,19 +19,21 @@ use crate::value::{PackError, UnpackError, Values};
 /// - A `times` takes its rounds as [`Value::Groups`] (one [`Values`] per round) under the name
 ///   `"__times_<anchor>"`, as many as its count; a member under a `flags` or `when` stays in its
 ///   round. Without that value each direct field of the `times` takes a [`Value::List`] with one
-///   item per round, and a field under a `flags` or `when` is not aligned per round. With both,
-///   a value kept for a name of the rounds (a non-list counts as a list of one item) must be
-///   what the rounds hold. To change a value after `unpack`, edit the rounds and drop or rewrite
-///   the per-name lists, or edit the lists and drop the `"__times_<anchor>"` key; leaving both
-///   and changing one is an error.
+///   item per round; a list cannot say which round holds a field under a `flags` or `when`, so a
+///   value kept under the name of such a field (at any depth below them; a non-list counts as a
+///   list of one item) is a [`PackError::Type`] naming it, and the field goes in the rounds.
+///   With both, a value kept for a name of the rounds must be what the rounds hold. To change a
+///   value after `unpack`, edit the rounds and drop or rewrite the per-name lists, or edit the
+///   lists and drop the `"__times_<anchor>"` key (not for a field under a `flags` or `when`:
+///   edit its rounds); leaving both and changing one is an error.
 /// - A `repeat` takes its rounds as [`Value::Groups`] (one [`Values`] per round) under the name
 ///   `"__repeat__"`; no value there packs no rounds.
 ///
 /// Returns the packet bytes, or a [`PackError`]: [`PackError::Missing`] when a field that is
 /// written has no value; [`PackError::Type`] when a value does not fit its field, a bool value
 /// is not `0` or `1`, `"__repeat__"` or a `times` holds anything but [`Value::Groups`], the
-/// rounds of a `times` are not as many as its count, or a value kept beside them differs from
-/// them.
+/// rounds of a `times` are not as many as its count, a value kept beside them differs from
+/// them, or a `times` without rounds has a value kept under a field below a `flags` or `when`.
 ///
 /// [`Value::List`]: crate::Value::List
 /// [`Value::Groups`]: crate::Value::Groups

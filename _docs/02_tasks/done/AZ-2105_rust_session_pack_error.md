@@ -117,3 +117,7 @@ Then the payload bytes are unchanged (`ac1_opener_ciphertext_matches`), and the 
 |---------|----------------|--------|----------|
 | Public API change: `PackSession::pack` return type `Option<Vec<u8>>` → a `Result` with a "not open" error and the `PackError` | plan row 36 (C30) | accepted-risk | Medium |
 | Name and shape of the session error type should follow the error-kind decision (C15); if C15 lands first, reuse its naming | user (C15) | open | Low |
+
+## Loop 16 result (2026-10-06)
+
+Done in loop 16 (batch 1). `PackSession::pack` returns `Result<Vec<u8>, SessionPackError>` (`NotOpen`, `Pack(PackError)`), source-breaking for callers that matched `Option`. The Rust handoff driver `.github/workflows/drivers/handoff-rust/src/main.rs` was changed to `let Ok(payload) = ...` in the same commit.

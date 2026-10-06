@@ -6,9 +6,9 @@ from packbin._nodes import (
     bits,
     packed,
     times,
-    bool,
-    bytes,
-    dict,
+    bool as bool,
+    bytes as bytes,
+    dict as dict,
     eq,
     flags,
     flag_byte,
@@ -19,7 +19,7 @@ from packbin._nodes import (
     i64,
     f32,
     f64,
-    list,
+    list as list,
     repeat,
     sized,
     u2,
@@ -33,6 +33,8 @@ from packbin._nodes import (
 from packbin._scheme import BinaryPacker, Scheme
 from packbin._session import PackSession
 
+# bool, bytes, dict and list are importable by name (`as` re-exports them) but left out of `*`:
+# a star import would replace the caller's builtins with field builders.
 __all__ = [
     "BinaryPacker",
     "PackSession",
@@ -51,8 +53,6 @@ __all__ = [
     "i64",
     "f32",
     "f64",
-    "bool",
-    "bytes",
     "be",
     "flags",
     "flag_byte",
@@ -66,6 +66,4 @@ __all__ = [
     "packed",
     "times",
     "utf8",
-    "list",
-    "dict",
 ]

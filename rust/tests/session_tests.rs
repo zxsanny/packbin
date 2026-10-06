@@ -1,6 +1,6 @@
 use packbin::{
-    flags, i16, mismatched_bytes, to_hex, u16, u8, BinaryPacker, BoundField, PackSession, Scheme,
-    NONCE_SIZE, SEED_SIZE,
+    flags, i16, mismatched_bytes, to_hex, u16, u8, BinaryPacker, BoundField, PackError,
+    PackSession, Scheme, SessionPackError, NONCE_SIZE, SEED_SIZE,
 };
 
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
@@ -164,5 +164,83 @@ fn ac4_bad_lengths_create_nothing() {
         created += 1;
     }
     assert_eq!(created, 0);
-    assert!(loaded.pack(&position_scheme(), &position_row()).is_none());
+    assert_eq!(
+        loaded.pack(&position_scheme(), &position_row()),
+        Err(SessionPackError::NotOpen)
+    );
+}
+
+#[derive(Default)]
+struct TextRow {
+    text: String,
+}
+
+fn text_scheme() -> Scheme<TextRow> {
+    Scheme::new(
+        0x41,
+        [BoundField::utf8(
+            0,
+            |r: &TextRow| r.text.clone(),
+            |r: &mut TextRow, v| r.text = v,
+        )
+        .into()],
+    )
+}
+
+fn open_pair() -> (PackSession, PackSession) {
+    let mut opener = PackSession::load(&[7; SEED_SIZE]).expect("load");
+    let mut waiter = PackSession::load(&[7; SEED_SIZE]).expect("load");
+    let nonce = opener.start_with(&[1; NONCE_SIZE]).expect("start");
+    assert!(waiter.join(&nonce));
+    (opener, waiter)
+}
+
+#[test]
+fn ac1_pack_before_open_is_not_open_and_the_counter_stays_zero() {
+    let mut session = PackSession::load(&seed()).expect("load");
+
+    let before = session.pack(&position_scheme(), &position_row());
+
+    assert_eq!(before, Err(SessionPackError::NotOpen));
+    assert!(session.start_with(&fixture_nonce()).is_some());
+    let first = session
+        .pack(&position_scheme(), &position_row())
+        .expect("pack");
+    assert_eq!(to_hex(&first), CIPHER_HEX);
+}
+
+#[test]
+fn ac2_oversize_string_returns_the_pack_error_of_clear_pack() {
+    let (mut opener, _waiter) = open_pair();
+    let row = TextRow {
+        text: "a".repeat(70_000),
+    };
+    let clear = BinaryPacker::pack(&text_scheme(), &row);
+    assert_eq!(clear, Err(PackError::Type("0".to_string())));
+
+    let sent = opener.pack(&text_scheme(), &row);
+
+    assert_eq!(
+        sent,
+        Err(SessionPackError::Pack(PackError::Type("0".to_string())))
+    );
+}
+
+#[test]
+fn ac3_a_failed_pack_consumes_no_pad_position() {
+    let (mut opener, mut waiter) = open_pair();
+    let bad = TextRow {
+        text: "a".repeat(70_000),
+    };
+    assert!(opener.pack(&text_scheme(), &bad).is_err());
+
+    let payload = opener
+        .pack(&position_scheme(), &position_row())
+        .expect("pack");
+
+    let mut got = None;
+    let scheme = position_scheme();
+    let mut on_row = scheme.on(|row| got = Some(row));
+    waiter.unpack(&payload, &mut [&mut on_row]).expect("unpack");
+    assert_eq!(field_mismatches(&got.expect("row")), 0);
 }

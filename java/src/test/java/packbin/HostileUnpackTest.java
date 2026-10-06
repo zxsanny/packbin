@@ -80,18 +80,21 @@ final class HostileUnpackTest {
                 Packbin.times(1, 0, Packbin.bytes(1, Access.get("b"), Access.set("b"), 0)));
         expectEmptyRound("AC-1 times u32 count, zero-width body", u32, "01ffffffff", 0);
 
-        // AZ-2089: a when names only an integer or bool read earlier in its own round, and a round holds no repeat
-        // or times, so no times body reads nothing for some packets only. Both such shapes are refused; the
-        // zero-width bodies above and below keep the guard tested.
+        // AZ-2089: a when names only an integer or bool read earlier in its own round, so no times body reads
+        // nothing for some packets only. That shape is refused; the zero-width bodies above and below keep the
+        // guard tested. AZ-2127 removed the refusal of a repeat inside a round: its rounds read the bytes left, so
+        // the next round of the times starts at the end of the packet and reads nothing.
         PackbinTest.expectThrows("AC-1 times body of a when on an outer field is refused", () -> Maps.scheme(1,
                 Packbin.u8(0, Access.get("mode"), Access.set("mode")),
                 Packbin.u32(1, Access.get("n"), Access.set("n")),
                 Packbin.times(2, 1, Packbin.when(2, Packbin.eq(0, 1), Packbin.u8(2, Access.get("v"), Access.set("v"))))),
                 "when 2 tests field 0, which is not an earlier integer or bool field in its scope");
-        PackbinTest.expectThrows("AC-1 times body of a repeat is refused", () -> Maps.scheme(1,
+        Scheme<Map> timesOfRepeat = Maps.scheme(1,
                 Packbin.u32(0, Access.get("n"), Access.set("n")),
-                Packbin.times(1, 0, Packbin.repeat(1, Packbin.u8(1, Access.get("v"), Access.set("v"))))),
-                "repeat 1 is inside a repeat or times round; a round cannot hold another repeat or times");
+                Packbin.times(1, 0, Packbin.repeat(1, Packbin.u8(1, Access.get("v"), Access.set("v")))));
+        expectEmptyRound("AC-1 times body of a repeat, the second round has no bytes left", timesOfRepeat,
+                "0103000000aabbcc", 0);
+        expectEmptyRound("AC-1 times body of a repeat, u32 count", timesOfRepeat, "01ffffffffaa", 0);
 
         Scheme<Map> small = Maps.scheme(1,
                 Packbin.u8(0, Access.get("n"), Access.set("n")),

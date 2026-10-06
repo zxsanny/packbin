@@ -12,11 +12,9 @@ final class SchemeOrder {
     private static final String NOT_EARLIER = ", which is not an earlier integer or bool field in its scope";
     private static final String ONLY_A_BIT = " is allowed only as a bit of flags or a flagByte";
     private static final String NEVER_SET = " has no fields and no accessor, so its bit can never be set";
-    private static final String NESTED_ROUND =
-            " is inside a repeat or times round; a round cannot hold another repeat or times";
 
     static void validate(List<Field> fields) {
-        walkScope(fields, new int[] {0}, false);
+        walkScope(fields, new int[] {0});
         requireFlagBytes(fields, new HashSet<>());
     }
 
@@ -57,14 +55,13 @@ final class SchemeOrder {
      * One reference scope: the top level, a repeat or times round, a list or dict element, or a nested row.
      * A when condition or a borrowed count may name only an integer or bool field read earlier in the same scope
      * (C++ {@code find_ref}, {@code is_count_source}). Order ids continue through repeat and times rounds;
-     * {@code next} carries them. {@code inRound} is true inside a repeat or times round, including a nested row
-     * there: a round packs item i of each list, so an inner repeat or times would read every inner round from the
-     * same item. A list or dict element is a row of its own and starts outside any round.
+     * {@code next} carries them. A repeat or times inside a round is a group of its own (AZ-2127): its value
+     * fields hold one list per outer round.
      */
-    private static void walkScope(List<Field> fields, int[] next, boolean inRound) {
+    private static void walkScope(List<Field> fields, int[] next) {
         Set<Integer> earlier = new HashSet<>();
         for (Field field : fields) {
-            walk(field, earlier, next, false, inRound);
+            walk(field, earlier, next, false);
         }
     }
 
@@ -74,33 +71,31 @@ final class SchemeOrder {
      * nothing else (C++ {@code check_shape}). An empty anchored group has no accessor, so its bit could never be
      * set: it is refused wherever it stands. An empty nested row sets its bit when its member is present.
      */
-    private static void walk(Field field, Set<Integer> earlier, int[] next, boolean isBit, boolean inRound) {
+    private static void walk(Field field, Set<Integer> earlier, int[] next, boolean isBit) {
         switch (field.kind) {
             case FLAGS -> {
                 requireAnchor(field, next);
                 for (Field bit : field.children) {
-                    walk(bit.inner, earlier, next, true, inRound);
+                    walk(bit.inner, earlier, next, true);
                 }
             }
-            case FLAG_BIT -> walk(field.inner, earlier, next, true, inRound);
+            case FLAG_BIT -> walk(field.inner, earlier, next, true);
             case FLAG_BYTE -> {}
             case WHEN -> {
                 requireAnchor(field, next);
                 requireEarlier(field.condition.fieldId, earlier, "when " + field.id + " tests field ");
                 for (Field child : field.children) {
-                    walk(child, earlier, next, false, inRound);
+                    walk(child, earlier, next, false);
                 }
             }
             case REPEAT -> {
-                requireOutsideRound(field, inRound);
                 requireAnchor(field, next);
-                walkScope(field.children, next, true);
+                walkScope(field.children, next);
             }
             case TIMES -> {
-                requireOutsideRound(field, inRound);
                 requireAnchor(field, next);
                 requireCount(field, earlier);
-                walkScope(field.children, next, true);
+                walkScope(field.children, next);
             }
             case GROUP -> {
                 if (field.children.isEmpty() && !field.nestedRow) {
@@ -110,15 +105,15 @@ final class SchemeOrder {
                     throw new IllegalArgumentException("empty group" + ONLY_A_BIT);
                 }
                 if (field.nestedRow) {
-                    walkScope(field.children, new int[] {0}, inRound);
+                    walkScope(field.children, new int[] {0});
                 } else {
                     requireAnchor(field, next);
                     for (Field child : field.children) {
-                        walk(child, earlier, next, false, inRound);
+                        walk(child, earlier, next, false);
                     }
                 }
             }
-            case LIST, DICT -> walkScope(field.children, new int[] {0}, false);
+            case LIST, DICT -> walkScope(field.children, new int[] {0});
             case U2 -> {
                 for (Field slot : field.children) {
                     take(slot, earlier, next);
@@ -145,12 +140,6 @@ final class SchemeOrder {
     private static void requireAnchor(Field field, int[] next) {
         if (field.id != next[0]) {
             throw new IllegalArgumentException("field id " + field.id + " must be " + next[0]);
-        }
-    }
-
-    private static void requireOutsideRound(Field field, boolean inRound) {
-        if (inRound) {
-            throw new IllegalArgumentException(field.kind.name().toLowerCase(Locale.ROOT) + " " + field.id + NESTED_ROUND);
         }
     }
 

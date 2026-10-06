@@ -231,7 +231,7 @@ fn split_flag_byte_and_be() {
         1,
         vec![
             motion.byte(),
-            when(1, eq("type", Value::U8(0)), vec![u8("shape")]),
+            when(1, eq("motion", Value::U8(0)), vec![u8("shape")]),
             motion.bit(u16("heading")),
             motion.bit(u8("speed")),
         ],

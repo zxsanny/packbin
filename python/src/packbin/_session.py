@@ -18,6 +18,8 @@ class PackSession:
     __slots__ = ("_seed", "_send", "_recv", "_send_count", "_recv_count")
 
     def __init__(self, seed: bytes) -> None:
+        if len(seed) != SEED_SIZE:
+            raise ValueError(f"seed must be {SEED_SIZE} bytes, got {len(seed)}")
         self._seed: bytearray | None = bytearray(seed)
         self._send: bytes | None = None
         self._recv: bytes | None = None

@@ -141,7 +141,7 @@ describe("nested rounds", () => {
 
   it("a repeat in a list element inside a repeat round builds; empty collections round-trip", () => {
     // Arrange
-    // AZ-2102: a non-empty group element does not pack per item yet, so only empty collections round-trip.
+    // The collections stay empty here; list-group-elements.test.ts packs non-empty items per round.
     const fields = () => [
       repeat(0, [
         u8(0, (x) => x.k),
@@ -162,7 +162,7 @@ describe("nested rounds", () => {
 
   it("a times in a dict element inside a times round builds; empty collections round-trip", () => {
     // Arrange
-    // AZ-2102: a non-empty group element does not pack per item yet, so only empty collections round-trip.
+    // The collections stay empty here; list-group-elements.test.ts packs non-empty items per round.
     const fields = () => [
       u8(0, (x) => x.n),
       times(1, 0, [

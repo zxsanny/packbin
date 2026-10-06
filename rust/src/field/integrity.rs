@@ -5,8 +5,10 @@ use crate::value::{as_int, Name, Value};
 /// Checks what a `when` reads and what a `list` or `dict` element may be, so a scheme the
 /// walker cannot carry fails when it is built instead of losing data.
 ///
-/// - A `when` tests an integer or bool field against an integer value; the check applies to a
-///   tested name this scope has declared before the `when`.
+/// - A `when` tests an integer or bool field against an integer value, and a `when` or a count
+///   (`sized`, `bits`, `packed`, `times`) names a field this scope declared before it. A name
+///   outside the scope (outside or inside an earlier `repeat`, `times`, `list` or `dict` body)
+///   or declared nowhere is refused, whether it is an id or a name.
 /// - An element is one integer, float, bytes, utf8, list or dict, or a `u2` with one name. The
 ///   walker keeps one value per element, so a group, flags, `when`, `repeat`, `times`, flag
 ///   byte or bit, `sized`, `bits`, `packed` or a `u2` with several names would drop values.
@@ -31,10 +33,13 @@ fn check_one(field: &Field, seen: &mut Seen) {
         }
         FieldKind::Float { name, .. }
         | FieldKind::Bytes { name, .. }
-        | FieldKind::Utf8 { name }
-        | FieldKind::Sized { name, .. }
-        | FieldKind::Bits { name, .. }
-        | FieldKind::Packed { name, .. } => seen.push((name.clone(), false)),
+        | FieldKind::Utf8 { name } => seen.push((name.clone(), false)),
+        FieldKind::Sized { name, count }
+        | FieldKind::Bits { name, count }
+        | FieldKind::Packed { name, count, .. } => {
+            declared_integer(&format!("the count of \"{name}\""), count, seen);
+            seen.push((name.clone(), false));
+        }
         FieldKind::U2 { names } => seen.extend(names.iter().map(|name| (name.clone(), true))),
         FieldKind::Flags { name, members, .. } => {
             seen.push((name.clone(), true));
@@ -57,7 +62,14 @@ fn check_one(field: &Field, seen: &mut Seen) {
             check_when(*anchor, tested, expect, seen);
             check_seq(members, seen);
         }
-        FieldKind::Repeat { members, .. } | FieldKind::Times { members, .. } => {
+        FieldKind::Repeat { members, .. } => check_seq(members, &mut Seen::new()),
+        FieldKind::Times {
+            anchor,
+            count,
+            members,
+            ..
+        } => {
+            declared_integer(&format!("times at id {anchor}"), count, seen);
             check_seq(members, &mut Seen::new());
         }
         FieldKind::List { name, element } => {
@@ -71,8 +83,21 @@ fn check_one(field: &Field, seen: &mut Seen) {
     }
 }
 
+/// Whether the latest field `name` in this scope holds an integer; panics when this scope has
+/// declared no field of that name before `owner`.
+fn declared_integer(owner: &str, name: &Name, seen: &Seen) -> bool {
+    match seen.iter().rev().find(|(declared, _)| declared == name) {
+        Some((_, integer)) => *integer,
+        None => panic!(
+            "{owner} names field \"{name}\", which is not in the same scope (a field must be \
+             declared earlier in the same container; a repeat, times, list or dict body is a \
+             scope of its own)"
+        ),
+    }
+}
+
 fn check_when(anchor: u32, tested: &Name, expect: &Value, seen: &Seen) {
-    if let Some((_, false)) = seen.iter().rev().find(|(name, _)| name == tested) {
+    if !declared_integer(&format!("when at id {anchor}"), tested, seen) {
         panic!("when at id {anchor} tests field \"{tested}\", which is not an integer or bool");
     }
     if as_int(expect).is_none() {

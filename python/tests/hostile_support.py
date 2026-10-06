@@ -12,6 +12,7 @@ from packbin import (
     UnpackResult,
     bits,
     bool as flag_bool,
+    bytes as raw_bytes,
     dict as map_field,
     eq,
     flags,
@@ -34,11 +35,14 @@ def _scheme(*fields: Any) -> Scheme[Any]:
     return Scheme(1, dict, *fields)
 
 
+def _empty_round() -> list[Any]:
+    """A round that reads nothing. A `when` names only an earlier field of its own round, so the
+    round is a zero-width field and a `when` on it that never matches (ids 1 and 2)."""
+    return [raw_bytes(1, lambda row: row["e"], 0), when(2, eq(1, 9), u8(2, lambda row: row["v"]))]
+
+
 def zero_progress_when() -> Scheme[Any]:
-    return _scheme(
-        u8(0, lambda row: row["k"]),
-        repeat(1, when(1, eq(0, 9), u8(1, lambda row: row["v"]))),
-    )
+    return _scheme(u8(0, lambda row: row["k"]), repeat(1, *_empty_round()))
 
 
 def zero_progress_vector_when() -> Scheme[Any]:
@@ -73,10 +77,7 @@ def counter(kind: Any) -> Any:
 
 
 def times_zero_width(count_field: Any) -> Scheme[Any]:
-    return _scheme(
-        count_field,
-        times(1, 0, when(1, eq(0, 9), u8(1, lambda row: row["v"]))),
-    )
+    return _scheme(count_field, times(1, 0, *_empty_round()))
 
 
 def _behind_flag(consumer: Any) -> Scheme[Any]:

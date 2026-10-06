@@ -1,6 +1,6 @@
 use crate::walk::{pack, unpack};
 use crate::{
-    eq, flags, group, i32, insert, packed, times, to_hex, u16, u8, when, MapScheme, PackError,
+    eq, flags, group, i32, insert, packed, times, to_hex, u16, u64, u8, when, MapScheme, PackError,
     ShortPacket, UnpackError, Value, Values,
 };
 
@@ -100,6 +100,18 @@ fn length_mismatch_names_the_field() {
     match pack(&scheme, &vals) {
         Err(PackError::Type(name)) => assert_eq!(name, "kinds"),
         other => panic!("expected PackError::Type(kinds), got {:?}", other),
+    }
+}
+
+#[test]
+fn ac1_count_2_pow_63_with_bias_minus_one_is_a_pack_error() {
+    let scheme = MapScheme::new(1, vec![u64("n"), packed(1, "kinds", "n", -1)]);
+    let mut vals = Values::new();
+    insert(&mut vals, "n", Some(Value::U64(1 << 63)));
+    insert(&mut vals, "kinds", Some(Value::List(vec![])));
+    match pack(&scheme, &vals) {
+        Err(PackError::Type(label)) => assert!(label.starts_with("kinds"), "label {label}"),
+        other => panic!("expected PackError::Type(kinds..), got {:?}", other),
     }
 }
 

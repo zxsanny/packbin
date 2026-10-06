@@ -46,3 +46,7 @@ Then the bytes are `010102`, `g == [{v:1},{v:2}]`, and `BinaryPacker.unpack` ret
 |---------|----------------|--------|----------|
 | Written from a review finding; refine before the loop that takes it | coordinator | open | Low |
 | Loop 13 assessment (C16, T28, X8): until this lands TypeScript (AZ-2177) and C# (AZ-2176) refuse a `repeat` / `times` nested inside a round at construction, as Java does; the per-round nested list design here is the one all packages follow. Rust still allows a `times` inside a `repeat` round (a documented difference) | owner | open | Low |
+
+## Loop 16 result (2026-10-06)
+
+Done in loop 16 (batch 1). Owner decision after the batch review (2026-10-06, option A): a `repeat` has no end marker, so a `repeat` inside a round is readable only when it is written once. Java pack throws `IllegalArgumentException` (`<field id>: a repeat has no end marker, so it can be written in one round only`) when one pack call would write the same inner `repeat` a second time; an inner `times` stays supported under any number of outer rounds. Wording fix for AC-4: "returns an error value for any packet" is read as "never throws, never hangs"; the valid packet `010102` gives `g`. Open for the owner, not decided: a `repeat` reached by only one round but followed by later rounds (`repeat(u8 k, when(k==1, repeat v))` with k=[1,2] packs `0101050602`) and a field written after an inner `repeat` still pack bytes that read back differently.

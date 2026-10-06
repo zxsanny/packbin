@@ -110,11 +110,21 @@ export function writeBits(
   for (const b of packed) out.push(b)
 }
 
-// A count is a non-negative integer number; anything else (absent, negative, fractional,
-// bigint) cannot be read. `bias` is added before the sign check.
+const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER)
+
+// A count read from a u64 or i64 field is a bigint. It is a count only while a number holds it
+// exactly; past 2^53 it stays a bigint and cannot be read.
+function countNumber(raw: unknown): unknown {
+  const exact = typeof raw === "bigint" && raw >= -MAX_SAFE && raw <= MAX_SAFE
+  return exact ? Number(raw) : raw
+}
+
+// A count is a non-negative integer, as a number or a bigint within 2^53; anything else (absent,
+// negative, fractional, a bigint past 2^53) cannot be read. `bias` is added before the sign check.
 export function validCount(raw: unknown, bias = 0): number | null {
-  if (typeof raw !== "number" || !Number.isInteger(raw)) return null
-  const count = raw + bias
+  const n = countNumber(raw)
+  if (typeof n !== "number" || !Number.isInteger(n)) return null
+  const count = n + bias
   return count < 0 ? null : count
 }
 
@@ -190,7 +200,8 @@ export function writeSized(
   count: unknown,
   raw: unknown,
 ): void {
-  if (typeof count !== "number" || !Number.isInteger(count)) {
+  const n = countNumber(count)
+  if (typeof n !== "number" || !Number.isInteger(n)) {
     throw new RangeError(`${name}: bad count`)
   }
   const arr =
@@ -200,8 +211,8 @@ export function writeSized(
         ? new Uint8Array(raw)
         : null
   if (!arr) throw new RangeError(`${name}: expected bytes`)
-  if (arr.length !== count) {
-    throw new RangeError(`${name}: expected ${count} bytes, got ${arr.length}`)
+  if (arr.length !== n) {
+    throw new RangeError(`${name}: expected ${n} bytes, got ${arr.length}`)
   }
   for (let i = 0; i < arr.length; i++) out.push(arr[i]!)
 }

@@ -107,6 +107,8 @@ def _write_packed(buf: bytearray, label: str, width: int, count: int, raw: Any) 
 
 def _require_int(field: _Scalar, value: Any) -> int | float:
     if field.kind in ("f32", "f64"):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise TypeError(f"{field.field_id}: expected number, got {type(value).__name__}")
         return float(value)
     if isinstance(value, bool) or not isinstance(value, int):
         raise TypeError(f"{field.field_id}: expected int, got {type(value).__name__}")
@@ -116,12 +118,37 @@ def _require_int(field: _Scalar, value: Any) -> int | float:
 
 
 def _write_scalar(buf: bytearray, field: _Scalar, value: Any) -> None:
-    packed = struct.pack(field.endian_fmt(), _require_int(field, value))
+    number = _require_int(field, value)
+    try:
+        packed = struct.pack(field.endian_fmt(), number)
+    except OverflowError as exc:  # only a finite f32 value too large for the format reaches here
+        raise OverflowError(f"{field.field_id}: {value} does not fit in {field.kind}") from exc
     buf.extend(packed)
 
 
 def _is_leaf(node: _Node) -> bool:
     return isinstance(node, (_Scalar, _Bytes, _Utf8, _Bool, _Sized, _Bits, _Packed))
+
+
+def _member_label(node: Any) -> str:
+    if isinstance(node, _List):
+        return "list"
+    if isinstance(node, _Dict):
+        return "dict"
+    return str(node.field_id)
+
+
+def _check_round_lists(nodes: Sequence[_Node], row: Any, count: int) -> None:
+    """A list a `times` body holds may not be longer than the count: the entries past it would be dropped."""
+    for node in nodes:
+        if isinstance(node, (_Flags, _When, _Group)):
+            _check_round_lists(node.fields, row, count)
+        elif isinstance(node, _FlagBit):
+            _check_round_lists([node.field], row, count)
+        elif isinstance(node, (_Scalar, _Bytes, _Utf8, _Sized, _Bits, _Packed, _List, _Dict)):
+            value = node.get(row)
+            if isinstance(value, _builtin_list) and len(value) > count:
+                raise ValueError(f"{_member_label(node)}: {len(value)} items, times count is {count}")
 
 
 def _pack_element(buf: bytearray, element: _Node, item: Any) -> None:
@@ -238,6 +265,7 @@ def pack_nodes(
             _write_packed(buf, label, node.width, item_count, value)
         elif isinstance(node, _Times):
             item_count = _borrowed("times", seen.get(node.count), 0)
+            _check_round_lists(node.fields, row, item_count)
             for i in range(item_count):
 
                 def at(child: _Node, index: int = i) -> Any:

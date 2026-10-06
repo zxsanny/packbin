@@ -361,7 +361,7 @@ fn run(args: &[String]) -> u8 {
             if opener.start_with(&session_nonce()).is_none() {
                 return 1;
             }
-            let Some(payload) = opener.pack(&position_scheme(), &position_row()) else {
+            let Ok(payload) = opener.pack(&position_scheme(), &position_row()) else {
                 return 1;
             };
             println!("{}", to_hex(&payload));

@@ -55,3 +55,7 @@ Given `u8 mode(0)` and `repeat(1, when(1, eq(0, 1), u8 v(1)))`, When Python buil
 |---------|----------------|--------|----------|
 | Written from a feature-assess row; refine the Given/When/Then with the implementer before the loop that takes it | coordinator | open | Low |
 | Loop 13 assessment (X4): Python builds the `when_names_outer_field_in_repeat` scheme; `CONSTRUCT_SCHEMES` in the Python construct test omits all three reference vectors. AC-4 added | coordinator | open | Medium |
+
+## Loop 16 result (2026-10-06)
+
+Done in loop 16 (batch 1). AC-3 ("existing scheme tests pass unchanged") contradicted AC-4 for three existing tests that built schemes AC-4 refuses; they were rebuilt with the same bytes and the same results (`hostile_support.zero_progress_when`, `times_zero_width`: a zero-width `bytes` field plus an in-round `when`, the TypeScript `emptyRound` precedent) or now assert the construction refusal and gained a ported unpack test (`test_zero_width_elements.py`, group-wrapped element). Python still does not refuse a `repeat` or `times` nested in a round, or a count that names a bool or float (TypeScript refuses the count); no ticket.

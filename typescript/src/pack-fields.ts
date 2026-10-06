@@ -2,11 +2,13 @@ import {
   fieldName,
   flagValueFor,
   flatten,
+  flattenValues,
   isPlainObject,
+  itemGroup,
   type Field,
 } from "./fields.ts"
 import { refName } from "./ref-scope.ts"
-import { roundCount, roundNames, sliceRound } from "./rounds.ts"
+import { refuseLongLists, roundCount, roundNames, sliceRound } from "./rounds.ts"
 import {
   present,
   sameValue,
@@ -27,12 +29,34 @@ function borrowedCount(ref: string, bias: number, label: string, values: Value):
   if (count === null) {
     // Pack keeps throwing; the message tells a missing count from a negative one.
     throw new RangeError(
-      typeof raw === "number" && Number.isInteger(raw)
-        ? `${label}: item count ${raw + bias}`
-        : `${label}: count missing`,
+      typeof raw === "bigint"
+        ? `${label}: item count ${raw + BigInt(bias)}`
+        : typeof raw === "number" && Number.isInteger(raw)
+          ? `${label}: item count ${raw + bias}`
+          : `${label}: count missing`,
     )
   }
   return count
+}
+
+// One list or dict item. A group or flags element packs from the members of the item; any other
+// element is one value, read under the element's own name.
+function packItem(
+  f: Extract<Field, { kind: "list" | "dict" }>,
+  item: unknown,
+  values: Value,
+  allFields: Field[],
+  out: number[],
+  flagBytes: Map<symbol, number>,
+): void {
+  const group = itemGroup(f.element)
+  if (group === null) {
+    const slice: Value = { ...values, [fieldName(f.element)]: item }
+    packFields([f.element], allFields, slice, out, flagBytes)
+    return
+  }
+  if (!isPlainObject(item)) throw new RangeError(`${f.name}: expected an object for each item`)
+  packFields(group.fields, group.fields, flattenValues(item), out, flagBytes)
 }
 
 function packRounds(
@@ -134,7 +158,9 @@ export function packFields(
       }
       case "times": {
         const count = borrowedCount(refName(f), 0, "times", values)
-        packRounds(f.fields, roundNames(f.fields, true), count, allFields, values, out, flagBytes)
+        const names = roundNames(f.fields, true)
+        refuseLongLists(names, count, values)
+        packRounds(f.fields, names, count, allFields, values, out, flagBytes)
         break
       }
       case "utf8":
@@ -146,11 +172,7 @@ export function packFields(
         if (!Array.isArray(items)) throw new RangeError(`${f.name}: expected list`)
         if (items.length > 65535) throw new RangeError(`${f.name}: length ${items.length}`)
         out.push(items.length & 0xff, (items.length >> 8) & 0xff)
-        const child = fieldName(f.element)
-        for (const item of items) {
-          const slice: Value = { ...values, [child]: item }
-          packFields([f.element], allFields, slice, out, flagBytes)
-        }
+        for (const item of items) packItem(f, item, values, allFields, out, flagBytes)
         break
       }
       case "dict": {
@@ -169,12 +191,10 @@ export function packFields(
         })
         if (keys.length > 65535) throw new RangeError(`${f.name}: length ${keys.length}`)
         out.push(keys.length & 0xff, (keys.length >> 8) & 0xff)
-        const child = fieldName(f.element)
         const record = items as Value
         for (const key of keys) {
           writeUtf8(out, f.name, key)
-          const slice: Value = { ...values, [child]: record[key] }
-          packFields([f.element], allFields, slice, out, flagBytes)
+          packItem(f, record[key], values, allFields, out, flagBytes)
         }
         break
       }

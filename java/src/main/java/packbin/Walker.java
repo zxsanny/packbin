@@ -73,8 +73,8 @@ final class Walker {
                     packFields(field.children, row, sink, seen, take);
                 }
             }
-            case REPEAT -> Rounds.packRepeat(field, row, sink, seen);
-            case TIMES -> VarFields.packTimes(field, row, sink, seen);
+            case REPEAT -> Rounds.packRepeat(field, row, sink, seen, take);
+            case TIMES -> VarFields.packTimes(field, row, sink, seen, take);
             case BYTES -> packBytes(field, row, sink, seen, take);
             case GROUP -> packGroup(field, row, sink, seen, take);
             case SIZED -> VarFields.packSized(field, row, sink, seen, take);
@@ -117,8 +117,8 @@ final class Walker {
             case FLAG_BYTE -> unpackFlagByte(field, data, cur, seen);
             case FLAG_BIT -> unpackFlagBit(field, data, cur, row, seen, asList);
             case WHEN -> unpackWhen(field, data, cur, row, seen, asList);
-            case REPEAT -> Rounds.unpackRepeat(field, data, cur, row, seen);
-            case TIMES -> VarFields.unpackTimes(field, data, cur, row, seen);
+            case REPEAT -> Rounds.unpackRepeat(field, data, cur, row, seen, asList);
+            case TIMES -> VarFields.unpackTimes(field, data, cur, row, seen, asList);
             case BYTES -> unpackBytes(field, data, cur, row, seen, asList);
             case GROUP -> unpackGroup(field, data, cur, row, seen, asList);
             case SIZED -> VarFields.unpackSized(field, data, cur, row, seen, asList);
@@ -155,10 +155,12 @@ final class Walker {
             Field field, Object row, ByteSink sink, Map<Object, Object> seen, Take take) {
         Object target = row;
         if (field.nestedRow) {
-            target = field.get.get(row);
+            target = takeValue(field, row, take);
             if (target == null) {
                 return;
             }
+            // The nested row is a row of its own: in a round it is that round's map, not an item of a list.
+            take = null;
         }
         packFields(field.children, target, sink, seen, take);
     }
@@ -257,8 +259,9 @@ final class Walker {
             Map<Object, Object> seen,
             boolean asList) {
         if (field.nestedRow) {
-            Object child = newChild(field, row);
-            Object err = unpackFields(field.children, data, cur, child, seen, asList);
+            // A round adds one nested row per round; a row of its own never reads its fields into lists.
+            Object child = asList ? new HashMap<String, Object>() : newChild(field, row);
+            Object err = unpackFields(field.children, data, cur, child, seen, false);
             if (err != null) {
                 return err;
             }

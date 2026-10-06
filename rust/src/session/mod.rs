@@ -3,11 +3,19 @@ mod pad;
 mod sha256;
 
 use crate::scheme::{BinaryPacker, DispatchHandler, Scheme};
-use crate::value::{ShortPacket, UnpackError};
+use crate::value::{PackError, ShortPacket, UnpackError};
 use std::io::Read;
 
 pub const SEED_SIZE: usize = 32;
 pub const NONCE_SIZE: usize = 16;
+
+/// Why `PackSession::pack` returned no payload: the session has no send key yet, or the row
+/// cannot be packed (the same `PackError` as `BinaryPacker::pack`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SessionPackError {
+    NotOpen,
+    Pack(PackError),
+}
 
 pub struct PackSession {
     seed: Option<[u8; SEED_SIZE]>,
@@ -60,12 +68,13 @@ impl PackSession {
         self.open(nonce, false)
     }
 
-    pub fn pack<T>(&mut self, scheme: &Scheme<T>, row: &T) -> Option<Vec<u8>> {
-        let send = self.send.as_ref()?;
-        let mut clear = BinaryPacker::pack(scheme, row).ok()?;
+    /// Packs `row` and encrypts it with the next pad position, which only a successful pack uses.
+    pub fn pack<T>(&mut self, scheme: &Scheme<T>, row: &T) -> Result<Vec<u8>, SessionPackError> {
+        let send = self.send.as_ref().ok_or(SessionPackError::NotOpen)?;
+        let mut clear = BinaryPacker::pack(scheme, row).map_err(SessionPackError::Pack)?;
         pad::xor(send, self.send_count, &mut clear);
         self.send_count = self.send_count.wrapping_add(1);
-        Some(clear)
+        Ok(clear)
     }
 
     pub fn unpack(

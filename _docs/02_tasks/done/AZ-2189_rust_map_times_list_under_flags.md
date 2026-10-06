@@ -106,3 +106,7 @@ Then the first gives `01 02 0a000000 14000000 1e000000 28000000` and the second 
 ## Owner decision (2026-10-06)
 
 DECIDED, the proposed default: option A: refuse a map `times` list under `flags`. The open DECISION rows above are resolved by this section.
+
+## Loop 16 result (2026-10-06)
+
+Done in loop 16 (batch 1), option A. An empty per-name list holds no value and still packs (review finding F1); a non-empty list or a single value under a member below `flags` or `when`, with no `__times_<anchor>`, is refused. Known limit: the check works on the flat name map, so an outer field that shares its name with such a member is refused as if it were the member's.

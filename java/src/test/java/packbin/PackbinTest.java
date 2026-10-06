@@ -46,6 +46,9 @@ public final class PackbinTest {
         ReferenceScopeTest.run();
         BoolPlacementTest.run();
         RepeatRoundTest.run();
+        NestedRoundTest.run();
+        TimesLongerTest.run();
+        PackStrictTest.run();
         RoundLimitsTest.run();
         ApiSafeReplacementsTest.run();
         if (failures + PackbinFieldsTest.failures > 0) {

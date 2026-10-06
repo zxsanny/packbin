@@ -258,23 +258,33 @@ export function utf8<T>(id: number, acc: Acc<T>): Field {
   return { kind: "utf8", id, name: memberName(acc) }
 }
 
+// A flags element is a flag byte and its bits, not one field, so it is held as an unanchored group of
+// its own: like a group element it packs from and unpacks to one object per item.
+function elementOf(element: Field): Field {
+  if (element.kind === "flags") return { kind: "group", name: "", fields: [element] }
+  return flatten([element])[0]!
+}
+
+// The group that holds the members of each item, for a group or flags element; any other element
+// is one value per item.
+export function itemGroup(element: Field): Extract<Field, { kind: "group" }> | null {
+  return element.kind === "group" && element.anchor === undefined ? element : null
+}
+
 export function list<T>(acc: Acc<T>, element: Field): Field {
-  const flat = flatten([element])
-  if (flat.length !== 1 || flat[0]!.kind === "repeat") {
+  const one = elementOf(element)
+  if (one.kind === "repeat") {
     throw new RangeError("list element must be one field")
   }
-  return { kind: "list", name: memberName(acc), element: flat[0]! }
+  return { kind: "list", name: memberName(acc), element: one }
 }
 
 export function dict<T>(acc: Acc<T>, element: Field): Field {
-  const flat = flatten([element])
-  if (flat.length !== 1) {
-    throw new RangeError("dictionary element must be one field")
-  }
-  if (flat[0]!.kind === "repeat") {
+  const one = elementOf(element)
+  if (one.kind === "repeat") {
     throw new RangeError("repeat is not a dictionary element")
   }
-  return { kind: "dict", name: memberName(acc), element: flat[0]! }
+  return { kind: "dict", name: memberName(acc), element: one }
 }
 
 export function collectFlagBits(

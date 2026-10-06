@@ -1,4 +1,4 @@
-use crate::field::{field_name, Field, FieldKind};
+use crate::field::{field_name, times_name, Field, FieldKind};
 use crate::value::{same_values, Name, PackError, Value, Values};
 use std::collections::HashMap;
 
@@ -65,4 +65,57 @@ fn declares(fields: &[Field], name: &str) -> bool {
         FieldKind::U2 { names } => names.iter().any(|own| own.as_ref() == name),
         _ => field_name(field) == Some(name),
     })
+}
+
+/// Without rounds pack gives each direct field of a `times` one item of its list per round, and
+/// reads nothing below a `flags` or `when`: a list has no null to say which round holds a member
+/// that only some rounds have. A value kept under such a member's name (a non-list counts as a
+/// list of one item; an empty list holds nothing) would be dropped, so it fails on the first
+/// such name; the rounds hold it.
+pub(super) fn check_aligned(
+    anchor: u32,
+    members: &[Field],
+    values: &Values,
+) -> Result<(), PackError> {
+    let mut below = Vec::new();
+    names_below(members, false, &mut below);
+    match below.into_iter().find(|name| holds_items(values, name)) {
+        Some(name) => Err(PackError::Type(format!(
+            "times at id {anchor}: '{name}' is under a flags or when; give its values per round \
+             under '{}'",
+            times_name(anchor)
+        ))),
+        None => Ok(()),
+    }
+}
+
+fn holds_items(values: &Values, name: &str) -> bool {
+    match values.get(name) {
+        Some(Some(Value::List(items))) => !items.is_empty(),
+        Some(Some(_)) => true,
+        _ => false,
+    }
+}
+
+/// Collects, in field order, the value names of the fields below a `flags` or `when`.
+fn names_below<'a>(fields: &'a [Field], under: bool, out: &mut Vec<&'a str>) {
+    for field in fields {
+        match &field.kind {
+            FieldKind::Flags { members, .. } | FieldKind::When { members, .. } => {
+                names_below(members, true, out);
+            }
+            FieldKind::Group { name, members, .. } => {
+                if under {
+                    out.push(name);
+                }
+                names_below(members, under, out);
+            }
+            FieldKind::FlagBit { inner, .. } => {
+                names_below(std::slice::from_ref(inner), under, out);
+            }
+            FieldKind::U2 { names } if under => out.extend(names.iter().map(|n| n.as_ref())),
+            _ if under => out.extend(field_name(field)),
+            _ => {}
+        }
+    }
 }
