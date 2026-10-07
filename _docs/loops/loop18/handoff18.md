@@ -11,7 +11,7 @@ This is the intake the next `/autodev` run starts from (launcher on `dev`, `kind
 ## Where things stand when loop 17 closes
 
 - `todo/` holds 6 specs; `done/` holds 158 files. Loop 17 was the C# stream only: 10 specs closed (AZ-2092, 2093, 2114, 2115, 2119, 2121, 2180, 2181, 2182, 2191), the C# parts of AZ-2135 and AZ-2128 shipped, the owner's C# multi-target work was committed (`68ca4f8`). C# tests 424 to 649 on net10.0 and on the `netstandard2.0` build. Behavior changes are in the README upgrade notes (step 13).
-- Pushed: `dev` at `87e554f` (the close commit). Its CI run 37588554503: `ring` and `embedded` passed, `scaffold` FAILED on the AC-10 timing test (1 618 ms on the runner, bound 1 000 ms), so the other five suites and the publish gate did not run on CI for that commit and `main` was not pushed (`origin/main` is `67cb09d`). Owner answer 2026-10-07: isolate the test; the fix commit after `87e554f` moves it to its own non-parallel xunit collection with one strict pass (`csharp/tests/Ac10TimingTests.cs`). Its CI run is the first thing to read in loop 18; the loop end channel is `main` (`ci_cd_pipeline.md`), polling is `enabled: yes`. Leftover: `_docs/_process_leftovers/2026-10-07_ci-fail-ac10-typed-path.md`.
+- Pushed and green: `dev` and `main` are at the same commit (the docs-only close commit after `f0f67ce`), `test.yml` green on both at `f0f67ce` (`scaffold` 9 min, `ring` 2 min, `embedded` 6 min; the doc's "45 to 60 minutes" is out of date). The first push (`87e554f`) was red on the AC-10 timing test (1 618 ms on the runner inside the parallel suite, bound 1 000 ms) and `main` was held back; owner answer 2026-10-07: isolate the test, done in `f0f67ce` (own non-parallel xunit collection, one strict pass, `csharp/tests/Ac10TimingTests.cs`). The runner's isolated per-pass time is unknown, so if that test turns red again it is decision 1 below, not a looser bound.
 - Review `review17.md`: PASS_WITH_WARNINGS, 2 Medium and 6 Low (R1 to R8; R7 and R8 fixed, R6 judged no change, R1 to R5 open). Security `security_report.md`: PASS_WITH_WARNINGS, Medium 3 (F10, F12, F25), Low 15. Feature assessment round 1: CLARIFY, no re-entry.
 
 ## Owner decisions open from loop 17 (each has a recommendation)
@@ -49,6 +49,6 @@ This is the intake the next `/autodev` run starts from (launcher on `dev`, `kind
 
 ## Do not start before checking
 
-1. The CI run of the fix commit after `87e554f` (and, once green, the push of `main` that loop 17 owes): read it before planning. If it is red on the AC-10 test again, that is decision 1 and nothing else moves. The five package suites and the publish gate have not run on CI since `67cb09d`.
-2. `git status`: the tree should be clean (the owner's C# work is committed); `AGENT_GOTCHAS.md` no longer carries the foreign-hunk rule.
+1. `git status` and `git log origin/main..HEAD` (both empty after loop 17), and the CI state of `dev`: green at the close. If a later run is red on the AC-10 test, that is decision 1 and nothing else moves.
+2. The tree should be clean (the owner's C# work is committed); `AGENT_GOTCHAS.md` no longer carries the foreign-hunk rule; `_docs/_process_leftovers/` is empty.
 3. Ask the owner the ten decisions above before wave 1 touches C#; waves for the other packages do not wait for them.
