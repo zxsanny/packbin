@@ -267,17 +267,16 @@ public class BoolFlagRuleTests
         Assert.Contains("8 bits", ex.Message, StringComparison.Ordinal);
     }
 
+    // AZ-2135: the handle holds no bit, so `.Bit(...)` never fails; the scheme refuses the ninth bit of one read.
     [Fact]
-    public void Ac6_NinthBitOnOneFlagByte_FailsOnTheNinthCall()
+    public void Ac6_NinthBitOnOneFlagByte_FailsWhenTheSchemeIsBuilt()
     {
         // Arrange
         var m = Field.FlagByte();
-        var fields = NineU8();
-        for (var i = 0; i < 8; i++)
-            m.Bit(fields[i]);
+        var bits = NineU8().Select(f => m.Bit(f)).ToArray();
 
         // Act
-        var ex = Assert.Throws<ArgumentException>(() => m.Bit(fields[8]));
+        var ex = Assert.Throws<ArgumentException>(() => new Scheme<NineRow>(1, [m, .. bits]));
 
         // Assert
         Assert.Contains("A8", ex.Message, StringComparison.Ordinal);

@@ -94,3 +94,7 @@ Then the elapsed time is ≤ 1.0 s (project AC-10), and the message reports the 
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | If task 23 slips, the honest test may fail CI on a slow runner. Do not relax the bound or revert to the dictionary path to get green. | meta-rule "real results" | accepted-risk | Medium |
+
+## Loop 17 result (2026-10-07)
+
+Done in batch 1 (commit `0f60607`). `Nfr_PublicTypedPackAndUnpack_RoundTripsWithinOneSecond` times only `BinaryPacker.Pack(Target, row)` and `Unpack(bytes, Target.On(...))`, asserts `Lat == 500_000_000` and a null error per iteration, bound 1.0 s, best of three passes as before; 274 to 284 ms per pass in Debug after AZ-2092 (791 ms before).

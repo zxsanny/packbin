@@ -54,5 +54,5 @@ C++ `present()` recurses into nested groups. C# already counts u2/sized/bits/pac
 | same | Rust (map API) | done in batch 2 (`group_on` / `member_on`) |
 | same | Java | done in batch 2 (`Walker.childOn` FLAGS and U2 cases) |
 | same | Python | done in batch 2 (u2 and nested flags presence) |
-| same | C# | held until the C# multi-target work is committed (C# already counts u2, sized, bits, packed and nested groups, AZ-2079 AC-7) |
+| same | C# | done in loop 17 batch 1 for nested `Flags` and split `FlagBit` children (`Walker.Presence.cs`; B=5 gives `01 01 01 05`, AC-2 fails naming the missing value); a direct `u2` member with only a non-first slot present is still dropped (fixed in batch 2) |
 | flagged concern: `when`, `times`, `repeat` as a `flags` member or flag-bit field | all | NOT implemented or refused. Owner decision 2026-10-06: hold for the loop that lands the C# work, so the five packages are decided together (today they all give the same bytes for the AZ-2120 shape, `01 01 02 5a00`; AZ-2120 will make C# `01 01 03 07 5a00` and requires the other five to match) |

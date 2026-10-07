@@ -4,7 +4,8 @@ namespace Packbin;
 internal static partial class Walker
 {
     // A bool or an empty group is only a presence bit: on for true, off for false or no value. A group with children is
-    // on when its own member or any value-bearing child (or a nested group's) has a value.
+    // on when its own member or any value-bearing child (or a nested group's, a nested flags' or a flag bit's) has a
+    // value. A `when`, `repeat` or `times` inside a group gives it no presence.
     public static bool BitOn(IReadOnlyDictionary<string, object?> values, Field inner) =>
         inner.Type switch
         {
@@ -44,6 +45,8 @@ internal static partial class Walker
         {
             Field.Kind.Group => GroupOn(values, child),
             Field.Kind.U2 => child.Names.Any(name => IsPresent(values, name)),
+            Field.Kind.Flags => child.Children.Any(bit => ChildPresent(values, bit)),
+            Field.Kind.FlagBit => BitOn(values, child.Inner!),
             _ => IsGroupValue(child) && IsPresent(values, child.Name),
         };
 

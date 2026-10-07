@@ -80,6 +80,12 @@ One worker at a time owns `csharp/` (sources and `csharp/tests/`). Parent-only: 
 
 Wire bytes unchanged for every existing test; AC tests of each spec fail first, then pass; the README C# example packs the README hex and unpacks back; typed position round trip at least 3x faster (target 300 ms Release for 100 000).
 
+### Divergence from the plan (batch 1, 2026-10-07)
+
+- AZ-2092 AC-7 (3x faster typed path) is partly met: about 2.0x cold, 2.6x warmed; the project bound of 1 s has 3x margin. Owner decision after the loop: accept, or spec a typed walker that does not go through a dictionary.
+- AZ-2128 gains a one-line follow-up in batch 2: a direct `u2` member of `Flags` with only a non-first slot present is dropped silently on a dictionary row (the spec Outcome says any value, any kind). The `when`/`times`/`repeat` angle stays held with AZ-2120.
+- The batch was committed in two stages (`0f60607`, then the stage 2 commit) after the first worker run stalled before editing; no scope change.
+
 ### Risks
 
 AZ-2092 rewrites the core typed path (Risk 1: pin current bytes first by running every dictionary test also through typed rows). AZ-2181 reverses C# AZ-2088 AC-6, so existing hostile tests are rewritten. Batch 2 changes error kinds in two places (count errors, strict numeric pack): list them in the README upgrade notes.

@@ -88,18 +88,25 @@ public sealed class Field
     }
 
     // A scheme keeps its own copy of each field it resolves; a Field is never changed after it is built.
-    internal Field With(Field[]? children = null, Condition? pred = null, string? countName = null, Field? inner = null) =>
-        new(Type, Id, Name, BigEndian, ByteCount, children ?? Children, pred ?? Pred, FlagOwner, BitIndex, inner ?? Inner,
+    internal Field With(
+        Field[]? children = null,
+        Condition? pred = null,
+        string? countName = null,
+        Field? inner = null,
+        FlagGroup? flagOwner = null) =>
+        new(Type, Id, Name, BigEndian, ByteCount, children ?? Children, pred ?? Pred, flagOwner ?? FlagOwner, BitIndex, inner ?? Inner,
             CountId, countName ?? CountName, Names, SlotIds, NestedRow, Bias, RowType, Binding);
 
     public Field Be() =>
         new(Type, Id, Name, true, ByteCount, Children, Pred, FlagOwner, BitIndex, Inner, CountId, CountName, Names, SlotIds, NestedRow, Bias, RowType, Binding);
 
+    // A bit of this flag byte, numbered when a scheme places it: by its order among the bits that follow a read of the
+    // byte there. The handle holds no bit, so it can be placed in any number of schemes.
     public Field Bit(Field field)
     {
         if (Type != Kind.FlagByte || FlagOwner is null)
             throw new InvalidOperationException("Bit requires FlagByte.");
-        return FlagOwner.AddBit(field);
+        return CreateFlagBit(FlagOwner, -1, field);
     }
 
     public static Field U8<T>(int id, Expression<Func<T, byte>> accessor) => Scalar(Kind.U8, id, accessor, 1);

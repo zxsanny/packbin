@@ -220,7 +220,7 @@ internal static class SchemeOrder
         var resolved = new Field[fields.Count];
         for (var i = 0; i < resolved.Length; i++)
             resolved[i] = Walk(fields[i], row, scope, ref next);
-        FlagScopes.Validate(resolved);
+        resolved = FlagScopes.Bind(resolved);
         RoundScopes.Validate(resolved);
         return resolved;
     }
