@@ -16,61 +16,63 @@ internal static partial class Walker
                 dest[0] = (byte)Convert.ToSByte(value, CultureInfo.InvariantCulture);
                 break;
             case Field.Kind.U16:
-            {
-                var n = Convert.ToUInt16(value, CultureInfo.InvariantCulture);
-                if (field.BigEndian) BinaryPrimitives.WriteUInt16BigEndian(dest, n);
-                else BinaryPrimitives.WriteUInt16LittleEndian(dest, n);
-                break;
-            }
+                {
+                    var n = Convert.ToUInt16(value, CultureInfo.InvariantCulture);
+                    if (field.BigEndian) BinaryPrimitives.WriteUInt16BigEndian(dest, n);
+                    else BinaryPrimitives.WriteUInt16LittleEndian(dest, n);
+                    break;
+                }
             case Field.Kind.I16:
-            {
-                var n = Convert.ToInt16(value, CultureInfo.InvariantCulture);
-                if (field.BigEndian) BinaryPrimitives.WriteInt16BigEndian(dest, n);
-                else BinaryPrimitives.WriteInt16LittleEndian(dest, n);
-                break;
-            }
+                {
+                    var n = Convert.ToInt16(value, CultureInfo.InvariantCulture);
+                    if (field.BigEndian) BinaryPrimitives.WriteInt16BigEndian(dest, n);
+                    else BinaryPrimitives.WriteInt16LittleEndian(dest, n);
+                    break;
+                }
             case Field.Kind.U32:
-            {
-                var n = Convert.ToUInt32(value, CultureInfo.InvariantCulture);
-                if (field.BigEndian) BinaryPrimitives.WriteUInt32BigEndian(dest, n);
-                else BinaryPrimitives.WriteUInt32LittleEndian(dest, n);
-                break;
-            }
+                {
+                    var n = Convert.ToUInt32(value, CultureInfo.InvariantCulture);
+                    if (field.BigEndian) BinaryPrimitives.WriteUInt32BigEndian(dest, n);
+                    else BinaryPrimitives.WriteUInt32LittleEndian(dest, n);
+                    break;
+                }
             case Field.Kind.I32:
-            {
-                var n = Convert.ToInt32(value, CultureInfo.InvariantCulture);
-                if (field.BigEndian) BinaryPrimitives.WriteInt32BigEndian(dest, n);
-                else BinaryPrimitives.WriteInt32LittleEndian(dest, n);
-                break;
-            }
+                {
+                    var n = Convert.ToInt32(value, CultureInfo.InvariantCulture);
+                    if (field.BigEndian) BinaryPrimitives.WriteInt32BigEndian(dest, n);
+                    else BinaryPrimitives.WriteInt32LittleEndian(dest, n);
+                    break;
+                }
             case Field.Kind.U64:
-            {
-                var n = Convert.ToUInt64(value, CultureInfo.InvariantCulture);
-                if (field.BigEndian) BinaryPrimitives.WriteUInt64BigEndian(dest, n);
-                else BinaryPrimitives.WriteUInt64LittleEndian(dest, n);
-                break;
-            }
+                {
+                    var n = Convert.ToUInt64(value, CultureInfo.InvariantCulture);
+                    if (field.BigEndian) BinaryPrimitives.WriteUInt64BigEndian(dest, n);
+                    else BinaryPrimitives.WriteUInt64LittleEndian(dest, n);
+                    break;
+                }
             case Field.Kind.I64:
-            {
-                var n = Convert.ToInt64(value, CultureInfo.InvariantCulture);
-                if (field.BigEndian) BinaryPrimitives.WriteInt64BigEndian(dest, n);
-                else BinaryPrimitives.WriteInt64LittleEndian(dest, n);
-                break;
-            }
+                {
+                    var n = Convert.ToInt64(value, CultureInfo.InvariantCulture);
+                    if (field.BigEndian) BinaryPrimitives.WriteInt64BigEndian(dest, n);
+                    else BinaryPrimitives.WriteInt64LittleEndian(dest, n);
+                    break;
+                }
             case Field.Kind.F32:
-            {
-                var n = Convert.ToSingle(value, CultureInfo.InvariantCulture);
-                if (field.BigEndian) BinaryPrimitives.WriteSingleBigEndian(dest, n);
-                else BinaryPrimitives.WriteSingleLittleEndian(dest, n);
-                break;
-            }
+                {
+                    var n = Convert.ToSingle(value, CultureInfo.InvariantCulture);
+                    var bits = Compat.SingleToInt32Bits(n);
+                    if (field.BigEndian) BinaryPrimitives.WriteInt32BigEndian(dest, bits);
+                    else BinaryPrimitives.WriteInt32LittleEndian(dest, bits);
+                    break;
+                }
             case Field.Kind.F64:
-            {
-                var n = Convert.ToDouble(value, CultureInfo.InvariantCulture);
-                if (field.BigEndian) BinaryPrimitives.WriteDoubleBigEndian(dest, n);
-                else BinaryPrimitives.WriteDoubleLittleEndian(dest, n);
-                break;
-            }
+                {
+                    var n = Convert.ToDouble(value, CultureInfo.InvariantCulture);
+                    var bits = BitConverter.DoubleToInt64Bits(n);
+                    if (field.BigEndian) BinaryPrimitives.WriteInt64BigEndian(dest, bits);
+                    else BinaryPrimitives.WriteInt64LittleEndian(dest, bits);
+                    break;
+                }
             default:
                 throw new InvalidOperationException($"Cannot write {field.Type}.");
         }
@@ -112,12 +114,12 @@ internal static partial class Walker
             Field.Kind.I32 => field.BigEndian
                 ? BinaryPrimitives.ReadInt32BigEndian(src)
                 : BinaryPrimitives.ReadInt32LittleEndian(src),
-            Field.Kind.F32 => field.BigEndian
-                ? BinaryPrimitives.ReadSingleBigEndian(src)
-                : BinaryPrimitives.ReadSingleLittleEndian(src),
-            Field.Kind.F64 => field.BigEndian
-                ? BinaryPrimitives.ReadDoubleBigEndian(src)
-                : BinaryPrimitives.ReadDoubleLittleEndian(src),
+            Field.Kind.F32 => Compat.Int32BitsToSingle(field.BigEndian
+                ? BinaryPrimitives.ReadInt32BigEndian(src)
+                : BinaryPrimitives.ReadInt32LittleEndian(src)),
+            Field.Kind.F64 => BitConverter.Int64BitsToDouble(field.BigEndian
+                ? BinaryPrimitives.ReadInt64BigEndian(src)
+                : BinaryPrimitives.ReadInt64LittleEndian(src)),
             _ => throw new InvalidOperationException($"Cannot read {field.Type}."),
         };
 }

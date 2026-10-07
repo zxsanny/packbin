@@ -10,7 +10,8 @@ public sealed class PackSession
     private byte[]? _seed;
     private byte[]? _send;
     private byte[]? _recv;
-    private ulong _sendCount;
+    // long because netstandard2.0 has no ulong Interlocked.Increment; cast back, the bits count the same.
+    private long _sendCount;
     private ulong _recvCount;
 
     private PackSession(byte[] seed) => _seed = seed;
@@ -26,7 +27,10 @@ public sealed class PackSession
     {
         if (_send is not null || _seed is null)
             return null;
-        return Start(RandomNumberGenerator.GetBytes(NonceSize));
+        var nonce = new byte[NonceSize];
+        using (var random = RandomNumberGenerator.Create())
+            random.GetBytes(nonce);
+        return Start(nonce);
     }
 
     public byte[]? Start(ReadOnlySpan<byte> nonce)
@@ -44,7 +48,7 @@ public sealed class PackSession
             return null;
         var clear = BinaryPacker.Pack(scheme, value);
         // Each call takes its own counter, so concurrent packs never reuse a keystream.
-        SessionPad.Xor(_send, Interlocked.Increment(ref _sendCount) - 1, clear);
+        SessionPad.Xor(_send, (ulong)(Interlocked.Increment(ref _sendCount) - 1), clear);
         return clear;
     }
 
@@ -64,13 +68,13 @@ public sealed class PackSession
         if (_seed is null || _send is not null || nonce.Length != NonceSize)
             return false;
         Span<byte> both = stackalloc byte[SeedSize * 2];
-        HKDF.DeriveKey(HashAlgorithmName.SHA256, _seed, both, nonce, "packbin"u8);
-        var first = both[..SeedSize].ToArray();
-        var second = both[SeedSize..].ToArray();
+        Compat.HkdfSha256(_seed, both, nonce, "packbin"u8);
+        var first = both.Slice(0, SeedSize).ToArray();
+        var second = both.Slice(SeedSize).ToArray();
         _send = initiator ? first : second;
         _recv = initiator ? second : first;
-        CryptographicOperations.ZeroMemory(both);
-        CryptographicOperations.ZeroMemory(_seed);
+        Compat.Zero(both);
+        Compat.Zero(_seed);
         _seed = null;
         return true;
     }

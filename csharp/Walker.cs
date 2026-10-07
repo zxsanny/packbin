@@ -191,7 +191,7 @@ internal static partial class Walker
         var value = RequireValue(field, values);
         Span<byte> tmp = stackalloc byte[8];
         var width = field.ByteCount;
-        WriteScalar(field, value, tmp[..width]);
+        WriteScalar(field, value, tmp.Slice(0, width));
         for (var i = 0; i < width; i++)
             buffer.Add(tmp[i]);
         seen[field.Name] = value;
@@ -389,7 +389,7 @@ internal static partial class Walker
 
     // A float compares as a double by Java's Double.compare: NaN equals NaN and -0.0 differs from 0.0.
     private static bool SameDouble(double a, double b) =>
-        double.IsNaN(a) ? double.IsNaN(b) : a == b && double.IsNegative(a) == double.IsNegative(b);
+        double.IsNaN(a) ? double.IsNaN(b) : a == b && (BitConverter.DoubleToInt64Bits(a) < 0) == (BitConverter.DoubleToInt64Bits(b) < 0);
 
     private static bool IsNumber(object value) =>
         value is byte or sbyte or ushort or short or uint or int or ulong or long or float or double or decimal;

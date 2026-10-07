@@ -1,7 +1,6 @@
 using System.Collections;
 using System.Globalization;
 using System.Text;
-using System.Text.Unicode;
 
 namespace Packbin;
 
@@ -127,15 +126,6 @@ internal static partial class Walker
             return false;
         count += field.Bias;
         return count >= 0;
-    }
-
-    private static bool TryUtf8(ReadOnlySpan<byte> raw, out string text)
-    {
-        text = "";
-        if (!Utf8.IsValid(raw))
-            return false;
-        text = Encoding.UTF8.GetString(raw);
-        return true;
     }
 
     private static object? UnpackSized(
@@ -285,8 +275,8 @@ internal static partial class Walker
                 return InterimBadValue(field.Name, bytes.Length - roundStart);
             AppendRound(built, group, names);
         }
-        foreach (var (key, list) in built)
-            values[key] = list;
+        foreach (var pair in built)
+            values[pair.Key] = pair.Value;
         return null;
     }
 
@@ -322,7 +312,7 @@ internal static partial class Walker
         left = bytes.Length - offset;
         if (left < count)
             return new ShortPacket(field.Name, count, left);
-        if (!TryUtf8(bytes.Slice(offset, count), out var text))
+        if (!Compat.TryUtf8(bytes.Slice(offset, count), out var text))
             return InterimBadValue(field.Name, left);
         offset += count;
         Store(values, field.Name, text, repeatLists);
@@ -340,7 +330,8 @@ internal static partial class Walker
         var child = field.Children[0];
         foreach (var item in items)
         {
-            var slice = new Dictionary<string, object?>(values) { [child.Name] = item };
+            var slice = values.ToDictionary(p => p.Key, p => p.Value);
+            slice[child.Name] = item;
             PackField(child, slice, buffer, new Scope());
         }
     }
@@ -401,7 +392,8 @@ internal static partial class Walker
             buffer.Add((byte)keyBytes.Length);
             buffer.Add((byte)(keyBytes.Length >> 8));
             buffer.AddRange(keyBytes);
-            var slice = new Dictionary<string, object?>(values) { [child.Name] = value };
+            var slice = values.ToDictionary(p => p.Key, p => p.Value);
+            slice[child.Name] = value;
             PackField(child, slice, buffer, new Scope());
         }
     }
@@ -430,7 +422,7 @@ internal static partial class Walker
             left = bytes.Length - offset;
             if (left < keyLen)
                 return new ShortPacket(field.Name, keyLen, left);
-            if (!TryUtf8(bytes.Slice(offset, keyLen), out var key))
+            if (!Compat.TryUtf8(bytes.Slice(offset, keyLen), out var key))
                 return InterimBadValue(field.Name, left);
             offset += keyLen;
             var one = new Scope(values.Budget);

@@ -360,17 +360,17 @@ def tarred(files):
             t.addfile(info, io.BytesIO(data))
     return buffer.getvalue()
 
-def nupkg(case, version=V, license_xml="<license type=\"expression\">MIT</license>", dll=True):
+def nupkg(case, version=V, license_xml="<license type=\"expression\">MIT</license>", frameworks=("netstandard2.0", "net10.0")):
     spec = f"<package xmlns=\"x\"><metadata><id>Packbin</id><version>{version}</version>{license_xml}</metadata></package>"
     files = {"Packbin.nuspec": spec, "README.md": "r"}
-    if dll:
-        files["lib/net10.0/Packbin.dll"] = "d"
+    for framework in frameworks:
+        files[f"lib/{framework}/Packbin.dll"] = "d"
     put(case, f"Packbin.{V}.nupkg", zipped(files))
 
 nupkg("csharp-ok")
 nupkg("csharp-version", version="0.1.0")
 nupkg("csharp-license", license_xml="")
-nupkg("csharp-payload", dll=False)
+nupkg("csharp-payload", frameworks=("net10.0",))
 
 def npm(case, version=V, license="MIT", index=True):
     manifest = json.dumps({"name": "packbin", "version": version, "license": license, "types": "./dist/index.d.ts", "exports": {".": {"types": "./dist/index.d.ts", "import": "./dist/index.js"}}}).encode()

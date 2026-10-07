@@ -35,11 +35,11 @@ internal static class SessionPad
         state[2] = 0x79622d32;
         state[3] = 0x6b206574;
         for (var i = 0; i < 8; i++)
-            state[4 + i] = BinaryPrimitives.ReadUInt32LittleEndian(key[(i * 4)..]);
+            state[4 + i] = BinaryPrimitives.ReadUInt32LittleEndian(key.Slice(i * 4));
         state[12] = counter;
         state[13] = BinaryPrimitives.ReadUInt32LittleEndian(nonce);
-        state[14] = BinaryPrimitives.ReadUInt32LittleEndian(nonce[4..]);
-        state[15] = BinaryPrimitives.ReadUInt32LittleEndian(nonce[8..]);
+        state[14] = BinaryPrimitives.ReadUInt32LittleEndian(nonce.Slice(4));
+        state[15] = BinaryPrimitives.ReadUInt32LittleEndian(nonce.Slice(8));
 
         Span<uint> work = stackalloc uint[16];
         state.CopyTo(work);
@@ -61,7 +61,7 @@ internal static class SessionPad
             {
                 work[i] += state[i];
             }
-            BinaryPrimitives.WriteUInt32LittleEndian(output[(i * 4)..], work[i]);
+            BinaryPrimitives.WriteUInt32LittleEndian(output.Slice(i * 4), work[i]);
         }
     }
 

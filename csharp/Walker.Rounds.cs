@@ -136,7 +136,7 @@ internal static partial class Walker
     {
         foreach (var name in names)
             round.TryAdd(name, null);
-        foreach (var (key, value) in round)
-            Append(into, key, value);
+        foreach (var pair in round)
+            Append(into, pair.Key, pair.Value);
     }
 }

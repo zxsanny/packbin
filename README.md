@@ -17,9 +17,16 @@ Both sides keep the same field list. The bytes are only the values. Unpack takes
 
 Can be used for WebSocket, TCP, UDP, and other means of efficient communication
 
-Encryption is optional. `PackSession` hides the packed bytes on one connection and adds 0 bytes to each packet. The only extra send is 16 bytes, once, when the connection opens. It does not detect a changed byte, and anyone holding the 32-byte seed can read every session. See [Encrypted session](#encrypted-session).
+Supported languages:
 
-Java: Java 17+, Android API 26+.
+- Java: Java 17+, Android API 26+.
+- C#: .NET 10+, and .NET Standard 2.0 for .NET Framework 4.6.2+, Unity, Mono and Xamarin (the .NET Standard build is tested on the .NET 10 runtime). Under Unity IL2CPP, rows are read and written through reflection, so keep row types from being stripped (`link.xml` or `[Preserve]`).
+- TypeScript: Node.js 22+; browsers through a bundler such as Vite.
+- Python: 3.10+.
+- Rust: edition 2021.
+- C++: C++17; CMake 3.16+ or vcpkg on desktop and server; 32-bit microcontrollers (ESP32, RP2040, nRF52, STM32) through PlatformIO, Arduino and ESP-IDF 5.1+.
+
+Encryption is optional. `PackSession` hides the packed bytes on one connection and adds 0 bytes to each packet. The only extra send is 16 bytes, once, when the connection opens. It does not detect a changed byte, and anyone holding the 32-byte seed can read every session. See [Encrypted session](#encrypted-session).
 
 ## Example
 

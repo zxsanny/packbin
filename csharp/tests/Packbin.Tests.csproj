@@ -18,8 +18,17 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
-  <ItemGroup>
+  <!-- dotnet test -p:PackbinTarget=netstandard2.0 runs this suite against the netstandard2.0 build. -->
+  <PropertyGroup Condition="'$(PackbinTarget)' == 'netstandard2.0'">
+    <DefineConstants>$(DefineConstants);PACKBIN_NETSTANDARD2_0</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(PackbinTarget)' == ''">
     <ProjectReference Include="..\Packbin.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(PackbinTarget)' != ''">
+    <ProjectReference Include="..\Packbin.csproj" SetTargetFramework="TargetFramework=$(PackbinTarget)" />
   </ItemGroup>
 
   <ItemGroup>

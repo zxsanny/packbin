@@ -22,8 +22,10 @@ public sealed class Scheme<T> where T : class, new()
 
     private Scheme(Scheme<T> source, int maxRounds, long maxSlots)
     {
-        ArgumentOutOfRangeException.ThrowIfLessThan(maxRounds, 1);
-        ArgumentOutOfRangeException.ThrowIfLessThan(maxSlots, 1L);
+        if (maxRounds < 1)
+            throw new ArgumentOutOfRangeException(nameof(maxRounds), maxRounds, "must be at least 1");
+        if (maxSlots < 1)
+            throw new ArgumentOutOfRangeException(nameof(maxSlots), maxSlots, "must be at least 1");
         TypeNumber = source.TypeNumber;
         Fields = source.Fields;
         MaxRounds = maxRounds;
@@ -171,7 +173,7 @@ public static class BinaryPacker
         {
             if (handler.TypeNumber != actual)
                 continue;
-            return handler.Dispatch(bytes[1..]);
+            return handler.Dispatch(bytes.Slice(1));
         }
 
         return new TypeMismatch(0, actual);
@@ -184,7 +186,7 @@ public static class BinaryPacker
         var actual = bytes[0];
         if (actual != scheme.TypeNumber)
             return new UnpackResult([], new TypeMismatch(scheme.TypeNumber, actual));
-        return ReadFields(scheme, bytes[1..]);
+        return ReadFields(scheme, bytes.Slice(1));
     }
 
     internal static UnpackResult ReadFields<T>(Scheme<T> scheme, ReadOnlySpan<byte> bytes) where T : class, new()
@@ -296,7 +298,7 @@ internal static class SchemeOrder
     // `List<Int32>` rather than the reflection name `List`1`, so two closed generic rows read apart.
     private static string TypeName(Type type) =>
         type.IsGenericType
-            ? $"{type.Name[..type.Name.IndexOf('`')]}<{string.Join(", ", type.GetGenericArguments().Select(TypeName))}>"
+            ? $"{type.Name.Substring(0, type.Name.IndexOf('`'))}<{string.Join(", ", type.GetGenericArguments().Select(TypeName))}>"
             : type.Name;
 
     private static void RequireFlagBit(Field field, bool flagBit)

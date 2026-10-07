@@ -23,6 +23,8 @@ case "$lang" in
     projects=("$root"/csharp/*.csproj)
     if [ "${#projects[@]}" -gt 0 ]; then
       run env MSBUILDDISABLENODEREUSE=1 dotnet test "$root/csharp" -v n --nologo
+      # The same suite against the netstandard2.0 build of the package.
+      run env MSBUILDDISABLENODEREUSE=1 dotnet test "$root/csharp" -v n --nologo -p:PackbinTarget=netstandard2.0
     fi
     ;;
   typescript)

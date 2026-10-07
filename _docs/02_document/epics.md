@@ -43,5 +43,9 @@ flowchart TD
 | 2 | AZ-1864 | Java package | component | M / 5 | AZ-1858 |
 | 3 | AZ-1865 | Blackbox tests | tests | M / 5 | the six packages |
 | 4 | AZ-2018 | Pack session | feature | L / 13 | the six packages |
+| 5 | AZ-2222 | Go package (full parity) | component | L / ~26 | the six packages |
+| 6 | AZ-2223 | Swift package (full parity) | component | L / ~26 | the six packages |
 
 The six language epics are the same order. Each is pack, unpack, and that registry's publish. Full descriptions are on the Jira issues.
+
+Go and Swift (2026-10-06) each cover every feature the six packages have: the wire format, schemes, strings, lists, dicts, the session, round limits, hostile vectors, the language-pair ring, and CI. Neither has a registry upload. Both install from a git tag, so their open decisions are about tag and manifest layout (Go `go/vX.Y.Z` tags; Swift `Package.swift` at the repository root). These are listed on the Jira issues.

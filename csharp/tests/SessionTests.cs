@@ -44,6 +44,21 @@ public class SessionTests
         Assert.Equal(0, Mismatched(bytes, Parse(GoldenHex)));
     }
 
+    // The same bytes every package pins (python test_ac1_ciphertext_matches_csharp and its twins).
+    [Fact]
+    public void Ac1_CiphertextMatchesTheSharedVector()
+    {
+        // Arrange
+        var opener = PackSession.Load(Seed())!;
+        opener.Start(Nonce(1));
+
+        // Act
+        var payload = opener.Pack(Position, Row)!;
+
+        // Assert
+        Assert.Equal("b55d0a29c56c203712b241232e", Convert.ToHexString(payload).ToLowerInvariant());
+    }
+
     [Fact]
     public void S7_ClearUnpackStillReturnsTheRow()
     {

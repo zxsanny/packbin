@@ -86,7 +86,8 @@ def check_csharp(directory, version):
     need(xml_text(spec, "id") == "Packbin", "nuspec id is not Packbin")
     need(xml_text(spec, "version") == version, f"nuspec version {xml_text(spec, 'version')} is not {version}")
     need(xml_text(spec, "license") == "MIT", "license MIT is not declared in the nuspec")
-    need(any(re.fullmatch(r"lib/[^/]+/Packbin\.dll", name) for name in members), "Packbin.dll is missing from lib/")
+    for framework in ("netstandard2.0", "net10.0"):
+        need(f"lib/{framework}/Packbin.dll" in members, f"lib/{framework}/Packbin.dll is missing")
     need("README.md" in members, "README.md is missing")
 
 
