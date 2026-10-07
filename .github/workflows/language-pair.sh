@@ -153,7 +153,8 @@ handoff cpp typescript roundwhen "$roundwhen_hex"
 # AZ-2239: only TypeScript, Python and Java take part in the listgroup, dictgroup and listflags rings. Rust
 # refuses these schemes when it builds them (a list or dict element is one integer, float, bytes, utf8, list
 # or dict; README upgrade notes, integrity_tests.rs), C++ builds an invalid scheme for them (bind_element in
-# table.hpp), and C# throws KeyNotFoundException on unpack until AZ-2119 lands, so none of the three is run.
+# table.hpp), and C# has no case for them in its driver yet (a group element unpacks since AZ-2119; a flags element still
+# throws KeyNotFoundException), so none of the three is run.
 # A package that joins gets its handoff lines here and the commands in its driver.
 handoff typescript python listgroup "$listgroup_hex"
 handoff python java listgroup "$listgroup_hex"

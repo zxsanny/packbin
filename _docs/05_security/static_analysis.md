@@ -62,3 +62,18 @@
 - Loop 13: 2.63 million unpack calls, 0 hang, 0 panic, 0 walker exception; F10 and F11 recorded.
 - Loop 11: unpack paths in five packages hardened (F4 to F9, fixed).
 - Loop 10: C++ core: no heap, exceptions or RTTI; every `memcpy` guarded; 20 M ASan/UBSan fuzz packets, 0 reports; F0 (32-bit count truncation, High) found and fixed.
+
+## Loop 17 addendum (2026-10-07): C# typed binding
+
+Scope: `git diff 68ca4f8..HEAD -- csharp/`, read in full by the parent (total review `_docs/loops/loop17/review17.md`) and probed with a project built against the committed tree.
+
+| Area | Result |
+|------|--------|
+| Injection, command, SQL, template | none: no process, shell, SQL or template use in the package |
+| Reflection and dynamic code | accessors and constructors are compiled with `Expression.Compile` from the scheme author's own expressions and types (`FieldAccess.cs`, `FieldBinding.cs`); no member, type or method name comes from a packet; no `Activator.CreateInstance` on a packet-chosen type; no `Type.GetType` |
+| Deserialization of untrusted bytes | typed unpack builds only the row, nested row and element types the scheme names; counts are checked against the bytes left and the round budget before allocation (unchanged); conversion of collection elements can throw (F25), unsupported collection members throw (F26), typed rounds throw (F17) |
+| Integer handling | pack side: `WholeNumber` range-checks every integer through `decimal`; counts read back from packets are `(long)` of a whole in-range double or a `long`/`ulong` clamp (`TryUnpackCount`), no overflow; a count that does not fit an int on pack is an `ArgumentException` |
+| Secrets and logging | no secret, no logging in the package; pack error messages name the member and, for numbers, the value the caller passed (no packet data) |
+| Concurrency | the new files keep no shared mutable state: statics are factories and read-only tables; the compiled delegates are immutable; each call builds its own `RowValues` and `Scope` |
+
+Findings: F25 (Medium) and F26 (Low), details in `security_report.md`. F17 re-verified. Memory: see the F10 C# row of the report.

@@ -1,0 +1,23 @@
+# Autodev loop record — loop 17
+
+loop: 17
+branch:
+worktree: none (worked on dev, same as loops 11 to 16)
+plan_artifact: _docs/loops/loop17/plan17.md
+tasks_shipped: [AZ-2092_csharp_scoped_binding, AZ-2093_csharp_ac10_public_path, AZ-2114_hostile_session_tests, AZ-2115_split_form_reference_bytes, AZ-2119_csharp_group_list_element, AZ-2121_flag_scope_container_tests, AZ-2180_csharp_flag_group_clone, AZ-2181_csharp_count_integer_only, AZ-2182_csharp_nonlist_round_value, AZ-2191_csharp_dict_pack_strict]
+partly_shipped: [AZ-2135_split_bits_field_order (C# G4 done; Python numbering by scheme order and the C++ flag-byte scope follow-up open), AZ-2128_flag_group_presence_parity (C# nested flags, split flag bit and u2 presence done; the when/times/repeat angle held with AZ-2120)]
+held: [AZ-2120_csharp_when_under_flags_pack (owner 2026-10-07: decide with the other five packages)]
+leftovers:
+  - "The next loop's intake is `_docs/loops/loop18/handoff18.md`: six specs stay in `todo/` (AZ-2068, AZ-2120, AZ-2126, AZ-2128, AZ-2135, AZ-2194), ten owner decisions with a recommendation each, three clear gaps to spec (C# dictionary-mode repack of group elements, Rust map `times` lone scalar, C# `Bytes`/`Sized` given a non-collection) and the hopper as waves: one worker per package for AZ-2126 and the C++ flag-scope spec, the vector and AZ-2194 after them, AZ-2120 with all six packages; then the Go package (AZ-2222), then Swift (AZ-2223)"
+  - "Owner decisions raised by loop 17 (details in `assessment17.md`, `review17.md`, `security_report.md`): AZ-2092 AC-7 reached 2.1x cold and 2.3x warm, not 3x (accept, or a dictionary-free typed walker); F25 / R1 a hostile element value throws `OverflowException` out of typed `Unpack` when the member's element type is narrower than the field (refuse at construction, recommended, or catch); D2 non-null all-null nested row dropped under flags; D8 AOT and IL2CPP; E4 `flags` as a list or dict element; E5 lone dictionary in a round; E9 enum and char for numeric fields; E11 `u2`, `bits`, `packed` rounding; R3 the AC-10 test needs a non-parallel collection (790 ms to 1 s inside the suite against 340 to 390 ms alone)"
+  - "Review `review17.md` (PASS_WITH_WARNINGS): R1 to R5 open, R6 no change needed, R7 and R8 fixed. Security `_docs/05_security/security_report.md` (PASS_WITH_WARNINGS): Medium F10, F12, F25 (new), Low 15 with F26 new; F17 re-verified"
+  - "Not run in the total test run (`test_run_loop17_report.md`, verdict PARTIAL): the `cpp-embedded` ARM and `cpp-embedded-esp` stages (no `cpp/` change; the CI `embedded` job runs them on this push), `tsc --noEmit --strict` and the real-vcpkg gate (no TypeScript or port change); the first CI run after the push decides them"
+  - "Docs: `README.md` carries the loop 17 C# upgrade notes, the F25 limit and the C++ platforms bullet (Linux and macOS, from the staged port's `supports`); open in other files: `glossary.md` line 48 (bit numbering omits Python and C#), `architecture.md` line 117 (C# strict numbers), `components/01_csharp_package/tests.md` has no loop 17 section, and the C# split-form snippet in `schema.md` is not the real API (stale before this loop); the C# driver has no case in the `listgroup` and `dictgroup` rings"
+smoke: PASS
+smoke_artifact: _docs/loops/loop17/smoke17.md
+assessment_artifact: _docs/loops/loop17/assessment17.md
+suite: PARTIAL (embedded ARM and ESP stages not run, reason above; every executed stage passed)
+suite_report: _docs/03_implementation/test_run_loop17_report.md
+merged_local: true
+conflicts_resolved: ""
+loop_end_merge: main (fast-forward `origin/main` only after the `dev` push and a green `test.yml` on `dev`)

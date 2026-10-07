@@ -9,12 +9,6 @@ Downstream skills consume this file:
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
 
-- [2026-10-05] [testing] Run a hostile-input fix's new test against the pre-fix tree and require it to fail; the spec's literal packets (`01ffffffff`) passed on the old code in several packages, and only a longer amplifier packet or an exact-shape assert (`needed`, `left`, kind) discriminated.
-  Source: _docs/06_metrics/retro_2026-10-05_loop11.md
-- [2026-10-05] [tooling] CI has no typecheck job, so tests and Docker CI pass a TypeScript type error; run `tsc --noEmit --strict` over `typescript/src` before each TypeScript commit until a CI job exists (a reviewer FAIL caught four TS2345 call sites in loop 11).
-  Source: _docs/06_metrics/retro_2026-10-05_loop11.md
-- [2026-10-05] [testing] Keep the auditor's cross-package fuzz generators and drivers in the repo and run them whenever unpack changes; the scratch differential over 276 855 packets per package found three Medium defects (u64 top-range exception, `__proto__` dict key, `when` in `repeat`) that eight reviewer reports missed.
-  Source: _docs/06_metrics/retro_2026-10-05_loop11.md
 - [2026-10-06] [estimation] Give every task that changes the shape an unpack returns an amplification check (a 1 MiB packet of one-byte rounds with 1 and 36 names, peak memory and time): padding each name per round took TypeScript from 130 to 401 MB, C# from 93 to 525 MB and Rust from 36 to 311 MB.
   Source: _docs/06_metrics/retro_2026-10-06_loop13.md
 - [2026-10-06] [testing] Re-derive every hex string and example row in a spec by hand or from a reference build before the batch starts; AZ-2087 AC-4, AZ-2177 AC-2 and two AZ-2178 hex strings were wrong, and only fresh-reviewer oracles caught them.
@@ -39,3 +33,10 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-06_loop16.md
 - [2026-10-06] [tooling] A subagent shell command must end on its own (stdin from `/dev/null`, a `timeout`, no leftover background processes): a bare `cat > /dev/null` sat 2.5 hours and showed as a running task; put the shell-hygiene paragraph in every worker and reviewer prompt.
   Source: _docs/06_metrics/retro_2026-10-06_loop16.md
+- [2026-10-07] [testing] After rewriting a conversion path, probe it once with a hostile value outside the member's range (a u32 above `int.MaxValue` into a `List<int>`): a differential over 1.4 million random inputs ran only schemes whose member types matched their fields and missed the `OverflowException` that one 7-byte packet shows.
+  Source: _docs/06_metrics/retro_2026-10-07_loop17.md
+- [2026-10-07] [estimation] Before writing a speed-up into an acceptance criterion, measure the floor of the part the change keeps: the dictionary engine costs 130 ms cold of the 570 ms typed round trip, so AZ-2092's "3x" needed a second walker and the loop delivered 2.1x cold and 2.3x warm.
+  Source: _docs/06_metrics/retro_2026-10-07_loop17.md
+- [2026-10-07] [testing] Put a timing assertion in its own non-parallel xunit collection: the AC-10 test takes 340 to 390 ms alone and 790 ms to 1 s inside the full suite, and only its best-of-three retry keeps it green.
+  Source: _docs/06_metrics/retro_2026-10-07_loop17.md
+

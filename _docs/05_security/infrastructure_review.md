@@ -68,3 +68,7 @@ Carried: F1 fixed, F2 (lines moved to `examples.sh:29-31,71-72`), F3 (extended b
 ## Earlier loops (condensed)
 
 Loop 15: read-only build containers, tool pins, action pins, credential flow, symlink behavior of `cargo package`. Loop 14: `timeout-minutes` on every job; build phase credential stripping; F12 to F16. Loop 13: toolchain cache moved to the gitignored `.cache/embedded/`; gate test generates its GPG key into a `mktemp` keyring. Loop 11: F3 extended to the six test images. Loop 10: `cpp/embedded/Dockerfile` base by tag, packages from the distribution, no secrets; `examples.sh` downloads `arduino-cli` 1.1.1 with no checksum (F2).
+
+## Loop 17 addendum (2026-10-07)
+
+No infrastructure file changed in the loop 17 batches. Since loop 16 the owner's multi-target commit (`68ca4f8`) changed three CI files, all read: `run-suite.sh` runs the C# suite a second time with `-p:PackbinTarget=netstandard2.0` (same container, same mounts); `publish-check.py` requires both `lib/netstandard2.0/Packbin.dll` and `lib/net10.0/Packbin.dll` in the `.nupkg` (a stricter artifact check, no new input); `publish-phases.test.sh` follows. The total test run of loop 17 ran `publish-gate.test.sh` and the C# container suite against them. Findings F12, F13, F14, F15, F16, F20, F23, F24 are unchanged.

@@ -1,7 +1,7 @@
 # Security Audit Report
 
-**Date**: 2026-10-06
-**Scope**: packbin, loop 16 (`git diff 9db438e..HEAD`, 12 commits 611c68a to 5c95950, HEAD 5c95950): unpack of untrusted bytes (Java nested rounds and typed rows, u64 counts in TypeScript and Rust, split-form flag bits in TypeScript, Python, Java and C++, Python round and slot limits, Rust `Written`/`RoundLists`/`check_longer`, Python `_flag_scope.py`), session key and nonce handling, the npm JavaScript build, the vcpkg port, the tag-time guard, the `ring` CI job, the new shell scripts. Loop 14 and 15 findings carried by their original ids. Out of scope by instruction: `csharp/**` and the owner's uncommitted hunks (C# findings are carried, not re-verified). `README.md` line numbers are those of `git show HEAD:README.md`.
+**Date**: 2026-10-06 (loop 16), loop 17 addendum 2026-10-07
+**Scope**: packbin. **Loop 17 addendum (2026-10-07)**: `git diff 68ca4f8..HEAD -- csharp/` (HEAD 412ae3a, 4 batches, 17 files of source change): the C# typed binding rewrite (`RowBinding.cs`, `FieldBinding.cs`, `FieldAccess.cs`; `ObjectValues.cs` removed), typed nested rows and row elements, flag-bit binding by field order, counts that must name an integer field, lone values in rounds, group elements in dictionary mode, strict numbers for dictionary rows, the `netstandard2.0` build. New findings F25 and F26; F17 and the C# row of F10 re-verified; the rest of this report is unchanged and was audited in loop 16. Loop 16 scope: packbin, loop 16 (`git diff 9db438e..HEAD`, 12 commits 611c68a to 5c95950, HEAD 5c95950): unpack of untrusted bytes (Java nested rounds and typed rows, u64 counts in TypeScript and Rust, split-form flag bits in TypeScript, Python, Java and C++, Python round and slot limits, Rust `Written`/`RoundLists`/`check_longer`, Python `_flag_scope.py`), session key and nonce handling, the npm JavaScript build, the vcpkg port, the tag-time guard, the `ring` CI job, the new shell scripts. Loop 14 and 15 findings carried by their original ids. Out of scope in loop 16 by instruction: `csharp/**` and the owner's uncommitted hunks (in loop 17 the C# package is in scope and the multi-target work is committed, `68ca4f8`). `README.md` line numbers are those of `git show HEAD:README.md`.
 **Verdict**: PASS_WITH_WARNINGS
 
 ## Summary
@@ -10,8 +10,8 @@
 |----------|-------|
 | Critical | 0 |
 | High     | 0 |
-| Medium   | 2 |
-| Low      | 14 |
+| Medium   | 3 |
+| Low      | 15 |
 
 No Critical or High. The loop's trust-boundary work holds up under probing: no unpack path in Python, TypeScript, Java or Rust allocates from a packet count before checking the bytes left (u64 counts 2^64-1 to 0 refused in microseconds in all four), the Python round and slot budget is checked before each round, per call, overflow-free, and 29.8 million fuzzed unpack calls over 14 to 16 schemes per package (split flag bytes, flags, u64 and u32 counted fields, `u2`, `times`, `repeat`, nested rounds, list and dict elements) raised no exception. The fixed zero nonce of Python `start(16)` is closed, TypeScript `load` checks the brand, and neither the npm build, the vcpkg port nor the `ring` job adds a credential or a registry write path. Two Mediums stay (F10 narrower, F12 unchanged). Seven Lows are new to the report: a Java `unpack` that throws on a typed accessor that does not fit an anchored-group element (F18), session entry points that are not uniformly strict and have no nonce-reuse rule in the docs (F19), the `gcc:16` ring wrapper with a read-write repository and host `/tmp` mount and default network (F20, the known item Q9), `pack` writing as many rounds as the row's count says (F21), C++ unpack returning unvalidated UTF-8 (F22), gaps in the new npm and vcpkg tag-time assertions (F23) and fixed `/tmp` names that are executed (F24). F13 is narrower: the loop 15 symlink refusal is in place and verified.
 
@@ -30,7 +30,7 @@ List: OWASP Top 10 2025, confirmed at owasp.org at the start of the audit.
 | A07 Authentication Failures | N/A | — |
 | A08 Software or Data Integrity Failures | PASS_WITH_WARNINGS | F13, F16, F23 |
 | A09 Security Logging and Alerting Failures | N/A | — |
-| A10 Mishandling of Exceptional Conditions | PASS_WITH_WARNINGS | F17, F18 |
+| A10 Mishandling of Exceptional Conditions | PASS_WITH_WARNINGS | F17, F18, F25, F26 |
 
 ## Findings
 
@@ -38,8 +38,10 @@ List: OWASP Top 10 2025, confirmed at owasp.org at the start of the audit.
 |---|----------|----------|----------|-------|--------|
 | 10 | Medium | A06 | `python/src/packbin/_unpack.py:33-58`, `csharp/Scope.cs:25-37`, `typescript/src/walker.ts:34-38`, `java/.../Cursor.java:20-26`, `rust/src/walk/unpack.rs:33-49`; counted fields `rust/src/walk/unpack.rs:268-290`, `typescript/src/kinds.ts:99-113`, `python/src/packbin/_unpack.py:96-109` | Unpack memory: the limits cap round growth, but the default ceiling is 110 to 430 MiB per call and `bits`, `packed` and list or dict elements stay linear at up to 257 times the packet | reduced again (README now states the bound; Python now limited) |
 | 12 | Medium | A03 | `publish-lib.sh:134-157`, `publish-upload.sh:129-140`, `publish-embedded.sh:128,134`, `publish.yml:29,36,50` | The credentialed job still installs about 60 unpinned, unhashed transitive wheels; the Maven key is visible to host pip in the build phase; `PYPI_TOKEN` beside OIDC; checkout credentials persist | reduced in loop 15, unchanged in loop 16 |
+| 25 | Medium | A10 | `csharp/RowBinding.cs:196-213` (`Element`), `RowBinding.cs:161-186` (`ListOf`, `DictOf`) | Typed C# `Unpack` converts list and dictionary elements with `Convert.ChangeType`; a member whose element type is narrower than the element field makes one hostile packet throw `OverflowException` out of `BinaryPacker.Unpack` | new (loop 17), open |
 | 13 | Low | A08 / A02 | `publish-check.py:155-158,257-276`, `publish-upload.sh:153-154`, `publish-sign.sh:30-45`, `docker-compose.publish.yml:9-12` | Container-written trees: symlinks now refused; non-regular files, the check-to-upload gap and `stage/` against the `.crate` remain; container is root with default network and capabilities | reduced (symlink route closed) |
-| 17 | Low | A10 | `csharp/Packbin.cs:62-67` | A typed C# `Unpack` of a packet that holds a round throws `InvalidCastException` | carried, not re-verified (C# out of scope) |
+| 17 | Low | A10 | `csharp/RowBinding.cs:91-157` (`ApplyField`, `SetValue`), `Packbin.cs:62-72` (`SchemeHandler.Dispatch`) | A typed C# `Unpack` of a packet that holds a round throws `InvalidCastException` | re-verified in loop 17, open (README lists it under limits) |
+| 26 | Low | A10 | `csharp/FieldBinding.cs:74-81` (`ElementOf`), `RowBinding.cs:191-194` (`Created`) | A collection member that is not an array, `List<E>` or `Dictionary<string,E>` (a subclass of `List<Role>`, `Stack<int>`) builds and throws at unpack | new (loop 17), open |
 | 18 | Low | A10 | `java/src/main/java/packbin/Containers.java:204`, `Walker.java:395`, `Packbin.java:112-118` | Java `unpack` throws `ClassCastException` when a typed accessor sits in an anchored-group list or dict element | new to the report (pre-existing, documented in the Javadoc) |
 | 19 | Low | A04 | `python/src/packbin/_session.py:33-36,47-58`, `typescript/src/index.ts:176-178,185-199`, `README.md:458-460` | Session entry points are not uniformly strict, and an explicit nonce has no reuse rule | new |
 | 20 | Low | A02 / A08 | `.github/workflows/ring-cxx.sh:15-25`, `test.yml:73-122` | The `gcc:16` ring wrapper mounts the repository and host `/tmp` read-write, default network and capabilities, image by tag | new (known item Q9) |
@@ -55,7 +57,7 @@ List: OWASP Top 10 2025, confirmed at owasp.org at the start of the audit.
 | 1 | Low | A03 | `publish.yml:29,32,37`, `test.yml:17,63,92,93,96,99,102` | Actions on moving tags | **fixed** (10 non-local `uses:`, all 40-hex commits equal to their tags) |
 | 11 | Low | A06 | `fixtures/hostile/cases.txt:20-21`, the six replays | No test bounds unpack cost by packet size | **fixed** for C#, TypeScript, Java, Rust and Python (`python/tests/test_hostile_vectors.py:24,45-50`); C++ closed with its fixed-capacity bound |
 
-Counts: Medium 2 (F10, F12), Low 14 (F13, F17, F18, F19, F20, F21, F22, F23, F24, F14, F15, F16, F2, F3). F1 and F11 are fixed and not counted.
+Counts: Medium 3 (F10, F12, F25), Low 15 (F13, F17, F18, F19, F20, F21, F22, F23, F24, F26, F14, F15, F16, F2, F3). F1 and F11 are fixed and not counted.
 
 ### Finding Details
 
@@ -74,8 +76,20 @@ Counts: Medium 2 (F10, F12), Low 14 (F13, F17, F18, F19, F20, F21, F22, F23, F24
 - Remaining: (1) non-regular files are not refused: a FIFO and a hard link in the folder pass `refuse_symlinks` (probe) and a FIFO could block a host tool that opens it, such as `twine upload artifacts/python/*` (not run); (2) `cargo publish --no-verify --allow-dirty --manifest-path artifacts/rust/stage/Cargo.toml` (`publish-upload.sh:153-154`) re-archives `stage/`, while the check reads the `.crate` and only `stage/Cargo.toml`'s version and the absence of `stage/target` (`publish-check.py:155-158`); (3) no digest is recorded between check and upload; (4) the container is root with default capabilities and network and can read `/src/.git/config`; (5) the Java sign step still relies on `find -type f` (`publish-sign.sh:45`).
 - Remediation: reject any non-regular file and any file with a link count above 1 under the container folders (walk with `lstat`); publish the Rust crate from the checked `.crate` (extract into a fresh host directory and pack that) or compare the staged file list with the `.crate` members; record SHA-256 of every artifact at check time and verify before upload; run the containers with `--cap-drop ALL`, `--security-opt no-new-privileges` and no network after dependencies are fetched.
 
-**F17: A typed C# `Unpack` throws on a packet that holds a round** (Low / A10, carried)
-- Location `csharp/Packbin.cs:62-67`; not re-verified (the file has uncommitted owner hunks). Impact, probe and remediation as in loop 15: catch the cast in `Dispatch` and return a typed error, or refuse `repeat` and `times` in `Scheme<T>` for typed unpack; keep the README exception.
+**F17: A typed C# `Unpack` throws on a packet that holds a round** (Low / A10, re-verified in loop 17)
+- Location now `csharp/RowBinding.cs:91-157` (`ApplyField` then `SetValue` set a list per round on a scalar member) reached from `csharp/Packbin.cs:62-72` (`SchemeHandler<T>.Dispatch`). Probe (loop 17, a probe project against the committed tree): scheme `Repeat(0, U8 V)`, packet `03 01 02` (two rounds), typed `Unpack` throws `InvalidCastException: Object must implement IConvertible`. Same class as F18 and F25: a receive call without a catch stops. Unchanged by the rewrite (typed `repeat`/`times` binding is excluded in AZ-2092); the README lists it under "Limits to keep in mind".
+- Remediation: catch the cast in `Dispatch` and return a typed error, or refuse `repeat` and `times` in `Scheme<T>` for typed unpack (owner decision since loop 13: typed `times` binds a collection of rows, as Rust).
+
+**F25: Typed C# `Unpack` converts collection elements with `Convert.ChangeType`; a hostile value throws out of `Unpack`** (Medium / A10, new in loop 17)
+- Location: `csharp/RowBinding.cs:212` (`Element` converts an element that is not already of the member's element type with `Convert.ChangeType`), reached from `ListOf` (`:161-176`) and `DictOf` (`:178-186`), called by `SetValue` from `SchemeHandler<T>.Dispatch`. The old `ObjectValues.ConvertValue` made the same call, so the defect is not new, but the rewritten path keeps it, adds no check at scheme construction and the new code is the place to close it.
+- Probe (loop 17): `Field.List((IdsRow x) => x.Ids, Field.U32<ElU>(0, e => e.N))` with `List<int> Ids`; the 7-byte packet `01 01 00 FF FF FF FF` (u32 4294967295) makes `BinaryPacker.Unpack` throw `OverflowException: Value was either too large or too small for an Int32`; the same scheme with 7 unpacks. Also `byte[] Ids` with a `U16` element: a packet holding 300 throws `OverflowException: ... unsigned byte`. Nothing ties the member's element type to the field kind at construction, and an `int` list for a `u32` field is an easy mistake.
+- Impact: a service whose scheme has such a member stops its receive loop on one 7-byte packet from any peer (the README says unpack returns an error value and does not throw on hostile input). Medium because the packet is tiny and unauthenticated, the precondition is a plausible scheme mistake, and the contract says it cannot happen.
+- Remediation (owner decision needed, Medium bug does not auto-fix): A) at scheme construction refuse a collection member whose element type cannot hold the element field's whole range (u32 needs `uint`/`long`/`ulong`/`double`...), recommended; or B) catch the conversion in `SchemeHandler.Dispatch` and return a bad-value error for the field. A also closes F26.
+
+**F26: Unsupported collection member types build and throw at unpack** (Low / A10, new in loop 17)
+- Location: `csharp/FieldBinding.cs:74-81` (`ElementOf` reads only the member's own generic arguments), `csharp/RowBinding.cs:191-194` (`Created` throws `InvalidCastException` when no collection can be built). Probe: `class RoleList : List<Role> {}` as the member of `Field.List(x => x.Roles, Field.Utf8<Role>(0, r => r.Name))` builds; unpack of a valid packet throws `ArgumentException: The value "ada" is not of type "Role"` (element type was taken as `object`). `Stack<int>` throws `InvalidCastException`. HEAD threw too (`GetGenericArguments()[0]` / `Activator`), so no regression.
+- Impact and class: as F17, a peer's valid packet stops a receive loop without a catch; the cause is the scheme, not the packet.
+- Remediation: refuse unsupported collection member types in `CollectionShape` when the scheme is built (an `ArgumentException` naming the member). Assessment question D4 / review R4.
 
 **F18: Java `unpack` throws `ClassCastException` for a typed accessor in an anchored-group element** (Low / A10, new to the report)
 - Location: `java/src/main/java/packbin/Containers.java:204` (`Walker.newRow(element)` returns a `HashMap` because an anchored group element has no child factory), `Walker.java:395` (`field.set.set(row, value)`), documented in the Javadoc at `Packbin.java:112-118` ("It does not check anchored group, flags or u2 elements ... so typed accessors in them fail when the row is unpacked"). `README.md:1075` says `unpack` "does not throw" for Java.
@@ -117,13 +131,13 @@ Counts: Medium 2 (F10, F12), Low 14 (F13, F17, F18, F19, F20, F21, F22, F23, F24
 
 **F14, F15, F16** carried (no `environment:` in `publish.yml`; no version check anywhere, and `publish-embedded.sh:63-76` writes `$version` into `vcpkg.json` unquoted, which `check_vcpkg` rejects when the parsed value differs from the tag; tokens on argv at the cited lines). **F2**: `examples.sh:29-31` downloads `arduino-cli` 1.1.1 with no checksum, `:71-72` installs `esp32:esp32` without a version; `embedded` job only, no secret. **F3**: no image or Dockerfile changed; `gcc:16` is now also the ring compiler (F20). **F1** and **F11**: fixed, see the table.
 
-## Loop 16 status: F10 and F11 per package, as audited
+## Loop 16 status: F10 and F11 per package, as audited (the C# row is loop 17)
 
 This block replaces the one of loop 15.
 
 | # | Package | Status | Evidence |
 |---|---------|--------|----------|
-| F10 | C# | reduced, not re-probed | out of scope (owner's uncommitted work); loop 15 figures stand; typed `Unpack` of a round throws (F17) |
+| F10 | C# | reduced, re-measured in loop 17 (by the batch 1 worker, not repeated here) | typed `Unpack` of a 1 MiB packet of 16 lists x 65,535 one-byte elements allocates 285 MB (276 MB at `68ca4f8`, +3%: a second collection is built when the elements are converted); with row-typed elements 327 MB (that shape did not unpack at `68ca4f8`); the loop 15 figure of 192 MB for the dictionary path stands; typed `Unpack` of a round throws (F17) |
 | F10 | TypeScript | reduced | check before allocation, per-call budget (`walker.ts:34-38,274-281`); u64 counts refused in under 1 ms for `times`, `bits`, `packed`, `sized` at 2^64-1, 2^63, 2^53, 2^53-1, 4e9; `bits` 8,388,608 items in 1 MiB +136 MB |
 | F10 | Java | reduced | `Cursor.startRound` before each round, also for nested rounds; 65,535 outer rounds of `repeat -> times` +15 MB, 1 MiB refused in 42 ms; typed accessor mismatch throws (F18) |
 | F10 | Rust | reduced | unpack unchanged (`walk/unpack.rs`); u64 counts refused in 3 to 27 microseconds at 2 MB resident, no overflow in a debug-assertions build; pack count checked (`borrowed_count`); ceiling and `bits` 257 times as in loop 15 |
@@ -136,7 +150,7 @@ This block replaces the one of loop 15.
 
 | Package | CVE | Severity | Fix Version |
 |---------|-----|----------|-------------|
-| none known | `npm audit` 0 (also `--omit=dev`); `dotnet list package --vulnerable --include-transitive` 0 (test project, HEAD copy); OSV 0 for `npm` 11.21.0, `twine` 7.0.0, `platformio` 6.2.0, `idf-component-manager` 3.1.2, `build` 1.6.1, `setuptools` 84.0.0, `pytest` 9.1.1, `@noble/hashes` 2.4.0, `typescript` 5.9.3 and the four NuGet test packages; the loop 15 wheel closure (61 packages) not re-resolved, pins unchanged; `cargo audit` could not parse the advisory database (CVSS 4.0), lockfiles hold only path crates | — | — |
+| none known | loop 17: `dotnet list package --vulnerable --include-transitive` 0 for `csharp/Packbin.csproj` (adds `System.Memory` 4.6.3 for `netstandard2.0` only) and for `csharp/tests/Packbin.Tests.csproj`; `npm audit` 0 (also `--omit=dev`); `dotnet list package --vulnerable --include-transitive` 0 (test project, HEAD copy); OSV 0 for `npm` 11.21.0, `twine` 7.0.0, `platformio` 6.2.0, `idf-component-manager` 3.1.2, `build` 1.6.1, `setuptools` 84.0.0, `pytest` 9.1.1, `@noble/hashes` 2.4.0, `typescript` 5.9.3 and the four NuGet test packages; the loop 15 wheel closure (61 packages) not re-resolved, pins unchanged; `cargo audit` could not parse the advisory database (CVSS 4.0), lockfiles hold only path crates | — | — |
 
 ## Recommendations
 
@@ -144,11 +158,12 @@ This block replaces the one of loop 15.
 None.
 
 ### Short-term (Medium)
+- F25: refuse at scheme construction a collection member whose element type cannot hold the element field's whole range (owner decision A or B above); recommended before the C# package is released.
 - F10: lower the default `maxSlots` or add a byte budget that counted fields and elements also charge; Rust bitset for `bits`; before the first real release.
 - F12: hash-locked tool installs; Maven key only to `publish-sign.sh`; drop `PYPI_TOKEN`; `persist-credentials: false`.
 
 ### Short-term (Low, cheap)
-- F18: refuse typed accessors under anchored-group, `flags` and `u2` elements at construction (Java). F17: catch the cast in `Dispatch` (C#).
+- F18: refuse typed accessors under anchored-group, `flags` and `u2` elements at construction (Java). F17: catch the cast in `Dispatch` (C#). F26: refuse unsupported collection members at construction (C#).
 - F19: README and contract text on nonce reuse; strict `start`/`join` in TypeScript and the Python constructor.
 - F20: harden the ring wrapper (`--network none`, `--cap-drop ALL`, `:ro`, private temp, digest) after the first green `ring` run.
 - F21: refuse a `times` count above `maxRounds` in `pack`. F13: reject non-regular files; upload the Rust crate from the checked `.crate`; digests between check and upload.
@@ -158,6 +173,10 @@ None.
 - F22 validate UTF-8 in the C++ core (AZ-2078); F24 `mktemp -d` for the ring and position defaults; F14 environment with reviewers and tag ruleset; F15 version regex; F16 tokens off argv; F2 checksum for `arduino-cli`, pinned ESP32 core; F3 images by digest (now also the ring compiler and the publish build containers).
 
 ## Evidence and limits
+
+Loop 17 method: read the whole C# source diff `68ca4f8..HEAD` (about 780 lines; the total review is `_docs/loops/loop17/review17.md`), ran a probe project against the committed tree (F25, F26, F17 above), and used the batch reports' differentials against the previous commit (1.4 million `Read`, typed unpack and typed pack lines per stage over 14 and 21 schemes with random and mutated bytes, 0 outcome mismatches outside the classes the specs name; the 9 integer count widths x 4 counted kinds with 90 000 hostile counts, 0 differences) and the total test run of the loop (C# 649 on both targets in the CI container, the language-pair ring, the hostile case files). Not re-run in loop 17: the other five packages (no source change since the loop 16 audit), Docker beyond the test run, the publish scripts beyond `publish-gate.test.sh`.
+
+Loop 16 method follows.
 
 Method: read the changed source of Python, TypeScript, Rust, Java (diff and surrounding code) and the C++ delta, the CI and publish scripts, the embedded harness and the new test scripts; ran my own probes on a `git archive HEAD` copy in the session scratch directory (Python 3.14.6, Node 22.23, JDK 21.0.2, Rust 1.79 release with debug assertions and overflow checks, Apple clang with ASan and UBSan, macOS arm64, `ru_maxrss` and `ps` resident sizes, runtime baselines subtracted where stated); fuzz of 14 schemes (Python, TypeScript) and 16 (Java), 29.8 million unpack calls, 0 exceptions; `cargo test --release` on the HEAD copy (360 tests in the library and 9 integration files, all pass) and the C++ suite under sanitizers (pass); read-only network queries (`npm audit`, `git ls-remote`, OSV, owasp.org, the NuGet vulnerability feed through `dotnet list package`). No publish, no registry write, no credential used; this audit modified nothing outside `_docs/05_security/` and its scratch directory (every build, install and probe ran on the `git archive` copy); the five reports of loop 15 were overwritten without asking, as the skill allows for autodev Step 14.
 

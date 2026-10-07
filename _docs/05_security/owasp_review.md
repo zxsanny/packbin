@@ -34,3 +34,7 @@ Unchanged from loop 15: a `v*` tag by anyone with write access starts `publish`,
 
 - Loop 15: A01 to A10 as above for the round limits (F10, F11, F17), read-only build containers (F13), CI pins (F1 fixed, F12 reduced). Full table: `git show 9db438e:_docs/05_security/owasp_review.md`.
 - Loop 10/11/13/14: no access control (library); F4 to F9 fixed; F10, F11 opened in loop 13; F12 to F16 opened in loop 14. Full tables are in git history (`git show 43af2f6:_docs/05_security/owasp_review.md`).
+
+## Loop 17 addendum (2026-10-07)
+
+List unchanged (OWASP Top 10 2025). Only C# changed in loop 17. A10 Mishandling of Exceptional Conditions stays PASS_WITH_WARNINGS with two more findings: F25 (a hostile element value throws out of typed `Unpack` when the member's element type is narrower than the field, Medium) and F26 (unsupported collection members throw at unpack, Low), next to F17 (typed rounds) and F18 (Java). A06 Insecure Design: F10 unchanged in kind, the C# figures are in the report. All other categories: no new evidence from the C# diff (no access control, crypto, injection, auth, logging or SSRF surface in the package).

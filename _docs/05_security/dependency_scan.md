@@ -48,3 +48,7 @@ No known-vulnerable dependency. No Critical or High.
 - Loop 14: `twine`, `platformio`, `idf-component-manager`, `build` unpinned, 0 advisories; `java/api-check.sh` jars equal Maven Central's checksums.
 - Loop 13: `npm audit` 0; `dotnet list package --vulnerable --include-transitive` none; `cargo audit` failed on CVSS 4.0.
 - Loop 11: `typescript`, `rust`, `python`, `csharp`, `java` unchanged; no vulnerable package. Loop 10: C++ core has no dependencies; `arduino-cli` without checksum (F2).
+
+## Loop 17 addendum (2026-10-07)
+
+Scope: `csharp/` only (`git diff 68ca4f8..HEAD`). `dotnet list <project> package --vulnerable --include-transitive` against nuget.org: `csharp/Packbin.csproj` and `csharp/tests/Packbin.Tests.csproj` both report "has no vulnerable packages given the current sources". The only dependency the package has is `System.Memory` 4.6.3, referenced for the `netstandard2.0` build only (`68ca4f8`); the `net10.0` build has none. No package was added or changed in loop 17 batches. The other five packages are unchanged since the loop 16 scan.
