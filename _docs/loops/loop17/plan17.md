@@ -92,4 +92,4 @@ AZ-2092 rewrites the core typed path (Risk 1: pin current bytes first by running
 
 ## Assessment rounds
 
-Optional. Appended by `protocols/feature-reentry.md`.
+Round 1 (2026-10-07, `assessment17.md`): CLARIFY, 20 covered / 4 out-of-scope / 3 gap-clear / 8 gap-unclear. No re-entry: owner preference (memory `one-total-review-and-test`) is that `todo/` does not grow during a loop. The 3 clear gaps (E3, E6, E8) and the 8 questions (D2, D4, D8, D11, E4, E5, E9, E11) go to `handoff18.md`. `assess_round` stays 0.

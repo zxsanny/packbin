@@ -1,4 +1,3 @@
-using System.Reflection;
 using Packbin;
 
 namespace Packbin.Tests;
@@ -74,15 +73,12 @@ public class HostileSessionTests
         return (opener, waiter);
     }
 
-    private static object Private(PackSession session, string name) =>
-        typeof(PackSession).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(session)!;
-
     // The packet the opener would send for these clear bytes at its next counter. The opener is then moved past that
     // counter, so its next real message is padded with the keystream the waiter expects.
     private static byte[] PadAsOpener(PackSession opener, string clearHex)
     {
         var padded = Convert.FromHexString(clearHex);
-        SessionPad.Xor((byte[])Private(opener, "_send"), (ulong)(long)Private(opener, "_sendCount"), padded);
+        SessionPad.Xor((byte[])SessionPrivates.Get(opener, "_send"), (ulong)(long)SessionPrivates.Get(opener, "_sendCount"), padded);
         Assert.NotNull(opener.Pack(Ok, new OkRow()));
         return padded;
     }
@@ -157,7 +153,7 @@ public class HostileSessionTests
 
         // Act
         var hostileError = Within(1, () => waiter.Unpack(hostile, handler, ok));
-        var countAfterHostile = (ulong)Private(waiter, "_recvCount");
+        var countAfterHostile = (ulong)SessionPrivates.Get(waiter, "_recvCount");
         var valid = opener.Pack(Ok, new OkRow { N = 7 })!;
         var validError = Within(1, () => waiter.Unpack(valid, handler, ok));
 
@@ -166,6 +162,6 @@ public class HostileSessionTests
         Assert.Equal(1UL, countAfterHostile);
         Assert.Null(validError);
         Assert.Equal((byte)7, got!.N);
-        Assert.Equal(2UL, (ulong)Private(waiter, "_recvCount"));
+        Assert.Equal(2UL, (ulong)SessionPrivates.Get(waiter, "_recvCount"));
     }
 }

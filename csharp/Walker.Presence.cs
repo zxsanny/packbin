@@ -13,9 +13,19 @@ internal static partial class Walker
             Field.Kind.Bool => IsTrue(values, inner.Name),
             Field.Kind.Group when inner.Children.Length == 0 => IsTrue(values, inner.Name),
             Field.Kind.Group => GroupOn(values, inner),
-            Field.Kind.U2 => inner.Names.Any(name => IsPresent(values, name)),
+            Field.Kind.U2 => AnyPresent(values, inner.Names),
             _ => IsPresent(values, inner.Name),
         };
+
+    private static bool AnyPresent(IReadOnlyDictionary<string, object?> values, string[] names)
+    {
+        for (var i = 0; i < names.Length; i++)
+        {
+            if (IsPresent(values, names[i]))
+                return true;
+        }
+        return false;
+    }
 
     private static bool IsTrue(IReadOnlyDictionary<string, object?> values, string name) =>
         values.TryGetValue(name, out var v) && v is true;
@@ -46,7 +56,7 @@ internal static partial class Walker
         child.Type switch
         {
             Field.Kind.Group => GroupOn(values, child),
-            Field.Kind.U2 => child.Names.Any(name => IsPresent(values, name)),
+            Field.Kind.U2 => AnyPresent(values, child.Names),
             Field.Kind.Flags => child.Children.Any(bit => ChildPresent(values, bit)),
             Field.Kind.FlagBit => BitOn(values, child.Inner!),
             _ => IsGroupValue(child) && IsPresent(values, child.Name),

@@ -1,4 +1,3 @@
-using System.Reflection;
 using Packbin;
 
 namespace Packbin.Tests;
@@ -158,8 +157,7 @@ public class TopRangeAndSessionTests
         workers.ForEach(w => w.Join());
 
         // Assert: every counter 0..N-1 was used exactly once, so the ciphertext set is the one a single thread gives
-        var key = (byte[])typeof(PackSession).GetField("_recv", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .GetValue(receiver)!;
+        var key = (byte[])SessionPrivates.Get(receiver, "_recv");
         var expected = new HashSet<string>();
         for (ulong k = 0; k < threads * perThread; k++)
         {
