@@ -172,14 +172,23 @@ internal static partial class Walker
         seen[field.Name] = raw;
     }
 
+    // A typed row's nested row packs from its own values and its own `seen`, as unpack reads it into a scope of its own.
     private static void PackGroup(
         Field field,
         IReadOnlyDictionary<string, object?> values,
         List<byte> buffer,
         Scope seen)
     {
+        if (!(field.NestedRow && values is RowValues))
+        {
+            foreach (var child in field.Children)
+                PackField(child, values, buffer, seen);
+            return;
+        }
+        var nested = (RowValues)RequireValue(field, values);
+        var inner = new Scope();
         foreach (var child in field.Children)
-            PackField(child, values, buffer, seen);
+            PackField(child, nested, buffer, inner);
     }
 
     private static void PackScalar(
@@ -252,12 +261,15 @@ internal static partial class Walker
     {
         if (field.Children.Length == 0)
             values[field.Name] = true;
+        var scope = field.NestedRow && values.Scoped ? values.Fresh() : values;
         foreach (var child in field.Children)
         {
-            var err = UnpackField(child, bytes, ref offset, values, repeatLists: false);
+            var err = UnpackField(child, bytes, ref offset, scope, repeatLists: false);
             if (err is not null)
                 return err;
         }
+        if (!ReferenceEquals(scope, values))
+            values[field.Name] = scope;
         return null;
     }
 
@@ -292,7 +304,7 @@ internal static partial class Walker
             if (!values.Budget.TryStartRound(rounds++, slots))
                 return InterimBadValue(field.Name, bytes.Length - offset);
             var roundStart = offset;
-            var group = new Scope(values.Budget);
+            var group = values.Fresh();
             foreach (var child in field.Children)
             {
                 var err = UnpackField(child, bytes, ref offset, group, repeatLists: false);

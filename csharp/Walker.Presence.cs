@@ -17,13 +17,23 @@ internal static partial class Walker
     private static bool IsTrue(IReadOnlyDictionary<string, object?> values, string name) =>
         values.TryGetValue(name, out var v) && v is true;
 
+    // The values a group's fields read: a typed row's nested row has its own (null when the member is null), anything
+    // else shares the row around it. A nested row counts for what is inside it, not for the member being non-null.
+    private static IReadOnlyDictionary<string, object?>? ScopeOf(Field group, IReadOnlyDictionary<string, object?> values) =>
+        group.NestedRow && values is RowValues
+            ? values.TryGetValue(group.Name, out var nested) ? nested as RowValues : null
+            : values;
+
     private static bool GroupOn(IReadOnlyDictionary<string, object?> values, Field group)
     {
-        if (IsPresent(values, group.Name))
+        var scope = ScopeOf(group, values);
+        if (scope is null)
+            return false;
+        if (ReferenceEquals(scope, values) && IsPresent(values, group.Name))
             return true;
         foreach (var child in group.Children)
         {
-            if (ChildPresent(values, child))
+            if (ChildPresent(scope, child))
                 return true;
         }
         return false;
@@ -65,17 +75,19 @@ internal static partial class Walker
 
     private static void RequireGroupValues(Field flagged, Field group, IReadOnlyDictionary<string, object?> values)
     {
+        var scope = ScopeOf(group, values)
+            ?? throw new ArgumentException($"'{group.Name}': flag group '{flagged.Name}' is set, so it needs a value");
         foreach (var child in group.Children)
         {
             if (child.Type == Field.Kind.Group)
             {
-                RequireGroupValues(flagged, child, values);
+                RequireGroupValues(flagged, child, scope);
                 continue;
             }
             string[] names = child.Type == Field.Kind.U2 ? child.Names : IsGroupValue(child) ? [child.Name] : [];
             foreach (var name in names)
             {
-                if (!IsPresent(values, name))
+                if (!IsPresent(scope, name))
                     throw new ArgumentException($"'{name}': flag group '{flagged.Name}' is set, so it needs a value");
             }
         }

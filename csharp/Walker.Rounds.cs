@@ -114,7 +114,7 @@ internal static partial class Walker
         IReadOnlyDictionary<string, object?> values,
         int index)
     {
-        var slice = new Dictionary<string, object?>();
+        var slice = values is RowValues ? new RowValues(names.Count) : new Dictionary<string, object?>();
         foreach (var name in names)
         {
             if (!values.TryGetValue(name, out var v) || v is null)

@@ -263,7 +263,7 @@ internal static partial class Walker
             if (!values.Budget.TryStartRound(i, slots))
                 return InterimBadValue(field.Name, bytes.Length - offset);
             var roundStart = offset;
-            var group = new Scope(values.Budget);
+            var group = values.Fresh();
             foreach (var child in field.Children)
             {
                 var err = UnpackField(child, bytes, ref offset, group, repeatLists: false);
@@ -330,10 +330,21 @@ internal static partial class Walker
         var child = field.Children[0];
         foreach (var item in items)
         {
-            var slice = values.ToDictionary(p => p.Key, p => p.Value);
-            slice[child.Name] = item;
-            PackField(child, slice, buffer, new Scope());
+            PackField(child, ElementValues(values, child, item), buffer, new Scope());
         }
+    }
+
+    // A typed row's element has values of its own. A dictionary row's element sees the row's values with its own added.
+    private static IReadOnlyDictionary<string, object?> ElementValues(
+        IReadOnlyDictionary<string, object?> values,
+        Field element,
+        object? item)
+    {
+        if (values is RowValues)
+            return RowBinding.Element(element, item);
+        var slice = values.ToDictionary(p => p.Key, p => p.Value);
+        slice[element.Name] = item;
+        return slice;
     }
 
     private static object? UnpackList(
@@ -353,7 +364,7 @@ internal static partial class Walker
         var items = new List<object?>(Math.Min(count, bytes.Length - offset));
         for (var i = 0; i < count; i++)
         {
-            var one = new Scope(values.Budget);
+            var one = values.Fresh();
             var elementStart = offset;
             var err = UnpackField(child, bytes, ref offset, one, false);
             if (err is not null)
@@ -392,9 +403,7 @@ internal static partial class Walker
             buffer.Add((byte)keyBytes.Length);
             buffer.Add((byte)(keyBytes.Length >> 8));
             buffer.AddRange(keyBytes);
-            var slice = values.ToDictionary(p => p.Key, p => p.Value);
-            slice[child.Name] = value;
-            PackField(child, slice, buffer, new Scope());
+            PackField(child, ElementValues(values, child, value), buffer, new Scope());
         }
     }
 
@@ -425,7 +434,7 @@ internal static partial class Walker
             if (!Compat.TryUtf8(bytes.Slice(offset, keyLen), out var key))
                 return InterimBadValue(field.Name, left);
             offset += keyLen;
-            var one = new Scope(values.Budget);
+            var one = values.Fresh();
             var valueStart = offset;
             var err = UnpackField(child, bytes, ref offset, one, false);
             if (err is not null)

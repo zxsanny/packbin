@@ -1,18 +1,30 @@
 namespace Packbin;
 
-// State owned by one call: the values read (unpack) or written (pack) so far in one scope (the packet, or one
-// repeat/times round, list element or dictionary value) and the flags bytes read there. A `when` is decided on these,
-// so pack and unpack agree. FlagScopes guarantees a split flag bit finds its byte in the same scope, so nothing is
-// looked up in an outer one.
+// State owned by one call: the values read (unpack) or written (pack) so far in one scope (the packet, a nested row of
+// a typed row, or one repeat/times round, list element or dictionary value) and the flags bytes read there. A `when` is
+// decided on these, so pack and unpack agree. FlagScopes guarantees a split flag bit finds its byte in the same scope,
+// so nothing is looked up in an outer one.
 internal sealed class Scope : Dictionary<string, object?>
 {
     private readonly RoundBudget? _budget;
     private Dictionary<FlagGroup, byte>? _flagBytes;
 
-    // Unpack passes the call's budget to every scope it opens (round, list element, dictionary value); pack has none.
-    public Scope(RoundBudget? budget = null) => _budget = budget;
+    // Unpack passes the call's budget to every scope it opens (round, list element, dictionary value, nested row); pack
+    // has none. `scoped`: a typed row, whose nested rows read into scopes of their own; the dictionary overloads keep
+    // one flat scope.
+    public Scope(RoundBudget? budget = null, bool scoped = false)
+    {
+        _budget = budget;
+        Scoped = scoped;
+    }
+
+    public bool Scoped { get; }
 
     public RoundBudget Budget => _budget ?? throw new InvalidOperationException("this scope has no round budget");
+
+    // A scope for one round, list element, dictionary value or nested row: the same budget, no flag byte of the scope
+    // around.
+    public Scope Fresh() => new(_budget, Scoped);
 
     public void SetFlagByte(FlagGroup group, byte flags) => (_flagBytes ??= [])[group] = flags;
 

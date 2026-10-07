@@ -62,10 +62,10 @@ internal sealed class SchemeHandler<T> : SchemeHandler where T : class, new()
 
     internal override object? Dispatch(ReadOnlySpan<byte> fieldBytes)
     {
-        var raw = BinaryPacker.ReadFields(_scheme, fieldBytes);
+        var raw = BinaryPacker.ReadFields(_scheme, fieldBytes, scoped: true);
         if (raw.Error is not null)
             return raw.Error;
-        _action(ObjectValues.To<T>(raw.Values));
+        _action(RowBinding.To<T>(_scheme.Fields, raw.Values));
         return null;
     }
 }
@@ -153,16 +153,18 @@ public static class BinaryPacker
     {
         if (values is IReadOnlyDictionary<string, object?> map)
             return Pack(scheme, map);
-        return Pack(scheme, ObjectValues.From(values));
+        return Pack(scheme, RowBinding.Read(scheme.Fields, values));
     }
 
     public static object? Unpack(ReadOnlySpan<byte> bytes, params SchemeHandler[] handlers)
     {
-        var seen = new HashSet<int>();
-        foreach (var handler in handlers)
+        for (var i = 0; i < handlers.Length; i++)
         {
-            if (!seen.Add(handler.TypeNumber))
-                throw new ArgumentException("duplicate type number");
+            for (var j = 0; j < i; j++)
+            {
+                if (handlers[j].TypeNumber == handlers[i].TypeNumber)
+                    throw new ArgumentException("duplicate type number");
+            }
         }
 
         if (bytes.Length < 1)
@@ -189,9 +191,11 @@ public static class BinaryPacker
         return ReadFields(scheme, bytes.Slice(1));
     }
 
-    internal static UnpackResult ReadFields<T>(Scheme<T> scheme, ReadOnlySpan<byte> bytes) where T : class, new()
+    // `scoped`: read into a typed row, whose nested rows have scopes of their own; the dictionary result keeps one flat scope.
+    internal static UnpackResult ReadFields<T>(Scheme<T> scheme, ReadOnlySpan<byte> bytes, bool scoped = false)
+        where T : class, new()
     {
-        var values = new Scope(new RoundBudget(scheme.MaxRounds, scheme.MaxSlots));
+        var values = new Scope(new RoundBudget(scheme.MaxRounds, scheme.MaxSlots), scoped);
         var offset = 0;
         foreach (var field in scheme.Fields)
         {
@@ -253,6 +257,7 @@ internal static class SchemeOrder
             case Field.Kind.Group:
             case Field.Kind.List:
             case Field.Kind.Dict:
+                RequireCreatable(field);
                 return field.With(children: WalkFromZero(field));
             case Field.Kind.U2:
                 for (var i = 0; i < field.SlotIds.Length; i++)
@@ -300,6 +305,19 @@ internal static class SchemeOrder
         type.IsGenericType
             ? $"{type.Name.Substring(0, type.Name.IndexOf('`'))}<{string.Join(", ", type.GetGenericArguments().Select(TypeName))}>"
             : type.Name;
+
+    // Unpack creates a nested row and the rows of a list or dict, so their types need a public parameterless constructor.
+    private static void RequireCreatable(Field field)
+    {
+        var binding = field.Binding!;
+        if (field.Type == Field.Kind.Group && binding.CreateNested is null)
+            throw NoConstructor(field, binding.NestedType!);
+        if (binding.Shape is { RowElements: true, CreateElement: null } shape)
+            throw NoConstructor(field, shape.ElementType);
+    }
+
+    private static ArgumentException NoConstructor(Field field, Type type) =>
+        new($"'{field.Name}': row type {TypeName(type)} needs a public parameterless constructor to be unpacked");
 
     private static void RequireFlagBit(Field field, bool flagBit)
     {

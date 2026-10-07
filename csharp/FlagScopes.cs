@@ -1,7 +1,8 @@
 namespace Packbin;
 
 // A split flag bit reads the byte its FlagByte() read earlier in the same container: the top level, a repeat or
-// times round, or a list or dictionary element. A byte inside a when may be skipped, so it does not count outside it.
+// times round, a list or dictionary element, or a nested row. A byte inside a when may be skipped, so it does not
+// count outside it. A nested row has values of its own, so it starts with no byte visible and its bytes stay inside it.
 internal static class FlagScopes
 {
     public static void Validate(IReadOnlyList<Field> fields) => Check(fields, []);
@@ -28,7 +29,7 @@ internal static class FlagScopes
                     Check(field.Children, [.. read]);
                     break;
                 case Field.Kind.Group:
-                    Check(field.Children, read);
+                    Check(field.Children, field.NestedRow ? [] : read);
                     break;
                 case Field.Kind.Repeat:
                 case Field.Kind.Times:
