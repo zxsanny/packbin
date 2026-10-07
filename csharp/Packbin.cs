@@ -1,3 +1,5 @@
+using Taken = System.Collections.Generic.Dictionary<int, (string Name, Packbin.Field.Kind Kind)>;
+
 namespace Packbin;
 
 public sealed class Scheme<T> where T : class, new()
@@ -215,7 +217,7 @@ internal static class SchemeOrder
     // caller's Field and Condition objects are never changed, so one can be reused in many schemes.
     public static Field[] Resolve(Type row, IReadOnlyList<Field> fields)
     {
-        var scope = new Dictionary<int, string>();
+        var scope = new Taken();
         var next = 0;
         var resolved = new Field[fields.Count];
         for (var i = 0; i < resolved.Length; i++)
@@ -231,7 +233,7 @@ internal static class SchemeOrder
     // bind their own row types.
     // `flagBit`: the field is a direct child of Flags or the field of a FlagByte bit, the only place a bool or an empty
     // group has a bit to live in.
-    private static Field Walk(Field field, Type? row, Dictionary<int, string> scope, ref int next, bool flagBit = false)
+    private static Field Walk(Field field, Type? row, Taken scope, ref int next, bool flagBit = false)
     {
         RequireFlagBit(field, flagBit);
         RequireRow(field, row);
@@ -239,7 +241,7 @@ internal static class SchemeOrder
         {
             case Field.Kind.When:
                 RequireAnchor(field.Id, next);
-                var pred = field.Pred!.Resolved(Earlier(scope, field.Pred.FieldId, $"when {field.Id}"));
+                var pred = field.Pred!.Resolved(Earlier(scope, field.Pred.FieldId, $"when {field.Id}").Name);
                 return field.With(children: WalkChildren(field, row, scope, ref next), pred: pred);
             case Field.Kind.Flags:
             case Field.Kind.Group when !field.NestedRow:
@@ -250,7 +252,7 @@ internal static class SchemeOrder
                 return field.With(children: WalkChildren(field, row, [], ref next));
             case Field.Kind.Times:
                 RequireAnchor(field.Id, next);
-                var count = Earlier(scope, field.CountId, $"count of times {field.Id}");
+                var count = Count(scope, field.CountId, $"count of times {field.Id}", $"times {field.Id}");
                 return field.With(children: WalkChildren(field, row, [], ref next), countName: count);
             case Field.Kind.FlagBit:
                 return field.With(inner: Walk(field.Inner!, row, scope, ref next, flagBit: true));
@@ -261,22 +263,23 @@ internal static class SchemeOrder
                 return field.With(children: WalkFromZero(field));
             case Field.Kind.U2:
                 for (var i = 0; i < field.SlotIds.Length; i++)
-                    Take(field.SlotIds[i], field.Names[i], scope, ref next);
+                    Take(field.SlotIds[i], field.Names[i], field.Type, scope, ref next);
                 return field;
             case Field.Kind.Sized:
             case Field.Kind.Bits:
             case Field.Kind.Packed:
-                var counted = field.With(countName: Earlier(scope, field.CountId, $"count of field id {field.Id}"));
-                Take(field.Id, field.Name, scope, ref next);
+                var counted = field.With(countName: Count(
+                    scope, field.CountId, $"count of field id {field.Id}", $"'{field.Name}' (field id {field.Id})"));
+                Take(field.Id, field.Name, field.Type, scope, ref next);
                 return counted;
             default:
                 if (Field.IsValueBearing(field))
-                    Take(field.Id, field.Name, scope, ref next);
+                    Take(field.Id, field.Name, field.Type, scope, ref next);
                 return field;
         }
     }
 
-    private static Field[] WalkChildren(Field field, Type? row, Dictionary<int, string> scope, ref int next)
+    private static Field[] WalkChildren(Field field, Type? row, Taken scope, ref int next)
     {
         var children = new Field[field.Children.Length];
         for (var i = 0; i < children.Length; i++)
@@ -335,21 +338,33 @@ internal static class SchemeOrder
             throw new ArgumentException($"anchor {anchor} must be {next}");
     }
 
-    private static void Take(int id, string name, Dictionary<int, string> scope, ref int next)
+    private static void Take(int id, string name, Field.Kind kind, Taken scope, ref int next)
     {
         if (id != next)
             throw new ArgumentException($"field id {id} must be {next}");
-        if (!scope.TryAdd(id, name))
+        if (!scope.TryAdd(id, (name, kind)))
             throw new ArgumentException($"duplicate field id {id}");
         next++;
     }
 
-    private static string Earlier(Dictionary<int, string> scope, int id, string by)
+    private static (string Name, Field.Kind Kind) Earlier(Taken scope, int id, string by)
     {
-        if (scope.TryGetValue(id, out var name))
-            return name;
+        if (scope.TryGetValue(id, out var taken))
+            return taken;
         throw new ArgumentException(
             $"{by} names field id {id}, which is not an earlier field in the same scope "
             + "(the top level, a repeat or times body, a list or dict element and a nested row are separate scopes)");
+    }
+
+    // A count is an integer: a u2 slot or an 8 to 64-bit integer field. A float, bool, string or byte run is read back
+    // differently (or not at all) by the packages, so the same scheme would not mean the same bytes everywhere.
+    private static string Count(Taken scope, int id, string by, string counted)
+    {
+        var (name, kind) = Earlier(scope, id, by);
+        if (kind is (>= Field.Kind.U8 and <= Field.Kind.I64) or Field.Kind.U2)
+            return name;
+        throw new ArgumentException(
+            $"{counted}: its count names '{name}' (field id {id}), a {kind.ToString().ToLowerInvariant()} field; "
+            + "a count must name an integer field");
     }
 }

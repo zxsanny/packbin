@@ -2,13 +2,15 @@ using System.Collections;
 
 namespace Packbin;
 
-// A repeat or times round is addressed by index. Pack reads each value list at the round's index; unpack gives every
-// value a round can hold one entry per round, null where the round skipped it, so a repack gives the same bytes.
+// A repeat or times round is addressed by index. Pack reads each value list at the round's index and gives a value that
+// is not a list to every round; unpack gives every value a round can hold one entry per round, null where the round
+// skipped it, so a repack gives the same bytes.
 internal static partial class Walker
 {
     private static void PackRepeat(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
     {
         var names = RoundNames(field, packing: true);
+        RequireRoundCollections(field, values);
         PackRounds(field, names, RoundCount(names, values), values, buffer);
     }
 
@@ -19,6 +21,7 @@ internal static partial class Walker
         Scope seen)
     {
         var names = RoundNames(field, packing: true);
+        RequireRoundCollections(field, values);
         var count = BorrowedCount(field, seen);
         RequireNoExtraRounds(names, count, values);
         PackRounds(field, names, count, values, buffer);
@@ -96,6 +99,47 @@ internal static partial class Walker
         }
     }
 
+    // A name that holds a byte run or a list per round (bytes, sized, bits, packed) takes a list with one of them per
+    // round. One byte run or list alone would be read as the list of rounds, and its items given to the rounds.
+    private static void RequireRoundCollections(Field field, IReadOnlyDictionary<string, object?> values)
+    {
+        switch (field.Type)
+        {
+            case Field.Kind.Repeat:
+            case Field.Kind.Times:
+            case Field.Kind.When:
+            case Field.Kind.Flags:
+            case Field.Kind.Group:
+                foreach (var child in field.Children)
+                    RequireRoundCollections(child, values);
+                break;
+            case Field.Kind.FlagBit:
+                RequireRoundCollections(field.Inner!, values);
+                break;
+            case Field.Kind.Bytes:
+            case Field.Kind.Sized:
+            case Field.Kind.Bits:
+            case Field.Kind.Packed:
+                if (values.TryGetValue(field.Name, out var v) && v is IList list && IsOneCollection(list))
+                    throw new ArgumentException(
+                        $"'{field.Name}': a round's value belongs in a list with one entry per round; "
+                        + "wrap this value in a list");
+                break;
+        }
+    }
+
+    // A list of rounds holds one byte run or list per round (null for a round that skipped the field); a list of plain
+    // items, or any byte[], is one round's value. An empty list cannot be told from no rounds.
+    private static bool IsOneCollection(IList list)
+    {
+        foreach (var item in list)
+        {
+            if (item is not null)
+                return item is not IList;
+        }
+        return list is byte[];
+    }
+
     // The longest list among the round's values; a value that is not a list is one round.
     private static int RoundCount(List<string> names, IReadOnlyDictionary<string, object?> values)
     {
@@ -124,7 +168,7 @@ internal static partial class Walker
                 if (index < list.Count)
                     slice[name] = list[index];
             }
-            else if (index == 0)
+            else
             {
                 slice[name] = v;
             }

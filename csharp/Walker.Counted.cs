@@ -72,7 +72,7 @@ internal static partial class Walker
     private static int RequireCount(Scope seen, string countName, string fieldName)
     {
         if (!seen.TryGetValue(countName, out var v) || v is null)
-            throw new InvalidOperationException($"{fieldName}: count '{countName}' is missing");
+            throw new ArgumentException($"{fieldName}: count '{countName}' is missing");
         return Convert.ToInt32(v, CultureInfo.InvariantCulture);
     }
 
@@ -111,13 +111,10 @@ internal static partial class Walker
             case ulong big:
                 count = big > long.MaxValue ? long.MaxValue : (long)big;
                 break;
-            case float or double:
-                // u8 ... u32 and f32 arrive here as a double (ReadScalar's switch has natural type double);
-                // u64 and i64 are boxed as ulong and long and handled by the typed cases above.
-                var rounded = Math.Round(Convert.ToDouble(value, CultureInfo.InvariantCulture));
-                if (double.IsNaN(rounded))
-                    return false;
-                count = rounded >= long.MaxValue ? long.MaxValue : rounded <= long.MinValue ? long.MinValue : (long)rounded;
+            case double narrow:
+                // u8 ... u32 arrive here as a double (ReadScalar's switch has natural type double), always a whole number
+                // in range; u64 and i64 are boxed as ulong and long and handled by the typed cases above.
+                count = (long)narrow;
                 break;
             default:
                 return false;
@@ -372,7 +369,7 @@ internal static partial class Walker
             // An element that reads nothing would let a few bytes ask for millions of empty items.
             if (offset == elementStart)
                 return InterimBadValue(field.Name, bytes.Length - elementStart);
-            items.Add(one[child.Name]);
+            items.Add(ElementValue(child, one));
         }
         Store(values, field.Name, items, repeatLists);
         return null;
@@ -444,7 +441,7 @@ internal static partial class Walker
                 return InterimBadValue(field.Name, bytes.Length - valueStart);
             if (items.ContainsKey(key))
                 return new ShortPacket(field.Name, 0, 0);
-            items[key] = one[child.Name];
+            items[key] = ElementValue(child, one);
         }
         Store(values, field.Name, items, repeatLists);
         return null;

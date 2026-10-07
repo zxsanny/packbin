@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.Globalization;
 
 namespace Packbin;
 
@@ -10,56 +9,56 @@ internal static partial class Walker
         switch (field.Type)
         {
             case Field.Kind.U8:
-                dest[0] = Convert.ToByte(value, CultureInfo.InvariantCulture);
+                dest[0] = (byte)WholeNumber(field, value);
                 break;
             case Field.Kind.I8:
-                dest[0] = (byte)Convert.ToSByte(value, CultureInfo.InvariantCulture);
+                dest[0] = (byte)(sbyte)WholeNumber(field, value);
                 break;
             case Field.Kind.U16:
                 {
-                    var n = Convert.ToUInt16(value, CultureInfo.InvariantCulture);
+                    var n = (ushort)WholeNumber(field, value);
                     if (field.BigEndian) BinaryPrimitives.WriteUInt16BigEndian(dest, n);
                     else BinaryPrimitives.WriteUInt16LittleEndian(dest, n);
                     break;
                 }
             case Field.Kind.I16:
                 {
-                    var n = Convert.ToInt16(value, CultureInfo.InvariantCulture);
+                    var n = (short)WholeNumber(field, value);
                     if (field.BigEndian) BinaryPrimitives.WriteInt16BigEndian(dest, n);
                     else BinaryPrimitives.WriteInt16LittleEndian(dest, n);
                     break;
                 }
             case Field.Kind.U32:
                 {
-                    var n = Convert.ToUInt32(value, CultureInfo.InvariantCulture);
+                    var n = (uint)WholeNumber(field, value);
                     if (field.BigEndian) BinaryPrimitives.WriteUInt32BigEndian(dest, n);
                     else BinaryPrimitives.WriteUInt32LittleEndian(dest, n);
                     break;
                 }
             case Field.Kind.I32:
                 {
-                    var n = Convert.ToInt32(value, CultureInfo.InvariantCulture);
+                    var n = (int)WholeNumber(field, value);
                     if (field.BigEndian) BinaryPrimitives.WriteInt32BigEndian(dest, n);
                     else BinaryPrimitives.WriteInt32LittleEndian(dest, n);
                     break;
                 }
             case Field.Kind.U64:
                 {
-                    var n = Convert.ToUInt64(value, CultureInfo.InvariantCulture);
+                    var n = (ulong)WholeNumber(field, value);
                     if (field.BigEndian) BinaryPrimitives.WriteUInt64BigEndian(dest, n);
                     else BinaryPrimitives.WriteUInt64LittleEndian(dest, n);
                     break;
                 }
             case Field.Kind.I64:
                 {
-                    var n = Convert.ToInt64(value, CultureInfo.InvariantCulture);
+                    var n = (long)WholeNumber(field, value);
                     if (field.BigEndian) BinaryPrimitives.WriteInt64BigEndian(dest, n);
                     else BinaryPrimitives.WriteInt64LittleEndian(dest, n);
                     break;
                 }
             case Field.Kind.F32:
                 {
-                    var n = Convert.ToSingle(value, CultureInfo.InvariantCulture);
+                    var n = SingleNumber(field, value);
                     var bits = Compat.SingleToInt32Bits(n);
                     if (field.BigEndian) BinaryPrimitives.WriteInt32BigEndian(dest, bits);
                     else BinaryPrimitives.WriteInt32LittleEndian(dest, bits);
@@ -67,7 +66,7 @@ internal static partial class Walker
                 }
             case Field.Kind.F64:
                 {
-                    var n = Convert.ToDouble(value, CultureInfo.InvariantCulture);
+                    var n = RealNumber(field, value);
                     var bits = BitConverter.DoubleToInt64Bits(n);
                     if (field.BigEndian) BinaryPrimitives.WriteInt64BigEndian(dest, bits);
                     else BinaryPrimitives.WriteInt64LittleEndian(dest, bits);

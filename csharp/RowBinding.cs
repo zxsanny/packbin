@@ -200,7 +200,12 @@ internal static class RowBinding
         if (shape.RowElements)
         {
             var element = shape.CreateElement!();
-            SetValue(field.Children[0], element, item);
+            var inner = field.Children[0];
+            // An anchored group's fields belong to the element row itself, so its item holds them by name.
+            if (inner is { Type: Field.Kind.Group, NestedRow: false, Children.Length: > 0 })
+                ApplyField(inner, (IReadOnlyDictionary<string, object?>)item, element);
+            else
+                SetValue(inner, element, item);
             return element;
         }
         var type = Nullable.GetUnderlyingType(shape.ElementType) ?? shape.ElementType;

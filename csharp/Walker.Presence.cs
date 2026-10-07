@@ -5,13 +5,15 @@ internal static partial class Walker
 {
     // A bool or an empty group is only a presence bit: on for true, off for false or no value. A group with children is
     // on when its own member or any value-bearing child (or a nested group's, a nested flags' or a flag bit's) has a
-    // value. A `when`, `repeat` or `times` inside a group gives it no presence.
+    // value. A `u2` is on when any of its slots has a value. A `when`, `repeat` or `times` inside a group gives it no
+    // presence.
     public static bool BitOn(IReadOnlyDictionary<string, object?> values, Field inner) =>
         inner.Type switch
         {
             Field.Kind.Bool => IsTrue(values, inner.Name),
             Field.Kind.Group when inner.Children.Length == 0 => IsTrue(values, inner.Name),
             Field.Kind.Group => GroupOn(values, inner),
+            Field.Kind.U2 => inner.Names.Any(name => IsPresent(values, name)),
             _ => IsPresent(values, inner.Name),
         };
 

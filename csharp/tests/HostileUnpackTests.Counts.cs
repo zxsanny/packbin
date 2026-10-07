@@ -207,11 +207,16 @@ public partial class HostileUnpackTests
         Assert.True(outcome.HandlerCalled);
     }
 
-    private static string FloatHex(float value) =>
-        Convert.ToHexString(BitConverter.GetBytes(value)).ToLowerInvariant();
+    // A count names an integer field (AZ-2181): a float count no longer builds, so no packet can reach it. These were the
+    // hostile float-count unpack cases (NaN, infinities, 1e300), each of which now stops at construction.
+    private static void ExpectCountRefused<TRow>(Func<Scheme<TRow>> build, string source)
+        where TRow : class, new()
+    {
+        var error = Assert.Throws<ArgumentException>(build);
 
-    private static string DoubleHex(double value) =>
-        Convert.ToHexString(BitConverter.GetBytes(value)).ToLowerInvariant();
+        Assert.Contains("'P'", error.Message, StringComparison.Ordinal);
+        Assert.Contains($"'{source}'", error.Message, StringComparison.Ordinal);
+    }
 
     private static Scheme<FloatCountRow> FloatCount() => new(1,
         Field.F32<FloatCountRow>(0, x => x.F),
@@ -222,56 +227,22 @@ public partial class HostileUnpackTests
         Field.Sized<DoubleCountRow>(1, x => x.P, 0));
 
     [Fact]
-    public void Count_F32NaN_ReturnsShortPacket()
-    {
-        var outcome = HostileProbe.Unpack(FloatCount(), "01" + FloatHex(float.NaN));
-
-        HostileProbe.ExpectShort(outcome, "P");
-    }
+    public void Count_F32NaN_SchemeIsRefused() => ExpectCountRefused(FloatCount, "F");
 
     [Fact]
-    public void Count_F32PositiveInfinity_ReturnsShortPacketWithClampedNeeded()
-    {
-        var outcome = HostileProbe.Unpack(FloatCount(), "01" + FloatHex(float.PositiveInfinity));
-
-        var error = HostileProbe.ExpectShort(outcome, "P");
-        Assert.Equal(int.MaxValue, error.Needed);
-    }
+    public void Count_F32PositiveInfinity_SchemeIsRefused() => ExpectCountRefused(FloatCount, "F");
 
     [Fact]
-    public void Count_F32NegativeInfinity_ReturnsShortPacket()
-    {
-        var outcome = HostileProbe.Unpack(FloatCount(), "01" + FloatHex(float.NegativeInfinity));
-
-        var error = HostileProbe.ExpectShort(outcome, "P");
-        Assert.Equal(0, error.Needed);
-    }
+    public void Count_F32NegativeInfinity_SchemeIsRefused() => ExpectCountRefused(FloatCount, "F");
 
     [Fact]
-    public void Count_F64Huge_ReturnsShortPacketWithClampedNeeded()
-    {
-        var outcome = HostileProbe.Unpack(DoubleCount(), "01" + DoubleHex(1e300));
-
-        var error = HostileProbe.ExpectShort(outcome, "P");
-        Assert.Equal(int.MaxValue, error.Needed);
-    }
+    public void Count_F64Huge_SchemeIsRefused() => ExpectCountRefused(DoubleCount, "D");
 
     [Fact]
-    public void Count_F64HugeNegative_ReturnsShortPacket()
-    {
-        var outcome = HostileProbe.Unpack(DoubleCount(), "01" + DoubleHex(-1e300));
-
-        var error = HostileProbe.ExpectShort(outcome, "P");
-        Assert.Equal(0, error.Needed);
-    }
+    public void Count_F64HugeNegative_SchemeIsRefused() => ExpectCountRefused(DoubleCount, "D");
 
     [Fact]
-    public void Count_F64NaN_ReturnsShortPacket()
-    {
-        var outcome = HostileProbe.Unpack(DoubleCount(), "01" + DoubleHex(double.NaN));
-
-        HostileProbe.ExpectShort(outcome, "P");
-    }
+    public void Count_F64NaN_SchemeIsRefused() => ExpectCountRefused(DoubleCount, "D");
 
     [Fact]
     public void Count_I64MaxValue_ReturnsShortPacketWithClampedNeeded()

@@ -63,7 +63,7 @@ public class WrittenCountTests
         var refused = Record.Exception(() => BinaryPacker.Pack(scheme, Row(1)));
 
         // Assert
-        var error = Assert.IsType<InvalidOperationException>(refused);
+        var error = Assert.IsType<ArgumentException>(refused);
         Assert.Contains("count 'N' is missing", error.Message, StringComparison.Ordinal);
     }
 
@@ -106,7 +106,7 @@ public class WrittenCountTests
         var refused = Record.Exception(() => BinaryPacker.Pack(scheme, values));
 
         // Assert
-        var error = Assert.IsType<InvalidOperationException>(refused);
+        var error = Assert.IsType<ArgumentException>(refused);
         Assert.Contains("count 'N' is missing", error.Message, StringComparison.Ordinal);
     }
 
@@ -143,7 +143,7 @@ public class WrittenCountTests
         var refused = Record.Exception(() => BinaryPacker.Pack(scheme, values));
 
         // Assert
-        var error = Assert.IsType<InvalidOperationException>(refused);
+        var error = Assert.IsType<ArgumentException>(refused);
         Assert.Contains("count 'N' is missing", error.Message, StringComparison.Ordinal);
     }
 }
