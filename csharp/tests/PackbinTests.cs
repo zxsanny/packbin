@@ -1,11 +1,10 @@
 using System.Diagnostics;
 using System.Globalization;
 using Packbin;
-using Xunit.Abstractions;
 
 namespace Packbin.Tests;
 
-public class PackbinTests(ITestOutputHelper output)
+public class PackbinTests
 {
     private sealed class FlagWideRow
     {
@@ -150,34 +149,6 @@ public class PackbinTests(ITestOutputHelper output)
         Assert.Equal(GoldenHex, Convert.ToHexString(bytes).ToLowerInvariant());
     }
 
-    // AC-10 on the path a caller runs: the public typed Pack(scheme, row) and Unpack(bytes, scheme.On(...)). The
-    // internal Read and the dictionary overload skip the row binding and the handler dispatch, so they are not timed.
-    [Fact]
-    public void Nfr_PublicTypedPackAndUnpack_RoundTripsWithinOneSecond()
-    {
-        // The fastest of up to three passes counts: a loaded machine can stall one pass (1.1 s at load average 30
-        // in loop 15 against 0.25 s when quiet), while a real slowdown makes every pass slow. A pass inside the bound ends it.
-        var row = new PositionRow { Sid = 1, Lat = 500_000_000, Lon = 300_000_000, Profile = 1 };
-        var fastest = double.MaxValue;
-        for (var pass = 0; pass < 3 && fastest > 1.0; pass++)
-        {
-            var watch = Stopwatch.StartNew();
-            for (var i = 0; i < 100_000; i++)
-            {
-                PositionRow? got = null;
-                var bytes = BinaryPacker.Pack(Target, row);
-                var err = BinaryPacker.Unpack(bytes, Target.On(r => got = r));
-                Assert.Null(err);
-                Assert.Equal(500_000_000, got!.Lat);
-            }
-            watch.Stop();
-            fastest = Math.Min(fastest, watch.Elapsed.TotalSeconds);
-        }
-        output.WriteLine($"AC-10 public typed path: fastest pass {fastest * 1000:F0} ms for 100000 round trips");
-        AssertNoGpuLibrary();
-        Assert.True(fastest <= 1.0, $"fastest of the passes: {fastest * 1000} ms");
-    }
-
     [Fact]
     public void Object_round_trip_leaves_absent_flags_null()
     {
@@ -203,7 +174,7 @@ public class PackbinTests(ITestOutputHelper output)
         Assert.Null(got.Altitude);
     }
 
-    private static void AssertNoGpuLibrary()
+    internal static void AssertNoGpuLibrary()
     {
         var blob = new System.Text.StringBuilder();
         if (File.Exists("/proc/self/maps"))

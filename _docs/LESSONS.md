@@ -37,6 +37,6 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-07_loop17.md
 - [2026-10-07] [estimation] Before writing a speed-up into an acceptance criterion, measure the floor of the part the change keeps: the dictionary engine costs 130 ms cold of the 570 ms typed round trip, so AZ-2092's "3x" needed a second walker and the loop delivered 2.1x cold and 2.3x warm.
   Source: _docs/06_metrics/retro_2026-10-07_loop17.md
-- [2026-10-07] [testing] Put a timing assertion in its own non-parallel xunit collection: the AC-10 test takes 340 to 390 ms alone and 790 ms to 1 s inside the full suite, and only its best-of-three retry keeps it green.
+- [2026-10-07] [testing] Put a timing assertion in its own non-parallel xunit collection: the AC-10 test takes 340 to 390 ms alone and 790 ms to 1 s inside the full suite on a fast laptop and failed CI at 1 618 ms, so a local pass is not CI parity for a timing bound.
   Source: _docs/06_metrics/retro_2026-10-07_loop17.md
 

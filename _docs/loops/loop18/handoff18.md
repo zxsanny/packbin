@@ -11,7 +11,7 @@ This is the intake the next `/autodev` run starts from (launcher on `dev`, `kind
 ## Where things stand when loop 17 closes
 
 - `todo/` holds 6 specs; `done/` holds 158 files. Loop 17 was the C# stream only: 10 specs closed (AZ-2092, 2093, 2114, 2115, 2119, 2121, 2180, 2181, 2182, 2191), the C# parts of AZ-2135 and AZ-2128 shipped, the owner's C# multi-target work was committed (`68ca4f8`). C# tests 424 to 649 on net10.0 and on the `netstandard2.0` build. Behavior changes are in the README upgrade notes (step 13).
-- Not pushed until the close pushes `dev`; the loop end channel is `main` (`ci_cd_pipeline.md`), polling is `enabled: yes`. The first CI run after the push decides the `embedded` job (ARM, ESP, Pico stages), which loop 17 did not run locally (no `cpp/` change; `test_run_loop17_report.md` verdict PARTIAL for that reason only).
+- Pushed: `dev` at `87e554f` (the close commit). Its CI run 37588554503: `ring` and `embedded` passed, `scaffold` FAILED on the AC-10 timing test (1 618 ms on the runner, bound 1 000 ms), so the other five suites and the publish gate did not run on CI for that commit and `main` was not pushed (`origin/main` is `67cb09d`). Owner answer 2026-10-07: isolate the test; the fix commit after `87e554f` moves it to its own non-parallel xunit collection with one strict pass (`csharp/tests/Ac10TimingTests.cs`). Its CI run is the first thing to read in loop 18; the loop end channel is `main` (`ci_cd_pipeline.md`), polling is `enabled: yes`. Leftover: `_docs/_process_leftovers/2026-10-07_ci-fail-ac10-typed-path.md`.
 - Review `review17.md`: PASS_WITH_WARNINGS, 2 Medium and 6 Low (R1 to R8; R7 and R8 fixed, R6 judged no change, R1 to R5 open). Security `security_report.md`: PASS_WITH_WARNINGS, Medium 3 (F10, F12, F25), Low 15. Feature assessment round 1: CLARIFY, no re-entry.
 
 ## Owner decisions open from loop 17 (each has a recommendation)
@@ -26,7 +26,7 @@ This is the intake the next `/autodev` run starts from (launcher on `dev`, `kind
 | 6 | E5: a lone dictionary for a `Dict` name in a round is broadcast (it threw), a lone string for `Utf8` broadcasts | A refuse a lone dictionary like a lone collection (probe TypeScript, Python, Java first); B keep | A |
 | 7 | E9: char, enum and `object` values for numeric fields are refused in C# dictionary rows | A keep; B accept an enum through its underlying integer | A |
 | 8 | E11: `u2` slots, `bits` and `packed` items still round or coerce (`1.5` in a `u2` slot packs 2) | A follow-up spec (1 point), one strict rule for every numeric slot; B leave and document | A |
-| 9 | R3 / perf: the AC-10 test takes 340 to 390 ms alone and 790 ms to 1 s inside the full container suite and relies on its best-of-three retry | A a collection with `DisableParallelization = true`, then one strict pass as AZ-2093 asks; B keep the retry | A |
+| 9 | R3 / perf: the AC-10 test took 340 to 390 ms alone and 790 ms to 1 s inside the suite on the Mac and 1 618 ms on the CI runner | **decided and done 2026-10-07 (owner)**: a collection with `DisableParallelization = true` and one strict pass; if the runner is still over 1 000 ms, decision 1 (typed walker) is the only honest fix | done |
 | 10 | AZ-2120 (held by the owner 2026-10-07): `when`, `times`, `repeat` as a `flags` member or flag-bit field are dropped on pack in all six packages (`01 01 02 5a00`), C# unpack already reads `01 01 03 07 5a00` | A all six write them; B all six refuse at construction | decide together with the loop that touches all six |
 
 ## Gaps that are clear (spec them; from `assessment17.md`)
@@ -49,6 +49,6 @@ This is the intake the next `/autodev` run starts from (launcher on `dev`, `kind
 
 ## Do not start before checking
 
-1. The CI run after the push of loop 17 (`embedded`, `ring`, `scaffold`): read it before planning; the `embedded` job is the only suite loop 17 did not run.
+1. The CI run of the fix commit after `87e554f` (and, once green, the push of `main` that loop 17 owes): read it before planning. If it is red on the AC-10 test again, that is decision 1 and nothing else moves. The five package suites and the publish gate have not run on CI since `67cb09d`.
 2. `git status`: the tree should be clean (the owner's C# work is committed); `AGENT_GOTCHAS.md` no longer carries the foreign-hunk rule.
 3. Ask the owner the ten decisions above before wave 1 touches C#; waves for the other packages do not wait for them.

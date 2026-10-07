@@ -43,7 +43,7 @@ CI-parity: PASS locally for what CI runs per push except the `embedded` job and 
 
 ## Findings of this run
 
-None: no failure in any executed stage.
+None: no failure in any executed stage here. **CI found one after the push** (run 37588554503 at `87e554f`): the AC-10 timing test took 1 618 ms on the GitHub runner (bound 1 000 ms), so the `scaffold` job stopped in its first suite (C#) and the other five suites and the publish gate did not run on CI for that commit; `ring` and `embedded` passed (`embedded` closes the not-run item above: ARM, ESP and Pico stages are green on CI). A local pass on a fast machine is not CI parity for a timing assertion: the same test took 786 ms to 1 s inside the suite on the Mac and about 1.6 s on the runner. Fixed after the first push by isolating the test (see `perf_run_loop17_report.md`).
 
 ## Environment notes
 
