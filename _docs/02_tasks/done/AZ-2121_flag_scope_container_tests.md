@@ -64,3 +64,7 @@ Given a combined `flags(...)` member that holds a split bit whose byte is missin
 | AC-2 dict element, AC-4 combined flags member | Java | done in batch 2 (tests only, no production change) |
 | combined flags member without its byte | TypeScript | already covered at HEAD (the spec says only TypeScript tested it) |
 | AC-1 times round and dict element, AC-4 | C# | held until the C# multi-target work is committed |
+
+## Loop 17 result (2026-10-07)
+
+C# done in batch 2 (`FlagScopeContainerTests`, 9 tests, tests only: AC-1 times round and dict element, AC-4 combined flags member without its byte, bit after its byte, second member). All four packages named in Included are done.

@@ -52,3 +52,7 @@ Given `u8 sid`, split `flagByte m`, `when(sid==9) u8 shape`, `m.bit(u16 heading)
 |------|---------|-------|
 | AC-1 reference rows `010901045a00` and `010100` | TypeScript | done in batch 3 (tests only; both rows already packed correctly at HEAD) |
 | AC-1 | C# | held until the C# multi-target work is committed |
+
+## Loop 17 result (2026-10-07)
+
+C# done in batch 2 (`SplitFormReferenceTests`, 3 tests, tests only: `010901045a00` and `010100`, typed and dictionary rows). Both packages named in Included (TypeScript, C#) are done.

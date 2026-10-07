@@ -112,3 +112,7 @@ Then the bytes equal the original packet.
 | `u2` slots and `bits` / `packed` items also convert with rounding (a 1.5 in a `u2` slot packs as 2); not in the ticket text, so left out. Decide whether to include them here or in a follow-up | owner | open | Medium |
 | Whole-number doubles are accepted for integer fields because unpack and JSON produce them; AZ-2116 (exact integer types) may change what unpack returns | AZ-2116 | open | Low |
 | Error type and label for pack failures stay as they are (C15) | docs / C15 | accepted-risk | Low |
+
+## Loop 17 result (2026-10-07)
+
+Done in batch 2 (commit `a4cc089`). `Walker.Numbers.cs`: an integer field takes a whole number that fits (any integer type, a whole finite `double`/`float`/`decimal`); a fraction, NaN, infinity, bool, string, char, enum or object is an `ArgumentException` naming the member (char, enum and object used to be converted through `IConvertible`); a float field takes any numeric type, an f32 overflow is refused. Left out per the spec: `u2` slots and `bits`/`packed` items still round or coerce (follow-up).

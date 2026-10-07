@@ -50,3 +50,7 @@ Given every existing test, When they run, Then they pass unchanged
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Written from a worker discovery; refine the Given/When/Then before the loop that takes it | coordinator | open | Low |
+
+## Loop 17 result (2026-10-07)
+
+Done in batch 2 (commit `a4cc089`) for unpack: a group list or dict element reads and unpacks in dictionary mode (a row keyed by the member names) and in typed mode (an anchored group element also threw `KeyNotFoundException` before). Open: dictionary-mode pack of a group element still fails (`'A' has no value`), so unpack-then-repack of dictionary rows does not round-trip (about 1 point); a `Flags` container as a direct list or dict element still throws `KeyNotFoundException`.

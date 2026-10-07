@@ -73,7 +73,16 @@ internal static partial class Walker
     {
         if (!seen.TryGetValue(countName, out var v) || v is null)
             throw new ArgumentException($"{fieldName}: count '{countName}' is missing");
-        return Convert.ToInt32(v, CultureInfo.InvariantCulture);
+        try
+        {
+            return Convert.ToInt32(v, CultureInfo.InvariantCulture);
+        }
+        catch (OverflowException)
+        {
+            throw new ArgumentException(
+                $"{fieldName}: count '{countName}' is {Convert.ToString(v, CultureInfo.InvariantCulture)}, "
+                + "which does not fit an int");
+        }
     }
 
     // No bad-value error type until C15: the same stand-in the duplicate dictionary key already uses.

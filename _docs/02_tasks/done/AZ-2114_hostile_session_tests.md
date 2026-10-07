@@ -61,3 +61,7 @@ Extend the scope to all five packages and to the zero-width element packets: Giv
 | AC-1, AC-2 and the R2-G1 element packets | Java | done in batch 2 (`HostileSessionTest`, tests only; same note: a zero-width `bytes` repeat stands in for the refused `when` scheme) |
 | all | C# | held until the C# multi-target work is committed |
 | R2-G1 element packets | Python, TypeScript | already covered (AZ-2071 / AZ-2072) |
+
+## Loop 17 result (2026-10-07)
+
+C# done in batch 2 (`HostileSessionTests`, 6 tests, tests only; the README `when` scheme for `01 00 ff` is refused at construction in C# too, so the zero-progress packet uses `U8 K, Repeat(Bytes(0))` as Rust and Java do). All packages named in Included (C#, Java, Rust) are done.

@@ -118,3 +118,7 @@ Then the bytes are `4001000065cd1d00a3e1110100` and `3410001500062d00020d0065cd1
 ## Owner decision (2026-10-06)
 
 DECIDED, the proposed default: option A: broadcast a lone scalar to every round, refuse a lone collection. The open DECISION rows above are resolved by this section.
+
+## Loop 17 result (2026-10-07)
+
+Done in batch 2 (commit `a4cc089`). Option A: a lone scalar goes to every round (a scalar under `Flags` or a flag bit now sets the bit in every round: bytes change for rows that packed before), a lone `byte[]` or collection for `Bytes`, `Sized`, `Bits` or `Packed` is an `ArgumentException` naming the field. Open for the owner: a lone dictionary for a `Dict` name now broadcasts (HEAD threw) and a lone `string` for a `Utf8` name broadcasts as in the other packages; the Rust map `times` follow-up (a lone scalar goes to round 0 only) has no ticket yet.

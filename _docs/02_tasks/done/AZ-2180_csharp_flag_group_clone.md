@@ -107,3 +107,7 @@ Then they build and the bytes are identical (`4001000065cd1d00a3e1110100` for th
 |---------|----------------|--------|----------|
 | Bit numbering and the ninth-bit count across schemes sharing one handle stay as they are; AZ-2135 changes them to field order. A copy of the group as built can still carry bit slots from an earlier scheme on the same handle | AZ-2135 | open | Medium |
 | Ticket text says replacing an element of the caller's `params Field[]` changes the layout; the code already copies the array at construction (AZ-2088 AC-7). AC-3 is a regression pin. If a real probe shows a change, treat it as an extra defect in this task | implementer | open | Low |
+
+## Loop 17 result (2026-10-07)
+
+Already held after AZ-2135 (batch 1): `FlagScopes.Bind` gives every read its own `FlagGroup` and a `FlagByte` handle holds no bit, so AC-1 to AC-5 hold; no clone was made because the `Flags` group object is never mutated after `Field.Flags(...)`. `FlagGroupCopyTests` (7) pin it; three of them fail on `68ca4f8`.
