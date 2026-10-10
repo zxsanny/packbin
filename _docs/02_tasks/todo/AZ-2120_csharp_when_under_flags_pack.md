@@ -1,3 +1,8 @@
+---
+loop: 18
+branch: dev
+---
+
 # C# pack drops a When directly under a combined Flags group
 
 **Task**: AZ-2120_csharp_when_under_flags_pack

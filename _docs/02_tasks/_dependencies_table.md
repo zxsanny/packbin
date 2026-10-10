@@ -164,6 +164,14 @@ Estimation: `_docs/LESSONS.md` says the six packages stay peers. The session is 
 | AZ-2238 | harness_hygiene_prefix_find_consumer | 2 | AZ-2193, AZ-2099 | AZ-2069 |
 | AZ-2239 | listgroup_cross_language_ring | 3 | AZ-2193, AZ-2102 | AZ-2069 |
 | AZ-2240 | publish_guard_dist_and_port_asserts | 1 | AZ-2103, AZ-2098 | AZ-2069 |
+| AZ-2304 | cpp_flag_byte_scope_members | 2 | AZ-2135 | AZ-2069 |
+| AZ-2305 | csharp_collection_member_checked | 2 | AZ-2092 | AZ-2069 |
+| AZ-2306 | csharp_empty_nested_row_present | 1 | AZ-2128 | AZ-2069 |
+| AZ-2307 | csharp_flags_element_and_rings | 3 | AZ-2119, AZ-2239 | AZ-2069 |
+| AZ-2308 | lone_dict_in_round_refused | 2 | AZ-2182 | AZ-2069 |
+| AZ-2309 | csharp_numeric_slots_strict | 1 | AZ-2191 | AZ-2069 |
+| AZ-2310 | csharp_dict_pack_repack_and_bytes_int | 2 | AZ-2119, AZ-2191 | AZ-2069 |
+| AZ-2311 | rust_times_lone_scalar | 2 | AZ-2182 | AZ-2069 |
 
 The six pack tasks do not depend on each other. AZ-1875 runs after all six. The five blackbox tasks run after AZ-1913 and do not depend on each other. The three earlier todo tasks do not depend on each other and still have no tracker id. AZ-1938 through AZ-1941 are under epic AZ-1937. The string count does not include itself; the list count does not consume the next field.
 
@@ -177,3 +185,5 @@ AZ-2122 through AZ-2125 are loop 11 security-audit fixes (F4-F9), claimed by loo
 AZ-2175 through AZ-2179 are loop 13 feature-assessment round 1 tasks (owner scope A, 2026-10-05), claimed by loop 13. AZ-2180 through AZ-2194 are the deferred follow-ups of that assessment, unclaimed; AZ-2197 (TypeScript twin of AZ-2175, found by the loop 13 README writer) is unclaimed too; AZ-2117 and AZ-2113 gained acceptance criteria from it (4 and 3 points). Decisions marked open in them wait for the owner before the loop that takes them.
 AZ-2214 through AZ-2220 are loop 15 (security findings F12, F13 and F10, owner request 2026-10-06), claimed by loop 15. AZ-2214 and AZ-2215 edit the same publish files, so AZ-2214 lands first; AZ-2220 follows the four round-limit tasks.
 AZ-2230 through AZ-2240 are loop 16 round 2 (feature assessment round 1 CLARIFY, owner answer 2026-10-06: implement everything now), claimed by loop 16. AZ-2234 and AZ-2233 and AZ-2235 edit the same Java files and run in one worker; AZ-2238 and AZ-2239 both edit `language-pair.sh` and run in one worker; AZ-2232 and AZ-2240 both touch the vcpkg port checks and run in one worker. All eleven are Done in loop 16: the specs are in `done/`, each with a `## Loop 16 result` section; the table has no status column, so the rows above are unchanged. AZ-2243 through AZ-2249 (loop 16 round 3: the TypeScript and Python session seeds and nonces, the repeated member name in Python, Java and Rust, the Python short `times` list and the Python element accessor) are Done in loop 16 as well, specs in `done/`; the table has no rows for them.
+
+AZ-2304 through AZ-2311 are loop 18 (owner decisions of 2026-10-10 on the loop 17 assessment, plus its clear gaps), claimed by loop 18: AZ-2304 (C++ flag-byte scope), AZ-2305 to AZ-2307, AZ-2309 and AZ-2310 (C#), AZ-2308 (lone dictionary in a round: C# first, other packages after the probe), AZ-2311 (Rust). The C# specs share `csharp/` and run in one worker; AZ-2307 also edits the shared ring files (`language-pair.sh`, the C# driver) and no other worker touches them in that wave.

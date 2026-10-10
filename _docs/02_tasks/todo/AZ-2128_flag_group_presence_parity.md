@@ -1,3 +1,8 @@
+---
+loop: 18
+branch: dev
+---
+
 # Flag group presence counts every child kind at any depth (C#, Java, Rust)
 
 **Task**: AZ-2128_flag_group_presence_parity

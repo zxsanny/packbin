@@ -1,3 +1,8 @@
+---
+loop: 18
+branch: dev
+---
+
 # Refuse `eq` on a bool or empty-group id unless the value is `true`, all packages
 
 **Task**: AZ-2126_eq_bool_true_only

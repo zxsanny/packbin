@@ -1,3 +1,8 @@
+---
+loop: 18
+branch: dev
+---
+
 # Split-form flag bits by field order per read (TypeScript, C#, Java) and C++ `when` scope
 
 **Task**: AZ-2135_split_bits_field_order

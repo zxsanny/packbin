@@ -1,3 +1,8 @@
+---
+loop: 18
+branch: dev
+---
+
 # Hostile vectors gain a pack stage
 
 **Task**: AZ-2194_hostile_pack_stage
