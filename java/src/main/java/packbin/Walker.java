@@ -26,31 +26,39 @@ final class Walker {
         return Boolean.TRUE.equals(value);
     }
 
-    /** Whether a flag bit is set. {@code take} is the repeat or times round's item lookup, null outside rounds. */
-    static boolean childOn(Object row, Field child, Take take) {
+    /**
+     * Whether a flag bit is set. {@code take} is the repeat or times round's item lookup, null outside rounds.
+     * {@code seen} holds the values written so far in the scope, which decide a {@code when} member (its condition)
+     * and a {@code times} member (its count). A {@code when} is on when its condition holds and its body holds a
+     * value; a {@code times} when its count is above 0; a {@code repeat} when a round holds a value.
+     */
+    static boolean childOn(Object row, Field child, Take take, Map<Object, Object> seen) {
         return switch (child.kind) {
-            case GROUP -> groupOn(row, child, take);
-            case FLAGS -> anyOn(row, child.children, take);
+            case GROUP -> groupOn(row, child, take, seen);
+            case FLAGS -> anyOn(row, child.children, take, seen);
             case U2 -> anySlotPresent(row, child.children, take);
             case BOOL -> boolOn(takeValue(child, row, take));
-            case FLAG_BIT -> childOn(row, child.inner, take);
+            case FLAG_BIT -> childOn(row, child.inner, take, seen);
+            case WHEN -> conditionHolds(child.condition, seen) && anyOn(row, child.children, take, seen);
+            case TIMES -> VarFields.timesOn(child, row, take, seen);
+            case REPEAT -> Rounds.repeatOn(child, row, take);
             case U8, U16, U32, U64, I8, I16, I32, I64, F32, F64, BYTES, UTF8, SIZED, BITS, PACKED, LIST, DICT ->
                     isPresent(takeValue(child, row, take));
             default -> false;
         };
     }
 
-    private static boolean groupOn(Object row, Field group, Take take) {
+    private static boolean groupOn(Object row, Field group, Take take, Map<Object, Object> seen) {
         if (group.nestedRow) {
             // The fields of a nested row belong to its member, not to this row: the member alone decides.
             return isPresent(takeValue(group, row, take));
         }
-        return anyOn(row, group.children, take);
+        return anyOn(row, group.children, take, seen);
     }
 
-    private static boolean anyOn(Object row, List<Field> children, Take take) {
+    private static boolean anyOn(Object row, List<Field> children, Take take, Map<Object, Object> seen) {
         for (Field child : children) {
-            if (childOn(row, child, take)) {
+            if (childOn(row, child, take, seen)) {
                 return true;
             }
         }
@@ -80,9 +88,9 @@ final class Walker {
     static void packField(Field field, Object row, ByteSink sink, Map<Object, Object> seen, Take take) {
         switch (field.kind) {
             case FLAGS -> packFlags(field, row, sink, seen, take);
-            case FLAG_BYTE -> sink.write((byte) field.group.compute(row, take));
+            case FLAG_BYTE -> packFlagByte(field, row, sink, seen, take);
             case FLAG_BIT -> {
-                if (childOn(row, field.inner, take)) {
+                if (flagByteHas(field, seen)) {
                     packField(field.inner, row, sink, seen, take);
                 }
             }
@@ -158,15 +166,38 @@ final class Walker {
         return field.get.get(row);
     }
 
+    /**
+     * The members are decided in order, each against the values written so far, so a {@code when} member may name
+     * an earlier member of the same flags: the byte is a placeholder until the last member is decided.
+     */
     private static void packFlags(
             Field field, Object row, ByteSink sink, Map<Object, Object> seen, Take take) {
-        int flags = field.group.compute(row, take);
-        sink.write((byte) flags);
+        int at = sink.size();
+        sink.write((byte) 0);
+        int flags = 0;
         for (int i = 0; i < field.children.size(); i++) {
-            if ((flags & (1 << i)) != 0) {
-                packField(field.children.get(i).inner, row, sink, seen, take);
+            Field inner = field.children.get(i).inner;
+            if (childOn(row, inner, take, seen)) {
+                flags |= 1 << i;
+                packField(inner, row, sink, seen, take);
             }
         }
+        sink.set(at, (byte) flags);
+    }
+
+    /** A split flag byte is decided where it stands, on the values written before it; its bits read it back. */
+    private static void packFlagByte(
+            Field field, Object row, ByteSink sink, Map<Object, Object> seen, Take take) {
+        int flags = field.group.compute(row, take, seen);
+        seen.put(field.group, flags);
+        sink.write((byte) flags);
+    }
+
+    private static boolean flagByteHas(Field bit, Map<Object, Object> seen) {
+        if (!(seen.get(bit.group) instanceof Integer flags)) {
+            throw new IllegalStateException("flag bit " + bit.bitIndex + " is packed before its flag byte");
+        }
+        return (flags & (1 << bit.bitIndex)) != 0;
     }
 
     private static void packGroup(

@@ -19,7 +19,7 @@ internal static partial class Walker
                 PackFlags(field, values, buffer, seen);
                 break;
             case Field.Kind.FlagByte:
-                PackFlagByte(field, values, buffer);
+                PackFlagByte(field, values, buffer, seen);
                 break;
             case Field.Kind.FlagBit:
                 PackFlagBit(field, values, buffer, seen);
@@ -120,19 +120,29 @@ internal static partial class Walker
         List<byte> buffer,
         Scope seen)
     {
-        var flags = field.FlagOwner!.Compute(values);
-        buffer.Add(flags);
+        var at = buffer.Count;
+        buffer.Add(0);
+        byte flags = 0;
         for (var i = 0; i < field.Children.Length; i++)
         {
-            if ((flags & (1 << i)) == 0)
+            var inner = field.Children[i].Inner!;
+            if (!BitOn(values, inner, seen))
                 continue;
-            PackBitField(field.Children[i].Inner!, values, buffer, seen);
+            flags |= (byte)(1 << i);
+            PackBitField(inner, values, buffer, seen);
         }
+        buffer[at] = flags;
     }
 
-    private static void PackFlagByte(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    private static void PackFlagByte(
+        Field field,
+        IReadOnlyDictionary<string, object?> values,
+        List<byte> buffer,
+        Scope seen)
     {
-        buffer.Add(field.FlagOwner!.Compute(values));
+        var flags = field.FlagOwner!.Compute(values, seen);
+        seen.SetFlagByte(field.FlagOwner!, flags);
+        buffer.Add(flags);
     }
 
     private static void PackFlagBit(
@@ -141,7 +151,7 @@ internal static partial class Walker
         List<byte> buffer,
         Scope seen)
     {
-        if (!BitOn(values, field.Inner!))
+        if ((seen.FlagByte(field.FlagOwner!) & (1 << field.BitIndex)) == 0)
             return;
         PackBitField(field.Inner!, values, buffer, seen);
     }

@@ -10,7 +10,7 @@ export type Field =
   | { kind: "bytes"; id: number; name: string; size: number }
   | { kind: "bool"; id: number; name: string }
   | { kind: "flags"; anchor: number; fields: Field[] }
-  | { kind: "flagByte"; name: string; id: symbol }
+  | { kind: "flagByte"; name: string; id: symbol; inOrder?: true }
   | { kind: "flagBit"; flagId: symbol; bit: number; field: Field }
   | { kind: "when"; anchor: number; fieldId: number; value: unknown; fields: Field[] }
   | { kind: "repeat"; anchor: number; fields: Field[] }
@@ -104,7 +104,7 @@ export function flatten(fields: Field[]): Field[] {
   const out: Field[] = []
   for (const f of fields) {
     if (f.kind === "flags") {
-      const fb = flagByte("")
+      const fb = { ...flagByte(""), inOrder: true as const }
       out.push(fb)
       // A member that holds flags of its own is flattened too, or its bits would get a new flag
       // byte on every walk and pack could not find them.

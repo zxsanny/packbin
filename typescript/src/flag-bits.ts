@@ -1,5 +1,12 @@
 import type { Field } from "./fields.ts"
-import { present, type Value } from "./kinds.ts"
+import { present, sameValue, type Value } from "./kinds.ts"
+import { refName } from "./ref-scope.ts"
+import { refuseLongLists, roundCount, roundNames } from "./rounds.ts"
+import { borrowedCount, seen } from "./written.ts"
+
+// A flag byte pack has written: where it sits in the output, the bits set so far, and whether its
+// bits are decided one by one as their members are reached (a combined `flags`).
+export type PackedFlagByte = { at: number; flags: number; inOrder: boolean }
 
 export function collectFlagBits(
   fields: Field[],
@@ -24,9 +31,11 @@ export function collectFlagBits(
 
 // A flag bit is on when its field holds a value at any depth, whatever the kind of its members: a
 // group is on for its own name or any member inside it, nested groups and flags included. A bool or
-// an empty group is a mark with no bytes of its own, and only `true` sets its bit. A `when`, `repeat`
-// or `times` is given no presence here: it never sets a bit.
-export function bitOn(field: Field, values: Value): boolean {
+// an empty group is a mark with no bytes of its own, and only `true` sets its bit. A `when` is on when
+// its condition holds on what pack has written so far (`wrote`) and its body holds a value; a `times`
+// when its count is above 0 (a count that was skipped is no round); a `repeat` when a round holds a
+// value. A member that is on and cannot be written in full fails when it is packed.
+export function bitOn(field: Field, values: Value, wrote: Value): boolean {
   switch (field.kind) {
     case "bool":
       return values[field.name] === true
@@ -34,14 +43,27 @@ export function bitOn(field: Field, values: Value): boolean {
       return field.slots.some((slot) => present(values[slot.name]))
     case "group":
       if (field.fields.length === 0) return values[field.name] === true
-      return present(values[field.name]) || field.fields.some((child) => bitOn(child, values))
+      return (
+        present(values[field.name]) || field.fields.some((child) => bitOn(child, values, wrote))
+      )
     case "flags":
-      return field.fields.some((child) => bitOn(child, values))
+      return field.fields.some((child) => bitOn(child, values, wrote))
     case "flagBit":
-      return bitOn(field.field, values)
+      return bitOn(field.field, values, wrote)
     case "when":
+      return (
+        sameValue(seen(wrote, refName(field)), field.value) &&
+        field.fields.some((child) => bitOn(child, values, wrote))
+      )
+    case "times": {
+      const ref = refName(field)
+      if (!Object.hasOwn(wrote, ref)) return false
+      const count = borrowedCount(ref, 0, "times", wrote)
+      if (count === 0) refuseLongLists(roundNames(field.fields, true), 0, values)
+      return count > 0
+    }
     case "repeat":
-    case "times":
+      return roundCount(roundNames(field.fields, true), values) > 0
     case "flagByte":
       return false
     default:
@@ -49,10 +71,10 @@ export function bitOn(field: Field, values: Value): boolean {
   }
 }
 
-export function flagValueFor(fields: Field[], id: symbol, values: Value): number {
+export function flagValueFor(fields: Field[], id: symbol, values: Value, wrote: Value): number {
   let flags = 0
   for (const { bit, field } of collectFlagBits(fields, id)) {
-    if (bitOn(field, values)) flags |= 1 << bit
+    if (bitOn(field, values, wrote)) flags |= 1 << bit
   }
   return flags
 }

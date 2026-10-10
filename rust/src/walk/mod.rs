@@ -3,6 +3,7 @@ mod flag_bits;
 mod pack;
 mod times;
 mod unpack;
+mod written;
 
 #[cfg(test)]
 pub(crate) use element::capacity_hint;
@@ -16,7 +17,9 @@ use crate::value::{PackError, UnpackError, Values};
 ///
 /// - The bits of a `flags` byte or flag byte come from its members: a `flags` member or a field
 ///   under a flag bit that has no value leaves its bit clear and is not written, while any other
-///   field with no value is a [`PackError::Missing`]. A value kept under the name of the `flags`
+///   field with no value is a [`PackError::Missing`]. A `when`, `times` or `repeat` there is on
+///   exactly when it writes a value (see [`flags`](crate::flags)); the bits of a `flags` are
+///   decided in member order, those of a split flag byte where the byte is written. A value kept under the name of the `flags`
 ///   byte or flag byte itself is not read. A bool (an empty `group`) is read from its own value:
 ///   `1` sets its bit, `0` or no value leaves it clear.
 /// - A `when` and a count (`sized`, `bits`, `packed`, `times`) read what pack wrote in the same

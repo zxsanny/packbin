@@ -26,12 +26,13 @@ internal sealed class FlagGroup
 
     public void Place(int index, Field inner) => BitInners[index] = inner;
 
-    public byte Compute(IReadOnlyDictionary<string, object?> values)
+    // `seen`: the values written so far in the scope of the byte, which decide a `when` member.
+    public byte Compute(IReadOnlyDictionary<string, object?> values, Scope seen)
     {
         byte flags = 0;
         for (var i = 0; i < BitInners.Count; i++)
         {
-            if (Walker.BitOn(values, BitInners[i]))
+            if (Walker.BitOn(values, BitInners[i], seen))
                 flags |= (byte)(1 << i);
         }
         return flags;

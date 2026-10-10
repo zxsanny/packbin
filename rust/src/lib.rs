@@ -32,6 +32,10 @@ mod eq_bool_true_tests;
 #[cfg(test)]
 mod flag_bits_tests;
 #[cfg(test)]
+mod flags_round_member_tests;
+#[cfg(test)]
+mod flags_when_member_tests;
+#[cfg(test)]
 mod flag_group_tests;
 #[cfg(test)]
 mod flag_presence_tests;

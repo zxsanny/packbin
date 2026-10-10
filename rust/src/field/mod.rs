@@ -234,6 +234,14 @@ pub fn repeat(anchor: u32, fields: Vec<Field>) -> Field {
 /// One byte with a bit per member (at most 8), then each member whose bit is set. A member
 /// is on when its value is present; a bool member (an empty `group`) only when it is `1`, and
 /// a bool value other than `0` or `1` fails pack with `PackError::Type`.
+///
+/// Members are decided in order, each against what pack has written so far in its scope. A
+/// `when` member is on when its condition holds on that and its body holds a value (with the
+/// condition false, a body value given is not written and is no error). A `times` member is on
+/// when its count, as written, is above 0 (a count field pack skipped is no round); with count 0,
+/// values given for its rounds fail pack. A `repeat` member is on when a round holds a value. A
+/// member that is on but cannot be written in full fails pack naming the missing value. Unpack
+/// reads the body of a set bit, and nothing for a clear one.
 pub fn flags(anchor: u32, name: impl AsRef<str>, members: Vec<Field>) -> Field {
     Field {
         kind: FieldKind::Flags {
@@ -323,8 +331,8 @@ pub fn bytes(name: impl AsRef<str>, n: usize) -> Field {
 
 /// Fields gathered under one `flags` bit, on when its own value, or any value inside it at any
 /// depth (an integer, float, bytes, utf8, list, dict, `sized`, `bits`, `packed`, `u2`, a nested
-/// `group` or `flags`), or one of its flag bits is present; a `when`, `repeat` or `times` inside
-/// it does not count yet. With no fields it is a bool: allowed only directly inside `flags` or
+/// `group` or `flags`), or one of its flag bits is present; a `when`, `times` or `repeat` inside
+/// it counts when it writes a value (see [`flags`]). With no fields it is a bool: allowed only directly inside `flags` or
 /// under a flag bit, set by the value `1` (cleared by `0` or no value), and unpacked as `1` when
 /// set.
 pub fn group(anchor: u32, name: impl AsRef<str>, fields: Vec<Field>) -> Field {

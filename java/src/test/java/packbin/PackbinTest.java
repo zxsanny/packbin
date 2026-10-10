@@ -61,6 +61,8 @@ public final class PackbinTest {
         MissingNestedValueTest.run();
         TypedElementScopeTest.run();
         DuplicateNamesTest.run();
+        FlagsWhenMemberTest.run();
+        FlagsRoundMemberTest.run();
         if (failures + PackbinFieldsTest.failures > 0) {
             System.err.println((failures + PackbinFieldsTest.failures) + " failure(s)");
             System.exit(1);

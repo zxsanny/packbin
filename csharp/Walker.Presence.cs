@@ -5,17 +5,48 @@ internal static partial class Walker
 {
     // A bool or an empty group is only a presence bit: on for true, off for false or no value. A group with children is
     // on when its own member or any value-bearing child (or a nested group's, a nested flags' or a flag bit's) has a
-    // value. A `u2` is on when any of its slots has a value. A `when`, `repeat` or `times` inside a group gives it no
-    // presence.
-    public static bool BitOn(IReadOnlyDictionary<string, object?> values, Field inner) =>
+    // value. A `u2` is on when any of its slots has a value. A `when` is on when its condition holds on the values
+    // written so far (`seen`) and its body holds a value; a `times` when its count is above zero; a `repeat` when a
+    // round has a value. The same holds for each of them inside a group.
+    public static bool BitOn(IReadOnlyDictionary<string, object?> values, Field inner, Scope seen) =>
         inner.Type switch
         {
             Field.Kind.Bool => IsTrue(values, inner.Name),
             Field.Kind.Group when inner.Children.Length == 0 => IsTrue(values, inner.Name),
-            Field.Kind.Group => GroupOn(values, inner),
+            Field.Kind.Group => GroupOn(values, inner, seen),
             Field.Kind.U2 => AnyPresent(values, inner.Names),
+            Field.Kind.When => WhenOn(values, inner, seen),
+            Field.Kind.Times => TimesOn(values, inner, seen),
+            Field.Kind.Repeat => RepeatOn(values, inner),
             _ => IsPresent(values, inner.Name),
         };
+
+    private static bool WhenOn(IReadOnlyDictionary<string, object?> values, Field when, Scope seen)
+    {
+        if (!ConditionHolds(when.Pred!, seen))
+            return false;
+        foreach (var child in when.Children)
+        {
+            if (ChildPresent(values, child, seen))
+                return true;
+        }
+        return false;
+    }
+
+    // A count that is missing (its field was skipped) is no round: unpack would not read the field either. A count of
+    // zero with values given refuses them, as a times outside `flags` does.
+    private static bool TimesOn(IReadOnlyDictionary<string, object?> values, Field times, Scope seen)
+    {
+        if (!seen.TryGetValue(times.CountName, out var count) || count is null)
+            return false;
+        var rounds = BorrowedCount(times, seen);
+        if (rounds == 0)
+            RequireNoExtraRounds(RoundNames(times, packing: true), 0, values);
+        return rounds > 0;
+    }
+
+    private static bool RepeatOn(IReadOnlyDictionary<string, object?> values, Field repeat) =>
+        RoundCount(RoundNames(repeat, packing: true), values) > 0;
 
     private static bool AnyPresent(IReadOnlyDictionary<string, object?> values, string[] names)
     {
@@ -37,7 +68,7 @@ internal static partial class Walker
             ? values.TryGetValue(group.Name, out var nested) ? nested as RowValues : null
             : values;
 
-    private static bool GroupOn(IReadOnlyDictionary<string, object?> values, Field group)
+    private static bool GroupOn(IReadOnlyDictionary<string, object?> values, Field group, Scope seen)
     {
         var scope = ScopeOf(group, values);
         if (scope is null)
@@ -48,19 +79,22 @@ internal static partial class Walker
             return true;
         foreach (var child in group.Children)
         {
-            if (ChildPresent(scope, child))
+            if (ChildPresent(scope, child, seen))
                 return true;
         }
         return false;
     }
 
-    private static bool ChildPresent(IReadOnlyDictionary<string, object?> values, Field child) =>
+    private static bool ChildPresent(IReadOnlyDictionary<string, object?> values, Field child, Scope seen) =>
         child.Type switch
         {
-            Field.Kind.Group => GroupOn(values, child),
+            Field.Kind.Group => GroupOn(values, child, seen),
             Field.Kind.U2 => AnyPresent(values, child.Names),
-            Field.Kind.Flags => child.Children.Any(bit => ChildPresent(values, bit)),
-            Field.Kind.FlagBit => BitOn(values, child.Inner!),
+            Field.Kind.Flags => child.Children.Any(bit => ChildPresent(values, bit, seen)),
+            Field.Kind.FlagBit => BitOn(values, child.Inner!, seen),
+            Field.Kind.When => WhenOn(values, child, seen),
+            Field.Kind.Times => TimesOn(values, child, seen),
+            Field.Kind.Repeat => RepeatOn(values, child),
             _ => IsGroupValue(child) && IsPresent(values, child.Name),
         };
 

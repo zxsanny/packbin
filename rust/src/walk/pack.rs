@@ -1,5 +1,6 @@
-use super::flag_bits::{collect_flag_bits, member_on};
-use super::times::{check_aligned, check_lists, check_longer, slice_times};
+use super::flag_bits::{collect_flag_bits, member_on, FlagInners};
+use super::times::{check_aligned, check_lists, check_longer, rounds_mismatch, slice_times};
+use super::written::{borrowed_count, written, Written};
 use crate::field::{field_name, times_name, Field, FieldKind, FloatKind, IntKind, MapScheme};
 use crate::value::{
     as_bit, as_packed, as_u2, as_usize, name_of, when_matches, Name, PackError, Value, Values,
@@ -7,76 +8,10 @@ use crate::value::{
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-/// What pack has written in one scope (the top level, a round of a `repeat` or `times`, a list or
-/// dict element), by name, as unpack holds what it has read: each value, each `u2` slot, a flags
-/// byte and a flag byte under their own name, and a set bool as `1`. A `when` and a count read
-/// it, so one that names a field pack skipped finds nothing, as on unpack.
-struct Written<'v> {
-    /// False for a list or dict element: it cannot hold a `when` or a count (`check_element`), so
-    /// nothing would read what it wrote.
-    kept: bool,
-    items: Vec<(Name, Cow<'v, Value>)>,
-}
-
-impl<'v> Written<'v> {
-    fn new() -> Self {
-        // Most scopes write a handful of fields: one allocation, not a growth from 4 to 8.
-        Written {
-            kept: true,
-            items: Vec::with_capacity(8),
-        }
-    }
-
-    fn unread() -> Self {
-        Written {
-            kept: false,
-            items: Vec::new(),
-        }
-    }
-
-    fn insert(&mut self, name: &Name, value: Cow<'v, Value>) {
-        if self.kept {
-            self.items.push((name.clone(), value));
-        }
-    }
-
-    /// The latest value written under `name`, as a later read replaces an earlier one.
-    fn get(&self, name: &str) -> Option<&Value> {
-        self.items
-            .iter()
-            .rev()
-            .find(|(own, _)| own.as_ref() == name)
-            .map(|(_, value)| &**value)
-    }
-}
-
 fn require<'a>(values: &'a Values, name: &str) -> Result<&'a Value, PackError> {
     match values.get(name) {
         Some(Some(v)) => Ok(v),
         _ => Err(PackError::Missing(name.to_string())),
-    }
-}
-
-fn written<'a>(wrote: &'a Written<'_>, name: &str) -> Result<&'a Value, PackError> {
-    wrote
-        .get(name)
-        .ok_or_else(|| PackError::Missing(name.to_string()))
-}
-
-fn borrowed_count(
-    wrote: &Written<'_>,
-    count: &str,
-    bias: i8,
-    label: &str,
-) -> Result<usize, PackError> {
-    let raw = as_usize(written(wrote, count)?).ok_or_else(|| PackError::Type(count.to_string()))?;
-    let item_count = i64::try_from(raw)
-        .ok()
-        .and_then(|n| n.checked_add(i64::from(bias)));
-    match item_count {
-        Some(n) if n >= 0 => Ok(n as usize),
-        Some(n) => Err(PackError::Type(format!("{label}: item count {n}"))),
-        None => Err(PackError::Type(format!("{label}: item count out of range"))),
     }
 }
 
@@ -90,10 +25,10 @@ fn pack_round<'r>(
     round: &'r Values,
     out: &mut Vec<u8>,
 ) -> Result<Written<'r>, PackError> {
-    let mut bits = HashMap::new();
-    collect_flag_bits(members, round, &mut bits)?;
+    let mut inners = FlagInners::new();
+    collect_flag_bits(members, &mut inners);
     let mut wrote = Written::new();
-    pack_fields(members, round, &bits, &mut wrote, out)?;
+    pack_fields(members, round, &inners, &mut wrote, out)?;
     Ok(wrote)
 }
 
@@ -164,12 +99,12 @@ fn write_float(
 fn pack_fields<'v>(
     fields: &[Field],
     values: &'v Values,
-    flag_bits: &HashMap<usize, u8>,
+    inners: &FlagInners<'_>,
     wrote: &mut Written<'v>,
     out: &mut Vec<u8>,
 ) -> Result<(), PackError> {
     for field in fields {
-        pack_one(field, values, flag_bits, wrote, out)?;
+        pack_one(field, values, inners, wrote, out)?;
     }
     Ok(())
 }
@@ -177,7 +112,7 @@ fn pack_fields<'v>(
 fn pack_one<'v>(
     field: &Field,
     values: &'v Values,
-    flag_bits: &HashMap<usize, u8>,
+    inners: &FlagInners<'_>,
     wrote: &mut Written<'v>,
     out: &mut Vec<u8>,
 ) -> Result<(), PackError> {
@@ -214,23 +149,27 @@ fn pack_one<'v>(
             }
         }
         FieldKind::Flags { name, members, .. } => {
+            let at = out.len();
+            out.push(0);
             let mut bits: u8 = 0;
             for (i, member) in members.iter().enumerate() {
-                if member_on(member, values)? {
+                if member_on(member, values, wrote)? {
                     bits |= 1 << i;
+                    pack_one(member, values, inners, wrote, out)?;
                 }
             }
-            out.push(bits);
+            out[at] = bits;
             wrote.insert(name, Cow::Owned(Value::U8(bits)));
-            for (i, member) in members.iter().enumerate() {
-                if bits & (1 << i) != 0 {
-                    pack_one(member, values, flag_bits, wrote, out)?;
-                }
-            }
             Ok(())
         }
         FieldKind::FlagByte { name, slot } => {
-            let bits = *flag_bits.get(slot).unwrap_or(&0);
+            let mut bits: u8 = 0;
+            for (bit, inner) in inners.get(slot).into_iter().flatten() {
+                if member_on(inner, values, wrote)? {
+                    bits |= 1 << bit;
+                }
+            }
+            wrote.set_flag_byte(*slot, bits);
             out.push(bits);
             wrote.insert(name, Cow::Owned(Value::U8(bits)));
             Ok(())
@@ -238,9 +177,8 @@ fn pack_one<'v>(
         FieldKind::FlagBit {
             slot, bit, inner, ..
         } => {
-            let bits = *flag_bits.get(slot).unwrap_or(&0);
-            if bits & (1 << bit) != 0 {
-                pack_one(inner, values, flag_bits, wrote, out)?;
+            if wrote.flag_byte(*slot) & (1 << bit) != 0 {
+                pack_one(inner, values, inners, wrote, out)?;
             }
             Ok(())
         }
@@ -251,7 +189,7 @@ fn pack_one<'v>(
             ..
         } => {
             if wrote.get(field).is_some_and(|v| when_matches(v, expect)) {
-                pack_fields(members, values, flag_bits, wrote, out)?;
+                pack_fields(members, values, inners, wrote, out)?;
             }
             Ok(())
         }
@@ -270,7 +208,7 @@ fn pack_one<'v>(
             if members.is_empty() {
                 wrote.insert(name, Cow::Owned(Value::U8(1)));
             }
-            pack_fields(members, values, flag_bits, wrote, out)
+            pack_fields(members, values, inners, wrote, out)
         }
         FieldKind::Sized { name, count } => {
             let n = as_usize(written(wrote, count)?)
@@ -353,10 +291,7 @@ fn pack_one<'v>(
             match values.get(key.as_ref()) {
                 Some(Some(Value::Groups(rounds))) => {
                     if rounds.len() != n {
-                        return Err(PackError::Type(format!(
-                            "times at id {anchor}: count {n}, {} rounds",
-                            rounds.len()
-                        )));
+                        return Err(rounds_mismatch(*anchor, n, rounds.len()));
                     }
                     check_lists(*anchor, members, rounds, values)?;
                     let mut lists = RoundLists::default();
@@ -412,7 +347,7 @@ fn pack_one<'v>(
                         slice.insert(name_of(child), Some(item.clone()));
                         let mut elem_wrote = Written::unread();
                         let one = std::slice::from_ref(&**element);
-                        pack_fields(one, &slice, flag_bits, &mut elem_wrote, out)?;
+                        pack_fields(one, &slice, inners, &mut elem_wrote, out)?;
                     }
                     wrote.insert(name, Cow::Borrowed(v));
                     Ok(())
@@ -443,7 +378,7 @@ fn pack_one<'v>(
                         slice.insert(name_of(child), Some(item.clone()));
                         let mut elem_wrote = Written::unread();
                         let one = std::slice::from_ref(&**element);
-                        pack_fields(one, &slice, flag_bits, &mut elem_wrote, out)?;
+                        pack_fields(one, &slice, inners, &mut elem_wrote, out)?;
                     }
                     wrote.insert(name, Cow::Borrowed(v));
                     Ok(())
@@ -455,19 +390,16 @@ fn pack_one<'v>(
 }
 
 pub fn pack(scheme: &MapScheme, values: &Values) -> Result<Vec<u8>, PackError> {
-    let flag_bits = if scheme.has_split_flags {
-        let mut bits = HashMap::new();
-        collect_flag_bits(&scheme.fields, values, &mut bits)?;
-        bits
-    } else {
-        HashMap::new()
-    };
+    let mut inners = FlagInners::new();
+    if scheme.has_split_flags {
+        collect_flag_bits(&scheme.fields, &mut inners);
+    }
     let mut out = Vec::with_capacity(32);
     out.push(scheme.type_number);
     pack_fields(
         &scheme.fields,
         values,
-        &flag_bits,
+        &inners,
         &mut Written::new(),
         &mut out,
     )?;

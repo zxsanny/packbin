@@ -24,6 +24,14 @@ final class ByteSink {
         size += n;
     }
 
+    int size() {
+        return size;
+    }
+
+    void set(int index, byte b) {
+        buf[index] = b;
+    }
+
     byte[] toArray() {
         byte[] out = new byte[size];
         System.arraycopy(buf, 0, out, 0, size);

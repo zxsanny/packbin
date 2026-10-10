@@ -321,6 +321,22 @@ final class VarFields {
         }
     }
 
+    /**
+     * Whether a times that is a flags member writes: its count is above 0. A count the row skipped is no round (unpack
+     * would not read the field either). A count of 0 refuses the entries the row holds, as a times outside flags does.
+     */
+    static boolean timesOn(Field field, Object row, Walker.Take take, Map<Object, Object> seen) {
+        Object countRaw = seen.get(field.countId);
+        if (!(countRaw instanceof Number) || countRaw instanceof Float || countRaw instanceof Double) {
+            return false;
+        }
+        int count = borrowedCount(field, seen);
+        if (count == 0) {
+            Rounds.requireEntriesFit(field, row, 0, take);
+        }
+        return count > 0;
+    }
+
     static void packTimes(
             Field field, Object row, ByteSink sink, Map<Object, Object> seen, Walker.Take take) {
         Rounds.packTimes(field, row, sink, seen, borrowedCount(field, seen), take);

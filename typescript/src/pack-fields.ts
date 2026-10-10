@@ -6,13 +6,12 @@ import {
   itemGroup,
   type Field,
 } from "./fields.ts"
-import { flagValueFor } from "./flag-bits.ts"
+import { bitOn, flagValueFor, type PackedFlagByte } from "./flag-bits.ts"
 import { refName } from "./ref-scope.ts"
 import { refuseLoneDicts, refuseLongLists, roundCount, roundNames, sliceRound } from "./rounds.ts"
 import {
   present,
   sameValue,
-  validCount,
   writeBits,
   writeFloat,
   writeInt,
@@ -22,33 +21,7 @@ import {
   writeUtf8,
   type Value,
 } from "./kinds.ts"
-
-// What a `when` or a count reads is what pack wrote in the scope, as unpack reads what it has read: a
-// field that was skipped or absent was not written, and a `when` sees it as `undefined`, as unpack does.
-function seen(wrote: Value, ref: string): unknown {
-  return Object.hasOwn(wrote, ref) ? wrote[ref] : undefined
-}
-
-function writtenCount(ref: string, label: string, wrote: Value): unknown {
-  if (!Object.hasOwn(wrote, ref)) throw new RangeError(`${label}: count ${ref} was not written`)
-  return wrote[ref]
-}
-
-function borrowedCount(ref: string, bias: number, label: string, wrote: Value): number {
-  const raw = writtenCount(ref, label, wrote)
-  const count = validCount(raw, bias)
-  if (count === null) {
-    // Pack keeps throwing; the message tells a missing count from a negative one.
-    throw new RangeError(
-      typeof raw === "bigint"
-        ? `${label}: item count ${raw + BigInt(bias)}`
-        : typeof raw === "number" && Number.isInteger(raw)
-          ? `${label}: item count ${raw + bias}`
-          : `${label}: count missing`,
-    )
-  }
-  return count
-}
+import { borrowedCount, seen, writtenCount } from "./written.ts"
 
 // One list or dict item. A group or flags element packs from the members of the item; any other
 // element is one value, read under the element's own name.
@@ -58,7 +31,7 @@ function packItem(
   values: Value,
   allFields: Field[],
   out: number[],
-  flagBytes: Map<symbol, number>,
+  flagBytes: Map<symbol, PackedFlagByte>,
 ): void {
   const group = itemGroup(f.element)
   if (group === null) {
@@ -77,7 +50,7 @@ function packRounds(
   allFields: Field[],
   values: Value,
   out: number[],
-  flagBytes: Map<symbol, number>,
+  flagBytes: Map<symbol, PackedFlagByte>,
 ): void {
   for (let i = 0; i < count; i++) {
     packFields(fields, allFields, sliceRound(values, names, i), out, flagBytes, newScope())
@@ -94,7 +67,7 @@ export function packFields(
   allFields: Field[],
   values: Value,
   out: number[],
-  flagBytes: Map<symbol, number>,
+  flagBytes: Map<symbol, PackedFlagByte>,
   wrote: Value,
 ): void {
   for (const f of fields) {
@@ -131,14 +104,21 @@ export function packFields(
         wrote[f.name] = true
         break
       case "flagByte": {
-        const v = flagValueFor(allFields, f.id, values)
-        flagBytes.set(f.id, v)
-        out.push(v & 0xff)
+        // A combined `flags` decides each bit in order, as its member is reached, and patches the byte at
+        // the end; a split flag byte is decided where it is read.
+        const flags = f.inOrder ? 0 : flagValueFor(allFields, f.id, values, wrote)
+        flagBytes.set(f.id, { at: out.length, flags, inOrder: f.inOrder === true })
+        out.push(flags & 0xff)
         break
       }
       case "flagBit": {
-        const flags = flagBytes.get(f.flagId) ?? 0
-        if ((flags & (1 << f.bit)) === 0) break
+        const byte = flagBytes.get(f.flagId)
+        if (byte === undefined) break
+        if (byte.inOrder) {
+          if (!bitOn(f.field, values, wrote)) break
+          byte.flags |= 1 << f.bit
+          out[byte.at] = byte.flags
+        } else if ((byte.flags & (1 << f.bit)) === 0) break
         if (f.field.kind === "group") {
           packFields(f.field.fields, allFields, values, out, flagBytes, wrote)
         } else {

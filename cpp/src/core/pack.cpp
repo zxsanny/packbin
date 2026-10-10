@@ -195,7 +195,7 @@ std::size_t item_count(Pack& p, std::size_t i, void* obj, void* m, Result& out) 
   if (f.kind == Kind::Times) {
     std::int64_t count = 0;
     if (!ref_value(p.t, f, obj, count) || count < 0 ||
-        (count != 0 && (m == nullptr || *f.count(m) != count))) {
+        (m == nullptr ? count != 0 : *f.count(m) != count)) {
       out = bad(p.w, f);
       return stop;
     }

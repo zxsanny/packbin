@@ -85,3 +85,7 @@ Then bytes and results are unchanged except the tests that pinned the old droppe
 |---------|----------------|--------|----------|
 | Behavior change in five packages that agreed on the old bytes (`01 01 02 5a00`); upgrade note | owner decision 2026-10-10 | resolved | Medium |
 | The exact schemes and bytes for `times` and `repeat` are derived from runs by the wave 3 workers; if the packages cannot agree on one reading, the worker stops and reports | coordinator | open | Medium |
+
+## Loop 18 result (2026-10-10)
+
+Done in loop 18 wave 3 in all six packages (owner decision 10, option A). Rule and reference bytes in `batch_03_loop18_report.md` and `_docs/03_implementation/flags_member_reference_cases_loop18.md`; `Mode=1, Speed=7, Heading=90` packs `01 01 03 07 5a00` in C#, TypeScript, Python, Rust, Java and C++; old clear-bit packets still unpack.

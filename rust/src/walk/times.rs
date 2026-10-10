@@ -50,6 +50,31 @@ pub(super) fn slice_times(
     Ok(slice)
 }
 
+pub(super) fn rounds_mismatch(anchor: u32, count: usize, rounds: usize) -> PackError {
+    PackError::Type(format!(
+        "times at id {anchor}: count {count}, {rounds} rounds"
+    ))
+}
+
+/// A `times` with count 0 writes no round, and what is given for its rounds (rounds, or a list
+/// with an item for a member) is refused, as it is for any other count it does not match.
+pub(super) fn check_no_rounds(
+    anchor: u32,
+    members: &[Field],
+    values: &Values,
+) -> Result<(), PackError> {
+    let key = times_name(anchor);
+    match values.get(key.as_ref()) {
+        Some(Some(Value::Groups(rounds))) if rounds.is_empty() => Ok(()),
+        Some(Some(Value::Groups(rounds))) => Err(rounds_mismatch(anchor, 0, rounds.len())),
+        Some(Some(_)) => Err(PackError::Type(key.to_string())),
+        _ => {
+            check_aligned(anchor, members, values)?;
+            check_longer(anchor, members, values, 0)
+        }
+    }
+}
+
 fn holds_dict(field: &Field) -> bool {
     match &field.kind {
         FieldKind::Dict { .. } => true,

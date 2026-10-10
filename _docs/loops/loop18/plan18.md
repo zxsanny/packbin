@@ -78,3 +78,4 @@ Per package: the package suite only (no Docker). C# on net10.0 and `-p:PackbinTa
 ### Divergence log
 
 - Wave 1 ran as seven worker stages (C# split in two: A = AZ-2305, 2306, 2308, 2309, 2310; B = AZ-2126, AZ-2307 plus the ring files). AZ-2308 spread over five packages by direction (each worker probed its own package). AZ-2135 closed with AZ-2304 (its Python and C# parts were already done in loops 16 and 17). A hung `dotnet test` (missing `MSBUILDDISABLENODEREUSE=1`) cost the C# A stage about 15 minutes; the fix is in `AGENT_GOTCHAS.md`. Batch report: `_docs/03_implementation/batch_01_loop18_report.md`.
+- Wave 2 (one worker, `fixtures/hostile/` and the six loaders) committed as `e4d76f9`; the `cpp/Makefile` dependency on `hostile_pack_cases.hpp` was fixed by the parent. Wave 3 ran in two stages (C# reference stage writing a hex-pinned table, then five workers in parallel) so six packages could not derive different readings. Batch reports 02 and 03.

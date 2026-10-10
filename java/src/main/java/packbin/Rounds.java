@@ -37,17 +37,31 @@ final class Rounds {
         pack(field, values, row, sink, seen, count, outer);
     }
 
+    /** Whether a repeat that is a flags member writes: at least one round holds a value. */
+    static boolean repeatOn(Field field, Object row, Walker.Take outer) {
+        for (Field value : values(field.children)) {
+            if (entries(read(value, row, outer)) > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     static void packTimes(
             Field field, Object row, ByteSink sink, Map<Object, Object> seen, int count, Walker.Take outer) {
-        List<Field> values = values(field.children);
-        for (Field value : values) {
+        requireEntriesFit(field, row, count, outer);
+        pack(field, values(field.children), row, sink, seen, count, outer);
+    }
+
+    /** A list that holds more entries than the count is refused, not cut to the count. */
+    static void requireEntriesFit(Field field, Object row, int count, Walker.Take outer) {
+        for (Field value : values(field.children)) {
             Object list = read(value, row, outer);
             if (list instanceof List<?> items && items.size() > count) {
                 throw new IllegalArgumentException(
                         member(value) + ": list has " + items.size() + " entries for a count of " + count);
             }
         }
-        pack(field, values, row, sink, seen, count, outer);
     }
 
     private static void pack(

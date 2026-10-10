@@ -47,10 +47,11 @@ def _bool_on(value: Any) -> bool:
     return value is True
 
 
-def _child_on(child: _Node, take: Callable[[_Node], Any]) -> bool:
-    """`take` gives the value of a leaf for the row, or for the round being packed."""
+def _child_on(child: _Node, take: Callable[[_Node], Any], seen: dict[int, Any], row: Any) -> bool:
+    """`take` gives the value of a leaf for the row, or for the round being packed; `seen` holds the values written
+    so far in this scope, which decide a `when` and a `times` member."""
     if isinstance(child, (_Group, _Flags)):
-        return any(_child_on(inner, take) for inner in child.fields)
+        return any(_child_on(inner, take, seen, row) for inner in child.fields)
     if isinstance(child, _U2):
         return any(_present_value(take(slot)) for slot in child.slots)
     if isinstance(child, _Bool):
@@ -58,8 +59,27 @@ def _child_on(child: _Node, take: Callable[[_Node], Any]) -> bool:
     if isinstance(child, (_Scalar, _Bytes, _Utf8, _Sized, _Bits, _Packed, _List, _Dict)):
         return _present_value(take(child))
     if isinstance(child, _FlagBit):
-        return _child_on(child.field, take)
+        return _child_on(child.field, take, seen, row)
+    if isinstance(child, _When):
+        held = seen.get(child.condition.field_id) == child.condition.value
+        return held and any(_child_on(inner, take, seen, row) for inner in child.fields)
+    if isinstance(child, _Times):
+        return _times_on(child, seen, row)
+    if isinstance(child, _Repeat):
+        return any(_round_length(leaf.get(row)) > 0 for leaf in child.leaves)
     return False
+
+
+def _times_on(node: _Times, seen: dict[int, Any], row: Any) -> bool:
+    """On when the count is above 0. A count that was skipped is no round (unpack would not read the field either);
+    a count of 0 with a list given for a body value is refused, as a `times` outside `flags` refuses it."""
+    count = seen.get(node.count)
+    if count is None:
+        return False
+    rounds = _borrowed("times", count, 0)
+    if rounds == 0:
+        _check_round_lists(node.leaves, row, 0)
+    return rounds > 0
 
 
 def _write_u2(buf: bytearray, slots: Sequence[Any], take: Callable[[_Node], Any], seen: dict[int, Any]) -> None:
@@ -159,10 +179,13 @@ def _round_length(value: Any) -> int:
     return len(value) if isinstance(value, _builtin_list) else 1
 
 
-def _at_round(row: Any, index: int, optional: set[int] | None = None) -> Callable[[_Node], Any]:
+def _at_round(
+    row: Any, index: int, optional: set[int] | None = None, count: int | None = None
+) -> Callable[[_Node], Any]:
     """The value of a leaf in round `index`: entry `index` of its list, or the lone value every round shares.
     A leaf in `optional` (the ids of those a `times` body holds under `flags` or a flag bit) has no entry
-    past the end of its list: it is absent in that round, as a `None` entry is."""
+    past the end of its list: it is absent in that round, as a `None` entry is. `count` is given for a `times`
+    that is a member of `flags`: its set bit promises every round, so a list that ends early names the leaf."""
 
     def at(leaf: _Node) -> Any:
         value = leaf.get(row)  # type: ignore[attr-defined]
@@ -170,6 +193,8 @@ def _at_round(row: Any, index: int, optional: set[int] | None = None) -> Callabl
             return value
         if optional and index >= len(value) and id(leaf) in optional:
             return None
+        if count is not None and index >= len(value):
+            raise ValueError(f"{_member_label(leaf)}: {len(value)} items, times count is {count}")
         return value[index]
 
     return at
@@ -219,9 +244,16 @@ def pack_nodes(
     row: Any,
     seen: dict[int, Any] | None = None,
     get_value: Callable[[_Node], Any] | None = None,
+    *,
+    flag_state: dict[int, int] | None = None,
+    flagged: bool = False,
 ) -> None:
+    """`flag_state`: the byte each read of a split flag byte wrote, which its bits follow. `flagged`: the nodes
+    are a member of `flags` or of a flag bit, so a `times` among them promises every round it counts."""
     if seen is None:
         seen = {}
+    if flag_state is None:
+        flag_state = {}
 
     def take(node: _Node) -> Any:
         if get_value is not None:
@@ -248,19 +280,20 @@ def pack_nodes(
         elif isinstance(node, _Bool):
             seen[node.field_id] = take(node)
         elif isinstance(node, _Flags):
+            at = len(buf)
+            buf.append(0)
             flag = 0
             for i, child in enumerate(node.fields):
-                if _child_on(child, take):
-                    flag |= 1 << i
-            buf.append(flag)
-            for i, child in enumerate(node.fields):
-                if flag & (1 << i):
-                    if isinstance(child, _Bool):
-                        seen[child.field_id] = take(child)
-                    elif isinstance(child, _Group):
-                        pack_nodes(buf, child.fields, row, seen, get_value)
-                    else:
-                        pack_nodes(buf, [child], row, seen, get_value)
+                if not _child_on(child, take, seen, row):
+                    continue
+                flag |= 1 << i
+                if isinstance(child, _Bool):
+                    seen[child.field_id] = take(child)
+                elif isinstance(child, _Group):
+                    pack_nodes(buf, child.fields, row, seen, get_value, flag_state=flag_state, flagged=True)
+                else:
+                    pack_nodes(buf, [child], row, seen, get_value, flag_state=flag_state, flagged=True)
+            buf[at] = flag
         elif isinstance(node, _Sized):
             count = seen.get(node.count)
             if count is None:
@@ -293,19 +326,24 @@ def pack_nodes(
             for leaf in node.leaves:
                 _refuse_lone_dict(leaf, leaf.get(row))
             for i in range(item_count):
-                pack_nodes(buf, node.fields, row, seen, _at_round(row, i, node.optional))
+                at_round = _at_round(row, i, node.optional, item_count if flagged else None)
+                pack_nodes(buf, node.fields, row, seen, at_round, flag_state=flag_state)
         elif isinstance(node, _FlagByte):
             flag = 0
             for i, child in enumerate(node.bits):
-                if _child_on(child, take):
+                if _child_on(child, take, seen, row):
                     flag |= 1 << i
             buf.append(flag)
+            flag_state[id(node)] = flag
         elif isinstance(node, _FlagBit):
-            if _child_on(node.field, take):
-                pack_nodes(buf, [node.field], row, seen, get_value)
+            flag = flag_state.get(id(node.owner))
+            if flag is None:
+                raise RuntimeError("flag bit before flag byte")
+            if flag & (1 << node.index):
+                pack_nodes(buf, [node.field], row, seen, get_value, flag_state=flag_state, flagged=True)
         elif isinstance(node, _When):
             if seen.get(node.condition.field_id) == node.condition.value:
-                pack_nodes(buf, node.fields, row, seen, get_value)
+                pack_nodes(buf, node.fields, row, seen, get_value, flag_state=flag_state, flagged=flagged)
         elif isinstance(node, _Repeat):
             values = [leaf.get(row) for leaf in node.leaves]
             for leaf, value in zip(node.leaves, values):
@@ -315,7 +353,7 @@ def pack_nodes(
             if any(n not in (0, count) for n in lengths):
                 raise ValueError("repeat fields must have equal lengths")
             for i in range(count):
-                pack_nodes(buf, node.fields, row, seen, _at_round(row, i))
+                pack_nodes(buf, node.fields, row, seen, _at_round(row, i), flag_state=flag_state)
         elif isinstance(node, _Utf8):
             value = take(node)
             seen[node.field_id] = value
@@ -328,6 +366,6 @@ def pack_nodes(
         elif isinstance(node, _Dict):
             _pack_dict_items(buf, node.element, take(node))
         elif isinstance(node, _Group):
-            pack_nodes(buf, node.fields, row, seen, get_value)
+            pack_nodes(buf, node.fields, row, seen, get_value, flag_state=flag_state, flagged=flagged)
         else:
             raise TypeError(f"unknown field node: {type(node)!r}")

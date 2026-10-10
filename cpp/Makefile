@@ -11,13 +11,13 @@ CORE_SRCS := src/core/values.cpp src/core/pack.cpp src/core/unpack.cpp src/core/
 HOST_SRCS := src/os_random.cpp
 # VECTOR_TESTS are shared with the firmware runner; HOST_TESTS need an operating system.
 VECTOR_TESTS := tests/core/scalar_tests.cpp tests/core/scheme_tests.cpp tests/core/grouped_tests.cpp tests/core/counted_tests.cpp tests/core/container_tests.cpp tests/core/session_tests.cpp
-HOST_TESTS := tests/core/main.cpp tests/core/host_tests.cpp tests/core/session_host_tests.cpp tests/core/hostile_host_tests.cpp tests/core/flag_scope_host_tests.cpp tests/core/source_kinds_host_tests.cpp
+HOST_TESTS := tests/core/main.cpp tests/core/host_tests.cpp tests/core/session_host_tests.cpp tests/core/hostile_host_tests.cpp tests/core/flag_scope_host_tests.cpp tests/core/source_kinds_host_tests.cpp tests/core/flags_when_member_host_tests.cpp tests/core/flags_times_repeat_member_host_tests.cpp
 TEST_BIN := build/packbin_tests
 EXPECT_FAIL := ./tests/compile-fail/expect-fail.sh "$(CXX) $(CXXFLAGS) $(CORE_FLAGS) -fsyntax-only"
 
 .PHONY: test core-test clean compile-fail
 
-$(TEST_BIN): $(HDRS) $(CORE_SRCS) $(HOST_SRCS) $(VECTOR_TESTS) $(HOST_TESTS) tests/core/check.hpp tests/core/hostile_pack_cases.hpp
+$(TEST_BIN): $(HDRS) $(CORE_SRCS) $(HOST_SRCS) $(VECTOR_TESTS) $(HOST_TESTS) tests/core/check.hpp tests/core/hostile_pack_cases.hpp tests/core/member_cases.hpp
 	mkdir -p build
 	$(CXX) $(CXXFLAGS) $(CORE_FLAGS) -pthread -o $@ $(CORE_SRCS) $(HOST_SRCS) $(VECTOR_TESTS) $(HOST_TESTS)
 

@@ -391,10 +391,10 @@ final class FlagGroup {
         return Field.flagBit(this, reserve(inner), inner);
     }
 
-    int compute(Object row, Walker.Take take) {
+    int compute(Object row, Walker.Take take, java.util.Map<Object, Object> seen) {
         int flags = 0;
         for (int i = 0; i < bitInners.size(); i++) {
-            if (Walker.childOn(row, bitInners.get(i), take)) {
+            if (Walker.childOn(row, bitInners.get(i), take, seen)) {
                 flags |= 1 << i;
             }
         }
