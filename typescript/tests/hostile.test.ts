@@ -4,6 +4,7 @@ import { describe, it } from "node:test"
 import { Worker } from "node:worker_threads"
 import { BinaryPacker, bits, bytes, eq, i32, list, repeat, scheme, u64, u8, when, type DispatchResult } from "../src/index.ts"
 import { CONSTRUCT, type Outcome, type SessionOutcome } from "./support/hostile-cases.ts"
+import { PACK } from "./support/hostile-pack.ts"
 
 // A hang or an out-of-memory loop ends the worker, not the test run. The cases share one
 // worker; the case that hangs is reported and the rest restart in a fresh worker.
@@ -67,6 +68,7 @@ const allCases = readFileSync(new URL("../../fixtures/hostile/cases.txt", import
 const cases = allCases.filter((c) => c.stage === "unpack")
 const constructCases = allCases.filter((c) => c.stage === "construct")
 const limitCases = allCases.filter((c) => c.stage === "limit")
+const packCases = allCases.filter((c) => c.stage === "pack")
 
 const SPEC: Record<string, string> = {
   row1_zero_progress_repeat: "010005",
@@ -327,6 +329,29 @@ describe("shared construct vectors (fixtures/hostile/cases.txt)", () => {
       assert.throws(entry.build, (e: unknown) => {
         assert.ok(e instanceof RangeError, `${c.id}: expected RangeError, got ${String(e)}`)
         assert.match(e.message, entry.rule, `${c.id}: wrong rule fired`)
+        return true
+      })
+    })
+  }
+})
+
+describe("shared pack vectors (fixtures/hostile/cases.txt)", () => {
+  it("has a TypeScript scheme for every pack vector and no other", () => {
+    assert.ok(packCases.length > 0)
+    assert.deepEqual(packCases.map((c) => c.id).sort(), Object.keys(PACK).sort())
+  })
+
+  for (const c of packCases) {
+    it(`${c.id} packs ${c.expected[0] === "bytes" ? "the bytes" : "nothing: pack refuses the row"}`, () => {
+      const pack = PACK[c.id]
+      assert.ok(pack, `no TypeScript scheme for pack case ${c.id}`)
+      if (c.expected[0] === "bytes") {
+        assert.equal(Buffer.from(pack()).toString("hex"), c.hex)
+        return
+      }
+      assert.deepEqual(c.expected, ["pack_error"])
+      assert.throws(pack, (e: unknown) => {
+        assert.ok(e instanceof RangeError, `${c.id}: expected RangeError, got ${String(e)}`)
         return true
       })
     })

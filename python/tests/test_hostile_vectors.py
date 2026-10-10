@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from hostile_support import LIMIT_SCHEMES, VECTOR_SCHEMES, assert_rejected, error_kind, unpack_guarded
+from hostile_support import LIMIT_SCHEMES, PACK_CASES, VECTOR_SCHEMES, assert_rejected, error_kind, unpack_guarded
 
 CASES = Path(__file__).resolve().parents[2] / "fixtures" / "hostile" / "cases.txt"
 
@@ -22,6 +22,7 @@ def _cases(wanted: str) -> list[tuple[str, set[str], str]]:
 
 UNPACK_CASES = _cases("unpack")
 LIMIT_CASES = _cases("limit")
+PACK_VECTORS = _cases("pack")
 
 
 def test_every_unpack_vector_has_a_declared_scheme():
@@ -55,3 +56,20 @@ def test_limit_vector_is_refused_by_the_round_limit(case_id: str, expected: set[
     assert_rejected(result, seen, elapsed)
     assert error_kind(result) in expected
     assert (result.error.needed, result.error.left) == (0, 1)
+
+
+def test_every_pack_vector_has_a_declared_scheme():
+    assert sorted(case[0] for case in PACK_VECTORS) == sorted(PACK_CASES)
+
+
+@pytest.mark.parametrize("case_id,expected,hex_bytes", PACK_VECTORS, ids=[c[0] for c in PACK_VECTORS])
+def test_pack_vector_gives_the_bytes_or_is_refused(case_id: str, expected: set[str], hex_bytes: str):
+    pack, refusal = PACK_CASES[case_id]
+
+    if expected == {"bytes"}:
+        assert refusal is None
+        assert pack().hex() == hex_bytes
+    else:
+        assert expected == {"pack_error"}
+        with pytest.raises(refusal):
+            pack()

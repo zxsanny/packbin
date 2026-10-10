@@ -1,16 +1,17 @@
 # Hostile-packet vectors
 
-`cases.txt` lists packets and schemes that crafted input or a careless caller can send. Every package must answer each one the same way in kind: return an error value (never hang, never throw out of `unpack`), or refuse the scheme at construction. The file holds bytes and outcomes only. Each language writes the scheme by hand from `README.md` at the repository root (ADR-001: no shared walker, no generated schemes).
+`cases.txt` lists packets and schemes that crafted input or a careless caller can send. Every package must answer each one the same way in kind: return an error value (never hang, never throw out of `unpack`), refuse the scheme at construction, or, for a `pack` case, refuse the row at pack time (an exception in most packages, an error return in C++ and Rust, with no bytes returned; `unpack` never throws, `pack` may). The file holds bytes and outcomes only. Each language writes the scheme by hand from `README.md` at the repository root (ADR-001: no shared walker, no generated schemes).
 
 ## Format of `cases.txt`
 
 - UTF-8, LF line endings. Lines starting with `#` and blank lines are ignored.
 - Data line: four fields separated by spaces or tabs: `id stage expected hex`.
   - `id`: `[a-z0-9_]+`, unique. Every id has a `## <id>` section below.
-  - `stage`: `unpack` (build the scheme, unpack `hex`), `construct` (building the scheme must fail) or `limit` (build the scheme with the limits the section gives, unpack `hex`).
-  - `expected`: outcome terms joined by `|`; any listed term is accepted, the first is preferred.
-  - `hex`: lowercase, even length, starting with `01` for `unpack` and `limit`; `-` for `construct`.
+  - `stage`: `unpack` (build the scheme, unpack `hex`), `construct` (building the scheme must fail), `limit` (build the scheme with the limits the section gives, unpack `hex`) or `pack` (build the scheme and pack the row the section gives).
+  - `expected`: outcome terms joined by `|`; any listed term is accepted, the first is preferred. A `pack` case has exactly one term: `bytes` or `pack_error`.
+  - `hex`: lowercase, even length, starting with `01` for `unpack`, `limit` and a `pack` case that expects `bytes` (the packet that must come out); `-` for `construct` and for a `pack` case that expects `pack_error`.
 - A `limit` case is a small packet that a scheme with a low round limit refuses. The file holds bytes and outcomes only, so the limit is not in it: the `## <id>` section names it and each package writes it by hand with its own call (`WithLimits`, `withLimits`, `with_limits`). A literal packet over the default limit (65,535 rounds, about 1 MiB) cannot live in the file; each package's own default-limit tests cover it. C#, TypeScript, Java, Rust and Python run `limit` cases (Python since loop 16). C++ unpacks into fixed arrays, so it has no round limit and its replay skips the stage.
+- A `pack` case states its scheme and row in its section, not in the file, and the outcome is the packet `bytes` or `pack_error`: pack throws or returns an error and returns no bytes. One term covers every refusal (out of range, missing, wrong length); the error type and message are not asserted, each package's own tests do that. Each pack section has `Scheme`, `Row`, `Run by` and `Not run by` lines. Some packages cannot write a row (a typed row has a static type, so an out-of-range integer cannot be put in it). `Run by` lists the packages whose vector test packs the row and asserts the outcome, `Not run by` the packages whose test reports the case skipped, with the reason for each. Together the two lists name each of the six packages exactly once; `Not run by: none` is written when all six run the case. A package never skips a case silently: a package in `Run by` that cannot run it fails.
 - `check-cases.sh` checks all of this and that every id has a section here. `cases.test.sh` proves the check passes on the committed file and fails on corrupted copies. Both run in the `scaffold` job of `.github/workflows/test.yml`.
 
 ## Notation
@@ -21,6 +22,7 @@
 - Outcome terms:
   - `short_packet`, `trailing_bytes`, `bad_value`, `too_many`, `type_mismatch`: unpack returns that error value, with no exception and no row.
   - `scheme_error`: construction fails (an exception in C#, Java, TypeScript, Python and Rust; a compile error or `SchemeInvalid` in C++).
+  - `bytes` and `pack_error`: the two `pack` outcomes. `bytes` means pack returns exactly the packet in `hex`; `pack_error` means pack throws (C#, Java, TypeScript, Python) or returns an error (Rust `PackError`, C++ `BadValue`) and returns no bytes.
 - A `limit` case returns an error value whose kind is `too_many` or `bad_value`, with `needed` 0 and `left` 1: the limit refuses a round when it would start, before the round's bytes are read, so a short read of a field (`needed` above 0) does not satisfy it. Packages that have no `too_many` or `bad_value` type yet return their interim bad-value error (a short-packet value with `needed` 0). The field label in that error differs by package and is not asserted.
 - Until the error-kind decision (C15) is taken, a package without a type for a kind passes the case with any non-ok unpack result that is not an exception, and names the kind it returned in the test name or message.
 - Every `unpack` case returns within 1 second on CI hardware. A hang is a failure; each package test supplies its own time guard.
@@ -148,6 +150,13 @@
 - Expected: `scheme_error`.
 - Source: C++ LB7. User decision 2026-10-05.
 
+## eq_bool_false
+
+- Scheme: id0 `flags` anchor 0 { id0 `bool on` }; id1 `when` anchor 1, `eq(0, false)` { id1 `u8 v` }.
+- No packet: a `false` bool leaves its bit clear and is absent on the wire, so a `when` on `eq(0, false)` could never match on unpack. `eq` on a bool or an empty group accepts only `true`; the same scheme with `eq(0, true)` builds and round-trips (`{on: true, v: 5}` packs `010105`).
+- Expected: `scheme_error`. Rust has no bool value: its bool is an empty group, `false` is `U8(0)` and `true` is `eq(id, 1)`. C++ refuses the literal `eq(0, false)` at compile time (`cpp/tests/compile-fail/when_eq_bool_false.cpp`); its vector builds the scheme with `eq(0, 0)`, which `validate` refuses at run time.
+- Source: loop 12 review findings; user decision 2026-10-05 (AZ-2126, built in loop 18).
+
 ## repeat_rounds_over_limit
 
 - Scheme: id0 `repeat` anchor 0 { id0 `u8 v` }.
@@ -167,3 +176,49 @@
 - Source: loop 15, AZ-2216 to AZ-2219; the bytes were run against each package's real code.
 - Run by: C#, TypeScript, Java, Rust, Python (calls as in `repeat_rounds_over_limit`).
 - Not run by: C++, for the reason given there.
+
+## pack_out_of_range_integer
+
+- Scheme: id0 `u8 a`.
+- Row: `a = 300`.
+- Expected: `pack_error`. 300 does not fit in a `u8`; pack refuses the row and does not wrap it to `2c`.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form, `Value::U16(300)` for the `u8` field).
+- Not run by: C++ (a typed row binds a `std::uint8_t` member, so 300 cannot be written).
+- Source: AZ-2084 (TypeScript range check) and the loud-pack tickets of loop 13; probed in every listed package in loop 18.
+
+## pack_missing_required_value
+
+- Scheme: id0 `u8 a`; id1 `u8 b`.
+- Row: `a = 1`, no `b`.
+- Expected: `pack_error`. A walked field with no value is an error, never a shorter packet.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (the member of `b` is an `Opt<std::uint8_t>` left unset; pack returns `BadValue`).
+- Not run by: none.
+- Source: AZ-2088 (C# loud missing value); probed in every package in loop 18.
+
+## pack_times_list_too_long
+
+- Scheme: id0 `u8 a`; id1 `times` anchor 1, count = id0 { id1 `u8 x` }.
+- Row: `a = 2`, `x = [1, 2, 3]`.
+- Expected: `pack_error`. A list longer than the count is refused, never cut to two entries.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of three items beside `a = 2`; pack returns `BadValue`).
+- Not run by: none.
+- Source: AZ-2088 (C#), AZ-2185 (TypeScript), AZ-2186 (Python), AZ-2187 (Java); Rust refuses it with a type error; probed in every package in loop 18.
+
+## pack_times_list_too_short
+
+- Scheme: as `pack_times_list_too_long`.
+- Row: `a = 2`, `x = [1]`.
+- Expected: `pack_error`. A list shorter than the count is refused, never padded or cut to one round.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of one item beside `a = 2`; pack returns `BadValue`).
+- Not run by: none.
+- Source: AZ-2088 (C#); probed in every package in loop 18.
+
+## pack_aligned_round_row
+
+- Scheme: id0 `repeat` anchor 0 { id0 `flags` anchor 0 { id0 `bool on`, id1 `u8 n` } }.
+- Row: `on = [true, false, true]`, `n = [1, 2, 3]` (one entry per round). In Rust, whose bool is an empty group, three round rows: `on` set in rounds 0 and 2, absent in round 1.
+- Packet `01 0301 0202 0303`: type `01`; per round one flags byte (bit 0 `on`, bit 1 `n` present) then `n`. The `false` leaves its bit clear and `n` still sits in its own round.
+- Expected: `bytes` `01030102020303`.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of three rounds with `Opt<bool> on` and `Opt<std::uint8_t> n`).
+- Not run by: none.
+- Source: AZ-2179 (the `roundflags` ring) and AZ-2134 (Python aligned rows, loop 16); the bytes were run against each package's real code in loop 18.

@@ -1,7 +1,8 @@
-use crate::walk::unpack;
+use crate::walk::{pack, unpack};
 use crate::{
-    bits, dict, eq, flag_byte, flags, group, i8, list, repeat, sized, times, u16, u32, u8, utf8,
-    when, BoundField, MapScheme, Scheme, UnpackError, Value, DEFAULT_MAX_SLOTS,
+    bits, dict, eq, flag_byte, flags, group, i8, insert, list, repeat, sized, times, to_hex, u16,
+    u32, u8, utf8, when, BoundField, MapScheme, PackError, Scheme, UnpackError, Value, Values,
+    DEFAULT_MAX_SLOTS,
 };
 use std::collections::HashSet;
 use std::fs;
@@ -85,6 +86,13 @@ fn scheme_for(id: &str) -> MapScheme {
             MapScheme::new(1, fields)
         }
         "empty_group_outside_flags" => MapScheme::new(1, vec![u8("0"), group(1, "1", vec![])]),
+        "eq_bool_false" => MapScheme::new(
+            1,
+            vec![
+                flags(0, "f", vec![group(0, "0", vec![])]),
+                when(1, eq("0", Value::U8(0)), vec![u8("1")]),
+            ],
+        ),
         other => panic!("no scheme written for hostile case {other}"),
     }
 }
@@ -100,6 +108,65 @@ fn limit_scheme_for(id: &str) -> MapScheme {
         "times_rounds_over_limit" => MapScheme::new(1, vec![u8("0"), times(1, "0", vec![u8("1")])])
             .with_limits(LOW_ROUNDS, DEFAULT_MAX_SLOTS),
         other => panic!("no scheme written for hostile limit case {other}"),
+    }
+}
+
+fn row(pairs: &[(&str, Value)]) -> Values {
+    let mut vals = Values::new();
+    for (name, value) in pairs {
+        insert(&mut vals, name, Some(value.clone()));
+    }
+    vals
+}
+
+/// One round row per entry; a name a round leaves out is absent there (false for a bool).
+fn rounds(rounds: Vec<Vec<(&str, Value)>>) -> Values {
+    let groups = rounds.iter().map(|round| row(round)).collect();
+    row(&[("__repeat__", Value::Groups(groups))])
+}
+
+fn ints(items: &[u8]) -> Value {
+    Value::List(items.iter().map(|n| Value::U8(*n)).collect())
+}
+
+fn times_scheme() -> MapScheme {
+    MapScheme::new(1, vec![u8("a"), times(1, "a", vec![u8("x")])])
+}
+
+/// The scheme and row of a `pack` case, written by hand from fixtures/hostile/README.md (map form).
+fn pack_case(id: &str) -> Result<Vec<u8>, PackError> {
+    match id {
+        "pack_out_of_range_integer" => pack(
+            &MapScheme::new(1, vec![u8("a")]),
+            &row(&[("a", Value::U16(300))]),
+        ),
+        "pack_missing_required_value" => pack(
+            &MapScheme::new(1, vec![u8("a"), u8("b")]),
+            &row(&[("a", Value::U8(1))]),
+        ),
+        "pack_times_list_too_long" => pack(
+            &times_scheme(),
+            &row(&[("a", Value::U8(2)), ("x", ints(&[1, 2, 3]))]),
+        ),
+        "pack_times_list_too_short" => pack(
+            &times_scheme(),
+            &row(&[("a", Value::U8(2)), ("x", ints(&[1]))]),
+        ),
+        "pack_aligned_round_row" => pack(
+            &MapScheme::new(
+                1,
+                vec![repeat(
+                    0,
+                    vec![flags(0, "f", vec![group(0, "on", vec![]), u8("n")])],
+                )],
+            ),
+            &rounds(vec![
+                vec![("on", Value::U8(1)), ("n", Value::U8(1))],
+                vec![("n", Value::U8(2))],
+                vec![("on", Value::U8(1)), ("n", Value::U8(3))],
+            ]),
+        ),
+        other => panic!("no scheme written for hostile pack case {other}"),
     }
 }
 
@@ -132,6 +199,7 @@ fn assert_refusal_names_the_rule(id: &str, msg: &str) {
         "not yet walked",
         "more than 8",
         "allowed only directly inside flags",
+        "value other than true",
     ];
     assert!(
         rules.iter().any(|rule| msg.contains(rule)),
@@ -156,7 +224,8 @@ fn rust_outcome(id: &str) -> &'static str {
         | "nine_flag_bits"
         | "nine_flag_bits_split"
         | "bool_outside_flags"
-        | "empty_group_outside_flags" => "scheme_error",
+        | "empty_group_outside_flags"
+        | "eq_bool_false" => "scheme_error",
         "zero_progress_repeat_when" | "when_names_outer_field_in_repeat" => "scheme_error",
         "negative_count"
         | "oversize_count"
@@ -257,6 +326,20 @@ fn hostile_vectors_error_without_panic_or_hang() {
                 }
                 Ok(Err(err)) => panic!("{id}: expected the interim bad-value error, got {err:?}"),
             },
+            "pack" => {
+                let bytes = pack_case(id).map(|raw| to_hex(&raw));
+                match (expected, hex) {
+                    ("bytes", _) => assert_eq!(bytes, Ok(hex.to_string()), "{id}"),
+                    ("pack_error", "-") => {
+                        assert!(
+                            bytes.is_err(),
+                            "{id}: packed {bytes:?}, expected pack_error"
+                        )
+                    }
+                    other => panic!("{id}: malformed pack line {other:?}"),
+                }
+                outcomes.push(format!("{id} -> {expected} {bytes:?}"));
+            }
             other => panic!("{id}: unknown stage {other}"),
         }
     }

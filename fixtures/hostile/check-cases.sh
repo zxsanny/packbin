@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Checks the format of the hostile-case file and that README.md describes every id.
+# Checks the format of the hostile-case file and that README.md describes every id. A pack case also
+# needs Scheme, Row, Run by and Not run by lines that together name each of the six packages once.
 # Usage: check-cases.sh [cases-file] [readme]
 set -euo pipefail
 set -f
@@ -9,6 +10,7 @@ cases="${1:-$here/cases.txt}"
 readme="${2:-$here/README.md}"
 
 terms="short_packet trailing_bytes bad_value too_many type_mismatch scheme_error"
+packages=("C#" "C++" "Java" "Python" "Rust" "TypeScript")
 errors=0
 count=0
 seen=" "
@@ -17,6 +19,33 @@ lineno=0
 bad() {
   echo "$cases:$lineno: $1" >&2
   errors=$((errors + 1))
+}
+
+# A pack case's README section: the scheme, the row, and the Run by and Not run by lists, which
+# together name each package exactly once.
+check_pack_section() {
+  local id="$1" section line run notrun pkg n
+  section="$(awk -v head="## $id" '$0 == head { on = 1; next } /^## / { on = 0 } on' "$readme")"
+  for line in Scheme Row; do
+    grep -q "^- $line: " <<<"$section" || bad "pack case '$id': section has no '- $line:' line"
+  done
+  run="$(grep -m1 '^- Run by: ' <<<"$section" || true)"
+  notrun="$(grep -m1 '^- Not run by: ' <<<"$section" || true)"
+  if [[ -z "$run" ]]; then
+    bad "pack case '$id': section has no '- Run by:' line"
+  fi
+  if [[ -z "$notrun" ]]; then
+    bad "pack case '$id': section has no '- Not run by:' line"
+  fi
+  if [[ -z "$run" || -z "$notrun" ]]; then
+    return
+  fi
+  for pkg in "${packages[@]}"; do
+    n="$({ printf '%s\n%s\n' "$run" "$notrun" | grep -o -F -- "$pkg" || true; } | wc -l | tr -d ' ')"
+    if [[ "$n" -ne 1 ]]; then
+      bad "pack case '$id': package $pkg is named $n times in Run by and Not run by, expected once"
+    fi
+  done
 }
 
 while IFS= read -r line || [[ -n "$line" ]]; do
@@ -42,16 +71,21 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   else
     seen="$seen$id "
   fi
-  if [[ "$stage" != unpack && "$stage" != construct && "$stage" != limit ]]; then
-    bad "stage '$stage' must be unpack, construct or limit"
+  if [[ "$stage" != unpack && "$stage" != construct && "$stage" != limit && "$stage" != pack ]]; then
+    bad "stage '$stage' must be unpack, construct, limit or pack"
   fi
   if [[ ! "$expected" =~ ^[a-z_]+(\|[a-z_]+)*$ ]]; then
     bad "expected '$expected' must be outcome terms joined by |"
+  elif [[ "$stage" == pack ]]; then
+    [[ "$expected" == bytes || "$expected" == pack_error ]] ||
+      bad "a pack case expects bytes or pack_error, got '$expected'"
   else
     old_ifs="$IFS"
     IFS='|'
     for term in $expected; do
-      if [[ " $terms " != *" $term "* ]]; then
+      if [[ "$term" == bytes || "$term" == pack_error ]]; then
+        bad "outcome term '$term' belongs to the pack stage only"
+      elif [[ " $terms " != *" $term "* ]]; then
         bad "unknown outcome term '$term'"
       fi
     done
@@ -59,11 +93,15 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   fi
   if [[ "$stage" == construct ]]; then
     [[ "$hex" == "-" ]] || bad "a construct case has hex '-'"
+  elif [[ "$stage" == pack && "$expected" == pack_error ]]; then
+    [[ "$hex" == "-" ]] || bad "a pack_error case has hex '-'"
   elif [[ ! "$hex" =~ ^01([0-9a-f]{2})*$ ]]; then
     bad "hex '$hex' must be lowercase, even length, starting with 01"
   fi
   if ! grep -q "^## $id\$" "$readme"; then
     bad "id '$id' has no '## $id' section in $readme"
+  elif [[ "$stage" == pack ]]; then
+    check_pack_section "$id"
   fi
 done <"$cases"
 

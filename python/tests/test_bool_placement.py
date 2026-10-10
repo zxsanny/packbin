@@ -106,7 +106,10 @@ CONSTRUCT_SCHEMES = {
     "nine_flag_bits_split": _nine_bits_split,
     "bool_outside_flags": lambda: _scheme(_u8(0, "a"), _on(1)),
     "empty_group_outside_flags": lambda: _scheme(_u8(0, "a"), group(1)),
+    "eq_bool_false": lambda: _scheme(flags(0, _on(0)), when(1, eq(0, False), _u8(1, "v"))),
 }
+
+CONSTRUCT_RULE = {"eq_bool_false": r"when 1: .*bool field 0 .*compared only with true"}
 
 
 def _construct_ids() -> list[str]:
@@ -127,7 +130,7 @@ def test_construct_vectors_are_in_the_case_file():
 
 @pytest.mark.parametrize("case_id", sorted(CONSTRUCT_SCHEMES))
 def test_construct_vector_is_scheme_error(case_id: str):
-    with pytest.raises(ValueError, match="8 bits|flags|no fields"):
+    with pytest.raises(ValueError, match=CONSTRUCT_RULE.get(case_id, "8 bits|flags|no fields")):
         CONSTRUCT_SCHEMES[case_id]()
 
 

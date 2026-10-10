@@ -6,6 +6,7 @@
 #include "packbin/packbin.hpp"
 
 #include "check.hpp"
+#include "hostile_pack_cases.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -266,10 +267,24 @@ char const* empty_group_outside_flags(std::uint8_t const*, std::size_t) {
   return construct_term(s);
 }
 
+struct Gate {
+  bool on = false;
+  Opt<std::uint8_t> v;
+};
+
+// The literal `eq(0, false)` does not compile (tests/compile-fail/when_eq_bool_false.cpp), so the
+// vector writes the false as the integer 0, which `validate` refuses.
+char const* eq_bool_false(std::uint8_t const*, std::size_t) {
+  auto s = packbin::scheme<Gate>(1, packbin::flags(0, packbin::boolean<&Gate::on>(0)),
+                                 packbin::when(1, packbin::eq(0, 0), packbin::u8<&Gate::v>(1)));
+  return construct_term(s);
+}
+
 struct Handler {
   char const* id;
   Run run;
 };
+
 
 constexpr Handler kHandlers[] = {
     {"zero_progress_repeat_bool", zero_progress_repeat_bool},
@@ -289,13 +304,14 @@ constexpr Handler kHandlers[] = {
     {"when_names_outer_field_in_repeat", when_names_outer_field_in_repeat},
     {"bool_outside_flags", bool_outside_flags},
     {"empty_group_outside_flags", empty_group_outside_flags},
+    {"eq_bool_false", eq_bool_false},
 };
 
 struct Case {
   std::string id, stage, expected, hex;
 };
 
-bool read_cases(std::vector<Case>& out) {
+bool read_cases(std::vector<Case>& out, std::vector<Case>& packs) {
   for (auto const* path : {"../fixtures/hostile/cases.txt", "fixtures/hostile/cases.txt"}) {
     std::ifstream in(path);
     if (!in)
@@ -309,7 +325,7 @@ bool read_cases(std::vector<Case>& out) {
       fields >> c.stage >> c.expected >> c.hex;
       if (c.stage == "limit")  // round limits: C++ unpacks into fixed arrays and has none (README)
         continue;
-      out.push_back(c);
+      (c.stage == "pack" ? packs : out).push_back(c);
     }
     return true;
   }
@@ -363,9 +379,31 @@ void check_case(Handler const& h, Case const& c) {
   expect(ok, "hostile case outcome");
 }
 
+void pack_cases(std::vector<Case> const& packs) {
+  expect(!packs.empty(), "pack cases found");
+  for (auto const& c : packs) {
+    auto out = hostile_pack::outcome_of(c.id);
+    if (out.ran == out.skipped) {
+      std::fprintf(stderr, "hostile %s is neither run nor skipped exactly once\n", c.id.c_str());
+      expect(false, "hostile pack case is run or skipped");
+    } else if (out.skipped) {
+      std::printf("hostile %s skipped: %s\n", c.id.c_str(), out.text.c_str());
+      expect(!out.text.empty(), "hostile pack skip names its reason");
+    } else {
+      bool ok = c.expected == "bytes" ? out.text == c.hex
+                                      : c.expected == "pack_error" && out.text == c.expected;
+      if (!ok)
+        std::fprintf(stderr, "hostile %s: got %s, expected %s %s\n", c.id.c_str(),
+                     out.text.c_str(), c.expected.c_str(), c.hex.c_str());
+      expect(ok, "hostile pack case outcome");
+    }
+  }
+}
+
 void hostile_cases() {
   std::vector<Case> cases;
-  bool found = read_cases(cases);
+  std::vector<Case> packs;
+  bool found = read_cases(cases, packs);
   expect(found, "hostile cases file found");
   expect(cases.size() == sizeof(kHandlers) / sizeof(kHandlers[0]), "every case has a scheme");
   for (auto const& c : cases) {
@@ -380,6 +418,7 @@ void hostile_cases() {
     }
     check_case(*match, c);
   }
+  pack_cases(packs);
 }
 
 }  // namespace

@@ -81,3 +81,7 @@ Then `scheme_error`
 |------|---------|-------|
 | AC-1, AC-2 and the decided concern (`when` sources integer or bool, bool only with `true`; counts integer only) | TypeScript, Python, Rust, Java, C++, C# | done in loop 18 wave 1 (each package changed only where it differed; C# reversed `FloatWhenTests` and part of `WrittenWhenKindsTests`; Rust has no bool value: true is `eq(id, 1)`) |
 | AC-3 hostile vector `eq_bool_false` and its README section | shared harness | open, loop 18 wave 2 |
+
+## Loop 18 result (2026-10-10)
+
+Done. Construction checks shipped in wave 1 (six packages, see the progress table above); the construct vector `eq_bool_false` and its README section shipped in wave 2; every package builds the scheme by hand and expects its construction error (C++: `eq(0, 0)` at run time plus the compile-fail case for `eq(0, false)`).

@@ -82,6 +82,12 @@ public class HostileVectorTests
         public bool? On { get; set; }
     }
 
+    private sealed class BoolWhenRow
+    {
+        public bool? On { get; set; }
+        public byte? V { get; set; }
+    }
+
     private sealed class LaterRow
     {
         public byte A { get; set; }
@@ -169,6 +175,9 @@ public class HostileVectorTests
         ["empty_group_outside_flags"] = () => _ = new Scheme<PresenceRow>(1,
             Field.U8<PresenceRow>(0, x => x.A),
             Field.Group(1, (PresenceRow x) => x.On)),
+        ["eq_bool_false"] = () => _ = new Scheme<BoolWhenRow>(1,
+            Field.Flags(0, Field.Bool<BoolWhenRow>(0, x => x.On)),
+            Field.When(1, Condition.Eq(0, false), Field.U8<BoolWhenRow>(1, x => x.V))),
         ["when_names_later_field"] = () => _ = new Scheme<LaterRow>(1,
             Field.U8<LaterRow>(0, x => x.A),
             Field.When(1, Condition.Eq(2, (byte)1), Field.U8<LaterRow>(1, x => x.B)),
@@ -188,6 +197,7 @@ public class HostileVectorTests
         ["nine_flag_bits_split"] = "at most 8 bits",
         ["bool_outside_flags"] = "put it directly in Flags",
         ["empty_group_outside_flags"] = "put it directly in Flags",
+        ["eq_bool_false"] = "a bool is compared only with true",
         ["zero_progress_repeat_bool"] = "put it directly in Flags",
         ["zero_progress_repeat_when"] = "not an earlier field in the same scope",
         ["when_names_later_field"] = "not an earlier field in the same scope",
@@ -205,7 +215,7 @@ public class HostileVectorTests
         ["type_mismatch"] = typeof(TypeMismatch),
     };
 
-    private static IEnumerable<string[]> Cases(string stage)
+    internal static IEnumerable<string[]> Cases(string stage)
     {
         foreach (var line in File.ReadLines(FindCases()))
         {

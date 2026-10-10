@@ -71,6 +71,14 @@ export const CONSTRUCT: Record<string, { build: () => unknown; rule: RegExp }> =
     },
     rule: /^flag byte "fb": ninth bit \(f8\); a flag byte holds 8 bits$/,
   },
+  eq_bool_false: {
+    build: () => scheme<Row>(
+      1,
+      flags(0, [bool(0, (x) => x.on)]),
+      when(1, eq(0, false), [u8(1, (x) => x.v)]),
+    ),
+    rule: /^when 1: eq names bool field id 0 \(on\) and accepts only true, not false$/,
+  },
   when_names_later_field: {
     build: () => scheme<Row>(
       1,

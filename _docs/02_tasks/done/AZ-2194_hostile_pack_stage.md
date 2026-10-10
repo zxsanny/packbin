@@ -135,3 +135,7 @@ Then it runs the check and the self-test with the new count and the corruptions 
 | One `pack_error` kind for every refusal (out-of-range, missing, length); per-cause kinds could be added later | owner | open | Low |
 | Pack errors throw in most packages, unlike `unpack` (the README says `unpack` never throws); the README intro needs the exception stated | spec scope | resolved | Low |
 | Rust map-form and C++ coverage of each case is decided by the worker against the real public API | worker, named in the case section | open | Low |
+
+## Loop 18 result (2026-10-10)
+
+Done in loop 18 wave 2. `cases.txt` has 25 cases (20 after `eq_bool_false`, 5 `pack` cases); `check-cases.sh` and `cases.test.sh` (+14 corruptions: nine file shapes, five README shapes) cover the new kind; every package's vector test handles the stage. Run by / Not run by were re-probed (table in `batch_02_loop18_report.md`): only `pack_out_of_range_integer` is skipped, in C++.

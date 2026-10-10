@@ -30,6 +30,8 @@ final class HostileVectorTest {
                 replay(c);
             } else if (c.stage.equals("limit")) {
                 replayLimit(c);
+            } else if (c.stage.equals("pack")) {
+                replayPack(c);
             } else {
                 PackbinTest.fail("hostile case " + c.id + " has unknown stage " + c.stage);
             }
@@ -39,8 +41,10 @@ final class HostileVectorTest {
                 "oversize_count_times", "oversize_list_count", "invalid_utf8", "invalid_utf8_dict_key",
                 "count_behind_clear_flag", "count_behind_clear_flag_bits", "nine_flag_bits", "nine_flag_bits_split",
                 "when_names_later_field", "count_names_later_field", "when_names_outer_field_in_repeat",
-                "bool_outside_flags", "empty_group_outside_flags",
-                "repeat_rounds_over_limit", "times_rounds_over_limit")) {
+                "bool_outside_flags", "empty_group_outside_flags", "eq_bool_false",
+                "repeat_rounds_over_limit", "times_rounds_over_limit",
+                "pack_out_of_range_integer", "pack_missing_required_value", "pack_times_list_too_long",
+                "pack_times_list_too_short", "pack_aligned_round_row")) {
             PackbinTest.expectTrue("hostile vector " + id + " present in cases.txt", seen.contains(id));
         }
     }
@@ -110,6 +114,53 @@ final class HostileVectorTest {
         };
     }
 
+    /**
+     * AZ-2194: a pack case packs the row its README section gives. {@code bytes} must equal the hex; {@code pack_error}
+     * must throw IllegalArgumentException and return no bytes. Java runs all five cases.
+     */
+    private static void replayPack(Case c) {
+        Supplier<byte[]> pack = packFor(c.id);
+        if (pack == null) {
+            PackbinTest.fail("hostile case " + c.id + " has no Java scheme in HostileVectorTest");
+            return;
+        }
+        if (c.expected.equals(List.of("bytes"))) {
+            PackbinTest.expectEq("hostile pack " + c.id, c.hex, PackbinTest.toHex(pack.get()));
+        } else if (c.expected.equals(List.of("pack_error"))) {
+            PackbinTest.expectTrue("hostile pack " + c.id + " has hex '-'", c.hex.equals("-"));
+            try {
+                pack.get();
+            } catch (IllegalArgumentException ex) {
+                System.out.println("hostile vector " + c.id + " -> pack_error: " + ex.getMessage());
+                return;
+            }
+            PackbinTest.fail("hostile vector " + c.id + ": packed without error, expected pack_error");
+        } else {
+            PackbinTest.fail("hostile pack case " + c.id + " expects " + c.expected + ", not bytes or pack_error");
+        }
+    }
+
+    private static Supplier<byte[]> packFor(String id) {
+        return switch (id) {
+            case "pack_out_of_range_integer" -> () -> BinaryPacker.pack(Maps.scheme(1, u8(0, "a")), Maps.map("a", 300));
+            case "pack_missing_required_value" -> () -> BinaryPacker.pack(
+                    Maps.scheme(1, u8(0, "a"), u8(1, "b")), Maps.map("a", 1));
+            case "pack_times_list_too_long" -> () -> BinaryPacker.pack(
+                    timesScheme(), Maps.map("a", 2, "x", List.of(1, 2, 3)));
+            case "pack_times_list_too_short" -> () -> BinaryPacker.pack(
+                    timesScheme(), Maps.map("a", 2, "x", List.of(1)));
+            case "pack_aligned_round_row" -> () -> BinaryPacker.pack(
+                    Maps.scheme(1, Packbin.repeat(0, Packbin.flags(0,
+                            Packbin.boolField(0, Access.get("on"), Access.set("on")), u8(1, "n")))),
+                    Maps.map("on", List.of(true, false, true), "n", List.of(1, 2, 3)));
+            default -> null;
+        };
+    }
+
+    private static Scheme<Map> timesScheme() {
+        return Maps.scheme(1, u8(0, "a"), Packbin.times(1, 0, u8(1, "x")));
+    }
+
     /** A construct case passes only when building its scheme throws IllegalArgumentException: 0 schemes. */
     private static void replayConstruct(Case c) {
         PackbinTest.expectTrue(c.id + " construct case expects scheme_error", c.expected.contains("scheme_error"));
@@ -156,6 +207,9 @@ final class HostileVectorTest {
             case "bool_outside_flags" -> () -> Maps.scheme(1,
                     u8(0, "a"), Packbin.boolField(1, Access.get("on"), Access.set("on")));
             case "empty_group_outside_flags" -> () -> Maps.scheme(1, u8(0, "a"), Packbin.group(1));
+            case "eq_bool_false" -> () -> Maps.scheme(1,
+                    Packbin.flags(0, Packbin.boolField(0, Access.get("on"), Access.set("on"))),
+                    Packbin.when(1, Packbin.eq(0, false), u8(1, "v")));
             default -> null;
         };
     }

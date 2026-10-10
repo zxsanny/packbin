@@ -136,6 +136,37 @@ VECTOR_SCHEMES = {
 }
 
 
+def _times_scheme() -> Scheme[Any]:
+    return _scheme(u8(0, lambda row: row["a"]), times(1, 0, u8(1, lambda row: row["x"])))
+
+
+def _aligned_round_scheme() -> Scheme[Any]:
+    return _scheme(repeat(0, flags(0, flag_bool(0, lambda row: row["on"]), u8(1, lambda row: row["n"]))))
+
+
+# Pack vectors in fixtures/hostile/cases.txt: the packet each case's scheme and row (README) give, and the
+# exception a `pack_error` case raises (a short `times` list raises a bare IndexError today). Python runs all five.
+PACK_CASES = {
+    "pack_out_of_range_integer": (
+        lambda: BinaryPacker.pack(_scheme(u8(0, lambda row: row["a"])), {"a": 300}),
+        OverflowError,
+    ),
+    "pack_missing_required_value": (
+        lambda: BinaryPacker.pack(_scheme(u8(0, lambda row: row["a"]), u8(1, lambda row: row["b"])), {"a": 1}),
+        KeyError,
+    ),
+    "pack_times_list_too_long": (lambda: BinaryPacker.pack(_times_scheme(), {"a": 2, "x": [1, 2, 3]}), ValueError),
+    "pack_times_list_too_short": (
+        lambda: BinaryPacker.pack(_times_scheme(), {"a": 2, "x": [1]}),
+        (IndexError, ValueError),
+    ),
+    "pack_aligned_round_row": (
+        lambda: BinaryPacker.pack(_aligned_round_scheme(), {"on": [True, False, True], "n": [1, 2, 3]}),
+        None,
+    ),
+}
+
+
 def error_kind(result: UnpackResult[Any]) -> str:
     """Vector error kind for a result. Python has no bad_value type until C15: a
     ShortPacket with needed == 0 stands for it (duplicate-key precedent)."""
