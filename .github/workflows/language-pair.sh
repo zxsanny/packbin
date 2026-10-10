@@ -150,26 +150,28 @@ handoff rust java roundwhen "$roundwhen_hex"
 handoff java cpp roundwhen "$roundwhen_hex"
 handoff cpp typescript roundwhen "$roundwhen_hex"
 
-# AZ-2239: only TypeScript, Python and Java take part in the listgroup, dictgroup and listflags rings. Rust
+# AZ-2239, AZ-2307: TypeScript, Python, Java and C# take part in the listgroup, dictgroup and listflags rings. Rust
 # refuses these schemes when it builds them (a list or dict element is one integer, float, bytes, utf8, list
-# or dict; README upgrade notes, integrity_tests.rs), C++ builds an invalid scheme for them (bind_element in
-# table.hpp), and C# has no case for them in its driver yet (a group element unpacks since AZ-2119; a flags element still
-# throws KeyNotFoundException), so none of the three is run.
-# A package that joins gets its handoff lines here and the commands in its driver.
+# or dict; README upgrade notes, integrity_tests.rs) and C++ builds an invalid scheme for them (bind_element in
+# table.hpp), so neither is run. A package that joins gets its handoff lines here and the commands in its driver;
+# ring-wiring.test.sh fails when a C# line below is missing.
 handoff typescript python listgroup "$listgroup_hex"
 handoff python java listgroup "$listgroup_hex"
-handoff java typescript listgroup "$listgroup_hex"
+handoff java csharp listgroup "$listgroup_hex"
+handoff csharp typescript listgroup "$listgroup_hex"
 
 handoff typescript python dictgroup "$dictgroup_hex"
 handoff python java dictgroup "$dictgroup_hex"
-handoff java typescript dictgroup "$dictgroup_hex"
+handoff java csharp dictgroup "$dictgroup_hex"
+handoff csharp typescript dictgroup "$dictgroup_hex"
 
 handoff typescript python listflags "$listflags_hex"
 handoff python java listflags "$listflags_hex"
-handoff java typescript listflags "$listflags_hex"
+handoff java csharp listflags "$listflags_hex"
+handoff csharp typescript listflags "$listflags_hex"
 
 # Each participant refuses a packet whose last element is short, and hands no row to its handler.
-for lang in typescript python java; do
+for lang in typescript python java csharp; do
   for row in "listgroup $listgroup_short_hex" "dictgroup $dictgroup_short_hex" "listflags $listflags_short_hex"; do
     read -r kind short <<< "$row"
     if ! run_lang "$lang" "unpack-$kind-short" "$short"; then

@@ -17,7 +17,7 @@ constexpr bool is_container(Kind k) {
   return k == Kind::Repeat || k == Kind::Times || k == Kind::List || k == Kind::Dict;
 }
 
-// Kinds whose value a `when` or a count can read.
+// Kinds whose value a `when` can read; a count reads integers only (see `resolve`).
 constexpr bool is_count_source(Kind k) {
   switch (k) {
     case Kind::U8:
@@ -108,22 +108,30 @@ constexpr int find_ref(Field const* t, std::size_t scope, std::size_t before, in
   return -1;
 }
 
-// Index of the flag byte numbered `number` before `before` in the scope, or -1. A byte read
-// inside a `when` that ends before `before` is not visible there.
-constexpr int find_flag_byte(Field const* t, std::size_t scope, std::size_t before, int number) {
+// Index of the flag byte numbered `number` in t[begin, end) before `before`, or -1. A part that
+// ends before `before` and may not have run (a `when`, `flags`, a flag bit, a round or a list
+// or dict element) hides the bytes it holds; so does every member of `flags` that ends before
+// `before`, whatever it is. `members` is true when t[begin, end) are the members of `flags`.
+constexpr int find_flag_byte_in(Field const* t, std::size_t begin, std::size_t end,
+                                std::size_t before, int number, bool members) {
   int found = -1;
-  std::size_t j = scope;
-  while (j < before) {
+  for (std::size_t j = begin; j < end && j < before; j += t[j].span) {
     Field const& f = t[j];
-    if ((is_container(f.kind) || f.kind == Kind::When) && j + f.span <= before) {
-      j += f.span;
+    bool closed = j + f.span <= before;
+    if (closed && (members || is_container(f.kind) || f.kind == Kind::When ||
+                   f.kind == Kind::Flags || f.kind == Kind::FlagBit))
       continue;
-    }
     if (f.kind == Kind::FlagByte && f.size == number)
       found = static_cast<int>(j);
-    ++j;
+    int inner = find_flag_byte_in(t, j + 1, j + f.span, before, number, f.kind == Kind::Flags);
+    if (inner >= 0)
+      found = inner;
   }
   return found;
+}
+
+constexpr int find_flag_byte(Field const* t, std::size_t scope, std::size_t before, int number) {
+  return find_flag_byte_in(t, scope, before, before, number, false);
 }
 
 // Position of the flag bit at `at` among the bits of its flag byte.
@@ -157,7 +165,10 @@ constexpr void resolve(Field* t, std::size_t begin, std::size_t end, std::size_t
     }
     if (f.ref_id >= 0) {
       int at = find_ref(t, scope, j, f.ref_id);
-      if (at < 0) {
+      // A bool is a source of a `when` for `true` only: a false bool is absent on the wire, so
+      // the `when` could never match on unpack. A count names an integer field only.
+      bool bool_ok = f.kind == Kind::When && f.eq == 1;
+      if (at < 0 || (t[at].kind == Kind::Bool && !bool_ok)) {
         c.fail_at(f.id);
         return;
       }

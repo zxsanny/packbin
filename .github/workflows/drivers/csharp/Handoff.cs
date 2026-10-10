@@ -35,6 +35,11 @@ static class Handoff
         public Dictionary<string, object?>? Fields { get; set; }
     }
 
+    sealed class FieldList
+    {
+        public List<object?>? Fields { get; set; }
+    }
+
     sealed class NestedRow
     {
         public Dictionary<string, object?>? Access { get; set; }
@@ -46,7 +51,7 @@ static class Handoff
         Field.Dict((UserRow x) => x.Access, Field.List((ActionList e) => e.Actions, Field.Utf8<ActionEl>(0, a => a.Action))));
 
     static readonly Scheme<NestedRow> NestedScheme = new(1,
-        Field.Dict((NestedRow x) => x.Access, Field.List((FieldDict r) => r.Fields, Field.Dict((FieldDict f) => f.Fields, Field.Utf8<ValueEl>(0, v => v.Value)))));
+        Field.Dict((NestedRow x) => x.Access, Field.List((FieldList r) => r.Fields, Field.Dict((FieldDict f) => f.Fields, Field.Utf8<ValueEl>(0, v => v.Value)))));
 
     static readonly Dictionary<string, object?> UserValues = new()
     {
@@ -223,7 +228,7 @@ static class Handoff
                     return 2;
                 return UnpackBitWhen(args[1]);
             default:
-                return 2;
+                return HandoffElements.Run(args);
         }
     }
 

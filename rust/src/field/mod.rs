@@ -412,6 +412,9 @@ pub fn packed(width: u8, name: impl FieldKey, count_field: impl FieldKey, bias: 
     }
 }
 
+/// `count_field` rounds. Pack reads the rounds from `Value::Groups` under `__times_<anchor>`, or
+/// from one value per member name: a list gives one item per round, any other value is used in
+/// every round, and a lone dictionary for a `dict` member fails pack (give one per round).
 pub fn times(anchor: u32, count_field: impl FieldKey, fields: Vec<Field>) -> Field {
     Field {
         kind: FieldKind::Times {

@@ -1,6 +1,7 @@
 import type { Field } from "./fields.ts"
 
-type Source = { name: string; integer: boolean }
+type SourceKind = "integer" | "bool" | "other"
+type Source = { name: string; kind: SourceKind }
 type Scope = Map<number, Source>
 type Referring = Extract<Field, { kind: "when" | "sized" | "bits" | "packed" | "times" }>
 
@@ -13,6 +14,13 @@ export function refName(f: Referring): string {
 }
 
 // A copy of `f` that carries the name; the exported `Field` type has no `ref`.
+// A value shown in an error: never calls the caller's toString.
+function describe(v: unknown): string {
+  if (typeof v === "string") return JSON.stringify(v)
+  if (v === null || ["number", "boolean", "bigint", "undefined"].includes(typeof v)) return String(v)
+  return `a ${typeof v}`
+}
+
 function bound<F extends Field>(f: F, ref: string): F {
   return { ...f, ref }
 }
@@ -30,8 +38,8 @@ function bindAll(fields: Field[], scope: Scope): Field[] {
   return fields.map((f) => bind(f, scope))
 }
 
-function declare(scope: Scope, id: number, name: string, integer = false): void {
-  scope.set(id, { name, integer })
+function declare(scope: Scope, id: number, name: string, kind: SourceKind = "other"): void {
+  scope.set(id, { name, kind })
 }
 
 function resolve(
@@ -40,7 +48,7 @@ function resolve(
   ownerId: number,
   role: string,
   id: number,
-  integer: boolean,
+  accepts: "integer" | "integer or bool",
 ): string {
   const source = scope.get(id)
   if (source === undefined) {
@@ -48,9 +56,12 @@ function resolve(
       `${owner} ${ownerId}: ${role} names field id ${id}, which is not declared earlier in the same scope`,
     )
   }
-  if (integer && !source.integer) {
+  const allowed = source.kind === "integer" || (accepts === "integer or bool" && source.kind === "bool")
+  if (!allowed) {
     throw new RangeError(
-      `${owner} ${ownerId}: ${role} names field id ${id} (${source.name}), which is not an integer`,
+      `${owner} ${ownerId}: ${role} names field id ${id} (${source.name}), which is not ${
+        accepts === "integer" ? "an integer" : "an integer or a bool"
+      }`,
     )
   }
   return source.name
@@ -59,30 +70,37 @@ function resolve(
 function bind(f: Field, scope: Scope): Field {
   switch (f.kind) {
     case "int":
-      declare(scope, f.id, f.name, true)
+      declare(scope, f.id, f.name, "integer")
+      return f
+    case "bool":
+      declare(scope, f.id, f.name, "bool")
       return f
     case "float":
     case "bytes":
-    case "bool":
     case "utf8":
       declare(scope, f.id, f.name)
       return f
     case "u2":
-      for (const slot of f.slots) declare(scope, slot.id, slot.name, true)
+      for (const slot of f.slots) declare(scope, slot.id, slot.name, "integer")
       return f
     case "sized":
     case "bits":
     case "packed": {
-      const ref = resolve(scope, f.kind, f.id, "count", f.countId, true)
+      const ref = resolve(scope, f.kind, f.id, "count", f.countId, "integer")
       declare(scope, f.id, f.name)
       return bound(f, ref)
     }
     case "when": {
-      const ref = resolve(scope, "when", f.anchor, "eq", f.fieldId, false)
+      const ref = resolve(scope, "when", f.anchor, "eq", f.fieldId, "integer or bool")
+      if (scope.get(f.fieldId)?.kind === "bool" && f.value !== true) {
+        throw new RangeError(
+          `when ${f.anchor}: eq names bool field id ${f.fieldId} (${ref}) and accepts only true, not ${describe(f.value)}`,
+        )
+      }
       return bound({ ...f, fields: bindAll(f.fields, scope) }, ref)
     }
     case "times": {
-      const ref = resolve(scope, "times", f.anchor, "count", f.countId, true)
+      const ref = resolve(scope, "times", f.anchor, "count", f.countId, "integer")
       return bound({ ...f, fields: bindAll(f.fields, new Map()) }, ref)
     }
     case "repeat":

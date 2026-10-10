@@ -89,3 +89,7 @@ Then bytes and results are unchanged, and the embedded flash size stays within t
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Exact scheme shapes and Rust bytes in the ACs are derived by the spec writer; the worker re-derives them from a run of Rust, TypeScript and Java first | coordinator | open | Low |
+
+## Loop 18 result (2026-10-10)
+
+Done in loop 18 wave 1 (cpp). `find_flag_byte` is recursive: a flag byte inside a `flags` member or a flag-bit child is invisible to later bits outside it; `unpack_scoped` (`cpp/src/core/unpack.cpp`) saves and restores the flag-byte values around each such scope. Tests `flag_scope_host_tests.cpp` and two compile-fail cases. Bytes (Rust and TypeScript agree): `b` only `01010007`, `v`+`b` `010101030007`, `v`+`x`+`b` `01010103010507`. Open (batch report discoveries 3 to 4): sibling `flags` members are separate scopes in C++, TypeScript and Java and one shared scope in Rust; a flag-bit-only group under `flags` is never present in C++. Flash of `unpack_scoped` is measured in step 11.

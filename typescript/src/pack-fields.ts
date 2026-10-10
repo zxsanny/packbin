@@ -8,7 +8,7 @@ import {
 } from "./fields.ts"
 import { flagValueFor } from "./flag-bits.ts"
 import { refName } from "./ref-scope.ts"
-import { refuseLongLists, roundCount, roundNames, sliceRound } from "./rounds.ts"
+import { refuseLoneDicts, refuseLongLists, roundCount, roundNames, sliceRound } from "./rounds.ts"
 import {
   present,
   sameValue,
@@ -154,6 +154,7 @@ export function packFields(
       }
       case "repeat": {
         const names = roundNames(f.fields, true)
+        refuseLoneDicts(f.fields, values)
         packRounds(f.fields, names, roundCount(names, values), allFields, values, out, flagBytes)
         break
       }
@@ -182,6 +183,7 @@ export function packFields(
         const count = borrowedCount(refName(f), 0, "times", wrote)
         const names = roundNames(f.fields, true)
         refuseLongLists(names, count, values)
+        refuseLoneDicts(f.fields, values)
         packRounds(f.fields, names, count, allFields, values, out, flagBytes)
         break
       }

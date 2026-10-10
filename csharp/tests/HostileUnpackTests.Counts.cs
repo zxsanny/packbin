@@ -346,20 +346,6 @@ public partial class HostileUnpackTests
     }
 
     [Fact]
-    public void Times_NeverTrueWhenBodyWithU32MaxCount_ReturnsShortPacketQuickly()
-    {
-        var scheme = new Scheme<GuardedTimesRow>(1,
-            Field.U32<GuardedTimesRow>(0, x => x.N),
-            Field.Times(1, 0,
-                Field.Bytes<GuardedTimesRow>(1, x => x.B, 0),
-                Field.When(2, Condition.Eq(1, new byte[] { 1 }), Field.U8<GuardedTimesRow>(2, x => x.V))));
-
-        var outcome = HostileProbe.Unpack(scheme, "01ffffffff", 1);
-
-        HostileProbe.ExpectShort(outcome, "times");
-    }
-
-    [Fact]
     public void Times_ZeroWidthBodyWithSmallCount_ReturnsShortPacketWithBytesLeft()
     {
         var scheme = new Scheme<SmallTimesRow>(1,

@@ -59,9 +59,9 @@ def test_never_matching_when_element_is_error():
         _list_of(_never_matches())
 
 
-def test_never_matching_when_in_a_group_element_is_error():
-    # Group-wrapped so the `when` names a field earlier in its own element (AZ-2113 refuses the bare element).
-    element = group(0, raw_bytes(0, lambda row: row["e"], 0), when(1, eq(0, 9), u8(1, lambda row: row["v"])))
+def test_group_of_zero_width_element_is_error():
+    # AZ-2126 AC-1: a `when` names an integer or a bool, neither zero-width, so the group holds the bytes alone.
+    element = group(0, raw_bytes(0, lambda row: row["e"], 0))
     _assert_bad_value(_list_of(element), "010300", 0)
     _assert_bad_value(_list_of(element), "0103000a", 1)
 

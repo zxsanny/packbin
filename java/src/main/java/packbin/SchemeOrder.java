@@ -2,11 +2,9 @@ package packbin;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
 final class SchemeOrder {
     private SchemeOrder() {}
@@ -83,14 +81,14 @@ final class SchemeOrder {
 
     /**
      * One reference scope: the top level, a repeat or times round, a list or dict element, or a nested row.
-     * A when condition or a borrowed count may name only an integer or bool field read earlier in the same scope
-     * (C++ {@code find_ref}, {@code is_count_source}). Order ids continue through repeat and times rounds;
+     * A when condition may name only an integer or bool field read earlier in the same scope, a bool only against
+     * true; a borrowed count may name only an integer field (AZ-2126). Order ids continue through repeat and times rounds;
      * {@code next} carries them. A repeat or times inside a round is a group of its own (AZ-2127): its value
      * fields hold one list per outer round. {@code typed} is true when the row of this scope is not a Map: a
      * nested row in it needs a child factory (AZ-2101), as one below a nested row that has a factory does.
      */
     private static void walkScope(List<Field> fields, int[] next, boolean typed) {
-        Set<Integer> earlier = new HashSet<>();
+        Map<Integer, Field.Kind> earlier = new HashMap<>();
         for (Field field : fields) {
             walk(field, earlier, next, false, typed);
         }
@@ -102,7 +100,7 @@ final class SchemeOrder {
      * nothing else (C++ {@code check_shape}). An empty anchored group has no accessor, so its bit could never be
      * set: it is refused wherever it stands. An empty nested row sets its bit when its member is present.
      */
-    private static void walk(Field field, Set<Integer> earlier, int[] next, boolean isBit, boolean typed) {
+    private static void walk(Field field, Map<Integer, Field.Kind> earlier, int[] next, boolean isBit, boolean typed) {
         switch (field.kind) {
             case FLAGS -> {
                 requireAnchor(field, next);
@@ -114,7 +112,7 @@ final class SchemeOrder {
             case FLAG_BYTE -> {}
             case WHEN -> {
                 requireAnchor(field, next);
-                requireEarlier(field.condition.fieldId, earlier, "when " + field.id + " tests field ");
+                requireWhenSource(field, earlier);
                 for (Field child : field.children) {
                     walk(child, earlier, next, false, typed);
                 }
@@ -196,23 +194,38 @@ final class SchemeOrder {
         }
     }
 
-    private static void requireCount(Field field, Set<Integer> earlier) {
-        requireEarlier(field.countId, earlier,
-                field.kind.name().toLowerCase(Locale.ROOT) + " " + field.id + " takes its count from field ");
-    }
-
-    private static void requireEarlier(int id, Set<Integer> earlier, String referrer) {
-        if (!earlier.contains(id)) {
-            throw new IllegalArgumentException(referrer + id + NOT_EARLIER);
+    /** A count is read as a number, so it names an integer field; a bool is refused (AZ-2126). */
+    private static void requireCount(Field field, Map<Integer, Field.Kind> earlier) {
+        String referrer = field.kind.name().toLowerCase(Locale.ROOT) + " " + field.id + " takes its count from field "
+                + field.countId;
+        Field.Kind source = earlier.get(field.countId);
+        if (source == null) {
+            throw new IllegalArgumentException(referrer + ", which is not an earlier integer field in its scope");
+        }
+        if (source == Field.Kind.BOOL) {
+            throw new IllegalArgumentException(referrer + ", which is a bool; a count names an integer field");
         }
     }
 
-    private static void take(Field field, Set<Integer> earlier, int[] next) {
+    /** A bool is true or clear on the wire and a clear bit is absent, so a when on a bool compares only with true. */
+    private static void requireWhenSource(Field when, Map<Integer, Field.Kind> earlier) {
+        int id = when.condition.fieldId;
+        Field.Kind source = earlier.get(id);
+        if (source == null) {
+            throw new IllegalArgumentException("when " + when.id + " tests field " + id + NOT_EARLIER);
+        }
+        if (source == Field.Kind.BOOL && !Boolean.TRUE.equals(when.condition.value)) {
+            throw new IllegalArgumentException("when " + when.id + " tests bool field " + id + " against "
+                    + when.condition.value + "; a bool is compared only with true");
+        }
+    }
+
+    private static void take(Field field, Map<Integer, Field.Kind> earlier, int[] next) {
         if (field.id != next[0]) {
             throw new IllegalArgumentException("field id " + field.id + " must be " + next[0]);
         }
         if (isCountSource(field)) {
-            earlier.add(field.id);
+            earlier.put(field.id, field.kind);
         }
         next[0]++;
     }

@@ -86,3 +86,7 @@ Then bytes and results are unchanged; the suite passes on net10.0 and netstandar
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Which narrower pairs are refused (an element type wider than the field is accepted) is the writer's reading of "cannot hold the element field"; the worker lists the rule in the batch report | coordinator | open | Low |
+
+## Loop 18 result (2026-10-10)
+
+Done in loop 18 wave 1 (csharp). `new Scheme<T>` refuses a collection member whose type or element type cannot hold its field (`SchemeOrder.Walk` to `RequireCollection`); element rule: an integer member must contain the field's whole range, float/double/decimal members are accepted, `IList<E>`, `IList`, `IDictionary<string,E>`, `IDictionary` are accepted, `IEnumerable<E>`, `HashSet`, `Stack` are not. Skipped inside rounds. `CollectionMemberTests`. F25 packet `01 01 00 FF FF FF FF` returns 4294967295 against a `List<long>` member.

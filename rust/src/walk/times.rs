@@ -1,5 +1,5 @@
 use crate::field::{field_name, times_name, Field, FieldKind};
-use crate::value::{same_values, Name, PackError, Value, Values};
+use crate::value::{name_of, same_values, Name, PackError, Value, Values};
 use std::collections::HashMap;
 
 /// One list per name, with an item for every round that read it.
@@ -13,6 +13,49 @@ pub(super) fn round_lists(rounds: &[Values]) -> HashMap<Name, Vec<Value>> {
         }
     }
     lists
+}
+
+/// Round `index` of a `times` given as one list per name. A list gives one item per round and
+/// any other value is used in every round; a dictionary is the exception, because a lone one
+/// reads as a value for every round that was meant for one.
+pub(super) fn slice_times(
+    anchor: u32,
+    members: &[Field],
+    values: &Values,
+    index: usize,
+) -> Result<Values, PackError> {
+    let mut slice = Values::new();
+    for child in members {
+        let Some(name) = field_name(child) else {
+            continue;
+        };
+        match values.get(name) {
+            Some(Some(Value::List(items))) => {
+                if index < items.len() {
+                    slice.insert(name_of(name), Some(items[index].clone()));
+                }
+            }
+            Some(Some(Value::Map(_))) if holds_dict(child) => {
+                return Err(PackError::Type(format!(
+                    "times at id {anchor}: '{name}' is one dictionary; give a list with one \
+                     dictionary per round"
+                )));
+            }
+            Some(Some(v)) => {
+                slice.insert(name_of(name), Some(v.clone()));
+            }
+            _ => {}
+        }
+    }
+    Ok(slice)
+}
+
+fn holds_dict(field: &Field) -> bool {
+    match &field.kind {
+        FieldKind::Dict { .. } => true,
+        FieldKind::FlagBit { inner, .. } => holds_dict(inner),
+        _ => false,
+    }
 }
 
 /// Pack takes the rounds and ignores the values kept beside them under a name of the rounds, so

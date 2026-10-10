@@ -165,7 +165,7 @@ internal static partial class Walker
         List<byte> buffer,
         Scope seen)
     {
-        var raw = (byte[])RequireValue(field, values);
+        var raw = RequireBytes(field, values);
         if (raw.Length != field.ByteCount)
             throw new ArgumentException($"Field '{field.Name}' needs {field.ByteCount} bytes.");
         buffer.AddRange(raw);

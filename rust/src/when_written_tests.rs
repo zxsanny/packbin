@@ -135,19 +135,9 @@ fn bool_when(test: Value) -> MapScheme {
 }
 
 #[test]
-fn ac3_eq_false_on_a_clear_bit_does_not_write_its_body() {
-    // Arrange
-    let scheme = bool_when(zero());
-    let clear = values(&[("on", zero()), ("1", Value::U8(7))]);
-    let absent = values(&[("1", Value::U8(7))]);
-
-    // Act
-    let (with_zero, without) = (hex(&scheme, &clear), hex(&scheme, &absent));
-
-    // Assert
-    assert_eq!(with_zero, "0100");
-    assert_eq!(without, "0100");
-    assert_eq!(unpack(&scheme, &[1, 0]), Ok(values(&[("f", zero())])));
+#[should_panic(expected = "compares bool \"on\" with a value other than true")]
+fn ac3_eq_false_on_a_bool_is_refused_at_construction() {
+    bool_when(zero());
 }
 
 #[test]

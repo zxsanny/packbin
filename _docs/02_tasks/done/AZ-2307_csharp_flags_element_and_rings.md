@@ -84,3 +84,7 @@ Then results are unchanged
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | The ring run needs Docker or all six runtimes; the loop's one total test run executes it, not the worker | owner preference (one total test run) | accepted-risk | Low |
+
+## Loop 18 result (2026-10-10)
+
+Done in loop 18 wave 1 (csharp and ring files). A `Flags` list or dict element packs and unpacks in dictionary and typed mode; bytes from a TypeScript run: list `[{a:1},{},{b:2}]` `010300010100020200`, dict `{y:{b:2}, x:{a:1}}` `0102000100780101010079020200`. C# is a member of the `listgroup`, `dictgroup` and `listflags` rings (chain typescript, python, java, csharp, typescript; driver `drivers/csharp/HandoffElements.cs`, `ring-wiring.test.sh` checks six C# lines). The rings run in step 11. The C# handoff driver `NestedScheme` was fixed (it used one member as list and dict).

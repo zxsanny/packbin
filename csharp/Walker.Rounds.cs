@@ -99,8 +99,8 @@ internal static partial class Walker
         }
     }
 
-    // A name that holds a byte run or a list per round (bytes, sized, bits, packed) takes a list with one of them per
-    // round. One byte run or list alone would be read as the list of rounds, and its items given to the rounds.
+    // A name that holds a byte run, a list or a dictionary per round (bytes, sized, bits, packed, dict) takes a list with
+    // one of them per round. One byte run or list alone would be read as the list of rounds, and its items given to the rounds.
     private static void RequireRoundCollections(Field field, IReadOnlyDictionary<string, object?> values)
     {
         switch (field.Type)
@@ -115,6 +115,12 @@ internal static partial class Walker
                 break;
             case Field.Kind.FlagBit:
                 RequireRoundCollections(field.Inner!, values);
+                break;
+            case Field.Kind.Dict:
+                if (values.TryGetValue(field.Name, out var map) && map is IDictionary)
+                    throw new ArgumentException(
+                        $"'{field.Name}': a round's value belongs in a list with one entry per round; "
+                        + "wrap this dictionary in a list");
                 break;
             case Field.Kind.Bytes:
             case Field.Kind.Sized:

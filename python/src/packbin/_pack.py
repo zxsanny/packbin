@@ -134,6 +134,17 @@ def _member_label(node: Any) -> str:
     return str(node.field_id)
 
 
+def _refuse_lone_dict(leaf: Any, value: Any) -> None:
+    """A dict for a `dict` name in a round is one value of the round, so the name holds a list with one dict
+    per round; a lone dict would be read as one round's value or shared by every round."""
+    if isinstance(leaf, _Dict) and isinstance(value, _builtin_dict):
+        access = getattr(leaf.get, "access", None)
+        name = access[1] if access is not None else "dict"
+        raise TypeError(
+            f"member {name}: a dict in a repeat or times round must be a list with one dict per round, got a single dict"
+        )
+
+
 def _check_round_lists(leaves: Sequence[Any], row: Any, count: int) -> None:
     """A list a `times` body holds may not be longer than the count: the entries past it would be dropped."""
     for node in leaves:
@@ -279,6 +290,8 @@ def pack_nodes(
         elif isinstance(node, _Times):
             item_count = _borrowed("times", seen.get(node.count), 0)
             _check_round_lists(node.leaves, row, item_count)
+            for leaf in node.leaves:
+                _refuse_lone_dict(leaf, leaf.get(row))
             for i in range(item_count):
                 pack_nodes(buf, node.fields, row, seen, _at_round(row, i, node.optional))
         elif isinstance(node, _FlagByte):
@@ -294,7 +307,10 @@ def pack_nodes(
             if seen.get(node.condition.field_id) == node.condition.value:
                 pack_nodes(buf, node.fields, row, seen, get_value)
         elif isinstance(node, _Repeat):
-            lengths = [_round_length(leaf.get(row)) for leaf in node.leaves]
+            values = [leaf.get(row) for leaf in node.leaves]
+            for leaf, value in zip(node.leaves, values):
+                _refuse_lone_dict(leaf, value)
+            lengths = [_round_length(value) for value in values]
             count = max(lengths, default=0)
             if any(n not in (0, count) for n in lengths):
                 raise ValueError("repeat fields must have equal lengths")

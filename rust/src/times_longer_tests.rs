@@ -161,15 +161,15 @@ fn ac7_an_empty_list_and_an_absent_list_beside_a_count_of_zero_pack() {
 }
 
 #[test]
-fn ac7_a_lone_value_for_a_member_is_still_missing_after_round_zero() {
+fn ac7_a_lone_value_for_a_member_is_in_every_round() {
     // Arrange
     let row = values(&[("0", Value::U8(2)), ("1", Value::U8(5))]);
 
     // Act
-    let result = pack(&one_member(), &row);
+    let result = hex(pack(&one_member(), &row));
 
     // Assert
-    assert_eq!(result, Err(PackError::Missing("1".to_string())));
+    assert_eq!(result, Ok("01020505".to_string()));
 }
 
 #[test]

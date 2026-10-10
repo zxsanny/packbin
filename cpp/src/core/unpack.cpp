@@ -59,6 +59,17 @@ Result unpack_when(Walk& w, std::size_t i, void* obj) {
   return res;
 }
 
+// A flag byte read inside a `flags` member or the child of a flag bit is not seen after it
+// either.
+PACKBIN_NOINLINE
+Result unpack_scoped(Walk& w, std::size_t i, void* obj) {
+  std::uint8_t outer[8];
+  std::memcpy(outer, w.flag_bytes, sizeof(outer));
+  Result res = unpack_one(w, i, obj);
+  std::memcpy(w.flag_bytes, outer, sizeof(outer));
+  return res;
+}
+
 // Bytes, utf8 (after its u16 length) and sized (length from its count).
 PACKBIN_NOINLINE
 Result unpack_text(Walk& w, std::size_t i, void* obj) {
@@ -145,7 +156,7 @@ Result unpack_flags(Walk& w, std::size_t i, void* obj) {
   unsigned k = 0;
   for (std::size_t j = i + 1; res.ok() && j < i + t[i].span; j += t[j].span, ++k) {
     if (byte & (1u << k))
-      res = unpack_one(w, j, obj);
+      res = unpack_scoped(w, j, obj);
   }
   return res;
 }
@@ -267,7 +278,7 @@ Result unpack_one(Walk& w, std::size_t i, void* obj) {
       return get_num<std::uint8_t>(w.r, w.flag_bytes[f.size], false, f.id);
     case Kind::FlagBit:
       if (w.flag_bytes[w.t[f.ref].size] & (1u << f.bit))
-        return unpack_one(w, i + 1, obj);
+        return unpack_scoped(w, i + 1, obj);
       return Result{};
     case Kind::Group:
       if (f.span == 1) {

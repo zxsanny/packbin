@@ -74,3 +74,10 @@ Then `scheme_error`
 | Loop 12 assessment G3: also pin that a non-`true` value (`1`, `"yes"`) clears the bit — done for TS/C#/Java/Python in AZ-2129..AZ-2132 | coordinator | resolved | Low |
 | A count naming a `bool` builds in Java and C++ (C++ `read_int` reads it as 0/1) but Java pack/unpack fail, TS refuses at pack, and Python packs and round-trips it when the bool is true (`010161`) but fails when it is false or absent. Decide here: refuse a bool count everywhere, or read it as 0/1 everywhere | coordinator | open | Low |
 | Loop 13 assessment (T11, C19, X6, C18): which kinds a `when` / count may name. Java, C++ and Rust (AZ-2085 AC-5) allow integer or bool sources only; TypeScript and C# accept floats, utf8 and bytes (f32 `eq(0, 0.1)` packs a packet its own unpack rejects; `eq` on a float disagrees on -0.0 and NaN across packages). Decision: integer or bool only everywhere (analysts recommend yes; C# AZ-2088 AC-6 mandated the float `when` and would be reversed) or keep floats open with a defined equality rule in schema.md. Owner confirms before the loop that takes it | DECIDED by the owner 2026-10-06: counts name an integer field only (bool and float refused, everywhere); a `when` names an integer or a bool (bool only with `true`); float, utf8 and bytes are refused. Reason: the same scheme must give the same bytes in every language; refusing can be relaxed later, accepting cannot be withdrawn. C# AZ-2088 AC-6 is reversed. | owner | resolved | Medium |
+
+## Loop 18 progress (2026-10-10)
+
+| Part | Package | State |
+|------|---------|-------|
+| AC-1, AC-2 and the decided concern (`when` sources integer or bool, bool only with `true`; counts integer only) | TypeScript, Python, Rust, Java, C++, C# | done in loop 18 wave 1 (each package changed only where it differed; C# reversed `FloatWhenTests` and part of `WrittenWhenKindsTests`; Rust has no bool value: true is `eq(id, 1)`) |
+| AC-3 hostile vector `eq_bool_false` and its README section | shared harness | open, loop 18 wave 2 |

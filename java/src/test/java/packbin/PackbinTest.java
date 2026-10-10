@@ -44,6 +44,8 @@ public final class PackbinTest {
         FlagStateTest.run();
         ZeroWidthElementTest.run();
         ReferenceScopeTest.run();
+        EqBoolTrueOnlyTest.run();
+        LoneDictRoundTest.run();
         BoolPlacementTest.run();
         RepeatRoundTest.run();
         NestedRoundTest.run();

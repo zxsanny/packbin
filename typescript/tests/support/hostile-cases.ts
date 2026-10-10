@@ -41,12 +41,9 @@ const clearFlag = () => flags(0, [u8(0, (x: Row) => x.n)])
 
 const dictZeroWidthValue = () => scheme<Row>(1, dict((x) => x.d, bytes(0, (x) => x.v, 0)))
 
-// A `when` names only a field read earlier in its own round, so a round that reads nothing is a
-// zero-width field and a `when` on it that never matches. Ids 1 and 2 follow one field before it.
-const emptyRound = () => [
-  bytes(1, (x: Row) => x.v, 0),
-  when(2, eq(1, 9), [u8(2, (x: Row) => x.w)]),
-]
+// A round that reads nothing: one zero-width field. A `when` may name only an integer or a bool, and
+// neither is zero-width, so there is no never-matching `when` in it.
+const emptyRound = () => [bytes(1, (x: Row) => x.v, 0)]
 
 const nineU8 = () => [
   u8(0, (x: Row) => x.f0),

@@ -85,3 +85,7 @@ Then results are unchanged
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | none | — | resolved | Low |
+
+## Loop 18 result (2026-10-10)
+
+Done in loop 18 wave 1 (csharp). E3: `ElementValues` takes a group element's row from `Read`; about 360 000 random packets across six schemes repack to the original bytes (list schemes) or to a stable second repack (dict schemes: keys are re-sorted). E8: `RequireBytes` gives `ArgumentException` for an int given for `Bytes`/`Sized`. `DictRepackTests`.

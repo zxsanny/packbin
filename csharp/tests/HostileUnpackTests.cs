@@ -9,7 +9,6 @@ public partial class HostileUnpackTests
     private sealed class ZeroRow
     {
         public byte[] B { get; set; } = [];
-        public byte V { get; set; }
     }
 
     private sealed class SignedCountRow
@@ -85,13 +84,6 @@ public partial class HostileUnpackTests
         public byte[] B { get; set; } = [];
     }
 
-    private sealed class GuardedTimesRow
-    {
-        public uint N { get; set; }
-        public byte[] B { get; set; } = [];
-        public byte V { get; set; }
-    }
-
     private sealed class FloatCountRow
     {
         public float F { get; set; }
@@ -115,12 +107,6 @@ public partial class HostileUnpackTests
         public List<object?>? Words { get; set; }
     }
 
-    private sealed class FloatRow
-    {
-        public float F { get; set; }
-        public byte? V { get; set; }
-    }
-
     [Fact]
     public void Ac1_ZeroWidthRepeatBody_ReturnsTrailingBytes()
     {
@@ -129,24 +115,6 @@ public partial class HostileUnpackTests
 
         // Act
         var outcome = HostileProbe.Unpack(scheme, "0109");
-
-        // Assert
-        Assert.False(outcome.HandlerCalled);
-        var error = Assert.IsType<TrailingBytes>(outcome.Error);
-        Assert.Equal(1, error.Left);
-    }
-
-    [Fact]
-    public void Ac1_RepeatBodyWithANeverMatchingWhen_ReturnsTrailingBytes()
-    {
-        // Arrange
-        var scheme = new Scheme<ZeroRow>(1,
-            Field.Repeat(0,
-                Field.Bytes<ZeroRow>(0, x => x.B, 0),
-                Field.When(1, Condition.Eq(0, new byte[] { 1 }), Field.U8<ZeroRow>(1, x => x.V))));
-
-        // Act
-        var outcome = HostileProbe.Unpack(scheme, "01ff");
 
         // Assert
         Assert.False(outcome.HandlerCalled);
@@ -221,18 +189,5 @@ public partial class HostileUnpackTests
         var outcome = HostileProbe.Unpack(scheme, "0101000200fffe");
 
         HostileProbe.ExpectShort(outcome, "V");
-    }
-
-    [Fact]
-    public void Reliability_ConditionOnNaNFloat_DoesNotThrow()
-    {
-        var scheme = new Scheme<FloatRow>(1,
-            Field.F32<FloatRow>(0, x => x.F),
-            Field.When(1, Condition.Eq(0, 1), Field.U8<FloatRow>(1, x => x.V)));
-
-        var outcome = HostileProbe.Unpack(scheme, "010000c07f");
-
-        Assert.Null(outcome.Error);
-        Assert.True(outcome.HandlerCalled);
     }
 }

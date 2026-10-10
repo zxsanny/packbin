@@ -1,5 +1,5 @@
 use super::flag_bits::{collect_flag_bits, member_on};
-use super::times::{check_aligned, check_lists, check_longer};
+use super::times::{check_aligned, check_lists, check_longer, slice_times};
 use crate::field::{field_name, times_name, Field, FieldKind, FloatKind, IntKind, MapScheme};
 use crate::value::{
     as_bit, as_packed, as_u2, as_usize, name_of, when_matches, Name, PackError, Value, Values,
@@ -82,27 +82,6 @@ fn borrowed_count(
 
 fn packed_bytes(width: u8, count: usize) -> usize {
     (count * width as usize).div_ceil(8)
-}
-
-fn slice_times(members: &[Field], values: &Values, index: usize) -> Values {
-    let mut slice = Values::new();
-    for child in members {
-        let Some(name) = field_name(child) else {
-            continue;
-        };
-        match values.get(name) {
-            Some(Some(Value::List(items))) => {
-                if index < items.len() {
-                    slice.insert(name_of(name), Some(items[index].clone()));
-                }
-            }
-            Some(Some(v)) if index == 0 => {
-                slice.insert(name_of(name), Some(v.clone()));
-            }
-            _ => {}
-        }
-    }
-    slice
 }
 
 /// Packs one round and returns what it wrote.
@@ -392,7 +371,7 @@ fn pack_one<'v>(
                     check_longer(*anchor, members, values, n)?;
                     let mut lists = RoundLists::default();
                     for i in 0..n {
-                        let round = slice_times(members, values, i);
+                        let round = slice_times(*anchor, members, values, i)?;
                         lists.add(i, &pack_round(members, &round, out)?);
                     }
                     lists.leave_in(wrote);

@@ -74,3 +74,7 @@ Then bytes and results are unchanged
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | none | — | resolved | Low |
+
+## Loop 18 result (2026-10-10)
+
+Done in loop 18 wave 1 (rust). `slice_times` broadcasts a lone non-list value to every round; bytes from a TypeScript run: n=2 lone x=1, y=[4,5] `010201040105`, n=3 `0103010401050106`. `repeat` has no lone-scalar form in the map API. `times_lone_value_tests`.

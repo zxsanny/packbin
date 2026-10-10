@@ -11,6 +11,7 @@ final class ReferenceScopeTest {
     private ReferenceScopeTest() {}
 
     private static final String NOT_EARLIER = ", which is not an earlier integer or bool field in its scope";
+    private static final String COUNT_NOT_EARLIER = ", which is not an earlier integer field in its scope";
 
     static void run() {
         laterWhenReferenceIsRejected();
@@ -51,26 +52,26 @@ final class ReferenceScopeTest {
     private static void laterCountReferenceIsRejected() {
         expectRefused("AC-2 sized count names a later field", () -> Maps.scheme(1,
                 Packbin.sized(0, Access.get("p"), Access.set("p"), 1), u8(1, "n")),
-                "sized 0 takes its count from field 1" + NOT_EARLIER);
+                "sized 0 takes its count from field 1" + COUNT_NOT_EARLIER);
         expectRefused("AC-2 bits count names a later field", () -> Maps.scheme(1,
                 Packbin.bits(0, Access.get("p"), Access.set("p"), 1), u8(1, "n")),
-                "bits 0 takes its count from field 1" + NOT_EARLIER);
+                "bits 0 takes its count from field 1" + COUNT_NOT_EARLIER);
         expectRefused("AC-2 packed count names a later field", () -> Maps.scheme(1,
                 Packbin.packed(2, 0, Access.get("p"), Access.set("p"), 1, 0), u8(1, "n")),
-                "packed 0 takes its count from field 1" + NOT_EARLIER);
+                "packed 0 takes its count from field 1" + COUNT_NOT_EARLIER);
         expectRefused("AC-2 times count names a later field", () -> Maps.scheme(1,
                 Packbin.times(0, 1, u8(0, "x")), u8(1, "n")),
-                "times 0 takes its count from field 1" + NOT_EARLIER);
+                "times 0 takes its count from field 1" + COUNT_NOT_EARLIER);
         expectRefused("AC-2 vector count_names_later_field", () -> Maps.scheme(1,
                 Packbin.sized(0, Access.get("payload"), Access.set("payload"), 1),
                 Packbin.u16(1, Access.get("n"), Access.set("n"))),
-                "sized 0 takes its count from field 1" + NOT_EARLIER);
+                "sized 0 takes its count from field 1" + COUNT_NOT_EARLIER);
         expectRefused("AC-2 sized count names itself", () -> Maps.scheme(1,
                 Packbin.sized(0, Access.get("p"), Access.set("p"), 0)),
-                "sized 0 takes its count from field 0" + NOT_EARLIER);
+                "sized 0 takes its count from field 0" + COUNT_NOT_EARLIER);
         expectRefused("AC-2 times count names its own body", () -> Maps.scheme(1,
                 Packbin.times(0, 0, u8(0, "x"))),
-                "times 0 takes its count from field 0" + NOT_EARLIER);
+                "times 0 takes its count from field 0" + COUNT_NOT_EARLIER);
     }
 
     private static void outerReferenceInsideRepeatOrTimesIsRejected() {
@@ -89,11 +90,11 @@ final class ReferenceScopeTest {
         expectRefused("AC-3 count in repeat names an outer field", () -> Maps.scheme(1,
                 u8(0, "n"),
                 Packbin.repeat(1, Packbin.sized(1, Access.get("p"), Access.set("p"), 0))),
-                "sized 1 takes its count from field 0" + NOT_EARLIER);
+                "sized 1 takes its count from field 0" + COUNT_NOT_EARLIER);
         expectRefused("AC-3 count in times names an outer field", () -> Maps.scheme(1,
                 u8(0, "n"),
                 Packbin.times(1, 0, Packbin.sized(1, Access.get("p"), Access.set("p"), 0))),
-                "sized 1 takes its count from field 0" + NOT_EARLIER);
+                "sized 1 takes its count from field 0" + COUNT_NOT_EARLIER);
         expectRefused("AC-3 field after a repeat names a field inside it", () -> Maps.scheme(1,
                 Packbin.repeat(0, u8(0, "k")),
                 Packbin.when(1, Packbin.eq(0, 1), u8(1, "v"))),
@@ -117,11 +118,11 @@ final class ReferenceScopeTest {
                 "when 1 tests field 0" + NOT_EARLIER);
         expectRefused("F4 count names utf8", () -> Maps.scheme(1,
                 Packbin.utf8(0, Access.get("s"), Access.set("s")), Packbin.sized(1, Access.get("p"), Access.set("p"), 0)),
-                "sized 1 takes its count from field 0" + NOT_EARLIER);
+                "sized 1 takes its count from field 0" + COUNT_NOT_EARLIER);
         expectRefused("F4 count names a sized field", () -> Maps.scheme(1,
                 u8(0, "n"), Packbin.sized(1, Access.get("p"), Access.set("p"), 0),
                 Packbin.times(2, 1, u8(2, "x"))),
-                "times 2 takes its count from field 1" + NOT_EARLIER);
+                "times 2 takes its count from field 1" + COUNT_NOT_EARLIER);
 
         Scheme<Map> slot = Maps.scheme(1,
                 Packbin.u2(Packbin.u2Slot(0, Access.get("a"), Access.set("a")), Packbin.u2Slot(1, Access.get("b"), Access.set("b"))),

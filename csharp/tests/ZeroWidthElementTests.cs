@@ -10,7 +10,6 @@ public class ZeroWidthElementTests
     {
         public byte[] B { get; set; } = [];
         public byte V { get; set; }
-        public bool? Mark { get; set; }
     }
 
     private sealed class Mid
@@ -42,12 +41,6 @@ public class ZeroWidthElementTests
 
     private static Scheme<MapRow> ZeroDict() => new(1,
         Field.Dict((MapRow x) => x.M, Field.Bytes<El>(0, x => x.B, 0)));
-
-    // A zero-width field, then a `when` that names it and never matches: the element reads nothing.
-    private static Field NeverMatchingWhenElement() =>
-        Field.Group(0, (El x) => x.Mark,
-            Field.Bytes<El>(0, x => x.B, 0),
-            Field.When(1, Condition.Eq(0, new byte[] { 1 }), Field.U8<El>(1, x => x.V)));
 
     [Fact]
     public void ZeroWidthListElement_IsError()
@@ -114,26 +107,6 @@ public class ZeroWidthElementTests
         var error = HostileProbe.ExpectShort(outcome, "M");
         Assert.Equal(0, error.Needed);
         Assert.Equal(0, error.Left);
-    }
-
-    [Fact]
-    public void NeverMatchingWhenListElement_IsError()
-    {
-        var scheme = new Scheme<ListRow>(1, Field.List((ListRow x) => x.Xs, NeverMatchingWhenElement()));
-
-        var outcome = HostileProbe.Unpack(scheme, "010300", 1);
-
-        HostileProbe.ExpectShort(outcome, "Xs");
-    }
-
-    [Fact]
-    public void NeverMatchingWhenDictValue_IsError()
-    {
-        var scheme = new Scheme<MapRow>(1, Field.Dict((MapRow x) => x.M, NeverMatchingWhenElement()));
-
-        var outcome = HostileProbe.Unpack(scheme, "0101000100" + "61", 1);
-
-        HostileProbe.ExpectShort(outcome, "M");
     }
 
     [Fact]

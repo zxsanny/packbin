@@ -143,49 +143,21 @@ describe("reference scope: which value fields a reference may name", () => {
     assert.equal(toHex(row!.p as Uint8Array), "0708")
   })
 
-  // The group never runs: the field value is bytes or a list, which no eq value equals.
-  const NAMED: { kind: string; layout: () => Scheme<Row>; hex: string; name: string }[] = [
-    {
-      kind: "sized",
-      layout: () => scheme<Row>(
-        1,
-        u8(0, (x) => x.n),
-        sized(1, (x) => x.p, 0),
-        when(2, eq(1, 1), [u8(2, (x) => x.v)]),
-      ),
-      hex: "010105",
-      name: "p",
-    },
-    {
-      kind: "bits",
-      layout: () => scheme<Row>(
-        1,
-        u8(0, (x) => x.n),
-        bits(1, (x) => x.b, 0),
-        when(2, eq(1, 1), [u8(2, (x) => x.v)]),
-      ),
-      hex: "010101",
-      name: "b",
-    },
-    {
-      kind: "packed",
-      layout: () => scheme<Row>(
-        1,
-        u8(0, (x) => x.n),
-        packed(2, 1, (x) => x.k, 0),
-        when(2, eq(1, 1), [u8(2, (x) => x.v)]),
-      ),
-      hex: "010101",
-      name: "k",
-    },
+  const COLLECTIONS: { kind: string; collection: () => Field }[] = [
+    { kind: "sized", collection: () => sized(1, (x) => x.p, 0) },
+    { kind: "bits", collection: () => bits(1, (x) => x.p, 0) },
+    { kind: "packed", collection: () => packed(1, 1, (x) => x.p, 0) },
   ]
 
-  for (const c of NAMED) {
-    it(`an eq may name a ${c.kind} field`, () => {
-      const { result, row } = unpacked(c.layout(), c.hex)
-      assert.deepEqual(result, { ok: true })
-      assert.ok(row![c.name] !== undefined)
-      assert.equal(row!.v, undefined)
+  for (const c of COLLECTIONS) {
+    it(`AZ-2126 AC-1 an eq naming a ${c.kind} field is a scheme error`, () => {
+      const message = refusal(() => scheme<Row>(
+        1,
+        u8(0, (x) => x.n),
+        c.collection(),
+        when(2, eq(1, 1), [u8(2, (x) => x.v)]),
+      ))
+      assert.equal(message, "when 2: eq names field id 1 (p), which is not an integer or a bool")
     })
   }
 })
@@ -343,55 +315,17 @@ describe("reference scope: eq compares integers by value", () => {
     })
   }
 
-  const SEEN: { name: string; layout: () => Scheme<Row>; row: Row; hex: string }[] = [
-    {
-      name: "true",
-      layout: () => scheme<Row>(
-        1,
-        flags(0, [bool(0, (x) => x.on)]),
-        when(1, eq(0, 1), [u8(1, (x) => x.v)]),
-      ),
-      row: { on: true, v: 9 },
-      hex: "0101",
-    },
-    {
-      name: '"1"',
-      layout: () => scheme<Row>(1, utf8(0, (x) => x.s), when(1, eq(0, 1), [u8(1, (x) => x.v)])),
-      row: { s: "1", v: 9 },
-      hex: "010100" + "31",
-    },
-    {
-      name: "[1]",
-      layout: () => scheme<Row>(
-        1,
-        u8(0, (x) => x.n),
-        bits(1, (x) => x.b, 0),
-        when(2, eq(1, 1), [u8(2, (x) => x.v)]),
-      ),
-      row: { n: 1, b: [1], v: 9 },
-      hex: "010101",
-    },
-    {
-      name: "an absent value",
-      layout: () => scheme<Row>(
-        1,
-        flags(0, [u8(0, (x) => x.n)]),
-        when(1, eq(0, null), [u8(1, (x) => x.v)]),
-      ),
-      row: { v: 9 },
-      hex: "0100",
-    },
-  ]
-
-  for (const c of SEEN) {
-    it(`the field value ${c.name} does not match eq 1 or null`, () => {
-      const layout = c.layout()
-      assert.equal(toHex(BinaryPacker.pack(layout, c.row)), c.hex)
-      const { result, row } = unpacked(layout, c.hex)
-      assert.deepEqual(result, { ok: true })
-      assert.equal(row!.v, undefined)
-    })
-  }
+  it("an absent field value does not match eq null", () => {
+    const layout = scheme<Row>(
+      1,
+      flags(0, [u8(0, (x) => x.n)]),
+      when(1, eq(0, null), [u8(1, (x) => x.v)]),
+    )
+    assert.equal(toHex(BinaryPacker.pack(layout, { v: 9 })), "0100")
+    const { result, row } = unpacked(layout, "0100")
+    assert.deepEqual(result, { ok: true })
+    assert.equal(row!.v, undefined)
+  })
 
   it("a bool eq value still needs true", () => {
     const layout = scheme<Row>(

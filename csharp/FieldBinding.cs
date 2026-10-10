@@ -60,7 +60,7 @@ internal sealed class CollectionShape
         Dictionary = dictionary;
         IsArray = memberType.IsArray;
         ElementType = ElementOf(memberType, dictionary);
-        var rowType = element.RowType;
+        var rowType = element.ElementRowType;
         RowElements = rowType is { IsClass: true } && rowType.IsAssignableFrom(ElementType);
         CreateElement = RowElements ? Creator.Of(ElementType) : null;
         if (IsArray)
@@ -70,6 +70,73 @@ internal sealed class CollectionShape
             : typeof(List<>).MakeGenericType(ElementType);
         Create = memberType.IsAssignableFrom(built) ? Creator.Of(built) : Creator.Of(memberType);
     }
+
+    // A member Packbin can build and fill: an array, List<E>, IList<E> or IList; for a dict Dictionary<string, E>,
+    // IDictionary<string, E> or IDictionary. Anything else (a subclass, Stack<E>, HashSet<E>, IEnumerable<E>) would
+    // build and then throw when a packet is unpacked.
+    public static bool IsSupported(Type member, bool dictionary)
+    {
+        if (!dictionary && member.IsArray)
+            return member.GetArrayRank() == 1;
+        if (!member.IsGenericType)
+            return member == (dictionary ? typeof(System.Collections.IDictionary) : typeof(System.Collections.IList));
+        var definition = member.GetGenericTypeDefinition();
+        var args = member.GetGenericArguments();
+        if (!dictionary)
+            return definition == typeof(List<>) || definition == typeof(IList<>);
+        return (definition == typeof(Dictionary<,>) || definition == typeof(IDictionary<,>)) && args[0] == typeof(string);
+    }
+
+    // The elements unpack hands over are a number of the element field's own width, a string or a byte run: the
+    // element type must be object or hold the whole range of the field, or a Convert.ChangeType of a hostile packet
+    // value would throw out of Unpack. A row element is read through typed accessors and is not checked here.
+    public bool Holds(Field element)
+    {
+        if (RowElements || ElementType == typeof(object))
+            return true;
+        var type = Nullable.GetUnderlyingType(ElementType) ?? ElementType;
+        return element.Type switch
+        {
+            Field.Kind.Utf8 => type == typeof(string),
+            Field.Kind.Bytes or Field.Kind.Sized => type == typeof(byte[]),
+            Field.Kind.Bool => type == typeof(bool),
+            Field.Kind.F32 => type == typeof(float) || type == typeof(double),
+            Field.Kind.F64 => type == typeof(double),
+            >= Field.Kind.U8 and <= Field.Kind.I64 => HoldsInteger(element.Type, type),
+            _ => true,
+        };
+    }
+
+    private static bool HoldsInteger(Field.Kind kind, Type type)
+    {
+        if (type == typeof(float) || type == typeof(double) || type == typeof(decimal))
+            return true;
+        if (RangeOf(type) is not { } member)
+            return false;
+        var own = RangeOf(kind switch
+        {
+            Field.Kind.U8 => typeof(byte),
+            Field.Kind.I8 => typeof(sbyte),
+            Field.Kind.U16 => typeof(ushort),
+            Field.Kind.I16 => typeof(short),
+            Field.Kind.U32 => typeof(uint),
+            Field.Kind.I32 => typeof(int),
+            Field.Kind.U64 => typeof(ulong),
+            _ => typeof(long),
+        })!.Value;
+        return member.Min <= own.Min && member.Max >= own.Max;
+    }
+
+    private static (decimal Min, decimal Max)? RangeOf(Type type) =>
+        type == typeof(byte) ? (byte.MinValue, byte.MaxValue)
+        : type == typeof(sbyte) ? (sbyte.MinValue, sbyte.MaxValue)
+        : type == typeof(ushort) ? (ushort.MinValue, ushort.MaxValue)
+        : type == typeof(short) ? (short.MinValue, short.MaxValue)
+        : type == typeof(uint) ? (uint.MinValue, uint.MaxValue)
+        : type == typeof(int) ? (int.MinValue, int.MaxValue)
+        : type == typeof(ulong) ? (ulong.MinValue, ulong.MaxValue)
+        : type == typeof(long) ? (long.MinValue, long.MaxValue)
+        : null;
 
     private static Type ElementOf(Type member, bool dictionary)
     {

@@ -75,3 +75,7 @@ Then the bytes and the unpacked row equal today's
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Behavior change for callers that pass empty placeholder objects | owner decision 2026-10-10 | resolved | Low |
+
+## Loop 18 result (2026-10-10)
+
+Done in loop 18 wave 1 (csharp). A non-null typed nested row counts as present in `GroupOn`; pack fails naming the first missing member; null stays `0100`; the filled depth-2 row packs `01010406`. `EmptyNestedRowTests`.

@@ -16,7 +16,7 @@ internal static partial class Walker
         Scope seen)
     {
         var count = RequireCount(seen, field.CountName, field.Name);
-        var raw = (byte[])RequireValue(field, values);
+        var raw = RequireBytes(field, values);
         if (raw.Length != count)
             throw new ArgumentException($"{field.Name}: expected {count} bytes, got {raw.Length}");
         buffer.AddRange(raw);
@@ -34,10 +34,7 @@ internal static partial class Walker
         var raw = new byte[nbytes];
         for (var i = 0; i < names.Length; i++)
         {
-            if (!values.TryGetValue(names[i], out var value) || value is null || value is bool)
-                throw new ArgumentException($"{names[i]}: expected 2-bit int");
-            var n = Convert.ToInt32(value, CultureInfo.InvariantCulture);
-            if (n is < 0 or > 3)
+            if (!values.TryGetValue(names[i], out var value) || !TrySlot(value, 3, out var n))
                 throw new ArgumentException($"{names[i]}: expected 2-bit int");
             raw[i / 4] |= (byte)(n << ((i % 4) * 2));
             seen[names[i]] = value;
@@ -58,8 +55,7 @@ internal static partial class Walker
         var packed = new byte[nbytes];
         for (var i = 0; i < count; i++)
         {
-            var bit = Convert.ToInt32(raw[i], CultureInfo.InvariantCulture);
-            if (bit is not (0 or 1))
+            if (!TrySlot(raw[i], 1, out var bit))
                 throw new ArgumentException($"{field.Name}: expected 0 or 1");
             packed[i / 8] |= (byte)(bit << (i % 8));
         }
@@ -220,8 +216,7 @@ internal static partial class Walker
         var packed = new byte[PackedBytes(width, count)];
         for (var i = 0; i < count; i++)
         {
-            var n = Convert.ToInt32(raw[i], CultureInfo.InvariantCulture);
-            if (n < 0 || n > max)
+            if (!TrySlot(raw[i], max, out var n))
                 throw new ArgumentException($"{field.Name}: expected 0..{max}");
             packed[i / per] |= (byte)(n << ((i % per) * shift));
         }
@@ -340,7 +335,9 @@ internal static partial class Walker
         }
     }
 
-    // A typed row's element has values of its own. A dictionary row's element sees the row's values with its own added.
+    // A typed row's element has values of its own. A dictionary row's element sees the row's values with its own added;
+    // a group's element is the row of its members that unpack returns, so those are the values added. A flags element
+    // sees its members only: a name the row around it also holds must not set a bit the element leaves clear.
     private static IReadOnlyDictionary<string, object?> ElementValues(
         IReadOnlyDictionary<string, object?> values,
         Field element,
@@ -348,7 +345,20 @@ internal static partial class Walker
     {
         if (values is RowValues)
             return RowBinding.Element(element, item);
+        if (element.Type == Field.Kind.Flags)
+            return item switch
+            {
+                null => new Dictionary<string, object?>(),
+                IReadOnlyDictionary<string, object?> row => row,
+                _ => throw new ArgumentException($"a flags element is a row of its members by name, got {item.GetType().Name}"),
+            };
         var slice = values.ToDictionary(p => p.Key, p => p.Value);
+        if (element is { Type: Field.Kind.Group, Children.Length: > 0 } && item is IReadOnlyDictionary<string, object?> members)
+        {
+            foreach (var pair in members)
+                slice[pair.Key] = pair.Value;
+            return slice;
+        }
         slice[element.Name] = item;
         return slice;
     }

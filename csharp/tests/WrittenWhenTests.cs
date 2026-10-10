@@ -201,12 +201,12 @@ public class WrittenWhenTests
     }
 
     [Fact]
-    public void Ac7_WhenOnABoolWithAClearBit_DoesNotMatch()
+    public void Ac7_WhenTrueOnABoolWithAClearBit_DoesNotMatch()
     {
         // Arrange
         var scheme = new Scheme<RoundRow>(1,
             Field.Flags(0, Field.Bool<RoundRow>(0, x => x.On)),
-            Field.When(1, Condition.Eq(0, false), Field.U8<RoundRow>(1, x => x.V)));
+            Field.When(1, Condition.Eq(0, true), Field.U8<RoundRow>(1, x => x.V)));
         var row = new RoundRow { On = false, V = 7 };
         RoundRow? got = null;
 

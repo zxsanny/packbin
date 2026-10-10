@@ -233,7 +233,7 @@ internal static class SchemeOrder
     // bind their own row types.
     // `flagBit`: the field is a direct child of Flags or the field of a FlagByte bit, the only place a bool or an empty
     // group has a bit to live in.
-    private static Field Walk(Field field, Type? row, Taken scope, ref int next, bool flagBit = false)
+    private static Field Walk(Field field, Type? row, Taken scope, ref int next, bool flagBit = false, bool inRound = false)
     {
         RequireFlagBit(field, flagBit);
         RequireRow(field, row);
@@ -241,26 +241,26 @@ internal static class SchemeOrder
         {
             case Field.Kind.When:
                 RequireAnchor(field.Id, next);
-                var pred = field.Pred!.Resolved(Earlier(scope, field.Pred.FieldId, $"when {field.Id}").Name);
-                return field.With(children: WalkChildren(field, row, scope, ref next), pred: pred);
+                var pred = field.Pred!.Resolved(WhenSource(scope, field));
+                return field.With(children: WalkChildren(field, row, scope, ref next, inRound), pred: pred);
             case Field.Kind.Flags:
             case Field.Kind.Group when !field.NestedRow:
                 RequireAnchor(field.Id, next);
-                return field.With(children: WalkChildren(field, row, scope, ref next));
+                return field.With(children: WalkChildren(field, row, scope, ref next, inRound));
             case Field.Kind.Repeat:
                 RequireAnchor(field.Id, next);
-                return field.With(children: WalkChildren(field, row, [], ref next));
+                return field.With(children: WalkChildren(field, row, [], ref next, inRound: true));
             case Field.Kind.Times:
                 RequireAnchor(field.Id, next);
                 var count = Count(scope, field.CountId, $"count of times {field.Id}", $"times {field.Id}");
-                return field.With(children: WalkChildren(field, row, [], ref next), countName: count);
+                return field.With(children: WalkChildren(field, row, [], ref next, inRound: true), countName: count);
             case Field.Kind.FlagBit:
-                return field.With(inner: Walk(field.Inner!, row, scope, ref next, flagBit: true));
+                return field.With(inner: Walk(field.Inner!, row, scope, ref next, flagBit: true, inRound: inRound));
             case Field.Kind.Group:
             case Field.Kind.List:
             case Field.Kind.Dict:
-                RequireCreatable(field);
-                return field.With(children: WalkFromZero(field));
+                RequireCreatable(field, inRound);
+                return field.With(children: WalkFromZero(field, inRound && field.Type == Field.Kind.Group));
             case Field.Kind.U2:
                 for (var i = 0; i < field.SlotIds.Length; i++)
                     Take(field.SlotIds[i], field.Names[i], field.Type, scope, ref next);
@@ -279,19 +279,19 @@ internal static class SchemeOrder
         }
     }
 
-    private static Field[] WalkChildren(Field field, Type? row, Taken scope, ref int next)
+    private static Field[] WalkChildren(Field field, Type? row, Taken scope, ref int next, bool inRound = false)
     {
         var children = new Field[field.Children.Length];
         for (var i = 0; i < children.Length; i++)
-            children[i] = Walk(field.Children[i], row, scope, ref next);
+            children[i] = Walk(field.Children[i], row, scope, ref next, inRound: inRound);
         return children;
     }
 
     // A nested row, list element or dict element numbers its own fields from 0.
-    private static Field[] WalkFromZero(Field field)
+    private static Field[] WalkFromZero(Field field, bool inRound)
     {
         var next = 0;
-        return WalkChildren(field, null, [], ref next);
+        return WalkChildren(field, null, [], ref next, inRound);
     }
 
     // A value is found by member name, so a field declared for another row type would be silently left out.
@@ -310,13 +310,29 @@ internal static class SchemeOrder
             : type.Name;
 
     // Unpack creates a nested row and the rows of a list or dict, so their types need a public parameterless constructor.
-    private static void RequireCreatable(Field field)
+    private static void RequireCreatable(Field field, bool inRound)
     {
         var binding = field.Binding!;
         if (field.Type == Field.Kind.Group && binding.CreateNested is null)
             throw NoConstructor(field, binding.NestedType!);
         if (binding.Shape is { RowElements: true, CreateElement: null } shape)
             throw NoConstructor(field, shape.ElementType);
+        if (binding.Shape is { } collection && !inRound)
+            RequireCollection(field, collection);
+    }
+
+    private static void RequireCollection(Field field, CollectionShape shape)
+    {
+        var member = field.Binding!.Member.Type;
+        var kind = shape.Dictionary ? "dictionary" : "list";
+        if (!CollectionShape.IsSupported(member, shape.Dictionary))
+            throw new ArgumentException(
+                $"'{field.Name}': {TypeName(member)} is not a collection Packbin can fill; use an array, "
+                + (shape.Dictionary ? "Dictionary<string, E>" : "List<E>") + $" for a {kind} field");
+        if (!shape.Holds(field.Children[0]))
+            throw new ArgumentException(
+                $"'{field.Name}': {TypeName(member)} cannot hold the {field.Children[0].Type.ToString().ToLowerInvariant()} "
+                + $"elements of its field; element type {TypeName(shape.ElementType)} is too narrow or of another kind");
     }
 
     private static ArgumentException NoConstructor(Field field, Type type) =>
@@ -356,12 +372,43 @@ internal static class SchemeOrder
             + "(the top level, a repeat or times body, a list or dict element and a nested row are separate scopes)");
     }
 
+    // A `when` reads an integer or a bool. A bool is true or a clear bit that is absent on the wire, so only `true` can
+    // ever match it; a float, string or byte run would not compare the same in every package.
+    private static string WhenSource(Taken scope, Field when)
+    {
+        var id = when.Pred!.FieldId;
+        var (name, kind) = Earlier(scope, id, $"when {when.Id}");
+        var value = when.Pred.Value;
+        if (kind == Field.Kind.Bool)
+        {
+            if (value is not true)
+                throw new ArgumentException(
+                    $"when {when.Id} tests bool field {id} ('{name}') against {Describe(value)}; a bool is compared only with true");
+            return name;
+        }
+        if (IsInteger(kind))
+            return name;
+        throw new ArgumentException(
+            $"when {when.Id} tests '{name}' (field id {id}), a {kind.ToString().ToLowerInvariant()} field; "
+            + "a when names an integer or a bool field");
+    }
+
+    private static string Describe(object? value) =>
+        value switch
+        {
+            null => "null",
+            bool b => b ? "true" : "false",
+            _ => Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) ?? value.GetType().Name,
+        };
+
+    private static bool IsInteger(Field.Kind kind) => kind is (>= Field.Kind.U8 and <= Field.Kind.I64) or Field.Kind.U2;
+
     // A count is an integer: a u2 slot or an 8 to 64-bit integer field. A float, bool, string or byte run is read back
     // differently (or not at all) by the packages, so the same scheme would not mean the same bytes everywhere.
     private static string Count(Taken scope, int id, string by, string counted)
     {
         var (name, kind) = Earlier(scope, id, by);
-        if (kind is (>= Field.Kind.U8 and <= Field.Kind.I64) or Field.Kind.U2)
+        if (IsInteger(kind))
             return name;
         throw new ArgumentException(
             $"{counted}: its count names '{name}' (field id {id}), a {kind.ToString().ToLowerInvariant()} field; "

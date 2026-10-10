@@ -31,7 +31,7 @@ internal static partial class Walker
         values.TryGetValue(name, out var v) && v is true;
 
     // The values a group's fields read: a typed row's nested row has its own (null when the member is null), anything
-    // else shares the row around it. A nested row counts for what is inside it, not for the member being non-null.
+    // else shares the row around it.
     private static IReadOnlyDictionary<string, object?>? ScopeOf(Field group, IReadOnlyDictionary<string, object?> values) =>
         group.NestedRow && values is RowValues
             ? values.TryGetValue(group.Name, out var nested) ? nested as RowValues : null
@@ -42,7 +42,9 @@ internal static partial class Walker
         var scope = ScopeOf(group, values);
         if (scope is null)
             return false;
-        if (ReferenceEquals(scope, values) && IsPresent(values, group.Name))
+        if (!ReferenceEquals(scope, values))
+            return true;
+        if (IsPresent(values, group.Name))
             return true;
         foreach (var child in group.Children)
         {
@@ -74,6 +76,10 @@ internal static partial class Walker
         var id = field.Id >= 0 ? $" (field id {field.Id})" : "";
         throw new ArgumentException($"'{field.Name}'{id} has no value; a field that may be absent belongs in Flags");
     }
+
+    private static byte[] RequireBytes(Field field, IReadOnlyDictionary<string, object?> values) =>
+        RequireValue(field, values) as byte[]
+            ?? throw new ArgumentException($"{field.Name}: expected a byte[], got {values[field.Name]!.GetType().Name}");
 
     // The field behind a set flag bit. A group there has no presence per value, so it is written in full: every value
     // in it, and in the groups nested in it, must be there. A missing one would give a packet its own unpack rejects.

@@ -74,3 +74,7 @@ Per package: the package suite only (no Docker). C# on net10.0 and `-p:PackbinTa
 - AZ-2126 counts and `when` kinds: the decided concern widens the change per package; a package that already conforms only gets a test.
 - AZ-2308 may touch up to five packages; each worker probes its own package first.
 - Wave 3 changes bytes for the `when`/`times`/`repeat`-under-`flags` shape in five packages that agree today (`01 01 02 5a00`); recorded as an upgrade note.
+
+### Divergence log
+
+- Wave 1 ran as seven worker stages (C# split in two: A = AZ-2305, 2306, 2308, 2309, 2310; B = AZ-2126, AZ-2307 plus the ring files). AZ-2308 spread over five packages by direction (each worker probed its own package). AZ-2135 closed with AZ-2304 (its Python and C# parts were already done in loops 16 and 17). A hung `dotnet test` (missing `MSBUILDDISABLENODEREUSE=1`) cost the C# A stage about 15 minutes; the fix is in `AGENT_GOTCHAS.md`. Batch report: `_docs/03_implementation/batch_01_loop18_report.md`.

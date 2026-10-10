@@ -9,6 +9,7 @@ from packbin._nodes import (
     _Bool,
     _Bytes,
     _Dict,
+    _Eq,
     _FlagBit,
     _FlagByte,
     _Flags,
@@ -28,10 +29,55 @@ from packbin._nodes import (
 _COUNTED = {_Sized: "sized", _Bits: "bits", _Packed: "packed"}
 
 
-def _require_visible(label: str, what: str, field_id: int, visible: set[int]) -> None:
-    if field_id not in visible:
+def _require_visible(label: str, what: str, field_id: int, visible: dict[int, _Node]) -> _Node:
+    node = visible.get(field_id)
+    if node is None:
         raise ValueError(
             f"{label}: {what} field id {field_id} is allowed only if declared earlier in the same scope"
+        )
+    return node
+
+
+def _kind_of(node: _Node) -> str:
+    if isinstance(node, _Scalar):
+        return node.kind
+    if isinstance(node, _U2Slot):
+        return "u2 slot"
+    return {
+        _Bool: "bool",
+        _Bytes: "bytes",
+        _Utf8: "utf8",
+        _Sized: "sized",
+        _Bits: "bits",
+        _Packed: "packed",
+    }[type(node)]
+
+
+def _is_integer(node: _Node) -> bool:
+    return isinstance(node, _U2Slot) or (isinstance(node, _Scalar) and node.kind[0] in "ui")
+
+
+def _require_count_source(label: str, field_id: int, visible: dict[int, _Node]) -> None:
+    source = _require_visible(label, "count", field_id, visible)
+    if not _is_integer(source):
+        raise ValueError(
+            f"{label}: count names field {field_id}, which is a {_kind_of(source)}; a count names an integer field"
+        )
+
+
+def _require_eq_source(anchor: int, condition: _Eq, visible: dict[int, _Node]) -> None:
+    label = f"when {anchor}"
+    source = _require_visible(label, "eq names", condition.field_id, visible)
+    if isinstance(source, _Bool):
+        if condition.value is not True:
+            raise ValueError(
+                f"{label}: eq tests bool field {condition.field_id} against {condition.value!r}; "
+                "a bool is compared only with true"
+            )
+    elif not _is_integer(source):
+        raise ValueError(
+            f"{label}: eq names field {condition.field_id}, which is a {_kind_of(source)}; "
+            "a when names an integer or a bool field"
         )
 
 
@@ -39,7 +85,7 @@ def _validate_order(
     nodes: Sequence[_Node],
     next_id: int = 0,
     flag_bits: bool = False,
-    visible: set[int] | None = None,
+    visible: dict[int, _Node] | None = None,
 ) -> int:
     """`flag_bits`: the nodes are the direct children of `flags` or of a flag-byte bit, the only
     places a bool may stand (its value is the bit itself).
@@ -47,7 +93,7 @@ def _validate_order(
     The top level, a `repeat` or `times` body and a list or dict element are separate scopes.
     A flag byte takes no id: each of its bits takes one where the bit stands."""
     if visible is None:
-        visible = set()
+        visible = {}
     for node in nodes:
         if isinstance(node, _Bool) and not flag_bits:
             raise ValueError(
@@ -57,15 +103,15 @@ def _validate_order(
             raise ValueError(f"group {node.anchor} has no fields, so it can never carry a value")
         if isinstance(node, (_Scalar, _Bytes, _Bool, _Utf8, _Sized, _Bits, _Packed)):
             if isinstance(node, (_Sized, _Bits, _Packed)):
-                _require_visible(f"{_COUNTED[type(node)]} {node.field_id}", "count", node.count, visible)
+                _require_count_source(f"{_COUNTED[type(node)]} {node.field_id}", node.count, visible)
             if node.field_id != next_id:
                 raise ValueError(f"field id {node.field_id} is not the next order {next_id}")
-            visible.add(node.field_id)
+            visible[node.field_id] = node
             next_id += 1
         elif isinstance(node, _U2Slot):
             if node.field_id != next_id:
                 raise ValueError(f"field id {node.field_id} is not the next order {next_id}")
-            visible.add(node.field_id)
+            visible[node.field_id] = node
             next_id += 1
         elif isinstance(node, _U2):
             next_id = _validate_order(node.slots, next_id, visible=visible)
@@ -73,10 +119,10 @@ def _validate_order(
             if node.anchor != next_id:
                 raise ValueError(f"anchor {node.anchor} is not the next order {next_id}")
             if isinstance(node, _When):
-                _require_visible(f"when {node.anchor}", "eq names", node.condition.field_id, visible)
+                _require_eq_source(node.anchor, node.condition, visible)
             if isinstance(node, _Times):
-                _require_visible(f"times {node.anchor}", "count", node.count, visible)
-            body = set() if isinstance(node, (_Repeat, _Times)) else visible
+                _require_count_source(f"times {node.anchor}", node.count, visible)
+            body = {} if isinstance(node, (_Repeat, _Times)) else visible
             next_id = _validate_order(node.fields, next_id, isinstance(node, _Flags), body)
         elif isinstance(node, _FlagByte):
             pass

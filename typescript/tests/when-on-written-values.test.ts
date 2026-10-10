@@ -9,7 +9,6 @@ import {
   bits,
   bool,
   eq,
-  f32,
   flags,
   i16,
   i32,
@@ -209,23 +208,6 @@ describe("when and counts read what pack wrote", () => {
     assert.deepEqual(wires, ["010002" + "0708", "0100" + "02" + "01", "0100" + "02" + "09", "0100" + "02" + "0506"])
   })
 
-  it("AC-5 a when on a clear flag bit does not match", () => {
-    // Arrange
-    const layout = scheme<Row>(
-      1,
-      flags(0, [bool(0, (x) => x.on)]),
-      when(1, eq(0, false), [u8(1, (x) => x.v)]),
-    )
-
-    // Act
-    const wire = hex(BinaryPacker.pack(layout, { on: false, v: 7 }))
-    const { result } = unpack(layout, wire)
-
-    // Assert
-    assert.equal(wire, "0100")
-    assert.deepEqual(result, { ok: true })
-  })
-
   it("AC-5 a when on a set flag bit still matches", () => {
     // Arrange
     const layout = scheme<Row>(
@@ -273,22 +255,6 @@ describe("when and counts read what pack wrote", () => {
     assert.equal(wire, "010104")
     assert.deepEqual(result, { ok: true })
     assert.deepEqual(row, { p: 1, v: 4 })
-  })
-
-  it("an f32 is tested as the reader sees it, rounded to 32 bits", () => {
-    // Arrange
-    const unrounded = scheme<Row>(1, f32(0, (x) => x.x), when(1, eq(0, 0.1), [u8(1, (x) => x.v)]))
-    const rounded = scheme<Row>(1, f32(0, (x) => x.x), when(1, eq(0, Math.fround(0.1)), [u8(1, (x) => x.v)]))
-
-    // Act
-    const first = hex(BinaryPacker.pack(unrounded, { x: 0.1, v: 5 }))
-    const second = hex(BinaryPacker.pack(rounded, { x: 0.1, v: 5 }))
-
-    // Assert
-    assert.equal(first, "01cdcccc3d")
-    assert.equal(second, "01cdcccc3d05")
-    assert.deepEqual(unpack(unrounded, first).result, { ok: true })
-    assert.deepEqual(unpack(rounded, second).result, { ok: true })
   })
 })
 

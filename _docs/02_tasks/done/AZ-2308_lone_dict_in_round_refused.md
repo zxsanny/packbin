@@ -76,3 +76,7 @@ Then every package gives the same bytes as today
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | The probe may show that other packages broadcast too, which widens the change to up to six packages (still 2 points per package at most); the parent splits the work by directory | coordinator | open | Medium |
+
+## Loop 18 result (2026-10-10)
+
+Done in loop 18 wave 1 (csharp, typescript, python, java, rust; C++ not applicable). Probe table in `batch_01_loop18_report.md`. A lone dictionary for a `Dict` name in `repeat`/`times` is refused naming the member; a list of one dictionary per round packs as before. Open: a lone byte buffer for `Bytes`/`Sized` is broadcast everywhere except C#.

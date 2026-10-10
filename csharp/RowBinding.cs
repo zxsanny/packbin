@@ -32,7 +32,7 @@ internal static class RowBinding
     // field's accessor; any other item is the element's value itself.
     public static RowValues Element(Field element, object? item)
     {
-        if (item is not null && element.RowType is { } rowType && rowType.IsInstanceOfType(item))
+        if (item is not null && element.ElementRowType is { } rowType && rowType.IsInstanceOfType(item))
             return Read([element], item);
         var values = new RowValues(1);
         if (item is not null)
@@ -201,8 +201,8 @@ internal static class RowBinding
         {
             var element = shape.CreateElement!();
             var inner = field.Children[0];
-            // An anchored group's fields belong to the element row itself, so its item holds them by name.
-            if (inner is { Type: Field.Kind.Group, NestedRow: false, Children.Length: > 0 })
+            // An anchored group's or a flags container's fields belong to the element row itself, so its item holds them by name.
+            if (inner is { Type: Field.Kind.Flags } or { Type: Field.Kind.Group, NestedRow: false, Children.Length: > 0 })
                 ApplyField(inner, (IReadOnlyDictionary<string, object?>)item, element);
             else
                 SetValue(inner, element, item);

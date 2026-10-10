@@ -81,3 +81,7 @@ Then bytes equal today's bytes; golden and route fixtures unchanged
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Whether other packages round in slots is not probed here; the batch report records what C# does and the next handoff gets the other packages if they differ | coordinator | open | Low |
+
+## Loop 18 result (2026-10-10)
+
+Done in loop 18 wave 1 (csharp). `TrySlot` in `Walker.Numbers.cs`: `u2` slots, `bits` and `packed(1)`/`packed(2)` items refuse fractions, out-of-range, bool, string, char, enum, object, null (a null item used to pack as 0). `StrictSlotTests`. Other packages not probed.

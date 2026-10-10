@@ -45,6 +45,11 @@ public sealed class Field
     internal bool NestedRow { get; }
     internal int Bias { get; }
     internal Type? RowType { get; }
+
+    // The row type of a list or dict element: a flags container has none of its own, so it is the one its members are
+    // declared for.
+    internal Type? ElementRowType =>
+        RowType ?? (Type == Kind.Flags ? Children.Select(bit => bit.Inner!.RowType).FirstOrDefault(t => t is not null) : null);
     internal FieldBinding? Binding { get; }
 
     private Field(

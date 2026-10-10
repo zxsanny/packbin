@@ -14,6 +14,7 @@ public class NestedRoundTests
         public bool? On { get; set; }
         public Child? Row { get; set; }
         public List<object?>? Items { get; set; }
+        public Dictionary<string, object?>? Map { get; set; }
     }
 
     private sealed class Child
@@ -151,7 +152,7 @@ public class NestedRoundTests
         var built = Record.Exception(() => new Scheme<RoundRow>(1,
             Field.U8<RoundRow>(0, x => x.N),
             Field.Times(1, 0,
-                Field.Dict((RoundRow x) => x.Items,
+                Field.Dict((RoundRow x) => x.Map,
                     Field.Group(0, (El e) => e.Mark,
                         Field.U8<El>(0, e => e.V),
                         Field.Times(1, 0, Field.U8<El>(1, e => e.V)))))));

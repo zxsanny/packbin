@@ -36,9 +36,9 @@ def _scheme(*fields: Any) -> Scheme[Any]:
 
 
 def _empty_round() -> list[Any]:
-    """A round that reads nothing. A `when` names only an earlier field of its own round, so the
-    round is a zero-width field and a `when` on it that never matches (ids 1 and 2)."""
-    return [raw_bytes(1, lambda row: row["e"], 0), when(2, eq(1, 9), u8(2, lambda row: row["v"]))]
+    """A round that reads nothing: one zero-width field. A `when` names only an integer or a bool, and
+    neither is zero-width, so no never-matching `when` can sit in it."""
+    return [raw_bytes(1, lambda row: row["e"], 0)]
 
 
 def zero_progress_when() -> Scheme[Any]:

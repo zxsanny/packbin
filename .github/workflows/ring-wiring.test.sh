@@ -235,6 +235,57 @@ consumer_failure_checks() {
   expect_ring "the csharp producer exits 1 while packing" "csharp pack-user failed" 1
 }
 
+# AZ-2307 AC-2, AC-3: C# is a producer and a consumer of each element ring (listgroup, dictgroup, listflags) in
+# language-pair.sh, refuses their short packets there, and has the three commands in its driver. Prints one line per
+# missing piece of the script $1 (default: the real one).
+element_ring_violations() {
+  local script="${1:-$here/language-pair.sh}" kind
+  for kind in listgroup dictgroup listflags; do
+    grep -Eq "^handoff csharp [a-z]+ ${kind} \"[$]${kind}_hex\"\$" "$script" \
+      || echo "no handoff line with csharp as the producer of $kind"
+    grep -Eq "^handoff [a-z]+ csharp ${kind} \"[$]${kind}_hex\"\$" "$script" \
+      || echo "no handoff line with csharp as the consumer of $kind"
+    grep -q "\"$kind\"" "$here/drivers/csharp/HandoffElements.cs" \
+      || echo "the csharp driver has no command for $kind"
+  done
+  # The loop that refuses the short packets is the last "for lang in" line before the one that names the rows.
+  awk '/^for lang in /{ langs = $0 } /for row in "listgroup/{ print langs }' "$script" | grep -Eq '[ ]csharp[;]' \
+    || echo "csharp is not in the loop that refuses the short element packets"
+}
+
+# expect_element_ring_rejected <label> <language-pair.sh copy>: the copy lacks something and the check names it.
+expect_element_ring_rejected() {
+  local label="$1" copy="$2" out
+  if cmp -s "$here/language-pair.sh" "$copy"; then
+    fail "temp copy is unchanged: $label"
+    return
+  fi
+  out="$(element_ring_violations "$copy")"
+  if [ -z "$out" ]; then
+    fail "the element ring check passed a script without: $label"
+  else
+    echo "rejects: $label ($out)"
+  fi
+}
+
+element_ring_checks() {
+  local out kind
+  out="$(element_ring_violations)"
+  if [ -n "$out" ]; then
+    fail "language-pair.sh: $out"
+    return
+  fi
+  for kind in listgroup dictgroup listflags; do
+    sed "/^handoff csharp [a-z]* ${kind} /d" "$here/language-pair.sh" > "$tmp/no-producer-$kind.sh"
+    expect_element_ring_rejected "the csharp producer line of $kind" "$tmp/no-producer-$kind.sh"
+    sed "/^handoff [a-z]* csharp ${kind} /d" "$here/language-pair.sh" > "$tmp/no-consumer-$kind.sh"
+    expect_element_ring_rejected "the csharp consumer line of $kind" "$tmp/no-consumer-$kind.sh"
+  done
+  sed 's/^for lang in typescript python java csharp; do$/for lang in typescript python java; do/' \
+    "$here/language-pair.sh" > "$tmp/no-short-csharp.sh"
+  expect_element_ring_rejected "csharp in the short packet loop" "$tmp/no-short-csharp.sh"
+}
+
 if ! command -v ruby > /dev/null; then
   fail "ruby is required to parse the workflow YAML"
 elif ! out="$(ring_wiring "$test_yml")"; then
@@ -306,6 +357,7 @@ else
 fi
 
 consumer_failure_checks
+element_ring_checks
 
 if [ "$failures" -ne 0 ]; then
   echo "$failures failure(s)" >&2

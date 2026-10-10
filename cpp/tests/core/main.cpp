@@ -8,6 +8,8 @@ int run_core_session_tests();
 int run_core_session_host_tests();
 int run_core_host_tests();
 int run_core_hostile_host_tests();
+int run_core_flag_scope_host_tests();
+int run_core_source_kinds_host_tests();
 
 int main() {
   run_core_scalar_tests();
@@ -18,6 +20,8 @@ int main() {
   run_core_session_host_tests();
   run_core_host_tests();
   run_core_hostile_host_tests();
+  run_core_flag_scope_host_tests();
+  run_core_source_kinds_host_tests();
   if (check::failures() != 0) {
     std::fprintf(stderr, "%d failure(s)\n", check::failures());
     return 1;

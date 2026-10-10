@@ -15,6 +15,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="Handoff.cs" />
+    <Compile Remove="HandoffElements.cs" />
     <ProjectReference Include="../../../../csharp/Packbin.csproj" />
   </ItemGroup>
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />

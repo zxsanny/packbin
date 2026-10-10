@@ -58,6 +58,12 @@ final class Rounds {
             Map<Object, Object> seen,
             int count,
             Walker.Take outer) {
+        for (Field value : values) {
+            if (value.kind == Field.Kind.DICT && read(value, row, outer) instanceof Map<?, ?>) {
+                throw new IllegalArgumentException(memberName(value)
+                        + ": a lone dictionary is not a list of rounds; give one dictionary per round in a list");
+            }
+        }
         for (int i = 0; i < count; i++) {
             clear(values, seen);
             int index = i;
@@ -69,6 +75,10 @@ final class Rounds {
     /** Fields carry no names: a member with a field id is named by it, a nested row, list or dict by its kind. */
     private static String member(Field value) {
         return value.id >= 0 ? value.label() : value.kind.name().toLowerCase(Locale.ROOT);
+    }
+
+    private static String memberName(Field value) {
+        return value.set instanceof Access.KeySetter named ? named.key : member(value);
     }
 
     private static Object read(Field value, Object row, Walker.Take outer) {

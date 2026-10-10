@@ -51,3 +51,7 @@ Loop 12 feature assessment (`_docs/loops/loop12/assessment12.md` G4, G1), deferr
 | G4: split bits numbered by field order per flag-byte read, handle shareable, eight bits per read, ninth bit refused when the scheme is built | C# | done in loop 17 batch 1 (`FlagScopes.Bind`; the three probes give the Rust bytes `010105` / `010209` / `01000109`; a nested row is a flag-byte scope of its own) |
 | numbering by scheme order (AZ-2100 Included line) | Python | open: Python numbers by `.bit()` call order and refuses a handle shared by two schemes; not in this spec's component list |
 | flag byte inside a `flags` member or a flag-bit child stays visible to later bits | C++ | open, owner decision 2026-10-06: follow-up spec (Rust, TypeScript and Java treat all three as conditional scopes) |
+
+## Loop 18 result (2026-10-10)
+
+All parts done: TypeScript and Java in loop 16, C++ `when` scope in loop 16, Python numbering by AZ-2230 (loop 16), C# in loop 17, and the C++ follow-up (flag byte inside a `flags` member or flag-bit child) as AZ-2304 in loop 18. The table row 'numbering by scheme order, Python: open' above is out of date.

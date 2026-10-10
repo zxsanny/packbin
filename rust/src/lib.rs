@@ -28,6 +28,8 @@ mod duplicate_names_tests;
 #[cfg(test)]
 mod element_tests;
 #[cfg(test)]
+mod eq_bool_true_tests;
+#[cfg(test)]
 mod flag_bits_tests;
 #[cfg(test)]
 mod flag_group_tests;
@@ -47,6 +49,8 @@ mod round_tests;
 mod scope_tests;
 #[cfg(test)]
 mod session_hostile_tests;
+#[cfg(test)]
+mod times_lone_value_tests;
 #[cfg(test)]
 mod times_longer_tests;
 #[cfg(test)]

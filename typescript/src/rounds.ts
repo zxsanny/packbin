@@ -1,4 +1,4 @@
-import type { Field } from "./fields.ts"
+import { isPlainObject, type Field } from "./fields.ts"
 import { present, type Value } from "./kinds.ts"
 
 // A repeat or times round is addressed by index. Pack reads each value list at the round's index;
@@ -44,6 +44,30 @@ export function roundNames(fields: Field[], packing: boolean): Set<string> {
   const names = new Set<string>()
   for (const f of fields) addNames(f, packing, names)
   return names
+}
+
+// The dict names among a round's own names. One dictionary given for such a name would reach every
+// round, so it is refused: a dictionary per round goes in a list.
+export function refuseLoneDicts(fields: Field[], values: Value): void {
+  for (const f of fields) {
+    switch (f.kind) {
+      case "dict":
+        if (isPlainObject(values[f.name])) {
+          throw new RangeError(
+            `${f.name}: a dictionary in a repeat or times round needs a list with one dictionary per round`,
+          )
+        }
+        break
+      case "when":
+      case "flags":
+      case "group":
+        refuseLoneDicts(f.fields, values)
+        break
+      case "flagBit":
+        refuseLoneDicts([f.field], values)
+        break
+    }
+  }
 }
 
 function addNames(f: Field, packing: boolean, names: Set<string>): void {
