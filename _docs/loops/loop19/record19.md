@@ -13,7 +13,7 @@ leftovers:
   - "Assessment `assessment19.md` CLARIFY: 7 gap-unclear rows U1 to U7 and 5 gap-clear rows G1 to G5 recorded in the handoff; no re-entry round (owner preference)"
   - "Not run locally in the total test run (`test_run_loop19_report.md`, verdict PARTIAL): the `cpp-example-pico` PlatformIO example (no arm64 toolchain on this host; the CI `embedded` job runs it) and the two real-vcpkg checks of the publish gate; everything else ran, including the embedded ARM and ESP targets"
   - "Total run found no code failure; its two first-pass stage failures (ring, publish gate) were the host Python 3.9 and the missing sysroot: recipe in `AGENT_GOTCHAS.md` and `smoke19.md`"
-smoke: PENDING
+smoke: PASS
 smoke_artifact: _docs/loops/loop19/smoke19.md
 assessment_artifact: _docs/loops/loop19/assessment19.md
 suite: PARTIAL locally (Pico example and two vcpkg checks not run, reasons above; every executed stage passed at the final commits)
