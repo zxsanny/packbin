@@ -32,13 +32,16 @@ internal static class RowBinding
     // field's accessor; any other item is the element's value itself.
     public static RowValues Element(Field element, object? item)
     {
-        if (item is not null && element.ElementRowType is { } rowType && rowType.IsInstanceOfType(item))
+        if (IsRow(element, item))
             return Read([element], item);
         var values = new RowValues(1);
         if (item is not null)
             values[element.Name] = item;
         return values;
     }
+
+    public static bool IsRow(Field element, object? item) =>
+        item is not null && element.ElementRowType is { } rowType && rowType.IsInstanceOfType(item);
 
     private static void ReadField(Field field, object row, RowValues into)
     {

@@ -72,13 +72,15 @@ def _child_on(child: _Node, take: Callable[[_Node], Any], seen: dict[int, Any], 
 
 def _times_on(node: _Times, seen: dict[int, Any], row: Any) -> bool:
     """On when the count is above 0. A count that was skipped is no round (unpack would not read the field either);
-    a count of 0 with a list given for a body value is refused, as a `times` outside `flags` refuses it."""
+    a count of 0 with a list or a lone dict given for a body value is refused, as outside `flags`."""
     count = seen.get(node.count)
     if count is None:
         return False
     rounds = _borrowed("times", count, 0)
     if rounds == 0:
         _check_round_lists(node.leaves, row, 0)
+        for leaf in node.leaves:
+            _refuse_lone_dict(leaf, leaf.get(row))
     return rounds > 0
 
 

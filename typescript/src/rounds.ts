@@ -1,4 +1,4 @@
-import { isPlainObject, type Field } from "./fields.ts"
+import { isObjectLike, type Field } from "./fields.ts"
 import { present, type Value } from "./kinds.ts"
 
 // A repeat or times round is addressed by index. Pack reads each value list at the round's index;
@@ -46,26 +46,48 @@ export function roundNames(fields: Field[], packing: boolean): Set<string> {
   return names
 }
 
-// The dict names among a round's own names. One dictionary given for such a name would reach every
-// round, so it is refused: a dictionary per round goes in a list.
-export function refuseLoneDicts(fields: Field[], values: Value): void {
+// What a repeat or times asks of its values on every pack, worked out once when the scheme binds it.
+export type RoundShape = { names: Set<string>; dictNames: string[] }
+
+export function makeRoundShape(fields: Field[]): RoundShape {
+  const dictNames: string[] = []
+  collectDictNames(fields, dictNames)
+  return { names: roundNames(fields, true), dictNames }
+}
+
+// The shape `bindReferences` filled in; a repeat or times no Scheme bound has none.
+export function roundShape(f: Extract<Field, { kind: "repeat" | "times" }>): RoundShape {
+  const { shape } = f as typeof f & { shape?: RoundShape }
+  if (shape === undefined) throw new RangeError(`${f.kind}: round shape is not bound`)
+  return shape
+}
+
+function collectDictNames(fields: Field[], into: string[]): void {
   for (const f of fields) {
     switch (f.kind) {
       case "dict":
-        if (isPlainObject(values[f.name])) {
-          throw new RangeError(
-            `${f.name}: a dictionary in a repeat or times round needs a list with one dictionary per round`,
-          )
-        }
+        into.push(f.name)
         break
       case "when":
       case "flags":
       case "group":
-        refuseLoneDicts(f.fields, values)
+        collectDictNames(f.fields, into)
         break
       case "flagBit":
-        refuseLoneDicts([f.field], values)
+        collectDictNames([f.field], into)
         break
+    }
+  }
+}
+
+// One dictionary given for a dict name of a round would reach every round, so it is refused: a
+// dictionary per round goes in a list. Any object counts, a Map included: it would be broadcast too.
+export function refuseLoneDicts(dictNames: string[], values: Value): void {
+  for (const name of dictNames) {
+    if (isObjectLike(values[name])) {
+      throw new RangeError(
+        `${name}: a dictionary in a repeat or times round needs a list with one dictionary per round`,
+      )
     }
   }
 }

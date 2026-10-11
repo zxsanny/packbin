@@ -237,15 +237,20 @@ consumer_failure_checks() {
 
 # AZ-2307 AC-2, AC-3: C# is a producer and a consumer of each element ring (listgroup, dictgroup, listflags) in
 # language-pair.sh, refuses their short packets there, and has the three commands in its driver. Prints one line per
-# missing piece of the script $1 (default: the real one).
+# missing piece of the script $1 (default: the real one) or of the driver $2 (default: the real one). The driver builds
+# its commands as pack-{kind}, unpack-{kind} and unpack-{kind}-short for each kind in the array of its Run loop.
 element_ring_violations() {
-  local script="${1:-$here/language-pair.sh}" kind
+  local script="${1:-$here/language-pair.sh}" driver="${2:-$here/drivers/csharp/HandoffElements.cs}" kind form
+  for form in 'pack-{kind}' 'unpack-{kind}' 'unpack-{kind}-short'; do
+    grep -qF "\$\"$form\"" "$driver" \
+      || echo "the csharp driver does not build the command $form"
+  done
   for kind in listgroup dictgroup listflags; do
     grep -Eq "^handoff csharp [a-z]+ ${kind} \"[$]${kind}_hex\"\$" "$script" \
       || echo "no handoff line with csharp as the producer of $kind"
     grep -Eq "^handoff [a-z]+ csharp ${kind} \"[$]${kind}_hex\"\$" "$script" \
       || echo "no handoff line with csharp as the consumer of $kind"
-    grep -q "\"$kind\"" "$here/drivers/csharp/HandoffElements.cs" \
+    grep -E 'foreach [(]var kind in new' "$driver" | grep -qF "\"$kind\"" \
       || echo "the csharp driver has no command for $kind"
   done
   # The loop that refuses the short packets is the last "for lang in" line before the one that names the rows.
@@ -268,6 +273,21 @@ expect_element_ring_rejected() {
   fi
 }
 
+# expect_driver_rejected <label> <driver copy>: the copy lacks a command and the check names it.
+expect_driver_rejected() {
+  local label="$1" copy="$2" out
+  if cmp -s "$here/drivers/csharp/HandoffElements.cs" "$copy"; then
+    fail "temp copy is unchanged: $label"
+    return
+  fi
+  out="$(element_ring_violations "$here/language-pair.sh" "$copy")"
+  if [ -z "$out" ]; then
+    fail "the element ring check passed a driver without: $label"
+  else
+    echo "rejects: $label ($out)"
+  fi
+}
+
 element_ring_checks() {
   local out kind
   out="$(element_ring_violations)"
@@ -280,6 +300,14 @@ element_ring_checks() {
     expect_element_ring_rejected "the csharp producer line of $kind" "$tmp/no-producer-$kind.sh"
     sed "/^handoff [a-z]* csharp ${kind} /d" "$here/language-pair.sh" > "$tmp/no-consumer-$kind.sh"
     expect_element_ring_rejected "the csharp consumer line of $kind" "$tmp/no-consumer-$kind.sh"
+  done
+  for kind in listgroup dictgroup listflags; do
+    sed "/foreach (var kind in new/s/\"$kind\"[,]* *//" "$here/drivers/csharp/HandoffElements.cs" > "$tmp/no-driver-$kind.cs"
+    expect_driver_rejected "the $kind case of the csharp driver" "$tmp/no-driver-$kind.cs"
+  done
+  for form in 'pack-{kind}' 'unpack-{kind}-short'; do
+    sed "s/\$\"$form\"/\$\"x$form\"/" "$here/drivers/csharp/HandoffElements.cs" > "$tmp/no-form-$form.cs"
+    expect_driver_rejected "the $form command of the csharp driver" "$tmp/no-form-$form.cs"
   done
   sed 's/^for lang in typescript python java csharp; do$/for lang in typescript python java; do/' \
     "$here/language-pair.sh" > "$tmp/no-short-csharp.sh"

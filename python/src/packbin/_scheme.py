@@ -10,6 +10,7 @@ from packbin._nodes import _Node
 from packbin._pack import pack_nodes
 from packbin._unpack import DEFAULT_MAX_ROUNDS, DEFAULT_MAX_SLOTS, _Budget, unpack_nodes
 from packbin._validate import (
+    _shown,
     _validate_element_accessors,
     _validate_names,
     _validate_order,
@@ -23,7 +24,7 @@ _builtin_dict = dict
 
 def _checked_limit(name: str, value: Any) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise ValueError(f"{name} must be a whole number of at least 1, got {value!r}")
+        raise ValueError(f"{name} must be a whole number of at least 1, got {_shown(value)}")
     return value
 
 
@@ -39,7 +40,7 @@ class Scheme(Generic[T]):
 
     def __init__(self, type_number: int, row_type: type[T], *fields: _Node) -> None:
         if isinstance(type_number, bool) or not isinstance(type_number, int) or type_number < 0 or type_number > 255:
-            raise ValueError(f"type number must be 0..255, got {type_number!r}")
+            raise ValueError(f"type number must be 0..255, got {_shown(type_number)}")
         _validate_order(fields)
         bound = _bind_flag_bits(fields)
         _validate_round_nesting(bound)

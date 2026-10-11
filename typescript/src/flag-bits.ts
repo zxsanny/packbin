@@ -1,7 +1,7 @@
 import type { Field } from "./fields.ts"
 import { present, sameValue, type Value } from "./kinds.ts"
 import { refName } from "./ref-scope.ts"
-import { refuseLongLists, roundCount, roundNames } from "./rounds.ts"
+import { refuseLoneDicts, refuseLongLists, roundCount, roundShape } from "./rounds.ts"
 import { borrowedCount, seen } from "./written.ts"
 
 // A flag byte pack has written: where it sits in the output, the bits set so far, and whether its
@@ -59,11 +59,15 @@ export function bitOn(field: Field, values: Value, wrote: Value): boolean {
       const ref = refName(field)
       if (!Object.hasOwn(wrote, ref)) return false
       const count = borrowedCount(ref, 0, "times", wrote)
-      if (count === 0) refuseLongLists(roundNames(field.fields, true), 0, values)
+      if (count === 0) {
+        const { names, dictNames } = roundShape(field)
+        refuseLongLists(names, 0, values)
+        refuseLoneDicts(dictNames, values)
+      }
       return count > 0
     }
     case "repeat":
-      return roundCount(roundNames(field.fields, true), values) > 0
+      return roundCount(roundShape(field).names, values) > 0
     case "flagByte":
       return false
     default:

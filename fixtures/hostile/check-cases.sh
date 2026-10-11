@@ -22,13 +22,20 @@ bad() {
 }
 
 # A pack case's README section: the scheme, the row, and the Run by and Not run by lists, which
-# together name each package exactly once.
+# together name each package exactly once. A pack case that expects bytes also writes the packet in
+# its Packet line (spaces allowed) and its Expected line.
 check_pack_section() {
-  local id="$1" section line run notrun pkg n
+  local id="$1" expected="$2" hex="$3" section line run notrun pkg n packet
   section="$(awk -v head="## $id" '$0 == head { on = 1; next } /^## / { on = 0 } on' "$readme")"
   for line in Scheme Row; do
     grep -q "^- $line: " <<<"$section" || bad "pack case '$id': section has no '- $line:' line"
   done
+  if [[ "$expected" == bytes ]]; then
+    packet="$(grep -m1 '^- Packet ' <<<"$section" || true)"
+    [[ "${packet// /}" == *"$hex"* ]] || bad "pack case '$id': Packet line does not hold the hex $hex"
+    line="$(grep -m1 '^- Expected: ' <<<"$section" || true)"
+    [[ "$line" == *"$hex"* ]] || bad "pack case '$id': Expected line does not hold the hex $hex"
+  fi
   run="$(grep -m1 '^- Run by: ' <<<"$section" || true)"
   notrun="$(grep -m1 '^- Not run by: ' <<<"$section" || true)"
   if [[ -z "$run" ]]; then
@@ -101,7 +108,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   if ! grep -q "^## $id\$" "$readme"; then
     bad "id '$id' has no '## $id' section in $readme"
   elif [[ "$stage" == pack ]]; then
-    check_pack_section "$id"
+    check_pack_section "$id" "$expected" "$hex"
   fi
 done <"$cases"
 

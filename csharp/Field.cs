@@ -48,8 +48,7 @@ public sealed class Field
 
     // The row type of a list or dict element: a flags container has none of its own, so it is the one its members are
     // declared for.
-    internal Type? ElementRowType =>
-        RowType ?? (Type == Kind.Flags ? Children.Select(bit => bit.Inner!.RowType).FirstOrDefault(t => t is not null) : null);
+    internal Type? ElementRowType { get; }
     internal FieldBinding? Binding { get; }
 
     private Field(
@@ -89,7 +88,18 @@ public sealed class Field
         NestedRow = nestedRow;
         Bias = bias;
         RowType = rowType;
+        ElementRowType = rowType ?? (type == Kind.Flags ? FirstBitRowType(Children) : null);
         Binding = binding;
+    }
+
+    private static Type? FirstBitRowType(Field[] bits)
+    {
+        foreach (var bit in bits)
+        {
+            if (bit.Inner!.RowType is { } rowType)
+                return rowType;
+        }
+        return null;
     }
 
     // A scheme keeps its own copy of each field it resolves; a Field is never changed after it is built.

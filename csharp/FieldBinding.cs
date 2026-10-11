@@ -71,9 +71,11 @@ internal sealed class CollectionShape
         Create = memberType.IsAssignableFrom(built) ? Creator.Of(built) : Creator.Of(memberType);
     }
 
-    // A member Packbin can build and fill: an array, List<E>, IList<E> or IList; for a dict Dictionary<string, E>,
-    // IDictionary<string, E> or IDictionary. Anything else (a subclass, Stack<E>, HashSet<E>, IEnumerable<E>) would
-    // build and then throw when a packet is unpacked.
+    // The members Packbin accepts, on purpose: an array, List<E>, IList<E> or IList; for a dict Dictionary<string, E>,
+    // IDictionary<string, E> or IDictionary. Everything else is refused when the scheme is built, including types that
+    // would work (ICollection<E>, IReadOnlyList<E>, Collection<E>, IEnumerable<E>, a subclass of List<E>). A refusal can
+    // be relaxed later; an accepted type cannot be withdrawn without breaking schemes that use it, so the accepted set
+    // grows only when the owner decides it.
     public static bool IsSupported(Type member, bool dictionary)
     {
         if (!dictionary && member.IsArray)
@@ -87,9 +89,11 @@ internal sealed class CollectionShape
         return (definition == typeof(Dictionary<,>) || definition == typeof(IDictionary<,>)) && args[0] == typeof(string);
     }
 
-    // The elements unpack hands over are a number of the element field's own width, a string or a byte run: the
-    // element type must be object or hold the whole range of the field, or a Convert.ChangeType of a hostile packet
-    // value would throw out of Unpack. A row element is read through typed accessors and is not checked here.
+    // The elements unpack hands over are a number of the element field's own width, a string, a byte run, or for a
+    // group, flags or dict element a Dictionary<string, object?>, for a list element a List<object?>: the element type
+    // must be object or hold the whole range of the field or be assignable from what is handed over, or a
+    // Convert.ChangeType of a hostile packet value would throw out of Unpack. A row element is read through typed
+    // accessors and is not checked here.
     public bool Holds(Field element)
     {
         if (RowElements || ElementType == typeof(object))
@@ -102,40 +106,33 @@ internal sealed class CollectionShape
             Field.Kind.Bool => type == typeof(bool),
             Field.Kind.F32 => type == typeof(float) || type == typeof(double),
             Field.Kind.F64 => type == typeof(double),
-            >= Field.Kind.U8 and <= Field.Kind.I64 => HoldsInteger(element.Type, type),
+            >= Field.Kind.U8 and <= Field.Kind.I64 => HoldsRange(Walker.Range(element.Type), type),
+            Field.Kind.U2 => HoldsRange((0, 3), type),
+            Field.Kind.Group or Field.Kind.Flags or Field.Kind.Dict => type.IsAssignableFrom(typeof(Dictionary<string, object?>)),
+            Field.Kind.List => type.IsAssignableFrom(typeof(List<object?>)),
             _ => true,
         };
     }
 
-    private static bool HoldsInteger(Field.Kind kind, Type type)
+    private static bool HoldsRange((decimal Min, decimal Max) own, Type type)
     {
         if (type == typeof(float) || type == typeof(double) || type == typeof(decimal))
             return true;
-        if (RangeOf(type) is not { } member)
+        if (IntegerKind(type) is not { } kind)
             return false;
-        var own = RangeOf(kind switch
-        {
-            Field.Kind.U8 => typeof(byte),
-            Field.Kind.I8 => typeof(sbyte),
-            Field.Kind.U16 => typeof(ushort),
-            Field.Kind.I16 => typeof(short),
-            Field.Kind.U32 => typeof(uint),
-            Field.Kind.I32 => typeof(int),
-            Field.Kind.U64 => typeof(ulong),
-            _ => typeof(long),
-        })!.Value;
+        var member = Walker.Range(kind);
         return member.Min <= own.Min && member.Max >= own.Max;
     }
 
-    private static (decimal Min, decimal Max)? RangeOf(Type type) =>
-        type == typeof(byte) ? (byte.MinValue, byte.MaxValue)
-        : type == typeof(sbyte) ? (sbyte.MinValue, sbyte.MaxValue)
-        : type == typeof(ushort) ? (ushort.MinValue, ushort.MaxValue)
-        : type == typeof(short) ? (short.MinValue, short.MaxValue)
-        : type == typeof(uint) ? (uint.MinValue, uint.MaxValue)
-        : type == typeof(int) ? (int.MinValue, int.MaxValue)
-        : type == typeof(ulong) ? (ulong.MinValue, ulong.MaxValue)
-        : type == typeof(long) ? (long.MinValue, long.MaxValue)
+    private static Field.Kind? IntegerKind(Type type) =>
+        type == typeof(byte) ? Field.Kind.U8
+        : type == typeof(sbyte) ? Field.Kind.I8
+        : type == typeof(ushort) ? Field.Kind.U16
+        : type == typeof(short) ? Field.Kind.I16
+        : type == typeof(uint) ? Field.Kind.U32
+        : type == typeof(int) ? Field.Kind.I32
+        : type == typeof(ulong) ? Field.Kind.U64
+        : type == typeof(long) ? Field.Kind.I64
         : null;
 
     private static Type ElementOf(Type member, bool dictionary)

@@ -13,6 +13,9 @@ use crate::value::{as_int, Name, Value};
 ///   bool is absent on the wire, so `eq(bool, 0)` could never match on unpack. A float, utf8,
 ///   bytes or collection source is refused. A count names an integer field only, so a bool
 ///   or a float count is refused.
+/// - A `flags` name joins the scope after its members: a member that names the byte it sits in
+///   is refused, since pack writes that byte after the members. A sibling after the container
+///   may name it.
 /// - An element is one integer, float, bytes, utf8, list or dict, or a `u2` with one name. The
 ///   walker keeps one value per element, so a group, flags, `when`, `repeat`, `times`, flag
 ///   byte or bit, `sized`, `bits`, `packed` or a `u2` with several names would drop values.
@@ -55,8 +58,8 @@ fn check_one(field: &Field, seen: &mut Seen) {
             seen.extend(names.iter().map(|name| (name.clone(), Source::Integer)));
         }
         FieldKind::Flags { name, members, .. } => {
-            seen.push((name.clone(), Source::Integer));
             check_seq(members, seen);
+            seen.push((name.clone(), Source::Integer));
         }
         FieldKind::Group { name, members, .. } => {
             if members.is_empty() {

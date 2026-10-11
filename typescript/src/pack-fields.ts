@@ -2,13 +2,14 @@ import {
   fieldName,
   flatten,
   flattenValues,
+  isObjectLike,
   isPlainObject,
   itemGroup,
   type Field,
 } from "./fields.ts"
 import { bitOn, flagValueFor, type PackedFlagByte } from "./flag-bits.ts"
 import { refName } from "./ref-scope.ts"
-import { refuseLoneDicts, refuseLongLists, roundCount, roundNames, sliceRound } from "./rounds.ts"
+import { refuseLoneDicts, refuseLongLists, roundCount, roundShape, sliceRound } from "./rounds.ts"
 import {
   present,
   sameValue,
@@ -39,7 +40,7 @@ function packItem(
     packFields([f.element], allFields, slice, out, flagBytes, newScope())
     return
   }
-  if (!isPlainObject(item)) throw new RangeError(`${f.name}: expected an object for each item`)
+  if (!isObjectLike(item)) throw new RangeError(`${f.name}: expected an object for each item`)
   packFields(group.fields, group.fields, flattenValues(item, group.fields), out, flagBytes, newScope())
 }
 
@@ -133,8 +134,8 @@ export function packFields(
         break
       }
       case "repeat": {
-        const names = roundNames(f.fields, true)
-        refuseLoneDicts(f.fields, values)
+        const { names, dictNames } = roundShape(f)
+        refuseLoneDicts(dictNames, values)
         packRounds(f.fields, names, roundCount(names, values), allFields, values, out, flagBytes)
         break
       }
@@ -161,9 +162,9 @@ export function packFields(
       }
       case "times": {
         const count = borrowedCount(refName(f), 0, "times", wrote)
-        const names = roundNames(f.fields, true)
+        const { names, dictNames } = roundShape(f)
         refuseLongLists(names, count, values)
-        refuseLoneDicts(f.fields, values)
+        refuseLoneDicts(dictNames, values)
         packRounds(f.fields, names, count, allFields, values, out, flagBytes)
         break
       }

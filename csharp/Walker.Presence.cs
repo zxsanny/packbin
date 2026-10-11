@@ -21,17 +21,8 @@ internal static partial class Walker
             _ => IsPresent(values, inner.Name),
         };
 
-    private static bool WhenOn(IReadOnlyDictionary<string, object?> values, Field when, Scope seen)
-    {
-        if (!ConditionHolds(when.Pred!, seen))
-            return false;
-        foreach (var child in when.Children)
-        {
-            if (ChildPresent(values, child, seen))
-                return true;
-        }
-        return false;
-    }
+    private static bool WhenOn(IReadOnlyDictionary<string, object?> values, Field when, Scope seen) =>
+        ConditionHolds(when.Pred!, seen) && AnyChildPresent(values, when, seen);
 
     // A count that is missing (its field was skipped) is no round: unpack would not read the field either. A count of
     // zero with values given refuses them, as a times outside `flags` does.
@@ -90,13 +81,23 @@ internal static partial class Walker
         {
             Field.Kind.Group => GroupOn(values, child, seen),
             Field.Kind.U2 => AnyPresent(values, child.Names),
-            Field.Kind.Flags => child.Children.Any(bit => ChildPresent(values, bit, seen)),
+            Field.Kind.Flags => AnyChildPresent(values, child, seen),
             Field.Kind.FlagBit => BitOn(values, child.Inner!, seen),
             Field.Kind.When => WhenOn(values, child, seen),
             Field.Kind.Times => TimesOn(values, child, seen),
             Field.Kind.Repeat => RepeatOn(values, child),
             _ => IsGroupValue(child) && IsPresent(values, child.Name),
         };
+
+    private static bool AnyChildPresent(IReadOnlyDictionary<string, object?> values, Field parent, Scope seen)
+    {
+        foreach (var child in parent.Children)
+        {
+            if (ChildPresent(values, child, seen))
+                return true;
+        }
+        return false;
+    }
 
     private static bool IsGroupValue(Field child) =>
         Field.IsValueBearing(child) || child.Type is Field.Kind.List or Field.Kind.Dict;

@@ -7,7 +7,7 @@ namespace Packbin;
 // the narrow ones as whole-number doubles, and a row from JSON holds doubles or longs), a float field takes any number.
 internal static partial class Walker
 {
-    private static string KindName(Field field) => field.Type.ToString().ToLowerInvariant();
+    internal static string KindName(Field field) => field.Type.ToString().ToLowerInvariant();
 
     private static ArgumentException NotANumber(Field field, object value) =>
         new($"{field.Name}: expected a number for {KindName(field)}, got {value.GetType().Name}");
@@ -62,7 +62,7 @@ internal static partial class Walker
         }
     }
 
-    private static (decimal Min, decimal Max) Range(Field.Kind kind) => kind switch
+    internal static (decimal Min, decimal Max) Range(Field.Kind kind) => kind switch
     {
         Field.Kind.U8 => (byte.MinValue, byte.MaxValue),
         Field.Kind.I8 => (sbyte.MinValue, sbyte.MaxValue),

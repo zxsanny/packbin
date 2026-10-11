@@ -1,4 +1,5 @@
 import type { Field } from "./fields.ts"
+import { makeRoundShape } from "./rounds.ts"
 
 type SourceKind = "integer" | "bool" | "other"
 type Source = { name: string; kind: SourceKind }
@@ -13,16 +14,21 @@ export function refName(f: Referring): string {
   return ref
 }
 
-// A copy of `f` that carries the name; the exported `Field` type has no `ref`.
 // A value shown in an error: never calls the caller's toString.
 function describe(v: unknown): string {
   if (typeof v === "string") return JSON.stringify(v)
   if (v === null || ["number", "boolean", "bigint", "undefined"].includes(typeof v)) return String(v)
-  return `a ${typeof v}`
+  return `${typeof v === "object" ? "an" : "a"} ${typeof v}`
 }
 
+// A copy of `f` that carries the name; the exported `Field` type has no `ref`.
 function bound<F extends Field>(f: F, ref: string): F {
   return { ...f, ref }
+}
+
+// A copy of a repeat or times with its round shape; the exported `Field` type has no `shape`.
+function shaped<F extends Extract<Field, { kind: "repeat" | "times" }>>(f: F, fields: Field[]): F {
+  return { ...f, fields, shape: makeRoundShape(fields) }
 }
 
 // An `eq` id, or the count id of `sized`, `bits`, `packed` and `times`, names a value field read
@@ -101,10 +107,10 @@ function bind(f: Field, scope: Scope): Field {
     }
     case "times": {
       const ref = resolve(scope, "times", f.anchor, "count", f.countId, "integer")
-      return bound({ ...f, fields: bindAll(f.fields, new Map()) }, ref)
+      return bound(shaped(f, bindAll(f.fields, new Map())), ref)
     }
     case "repeat":
-      return { ...f, fields: bindAll(f.fields, new Map()) }
+      return shaped(f, bindAll(f.fields, new Map()))
     case "group":
       return { ...f, fields: bindAll(f.fields, f.anchor === undefined ? new Map() : scope) }
     case "flags":

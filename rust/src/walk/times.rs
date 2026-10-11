@@ -65,7 +65,9 @@ pub(super) fn check_no_rounds(
 ) -> Result<(), PackError> {
     let key = times_name(anchor);
     match values.get(key.as_ref()) {
-        Some(Some(Value::Groups(rounds))) if rounds.is_empty() => Ok(()),
+        Some(Some(Value::Groups(rounds))) if rounds.is_empty() => {
+            check_lists(anchor, members, rounds, values)
+        }
         Some(Some(Value::Groups(rounds))) => Err(rounds_mismatch(anchor, 0, rounds.len())),
         Some(Some(_)) => Err(PackError::Type(key.to_string())),
         _ => {

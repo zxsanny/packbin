@@ -391,9 +391,7 @@ fn pack_one<'v>(
 
 pub fn pack(scheme: &MapScheme, values: &Values) -> Result<Vec<u8>, PackError> {
     let mut inners = FlagInners::new();
-    if scheme.has_split_flags {
-        collect_flag_bits(&scheme.fields, &mut inners);
-    }
+    collect_flag_bits(&scheme.fields, &mut inners);
     let mut out = Vec::with_capacity(32);
     out.push(scheme.type_number);
     pack_fields(

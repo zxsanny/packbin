@@ -31,10 +31,6 @@ void set_flag(Field const& f, void* m, bool on) {
   *static_cast<bool*>(m) = on;
 }
 
-}  // namespace
-
-namespace {
-
 bool any_child_present(Field const* t, std::size_t i, void* obj) {
   for (std::size_t j = i + 1; j < i + t[i].span; j += t[j].span) {
     if (present(t, j, obj))

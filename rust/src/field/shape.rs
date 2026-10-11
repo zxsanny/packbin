@@ -18,10 +18,8 @@ const FLAG_BITS: usize = 8;
 ///   any depth: unpack keeps no inner `repeat` rounds, and a `times` round passes no values to
 ///   an inner `times`. A `times` inside a `repeat` round works. A `list` or `dict` element
 ///   starts outside any round.
-pub(crate) fn check_shape(fields: &mut [Field]) -> usize {
-    let mut scope = Scope::default();
-    shape_seq(fields, false, &mut scope);
-    scope.bits.len()
+pub(crate) fn check_shape(fields: &mut [Field]) {
+    shape_seq(fields, false, &mut Scope::default());
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]

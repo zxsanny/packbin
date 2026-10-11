@@ -60,6 +60,19 @@ describe("AZ-2126 eq on a bool accepts only true", () => {
     })
   }
 
+  it("AC-1 the refused value is named with the right article and never printed by its own toString", () => {
+    const hostile = { toString: () => "leaked" }
+
+    assert.equal(
+      refusal(() => scheme<Row>(1, ...onFlag(hostile))),
+      "when 1: eq names bool field id 0 (on) and accepts only true, not an object",
+    )
+    assert.equal(
+      refusal(() => scheme<Row>(1, ...onFlag(() => true))),
+      "when 1: eq names bool field id 0 (on) and accepts only true, not a function",
+    )
+  })
+
   it("AC-1 new Scheme refuses like scheme()", () => {
     const viaNew = refusal(() => new Scheme<Row>(1, onFlag(false)))
 

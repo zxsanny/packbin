@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from packbin import BinaryPacker, Scheme, bytes as raw_bytes, dict as map_field, repeat, times, u8, utf8
+from packbin import BinaryPacker, Scheme, bytes as raw_bytes, dict as map_field, flags, repeat, times, u8, utf8
 
 
 def _entry():
@@ -102,3 +102,19 @@ def test_az_2308_a_lone_bytes_for_a_bytes_name_keeps_broadcasting():
     raw = BinaryPacker.pack(scheme, {"n": 2, "b": b"a"})
 
     assert raw.hex() == "01026161"
+
+
+def _flags_times_scheme() -> Scheme:
+    return Scheme(
+        1, dict, u8(0, lambda row: row["n"]), flags(1, times(1, 0, _entry()), u8(1, lambda row: row["h"]))
+    )
+
+
+@pytest.mark.parametrize("count", [0, 1])
+def test_az_2308_a_lone_dict_under_a_times_in_flags_is_refused_whatever_the_count(count):
+    with pytest.raises(TypeError, match=r"member d: a dict in a repeat or times round must be a list"):
+        BinaryPacker.pack(_flags_times_scheme(), {"n": count, "d": {"k": 7}, "h": 5})
+
+
+def test_az_2308_a_times_with_count_0_in_flags_and_no_dict_given_still_packs():
+    assert BinaryPacker.pack(_flags_times_scheme(), {"n": 0, "h": 5}).hex() == "01000205"

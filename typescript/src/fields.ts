@@ -359,8 +359,18 @@ export function validateFieldIds(fields: Field[], next = 0): number {
   return next
 }
 
-export function isPlainObject(raw: unknown): raw is object {
+// Any object a row, a group or an item can be given as: a class instance, a Map or a Date included.
+export function isObjectLike(raw: unknown): raw is object {
   return typeof raw === "object" && raw !== null && !Array.isArray(raw) && !ArrayBuffer.isView(raw)
+}
+
+// A dictionary is a plain object: one made by `{}`, by JSON.parse or by `Object.create(null)`. A Map, a
+// Set, a Date or a class instance has no entries a dictionary could read, so it is no dictionary. The
+// prototype's own prototype is checked too, so an object from another realm still counts.
+export function isPlainObject(raw: unknown): raw is object {
+  if (!isObjectLike(raw)) return false
+  const proto = Object.getPrototypeOf(raw)
+  return proto === null || Object.getPrototypeOf(proto) === null
 }
 
 // The row a pack walks: the values given, plus the members of each declared group that is given as an
@@ -388,7 +398,7 @@ function mergeGroups(out: Value, fields: Field[]): void {
     switch (f.kind) {
       case "group": {
         const own = out[f.name]
-        if (isPlainObject(own)) copyKeys(out, own, memberNames(f.fields, new Set()))
+        if (isObjectLike(own)) copyKeys(out, own, memberNames(f.fields, new Set()))
         mergeGroups(out, f.fields)
         break
       }

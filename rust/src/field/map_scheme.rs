@@ -10,8 +10,6 @@ pub const DEFAULT_MAX_SLOTS: usize = 4_194_304;
 pub struct MapScheme {
     pub(crate) type_number: u8,
     pub(crate) fields: Vec<Field>,
-    /// The scheme reads at least one split-form flag byte.
-    pub(crate) has_split_flags: bool,
     pub(crate) field_count: usize,
     pub(crate) max_rounds: usize,
     pub(crate) max_slots: usize,
@@ -48,23 +46,25 @@ impl MapScheme {
     /// Panics, naming the field, on a scheme that cannot round-trip: a field out of order or
     /// scope, a flag bit with no flag byte before it in its scope, a 9th member or bit in one
     /// flags byte or flag byte, a bool (an empty `group`) not directly inside `flags` or
-    /// under a flag bit, a `when` that tests a field or value that is not an integer, or a `list`
-    /// or `dict` element that is not one integer, float, bytes, utf8, list or dict (a `u2` with
-    /// one name), or a data name declared twice in one scope (see `names.rs`). Binds each flag
-    /// bit to its flag byte and numbers it by field order.
+    /// under a flag bit, a `list` or `dict` element that is not one integer, float, bytes, utf8,
+    /// list or dict (a `u2` with one name), or a data name declared twice in one scope (see
+    /// `names.rs`). Also refused (see `integrity.rs`): a `when` that tests a float, utf8, bytes
+    /// or collection field or compares it with a value that is not an integer, `eq(bool, v)`
+    /// with `v` other than true, a count (`sized`, `bits`, `packed`, `times`) that names a bool
+    /// or a non-integer field, and a `when` or count that names the `flags` byte of the `flags`
+    /// it sits in. Binds each flag bit to its flag byte and numbers it by field order.
     pub fn new(type_number: i32, mut fields: Vec<Field>) -> Self {
         if !(0..=255).contains(&type_number) {
             panic!("type number must be 0..=255");
         }
         let field_count = count_fields(&fields);
         check_order(&fields, 0, 0);
-        let flag_bytes = shape::check_shape(&mut fields);
+        shape::check_shape(&mut fields);
         integrity::check_integrity(&fields);
         names::check_names(&fields);
         MapScheme {
             type_number: type_number as u8,
             fields,
-            has_split_flags: flag_bytes > 0,
             field_count,
             max_rounds: DEFAULT_MAX_ROUNDS,
             max_slots: DEFAULT_MAX_SLOTS,

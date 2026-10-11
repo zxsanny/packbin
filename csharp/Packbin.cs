@@ -331,7 +331,7 @@ internal static class SchemeOrder
                 + (shape.Dictionary ? "Dictionary<string, E>" : "List<E>") + $" for a {kind} field");
         if (!shape.Holds(field.Children[0]))
             throw new ArgumentException(
-                $"'{field.Name}': {TypeName(member)} cannot hold the {field.Children[0].Type.ToString().ToLowerInvariant()} "
+                $"'{field.Name}': {TypeName(member)} cannot hold the {Walker.KindName(field.Children[0])} "
                 + $"elements of its field; element type {TypeName(shape.ElementType)} is too narrow or of another kind");
     }
 

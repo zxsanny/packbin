@@ -1,6 +1,6 @@
 use crate::{
-    be, dict, eq, f32, flag_byte, flags, group, i8, insert, list, pack, repeat, sized, u16, u2,
-    u64, u8, unpack, utf8, when, Field, MapScheme, Value, Values,
+    be, dict, eq, f32, flag_byte, flags, group, i8, insert, list, pack, repeat, sized, times, u16,
+    u2, u64, u8, unpack, utf8, when, Field, MapScheme, Value, Values,
 };
 
 // `when` compares by number, so the width or sign of `eq`'s value does not matter.
@@ -214,4 +214,79 @@ fn single_value_elements_still_round_trip() {
         Some(&Some(Value::List(vec![Value::U16(0x1234)])))
     );
     assert!(table_back.contains_key("0"));
+}
+
+// AZ-2126: a member of a `flags` cannot name the flags byte it sits in, because pack writes that
+// byte after its members; a sibling after the container and a member before it may.
+
+#[test]
+#[should_panic(expected = "names field \"f\", which is not in the same scope")]
+fn az2126_when_member_naming_its_own_flags_byte_is_refused() {
+    MapScheme::new(
+        1,
+        vec![
+            u8("mode"),
+            flags(
+                1,
+                "f",
+                vec![u8("a"), when(2, eq("f", Value::U8(1)), vec![u8("speed")])],
+            ),
+        ],
+    );
+}
+
+#[test]
+#[should_panic(expected = "names field \"f\", which is not in the same scope")]
+fn az2126_times_member_counted_by_its_own_flags_byte_is_refused() {
+    MapScheme::new(
+        1,
+        vec![flags(0, "f", vec![u8("a"), times(1, "f", vec![u8("pt")])])],
+    );
+}
+
+#[test]
+#[should_panic(expected = "names field \"f\", which is not in the same scope")]
+fn az2126_when_inside_a_group_under_its_flags_byte_is_refused() {
+    MapScheme::new(
+        1,
+        vec![flags(
+            0,
+            "f",
+            vec![
+                u8("a"),
+                group(
+                    1,
+                    "g",
+                    vec![when(1, eq("f", Value::U8(1)), vec![u8("speed")])],
+                ),
+            ],
+        )],
+    );
+}
+
+#[test]
+fn az2126_when_naming_an_earlier_member_of_the_same_flags_builds() {
+    MapScheme::new(
+        1,
+        vec![flags(
+            0,
+            "f",
+            vec![
+                u8("mode"),
+                when(1, eq("mode", Value::U8(1)), vec![u8("speed")]),
+            ],
+        )],
+    );
+}
+
+#[test]
+fn az2126_sibling_after_the_flags_container_may_name_its_byte() {
+    MapScheme::new(
+        1,
+        vec![
+            flags(0, "f", vec![u8("a")]),
+            when(1, eq("f", Value::U8(1)), vec![u8("speed")]),
+            sized("s", "f"),
+        ],
+    );
 }

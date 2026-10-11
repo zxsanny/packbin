@@ -26,6 +26,17 @@ from packbin._nodes import (
     _When,
 )
 
+_INTEGER_KINDS = frozenset({"u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64"})
+
+
+def _shown(value: Any) -> str:
+    """A caller's value for an error text: its repr only for a plain scalar, otherwise its type name, so an
+    arbitrary `__repr__` never runs."""
+    if value is None or type(value) in (bool, int, float, str):
+        return repr(value)
+    return type(value).__name__
+
+
 _COUNTED = {_Sized: "sized", _Bits: "bits", _Packed: "packed"}
 
 
@@ -54,7 +65,7 @@ def _kind_of(node: _Node) -> str:
 
 
 def _is_integer(node: _Node) -> bool:
-    return isinstance(node, _U2Slot) or (isinstance(node, _Scalar) and node.kind[0] in "ui")
+    return isinstance(node, _U2Slot) or (isinstance(node, _Scalar) and node.kind in _INTEGER_KINDS)
 
 
 def _require_count_source(label: str, field_id: int, visible: dict[int, _Node]) -> None:
@@ -71,7 +82,7 @@ def _require_eq_source(anchor: int, condition: _Eq, visible: dict[int, _Node]) -
     if isinstance(source, _Bool):
         if condition.value is not True:
             raise ValueError(
-                f"{label}: eq tests bool field {condition.field_id} against {condition.value!r}; "
+                f"{label}: eq tests bool field {condition.field_id} against {_shown(condition.value)}; "
                 "a bool is compared only with true"
             )
     elif not _is_integer(source):
