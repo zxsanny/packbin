@@ -44,10 +44,10 @@ Given a `times` bit whose count field was skipped and values given
 When packed
 Then error naming the member
 
-**AC-3: false condition with a body**
-Given a `when` bit whose condition is false and a body given
+**AC-3: false condition with a body (decided 2026-10-11, after wave 1)**
+Given a `when` bit whose condition is false (its source written before or after the flag byte) and a body given
 When packed
-Then error naming the member
+Then the packet is written without the body and without an error (the loud cases are only those where the body would be written but the byte left its bit clear); the loop 18 reference rows and the combined `flags` form are unchanged
 
 **AC-4: source before the byte still packs**
 Given the reference rows with the source before the byte
@@ -76,3 +76,7 @@ Then bytes unchanged
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | A package may already refuse one shape; the probe decides the per-package work | coordinator | open | Low |
+
+## Decision record
+
+2026-10-11 (owner, after wave 1): option A. Loud only when the body WOULD be written (condition true, count above 0, or count never written) and the byte left the bit clear. Wave 1 as built: Java, TypeScript, C++ already match; C# and Rust were loud on every false-condition row and Python loud on a false condition with the source after the byte; the three are relaxed in the follow-up pass.

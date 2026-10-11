@@ -42,6 +42,8 @@ jobs:
         run: bash .github/workflows/report-row.test.sh
       - name: hostile case file
         run: bash fixtures/hostile/cases.test.sh
+      - name: suite runner
+        run: bash .github/workflows/run-suite.test.sh
       - name: embedded harness
         run: bash cpp/embedded/lib.test.sh
       - name: cross-language ring wiring

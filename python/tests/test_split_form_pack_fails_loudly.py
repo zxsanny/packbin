@@ -94,13 +94,20 @@ def test_ac2_times_whose_count_was_skipped_with_values_is_refused_in_combined_fl
         _pack(scheme, {"pt": [5]})
 
 
-def test_ac3_false_condition_written_after_the_byte_with_a_body_is_refused():
+def test_ac3_false_condition_written_after_the_byte_with_a_body_packs_without_the_body():
     # Arrange
     row = {"mode": 0, "sel": 0, "speed": 7}
 
     # Act / Assert
-    with pytest.raises(ValueError, match=r"^when 2: "):
-        _pack(_when_after_byte(), row)
+    assert _pack(_when_after_byte(), row) == "01000000"
+
+
+def test_ac3_false_condition_in_a_group_bit_packs_without_the_body():
+    # Arrange
+    row = {"sel": 0, "speed": 7}
+
+    # Act / Assert
+    assert _pack(_group_when_after_byte(), row) == "010000"
 
 
 @pytest.mark.parametrize(

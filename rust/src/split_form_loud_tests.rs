@@ -175,7 +175,7 @@ fn ac2_a_count_written_before_the_byte_still_packs() {
 }
 
 #[test]
-fn ac3_a_false_condition_with_a_body_given_names_the_body() {
+fn ac3_a_false_condition_before_the_byte_with_a_body_given_packs_without_it() {
     // Arrange: WS, the condition is written before the byte and is false
     let vals = row(&[
         ("mode", Value::U8(0)),
@@ -184,10 +184,34 @@ fn ac3_a_false_condition_with_a_body_given_names_the_body() {
     ]);
 
     // Act
-    let message = refusal(&ws(), &vals);
+    let wire = hex(&ws(), &vals);
 
     // Assert
-    assert!(message.contains("'speed'"), "{message}");
+    assert_eq!(wire, "0100025a00");
+}
+
+#[test]
+fn ac3_a_false_condition_after_the_byte_with_a_body_given_packs_without_it() {
+    // Arrange: the condition follows the byte and is false
+    let vals = row(&[("mode", Value::U8(0)), ("speed", Value::U8(7))]);
+
+    // Act
+    let wire = hex(&when_after_the_byte(), &vals);
+
+    // Assert
+    assert_eq!(wire, "010000");
+}
+
+#[test]
+fn ac3_a_false_condition_outside_the_range_of_its_source_is_still_false() {
+    // Arrange: a hostile source value (255) that is not the expected 1
+    let vals = row(&[("mode", Value::U8(255)), ("speed", Value::U8(7))]);
+
+    // Act
+    let wire = hex(&when_after_the_byte(), &vals);
+
+    // Assert
+    assert_eq!(wire, "0100ff");
 }
 
 #[test]

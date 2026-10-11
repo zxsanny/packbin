@@ -155,3 +155,22 @@ gcc:16 `make test` and host clang `make test` pass; compile-fail 15 of 15 reject
 | AZ-2335 | lone scalar with count 0 packs `0100` silently in all six packages (parity) | document, no code | clear |
 | docs | the loop 18 reference doc says "count missing: bit clear" for a `times` with values; AZ-2331 AC-2 supersedes it for C++ | step 13 | clear |
 | wave 2 | C++ handler `pack_times_zero_with_values` exists; `construct_eq_out_of_range` is added with the fixture line (construct stage compares counts) | wave 2 | clear |
+
+## Follow-up after the owner decision (AZ-2331 AC-3, option A, 2026-10-11)
+
+Rule: loud only when the body WOULD be written (condition true, count above 0, or count never written) and the byte left the bit clear; a false condition (source before or after the byte) packs silently, body dropped.
+
+| Package | Change | Suite |
+|---------|--------|-------|
+| C# | `RequireNoDroppedBody` evaluates at the bit (sees `seen`); false condition silent; 1 test removed, 4 added/replaced, hostile row (Mode 200, Speed 255) | 889/889 both targets |
+| Rust | `check_split_bit` `When` arm: false silent; source-after-byte judged by the value given; 3 tests added, 1 rewritten, 1 renamed | 528 passed |
+| Python | `_refuse_late_body` raises only if `_child_on` says the bit would be on | 765 passed |
+| Java, TypeScript, C++ | already matched | 712 (TS), Java exit 0, C++ green |
+
+Probe rows (C#): source before byte Mode=0 Speed=7 -> `0100025a00`; source after byte Mode=0 -> `0102005a00`; Mode=200 Speed=255 -> `0102c85a00`; Mode=1 Speed=7 (true, byte clear) -> error naming `Speed`; `times` count after byte / skipped with values -> error.
+
+Edges left (loop 20 or upgrade notes): `times` count written after the byte with value 0 and values given still errors in C# and Rust (other packages: not probed for this exact row); Rust keeps the error when the source is absent from the row and not yet written (derived value).
+
+## AZ-2341 (parent, `.github/workflows`)
+
+`run-suite.sh python` now checks the venv can import pytest (message names the venv and the rebuild command `rm -rf <venv>`) and reports when the venv cannot be created (no `python` on PATH). New hermetic `run-suite.test.sh` (fake venvs, no network) is registered in the `scaffold` job of `test.yml`. On this host `/tmp/packbin-pytest` is the broken venv of the handoff (`python` is not on PATH, only `python3`): the script now says so.

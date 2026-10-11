@@ -41,42 +41,46 @@ internal static partial class Walker
     {
         if ((seen.FlagByte(field.FlagOwner!) & (1 << field.BitIndex)) == 0)
         {
-            RequireNoDroppedBody(field.Inner!, values);
+            RequireNoDroppedBody(field.Inner!, values, seen);
             return;
         }
         PackBitField(field.Inner!, values, buffer, seen);
     }
 
-    // A split flag byte decides its bits where it is written, on the values written before it. A clear bit of a `when`
-    // or `times` that still has a value in the row (its condition or count is false, was skipped, or is written after the
-    // byte) would drop that value without a word, and pack could not give a packet its own unpack accepts.
-    private static void RequireNoDroppedBody(Field bit, IReadOnlyDictionary<string, object?> values)
+    // A split flag byte decides its bits where it is written, on the values written before it. A clear bit whose body
+    // would still be written now is a packet pack cannot give: a `when` whose condition holds on the values written since
+    // the byte (its source is written after it), or a `times` that has a value in the row (its count is written after
+    // the byte or was skipped). A `when` whose condition is false drops its body by design, as it does in the combined
+    // `flags` form, and packs without a word.
+    private static void RequireNoDroppedBody(Field bit, IReadOnlyDictionary<string, object?> values, Scope seen)
     {
-        var name = DroppedBody(bit, values);
+        var name = DroppedBody(bit, values, seen);
         if (name is not null)
             throw new ArgumentException(
-                $"'{name}' has a value, but its flag bit is clear: the condition or count that decides the bit is false, "
-                + "missing, or written after the flag byte");
+                $"'{name}' has a value, but its flag bit is clear: the condition or count that decides the bit is written "
+                + "after the flag byte or was skipped");
     }
 
-    private static string? DroppedBody(Field bit, IReadOnlyDictionary<string, object?> values) =>
+    private static string? DroppedBody(Field bit, IReadOnlyDictionary<string, object?> values, Scope seen) =>
         bit.Type switch
         {
-            Field.Kind.When => FirstGiven(values, bit.Children),
+            Field.Kind.When => ConditionHolds(bit.Pred!, seen) ? FirstGiven(values, bit.Children, seen) : null,
             Field.Kind.Times => RoundNames(bit, packing: true).FirstOrDefault(name => IsPresent(values, name)),
-            Field.Kind.Group when !bit.NestedRow => bit.Children.Select(child => DroppedBody(child, values)).FirstOrDefault(name => name is not null),
+            Field.Kind.Group when !bit.NestedRow =>
+                bit.Children.Select(child => DroppedBody(child, values, seen)).FirstOrDefault(name => name is not null),
             _ => null,
         };
 
-    private static string? FirstGiven(IReadOnlyDictionary<string, object?> values, IEnumerable<Field> fields)
+    private static string? FirstGiven(IReadOnlyDictionary<string, object?> values, IEnumerable<Field> fields, Scope seen)
     {
         foreach (var field in fields)
         {
             var name = field.Type switch
             {
+                Field.Kind.When when !ConditionHolds(field.Pred!, seen) => null,
                 Field.Kind.When or Field.Kind.Flags or Field.Kind.Group when !field.NestedRow =>
-                    FirstGiven(values, field.Children),
-                Field.Kind.FlagBit => FirstGiven(values, [field.Inner!]),
+                    FirstGiven(values, field.Children, seen),
+                Field.Kind.FlagBit => FirstGiven(values, [field.Inner!], seen),
                 Field.Kind.Times or Field.Kind.Repeat => RoundNames(field, packing: true).FirstOrDefault(n => IsPresent(values, n)),
                 Field.Kind.U2 => field.Names.FirstOrDefault(n => IsPresent(values, n)),
                 _ => (IsGroupValue(field) || field.Type == Field.Kind.Group) && IsPresent(values, field.Name) ? field.Name : null,

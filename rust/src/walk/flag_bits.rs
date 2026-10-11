@@ -189,9 +189,10 @@ fn given_name(fields: &[Field], values: &Values) -> Option<String> {
 }
 
 /// A split flag byte decides its bits where the byte is written, from what is written so far. A
-/// `when` whose condition does not hold then, or a `times` whose count is not written then, would
-/// leave its bit clear and drop a value given for its body, so pack refuses and names the value.
-/// Write the condition or count field before the flag byte.
+/// `when` whose condition holds (or is written after the byte and holds), or a `times` whose count
+/// is not written then, would leave its bit clear and drop a value given for its body, so pack
+/// refuses and names the value. A `when` whose condition is false drops its body silently, as in
+/// the combined form. Write the condition or count field before the flag byte.
 pub(super) fn check_split_bit(
     field: &Field,
     values: &Values,
@@ -213,11 +214,21 @@ pub(super) fn check_split_bit(
                     .iter()
                     .try_for_each(|m| check_split_bit(m, values, wrote));
             }
+            if wrote.get(tested).is_some() {
+                return Ok(());
+            }
+            // The condition is written after the byte: the value given for it decides whether
+            // the body would be written. A false condition drops the body silently, as in the
+            // combined form.
+            match values.get(tested) {
+                Some(Some(v)) if !when_matches(v, expect) => return Ok(()),
+                _ => {}
+            }
             match given_name(members, values) {
                 Some(name) => Err(PackError::Type(format!(
-                    "'{name}' is given, but its when on '{tested}' does not hold where the flag \
-                     byte is written (false or not yet written); write '{tested}' before the \
-                     flag byte"
+                    "'{name}' is given, but its when on '{tested}' holds, or is written after \
+                     the flag byte, so the body would be written but the byte leaves its bit \
+                     clear; write '{tested}' before the flag byte"
                 ))),
                 None => Ok(()),
             }

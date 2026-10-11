@@ -249,14 +249,13 @@ fn ac3_split_form_when_true_with_no_body_value_leaves_its_bit_clear() {
 }
 
 #[test]
-fn ac3_split_form_when_false_with_a_body_value_given_fails_naming_it() {
-    // AZ-2331 AC-3: the split flag byte cannot write a body whose condition is false, so a body
-    // value given is refused, where the combined form (WA) still leaves it out.
-    let result = pack(&ws(), &row(Some(0), Some(7), None, Some(90)));
-    match result {
-        Err(PackError::Type(message)) => assert!(message.contains("'speed'"), "{message}"),
-        other => panic!("expected a type error naming speed, got {other:?}"),
-    }
+fn ac3_split_form_when_false_with_a_body_value_given_drops_it_without_error() {
+    // AZ-2331 AC-3 (decided 2026-10-11): a false condition drops the body silently, as in WA.
+    let vals = row(Some(0), Some(7), None, Some(90));
+    let raw = pack(&ws(), &vals).expect("pack");
+    assert_eq!(to_hex(&raw), "0100025a00");
+    let got = unpack(&ws(), &raw).expect("unpack");
+    assert_row(&got, &[("mode", 0), ("heading", 90)], &["speed"]);
 }
 
 // W-group-*: the same rule for a `when` inside a group under `flags`.

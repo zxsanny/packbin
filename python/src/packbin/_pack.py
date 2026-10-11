@@ -107,22 +107,14 @@ def _unwritten_source(child: _Node, seen: dict[int, Any]) -> tuple[int, int] | N
     return None
 
 
-def _body_given(child: _Node, take: Callable[[_Node], Any], seen: dict[int, Any], row: Any) -> bool:
-    """Whether a `when` body under the bit holds a value, whatever its condition says."""
-    if isinstance(child, (_Group, _Flags, _When)):
-        return any(_body_given(inner, take, seen, row) for inner in child.fields)
-    if isinstance(child, _FlagBit):
-        return _body_given(child.field, take, seen, row)
-    return _child_on(child, take, seen, row)
-
-
 def _refuse_late_body(
     child: _Node, flag_state: dict[int, Any], take: Callable[[_Node], Any], seen: dict[int, Any], row: Any
 ) -> None:
-    """A clear split bit whose `when` condition was written after the flag byte: a body value given for it would
-    be dropped, so pack fails instead of returning a packet the row did not ask for."""
+    """A clear split bit whose `when` condition was written after the flag byte: a body that the written condition
+    now asks for would be dropped, so pack fails instead of returning a packet the row did not ask for. A false
+    condition leaves the body out on purpose, as outside a split byte."""
     unwritten = flag_state.get(id(child))
-    if unwritten is None or seen.get(unwritten[1]) is None or not _body_given(child, take, seen, row):
+    if unwritten is None or seen.get(unwritten[1]) is None or not _child_on(child, take, seen, row):
         return
     anchor, source = unwritten
     raise ValueError(

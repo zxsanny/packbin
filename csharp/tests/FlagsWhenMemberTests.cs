@@ -159,6 +159,7 @@ public class FlagsWhenMemberTests
     [Theory]
     [InlineData("direct")]
     [InlineData("in group")]
+    [InlineData("split bit")]
     public void Ac3_ConditionFalseBodyGiven_IsNotWritten(string shape)
     {
         // Arrange
@@ -171,23 +172,6 @@ public class FlagsWhenMemberTests
         // Assert
         Assert.Equal("01" + "00" + "02" + "5a00", Hex(typed));
         Assert.Equal(Hex(typed), Hex(dict));
-    }
-
-    // AZ-2331: a split flag byte decides its bit where it is written, so a body given with a false condition would be
-    // dropped without a word; pack names the member instead (the combined `flags` form keeps the reference reading).
-    [Fact]
-    public void Ac3_SplitBit_ConditionFalseBodyGiven_NamesTheMember()
-    {
-        // Arrange
-        var scheme = SplitBit();
-
-        // Act
-        var typed = Record.Exception(() => BinaryPacker.Pack(scheme, new Row { Mode = 0, Speed = 7, Heading = 90 }));
-        var dict = Record.Exception(() => BinaryPacker.Pack(scheme, Dict(0, 7, 90)));
-
-        // Assert
-        Assert.Contains("'Speed'", Assert.IsType<ArgumentException>(typed).Message);
-        Assert.Contains("'Speed'", Assert.IsType<ArgumentException>(dict).Message);
     }
 
     [Theory]

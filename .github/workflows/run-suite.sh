@@ -37,11 +37,20 @@ case "$lang" in
       venv="${PACKBIN_PYTEST_VENV:-/tmp/packbin-pytest}"
       if [ ! -x "$venv/bin/pytest" ]; then
         if pytest_pin="$(bash "$root/.github/workflows/tool-pin.sh" pytest)"; then
-          python -m venv "$venv"
-          "$venv/bin/pip" install --only-binary=:all: "pytest==$pytest_pin" || ok=1
+          if python -m venv --clear "$venv" </dev/null; then
+            "$venv/bin/pip" install --only-binary=:all: "pytest==$pytest_pin" || ok=1
+          else
+            echo "run-suite: cannot create the python venv $venv (is 'python' on PATH?)" >&2
+            ok=1
+          fi
         else
           ok=1
         fi
+      fi
+      if [ "$ok" -eq 0 ] && ! "$venv/bin/python" -c 'import pytest' </dev/null >/dev/null 2>&1; then
+        echo "run-suite: python venv $venv is unusable: its interpreter or pytest does not start." >&2
+        echo "run-suite: remove it and run again so it is rebuilt: rm -rf $venv" >&2
+        ok=1
       fi
       run "$venv/bin/python" -m pytest -v --tb=short "$root/python/tests"
     fi

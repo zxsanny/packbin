@@ -3,8 +3,9 @@ using Packbin;
 namespace Packbin.Tests;
 
 // AZ-2331: a split flag byte decides its `when`/`times` bits where the byte is written. A body whose condition or count
-// is written after the byte, whose count field was skipped, or whose condition is false would be dropped silently; pack
-// names the member instead. A source written before the byte packs as before.
+// is written after the byte (and holds there) or whose count field was skipped would be dropped silently; pack names
+// the member instead. A false condition drops its body by design, as in the combined `flags` form: no body, no error.
+// A source written before the byte packs as before.
 public class SplitFormDroppedBodyTests
 {
     private sealed class Row
@@ -156,32 +157,59 @@ public class SplitFormDroppedBodyTests
     }
 
     [Fact]
-    public void Ac3_Pack_FalseConditionWithABodyGiven_NamesTheBody()
+    public void Ac3_Pack_FalseConditionWithABodyGiven_PacksWithoutTheBody()
     {
         // Arrange
         var scheme = WhenSourceBeforeByte();
 
         // Act
-        var typed = Record.Exception(() => BinaryPacker.Pack(scheme, new Row { Mode = 0, Speed = 7, Heading = 90 }));
-        var dict = Record.Exception(() =>
-            BinaryPacker.Pack(scheme, Dict(("Mode", (byte)0), ("Speed", (byte)7), ("Heading", (ushort)90))));
+        var typed = BinaryPacker.Pack(scheme, new Row { Mode = 0, Speed = 7, Heading = 90 });
+        var dict = BinaryPacker.Pack(scheme, Dict(("Mode", (byte)0), ("Speed", (byte)7), ("Heading", (ushort)90)));
 
         // Assert
-        Assert.Contains("'Speed'", Assert.IsType<ArgumentException>(typed).Message);
-        Assert.Contains("'Speed'", Assert.IsType<ArgumentException>(dict).Message);
+        Assert.Equal("0100025a00", Hex(typed));
+        Assert.Equal(Hex(typed), Hex(dict));
     }
 
     [Fact]
-    public void Ac3_Pack_FalseConditionInAGroupBitWithABodyGiven_NamesTheBody()
+    public void Ac3_Pack_FalseConditionWrittenAfterTheByteWithABodyGiven_PacksWithoutTheBody()
+    {
+        // Arrange
+        var scheme = WhenSourceAfterByte();
+
+        // Act
+        var typed = BinaryPacker.Pack(scheme, new Row { Mode = 0, Speed = 7, Heading = 90 });
+        var dict = BinaryPacker.Pack(scheme, Dict(("Mode", (byte)0), ("Speed", (byte)7), ("Heading", (ushort)90)));
+
+        // Assert
+        Assert.Equal("0102005a00", Hex(typed));
+        Assert.Equal(Hex(typed), Hex(dict));
+    }
+
+    [Fact]
+    public void Ac3_Pack_FalseConditionInAGroupBitWithABodyGiven_PacksWithoutTheBody()
     {
         // Arrange
         var scheme = WhenInGroupBit();
 
         // Act
-        var thrown = Record.Exception(() => BinaryPacker.Pack(scheme, new Row { Mode = 0, Speed = 7, Heading = 90 }));
+        var raw = BinaryPacker.Pack(scheme, new Row { Mode = 0, Speed = 7, Heading = 90 });
 
         // Assert
-        Assert.Contains("'Speed'", Assert.IsType<ArgumentException>(thrown).Message);
+        Assert.Equal("0100025a00", Hex(raw));
+    }
+
+    [Fact]
+    public void Ac3_Pack_FalseConditionHostileValueOutsideTheRange_StillPacksWithoutTheBody()
+    {
+        // Arrange: a source above 1 and a body at the edge of its range stay silent behind a false condition
+        var scheme = WhenSourceAfterByte();
+
+        // Act
+        var raw = BinaryPacker.Pack(scheme, new Row { Mode = 200, Speed = 255, Heading = 90 });
+
+        // Assert
+        Assert.Equal("0102c85a00", Hex(raw));
     }
 
     [Fact]
