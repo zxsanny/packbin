@@ -72,3 +72,16 @@ Loop 15: read-only build containers, tool pins, action pins, credential flow, sy
 ## Loop 17 addendum (2026-10-07)
 
 No infrastructure file changed in the loop 17 batches. Since loop 16 the owner's multi-target commit (`68ca4f8`) changed three CI files, all read: `run-suite.sh` runs the C# suite a second time with `-p:PackbinTarget=netstandard2.0` (same container, same mounts); `publish-check.py` requires both `lib/netstandard2.0/Packbin.dll` and `lib/net10.0/Packbin.dll` in the `.nupkg` (a stricter artifact check, no new input); `publish-phases.test.sh` follows. The total test run of loop 17 ran `publish-gate.test.sh` and the C# container suite against them. Findings F12, F13, F14, F15, F16, F20, F23, F24 are unchanged.
+
+## Loop 18 addendum (2026-10-11)
+
+Files changed under `.github/` and `fixtures/` in `aea6344..HEAD`, all read: `language-pair.sh` (C# joins the `listgroup`, `dictgroup` and `listflags` rings as producer and consumer, loop over the short packets now includes C#; the Java build now also requires `HandoffElements.class` and compiles `drivers/HandoffElements.java`), `drivers/csharp/HandoffElements.cs` (new), `drivers/csharp/Handoff.cs` and `Position.csproj` (one `Compile Remove`), `ring-wiring.test.sh` (80 new lines that check the C# lines and driver commands), `fixtures/hostile/check-cases.sh`, `cases.test.sh`, `cases.txt` and `README.md`. No workflow YAML, Dockerfile, compose file, image tag, secret, permission or publish script changed.
+
+| Item | Result |
+|------|--------|
+| `check-cases.sh` against a hostile `cases.txt` and README (7 MB; `$(...)`, backticks, `;`, `&&`, `\|\|`, `* ? [a-z] ~ {a,b}`, `-n -e --`, ESC/BEL/CR/BS bytes, `::error::` text, 5 000-field line, 3 000 duplicate ids, 1 MB to 2.5 MB fields), bash 3.2.57 | no command ran (canary files under the probe directory: none created), no glob expanded (`set -f`, quoted expansions, no `eval`), exit 1 with 3 049 error lines in 10.8 s and 80 MB; every message starts `file:line:` so a `::` command cannot begin a line; the raw field is echoed (ESC/OSC sequences reach the log) |
+| `cases.test.sh`, `ring-wiring.test.sh` on the archive copy, bash 3.2 | pass ("hostile case tests passed", "ring wiring checks passed"); the shim heredoc receives only `user_hex` (a `[0-9a-f]*` capture) and literals; the workflow is parsed with `YAML.safe_load` |
+| `HandoffElements.cs:80` | `Convert.FromHexString(args[1])` can throw `FormatException`; inputs are the script's fixed hex constants and the producer output already compared to them; fail-closed |
+| `language-pair.sh:65-68` (F24) | still reuses `/tmp/packbin-handoff-java` when both `Handoff.class` and `HandoffElements.class` exist; one more class file a local user could pre-create. Unchanged otherwise (`PACKBIN_JAVA_HANDOFF` still overrides) |
+
+Findings F12, F13, F14, F15, F16, F20, F23, F24 unchanged (F24 as noted). Not run: the `ring` job on a runner, Docker, `shellcheck`, GNU bash 5.

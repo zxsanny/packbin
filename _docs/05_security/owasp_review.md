@@ -38,3 +38,19 @@ Unchanged from loop 15: a `v*` tag by anyone with write access starts `publish`,
 ## Loop 17 addendum (2026-10-07)
 
 List unchanged (OWASP Top 10 2025). Only C# changed in loop 17. A10 Mishandling of Exceptional Conditions stays PASS_WITH_WARNINGS with two more findings: F25 (a hostile element value throws out of typed `Unpack` when the member's element type is narrower than the field, Medium) and F26 (unsupported collection members throw at unpack, Low), next to F17 (typed rounds) and F18 (Java). A06 Insecure Design: F10 unchanged in kind, the C# figures are in the report. All other categories: no new evidence from the C# diff (no access control, crypto, injection, auth, logging or SSRF surface in the package).
+
+## Loop 18 addendum (2026-10-11)
+
+List unchanged (OWASP Top 10 2025, re-confirmed at https://owasp.org/Top10/2025/ on 2026-10-11: A01 Broken Access Control to A10 Mishandling of Exceptional Conditions). Scope `aea6344..HEAD` over the six packages and `.github`/`fixtures`.
+
+| Category | Status | Loop 18 evidence |
+|----------|--------|------------------|
+| A06 Insecure Design | PASS_WITH_WARNINGS | F21 re-rated Low to Medium and widened: `pack` of a `times` with a lone scalar (or a valueless body) runs `n` rounds for any `n`, in TypeScript, Python, Java, C# and (new in loop 18) Rust; 4 bytes of count ask for gigabytes; C++ is bounded by its `Array`. F10 unchanged (no unpack source changed in five packages; C# re-measured at 298 and 312 MiB per 1 MiB packet). The unpack side of the new `flags`-member shapes refuses oversized claimed counts in microseconds with no allocation tied to them |
+| A10 Mishandling of Exceptional Conditions | PASS_WITH_WARNINGS | F25 (Medium) and F26 (Low) fixed: the C# scheme refuses a narrow or unsupported collection member when it is built, verified by probe on 26 combinations; 6.2 million typed unpacks raised nothing. F17 re-verified and not widened by the `flags`-member shapes (`InvalidCastException` only for a set round). F18 unchanged. New F27: the collection checks are skipped inside rounds, latent behind F17 |
+| A05 Injection | PASS_WITH_WARNINGS | `fixtures/hostile/check-cases.sh` runs no code on a hostile case file and README (command substitution, backticks, globs, option-like fields, control bytes; canary files probe); it echoes raw field bytes into its error text (log hygiene, observation). F15, F22 unchanged |
+| A08 Software or Data Integrity Failures | PASS_WITH_WARNINGS | `ring-wiring.test.sh` reads the workflow with `YAML.safe_load`, takes no repository text into a shell; the C# ring driver parses only fixed hex. F13, F16, F23 unchanged |
+| A02 Security Misconfiguration | PASS_WITH_WARNINGS | F20 unchanged; F24 gains one reused class file (`HandoffElements.class`) |
+| A03 Software Supply Chain Failures | PASS_WITH_WARNINGS | no manifest changed; npm, NuGet and OSV queries give 0 (see `dependency_scan.md`); F12, F2, F3 unchanged |
+| A01, A04, A07, A09 | unchanged | no surface in the diff (F14 carried; F19 carried; A07 and A09 N/A) |
+
+Earlier findings re-stated: F10 Medium open (unchanged); F12 Medium open (unchanged); F17 Low open; F25 and F26 fixed; F21 now Medium open.

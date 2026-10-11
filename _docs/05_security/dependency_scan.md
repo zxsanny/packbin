@@ -52,3 +52,18 @@ No known-vulnerable dependency. No Critical or High.
 ## Loop 17 addendum (2026-10-07)
 
 Scope: `csharp/` only (`git diff 68ca4f8..HEAD`). `dotnet list <project> package --vulnerable --include-transitive` against nuget.org: `csharp/Packbin.csproj` and `csharp/tests/Packbin.Tests.csproj` both report "has no vulnerable packages given the current sources". The only dependency the package has is `System.Memory` 4.6.3, referenced for the `netstandard2.0` build only (`68ca4f8`); the `net10.0` build has none. No package was added or changed in loop 17 batches. The other five packages are unchanged since the loop 16 scan.
+
+## Loop 18 addendum (2026-10-11)
+
+Scope: `git diff aea6344..HEAD -- csharp typescript python rust java cpp fixtures .github` (HEAD cd23293). No manifest, lockfile, Dockerfile, compose file or workflow pin changed in the range (the only project file touched is `.github/workflows/drivers/csharp/Position.csproj`, one `Compile Remove` line). A short confirmation, run on a `git archive HEAD` copy:
+
+| Tool (date 2026-10-11) | Result |
+|------|--------|
+| `npm ci --ignore-scripts`, then `npm audit --json` and `npm audit --omit=dev` (registry reachable) | 0 vulnerabilities in every severity; 2 packages in the tree, `@noble/hashes` 2.4.0 and `typescript` 5.9.3 (`npm ls --all`) |
+| `dotnet list csharp/Packbin.csproj package --vulnerable --include-transitive` and the same for `csharp/tests/Packbin.Tests.csproj` (`MSBUILDDISABLENODEREUSE=1`, nuget.org) | both "has no vulnerable packages given the current sources" (`System.Memory` 4.6.3 for `netstandard2.0` only) |
+| OSV `/v1/query` (read-only) for `@noble/hashes` 2.4.0, `typescript` 5.9.3, `System.Memory` 4.6.3 | `{}` (no advisory) for all three |
+| `cargo audit` 0.21.1 | cannot run, same error as loops 13 to 17 (`unsupported CVSS version: 4.0` in RUSTSEC-2026-0073); `rust/Cargo.lock` holds one package, `packbin` itself, so there is nothing to scan |
+| Python | `python/pyproject.toml` has `dependencies = []`; `pip-audit` is not installed; nothing to scan. The wheel closure of the publish tools is unchanged since loop 15 (not re-resolved) |
+| Java, C++ | no manifest and no dependency (the vcpkg port vendors `cpp/`); nothing to scan |
+
+Not run: `pip-audit`, `osv-scanner`, `govulncheck`, `shellcheck`, OWASP dependency-check (not installed). Loop 12 to 17 findings F2 (arduino-cli checksum), F3 (images by tag) and F12 (unpinned wheels in the credentialed job) are unchanged. No CVE or advisory applies to anything the repository pulls in; Critical and High: none.
