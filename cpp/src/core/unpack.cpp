@@ -208,7 +208,9 @@ std::size_t item_count(Walk& w, std::size_t i, void* obj, void* m, Result& out) 
 }
 
 // Up to `count` items (a repeat: until the packet ends) of the children of entry i, each into
-// the next Array item. A null array skips the items.
+// the next Array item. A null array skips the items. Kept out of line: inlined into unpack_one it
+// grows the frame of every nesting level, not only of the counted ones.
+PACKBIN_NOINLINE
 Result unpack_items(Walk& w, std::size_t i, void* m, std::size_t count) {
   Field const& f = w.t[i];
   bool to_end = f.kind == Kind::Repeat;
