@@ -58,3 +58,7 @@ Then the table lists bytes or error per package and row
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Follow-up specs are loop 20 work | coordinator | resolved | Low |
+
+## Loop 19 result (2026-10-11)
+
+Done in loop 19 (probe only): per-package table in `batch_01_loop19_report.md`; Java BigDecimal truncation is assessment G1 for loop 20.

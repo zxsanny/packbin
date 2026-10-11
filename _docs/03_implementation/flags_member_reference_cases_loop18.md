@@ -130,3 +130,17 @@ A list value (`pt=[5,6]`) holds one entry per round. In a row, a name not listed
 - C# message for a missing value is `'<name>' ... has no value ...` (or `'<name>' holds N items, but the times count is M`); error kind and label are out of scope (C15). Each package checks that its error names the value.
 - Bit order inside the flags byte is member order (bit 0 = first member). In WA the `when` is bit 0 and `heading` is bit 1; in RA `heading` is bit 0 and the `repeat` is bit 1.
 - Hostile probe C# also checks: a body value outside its field range (speed=300, a round entry 300) fails pack naming the field, with no bytes.
+
+## Loop 19 supersessions (AZ-2331, AZ-2335; owner decisions of 2026-10-11)
+
+The rows above stay the reference for every case they pin, except the ones below. Nothing in the unpack column changes.
+
+| Row or rule | Loop 18 text | Loop 19 |
+|-------------|--------------|---------|
+| Rule 3, "Count missing (the count field was skipped): bit clear" | silent, all six | superseded for values that are given. **Split form (WS, TS and the group shapes): all six packages refuse** a `times` whose count was never written (or is written after the byte) while a value is given, naming the value (AZ-2331 AC-1, AC-2; C++ does not see a count that is set in the row but behind a clear `when`). **Combined `flags` (TA, TG): Python and C++ refuse too** (C++ only when the count has no value in the row; a count set in the row but behind a clear `when` still packs, `010003055a00`); C#, TypeScript, Java and Rust keep the silent drop (not decided, loop 20) |
+| W-split-false-body-given (WS, mode=0 speed=7 heading=90) | `0100025a00`, no error | **unchanged**: AC-3 was decided as option A, so a false condition packs silently with the body left out, whether the `when` source is written before or after the flag byte, in all six packages. C# and Rust applied AC-3 literally first and were corrected in the follow-up. The error is loud only when the body would be written and the byte left the bit clear |
+| T-split-0 / 1 / 2 (TS) | the same bytes as TA | unchanged when the count is written before the byte; a count written after the byte with a count above 0, or 0 with a list of values, is an error |
+| T-split-errors (TS) | pack error naming `pt` | unchanged; a lone scalar with a count of 0 packs `0100025a00` in C# (review A1) and Rust |
+| Rule 3, count 0 and a non-empty list | pack error naming the value | unchanged, and the same error everywhere outside `flags` (AZ-2335: all six); a **lone scalar** with count 0 is not an error in any package (`01 00` for `u8 n; times(n, u8 x)`) |
+| New: W-split-source-after-byte, T-split-count-after-byte, T-split-count-skipped | not in the table | hostile `pack` cases of the same names; error naming the member in all six packages |
+| New: sibling `flags` scope | Rust shared one flag-byte scope for the members of one `flags` (batch 1 discovery 3) | each member has its own scope in C++, TypeScript, Java and now Rust (AZ-2333; C# and Python not re-checked); `flagbyte fb; flags(group g1 {v; fb byte; bit fb x}, group g2 {bit fb y}); bit fb b` with v=3 x=5 y=6 b=7 packs `0103030301050607` in TypeScript and Rust |

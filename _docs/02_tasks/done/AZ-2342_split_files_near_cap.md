@@ -63,3 +63,7 @@ Then same pass count as before the split
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | none | coordinator | resolved | Low |
+
+## Loop 19 result (2026-10-11)
+
+Done in loop 19: Rust `walk/unpack.rs` 471 to 352 and `field/mod.rs` 479 to 332; Java `Walker.java` 464 to 387; C# `Packbin.cs` 417 to 210 and `Walker.cs` 418 to 299; suites unchanged.

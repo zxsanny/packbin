@@ -64,3 +64,7 @@ Then bytes unchanged
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Rust bytes change for sibling members that shared a byte (upgrade note) | owner decision 5 | resolved | Medium |
+
+## Loop 19 result (2026-10-11)
+
+Done in loop 19: Rust sibling `flags` members each have their own flag-byte scope; reference = TypeScript run on scheme S1.

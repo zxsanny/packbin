@@ -70,3 +70,8 @@ Then compilation fails with a message naming `f64` (feature AC-9).
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | none | — | resolved | Low |
+
+## Notes added in loop 19
+
+- The stale loop 10 claim (`loop: 10`, `branch: loop/10-cpp-microcontroller`) was cleared at the loop 19 intake.
+- Loop 19 added `Field::late` (C++ `table.hpp`): it sits in padding where `int64` alignment is at least 2 (ARM, x86, RISC-V, Xtensa), so `sizeof(Field)` is unchanged there. On AVR (alignment 1) each table entry grows by 1 B; there is no `static_assert` for it yet (review C10). Add an `offsetof(Field, eq)` assert per target when this task starts.

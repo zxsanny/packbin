@@ -58,3 +58,7 @@ Then exit non-zero with a message naming the venv path, or a rebuilt venv that p
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | none | coordinator | resolved | Low |
+
+## Loop 19 result (2026-10-11)
+
+Done in loop 19: `run-suite.sh python` checks the venv can import pytest, refuses to clear a non-venv directory; hermetic `run-suite.test.sh` registered in `test.yml`.

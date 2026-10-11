@@ -67,3 +67,15 @@ Scope: `git diff aea6344..HEAD -- csharp typescript python rust java cpp fixture
 | Java, C++ | no manifest and no dependency (the vcpkg port vendors `cpp/`); nothing to scan |
 
 Not run: `pip-audit`, `osv-scanner`, `govulncheck`, `shellcheck`, OWASP dependency-check (not installed). Loop 12 to 17 findings F2 (arduino-cli checksum), F3 (images by tag) and F12 (unpinned wheels in the credentialed job) are unchanged. No CVE or advisory applies to anything the repository pulls in; Critical and High: none.
+
+## Loop 19 (2026-10-11)
+
+Scope: `git diff e1a791e..HEAD`. No manifest, lockfile, image or pin changed (`git diff e1a791e..HEAD --stat` over `typescript/package.json`, `package-lock.json`, `csharp/Packbin.csproj`, `rust/Cargo.toml`, `Cargo.lock`, `python/pyproject.toml`, the compose files, `cpp/embedded` and `.github/` lists only `run-suite.sh`, `run-suite.test.sh` and `test.yml`).
+
+| Tool | Result |
+|------|--------|
+| `npm audit` (lockfile of a `git archive HEAD` copy) | 0 vulnerabilities |
+| `dotnet list package --vulnerable --include-transitive` (`csharp/Packbin.csproj`, nuget.org) | "has no vulnerable packages given the current sources" |
+| `cargo audit`, `pip-audit`, `govulncheck` | not run (as in loop 18: `cargo audit` 0.21.1 cannot parse the advisory database; Rust, Python, Java and C++ have no third-party dependency to scan) |
+
+F2, F3 and F12 unchanged. No CVE or advisory applies.

@@ -443,6 +443,22 @@ Run by `make test` in `cpp/` and by `cpp/embedded/run.sh` (the `cpp-embedded` an
 
 The consumer check uses the vcpkg of the GitHub runner (`VCPKG_INSTALLATION_ROOT`), or `VCPKG_ROOT`, or the one on `PATH`; it has no pin. A missing vcpkg or cmake fails the job on GitHub Actions. Anywhere else it prints `vcpkg consumer check NOT RUN: no vcpkg tool`, and the last line of the gate reads `publish gate: no failures, NOT RUN: <checks>`: a check that did not run is not a pass. The script honors `PACKBIN_CXX_SYSROOT` itself (macOS): it adds the sysroot flags to the cmake builds (`add_subdirectory` and the consumer) and writes a temporary overlay triplet with `VCPKG_C_FLAGS` and `VCPKG_CXX_FLAGS` for the vcpkg consumer, because vcpkg ignores `CXXFLAGS`; unset, as on the CI runner, nothing of it exists.
 
+## Loop 19 Tests (AZ-2331, AZ-2334, AZ-2335, AZ-2338, AZ-2340)
+
+Source: `_docs/03_implementation/batch_01_loop19_report.md`, `_docs/loops/loop19/review19.md`, `_docs/03_implementation/test_run_loop19_report.md`. gcc:16 `make test` and host clang `make test` pass; compile-fail 15 of 15 rejected; arm embedded stage `0 target(s) failed`: Cortex-M4F stack 448 of 512 B, AC-5 flash 8064 of 8192 B; M0+ and M3 QEMU 241 of 241; s390x pass. Host-only tests are listed in `cpp/tests/core/main.cpp`.
+
+| Test file | Task | What it proves |
+|-----------|------|----------------|
+| `split_form_loud_host_tests.cpp` | AZ-2331 | a flag bit whose `when` source or `times` count is written after the byte, with a body given, is `BadValue` naming the member; a `times` whose count is missing from the row refuses its rounds, also in `flags`; a false condition is silent |
+| `late_source_host_tests.cpp` | AZ-2331 | a source inside the bit's own body is not late (review C1: four asserts fail if the one condition is reverted); distance 255 and 256 of `mark_late` (review C9) |
+| `source_kinds_host_tests.cpp` | AZ-2334 | an empty group is a `when` source for `eq(id, true)`; the id of the field after it; a same-id field wins (review C8) |
+| `times_count_zero_host_tests.cpp` | AZ-2335 | count 0 with an item is `BadValue`; a lone scalar with count 0 packs `0100` |
+| `eq_value_checked_host_tests.cpp`, `compile-fail/when_eq_out_of_range.cpp` | AZ-2338 | out-of-range `eq` constants are `SchemeInvalid` at run time and a compile error for a `constexpr` scheme; `eq(u8, 1.5)` and `eq(u8, true)` still build |
+| `flags_when_member_host_tests.cpp` | AZ-2340 | `flags(group(flag_byte(0), flag_bit(0, x)))` with `x` set packs `01 01 01 05` |
+| `hostile_host_tests.cpp`, `hostile_pack_cases.hpp` | AZ-2329 to AZ-2338 | nine of the twelve `pack` cases run; `pack_times_count_over_limit` and `pack_lone_bytes_in_round` are skipped with reasons; `pack_times_zero_with_values` has a handler |
+
+Existing tests changed: `times_with_a_skipped_count` (in `flags_times_repeat_member_host_tests.cpp`) expects a refusal.
+
 ## Test Data Management
 
 **Required test data**:

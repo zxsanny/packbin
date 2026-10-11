@@ -54,3 +54,17 @@ List unchanged (OWASP Top 10 2025, re-confirmed at https://owasp.org/Top10/2025/
 | A01, A04, A07, A09 | unchanged | no surface in the diff (F14 carried; F19 carried; A07 and A09 N/A) |
 
 Earlier findings re-stated: F10 Medium open (unchanged); F12 Medium open (unchanged); F17 Low open; F25 and F26 fixed; F21 now Medium open.
+
+## Loop 19 (2026-10-11)
+
+List: OWASP Top 10 2025 (names unchanged since loop 16). Scope: `git diff e1a791e..HEAD` (see `security_report.md`).
+
+| Category | Status | Evidence |
+|----------|--------|----------|
+| A02 Security Misconfiguration | PASS_WITH_WARNINGS | F32: the default venv `/tmp/packbin-pytest` is executed and, behind a symlink, emptied by `--clear`; F13, F20, F24 unchanged |
+| A06 Insecure Design | PASS_WITH_WARNINGS | F28 (no pack-wide output budget; the count cap of F21 is fixed), F31 (`pack` writes packets `unpack` refuses), F10 unchanged |
+| A10 Mishandling of Exceptional Conditions | PASS_WITH_WARNINGS | F29 (Java buffer growth overflow), F30 (Java count truncation), F17 and F27 unchanged (C# typed round) |
+| A03 Supply Chain | PASS_WITH_WARNINGS | no manifest or lockfile changed; `npm audit` and `dotnet list package --vulnerable` 0; F12 unchanged |
+| A01, A04, A05, A07, A08, A09 | unchanged | no surface in the diff (F14, F15, F16, F19, F22, F23 carried; A07 and A09 N/A) |
+
+Earlier findings re-stated: F10 Medium open (unchanged); F12 Medium open (unchanged); F17 Low open; F27 Low open; F21 fixed for the count, F28 Medium open.

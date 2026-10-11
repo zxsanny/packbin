@@ -436,6 +436,22 @@ All run in the `rust` service of `docker-compose.test.yml` with `cargo test`.
 | `AZ-2247 a data member name declared twice is refused` (29 tests) | `MapScheme::new` and `Scheme::new` panic with the whole message for the same name twice at one level, once outside and once inside a `times` round (both orders), two `times` bodies that share a name, a `times` body that names a member twice, a name inside and outside a `repeat` round, and 14 shapes (every data kind and every container that shares the scope), and for a raw `SchemeItem::Field` twice in a typed scheme; alternate `when` branches, a name outside then under a `when` and two in one `when` body, a flag byte read twice, two `flags` bytes named alike, and a list element named like a row member build; typed bound fields with one id keep the id message; five schemes keep their existing message after a duplicate (10 tests refuse, 19 pin; two files, `duplicate_names_tests.rs` 320 lines and `duplicate_names_kept_tests.rs` 210 lines) | `rust/src/duplicate_names_tests.rs`, `rust/src/duplicate_names_kept_tests.rs` |
 | orphan split-bit tests | a typed list whose element is a bare flag bit, and a `flags` member split bit without or before its flag byte, are refused at construction (AZ-2121) | `rust/src/element_tests.rs` |
 
+## Loop 19 Tests (AZ-2329 to AZ-2338, AZ-2342)
+
+Source: `_docs/03_implementation/batch_01_loop19_report.md`, `_docs/loops/loop19/review19.md`, `_docs/03_implementation/test_run_loop19_report.md`. The suite went from 479 to 526 (wave 1), 528 and 533 after the review fixes (436 lib tests and 97 in the other targets); clippy is clean in the touched files.
+
+| Test file | Task | What it proves |
+|-----------|------|----------------|
+| `pack_round_cap_tests.rs` | AZ-2329 | `PackError::Type` for a count of 65 536, 70 000 and 4 000 000 000 in `times`, `__times_N`, a round, `flags` and a group; 65 535 packs; `with_limits(2, ..)` refuses 3 |
+| `split_form_loud_tests.rs` | AZ-2331 | a clear split bit errors when a `when` source or `times` count is written after the byte and the body would be written, or the count is not written; the false condition, the combined form and a never-written source (review A2) are silent; `ac3_split_form_when_false_...` rewritten |
+| `flags_member_scope_tests.rs` | AZ-2333 | each `flags` member has its own flag-byte scope; scheme S1 packs `0103030301050607` (TypeScript's bytes) and the other four rows match; S2 with no outer byte panics at construction |
+| `lone_bytes_in_round_tests.rs` | AZ-2332 | a lone `Value::Bytes` in a `times` round is refused (count 1 too); `utf8` still broadcasts |
+| `times_count_zero_tests.rs` | AZ-2335 | count 0 with a list or rounds errors; a lone scalar packs `0100` |
+| `eq_range_tests.rs` | AZ-2338 | `U16(300)` on `u8`, `U32(70000)` on `u16`, `I16(200)` on `i8`, `I8(-1)` on `u64`, `U64::MAX` on `i64`, a `u2` slot 4 and a flag byte 256 panic at construction |
+| `hostile_tests.rs` (438 lines) | AZ-2329 to AZ-2338 | the eight new hostile cases |
+
+Existing tests changed: `az2311_ac2_...` (lone buffer), `eq(i8, U8(255))` and `eq(u64, I64(-1))`, `flags_when_member_tests.rs`, `integrity_tests.rs`, `times_lone_value_tests.rs`. File split (AZ-2342): `walk/cursor.rs` and `field/leaf.rs` moved out of `walk/unpack.rs` and `field/mod.rs`; 479 tests before and after.
+
 ## Test Data Management
 
 **Required test data**:

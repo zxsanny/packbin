@@ -457,6 +457,22 @@ Source: `_docs/03_implementation/batch_01_loop18_report.md` to `batch_03_loop18_
 
 Existing tests changed or deleted (the decided concerns reverse them; none weakened): `FloatWhenTests` deleted; `WrittenWhenKindsTests` lost its bytes, sized, bits, packed and utf8 cases; `WrittenWhenTests.Ac7` uses `Eq(0, true)`; five tests deleted because their scheme cannot be built any more (a `When` source that never matches): `HostileUnpackTests.Ac1_RepeatBodyWithANeverMatchingWhen_ReturnsTrailingBytes`, `Reliability_ConditionOnNaNFloat_DoesNotThrow`, `Counts.Times_NeverTrueWhenBodyWithU32MaxCount_ReturnsShortPacketQuickly`, `ZeroWidthElementTests.NeverMatchingWhenListElement_IsError` and `NeverMatchingWhenDictValue_IsError` (the plain zero-width tests stay); `NestedRoundTests.ATimesInADictElementInARound_Builds` binds a `Dictionary` member (it bound a `List<object?>` to a `Dict` field, a test mistake). Running the suite needs `MSBUILDDISABLENODEREUSE=1` (a test starts a child `dotnet build`; without it the run hangs at 646 of 649, `_docs/AGENT_GOTCHAS.md`).
 
+## Loop 19 (round cap, split-form body, eq value, group elements)
+
+Source: `_docs/03_implementation/batch_01_loop19_report.md`, `_docs/loops/loop19/review19.md`, `_docs/03_implementation/test_run_loop19_report.md`. The suite went from 844 to 887 (wave 1), 889 (the split-form rule follow-up), 897 (hostile loaders) and 913 after the review fixes, on net10.0 and the `netstandard2.0` build alike.
+
+| Test class | Task | What it proves |
+|------------|------|----------------|
+| `PackRoundCapTests` | AZ-2329 | a `Times` count above `MaxRounds` is an `ArgumentException` naming the first body member, before any round is written, at the top level, in a round, in a group and in `Flags`; 65 535 packs, 65 536 and 70 000 are refused; `WithLimits` raises or lowers the cap |
+| `SplitFormDroppedBodyTests` | AZ-2331 | a clear split bit whose body would be written is refused naming the member (a `When` source or `Times` count written after the byte, a skipped count with values, a count of 0 with a list); a false condition packs `0100025a00`; the review A1 (lone scalar with count 0), A3 (`Flags` inside a bit) regressions |
+| `LoneRoundValueTests` | AZ-2332 | a lone `byte[]` for a `Bytes` or `Sized` name in a round is refused (pinned for the loop) |
+| `GroupElementMembersOnlyTests` | AZ-2337 | a group element takes its members only; a dictionary row that relied on the outer value of the same name throws naming the member |
+| `EqValueConstructionTests` | AZ-2338 | `Eq(u8, 300)`, a string, NaN, `-1`, `1.5`, `true`, `Eq(u64, -1)`, `Eq(u2, 4)` are refused at construction; `5.0` and `5m` build; `255.00000000000003` and `5.5m` are refused (review A4) |
+| `TimesZeroWithValuesTests` | AZ-2335 | count 0 with a list is an error before and after a flag byte; a lone scalar with count 0 packs `0100` |
+| `HostileVectorTests`, `HostilePackVectorTests` | AZ-2329, AZ-2331, AZ-2335, AZ-2338 | the eight new hostile cases (33 in all); refusals assert the member name |
+
+Existing tests changed (none weakened): `FlagsWhenMemberTests.Ac3_ConditionFalseBodyGiven_IsNotWritten` covers the direct and in-group forms only; `FloatConditionValueTests` expects construction refusals for NaN, infinity, `1e30` and `1.5`. File split (AZ-2342): `SchemeOrder.cs`, `Walker.Flags.cs` and `Walker.Equality.cs` were moved out of `Packbin.cs` and `Walker.cs`; the suite gave 844/844 on both targets before and after the move. `csharp/tests/LayoutTests.cs` is 517 lines (older than the loop; to be split in a later loop).
+
 ## Test Data Management
 
 **Required test data**:

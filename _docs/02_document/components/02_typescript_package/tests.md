@@ -438,6 +438,21 @@ No AC number from the first acceptance set; each file names the task and its ACs
 | `npm_guard_checks` (AZ-2240) | the tag-time guard (`publish-check.py typescript`) passes on the real tarball and fails, with the message that names the part, for `exports` removed, pointed at `src` or without `types`, `types` removed or pointed at `src`, a `dist/*.js` or `dist/*.d.ts` that another file imports but the tarball lacks (`walker.js`, `walker.d.ts`), and a `./nope.js` or `./nope.ts` import | `.github/workflows/publish-npm.test.sh` |
 | `publish-position.test.sh` (AZ-2238) | `publish-position.sh typescript` on a tree without `typescript/node_modules` prints the golden hex, installs only into its own work copy, and leaves no temp directory; the temp directory is reached through a symlink, as on macOS (it failed with `Missing: typescript@... from lock file` when the script ran `npm ci --prefix`); the gate runs it as a child process | `.github/workflows/publish-position.test.sh` |
 
+## Loop 19 Tests (AZ-2329, AZ-2331, AZ-2332, AZ-2335, AZ-2338)
+
+Source: `_docs/03_implementation/batch_01_loop19_report.md`, `_docs/loops/loop19/review19.md`, `_docs/03_implementation/test_run_loop19_report.md`. The suite went from 642 to 712 (wave 1), 720 (hostile loaders) and 728 after the review fixes; strict `tsc` passes.
+
+| Test file | Task | What it proves |
+|-----------|------|----------------|
+| `pack-round-count-cap.test.ts` | AZ-2329 | a `times` count of 65 536 or 4 000 000 000 throws `RangeError` (`k: the times count is 65536, above the limit of 65535 rounds`), also inside `flags`; `maxRounds` 70 000 packs 70 000 |
+| `split-form-loud-pack.test.ts` | AZ-2331 | a clear split bit throws when its `when` source or `times` count is written after the byte or the count was never written, also under a `when` inside the bit (review B2); the false condition (`0100025a00`), the combined `flags` form and an empty body list with a skipped count are silent |
+| `lone-bytes-in-round.test.ts` | AZ-2332 | a lone `Uint8Array` or `ArrayBuffer` in a `times` (count 1 too) or `repeat` round throws; a list of buffers packs; a lone `utf8` string still goes to every round |
+| `times-count-zero-with-values.test.ts` | AZ-2335 | a list with count 0 throws, in and out of `flags`; a lone scalar packs `0100` |
+| `eq-value-checked.test.ts` | AZ-2338 | out-of-range, `"x"`, `NaN`, `1.5`, `true`, `1e30`, `null`, `undefined` and `[1]` are refused at construction; `5.0`, `5n` and the `u64` maximum as a `bigint` build; `2**64` on `u64` and `2**63` on `i64` are refused (review B8) |
+| `hostile-cases.ts`, `hostile-pack.ts` (support) | AZ-2329 to AZ-2338 | the loaders replay the eight new hostile cases |
+
+Existing tests rewritten (batch report: four and two): `reference-scope.test.ts` and `when-on-written-values.test.ts`, for the removed `eq(int, undefined)` and `eq(int, null)` forms (now construction errors, or a `when` that never matches an unwritten field).
+
 ## Test Data Management
 
 **Required test data**:

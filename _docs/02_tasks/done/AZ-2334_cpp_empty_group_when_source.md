@@ -58,3 +58,7 @@ Then accepted, same bytes as Rust
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Embedded stack margin is 56 B; the change must be measured | coordinator | open | Medium |
+
+## Loop 19 result (2026-10-11)
+
+Done in loop 19: C++ accepts an empty group as a `when` source; `find_ref` guard added after review C8.

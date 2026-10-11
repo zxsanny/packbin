@@ -73,3 +73,7 @@ Then packed without error
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Reusing `maxRounds` (a decoder limit) as an encoder limit means a scheme that lowers it also lowers what it can pack | coordinator | open | Low |
+
+## Loop 19 result (2026-10-11)
+
+Done in loop 19 (wave 1 + review fixes): pack refuses a `times` count above the scheme `maxRounds` in TypeScript, Python, Java, C# and Rust (C++ fixed arrays). Java count arithmetic moved to long after review B1. Hostile case `pack_times_count_over_limit` (C++ skipped with reason). `repeat` is not capped on pack (assessment U1).

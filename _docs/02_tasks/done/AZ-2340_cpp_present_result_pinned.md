@@ -58,3 +58,7 @@ Then `01 01 01 05`
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | none | coordinator | resolved | Low |
+
+## Loop 19 result (2026-10-11)
+
+Done in loop 19: C++ test pins `flags(group(flag_byte(0), flag_bit(0,x)))` with only `x` to `01010105`.

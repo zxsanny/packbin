@@ -85,3 +85,16 @@ Files changed under `.github/` and `fixtures/` in `aea6344..HEAD`, all read: `la
 | `language-pair.sh:65-68` (F24) | still reuses `/tmp/packbin-handoff-java` when both `Handoff.class` and `HandoffElements.class` exist; one more class file a local user could pre-create. Unchanged otherwise (`PACKBIN_JAVA_HANDOFF` still overrides) |
 
 Findings F12, F13, F14, F15, F16, F20, F23, F24 unchanged (F24 as noted). Not run: the `ring` job on a runner, Docker, `shellcheck`, GNU bash 5.
+
+## Loop 19 (2026-10-11)
+
+Scope: `.github/workflows/run-suite.sh`, `run-suite.test.sh`, `test.yml` (one new step, `bash .github/workflows/run-suite.test.sh` in the `scaffold` job; the job's permissions and secrets are unchanged). No Dockerfile, compose file, publish script, pin or image changed.
+
+| Item | Result |
+|------|--------|
+| `run-suite.sh` venv guard (`:40-49`) | A directory that exists, holds no `pyvenv.cfg` and is not empty is refused before `python -m venv --clear` (review C5 closed); a missing, empty or venv-shaped directory is rebuilt. Six hostile values of `PACKBIN_PYTEST_VENV` (`x; touch ...`, spaces, `$(...)`, backticks, quotes, `--help`) ran no code; `--help` fails closed |
+| `run-suite.sh` default venv (`:37`) | F32: `/tmp/packbin-pytest` is a fixed shared name; `[ -e ]` follows a symlink and `python -m venv --clear` empties the target when it holds a `pyvenv.cfg` and no `bin/pytest` (probe); `bin/python` and `bin/pytest` of a pre-created directory are executed. Same family as F24; single-user runners are not affected |
+| `run-suite.test.sh` | 5 checks (broken venv, usable venv with `-m pytest` called, failing pytest, non-venv directory kept, missing venv built with the pinned pytest), all with fake interpreters, no network; passes under bash 3.2. `work=$(mktemp -d ...)` has no failure branch (note in `security_report.md`) |
+| `test.yml` | the new step runs a repository script with no secret and no write permission |
+
+Findings F12, F13, F14, F15, F16, F20, F23, F24 unchanged; F32 new. Not run: the `ring` job, Docker, GNU bash 5, `shellcheck`.

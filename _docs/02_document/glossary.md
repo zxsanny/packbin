@@ -45,7 +45,7 @@ Unpack found that a present field does not fit in the bytes that remain. The err
 
 ## Split form
 
-The flags byte is stored now, and each bit's field is placed later in the list. The bit must come after its flag byte in the same scope (top level, one `repeat` or `times` round, or one `list` or `dict` element); a flag byte read inside a `when` is not visible after it. TypeScript, C#, Java, Rust and Python refuse a violation at construction (Python since loop 16, AZ-2100). A bit's number is its place among the bits of the flag byte read it follows (Rust, C++, TypeScript, Java, Python since loop 16 AZ-2230, and C# since loop 17 AZ-2135). A flag byte read inside a `flags` member or the child of a flag bit is not visible after it in C++ either since loop 18 (AZ-2304), as in Rust, TypeScript and Java. (source: schema.md; loop 11)
+The flags byte is stored now, and each bit's field is placed later in the list. The bit must come after its flag byte in the same scope (top level, one `repeat` or `times` round, or one `list` or `dict` element); a flag byte read inside a `when` is not visible after it. TypeScript, C#, Java, Rust and Python refuse a violation at construction (Python since loop 16, AZ-2100). A bit's number is its place among the bits of the flag byte read it follows (Rust, C++, TypeScript, Java, Python since loop 16 AZ-2230, and C# since loop 17 AZ-2135). A flag byte read inside a `flags` member or the child of a flag bit is not visible after it in C++ either since loop 18 (AZ-2304), as in TypeScript and Java; Rust gives each member of one `flags` its own scope since loop 19 (AZ-2333). Pack of a split bit whose `when` source or `times` count is written after the byte fails, naming the member, when the body would be written and the bit is clear (loop 19, AZ-2331); a false condition packs silently. (source: schema.md; loop 11)
 
 ## Unpack
 
@@ -57,4 +57,4 @@ A Git tag that starts the publish of each language present in that commit. (sour
 
 ## When
 
-A group that is written only when an earlier field equals a given value. The tested field is an integer, a `u2` slot or a bool; a bool is compared only with `true`, and the field list fails when it is built for any other test or source kind, in all six packages since loop 18 (AZ-2126). (source: schema.md)
+A group that is written only when an earlier field equals a given value. The tested field is an integer, a `u2` slot or a bool; a bool is compared only with `true`, and the field list fails when it is built for any other test or source kind, in all six packages since loop 18 (AZ-2126). Since loop 19 (AZ-2338) it also fails when the tested value is one that an integer source can never hold (out of range, a string, `NaN`, a fraction, a bool); C++ checks out-of-range integers only. C++ accepts an empty group as a source (AZ-2334). (source: schema.md)

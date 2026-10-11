@@ -72,3 +72,7 @@ Then all pass without edits
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Python bytes change for that shape (upgrade note) | owner decision 2, 2026-10-11 | resolved | Medium |
+
+## Loop 19 result (2026-10-11)
+
+Done in loop 19: Python repeat/times rounds use a fresh scope in pack and unpack. The exact T1 row was rebuilt as an equivalent scheme (`010201050700` in TypeScript and Python).

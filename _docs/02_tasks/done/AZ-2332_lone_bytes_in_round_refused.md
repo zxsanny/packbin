@@ -65,3 +65,7 @@ Then bytes unchanged
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Callers relying on the broadcast break (upgrade note) | owner decision 4, 2026-10-11 | resolved | Medium |
+
+## Loop 19 result (2026-10-11)
+
+Done in loop 19: a lone byte buffer for a Bytes/Sized name in a round is refused in TypeScript, Python, Java, Rust (C# already). Java also under a count-0 flags `times` (review B4).

@@ -193,6 +193,63 @@
 | AZ-2311 AC-1 | The bytes Rust gives for a lone scalar are recorded beside the other packages' bytes | FT-X-12; evidence: `batch_01_loop18_report.md` and the TypeScript bytes in the AZ-2311 result | Covered |
 | AZ-2311 AC-2 | Every round carries a lone scalar: `010201040105`, `0103010401050106`, `010201040104` | FT-X-12; tests: Rust `times_lone_value_tests::az2311_ac2_*` | Covered |
 | AZ-2311 AC-3 | Per-round lists and the Rust suite unchanged; a short list is still `Missing` | FT-X-12; tests: Rust `az2311_ac3_one_round_and_per_round_lists_keep_their_bytes`, `az2311_ac3_a_list_shorter_than_the_count_is_still_missing` | Covered |
+| AZ-2088 AC-1 | A missing required value throws `ArgumentException` naming the member | FT-X-22; tests: C# `LoudPackTests.Pack_RequiredValueMissing_ThrowsNamingTheMemberAndItsId`, `Pack_RequiredValueMissingInADictionary_Throws`, `Pack_RequiredValueSetToNull_Throws` | Covered |
+| AZ-2088 AC-2 | A flag-bit absence is still allowed; the golden row is unchanged | FT-X-22, FT-P-01; tests: C# `LoudPackTests.Pack_FlagBitChildMissing_StaysABitClear`, `Pack_FieldInsideAFalseWhen_IsNotWalked` | Covered |
+| AZ-2088 AC-3 | `repeat` and `times` list lengths are checked | FT-X-22; tests: C# `LoudPackTests.Pack_RepeatListsOfUnequalLength_ThrowsNamingTheShortList`, `Pack_TimesListShorterThanTheCount_ThrowsNamingTheShortList`, `Pack_TimesListLongerThanTheCount_ThrowsNamingTheLongList` | Covered |
+| AZ-2088 AC-4 | An absent list, dict or sized member names the field, not `KeyNotFoundException` | FT-X-22; tests: C# `LoudPackTests.Pack_AbsentListDictOrSized_ThrowsArgumentExceptionNamingTheField`, `Pack_AbsentListInADictionary_ThrowsArgumentException`, `Pack_AbsentBytesUtf8OrNullableScalar_ThrowsArgumentExceptionNamingTheField` | Covered |
+| AZ-2088 AC-5 | A field declared for another row type fails construction naming both types | FT-X-22; tests: C# `SchemeOwnershipTests.Construct_FieldDeclaredForAnotherRowType_ThrowsNamingBothTypes`, `Construct_ForeignFieldAtAnyDepth_Throws`, `Construct_ForeignFieldBuildsNoScheme_AndTheFieldsStayReusable` | Covered |
+| AZ-2088 AC-6 | A float `when` never throws (superseded in loop 18: a float source for a `when` is refused at construction, AZ-2126) | FT-X-22, FT-X-09; tests: C# `FloatConditionValueTests.Construct_IntegerSourceWithAFloatConditionThatIsNotAWholeNumberInRange_IsRefused`, `PackAndUnpack_IntegerSourceWithAFloatCondition_MatchesOnTheSameNumber`; the AZ-2126 tests of FT-X-09 | Covered |
+| AZ-2088 AC-7 | The scheme owns its fields: a replaced array element changes nothing | FT-X-22; tests: C# `SchemeOwnershipTests.Scheme_CopiesItsFieldList_SoALaterReplacementChangesNothing` | Covered |
+| AZ-2088 AC-8 | A shared condition and field are not re-bound by a second scheme | FT-X-22; tests: C# `SchemeOwnershipTests.Scheme_SharedConditionAcrossTwoSchemes_IsNotReBound`, `Scheme_SharedConditionAcrossTwoSchemes_UnpacksEachWithItsOwnTarget`, `Scheme_SharedCountedFieldAcrossTwoSchemes_KeepsItsOwnCount`, `Schemes_SharingAConditionAndAField_PackAndUnpackTheirOwnBytesFromManyThreads` | Covered |
+| AZ-2088 AC-9 | Existing bytes unchanged (golden and route) | FT-X-22, FT-P-01, FT-C-04; tests: the C# suite | Covered |
+| AZ-2088 AC-10 | The type check runs at construction and the 100000 round trips stay within 1 s | NFT-PERF-01, FT-X-22 | Covered |
+| AZ-2191 AC-1 | An integer that does not fit is refused naming the member and the kind | FT-X-22; tests: C# `StrictNumberTests.Pack_IntegerThatDoesNotFit_ThrowsNamingMemberAndKind` | Covered |
+| AZ-2191 AC-2 | A fraction, bool or string for an integer is refused | FT-X-22; tests: C# `StrictNumberTests.Pack_FractionBoolOrStringForAnInteger_ThrowsNamingTheMember` | Covered |
+| AZ-2191 AC-3 | Floats accept only numbers; f32 overflow is refused; infinities and NaN are written | FT-X-22; tests: C# `StrictNumberTests.Pack_StringBoolOrOverflowForAFloat_ThrowsNamingTheMember`, `Pack_F32Infinity_IsWritten`, `Pack_Nan_IsWritten`, `Pack_AnyNumericTypeForF64_Packs` | Covered |
+| AZ-2191 AC-4 | Range edges, whole numbers held as `double` or `long`, golden and route keep their bytes | FT-X-22, FT-P-01, FT-C-04; tests: C# `StrictNumberTests.Pack_NumberThatFits_PacksAsBefore`, `Pack_BigEndianFieldWithAValueThatDoesNotFit_Throws`, `Pack_ValueInsideFlagsRepeatAndListElement_IsChecked` | Covered |
+| AZ-2191 AC-5 | A row from unpack packs again to the original packet | FT-X-22; tests: C# `StrictNumberTests.Pack_RowReadByUnpack_PacksAgainToTheSameBytes` | Covered |
+| AZ-2216 AC-1 to AC-11 | C# unpack round limits: defaults, `repeat` and `times` refused at round `maxRounds + 1`, slot limit and its per-call total, a refused 1 MiB packet bounded, limits belong to the scheme, invalid limits, nothing else changes | FT-X-23, NFT-RES-LIM-02; tests: C# `RoundLimitTests.Ac1_DefaultsAndConstants`, `Ac2_Repeat_DefaultLimit_*`, `Ac3_Repeat_RefusedWhenTheNextRoundWouldStart`, `Ac4_Times_RefusedWhenTheNextRoundWouldStart`, `Ac5_Times_DefaultLimit_U32Count`, `Ac6_SlotLimit_*`, `Ac7_SlotTotalIsSharedByEveryFieldOfOneCall`, `Ac8_RefusedOneMiBPacket_AllocationIsBoundedByTheLimits`, `Ac9_LimitsBelongToTheScheme`, `Ac10_InvalidLimits_AreRefusedAtConstruction`, `Ac11_ExistingCallShapes_CompileAndBehaveUnchanged` | Covered |
+| AZ-2217 AC-1 to AC-11 | The same rules in TypeScript | FT-X-23, NFT-RES-LIM-02; tests: TypeScript `round-limits.test.ts` (describe blocks "scheme limits surface" for AC-1 and AC-11, "repeat limits" AC-2 and AC-3, "times limits" AC-4, "times at the default limit" AC-5, "slot limit" AC-6 and AC-7, "limits of a large packet" AC-8, "limits belong to the scheme" AC-9, "invalid limits" AC-10) | Covered |
+| AZ-2218 AC-1 to AC-11 | The same rules in Java, with the slot total across list elements | FT-X-23, NFT-RES-LIM-02; tests: Java `RoundLimitsTest` (`defaultsAndSurface`, `repeatAtTheDefaultLimit`, `repeatRefusedAtTheNextRound`, `timesRefusedAtTheNextRound`, `timesAtTheDefaultLimit`, `slotLimit`, `slotTotalSpansFieldsAndElements`, `refusedMegabyteIsBoundedByTheLimits`, `limitsBelongToTheScheme`, `invalidLimitsAreRefused`, `existingCallSitesAreUnchanged`) | Covered |
+| AZ-2219 AC-1 to AC-13 | The same rules in Rust, with a `times` inside a `repeat` and typed `times` rows | FT-X-23, NFT-RES-LIM-02; tests: Rust `round_limits_tests.rs` (`ac1_*` to `ac12_*`; AC-13 is the rest of the Rust suite) | Covered |
+| AZ-2220 AC-1 | The format check accepts the `limit` stage | FT-X-23, FT-X-01; tests: `fixtures/hostile/check-cases.sh`, `cases.test.sh` | Covered |
+| AZ-2220 AC-2 | The check rejects a malformed `limit` line | FT-X-23, FT-X-01; tests: `cases.test.sh` corruptions `limit_dash_hex`, `limit_odd_hex`, `limit_unknown_term` and the others on `limit` lines | Covered |
+| AZ-2220 AC-3 | Both cases are documented and the README names the stage | FT-X-23, FT-X-01; tests: `check-cases.sh` README section check | Covered |
+| AZ-2220 AC-4 | The packages replay `repeat_rounds_over_limit` and `times_rounds_over_limit` | FT-X-23; tests: the `limit` replay of `HostileVectorTests`, `hostile.test.ts`, `HostileVectorTest.replayLimit`, `hostile_tests` (Rust `limit_scheme_for`), Python `hostile_support.py` | Covered |
+| AZ-2220 AC-5 | The existing vectors, including `oversize_count_times`, are unchanged | FT-X-23, FT-X-04; tests: the unpack replay of the six hostile vector tests | Covered |
+| AZ-2220 AC-6 | C++ skips the `limit` stage and records why | FT-X-04, FT-X-23; tests: `hostile_host_tests.cpp` stage filter | Covered |
+| AZ-2220 AC-7 | The size tests of the four package tasks exist | FT-X-23; tests: `RoundLimitTests.cs`, `round-limits.test.ts`, `RoundLimitsTest.java`, `rust/tests/round_limits_tests.rs` | Covered |
+| AZ-2220 AC-8 | The README "Untrusted input" section states the new rule | FT-X-23; evidence: `README.md:1133` (the upgrade note, with Python added in loop 16) and the Untrusted input bullets | Covered |
+| AZ-2220 AC-9 | The security docs record the outcome | FT-X-23; the security docs are owned by the security step, and `owasp_review.md` lines 16 and 35 now summarize loop 15 (the "Loop 15 status block" the spec names was replaced by later summaries) | BLOCKED — not verified (documentation AC, outside this folder) |
+| AZ-2329 AC-1 | Pack refuses a count of `maxRounds + 1` and above, naming the first body member, with no bytes and no allocation for the count | FT-X-24, NFT-RES-LIM-03; tests: C# `PackRoundCapTests.Ac1_*`, TypeScript `pack-round-count-cap.test.ts` (AC-1 cases), Python `test_pack_round_count_cap.py::test_ac1_*`, Java `RoundLimitsTest.packRefusesACountAboveTheLimit` (incl. loop 19 B1 u64 cases), Rust `pack_round_cap_tests.rs::ac1_*`; hostile `pack_times_count_over_limit` (C++ skipped: capacity-bound) | Covered |
+| AZ-2329 AC-2 | A count at the limit packs and round-trips | FT-X-24; tests: C# `PackRoundCapTests.Ac2_*`, TypeScript `AC-2 a count at the limit packs and round-trips`, Python `test_ac2_count_at_the_limit_packs_and_round_trips`, Java `RoundLimitsTest` ("AZ-2329 AC-2"), Rust `ac2_*` | Covered |
+| AZ-2329 AC-3 | A scheme that raised `maxRounds` to 70 000 packs a count of 70 000 | FT-X-24; tests: C# `PackRoundCapTests.Ac3_Pack_SchemeThatRaisedTheLimit_PacksALargerCount`, TypeScript `AC-3 a scheme that raised maxRounds packs a larger count`, Python `test_ac3_a_scheme_that_raised_the_limit_packs_a_larger_count`, Java ("AZ-2329 AC-3"), Rust `ac3_a_scheme_with_a_raised_limit_packs_a_larger_count` | Covered |
+| AZ-2330 AC-1 | Python packs the T1 shape like TypeScript (equivalent scheme, `010201050700`) | FT-X-25; tests: Python `test_round_fresh_scope.py::test_ac1_times_round_does_not_see_a_value_an_earlier_round_wrote`, `test_ac1_repeat_round_does_not_see_a_value_an_earlier_round_wrote`, `test_ac1_a_stale_value_in_the_skipped_slot_is_not_written` | Covered |
+| AZ-2330 AC-2 | Unpack mirrors it | FT-X-25; tests: Python `test_ac2_unpack_times_round_starts_with_a_fresh_scope`, `test_ac2_unpack_leaves_the_byte_a_stale_when_would_have_read_as_trailing`, `test_ac2_unpack_repeat_round_starts_with_a_fresh_scope` | Covered |
+| AZ-2330 AC-3 | Golden, route and ring fixtures unchanged | FT-X-25, FT-P-01, FT-C-04; tests: the Python suite (777) and the ring | Covered |
+| AZ-2331 AC-1 | A `when` source or `times` count written after the split byte, body given, fails naming the member | FT-X-26; tests: C# `SplitFormDroppedBodyTests.Ac1_*`, TypeScript `split-form-loud-pack.test.ts` (AC-1), Python `test_split_form_pack_fails_loudly.py::test_ac1_*`, Java `SplitFormLoudPackTest.ac1ConditionWrittenAfterTheByte`, Rust `split_form_loud_tests.rs::ac1_*`, C++ `split_form_loud_host_tests.cpp::ac1_*`; hostile `pack_split_when_source_after_byte`, `pack_split_times_count_after_byte` | Covered |
+| AZ-2331 AC-2 | A `times` bit whose count was skipped, values given, fails naming the member | FT-X-26; tests: C# `SplitFormDroppedBodyTests.Ac2_*`, TypeScript (AC-2), Python `test_ac2_*`, Java `ac2CountWrittenAfterTheByteOrNeverWritten`, Rust `ac2_*`, C++ `ac2_count_never_written`; hostile `pack_split_times_count_skipped`. Gaps: the combined `flags` form is silent in TypeScript and Java and C++ lets rounds through behind a clear `when` (loop 20) | Covered |
+| AZ-2331 AC-3 | A false condition with a body given packs without the body and without an error (owner option A, 2026-10-11) | FT-X-26; tests: C# `Ac3_*`, TypeScript `AC-3 unchanged:*`, Python `test_ac3_*`, Java `ac3ConditionFalseOnWrittenValuesStillDropsTheBody`, Rust `ac3_*`; hostile `pack_split_false_condition_silent` (`0100025a00`) in all six | Covered |
+| AZ-2331 AC-4 | The reference rows with the source before the byte keep their bytes | FT-X-26, FT-X-13; tests: C# `Ac4_Pack_SourceBeforeTheByte_BytesAreUnchanged`, TypeScript `AC-4 the reference rows*`, Python `test_ac4_*`, Java `ac4SourceBeforeTheByteIsUnchanged`, Rust `ac4_*`, C++ `ac4_source_before_the_byte_packs_as_before` | Covered |
+| AZ-2332 AC-1 | A lone byte buffer for a `Bytes` or `Sized` name in a round is refused naming the member | FT-X-27; tests: TypeScript `lone-bytes-in-round.test.ts` (AC-1), Python `test_lone_bytes_in_round_refused.py::test_ac1_*`, Java `LoneBytesInRoundTest.ac1LoneBufferIsRefused`, Rust `lone_bytes_in_round_tests.rs::ac1_*`, C# `LoneRoundValueTests.Pack_LoneCollectionInARound_ThrowsNamingTheField`; hostile `pack_lone_bytes_in_round` (C++ skipped: typed `Array` of `Array`) | Covered |
+| AZ-2332 AC-2 | A list with one buffer per round packs as before | FT-X-27; tests: TypeScript (AC-2), Python `test_ac2_*`, Java `ac2OneBufferPerRoundPacks`, Rust `ac2_*`, C# `LoneRoundValueTests.Pack_PerRoundBytes_PacksReadsAndRepacksTheSameBytes` | Covered |
+| AZ-2333 AC-1 | Sibling `flags` members each have their own flag-byte scope; Rust bytes equal TypeScript (S1) | FT-X-28; tests: Rust `flags_member_scope_tests.rs::ac1_sibling_members_each_have_their_own_byte_scope`, `ac1_a_bit_in_a_sibling_member_cannot_use_the_byte_of_the_member_before`, `ac1_a_byte_that_is_itself_a_flags_member_is_not_seen_by_the_next_member` | Covered |
+| AZ-2333 AC-2 | A single member is unchanged | FT-X-28, FT-X-13; tests: Rust `flags_member_scope_tests.rs::ac2_*` | Covered |
+| AZ-2334 AC-1 | `eq(emptyGroup, true)` is accepted as a `when` source in C++ with the Rust bytes | FT-X-29; tests: C++ `source_kinds_host_tests.cpp::eq_on_an_empty_group_builds_and_round_trips`, `eq_on_an_empty_group_other_than_true_is_refused`, `a_field_with_the_id_of_an_empty_group_stays_the_source`; `late_source_host_tests.cpp::c8_*`; the arm stage stack 448 of 512 B | Covered |
+| AZ-2335 AC-1 | Count 0 with a list of values is refused naming the member in all six | FT-X-30; tests: C# `TimesZeroWithValuesTests.Ac1_*`, TypeScript `times-count-zero-with-values.test.ts` (AC-1), Python `test_times_count_zero_with_values.py::test_ac1_*`, Java `TimesCountZeroTest.ac1CountZeroWithValuesIsRefused`, Rust `times_count_zero_tests.rs::ac1_*`, C++ `times_count_zero_host_tests.cpp::ac1_count_zero_with_a_value_is_refused`; hostile `pack_times_zero_with_values` | Covered |
+| AZ-2335 AC-2 | Count 0 without values writes zero rounds | FT-X-30; tests: C# `Ac2_*`, TypeScript (AC-2), Python `test_ac2_*`, Java `ac2CountZeroWithoutValuesPacks`, Rust `ac2_count_zero_without_values_packs_no_round`, C++ `ac2_count_zero_without_values_packs` | Covered |
+| AZ-2336 AC-1 | A short `times` list in Python outside `flags` is a named error, not `IndexError` | FT-X-31; tests: Python `test_times_longer_list.py::test_ac5_a_shorter_list_is_refused_naming_the_member`, `test_times_short_list.py::test_ac5_a_plain_member_refuses_a_short_list_naming_the_member`, `test_ac5_a_member_under_when_refuses_a_short_list_naming_the_member` (matched by content: no test cites AZ-2336) | Covered |
+| AZ-2337 AC-1 | A C# group element ignores outer values and names a missing member | FT-X-32; tests: C# `GroupElementMembersOnlyTests.Ac1_*` | Covered |
+| AZ-2337 AC-2 | Complete elements keep their bytes | FT-X-32; tests: C# `GroupElementMembersOnlyTests.Ac2_*`; the group rings | Covered |
+| AZ-2338 AC-1 | `eq(u8, 300)` and other out-of-range values fail construction in six | FT-X-33; tests: C# `EqValueConstructionTests.Construct_EqValueTheSourceCannotHold_*`, TypeScript `eq-value-checked.test.ts` (AC-1..3), Python `test_eq_value_checked.py::test_ac1_*`, Java `EqValueCheckedTest.ac1OutOfRange` and `ReferenceScopeTest` (loop 19 B3), Rust `eq_range_tests.rs::ac1_*`, C++ `eq_value_checked_host_tests.cpp::ac1_*` and compile-fail `when_eq_out_of_range`; hostile `eq_out_of_range` | Covered |
+| AZ-2338 AC-2 | A non-integer value (`"x"`, NaN) fails construction | FT-X-33; tests: Python `test_ac2_a_non_integer_value_is_refused_naming_the_member`, Java `ac2NotAnInteger`, Rust `ac2_*`, C#/TypeScript as AC-1. C++ builds `eq(u8, 1.5)`: out-of-range integers only | Covered |
+| AZ-2338 AC-3 | A bool for an integer source fails construction (Python `True`) | FT-X-33; tests: Python `test_ac3_a_bool_for_an_integer_source_is_refused`, `test_ac3_a_bool_for_a_u2_slot_is_refused`, Java `ac3BoolForInteger`. Rust has no bool value; C++ builds `eq(u8, true)` | Covered |
+| AZ-2338 AC-4 | `eq(u8, 5)` builds, packs and keeps its bytes | FT-X-33; tests: C# `EqValueConstructionTests.Construct_EqValueInTheSourceRange_Builds`, `Pack_EqValueInRange_BytesAreUnchanged`, Python `test_ac4_*`, Java `ac4ValidValueBuilds`, Rust `ac4_*`, C++ `ac4_*`, TypeScript `AC-4` | Covered |
+| AZ-2339 AC-1 | A per-package table of the fraction rows in `u2`, `bits` and `packed` slots exists | FT-X-34; evidence: the Java table and the per-package notes in `_docs/03_implementation/batch_01_loop19_report.md` (no executable test: probe only) | Covered |
+| AZ-2340 AC-1 | `flags(group(flag_byte(0), flag_bit(0,x)))` with only `x` packs `01010105` in C++ | FT-X-35; tests: C++ `flags_when_member_host_tests.cpp::lone_flag_bit_member_in_a_group_is_present` | Covered |
+| AZ-2341 AC-1 | `run-suite.sh python` on a broken venv exits non-zero naming the venv, or rebuilds it | FT-X-36; tests: `.github/workflows/run-suite.test.sh` (5 checks), registered in the `scaffold` job of `test.yml` | Covered |
+| AZ-2342 AC-1 | The five files (Rust 2, Java 1, C# 2) are split and each is below 400 lines | FT-X-37; evidence: line counts in `batch_01_loop19_report.md` (Java `Walker.java` 387, Rust 352 and 332, C# 210 and 299) | Covered |
+| AZ-2342 AC-2 | Behavior unchanged: the same pass counts as before the split | FT-X-37, FT-P-01; evidence: C# 844 of 844, Rust 479 before and after, Java output identical | Covered |
 
 ## Restrictions Coverage
 
@@ -222,9 +279,9 @@
 
 | Category | Total Items | Covered | BLOCKED | WAIVED | Coverage |
 |----------|-----------|---------|---------|--------|----------|
-| Acceptance Criteria | 189 | 189 | 0 | 0 | every row Covered or WAIVED |
+| Acceptance Criteria | 246 | 245 | 1 | 0 | every row Covered or WAIVED, except AZ-2220 AC-9 (not verified, see below) |
 | Restrictions | 19 | 17 | 0 | 2 | every row Covered or WAIVED |
-| **Total** | 208 | 206 | 0 | 2 | every row Covered or WAIVED |
+| **Total** | 265 | 262 | 1 | 2 | one row not verified |
 
 ## Uncovered Items Analysis
 
@@ -232,6 +289,120 @@
 |------|--------|--------|------|-----------|
 | R-11 | WAIVED | No calendar date was set | A release could slip with no alarm | The first publish is gated by the golden hex, not a date |
 | R-12 | WAIVED | No budget number was set | None for a $0 library | Revisit if a paid service is added |
+| AZ-2220 AC-9 | BLOCKED — not verified | The spec asks for a Loop 15 block in the security docs; later summaries replaced it and the security docs belong to the security step | The F10 and F11 outcome could be misread | Security agent confirms the status in `_docs/05_security/` |
+
+## Loops 11 to 18: specs with no AC rows yet (Not verified)
+
+Step 12 of loop 19 added AC rows for the specs the handoff named (AZ-2088, AZ-2191, AZ-2216 to AZ-2220) and for loop 19. The specs below closed in loops 11 to 18 (they appear in a `batch_*_loop11` to `batch_*_loop18` report) and still have no AC row. This is a pointer for a later sync, not coverage: a row is added only when each AC is mapped to a test name read in the package. Their behavior is partly described by FT-X-01 to FT-X-21. The AC count is the number of `**AC-n` headings in the spec.
+
+### With a test file that cites the task id (file level only, ACs not mapped)
+
+| Spec | Name | ACs | Files that cite the id |
+|------|------|-----|------------------------|
+| AZ-2072 | TypeScript hostile-packet unpack | 7 | `typescript/tests/support/hostile-cases.ts` |
+| AZ-2074 | Java hostile-packet unpack | 6 | `java/src/test/java/packbin/HostileUnpackTest.java`, `java/src/test/java/packbin/HostileVectorTest.java` |
+| AZ-2077 | Java thread-safe flags unpack | 5 | `java/src/test/java/packbin/FlagStateTest.java` |
+| AZ-2084 | TypeScript numeric range check on pack | 6 | `fixtures/hostile/README.md` |
+| AZ-2085 | Rust typed-scheme integrity | 6 | `java/src/test/java/packbin/EqBoolTrueOnlyTest.java` |
+| AZ-2087 | C# reference scope check | 5 | `.github/workflows/language-pair.sh`, `fixtures/hostile/README.md` |
+| AZ-2089 | Java reference scope and bool placement | 8 | `java/src/test/java/packbin/BoolPlacementTest.java`, `java/src/test/java/packbin/FlagStateTest.java`, `java/src/test/java/packbin/HostileUnpackTest.java`, `java/src/test/java/packbin/HostileVectorTest.java`, `java/src/test/java/packbin/ReferenceScopeTest.java` and 2 more |
+| AZ-2090 | TypeScript `when`/count reference resolution | 6 | `fixtures/hostile/README.md` |
+| AZ-2091 | TypeScript nested-group structure fixes | 7 | `.github/workflows/language-pair.sh` |
+| AZ-2092 | C# typed binding per scope | 8 | `.github/workflows/language-pair.sh`, `csharp/tests/TypedBindingTests.cs`, `csharp/tests/TypedParityTests.cs` |
+| AZ-2093 | C# honest AC-10 test | 3 | `csharp/tests/Ac10TimingTests.cs` |
+| AZ-2094 | Java 17 / Android API 26 artifact | 6 | `java/src/test/java/packbin/ApiSafeReplacementsTest.java` |
+| AZ-2095 | Publish gated on test.yml | 6 | `.github/workflows/publish-gate.test.sh` |
+| AZ-2096 | Two-phase publish (build, then upload) | 6 | `.github/workflows/publish-phases.test.sh` |
+| AZ-2097 | Re-runnable publish with declared required registries | 7 | `.github/workflows/publish-rerun.test.sh` |
+| AZ-2098 | Buildable vcpkg port with consumer check | 5 | `.github/workflows/publish-vcpkg.test.sh` |
+| AZ-2101 | Java typed nested rows | 6 | `java/src/test/java/packbin/TypedNestedRowTest.java` |
+| AZ-2102 | TypeScript group/flags as list and dict elements | 6 | `.github/workflows/drivers/HandoffElements.java`, `.github/workflows/drivers/handoff.py`, `.github/workflows/drivers/handoff.ts`, `.github/workflows/language-pair.sh` |
+| AZ-2103 | npm package as JavaScript + .d.ts | 6 | `.github/workflows/publish-npm.test.sh` |
+| AZ-2110 | Java zero-width elements and orphan flag bits | 5 | `java/src/test/java/packbin/ZeroWidthElementTest.java` |
+| AZ-2113 | Python refuses when and count names that point to a later field | 4 | `fixtures/hostile/README.md`, `python/tests/test_bool_placement.py`, `python/tests/test_zero_width_elements.py` |
+| AZ-2114 | Hostile session unpack tests for C#, Java and Rust | 2 | `csharp/tests/HostileSessionTests.cs`, `java/src/test/java/packbin/HostileSessionTest.java`, `rust/src/session_hostile_tests.rs` |
+| AZ-2115 | Pin the split-form reference bytes in TypeScript and C# tests | 1 | `csharp/tests/SplitFormReferenceTests.cs`, `typescript/tests/split-form-reference.test.ts` |
+| AZ-2119 | C# group as list or dict element throws KeyNotFoundException on unpack | 3 | `.github/workflows/drivers/csharp/HandoffElements.cs`, `csharp/tests/GroupElementTests.cs` |
+| AZ-2121 | Orphan flag-bit tests for every container | 4 | `csharp/tests/FlagScopeContainerTests.cs`, `java/src/test/java/packbin/FlagScopeContainerTest.java` |
+| AZ-2127 | Java nested rounds | 4 | `java/src/test/java/packbin/HostileUnpackTest.java`, `java/src/test/java/packbin/NestedRoundTest.java`, `java/src/test/java/packbin/RepeatRoundTest.java` |
+| AZ-2131 | Java empty group refused | 4 | `java/src/test/java/packbin/BoolPlacementTest.java`, `java/src/test/java/packbin/FlagStateTest.java`, `java/src/test/java/packbin/TypedNestedRowTest.java` |
+| AZ-2133 | Rust and C++ bitwhen | 2 | `.github/workflows/out/artifacts/rust/stage/src/flag_presence_tests.rs`, `rust/src/flag_presence_tests.rs` |
+| AZ-2134 | Aligned round values | 4 | `.github/workflows/language-pair.sh`, `fixtures/hostile/README.md` |
+| AZ-2147 | C++ empty group without member | 2 | `cpp/tests/core/scheme_tests.cpp` |
+| AZ-2179 | Rounds ring in `language-pair.sh` | 4 | `fixtures/hostile/README.md` |
+| AZ-2180 | C# scheme clones its flag-bit groups | 5 | `csharp/tests/FlagGroupCopyTests.cs` |
+| AZ-2181 | C# count source is an integer field | 4 | `csharp/tests/CountKindTests.cs`, `csharp/tests/CountOverflowTests.cs`, `csharp/tests/EqBoolTrueOnlyTests.cs`, `csharp/tests/HostileUnpackTests.Counts.cs` |
+| AZ-2182 | C# lone value in a round | 7 | `csharp/tests/LoneRoundValueTests.cs` |
+| AZ-2185 | TypeScript `times` list longer than the count is an error | 6 | `fixtures/hostile/README.md` |
+| AZ-2186 | Python `times` list longer than the count is an error | 6 | `fixtures/hostile/README.md` |
+| AZ-2187 | Java `times` list longer than count is refused | 6 | `fixtures/hostile/README.md`, `java/src/test/java/packbin/TimesLongerTest.java` |
+| AZ-2188 | TypeScript duplicate member names refused at construction | 7 | `typescript/tests/nested-group.test.ts`, `typescript/tests/round-values.test.ts` |
+| AZ-2190 | Java pack range and type check for integers and floats | 7 | `java/src/test/java/packbin/PackStrictTest.java` |
+| AZ-2193 | `language-pair.sh` in CI | 7 | `.github/workflows/ring-wiring.test.sh` |
+| AZ-2214 | Pin actions by commit and tools by exact version (F12) | 8 | `.github/workflows/publish-pins.test.sh` |
+| AZ-2215 | Read-only repo mount for the publish containers (F13) | 8 | `.github/workflows/publish-readonly.test.sh` |
+| AZ-2230 | Python numbers split bits by scheme order | 10 | `fixtures/hostile/README.md` |
+| AZ-2232 | vcpkg port limited to Linux and macOS, `find_package` version rule "same minor" for 0.x | 6 | `.github/workflows/publish-vcpkg.test.sh` |
+| AZ-2233 | Java nested row: a flag bit with no flag byte inside the row is refused at construction | 6 | `java/src/test/java/packbin/SplitBitOrderTest.java` |
+| AZ-2234 | Java pack: missing nested rows and null group elements throw, `u2` honours the round item | 9 | `java/src/test/java/packbin/FlagPresenceTest.java`, `java/src/test/java/packbin/MissingNestedValueTest.java`, `java/src/test/java/packbin/PackStrictTest.java`, `java/src/test/java/packbin/RepeatRoundTest.java` |
+| AZ-2235 | Java typed rows: a list or dict element nested-row group without a factory is refused at construction | 6 | `java/src/test/java/packbin/TypedElementScopeTest.java`, `java/src/test/java/packbin/TypedNestedRowTest.java` |
+| AZ-2237 | Rust pack reads what it wrote | 8 | `rust/src/when_kept_tests.rs` |
+| AZ-2238 | Three harness fixes: `publish-position.sh` installs with `cd` + `npm ci`, `examples.sh` captures `find` output before it picks the first line, `language-pair.sh` names a failing consumer | 5 | `.github/workflows/publish-gate.test.sh`, `.github/workflows/publish-position.test.sh`, `.github/workflows/ring-wiring.test.sh` |
+| AZ-2239 | `listgroup` ring in `language-pair.sh` for the packages that support the shapes | 6 | `.github/workflows/drivers/HandoffElements.java`, `.github/workflows/drivers/csharp/HandoffElements.cs`, `.github/workflows/drivers/handoff.py`, `.github/workflows/drivers/handoff.ts`, `.github/workflows/language-pair.sh` |
+| AZ-2240 | `publish-check.py` checks `exports`, `types` and the dist modules of the npm tarball, and the CMake file, LICENSE and host dependencies of the vcpkg port | 6 | `.github/workflows/publish-npm.test.sh`, `.github/workflows/publish-vcpkg.test.sh` |
+| AZ-2243 | TypeScript `PackSession.load` takes only a `Uint8Array` seed | 6 | `typescript/tests/session.test.ts` |
+| AZ-2246 | Java duplicate member names refused at construction | 11 | `java/src/test/java/packbin/DuplicateNamesTest.java` |
+
+### No test or fixture file cites the id (Not verified: tests may exist under another name)
+
+| Spec | Name | ACs |
+|------|------|-----|
+| AZ-2071 | Python hostile-packet unpack | 7 |
+| AZ-2073 | C# hostile-packet unpack | 6 |
+| AZ-2075 | Rust hostile-packet unpack | 5 |
+| AZ-2076 | C# thread-safe flags unpack | 5 |
+| AZ-2079 | C# bool presence and 9th flag bit | 8 |
+| AZ-2080 | TypeScript bool presence and flag-bit limit | 8 |
+| AZ-2082 | Rust flag bits and bool rule | 5 |
+| AZ-2083 | Python bool placement and flag-bit limit | 5 |
+| AZ-2086 | Rust typed times | 6 |
+| AZ-2099 | Embedded harness fails a target on any failed command | 6 |
+| AZ-2100 | Python split form and repeat/times fixes | 9 |
+| AZ-2104 | Python seed check and safe star-import | 5 |
+| AZ-2105 | Rust session pack error | 4 |
+| AZ-2107 | Python zero-width elements | 4 |
+| AZ-2108 | TypeScript zero-width elements and orphan flag bits | 5 |
+| AZ-2109 | C# zero-width elements and orphan flag bits | 5 |
+| AZ-2111 | Rust zero-width elements and orphan flag bits | 5 |
+| AZ-2112 | TypeScript accepts u64 counts for sized, packed and times | 3 |
+| AZ-2116 | C# unpack returns exact integer types | 2 |
+| AZ-2117 | Rust scope check covers name-based references | 4 |
+| AZ-2118 | Rust pack borrowed_count uses checked_add | 1 |
+| AZ-2122 | TypeScript __proto__ dict key, when-in-repeat round scope, BOM kept | 4 |
+| AZ-2123 | C# top-range u64/i64 overflow, capacity reserve, atomic session counter | 4 |
+| AZ-2124 | Java atomic PackSession send counter | 2 |
+| AZ-2125 | Rust cap collection capacity at the bytes left | 2 |
+| AZ-2129 | TypeScript constructor checks | 4 |
+| AZ-2130 | C# empty nested-row group | 4 |
+| AZ-2132 | Python empty group refused | 3 |
+| AZ-2175 | C# `when` reads what pack wrote | 7 |
+| AZ-2176 | C# nested rounds refused at construction | 3 |
+| AZ-2177 | TypeScript nested rounds refused at construction | 4 |
+| AZ-2178 | Rust typed `times` shape pins | 7 |
+| AZ-2183 | TypeScript pack finds flags under a split bit and inside flags | 7 |
+| AZ-2184 | TypeScript dict entries stay out of the row's members | 7 |
+| AZ-2189 | Rust map `times` refuses a per-name value it cannot align | 4 |
+| AZ-2192 | Python float fields accept only numbers and name the field on overflow | 6 |
+| AZ-2197 | TypeScript `when` reads what pack wrote | 6 |
+| AZ-2231 | Python `PackSession.load` takes only a bytes-like seed | 5 |
+| AZ-2236 | TypeScript refuses an anchored group as a list or dict element when the scheme is built | 7 |
+| AZ-2244 | Python `PackSession.start` and `join` take only a bytes-like nonce | 9 |
+| AZ-2245 | Python duplicate member names refused at construction | 10 |
+| AZ-2247 | Rust duplicate data member names refused at construction | 11 |
+| AZ-2248 | Python `times` short or empty list for a member under `flags` | 8 |
+| AZ-2249 | Python refuses an attribute-style accessor inside a `list` or `dict` element group when the scheme is built | 10 |
+
 
 <!-- autodev-step5-post-architecture-pass: 2026-09-22 -->
 <!-- autodev-step12-loop-update: loop 18, 2026-10-11, 53 rows added (AZ-2120, 2126, 2128, 2135, 2194, 2304-2311) -->
+<!-- autodev-step12-loop-update: loop 19, 2026-10-11, 57 AC rows added (AZ-2088, 2191, 2216-2220 catch-up; AZ-2329-2342); 97 loop 11-18 specs listed as not verified -->

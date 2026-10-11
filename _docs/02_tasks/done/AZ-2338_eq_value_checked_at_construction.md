@@ -74,3 +74,7 @@ Then bytes unchanged
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Each package knows its source type at build; the check order must not depend on member order | coordinator | open | Low |
+
+## Loop 19 result (2026-10-11)
+
+Done in loop 19: `eq` with an out-of-range, non-integer, NaN or bool value is refused at construction in six (C++: out-of-range integers only). Review fixes: Java `u2` slot 0..3, TypeScript 64-bit via BigInt, C# exact double check. Hostile case `eq_out_of_range`.

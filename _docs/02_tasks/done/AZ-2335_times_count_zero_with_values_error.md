@@ -64,3 +64,7 @@ Then zero rounds written
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Callers that pass a stale list with count 0 break (upgrade note) | owner decision 7 | resolved | Low |
+
+## Loop 19 result (2026-10-11)
+
+Done in loop 19: count 0 with a list of values is refused in all six; a lone scalar with count 0 packs `0100` silently in all six (documented). Hostile case `pack_times_zero_with_values`.

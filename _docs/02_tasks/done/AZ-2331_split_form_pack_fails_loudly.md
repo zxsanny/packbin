@@ -80,3 +80,7 @@ Then bytes unchanged
 ## Decision record
 
 2026-10-11 (owner, after wave 1): option A. Loud only when the body WOULD be written (condition true, count above 0, or count never written) and the byte left the bit clear. Wave 1 as built: Java, TypeScript, C++ already match; C# and Rust were loud on every false-condition row and Python loud on a false condition with the source after the byte; the three are relaxed in the follow-up pass.
+
+## Loop 19 result (2026-10-11)
+
+Done in loop 19. AC-3 decided by the owner after wave 1 (option A): a false condition packs silently; loud only when the body would be written but the byte left the bit clear. Review fixes: C# count-0 regression and Flags case, TypeScript `when` case, Python several `when`s, Rust absent source silent, Java FLAGS recursion, C++ source inside the bit body. Hostile cases `pack_split_*`.

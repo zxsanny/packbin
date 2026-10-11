@@ -64,3 +64,7 @@ Then bytes unchanged
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Callers that relied on inheritance break (upgrade note) | owner decision 9 | resolved | Medium |
+
+## Loop 19 result (2026-10-11)
+
+Done in loop 19: a C# group element uses members only.

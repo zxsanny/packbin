@@ -99,3 +99,18 @@ Scope: `git diff aea6344..HEAD -- csharp typescript python rust java cpp fixture
 | Secrets, logging, crypto, SQL, templates, deserialization of types | none | no process, SQL, template, secret or log in the changed package code |
 
 Findings: F21 re-rated Medium and widened (details in `security_report.md`), F27 new (Low). F25 and F26 fixed; F17 re-verified and not widened by the new shapes; F10 and F12 unchanged.
+
+## Loop 19 (2026-10-11)
+
+Scope: `git diff e1a791e..HEAD` (about 2 900 lines of source in the six packages, `run-suite.sh`, `run-suite.test.sh`, the hostile cases). Read in full: the pack and construction paths named in `security_report.md` (Loop 19 method), the new C++ `order.hpp`/`table.hpp`/`pack.cpp`/`values.cpp` hunks, and the Rust, Java and C# files that the loop split (verbatim moves checked by comparing removed and added lines).
+
+| Class | Result | Evidence |
+|-------|--------|----------|
+| Injection (shell) | none | `run-suite.sh`: `$venv` is quoted at every use and appears in `printf` only as an argument (`%q`); six hostile `PACKBIN_PYTEST_VENV` values ran no code. `run-suite.test.sh` builds its fake interpreter from its own paths (F32 note) |
+| Resource exhaustion on pack | **F28** (Medium), F29, F30, F31 | no pack-wide output budget; Java `ByteSink` growth overflow; Java `sized`/`bits` count truncation; `repeat` and `maxSlots` unbounded on pack |
+| Integer width | F30 (Java `intValue()` in `packSized`, `packBits`); the C# `int` count refusals, TypeScript `validCount`, Rust `as_usize`, Python big ints and the Java `borrowedLong` (clamped at `Long.MAX_VALUE`) hold | probes: counts 65 536, 2^32+3, 4e9, 2^63-1, 2^64-1 in five packages |
+| Unchecked indexing / casts in C++ | none | `Field::late` is a `uint8_t` guarded by `c.fail_at` above 255; `t[j + late]` is inside the bit's span; `find_ref` and `eq_fits` run at build time |
+| Unpack of untrusted bytes | no new path | Python fresh scope per round (measured, no regression); Rust unpack code moved verbatim; C++ suite and 1.6 million fuzzed unpacks under ASan and UBSan clean |
+| Secrets, logging, crypto, SQL, templates, deserialization of types | none | no process, SQL, template, secret or log in the changed code |
+
+Findings: F21 fixed for the count (re-filed as F28), F28 to F32 new; F10, F12, F17, F27 unchanged.

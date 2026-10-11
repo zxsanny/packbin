@@ -58,3 +58,7 @@ Then a named error naming the member, not `IndexError`
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Three tests are rewritten, not deleted | coordinator | resolved | Low |
+
+## Loop 19 result (2026-10-11)
+
+Done in loop 19: Python short `times` list is a named error; `repeat` with an empty list under a flags member still a bare IndexError (assessment G2).

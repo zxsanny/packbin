@@ -447,6 +447,21 @@ All run in `java/test.sh` (the `java` service of `docker-compose.test.yml`); eac
 | `FlagScopeContainerTest` | a split bit in a dict element, or held by a combined `flags` member, with no flag byte earlier in its scope is refused; the same-scope shapes build (AZ-2121) | `java/src/test/java/packbin/FlagScopeContainerTest.java` |
 | `SplitBitOrderTest` | a handle shared by two schemes packs `010105` twice; a second read starts its own bits (`01000109`); `[m, early, late]` packs `010209`; the ninth bit of one read is refused at construction; a flag byte read inside a nested row belongs to that row (`010301010203`); a bit after a row whose only byte was read inside it is refused (AZ-2135); a bit inside a nested row whose only byte was read outside it is refused in eight shapes with `flag bit U8 0 has no flagByte before it in the same scope`, and a typed row is refused the same way (`az2233Ac1` to `Ac5`, AZ-2233) | `java/src/test/java/packbin/SplitBitOrderTest.java` |
 
+## Loop 19 Tests (AZ-2329, AZ-2331, AZ-2332, AZ-2335, AZ-2338, AZ-2342)
+
+Source: `_docs/03_implementation/batch_01_loop19_report.md`, `_docs/loops/loop19/review19.md`, `_docs/03_implementation/test_run_loop19_report.md`. `bash java/test.sh .` exits 0 with the Android API 26 check passing; the test classes are registered in `PackbinTest`. The review fix pass added regression tests that failed on the pre-fix sources (ten failures: B1 four, B3 two, B4 two, B9 two).
+
+| Test class | Task | What it proves |
+|------------|------|----------------|
+| `RoundLimitsTest` | AZ-2329 | a `times` count of 65 536, 1 000 000 and 4 000 000 000 throws; 65 535 packs; `withLimits(70_000, ..)` packs 70 000; a `u64` count of 4294967299 and 4294967296 is refused by the cap, not truncated (review B1) |
+| `SplitFormLoudPackTest` | AZ-2331 | a clear split bit throws when the condition or count was written after the byte and the body would be written, or the count was never written (also through `flags` and flag bits, review B9); the false condition is silent |
+| `LoneBytesInRoundTest` | AZ-2332 | a lone `byte[]` in a `repeat` or `times` round throws; a lone `Utf8` string still broadcasts; a lone dict or buffer under a count-0 `flags` `times` throws (review B4) |
+| `TimesCountZeroTest` | AZ-2335 | a list with count 0 throws; a lone scalar packs `0100` |
+| `EqValueCheckedTest`, `ReferenceScopeTest` | AZ-2338 | a string, a boolean, NaN, a fraction, a whole `Double`, an out-of-range number and a `u2` slot above 3 are refused at construction |
+| `HostileVectorTest` | AZ-2329 to AZ-2338 | the eight new hostile cases (the flag byte comes before the `when`, review C3) |
+
+File split (AZ-2342): `Presence.java` moved out of `Walker.java`; the suite output is identical before and after.
+
 ## Test Data Management
 
 **Required test data**:

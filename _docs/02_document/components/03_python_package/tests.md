@@ -424,6 +424,22 @@ All run in the `python` service of `docker-compose.test.yml` with pytest.
 | `test_round_limits` | defaults and surface, an omitted limit is the default, `repeat` and `times` refused at round 65,536 with the interim error (`needed` 0), the slot total is per call and shared with list and dict elements, a short run in each element pays for its own lists, a 1 MiB packet is refused at round 65,536, invalid limits raise `ValueError` | `python/tests/test_round_limits.py` |
 | hostile `limit` stage | `repeat_rounds_over_limit` and `times_rounds_over_limit` run with `with_limits(max_rounds=3)` and return the bad-value error with `needed` 0 and `left` 1 | `python/tests/test_hostile_vectors.py`, `python/tests/hostile_support.py` |
 
+## Loop 19 Tests (AZ-2329 to AZ-2338)
+
+Source: `_docs/03_implementation/batch_01_loop19_report.md`, `_docs/loops/loop19/review19.md`, `_docs/03_implementation/test_run_loop19_report.md`. The suite went from 692 to 764 (wave 1), 765 (the split-form rule follow-up), 773 (hostile loaders) and 777 after the review fixes, in a Python 3.12 venv (the package needs 3.10+).
+
+| Test file | Task | What it proves |
+|-----------|------|----------------|
+| `test_round_fresh_scope.py` | AZ-2330 | a round starts with a fresh scope in pack and unpack; the shape that raised `TypeError` packs `010201050700`, like TypeScript |
+| `test_pack_round_count_cap.py` | AZ-2329 | a `times` count of 65 536 or 4 000 000 000 raises `ValueError` (`times 1: 65536 rounds, the limit is 65535`); `with_limits(max_rounds=70_000)` packs 70 000 |
+| `test_split_form_pack_fails_loudly.py` | AZ-2331 | a clear split bit raises when a `when` source is written after the byte and now matches, or a `times` count is skipped or written after the byte with values given; every unwritten source of a bit is re-checked (review B5); the false condition and the combined form stay as before, and a skipped count with values raises in `flags` too |
+| `test_lone_bytes_in_round_refused.py` | AZ-2332 | a lone `bytes`, `bytearray` or `memoryview` in a `times`, `sized` or `repeat` round raises `TypeError` |
+| `test_times_count_zero_with_values.py` | AZ-2335 | a list with count 0 raises; a lone scalar packs `0100`, also inside `flags` |
+| `test_eq_value_checked.py` | AZ-2338 | out-of-range, `"x"`, `NaN`, `1.5`, `5.0`, `None`, a list and `True` or `False` are refused at construction; 0, 5, 255, `i8` -128, `u64` 2**64-1 and a `u2` slot 3 build |
+| `hostile_support.py`, `test_bool_placement.py` | AZ-2329 to AZ-2338 | the eight new hostile cases (`pack_lone_bytes_in_round` raises `TypeError`, the others `ValueError`) |
+
+Existing tests rewritten: `test_times_short_list.py` (three, the bare `IndexError` is now a named `ValueError`), `test_times_longer_list.py`, `test_lone_dict_in_round.py`, `test_flags_round_member.py`. A 20 000-case unpack-then-repack differential against a copy of HEAD showed equal `repeat` and `times` repack counts; the schemes whose source sits after the byte turned silent mismatches into `ValueError`.
+
 ## Test Data Management
 
 **Required test data**:

@@ -37,8 +37,12 @@ case "$lang" in
       venv="${PACKBIN_PYTEST_VENV:-/tmp/packbin-pytest}"
       if [ ! -x "$venv/bin/pytest" ]; then
         if pytest_pin="$(bash "$root/.github/workflows/tool-pin.sh" pytest)"; then
-          # --clear empties the directory, so only a missing, empty or venv directory may be rebuilt.
-          if [ -e "$venv" ] && [ ! -f "$venv/pyvenv.cfg" ] && [ -n "$(ls -A "$venv" 2>/dev/null)" ]; then
+          # --clear empties the directory, so only a missing, empty or venv directory may be rebuilt,
+          # and never through a symlink (it would empty the target).
+          if [ -L "$venv" ]; then
+            printf 'run-suite: %q is a symlink; not rebuilding through it\n' "$venv" >&2
+            ok=1
+          elif [ -e "$venv" ] && [ ! -f "$venv/pyvenv.cfg" ] && [ -n "$(ls -A "$venv" 2>/dev/null)" ]; then
             printf 'run-suite: %q exists, is not empty and is not a python venv; not overwriting it\n' "$venv" >&2
             ok=1
           elif python -m venv --clear "$venv" </dev/null; then

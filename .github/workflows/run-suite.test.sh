@@ -84,6 +84,13 @@ out="$(run_suite "$work/notvenv" "$work/fakebin")"; code=$?
 [ -f "$work/notvenv/precious.txt" ] || bad "a non-venv directory was cleared"
 case "$out" in *"not a python venv"*) ;; *) bad "no message for a non-venv directory: $out" ;; esac
 
+# 4b. a symlink to a venv-like directory is not cleared
+mkdir -p "$work/target"; : > "$work/target/pyvenv.cfg"; ln -s "$work/target" "$work/link"
+out="$(run_suite "$work/link" "$work/fakebin")"; code=$?
+[ "$code" -ne 0 ] || bad "a symlinked venv path was accepted"
+[ -f "$work/target/pyvenv.cfg" ] || bad "a symlink target was cleared"
+case "$out" in *"is a symlink"*) ;; *) bad "no message for a symlink: $out" ;; esac
+
 # 5. a missing venv is built with the pinned pytest and then used
 out="$(run_suite "$work/fresh" "$work/fakebin")"; code=$?
 [ "$code" -eq 0 ] || bad "a missing venv was not built (exit $code): $out"
