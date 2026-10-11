@@ -79,6 +79,10 @@ export const CONSTRUCT: Record<string, { build: () => unknown; rule: RegExp }> =
     ),
     rule: /^when 1: eq names bool field id 0 \(on\) and accepts only true, not false$/,
   },
+  eq_out_of_range: {
+    build: () => scheme<Row>(1, u8(0, (x) => x.a), when(1, eq(0, 300), [u8(1, (x) => x.v)])),
+    rule: /^when 1 tests u8 field 0 \('a'\) against 300; the value must be a whole number from 0 to 255$/,
+  },
   when_names_later_field: {
     build: () => scheme<Row>(
       1,

@@ -174,3 +174,18 @@ Edges left (loop 20 or upgrade notes): `times` count written after the byte with
 ## AZ-2341 (parent, `.github/workflows`)
 
 `run-suite.sh python` now checks the venv can import pytest (message names the venv and the rebuild command `rm -rf <venv>`) and reports when the venv cannot be created (no `python` on PATH). New hermetic `run-suite.test.sh` (fake venvs, no network) is registered in the `scaffold` job of `test.yml`. On this host `/tmp/packbin-pytest` is the broken venv of the handoff (`python` is not on PATH, only `python3`): the script now says so.
+
+## Wave 2 (hostile fixtures and loaders)
+
+Parent wrote `fixtures/hostile/cases.txt` (+8 cases, 33 total) and the README sections; `check-cases.sh` and `cases.test.sh` pass. New ids: `eq_out_of_range` (construct); pack: `pack_times_count_over_limit`, `pack_times_zero_with_values`, `pack_split_when_source_after_byte`, `pack_split_times_count_after_byte`, `pack_split_times_count_skipped`, `pack_lone_bytes_in_round`, `pack_split_false_condition_silent` (bytes `0100025a00`, pins the AC-3 decision in all six packages).
+
+| Package | Loader | Suite |
+|---------|--------|-------|
+| C# | `HostileVectorTests.cs`, `HostilePackVectorTests.cs` (+8 theory rows; refusals assert the member name) | 897/897 both targets |
+| TypeScript | `hostile-cases.ts`, `hostile-pack.ts` | 720 pass |
+| Python | `hostile_support.py`, `test_bool_placement.py` (`pack_lone_bytes_in_round` raises `TypeError`, others `ValueError`) | 773 passed |
+| Java | `HostileVectorTest.java` | exit 0 |
+| Rust | `hostile_tests.rs` (438 lines) | 528 passed |
+| C++ | `hostile_host_tests.cpp`, `hostile_pack_cases.hpp`; two skips with reasons (`pack_times_count_over_limit`, `pack_lone_bytes_in_round`) | gcc:16 and host `make test` pass |
+
+Rust worker slip: ran `cargo fmt` on the whole crate, then reverted that churn; the tree now differs from HEAD only in `hostile_tests.rs` (verified). Java note: a count of 4 000 000 000 reports "item count -294967296" (negative `int`), still a pack error.

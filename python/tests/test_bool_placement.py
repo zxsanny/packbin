@@ -107,9 +107,13 @@ CONSTRUCT_SCHEMES = {
     "bool_outside_flags": lambda: _scheme(_u8(0, "a"), _on(1)),
     "empty_group_outside_flags": lambda: _scheme(_u8(0, "a"), group(1)),
     "eq_bool_false": lambda: _scheme(flags(0, _on(0)), when(1, eq(0, False), _u8(1, "v"))),
+    "eq_out_of_range": lambda: _scheme(_u8(0, "a"), when(1, eq(0, 300), _u8(1, "v"))),
 }
 
-CONSTRUCT_RULE = {"eq_bool_false": r"when 1: .*bool field 0 .*compared only with true"}
+CONSTRUCT_RULE = {
+    "eq_bool_false": r"when 1: .*bool field 0 .*compared only with true",
+    "eq_out_of_range": r"when 1: eq tests u8 field 0 against 300, which is outside 0\.\.255",
+}
 
 
 def _construct_ids() -> list[str]:

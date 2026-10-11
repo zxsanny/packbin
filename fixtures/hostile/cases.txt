@@ -18,6 +18,7 @@ when_names_outer_field_in_repeat  construct  scheme_error                 -
 bool_outside_flags                construct  scheme_error                 -
 empty_group_outside_flags         construct  scheme_error                 -
 eq_bool_false                     construct  scheme_error                 -
+eq_out_of_range                   construct  scheme_error                 -
 repeat_rounds_over_limit          limit      too_many|bad_value           0111223344
 times_rounds_over_limit           limit      too_many|bad_value           010411223344
 pack_out_of_range_integer         pack       pack_error                   -
@@ -25,3 +26,10 @@ pack_missing_required_value       pack       pack_error                   -
 pack_times_list_too_long          pack       pack_error                   -
 pack_times_list_too_short         pack       pack_error                   -
 pack_aligned_round_row            pack       bytes                        01030102020303
+pack_times_count_over_limit       pack       pack_error                   -
+pack_times_zero_with_values       pack       pack_error                   -
+pack_split_when_source_after_byte pack       pack_error                   -
+pack_split_times_count_after_byte pack       pack_error                   -
+pack_split_times_count_skipped    pack       pack_error                   -
+pack_lone_bytes_in_round          pack       pack_error                   -
+pack_split_false_condition_silent pack       bytes                        0100025a00

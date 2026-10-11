@@ -1,7 +1,7 @@
 use crate::walk::{pack, unpack};
 use crate::{
-    bits, dict, eq, flag_byte, flags, group, i8, insert, list, repeat, sized, times, to_hex, u16,
-    u32, u8, utf8, when, BoundField, MapScheme, PackError, Scheme, UnpackError, Value, Values,
+    bits, bytes, dict, eq, flag_byte, flags, group, i8, insert, list, repeat, sized, times, to_hex,
+    u16, u32, u8, utf8, when, BoundField, MapScheme, PackError, Scheme, UnpackError, Value, Values,
     DEFAULT_MAX_SLOTS,
 };
 use std::collections::HashSet;
@@ -93,6 +93,10 @@ fn scheme_for(id: &str) -> MapScheme {
                 when(1, eq("0", Value::U8(0)), vec![u8("1")]),
             ],
         ),
+        "eq_out_of_range" => MapScheme::new(
+            1,
+            vec![u8("a"), when(1, eq("a", Value::U16(300)), vec![u8("v")])],
+        ),
         other => panic!("no scheme written for hostile case {other}"),
     }
 }
@@ -133,6 +137,56 @@ fn times_scheme() -> MapScheme {
     MapScheme::new(1, vec![u8("a"), times(1, "a", vec![u8("x")])])
 }
 
+/// `flagbyte m; u8 mode; bit m { when mode == 1 { u8 speed } }`: the condition follows the byte.
+fn split_when_after_byte() -> MapScheme {
+    let m = flag_byte("m");
+    MapScheme::new(
+        1,
+        vec![
+            m.byte(),
+            u8("mode"),
+            m.bit(when(2, eq("mode", Value::U8(1)), vec![u8("speed")])),
+        ],
+    )
+}
+
+/// `flagbyte m; u8 n; bit m { times n { u8 pt } }`: the count follows the byte.
+fn split_count_after_byte() -> MapScheme {
+    let m = flag_byte("m");
+    MapScheme::new(
+        1,
+        vec![m.byte(), u8("n"), m.bit(times(2, "n", vec![u8("pt")]))],
+    )
+}
+
+/// `u8 sel; flagbyte m; when sel == 1 { u8 n }; bit m { times n { u8 pt } }`
+fn split_count_skipped() -> MapScheme {
+    let m = flag_byte("m");
+    MapScheme::new(
+        1,
+        vec![
+            u8("sel"),
+            m.byte(),
+            when(2, eq("sel", Value::U8(1)), vec![u8("n")]),
+            m.bit(times(3, "n", vec![u8("pt")])),
+        ],
+    )
+}
+
+/// `u8 mode; flagbyte m; bit m { when mode == 1 { u8 speed } }; bit m { u16 heading }`
+fn split_false_condition() -> MapScheme {
+    let m = flag_byte("m");
+    MapScheme::new(
+        1,
+        vec![
+            u8("mode"),
+            m.byte(),
+            m.bit(when(2, eq("mode", Value::U8(1)), vec![u8("speed")])),
+            m.bit(u16("heading")),
+        ],
+    )
+}
+
 /// The scheme and row of a `pack` case, written by hand from fixtures/hostile/README.md (map form).
 fn pack_case(id: &str) -> Result<Vec<u8>, PackError> {
     match id {
@@ -164,6 +218,38 @@ fn pack_case(id: &str) -> Result<Vec<u8>, PackError> {
                 vec![("on", Value::U8(1)), ("n", Value::U8(1))],
                 vec![("n", Value::U8(2))],
                 vec![("on", Value::U8(1)), ("n", Value::U8(3))],
+            ]),
+        ),
+        "pack_times_count_over_limit" => pack(
+            &MapScheme::new(1, vec![u32("n"), times(1, "n", vec![u8("x")])]),
+            &row(&[("n", Value::U32(65_536)), ("x", Value::U8(7))]),
+        ),
+        "pack_times_zero_with_values" => pack(
+            &times_scheme(),
+            &row(&[("a", Value::U8(0)), ("x", ints(&[5]))]),
+        ),
+        "pack_split_when_source_after_byte" => pack(
+            &split_when_after_byte(),
+            &row(&[("mode", Value::U8(1)), ("speed", Value::U8(7))]),
+        ),
+        "pack_split_times_count_after_byte" => pack(
+            &split_count_after_byte(),
+            &row(&[("n", Value::U8(2)), ("pt", ints(&[5, 6]))]),
+        ),
+        "pack_split_times_count_skipped" => pack(
+            &split_count_skipped(),
+            &row(&[("sel", Value::U8(0)), ("pt", ints(&[5]))]),
+        ),
+        "pack_lone_bytes_in_round" => pack(
+            &MapScheme::new(1, vec![u8("n"), times(1, "n", vec![bytes("d", 2)])]),
+            &row(&[("n", Value::U8(2)), ("d", Value::Bytes(vec![1, 2]))]),
+        ),
+        "pack_split_false_condition_silent" => pack(
+            &split_false_condition(),
+            &row(&[
+                ("mode", Value::U8(0)),
+                ("speed", Value::U8(7)),
+                ("heading", Value::U16(90)),
             ]),
         ),
         other => panic!("no scheme written for hostile pack case {other}"),
@@ -200,6 +286,7 @@ fn assert_refusal_names_the_rule(id: &str, msg: &str) {
         "more than 8",
         "allowed only directly inside flags",
         "value other than true",
+        "which is outside",
     ];
     assert!(
         rules.iter().any(|rule| msg.contains(rule)),
@@ -225,7 +312,8 @@ fn rust_outcome(id: &str) -> &'static str {
         | "nine_flag_bits_split"
         | "bool_outside_flags"
         | "empty_group_outside_flags"
-        | "eq_bool_false" => "scheme_error",
+        | "eq_bool_false"
+        | "eq_out_of_range" => "scheme_error",
         "zero_progress_repeat_when" | "when_names_outer_field_in_repeat" => "scheme_error",
         "negative_count"
         | "oversize_count"

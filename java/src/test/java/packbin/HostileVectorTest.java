@@ -41,10 +41,13 @@ final class HostileVectorTest {
                 "oversize_count_times", "oversize_list_count", "invalid_utf8", "invalid_utf8_dict_key",
                 "count_behind_clear_flag", "count_behind_clear_flag_bits", "nine_flag_bits", "nine_flag_bits_split",
                 "when_names_later_field", "count_names_later_field", "when_names_outer_field_in_repeat",
-                "bool_outside_flags", "empty_group_outside_flags", "eq_bool_false",
+                "bool_outside_flags", "empty_group_outside_flags", "eq_bool_false", "eq_out_of_range",
                 "repeat_rounds_over_limit", "times_rounds_over_limit",
                 "pack_out_of_range_integer", "pack_missing_required_value", "pack_times_list_too_long",
-                "pack_times_list_too_short", "pack_aligned_round_row")) {
+                "pack_times_list_too_short", "pack_aligned_round_row", "pack_times_count_over_limit",
+                "pack_times_zero_with_values", "pack_split_when_source_after_byte",
+                "pack_split_times_count_after_byte", "pack_split_times_count_skipped", "pack_lone_bytes_in_round",
+                "pack_split_false_condition_silent")) {
             PackbinTest.expectTrue("hostile vector " + id + " present in cases.txt", seen.contains(id));
         }
     }
@@ -116,7 +119,7 @@ final class HostileVectorTest {
 
     /**
      * AZ-2194: a pack case packs the row its README section gives. {@code bytes} must equal the hex; {@code pack_error}
-     * must throw IllegalArgumentException and return no bytes. Java runs all five cases.
+     * must throw IllegalArgumentException and return no bytes. Java runs every pack case.
      */
     private static void replayPack(Case c) {
         Supplier<byte[]> pack = packFor(c.id);
@@ -153,6 +156,36 @@ final class HostileVectorTest {
                     Maps.scheme(1, Packbin.repeat(0, Packbin.flags(0,
                             Packbin.boolField(0, Access.get("on"), Access.set("on")), u8(1, "n")))),
                     Maps.map("on", List.of(true, false, true), "n", List.of(1, 2, 3)));
+            case "pack_times_count_over_limit" -> () -> BinaryPacker.pack(
+                    Maps.scheme(1, Packbin.u32(0, Access.get("n"), Access.set("n")), Packbin.times(1, 0, u8(1, "x"))),
+                    Maps.map("n", 65_536, "x", 7));
+            case "pack_times_zero_with_values" -> () -> BinaryPacker.pack(timesScheme(), Maps.map("a", 0, "x", List.of(5)));
+            case "pack_split_when_source_after_byte" -> () -> {
+                Field fb = Packbin.flagByte();
+                return BinaryPacker.pack(Maps.scheme(1, fb, u8(0, "mode"),
+                        fb.bit(Packbin.when(1, Packbin.eq(0, 1), u8(1, "speed")))), Maps.map("mode", 1, "speed", 7));
+            };
+            case "pack_split_times_count_after_byte" -> () -> {
+                Field fb = Packbin.flagByte();
+                return BinaryPacker.pack(Maps.scheme(1, fb, u8(0, "n"), fb.bit(Packbin.times(1, 0, u8(1, "pt")))),
+                        Maps.map("n", 2, "pt", List.of(5, 6)));
+            };
+            case "pack_split_times_count_skipped" -> () -> {
+                Field fb = Packbin.flagByte();
+                return BinaryPacker.pack(Maps.scheme(1, u8(0, "sel"), Packbin.when(1, Packbin.eq(0, 1), u8(1, "n")), fb,
+                        fb.bit(Packbin.times(2, 1, u8(2, "pt")))), Maps.map("sel", 0, "pt", List.of(5)));
+            };
+            case "pack_lone_bytes_in_round" -> () -> BinaryPacker.pack(
+                    Maps.scheme(1, u8(0, "n"),
+                            Packbin.times(1, 0, Packbin.bytes(1, Access.get("d"), Access.set("d"), 2))),
+                    Maps.map("n", 2, "d", new byte[] {1, 2}));
+            case "pack_split_false_condition_silent" -> () -> {
+                Field fb = Packbin.flagByte();
+                return BinaryPacker.pack(Maps.scheme(1, u8(0, "mode"), fb,
+                        fb.bit(Packbin.when(1, Packbin.eq(0, 1), u8(1, "speed"))),
+                        fb.bit(Packbin.u16(2, Access.get("heading"), Access.set("heading")))),
+                        Maps.map("mode", 0, "speed", 7, "heading", 90));
+            };
             default -> null;
         };
     }
@@ -210,6 +243,8 @@ final class HostileVectorTest {
             case "eq_bool_false" -> () -> Maps.scheme(1,
                     Packbin.flags(0, Packbin.boolField(0, Access.get("on"), Access.set("on"))),
                     Packbin.when(1, Packbin.eq(0, false), u8(1, "v")));
+            case "eq_out_of_range" -> () -> Maps.scheme(1,
+                    u8(0, "a"), Packbin.when(1, Packbin.eq(0, 300), u8(1, "v")));
             default -> null;
         };
     }

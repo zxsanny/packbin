@@ -188,6 +188,9 @@ public class HostileVectorTests
         ["when_names_outer_field_in_repeat"] = () => _ = new Scheme<ModeRow>(1,
             Field.U8<ModeRow>(0, x => x.Mode),
             Field.Repeat(1, Field.When(1, Condition.Eq(0, 1), Field.U8<ModeRow>(1, x => x.V)))),
+        ["eq_out_of_range"] = () => _ = new Scheme<ModeRow>(1,
+            Field.U8<ModeRow>(0, x => x.Mode),
+            Field.When(1, Condition.Eq(0, 300), Field.U8<ModeRow>(1, x => x.V))),
     };
 
     // A message fragment for each case refused at construction, so a refusal by some other rule does not pass.
@@ -198,6 +201,7 @@ public class HostileVectorTests
         ["bool_outside_flags"] = "put it directly in Flags",
         ["empty_group_outside_flags"] = "put it directly in Flags",
         ["eq_bool_false"] = "a bool is compared only with true",
+        ["eq_out_of_range"] = "the value must be a whole number from 0 to 255",
         ["zero_progress_repeat_bool"] = "put it directly in Flags",
         ["zero_progress_repeat_when"] = "not an earlier field in the same scope",
         ["when_names_later_field"] = "not an earlier field in the same scope",

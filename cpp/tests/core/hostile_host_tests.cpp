@@ -280,6 +280,20 @@ char const* eq_bool_false(std::uint8_t const*, std::size_t) {
   return construct_term(s);
 }
 
+// The constant 300 is outside the u8 source. The literal in a constexpr scheme fails to compile
+// (tests/compile-fail/when_eq_out_of_range.cpp), so this one is built at run time.
+struct EqSource {
+  std::uint8_t a = 0;
+  Opt<std::uint8_t> v;
+};
+
+char const* eq_out_of_range(std::uint8_t const*, std::size_t) {
+  auto s = packbin::scheme<EqSource>(
+      1, packbin::u8<&EqSource::a>(0),
+      packbin::when(1, packbin::eq(0, 300), packbin::u8<&EqSource::v>(1)));
+  return construct_term(s);
+}
+
 struct Handler {
   char const* id;
   Run run;
@@ -305,6 +319,7 @@ constexpr Handler kHandlers[] = {
     {"bool_outside_flags", bool_outside_flags},
     {"empty_group_outside_flags", empty_group_outside_flags},
     {"eq_bool_false", eq_bool_false},
+    {"eq_out_of_range", eq_out_of_range},
 };
 
 struct Case {

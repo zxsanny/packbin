@@ -157,6 +157,14 @@
 - Expected: `scheme_error`. Rust has no bool value: its bool is an empty group, `false` is `U8(0)` and `true` is `eq(id, 1)`. C++ refuses the literal `eq(0, false)` at compile time (`cpp/tests/compile-fail/when_eq_bool_false.cpp`); its vector builds the scheme with `eq(0, 0)`, which `validate` refuses at run time.
 - Source: loop 12 review findings; user decision 2026-10-05 (AZ-2126, built in loop 18).
 
+## eq_out_of_range
+
+- Scheme: id0 `u8 a`; id1 `when` anchor 1, `eq(0, 300)` { id1 `u8 v` }.
+- No packet: 300 is outside the `u8` source (0 to 255), so the condition could never match. Construction must fail, before any pack or unpack.
+- Expected: `scheme_error`. The same refusal covers a value that is not an integer (a string, NaN, a fraction) or a bool for an integer source where the language can write one. A whole-number float equal to an integer (`5.0`) is not part of this case: C# and TypeScript accept it, Java, Python and Rust refuse it (documented in the upgrade notes).
+- Rust: the constant is `Value::U16(300)` against the `u8` field. C++: the literal fails to compile (`cpp/tests/compile-fail/when_eq_out_of_range.cpp`); its vector builds the scheme at run time with the constant 300 and expects `SchemeInvalid`.
+- Source: loop 19, AZ-2338 (owner decision 11, 2026-10-11); review C5, T8.
+
 ## repeat_rounds_over_limit
 
 - Scheme: id0 `repeat` anchor 0 { id0 `u8 v` }.
@@ -222,3 +230,67 @@
 - Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of three rounds with `Opt<bool> on` and `Opt<std::uint8_t> n`).
 - Not run by: none.
 - Source: AZ-2179 (the `roundflags` ring) and AZ-2134 (Python aligned rows, loop 16); the bytes were run against each package's real code in loop 18.
+
+## pack_times_count_over_limit
+
+- Scheme: id0 `u32 n`; id1 `times` anchor 1, count = id0 { id1 `u8 x` }.
+- Row: `n = 65536`, `x = 7` (one scalar, not a list).
+- Expected: `pack_error`. The count is one above the default `maxRounds` (65,535). Pack refuses it before it writes any round, with no allocation proportional to the count (a count of 4,000,000,000 behaves the same). A scheme built with a higher `maxRounds` packs that many rounds.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form).
+- Not run by: C++ (the rounds live in a fixed `Array` whose capacity is at most 65,535, so the row cannot be written).
+- Source: loop 19, AZ-2329 (owner decision 1, security F21, review R1).
+
+## pack_times_zero_with_values
+
+- Scheme: as `pack_times_list_too_long`.
+- Row: `a = 0`, `x = [5]`.
+- Expected: `pack_error`. A count of 0 with a list that holds a value is refused, never packed as zero rounds. A lone scalar with count 0 is not part of this case: all six packages pack `0100` for it (documented).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of one item beside `a = 0`; pack returns `BadValue`).
+- Not run by: none.
+- Source: loop 19, AZ-2335 (owner decision 7).
+
+## pack_split_when_source_after_byte
+
+- Scheme: split-form `flag_byte` (id0 in Rust, no order id elsewhere); `u8 mode` written after the byte; bit 0 { `when` `eq(mode, 1)` { `u8 speed` } }.
+- Row: `mode = 1`, `speed = 7`.
+- Expected: `pack_error`. The byte is written before `mode`, so its bit 0 is clear although the condition holds and the body is given; writing the body anyway would make a packet whose bit says "absent". Pack refuses it, naming `speed`.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row with `speed` set and `mode` 1).
+- Not run by: none.
+- Source: loop 19, AZ-2331 AC-1 (owner decision 3).
+
+## pack_split_times_count_after_byte
+
+- Scheme: split-form `flag_byte`; `u8 n` written after the byte; bit 0 { `times` count = `n` { `u8 pt` } }.
+- Row: `n = 2`, `pt = [5, 6]`.
+- Expected: `pack_error`. Same reason as `pack_split_when_source_after_byte`, for a count: the bit was decided before `n` was written.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of two beside `n = 2`).
+- Not run by: none.
+- Source: loop 19, AZ-2331 AC-1.
+
+## pack_split_times_count_skipped
+
+- Scheme: `u8 sel`; split-form `flag_byte`; `when` `eq(sel, 1)` { `u8 n` }; bit 0 { `times` count = `n` { `u8 pt` } }.
+- Row: `sel = 0`, `pt = [5]`.
+- Expected: `pack_error`. The `when` is false, so `n` is never written; rounds were given for a count that does not exist, and packing would drop them silently. Pack refuses it, naming `pt`.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of one beside `sel = 0` and no `n`).
+- Not run by: none.
+- Source: loop 19, AZ-2331 AC-2.
+
+## pack_lone_bytes_in_round
+
+- Scheme: id0 `u8 n`; id1 `times` anchor 1, count = id0 { id1 `bytes(2) d` }.
+- Row: `n = 2`, `d` = one 2-byte buffer `0102` (not a list of buffers).
+- Expected: `pack_error`. A byte buffer given once for a round name is not broadcast to every round (it used to be in four packages); a list with one buffer per round (`[0102, 0304]` with `n = 2`) is the form that packs, to `010201020304`.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form, `Value::Bytes`).
+- Not run by: C++ (a typed row holds an `Array` of `Array`, so a lone buffer cannot be written).
+- Source: loop 19, AZ-2332 (owner decision 4, assessment U1).
+
+## pack_split_false_condition_silent
+
+- Scheme: id0 `u8 mode`; split-form `flag_byte`; bit 0 { `when` `eq(mode, 1)` { `u8 speed` } }; bit 1 { `u16 heading` }.
+- Row: `mode = 0`, `speed = 7`, `heading = 90`.
+- Packet `01 00 02 5a00`: type `01`; `mode` 0; flag byte `02` (bit 1 only); `heading` `5a00`.
+- Expected: `bytes` `0100025a00`. The condition is false, so `speed` is not written and the bit stays clear. This is not an error: giving every member of a row while a condition decides which are written is normal use (decision 2026-10-11, AZ-2331 AC-3).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row with `speed` set).
+- Not run by: none.
+- Source: loop 18 reference row W-split-false-body-given; loop 19, AZ-2331 AC-3 (owner decision A, 2026-10-11).

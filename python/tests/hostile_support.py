@@ -15,6 +15,7 @@ from packbin import (
     bytes as raw_bytes,
     dict as map_field,
     eq,
+    flag_byte,
     flags,
     i8,
     list as list_field,
@@ -23,6 +24,7 @@ from packbin import (
     sized,
     times,
     u8,
+    u16,
     u32,
     utf8,
     when,
@@ -144,8 +146,46 @@ def _aligned_round_scheme() -> Scheme[Any]:
     return _scheme(repeat(0, flags(0, flag_bool(0, lambda row: row["on"]), u8(1, lambda row: row["n"]))))
 
 
+def _times_over_limit_scheme() -> Scheme[Any]:
+    return _scheme(u32(0, lambda row: row["n"]), times(1, 0, u8(1, lambda row: row["x"])))
+
+
+def _split_when_source_after_byte() -> Scheme[Any]:
+    byte = flag_byte()
+    return _scheme(byte, u8(0, lambda row: row["mode"]), byte.bit(when(1, eq(0, 1), u8(1, lambda row: row["speed"]))))
+
+
+def _split_times_count_after_byte() -> Scheme[Any]:
+    byte = flag_byte()
+    return _scheme(byte, u8(0, lambda row: row["n"]), byte.bit(times(1, 0, u8(1, lambda row: row["pt"]))))
+
+
+def _split_times_count_skipped() -> Scheme[Any]:
+    byte = flag_byte()
+    return _scheme(
+        u8(0, lambda row: row["sel"]),
+        byte,
+        when(1, eq(0, 1), u8(1, lambda row: row["n"])),
+        byte.bit(times(2, 1, u8(2, lambda row: row["pt"]))),
+    )
+
+
+def _lone_bytes_in_round_scheme() -> Scheme[Any]:
+    return _scheme(u8(0, lambda row: row["n"]), times(1, 0, raw_bytes(1, lambda row: row["d"], 2)))
+
+
+def _split_false_condition_silent() -> Scheme[Any]:
+    byte = flag_byte()
+    return _scheme(
+        u8(0, lambda row: row["mode"]),
+        byte,
+        byte.bit(when(1, eq(0, 1), u8(1, lambda row: row["speed"]))),
+        byte.bit(u16(2, lambda row: row["heading"])),
+    )
+
+
 # Pack vectors in fixtures/hostile/cases.txt: the packet each case's scheme and row (README) give, and the
-# exception a `pack_error` case raises. Python runs all five.
+# exception a `pack_error` case raises. Python runs every pack case.
 PACK_CASES = {
     "pack_out_of_range_integer": (
         lambda: BinaryPacker.pack(_scheme(u8(0, lambda row: row["a"])), {"a": 300}),
@@ -159,6 +199,31 @@ PACK_CASES = {
     "pack_times_list_too_short": (lambda: BinaryPacker.pack(_times_scheme(), {"a": 2, "x": [1]}), ValueError),
     "pack_aligned_round_row": (
         lambda: BinaryPacker.pack(_aligned_round_scheme(), {"on": [True, False, True], "n": [1, 2, 3]}),
+        None,
+    ),
+    "pack_times_count_over_limit": (
+        lambda: BinaryPacker.pack(_times_over_limit_scheme(), {"n": 65536, "x": 7}),
+        ValueError,
+    ),
+    "pack_times_zero_with_values": (lambda: BinaryPacker.pack(_times_scheme(), {"a": 0, "x": [5]}), ValueError),
+    "pack_split_when_source_after_byte": (
+        lambda: BinaryPacker.pack(_split_when_source_after_byte(), {"mode": 1, "speed": 7}),
+        ValueError,
+    ),
+    "pack_split_times_count_after_byte": (
+        lambda: BinaryPacker.pack(_split_times_count_after_byte(), {"n": 2, "pt": [5, 6]}),
+        ValueError,
+    ),
+    "pack_split_times_count_skipped": (
+        lambda: BinaryPacker.pack(_split_times_count_skipped(), {"sel": 0, "pt": [5]}),
+        ValueError,
+    ),
+    "pack_lone_bytes_in_round": (
+        lambda: BinaryPacker.pack(_lone_bytes_in_round_scheme(), {"n": 2, "d": b"\x01\x02"}),
+        TypeError,
+    ),
+    "pack_split_false_condition_silent": (
+        lambda: BinaryPacker.pack(_split_false_condition_silent(), {"mode": 0, "speed": 7, "heading": 90}),
         None,
     ),
 }

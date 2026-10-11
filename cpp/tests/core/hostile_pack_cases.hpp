@@ -95,6 +95,78 @@ std::string pack_aligned_round_row() {
   return pack_answer(s, row);
 }
 
+// Split-form flag byte schemes. One row type serves all four cases: `mode` and `sel` are the
+// condition sources, `n` the count, `rounds` the list, `speed` and `heading` the bodies.
+struct SplitItem {
+  Opt<std::uint8_t> pt;
+};
+struct SplitRow {
+  Opt<std::uint8_t> mode;
+  Opt<std::uint8_t> n;
+  Opt<std::uint8_t> speed;
+  Opt<std::uint16_t> heading;
+  Array<SplitItem, 4> rounds;
+};
+
+// flag_byte; u8 mode after it; bit 0 { when eq(mode, 1) { u8 speed } }; bit 1 { u16 heading }.
+std::string pack_split_when_source_after_byte() {
+  namespace pb = packbin;
+  auto s = pb::scheme<SplitRow>(
+      1, pb::flag_byte(0), pb::u8<&SplitRow::mode>(0),
+      pb::flag_bit(0, pb::when(1, pb::eq(0, 1), pb::u8<&SplitRow::speed>(1))),
+      pb::flag_bit(0, pb::u16<&SplitRow::heading>(2)));
+  SplitRow row;
+  row.mode = 1;
+  row.speed = 7;
+  return pack_answer(s, row);
+}
+
+// flag_byte; u8 n after it; bit 0 { times count = n { u8 pt } }.
+std::string pack_split_times_count_after_byte() {
+  namespace pb = packbin;
+  auto s = pb::scheme<SplitRow>(
+      1, pb::flag_byte(0), pb::u8<&SplitRow::n>(0),
+      pb::flag_bit(0, pb::times<&SplitRow::rounds>(1, 0, pb::u8<&SplitItem::pt>(1))),
+      pb::flag_bit(0, pb::u16<&SplitRow::heading>(2)));
+  SplitRow row;
+  row.n = 2;
+  row.rounds.count = 2;
+  row.rounds.items[0].pt = 5;
+  row.rounds.items[1].pt = 6;
+  return pack_answer(s, row);
+}
+
+// u8 sel; flag_byte; when eq(sel, 1) { u8 n }; bit 0 { times count = n { u8 pt } }; sel = 0, so
+// `n` is never written and the one round given has no count.
+std::string pack_split_times_count_skipped() {
+  namespace pb = packbin;
+  auto s = pb::scheme<SplitRow>(
+      1, pb::u8<&SplitRow::mode>(0), pb::flag_byte(0),
+      pb::when(1, pb::eq(0, 1), pb::u8<&SplitRow::n>(1)),
+      pb::flag_bit(0, pb::times<&SplitRow::rounds>(2, 1, pb::u8<&SplitItem::pt>(2))),
+      pb::flag_bit(0, pb::u16<&SplitRow::heading>(3)));
+  SplitRow row;
+  row.mode = 0;
+  row.rounds.count = 1;
+  row.rounds.items[0].pt = 5;
+  return pack_answer(s, row);
+}
+
+// u8 mode; flag_byte; bit 0 { when eq(mode, 1) { u8 speed } }; bit 1 { u16 heading }, with mode 0
+// and speed given anyway: the false condition keeps the body out and the bit clear, silently.
+std::string pack_split_false_condition_silent() {
+  namespace pb = packbin;
+  auto s = pb::scheme<SplitRow>(
+      1, pb::u8<&SplitRow::mode>(0), pb::flag_byte(0),
+      pb::flag_bit(0, pb::when(1, pb::eq(0, 1), pb::u8<&SplitRow::speed>(1))),
+      pb::flag_bit(0, pb::u16<&SplitRow::heading>(2)));
+  SplitRow row;
+  row.mode = 0;
+  row.speed = 7;
+  row.heading = 90;
+  return pack_answer(s, row);
+}
+
 struct PackHandler {
   char const* id;
   PackRun run;
@@ -106,6 +178,10 @@ constexpr PackHandler kPackHandlers[] = {
     {"pack_times_list_too_short", pack_times_list_too_short},
     {"pack_times_zero_with_values", pack_times_zero_with_values},
     {"pack_aligned_round_row", pack_aligned_round_row},
+    {"pack_split_when_source_after_byte", pack_split_when_source_after_byte},
+    {"pack_split_times_count_after_byte", pack_split_times_count_after_byte},
+    {"pack_split_times_count_skipped", pack_split_times_count_skipped},
+    {"pack_split_false_condition_silent", pack_split_false_condition_silent},
 };
 
 struct PackSkip {
@@ -113,9 +189,15 @@ struct PackSkip {
   char const* reason;
 };
 
-// A typed row binds a std::uint8_t member, so 300 cannot be written for a u8.
+// A typed row binds a std::uint8_t member, so 300 cannot be written for a u8; the rounds of a
+// times live in an Array of at most 65,535 items, so a count of 65,536 cannot be written; and an
+// Array of Array has no lone-buffer form to broadcast.
 constexpr PackSkip kPackSkips[] = {
     {"pack_out_of_range_integer", "typed rows have static types: the u8 member is a std::uint8_t"},
+    {"pack_times_count_over_limit",
+     "the rounds live in a fixed Array of at most 65,535 items: the row cannot be written"},
+    {"pack_lone_bytes_in_round",
+     "a typed row holds an Array of Array: a lone buffer cannot be written"},
 };
 
 // What the C++ test does with a pack case: `ran` with the answer (hex or "pack_error"), a skip with
