@@ -139,8 +139,20 @@ final class RoundLimitsTest {
                 refusal(scheme, Maps.map("n", 65_536)));
         PackbinTest.expectEq("AZ-2329 hostile 2e9 count", "times: count 2000000000 is above the limit of 65535 rounds",
                 refusal(scheme, Maps.map("n", 2_000_000_000, "k", 7)));
-        PackbinTest.expectEq("AZ-2329 hostile 4e9 count (not an int)", "times: item count -294967296",
+        PackbinTest.expectEq("AZ-2329 hostile 4e9 count (not an int)",
+                "times: count 4000000000 is above the limit of 65535 rounds",
                 refusal(scheme, Maps.map("n", 4_000_000_000L, "k", 7)));
+        Scheme<Map> u64Count = Maps.scheme(1, Packbin.u64(0, Access.get("n"), Access.set("n")),
+                Packbin.times(1, 0, u8(1, "k")));
+        PackbinTest.expectEq("loop 19 B1 u64 count 2^32 + 3 (low 32 bits read 3)",
+                "times: count 4294967299 is above the limit of 65535 rounds",
+                refusal(u64Count, Maps.map("n", 4_294_967_299L, "k", 7)));
+        PackbinTest.expectEq("loop 19 B1 u64 count 2^32 (low 32 bits read 0)",
+                "times: count 4294967296 is above the limit of 65535 rounds",
+                refusal(u64Count, Maps.map("n", 4_294_967_296L, "k", 7)));
+        PackbinTest.expectEq("loop 19 B1 u64 count Long.MAX_VALUE",
+                "times: count 9223372036854775807 is above the limit of 65535 rounds",
+                refusal(u64Count, Maps.map("n", Long.MAX_VALUE, "k", 7)));
         PackbinTest.expectEq("AZ-2329 lowered limit refuses 4", "times: count 4 is above the limit of 3 rounds",
                 refusal(scheme.withLimits(3, NO_SLOT_LIMIT), Maps.map("n", 4, "k", 7)));
         PackbinTest.expectEq("AZ-2329 lowered limit packs 3", 8,

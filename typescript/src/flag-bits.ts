@@ -89,9 +89,14 @@ function heldName(field: Field, values: Value): string | null {
       return firstHeld(field.fields, values)
     case "flags":
     case "when":
-    case "repeat":
-    case "times":
       return firstHeld(field.fields, values)
+    case "repeat":
+    case "times": {
+      // Empty lists hold no value: a round of none has nothing to drop.
+      const { names, dictNames, bufferNames } = roundShape(field)
+      const lone = [...dictNames, ...bufferNames].some((name) => present(values[name]))
+      return roundCount(names, values) > 0 || lone ? firstHeld(field.fields, values) : null
+    }
     case "flagBit":
       return heldName(field.field, values)
     case "flagByte":
@@ -109,12 +114,18 @@ function firstHeld(fields: Field[], values: Value): string | null {
   return null
 }
 
-// Whether a times in the scope of `field` (itself, or under groups, flags and flag bits) holds a value
+// Whether a times in the scope of `field` (itself, or under groups, flags, flag bits and a `when` whose
+// condition holds) holds a value
 // although its count was never written.
 function countNeverWritten(field: Field, values: Value, wrote: Value): boolean {
   switch (field.kind) {
     case "times":
       return !Object.hasOwn(wrote, refName(field)) && heldName(field, values) !== null
+    case "when":
+      return (
+        sameValue(seen(wrote, refName(field)), field.value) &&
+        field.fields.some((child) => countNeverWritten(child, values, wrote))
+      )
     case "group":
     case "flags":
       return field.fields.some((child) => countNeverWritten(child, values, wrote))

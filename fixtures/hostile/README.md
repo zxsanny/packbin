@@ -161,7 +161,7 @@
 
 - Scheme: id0 `u8 a`; id1 `when` anchor 1, `eq(0, 300)` { id1 `u8 v` }.
 - No packet: 300 is outside the `u8` source (0 to 255), so the condition could never match. Construction must fail, before any pack or unpack.
-- Expected: `scheme_error`. The same refusal covers a value that is not an integer (a string, NaN, a fraction) or a bool for an integer source where the language can write one. A whole-number float equal to an integer (`5.0`) is not part of this case: C# and TypeScript accept it, Java, Python and Rust refuse it (documented in the upgrade notes).
+- Expected: `scheme_error`. The same refusal covers a value that is not an integer (a string, NaN, a fraction) or a bool for an integer source in the packages whose language can write one (C#, TypeScript, Java, Python, Rust). C++ is covered for out-of-range integers only: its typed constants convert, so `eq(0, 1.5)` and `eq(0, true)` on a `u8` source still build (decision 2026-10-11, point 4). A whole-number float equal to an integer (`5.0`) is not part of this case: C# and TypeScript accept it, Java, Python and Rust refuse it (documented in the upgrade notes).
 - Rust: the constant is `Value::U16(300)` against the `u8` field. C++: the literal fails to compile (`cpp/tests/compile-fail/when_eq_out_of_range.cpp`); its vector builds the scheme at run time with the constant 300 and expects `SchemeInvalid`.
 - Source: loop 19, AZ-2338 (owner decision 11, 2026-10-11); review C5, T8.
 
@@ -237,7 +237,7 @@
 - Row: `n = 65536`, `x = 7` (one scalar, not a list).
 - Expected: `pack_error`. The count is one above the default `maxRounds` (65,535). Pack refuses it before it writes any round, with no allocation proportional to the count (a count of 4,000,000,000 behaves the same). A scheme built with a higher `maxRounds` packs that many rounds.
 - Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form).
-- Not run by: C++ (the rounds live in a fixed `Array` whose capacity is at most 65,535, so the row cannot be written).
+- Not run by: C++ (it has no round limit on pack: the rounds live in a fixed `Array` of at most 65,535 items, and a count of 65,536 is refused only as a count that differs from the array length, which `pack_times_list_too_long` already covers).
 - Source: loop 19, AZ-2329 (owner decision 1, security F21, review R1).
 
 ## pack_times_zero_with_values

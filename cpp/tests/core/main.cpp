@@ -15,6 +15,7 @@ int run_core_flags_times_repeat_member_host_tests();
 int run_core_split_form_loud_host_tests();
 int run_core_times_count_zero_host_tests();
 int run_core_eq_value_checked_host_tests();
+int run_core_late_source_host_tests();
 
 int main() {
   run_core_scalar_tests();
@@ -32,6 +33,7 @@ int main() {
   run_core_split_form_loud_host_tests();
   run_core_times_count_zero_host_tests();
   run_core_eq_value_checked_host_tests();
+  run_core_late_source_host_tests();
   if (check::failures() != 0) {
     std::fprintf(stderr, "%d failure(s)\n", check::failures());
     return 1;

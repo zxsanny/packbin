@@ -228,7 +228,12 @@ final class SchemeOrder {
             return;
         }
         try {
-            Scalars.writeScalar(source, when.condition.value, ByteBuffer.allocate(8));
+            ByteBuffer probe = ByteBuffer.allocate(8);
+            Scalars.writeScalar(source, when.condition.value, probe);
+            // A u2 slot is a u8 without a byte of its own (size 0) and holds 0..3.
+            if (source.kind == Field.Kind.U8 && source.size == 0 && (probe.get(0) & 0xFF) > 3) {
+                throw new IllegalArgumentException("expected 2-bit int");
+            }
         } catch (IllegalArgumentException ex) {
             throw new IllegalArgumentException("when " + when.id + " tests field " + id + " against "
                     + when.condition.value + ", which that field can not hold (" + ex.getMessage() + ")", ex);

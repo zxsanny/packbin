@@ -193,28 +193,30 @@ internal static class SchemeOrder
     {
         var (low, high) = IntegerRange(kind);
         var value = when.Pred!.Value;
-        if (TryWholeNumber(value, out var number) && number >= low && number <= high)
+        if (IsWholeNumberWithin(value, low, high))
             return;
         throw new ArgumentException(
             $"when {when.Id} tests {kind.ToString().ToLowerInvariant()} field {when.Pred.FieldId} ('{name}') against {Describe(value)}; "
             + $"the value must be a whole number from {low} to {high}");
     }
 
-    private static bool TryWholeNumber(object? value, out decimal number)
+    private static bool IsWholeNumberWithin(object? value, decimal low, decimal high)
     {
-        number = 0;
         switch (value)
         {
-            case byte or sbyte or short or ushort or int or uint or long or ulong or decimal:
-                number = Convert.ToDecimal(value, System.Globalization.CultureInfo.InvariantCulture);
-                return true;
+            case byte or sbyte or short or ushort or int or uint or long or ulong:
+                var whole = Convert.ToDecimal(value, System.Globalization.CultureInfo.InvariantCulture);
+                return whole >= low && whole <= high;
+            case decimal number:
+                return number == decimal.Truncate(number) && number >= low && number <= high;
             case float or double:
-                // 1e20 is past every integer field, and NaN and infinity are not numbers a field holds.
+                // Tested on the double itself: (decimal)real rounds to 15 digits, so 255.00000000000003 would pass as 255.
+                // NaN and infinity are not numbers a field holds. A whole double converts to BigInteger exactly.
                 var real = Convert.ToDouble(value, System.Globalization.CultureInfo.InvariantCulture);
-                if (double.IsNaN(real) || Math.Abs(real) >= 1e20)
+                if (double.IsNaN(real) || double.IsInfinity(real) || real != Math.Floor(real))
                     return false;
-                number = (decimal)real;
-                return number == decimal.Truncate(number);
+                var exact = new System.Numerics.BigInteger(real);
+                return exact >= new System.Numerics.BigInteger(low) && exact <= new System.Numerics.BigInteger(high);
             default:
                 return false;
         }

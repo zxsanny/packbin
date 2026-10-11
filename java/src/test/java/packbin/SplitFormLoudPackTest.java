@@ -53,6 +53,8 @@ final class SplitFormLoudPackTest {
         ac2CountWrittenAfterTheByteOrNeverWritten();
         ac3ConditionFalseOnWrittenValuesStillDropsTheBody();
         ac4SourceBeforeTheByteIsUnchanged();
+        loop19B4LoneBufferUnderACountZeroFlagsTimes();
+        loop19B9CountSkippedBehindFlagsInASplitBit();
     }
 
     private static void ac1ConditionWrittenAfterTheByte() {
@@ -92,5 +94,30 @@ final class SplitFormLoudPackTest {
         packs("AZ-2331 AC-4 TS 2 rounds", ts, row("n", 2, "pt", list(5, 6), "heading", 90), "01020305065a00");
         refused("AZ-2331 AC-4 TS count 0 and values", ts, row("n", 0, "pt", list(5), "heading", 90),
                 "1: list has 1 entries for a count of 0");
+    }
+
+    private static Field bytes2(int id, String name) {
+        return Packbin.bytes(id, Access.get(name), Access.set(name), 2);
+    }
+
+    /** B4: a lone buffer under a flags member's times is refused at count 0 as it is outside flags. */
+    private static void loop19B4LoneBufferUnderACountZeroFlagsTimes() {
+        Scheme<Map> inFlags = Maps.scheme(1, u8(0, "n"), Packbin.flags(1, Packbin.times(1, 0, bytes2(1, "d"))));
+        Scheme<Map> outside = Maps.scheme(1, u8(0, "n"), Packbin.times(1, 0, bytes2(1, "d")));
+        String lone = "d: a lone byte buffer is not a list of rounds; give one buffer per round in a list";
+        refused("loop 19 B4 outside flags, count 0", outside, row("n", 0, "d", new byte[2]), lone);
+        refused("loop 19 B4 in flags, count 0", inFlags, row("n", 0, "d", new byte[2]), lone);
+        packs("loop 19 B4 in flags, count 0, no buffer", inFlags, row("n", 0), "010000");
+    }
+
+    /** B9: a count skipped behind a flags member inside a split bit, with values given, is refused. */
+    private static void loop19B9CountSkippedBehindFlagsInASplitBit() {
+        Field byteField = Packbin.flagByte();
+        Scheme<Map> scheme = Maps.scheme(1, u8(0, "sel"), Packbin.when(1, Packbin.eq(0, 1), u8(1, "n")), byteField,
+                byteField.bit(Packbin.flags(2, Packbin.times(2, 1, u8(2, "pt")))), byteField.bit(u16(3, "heading")));
+        refused("loop 19 B9 flags(times) count skipped, values given", scheme,
+                row("sel", 0, "pt", list(5), "heading", 90), "pt" + UNCOUNTED);
+        packs("loop 19 B9 flags(times) count skipped, no values", scheme, row("sel", 0, "heading", 90),
+                "0100025a00");
     }
 }

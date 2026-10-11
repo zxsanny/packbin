@@ -1,3 +1,5 @@
+using System.Collections;
+
 namespace Packbin;
 
 internal static partial class Walker
@@ -49,27 +51,53 @@ internal static partial class Walker
 
     // A split flag byte decides its bits where it is written, on the values written before it. A clear bit whose body
     // would still be written now is a packet pack cannot give: a `when` whose condition holds on the values written since
-    // the byte (its source is written after it), or a `times` that has a value in the row (its count is written after
-    // the byte or was skipped). A `when` whose condition is false drops its body by design, as it does in the combined
-    // `flags` form, and packs without a word.
+    // the byte (its source is written after it), or a `times` that has a value in the row and a count that is above zero
+    // (written after the byte) or was skipped. A `when` whose condition is false, or one whose source was never
+    // written, drops its body by design, as it does in the combined `flags` form, and packs without a word. So does a
+    // `times` whose count is zero and whose value is a lone scalar; a list of values under a zero count is refused, as
+    // a `times` outside a split bit refuses it.
     private static void RequireNoDroppedBody(Field bit, IReadOnlyDictionary<string, object?> values, Scope seen)
     {
-        var name = DroppedBody(bit, values, seen);
-        if (name is not null)
-            throw new ArgumentException(
-                $"'{name}' has a value, but its flag bit is clear: the condition or count that decides the bit is written "
-                + "after the flag byte or was skipped");
+        var dropped = DroppedBody(bit, values, seen);
+        if (dropped is var (name, reason))
+            throw new ArgumentException($"'{name}' has a value, but its flag bit is clear: {reason}");
     }
 
-    private static string? DroppedBody(Field bit, IReadOnlyDictionary<string, object?> values, Scope seen) =>
-        bit.Type switch
+    private static (string Name, string Reason)? DroppedBody(Field bit, IReadOnlyDictionary<string, object?> values, Scope seen)
+    {
+        switch (bit.Type)
         {
-            Field.Kind.When => ConditionHolds(bit.Pred!, seen) ? FirstGiven(values, bit.Children, seen) : null,
-            Field.Kind.Times => RoundNames(bit, packing: true).FirstOrDefault(name => IsPresent(values, name)),
-            Field.Kind.Group when !bit.NestedRow =>
-                bit.Children.Select(child => DroppedBody(child, values, seen)).FirstOrDefault(name => name is not null),
-            _ => null,
-        };
+            case Field.Kind.When:
+                var given = ConditionHolds(bit.Pred!, seen) ? FirstGiven(values, bit.Children, seen) : null;
+                return given is null ? null : (given, "the condition that decides the bit is written after the flag byte");
+            case Field.Kind.Times:
+                var counted = seen.TryGetValue(bit.CountName, out var count) && count is not null;
+                var names = RoundNames(bit, packing: true);
+                if (counted && BorrowedCount(bit, seen) == 0)
+                {
+                    // A lone value has no round to be dropped from; a list with items holds rounds the count denies.
+                    var listed = names.FirstOrDefault(name => values.TryGetValue(name, out var v) && v is IList { Count: > 0 });
+                    return listed is null ? null : (listed, "the times count is 0, so it takes no values");
+                }
+                var body = names.FirstOrDefault(name => IsPresent(values, name));
+                return body is null
+                    ? null
+                    : (body, counted
+                        ? "the count that decides the bit is written after the flag byte"
+                        : "the count that decides the bit was skipped");
+            case Field.Kind.FlagBit:
+                return DroppedBody(bit.Inner!, values, seen);
+            case Field.Kind.Group or Field.Kind.Flags when !bit.NestedRow:
+                foreach (var child in bit.Children)
+                {
+                    if (DroppedBody(child, values, seen) is { } found)
+                        return found;
+                }
+                return null;
+            default:
+                return null;
+        }
+    }
 
     private static string? FirstGiven(IReadOnlyDictionary<string, object?> values, IEnumerable<Field> fields, Scope seen)
     {

@@ -93,9 +93,10 @@ constexpr int check_subtree(Field const* t, std::size_t i, int next, Check& c) {
 
 // Index of the bound count source with order id `id` that comes before `before` in the scope
 // starting at `scope`, or -1. An empty group is a source too, but it takes the id of the field
-// after it, so a field of that id wins when there is one.
+// after it, so it binds only when no other field has that id.
 constexpr int find_ref(Field const* t, std::size_t scope, std::size_t before, int id) {
   int group = -1;
+  bool other = false;
   std::size_t j = scope;
   while (j < before) {
     Field const& f = t[j];
@@ -103,15 +104,19 @@ constexpr int find_ref(Field const* t, std::size_t scope, std::size_t before, in
       j += f.span;
       continue;
     }
-    if (f.id == id && f.access != nullptr && f.span == 1) {
-      if (is_count_source(f.kind))
+    if (f.id == id && f.span == 1) {
+      if (f.access != nullptr && is_count_source(f.kind))
         return static_cast<int>(j);
-      if (f.kind == Kind::Group && group < 0)
-        group = static_cast<int>(j);
+      if (f.kind == Kind::Group && f.access != nullptr) {
+        if (group < 0)
+          group = static_cast<int>(j);
+      } else {
+        other = true;
+      }
     }
     ++j;
   }
-  return group;
+  return other ? -1 : group;
 }
 
 // A `when` source that holds a u2 slot reads 0..3; otherwise the range of its integer type. A
@@ -178,12 +183,14 @@ constexpr int bit_position(Field const* t, std::size_t byte, std::size_t at) {
 }
 
 // Sets `late` on the flag bit at `bit`: the first `when` or `times` it decides, directly or
-// inside groups, whose source comes after the flag byte (resolved already).
+// inside groups, whose source comes after the flag byte and before the flag bit (resolved
+// already). A source inside the bit's own body is read where the body is read.
 constexpr void mark_late(Field* t, std::size_t bit, Check& c) {
   std::size_t end = bit + t[bit].span;
   for (std::size_t i = bit + 1; i < end; i += t[i].kind == Kind::Group ? 1 : t[i].span) {
     bool decided = t[i].kind == Kind::When || t[i].kind == Kind::Times;
-    if (decided && t[i].ref > t[bit].ref) {
+    bool late = t[i].ref > t[bit].ref && t[i].ref < static_cast<std::int16_t>(bit);
+    if (decided && late) {
       if (i - bit > 255)
         c.fail_at(t[i].id);
       else

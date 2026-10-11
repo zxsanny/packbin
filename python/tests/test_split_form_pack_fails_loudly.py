@@ -163,3 +163,36 @@ def test_a_value_outside_the_member_range_still_fails_naming_the_field():
     # Act / Assert
     with pytest.raises(OverflowError, match=r"^1: 300 does not fit in u8$"):
         _pack(_times_before_byte(), row)
+
+
+def _two_whens_in_one_bit() -> Scheme:
+    """One split bit holds two `when`s; `a` (field 0) is never given, `b` (field 1) is written after the byte."""
+    byte = flag_byte()
+    return _scheme(
+        byte,
+        byte.bit(_u8(0, "a")),
+        _u8(1, "b"),
+        byte.bit(group(2, when(2, eq(0, 1), _u8(2, "x")), when(3, eq(1, 1), _u8(3, "y")))),
+    )
+
+
+def test_ac1_second_when_of_a_split_bit_with_a_written_condition_and_a_body_is_refused():
+    # Arrange
+    row = {"b": 1, "y": 9}
+
+    # Act / Assert
+    with pytest.raises(ValueError, match=r"^when 3: a body value is given, but condition field 1 is written after"):
+        _pack(_two_whens_in_one_bit(), row)
+
+
+@pytest.mark.parametrize(
+    "row,packet",
+    [({"b": 0, "y": 9}, "010000"), ({"b": 1}, "010001"), ({"b": 0}, "010000")],
+    ids=["second-false-body-given", "second-true-no-body", "second-false-no-body"],
+)
+def test_ac3_second_when_of_a_split_bit_stays_silent_when_false_or_without_a_body(row: dict, packet: str):
+    # Arrange
+    scheme = _two_whens_in_one_bit()
+
+    # Act / Assert
+    assert _pack(scheme, row) == packet

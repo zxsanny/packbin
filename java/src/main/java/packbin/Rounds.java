@@ -48,14 +48,15 @@ final class Rounds {
     }
 
     static void packTimes(
-            Field field, Object row, ByteSink sink, Map<Object, Object> seen, int count, Walker.Take outer) {
+            Field field, Object row, ByteSink sink, Map<Object, Object> seen, long count, Walker.Take outer) {
         if (count > sink.maxRounds) {
             // A lone value is the item of every round, so the count alone decides how long pack would run.
             throw new IllegalArgumentException(
                     field.label() + ": count " + count + " is above the limit of " + sink.maxRounds + " rounds");
         }
-        requireEntriesFit(field, row, count, outer);
-        pack(field, values(field.children), row, sink, seen, count, outer);
+        int rounds = (int) count;
+        requireEntriesFit(field, row, rounds, outer);
+        pack(field, values(field.children), row, sink, seen, rounds, outer);
     }
 
     /** A list that holds more entries than the count is refused, not cut to the count. */
@@ -77,7 +78,18 @@ final class Rounds {
             Map<Object, Object> seen,
             int count,
             Walker.Take outer) {
-        for (Field value : values) {
+        requireNoLone(field, row, outer);
+        for (int i = 0; i < count; i++) {
+            clear(values, seen);
+            int index = i;
+            Walker.Take at = child -> item(read(child, row, outer), index);
+            Walker.packFields(field.children, row, sink, seen, at);
+        }
+    }
+
+    /** A lone dictionary or byte buffer is the item of no round: the rounds take one per round, in a list. */
+    static void requireNoLone(Field field, Object row, Walker.Take outer) {
+        for (Field value : values(field.children)) {
             Object given = read(value, row, outer);
             if (value.kind == Field.Kind.DICT && given instanceof Map<?, ?>) {
                 throw new IllegalArgumentException(memberName(value)
@@ -87,12 +99,6 @@ final class Rounds {
                 throw new IllegalArgumentException(memberName(value)
                         + ": a lone byte buffer is not a list of rounds; give one buffer per round in a list");
             }
-        }
-        for (int i = 0; i < count; i++) {
-            clear(values, seen);
-            int index = i;
-            Walker.Take at = child -> item(read(child, row, outer), index);
-            Walker.packFields(field.children, row, sink, seen, at);
         }
     }
 

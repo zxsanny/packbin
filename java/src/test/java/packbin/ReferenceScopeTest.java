@@ -128,6 +128,17 @@ final class ReferenceScopeTest {
                 Packbin.u2(Packbin.u2Slot(0, Access.get("a"), Access.set("a")), Packbin.u2Slot(1, Access.get("b"), Access.set("b"))),
                 Packbin.when(2, Packbin.eq(1, 3), u8(2, "v")));
         expectRoundTrip("F4 when names a u2 slot", slot, Maps.map("a", 0, "b", 3, "v", 9), "01" + "0c" + "09");
+        expectRefused("loop 19 B3 eq on a u2 slot past 3", () -> Maps.scheme(1,
+                Packbin.u2(Packbin.u2Slot(0, Access.get("a"), Access.set("a"))),
+                Packbin.when(1, Packbin.eq(0, 7), u8(1, "v"))),
+                "when 1 tests field 0 against 7, which that field can not hold (expected 2-bit int)");
+        expectRefused("loop 19 B3 eq on a u2 slot at 4", () -> Maps.scheme(1,
+                Packbin.u2(Packbin.u2Slot(0, Access.get("a"), Access.set("a"))),
+                Packbin.when(1, Packbin.eq(0, 4), u8(1, "v"))),
+                "when 1 tests field 0 against 4, which that field can not hold (expected 2-bit int)");
+        expectRoundTrip("loop 19 B3 eq on a u2 slot at 3 still builds", Maps.scheme(1,
+                Packbin.u2(Packbin.u2Slot(0, Access.get("a"), Access.set("a"))),
+                Packbin.when(1, Packbin.eq(0, 3), u8(1, "v"))), Maps.map("a", 3, "v", 9), "01" + "03" + "09");
         Scheme<Map> signed = Maps.scheme(1,
                 Packbin.i16(0, Access.get("n"), Access.set("n")),
                 Packbin.when(1, Packbin.eq(0, -1), Packbin.u8(1, Access.get("v"), Access.set("v"))));

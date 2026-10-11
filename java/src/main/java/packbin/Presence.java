@@ -88,7 +88,10 @@ final class Presence {
                 boolean written = count instanceof Number && !(count instanceof Float || count instanceof Double);
                 return !written && Rounds.repeatOn(member, row, take);
             }
-            case GROUP, WHEN -> {
+            case FLAG_BIT -> {
+                return valuesWithoutCount(member.inner, row, take, seen);
+            }
+            case GROUP, WHEN, FLAGS -> {
                 if (member.kind == Field.Kind.WHEN && !conditionHolds(member.condition, seen)) {
                     return false;
                 }

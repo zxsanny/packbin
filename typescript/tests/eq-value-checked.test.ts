@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { BinaryPacker, bool, eq, flags, i8, scheme, u2, u8, u16, u32, u64, when, type Field } from "../src/index.ts"
+import { BinaryPacker, bool, eq, flags, i8, i64, scheme, u2, u8, u16, u32, u64, when, type Field } from "../src/index.ts"
 
 type Row = Record<string, unknown>
 
@@ -22,6 +22,7 @@ const SOURCES: Record<string, () => Field> = {
   u16: () => u16(0, (x) => x.mode),
   u32: () => u32(0, (x) => x.mode),
   u64: () => u64(0, (x) => x.mode),
+  i64: () => i64(0, (x) => x.mode),
   u2: () => u2(0, (x) => x.mode),
 }
 
@@ -44,6 +45,9 @@ const REFUSED: [string, unknown, string, string][] = [
   ["u64", -1, "-1", "0 to 18446744073709551615"],
   ["u64", 1e20, "100000000000000000000", "0 to 18446744073709551615"],
   ["u64", 1n << 64n, "18446744073709551616", "0 to 18446744073709551615"],
+  ["u64", 2 ** 64, "18446744073709552000", "0 to 18446744073709551615"],
+  ["i64", 2 ** 63, "9223372036854776000", "-9223372036854775808 to 9223372036854775807"],
+  ["i64", 2n ** 63n, "9223372036854775808", "-9223372036854775808 to 9223372036854775807"],
   ["u2", 4, "4", "0 to 3"],
   ["u2", -1, "-1", "0 to 3"],
 ]
@@ -52,6 +56,7 @@ const BUILT: [string, unknown][] = [
   ["u8", 5], ["u8", 5.0], ["u8", 255], ["u8", 0], ["u8", 5n],
   ["i8", -128], ["i8", 127], ["u16", 65_535], ["u32", 4_294_967_295],
   ["u64", 18_446_744_073_709_551_615n], ["u64", 2 ** 53], ["u2", 3],
+  ["i64", -(2n ** 63n)], ["i64", 2n ** 63n - 1n], ["u64", 2 ** 53 - 1],
 ]
 
 describe("AZ-2338 an eq value is checked against the integer source when the scheme is built", () => {

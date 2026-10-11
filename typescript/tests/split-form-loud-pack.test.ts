@@ -161,4 +161,35 @@ describe("AZ-2331 a split flag byte pack refuses a body its bit cannot carry", (
     assert.match(refusal(() => BinaryPacker.pack(ws(), { mode: 1, speed: 300, heading: 90 })), /^speed/)
     assert.match(refusal(() => BinaryPacker.pack(ts(), { n: 1, pt: [300], heading: 90 })), /^pt/)
   })
+  it("review B2 a skipped count under a when inside a split bit is refused naming the member", () => {
+    // Arrange
+    const layout = split((m) => [
+      u8(0, (x) => x.mode), m, m.bit(u8(1, (x) => x.n)),
+      m.bit(when(2, eq(0, 1), [times(2, 1, [u8(2, (x) => x.pt)])])),
+    ])
+
+    // Act
+    const message = refusal(() => BinaryPacker.pack(layout, { mode: 1, pt: [5] }))
+    const falseCondition = hex(BinaryPacker.pack(layout, { mode: 0, pt: [5] }))
+
+    // Assert
+    assert.equal(message, `pt: ${WHY}`)
+    assert.equal(falseCondition, "010000")
+  })
+
+  it("review B7 an empty list under a skipped count holds no value and packs", () => {
+    // Arrange
+    const layout = split((m) => [
+      u8(0, (x) => x.mode), m, m.bit(u8(1, (x) => x.n)),
+      m.bit(when(2, eq(0, 1), [times(2, 1, [u8(2, (x) => x.pt)])])),
+    ])
+
+    // Act
+    const inWhen = hex(BinaryPacker.pack(layout, { mode: 1, pt: [] }))
+    const bare = hex(BinaryPacker.pack(timesSkipped(), { pt: [], heading: 90 }))
+
+    // Assert
+    assert.equal(inWhen, "010100")
+    assert.equal(bare, "01045a00")
+  })
 })

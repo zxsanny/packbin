@@ -284,3 +284,112 @@ fn to_bytes(hex: &str) -> Vec<u8> {
         .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).expect("hex"))
         .collect()
 }
+
+/// `flagbyte m; bit m { u8 mode }; bit m { when mode == 1 { u8 speed } }; bit m { u16 heading }`:
+/// the condition is a plain optional field under a bit; nothing may write it before the byte.
+fn optional_source() -> MapScheme {
+    let m = flag_byte("m");
+    MapScheme::new(
+        1,
+        vec![
+            m.byte(),
+            m.bit(u8("mode")),
+            m.bit(when(2, eq("mode", Value::U8(1)), vec![u8("speed")])),
+            m.bit(u16("heading")),
+        ],
+    )
+}
+
+#[test]
+fn review_a2_a_source_never_written_and_absent_packs_the_body_away_silently() {
+    // Arrange: mode has no value, so the when cannot match; before the fix this was a type error
+    let vals = row(&[("speed", Value::U8(7)), ("heading", Value::U16(90))]);
+
+    // Act
+    let wire = hex(&optional_source(), &vals);
+
+    // Assert
+    assert_eq!(wire, "01045a00");
+}
+
+#[test]
+fn review_a2_a_source_given_after_the_byte_that_matches_still_names_the_body() {
+    // Arrange: mode=1 is written after the byte, so the body would be written with its bit clear
+    let vals = row(&[("mode", Value::U8(1)), ("speed", Value::U8(7))]);
+
+    // Act
+    let message = refusal(&optional_source(), &vals);
+
+    // Assert
+    assert!(
+        message.contains("'speed'") && message.contains("'mode'"),
+        "{message}"
+    );
+}
+
+#[test]
+fn review_a2_a_source_given_after_the_byte_outside_the_expected_value_packs_silently() {
+    // Arrange: a hostile value (255) that is not the expected 1
+    let vals = row(&[("mode", Value::U8(255)), ("speed", Value::U8(7))]);
+
+    // Act
+    let wire = hex(&optional_source(), &vals);
+
+    // Assert
+    assert_eq!(wire, "0101ff");
+}
+
+#[test]
+fn review_a6_a_count_written_before_the_byte_as_zero_packs_a_lone_value_away() {
+    // Arrange: `u8 C; flagbyte m; bit m { times C { u8 Pt } }; bit m { u16 Heading }`, C = 0
+    let m = flag_byte("m");
+    let scheme = MapScheme::new(
+        1,
+        vec![
+            u8("C"),
+            m.byte(),
+            m.bit(times(2, "C", vec![u8("Pt")])),
+            m.bit(u16("Heading")),
+        ],
+    );
+    let vals = row(&[
+        ("C", Value::U8(0)),
+        ("Pt", Value::U8(5)),
+        ("Heading", Value::U16(90)),
+    ]);
+
+    // Act
+    let wire = hex(&scheme, &vals);
+
+    // Assert
+    assert_eq!(wire, "0100025a00");
+}
+
+#[test]
+fn review_a3_a_combined_flags_inside_a_split_bit_with_the_when_true_names_the_body() {
+    // Arrange: `flagbyte m; u8 Mode; bit m { flags f { when Mode == 1 { u8 Speed } } }; bit m { u16 Heading }`
+    let m = flag_byte("m");
+    let scheme = MapScheme::new(
+        1,
+        vec![
+            m.byte(),
+            u8("Mode"),
+            m.bit(flags(
+                2,
+                "f",
+                vec![when(2, eq("Mode", Value::U8(1)), vec![u8("Speed")])],
+            )),
+            m.bit(u16("Heading")),
+        ],
+    );
+    let vals = row(&[("Mode", Value::U8(1)), ("Speed", Value::U8(7))]);
+
+    // Act
+    let message = refusal(&scheme, &vals);
+
+    // Assert
+    assert!(
+        message.contains("'Speed'") && message.contains("'Mode'"),
+        "{message}"
+    );
+}

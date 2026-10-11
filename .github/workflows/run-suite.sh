@@ -37,10 +37,14 @@ case "$lang" in
       venv="${PACKBIN_PYTEST_VENV:-/tmp/packbin-pytest}"
       if [ ! -x "$venv/bin/pytest" ]; then
         if pytest_pin="$(bash "$root/.github/workflows/tool-pin.sh" pytest)"; then
-          if python -m venv --clear "$venv" </dev/null; then
+          # --clear empties the directory, so only a missing, empty or venv directory may be rebuilt.
+          if [ -e "$venv" ] && [ ! -f "$venv/pyvenv.cfg" ] && [ -n "$(ls -A "$venv" 2>/dev/null)" ]; then
+            printf 'run-suite: %q exists, is not empty and is not a python venv; not overwriting it\n' "$venv" >&2
+            ok=1
+          elif python -m venv --clear "$venv" </dev/null; then
             "$venv/bin/pip" install --only-binary=:all: "pytest==$pytest_pin" || ok=1
           else
-            echo "run-suite: cannot create the python venv $venv (is 'python' on PATH?)" >&2
+            printf "run-suite: cannot create the python venv %q (is 'python' on PATH?)\n" "$venv" >&2
             ok=1
           fi
         else
@@ -48,8 +52,8 @@ case "$lang" in
         fi
       fi
       if [ "$ok" -eq 0 ] && ! "$venv/bin/python" -c 'import pytest' </dev/null >/dev/null 2>&1; then
-        echo "run-suite: python venv $venv is unusable: its interpreter or pytest does not start." >&2
-        echo "run-suite: remove it and run again so it is rebuilt: rm -rf $venv" >&2
+        printf 'run-suite: python venv %q is unusable: its interpreter or pytest does not start.\n' "$venv" >&2
+        printf 'run-suite: remove it and run again so it is rebuilt: rm -rf %q\n' "$venv" >&2
         ok=1
       fi
       run "$venv/bin/python" -m pytest -v --tb=short "$root/python/tests"

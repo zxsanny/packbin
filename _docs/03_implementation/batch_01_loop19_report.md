@@ -189,3 +189,9 @@ Parent wrote `fixtures/hostile/cases.txt` (+8 cases, 33 total) and the README se
 | C++ | `hostile_host_tests.cpp`, `hostile_pack_cases.hpp`; two skips with reasons (`pack_times_count_over_limit`, `pack_lone_bytes_in_round`) | gcc:16 and host `make test` pass |
 
 Rust worker slip: ran `cargo fmt` on the whole crate, then reverted that churn; the tree now differs from HEAD only in `hostile_tests.rs` (verified). Java note: a count of 4 000 000 000 reports "item count -294967296" (negative `int`), still a pack error.
+
+## Review fix pass (batch 02)
+
+See `_docs/loops/loop19/review19.md` "Fix pass". Counts after: C# 913/913 (both targets), TypeScript 728, Python 777, Rust 533, Java exit 0, C++ gcc:16 and host green, arm embedded stack 448 B, flash 8064 of 8192 B.
+Decided and recorded during the pass: a lone scalar with count 0 stays silent in all six; a count of 0 with a list of values is an error before and after the byte (C# restored, Rust already); a never-written `when` source with a body given is silent (Rust relaxed to match C#); `eq(u64, 2**53)` stays buildable in TypeScript.
+Slip: the C7 relay for the C++ skip text was first sent to the Rust worker and then re-sent to the C++ worker; no harm.

@@ -172,7 +172,7 @@ final class HostileVectorTest {
             };
             case "pack_split_times_count_skipped" -> () -> {
                 Field fb = Packbin.flagByte();
-                return BinaryPacker.pack(Maps.scheme(1, u8(0, "sel"), Packbin.when(1, Packbin.eq(0, 1), u8(1, "n")), fb,
+                return BinaryPacker.pack(Maps.scheme(1, u8(0, "sel"), fb, Packbin.when(1, Packbin.eq(0, 1), u8(1, "n")),
                         fb.bit(Packbin.times(2, 1, u8(2, "pt")))), Maps.map("sel", 0, "pt", List.of(5)));
             };
             case "pack_lone_bytes_in_round" -> () -> BinaryPacker.pack(

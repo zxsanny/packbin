@@ -64,7 +64,8 @@ const U2_RANGE: Range = { label: "u2", min: 0n, max: 3n }
 function inRange(value: unknown, range: Range): boolean {
   if (typeof value === "bigint") return value >= range.min && value <= range.max
   if (typeof value !== "number" || !Number.isInteger(value)) return false
-  return value >= Number(range.min) && value <= Number(range.max)
+  const exact = BigInt(value)
+  return exact >= range.min && exact <= range.max
 }
 
 function resolve(

@@ -91,36 +91,36 @@ def _times_on(node: _Times, seen: dict[int, Any], row: Any) -> bool:
     return rounds > 0
 
 
-def _unwritten_source(child: _Node, seen: dict[int, Any]) -> tuple[int, int] | None:
-    """The first `when` under a flag bit, with its condition field, whose field has no value yet: a split flag byte
-    decides the bit without it, so the bit must be re-checked when the field is written."""
+def _unwritten_sources(child: _Node, seen: dict[int, Any]) -> list[_When]:
+    """Every `when` under a flag bit whose condition field has no value yet: a split flag byte decides the bit
+    without them, so the bit must be re-checked when the fields are written."""
+    found: list[_When] = []
     if isinstance(child, (_Group, _Flags, _When)):
-        if isinstance(child, _When):
-            if seen.get(child.condition.field_id) is None:
-                return child.anchor, child.condition.field_id
+        if isinstance(child, _When) and seen.get(child.condition.field_id) is None:
+            found.append(child)
         for inner in child.fields:
-            found = _unwritten_source(inner, seen)
-            if found is not None:
-                return found
+            found.extend(_unwritten_sources(inner, seen))
     elif isinstance(child, _FlagBit):
-        return _unwritten_source(child.field, seen)
-    return None
+        found.extend(_unwritten_sources(child.field, seen))
+    return found
 
 
 def _refuse_late_body(
     child: _Node, flag_state: dict[int, Any], take: Callable[[_Node], Any], seen: dict[int, Any], row: Any
 ) -> None:
-    """A clear split bit whose `when` condition was written after the flag byte: a body that the written condition
+    """A clear split bit with `when` conditions written after the flag byte: a body that a written condition
     now asks for would be dropped, so pack fails instead of returning a packet the row did not ask for. A false
     condition leaves the body out on purpose, as outside a split byte."""
-    unwritten = flag_state.get(id(child))
-    if unwritten is None or seen.get(unwritten[1]) is None or not _child_on(child, take, seen, row):
+    late = flag_state.get(id(child))
+    if not late or not _child_on(child, take, seen, row):
         return
-    anchor, source = unwritten
-    raise ValueError(
-        f"when {anchor}: a body value is given, but condition field {source} is written after the flag byte "
-        "that decides this bit"
-    )
+    for node in late:
+        source = node.condition.field_id
+        if seen.get(source) == node.condition.value:
+            raise ValueError(
+                f"when {node.anchor}: a body value is given, but condition field {source} is written after "
+                "the flag byte that decides this bit"
+            )
 
 
 def _write_u2(buf: bytearray, slots: Sequence[Any], take: Callable[[_Node], Any], seen: dict[int, Any]) -> None:
@@ -387,8 +387,8 @@ def pack_nodes(
                 if _child_on(child, take, seen, row):
                     flag |= 1 << i
                 else:
-                    unwritten = _unwritten_source(child, seen)
-                    if unwritten is not None:
+                    unwritten = _unwritten_sources(child, seen)
+                    if unwritten:
                         flag_state[id(child)] = unwritten
             buf.append(flag)
             flag_state[id(node)] = flag

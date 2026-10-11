@@ -195,7 +195,7 @@ struct PackSkip {
 constexpr PackSkip kPackSkips[] = {
     {"pack_out_of_range_integer", "typed rows have static types: the u8 member is a std::uint8_t"},
     {"pack_times_count_over_limit",
-     "the rounds live in a fixed Array of at most 65,535 items: the row cannot be written"},
+     "it has no round limit on pack: the rounds live in a fixed `Array` of at most 65,535 items, and a count of 65,536 is refused only as a count that differs from the array length"},
     {"pack_lone_bytes_in_round",
      "a typed row holds an Array of Array: a lone buffer cannot be written"},
 };

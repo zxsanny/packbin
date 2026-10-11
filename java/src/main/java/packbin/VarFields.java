@@ -162,16 +162,28 @@ final class VarFields {
         return null;
     }
 
-    static int borrowedCount(Field field, Map<Object, Object> seen) {
+    /** The count a field borrows plus its bias, as a long so a u32 or u64 count is never cut to an int. */
+    static long borrowedLong(Field field, Map<Object, Object> seen) {
         Object countRaw = seen.get(field.countId);
         if (!(countRaw instanceof Number) || countRaw instanceof Float || countRaw instanceof Double) {
             throw new IllegalStateException(field.label() + ": count " + field.countId + " is missing");
         }
-        int count = ((Number) countRaw).intValue() + field.bias;
+        long raw = ((Number) countRaw).longValue();
+        long count = field.bias > 0 && raw > Long.MAX_VALUE - field.bias ? Long.MAX_VALUE : raw + field.bias;
         if (count < 0) {
             throw new IllegalArgumentException(field.label() + ": item count " + count);
         }
         return count;
+    }
+
+    /** The borrowed count as an int, refused above {@code limit} before any cast. */
+    static int borrowedCount(Field field, Map<Object, Object> seen, long limit) {
+        long count = borrowedLong(field, seen);
+        if (count > limit) {
+            throw new IllegalArgumentException(
+                    field.label() + ": count " + count + " is above the limit of " + limit + " items");
+        }
+        return (int) count;
     }
 
     static int packedBytes(int width, int count) {
@@ -180,7 +192,7 @@ final class VarFields {
 
     static void packPacked(
             Field field, Object row, ByteSink sink, Map<Object, Object> seen, Walker.Take take) {
-        int count = borrowedCount(field, seen);
+        int count = borrowedCount(field, seen, Integer.MAX_VALUE);
         Object raw = take != null ? take.apply(field) : field.get.get(row);
         seen.put(field.id, raw);
         if (!(raw instanceof List<?> items) || items.size() != count) {
@@ -330,16 +342,17 @@ final class VarFields {
         if (!(countRaw instanceof Number) || countRaw instanceof Float || countRaw instanceof Double) {
             return false;
         }
-        int count = borrowedCount(field, seen);
+        long count = borrowedLong(field, seen);
         if (count == 0) {
             Rounds.requireEntriesFit(field, row, 0, take);
+            Rounds.requireNoLone(field, row, take);
         }
         return count > 0;
     }
 
     static void packTimes(
             Field field, Object row, ByteSink sink, Map<Object, Object> seen, Walker.Take take) {
-        Rounds.packTimes(field, row, sink, seen, borrowedCount(field, seen), take);
+        Rounds.packTimes(field, row, sink, seen, borrowedLong(field, seen), take);
     }
 
     static Object unpackTimes(
