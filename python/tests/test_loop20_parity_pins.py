@@ -6,7 +6,7 @@ import pytest
 
 from packbin import BinaryPacker, Scheme, flag_byte, flags, repeat, times, u8, u32
 
-# Loop 20 parity rows (AZ-2356, AZ-2359, AZ-2360, AZ-2362): each pins the outcome of the TypeScript reference.
+# Loop 20 parity rows (AZ-2356, AZ-2359, AZ-2360, AZ-2362, review B1): each pins the outcome of the TypeScript reference.
 
 SKIPPED_COUNT = (
     "pt: a value is given, but the count of its times is not written, so its bit is clear; "
@@ -117,6 +117,37 @@ def test_az2362_a_flags_member_of_a_repeat_round_with_an_empty_list_is_absent_in
 
     # Act / Assert
     assert _pack(scheme, {"w": [1, 2], "v": []}) == "0101000200"
+
+
+def test_review_b1_a_required_leaf_with_an_empty_list_beside_a_flags_member_is_missing_not_an_index_error():
+    # Arrange
+    scheme = Scheme(1, dict, repeat(0, _u8(0, "w"), flags(1, _u8(1, "v"))))
+
+    # Act / Assert: TypeScript refuses `missing w`
+    with pytest.raises(KeyError) as raised:
+        _pack(scheme, {"w": [], "v": [3]})
+    assert str(raised.value) == "'missing field w'"
+
+
+@pytest.mark.parametrize(
+    ("row", "member"), [({"a": [1, 2], "b": []}, "b"), ({"a": [], "b": [1, 2]}, "a")]
+)
+def test_review_b1_a_repeat_with_one_empty_required_list_beside_a_longer_one_names_the_member(row, member):
+    # Arrange
+    scheme = Scheme(1, dict, repeat(0, _u8(0, "a"), _u8(1, "b")))
+
+    # Act / Assert
+    with pytest.raises(KeyError) as raised:
+        _pack(scheme, row)
+    assert str(raised.value) == f"'missing field {member}'"
+
+
+def test_review_b1_a_repeat_with_every_list_empty_still_packs_no_rounds():
+    # Arrange
+    scheme = Scheme(1, dict, repeat(0, _u8(0, "a"), _u8(1, "b")))
+
+    # Act / Assert
+    assert _pack(scheme, {"a": [], "b": []}) == "01"
 
 
 class Level(enum.IntEnum):

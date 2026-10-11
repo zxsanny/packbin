@@ -23,14 +23,9 @@ Result put_u16(Writer& w, std::size_t value, int id) {
   return put_num<std::uint16_t>(w, static_cast<std::uint16_t>(value), false, id);
 }
 
-// The value of a count or `when` source, or false when it is absent.
-bool ref_value(Field const* t, Field const& f, void* obj, std::int64_t& out) {
-  return f.ref >= 0 && read_int(t[f.ref], obj, out);
-}
-
-// True when a `when` that holds the count of the times `f` has a false condition: the count is
-// set in the row but never written, so a reader has no count (`bit` links the count to each
-// `when` that holds it, see `mark_held`).
+// True when a `when` that holds the count of `f` has a false condition: the count is set in the
+// row but never written, so a reader has no count (`bit` links the count to each `when` that
+// holds it, see `mark_held`).
 bool count_skipped(Field const* t, Field const& f, void* obj) {
   for (Field const* k = t + f.ref; k->bit != 0;) {
     k -= k->bit;
@@ -38,6 +33,11 @@ bool count_skipped(Field const* t, Field const& f, void* obj) {
       return true;
   }
   return false;
+}
+
+// The value of a count, or false when it is absent or was not written.
+bool ref_value(Field const* t, Field const& f, void* obj, std::int64_t& out) {
+  return f.ref >= 0 && read_int(t[f.ref], obj, out) && !count_skipped(t, f, obj);
 }
 
 // The children of entry i, in order, on the same object.
@@ -82,6 +82,17 @@ Result pack_flags(Pack& p, std::size_t i, void* obj) {
   return r;
 }
 
+// True when a `when` between the flag bit at `bit` and the entry `k` that holds `k` has a false
+// condition: `k` is not written then.
+bool under_clear_when(Field const* t, std::size_t bit, std::size_t k, void* obj) {
+  Field const* at = t + k;
+  for (Field const* w = t + bit + 1; w < at; ++w) {
+    if (w->kind == Kind::When && at < w + w->span && !when_matches(t, *w, obj))
+      return true;
+  }
+  return false;
+}
+
 PACKBIN_NOINLINE
 Result pack_flag_byte(Pack& p, std::size_t i, void* obj) {
   Field const* t = p.t;
@@ -92,7 +103,7 @@ Result pack_flag_byte(Pack& p, std::size_t i, void* obj) {
     // A body whose source is written after this byte cannot be read back (see `Field::late`).
     for (std::size_t k = j; t[k].late != 0;) {
       k += t[k].late;
-      if (present(t, k, obj))
+      if (present(t, k, obj) && !under_clear_when(t, j, k, obj))
         return bad(p.w, t[k]);
     }
     if (present(t, j + 1, obj))
@@ -213,7 +224,7 @@ std::size_t item_count(Pack& p, std::size_t i, void* obj, void* m, Result& out) 
     return m == nullptr ? 0 : *f.count(m);
   if (f.kind == Kind::Times) {
     std::int64_t count = 0;
-    if (!ref_value(p.t, f, obj, count) || count_skipped(p.t, f, obj) || count < 0 ||
+    if (!ref_value(p.t, f, obj, count) || count < 0 ||
         (m == nullptr ? count != 0 : *f.count(m) != count)) {
       out = bad(p.w, f);
       return stop;

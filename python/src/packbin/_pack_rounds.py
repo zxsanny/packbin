@@ -65,7 +65,8 @@ def _at_round(
     """The value of a leaf in round `index`: entry `index` of its list, or the lone value every round shares.
     A leaf in `optional` (the ids of those a `times` body holds under `flags` or a flag bit) has no entry
     past the end of its list: it is absent in that round, as a `None` entry is. `count` is given for a `times`:
-    it writes every round it counts, so a list that ends early names the leaf."""
+    it writes every round it counts, so a list that ends early names the leaf. A required leaf of a `repeat`
+    whose list is empty beside a longer one is missing in every round and is named so."""
 
     def at(leaf: _Node) -> Any:
         value = leaf.get(row)  # type: ignore[attr-defined]
@@ -75,6 +76,8 @@ def _at_round(
             return None
         if count is not None and index >= len(value):
             raise ValueError(f"{_member_label(leaf)}: {len(value)} items, times count is {count}")
+        if index >= len(value):
+            raise KeyError(f"missing field {_name(leaf)}")
         return value[index]
 
     return at

@@ -30,10 +30,10 @@ Given `Repeat(0, U8 V)` (type 3) and the packet `03 01 02`, and a `times` and a 
 When unpacked with typed `Unpack`
 Then an error result naming the field, no exception
 
-**AC-2: checks in rounds**
-Given `Repeat(0, List((Row x) => x.Ids, U32(...)))` with `List<int> Ids`, and the same in `Times`
+**AC-2: checks in rounds** (corrected by the loop 20 review, A1)
+Given `Repeat(0, List((Row x) => x.Ids, U32(...)))` with `List<int> Ids` or `List<long> Ids`, and the same in `Times`
 When the scheme is built
-Then refused at construction, naming the member; `List<long>` builds
+Then refused at construction, naming the member: inside a round the member holds one list per round, so a scalar-element collection can never bind; `List<List<object?>>`, `object[]`, `IList` and `object` members build and bind as before
 
 ## Unit Tests
 

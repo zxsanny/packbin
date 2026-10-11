@@ -23,6 +23,7 @@ public class TypedRoundUnpackTests
     private sealed class WideIds
     {
         public uint U { get; set; }
+        public byte Count { get; set; }
         public List<long>? Ids { get; set; }
     }
 
@@ -104,7 +105,7 @@ public class TypedRoundUnpackTests
         // Assert
         var refused = Assert.IsType<ArgumentException>(error);
         Assert.Contains("'Ids'", refused.Message);
-        Assert.Contains("too narrow", refused.Message);
+        Assert.Contains("one list per round", refused.Message);
     }
 
     [Fact]
@@ -121,13 +122,27 @@ public class TypedRoundUnpackTests
     }
 
     [Fact]
-    public void Ac2_Scheme_ListOfLongIdsInARepeat_Builds()
+    public void Ac2_Scheme_ListOfLongIdsInARepeat_IsRefusedAtConstructionNamingTheMember()
     {
         // Arrange / Act
-        var scheme = new Scheme<WideIds>(1,
-            Field.Repeat(0, Field.List((WideIds x) => x.Ids, Field.U32<WideIds>(0, x => x.U))));
+        var error = Record.Exception(() => new Scheme<WideIds>(1,
+            Field.Repeat(0, Field.List((WideIds x) => x.Ids, Field.U32<WideIds>(0, x => x.U)))));
 
         // Assert
-        Assert.Single(scheme.Fields);
+        var refused = Assert.IsType<ArgumentException>(error);
+        Assert.Contains("'Ids'", refused.Message);
+        Assert.Contains("one list per round", refused.Message);
+    }
+
+    [Fact]
+    public void Ac2_Scheme_ListOfLongIdsInATimes_IsRefusedAtConstructionNamingTheMember()
+    {
+        // Arrange / Act
+        var error = Record.Exception(() => new Scheme<WideIds>(1,
+            Field.U8<WideIds>(0, x => x.Count),
+            Field.Times(1, 0, Field.List((WideIds x) => x.Ids, Field.U32<WideIds>(0, x => x.U)))));
+
+        // Assert
+        Assert.Contains("'Ids'", Assert.IsType<ArgumentException>(error).Message);
     }
 }

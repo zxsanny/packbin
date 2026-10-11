@@ -171,6 +171,74 @@ fn az2360_ac1_a_times_in_a_group_under_flags_is_refused_too() {
     assert_eq!(message, format!("pt: {SKIPPED}"));
 }
 
+/// Review 20 A4: `u8 m; when(m == 9) { u8 n }; flags { group g { times(n) { u8 pt } } }`; the
+/// count `n` is skipped when `m` is not 9.
+fn skipped_count_under_flags() -> MapScheme {
+    MapScheme::new(
+        1,
+        vec![
+            u8("m"),
+            when(1, eq("m", Value::U8(9)), vec![u8("n")]),
+            flags(
+                2,
+                "f",
+                vec![group(2, "g", vec![times(2, "n", vec![u8("pt")])])],
+            ),
+        ],
+    )
+}
+
+#[test]
+fn review20_a4_a_skipped_count_with_a_stale_zero_is_refused_under_flags_naming_the_member() {
+    // Arrange
+    let scheme = skipped_count_under_flags();
+    let stale_zero = row(&[
+        ("m", Value::U8(0)),
+        ("n", Value::U8(0)),
+        ("pt", Value::U8(5)),
+    ]);
+    let stale_zero_list = row(&[("m", Value::U8(0)), ("n", Value::U8(0)), ("pt", ints(&[5]))]);
+    let no_count = row(&[("m", Value::U8(0)), ("pt", Value::U8(5))]);
+    let stale_three = row(&[
+        ("m", Value::U8(0)),
+        ("n", Value::U8(3)),
+        ("pt", Value::U8(5)),
+    ]);
+
+    // Act
+    let messages =
+        [&stale_zero, &stale_zero_list, &no_count, &stale_three].map(|vals| refusal(&scheme, vals));
+
+    // Assert
+    assert_eq!(messages, std::array::from_fn(|_| format!("pt: {SKIPPED}")));
+}
+
+#[test]
+fn review20_a4_a_skipped_count_with_a_stale_zero_and_no_value_packs_the_bit_clear() {
+    // Arrange
+    let scheme = skipped_count_under_flags();
+    let vals = row(&[("m", Value::U8(0)), ("n", Value::U8(0))]);
+
+    // Act
+    let wire = hex(&scheme, &vals);
+
+    // Assert
+    assert_eq!(wire, "010000");
+}
+
+#[test]
+fn review20_a4_the_split_form_keeps_count_zero_after_the_byte() {
+    // Arrange
+    let scheme = count_after_the_byte();
+    let three = row(&[("n", Value::U8(3)), ("pt", Value::U8(5))]);
+
+    // Act
+    let message = refusal(&scheme, &three);
+
+    // Assert: count 0 (list refused, lone scalar packs) is pinned by the AZ-2356 tests above
+    assert!(message.contains("'pt'"), "{message}");
+}
+
 /// AZ-2359: Rust enums are not numbers. The typed API takes the integer a caller converts to
 /// (`Level::High as u8`); a value of another kind in a `u8` slot is a type error.
 #[test]

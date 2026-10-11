@@ -278,8 +278,10 @@ def test_ac4_row16_the_same_packet_is_refused_by_unpack_at_the_default_limit():
     result = BinaryPacker.unpack(packed, _wide_round().on(lambda _row: None))
 
     # Assert
+    # Python's unpack charges eight more slots per name for the first round of a run (README), so it refuses
+    # at a round of its own: the field and the bytes left pin that round
     assert result.ok is False
-    assert isinstance(result.error, ShortPacket)
+    assert result.error == ShortPacket(field="1", needed=0, left=66040)
 
 
 def test_order_row17_a_row_at_both_limits_packs():

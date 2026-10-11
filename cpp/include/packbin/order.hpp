@@ -182,16 +182,18 @@ constexpr int bit_position(Field const* t, std::size_t byte, std::size_t at) {
   return n;
 }
 
-// Links every `when` or `times` the flag bit at `bit` decides, directly or inside groups, whose
-// source comes after the flag byte and before the flag bit (resolved already): `late` on the bit
-// leads to the first, `late` on each to the next. A source inside the bit's own body is read
-// where the body is read.
+// Links every `when` or `times` the flag bit at `bit` decides, directly or inside groups, `flags`
+// or a `when` (pack checks that `when`), whose source comes after the flag byte and before the flag
+// bit (resolved already): `late` on the bit leads to the first, `late` on each to the next. A
+// source inside the bit's own body is read where the body is read.
 constexpr void mark_late(Field* t, std::size_t bit, Check& c) {
   std::size_t end = bit + t[bit].span;
   std::size_t last = bit;
-  for (std::size_t i = bit + 1; i < end; i += t[i].kind == Kind::Group ? 1 : t[i].span) {
+  for (std::size_t i = bit + 1; i < end;) {
     bool decided = t[i].kind == Kind::When || t[i].kind == Kind::Times;
     bool late = t[i].ref > t[bit].ref && t[i].ref < static_cast<std::int16_t>(bit);
+    bool inside = t[i].kind == Kind::Group || t[i].kind == Kind::Flags ||
+                  (t[i].kind == Kind::When && !late);
     if (decided && late) {
       if (i - last > 255) {
         c.fail_at(t[i].id);
@@ -200,20 +202,23 @@ constexpr void mark_late(Field* t, std::size_t bit, Check& c) {
       t[last].late = static_cast<std::uint8_t>(i - last);
       last = i;
     }
+    i += inside ? 1 : t[i].span;
   }
 }
 
-// Sets `bit` on the count source at `at` of the times `id`, and on each `when` in `scope` that
-// holds it, to the distance back to the nearest `when` that holds that entry, so pack can tell a
-// count that a false condition skips (see `Field::bit`).
-constexpr void mark_held(Field* t, std::size_t scope, std::size_t at, int id, Check& c) {
+// Sets `bit` on the count source at `at` of the counted entry `user` (id `id`), and on each `when`
+// in `scope` that holds it, to the distance back to the nearest `when` that holds that entry, so
+// pack can tell a count that a false condition skips (see `Field::bit`). A `when` that also holds
+// `user` is true whenever `user` is reached, so the chain stops there.
+constexpr void mark_held(Field* t, std::size_t scope, std::size_t at, std::size_t user, int id,
+                         Check& c) {
   for (std::size_t k = at;;) {
     std::size_t w = k;
     for (std::size_t j = scope; j < k; ++j) {
       if (t[j].kind == Kind::When && k < j + t[j].span)
         w = j;
     }
-    if (w == k)
+    if (w == k || user < w + t[w].span)
       return;
     if (k - w > 255) {
       c.fail_at(id);
@@ -256,8 +261,9 @@ constexpr void resolve(Field* t, std::size_t begin, std::size_t end, std::size_t
         return;
       }
       f.ref = static_cast<std::int16_t>(at);
-      if (f.kind == Kind::Times)
-        mark_held(t, scope, static_cast<std::size_t>(at), f.id, c);
+      if (f.kind == Kind::Times || f.kind == Kind::Bits || f.kind == Kind::Packed ||
+          f.kind == Kind::Sized)
+        mark_held(t, scope, static_cast<std::size_t>(at), j, f.id, c);
     }
     if (f.span > 1)
       resolve(t, j + 1, j + f.span, is_container(f.kind) ? j + 1 : scope, c);

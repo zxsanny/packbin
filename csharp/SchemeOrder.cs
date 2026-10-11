@@ -112,12 +112,21 @@ internal static class SchemeOrder
             RequireCollection(field, collection, inRound);
     }
 
-    // In a repeat or times round the member may be a list of what each round holds (`List<Dictionary<string, byte>>` for a
-    // dict field), so only the element check applies there.
+    // In a repeat or times round a list member holds one list per round, so it must be a member typed unpack can bind that
+    // to (`List<List<object?>>`, `IList`, `IList<object?>`, `List<object?>`, `object[]`, `object`): `List<int>` could
+    // never take it. A dict member in a round keeps the element check (a pack-only member such as `List<Dictionary<..>>` builds).
     private static void RequireCollection(Field field, CollectionShape shape, bool inRound)
     {
         var member = field.Binding!.Member.Type;
         var kind = shape.Dictionary ? "dictionary" : "list";
+        if (inRound && !shape.Dictionary)
+        {
+            if (!shape.HoldsRounds)
+                throw new ArgumentException(
+                    $"'{field.Name}': {TypeName(member)} cannot hold the list a repeat or times round reads for its field "
+                    + "(one list per round); use List<List<object?>>, IList, IList<object?>, List<object?>, object[] or object");
+            return;
+        }
         if (!inRound && !CollectionShape.IsSupported(member, shape.Dictionary))
             throw new ArgumentException(
                 $"'{field.Name}': {TypeName(member)} is not a collection Packbin can fill; use an array, "

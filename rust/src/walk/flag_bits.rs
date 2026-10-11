@@ -8,6 +8,14 @@ use std::collections::HashMap;
 /// The fields under each flag byte read in one scope, by slot, with the bit each one owns.
 pub(super) type FlagInners<'f> = HashMap<usize, Vec<(u8, &'f Field)>>;
 
+/// Where a flag bit is decided: in a combined `flags` byte (which writes its own members), or at a
+/// split flag byte whose fields are written elsewhere.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Form {
+    Combined,
+    Split,
+}
+
 /// A bool (an empty group) is on for `1` and off for `0` or no value; any other value is a
 /// type error, as for `bits`.
 fn bool_on(values: &Values, name: &str) -> Result<bool, PackError> {
@@ -46,6 +54,7 @@ fn group_on(
     members: &[Field],
     values: &Values,
     wrote: &Written<'_>,
+    form: Form,
 ) -> Result<bool, PackError> {
     if members.is_empty() {
         return bool_on(values, name);
@@ -53,16 +62,19 @@ fn group_on(
     if present(values, name) {
         return Ok(true);
     }
-    any_member_on(members, values, wrote)
+    any_member_on(members, values, wrote, form)
 }
 
 fn any_member_on(
     members: &[Field],
     values: &Values,
     wrote: &Written<'_>,
+    form: Form,
 ) -> Result<bool, PackError> {
     for member in members {
-        if !matches!(member.kind, FieldKind::FlagByte { .. }) && member_on(member, values, wrote)? {
+        if !matches!(member.kind, FieldKind::FlagByte { .. })
+            && member_on(member, values, wrote, form)?
+        {
             return Ok(true);
         }
     }
@@ -78,26 +90,29 @@ fn when_on(
     members: &[Field],
     values: &Values,
     wrote: &Written<'_>,
+    form: Form,
 ) -> Result<bool, PackError> {
     if !wrote.get(field).is_some_and(|v| when_matches(v, expect)) {
         return Ok(false);
     }
-    any_member_on(members, values, wrote)
+    any_member_on(members, values, wrote, form)
 }
 
 /// A `times` is on when its count is above 0. A count pack has not written (its field was
 /// skipped) is no round, as on unpack, so a value given for its rounds would be dropped without a
-/// word: it is refused, naming the member (an empty list holds no value). With count 0 the values
-/// given for its rounds are refused, as outside `flags`.
+/// word: it is refused, naming the member (an empty list holds no value). In the split form a
+/// count given as 0 and written after the byte starts no round and is not refused. With count 0
+/// the values given for its rounds are refused, as outside `flags`.
 fn times_on(
     anchor: u32,
     count: &str,
     members: &[Field],
     values: &Values,
     wrote: &Written<'_>,
+    form: Form,
 ) -> Result<bool, PackError> {
     if wrote.get(count).is_none() {
-        if zero_given(count, values) {
+        if form == Form::Split && zero_given(count, values) {
             check_no_rounds(anchor, members, values)?;
             return Ok(false);
         }
@@ -124,18 +139,20 @@ fn times_on(
 }
 
 /// Whether the row gives the count as 0, though pack has not written it where its `times` is
-/// reached (it follows the flag byte): no round starts, so nothing is dropped.
+/// reached (it follows the flag byte): no round starts, so nothing is dropped. Only the split
+/// form has such a count; in a combined `flags` a skipped count with a stale 0 is refused like any
+/// other, as the value given for the rounds would be dropped.
 fn zero_given(count: &str, values: &Values) -> bool {
     matches!(values.get(count), Some(Some(v)) if as_usize(v) == Some(0))
 }
 
 /// A `repeat` is on when one of its rounds holds a value.
-fn repeat_on(members: &[Field], values: &Values) -> Result<bool, PackError> {
+fn repeat_on(members: &[Field], values: &Values, form: Form) -> Result<bool, PackError> {
     match values.get("__repeat__") {
         Some(Some(Value::Groups(rounds))) => {
             let scope = Written::unread();
             for round in rounds {
-                if any_member_on(members, round, &scope)? {
+                if any_member_on(members, round, &scope, form)? {
                     return Ok(true);
                 }
             }
@@ -152,15 +169,16 @@ pub(super) fn member_on(
     field: &Field,
     values: &Values,
     wrote: &Written<'_>,
+    form: Form,
 ) -> Result<bool, PackError> {
     match &field.kind {
-        FieldKind::Group { name, members, .. } => group_on(name, members, values, wrote),
-        FieldKind::FlagBit { inner, .. } => member_on(inner, values, wrote),
+        FieldKind::Group { name, members, .. } => group_on(name, members, values, wrote, form),
+        FieldKind::FlagBit { inner, .. } => member_on(inner, values, wrote, form),
         FieldKind::Flags { name, members, .. } => {
             if present(values, name) {
                 return Ok(true);
             }
-            any_member_on(members, values, wrote)
+            any_member_on(members, values, wrote, form)
         }
         FieldKind::U2 { names } => Ok(names.iter().any(|n| present(values, n))),
         FieldKind::When {
@@ -168,14 +186,14 @@ pub(super) fn member_on(
             expect,
             members,
             ..
-        } => when_on(tested, expect, members, values, wrote),
+        } => when_on(tested, expect, members, values, wrote, form),
         FieldKind::Times {
             anchor,
             count,
             members,
             ..
-        } => times_on(*anchor, count, members, values, wrote),
-        FieldKind::Repeat { members, .. } => repeat_on(members, values),
+        } => times_on(*anchor, count, members, values, wrote, form),
+        FieldKind::Repeat { members, .. } => repeat_on(members, values, form),
         _ => Ok(field_name(field).is_some_and(|n| present(values, n))),
     }
 }

@@ -55,7 +55,19 @@ internal sealed class CollectionShape
     public Func<object>? Create { get; }
     public bool IsArray { get; }
 
+    // In a repeat or times round the field's value is a list with one entry per round (a List<object?> for a list field, a
+    // Dictionary<string, object?> for a dict field, null for a round that skipped it), whatever the field's kind: `Rounds`
+    // is the shape RowBinding binds that list with, and `HoldsRounds` is true when it can do so without a throw. The scheme
+    // (list fields) and the typed Unpack both ask this one question.
+    public CollectionShape Rounds { get; }
+    public bool HoldsRounds { get; }
+
     public CollectionShape(Type memberType, Field element, bool dictionary)
+        : this(memberType, element, dictionary, roundsOfDictionaries: false)
+    {
+    }
+
+    private CollectionShape(Type memberType, Field element, bool dictionary, bool roundsOfDictionaries)
     {
         Dictionary = dictionary;
         IsArray = memberType.IsArray;
@@ -63,12 +75,32 @@ internal sealed class CollectionShape
         var rowType = element.ElementRowType;
         RowElements = rowType is { IsClass: true } && rowType.IsAssignableFrom(ElementType);
         CreateElement = RowElements ? Creator.Of(ElementType) : null;
-        if (IsArray)
-            return;
-        var built = dictionary
-            ? typeof(Dictionary<,>).MakeGenericType(typeof(string), ElementType)
-            : typeof(List<>).MakeGenericType(ElementType);
-        Create = memberType.IsAssignableFrom(built) ? Creator.Of(built) : Creator.Of(memberType);
+        var made = memberType;
+        if (!IsArray)
+        {
+            var built = dictionary
+                ? typeof(Dictionary<,>).MakeGenericType(typeof(string), ElementType)
+                : typeof(List<>).MakeGenericType(ElementType);
+            made = memberType.IsAssignableFrom(built) ? built : memberType;
+            Create = Creator.Of(made);
+        }
+        Rounds = dictionary ? new CollectionShape(memberType, element, false, roundsOfDictionaries: true) : this;
+        HoldsRounds = dictionary ? Rounds.HoldsRounds : CanHoldRounds(memberType, made, roundsOfDictionaries);
+    }
+
+    private bool CanHoldRounds(Type memberType, Type made, bool ofDictionaries)
+    {
+        if (RowElements)
+            return false;
+        // The list unpack read is handed over as it is.
+        if (ElementType == typeof(object) && memberType.IsAssignableFrom(typeof(List<object?>)))
+            return true;
+        var round = ofDictionaries ? typeof(Dictionary<string, object?>) : typeof(List<object?>);
+        if (!(Nullable.GetUnderlyingType(ElementType) ?? ElementType).IsAssignableFrom(round))
+            return false;
+        return IsArray
+            ? memberType.GetArrayRank() == 1
+            : Create is not null && typeof(System.Collections.IList).IsAssignableFrom(made);
     }
 
     // The members Packbin accepts, on purpose: an array, List<E>, IList<E> or IList; for a dict Dictionary<string, E>,

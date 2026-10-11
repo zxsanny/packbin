@@ -154,11 +154,20 @@ internal static class RowBinding
     {
         if (!values.TryGetValue(field.Name, out var raw) || raw is null)
             return;
-        RequireFits(field.Name, field.Binding!.Member, raw, inRound);
+        var binding = field.Binding!;
+        if (inRound && binding.Shape is { } shape)
+        {
+            if (raw is not IList rounds || !shape.HoldsRounds)
+                throw new UnfitMember(field.Name);
+            binding.Member.Set(row, ListOf(field, shape.Rounds, rounds));
+            return;
+        }
+        RequireFits(field.Name, binding.Member, raw, inRound);
         SetValue(field, row, raw);
     }
 
-    // A round holds a list of what its rounds read, so a member that is not a list cannot take it.
+    // A round holds a list of what its rounds read, so a member that is not a list cannot take it. A list or dict member
+    // is bound by SetIfRead through CollectionShape.HoldsRounds instead.
     private static void RequireFits(string name, MemberAccess member, object raw, bool inRound)
     {
         if (inRound && !member.Type.IsInstanceOfType(raw))

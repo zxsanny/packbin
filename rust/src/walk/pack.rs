@@ -1,4 +1,4 @@
-use super::flag_bits::{check_split_bit, collect_flag_bits, member_on, FlagInners};
+use super::flag_bits::{check_split_bit, collect_flag_bits, member_on, FlagInners, Form};
 use super::pack_out::{flags_byte_name, round_member, write_float, write_int, PackOut};
 use super::times::{
     check_aligned, check_lists, check_longer, check_repeat_cap, check_round_cap, rounds_mismatch,
@@ -120,7 +120,7 @@ fn pack_one<'v>(
             out.byte(0, || flags_byte_name(name, members))?;
             let mut bits: u8 = 0;
             for (i, member) in members.iter().enumerate() {
-                if member_on(member, values, wrote)? {
+                if member_on(member, values, wrote, Form::Combined)? {
                     bits |= 1 << i;
                     pack_one(member, values, inners, wrote, out)?;
                 }
@@ -133,7 +133,7 @@ fn pack_one<'v>(
             let mut bits: u8 = 0;
             for (bit, inner) in inners.get(slot).into_iter().flatten() {
                 check_split_bit(inner, values, wrote)?;
-                if member_on(inner, values, wrote)? {
+                if member_on(inner, values, wrote, Form::Split)? {
                     bits |= 1 << bit;
                 }
             }

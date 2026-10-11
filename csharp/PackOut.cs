@@ -2,7 +2,8 @@ namespace Packbin;
 
 // The packet one pack call writes. Every write reserves its bytes first, naming the member being written, and a write
 // that would take the packet past `maxBytes` is refused before it grows the buffer, so the buffer never holds more
-// than `maxBytes` bytes (the type byte included).
+// than `maxBytes` bytes (the type byte included). A byte array cannot pass `MaxArray`, so that is also the cap when
+// `maxBytes` is above it: the same refusal, not an int overflow.
 internal sealed class PackOut
 {
     private const int MaxArray = 0x7FFFFFC7;
@@ -12,9 +13,11 @@ internal sealed class PackOut
 
     public PackOut(long maxBytes)
     {
-        _maxBytes = maxBytes;
-        _data = new byte[Math.Min(32, maxBytes)];
+        _maxBytes = EffectiveCap(maxBytes);
+        _data = new byte[Math.Min(32, _maxBytes)];
     }
+
+    internal static long EffectiveCap(long maxBytes) => Math.Min(maxBytes, MaxArray);
 
     public int Count { get; private set; }
 
