@@ -17,7 +17,7 @@ A group with no fields: a presence bit like a bool, bound to something that can 
 
 ## Flags
 
-A byte whose bits say which following fields are present. A set bit writes the field. A clear bit skips it. Zero is a real value, so a missing field is absence, not `0`. One flags byte holds at most 8 bits; a ninth fails when the field list is built. (source: solution.md; loop 12)
+A byte whose bits say which following fields are present. A set bit writes the field. A clear bit skips it. Zero is a real value, so a missing field is absence, not `0`. One flags byte holds at most 8 bits; a ninth fails when the field list is built. A `when`, `times` or `repeat` can be a member (or sit in a group under one): its bit is set exactly when it writes a value, in all six packages since loop 18 (AZ-2120). (source: solution.md; loop 12)
 
 ## Golden fixture
 
@@ -45,11 +45,11 @@ Unpack found that a present field does not fit in the bytes that remain. The err
 
 ## Split form
 
-The flags byte is stored now, and each bit's field is placed later in the list. The bit must come after its flag byte in the same scope (top level, one `repeat` or `times` round, or one `list` or `dict` element); a flag byte read inside a `when` is not visible after it. TypeScript, C#, Java, Rust and Python refuse a violation at construction (Python since loop 16, AZ-2100). A bit's number is its place among the bits of the flag byte read it follows (Rust, C++, and TypeScript and Java since loop 16, AZ-2135). (source: schema.md; loop 11)
+The flags byte is stored now, and each bit's field is placed later in the list. The bit must come after its flag byte in the same scope (top level, one `repeat` or `times` round, or one `list` or `dict` element); a flag byte read inside a `when` is not visible after it. TypeScript, C#, Java, Rust and Python refuse a violation at construction (Python since loop 16, AZ-2100). A bit's number is its place among the bits of the flag byte read it follows (Rust, C++, TypeScript, Java, Python since loop 16 AZ-2230, and C# since loop 17 AZ-2135). A flag byte read inside a `flags` member or the child of a flag bit is not visible after it in C++ either since loop 18 (AZ-2304), as in Rust, TypeScript and Java. (source: schema.md; loop 11)
 
 ## Unpack
 
-The call that turns bytes back into a value, or into a short-packet or trailing-bytes error. In C#, TypeScript, Python, Rust and Java it returns an error value for every bad buffer and never throws; a negative count, a count with no source field, invalid UTF-8, and a `times`, `list` or `dict` round that reads nothing come back as an interim short-packet-style error until C15 sets their kind. (source: problem.md; loop 11)
+The call that turns bytes back into a value, or into a short-packet or trailing-bytes error. In C#, TypeScript, Python, Rust and Java it returns an error value for every bad buffer and never throws (the one exception is the typed C# `Unpack` of a `repeat` or `times` round); a negative count, a count with no source field, invalid UTF-8, and a `times`, `list` or `dict` round that reads nothing come back as an interim short-packet-style error until C15 sets their kind. (source: problem.md; loop 11)
 
 ## Version tag
 
@@ -57,4 +57,4 @@ A Git tag that starts the publish of each language present in that commit. (sour
 
 ## When
 
-A group that is written only when an earlier field equals a given value. (source: schema.md)
+A group that is written only when an earlier field equals a given value. The tested field is an integer, a `u2` slot or a bool; a bool is compared only with `true`, and the field list fails when it is built for any other test or source kind, in all six packages since loop 18 (AZ-2126). (source: schema.md)

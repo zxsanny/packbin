@@ -10,7 +10,7 @@ report_of_round: 1
 
 **Date**: 2026-10-10
 **Implement pass**: batches 01 to 03 (`_docs/03_implementation/batch_01_loop18_report.md`, `batch_02_loop18_report.md`, `batch_03_loop18_report.md`); no `implementation_report_*_loop18.md` and no completeness report yet (written at the loop close). The batch reports carry the mandatory discovery tables (32 rows).
-**Verdict**: CLARIFY — 18 covered / 5 out-of-scope / 3 gap-clear / 11 gap-unclear
+**Verdict**: CLARIFY — 19 covered / 5 out-of-scope / 3 gap-clear / 10 gap-unclear
 
 Input notes: `scenarios.md` is absent for these specs (written in loops 11 to 18, partly before the scenario matrix); the intent baseline is the specs in `done/`, `plan18.md` and the owner decisions of 2026-10-10. **Routing decision (owner preference, memory `one-total-review-and-test`): no re-entry round.** The `gap-clear` and `gap-unclear` rows are recorded in the loop 19 handoff; `assess_round` stays 0.
 
@@ -47,7 +47,7 @@ Input notes: `scenarios.md` is absent for these specs (written in loops 11 to 18
 | U1 | a lone byte buffer for a `Bytes`/`Sized` name in a round is broadcast by TypeScript, Python, Java, Rust and refused by C# | gap-unclear | question below | batch_01 #1 |
 | U2 | TypeScript packs a `Map` given for a dict outside a round as an empty dictionary | gap-unclear | question below | batch_01 #2 |
 | U3 | sibling `flags` members: separate flag-byte scopes in C++, TypeScript, Java; one shared scope in Rust | gap-unclear | question below | batch_01 #3 |
-| U4 | C++: a group under `flags` whose only children are `flag_byte`/`flag_bit` is never present on pack | gap-unclear | question below | batch_01 #4 |
+| U4 | C++: a group under `flags` whose only children are `flag_byte`/`flag_bit` is never present on pack | covered (closed after the finding) | the C++ `present()` change of AZ-2128 (wave 3) counts `flag_bit` and nested `flags` heads: a probe at HEAD packs `flags(group(flag_byte(0), flag_bit(0,x)))` as `01 01 01 05` and `flag_byte(0), flags(0, flag_bit(0,p), q)` as `01 01 03 05 06`; not pinned by a test yet (handoff 19) | batch_01 #4, step 13 probe |
 | U5 | C++ refuses a `when` naming an empty group even for `true`; Rust accepts it as a bool source | gap-unclear | question below | batch_01 #5 |
 | U6 | a `times` count 0 with a non-empty list: error (C#, TypeScript, Python, Java, Rust, and now C++ outside `flags` too) | gap-unclear | question below | batch_03 #22 |
 | U7 | a `times` whose count field was skipped: bit clear and body values dropped without an error | gap-unclear | question below | batch_03 #24 |
@@ -75,7 +75,8 @@ A single byte array given for a `Bytes` or `Sized` name inside `repeat`/`times` 
 **Options**: A change Rust to separate scopes (like three packages); B change the three to one shared scope.
 **Recommendation**: A: schema.md says a flags member is a conditional scope.
 
-#### U4: a flag-bit-only group under `flags` in C++
+#### U4 (closed): a flag-bit-only group under `flags` in C++
+**Closed by the wave 3 `present()` change** (probe in the table row above); only a pinning test is left (handoff 19).
 **What is not decided**: `flags(group(v, flag_byte(0), flag_bit(0, x)))` with only `x` set drops it in C++ (`0100`); Rust and TypeScript write `0100010105`.
 **Options**: A follow-up spec: a flag bit child makes its group present; B document the limit.
 **Recommendation**: A (same-bytes rule).

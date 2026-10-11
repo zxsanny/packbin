@@ -417,6 +417,46 @@ No AC number; they hold the F10 limit on the rounds of one unpack call. All run 
 The hostile `limit` stage of `fixtures/hostile/cases.txt` (`repeat_rounds_over_limit`, `times_rounds_over_limit`, AZ-2220) is replayed with a scheme whose `maxRounds` is 3: the refusal is the interim bad-value error with `needed` 0 and the one byte of the round that would start left, and the handler is not called.
 
 
+## Loop 17 (typed rows, split bits, counts, rounds, strict numbers)
+
+Source: `_docs/03_implementation/batch_01_loop17_report.md`, `batch_02_loop17_report.md`, `test_run_loop17_report.md`. The suite went from 424 tests at the start of the loop to 649 on net10.0 and the same 649 on the `netstandard2.0` build. Each file below was written failing first against the previous commit where a "fail before" count is given. All files are in `csharp/tests/`.
+
+| Test class | Task | What it proves | Fail before |
+|------------|------|----------------|-------------|
+| `TypedParityTests` (10) | AZ-2092 | typed `Pack` and `Unpack` give the same bytes and values as the dictionary form for every kind; pins bytes before the rewrite | 0 of 10 (pins old bytes) |
+| `TypedBindingTests` (11) | AZ-2092 | the README C# example packs and unpacks the printed hex; a nested row has its own names (`Name` 1 and 2 pack `01 01 02`); `list` and `dict` members of rows | 9 of 11 |
+| `NestedRowFlagByteTests` (3) | AZ-2092 | a flag byte read in a nested row stays in it; `[m, Group(g, m.Bit(x))]` and `[Group(g, m, ...), m.Bit(x)]` are refused | new refusals |
+| `Ac10TimingTests.Nfr_PublicTypedPackAndUnpack_RoundTripsWithinOneSecond` | AZ-2093 | 100 000 public typed round trips (`Pack(Target, row)` and `Unpack(bytes, Target.On(...))`) within 1 s (project AC-10); it moved from `PackbinTests` into its own non-parallel xunit collection with one warm-up call and one strict timed pass in `f0f67ce`, after the first CI run failed it at 1 618 ms inside the parallel suite | the timing in `perf_run_loop17_report.md` |
+| `SplitBitOrderTests` (8) | AZ-2135 | split bits numbered by place per read of the flag byte; one handle in two schemes; the ninth bit fails at construction | 8 of 8 |
+| `FlagGroupCopyTests` (7) | AZ-2180 | a built scheme does not change when a handle gains a bit | 3 of 7 (fixed by AZ-2135) |
+| `FlagGroupPresenceTests` (9), `U2PresenceTests` (8) | AZ-2128 | a nested `Flags`, a split flag bit and a `U2` with any slot present set the group's bit; a set group with a missing value fails naming it | 4 of 9, 2 of 8 |
+| `CountKindTests` (44), `CountOverflowTests` (21) | AZ-2181 | a count names an integer field or a `U2` slot or the scheme does not build; a count that does not fit an `int` is an `ArgumentException` | 35 of 44, 20 of 21 |
+| `LoneRoundValueTests` (26) | AZ-2182 | a lone value goes to every round; a lone byte run or list for a `Bytes`, `Sized`, `Bits` or `Packed` name is refused | 20 of 26 |
+| `GroupElementTests` (10) | AZ-2119 | a `List` or `Dict` of groups unpacks, typed and dictionary | 7 of 10 |
+| `StrictNumberTests` (50) | AZ-2191 | dictionary rows pack numbers strictly | 25 of 50 |
+| `HostileSessionTests` (6), `SplitFormReferenceTests` (3), `FlagScopeContainerTests` (9), `SessionPrivates` (helper) | AZ-2114, AZ-2115, AZ-2121 | tests only: hostile session inputs, the split-form reference scheme (`010901045a00`, `010100`), flag-byte scopes of containers | 0 (pins) |
+
+Changed by owner decision (2026-10-06, AZ-2181 reverses C# AZ-2088 AC-6): six `HostileUnpackTests.Counts.cs` float-count tests now assert the construction error, and three `WrittenCountTests` sites expect `ArgumentException`.
+
+## Loop 18 (construction checks, collection members, flags members, strict slots)
+
+Source: `_docs/03_implementation/batch_01_loop18_report.md` to `batch_03_loop18_report.md`, `_docs/loops/loop18/review18.md`, `_docs/03_implementation/test_run_loop18_report.md`. The suite went from 649 to 749 (wave 1), 756 (wave 2), 810 (wave 3) and 844 after the review fixes, on net10.0 and the same 844 on the `netstandard2.0` build. Reference bytes for the flags-member tests: `_docs/03_implementation/flags_member_reference_cases_loop18.md`.
+
+| Test class | Task | What it proves |
+|------------|------|----------------|
+| `EqBoolTrueOnlyTests` | AZ-2126 | `Eq(bool, v)` with `v` other than `true` is refused at construction (`when 1 tests bool field 0 ('On') against false; a bool is compared only with true`); `Eq(bool, true)` packs `010105`; a `When` on a float, utf8, bytes, sized, bits or packed field is refused (`when 1 tests 'F' (field id 0), a f32 field`) |
+| `FloatConditionValueTests` | AZ-2126 | what stays of the deleted `FloatWhenTests`: an integer source against a float condition value (`NaN`, the infinities, `1e30`) compares as the same number and never throws |
+| `CollectionMemberTests`, `CollectionElementKindTests` | AZ-2305 | every integer pair of member and field type is accepted only when the member holds the field's range; `Stack`, `HashSet`, `IEnumerable`, a `List<E>` subclass and a `Dictionary` with non-string keys are refused naming the member; `Single` for `F64` refused and `Double` for `F32` accepted; the F25 packet `01 01 00 FF FF FF FF` reads 4294967295 into a `List<long>`; element kinds for `Group`, `Flags`, `List`, `Dict` and `U2` elements (review C2, 28 tests) |
+| `EmptyNestedRowTests` | AZ-2306 | an all-null typed nested row under `Flags` fails pack naming the first missing member, at depth 1 and 2; a null row packs `0100`; the filled depth-2 row packs `01010406` |
+| `FlagsElementTests`, `DictionaryElementTypedRowTests` | AZ-2307 | a `Flags` list element packs and unpacks (`010300010100020200`) and a dict element (`0102000100780101010079020200`), dictionary and typed; a typed row whose `List<object?>` or `Dictionary<string, object?>` member holds unpacked `Flags` elements repacks to the same bytes (review C1, 4 failing-first tests), and the same repack of anchored or nested-row group elements throws instead of writing wrong bytes |
+| `LoneDictRoundTests` | AZ-2308 | a lone dictionary for a `Dict` name in `Repeat` and `Times` is refused naming the member; a list of one dictionary per round packs as before |
+| `StrictSlotTests` | AZ-2309 | `U2` slots, `Bits` and `Packed` items refuse fractions, out-of-range values, bool, string, `char`, enum, object and `null`; range edges and whole `double` or `long` values keep their bytes |
+| `DictRepackTests` | AZ-2310 | the rows `Read` returns for list and dict group elements repack to the original bytes; an `int` for `Bytes` or `Sized` is an `ArgumentException` naming the member |
+| `FlagsWhenMemberTests`, `FlagsRoundMemberTests` | AZ-2120, AZ-2128 | the reference table: `010103075a00`, `0100025a00`, `0101025a00`, the `Times` cases `0100025a00` / `010103055a00` / `01020305065a00` and the `Repeat` cases `0101015a00` / `0101035a0005` / `0101035a000506`; the split and group forms give the same bytes; old packets (bit clear) unpack; the error rows fail naming the value |
+| `HostilePackVectorTests` | AZ-2194 | the five `pack` cases of `fixtures/hostile/cases.txt` (C# runs `pack_out_of_range_integer` through the dictionary form) |
+
+Existing tests changed or deleted (the decided concerns reverse them; none weakened): `FloatWhenTests` deleted; `WrittenWhenKindsTests` lost its bytes, sized, bits, packed and utf8 cases; `WrittenWhenTests.Ac7` uses `Eq(0, true)`; five tests deleted because their scheme cannot be built any more (a `When` source that never matches): `HostileUnpackTests.Ac1_RepeatBodyWithANeverMatchingWhen_ReturnsTrailingBytes`, `Reliability_ConditionOnNaNFloat_DoesNotThrow`, `Counts.Times_NeverTrueWhenBodyWithU32MaxCount_ReturnsShortPacketQuickly`, `ZeroWidthElementTests.NeverMatchingWhenListElement_IsError` and `NeverMatchingWhenDictValue_IsError` (the plain zero-width tests stay); `NestedRoundTests.ATimesInADictElementInARound_Builds` binds a `Dictionary` member (it bound a `List<object?>` to a `Dict` field, a test mistake). Running the suite needs `MSBUILDDISABLENODEREUSE=1` (a test starts a child `dotnet build`; without it the run hangs at 646 of 649, `_docs/AGENT_GOTCHAS.md`).
+
 ## Test Data Management
 
 **Required test data**:

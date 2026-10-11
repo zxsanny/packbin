@@ -12,7 +12,11 @@
 | dictionaries | the 103-byte user value, empty triple, a repeated key | FT-D-01, FT-D-02, FT-D-03, FT-D-04, FT-D-05 | inline | none |
 | handoffs | producer hex consumed by the next language | FT-H-01, FT-H-02, FT-H-03 | inline | none |
 | borrowed count | width-2 kinds `0,1,2,3`, width-1 bias −1, two pairs then `7`, and the route fixture | FT-C-01, FT-C-02, FT-C-03, FT-C-04, FT-C-05 | inline | none |
-| hostile packets | `fixtures/hostile/cases.txt`: 19 packets and invalid schemes with the outcome kinds each may return (zero-progress repeat, hostile counts, invalid UTF-8, nine flag bits, later and outer references, bool outside flags, and two `limit` cases: a `repeat` and a `times` past a low round limit, AZ-2220) | AZ-2069 package tasks (AZ-2071 to AZ-2075, AZ-2078 and later), format check in the `scaffold` job | each package reads the file by path and writes the scheme by hand from `fixtures/hostile/README.md` | none; the file is read only |
+| hostile packets | `fixtures/hostile/cases.txt`: 25 cases: packets and invalid schemes with the outcome kinds each may return (zero-progress repeat, hostile counts, invalid UTF-8, nine flag bits, later and outer references, bool outside flags, `eq(bool, false)` (AZ-2126), two `limit` cases: a `repeat` and a `times` past a low round limit, AZ-2220), and five `pack` cases (AZ-2194: out-of-range integer, missing value, `times` list too long and too short, aligned round row `01030102020303`; each README section has `Scheme`, `Row`, `Run by` and `Not run by`) | AZ-2069 package tasks (AZ-2071 to AZ-2075, AZ-2078 and later), format check in the `scaffold` job | each package reads the file by path and writes the scheme by hand from `fixtures/hostile/README.md` | none; the file is read only |
+| flags members | `_docs/03_implementation/flags_member_reference_cases_loop18.md`: about 60 hex-pinned rows over twelve schemes (WA to R2) for a `when`, `times` or `repeat` as a `flags` member; e.g. `010103075a00`, `0100025a00`, `01020305065a00`, `0101035a000506`, `01030107` | FT-X-13, FT-X-14 | each package pins the hex of the table in its own member tests (`MemberCases` or `member-cases` helpers) | none; the table is read only |
+| lone round values | `u8 n; times(count n){ dict d { utf8 e } }` with a lone and a per-round dictionary; `u8 n; times(count n){ u8 x, u8 y }` with a lone scalar | FT-X-11, FT-X-12 | inline | none |
+| flag-byte scope | C++ schemes with a flag byte inside a `flags` member or flag-bit child, rows `v=3 x=5 b=7` | FT-X-15, FT-X-16 | inline | none |
+| C# typed rows | typed row classes with narrow, wide and unsupported collection members, a nested row with null members, `u2`, `bits` and `packed` slots with fractions and range edges, the F25 packet `01 01 00 ff ff ff ff`, ring hex `010300010100020200` | FT-X-17 to FT-X-21, NFT-SEC-03 | inline in the C# tests; ring hex in `.github/workflows/language-pair.sh` | none |
 
 ## Data Isolation Strategy
 
@@ -63,6 +67,21 @@ Each call gets its own input buffer. The packages do not keep the last packet.
 | FT-C-03 | count 2, two lat/lon pairs, trailing `u8` 7 | pairs match, trailing byte 7, bytes left 0 | exact | N/A | 04_borrowed_count AC-3 |
 | FT-C-04 | route fixture | hex `3410001500062d00020d0065cd1d00a3e111108ccd1d10cae11101` twice, bytes left 0, schemes 1, mismatch 0 | exact | N/A | 04_borrowed_count AC-4 |
 | FT-C-05 | kinds length ≠ count; count 2 and one coordinate byte | pack names the field; unpack names field, needed, and left; value count 0 | exact | N/A | 04_borrowed_count AC-5 |
+| FT-X-08 | `flags(bool on)`, `when eq(0, v)`; `v` false, then true with `{on: true, v: 5}` | build fails naming the `when` and field 0; hex `010105`; `{on: false}` packs `0100` | exact | N/A | AZ-2126 AC-1 to AC-3 |
+| FT-X-09 | a `when` on float, utf8, bytes, sized, bits, packed; a count on bool, float, counted field | construction fails naming the `when` or the count; the controls build and round-trip | exact | N/A | AZ-2126 AC-1 (owner decision 2026-10-06) |
+| FT-X-10 | the five `pack` cases of `cases.txt` | `pack_error` x4 (no bytes), `bytes` `01030102020303`; C++ skips `pack_out_of_range_integer` | exact | N/A | AZ-2194 AC-4 to AC-8; hostile README |
+| FT-X-11 | lone dictionary and list of two dictionaries in a `times` and a `repeat` round | error naming `d`; hex `010201000100610100780100010062010079` and `0101000100610100780100010062010079` | exact | N/A | AZ-2308 AC-1 to AC-3 |
+| FT-X-12 | Rust map `times`, rows with a lone scalar, one round, lists, a short list | `010201040105`, `0103010401050106`, `010201040104`, `01010104`, `010201040205`; short list names `x` | exact | N/A | AZ-2311 AC-1 to AC-3 |
+| FT-X-13 | WA, WE, TA, RA, R2 rows | `010103075a00`, `0100025a00`, `01030107`, `0100025a00`, `01020305065a00`, `0101015a00`, `0101035a000506`; R2 unpack `pt=[5,7] pu=[6,8]` | exact | N/A | AZ-2120 AC-1 to AC-5, flags_member_reference_cases_loop18.md |
+| FT-X-14 | four incomplete rows, three old packets, the golden | pack errors naming `extra`, `pt`, `pt`, `pu`; old packets unpack; golden `4001000065cd1d00a3e1110100` | exact | N/A | AZ-2120 AC-6, AZ-2128 AC-2, AC-3 |
+| FT-X-15 | C++ flag-byte scope schemes (a), (b), (c) | `SchemeInvalid` naming `b`; `01010007`, `010101030007`, `01010103010507` | exact | N/A | AZ-2304 AC-1 to AC-4 |
+| FT-X-16 | three split-bit probes; C++ `{k: 0, b: 6}`, `{k: 1, a: 5, b: 6}` | `010105`, `010209`, `01000109`; `01000106`, `010101010506` | exact | N/A | AZ-2135 AC-1 to AC-3 |
+| FT-X-17 | typed members `List<int>` for `u32`, `Stack<int>`, `List<long>` for `u32` | `ArgumentException` naming the member; `List<long>` builds | exact | N/A | AZ-2305 AC-1, AC-2, AC-4 |
+| FT-X-18 | nested row with null members, null nested row, filled depth-2 row | `ArgumentException` naming `A`, `M`, `A`; `0100`; `01010406` | exact | N/A | AZ-2306 AC-1 to AC-3 |
+| FT-X-19 | `flags{u8 a, u16 b}` list and dict elements; the three ring hex | `010300010100020200`, `0102000100780101010079020200`; rings pass | exact | N/A | AZ-2307 AC-1 to AC-4 |
+| FT-X-20 | fractions, out-of-range and wrong-typed slot values; valid values | `ArgumentException` naming the member; `0103`, `010202`, `01020c` | exact | N/A | AZ-2309 AC-1 to AC-4 |
+| FT-X-21 | packet `01020001020304` read and packed; random packets; an int for `Bytes` | original bytes; `ArgumentException` naming the member | exact | N/A | AZ-2310 AC-1 to AC-4 |
+| NFT-SEC-03 | packet `01 01 00 ff ff ff ff` and a `List<long>` member for a `u32` list | no exception; value `[4294967295]`; the narrow member cannot be built | exact | N/A | AZ-2305 AC-3 |
 
 ## External Dependency Mocks
 

@@ -89,7 +89,7 @@ public static readonly Scheme<Target> TargetScheme = new(0x40, f => [
     f.I32(1, x => x.Lat),
     f.I32(2, x => x.Lon),
     f.U8(3, x => x.Profile),
-    f.Flags(
+    f.Flags(4,
         f.U16(4, x => x.Heading),
         f.U8(5, x => x.Speed),
         f.I16(6, x => x.Altitude))]);
@@ -112,8 +112,8 @@ pack(target, { /* same fields */, heading: 90, speed: 10 })
 ```
 
 ```csharp
-["heading"] = (ushort)90,
-["speed"] = (byte)10,
+["Heading"] = (ushort)90,
+["Speed"] = (byte)10,
 ```
 
 Bit 0 and bit 1 are set. Altitude stays absent. Heading `0` would still set bit 0.
@@ -144,23 +144,25 @@ const targetFull = packet([
 ```
 
 ```csharp
-var motion = Field.FlagByte("motion");
+public sealed class Target
+{
+    public byte Profile { get; set; }
+    public byte? Shape { get; set; }
+    public ushort? Heading { get; set; }
+    public byte? Speed { get; set; }
+}
 
-Packet.Of(
-    Field.U8("type"),
-    Field.U16("sid"),
-    Field.I32("lat"),
-    Field.I32("lon"),
-    Field.U8("profile"),
+var motion = Field.FlagByte();
+
+var scheme = new Scheme<Target>(0x40,
+    Field.U8<Target>(0, x => x.Profile),
     motion,
-    Field.When(Eq("profile", (byte)0),
-        Field.U8("shape"),
-        Field.Flags("identity", Field.U16("name"), Field.U16("group"), Field.U16("label"))),
-    motion.Bit(Field.U16("heading")),
-    motion.Bit(Field.U8("speed")),
-    motion.Bit(Field.I16("altitude")),
-    motion.Bit(Field.U8("frequency")));
+    Field.When(1, Condition.Eq(0, 0), Field.U8<Target>(1, x => x.Shape)),
+    motion.Bit(Field.U16<Target>(2, x => x.Heading)),
+    motion.Bit(Field.U8<Target>(3, x => x.Speed)));
 ```
+
+The C# snippet is the shape only (a reduced row; ids are explicit and number the fields in order). `csharp/tests/SplitFormReferenceTests.cs` pins the same form: `u8 sid`, a flag byte, a `when` on the sid between the byte and its bit, then the `u16` heading bit; `sid` 9, `shape` 4, `heading` 90 packs `010901045a00`, `sid` 1 alone packs `010100`.
 
 `flags(...)` is the short form of a flag byte plus immediate `.bit` fields. Prefer it when the bytes really are adjacent.
 
@@ -170,9 +172,13 @@ A bit's number is its place among the bits of the flag byte read it follows: bit
 
 ## References
 
-The field id inside `eq(...)` and the count id of `packed`, `sized`, `bits` and `times` name a value field that was read earlier in the same scope. The scopes are the ones above (the top level, each `repeat` or `times` round, each `list` or `dict` element), plus a nested row: an unanchored group in TypeScript, a nested-row group in C# and Java. `flags`, `when` and an ordinary group share the scope around them. A reference to a later field, to an id nobody declared, to a field inside a `repeat` or `times` body from outside it, or to an outer field from inside the body fails when the scheme is built, naming both ids (loop 13). A count names an integer field; C# accepts an integer field (`u8` to `i64`) or a `u2` slot only and refuses any other kind when the scheme is built (loop 17, AZ-2181), and which other kinds the other packages refuse differs (AZ-2126). All six packages check the scope. Rust checks names as well as numeric ids (a name outside the scope, inside an earlier body or never declared is refused, loop 16, AZ-2117), and Python raises a `ValueError` at construction (loop 16, AZ-2113).
+The field id inside `eq(...)` and the count id of `packed`, `sized`, `bits` and `times` name a value field that was read earlier in the same scope. The scopes are the ones above (the top level, each `repeat` or `times` round, each `list` or `dict` element), plus a nested row: an unanchored group in TypeScript, a nested-row group in C# and Java. `flags`, `when` and an ordinary group share the scope around them. A reference to a later field, to an id nobody declared, to a field inside a `repeat` or `times` body from outside it, or to an outer field from inside the body fails when the scheme is built, naming both ids (loop 13). A count names an integer field; C# accepts an integer field (`u8` to `i64`) or a `u2` slot only and refuses any other kind when the scheme is built (loop 17, AZ-2181), and since loop 18 (AZ-2126) every package agrees: a `when` names an integer field, a `u2` slot or a bool (a bool is compared only with `true`), a count names an integer field or a `u2` slot, and the rest is refused when the scheme is built. All six packages check the scope. Rust checks names as well as numeric ids (a name outside the scope, inside an earlier body or never declared is refused, loop 16, AZ-2117), and Python raises a `ValueError` at construction (loop 16, AZ-2113).
 
 Unpack decides a `when` on the fields it has read. C# since loop 13, TypeScript since loop 16 (AZ-2197) and Rust since loop 16 (AZ-2237; map and typed form), like Java and Python, decide it on pack from the fields they wrote in the same scope, so a `when` that names a field an earlier `when` or a clear flag bit skipped does not match on either side and pack never returns bytes that unpack reads differently.
+
+A `when`, `times` or `repeat` can be a member of `flags`, the field of a flag bit, or sit in a group under them (all six packages since loop 18, AZ-2120). Its bit is set exactly when it writes a value. The members of one `flags` are decided in order against the values written so far in the scope. A split flag byte decides its `when` or `times` bit where the byte is read, so the field a condition or count names must be written before the byte. `u8 mode; flags(when(eq(mode, 1), u8 speed), u16 heading)` with `mode` 1, `speed` 7 and `heading` 90 packs `01 01 03 07 5a 00` (it was `01 01 02 5a 00`, with `speed` dropped). A `times` count of 0 with a non-empty list is refused in every package.
+
+A lone dictionary for a `dict` name in a `repeat` or `times` round is refused in C#, TypeScript, Python, Java and Rust (loop 18, AZ-2308); a list with one dictionary per round packs. A lone scalar goes to every round in the Rust map form too (AZ-2311).
 
 ## Repeat
 
@@ -187,11 +193,12 @@ packet([
 ```
 
 ```csharp
-Packet.Of(
-    Field.U8("type"),
-    Field.U16("sid"),
-    Field.Repeat(Field.I32("lat"), Field.I32("lon")));
+var trail = new Scheme<Trail>(1,
+    Field.U16<Trail>(0, x => x.Sid),
+    Field.Repeat(1, Field.I32<Trail>(1, x => x.Lat), Field.I32<Trail>(2, x => x.Lon)));
 ```
+
+Typed `Unpack` of a `Repeat` round throws `InvalidCastException` (F17), so a C# round is packed from a dictionary of lists with `BinaryPacker.Pack(scheme, IReadOnlyDictionary<string, object?>)`; the snippet shows the scheme shape only.
 
 Unpack gives each field one list entry per round, so `lat` and `lon` hold one entry per complete pair. A trailing partial pair is `ShortPacket` on `lat` or `lon`.
 

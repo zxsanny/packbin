@@ -1520,21 +1520,21 @@
 ### FT-X-01: The hostile case file is well formed
 
 **Summary**: The hostile case file is well formed (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
-**Traces to**: AZ-2070 AC-1, AZ-2070 AC-2, AZ-2070 AC-3, AZ-2070 AC-4
+**Traces to**: AZ-2070 AC-1, AZ-2070 AC-2, AZ-2070 AC-3, AZ-2070 AC-4, AZ-2194 AC-1, AZ-2194 AC-2, AZ-2194 AC-3, AZ-2194 AC-9
 **Category**: Errors
 
 **Preconditions**:
 - The C++ core as built in loop 10
 
-**Input data**: `fixtures/hostile/cases.txt`, nine corrupted copies of it and a README copy without one section
+**Input data**: `fixtures/hostile/cases.txt` (25 cases: 10 `unpack`, 8 `construct`, 2 `limit`, 5 `pack`), 18 corrupted copies of it, 7 corrupted copies of `fixtures/hostile/README.md` and a README copy without one section (26 corruptions in all, loop 18)
 
 **Steps**:
 
 | Step | Consumer Action | Expected System Response |
 |------|----------------|------------------------|
-| 1 | run `fixtures/hostile/cases.test.sh` (the `scaffold` job runs it) | 19 ids pass; each corrupted copy exits non-zero and names its line; every id has a README section |
+| 1 | run `fixtures/hostile/cases.test.sh` (the `scaffold` job runs it) | `hostile cases ok: 25`; each of the 26 corrupted copies exits non-zero and names its line or its id; every id has a README section; a `pack` id also has `Scheme`, `Row`, `Run by` and `Not run by` lines that name each of the six packages exactly once |
 
-**Expected outcome**: 19 ids pass; each corrupted copy exits non-zero and names its line; every id has a README section.
+**Expected outcome**: 25 ids pass; each of the 26 corrupted copies exits non-zero and names its line or its id; every id has a README section; a `bytes` line carries lowercase even hex starting `01`, a `pack_error` line carries `-`, and only the `pack` stage may use either term.
 **Max execution time**: 5s
 
 ### FT-X-02: A reused flag-byte number keeps its own scope
@@ -1580,22 +1580,22 @@
 ### FT-X-04: The hostile vectors give allowed outcomes in C++
 
 **Summary**: The hostile vectors give allowed outcomes in C++ (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
-**Traces to**: AZ-2078 AC-4
+**Traces to**: AZ-2078 AC-4, AZ-2126 AC-3, AZ-2194 AC-8
 **Category**: Errors
 
 **Preconditions**:
 - The C++ core as built in loop 10
 
-**Input data**: the 17 `unpack` and `construct` cases of the 19 in `fixtures/hostile/cases.txt` (the 2 `limit` cases are skipped: C++ has no round limit, AZ-2220)
+**Input data**: 22 of the 25 cases in `fixtures/hostile/cases.txt`: the 10 `unpack` cases, the 8 `construct` cases (including `eq_bool_false`, built as `eq(0, 0)` at run time because the literal `eq(0, false)` is a compile error) and 4 of the 5 `pack` cases. Skipped with a printed reason: the 2 `limit` cases (C++ has no round limit, AZ-2220) and `pack_out_of_range_integer` (a typed row binds a `std::uint8_t`, so 300 cannot be written)
 
 **Steps**:
 
 | Step | Consumer Action | Expected System Response |
 |------|----------------|------------------------|
-| 1 | the host runner builds each scheme by hand and unpacks or validates it | each outcome is one the file allows; each case within 1 s; bytes written outside the row 0 |
+| 1 | the host runner builds each scheme by hand and unpacks, validates or packs it | each outcome is one the file allows (a `pack` case: the packet hex, or `BadValue` with no bytes); each case within 1 s; bytes written outside the row 0; every skipped case prints its reason |
 
-**Expected outcome**: each outcome is one the file allows; each case within 1 s; bytes written outside the row 0.
-**Max execution time**: 17s
+**Expected outcome**: each outcome is one the file allows; each case within 1 s; bytes written outside the row 0; 22 cases run and 3 are skipped with a reason.
+**Max execution time**: 22s
 
 ### FT-X-05: A bool or empty group outside flags is refused
 
@@ -1656,3 +1656,335 @@
 
 **Expected outcome**: 65 fails construction; 64 packs to 16 bytes and round-trips.
 **Max execution time**: 1s
+
+### FT-X-08: `eq` on a bool accepts only `true`
+
+**Summary**: A `when` whose `eq` names a bool or an empty-group mark fails scheme construction unless the compared value is `true`, in every package (loop 18, AZ-2126).
+**Traces to**: AZ-2126 AC-1, AZ-2126 AC-2, AZ-2126 AC-3
+**Category**: Errors
+
+**Preconditions**:
+- The six packages as built in loop 18 (wave 1 construction check, wave 2 vector)
+
+**Input data**: the scheme `flags(0, bool on)`, `when(1, eq(0, v), u8 v)` with `v` = `false` (and `0`, `2`, `-1`, `"yes"` where the language can write them); the hostile construct vector `eq_bool_false`; the same scheme with `eq(0, true)` and the rows `{on: true, v: 5}` and `{on: false}`
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | build the scheme with `eq(0, false)` | construction fails naming the `when` and field 0 (exception in C#, TypeScript, Python, Java and Rust; `SchemeInvalid` in C++, and the literal `eq(0, false)` is a compile error: `cpp/tests/compile-fail/when_eq_bool_false.cpp`) |
+| 2 | build the same scheme with `eq(0, true)`; pack `{on: true, v: 5}`; unpack the bytes | hex `010105`; the row `{on: true, v: 5}` |
+| 3 | pack `{on: false}` with the `eq(0, true)` scheme | hex `0100`; the `when` body is left out; unpack gives `{on: false}` |
+
+**Expected outcome**: step 1 is `scheme_error` in all six packages (the vector `eq_bool_false`; C++ builds `eq(0, 0)` at run time); step 2 gives `010105` and the same row in all six; step 3 gives `0100`. Rust has no bool value: its bool is an empty group, `false` is `U8(0)` and `true` is `eq(id, 1)`.
+**Max execution time**: 1s
+
+### FT-X-09: A `when` or a count names an integer field only
+
+**Summary**: A `when` may name an integer field or a bool (a bool only with `true`); a count (`sized`, `bits`, `packed`, `times`) may name an integer field only; any other source fails scheme construction in every package (loop 18, AZ-2126, owner decision 2026-10-06).
+**Traces to**: AZ-2126 AC-1
+**Category**: Errors
+
+**Preconditions**:
+- The six packages as built in loop 18 (wave 1)
+
+**Input data**: a `when` whose source is a float, a utf8, a bytes, a sized, a bits or a packed field; a `times`, `sized`, `bits` or `packed` count whose source is a bool, a float or another counted field; controls: a `when` on `u8`, `i64`, a `be()` field and a `u2` slot, a `when` on a bool with `eq(.., true)`, a count on `u8` and on a `u2` slot
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | build each refused scheme | construction fails naming the `when` or the count and the source field |
+| 2 | build each control scheme, pack a row and unpack it | the scheme builds and the row round-trips |
+
+**Expected outcome**: every refused source gives `scheme_error`; every control builds and round-trips; a count that named a bool in Java, Rust and C++ is now refused (it was accepted); a float `when` in C# and TypeScript is now refused (it was accepted).
+**Max execution time**: 1s
+
+### FT-X-10: The pack stage of the hostile vectors
+
+**Summary**: Five `pack` cases in `fixtures/hostile/cases.txt` give the same outcome in every package that can express them, and each package that cannot reports the case skipped with a reason (loop 18, AZ-2194).
+**Traces to**: AZ-2194 AC-4, AZ-2194 AC-5, AZ-2194 AC-6, AZ-2194 AC-7, AZ-2194 AC-8
+**Category**: Errors
+
+**Preconditions**:
+- The six packages as built in loop 18 (wave 2); the file and its README pass FT-X-01
+
+**Input data**: the five cases below (the scheme and the row are in the README section of each id, not in the file):
+
+| Case | Scheme and row | Expected | Run by | Not run by |
+|------|----------------|----------|--------|------------|
+| `pack_out_of_range_integer` | `u8 a`; `a = 300` | `pack_error` (not wrapped to `2c`) | TypeScript, Python, Java, C# (dictionary rows), Rust (map form, `U16(300)`) | C++ (a typed row binds a `std::uint8_t`) |
+| `pack_missing_required_value` | `u8 a; u8 b`; `a = 1` | `pack_error` | all six (C++: an unset `Opt` member gives `BadValue`) | none |
+| `pack_times_list_too_long` | `u8 a; times(count a){ u8 x }`; `a = 2`, `x = [1, 2, 3]` | `pack_error` | all six | none |
+| `pack_times_list_too_short` | same scheme; `a = 2`, `x = [1]` | `pack_error` | all six | none |
+| `pack_aligned_round_row` | `repeat{ flags{ bool on, u8 n } }`; `on = [true, false, true]`, `n = [1, 2, 3]` | `bytes` `01030102020303` | all six | none |
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | each package's vector test packs the row of every case in its `Run by` list | `pack_error`: pack throws (C#, Java, TypeScript, Python) or returns an error (Rust `PackError`, C++ `BadValue`) and returns no bytes; `bytes`: exactly the packet in the table |
+| 2 | each package's vector test reaches a case in its `Not run by` list | the case is reported skipped with its reason; a package in `Run by` that cannot run its case fails |
+
+**Expected outcome**: 25 of 25 cases pass in the packages that run them; the only skip is `pack_out_of_range_integer` in C++; the error type and message are not asserted; the 20 earlier cases (10 `unpack`, 8 `construct`, 2 `limit`) give the same results as before the stage existed.
+**Max execution time**: 5s
+
+### FT-X-11: A lone dictionary in a round is refused
+
+**Summary**: A single dictionary given for a `Dict` name in a `repeat` or `times` round is refused naming the member, instead of being broadcast to every round or read as one round; one dictionary per round still packs (loop 18, AZ-2308).
+**Traces to**: AZ-2308 AC-1, AZ-2308 AC-2, AZ-2308 AC-3
+**Category**: Errors
+
+**Preconditions**:
+- C#, TypeScript, Python, Java and Rust as built in loop 18 (wave 1); C++ has typed array rounds, so the case does not apply
+
+**Input data**: the scheme `u8 n; times(count n){ dict d { utf8 e } }`, and `repeat{ dict d { utf8 e } }`; the rows `{n: 2, d: {a: "x"}}` (a lone dictionary) and `{n: 2, d: [{a: "x"}, {b: "y"}]}`
+
+| Package | Before loop 18 | After |
+|---------|----------------|-------|
+| C# | broadcast to every round | `ArgumentException` naming the member |
+| TypeScript | object: broadcast; `Map`: an empty dictionary per round; `repeat`: one round | error naming the member (a `Map`, `Set` or `Date` is no dictionary) |
+| Python | `times`: broadcast; `repeat`: one round, or `ValueError` | `TypeError` naming the member (also with count 0) |
+| Java | broadcast (`times`) or one round (`repeat`) | `IllegalArgumentException` naming the member |
+| Rust (map API) | n = 1 packed; n = 2 `Missing` | `PackError::Type` naming the member |
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | pack the lone-dictionary row with the `times` scheme and with the `repeat` scheme | an error naming `d`; no bytes returned |
+| 2 | pack the list of two dictionaries | hex `010201000100610100780100010062010079` (`times`); `0101000100610100780100010062010079` (`repeat` with the same two rounds) |
+| 3 | pack a dictionary outside any round; pack a lone `string` for a `utf8` name in a round | `010100010061010078`; the string goes to every round, as before |
+
+**Expected outcome**: step 1 is an error naming the member in all five packages; step 2 gives the hex above and the bytes of a list of dictionaries are unchanged; step 3 is unchanged. Not specified: a lone byte buffer for a `Bytes` or `Sized` name in a round is refused in C# and broadcast in TypeScript, Python, Java and Rust (open owner question, batch 1 discovery 1).
+**Max execution time**: 1s
+
+### FT-X-12: A lone scalar in a Rust `times` goes to every round
+
+**Summary**: A Rust map scheme with a `times` and a single scalar for a name in the round puts the scalar in every round, as TypeScript, Python, Java and C# do (loop 18, AZ-2311).
+**Traces to**: AZ-2311 AC-1, AZ-2311 AC-2, AZ-2311 AC-3
+**Category**: Bytes
+
+**Preconditions**:
+- Rust as built in loop 18 (wave 1); the bytes were read from a TypeScript run
+
+**Input data**: the scheme `u8 n; times(count n){ u8 x, u8 y }`; the rows `{n: 2, x: 1, y: [4, 5]}`, `{n: 3, x: 1, y: [4, 5, 6]}`, `{n: 2, x: 1, y: 4}` (two lone scalars), `{n: 1, x: 1, y: 4}` (one round), `{n: 2, x: [1, 2], y: [4, 5]}` (a list per name) and `{n: 2, x: [1], y: [4, 5]}` (a list shorter than the count)
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | pack the first three rows with the Rust map API | `010201040105`; `0103010401050106`; `010201040104` |
+| 2 | unpack `010201040105`, then pack the unpacked row | the same bytes |
+| 3 | pack the one-round row and the per-round lists; pack the row with the short list | `01010104` and `010201040205`, as before; a pack error naming `x` (`Missing`), no bytes |
+
+**Expected outcome**: steps 1 and 2 give the hex above and equal the TypeScript, Python, Java and C# bytes for the same row; step 3 is unchanged. `repeat` has no lone-scalar form in the map API.
+**Max execution time**: 1s
+
+### FT-X-13: A `when`, `times` or `repeat` member of `flags` is written
+
+**Summary**: A `when`, `times` or `repeat` that is a member of a `flags` container (or sits in a group or flag-bit field under it) is written like any other value, and its bit is on exactly when it writes a value; all six packages give the same bytes and rows (loop 18, AZ-2120, AZ-2128; owner decision 10, option A).
+**Traces to**: AZ-2120 AC-1, AZ-2120 AC-2, AZ-2120 AC-3, AZ-2120 AC-4, AZ-2120 AC-5, AZ-2128 AC-1
+**Category**: Bytes
+
+**Preconditions**:
+- The six packages as built in loop 18 (wave 3); the reference rows are `_docs/03_implementation/flags_member_reference_cases_loop18.md` (about 60 hex-pinned cases over the schemes WA to R2, taken from a C# run; each package matches the table byte for byte). Typed rows and dictionary or map rows both give the table's bytes where the package has both.
+
+**Input data**: six representative rows of the table (the other rows are in the table file: split form WS and TS, group form WG and TG, two-value bodies W2, T2 and R2, and the same-`flags` condition WE):
+
+| Case | Scheme | Row | Packs to | Unpacks to |
+|------|--------|-----|----------|-----------|
+| W-true (AZ-2120 AC-3) | WA: `u8 mode; flags{ when eq(0,1){ u8 speed }, u16 heading }` | `mode=1 speed=7 heading=90` | `010103075a00` | the same row |
+| W-false | WA | `mode=0 heading=90` | `0100025a00` | the same row |
+| W-same-flags-true | WE: `flags{ u8 mode, when eq(0,1){ u8 speed } }` | `mode=1 speed=7` | `01030107` | the same row |
+| T-0-rounds / T-2-rounds (AZ-2120 AC-4) | TA: `u8 n; flags{ times(count n){ u8 pt }, u16 heading }` | `n=0 heading=90`; `n=2 pt=[5,6] heading=90` | `0100025a00`; `01020305065a00` | the same rows |
+| R-0-rounds / R-2-rounds (AZ-2120 AC-4) | RA: `u8 mode; flags{ u16 heading, repeat{ u8 pt } }` | `mode=1 heading=90`; `mode=1 pt=[5,6] heading=90` | `0101015a00`; `0101035a000506` | the same rows |
+| R-two-values-unpack | R2: `repeat{ u8 pt, u8 pu }` | unpack `0101035a0005060708` | - | `mode=1 pt=[5,7] pu=[6,8] heading=90` |
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | in each package pack each row | the hex of the table; the bit of the member is on exactly when a value is written (a `when` whose condition holds and whose body has a value; a `times` or `repeat` with at least one round) |
+| 2 | in each package unpack each hex of the table (AZ-2120 AC-5: the packet one package wrote is read by every other) | the row of the table; a clear bit reads nothing |
+| 3 | unpack, then pack the unpacked row | the same bytes (the row repacks) |
+
+**Expected outcome**: `Mode=1, Speed=7, Heading=90` packs `01 01 03 07 5a00` in C#, TypeScript, Python, Rust, Java and C++ (it was `01 01 02 5a00` with `Speed` dropped, in all six); every row of the table gives its hex in all six packages; C++ also counts a `u2`, nested `flags` or `flag_bit` head as a present group value (AZ-2128 AC-1).
+**Max execution time**: 1s
+
+### FT-X-14: A set `flags` member that cannot be written fails; old packets and other shapes are unchanged
+
+**Summary**: Where a `when`, `times` or `repeat` member of `flags` has its bit set but cannot be written in full, pack fails naming the missing value and returns no bytes; packets written before loop 18 still unpack; golden and route fixtures do not change (loop 18, AZ-2120, AZ-2128).
+**Traces to**: AZ-2120 AC-6, AZ-2128 AC-2, AZ-2128 AC-3
+**Category**: Errors
+
+**Preconditions**:
+- The six packages as built in loop 18 (wave 3); the schemes are in `flags_member_reference_cases_loop18.md`
+
+**Input data**: W2 (`flags{ when eq(0,1){ u8 speed, u8 extra }, u16 heading }`) with `mode=1 speed=7 heading=90` (`extra` missing); TA with `n=2 pt=[5] heading=90` (list too short); TA with `n=0 pt=[5] heading=90` (count 0, list given); R2 with `mode=1 pt=[5] heading=90` (`pu` missing); the old packets `0101025a00` (WA), `0100025a00` (TA), `0101015a00` (RA); the golden `4001000065cd1d00a3e1110100`
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | pack each of the four incomplete rows | a pack error naming `extra`, `pt`, `pt` (count 0 with a list given; the C# text is "holds 1 items, but the times count is 0") and `pu`; no bytes |
+| 2 | unpack each old packet | no error; WA gives `mode=1 heading=90` (no `speed`), TA gives `n=0 heading=90`, RA gives `mode=1 heading=90` |
+| 3 | pack the position golden and the route fixture | the bytes of FT-P-01 and FT-C-04, unchanged |
+
+**Expected outcome**: step 1 is a pack error in all six packages (C++ also refuses a `times` count 0 with a non-empty list outside `flags`: batch 3 discovery 22, owner to confirm); step 2 unpacks without error; step 3 is byte-identical. A packet whose `times` count is above 0 but whose bit is clear (what the old packers wrote) unpacks to a row that no longer repacks (`missing pt`): an upgrade note, not a failure. Not specified: a split `flagByte` decides its `when` or `times` bit where the byte is read, so a condition written between the byte and the bit leaves the bit clear and the body is dropped (review finding C3, open owner question).
+**Max execution time**: 1s
+
+### FT-X-15: A flag byte inside a `flags` member or a flag-bit child is invisible to a later bit (C++)
+
+**Summary**: A flag byte read inside a `flags` member or a flag-bit child is a conditional scope: a later flag bit outside it cannot bind to it, and binds to an outer byte when one exists (loop 18, AZ-2304; closes AZ-2135 for C++).
+**Traces to**: AZ-2304 AC-1, AZ-2304 AC-2, AZ-2304 AC-3, AZ-2304 AC-4, AZ-2135 AC-2
+**Category**: Bytes
+
+**Preconditions**:
+- The C++ core as built in loop 18 (wave 1); `cpp/tests/core/flag_scope_host_tests.cpp` and two compile-fail cases
+
+**Input data**: (a) `flags(0, group(u8 v, flag_byte(0), flag_bit(0, u8 x)))` then `flag_bit(0, u8 b)`; (b) `flag_byte(0)`, then `flag_bit(0, group(u8 v, flag_byte(1), flag_bit(1, u8 x)))` where the only byte 1 sits in the child, then `flag_bit(1, u8 b)`; (c) `flag_byte(0)`, then `flags(0, group(u8 v, flag_byte(0), flag_bit(0, u8 x)))`, then `flag_bit(0, u8 b)`; rows with `v = 3`, `x = 5`, `b = 7`
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | build (a) and (b) (`constexpr` and the host `validate`) | compile error, or `SchemeInvalid` naming `b` (field 2) with 0 bytes written |
+| 2 | pack and unpack scheme (c) with `b` only, `v` and `b`, `v`, `x` and `b` | `01010007`, `010101030007`, `01010103010507` (also `010001030105`, `0100010300`, `010000` for the rows without `b`); each unpacks to the row and repacks to the same bytes; the variant with the outer byte 1 guarding a flag-bit child gives the same bytes for its rows |
+| 3 | build the golden, the route and the motion examples and every scheme in `cpp/tests` | bytes and results unchanged; the embedded flash stays within its budget |
+
+**Expected outcome**: step 1 refuses (a) and (b) as Rust, TypeScript and Java do (compile-fail cases `flag_byte_in_flags_member.cpp` and `flag_byte_in_flag_bit_child.cpp`); step 2 gives the hex above, equal to the Rust and TypeScript bytes; step 3 is unchanged (the flash of `unpack_scoped` is measured in the embedded stages of the total run, FT-E-05). Not specified: sibling `flags` members are separate scopes in C++, TypeScript and Java and one shared scope in Rust; and a group under `flags` whose only children are `flag_byte` and `flag_bit` is never present on pack in C++ (batch 1 discoveries 3 and 4, open owner questions).
+**Max execution time**: 1s
+
+### FT-X-16: Split-form bits are numbered by field order for each flag-byte read
+
+**Summary**: TypeScript, C# and Java number split bits by field order per flag-byte read, as Rust and C++ do, and give the Rust bytes for the three probes; C++ packs the `k`/`a`/`b` rows below (AZ-2135 closed in loop 18 with AZ-2304).
+**Traces to**: AZ-2135 AC-1, AZ-2135 AC-2, AZ-2135 AC-3
+**Category**: Bytes
+
+**Preconditions**:
+- The packages as built in loops 16 and 17 (TypeScript, Java, C++ in loop 16; Python by AZ-2230; C# in loop 17)
+
+**Input data**: three probes with one `flagByte` handle `m`: `[m, m.bit(u8 x)]` with `x = 5` in two schemes sharing the handle; `[m, early a, late b]` (`late` created first) with `b = 9`; `[m, m.bit(a), m, m.bit(b)]` with `b = 9`. C++: `u8 k, flag_byte(0), when(k == 1, [flag_byte(0), flag_bit(0, u8 a)]), flag_bit(0, u8 b)` with `{k: 0, b: 6}` and `{k: 1, a: 5, b: 6}`
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | pack the three probes in TypeScript, C# and Java (Rust is the reference) | `010105` (both schemes build), `010209`, `01000109` |
+| 2 | pack the two C++ rows and unpack them | `01000106` and `010101010506`; both unpack; with no outer `flag_byte(0)` building fails with `SchemeInvalid` naming `b` |
+| 3 | pack the golden, route and motion examples | unchanged |
+
+**Expected outcome**: the bytes above in every package that has the probe; golden, route and motion unchanged.
+**Max execution time**: 1s
+
+### FT-X-17: C# refuses a collection member that cannot hold its field when the scheme is built
+
+**Summary**: A C# typed row member whose element type cannot hold its field, or whose collection type is not supported, fails `new Scheme<T>` with `ArgumentException` naming the member (loop 18, AZ-2305).
+**Traces to**: AZ-2305 AC-1, AZ-2305 AC-2, AZ-2305 AC-4
+**Category**: Errors
+
+**Preconditions**:
+- C# as built in loop 18 (wave 1); net10.0 and netstandard2.0
+
+**Input data**: `List<int>`, `int[]` and `Dictionary<string,int>` members for a `u32` list or dict field; `List<byte>` for a `u16` field; `Stack<int>`, `HashSet<int>`, `IEnumerable<int>` and a subclass of `List<E>` for a list field; a dictionary with `int` keys for a dict field; controls: `List<long>` for `u32`, every integer member that holds the field's whole range, `double` for `f32`
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | build each refused scheme | `ArgumentException` naming the member and the element type |
+| 2 | build each control, then pack and unpack the existing suite schemes, the README example and the golden | the scheme builds; bytes and results unchanged |
+
+**Expected outcome**: step 1 is an `ArgumentException` in every refused shape; step 2 is unchanged on net10.0 and netstandard2.0. The rule: an integer member must contain the field's whole range; `float`, `double` and `decimal` members are accepted; `IList<E>`, `IList`, `IDictionary<string,E>` and `IDictionary` are accepted; the check is skipped for list and dict fields inside a round. Not specified: whether `ICollection<E>` and `IReadOnlyList<E>` should be accepted (review C4, open owner question).
+**Max execution time**: 1s
+
+### FT-X-18: A non-null nested row with all members null is present
+
+**Summary**: A non-null typed nested row object under a `Flags` group sets the group's bit even when every member is null, and pack then fails naming the first missing member; a null nested row stays absent (loop 18, AZ-2306).
+**Traces to**: AZ-2306 AC-1, AZ-2306 AC-2, AZ-2306 AC-3
+**Category**: Errors
+
+**Preconditions**:
+- C# as built in loop 18 (wave 1)
+
+**Input data**: `Flags(0, Group(Leaf: u8 A, u8 B))` with `Leaf = new Leaf()` (all members null), `Leaf = null`; the depth-2 scheme `Flags(0, Group(Mid: u8 M, Group(Leaf: u8 A)))` with `Mid = new Mid()`, `Mid = {M=4, Leaf = new Leaf()}`, `Mid = {M=4, Leaf.A=6}`, `Mid = null`
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | pack the all-null objects (depth 1 and 2) | `ArgumentException` naming `A`, `M` and `A`; no bytes |
+| 2 | pack the null nested rows | `0100`, the bit clear |
+| 3 | pack the filled depth-2 row and unpack it | `01010406`; `Mid.Leaf.A` is 6 |
+
+**Expected outcome**: step 1 is an `ArgumentException` naming the first missing member; step 2 is `0100` for both schemes; step 3 gives `01010406` and the same row.
+**Max execution time**: 1s
+
+### FT-X-19: A C# `Flags` list or dict element, and C# in the three element rings
+
+**Summary**: A `Flags` container as a direct list or dict element packs and unpacks in C# with the TypeScript bytes, and C# takes part in the `listgroup`, `dictgroup` and `listflags` cross-language rings (loop 18, AZ-2307).
+**Traces to**: AZ-2307 AC-1, AZ-2307 AC-2, AZ-2307 AC-3, AZ-2307 AC-4
+**Category**: Bytes
+
+**Preconditions**:
+- C# as built in loop 18 (wave 1 and the ring files `.github/workflows/language-pair.sh`, `drivers/csharp/HandoffElements.cs`, `ring-wiring.test.sh`); the rings run in the one total test run (Docker or all six runtimes)
+
+**Input data**: the element `flags{ u8 a (bit 0), u16 b (bit 1) }`; the list `[{a:1}, {}, {b:2}]`; the dict `{y: {b:2}, x: {a:1}}`; the ring hex `listgroup` `01020001020304`, `dictgroup` `01020001007801020100790304`, `listflags` `010300010100020200`, and their short forms `010200010203`, `010200010078010201007903`, `0103000101000202`
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | pack the list and the dict in C# dictionary mode and in typed mode | `010300010100020200` and `0102000100780101010079020200`, the TypeScript bytes; no `KeyNotFoundException` |
+| 2 | unpack both hex strings | one row per element holding only what was read |
+| 3 | `language-pair.sh` runs the rings (chain TypeScript, Python, Java, C#, TypeScript) | C# packs for and unpacks from its neighbour in each of the three rings, and refuses the three short packets |
+| 4 | `ring-wiring.test.sh` with one C# handoff line, a driver command or the C# entry of the short-packet loop removed | the wiring test fails naming what is missing |
+
+**Expected outcome**: step 1 gives the hex above; step 3 passes for `listgroup`, `dictgroup` and `listflags`; step 4 fails for each removal; the existing C# suite is unchanged on net10.0 and netstandard2.0. Not specified: the ring is a chain, not all pairs (review C10, open owner question: all pairs would add 18 handoffs).
+**Max execution time**: 1s (steps 1, 2 and 4); the rings run in the CI ring job
+
+### FT-X-20: C# `u2` slots, `bits` and `packed` items take whole numbers that fit
+
+**Summary**: A C# `u2` slot, `bits` item or `packed` item accepts only a whole number that fits and refuses anything else with `ArgumentException` naming the member, as every other integer field does (loop 18, AZ-2309).
+**Traces to**: AZ-2309 AC-1, AZ-2309 AC-2, AZ-2309 AC-3, AZ-2309 AC-4
+**Category**: Errors
+
+**Preconditions**:
+- C# as built in loop 18 (wave 1)
+
+**Input data**: `u2` of two slots; `u8 n` then `bits` (count n); `packed(1)` and `packed(2)` items; values: fractions (`1.5` in a `u2` slot, `2.5` and `0.5` in `bits`, `0.5` in `packed`); out of range (`4`, `-1`, `4.0` in `u2`; `2` in a `bits` or `packed(1)` item; `4` and `-1` in `packed(2)`; NaN, infinity); `true`, `"1"`, `'a'`, `DayOfWeek.Monday`, `new object()`, `null`; valid values `u2` 0, 3, 3.0, 2L, `(byte)1`, `bits` item 1 and 1.0, `packed(1)` item 1L, `packed(2)` item 3 and 3.0
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | pack each fraction, each out-of-range value and each wrong-typed value | `ArgumentException` naming the member; no bytes |
+| 2 | pack the valid values | `u2`: `0100`, `0103`, `0103`, `0102`, `0101`; `bits` item 1: `010202`; `packed(1)` item 1: `010202`; `packed(2)` item 3: `01020c` |
+| 3 | pack a fraction inside `Flags`, a `Repeat` and a list element; pack the golden and route fixtures; run the 100000 round trips (NFT-PERF-01) | the fraction is refused; the fixtures and the timing are unchanged |
+
+**Expected outcome**: step 1 is an `ArgumentException` in every case (a null item used to pack as 0 and is now refused); step 2 gives the hex above (a whole number held as `double` or `long` equals the integer bytes); step 3 as stated. Not specified: whether the other five packages round fractions in `u2` slots, `bits` and `packed` items (not probed; carried to the next loop, batch 1 discovery 13).
+**Max execution time**: 1s
+
+### FT-X-21: C# dictionary pack repacks what `Read` returned, and an int for `Bytes` or `Sized` is refused
+
+**Summary**: The rows `Read` returns for a list or dict of group elements pack again to the original bytes, and an `int` given for a `Bytes` or `Sized` name is an `ArgumentException` naming the member, in and outside a round (loop 18, AZ-2310).
+**Traces to**: AZ-2310 AC-1, AZ-2310 AC-2, AZ-2310 AC-3, AZ-2310 AC-4
+**Category**: Bytes
+
+**Preconditions**:
+- C# as built in loop 18 (wave 1)
+
+**Input data**: a list of group elements `u8 a, u8 b` (anchored and unanchored) and a dict of the same, with the packet `01 0200 0102 0304` (the `listgroup` ring packet) and its dict form; groups holding a string and flags; about 360 000 random packets over six schemes; the scheme `u8 n; bytes raw; sized data` with an `int` for `raw` and for `data`, outside a round and inside a `times` round
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | `Read` the packet in dictionary mode, pass the row to `Pack` | the original bytes `01020001020304`; no `'A' has no value` |
+| 2 | unpack each random packet, then repack | the original packet (list schemes), or a stable second repack (dict schemes, whose keys are re-sorted); a packet that fails unpack fails in the same way |
+| 3 | pack an `int` for a `Bytes` name and for a `Sized` name | `ArgumentException` naming the member; no `InvalidCastException` |
+| 4 | pack `byte[]` for both; run the existing suite on both targets | the bytes of today; results unchanged |
+
+**Expected outcome**: step 1 gives the original hex; step 2 holds for every random packet; step 3 is an `ArgumentException` in and outside a round; step 4 is unchanged on net10.0 and netstandard2.0.
+**Max execution time**: 30s (the random repack)

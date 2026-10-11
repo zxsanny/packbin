@@ -140,6 +140,59 @@
 | AZ-2025 AC-3 | Clear pack still matches | FT-P-01 | Covered |
 | AZ-2026 AC-1 | Both examples are in the README | FT-K-08 | Covered |
 | AZ-2026 AC-2 | The session example matches the contract | FT-K-08 | Covered |
+| AZ-2120 AC-1 | C# `When` under a combined `Flags`: `Mode=1, Speed=7, Heading=90` packs `01 01 03 07 5a00` and unpacks to the same row | FT-X-13; tests: C# `FlagsWhenMemberTests.Ac3_Typed_ConditionHoldsAndBodyPresent_WritesTheBodyAndRoundTrips`, `Ac3_Dictionary_ConditionHoldsAndBodyPresent_WritesTheBodyAndRoundTrips` | Covered |
+| AZ-2120 AC-2 | The other five packages pack the same scheme to the C# bytes | FT-X-13; tests: C# `FlagsWhenMemberTests`, TypeScript `flags-when-member`, Python `test_flags_when_member`, Rust `flags_when_member_tests` + `flags_member_typed_tests`, Java `FlagsWhenMemberTest`, C++ `flags_when_member_host_tests` | Covered |
+| AZ-2120 AC-3 | `when` under `flags`, all six: `01 01 03 07 5a00`; `Mode=0` leaves the bit clear and round-trips | FT-X-13; tests: C# `FlagsWhenMemberTests`, TypeScript `flags-when-member`, Python `test_flags_when_member`, Rust `flags_when_member_tests` + `flags_member_typed_tests`, Java `FlagsWhenMemberTest`, C++ `flags_when_member_host_tests` | Covered |
+| AZ-2120 AC-4 | `times` and `repeat` under `flags`, all six: the bit is on exactly when a round is written; same bytes in every package | FT-X-13; tests: C# `FlagsRoundMemberTests`, TypeScript `flags-times-repeat-member`, Python `test_flags_round_member`, Rust `flags_round_member_tests` + `flags_zero_rounds_tests`, Java `FlagsRoundMemberTest`, C++ `flags_times_repeat_member_host_tests` | Covered |
+| AZ-2120 AC-5 | Packets of AC-3 and AC-4 written by one package unpack to equal rows in every other (each package pins the hex) | FT-X-13; tests: Python `test_ac5_old_and_new_when_under_flags_packets_unpack`, `test_ac5_old_and_new_times_under_flags_packets_unpack`, `test_ac5_old_and_new_repeat_under_flags_packets_unpack`, Java `ac5TimesPacketsUnpack`, `ac5RepeatPacketsUnpack`, and the `*_unpack` rows of the member tests above | Covered |
+| AZ-2120 AC-6 | Nothing else changes: golden, route and every packet not using the shape keep their bytes | FT-X-14, FT-P-01, FT-C-04; tests: TypeScript `AC-6 a row that does not use the shape is unchanged`, the six package suites | Covered |
+| AZ-2126 AC-1 | `eq(bool, false)` is a scheme error naming the `when` and field 0, in every package | FT-X-08, FT-X-09; tests: C# `EqBoolTrueOnlyTests.Ac1_*`, TypeScript `eq-source-kinds`, Python `test_when_count_sources`, Rust `eq_bool_true_tests`, Java `EqBoolTrueOnlyTest`, C++ `source_kinds_host_tests` + compile-fail `when_eq_bool_false` | Covered |
+| AZ-2126 AC-2 | `eq(bool, true)` packs `010105` and round-trips `{on: true, v: 5}` in every package | FT-X-08; tests: C# `EqBoolTrueOnlyTests.Ac2_*`, TypeScript `eq-source-kinds` (AC-2), Python `test_az_2126_ac2_*`, Rust `ac2_eq_bool_true_*`, Java `EqBoolTrueOnlyTest`, C++ `eq_on_a_bool_with_true_round_trips` | Covered |
+| AZ-2126 AC-3 | The construct vector `eq_bool_false` gives `scheme_error` in every package | FT-X-08, FT-X-01, FT-X-04; tests: the `construct` replay of each package's hostile vector test (`HostileVectorTests`, `hostile.test.ts`, `test_hostile_vectors`, `hostile_tests`, `HostileVectorTest`, `hostile_host_tests`) | Covered |
+| AZ-2128 AC-1 | Each presence probe sets the group's bit and round-trips; loop 18 adds `when`, `times` and `repeat` members and C++ `u2`, nested `flags` and `flag_bit` heads | FT-X-13; tests: the member tests of AZ-2120 AC-4, C++ `group_with_only_a_u2_value` | Covered |
+| AZ-2128 AC-2 | A set group or member with a missing required value fails pack naming that value | FT-X-14; tests: C# `Ac3_SetWhenWithAMissingBodyValue_FailsNamingTheValue`, `Ac4_Times_CountAboveZeroButTooFewValues_FailsNamingTheValue`, Python `test_ac3_a_set_when_member_missing_a_value_fails_pack_naming_it`, Rust `flags_zero_rounds_tests`, Java `ac3TwoValueBodyAndMissingValues`, `ac4TimesErrors` | Covered |
+| AZ-2128 AC-3 | Golden and route fixtures unchanged | FT-X-14, FT-P-01, FT-C-04 | Covered |
+| AZ-2135 AC-1 | TypeScript, C# and Java number split bits by field order and give the Rust bytes `010105`, `010209`, `01000109`; a shared handle builds both schemes | FT-X-16; tests: TypeScript `split-bits-field-order`, C# `SplitBitOrderTests`, Java `SplitBitOrderTest`, Python `test_split_bits_field_order` | Covered |
+| AZ-2135 AC-2 | C++ packs `01000106` and `010101010506` for `{k:0, b:6}` and `{k:1, a:5, b:6}`; no outer byte gives `SchemeInvalid` naming `b` | FT-X-16, FT-X-15; tests: C++ `grouped_tests` (AC-2 hex), `flag_scope_host_tests` | Covered |
+| AZ-2135 AC-3 | Golden, route and motion examples unchanged | FT-X-16, FT-P-01, FT-C-04 | Covered |
+| AZ-2194 AC-1 | `check-cases.sh` accepts `pack bytes <hex>` and `pack pack_error -` lines (the committed file reports `hostile cases ok: 25`; the spec text said 22 before `eq_bool_false` and the two `limit` cases were counted) | FT-X-01; tests: `fixtures/hostile/cases.test.sh` | Covered |
+| AZ-2194 AC-2 | The check rejects a malformed pack line and names it | FT-X-01; tests: `cases.test.sh` corruptions `pack_bytes_dash_hex`, `pack_error_with_hex`, `pack_odd_hex`, `pack_hex_not_01`, `pack_unpack_term`, `unpack_uses_bytes`, `unpack_uses_pack_error`, `construct_uses_pack_error`, `pack_duplicate_id` | Covered |
+| AZ-2194 AC-3 | Each pack case needs a README section with Scheme, Row, `Run by` and `Not run by` naming each of the six packages exactly once | FT-X-01; tests: `cases.test.sh` README corruptions `pack_no_section`, `pack_package_in_neither`, `pack_package_twice`, `pack_no_not_run_list`, `pack_readme_packet_differs`, `pack_readme_expected_differs`, `pack_no_row_line` | Covered |
+| AZ-2194 AC-4 | `u8 a`, `a = 300` is `pack_error` in TypeScript, Python, Java, C# (dictionary rows), Rust (map form); C++ skipped with its reason | FT-X-10; tests: `pack_out_of_range_integer` replay in the six hostile vector tests (C#: `HostilePackVectorTests.PackCase_ReturnsTheBytesOrRefuses`) | Covered |
+| AZ-2194 AC-5 | `u8 a; u8 b` with `{a: 1}` is `pack_error` in all six | FT-X-10; tests: `pack_missing_required_value` replay in the six hostile vector tests | Covered |
+| AZ-2194 AC-6 | `times` list too long and too short is `pack_error` in all six | FT-X-10; tests: `pack_times_list_too_long`, `pack_times_list_too_short` replay in the six hostile vector tests | Covered |
+| AZ-2194 AC-7 | The aligned round row packs `01030102020303` in all six | FT-X-10; tests: `pack_aligned_round_row` replay in the six hostile vector tests | Covered |
+| AZ-2194 AC-8 | Every package's vector test handles the stage: run where listed, skipped with a reason where not | FT-X-10, FT-X-04; tests: `EveryPackCase_HasACSharpScheme`, `test_every_pack_vector_has_a_declared_scheme`, `pack_cases` (C++), `replayPack` (Java), `hostile.test.ts` pack cases, `hostile_tests` (Rust) | Covered |
+| AZ-2194 AC-9 | The scaffold job runs the check and the self-test with the new count and the corruptions | FT-X-01; tests: the `hostile case file` step of the `scaffold` job (`cases.test.sh`, 26 corruptions) | Covered |
+| AZ-2304 AC-1 | A flag byte inside a `flags` member is invisible to a later bit; building fails with `SchemeInvalid` naming `b` | FT-X-15; tests: C++ `byte_inside_a_flags_member_is_not_seen_after_it`, compile-fail `flag_byte_in_flags_member` | Covered |
+| AZ-2304 AC-2 | A flag byte inside a flag-bit child is invisible to a later bit | FT-X-15; tests: C++ `byte_inside_a_flag_bit_child_is_not_seen_after_it`, compile-fail `flag_byte_in_flag_bit_child` | Covered |
+| AZ-2304 AC-3 | A byte read before the container keeps working: Rust bytes `01010007`, `010101030007`, `01010103010507`, both directions | FT-X-15; tests: C++ `outer_byte_serves_a_bit_after_a_flags_member`, `outer_byte_serves_a_bit_after_a_flag_bit_child` | Covered |
+| AZ-2304 AC-4 | Golden, route and motion unchanged; embedded flash within budget | FT-X-15, FT-E-05; tests: C++ `make -C cpp test`; the flash of `unpack_scoped` is measured in the embedded stages of the total run | Covered |
+| AZ-2305 AC-1 | A narrower element type (`List<int>`, `int[]`, `Dictionary<string,int>` for `u32`; `List<byte>` for `u16`) is refused naming the member | FT-X-17; tests: C# `CollectionMemberTests.Build_ListOfIntForU32_RefusedNamingMemberAndElement`, `Build_ArrayOfIntForU32_*`, `Build_DictOfIntForU32_*`, `Build_ListOfByteForU16_*`, `Build_EveryIntegerPair_AcceptedOnlyWhenTheMemberHoldsTheFieldRange` | Covered |
+| AZ-2305 AC-2 | `Stack<int>`, `HashSet<int>`, `IEnumerable<int>` for a list field are refused naming the member | FT-X-17; tests: C# `CollectionMemberTests.Build_StackForAList_*`, `Build_HashSetForAList_*`, `Build_IEnumerableForAList_*` | Covered |
+| AZ-2305 AC-3 | The 7-byte packet no longer throws out of `Unpack` | NFT-SEC-03; tests: C# `CollectionMemberTests.Unpack_F25Packet_AgainstWideEnoughScheme_ReturnsValueNotException` | Covered |
+| AZ-2305 AC-4 | Matching members unchanged on net10.0 and netstandard2.0 | FT-X-17, FT-P-01, FT-C-04; tests: C# `CollectionMemberTests.Build_MatchingAndWiderMembers_Accepted`, the C# suite | Covered |
+| AZ-2306 AC-1 | A non-null nested row with all members null sets the group bit and pack fails naming the first missing member | FT-X-18; tests: C# `EmptyNestedRowTests.Pack_AllNullObjectUnderFlags_*`, `Pack_AllNullObjectAtDepthTwo_*`, `Pack_FilledMidWithAllNullInnerObject_*` | Covered |
+| AZ-2306 AC-2 | A null nested row stays absent (`0100`) | FT-X-18; tests: C# `EmptyNestedRowTests.Pack_NullNestedRow_BitClearAndBytesUnchanged` | Covered |
+| AZ-2306 AC-3 | A filled object packs and unpacks as before (`01010406`) | FT-X-18, FT-P-01, FT-C-04; tests: C# `EmptyNestedRowTests.Pack_FilledObject_BytesAndRoundTripUnchanged` | Covered |
+| AZ-2307 AC-1 | A `Flags` list or dict element packs and unpacks in C# dictionary and typed mode with the TypeScript bytes | FT-X-19; tests: C# `FlagsElementTests.Ac1_Pack_ListOfFlagsInDictionaryMode_WritesTheTypeScriptBytes`, `Ac1_Pack_DictOfFlagsInDictionaryMode_*`, `Ac1_Pack_ListOfFlagsTyped_*`, `Ac1_Pack_DictOfFlagsTyped_*`, `Ac1_Read_*` | Covered |
+| AZ-2307 AC-2 | The `listgroup` and `dictgroup` rings include C#; the wiring test fails when a handoff line is missing | FT-X-19; tests: `language-pair.sh` rings (run in the total test run), `ring-wiring.test.sh` (C# lines) | Covered |
+| AZ-2307 AC-3 | The `listflags` ring includes C# in both directions | FT-X-19; tests: `language-pair.sh` `listflags` ring (run in the total test run), `ring-wiring.test.sh` | Covered |
+| AZ-2307 AC-4 | Golden, route and the C# suite unchanged on net10.0 and netstandard2.0 | FT-X-19, FT-P-01, FT-C-04; tests: the C# suite | Covered |
+| AZ-2308 AC-1 | A probe table of the result per package for a lone dictionary in a `times` | FT-X-11; evidence: the probe table in `batch_01_loop18_report.md` and the before/after table of FT-X-11 | Covered |
+| AZ-2308 AC-2 | A lone dictionary for a `Dict` name in a round is refused naming the member in C#, TypeScript, Python, Java, Rust | FT-X-11; tests: C# `LoneDictRoundTests.Ac2_*`, TypeScript `lone-dict-in-round` + `dict-non-plain-object`, Python `test_lone_dict_in_round`, Java `LoneDictRoundTest`, Rust `times_lone_value_tests` (dict case) | Covered |
+| AZ-2308 AC-3 | A list with one dictionary per round packs as before | FT-X-11; tests: C# `LoneDictRoundTests.Ac3_*`, TypeScript `AC-3 a list with one dictionary per round packs`, Python `test_az_2308_ac3_*`, Java `listOfDictsPerRoundStillPacks` | Covered |
+| AZ-2309 AC-1 | A fraction in a `u2` slot, `bits` item or `packed` item is refused naming the member | FT-X-20; tests: C# `StrictSlotTests.Ac1_Pack_FractionInASlot_ThrowsNamingTheMember`, `Ac1_Pack_FractionInsideFlagsRepeatAndListElement_IsRefused` | Covered |
+| AZ-2309 AC-2 | A value that does not fit the slot is refused naming the member | FT-X-20; tests: C# `StrictSlotTests.Ac2_Pack_ValueThatDoesNotFit_ThrowsNamingTheMember` | Covered |
+| AZ-2309 AC-3 | bool, string, char, enum, object and null are refused in slots | FT-X-20; tests: C# `StrictSlotTests.Ac3_Pack_BoolStringCharEnumObjectOrNull_ThrowsNamingTheMember` | Covered |
+| AZ-2309 AC-4 | Valid values and whole numbers held as `double` or `long` keep their bytes; golden and route unchanged | FT-X-20, NFT-PERF-01; tests: C# `StrictSlotTests.Ac4_Pack_RangeEdgesAndWholeNumbers_KeepTheirBytes`, `Ac4_Pack_WholeNumbersAsDoubleOrLong_EqualTheIntegerBytes`, `Ac4_Pack_TypedRowOfInts_KeepsItsBytes` | Covered |
+| AZ-2310 AC-1 | The rows `Read` returns for a list or dict of group elements pack to the original bytes | FT-X-21; tests: C# `DictRepackTests.Ac1_Pack_ReadOfAListOfGroups_GivesTheOriginalBytes`, `Ac1_Pack_ReadOfADictOfGroups_*`, `Ac1_Pack_ReadOfGroupsHoldingAStringAndFlags_*` | Covered |
+| AZ-2310 AC-2 | Random packets repack to the original or fail as the unpack failed | FT-X-21; tests: C# `DictRepackTests.Ac2_Pack_RepackOfEveryUnpackedRandomPacket_EqualsItOrFailsAsTheUnpackDid` | Covered |
+| AZ-2310 AC-3 | An `int` for a `Bytes` or `Sized` name is an `ArgumentException` naming the member, in and outside a round | FT-X-21; tests: C# `DictRepackTests.Ac3_Pack_IntForBytesOrSized_ThrowsArgumentExceptionNamingTheMember` | Covered |
+| AZ-2310 AC-4 | Unchanged paths on net10.0 and netstandard2.0 | FT-X-21; tests: C# `DictRepackTests.Ac4_Pack_ByteArraysForBytesAndSized_KeepTheirBytes`, the C# suite | Covered |
+| AZ-2311 AC-1 | The bytes Rust gives for a lone scalar are recorded beside the other packages' bytes | FT-X-12; evidence: `batch_01_loop18_report.md` and the TypeScript bytes in the AZ-2311 result | Covered |
+| AZ-2311 AC-2 | Every round carries a lone scalar: `010201040105`, `0103010401050106`, `010201040104` | FT-X-12; tests: Rust `times_lone_value_tests::az2311_ac2_*` | Covered |
+| AZ-2311 AC-3 | Per-round lists and the Rust suite unchanged; a short list is still `Missing` | FT-X-12; tests: Rust `az2311_ac3_one_round_and_per_round_lists_keep_their_bytes`, `az2311_ac3_a_list_shorter_than_the_count_is_still_missing` | Covered |
 
 ## Restrictions Coverage
 
@@ -169,9 +222,9 @@
 
 | Category | Total Items | Covered | BLOCKED | WAIVED | Coverage |
 |----------|-----------|---------|---------|--------|----------|
-| Acceptance Criteria | 136 | 136 | 0 | 0 | every row Covered or WAIVED |
+| Acceptance Criteria | 189 | 189 | 0 | 0 | every row Covered or WAIVED |
 | Restrictions | 19 | 17 | 0 | 2 | every row Covered or WAIVED |
-| **Total** | 155 | 153 | 0 | 2 | every row Covered or WAIVED |
+| **Total** | 208 | 206 | 0 | 2 | every row Covered or WAIVED |
 
 ## Uncovered Items Analysis
 
@@ -181,3 +234,4 @@
 | R-12 | WAIVED | No budget number was set | None for a $0 library | Revisit if a paid service is added |
 
 <!-- autodev-step5-post-architecture-pass: 2026-09-22 -->
+<!-- autodev-step12-loop-update: loop 18, 2026-10-11, 53 rows added (AZ-2120, 2126, 2128, 2135, 2194, 2304-2311) -->
