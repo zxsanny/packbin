@@ -84,55 +84,85 @@ internal static class RowBinding
             into[name] = value;
     }
 
-    public static T To<T>(IReadOnlyList<Field> fields, IReadOnlyDictionary<string, object?> values) where T : new()
+    // `unfit`: the first member of a repeat or times round that cannot hold the list of rounds unpack read for it (a byte
+    // member cannot hold the rounds of a byte), or null when every member took its value. The row is not to be used then.
+    public static T To<T>(IReadOnlyList<Field> fields, IReadOnlyDictionary<string, object?> values, out string? unfit)
+        where T : new()
     {
         var row = new T();
-        Apply(fields, values, row);
+        try
+        {
+            Apply(fields, values, row, inRound: false);
+            unfit = null;
+        }
+        catch (UnfitMember refused)
+        {
+            unfit = refused.Member;
+        }
         return row;
     }
 
-    private static void Apply(IReadOnlyList<Field> fields, IReadOnlyDictionary<string, object?> values, object row)
+    private sealed class UnfitMember(string member) : Exception(member)
     {
-        for (var i = 0; i < fields.Count; i++)
-            ApplyField(fields[i], values, row);
+        public string Member => Message;
     }
 
-    private static void ApplyField(Field field, IReadOnlyDictionary<string, object?> values, object row)
+    private static void Apply(IReadOnlyList<Field> fields, IReadOnlyDictionary<string, object?> values, object row, bool inRound)
+    {
+        for (var i = 0; i < fields.Count; i++)
+            ApplyField(fields[i], values, row, inRound);
+    }
+
+    private static void ApplyField(Field field, IReadOnlyDictionary<string, object?> values, object row, bool inRound)
     {
         switch (field.Type)
         {
             case Field.Kind.FlagByte:
                 break;
             case Field.Kind.FlagBit:
-                ApplyField(field.Inner!, values, row);
+                ApplyField(field.Inner!, values, row, inRound);
                 break;
             case Field.Kind.When:
             case Field.Kind.Flags:
+                Apply(field.Children, values, row, inRound);
+                break;
             case Field.Kind.Repeat:
             case Field.Kind.Times:
-                Apply(field.Children, values, row);
+                Apply(field.Children, values, row, inRound: true);
                 break;
             case Field.Kind.U2:
                 for (var i = 0; i < field.Names.Length; i++)
                 {
-                    if (values.TryGetValue(field.Names[i], out var slot) && slot is not null)
-                        field.Binding!.Slots[i].Set(row, slot);
+                    if (!values.TryGetValue(field.Names[i], out var slot) || slot is null)
+                        continue;
+                    var member = field.Binding!.Slots[i];
+                    RequireFits(field.Names[i], member, slot, inRound);
+                    member.Set(row, slot);
                 }
                 break;
             case Field.Kind.Group when !field.NestedRow:
-                SetIfRead(field, values, row);
-                Apply(field.Children, values, row);
+                SetIfRead(field, values, row, inRound);
+                Apply(field.Children, values, row, inRound);
                 break;
             default:
-                SetIfRead(field, values, row);
+                SetIfRead(field, values, row, inRound);
                 break;
         }
     }
 
-    private static void SetIfRead(Field field, IReadOnlyDictionary<string, object?> values, object row)
+    private static void SetIfRead(Field field, IReadOnlyDictionary<string, object?> values, object row, bool inRound)
     {
-        if (values.TryGetValue(field.Name, out var raw) && raw is not null)
-            SetValue(field, row, raw);
+        if (!values.TryGetValue(field.Name, out var raw) || raw is null)
+            return;
+        RequireFits(field.Name, field.Binding!.Member, raw, inRound);
+        SetValue(field, row, raw);
+    }
+
+    // A round holds a list of what its rounds read, so a member that is not a list cannot take it.
+    private static void RequireFits(string name, MemberAccess member, object raw, bool inRound)
+    {
+        if (inRound && !member.Type.IsInstanceOfType(raw))
+            throw new UnfitMember(name);
     }
 
     // `raw` is what unpack read for the field: a value, a list or dictionary of them, or (typed rows) the Scope of a
@@ -144,7 +174,7 @@ internal static class RowBinding
         {
             case Field.Kind.Group when field.NestedRow:
                 var nested = binding.CreateNested!();
-                Apply(field.Children, (IReadOnlyDictionary<string, object?>)raw, nested);
+                Apply(field.Children, (IReadOnlyDictionary<string, object?>)raw, nested, inRound: false);
                 binding.Member.Set(row, nested);
                 break;
             case Field.Kind.List:
@@ -206,7 +236,7 @@ internal static class RowBinding
             var inner = field.Children[0];
             // An anchored group's or a flags container's fields belong to the element row itself, so its item holds them by name.
             if (inner is { Type: Field.Kind.Flags } or { Type: Field.Kind.Group, NestedRow: false, Children.Length: > 0 })
-                ApplyField(inner, (IReadOnlyDictionary<string, object?>)item, element);
+                ApplyField(inner, (IReadOnlyDictionary<string, object?>)item, element, inRound: false);
             else
                 SetValue(inner, element, item);
             return element;

@@ -8,6 +8,7 @@ from packbin._errors import ShortPacket, TrailingBytes, TypeMismatch, UnpackResu
 from packbin._flag_scope import _bind_flag_bits
 from packbin._nodes import _Node
 from packbin._pack import pack_nodes
+from packbin._pack_limits import DEFAULT_MAX_BYTES, _PackBudget
 from packbin._unpack import DEFAULT_MAX_ROUNDS, DEFAULT_MAX_SLOTS, _Budget, unpack_nodes
 from packbin._validate import (
     _shown,
@@ -31,12 +32,14 @@ def _checked_limit(name: str, value: Any) -> int:
 class Scheme(Generic[T]):
     """`max_rounds` is the most rounds one `repeat` or `times` field may start in one unpack, and `max_slots`
     the most entries all the rounds of one unpack may make together (one per name a round can hold), so the
-    length of a packet does not set its memory cost."""
+    length of a packet does not set its memory cost. Pack keeps the same two limits and refuses a packet longer
+    than `max_bytes`, type byte included."""
 
-    __slots__ = ("_type_number", "_row_type", "_fields", "_max_rounds", "_max_slots")
+    __slots__ = ("_type_number", "_row_type", "_fields", "_max_rounds", "_max_slots", "_max_bytes")
 
     DEFAULT_MAX_ROUNDS = DEFAULT_MAX_ROUNDS
     DEFAULT_MAX_SLOTS = DEFAULT_MAX_SLOTS
+    DEFAULT_MAX_BYTES = DEFAULT_MAX_BYTES
 
     def __init__(self, type_number: int, row_type: type[T], *fields: _Node) -> None:
         if isinstance(type_number, bool) or not isinstance(type_number, int) or type_number < 0 or type_number > 255:
@@ -51,6 +54,7 @@ class Scheme(Generic[T]):
         self._fields = bound
         self._max_rounds = DEFAULT_MAX_ROUNDS
         self._max_slots = DEFAULT_MAX_SLOTS
+        self._max_bytes = DEFAULT_MAX_BYTES
 
     @property
     def max_rounds(self) -> int:
@@ -60,14 +64,22 @@ class Scheme(Generic[T]):
     def max_slots(self) -> int:
         return self._max_slots
 
+    @property
+    def max_bytes(self) -> int:
+        return self._max_bytes
+
     def with_limits(
-        self, max_rounds: int = DEFAULT_MAX_ROUNDS, max_slots: int = DEFAULT_MAX_SLOTS
+        self,
+        max_rounds: int = DEFAULT_MAX_ROUNDS,
+        max_slots: int = DEFAULT_MAX_SLOTS,
+        max_bytes: int = DEFAULT_MAX_BYTES,
     ) -> Scheme[T]:
         """A scheme with these limits and the same fields; this one is unchanged. A limit left out is the
         default, not this scheme's current value."""
         limited = copy.copy(self)
         limited._max_rounds = _checked_limit("max_rounds", max_rounds)
         limited._max_slots = _checked_limit("max_slots", max_slots)
+        limited._max_bytes = _checked_limit("max_bytes", max_bytes)
         return limited
 
     def on(self, handler: Callable[[T], None]) -> _Handler[T]:
@@ -93,7 +105,8 @@ class BinaryPacker:
     def pack(scheme: Scheme[T], row: T | Mapping[str, Any]) -> bytes:
         buf = bytearray()
         buf.append(scheme._type_number)
-        pack_nodes(buf, scheme._fields, row, max_rounds=scheme._max_rounds)
+        budget = _PackBudget(scheme._max_rounds, scheme._max_slots, scheme._max_bytes)
+        pack_nodes(buf, scheme._fields, row, budget=budget)
         return _builtin_bytes(buf)
 
     @staticmethod

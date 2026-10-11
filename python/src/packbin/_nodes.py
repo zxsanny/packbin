@@ -148,6 +148,7 @@ class _Repeat(_Node):
     anchor: int
     fields: list[_Node]
     leaves: list[Any] = field(default_factory=_builtin_list, init=False, repr=False, compare=False)
+    optional: set[int] = field(default_factory=set, init=False, repr=False, compare=False)
 
 
 @dataclass(slots=True)
@@ -350,6 +351,7 @@ def when(anchor: int, condition: _Eq, *fields: _Node) -> _When:
 def repeat(anchor: int, *fields: _Node) -> _Repeat:
     node = _Repeat(anchor=anchor, fields=_builtin_list(fields))
     node.leaves = _round_leaves(node.fields)
+    node.optional = _optional_leaves(node.fields)
     return node
 
 

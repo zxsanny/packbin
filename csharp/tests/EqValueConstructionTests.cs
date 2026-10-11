@@ -60,10 +60,6 @@ public class EqValueConstructionTests
     {
         { "u8", 5 },
         { "u8", (byte)255 },
-        { "u8", 5.0 },
-        { "u8", 255.0 },
-        { "u8", 0.0 },
-        { "u8", 5m },
         { "i8", -128 },
         { "i8", (sbyte)127 },
         { "u16", 65_535 },
@@ -83,6 +79,34 @@ public class EqValueConstructionTests
         var error = Assert.IsType<ArgumentException>(thrown);
         Assert.StartsWith($"when 1 tests {kind} field 0 ('", error.Message, StringComparison.Ordinal);
         Assert.Contains("the value must be a whole number from ", error.Message, StringComparison.Ordinal);
+    }
+
+    // AZ-2358: `5.0` is not the integer 5, as Java, Python and Rust already say.
+    public static TheoryData<string, object?> WholeFloats() => new()
+    {
+        { "u8", 5.0 },
+        { "u8", 255.0 },
+        { "u8", 0.0 },
+        { "u8", 5m },
+        { "u8", 5.0f },
+        { "i8", -128.0 },
+        { "u16", 65_535.0 },
+        { "u32", 1.0 },
+        { "u64", 1.0 },
+        { "u2", 3.0 },
+    };
+
+    [Theory]
+    [MemberData(nameof(WholeFloats))]
+    public void Construct_EqWholeFloatForAnIntegerSource_IsRefusedNamingTheWhenAndTheMember(string kind, object? value)
+    {
+        // Act
+        var thrown = Record.Exception(() => Build(kind, value));
+
+        // Assert
+        var error = Assert.IsType<ArgumentException>(thrown);
+        Assert.StartsWith($"when 1 tests {kind} field 0 ('", error.Message, StringComparison.Ordinal);
+        Assert.Contains("not a float, double or decimal", error.Message, StringComparison.Ordinal);
     }
 
     [Theory]

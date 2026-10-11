@@ -108,15 +108,17 @@ internal static class SchemeOrder
             throw NoConstructor(field, binding.NestedType!);
         if (binding.Shape is { RowElements: true, CreateElement: null } shape)
             throw NoConstructor(field, shape.ElementType);
-        if (binding.Shape is { } collection && !inRound)
-            RequireCollection(field, collection);
+        if (binding.Shape is { } collection)
+            RequireCollection(field, collection, inRound);
     }
 
-    private static void RequireCollection(Field field, CollectionShape shape)
+    // In a repeat or times round the member may be a list of what each round holds (`List<Dictionary<string, byte>>` for a
+    // dict field), so only the element check applies there.
+    private static void RequireCollection(Field field, CollectionShape shape, bool inRound)
     {
         var member = field.Binding!.Member.Type;
         var kind = shape.Dictionary ? "dictionary" : "list";
-        if (!CollectionShape.IsSupported(member, shape.Dictionary))
+        if (!inRound && !CollectionShape.IsSupported(member, shape.Dictionary))
             throw new ArgumentException(
                 $"'{field.Name}': {TypeName(member)} is not a collection Packbin can fill; use an array, "
                 + (shape.Dictionary ? "Dictionary<string, E>" : "List<E>") + $" for a {kind} field");
@@ -194,7 +196,14 @@ internal static class SchemeOrder
         var (low, high) = IntegerRange(kind);
         var value = when.Pred!.Value;
         if (IsWholeNumberWithin(value, low, high))
+        {
+            // An integer source is compared with an integer, as Java, Python and Rust do; `5.0` is not the integer 5.
+            if (value is float or double or decimal)
+                throw new ArgumentException(
+                    $"when {when.Id} tests {kind.ToString().ToLowerInvariant()} field {when.Pred.FieldId} ('{name}') against "
+                    + $"{Describe(value)} ({value!.GetType().Name}); an integer field is compared with an integer type, not a float, double or decimal");
             return;
+        }
         throw new ArgumentException(
             $"when {when.Id} tests {kind.ToString().ToLowerInvariant()} field {when.Pred.FieldId} ('{name}') against {Describe(value)}; "
             + $"the value must be a whole number from {low} to {high}");

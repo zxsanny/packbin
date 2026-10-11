@@ -10,10 +10,11 @@ internal static partial class Walker
     private static void PackRepeat(
         Field field,
         IReadOnlyDictionary<string, object?> values,
-        List<byte> buffer,
+        PackOut buffer,
         Scope seen)
     {
         var names = RoundNames(field, packing: true);
+        RequireRepeatWithinLimit(names, values, seen);
         RequireRoundCollections(field, values);
         PackRounds(field, names, RoundCount(names, values), values, buffer, seen);
     }
@@ -21,13 +22,13 @@ internal static partial class Walker
     private static void PackTimes(
         Field field,
         IReadOnlyDictionary<string, object?> values,
-        List<byte> buffer,
+        PackOut buffer,
         Scope seen)
     {
         var names = RoundNames(field, packing: true);
-        RequireRoundCollections(field, values);
         var count = BorrowedCount(field, seen);
         RequireRoundsWithinLimit(field, names, count, seen);
+        RequireRoundCollections(field, values);
         RequireNoExtraRounds(names, count, values);
         PackRounds(field, names, count, values, buffer, seen);
     }
@@ -40,6 +41,18 @@ internal static partial class Walker
         if (count > limit)
             throw new ArgumentException(
                 $"'{(names.Count > 0 ? names[0] : $"times {field.Id}")}': the times count is {count}, above the limit of {limit} rounds");
+    }
+
+    // A repeat takes its rounds from the longest list, so pack refuses a list above the limit before any round is written,
+    // naming the first member whose list passes it.
+    private static void RequireRepeatWithinLimit(List<string> names, IReadOnlyDictionary<string, object?> values, Scope seen)
+    {
+        var limit = seen.Budget.MaxRounds;
+        foreach (var name in names)
+        {
+            if (values.TryGetValue(name, out var v) && v is IList list && list.Count > limit)
+                throw new ArgumentException($"'{name}': the repeat count is {list.Count}, above the limit of {limit} rounds");
+        }
     }
 
     // A list longer than the count would have its last items dropped. A shorter one runs out in a round that walks
@@ -58,17 +71,31 @@ internal static partial class Walker
         List<string> names,
         int count,
         IReadOnlyDictionary<string, object?> values,
-        List<byte> buffer,
+        PackOut buffer,
         Scope outer)
     {
         var seen = outer.Fresh();
+        var slots = SlotsPerRound(RoundNames(field, packing: false));
         for (var i = 0; i < count; i++)
         {
+            RequireSlots(field, names, slots, seen);
             var slice = SliceRound(names, values, i);
             seen.Clear();
             foreach (var child in field.Children)
                 PackField(child, slice, buffer, seen);
         }
+    }
+
+    // A round is admitted before any of its bytes are written, as unpack admits it, so a packet pack writes is one the same
+    // scheme unpacks.
+    private static void RequireSlots(Field field, List<string> names, int slots, Scope seen)
+    {
+        var budget = seen.Budget;
+        if (budget.TryChargeSlots(slots))
+            return;
+        var member = names.Count > 0 ? names[0] : $"{(field.Type == Field.Kind.Times ? "times" : "repeat")} {field.Id}";
+        throw new ArgumentException(
+            $"'{member}': the rounds would hold {budget.SlotsUsed + slots} slots, above the limit of {budget.MaxSlots} slots");
     }
 
     // The names a round can hold: its own fields and the ones under when, flags, flag bits and groups. A list or dict

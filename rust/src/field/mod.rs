@@ -11,7 +11,7 @@ pub use leaf::{
 };
 pub(crate) use leaf::{float_width, int_width};
 use map_scheme::count_fields;
-pub use map_scheme::{MapScheme, DEFAULT_MAX_ROUNDS, DEFAULT_MAX_SLOTS};
+pub use map_scheme::{MapScheme, DEFAULT_MAX_BYTES, DEFAULT_MAX_ROUNDS, DEFAULT_MAX_SLOTS};
 pub(crate) use order::{check_order, nested_element, take_id};
 
 use crate::value::{name_of, Name, Value};

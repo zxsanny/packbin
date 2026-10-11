@@ -5,6 +5,8 @@ pub const DEFAULT_MAX_ROUNDS: usize = 65_535;
 /// The most slots (names a round can hold, summed over every round started) one unpack call
 /// may create.
 pub const DEFAULT_MAX_SLOTS: usize = 4_194_304;
+/// The most bytes one pack call may write, type byte included.
+pub const DEFAULT_MAX_BYTES: usize = 16_777_216;
 
 #[derive(Clone, Debug)]
 pub struct MapScheme {
@@ -13,6 +15,7 @@ pub struct MapScheme {
     pub(crate) field_count: usize,
     pub(crate) max_rounds: usize,
     pub(crate) max_slots: usize,
+    pub(crate) max_bytes: usize,
 }
 
 pub(super) fn count_fields(fields: &[Field]) -> usize {
@@ -68,14 +71,15 @@ impl MapScheme {
             field_count,
             max_rounds: DEFAULT_MAX_ROUNDS,
             max_slots: DEFAULT_MAX_SLOTS,
+            max_bytes: DEFAULT_MAX_BYTES,
         }
     }
 
-    /// Returns the scheme with other unpack limits (clone first to keep the original): the
+    /// Returns the scheme with other round limits (clone first to keep the original): the
     /// most rounds one `repeat` or `times` field may start, and the most slots all rounds of
-    /// one unpack call may create together. `unpack` refuses a packet that would pass either
-    /// when the round that crosses it would start. Panics when either is 0; `usize::MAX` is
-    /// valid.
+    /// one call may create together. `unpack` refuses a packet that would pass either when the
+    /// round that crosses it would start, and `pack` refuses the same rounds, naming the
+    /// member. Panics when either is 0; `usize::MAX` is valid.
     pub fn with_limits(mut self, max_rounds: usize, max_slots: usize) -> Self {
         if max_rounds == 0 {
             panic!("max_rounds must be at least 1");
@@ -88,8 +92,25 @@ impl MapScheme {
         self
     }
 
+    /// Returns the scheme with another output budget (clone first to keep the original): the
+    /// most bytes one `pack` call may write, type byte included (default
+    /// [`DEFAULT_MAX_BYTES`]). `pack` refuses, naming the member, the write that would pass it
+    /// before anything is written for it. Unpack is not affected. Panics when it is 0;
+    /// `usize::MAX` is valid.
+    pub fn with_max_bytes(mut self, max_bytes: usize) -> Self {
+        if max_bytes == 0 {
+            panic!("max_bytes must be at least 1");
+        }
+        self.max_bytes = max_bytes;
+        self
+    }
+
     pub fn max_rounds(&self) -> usize {
         self.max_rounds
+    }
+
+    pub fn max_bytes(&self) -> usize {
+        self.max_bytes
     }
 
     pub fn max_slots(&self) -> usize {

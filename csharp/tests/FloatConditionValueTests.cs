@@ -3,8 +3,8 @@ using Packbin;
 namespace Packbin.Tests;
 
 // AZ-2126: a `when` names an integer or a bool, so a float, utf8 or byte source is refused (EqBoolTrueOnlyTests). What
-// stays is an integer source against a float condition value that is a whole number in the field's range: it compares
-// as the same number. Any other float value is refused at construction (AZ-2338).
+// stays is an integer source against an integer of another width, which compares as the same number. Any float value
+// is refused at construction (AZ-2338, and AZ-2358 for a whole one such as 1.0).
 public class FloatConditionValueTests
 {
     private sealed class CountRow
@@ -38,9 +38,9 @@ public class FloatConditionValueTests
     }
 
     [Theory]
-    [InlineData(1.0, true)]
-    [InlineData(2.0, false)]
-    public void PackAndUnpack_IntegerSourceWithAFloatCondition_MatchesOnTheSameNumber(double match, bool holds)
+    [InlineData(1L, true)]
+    [InlineData(2L, false)]
+    public void PackAndUnpack_IntegerSourceWithAnIntegerCondition_MatchesOnTheSameNumber(long match, bool holds)
     {
         // Arrange
         var scheme = CountScheme(match);

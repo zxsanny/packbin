@@ -6,6 +6,7 @@ public sealed class Scheme<T> where T : class, new()
     public IReadOnlyList<Field> Fields { get; }
     public int MaxRounds { get; } = BinaryPacker.DefaultMaxRounds;
     public long MaxSlots { get; } = BinaryPacker.DefaultMaxSlots;
+    public long MaxBytes { get; } = BinaryPacker.DefaultMaxBytes;
 
     public Scheme(int typeNumber, params Field[] fields)
     {
@@ -20,23 +21,27 @@ public sealed class Scheme<T> where T : class, new()
     {
     }
 
-    private Scheme(Scheme<T> source, int maxRounds, long maxSlots)
+    private Scheme(Scheme<T> source, int maxRounds, long maxSlots, long maxBytes)
     {
         if (maxRounds < 1)
             throw new ArgumentOutOfRangeException(nameof(maxRounds), maxRounds, "must be at least 1");
         if (maxSlots < 1)
             throw new ArgumentOutOfRangeException(nameof(maxSlots), maxSlots, "must be at least 1");
+        if (maxBytes < 1)
+            throw new ArgumentOutOfRangeException(nameof(maxBytes), maxBytes, "must be at least 1");
         TypeNumber = source.TypeNumber;
         Fields = source.Fields;
         MaxRounds = maxRounds;
         MaxSlots = maxSlots;
+        MaxBytes = maxBytes;
     }
 
     // The same scheme with other limits: an omitted limit is the default, not this scheme's current value.
     public Scheme<T> WithLimits(
         int maxRounds = BinaryPacker.DefaultMaxRounds,
-        long maxSlots = BinaryPacker.DefaultMaxSlots) =>
-        new(this, maxRounds, maxSlots);
+        long maxSlots = BinaryPacker.DefaultMaxSlots,
+        long maxBytes = BinaryPacker.DefaultMaxBytes) =>
+        new(this, maxRounds, maxSlots, maxBytes);
 
     public SchemeHandler On(Action<T> handler) => new SchemeHandler<T>(this, handler);
 }
@@ -65,7 +70,10 @@ internal sealed class SchemeHandler<T> : SchemeHandler where T : class, new()
         var raw = BinaryPacker.ReadFields(_scheme, fieldBytes, scoped: true);
         if (raw.Error is not null)
             return raw.Error;
-        _action(RowBinding.To<T>(_scheme.Fields, raw.Values));
+        var row = RowBinding.To<T>(_scheme.Fields, raw.Values, out var unfit);
+        if (unfit is not null)
+            return Walker.InterimBadValue(unfit, 0);
+        _action(row);
         return null;
     }
 }
@@ -139,9 +147,12 @@ public static class BinaryPacker
     public const int DefaultMaxRounds = 65_535;
     public const long DefaultMaxSlots = 4_194_304;
 
+    // The longest packet one pack call writes, the type byte included.
+    public const long DefaultMaxBytes = 16_777_216;
+
     public static byte[] Pack<T>(Scheme<T> scheme, IReadOnlyDictionary<string, object?> values) where T : class, new()
     {
-        var buffer = new List<byte>(32);
+        var buffer = new PackOut(scheme.MaxBytes);
         buffer.Add((byte)scheme.TypeNumber);
         var seen = new Scope(new RoundBudget(scheme.MaxRounds, scheme.MaxSlots));
         foreach (var field in scheme.Fields)

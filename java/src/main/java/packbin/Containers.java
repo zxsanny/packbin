@@ -20,8 +20,7 @@ final class Containers {
         if (items.size() > VarFields.MAX_U16) {
             throw new IllegalArgumentException("list: length " + items.size());
         }
-        sink.write((byte) items.size());
-        sink.write((byte) (items.size() >> 8));
+        sink.writeCount(field, items.size());
         Field child = field.children.get(0);
         int index = 0;
         for (Object item : items) {
@@ -76,17 +75,14 @@ final class Containers {
         }
         keys.sort((a, b) -> compareUnsigned(
                 a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8)));
-        sink.write((byte) keys.size());
-        sink.write((byte) (keys.size() >> 8));
+        sink.writeCount(field, keys.size());
         Field child = field.children.get(0);
         for (String key : keys) {
             byte[] rawKey = key.getBytes(StandardCharsets.UTF_8);
             if (rawKey.length > VarFields.MAX_U16) {
                 throw new IllegalArgumentException("dict: key length " + rawKey.length);
             }
-            sink.write((byte) rawKey.length);
-            sink.write((byte) (rawKey.length >> 8));
-            sink.write(rawKey);
+            sink.writePrefixed(field, rawKey);
             Object value = items.get(key);
             if (value == null && isNestedRow(child)) {
                 throw new IllegalArgumentException("missing dict element \"" + key + "\"");

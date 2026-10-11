@@ -20,7 +20,7 @@ def test_ac1_count_over_the_limit_with_a_lone_scalar_is_refused_naming_the_membe
     row = {"n": LIMIT + 1, "x": 7}
 
     # Act / Assert
-    with pytest.raises(ValueError, match=r"times 1: 65536 rounds, the limit is 65535"):
+    with pytest.raises(ValueError, match=r"^x: the times count is 65536, above the limit of 65535 rounds$"):
         BinaryPacker.pack(_timed(), row)
 
 
@@ -29,7 +29,7 @@ def test_ac1_a_four_billion_count_is_refused_before_any_round():
     row = {"n": 4_000_000_000, "x": 7}
 
     # Act / Assert
-    with pytest.raises(ValueError, match=r"times 1: 4000000000 rounds"):
+    with pytest.raises(ValueError, match=r"^x: the times count is 4000000000, above the limit of 65535 rounds$"):
         BinaryPacker.pack(_timed(), row)
 
 
@@ -38,7 +38,7 @@ def test_ac1_count_over_the_limit_is_refused_when_the_value_is_a_list():
     row = {"n": LIMIT + 1, "x": [1] * (LIMIT + 1)}
 
     # Act / Assert
-    with pytest.raises(ValueError, match=r"times 1"):
+    with pytest.raises(ValueError, match=r"^x: the times count is 65536, above the limit of 65535 rounds$"):
         BinaryPacker.pack(_timed(), row)
 
 
@@ -52,7 +52,7 @@ def test_ac1_count_over_the_limit_is_refused_for_a_times_member_of_flags():
     )
 
     # Act / Assert
-    with pytest.raises(ValueError, match=r"times 1"):
+    with pytest.raises(ValueError, match=r"^x: the times count is 65536, above the limit of 65535 rounds$"):
         BinaryPacker.pack(scheme, {"n": LIMIT + 1, "x": 7})
 
 
@@ -66,7 +66,7 @@ def test_ac1_count_over_the_limit_is_refused_inside_a_list_element():
     row = {"items": [{"n": 1, "x": 7}, {"n": LIMIT + 1, "x": 7}]}
 
     # Act / Assert
-    with pytest.raises(ValueError, match=r"times 1"):
+    with pytest.raises(ValueError, match=r"^x: the times count is 65536, above the limit of 65535 rounds$"):
         BinaryPacker.pack(scheme, row)
 
 
@@ -100,5 +100,5 @@ def test_a_scheme_that_lowered_the_limit_refuses_a_smaller_count():
     scheme = _timed().with_limits(max_rounds=3)
 
     # Act / Assert
-    with pytest.raises(ValueError, match=r"times 1: 4 rounds, the limit is 3"):
+    with pytest.raises(ValueError, match=r"^x: the times count is 4, above the limit of 3 rounds$"):
         BinaryPacker.pack(scheme, {"n": 4, "x": 7})

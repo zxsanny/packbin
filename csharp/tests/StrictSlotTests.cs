@@ -60,6 +60,25 @@ public class StrictSlotTests
     [MemberData(nameof(Fractions))]
     public void Ac1_Pack_FractionInASlot_ThrowsNamingTheMember(string kind, object value) => ExpectRefused(kind, value);
 
+    // AZ-2358: a whole float is not an integer either, as in Java, Python and Rust.
+    public static TheoryData<string, object> WholeFloats() => new()
+    {
+        { "u2", 3.0 },
+        { "u2", 0.0 },
+        { "u2", 2.0f },
+        { "u2", 3m },
+        { "bits", 1.0 },
+        { "bits", 0.0 },
+        { "packed1", 1.0 },
+        { "packed1", 1m },
+        { "packed2", 3.0 },
+        { "packed2", 2.0f },
+    };
+
+    [Theory]
+    [MemberData(nameof(WholeFloats))]
+    public void Ac2_Pack_WholeFloatInASlot_ThrowsNamingTheMember(string kind, object value) => ExpectRefused(kind, value);
+
     public static TheoryData<string, object> OutOfRange() => new()
     {
         { "u2", 4 },
@@ -102,15 +121,12 @@ public class StrictSlotTests
     [Theory]
     [InlineData("u2", 0, "0100")]
     [InlineData("u2", 3, "0103")]
-    [InlineData("u2", 3.0, "0103")]
     [InlineData("u2", 2L, "0102")]
     [InlineData("u2", (byte)1, "0101")]
     [InlineData("bits", 1, "010202")]
-    [InlineData("bits", 1.0, "010202")]
     [InlineData("packed1", 1L, "010202")]
     [InlineData("packed2", 3, "01020c")]
-    [InlineData("packed2", 3.0, "01020c")]
-    public void Ac4_Pack_RangeEdgesAndWholeNumbers_KeepTheirBytes(string kind, object value, string hex)
+    public void Ac4_Pack_RangeEdgesAndIntegers_KeepTheirBytes(string kind, object value, string hex)
     {
         // Act
         var raw = BinaryPacker.Pack(For(kind), Slot(kind, value));
@@ -120,13 +136,13 @@ public class StrictSlotTests
     }
 
     [Fact]
-    public void Ac4_Pack_WholeNumbersAsDoubleOrLong_EqualTheIntegerBytes()
+    public void Ac4_Pack_IntegersOfEveryWidth_EqualTheIntegerBytes()
     {
         // Arrange
         object?[][] equal =
         [
-            [1, 1.0, 1L, 1m],
-            [0, 0.0, 0L, (byte)0],
+            [1, 1L, (byte)1, 1u],
+            [0, 0L, (byte)0, 0u],
         ];
 
         foreach (var values in equal)
@@ -167,5 +183,24 @@ public class StrictSlotTests
 
         // Assert
         Assert.All([flags, repeat, when], e => Assert.IsType<ArgumentException>(e));
+    }
+
+    [Fact]
+    public void Ac2_Pack_WholeFloatInAFloatField_StillPacks()
+    {
+        // Arrange
+        var scheme = new Scheme<FloatRow>(1, Field.F64<FloatRow>(0, x => x.D), Field.F32<FloatRow>(1, x => x.S));
+
+        // Act
+        var raw = BinaryPacker.Pack(scheme, new Dictionary<string, object?> { ["D"] = 5.0, ["S"] = 5.0 });
+
+        // Assert
+        Assert.Equal("01" + "0000000000001440" + "0000a040", Hex(raw));
+    }
+
+    private sealed class FloatRow
+    {
+        public double D { get; set; }
+        public float S { get; set; }
     }
 }

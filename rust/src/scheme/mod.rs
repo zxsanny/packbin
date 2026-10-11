@@ -1,4 +1,5 @@
 mod bound;
+mod bound_collections;
 mod times;
 
 pub use bound::BoundField;
@@ -219,16 +220,27 @@ impl<T: 'static> Scheme<T> {
         self.layout.type_number()
     }
 
-    /// Returns the scheme with other unpack limits: the most rounds one `repeat` or `times`
-    /// field may start, and the most slots all rounds of one unpack call may create together
-    /// (see [`MapScheme::with_limits`]). Panics when either is 0.
+    /// Returns the scheme with other round limits: the most rounds one `repeat` or `times`
+    /// field may start, and the most slots all rounds of one call may create together (see
+    /// [`MapScheme::with_limits`]). Panics when either is 0.
     pub fn with_limits(mut self, max_rounds: usize, max_slots: usize) -> Self {
         self.layout = self.layout.with_limits(max_rounds, max_slots);
         self
     }
 
+    /// Returns the scheme with another output budget: the most bytes one `pack` call may write,
+    /// type byte included (see [`MapScheme::with_max_bytes`]). Panics when it is 0.
+    pub fn with_max_bytes(mut self, max_bytes: usize) -> Self {
+        self.layout = self.layout.with_max_bytes(max_bytes);
+        self
+    }
+
     pub fn max_rounds(&self) -> usize {
         self.layout.max_rounds()
+    }
+
+    pub fn max_bytes(&self) -> usize {
+        self.layout.max_bytes()
     }
 
     pub fn max_slots(&self) -> usize {

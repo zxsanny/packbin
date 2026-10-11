@@ -72,6 +72,7 @@ def _bind(node: _Node, reads: dict[int, _FlagByte]) -> _Node:
     if isinstance(node, _Repeat):
         repeated = _Repeat(anchor=node.anchor, fields=_bind_all(node.fields, {}))
         repeated.leaves = _round_leaves(repeated.fields)
+        repeated.optional = _optional_leaves(repeated.fields)
         return repeated
     if isinstance(node, _Times):
         timed = _Times(anchor=node.anchor, count=node.count, fields=_bind_all(node.fields, {}))

@@ -2,6 +2,7 @@ mod cursor;
 mod element;
 mod flag_bits;
 mod pack;
+mod pack_out;
 mod times;
 mod unpack;
 mod written;

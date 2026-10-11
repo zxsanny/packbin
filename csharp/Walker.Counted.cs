@@ -12,13 +12,14 @@ internal static partial class Walker
     private static void PackSized(
         Field field,
         IReadOnlyDictionary<string, object?> values,
-        List<byte> buffer,
+        PackOut buffer,
         Scope seen)
     {
         var count = RequireCount(seen, field.CountName, field.Name);
         var raw = RequireBytes(field, values);
         if (raw.Length != count)
             throw new ArgumentException($"{field.Name}: expected {count} bytes, got {raw.Length}");
+        buffer.Reserve(raw.Length, field.Name);
         buffer.AddRange(raw);
         seen[field.Name] = raw;
     }
@@ -26,7 +27,7 @@ internal static partial class Walker
     private static void PackU2(
         Field field,
         IReadOnlyDictionary<string, object?> values,
-        List<byte> buffer,
+        PackOut buffer,
         Scope seen)
     {
         var names = field.Names;
@@ -39,13 +40,14 @@ internal static partial class Walker
             raw[i / 4] |= (byte)(n << ((i % 4) * 2));
             seen[names[i]] = value;
         }
+        buffer.Reserve(raw.Length, names[0]);
         buffer.AddRange(raw);
     }
 
     private static void PackBits(
         Field field,
         IReadOnlyDictionary<string, object?> values,
-        List<byte> buffer,
+        PackOut buffer,
         Scope seen)
     {
         var count = RequireCount(seen, field.CountName, field.Name);
@@ -59,6 +61,7 @@ internal static partial class Walker
                 throw new ArgumentException($"{field.Name}: expected 0 or 1");
             packed[i / 8] |= (byte)(bit << (i % 8));
         }
+        buffer.Reserve(packed.Length, field.Name);
         buffer.AddRange(packed);
         seen[field.Name] = raw;
     }
@@ -83,7 +86,7 @@ internal static partial class Walker
 
     // No bad-value error type until C15: the same stand-in the duplicate dictionary key already uses.
     // Every bad-value return goes through here, so C15 changes this one method.
-    private static ShortPacket InterimBadValue(string field, int left) => new(field, 0, left);
+    internal static ShortPacket InterimBadValue(string field, int left) => new(field, 0, left);
 
     private static int ClampToInt(long value) => value > int.MaxValue ? int.MaxValue : (int)value;
 
@@ -203,7 +206,7 @@ internal static partial class Walker
     private static void PackPacked(
         Field field,
         IReadOnlyDictionary<string, object?> values,
-        List<byte> buffer,
+        PackOut buffer,
         Scope seen)
     {
         var count = BorrowedCount(field, seen);
@@ -220,6 +223,7 @@ internal static partial class Walker
                 throw new ArgumentException($"{field.Name}: expected 0..{max}");
             packed[i / per] |= (byte)(n << ((i % per) * shift));
         }
+        buffer.Reserve(packed.Length, field.Name);
         buffer.AddRange(packed);
         seen[field.Name] = raw;
     }
@@ -284,7 +288,7 @@ internal static partial class Walker
     private static void PackUtf8(
         Field field,
         IReadOnlyDictionary<string, object?> values,
-        List<byte> buffer,
+        PackOut buffer,
         Scope seen)
     {
         if (!values.TryGetValue(field.Name, out var value) || value is not string text)
@@ -292,8 +296,8 @@ internal static partial class Walker
         var raw = Encoding.UTF8.GetBytes(text);
         if (raw.Length > MaxLength)
             throw new ArgumentException($"{field.Name}: utf-8 length {raw.Length}");
-        buffer.Add((byte)raw.Length);
-        buffer.Add((byte)(raw.Length >> 8));
+        buffer.Reserve(2 + raw.Length, field.Name);
+        buffer.AddU16(raw.Length);
         buffer.AddRange(raw);
         seen[field.Name] = text;
     }

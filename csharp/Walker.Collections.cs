@@ -8,15 +8,15 @@ internal static partial class Walker
     private static void PackList(
         Field field,
         IReadOnlyDictionary<string, object?> values,
-        List<byte> buffer,
+        PackOut buffer,
         Scope seen)
     {
         if (RequireValue(field, values) is not IList items)
             throw new ArgumentException($"{field.Name}: expected list");
         if (items.Count > MaxLength)
             throw new ArgumentException($"{field.Name}: length {items.Count}");
-        buffer.Add((byte)items.Count);
-        buffer.Add((byte)(items.Count >> 8));
+        buffer.Reserve(2, field.Name);
+        buffer.AddU16(items.Count);
         var child = field.Children[0];
         foreach (var item in items)
         {
@@ -82,7 +82,7 @@ internal static partial class Walker
     private static void PackDict(
         Field field,
         IReadOnlyDictionary<string, object?> values,
-        List<byte> buffer,
+        PackOut buffer,
         Scope seen)
     {
         if (RequireValue(field, values) is not IDictionary map)
@@ -100,13 +100,13 @@ internal static partial class Walker
             entries.Add((keyBytes, entry.Value));
         }
         entries.Sort(static (a, b) => CompareUtf8Bytes(a.KeyBytes, b.KeyBytes));
-        buffer.Add((byte)entries.Count);
-        buffer.Add((byte)(entries.Count >> 8));
+        buffer.Reserve(2, field.Name);
+        buffer.AddU16(entries.Count);
         var child = field.Children[0];
         foreach (var (keyBytes, value) in entries)
         {
-            buffer.Add((byte)keyBytes.Length);
-            buffer.Add((byte)(keyBytes.Length >> 8));
+            buffer.Reserve(2 + keyBytes.Length, field.Name);
+            buffer.AddU16(keyBytes.Length);
             buffer.AddRange(keyBytes);
             PackField(child, ElementValues(values, child, value), buffer, seen.Fresh());
         }

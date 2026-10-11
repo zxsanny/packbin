@@ -28,11 +28,12 @@ internal static partial class Walker
         throw DoesNotFit(field, value);
     }
 
-    // A u2 slot, bit or packed item: a whole number from 0 to `max`. A fraction, bool, string, char, enum or object is not.
+    // A u2 slot, bit or packed item: an integer from 0 to `max`. A float, double, decimal (a whole `3.0` too), bool, string,
+    // char, enum or object is not.
     private static bool TrySlot(object? value, int max, out int slot)
     {
         slot = 0;
-        if (value is null || !IsNumber(value) || !TryWhole(value, out var whole) || whole < 0 || whole > max)
+        if (value is null or float or double or decimal || !IsNumber(value) || !TryWhole(value, out var whole) || whole < 0 || whole > max)
             return false;
         slot = (int)whole;
         return true;

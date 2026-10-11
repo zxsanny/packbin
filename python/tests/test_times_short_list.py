@@ -216,10 +216,9 @@ def test_ac7_unpacked_rows_are_full_and_pack_back():
     ]
 
 
-def test_ac8_repeat_keeps_its_equal_length_rule_and_its_empty_list_failure():
+def test_ac8_repeat_keeps_its_equal_length_rule_and_an_empty_list_member_is_absent():
     scheme = Scheme(1, dict, repeat(0, _u8(0, "w"), flags(1, _u8(1, "v"))))
 
     with pytest.raises(ValueError, match=r"^repeat fields must have equal lengths$"):
         _pack(scheme, {"w": [1, 2], "v": [5]})
-    with pytest.raises(IndexError, match=r"^list index out of range$"):
-        _pack(scheme, {"w": [1, 2], "v": []})
+    assert _pack(scheme, {"w": [1, 2], "v": []}) == "0101000200"

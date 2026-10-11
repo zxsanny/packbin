@@ -24,7 +24,15 @@ from packbin._nodes import (
     _Utf8,
     _When,
 )
-from packbin._unpack import DEFAULT_MAX_ROUNDS
+from packbin._pack_limits import _PackBudget, _name, flags_member, round_member
+from packbin._pack_rounds import (
+    _at_round,
+    _borrowed,
+    _check_round_lists,
+    _refuse_lone_collection,
+    _refuse_repeat_over_limit,
+    _round_length,
+)
 
 _builtin_bytes = bytes
 _builtin_list = list
@@ -48,11 +56,14 @@ def _bool_on(value: Any) -> bool:
     return value is True
 
 
-def _child_on(child: _Node, take: Callable[[_Node], Any], seen: dict[int, Any], row: Any) -> bool:
+def _child_on(
+    child: _Node, take: Callable[[_Node], Any], seen: dict[int, Any], row: Any, deciding: bool = False
+) -> bool:
     """`take` gives the value of a leaf for the row, or for the round being packed; `seen` holds the values written
-    so far in this scope, which decide a `when` and a `times` member."""
+    so far in this scope, which decide a `when` and a `times` member. `deciding`: a split flag byte is deciding its
+    bits, so a `times` whose count is not written yet leaves its bit clear and is looked at again at the bit."""
     if isinstance(child, (_Group, _Flags)):
-        return any(_child_on(inner, take, seen, row) for inner in child.fields)
+        return any(_child_on(inner, take, seen, row, deciding) for inner in child.fields)
     if isinstance(child, _U2):
         return any(_present_value(take(slot)) for slot in child.slots)
     if isinstance(child, _Bool):
@@ -60,42 +71,67 @@ def _child_on(child: _Node, take: Callable[[_Node], Any], seen: dict[int, Any], 
     if isinstance(child, (_Scalar, _Bytes, _Utf8, _Sized, _Bits, _Packed, _List, _Dict)):
         return _present_value(take(child))
     if isinstance(child, _FlagBit):
-        return _child_on(child.field, take, seen, row)
+        return _child_on(child.field, take, seen, row, deciding)
     if isinstance(child, _When):
         held = seen.get(child.condition.field_id) == child.condition.value
-        return held and any(_child_on(inner, take, seen, row) for inner in child.fields)
+        return held and any(_child_on(inner, take, seen, row, deciding) for inner in child.fields)
     if isinstance(child, _Times):
-        return _times_on(child, seen, row)
+        return _times_on(child, seen, row, deciding)
     if isinstance(child, _Repeat):
         return any(_round_length(leaf.get(row)) > 0 for leaf in child.leaves)
     return False
 
 
-def _times_on(node: _Times, seen: dict[int, Any], row: Any) -> bool:
+def _times_on(node: _Times, seen: dict[int, Any], row: Any, deciding: bool = False) -> bool:
     """On when the count is above 0. A count that was skipped is no round (unpack would not read the field either),
     but values given for the body would be dropped, so they are refused; a count of 0 with a list or a lone dict
     given for a body value is refused, as outside `flags`."""
     count = seen.get(node.count)
     if count is None:
-        if any(_round_length(leaf.get(row)) > 0 for leaf in node.leaves):
-            raise ValueError(
-                f"times {node.anchor}: body values are given, but count field {node.count} has no value "
-                "(it was skipped, or is written after the flag byte that decides this bit)"
-            )
+        if not deciding:
+            held = _first_held(node, row)
+            if held is not None:
+                raise ValueError(
+                    f"{held}: a value is given, but the count of its times is not written, so its bit is clear; "
+                    "write the count before the times"
+                )
         return False
     rounds = _borrowed("times", count, 0)
     if rounds == 0:
-        _check_round_lists(node.leaves, row, 0)
-        for leaf in node.leaves:
-            _refuse_lone_collection(leaf, leaf.get(row))
+        _refuse_zero_rounds(node, row)
     return rounds > 0
 
 
-def _unwritten_sources(child: _Node, seen: dict[int, Any]) -> list[_When]:
-    """Every `when` under a flag bit whose condition field has no value yet: a split flag byte decides the bit
-    without them, so the bit must be re-checked when the fields are written."""
-    found: list[_When] = []
-    if isinstance(child, (_Group, _Flags, _When)):
+def _refuse_zero_rounds(node: _Times, row: Any) -> None:
+    _check_round_lists(node.leaves, row, 0)
+    for leaf in node.leaves:
+        _refuse_lone_collection(leaf, leaf.get(row))
+
+
+def _first_held(node: _Times, row: Any) -> str | None:
+    """The name of the first body value the row gives (a list with entries, or a lone value)."""
+    for leaf in node.leaves:
+        if _round_length(leaf.get(row)) > 0:
+            return _name(leaf)
+    return None
+
+
+def _refuse_dropped_times(node: _Times) -> None:
+    raise ValueError(
+        f"times {node.anchor}: body values are given, but count field {node.count} has no value "
+        "(it was skipped, or is written after the flag byte that decides this bit)"
+    )
+
+
+def _unwritten_sources(child: _Node, seen: dict[int, Any]) -> list[_When | _Times]:
+    """Every `when` under a flag bit whose condition field has no value yet, and every `times` whose count has
+    none: a split flag byte decides the bit without them, so the bit must be re-checked when the fields are
+    written."""
+    found: list[_When | _Times] = []
+    if isinstance(child, _Times):
+        if seen.get(child.count) is None:
+            found.append(child)
+    elif isinstance(child, (_Group, _Flags, _When)):
         if isinstance(child, _When) and seen.get(child.condition.field_id) is None:
             found.append(child)
         for inner in child.fields:
@@ -105,6 +141,26 @@ def _unwritten_sources(child: _Node, seen: dict[int, Any]) -> list[_When]:
     return found
 
 
+def _refuse_late_times(child: _Node, seen: dict[int, Any], row: Any) -> None:
+    """A `times` under a clear split bit whose count was not written when the flag byte was decided: with the count
+    now written, a count of 0 follows the rules outside a split byte (a list of values is refused, a lone value
+    packs zero rounds), and a count above 0 with body values would drop them."""
+    if isinstance(child, _Times):
+        count = seen.get(child.count)
+        if count is not None and _borrowed("times", count, 0) == 0:
+            _refuse_zero_rounds(child, row)
+        elif _first_held(child, row) is not None:
+            _refuse_dropped_times(child)
+    elif isinstance(child, (_Group, _Flags)):
+        for inner in child.fields:
+            _refuse_late_times(inner, seen, row)
+    elif isinstance(child, _FlagBit):
+        _refuse_late_times(child.field, seen, row)
+    elif isinstance(child, _When) and seen.get(child.condition.field_id) == child.condition.value:
+        for inner in child.fields:
+            _refuse_late_times(inner, seen, row)
+
+
 def _refuse_late_body(
     child: _Node, flag_state: dict[int, Any], take: Callable[[_Node], Any], seen: dict[int, Any], row: Any
 ) -> None:
@@ -112,9 +168,14 @@ def _refuse_late_body(
     now asks for would be dropped, so pack fails instead of returning a packet the row did not ask for. A false
     condition leaves the body out on purpose, as outside a split byte."""
     late = flag_state.get(id(child))
-    if not late or not _child_on(child, take, seen, row):
+    if not late:
+        return
+    _refuse_late_times(child, seen, row)
+    if not _child_on(child, take, seen, row):
         return
     for node in late:
+        if isinstance(node, _Times):
+            continue
         source = node.condition.field_id
         if seen.get(source) == node.condition.value:
             raise ValueError(
@@ -123,7 +184,9 @@ def _refuse_late_body(
             )
 
 
-def _write_u2(buf: bytearray, slots: Sequence[Any], take: Callable[[_Node], Any], seen: dict[int, Any]) -> None:
+def _write_u2(
+    buf: bytearray, slots: Sequence[Any], take: Callable[[_Node], Any], seen: dict[int, Any], budget: _PackBudget
+) -> None:
     nbytes = (len(slots) + 3) // 4
     raw = bytearray(nbytes)
     for i, slot in enumerate(slots):
@@ -132,25 +195,20 @@ def _write_u2(buf: bytearray, slots: Sequence[Any], take: Callable[[_Node], Any]
         if isinstance(value, bool) or not isinstance(value, int) or value < 0 or value > 3:
             raise ValueError(f"{slot.field_id}: expected 2-bit int")
         raw[i // 4] |= value << ((i % 4) * 2)
+    budget.room(buf, nbytes, _name(slots[0]))
     buf.extend(raw)
 
 
-def _write_bits(buf: bytearray, label: str, count: int, raw: Any) -> None:
-    _write_packed(buf, label, 1, count, raw)
+def _write_bits(buf: bytearray, label: str, count: int, raw: Any, budget: _PackBudget, member: str) -> None:
+    _write_packed(buf, label, 1, count, raw, budget, member)
 
 
-def _borrowed(label: str, count: Any, bias: int) -> int:
-    if isinstance(count, bool) or not isinstance(count, int):
-        raise RuntimeError(f"{label}: count is missing")
-    item_count = count + bias
-    if item_count < 0:
-        raise ValueError(f"{label}: item count {item_count}")
-    return item_count
-
-
-def _write_packed(buf: bytearray, label: str, width: int, count: int, raw: Any) -> None:
+def _write_packed(
+    buf: bytearray, label: str, width: int, count: int, raw: Any, budget: _PackBudget, member: str
+) -> None:
     if not isinstance(raw, _builtin_list) or len(raw) != count:
         raise ValueError(f"{label}: expected {count} items")
+    budget.room(buf, (count * width + 7) // 8, member)
     per = 8 if width == 1 else 4
     shift = 1 if width == 1 else 2
     limit = 1 if width == 1 else 3
@@ -174,12 +232,13 @@ def _require_int(field: _Scalar, value: Any) -> int | float:
     return value
 
 
-def _write_scalar(buf: bytearray, field: _Scalar, value: Any) -> None:
+def _write_scalar(buf: bytearray, field: _Scalar, value: Any, budget: _PackBudget) -> None:
     number = _require_int(field, value)
     try:
         packed = struct.pack(field.endian_fmt(), number)
     except OverflowError as exc:  # only a finite f32 value too large for the format reaches here
         raise OverflowError(f"{field.field_id}: {value} does not fit in {field.kind}") from exc
+    budget.room(buf, len(packed), _name(field))
     buf.extend(packed)
 
 
@@ -187,102 +246,46 @@ def _is_leaf(node: _Node) -> bool:
     return isinstance(node, (_Scalar, _Bytes, _Utf8, _Bool, _Sized, _Bits, _Packed))
 
 
-def _member_label(node: Any) -> str:
-    if isinstance(node, _List):
-        return "list"
-    if isinstance(node, _Dict):
-        return "dict"
-    return str(node.field_id)
-
-
-def _refuse_lone_collection(leaf: Any, value: Any) -> None:
-    """A dict or a byte buffer for a `dict`, `bytes` or `sized` name in a round is one value of the round, so the
-    name holds a list with one per round; a lone one would be read as one round's value or shared by every round."""
-    if isinstance(leaf, _Dict) and isinstance(value, _builtin_dict):
-        what, one = "dict", "dict"
-    elif isinstance(leaf, (_Bytes, _Sized)) and isinstance(value, (_builtin_bytes, bytearray, memoryview)):
-        what, one = "byte buffer", "buffer"
-    else:
-        return
-    access = getattr(leaf.get, "access", None)
-    name = access[1] if access is not None else str(_member_label(leaf))
-    raise TypeError(
-        f"member {name}: a {what} in a repeat or times round must be a list with one {one} per round, "
-        f"got a single {one}"
-    )
-
-
-def _check_round_lists(leaves: Sequence[Any], row: Any, count: int) -> None:
-    """A list a `times` body holds may not be longer than the count: the entries past it would be dropped."""
-    for node in leaves:
-        value = node.get(row)
-        if isinstance(value, _builtin_list) and len(value) > count:
-            raise ValueError(f"{_member_label(node)}: {len(value)} items, times count is {count}")
-
-
-def _round_length(value: Any) -> int:
-    if value is None:
-        return 0
-    return len(value) if isinstance(value, _builtin_list) else 1
-
-
-def _at_round(
-    row: Any, index: int, optional: set[int] | None = None, count: int | None = None
-) -> Callable[[_Node], Any]:
-    """The value of a leaf in round `index`: entry `index` of its list, or the lone value every round shares.
-    A leaf in `optional` (the ids of those a `times` body holds under `flags` or a flag bit) has no entry
-    past the end of its list: it is absent in that round, as a `None` entry is. `count` is given for a `times`:
-    it writes every round it counts, so a list that ends early names the leaf."""
-
-    def at(leaf: _Node) -> Any:
-        value = leaf.get(row)  # type: ignore[attr-defined]
-        if not isinstance(value, _builtin_list):
-            return value
-        if optional and index >= len(value) and id(leaf) in optional:
-            return None
-        if count is not None and index >= len(value):
-            raise ValueError(f"{_member_label(leaf)}: {len(value)} items, times count is {count}")
-        return value[index]
-
-    return at
-
-
-def _pack_element(buf: bytearray, element: _Node, item: Any, max_rounds: int) -> None:
+def _pack_element(buf: bytearray, element: _Node, item: Any, budget: _PackBudget) -> None:
     if isinstance(element, _List):
-        _pack_list_items(buf, element.element, item, max_rounds)
+        _pack_list_items(buf, element, element.element, item, budget)
     elif isinstance(element, _Dict):
-        _pack_dict_items(buf, element.element, item, max_rounds)
+        _pack_dict_items(buf, element, element.element, item, budget)
     elif _is_leaf(element):
-        pack_nodes(buf, [element], item, {}, lambda _n: item, max_rounds=max_rounds)
+        pack_nodes(buf, [element], item, {}, lambda _n: item, budget=budget)
     else:
-        pack_nodes(buf, [element], item, {}, max_rounds=max_rounds)
+        pack_nodes(buf, [element], item, {}, budget=budget)
 
 
-def _pack_list_items(buf: bytearray, element: _Node, items: Any, max_rounds: int) -> None:
+def _pack_list_items(buf: bytearray, owner: _Node, element: _Node, items: Any, budget: _PackBudget) -> None:
     if not isinstance(items, _builtin_list):
         raise TypeError("list: expected list")
     if len(items) > 65535:
         raise ValueError(f"list: length {len(items)}")
+    budget.room(buf, 2, _name(owner))
     buf.append(len(items) & 0xFF)
     buf.append((len(items) >> 8) & 0xFF)
     for item in items:
-        _pack_element(buf, element, item, max_rounds)
+        _pack_element(buf, element, item, budget)
 
 
-def _pack_dict_items(buf: bytearray, element: _Node, mapping: Any, max_rounds: int) -> None:
+def _pack_dict_items(buf: bytearray, owner: _Node, element: _Node, mapping: Any, budget: _PackBudget) -> None:
     if not isinstance(mapping, _builtin_dict):
         raise TypeError("dict: expected dict")
     if len(mapping) > 65535:
         raise ValueError(f"dict: length {len(mapping)}")
     pairs = sorted(mapping.items(), key=lambda kv: kv[0].encode("utf-8"))
+    member = _name(owner)
+    budget.room(buf, 2, member)
     buf.append(len(pairs) & 0xFF)
     buf.append((len(pairs) >> 8) & 0xFF)
     for key, value in pairs:
         raw = _utf8_payload("dict", key)
+        budget.room(buf, 2 + len(raw), member)
         buf.append(len(raw) & 0xFF)
         buf.append((len(raw) >> 8) & 0xFF)
         buf.extend(raw)
-        _pack_element(buf, element, value, max_rounds)
+        _pack_element(buf, element, value, budget)
 
 
 def pack_nodes(
@@ -293,14 +296,17 @@ def pack_nodes(
     get_value: Callable[[_Node], Any] | None = None,
     *,
     flag_state: dict[int, Any] | None = None,
-    max_rounds: int = DEFAULT_MAX_ROUNDS,
+    budget: _PackBudget | None = None,
 ) -> None:
     """`flag_state`: the byte each read of a split flag byte wrote, which its bits follow.
-    `max_rounds`: the scheme's round limit; a `times` count above it is refused, as unpack refuses the round."""
+    `budget`: the scheme's limits for this call: the round limit (a `times` count or a `repeat` list above it is
+    refused, as unpack refuses the round), the slots the rounds charge and the length of the packet."""
     if seen is None:
         seen = {}
     if flag_state is None:
         flag_state = {}
+    if budget is None:
+        budget = _PackBudget()
 
     def take(node: _Node) -> Any:
         if get_value is not None:
@@ -308,7 +314,7 @@ def pack_nodes(
         return node.get(row)  # type: ignore[attr-defined]
 
     def run(members: Sequence[_Node], scope: dict[int, Any], getter: Callable[[_Node], Any] | None) -> None:
-        pack_nodes(buf, members, row, scope, getter, flag_state=flag_state, max_rounds=max_rounds)
+        pack_nodes(buf, members, row, scope, getter, flag_state=flag_state, budget=budget)
 
     for node in nodes:
         if isinstance(node, _Scalar):
@@ -316,7 +322,7 @@ def pack_nodes(
             if not _present_value(value) and get_value is None:
                 raise KeyError(f"missing field {node.field_id}")
             seen[node.field_id] = value
-            _write_scalar(buf, node, value)
+            _write_scalar(buf, node, value, budget)
         elif isinstance(node, _Bytes):
             raw = take(node)
             if not _present_value(raw) and get_value is None:
@@ -326,10 +332,12 @@ def pack_nodes(
                 raise TypeError(f"{node.field_id}: expected bytes")
             if len(raw) != node.size:
                 raise ValueError(f"{node.field_id}: expected {node.size} bytes, got {len(raw)}")
+            budget.room(buf, len(raw), _name(node))
             buf.extend(raw)
         elif isinstance(node, _Bool):
             seen[node.field_id] = take(node)
         elif isinstance(node, _Flags):
+            budget.room(buf, 1, flags_member(node))
             at = len(buf)
             buf.append(0)
             flag = 0
@@ -354,42 +362,48 @@ def pack_nodes(
                 raise TypeError(f"{node.field_id}: expected bytes")
             if len(raw) != count:
                 raise ValueError(f"{node.field_id}: expected {count} bytes, got {len(raw)}")
+            budget.room(buf, len(raw), _name(node))
             buf.extend(raw)
         elif isinstance(node, _U2):
-            _write_u2(buf, node.slots, take, seen)
+            _write_u2(buf, node.slots, take, seen, budget)
         elif isinstance(node, _Bits):
             count = seen.get(node.count)
             if count is None:
                 raise RuntimeError(f"{node.field_id}: count {node.count} is missing")
             value = take(node)
             seen[node.field_id] = value
-            _write_bits(buf, str(node.field_id), int(count), value)
+            _write_bits(buf, str(node.field_id), int(count), value, budget, _name(node))
         elif isinstance(node, _Packed):
             label = str(node.field_id)
             item_count = _borrowed(label, seen.get(node.count), node.bias)
             value = take(node)
             seen[node.field_id] = value
-            _write_packed(buf, label, node.width, item_count, value)
+            _write_packed(buf, label, node.width, item_count, value, budget, _name(node))
         elif isinstance(node, _Times):
             item_count = _borrowed("times", seen.get(node.count), 0)
-            if item_count > max_rounds:
-                raise ValueError(f"times {node.anchor}: {item_count} rounds, the limit is {max_rounds}")
+            if item_count > budget.max_rounds:
+                raise ValueError(
+                    f"{round_member(node)}: the times count is {item_count}, "
+                    f"above the limit of {budget.max_rounds} rounds"
+                )
             _check_round_lists(node.leaves, row, item_count)
             for leaf in node.leaves:
                 _refuse_lone_collection(leaf, leaf.get(row))
             for i in range(item_count):
+                budget.start_round(node)
                 at_round = _at_round(row, i, node.optional, item_count)
                 run(node.fields, {}, at_round)
         elif isinstance(node, _FlagByte):
             flag = 0
             for i, child in enumerate(node.bits):
                 flag_state.pop(id(child), None)
-                if _child_on(child, take, seen, row):
+                if _child_on(child, take, seen, row, True):
                     flag |= 1 << i
                 else:
                     unwritten = _unwritten_sources(child, seen)
                     if unwritten:
                         flag_state[id(child)] = unwritten
+            budget.room(buf, 1, "flag byte")
             buf.append(flag)
             flag_state[id(node)] = flag
         elif isinstance(node, _FlagBit):
@@ -405,6 +419,7 @@ def pack_nodes(
                 run(node.fields, seen, get_value)
         elif isinstance(node, _Repeat):
             values = [leaf.get(row) for leaf in node.leaves]
+            _refuse_repeat_over_limit(node, values, budget.max_rounds)
             for leaf, value in zip(node.leaves, values):
                 _refuse_lone_collection(leaf, value)
             lengths = [_round_length(value) for value in values]
@@ -412,18 +427,20 @@ def pack_nodes(
             if any(n not in (0, count) for n in lengths):
                 raise ValueError("repeat fields must have equal lengths")
             for i in range(count):
-                run(node.fields, {}, _at_round(row, i))
+                budget.start_round(node)
+                run(node.fields, {}, _at_round(row, i, node.optional))
         elif isinstance(node, _Utf8):
             value = take(node)
             seen[node.field_id] = value
             raw = _utf8_payload(str(node.field_id), value)
+            budget.room(buf, 2 + len(raw), _name(node))
             buf.append(len(raw) & 0xFF)
             buf.append((len(raw) >> 8) & 0xFF)
             buf.extend(raw)
         elif isinstance(node, _List):
-            _pack_list_items(buf, node.element, take(node), max_rounds)
+            _pack_list_items(buf, node, node.element, take(node), budget)
         elif isinstance(node, _Dict):
-            _pack_dict_items(buf, node.element, take(node), max_rounds)
+            _pack_dict_items(buf, node, node.element, take(node), budget)
         elif isinstance(node, _Group):
             run(node.fields, seen, get_value)
         else:

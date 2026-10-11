@@ -75,7 +75,8 @@ Per package: the package suite only (no Docker). C# on net10.0 and `-p:PackbinTa
 ### Progress (plan-diff sync)
 
 - Wave 1a done 2026-10-11 (`batch_01_loop20_report.md`): AZ-2354/2355 (TypeScript reference), AZ-2356/2360 (TypeScript, C++), AZ-2357, AZ-2363 (pin, already fixed in loop 19), AZ-2364, AZ-2359 (TypeScript pin). Changed from the plan: TypeScript added `typescript/src/pack-out.ts` (output buffer) and `typescript/tests/support/lone-utf8-budget.ts`; the Python worker also changes the AZ-2360 message to name the member. C++ flash margin is 80 B after AZ-2357 and AZ-2364.
-- Wave 1b next: csharp, python, java, rust against `_docs/03_implementation/reference_loop20_budget.md`.
+- Wave 1b done 2026-10-11 (`batch_02_loop20_report.md`): csharp, python, java, rust against the reference table. Changed from the plan: AZ-2358 is PARTIAL (integer-field whole floats blocked by C# unpack boxing narrow ints as double: owner decision); Rust and Python AZ-2356 and Python AZ-2362 were real fixes, not pins; Java/Rust keep the loop 19 `times` cap text.
+- Wave 2 next: AZ-2367 hostile `pack` cases (one worker).
 
 ### Risks
 

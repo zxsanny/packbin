@@ -10,6 +10,7 @@ import java.util.Map;
 
 public final class PackbinTest {
     private static int failures;
+    private static int checks;
 
     private static final Scheme<PositionRow> TARGET = new Scheme<>(
             0x40,
@@ -67,10 +68,15 @@ public final class PackbinTest {
         LoneBytesInRoundTest.run();
         TimesCountZeroTest.run();
         EqValueCheckedTest.run();
+        PackBudgetTest.run();
+        RepeatRoundCapTest.run();
+        CountsFractionsSinkTest.run();
+        ParityPinsTest.run();
         if (failures + PackbinFieldsTest.failures > 0) {
             System.err.println((failures + PackbinFieldsTest.failures) + " failure(s)");
             System.exit(1);
         }
+        System.out.println("PackbinTest checks: " + checks);
         System.out.println("All tests passed");
     }
 
@@ -373,12 +379,14 @@ public final class PackbinTest {
     }
 
     static void expectEq(String label, Object expected, Object actual) {
+        checks++;
         if (expected == null ? actual != null : !expected.equals(actual)) {
             fail(label + ": expected " + expected + ", got " + actual);
         }
     }
 
     static void expectTrue(String label, boolean condition) {
+        checks++;
         if (!condition) {
             fail(label + ": expected true");
         }

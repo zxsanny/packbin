@@ -52,7 +52,7 @@ final class Scalars {
      * Number but a Float or Double whose decimal text has no fraction (BigDecimal, the atomics). A fraction, a
      * Float or Double, a string, a boolean and a number past 64 bits are refused instead of being narrowed.
      */
-    private static long exactLong(String name, Object value) {
+    static long exactLong(String name, Object value) {
         if (value instanceof Long || value instanceof Integer || value instanceof Short || value instanceof Byte) {
             return ((Number) value).longValue();
         }

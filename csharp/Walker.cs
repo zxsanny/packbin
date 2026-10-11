@@ -8,7 +8,7 @@ internal static partial class Walker
     public static void PackField(
         Field field,
         IReadOnlyDictionary<string, object?> values,
-        List<byte> buffer,
+        PackOut buffer,
         Scope seen)
     {
         switch (field.Type)
@@ -116,7 +116,7 @@ internal static partial class Walker
     private static void PackWhen(
         Field field,
         IReadOnlyDictionary<string, object?> values,
-        List<byte> buffer,
+        PackOut buffer,
         Scope seen)
     {
         if (!ConditionHolds(field.Pred!, seen))
@@ -128,12 +128,13 @@ internal static partial class Walker
     private static void PackBytes(
         Field field,
         IReadOnlyDictionary<string, object?> values,
-        List<byte> buffer,
+        PackOut buffer,
         Scope seen)
     {
         var raw = RequireBytes(field, values);
         if (raw.Length != field.ByteCount)
             throw new ArgumentException($"Field '{field.Name}' needs {field.ByteCount} bytes.");
+        buffer.Reserve(raw.Length, field.Name);
         buffer.AddRange(raw);
         seen[field.Name] = raw;
     }
@@ -142,7 +143,7 @@ internal static partial class Walker
     private static void PackGroup(
         Field field,
         IReadOnlyDictionary<string, object?> values,
-        List<byte> buffer,
+        PackOut buffer,
         Scope seen)
     {
         if (!(field.NestedRow && values is RowValues))
@@ -160,13 +161,14 @@ internal static partial class Walker
     private static void PackScalar(
         Field field,
         IReadOnlyDictionary<string, object?> values,
-        List<byte> buffer,
+        PackOut buffer,
         Scope seen)
     {
         var value = RequireValue(field, values);
         Span<byte> tmp = stackalloc byte[8];
         var width = field.ByteCount;
         WriteScalar(field, value, tmp.Slice(0, width));
+        buffer.Reserve(width, field.Name);
         for (var i = 0; i < width; i++)
             buffer.Add(tmp[i]);
         seen[field.Name] = value;

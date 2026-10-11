@@ -32,7 +32,13 @@ final class Rounds {
         List<Field> values = values(field.children);
         int count = 0;
         for (Field value : values) {
-            count = Math.max(count, entries(read(value, row, outer)));
+            Object given = read(value, row, outer);
+            if (given instanceof List<?> items && items.size() > sink.maxRounds) {
+                // Unpack refuses round maxRounds + 1, so pack does not write it; no round is written first.
+                throw new IllegalArgumentException(memberName(value) + ": the repeat count is " + items.size()
+                        + ", above the limit of " + sink.maxRounds + " rounds");
+            }
+            count = Math.max(count, entries(given));
         }
         pack(field, values, row, sink, seen, count, outer);
     }
@@ -80,6 +86,7 @@ final class Rounds {
             Walker.Take outer) {
         requireNoLone(field, row, outer);
         for (int i = 0; i < count; i++) {
+            sink.startRound(field, values);
             clear(values, seen);
             int index = i;
             Walker.Take at = child -> item(read(child, row, outer), index);
@@ -115,6 +122,26 @@ final class Rounds {
 
     private static String memberName(Field value) {
         return value.set instanceof Access.KeySetter named ? named.key : member(value);
+    }
+
+    /**
+     * The member a refused write names: the field, a u2 by its first slot, a combined flags byte by the first value
+     * its members hold (depth-first, through when, repeat, times and groups), a split flag byte by its kind.
+     */
+    static String nameOf(Field written) {
+        if (written == null) {
+            return "type";
+        }
+        if (written.kind == Field.Kind.FLAGS) {
+            List<Field> held = values(written.children);
+            return held.isEmpty() ? member(written) : memberName(held.get(0));
+        }
+        return memberName(written);
+    }
+
+    /** The first value a round holds, else the round itself ({@code times 1}). */
+    static String roundName(Field round, List<Field> values) {
+        return values.isEmpty() ? round.kind.name().toLowerCase(Locale.ROOT) + " " + round.id : memberName(values.get(0));
     }
 
     private static Object read(Field value, Object row, Walker.Take outer) {

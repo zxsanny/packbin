@@ -1,3 +1,4 @@
+use super::pack_out::round_member;
 use crate::field::{field_name, times_name, Field, FieldKind};
 use crate::value::{name_of, same_values, Name, PackError, Value, Values};
 use std::collections::HashMap;
@@ -79,6 +80,23 @@ pub(super) fn check_round_cap(
         "times at id {anchor}: count {count} (from '{count_field}') is over the {max_rounds} \
          rounds a scheme allows; members '{}'",
         names.join("', '")
+    )))
+}
+
+/// Unpack refuses the round after `max_rounds` of a `repeat`, so pack refuses its rounds before it
+/// writes any when they pass it, naming the first member the round holds.
+pub(super) fn check_repeat_cap(
+    anchor: u32,
+    members: &[Field],
+    rounds: usize,
+    max_rounds: usize,
+) -> Result<(), PackError> {
+    if rounds <= max_rounds {
+        return Ok(());
+    }
+    Err(PackError::Type(format!(
+        "{}: the repeat count is {rounds}, above the limit of {max_rounds} rounds",
+        round_member("repeat", anchor, members)
     )))
 }
 

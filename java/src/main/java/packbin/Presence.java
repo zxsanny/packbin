@@ -81,6 +81,18 @@ final class Presence {
         }
     }
 
+    /**
+     * A combined flags decides each bit as its member is reached. A member whose times count was skipped writes no
+     * round, so values given for it would be dropped: refuse, naming the first of them.
+     */
+    static void requireNoSkippedCount(Field member, Object row, Walker.Take take, Map<Object, Object> seen) {
+        if (valuesWithoutCount(member, row, take, seen)) {
+            throw new IllegalArgumentException(Rounds.firstValueName(member)
+                    + ": a value is given, but the count of its times is not written, so its bit is clear;"
+                    + " write the count before the times");
+        }
+    }
+
     private static boolean valuesWithoutCount(Field member, Object row, Walker.Take take, Map<Object, Object> seen) {
         switch (member.kind) {
             case TIMES -> {

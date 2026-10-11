@@ -16,6 +16,12 @@ from packbin import (
 )
 
 
+SKIPPED_COUNT = (
+    "pt: a value is given, but the count of its times is not written, so its bit is clear; "
+    "write the count before the times"
+)
+
+
 def _scheme(*fields) -> Scheme:
     return Scheme(1, dict, *fields)
 
@@ -90,7 +96,7 @@ def test_ac2_times_whose_count_was_skipped_with_values_is_refused_in_combined_fl
     scheme = _scheme(flags(0, _u8(0, "n"), times(1, 0, _u8(1, "pt"))))
 
     # Act / Assert
-    with pytest.raises(ValueError, match=r"^times 1: "):
+    with pytest.raises(ValueError, match=rf"^{SKIPPED_COUNT}$"):
         _pack(scheme, {"pt": [5]})
 
 

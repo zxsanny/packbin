@@ -32,22 +32,26 @@ internal sealed class Scope : Dictionary<string, object?>
         _flagBytes is not null && _flagBytes.TryGetValue(group, out var flags) ? flags : (byte)0;
 }
 
-// What one unpack call may still spend on rounds: shared by every scope of the call, never static, so two calls in
-// parallel do not share it. A round is admitted before its bytes are read. Pack uses only `MaxRounds`, to refuse a
-// times count above it before any round is written.
+// What one pack or unpack call may still spend on rounds: shared by every scope of the call, never static, so two calls
+// in parallel do not share it. A round is admitted before its bytes are read or written. Pack also uses `MaxRounds`, to
+// refuse a times count or a repeat list above it before any round is written.
 internal sealed class RoundBudget(int maxRounds, long maxSlots)
 {
-    private long _slotsUsed;
-
     public int MaxRounds => maxRounds;
+    public long MaxSlots => maxSlots;
+
+    // The slots the rounds admitted so far have used.
+    public long SlotsUsed { get; private set; }
 
     // `roundsStarted`: the rounds the same repeat or times field has already started in this walk.
     // `slots`: the entries the round adds to the row (one per name it can hold).
-    public bool TryStartRound(long roundsStarted, int slots)
+    public bool TryStartRound(long roundsStarted, int slots) => roundsStarted < maxRounds && TryChargeSlots(slots);
+
+    public bool TryChargeSlots(int slots)
     {
-        if (roundsStarted >= maxRounds || slots > maxSlots - _slotsUsed)
+        if (slots > maxSlots - SlotsUsed)
             return false;
-        _slotsUsed += slots;
+        SlotsUsed += slots;
         return true;
     }
 }

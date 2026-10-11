@@ -121,7 +121,7 @@ internal static partial class Walker
     private static void PackBitField(
         Field inner,
         IReadOnlyDictionary<string, object?> values,
-        List<byte> buffer,
+        PackOut buffer,
         Scope seen)
     {
         if (inner.Type == Field.Kind.Group)

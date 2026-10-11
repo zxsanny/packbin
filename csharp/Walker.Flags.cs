@@ -7,9 +7,10 @@ internal static partial class Walker
     private static void PackFlags(
         Field field,
         IReadOnlyDictionary<string, object?> values,
-        List<byte> buffer,
+        PackOut buffer,
         Scope seen)
     {
+        buffer.Reserve(1, FirstName(field) ?? "flags");
         var at = buffer.Count;
         buffer.Add(0);
         byte flags = 0;
@@ -17,28 +18,85 @@ internal static partial class Walker
         {
             var inner = field.Children[i].Inner!;
             if (!BitOn(values, inner, seen))
+            {
+                RequireNoValuesForSkippedCount(inner, values, seen);
                 continue;
+            }
             flags |= (byte)(1 << i);
             PackBitField(inner, values, buffer, seen);
         }
-        buffer[at] = flags;
+        buffer.Set(at, flags);
+    }
+
+    // A times whose count was skipped writes no round, so a bit left clear for it would drop the values given for it.
+    private static void RequireNoValuesForSkippedCount(Field inner, IReadOnlyDictionary<string, object?> values, Scope seen)
+    {
+        if (ValueOfSkippedCount(inner, values, seen) is { } name)
+            throw new ArgumentException(
+                $"'{name}': a value is given, but the count of its times is not written, so its bit is clear; "
+                + "write the count before the times");
+    }
+
+    // The first member given a value (not null, not an empty list) under a times whose count was not written. A `when`
+    // whose condition is false drops its body by design, as it does anywhere else in `flags`.
+    private static string? ValueOfSkippedCount(Field field, IReadOnlyDictionary<string, object?> values, Scope seen)
+    {
+        switch (field.Type)
+        {
+            case Field.Kind.Times:
+                if (seen.TryGetValue(field.CountName, out var count) && count is not null)
+                    return null;
+                return RoundNames(field, packing: true)
+                    .FirstOrDefault(name => IsPresent(values, name) && values[name] is not IList { Count: 0 });
+            case Field.Kind.FlagBit:
+                return ValueOfSkippedCount(field.Inner!, values, seen);
+            case Field.Kind.When when !ConditionHolds(field.Pred!, seen):
+                return null;
+            case Field.Kind.When:
+            case Field.Kind.Flags:
+            case Field.Kind.Group when !field.NestedRow:
+                return field.Children.Select(child => ValueOfSkippedCount(child, values, seen)).FirstOrDefault(name => name is not null);
+            default:
+                return null;
+        }
     }
 
     private static void PackFlagByte(
         Field field,
         IReadOnlyDictionary<string, object?> values,
-        List<byte> buffer,
+        PackOut buffer,
         Scope seen)
     {
         var flags = field.FlagOwner!.Compute(values, seen);
         seen.SetFlagByte(field.FlagOwner!, flags);
+        buffer.Reserve(1, field.FlagOwner!.BitInners.Select(FirstName).FirstOrDefault(n => n is not null) ?? "flag byte");
         buffer.Add(flags);
+    }
+
+    // The first name a flag byte's members declare, depth-first: C# has no name for the byte itself. A `repeat`, `times`,
+    // `when` and `flags` have none of their own, so their members are looked into.
+    private static string? FirstName(Field field)
+    {
+        switch (field.Type)
+        {
+            case Field.Kind.FlagBit:
+                return FirstName(field.Inner!);
+            case Field.Kind.Flags:
+            case Field.Kind.When:
+            case Field.Kind.Repeat:
+            case Field.Kind.Times:
+                return field.Children.Select(FirstName).FirstOrDefault(n => n is not null);
+            case Field.Kind.U2:
+                return field.Names[0];
+            default:
+                return field.Name.Length > 0 ? field.Name : null;
+        }
     }
 
     private static void PackFlagBit(
         Field field,
         IReadOnlyDictionary<string, object?> values,
-        List<byte> buffer,
+        PackOut buffer,
         Scope seen)
     {
         if ((seen.FlagByte(field.FlagOwner!) & (1 << field.BitIndex)) == 0)

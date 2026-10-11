@@ -117,13 +117,15 @@ final class Walker {
     private static void packFlags(
             Field field, Object row, ByteSink sink, Map<Object, Object> seen, Take take) {
         int at = sink.size();
-        sink.write((byte) 0);
+        sink.write(field, (byte) 0);
         int flags = 0;
         for (int i = 0; i < field.children.size(); i++) {
             Field inner = field.children.get(i).inner;
             if (childOn(row, inner, take, seen)) {
                 flags |= 1 << i;
                 packField(inner, row, sink, seen, take);
+            } else {
+                Presence.requireNoSkippedCount(inner, row, take, seen);
             }
         }
         sink.set(at, (byte) flags);
@@ -134,7 +136,7 @@ final class Walker {
             Field field, Object row, ByteSink sink, Map<Object, Object> seen, Take take) {
         int flags = field.group.compute(row, take, seen);
         seen.put(field.group, flags);
-        sink.write((byte) flags);
+        sink.write(field, (byte) flags);
     }
 
     private static boolean flagByteHas(Field bit, Map<Object, Object> seen) {
@@ -198,7 +200,7 @@ final class Walker {
             throw new IllegalArgumentException(
                     field.id + ": expected " + field.size + " bytes, got " + bytes.length);
         }
-        sink.write(bytes);
+        sink.write(field, bytes);
     }
 
     private static void packScalar(
@@ -212,7 +214,7 @@ final class Walker {
         buf.order(field.bigEndian ? ByteOrder.BIG_ENDIAN : ByteOrder.LITTLE_ENDIAN);
         Scalars.writeScalar(field, value, buf);
         ((Buffer) buf).flip();
-        sink.write(buf);
+        sink.write(field, buf);
     }
 
     private static Object unpackFlags(

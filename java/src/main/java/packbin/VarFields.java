@@ -42,11 +42,7 @@ final class VarFields {
 
     static void packSized(
             Field field, Object row, ByteSink sink, Map<Object, Object> seen, Walker.Take take) {
-        Object countRaw = seen.get(field.countId);
-        if (!(countRaw instanceof Number) || countRaw instanceof Float || countRaw instanceof Double) {
-            throw new IllegalStateException(field.id + ": count " + field.countId + " is missing");
-        }
-        int count = ((Number) countRaw).intValue();
+        int count = borrowedCount(field, seen, Integer.MAX_VALUE);
         Object raw = take != null ? take.apply(field) : field.get.get(row);
         seen.put(field.id, raw);
         if (!(raw instanceof byte[] bytes)) {
@@ -56,7 +52,7 @@ final class VarFields {
             throw new IllegalArgumentException(
                     field.id + ": expected " + count + " bytes, got " + bytes.length);
         }
-        sink.write(bytes);
+        sink.write(field, bytes);
     }
 
     static Object unpackSized(
@@ -91,7 +87,7 @@ final class VarFields {
             int n = requireU2(slot.label(), value);
             raw[i / 4] |= (byte) (n << ((i % 4) * 2));
         }
-        sink.write(raw);
+        sink.write(field, raw);
     }
 
     static Object unpackU2(
@@ -119,23 +115,18 @@ final class VarFields {
 
     static void packBits(
             Field field, Object row, ByteSink sink, Map<Object, Object> seen, Walker.Take take) {
-        Object countRaw = seen.get(field.countId);
-        if (!(countRaw instanceof Number) || countRaw instanceof Float || countRaw instanceof Double) {
-            throw new IllegalStateException(field.id + ": count " + field.countId + " is missing");
-        }
-        int count = ((Number) countRaw).intValue();
+        int count = borrowedCount(field, seen, Integer.MAX_VALUE);
         Object raw = take != null ? take.apply(field) : field.get.get(row);
         seen.put(field.id, raw);
         if (!(raw instanceof List<?> bits) || bits.size() != count) {
             throw new IllegalArgumentException(field.id + ": expected " + count + " bits");
         }
-        int nbytes = (count + 7) / 8;
-        byte[] packed = new byte[nbytes];
+        byte[] packed = new byte[(int) bytesFor(count, 8)];
         for (int i = 0; i < count; i++) {
             int bit = requireBit(field.label(), bits.get(i));
             packed[i / 8] |= (byte) (bit << (i % 8));
         }
-        sink.write(packed);
+        sink.write(field, packed);
     }
 
     static Object unpackBits(
@@ -187,7 +178,7 @@ final class VarFields {
     }
 
     static int packedBytes(int width, int count) {
-        return (count * width + 7) / 8;
+        return (int) (((long) count * width + 7) / 8);
     }
 
     static void packPacked(
@@ -207,7 +198,7 @@ final class VarFields {
             int n = requirePacked(field.label(), items.get(i), max);
             packed[i / per] |= (byte) (n << ((i % per) * shift));
         }
-        sink.write(packed);
+        sink.write(field, packed);
     }
 
     static Object unpackPacked(
@@ -239,42 +230,32 @@ final class VarFields {
     }
 
     private static int requireU2(String name, Object value) {
-        if (value instanceof Boolean
-                || !(value instanceof Number)
-                || value instanceof Float
-                || value instanceof Double) {
-            throw new IllegalArgumentException(name + ": expected 2-bit int");
-        }
-        int n = ((Number) value).intValue();
-        if (n < 0 || n > 3) {
-            throw new IllegalArgumentException(name + ": expected 2-bit int");
-        }
-        return n;
+        return wholeInt(name, value, 3, "expected 2-bit int");
     }
 
     private static int requireBit(String name, Object value) {
-        if (!(value instanceof Number) || value instanceof Float || value instanceof Double) {
-            throw new IllegalArgumentException(name + ": expected 0 or 1");
-        }
-        int n = ((Number) value).intValue();
-        if (n != 0 && n != 1) {
-            throw new IllegalArgumentException(name + ": expected 0 or 1");
-        }
-        return n;
+        return wholeInt(name, value, 1, "expected 0 or 1");
     }
 
     private static int requirePacked(String name, Object value, int max) {
-        if (value instanceof Boolean
-                || !(value instanceof Number)
-                || value instanceof Float
-                || value instanceof Double) {
-            throw new IllegalArgumentException(name + ": expected 0.." + max);
+        return wholeInt(name, value, max, "expected 0.." + max);
+    }
+
+    /**
+     * A whole number from 0 to {@code max}, as written; a fraction, a number that does not fit a long (it would
+     * be cut to an int), a Boolean, a Float or Double and anything but a number are refused with {@code expected}.
+     */
+    private static int wholeInt(String name, Object value, int max, String expected) {
+        long n;
+        try {
+            n = Scalars.exactLong(name, value);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException(name + ": " + expected, ex);
         }
-        int n = ((Number) value).intValue();
         if (n < 0 || n > max) {
-            throw new IllegalArgumentException(name + ": expected 0.." + max);
+            throw new IllegalArgumentException(name + ": " + expected);
         }
-        return n;
+        return (int) n;
     }
 
     static void packUtf8(
@@ -288,9 +269,7 @@ final class VarFields {
         if (bytes.length > MAX_U16) {
             throw new IllegalArgumentException(field.id + ": utf-8 length " + bytes.length);
         }
-        sink.write((byte) bytes.length);
-        sink.write((byte) (bytes.length >> 8));
-        sink.write(bytes);
+        sink.writePrefixed(field, bytes);
     }
 
     static Object unpackUtf8(
