@@ -294,3 +294,67 @@
 - Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row with `speed` set).
 - Not run by: none.
 - Source: loop 18 reference row W-split-false-body-given; loop 19, AZ-2331 AC-3 (owner decision A, 2026-10-11).
+
+## pack_lone_utf8_under_times_over_budget
+
+- Scheme: id0 `u32 n`; id1 `times` anchor 1, count = id0 { id1 `utf8 s` }.
+- Row: `n = 65535`, `s` = 65,535 times `a` (one string, not a list).
+- Expected: `pack_error`. The count is at the default `maxRounds` (65,535), so the count check passes; the rounds are 65,537 bytes each (`u16` length and text), so the packet would pass the default `maxBytes` (16,777,216) at round 256. Pack refuses it at that round, naming `s`, and never builds the 4 GiB packet.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form).
+- Not run by: C++ (pack writes into a caller buffer of fixed size and rounds live in a fixed `Array`, so there is no output budget to pass).
+- Source: loop 20, AZ-2354 (reference row 1), AZ-2367.
+
+## pack_element_times_over_budget
+
+- Scheme: id0 `list items` of an element `group` { id0 `u32 n`; id1 `times` anchor 1, count = id0 { id1 `u64 k` } }.
+- Row: 40 items, each `n = 65535`, `k = 5` (one scalar per item).
+- Expected: `pack_error`. Each item is about 524,284 bytes; the packet would pass `maxBytes` in item 33. Pack refuses it, naming `k`, and the budget runs across the list elements as one counter.
+- Run by: TypeScript, Python, Java, C# (dictionary rows).
+- Not run by: Rust (a list element cannot hold a `times`), C++ (a fixed array of rounds and a caller buffer, as in `pack_lone_utf8_under_times_over_budget`).
+- Source: loop 20, AZ-2354 (reference row 2), AZ-2367.
+
+## pack_slots_over_limit
+
+- Scheme: id0 `u32 n`; id1 `times` anchor 1, count = id0 { 65 `u8` members, ids 1 to 65 }.
+- Row: `n = 65535`, each member `1` (one scalar per member).
+- Expected: `pack_error`. 65,535 rounds of 65 slots are 4,259,775 slots, above the default `maxSlots` (4,194,304); the bytes (4,259,780) stay far under `maxBytes`, so the slot count refuses the row, at round 64,528, before that round's first byte. The width has no group, so it is 65 in every package.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form).
+- Not run by: C++ (a fixed array of rounds and a caller buffer, as in `pack_lone_utf8_under_times_over_budget`).
+- Source: loop 20, AZ-2354 (reference row 14), AZ-2367.
+
+## pack_repeat_over_limit
+
+- Scheme: id0 `repeat` anchor 0 { id0 `u8 k` }.
+- Row: `k` = a list of 65,536 entries (each `7`).
+- Expected: `pack_error`. The list is one above the default `maxRounds` (65,535); pack refuses it before the first round, as unpack refuses the same packet.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form).
+- Not run by: C++ (the rounds live in a fixed `Array` of at most 65,535 items).
+- Source: loop 20, AZ-2355 (reference row 1), AZ-2367.
+
+## pack_split_count_zero_after_byte_list
+
+- Scheme: split-form `flag_byte`; `u8 n` written after the byte; bit 0 { `times` count = `n` { `u8 pt` } }.
+- Row: `n = 0`, `pt = [5, 6]`.
+- Expected: `pack_error`. The count is 0 but the list holds values, so pack refuses it, as `pack_times_zero_with_values` does for a scheme without a flag byte. The bit was decided before `n` was written and the values would be dropped silently.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of two beside `n = 0`).
+- Not run by: none.
+- Source: loop 20, AZ-2356 (owner decision 3), AZ-2367.
+
+## pack_split_count_zero_after_byte_scalar
+
+- Scheme: as `pack_split_count_zero_after_byte_list`.
+- Row: `n = 0`, `pt = 5` (one scalar, not a list).
+- Packet `01 00 00`: type `01`; flag byte `00` (bit 0 clear); `n` = `00`. A lone scalar with count 0 packs zero rounds, so the bit stays clear and nothing follows `n`.
+- Expected: `bytes` `010000`. Not an error: a lone value for a count of 0 is the same as `pack_times_zero_with_values` leaves it (a scalar, not a list that holds a value).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form).
+- Not run by: C++ (a typed row holds an `Array`, so a lone scalar cannot be written).
+- Source: loop 20, AZ-2356 (owner decision 3), AZ-2367.
+
+## pack_flags_skipped_count_with_values
+
+- Scheme: id0 `flags` anchor 0 { id0 `u8 n`; id1 `times` anchor 1, count = id0 { id1 `u8 pt` } }.
+- Row: `n` not given (its flag bit stays clear), `pt = [5, 6]`.
+- Expected: `pack_error`. The count is skipped, so no round count exists; pack refuses the rounds that were given, naming `pt`, and never drops them silently.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of two with `n` unset).
+- Not run by: none.
+- Source: loop 20, AZ-2360, AZ-2367.

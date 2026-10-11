@@ -45,3 +45,7 @@ Then refused naming the field; `f64` with 5.0 still packs
 ## Constraints
 
 - Wire bytes of every accepted row are unchanged.
+
+## Loop 20 result (wave 1b, 2026-10-11)
+
+Partly done, closed by owner decision (2026-10-11, option A): `Eq(u8, 5.0)` is refused at construction; whole floats in `u2`/`bits`/`packed` slots are refused at pack (typed and dictionary rows); `f32`/`f64` still take whole floats. Plain integer fields (u8..i64) still accept `5.0`: C# unpack returns narrow integers as `double` (AZ-2116 undone) and dictionary repack of unpacked rows is a tested contract (37 tests in 15 files). Documented in the README and upgrade notes (step 13); the fix is AZ-2373 (loop 21 hopper).

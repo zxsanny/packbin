@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -47,7 +48,10 @@ final class HostileVectorTest {
                 "pack_times_list_too_short", "pack_aligned_round_row", "pack_times_count_over_limit",
                 "pack_times_zero_with_values", "pack_split_when_source_after_byte",
                 "pack_split_times_count_after_byte", "pack_split_times_count_skipped", "pack_lone_bytes_in_round",
-                "pack_split_false_condition_silent")) {
+                "pack_split_false_condition_silent", "pack_lone_utf8_under_times_over_budget",
+                "pack_element_times_over_budget", "pack_slots_over_limit", "pack_repeat_over_limit",
+                "pack_split_count_zero_after_byte_list", "pack_split_count_zero_after_byte_scalar",
+                "pack_flags_skipped_count_with_values")) {
             PackbinTest.expectTrue("hostile vector " + id + " present in cases.txt", seen.contains(id));
         }
     }
@@ -186,8 +190,46 @@ final class HostileVectorTest {
                         fb.bit(Packbin.u16(2, Access.get("heading"), Access.set("heading")))),
                         Maps.map("mode", 0, "speed", 7, "heading", 90));
             };
+            case "pack_lone_utf8_under_times_over_budget" -> () -> BinaryPacker.pack(
+                    Maps.scheme(1, Packbin.u32(0, Access.get("n"), Access.set("n")),
+                            Packbin.times(1, 0, Packbin.utf8(1, Access.get("s"), Access.set("s")))),
+                    Maps.map("n", 65_535, "s", "a".repeat(65_535)));
+            case "pack_element_times_over_budget" -> () -> {
+                List<Object> items = new ArrayList<>();
+                for (int i = 0; i < 40; i++) {
+                    items.add(Maps.map("n", 65_535, "k", 5));
+                }
+                return BinaryPacker.pack(Maps.scheme(1, Packbin.list(Access.get("items"), Access.set("items"),
+                        Packbin.group(0, Packbin.u32(0, Access.get("n"), Access.set("n")),
+                                Packbin.times(1, 0, Packbin.u64(1, Access.get("k"), Access.set("k")))))),
+                        Maps.map("items", items));
+            };
+            case "pack_slots_over_limit" -> () -> {
+                Field[] members = new Field[65];
+                Map<String, Object> row = Maps.map("n", 65_535);
+                for (int i = 0; i < 65; i++) {
+                    members[i] = u8(i + 1, "m" + i);
+                    row.put("m" + i, 1);
+                }
+                return BinaryPacker.pack(Maps.scheme(1, Packbin.u32(0, Access.get("n"), Access.set("n")),
+                        Packbin.times(1, 0, members)), row);
+            };
+            case "pack_repeat_over_limit" -> () -> BinaryPacker.pack(
+                    Maps.scheme(1, Packbin.repeat(0, u8(0, "k"))), Maps.map("k", Collections.nCopies(65_536, 7)));
+            case "pack_split_count_zero_after_byte_list" -> () -> BinaryPacker.pack(
+                    splitCountAfterByte(), Maps.map("n", 0, "pt", List.of(5, 6)));
+            case "pack_split_count_zero_after_byte_scalar" -> () -> BinaryPacker.pack(
+                    splitCountAfterByte(), Maps.map("n", 0, "pt", 5));
+            case "pack_flags_skipped_count_with_values" -> () -> BinaryPacker.pack(
+                    Maps.scheme(1, Packbin.flags(0, u8(0, "n"), Packbin.times(1, 0, u8(1, "pt")))),
+                    Maps.map("pt", List.of(5, 6)));
             default -> null;
         };
+    }
+
+    private static Scheme<Map> splitCountAfterByte() {
+        Field fb = Packbin.flagByte();
+        return Maps.scheme(1, fb, u8(0, "n"), fb.bit(Packbin.times(1, 0, u8(1, "pt"))));
     }
 
     private static Scheme<Map> timesScheme() {

@@ -335,6 +335,16 @@ describe("shared construct vectors (fixtures/hostile/cases.txt)", () => {
   }
 })
 
+// The rule each loop 20 refusal must name, so a refusal by some other rule does not pass.
+const PACK_REFUSAL: Record<string, RegExp> = {
+  pack_lone_utf8_under_times_over_budget: /^s: the packet would be 16777477 bytes, above the limit of 16777216 bytes$/,
+  pack_element_times_over_budget: /^k: the packet would be 16777223 bytes, above the limit of 16777216 bytes$/,
+  pack_slots_over_limit: /^m0: the rounds would hold 4194320 slots, above the limit of 4194304 slots$/,
+  pack_repeat_over_limit: /^k: the repeat count is 65536, above the limit of 65535 rounds$/,
+  pack_split_count_zero_after_byte_list: /^pt: 2 items, times count 0$/,
+  pack_flags_skipped_count_with_values: /^pt: a value is given, but the count of its times is not written/,
+}
+
 describe("shared pack vectors (fixtures/hostile/cases.txt)", () => {
   it("has a TypeScript scheme for every pack vector and no other", () => {
     assert.ok(packCases.length > 0)
@@ -352,6 +362,8 @@ describe("shared pack vectors (fixtures/hostile/cases.txt)", () => {
       assert.deepEqual(c.expected, ["pack_error"])
       assert.throws(pack, (e: unknown) => {
         assert.ok(e instanceof RangeError, `${c.id}: expected RangeError, got ${String(e)}`)
+        const rule = PACK_REFUSAL[c.id]
+        if (rule) assert.match(e.message, rule, `${c.id}: refused by another rule`)
         return true
       })
     })

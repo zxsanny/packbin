@@ -187,6 +187,12 @@ fn split_false_condition() -> MapScheme {
     )
 }
 
+/// Pack cases a Rust scheme cannot express, with the reason (the README "Not run by" line of each).
+const PACK_NOT_RUN: &[(&str, &str)] = &[(
+    "pack_element_times_over_budget",
+    "a list element cannot hold a `times`: Rust refuses it at construction",
+)];
+
 /// The scheme and row of a `pack` case, written by hand from fixtures/hostile/README.md (map form).
 fn pack_case(id: &str) -> Result<Vec<u8>, PackError> {
     match id {
@@ -251,6 +257,49 @@ fn pack_case(id: &str) -> Result<Vec<u8>, PackError> {
                 ("speed", Value::U8(7)),
                 ("heading", Value::U16(90)),
             ]),
+        ),
+        "pack_lone_utf8_under_times_over_budget" => pack(
+            &MapScheme::new(1, vec![u32("n"), times(1, "n", vec![utf8("s")])]),
+            &row(&[
+                ("n", Value::U32(65_535)),
+                ("s", Value::Str("a".repeat(65_535))),
+            ]),
+        ),
+        "pack_slots_over_limit" => {
+            let names: Vec<String> = (0..65).map(|i| format!("m{i}")).collect();
+            let mut pairs = vec![("n", Value::U32(65_535))];
+            pairs.extend(names.iter().map(|name| (name.as_str(), Value::U8(1))));
+            pack(
+                &MapScheme::new(
+                    1,
+                    vec![u32("n"), times(1, "n", names.iter().map(u8).collect())],
+                ),
+                &row(&pairs),
+            )
+        }
+        "pack_repeat_over_limit" => {
+            let rounds = (0..65_536)
+                .map(|_| row(&[("k", Value::U8(7))]))
+                .collect::<Vec<_>>();
+            pack(
+                &MapScheme::new(1, vec![repeat(0, vec![u8("k")])]),
+                &row(&[("__repeat__", Value::Groups(rounds))]),
+            )
+        }
+        "pack_split_count_zero_after_byte_list" => pack(
+            &split_count_after_byte(),
+            &row(&[("n", Value::U8(0)), ("pt", ints(&[5, 6]))]),
+        ),
+        "pack_split_count_zero_after_byte_scalar" => pack(
+            &split_count_after_byte(),
+            &row(&[("n", Value::U8(0)), ("pt", Value::U8(5))]),
+        ),
+        "pack_flags_skipped_count_with_values" => pack(
+            &MapScheme::new(
+                1,
+                vec![flags(0, "f", vec![u8("n"), times(1, "n", vec![u8("pt")])])],
+            ),
+            &row(&[("pt", ints(&[5, 6]))]),
         ),
         other => panic!("no scheme written for hostile pack case {other}"),
     }
@@ -415,6 +464,10 @@ fn hostile_vectors_error_without_panic_or_hang() {
                 Ok(Err(err)) => panic!("{id}: expected the interim bad-value error, got {err:?}"),
             },
             "pack" => {
+                if let Some((_, reason)) = PACK_NOT_RUN.iter().find(|(skipped, _)| *skipped == id) {
+                    outcomes.push(format!("{id} -> skipped: {reason}"));
+                    continue;
+                }
                 let bytes = pack_case(id).map(|raw| to_hex(&raw));
                 match (expected, hex) {
                     ("bytes", _) => assert_eq!(bytes, Ok(hex.to_string()), "{id}"),

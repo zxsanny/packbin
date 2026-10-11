@@ -17,6 +17,7 @@ from packbin import (
     eq,
     flag_byte,
     flags,
+    group,
     i8,
     list as list_field,
     packed,
@@ -26,6 +27,7 @@ from packbin import (
     u8,
     u16,
     u32,
+    u64,
     utf8,
     when,
 )
@@ -184,6 +186,30 @@ def _split_false_condition_silent() -> Scheme[Any]:
     )
 
 
+def _lone_utf8_scheme() -> Scheme[Any]:
+    return _scheme(u32(0, lambda row: row["n"]), times(1, 0, utf8(1, lambda row: row["s"])))
+
+
+def _element_times_scheme() -> Scheme[Any]:
+    return _scheme(
+        list_field(
+            lambda row: row["items"],
+            group(0, u32(0, lambda row: row["n"]), times(1, 0, u64(1, lambda row: row["k"]))),
+        )
+    )
+
+
+def _wide_round_scheme() -> Scheme[Any]:
+    return _scheme(
+        u32(0, lambda row: row["n"]),
+        times(1, 0, *[u8(1 + i, lambda row, name=f"m{i}": row[name]) for i in range(65)]),
+    )
+
+
+def _flags_skipped_count_scheme() -> Scheme[Any]:
+    return _scheme(flags(0, u8(0, lambda row: row["n"]), times(1, 0, u8(1, lambda row: row["pt"]))))
+
+
 # Pack vectors in fixtures/hostile/cases.txt: the packet each case's scheme and row (README) give, and the
 # exception a `pack_error` case raises. Python runs every pack case.
 PACK_CASES = {
@@ -225,6 +251,34 @@ PACK_CASES = {
     "pack_split_false_condition_silent": (
         lambda: BinaryPacker.pack(_split_false_condition_silent(), {"mode": 0, "speed": 7, "heading": 90}),
         None,
+    ),
+    "pack_lone_utf8_under_times_over_budget": (
+        lambda: BinaryPacker.pack(_lone_utf8_scheme(), {"n": 65535, "s": "a" * 65535}),
+        ValueError,
+    ),
+    "pack_element_times_over_budget": (
+        lambda: BinaryPacker.pack(_element_times_scheme(), {"items": [{"n": 65535, "k": 5} for _ in range(40)]}),
+        ValueError,
+    ),
+    "pack_slots_over_limit": (
+        lambda: BinaryPacker.pack(_wide_round_scheme(), {"n": 65535, **{f"m{i}": 1 for i in range(65)}}),
+        ValueError,
+    ),
+    "pack_repeat_over_limit": (
+        lambda: BinaryPacker.pack(_scheme(repeat(0, u8(0, lambda row: row["k"]))), {"k": [7] * 65536}),
+        ValueError,
+    ),
+    "pack_split_count_zero_after_byte_list": (
+        lambda: BinaryPacker.pack(_split_times_count_after_byte(), {"n": 0, "pt": [5, 6]}),
+        ValueError,
+    ),
+    "pack_split_count_zero_after_byte_scalar": (
+        lambda: BinaryPacker.pack(_split_times_count_after_byte(), {"n": 0, "pt": 5}),
+        None,
+    ),
+    "pack_flags_skipped_count_with_values": (
+        lambda: BinaryPacker.pack(_flags_skipped_count_scheme(), {"pt": [5, 6]}),
+        ValueError,
     ),
 }
 

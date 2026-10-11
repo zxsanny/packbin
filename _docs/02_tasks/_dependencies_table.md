@@ -200,6 +200,7 @@ Estimation: `_docs/LESSONS.md` says the six packages stay peers. The session is 
 | AZ-2365 | split_files_near_cap_l20 | 1 | AZ-2342 | AZ-2069 |
 | AZ-2366 | csharp_typed_round_unpack_error | 2 | AZ-2305 | AZ-2069 |
 | AZ-2367 | hostile_pack_budget_cases | 2 | AZ-2354, AZ-2355, AZ-2356, AZ-2360 | AZ-2069 |
+| AZ-2373 | csharp_exact_integer_types_unpack | 5 | AZ-2358 | AZ-2069 |
 
 The six pack tasks do not depend on each other. AZ-1875 runs after all six. The five blackbox tasks run after AZ-1913 and do not depend on each other. The three earlier todo tasks do not depend on each other and still have no tracker id. AZ-1938 through AZ-1941 are under epic AZ-1937. The string count does not include itself; the list count does not consume the next field.
 

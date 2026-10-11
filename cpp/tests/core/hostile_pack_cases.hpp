@@ -167,6 +167,34 @@ std::string pack_split_false_condition_silent() {
   return pack_answer(s, row);
 }
 
+// flag_byte; u8 n after it; bit 0 { times count = n { u8 pt } }, with n = 0 and two rounds given:
+// the list holds values for a count of 0.
+std::string pack_split_count_zero_after_byte_list() {
+  namespace pb = packbin;
+  auto s = pb::scheme<SplitRow>(
+      1, pb::flag_byte(0), pb::u8<&SplitRow::n>(0),
+      pb::flag_bit(0, pb::times<&SplitRow::rounds>(1, 0, pb::u8<&SplitItem::pt>(1))));
+  SplitRow row;
+  row.n = 0;
+  row.rounds.count = 2;
+  row.rounds.items[0].pt = 5;
+  row.rounds.items[1].pt = 6;
+  return pack_answer(s, row);
+}
+
+// flags { u8 n; times count = n { u8 pt } }, with n skipped and two rounds given.
+std::string pack_flags_skipped_count_with_values() {
+  namespace pb = packbin;
+  auto s = pb::scheme<SplitRow>(
+      1, pb::flags(0, pb::u8<&SplitRow::n>(0),
+                   pb::times<&SplitRow::rounds>(1, 0, pb::u8<&SplitItem::pt>(1))));
+  SplitRow row;
+  row.rounds.count = 2;
+  row.rounds.items[0].pt = 5;
+  row.rounds.items[1].pt = 6;
+  return pack_answer(s, row);
+}
+
 struct PackHandler {
   char const* id;
   PackRun run;
@@ -182,6 +210,8 @@ constexpr PackHandler kPackHandlers[] = {
     {"pack_split_times_count_after_byte", pack_split_times_count_after_byte},
     {"pack_split_times_count_skipped", pack_split_times_count_skipped},
     {"pack_split_false_condition_silent", pack_split_false_condition_silent},
+    {"pack_split_count_zero_after_byte_list", pack_split_count_zero_after_byte_list},
+    {"pack_flags_skipped_count_with_values", pack_flags_skipped_count_with_values},
 };
 
 struct PackSkip {
@@ -198,6 +228,16 @@ constexpr PackSkip kPackSkips[] = {
      "it has no round limit on pack: the rounds live in a fixed `Array` of at most 65,535 items, and a count of 65,536 is refused only as a count that differs from the array length"},
     {"pack_lone_bytes_in_round",
      "a typed row holds an Array of Array: a lone buffer cannot be written"},
+    {"pack_lone_utf8_under_times_over_budget",
+     "pack writes into a caller buffer and the rounds live in a fixed `Array`: there is no output budget to pass"},
+    {"pack_element_times_over_budget",
+     "pack writes into a caller buffer and the rounds live in a fixed `Array`: there is no output budget to pass"},
+    {"pack_slots_over_limit",
+     "the rounds live in a fixed `Array` and pack has no slot budget"},
+    {"pack_repeat_over_limit",
+     "the rounds live in a fixed `Array` of at most 65,535 items, so 65,536 entries cannot be written"},
+    {"pack_split_count_zero_after_byte_scalar",
+     "a typed row holds an Array, so a lone scalar cannot be written"},
 };
 
 // What the C++ test does with a pack case: `ran` with the answer (hex or "pack_error"), a skip with

@@ -1,4 +1,5 @@
 using Packbin;
+using static Packbin.Tests.Budget;
 
 namespace Packbin.Tests;
 
@@ -106,6 +107,32 @@ public class HostilePackVectorTests
             Row(("N", (byte)2), ("D", new byte[] { 1, 2 }))),
         ["pack_split_false_condition_silent"] = () => BinaryPacker.Pack(
             SplitScheme("false_silent"), Row(("Mode", (byte)0), ("Speed", (byte)7), ("Heading", (ushort)90))),
+        ["pack_lone_utf8_under_times_over_budget"] = () => BinaryPacker.Pack(
+            new Scheme<BudgetRow>(1,
+                Field.U32<BudgetRow>(0, x => x.N),
+                Field.Times(1, 0, Field.Utf8<BudgetRow>(1, x => x.S))),
+            Row(("N", 65_535u), ("S", new string('a', 65_535)))),
+        ["pack_element_times_over_budget"] = () => BinaryPacker.Pack(
+            new Scheme<BudgetRow>(1,
+                Field.List((BudgetRow x) => x.Items,
+                    Field.Group(0, (BudgetWideItem e) => e.Mark,
+                        Field.U32<BudgetWideItem>(0, e => e.N),
+                        Field.Times(1, 0, Field.U64<BudgetWideItem>(1, e => e.K))))),
+            Row(("Items", Enumerable.Range(0, 40)
+                .Select(_ => (object?)Row(("N", 65_535u), ("K", 5UL))).ToList()))),
+        ["pack_slots_over_limit"] = () => BinaryPacker.Pack(WideRound(), WideRow(65_535)),
+        ["pack_repeat_over_limit"] = () => BinaryPacker.Pack(
+            new Scheme<BudgetRow>(1, Field.Repeat(0, Field.U8<BudgetRow>(0, x => x.K))),
+            Row(("K", Repeated((byte)7, 65_536)))),
+        ["pack_split_count_zero_after_byte_list"] = () => BinaryPacker.Pack(
+            SplitScheme("times_after"), Row(("N", (byte)0), ("Pt", new object?[] { (byte)5, (byte)6 }))),
+        ["pack_split_count_zero_after_byte_scalar"] = () => BinaryPacker.Pack(
+            SplitScheme("times_after"), Row(("N", (byte)0), ("Pt", (byte)5))),
+        ["pack_flags_skipped_count_with_values"] = () => BinaryPacker.Pack(
+            new Scheme<SplitRow>(1, Field.Flags(0,
+                Field.U8<SplitRow>(0, x => x.N),
+                Field.Times(1, 0, Field.U8<SplitRow>(1, x => x.Pt)))),
+            Row(("Pt", new object?[] { (byte)5, (byte)6 }))),
     };
 
     // The member a loop 19 refusal names, so a refusal by some other rule does not pass.
@@ -117,6 +144,12 @@ public class HostilePackVectorTests
         ["pack_split_times_count_after_byte"] = "'Pt'",
         ["pack_split_times_count_skipped"] = "'Pt'",
         ["pack_lone_bytes_in_round"] = "'D'",
+        ["pack_lone_utf8_under_times_over_budget"] = "'S'",
+        ["pack_element_times_over_budget"] = "'K'",
+        ["pack_slots_over_limit"] = "'M0'",
+        ["pack_repeat_over_limit"] = "'K'",
+        ["pack_split_count_zero_after_byte_list"] = "'Pt'",
+        ["pack_flags_skipped_count_with_values"] = "'Pt'",
     };
 
     public static IEnumerable<object[]> RunCases() =>

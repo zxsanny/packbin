@@ -33,3 +33,10 @@ pack_split_times_count_after_byte pack       pack_error                   -
 pack_split_times_count_skipped    pack       pack_error                   -
 pack_lone_bytes_in_round          pack       pack_error                   -
 pack_split_false_condition_silent pack       bytes                        0100025a00
+pack_lone_utf8_under_times_over_budget pack  pack_error                   -
+pack_element_times_over_budget    pack       pack_error                   -
+pack_slots_over_limit             pack       pack_error                   -
+pack_repeat_over_limit            pack       pack_error                   -
+pack_split_count_zero_after_byte_list pack   pack_error                   -
+pack_split_count_zero_after_byte_scalar pack bytes                        010000
+pack_flags_skipped_count_with_values pack    pack_error                   -
