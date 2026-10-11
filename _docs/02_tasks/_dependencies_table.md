@@ -172,6 +172,20 @@ Estimation: `_docs/LESSONS.md` says the six packages stay peers. The session is 
 | AZ-2309 | csharp_numeric_slots_strict | 1 | AZ-2191 | AZ-2069 |
 | AZ-2310 | csharp_dict_pack_repack_and_bytes_int | 2 | AZ-2119, AZ-2191 | AZ-2069 |
 | AZ-2311 | rust_times_lone_scalar | 2 | AZ-2182 | AZ-2069 |
+| AZ-2329 | pack_round_count_cap | 3 | AZ-2216 | AZ-2069 |
+| AZ-2330 | python_round_fresh_scope | 2 | None | AZ-2069 |
+| AZ-2331 | split_form_pack_fails_loudly | 3 | AZ-2120, AZ-2128 | AZ-2069 |
+| AZ-2332 | lone_bytes_in_round_refused | 2 | AZ-2182 | AZ-2069 |
+| AZ-2333 | rust_flags_member_scope | 2 | AZ-2304 | AZ-2069 |
+| AZ-2334 | cpp_empty_group_when_source | 1 | None | AZ-2069 |
+| AZ-2335 | times_count_zero_with_values_error | 2 | AZ-2304 | AZ-2069 |
+| AZ-2336 | python_short_times_list_named_error | 1 | AZ-2248 | AZ-2069 |
+| AZ-2337 | csharp_group_element_members_only | 2 | AZ-2307 | AZ-2069 |
+| AZ-2338 | eq_value_checked_at_construction | 3 | AZ-2126 | AZ-2069 |
+| AZ-2339 | fraction_slot_probe | 1 | AZ-2309 | AZ-2069 |
+| AZ-2340 | cpp_present_result_pinned | 1 | AZ-2128 | AZ-2069 |
+| AZ-2341 | run_suite_python_venv_check | 1 | None | AZ-2069 |
+| AZ-2342 | split_files_near_cap | 2 | None | AZ-2069 |
 
 The six pack tasks do not depend on each other. AZ-1875 runs after all six. The five blackbox tasks run after AZ-1913 and do not depend on each other. The three earlier todo tasks do not depend on each other and still have no tracker id. AZ-1938 through AZ-1941 are under epic AZ-1937. The string count does not include itself; the list count does not consume the next field.
 
@@ -187,3 +201,5 @@ AZ-2214 through AZ-2220 are loop 15 (security findings F12, F13 and F10, owner r
 AZ-2230 through AZ-2240 are loop 16 round 2 (feature assessment round 1 CLARIFY, owner answer 2026-10-06: implement everything now), claimed by loop 16. AZ-2234 and AZ-2233 and AZ-2235 edit the same Java files and run in one worker; AZ-2238 and AZ-2239 both edit `language-pair.sh` and run in one worker; AZ-2232 and AZ-2240 both touch the vcpkg port checks and run in one worker. All eleven are Done in loop 16: the specs are in `done/`, each with a `## Loop 16 result` section; the table has no status column, so the rows above are unchanged. AZ-2243 through AZ-2249 (loop 16 round 3: the TypeScript and Python session seeds and nonces, the repeated member name in Python, Java and Rust, the Python short `times` list and the Python element accessor) are Done in loop 16 as well, specs in `done/`; the table has no rows for them.
 
 AZ-2304 through AZ-2311 are loop 18 (owner decisions of 2026-10-10 on the loop 17 assessment, plus its clear gaps), claimed by loop 18: AZ-2304 (C++ flag-byte scope), AZ-2305 to AZ-2307, AZ-2309 and AZ-2310 (C#), AZ-2308 (lone dictionary in a round: C# first, other packages after the probe), AZ-2311 (Rust). The C# specs share `csharp/` and run in one worker; AZ-2307 also edits the shared ring files (`language-pair.sh`, the C# driver) and no other worker touches them in that wave.
+
+AZ-2329 through AZ-2342 are loop 19 (owner decisions of 2026-10-11 on the loop 18 review and assessment, plus its clear gaps), claimed by loop 19; one worker per package directory, AZ-2342 first in each of rust, java, csharp.

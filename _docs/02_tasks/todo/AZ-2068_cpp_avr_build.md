@@ -1,8 +1,3 @@
----
-loop: 10
-branch: loop/10-cpp-microcontroller
----
-
 # C++ core on 8-bit AVR (stretch)
 
 **Task**: AZ-2068_cpp_avr_build
