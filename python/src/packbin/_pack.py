@@ -24,6 +24,7 @@ from packbin._nodes import (
     _Utf8,
     _When,
 )
+from packbin._unpack import DEFAULT_MAX_ROUNDS
 
 _builtin_bytes = bytes
 _builtin_list = list
@@ -71,17 +72,63 @@ def _child_on(child: _Node, take: Callable[[_Node], Any], seen: dict[int, Any], 
 
 
 def _times_on(node: _Times, seen: dict[int, Any], row: Any) -> bool:
-    """On when the count is above 0. A count that was skipped is no round (unpack would not read the field either);
-    a count of 0 with a list or a lone dict given for a body value is refused, as outside `flags`."""
+    """On when the count is above 0. A count that was skipped is no round (unpack would not read the field either),
+    but values given for the body would be dropped, so they are refused; a count of 0 with a list or a lone dict
+    given for a body value is refused, as outside `flags`."""
     count = seen.get(node.count)
     if count is None:
+        if any(_round_length(leaf.get(row)) > 0 for leaf in node.leaves):
+            raise ValueError(
+                f"times {node.anchor}: body values are given, but count field {node.count} has no value "
+                "(it was skipped, or is written after the flag byte that decides this bit)"
+            )
         return False
     rounds = _borrowed("times", count, 0)
     if rounds == 0:
         _check_round_lists(node.leaves, row, 0)
         for leaf in node.leaves:
-            _refuse_lone_dict(leaf, leaf.get(row))
+            _refuse_lone_collection(leaf, leaf.get(row))
     return rounds > 0
+
+
+def _unwritten_source(child: _Node, seen: dict[int, Any]) -> tuple[int, int] | None:
+    """The first `when` under a flag bit, with its condition field, whose field has no value yet: a split flag byte
+    decides the bit without it, so the bit must be re-checked when the field is written."""
+    if isinstance(child, (_Group, _Flags, _When)):
+        if isinstance(child, _When):
+            if seen.get(child.condition.field_id) is None:
+                return child.anchor, child.condition.field_id
+        for inner in child.fields:
+            found = _unwritten_source(inner, seen)
+            if found is not None:
+                return found
+    elif isinstance(child, _FlagBit):
+        return _unwritten_source(child.field, seen)
+    return None
+
+
+def _body_given(child: _Node, take: Callable[[_Node], Any], seen: dict[int, Any], row: Any) -> bool:
+    """Whether a `when` body under the bit holds a value, whatever its condition says."""
+    if isinstance(child, (_Group, _Flags, _When)):
+        return any(_body_given(inner, take, seen, row) for inner in child.fields)
+    if isinstance(child, _FlagBit):
+        return _body_given(child.field, take, seen, row)
+    return _child_on(child, take, seen, row)
+
+
+def _refuse_late_body(
+    child: _Node, flag_state: dict[int, Any], take: Callable[[_Node], Any], seen: dict[int, Any], row: Any
+) -> None:
+    """A clear split bit whose `when` condition was written after the flag byte: a body value given for it would
+    be dropped, so pack fails instead of returning a packet the row did not ask for."""
+    unwritten = flag_state.get(id(child))
+    if unwritten is None or seen.get(unwritten[1]) is None or not _body_given(child, take, seen, row):
+        return
+    anchor, source = unwritten
+    raise ValueError(
+        f"when {anchor}: a body value is given, but condition field {source} is written after the flag byte "
+        "that decides this bit"
+    )
 
 
 def _write_u2(buf: bytearray, slots: Sequence[Any], take: Callable[[_Node], Any], seen: dict[int, Any]) -> None:
@@ -156,15 +203,21 @@ def _member_label(node: Any) -> str:
     return str(node.field_id)
 
 
-def _refuse_lone_dict(leaf: Any, value: Any) -> None:
-    """A dict for a `dict` name in a round is one value of the round, so the name holds a list with one dict
-    per round; a lone dict would be read as one round's value or shared by every round."""
+def _refuse_lone_collection(leaf: Any, value: Any) -> None:
+    """A dict or a byte buffer for a `dict`, `bytes` or `sized` name in a round is one value of the round, so the
+    name holds a list with one per round; a lone one would be read as one round's value or shared by every round."""
     if isinstance(leaf, _Dict) and isinstance(value, _builtin_dict):
-        access = getattr(leaf.get, "access", None)
-        name = access[1] if access is not None else "dict"
-        raise TypeError(
-            f"member {name}: a dict in a repeat or times round must be a list with one dict per round, got a single dict"
-        )
+        what, one = "dict", "dict"
+    elif isinstance(leaf, (_Bytes, _Sized)) and isinstance(value, (_builtin_bytes, bytearray, memoryview)):
+        what, one = "byte buffer", "buffer"
+    else:
+        return
+    access = getattr(leaf.get, "access", None)
+    name = access[1] if access is not None else str(_member_label(leaf))
+    raise TypeError(
+        f"member {name}: a {what} in a repeat or times round must be a list with one {one} per round, "
+        f"got a single {one}"
+    )
 
 
 def _check_round_lists(leaves: Sequence[Any], row: Any, count: int) -> None:
@@ -186,8 +239,8 @@ def _at_round(
 ) -> Callable[[_Node], Any]:
     """The value of a leaf in round `index`: entry `index` of its list, or the lone value every round shares.
     A leaf in `optional` (the ids of those a `times` body holds under `flags` or a flag bit) has no entry
-    past the end of its list: it is absent in that round, as a `None` entry is. `count` is given for a `times`
-    that is a member of `flags`: its set bit promises every round, so a list that ends early names the leaf."""
+    past the end of its list: it is absent in that round, as a `None` entry is. `count` is given for a `times`:
+    it writes every round it counts, so a list that ends early names the leaf."""
 
     def at(leaf: _Node) -> Any:
         value = leaf.get(row)  # type: ignore[attr-defined]
@@ -202,18 +255,18 @@ def _at_round(
     return at
 
 
-def _pack_element(buf: bytearray, element: _Node, item: Any) -> None:
+def _pack_element(buf: bytearray, element: _Node, item: Any, max_rounds: int) -> None:
     if isinstance(element, _List):
-        _pack_list_items(buf, element.element, item)
+        _pack_list_items(buf, element.element, item, max_rounds)
     elif isinstance(element, _Dict):
-        _pack_dict_items(buf, element.element, item)
+        _pack_dict_items(buf, element.element, item, max_rounds)
     elif _is_leaf(element):
-        pack_nodes(buf, [element], item, {}, lambda _n: item)
+        pack_nodes(buf, [element], item, {}, lambda _n: item, max_rounds=max_rounds)
     else:
-        pack_nodes(buf, [element], item, {})
+        pack_nodes(buf, [element], item, {}, max_rounds=max_rounds)
 
 
-def _pack_list_items(buf: bytearray, element: _Node, items: Any) -> None:
+def _pack_list_items(buf: bytearray, element: _Node, items: Any, max_rounds: int) -> None:
     if not isinstance(items, _builtin_list):
         raise TypeError("list: expected list")
     if len(items) > 65535:
@@ -221,10 +274,10 @@ def _pack_list_items(buf: bytearray, element: _Node, items: Any) -> None:
     buf.append(len(items) & 0xFF)
     buf.append((len(items) >> 8) & 0xFF)
     for item in items:
-        _pack_element(buf, element, item)
+        _pack_element(buf, element, item, max_rounds)
 
 
-def _pack_dict_items(buf: bytearray, element: _Node, mapping: Any) -> None:
+def _pack_dict_items(buf: bytearray, element: _Node, mapping: Any, max_rounds: int) -> None:
     if not isinstance(mapping, _builtin_dict):
         raise TypeError("dict: expected dict")
     if len(mapping) > 65535:
@@ -237,7 +290,7 @@ def _pack_dict_items(buf: bytearray, element: _Node, mapping: Any) -> None:
         buf.append(len(raw) & 0xFF)
         buf.append((len(raw) >> 8) & 0xFF)
         buf.extend(raw)
-        _pack_element(buf, element, value)
+        _pack_element(buf, element, value, max_rounds)
 
 
 def pack_nodes(
@@ -247,11 +300,11 @@ def pack_nodes(
     seen: dict[int, Any] | None = None,
     get_value: Callable[[_Node], Any] | None = None,
     *,
-    flag_state: dict[int, int] | None = None,
-    flagged: bool = False,
+    flag_state: dict[int, Any] | None = None,
+    max_rounds: int = DEFAULT_MAX_ROUNDS,
 ) -> None:
-    """`flag_state`: the byte each read of a split flag byte wrote, which its bits follow. `flagged`: the nodes
-    are a member of `flags` or of a flag bit, so a `times` among them promises every round it counts."""
+    """`flag_state`: the byte each read of a split flag byte wrote, which its bits follow.
+    `max_rounds`: the scheme's round limit; a `times` count above it is refused, as unpack refuses the round."""
     if seen is None:
         seen = {}
     if flag_state is None:
@@ -261,6 +314,9 @@ def pack_nodes(
         if get_value is not None:
             return get_value(node)
         return node.get(row)  # type: ignore[attr-defined]
+
+    def run(members: Sequence[_Node], scope: dict[int, Any], getter: Callable[[_Node], Any] | None) -> None:
+        pack_nodes(buf, members, row, scope, getter, flag_state=flag_state, max_rounds=max_rounds)
 
     for node in nodes:
         if isinstance(node, _Scalar):
@@ -292,9 +348,9 @@ def pack_nodes(
                 if isinstance(child, _Bool):
                     seen[child.field_id] = take(child)
                 elif isinstance(child, _Group):
-                    pack_nodes(buf, child.fields, row, seen, get_value, flag_state=flag_state, flagged=True)
+                    run(child.fields, seen, get_value)
                 else:
-                    pack_nodes(buf, [child], row, seen, get_value, flag_state=flag_state, flagged=True)
+                    run([child], seen, get_value)
             buf[at] = flag
         elif isinstance(node, _Sized):
             count = seen.get(node.count)
@@ -324,38 +380,47 @@ def pack_nodes(
             _write_packed(buf, label, node.width, item_count, value)
         elif isinstance(node, _Times):
             item_count = _borrowed("times", seen.get(node.count), 0)
+            if item_count > max_rounds:
+                raise ValueError(f"times {node.anchor}: {item_count} rounds, the limit is {max_rounds}")
             _check_round_lists(node.leaves, row, item_count)
             for leaf in node.leaves:
-                _refuse_lone_dict(leaf, leaf.get(row))
+                _refuse_lone_collection(leaf, leaf.get(row))
             for i in range(item_count):
-                at_round = _at_round(row, i, node.optional, item_count if flagged else None)
-                pack_nodes(buf, node.fields, row, seen, at_round, flag_state=flag_state)
+                at_round = _at_round(row, i, node.optional, item_count)
+                run(node.fields, {}, at_round)
         elif isinstance(node, _FlagByte):
             flag = 0
             for i, child in enumerate(node.bits):
+                flag_state.pop(id(child), None)
                 if _child_on(child, take, seen, row):
                     flag |= 1 << i
+                else:
+                    unwritten = _unwritten_source(child, seen)
+                    if unwritten is not None:
+                        flag_state[id(child)] = unwritten
             buf.append(flag)
             flag_state[id(node)] = flag
         elif isinstance(node, _FlagBit):
             flag = flag_state.get(id(node.owner))
             if flag is None:
                 raise RuntimeError("flag bit before flag byte")
-            if flag & (1 << node.index):
-                pack_nodes(buf, [node.field], row, seen, get_value, flag_state=flag_state, flagged=True)
+            if not flag & (1 << node.index):
+                _refuse_late_body(node.field, flag_state, take, seen, row)
+            else:
+                run([node.field], seen, get_value)
         elif isinstance(node, _When):
             if seen.get(node.condition.field_id) == node.condition.value:
-                pack_nodes(buf, node.fields, row, seen, get_value, flag_state=flag_state, flagged=flagged)
+                run(node.fields, seen, get_value)
         elif isinstance(node, _Repeat):
             values = [leaf.get(row) for leaf in node.leaves]
             for leaf, value in zip(node.leaves, values):
-                _refuse_lone_dict(leaf, value)
+                _refuse_lone_collection(leaf, value)
             lengths = [_round_length(value) for value in values]
             count = max(lengths, default=0)
             if any(n not in (0, count) for n in lengths):
                 raise ValueError("repeat fields must have equal lengths")
             for i in range(count):
-                pack_nodes(buf, node.fields, row, seen, _at_round(row, i), flag_state=flag_state)
+                run(node.fields, {}, _at_round(row, i))
         elif isinstance(node, _Utf8):
             value = take(node)
             seen[node.field_id] = value
@@ -364,10 +429,10 @@ def pack_nodes(
             buf.append((len(raw) >> 8) & 0xFF)
             buf.extend(raw)
         elif isinstance(node, _List):
-            _pack_list_items(buf, node.element, take(node))
+            _pack_list_items(buf, node.element, take(node), max_rounds)
         elif isinstance(node, _Dict):
-            _pack_dict_items(buf, node.element, take(node))
+            _pack_dict_items(buf, node.element, take(node), max_rounds)
         elif isinstance(node, _Group):
-            pack_nodes(buf, node.fields, row, seen, get_value, flag_state=flag_state, flagged=flagged)
+            run(node.fields, seen, get_value)
         else:
             raise TypeError(f"unknown field node: {type(node)!r}")

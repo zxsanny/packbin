@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace Packbin;
 
 internal static partial class Walker
@@ -28,7 +26,7 @@ internal static partial class Walker
                 PackWhen(field, values, buffer, seen);
                 break;
             case Field.Kind.Repeat:
-                PackRepeat(field, values, buffer);
+                PackRepeat(field, values, buffer, seen);
                 break;
             case Field.Kind.Bytes:
                 PackBytes(field, values, buffer, seen);
@@ -55,10 +53,10 @@ internal static partial class Walker
                 PackUtf8(field, values, buffer, seen);
                 break;
             case Field.Kind.List:
-                PackList(field, values, buffer);
+                PackList(field, values, buffer, seen);
                 break;
             case Field.Kind.Dict:
-                PackDict(field, values, buffer);
+                PackDict(field, values, buffer, seen);
                 break;
             case Field.Kind.Bool:
                 PackBool(field, seen);
@@ -114,48 +112,6 @@ internal static partial class Walker
         return null;
     }
 
-    private static void PackFlags(
-        Field field,
-        IReadOnlyDictionary<string, object?> values,
-        List<byte> buffer,
-        Scope seen)
-    {
-        var at = buffer.Count;
-        buffer.Add(0);
-        byte flags = 0;
-        for (var i = 0; i < field.Children.Length; i++)
-        {
-            var inner = field.Children[i].Inner!;
-            if (!BitOn(values, inner, seen))
-                continue;
-            flags |= (byte)(1 << i);
-            PackBitField(inner, values, buffer, seen);
-        }
-        buffer[at] = flags;
-    }
-
-    private static void PackFlagByte(
-        Field field,
-        IReadOnlyDictionary<string, object?> values,
-        List<byte> buffer,
-        Scope seen)
-    {
-        var flags = field.FlagOwner!.Compute(values, seen);
-        seen.SetFlagByte(field.FlagOwner!, flags);
-        buffer.Add(flags);
-    }
-
-    private static void PackFlagBit(
-        Field field,
-        IReadOnlyDictionary<string, object?> values,
-        List<byte> buffer,
-        Scope seen)
-    {
-        if ((seen.FlagByte(field.FlagOwner!) & (1 << field.BitIndex)) == 0)
-            return;
-        PackBitField(field.Inner!, values, buffer, seen);
-    }
-
     // Decided on the fields written so far in this scope, as unpack decides it on the fields read.
     private static void PackWhen(
         Field field,
@@ -196,7 +152,7 @@ internal static partial class Walker
             return;
         }
         var nested = (RowValues)RequireValue(field, values);
-        var inner = new Scope();
+        var inner = seen.Fresh();
         foreach (var child in field.Children)
             PackField(child, nested, buffer, inner);
     }
@@ -214,53 +170,6 @@ internal static partial class Walker
         for (var i = 0; i < width; i++)
             buffer.Add(tmp[i]);
         seen[field.Name] = value;
-    }
-
-    private static object? UnpackFlags(
-        Field field,
-        ReadOnlySpan<byte> bytes,
-        ref int offset,
-        Scope values)
-    {
-        if (bytes.Length - offset < 1)
-            return new ShortPacket(field.Name, 1, bytes.Length - offset);
-        var flags = bytes[offset++];
-        if (field.Name.Length > 0)
-            values[field.Name] = flags;
-        foreach (var bit in field.Children)
-        {
-            var err = UnpackFlagBit(bit, flags, bytes, ref offset, values);
-            if (err is not null)
-                return err;
-        }
-        return null;
-    }
-
-    private static object? UnpackFlagByte(
-        Field field,
-        ReadOnlySpan<byte> bytes,
-        ref int offset,
-        Scope values)
-    {
-        if (bytes.Length - offset < 1)
-            return new ShortPacket(field.Name, 1, bytes.Length - offset);
-        var flags = bytes[offset++];
-        if (field.Name.Length > 0)
-            values[field.Name] = flags;
-        values.SetFlagByte(field.FlagOwner!, flags);
-        return null;
-    }
-
-    private static object? UnpackFlagBit(
-        Field field,
-        byte flags,
-        ReadOnlySpan<byte> bytes,
-        ref int offset,
-        Scope values)
-    {
-        if ((flags & (1 << field.BitIndex)) == 0)
-            return null;
-        return UnpackField(field.Inner!, bytes, ref offset, values, repeatLists: false);
     }
 
     private static object? UnpackGroup(
@@ -387,32 +296,4 @@ internal static partial class Walker
         else
             values[name] = value;
     }
-
-    private static bool ConditionHolds(Condition condition, IReadOnlyDictionary<string, object?> values)
-    {
-        if (!values.TryGetValue(condition.FieldName, out var actual) || actual is null)
-            return false;
-        return ValuesEqual(actual, condition.Value);
-    }
-
-    private static bool ValuesEqual(object a, object b)
-    {
-        if (a is byte[] aa && b is byte[] bb)
-            return aa.AsSpan().SequenceEqual(bb);
-        if (!IsNumber(a) || !IsNumber(b))
-            return Equals(a, b);
-        if (a is float or double || b is float or double)
-            return SameDouble(
-                Convert.ToDouble(a, CultureInfo.InvariantCulture),
-                Convert.ToDouble(b, CultureInfo.InvariantCulture));
-        return Convert.ToDecimal(a, CultureInfo.InvariantCulture)
-            == Convert.ToDecimal(b, CultureInfo.InvariantCulture);
-    }
-
-    // A float compares as a double by Java's Double.compare: NaN equals NaN and -0.0 differs from 0.0.
-    private static bool SameDouble(double a, double b) =>
-        double.IsNaN(a) ? double.IsNaN(b) : a == b && (BitConverter.DoubleToInt64Bits(a) < 0) == (BitConverter.DoubleToInt64Bits(b) < 0);
-
-    private static bool IsNumber(object value) =>
-        value is byte or sbyte or ushort or short or uint or int or ulong or long or float or double or decimal;
 }

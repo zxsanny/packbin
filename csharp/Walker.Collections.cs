@@ -5,7 +5,11 @@ namespace Packbin;
 
 internal static partial class Walker
 {
-    private static void PackList(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    private static void PackList(
+        Field field,
+        IReadOnlyDictionary<string, object?> values,
+        List<byte> buffer,
+        Scope seen)
     {
         if (RequireValue(field, values) is not IList items)
             throw new ArgumentException($"{field.Name}: expected list");
@@ -16,13 +20,13 @@ internal static partial class Walker
         var child = field.Children[0];
         foreach (var item in items)
         {
-            PackField(child, ElementValues(values, child, item), buffer, new Scope());
+            PackField(child, ElementValues(values, child, item), buffer, seen.Fresh());
         }
     }
 
-    // A typed row's element has values of its own. A dictionary row's element sees the row's values with its own added;
-    // a group's element is the row of its members that unpack returns, so those are the values added. A flags element
-    // sees its members only: a name the row around it also holds must not set a bit the element leaves clear. A flags
+    // An element has values of its own, typed row or dictionary row: a group's element is the row of its members that
+    // unpack returns, any other element is its one value. A name the row around it also holds is never lent to it, so a
+    // missing member is reported by name (and a flags element cannot set a bit the element leaves clear). A flags
     // element that is a row of its members by name (what unpack returns) is that row even in a typed row; only an
     // instance of the row type goes through its accessors.
     private static IReadOnlyDictionary<string, object?> ElementValues(
@@ -39,15 +43,9 @@ internal static partial class Walker
             };
         if (values is RowValues)
             return RowBinding.Element(element, item);
-        var slice = values.ToDictionary(p => p.Key, p => p.Value);
         if (element is { Type: Field.Kind.Group, Children.Length: > 0 } && item is IReadOnlyDictionary<string, object?> members)
-        {
-            foreach (var pair in members)
-                slice[pair.Key] = pair.Value;
-            return slice;
-        }
-        slice[element.Name] = item;
-        return slice;
+            return members.ToDictionary(p => p.Key, p => p.Value);
+        return new Dictionary<string, object?> { [element.Name] = item };
     }
 
     private static object? UnpackList(
@@ -81,7 +79,11 @@ internal static partial class Walker
         return null;
     }
 
-    private static void PackDict(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    private static void PackDict(
+        Field field,
+        IReadOnlyDictionary<string, object?> values,
+        List<byte> buffer,
+        Scope seen)
     {
         if (RequireValue(field, values) is not IDictionary map)
             throw new ArgumentException($"{field.Name}: expected dictionary");
@@ -106,7 +108,7 @@ internal static partial class Walker
             buffer.Add((byte)keyBytes.Length);
             buffer.Add((byte)(keyBytes.Length >> 8));
             buffer.AddRange(keyBytes);
-            PackField(child, ElementValues(values, child, value), buffer, new Scope());
+            PackField(child, ElementValues(values, child, value), buffer, seen.Fresh());
         }
     }
 

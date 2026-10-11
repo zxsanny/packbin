@@ -2,9 +2,15 @@ package packbin;
 
 import java.nio.ByteBuffer;
 
+/** The output of one pack call, with the most rounds its scheme lets a {@code times} write. */
 final class ByteSink {
+    final int maxRounds;
     private byte[] buf = new byte[32];
     private int size;
+
+    ByteSink(int maxRounds) {
+        this.maxRounds = maxRounds;
+    }
 
     void write(byte b) {
         ensure(1);

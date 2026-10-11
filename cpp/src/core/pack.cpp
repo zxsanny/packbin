@@ -75,8 +75,12 @@ Result pack_flag_byte(Pack& p, std::size_t i, void* obj) {
   Field const* t = p.t;
   std::uint8_t byte = 0;
   for (std::size_t j = i + 1; j < p.n; ++j) {
-    if (t[j].kind == Kind::FlagBit && t[j].ref == static_cast<std::int16_t>(i) &&
-        present(t, j + 1, obj))
+    if (t[j].kind != Kind::FlagBit || t[j].ref != static_cast<std::int16_t>(i))
+      continue;
+    // A body whose source is written after this byte cannot be read back (see `Field::late`).
+    if (t[j].late != 0 && present(t, j + t[j].late, obj))
+      return bad(p.w, t[j + t[j].late]);
+    if (present(t, j + 1, obj))
       byte = static_cast<std::uint8_t>(byte | (1u << t[j].bit));
   }
   return put_num<std::uint8_t>(p.w, byte, false, t[i].id);

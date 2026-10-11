@@ -225,12 +225,12 @@ describe("when and counts read what pack wrote", () => {
     assert.deepEqual(row, { on: true, v: 7 })
   })
 
-  it("a when on an unwritten field compares undefined, as unpack does (flag bit clear)", () => {
+  it("a when on an unwritten field never matches, as unpack does (flag bit clear)", () => {
     // Arrange
     const layout = scheme<Row>(
       1,
       flags(0, [u8(0, (x) => x.a)]),
-      when(1, eq(0, undefined), [u8(1, (x) => x.b)]),
+      when(1, eq(0, 0), [u8(1, (x) => x.b)]),
     )
 
     // Act
@@ -238,23 +238,23 @@ describe("when and counts read what pack wrote", () => {
     const { result, row } = unpack(layout, wire)
 
     // Assert
-    assert.equal(wire, "010007")
+    assert.equal(wire, "0100")
     assert.deepEqual(result, { ok: true })
-    assert.deepEqual(row, { b: 7 })
+    assert.deepEqual(row, {})
   })
 
-  it("a when on an unwritten field compares undefined, as unpack does (field skipped by a when)", () => {
+  it("a when on an unwritten field never matches, as unpack does (field skipped by a when)", () => {
     // Arrange
-    const layout = skipN(when(2, eq(1, undefined), [u8(2, (x) => x.v)]))
+    const layout = skipN(when(2, eq(1, 0), [u8(2, (x) => x.v)]))
 
     // Act
     const wire = hex(BinaryPacker.pack(layout, { p: 1, v: 4 }))
     const { result, row } = unpack(layout, wire)
 
     // Assert
-    assert.equal(wire, "010104")
+    assert.equal(wire, "0101")
     assert.deepEqual(result, { ok: true })
-    assert.deepEqual(row, { p: 1, v: 4 })
+    assert.deepEqual(row, { p: 1 })
   })
 })
 

@@ -47,12 +47,13 @@ export function roundNames(fields: Field[], packing: boolean): Set<string> {
 }
 
 // What a repeat or times asks of its values on every pack, worked out once when the scheme binds it.
-export type RoundShape = { names: Set<string>; dictNames: string[] }
+export type RoundShape = { names: Set<string>; dictNames: string[]; bufferNames: string[] }
 
 export function makeRoundShape(fields: Field[]): RoundShape {
   const dictNames: string[] = []
-  collectDictNames(fields, dictNames)
-  return { names: roundNames(fields, true), dictNames }
+  const bufferNames: string[] = []
+  collectCollectionNames(fields, dictNames, bufferNames)
+  return { names: roundNames(fields, true), dictNames, bufferNames }
 }
 
 // The shape `bindReferences` filled in; a repeat or times no Scheme bound has none.
@@ -62,19 +63,24 @@ export function roundShape(f: Extract<Field, { kind: "repeat" | "times" }>): Rou
   return shape
 }
 
-function collectDictNames(fields: Field[], into: string[]): void {
+// The dict names and the byte-buffer names (`bytes`, `sized`) a round holds one of per round.
+function collectCollectionNames(fields: Field[], dicts: string[], buffers: string[]): void {
   for (const f of fields) {
     switch (f.kind) {
       case "dict":
-        into.push(f.name)
+        dicts.push(f.name)
+        break
+      case "bytes":
+      case "sized":
+        buffers.push(f.name)
         break
       case "when":
       case "flags":
       case "group":
-        collectDictNames(f.fields, into)
+        collectCollectionNames(f.fields, dicts, buffers)
         break
       case "flagBit":
-        collectDictNames([f.field], into)
+        collectCollectionNames([f.field], dicts, buffers)
         break
     }
   }
@@ -90,6 +96,34 @@ export function refuseLoneDicts(dictNames: string[], values: Value): void {
       )
     }
   }
+}
+
+// One byte buffer given for a bytes or sized name of a round would reach every round, so it is refused:
+// a buffer per round goes in a list, as for a dictionary.
+export function refuseLoneBuffers(bufferNames: string[], values: Value): void {
+  for (const name of bufferNames) {
+    const v = values[name]
+    if (v instanceof Uint8Array || v instanceof ArrayBuffer) {
+      throw new RangeError(
+        `${name}: a byte buffer in a repeat or times round needs a list with one buffer per round`,
+      )
+    }
+  }
+}
+
+// Unpack refuses a round past the scheme's `maxRounds`, so pack refuses a times count past it before
+// it writes any round: a lone scalar goes to every round, and a huge count would loop that many times.
+export function refuseRoundsOverLimit(
+  f: Extract<Field, { kind: "times" }>,
+  names: Set<string>,
+  count: number,
+  limit: number,
+): void {
+  if (count <= limit) return
+  const first = names.values().next()
+  throw new RangeError(
+    `${first.done ? `times ${f.anchor}` : first.value}: the times count is ${count}, above the limit of ${limit} rounds`,
+  )
 }
 
 function addNames(f: Field, packing: boolean, names: Set<string>): void {

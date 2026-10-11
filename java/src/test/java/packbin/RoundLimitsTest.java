@@ -21,6 +21,7 @@ final class RoundLimitsTest {
         repeatRefusedAtTheNextRound();
         timesRefusedAtTheNextRound();
         timesAtTheDefaultLimit();
+        packRefusesACountAboveTheLimit();
         slotLimit();
         slotTotalSpansFieldsAndElements();
         refusedMegabyteIsBoundedByTheLimits();
@@ -119,6 +120,45 @@ final class RoundLimitsTest {
         Map[] got = new Map[1];
         BinaryPacker.unpack(timesPacket(new byte[] {-1, -1, 0, 0}, 65_535), scheme.on(row -> got[0] = row));
         PackbinTest.expectEq("AC-5 65,535 entries", 65_535, ((List) got[0].get("k")).size());
+    }
+
+    /** AZ-2329: pack of a times refuses a count above the scheme's maxRounds before it writes a round. */
+    private static void packRefusesACountAboveTheLimit() {
+        // Arrange
+        Scheme<Map> scheme = u32TimesOfK();
+        String over = "times: count 65536 is above the limit of 65535 rounds";
+        // Act
+        byte[] atLimit = BinaryPacker.pack(scheme, Maps.map("n", 65_535, "k", 7));
+        Map[] back = new Map[1];
+        Object err = BinaryPacker.unpack(atLimit, scheme.on(row -> back[0] = row));
+        byte[] raised = BinaryPacker.pack(scheme.withLimits(70_000, NO_SLOT_LIMIT), Maps.map("n", 70_000, "k", 7));
+        // Assert
+        PackbinTest.expectEq("AZ-2329 AC-1 count above the limit",
+                "times: count 65536 is above the limit of 65535 rounds", refusal(scheme, Maps.map("n", 65_536, "k", 7)));
+        PackbinTest.expectEq("AZ-2329 AC-1 count above the limit, no value", over,
+                refusal(scheme, Maps.map("n", 65_536)));
+        PackbinTest.expectEq("AZ-2329 hostile 2e9 count", "times: count 2000000000 is above the limit of 65535 rounds",
+                refusal(scheme, Maps.map("n", 2_000_000_000, "k", 7)));
+        PackbinTest.expectEq("AZ-2329 hostile 4e9 count (not an int)", "times: item count -294967296",
+                refusal(scheme, Maps.map("n", 4_000_000_000L, "k", 7)));
+        PackbinTest.expectEq("AZ-2329 lowered limit refuses 4", "times: count 4 is above the limit of 3 rounds",
+                refusal(scheme.withLimits(3, NO_SLOT_LIMIT), Maps.map("n", 4, "k", 7)));
+        PackbinTest.expectEq("AZ-2329 lowered limit packs 3", 8,
+                BinaryPacker.pack(scheme.withLimits(3, NO_SLOT_LIMIT), Maps.map("n", 3, "k", 7)).length);
+        PackbinTest.expectEq("AZ-2329 AC-2 length at the limit", 5 + 65_535, atLimit.length);
+        PackbinTest.expectTrue("AZ-2329 AC-2 first bytes", Arrays.equals(Arrays.copyOf(atLimit, 6), hex("01ffff000007")));
+        PackbinTest.expectTrue("AZ-2329 AC-2 round trips", err == null
+                && ((List) back[0].get("k")).size() == 65_535 && ((List) back[0].get("k")).get(0).equals(7));
+        PackbinTest.expectEq("AZ-2329 AC-3 raised limit packs 70,000", 5 + 70_000, raised.length);
+    }
+
+    private static String refusal(Scheme<Map> scheme, Map row) {
+        try {
+            BinaryPacker.pack(scheme, row);
+        } catch (IllegalArgumentException ex) {
+            return ex.getMessage();
+        }
+        return "packed";
     }
 
     private static void slotLimit() {

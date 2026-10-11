@@ -188,6 +188,27 @@ public class LoneRoundValueTests
         Assert.Equal(Hex(raw), Hex(again));
     }
 
+    // AZ-2332: C# already refused a lone byte buffer in a round (AZ-2182); a list with one buffer per round packs.
+    [Fact]
+    public void Pack_PerRoundBytesInATimes_PacksReadsAndRepacksTheSameBytes()
+    {
+        // Arrange
+        var scheme = InRound("bytes", times: true);
+        var values = new Dictionary<string, object?>
+        {
+            ["C"] = (byte)2,
+            ["Raw"] = Rounds(new byte[] { 1, 2 }, new byte[] { 3, 4 }),
+        };
+
+        // Act
+        var raw = BinaryPacker.Pack(scheme, values);
+        var again = BinaryPacker.Pack(scheme, BinaryPacker.Read(scheme, raw).Values);
+
+        // Assert
+        Assert.Equal("010201020304", Hex(raw));
+        Assert.Equal(Hex(raw), Hex(again));
+    }
+
     [Theory]
     [InlineData("sized", "0102" + "0909" + "01" + "08")]
     [InlineData("bits", "0103" + "05" + "02" + "02")]

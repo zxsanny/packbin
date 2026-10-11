@@ -69,6 +69,7 @@ std::string pack_times(std::uint8_t count, std::size_t listed) {
 
 std::string pack_times_list_too_long() { return pack_times(2, 3); }
 std::string pack_times_list_too_short() { return pack_times(2, 1); }
+std::string pack_times_zero_with_values() { return pack_times(0, 1); }
 
 // repeat(flags(bool on, u8 n)) with on = [true, false, true] and n = [1, 2, 3].
 struct FlagRound {
@@ -103,6 +104,7 @@ constexpr PackHandler kPackHandlers[] = {
     {"pack_missing_required_value", pack_missing_required_value},
     {"pack_times_list_too_long", pack_times_list_too_long},
     {"pack_times_list_too_short", pack_times_list_too_short},
+    {"pack_times_zero_with_values", pack_times_zero_with_values},
     {"pack_aligned_round_row", pack_aligned_round_row},
 };
 

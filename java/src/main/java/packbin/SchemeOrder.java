@@ -1,5 +1,6 @@
 package packbin;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -88,7 +89,7 @@ final class SchemeOrder {
      * nested row in it needs a child factory (AZ-2101), as one below a nested row that has a factory does.
      */
     private static void walkScope(List<Field> fields, int[] next, boolean typed) {
-        Map<Integer, Field.Kind> earlier = new HashMap<>();
+        Map<Integer, Field> earlier = new HashMap<>();
         for (Field field : fields) {
             walk(field, earlier, next, false, typed);
         }
@@ -100,7 +101,7 @@ final class SchemeOrder {
      * nothing else (C++ {@code check_shape}). An empty anchored group has no accessor, so its bit could never be
      * set: it is refused wherever it stands. An empty nested row sets its bit when its member is present.
      */
-    private static void walk(Field field, Map<Integer, Field.Kind> earlier, int[] next, boolean isBit, boolean typed) {
+    private static void walk(Field field, Map<Integer, Field> earlier, int[] next, boolean isBit, boolean typed) {
         switch (field.kind) {
             case FLAGS -> {
                 requireAnchor(field, next);
@@ -195,37 +196,51 @@ final class SchemeOrder {
     }
 
     /** A count is read as a number, so it names an integer field; a bool is refused (AZ-2126). */
-    private static void requireCount(Field field, Map<Integer, Field.Kind> earlier) {
+    private static void requireCount(Field field, Map<Integer, Field> earlier) {
         String referrer = field.kind.name().toLowerCase(Locale.ROOT) + " " + field.id + " takes its count from field "
                 + field.countId;
-        Field.Kind source = earlier.get(field.countId);
+        Field source = earlier.get(field.countId);
         if (source == null) {
             throw new IllegalArgumentException(referrer + ", which is not an earlier integer field in its scope");
         }
-        if (source == Field.Kind.BOOL) {
+        if (source.kind == Field.Kind.BOOL) {
             throw new IllegalArgumentException(referrer + ", which is a bool; a count names an integer field");
         }
     }
 
-    /** A bool is true or clear on the wire and a clear bit is absent, so a when on a bool compares only with true. */
-    private static void requireWhenSource(Field when, Map<Integer, Field.Kind> earlier) {
+    /**
+     * A bool is true or clear on the wire and a clear bit is absent, so a when on a bool compares only with true. An
+     * integer source is compared only with a value it could hold (AZ-2338): the value is checked as pack would check
+     * it, so a string, a fraction, a boolean, NaN or a number past the range of the source never builds a when that
+     * can not match.
+     */
+    private static void requireWhenSource(Field when, Map<Integer, Field> earlier) {
         int id = when.condition.fieldId;
-        Field.Kind source = earlier.get(id);
+        Field source = earlier.get(id);
         if (source == null) {
             throw new IllegalArgumentException("when " + when.id + " tests field " + id + NOT_EARLIER);
         }
-        if (source == Field.Kind.BOOL && !Boolean.TRUE.equals(when.condition.value)) {
-            throw new IllegalArgumentException("when " + when.id + " tests bool field " + id + " against "
-                    + when.condition.value + "; a bool is compared only with true");
+        if (source.kind == Field.Kind.BOOL) {
+            if (!Boolean.TRUE.equals(when.condition.value)) {
+                throw new IllegalArgumentException("when " + when.id + " tests bool field " + id + " against "
+                        + when.condition.value + "; a bool is compared only with true");
+            }
+            return;
+        }
+        try {
+            Scalars.writeScalar(source, when.condition.value, ByteBuffer.allocate(8));
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("when " + when.id + " tests field " + id + " against "
+                    + when.condition.value + ", which that field can not hold (" + ex.getMessage() + ")", ex);
         }
     }
 
-    private static void take(Field field, Map<Integer, Field.Kind> earlier, int[] next) {
+    private static void take(Field field, Map<Integer, Field> earlier, int[] next) {
         if (field.id != next[0]) {
             throw new IllegalArgumentException("field id " + field.id + " must be " + next[0]);
         }
         if (isCountSource(field)) {
-            earlier.put(field.id, field.kind);
+            earlier.put(field.id, field);
         }
         next[0]++;
     }

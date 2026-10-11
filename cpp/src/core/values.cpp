@@ -40,12 +40,14 @@ bool any_child_present(Field const* t, std::size_t i, void* obj) {
 }
 
 // A times is present when its count is above zero or the row holds rounds (a count of zero
-// with rounds is refused on pack, not dropped). A count that is not in the row is no round.
+// with rounds is refused on pack, not dropped). Rounds whose count is not in the row are present
+// too, so pack refuses them; a count that is not in the row and no rounds is no round.
 bool times_present(Field const* t, Field const& f, void* m, void* obj) {
+  bool rounds = m != nullptr && *f.count(m) != 0;
   std::int64_t count = 0;
   if (f.ref < 0 || !read_int(t[f.ref], obj, count))
-    return false;
-  return count != 0 || (m != nullptr && *f.count(m) != 0);
+    return rounds;
+  return count != 0 || rounds;
 }
 
 }  // namespace
@@ -91,7 +93,7 @@ bool read_int(Field const& f, void* obj, std::int64_t& out) {
   void* m = member(f, obj);
   if (m == nullptr)
     return false;
-  if (f.kind == Kind::Bool) {
+  if (f.kind == Kind::Bool || (f.kind == Kind::Group && f.span == 1)) {
     bool on = flag_on(f, m);
     out = on ? 1 : 0;
     return true;

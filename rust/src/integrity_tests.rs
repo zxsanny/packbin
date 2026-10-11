@@ -57,7 +57,7 @@ fn when_skips_its_members_when_the_numbers_differ() {
 fn when_compares_a_negative_source_by_value() {
     // Arrange
     let same = when_scheme(i8("0"), Value::I64(-1));
-    let other = when_scheme(i8("0"), Value::U8(255));
+    let other = when_scheme(i8("0"), Value::I16(-2));
 
     // Act
     let matched = pack(&same, &row(Value::I8(-1))).expect("pack");
@@ -73,7 +73,7 @@ fn when_compares_u64_above_i64_max_by_value() {
     // Arrange
     let top = u64::MAX;
     let same = when_scheme(u64("0"), Value::U64(top));
-    let wrapped = when_scheme(u64("0"), Value::I64(-1));
+    let wrapped = when_scheme(u64("0"), Value::I64(i64::MAX));
     let mut wire = vec![1];
     wire.extend_from_slice(&top.to_le_bytes());
 

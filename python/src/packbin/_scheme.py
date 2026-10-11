@@ -93,7 +93,7 @@ class BinaryPacker:
     def pack(scheme: Scheme[T], row: T | Mapping[str, Any]) -> bytes:
         buf = bytearray()
         buf.append(scheme._type_number)
-        pack_nodes(buf, scheme._fields, row)
+        pack_nodes(buf, scheme._fields, row, max_rounds=scheme._max_rounds)
         return _builtin_bytes(buf)
 
     @staticmethod

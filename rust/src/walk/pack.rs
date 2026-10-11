@@ -1,5 +1,7 @@
-use super::flag_bits::{collect_flag_bits, member_on, FlagInners};
-use super::times::{check_aligned, check_lists, check_longer, rounds_mismatch, slice_times};
+use super::flag_bits::{check_split_bit, collect_flag_bits, member_on, FlagInners};
+use super::times::{
+    check_aligned, check_lists, check_longer, check_round_cap, rounds_mismatch, slice_times,
+};
 use super::written::{borrowed_count, written, Written};
 use crate::field::{field_name, times_name, Field, FieldKind, FloatKind, IntKind, MapScheme};
 use crate::value::{
@@ -23,12 +25,13 @@ fn packed_bytes(width: u8, count: usize) -> usize {
 fn pack_round<'r>(
     members: &[Field],
     round: &'r Values,
+    max_rounds: usize,
     out: &mut Vec<u8>,
 ) -> Result<Written<'r>, PackError> {
     let mut inners = FlagInners::new();
     collect_flag_bits(members, &mut inners);
     let mut wrote = Written::new();
-    pack_fields(members, round, &inners, &mut wrote, out)?;
+    pack_fields(members, round, &inners, max_rounds, &mut wrote, out)?;
     Ok(wrote)
 }
 
@@ -100,11 +103,12 @@ fn pack_fields<'v>(
     fields: &[Field],
     values: &'v Values,
     inners: &FlagInners<'_>,
+    max_rounds: usize,
     wrote: &mut Written<'v>,
     out: &mut Vec<u8>,
 ) -> Result<(), PackError> {
     for field in fields {
-        pack_one(field, values, inners, wrote, out)?;
+        pack_one(field, values, inners, max_rounds, wrote, out)?;
     }
     Ok(())
 }
@@ -113,6 +117,7 @@ fn pack_one<'v>(
     field: &Field,
     values: &'v Values,
     inners: &FlagInners<'_>,
+    max_rounds: usize,
     wrote: &mut Written<'v>,
     out: &mut Vec<u8>,
 ) -> Result<(), PackError> {
@@ -155,7 +160,7 @@ fn pack_one<'v>(
             for (i, member) in members.iter().enumerate() {
                 if member_on(member, values, wrote)? {
                     bits |= 1 << i;
-                    pack_one(member, values, inners, wrote, out)?;
+                    pack_one(member, values, inners, max_rounds, wrote, out)?;
                 }
             }
             out[at] = bits;
@@ -165,6 +170,7 @@ fn pack_one<'v>(
         FieldKind::FlagByte { name, slot } => {
             let mut bits: u8 = 0;
             for (bit, inner) in inners.get(slot).into_iter().flatten() {
+                check_split_bit(inner, values, wrote)?;
                 if member_on(inner, values, wrote)? {
                     bits |= 1 << bit;
                 }
@@ -178,7 +184,7 @@ fn pack_one<'v>(
             slot, bit, inner, ..
         } => {
             if wrote.flag_byte(*slot) & (1 << bit) != 0 {
-                pack_one(inner, values, inners, wrote, out)?;
+                pack_one(inner, values, inners, max_rounds, wrote, out)?;
             }
             Ok(())
         }
@@ -189,7 +195,7 @@ fn pack_one<'v>(
             ..
         } => {
             if wrote.get(field).is_some_and(|v| when_matches(v, expect)) {
-                pack_fields(members, values, inners, wrote, out)?;
+                pack_fields(members, values, inners, max_rounds, wrote, out)?;
             }
             Ok(())
         }
@@ -200,7 +206,7 @@ fn pack_one<'v>(
                 _ => &[],
             };
             for group in groups {
-                pack_round(members, group, out)?;
+                pack_round(members, group, max_rounds, out)?;
             }
             Ok(())
         }
@@ -208,7 +214,7 @@ fn pack_one<'v>(
             if members.is_empty() {
                 wrote.insert(name, Cow::Owned(Value::U8(1)));
             }
-            pack_fields(members, values, inners, wrote, out)
+            pack_fields(members, values, inners, max_rounds, wrote, out)
         }
         FieldKind::Sized { name, count } => {
             let n = as_usize(written(wrote, count)?)
@@ -287,6 +293,7 @@ fn pack_one<'v>(
             ..
         } => {
             let n = borrowed_count(wrote, count, 0, "times")?;
+            check_round_cap(*anchor, count, members, n, max_rounds)?;
             let key = times_name(*anchor);
             match values.get(key.as_ref()) {
                 Some(Some(Value::Groups(rounds))) => {
@@ -296,7 +303,7 @@ fn pack_one<'v>(
                     check_lists(*anchor, members, rounds, values)?;
                     let mut lists = RoundLists::default();
                     for (i, round) in rounds.iter().enumerate() {
-                        lists.add(i, &pack_round(members, round, out)?);
+                        lists.add(i, &pack_round(members, round, max_rounds, out)?);
                     }
                     lists.leave_in(wrote);
                 }
@@ -307,7 +314,7 @@ fn pack_one<'v>(
                     let mut lists = RoundLists::default();
                     for i in 0..n {
                         let round = slice_times(*anchor, members, values, i)?;
-                        lists.add(i, &pack_round(members, &round, out)?);
+                        lists.add(i, &pack_round(members, &round, max_rounds, out)?);
                     }
                     lists.leave_in(wrote);
                 }
@@ -347,7 +354,7 @@ fn pack_one<'v>(
                         slice.insert(name_of(child), Some(item.clone()));
                         let mut elem_wrote = Written::unread();
                         let one = std::slice::from_ref(&**element);
-                        pack_fields(one, &slice, inners, &mut elem_wrote, out)?;
+                        pack_fields(one, &slice, inners, max_rounds, &mut elem_wrote, out)?;
                     }
                     wrote.insert(name, Cow::Borrowed(v));
                     Ok(())
@@ -378,7 +385,7 @@ fn pack_one<'v>(
                         slice.insert(name_of(child), Some(item.clone()));
                         let mut elem_wrote = Written::unread();
                         let one = std::slice::from_ref(&**element);
-                        pack_fields(one, &slice, inners, &mut elem_wrote, out)?;
+                        pack_fields(one, &slice, inners, max_rounds, &mut elem_wrote, out)?;
                     }
                     wrote.insert(name, Cow::Borrowed(v));
                     Ok(())
@@ -398,6 +405,7 @@ pub fn pack(scheme: &MapScheme, values: &Values) -> Result<Vec<u8>, PackError> {
         &scheme.fields,
         values,
         &inners,
+        scheme.max_rounds,
         &mut Written::new(),
         &mut out,
     )?;

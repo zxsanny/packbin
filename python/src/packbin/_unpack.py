@@ -333,7 +333,7 @@ def unpack_nodes(
                 started += 1
                 before = offset
                 offset, err = unpack_nodes(
-                    data, offset, node.fields, row, seen, lists=round_lists, flag_state=flag_state, budget=budget
+                    data, offset, node.fields, row, {}, lists=round_lists, flag_state=flag_state, budget=budget
                 )
                 if err is not None:
                     return offset, err
@@ -395,7 +395,7 @@ def unpack_nodes(
                     return offset, _bad_value(data, offset, str(node.anchor))
                 before = offset
                 offset, err = unpack_nodes(
-                    data, offset, node.fields, row, seen, lists=round_lists, flag_state=flag_state, budget=budget
+                    data, offset, node.fields, row, {}, lists=round_lists, flag_state=flag_state, budget=budget
                 )
                 if err is not None:
                     return offset, err

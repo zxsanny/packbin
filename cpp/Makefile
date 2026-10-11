@@ -11,7 +11,7 @@ CORE_SRCS := src/core/values.cpp src/core/pack.cpp src/core/unpack.cpp src/core/
 HOST_SRCS := src/os_random.cpp
 # VECTOR_TESTS are shared with the firmware runner; HOST_TESTS need an operating system.
 VECTOR_TESTS := tests/core/scalar_tests.cpp tests/core/scheme_tests.cpp tests/core/grouped_tests.cpp tests/core/counted_tests.cpp tests/core/container_tests.cpp tests/core/session_tests.cpp
-HOST_TESTS := tests/core/main.cpp tests/core/host_tests.cpp tests/core/session_host_tests.cpp tests/core/hostile_host_tests.cpp tests/core/flag_scope_host_tests.cpp tests/core/source_kinds_host_tests.cpp tests/core/flags_when_member_host_tests.cpp tests/core/flags_times_repeat_member_host_tests.cpp
+HOST_TESTS := tests/core/main.cpp tests/core/host_tests.cpp tests/core/session_host_tests.cpp tests/core/hostile_host_tests.cpp tests/core/flag_scope_host_tests.cpp tests/core/source_kinds_host_tests.cpp tests/core/flags_when_member_host_tests.cpp tests/core/flags_times_repeat_member_host_tests.cpp tests/core/split_form_loud_host_tests.cpp tests/core/times_count_zero_host_tests.cpp tests/core/eq_value_checked_host_tests.cpp
 TEST_BIN := build/packbin_tests
 EXPECT_FAIL := ./tests/compile-fail/expect-fail.sh "$(CXX) $(CXXFLAGS) $(CORE_FLAGS) -fsyntax-only"
 
@@ -38,6 +38,7 @@ compile-fail: $(HDRS)
 	@$(EXPECT_FAIL) tests/compile-fail/flag_byte_in_flags_member.cpp "breaks_order<2>|Id = 2\]"
 	@$(EXPECT_FAIL) tests/compile-fail/flag_byte_in_flag_bit_child.cpp "breaks_order<2>|Id = 2\]"
 	@$(EXPECT_FAIL) tests/compile-fail/when_eq_bool_false.cpp "breaks_order<1>|Id = 1\]"
+	@$(EXPECT_FAIL) tests/compile-fail/when_eq_out_of_range.cpp "breaks_order<1>|Id = 1\]"
 
 test: $(TEST_BIN) compile-fail
 	./$(TEST_BIN)

@@ -30,11 +30,15 @@ mod element_tests;
 #[cfg(test)]
 mod eq_bool_true_tests;
 #[cfg(test)]
+mod eq_range_tests;
+#[cfg(test)]
 mod flag_bits_tests;
 #[cfg(test)]
 mod flag_group_tests;
 #[cfg(test)]
 mod flag_presence_tests;
+#[cfg(test)]
+mod flags_member_scope_tests;
 #[cfg(test)]
 mod flags_round_member_tests;
 #[cfg(test)]
@@ -46,7 +50,11 @@ mod hostile_tests;
 #[cfg(test)]
 mod integrity_tests;
 #[cfg(test)]
+mod lone_bytes_in_round_tests;
+#[cfg(test)]
 mod name_scope_tests;
+#[cfg(test)]
+mod pack_round_cap_tests;
 #[cfg(test)]
 mod packbin_tests;
 #[cfg(test)]
@@ -55,6 +63,10 @@ mod round_tests;
 mod scope_tests;
 #[cfg(test)]
 mod session_hostile_tests;
+#[cfg(test)]
+mod split_form_loud_tests;
+#[cfg(test)]
+mod times_count_zero_tests;
 #[cfg(test)]
 mod times_lone_value_tests;
 #[cfg(test)]

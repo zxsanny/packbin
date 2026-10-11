@@ -16,8 +16,8 @@ pub(super) fn round_lists(rounds: &[Values]) -> HashMap<Name, Vec<Value>> {
 }
 
 /// Round `index` of a `times` given as one list per name. A list gives one item per round and
-/// any other value is used in every round; a dictionary is the exception, because a lone one
-/// reads as a value for every round that was meant for one.
+/// any other value is used in every round; a dictionary and a byte buffer are the exceptions,
+/// because a lone one reads as a value for every round that was meant for one.
 pub(super) fn slice_times(
     anchor: u32,
     members: &[Field],
@@ -41,6 +41,12 @@ pub(super) fn slice_times(
                      dictionary per round"
                 )));
             }
+            Some(Some(Value::Bytes(_))) if holds_bytes(child) => {
+                return Err(PackError::Type(format!(
+                    "times at id {anchor}: '{name}' is one byte buffer; give a list with one \
+                     buffer per round"
+                )));
+            }
             Some(Some(v)) => {
                 slice.insert(name_of(name), Some(v.clone()));
             }
@@ -54,6 +60,26 @@ pub(super) fn rounds_mismatch(anchor: u32, count: usize, rounds: usize) -> PackE
     PackError::Type(format!(
         "times at id {anchor}: count {count}, {rounds} rounds"
     ))
+}
+
+/// Unpack refuses a round past `max_rounds`; pack refuses a count past it before it writes (or
+/// slices) any round, so a count of billions with a lone value cannot loop for hours or fill memory.
+pub(super) fn check_round_cap(
+    anchor: u32,
+    count_field: &str,
+    members: &[Field],
+    count: usize,
+    max_rounds: usize,
+) -> Result<(), PackError> {
+    if count <= max_rounds {
+        return Ok(());
+    }
+    let names: Vec<&str> = members.iter().filter_map(data_name).collect();
+    Err(PackError::Type(format!(
+        "times at id {anchor}: count {count} (from '{count_field}') is over the {max_rounds} \
+         rounds a scheme allows; members '{}'",
+        names.join("', '")
+    )))
 }
 
 /// A `times` with count 0 writes no round, and what is given for its rounds (rounds, or a list
@@ -74,6 +100,14 @@ pub(super) fn check_no_rounds(
             check_aligned(anchor, members, values)?;
             check_longer(anchor, members, values, 0)
         }
+    }
+}
+
+fn holds_bytes(field: &Field) -> bool {
+    match &field.kind {
+        FieldKind::Bytes { .. } | FieldKind::Sized { .. } => true,
+        FieldKind::FlagBit { inner, .. } => holds_bytes(inner),
+        _ => false,
     }
 }
 

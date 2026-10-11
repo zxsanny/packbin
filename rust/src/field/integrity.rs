@@ -1,11 +1,12 @@
 use super::shape::label;
-use super::{Field, FieldKind};
+use super::{Field, FieldKind, IntKind};
 use crate::value::{as_int, Name, Value};
 
 /// Checks what a `when` reads and what a `list` or `dict` element may be, so a scheme the
 /// walker cannot carry fails when it is built instead of losing data.
 ///
-/// - A `when` tests an integer or bool field against an integer value, and a `when` or a count
+/// - A `when` tests an integer or bool field against an integer value that field can hold (an
+///   `eq(u8, 300)` could never match), and a `when` or a count
 ///   (`sized`, `bits`, `packed`, `times`) names a field this scope declared before it. A name
 ///   outside the scope (outside or inside an earlier `repeat`, `times`, `list` or `dict` body)
 ///   or declared nowhere is refused, whether it is an id or a name.
@@ -23,11 +24,28 @@ pub(crate) fn check_integrity(fields: &[Field]) {
     check_seq(fields, &mut Seen::new());
 }
 
+/// What a name holds, for the checks of a `when` and a count. An integer carries the lowest and
+/// highest value it can hold.
 #[derive(Clone, Copy, PartialEq)]
 enum Source {
-    Integer,
+    Integer(i128, i128),
     Bool,
     Other,
+}
+
+const BYTE: Source = Source::Integer(0, 255);
+
+fn int_source(kind: IntKind) -> Source {
+    match kind {
+        IntKind::U8 => BYTE,
+        IntKind::U16 => Source::Integer(0, i128::from(u16::MAX)),
+        IntKind::U32 => Source::Integer(0, i128::from(u32::MAX)),
+        IntKind::U64 => Source::Integer(0, i128::from(u64::MAX)),
+        IntKind::I8 => Source::Integer(i128::from(i8::MIN), i128::from(i8::MAX)),
+        IntKind::I16 => Source::Integer(i128::from(i16::MIN), i128::from(i16::MAX)),
+        IntKind::I32 => Source::Integer(i128::from(i32::MIN), i128::from(i32::MAX)),
+        IntKind::I64 => Source::Integer(i128::from(i64::MIN), i128::from(i64::MAX)),
+    }
 }
 
 /// The names one scope has declared so far and what each holds. A `repeat` or `times` round
@@ -42,9 +60,8 @@ fn check_seq(fields: &[Field], seen: &mut Seen) {
 
 fn check_one(field: &Field, seen: &mut Seen) {
     match &field.kind {
-        FieldKind::Int { name, .. } | FieldKind::FlagByte { name, .. } => {
-            seen.push((name.clone(), Source::Integer));
-        }
+        FieldKind::Int { name, kind, .. } => seen.push((name.clone(), int_source(*kind))),
+        FieldKind::FlagByte { name, .. } => seen.push((name.clone(), BYTE)),
         FieldKind::Float { name, .. }
         | FieldKind::Bytes { name, .. }
         | FieldKind::Utf8 { name } => seen.push((name.clone(), Source::Other)),
@@ -55,11 +72,15 @@ fn check_one(field: &Field, seen: &mut Seen) {
             seen.push((name.clone(), Source::Other));
         }
         FieldKind::U2 { names } => {
-            seen.extend(names.iter().map(|name| (name.clone(), Source::Integer)));
+            seen.extend(
+                names
+                    .iter()
+                    .map(|name| (name.clone(), Source::Integer(0, 3))),
+            );
         }
         FieldKind::Flags { name, members, .. } => {
             check_seq(members, seen);
-            seen.push((name.clone(), Source::Integer));
+            seen.push((name.clone(), BYTE));
         }
         FieldKind::Group { name, members, .. } => {
             if members.is_empty() {
@@ -113,7 +134,7 @@ fn declared(owner: &str, name: &Name, seen: &Seen) -> Source {
 }
 
 fn check_count(owner: &str, name: &Name, seen: &Seen) {
-    if declared(owner, name, seen) != Source::Integer {
+    if !matches!(declared(owner, name, seen), Source::Integer(..)) {
         panic!("{owner} names field \"{name}\", which is not an integer");
     }
 }
@@ -128,6 +149,14 @@ fn check_when(anchor: u32, tested: &Name, expect: &Value, seen: &Seen) {
             "when at id {anchor} compares field \"{tested}\" with a value that is not an integer"
         );
     };
+    if let Source::Integer(low, high) = source {
+        if number < low || number > high {
+            panic!(
+                "when at id {anchor} compares field \"{tested}\" with {number}, which is outside \
+                 the {low} to {high} that field holds, so the comparison could never match"
+            );
+        }
+    }
     if source == Source::Bool && number != 1 {
         panic!(
             "when at id {anchor} compares bool \"{tested}\" with a value other than true (1); a \

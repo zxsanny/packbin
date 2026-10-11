@@ -24,6 +24,12 @@ struct Marked {
   Opt<std::uint8_t> v;
 };
 
+struct Presence {
+  bool on = false;
+  Opt<std::uint8_t> x;
+  Opt<std::uint8_t> v;
+};
+
 struct Counted {
   bool on = false;
   packbin::View payload;
@@ -98,6 +104,58 @@ void eq_on_an_optional_bool() {
   expect(packbin::validate(good).ok(), "AC-1 Opt<bool> eq(true) builds");
 }
 
+// GCC 16 at -O2 reports a false -Warray-bounds for the copy into the table of a scheme that is invalid on
+// purpose and built at run time (the same scheme as a constexpr value is a compile error, see
+// compile-fail/). The suppression covers the functions from here to the pop below.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+
+// AZ-2334: an empty group is a presence bit, so `eq(emptyGroup, true)` names it like a bool (as
+// Rust does). The empty group takes the id of the field after it; a field of that id wins.
+void eq_on_an_empty_group_builds_and_round_trips() {
+  auto s = packbin::scheme<Gate>(
+      1, packbin::flags(0, packbin::group<&Gate::on>(0)),
+      packbin::when(0, packbin::eq(0, true), packbin::u8<&Gate::v>(0)));
+  expect(packbin::validate(s).ok(), "AZ-2334 eq(emptyGroup, true) builds");
+  Gate row;
+  row.on = true;
+  row.v = 7;
+  std::uint8_t buf[8];
+  auto p = packbin::pack(s, row, buf, sizeof(buf));
+  expect(p.ok() && check::same_hex(buf, p.offset, "010107"), "AZ-2334 packs 010107 (Rust bytes)");
+  Gate back;
+  auto u = packbin::unpack(s, buf, p.offset, back);
+  expect(u.ok() && back.on && back.v.has && back.v.value == 7, "AZ-2334 unpacks");
+  Gate off;
+  off.v = 7;
+  auto q = packbin::pack(s, off, buf, sizeof(buf));
+  expect(q.ok() && check::same_hex(buf, q.offset, "0100"), "AZ-2334 a clear bit leaves the when out");
+  Gate clear;
+  auto r = packbin::unpack(s, buf, q.offset, clear);
+  expect(r.ok() && !clear.on && !clear.v.has, "AZ-2334 clear bit unpacks to nothing");
+}
+
+void eq_on_an_empty_group_other_than_true_is_refused() {
+  auto s = packbin::scheme<Gate>(
+      1, packbin::flags(0, packbin::group<&Gate::on>(0)),
+      packbin::when(0, packbin::eq(0, 0), packbin::u8<&Gate::v>(0)));
+  expect(refused_at(packbin::validate(s), 0), "AZ-2334 eq(emptyGroup, 0) names the when");
+}
+
+void a_field_with_the_id_of_an_empty_group_stays_the_source() {
+  auto s = packbin::scheme<Presence>(
+      1, packbin::flags(0, packbin::group<&Presence::on>(0), packbin::u8<&Presence::x>(0)),
+      packbin::when(1, packbin::eq(0, 5), packbin::u8<&Presence::v>(1)));
+  expect(packbin::validate(s).ok(), "AZ-2334 a field of the same id builds");
+  Presence row;
+  row.x = 5;
+  row.v = 9;
+  std::uint8_t buf[8];
+  auto p = packbin::pack(s, row, buf, sizeof(buf));
+  expect(p.ok() && check::same_hex(buf, p.offset, "01020509"),
+         "AZ-2334 eq(0, 5) still names the u8 after the empty group");
+}
+
 // A `when` names an integer or a bool; anything else is refused.
 void when_on_other_kinds_is_refused() {
   auto flt = packbin::scheme<Float>(
@@ -107,11 +165,6 @@ void when_on_other_kinds_is_refused() {
 }
 
 // A count names an integer field; a bool count is refused.
-// GCC 16 at -O2 reports a false -Warray-bounds for the copy into the table of a scheme that is invalid on
-// purpose and built at run time (the same scheme as a constexpr value is a compile error, see
-// compile-fail/). The suppression covers only this function.
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Warray-bounds"
 void a_bool_count_is_refused() {
   auto sized = packbin::scheme<Counted>(
       1, packbin::flags(0, packbin::boolean<&Counted::on>(0)),
@@ -126,6 +179,9 @@ int run_core_source_kinds_host_tests() {
   eq_on_a_bool_other_than_true_is_refused();
   eq_on_a_bool_with_true_round_trips();
   eq_on_an_optional_bool();
+  eq_on_an_empty_group_builds_and_round_trips();
+  eq_on_an_empty_group_other_than_true_is_refused();
+  a_field_with_the_id_of_an_empty_group_stays_the_source();
   when_on_other_kinds_is_refused();
   a_bool_count_is_refused();
   return check::failures();

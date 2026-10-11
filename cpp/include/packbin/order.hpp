@@ -92,8 +92,10 @@ constexpr int check_subtree(Field const* t, std::size_t i, int next, Check& c) {
 }
 
 // Index of the bound count source with order id `id` that comes before `before` in the scope
-// starting at `scope`, or -1.
+// starting at `scope`, or -1. An empty group is a source too, but it takes the id of the field
+// after it, so a field of that id wins when there is one.
 constexpr int find_ref(Field const* t, std::size_t scope, std::size_t before, int id) {
+  int group = -1;
   std::size_t j = scope;
   while (j < before) {
     Field const& f = t[j];
@@ -101,11 +103,42 @@ constexpr int find_ref(Field const* t, std::size_t scope, std::size_t before, in
       j += f.span;
       continue;
     }
-    if (f.id == id && is_count_source(f.kind) && f.access != nullptr && f.span == 1)
-      return static_cast<int>(j);
+    if (f.id == id && f.access != nullptr && f.span == 1) {
+      if (is_count_source(f.kind))
+        return static_cast<int>(j);
+      if (f.kind == Kind::Group && group < 0)
+        group = static_cast<int>(j);
+    }
     ++j;
   }
-  return -1;
+  return group;
+}
+
+// A `when` source that holds a u2 slot reads 0..3; otherwise the range of its integer type. A
+// presence source (bool or empty group) keeps its own rule (`true` only).
+constexpr bool eq_fits(Field const* t, std::size_t at, std::int64_t value) {
+  for (std::size_t k = 0; k < at; ++k) {
+    if (t[k].kind == Kind::U2 && at < k + t[k].span)
+      return value >= 0 && value <= 3;
+  }
+  switch (t[at].kind) {
+    case Kind::U8:
+      return value >= 0 && value <= 255;
+    case Kind::U16:
+      return value >= 0 && value <= 65535;
+    case Kind::U32:
+      return value >= 0 && value <= 4294967295;
+    case Kind::U64:
+      return value >= 0;
+    case Kind::I8:
+      return value >= -128 && value <= 127;
+    case Kind::I16:
+      return value >= -32768 && value <= 32767;
+    case Kind::I32:
+      return value >= -2147483647 - 1 && value <= 2147483647;
+    default:
+      return true;
+  }
 }
 
 // Index of the flag byte numbered `number` in t[begin, end) before `before`, or -1. A part that
@@ -144,6 +177,22 @@ constexpr int bit_position(Field const* t, std::size_t byte, std::size_t at) {
   return n;
 }
 
+// Sets `late` on the flag bit at `bit`: the first `when` or `times` it decides, directly or
+// inside groups, whose source comes after the flag byte (resolved already).
+constexpr void mark_late(Field* t, std::size_t bit, Check& c) {
+  std::size_t end = bit + t[bit].span;
+  for (std::size_t i = bit + 1; i < end; i += t[i].kind == Kind::Group ? 1 : t[i].span) {
+    bool decided = t[i].kind == Kind::When || t[i].kind == Kind::Times;
+    if (decided && t[i].ref > t[bit].ref) {
+      if (i - bit > 255)
+        c.fail_at(t[i].id);
+      else
+        t[bit].late = static_cast<std::uint8_t>(i - bit);
+      return;
+    }
+  }
+}
+
 constexpr void resolve(Field* t, std::size_t begin, std::size_t end, std::size_t scope,
                        Check& c) {
   for (std::size_t j = begin; j < end && !c.failed; j += t[j].span) {
@@ -166,9 +215,12 @@ constexpr void resolve(Field* t, std::size_t begin, std::size_t end, std::size_t
     if (f.ref_id >= 0) {
       int at = find_ref(t, scope, j, f.ref_id);
       // A bool is a source of a `when` for `true` only: a false bool is absent on the wire, so
-      // the `when` could never match on unpack. A count names an integer field only.
+      // the `when` could never match on unpack. A count names an integer field only. A `when`
+      // whose value its source can never hold could never match either.
       bool bool_ok = f.kind == Kind::When && f.eq == 1;
-      if (at < 0 || (t[at].kind == Kind::Bool && !bool_ok)) {
+      bool presence = at >= 0 && (t[at].kind == Kind::Bool || t[at].kind == Kind::Group);
+      if (at < 0 || (presence && !bool_ok) ||
+          (f.kind == Kind::When && !eq_fits(t, static_cast<std::size_t>(at), f.eq))) {
         c.fail_at(f.id);
         return;
       }
@@ -176,6 +228,8 @@ constexpr void resolve(Field* t, std::size_t begin, std::size_t end, std::size_t
     }
     if (f.span > 1)
       resolve(t, j + 1, j + f.span, is_container(f.kind) ? j + 1 : scope, c);
+    if (f.kind == Kind::FlagBit && !c.failed)
+      mark_late(t, j, c);
   }
 }
 

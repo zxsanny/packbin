@@ -132,6 +132,10 @@ struct Field {
   std::uint8_t width = 0;
   std::int8_t bias = 0;
   std::uint8_t bit = 0;
+  // A flag bit: the distance to the `when` or `times` it decides (itself or inside a group)
+  // whose source is written after its flag byte, or 0. A reader decides that bit where the byte
+  // is read, before the source exists, so pack refuses a body for it.
+  std::uint8_t late = 0;
   std::int64_t eq = 0;
   Access access = nullptr;
   Item item = nullptr;

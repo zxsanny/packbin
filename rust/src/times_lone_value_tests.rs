@@ -94,8 +94,8 @@ fn az2311_ac2_a_lone_scalar_repacks_from_its_own_unpack() {
 }
 
 #[test]
-fn az2311_ac2_a_lone_utf8_and_a_lone_byte_string_are_in_every_round() {
-    // Arrange
+fn az2311_ac2_a_lone_utf8_is_in_every_round_and_a_lone_byte_string_is_refused() {
+    // Arrange: AZ-2332 turned the lone byte string from a broadcast into a refusal
     let text = MapScheme::new(1, vec![u8("0"), times(1, "0", vec![utf8("1"), u8("2")])]);
     let raw = MapScheme::new(
         1,
@@ -117,7 +117,7 @@ fn az2311_ac2_a_lone_utf8_and_a_lone_byte_string_are_in_every_round() {
 
     // Assert
     assert_eq!(text_wire, Ok("01020100610401006105".to_string()));
-    assert_eq!(raw_wire, Ok("0102010204010205".to_string()));
+    assert!(matches!(raw_wire, Err(PackError::Type(m)) if m.contains("'1'")));
 }
 
 // AZ-2311 AC-3

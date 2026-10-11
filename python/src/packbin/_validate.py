@@ -90,6 +90,25 @@ def _require_eq_source(anchor: int, condition: _Eq, visible: dict[int, _Node]) -
             f"{label}: eq names field {condition.field_id}, which is a {_kind_of(source)}; "
             "a when names an integer or a bool field"
         )
+    else:
+        _require_eq_value(label, condition, source)
+
+
+def _require_eq_value(label: str, condition: _Eq, source: _Node) -> None:
+    """An integer source holds only whole numbers in its range, so any other value (a bool, a string, a float,
+    a number out of range) can never match and the `when` would never run."""
+    value = condition.value
+    low, high = (0, 3) if isinstance(source, _U2Slot) else (source.min_v, source.max_v)  # type: ignore[attr-defined]
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(
+            f"{label}: eq tests {_kind_of(source)} field {condition.field_id} against {_shown(value)}; "
+            "an integer field is compared only with an integer"
+        )
+    if value < low or value > high:
+        raise ValueError(
+            f"{label}: eq tests {_kind_of(source)} field {condition.field_id} against {value}, "
+            f"which is outside {low}..{high}"
+        )
 
 
 def _validate_order(

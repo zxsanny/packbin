@@ -7,11 +7,15 @@ namespace Packbin;
 // skipped it, so a repack gives the same bytes.
 internal static partial class Walker
 {
-    private static void PackRepeat(Field field, IReadOnlyDictionary<string, object?> values, List<byte> buffer)
+    private static void PackRepeat(
+        Field field,
+        IReadOnlyDictionary<string, object?> values,
+        List<byte> buffer,
+        Scope seen)
     {
         var names = RoundNames(field, packing: true);
         RequireRoundCollections(field, values);
-        PackRounds(field, names, RoundCount(names, values), values, buffer);
+        PackRounds(field, names, RoundCount(names, values), values, buffer, seen);
     }
 
     private static void PackTimes(
@@ -23,8 +27,19 @@ internal static partial class Walker
         var names = RoundNames(field, packing: true);
         RequireRoundCollections(field, values);
         var count = BorrowedCount(field, seen);
+        RequireRoundsWithinLimit(field, names, count, seen);
         RequireNoExtraRounds(names, count, values);
-        PackRounds(field, names, count, values, buffer);
+        PackRounds(field, names, count, values, buffer, seen);
+    }
+
+    // Unpack refuses a round above the scheme's `maxRounds`, so pack refuses a count above it before any round is
+    // written: a lone scalar is given to every round, and a huge count would otherwise loop and fill the buffer.
+    private static void RequireRoundsWithinLimit(Field field, List<string> names, int count, Scope seen)
+    {
+        var limit = seen.Budget.MaxRounds;
+        if (count > limit)
+            throw new ArgumentException(
+                $"'{(names.Count > 0 ? names[0] : $"times {field.Id}")}': the times count is {count}, above the limit of {limit} rounds");
     }
 
     // A list longer than the count would have its last items dropped. A shorter one runs out in a round that walks
@@ -43,9 +58,10 @@ internal static partial class Walker
         List<string> names,
         int count,
         IReadOnlyDictionary<string, object?> values,
-        List<byte> buffer)
+        List<byte> buffer,
+        Scope outer)
     {
-        var seen = new Scope();
+        var seen = outer.Fresh();
         for (var i = 0; i < count; i++)
         {
             var slice = SliceRound(names, values, i);

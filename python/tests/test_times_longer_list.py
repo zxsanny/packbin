@@ -111,8 +111,8 @@ def test_ac4_a_list_member_with_one_list_per_round_packs_unchanged():
     assert _pack(_list_member(), {"a": 2, "xs": [[1], [2]]}) == "0102010001010002"
 
 
-def test_ac5_a_shorter_list_keeps_its_failure():
-    with pytest.raises(IndexError):
+def test_ac5_a_shorter_list_is_refused_naming_the_member():
+    with pytest.raises(ValueError, match=r"^1: 1 items, times count is 2$"):
         BinaryPacker.pack(_one_member(), {"a": 2, "x": [1]})
 
 

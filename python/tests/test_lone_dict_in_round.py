@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from packbin import BinaryPacker, Scheme, bytes as raw_bytes, dict as map_field, flags, repeat, times, u8, utf8
+from packbin import BinaryPacker, Scheme, dict as map_field, flags, repeat, times, u8, utf8
 
 
 def _entry():
@@ -94,14 +94,6 @@ def test_az_2308_a_lone_string_for_a_utf8_name_keeps_broadcasting():
     raw = BinaryPacker.pack(scheme, {"n": 2, "s": "ab"})
 
     assert raw.hex() == "01020200616202006162"
-
-
-def test_az_2308_a_lone_bytes_for_a_bytes_name_keeps_broadcasting():
-    scheme = Scheme(1, dict, u8(0, lambda row: row["n"]), times(1, 0, raw_bytes(1, lambda row: row["b"], 1)))
-
-    raw = BinaryPacker.pack(scheme, {"n": 2, "b": b"a"})
-
-    assert raw.hex() == "01026161"
 
 
 def _flags_times_scheme() -> Scheme:

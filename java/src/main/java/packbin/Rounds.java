@@ -49,6 +49,11 @@ final class Rounds {
 
     static void packTimes(
             Field field, Object row, ByteSink sink, Map<Object, Object> seen, int count, Walker.Take outer) {
+        if (count > sink.maxRounds) {
+            // A lone value is the item of every round, so the count alone decides how long pack would run.
+            throw new IllegalArgumentException(
+                    field.label() + ": count " + count + " is above the limit of " + sink.maxRounds + " rounds");
+        }
         requireEntriesFit(field, row, count, outer);
         pack(field, values(field.children), row, sink, seen, count, outer);
     }
@@ -73,9 +78,14 @@ final class Rounds {
             int count,
             Walker.Take outer) {
         for (Field value : values) {
-            if (value.kind == Field.Kind.DICT && read(value, row, outer) instanceof Map<?, ?>) {
+            Object given = read(value, row, outer);
+            if (value.kind == Field.Kind.DICT && given instanceof Map<?, ?>) {
                 throw new IllegalArgumentException(memberName(value)
                         + ": a lone dictionary is not a list of rounds; give one dictionary per round in a list");
+            }
+            if ((value.kind == Field.Kind.BYTES || value.kind == Field.Kind.SIZED) && given instanceof byte[]) {
+                throw new IllegalArgumentException(memberName(value)
+                        + ": a lone byte buffer is not a list of rounds; give one buffer per round in a list");
             }
         }
         for (int i = 0; i < count; i++) {
@@ -89,6 +99,12 @@ final class Rounds {
     /** Fields carry no names: a member with a field id is named by it, a nested row, list or dict by its kind. */
     private static String member(Field value) {
         return value.id >= 0 ? value.label() : value.kind.name().toLowerCase(Locale.ROOT);
+    }
+
+    /** The name of the first value a member holds: its accessor key where it has one, else its field id or kind. */
+    static String firstValueName(Field member) {
+        List<Field> values = values(Collections.singletonList(member));
+        return values.isEmpty() ? member(member) : memberName(values.get(0));
     }
 
     private static String memberName(Field value) {

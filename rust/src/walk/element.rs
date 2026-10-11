@@ -1,4 +1,5 @@
-use super::unpack::{unpack_fields, Cursor};
+use super::cursor::Cursor;
+use super::unpack::unpack_fields;
 use crate::field::Field;
 use crate::value::{ShortPacket, UnpackError, Value, Values};
 use std::collections::HashMap;

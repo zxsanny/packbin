@@ -152,10 +152,10 @@ def test_ac4_a_set_group_that_lacks_a_sibling_still_fails():
 
 
 @pytest.mark.parametrize("row", [{"c": 2, "x": [1]}, {"c": 2, "x": []}])
-def test_ac5_a_plain_member_keeps_refusing_a_short_list(row):
+def test_ac5_a_plain_member_refuses_a_short_list_naming_the_member(row):
     scheme = _timed(_u8(1, "x"))
 
-    with pytest.raises(IndexError, match=r"^list index out of range$"):
+    with pytest.raises(ValueError, match=rf"^1: {len(row['x'])} items, times count is 2$"):
         _pack(scheme, row)
 
 
@@ -168,10 +168,10 @@ def test_ac5_a_plain_member_keeps_its_other_results():
 
 
 @pytest.mark.parametrize("row", [{"c": 2, "k": [1, 1], "v": [7]}, {"c": 2, "k": [1, 0], "v": []}])
-def test_ac5_a_member_under_when_keeps_refusing_a_short_list(row):
+def test_ac5_a_member_under_when_refuses_a_short_list_naming_the_member(row):
     scheme = _timed(_u8(1, "k"), when(2, eq(1, 1), _u8(2, "v")))
 
-    with pytest.raises(IndexError, match=r"^list index out of range$"):
+    with pytest.raises(ValueError, match=rf"^2: {len(row['v'])} items, times count is 2$"):
         _pack(scheme, row)
 
 

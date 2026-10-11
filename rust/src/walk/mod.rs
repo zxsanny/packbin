@@ -1,3 +1,4 @@
+mod cursor;
 mod element;
 mod flag_bits;
 mod pack;
@@ -8,7 +9,7 @@ mod written;
 #[cfg(test)]
 pub(crate) use element::capacity_hint;
 #[cfg(test)]
-pub(crate) use unpack::packed_layout;
+pub(crate) use cursor::packed_layout;
 
 use crate::field::MapScheme;
 use crate::value::{PackError, UnpackError, Values};

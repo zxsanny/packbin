@@ -221,6 +221,22 @@ void group_with_only_a_u2_value() {
   round_trip(s, d, "010109", "AZ-2128 group with only a u2 value");
 }
 
+// AZ-2340: a flags member that is a group holding a flag byte and a flag bit with one lone value
+// is present through that value: the flags byte, the group's own flag byte, then the value.
+struct Lone {
+  Opt<std::uint8_t> x;
+  bool same_as(Lone const& o) const { return same_opt(x, o.x); }
+};
+
+void lone_flag_bit_member_in_a_group_is_present() {
+  auto s = pb::scheme<Lone>(
+      1, pb::flags(0, pb::group(0, pb::flag_byte(0), pb::flag_bit(0, pb::u8<&Lone::x>(0)))));
+  Lone with;
+  with.x = 5;
+  round_trip(s, with, "01010105", "AZ-2340 lone flag member packs 01 01 01 05");
+  round_trip(s, Lone{}, "0100", "AZ-2340 no member: the flags byte is clear");
+}
+
 }  // namespace
 
 int run_core_flags_when_member_host_tests() {
@@ -234,5 +250,6 @@ int run_core_flags_when_member_host_tests() {
   when_names_an_earlier_member_of_the_same_flags();
   when_body_value_at_any_depth();
   group_with_only_a_u2_value();
+  lone_flag_bit_member_in_a_group_is_present();
   return check::failures();
 }

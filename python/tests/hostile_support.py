@@ -145,7 +145,7 @@ def _aligned_round_scheme() -> Scheme[Any]:
 
 
 # Pack vectors in fixtures/hostile/cases.txt: the packet each case's scheme and row (README) give, and the
-# exception a `pack_error` case raises (a short `times` list raises a bare IndexError today). Python runs all five.
+# exception a `pack_error` case raises. Python runs all five.
 PACK_CASES = {
     "pack_out_of_range_integer": (
         lambda: BinaryPacker.pack(_scheme(u8(0, lambda row: row["a"])), {"a": 300}),
@@ -156,10 +156,7 @@ PACK_CASES = {
         KeyError,
     ),
     "pack_times_list_too_long": (lambda: BinaryPacker.pack(_times_scheme(), {"a": 2, "x": [1, 2, 3]}), ValueError),
-    "pack_times_list_too_short": (
-        lambda: BinaryPacker.pack(_times_scheme(), {"a": 2, "x": [1]}),
-        (IndexError, ValueError),
-    ),
+    "pack_times_list_too_short": (lambda: BinaryPacker.pack(_times_scheme(), {"a": 2, "x": [1]}), ValueError),
     "pack_aligned_round_row": (
         lambda: BinaryPacker.pack(_aligned_round_scheme(), {"on": [True, False, True], "n": [1, 2, 3]}),
         None,

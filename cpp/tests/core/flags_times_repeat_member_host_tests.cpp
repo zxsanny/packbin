@@ -128,7 +128,8 @@ void times_with_two_values() {
   round_trip(s, trow(2, 5, 6, 90, 7, 8), "010203050706085a00", "AC-4 T-two-values-2");
 }
 
-// The count is a flags member itself: a count that was skipped is no round, and no error.
+// The count is a flags member itself: a count that was skipped is no round, so rounds given
+// for it are refused (AZ-2331) and no rounds pack with both bits clear.
 struct Counted {
   Opt<std::uint8_t> n;
   Array<Item, 4> rounds;
@@ -155,10 +156,11 @@ void times_with_a_skipped_count() {
   Counted c;
   c.rounds.count = 1;
   c.rounds.items[0].pt = 5;
+  pack_refused(s, c, 1, "AC-4 times with a skipped count, rounds given");
   std::uint8_t buf[16];
-  auto p = pb::pack(s, c, buf, sizeof(buf));
+  auto p = pb::pack(s, Counted{}, buf, sizeof(buf));
   check::expect(p.ok() && check::same_hex(buf, p.offset, "0100"),
-                "AC-4 times with a skipped count: both bits clear");
+                "AC-4 times with a skipped count, no rounds: both bits clear");
   Counted full;
   full.n = 1;
   full.rounds.count = 1;

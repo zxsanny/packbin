@@ -12,8 +12,9 @@ const FLAG_BITS: usize = 8;
 /// - `flags` holds at most 8 members and a flag byte at most 8 bits.
 /// - A flag bit belongs to the latest read of its flag byte that it can see: one read earlier
 ///   in the same scope (the top level, or one `repeat` / `times` round or `list` / `dict`
-///   element), outside any part that may not run (`when`, a `flags` member, a flag bit). Its
-///   position is its order among the bits of that read.
+///   element), outside any part that may not run (`when`, a `flags` member, a flag bit). Each
+///   member of one `flags` is a part of its own: a byte read in one is not seen by a bit in the
+///   next. Its position is its order among the bits of that read.
 /// - No `repeat` inside a `repeat` or `times` round, and no `times` inside a `times` round, at
 ///   any depth: unpack keeps no inner `repeat` rounds, and a `times` round passes no values to
 ///   an inner `times`. A `times` inside a `repeat` round works. A `list` or `dict` element
@@ -134,7 +135,10 @@ fn shape_one(field: &mut Field, presence_ok: bool, flags: &mut Scope) {
                     label(ninth)
                 );
             }
-            flags.conditional(|f| shape_seq(members, true, f));
+            // Each member is a scope of its own: a flag byte read in one is not seen by the next.
+            for member in members.iter_mut() {
+                flags.conditional(|f| shape_one(member, true, f));
+            }
         }
         FieldKind::FlagByte { name, slot } => *slot = flags.read(name),
         FieldKind::FlagBit {

@@ -1,6 +1,6 @@
 use super::times::check_no_rounds;
 use super::written::{borrowed_count, Written};
-use crate::field::{field_name, Field, FieldKind};
+use crate::field::{field_name, times_name, Field, FieldKind};
 use crate::value::{as_bit, present, when_matches, PackError, Value, Values};
 use std::collections::HashMap;
 
@@ -152,5 +152,99 @@ pub(super) fn member_on(
         } => times_on(*anchor, count, members, values, wrote),
         FieldKind::Repeat { members, .. } => repeat_on(members, values),
         _ => Ok(field_name(field).is_some_and(|n| present(values, n))),
+    }
+}
+
+/// The name of the first value given for `fields`, at any depth, or `None` when none is.
+fn given_name(fields: &[Field], values: &Values) -> Option<String> {
+    fields.iter().find_map(|field| match &field.kind {
+        FieldKind::FlagByte { .. } => None,
+        FieldKind::Flags { name, members, .. } | FieldKind::Group { name, members, .. } => {
+            if present(values, name) {
+                Some(name.to_string())
+            } else {
+                given_name(members, values)
+            }
+        }
+        FieldKind::When { members, .. } => given_name(members, values),
+        FieldKind::Times {
+            anchor, members, ..
+        } => {
+            let key = times_name(*anchor);
+            match values.get(key.as_ref()) {
+                Some(Some(Value::Groups(rounds))) if !rounds.is_empty() => Some(key.to_string()),
+                _ => given_name(members, values),
+            }
+        }
+        FieldKind::Repeat { .. } => present(values, "__repeat__").then(|| "__repeat__".to_string()),
+        FieldKind::FlagBit { inner, .. } => given_name(std::slice::from_ref(inner), values),
+        FieldKind::U2 { names } => names
+            .iter()
+            .find(|n| present(values, n))
+            .map(|n| n.to_string()),
+        _ => field_name(field)
+            .filter(|n| present(values, n))
+            .map(str::to_string),
+    })
+}
+
+/// A split flag byte decides its bits where the byte is written, from what is written so far. A
+/// `when` whose condition does not hold then, or a `times` whose count is not written then, would
+/// leave its bit clear and drop a value given for its body, so pack refuses and names the value.
+/// Write the condition or count field before the flag byte.
+pub(super) fn check_split_bit(
+    field: &Field,
+    values: &Values,
+    wrote: &Written<'_>,
+) -> Result<(), PackError> {
+    match &field.kind {
+        FieldKind::FlagBit { inner, .. } => check_split_bit(inner, values, wrote),
+        FieldKind::Flags { members, .. } | FieldKind::Group { members, .. } => members
+            .iter()
+            .try_for_each(|m| check_split_bit(m, values, wrote)),
+        FieldKind::When {
+            field: tested,
+            expect,
+            members,
+            ..
+        } => {
+            if wrote.get(tested).is_some_and(|v| when_matches(v, expect)) {
+                return members
+                    .iter()
+                    .try_for_each(|m| check_split_bit(m, values, wrote));
+            }
+            match given_name(members, values) {
+                Some(name) => Err(PackError::Type(format!(
+                    "'{name}' is given, but its when on '{tested}' does not hold where the flag \
+                     byte is written (false or not yet written); write '{tested}' before the \
+                     flag byte"
+                ))),
+                None => Ok(()),
+            }
+        }
+        FieldKind::Times {
+            anchor,
+            count,
+            members,
+            ..
+        } => {
+            if wrote.get(count).is_some() {
+                return Ok(());
+            }
+            let rounds = times_name(*anchor);
+            let given = match values.get(rounds.as_ref()) {
+                Some(Some(Value::Groups(g))) if !g.is_empty() => Some(rounds.to_string()),
+                _ => given_name(members, values),
+            };
+            match given {
+                Some(name) => Err(PackError::Type(format!(
+                    "'{name}' is given, but its times count '{count}' is not written where the \
+                     flag byte is written (skipped or written after it); write '{count}' before \
+                     the flag byte"
+                ))),
+                None => Ok(()),
+            }
+        }
+        _ => Ok(()),
     }
 }

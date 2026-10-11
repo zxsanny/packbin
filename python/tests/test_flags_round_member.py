@@ -173,7 +173,9 @@ def test_ac4_a_times_count_above_zero_sets_the_bit_only_through_the_count_writte
 
     assert BinaryPacker.pack(scheme, {"n": 2, "pt": [5, 6]}).hex() == "0103020506"
     assert BinaryPacker.pack(scheme, {"n": 0}).hex() == "010100"
-    assert BinaryPacker.pack(scheme, {"pt": [5, 6]}).hex() == "0100"
+    assert BinaryPacker.pack(scheme, {}).hex() == "0100"
+    with pytest.raises(ValueError, match=r"^times 1: body values are given, but count field 0 has no value"):
+        BinaryPacker.pack(scheme, {"pt": [5, 6]})
 
 
 @pytest.mark.parametrize("case,name,row,packet", REPEAT_ROWS, ids=[c[0] for c in REPEAT_ROWS])

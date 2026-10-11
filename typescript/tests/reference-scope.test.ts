@@ -297,35 +297,27 @@ describe("reference scope: eq compares integers by value", () => {
     assert.equal(row!.k, 2n)
   })
 
-  // Only a number and a bigint compare by value; any other pair needs the same value.
-  const WANTS: { name: string; want: unknown }[] = [
-    { name: "true", want: true },
-    { name: '"1"', want: "1" },
-    { name: "[1]", want: [1] },
-    { name: "null", want: null },
+  // Only a number and a bigint compare by value; any other value could never equal an integer, so an
+  // integer source refuses it when the scheme is built (AZ-2338).
+  const WANTS: { name: string; want: unknown; shown: string }[] = [
+    { name: "true", want: true, shown: "true" },
+    { name: '"1"', want: "1", shown: '"1"' },
+    { name: "[1]", want: [1], shown: "an object" },
+    { name: "null", want: null, shown: "null" },
+    { name: "undefined", want: undefined, shown: "undefined" },
   ]
 
   for (const c of WANTS) {
-    it(`eq ${c.name} does not match the number 1`, () => {
-      const layout = scheme<Row>(1, u8(0, (x) => x.k), when(1, eq(0, c.want), [u8(1, (x) => x.v)]))
-      assert.equal(toHex(BinaryPacker.pack(layout, { k: 1, v: 9 })), "0101")
-      const { result, row } = unpacked(layout, "0101")
-      assert.deepEqual(result, { ok: true })
-      assert.equal(row!.v, undefined)
+    it(`eq ${c.name} on an integer field is a scheme error`, () => {
+      const message = refusal(() =>
+        scheme<Row>(1, u8(0, (x) => x.k), when(1, eq(0, c.want), [u8(1, (x) => x.v)])),
+      )
+      assert.equal(
+        message,
+        `when 1 tests u8 field 0 ('k') against ${c.shown}; the value must be a whole number from 0 to 255`,
+      )
     })
   }
-
-  it("an absent field value does not match eq null", () => {
-    const layout = scheme<Row>(
-      1,
-      flags(0, [u8(0, (x) => x.n)]),
-      when(1, eq(0, null), [u8(1, (x) => x.v)]),
-    )
-    assert.equal(toHex(BinaryPacker.pack(layout, { v: 9 })), "0100")
-    const { result, row } = unpacked(layout, "0100")
-    assert.deepEqual(result, { ok: true })
-    assert.equal(row!.v, undefined)
-  })
 
   it("a bool eq value still needs true", () => {
     const layout = scheme<Row>(
