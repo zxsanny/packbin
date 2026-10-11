@@ -58,3 +58,7 @@ Then stack ≤ 512 B and flash ≤ 8 192 B, with the margins written in the batc
 ## Constraints
 
 - Flash margin: stop and report if it goes below 32 B (with AZ-2364 and AZ-2356 together).
+
+## Loop 20 result (wave 1a, 2026-10-11)
+
+Done in `cpp/include/packbin/order.hpp`, `table.hpp`, `cpp/src/core/pack.cpp`: the count source and each `when` that holds it store, in the unused `Field::bit` byte, the distance back to the nearest `when` that holds them; pack follows the links in `item_count`. Arm Cortex-M4F: flash 8112 of 8192 B (margin 80 B, was 128 B; AZ-2357 alone 8120), stack 448 of 512 B unchanged. New construction limit: a count more than 255 entries after the `when` that holds it is `SchemeInvalid` (C9 precedent). One accepted row changes: a plain `times` (no flag byte) with its count behind a clear `when`, count 0 and no rounds, packed `0100` before and is now refused; C++'s own unpack and Python's pack refuse that packet already (upgrade note, step 13).

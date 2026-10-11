@@ -7,6 +7,7 @@ import {
 import { unpackBody, type UnpackErr } from "./walker.ts"
 import type { PackedFlagByte } from "./flag-bits.ts"
 import { newScope, packFields, type PackState } from "./pack-fields.ts"
+import { PackOut } from "./pack-out.ts"
 import { bindFlagBits, validatePresenceMarks } from "./flag-scope.ts"
 import { validateMemberNames } from "./member-names.ts"
 import { validateRoundNesting } from "./rounds.ts"
@@ -58,7 +59,7 @@ export type SchemeHandler<T> = {
   handler: (row: T) => void
 }
 
-export type SchemeLimits = { maxRounds?: number; maxSlots?: number }
+export type SchemeLimits = { maxRounds?: number; maxSlots?: number; maxBytes?: number }
 
 function checkedLimit(name: string, value: number | undefined, fallback: number): number {
   if (value === undefined) return fallback
@@ -71,14 +72,18 @@ function checkedLimit(name: string, value: number | undefined, fallback: number)
 export class Scheme<T> {
   static readonly DefaultMaxRounds = 65_535
   static readonly DefaultMaxSlots = 4_194_304
+  static readonly DefaultMaxBytes = 16_777_216
 
   declare private readonly __row: T
   readonly typeNumber: number
   readonly fields: Field[]
   // An unpack refuses a repeat or times field past `maxRounds` rounds, and rounds that together
   // would hold more than `maxSlots` entries, so a packet's length does not set its memory cost.
+  // Pack refuses the same rounds and slots, and a packet longer than `maxBytes` (type byte included),
+  // so a row's counts do not set the cost of packing it either.
   readonly maxRounds: number
   readonly maxSlots: number
+  readonly maxBytes: number
 
   // Every check runs here, so `new Scheme(...)` refuses what `scheme(...)` refuses.
   constructor(typeNumber: number, fields: Field[], limits: SchemeLimits = {}) {
@@ -92,6 +97,7 @@ export class Scheme<T> {
     validateRoundNesting(flat)
     this.maxRounds = checkedLimit("maxRounds", limits.maxRounds, Scheme.DefaultMaxRounds)
     this.maxSlots = checkedLimit("maxSlots", limits.maxSlots, Scheme.DefaultMaxSlots)
+    this.maxBytes = checkedLimit("maxBytes", limits.maxBytes, Scheme.DefaultMaxBytes)
     this.typeNumber = typeNumber
     this.fields = bindReferences(flat)
     validateElementKinds(this.fields)
@@ -113,10 +119,15 @@ export function scheme<T>(typeNumber: number, ...fields: Field[]): Scheme<T> {
 
 export class BinaryPacker {
   static pack<T extends object>(s: Scheme<T>, row: T): Uint8Array {
-    const out: number[] = [s.typeNumber & 0xff]
-    const state: PackState = { flagBytes: new Map<symbol, PackedFlagByte>(), maxRounds: s.maxRounds }
+    const out = new PackOut(s.maxBytes, s.typeNumber & 0xff)
+    const state: PackState = {
+      flagBytes: new Map<symbol, PackedFlagByte>(),
+      maxRounds: s.maxRounds,
+      maxSlots: s.maxSlots,
+      slots: 0,
+    }
     packFields(s.fields, s.fields, flattenValues(row, s.fields), out, state, newScope())
-    return Uint8Array.from(out)
+    return out.bytes()
   }
 
   static unpack(

@@ -86,6 +86,8 @@ Then every accepted row packs to the same hex as before
 
 ## Constraints
 
+- **Reference (wave 1a, parent-checked 2026-10-11):** `_docs/03_implementation/reference_loop20_budget.md` is the contract for wave 1b: same outcome, same member named, same numbers in the message, per package error type. Rows 1 to 28 cover AC-1 to AC-6; the order of checks (rounds, then per round slots before bytes) and the width a round charges are in its "rules" section. Parent decisions on the worker's open choices: a combined `flags` byte that would pass the budget is named by the first name its members declare, depth-first (confirmed); a refused `repeat` names the first member whose list passes the limit (confirmed).
+- Each wave 1b worker measures AC-1 peak memory with `/usr/bin/time -l` (or the language's equivalent): a growable list of boxed values can miss the 256 MB bound (TypeScript `number[]` measured 554 MB for 16.7 M bytes), so use a primitive byte buffer that never grows past `maxBytes`.
 - ADR-001: each package implements it itself; no shared walker.
 - The reference table is written before the other four packages start; every AC above is checked against its rows by the parent first (retro lesson, loop 19).
 - Hot path: one integer comparison per append; no per-byte allocation.

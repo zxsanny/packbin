@@ -44,3 +44,7 @@ Then stack ≤ 512 B and flash ≤ 8 192 B; margins in the batch report
 ## Constraints
 
 - Wire bytes of every accepted row are unchanged.
+
+## Loop 20 result (wave 1a, 2026-10-11)
+
+Done: `Field::late` is a chain (the flag bit points to its first late `when`/`times`, each one to the next); `mark_late` marks every late member. A link of more than 255 entries between two late `when`s of one bit is `SchemeInvalid` at the later one. Final arm numbers: see AZ-2357 (flash margin 80 B, stack unchanged); `pack_flag_byte` frame 48 to 56 B, not on the deepest measured path.

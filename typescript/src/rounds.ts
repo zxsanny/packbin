@@ -47,13 +47,14 @@ export function roundNames(fields: Field[], packing: boolean): Set<string> {
 }
 
 // What a repeat or times asks of its values on every pack, worked out once when the scheme binds it.
-export type RoundShape = { names: Set<string>; dictNames: string[]; bufferNames: string[] }
+// `width` is the slots a round charges against `maxSlots`: the names unpack gives an entry per round.
+export type RoundShape = { names: Set<string>; dictNames: string[]; bufferNames: string[]; width: number }
 
 export function makeRoundShape(fields: Field[]): RoundShape {
   const dictNames: string[] = []
   const bufferNames: string[] = []
   collectCollectionNames(fields, dictNames, bufferNames)
-  return { names: roundNames(fields, true), dictNames, bufferNames }
+  return { names: roundNames(fields, true), dictNames, bufferNames, width: roundNames(fields, false).size }
 }
 
 // The shape `bindReferences` filled in; a repeat or times no Scheme bound has none.
@@ -111,6 +112,12 @@ export function refuseLoneBuffers(bufferNames: string[], values: Value): void {
   }
 }
 
+// The member a refused times count or round slot charge is named by: the first name its round holds.
+export function roundMember(f: Extract<Field, { kind: "repeat" | "times" }>, names: Set<string>): string {
+  const first = names.values().next()
+  return first.done ? `${f.kind} ${f.anchor}` : first.value
+}
+
 // Unpack refuses a round past the scheme's `maxRounds`, so pack refuses a times count past it before
 // it writes any round: a lone scalar goes to every round, and a huge count would loop that many times.
 export function refuseRoundsOverLimit(
@@ -120,10 +127,20 @@ export function refuseRoundsOverLimit(
   limit: number,
 ): void {
   if (count <= limit) return
-  const first = names.values().next()
   throw new RangeError(
-    `${first.done ? `times ${f.anchor}` : first.value}: the times count is ${count}, above the limit of ${limit} rounds`,
+    `${roundMember(f, names)}: the times count is ${count}, above the limit of ${limit} rounds`,
   )
+}
+
+// A repeat writes a round per entry of its longest list, so pack refuses, before any round, the first
+// list among the round's names with more entries than `maxRounds`, named by its own member.
+export function refuseRepeatOverLimit(names: Set<string>, values: Value, limit: number): void {
+  for (const name of names) {
+    const v = values[name]
+    if (Array.isArray(v) && v.length > limit) {
+      throw new RangeError(`${name}: the repeat count is ${v.length}, above the limit of ${limit} rounds`)
+    }
+  }
 }
 
 function addNames(f: Field, packing: boolean, names: Set<string>): void {

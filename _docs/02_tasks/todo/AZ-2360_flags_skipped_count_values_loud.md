@@ -43,4 +43,6 @@ Then the same hex in six packages as today
 
 ## Constraints
 
+- **Reference message (TypeScript, wave 1a):** `pt: a value is given, but the count of its times is not written, so its bit is clear; write the count before the times`. The error must NAME THE MEMBER (`pt`) in every package: Python's current text names `times 1` (`python/tests/test_split_form_pack_fails_loudly.py:93`) and changes to name the first held member; C++ already names the member (pinned in wave 1a).
+- A row with no values (or an empty list) still packs `0100`.
 - Wire bytes of every accepted row are unchanged.

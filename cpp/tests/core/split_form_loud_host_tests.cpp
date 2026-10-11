@@ -3,7 +3,8 @@
 // the row, would be dropped without a word; pack refuses it with BadValue naming the member (the
 // order id of the `when` or `times`, which is the id of its first body value). A source written
 // before the byte packs as before. A false condition with a body given (AC-3) is undecided and
-// is not pinned here. Host-only.
+// is not pinned here. Also AZ-2357 (a count set in the row behind a clear `when`) and AZ-2360
+// (combined `flags`, count skipped, values given). Host-only.
 
 #include "packbin/packbin.hpp"
 
@@ -158,6 +159,73 @@ void ac2_count_never_written() {
                 "AC-2 flags member count skipped, no rounds: packs");
 }
 
+// AZ-2357 (loop 19 assessment U4): the count is set in the row but sits behind a clear `when`, so
+// it is never written; the rounds are refused naming the times (they packed `010003055a00`).
+void count_set_behind_a_clear_when() {
+  auto s = count_behind_a_when();
+  Row one = counted(1, 1, 90);
+  one.mode = 0;
+  pack_refused(s, one, 2, "AZ-2357 AC-1 count 1 behind a clear when, one round");
+  Row two = counted(2, 2, 90);
+  two.mode = 0;
+  pack_refused(s, two, 2, "AZ-2357 AC-1 count 2 behind a clear when, two rounds");
+  Row zero = counted(0, 0, 90);
+  zero.mode = 0;
+  std::uint8_t buf[16];
+  auto p = pb::pack(s, zero, buf, sizeof(buf));
+  check::expect(p.ok() && check::same_hex(buf, p.offset, "0100025a00"),
+                "AZ-2357 count 0 behind a clear when, no rounds: packs as before");
+
+  // Nested: the outer `when` reads mode, the inner one speed; either false skips the count.
+  auto nested = pb::scheme<Row>(
+      1, pb::u8<&Row::mode>(0), pb::u8<&Row::speed>(1),
+      pb::when(2, pb::eq(0, 1), pb::when(2, pb::eq(1, 1), pb::u8<&Row::c>(2))),
+      pb::flag_byte(0),
+      pb::flag_bit(0, pb::times<&Row::rounds>(3, 2, pb::u8<&Item::pt>(3))),
+      pb::flag_bit(0, pb::u16<&Row::heading>(4)));
+  Row outer_off = counted(1, 1, 90);
+  outer_off.mode = 0;
+  outer_off.speed = 1;
+  pack_refused(nested, outer_off, 3, "AZ-2357 outer when false, inner true");
+  Row inner_off = counted(1, 1, 90);
+  inner_off.mode = 1;
+  inner_off.speed = 0;
+  pack_refused(nested, inner_off, 3, "AZ-2357 outer when true, inner false");
+  Row both = counted(1, 1, 90);
+  both.mode = 1;
+  both.speed = 1;
+  round_trip(nested, both, "0101010103055a00", "AZ-2357 both whens true");
+
+  // Without a flag byte: the same rule, and a `when` that holds the times too is no obstacle.
+  auto plain = pb::scheme<Row>(1, pb::u8<&Row::mode>(0),
+                               pb::when(1, pb::eq(0, 1), pb::u8<&Row::c>(1)),
+                               pb::times<&Row::rounds>(2, 1, pb::u8<&Item::pt>(2)));
+  Row off = counted(1, 1, kNone);
+  off.mode = 0;
+  pack_refused(plain, off, 2, "AZ-2357 plain times, count behind a clear when");
+  Row on = counted(1, 1, kNone);
+  on.mode = 1;
+  round_trip(plain, on, "01010105", "AZ-2357 plain times, count behind a holding when");
+  auto holding = pb::scheme<Row>(
+      1, pb::u8<&Row::mode>(0),
+      pb::when(1, pb::eq(0, 1), pb::u8<&Row::c>(1),
+               pb::times<&Row::rounds>(2, 1, pb::u8<&Item::pt>(2))));
+  round_trip(holding, on, "01010105", "AZ-2357 when holds the count and the times");
+}
+
+// AZ-2360: combined `flags`, the count skipped and two values given: refused naming the times
+// (the order id of pt); no values packs the clear byte as before.
+void flags_skipped_count_with_values() {
+  auto in_flags = pb::scheme<Row>(
+      1, pb::flags(0, pb::u8<&Row::c>(0),
+                   pb::times<&Row::rounds>(1, 0, pb::u8<&Item::pt>(1))));
+  pack_refused(in_flags, counted(kNone, 2, kNone), 1, "AZ-2360 AC-1 skipped count, pt [5, 6]");
+  std::uint8_t buf[16];
+  auto q = pb::pack(in_flags, counted(kNone, 0, kNone), buf, sizeof(buf));
+  check::expect(q.ok() && check::same_hex(buf, q.offset, "0100"),
+                "AZ-2360 AC-2 skipped count, no values: packs 0100");
+}
+
 void ac4_source_before_the_byte_packs_as_before() {
   auto w = when_before_byte();
   round_trip(w, row(1, 7, 90), "010103075a00", "AC-4 when source before the byte, true");
@@ -176,5 +244,7 @@ int run_core_split_form_loud_host_tests() {
   ac1_times_count_after_the_byte();
   ac2_count_never_written();
   ac4_source_before_the_byte_packs_as_before();
+  count_set_behind_a_clear_when();
+  flags_skipped_count_with_values();
   return check::failures();
 }

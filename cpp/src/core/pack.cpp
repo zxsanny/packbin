@@ -28,6 +28,18 @@ bool ref_value(Field const* t, Field const& f, void* obj, std::int64_t& out) {
   return f.ref >= 0 && read_int(t[f.ref], obj, out);
 }
 
+// True when a `when` that holds the count of the times `f` has a false condition: the count is
+// set in the row but never written, so a reader has no count (`bit` links the count to each
+// `when` that holds it, see `mark_held`).
+bool count_skipped(Field const* t, Field const& f, void* obj) {
+  for (Field const* k = t + f.ref; k->bit != 0;) {
+    k -= k->bit;
+    if (!when_matches(t, *k, obj))
+      return true;
+  }
+  return false;
+}
+
 // The children of entry i, in order, on the same object.
 Result pack_children(Pack& p, std::size_t i, void* obj) {
   for (std::size_t j = i + 1; j < i + p.t[i].span; j += p.t[j].span) {
@@ -78,8 +90,11 @@ Result pack_flag_byte(Pack& p, std::size_t i, void* obj) {
     if (t[j].kind != Kind::FlagBit || t[j].ref != static_cast<std::int16_t>(i))
       continue;
     // A body whose source is written after this byte cannot be read back (see `Field::late`).
-    if (t[j].late != 0 && present(t, j + t[j].late, obj))
-      return bad(p.w, t[j + t[j].late]);
+    for (std::size_t k = j; t[k].late != 0;) {
+      k += t[k].late;
+      if (present(t, k, obj))
+        return bad(p.w, t[k]);
+    }
     if (present(t, j + 1, obj))
       byte = static_cast<std::uint8_t>(byte | (1u << t[j].bit));
   }
@@ -198,7 +213,7 @@ std::size_t item_count(Pack& p, std::size_t i, void* obj, void* m, Result& out) 
     return m == nullptr ? 0 : *f.count(m);
   if (f.kind == Kind::Times) {
     std::int64_t count = 0;
-    if (!ref_value(p.t, f, obj, count) || count < 0 ||
+    if (!ref_value(p.t, f, obj, count) || count_skipped(p.t, f, obj) || count < 0 ||
         (m == nullptr ? count != 0 : *f.count(m) != count)) {
       out = bad(p.w, f);
       return stop;

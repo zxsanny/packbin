@@ -139,7 +139,7 @@ describe("AZ-2331 a split flag byte pack refuses a body its bit cannot carry", (
     assert.match(refusal(() => BinaryPacker.pack(ts(), { n: 2, pt: [5], heading: 90 })), /^missing pt$/)
   })
 
-  it("the combined flags form decides each bit in order and keeps its rows (unchanged)", () => {
+  it("the combined flags form decides each bit in order; a skipped count with values is refused (AZ-2360)", () => {
     // Arrange
     const wa = scheme<Row>(
       1,
@@ -150,11 +150,12 @@ describe("AZ-2331 a split flag byte pack refuses a body its bit cannot carry", (
 
     // Act
     const falseBody = hex(BinaryPacker.pack(wa, { mode: 0, speed: 7, heading: 90 }))
-    const countSkipped = hex(BinaryPacker.pack(tc, { pt: [5] }))
+    const countSkipped = hex(BinaryPacker.pack(tc, {}))
     const countGiven = hex(BinaryPacker.pack(tc, { n: 2, pt: [5, 6] }))
 
     // Assert
     assert.deepEqual([falseBody, countSkipped, countGiven], ["0100025a00", "0100", "0103020506"])
+    assert.match(refusal(() => BinaryPacker.pack(tc, { pt: [5] })), /^pt: a value is given, but the count of its times is not written/)
   })
 
   it("a value outside the member's range still fails naming the member, with no bytes", () => {

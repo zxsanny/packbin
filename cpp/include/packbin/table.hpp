@@ -128,13 +128,16 @@ struct Field {
   std::int16_t ref = -1;
   // `bytes(n)` length; Text/Blob/Array capacity; flag byte group number.
   std::uint16_t size = 0;
-  // `packed` bit width (1 or 2) and count bias (0 or -1); a flag bit's position.
+  // `packed` bit width (1 or 2) and count bias (0 or -1); a flag bit's position. On the count
+  // of a times and on a `when` that holds one, `bit` is the distance back to the nearest `when`
+  // that holds it, or 0.
   std::uint8_t width = 0;
   std::int8_t bias = 0;
   std::uint8_t bit = 0;
-  // A flag bit: the distance to the `when` or `times` it decides (itself or inside a group)
-  // whose source is written after its flag byte, or 0. A reader decides that bit where the byte
-  // is read, before the source exists, so pack refuses a body for it.
+  // A flag bit: the distance to the first `when` or `times` it decides (itself or inside a
+  // group) whose source is written after its flag byte, or 0; on that `when` or `times`, the
+  // distance to the next one. A reader decides that bit where the byte is read, before the source
+  // exists, so pack refuses a body for each.
   std::uint8_t late = 0;
   std::int64_t eq = 0;
   Access access = nullptr;

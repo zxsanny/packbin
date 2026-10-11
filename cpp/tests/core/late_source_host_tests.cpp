@@ -3,7 +3,8 @@
 // not "late" and the row packs and round-trips as before loop 19; only a source between the
 // flag byte and the flag bit is late. C8: the empty-group fallback of a `when` source does not
 // bind when a field of the same id exists that is not the group. C9: the "distance over 255"
-// refusal of a late flag bit. Host-only.
+// refusal of a late flag bit. AZ-2364: every late `when` of a bit is refused, and the AZ-2364 and
+// AZ-2357 link limits. Host-only.
 
 #include "packbin/packbin.hpp"
 
@@ -159,6 +160,93 @@ void c9_distance_over_255_is_refused_at_construction() {
                 "C9 distance 256, pack writes nothing");
 }
 
+// AZ-2364: every late `when` of a flag bit is marked, not only the first.
+struct Modes {
+  Opt<std::uint8_t> mode;
+  Opt<std::uint8_t> a;
+  Opt<std::uint8_t> b;
+  Opt<std::uint8_t> d;
+
+  bool same_as(Modes const& o) const {
+    return same_opt(mode, o.mode) && same_opt(a, o.a) && same_opt(b, o.b) && same_opt(d, o.d);
+  }
+};
+
+Modes modes(int mode) {
+  Modes m;
+  m.mode = static_cast<std::uint8_t>(mode);
+  return m;
+}
+
+void az2364_every_late_when_of_a_bit_is_refused() {
+  auto two = pb::scheme<Modes>(
+      1, pb::flag_byte(0), pb::u8<&Modes::mode>(0),
+      pb::flag_bit(0, pb::group(1, pb::when(1, pb::eq(0, 1), pb::u8<&Modes::a>(1)),
+                                pb::when(2, pb::eq(0, 2), pb::u8<&Modes::b>(2)))));
+  Modes second = modes(2);
+  second.b = 9;
+  pack_refused(two, second, 2, "AZ-2364 AC-1 second late when, b given");
+  Modes first = modes(1);
+  first.a = 9;
+  pack_refused(two, first, 1, "AZ-2364 first late when, a given (unchanged)");
+  round_trip(two, modes(2), "010002", "AZ-2364 no body given packs as before");
+
+  auto three = pb::scheme<Modes>(
+      1, pb::flag_byte(0), pb::u8<&Modes::mode>(0),
+      pb::flag_bit(0, pb::group(1, pb::when(1, pb::eq(0, 1), pb::u8<&Modes::a>(1)),
+                                pb::when(2, pb::eq(0, 2), pb::u8<&Modes::b>(2)),
+                                pb::when(3, pb::eq(0, 3), pb::u8<&Modes::d>(3)))));
+  Modes third = modes(3);
+  third.d = 9;
+  pack_refused(three, third, 3, "AZ-2364 third late when, d given");
+}
+
+// AZ-2364: the link from one late `when` to the next is a byte too; the bit body is
+// `group(when a, filler u8 x K, when b)` and the link from `when a` to `when b` is K + 2.
+template <std::size_t... Is>
+auto long_link(std::index_sequence<Is...>) {
+  constexpr int k = static_cast<int>(sizeof...(Is));
+  return pb::scheme<Modes>(
+      1, pb::flag_byte(0), pb::u8<&Modes::mode>(0),
+      pb::flag_bit(0, pb::group(1, pb::when(1, pb::eq(0, 1), pb::u8<&Modes::a>(1)),
+                                pb::u8(2 + static_cast<int>(Is))...,
+                                pb::when(2 + k, pb::eq(0, 2), pb::u8<&Modes::b>(2 + k)))));
+}
+
+void az2364_link_over_255_is_refused_at_construction() {
+  auto at_limit = long_link(std::make_index_sequence<253>());
+  check::expect(pb::validate(at_limit).ok(), "AZ-2364 link 255 builds");
+  Modes m = modes(2);
+  m.b = 9;
+  pack_refused(at_limit, m, 255, "AZ-2364 link 255 still marks the second when");
+  auto over = long_link(std::make_index_sequence<254>());
+  check::expect(refused_at(pb::validate(over), 256), "AZ-2364 link 256 is SchemeInvalid");
+}
+
+// AZ-2357: the count of a times links back to each `when` that holds it; the count sits K + 1
+// entries after its `when` here (K unbound fillers before it).
+template <std::size_t... Is>
+auto long_hold(std::index_sequence<Is...>) {
+  constexpr int k = static_cast<int>(sizeof...(Is));
+  return pb::scheme<Row>(
+      1, pb::u8<&Row::mode>(0),
+      pb::when(1, pb::eq(0, 1), pb::u8(1 + static_cast<int>(Is))..., pb::u8<&Row::n>(1 + k)),
+      pb::times<&Row::rounds>(2 + k, 1 + k, pb::u8<&Item::pt>(2 + k)));
+}
+
+void az2357_hold_over_255_is_refused_at_construction() {
+  auto at_limit = long_hold(std::make_index_sequence<254>());
+  check::expect(pb::validate(at_limit).ok(), "AZ-2357 count 255 after its when builds");
+  Row r;
+  r.mode = 0;
+  r.n = 1;
+  r.rounds.items[0].pt = 5;
+  r.rounds.count = 1;
+  pack_refused(at_limit, r, 256, "AZ-2357 count 255 after a clear when is still refused");
+  auto over = long_hold(std::make_index_sequence<255>());
+  check::expect(refused_at(pb::validate(over), 257), "AZ-2357 count 256 after its when is SchemeInvalid");
+}
+
 }  // namespace
 
 int run_core_late_source_host_tests() {
@@ -168,5 +256,8 @@ int run_core_late_source_host_tests() {
   c8_same_id_field_blocks_the_empty_group_fallback();
   c8_empty_group_alone_is_still_the_source();
   c9_distance_over_255_is_refused_at_construction();
+  az2364_every_late_when_of_a_bit_is_refused();
+  az2364_link_over_255_is_refused_at_construction();
+  az2357_hold_over_255_is_refused_at_construction();
   return check::failures();
 }

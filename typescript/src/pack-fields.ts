@@ -8,15 +8,19 @@ import {
   type Field,
 } from "./fields.ts"
 import { bitOn, droppedBody, flagValueFor, type PackedFlagByte } from "./flag-bits.ts"
+import type { PackOut } from "./pack-out.ts"
 import { refName } from "./ref-scope.ts"
 import {
   refuseLoneBuffers,
   refuseLoneDicts,
   refuseLongLists,
+  refuseRepeatOverLimit,
   refuseRoundsOverLimit,
   roundCount,
+  roundMember,
   roundShape,
   sliceRound,
+  type RoundShape,
 } from "./rounds.ts"
 import {
   present,
@@ -32,9 +36,15 @@ import {
 } from "./kinds.ts"
 import { borrowedCount, seen, writtenCount } from "./written.ts"
 
-// What one pack call carries: the flag bytes written so far, and the scheme's `maxRounds`, which
-// bounds the rounds a times writes as it bounds the rounds an unpack reads.
-export type PackState = { flagBytes: Map<symbol, PackedFlagByte>; maxRounds: number }
+// What one pack call carries: the flag bytes written so far, the scheme's `maxRounds`, which bounds the
+// rounds a repeat or times writes as it bounds the rounds an unpack reads, and `maxSlots` with the slots
+// the rounds of this call have charged so far, as one unpack charges them.
+export type PackState = {
+  flagBytes: Map<symbol, PackedFlagByte>
+  maxRounds: number
+  maxSlots: number
+  slots: number
+}
 
 // One list or dict item. A group or flags element packs from the members of the item; any other
 // element is one value, read under the element's own name.
@@ -43,7 +53,7 @@ function packItem(
   item: unknown,
   values: Value,
   allFields: Field[],
-  out: number[],
+  out: PackOut,
   state: PackState,
 ): void {
   const group = itemGroup(f.element)
@@ -56,18 +66,45 @@ function packItem(
   packFields(group.fields, group.fields, flattenValues(item, group.fields), out, state, newScope())
 }
 
+// Each round is charged its width against `maxSlots` as it starts, before its bytes, as unpack charges
+// it, so pack refuses at the round where the same scheme's unpack would.
 function packRounds(
-  fields: Field[],
-  names: Set<string>,
+  f: Extract<Field, { kind: "repeat" | "times" }>,
+  shape: RoundShape,
   count: number,
   allFields: Field[],
   values: Value,
-  out: number[],
+  out: PackOut,
   state: PackState,
 ): void {
   for (let i = 0; i < count; i++) {
-    packFields(fields, allFields, sliceRound(values, names, i), out, state, newScope())
+    const slots = state.slots + shape.width
+    if (slots > state.maxSlots) {
+      throw new RangeError(
+        `${roundMember(f, shape.names)}: the rounds would hold ${slots} slots, above the limit of ${state.maxSlots} slots`,
+      )
+    }
+    state.slots = slots
+    packFields(f.fields, allFields, sliceRound(values, shape.names, i), out, state, newScope())
   }
+}
+
+// A combined flags' byte has no name of its own: it is named by the first name its members declare.
+function firstBitName(fields: Field[], id: symbol): string {
+  const bit = fields.find((f) => f.kind === "flagBit" && f.flagId === id)
+  return bit === undefined ? "" : declaredName(bit)
+}
+
+// The first name `field` declares, looking into a when, repeat, times, flags or nameless group.
+function declaredName(field: Field): string {
+  if (field.kind === "flagBit") return declaredName(field.field)
+  const own = fieldName(field)
+  if (own !== "" || !("fields" in field)) return own
+  for (const child of field.fields) {
+    const name = declaredName(child)
+    if (name !== "") return name
+  }
+  return ""
 }
 
 // The values pack has written in one scope: the top level, a round, or a list or dict item.
@@ -79,7 +116,7 @@ export function packFields(
   fields: Field[],
   allFields: Field[],
   values: Value,
-  out: number[],
+  out: PackOut,
   state: PackState,
   wrote: Value,
 ): void {
@@ -108,7 +145,7 @@ export function packFields(
               ? new Uint8Array(raw)
               : null
         if (!arr || arr.length !== f.size) throw new RangeError(`bad bytes ${f.name}`)
-        for (let i = 0; i < arr.length; i++) out.push(arr[i]!)
+        out.append(f.name, arr)
         wrote[f.name] = values[f.name]
         break
       }
@@ -121,16 +158,26 @@ export function packFields(
         // the end; a split flag byte is decided where it is read.
         const flags = f.inOrder ? 0 : flagValueFor(allFields, f.id, values, wrote)
         state.flagBytes.set(f.id, { at: out.length, flags, inOrder: f.inOrder === true })
-        out.push(flags & 0xff)
+        out.byte(f.name || firstBitName(fields, f.id), flags & 0xff)
         break
       }
       case "flagBit": {
         const byte = state.flagBytes.get(f.flagId)
         if (byte === undefined) break
         if (byte.inOrder) {
-          if (!bitOn(f.field, values, wrote)) break
+          if (!bitOn(f.field, values, wrote)) {
+            // A times whose count was not written (skipped, or under a clear bit) writes no round, so the
+            // values given for it would be dropped without a word.
+            const dropped = droppedBody(f.field, values, wrote)
+            if (dropped !== null) {
+              throw new RangeError(
+                `${dropped}: a value is given, but the count of its times is not written, so its bit is clear; write the count before the times`,
+              )
+            }
+            break
+          }
           byte.flags |= 1 << f.bit
-          out[byte.at] = byte.flags
+          out.patch(byte.at, byte.flags)
         } else if ((byte.flags & (1 << f.bit)) === 0) {
           // The bit was decided where the byte sits. A body whose condition or count is not written
           // by then would be dropped without a word, and its own unpack reads no bit for it.
@@ -156,10 +203,11 @@ export function packFields(
         break
       }
       case "repeat": {
-        const { names, dictNames, bufferNames } = roundShape(f)
-        refuseLoneDicts(dictNames, values)
-        refuseLoneBuffers(bufferNames, values)
-        packRounds(f.fields, names, roundCount(names, values), allFields, values, out, state)
+        const shape = roundShape(f)
+        refuseRepeatOverLimit(shape.names, values, state.maxRounds)
+        refuseLoneDicts(shape.dictNames, values)
+        refuseLoneBuffers(shape.bufferNames, values)
+        packRounds(f, shape, roundCount(shape.names, values), allFields, values, out, state)
         break
       }
       case "group":
@@ -185,12 +233,12 @@ export function packFields(
       }
       case "times": {
         const count = borrowedCount(refName(f), 0, "times", wrote)
-        const { names, dictNames, bufferNames } = roundShape(f)
-        refuseRoundsOverLimit(f, names, count, state.maxRounds)
-        refuseLongLists(names, count, values)
-        refuseLoneDicts(dictNames, values)
-        refuseLoneBuffers(bufferNames, values)
-        packRounds(f.fields, names, count, allFields, values, out, state)
+        const shape = roundShape(f)
+        refuseRoundsOverLimit(f, shape.names, count, state.maxRounds)
+        refuseLongLists(shape.names, count, values)
+        refuseLoneDicts(shape.dictNames, values)
+        refuseLoneBuffers(shape.bufferNames, values)
+        packRounds(f, shape, count, allFields, values, out, state)
         break
       }
       case "utf8":
@@ -202,7 +250,7 @@ export function packFields(
         const items = values[f.name]
         if (!Array.isArray(items)) throw new RangeError(`${f.name}: expected list`)
         if (items.length > 65535) throw new RangeError(`${f.name}: length ${items.length}`)
-        out.push(items.length & 0xff, (items.length >> 8) & 0xff)
+        out.append(f.name, [items.length & 0xff, (items.length >> 8) & 0xff])
         for (const item of items) packItem(f, item, values, allFields, out, state)
         break
       }
@@ -221,7 +269,7 @@ export function packFields(
           return ba.length - bb.length
         })
         if (keys.length > 65535) throw new RangeError(`${f.name}: length ${keys.length}`)
-        out.push(keys.length & 0xff, (keys.length >> 8) & 0xff)
+        out.append(f.name, [keys.length & 0xff, (keys.length >> 8) & 0xff])
         const record = items as Value
         for (const key of keys) {
           writeUtf8(out, f.name, key)

@@ -72,6 +72,11 @@ Each worker returns a status table and a `## Discovered during implementation` l
 
 Per package: the package suite only (no Docker). C# on net10.0 and `-p:PackbinTarget=netstandard2.0`, with `env MSBUILDDISABLENODEREUSE=1`. C++: `docker run --rm -v "$PWD":/src -w /src/cpp gcc:16 make test` plus the arm embedded stage for `cpp/src/core`. Python: a per-worker venv with Python 3.10+. Wire bytes of accepted rows do not change.
 
+### Progress (plan-diff sync)
+
+- Wave 1a done 2026-10-11 (`batch_01_loop20_report.md`): AZ-2354/2355 (TypeScript reference), AZ-2356/2360 (TypeScript, C++), AZ-2357, AZ-2363 (pin, already fixed in loop 19), AZ-2364, AZ-2359 (TypeScript pin). Changed from the plan: TypeScript added `typescript/src/pack-out.ts` (output buffer) and `typescript/tests/support/lone-utf8-budget.ts`; the Python worker also changes the AZ-2360 message to name the member. C++ flash margin is 80 B after AZ-2357 and AZ-2364.
+- Wave 1b next: csharp, python, java, rust against `_docs/03_implementation/reference_loop20_budget.md`.
+
 ### Risks
 
 - The budget check sits on the hot append path: one comparison per append, no allocation; AZ-2354 AC-1 bounds time and memory.

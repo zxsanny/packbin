@@ -38,3 +38,7 @@ Then an error naming the member
 ## Constraints
 
 - Wire bytes of every accepted row are unchanged.
+
+## Loop 20 result (wave 1a, 2026-10-11)
+
+Closed as a pin: the shape was already refused on HEAD (loop 19 review B2, commit 02206a7, `countNeverWritten` has a `when` case). The TypeScript worker added two more shapes as tests (`typescript/tests/loop20-parity-pins.test.ts`).

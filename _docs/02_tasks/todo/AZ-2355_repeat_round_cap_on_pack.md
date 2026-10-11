@@ -64,4 +64,5 @@ Then packed without error
 
 ## Constraints
 
+- **Reference:** rows 1 to 10 of the AZ-2355 table in `_docs/03_implementation/reference_loop20_budget.md`. The error names the first member whose list passes the limit (not the round's first member), text `{member}: the repeat count is {n}, above the limit of {maxRounds} rounds`.
 - Wire bytes of accepted rows unchanged.

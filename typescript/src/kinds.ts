@@ -1,3 +1,5 @@
+import type { PackOut } from "./pack-out.ts"
+
 export type Value = Record<string, unknown>
 
 export type ShortErr = { ok: false; field: string; needed: number; left: number }
@@ -18,7 +20,7 @@ export function sameValue(seen: unknown, want: unknown): boolean {
 }
 
 export function writeU2(
-  out: number[],
+  out: PackOut,
   slots: { name: string }[],
   take: (name: string) => unknown,
 ): void {
@@ -37,7 +39,7 @@ export function writeU2(
     }
     raw[i >> 2]! |= value << ((i & 3) * 2)
   }
-  for (const b of raw) out.push(b)
+  out.append(slots[0]?.name ?? "", raw)
 }
 
 export function readU2(
@@ -58,7 +60,7 @@ export function readU2(
 }
 
 export function writeBits(
-  out: number[],
+  out: PackOut,
   name: string,
   count: number,
   raw: unknown,
@@ -75,7 +77,7 @@ export function writeBits(
     }
     packed[i >> 3]! |= Number(bit) << (i & 7)
   }
-  for (const b of packed) out.push(b)
+  out.append(name, packed)
 }
 
 const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER)
@@ -117,7 +119,7 @@ export function packedBytes(width: 1 | 2, count: number): number {
 }
 
 export function writePacked(
-  out: number[],
+  out: PackOut,
   name: string,
   width: 1 | 2,
   count: number,
@@ -137,7 +139,7 @@ export function writePacked(
     }
     packed[(i / per) | 0]! |= n << ((i % per) * shift)
   }
-  for (const b of packed) out.push(b)
+  out.append(name, packed)
 }
 
 export function readPacked(
@@ -163,7 +165,7 @@ export function readPacked(
 }
 
 export function writeSized(
-  out: number[],
+  out: PackOut,
   name: string,
   count: unknown,
   raw: unknown,
@@ -182,7 +184,7 @@ export function writeSized(
   if (arr.length !== n) {
     throw new RangeError(`${name}: expected ${n} bytes, got ${arr.length}`)
   }
-  for (let i = 0; i < arr.length; i++) out.push(arr[i]!)
+  out.append(name, arr)
 }
 
 export function readSized(
@@ -229,7 +231,7 @@ function intRefused(name: string, value: unknown, size: 1 | 2 | 4 | 8, signed: b
 }
 
 export function writeInt(
-  out: number[],
+  out: PackOut,
   name: string,
   value: unknown,
   size: 1 | 2 | 4 | 8,
@@ -239,12 +241,14 @@ export function writeInt(
   if ((typeof value !== "number" && typeof value !== "bigint") || !fitsInt(value, size, signed)) {
     throw intRefused(name, value, size, signed)
   }
+  if (size === 1) {
+    // A Uint8Array stores an i8 as its two's complement byte.
+    out.byte(name, Number(value))
+    return
+  }
   const buf = new ArrayBuffer(size)
   const view = new DataView(buf)
-  if (size === 1) {
-    if (signed) view.setInt8(0, Number(value))
-    else view.setUint8(0, Number(value))
-  } else if (size === 2) {
+  if (size === 2) {
     if (signed) view.setInt16(0, Number(value), le)
     else view.setUint16(0, Number(value), le)
   } else if (size === 4) {
@@ -254,13 +258,12 @@ export function writeInt(
     if (signed) view.setBigInt64(0, BigInt(value), le)
     else view.setBigUint64(0, BigInt(value), le)
   }
-  const bytes = new Uint8Array(buf)
-  for (let i = 0; i < size; i++) out.push(bytes[i]!)
+  out.append(name, new Uint8Array(buf))
 }
 
 // NaN and the infinities are written as given; a finite value is refused only where the
 // narrower width would turn it into an infinity.
-export function writeFloat(out: number[], name: string, value: unknown, size: 4 | 8, le: boolean): void {
+export function writeFloat(out: PackOut, name: string, value: unknown, size: 4 | 8, le: boolean): void {
   const kind = `f${size * 8}`
   if (typeof value !== "number") throw notNumber(name, kind, value)
   if (size === 4 && Number.isFinite(value) && !Number.isFinite(Math.fround(value))) {
@@ -270,8 +273,7 @@ export function writeFloat(out: number[], name: string, value: unknown, size: 4 
   const view = new DataView(buf)
   if (size === 4) view.setFloat32(0, value, le)
   else view.setFloat64(0, value, le)
-  const bytes = new Uint8Array(buf)
-  for (let i = 0; i < size; i++) out.push(bytes[i]!)
+  out.append(name, new Uint8Array(buf))
 }
 
 // `slots` counts the entries every round of this unpack call has made so far, against the
@@ -309,12 +311,16 @@ export function readInt(
   return { ok: true, value }
 }
 
-export function writeUtf8(out: number[], name: string, value: unknown): void {
+export function writeUtf8(out: PackOut, name: string, value: unknown): void {
   if (typeof value !== "string") throw new RangeError(`${name}: expected string`)
   const raw = new TextEncoder().encode(value)
   if (raw.length > 65535) throw new RangeError(`${name}: utf-8 length ${raw.length}`)
-  out.push(raw.length & 0xff, (raw.length >> 8) & 0xff)
-  for (let i = 0; i < raw.length; i++) out.push(raw[i]!)
+  // The length and the text are one append, so a refusal reports the whole member.
+  const counted = new Uint8Array(2 + raw.length)
+  counted[0] = raw.length & 0xff
+  counted[1] = (raw.length >> 8) & 0xff
+  counted.set(raw, 2)
+  out.append(name, counted)
 }
 
 export function readUtf8(
