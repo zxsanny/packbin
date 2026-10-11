@@ -107,12 +107,18 @@ void when_on_other_kinds_is_refused() {
 }
 
 // A count names an integer field; a bool count is refused.
+// GCC 16 at -O2 reports a false -Warray-bounds for the copy into the table of a scheme that is invalid on
+// purpose and built at run time (the same scheme as a constexpr value is a compile error, see
+// compile-fail/). The suppression covers only this function.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
 void a_bool_count_is_refused() {
   auto sized = packbin::scheme<Counted>(
       1, packbin::flags(0, packbin::boolean<&Counted::on>(0)),
       packbin::sized<&Counted::payload>(1, 0));
   expect(refused_at(packbin::validate(sized), 1), "sized on a bool count names the field");
 }
+#pragma GCC diagnostic pop
 
 }  // namespace
 

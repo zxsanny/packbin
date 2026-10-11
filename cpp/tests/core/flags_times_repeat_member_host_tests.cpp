@@ -144,10 +144,14 @@ struct Counted {
   }
 };
 
-void times_with_a_skipped_count() {
-  auto s = pb::scheme<Counted>(
+constexpr auto skipped_count_scheme() {
+  return pb::scheme<Counted>(
       1, pb::flags(0, pb::u8<&Counted::n>(0),
                    pb::times<&Counted::rounds>(1, 0, pb::u8<&Item::pt>(1))));
+}
+
+void times_with_a_skipped_count() {
+  constexpr auto s = skipped_count_scheme();
   Counted c;
   c.rounds.count = 1;
   c.rounds.items[0].pt = 5;

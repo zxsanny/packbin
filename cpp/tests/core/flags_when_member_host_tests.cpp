@@ -153,14 +153,14 @@ void group_with_a_sibling_and_a_when() {
 
 // WE: flags { u8 mode, when(mode == 1) { u8 speed } }: the `when` names an earlier member of
 // its own `flags`.
-auto we() {
+constexpr auto we() {
   return pb::scheme<W>(
       1, pb::flags(0, pb::u8<&W::mode>(0),
                    pb::when(1, pb::eq(0, 1), pb::u8<&W::speed>(1))));
 }
 
 void when_names_an_earlier_member_of_the_same_flags() {
-  auto s = we();
+  constexpr auto s = we();
   round_trip(s, row(1, 7, kNone, kNone), "01030107", "AC-3 W-same-flags-true");
   round_trip(s, row(1, kNone, kNone, kNone), "010101", "AC-3 W-same-flags-no-body");
   round_trip(s, row(0, kNone, kNone, kNone), "010100", "AC-3 W-same-flags-false-bytes");
