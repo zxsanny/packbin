@@ -9,12 +9,6 @@ Downstream skills consume this file:
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
 
-- [2026-10-06] [estimation] Give every task that changes the shape an unpack returns an amplification check (a 1 MiB packet of one-byte rounds with 1 and 36 names, peak memory and time): padding each name per round took TypeScript from 130 to 401 MB, C# from 93 to 525 MB and Rust from 36 to 311 MB.
-  Source: _docs/06_metrics/retro_2026-10-06_loop13.md
-- [2026-10-06] [testing] Re-derive every hex string and example row in a spec by hand or from a reference build before the batch starts; AZ-2087 AC-4, AZ-2177 AC-2 and two AZ-2178 hex strings were wrong, and only fresh-reviewer oracles caught them.
-  Source: _docs/06_metrics/retro_2026-10-06_loop13.md
-- [2026-10-06] [estimation] Size a CI or publish restructure by the scripts and tests it touches, not by its AC count: AZ-2096 was 3 points and became 15 files and +1 313 lines (two new scripts, a checker and a test harness).
-  Source: _docs/06_metrics/retro_2026-10-06_loop14.md
 - [2026-10-06] [testing] Under `set -o pipefail`, `cmd | grep -q .` reads an early grep exit as a failure (SIGPIPE) or a network error as an empty answer; capture the output first. The worker's tests passed and only the high-effort review found it.
   Source: _docs/06_metrics/retro_2026-10-06_loop14.md
 - [2026-10-06] [dependencies] Pin or hash-check every tool the credentialed publish job installs (pip tools, `npm@11`, `NuGet/login`), and let the build step see no write access to the scripts the host runs next with the tokens.
@@ -39,4 +33,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-07_loop17.md
 - [2026-10-07] [testing] Put a timing assertion in its own non-parallel xunit collection: the AC-10 test takes 340 to 390 ms alone and 790 ms to 1 s inside the full suite on a fast laptop and failed CI at 1 618 ms, so a local pass is not CI parity for a timing bound.
   Source: _docs/06_metrics/retro_2026-10-07_loop17.md
-
+- [2026-10-11] [tooling] A green `make -C cpp test` on the Mac (Apple clang) does not prove the CI build (GCC 16, `-Wall -Wextra -Werror`): the loop 18 C++ tests failed the container on `-Warray-bounds` and `-Wformat-truncation`, so a C++ task ends with `docker run gcc:16 make test` and, for `cpp/src/core`, the arm embedded stage (a one-line inlining change moved the Cortex-M4F stack by 64 B against a 512 B budget).
+  Source: _docs/06_metrics/retro_2026-10-11_loop18.md
+- [2026-10-11] [testing] When one rule must give the same bytes in six packages, have one package implement it first and write a hex-pinned reference table (scheme, row, packet, unpacked row), then align the others in parallel against the table: five workers matched 60 cases in loop 18 with no divergent reading.
+  Source: _docs/06_metrics/retro_2026-10-11_loop18.md
+- [2026-10-11] [architecture] Bound a broadcast rule in the change that adds it: loop 18 made Rust send a lone scalar to every `times` round and the audit found `pack` loops for any count in five packages (4 GiB at a 4-billion count), so a new broadcast comes with the rounds cap on pack and a hostile `pack` case.
+  Source: _docs/06_metrics/retro_2026-10-11_loop18.md
