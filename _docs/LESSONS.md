@@ -39,3 +39,10 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-11_loop18.md
 - [2026-10-11] [architecture] Bound a broadcast rule in the change that adds it: loop 18 made Rust send a lone scalar to every `times` round and the audit found `pack` loops for any count in five packages (4 GiB at a 4-billion count), so a new broadcast comes with the rounds cap on pack and a hostile `pack` case.
   Source: _docs/06_metrics/retro_2026-10-11_loop18.md
+- [2026-10-11] [process] Check each AC of a cross-package spec against the reference rows it must keep before the specs are written: AZ-2331 AC-3 contradicted the loop 18 row `W-split-false-body-given`, six workers read it two ways, and it cost one owner question plus three follow-up workers. Put one cross-package table in front of the owner after the first wave
+  Source: _docs/06_metrics/retro_2026-10-11_loop19.md
+- [2026-10-11] [testing] Tell every reviewer to probe with a hostile value outside the type's range and with a row that packed before the change: the loop 19 review found Java `intValue()` ahead of the round cap, a C# count-0 regression and a C++ legitimate row now refused, all green in the package suites
+  Source: _docs/06_metrics/retro_2026-10-11_loop19.md
+- [2026-10-11] [architecture] A cap on one count does not bound the output: the audit measured 4.29 GB written for a 64 KB request through a lone `utf8` under one `times` (F28). Bound the bytes written per call, not only each count
+  Source: _docs/06_metrics/retro_2026-10-11_loop19.md
+
