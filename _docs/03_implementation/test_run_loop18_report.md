@@ -5,7 +5,7 @@
 **Mode**: functional. One total run for the loop, by the owner's direction (2026-10-06): the workers ran only their own package suite per stage; no Docker run per batch. Script: stage by stage with a result line per stage and a progress line every 30 seconds (scratchpad `step11.sh`).
 
 ```
-TEST RESULTS: 2 692 passed, 0 failed, 0 skipped, 0 errors (csharp 844 on net10.0 and the same 844 again on the netstandard2.0 build, typescript 642, python 692, rust 479; java and cpp print per-runner "all tests passed")
+TEST RESULTS: 2 657 passed, 0 failed, 0 skipped, 0 errors (csharp 844 on net10.0 and the same 844 again on the netstandard2.0 build, typescript 642, python 692, rust 479; java and cpp print per-runner "all tests passed")
 SUITE: specified 8 / executed 7 / not-run 1 suite (the Pico example, a host limit), plus 5 scaffold checks, the cross-language ring and the publish gate executed
 ```
 
