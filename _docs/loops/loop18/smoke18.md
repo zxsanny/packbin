@@ -68,3 +68,7 @@ SMOKE
 - No credentials are needed. Step 11 builds nothing new when its Docker image is cached (it took 7 s in the trial); a cold run takes a few minutes.
 - Not in this script (they ran in the total test run, `_docs/03_implementation/test_run_loop18_report.md`): the publish gate (450 s), the ESP targets and the Pico example (the CI `embedded` job runs Pico; it has no arm64 toolchain here).
 - Agent walk: no browser; the script above is the walk.
+
+## Result
+
+PASS. Owner run in the Terminal panel on `d365e06` (2026-10-11): `13/13 steps passed` (C# 844 on both targets, focused C# 137, TypeScript 642, Python 692, Rust, Java, C++ in the GCC 16 container, embedded ARM 0 targets failed, ring `language pairs passed` in 84 s, AC-10). The gate was answered PASS in chat after a misclick on FAIL.
