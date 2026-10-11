@@ -186,6 +186,20 @@ Estimation: `_docs/LESSONS.md` says the six packages stay peers. The session is 
 | AZ-2340 | cpp_present_result_pinned | 1 | AZ-2128 | AZ-2069 |
 | AZ-2341 | run_suite_python_venv_check | 1 | None | AZ-2069 |
 | AZ-2342 | split_files_near_cap | 2 | None | AZ-2069 |
+| AZ-2354 | pack_output_budget | 5 | AZ-2329 | AZ-2069 |
+| AZ-2355 | repeat_round_cap_on_pack | 2 | AZ-2329 | AZ-2069 |
+| AZ-2356 | count_zero_after_byte_list_error | 2 | AZ-2335, AZ-2331 | AZ-2069 |
+| AZ-2357 | cpp_count_behind_clear_when | 2 | AZ-2331 | AZ-2069 |
+| AZ-2358 | csharp_whole_float_refused | 1 | AZ-2309, AZ-2338 | AZ-2069 |
+| AZ-2359 | enum_slot_values_pinned | 1 | AZ-2309 | AZ-2069 |
+| AZ-2360 | flags_skipped_count_values_loud | 2 | AZ-2331 | AZ-2069 |
+| AZ-2361 | java_counts_fractions_sink | 2 | AZ-2329, AZ-2339 | AZ-2069 |
+| AZ-2362 | python_repeat_empty_flags_named_error | 1 | AZ-2336 | AZ-2069 |
+| AZ-2363 | typescript_times_in_when_split_bit | 1 | AZ-2331 | AZ-2069 |
+| AZ-2364 | cpp_late_marks_every_member | 1 | AZ-2331 | AZ-2069 |
+| AZ-2365 | split_files_near_cap_l20 | 1 | AZ-2342 | AZ-2069 |
+| AZ-2366 | csharp_typed_round_unpack_error | 2 | AZ-2305 | AZ-2069 |
+| AZ-2367 | hostile_pack_budget_cases | 2 | AZ-2354, AZ-2355, AZ-2356, AZ-2360 | AZ-2069 |
 
 The six pack tasks do not depend on each other. AZ-1875 runs after all six. The five blackbox tasks run after AZ-1913 and do not depend on each other. The three earlier todo tasks do not depend on each other and still have no tracker id. AZ-1938 through AZ-1941 are under epic AZ-1937. The string count does not include itself; the list count does not consume the next field.
 
@@ -203,3 +217,5 @@ AZ-2230 through AZ-2240 are loop 16 round 2 (feature assessment round 1 CLARIFY,
 AZ-2304 through AZ-2311 are loop 18 (owner decisions of 2026-10-10 on the loop 17 assessment, plus its clear gaps), claimed by loop 18: AZ-2304 (C++ flag-byte scope), AZ-2305 to AZ-2307, AZ-2309 and AZ-2310 (C#), AZ-2308 (lone dictionary in a round: C# first, other packages after the probe), AZ-2311 (Rust). The C# specs share `csharp/` and run in one worker; AZ-2307 also edits the shared ring files (`language-pair.sh`, the C# driver) and no other worker touches them in that wave.
 
 AZ-2329 through AZ-2342 are loop 19 (owner decisions of 2026-10-11 on the loop 18 review and assessment, plus its clear gaps), claimed by loop 19; one worker per package directory, AZ-2342 first in each of rust, java, csharp.
+
+AZ-2354 through AZ-2367 are loop 20 (owner decisions of 2026-10-11 on the loop 19 assessment, review and audit, plus its clear gaps), claimed by loop 20: TypeScript implements AZ-2354/AZ-2355 first and writes the reference table; then one worker per package directory; AZ-2367 is wave 2.
