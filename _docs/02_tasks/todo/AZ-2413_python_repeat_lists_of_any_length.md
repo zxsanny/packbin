@@ -1,0 +1,67 @@
+---
+loop: 22
+branch: dev
+---
+
+# Python repeat lists of unequal length pack like the other five packages
+
+**Task**: AZ-2413_python_repeat_lists_of_any_length
+**Name**: Python repeat lists of unequal length pack like the other five packages
+**Description**: Python requires equal lengths for `repeat` lists (a lone value, a short required list, a `when` list outside `flags`); it follows the rule the other five packages share.
+**Complexity**: 3 points
+**Dependencies**: none
+**Component**: python (change); typescript, java, csharp, rust (probe only)
+**Tracker**: AZ-2413
+**Epic**: AZ-2069
+
+## Problem
+
+Owner decision U14 of loop 22 (option A, align Python to the five). A lone value for a repeat member, a required list shorter than the longest, and a `when` list outside `flags` are refused in Python and packed by the other five. The five packages' rule: the round count is the longest list; a lone value broadcasts; a short required list ... (the worker records the exact rule per case from a TypeScript probe before changing Python, because the handoff names the shapes, not the bytes).
+
+## Outcome
+
+- A probe table in the batch report: each of the three shapes, the five packages' outcome (hex or error), one row per shape with-value and short.
+- Python packs those rows to the same bytes as the five; where the five themselves differ, the worker stops and reports the row (no guess).
+- Rows Python packs today keep their bytes.
+
+## Scope
+
+### Included
+- Python `_pack.py` repeat handling and the messages that go away; Python tests.
+
+### Excluded
+- Unpack; the other five packages (probe only; a differing row becomes a question, not a change).
+
+## Acceptance Criteria
+
+**AC-1: probe table**
+Given the three shapes
+When run through TypeScript, Java, C#, Rust
+Then the table records bytes or errors; all agree, else the worker stops.
+
+**AC-2: Python matches**
+Given the agreed rows
+When packed with Python
+Then the same bytes; Python unpack of those bytes gives back the rows the others unpack.
+
+**AC-3: no regression**
+Given the existing Python suite and the golden/ring fixtures
+When run
+Then all pass.
+
+## Unit Tests
+
+| AC Ref | What to Test | Required Outcome |
+|--------|-------------|-----------------|
+| AC-1/2 | each shape, with-value and short | bytes equal the table |
+| AC-3 | suite | green |
+
+## Blackbox Tests
+
+| AC Ref | Initial Data/Conditions | What to Test | Expected Behavior | NFR References |
+|--------|------------------------|-------------|-------------------|----------------|
+| AC-2 | hostile/ring | `pack_repeat_unequal_lists` (AZ-2417) | same bytes in six | — |
+
+## Constraints
+
+- Wire bytes of rows accepted today unchanged. Python needs 3.10+ (per-worker venv).
