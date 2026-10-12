@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import copy
 from collections.abc import Sequence
 from typing import Any
 
 from packbin._nodes import (
     _U2,
+    _Bits,
     _Dict,
     _FlagBit,
     _FlagByte,
@@ -12,7 +14,9 @@ from packbin._nodes import (
     _Group,
     _List,
     _Node,
+    _Packed,
     _Repeat,
+    _Sized,
     _finish_round,
     _Times,
     _When,
@@ -78,4 +82,6 @@ def _bind(node: _Node, reads: dict[int, _FlagByte]) -> _Node:
         return _List(get=node.get, set=node.set, element=_bind(node.element, {}))
     if isinstance(node, _Dict):
         return _Dict(get=node.get, set=node.set, element=_bind(node.element, {}))
+    if isinstance(node, (_Sized, _Bits, _Packed)):
+        return copy.copy(node)  # the count source it holds is this scheme's, not the shared node's
     return node
