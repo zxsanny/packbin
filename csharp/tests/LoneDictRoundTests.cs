@@ -2,6 +2,7 @@ using Packbin;
 
 namespace Packbin.Tests;
 
+// AZ-2389: a dict member of a round is an object or a list type (AZ-2308 used pack-only members that no longer build).
 // AZ-2308: in a repeat or times round a lone dictionary for a Dict name is refused naming the member, because it would
 // be given to every round; a list with one dictionary per round packs as before, and a lone string for a Utf8 name keeps
 // going to every round.
@@ -16,7 +17,7 @@ public class LoneDictRoundTests
     {
         public byte C { get; set; }
         public byte K { get; set; }
-        public Dictionary<string, byte>? Maps { get; set; }
+        public object? Maps { get; set; }
         public string S { get; set; } = "";
     }
 
@@ -24,7 +25,7 @@ public class LoneDictRoundTests
     {
         public byte C { get; set; }
         public byte K { get; set; }
-        public List<Dictionary<string, byte>>? Maps { get; set; }
+        public List<Dictionary<string, object?>>? Maps { get; set; }
         public string S { get; set; } = "";
     }
 
@@ -89,7 +90,7 @@ public class LoneDictRoundTests
     public void Ac2_Pack_LoneDictionaryInARoundOfATypedRow_ThrowsNamingTheMember(bool times)
     {
         // Arrange
-        var row = new LoneRow { C = 2, K = 1, Maps = new Dictionary<string, byte> { ["a"] = 5 } };
+        var row = new LoneRow { C = 2, K = 1, Maps = new Dictionary<string, object?> { ["a"] = (byte)5 } };
 
         // Act
         var error = Assert.Throws<ArgumentException>(() => BinaryPacker.Pack(times ? LoneTimes() : LoneRepeat(), row));
@@ -123,7 +124,7 @@ public class LoneDictRoundTests
         {
             C = 2,
             K = 0,
-            Maps = [new() { ["a"] = 5 }, new() { ["b"] = 6 }],
+            Maps = [new() { ["a"] = (byte)5 }, new() { ["b"] = (byte)6 }],
         };
 
         // Act

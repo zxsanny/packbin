@@ -48,6 +48,8 @@ public final class Field {
     final boolean nestedRow;
     /** The nested row's child factory; null for a Map row and for every other kind. */
     final Supplier<?> create;
+    /** The field a times reads its count from, set when a scheme binds it (SchemeOrder.bindFlagBits); else null. */
+    final Field countSource;
 
     private Field(
             Kind kind,
@@ -66,6 +68,28 @@ public final class Field {
             List<Integer> slotIds,
             boolean nestedRow,
             Supplier<?> create) {
+        this(kind, id, get, set, bigEndian, size, children, condition, group, bitIndex, inner, countId, bias, slotIds,
+                nestedRow, create, null);
+    }
+
+    private Field(
+            Kind kind,
+            int id,
+            Getter get,
+            Setter set,
+            boolean bigEndian,
+            int size,
+            List<Field> children,
+            Packbin.Eq condition,
+            FlagGroup group,
+            int bitIndex,
+            Field inner,
+            int countId,
+            int bias,
+            List<Integer> slotIds,
+            boolean nestedRow,
+            Supplier<?> create,
+            Field countSource) {
         this.kind = kind;
         this.id = id;
         this.get = get;
@@ -82,6 +106,7 @@ public final class Field {
         this.slotIds = immutableCopy(slotIds);
         this.nestedRow = nestedRow;
         this.create = create;
+        this.countSource = countSource;
     }
 
     /** An unmodifiable copy that rejects null items, as List.copyOf does (that call needs Android API 30). */
@@ -333,17 +358,23 @@ public final class Field {
 
     /** A copy with other children: the container of a scheme whose flag bits are bound (SchemeOrder). */
     Field withChildren(List<Field> bound) {
-        return copy(bound, group);
+        return copy(bound, group, countSource);
+    }
+
+    /** A times copy with other children that reads its count from {@code source} (null when it names none). */
+    Field withChildren(List<Field> bound, Field source) {
+        return copy(bound, group, source);
     }
 
     /** A copy that reads and writes through {@code read}, the flag byte group of one read in one scheme. */
     Field withGroup(FlagGroup read) {
-        return copy(children, read);
+        return copy(children, read, countSource);
     }
 
-    private Field copy(List<Field> newChildren, FlagGroup newGroup) {
+    private Field copy(List<Field> newChildren, FlagGroup newGroup, Field newCountSource) {
         return new Field(
-                kind, id, get, set, bigEndian, size, newChildren, condition, newGroup, bitIndex, inner, countId, bias, slotIds, nestedRow, create);
+                kind, id, get, set, bigEndian, size, newChildren, condition, newGroup, bitIndex, inner, countId, bias, slotIds, nestedRow, create,
+                newCountSource);
     }
 
     Field withBigEndian() {

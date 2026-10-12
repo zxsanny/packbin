@@ -7,7 +7,7 @@ import {
   itemGroup,
   type Field,
 } from "./fields.ts"
-import { bitOn, droppedBody, flagValueFor, type PackedFlagByte } from "./flag-bits.ts"
+import { bitOn, droppedBody, flagValueFor, refuseUnwrittenCount, type PackedFlagByte } from "./flag-bits.ts"
 import type { PackOut } from "./pack-out.ts"
 import { refName } from "./ref-scope.ts"
 import {
@@ -16,8 +16,10 @@ import {
   refuseLongLists,
   refuseRepeatOverLimit,
   refuseRoundsOverLimit,
+  refuseShortOptional,
   roundCount,
   roundMember,
+  overlay,
   roundShape,
   sliceRound,
   type RoundShape,
@@ -58,8 +60,7 @@ function packItem(
 ): void {
   const group = itemGroup(f.element)
   if (group === null) {
-    const slice: Value = { ...values, [fieldName(f.element)]: item }
-    packFields([f.element], allFields, slice, out, state, newScope())
+    packFields([f.element], allFields, overlay(values, fieldName(f.element), item), out, state, newScope())
     return
   }
   if (!isObjectLike(item)) throw new RangeError(`${f.name}: expected an object for each item`)
@@ -174,6 +175,7 @@ export function packFields(
                 `${dropped}: a value is given, but the count of its times is not written, so its bit is clear; write the count before the times`,
               )
             }
+            refuseUnwrittenCount(f.field, values, wrote)
             break
           }
           byte.flags |= 1 << f.bit
@@ -187,6 +189,7 @@ export function packFields(
               `${dropped}: a value is given, but the condition or count of its when or times is not written before the flag byte, so its bit is clear; write that field before the flag byte`,
             )
           }
+          refuseUnwrittenCount(f.field, values, wrote)
           break
         }
         if (f.field.kind === "group") {
@@ -205,9 +208,11 @@ export function packFields(
       case "repeat": {
         const shape = roundShape(f)
         refuseRepeatOverLimit(shape.names, values, state.maxRounds)
+        const count = roundCount(shape.names, values)
+        refuseShortOptional(shape.optionalNames, values, count)
         refuseLoneDicts(shape.dictNames, values)
         refuseLoneBuffers(shape.bufferNames, values)
-        packRounds(f, shape, roundCount(shape.names, values), allFields, values, out, state)
+        packRounds(f, shape, count, allFields, values, out, state)
         break
       }
       case "group":

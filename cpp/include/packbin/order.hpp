@@ -200,6 +200,7 @@ constexpr void mark_late(Field* t, std::size_t bit, Check& c) {
         return;
       }
       t[last].late = static_cast<std::uint8_t>(i - last);
+      t[i].flags = static_cast<std::uint8_t>(t[i].flags | flag::Late);
       last = i;
     }
     i += inside ? 1 : t[i].span;
@@ -287,7 +288,9 @@ constexpr void check_shape(Field const* t, std::size_t begin, std::size_t end, b
     bool is_presence = f.kind == Kind::Bool || (f.kind == Kind::Group && f.span == 1);
     bool too_wide = (f.kind == Kind::Flags && children > 8) ||
                     (f.kind == Kind::U2 && children > kMaxU2Children);
-    if (too_wide || (is_presence && !presence_ok) || (f.flags & flag::Invalid) != 0)
+    // A round with no member writes nothing, so the slot budget would not bound its work.
+    bool empty_round = (f.kind == Kind::Repeat || f.kind == Kind::Times) && children == 0;
+    if (too_wide || empty_round || (is_presence && !presence_ok) || (f.flags & flag::Invalid) != 0)
       c.fail_at(f.id);
     if (f.span > 1)
       check_shape(t, j + 1, j + f.span, f.kind == Kind::Flags || f.kind == Kind::FlagBit, c);

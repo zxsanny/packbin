@@ -52,6 +52,15 @@ internal static class RowBinding
             case Field.Kind.FlagBit:
                 ReadField(field.Inner!, row, into);
                 break;
+            case Field.Kind.Repeat or Field.Kind.Times when field.Binding is not null:
+                if (field.Binding.Member.Get(row) is IEnumerable items)
+                {
+                    var rounds = new List<RowValues>();
+                    foreach (var item in items)
+                        rounds.Add(Read(field.Children, item));
+                    into[field.Name] = rounds;
+                }
+                break;
             case Field.Kind.When:
             case Field.Kind.Flags:
             case Field.Kind.Repeat:
@@ -126,6 +135,10 @@ internal static class RowBinding
             case Field.Kind.Flags:
                 Apply(field.Children, values, row, inRound);
                 break;
+            case Field.Kind.Repeat or Field.Kind.Times when field.Binding is not null:
+                if (values.TryGetValue(field.Name, out var read) && read is List<Scope> rounds)
+                    field.Binding.Member.Set(row, RowsOf(field, rounds));
+                break;
             case Field.Kind.Repeat:
             case Field.Kind.Times:
                 Apply(field.Children, values, row, inRound: true);
@@ -148,6 +161,20 @@ internal static class RowBinding
                 SetIfRead(field, values, row, inRound);
                 break;
         }
+    }
+
+    // The collection of rows a round bound to one takes: a row of the round's row type for each round unpack read.
+    private static object RowsOf(Field round, List<Scope> read)
+    {
+        var rows = round.Binding!.Round!;
+        var made = new List<object>(read.Count);
+        foreach (var scope in read)
+        {
+            var element = rows.CreateElement();
+            Apply(round.Children, scope, element, inRound: false);
+            made.Add(element);
+        }
+        return rows.Collect(made);
     }
 
     private static void SetIfRead(Field field, IReadOnlyDictionary<string, object?> values, object row, bool inRound)

@@ -160,8 +160,9 @@ final class RepeatRoundTest {
                 Maps.map("on", Arrays.asList(true, null), "x", List.of(5, 6)));
 
         Scheme<Map> shortList = Maps.scheme(1, Packbin.repeat(0, u8(0, "k"), Packbin.flags(1, u8(1, "v"))));
-        expectPack("F1 repeat(u8 k, flags(u8 v)) {k:[1,2], v:[5]}", shortList,
-                Maps.map("k", List.of(1, 2), "v", List.of(5)), "01" + "010105" + "0200");
+        // AZ-2383: a short list under flags is refused (RepeatShortOptionalTest); the full list gives the same bytes.
+        expectPack("F1 repeat(u8 k, flags(u8 v)) {k:[1,2], v:[5,null]}", shortList,
+                Maps.map("k", List.of(1, 2), "v", Arrays.asList(5, null)), "01" + "010105" + "0200");
     }
 
     private static void roundListsStayAligned() {

@@ -3,8 +3,9 @@ using System.Globalization;
 namespace Packbin;
 
 // The number a row holds for an integer or float field. A dictionary row holds boxed values of any type, so each is
-// checked against the field it is written to: an integer field takes a whole number that fits its width (unpack returns
-// the narrow ones as whole-number doubles, and a row from JSON holds doubles or longs), a float field takes any number.
+// checked against the field it is written to: an integer field takes an integer type that fits its width (unpack returns
+// the exact type of each, so an unpacked row packs again as it is), never a float, double or decimal, whole or not; a
+// float field takes any number.
 internal static partial class Walker
 {
     internal static string KindName(Field field) => field.Type.ToString().ToLowerInvariant();
@@ -19,12 +20,14 @@ internal static partial class Walker
     {
         if (!IsNumber(value))
             throw NotANumber(field, value);
-        if (TryWhole(value, out var whole))
-        {
-            var (min, max) = Range(field.Type);
-            if (whole >= min && whole <= max)
-                return whole;
-        }
+        if (value is float or double or decimal)
+            throw new ArgumentException(
+                $"{field.Name}: {Convert.ToString(value, CultureInfo.InvariantCulture)} is a {value.GetType().Name}; "
+                + $"{KindName(field)} takes an integer type, not a float, double or decimal (f32 and f64 take them)");
+        var whole = Whole(value);
+        var (min, max) = Range(field.Type);
+        if (whole >= min && whole <= max)
+            return whole;
         throw DoesNotFit(field, value);
     }
 
@@ -33,35 +36,18 @@ internal static partial class Walker
     private static bool TrySlot(object? value, int max, out int slot)
     {
         slot = 0;
-        if (value is null or float or double or decimal || !IsNumber(value) || !TryWhole(value, out var whole) || whole < 0 || whole > max)
+        if (value is null or float or double or decimal || !IsNumber(value))
+            return false;
+        var whole = Whole(value);
+        if (whole < 0 || whole > max)
             return false;
         slot = (int)whole;
         return true;
     }
 
-    // False for a fraction, NaN, an infinity, or a number beyond long.MinValue..ulong.MaxValue.
-    private static bool TryWhole(object value, out decimal whole)
-    {
-        whole = 0;
-        switch (value)
-        {
-            case ulong big:
-                whole = big;
-                return true;
-            case float or double:
-                var d = Convert.ToDouble(value, CultureInfo.InvariantCulture);
-                if (!(d >= -9223372036854775808.0 && d < 18446744073709551616.0) || Math.Floor(d) != d)
-                    return false;
-                whole = d >= 9223372036854775808.0 ? (decimal)(ulong)d : (decimal)(long)d;
-                return true;
-            case decimal exact:
-                whole = exact;
-                return decimal.Truncate(exact) == exact;
-            default:
-                whole = Convert.ToInt64(value, CultureInfo.InvariantCulture);
-                return true;
-        }
-    }
+    // The value of an integer type (byte to ulong), as one decimal.
+    private static decimal Whole(object value) =>
+        value is ulong big ? big : Convert.ToInt64(value, CultureInfo.InvariantCulture);
 
     internal static (decimal Min, decimal Max) Range(Field.Kind kind) => kind switch
     {

@@ -32,12 +32,19 @@ internal static partial class Walker
             return false;
         var rounds = BorrowedCount(times, seen);
         if (rounds == 0)
-            RequireNoExtraRounds(RoundNames(times, packing: true), 0, values);
+            RequireNoRoundsGiven(times, values);
         return rounds > 0;
     }
 
+    private static void RequireNoRoundsGiven(Field times, IReadOnlyDictionary<string, object?> values)
+    {
+        if (RowsOf(times, values) is { Count: > 0 } rows)
+            throw new ArgumentException($"'{times.Name}' holds {rows.Count} items, but the times count is 0");
+        RequireNoExtraRounds(RoundNames(times, packing: true), 0, values);
+    }
+
     private static bool RepeatOn(IReadOnlyDictionary<string, object?> values, Field repeat) =>
-        RoundCount(RoundNames(repeat, packing: true), values) > 0;
+        RowsOf(repeat, values) is { } rows ? rows.Count > 0 : RoundCount(RoundNames(repeat, packing: true), values) > 0;
 
     private static bool AnyPresent(IReadOnlyDictionary<string, object?> values, string[] names)
     {

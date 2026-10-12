@@ -73,7 +73,7 @@ class _PackBudget:
 
     def start_round(self, node: _Repeat | _Times) -> None:
         """Called as a round starts, before any byte of it is written."""
-        total = self.slots + len(node.leaves)
+        total = self.slots + node.width
         if total > self.max_slots:
             raise ValueError(
                 f"{round_member(node)}: the rounds would hold {total} slots, above the limit of {self.max_slots} slots"

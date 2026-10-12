@@ -36,6 +36,55 @@ export function validateRoundNesting(fields: Field[], inRound = false): void {
   }
 }
 
+// A round of a body with no member charges no slot and writes no byte, so a count of 65 535 would loop
+// 65 535 times for no output and neither `maxSlots` nor `maxBytes` could stop it. Refused when the scheme
+// is built, wherever the repeat or times stands. A member is any field but a container (`when`, group)
+// that holds none, so a body of only empty containers is empty too. A zero-width `bytes`, a flag byte or a
+// `flags` without members is a member: it names a slot or writes a byte, so the budgets still bound it.
+export function validateRoundBodies(fields: Field[]): void {
+  for (const f of fields) {
+    switch (f.kind) {
+      case "repeat":
+      case "times":
+        if (!holdsMember(f.fields)) {
+          throw new RangeError(
+            `${f.kind} ${f.anchor}: the body holds no member; a round of it would charge no slot and write nothing`,
+          )
+        }
+        validateRoundBodies(f.fields)
+        break
+      case "when":
+      case "flags":
+      case "group":
+        validateRoundBodies(f.fields)
+        break
+      case "flagBit":
+        validateRoundBodies([f.field])
+        break
+      case "list":
+      case "dict":
+        validateRoundBodies([f.element])
+        break
+    }
+  }
+}
+
+function holdsMember(fields: Field[]): boolean {
+  return fields.some((f) => {
+    switch (f.kind) {
+      case "when":
+      case "group":
+      case "repeat":
+      case "times":
+        return holdsMember(f.fields)
+      case "flagBit":
+        return holdsMember([f.field])
+      default:
+        return true
+    }
+  })
+}
+
 // The names a round can hold: its own fields and the ones under when, flags, flag bits and groups.
 // A list or dict element keeps values of its own, so it is not looked into. `packing`: a group's
 // own member is read on pack (it can turn the group's flag bit on); unpack stores it only for an
@@ -48,13 +97,27 @@ export function roundNames(fields: Field[], packing: boolean): Set<string> {
 
 // What a repeat or times asks of its values on every pack, worked out once when the scheme binds it.
 // `width` is the slots a round charges against `maxSlots`: the names unpack gives an entry per round.
-export type RoundShape = { names: Set<string>; dictNames: string[]; bufferNames: string[]; width: number }
+// `optionalNames` are the names a flag bit can leave absent in a round (under `flags` or a flag bit).
+export type RoundShape = {
+  names: Set<string>
+  dictNames: string[]
+  bufferNames: string[]
+  optionalNames: string[]
+  width: number
+}
 
 export function makeRoundShape(fields: Field[]): RoundShape {
   const dictNames: string[] = []
   const bufferNames: string[] = []
   collectCollectionNames(fields, dictNames, bufferNames)
-  return { names: roundNames(fields, true), dictNames, bufferNames, width: roundNames(fields, false).size }
+  const optionalNames = [...collectOptionalNames(fields, false, new Set())]
+  return {
+    names: roundNames(fields, true),
+    dictNames,
+    bufferNames,
+    optionalNames,
+    width: roundNames(fields, false).size,
+  }
 }
 
 // The shape `bindReferences` filled in; a repeat or times no Scheme bound has none.
@@ -62,6 +125,38 @@ export function roundShape(f: Extract<Field, { kind: "repeat" | "times" }>): Rou
   const { shape } = f as typeof f & { shape?: RoundShape }
   if (shape === undefined) throw new RangeError(`${f.kind}: round shape is not bound`)
   return shape
+}
+
+// The names reached through `flags` or a flag bit, also through a `when` or group below them: a flag
+// bit can leave them absent in a round.
+function collectOptionalNames(fields: Field[], underFlag: boolean, names: Set<string>): Set<string> {
+  for (const f of fields) {
+    switch (f.kind) {
+      case "flagBit":
+        collectOptionalNames([f.field], true, names)
+        break
+      case "flags":
+        collectOptionalNames(f.fields, true, names)
+        break
+      case "when":
+        collectOptionalNames(f.fields, underFlag, names)
+        break
+      case "group":
+        if (underFlag && f.fields.length === 0) names.add(f.name)
+        collectOptionalNames(f.fields, underFlag, names)
+        break
+      case "u2":
+        if (underFlag) for (const slot of f.slots) names.add(slot.name)
+        break
+      case "repeat":
+      case "times":
+      case "flagByte":
+        break
+      default:
+        if (underFlag) names.add(f.name)
+    }
+  }
+  return names
 }
 
 // The dict names and the byte-buffer names (`bytes`, `sized`) a round holds one of per round.
@@ -143,6 +238,21 @@ export function refuseRepeatOverLimit(names: Set<string>, values: Value, limit: 
   }
 }
 
+// A repeat writes a round per entry of its longest list, and a flag bit leaves a member absent in a round
+// only by an `undefined` entry. A non-empty list shorter than the rounds under a member a flag bit can leave
+// absent does not say which rounds it belongs to, so pack refuses it, named by the member. An empty list
+// leaves the member absent in every round.
+export function refuseShortOptional(optionalNames: string[], values: Value, count: number): void {
+  for (const name of optionalNames) {
+    const v = values[name]
+    if (Array.isArray(v) && v.length > 0 && v.length < count) {
+      throw new RangeError(
+        `${name}: ${v.length} items, repeat count ${count}; give one entry per round, undefined where the member is absent`,
+      )
+    }
+  }
+}
+
 function addNames(f: Field, packing: boolean, names: Set<string>): void {
   switch (f.kind) {
     // A repeat or times never sits in a round (refused at construction); the case only narrows the union.
@@ -190,15 +300,28 @@ export function refuseLongLists(names: Set<string>, count: number, values: Value
   }
 }
 
-// `values` with each list among the round's names read at `index`; a value that is not a list
-// stays as it is.
+// A view of `values` for round `index`: each list among the round's names read at that index, a value
+// that is not a list as it is. The view reads through to `values`, so a round costs the names it holds
+// and not every field of the enclosing scope.
 export function sliceRound(values: Value, names: Set<string>, index: number): Value {
-  const slice: Value = { ...values }
+  const slice: Value = Object.create(values) as Value
   for (const name of names) {
     const v = values[name]
-    if (Array.isArray(v)) slice[name] = v[index]
+    if (Array.isArray(v)) defineOwn(slice, name, v[index])
   }
   return slice
+}
+
+// A view of `values` that reads `name` as `value`, as for one list or dict item.
+export function overlay(values: Value, name: string, value: unknown): Value {
+  const view: Value = Object.create(values) as Value
+  defineOwn(view, name, value)
+  return view
+}
+
+// Defined, not assigned, so a member named "__proto__" is an entry and not the view's prototype.
+function defineOwn(view: Value, name: string, value: unknown): void {
+  Object.defineProperty(view, name, { value, enumerable: true, writable: true, configurable: true })
 }
 
 function padTo(list: unknown[], length: number): void {

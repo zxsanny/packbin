@@ -82,32 +82,23 @@ Result pack_flags(Pack& p, std::size_t i, void* obj) {
   return r;
 }
 
-// True when a `when` between the flag bit at `bit` and the entry `k` that holds `k` has a false
-// condition: `k` is not written then.
-bool under_clear_when(Field const* t, std::size_t bit, std::size_t k, void* obj) {
-  Field const* at = t + k;
-  for (Field const* w = t + bit + 1; w < at; ++w) {
-    if (w->kind == Kind::When && at < w + w->span && !when_matches(t, *w, obj))
-      return true;
-  }
-  return false;
-}
-
 PACKBIN_NOINLINE
 Result pack_flag_byte(Pack& p, std::size_t i, void* obj) {
   Field const* t = p.t;
   std::uint8_t byte = 0;
   for (std::size_t j = i + 1; j < p.n; ++j) {
-    if (t[j].kind != Kind::FlagBit || t[j].ref != static_cast<std::int16_t>(i))
+    if (t[j].kind != Kind::FlagBit || t[j].ref != static_cast<std::int16_t>(i) ||
+        !present(t, j + 1, obj))
       continue;
-    // A body whose source is written after this byte cannot be read back (see `Field::late`).
-    for (std::size_t k = j; t[k].late != 0;) {
-      k += t[k].late;
-      if (present(t, k, obj) && !under_clear_when(t, j, k, obj))
-        return bad(p.w, t[k]);
+    // A body that only its late members hold cannot be read back (see `Field::late`).
+    if (!present(t, j + 1, obj, flag::Late)) {
+      for (std::size_t k = j; t[k].late != 0;) {
+        k += t[k].late;
+        if (present(t, k, obj))
+          return bad(p.w, t[k]);
+      }
     }
-    if (present(t, j + 1, obj))
-      byte = static_cast<std::uint8_t>(byte | (1u << t[j].bit));
+    byte = static_cast<std::uint8_t>(byte | (1u << t[j].bit));
   }
   return put_num<std::uint8_t>(p.w, byte, false, t[i].id);
 }

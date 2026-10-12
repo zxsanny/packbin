@@ -149,6 +149,7 @@ class _Repeat(_Node):
     fields: list[_Node]
     leaves: list[Any] = field(default_factory=_builtin_list, init=False, repr=False, compare=False)
     optional: set[int] = field(default_factory=set, init=False, repr=False, compare=False)
+    width: int = field(default=0, init=False, repr=False, compare=False)
 
 
 @dataclass(slots=True)
@@ -202,6 +203,8 @@ class _Times(_Node):
     fields: list[_Node]
     leaves: list[Any] = field(default_factory=_builtin_list, init=False, repr=False, compare=False)
     optional: set[int] = field(default_factory=set, init=False, repr=False, compare=False)
+    width: int = field(default=0, init=False, repr=False, compare=False)
+    count_source: Any = field(default=None, init=False, repr=False, compare=False)
 
 
 @dataclass(slots=True)
@@ -349,10 +352,7 @@ def when(anchor: int, condition: _Eq, *fields: _Node) -> _When:
 
 
 def repeat(anchor: int, *fields: _Node) -> _Repeat:
-    node = _Repeat(anchor=anchor, fields=_builtin_list(fields))
-    node.leaves = _round_leaves(node.fields)
-    node.optional = _optional_leaves(node.fields)
-    return node
+    return _finish_round(_Repeat(anchor=anchor, fields=_builtin_list(fields)))
 
 
 def group(anchor: int, *fields: _Node) -> _Group:
@@ -395,10 +395,7 @@ def packed(width: int, field_id: int, acc: Acc, count_id: int, bias: int = 0) ->
 
 
 def times(anchor: int, count_id: int, *fields: _Node) -> _Times:
-    node = _Times(anchor=anchor, count=count_id, fields=_builtin_list(fields))
-    node.leaves = _round_leaves(node.fields)
-    node.optional = _optional_leaves(node.fields)
-    return node
+    return _finish_round(_Times(anchor=anchor, count=count_id, fields=_builtin_list(fields)))
 
 
 def utf8(field_id: int, acc: Acc) -> _Utf8:
@@ -456,3 +453,28 @@ def _optional_leaves(nodes: Sequence[_Node], under_flags: bool = False) -> set[i
         elif under_flags and isinstance(node, _U2):
             out.update(id(slot) for slot in node.slots)
     return out
+
+
+def _round_width(leaves: Sequence[Any]) -> int:
+    """The slots a round charges: one per distinct name its body can hold. Two nodes that read and write the same
+    member (the arms of two `when`s) are one name; a node with no member access (the identity) is its own."""
+    hashed: set[Any] = set()
+    unhashed: _builtin_list[Any] = []
+    for leaf in leaves:
+        access = getattr(leaf.get, "access", None)
+        if access is None:
+            access = ("node", id(leaf))
+        try:
+            hashed.add(access)
+        except TypeError:  # an unhashable key
+            if access not in unhashed:
+                unhashed.append(access)
+    return len(hashed) + len(unhashed)
+
+
+def _finish_round(node: Any) -> Any:
+    """Gives a `repeat` or `times` the values it holds, the ones a flag bit can leave absent and its slot width."""
+    node.leaves = _round_leaves(node.fields)
+    node.optional = _optional_leaves(node.fields)
+    node.width = _round_width(node.leaves)
+    return node

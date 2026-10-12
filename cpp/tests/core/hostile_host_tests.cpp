@@ -6,7 +6,7 @@
 #include "packbin/packbin.hpp"
 
 #include "check.hpp"
-#include "hostile_pack_cases.hpp"
+#include "hostile_pack_loop21.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -294,6 +294,19 @@ char const* eq_out_of_range(std::uint8_t const*, std::size_t) {
   return construct_term(s);
 }
 
+// AZ-2390: a times or repeat with no child writes nothing in any round, so it is refused at
+// construction. C++ cannot spell the list-element shape (an Array element holds no times), so
+// construct_empty_round_body_list_element is skipped and these two cover the same refusal.
+char const* construct_empty_times_body(std::uint8_t const*, std::size_t) {
+  auto s = packbin::scheme<TimesU32>(1, packbin::u32<&TimesU32::n>(0), packbin::times(1, 0));
+  return construct_term(s);
+}
+
+char const* construct_empty_repeat_body(std::uint8_t const*, std::size_t) {
+  auto s = packbin::scheme<TimesU32>(1, packbin::repeat(0));
+  return construct_term(s);
+}
+
 struct Handler {
   char const* id;
   Run run;
@@ -320,7 +333,11 @@ constexpr Handler kHandlers[] = {
     {"empty_group_outside_flags", empty_group_outside_flags},
     {"eq_bool_false", eq_bool_false},
     {"eq_out_of_range", eq_out_of_range},
+    {"construct_empty_times_body", construct_empty_times_body},
+    {"construct_empty_repeat_body", construct_empty_repeat_body},
 };
+
+constexpr char const* kConstructSkips[] = {"construct_empty_round_body_list_element"};
 
 struct Case {
   std::string id, stage, expected, hex;
@@ -394,10 +411,28 @@ void check_case(Handler const& h, Case const& c) {
   expect(ok, "hostile case outcome");
 }
 
+// AZ-2392: a refused case must carry the error its table entry names, so a refusal by another
+// rule (another kind, or another member) fails.
+void refusal_is_named(Case const& c) {
+  auto const* want = hostile_pack::refusal_of(c.id);
+  if (want == nullptr) {
+    std::fprintf(stderr, "hostile %s has no refusal entry\n", c.id.c_str());
+    expect(false, "hostile pack refusal has a table entry");
+    return;
+  }
+  auto const& got = hostile_pack::last_result;
+  bool ok = got.error == want->error && got.field == want->field;
+  if (!ok)
+    std::fprintf(stderr, "hostile %s: refused with error %d field %d, table says %d field %d\n",
+                 c.id.c_str(), static_cast<int>(got.error), got.field,
+                 static_cast<int>(want->error), want->field);
+  expect(ok, "hostile pack refusal carries the table error");
+}
+
 void pack_cases(std::vector<Case> const& packs) {
   expect(!packs.empty(), "pack cases found");
   for (auto const& c : packs) {
-    auto out = hostile_pack::outcome_of(c.id);
+    auto out = hostile_pack::outcome_of_all(c.id);
     if (out.ran == out.skipped) {
       std::fprintf(stderr, "hostile %s is neither run nor skipped exactly once\n", c.id.c_str());
       expect(false, "hostile pack case is run or skipped");
@@ -411,6 +446,8 @@ void pack_cases(std::vector<Case> const& packs) {
         std::fprintf(stderr, "hostile %s: got %s, expected %s %s\n", c.id.c_str(),
                      out.text.c_str(), c.expected.c_str(), c.hex.c_str());
       expect(ok, "hostile pack case outcome");
+      if (c.expected == "pack_error")
+        refusal_is_named(c);
     }
   }
 }
@@ -420,8 +457,17 @@ void hostile_cases() {
   std::vector<Case> packs;
   bool found = read_cases(cases, packs);
   expect(found, "hostile cases file found");
-  expect(cases.size() == sizeof(kHandlers) / sizeof(kHandlers[0]), "every case has a scheme");
+  std::size_t skipped = 0;
+  for (auto const& c : cases)
+    for (auto const* id : kConstructSkips)
+      skipped += c.id == id;
+  expect(cases.size() == skipped + sizeof(kHandlers) / sizeof(kHandlers[0]),
+         "every case has a scheme or a skip");
   for (auto const& c : cases) {
+    if (c.stage == "construct" && skipped != 0 && c.id == kConstructSkips[0]) {
+      std::printf("hostile %s skipped: an Array element holds no times\n", c.id.c_str());
+      continue;
+    }
     Handler const* match = nullptr;
     for (auto const& h : kHandlers)
       if (c.id == h.id)

@@ -31,6 +31,7 @@ from packbin._pack_rounds import (
     _check_round_lists,
     _refuse_lone_collection,
     _refuse_repeat_over_limit,
+    _refuse_short_optional,
     _round_length,
 )
 
@@ -161,6 +162,32 @@ def _refuse_late_times(child: _Node, seen: dict[int, Any], row: Any) -> None:
             _refuse_late_times(inner, seen, row)
 
 
+def _refuse_unwritten_count(child: _Node, seen: dict[int, Any], take: Callable[[_Node], Any]) -> None:
+    """A clear bit holds a `times` whose count no field wrote, because the `when` that holds it is clear, while the
+    row gives the count a value above 0. Unpack would read the count as absent and the `times` as no round, so
+    pack refuses the row instead of writing a packet that drops it. A count of 0 or none, and a count that a
+    field wrote, are left alone. Looked at through `flags`, flag bits, groups and the `when`s that hold."""
+    if isinstance(child, _Times):
+        source = child.count_source
+        if source is None or seen.get(child.count) is not None:
+            return
+        count = take(source)
+        if isinstance(count, int) and not isinstance(count, bool) and count > 0:
+            raise ValueError(
+                f"{round_member(child)}: the count {_name(source)} is {count} in the row, but no field wrote it "
+                "(the when that holds it is clear), so its times reads no round; "
+                "give the count 0, leave it out, or make the when hold"
+            )
+    elif isinstance(child, (_Group, _Flags)):
+        for inner in child.fields:
+            _refuse_unwritten_count(inner, seen, take)
+    elif isinstance(child, _FlagBit):
+        _refuse_unwritten_count(child.field, seen, take)
+    elif isinstance(child, _When) and seen.get(child.condition.field_id) == child.condition.value:
+        for inner in child.fields:
+            _refuse_unwritten_count(inner, seen, take)
+
+
 def _refuse_late_body(
     child: _Node, flag_state: dict[int, Any], take: Callable[[_Node], Any], seen: dict[int, Any], row: Any
 ) -> None:
@@ -171,6 +198,7 @@ def _refuse_late_body(
     if not late:
         return
     _refuse_late_times(child, seen, row)
+    _refuse_unwritten_count(child, seen, take)
     if not _child_on(child, take, seen, row):
         return
     for node in late:
@@ -343,6 +371,7 @@ def pack_nodes(
             flag = 0
             for i, child in enumerate(node.fields):
                 if not _child_on(child, take, seen, row):
+                    _refuse_unwritten_count(child, seen, take)
                     continue
                 flag |= 1 << i
                 if isinstance(child, _Bool):
@@ -420,10 +449,11 @@ def pack_nodes(
         elif isinstance(node, _Repeat):
             values = [leaf.get(row) for leaf in node.leaves]
             _refuse_repeat_over_limit(node, values, budget.max_rounds)
-            for leaf, value in zip(node.leaves, values):
-                _refuse_lone_collection(leaf, value)
             lengths = [_round_length(value) for value in values]
             count = max(lengths, default=0)
+            _refuse_short_optional(node, values, count)
+            for leaf, value in zip(node.leaves, values):
+                _refuse_lone_collection(leaf, value)
             if any(n not in (0, count) for n in lengths):
                 raise ValueError("repeat fields must have equal lengths")
             for i in range(count):

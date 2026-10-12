@@ -107,6 +107,9 @@ constexpr std::uint8_t Borrowed = 4;
 constexpr std::uint8_t Fixed = 8;
 // Set by a builder that could not bind this entry; the scheme check reports SchemeInvalid.
 constexpr std::uint8_t Invalid = 16;
+// A `when` or `times` that a flag bit decides and whose source is written after its flag byte
+// (see `Field::late`).
+constexpr std::uint8_t Late = 32;
 }  // namespace flag
 
 // Returns the bound member inside one row or element object.
@@ -129,15 +132,17 @@ struct Field {
   // `bytes(n)` length; Text/Blob/Array capacity; flag byte group number.
   std::uint16_t size = 0;
   // `packed` bit width (1 or 2) and count bias (0 or -1); a flag bit's position. On the count
-  // of a times and on a `when` that holds one, `bit` is the distance back to the nearest `when`
-  // that holds it, or 0.
+  // source of a `times`, `bits`, `packed` or `sized`, and on a `when` that holds that source,
+  // `bit` is the distance back to the nearest `when` that holds it, or 0.
   std::uint8_t width = 0;
   std::int8_t bias = 0;
   std::uint8_t bit = 0;
   // A flag bit: the distance to the first `when` or `times` it decides (itself or inside a
   // group) whose source is written after its flag byte, or 0; on that `when` or `times`, the
-  // distance to the next one. A reader decides that bit where the byte is read, before the source
-  // exists, so pack refuses a body for each.
+  // distance to the next one (each carries `flag::Late`). A reader decides that bit where the
+  // byte is read, before the source exists, so a body held only by those members cannot set the
+  // bit and pack refuses it; another member of the bit that holds a value sets the bit and the
+  // body packs.
   std::uint8_t late = 0;
   std::int64_t eq = 0;
   Access access = nullptr;

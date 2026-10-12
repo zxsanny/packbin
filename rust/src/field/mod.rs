@@ -3,6 +3,7 @@ mod leaf;
 mod map_scheme;
 mod names;
 mod order;
+mod round_body;
 mod shape;
 
 pub use leaf::{
@@ -10,7 +11,7 @@ pub use leaf::{
     utf8,
 };
 pub(crate) use leaf::{float_width, int_width};
-use map_scheme::count_fields;
+use map_scheme::round_width;
 pub use map_scheme::{MapScheme, DEFAULT_MAX_BYTES, DEFAULT_MAX_ROUNDS, DEFAULT_MAX_SLOTS};
 pub(crate) use order::{check_order, nested_element, take_id};
 
@@ -231,7 +232,7 @@ pub fn repeat(anchor: u32, fields: Vec<Field>) -> Field {
     Field {
         kind: FieldKind::Repeat {
             anchor,
-            slots: count_fields(&fields),
+            slots: round_width(&fields),
             members: fields,
         },
     }
@@ -296,7 +297,7 @@ pub fn times(anchor: u32, count_field: impl FieldKey, fields: Vec<Field>) -> Fie
         kind: FieldKind::Times {
             anchor,
             count: count_field.to_name(),
-            slots: count_fields(&fields),
+            slots: round_width(&fields),
             members: fields,
         },
     }

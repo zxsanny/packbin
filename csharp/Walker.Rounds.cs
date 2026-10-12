@@ -13,10 +13,16 @@ internal static partial class Walker
         PackOut buffer,
         Scope seen)
     {
+        if (RowsOf(field, values) is { } rows)
+        {
+            PackRowRepeat(field, rows, buffer, seen);
+            return;
+        }
         var names = RoundNames(field, packing: true);
         RequireRepeatWithinLimit(names, values, seen);
         RequireRoundCollections(field, values);
-        PackRounds(field, names, RoundCount(names, values), values, buffer, seen);
+        RequireNoShortOptionalLists(field, values);
+        PackRounds(field, RoundMember(field, names), RoundCount(names, values), i => SliceRound(names, values, i), buffer, seen);
     }
 
     private static void PackTimes(
@@ -27,20 +33,32 @@ internal static partial class Walker
     {
         var names = RoundNames(field, packing: true);
         var count = BorrowedCount(field, seen);
-        RequireRoundsWithinLimit(field, names, count, seen);
+        var member = RoundMember(field, names);
+        RequireRoundsWithinLimit(member, count, seen);
+        if (RowsOf(field, values) is { } rows)
+        {
+            RequireRowCount(field, rows, count);
+            PackRounds(field, member, count, i => rows[i], buffer, seen);
+            return;
+        }
         RequireRoundCollections(field, values);
         RequireNoExtraRounds(names, count, values);
-        PackRounds(field, names, count, values, buffer, seen);
+        PackRounds(field, member, count, i => SliceRound(names, values, i), buffer, seen);
     }
+
+    // The member a round's limit error names: the collection of a round bound to rows, else the first name it holds.
+    private static string RoundMember(Field field, List<string> names) =>
+        field.Binding is not null ? field.Name
+        : names.Count > 0 ? names[0]
+        : $"{(field.Type == Field.Kind.Times ? "times" : "repeat")} {field.Id}";
 
     // Unpack refuses a round above the scheme's `maxRounds`, so pack refuses a count above it before any round is
     // written: a lone scalar is given to every round, and a huge count would otherwise loop and fill the buffer.
-    private static void RequireRoundsWithinLimit(Field field, List<string> names, int count, Scope seen)
+    private static void RequireRoundsWithinLimit(string member, int count, Scope seen)
     {
         var limit = seen.Budget.MaxRounds;
         if (count > limit)
-            throw new ArgumentException(
-                $"'{(names.Count > 0 ? names[0] : $"times {field.Id}")}': the times count is {count}, above the limit of {limit} rounds");
+            throw new ArgumentException($"'{member}': the times count is {count}, above the limit of {limit} rounds");
     }
 
     // A repeat takes its rounds from the longest list, so pack refuses a list above the limit before any round is written,
@@ -66,11 +84,12 @@ internal static partial class Walker
         }
     }
 
+    // `roundValues(i)`: the values round i reads, a slice of the per-name lists or the row of a round bound to rows.
     private static void PackRounds(
         Field field,
-        List<string> names,
+        string member,
         int count,
-        IReadOnlyDictionary<string, object?> values,
+        Func<int, IReadOnlyDictionary<string, object?>> roundValues,
         PackOut buffer,
         Scope outer)
     {
@@ -78,8 +97,8 @@ internal static partial class Walker
         var slots = SlotsPerRound(RoundNames(field, packing: false));
         for (var i = 0; i < count; i++)
         {
-            RequireSlots(field, names, slots, seen);
-            var slice = SliceRound(names, values, i);
+            RequireSlots(member, slots, seen);
+            var slice = roundValues(i);
             seen.Clear();
             foreach (var child in field.Children)
                 PackField(child, slice, buffer, seen);
@@ -88,12 +107,11 @@ internal static partial class Walker
 
     // A round is admitted before any of its bytes are written, as unpack admits it, so a packet pack writes is one the same
     // scheme unpacks.
-    private static void RequireSlots(Field field, List<string> names, int slots, Scope seen)
+    private static void RequireSlots(string member, int slots, Scope seen)
     {
         var budget = seen.Budget;
         if (budget.TryChargeSlots(slots))
             return;
-        var member = names.Count > 0 ? names[0] : $"{(field.Type == Field.Kind.Times ? "times" : "repeat")} {field.Id}";
         throw new ArgumentException(
             $"'{member}': the rounds would hold {budget.SlotsUsed + slots} slots, above the limit of {budget.MaxSlots} slots");
     }

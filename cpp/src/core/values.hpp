@@ -103,7 +103,9 @@ constexpr bool is_number(Kind k) {
          k == Kind::F32 || k == Kind::F64;
 }
 
-bool present(Field const* t, std::size_t i, void* obj);
+// The children of the entry that have any of the `skip` flag bits count as absent (`flag::Late`:
+// the members a flag bit decides after its byte is read).
+bool present(Field const* t, std::size_t i, void* obj, std::uint8_t skip = 0);
 bool read_int(Field const& f, void* obj, std::int64_t& out);
 // True when the `when` entry `f` matches: its source field is present and equals `f.eq`.
 bool when_matches(Field const* t, Field const& f, void* obj);

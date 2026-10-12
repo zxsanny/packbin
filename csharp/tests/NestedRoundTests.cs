@@ -14,7 +14,7 @@ public class NestedRoundTests
         public bool? On { get; set; }
         public Child? Row { get; set; }
         public List<object?>? Items { get; set; }
-        public Dictionary<string, object?>? Map { get; set; }
+        public object? Map { get; set; }
     }
 
     private sealed class Child

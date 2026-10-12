@@ -175,6 +175,16 @@ public sealed class Field
     public static Field Times(int anchor, int countId, params Field[] fields) =>
         new(Kind.Times, anchor, "times", children: fields, countId: countId);
 
+    // A times bound to a collection of rows: `fields` are declared for the row type E of an E[], List<E> or IList<E>
+    // member, and the member holds one E per round (AZ-2388).
+    public static Field Times<T, TProp>(int anchor, int countId, Expression<Func<T, TProp>> accessor, params Field[] fields)
+    {
+        var access = MemberAccess.From(accessor);
+        return new Field(
+            Kind.Times, anchor, access.Name, children: fields, countId: countId, rowType: typeof(T),
+            binding: FieldBinding.OfRound(access));
+    }
+
     public static Field U2<T>(params (int Id, Expression<Func<T, int>> Accessor)[] slots)
     {
         if (slots.Length == 0)
@@ -212,6 +222,14 @@ public sealed class Field
 
     public static Field Repeat(int anchor, params Field[] fields) =>
         new(Kind.Repeat, anchor, "", children: fields);
+
+    // A repeat bound to a collection of rows, as Times above.
+    public static Field Repeat<T, TProp>(int anchor, Expression<Func<T, TProp>> accessor, params Field[] fields)
+    {
+        var access = MemberAccess.From(accessor);
+        return new Field(
+            Kind.Repeat, anchor, access.Name, children: fields, rowType: typeof(T), binding: FieldBinding.OfRound(access));
+    }
 
     public static Field Group<T, TChild>(Expression<Func<T, TChild>> accessor, params Field[] fields)
     {

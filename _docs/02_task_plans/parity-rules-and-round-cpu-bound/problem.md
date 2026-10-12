@@ -33,6 +33,10 @@ Callers who pack rows built from requests they do not trust (CPU bound), callers
 - **D6** U10 (message and limit parity) is accepted as is: no code, a line in the upgrade notes (step 13).
 - **D7** Out of scope: Go (AZ-2222, next), Swift (AZ-2223), AZ-2068 (C++ AVR), any tag, slow-test trimming, mypy/clippy/rustfmt clean-up, the traceability catch-up of loops 11 to 18 beyond step 12.
 
+- **D8** (after the TypeScript reference, 2026-10-12) `_docs/03_implementation/reference_loop21_slots.md` is the contract for wave 1b. Refinements the reference made: AZ-2390 refuses a round body with no *member* looking through `when` and groups (a zero-width `bytes`, a flag byte and a member-less `flags` are members and still build; the hostile unpack vectors `zero_progress_repeat_*` rely on it); AZ-2383 refuses a short optional list under `flags` for `repeat` only (`times` keeps accepting it: README Times, AZ-2248); AZ-2386 refuses a count above 0 that no field wrote behind a clear `when`, in a split bit and in combined `flags`.
+- **D9** Row 56 of the reference (`bits`/`packed`/`sized` count behind a clear `when`, count in the row, **no value**) packs a clear bit `010000` in TypeScript, while U6 refuses the same shape for `times`. Wave 1b matches TypeScript row 56; making the six refuse it is an open row (U11) for the loop 22 handoff, not built here.
+- **D10** C++ AZ-2385 landed at 8152 B flash (margin 40 B) and 456 B stack (margin 56 B); the C++ empty-body refusal is `Error::SchemeInvalid` at construction for a `times`/`repeat` with no child; the fixture rows must accept `scheme_error` there.
+
 ## Out of scope
 
 Wire format changes for accepted rows; the session layer; Go and Swift; a release or tag.

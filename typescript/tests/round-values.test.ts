@@ -216,7 +216,7 @@ describe("repeat and times round values are addressed by round index", () => {
     )
 
     // Act
-    const wire = hex(BinaryPacker.pack(layout, { a: [1], b: [5, 6] }))
+    const wire = hex(BinaryPacker.pack(layout, { a: [1, undefined], b: [5, 6] }))
 
     // Assert
     assert.equal(wire, "010301050206")

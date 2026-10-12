@@ -125,13 +125,38 @@ public class StrictNumberTests
         { "I32", int.MinValue, "0100000080" },
         { "U64", ulong.MaxValue, "01ffffffffffffffff" },
         { "I64", long.MinValue, "010000000000000080" },
-        { "U8", 5.0, "0105" },
+        { "U8", 5, "0105" },
         { "U8", 5L, "0105" },
-        { "U32", 4294967295.0, "01ffffffff" },
-        { "I16", -2.0f, "01feff" },
-        { "U64", 18446744073709549568.0, "0100f8ffffffffffff" },
-        { "U8", 5m, "0105" },
+        { "U32", 4294967295L, "01ffffffff" },
+        { "I16", -2, "01feff" },
+        { "U64", 18446744073709549568UL, "0100f8ffffffffffff" },
     };
+
+    // AZ-2373: unpack returns exact integer types, so an integer field refuses a whole float, double or decimal too.
+    public static TheoryData<string, object> WholeFloats() => new()
+    {
+        { "U8", 5.0 },
+        { "U8", 5m },
+        { "U32", 4294967295.0 },
+        { "I16", -2.0f },
+        { "U64", 18446744073709549568.0 },
+        { "I64", 0.0 },
+    };
+
+    [Theory]
+    [MemberData(nameof(WholeFloats))]
+    public void Pack_WholeFloatForAnInteger_ThrowsNamingTheMemberAndKind(string kind, object value) =>
+        ExpectRefused(() => Pack(kind, value), kind, kind);
+
+    [Theory]
+    [InlineData("F32", 5.0, "0000a040")]
+    [InlineData("F32", 5, "0000a040")]
+    [InlineData("F64", 5.0, "0000000000001440")]
+    public void Pack_WholeNumberForAFloat_StillPacks(string kind, object value, string hex) =>
+        Assert.Equal("01" + hex, Hex(Pack(kind, value)));
+
+    [Fact]
+    public void Pack_WholeDecimalForAFloat_StillPacks() => Assert.Equal("010000000000001440", Hex(Pack("F64", 5m)));
 
     [Theory]
     [MemberData(nameof(Valid))]

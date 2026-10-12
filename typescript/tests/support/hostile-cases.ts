@@ -112,6 +112,21 @@ export const CONSTRUCT: Record<string, { build: () => unknown; rule: RegExp }> =
     build: () => scheme<Row>(1, u8(0, (x) => x.a), group((x) => x.mark, [])),
     rule: /^empty group mark: allowed only directly inside flags or a flag bit/,
   },
+  construct_empty_times_body: {
+    build: () => scheme<Row>(1, u8(0, (x) => x.n), times(1, 0, [])),
+    rule: /^times 1: the body holds no member; a round of it would charge no slot and write nothing$/,
+  },
+  construct_empty_repeat_body: {
+    build: () => scheme<Row>(1, repeat(0, [])),
+    rule: /^repeat 0: the body holds no member; a round of it would charge no slot and write nothing$/,
+  },
+  construct_empty_round_body_list_element: {
+    build: () => scheme<Row>(
+      1,
+      list((x) => x.items, group((x) => x.item, [u32(0, (x) => x.n), times(1, 0, [])])),
+    ),
+    rule: /^times 1: the body holds no member; a round of it would charge no slot and write nothing$/,
+  },
 }
 
 // Built per case, so a scheme a package refuses is reported for that case alone.

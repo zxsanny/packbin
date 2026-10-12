@@ -13,8 +13,7 @@ from packbin._nodes import (
     _List,
     _Node,
     _Repeat,
-    _optional_leaves,
-    _round_leaves,
+    _finish_round,
     _Times,
     _When,
 )
@@ -70,14 +69,10 @@ def _bind(node: _Node, reads: dict[int, _FlagByte]) -> _Node:
     if isinstance(node, _When):
         return _When(anchor=node.anchor, condition=node.condition, fields=_bind_all(node.fields, dict(reads)))
     if isinstance(node, _Repeat):
-        repeated = _Repeat(anchor=node.anchor, fields=_bind_all(node.fields, {}))
-        repeated.leaves = _round_leaves(repeated.fields)
-        repeated.optional = _optional_leaves(repeated.fields)
-        return repeated
+        return _finish_round(_Repeat(anchor=node.anchor, fields=_bind_all(node.fields, {})))
     if isinstance(node, _Times):
-        timed = _Times(anchor=node.anchor, count=node.count, fields=_bind_all(node.fields, {}))
-        timed.leaves = _round_leaves(timed.fields)
-        timed.optional = _optional_leaves(timed.fields)
+        timed = _finish_round(_Times(anchor=node.anchor, count=node.count, fields=_bind_all(node.fields, {})))
+        timed.count_source = node.count_source
         return timed
     if isinstance(node, _List):
         return _List(get=node.get, set=node.set, element=_bind(node.element, {}))

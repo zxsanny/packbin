@@ -68,12 +68,14 @@ def _is_integer(node: _Node) -> bool:
     return isinstance(node, _U2Slot) or (isinstance(node, _Scalar) and node.kind in _INTEGER_KINDS)
 
 
-def _require_count_source(label: str, field_id: int, visible: dict[int, _Node]) -> None:
+def _require_count_source(label: str, field_id: int, visible: dict[int, _Node]) -> _Node:
+    """The field a count names. A `times` keeps it (`count_source`) to read the count in the row."""
     source = _require_visible(label, "count", field_id, visible)
     if not _is_integer(source):
         raise ValueError(
             f"{label}: count names field {field_id}, which is a {_kind_of(source)}; a count names an integer field"
         )
+    return source
 
 
 def _require_eq_source(anchor: int, condition: _Eq, visible: dict[int, _Node]) -> None:
@@ -151,7 +153,7 @@ def _validate_order(
             if isinstance(node, _When):
                 _require_eq_source(node.anchor, node.condition, visible)
             if isinstance(node, _Times):
-                _require_count_source(f"times {node.anchor}", node.count, visible)
+                node.count_source = _require_count_source(f"times {node.anchor}", node.count, visible)
             body = {} if isinstance(node, (_Repeat, _Times)) else visible
             next_id = _validate_order(node.fields, next_id, isinstance(node, _Flags), body)
         elif isinstance(node, _FlagByte):
@@ -183,6 +185,40 @@ def _validate_round_nesting(nodes: Sequence[_Node], in_round: bool = False) -> N
             _validate_round_nesting([node.field], in_round)
         elif isinstance(node, (_List, _Dict)):
             _validate_round_nesting([node.element])
+
+
+def _has_member(nodes: Sequence[_Node]) -> bool:
+    """Looking through `when` and groups, any field that is not a container is a member: a value, a `list` or
+    `dict`, `u2`, a flag byte or flag bit, `flags` (a member-less one still writes its flag byte). A zero-width
+    `bytes` is one too: unpack stops it as a round that reads nothing, and pack is bounded by the slots."""
+    for node in nodes:
+        if isinstance(node, (_When, _Group, _Repeat, _Times)):
+            if _has_member(node.fields):
+                return True
+        else:
+            return True
+    return False
+
+
+def _validate_round_bodies(nodes: Sequence[_Node]) -> None:
+    """A round body must hold a member: every member either takes a slot (so `max_slots` bounds the rounds) or
+    writes a byte (so `max_bytes` does), and a body with none charges 0 slots and writes 0 bytes, so a
+    `times(65535)` of it would cost the CPU of its rounds for nothing (F33). Refused wherever the round stands.
+    One walk at construction; a round costs no more."""
+    for node in nodes:
+        if isinstance(node, (_Repeat, _Times)):
+            if not _has_member(node.fields):
+                kind = "repeat" if isinstance(node, _Repeat) else "times"
+                raise ValueError(
+                    f"{kind} {node.anchor}: the body holds no member; a round of it would charge no slot and write nothing"
+                )
+            _validate_round_bodies(node.fields)
+        elif isinstance(node, (_When, _Flags, _Group)):
+            _validate_round_bodies(node.fields)
+        elif isinstance(node, _FlagBit):
+            _validate_round_bodies([node.field])
+        elif isinstance(node, (_List, _Dict)):
+            _validate_round_bodies([node.element])
 
 
 class _Seen:

@@ -138,8 +138,8 @@ def test_ac5_times_at_the_default_limit():
 
 
 def test_ac6_the_slot_limit_counts_every_name_of_a_round():
-    # Three names: the first round of a run costs 9 x 3 slots, each later round 3.
-    scheme = _three_names().with_limits(max_slots=30)
+    # Three names: each round costs 3 slots.
+    scheme = _three_names().with_limits(max_slots=6)
 
     ok, ok_seen = _unpack(scheme, bytes.fromhex("010000"))
     three_rounds, three_seen = _unpack(scheme, bytes.fromhex("01000000"))
@@ -153,10 +153,10 @@ def test_ac6_the_slot_limit_counts_every_name_of_a_round():
 
 @pytest.mark.parametrize(
     "max_slots,refused_left",
-    [(11, None), (10, 1), (9, 2)],
-    ids=["first_round_nine_then_one_each", "third_round_refused", "second_round_refused"],
+    [(3, None), (2, 1), (1, 2)],
+    ids=["one_slot_each", "third_round_refused", "second_round_refused"],
 )
-def test_the_first_round_of_a_run_costs_nine_slots_per_name(max_slots: int, refused_left):
+def test_every_round_of_a_run_costs_one_slot_per_name(max_slots: int, refused_left):
     scheme = _repeat_k().with_limits(max_slots=max_slots)
 
     result, seen = _unpack(scheme, bytes.fromhex("01aabbcc"))
@@ -170,8 +170,8 @@ def test_the_first_round_of_a_run_costs_nine_slots_per_name(max_slots: int, refu
 
 @pytest.mark.parametrize(
     "max_slots,refused_left",
-    [(20, None), (19, 1)],
-    ids=["nine_plus_one_twice", "second_times_refused"],
+    [(4, None), (3, 1)],
+    ids=["one_slot_each_round", "second_times_refused"],
 )
 def test_ac7_the_slot_total_is_per_call_and_shared_by_the_fields(max_slots: int, refused_left):
     scheme = Scheme(
@@ -192,7 +192,7 @@ def test_ac7_the_slot_total_is_per_call_and_shared_by_the_fields(max_slots: int,
 
 
 def test_ac7_the_slot_total_starts_again_on_the_next_call():
-    scheme = _repeat_k().with_limits(max_slots=11)
+    scheme = _repeat_k().with_limits(max_slots=3)
 
     first, _ = _unpack(scheme, bytes.fromhex("01aabbcc"))
     second, _ = _unpack(scheme, bytes.fromhex("01aabbcc"))
@@ -309,8 +309,8 @@ def _three_elements(container: str) -> bytes:
 @pytest.mark.parametrize("container", ["list", "dict"])
 def test_the_slot_budget_is_shared_with_list_and_dict_elements(container: str):
     data = _three_elements(container)
-    fits = _element_round_scheme(container).with_limits(max_slots=27)
-    too_small = _element_round_scheme(container).with_limits(max_slots=26)
+    fits = _element_round_scheme(container).with_limits(max_slots=3)
+    too_small = _element_round_scheme(container).with_limits(max_slots=2)
 
     ok, ok_seen = _unpack(fits, data)
     refused, refused_seen = _unpack(too_small, data)
@@ -320,12 +320,12 @@ def test_the_slot_budget_is_shared_with_list_and_dict_elements(container: str):
     _refusal(refused, refused_seen, left=1)
 
 
-def test_each_run_in_an_element_pays_for_its_own_lists():
-    scheme = _element_round_scheme("list").with_limits(max_slots=9 * 3 - 1)
+def test_the_first_round_of_a_run_in_an_element_pays_no_more_than_the_later_ones():
+    scheme = _element_round_scheme("list").with_limits(max_slots=3)
 
-    result, seen = _unpack(scheme, _three_elements("list"))
+    result, _seen = _unpack(scheme, _three_elements("list"))
 
-    _refusal(result, seen, left=1)
+    assert result.ok
 
 
 def test_a_round_leaf_list_is_found_once_when_the_scheme_is_built(monkeypatch: pytest.MonkeyPatch):

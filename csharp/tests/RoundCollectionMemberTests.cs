@@ -54,7 +54,8 @@ public class RoundCollectionMemberTests
         return [.. packet];
     }
 
-    // Builds? and the outcome of unpacking two rounds: the member as text, "short:<field>" or the exception type.
+    // Builds? and the outcome of unpacking two rounds: the member as text, "short:<field>" or the exception type (the
+    // refusal's message when it does not build).
     private static (bool Built, string Outcome) Probe<M>(bool dict, bool wide, bool times)
     {
         Scheme<RoundRow<M>> scheme;
@@ -62,9 +63,9 @@ public class RoundCollectionMemberTests
         {
             scheme = Build<M>(dict, wide, times);
         }
-        catch (ArgumentException)
+        catch (ArgumentException refused)
         {
-            return (false, "");
+            return (false, refused.Message);
         }
         try
         {
@@ -169,25 +170,43 @@ public class RoundCollectionMemberTests
         Assert.Equal("[[10],[11]]", outcome);
     }
 
-    [Theory]
-    [InlineData("List<object?>", true)]
-    [InlineData("IList", true)]
-    [InlineData("object", true)]
-    [InlineData("List<Dictionary<string,object?>>", true)]
-    [InlineData("object[]", true)]
-    [InlineData("Dictionary<string,object?>", false)]
-    [InlineData("string", false)]
-    public void DictInARound_BindsOrReturnsTheErrorResultAndNeverThrows(string member, bool binds)
-    {
-        foreach (var times in new[] { false, true })
-        {
-            // Act
-            var (built, outcome) = Run(member, dict: true, wide: false, times);
+    // Every member a dict holds one dictionary per round in (AZ-2389).
+    private static readonly string[] DictBinding =
+    [
+        "List<Dictionary<string,object?>>", "List<object?>", "IList", "IList<object?>", "object[]", "object",
+        "ICollection<object?>", "IEnumerable", "IReadOnlyList<object?>", "List<object>",
+    ];
 
-            // Assert (a dict member that cannot hold the rounds still builds: such a scheme can pack)
-            Assert.True(built);
-            Assert.Equal(binds ? "[{a:10},{a:11}]" : "short:Ids", outcome);
-        }
+    [Theory]
+    [MemberData(nameof(Members))]
+    public void DictInARound_BuildsIfAndOnlyIfTypedUnpackBindsIt(string member, bool wide, bool times)
+    {
+        // Arrange
+        var binds = Array.IndexOf(DictBinding, member) >= 0;
+
+        // Act
+        var (built, outcome) = Run(member, dict: true, wide, times);
+
+        // Assert (the same predicate decides the build and the binding: no member builds and then fails to bind)
+        Assert.Equal(binds, built);
+        if (built)
+            Assert.Equal("[{a:10},{a:11}]", outcome);
+    }
+
+    [Theory]
+    [InlineData("Dictionary<string,object?>")]
+    [InlineData("string")]
+    [InlineData("List<int>")]
+    [InlineData("int[]")]
+    public void DictInARound_ThatCannotHoldTheRounds_IsRefusedAtConstructionNamingTheMember(string member)
+    {
+        // Act
+        var (built, message) = Run(member, dict: true, wide: false, times: false);
+
+        // Assert
+        Assert.False(built);
+        Assert.Contains("'Ids'", message);
+        Assert.Contains("one dictionary per round", message);
     }
 
     [Fact]

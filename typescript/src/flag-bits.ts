@@ -1,7 +1,7 @@
 import type { Field } from "./fields.ts"
-import { present, sameValue, type Value } from "./kinds.ts"
+import { present, sameValue, validCount, type Value } from "./kinds.ts"
 import { refName } from "./ref-scope.ts"
-import { refuseLoneBuffers, refuseLoneDicts, refuseLongLists, roundCount, roundShape } from "./rounds.ts"
+import { refuseLoneBuffers, refuseLoneDicts, refuseLongLists, roundCount, roundMember, roundShape } from "./rounds.ts"
 import { borrowedCount, seen } from "./written.ts"
 
 // A flag byte pack has written: where it sits in the output, the bits set so far, and whether its
@@ -133,6 +133,33 @@ function countNeverWritten(field: Field, values: Value, wrote: Value): boolean {
       return countNeverWritten(field.field, values, wrote)
     default:
       return false
+  }
+}
+
+// A times in the scope of `field` (as for `countNeverWritten`) whose count the row holds above 0 although
+// no field wrote it, which is what a clear `when` that holds the count leaves: its bit is clear and no
+// round is read, so the count the row gives would mean nothing. Refused, naming the member of its round.
+export function refuseUnwrittenCount(field: Field, values: Value, wrote: Value): void {
+  switch (field.kind) {
+    case "times": {
+      const ref = refName(field)
+      if (Object.hasOwn(wrote, ref)) return
+      const count = validCount(values[ref])
+      if (count === null || count === 0) return
+      throw new RangeError(
+        `${roundMember(field, roundShape(field).names)}: the count ${ref} is ${count} in the row, but no field wrote it (the when that holds it is clear), so its times reads no round; give the count 0, leave it out, or make the when hold`,
+      )
+    }
+    case "when":
+      if (!sameValue(seen(wrote, refName(field)), field.value)) return
+      for (const child of field.fields) refuseUnwrittenCount(child, values, wrote)
+      return
+    case "group":
+    case "flags":
+      for (const child of field.fields) refuseUnwrittenCount(child, values, wrote)
+      return
+    case "flagBit":
+      refuseUnwrittenCount(field.field, values, wrote)
   }
 }
 

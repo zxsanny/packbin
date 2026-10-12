@@ -18,10 +18,14 @@ using packbin::Opt;
 
 using PackRun = std::string (*)();
 
+// The result of the last pack_answer, so the loader can check which error a refusal carried.
+inline packbin::Result last_result;
+
 template <typename S, typename Row>
 std::string pack_answer(S const& s, Row const& row) {
   std::uint8_t buf[32] = {};
   auto r = packbin::pack(s, row, buf, sizeof(buf));
+  last_result = r;
   if (!r.ok())
     return "pack_error";
   static char const digits[] = "0123456789abcdef";
@@ -105,6 +109,7 @@ struct SplitRow {
   Opt<std::uint8_t> n;
   Opt<std::uint8_t> speed;
   Opt<std::uint16_t> heading;
+  Opt<std::uint8_t> x;
   Array<SplitItem, 4> rounds;
 };
 
@@ -167,15 +172,20 @@ std::string pack_split_false_condition_silent() {
   return pack_answer(s, row);
 }
 
-// flag_byte; u8 n after it; bit 0 { times count = n { u8 pt } }, with n = 0 and two rounds given:
-// the list holds values for a count of 0.
+// flag_byte; u8 n after it; bit 0 { group { u8 x; times count = n { u8 pt } } }, with n = 0, x
+// given and two rounds given: the list holds values for a count of 0. README gives the bit body as
+// the times alone, but then the late rule refuses the row first (the bit is set only by the late
+// times, AZ-2385) and the count-0 rule is never reached. With `x` set the bit is set by a member
+// that is not late, so the late rule cannot fire and only the count rule can refuse.
 std::string pack_split_count_zero_after_byte_list() {
   namespace pb = packbin;
   auto s = pb::scheme<SplitRow>(
       1, pb::flag_byte(0), pb::u8<&SplitRow::n>(0),
-      pb::flag_bit(0, pb::times<&SplitRow::rounds>(1, 0, pb::u8<&SplitItem::pt>(1))));
+      pb::flag_bit(0, pb::group(1, pb::u8<&SplitRow::x>(1),
+                                pb::times<&SplitRow::rounds>(2, 0, pb::u8<&SplitItem::pt>(2)))));
   SplitRow row;
   row.n = 0;
+  row.x = 1;
   row.rounds.count = 2;
   row.rounds.items[0].pt = 5;
   row.rounds.items[1].pt = 6;

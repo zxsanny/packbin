@@ -2,9 +2,11 @@ package packbin;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Repeat and times rounds, as C++ per-round items ({@code unpack_items}). A round packs item {@code i} of every
@@ -40,7 +42,53 @@ final class Rounds {
             }
             count = Math.max(count, entries(given));
         }
+        requireListPerRound(field, row, count, outer);
         pack(field, values, row, sink, seen, count, outer);
+    }
+
+    /**
+     * A list under a member that a flag bit can leave absent, shorter than the rounds, would read as absent in the
+     * rounds it does not reach and so hide which round it belongs to: refused before any round, as TypeScript does.
+     * An empty list, no list and a lone value are not short. A times keeps reading a short list as absent.
+     */
+    private static void requireListPerRound(Field field, Object row, int rounds, Walker.Take outer) {
+        List<Field> optional = new ArrayList<>();
+        optionalValues(field.children, false, optional);
+        for (Field value : optional) {
+            if (read(value, row, outer) instanceof List<?> items && !items.isEmpty() && items.size() < rounds) {
+                throw new IllegalArgumentException(memberName(value) + ": " + items.size() + " items, repeat count "
+                        + rounds + "; give one entry per round, null where the member is absent");
+            }
+        }
+    }
+
+    /** The value fields a flag bit can leave absent: reached through flags or a flag bit, also below a when or group. */
+    private static void optionalValues(List<Field> body, boolean underFlag, List<Field> out) {
+        for (Field field : body) {
+            switch (field.kind) {
+                case FLAGS -> optionalValues(field.children, true, out);
+                case FLAG_BIT -> optionalValues(Collections.singletonList(field.inner), true, out);
+                case WHEN -> optionalValues(field.children, underFlag, out);
+                case GROUP -> {
+                    if (!field.nestedRow) {
+                        optionalValues(field.children, underFlag, out);
+                    } else if (underFlag) {
+                        out.add(field);
+                    }
+                }
+                case U2 -> {
+                    if (underFlag) {
+                        out.addAll(field.children);
+                    }
+                }
+                case REPEAT, TIMES, FLAG_BYTE -> { }
+                default -> {
+                    if (underFlag) {
+                        out.add(field);
+                    }
+                }
+            }
+        }
     }
 
     /** Whether a repeat that is a flags member writes: at least one round holds a value. */
@@ -85,8 +133,9 @@ final class Rounds {
             int count,
             Walker.Take outer) {
         requireNoLone(field, row, outer);
+        int width = width(values);
         for (int i = 0; i < count; i++) {
-            sink.startRound(field, values);
+            sink.startRound(field, values, width);
             clear(values, seen);
             int index = i;
             Walker.Take at = child -> item(read(child, row, outer), index);
@@ -160,10 +209,11 @@ final class Rounds {
     static Object unpackRepeat(
             Field field, byte[] data, Cursor cur, Object row, Map<Object, Object> seen, boolean nested) {
         List<Field> values = values(field.children);
+        int width = width(values);
         int[] before = nested ? entryCounts(values, row) : null;
         long started = 0;
         while (cur.pos < data.length) {
-            if (!cur.startRound(started++, values.size())) {
+            if (!cur.startRound(started++, width)) {
                 return refused(field, data, cur);
             }
             int round = cur.pos;
@@ -183,9 +233,10 @@ final class Rounds {
     static Object unpackTimes(
             Field field, long count, byte[] data, Cursor cur, Object row, Map<Object, Object> seen, boolean nested) {
         List<Field> values = values(field.children);
+        int width = width(values);
         int[] before = nested ? entryCounts(values, row) : null;
         for (long i = 0; i < count; i++) {
-            if (!cur.startRound(i, values.size())) {
+            if (!cur.startRound(i, width)) {
                 return refused(field, data, cur);
             }
             int round = cur.pos;
@@ -256,6 +307,24 @@ final class Rounds {
             }
         }
         return null;
+    }
+
+    /**
+     * The slots a round charges against maxSlots, on pack and on unpack: one for each distinct member name it can
+     * hold, so two branches of a when that write the same name are one slot. A member with no name (a typed
+     * accessor) is a slot of its own.
+     */
+    static int width(List<Field> values) {
+        Set<String> names = new HashSet<>();
+        int unnamed = 0;
+        for (Field value : values) {
+            if (value.set instanceof Access.KeySetter named) {
+                names.add(named.key);
+            } else {
+                unnamed++;
+            }
+        }
+        return names.size() + unnamed;
     }
 
     private static void clear(List<Field> values, Map<Object, Object> seen) {

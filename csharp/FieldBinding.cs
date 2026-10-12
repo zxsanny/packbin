@@ -17,12 +17,17 @@ internal sealed class FieldBinding
     // List and dict: how unpack builds the collection.
     public CollectionShape? Shape { get; }
 
+    // Repeat and times bound to a collection of rows.
+    public RowRounds? Round { get; }
+
     private FieldBinding(
         MemberAccess member,
         MemberAccess[]? slots = null,
         Type? nestedType = null,
-        CollectionShape? shape = null)
+        CollectionShape? shape = null,
+        RowRounds? round = null)
     {
+        Round = round;
         Member = member;
         Slots = slots ?? [];
         NestedType = nestedType;
@@ -35,6 +40,8 @@ internal sealed class FieldBinding
     public static FieldBinding OfSlots(MemberAccess[] slots) => new(slots[0], slots);
 
     public static FieldBinding OfNestedRow(MemberAccess member, Type rowType) => new(member, nestedType: rowType);
+
+    public static FieldBinding OfRound(MemberAccess member) => new(member, round: new RowRounds(member.Type));
 
     public static FieldBinding OfCollection(MemberAccess member, Field element, bool dictionary) =>
         new(member, shape: new CollectionShape(member.Type, element, dictionary));

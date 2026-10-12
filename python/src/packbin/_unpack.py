@@ -37,12 +37,10 @@ DEFAULT_MAX_SLOTS = 4_194_304
 class _Budget:
     """What one unpack call may still spend on `repeat` and `times` rounds. `slots` counts the entries every
     round of the call has made so far, shared by every field and by list and dict elements, like `seen`.
-    A round makes one entry per name its body holds, and the first round of a run also pays eight more per
-    name for the list that holds the run's entries, so a short run in each of many elements costs what it takes."""
+    A round makes one entry per name its body holds (`_Repeat.width`), the width pack charges, so a packet pack
+    writes at exactly `max_slots` unpacks."""
 
     __slots__ = ("max_rounds", "max_slots", "slots")
-
-    LIST_SLOTS = 8
 
     def __init__(self, max_rounds: int = DEFAULT_MAX_ROUNDS, max_slots: int = DEFAULT_MAX_SLOTS) -> None:
         self.max_rounds = max_rounds
@@ -51,10 +49,9 @@ class _Budget:
 
     def refuses(self, started: int, width: int) -> bool:
         """Called as a round starts: `started` is the rounds this field has begun, `width` the names of the body."""
-        cost = width * (1 + self.LIST_SLOTS) if started == 0 else width
-        if started >= self.max_rounds or self.slots + cost > self.max_slots:
+        if started >= self.max_rounds or self.slots + width > self.max_slots:
             return True
-        self.slots += cost
+        self.slots += width
         return False
 
 
@@ -328,7 +325,7 @@ def unpack_nodes(
             round_lists: dict[int, list[Any]] = {id(leaf): [] for leaf in leaves}
             started = 0
             while offset < len(data):
-                if budget.refuses(started, len(leaves)):
+                if budget.refuses(started, node.width):
                     return offset, _bad_value(data, offset, str(node.anchor))
                 started += 1
                 before = offset
@@ -391,7 +388,7 @@ def unpack_nodes(
             leaves = node.leaves
             round_lists = {id(leaf): [] for leaf in leaves}
             for started in range(raw_count):
-                if budget.refuses(started, len(leaves)):
+                if budget.refuses(started, node.width):
                     return offset, _bad_value(data, offset, str(node.anchor))
                 before = offset
                 offset, err = unpack_nodes(

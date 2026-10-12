@@ -265,8 +265,7 @@ def test_ac4_row15_a_raised_max_slots_packs_and_unpacks():
 
     # Act
     packed = BinaryPacker.pack(scheme, row)
-    # Python's unpack also charges eight more slots per name for the first round of a run
-    result = BinaryPacker.unpack(packed, scheme.with_limits(max_slots=4_259_775 + 8 * 65).on(lambda _row: None))
+    result = BinaryPacker.unpack(packed, scheme.on(lambda _row: None))
 
     # Assert
     assert len(packed) == 4_259_780
@@ -284,10 +283,10 @@ def test_ac4_row16_the_same_packet_is_refused_by_unpack_at_the_default_limit():
     result = BinaryPacker.unpack(packed, _wide_round().on(lambda _row: None))
 
     # Assert
-    # Python's unpack charges eight more slots per name for the first round of a run (README), so it refuses
-    # at a round of its own: the field and the bytes left pin that round
+    # Unpack charges the width pack charges (AZ-2381), so it refuses at the round pack refuses (round index
+    # 64 527, 4 194 260 bytes written): the bytes left pin that round
     assert result.ok is False
-    assert result.error == ShortPacket(field="1", needed=0, left=66040)
+    assert result.error == ShortPacket(field="1", needed=0, left=65_520)
 
 
 def test_order_row17_a_row_at_both_limits_packs():

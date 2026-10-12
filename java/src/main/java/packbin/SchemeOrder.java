@@ -31,19 +31,24 @@ final class SchemeOrder {
      * Each read gets a {@link FlagGroup} of its own in the rebuilt fields.
      */
     static List<Field> bindFlagBits(List<Field> fields) {
-        return bindAll(fields, new HashMap<>());
+        return bindAll(fields, new HashMap<>(), new HashMap<>());
     }
 
-    /** {@code visible} maps a flagByte handle to the group of its latest read that this point can see. */
-    private static List<Field> bindAll(List<Field> fields, Map<FlagGroup, FlagGroup> visible) {
+    /**
+     * {@code visible} maps a flagByte handle to the group of its latest read that this point can see. {@code counts}
+     * holds the integer and bool fields read so far in this reference scope, by id, as the construction checks see
+     * them: a times takes the field its count names from it, so pack can read that count in the row.
+     */
+    private static List<Field> bindAll(
+            List<Field> fields, Map<FlagGroup, FlagGroup> visible, Map<Integer, Field> counts) {
         List<Field> bound = new ArrayList<>(fields.size());
         for (Field field : fields) {
-            bound.add(bind(field, visible));
+            bound.add(bind(field, visible, counts));
         }
         return bound;
     }
 
-    private static Field bind(Field field, Map<FlagGroup, FlagGroup> visible) {
+    private static Field bind(Field field, Map<FlagGroup, FlagGroup> visible, Map<Integer, Field> counts) {
         return switch (field.kind) {
             case FLAG_BYTE -> {
                 FlagGroup read = new FlagGroup();
@@ -57,21 +62,38 @@ final class SchemeOrder {
                             "flag bit " + bitName(field.inner) + " has no flagByte before it in the same scope");
                 }
                 int index = read.reserve(field.inner);
-                Field inner = bind(field.inner, new HashMap<>(visible));
+                Field inner = bind(field.inner, new HashMap<>(visible), counts);
                 read.bitInners.set(index, inner);
                 yield Field.flagBit(read, index, inner);
             }
             case FLAGS -> {
                 Field[] members = new Field[field.children.size()];
                 for (int i = 0; i < members.length; i++) {
-                    members[i] = bind(field.children.get(i).inner, new HashMap<>(visible));
+                    members[i] = bind(field.children.get(i).inner, new HashMap<>(visible), counts);
                 }
                 yield Field.flags(field.id, members);
             }
-            case WHEN -> field.withChildren(bindAll(field.children, new HashMap<>(visible)));
-            case GROUP -> field.withChildren(bindAll(field.children, field.nestedRow ? new HashMap<>() : visible));
-            case REPEAT, TIMES, LIST, DICT -> field.withChildren(bindAll(field.children, new HashMap<>()));
-            default -> field;
+            case WHEN -> field.withChildren(bindAll(field.children, new HashMap<>(visible), counts));
+            case GROUP -> field.nestedRow
+                    ? field.withChildren(bindAll(field.children, new HashMap<>(), new HashMap<>()))
+                    : field.withChildren(bindAll(field.children, visible, counts));
+            case REPEAT, LIST, DICT -> field.withChildren(bindAll(field.children, new HashMap<>(), new HashMap<>()));
+            case TIMES -> field.withChildren(
+                    bindAll(field.children, new HashMap<>(), new HashMap<>()), counts.get(field.countId));
+            case U2 -> {
+                for (Field slot : field.children) {
+                    if (isCountSource(slot)) {
+                        counts.put(slot.id, slot);
+                    }
+                }
+                yield field;
+            }
+            default -> {
+                if (isCountSource(field)) {
+                    counts.put(field.id, field);
+                }
+                yield field;
+            }
         };
     }
 
@@ -121,11 +143,13 @@ final class SchemeOrder {
             case REPEAT -> {
                 requireAnchor(field, next);
                 walkScope(field.children, next, typed);
+                requireMember(field);
             }
             case TIMES -> {
                 requireAnchor(field, next);
                 requireCount(field, earlier);
                 walkScope(field.children, next, typed);
+                requireMember(field);
             }
             case GROUP -> {
                 if (field.children.isEmpty() && !field.nestedRow) {
@@ -187,6 +211,37 @@ final class SchemeOrder {
         if (element.kind == Field.Kind.LIST || element.kind == Field.Kind.DICT) {
             requireElementFactory(element, typed);
         }
+    }
+
+    /**
+     * A round whose body holds no member charges no slot and writes no byte, so neither maxSlots nor maxBytes could
+     * bound a count of 65 535 such rounds (F33). Refused here, once, wherever the repeat or times stands.
+     */
+    private static void requireMember(Field round) {
+        if (!holdsMember(round.children)) {
+            throw new IllegalArgumentException(round.kind.name().toLowerCase(Locale.ROOT) + " " + round.id
+                    + ": the body holds no member; a round of it would charge no slot and write nothing");
+        }
+    }
+
+    /**
+     * Looking through when, anchored groups, flag bits and an inner repeat or times, a member is any field that is
+     * not a container: a value field (a zero-width bytes included), a list, a dict, a u2, a nested row, a flag byte
+     * or a flags (one without members writes its flag byte).
+     */
+    private static boolean holdsMember(List<Field> body) {
+        for (Field field : body) {
+            boolean member = switch (field.kind) {
+                case WHEN, REPEAT, TIMES -> holdsMember(field.children);
+                case GROUP -> field.nestedRow || holdsMember(field.children);
+                case FLAG_BIT -> holdsMember(java.util.Collections.singletonList(field.inner));
+                default -> true;
+            };
+            if (member) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void requireAnchor(Field field, int[] next) {

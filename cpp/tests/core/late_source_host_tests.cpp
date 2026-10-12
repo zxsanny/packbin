@@ -201,6 +201,64 @@ void az2364_every_late_when_of_a_bit_is_refused() {
   pack_refused(three, third, 3, "AZ-2364 third late when, d given");
 }
 
+// AZ-2385: a late `when` or `times` in a flag bit body packs when another member of the bit sets
+// the bit, with TypeScript's bytes; when only late members hold a value it stays refused.
+void az2385_late_when_packs_when_another_member_sets_the_bit() {
+  auto s = pb::scheme<Modes>(
+      1, pb::flag_byte(0), pb::u8<&Modes::mode>(0),
+      pb::flag_bit(0, pb::group(1, pb::u8<&Modes::d>(1),
+                                pb::when(2, pb::eq(0, 1), pb::u8<&Modes::a>(2)),
+                                pb::when(3, pb::eq(0, 2), pb::u8<&Modes::b>(3)))));
+  Modes first = modes(1);
+  first.d = 5;
+  first.a = 9;
+  round_trip(s, first, "0101010509", "AZ-2385 AC-1 other member and the first late when");
+  Modes second = modes(2);
+  second.d = 5;
+  second.b = 9;
+  round_trip(s, second, "0101020509", "AZ-2385 AC-1 other member and the second late when");
+  Modes quiet = modes(3);
+  quiet.d = 5;
+  round_trip(s, quiet, "01010305", "AZ-2385 AC-1 other member, no condition holds");
+  Modes only = modes(1);
+  only.a = 9;
+  pack_refused(s, only, 2, "AZ-2385 only the late when holds a value");
+  Modes only_second = modes(2);
+  only_second.b = 9;
+  pack_refused(s, only_second, 3, "AZ-2385 only the second late when holds a value");
+}
+
+void az2385_nested_late_when_packs_when_another_member_sets_the_bit() {
+  auto s = pb::scheme<Modes>(
+      1, pb::flag_byte(0), pb::u8<&Modes::mode>(0),
+      pb::flag_bit(0, pb::group(1, pb::u8<&Modes::d>(1),
+                                pb::group(2, pb::when(2, pb::eq(0, 1), pb::u8<&Modes::a>(2))))));
+  Modes m = modes(1);
+  m.d = 5;
+  m.a = 9;
+  round_trip(s, m, "0101010509", "AZ-2385 nested late when, other member");
+  Modes only = modes(1);
+  only.a = 9;
+  pack_refused(s, only, 2, "AZ-2385 nested late when alone");
+}
+
+void az2385_late_times_packs_when_another_member_sets_the_bit() {
+  auto s = pb::scheme<Row>(
+      1, pb::flag_byte(0), pb::u8<&Row::n>(0),
+      pb::flag_bit(0, pb::group(1, pb::u8<&Row::x>(1),
+                                pb::times<&Row::rounds>(2, 0, pb::u8<&Item::pt>(2)))));
+  Row r;
+  r.n = 2;
+  r.x = 5;
+  r.rounds.items[0].pt = 7;
+  r.rounds.items[1].pt = 8;
+  r.rounds.count = 2;
+  round_trip(s, r, "010102050708", "AZ-2385 late times, other member");
+  Row only = r;
+  only.x.reset();
+  pack_refused(s, only, 2, "AZ-2385 late times alone");
+}
+
 // AZ-2364: the link from one late `when` to the next is a byte too; the bit body is
 // `group(when a, filler u8 x K, when b)` and the link from `when a` to `when b` is K + 2.
 template <std::size_t... Is>
@@ -258,6 +316,9 @@ int run_core_late_source_host_tests() {
   c9_distance_over_255_is_refused_at_construction();
   az2364_every_late_when_of_a_bit_is_refused();
   az2364_link_over_255_is_refused_at_construction();
+  az2385_late_when_packs_when_another_member_sets_the_bit();
+  az2385_nested_late_when_packs_when_another_member_sets_the_bit();
+  az2385_late_times_packs_when_another_member_sets_the_bit();
   az2357_hold_over_255_is_refused_at_construction();
   return check::failures();
 }

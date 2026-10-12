@@ -1,4 +1,6 @@
-import { BinaryPacker, bool, bytes, eq, flagByte, flags, group, list, repeat, scheme, times, u32, u64, u8, u16, utf8, when } from "../../src/index.ts"
+import {
+  BinaryPacker, bits, bool, bytes, eq, flagByte, flags, group, list, packed, repeat, scheme, sized, times, u32, u64, u8, u16, utf8, when,
+} from "../../src/index.ts"
 
 type Row = Record<string, unknown>
 
@@ -43,6 +45,30 @@ const slotsScheme = () => scheme<Row>(
     u8(63, (x) => x.m62), u8(64, (x) => x.m63), u8(65, (x) => x.m64),
   ]),
 )
+
+// repeat { u8 w; flags { u8 v } }
+const optionalRepeat = () => scheme<Row>(1, repeat(0, [u8(0, (x) => x.w), flags(1, [u8(1, (x) => x.v)])]))
+
+// repeat { flags { bool on; u8 v } }: a round holds the two names on and v, whatever the flags byte is.
+const flagsRound = () => scheme<Row>(1, repeat(0, [flags(0, [bool(0, (x) => x.on), u8(1, (x) => x.v)])])).withLimits({ maxSlots: 4 })
+
+// u8 n; times(n) { u8 a }; repeat { u8 b }: each round of either container charges one slot.
+const mixedRounds = () => scheme<Row>(
+  1,
+  u8(0, (x) => x.n),
+  times(1, 0, [u8(1, (x) => x.a)]),
+  repeat(2, [u8(2, (x) => x.b)]),
+).withLimits({ maxSlots: 3 })
+
+// flag byte first; u8 n after it; bit 0 { times(n) { u8 pt } }; bit 1 { u16 heading }
+const splitTimesBody = () => {
+  const fb = flagByte("fb")
+  return scheme<Row>(1, fb, u8(0, (x) => x.n), fb.bit(times(1, 0, [u8(1, (x) => x.pt)])), fb.bit(u16(2, (x) => x.heading)))
+}
+
+// u8 mode; when mode == 1 { u8 c }, then the counted member `after(1)` whose count is c.
+const clearWhenCount = (after: (countId: number) => ReturnType<typeof bits>) =>
+  scheme<Row>(1, u8(0, (x) => x.mode), when(1, eq(0, 1), [u8(1, (x) => x.c)]), after(1))
 
 export const PACK: Record<string, () => Uint8Array> = {
   pack_lone_utf8_under_times_over_budget: () => BinaryPacker.pack(
@@ -124,4 +150,53 @@ export const PACK: Record<string, () => Uint8Array> = {
       { mode: 0, speed: 7, heading: 90 },
     )
   },
+  pack_round_slots_at_limit: () => BinaryPacker.pack(mixedRounds(), { n: 1, a: [1], b: [2, 3] }),
+  pack_round_slots_over_limit: () => BinaryPacker.pack(mixedRounds(), { n: 1, a: [1], b: [2, 3, 4] }),
+  pack_round_slots_flags_at_limit: () => BinaryPacker.pack(flagsRound(), { on: [true, true], v: [5, 6] }),
+  pack_round_slots_flags_over_limit: () => BinaryPacker.pack(flagsRound(), { on: [true, true, true], v: [5, 6, 7] }),
+  pack_flags_short_list: () => BinaryPacker.pack(optionalRepeat(), { w: [1, 2], v: [5] }),
+  pack_flags_short_list_filled: () => BinaryPacker.pack(optionalRepeat(), { w: [1, 2], v: [5, undefined] }),
+  pack_split_times_absent_body: () => BinaryPacker.pack(splitTimesBody(), { n: 2, heading: 90 }),
+  pack_late_when_in_bit_body: () => {
+    const fb = flagByte("fb")
+    return BinaryPacker.pack(
+      scheme<Row>(
+        1,
+        fb,
+        u8(0, (x) => x.mode),
+        fb.bit(group(1, (x) => x.g, [
+          u8(1, (x) => x.d),
+          when(2, eq(0, 1), [u8(2, (x) => x.a)]),
+          when(3, eq(0, 2), [u8(3, (x) => x.b)]),
+        ])),
+      ),
+      { mode: 1, d: 5, a: 9 },
+    )
+  },
+  pack_count_one_clear_when: () => {
+    const fb = flagByte("fb")
+    return BinaryPacker.pack(
+      scheme<Row>(
+        1,
+        u8(0, (x) => x.mode),
+        when(1, eq(0, 1), [u8(1, (x) => x.c)]),
+        fb,
+        fb.bit(times(2, 1, [u8(2, (x) => x.pt)])),
+        fb.bit(u16(3, (x) => x.heading)),
+      ),
+      { mode: 0, c: 1, heading: 90 },
+    )
+  },
+  pack_bits_count_clear_when: () => BinaryPacker.pack(
+    clearWhenCount((c) => bits(2, (x) => x.v, c)),
+    { mode: 0, c: 3, v: [1, 0, 1] },
+  ),
+  pack_packed_count_clear_when: () => BinaryPacker.pack(
+    clearWhenCount((c) => packed(1, 2, (x) => x.v, c)),
+    { mode: 0, c: 3, v: [1, 0, 1] },
+  ),
+  pack_sized_count_clear_when: () => BinaryPacker.pack(
+    clearWhenCount((c) => sized(2, (x) => x.v, c)),
+    { mode: 0, c: 3, v: Uint8Array.from([1, 2, 3]) },
+  ),
 }

@@ -89,3 +89,16 @@ def _refuse_repeat_over_limit(node: _Repeat, values: Sequence[Any], max_rounds: 
     for leaf, value in zip(node.leaves, values):
         if isinstance(value, _builtin_list) and len(value) > max_rounds:
             raise ValueError(f"{_name(leaf)}: the repeat count is {len(value)}, above the limit of {max_rounds} rounds")
+
+
+def _refuse_short_optional(node: _Repeat, values: Sequence[Any], rounds: int) -> None:
+    """A non-empty list shorter than the rounds under a member a flag bit can leave absent does not say which
+    rounds it belongs to, so it is refused, named by its member (the first one in declaration order). An empty
+    list or none leaves the member absent in every round, a lone value goes to every round, and a required member
+    is reported by the length check that follows."""
+    for leaf, value in zip(node.leaves, values):
+        if id(leaf) in node.optional and isinstance(value, _builtin_list) and 0 < len(value) < rounds:
+            raise ValueError(
+                f"{_name(leaf)}: {len(value)} items, repeat count {rounds}; "
+                "give one entry per round, None where the member is absent"
+            )

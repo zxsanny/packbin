@@ -40,11 +40,11 @@ internal static class SchemeOrder
                 return field.With(children: WalkChildren(field, row, scope, ref next, inRound));
             case Field.Kind.Repeat:
                 RequireAnchor(field.Id, next);
-                return field.With(children: WalkChildren(field, row, [], ref next, inRound: true));
+                return field.With(children: WalkChildren(field, RoundRow(field, row), [], ref next, inRound: true));
             case Field.Kind.Times:
                 RequireAnchor(field.Id, next);
                 var count = Count(scope, field.CountId, $"count of times {field.Id}", $"times {field.Id}");
-                return field.With(children: WalkChildren(field, row, [], ref next, inRound: true), countName: count);
+                return field.With(children: WalkChildren(field, RoundRow(field, row), [], ref next, inRound: true), countName: count);
             case Field.Kind.FlagBit:
                 return field.With(inner: Walk(field.Inner!, row, scope, ref next, flagBit: true, inRound: inRound));
             case Field.Kind.Group:
@@ -85,6 +85,22 @@ internal static class SchemeOrder
         return WalkChildren(field, null, [], ref next, inRound);
     }
 
+    // The row type the fields of a round are declared for: the enclosing row's, or for a round bound to a collection the
+    // collection's row type E. The member must be one typed Unpack can fill (RowRounds.Binds), or the scheme is refused.
+    private static Type? RoundRow(Field round, Type? row)
+    {
+        if (round.Binding?.Round is not { } rounds)
+            return row;
+        var member = round.Binding.Member.Type;
+        if (!rounds.IsCollection)
+            throw new ArgumentException(
+                $"'{round.Name}': {TypeName(member)} is not a collection of rows a {round.Type.ToString().ToLowerInvariant()} can bind; "
+                + "use E[], List<E> or IList<E> for a row class E");
+        if (!rounds.Binds)
+            throw NoConstructor(round, rounds.ElementType!);
+        return rounds.ElementType;
+    }
+
     // A value is found by member name, so a field declared for another row type would be silently left out.
     // A field declared for a base type of the row is the row's own member.
     private static void RequireRow(Field field, Type? row)
@@ -112,22 +128,27 @@ internal static class SchemeOrder
             RequireCollection(field, collection, inRound);
     }
 
-    // In a repeat or times round a list member holds one list per round, so it must be a member typed unpack can bind that
-    // to (`List<List<object?>>`, `IList`, `IList<object?>`, `List<object?>`, `object[]`, `object`): `List<int>` could
-    // never take it. A dict member in a round keeps the element check (a pack-only member such as `List<Dictionary<..>>` builds).
+    // In a repeat or times round a list or dict member holds one value per round: a list per round for a list field, a
+    // dictionary per round for a dict field. The member must be one typed unpack can bind that to, which is the question
+    // CollectionShape.HoldsRounds answers for the binding too, so the scheme builds if and only if typed Unpack binds it:
+    // `List<List<object?>>`, `IList`, `IList<object?>`, `List<object?>`, `object[]`, `object` for a list; for a dict also
+    // `List<Dictionary<string, object?>>`. `List<int>` could never take the rounds of a list, nor `Dictionary<string, E>`
+    // the rounds of a dict.
     private static void RequireCollection(Field field, CollectionShape shape, bool inRound)
     {
         var member = field.Binding!.Member.Type;
         var kind = shape.Dictionary ? "dictionary" : "list";
-        if (inRound && !shape.Dictionary)
+        if (inRound)
         {
             if (!shape.HoldsRounds)
                 throw new ArgumentException(
                     $"'{field.Name}': {TypeName(member)} cannot hold the list a repeat or times round reads for its field "
-                    + "(one list per round); use List<List<object?>>, IList, IList<object?>, List<object?>, object[] or object");
+                    + $"(one {kind} per round); use "
+                    + (shape.Dictionary ? "List<Dictionary<string, object?>>" : "List<List<object?>>")
+                    + ", IList, IList<object?>, List<object?>, object[] or object");
             return;
         }
-        if (!inRound && !CollectionShape.IsSupported(member, shape.Dictionary))
+        if (!CollectionShape.IsSupported(member, shape.Dictionary))
             throw new ArgumentException(
                 $"'{field.Name}': {TypeName(member)} is not a collection Packbin can fill; use an array, "
                 + (shape.Dictionary ? "Dictionary<string, E>" : "List<E>") + $" for a {kind} field");

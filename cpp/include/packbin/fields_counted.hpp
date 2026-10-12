@@ -141,7 +141,8 @@ constexpr Node<detail::MemberClass<M>, 1> packed(int width, int id, int count_id
   return Node<detail::MemberClass<M>, 1>{{f}};
 }
 
-// Groups of the children until the packet ends. The repeat id is the anchor.
+// Groups of the children until the packet ends. The repeat id is the anchor. A repeat or times
+// with no child is SchemeInvalid: it would write nothing in any round.
 template <typename... Ns>
 constexpr auto repeat(int id, Ns const&... children) {
   return detail::nest(detail::leaf(Kind::Repeat, id), children...);

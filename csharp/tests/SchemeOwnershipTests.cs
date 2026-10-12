@@ -284,7 +284,7 @@ public class SchemeOwnershipTests
 
         // Assert
         Assert.Null(got.Error);
-        Assert.Equal(new object?[] { 10.0, 11.0 }, ((List<object?>)got.Values["C"]!).ToArray());
+        Assert.Equal(new object?[] { (byte)10, (byte)11 }, ((List<object?>)got.Values["C"]!).ToArray());
     }
 
     [Fact]

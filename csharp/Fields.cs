@@ -35,11 +35,24 @@ public sealed class Fields<T>
     public Field Packed(int width, int id, Expression<Func<T, List<int>?>> accessor, int countId, int bias = 0) =>
         Field.Packed(width, id, accessor, countId, bias);
     public Field Times(int anchor, int countId, params Field[] fields) => Field.Times(anchor, countId, fields);
+
+    public Field Times<TProp>(int anchor, int countId, Expression<Func<T, TProp>> accessor, params Field[] fields) =>
+        Field.Times(anchor, countId, accessor, fields);
+
+    public Field Times<TRow>(
+        int anchor, int countId, Expression<Func<T, List<TRow>>> accessor, Func<Fields<TRow>, Field[]> rounds) =>
+        Field.Times(anchor, countId, accessor, rounds(new Fields<TRow>()));
     public Field U2(params (int Id, Expression<Func<T, int>> Accessor)[] slots) => Field.U2(slots);
 
     public Field Flags(int anchor, params Field[] fields) => Field.Flags(anchor, fields);
     public Field When(int anchor, Condition condition, params Field[] fields) => Field.When(anchor, condition, fields);
     public Field Repeat(int anchor, params Field[] fields) => Field.Repeat(anchor, fields);
+
+    public Field Repeat<TProp>(int anchor, Expression<Func<T, TProp>> accessor, params Field[] fields) =>
+        Field.Repeat(anchor, accessor, fields);
+
+    public Field Repeat<TRow>(int anchor, Expression<Func<T, List<TRow>>> accessor, Func<Fields<TRow>, Field[]> rounds) =>
+        Field.Repeat(anchor, accessor, rounds(new Fields<TRow>()));
 
     public Field Group<TChild>(Expression<Func<T, TChild>> accessor, Func<Fields<TChild>, Field[]> children) =>
         Field.Group(accessor, children(new Fields<TChild>()));

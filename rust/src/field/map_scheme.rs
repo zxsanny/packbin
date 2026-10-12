@@ -1,4 +1,5 @@
-use super::{check_order, integrity, names, shape, Field, FieldKind};
+use super::{check_order, integrity, names, round_body, shape, Field, FieldKind};
+use std::collections::HashSet;
 
 /// The most rounds one `repeat` or `times` field may start in one unpack call.
 pub const DEFAULT_MAX_ROUNDS: usize = 65_535;
@@ -18,6 +19,7 @@ pub struct MapScheme {
     pub(crate) max_bytes: usize,
 }
 
+/// Names and fields counted once, as a capacity hint for the unpacked values.
 pub(super) fn count_fields(fields: &[Field]) -> usize {
     let mut n = 0;
     for f in fields {
@@ -45,13 +47,56 @@ pub(super) fn count_fields(fields: &[Field]) -> usize {
     n
 }
 
+/// The slots one round of a `repeat` or `times` charges: the number of distinct names its body
+/// can hold. A value field, a `list`, a `dict`, each `u2` name and an empty group (a bool) each
+/// name one slot; the members of a `when`, `flags`, flag bit and non-empty group count from inside.
+/// A non-empty group's own name, a `flags` name, a flag byte and the anchors name none. A name
+/// that appears twice (two `when` branches) is one slot.
+pub(super) fn round_width(fields: &[Field]) -> usize {
+    let mut names = HashSet::new();
+    collect_slot_names(fields, &mut names);
+    names.len()
+}
+
+fn collect_slot_names<'a>(fields: &'a [Field], names: &mut HashSet<&'a str>) {
+    for f in fields {
+        match &f.kind {
+            FieldKind::Int { name, .. }
+            | FieldKind::Float { name, .. }
+            | FieldKind::Bytes { name, .. }
+            | FieldKind::Sized { name, .. }
+            | FieldKind::Bits { name, .. }
+            | FieldKind::Packed { name, .. }
+            | FieldKind::Utf8 { name }
+            | FieldKind::List { name, .. }
+            | FieldKind::Dict { name, .. } => {
+                names.insert(name);
+            }
+            FieldKind::U2 { names: own } => names.extend(own.iter().map(|n| n.as_ref())),
+            FieldKind::Group { name, members, .. } if members.is_empty() => {
+                names.insert(name);
+            }
+            FieldKind::FlagByte { .. } => {}
+            FieldKind::Flags { members, .. }
+            | FieldKind::Group { members, .. }
+            | FieldKind::When { members, .. }
+            | FieldKind::Repeat { members, .. }
+            | FieldKind::Times { members, .. } => collect_slot_names(members, names),
+            FieldKind::FlagBit { inner, .. } => {
+                collect_slot_names(std::slice::from_ref(&**inner), names);
+            }
+        }
+    }
+}
+
 impl MapScheme {
     /// Panics, naming the field, on a scheme that cannot round-trip: a field out of order or
     /// scope, a flag bit with no flag byte before it in its scope, a 9th member or bit in one
     /// flags byte or flag byte, a bool (an empty `group`) not directly inside `flags` or
     /// under a flag bit, a `list` or `dict` element that is not one integer, float, bytes, utf8,
-    /// list or dict (a `u2` with one name), or a data name declared twice in one scope (see
-    /// `names.rs`). Also refused (see `integrity.rs`): a `when` that tests a float, utf8, bytes
+    /// list or dict (a `u2` with one name), a `repeat` or `times` whose body holds no
+    /// member (see `round_body.rs`), or a data name declared twice in one scope (see `names.rs`).
+    /// Also refused (see `integrity.rs`): a `when` that tests a float, utf8, bytes
     /// or collection field or compares it with a value that is not an integer, `eq(bool, v)`
     /// with `v` other than true, a count (`sized`, `bits`, `packed`, `times`) that names a bool
     /// or a non-integer field, and a `when` or count that names the `flags` byte of the `flags`
@@ -63,6 +108,7 @@ impl MapScheme {
         let field_count = count_fields(&fields);
         check_order(&fields, 0, 0);
         shape::check_shape(&mut fields);
+        round_body::check_round_bodies(&fields);
         integrity::check_integrity(&fields);
         names::check_names(&fields);
         MapScheme {

@@ -36,6 +36,11 @@ public sealed class Scheme<T> where T : class, new()
         MaxBytes = maxBytes;
     }
 
+    // The loop 19 signature, kept so code compiled against it still binds. It sets the round and slot limits and leaves the
+    // output budget at its default, as the three-limit overload does for an omitted limit.
+    public Scheme<T> WithLimits(int maxRounds, long maxSlots) =>
+        WithLimits(maxRounds, maxSlots, BinaryPacker.DefaultMaxBytes);
+
     // The same scheme with other limits: an omitted limit is the default, not this scheme's current value.
     public Scheme<T> WithLimits(
         int maxRounds = BinaryPacker.DefaultMaxRounds,

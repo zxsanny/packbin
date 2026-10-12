@@ -240,16 +240,32 @@ fn given_name(fields: &[Field], values: &Values, skip_empty: bool) -> Option<Str
 /// refuses and names the value. A `when` whose condition is false, or whose source is never
 /// written and has no value, drops its body silently, as in the combined form. Write the
 /// condition or count field before the flag byte.
+///
+/// When another member of the bit holds a value that does not wait for a late source (see
+/// `early_on`), the bit is set anyway and the late `when` or `times` of its body is written
+/// where the walk reaches it, so nothing is dropped and nothing is refused (AZ-2385). Returns
+/// whether the bit is set that way; a body held only by late members is still refused.
 pub(super) fn check_split_bit(
     field: &Field,
     values: &Values,
     wrote: &Written<'_>,
+) -> Result<bool, PackError> {
+    let early = early_on(field, values, wrote)?;
+    check_bit(field, values, wrote, early)?;
+    Ok(early)
+}
+
+fn check_bit(
+    field: &Field,
+    values: &Values,
+    wrote: &Written<'_>,
+    early: bool,
 ) -> Result<(), PackError> {
     match &field.kind {
-        FieldKind::FlagBit { inner, .. } => check_split_bit(inner, values, wrote),
+        FieldKind::FlagBit { inner, .. } => check_bit(inner, values, wrote, early),
         FieldKind::Flags { members, .. } | FieldKind::Group { members, .. } => members
             .iter()
-            .try_for_each(|m| check_split_bit(m, values, wrote)),
+            .try_for_each(|m| check_bit(m, values, wrote, early)),
         FieldKind::When {
             field: tested,
             expect,
@@ -259,9 +275,9 @@ pub(super) fn check_split_bit(
             if wrote.get(tested).is_some_and(|v| when_matches(v, expect)) {
                 return members
                     .iter()
-                    .try_for_each(|m| check_split_bit(m, values, wrote));
+                    .try_for_each(|m| check_bit(m, values, wrote, early));
             }
-            if wrote.get(tested).is_some() {
+            if early || wrote.get(tested).is_some() {
                 return Ok(());
             }
             // The condition is written after the byte: the value given for it decides whether
@@ -296,11 +312,12 @@ pub(super) fn check_split_bit(
                 return check_no_rounds(*anchor, members, values);
             }
             let rounds = times_name(*anchor);
+            // An empty list holds no value: the bit is clear and nothing is dropped.
             let given = match values.get(rounds.as_ref()) {
                 Some(Some(Value::Groups(g))) if !g.is_empty() => Some(rounds.to_string()),
-                _ => given_name(members, values, false),
+                _ => given_name(members, values, true),
             };
-            match given {
+            match given.filter(|_| !early) {
                 Some(name) => Err(PackError::Type(format!(
                     "'{name}' is given, but its times count '{count}' is not written where the \
                      flag byte is written (skipped or written after it); write '{count}' before \
@@ -309,6 +326,113 @@ pub(super) fn check_split_bit(
                 None => Ok(()),
             }
         }
+        _ => Ok(()),
+    }
+}
+
+/// Whether a member of the bit holds a value that decides the bit now, without waiting for a
+/// source written after the flag byte: `member_on` with a `when` whose source is not written yet,
+/// and a `times` whose count is not written yet, counted as holding nothing (they are late).
+fn early_on(
+    field: &Field,
+    values: &Values,
+    wrote: &Written<'_>,
+) -> Result<bool, PackError> {
+    match &field.kind {
+        FieldKind::FlagBit { inner, .. } => early_on(inner, values, wrote),
+        FieldKind::Group { name, members, .. } => {
+            if members.is_empty() {
+                return bool_on(values, name);
+            }
+            if present(values, name) {
+                return Ok(true);
+            }
+            any_early(members, values, wrote)
+        }
+        FieldKind::Flags { name, members, .. } => {
+            if present(values, name) {
+                return Ok(true);
+            }
+            any_early(members, values, wrote)
+        }
+        FieldKind::When {
+            field: tested,
+            expect,
+            members,
+            ..
+        } => {
+            if wrote.get(tested).is_some_and(|v| when_matches(v, expect)) {
+                any_early(members, values, wrote)
+            } else {
+                Ok(false)
+            }
+        }
+        FieldKind::Times { count, .. } if wrote.get(count).is_none() => Ok(false),
+        _ => member_on(field, values, wrote, Form::Split),
+    }
+}
+
+fn any_early(members: &[Field], values: &Values, wrote: &Written<'_>) -> Result<bool, PackError> {
+    for member in members {
+        if !matches!(member.kind, FieldKind::FlagByte { .. }) && early_on(member, values, wrote)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// A clear flag bit (combined `flags` or split) whose field holds a `times` that no field wrote
+/// the count of, though the row gives it above 0: that is what a clear `when` holding the count
+/// leaves, so no round is read and the count the row gives would mean nothing. Refused, naming the
+/// first member of the round. The scope is the field itself or what it reaches through groups,
+/// `flags`, flag bits and a `when` whose condition holds. A count of 0, a count left out and a
+/// count some field wrote are not refused. `wrote` is what pack has written so far in the scope,
+/// so a count written after the flag byte but before the bit counts as written.
+pub(super) fn refuse_unwritten_count(
+    field: &Field,
+    values: &Values,
+    wrote: &Written<'_>,
+) -> Result<(), PackError> {
+    match &field.kind {
+        FieldKind::Times {
+            anchor,
+            count,
+            members,
+            ..
+        } => {
+            if wrote.get(count).is_some() {
+                return Ok(());
+            }
+            match values.get(count.as_ref()) {
+                Some(Some(v)) => match as_usize(v) {
+                    Some(n) if n > 0 => Err(PackError::Type(format!(
+                        "{}: the count {count} is {n} in the row, but no field wrote it (the when \
+                         that holds it is clear), so its times reads no round; give the count 0, \
+                         leave it out, or make the when hold",
+                        round_member("times", *anchor, members)
+                    ))),
+                    _ => Ok(()),
+                },
+                _ => Ok(()),
+            }
+        }
+        FieldKind::When {
+            field: tested,
+            expect,
+            members,
+            ..
+        } => {
+            if !wrote.get(tested).is_some_and(|v| when_matches(v, expect)) {
+                return Ok(());
+            }
+            members
+                .iter()
+                .try_for_each(|m| refuse_unwritten_count(m, values, wrote))
+        }
+        FieldKind::Group { members, .. } | FieldKind::Flags { members, .. } => members
+            .iter()
+            .try_for_each(|m| refuse_unwritten_count(m, values, wrote)),
+        FieldKind::FlagBit { inner, .. } => refuse_unwritten_count(inner, values, wrote),
         _ => Ok(()),
     }
 }

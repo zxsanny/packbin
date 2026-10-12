@@ -31,9 +31,9 @@ void set_flag(Field const& f, void* m, bool on) {
   *static_cast<bool*>(m) = on;
 }
 
-bool any_child_present(Field const* t, std::size_t i, void* obj) {
+bool any_child_present(Field const* t, std::size_t i, void* obj, std::uint8_t skip) {
   for (std::size_t j = i + 1; j < i + t[i].span; j += t[j].span) {
-    if (present(t, j, obj))
+    if (present(t, j, obj, skip))
       return true;
   }
   return false;
@@ -52,8 +52,10 @@ bool times_present(Field const* t, Field const& f, void* m, void* obj) {
 
 }  // namespace
 
-bool present(Field const* t, std::size_t i, void* obj) {
+bool present(Field const* t, std::size_t i, void* obj, std::uint8_t skip) {
   Field const& f = t[i];
+  if ((f.flags & skip) != 0)
+    return false;
   void* m = member(f, obj);
   if (is_number(f.kind)) {
     if (m == nullptr)
@@ -73,13 +75,13 @@ bool present(Field const* t, std::size_t i, void* obj) {
     case Kind::Group:
       if (f.span == 1)
         return flag_on(f, m);
-      return any_child_present(t, i, obj);
+      return any_child_present(t, i, obj, skip);
     case Kind::Flags:
     case Kind::FlagBit:
     case Kind::U2:
-      return any_child_present(t, i, obj);
+      return any_child_present(t, i, obj, skip);
     case Kind::When:
-      return when_matches(t, f, obj) && any_child_present(t, i, obj);
+      return when_matches(t, f, obj) && any_child_present(t, i, obj, skip);
     case Kind::Times:
       return times_present(t, f, m, obj);
     case Kind::Repeat:

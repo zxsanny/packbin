@@ -17,7 +17,7 @@ EXPECT_FAIL := ./tests/compile-fail/expect-fail.sh "$(CXX) $(CXXFLAGS) $(CORE_FL
 
 .PHONY: test core-test clean compile-fail
 
-$(TEST_BIN): $(HDRS) $(CORE_SRCS) $(HOST_SRCS) $(VECTOR_TESTS) $(HOST_TESTS) tests/core/check.hpp tests/core/hostile_pack_cases.hpp tests/core/member_cases.hpp
+$(TEST_BIN): $(HDRS) $(CORE_SRCS) $(HOST_SRCS) $(VECTOR_TESTS) $(HOST_TESTS) tests/core/check.hpp tests/core/hostile_pack_cases.hpp tests/core/hostile_pack_loop21.hpp tests/core/member_cases.hpp
 	mkdir -p build
 	$(CXX) $(CXXFLAGS) $(CORE_FLAGS) -pthread -o $@ $(CORE_SRCS) $(HOST_SRCS) $(VECTOR_TESTS) $(HOST_TESTS)
 

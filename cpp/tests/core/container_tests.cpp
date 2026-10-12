@@ -391,7 +391,8 @@ void flag_byte_per_scope() {
          "AC-2 inner bit unpacks");
 }
 
-// A repeat round that reads no bytes ends the repeat; the bytes left are trailing (AC-3).
+// A repeat or times with no member reads no bytes in any round, so the scheme is refused at
+// construction (AZ-2390) and neither pack nor unpack can spin through its rounds.
 struct Zero {
   std::uint8_t k = 0;
 };
@@ -401,21 +402,18 @@ struct ZeroBound {
   Array<Zero, 4> items;
 };
 
-void zero_progress_repeat() {
+void empty_round_body_is_refused() {
   auto unbound = packbin::scheme<Zero>(1, packbin::u8<&Zero::k>(0), packbin::repeat(1));
   auto bound = packbin::scheme<ZeroBound>(1, packbin::u8<&ZeroBound::k>(0),
                                           packbin::repeat<&ZeroBound::items>(1));
   std::uint8_t data[3] = {1, 5, 9};
   Zero a;
   auto u = packbin::unpack(unbound, data, sizeof(data), a);
-  expect(u.error == Error::TrailingBytes && u.offset == 2, "AC-3 unbound empty repeat");
+  expect(u.error == Error::SchemeInvalid && u.field == 1, "AZ-2390 unbound empty repeat");
   ZeroBound b;
   auto w = packbin::unpack(bound, data, sizeof(data), b);
-  expect(w.error == Error::TrailingBytes && w.offset == 2 && b.items.count == 0,
-         "AC-3 bound empty repeat");
+  expect(w.error == Error::SchemeInvalid && w.field == 1, "AZ-2390 bound empty repeat");
 
-  // An unbound times with an empty body reads nothing in any round, so a huge count returns
-  // at once instead of spinning through it.
   struct Spin {
     std::uint32_t n = 0;
   };
@@ -423,7 +421,7 @@ void zero_progress_repeat() {
   std::uint8_t huge[5] = {1, 0xff, 0xff, 0xff, 0xff};
   Spin s;
   auto t = packbin::unpack(spin, huge, sizeof(huge), s);
-  expect(t.ok() && t.offset == 5 && s.n == 0xffffffffu, "empty-body times ends at once");
+  expect(t.error == Error::SchemeInvalid && t.field == 1, "AZ-2390 empty-body times");
 }
 
 }  // namespace
@@ -436,6 +434,6 @@ int run_core_container_tests() {
   repeat_to_the_end();
   times_and_route();
   flag_byte_per_scope();
-  zero_progress_repeat();
+  empty_round_body_is_refused();
   return check::failures();
 }

@@ -15,6 +15,7 @@ from packbin._validate import (
     _validate_element_accessors,
     _validate_names,
     _validate_order,
+    _validate_round_bodies,
     _validate_round_nesting,
 )
 
@@ -47,6 +48,7 @@ class Scheme(Generic[T]):
         _validate_order(fields)
         bound = _bind_flag_bits(fields)
         _validate_round_nesting(bound)
+        _validate_round_bodies(bound)
         _validate_names(bound)
         _validate_element_accessors(bound)
         self._type_number = type_number

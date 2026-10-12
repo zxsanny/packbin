@@ -265,7 +265,8 @@ fn order_rows18_to_21_slots_are_checked_before_the_bytes_of_a_round() {
 
 #[test]
 fn width_a_round_is_charged_what_unpack_charges_and_pack_refuses_where_unpack_would() {
-    // Arrange: `repeat { u8 a; group g { u8 b } }`, a round holds a, g and b
+    // Arrange: `repeat { u8 a; group g { u8 b } }`, a round holds a and b (a group's own name is
+    // no slot, AZ-2382)
     let scheme = |slots| {
         MapScheme::new(
             1,
@@ -279,13 +280,13 @@ fn width_a_round_is_charged_what_unpack_charges_and_pack_refuses_where_unpack_wo
     let vals = row(&[("__repeat__", Value::Groups(rounds))]);
 
     // Act
-    let wire = pack(&scheme(6), &vals).map(|raw| to_hex(&raw));
-    let by_pack = refusal(&scheme(5), &vals);
-    let by_unpack = unpack(&scheme(5), &[1, 1, 3, 2, 4]);
+    let wire = pack(&scheme(4), &vals).map(|raw| to_hex(&raw));
+    let by_pack = refusal(&scheme(3), &vals);
+    let by_unpack = unpack(&scheme(3), &[1, 1, 3, 2, 4]);
 
     // Assert
     assert_eq!(wire, Ok("0101030204".to_string()));
-    assert_eq!(by_pack, over_slots("a", 6, 5));
+    assert_eq!(by_pack, over_slots("a", 4, 3));
     assert_eq!(by_unpack, Err(short("repeat", 2)));
 }
 

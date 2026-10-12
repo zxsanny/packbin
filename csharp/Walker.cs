@@ -220,6 +220,7 @@ internal static partial class Walker
         var names = RoundNames(field, packing: false);
         var slots = SlotsPerRound(names);
         var rounds = 0;
+        var rows = RoundRowsFor(field, values);
         while (offset < bytes.Length)
         {
             if (!values.Budget.TryStartRound(rounds++, slots))
@@ -235,8 +236,13 @@ internal static partial class Walker
             // A round that reads nothing can never reach the end of the buffer.
             if (offset == roundStart)
                 return new TrailingBytes(bytes.Length - offset);
-            AppendRound(values, group, names);
+            if (rows is null)
+                AppendRound(values, group, names);
+            else
+                rows.Add(group);
         }
+        if (rows is not null)
+            values[field.Name] = rows;
         return null;
     }
 

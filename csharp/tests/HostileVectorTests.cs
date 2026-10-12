@@ -63,6 +63,17 @@ public class HostileVectorTests
         public byte V { get; set; }
     }
 
+    private sealed class ItemsRow
+    {
+        public List<CountItem>? Items { get; set; }
+    }
+
+    private sealed class CountItem
+    {
+        public uint N { get; set; }
+        public bool? Mark { get; set; }
+    }
+
     private sealed class NineRow
     {
         public byte? F0 { get; set; }
@@ -191,6 +202,13 @@ public class HostileVectorTests
         ["eq_out_of_range"] = () => _ = new Scheme<ModeRow>(1,
             Field.U8<ModeRow>(0, x => x.Mode),
             Field.When(1, Condition.Eq(0, 300), Field.U8<ModeRow>(1, x => x.V))),
+        ["construct_empty_times_body"] = () => _ = new Scheme<RoundRow>(1,
+            Field.U8<RoundRow>(0, x => x.N),
+            Field.Times(1, 0)),
+        ["construct_empty_repeat_body"] = () => _ = new Scheme<RoundRow>(1, Field.Repeat(0)),
+        ["construct_empty_round_body_list_element"] = () => _ = new Scheme<ItemsRow>(1,
+            Field.List((ItemsRow x) => x.Items,
+                Field.Group(0, (CountItem e) => e.Mark, Field.U32<CountItem>(0, e => e.N), Field.Times(1, 0)))),
     };
 
     // A message fragment for each case refused at construction, so a refusal by some other rule does not pass.
@@ -207,6 +225,9 @@ public class HostileVectorTests
         ["when_names_later_field"] = "not an earlier field in the same scope",
         ["count_names_later_field"] = "not an earlier field in the same scope",
         ["when_names_outer_field_in_repeat"] = "not an earlier field in the same scope",
+        ["construct_empty_times_body"] = "times 1: the body holds no member",
+        ["construct_empty_repeat_body"] = "repeat 0: the body holds no member",
+        ["construct_empty_round_body_list_element"] = "times 1: the body holds no member",
     };
 
     // C# has no bad_value or too_many type yet (C15); ShortPacket stands in for both.

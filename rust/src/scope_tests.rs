@@ -131,7 +131,7 @@ fn flag_byte_inside_repeat_builds() {
 #[test]
 fn zero_progress_repeat_ends_with_trailing() {
     let result = within_one_second("empty repeat", || {
-        let scheme = MapScheme::new(1, vec![u8("0"), repeat(1, vec![])]);
+        let scheme = MapScheme::new(1, vec![u8("0"), repeat(1, vec![bytes("1", 0)])]);
         unpack(&scheme, &[0x01, 0x05, 0x09]).map(|_| ())
     });
     assert_eq!(result.unwrap_err(), UnpackError::Trailing { left: 1 });
@@ -140,7 +140,7 @@ fn zero_progress_repeat_ends_with_trailing() {
 #[test]
 fn zero_progress_repeat_with_nothing_left_is_empty() {
     let result = within_one_second("empty repeat, no bytes", || {
-        let scheme = MapScheme::new(1, vec![u8("0"), repeat(1, vec![])]);
+        let scheme = MapScheme::new(1, vec![u8("0"), repeat(1, vec![bytes("1", 0)])]);
         unpack(&scheme, &[0x01, 0x05]).map(|_| ())
     });
     assert!(result.is_ok());
@@ -163,7 +163,7 @@ fn repeat_round_with_a_real_body_still_reports_short() {
 #[test]
 fn zero_width_times_round_is_short_even_with_a_huge_count() {
     let result = within_one_second("empty times", || {
-        let scheme = MapScheme::new(1, vec![u64("0"), times(1, "0", vec![])]);
+        let scheme = MapScheme::new(1, vec![u64("0"), times(1, "0", vec![bytes("1", 0)])]);
         let mut packet = vec![0x01];
         packet.extend_from_slice(&u64::MAX.to_le_bytes());
         unpack(&scheme, &packet).map(|_| ())

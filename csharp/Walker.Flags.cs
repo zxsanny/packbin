@@ -20,6 +20,7 @@ internal static partial class Walker
             if (!BitOn(values, inner, seen))
             {
                 RequireNoValuesForSkippedCount(inner, values, seen);
+                RequireNoStrandedCount(inner, values, seen);
                 continue;
             }
             flags |= (byte)(1 << i);
@@ -46,8 +47,7 @@ internal static partial class Walker
             case Field.Kind.Times:
                 if (seen.TryGetValue(field.CountName, out var count) && count is not null)
                     return null;
-                return RoundNames(field, packing: true)
-                    .FirstOrDefault(name => IsPresent(values, name) && values[name] is not IList { Count: 0 });
+                return GivenInRound(field, values, value => value is not IList { Count: 0 });
             case Field.Kind.FlagBit:
                 return ValueOfSkippedCount(field.Inner!, values, seen);
             case Field.Kind.When when !ConditionHolds(field.Pred!, seen):
@@ -119,6 +119,7 @@ internal static partial class Walker
         var dropped = DroppedBody(bit, values, seen);
         if (dropped is var (name, reason))
             throw new ArgumentException($"'{name}' has a value, but its flag bit is clear: {reason}");
+        RequireNoStrandedCount(bit, values, seen);
     }
 
     private static (string Name, string Reason)? DroppedBody(Field bit, IReadOnlyDictionary<string, object?> values, Scope seen)
@@ -130,14 +131,14 @@ internal static partial class Walker
                 return given is null ? null : (given, "the condition that decides the bit is written after the flag byte");
             case Field.Kind.Times:
                 var counted = seen.TryGetValue(bit.CountName, out var count) && count is not null;
-                var names = RoundNames(bit, packing: true);
                 if (counted && BorrowedCount(bit, seen) == 0)
                 {
                     // A lone value has no round to be dropped from; a list with items holds rounds the count denies.
-                    var listed = names.FirstOrDefault(name => values.TryGetValue(name, out var v) && v is IList { Count: > 0 });
+                    var listed = GivenInRound(bit, values, value => value is IList { Count: > 0 });
                     return listed is null ? null : (listed, "the times count is 0, so it takes no values");
                 }
-                var body = names.FirstOrDefault(name => IsPresent(values, name));
+                // An empty list is no body: nothing is dropped from it (AZ-2384).
+                var body = GivenInRound(bit, values, value => value is not IList { Count: 0 });
                 return body is null
                     ? null
                     : (body, counted
@@ -167,7 +168,7 @@ internal static partial class Walker
                 Field.Kind.When or Field.Kind.Flags or Field.Kind.Group when !field.NestedRow =>
                     FirstGiven(values, field.Children, seen),
                 Field.Kind.FlagBit => FirstGiven(values, [field.Inner!], seen),
-                Field.Kind.Times or Field.Kind.Repeat => RoundNames(field, packing: true).FirstOrDefault(n => IsPresent(values, n)),
+                Field.Kind.Times or Field.Kind.Repeat => GivenInRound(field, values),
                 Field.Kind.U2 => field.Names.FirstOrDefault(n => IsPresent(values, n)),
                 _ => (IsGroupValue(field) || field.Type == Field.Kind.Group) && IsPresent(values, field.Name) ? field.Name : null,
             };

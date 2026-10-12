@@ -56,8 +56,8 @@ internal sealed class MemberAccess
         return new MemberAccess(member.Member.Name, typeof(TProp), get, set);
     }
 
-    // A value already of the member's type is assigned as it is. Unpack reads the narrower numbers as a double, which
-    // holds every value of the member's own width exactly, so it is cast; anything else goes through Convert.ChangeType.
+    // A value already of the member's type is assigned as it is. An f32 is unpacked as a double, which holds every float
+    // exactly, so it is cast to the member's width; anything else goes through Convert.ChangeType.
     private static Expression ConvertTo(Expression value, Type target)
     {
         var underlying = Nullable.GetUnderlyingType(target) ?? target;

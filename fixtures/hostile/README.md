@@ -31,6 +31,8 @@
 
 **Decision (2026-10-05).** The flags bit is set only for `true`; `false` and absent leave it clear. A `bool` (and an empty group) is allowed only inside `flags` or a flag byte. Anywhere else is a scheme construction error. An empty group that could never set its bit (no member and no fields) is a construction error everywhere, inside `flags` too (decision 2026-10-05, loop 12).
 
+**New in loop 21 (AZ-2394).** Fifteen cases at the end of the file, from the loop 21 reference (`_docs/03_implementation/reference_loop21_slots.md`, TypeScript): `pack_round_slots_at_limit`, `pack_round_slots_over_limit`, `pack_round_slots_flags_at_limit`, `pack_round_slots_flags_over_limit` (AZ-2381, AZ-2382), `pack_flags_short_list`, `pack_flags_short_list_filled` (AZ-2383), `pack_split_times_absent_body` (AZ-2384), `pack_late_when_in_bit_body` (AZ-2385), `pack_count_one_clear_when` (AZ-2386), `pack_bits_count_clear_when`, `pack_packed_count_clear_when`, `pack_sized_count_clear_when` (AZ-2387), and the `construct` cases `construct_empty_times_body`, `construct_empty_repeat_body`, `construct_empty_round_body_list_element` (AZ-2390). The 40 older cases are unchanged.
+
 ## zero_progress_repeat_bool
 
 - Scheme: id0 `repeat` anchor 0 { id0 `bool on` }.
@@ -358,3 +360,141 @@
 - Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of two with `n` unset).
 - Not run by: none.
 - Source: loop 20, AZ-2360, AZ-2367.
+
+## pack_round_slots_at_limit
+
+- Scheme: id0 `u8 n`; id1 `times` anchor 1, count = id0 { id1 `u8 a` }; id2 `repeat` anchor 2 { id2 `u8 b` }. Each round of either container holds one name, so one round charges 1 slot.
+- Limit: `maxSlots` 3; `maxRounds` at its default (65,535); `maxBytes` at its default.
+- Row: `n = 1`, `a = [1]`, `b = [2, 3]`. In Rust, whose `repeat` rounds are groups: `__repeat__` holds two round rows (`b = 2`, `b = 3`).
+- Packet `01 01 01 02 03`: type `01`; `n` = 1; the one `times` round `01`; the two `repeat` rounds `02` and `03`.
+- Expected: `bytes` `0101010203`. The `times` charges 1 slot and the `repeat` 2: 3 slots, exactly the limit, so it packs. One counter runs through the whole pack call and is shared by every `repeat` and `times`; a round is charged by the number of distinct names it can hold, before its first byte.
+- Run by: TypeScript (`new Scheme(..., { maxSlots: 3 })`), Python (`with_limits(max_slots=3)`), Java (`withLimits(Scheme.DEFAULT_MAX_ROUNDS, 3)`), C# (`WithLimits(65535, 3)`), Rust (`with_limits(DEFAULT_MAX_ROUNDS, 3)`).
+- Not run by: C++ (fixed `Array` rounds and a caller buffer, so no round or slot budget to set).
+- Source: loop 21, AZ-2382 (reference row 13), AZ-2394.
+
+## pack_round_slots_over_limit
+
+- Scheme: as `pack_round_slots_at_limit`.
+- Limit: as `pack_round_slots_at_limit` (`maxSlots` 3).
+- Row: `n = 1`, `a = [1]`, `b = [2, 3, 4]` (a third `repeat` round).
+- Expected: `pack_error`. The three rounds would hold 4 slots, one above the limit; pack refuses the third `repeat` round before its first byte and returns no bytes.
+- Run by: TypeScript, Python, Java, C#, Rust (calls as in `pack_round_slots_at_limit`, with three round rows).
+- Not run by: C++ (as in `pack_round_slots_at_limit`).
+- Source: loop 21, AZ-2382 (reference row 14), AZ-2394.
+
+## pack_round_slots_flags_at_limit
+
+- Scheme: id0 `repeat` anchor 0 { id0 `flags` anchor 0 { id0 `bool on`, id1 `u8 v` } }. The width of a round is 2: the names `on` and `v`; the `flags` itself and its combined byte are no slot. In Rust, whose bool is an empty group, `on` is an empty group named `on`.
+- Limit: `maxSlots` 4; the other limits at their defaults.
+- Row: `on = [true, true]`, `v = [5, 6]`. In Rust, two round rows with `on` set and `v` 5, then 6.
+- Packet `01 0305 0306`: type `01`; per round one flags byte `03` (both bits set) then `v`.
+- Expected: `bytes` `0103050306`. Two rounds of width 2 are 4 slots, exactly the limit.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (round rows).
+- Not run by: C++ (as in `pack_round_slots_at_limit`).
+- Source: loop 21, AZ-2381 and AZ-2382 (reference row 3), AZ-2394.
+
+## pack_round_slots_flags_over_limit
+
+- Scheme: as `pack_round_slots_flags_at_limit`.
+- Limit: `maxSlots` 4.
+- Row: `on = [true, true, true]`, `v = [5, 6, 7]` (a third round; Rust gives three round rows).
+- Expected: `pack_error`. The third round would hold 6 slots, above the limit of 4; pack refuses it before its first byte. A package that also charged the `flags` name or its byte (width 3 or 4) would refuse the two-round row of `pack_round_slots_flags_at_limit`; a package that charged only `v` would accept this one.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (round rows).
+- Not run by: C++ (as in `pack_round_slots_at_limit`).
+- Source: loop 21, AZ-2381 and AZ-2382 (reference row 3), AZ-2394.
+
+## pack_flags_short_list
+
+- Scheme: id0 `repeat` anchor 0 { id0 `u8 w`; id1 `flags` anchor 1 { id1 `u8 v` } }.
+- Row: `w = [1, 2]`, `v = [5]` (one entry for two rounds).
+- Expected: `pack_error`. A non-empty list under a member that a flag bit can leave absent must give one entry per round (an absent entry where the member is absent); a list shorter than the rounds is refused before any round, naming `v`, and the old packet `010101050200` is no longer produced. The `repeat` count comes from the longest list; `times` keeps accepting a short list under `flags`, and that is not part of this case.
+- Run by: TypeScript, Python, Java, C# (dictionary rows).
+- Not run by: Rust (a `repeat` takes its rounds as groups, one row per round, so there is no list to be too short), C++ (a fixed `Array` of round items whose length is the round count, so a short list cannot be written).
+- Source: loop 21, AZ-2383 (reference row 27), AZ-2394.
+
+## pack_flags_short_list_filled
+
+- Scheme: as `pack_flags_short_list`.
+- Row: `w = [1, 2]`, `v = [5, absent]` (a full list whose second entry is the language's absent value: `undefined` or `null`, `None`, `null`; in Rust, round 2 has no `v`; in C++ an `Array` of two rounds whose second `Opt<std::uint8_t> v` is unset).
+- Packet `01 0101 05 0200`: type `01`; round 1: `w` = 1, flags byte `01`, `v` = 5; round 2: `w` = 2, flags byte `00`.
+- Expected: `bytes` `010101050200`. The same bytes the short list used to produce, now written with one entry per round.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (round rows), C++ (a typed row with the `Opt` unset in round 2).
+- Not run by: none.
+- Source: loop 21, AZ-2383 (reference row 29), AZ-2394.
+
+## pack_split_times_absent_body
+
+- Scheme: split-form `flag_byte` (id0 in Rust, no order id elsewhere), written first; `u8 n`; bit 0 { `times` count = `n` { `u8 pt` } }; bit 1 { `u16 heading` }.
+- Row: `n = 2`, `heading = 90`, no `pt`. A row that also gives `pt = []` packs the same bytes.
+- Packet `01 02 02 5a00`: type `01`; flag byte `02` (bit 1 only); `n` = 2; `heading` `5a00`.
+- Expected: `bytes` `0102025a00`. The count is above 0 and the `times` has no rounds in the row, so its bit stays clear and nothing is dropped. The count `n` is written inside the packet whatever the bit says.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form).
+- Not run by: C++ (AZ-2384 excludes it, loop 21 finding): its row holds the rounds as an `Array`; a count of 2 with an `Array` of 0 items is a count mismatch, not an absent body, and the late rule (AZ-2385) refuses it.
+- Source: loop 21, AZ-2384 (reference rows 40 and 41), AZ-2394.
+
+## pack_late_when_in_bit_body
+
+- Scheme: split-form `flag_byte`, written first; `u8 mode` after the byte; bit 0 { a group (anonymous where the package names none) { `u8 d`; `when` `eq(mode, 1)` { `u8 a` }; `when` `eq(mode, 2)` { `u8 b` } } }. The `when` source `mode` is written after the flag byte, so the bit's `when`s are late.
+- Row: `mode = 1`, `d = 5`, `a = 9`, no `b`.
+- Packet `01 01 01 05 09`: type `01`; flag byte `01` (bit 0 set by `d`); `mode` = 1; `d` = 5; `a` = 9.
+- Expected: `bytes` `0101010509`. Another member of the bit (`d`) is given, so the bit is set and the late `when` whose condition holds writes its body. (A row that gives only the late `a`, with no `d`, stays `pack_error` as in `pack_split_when_source_after_byte`, and is not part of this case.)
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row with `d` and `a` set).
+- Not run by: none.
+- Source: loop 21, AZ-2385 (the C++ change; the TypeScript probe of loop 21 gives the same bytes), AZ-2394.
+
+## pack_count_one_clear_when
+
+- Scheme: id0 `u8 mode`; id1 `when` anchor 1, `eq(0, 1)` { id1 `u8 c` }; split-form `flag_byte` (id2 in Rust); bit 0 { `times` count = `c` { `u8 pt` } }; bit 1 { `u16 heading` }.
+- Row: `mode = 0`, `c = 1`, `heading = 90`, no `pt`.
+- Expected: `pack_error`. The `when` is clear, so `c` is never written and the count is a value the packet cannot hold: the `times` would read a round the packet has no count for. Pack refuses it, naming `pt`. A count of 0 or a row without `c` packs `0100025a00` (not part of this case).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row with `c` set to 1 and `mode` 0).
+- Not run by: none.
+- Source: loop 21, AZ-2386 (reference row 44), AZ-2394.
+
+## pack_bits_count_clear_when
+
+- Scheme: id0 `u8 mode`; id1 `when` anchor 1, `eq(0, 1)` { id1 `u8 c` }; id2 `bits v`, count = id1.
+- Row: `mode = 0`, `c = 3`, `v = [1, 0, 1]`.
+- Expected: `pack_error`. The `when` is clear, so `c` is not written and `v` has no count on the wire; pack refuses the row, naming `v`, and never writes the bits.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row; the bits member is given three values).
+- Not run by: none.
+- Source: loop 21, AZ-2387 (reference row 53), AZ-2394.
+
+## pack_packed_count_clear_when
+
+- Scheme: as `pack_bits_count_clear_when`, with id2 `packed v` (width 1, bias 0), count = id1 in place of `bits`.
+- Row: `mode = 0`, `c = 3`, `v = [1, 0, 1]`.
+- Expected: `pack_error`, for the reason given in `pack_bits_count_clear_when`.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row; the packed member is given three values).
+- Not run by: none.
+- Source: loop 21, AZ-2387 (reference row 53), AZ-2394.
+
+## pack_sized_count_clear_when
+
+- Scheme: as `pack_bits_count_clear_when`, with id2 `sized v`, count = id1 in place of `bits`.
+- Row: `mode = 0`, `c = 3`, `v` = the three bytes `010203`.
+- Expected: `pack_error`, for the reason given in `pack_bits_count_clear_when`.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row; the sized member holds three bytes).
+- Not run by: none.
+- Source: loop 21, AZ-2387 (reference row 53), AZ-2394.
+
+## construct_empty_times_body
+
+- Scheme: id0 `u8 n`; id1 `times` anchor 1, count = id0 { } with no child.
+- No packet: a round body must hold at least one member (a value field, a zero-width `bytes`, a list, a dict, a flag byte or bit, a `flags`); a `times` with none would charge no slot and write no byte, so a count of 65,535 rounds would cost nothing to the budget. Construction must fail, before any pack or unpack.
+- Expected: `scheme_error` (C++: `Error::SchemeInvalid` at construction). A body made only of empty `when`s or empty groups holds no member and is refused the same way; a body with a zero-width `bytes`, a flag byte or a member-less `flags` still builds (the `zero_progress_repeat_*` vectors rely on it).
+- Source: loop 21, AZ-2390 (reference rows 16 and 17), AZ-2394.
+
+## construct_empty_repeat_body
+
+- Scheme: id0 `repeat` anchor 0 { } with no child.
+- No packet: as `construct_empty_times_body`.
+- Expected: `scheme_error` (C++: `Error::SchemeInvalid` at construction).
+- Source: loop 21, AZ-2390 (reference row 15), AZ-2394.
+
+## construct_empty_round_body_list_element
+
+- Scheme: id0 `list items` of an element `group` { id0 `u32 n`; id1 `times` anchor 1, count = id0 { } with no child }. This is the shape that asked a package to pack a list of items each holding a count of 65,535 empty rounds.
+- No packet: construction must fail in well under a second, before any item is built.
+- Expected: `scheme_error`. Packages whose list element cannot hold a `times` (Rust, C++ with its fixed arrays) have no spelling of this shape; their test for the plain empty `times` of `construct_empty_times_body` covers the same refusal, and their loader names this id as skipped for that reason.
+- Source: loop 21, AZ-2390 (reference row 20, the F33 request shape), AZ-2394.

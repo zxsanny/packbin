@@ -1,9 +1,13 @@
-use crate::walk::{pack, unpack};
+mod pack_cases;
+mod refusals;
+
+use crate::walk::unpack;
 use crate::{
-    bits, bytes, dict, eq, flag_byte, flags, group, i8, insert, list, repeat, sized, times, to_hex,
-    u16, u32, u8, utf8, when, BoundField, MapScheme, PackError, Scheme, UnpackError, Value, Values,
-    DEFAULT_MAX_SLOTS,
+    bits, dict, eq, flag_byte, flags, group, i8, list, repeat, sized, times, to_hex, u16, u32, u8,
+    utf8, when, BoundField, MapScheme, Scheme, UnpackError, Value, DEFAULT_MAX_SLOTS,
 };
+use pack_cases::{pack_case, PACK_NOT_RUN};
+use refusals::{assert_construct_rule, assert_pack_rule, assert_tables_cover};
 use std::collections::HashSet;
 use std::fs;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -85,6 +89,8 @@ fn scheme_for(id: &str) -> MapScheme {
             fields.extend((1..10).map(|i| byte.bit(u8(i.to_string()))));
             MapScheme::new(1, fields)
         }
+        "construct_empty_times_body" => MapScheme::new(1, vec![u8("0"), times(1, "0", vec![])]),
+        "construct_empty_repeat_body" => MapScheme::new(1, vec![repeat(0, vec![])]),
         "empty_group_outside_flags" => MapScheme::new(1, vec![u8("0"), group(1, "1", vec![])]),
         "eq_bool_false" => MapScheme::new(
             1,
@@ -115,195 +121,11 @@ fn limit_scheme_for(id: &str) -> MapScheme {
     }
 }
 
-fn row(pairs: &[(&str, Value)]) -> Values {
-    let mut vals = Values::new();
-    for (name, value) in pairs {
-        insert(&mut vals, name, Some(value.clone()));
-    }
-    vals
-}
-
-/// One round row per entry; a name a round leaves out is absent there (false for a bool).
-fn rounds(rounds: Vec<Vec<(&str, Value)>>) -> Values {
-    let groups = rounds.iter().map(|round| row(round)).collect();
-    row(&[("__repeat__", Value::Groups(groups))])
-}
-
-fn ints(items: &[u8]) -> Value {
-    Value::List(items.iter().map(|n| Value::U8(*n)).collect())
-}
-
-fn times_scheme() -> MapScheme {
-    MapScheme::new(1, vec![u8("a"), times(1, "a", vec![u8("x")])])
-}
-
-/// `flagbyte m; u8 mode; bit m { when mode == 1 { u8 speed } }`: the condition follows the byte.
-fn split_when_after_byte() -> MapScheme {
-    let m = flag_byte("m");
-    MapScheme::new(
-        1,
-        vec![
-            m.byte(),
-            u8("mode"),
-            m.bit(when(2, eq("mode", Value::U8(1)), vec![u8("speed")])),
-        ],
-    )
-}
-
-/// `flagbyte m; u8 n; bit m { times n { u8 pt } }`: the count follows the byte.
-fn split_count_after_byte() -> MapScheme {
-    let m = flag_byte("m");
-    MapScheme::new(
-        1,
-        vec![m.byte(), u8("n"), m.bit(times(2, "n", vec![u8("pt")]))],
-    )
-}
-
-/// `u8 sel; flagbyte m; when sel == 1 { u8 n }; bit m { times n { u8 pt } }`
-fn split_count_skipped() -> MapScheme {
-    let m = flag_byte("m");
-    MapScheme::new(
-        1,
-        vec![
-            u8("sel"),
-            m.byte(),
-            when(2, eq("sel", Value::U8(1)), vec![u8("n")]),
-            m.bit(times(3, "n", vec![u8("pt")])),
-        ],
-    )
-}
-
-/// `u8 mode; flagbyte m; bit m { when mode == 1 { u8 speed } }; bit m { u16 heading }`
-fn split_false_condition() -> MapScheme {
-    let m = flag_byte("m");
-    MapScheme::new(
-        1,
-        vec![
-            u8("mode"),
-            m.byte(),
-            m.bit(when(2, eq("mode", Value::U8(1)), vec![u8("speed")])),
-            m.bit(u16("heading")),
-        ],
-    )
-}
-
-/// Pack cases a Rust scheme cannot express, with the reason (the README "Not run by" line of each).
-const PACK_NOT_RUN: &[(&str, &str)] = &[(
-    "pack_element_times_over_budget",
-    "a list element cannot hold a `times`: Rust refuses it at construction",
+/// Construct cases a Rust scheme cannot spell, with the reason (the README "Expected" line of each).
+const CONSTRUCT_NOT_RUN: &[(&str, &str)] = &[(
+    "construct_empty_round_body_list_element",
+    "a list element cannot hold a `times`; construct_empty_times_body covers the same refusal",
 )];
-
-/// The scheme and row of a `pack` case, written by hand from fixtures/hostile/README.md (map form).
-fn pack_case(id: &str) -> Result<Vec<u8>, PackError> {
-    match id {
-        "pack_out_of_range_integer" => pack(
-            &MapScheme::new(1, vec![u8("a")]),
-            &row(&[("a", Value::U16(300))]),
-        ),
-        "pack_missing_required_value" => pack(
-            &MapScheme::new(1, vec![u8("a"), u8("b")]),
-            &row(&[("a", Value::U8(1))]),
-        ),
-        "pack_times_list_too_long" => pack(
-            &times_scheme(),
-            &row(&[("a", Value::U8(2)), ("x", ints(&[1, 2, 3]))]),
-        ),
-        "pack_times_list_too_short" => pack(
-            &times_scheme(),
-            &row(&[("a", Value::U8(2)), ("x", ints(&[1]))]),
-        ),
-        "pack_aligned_round_row" => pack(
-            &MapScheme::new(
-                1,
-                vec![repeat(
-                    0,
-                    vec![flags(0, "f", vec![group(0, "on", vec![]), u8("n")])],
-                )],
-            ),
-            &rounds(vec![
-                vec![("on", Value::U8(1)), ("n", Value::U8(1))],
-                vec![("n", Value::U8(2))],
-                vec![("on", Value::U8(1)), ("n", Value::U8(3))],
-            ]),
-        ),
-        "pack_times_count_over_limit" => pack(
-            &MapScheme::new(1, vec![u32("n"), times(1, "n", vec![u8("x")])]),
-            &row(&[("n", Value::U32(65_536)), ("x", Value::U8(7))]),
-        ),
-        "pack_times_zero_with_values" => pack(
-            &times_scheme(),
-            &row(&[("a", Value::U8(0)), ("x", ints(&[5]))]),
-        ),
-        "pack_split_when_source_after_byte" => pack(
-            &split_when_after_byte(),
-            &row(&[("mode", Value::U8(1)), ("speed", Value::U8(7))]),
-        ),
-        "pack_split_times_count_after_byte" => pack(
-            &split_count_after_byte(),
-            &row(&[("n", Value::U8(2)), ("pt", ints(&[5, 6]))]),
-        ),
-        "pack_split_times_count_skipped" => pack(
-            &split_count_skipped(),
-            &row(&[("sel", Value::U8(0)), ("pt", ints(&[5]))]),
-        ),
-        "pack_lone_bytes_in_round" => pack(
-            &MapScheme::new(1, vec![u8("n"), times(1, "n", vec![bytes("d", 2)])]),
-            &row(&[("n", Value::U8(2)), ("d", Value::Bytes(vec![1, 2]))]),
-        ),
-        "pack_split_false_condition_silent" => pack(
-            &split_false_condition(),
-            &row(&[
-                ("mode", Value::U8(0)),
-                ("speed", Value::U8(7)),
-                ("heading", Value::U16(90)),
-            ]),
-        ),
-        "pack_lone_utf8_under_times_over_budget" => pack(
-            &MapScheme::new(1, vec![u32("n"), times(1, "n", vec![utf8("s")])]),
-            &row(&[
-                ("n", Value::U32(65_535)),
-                ("s", Value::Str("a".repeat(65_535))),
-            ]),
-        ),
-        "pack_slots_over_limit" => {
-            let names: Vec<String> = (0..65).map(|i| format!("m{i}")).collect();
-            let mut pairs = vec![("n", Value::U32(65_535))];
-            pairs.extend(names.iter().map(|name| (name.as_str(), Value::U8(1))));
-            pack(
-                &MapScheme::new(
-                    1,
-                    vec![u32("n"), times(1, "n", names.iter().map(u8).collect())],
-                ),
-                &row(&pairs),
-            )
-        }
-        "pack_repeat_over_limit" => {
-            let rounds = (0..65_536)
-                .map(|_| row(&[("k", Value::U8(7))]))
-                .collect::<Vec<_>>();
-            pack(
-                &MapScheme::new(1, vec![repeat(0, vec![u8("k")])]),
-                &row(&[("__repeat__", Value::Groups(rounds))]),
-            )
-        }
-        "pack_split_count_zero_after_byte_list" => pack(
-            &split_count_after_byte(),
-            &row(&[("n", Value::U8(0)), ("pt", ints(&[5, 6]))]),
-        ),
-        "pack_split_count_zero_after_byte_scalar" => pack(
-            &split_count_after_byte(),
-            &row(&[("n", Value::U8(0)), ("pt", Value::U8(5))]),
-        ),
-        "pack_flags_skipped_count_with_values" => pack(
-            &MapScheme::new(
-                1,
-                vec![flags(0, "f", vec![u8("n"), times(1, "n", vec![u8("pt")])])],
-            ),
-            &row(&[("pt", ints(&[5, 6]))]),
-        ),
-        other => panic!("no scheme written for hostile pack case {other}"),
-    }
-}
 
 #[derive(Default)]
 struct BoolRow {
@@ -336,6 +158,7 @@ fn assert_refusal_names_the_rule(id: &str, msg: &str) {
         "allowed only directly inside flags",
         "value other than true",
         "which is outside",
+        "the body holds no member",
     ];
     assert!(
         rules.iter().any(|rule| msg.contains(rule)),
@@ -362,7 +185,9 @@ fn rust_outcome(id: &str) -> &'static str {
         | "bool_outside_flags"
         | "empty_group_outside_flags"
         | "eq_bool_false"
-        | "eq_out_of_range" => "scheme_error",
+        | "eq_out_of_range"
+        | "construct_empty_times_body"
+        | "construct_empty_repeat_body" => "scheme_error",
         "zero_progress_repeat_when" | "when_names_outer_field_in_repeat" => "scheme_error",
         "negative_count"
         | "oversize_count"
@@ -408,11 +233,20 @@ fn run_with(
     })
 }
 
+/// The README expectation of `pack_late_when_in_bit_body` (AZ-2385): another member (`d`) sets the
+/// bit, so the late `when` body is written.
+#[test]
+fn late_when_in_bit_body_packs_the_readme_bytes() {
+    let packed = pack_case("pack_late_when_in_bit_body").map(|raw| to_hex(&raw));
+    assert_eq!(packed, Ok("0101010509".to_string()));
+}
+
 #[test]
 fn hostile_vectors_error_without_panic_or_hang() {
     let text = fs::read_to_string(CASES).expect("fixtures/hostile/cases.txt");
     let mut seen = HashSet::new();
     let mut outcomes = Vec::new();
+    let (mut construct_refused, mut pack_refused) = (Vec::new(), Vec::new());
     for line in text.lines() {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
@@ -425,6 +259,11 @@ fn hostile_vectors_error_without_panic_or_hang() {
         let allows_scheme_error = expected.split('|').any(|t| t == "scheme_error");
         match stage {
             "construct" => {
+                if let Some((_, reason)) = CONSTRUCT_NOT_RUN.iter().find(|(skipped, _)| *skipped == id)
+                {
+                    outcomes.push(format!("{id} -> skipped: {reason}"));
+                    continue;
+                }
                 let id_owned = id.to_string();
                 let refusal = within_one_second(id, move || {
                     catch_unwind(AssertUnwindSafe(|| construct(&id_owned)))
@@ -433,9 +272,10 @@ fn hostile_vectors_error_without_panic_or_hang() {
                 });
                 let msg = refusal
                     .unwrap_or_else(|| panic!("{id}: scheme was built, expected scheme_error"));
-                assert_refusal_names_the_rule(id, &msg);
+                assert_construct_rule(id, &msg);
                 assert_eq!(rust_outcome(id), "scheme_error", "{id}");
-                outcomes.push(format!("{id} -> scheme_error"));
+                construct_refused.push(id.to_string());
+                outcomes.push(format!("{id} -> scheme_error ({msg})"));
             }
             "unpack" => match run_unpack(id, hex) {
                 Err(msg) => {
@@ -472,10 +312,11 @@ fn hostile_vectors_error_without_panic_or_hang() {
                 match (expected, hex) {
                     ("bytes", _) => assert_eq!(bytes, Ok(hex.to_string()), "{id}"),
                     ("pack_error", "-") => {
-                        assert!(
-                            bytes.is_err(),
-                            "{id}: packed {bytes:?}, expected pack_error"
-                        )
+                        let err = bytes
+                            .as_ref()
+                            .expect_err(&format!("{id}: packed {bytes:?}, expected pack_error"));
+                        assert_pack_rule(id, err);
+                        pack_refused.push(id.to_string());
                     }
                     other => panic!("{id}: malformed pack line {other:?}"),
                 }
@@ -484,6 +325,7 @@ fn hostile_vectors_error_without_panic_or_hang() {
             other => panic!("{id}: unknown stage {other}"),
         }
     }
+    assert_tables_cover(&construct_refused, &pack_refused);
     for line in &outcomes {
         println!("hostile {line}");
     }

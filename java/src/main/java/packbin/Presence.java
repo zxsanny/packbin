@@ -22,14 +22,23 @@ final class Presence {
      * value; a {@code times} when its count is above 0; a {@code repeat} when a round holds a value.
      */
     static boolean childOn(Object row, Field child, Walker.Take take, Map<Object, Object> seen) {
+        return childOn(row, child, take, seen, false);
+    }
+
+    /**
+     * {@code valuesOnly} asks whether a value would be dropped: a {@code times} then counts only when a round holds
+     * a value, since a count with no value behind it leaves nothing to drop.
+     */
+    private static boolean childOn(
+            Object row, Field child, Walker.Take take, Map<Object, Object> seen, boolean valuesOnly) {
         return switch (child.kind) {
-            case GROUP -> groupOn(row, child, take, seen);
-            case FLAGS -> anyOn(row, child.children, take, seen);
+            case GROUP -> groupOn(row, child, take, seen, valuesOnly);
+            case FLAGS -> anyOn(row, child.children, take, seen, valuesOnly);
             case U2 -> anySlotPresent(row, child.children, take);
             case BOOL -> boolOn(takeValue(child, row, take));
-            case FLAG_BIT -> childOn(row, child.inner, take, seen);
-            case WHEN -> conditionHolds(child.condition, seen) && anyOn(row, child.children, take, seen);
-            case TIMES -> VarFields.timesOn(child, row, take, seen);
+            case FLAG_BIT -> childOn(row, child.inner, take, seen, valuesOnly);
+            case WHEN -> conditionHolds(child.condition, seen) && anyOn(row, child.children, take, seen, valuesOnly);
+            case TIMES -> VarFields.timesOn(child, row, take, seen) && (!valuesOnly || Rounds.repeatOn(child, row, take));
             case REPEAT -> Rounds.repeatOn(child, row, take);
             case U8, U16, U32, U64, I8, I16, I32, I64, F32, F64, BYTES, UTF8, SIZED, BITS, PACKED, LIST, DICT ->
                     isPresent(takeValue(child, row, take));
@@ -37,17 +46,19 @@ final class Presence {
         };
     }
 
-    private static boolean groupOn(Object row, Field group, Walker.Take take, Map<Object, Object> seen) {
+    private static boolean groupOn(
+            Object row, Field group, Walker.Take take, Map<Object, Object> seen, boolean valuesOnly) {
         if (group.nestedRow) {
             // The fields of a nested row belong to its member, not to this row: the member alone decides.
             return isPresent(takeValue(group, row, take));
         }
-        return anyOn(row, group.children, take, seen);
+        return anyOn(row, group.children, take, seen, valuesOnly);
     }
 
-    private static boolean anyOn(Object row, List<Field> children, Walker.Take take, Map<Object, Object> seen) {
+    private static boolean anyOn(
+            Object row, List<Field> children, Walker.Take take, Map<Object, Object> seen, boolean valuesOnly) {
         for (Field child : children) {
-            if (childOn(row, child, take, seen)) {
+            if (childOn(row, child, take, seen, valuesOnly)) {
                 return true;
             }
         }
@@ -71,7 +82,7 @@ final class Presence {
      * A condition that is false on values written before the byte drops its body without error, as outside flags.
      */
     static void requireNothingDropped(Field member, Object row, Walker.Take take, Map<Object, Object> seen) {
-        if (childOn(row, member, take, seen)) {
+        if (childOn(row, member, take, seen, true)) {
             throw new IllegalArgumentException(Rounds.firstValueName(member)
                     + ": its flag bit was decided before the value its condition or count reads was written");
         }
@@ -79,6 +90,7 @@ final class Presence {
             throw new IllegalArgumentException(
                     Rounds.firstValueName(member) + ": values given, but the count of its times was never written");
         }
+        requireCountWritten(member, row, take, seen);
     }
 
     /**
@@ -91,6 +103,51 @@ final class Presence {
                     + ": a value is given, but the count of its times is not written, so its bit is clear;"
                     + " write the count before the times");
         }
+        requireCountWritten(member, row, take, seen);
+    }
+
+    /**
+     * A times whose count no field wrote (the when that holds the count is clear) reads no round, whatever count the
+     * row holds, so the row would unpack with a smaller count than it packs: refused where its bit is found clear.
+     * A count of 0, or none in the row, agrees with the packet and packs.
+     */
+    private static void requireCountWritten(Field member, Object row, Walker.Take take, Map<Object, Object> seen) {
+        switch (member.kind) {
+            case TIMES -> {
+                Object count = seen.get(member.countId);
+                if (member.countSource == null || count instanceof Number && !(count instanceof Float || count instanceof Double)) {
+                    return;
+                }
+                String given = positive(takeValue(member.countSource, row, take));
+                if (given != null) {
+                    throw new IllegalArgumentException(Rounds.firstValueName(member) + ": the count "
+                            + Rounds.firstValueName(member.countSource) + " is " + given
+                            + " in the row, but no field wrote it (the when that holds it is clear), so its times"
+                            + " reads no round; give the count 0, leave it out, or make the when hold");
+                }
+            }
+            case FLAG_BIT -> requireCountWritten(member.inner, row, take, seen);
+            case GROUP, WHEN, FLAGS -> {
+                if (member.nestedRow || member.kind == Field.Kind.WHEN && !conditionHolds(member.condition, seen)) {
+                    return;
+                }
+                for (Field child : member.children) {
+                    requireCountWritten(child, row, take, seen);
+                }
+            }
+            default -> { }
+        }
+    }
+
+    /** The whole number above 0 that {@code value} holds, as text; null for anything else. */
+    private static String positive(Object value) {
+        if (value instanceof java.math.BigInteger big) {
+            return big.signum() > 0 ? big.toString() : null;
+        }
+        if (value instanceof Number number && !(value instanceof Float || value instanceof Double)) {
+            return number.longValue() > 0 ? Long.toString(number.longValue()) : null;
+        }
+        return null;
     }
 
     private static boolean valuesWithoutCount(Field member, Object row, Walker.Take take, Map<Object, Object> seen) {

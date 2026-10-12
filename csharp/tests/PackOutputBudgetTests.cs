@@ -100,7 +100,7 @@ public class PackOutputBudgetTests
         var items = (List<object?>)read.Values["Items"]!;
         Assert.Equal(40, items.Count);
         var last = (Dictionary<string, object?>)items[39]!;
-        Assert.Equal(65_535.0, last["N"]);
+        Assert.Equal(65_535u, last["N"]);
         Assert.Equal(65_535, ((List<object?>)last["K"]!).Count);
         Assert.All((List<object?>)last["K"]!, k => Assert.Equal(5UL, k));
     }

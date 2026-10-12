@@ -1,4 +1,6 @@
-use super::flag_bits::{check_split_bit, collect_flag_bits, member_on, FlagInners, Form};
+use super::flag_bits::{
+    check_split_bit, collect_flag_bits, member_on, refuse_unwritten_count, FlagInners, Form,
+};
 use super::pack_out::{flags_byte_name, round_member, write_float, write_int, PackOut};
 use super::times::{
     check_aligned, check_lists, check_longer, check_repeat_cap, check_round_cap, rounds_mismatch,
@@ -123,6 +125,8 @@ fn pack_one<'v>(
                 if member_on(member, values, wrote, Form::Combined)? {
                     bits |= 1 << i;
                     pack_one(member, values, inners, wrote, out)?;
+                } else {
+                    refuse_unwritten_count(member, values, wrote)?;
                 }
             }
             out.patch(at, bits);
@@ -132,8 +136,8 @@ fn pack_one<'v>(
         FieldKind::FlagByte { name, slot } => {
             let mut bits: u8 = 0;
             for (bit, inner) in inners.get(slot).into_iter().flatten() {
-                check_split_bit(inner, values, wrote)?;
-                if member_on(inner, values, wrote, Form::Split)? {
+                let early = check_split_bit(inner, values, wrote)?;
+                if early || member_on(inner, values, wrote, Form::Split)? {
                     bits |= 1 << bit;
                 }
             }
@@ -146,9 +150,10 @@ fn pack_one<'v>(
             slot, bit, inner, ..
         } => {
             if wrote.flag_byte(*slot) & (1 << bit) != 0 {
-                pack_one(inner, values, inners, wrote, out)?;
+                pack_one(inner, values, inners, wrote, out)
+            } else {
+                refuse_unwritten_count(inner, values, wrote)
             }
-            Ok(())
         }
         FieldKind::When {
             field,

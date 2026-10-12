@@ -119,11 +119,6 @@ internal static partial class Walker
             case ulong big:
                 count = big > long.MaxValue ? long.MaxValue : (long)big;
                 break;
-            case double narrow:
-                // u8 ... u32 arrive here as a double (ReadScalar's switch has natural type double), always a whole number
-                // in range; u64 and i64 are boxed as ulong and long and handled by the typed cases above.
-                count = (long)narrow;
-                break;
             default:
                 return false;
         }
@@ -263,6 +258,7 @@ internal static partial class Walker
         var names = RoundNames(field, packing: false);
         var slots = SlotsPerRound(names);
         var built = new Dictionary<string, object?>();
+        var rows = RoundRowsFor(field, values);
         for (long i = 0; i < count; i++)
         {
             if (!values.Budget.TryStartRound(i, slots))
@@ -278,10 +274,15 @@ internal static partial class Walker
             // A round that reads nothing would only burn through a huge count.
             if (offset == roundStart)
                 return InterimBadValue(field.Name, bytes.Length - roundStart);
-            AppendRound(built, group, names);
+            if (rows is null)
+                AppendRound(built, group, names);
+            else
+                rows.Add(group);
         }
         foreach (var pair in built)
             values[pair.Key] = pair.Value;
+        if (rows is not null)
+            values[field.Name] = rows;
         return null;
     }
 

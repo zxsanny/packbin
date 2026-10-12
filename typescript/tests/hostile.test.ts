@@ -326,11 +326,14 @@ describe("shared construct vectors (fixtures/hostile/cases.txt)", () => {
     it(`${c.id} is refused at construction`, () => {
       assert.ok(entry, `no TypeScript scheme for construct case ${c.id}`)
       assert.ok(c.expected.includes("scheme_error"), `${c.id}: vector expects ${c.expected.join("|")}`)
+      const start = performance.now()
       assert.throws(entry.build, (e: unknown) => {
         assert.ok(e instanceof RangeError, `${c.id}: expected RangeError, got ${String(e)}`)
         assert.match(e.message, entry.rule, `${c.id}: wrong rule fired`)
         return true
       })
+      // The refusal comes at build, before any item or round exists (construct_empty_round_body_list_element).
+      assert.ok(performance.now() - start < 1000, `${c.id}: construction took ${performance.now() - start} ms`)
     })
   }
 })
@@ -343,6 +346,14 @@ const PACK_REFUSAL: Record<string, RegExp> = {
   pack_repeat_over_limit: /^k: the repeat count is 65536, above the limit of 65535 rounds$/,
   pack_split_count_zero_after_byte_list: /^pt: 2 items, times count 0$/,
   pack_flags_skipped_count_with_values: /^pt: a value is given, but the count of its times is not written/,
+  pack_round_slots_over_limit: /^b: the rounds would hold 4 slots, above the limit of 3 slots$/,
+  pack_round_slots_flags_over_limit: /^on: the rounds would hold 6 slots, above the limit of 4 slots$/,
+  pack_flags_short_list: /^v: 1 items, repeat count 2; give one entry per round, undefined where the member is absent$/,
+  pack_count_one_clear_when:
+    /^pt: the count c is 1 in the row, but no field wrote it \(the when that holds it is clear\), so its times reads no round; give the count 0, leave it out, or make the when hold$/,
+  pack_bits_count_clear_when: /^v: count c was not written$/,
+  pack_packed_count_clear_when: /^v: count c was not written$/,
+  pack_sized_count_clear_when: /^v: count c was not written$/,
 }
 
 describe("shared pack vectors (fixtures/hostile/cases.txt)", () => {

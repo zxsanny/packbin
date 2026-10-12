@@ -61,11 +61,10 @@ final class ByteSink {
 
     /**
      * Takes the slots of one round that is about to start, before any byte of it is written; refuses the round
-     * when the slots of all rounds of this call would pass the limit. A round is as wide as unpack counts it: one
-     * slot for each value the round holds ({@code values}).
+     * when the slots of all rounds of this call would pass the limit. {@code width} is {@link Rounds#width}, the
+     * slots unpack charges for the same round.
      */
-    void startRound(Field round, List<Field> values) {
-        int width = values.size();
+    void startRound(Field round, List<Field> values, int width) {
         if (width > maxSlots - slots) {
             throw new IllegalArgumentException(Rounds.roundName(round, values) + ": the rounds would hold " + (slots + width)
                     + " slots, above the limit of " + maxSlots + " slots");
