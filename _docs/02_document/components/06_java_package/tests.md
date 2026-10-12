@@ -462,6 +462,20 @@ Source: `_docs/03_implementation/batch_01_loop19_report.md`, `_docs/loops/loop19
 
 File split (AZ-2342): `Presence.java` moved out of `Walker.java`; the suite output is identical before and after.
 
+## Loop 20 Tests (AZ-2354, AZ-2355, AZ-2356, AZ-2359, AZ-2360, AZ-2361, AZ-2367)
+
+Source: `_docs/03_implementation/batch_01_loop20_report.md` to `batch_04_loop20_report.md`, `_docs/loops/loop20/review20.md`, `_docs/03_implementation/reference_loop20_budget.md`, and the scenario mapping in `_docs/02_document/tests/blackbox-tests-13-loop20-pack-budget-and-parity.md` (FT-X-38 to FT-X-52). `PackbinTest` checks went from 1772 to 1938 (wave 1b) and 1952 (hostile pack loader), 0 failures, api-check PASS; the new classes are registered in `PackbinTest`.
+
+| Test class | Task | What it proves |
+|------------|------|----------------|
+| `PackBudgetTest`, `LoneUtf8Budget` | AZ-2354 | `row1LoneUtf8UnderACappedTimes` (the child-JVM helper refuses it in a small heap; 47 ms, 99.5 MB RSS); `rows4To13TheBoundaryIsExact`; `rows14To16SlotsAreChargedOnPack`; `rows17To21TheOrderOfTheChecks`; `rows22To25ScopeAndWidth`; `rows26To28TheLimitsApi` (`withLimits(int, long)` resets `maxBytes`); `growthStaysInsideTheArrayLimit` |
+| `RepeatRoundCapTest` | AZ-2355 | `rows1To3TheDefaultLimit`, `rows4To6TheMemberNamed`, `rows7To10EveryPlaceARepeatSits` |
+| `ParityPinsTest` | AZ-2356, AZ-2359, AZ-2360 | `az2356CountZeroAfterTheByte`, `az2360SkippedCountWithValuesIsLoud`, `az2359AnEnumIsNotANumber` |
+| `CountsFractionsSinkTest` | AZ-2361 | `ac1AFractionIsRefused` (`BigDecimal` 1.5 and 0.1, `Long` and `BigInteger` 2^32 + 1 in `u2`, `bits`, `packed`), `ac2AU64CountAboveIntRange`, `ac3TheSinkGrowsWithoutOverflow` |
+| `HostileVectorTest` | AZ-2367 | the seven new hostile `pack` cases; refusal only, not the rule that fired (loop 21) |
+
+Slow tests: none above 2 s from this loop.
+
 ## Test Data Management
 
 **Required test data**:

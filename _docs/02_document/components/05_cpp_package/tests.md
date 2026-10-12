@@ -459,6 +459,20 @@ Source: `_docs/03_implementation/batch_01_loop19_report.md`, `_docs/loops/loop19
 
 Existing tests changed: `times_with_a_skipped_count` (in `flags_times_repeat_member_host_tests.cpp`) expects a refusal.
 
+## Loop 20 Tests (AZ-2356, AZ-2357, AZ-2360, AZ-2364, AZ-2367)
+
+Source: `_docs/03_implementation/batch_01_loop20_report.md` to `batch_04_loop20_report.md`, `_docs/loops/loop20/review20.md`, `_docs/03_implementation/reference_loop20_budget.md`, and the scenario mapping in `_docs/02_document/tests/blackbox-tests-13-loop20-pack-budget-and-parity.md` (FT-X-38 to FT-X-52). gcc:16 `make test` and host `make test` pass; compile-fail 15 of 15 rejected; the arm embedded stage passes: Cortex-M4F stack 448 of 512 B, flash 8160 of 8192 B (8112 before the review fix pass, margin now 32 B); 11 new tests of wave 1a and 9 checks of the review pass fail on the sources before the change. C++ has no pack budget, so AZ-2354 and AZ-2355 have no C++ row.
+
+| Test file | Task | What it proves |
+|-----------|------|----------------|
+| `split_form_loud_host_tests.cpp` | AZ-2357, AZ-2360 | `count_set_behind_a_clear_when` (a plain `times` with its count behind a clear `when`, count 0, no rounds is `BadValue`; it packed `0100`); `flags_skipped_count_with_values`; `ac2_count_never_written` |
+| `late_source_host_tests.cpp` | AZ-2357, AZ-2364 | `az2364_every_late_when_of_a_bit_is_refused`; `az2364_link_over_255_is_refused_at_construction`; `az2357_hold_over_255_is_refused_at_construction` |
+| `held_count_nested_late_host_tests.cpp` (new, registered in `main.cpp`) | review C1, C2, C3 | `c2_count_behind_a_clear_when_is_refused` (`bits`, `packed`, `sized`), `c2_count_behind_a_true_when_is_unchanged`, `c1_late_when_in_a_when_is_refused`, `c3_times_inside_the_holding_when_has_no_limit` |
+| `times_count_zero_host_tests.cpp` | AZ-2356 | `az2356_split_count_zero_after_the_byte` (a list is `BadValue`, a lone scalar packs `010000`); it passes through the late rule, not the count-0 rule (review C4, loop 21) |
+| `hostile_pack_cases.hpp`, `hostile_host_tests.cpp` | AZ-2367 | two of the seven new hostile `pack` cases run (`pack_split_count_zero_after_byte_list`, `pack_flags_skipped_count_with_values`); five are skipped with reasons (caller buffer, fixed `Array`, typed row holds an `Array`) |
+
+Slow tests: none from this loop on the host; the arm stage takes about 3 min. The flash margin is exhausted: any further edit to `cpp/src/core` or `cpp/include` needs a saving first.
+
 ## Test Data Management
 
 **Required test data**:

@@ -68,3 +68,17 @@ List: OWASP Top 10 2025 (names unchanged since loop 16). Scope: `git diff e1a791
 | A01, A04, A05, A07, A08, A09 | unchanged | no surface in the diff (F14, F15, F16, F19, F22, F23 carried; A07 and A09 N/A) |
 
 Earlier findings re-stated: F10 Medium open (unchanged); F12 Medium open (unchanged); F17 Low open; F27 Low open; F21 fixed for the count, F28 Medium open.
+
+## Loop 20 (2026-10-12)
+
+List: OWASP Top 10 2025 (names unchanged since loop 16). Scope: `git diff a27433e..HEAD -- csharp typescript python java rust cpp fixtures` (HEAD 803625f; see `security_report.md`, "Loop 20 findings").
+
+| Category | Status | Evidence |
+|----------|--------|----------|
+| A06 Insecure Design | PASS_WITH_WARNINGS | F28 fixed: one pack output budget (`maxBytes`, 16 MiB) plus `maxSlots` per round and the `repeat` cap on pack; the lone string under a `times` is refused in 4 to 30 ms in five packages, element and round routes in 0.37 to 7.4 s. F31 fixed in four packages, partly in Python (8 slots per name per run). New Lows: F33 (an empty round body charges nothing: CPU unbounded, TypeScript 93 s for a 1.1 MB request), F34 (TypeScript `sliceRound` copies the whole scope per round). F10 unchanged (no unpack limit changed) |
+| A10 Mishandling of Exceptional Conditions | PASS_WITH_WARNINGS | F17, F27, F29, F30 fixed: 5.6 million typed C# unpacks over 9 to 10 round shapes raised 0 exceptions, five member types that cannot hold a round are refused at construction, the Java buffer grows once past 2^30 and refuses with a typed error at the array limit, Java `sized`/`bits` counts above `Integer.MAX_VALUE` are refused. F18 (Java typed accessor in an anchored-group element) unchanged. The new refusals are typed in every package (`RangeError`, `ValueError`, `IllegalArgumentException`, `ArgumentException`, `PackError::Type`) and name the member |
+| A02 Security Misconfiguration | PASS_WITH_WARNINGS | F32 untouched (`.github/` not in the diff); F13, F20, F24 unchanged |
+| A03 Software Supply Chain | PASS_WITH_WARNINGS | no manifest, lockfile, workflow, image or script changed; `npm audit` 0, `dotnet list package --vulnerable` 0; F12 unchanged |
+| A01, A04, A05, A07, A08, A09 | unchanged | no surface in the diff: the new tests start two fixed child processes (Python AC-1, Java `LoneUtf8Budget`, TypeScript `spawnSync`) without a shell, secret or network; F14, F15, F16, F19, F22, F23 carried; A07 and A09 N/A |
+
+Earlier findings re-stated: F10 Medium open (unchanged); F12 Medium open (unchanged); F28 fixed; F31, F32, F33, F34 Low open.

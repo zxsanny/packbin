@@ -452,6 +452,20 @@ Source: `_docs/03_implementation/batch_01_loop19_report.md`, `_docs/loops/loop19
 
 Existing tests changed: `az2311_ac2_...` (lone buffer), `eq(i8, U8(255))` and `eq(u64, I64(-1))`, `flags_when_member_tests.rs`, `integrity_tests.rs`, `times_lone_value_tests.rs`. File split (AZ-2342): `walk/cursor.rs` and `field/leaf.rs` moved out of `walk/unpack.rs` and `field/mod.rs`; 479 tests before and after.
 
+## Loop 20 Tests (AZ-2354, AZ-2355, AZ-2356, AZ-2359, AZ-2360, AZ-2365, AZ-2367)
+
+Source: `_docs/03_implementation/batch_01_loop20_report.md` to `batch_04_loop20_report.md`, `_docs/loops/loop20/review20.md`, `_docs/03_implementation/reference_loop20_budget.md`, and the scenario mapping in `_docs/02_document/tests/blackbox-tests-13-loop20-pack-budget-and-parity.md` (FT-X-38 to FT-X-52). The library tests went from 436 to 469 (wave 1b), and the whole suite from 533 to 566 and 569 after the review fix pass: 472 lib tests plus 97 in the integration binaries. The AZ-2354 rows that need a `times` or `repeat` in a list element have no Rust equivalent (construction refuses it).
+
+| Test file | Task | What it proves |
+|-----------|------|----------------|
+| `pack_output_budget_tests.rs` | AZ-2354 | `ac1_row1_a_lone_utf8_under_a_capped_times_is_refused_at_once_naming_the_member`; the boundary rows 4 to 13; `ac4_row14_*` and the slot rows; `ac5_rows26_28_limits_api`, `ac5_row27_a_zero_max_bytes_is_refused` (and for the typed scheme) |
+| `pack_repeat_cap_tests.rs` | AZ-2355 | `ac1_row1_*`, `ac2_row2_*`, `ac3_row3_*`, rows 4 to 9 (the list-element row 10 does not apply) |
+| `loop20_parity_pins_tests.rs` | AZ-2356, AZ-2359, AZ-2360, review A4 | `az2356_ac1_*`, `az2356_ac2_*` (a lone scalar now packs `010000`, was refused), `review20_a4_the_split_form_keeps_count_zero_after_the_byte`; `az2360_ac1_*`, `review20_a4_a_skipped_count_with_a_stale_zero_is_refused_under_flags_naming_the_member` (failed on HEAD with `expected a type error, got Ok([1, 0, 0])`); `az2359_ac1_a_u8_slot_takes_only_an_integer_value` |
+| `hostile_tests.rs` | AZ-2367 | a `PACK_NOT_RUN` table (the list-element case is skipped with its reason); 491 lines |
+| `scheme/bound_collections.rs` | AZ-2365 | not a test file: split out of `scheme/bound.rs` (514 to 357 lines); the suite is unchanged by the move |
+
+Slow tests: the AC-4 slot rows take about 20 s in a debug build (rows 14 and 15 measured 8.5 s and 17.7 s; 0.8 s in release) and the hostile slots case 8.1 s in debug; kept at spec size (review A9). Decide with the total run whether CI should use a release build or smaller limits.
+
 ## Test Data Management
 
 **Required test data**:

@@ -49,7 +49,7 @@ The flags byte is stored now, and each bit's field is placed later in the list. 
 
 ## Unpack
 
-The call that turns bytes back into a value, or into a short-packet or trailing-bytes error. In C#, TypeScript, Python, Rust and Java it returns an error value for every bad buffer and never throws (the one exception is the typed C# `Unpack` of a `repeat` or `times` round); a negative count, a count with no source field, invalid UTF-8, and a `times`, `list` or `dict` round that reads nothing come back as an interim short-packet-style error until C15 sets their kind. (source: problem.md; loop 11)
+The call that turns bytes back into a value, or into a short-packet or trailing-bytes error. In C#, TypeScript, Python, Rust and Java it returns an error value for every bad buffer and never throws (the typed C# `Unpack` of a `repeat` or `times` round returns an error value too since loop 20, when the row cannot hold the lists of rounds); a negative count, a count with no source field, invalid UTF-8, and a `times`, `list` or `dict` round that reads nothing come back as an interim short-packet-style error until C15 sets their kind. (source: problem.md; loop 11)
 
 ## Version tag
 

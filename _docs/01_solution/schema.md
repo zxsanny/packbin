@@ -198,7 +198,7 @@ var trail = new Scheme<Trail>(1,
     Field.Repeat(1, Field.I32<Trail>(1, x => x.Lat), Field.I32<Trail>(2, x => x.Lon)));
 ```
 
-Typed `Unpack` of a `Repeat` round throws `InvalidCastException` (F17), so a C# round is packed from a dictionary of lists with `BinaryPacker.Pack(scheme, IReadOnlyDictionary<string, object?>)`; the snippet shows the scheme shape only.
+Typed `Unpack` of a `Repeat` round into a member that cannot hold the list of rounds returns an error value naming the member (loop 20, F17; it threw `InvalidCastException`), so a C# round is packed from a dictionary of lists with `BinaryPacker.Pack(scheme, IReadOnlyDictionary<string, object?>)`; the snippet shows the scheme shape only.
 
 Unpack gives each field one list entry per round, so `lat` and `lon` hold one entry per complete pair. A trailing partial pair is `ShortPacket` on `lat` or `lon`.
 
@@ -210,7 +210,7 @@ A round may hold optional fields (`when`, `flags`, a flag bit, a group). Then ev
 
 `times` writes the inner fields exactly N times, then the next field. A count of 2, two lat/lon pairs, and a following `u8` of 7 unpacks with bytes left 0. The `7` is not another latitude.
 
-Pack takes N from the count field, and the lists must hold N items. C# refuses a list with more or fewer, C++ refuses an array that does not match a non-zero count, and a Rust typed `times` refuses a `Vec` whose length is not N (a `PackError` naming the `times`). TypeScript, Python and Java refuse a list longer than N as well as a short one for a plain member (loop 16, AZ-2185, AZ-2186, AZ-2187), and so does the map form of Rust when no rounds are given (AZ-2237). A short or empty list for a member under `flags` or a flag bit is read as absent for the rounds it does not reach, in TypeScript, Java and Python (AZ-2248); Rust does not take such a list and asks for the values per round.
+Pack takes N from the count field, and the lists must hold N items. Pack also bounds its own output (loop 20, C#, TypeScript, Python, Java, Rust): a `times` count or a `repeat` list above `maxRounds` (65,535), rounds that would hold more than `maxSlots` slots (4,194,304) and a packet longer than `maxBytes` (16,777,216, type byte included) are refused before the write that passes the limit, naming the member. A lone string for a `utf8` name goes to every round, so the packet length is the caller's to bound. C++ writes into the caller's buffer and has no such limits. C# refuses a list with more or fewer, C++ refuses an array that does not match a non-zero count, and a Rust typed `times` refuses a `Vec` whose length is not N (a `PackError` naming the `times`). TypeScript, Python and Java refuse a list longer than N as well as a short one for a plain member (loop 16, AZ-2185, AZ-2186, AZ-2187), and so does the map form of Rust when no rounds are given (AZ-2237). A short or empty list for a member under `flags` or a flag bit is read as absent for the rounds it does not reach, in TypeScript, Java and Python (AZ-2248); Rust does not take such a list and asks for the values per round.
 
 One scheme uses both for a route: header, N two-bit kinds, N pairs, then N−1 straight-leg bits when that flag is set. The fixture hex is `3410001500062d00020d0065cd1d00a3e111108ccd1d10cae11101`.
 

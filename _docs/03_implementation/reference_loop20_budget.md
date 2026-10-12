@@ -158,3 +158,14 @@ The suite's AC-1 test runs the same script in a child process and asserts < 1 00
 | 10 | | `list(x => x.items, group(x => x.item, [repeat(0, [u8(0, x => x.k)])]))` | `list items of group { repeat { u8 k } }` | `{items: [{k: [1, 2, 3, 4]}]}` | `maxRounds: 3` | same text as row 7 | rounds |
 
 Before (HEAD): rows 1, 4, 6 to 10 packed (row 1: 65 537 bytes that the same scheme's unpack refuses).
+
+## Errata and per-package differences (parent, 2026-10-12, after waves 1b and the review fix pass)
+
+The table above is TypeScript's. The other packages reproduce its numbers, member names and order of checks; these are the accepted differences (rulings in `batch_02_loop20_report.md` and `review20.md`):
+
+- **Error type**: TypeScript `RangeError`, Python `ValueError` (the missing-field error of a `repeat` is a `KeyError`), Java `IllegalArgumentException`, C# `ArgumentException`, Rust `PackError`.
+- **Message text**: Python uses the reference text for the `times` cap (`x: the times count is N, above the limit of M rounds`). Java and Rust keep their loop 19 `times` cap text (existing tests pin it): Java `times: count N is above the limit of M rounds`, Rust `times at id N: count N (from 'n') is over the M rounds a scheme allows; members 'k'`. The `repeat` cap, bytes and slots texts follow the reference in all five. C# quotes the member (`'S': ...`).
+- **Member naming**: a split `flagByte()` has no name in Java (`flag_byte`), Python (`flag byte`) and C# (the first member its bits declare); a Java field without an accessor key is named by its field id (`0:`); older Python, Java and Rust messages name a field by id.
+- **Limits API**: TypeScript `withLimits({ maxBytes })` and a left-out limit takes the default; Python `with_limits(max_rounds, max_slots, max_bytes)` (same reset); Java `withMaxBytes(long)` keeps the other limits and `withLimits(int, long)` resets `maxBytes` to the default; Rust `with_max_bytes(usize)` is separate and `with_limits(rounds, slots)` keeps `max_bytes`; C# an optional trailing `maxBytes` of `WithLimits` (a `long`, only values below 1 are refused; effective cap 0x7FFFFFC7). Python and C# have no upper bound of 2^53 - 1 on a limit.
+- **Slot width** (row 24/25): Rust counts group, `flags` and flag-byte names (its own unpack does, width 3 for `repeat { u8 a; group g { u8 b } }`); Python never counts an empty group's name and counts duplicate leaves twice. Python's unpack charges 8 more slots per name for the first round of each run, so a packet written at exactly `maxSlots` (rows 15/16) is refused by Python's own unpack (`left=66040`): loop 21 decision U1.
+- **Rows that do not apply**: Rust has no `times`/`repeat` in a list element (AZ-2354 rows 2, 3, 22, 23, AZ-2355 row 10); C++ is out of AZ-2354/AZ-2355 (caller buffer, fixed arrays).

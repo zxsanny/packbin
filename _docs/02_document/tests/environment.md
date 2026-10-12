@@ -86,5 +86,6 @@ services:
 
 1. **Decision**: docker
 2. **Hardware dependencies found**: none. The embedded targets run on emulators: QEMU Cortex-M (`mps2-an385`, `mps2-an386`) and `qemu-s390x`; ESP32 targets are build-only. Restrictions forbid a GPU. The research MVE is a CPU loop. No product source imports a GPU, camera, or device API.
+2a. **Memory and timing checks (loop 20)**: the pack budget AC-1 tests measure peak memory in a child process, so they need a spawnable interpreter on the runner: TypeScript `support/lone-utf8-budget.ts` under `node`, Python a child `python` that finds the package through the parent's import path, Java a child JVM with a small heap (`LoneUtf8Budget`). C# asserts managed allocation on the pack thread and Rust asserts time only. Slow cases kept at spec size: Rust debug AC-4 rows 8 to 18 s, Python suite about 25 s, Python hostile element case 7.1 s. The arm embedded stage reports flash 8160 of 8192 B and stack 448 of 512 B after loop 20.
 3. **Execution instructions**:
    - **Docker mode**: one container per language, plus the two embedded containers for C++: current .NET LTS SDK, current Node LTS, and the current stable images for Python, Rust, C++, and Java. Each runs its package suite against the fixture file. Results are the CSV written to `./test-results/report.csv`. No port is published.

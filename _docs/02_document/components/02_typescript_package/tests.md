@@ -453,6 +453,20 @@ Source: `_docs/03_implementation/batch_01_loop19_report.md`, `_docs/loops/loop19
 
 Existing tests rewritten (batch report: four and two): `reference-scope.test.ts` and `when-on-written-values.test.ts`, for the removed `eq(int, undefined)` and `eq(int, null)` forms (now construction errors, or a `when` that never matches an unwritten field).
 
+## Loop 20 Tests (AZ-2354, AZ-2355, AZ-2356, AZ-2359, AZ-2360, AZ-2363, AZ-2367)
+
+Source: `_docs/03_implementation/batch_01_loop20_report.md` to `batch_04_loop20_report.md`, `_docs/loops/loop20/review20.md`, `_docs/03_implementation/reference_loop20_budget.md`, and the scenario mapping in `_docs/02_document/tests/blackbox-tests-13-loop20-pack-budget-and-parity.md` (FT-X-38 to FT-X-52). The suite went from 728 to 758 (wave 1a, 84 suites, strict `tsc` exit 0) and counts 765 in the step 11 container run (758 plus the 7 new hostile `pack` cases in `hostile.test.ts`). TypeScript is the reference package: the hex of the reference table rows is pinned here first.
+
+| Test file | Task | What it proves |
+|-----------|------|----------------|
+| `pack-output-budget.test.ts` with `tests/support/lone-utf8-budget.ts` | AZ-2354 | "AC-1 a lone string under a capped times is refused naming it, in under 1 s and 256 MB" (the helper runs in a child process, asserts under 1000 ms and 256 MiB peak RSS); "AC-3 a packet of exactly maxBytes packs; one byte more is refused"; AC-4 slot rows; "AC-5 a maxBytes below 1 or not an integer is refused like the other limits" |
+| `pack-repeat-round-cap.test.ts` | AZ-2355 | "AC-1 maxRounds + 1 entries are refused naming the member"; "AC-2 maxRounds entries pack in maxRounds + 1 bytes and round-trip"; the cap in `flags`, a split bit, a `when` and a list element |
+| `loop20-parity-pins.test.ts` | AZ-2356, AZ-2359, AZ-2360, AZ-2363 | groups "AZ-2356 a split count of 0 written after the byte", "AZ-2360 a combined flags times whose count is skipped", "AZ-2359 a numeric enum member in a u8 slot" (packs `01c8`; a string enum is refused) and "AZ-2363 a times inside a when inside a split bit" (already refused since loop 19) |
+| `split-form-loud-pack.test.ts` | AZ-2360 | one pinned row changed on purpose: `{pt: [5, 6]}` in a combined `flags` with a skipped count is now refused (it packed `0100`) |
+| `hostile.test.ts`, `tests/support/hostile-pack.ts` | AZ-2367 | the seven new hostile `pack` cases; a `PACK_REFUSAL` table pins which rule fired, so a wrong-reason `RangeError` cannot pass |
+
+Slow tests: the hostile slots case 1.45 s; the 4.26 MB packet of the AC-4 row packs in 0.86 s (2.06 s before). The suite has no other test above 2 s from this loop.
+
 ## Test Data Management
 
 **Required test data**:

@@ -114,3 +114,19 @@ Scope: `git diff e1a791e..HEAD` (about 2 900 lines of source in the six packages
 | Secrets, logging, crypto, SQL, templates, deserialization of types | none | no process, SQL, template, secret or log in the changed code |
 
 Findings: F21 fixed for the count (re-filed as F28), F28 to F32 new; F10, F12, F17, F27 unchanged.
+
+## Loop 20 (2026-10-12)
+
+Scope `a27433e..HEAD` (about 2 300 lines of source). Method and probes: `security_report.md`, "Loop 20 findings" and "Loop 20 method".
+
+| Class | Result | Evidence |
+|-------|--------|----------|
+| Unchecked growth of the output buffer | none left | every append site is budget-checked before the write: TypeScript `PackOut.append/byte`, Python `_PackBudget.room` at 11 sites, Java `ByteSink.ensure`, C# `PackOut.Reserve` before every `Add*` call after the type byte, Rust `PackOut::admit`; refusals are typed and name the member |
+| Integer overflow in length arithmetic | none | TypeScript doubles (below 2^53), Python unbounded, Java `long` arithmetic and a cap at `Integer.MAX_VALUE - 8`, C# `(long)Count + size` and a 0x7FFFFFC7 cap, Rust `saturating_add`; `maxBytes` at `Number.MAX_SAFE_INTEGER`, `2**200`, `Long.MAX_VALUE`, `usize::MAX` probed (refusal at the array limit in Java and C#, allocation that follows the written bytes elsewhere) |
+| CPU not bounded by the budget | 2 findings | F33 (empty round body: width 0 and no bytes), F34 (TypeScript `sliceRound` per-round copy of the scope) |
+| Unchecked indexing / casts in C++ | none | `Field::bit` (hold link) and `Field::late` (late chain) are `uint8_t`; a link above 255 fails the scheme (`c.fail_at` and return) in `mark_held` and `mark_late`; 250 to 600 entries probed under ASan and UBSan: no wrap, no sanitizer report; `count_skipped` and `under_clear_when` walk strictly backwards or inside the bit's span |
+| Unpack of untrusted bytes | no new path | no unpack limit or allocation changed; C# typed `Unpack` 5.6 million packets, 0 exceptions |
+| Process, file, secret and network handling in the new code | none | two fixed child processes in the tests (no shell, no external data); no secret, token, path or network use |
+| Secrets, logging, crypto, SQL, templates, deserialization of types | none | no process, SQL, template, secret or log in the changed library code |
+
+Findings: F28, F29, F30, F17, F27 fixed; F31 fixed except Python's unpack surcharge; F33 and F34 new; F10, F12, F32 unchanged.

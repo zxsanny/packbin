@@ -79,3 +79,15 @@ Scope: `git diff e1a791e..HEAD`. No manifest, lockfile, image or pin changed (`g
 | `cargo audit`, `pip-audit`, `govulncheck` | not run (as in loop 18: `cargo audit` 0.21.1 cannot parse the advisory database; Rust, Python, Java and C++ have no third-party dependency to scan) |
 
 F2, F3 and F12 unchanged. No CVE or advisory applies.
+
+## Loop 20 (2026-10-12)
+
+No manifest, lockfile, image, workflow or publish script changed since loop 19 (`git diff --stat a27433e..HEAD` over everything outside the six package directories, `fixtures` and `_docs` lists nothing; inside the package directories no `*.csproj`, `package.json`, lockfile, `Cargo.toml`, `pyproject.toml` or Dockerfile changed, only `cpp/Makefile` gained a test file in `HOST_TESTS`).
+
+| Tool | Result |
+|------|--------|
+| `npm audit --package-lock-only` (HEAD copy of `typescript/`) | found 0 vulnerabilities |
+| `dotnet list package --vulnerable --include-transitive` (`csharp/Packbin.csproj`, nuget.org) | "has no vulnerable packages given the current sources" |
+| `cargo audit`, `pip-audit`, `govulncheck` | not run (as in loop 19; Rust, Python, Java and C++ have no third-party dependency to scan) |
+
+F2, F3 and F12 unchanged. No CVE or advisory applies.

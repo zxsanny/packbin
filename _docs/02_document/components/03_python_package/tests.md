@@ -440,6 +440,20 @@ Source: `_docs/03_implementation/batch_01_loop19_report.md`, `_docs/loops/loop19
 
 Existing tests rewritten: `test_times_short_list.py` (three, the bare `IndexError` is now a named `ValueError`), `test_times_longer_list.py`, `test_lone_dict_in_round.py`, `test_flags_round_member.py`. A 20 000-case unpack-then-repack differential against a copy of HEAD showed equal `repeat` and `times` repack counts; the schemes whose source sits after the byte turned silent mismatches into `ValueError`.
 
+## Loop 20 Tests (AZ-2354, AZ-2355, AZ-2356, AZ-2359, AZ-2360, AZ-2362, AZ-2367)
+
+Source: `_docs/03_implementation/batch_01_loop20_report.md` to `batch_04_loop20_report.md`, `_docs/loops/loop20/review20.md`, `_docs/03_implementation/reference_loop20_budget.md`, and the scenario mapping in `_docs/02_document/tests/blackbox-tests-13-loop20-pack-budget-and-parity.md` (FT-X-38 to FT-X-52). The suite went from 777 to 835 (wave 1b) and 846 after the review fix pass; the hostile vector tests are 34 of 34 (27 before).
+
+| Test file | Task | What it proves |
+|-----------|------|----------------|
+| `test_pack_output_budget.py` | AZ-2354 | `test_ac1_row1_a_lone_utf8_under_a_capped_times_is_refused_naming_the_member` and the under-1-s, under-256-MB child-process check; `test_ac2_row2_*`, `test_ac3_row4_*` to `row13_*`, `test_ac4_row14_*` to `row16_*` (row 16 pins `ShortPacket(field='1', needed=0, left=66040)`, review B3), `test_order_row17_*` to `row21_*`, `test_scope_*`, `test_width_*`; `test_ac5_row27_an_invalid_max_bytes_is_refused_like_the_other_limits` |
+| `test_pack_repeat_round_cap.py` | AZ-2355 | `test_ac1_row1_*`, `test_ac2_row2_*`, `test_ac3_row3_*`, `test_row4_*` to `test_row10_*` |
+| `test_loop20_parity_pins.py` | AZ-2356, AZ-2359, AZ-2360, AZ-2362, review B1 | `test_az2356_ac1_*` (a list is refused), `test_az2356_ac2_*` (a lone scalar now packs `010000`); `test_az2360_ac1_combined_flags_skipped_count_with_values_is_refused_naming_the_member`; `test_az2362_a_repeat_with_an_empty_list_as_a_flags_member_leaves_the_bit_clear`; `test_review_b1_*` (a required leaf with an empty list is `KeyError` `'missing field w'`, never a bare `IndexError`); `test_az2359_ac1_an_int_enum_member_packs_as_its_integer` and the plain `Enum` refusal |
+| `test_split_form_pack_fails_loudly.py`, `test_pack_round_count_cap.py`, `test_times_short_list.py`, `test_flags_round_member.py` | AZ-2360, AZ-2354 | the message now names `pt` and the `times` cap text follows the reference (`x: the times count is 65536, above the limit of 65535 rounds`) |
+| `hostile_support.py` | AZ-2367 | the seven new hostile `pack` cases |
+
+Slow tests: the suite is about 20 s slower (25.7 s); the hostile element case 7.1 s and the slots case 3.3 to 4.2 s are kept at spec size; `test_nfr_round_trips` (in `test_position.py`, bound 2 s) measured 0.83 to 0.87 s against 0.70 to 0.78 s before the budget code, far inside its bound.
+
 ## Test Data Management
 
 **Required test data**:
