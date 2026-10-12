@@ -8,21 +8,6 @@ Downstream skills consume this file:
 - `.cursor/skills/autodev/protocols/bootstrap-lessons.md` (Bootstrap B2 — Surface Recent Lessons)
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
-
-- [2026-10-06] [testing] Under `set -o pipefail`, `cmd | grep -q .` reads an early grep exit as a failure (SIGPIPE) or a network error as an empty answer; capture the output first. The worker's tests passed and only the high-effort review found it.
-  Source: _docs/06_metrics/retro_2026-10-06_loop14.md
-- [2026-10-06] [dependencies] Pin or hash-check every tool the credentialed publish job installs (pip tools, `npm@11`, `NuGet/login`), and let the build step see no write access to the scripts the host runs next with the tokens.
-  Source: _docs/06_metrics/retro_2026-10-06_loop14.md
-- [2026-10-06] [process] Prototype a design against each package's existing suite while writing the spec: the first draft of the eager `times` check broke three existing assertions, and the spec pass found it at the cost of one resumed writer instead of an implementation round.
-  Source: _docs/06_metrics/retro_2026-10-06_loop15.md
-- [2026-10-06] [testing] Before writing "bounded" in the README, grep every counted field type: after the round limits the audit still found `bits` and `packed` at 36 to 257 times the packet, so the claim "memory is bounded by the round limits, not by the packet" had to be narrowed.
-  Source: _docs/06_metrics/retro_2026-10-06_loop15.md
-- [2026-10-06] [process] A fix for something only the Linux runner shows (root-owned files, mount modes, Compose version) cannot be proven on Docker Desktop: list its Linux-only parts in the batch report, push `dev` and watch the first CI run before any tag, as loop 14's `chmod` failure showed.
-  Source: _docs/06_metrics/retro_2026-10-06_loop15.md
-- [2026-10-06] [process] Run the workers' own suites per batch, then ONE total review and ONE total test run for the loop; per-batch reviewers, fix passes and Docker overlay runs were most of loop 16's wall time, and every assessment round added specs until the owner stopped it.
-  Source: _docs/06_metrics/retro_2026-10-06_loop16.md
-- [2026-10-06] [estimation] Before asking the owner an all-packages question, check in each package that the rule is decidable and run a differential for who breaks: Java has no field names (only `Access.set(String)` can be named) and the claim "no break for schemes that unpack today" for Python element accessors was false (pack-only callers break).
-  Source: _docs/06_metrics/retro_2026-10-06_loop16.md
 - [2026-10-06] [testing] For every pack-side rule add an unpack-random-bytes then repack differential against the HEAD export: the Rust round-name regression (`0101000007` repacked to `Missing`) was invisible to forward tests and found only by repacking unpacked packets.
   Source: _docs/06_metrics/retro_2026-10-06_loop16.md
 - [2026-10-06] [tooling] A subagent shell command must end on its own (stdin from `/dev/null`, a `timeout`, no leftover background processes): a bare `cat > /dev/null` sat 2.5 hours and showed as a running task; put the shell-hygiene paragraph in every worker and reviewer prompt.
@@ -45,4 +30,11 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-11_loop19.md
 - [2026-10-11] [architecture] A cap on one count does not bound the output: the audit measured 4.29 GB written for a 64 KB request through a lone `utf8` under one `times` (F28). Bound the bytes written per call, not only each count
   Source: _docs/06_metrics/retro_2026-10-11_loop19.md
-
+- [2026-10-12] [testing] A construction check that mirrors a binding must be the binding's own predicate, tested as "builds if and only if it binds": the C# round collection rule was written from spec text and inverted (a buildable scheme refused, an unbindable one accepted); 23 member types times U8/U32 times Repeat/Times pinned it.
+  Source: _docs/06_metrics/retro_2026-10-12_loop20.md
+- [2026-10-12] [architecture] A byte and slot budget bounds the output, not the work: an empty round body charges 0 and a 1.1 MB request bought 93 s of CPU in TypeScript (F33); every unit of work, the empty one included, must charge at least one unit.
+  Source: _docs/06_metrics/retro_2026-10-12_loop20.md
+- [2026-10-12] [testing] A test that starts a child interpreter must give it the parent's import path: the AC-1 memory test passed with the worker's editable install and failed in the clean CI container with ModuleNotFoundError; and a timing bound that fails under load is settled by an idle A/B of the previous commit against HEAD in the same image (the budget cost 13 to 20 %).
+  Source: _docs/06_metrics/retro_2026-10-12_loop20.md
+- [2026-10-12] [tooling] On this Mac a subagent output file is a symlink (heartbeat must `stat -L`), `setsid` does not exist, monitor and `alarm` timers count wall time across sleep, and a network drop kills subagents and downloads: wait on one single-shot task that exits when the run is done, re-arm monitors, resume failed subagents by id.
+  Source: _docs/06_metrics/retro_2026-10-12_loop20.md
