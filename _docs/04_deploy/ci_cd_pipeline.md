@@ -6,7 +6,7 @@ loop_end_merge: main
 
 Owner decision 2026-10-06: this project closes every product loop on `main`, not on `stage`. `origin` has no `stage` branch (`arduino`, `dev` and `main` only) and none is wanted. The value `main` is this project's own definition; the autodev protocol table lists only `none`, `stage` and `stage+main`.
 
-At every loop close, after smoke PASS, the local merge on `dev` and the `dev` push, the agent does one more step from the launcher: it fast-forwards `origin/main` to `HEAD` (`git push origin HEAD:main`) and then watches the `test.yml` run on `main` as set in the polling section below. It never force-pushes. If `origin/main` is not an ancestor of `HEAD`, it stops and reports. Pushing `main` publishes nothing: a registry publish happens only on a `v*` tag (`publish.yml`), and a tag is always a separate, explicit owner decision.
+At every loop close, after smoke PASS (the agent runs the smoke script itself and passes the gate when every step passes: `_docs/04_deploy/deployment_procedures.md` § Loop smoke gate), the local merge on `dev` and the `dev` push, the agent does one more step from the launcher: it fast-forwards `origin/main` to `HEAD` (`git push origin HEAD:main`) and then watches the `test.yml` run on `main` as set in the polling section below. It never force-pushes. If `origin/main` is not an ancestor of `HEAD`, it stops and reports. Pushing `main` publishes nothing: a registry publish happens only on a `v*` tag (`publish.yml`), and a tag is always a separate, explicit owner decision.
 
 ## Pipeline
 
