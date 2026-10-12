@@ -52,10 +52,10 @@ step "C# suite on the netstandard2.0 build (1479 tests)" 900 "Passed: +1479" dot
 step "C#: slot rule, short lists, clear-bit counts, empty round body, exact integer types, row rounds, dict-in-round, count texts" 600 "Passed: +[0-9]+" dotnet test csharp --nologo -v n --no-build -p:PackbinTarget=netstandard2.0 --filter "FullyQualifiedName~RoundSlotWidthTests|FullyQualifiedName~RoundSlotWidthTypedTests|FullyQualifiedName~EmptyRoundBodyTests|FullyQualifiedName~ShortOptionalListTests|FullyQualifiedName~SplitTimesClearBitTests|FullyQualifiedName~CountBehindClearWhenTests|FullyQualifiedName~ExactIntegerTypeTests|FullyQualifiedName~RowRoundTests|FullyQualifiedName~RowRoundMemberTests|FullyQualifiedName~RoundCollectionMemberTests|FullyQualifiedName~CountTextAndLimitsTests"
 step "TypeScript suite (880 tests) and strict tsc" 900 "pass 880" bash -c 'cd typescript && npm test && node_modules/.bin/tsc --noEmit --strict --target es2022 --module nodenext --moduleResolution nodenext --allowImportingTsExtensions src/index.ts && echo "tsc strict ok"'
 step "Python suite in the CI container (1003 tests)" 900 "1003 passed" docker compose -f docker-compose.test.yml run --rm python
-step "Rust suite in the CI container (625 tests)" 1500 "test result: ok. [0-9]+ passed" docker compose -f docker-compose.test.yml run --rm rust
+step "Rust suite in the CI container (625 tests)" 1500 "test result: ok. [1-9][0-9]{2,} passed" docker compose -f docker-compose.test.yml run --rm rust
 step "Java suite in the CI container (2153 checks)" 900 "PackbinTest checks: 2153" docker compose -f docker-compose.test.yml run --rm java
 step "C++ suite in the CI container (GCC 16, -Werror)" 900 "all tests passed" bash -c 'make -C cpp clean && docker compose -f docker-compose.test.yml run --rm cpp'
-step "C++ embedded ARM targets: M0+, M3 QEMU, M4F stack 448 of 512 B and flash 8160 of 8192 B, s390x" 2400 "embedded stage arm: 0 target" docker compose -f docker-compose.test.yml run --rm cpp-embedded
+step "C++ embedded ARM targets: M0+, M3 QEMU, M4F stack 456 of 512 B and flash 8152 of 8192 B, s390x" 2400 "embedded stage arm: 0 target" docker compose -f docker-compose.test.yml run --rm cpp-embedded
 step "cross-language ring: every pair on the same bytes (Python 3.14 first on PATH)" 1500 "language pairs passed" env PATH="$LOGS/py:$PATH" PACKBIN_CXX_SYSROOT="$(xcrun --show-sdk-path)" bash .github/workflows/language-pair.sh
 step "AC-10: 100 000 public typed round trips in under 1 second (Release)" 600 "fastest pass [0-9]+ ms|Passed: +[0-9]+" dotnet test csharp -c Release --nologo --filter "FullyQualifiedName~Nfr_PublicTyped" --logger "console;verbosity=detailed"
 dotnet build-server shutdown </dev/null >/dev/null 2>&1
@@ -69,3 +69,7 @@ SMOKE
 - No credentials are needed. Step 11 builds nothing new when its Docker image is cached; a cold run takes a few minutes.
 - Not in this script (they ran in the total test run, `_docs/03_implementation/test_run_loop21_report.md`): the publish gate, the ESP targets (the Pico example fails on this host by design; the CI `embedded` job runs it) and the two real-vcpkg checks.
 - Agent walk: no browser; the script above is the walk.
+
+## Result
+
+PASS. Agent run on `388d2a2` (2026-10-12), owner rule of 2026-10-12 (`_docs/04_deploy/deployment_procedures.md` § Loop smoke gate): `13/13 steps passed` (hostile case file 55, C# 1479 on both targets and 442 focused, TypeScript 880 with strict `tsc`, Python 1003, Rust, Java 2153 checks, C++ GCC 16 `-Werror`, embedded ARM 0 targets failed, ring "language pairs passed", AC-10 timing). Two script notes, fixed in this file after the run: the step 11 title still carried the loop 20 numbers (the run itself checks "0 target(s) failed"; the real numbers are stack 456 of 512 B and flash 8152 of 8192 B from `test_run_loop21_report.md`), and the Rust step regex `[0-9]+ passed` also matched an empty target (`0 passed`); it is now `[1-9][0-9]{2,} passed` (the lib target runs 472+). The step 11 total run counted Rust 625.
