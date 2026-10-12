@@ -72,4 +72,4 @@ SMOKE
 
 ## Result
 
-(filled at the loop close)
+PASS. Agent run on `78a6f94` (2026-10-12), owner rule of 2026-10-12 (`_docs/04_deploy/deployment_procedures.md` § Loop smoke gate): `13/13 steps passed` (hostile case file 40, C# 1118 on both targets, focused C# 184, TypeScript 765 and strict `tsc`, Python 846, Rust 472 lib tests ok (569 in all), Java 1952 checks, C++ in the GCC 16 container, embedded ARM 0 targets failed, ring `language pairs passed`, AC-10 in Release). An earlier trial run on `6c03a2b` passed 13/13 as well. The owner was asked and answered: run it yourself and pass the gate when every step passes.
