@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
+import packbin
 from packbin import BinaryPacker, ShortPacket, Scheme, flag_byte, flags, group, repeat, times, u8, u32, u64, utf8
 from packbin import list as list_field
 
@@ -93,8 +96,11 @@ def test_ac1_row1_pack_takes_under_a_second_and_under_256_mb():
     )
 
     # Act
+    # The child finds the package where this process found it (pytest's `pythonpath`, not an installed copy).
+    src = str(Path(packbin.__file__).resolve().parent.parent)
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [src, os.environ.get("PYTHONPATH")]))}
     done = subprocess.run(
-        [sys.executable, "-c", code], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60
+        [sys.executable, "-c", code], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60, env=env
     )
 
     # Assert
