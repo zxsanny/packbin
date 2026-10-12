@@ -1,3 +1,8 @@
+---
+loop: 21
+branch: dev
+---
+
 # C# unpack returns exact integer types, then integer fields refuse whole-number floats on pack
 
 **Task**: AZ-2373_csharp_exact_integer_types_unpack

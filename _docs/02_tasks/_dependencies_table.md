@@ -201,6 +201,20 @@ Estimation: `_docs/LESSONS.md` says the six packages stay peers. The session is 
 | AZ-2366 | csharp_typed_round_unpack_error | 2 | AZ-2305 | AZ-2069 |
 | AZ-2367 | hostile_pack_budget_cases | 2 | AZ-2354, AZ-2355, AZ-2356, AZ-2360 | AZ-2069 |
 | AZ-2373 | csharp_exact_integer_types_unpack | 5 | AZ-2358 | AZ-2069 |
+| AZ-2381 | python_unpack_slot_surcharge | 2 | AZ-2382 | AZ-2069 |
+| AZ-2382 | round_slot_width_rule | 5 | AZ-2329 | AZ-2069 |
+| AZ-2383 | short_list_in_optional_flags | 2 | none | AZ-2069 |
+| AZ-2384 | split_bit_times_clear_bit | 2 | none | AZ-2069 |
+| AZ-2385 | cpp_late_when_in_bit_body | 2 | AZ-2364 | AZ-2069 |
+| AZ-2386 | count_one_behind_clear_when | 2 | none | AZ-2069 |
+| AZ-2387 | bits_packed_sized_count_behind_clear_when | 3 | AZ-2386 | AZ-2069 |
+| AZ-2388 | csharp_typed_rounds_bind_to_rows | 5 | AZ-2366 | AZ-2069 |
+| AZ-2389 | csharp_dict_member_in_round_refused | 2 | none | AZ-2069 |
+| AZ-2390 | empty_round_body_refused | 3 | AZ-2382 | AZ-2069 |
+| AZ-2391 | ts_slice_round_scope_and_memory_note | 2 | none | AZ-2069 |
+| AZ-2392 | hostile_loader_rule_tables | 3 | AZ-2394 | AZ-2069 |
+| AZ-2393 | csharp_count_text_repeat_bytes_withlimits | 2 | AZ-2373 | AZ-2069 |
+| AZ-2394 | hostile_cases_loop21 | 2 | AZ-2381 to AZ-2391 | AZ-2069 |
 
 The six pack tasks do not depend on each other. AZ-1875 runs after all six. The five blackbox tasks run after AZ-1913 and do not depend on each other. The three earlier todo tasks do not depend on each other and still have no tracker id. AZ-1938 through AZ-1941 are under epic AZ-1937. The string count does not include itself; the list count does not consume the next field.
 
@@ -220,3 +234,5 @@ AZ-2304 through AZ-2311 are loop 18 (owner decisions of 2026-10-10 on the loop 1
 AZ-2329 through AZ-2342 are loop 19 (owner decisions of 2026-10-11 on the loop 18 review and assessment, plus its clear gaps), claimed by loop 19; one worker per package directory, AZ-2342 first in each of rust, java, csharp.
 
 AZ-2354 through AZ-2367 are loop 20 (owner decisions of 2026-10-11 on the loop 19 assessment, review and audit, plus its clear gaps), claimed by loop 20: TypeScript implements AZ-2354/AZ-2355 first and writes the reference table; then one worker per package directory; AZ-2367 is wave 2.
+
+AZ-2373 and AZ-2381 through AZ-2394 are loop 21 (owner decisions U1 to U10 of 2026-10-12 on the loop 20 assessment, review and audit, plus its clear gaps), claimed by loop 21: TypeScript implements AZ-2382 first and writes the slot reference table; csharp runs AZ-2373, AZ-2389, AZ-2388, AZ-2393 in wave 1a and its AZ-2382/AZ-2390/AZ-2387 share in wave 1b; AZ-2394 then AZ-2392 are wave 2. The Go package (AZ-2222) follows.

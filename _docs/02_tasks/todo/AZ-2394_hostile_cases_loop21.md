@@ -1,0 +1,60 @@
+---
+loop: 21
+branch: dev
+---
+
+# Hostile pack cases for the loop 21 parity rules and empty round bodies
+
+**Task**: AZ-2394_hostile_cases_loop21
+**Name**: Hostile pack cases for the loop 21 parity rules and empty round bodies
+**Description**: `fixtures/hostile` gains the `pack` cases named in the loop 21 specs, replayed by the six loaders.
+**Complexity**: 2 points
+**Dependencies**: AZ-2381 to AZ-2391 (the rules), wave 2
+**Component**: fixtures
+**Tracker**: AZ-2394
+**Epic**: AZ-2069
+
+## Problem
+
+Each parity rule of loop 21 needs a shared fixture so a seventh package (Go) inherits it.
+
+## Outcome
+
+- Cases added: `pack_round_slots_*`, `pack_flags_short_list`, `pack_split_times_absent_body`, `pack_late_when_in_bit_body`, `pack_count_one_clear_when`, `pack_bits_count_clear_when` (and two siblings), `pack_empty_round_body`; the file stays valid for all six loaders.
+
+## Scope
+
+### Included
+- `fixtures/hostile/**`.
+
+### Excluded
+- Loader code except a new stage name.
+
+## Acceptance Criteria
+
+**AC-1: cases replay**
+Given the new cases
+When the six loaders run
+Then each passes with the outcome in the case row
+
+**AC-2: existing cases**
+Given the 40 existing cases
+When run
+Then unchanged
+
+## Unit Tests
+
+| AC Ref | What to Test | Required Outcome |
+|--------|-------------|-----------------|
+| AC-1 | new cases | pass in six |
+| AC-2 | existing cases | pass |
+
+## Blackbox Tests
+
+| AC Ref | Initial Data/Conditions | What to Test | Expected Behavior | NFR References |
+|--------|------------------------|-------------|-------------------|----------------|
+| AC-1 | hostile stage | new rows | six loaders pass | — |
+
+## Constraints
+
+- Owns `fixtures/hostile/**` only.
