@@ -31,7 +31,7 @@ _builtin_list = list
 _builtin_dict = dict
 
 DEFAULT_MAX_ROUNDS = 65_535
-DEFAULT_MAX_SLOTS = 4_194_304
+DEFAULT_MAX_SLOTS = 1_048_576
 
 
 class _Budget:

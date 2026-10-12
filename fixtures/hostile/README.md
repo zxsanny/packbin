@@ -33,6 +33,8 @@
 
 **New in loop 21 (AZ-2394).** Fifteen cases at the end of the file, from the loop 21 reference (`_docs/03_implementation/reference_loop21_slots.md`, TypeScript): `pack_round_slots_at_limit`, `pack_round_slots_over_limit`, `pack_round_slots_flags_at_limit`, `pack_round_slots_flags_over_limit` (AZ-2381, AZ-2382), `pack_flags_short_list`, `pack_flags_short_list_filled` (AZ-2383), `pack_split_times_absent_body` (AZ-2384), `pack_late_when_in_bit_body` (AZ-2385), `pack_count_one_clear_when` (AZ-2386), `pack_bits_count_clear_when`, `pack_packed_count_clear_when`, `pack_sized_count_clear_when` (AZ-2387), and the `construct` cases `construct_empty_times_body`, `construct_empty_repeat_body`, `construct_empty_round_body_list_element` (AZ-2390). The 40 older cases are unchanged.
 
+**New in loop 22 (AZ-2417).** Ten cases at the end of the file, from the loop 22 reference (`_docs/03_implementation/reference_loop22.md`, TypeScript): `pack_novalue_count_clear_when_bits`, `pack_novalue_count_clear_when_packed`, `pack_novalue_count_clear_when_sized` (AZ-2410), `pack_repeat_unequal_lists_lone`, `pack_repeat_unequal_lists_when` (AZ-2413), `pack_times_short_list_flags` (AZ-2414), `pack_element_times_over_bytes_budget` (AZ-2415), and the `construct` cases `construct_empty_when_times_body`, `construct_empty_when_repeat_body`, `construct_empty_nested_when_body` (AZ-2416). The 55 older cases are unchanged except the texts that carry the default `maxSlots`, which AZ-2415 lowered from 4,194,304 to 1,048,576: the Limit lines of `repeat_rounds_over_limit` and `times_rounds_over_limit`, and the Expected lines of `pack_slots_over_limit` (refused at round 16,132 with 1,048,580 slots) and `pack_element_times_over_budget` (now refused by the slots limit; its bytes route is the new `pack_element_times_over_bytes_budget`). AZ-2412 (Rust refuses per-name `repeat` lists given without round groups) has no case: a case has one outcome and the five other packages pack those lists (`01 01 05 02 06` for `n = [1, 2]`, `x = [5, 6]`), so the Rust refusal is pinned in the Rust package tests only. The three `construct_empty_*when*` cases name the `when` source outside the round, so a package with a scope rule (Rust, Python, Java, C#, and C++ by its source check) refuses them by that rule before it looks at the empty body; the case still asserts `scheme_error` only, and each package pins the empty-body rule itself in its own tests (C++ reaches it with a source-less `eq(-1, ...)`).
+
 ## zero_progress_repeat_bool
 
 - Scheme: id0 `repeat` anchor 0 { id0 `bool on` }.
@@ -170,7 +172,7 @@
 ## repeat_rounds_over_limit
 
 - Scheme: id0 `repeat` anchor 0 { id0 `u8 v` }.
-- Limit: `maxRounds` 3; `maxSlots` at its default (4,194,304).
+- Limit: `maxRounds` 3; `maxSlots` at its default (1,048,576).
 - Packet `01 11 22 33 44`: type `01`; four one-byte rounds. The fourth round would be the fourth started, above the limit, so it is refused when it would start, with its byte `44` left.
 - Expected: `too_many` or `bad_value`, with `needed` 0 and `left` 1. No handler call, no row. The label of the error is not asserted.
 - Source: loop 15, AZ-2216 to AZ-2219 (round limits); the bytes were run against each package's real code.
@@ -180,7 +182,7 @@
 ## times_rounds_over_limit
 
 - Scheme: id0 `u8 n`; id1 `times` anchor 1, count = id0 { id1 `u8 v` }.
-- Limit: `maxRounds` 3; `maxSlots` at its default (4,194,304).
+- Limit: `maxRounds` 3; `maxSlots` at its default (1,048,576).
 - Packet `01 04 11 22 33 44`: type `01`; `n` = 4; four one-byte rounds. The count 4 is above the limit but is not refused up front (the check is lazy, so `oversize_count_times` keeps its short read); round 4 is refused when it would start, with its byte `44` left.
 - Expected: `too_many` or `bad_value`, with `needed` 0 and `left` 1. No handler call, no row. The label of the error is not asserted.
 - Source: loop 15, AZ-2216 to AZ-2219; the bytes were run against each package's real code.
@@ -310,19 +312,19 @@
 
 - Scheme: id0 `list items` of an element `group` { id0 `u32 n`; id1 `times` anchor 1, count = id0 { id1 `u64 k` } }.
 - Row: 40 items, each `n = 65535`, `k = 5` (one scalar per item).
-- Expected: `pack_error`. Each item is about 524,284 bytes; the packet would pass `maxBytes` in item 33. Pack refuses it, naming `k`, and the budget runs across the list elements as one counter.
+- Expected: `pack_error`. Since loop 22 (AZ-2415) the slots limit refuses it, not the bytes budget it was written to reach: the budget runs across the list elements as one counter, 16 items of 65,535 one-slot rounds are 1,048,560 slots, and round 17 of item 17 would hold 1,048,577 slots, above the default `maxSlots` (1,048,576). Pack refuses it there, naming `k` (`k: the rounds would hold 1048577 slots, above the limit of 1048576 slots` in TypeScript), and returns no bytes. The bytes route this case used to take (each item is about 524,284 bytes; the packet passed `maxBytes` in item 33) moved to `pack_element_times_over_bytes_budget`.
 - Run by: TypeScript, Python, Java, C# (dictionary rows).
 - Not run by: Rust (a list element cannot hold a `times`), C++ (a fixed array of rounds and a caller buffer, as in `pack_lone_utf8_under_times_over_budget`).
-- Source: loop 20, AZ-2354 (reference row 2), AZ-2367.
+- Source: loop 20, AZ-2354 (reference row 2), AZ-2367; slots text updated in loop 22, AZ-2415, AZ-2417.
 
 ## pack_slots_over_limit
 
 - Scheme: id0 `u32 n`; id1 `times` anchor 1, count = id0 { 65 `u8` members, ids 1 to 65 }.
 - Row: `n = 65535`, each member `1` (one scalar per member).
-- Expected: `pack_error`. 65,535 rounds of 65 slots are 4,259,775 slots, above the default `maxSlots` (4,194,304); the bytes (4,259,780) stay far under `maxBytes`, so the slot count refuses the row, at round 64,528, before that round's first byte. The width has no group, so it is 65 in every package.
+- Expected: `pack_error`. 65,535 rounds of 65 slots are 4,259,775 slots, above the default `maxSlots` (1,048,576, lowered from 4,194,304 in loop 22, AZ-2415); the bytes (4,259,780) stay far under `maxBytes`, so the slot count refuses the row, at round 16,132 (1,048,580 slots: `m0: the rounds would hold 1048580 slots, above the limit of 1048576 slots` in TypeScript), before that round's first byte. The width has no group, so it is 65 in every package.
 - Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form).
 - Not run by: C++ (a fixed array of rounds and a caller buffer, as in `pack_lone_utf8_under_times_over_budget`).
-- Source: loop 20, AZ-2354 (reference row 14), AZ-2367.
+- Source: loop 20, AZ-2354 (reference row 14), AZ-2367; numbers updated in loop 22, AZ-2415, AZ-2417.
 
 ## pack_repeat_over_limit
 
@@ -498,3 +500,90 @@
 - No packet: construction must fail in well under a second, before any item is built.
 - Expected: `scheme_error`. Packages whose list element cannot hold a `times` (Rust, C++ with its fixed arrays) have no spelling of this shape; their test for the plain empty `times` of `construct_empty_times_body` covers the same refusal, and their loader names this id as skipped for that reason.
 - Source: loop 21, AZ-2390 (reference row 20, the F33 request shape), AZ-2394.
+
+## pack_novalue_count_clear_when_bits
+
+- Scheme: id0 `u8 mode`; id1 `when` anchor 1, `eq(0, 1)` { id1 `u8 c` }; split-form `flag_byte` (id2 in Rust); bit 0 { id2 `bits v`, count = id1 }.
+- Row: `mode = 0`, `c = 3`, no `v`.
+- Expected: `pack_error`. The `when` is clear, so `c` is never written, and the row holds a count above 0 for a member that has no value: the member would read nothing from a count the packet cannot hold. Pack refuses it, naming `v` and the count, and never writes the clear bit (the bits member, as in `pack_bits_count_clear_when`, but with no value given). A count of 0, a row without `c`, or a holding `when` (`mode = 1`) packs the clear bit (`010000`, `010000`, `01010300`) and is not part of this case; a row that gives `v` stays `pack_error` as in `pack_bits_count_clear_when`.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form).
+- Not run by: C++ (a typed row has no "no value" for a bits member: it always holds the member, so the row is refused anyway as a count that differs from the member's length).
+- Source: loop 22, AZ-2410 (reference row 56), AZ-2417.
+
+## pack_novalue_count_clear_when_packed
+
+- Scheme: id0 `u8 mode`; id1 `when` anchor 1, `eq(0, 1)` { id1 `u8 c` }; split-form `flag_byte` (id2 in Rust); bit 0 { id2 `packed v` (width 1, bias 0), count = id1 }.
+- Row: `mode = 0`, `c = 3`, no `v`.
+- Expected: `pack_error`. The `when` is clear, so `c` is never written, and the row holds a count above 0 for a member that has no value: the member would read nothing from a count the packet cannot hold. Pack refuses it, naming `v` and the count, and never writes the clear bit (as above). A count of 0, a row without `c`, or a holding `when` (`mode = 1`) packs the clear bit (`010000`, `010000`, `01010300`) and is not part of this case; a row that gives `v` stays `pack_error` as in `pack_packed_count_clear_when`.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form).
+- Not run by: C++ (a typed row has no "no value" for a packed member: it always holds the member, so the row is refused anyway as a count that differs from the member's length).
+- Source: loop 22, AZ-2410 (reference row 56), AZ-2417.
+
+## pack_novalue_count_clear_when_sized
+
+- Scheme: id0 `u8 mode`; id1 `when` anchor 1, `eq(0, 1)` { id1 `u8 c` }; split-form `flag_byte` (id2 in Rust); bit 0 { id2 `sized v`, count = id1 }.
+- Row: `mode = 0`, `c = 3`, no `v`.
+- Expected: `pack_error`. The `when` is clear, so `c` is never written, and the row holds a count above 0 for a member that has no value: the member would read nothing from a count the packet cannot hold. Pack refuses it, naming `v` and the count, and never writes the clear bit (as above). A count of 0, a row without `c`, or a holding `when` (`mode = 1`) packs the clear bit (`010000`, `010000`, `01010300`) and is not part of this case; a row that gives `v` stays `pack_error` as in `pack_sized_count_clear_when`.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form).
+- Not run by: C++ (a typed row has no "no value" for a sized member: it always holds the member, so the row is refused anyway as a count that differs from the member's length).
+- Source: loop 22, AZ-2410 (reference row 56), AZ-2417.
+
+## pack_repeat_unequal_lists_lone
+
+- Scheme: id0 `repeat` anchor 0 { id0 `u8 a`; id1 `u8 b` }.
+- Row: `a = [1, 2]`, `b = 7` (a list beside one scalar).
+- Packet `01 01 07 02 07`: type `01`; round 1: `a` = 1, `b` = 7; round 2: `a` = 2, `b` = 7.
+- Expected: `bytes` `0101070207`. The round count is the longest list (2); a lone value is given to every round.
+- Run by: TypeScript, Python, Java, C# (dictionary rows).
+- Not run by: Rust (a `repeat` takes its rounds as groups only, one row per round, so per-name lists are refused), C++ (a typed row holds an `Array` of round items, so a lone value for one round member cannot be written).
+- Source: loop 22, AZ-2413 (reference row R2a), AZ-2417.
+
+## pack_repeat_unequal_lists_when
+
+- Scheme: id0 `repeat` anchor 0 { id0 `u8 k`; id1 `when` anchor 1, `eq(0, 1)` { id1 `u8 v` } }.
+- Row: `k = [1, 2]`, `v = [9]` (the `when` holds in round 1 only, so the shorter list is enough).
+- Packet `01 01 09 02`: type `01`; round 1: `k` = 1, the `when` holds, `v` = 9; round 2: `k` = 2, the `when` is clear and reads no `v`.
+- Expected: `bytes` `01010902`. A list for a member that only some rounds reach may be shorter than the round count; a round whose `when` is clear never reads it.
+- Run by: TypeScript, Python, Java, C# (dictionary rows).
+- Not run by: Rust (a `repeat` takes its rounds as groups only, one row per round, so per-name lists are refused), C++ (a typed row holds an `Array` of round items, so a shorter list for one round member cannot be written).
+- Source: loop 22, AZ-2413 (reference row R3a), AZ-2417.
+
+## pack_times_short_list_flags
+
+- Scheme: id0 `u8 c`; id1 `times` anchor 1, count = id0 { id1 `flags` anchor 1 { id1 `u8 v` } }.
+- Row: `c = 2`, `v = [5]` (one entry for two rounds).
+- Packet `01 02 01 05 00`: type `01`; `c` = 2; round 1: flags byte `01`, `v` = 5; round 2: flags byte `00` (the list ran out, so the bit stays clear).
+- Expected: `bytes` `0102010500`. A `times` accepts a short list under a `flags`; the older `repeat` rule of `pack_flags_short_list` (one entry per round) does not apply to it.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form).
+- Not run by: C++ (a typed row holds an `Array` with one item per round, so a list shorter than the count cannot be written).
+- Source: loop 22, AZ-2414 (reference row A1), AZ-2417.
+
+## pack_element_times_over_bytes_budget
+
+- Scheme: id0 `list items` of an element `group` { id0 `u32 n`; id1 `times` anchor 1, count = id0 { id1 `utf8 s` } }.
+- Row: 16 items, each `n = 65535`, `s` = 16 times `a` (one string per item, not a list).
+- Expected: `pack_error`. A round is 18 bytes (`u16` length and 16 characters), an item about 1,179,634 bytes, so the packet would be 18,874,147 bytes, above the default `maxBytes` (16,777,216): pack refuses it in item 15 at round 14,575 (16,777,233 bytes), naming `s`. The slots stay under the limit (16 x 65,535 = 1,048,560, below the default `maxSlots` of 1,048,576), so the bytes budget refuses it, not the slots limit; this is the route `pack_element_times_over_budget` took before AZ-2415. A scheme built with `maxBytes` 33,554,432 packs the row to 18,874,147 bytes and unpacks it.
+- Run by: TypeScript, Python, Java, C# (dictionary rows).
+- Not run by: Rust (a list element cannot hold a `times`), C++ (a fixed array of rounds and a caller buffer, as in `pack_lone_utf8_under_times_over_budget`).
+- Source: loop 22, AZ-2415 (reference section 2), AZ-2417.
+
+## construct_empty_when_times_body
+
+- Scheme: id0 `u8 mode`; id1 `u8 c`; id2 `times` anchor 2, count = id1 { id2 `when` anchor 2, `eq(0, 1)` { } with no child }. The source field `mode` sits outside the round.
+- No packet: the body holds only an empty `when`, so it holds no member; a round would charge no slot and write no byte. Construction must fail, before any pack or unpack, as in `construct_empty_times_body`.
+- Expected: `scheme_error` (C++: `Error::SchemeInvalid` at construction, since AZ-2416).
+- Source: loop 22, AZ-2416, AZ-2417.
+
+## construct_empty_when_repeat_body
+
+- Scheme: id0 `u8 mode`; id1 `repeat` anchor 1 { id1 `when` anchor 1, `eq(0, 1)` { } with no child }. The source field `mode` sits outside the round.
+- No packet: as `construct_empty_when_times_body`.
+- Expected: `scheme_error` (C++: `Error::SchemeInvalid` at construction, since AZ-2416).
+- Source: loop 22, AZ-2416, AZ-2417.
+
+## construct_empty_nested_when_body
+
+- Scheme: id0 `u8 mode`; id1 `u8 c`; id2 `times` anchor 2, count = id1 { id2 `when` anchor 2, `eq(0, 1)` { id2 `when` anchor 2, `eq(0, 1)` { } with no child } }. The body of a `when` holds only an empty `when`.
+- No packet: as `construct_empty_when_times_body`; a `when` that holds nothing but another empty `when` holds no member either.
+- Expected: `scheme_error` (C++: `Error::SchemeInvalid` at construction, since AZ-2416).
+- Source: loop 22, AZ-2416, AZ-2417.

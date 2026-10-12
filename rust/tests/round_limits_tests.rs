@@ -96,10 +96,10 @@ fn ac1_defaults_constants_and_with_limits() {
 
     // Assert
     assert_eq!(DEFAULT_MAX_ROUNDS, 65_535);
-    assert_eq!(DEFAULT_MAX_SLOTS, 4_194_304);
-    assert_eq!((map.max_rounds(), map.max_slots()), (65_535, 4_194_304));
-    assert_eq!((typed.max_rounds(), typed.max_slots()), (65_535, 4_194_304));
-    assert_eq!((tuned.max_rounds(), tuned.max_slots()), (10, 4_194_304));
+    assert_eq!(DEFAULT_MAX_SLOTS, 1_048_576);
+    assert_eq!((map.max_rounds(), map.max_slots()), (65_535, 1_048_576));
+    assert_eq!((typed.max_rounds(), typed.max_slots()), (65_535, 1_048_576));
+    assert_eq!((tuned.max_rounds(), tuned.max_slots()), (10, 1_048_576));
     assert_eq!(
         (typed_tuned.max_rounds(), typed_tuned.max_slots()),
         (10, 20)

@@ -127,6 +127,28 @@ export const CONSTRUCT: Record<string, { build: () => unknown; rule: RegExp }> =
     ),
     rule: /^times 1: the body holds no member; a round of it would charge no slot and write nothing$/,
   },
+  construct_empty_when_times_body: {
+    build: () => scheme<Row>(
+      1,
+      u8(0, (x) => x.mode),
+      u8(1, (x) => x.c),
+      times(2, 1, [when(2, eq(0, 1), [])]),
+    ),
+    rule: /^times 2: the body holds no member; a round of it would charge no slot and write nothing$/,
+  },
+  construct_empty_when_repeat_body: {
+    build: () => scheme<Row>(1, u8(0, (x) => x.mode), repeat(1, [when(1, eq(0, 1), [])])),
+    rule: /^repeat 1: the body holds no member; a round of it would charge no slot and write nothing$/,
+  },
+  construct_empty_nested_when_body: {
+    build: () => scheme<Row>(
+      1,
+      u8(0, (x) => x.mode),
+      u8(1, (x) => x.c),
+      times(2, 1, [when(2, eq(0, 1), [when(2, eq(0, 1), [])])]),
+    ),
+    rule: /^times 2: the body holds no member; a round of it would charge no slot and write nothing$/,
+  },
 }
 
 // Built per case, so a scheme a package refuses is reported for that case alone.

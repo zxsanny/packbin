@@ -55,3 +55,13 @@ pack_sized_count_clear_when       pack       pack_error                   -
 construct_empty_times_body        construct  scheme_error                 -
 construct_empty_repeat_body       construct  scheme_error                 -
 construct_empty_round_body_list_element construct scheme_error            -
+pack_novalue_count_clear_when_bits pack      pack_error                   -
+pack_novalue_count_clear_when_packed pack    pack_error                   -
+pack_novalue_count_clear_when_sized pack     pack_error                   -
+pack_repeat_unequal_lists_lone    pack       bytes                        0101070207
+pack_repeat_unequal_lists_when    pack       bytes                        01010902
+pack_times_short_list_flags       pack       bytes                        0102010500
+construct_empty_when_times_body   construct  scheme_error                 -
+construct_empty_when_repeat_body  construct  scheme_error                 -
+construct_empty_nested_when_body   construct  scheme_error                -
+pack_element_times_over_bytes_budget pack    pack_error                   -

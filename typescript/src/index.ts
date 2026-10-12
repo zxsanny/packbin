@@ -71,7 +71,7 @@ function checkedLimit(name: string, value: number | undefined, fallback: number)
 
 export class Scheme<T> {
   static readonly DefaultMaxRounds = 65_535
-  static readonly DefaultMaxSlots = 4_194_304
+  static readonly DefaultMaxSlots = 1_048_576
   static readonly DefaultMaxBytes = 16_777_216
 
   declare private readonly __row: T

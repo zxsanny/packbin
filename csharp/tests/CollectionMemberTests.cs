@@ -218,6 +218,12 @@ public class CollectionMemberTests
         Assert.Equal([4294967295L], got!.Ids);
     }
 
+    // AZ-2411: pack refuses a double for an integer element, so a double[] for a u32 list does not build (the member
+    // stays in MixedRow for this refusal).
+    [Fact]
+    public void Build_DoubleArrayForAnIntegerList_RefusedNamingMemberAndType() =>
+        ExpectRefused(() => new Scheme<MixedRow>(1, Field.List((MixedRow x) => x.Doubles, Field.U32<El>(0, e => e.V))), "Doubles", "Double");
+
     [Fact]
     public void Build_MatchingAndWiderMembers_Accepted()
     {
@@ -230,7 +236,6 @@ public class CollectionMemberTests
             1,
             Field.List((MixedRow x) => x.Names, names),
             Field.List((MixedRow x) => x.Wide, element),
-            Field.List((MixedRow x) => x.Doubles, element),
             Field.List((MixedRow x) => x.Any, element),
             Field.List((MixedRow x) => x.Big, element),
             Field.Dict((MixedRow x) => x.Map, element)));

@@ -27,6 +27,7 @@ final class PackBudgetTest {
     static void run() {
         row1LoneUtf8UnderACappedTimes();
         rows2And3AnElementThatHoldsATimes();
+        rows2And3AnElementThatHoldsATimesUnderTheSlotsLimit();
         rows4To13TheBoundaryIsExact();
         rows14To16SlotsAreChargedOnPack();
         rows17To21TheOrderOfTheChecks();
@@ -87,7 +88,10 @@ final class PackBudgetTest {
         LoneUtf8Budget.expectRefusedInASmallHeap(refused);
     }
 
-    /** Rows 2 and 3: 40 items that each hold 65 535 rounds of a u64, about 21 MB. */
+    /**
+     * Rows 2 and 3: 40 items that each hold 65 535 rounds of a u64, about 21 MB. That is 2 621 400 slots, so the
+     * default limit of 1 048 576 slots refuses it first (loop 22, AZ-2415); row 3 raises maxSlots to pack it.
+     */
     private static void rows2And3AnElementThatHoldsATimes() {
         // Arrange
         Scheme<Map> scheme = Maps.scheme(1, Packbin.list(Access.get("items"), Access.set("items"),
@@ -99,12 +103,13 @@ final class PackBudgetTest {
         Map row = Maps.map("items", items);
         // Act
         String refused = refusal(scheme, row);
-        byte[] packet = BinaryPacker.pack(scheme.withMaxBytes(33_554_432L), row);
+        Scheme<Map> raised = scheme.withLimits(Scheme.DEFAULT_MAX_ROUNDS, 4_194_304L).withMaxBytes(33_554_432L);
+        byte[] packet = BinaryPacker.pack(raised, row);
         Map[] back = new Map[1];
-        Object err = BinaryPacker.unpack(packet, scheme.on(r -> back[0] = r));
+        Object err = BinaryPacker.unpack(packet, raised.on(r -> back[0] = r));
         // Assert
         PackbinTest.expectEq("AC-2 row 2 refused at the default",
-                "k: the packet would be 16777223 bytes, above the limit of 16777216 bytes", refused);
+                "k: the rounds would hold 1048577 slots, above the limit of 1048576 slots", refused);
         PackbinTest.expectEq("AC-2 row 3 length", 20_971_363, packet.length);
         PackbinTest.expectEq("AC-2 row 3 first 16", "012800ffff0000050000000000000005", hexAt(packet, 0, 16));
         PackbinTest.expectEq("AC-2 row 3 last 16", "05000000000000000500000000000000", hexAt(packet, packet.length - 16, 16));
@@ -113,6 +118,33 @@ final class PackBudgetTest {
         PackbinTest.expectEq("AC-2 row 3 items", 40, got.size());
         PackbinTest.expectEq("AC-2 row 3 n", 65_535, ((Number) got.get(0).get("n")).intValue());
         PackbinTest.expectEq("AC-2 row 3 k rounds", 65_535, ((List) got.get(39).get("k")).size());
+    }
+
+    /**
+     * The bytes-budget route through an element that holds a times, under the slots limit: 16 items of 65 535 rounds
+     * of one 16-char text are 1 048 560 slots and 18 874 147 bytes (the TypeScript row of reference_loop22.md).
+     */
+    private static void rows2And3AnElementThatHoldsATimesUnderTheSlotsLimit() {
+        // Arrange
+        Scheme<Map> scheme = Maps.scheme(1, Packbin.list(Access.get("items"), Access.set("items"),
+                Packbin.group(0, u32(0, "n"), Packbin.times(1, 0, utf8(1, "s")))));
+        List<Object> items = new ArrayList<>();
+        for (int i = 0; i < 16; i++) {
+            items.add(Maps.map("n", 65_535, "s", "abcdefghijklmnop"));
+        }
+        Map row = Maps.map("items", items);
+        // Act
+        String refused = refusal(scheme, row);
+        Scheme<Map> raised = scheme.withMaxBytes(33_554_432L);
+        byte[] packet = BinaryPacker.pack(raised, row);
+        Map[] back = new Map[1];
+        Object err = BinaryPacker.unpack(packet, raised.on(r -> back[0] = r));
+        // Assert
+        PackbinTest.expectEq("AC-2 bytes route refused at the default",
+                "s: the packet would be 16777233 bytes, above the limit of 16777216 bytes", refused);
+        PackbinTest.expectEq("AC-2 bytes route length", 18_874_147, packet.length);
+        PackbinTest.expectTrue("AC-2 bytes route unpacks (" + err + ")", err == null && back[0] != null);
+        PackbinTest.expectEq("AC-2 bytes route items", 16, ((List) back[0].get("items")).size());
     }
 
     /** Rows 4 to 13: a packet of exactly maxBytes packs, one byte more is refused, the member being written is named. */
@@ -185,14 +217,14 @@ final class PackBudgetTest {
                 .on(r -> back[0] = r));
         Object refusedErr = BinaryPacker.unpack(packet, scheme.on(r -> { }));
         // Assert
-        PackbinTest.expectEq("AC-4 row 14", "m0: the rounds would hold 4194320 slots, above the limit of 4194304 slots", refused);
+        PackbinTest.expectEq("AC-4 row 14", "m0: the rounds would hold 1048580 slots, above the limit of 1048576 slots", refused);
         PackbinTest.expectEq("AC-4 row 15 length", 4_259_780, packet.length);
         PackbinTest.expectEq("AC-4 row 15 first 16", "01ffff00000101010101010101010101", hexAt(packet, 0, 16));
         PackbinTest.expectEq("AC-4 row 15 last 16", "01010101010101010101010101010101", hexAt(packet, packet.length - 16, 16));
         PackbinTest.expectTrue("AC-4 row 15 unpacks (" + okErr + ")", okErr == null && back[0] != null);
         PackbinTest.expectEq("AC-4 row 15 m64 rounds", 65_535, ((List) back[0].get("m64")).size());
         PackbinTest.expectTrue("AC-4 row 16 unpack refuses at the same round",
-                refusedErr instanceof Packbin.ShortPacket s && s.field.equals("times") && s.needed == 0 && s.left == 65_520);
+                refusedErr instanceof Packbin.ShortPacket s && s.field.equals("times") && s.needed == 0 && s.left == 3_211_260);
     }
 
     private static Scheme<Map> timesOfK() {

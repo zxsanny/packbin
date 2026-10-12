@@ -109,21 +109,23 @@ final class Presence {
     /**
      * A times whose count no field wrote (the when that holds the count is clear) reads no round, whatever count the
      * row holds, so the row would unpack with a smaller count than it packs: refused where its bit is found clear.
-     * A count of 0, or none in the row, agrees with the packet and packs.
+     * A bits, packed or sized with no value reads nothing, which is the same disagreement (AZ-2410). A count of 0
+     * (after the packed bias), or none in the row, agrees with the packet and packs.
      */
     private static void requireCountWritten(Field member, Object row, Walker.Take take, Map<Object, Object> seen) {
         switch (member.kind) {
-            case TIMES -> {
+            case TIMES, BITS, PACKED, SIZED -> {
                 Object count = seen.get(member.countId);
                 if (member.countSource == null || count instanceof Number && !(count instanceof Float || count instanceof Double)) {
                     return;
                 }
-                String given = positive(takeValue(member.countSource, row, take));
+                String given = positive(takeValue(member.countSource, row, take), member.bias);
                 if (given != null) {
+                    String reads = member.kind == Field.Kind.TIMES ? "its times reads no round" : "the member reads nothing";
                     throw new IllegalArgumentException(Rounds.firstValueName(member) + ": the count "
                             + Rounds.firstValueName(member.countSource) + " is " + given
-                            + " in the row, but no field wrote it (the when that holds it is clear), so its times"
-                            + " reads no round; give the count 0, leave it out, or make the when hold");
+                            + " in the row, but no field wrote it (the when that holds it is clear), so " + reads
+                            + "; give the count 0, leave it out, or make the when hold");
                 }
             }
             case FLAG_BIT -> requireCountWritten(member.inner, row, take, seen);
@@ -139,13 +141,13 @@ final class Presence {
         }
     }
 
-    /** The whole number above 0 that {@code value} holds, as text; null for anything else. */
-    private static String positive(Object value) {
+    /** The whole number that {@code value} holds, as text, when it is above 0 after the {@code bias}; null for anything else. */
+    private static String positive(Object value, int bias) {
         if (value instanceof java.math.BigInteger big) {
-            return big.signum() > 0 ? big.toString() : null;
+            return big.add(java.math.BigInteger.valueOf(bias)).signum() > 0 ? big.toString() : null;
         }
         if (value instanceof Number number && !(value instanceof Float || value instanceof Double)) {
-            return number.longValue() > 0 ? Long.toString(number.longValue()) : null;
+            return number.longValue() > -(long) bias ? Long.toString(number.longValue()) : null;
         }
         return null;
     }

@@ -8,7 +8,7 @@ import java.util.function.Consumer;
 
 public final class Scheme<T> {
     public static final int DEFAULT_MAX_ROUNDS = 65_535;
-    public static final long DEFAULT_MAX_SLOTS = 4_194_304L;
+    public static final long DEFAULT_MAX_SLOTS = 1_048_576L;
     public static final long DEFAULT_MAX_BYTES = 16_777_216L;
 
     final int typeNumber;

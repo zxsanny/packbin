@@ -198,8 +198,8 @@ fn ac4_row14_a_round_that_passes_max_slots_is_refused_before_its_first_byte() {
     // Act
     let message = refusal(&wide_round(), &wide_row());
 
-    // Assert: 64 527 rounds of 65 slots are charged, the next would hold 4 194 320
-    assert_eq!(message, over_slots("m0", 4_194_320, DEFAULT_MAX_SLOTS));
+    // Assert: 16 131 rounds of 65 slots are charged, the next would hold 1 048 580
+    assert_eq!(message, over_slots("m0", 1_048_580, DEFAULT_MAX_SLOTS));
 }
 
 #[test]
@@ -220,7 +220,7 @@ fn ac4_rows15_16_with_max_slots_raised_it_packs_and_unpack_refuses_at_the_same_r
         back.get("m64"),
         Some(&Some(Value::List(vec![Value::U8(1); 65_535])))
     );
-    assert_eq!(by_default, Err(short("times", 65_520)));
+    assert_eq!(by_default, Err(short("times", 3_211_260)));
 }
 
 #[test]

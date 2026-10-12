@@ -22,6 +22,9 @@ final class HostileRefusals {
 
     private static final String BIT_DECIDED = ": its flag bit was decided before the value its condition or count reads"
             + " was written";
+    private static final String NO_VALUE_COUNT = ": the count c is 3 in the row, but no field wrote it (the when that holds"
+            + " it is clear), so the member reads nothing";
+    private static final String NOT_EARLIER = ", which is not an earlier integer or bool field in its scope";
     private static final String EMPTY_BODY = ": the body holds no member; a round of it would charge no slot and write"
             + " nothing";
 
@@ -39,9 +42,9 @@ final class HostileRefusals {
             Map.entry("pack_lone_utf8_under_times_over_budget",
                     bad("s: the packet would be 16777477 bytes, above the limit of 16777216 bytes")),
             Map.entry("pack_element_times_over_budget",
-                    bad("k: the packet would be 16777223 bytes, above the limit of 16777216 bytes")),
+                    bad("k: the rounds would hold 1048577 slots, above the limit of 1048576 slots")),
             Map.entry("pack_slots_over_limit",
-                    bad("m0: the rounds would hold 4194320 slots, above the limit of 4194304 slots")),
+                    bad("m0: the rounds would hold 1048580 slots, above the limit of 1048576 slots")),
             Map.entry("pack_repeat_over_limit", bad("k: the repeat count is 65536, above the limit of 65535 rounds")),
             Map.entry("pack_split_count_zero_after_byte_list", bad("1: list has 2 entries for a count of 0")),
             Map.entry("pack_flags_skipped_count_with_values",
@@ -55,7 +58,12 @@ final class HostileRefusals {
                     bad("pt: the count c is 1 in the row, but no field wrote it (the when that holds it is clear)")),
             Map.entry("pack_bits_count_clear_when", state("2: count 1 is missing")),
             Map.entry("pack_packed_count_clear_when", state("2: count 1 is missing")),
-            Map.entry("pack_sized_count_clear_when", state("2: count 1 is missing")));
+            Map.entry("pack_sized_count_clear_when", state("2: count 1 is missing")),
+            Map.entry("pack_novalue_count_clear_when_bits", bad("v" + NO_VALUE_COUNT)),
+            Map.entry("pack_novalue_count_clear_when_packed", bad("v" + NO_VALUE_COUNT)),
+            Map.entry("pack_novalue_count_clear_when_sized", bad("v" + NO_VALUE_COUNT)),
+            Map.entry("pack_element_times_over_bytes_budget",
+                    bad("s: the packet would be 16777233 bytes, above the limit of 16777216 bytes")));
 
     static final Map<String, Rule> CONSTRUCT = Map.ofEntries(
             Map.entry("nine_flag_bits", bad("flags already has 8 bits")),
@@ -72,7 +80,12 @@ final class HostileRefusals {
             Map.entry("eq_out_of_range", bad("when 1 tests field 0 against 300, which that field can not hold")),
             Map.entry("construct_empty_times_body", bad("times 1" + EMPTY_BODY)),
             Map.entry("construct_empty_repeat_body", bad("repeat 0" + EMPTY_BODY)),
-            Map.entry("construct_empty_round_body_list_element", bad("times 1" + EMPTY_BODY)));
+            Map.entry("construct_empty_round_body_list_element", bad("times 1" + EMPTY_BODY)),
+            // The README shapes name the when source outside the round, so Java's reference-scope rule fires before
+            // the empty-body rule; that rule itself is pinned in EmptyRoundBodyTest rows 15, 16 and 25.
+            Map.entry("construct_empty_when_times_body", bad("when 2 tests field 0" + NOT_EARLIER)),
+            Map.entry("construct_empty_when_repeat_body", bad("when 1 tests field 0" + NOT_EARLIER)),
+            Map.entry("construct_empty_nested_when_body", bad("when 2 tests field 0" + NOT_EARLIER)));
 
     /** Null when {@code ex} is the refusal {@code rule} names; otherwise what is wrong. */
     static String mismatch(String id, Rule rule, RuntimeException ex) {

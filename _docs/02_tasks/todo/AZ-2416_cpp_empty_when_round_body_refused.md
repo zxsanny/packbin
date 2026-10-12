@@ -26,7 +26,7 @@ Gap G1 of loop 21 (assessment and review). AZ-2390 refuses an empty round body a
 ## Scope
 
 ### Included
-- `cpp/src/core/order.hpp` (`check_shape`) and C++ tests; the arm stage numbers in the batch report.
+- `cpp/include/packbin/order.hpp` (`check_shape`) and C++ tests; the arm stage numbers in the batch report.
 
 ### Excluded
 - Any other C++ behavior; the C++ late-flag exact id (needs ~54 B saving, not taken).

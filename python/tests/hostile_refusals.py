@@ -7,6 +7,10 @@ from __future__ import annotations
 
 _AFTER_BYTE = " (it was skipped, or is written after the flag byte that decides this bit)"
 _NO_MEMBER = "{kind} {anchor}: the body holds no member; a round of it would charge no slot and write nothing"
+_NO_VALUE = (
+    "v: the count c is 3 in the row, but no field wrote it (the when that holds it is clear), so the member "
+    "reads nothing; give the count 0, leave it out, or make the when hold"
+)
 _LATER = "is allowed only if declared earlier in the same scope"
 
 # id -> (exception type, message)
@@ -43,11 +47,11 @@ PACK_REFUSAL: dict[str, tuple[type[Exception], str]] = {
     ),
     "pack_element_times_over_budget": (
         ValueError,
-        "k: the packet would be 16777223 bytes, above the limit of 16777216 bytes",
+        "k: the rounds would hold 1048577 slots, above the limit of 1048576 slots",
     ),
     "pack_slots_over_limit": (
         ValueError,
-        "m0: the rounds would hold 4194320 slots, above the limit of 4194304 slots",
+        "m0: the rounds would hold 1048580 slots, above the limit of 1048576 slots",
     ),
     "pack_repeat_over_limit": (ValueError, "k: the repeat count is 65536, above the limit of 65535 rounds"),
     "pack_split_count_zero_after_byte_list": (ValueError, "1: 2 items, times count is 0"),
@@ -73,9 +77,16 @@ PACK_REFUSAL: dict[str, tuple[type[Exception], str]] = {
         "pt: the count c is 1 in the row, but no field wrote it (the when that holds it is clear), so its times "
         "reads no round; give the count 0, leave it out, or make the when hold",
     ),
+    "pack_element_times_over_bytes_budget": (
+        ValueError,
+        "s: the packet would be 16777233 bytes, above the limit of 16777216 bytes",
+    ),
     "pack_bits_count_clear_when": (RuntimeError, "2: count 1 is missing"),
     "pack_packed_count_clear_when": (RuntimeError, "2: count is missing"),
     "pack_sized_count_clear_when": (RuntimeError, "2: count 1 is missing"),
+    "pack_novalue_count_clear_when_bits": (ValueError, _NO_VALUE),
+    "pack_novalue_count_clear_when_packed": (ValueError, _NO_VALUE),
+    "pack_novalue_count_clear_when_sized": (ValueError, _NO_VALUE),
 }
 
 # id -> message of the ValueError the build raises
@@ -92,4 +103,7 @@ CONSTRUCT_REFUSAL: dict[str, str] = {
     "construct_empty_times_body": _NO_MEMBER.format(kind="times", anchor=1),
     "construct_empty_repeat_body": _NO_MEMBER.format(kind="repeat", anchor=0),
     "construct_empty_round_body_list_element": _NO_MEMBER.format(kind="times", anchor=1),
+    "construct_empty_when_times_body": _NO_MEMBER.format(kind="times", anchor=2),
+    "construct_empty_when_repeat_body": _NO_MEMBER.format(kind="repeat", anchor=1),
+    "construct_empty_nested_when_body": _NO_MEMBER.format(kind="times", anchor=2),
 }

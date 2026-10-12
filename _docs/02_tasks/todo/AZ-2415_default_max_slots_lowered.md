@@ -73,3 +73,7 @@ Then green after the text and threshold updates.
 ## Constraints
 
 - TypeScript lands first and writes the memory A/B method into `_docs/03_implementation/reference_loop22.md`; the other four reuse it. C++ is not edited unless its limit differs (flash margin 40 B).
+
+## Parent decision after the TypeScript reference (2026-10-12)
+
+AC-2 reads: the default slot count is a quarter of the old one and the measured worst-case peak (F10 shape) is stated per package and stays under 400 MB. TypeScript: 1 070 MB before, about 355 MB after (33 % by peak RSS; the fixed floor of runtime and packet does not shrink). The method is in `reference_loop22.md` section 2. `pack_element_times_over_budget` is now refused by slots, not the bytes budget: each package updates its own loader expectation to the slots text; the parent adds a separate bytes-budget case in AZ-2417 (fixture files stay with the parent).

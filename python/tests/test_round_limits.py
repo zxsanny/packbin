@@ -53,9 +53,9 @@ def test_ac1_defaults_and_surface():
 
     limited = base.with_limits(max_rounds=10)
 
-    assert (Scheme.DEFAULT_MAX_ROUNDS, Scheme.DEFAULT_MAX_SLOTS) == (65_535, 4_194_304)
-    assert (base.max_rounds, base.max_slots) == (65_535, 4_194_304)
-    assert (limited.max_rounds, limited.max_slots) == (10, 4_194_304)
+    assert (Scheme.DEFAULT_MAX_ROUNDS, Scheme.DEFAULT_MAX_SLOTS) == (65_535, 1_048_576)
+    assert (base.max_rounds, base.max_slots) == (65_535, 1_048_576)
+    assert (limited.max_rounds, limited.max_slots) == (10, 1_048_576)
 
 
 def test_ac1_an_omitted_limit_is_the_default_not_the_current_value():
@@ -200,13 +200,13 @@ def test_ac7_the_slot_total_starts_again_on_the_next_call():
     assert first.ok and second.ok
 
 
-def test_ac8_a_one_mebibyte_packet_is_refused_at_round_65536():
+def test_ac8_a_one_mebibyte_packet_is_refused_by_the_slot_limit_before_the_round_limit():
     names = [_u8(i + 1, f"a{i}") for i in range(36)]
     scheme = Scheme(1, dict, repeat(0, _u8(0, "k"), when(1, eq(0, 1), *names)))
 
     result, seen = _unpack(scheme, b"\x01" + bytes(1_048_576))
 
-    _refusal(result, seen, left=983_041)
+    _refusal(result, seen, left=1_020_237)
 
 
 def test_ac9_the_limits_belong_to_the_scheme():

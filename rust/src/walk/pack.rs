@@ -3,8 +3,8 @@ use super::flag_bits::{
 };
 use super::pack_out::{flags_byte_name, round_member, write_float, write_int, PackOut};
 use super::times::{
-    check_aligned, check_lists, check_longer, check_repeat_cap, check_round_cap, rounds_mismatch,
-    slice_times,
+    check_aligned, check_lists, check_longer, check_repeat_cap, check_repeat_lists,
+    check_round_cap, rounds_mismatch, slice_times,
 };
 use super::written::{borrowed_count, written, Written};
 use crate::field::{field_name, times_name, Field, FieldKind, MapScheme};
@@ -176,6 +176,9 @@ fn pack_one<'v>(
                 Some(Some(_)) => return Err(PackError::Type("__repeat__".to_string())),
                 _ => &[],
             };
+            if groups.is_empty() {
+                check_repeat_lists(*anchor, members, values)?;
+            }
             check_repeat_cap(*anchor, members, groups.len(), out.max_rounds)?;
             for group in groups {
                 out.start_round(*slots, || round_member("repeat", *anchor, members))?;

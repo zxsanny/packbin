@@ -167,7 +167,8 @@ describe("unpack of a large packet", () => {
         when(1, eq(0, 1), names.map((n, i) => (i % 2 === 0 ? u8(1 + i, member(n)) : u16(1 + i, member(n))))),
       ]),
     )
-    const rounds = 50_000
+    // 37 names a round (k and 36 more): 28,000 rounds are 1,036,000 slots, under the default maxSlots.
+    const rounds = 28_000
     const bytes = new Uint8Array(1 + rounds)
     bytes[0] = 1
 

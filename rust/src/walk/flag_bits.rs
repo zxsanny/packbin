@@ -1,5 +1,5 @@
 use super::pack_out::round_member;
-use super::times::check_no_rounds;
+use super::times::{check_no_rounds, check_repeat_lists};
 use super::written::{borrowed_count, Written};
 use crate::field::{field_name, times_name, Field, FieldKind};
 use crate::value::{as_bit, as_usize, present, when_matches, PackError, Value, Values};
@@ -146,10 +146,16 @@ fn zero_given(count: &str, values: &Values) -> bool {
     matches!(values.get(count), Some(Some(v)) if as_usize(v) == Some(0))
 }
 
-/// A `repeat` is on when one of its rounds holds a value.
-fn repeat_on(members: &[Field], values: &Values, form: Form) -> Result<bool, PackError> {
+/// A `repeat` is on when one of its rounds holds a value. With no rounds, a value given under a
+/// name of its body would be dropped, so it is refused as outside `flags`.
+fn repeat_on(
+    anchor: u32,
+    members: &[Field],
+    values: &Values,
+    form: Form,
+) -> Result<bool, PackError> {
     match values.get("__repeat__") {
-        Some(Some(Value::Groups(rounds))) => {
+        Some(Some(Value::Groups(rounds))) if !rounds.is_empty() => {
             let scope = Written::unread();
             for round in rounds {
                 if any_member_on(members, round, &scope, form)? {
@@ -158,8 +164,11 @@ fn repeat_on(members: &[Field], values: &Values, form: Form) -> Result<bool, Pac
             }
             Ok(false)
         }
+        Some(Some(Value::Groups(_))) | Some(None) | None => {
+            check_repeat_lists(anchor, members, values)?;
+            Ok(false)
+        }
         Some(Some(_)) => Err(PackError::Type("__repeat__".to_string())),
-        _ => Ok(false),
     }
 }
 
@@ -193,7 +202,9 @@ pub(super) fn member_on(
             members,
             ..
         } => times_on(*anchor, count, members, values, wrote, form),
-        FieldKind::Repeat { members, .. } => repeat_on(members, values, form),
+        FieldKind::Repeat {
+            anchor, members, ..
+        } => repeat_on(*anchor, members, values, form),
         _ => Ok(field_name(field).is_some_and(|n| present(values, n))),
     }
 }
@@ -381,13 +392,14 @@ fn any_early(members: &[Field], values: &Values, wrote: &Written<'_>) -> Result<
     Ok(false)
 }
 
-/// A clear flag bit (combined `flags` or split) whose field holds a `times` that no field wrote
-/// the count of, though the row gives it above 0: that is what a clear `when` holding the count
-/// leaves, so no round is read and the count the row gives would mean nothing. Refused, naming the
-/// first member of the round. The scope is the field itself or what it reaches through groups,
-/// `flags`, flag bits and a `when` whose condition holds. A count of 0, a count left out and a
-/// count some field wrote are not refused. `wrote` is what pack has written so far in the scope,
-/// so a count written after the flag byte but before the bit counts as written.
+/// A clear flag bit (combined `flags` or split) whose field holds a `times`, `bits`, `packed` or
+/// `sized` that no field wrote the count of, though the row gives it above 0 (after the `packed`
+/// bias): that is what a clear `when` holding the count leaves, so the member reads nothing and the
+/// count the row gives would mean nothing. Refused, naming the first member of the round for a
+/// `times` and the member itself for the others. The scope is the field itself or what it reaches
+/// through groups, `flags`, flag bits and a `when` whose condition holds. A count of 0, a count left
+/// out and a count some field wrote are not refused. `wrote` is what pack has written so far in the
+/// scope, so a count written after the flag byte but before the bit counts as written.
 pub(super) fn refuse_unwritten_count(
     field: &Field,
     values: &Values,
@@ -399,23 +411,20 @@ pub(super) fn refuse_unwritten_count(
             count,
             members,
             ..
-        } => {
-            if wrote.get(count).is_some() {
-                return Ok(());
-            }
-            match values.get(count.as_ref()) {
-                Some(Some(v)) => match as_usize(v) {
-                    Some(n) if n > 0 => Err(PackError::Type(format!(
-                        "{}: the count {count} is {n} in the row, but no field wrote it (the when \
-                         that holds it is clear), so its times reads no round; give the count 0, \
-                         leave it out, or make the when hold",
-                        round_member("times", *anchor, members)
-                    ))),
-                    _ => Ok(()),
-                },
-                _ => Ok(()),
-            }
+        } => refuse_count(
+            &round_member("times", *anchor, members),
+            count,
+            "its times reads no round",
+            0,
+            values,
+            wrote,
+        ),
+        FieldKind::Bits { name, count } | FieldKind::Sized { name, count } => {
+            refuse_count(name, count, "the member reads nothing", 0, values, wrote)
         }
+        FieldKind::Packed {
+            name, count, bias, ..
+        } => refuse_count(name, count, "the member reads nothing", *bias, values, wrote),
         FieldKind::When {
             field: tested,
             expect,
@@ -433,6 +442,32 @@ pub(super) fn refuse_unwritten_count(
             .iter()
             .try_for_each(|m| refuse_unwritten_count(m, values, wrote)),
         FieldKind::FlagBit { inner, .. } => refuse_unwritten_count(inner, values, wrote),
+        _ => Ok(()),
+    }
+}
+
+fn refuse_count(
+    member: &str,
+    count: &str,
+    reads: &str,
+    bias: i8,
+    values: &Values,
+    wrote: &Written<'_>,
+) -> Result<(), PackError> {
+    if wrote.get(count).is_some() {
+        return Ok(());
+    }
+    match values.get(count) {
+        Some(Some(v)) => match as_usize(v) {
+            Some(n) if i64::try_from(n).is_ok_and(|n| n + i64::from(bias) > 0) => {
+                Err(PackError::Type(format!(
+                    "{member}: the count {count} is {n} in the row, but no field wrote it (the \
+                     when that holds it is clear), so {reads}; give the count 0, leave it out, \
+                     or make the when hold"
+                )))
+            }
+            _ => Ok(()),
+        },
         _ => Ok(()),
     }
 }

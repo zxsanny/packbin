@@ -66,3 +66,7 @@ Then the outcomes of loop 21 (refused or the same hex).
 ## Constraints
 
 - Wire bytes of accepted rows unchanged. TypeScript lands first and writes the reference rows; the other five align to them.
+
+## Parent decision after the TypeScript reference (2026-10-12)
+
+Reference section 1. The text is `<m>: the count <c> is <N> in the row, but no field wrote it (the when that holds it is clear), so the member reads nothing; give the count 0, leave it out, or make the when hold`. Only the six no-value `c:3` cells (3 kinds x split bit and combined `flags`) change; count 0, count left out, a holding `when` with no value (`01010300`) and rows 53 to 55 are unchanged; `packed` compares the count after the bias.

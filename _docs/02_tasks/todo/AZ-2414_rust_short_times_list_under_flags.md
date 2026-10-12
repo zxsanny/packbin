@@ -65,3 +65,7 @@ Then the same row.
 ## Constraints
 
 - Wire bytes of rows Rust accepts today unchanged.
+
+## Parent decision after the TypeScript reference (2026-10-12)
+
+Reference section 3a. The README AZ-2248 shape is **Shape A**: `flags` inside the `times` body (rows A1 to A11); Rust matches those bytes. **Shape B** (`times` as a `flags` member, rows B1 to B6) is refused in TypeScript with `missing pt`; Rust must give the same outcome there as TypeScript (a refusal), so a Rust that accepts B is brought back to refusing it. The worker probes both shapes first and reports the Rust outcome per row.

@@ -8,9 +8,9 @@ from packbin import bool as flag_bool
 # AZ-2383 (U3): rows 27 to 39 of `_docs/03_implementation/reference_loop21_slots.md` section 3. In a `repeat`, a
 # non-empty list shorter than the rounds under a member a flag bit can leave absent is refused, named by the
 # member. `times` keeps accepting it.
-# Python differences: the text says `None` where TypeScript says `undefined`; a lone value, a short list for a
-# required member and a short list under a `when` outside `flags` (rows 30 lone, 31, 38) are refused by the
-# equal-length rule of `repeat` (README, Repeat), where TypeScript packs the lone value and the `when` row.
+# Python difference: the text says `None` where TypeScript says `undefined`. Since AZ-2413 (loop 22, U14) a lone
+# value goes to every round and a short `when` list outside `flags` packs as in TypeScript (rows 30 lone, 38); a short
+# required list (row 31) is refused naming the member, with Python's `KeyError` text where TypeScript says `missing`.
 
 
 def _u8(field_id: int, name: str):
@@ -74,14 +74,21 @@ def test_ac2_row30_a_full_list_an_empty_list_and_no_list_pack_as_before(row: dic
     assert _pack(_w_flags_v(), row) == expected
 
 
-@pytest.mark.parametrize(
-    "row",
-    [{"w": [1, 2], "v": 5}, {"w": [1], "v": [5, 6]}],
-    ids=["lone_value", "required_member_short"],
-)
-def test_row30_row31_python_keeps_the_equal_length_rule_for_a_lone_value_and_a_short_required_list(row: dict):
+def test_row30_a_lone_value_goes_to_every_round():
     # Arrange / Act / Assert
-    assert _refusal(_w_flags_v(), row) == "repeat fields must have equal lengths"
+    assert _pack(_w_flags_v(), {"w": [1, 2], "v": 5}) == "01010105020105"
+
+
+def test_row31_a_short_required_list_is_refused_naming_the_member():
+    # Arrange
+    scheme = _w_flags_v()
+
+    # Act
+    with pytest.raises(KeyError) as caught:
+        BinaryPacker.pack(scheme, {"w": [1], "v": [5, 6]})
+
+    # Assert
+    assert caught.value.args == ("missing field w",)
 
 
 def test_ac1_row32_a_short_bool_list_is_refused_and_a_none_entry_packs():
@@ -137,12 +144,12 @@ def test_ac1_row37_the_first_short_member_in_declaration_order_is_named():
     assert _refusal(scheme, {"a": [1, 2, 3], "b": [5, 6]}) == _short("b", 2, 3)
 
 
-def test_row38_a_short_list_under_a_when_outside_flags_stays_refused_by_the_equal_length_rule():
+def test_row38_a_short_list_under_a_when_outside_flags_packs():
     # Arrange
     scheme = Scheme(1, dict, repeat(0, _u8(0, "k"), when(1, eq(0, 1), _u8(1, "v"))))
 
-    # Act / Assert
-    assert _refusal(scheme, {"k": [1, 2], "v": [9]}) == "repeat fields must have equal lengths"
+    # Act / Assert: round 2's `when` is false, so `v` is not read
+    assert _pack(scheme, {"k": [1, 2], "v": [9]}) == "01010902"
     assert _pack(scheme, {"k": [1, 2], "v": [9, None]}) == "01010902"
 
 

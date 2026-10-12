@@ -284,7 +284,7 @@ fn unaligned_error(anchor: u32, name: &str) -> PackError {
 }
 
 #[test]
-fn ac1_map_per_name_list_for_a_member_under_flags_is_refused() {
+fn ac1_map_per_name_list_for_a_member_under_flags_is_read_one_item_per_round() {
     // Arrange
     let scheme = rp6_scheme();
     let mut values = Values::new();
@@ -293,14 +293,14 @@ fn ac1_map_per_name_list_for_a_member_under_flags_is_refused() {
     kept_value(&mut values, "2", &[5, 6]);
 
     // Act
-    let result = pack(&scheme, &values);
+    let raw = pack(&scheme, &values).expect("pack");
 
-    // Assert
-    assert_eq!(result, Err(unaligned_error(1, "1")));
+    // Assert: the list is short, so round 2 has no "1" and its flags bit is clear (AZ-2414)
+    assert_eq!(to_hex(&raw), "01020109050006");
 }
 
 #[test]
-fn ac1_map_single_value_for_a_member_under_flags_is_refused_like_a_list_of_one() {
+fn ac1_map_single_value_for_a_member_under_flags_is_in_every_round() {
     // Arrange
     let scheme = rp6_scheme();
     let mut values = Values::new();
@@ -309,10 +309,10 @@ fn ac1_map_single_value_for_a_member_under_flags_is_refused_like_a_list_of_one()
     kept_value(&mut values, "2", &[5]);
 
     // Act
-    let result = pack(&scheme, &values);
+    let raw = pack(&scheme, &values).expect("pack");
 
     // Assert
-    assert_eq!(result, Err(unaligned_error(1, "1")));
+    assert_eq!(to_hex(&raw), "0101010905");
 }
 
 fn when_member_scheme() -> MapScheme {
@@ -457,5 +457,10 @@ fn ac1_map_non_empty_list_at_count_zero_for_a_member_under_flags_is_refused() {
     let result = pack(&scheme, &values);
 
     // Assert
-    assert_eq!(result, Err(unaligned_error(1, "1")));
+    assert_eq!(
+        result,
+        Err(PackError::Type(
+            "times at id 1: '1' has 1 items, count is 0".to_string()
+        ))
+    );
 }

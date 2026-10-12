@@ -13,6 +13,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <utility>
 
 // GCC 16 at -O2 reports a false -Warray-bounds for the copy of a node into the table of a scheme
@@ -134,6 +135,66 @@ void c2_count_behind_a_nested_clear_when_is_refused() {
       pb::bits<&Held::list>(2, 1));
   pack_refused(s, with_list(held(0, 2), {1, 1}), 2, "C2 bits, count behind two whens, clear");
   round_trip(s, with_list(held(1, 2), {1, 1}), "01010203", "C2 bits, count behind two whens, true");
+}
+
+// AZ-2410 (U11): TypeScript refuses a bits, packed or sized member with NO value whose count is
+// set in the row but never written (the `when` is clear) in a split bit and in a combined
+// `flags`, and packs a clear bit for count 0 and for a left-out count. A typed C++ row cannot
+// say "no value": the Array and the Blob are always there, so the bit is always set and the
+// walk reaches the member, whose count is not written. C++ therefore refuses every such row
+// (an empty member here, so the nearest analog of "no value"), including count 0 and a left-out
+// count, which TypeScript packs as 010000. Pinned as observed; nothing to align in the
+// source.
+template <typename Member>
+auto split_bit_scheme(Member const& m) {
+  return pb::scheme<Held>(1, pb::u8<&Held::mode>(0),
+                          pb::when(1, pb::eq(0, 1), pb::u8<&Held::c>(1)), pb::flag_byte(0),
+                          pb::flag_bit(0, m));
+}
+
+template <typename Member>
+auto combined_flags_scheme(Member const& m) {
+  return pb::scheme<Held>(1, pb::u8<&Held::mode>(0),
+                          pb::when(1, pb::eq(0, 1), pb::u8<&Held::c>(1)), pb::flags(2, m));
+}
+
+template <typename S>
+void no_value_rows_are_refused(S const& s, char const* name) {
+  std::string at = name;
+  for (int c : {3, 4, 1, 0})
+    pack_refused(s, held(0, c), 2, (at + " no value, count " + std::to_string(c)).c_str());
+  Held none;
+  none.mode = 0;
+  pack_refused(s, none, 2, (at + " no value, count absent").c_str());
+}
+
+void az2410_no_value_count_behind_a_clear_when() {
+  no_value_rows_are_refused(split_bit_scheme(pb::bits<&Held::list>(2, 1)), "AZ-2410 bits split");
+  no_value_rows_are_refused(split_bit_scheme(pb::packed<&Held::list>(1, 2, 1)),
+                            "AZ-2410 packed split");
+  no_value_rows_are_refused(split_bit_scheme(pb::sized<&Held::payload>(2, 1)),
+                            "AZ-2410 sized split");
+  no_value_rows_are_refused(combined_flags_scheme(pb::bits<&Held::list>(2, 1)),
+                            "AZ-2410 bits flags");
+  no_value_rows_are_refused(combined_flags_scheme(pb::packed<&Held::list>(1, 2, 1)),
+                            "AZ-2410 packed flags");
+  no_value_rows_are_refused(combined_flags_scheme(pb::sized<&Held::payload>(2, 1)),
+                            "AZ-2410 sized flags");
+}
+
+// Rows 53 to 55: a value with the count behind a clear `when` is refused; with the `when` true
+// the bytes are those of loop 21.
+void az2410_value_rows_are_unchanged() {
+  auto sb = split_bit_scheme(pb::bits<&Held::list>(2, 1));
+  pack_refused(sb, with_list(held(0, 3), {1, 0, 1}), 2, "AZ-2410 row 53 bits split");
+  round_trip(sb, with_list(held(1, 3), {1, 0, 1}), "0101030105", "AZ-2410 row 54 bits split");
+  auto sp = combined_flags_scheme(pb::packed<&Held::list>(1, 2, 1));
+  pack_refused(sp, with_list(held(0, 3), {1, 0, 1}), 2, "AZ-2410 row 53 packed flags");
+  round_trip(sp, with_list(held(1, 3), {1, 0, 1}), "0101030105", "AZ-2410 row 54 packed flags");
+  auto ss = split_bit_scheme(pb::sized<&Held::payload>(2, 1));
+  pack_refused(ss, with_payload(held(0, 3), "\1\2\3", 3), 2, "AZ-2410 row 53 sized split");
+  round_trip(ss, with_payload(held(1, 3), "\1\2\3", 3), "01010301010203",
+             "AZ-2410 row 55 sized split");
 }
 
 // C1: the nested late bodies. `a` sits before the flag byte, `b` and `n` after it.
@@ -297,6 +358,8 @@ int run_core_held_count_nested_late_host_tests() {
   c2_count_behind_a_true_when_is_unchanged();
   c2_count_and_member_in_the_same_when_pack();
   c2_count_behind_a_nested_clear_when_is_refused();
+  az2410_no_value_count_behind_a_clear_when();
+  az2410_value_rows_are_unchanged();
   c1_late_when_in_a_when_is_refused();
   c1_late_when_in_flags_is_refused();
   c1_late_times_in_a_when_is_refused();

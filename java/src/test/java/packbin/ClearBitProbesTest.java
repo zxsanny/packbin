@@ -9,7 +9,7 @@ import java.util.function.Supplier;
  * Loop 21 parity rows, pinned from _docs/03_implementation/reference_loop21_slots.md section 5:
  * U4 (AZ-2384) rows 40 to 43, a split-bit times with its count after the flag byte and the body absent packs a clear
  * bit; U6 (AZ-2386) rows 44 to 52, a count above 0 that no field wrote behind a clear when is refused in a split bit
- * and in combined flags; U7 (AZ-2387) rows 53 to 56, bits, packed and sized counts behind a clear when.
+ * and in combined flags; U7 (AZ-2387) rows 53 to 55, bits, packed and sized counts behind a clear when; loop 22 U11 (AZ-2410) row 56.
  */
 @SuppressWarnings({"unchecked", "rawtypes"})
 final class ClearBitProbesTest {
@@ -25,7 +25,7 @@ final class ClearBitProbesTest {
         u6CountBehindAClearWhen();
         u6TheWhenHolds();
         u7CountKinds();
-        u7NoValueIsAClearBit();
+        u11NoValueCountBehindAClearWhen();
     }
 
     /** Rows 40 to 43. */
@@ -110,20 +110,42 @@ final class ClearBitProbesTest {
         }
     }
 
-    /** Row 56: no value given, so the bit is clear and nothing is dropped: a packet, not an error (the reference). */
-    private static void u7NoValueIsAClearBit() {
+    /**
+     * Row 56 (AZ-2410, U11): no value given and the count behind a clear when is above 0 (after the packed bias): the
+     * member reads nothing where the row says otherwise, so a split bit or combined flags refuses; count 0, a count
+     * left out and a holding when pack as before (rows 56a to 56d). Plain was refused already (count c was not written).
+     */
+    private static void u11NoValueCountBehindAClearWhen() {
         // Arrange
         Map<String, Supplier<Field>> kinds = Map.of(
                 "bits", () -> Packbin.bits(2, Access.get("v"), Access.set("v"), 1),
-                "packed", () -> Packbin.packed(2, 2, Access.get("v"), Access.set("v"), 1, 0),
+                "packed", () -> Packbin.packed(1, 2, Access.get("v"), Access.set("v"), 1, 0),
                 "sized", () -> Packbin.sized(2, Access.get("v"), Access.set("v"), 1));
         for (Map.Entry<String, Supplier<Field>> kind : kinds.entrySet()) {
-            // Act and Assert
+            String label = "row 56 " + kind.getKey() + " ";
             for (String position : List.of("split bit", "combined flags")) {
-                expectPacks("row 56 " + kind.getKey() + " " + position + ", no value", at(position, kind.getValue()),
-                        Maps.map("mode", 0, "c", 3), "010000");
+                Scheme<Map> scheme = at(position, kind.getValue());
+                // Act and Assert
+                expectRefused(label + position + ", no value", scheme, Maps.map("mode", 0, "c", 3), "v: " + member("3"));
+                expectRefused(label + position + ", a big count", scheme,
+                        Maps.map("mode", 0, "c", BigInteger.valueOf(4)), "v: " + member("4"));
+                expectPacks(label + "56a " + position + ", count 0", scheme, Maps.map("mode", 0, "c", 0), "010000");
+                expectPacks(label + "56b " + position + ", count left out", scheme, Maps.map("mode", 0), "010000");
+                expectPacks(label + "56c " + position + ", a holding when", scheme, Maps.map("mode", 1, "c", 3),
+                        "01010300");
             }
+            expectRefusedAnyway(label + "plain, no value", at("plain", kind.getValue()), Maps.map("mode", 0, "c", 3));
         }
+        // Row 56d: the packed bias is taken off the count before it is compared with 0.
+        Field fb = Packbin.flagByte();
+        Scheme<Map> biased = Maps.scheme(1, mode(), c(), fb,
+                fb.bit(Packbin.packed(1, 2, Access.get("v"), Access.set("v"), 1, -1)));
+        expectPacks("row 56d bias -1, count 1", biased, Maps.map("mode", 0, "c", 1), "010000");
+        expectRefused("row 56d bias -1, count 3", biased, Maps.map("mode", 0, "c", 3), "v: " + member("3"));
+    }
+
+    private static String member(String count) {
+        return String.format(CLEAR_WHEN, count).replace("its times reads no round", "the member reads nothing");
     }
 
     private static Scheme<Map> at(String position, Supplier<Field> member) {

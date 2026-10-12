@@ -13,7 +13,7 @@ public class PackSlotBudgetTests
         public List<object?>? Items { get; set; }
     }
 
-    private static Scheme<BudgetRow> CountedTimes(int maxRounds = 65_535, long maxSlots = 4_194_304, long maxBytes = 16_777_216) =>
+    private static Scheme<BudgetRow> CountedTimes(int maxRounds = 65_535, long maxSlots = 1_048_576, long maxBytes = 16_777_216) =>
         new Scheme<BudgetRow>(1,
             Field.U32<BudgetRow>(0, x => x.N),
             Field.Times(1, 0, Field.U8<BudgetRow>(1, x => x.K))).WithLimits(maxRounds, maxSlots, maxBytes);
@@ -43,11 +43,11 @@ public class PackSlotBudgetTests
         // Arrange
         var scheme = WideRound();
 
-        // Act (64 527 rounds of 65 slots are charged, 4 194 260 bytes are written)
+        // Act (16 131 rounds of 65 slots are charged, 1 048 515 bytes are written)
         var error = Refused(scheme, WideRow(65_535));
 
         // Assert
-        Assert.Equal(Slots(4_194_320, 4_194_304, "M0"), error.Message);
+        Assert.Equal(Slots(1_048_580, 1_048_576, "M0"), error.Message);
     }
 
     [Fact]
@@ -79,7 +79,51 @@ public class PackSlotBudgetTests
 
         // Assert (C# names the failing field `times`, as it has since AZ-2329)
         var refused = Assert.IsType<ShortPacket>(read.Error);
-        Assert.Equal(65_520, refused.Left);
+        Assert.Equal(3_211_260, refused.Left);
+    }
+
+    // AZ-2415 (F10): 65 535 elements of `u32 n; times(n) { 64 names }` with n = 1, 4 194 240 slots in 4 259 778 bytes.
+    private static Scheme<Bag> Cheapest() =>
+        new(1, Field.List((Bag x) => x.Items,
+            Field.Group(0, (BudgetWide e) => e.Mark,
+                Field.U32<BudgetWide>(0, e => e.N),
+                Field.Times(1, 0, [.. Enumerable.Range(0, 64).Select(WideMember)]))));
+
+    private static byte[] CheapestPacket()
+    {
+        var raw = new byte[3 + 68 * 65_535];
+        raw[0] = 1;
+        raw[1] = 0xff;
+        raw[2] = 0xff;
+        for (var item = 0; item < 65_535; item++)
+        {
+            var at = 3 + 68 * item;
+            raw[at] = 1;
+            Array.Fill(raw, (byte)1, at + 4, 64);
+        }
+        return raw;
+    }
+
+    [Fact]
+    public void Ac2_Unpack_CheapestBodyPacketAtTheDefault_IsRefusedAtTheSlotLimit()
+    {
+        // Act
+        var read = BinaryPacker.Read(Cheapest(), CheapestPacket());
+
+        // Assert (16 384 elements hold 1 048 576 slots; the 16 385th is refused after its u32 count is read)
+        var refused = Assert.IsType<ShortPacket>(read.Error);
+        Assert.Equal(CheapestPacket().Length - 3 - 68 * 16_384 - 4, refused.Left);
+    }
+
+    [Fact]
+    public void Ac3_Unpack_CheapestBodyPacketWithTheLimitRaised_Unpacks()
+    {
+        // Act
+        var read = BinaryPacker.Read(Cheapest().WithLimits(maxSlots: 4_194_304), CheapestPacket());
+
+        // Assert
+        Assert.Null(read.Error);
+        Assert.Equal(65_535, ((List<object?>)read.Values["Items"]!).Count);
     }
 
     [Fact]

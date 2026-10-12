@@ -54,7 +54,7 @@ Then bytes as at HEAD.
 
 | AC Ref | Initial Data/Conditions | What to Test | Expected Behavior | NFR References |
 |--------|------------------------|-------------|-------------------|----------------|
-| AC-1 | hostile `pack` stage | `pack_repeat_lists_without_groups` (AZ-2417) | refused in Rust; the five others pack the lists (rule table says so) | — |
+| AC-1 | Rust package tests | per-name lists without groups (`repeat_lists_without_groups_tests.rs`) | refused in Rust; the hostile format has one outcome per case, so no shared case | — |
 
 ## Constraints
 

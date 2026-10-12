@@ -198,22 +198,27 @@ fn ac7_a_longer_list_kept_beside_rounds_still_disagrees_with_them() {
 }
 
 #[test]
-fn ac7_a_value_under_a_flags_member_is_still_refused_first() {
-    // Arrange
+fn ac7_a_short_list_under_a_flags_member_leaves_it_absent_in_the_later_rounds() {
+    // Arrange: AZ-2414, a list under a `flags` is read one item per round like a direct member
     let row = values(&[("0", Value::U8(2)), ("1", ints(&[9])), ("2", ints(&[5, 6]))]);
 
     // Act
     let result = pack(&flags_member(), &row);
 
     // Assert
-    assert_eq!(
-        result,
-        Err(PackError::Type(
-            "times at id 1: '1' is under a flags or when; give its values per round under \
-             '__times_1'"
-                .to_string()
-        ))
-    );
+    assert_eq!(hex(result), Ok("01020109050006".to_string()));
+}
+
+#[test]
+fn ac7_a_list_longer_than_the_count_under_a_flags_member_is_refused() {
+    // Arrange
+    let row = values(&[("0", Value::U8(1)), ("1", ints(&[9, 8])), ("2", ints(&[5]))]);
+
+    // Act
+    let result = pack(&flags_member(), &row);
+
+    // Assert
+    assert_eq!(result, longer("1", 2, 1));
 }
 
 // A list that pack never reads is not a list it drops: the name of a flags member, of a flag byte

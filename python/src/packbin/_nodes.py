@@ -164,6 +164,7 @@ class _Sized(_Node):
     get: Get
     set: Set
     count: int
+    count_source: Any = field(default=None, init=False, repr=False, compare=False)
 
 
 @dataclass(slots=True)
@@ -184,6 +185,7 @@ class _Bits(_Node):
     get: Get
     set: Set
     count: int
+    count_source: Any = field(default=None, init=False, repr=False, compare=False)
 
 
 @dataclass(slots=True)
@@ -194,6 +196,7 @@ class _Packed(_Node):
     count: int
     width: int
     bias: int
+    count_source: Any = field(default=None, init=False, repr=False, compare=False)
 
 
 @dataclass(slots=True)

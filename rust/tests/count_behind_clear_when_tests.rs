@@ -315,7 +315,7 @@ fn az2387_rows_54_and_55_a_count_behind_a_set_when_packs() {
 }
 
 #[test]
-fn az2387_row_56_no_value_behind_a_clear_when_packs_a_clear_bit() {
+fn az2387_row_56_no_value_behind_a_clear_when_is_refused_since_az_2410() {
     for (kind, member) in members() {
         for position in ["split", "flags"] {
             // Arrange
@@ -323,10 +323,16 @@ fn az2387_row_56_no_value_behind_a_clear_when_packs_a_clear_bit() {
             let vals = mode_row(0, &[("c", n(3))]);
 
             // Act
-            let wire = hex_of(&scheme, &vals);
+            let message = text(hex_of(&scheme, &vals));
 
-            // Assert: a clear bit, nothing is dropped (TypeScript packs the same)
-            assert_eq!(wire, Ok("010000".to_string()), "{kind} {position}");
+            // Assert: loop 22 U11, the same rule as for a `times` (AZ-2386)
+            assert_eq!(
+                message,
+                "v: the count c is 3 in the row, but no field wrote it (the when that holds it is \
+                 clear), so the member reads nothing; give the count 0, leave it out, or make the \
+                 when hold",
+                "{kind} {position}"
+            );
         }
     }
 }

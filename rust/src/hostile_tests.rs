@@ -7,7 +7,10 @@ use crate::{
     utf8, when, BoundField, MapScheme, Scheme, UnpackError, Value, DEFAULT_MAX_SLOTS,
 };
 use pack_cases::{pack_case, PACK_NOT_RUN};
-use refusals::{assert_construct_rule, assert_pack_rule, assert_tables_cover};
+use refusals::{
+    assert_construct_rule, assert_pack_rule, assert_tables_cover, RuleTable, CONSTRUCT_REFUSAL,
+    PACK_REFUSAL,
+};
 use std::collections::HashSet;
 use std::fs;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -90,6 +93,37 @@ fn scheme_for(id: &str) -> MapScheme {
             MapScheme::new(1, fields)
         }
         "construct_empty_times_body" => MapScheme::new(1, vec![u8("0"), times(1, "0", vec![])]),
+        "construct_empty_when_times_body" => MapScheme::new(
+            1,
+            vec![
+                u8("0"),
+                u8("1"),
+                times(2, "1", vec![when(2, eq("0", Value::U8(1)), vec![])]),
+            ],
+        ),
+        "construct_empty_when_repeat_body" => MapScheme::new(
+            1,
+            vec![
+                u8("0"),
+                repeat(1, vec![when(1, eq("0", Value::U8(1)), vec![])]),
+            ],
+        ),
+        "construct_empty_nested_when_body" => MapScheme::new(
+            1,
+            vec![
+                u8("0"),
+                u8("1"),
+                times(
+                    2,
+                    "1",
+                    vec![when(
+                        2,
+                        eq("0", Value::U8(1)),
+                        vec![when(2, eq("0", Value::U8(1)), vec![])],
+                    )],
+                ),
+            ],
+        ),
         "construct_empty_repeat_body" => MapScheme::new(1, vec![repeat(0, vec![])]),
         "empty_group_outside_flags" => MapScheme::new(1, vec![u8("0"), group(1, "1", vec![])]),
         "eq_bool_false" => MapScheme::new(
@@ -187,7 +221,10 @@ fn rust_outcome(id: &str) -> &'static str {
         | "eq_bool_false"
         | "eq_out_of_range"
         | "construct_empty_times_body"
-        | "construct_empty_repeat_body" => "scheme_error",
+        | "construct_empty_repeat_body"
+        | "construct_empty_when_times_body"
+        | "construct_empty_when_repeat_body"
+        | "construct_empty_nested_when_body" => "scheme_error",
         "zero_progress_repeat_when" | "when_names_outer_field_in_repeat" => "scheme_error",
         "negative_count"
         | "oversize_count"
@@ -243,6 +280,95 @@ fn late_when_in_bit_body_packs_the_readme_bytes() {
 
 #[test]
 fn hostile_vectors_error_without_panic_or_hang() {
+    run_all_cases(CONSTRUCT_REFUSAL, PACK_REFUSAL);
+}
+
+/// AZ-2418 AC-1: the loader fails, naming the case, when a rule entry is wrong. The wrong entry is
+/// built here; the real tables are not touched.
+fn wrong_entry(table: RuleTable, id: &str) -> Vec<(&'static str, &'static str)> {
+    let mut entries = table.to_vec();
+    let entry = entries
+        .iter_mut()
+        .find(|(case, _)| *case == id)
+        .unwrap_or_else(|| panic!("{id}: no rule entry to make wrong"));
+    entry.1 = "a rule this refusal never names";
+    entries
+}
+
+fn loader_failure(construct_rules: RuleTable, pack_rules: RuleTable) -> String {
+    let panic = catch_unwind(|| run_all_cases(construct_rules, pack_rules))
+        .expect_err("the loader accepted a wrong rule table");
+    panic_text(panic.as_ref())
+}
+
+#[test]
+fn a_wrong_pack_rule_entry_fails_the_loader_naming_the_case() {
+    // Arrange: one pack entry that names the wrong rule
+    let rules = wrong_entry(PACK_REFUSAL, "pack_times_list_too_long").leak();
+
+    // Act
+    let failure = loader_failure(CONSTRUCT_REFUSAL, rules);
+
+    // Assert
+    assert!(
+        failure.contains("pack_times_list_too_long: refused by another rule"),
+        "{failure}"
+    );
+}
+
+#[test]
+fn a_wrong_construct_rule_entry_fails_the_loader_naming_the_case() {
+    // Arrange: one construct entry that names the wrong rule
+    let rules = wrong_entry(CONSTRUCT_REFUSAL, "nine_flag_bits").leak();
+
+    // Act
+    let failure = loader_failure(rules, PACK_REFUSAL);
+
+    // Assert
+    assert!(
+        failure.contains("nine_flag_bits: refused by another rule"),
+        "{failure}"
+    );
+}
+
+#[test]
+fn a_rule_entry_for_a_case_that_is_not_refused_fails_the_loader() {
+    // Arrange: an entry for a pack case that packs bytes
+    let mut entries = PACK_REFUSAL.to_vec();
+    entries.push(("pack_late_when_in_bit_body", "a refusal it never gives"));
+    let rules: RuleTable = entries.leak();
+
+    // Act
+    let failure = loader_failure(CONSTRUCT_REFUSAL, rules);
+
+    // Assert
+    assert!(
+        failure.contains("pack rule for pack_late_when_in_bit_body"),
+        "{failure}"
+    );
+}
+
+#[test]
+fn a_refused_case_without_a_rule_entry_fails_the_loader() {
+    // Arrange: the table without the entry of one refused case
+    let rules: RuleTable = PACK_REFUSAL
+        .iter()
+        .copied()
+        .filter(|(case, _)| *case != "pack_repeat_over_limit")
+        .collect::<Vec<_>>()
+        .leak();
+
+    // Act
+    let failure = loader_failure(CONSTRUCT_REFUSAL, rules);
+
+    // Assert
+    assert!(
+        failure.contains("pack_repeat_over_limit: no refusal rule recorded"),
+        "{failure}"
+    );
+}
+
+fn run_all_cases(construct_rules: RuleTable, pack_rules: RuleTable) {
     let text = fs::read_to_string(CASES).expect("fixtures/hostile/cases.txt");
     let mut seen = HashSet::new();
     let mut outcomes = Vec::new();
@@ -259,7 +385,8 @@ fn hostile_vectors_error_without_panic_or_hang() {
         let allows_scheme_error = expected.split('|').any(|t| t == "scheme_error");
         match stage {
             "construct" => {
-                if let Some((_, reason)) = CONSTRUCT_NOT_RUN.iter().find(|(skipped, _)| *skipped == id)
+                if let Some((_, reason)) =
+                    CONSTRUCT_NOT_RUN.iter().find(|(skipped, _)| *skipped == id)
                 {
                     outcomes.push(format!("{id} -> skipped: {reason}"));
                     continue;
@@ -272,7 +399,7 @@ fn hostile_vectors_error_without_panic_or_hang() {
                 });
                 let msg = refusal
                     .unwrap_or_else(|| panic!("{id}: scheme was built, expected scheme_error"));
-                assert_construct_rule(id, &msg);
+                assert_construct_rule(construct_rules, id, &msg);
                 assert_eq!(rust_outcome(id), "scheme_error", "{id}");
                 construct_refused.push(id.to_string());
                 outcomes.push(format!("{id} -> scheme_error ({msg})"));
@@ -315,7 +442,7 @@ fn hostile_vectors_error_without_panic_or_hang() {
                         let err = bytes
                             .as_ref()
                             .expect_err(&format!("{id}: packed {bytes:?}, expected pack_error"));
-                        assert_pack_rule(id, err);
+                        assert_pack_rule(pack_rules, id, err);
                         pack_refused.push(id.to_string());
                     }
                     other => panic!("{id}: malformed pack line {other:?}"),
@@ -325,7 +452,12 @@ fn hostile_vectors_error_without_panic_or_hang() {
             other => panic!("{id}: unknown stage {other}"),
         }
     }
-    assert_tables_cover(&construct_refused, &pack_refused);
+    assert_tables_cover(
+        construct_rules,
+        &construct_refused,
+        pack_rules,
+        &pack_refused,
+    );
     for line in &outcomes {
         println!("hostile {line}");
     }

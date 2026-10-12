@@ -224,9 +224,20 @@ for (const { kind, member, value, setHex, splitSetHex } of kinds) {
       assert.deepEqual(wires, [setHex, splitSetHex])
     })
 
-    it("observed: with no value given, a split bit or combined flags packs a clear bit", () => {
+    it("with no value given and count 3, a split bit or combined flags is refused since loop 22 (U11, packed 010000 before)", () => {
       // Act
-      const wires = [pack(split(), { mode: 0, c: 3 }), pack(combined(), { mode: 0, c: 3 })]
+      const messages = [split(), combined()].map((layout) => refusal(() => BinaryPacker.pack(layout, { mode: 0, c: 3 })))
+
+      // Assert
+      assert.deepEqual(messages, [
+        "v: the count c is 3 in the row, but no field wrote it (the when that holds it is clear), so the member reads nothing; give the count 0, leave it out, or make the when hold",
+        "v: the count c is 3 in the row, but no field wrote it (the when that holds it is clear), so the member reads nothing; give the count 0, leave it out, or make the when hold",
+      ])
+    })
+
+    it("with no value given and count 0, a split bit or combined flags still packs a clear bit", () => {
+      // Act
+      const wires = [pack(split(), { mode: 0, c: 0 }), pack(combined(), { mode: 0, c: 0 })]
 
       // Assert
       assert.deepEqual(wires, ["010000", "010000"])

@@ -125,6 +125,21 @@ constexpr PackHandler kPackHandlers21[] = {
 
 // The slot cases need a round budget and a short list needs a list: C++ has neither.
 constexpr PackSkip kPackSkips21[] = {
+    // Loop 22 (AZ-2417): the reasons are the README's "Not run by" lines.
+    {"pack_novalue_count_clear_when_bits",
+     "a typed row has no \"no value\" for a bits member: it always holds the member, so the row is refused anyway as a count that differs from the member's length"},
+    {"pack_novalue_count_clear_when_packed",
+     "a typed row has no \"no value\" for a packed member: it always holds the member, so the row is refused anyway as a count that differs from the member's length"},
+    {"pack_novalue_count_clear_when_sized",
+     "a typed row has no \"no value\" for a sized member: it always holds the member, so the row is refused anyway as a count that differs from the member's length"},
+    {"pack_repeat_unequal_lists_lone",
+     "a typed row holds an `Array` of round items, so a lone value for one round member cannot be written"},
+    {"pack_repeat_unequal_lists_when",
+     "a typed row holds an `Array` of round items, so a shorter list for one round member cannot be written"},
+    {"pack_times_short_list_flags",
+     "a typed row holds an `Array` with one item per round, so a list shorter than the count cannot be written"},
+    {"pack_element_times_over_bytes_budget",
+     "a fixed array of rounds and a caller buffer: there is no output budget to pass"},
     {"pack_round_slots_at_limit",
      "the rounds live in a fixed `Array` and pack has no slot budget to set"},
     {"pack_round_slots_over_limit",

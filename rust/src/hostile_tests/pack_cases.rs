@@ -133,6 +133,24 @@ fn split_times_after_byte() -> MapScheme {
     )
 }
 
+/// `u8 mode; when mode == 1 { u8 c }; flagbyte m; bit m { <member counted by c> }`, the row
+/// `mode 0, c 3`, and no `v`.
+fn novalue_count_clear_when(member: crate::Field) -> Result<Vec<u8>, PackError> {
+    let m = flag_byte("m");
+    pack(
+        &MapScheme::new(
+            1,
+            vec![
+                u8("mode"),
+                when(1, eq("mode", Value::U8(1)), vec![u8("c")]),
+                m.byte(),
+                m.bit(member),
+            ],
+        ),
+        &row(&[("mode", Value::U8(0)), ("c", Value::U8(3))]),
+    )
+}
+
 /// `u8 mode; when mode == 1 { u8 c }; <member counted by c>`, the row `mode 0, c 3, v given`.
 fn count_clear_when(member: crate::Field, v: Value) -> Result<Vec<u8>, PackError> {
     pack(
@@ -157,6 +175,18 @@ pub(super) const PACK_NOT_RUN: &[(&str, &str)] = &[
     (
         "pack_flags_short_list",
         "a `repeat` takes its rounds as groups, one row per round, so there is no list to be too short",
+    ),
+    (
+        "pack_repeat_unequal_lists_lone",
+        "a `repeat` takes its rounds as groups only, one row per round, so per-name lists are refused",
+    ),
+    (
+        "pack_repeat_unequal_lists_when",
+        "a `repeat` takes its rounds as groups only, one row per round, so per-name lists are refused",
+    ),
+    (
+        "pack_element_times_over_bytes_budget",
+        "a list element cannot hold a `times`: Rust refuses it at construction",
     ),
 ];
 
@@ -270,9 +300,7 @@ pub(super) fn pack_case(id: &str) -> Result<Vec<u8>, PackError> {
         ),
         "pack_round_slots_at_limit" => pack(&slots_scheme(), &slots_row(&[2, 3])),
         "pack_round_slots_over_limit" => pack(&slots_scheme(), &slots_row(&[2, 3, 4])),
-        "pack_round_slots_flags_at_limit" => {
-            pack(&flags_slots_scheme(), &flags_slots_row(&[5, 6]))
-        }
+        "pack_round_slots_flags_at_limit" => pack(&flags_slots_scheme(), &flags_slots_row(&[5, 6])),
         "pack_round_slots_flags_over_limit" => {
             pack(&flags_slots_scheme(), &flags_slots_row(&[5, 6, 7]))
         }
@@ -336,15 +364,23 @@ pub(super) fn pack_case(id: &str) -> Result<Vec<u8>, PackError> {
                 ]),
             )
         }
-        "pack_bits_count_clear_when" => {
-            count_clear_when(bits("v", "c"), ints(&[1, 0, 1]))
-        }
+        "pack_bits_count_clear_when" => count_clear_when(bits("v", "c"), ints(&[1, 0, 1])),
         "pack_packed_count_clear_when" => {
             count_clear_when(packed(1, "v", "c", 0), ints(&[1, 0, 1]))
         }
         "pack_sized_count_clear_when" => {
             count_clear_when(sized("v", "c"), Value::Bytes(vec![1, 2, 3]))
         }
+        "pack_novalue_count_clear_when_bits" => novalue_count_clear_when(bits("v", "c")),
+        "pack_novalue_count_clear_when_packed" => novalue_count_clear_when(packed(1, "v", "c", 0)),
+        "pack_novalue_count_clear_when_sized" => novalue_count_clear_when(sized("v", "c")),
+        "pack_times_short_list_flags" => pack(
+            &MapScheme::new(
+                1,
+                vec![u8("c"), times(1, "c", vec![flags(1, "f", vec![u8("v")])])],
+            ),
+            &row(&[("c", Value::U8(2)), ("v", ints(&[5]))]),
+        ),
         other => panic!("no scheme written for hostile pack case {other}"),
     }
 }

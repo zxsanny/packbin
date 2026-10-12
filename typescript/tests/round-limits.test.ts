@@ -58,9 +58,9 @@ describe("scheme limits surface", () => {
     // Assert
     assert.deepEqual(
       [base.maxRounds, base.maxSlots, Scheme.DefaultMaxRounds, Scheme.DefaultMaxSlots],
-      [65_535, 4_194_304, 65_535, 4_194_304],
+      [65_535, 1_048_576, 65_535, 1_048_576],
     )
-    assert.deepEqual([lowered.maxRounds, lowered.maxSlots], [10, 4_194_304])
+    assert.deepEqual([lowered.maxRounds, lowered.maxSlots], [10, 1_048_576])
   })
 
   it("takes the default, not the receiver's value, for a member left out", () => {
@@ -73,7 +73,7 @@ describe("scheme limits surface", () => {
 
     // Assert
     assert.deepEqual([next.maxRounds, next.maxSlots], [65_535, 30])
-    assert.deepEqual([reset.maxRounds, reset.maxSlots], [65_535, 4_194_304])
+    assert.deepEqual([reset.maxRounds, reset.maxSlots], [65_535, 1_048_576])
   })
 
   it("keeps the type number and the receiver's limits on a derived scheme", () => {
@@ -355,7 +355,7 @@ describe("slot limit", () => {
 })
 
 describe("limits of a large packet", () => {
-  it("refuses a 1 MiB packet of one-byte rounds with 36 names after 65,535 rounds", () => {
+  it("refuses a 1 MiB packet of one-byte rounds with 36 names after 28,339 rounds, where maxSlots 1,048,576 is reached", () => {
     // Arrange
     const names = Array.from({ length: 36 }, (_, i) => `f${i}`)
     const member = (name: string) => new Function("x", `return x.${name}`) as (x: Row) => unknown
@@ -374,7 +374,8 @@ describe("limits of a large packet", () => {
     const elapsed = performance.now() - started
 
     // Assert
-    assert.deepEqual(result, refused("k", 983_041))
+    // A round holds 37 names (k and the 36 behind the when): round 28,340 would hold 1,048,580 slots.
+    assert.deepEqual(result, refused("k", 1_020_237))
     assert.equal(rows.length, 0)
     assert.ok(elapsed < 1000, `refusal took ${elapsed} ms`)
   })

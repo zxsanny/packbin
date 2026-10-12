@@ -69,7 +69,7 @@ def _is_integer(node: _Node) -> bool:
 
 
 def _require_count_source(label: str, field_id: int, visible: dict[int, _Node]) -> _Node:
-    """The field a count names. A `times` keeps it (`count_source`) to read the count in the row."""
+    """The field a count names. A `times`, `sized`, `bits` and `packed` keep it (`count_source`) to read the row."""
     source = _require_visible(label, "count", field_id, visible)
     if not _is_integer(source):
         raise ValueError(
@@ -135,7 +135,9 @@ def _validate_order(
             raise ValueError(f"group {node.anchor} has no fields, so it can never carry a value")
         if isinstance(node, (_Scalar, _Bytes, _Bool, _Utf8, _Sized, _Bits, _Packed)):
             if isinstance(node, (_Sized, _Bits, _Packed)):
-                _require_count_source(f"{_COUNTED[type(node)]} {node.field_id}", node.count, visible)
+                node.count_source = _require_count_source(
+                    f"{_COUNTED[type(node)]} {node.field_id}", node.count, visible
+                )
             if node.field_id != next_id:
                 raise ValueError(f"field id {node.field_id} is not the next order {next_id}")
             visible[node.field_id] = node

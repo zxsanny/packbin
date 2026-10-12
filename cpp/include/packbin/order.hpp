@@ -273,6 +273,17 @@ constexpr void resolve(Field* t, std::size_t begin, std::size_t end, std::size_t
   }
 }
 
+// True when t[begin, end) holds a member, looking through `when` and groups: any other field
+// counts, so only a body of empty `when`s and groups holds none.
+constexpr bool has_member(Field const* t, std::size_t begin, std::size_t end) {
+  for (std::size_t j = begin; j < end; j += t[j].span) {
+    if ((t[j].kind != Kind::When && t[j].kind != Kind::Group) ||
+        has_member(t, j + 1, j + t[j].span))
+      return true;
+  }
+  return false;
+}
+
 // A u2 packs into a 16-byte buffer: at most 64 two-bit children.
 constexpr std::size_t kMaxU2Children = 64;
 
@@ -289,7 +300,8 @@ constexpr void check_shape(Field const* t, std::size_t begin, std::size_t end, b
     bool too_wide = (f.kind == Kind::Flags && children > 8) ||
                     (f.kind == Kind::U2 && children > kMaxU2Children);
     // A round with no member writes nothing, so the slot budget would not bound its work.
-    bool empty_round = (f.kind == Kind::Repeat || f.kind == Kind::Times) && children == 0;
+    bool empty_round =
+        (f.kind == Kind::Repeat || f.kind == Kind::Times) && !has_member(t, j + 1, j + f.span);
     if (too_wide || empty_round || (is_presence && !presence_ok) || (f.flags & flag::Invalid) != 0)
       c.fail_at(f.id);
     if (f.span > 1)

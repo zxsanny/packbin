@@ -80,7 +80,53 @@ public class HostilePackVectorTests
         public byte[] V { get; set; } = [];
     }
 
+    // Loop 22 (AZ-2417): repeat lists of unequal length, a short `times` list under flags, a utf8 under a list element.
+    private sealed class RepeatWhenRow
+    {
+        public byte K { get; set; }
+        public byte? V { get; set; }
+    }
+
+    private sealed class FlagsTimesRow
+    {
+        public byte C { get; set; }
+        public byte? V { get; set; }
+    }
+
+    private sealed class Utf8Item
+    {
+        public uint N { get; set; }
+        public string S { get; set; } = "";
+        public bool? Mark { get; set; }
+    }
+
+    private sealed class Utf8Items
+    {
+        public List<object?>? Items { get; set; }
+    }
+
     private static object?[] L(params object?[] items) => items;
+
+    // u8 mode; when mode == 1 { u8 c }; flag byte; bit 0 { counted member (id 2, count id 1) }: the split form.
+    private static Scheme<StrandedRow> SplitCounted(Func<Field> member)
+    {
+        var m = Field.FlagByte();
+        return new Scheme<StrandedRow>(1,
+            Field.U8<StrandedRow>(0, x => x.Mode),
+            Field.When(1, Condition.Eq(0, 1), Field.U8<StrandedRow>(1, x => x.C)),
+            m,
+            m.Bit(member()));
+    }
+
+    private static Scheme<StrandedSizedRow> SplitSized()
+    {
+        var m = Field.FlagByte();
+        return new Scheme<StrandedSizedRow>(1,
+            Field.U8<StrandedSizedRow>(0, x => x.Mode),
+            Field.When(1, Condition.Eq(0, 1), Field.U8<StrandedSizedRow>(1, x => x.C)),
+            m,
+            m.Bit(Field.Sized<StrandedSizedRow>(2, x => x.V, 1)));
+    }
 
     // u8 n; times(n) { u8 a }; repeat { u8 b }: one slot per round of either container.
     private static Scheme<SlotsRow> SlotsScheme() => new Scheme<SlotsRow>(1,
@@ -254,6 +300,33 @@ public class HostilePackVectorTests
                 Field.When(1, Condition.Eq(0, 1), Field.U8<StrandedSizedRow>(1, x => x.C)),
                 Field.Sized<StrandedSizedRow>(2, x => x.V, 1)),
             Row(("Mode", (byte)0), ("C", (byte)3), ("V", new byte[] { 1, 2, 3 }))),
+        ["pack_novalue_count_clear_when_bits"] = () => BinaryPacker.Pack(
+            SplitCounted(() => Field.Bits<StrandedRow>(2, x => x.V, 1)), Row(("Mode", (byte)0), ("C", (byte)3))),
+        ["pack_novalue_count_clear_when_packed"] = () => BinaryPacker.Pack(
+            SplitCounted(() => Field.Packed<StrandedRow>(1, 2, x => x.V, 1)), Row(("Mode", (byte)0), ("C", (byte)3))),
+        ["pack_novalue_count_clear_when_sized"] = () => BinaryPacker.Pack(
+            SplitSized(), Row(("Mode", (byte)0), ("C", (byte)3))),
+        ["pack_repeat_unequal_lists_lone"] = () => BinaryPacker.Pack(
+            new Scheme<PackRow>(1, Field.Repeat(0, Field.U8<PackRow>(0, x => x.A), Field.U8<PackRow>(1, x => x.B))),
+            Row(("A", L((byte)1, (byte)2)), ("B", (byte)7))),
+        ["pack_repeat_unequal_lists_when"] = () => BinaryPacker.Pack(
+            new Scheme<RepeatWhenRow>(1, Field.Repeat(0,
+                Field.U8<RepeatWhenRow>(0, x => x.K),
+                Field.When(1, Condition.Eq(0, 1), Field.U8<RepeatWhenRow>(1, x => x.V)))),
+            Row(("K", L((byte)1, (byte)2)), ("V", L((byte)9)))),
+        ["pack_times_short_list_flags"] = () => BinaryPacker.Pack(
+            new Scheme<FlagsTimesRow>(1,
+                Field.U8<FlagsTimesRow>(0, x => x.C),
+                Field.Times(1, 0, Field.Flags(1, Field.U8<FlagsTimesRow>(1, x => x.V)))),
+            Row(("C", (byte)2), ("V", L((byte)5)))),
+        ["pack_element_times_over_bytes_budget"] = () => BinaryPacker.Pack(
+            new Scheme<Utf8Items>(1,
+                Field.List((Utf8Items x) => x.Items,
+                    Field.Group(0, (Utf8Item e) => e.Mark,
+                        Field.U32<Utf8Item>(0, e => e.N),
+                        Field.Times(1, 0, Field.Utf8<Utf8Item>(1, e => e.S))))),
+            Row(("Items", Enumerable.Range(0, 16)
+                .Select(_ => (object?)Row(("N", 65_535u), ("S", new string('a', 16)))).ToList()))),
     };
 
     // The member a loop 19 refusal names, so a refusal by some other rule does not pass.
@@ -266,8 +339,8 @@ public class HostilePackVectorTests
         ["pack_split_times_count_skipped"] = "'Pt'",
         ["pack_lone_bytes_in_round"] = "'D'",
         ["pack_lone_utf8_under_times_over_budget"] = "'S'",
-        ["pack_element_times_over_budget"] = "'K'",
-        ["pack_slots_over_limit"] = "'M0'",
+        ["pack_element_times_over_budget"] = "'K': the rounds would hold 1048577 slots, above the limit of 1048576 slots",
+        ["pack_slots_over_limit"] = "'M0': the rounds would hold 1048580 slots, above the limit of 1048576 slots",
         ["pack_repeat_over_limit"] = "'K'",
         ["pack_split_count_zero_after_byte_list"] = "'Pt'",
         ["pack_flags_skipped_count_with_values"] = "'Pt'",
@@ -278,7 +351,15 @@ public class HostilePackVectorTests
         ["pack_bits_count_clear_when"] = "V: count 'C' is missing",
         ["pack_packed_count_clear_when"] = "V: count 'C' is missing",
         ["pack_sized_count_clear_when"] = "V: count 'C' is missing",
+        ["pack_novalue_count_clear_when_bits"] = NoValueRule("V"),
+        ["pack_novalue_count_clear_when_packed"] = NoValueRule("V"),
+        ["pack_novalue_count_clear_when_sized"] = NoValueRule("V"),
+        ["pack_element_times_over_bytes_budget"] = "'S': the packet would be 16777233 bytes, above the limit of 16777216 bytes",
     };
+
+    // Row 56: a count above 0 for a member with no value, refused where the clear bit is found (not "count 'C' is missing").
+    private static string NoValueRule(string member) =>
+        $"'{member}': the count C is 3 in the row, but no field wrote it (the when that holds it is clear), so the member reads nothing";
 
     public static IEnumerable<object[]> RunCases() =>
         HostileVectorTests.Cases("pack").Where(p => Packs.ContainsKey(p[0])).Select(p => new object[] { p[0], p[2], p[3] });
@@ -301,7 +382,40 @@ public class HostilePackVectorTests
 
     [Theory]
     [MemberData(nameof(RunCases))]
-    public void PackCase_ReturnsTheBytesOrRefuses(string id, string expected, string hex)
+    public void PackCase_ReturnsTheBytesOrRefuses(string id, string expected, string hex) =>
+        CheckPackCase(id, expected, hex, NamedMember);
+
+    // AZ-2418 AC-1: the rule table is part of the check, so a wrong entry must fail the loader naming the case.
+    [Fact]
+    public void WrongRuleEntry_FailsTheLoaderNamingTheCase()
+    {
+        // Arrange (a refusal that is real, with a rule that names some other message)
+        var wrong = new Dictionary<string, string>(NamedMember)
+        {
+            ["pack_times_count_over_limit"] = "'NoSuchMember'",
+            ["pack_novalue_count_clear_when_bits"] = "'V': a rule this refusal does not carry",
+        };
+
+        // Act
+        var failedCount = Record.Exception(() => CheckPackCase("pack_times_count_over_limit", "pack_error", "-", wrong));
+        var failedNoValue = Record.Exception(() => CheckPackCase("pack_novalue_count_clear_when_bits", "pack_error", "-", wrong));
+
+        // Assert
+        Assert.Contains("pack_times_count_over_limit: refused by another rule", Assert.IsAssignableFrom<Xunit.Sdk.XunitException>(failedCount).Message);
+        Assert.Contains("pack_novalue_count_clear_when_bits: refused by another rule", Assert.IsAssignableFrom<Xunit.Sdk.XunitException>(failedNoValue).Message);
+    }
+
+    [Fact]
+    public void WrongBytes_FailTheLoader()
+    {
+        // Act (the real case packs 0102010500)
+        var failed = Record.Exception(() => CheckPackCase("pack_times_short_list_flags", "bytes", "0102010501", NamedMember));
+
+        // Assert
+        Assert.IsAssignableFrom<Xunit.Sdk.XunitException>(failed);
+    }
+
+    private static void CheckPackCase(string id, string expected, string hex, IReadOnlyDictionary<string, string> rules)
     {
         // Arrange
         var pack = Packs[id];
@@ -320,7 +434,7 @@ public class HostilePackVectorTests
         {
             Assert.Equal("pack_error", expected);
             var error = Assert.IsType<ArgumentException>(refused);
-            if (NamedMember.TryGetValue(id, out var member))
+            if (rules.TryGetValue(id, out var member))
                 Assert.True(error.Message.Contains(member, StringComparison.Ordinal), $"{id}: refused by another rule: {error.Message}");
             Assert.Null(packed);
         }

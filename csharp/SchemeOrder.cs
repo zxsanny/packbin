@@ -152,10 +152,17 @@ internal static class SchemeOrder
             throw new ArgumentException(
                 $"'{field.Name}': {TypeName(member)} is not a collection Packbin can fill; use an array, "
                 + (shape.Dictionary ? "Dictionary<string, E>" : "List<E>") + $" for a {kind} field");
-        if (!shape.Holds(field.Children[0]))
+        var element = field.Children[0];
+        if (shape.Holds(element))
+            return;
+        if (CollectionShape.IsReal(shape.ElementType) && element.Type is (>= Field.Kind.U8 and <= Field.Kind.I64) or Field.Kind.U2)
             throw new ArgumentException(
-                $"'{field.Name}': {TypeName(member)} cannot hold the {Walker.KindName(field.Children[0])} "
-                + $"elements of its field; element type {TypeName(shape.ElementType)} is too narrow or of another kind");
+                $"'{field.Name}': {TypeName(member)} holds {TypeName(shape.ElementType)} elements, which pack refuses for the "
+                + $"{Walker.KindName(element)} elements of its field; use an integer element type "
+                + "(a float, double or decimal is for f32 and f64)");
+        throw new ArgumentException(
+            $"'{field.Name}': {TypeName(member)} cannot hold the {Walker.KindName(element)} "
+            + $"elements of its field; element type {TypeName(shape.ElementType)} is too narrow or of another kind");
     }
 
     private static ArgumentException NoConstructor(Field field, Type type) =>

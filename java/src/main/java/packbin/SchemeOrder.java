@@ -80,6 +80,7 @@ final class SchemeOrder {
             case REPEAT, LIST, DICT -> field.withChildren(bindAll(field.children, new HashMap<>(), new HashMap<>()));
             case TIMES -> field.withChildren(
                     bindAll(field.children, new HashMap<>(), new HashMap<>()), counts.get(field.countId));
+            case BITS, PACKED, SIZED -> field.withChildren(field.children, counts.get(field.countId));
             case U2 -> {
                 for (Field slot : field.children) {
                     if (isCountSource(slot)) {

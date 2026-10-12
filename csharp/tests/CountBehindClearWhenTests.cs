@@ -4,8 +4,9 @@ namespace Packbin.Tests;
 
 // AZ-2386 (U6) and AZ-2387 (U7), rows 44 to 56 of _docs/03_implementation/reference_loop21_slots.md: a count that no field
 // wrote because the `when` holding it is clear. A `times` whose row still holds a count above 0 is refused at its clear bit
-// (split and combined `flags`); `bits`, `packed` and `sized` are refused when they have a value, and a row with no value
-// packs a clear bit (row 56). C# words the U7 refusal as it always has ("count 'C' is missing").
+// (split and combined `flags`); `bits`, `packed` and `sized` are refused when they have a value, and with no value and a
+// count above 0 (row 56, AZ-2410 U11) once the bit is found clear. C# words the U7 refusal as it always has
+// ("count 'C' is missing").
 public class CountBehindClearWhenTests
 {
     private sealed class Row
@@ -199,19 +200,110 @@ public class CountBehindClearWhenTests
         Assert.Equal(expected, Hex(raw));
     }
 
-    [Theory]
-    [InlineData("bits", "split")]
-    [InlineData("bits", "combined")]
-    [InlineData("packed", "split")]
-    [InlineData("packed", "combined")]
-    [InlineData("sized", "split")]
-    [InlineData("sized", "combined")]
-    public void Ac3_Pack_CountedMemberWithNoValueBehindAClearWhen_PacksAClearBit(string kind, string position)
+    public static TheoryData<string, string> SixNoValue()
     {
-        // Act (row 56: TypeScript packs a clear bit and nothing is dropped, so C# matches it)
-        var raw = BinaryPacker.Pack(Counted(Kinds[kind], position), Given(kind, 0, withValue: false));
+        var data = new TheoryData<string, string>();
+        foreach (var kind in Kinds.Keys)
+        {
+            foreach (var position in new[] { "split", "combined" })
+                data.Add(kind, position);
+        }
+        return data;
+    }
+
+    private static string NoValueCount(string member, string count, string n) =>
+        $"'{member}': the count {count} is {n} in the row, but no field wrote it (the when that holds it is clear), "
+        + "so the member reads nothing; give the count 0, leave it out, or make the when hold";
+
+    [Theory]
+    [MemberData(nameof(SixNoValue))]
+    public void Ac1_Pack_CountedMemberWithNoValueBehindAClearWhen_IsRefused(string kind, string position)
+    {
+        // Act (row 56: AZ-2410 refuses it as a `times` is refused; it packed a clear bit before)
+        var error = Budget.Refused(Counted(Kinds[kind], position), Given(kind, 0, withValue: false));
 
         // Assert
-        Assert.Equal("010000", Hex(raw));
+        Assert.Equal(NoValueCount(kind == "sized" ? "Bv" : "V", "C", "3"), error.Message);
+    }
+
+    [Theory]
+    [MemberData(nameof(SixNoValue))]
+    public void Ac1_Pack_WideCountBehindAClearWhenWithNoValue_IsRefusedWithTheCountAsGiven(string kind, string position)
+    {
+        // Arrange
+        var values = Given(kind, 0, withValue: false);
+        values["C"] = 4UL;
+
+        // Act
+        var error = Budget.Refused(Counted(Kinds[kind], position), values);
+
+        // Assert
+        Assert.Equal(NoValueCount(kind == "sized" ? "Bv" : "V", "C", "4"), error.Message);
+    }
+
+    [Theory]
+    [InlineData("bits")]
+    [InlineData("packed")]
+    [InlineData("sized")]
+    public void Ac1_Pack_CountedMemberWithNoValueInPlainPosition_KeepsItsOwnRefusal(string kind)
+    {
+        // Act (row 56, plain: never reached the clear-bit path)
+        var error = Budget.Refused(Counted(Kinds[kind], "plain"), Given(kind, 0, withValue: false));
+
+        // Assert
+        Assert.Equal($"{(kind == "sized" ? "Bv" : "V")}: count 'C' is missing", error.Message);
+    }
+
+    [Theory]
+    [MemberData(nameof(SixNoValue))]
+    public void Ac2_Pack_CountedMemberWithNoValueAndCountZeroOrLeftOut_PacksAClearBit(string kind, string position)
+    {
+        // Arrange
+        var zero = Given(kind, 0, withValue: false);
+        zero["C"] = (byte)0;
+        var left = Given(kind, 0, withValue: false);
+        left.Remove("C");
+
+        // Act (rows 56a and 56b)
+        var rawZero = BinaryPacker.Pack(Counted(Kinds[kind], position), zero);
+        var rawLeft = BinaryPacker.Pack(Counted(Kinds[kind], position), left);
+
+        // Assert
+        Assert.Equal(("010000", "010000"), (Hex(rawZero), Hex(rawLeft)));
+    }
+
+    [Theory]
+    [MemberData(nameof(SixNoValue))]
+    public void Ac3_Pack_CountedMemberWithNoValueWhenTheWhenHolds_PacksAsBefore(string kind, string position)
+    {
+        // Act (row 56c)
+        var raw = BinaryPacker.Pack(Counted(Kinds[kind], position), Given(kind, 1, withValue: false));
+
+        // Assert
+        Assert.Equal("01010300", Hex(raw));
+    }
+
+    [Theory]
+    [InlineData("split", 1, "010000")]
+    [InlineData("combined", 1, "010000")]
+    [InlineData("split", 3, null)]
+    [InlineData("combined", 3, null)]
+    public void Ac1_Pack_PackedCountIsComparedAfterTheBias(string position, int count, string? expected)
+    {
+        // Arrange
+        var member = () => Field.Packed<Row>(1, 2, x => x.V, 1, bias: -1);
+        var values = Given("packed", 0, withValue: false);
+        values["C"] = (byte)count;
+
+        // Act (row 56d: count 1 minus 1 is 0, count 3 minus 1 is 2)
+        if (expected is not null)
+        {
+            Assert.Equal(expected, Hex(BinaryPacker.Pack(Counted(member, position), values)));
+            return;
+        }
+        var error = Budget.Refused(Counted(member, position), values);
+
+        // Assert
+        Assert.Equal(NoValueCount("V", "C", "3"), error.Message);
     }
 }

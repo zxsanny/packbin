@@ -67,18 +67,26 @@ fn az2383_rows_27_to_30_a_repeat_names_its_rounds_so_an_absent_member_is_a_round
 }
 
 #[test]
-fn az2383_row_27_per_name_lists_are_not_read_by_a_repeat_so_none_can_be_short() {
-    // Arrange: TypeScript's `{w:[1,2], v:[5]}`; Rust's pack reads `__repeat__` only
+fn az2383_row_27_per_name_lists_without_groups_are_refused_naming_the_member() {
+    // Arrange: TypeScript's `{w:[1,2], v:[5]}`; Rust's pack reads `__repeat__` only, and since
+    // AZ-2412 (U13) it refuses lists given without groups instead of packing no rounds
     let vals = v(&[
         ("w", Value::List(vec![n(1), n(2)])),
         ("v", Value::List(vec![n(5)])),
     ]);
 
     // Act
-    let wire = hex_of(&repeat_optional(), &vals);
+    let result = hex_of(&repeat_optional(), &vals);
 
-    // Assert: no rounds, as for any repeat given no `__repeat__`
-    assert_eq!(wire, Ok("01".to_string()));
+    // Assert
+    assert_eq!(
+        result,
+        Err(PackError::Type(
+            "repeat at id 0: 'w' is given without '__repeat__' groups; give the rounds of a \
+             repeat as '__repeat__' groups, one per round"
+                .to_string()
+        ))
+    );
 }
 
 #[test]
@@ -137,15 +145,12 @@ fn az2383_row_39_times_takes_the_rounds_of_a_member_under_flags_as_groups() {
 
     // Act
     let by_rounds = hex_of(&scheme, &vals);
-    let by_list = text(hex_of(&scheme, &listed));
+    let by_list = hex_of(&scheme, &listed);
 
-    // Assert: TypeScript also packs the list `{c:2, v:[5]}` as `0102010500`; Rust refuses a list
-    // under a flags, because a list cannot say which round holds the member (see `pack`)
+    // Assert: TypeScript packs the list `{c:2, v:[5]}` as `0102010500`; since AZ-2414 (U15) so does
+    // Rust, the missing item meaning the member is absent in that round
     assert_eq!(by_rounds, Ok("0102010500".to_string()));
-    assert_eq!(
-        by_list,
-        "times at id 1: 'v' is under a flags or when; give its values per round under '__times_1'"
-    );
+    assert_eq!(by_list, Ok("0102010500".to_string()));
 }
 
 // ---- AZ-2384: a split-bit times, count above 0 after the byte, body absent (rows 40 to 43) ----

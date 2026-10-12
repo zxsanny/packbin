@@ -144,11 +144,14 @@ public class CollectionElementKindTests
         Refused(() => BuildList<Dictionary<string, object?>>(TwoBits()), "Dictionary");
 
     [Fact]
+    public void Build_ListOfDoubleForAU2Element_Refused() =>
+        Refused(() => BuildList<double>(TwoBits()), "Double");
+
+    [Fact]
     public void Build_ListOfNumberOrObjectForAU2Element_Accepted()
     {
         Accepted(() => BuildList<byte>(TwoBits()));
         Accepted(() => BuildList<int>(TwoBits()));
-        Accepted(() => BuildList<double>(TwoBits()));
         Accepted(() => BuildList<object?>(TwoBits()));
     }
 

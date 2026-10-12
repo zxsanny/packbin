@@ -9,6 +9,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -33,13 +34,13 @@ final class HostileVectorTest {
                 constructed.add(c.id);
             }
             if (c.stage.equals("construct")) {
-                replayConstruct(c);
+                replayConstruct(c, HostileRefusals.CONSTRUCT, PackbinTest::fail);
             } else if (c.stage.equals("unpack")) {
                 replay(c);
             } else if (c.stage.equals("limit")) {
                 replayLimit(c);
             } else if (c.stage.equals("pack")) {
-                replayPack(c);
+                replayPack(c, HostileRefusals.PACK, PackbinTest::fail);
             } else {
                 PackbinTest.fail("hostile case " + c.id + " has unknown stage " + c.stage);
             }
@@ -66,6 +67,9 @@ final class HostileVectorTest {
         PackbinTest.expectEq("refusal rules cover exactly the construct cases", new java.util.TreeSet<>(constructed),
                 new java.util.TreeSet<>(HostileRefusals.CONSTRUCT.keySet()));
         for (String id : HostileLoop21.IDS) {
+            PackbinTest.expectTrue("hostile vector " + id + " present in cases.txt", seen.contains(id));
+        }
+        for (String id : HostileLoop22.IDS) {
             PackbinTest.expectTrue("hostile vector " + id + " present in cases.txt", seen.contains(id));
         }
     }
@@ -139,10 +143,10 @@ final class HostileVectorTest {
      * AZ-2194: a pack case packs the row its README section gives. {@code bytes} must equal the hex; {@code pack_error}
      * must throw and return no bytes, by the rule HostileRefusals names for the case (AZ-2392). Java runs every pack case.
      */
-    private static void replayPack(Case c) {
+    private static void replayPack(Case c, Map<String, HostileRefusals.Rule> rules, Consumer<String> failure) {
         Supplier<byte[]> pack = packFor(c.id);
         if (pack == null) {
-            PackbinTest.fail("hostile case " + c.id + " has no Java scheme in HostileVectorTest");
+            failure.accept("hostile case " + c.id + " has no Java scheme in HostileVectorTest");
             return;
         }
         if (c.expected.equals(List.of("bytes"))) {
@@ -153,21 +157,47 @@ final class HostileVectorTest {
                 pack.get();
             } catch (IllegalArgumentException | IllegalStateException ex) {
                 System.out.println("hostile vector " + c.id + " -> pack_error: " + ex.getMessage());
-                refusedByRule(HostileRefusals.PACK.get(c.id), c.id, ex);
+                refusedByRule(rules.get(c.id), c.id, ex, failure);
                 return;
             }
-            PackbinTest.fail("hostile vector " + c.id + ": packed without error, expected pack_error");
+            failure.accept("hostile vector " + c.id + ": packed without error, expected pack_error");
         } else {
             PackbinTest.fail("hostile pack case " + c.id + " expects " + c.expected + ", not bytes or pack_error");
         }
     }
 
     /** AZ-2392: the refusal must come from the rule the table names for this case, not from some other rule. */
-    private static void refusedByRule(HostileRefusals.Rule rule, String id, RuntimeException ex) {
+    private static void refusedByRule(
+            HostileRefusals.Rule rule, String id, RuntimeException ex, Consumer<String> failure) {
         String problem = HostileRefusals.mismatch(id, rule, ex);
         if (problem != null) {
-            PackbinTest.fail("hostile vector " + problem);
+            failure.accept("hostile vector " + problem);
         }
+    }
+
+    /**
+     * AZ-2418: replays the one refusal case {@code id} of cases.txt against the given rule tables and returns the
+     * failures instead of counting them, so a test can feed the loader a wrong rule and see it fail.
+     */
+    static List<String> replayRefusal(
+            String id, Map<String, HostileRefusals.Rule> pack, Map<String, HostileRefusals.Rule> construct)
+            throws IOException {
+        List<String> failures = new ArrayList<>();
+        for (Case c : readCases()) {
+            if (!c.id.equals(id)) {
+                continue;
+            }
+            if (c.stage.equals("construct")) {
+                replayConstruct(c, construct, failures::add);
+            } else if (c.stage.equals("pack") && c.expected.equals(List.of("pack_error"))) {
+                replayPack(c, pack, failures::add);
+            } else {
+                failures.add("hostile case " + id + " is not a refusal case");
+            }
+            return failures;
+        }
+        failures.add("hostile case " + id + " not found in cases.txt");
+        return failures;
     }
 
     private static Supplier<byte[]> packFor(String id) {
@@ -246,8 +276,12 @@ final class HostileVectorTest {
             case "pack_flags_skipped_count_with_values" -> () -> BinaryPacker.pack(
                     Maps.scheme(1, Packbin.flags(0, u8(0, "n"), Packbin.times(1, 0, u8(1, "pt")))),
                     Maps.map("pt", List.of(5, 6)));
-            default -> HostileLoop21.packFor(id);
+            default -> orElse(HostileLoop21.packFor(id), () -> HostileLoop22.packFor(id));
         };
+    }
+
+    private static <T> T orElse(T first, Supplier<T> next) {
+        return first != null ? first : next.get();
     }
 
     private static Scheme<Map> splitCountAfterByte() {
@@ -260,21 +294,21 @@ final class HostileVectorTest {
     }
 
     /** A construct case passes only when building its scheme throws IllegalArgumentException: 0 schemes. */
-    private static void replayConstruct(Case c) {
+    private static void replayConstruct(Case c, Map<String, HostileRefusals.Rule> rules, Consumer<String> failure) {
         PackbinTest.expectTrue(c.id + " construct case expects scheme_error", c.expected.contains("scheme_error"));
         Supplier<Scheme<Map>> build = constructFor(c.id);
         if (build == null) {
-            PackbinTest.fail("hostile case " + c.id + " has no Java scheme in HostileVectorTest");
+            failure.accept("hostile case " + c.id + " has no Java scheme in HostileVectorTest");
             return;
         }
         try {
             build.get();
         } catch (IllegalArgumentException ex) {
             System.out.println("hostile vector " + c.id + " -> scheme_error: " + ex.getMessage());
-            refusedByRule(HostileRefusals.CONSTRUCT.get(c.id), c.id, ex);
+            refusedByRule(rules.get(c.id), c.id, ex, failure);
             return;
         }
-        PackbinTest.fail("hostile vector " + c.id + ": scheme built, expected scheme_error");
+        failure.accept("hostile vector " + c.id + ": scheme built, expected scheme_error");
     }
 
     private static Field u8(int id, String name) {
@@ -311,7 +345,7 @@ final class HostileVectorTest {
                     Packbin.when(1, Packbin.eq(0, false), u8(1, "v")));
             case "eq_out_of_range" -> () -> Maps.scheme(1,
                     u8(0, "a"), Packbin.when(1, Packbin.eq(0, 300), u8(1, "v")));
-            default -> HostileLoop21.constructFor(id);
+            default -> orElse(HostileLoop21.constructFor(id), () -> HostileLoop22.constructFor(id));
         };
     }
 

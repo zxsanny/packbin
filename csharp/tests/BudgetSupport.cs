@@ -34,6 +34,7 @@ internal sealed class BudgetWideItem
 internal sealed class BudgetWide
 {
     public uint N { get; set; }
+    public bool? Mark { get; set; }
     public byte M0 { get; set; }
     public byte M1 { get; set; }
     public byte M2 { get; set; }

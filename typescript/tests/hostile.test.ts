@@ -320,29 +320,56 @@ describe("shared limit vectors (fixtures/hostile/cases.txt)", () => {
   }
 })
 
+type ConstructEntry = { build: () => unknown; rule: RegExp }
+type VectorCase = (typeof allCases)[number]
+
+// Builds the scheme of a construct case and checks the refusal names `entry.rule`.
+function checkConstruct(c: VectorCase, entry: ConstructEntry | undefined): void {
+  assert.ok(entry, `no TypeScript scheme for construct case ${c.id}`)
+  assert.ok(c.expected.includes("scheme_error"), `${c.id}: vector expects ${c.expected.join("|")}`)
+  const start = performance.now()
+  assert.throws(entry.build, (e: unknown) => {
+    assert.ok(e instanceof RangeError, `${c.id}: expected RangeError, got ${String(e)}`)
+    assert.match(e.message, entry.rule, `${c.id}: wrong rule fired`)
+    return true
+  })
+  // The refusal comes at build, before any item or round exists (construct_empty_round_body_list_element).
+  assert.ok(performance.now() - start < 1000, `${c.id}: construction took ${performance.now() - start} ms`)
+}
+
 describe("shared construct vectors (fixtures/hostile/cases.txt)", () => {
   for (const c of constructCases) {
-    const entry = CONSTRUCT[c.id]
     it(`${c.id} is refused at construction`, () => {
-      assert.ok(entry, `no TypeScript scheme for construct case ${c.id}`)
-      assert.ok(c.expected.includes("scheme_error"), `${c.id}: vector expects ${c.expected.join("|")}`)
-      const start = performance.now()
-      assert.throws(entry.build, (e: unknown) => {
-        assert.ok(e instanceof RangeError, `${c.id}: expected RangeError, got ${String(e)}`)
-        assert.match(e.message, entry.rule, `${c.id}: wrong rule fired`)
-        return true
-      })
-      // The refusal comes at build, before any item or round exists (construct_empty_round_body_list_element).
-      assert.ok(performance.now() - start < 1000, `${c.id}: construction took ${performance.now() - start} ms`)
+      checkConstruct(c, CONSTRUCT[c.id])
     })
   }
+
+  // AZ-2418 AC-1: a rule table with one wrong entry cannot pass. The wrong entry is built here; nothing on disk changes.
+  it("a construct case with a wrong rule entry fails naming that case", () => {
+    // Arrange
+    const c = constructCases.find((x) => x.id === "construct_empty_times_body")!
+    const wrong: ConstructEntry = { ...CONSTRUCT[c.id]!, rule: /^repeat 0: the body holds no member/ }
+
+    // Act and assert
+    assert.throws(() => checkConstruct(c, wrong), (e: unknown) => {
+      assert.ok(e instanceof assert.AssertionError, String(e))
+      assert.match(e.message, /^construct_empty_times_body: wrong rule fired/)
+      return true
+    })
+  })
 })
+
+const NOVALUE_COUNT =
+  /^v: the count c is 3 in the row, but no field wrote it \(the when that holds it is clear\), so the member reads nothing; give the count 0, leave it out, or make the when hold$/
 
 // The rule each loop 20 refusal must name, so a refusal by some other rule does not pass.
 const PACK_REFUSAL: Record<string, RegExp> = {
   pack_lone_utf8_under_times_over_budget: /^s: the packet would be 16777477 bytes, above the limit of 16777216 bytes$/,
-  pack_element_times_over_budget: /^k: the packet would be 16777223 bytes, above the limit of 16777216 bytes$/,
-  pack_slots_over_limit: /^m0: the rounds would hold 4194320 slots, above the limit of 4194304 slots$/,
+  // The 40 items of 65 535 rounds are 2 621 400 slots: since loop 22 (maxSlots 1 048 576) the slots refuse it
+  // (item 17), before the 16 MiB bytes budget it was written to reach. pack-output-budget.test.ts keeps the
+  // bytes-budget element route with a scheme that fits the slots.
+  pack_element_times_over_budget: /^k: the rounds would hold 1048577 slots, above the limit of 1048576 slots$/,
+  pack_slots_over_limit: /^m0: the rounds would hold 1048580 slots, above the limit of 1048576 slots$/,
   pack_repeat_over_limit: /^k: the repeat count is 65536, above the limit of 65535 rounds$/,
   pack_split_count_zero_after_byte_list: /^pt: 2 items, times count 0$/,
   pack_flags_skipped_count_with_values: /^pt: a value is given, but the count of its times is not written/,
@@ -354,6 +381,26 @@ const PACK_REFUSAL: Record<string, RegExp> = {
   pack_bits_count_clear_when: /^v: count c was not written$/,
   pack_packed_count_clear_when: /^v: count c was not written$/,
   pack_sized_count_clear_when: /^v: count c was not written$/,
+  pack_novalue_count_clear_when_bits: NOVALUE_COUNT,
+  pack_novalue_count_clear_when_packed: NOVALUE_COUNT,
+  pack_novalue_count_clear_when_sized: NOVALUE_COUNT,
+  pack_element_times_over_bytes_budget: /^s: the packet would be 16777233 bytes, above the limit of 16777216 bytes$/,
+}
+
+// Packs the case row and checks the bytes, or the refusal and the rule it names (`rules` is PACK_REFUSAL).
+function checkPack(c: VectorCase, pack: (() => Uint8Array) | undefined, rules: Record<string, RegExp>): void {
+  assert.ok(pack, `no TypeScript scheme for pack case ${c.id}`)
+  if (c.expected[0] === "bytes") {
+    assert.equal(Buffer.from(pack()).toString("hex"), c.hex)
+    return
+  }
+  assert.deepEqual(c.expected, ["pack_error"])
+  assert.throws(pack, (e: unknown) => {
+    assert.ok(e instanceof RangeError, `${c.id}: expected RangeError, got ${String(e)}`)
+    const rule = rules[c.id]
+    if (rule) assert.match(e.message, rule, `${c.id}: refused by another rule`)
+    return true
+  })
 }
 
 describe("shared pack vectors (fixtures/hostile/cases.txt)", () => {
@@ -364,19 +411,21 @@ describe("shared pack vectors (fixtures/hostile/cases.txt)", () => {
 
   for (const c of packCases) {
     it(`${c.id} packs ${c.expected[0] === "bytes" ? "the bytes" : "nothing: pack refuses the row"}`, () => {
-      const pack = PACK[c.id]
-      assert.ok(pack, `no TypeScript scheme for pack case ${c.id}`)
-      if (c.expected[0] === "bytes") {
-        assert.equal(Buffer.from(pack()).toString("hex"), c.hex)
-        return
-      }
-      assert.deepEqual(c.expected, ["pack_error"])
-      assert.throws(pack, (e: unknown) => {
-        assert.ok(e instanceof RangeError, `${c.id}: expected RangeError, got ${String(e)}`)
-        const rule = PACK_REFUSAL[c.id]
-        if (rule) assert.match(e.message, rule, `${c.id}: refused by another rule`)
-        return true
-      })
+      checkPack(c, PACK[c.id], PACK_REFUSAL)
     })
   }
+
+  // AZ-2418 AC-1: a rule table with one wrong entry cannot pass. The wrong entry is built here; nothing on disk changes.
+  it("a pack case with a wrong rule entry fails naming that case", () => {
+    // Arrange
+    const c = packCases.find((x) => x.id === "pack_slots_over_limit")!
+    const wrong = { ...PACK_REFUSAL, [c.id]: PACK_REFUSAL.pack_repeat_over_limit! }
+
+    // Act and assert
+    assert.throws(() => checkPack(c, PACK[c.id], wrong), (e: unknown) => {
+      assert.ok(e instanceof assert.AssertionError, String(e))
+      assert.match(e.message, /^pack_slots_over_limit: refused by another rule/)
+      return true
+    })
+  })
 })

@@ -150,7 +150,7 @@ public sealed class UnpackResult
 public static class BinaryPacker
 {
     public const int DefaultMaxRounds = 65_535;
-    public const long DefaultMaxSlots = 4_194_304;
+    public const long DefaultMaxSlots = 1_048_576;
 
     // The longest packet one pack call writes, the type byte included.
     public const long DefaultMaxBytes = 16_777_216;

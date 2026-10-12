@@ -102,13 +102,13 @@ public class RoundLimitTests
 
         // Assert
         Assert.Equal(65_535, BinaryPacker.DefaultMaxRounds);
-        Assert.Equal(4_194_304L, BinaryPacker.DefaultMaxSlots);
+        Assert.Equal(1_048_576L, BinaryPacker.DefaultMaxSlots);
         Assert.Equal(65_535, scheme.MaxRounds);
-        Assert.Equal(4_194_304L, scheme.MaxSlots);
+        Assert.Equal(1_048_576L, scheme.MaxSlots);
         Assert.Equal(65_535, viaWithLimits.MaxRounds);
-        Assert.Equal(4_194_304L, viaWithLimits.MaxSlots);
+        Assert.Equal(1_048_576L, viaWithLimits.MaxSlots);
         Assert.Equal(10, lowRounds.MaxRounds);
-        Assert.Equal(4_194_304L, lowRounds.MaxSlots);
+        Assert.Equal(1_048_576L, lowRounds.MaxSlots);
     }
 
     [Fact]

@@ -65,3 +65,7 @@ Then all pass.
 ## Constraints
 
 - Wire bytes of rows accepted today unchanged. Python needs 3.10+ (per-worker venv).
+
+## Parent decision after the TypeScript reference (2026-10-12)
+
+Reference: `_docs/03_implementation/reference_loop22.md` section 3b. TypeScript packs the **lone value** (R1, R2a, R2b) and the **`when` list outside `flags`** (R3a to R3c, R3e); it **refuses** a short required list (R2d to R2f, `missing {name}`), so that shape is not "packed by the other five". Python changes for the lone value and the `when` list only; the short required list keeps the TypeScript rule (refused). The Java, C# and Rust workers record their outcome for rows R2d to R2f; a package that packs them is a question for the parent, not a change.

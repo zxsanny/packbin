@@ -54,6 +54,22 @@ pub(super) fn slice_times(
             _ => {}
         }
     }
+    for below in names_below(members, false) {
+        if below.when {
+            continue;
+        }
+        match values.get(below.name) {
+            Some(Some(Value::List(items))) => {
+                if index < items.len() {
+                    slice.insert(name_of(below.name), Some(items[index].clone()));
+                }
+            }
+            Some(Some(v)) => {
+                slice.insert(name_of(below.name), Some(v.clone()));
+            }
+            _ => {}
+        }
+    }
     Ok(slice)
 }
 
@@ -189,26 +205,67 @@ fn declares(fields: &[Field], name: &str) -> bool {
     })
 }
 
-/// Without rounds pack gives each direct field of a `times` one item of its list per round, and
-/// reads nothing below a `flags` or `when`: a list has no null to say which round holds a member
-/// that only some rounds have. A value kept under such a member's name (a non-list counts as a
-/// list of one item; an empty list holds nothing) would be dropped, so it fails on the first
-/// such name; the rounds hold it.
+/// A `repeat` takes its rounds only as `__repeat__` groups. With none, a value kept under a name of
+/// its body (a non-list counts as a list of one item; an empty list holds nothing) would be dropped
+/// without a word, so it fails on the first such name.
+pub(super) fn check_repeat_lists(
+    anchor: u32,
+    members: &[Field],
+    values: &Values,
+) -> Result<(), PackError> {
+    let names = names_below(members, true);
+    match names.iter().find(|below| holds_items(values, below.name)) {
+        Some(Below { name, .. }) => Err(PackError::Type(format!(
+            "repeat at id {anchor}: '{name}' is given without '__repeat__' groups; give the rounds \
+             of a repeat as '__repeat__' groups, one per round"
+        ))),
+        None => Ok(()),
+    }
+}
+
+/// Without rounds pack gives each direct field of a `times` one item of its list per round, and a
+/// name below a `flags` the same: a list shorter than the count leaves the member absent in the
+/// rounds it does not reach, so its bit is clear. Below a `when` it reads nothing: a list has no
+/// null to say which round holds a member that only some rounds have. A value kept under such a
+/// member's name (a non-list counts as a list of one item; an empty list holds nothing) would be
+/// dropped, so it fails on the first such name; the rounds hold it. A lone dictionary or byte
+/// buffer below a `flags` is refused as it is for a direct member.
 pub(super) fn check_aligned(
     anchor: u32,
     members: &[Field],
     values: &Values,
 ) -> Result<(), PackError> {
-    let mut below = Vec::new();
-    names_below(members, false, &mut below);
-    match below.into_iter().find(|name| holds_items(values, name)) {
-        Some(name) => Err(PackError::Type(format!(
-            "times at id {anchor}: '{name}' is under a flags or when; give its values per round \
-             under '{}'",
-            times_name(anchor)
-        ))),
-        None => Ok(()),
+    for below in names_below(members, false) {
+        if below.when {
+            if holds_items(values, below.name) {
+                return Err(PackError::Type(format!(
+                    "times at id {anchor}: '{}' is under a flags or when; give its values per \
+                     round under '{}'",
+                    below.name,
+                    times_name(anchor)
+                )));
+            }
+            continue;
+        }
+        match values.get(below.name) {
+            Some(Some(Value::Map(_))) if holds_dict(below.field) => {
+                return Err(PackError::Type(format!(
+                    "times at id {anchor}: '{}' is one dictionary; give a list with one \
+                     dictionary per round",
+                    below.name
+                )));
+            }
+            Some(Some(Value::Bytes(_))) if holds_bytes(below.field) => {
+                return Err(PackError::Type(format!(
+                    "times at id {anchor}: '{}' is one byte buffer; give a list with one \
+                     buffer per round",
+                    below.name
+                )));
+            }
+            _ => {}
+        }
     }
+    Ok(())
 }
 
 /// Without rounds pack takes item `i` of each direct field's list for round `i` of the `count`
@@ -228,6 +285,20 @@ pub(super) fn check_longer(
             if items.len() > count {
                 return Err(PackError::Type(format!(
                     "times at id {anchor}: '{name}' has {} items, count is {count}",
+                    items.len()
+                )));
+            }
+        }
+    }
+    for below in names_below(members, false) {
+        if below.when {
+            continue;
+        }
+        if let Some(Some(Value::List(items))) = values.get(below.name) {
+            if items.len() > count {
+                return Err(PackError::Type(format!(
+                    "times at id {anchor}: '{}' has {} items, count is {count}",
+                    below.name,
                     items.len()
                 )));
             }
@@ -256,24 +327,44 @@ fn holds_items(values: &Values, name: &str) -> bool {
     }
 }
 
-/// Collects, in field order, the value names of the fields below a `flags` or `when`.
-fn names_below<'a>(fields: &'a [Field], under: bool, out: &mut Vec<&'a str>) {
+/// A value name of a round body that sits below a `flags` or `when` (`when`: at any depth under a
+/// `when`), with the field that holds it.
+struct Below<'a> {
+    name: &'a str,
+    field: &'a Field,
+    when: bool,
+}
+
+/// Collects, in field order, the value names of the fields below a `flags` or `when`. With `under`
+/// the fields at the top count too (a `repeat` body, where none are direct).
+fn names_below(fields: &[Field], under: bool) -> Vec<Below<'_>> {
+    let mut out = Vec::new();
+    collect_below(fields, under, false, &mut out);
+    out
+}
+
+fn collect_below<'a>(fields: &'a [Field], flags: bool, when: bool, out: &mut Vec<Below<'a>>) {
     for field in fields {
         match &field.kind {
-            FieldKind::Flags { members, .. } | FieldKind::When { members, .. } => {
-                names_below(members, true, out);
-            }
+            FieldKind::Flags { members, .. } => collect_below(members, true, when, out),
+            FieldKind::When { members, .. } => collect_below(members, flags, true, out),
             FieldKind::Group { name, members, .. } => {
-                if under {
-                    out.push(name);
+                if flags || when {
+                    out.push(Below { name, field, when });
                 }
-                names_below(members, under, out);
+                collect_below(members, flags, when, out);
             }
             FieldKind::FlagBit { inner, .. } => {
-                names_below(std::slice::from_ref(inner), under, out);
+                collect_below(std::slice::from_ref(inner), flags, when, out);
             }
-            FieldKind::U2 { names } if under => out.extend(names.iter().map(|n| n.as_ref())),
-            _ if under => out.extend(field_name(field)),
+            FieldKind::U2 { names } if flags || when => {
+                out.extend(names.iter().map(|name| Below { name, field, when }));
+            }
+            _ if flags || when => {
+                if let Some(name) = field_name(field) {
+                    out.push(Below { name, field, when });
+                }
+            }
             _ => {}
         }
     }

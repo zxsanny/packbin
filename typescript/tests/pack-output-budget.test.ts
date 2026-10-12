@@ -14,7 +14,6 @@ import {
   times,
   u8,
   u32,
-  u64,
   utf8,
   type DispatchResult,
   type Field,
@@ -44,11 +43,12 @@ function unpack(layout: Scheme<Row>, bytes: Uint8Array): { result: DispatchResul
 const timesK = (limits = {}): Scheme<Row> =>
   new Scheme<Row>(1, [u32(0, (x) => x.n), times(1, 0, [u8(1, (x) => x.k)])], limits)
 
-// AC-2: a list whose item holds a count and a times of that many u64.
+// AC-2: a list whose item holds a count and a times of that many lone 16-char strings (18 bytes a round, one
+// slot a round: 16 items of 65 535 rounds are 1 048 560 slots, under the default maxSlots, so the bytes budget refuses).
 const elementTimes = (limits = {}): Scheme<Row> =>
   new Scheme<Row>(
     1,
-    [list((x) => x.items, group((x) => x.item, [u32(0, (x) => x.n), times(1, 0, [u64(1, (x) => x.k)])]))],
+    [list((x) => x.items, group((x) => x.item, [u32(0, (x) => x.n), times(1, 0, [utf8(1, (x) => x.s)])]))],
     limits,
   )
 
@@ -83,32 +83,32 @@ describe("AZ-2354 pack has one output budget, maxBytes", () => {
 
   it("AC-2 an element that holds a times is refused at the default budget naming its member", () => {
     // Arrange
-    const items = Array.from({ length: 40 }, () => ({ n: 65_535, k: 5 }))
+    const items = Array.from({ length: 16 }, () => ({ n: 65_535, s: "a".repeat(16) }))
 
     // Act
     const message = refusal(() => BinaryPacker.pack(elementTimes(), { items }))
 
     // Assert
-    assert.equal(message, "k: the packet would be 16777223 bytes, above the limit of 16777216 bytes")
+    assert.equal(message, "s: the packet would be 16777233 bytes, above the limit of 16777216 bytes")
   })
 
   it("AC-2 with maxBytes raised to 32 MiB the same row packs and unpacks to it", () => {
     // Arrange
     const layout = elementTimes({ maxBytes: 33_554_432 })
-    const items = Array.from({ length: 40 }, () => ({ n: 65_535, k: 5 }))
+    const items = Array.from({ length: 16 }, () => ({ n: 65_535, s: "a".repeat(16) }))
 
     // Act
     const wire = BinaryPacker.pack(layout, { items })
     const { result, row } = unpack(layout, wire)
 
     // Assert
-    assert.equal(wire.length, 20_971_363)
-    assert.equal(hex(wire.subarray(0, 16)), "012800ffff0000050000000000000005")
-    assert.equal(hex(wire.subarray(wire.length - 16)), "05000000000000000500000000000000")
+    assert.equal(wire.length, 18_874_147)
+    assert.equal(hex(wire.subarray(0, 16)), "011000ffff0000100061616161616161")
+    assert.equal(hex(wire.subarray(wire.length - 16)), "61616161616161616161616161616161")
     assert.deepEqual(result, { ok: true })
-    const back = row!.items as { n: number; k: bigint[] }[]
-    assert.equal(back.length, 40)
-    assert.ok(back.every((item) => item.n === 65_535 && item.k.length === 65_535 && item.k.every((k) => k === 5n)))
+    const back = row!.items as { n: number; s: string[] }[]
+    assert.equal(back.length, 16)
+    assert.ok(back.every((item) => item.n === 65_535 && item.s.length === 65_535 && item.s.every((s) => s === "a".repeat(16))))
   })
 
   it("AC-3 a packet of exactly maxBytes packs; one byte more is refused", () => {
@@ -171,7 +171,7 @@ describe("AZ-2354 pack charges maxSlots per round as unpack does", () => {
     const message = refusal(() => BinaryPacker.pack(layout, row))
 
     // Assert
-    assert.equal(message, "m0: the rounds would hold 4194320 slots, above the limit of 4194304 slots")
+    assert.equal(message, "m0: the rounds would hold 1048580 slots, above the limit of 1048576 slots")
   })
 
   it("AC-4 with maxSlots raised to 4 259 775 it packs and unpacks; the default unpack refuses that packet", () => {
@@ -187,7 +187,7 @@ describe("AZ-2354 pack charges maxSlots per round as unpack does", () => {
     assert.equal(hex(wire.subarray(0, 16)), "01ffff00000101010101010101010101")
     assert.deepEqual(result, { ok: true })
     assert.equal((back!.m64 as number[]).length, 65_535)
-    assert.deepEqual(unpack(wideRound().layout, wire).result, { ok: false, field: "m0", needed: 0, left: 65_520 })
+    assert.deepEqual(unpack(wideRound().layout, wire).result, { ok: false, field: "m0", needed: 0, left: 3_211_260 })
   })
 
   it("slots are charged before the round's bytes and across the whole call", () => {

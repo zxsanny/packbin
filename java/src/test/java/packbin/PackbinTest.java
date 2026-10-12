@@ -42,6 +42,7 @@ public final class PackbinTest {
         PackbinFieldsTest.run();
         HostileUnpackTest.run();
         HostileVectorTest.run();
+        HostileRuleTableTest.run();
         FlagStateTest.run();
         ZeroWidthElementTest.run();
         ReferenceScopeTest.run();

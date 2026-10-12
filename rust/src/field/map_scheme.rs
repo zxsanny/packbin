@@ -5,7 +5,7 @@ use std::collections::HashSet;
 pub const DEFAULT_MAX_ROUNDS: usize = 65_535;
 /// The most slots (names a round can hold, summed over every round started) one unpack call
 /// may create.
-pub const DEFAULT_MAX_SLOTS: usize = 4_194_304;
+pub const DEFAULT_MAX_SLOTS: usize = 1_048_576;
 /// The most bytes one pack call may write, type byte included.
 pub const DEFAULT_MAX_BYTES: usize = 16_777_216;
 

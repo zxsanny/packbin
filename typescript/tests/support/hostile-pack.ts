@@ -70,6 +70,23 @@ const splitTimesBody = () => {
 const clearWhenCount = (after: (countId: number) => ReturnType<typeof bits>) =>
   scheme<Row>(1, u8(0, (x) => x.mode), when(1, eq(0, 1), [u8(1, (x) => x.c)]), after(1))
 
+// id0 u8 mode; id1 when eq(0, 1) { id1 u8 c }; split-form flag byte; bit 0 { id2 <member>, count = id1 }, row without a value.
+function novalueCount(member: (countId: number) => ReturnType<typeof bits>): () => Uint8Array {
+  return () => {
+    const fb = flagByte("fb")
+    return BinaryPacker.pack(
+      scheme<Row>(1, u8(0, (x) => x.mode), when(1, eq(0, 1), [u8(1, (x) => x.c)]), fb, fb.bit(member(1))),
+      { mode: 0, c: 3 },
+    )
+  }
+}
+
+const novalueCountCases = (): Record<string, () => Uint8Array> => ({
+  pack_novalue_count_clear_when_bits: novalueCount((c) => bits(2, (x) => x.v, c)),
+  pack_novalue_count_clear_when_packed: novalueCount((c) => packed(1, 2, (x) => x.v, c)),
+  pack_novalue_count_clear_when_sized: novalueCount((c) => sized(2, (x) => x.v, c)),
+})
+
 export const PACK: Record<string, () => Uint8Array> = {
   pack_lone_utf8_under_times_over_budget: () => BinaryPacker.pack(
     scheme<Row>(1, u32(0, (x) => x.n), times(1, 0, [utf8(1, (x) => x.s)])),
@@ -198,5 +215,25 @@ export const PACK: Record<string, () => Uint8Array> = {
   pack_sized_count_clear_when: () => BinaryPacker.pack(
     clearWhenCount((c) => sized(2, (x) => x.v, c)),
     { mode: 0, c: 3, v: Uint8Array.from([1, 2, 3]) },
+  ),
+  ...novalueCountCases(),
+  pack_repeat_unequal_lists_lone: () => BinaryPacker.pack(
+    scheme<Row>(1, repeat(0, [u8(0, (x) => x.a), u8(1, (x) => x.b)])),
+    { a: [1, 2], b: 7 },
+  ),
+  pack_repeat_unequal_lists_when: () => BinaryPacker.pack(
+    scheme<Row>(1, repeat(0, [u8(0, (x) => x.k), when(1, eq(0, 1), [u8(1, (x) => x.v)])])),
+    { k: [1, 2], v: [9] },
+  ),
+  pack_times_short_list_flags: () => BinaryPacker.pack(
+    scheme<Row>(1, u8(0, (x) => x.c), times(1, 0, [flags(1, [u8(1, (x) => x.v)])])),
+    { c: 2, v: [5] },
+  ),
+  pack_element_times_over_bytes_budget: () => BinaryPacker.pack(
+    scheme<Row>(
+      1,
+      list((x) => x.items, group((x) => x.item, [u32(0, (x) => x.n), times(1, 0, [utf8(1, (x) => x.s)])])),
+    ),
+    { items: Array.from({ length: 16 }, () => ({ n: 65535, s: "a".repeat(16) })) },
   ),
 }

@@ -124,12 +124,12 @@ def _refuse_dropped_times(node: _Times) -> None:
     )
 
 
-def _unwritten_sources(child: _Node, seen: dict[int, Any]) -> list[_When | _Times]:
-    """Every `when` under a flag bit whose condition field has no value yet, and every `times` whose count has
-    none: a split flag byte decides the bit without them, so the bit must be re-checked when the fields are
-    written."""
-    found: list[_When | _Times] = []
-    if isinstance(child, _Times):
+def _unwritten_sources(child: _Node, seen: dict[int, Any]) -> list[_When | _Times | _Sized | _Bits | _Packed]:
+    """Every `when` under a flag bit whose condition field has no value yet, and every `times`, `sized`, `bits`
+    and `packed` whose count has none: a split flag byte decides the bit without them, so the bit must be
+    re-checked when the fields are written."""
+    found: list[_When | _Times | _Sized | _Bits | _Packed] = []
+    if isinstance(child, (_Times, _Sized, _Bits, _Packed)):
         if seen.get(child.count) is None:
             found.append(child)
     elif isinstance(child, (_Group, _Flags, _When)):
@@ -163,19 +163,23 @@ def _refuse_late_times(child: _Node, seen: dict[int, Any], row: Any) -> None:
 
 
 def _refuse_unwritten_count(child: _Node, seen: dict[int, Any], take: Callable[[_Node], Any]) -> None:
-    """A clear bit holds a `times` whose count no field wrote, because the `when` that holds it is clear, while the
-    row gives the count a value above 0. Unpack would read the count as absent and the `times` as no round, so
-    pack refuses the row instead of writing a packet that drops it. A count of 0 or none, and a count that a
-    field wrote, are left alone. Looked at through `flags`, flag bits, groups and the `when`s that hold."""
-    if isinstance(child, _Times):
+    """A clear bit holds a `times`, `bits`, `packed` or `sized` whose count no field wrote, because the `when` that
+    holds it is clear, while the row gives the count a value above 0 (after the `packed` bias). Unpack would read
+    the count as absent and the member as nothing, so pack refuses the row instead of writing a packet that drops
+    it. A count of 0 or none, and a count that a field wrote, are left alone. Looked at through `flags`, flag bits,
+    groups and the `when`s that hold."""
+    if isinstance(child, (_Times, _Sized, _Bits, _Packed)):
         source = child.count_source
         if source is None or seen.get(child.count) is not None:
             return
         count = take(source)
-        if isinstance(count, int) and not isinstance(count, bool) and count > 0:
+        bias = child.bias if isinstance(child, _Packed) else 0
+        if isinstance(count, int) and not isinstance(count, bool) and count + bias > 0:
+            ending = "its times reads no round" if isinstance(child, _Times) else "the member reads nothing"
+            member = round_member(child) if isinstance(child, _Times) else _name(child)
             raise ValueError(
-                f"{round_member(child)}: the count {_name(source)} is {count} in the row, but no field wrote it "
-                "(the when that holds it is clear), so its times reads no round; "
+                f"{member}: the count {_name(source)} is {count} in the row, but no field wrote it "
+                f"(the when that holds it is clear), so {ending}; "
                 "give the count 0, leave it out, or make the when hold"
             )
     elif isinstance(child, (_Group, _Flags)):
@@ -202,7 +206,7 @@ def _refuse_late_body(
     if not _child_on(child, take, seen, row):
         return
     for node in late:
-        if isinstance(node, _Times):
+        if not isinstance(node, _When):
             continue
         source = node.condition.field_id
         if seen.get(source) == node.condition.value:
@@ -454,8 +458,6 @@ def pack_nodes(
             _refuse_short_optional(node, values, count)
             for leaf, value in zip(node.leaves, values):
                 _refuse_lone_collection(leaf, value)
-            if any(n not in (0, count) for n in lengths):
-                raise ValueError("repeat fields must have equal lengths")
             for i in range(count):
                 budget.start_round(node)
                 run(node.fields, {}, _at_round(row, i, node.optional))

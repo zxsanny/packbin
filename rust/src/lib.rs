@@ -64,6 +64,8 @@ mod pack_round_cap_tests;
 #[cfg(test)]
 mod packbin_tests;
 #[cfg(test)]
+mod repeat_lists_without_groups_tests;
+#[cfg(test)]
 mod round_tests;
 #[cfg(test)]
 mod scope_tests;

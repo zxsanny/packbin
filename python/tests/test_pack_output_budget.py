@@ -110,20 +110,20 @@ def test_ac1_row1_pack_takes_under_a_second_and_under_256_mb():
     assert peak < 256 * 1024 * 1024
 
 
-def test_ac2_row2_an_element_that_holds_a_times_is_refused_at_the_default_budget():
+def test_ac2_row2_an_element_that_holds_a_times_is_refused_by_the_slots_at_the_default_limit():
     # Arrange
     row = {"items": [{"n": 65535, "k": 5}] * 40}
 
     # Act
     message = _refusal(_item_with_times(), row)
 
-    # Assert: item 32, round 15: 3 + 32 * 524 284 + 4 + 15 * 8 = 16 777 215 written
-    assert message == "k: the packet would be 16777223 bytes, above the limit of 16777216 bytes"
+    # Assert: AZ-2415, the default maxSlots 1 048 576 is reached before the bytes budget: item 17, round 17
+    assert message == "k: the rounds would hold 1048577 slots, above the limit of 1048576 slots"
 
 
 def test_ac2_row3_a_raised_budget_packs_the_element_row():
     # Arrange
-    scheme = _item_with_times().with_limits(max_bytes=33_554_432)
+    scheme = _item_with_times().with_limits(max_slots=2_621_400, max_bytes=33_554_432)
     row = {"items": [{"n": 65535, "k": 5}] * 40}
 
     # Act
@@ -137,6 +137,40 @@ def test_ac2_row3_a_raised_budget_packs_the_element_row():
     assert result.ok
     assert len(result.value["items"]) == 40
     assert result.value["items"][39] == {"n": 65535, "k": [5] * 65535}
+
+
+def _item_with_lone_utf8_times() -> Scheme:
+    return Scheme(
+        1,
+        dict,
+        list_field(lambda row: row["items"], group(0, _u32(0, "n"), times(1, 0, _utf8(1, "s")))),
+    )
+
+
+def test_ac2_row3_an_element_row_under_the_slots_is_refused_by_the_bytes_budget():
+    # Arrange: 16 items of 65 535 rounds, 1 048 560 slots (under the limit), 18 bytes a round
+    row = {"items": [{"n": 65535, "s": "a" * 16}] * 16}
+
+    # Act
+    message = _refusal(_item_with_lone_utf8_times(), row)
+
+    # Assert
+    assert message == "s: the packet would be 16777233 bytes, above the limit of 16777216 bytes"
+
+
+def test_ac2_row3_a_raised_bytes_budget_packs_the_element_row_that_the_slots_allow():
+    # Arrange
+    scheme = _item_with_lone_utf8_times().with_limits(max_bytes=33_554_432)
+    row = {"items": [{"n": 65535, "s": "a" * 16}] * 16}
+
+    # Act
+    packed = BinaryPacker.pack(scheme, row)
+    result = BinaryPacker.unpack(packed, scheme.on(lambda _row: None))
+
+    # Assert
+    assert len(packed) == 18_874_147
+    assert result.ok
+    assert len(result.value["items"]) == 16
 
 
 def test_ac3_row4_a_packet_of_exactly_max_bytes_packs():
@@ -254,8 +288,8 @@ def test_ac4_row14_a_round_of_65_names_is_refused_before_its_bytes():
     # Act
     message = _refusal(_wide_round(), row)
 
-    # Assert: round index 64 527 (4 194 255 charged, 4 194 260 bytes written)
-    assert message == "m0: the rounds would hold 4194320 slots, above the limit of 4194304 slots"
+    # Assert: AZ-2415, round index 16 131 (1 048 515 charged, 1 048 520 bytes written)
+    assert message == "m0: the rounds would hold 1048580 slots, above the limit of 1048576 slots"
 
 
 def test_ac4_row15_a_raised_max_slots_packs_and_unpacks():
@@ -284,9 +318,9 @@ def test_ac4_row16_the_same_packet_is_refused_by_unpack_at_the_default_limit():
 
     # Assert
     # Unpack charges the width pack charges (AZ-2381), so it refuses at the round pack refuses (round index
-    # 64 527, 4 194 260 bytes written): the bytes left pin that round
+    # 16 131, 1 048 520 bytes written): the bytes left pin that round
     assert result.ok is False
-    assert result.error == ShortPacket(field="1", needed=0, left=65_520)
+    assert result.error == ShortPacket(field="1", needed=0, left=3_211_260)
 
 
 def test_order_row17_a_row_at_both_limits_packs():

@@ -87,11 +87,14 @@ public class PackOutputBudgetTests
         var values = new Dictionary<string, object?> { ["Items"] = Items(40, 65_535) };
 
         // Act
-        var error = Refused(scheme, values);
-        var raw = BinaryPacker.Pack(scheme.WithLimits(maxBytes: 33_554_432), values);
-        var read = BinaryPacker.Read(scheme, raw);
+        var bySlots = Refused(scheme, values);
+        var error = Refused(scheme.WithLimits(maxSlots: 4_194_304), values);
+        var raw = BinaryPacker.Pack(scheme.WithLimits(maxSlots: 4_194_304, maxBytes: 33_554_432), values);
+        var read = BinaryPacker.Read(scheme.WithLimits(maxSlots: 4_194_304), raw);
 
-        // Assert (item 32, round 15: 3 + 32 * 524 284 + 4 + 15 * 8 = 16 777 215 bytes are written)
+        // Assert (the default slots refuse first, at item 17 round 17; with slots raised, item 32 round 15:
+        // 3 + 32 * 524 284 + 4 + 15 * 8 = 16 777 215 bytes are written)
+        Assert.Equal("'K': the rounds would hold 1048577 slots, above the limit of 1048576 slots", bySlots.Message);
         Assert.Equal(Words(16_777_223, 16_777_216, "K"), error.Message);
         Assert.Equal(20_971_363, raw.Length);
         Assert.Equal("012800ffff0000050000000000000005", Hex(raw, 0, 16));
@@ -114,8 +117,8 @@ public class PackOutputBudgetTests
         for (var i = 0; i < 40; i++)
             items.Add(new BudgetWideItem { N = 65_535, K = 5 });
 
-        // Act
-        var error = Refused(scheme, new Bag { Items = items });
+        // Act (the slots limit is raised so the bytes budget is the one that refuses)
+        var error = Refused(scheme.WithLimits(maxSlots: 4_194_304), new Bag { Items = items });
 
         // Assert
         Assert.Equal(Words(16_777_223, 16_777_216, "K"), error.Message);

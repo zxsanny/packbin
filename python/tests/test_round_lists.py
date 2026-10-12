@@ -223,10 +223,10 @@ def test_repeat_that_reads_no_round_leaves_the_row_as_it_was():
     assert result.value == {"a": 7}
 
 
-def test_repeat_lists_of_unequal_length_are_refused():
+def test_repeat_a_short_required_list_is_refused_naming_the_member():
     scheme = Scheme(1, dict, repeat(0, _u8(0, "x"), _u8(1, "y")))
 
-    with pytest.raises(ValueError, match="equal lengths"):
+    with pytest.raises(KeyError, match="missing field y"):
         _pack(scheme, {"x": [1, 2], "y": [3]})
 
 

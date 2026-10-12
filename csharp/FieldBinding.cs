@@ -153,10 +153,16 @@ internal sealed class CollectionShape
         };
     }
 
+    // True for a float, double or decimal (or the nullable of one): pack refuses those for an integer element, so an
+    // integer element's collection must not be of them.
+    internal static bool IsReal(Type type)
+    {
+        type = Nullable.GetUnderlyingType(type) ?? type;
+        return type == typeof(float) || type == typeof(double) || type == typeof(decimal);
+    }
+
     private static bool HoldsRange((decimal Min, decimal Max) own, Type type)
     {
-        if (type == typeof(float) || type == typeof(double) || type == typeof(decimal))
-            return true;
         if (IntegerKind(type) is not { } kind)
             return false;
         var member = Walker.Range(kind);

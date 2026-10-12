@@ -7,7 +7,8 @@ from packbin import BinaryPacker, Scheme, bits, eq, flag_byte, flags, packed, si
 # Loop 21 probes of `_docs/03_implementation/reference_loop21_slots.md` section 5.
 # AZ-2384 (U4, rows 40 to 43): Python packs a clear bit already, no change.
 # AZ-2386 (U6, rows 44 to 52): a count above 0 that no field wrote, behind a clear `when`, is refused.
-# AZ-2387 (U7, rows 53 to 56): `bits`, `packed` and `sized` behind a clear `when` are refused already.
+# AZ-2387 (U7, rows 53 to 55): `bits`, `packed` and `sized` with a value behind a clear `when` are refused already;
+# row 56 (no value) is refused since AZ-2410 (loop 22), see tests/test_loop22_parity.py.
 # Python differences: the U6 text is the reference text with Python's names (`pt`, `c`); the rows that
 # TypeScript refuses with its own texts (43, 49, 52, 53) are refused here with the Python texts pinned by loops 19
 # and 20 (`times 1: body values are given ...`, `times: count is missing`, `2: count 1 is missing`).
@@ -217,9 +218,9 @@ def test_az2387_ac2_rows54_and_55_a_holding_when_packs(member: str, position: st
 
 @pytest.mark.parametrize("position", ["split", "flags"])
 @pytest.mark.parametrize("member", ["bits", "packed", "sized"])
-def test_az2387_row56_no_value_behind_a_clear_when_packs_a_clear_bit(member: str, position: str):
-    # Arrange
-    row = {"mode": 0, "c": 3}
+def test_az2387_row56_no_value_and_count_zero_behind_a_clear_when_pack_a_clear_bit(member: str, position: str):
+    # Arrange: AZ-2410 (loop 22) refuses the same row with a count above 0 (tests/test_loop22_parity.py)
+    row = {"mode": 0, "c": 0}
 
     # Act / Assert
     assert _pack(_counted(member, position), row) == "010000"

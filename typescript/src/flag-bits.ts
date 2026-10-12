@@ -136,9 +136,10 @@ function countNeverWritten(field: Field, values: Value, wrote: Value): boolean {
   }
 }
 
-// A times in the scope of `field` (as for `countNeverWritten`) whose count the row holds above 0 although
-// no field wrote it, which is what a clear `when` that holds the count leaves: its bit is clear and no
-// round is read, so the count the row gives would mean nothing. Refused, naming the member of its round.
+// A times, bits, packed or sized in the scope of `field` (as for `countNeverWritten`) whose count the row holds
+// above 0 although no field wrote it, which is what a clear `when` that holds the count leaves: its bit is
+// clear and nothing is read, so the count the row gives would mean nothing. Refused, naming the member (for
+// a times, the first name of its round).
 export function refuseUnwrittenCount(field: Field, values: Value, wrote: Value): void {
   switch (field.kind) {
     case "times": {
@@ -148,6 +149,20 @@ export function refuseUnwrittenCount(field: Field, values: Value, wrote: Value):
       if (count === null || count === 0) return
       throw new RangeError(
         `${roundMember(field, roundShape(field).names)}: the count ${ref} is ${count} in the row, but no field wrote it (the when that holds it is clear), so its times reads no round; give the count 0, leave it out, or make the when hold`,
+      )
+    }
+    case "bits":
+    case "packed":
+    case "sized": {
+      // The same shape with no value: the clear bit drops nothing, but a count the row gives and no field
+      // wrote is refused as it is for a times, whether or not the member has a value.
+      const ref = refName(field)
+      if (Object.hasOwn(wrote, ref)) return
+      const bias = field.kind === "packed" ? field.bias : 0
+      const count = validCount(values[ref], bias)
+      if (count === null || count === 0) return
+      throw new RangeError(
+        `${field.name}: the count ${ref} is ${count - bias} in the row, but no field wrote it (the when that holds it is clear), so the member reads nothing; give the count 0, leave it out, or make the when hold`,
       )
     }
     case "when":

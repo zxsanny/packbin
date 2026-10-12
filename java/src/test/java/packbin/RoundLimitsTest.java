@@ -25,6 +25,7 @@ final class RoundLimitsTest {
         slotLimit();
         slotTotalSpansFieldsAndElements();
         refusedMegabyteIsBoundedByTheLimits();
+        defaultSlotsBoundTheWorstCasePacket();
         limitsBelongToTheScheme();
         invalidLimitsAreRefused();
         existingCallSitesAreUnchanged();
@@ -50,11 +51,11 @@ final class RoundLimitsTest {
         Scheme<Map> lowered = base.withLimits(10, Scheme.DEFAULT_MAX_SLOTS);
         // Assert
         PackbinTest.expectEq("AC-1 DEFAULT_MAX_ROUNDS", 65_535, Scheme.DEFAULT_MAX_ROUNDS);
-        PackbinTest.expectEq("AC-1 DEFAULT_MAX_SLOTS", 4_194_304L, Scheme.DEFAULT_MAX_SLOTS);
+        PackbinTest.expectEq("AC-1 DEFAULT_MAX_SLOTS", 1_048_576L, Scheme.DEFAULT_MAX_SLOTS);
         PackbinTest.expectEq("AC-1 default maxRounds", 65_535, base.maxRounds());
-        PackbinTest.expectEq("AC-1 default maxSlots", 4_194_304L, base.maxSlots());
+        PackbinTest.expectEq("AC-1 default maxSlots", 1_048_576L, base.maxSlots());
         PackbinTest.expectEq("AC-1 withLimits maxRounds", 10, lowered.maxRounds());
-        PackbinTest.expectEq("AC-1 withLimits maxSlots", 4_194_304L, lowered.maxSlots());
+        PackbinTest.expectEq("AC-1 withLimits maxSlots", 1_048_576L, lowered.maxSlots());
         PackbinTest.expectEq("AC-1 receiver keeps maxRounds", 65_535, base.maxRounds());
     }
 
@@ -214,7 +215,10 @@ final class RoundLimitsTest {
         expectShape("AC-7b maxRounds 1", inElements.withLimits(1, NO_SLOT_LIMIT), packet, "ShortPacket times 0 4");
     }
 
-    /** 37 names per round: refused at round 65,536, so the 1 MiB tail is never walked. */
+    /**
+     * 37 names per round: refused at round 28,340 by the 1,048,576-slot default (65,536 by maxRounds with the slots
+     * raised), so the 1 MiB tail is never walked.
+     */
     private static void refusedMegabyteIsBoundedByTheLimits() {
         // Arrange
         Scheme<Map> scheme = wideRepeat();
@@ -223,11 +227,37 @@ final class RoundLimitsTest {
         long start = System.nanoTime();
         HostileRun refused = HostileRun.of(scheme, megabyte, HostileRun.LIMIT_MS);
         long ms = (System.nanoTime() - start) / 1_000_000;
-        HostileRun atLimit = HostileRun.of(scheme, rounds(Scheme.DEFAULT_MAX_ROUNDS, 0), HostileRun.LIMIT_MS);
+        HostileRun atLimit = HostileRun.of(scheme.withLimits(Scheme.DEFAULT_MAX_ROUNDS, 4_194_304L),
+                rounds(Scheme.DEFAULT_MAX_ROUNDS, 0), HostileRun.LIMIT_MS);
+        HostileRun byRounds = HostileRun.of(scheme.withLimits(Scheme.DEFAULT_MAX_ROUNDS, 4_194_304L), megabyte,
+                HostileRun.LIMIT_MS);
         // Assert
-        PackbinTest.expectEq("AC-8 1 MiB refused at round 65,536", "ShortPacket 0 0 983041", shape(refused.result));
+        PackbinTest.expectEq("AC-8 1 MiB refused at round 28,340 by slots", "ShortPacket 0 0 1020237", shape(refused.result));
+        PackbinTest.expectEq("AC-8 1 MiB refused at round 65,536 with the slots raised", "ShortPacket 0 0 983041",
+                shape(byRounds.result));
         PackbinTest.expectTrue("AC-8 handler not called, " + ms + " ms -> " + refused.kind(), refused.finished && !refused.handled);
-        PackbinTest.expectTrue("AC-8 65,535 rounds -> " + atLimit.kind(), atLimit.finished && atLimit.result == null);
+        PackbinTest.expectTrue("AC-8 65,535 rounds, slots raised -> " + atLimit.kind(), atLimit.finished && atLimit.result == null);
+    }
+
+    /**
+     * AZ-2415 AC-2 and AC-3: the F10 packet (4 259 778 bytes, 4 194 240 slots) is refused at the 16 385th item by the
+     * 1,048,576-slot default, and unpacks once the scheme raises maxSlots to the old default.
+     */
+    private static void defaultSlotsBoundTheWorstCasePacket() {
+        // Arrange
+        byte[] packet = UnpackMemory.f10Packet();
+        Scheme<Map> scheme = UnpackMemory.f10();
+        Map[] got = new Map[1];
+        // Act
+        Object refused = BinaryPacker.unpack(packet, scheme.on(row -> got[0] = row));
+        Map[] raised = new Map[1];
+        Object ok = BinaryPacker.unpack(packet, scheme.withLimits(Scheme.DEFAULT_MAX_ROUNDS, 4_194_304L).on(row -> raised[0] = row));
+        // Assert
+        PackbinTest.expectEq("AC-2 F10 packet length", 4_259_778, packet.length);
+        PackbinTest.expectEq("AC-2 F10 refused by slots at item 16,385", "ShortPacket times 0 3194814", shape(refused));
+        PackbinTest.expectTrue("AC-2 F10 handler not called", got[0] == null);
+        PackbinTest.expectTrue("AC-3 F10 unpacks with maxSlots 4,194,304 (" + shape(ok) + ")",
+                ok == null && ((List) raised[0].get("items")).size() == 65_535);
     }
 
     /** A repeat of u8 k and a when of 36 more fields (alternating u8 and u16), as in the audit. */

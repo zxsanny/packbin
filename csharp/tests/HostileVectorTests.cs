@@ -209,6 +209,17 @@ public class HostileVectorTests
         ["construct_empty_round_body_list_element"] = () => _ = new Scheme<ItemsRow>(1,
             Field.List((ItemsRow x) => x.Items,
                 Field.Group(0, (CountItem e) => e.Mark, Field.U32<CountItem>(0, e => e.N), Field.Times(1, 0)))),
+        ["construct_empty_when_times_body"] = () => _ = new Scheme<ModeRow>(1,
+            Field.U8<ModeRow>(0, x => x.Mode),
+            Field.U8<ModeRow>(1, x => x.V),
+            Field.Times(2, 1, Field.When(2, Condition.Eq(0, 1)))),
+        ["construct_empty_when_repeat_body"] = () => _ = new Scheme<ModeRow>(1,
+            Field.U8<ModeRow>(0, x => x.Mode),
+            Field.Repeat(1, Field.When(1, Condition.Eq(0, 1)))),
+        ["construct_empty_nested_when_body"] = () => _ = new Scheme<ModeRow>(1,
+            Field.U8<ModeRow>(0, x => x.Mode),
+            Field.U8<ModeRow>(1, x => x.V),
+            Field.Times(2, 1, Field.When(2, Condition.Eq(0, 1), Field.When(2, Condition.Eq(0, 1))))),
     };
 
     // A message fragment for each case refused at construction, so a refusal by some other rule does not pass.
@@ -228,6 +239,12 @@ public class HostileVectorTests
         ["construct_empty_times_body"] = "times 1: the body holds no member",
         ["construct_empty_repeat_body"] = "repeat 0: the body holds no member",
         ["construct_empty_round_body_list_element"] = "times 1: the body holds no member",
+        // The three README shapes name `mode` from outside the round, so C# refuses them by the scope rule before the
+        // empty-body rule runs (it checks scopes first). The empty-body rule cannot be reached with an empty `when`: a
+        // body with no member has no earlier in-scope field for the `when` to name. The outcome is scheme_error either way.
+        ["construct_empty_when_times_body"] = "not an earlier field in the same scope",
+        ["construct_empty_when_repeat_body"] = "not an earlier field in the same scope",
+        ["construct_empty_nested_when_body"] = "not an earlier field in the same scope",
     };
 
     // C# has no bad_value or too_many type yet (C15); ShortPacket stands in for both.
@@ -311,13 +328,38 @@ public class HostileVectorTests
 
     [Theory]
     [MemberData(nameof(ConstructCases))]
-    public void ConstructCase_FailsSchemeConstruction(string id, string expected)
+    public void ConstructCase_FailsSchemeConstruction(string id, string expected) =>
+        CheckConstructCase(id, expected, ConstructSchemes, RefusalRule);
+
+    // AZ-2418 AC-1: the rule table is part of the check, so a wrong entry must fail the loader naming the case.
+    [Fact]
+    public void WrongRuleEntry_FailsTheConstructLoaderNamingTheCase()
+    {
+        // Arrange (a refusal that is real, with a rule that names some other message)
+        var wrong = new Dictionary<string, string>(RefusalRule)
+        {
+            ["construct_empty_when_times_body"] = "the body holds no member",
+        };
+        var missing = RefusalRule.Where(entry => entry.Key != "construct_empty_when_repeat_body")
+            .ToDictionary(entry => entry.Key, entry => entry.Value);
+
+        // Act
+        var failedRule = Record.Exception(() => CheckConstructCase("construct_empty_when_times_body", "scheme_error", ConstructSchemes, wrong));
+        var failedMissing = Record.Exception(() => CheckConstructCase("construct_empty_when_repeat_body", "scheme_error", ConstructSchemes, missing));
+
+        // Assert
+        Assert.Contains("construct_empty_when_times_body: refused by another rule", Assert.IsAssignableFrom<Xunit.Sdk.XunitException>(failedRule).Message);
+        Assert.Contains("construct_empty_when_repeat_body: no refusal rule declared", Assert.IsAssignableFrom<Xunit.Sdk.XunitException>(failedMissing).Message);
+    }
+
+    private static void CheckConstructCase(string id, string expected,
+        IReadOnlyDictionary<string, Action> schemes, IReadOnlyDictionary<string, string> rules)
     {
         // Arrange
         Assert.Equal("scheme_error", expected);
-        Assert.True(ConstructSchemes.TryGetValue(id, out var build), $"{id}: no C# scheme declared for this case");
+        Assert.True(schemes.TryGetValue(id, out var build), $"{id}: no C# scheme declared for this case");
 
-        Assert.True(RefusalRule.TryGetValue(id, out var rule), $"{id}: no refusal rule declared for this case");
+        Assert.True(rules.TryGetValue(id, out var rule), $"{id}: no refusal rule declared for this case");
 
         // Act
         var refused = Record.Exception(build!);
