@@ -3,7 +3,7 @@
 LOCAL_URL: none (a library; no site to open)
 Branch: none (the loop ran on `dev`, as loops 11 to 19)
 
-Paste the script below into a terminal. It runs every check in order, prints `[n/N] title`, then `PASS (Ns) <result>` or `FAIL` with the last log lines, and ends with `N/M steps passed`. It takes about 25 to 40 minutes on this Mac (the C# suites, four CI containers, the ARM stage and the ring dominate); do not let the laptop sleep, or a step can pass its time limit.
+Paste the script below into a terminal. It runs every check in order, prints `[n/N] title`, then `PASS (Ns) <result>` or `FAIL` with the last log lines, and ends with `N/M steps passed`. It takes about 5 minutes with warm caches (agent trial run on `6c03a2b`: 13/13 steps passed; the ring takes 90 s, the Python and Rust containers 30 to 40 s each) and up to about 30 minutes cold; do not let the laptop sleep, or a step can pass its time limit.
 
 What the 13 checks prove (each ties to a task of the loop):
 
