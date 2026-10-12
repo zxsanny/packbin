@@ -65,3 +65,7 @@ Then unchanged
 
 - A construction-time rule: it adds no per-round cost.
 - C++ cost on Cortex-M4F must fit the 32 B margin or the C++ part goes to the next loop with a recorded saving needed.
+
+## Loop 21 result
+
+All six refuse a `repeat` or `times` whose body holds no member when the scheme is built (`repeat 0: the body holds no member; a round of it would charge no slot and write nothing`; Rust panics; C++ `SchemeInvalid`, direct children only, so a single empty `when` still builds there: gap G1). A zero-width `bytes`, a flag byte and a member-less `flags` are members and build. The F33 request shape is refused in a few ms. Tests: `empty-round-body.test.ts`, `test_empty_round_body.py`, `EmptyRoundBodyTest`, `EmptyRoundBodyTests`, `empty_round_body_tests.rs`, `container_tests.cpp`; hostile `construct_empty_*`.

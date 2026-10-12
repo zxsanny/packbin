@@ -61,3 +61,7 @@ Then it unpacks (U1 closes the Python case)
 - Reference table before the other packages start.
 - Wire bytes of accepted rows unchanged.
 - File length at or under 500 lines.
+
+## Loop 21 result
+
+TypeScript confirmed the rule with no code change (`roundNames(fields, false).size`; reference rows 1 to 14). Rust (`round_width`), Python (`_round_width`) and Java (`Rounds.width`, `startRound(round, values, width)`) were changed; C# was already distinct names and gained pins. One difference stays: Java counts a nested-row group as one slot (owner row U16; README Limits). Tests: `round-slot-width.test.ts`, `test_round_slot_width.py`, `RoundSlotWidthTest`, `RoundSlotWidthTests`, `round_slot_width_tests.rs`; hostile `pack_round_slots_*` (C++ skips: no slot budget).

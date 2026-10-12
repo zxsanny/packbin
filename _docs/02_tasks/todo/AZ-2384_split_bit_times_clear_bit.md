@@ -58,3 +58,7 @@ Then unchanged
 ## Constraints
 
 - Wire bytes of accepted rows unchanged.
+
+## Loop 21 result
+
+TypeScript and Python pin the clear bit `0102025a00`; Java was changed to pack it (it refused); C# and Rust were probed and pack it. C++ is excluded: a count above 0 with an empty `Array` is a count mismatch (`BadValue`). Tests: `ClearBitProbesTest`, `SplitTimesClearBitTests`, `loop21_parity_probes_tests.rs`, `test_loop21_parity_probes.py`, `loop21-parity-probes.test.ts`; hostile `pack_split_times_absent_body`.

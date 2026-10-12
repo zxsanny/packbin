@@ -38,3 +38,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-12_loop20.md
 - [2026-10-12] [tooling] On this Mac a subagent output file is a symlink (heartbeat must `stat -L`), `setsid` does not exist, monitor and `alarm` timers count wall time across sleep, and a network drop kills subagents and downloads: wait on one single-shot task that exits when the run is done, re-arm monitors, resume failed subagents by id.
   Source: _docs/06_metrics/retro_2026-10-12_loop20.md
+- [2026-10-12] [architecture] A slot budget is a memory ceiling of maxSlots times the per-slot cost, and the cost differs by package (the same 4.3 MB packet: TypeScript 1 072 MB, Python 548 MB); removing Python's first-round surcharge raised its worst case from 90 MB to 548 MB. Change any charge only with a measured worst-case memory A/B in the same loop.
+  Source: _docs/06_metrics/retro_2026-10-12_loop21.md
+- [2026-10-12] [process] A parity decision must name the constructs it covers and both the with-value and no-value rows: U3 was built for repeat only and U7's no-value row (010000) stayed inconsistent with U6 until the reference worker flagged it.
+  Source: _docs/06_metrics/retro_2026-10-12_loop21.md
+- [2026-10-12] [testing] Fixtures first, then one loader worker per package: the loaders found two parity gaps (Rust late when in a bit body, C++ absent split body) that each package's own pins missed.
+  Source: _docs/06_metrics/retro_2026-10-12_loop21.md

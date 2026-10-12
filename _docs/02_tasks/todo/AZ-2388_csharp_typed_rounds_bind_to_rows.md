@@ -66,3 +66,7 @@ Then they pass
 
 - The construction check is the binding's own predicate, tested as "builds if and only if it binds" (loop 20 lesson).
 - Files at or under 500 lines.
+
+## Loop 21 result
+
+C# `Field.Times(anchor, countId, accessor, fields...)` and `Field.Repeat(anchor, accessor, fields...)` (and the `Fields<T>` forms) bind a round to an `E[]`, `List<E>` or `IList<E>` of a row class `E` with a public parameterless constructor (`RowRounds`, `Walker.RowRounds.cs`); the scheme builds if and only if typed `Unpack` binds the member. The route packs `01 02 0a000000 14000000 1e000000 28000000 07`. Old bindings still work. Tests: `RowRoundTests`, `RowRoundMemberTests`. README: Times (C# example).

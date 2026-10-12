@@ -64,3 +64,7 @@ Then it resolves
 ## Constraints
 
 - Upgrade note in the README (step 13).
+
+## Loop 21 result
+
+C# pins the count text above `int.MaxValue` (`Out: count 'U' is 3000000000, which does not fit an int`; `times: count ...` for a `times`), the lone `byte[]` in a `repeat` (`'Raw': a round's value belongs in a list with one entry per round; wrap this value in a list`, with the `maxRounds` text first when the buffer is longer than the limit) and a `byte[]` for a scalar name (one round per byte). `Scheme<T>.WithLimits(int, long)` is an overload again. Test: `CountTextAndLimitsTests`. README: the loop 21 C# paragraph.

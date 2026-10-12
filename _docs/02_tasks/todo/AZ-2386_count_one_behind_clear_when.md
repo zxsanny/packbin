@@ -58,3 +58,7 @@ Then unchanged
 ## Constraints
 
 - Wire bytes of accepted rows unchanged.
+
+## Loop 21 result
+
+Pack refuses a `times` count above 0 that no field wrote (its `when` is clear) in a split bit and in a combined `flags` (`pt: the count c is 1 in the row, but no field wrote it (the when that holds it is clear), so its times reads no round; give the count 0, leave it out, or make the when hold`). TypeScript and Python changed, Java, C# and Rust were aligned; C++ already refused it. A count of 0 or none still packs a clear bit. Tests: `loop21-parity-probes.test.ts`, `test_loop21_parity_probes.py`, `ClearBitProbesTest`, `CountBehindClearWhenTests`, `count_behind_clear_when_tests.rs`; hostile `pack_count_one_clear_when`.

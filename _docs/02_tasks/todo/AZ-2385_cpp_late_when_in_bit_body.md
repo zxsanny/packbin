@@ -60,3 +60,7 @@ Then flash at or under 8 192 B and stack at or under 512 B, or the change is dro
 
 - `docker run --rm -v "$PWD":/src -w /src/cpp gcc:16 make test` and the arm embedded stage before the batch ends.
 - No formatter on files the worker does not own.
+
+## Loop 21 result
+
+C++ packs a late `when` or `times` in a bit body when another non-late child sets the bit (`present(..., skip)` with `flag::Late`, `pack_flag_byte`); a body held only by late members is still refused. Rust got the same fix after the TypeScript reference (`early_on` in `walk/flag_bits.rs`). Arm stage: flash 8160 to 8152 B (margin 40 B), stack 448 to 456 B (margin 56 B). Tests: `late_source_host_tests.cpp`, `late_when_in_bit_body_tests.rs`; hostile `pack_late_when_in_bit_body` (run by all six).

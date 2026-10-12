@@ -59,3 +59,7 @@ Then it fails (shown once per loader by a temporary edit, reverted)
 ## Constraints
 
 - One worker per package directory; the fixture format change (if any) is made by the AZ-2394 worker first.
+
+## Loop 21 result
+
+The Python, Java, Rust and C++ hostile loaders name the exception type and the whole rule or message each refused `pack` and `construct` case must give, as TypeScript's `PACK_REFUSAL` and C#'s `NamedMember` do (`hostile_refusals.py`, `HostileRefusals.java`, `hostile_tests/refusals.rs`, `kRefusals` in the C++ runner); each table was shown to discriminate by a test that a wrong rule fails. The C++ pins that passed through the wrong rule were corrected.

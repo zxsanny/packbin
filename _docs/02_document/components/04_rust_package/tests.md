@@ -466,6 +466,12 @@ Source: `_docs/03_implementation/batch_01_loop20_report.md` to `batch_04_loop20_
 
 Slow tests: the AC-4 slot rows take about 20 s in a debug build (rows 14 and 15 measured 8.5 s and 17.7 s; 0.8 s in release) and the hostile slots case 8.1 s in debug; kept at spec size (review A9). Decide with the total run whether CI should use a release build or smaller limits.
 
+## Loop 21 Tests (AZ-2382, AZ-2384, AZ-2385, AZ-2386, AZ-2387, AZ-2390, AZ-2392, AZ-2394)
+
+Source: `_docs/03_implementation/batch_01_loop21_report.md`, `test_run_loop21_report.md`, `reference_loop21_slots.md`. The suite went from 569 to 625 tests (step 11 container run); 22 of the 49 new tests failed on a `git archive HEAD` copy of the sources before the change.
+
+Test files: `rust/tests/round_slot_width_tests.rs` (AZ-2382: rows 1 to 14), `empty_round_body_tests.rs` (AZ-2390: rows 15 to 26 that a map scheme can express), `late_when_in_bit_body_tests.rs` (AZ-2385), `loop21_parity_probes_tests.rs` (AZ-2384, AZ-2386, AZ-2387 pins) and `count_behind_clear_when_tests.rs` (AZ-2386, AZ-2387: rows 44 to 56), `src/hostile_tests/refusals.rs` and `src/hostile_tests/pack_cases.rs` (AZ-2392, AZ-2394; `hostile_tests.rs` shrank by the split). Changed: `pack_output_budget_tests.rs` and `scope_tests.rs` (the narrower width).
+
 ## Test Data Management
 
 **Required test data**:

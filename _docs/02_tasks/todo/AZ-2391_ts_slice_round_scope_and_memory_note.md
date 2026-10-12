@@ -60,3 +60,7 @@ Then unchanged
 
 - Wire bytes unchanged.
 - Timing test compares two sizes in one run, not an absolute number (loop 20 lesson).
+
+## Loop 21 result
+
+TypeScript `sliceRound` and `packItem` read through `Object.create(values)` views (`overlay`, `defineOwn`) instead of copying the enclosing scope: `times(65535) { u8 }` after 1 000 top-level `u8` took 23 878 ms before and 21 ms after; a list of 65 535 `u8` 24 621 ms before and 19 ms after. Test: `round-scope-cost.test.ts` (ratio of 100 to 1 000 fields; it flaked once under parallel load and passed on the idle step 11 run). README: `maxBytes` is also the memory bound of a pack call (2 to 3 times the packet).

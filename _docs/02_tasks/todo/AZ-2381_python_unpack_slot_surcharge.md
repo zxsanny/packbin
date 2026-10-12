@@ -59,3 +59,7 @@ Then it is refused as before
 
 - Python 3.10+ per-worker venv.
 - Wire bytes unchanged.
+
+## Loop 21 result
+
+Python unpack charges `node.width` per round (the AZ-2382 rule) and the first-round surcharge (`LIST_SLOTS`, 8 more per name) is removed from `_Budget.refuses`; a packet pack writes at exactly `max_slots` unpacks and one over is refused as before. Tests: `test_round_slot_width.py`, `test_round_limits.py` (changed). README: the surcharge sentences are removed; the memory note says the Python figures were measured before this change and are not re-measured (review finding 2, step 14).

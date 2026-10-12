@@ -58,3 +58,7 @@ Then the same bytes as today
 ## Constraints
 
 - Wire bytes of accepted rows unchanged.
+
+## Loop 21 result
+
+TypeScript, Python, Java and C# refuse a non-empty list under `flags` or a flag bit shorter than the rounds in a `repeat` (`v: 1 items, repeat count 2; give one entry per round, undefined where the member is absent`; `null` in Java and C#, `None` in Python); `times` is unchanged. Rust and C++ take the rounds as groups or arrays, so the shape does not exist there (Rust: per-name `repeat` lists given without `__repeat__` write no round, owner row U13). Python keeps its equal-length rule for a lone value and a `when` list (owner row U14). Tests: `repeat-short-optional.test.ts`, `test_repeat_short_optional.py`, `RepeatShortOptionalTest`, `ShortOptionalListTests`; hostile `pack_flags_short_list`, `pack_flags_short_list_filled`.

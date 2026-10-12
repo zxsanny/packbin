@@ -467,6 +467,12 @@ Source: `_docs/03_implementation/batch_01_loop20_report.md` to `batch_04_loop20_
 
 Slow tests: the hostile slots case 1.45 s; the 4.26 MB packet of the AC-4 row packs in 0.86 s (2.06 s before). The suite has no other test above 2 s from this loop.
 
+## Loop 21 Tests (AZ-2382, AZ-2383, AZ-2384, AZ-2386, AZ-2387, AZ-2390, AZ-2391, AZ-2394)
+
+Source: `_docs/03_implementation/batch_01_loop21_report.md`, `test_run_loop21_report.md`, `reference_loop21_slots.md` (every row was produced by this package). The suite went from 765 to 880 tests (step 11 container run, 880 passed).
+
+Test files: `round-slot-width.test.ts` (AZ-2382: rows 1 to 14, pack at `maxSlots` unpacks, one over refused at the same round), `empty-round-body.test.ts` (AZ-2390: rows 15 to 26, the F33 request shape built in a few ms, the zero-width `bytes` bodies still build), `repeat-short-optional.test.ts` (AZ-2383: rows 27 to 39), `loop21-parity-probes.test.ts` (AZ-2384 rows 40 to 43, AZ-2386 rows 44 to 52, AZ-2387 rows 53 to 56), `round-scope-cost.test.ts` (AZ-2391: timing ratio of 100 against 1 000 top-level fields for `times` and for `list`), and `support/hostile-pack.ts` with `support/hostile-cases.ts` and `hostile.test.ts` (AZ-2394: the 15 new cases, 55 in all). `round-values.test.ts` changed one row (`{a: [1, undefined], b: [5, 6]}`).
+
 ## Test Data Management
 
 **Required test data**:

@@ -58,3 +58,7 @@ Then unchanged
 ## Constraints
 
 - Wire bytes of accepted rows unchanged.
+
+## Loop 21 result
+
+A `bits`, `packed` or `sized` given a value while its count sits behind a clear `when` is refused in all six (TypeScript `v: count c was not written`; Java `IllegalStateException`, Python `RuntimeError`, accepted differences). With no value a split bit or combined `flags` packs a clear bit (`01 00 00`) in all six, while the `times` shape is refused: owner row U11 for loop 22. Tests as AZ-2386; hostile `pack_bits_count_clear_when`, `pack_packed_count_clear_when`, `pack_sized_count_clear_when`.

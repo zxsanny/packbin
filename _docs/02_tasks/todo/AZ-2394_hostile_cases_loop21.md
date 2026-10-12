@@ -58,3 +58,7 @@ Then unchanged
 ## Constraints
 
 - Owns `fixtures/hostile/**` only.
+
+## Loop 21 result
+
+`fixtures/hostile/cases.txt` holds 55 cases (40 + 15): `pack_round_slots_at_limit`, `_over_limit`, `_flags_at_limit`, `_flags_over_limit`, `pack_flags_short_list`, `pack_flags_short_list_filled`, `pack_split_times_absent_body`, `pack_late_when_in_bit_body`, `pack_count_one_clear_when`, `pack_bits_count_clear_when`, `pack_packed_count_clear_when`, `pack_sized_count_clear_when` and the `construct` cases `construct_empty_times_body`, `construct_empty_repeat_body`, `construct_empty_round_body_list_element`. C++ skips seven and Rust two, each with a stated reason in the fixture README; `check-cases.sh` reports `hostile cases ok: 55`. Open (batch report row 11): check the older TypeScript `row4_packed_*` schemes against the fixture README width.

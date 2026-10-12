@@ -473,6 +473,12 @@ Source: `_docs/03_implementation/batch_01_loop20_report.md` to `batch_04_loop20_
 
 Slow tests: none from this loop on the host; the arm stage takes about 3 min. The flash margin is exhausted: any further edit to `cpp/src/core` or `cpp/include` needs a saving first.
 
+## Loop 21 Tests (AZ-2385, AZ-2390, AZ-2394)
+
+Source: `_docs/03_implementation/batch_01_loop21_report.md`, `test_run_loop21_report.md`. The host suite and the `gcc:16` container pass; the arm embedded stage passes at 8152 of 8192 B of flash and 456 of 512 B of stack.
+
+Test files: `late_source_host_tests.cpp` (AZ-2385: a late `when` packs when another child sets the bit, and is refused when only late members hold it), `container_tests.cpp` (AZ-2390: a `repeat` or `times` with no child is `SchemeInvalid`), `hostile_host_tests.cpp`, `hostile_pack_cases.hpp` and `hostile_pack_loop21.hpp` (AZ-2394: 8 of the 15 new cases run), `times_count_zero_host_tests.cpp` (changed). The `Makefile` lists the new header as a dependency of the test binary.
+
 ## Test Data Management
 
 **Required test data**:

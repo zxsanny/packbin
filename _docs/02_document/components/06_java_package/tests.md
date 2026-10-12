@@ -476,6 +476,12 @@ Source: `_docs/03_implementation/batch_01_loop20_report.md` to `batch_04_loop20_
 
 Slow tests: none above 2 s from this loop.
 
+## Loop 21 Tests (AZ-2382, AZ-2383, AZ-2384, AZ-2386, AZ-2387, AZ-2390, AZ-2392, AZ-2394)
+
+Source: `_docs/03_implementation/batch_01_loop21_report.md`, `test_run_loop21_report.md`, `reference_loop21_slots.md`. The suite went from 1952 to 2153 checks (`PackbinTest checks: 2153`, step 11 container run).
+
+Test classes (all run by `PackbinTest`): `RoundSlotWidthTest` (AZ-2382: rows 1 to 14 with Java spellings; a nested row is the Java form of an unanchored group), `EmptyRoundBodyTest` (AZ-2390), `RepeatShortOptionalTest` (AZ-2383: rows 27 to 39), `ClearBitProbesTest` (AZ-2384, AZ-2386, AZ-2387: rows 40 to 56), `HostileRefusals` with `HostileLoop21` and `HostileVectorTest` (AZ-2392, AZ-2394). Changed: `RepeatRoundTest`.
+
 ## Test Data Management
 
 **Required test data**:

@@ -33,7 +33,7 @@ The library, and the npm package name. The NuGet package name is `Packbin`. (sou
 
 ## Repeat
 
-A group that is read until the buffer is used up. The buffer must end on a group boundary. One leftover byte is a short packet. (source: schema.md)
+A group that is read until the buffer is used up. The buffer must end on a group boundary. One leftover byte is a short packet. Its body, like that of `times`, must hold at least one member: an empty body is refused when the scheme is built (loop 21). (source: schema.md)
 
 ## Short form
 

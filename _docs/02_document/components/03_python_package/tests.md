@@ -454,6 +454,12 @@ Source: `_docs/03_implementation/batch_01_loop20_report.md` to `batch_04_loop20_
 
 Slow tests: the suite is about 20 s slower (25.7 s); the hostile element case 7.1 s and the slots case 3.3 to 4.2 s are kept at spec size; `test_nfr_round_trips` (in `test_position.py`, bound 2 s) measured 0.83 to 0.87 s against 0.70 to 0.78 s before the budget code, far inside its bound.
 
+## Loop 21 Tests (AZ-2381, AZ-2382, AZ-2383, AZ-2384, AZ-2386, AZ-2387, AZ-2390, AZ-2392, AZ-2394)
+
+Source: `_docs/03_implementation/batch_01_loop21_report.md`, `test_run_loop21_report.md`, `reference_loop21_slots.md`. The suite went from 846 to 1003 tests (step 11 container run on python:3.14, 1003 passed in 31.5 s).
+
+Test files: `test_round_slot_width.py` (AZ-2381, AZ-2382: rows 1 to 14, pack at `max_slots` unpacks), `test_empty_round_body.py` (AZ-2390: rows 15 to 26), `test_repeat_short_optional.py` (AZ-2383: rows 27 to 39; pins the Python differences: a lone value and a short required list keep `repeat fields must have equal lengths`, a `when` list outside `flags` too), `test_loop21_parity_probes.py` (AZ-2384, AZ-2386, AZ-2387: rows 40 to 56), `hostile_refusals.py` with `hostile_loop21_support.py` and `test_hostile_vectors.py` (AZ-2392, AZ-2394: the rule table and the 15 new cases, 55 in all). Changed: `test_round_limits.py` (the first round of a run now costs one slot per name, not nine), `test_pack_output_budget.py` and `test_times_short_list.py`. Not re-measured: the Python unpack memory figures.
+
 ## Test Data Management
 
 **Required test data**:

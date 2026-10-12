@@ -58,3 +58,7 @@ Then unchanged
 ## Constraints
 
 - Same predicate as the binding (see AZ-2388).
+
+## Loop 21 result
+
+A C# `dict` member of a `repeat` or `times` round must hold one dictionary per round (`List<Dictionary<string, object?>>`, `IList`, `IList<object?>`, `List<object?>`, `object[]` or `object`); other types fail at construction through the same `CollectionShape.HoldsRounds` that typed `Unpack` uses. Tests: `RoundCollectionMemberTests` (dict rows joined the list rows); `LoneDictRoundTests` and `NestedRoundTests` moved their `Dict` members to `object?` or `List<Dictionary<string, object?>>`.
