@@ -36,7 +36,7 @@ shell_options = /\Aset -[euo]+( pipefail)?\z/
 wrapper = %r{/\.github/workflows/ring-cxx\.sh\z}
 # The job env versions and the suite images they copy (docker-compose.test.yml service => RING_ variable).
 suites = { "RING_DOTNET" => "csharp", "RING_NODE" => "typescript", "RING_PYTHON" => "python",
-           "RING_RUST" => "rust", "RING_GCC" => "cpp", "RING_JDK" => "java" }
+           "RING_RUST" => "rust", "RING_GCC" => "cpp", "RING_JDK" => "java", "RING_GO" => "go" }
 
 on = workflow.key?("on") ? workflow["on"] : workflow[true]
 if on.is_a?(Hash) && on.key?("push") && on.key?("pull_request")
@@ -98,6 +98,16 @@ callers.each do |name, ring_steps|
       errors << "step '#{label}' of job #{name} does not compile through ring-cxx.sh (CXX is '#{env['CXX']}')"
     end
   end
+  # Go: a setup-go step pinned to a commit SHA at the version RING_GO names; the driver is built through ring-go.sh.
+  setup_go = steps.find { |s| s["uses"].to_s.start_with?("actions/setup-go@") }
+  if setup_go.nil?
+    errors << "job #{name} has no actions/setup-go step"
+  else
+    errors << "the setup-go step of job #{name} is not pinned to a commit SHA" unless setup_go["uses"].match?(/@[0-9a-f]{40}\z/)
+    errors << "the setup-go step of job #{name} does not take go-version from RING_GO" unless setup_go.dig("with", "go-version").to_s == "${{ env.RING_GO }}"
+  end
+  go_build = %r{\Abash \.github/workflows/ring-go\.sh \S+\z}
+  errors << "job #{name} does not build the Go driver through ring-go.sh" unless steps.any? { |s| code_lines.call(s).any? { |l| l.match?(go_build) } }
   services = compose.is_a?(Hash) && compose["services"].is_a?(Hash) ? compose["services"] : {}
   used = steps.map { |s| [s["with"], s["run"]].to_s }.join("\n")
   suites.each do |key, service|
@@ -254,7 +264,7 @@ element_ring_violations() {
       || echo "the csharp driver has no command for $kind"
   done
   # The loop that refuses the short packets is the last "for lang in" line before the one that names the rows.
-  awk '/^for lang in /{ langs = $0 } /for row in "listgroup/{ print langs }' "$script" | grep -Eq '[ ]csharp[;]' \
+  awk '/^for lang in /{ langs = $0 } /for row in "listgroup/{ print langs }' "$script" | grep -Eq '[ ]csharp[ ;]' \
     || echo "csharp is not in the loop that refuses the short element packets"
 }
 
@@ -309,9 +319,89 @@ element_ring_checks() {
     sed "s/\$\"$form\"/\$\"x$form\"/" "$here/drivers/csharp/HandoffElements.cs" > "$tmp/no-form-$form.cs"
     expect_driver_rejected "the $form command of the csharp driver" "$tmp/no-form-$form.cs"
   done
-  sed 's/^for lang in typescript python java csharp; do$/for lang in typescript python java; do/' \
+  sed 's/^for lang in typescript python java csharp go; do$/for lang in typescript python java go; do/' \
     "$here/language-pair.sh" > "$tmp/no-short-csharp.sh"
   expect_element_ring_rejected "csharp in the short packet loop" "$tmp/no-short-csharp.sh"
+}
+
+# AZ-2449 AC-3: Go joins every kind of language-pair.sh both ways with each member of that kind's ring (go_members),
+# refuses the short element packets, packs the session and the position row, and has its kinds in the driver.
+go_kinds="user nested boolflag booltrue bitwhen roundflags roundwhen listgroup dictgroup listflags session"
+go_members() {
+  case "$1" in
+    roundflags | roundwhen) echo "csharp typescript rust java cpp" ;;
+    listgroup | dictgroup | listflags) echo "typescript python java csharp" ;;
+    *) echo "csharp typescript python rust java cpp" ;;
+  esac
+}
+go_expected_lines() {
+  local kind member
+  for kind in $go_kinds; do
+    for member in $(go_members "$kind"); do
+      # C# only produces the round kinds (no public C# API reads an aligned round row yet).
+      case "$kind$member" in roundflagscsharp | roundwhencsharp) ;; *) echo "handoff go $member $kind \"\$${kind}_hex\"" ;; esac
+      echo "handoff $member go $kind \"\$${kind}_hex\""
+    done
+  done
+}
+
+# go_ring_violations [script] [driver kinds.go] [toolchains]: one line per missing piece (defaults: the real files).
+go_ring_violations() {
+  local script="${1:-$here/language-pair.sh}" driver="${2:-$here/drivers/handoff-go/kinds.go}"
+  local toolchains="${3:-$here/ring-toolchains.sh}" kind row tab=$'\t'
+  go_expected_lines > "$tmp/go-expected.txt"
+  grep -Fxv -f "$script" "$tmp/go-expected.txt" | sed 's/^/no handoff line: /' || true
+  grep -Eq '^    go[)]$' "$script" || echo "run_lang has no go case"
+  for row in 'for row in "listgroup|short element packets' '"pack-session"|pack-session' 'publish-position[.]sh|position row'; do
+    awk -v pat="${row%%|*}" '/^for lang in /{ langs = $0 } index($0, pat) || $0 ~ pat { print langs }' "$script" \
+      | grep -Eq '[ ]go[ ;]' || echo "go is not in the loop that checks ${row#*|}"
+  done
+  for kind in ${go_kinds% session}; do
+    grep -q "^${tab}${tab}\"$kind\": *{" "$driver" || echo "the go driver has no kind $kind"
+  done
+  for kind in listgroup dictgroup listflags; do
+    grep '^var short = ' "$driver" | grep -qF "\"$kind\": true" || echo "the go driver does not refuse the short $kind packet"
+  done
+  grep -qF 'check go "${RING_GO:?}"' "$toolchains" || echo "ring-toolchains.sh does not check the Go version"
+}
+
+# expect_go_rejected <label> <script copy> [<driver copy> [<toolchains copy>]]: the copy lacks something, the check names it.
+expect_go_rejected() {
+  local label="$1" copy="$2" driver="${3:-}" tools="${4:-}" out
+  if cmp -s "$here/language-pair.sh" "$copy" && [ -z "$driver$tools" ]; then fail "temp copy is unchanged: $label"; return; fi
+  out="$(go_ring_violations "$copy" "${driver:-$here/drivers/handoff-go/kinds.go}" "${tools:-$here/ring-toolchains.sh}")"
+  if [ -z "$out" ]; then
+    fail "the Go ring check passed a copy without: $label"
+  else
+    echo "rejects: $label ($out)"
+  fi
+}
+
+go_ring_checks() {
+  local line n=0 kind tab=$'\t' out
+  out="$(go_ring_violations)"
+  if [ -n "$out" ]; then fail "go ring: $out"; return; fi
+  # Every one of the Go handoff lines, removed alone, is named.
+  while IFS= read -r line; do
+    n=$((n + 1))
+    grep -Fxv -- "$line" "$here/language-pair.sh" > "$tmp/no-go-line.sh"
+    if ! go_ring_violations "$tmp/no-go-line.sh" | grep -qF "no handoff line: $line"; then
+      fail "removing [$line] was not named by the Go ring check"
+    fi
+  done < "$tmp/go-expected.txt"
+  echo "rejects: each of the $n Go handoff lines removed alone"
+  sed 's/^\(for lang in .*\) go; do$/\1; do/' "$here/language-pair.sh" > "$tmp/no-loop-go.sh"
+  expect_go_rejected "go in the short packet, pack-session and position loops" "$tmp/no-loop-go.sh"
+  awk '/^    go[)]$/ { sub(/go[)]/, "gox)") } { print }' "$here/language-pair.sh" > "$tmp/no-go-case.sh"
+  expect_go_rejected "the go case of run_lang" "$tmp/no-go-case.sh"
+  for kind in user dictgroup; do
+    sed "s/^\\(${tab}${tab}\\)\"$kind\": {/\\1\"x$kind\": {/" "$here/drivers/handoff-go/kinds.go" > "$tmp/no-driver-$kind.go"
+    expect_go_rejected "the $kind kind of the go driver" "$here/language-pair.sh" "$tmp/no-driver-$kind.go"
+  done
+  sed 's/"listflags": true//' "$here/drivers/handoff-go/kinds.go" > "$tmp/no-short-listflags.go"
+  expect_go_rejected "the short listflags refusal of the go driver" "$here/language-pair.sh" "$tmp/no-short-listflags.go"
+  sed 's/^check go /check gox /' "$here/ring-toolchains.sh" > "$tmp/no-go-toolchain.sh"
+  expect_go_rejected "the Go version check" "$here/language-pair.sh" "" "$tmp/no-go-toolchain.sh"
 }
 
 if ! command -v ruby > /dev/null; then
@@ -341,6 +431,14 @@ else
   sed '/^      RING_JDK: /d' "$test_yml" > "$tmp/env-jdk-removed.yml"
   sed 's#node-version: ${{ env.RING_NODE }}#node-version: 22#' "$test_yml" > "$tmp/node-hardcoded.yml"
   sed 's#image: gcc:16#image: gcc:17#' "$compose_yml" > "$tmp/compose-gcc-bumped.yml"
+  sed 's#image: golang:1.27#image: golang:1.28#' "$compose_yml" > "$tmp/compose-go-bumped.yml"
+  sed 's#RING_GO: "1.27"#RING_GO: "1.28"#' "$test_yml" > "$tmp/env-go-bumped.yml"
+  sed '/^      RING_GO: /d' "$test_yml" > "$tmp/env-go-removed.yml"
+  sed 's#go-version: ${{ env.RING_GO }}#go-version: 1.26#' "$test_yml" > "$tmp/go-hardcoded.yml"
+  sed 's#\(actions/setup-go@\)[0-9a-f]\{40\}.*#\1v7.0.0#' "$test_yml" > "$tmp/go-tag-pinned.yml"
+  awk '/^      - uses: actions\/setup-go@/ { skip = 1; next } skip && /^        / { next } { skip = 0; print }' \
+    "$test_yml" > "$tmp/no-setup-go.yml"
+  sed '/ring-go\.sh \/tmp/d' "$test_yml" > "$tmp/no-go-build.yml"
   insert_after '^        run: bash \.github/workflows/ring-toolchains\.sh$' \
     '      - name: ring script lint\n        run: |\n          bash -n .github/workflows/language-pair.sh\n          shellcheck .github/workflows/language-pair.sh' \
     > "$tmp/call-mentioned.yml"
@@ -365,6 +463,13 @@ else
   expect_rejected "RING_JDK removed" "$tmp/env-jdk-removed.yml"
   expect_rejected "node-version no longer comes from RING_NODE" "$tmp/node-hardcoded.yml"
   expect_rejected "the cpp suite image moved to gcc:17" "$test_yml" "$tmp/compose-gcc-bumped.yml"
+  expect_rejected "RING_GO differs from the go suite image" "$tmp/env-go-bumped.yml"
+  expect_rejected "RING_GO removed" "$tmp/env-go-removed.yml"
+  expect_rejected "go-version no longer comes from RING_GO" "$tmp/go-hardcoded.yml"
+  expect_rejected "setup-go pinned to a tag, not a commit" "$tmp/go-tag-pinned.yml"
+  expect_rejected "no setup-go step" "$tmp/no-setup-go.yml"
+  expect_rejected "the Go driver is not built" "$tmp/no-go-build.yml"
+  expect_rejected "the go suite image moved to golang:1.28" "$test_yml" "$tmp/compose-go-bumped.yml"
   expect_rejected "call removed" "$tmp/call-removed.yml"
   expect_rejected "call renamed" "$tmp/call-renamed.yml"
   expect_rejected "call turned into a comment" "$tmp/call-commented.yml"
@@ -386,6 +491,7 @@ fi
 
 consumer_failure_checks
 element_ring_checks
+go_ring_checks
 
 if [ "$failures" -ne 0 ]; then
   echo "$failures failure(s)" >&2

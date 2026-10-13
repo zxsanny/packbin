@@ -87,6 +87,7 @@ jobs:
       RING_RUST: "1.98"
       RING_GCC: "16"
       RING_JDK: "26"
+      RING_GO: "1.27"
       # ubuntu-latest has no GCC 16 release (13; 26.04 has 15), so the ring compiles in the gcc:16 image the
       # cpp suite uses, through ring-cxx.sh. The macOS sysroot recipe of language-pair.sh stays off.
       CXX: ${{ github.workspace }}/.github/workflows/ring-cxx.sh
@@ -108,6 +109,12 @@ jobs:
         with:
           distribution: temurin
           java-version: ${{ env.RING_JDK }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.RING_GO }}
+          cache-dependency-path: |
+            go/go.sum
+            .github/workflows/drivers/handoff-go/go.sum
       - name: Rust toolchain
         run: |
           set -euo pipefail
@@ -123,5 +130,6 @@ jobs:
           npm ci --prefix typescript
           dotnet build .github/workflows/drivers/csharp/Handoff.csproj --nologo
           cargo build --quiet --manifest-path .github/workflows/drivers/handoff-rust/Cargo.toml
+          bash .github/workflows/ring-go.sh /tmp/packbin-handoff-go
       - name: cross-language ring
         run: bash .github/workflows/language-pair.sh

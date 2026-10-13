@@ -130,3 +130,19 @@ API: `LoadSession(seed) (*PackSession, error)`, `Start()`, `StartWith(nonce)` (a
 | 41 | AZ-2446 | `zero_progress_repeat_bool` and `zero_progress_repeat_when`: TypeScript builds both and unpacks to `trailing_bytes`; Go refuses both at construction (a bool outside flags; a `when` naming a field outside the `repeat`); both cases accept `scheme_error` | README loop 24 paragraph states it | clear |
 | 42 | AZ-2446 | `pack_late_when_in_bit_body`: the group's members sit flat in the TypeScript row; Go reads the group as a nested map (Go-4) | `Run by` entry says so | clear |
 | 43 | AZ-2446 | TypeScript's `SPEC` rows (`row1_*`..`row7_*`) and its session test are outside `cases.txt` and were not ported here | AZ-2447 ports the parity rows; session is AZ-2445 | clear |
+
+## Batch 02 part 2 (AZ-2449, wave 3)
+
+| Worker | Spec | Result |
+|--------|------|--------|
+| go ring | AZ-2449 (Go in the language-pair ring) | Driver `.github/workflows/drivers/handoff-go/` (own go.mod with a `replace` to `go/`; `main.go`, `kinds.go`, `session.go`, `position/main.go`), `ring-go.sh` (host `go` on CI; on this Mac a cross-compiled host binary built in `golang:${RING_GO}`, rebuilt only when sources are newer), `language-pair.sh` +114 explicit Go handoff lines, `ring-toolchains.sh` Go check, `ring` job: `RING_GO: "1.27"`, `actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0` (parent verified: the tag dereferences to that commit, released 2026-07-16), driver build step. `ring-wiring.test.sh` (500 lines, at the cap) passes with 114 line guards + mutations. 108 Go handoffs run by the worker, all pass; no TypeScript/Go disagreement on any kind |
+
+Handoff matrix: `user`, `nested`, `boolflag`, `booltrue`, `bitwhen`, `session` with C#, TypeScript, Python, Rust, Java, C++ both ways; `roundflags`, `roundwhen` with TypeScript, Rust, Java, C++ both ways (C# only packs them: no public C# reader, AZ-2092, so only `handoff csharp go`); `listgroup`, `dictgroup`, `listflags` with TypeScript, Python, Java, C# both ways; the three `-short` refusals, `pack-session` and the position check include Go.
+
+**Open until AZ-2450:** the position loop at the end of `language-pair.sh` calls `publish-position.sh go`, which still answers `absent go`, so the full ring fails there. AZ-2450 adds the `go` branch (`bash .github/workflows/ring-go.sh /tmp/packbin-position-go ./position && /tmp/packbin-position-go`; the program prints the golden hex) and `language_present go` in `publish-lib.sh`.
+
+| # | Spec ref | Finding | Proposed handling | Status |
+|---|----------|---------|-------------------|--------|
+| 44 | AZ-2449 | `go->csharp roundflags/roundwhen` was removed: C# has no `unpack-roundflags` command (the script's own comment, AZ-2092) | none | clear |
+| 45 | AZ-2449 | `ring-toolchains.sh` was checked only against a stand-in `go version`, not live; the full `language-pair.sh` was not run (step 11) | step 11 | clear |
+| 46 | AZ-2449 | `ring-wiring.test.sh` is 500 lines (the cap) | the next edit splits it | clear |

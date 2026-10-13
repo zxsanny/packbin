@@ -25,6 +25,7 @@ check node "${RING_NODE:?}" "$(node --version | tr -d v)"
 check python "${RING_PYTHON:?}" "$(python3 -c 'import platform; print(platform.python_version())')"
 check rust "${RING_RUST:?}" "$(rustc --version | awk '{ print $2 }')"
 check java "${RING_JDK:?}" "$(javac --version | awk '{ print $2 }')"
+check go "${RING_GO:?}" "$(go version | awk '{ print $3 }' | sed 's/^go//')"
 
 # The compiler is the one the ring uses: CXX, which is ring-cxx.sh (g++ from the gcc image) in the
 # ring job. Clang also defines __GNUC__ (as 4), so name the compiler family first.
