@@ -191,6 +191,7 @@ Package suites at the batch (commit `04a8cd9`, plus the loaders): TypeScript 917
 | C# | 733 MB | 235 MB | 32 % | typed unpack; dictionary read 731 to 232 MB |
 | Python | 550 MB | 162 MB | 29 % | |
 | Rust | 628 MB | 120 MB | 19 % | stand-in shape (64-wide `times`, 65 535 rounds): a list element cannot hold a `times` |
+| Go (loop 25, AZ-2475) | 625 MB | not measured at this shape | n/a | heap in use sampled during the unpack in `golang:1.27`, not resident set; one run, about 10 %; at 1 048 576 slots the F10 packet is refused, and a 1 MiB wide-round packet of 16 128 rounds of 65 one-byte members (1 048 320 slots) at the defaults peaked at 94 MB |
 
 All under 400 MB. The slot count is exactly a quarter; the runtime floor and the packet do not shrink, so peak RSS is 19 to 33 % of the old peak (AC-2 read by the parent as the slot count, plus a ceiling under 400 MB).
 

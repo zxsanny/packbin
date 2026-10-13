@@ -54,3 +54,5 @@ Open (assessment, not decided): the empty anchored group's anchor, `u2` as a lis
 ## 5. Tests
 
 `go test -race ./...` in `go/` (about 25 s): golden, parity rows of TypeScript, the hostile vectors (`fixtures/hostile/cases.txt`, 65 cases), session vectors, concurrency (8 goroutines), `FuzzUnpack` (60 s in `run-suite.sh go`), and the six `Example` tests whose output is the README text. `docker compose -f docker-compose.test.yml run --rm go` is the suite as CI runs it.
+
+Peak memory (loop 25, AZ-2475): `go/mem_test.go`, behind the build tag `packbin_memtest` and so outside `go test ./...`, samples the heap in use during the unpack in `golang:1.27` (one run each, about 10 %): the F10 packet (4.26 MB, `MaxSlots` 4,194,304) peaks at about 625 MB and a 1 MiB wide-round packet (16,128 rounds of 65 one-byte members, the defaults) at about 94 MB. Run it with `go test -tags packbin_memtest -v -run TestMem -count=1 ./...`.
