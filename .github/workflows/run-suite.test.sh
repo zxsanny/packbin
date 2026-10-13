@@ -109,6 +109,7 @@ mkdir -p "$gobin"
 cat > "$gobin/go" <<'GO'
 #!/bin/sh
 echo "go $*" >> "$GO_LOG"
+echo "GOFLAGS=${GOFLAGS:-}" >> "$GO_LOG.env"
 if [ "$1" = -C ]; then shift 2; fi
 case "$1 $2" in
   "vet ./...") step=vet ;;
@@ -151,7 +152,7 @@ cp "$root/.github/workflows/report-row.sh" "$goroot/.github/workflows/"
 run_go() { # tree [VAR=value ...]: runs run-suite.sh go with the fakes first on PATH
   local tree="$1"
   shift
-  rm -f "$work/go.log" "$work/goresults.rows"
+  rm -f "$work/go.log" "$work/go.log.env" "$work/goresults.rows"
   : > "$work/go.log"
   env SRC_ROOT="$tree" FIXTURE="${GO_FIXTURE:-$tree/fixtures/golden.hex}" TEST_RESULTS="$work/goresults" \
     GO_LOG="$work/go.log" PATH="$gobin:$PATH" "$@" \
@@ -188,6 +189,13 @@ go -C $goroot/go list -m -f {{if not (or .Main .Indirect)}}{{.Path}}{{end}} all
 go -C $goroot/go list -deps -test -f {{with .Module}}{{.Path}}{{end}} ./..."
 [ "$(cat "$work/go.log")" = "$expected" ] || bad "go: the steps differ from the expected ones: $(cat "$work/go.log")"
 case "$out" in *"skipped"*) bad "go: the fuzz skip line shows although FuzzUnpack exists: $out" ;; esac
+# G2b. every go command runs with -buildvcs=false (CI run 38422313279: git refuses the runner-owned checkout in the
+# container, and `go list -test` stops with "error obtaining VCS status"); a GOFLAGS of the caller is kept
+[ "$(wc -l < "$work/go.log.env" | tr -d ' ')" -eq 8 ] || bad "go: expected the 8 go commands to record GOFLAGS: $(cat "$work/go.log.env")"
+[ -z "$(grep -vxF 'GOFLAGS=-buildvcs=false' "$work/go.log.env")" ] || bad "go: a go command ran without -buildvcs=false: $(cat "$work/go.log.env")"
+run_go "$goroot" GO_FUZZ=1 GOFLAGS=-mod=mod >/dev/null
+[ -z "$(grep -vxF 'GOFLAGS=-mod=mod -buildvcs=false' "$work/go.log.env")" ] || bad "go: the caller's GOFLAGS was not kept: $(cat "$work/go.log.env")"
+out="$(run_go "$goroot" GO_FUZZ=1)"
 
 # G3. no FuzzUnpack target yet: the step says it is skipped and does not fuzz
 out="$(run_go "$goroot")"; code=$?

@@ -119,6 +119,10 @@ case "$lang" in
     fi
     ;;
   go)
+    # In the CI container Go runs as root on a checkout owned by the runner user, so git refuses it
+    # ("dubious ownership") and `go list -test` stops with "error obtaining VCS status" (CI run 38422313279).
+    # No step needs the VCS stamp, so every go command here runs with -buildvcs=false.
+    export GOFLAGS="${GOFLAGS:+$GOFLAGS }-buildvcs=false"
     # Unlike the six above, a missing manifest fails: a Go suite that runs nothing must not pass (AZ-2448 AC-3).
     if [ -f "$root/go/go.mod" ]; then
       run go_fmt "$root/go"

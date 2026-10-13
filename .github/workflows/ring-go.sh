@@ -5,6 +5,10 @@
 # It rebuilds only when a non-test Go source, go.mod or go.sum of the package (go/) or the driver module is
 # newer than the binary, so language-pair.sh can call it before every driver command (as the java case does).
 #
+# -buildvcs=false: the publish gate runs this in the golang container as root on a checkout owned by the
+# runner user; git refuses that repository ("dubious ownership") and `go build` stops with "error obtaining
+# VCS status" (CI run 38422313279 hit the same error in run-suite.sh). The binary needs no VCS stamp.
+#
 # With `go` on PATH (the ring job: setup-go, RING_GO) it builds with it. Without (the owner's Mac has no Go),
 # it builds in the golang:$RING_GO image (default 1.27, the go suite image) for the host OS and architecture,
 # so the binary runs on the host. The container sees the repo and the output directory at the host paths;
@@ -23,7 +27,7 @@ fi
 
 mkdir -p "$(dirname "$out")"
 if command -v go > /dev/null; then
-  CGO_ENABLED=0 go build -C "$driver" -o "$out" "$pkg"
+  CGO_ENABLED=0 go build -buildvcs=false -C "$driver" -o "$out" "$pkg"
   exit 0
 fi
 
@@ -45,4 +49,4 @@ case "$outdir" in
 esac
 docker run --rm -i "${mounts[@]}" -v packbin-gomod:/go/pkg/mod -v packbin-gocache:/root/.cache/go-build \
   -e CGO_ENABLED=0 -e GOOS="$goos" -e GOARCH="$goarch" -w "$driver" \
-  "golang:${RING_GO:-1.27}" go build -o "$outdir/$(basename "$out")" "$pkg" < /dev/null
+  "golang:${RING_GO:-1.27}" go build -buildvcs=false -o "$outdir/$(basename "$out")" "$pkg" < /dev/null
