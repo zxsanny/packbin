@@ -255,8 +255,15 @@ def check_idf(directory, version):
     need("CMakeLists.txt" in members, "CMakeLists.txt is missing")
 
 
+# The module path has no /v2 suffix, so Go serves versions 0.x and 1.x of it and no other.
+GO_VERSION = re.compile(r"(0|1)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?")
+
+
 @target("go-tag")
 def check_go_tag(directory, version):
+    need(GO_VERSION.fullmatch(version) is not None,
+         f"version {version} is not one the Go proxy serves for this module path: canonical semver "
+         "with major 0 or 1 and no build metadata (a major 2 needs a new module path, ADR-004)")
     lines = (directory / "tag.txt").read_text().splitlines()
     need(len(lines) == 1, f"tag.txt has {len(lines)} lines, not 1")
     tag, _, commit = lines[0].partition(" ")

@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"sync"
 
 	"golang.org/x/crypto/chacha20"
 )
@@ -29,8 +30,12 @@ const sessionInfo = "packbin"
 // 16 bytes once; the waiter calls Join with them. A payload keeps the length of the clear packet.
 // There is no tag: a flipped bit is not detected.
 //
-// A PackSession is for one goroutine at a time: Pack and Unpack advance a counter.
+// A PackSession is safe for concurrent use: Pack, Unpack and UnpackMap take a lock only to pad and
+// advance the counter of their direction. Payloads are numbered in the order the Pack calls take that
+// lock, so the receiver must Unpack them in that order: concurrent senders serialise their sending in
+// the same order, or send the position themselves.
 type PackSession struct {
+	mu        sync.Mutex
 	seed      []byte
 	send      []byte
 	recv      []byte
@@ -51,8 +56,8 @@ func LoadSession(seed []byte) (*PackSession, error) {
 // them to the waiter once, in the clear. It fails (an *Error of kind BadValue) when the session is
 // already open.
 func (s *PackSession) Start() ([]byte, error) {
-	if err := s.canOpen(); err != nil {
-		return nil, err
+	if s == nil {
+		return nil, sessionErr("the session is nil")
 	}
 	nonce := make([]byte, NonceSize)
 	if _, err := rand.Read(nonce); err != nil {
@@ -86,18 +91,30 @@ func (s *PackSession) Join(nonce []byte) error {
 // session's send direction. Before Start or Join, or when the row is refused, it returns nil bytes and
 // an *Error and the position does not advance.
 func (s *PackSession) Pack(sc *Scheme, row any) ([]byte, error) {
-	if s == nil || s.send == nil {
+	if !s.isOpen() {
 		return nil, &Error{Kind: PackRefused, Field: NoField, Reason: "the session is not open: call Start or Join first"}
 	}
 	plain, err := Pack(sc, row)
 	if err != nil {
 		return nil, err
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if err := pad(s.send, s.sendCount, plain); err != nil {
 		return nil, err
 	}
 	s.sendCount++
 	return plain, nil
+}
+
+// isOpen is true once the session is open.
+func (s *PackSession) isOpen() bool {
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.send != nil
 }
 
 // Unpack removes the pad of the next position of the receive direction from a copy of payload and
@@ -124,7 +141,7 @@ func (s *PackSession) UnpackMap(payload []byte, schemes ...*Scheme) (map[string]
 
 // receive is a copy of payload with the receive pad removed and the position advanced.
 func (s *PackSession) receive(payload []byte, schemes []*Scheme) ([]byte, error) {
-	if s == nil || s.recv == nil {
+	if !s.isOpen() {
 		return nil, shortErr(NoField, "", 1, 0)
 	}
 	// An unusable scheme list is the caller's mistake, not the packet's: no position is spent on it.
@@ -133,6 +150,8 @@ func (s *PackSession) receive(payload []byte, schemes []*Scheme) ([]byte, error)
 		return nil, bad
 	}
 	plain := append([]byte(nil), payload...)
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if err := pad(s.recv, s.recvCount, plain); err != nil {
 		return nil, err
 	}
@@ -140,10 +159,8 @@ func (s *PackSession) receive(payload []byte, schemes []*Scheme) ([]byte, error)
 	return plain, nil
 }
 
+// canOpen is called with the lock held.
 func (s *PackSession) canOpen() error {
-	if s == nil {
-		return sessionErr("the session is nil")
-	}
 	if s.send != nil {
 		return sessionErr("the session is already open")
 	}
@@ -156,6 +173,11 @@ func (s *PackSession) canOpen() error {
 // open derives both directions from the seed and the 16 bytes, then wipes the seed. The opener sends
 // with the first 32 bytes and receives with the second 32; the waiter swaps them.
 func (s *PackSession) open(nonce []byte, opener bool) error {
+	if s == nil {
+		return sessionErr("the session is nil")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if err := s.canOpen(); err != nil {
 		return err
 	}

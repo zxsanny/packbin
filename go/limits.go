@@ -39,8 +39,8 @@ func (s *Scheme) Limits() Limits {
 // an override: a field left at 0 is refused (start from DefaultLimits to change one). A limit below 1
 // returns an *Error of kind InvalidScheme and a nil scheme.
 func (s *Scheme) WithLimits(l Limits) (*Scheme, error) {
-	if s == nil {
-		return nil, schemeErr(NoField, "", "the scheme is nil")
+	if s.unusable() {
+		return nil, schemeErr(NoField, "", "%s", s.notMade())
 	}
 	for _, c := range []struct {
 		name  string

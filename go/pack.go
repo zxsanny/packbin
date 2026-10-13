@@ -45,8 +45,8 @@ type scopeRoot struct {
 // map[string]any keyed by field name, or, for a scheme whose fields are bound with Bind, a *T (or a
 // T). A refused row returns nil bytes and an *Error of kind PackRefused naming the field id.
 func Pack(s *Scheme, row any) ([]byte, error) {
-	if s == nil {
-		return nil, packErr(NoField, "", "the scheme is nil")
+	if s.unusable() {
+		return nil, packErr(NoField, "", "%s", s.notMade())
 	}
 	values, err := s.rowValues(row)
 	if err != nil {

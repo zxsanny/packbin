@@ -36,8 +36,8 @@ func dispatch(buf []byte, schemes []*Scheme) (*Scheme, *reader, error) {
 	}
 	var seen [256]bool
 	for _, s := range schemes {
-		if s == nil {
-			return nil, nil, schemeErr(NoField, "", "a scheme is nil")
+		if s.unusable() {
+			return nil, nil, schemeErr(NoField, "", "a scheme is invalid: %s", s.notMade())
 		}
 		if seen[s.typeNumber] {
 			return nil, nil, schemeErr(NoField, "", "duplicate type number %d", s.typeNumber)
@@ -91,7 +91,7 @@ type reader struct {
 func (r *reader) enter(pl *place, out map[string]any) {
 	r.seen, r.split = out, false
 	if pl.nested {
-		r.seen, r.split = make(map[string]any, len(pl.members)), true
+		r.seen, r.split = map[string]any{}, true
 	}
 }
 
@@ -188,7 +188,7 @@ func (r *reader) group(f *node, values map[string]any) error {
 // row reads the members of a group into a map of its own. A nested row is a scope of its own: its
 // whens and counts read its own values.
 func (r *reader) row(f *node) (map[string]any, error) {
-	sub := make(map[string]any, len(f.fields))
+	sub := map[string]any{}
 	if f.nested {
 		savedSeen, savedSplit := r.seen, r.split
 		r.enter(f.inner, sub)

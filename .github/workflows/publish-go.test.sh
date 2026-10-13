@@ -38,22 +38,30 @@ gt_tags() {
   git --git-dir="$1" for-each-ref --format='%(refname:short)' refs/tags | paste -sd ' ' -
 }
 
-# A fake `go` on PATH: logs `list -m <module>@<version>|GOPROXY|GOFLAGS|GONOSUMDB|directory|go.mod there|tags on the
-# remote at that moment`, fails the first $GT_GO_FAILS calls like a proxy that has not seen the tag yet,
-# then answers `<module> <version>`.
+# A fake `go` on PATH: logs `mod download -json <module>@<version>|GOPROXY|GOFLAGS|GONOSUMDB|directory|go.mod
+# there|tags on the remote at that moment`, fails the first $GT_GO_FAILS calls like a proxy that has not seen the
+# tag yet (JSON with an Error field, exit 1), then prints the JSON of `go mod download`: Path and Version of the
+# request, or $GT_GO_ANSWER ("path version") when set.
 gt_write_go() {
   cat > "$1/go" <<'EOF'
 #!/bin/bash
 printf '%s|GOPROXY=%s|GOFLAGS=%s|GONOSUMDB=%s|dir=%s|gomod=%s|remote=%s\n' "$*" "${GOPROXY:-}" "${GOFLAGS:-}" \
   "${GONOSUMDB-unset}" "$(basename "$PWD")" "$([ -f go.mod ] && echo yes || echo no)" \
   "$(git --git-dir="$GT_BARE" for-each-ref --format='%(refname:short)' refs/tags | paste -sd , -)" >> "$GT_GO_LOG"
-calls="$(grep -c '^list ' "$GT_GO_LOG")"
+calls="$(grep -c '^mod download ' "$GT_GO_LOG")"
+spec="${@: -1}"
+path="${spec%@*}"
+version="${spec#*@}"
+if [ -n "${GT_GO_ANSWER:-}" ]; then
+  path="${GT_GO_ANSWER% *}"
+  version="${GT_GO_ANSWER#* }"
+fi
 if [ "$calls" -le "${GT_GO_FAILS:-0}" ]; then
+  printf '{\n\t"Path": "%s",\n\t"Version": "%s",\n\t"Error": "module not found"\n}\n' "$path" "$version"
   echo "go: module not found" >&2
   exit 1
 fi
-spec="$3"
-echo "${spec%@*} ${spec#*@}"
+printf '{\n\t"Path": "%s",\n\t"Version": "%s",\n\t"Info": "/cache/%s.info",\n\t"Sum": "h1:x"\n}\n' "$path" "$version" "$version"
 EOF
   chmod +x "$1/go"
 }
@@ -103,7 +111,7 @@ gt_publish() {
 }
 
 gt_go_calls() {
-  grep -c '^list ' "$gt_golog" || true
+  grep -c '^mod download ' "$gt_golog" || true
 }
 
 gt_pushed() {
@@ -130,7 +138,7 @@ gt_tag_checks() {
   assert_eq "$(gt_go_calls)" "1" "AC-2 proxy asks"
   # The module path and version, the proxy without a fallback, a temp module dir, and the tag already on the remote.
   assert_eq "$(sed -n 1p "$gt_golog")" \
-    "list -m github.com/zxsanny/packbin/go@v0.1.9|GOPROXY=https://proxy.golang.org|GOFLAGS=-mod=mod|GONOSUMDB=unset|dir=probe|gomod=yes|remote=go/v0.1.9" \
+    "mod download -json github.com/zxsanny/packbin/go@v0.1.9|GOPROXY=https://proxy.golang.org|GOFLAGS=-mod=mod|GONOSUMDB=unset|dir=probe|gomod=yes|remote=go/v0.1.9" \
     "AC-2 go list call"
   grep -q '^go proxy answers github.com/zxsanny/packbin/go v0.1.9' "$gt_dir/first.out" || fail "AC-2 no proxy answer line: $(cat "$gt_dir/first.out")"
   grep -q '^build ok go-tag$' "$gt_dir/first.out" && grep -q '^check ok: go-tag$' "$gt_dir/first.out" || fail "AC-2 build or check line missing"
@@ -226,6 +234,38 @@ gt_refusal_checks() {
   assert_eq "$(gt_pushed)" "0" "pushes after the refusals"
   assert_eq "$(gt_tags "$gt_bare")" "" "tags after the refusals"
   [ ! -e "$gt_dir/out-github/artifacts" ] || fail "a build started without GITHUB_TOKEN"
+  rm -rf "$gt_dir"
+}
+
+# F45: only a version the Go proxy can serve for this module path (canonical semver, major 0 or 1) is built; a
+# refused version is stopped by the build check before any push or proxy call. A proxy that answers another
+# version fails the check.
+gt_version_checks() {
+  local bad ok
+  gt_setup
+  for bad in v2.0.0 v1.2 v01.2.3 v1.0.0+meta v1.2.3-; do
+    gt_publish "ver-$bad" PACKBIN_VERSION="$bad"
+    [ "$gt_code" -ne 0 ] || fail "F45 version $bad passed"
+    grep -q "check failed: go-tag: version ${bad#v} is not one the Go proxy serves" "$gt_dir/ver-$bad.out" \
+      || fail "F45 version $bad message: $(tail -n 3 "$gt_dir/ver-$bad.out")"
+    assert_eq "$(gt_go_calls)" "0" "F45 proxy asks after version $bad"
+    assert_eq "$(gt_pushed)" "0" "F45 pushes after version $bad"
+    assert_eq "$(gt_tags "$gt_bare")" "" "F45 tags after version $bad"
+  done
+  for ok in v0.2.3 v1.0.0-rc.1; do
+    gt_publish "ver-$ok" PACKBIN_VERSION="$ok"
+    assert_eq "$gt_code" "0" "F45 version $ok: $(tail -n 3 "$gt_dir/ver-$ok.out")"
+    assert_eq "$(git --git-dir="$gt_bare" rev-parse "refs/tags/go/$ok^{commit}")" "$gt_head" "F45 tag go/$ok"
+  done
+  rm -rf "$gt_dir"
+
+  gt_setup
+  gt_publish otherversion GT_GO_ANSWER="github.com/zxsanny/packbin/go v0.1.8"
+  [ "$gt_code" -ne 0 ] || fail "F45 a proxy answer for another version passed"
+  [ "$(gt_go_calls)" -ge 1 ] || fail "F45 the proxy was not asked"
+  grep -q 'go proxy try 1: github.com/zxsanny/packbin/go v0.1.8' "$gt_dir/otherversion.out" || fail "F45 the wrong answer is not shown: $(tail -n 3 "$gt_dir/otherversion.out")"
+  gt_publish otherpath GT_GO_ANSWER="example.com/other v0.1.9"
+  [ "$gt_code" -ne 0 ] || fail "F45 a proxy answer for another module passed"
   rm -rf "$gt_dir"
 }
 
@@ -331,6 +371,7 @@ go_checks() {
   gt_tag_checks
   gt_rerun_checks
   gt_refusal_checks
+  gt_version_checks
   gt_table_checks
   gt_gate_checks
 }

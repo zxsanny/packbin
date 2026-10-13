@@ -56,13 +56,29 @@ func derefOf[V any](p *V) (any, bool) {
 	return *p, true
 }
 
-func normalizeReflect(rv reflect.Value) (any, bool) {
-	switch rv.Kind() {
-	case reflect.Pointer, reflect.Interface:
+// maxHops is how many pointers or interfaces normalize reads through; a value nested deeper (a type
+// that points at itself included) is kept as it is, and the field that reads it refuses it.
+const maxHops = 8
+
+// chase reads through up to maxHops pointers or interfaces to the value they hold.
+func chase(rv reflect.Value) (any, bool) {
+	whole := rv
+	for range maxHops {
 		if rv.IsNil() {
 			return nil, false
 		}
-		return normalize(rv.Elem().Interface())
+		rv = rv.Elem()
+		if k := rv.Kind(); k != reflect.Pointer && k != reflect.Interface {
+			return normalize(rv.Interface())
+		}
+	}
+	return whole.Interface(), true
+}
+
+func normalizeReflect(rv reflect.Value) (any, bool) {
+	switch rv.Kind() {
+	case reflect.Pointer, reflect.Interface:
+		return chase(rv)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return rv.Int(), true
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:

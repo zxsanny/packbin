@@ -6,7 +6,8 @@
 #
 # 1. Ask the remote about the tag. At the same commit: nothing to push. At another commit: fail naming
 #    both, because a Go tag never moves and is never deleted. Absent: push it (never forced).
-# 2. Ask proxy.golang.org for the module at that version (`go list -m`), retrying for
+# 2. Ask proxy.golang.org for the module at that version (`go mod download -json`: it fetches the
+#    zip and verifies it against sum.golang.org, which `go list -m` does not), retrying for
 #    $PACKBIN_GO_PROXY_WINDOW seconds (default 1800) every $PACKBIN_GO_PROXY_PAUSE seconds (default 30).
 #    It runs on a re-run too, so a run that failed here is finished by running the tag again.
 #
@@ -57,20 +58,30 @@ push_go_tag() {
   git_push "$root" "$url" "$commit:refs/tags/$tag"
 }
 
-# Succeeds when proxy.golang.org answers `<module> v<version>`. GOPROXY has no fallback to the
-# repository, GOFLAGS is replaced, and the variables that exclude a module from the proxy or from the
-# checksum database are unset, so the answer is what a new user's `go get` would get.
+# Succeeds when proxy.golang.org downloads `<module> v<version>`: the JSON of `go mod download` names
+# that Path and Version. GOPROXY has no fallback to the repository, GOFLAGS is replaced, and the
+# variables that exclude a module from the proxy or from the checksum database are unset, so the answer
+# is what a new user's `go get` would get.
 proxy_check() {
   local window="${PACKBIN_GO_PROXY_WINDOW:-1800}" pause="${PACKBIN_GO_PROXY_PAUSE:-30}"
-  local want="$module v$version" probe="$work/probe" deadline attempt=0 answer=""
+  local want="$module v$version" probe="$work/probe" deadline attempt=0 answer="" json="" code=0
   deadline=$((SECONDS + window))
   mkdir -p "$probe"
   printf 'module packbin-proxy-probe\n\ngo 1.26\n' > "$probe/go.mod"
   while :; do
     attempt=$((attempt + 1))
-    if answer="$(cd "$probe" && env -u GONOSUMDB -u GONOSUMCHECK -u GONOPROXY -u GOPRIVATE -u GOINSECURE -u GOSUMDB \
+    answer="" code=0
+    json="$(cd "$probe" && env -u GONOSUMDB -u GONOSUMCHECK -u GONOPROXY -u GOPRIVATE -u GOINSECURE -u GOSUMDB \
       GOPROXY=https://proxy.golang.org GOFLAGS=-mod=mod GOWORK=off \
-      go list -m "$module@v$version" 2> "$probe/err")" && [ "$answer" = "$want" ]; then
+      go mod download -json "$module@v$version" 2> "$probe/err")" || code=$?
+    # A failed download prints its reason as the Error field of the JSON on stdout.
+    answer="$(printf '%s' "$json" | python3 -I -c 'import json, sys
+d = json.load(sys.stdin)
+print(d["Error"] if d.get("Error") else "%s %s" % (d.get("Path", ""), d.get("Version", "")))' 2>> "$probe/err")" || answer=""
+    if [ "$code" -ne 0 ] && [ "$answer" = "$want" ]; then
+      answer="go exited $code"
+    fi
+    if [ "$answer" = "$want" ]; then
       echo "go proxy answers $answer (try $attempt)"
       return 0
     fi

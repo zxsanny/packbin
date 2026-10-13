@@ -192,3 +192,15 @@ Implement step complete: AZ-2440 to AZ-2451 are Done in `_docs/02_tasks/done/` (
 ## Review fixes (after `review24.md` PASS_WITH_WARNINGS)
 
 Findings 1 to 4 fixed: speed bound asserted without `-race` (a second `run-suite.sh go` step; the test skips the bound under `-race`), fuzz step `-fuzzminimizetime=0`, nil-safe `TypeNumber`/`Limits`, `StartWith` nonce warning. Findings 5 (`reachKey` identity) and 6 (explicit ring lines) skipped. Real `go` compose service after the fixes: `go,go suite,120000,PASS` (race tests 29.8 s, speed 160/128 ms without `-race`, fuzz 1.19M execs in 60 s). Go suite ok (28 s), `run-suite.test.sh` ok.
+
+## Security fix wave (owner decision 2026-10-13, "accept all recommended"; audit `_docs/05_security/security_report.md` loop 24)
+
+| Finding | Severity | Fix | Evidence |
+|---------|----------|-----|----------|
+| F41 | Medium | `go/unpack.go`: the size hints of the list/dict element maps (taken from the members the scheme declares) are dropped; the other scheme-sized `make` sites are charged by MaxSlots or bounded by the input | `go/alloc_bound_test.go`: a list of 65 535 `Nested` rows (256 declared members, 65 538 bytes) allocated 1 158 MB before and 22 MB after; a dict of 10 000 rows 177 MB before, 3 MB after |
+| F42 | Low | `Scheme.unusable()`: a zero-value `&Scheme{}` is refused in Pack, dispatch (Unpack, UnpackMap, session unpack) and WithLimits; `chase` in `values.go` follows at most 8 pointers, so `type P *P` is a refused value, not a stack overflow | `nil_scheme_test.go` (`TestZeroValueSchemeIsRefused`, `TestPointerChaseIsBounded`) |
+| F43 | Low | `PackSession` takes a `sync.Mutex` around the pad and the counter advance (clear Pack/Unpack run outside it); documented: payloads are numbered in lock order, the receiver unpacks in that order | `session_concurrent_test.go`: 8 goroutines x 1 000 Packs under `-race`, all 8 000 positions distinct, rows verified in position order |
+| F44 | Low | docs: ADR-004 "Tag protection" (tag ruleset on `go/v*` and `v*`; a repository setting the owner applies, not recorded as applied) and `packages.md` | open until the owner applies the ruleset |
+| F45 | Low | `publish-check.py` `GO_VERSION`: canonical semver, major 0 or 1, checked in the build phase before any push; `publish-go.sh` proxy check is `go mod download -json` with Path and Version compared | `publish-go.test.sh` (`gt_version_checks`: v2.0.0, v1.2, v01.2.3, v1.0.0+meta, v1.2.3- rejected with 0 calls, pushes and tags; v0.2.3 and v1.0.0-rc.1 accepted; another version or module path in the answer fails) |
+
+Verified by the parent: Go suite `-race` ok (29 s), speed bound without `-race` 126/115 ms, `publish-go.test.sh`, `run-suite.test.sh`. Review-style pass over the F43 diff: correct (the lock covers only the pad and counter; a session never closes once open). `security_report.md` is 530 lines (over 500 before this wave).

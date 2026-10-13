@@ -24,9 +24,14 @@ We will ship Go as a git tag, `go/vX.Y.Z`, pushed by `publish.yml` at the same c
 - **Gate.** `publish-gate.sh` runs the Go position program (`.github/workflows/drivers/handoff-go/position`) with the other languages and sums the byte mismatch over every language present. A Go mismatch, like any other, publishes 0 packages and 0 Go tags. A tree without `go/` prints `absent go`, plans no Go tag, and the other packages publish as before.
 - **Order.** The Go tag is the last upload of the run, after every required and optional registry target. A run that stopped on a registry failure pushes no Go tag.
 - **Push.** The `publish` job already holds `contents: write`. `publish-go.sh` pushes the commit of the checkout to `refs/tags/go/vX.Y.Z` with that token, without force.
-- **Proxy check.** After the push (and on every re-run) the job asks `proxy.golang.org` for `go list -m github.com/zxsanny/packbin/go@vX.Y.Z` and retries for up to 30 minutes. If it never answers, the step fails; the tag stays, and running the tag again only repeats the check.
+- **Version.** The module path has no `/v2` suffix, so Go serves only `0.x` and `1.x` versions of it. The build check (`publish-check.py go-tag`) refuses any other version (canonical semver, major 0 or 1, no build metadata) before anything is pushed. A major 2 or higher needs a new module path and a new ADR.
+- **Proxy check.** After the push (and on every re-run) the job runs `go mod download -json github.com/zxsanny/packbin/go@vX.Y.Z` against `proxy.golang.org` (it fetches the zip and verifies it against `sum.golang.org`), requires the JSON to name that Path and Version, and retries for up to 30 minutes. If it never answers, the step fails; the tag stays, and running the tag again only repeats the check.
 - **License.** `go/LICENSE` is the MIT text; the check fails the build phase otherwise.
 - **Tags never move.** A re-run finds `go/vX.Y.Z` at the same commit and pushes nothing; at another commit it fails and names both commits. A published Go tag is never deleted or moved. A bad version is retracted in `go.mod` (`retract vX.Y.Z`) of the next version, which ships as the next patch.
+
+### Tag protection
+
+`go/v*` tags are the release. A tag pushed by hand skips the golden gate and the license check, and the Go proxy serves it forever. The repository should therefore have a tag ruleset on `go/v*` and `v*`: creation limited to the publish workflow's identity and the maintainers, update and deletion blocked. This is a repository setting the owner applies, not code; as of 2026-10-13 it is a recommendation, and this repository does not record that the ruleset exists (security finding F44, related to F14).
 
 ## Alternatives Considered
 

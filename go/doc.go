@@ -89,6 +89,9 @@
 // NewScheme panic.
 //
 // A built Scheme is immutable and safe for concurrent Pack and Unpack from any number of goroutines.
+// A Scheme must come from NewScheme: a zero-value Scheme is refused with an *Error. A value reached
+// through more than 8 pointers (a type that points at itself included) is refused as an unsupported
+// value.
 //
 // # Field constructors
 //
@@ -182,7 +185,9 @@
 // the waiter joins with them, and a payload keeps the length of the clear packet. HKDF-SHA256 turns the
 // 32-byte seed and the 16 bytes into one key a direction; each direction counts its packets from 0 and
 // pads the packed bytes with ChaCha20 (RFC 8439). There is no tag: a flipped bit is not detected. A
-// PackSession is for one goroutine at a time.
+// PackSession is safe for concurrent use; payloads are numbered in the order the Pack calls take its
+// lock, so the receiver must Unpack them in that order (concurrent senders serialise their sending in
+// the same order, or send the position themselves).
 //
 //	opener, err := packbin.LoadSession(seed)   // seed is 32 bytes; the session keeps a copy
 //	hello, err := opener.Start()               // 16 random bytes: send them once, in the clear

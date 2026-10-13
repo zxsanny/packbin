@@ -60,6 +60,20 @@ func NewScheme(typeNumber int, fields ...Field) (*Scheme, error) {
 	return &Scheme{typeNumber: typeNumber, fields: bound, top: top, row: row, limits: DefaultLimits()}, nil
 }
 
+// unusable is true for a nil scheme and for a zero-value Scheme that NewScheme did not make: neither
+// has a field list to walk.
+func (s *Scheme) unusable() bool {
+	return s == nil || s.top == nil
+}
+
+// notMade names which of the two unusable schemes it is, for the message of the *Error.
+func (s *Scheme) notMade() string {
+	if s == nil {
+		return "the scheme is nil"
+	}
+	return "the scheme was not made by NewScheme"
+}
+
 // TypeNumber is the first byte of every packet of this scheme.
 // A nil scheme (an ignored NewScheme error) has type number 0.
 func (s *Scheme) TypeNumber() int {
