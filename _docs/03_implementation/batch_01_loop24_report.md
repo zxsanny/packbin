@@ -146,3 +146,18 @@ Handoff matrix: `user`, `nested`, `boolflag`, `booltrue`, `bitwhen`, `session` w
 | 44 | AZ-2449 | `go->csharp roundflags/roundwhen` was removed: C# has no `unpack-roundflags` command (the script's own comment, AZ-2092) | none | clear |
 | 45 | AZ-2449 | `ring-toolchains.sh` was checked only against a stand-in `go version`, not live; the full `language-pair.sh` was not run (step 11) | step 11 | clear |
 | 46 | AZ-2449 | `ring-wiring.test.sh` is 500 lines (the cap) | the next edit splits it | clear |
+
+## Batch 02 part 3 (AZ-2447, wave 3)
+
+| Worker | Spec | Result |
+|--------|------|--------|
+| go parity | AZ-2447 (TypeScript parity tables) | 5 new test-only files (`parity_bigint`, `parity_loop20`, `parity_flags_when`, `parity_fields`, `parity_reference`), 23 tests + about 330 subtests, 0 skips, no walker change. About 55 rows (loop22 section 3, the group rows) probed against TypeScript with node: all match. U6 row follows the five: checked in Python 3.14 (Docker) and by reading C# `Walker.StrandedCounts.cs` and Rust `walk/flag_bits.rs`; Java not run. Parent re-ran the Go suite: ok (26 s) |
+
+Row-to-test table (TypeScript table row to Go test) is in the worker report; in short: every row of `loop20-parity-pins`, `loop21-parity-probes`, `loop22-*`, `loop23-*`, `flags-when-member`, `flag-group-presence`, `bool-flag`, `fields`, `packbin`, `times-count-zero-with-values`, `split-form-loud-pack`, the loop 18/21/22 reference docs and FT-X-79, 80, 81 is covered; FT-X-75, 76, 77, 78, 82 are C++, Rust and Python only.
+
+| # | Spec ref | Finding | Proposed handling | Status |
+|---|----------|---------|-------------------|--------|
+| 47 | AZ-2447 | `flags-when-member` WG "when false with a body given": TypeScript packs the flat row `0100025a00` and the nested row `{g:{speed:7}}` `0100035a00`; Go packs the nested row `0100035a00` (as TypeScript's nested form), refuses the flat row naming `speed`; the bytes `0100025a00` have no Go spelling; unpack of `0100035a00` gives `g` as an empty map | Go-4; README (AZ-2451) | clear |
+| 48 | AZ-2447 | AZ-2359 string enum member in a u8: both refuse naming `level`; wording differs ("expected an integer" vs "a number") | none | clear |
+| 49 | AZ-2447 | The RSS bound of `loop22-max-slots` AC-2 (peak under 535 MB) is a Node measurement; not ported | a Go peak-RSS figure is a separate measurement (row 34) | clear |
+| 50 | AZ-2447 | U6 for Go checked by running Python and reading C#/Rust sources; Java not run | step 11 / assessment can probe Java | clear |
