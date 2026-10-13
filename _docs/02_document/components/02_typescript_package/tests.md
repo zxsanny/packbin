@@ -473,6 +473,12 @@ Source: `_docs/03_implementation/batch_01_loop21_report.md`, `test_run_loop21_re
 
 Test files: `round-slot-width.test.ts` (AZ-2382: rows 1 to 14, pack at `maxSlots` unpacks, one over refused at the same round), `empty-round-body.test.ts` (AZ-2390: rows 15 to 26, the F33 request shape built in a few ms, the zero-width `bytes` bodies still build), `repeat-short-optional.test.ts` (AZ-2383: rows 27 to 39), `loop21-parity-probes.test.ts` (AZ-2384 rows 40 to 43, AZ-2386 rows 44 to 52, AZ-2387 rows 53 to 56), `round-scope-cost.test.ts` (AZ-2391: timing ratio of 100 against 1 000 top-level fields for `times` and for `list`), and `support/hostile-pack.ts` with `support/hostile-cases.ts` and `hostile.test.ts` (AZ-2394: the 15 new cases, 55 in all). `round-values.test.ts` changed one row (`{a: [1, undefined], b: [5, 6]}`).
 
+## Loop 22 Tests (AZ-2410, AZ-2415, AZ-2417, AZ-2418)
+
+Source: `_docs/03_implementation/batch_01_loop22_report.md`, `reference_loop22.md` (every row was produced by this package). The suite went from 880 to 917 tests; strict `tsc` is clean.
+
+Test files: `loop22-novalue-count.test.ts` (AZ-2410: three kinds, split bit and combined `flags`, bigint count, count 0 and left out, holding `when`, rows 53 to 55, bias -1), `loop22-max-slots.test.ts` with `support/unpack-memory.ts` (AZ-2415: the default, the F10 packet refused and bounded below 535 MB, the raised limit), `loop21-parity-probes.test.ts` (row 56 pin changed), `round-limits.test.ts` and `pack-output-budget.test.ts` (numbers), `hostile.test.ts` with `support/hostile-pack.ts` and `support/hostile-cases.ts` (AZ-2417 ten new cases; AZ-2418 two wrong-rule tests). Scenarios FT-X-66, FT-X-71, FT-X-73, FT-X-74.
+
 ## Test Data Management
 
 **Required test data**:

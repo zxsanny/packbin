@@ -472,6 +472,12 @@ Source: `_docs/03_implementation/batch_01_loop21_report.md`, `test_run_loop21_re
 
 Test files: `rust/tests/round_slot_width_tests.rs` (AZ-2382: rows 1 to 14), `empty_round_body_tests.rs` (AZ-2390: rows 15 to 26 that a map scheme can express), `late_when_in_bit_body_tests.rs` (AZ-2385), `loop21_parity_probes_tests.rs` (AZ-2384, AZ-2386, AZ-2387 pins) and `count_behind_clear_when_tests.rs` (AZ-2386, AZ-2387: rows 44 to 56), `src/hostile_tests/refusals.rs` and `src/hostile_tests/pack_cases.rs` (AZ-2392, AZ-2394; `hostile_tests.rs` shrank by the split). Changed: `pack_output_budget_tests.rs` and `scope_tests.rs` (the narrower width).
 
+## Loop 22 Tests (AZ-2410, AZ-2412, AZ-2414, AZ-2415, AZ-2417, AZ-2418)
+
+Source: `_docs/03_implementation/batch_01_loop22_report.md`. The suite is 489 lib and integration tests.
+
+Test files: `tests/loop22_parity_tests.rs` (AZ-2410 rows 56 to 56d, AZ-2414 rows A1 to A11 and shape B, AZ-2415 default and the 64-slot-round packet), `repeat_lists_without_groups_tests.rs` (AZ-2412: refusals and unchanged rows), `times_tests.rs` and `times_longer_tests.rs` (three "under a flags member is refused" pins replaced by decision; a longer list still refused), `tests/count_behind_clear_when_tests.rs`, `tests/loop21_parity_probes_tests.rs`, `tests/round_limits_tests.rs` and `pack_output_budget_tests.rs` (numbers), `hostile_tests.rs` with `hostile_tests/pack_cases.rs` and `hostile_tests/refusals.rs` (AZ-2417; AZ-2418 four tests: wrong pack entry, wrong construct entry, entry for a case that is not refused, refused case without entry). Scenarios FT-X-66, FT-X-68, FT-X-70, FT-X-71, FT-X-73, FT-X-74.
+
 ## Test Data Management
 
 **Required test data**:

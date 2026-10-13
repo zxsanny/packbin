@@ -28,7 +28,7 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md). T
 
 ### FT-X-23: Unpack refuses a packet above the round limit, in five packages
 
-**Summary**: C#, TypeScript, Java and Rust (and Python, see the outcome) refuse a `repeat` or `times` that would start round `maxRounds + 1` (default 65 535 rounds) or take the slot total above `maxSlots` (default 4 194 304), with an error value, no handler call and no row; a refused 1 MiB packet costs memory bounded by the limits; C++ has fixed `Array` storage and no limit; the two hostile `limit` cases and the README state the rule (loop 15, AZ-2216 to AZ-2220).
+**Summary**: C#, TypeScript, Java and Rust (and Python, see the outcome) refuse a `repeat` or `times` that would start round `maxRounds + 1` (default 65 535 rounds) or take the slot total above `maxSlots` (default 4 194 304 in loop 15; 1 048 576 since loop 22), with an error value, no handler call and no row; a refused 1 MiB packet costs memory bounded by the limits; C++ has fixed `Array` storage and no limit; the two hostile `limit` cases and the README state the rule (loop 15, AZ-2216 to AZ-2220).
 **Traces to**: AZ-2216 AC-1 to AC-11, AZ-2217 AC-1 to AC-11, AZ-2218 AC-1 to AC-11, AZ-2219 AC-1 to AC-13, AZ-2220 AC-1 to AC-7
 **Category**: Resource limits
 

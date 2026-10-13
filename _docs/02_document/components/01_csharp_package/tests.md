@@ -408,7 +408,7 @@ No AC number; they hold the F10 limit on the rounds of one unpack call. All run 
 
 | Test | What it proves | Where |
 |------|----------------|-------|
-| `Ac1_*` | the defaults and constants (65,535 and 4,194,304); `WithLimits` takes the default, not the receiver's value, for an omitted argument | `csharp/tests/RoundLimitTests.cs` |
+| `Ac1_*` | the defaults and constants (65,535 and 1,048,576; 4,194,304 before loop 22); `WithLimits` takes the default, not the receiver's value, for an omitted argument | `csharp/tests/RoundLimitTests.cs` |
 | `Ac2_*` to `Ac5_*` | a `Repeat` of `MaxRounds` one-byte rounds is accepted and one more is refused; a `Times` is refused when the next round would start, also for a `u32` count | same file |
 | `Ac6_*`, `Ac7_*` | the slot limit counts every name a round can hold; the slot total is shared by the fields of one call, not by two calls | same file |
 | `Ac8_*` | a refused 1 MiB packet allocates a bounded amount | same file |
@@ -486,6 +486,12 @@ Source: `_docs/03_implementation/batch_01_loop21_report.md`, `test_run_loop21_re
 Test classes: `RoundSlotWidthTests` and `RoundSlotWidthTypedTests` (AZ-2382: reference rows 1 to 14, dictionary and typed rows; C# already had the rule, the tests pin it), `ShortOptionalListTests` (AZ-2383: reference rows 27 to 39), `SplitTimesClearBitTests` (AZ-2384: rows 40 to 43), `CountBehindClearWhenTests` (AZ-2386, AZ-2387: rows 44 to 56, the no-value clear bit `010000` included), `EmptyRoundBodyTests` (AZ-2390: rows 15 to 26, built at construction), `ExactIntegerTypeTests` (AZ-2373: `Ac1_Unpack_IntegerFields_ReturnTheirExactTypes`, `Ac2_Pack_WholeDoubleOrFloatForAnIntegerField_IsRefusedNamingTheField`, `Ac2_Pack_WholeFloatsForFloatFields_StillPack`, `Ac3_Pack_UnpackedRowOfEveryKind_GivesTheSameBytes`), `StrictNumberTests` (its `Valid` rows now use integer types and the new `WholeFloats` theory refuses `5.0`, `5m`, `4294967295.0`, `-2f`), `RowRoundTests` and `RowRoundMemberTests` (AZ-2388: the route bytes `01 02 0a000000 14000000 1e000000 28000000 07`, arrays and `IList<E>`, empty and null collections, count mismatch, limits, builds if and only if it binds), `RoundCollectionMemberTests` (AZ-2389: the `Dict` rows join the `List` rows in the binds-iff-builds theory), `CountTextAndLimitsTests` (AZ-2393: the count text above `int.MaxValue`, the lone `byte[]` in a `Repeat`, the loop 19 `WithLimits(int, long)` signature through reflection) and `HostilePackVectorTests` plus `HostileVectorTests` (AZ-2394: the 15 new cases, 55 in all).
 
 Existing cases changed: `StrictNumberTests.Pack_NumberThatFits_PacksAsBefore` (five rows that packed whole floats), `SchemeOwnershipTests.Scheme_SharedTimesFieldAcrossTwoSchemes_KeepsItsOwnCount` and `PackOutputBudgetTests.Ac2_Pack_ElementsThatEachHoldATimes_AreRefusedAtTheDefaultAndPackWithARaisedBudget` (asserted doubles) are the seven failing cases (the AZ-2373 spec expected 37 in 15 files); `LoneDictRoundTests` and `NestedRoundTests` changed their `Dict` member types for AZ-2389. Open: nothing pins `List<double>` for an integer `List` (builds, unpacks, pack refuses; owner decision).
+
+## Loop 22 Tests (AZ-2410, AZ-2411, AZ-2415, AZ-2417, AZ-2418)
+
+Source: `_docs/03_implementation/batch_01_loop22_report.md`. The suite went from 1479 to 1840 tests on net10.0 and on netstandard2.0.
+
+Test files: `CountBehindClearWhenTests.cs` (AZ-2410: six `Ac1_*`/`Ac2_*`/`Ac3_*` tests over `bits`, `packed`, `sized` in a split bit and a combined `flags`), `IntegerListFloatMemberTests.cs` (AZ-2411: the build-iff-pack matrix over 23 member types, the refusal of float members for integer lists, float lists unchanged, wire bytes unchanged), `CollectionElementKindTests.cs` and `CollectionMemberTests.cs` (two tests that built a `List<double>` for an integer list now expect the refusal), `RoundLimitTests.cs` and `PackSlotBudgetTests.cs` (AZ-2415: constant 1 048 576, F10 shape refused at the default and unpacked with the limit raised), `PackOutputBudgetTests.cs` (slot numbers), `HostilePackVectorTests.cs` and `HostileVectorTests.cs` (AZ-2417 ten new cases; AZ-2418 `WrongRuleEntry_FailsTheLoaderNamingTheCase`, `WrongBytes_FailTheLoader`, `WrongRuleEntry_FailsTheConstructLoaderNamingTheCase`). Scenarios FT-X-66, FT-X-67, FT-X-71, FT-X-73, FT-X-74.
 
 ## Test Data Management
 

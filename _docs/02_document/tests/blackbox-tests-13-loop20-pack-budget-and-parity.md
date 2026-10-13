@@ -88,7 +88,7 @@ Package suites after the fix pass (worker runs, review20 and batch 04): C# 1118 
 
 ### FT-X-41: Slots are charged on pack per round, with the width unpack charges
 
-**Summary**: Pack charges `maxSlots` as each round starts, before any byte of that round, with the same width unpack charges; a 65-name round at count 65 535 (4 259 775 slots, above the default 4 194 304) is refused naming the first member and packs with a raised limit; slots are checked before the bytes of a round (loop 20, AZ-2354).
+**Summary**: Pack charges `maxSlots` as each round starts, before any byte of that round, with the same width unpack charges; a 65-name round at count 65 535 (4 259 775 slots, above the default) is refused naming the first member and packs with a raised limit (figures below are loop 20, default 4 194 304; since loop 22 the default is 1 048 576 and the row is refused at round 16 132 with `m0: the rounds would hold 1048580 slots, above the limit of 1048576 slots`, see FT-X-71); slots are checked before the bytes of a round (loop 20, AZ-2354).
 **Traces to**: AZ-2354 AC-4
 **Category**: Errors
 
@@ -101,8 +101,8 @@ Package suites after the fix pass (worker runs, review20 and batch 04): C# 1118 
 
 | Step | Consumer Action | Expected System Response |
 |------|----------------|------------------------|
-| 1 | pack at the default limits (row 14) | `m0: the rounds would hold 4194320 slots, above the limit of 4194304 slots` at round 64 527 (64 527 x 65 = 4 194 255 charged; 4 194 260 bytes written) |
-| 2 | pack with `maxSlots` 4 259 775; unpack with the same scheme (row 15) | 4 259 780 bytes, first 16 `01ffff00000101010101010101010101`, last 16 `01` x 16; unpack ok, every `m` a list of 65 535 |
+| 1 | pack at the default limits of loop 20, 4 194 304 (row 14) | `m0: the rounds would hold 4194320 slots, above the limit of 4194304 slots` at round 64 527 (64 527 x 65 = 4 194 255 charged; 4 194 260 bytes written) |
+| 2 | pack with `maxSlots` 4 259 775 (still valid after loop 22: it is above the new default, so the row is raised explicitly); unpack with the same scheme (row 15) | 4 259 780 bytes, first 16 `01ffff00000101010101010101010101`, last 16 `01` x 16; unpack ok, every `m` a list of 65 535 |
 | 3 | unpack that packet with the default scheme (row 16) | TypeScript `{ok: false, field: "m0", needed: 0, left: 65520}`; Python `ShortPacket(field='1', needed=0, left=66040)` (Python unpack surcharge, review B3) |
 | 4 | order rows 17 to 21: `u32 n; times(n){ u8 k }` at `maxSlots` 3 and `maxBytes` 8 | `{n: 3, k: 7}` packs `0103000000070707`; `{n: 10}` with `maxBytes` 8: `k: the rounds would hold 4 slots, above the limit of 3 slots`; with `maxBytes` 7: `k: the packet would be 8 bytes, above the limit of 7 bytes`; with `maxRounds` 5: `k: the times count is 10, above the limit of 5 rounds`; with `maxBytes` 4: `n: the packet would be 5 bytes, above the limit of 4 bytes` |
 | 5 | scope and width rows 22 to 25 | two elements `{n: 3, k: 1}`, `{n: 3, k: 2}` at `maxSlots` 5: `k: the rounds would hold 6 slots, above the limit of 5 slots`; `{n: 3}`, `{n: 2}` packs `01020003010101020202`; `repeat{ u8 a; group g{ u8 b } }` width is 2 (`g` not counted): 2 rounds pack `0101030204`, 3 rounds `a: the rounds would hold 6 slots, above the limit of 5 slots` |

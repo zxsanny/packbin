@@ -479,6 +479,12 @@ Source: `_docs/03_implementation/batch_01_loop21_report.md`, `test_run_loop21_re
 
 Test files: `late_source_host_tests.cpp` (AZ-2385: a late `when` packs when another child sets the bit, and is refused when only late members hold it), `container_tests.cpp` (AZ-2390: a `repeat` or `times` with no child is `SchemeInvalid`), `hostile_host_tests.cpp`, `hostile_pack_cases.hpp` and `hostile_pack_loop21.hpp` (AZ-2394: 8 of the 15 new cases run), `times_count_zero_host_tests.cpp` (changed). The `Makefile` lists the new header as a dependency of the test binary.
 
+## Loop 22 Tests (AZ-2410, AZ-2416, AZ-2417, AZ-2418)
+
+Source: `_docs/03_implementation/batch_01_loop22_report.md`. The host suite and the `gcc:16` container pass; the arm embedded stage passes at 8152 of 8192 B of flash and 456 of 512 B of stack.
+
+Test files: `times_count_zero_host_tests.cpp` (AZ-2416: `az2416_empty_when_round_body_is_refused`, `az2416_member_round_body_builds`), `held_count_nested_late_host_tests.cpp` (AZ-2410: every no-value row is refused, rows 53 to 55 unchanged), `hostile_pack_loop21.hpp` (seven new skips with reasons), `hostile_host_tests.cpp` (497 lines after the split), `hostile_rule_check.hpp` and `hostile_rule_check_host_tests.cpp` (AZ-2418: the loader checks and `wrong_rule_entry_fails_the_loader`; listed in `HOST_TESTS` and as a dependency of the test binary in the `Makefile`). Scenarios FT-X-66, FT-X-72, FT-X-73, FT-X-74.
+
 ## Test Data Management
 
 **Required test data**:

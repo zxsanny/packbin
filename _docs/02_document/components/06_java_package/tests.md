@@ -482,6 +482,12 @@ Source: `_docs/03_implementation/batch_01_loop21_report.md`, `test_run_loop21_re
 
 Test classes (all run by `PackbinTest`): `RoundSlotWidthTest` (AZ-2382: rows 1 to 14 with Java spellings; a nested row is the Java form of an unanchored group), `EmptyRoundBodyTest` (AZ-2390), `RepeatShortOptionalTest` (AZ-2383: rows 27 to 39), `ClearBitProbesTest` (AZ-2384, AZ-2386, AZ-2387: rows 40 to 56), `HostileRefusals` with `HostileLoop21` and `HostileVectorTest` (AZ-2392, AZ-2394). Changed: `RepeatRoundTest`.
 
+## Loop 22 Tests (AZ-2410, AZ-2415, AZ-2417, AZ-2418)
+
+Source: `_docs/03_implementation/batch_01_loop22_report.md`. `PackbinTest` runs 2252 checks (2153 at loop 21).
+
+Test files: `ClearBitProbesTest.java` (`u11NoValueCountBehindAClearWhen`), `RoundLimitsTest.java` with `UnpackMemory.java` (AZ-2415 default, F10 packet refused, raised limit unpacks), `PackBudgetTest.java` (the element row refused by the slots, the bytes route kept), `HostileVectorTest.java` with `HostileLoop22.java` and `HostileRefusals.java` (AZ-2417 ten new cases), `HostileRuleTableTest.java` (AZ-2418: control plus wrong message, wrong exception type and missing entry for a pack and a construct case; registered in `PackbinTest`). Scenarios FT-X-66, FT-X-71, FT-X-73, FT-X-74.
+
 ## Test Data Management
 
 **Required test data**:

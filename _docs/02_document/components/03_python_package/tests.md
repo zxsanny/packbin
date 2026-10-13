@@ -460,6 +460,12 @@ Source: `_docs/03_implementation/batch_01_loop21_report.md`, `test_run_loop21_re
 
 Test files: `test_round_slot_width.py` (AZ-2381, AZ-2382: rows 1 to 14, pack at `max_slots` unpacks), `test_empty_round_body.py` (AZ-2390: rows 15 to 26), `test_repeat_short_optional.py` (AZ-2383: rows 27 to 39; pins the Python differences: a lone value and a short required list keep `repeat fields must have equal lengths`, a `when` list outside `flags` too), `test_loop21_parity_probes.py` (AZ-2384, AZ-2386, AZ-2387: rows 40 to 56), `hostile_refusals.py` with `hostile_loop21_support.py` and `test_hostile_vectors.py` (AZ-2392, AZ-2394: the rule table and the 15 new cases, 55 in all). Changed: `test_round_limits.py` (the first round of a run now costs one slot per name, not nine), `test_pack_output_budget.py` and `test_times_short_list.py`. Not re-measured: the Python unpack memory figures.
 
+## Loop 22 Tests (AZ-2410, AZ-2413, AZ-2415, AZ-2417, AZ-2418)
+
+Source: `_docs/03_implementation/batch_01_loop22_report.md`. The suite went from 1003 to 1099 tests.
+
+Test files: `test_loop22_parity.py` (AZ-2410 rows 56 to 56d and plain, AZ-2413 rows R1 to R3 and the unpack round trip, AZ-2415 F10 packet refused by the slots), `test_shared_count_node.py` (a counted node shared by two schemes keeps each scheme's count source), `test_repeat_short_optional.py` and `test_round_lists.py` (the equal-length pins replaced: lone value packs, short required list refused naming the member, short `when` list packs), `test_round_limits.py` and `test_pack_output_budget.py` (numbers, bytes route of the element row), `test_hostile_vectors.py` with `hostile_loop22_support.py` and `hostile_refusals.py` (AZ-2417 ten new cases; AZ-2418 four tests: wrong pack entry, wrong construct entry, control, scheme refusal of the `construct_empty_*when*` cases). Scenarios FT-X-66, FT-X-69, FT-X-71, FT-X-73, FT-X-74.
+
 ## Test Data Management
 
 **Required test data**:
