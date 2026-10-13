@@ -66,4 +66,4 @@ SMOKE
 
 ## Result
 
-(filled in after the agent run)
+PASS. Agent run on `1e1c23e` (2026-10-13), owner rule of 2026-10-12 (`_docs/04_deploy/deployment_procedures.md` § Loop smoke gate): `13/13 steps passed` (tree clean on `dev`; hostile case file 65; C# 1978 on net10.0 and on netstandard2.0 and 265 focused; TypeScript 967 with strict `tsc`; Python 1476 in 47 s; Rust 489 lib (673 across binaries); Java 2540 checks; C++ GCC 16 `-Werror`; embedded ARM 0 targets failed; ring 82 s; AC-10 pass). Host load 20 to 94 during the run (macOS XProtect scans); no step failed. Not in this script and not run locally: the ESP targets of `cpp-embedded-esp` and the vcpkg checks; the CI `embedded` job runs the ESP targets on the push.
