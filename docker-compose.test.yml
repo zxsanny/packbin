@@ -77,6 +77,19 @@ services:
       - ./:/src
       - ./fixtures/golden.hex:/fixture/golden.hex:ro
       - ./test-results:/test-results
+  go:
+    image: golang:1.27
+    working_dir: /src
+    entrypoint: ["bash", "-c"]
+    command: ["exec /src/.github/workflows/run-suite.sh go"]
+    environment:
+      SRC_ROOT: /src
+      FIXTURE: /fixture/golden.hex
+      TEST_RESULTS: /test-results
+    volumes:
+      - ./:/src
+      - ./fixtures/golden.hex:/fixture/golden.hex:ro
+      - ./test-results:/test-results
   cpp-embedded:
     build:
       context: ./cpp/embedded

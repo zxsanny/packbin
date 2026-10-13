@@ -3,6 +3,9 @@
 # `python -m pytest` on a usable venv and passes its exit code on, refuses to clear a directory
 # that is not a venv, and builds a missing venv with the pinned pytest. All interpreters are
 # fakes that log their arguments, so there is no network and no real pytest.
+# run-suite.sh go (AZ-2448): fails without go/go.mod, runs gofmt -l, go vet, go test -race, the
+# FuzzUnpack fuzz step (or says it is skipped) and the one-dependency check in that order, and stops
+# at the first failing step. `go` and `gofmt` are fakes too.
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
@@ -96,6 +99,131 @@ out="$(run_suite "$work/fresh" "$work/fakebin")"; code=$?
 [ "$code" -eq 0 ] || bad "a missing venv was not built (exit $code): $out"
 pin="$(bash "$here/tool-pin.sh" pytest)"
 grep -q "pip install --only-binary=:all: pytest==$pin" "$work/fakebin.log" || bad "pytest==$pin was not installed: $(cat "$work/fakebin.log")"
+
+# --- go ---
+gobin="$work/gobin"
+mkdir -p "$gobin"
+# A fake go: logs its arguments to $GO_LOG, fails the step named by $GO_FAIL (vet, test, list, fuzz,
+# mods, deps), lists FuzzUnpack when $GO_FUZZ is set, and prints what the real `go list` templates
+# print, plus $GO_EXTRA_DIRECT (a direct requirement) and $GO_EXTRA (a built module) when set.
+cat > "$gobin/go" <<'GO'
+#!/bin/sh
+echo "go $*" >> "$GO_LOG"
+if [ "$1" = -C ]; then shift 2; fi
+case "$1 $2" in
+  "vet ./...") step=vet ;;
+  "test -race") step=test ;;
+  "test -list") step=list ;;
+  "test -run="*) step=fuzz ;;
+  "list -m") step=mods ;;
+  "list -deps") step=deps ;;
+  *) echo "fake go: unexpected arguments $*" >&2; exit 2 ;;
+esac
+if [ "$step" = "${GO_FAIL:-}" ]; then echo "fake go: $step failed" >&2; exit 1; fi
+case "$step" in
+  list)
+    if [ -n "${GO_FUZZ:-}" ]; then echo FuzzUnpack; fi
+    printf 'ok  \tmod.example/packbin\t0.001s\n' ;;
+  mods)
+    if [ "$#" -eq 2 ]; then echo mod.example/packbin; else printf '\ngolang.org/x/crypto\n\n'; fi
+    if [ "$#" -gt 2 ] && [ -n "${GO_EXTRA_DIRECT:-}" ]; then echo "$GO_EXTRA_DIRECT"; fi ;;
+  deps)
+    printf '\nmod.example/packbin\ngolang.org/x/crypto\n'
+    if [ -n "${GO_EXTRA:-}" ]; then echo "$GO_EXTRA"; fi ;;
+esac
+exit 0
+GO
+cat > "$gobin/gofmt" <<'GOFMT'
+#!/bin/sh
+echo "gofmt $*" >> "$GO_LOG"
+if [ -n "${GOFMT_OUT:-}" ]; then echo "$GOFMT_OUT"; fi
+exit 0
+GOFMT
+chmod +x "$gobin/go" "$gobin/gofmt"
+
+goroot="$work/gosrc"
+mkdir -p "$goroot/go" "$goroot/fixtures" "$goroot/.github/workflows"
+cp "$repo/fixtures/golden.hex" "$goroot/fixtures/golden.hex"
+cp "$root/.github/workflows/report-row.sh" "$goroot/.github/workflows/"
+: > "$goroot/go/go.mod"
+
+run_go() { # tree [VAR=value ...]: runs run-suite.sh go with the fakes first on PATH
+  local tree="$1"
+  shift
+  rm -f "$work/go.log" "$work/goresults.rows"
+  : > "$work/go.log"
+  env SRC_ROOT="$tree" FIXTURE="${GO_FIXTURE:-$tree/fixtures/golden.hex}" TEST_RESULTS="$work/goresults" \
+    GO_LOG="$work/go.log" PATH="$gobin:$PATH" "$@" \
+    perl -e 'alarm 60; exec @ARGV' -- bash "$here/run-suite.sh" go </dev/null 2>&1
+}
+row_is() { # result: the one report row of the last run
+  grep -Eqx "report-row go go suite [0-9]+ $1" "$work/goresults.rows" \
+    || bad "go report row is not '$1': $(cat "$work/goresults.rows" 2>&1)"
+}
+ran() { grep -qF -- "$1" "$work/go.log"; }
+
+# G1 (AC-3). a tree without go/go.mod fails, names the manifest, writes a FAIL row and runs no go
+mkdir -p "$work/nogo/go" "$work/nogo/fixtures" "$work/nogo/.github/workflows"
+cp "$goroot/fixtures/golden.hex" "$work/nogo/fixtures/"
+cp "$goroot/.github/workflows/report-row.sh" "$work/nogo/.github/workflows/"
+out="$(run_go "$work/nogo")"; code=$?
+[ "$code" -ne 0 ] || bad "go: a tree without go/go.mod passed"
+case "$out" in *"go/go.mod is missing"*) ;; *) bad "go: no message naming the missing go/go.mod: $out" ;; esac
+row_is "FAIL suite failed"
+[ ! -s "$work/go.log" ] || bad "go: a tool ran without go/go.mod: $(cat "$work/go.log")"
+
+# G2 (AC-2). every gate in order on a clean tree with a FuzzUnpack target; one PASS row
+out="$(run_go "$goroot" GO_FUZZ=1)"; code=$?
+[ "$code" -eq 0 ] || bad "go: a clean tree failed (exit $code): $out"
+row_is "PASS "
+expected="gofmt -l .
+go -C $goroot/go vet ./...
+go -C $goroot/go test -race -count=1 -v ./...
+go -C $goroot/go test -list ^FuzzUnpack$ ./...
+go -C $goroot/go test -run=^$ -fuzz=^FuzzUnpack$ -fuzztime=60s mod.example/packbin
+go -C $goroot/go list -m
+go -C $goroot/go list -m -f {{if not (or .Main .Indirect)}}{{.Path}}{{end}} all
+go -C $goroot/go list -deps -test -f {{with .Module}}{{.Path}}{{end}} ./..."
+[ "$(cat "$work/go.log")" = "$expected" ] || bad "go: the steps differ from the expected ones: $(cat "$work/go.log")"
+case "$out" in *"skipped"*) bad "go: the fuzz skip line shows although FuzzUnpack exists: $out" ;; esac
+
+# G3. no FuzzUnpack target yet: the step says it is skipped and does not fuzz
+out="$(run_go "$goroot")"; code=$?
+[ "$code" -eq 0 ] || bad "go: a tree without a fuzz target failed (exit $code): $out"
+case "$out" in *"fuzz step skipped"*"no FuzzUnpack target"*) ;; *) bad "go: no skip line without a fuzz target: $out" ;; esac
+if ran "-fuzz="; then bad "go: fuzzed without a FuzzUnpack target"; fi
+
+# G4. gofmt lists a file: fail naming it, and nothing after it runs
+out="$(run_go "$goroot" GO_FUZZ=1 GOFMT_OUT=pack.go)"; code=$?
+[ "$code" -ne 0 ] || bad "go: an unformatted file passed"
+case "$out" in *"not gofmt-formatted"*"pack.go"*) ;; *) bad "go: no message naming the unformatted file: $out" ;; esac
+if ran " vet "; then bad "go: vet ran after gofmt failed"; fi
+row_is "FAIL suite failed"
+
+# G5 to G8. a failing vet, test, fuzz or dependency query fails the run and stops the later steps
+for step in vet test fuzz deps; do
+  out="$(run_go "$goroot" GO_FUZZ=1 GO_FAIL="$step")"; code=$?
+  [ "$code" -ne 0 ] || bad "go: a failing $step passed"
+  row_is "FAIL suite failed"
+done
+run_go "$goroot" GO_FUZZ=1 GO_FAIL=vet >/dev/null
+if ran "test -race"; then bad "go: tests ran after vet failed"; fi
+run_go "$goroot" GO_FUZZ=1 GO_FAIL=test >/dev/null
+if ran "-fuzz="; then bad "go: fuzzed after the tests failed"; fi
+
+# G9. a second module, built or required directly, fails and is named; x/crypto alone passes (G2)
+out="$(run_go "$goroot" GO_EXTRA=example.org/other)"; code=$?
+[ "$code" -ne 0 ] || bad "go: a second built module passed"
+case "$out" in *"other than golang.org/x/crypto"*"example.org/other"*) ;; *) bad "go: the extra module is not named: $out" ;; esac
+out="$(run_go "$goroot" GO_EXTRA_DIRECT=example.org/direct)"; code=$?
+[ "$code" -ne 0 ] || bad "go: a second direct requirement passed"
+case "$out" in *"example.org/direct"*) ;; *) bad "go: the extra requirement is not named: $out" ;; esac
+
+# G10. a fixture without the golden row fails before any go step
+printf '00\n' > "$work/bad-golden.hex"
+out="$(GO_FIXTURE="$work/bad-golden.hex" run_go "$goroot" GO_FUZZ=1)"; code=$?
+[ "$code" -ne 0 ] || bad "go: a wrong golden row passed"
+[ ! -s "$work/go.log" ] || bad "go: a step ran with a wrong golden row: $(cat "$work/go.log")"
 
 if [ "$fail" -eq 0 ]; then echo "run-suite.test.sh: all checks passed"; fi
 exit "$fail"

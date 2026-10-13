@@ -238,3 +238,20 @@ AZ-2354 through AZ-2367 are loop 20 (owner decisions of 2026-10-11 on the loop 1
 AZ-2373 and AZ-2381 through AZ-2394 are loop 21 (owner decisions U1 to U10 of 2026-10-12 on the loop 20 assessment, review and audit, plus its clear gaps), claimed by loop 21: TypeScript implements AZ-2382 first and writes the slot reference table; csharp runs AZ-2373, AZ-2389, AZ-2388, AZ-2393 in wave 1a and its AZ-2382/AZ-2390/AZ-2387 share in wave 1b; AZ-2394 then AZ-2392 are wave 2. The Go package (AZ-2222) follows.
 AZ-2410 through AZ-2418 are loop 22 (owner decisions U11 to U17 of 2026-10-12 on the loop 21 handoff, plus gap G1 and the loader checks), claimed by loop 22: TypeScript implements AZ-2410 and AZ-2415 first and writes the reference table; then one worker per package directory; AZ-2417 then AZ-2418 are wave 2. AZ-2417 depends on AZ-2410 and AZ-2412 to AZ-2416; AZ-2418 on AZ-2417. The Go package (AZ-2222) follows.
 AZ-2431 through AZ-2437 are loop 23 (owner decisions U18 to U23 of 2026-10-13 on the loop 22 handoff, plus gaps G1 to G3, and the Python bug AZ-2437 found in the batch), claimed by loop 23: one worker per package directory; `cpp/` runs AZ-2431 then AZ-2432; AZ-2436 is test-only in all six. U18 and U21 are README-only. The Go package (AZ-2222) follows.
+
+AZ-2440 through AZ-2451 are loop 24, the Go package (epic AZ-2222; owner decisions G-1 to G-6 and the 12-task split of 2026-10-13), claimed by loop 24. `go/` has one writer at a time: AZ-2440, AZ-2441, AZ-2442, AZ-2443, AZ-2444, AZ-2445, AZ-2446, AZ-2447, then AZ-2451's `go/example_test.go`. AZ-2448 (CI suite, scaffold job) runs beside the chain after AZ-2440; AZ-2449 (ring, ring job) after AZ-2445; AZ-2450 (release, ADR-004) after AZ-2448 and AZ-2449; AZ-2451 last. Estimation: no LESSONS bump; the epic's 26 points became 43 because loops 17 to 23 added the parity rows and work bounds (flagged concern in `problem.md`).
+
+| Task | Name | Complexity | Dependencies | Epic |
+|------|------|-----------|-------------|------|
+| AZ-2440 | go_core | 5 | None | AZ-2222 |
+| AZ-2441 | go_scheme_checks | 5 | AZ-2440 | AZ-2222 |
+| AZ-2442 | go_rounds | 5 | AZ-2441 | AZ-2222 |
+| AZ-2443 | go_collections | 5 | AZ-2442 | AZ-2222 |
+| AZ-2444 | go_limits | 3 | AZ-2443 | AZ-2222 |
+| AZ-2445 | go_session | 3 | AZ-2440 | AZ-2222 |
+| AZ-2446 | go_hostile_vectors | 3 | AZ-2444, AZ-2445 | AZ-2222 |
+| AZ-2447 | go_parity_rows | 3 | AZ-2446 | AZ-2222 |
+| AZ-2448 | go_ci_suite | 3 | AZ-2440 | AZ-2222 |
+| AZ-2449 | go_ring | 3 | AZ-2445 | AZ-2222 |
+| AZ-2450 | go_release | 5 | AZ-2448, AZ-2449 | AZ-2222 |
+| AZ-2451 | go_readme | 2 | AZ-2447, AZ-2450 | AZ-2222 |

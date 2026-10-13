@@ -4,9 +4,13 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$root"
 
-for lang in csharp typescript python rust cpp java; do
+langs="csharp typescript python rust cpp java go"
+for lang in $langs; do
   grep -q "^  ${lang}:" docker-compose.test.yml
+  grep -q "^  ${lang}:" docker-compose.publish.yml
 done
+# The scaffold job runs a suite for each of the seven services.
+grep -qx "          for lang in ${langs}; do" .github/workflows/test.yml
 if grep -q 'ports:' docker-compose.test.yml; then
   echo "compose publishes a port" >&2
   exit 1
@@ -18,7 +22,11 @@ if grep -E 'npmjs|nuget.org|pypi.org|crates.io|central.sonatype.com|github.com' 
 fi
 
 tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
 TEST_RESULTS="$tmp" bash .github/workflows/report-row.sh csharp "csharp suite" 10 PASS ""
 head -n 1 "$tmp/report.csv" | grep -qx 'Test ID,Test Name,Execution Time (ms),Result,Error Message'
 grep -qx 'csharp,csharp suite,10,PASS,' "$tmp/report.csv"
+TEST_RESULTS="$tmp" bash .github/workflows/report-row.sh go "go suite" 20 FAIL "suite failed"
+grep -qx 'go,go suite,20,FAIL,suite failed' "$tmp/report.csv"
+[ "$(grep -c 'Test ID' "$tmp/report.csv")" -eq 1 ]
 echo "report row tests passed"

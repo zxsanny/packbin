@@ -61,6 +61,16 @@ Strings, lists, and dictionaries:
 | A dictionary pair count is read as a byte length | AZ-1940 AC-1, AZ-1940 AC-3 | AZ-1940 |
 | Two languages agree with a fixture but not with each other on a nested map | AZ-1941 AC-1, AZ-1941 AC-2 | AZ-1941 |
 
+Go package (loop 24, AZ-2222; decompose 1.8):
+
+| Risk | AC | Owner |
+|------|----|-------|
+| Go agrees with its own tests but not with a peer on a ring kind (bytes cross a language seam) | AZ-2449 AC-1, AC-2 | AZ-2449 |
+| Go follows spec text where TypeScript and the five agree otherwise (a parity row drifts) | AZ-2447 AC-1, AC-2 | AZ-2447 |
+| A Go golden mismatch still lets the other registries or the Go tag publish | AZ-2450 AC-1 | AZ-2450 |
+| A re-run moves or duplicates `go/vX.Y.Z` | AZ-2450 AC-3 | AZ-2450 |
+| The hostile checker counts "Go" inside another word and passes a section that omits Go | AZ-2446 AC-3 | AZ-2446 |
+
 ## Deferred
 
 None.

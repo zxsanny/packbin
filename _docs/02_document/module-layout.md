@@ -3,7 +3,7 @@
 **Language**: mixed
 **Layout Convention**: custom
 **Root**: ./
-**Last Updated**: 2026-10-12
+**Last Updated**: 2026-10-13
 
 ## Layout Rules
 
@@ -169,6 +169,21 @@ A single `src/`, `crates/`, or `packages/` tree would put six languages in one c
 
 > See ADR 001_runtime-primitives-no-generator.
 
+### Component: go
+
+- **Epic**: AZ-2222
+- **Directory**: `go/` (module `github.com/zxsanny/packbin/go`, `go 1.26`; tags `go/vX.Y.Z`, ADR-004)
+- **Public API**:
+  - the exported identifiers of package `packbin` in `go/*.go` (non-test files); there is no `internal/` split
+- **Internal (do NOT import from other components)**:
+  - unexported identifiers in `go/*.go`; tests `go/*_test.go`, fuzz corpus `go/testdata/`
+  - Loop 24 (AZ-2222): created
+- **Owns (exclusive write during implementation)**: `go/**`
+- **Imports from**: none (stdlib and `golang.org/x/crypto/chacha20` only)
+- **Consumed by**: Go services
+
+> See ADR 001_runtime-primitives-no-generator, ADR 004 (Go ships as a git tag, loop 24).
+
 ## Shared / Cross-Cutting
 
 No shared code package. The library does not log, authenticate, or load configuration. Each package implements the connection session in its own public entry. None imports another.
@@ -201,11 +216,11 @@ No shared code package. The library does not log, authenticate, or load configur
 
 ## Allowed Dependencies (layering)
 
-The six packages are peers. None imports another.
+The seven packages are peers. None imports another.
 
 | Layer | Components | May import from |
 |-------|------------|-----------------|
-| 1. Packages | csharp, typescript, python, rust, cpp, java | none |
+| 1. Packages | csharp, typescript, python, rust, cpp, java, go | none |
 | 0. Fixture and workflows | fixtures, .github/workflows | none |
 
 ## Layout Conventions (reference)
@@ -218,3 +233,4 @@ The six packages are peers. None imports another.
 | Rust | `rust/` | `rust/src/` | `rust/src/lib.rs` | `rust/tests/` |
 | C++ | `cpp/` | `cpp/include/packbin/`, `cpp/src/core/` | the headers in `cpp/include/packbin/` | `cpp/tests/core/`, `cpp/tests/compile-fail/` |
 | Java | `java/` | `java/src/main/java/packbin/` | `java/src/main/java/packbin/Packbin.java` | `java/src/test/` |
+| Go | `go/` | `go/` (one package `packbin`) | exported identifiers in `go/*.go` | `go/*_test.go` |

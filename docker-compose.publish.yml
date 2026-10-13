@@ -22,3 +22,5 @@ services:
     volumes: *publish-volumes
   java:
     volumes: *publish-volumes
+  go:
+    volumes: *publish-volumes
