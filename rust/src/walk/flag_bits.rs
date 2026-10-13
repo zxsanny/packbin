@@ -147,7 +147,8 @@ fn zero_given(count: &str, values: &Values) -> bool {
 }
 
 /// A `repeat` is on when one of its rounds holds a value. With no rounds, a value given under a
-/// name of its body would be dropped, so it is refused as outside `flags`.
+/// name of its body would be dropped, so it is refused as outside `flags`; with rounds that hold
+/// none, a value kept beside them must be what they hold, as outside `flags`.
 fn repeat_on(
     anchor: u32,
     members: &[Field],
@@ -162,10 +163,11 @@ fn repeat_on(
                     return Ok(true);
                 }
             }
+            check_repeat_lists(anchor, members, rounds, values)?;
             Ok(false)
         }
         Some(Some(Value::Groups(_))) | Some(None) | None => {
-            check_repeat_lists(anchor, members, values)?;
+            check_repeat_lists(anchor, members, &[], values)?;
             Ok(false)
         }
         Some(Some(_)) => Err(PackError::Type("__repeat__".to_string())),

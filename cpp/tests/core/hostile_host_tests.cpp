@@ -310,11 +310,10 @@ char const* construct_empty_repeat_body(std::uint8_t const*, std::size_t) {
 }
 
 // AZ-2416: a times or repeat whose body holds only empty `when`s holds no member, so it is refused
-// at construction (SchemeInvalid naming the round, id 2 and 1 here). In these three vectors the
-// `when` names `mode` (id 0), which sits outside the round, so the scope rule (AZ-2331) refuses
-// the same scheme at the same ids; the standing test below pins that the empty-body rule is the
-// one the vectors reach, by building the same shapes with a `when` that names no source (no scope
-// rule can fire) and expecting the same refusal. The outcome is scheme_error either way.
+// at construction (SchemeInvalid naming the round, id 2 and 1 here). The `when` names `mode`
+// (id 0), outside the round, so the scope rule (AZ-2331) would refuse it at the same ids, but
+// C++ checks the body (check_shape) before the scope (resolve): the body rule fires first, as
+// empty_body_rule_host_tests.cpp pins with a direct check_shape call. scheme_error either way.
 char const* construct_empty_when_times_body(std::uint8_t const*, std::size_t) {
   auto s = packbin::scheme<Plain>(
       1, packbin::u8(0), packbin::u8(1),
@@ -438,26 +437,6 @@ void check_case(Handler const& h, Case const& c) {
   expect(ok, "hostile case outcome");
 }
 
-// AZ-2416: the three empty-`when` vectors fail by the empty-body rule, not only by the scope rule:
-// the same scheme with a `when` that names no source is refused at the same id.
-void empty_when_vectors_reach_the_empty_body_rule() {
-  auto times = packbin::scheme<Plain>(
-      1, packbin::u8(0), packbin::u8(1),
-      packbin::times(2, 1, packbin::when(2, packbin::eq(-1, 1))));
-  auto repeat = packbin::scheme<Plain>(
-      1, packbin::u8(0), packbin::repeat(1, packbin::when(1, packbin::eq(-1, 1))));
-  auto nested = packbin::scheme<Plain>(
-      1, packbin::u8(0), packbin::u8(1),
-      packbin::times(2, 1, packbin::when(2, packbin::eq(-1, 1),
-                                         packbin::when(2, packbin::eq(-1, 1)))));
-  auto at = [](packbin::Result r, int id) {
-    return r.error == Error::SchemeInvalid && r.field == id;
-  };
-  expect(at(packbin::validate(times), 2), "AZ-2416 empty when under times: empty-body rule");
-  expect(at(packbin::validate(repeat), 1), "AZ-2416 empty when under repeat: empty-body rule");
-  expect(at(packbin::validate(nested), 2), "AZ-2416 nested empty when: empty-body rule");
-}
-
 void hostile_cases() {
   std::vector<Case> cases;
   std::vector<Case> packs;
@@ -486,7 +465,6 @@ void hostile_cases() {
     check_case(*match, c);
   }
   run_hostile_pack_checks(packs);
-  empty_when_vectors_reach_the_empty_body_rule();
 }
 
 }  // namespace

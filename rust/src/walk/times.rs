@@ -162,6 +162,19 @@ pub(super) fn check_lists(
     rounds: &[Values],
     values: &Values,
 ) -> Result<(), PackError> {
+    lists_agree("times", anchor, members, false, rounds, values)
+}
+
+/// `kind` names the round field in the message; with `nested` a name of a `times` nested in the
+/// body counts too (a `repeat` body may hold a `times`, never a `repeat`).
+fn lists_agree(
+    kind: &str,
+    anchor: u32,
+    members: &[Field],
+    nested: bool,
+    rounds: &[Values],
+    values: &Values,
+) -> Result<(), PackError> {
     let mut kept: Vec<(&Name, &[Value])> = values
         .iter()
         .filter_map(|(name, value)| {
@@ -170,7 +183,7 @@ pub(super) fn check_lists(
                 Some(one) => std::slice::from_ref(one),
                 None => return None,
             };
-            declares(members, name).then_some((name, items))
+            declares(members, name, nested).then_some((name, items))
         })
         .collect();
     if kept.is_empty() {
@@ -182,38 +195,47 @@ pub(super) fn check_lists(
         let held = lists.get(name).map_or(&[][..], Vec::as_slice);
         if !same_values(list, held) {
             return Err(PackError::Type(format!(
-                "times at id {anchor}: list for '{name}' disagrees with its rounds"
+                "{kind} at id {anchor}: list for '{name}' disagrees with its rounds"
             )));
         }
     }
     Ok(())
 }
 
-/// Whether a field of `fields`, at any depth, is named `name`.
-fn declares(fields: &[Field], name: &str) -> bool {
+/// Whether a field of `fields`, at any depth, is named `name`; with `nested` also inside a
+/// `times`.
+fn declares(fields: &[Field], name: &str, nested: bool) -> bool {
     fields.iter().any(|field| match &field.kind {
         FieldKind::Flags {
             name: own, members, ..
         }
         | FieldKind::Group {
             name: own, members, ..
-        } => own.as_ref() == name || declares(members, name),
-        FieldKind::When { members, .. } => declares(members, name),
-        FieldKind::FlagBit { inner, .. } => declares(std::slice::from_ref(inner), name),
+        } => own.as_ref() == name || declares(members, name, nested),
+        FieldKind::When { members, .. } => declares(members, name, nested),
+        FieldKind::Times { members, .. } if nested => declares(members, name, nested),
+        FieldKind::FlagBit { inner, .. } => declares(std::slice::from_ref(inner), name, nested),
         FieldKind::U2 { names } => names.iter().any(|own| own.as_ref() == name),
         _ => field_name(field) == Some(name),
     })
 }
 
 /// A `repeat` takes its rounds only as `__repeat__` groups. With none, a value kept under a name of
-/// its body (a non-list counts as a list of one item; an empty list holds nothing) would be dropped
-/// without a word, so it fails on the first such name.
+/// its body, at any depth and in a `times` nested in it (a non-list counts as a list of
+/// one item; an empty list holds nothing), would be dropped without a word, so it fails on the
+/// first such name. With groups, a value kept beside them under a name of the body must be what
+/// the rounds hold, as for a `times` (unpack gives none: a `repeat` has no per-name lists).
 pub(super) fn check_repeat_lists(
     anchor: u32,
     members: &[Field],
+    groups: &[Values],
     values: &Values,
 ) -> Result<(), PackError> {
-    let names = names_below(members, true);
+    if !groups.is_empty() {
+        return lists_agree("repeat", anchor, members, true, groups, values);
+    }
+    let mut names = Vec::new();
+    collect_below(members, true, false, true, &mut names);
     match names.iter().find(|below| holds_items(values, below.name)) {
         Some(Below { name, .. }) => Err(PackError::Type(format!(
             "repeat at id {anchor}: '{name}' is given without '__repeat__' groups; give the rounds \
@@ -339,23 +361,33 @@ struct Below<'a> {
 /// the fields at the top count too (a `repeat` body, where none are direct).
 fn names_below(fields: &[Field], under: bool) -> Vec<Below<'_>> {
     let mut out = Vec::new();
-    collect_below(fields, under, false, &mut out);
+    collect_below(fields, under, false, false, &mut out);
     out
 }
 
-fn collect_below<'a>(fields: &'a [Field], flags: bool, when: bool, out: &mut Vec<Below<'a>>) {
+/// With `rounds` the names of a `times` nested in `fields` count too.
+fn collect_below<'a>(
+    fields: &'a [Field],
+    flags: bool,
+    when: bool,
+    rounds: bool,
+    out: &mut Vec<Below<'a>>,
+) {
     for field in fields {
         match &field.kind {
-            FieldKind::Flags { members, .. } => collect_below(members, true, when, out),
-            FieldKind::When { members, .. } => collect_below(members, flags, true, out),
+            FieldKind::Flags { members, .. } => collect_below(members, true, when, rounds, out),
+            FieldKind::When { members, .. } => collect_below(members, flags, true, rounds, out),
+            FieldKind::Times { members, .. } if rounds => {
+                collect_below(members, true, when, rounds, out);
+            }
             FieldKind::Group { name, members, .. } => {
                 if flags || when {
                     out.push(Below { name, field, when });
                 }
-                collect_below(members, flags, when, out);
+                collect_below(members, flags, when, rounds, out);
             }
             FieldKind::FlagBit { inner, .. } => {
-                collect_below(std::slice::from_ref(inner), flags, when, out);
+                collect_below(std::slice::from_ref(inner), flags, when, rounds, out);
             }
             FieldKind::U2 { names } if flags || when => {
                 out.extend(names.iter().map(|name| Below { name, field, when }));

@@ -1,5 +1,5 @@
 import type { Field } from "./fields.ts"
-import { present, sameValue, validCount, type Value } from "./kinds.ts"
+import { MAX_SAFE, present, sameValue, validCount, type Value } from "./kinds.ts"
 import { refName } from "./ref-scope.ts"
 import { refuseLoneBuffers, refuseLoneDicts, refuseLongLists, roundCount, roundMember, roundShape } from "./rounds.ts"
 import { borrowedCount, seen } from "./written.ts"
@@ -156,13 +156,22 @@ export function refuseUnwrittenCount(field: Field, values: Value, wrote: Value):
     case "sized": {
       // The same shape with no value: the clear bit drops nothing, but a count the row gives and no field
       // wrote is refused as it is for a times, whether or not the member has a value.
+      // A bigint past 2^53 is no readable count, but it is still a count above 0 the row gives (U23, as the
+      // other packages refuse it); a times keeps the split (U6).
       const ref = refName(field)
       if (Object.hasOwn(wrote, ref)) return
+      const raw = values[ref]
       const bias = field.kind === "packed" ? field.bias : 0
-      const count = validCount(values[ref], bias)
-      if (count === null || count === 0) return
+      let shown: bigint | number
+      if (typeof raw === "bigint" && raw > MAX_SAFE) {
+        shown = raw
+      } else {
+        const count = validCount(raw, bias)
+        if (count === null || count === 0) return
+        shown = count - bias
+      }
       throw new RangeError(
-        `${field.name}: the count ${ref} is ${count - bias} in the row, but no field wrote it (the when that holds it is clear), so the member reads nothing; give the count 0, leave it out, or make the when hold`,
+        `${field.name}: the count ${ref} is ${shown} in the row, but no field wrote it (the when that holds it is clear), so the member reads nothing; give the count 0, leave it out, or make the when hold`,
       )
     }
     case "when":

@@ -168,49 +168,8 @@ void az2390_empty_round_body_is_refused_at_construction() {
   check::expect(pb::validate(plain()).ok(), "AZ-2390 AC-3 one-member body builds");
 }
 
-// AZ-2416: the empty-round check looks through `when` and groups (D8 rule): a body made only of
-// empty `when`s or groups holds no member and is refused; a zero-width `bytes`, a flag byte, a
-// member-less `flags` and a `when` that holds a member are members and still build. A `when`
-// inside a round cannot name a field outside it (eq(0, 1) here is refused for its source too),
-// so eq(-1, ...) (no source) is what reaches the body check on its own.
-template <typename Body>
-bool round_refused(Body const& body) {
-  auto t = pb::scheme<Row>(1, pb::u8<&Row::n>(0), pb::times(1, 0, body));
-  auto r = pb::scheme<Row>(1, pb::u8<&Row::n>(0), pb::repeat(1, body));
-  return refused_at(pb::validate(t), 1) && refused_at(pb::validate(r), 1);
-}
-
-template <typename Body>
-bool round_builds(Body const& body) {
-  auto t = pb::scheme<Row>(1, pb::u8<&Row::n>(0), pb::times(1, 0, body));
-  auto r = pb::scheme<Row>(1, pb::u8<&Row::n>(0), pb::repeat(1, body));
-  return pb::validate(t).ok() && pb::validate(r).ok();
-}
-
-void az2416_empty_when_round_body_is_refused() {
-  check::expect(round_refused(pb::when(1, pb::eq(0, 1))), "AZ-2416 AC-1 empty when");
-  check::expect(round_refused(pb::when(1, pb::eq(-1, 1))), "AZ-2416 AC-1 empty when, no source");
-  check::expect(round_refused(pb::when(1, pb::eq(-1, 1), pb::when(1, pb::eq(-1, 2)))),
-                "AZ-2416 AC-1 when of an empty when");
-  check::expect(round_refused(pb::group(1)), "AZ-2416 AC-1 empty group");
-  check::expect(round_refused(pb::group(1, pb::when(1, pb::eq(-1, 1)))),
-                "AZ-2416 AC-1 group of an empty when");
-  check::expect(round_refused(pb::group(1, pb::group(1, pb::when(1, pb::eq(-1, 1))))),
-                "AZ-2416 AC-1 group of a group of an empty when");
-}
-
-void az2416_member_round_body_builds() {
-  check::expect(round_builds(pb::when(1, pb::eq(-1, 1), pb::u8(1))),
-                "AZ-2416 AC-2 when with a u8");
-  check::expect(round_builds(pb::when(1, pb::eq(-1, 1), pb::when(1, pb::eq(-1, 2), pb::u8(1)))),
-                "AZ-2416 AC-2 when of a when with a u8");
-  check::expect(round_builds(pb::group(1, pb::when(1, pb::eq(-1, 1), pb::bytes(1, 0)))),
-                "AZ-2416 AC-2 group of a when with a zero-width bytes");
-  check::expect(round_builds(pb::group(1, pb::u8(1))), "AZ-2416 AC-2 group with a u8");
-  check::expect(round_builds(pb::bytes(1, 0)), "AZ-2416 AC-2 zero-width bytes");
-  check::expect(round_builds(pb::flags(1)), "AZ-2416 AC-2 member-less flags");
-  check::expect(round_builds(pb::flag_byte(0)), "AZ-2416 AC-2 flag byte");
-}
+// AZ-2416 (the empty-round check looks through `when` and groups) moved to
+// empty_body_rule_host_tests.cpp with AZ-2431, which pins it without a source-less `when`.
 
 }  // namespace
 
@@ -220,7 +179,5 @@ int run_core_times_count_zero_host_tests() {
   a_lone_value_with_count_zero_is_unchanged();
   az2356_split_count_zero_after_the_byte();
   az2390_empty_round_body_is_refused_at_construction();
-  az2416_empty_when_round_body_is_refused();
-  az2416_member_round_body_builds();
   return check::failures();
 }

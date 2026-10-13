@@ -40,9 +40,10 @@ When packed with count 3 and no value
 Then refused, member and count named.
 
 **AC-2: nested holding when**
-Given `when(outer holds) { when(inner clear) { counted member } }`
+Given the row 56 shape (count source skipped by a clear `when`, counted member outside that `when`) placed inside an outer `when` that holds (also as a bit holding a holding `when` around the member)
 When packed with count 3 and no value
 Then refused.
+(Amended 2026-10-13 after the TypeScript worker's probe: a counted member *inside* the clear `when` is the existing silent skip, not the U11 rule; pin that literal shape as "observed, silent skip" where a package can spell it.)
 
 **AC-3: round body**
 Given the shape inside a `times` and a `repeat` round

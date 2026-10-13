@@ -176,10 +176,8 @@ fn pack_one<'v>(
                 Some(Some(_)) => return Err(PackError::Type("__repeat__".to_string())),
                 _ => &[],
             };
-            if groups.is_empty() {
-                check_repeat_lists(*anchor, members, values)?;
-            }
             check_repeat_cap(*anchor, members, groups.len(), out.max_rounds)?;
+            check_repeat_lists(*anchor, members, groups, values)?;
             for group in groups {
                 out.start_round(*slots, || round_member("repeat", *anchor, members))?;
                 pack_round(members, group, out)?;

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from typing import Any
 
 from packbin._nodes import _Bytes, _Dict, _List, _Node, _Repeat, _Sized
@@ -59,28 +59,45 @@ def _round_length(value: Any) -> int:
     return len(value) if isinstance(value, _builtin_list) else 1
 
 
-def _at_round(
-    row: Any, index: int, optional: set[int] | None = None, count: int | None = None
-) -> Callable[[_Node], Any]:
+class _RoundValues:
     """The value of a leaf in round `index`: entry `index` of its list, or the lone value every round shares.
     A leaf in `optional` (the ids of those a `times` body holds under `flags` or a flag bit) has no entry
     past the end of its list: it is absent in that round, as a `None` entry is. `count` is given for a `times`:
     it writes every round it counts, so a list that ends early names the leaf. A required leaf of a `repeat`
     whose list is empty beside a longer one is missing in every round and is named so."""
 
-    def at(leaf: _Node) -> Any:
-        value = leaf.get(row)  # type: ignore[attr-defined]
+    def __init__(self, row: Any, index: int, optional: set[int] | None, count: int | None) -> None:
+        self._row = row
+        self._index = index
+        self._optional = optional
+        self._count = count
+
+    def __call__(self, leaf: _Node) -> Any:
+        value = leaf.get(self._row)  # type: ignore[attr-defined]
         if not isinstance(value, _builtin_list):
             return value
-        if optional and index >= len(value) and id(leaf) in optional:
+        index = self._index
+        if self._optional and index >= len(value) and id(leaf) in self._optional:
             return None
-        if count is not None and index >= len(value):
-            raise ValueError(f"{_member_label(leaf)}: {len(value)} items, times count is {count}")
+        if self._count is not None and index >= len(value):
+            raise ValueError(f"{_member_label(leaf)}: {len(value)} items, times count is {self._count}")
         if index >= len(value):
             raise KeyError(f"missing field {_name(leaf)}")
         return value[index]
 
-    return at
+    def unwritten_count(self, leaf: _Node) -> Any:
+        """A count no field of this round wrote (its `when` is clear), as the U11 check reads it: a list with no
+        entry for this round leaves the count absent, as a `None` entry does; the round never needed it."""
+        value = leaf.get(self._row)  # type: ignore[attr-defined]
+        if not isinstance(value, _builtin_list):
+            return value
+        return value[self._index] if self._index < len(value) else None
+
+
+def _at_round(
+    row: Any, index: int, optional: set[int] | None = None, count: int | None = None
+) -> _RoundValues:
+    return _RoundValues(row, index, optional, count)
 
 
 def _refuse_repeat_over_limit(node: _Repeat, values: Sequence[Any], max_rounds: int) -> None:

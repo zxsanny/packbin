@@ -22,7 +22,7 @@ Loop works on `dev` in this session (no worktree). Intake: `_docs/loops/loop23/h
 
 ## Scope
 
-Specs claimed (`loop: 23`): AZ-2431 to AZ-2436 (10 points). AZ-2068 (C++ AVR stretch) stays out.
+Specs claimed (`loop: 23`): AZ-2431 to AZ-2436 (10 points), plus AZ-2437 (Python bug found in the batch, 1 point). AZ-2068 (C++ AVR stretch) stays out.
 
 ## Steps
 | id | step | name | include | reason |
@@ -54,6 +54,8 @@ One worker per package directory owns that directory (sources, tests): `cpp/` (A
 1. **Wave 1a** (parallel, four workers): `cpp/`, `rust/`, `typescript/`, `python/`.
 2. **Wave 1b** (parallel, two workers, as wave 1a slots free): `java/`, `csharp/` (AZ-2436 only).
 3. **Parent, once**: one total review, feature-assess (read-only), one step-11 run, steps 12–14, smoke, close, push `dev`, fast-forward `main` per the project `loop_end_merge`, watch CI.
+
+As run: wave 1a `cpp/`, `rust/`, `typescript/`, `python/`; wave 1b `java/`, then `csharp/`; the Python worker was resumed for AZ-2437 (owns `python/src/packbin/` U11 check) when the Java slot freed. AZ-2433 AC-1 and AZ-2436 AC-2 amended during the batch (see the specs).
 
 ### Proof
 

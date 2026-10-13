@@ -35,12 +35,13 @@ Owner decision U22 A (2026-10-13); review22 finding 5; security F37. AZ-2412 (U1
 ## Acceptance Criteria
 
 **AC-1: lists beside groups**
-Given `repeat { u8 n; u8 x }` and `{__repeat__: [{n:1,x:5}], n: [1]}`
+Given `repeat { u8 n; u8 x }` and `{__repeat__: [{n:1,x:5}], n: [2]}` (a kept value the rounds do not hold; also a shorter list, a lone value, an empty list beside rounds that hold the name)
 When packed
-Then `PackError` naming `n`.
+Then `PackError` naming `n` (`repeat at id N: list for 'n' disagrees with its rounds`, as `check_lists` for `times`).
+(Amended 2026-10-13: the review's example `n: [1]` agrees with its round and packs `010105`, as through a `times`; U22 A is "like `times` `check_lists`", which refuses only a disagreeing value.)
 
 **AC-2: nested round names**
-Given `repeat { u8 n; times(n) { u8 w } }` and `{w: [1]}` with no groups (also a `repeat` nested in a `repeat`)
+Given `repeat { u8 n; times(n) { u8 w } }` and `{w: [1]}` with no groups (a `repeat` nested in a `repeat` cannot be built in Rust: construction panics, so it is not covered)
 When packed
 Then `PackError` naming `w`.
 

@@ -80,7 +80,7 @@ export function writeBits(
   out.append(name, packed)
 }
 
-const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER)
+export const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER)
 
 // A count read from a u64 or i64 field is a bigint. It is a count only while a number holds it
 // exactly; past 2^53 it stays a bigint and cannot be read.

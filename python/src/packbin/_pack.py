@@ -26,6 +26,7 @@ from packbin._nodes import (
 )
 from packbin._pack_limits import _PackBudget, _name, flags_member, round_member
 from packbin._pack_rounds import (
+    _RoundValues,
     _at_round,
     _borrowed,
     _check_round_lists,
@@ -162,17 +163,17 @@ def _refuse_late_times(child: _Node, seen: dict[int, Any], row: Any) -> None:
             _refuse_late_times(inner, seen, row)
 
 
-def _refuse_unwritten_count(child: _Node, seen: dict[int, Any], take: Callable[[_Node], Any]) -> None:
+def _refuse_unwritten_count(child: _Node, seen: dict[int, Any], count_of: Callable[[_Node], Any]) -> None:
     """A clear bit holds a `times`, `bits`, `packed` or `sized` whose count no field wrote, because the `when` that
     holds it is clear, while the row gives the count a value above 0 (after the `packed` bias). Unpack would read
     the count as absent and the member as nothing, so pack refuses the row instead of writing a packet that drops
     it. A count of 0 or none, and a count that a field wrote, are left alone. Looked at through `flags`, flag bits,
-    groups and the `when`s that hold."""
+    groups and the `when`s that hold. `count_of` reads the count; in a round, a list with no entry for it is none."""
     if isinstance(child, (_Times, _Sized, _Bits, _Packed)):
         source = child.count_source
         if source is None or seen.get(child.count) is not None:
             return
-        count = take(source)
+        count = count_of(source)
         bias = child.bias if isinstance(child, _Packed) else 0
         if isinstance(count, int) and not isinstance(count, bool) and count + bias > 0:
             ending = "its times reads no round" if isinstance(child, _Times) else "the member reads nothing"
@@ -184,16 +185,21 @@ def _refuse_unwritten_count(child: _Node, seen: dict[int, Any], take: Callable[[
             )
     elif isinstance(child, (_Group, _Flags)):
         for inner in child.fields:
-            _refuse_unwritten_count(inner, seen, take)
+            _refuse_unwritten_count(inner, seen, count_of)
     elif isinstance(child, _FlagBit):
-        _refuse_unwritten_count(child.field, seen, take)
+        _refuse_unwritten_count(child.field, seen, count_of)
     elif isinstance(child, _When) and seen.get(child.condition.field_id) == child.condition.value:
         for inner in child.fields:
-            _refuse_unwritten_count(inner, seen, take)
+            _refuse_unwritten_count(inner, seen, count_of)
 
 
 def _refuse_late_body(
-    child: _Node, flag_state: dict[int, Any], take: Callable[[_Node], Any], seen: dict[int, Any], row: Any
+    child: _Node,
+    flag_state: dict[int, Any],
+    take: Callable[[_Node], Any],
+    seen: dict[int, Any],
+    row: Any,
+    count_of: Callable[[_Node], Any],
 ) -> None:
     """A clear split bit with `when` conditions written after the flag byte: a body that a written condition
     now asks for would be dropped, so pack fails instead of returning a packet the row did not ask for. A false
@@ -202,7 +208,7 @@ def _refuse_late_body(
     if not late:
         return
     _refuse_late_times(child, seen, row)
-    _refuse_unwritten_count(child, seen, take)
+    _refuse_unwritten_count(child, seen, count_of)
     if not _child_on(child, take, seen, row):
         return
     for node in late:
@@ -345,6 +351,9 @@ def pack_nodes(
             return get_value(node)
         return node.get(row)  # type: ignore[attr-defined]
 
+    def count_of(node: _Node) -> Any:
+        return get_value.unwritten_count(node) if isinstance(get_value, _RoundValues) else take(node)
+
     def run(members: Sequence[_Node], scope: dict[int, Any], getter: Callable[[_Node], Any] | None) -> None:
         pack_nodes(buf, members, row, scope, getter, flag_state=flag_state, budget=budget)
 
@@ -375,7 +384,7 @@ def pack_nodes(
             flag = 0
             for i, child in enumerate(node.fields):
                 if not _child_on(child, take, seen, row):
-                    _refuse_unwritten_count(child, seen, take)
+                    _refuse_unwritten_count(child, seen, count_of)
                     continue
                 flag |= 1 << i
                 if isinstance(child, _Bool):
@@ -444,7 +453,7 @@ def pack_nodes(
             if flag is None:
                 raise RuntimeError("flag bit before flag byte")
             if not flag & (1 << node.index):
-                _refuse_late_body(node.field, flag_state, take, seen, row)
+                _refuse_late_body(node.field, flag_state, take, seen, row, count_of)
             else:
                 run([node.field], seen, get_value)
         elif isinstance(node, _When):

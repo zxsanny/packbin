@@ -44,7 +44,9 @@ use crate::value::{PackError, UnpackError, Values};
 ///   than the count is a [`PackError::Type`] naming the field, the items and the count, not
 ///   dropped items.
 /// - A `repeat` takes its rounds as [`Value::Groups`] (one [`Values`] per round) under the name
-///   `"__repeat__"`; no value there packs no rounds.
+///   `"__repeat__"`; no value there packs no rounds. A value kept under a name of its body (at
+///   any depth, also in a `times` nested in it) is a [`PackError::Type`] naming it
+///   when there are no rounds, and must be what the rounds hold when there are.
 ///
 /// Returns the packet bytes, or a [`PackError`]: [`PackError::Missing`] when a field that is
 /// written has no value; [`PackError::Type`] when a value does not fit its field, a bool value
