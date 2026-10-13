@@ -47,3 +47,7 @@ Test files: `ClearBitProbesTest.java` (`u11NoValueCountBehindAClearWhen`), `Roun
 
 - `NoValueCountNestedTest.java` (AZ-2436, G3, FT-X-81), run from `PackbinTest`: `refusedNamingMemberAndCount` and `unchangedPacksAsAtHead` per position and kind, `nestedRowCannotCountByTheRowAround`, `memberInsideTheClearWhenIsASilentSkip`.
 - Suite: 2540 checks (2252 at loop 22). No main change.
+
+## Loop 24 (Go joins the ring; no Java test change)
+
+Loop 24 added the Go package (AZ-2222, `components/07_go_package/`). No Java source or test changed (batch report: the six suites have no source change). What is new for this package is its place in the ring: Go joins every kind both ways (`user`, `nested`, `boolflag`, `booltrue`, `bitwhen`, `session`, `roundflags`, `roundwhen`, `listgroup`, `dictgroup`, `listflags`), through `language-pair.sh` (114 Go lines in all, guarded by `ring-wiring.test.sh`; scenario FT-X-90). The hostile case file is unchanged at 65 cases and is now read by seven loaders (FT-X-87). Java charges a nested-row group 1 slot where Go charges the width of a `Nested` row's own members (assessment D3, open); the U6 row was not run in Java.

@@ -42,3 +42,7 @@ Test files: `CountBehindClearWhenTests.cs` (AZ-2410: six `Ac1_*`/`Ac2_*`/`Ac3_*`
 
 - `NoValueCountNestedTests.cs` (AZ-2436, G3, FT-X-81): `Ac1To3_Pack_CountAboveZeroWithNoValueInANestedPosition_IsRefusedNamingMemberAndCount`, `Ac4_Pack_CountZeroLeftOutOrAHoldingWhenInANestedPosition_PacksAsAtHead`, `Ac2_Pack_MemberInsideTheClearInnerWhenItself_IsASilentSkipAsObserved`, `Ac1_Build_NestedRowGroupNamingACountOutsideItsRow_IsRefusedSoThatPositionIsNotSpellable`; AZ-2437 parity (FT-X-82): `Ac3_Pack_CountListShorterThanTheRoundsWhereTheMissingRoundIsClear_PacksAsTypeScript`.
 - Suite: 1978 on net10.0 (1840 at loop 22). No source change.
+
+## Loop 24 (Go joins the ring; no C# test change)
+
+Loop 24 added the Go package (AZ-2222, `components/07_go_package/`). No C# source or test changed (batch report: the six suites have no source change). What is new for this package is its place in the ring: Go joins `user`, `nested`, `boolflag`, `booltrue`, `bitwhen` and `session` both ways, `roundflags` and `roundwhen` as producer only (`csharp -> go`; no public C# reader of an aligned round row, AZ-2092), and `listgroup`, `dictgroup`, `listflags` both ways, through `language-pair.sh` (114 Go lines in all, guarded by `ring-wiring.test.sh`; scenario FT-X-90). The hostile case file is unchanged at 65 cases and is now read by seven loaders (FT-X-87). C# is the reference of the Go session (ciphertext `b55d0a29c56c203712b241232e`) and of the whole-float refusal (Go-2 A follows C# since loop 21); `Walker.StrandedCounts.cs` was read for the U6 row.

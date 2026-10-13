@@ -50,3 +50,7 @@ Test files: `tests/loop22_parity_tests.rs` (AZ-2410 rows 56 to 56d, AZ-2414 rows
 - `tests/raised_slot_limit_tests.rs` (AZ-2435, G1, FT-X-80): `ac1_with_max_slots_raised_to_4_194_304_the_old_worst_packet_unpacks`, `ac2_the_default_limits_refuse_the_same_packet_at_the_slot_limit`.
 - `tests/no_value_count_nested_tests.rs` (AZ-2436, G3, FT-X-81): `ac1_to_ac3_count_3_and_no_value_is_refused_in_every_nested_position`, `ac4_count_zero_count_left_out_and_a_holding_when_pack_as_at_head`, `observed_a_member_inside_a_clear_when_is_skipped_without_a_word`.
 - Suite: 670 at the batch, 673 after the review fixes (489 lib and integration at loop 22 per that batch report).
+
+## Loop 24 (Go joins the ring; no Rust test change)
+
+Loop 24 added the Go package (AZ-2222, `components/07_go_package/`). No Rust source or test changed (batch report: the six suites have no source change). What is new for this package is its place in the ring: Go joins `user`, `nested`, `boolflag`, `booltrue`, `bitwhen`, `session`, `roundflags` and `roundwhen` both ways (Rust is not in the list and dict rings), through `language-pair.sh` (114 Go lines in all, guarded by `ring-wiring.test.sh`; scenario FT-X-90). The hostile case file is unchanged at 65 cases and is now read by seven loaders (FT-X-87). `walk/flag_bits.rs` was read for the U6 row.

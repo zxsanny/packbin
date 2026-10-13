@@ -445,7 +445,7 @@ The consumer check uses the vcpkg of the GitHub runner (`VCPKG_INSTALLATION_ROOT
 
 ## Loops 19 and later
 
-See [tests-by-loop.md](tests-by-loop.md) (loop 19 to loop 23 sections, moved in loop 23).
+See [tests-by-loop.md](tests-by-loop.md) (loop 19 to loop 23 sections, moved in loop 23; loop 24 adds Go to the ring, no test change here).
 
 ## Test Data Management
 

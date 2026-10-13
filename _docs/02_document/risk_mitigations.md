@@ -25,6 +25,7 @@
 | R02 | A pushed vcpkg port version stays | External | Low | Medium | Low | The tag pushes a public vcpkg git registry for `packbin`. Rollback is a later port version. A pull request to the curated microsoft/vcpkg registry is not the publish path | C++ package | Mitigated |
 | R03 | A published Maven Central version cannot be deleted | External | Low | Medium | Low | The Java component records that rollback is "stop depending on that version" | Java package | Accepted |
 | R04 | One language misses the 100000-round-trip bound | Technical | Low | Medium | Low | AC-10 is the same loop in each language. The research loop on C# and TypeScript finished far under 1 second | each package | Accepted |
+| R05 | A published Go version cannot be deleted or moved | External | Low | Medium | Low | Go ships as the tag `go/vX.Y.Z` (ADR-004). The tag is pushed last, after the golden gate and every registry, never forced; a re-run finds it at the same commit and pushes nothing, at another commit it fails. `proxy.golang.org` and the checksum database remember the first content, so a bad version is marked `retract` in the `go.mod` of the next patch | Go package | Accepted |
 
 ## Detailed Risk Analysis
 
@@ -34,7 +35,7 @@
 
 **Trigger conditions**: A field width, order, or endian differs and the golden check is skipped.
 
-**Affected components**: all six language packages, GitHub Actions
+**Affected components**: all six language packages (Go, the seventh since loop 24, is under the same golden check), GitHub Actions
 
 **Mitigation strategy**:
 1. One shared hex fixture is the pass condition for every language
@@ -101,6 +102,25 @@
 
 **Documents updated**: each component description, performance-tests.md
 
+### R05: A published Go version cannot be deleted or moved
+
+**Description**: The Go module is fetched from the git tag `go/vX.Y.Z`. The Go module proxy caches the first content it sees and the checksum database records it, so a tag that is deleted or moved gives users a checksum error, and a version with a bug stays fetchable.
+
+**Trigger conditions**: A Go version is tagged and then found wrong (a bug, or a tag at the wrong commit).
+
+**Affected components**: Go package, GitHub Actions (`publish-go.sh`)
+
+**Mitigation strategy**:
+1. The Go tag is the last upload of a run, so a golden mismatch or a failed registry pushes none (`go-tag` is a `final` target)
+2. `publish-go.sh` never forces a push; the same commit passes without a push, another commit fails naming both (tags never move)
+3. A tag needs the owner's explicit go with the exact commit; none was pushed in loop 24
+
+**Contingency plan**: Mark the version `retract vX.Y.Z` in the `go.mod` of the next version and ship that as the next patch (no `retract` line exists yet).
+
+**Residual risk after mitigation**: Low
+
+**Documents updated**: `adr/004_go-ships-as-a-git-tag.md`, `_docs/04_deploy/packages.md`, `components/07_go_package/description.md`
+
 ## Architecture/Component Changes Applied
 
 | Risk ID | Document Modified | Change Description |
@@ -111,10 +131,11 @@
 | R02 | `components/05_cpp_package/description.md` | Rollback is a later port version |
 | R03 | `components/06_java_package/description.md` | Rollback is to stop depending on that version |
 | R04 | component descriptions | Each names the AC-10 loop on one core |
+| R05 | `adr/004_go-ships-as-a-git-tag.md` | Go is a tag at the same commit, last upload, never moved |
 
 ## Summary
 
-**Total risks identified**: 4
-**Critical**: 0 | **High**: 1 | **Medium**: 0 | **Low**: 3
-**Risks mitigated this iteration**: 4
+**Total risks identified**: 5
+**Critical**: 0 | **High**: 1 | **Medium**: 0 | **Low**: 4
+**Risks mitigated this iteration**: 4 (R05 accepted)
 **Risks requiring user decision**: none

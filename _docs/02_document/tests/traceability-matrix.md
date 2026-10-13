@@ -4,22 +4,22 @@
 
 | AC ID | Acceptance Criterion | Test IDs | Coverage |
 |-------|---------------------|----------|----------|
-| AC-1 | Position pack is the 13-byte hex | FT-P-01, SM-01, NFT-RES-01 | Covered |
-| AC-2 | Unpack returns those fields and 0 motion fields | FT-P-02, SM-02 | Covered |
-| AC-3 | All six languages' bytes match | FT-P-03 | Covered |
-| AC-4 | Clear bit adds 0 bytes; flags 0x20 adds 2 | FT-P-04 | Covered |
-| AC-5 | A stored 0 is written | FT-P-05 | Covered |
-| AC-6 | Conditional group adds 0 bytes or its width | FT-P-06 | Covered |
-| AC-7 | Repeat yields one value per group; 1 leftover byte is an error | FT-P-07, FT-N-02 | Covered |
-| AC-8 | Short field names field, needed, left, and returns 0 values | FT-N-01, NFT-RES-01, NFT-SEC-02 | Covered |
-| AC-9 | Trailing bytes are an error and 0 values | FT-N-02 | Covered |
-| AC-10 | 100000 round trips ≤ 1 second on one core | NFT-PERF-01, NFT-RES-LIM-01 | Covered |
-| AC-11 | Tests run on every push and pull request | FT-P-09 | Covered |
-| AC-12 | A matching tag publishes one package per language present | FT-P-08 | Covered |
-| AC-13 | The first tag publishes exactly six packages | FT-P-08, FT-P-10 | Covered |
-| AC-14 | A golden mismatch publishes 0 packages | FT-N-03 | Covered |
-| AC-15 | A missing language publishes 0 packages | FT-N-04 | Covered |
-| AC-16 | Published packages declare MIT | FT-P-08 | Covered |
+| AC-1 | Position pack is the 13-byte hex | FT-P-01, SM-01, NFT-RES-01, FT-X-83 (Go, loop 24) | Covered |
+| AC-2 | Unpack returns those fields and 0 motion fields | FT-P-02, SM-02, FT-X-83 (Go, loop 24) | Covered |
+| AC-3 | All six languages' bytes match (seven since loop 24: Go joins) | FT-P-03, FT-X-83, FT-X-90 (Go, loop 24) | Covered |
+| AC-4 | Clear bit adds 0 bytes; flags 0x20 adds 2 | FT-P-04, FT-X-84, FT-X-85 (Go, loop 24) | Covered |
+| AC-5 | A stored 0 is written | FT-P-05, FT-X-84, FT-X-85 (Go, loop 24) | Covered |
+| AC-6 | Conditional group adds 0 bytes or its width | FT-P-06, FT-X-84, FT-X-85 (Go, loop 24) | Covered |
+| AC-7 | Repeat yields one value per group; 1 leftover byte is an error | FT-P-07, FT-N-02, FT-X-84, FT-X-85 (Go, loop 24) | Covered |
+| AC-8 | Short field names field, needed, left, and returns 0 values | FT-N-01, NFT-RES-01, NFT-SEC-02, FT-X-84, FT-X-85 (Go, loop 24) | Covered |
+| AC-9 | Trailing bytes are an error and 0 values | FT-N-02, FT-X-84, FT-X-85 (Go, loop 24) | Covered |
+| AC-10 | 100000 round trips ≤ 1 second on one core | NFT-PERF-01, NFT-RES-LIM-01, FT-X-91 (Go, loop 24) | Covered |
+| AC-11 | Tests run on every push and pull request | FT-P-09, FT-X-92 (Go, loop 24) | Covered |
+| AC-12 | A matching tag publishes one package per language present | FT-P-08, FT-X-93 (Go, loop 24) | Covered |
+| AC-13 | The first tag publishes exactly six packages (history; the Go tag of a later tag is ADR-004, GO-10) | FT-P-08, FT-P-10, FT-X-93 (Go, loop 24) | Covered |
+| AC-14 | A golden mismatch publishes 0 packages | FT-N-03, FT-X-93 (Go, loop 24) | Covered |
+| AC-15 | A missing language publishes 0 packages | FT-N-04, FT-X-93 (Go, loop 24) | Covered |
+| AC-16 | Published packages declare MIT | FT-P-08, FT-X-93 (Go, loop 24) | Covered |
 | AZ-1938 AC-1 | `zxsanny` packs to `07007a7873616e6e79` | FT-U-01 | Covered |
 | AZ-1938 AC-2 | An empty string is `0000` | FT-U-02 | Covered |
 | AZ-1938 AC-3 | 65536 UTF-8 bytes writes 0 bytes | FT-U-03 | Covered |
@@ -401,6 +401,33 @@
 | Review23 #5 | Rust `lists_agree` clones every round value into a map before comparing when a body name is kept beside `__repeat__` groups (bounded by the input and `maxRounds`) | FT-X-78; no test (cosmetic) | Open (loop 24 handoff, cosmetic: compare in place if profiling shows it) |
 | Review23 #6 | The AZ-2435 tests allocate a few hundred MB and take 4 to 6 s in the default Python and Rust suites (no slow marker) | FT-X-80; tests named there | Open (judged at the idle step 11 run; a marker only if they flake) |
 | Assessment23 U26 | C# dictionary rows read a nested-row group's names from the outer row: an inner name shared with the outer row packs the outer value; a nested dictionary under the group's name is not read | FT-X-81; no test (probe in assessment23) | Open (loop 24 owner row U26) |
+| GO-1 | Go packs the AC-1 row to `4001000065cd1d00a3e1110100` and unpacks it to the same five fields, 0 motion fields | FT-X-83; tests: Go `golden_test.go` (`TestAC1GoldenTyped`, `TestAC1GoldenMap`, `TestAC1MapAndTypedUnpackAgree`) | Covered |
+| GO-2 | Every README data-type example packs to the README hex and unpacks back; short buffer names field, needed, left; trailing bytes give 0 values | FT-X-84; tests: Go `golden_test.go`, `readme_rounds_test.go`, `collections_readme_test.go`, `errors_test.go`, `ints_test.go` | Covered |
+| GO-3 | Every TypeScript parity row (U1 to U26 that apply, loops 21 to 23 AC-3 tables) gives the same hex in Go, or a refusal where TypeScript refuses; U6 follows the five | FT-X-85, FT-X-86; tests: Go `parity_*_test.go`, `u11_test.go`, `split_rounds_test.go`; about 55 rows probed against TypeScript with node; U6 checked in Python 3.14 and by reading C# and Rust (Java not run) | Covered |
+| GO-4 | All 65 hostile cases give an allowed outcome in Go; 0 panics; unpack within 1 s; `check-cases.sh` counts seven packages | FT-X-87; tests: Go `hostile_loader_test.go`, `hostile_pack_test.go`; `check-cases.sh` ok: 65; `cases.test.sh` | Covered |
+| GO-5 | Default limits equal the other packages'; a lowered limit gives `TooMany` with `needed` 0; a raised limit unpacks the old worst packet; fuzz 60 s with 0 panics and 0 allocations above the ceiling | FT-X-88; tests: Go `limits_*_test.go`, `fuzz_unpack_test.go`; `run-suite.sh go` fuzz step 1.19 M execs, 0 failures; the memory part is not measured (row Assessment24 D8) | Covered (memory figure NOT MEASURED) |
+| GO-6 | Go's ciphertext for the same seed, value and row equals C#'s `b55d0a29c56c203712b241232e`; session AC-2 to AC-7 hold | FT-X-89; tests: Go `session_test.go`, `session_hostile_test.go` | Covered |
+| GO-7 | For each of the 15 ring kinds Go joins that kind's ring both ways with every member; `-short` kinds refused; `pack-session` prints the C# ciphertext; the position driver prints the golden hex | FT-X-90; `language-pair.sh` (114 Go lines), `ring-wiring.test.sh`; 108 handoffs run by the worker, all pass; the full ring was not run end to end at this sync (step 11) | Covered (full ring NOT RUN at this sync) |
+| GO-8 | 100 000 round trips of the AC-1 row take <= 1 second on one core | FT-X-91; tests: Go `speed_test.go` (`TestAC7SpeedRoundTrips`, second run without `-race` in `run-suite.sh go`): 160 ms typed, 128 ms map | Covered (failed twice under host load 79 to 87 before the bound moved to the non-race run) |
+| GO-9 | `test.yml` runs the Go suite on every push and pull request (race tests, vet 0, gofmt 0); the `go` service runs `run-suite.sh go` on `golang:1.27` | FT-X-92; `run-suite.test.sh` G1 to G10, `report-row.test.sh`, compose run `go,go suite,120000,PASS` on the owner's Mac | Covered locally; first Ubuntu runner run unproven (row Assessment24 D9) |
+| GO-10 | A tag with a passing Go golden check gets exactly one `go/vX.Y.Z` at the same commit and `go list -m` through proxy.golang.org answers; a failing check or a tree without `go/` gets 0 Go tags; `go/LICENSE` is MIT | FT-X-93; `publish-go.test.sh` (12 of 12), `publish-gate.test.sh` Go gate rows, `publish-check.py go-tag`, Go `TestAC8LicenseIsMIT`; no tag pushed, no live proxy call | Covered hermetically; live tag and proxy check NOT RUN (row Assessment24 D9) |
+| GO-11 | `go 1.26` or `1.26.0`; one direct requirement outside the standard library (`golang.org/x/crypto`); built packages come from the main module and x/crypto only; 0 cgo files | FT-X-94; tests: Go `module_test.go`; `run-suite.sh` `go_deps` | Covered |
+| GO-12 | A nil pointer or nil slice is no value; an empty slice is a value with 0 items; the map form reads a group from the nested map; each row pinned by a test | FT-X-95; tests: Go `novalue_test.go`, `u11_test.go`, `group_test.go`, `nested_test.go` | Covered |
+| GO-13 | The README Go section's example is compiled and run in CI and prints the README hex | FT-X-96; tests: Go `example_test.go` (six `Example` tests) | Covered |
+| GO-14 | A built scheme is safe for 8 goroutines x 10 000 round trips under `-race`: 0 races, 0 mismatches | FT-X-97; tests: Go `concurrency_test.go` (`TestAC6ConcurrentRoundTrips`) | Covered |
+| GO-15 | A nil row, nil map, wrong Go type or out-of-range getter value gives a pack error naming the field id, nil bytes, no panic | FT-X-98; tests: Go `invalid_test.go`, `ints_test.go`, `nil_scheme_test.go` | Covered |
+| GO-16 | A re-run finds `go/vX.Y.Z` at the same commit and passes without a push; at another commit it fails naming both; a published version is never moved or deleted | FT-X-99; `publish-go.test.sh` AC-3 scenarios; ADR-004 (no `retract` line exists yet, nothing tests the retraction) | Covered |
+| Assessment24 D8 | Go peak RSS for the F10 packet and the default-limit wide round is measured, at or below `maxSlots` times the per-slot cost; the figure joins the loop 22 memory table and the README | FT-X-111; NFT-RES-LIM-05; no measurement exists | Open (clear gap, loop 25 task, 1 point) |
+| Assessment24 D9 | The first real tag, the live `proxy.golang.org` check and the first Ubuntu CI run (`setup-go`, `ring-go.sh` on host `go`, the `go` service in `scaffold`) | FT-X-112; proven only hermetically and on a Mac | BLOCKED until the owner's go for a tag and the first push to Actions (out of scope in loop 24) |
+| Assessment24 D1 | Empty anchored group takes no id, so the next field reuses its number and no `eq` can name the mark; Go and TypeScript build it | FT-X-85 (open rows table in file 17); no test pins the other four | Open (owner, loop 25: A probe and document is recommended) |
+| Assessment24 D2 | `u2` or a `Slot` as a list or dict element: TypeScript builds it, Go refuses it | file 17 open rows; Go `list_elements_test.go` pins the refusal | Open (owner, loop 25: A keep and document is recommended) |
+| Assessment24 D3 | Slot width of a `Nested` row in a round: Go charges its own members, Java charges 1 | Go `limits_width_test.go` (`TestAC1ANestedRowInARoundChargesItsOwnMembers`) | Open (owner, loop 25: A keep is recommended) |
+| Assessment24 D4 | A zero-width `repeat` round (`01ff00`): Go gives `TrailingBytes` left 1, TypeScript the short-packet shape | file 17 open rows; both refuse | Open (owner, loop 25: A leave is recommended) |
+| Assessment24 D5 | Unpack of an unusable value returns a short-packet shape with `needed` 0 in Go as in TypeScript; `BadValue` only from the session | file 17 open rows | Open (owner, with C15 for all seven) |
+| Assessment24 D6 | `run-suite.sh go` fails without `go/go.mod`; the six others skip with a PASS row | `run-suite.test.sh` G1 | Open (owner, loop 25: A align the six, after reading the publish gate) |
+| Assessment24 D7 | A split flag bit inside a false `when` with the member given: TypeScript and Go pack `01000306` and repack `01000206`; the other five were not probed (possible TypeScript bug) | Go `flags_test.go` (`TestSplitBitInsideWhenSeesTheByteBeforeIt`) pins the TypeScript outcome | Open (owner, loop 25: probe all six first) |
+| Review24 #5 | Go `reachKey` keys a row by the address of its map (uintptr); correct while every keyed map stays in the result tree | no test | Open (Low; note for the next change to `rounds()`) |
+| Review24 #6 | 114 explicit `handoff ... go ...` lines and per-line guards make `ring-wiring.test.sh` 500 lines | `ring-wiring.test.sh` | Open (Low; the next edit splits it; loop 25 notes a table-driven ring) |
 
 ## Restrictions Coverage
 
@@ -430,9 +457,9 @@
 
 | Category | Total Items | Covered | BLOCKED | WAIVED | Coverage |
 |----------|-----------|---------|---------|--------|----------|
-| Acceptance Criteria | 397 | 386 | 1 | 1 | 9 rows Open (3 from loop 21: Review21 #2, #7, Assessment21 G3; 6 from the loop 23 review and assessment: Review23 #1, #2/U25, #3/U24, #5, #6, Assessment23 U26); the 6 loop 22 Open rows closed in loop 23; every other row Covered or WAIVED, except AZ-2220 AC-9 (not verified, see below) |
+| Acceptance Criteria | 424 | 402 | 2 | 1 | 19 rows Open (3 from loop 21: Review21 #2, #7, Assessment21 G3; 6 from the loop 23 review and assessment: Review23 #1, #2/U25, #3/U24, #5, #6, Assessment23 U26; 10 from loop 24: Assessment24 D1 to D8, Review24 #5, #6); loop 24 added GO-1 to GO-16 (all Covered; GO-5, GO-7, GO-9 and GO-10 carry a NOT RUN or NOT MEASURED part named in their row) and one BLOCKED row (Assessment24 D9); every other row Covered or WAIVED, except AZ-2220 AC-9 (not verified, see below) |
 | Restrictions | 19 | 17 | 0 | 2 | every row Covered or WAIVED |
-| **Total** | 416 | 403 | 1 | 3 | 9 Open (3 loop 21, 6 loop 23), one row not verified |
+| **Total** | 443 | 419 | 2 | 3 | 19 Open (3 loop 21, 6 loop 23, 10 loop 24), one row not verified |
 
 ## Uncovered Items Analysis
 
@@ -447,7 +474,9 @@
 | Review21 #1 (U12), #3 (U13), #4 (U16), U11, U14, U15 | Covered in loop 22 | The owner decided them (U11 to U17) and AZ-2410 to AZ-2416 implemented them; U16 is a README exception | none | See FT-X-66 to FT-X-70 and the rows above |
 | Review21 #2 (G2), #7, G3 | Open (clear gap) | Python per-name list memory bound after the surcharge removal (loop 22 measured the F10 shape only: 550 to 162 MB, not the per-name list shape), C++ one `Late` flag (handoff), AZ-2373 spec text "37 tests" is 7 (step 13) | Low | As listed in each row; Review21 #6 (G1) closed by AZ-2416 |
 | Review22 #1, #2, #5, #6, #8, #9 | Covered in loop 23 | U18 B (README exception, repack from groups: #1, #9), U21 A (fixture README text: #2), AZ-2433 (#5), AZ-2431 (#6), AZ-2434 (#8) | none | See FT-X-75 to FT-X-79 and the rows above |
-| Review23 #1, #2 (U25), #3 (U24), #5, #6, Assessment23 U26 | Open (loop 24) | Python `RuntimeError` for an unwritten count with a value; C++ count and own ids wrap; C++ unbound member skips U11; Rust `lists_agree` copy (cosmetic); heavy AZ-2435 tests; C# dictionary rows of a nested-row group | Behavior differs across packages in the cases named; no wire change | Loop 24 handoff (owner rows U24 to U26) |
+| Review23 #1, #2 (U25), #3 (U24), #5, #6, Assessment23 U26 | Open (decided 2026-10-13: U24 B, U25 A, U26 A, Low-1 A; the short wave moved to loop 25 behind Go) | Python `RuntimeError` for an unwritten count with a value; C++ count and own ids wrap; C++ unbound member skips U11; Rust `lists_agree` copy (cosmetic); heavy AZ-2435 tests; C# dictionary rows of a nested-row group | Behavior differs across packages in the cases named; no wire change | Loop 25 short wave (`problem.md` of the Go plan, out of scope for loop 24) |
+| Assessment24 D9, GO-9, GO-10 | BLOCKED | No tag was pushed (G-6: a tag needs the owner's explicit go with the exact commit) and the Go parts of `test.yml` have run only in Docker on a Mac; the live `proxy.golang.org` answer, `actions/setup-go`, `ring-go.sh` on a host `go` and the first Ubuntu run are unproven | A bad Go version cannot be undone (ADR-004: retract in the next `go.mod`); a CI step that only fails on the runner | `publish-go.test.sh` proves the tag logic with real git; the first push to Actions and the first tag are the proof; the tag run is the owner's decision |
+| Assessment24 D8, GO-5 | Open (gap-clear) | Go peak memory for the F10 packet and the wide round is not measured | The slot ceiling is unproven as memory for Go (lists of nested rows scale with packet length, README tells callers to cap it) | One-point measurement task in loop 25 (NFT-RES-LIM-05) |
 
 ## Loops 11 to 18: specs with no AC rows yet (Not verified)
 
@@ -461,3 +490,4 @@ Moved to [traceability-not-verified-loops-11-18.md](traceability-not-verified-lo
 <!-- autodev-step12-loop-update: loop 21, 2026-10-12, 46 AC rows added (AZ-2373 3, AZ-2381 to AZ-2394 31, review21 and assessment21 rows 12: 1 Covered, 1 WAIVED, 10 Open); AZ-2373 NOT STARTED row replaced -->
 <!-- autodev-step12-loop-update: loop 22, 2026-10-12, 34 AC rows added (AZ-2410 3, AZ-2411 3, AZ-2412 2, AZ-2413 3, AZ-2414 3, AZ-2415 4, AZ-2416 3, AZ-2417 2, AZ-2418 2, review22 9: 3 Covered, 6 Open); 7 loop 21 Open rows closed (Review21 #1 #3 #4 #6, Assessment21 U11 U14 U15) -->
 <!-- autodev-step12-loop-update: loop 23, 2026-10-13, 33 AC rows added (AZ-2431 4, AZ-2432 4, AZ-2433 4, AZ-2434 3, AZ-2435 2, AZ-2436 4, AZ-2437 3, review23 and assessment23 9: 3 Covered (G4 text, G5, G6), 6 Open (Review23 #1 #2/U25 #3/U24 #5 #6, Assessment23 U26)); 6 loop 22 Open rows closed (Review22 #1 #2 #5 #6 #8 #9); loops 11 to 18 not-verified section moved to traceability-not-verified-loops-11-18.md -->
+<!-- autodev-step12-loop-update: loop 24, 2026-10-13, 27 rows added (GO-1 to GO-16 Covered, 4 of them with a NOT RUN or NOT MEASURED part; Assessment24 D8 and D1 to D7 and Review24 #5, #6 Open; D9 BLOCKED); AC-1 to AC-16 Test IDs gained the Go scenarios FT-X-83 to FT-X-93; scenarios FT-X-83 to FT-X-112 in blackbox-tests-17-loop24-go-package.md -->

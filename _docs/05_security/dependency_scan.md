@@ -91,3 +91,30 @@ No manifest, lockfile, image, workflow or publish script changed since loop 19 (
 | `cargo audit`, `pip-audit`, `govulncheck` | not run (as in loop 19; Rust, Python, Java and C++ have no third-party dependency to scan) |
 
 F2, F3 and F12 unchanged. No CVE or advisory applies.
+
+## Loop 24 (2026-10-13)
+
+Scope: `git diff 0db6534..HEAD` (HEAD ed30ddf, the Go package). The only manifests that changed are the Go module's `go/go.mod` and `go/go.sum` and the ring driver's `.github/workflows/drivers/handoff-go/go.mod` and `go.sum`; no `package.json`, `*.csproj`, `Cargo.*`, `pyproject.toml`, tool pin or Dockerfile changed (`git diff --name-only` filtered for them lists only the four Go files). The new image reference is `golang:1.27` (compose `go` service, `ring-go.sh`; Go 1.27.2 today). Run in `golang:1.27` on a `git archive HEAD` copy (network read-only).
+
+| Module | Version | Where | Result |
+|--------|---------|-------|--------|
+| `golang.org/x/crypto` | v0.58.0 (direct) | `go/go.mod`, driver `go.mod` (`// indirect`) | latest on proxy.golang.org (`@latest`, 2026-10-09); `go.sum` `h1:` and `/go.mod h1:` lines equal `sum.golang.org/lookup/golang.org/x/crypto@v0.58.0`; imported packages `x/crypto/chacha20` and `x/crypto/internal/alias` only (`go list -deps`, linux/arm64); OSV `/v1/query` (Go ecosystem): **GO-2026-5932**, "The golang.org/x/crypto/openpgp package is unmaintained, unsafe by design" (introduced 0, no fixed version, affects `x/crypto/openpgp*` packages only); `govulncheck` 1.9.0: 0 vulnerabilities affect the code, 1 in a required module (this one), "doesn't appear to call". Not affected: nothing imports `openpgp`. |
+| `golang.org/x/sys` | v0.49.0 (indirect) | `go/go.mod` | latest (`@latest`, 2026-10-06); `go.sum` lines equal sumdb's; OSV `/v1/query`: no advisory; no x/sys package is built on linux/arm64 (the `chacha20` path of other architectures, for example s390x, imports `x/sys/cpu`; not built here) |
+| `golang.org/x/net` v0.60.0, `x/term` v0.47.0, `x/text` v0.43.0 | n/a | module graph via x/crypto's `go.mod` (`go list -m all`) | pruned: not downloaded, not built, no `go.sum` line; the `run-suite.sh go` step `go_deps` checks that the built packages and the direct requirements are only the main module and x/crypto |
+
+| Tool (2026-10-13) | Result |
+|-------------------|--------|
+| `go mod verify` (module cache of the build) | all modules verified |
+| `govulncheck` 1.9.0 (`go run golang.org/x/vuln/cmd/govulncheck@latest -C go ./...`) | "No vulnerabilities found" in symbols and packages; one module-level advisory (GO-2026-5932), not called |
+| OSV `https://api.osv.dev/v1/query` POST for x/crypto 0.58.0 and x/sys 0.49.0 (ecosystem Go) | one advisory and none, as above |
+| `go.sum` against `https://sum.golang.org/lookup/<module>@<version>` | both modules: all four lines equal |
+| `https://proxy.golang.org/github.com/zxsanny/packbin/go/@v/list` | 404 `no matching versions`: the module is not published yet (nothing tagged), so no one can hold the path; the first tag is the publish |
+| `npm audit`, `dotnet list package --vulnerable`, `cargo audit`, `pip-audit` | not re-run: no manifest of those ecosystems changed since the loop 20 results |
+
+| Action / image | Pin | Check |
+|----------------|-----|-------|
+| `actions/setup-go` (new, `test.yml:112`, `publish.yml:35`) | `b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0` | `git ls-remote https://github.com/actions/setup-go refs/tags/v7.0.0` = the same commit (lightweight tag); `publish.yml` sets `cache: false`, `test.yml` caches `go/go.sum` and the driver's `go.sum` (no cache in the credentialed job) |
+| `golang:1.27` | tag | by tag, not digest: F3 extended; `GOTOOLCHAIN=local` and `GOPROXY=https://proxy.golang.org,direct` inside |
+| `go-version: "1.27"` (`publish.yml:37`, `test.yml`) | floating patch | resolved by the action's manifest at run time; F12 note |
+
+Findings: no known-vulnerable dependency that the code reaches; F2, F3 (extended), F12 (touched), F1 unchanged (fixed). No Critical or High.

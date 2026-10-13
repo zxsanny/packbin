@@ -146,3 +146,24 @@ Scope `b8b2809..807e718` (six source files outside tests; loops 21 and 22 are re
 
 Findings: F36 and F37 fixed; F39 and F40 new (Low); F35 documented and open; F10, F12 unchanged.
 
+
+## Loop 24 (2026-10-13)
+
+Scope `0db6534..HEAD` (the Go package, 24 non-test files, 4 762 lines; the release and CI scripts). Method and probes: `security_report.md`, "Loop 24 findings" and "Loop 24 method".
+
+| Class | Result | Evidence |
+|-------|--------|----------|
+| Unpack of untrusted bytes: bounds | clean | every `take` compares the bytes left before slicing; `utf8` reads a u16 count and checks `left < n`; `countOf` refuses negative and above `MaxInt`; `itemBytes` cannot overflow once `take` passed; 22.9 million random packets over 5 schemes, 0 panics, slowest call 66 ms |
+| Allocation from a claimed count | clean for counts, **F41 for declared width** | lists and dicts allocate `min(count, left)`; `bits`/`packed` allocate after `take`; rounds are charged before their map; element rows allocate by `len(f.fields)` / `len(pl.members)` (`unpack.go:191,94`): 89 MB for 64 KB at 16 members, 1.2 GB at 256, OOM at 1 000; removing the hints gives 29 MB |
+| Amplification per element, round, list, dict | measured | F10 table row "Go": wide round 105 MB per 1 MiB; F10 shape 170 MB refused, 624 MB at a raised `maxSlots`; 16 lists of 65 535 bytes 25 MB; `bits` 8M items 17 MB |
+| Recursion depth | scheme-bound | the packet cannot add depth; a 200 000-level list scheme built by the caller unpacks (896 MB resident) |
+| Integer conversions | clean | `int(uint16)`, `uint64(-(x+1))+1`, the `bits == 64` short-circuit before `1<<bits`, `holdsInt` with `Type.Bits()` (32-bit `int` refused for u32/u64 members), `uint64(len(data)) > 1<<38` |
+| Reflection (typed rows, `Bind`) | one hole (F42) | `checkMemberType` refuses `any`, `**T`, cyclic pointer types and arrays at `Bind`; unexported fields are reached only through the caller's closures; `fromWalk`/`convertReflect` convert only between kinds `checkMemberType` accepted; no panic over 12 exotic types; `normalizeReflect` follows pointers without a bound (map rows) |
+| Zero-value types | F42 | `Scheme{}` is not detected (`s.top == nil`) |
+| Session | clean for crypto, F43 for concurrency | `session.go`: `hkdf.Key(sha256.New, seed, nonce, "packbin", 64)`; `chacha20.NewUnauthenticatedCipher(key, nonce12)`; position as little-endian nonce; counter overflow of x/crypto checked (`>1<<38` refused, exactly 2^32 blocks allowed); `clear(seed)`; no tag (README); no lock on the counters |
+| Process, file, network, `unsafe`, `cgo`, `eval` in the Go source | none | grep of the non-test source: no `os`, `exec`, `net`, `http`, `unsafe`, `syscall`, `linkname`, `panic(` |
+| Discarded errors | none | the `_` assignments are comma-ok type assertions and the `normalize` presence flag (`collections_typed.go`); no empty `recover` or `catch` |
+| Shell and Python in the diff | clean | `bash -n` ok for the 11 changed scripts, `py_compile` ok; the tag, version and commit are quoted everywhere; the `GIT_ASKPASS` file reads `$GITHUB_TOKEN` at run time and is removed after the push; `publish-go.sh` uses `mktemp -d` and a trap; no `eval`, no `sh -c`, no `2>/dev/null` |
+| Secrets | none | grep of the diff for key, token and private-key patterns: only `GITHUB_TOKEN` references |
+
+Findings: F41 (Medium), F42, F43, F44, F45 (Low) new; F10 extended to Go; F36 and F37 fixed with no Go equivalent.

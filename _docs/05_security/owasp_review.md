@@ -96,3 +96,22 @@ List: OWASP Top 10 2025 (names unchanged since loop 16). Scope: `git diff b8b280
 
 Earlier findings re-stated: F10 and F12 Medium open; Low open 16.
 
+
+## Loop 24 (2026-10-13)
+
+List: OWASP Top 10 2025 (names unchanged since loop 16). Scope: `git diff 0db6534..HEAD` (HEAD ed30ddf, the Go package; see `security_report.md`, "Loop 24 findings" and "Loop 24 method").
+
+| Category | Status | Evidence |
+|----------|--------|----------|
+| A01 Broken Access Control | PASS_WITH_WARNINGS | F44 new (Low): `go/vX.Y.Z` tags are the Go release and nothing documented restricts who pushes one (a hand-pushed tag skips the golden gate); F14 carried |
+| A02 Security Misconfiguration | PASS_WITH_WARNINGS | F20, F24 extended to the Go ring wrapper (`ring-go.sh`: repo and output directory mounted read-write, root, default network, fixed `/tmp/packbin-handoff-go` and `/tmp/packbin-position-go`), F32 carried; no workflow permission changed (`publish.yml` already had `contents: write`, `id-token: write` on the publish job only) |
+| A03 Software Supply Chain Failures | PASS_WITH_WARNINGS | one dependency (`golang.org/x/crypto` v0.58.0, `x/sys` v0.49.0): latest, `go.sum` equals sum.golang.org, `go mod verify` ok, `govulncheck` 0 reachable (one module-level advisory on the unused `openpgp` package); `setup-go` x2 pinned to the commit of v7.0.0; F12 touched (floating `go-version`), F2, F3 carried |
+| A04 Cryptographic Failures | PASS_WITH_WARNINGS | Go `PackSession` matches the contract (HKDF-SHA256, salt = 16 bytes, info `packbin`, ChaCha20 with the position as nonce, key halves swapped, seed wiped, packet above 2^38 refused); F43 new (Low): concurrent use reuses pad positions (3.75% of 160 000 packs from 8 goroutines); F19 carried (no tag, documented) |
+| A05 Injection | PASS_WITH_WARNINGS | the tag name reaches `publish-go.sh` only inside quotes (`printf`, `git push "$commit:refs/tags/$tag"`, `go list -m "$module@v$version"`); no `eval`, no `sh -c` with the version; F15 carried, F45 new (the version form is not checked); no HTML, SQL or shell is built in the Go source |
+| A06 Insecure Design | PASS_WITH_WARNINGS | F41 new (Medium): the Go unpack preallocates the maps of list and dict element rows by the declared member count (89 MB for 64 KB at 16 members, 1.2 GB at 256, OOM at 1 000); F10 measured for Go; limits (`MaxRounds`, `MaxSlots`, `MaxBytes`) charged before bytes are read, as in the other packages |
+| A07 Authentication Failures | N/A | no authentication surface |
+| A08 Software or Data Integrity Failures | PASS_WITH_WARNINGS | the golden gate covers the Go position program (`absent go` for a tree without `go/`); the `go-tag` target is in the new `final` tier after every registry; push `--atomic`, never forced; same-commit re-run pushes nothing, another commit fails naming both; F45 new (Low): version form and `go list -m` versus `go get`; F13, F16, F23, F35, F40 carried |
+| A09 Security Logging and Alerting Failures | N/A | libraries; errors carry scheme names and counts, no packet text |
+| A10 Mishandling of Exceptional Conditions | PASS_WITH_WARNINGS | 22.9 million random packets: 0 panics; errors are values (`*Error` with kinds); F42 new (Low): a zero `Scheme` panics, a cyclic pointer type in a map row overflows the stack; F18, F39 carried |
+
+Earlier findings re-stated: F10 and F12 Medium open, F41 Medium new; Low open 20.

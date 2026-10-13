@@ -21,7 +21,23 @@ A byte whose bits say which following fields are present. A set bit writes the f
 
 ## Golden fixture
 
-A shared hex buffer. All six first-release languages must pack it to the same bytes and unpack it to the same fields. The position fixture is `4001000065cd1d00a3e1110100`. (source: problem.md; acceptance_criteria.md AC-1)
+A shared hex buffer. All six first-release languages, and Go since loop 24, must pack it to the same bytes and unpack it to the same fields. The position fixture is `4001000065cd1d00a3e1110100`. (source: problem.md; acceptance_criteria.md AC-1)
+
+## Go tag
+
+The git tag `go/vX.Y.Z` that releases the Go module `github.com/zxsanny/packbin/go` (Go fetches a module in a subdirectory by the tag `<directory>/vX.Y.Z`; there is no registry upload). `publish.yml` pushes it at the commit of `vX.Y.Z`, last of all uploads and only after the golden check passes on every language, without force. A Go tag never moves and is never deleted; a bad version is marked `retract` in the `go.mod` of the next version. (source: ADR-004; Go decisions G-1, G-6)
+
+## Limits
+
+Three numbers a scheme carries: the most rounds one `repeat` or `times` field may have (`maxRounds`, 65 535), the most slots one call may charge (`maxSlots`, 1 048 576 since loop 22) and the longest packet pack may write (`maxBytes`, 16 777 216). Unpack refuses the round that would pass the first two before reading it; pack refuses a count or list above `maxRounds`, charges slots per round and checks `maxBytes` before every write. In Go they are `Limits{MaxRounds, MaxSlots, MaxBytes}`, read with `DefaultLimits()` and set with `(*Scheme).WithLimits(Limits)`, which returns a copy, takes all three values and refuses one below 1 as `InvalidScheme`; C#, TypeScript and Python default an omitted value. A refused round is the error kind `TooMany` in Go (the interim short-packet shape with `needed` 0 elsewhere). (source: loop 15 to 22 specs; AZ-2444)
+
+## Nested row
+
+A set of fields with an id and name scope of its own: its ids start at 0, and its references, member names and flag bytes stop at its edge (loop 13). In Go it is `Nested(name, members...)`, given as a nested `map[string]any` in a map row or a struct in a typed row; a `Nested` row in a round is charged the width of its own members against `maxSlots` (Java charges a nested-row group 1 slot, assessment D3, open). The anchored `Group` keeps the outer scope and still refuses a shared name. (source: loop 13; components/07_go_package/description.md)
+
+## No value
+
+A row that leaves a field out. In Go a nil pointer, a nil slice or a map key that is absent or nil is no value: its flag bit stays clear, and a count behind a clear `when` with no value is refused as in the five (U11). An empty slice is a value with 0 items, so its count 0 is written. (source: Go decision G-5; AZ-2440, AZ-2442)
 
 ## Pack
 
@@ -49,11 +65,11 @@ The flags byte is stored now, and each bit's field is placed later in the list. 
 
 ## Unpack
 
-The call that turns bytes back into a value, or into a short-packet or trailing-bytes error. In C#, TypeScript, Python, Rust and Java it returns an error value for every bad buffer and never throws (the typed C# `Unpack` of a `repeat` or `times` round returns an error value too since loop 20, when the row cannot hold the lists of rounds); a negative count, a count with no source field, invalid UTF-8, and a `times`, `list` or `dict` round that reads nothing come back as an interim short-packet-style error until C15 sets their kind. (source: problem.md; loop 11)
+The call that turns bytes back into a value, or into a short-packet or trailing-bytes error. In C#, TypeScript, Python, Rust, Java and Go it returns an error value for every bad buffer and never throws (the typed C# `Unpack` of a `repeat` or `times` round returns an error value too since loop 20, when the row cannot hold the lists of rounds); a negative count, a count with no source field, invalid UTF-8, and a `times`, `list` or `dict` round that reads nothing come back as an interim short-packet-style error until C15 sets their kind. (source: problem.md; loop 11)
 
 ## Version tag
 
-A Git tag that starts the publish of each language present in that commit. (source: restrictions.md; packages.md)
+A Git tag that starts the publish of each language present in that commit. Go is published by the second tag `go/vX.Y.Z` that this run pushes (see Go tag). (source: restrictions.md; packages.md; ADR-004)
 
 ## When
 

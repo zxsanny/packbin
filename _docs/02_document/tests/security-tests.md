@@ -4,7 +4,7 @@ The library has no authentication. These checks are about secrets and hostile bu
 
 ### NFT-SEC-01: The published archive has no registry token
 
-**Summary**: The files uploaded to the six registries do not contain a registry token.
+**Summary**: The files uploaded to the six registries do not contain a registry token. Since loop 24 the Go package has no upload: its release is the tag `go/vX.Y.Z`, pushed with the job's `GITHUB_TOKEN` through the `GIT_ASKPASS` path of the existing publish scripts, never forced; `publish-go.test.sh` unsets every registry credential for its runs (the remote is a local path, so the Go tag needs none).
 **Traces to**: R-19
 
 **Steps**:
@@ -42,3 +42,19 @@ The library has no authentication. These checks are about secrets and hostile bu
 | 2 | build the same row with a `List<long>` member and unpack `01 01 00 ff ff ff ff` | no exception; the member holds `[4294967295]` |
 
 **Pass criteria**: step 1 raises at build, so no packet can reach the conversion; step 2 returns a value with no exception. Not covered here: a typed unpack of a set `times` or `repeat` bit still throws `InvalidCastException` in C# (typed rows hold one round; carried finding F17, batch 3 discovery 30).
+
+### NFT-SEC-04: Hostile input cannot panic or hang the Go package, and the session wipes its seed copy
+
+**Summary**: No input makes Go `Pack`, `Unpack`, `UnpackMap`, `NewScheme` or a session call panic (GO-4, GO-15); every bad buffer is an `*Error` value, an unpack of a hostile case returns within 1 second, and `LoadSession` keeps a copy of the seed that it zeroes once the session opens (loop 24, AZ-2440, AZ-2445, AZ-2446).
+**Traces to**: GO-4, GO-6, GO-15, AZ-2445 AC-3, AZ-2446 AC-1
+
+**Steps**:
+
+| Step | Consumer Action | Expected Response |
+|------|----------------|------------------|
+| 1 | replay the 65 cases of `fixtures/hostile/cases.txt` in Go (`TestHostileUnpackVectors`, `TestHostileLimitVectors`, `TestHostileConstructVectors`, `TestHostilePackVectors`) | an allowed outcome each; unpack within the 1 s guard; no panic |
+| 2 | build about 78 000 random schemes and read random packets (`TestRandomSchemesNeverPanic`, `TestRoundsNeverPanic`, `TestCollectionsNeverPanic`), and run `FuzzUnpack` for 60 s | 0 panics, 0 failures (1.19 M execs in the compose run after the review fixes) |
+| 3 | give a nil row, a nil map, a wrong Go type or a nil scheme (`TestAC5InvalidGoValues`, `TestPackNilSchemeIsRefused`, `TestNilSchemeAccessorsDoNotPanic`), and a nil session or a zero value (`TestSessionCallsOnNilAndZeroValuesAreErrorsNotPanics`) | an error value naming the field; nil bytes |
+| 4 | load a seed, open the session, read the caller's slice and the internal copy (`TestSessionLoadKeepsACopyAndThePacketUseWipesIt`) | the caller's slice is not wiped (as TypeScript); the internal copy and the derived key block are zeroed |
+
+**Pass criteria**: panics 0; partial output 0 bytes. Not covered: `StartWith(nonce)` lets a caller reuse a nonce (a two-time pad); the doc comment says the value must be fresh and unique per connection (review24 Low 4, fixed as text); nothing tests that a caller obeys it. The security findings of the Go package are in `_docs/05_security/` (another step).

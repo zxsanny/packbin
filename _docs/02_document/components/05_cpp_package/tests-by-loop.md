@@ -50,3 +50,7 @@ Test files: `times_count_zero_host_tests.cpp` (AZ-2416: `az2416_empty_when_round
 - `tests/core/packed_bias_novalue_host_tests.cpp` (AZ-2432, U20, FT-X-77): `u20_bound_packed_bias_minus_one_is_the_typed_row`, `u20_unbound_packed_bias_minus_one_is_no_value`.
 - `tests/core/novalue_nested_host_tests.cpp` (AZ-2436, FT-X-81): `az2436_no_value_count_below_the_top_level`, `az2436_member_inside_the_clear_when_is_a_silent_skip`.
 - All three are run from `tests/core/main.cpp`. Host, `gcc:16` and s390x (241 of 241) green; arm stage 8152 of 8192 B flash, 456 of 512 B stack, unchanged.
+
+## Loop 24 (Go joins the ring; no C++ test change)
+
+Loop 24 added the Go package (AZ-2222, `components/07_go_package/`). No C++ source or test changed (batch report: the six suites have no source change). What is new for this package is its place in the ring: Go joins `user`, `nested`, `boolflag`, `booltrue`, `bitwhen`, `session`, `roundflags` and `roundwhen` both ways, built through `ring-cxx.sh` as before (C++ is not in the list and dict rings), through `language-pair.sh` (114 Go lines in all, guarded by `ring-wiring.test.sh`; scenario FT-X-90). The hostile case file is unchanged at 65 cases and is now read by seven loaders (FT-X-87).

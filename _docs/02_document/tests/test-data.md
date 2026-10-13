@@ -18,6 +18,10 @@
 | flag-byte scope | C++ schemes with a flag byte inside a `flags` member or flag-bit child, rows `v=3 x=5 b=7` | FT-X-15, FT-X-16 | inline | none |
 | C# typed rows | typed row classes with narrow, wide and unsupported collection members, a nested row with null members, `u2`, `bits` and `packed` slots with fractions and range edges, the F25 packet `01 01 00 ff ff ff ff`, ring hex `010300010100020200` | FT-X-17 to FT-X-21, NFT-SEC-03 | inline in the C# tests; ring hex in `.github/workflows/language-pair.sh` | none |
 | round and split-form rows | loop 19: `u32 n; times(count n){ u8 x }` with n 65536 / 70000 / 4e9; `u64 n` 4294967299; the split-form schemes of `pack_split_*` (rows `mode=1 speed=7`, `n=2 pt=[5,6]`, `sel=0 pt=[5]`, `mode=0 speed=7 heading=90`); S1 `flagbyte fb; flags{ group g1{v; fb byte; bit fb x}, group g2{bit fb y} }; bit fb b`; `eq` constants 300, -1, 70000, `"x"`, NaN, 1.5, `true` | FT-X-24 to FT-X-33 | inline in each package's tests; the hostile rows by id from `fixtures/hostile/README.md` | none |
+| hostile packets, seven loaders (loop 24) | `fixtures/hostile/cases.txt`: 65 cases = 10 unpack + 2 limit + 15 construct + 38 pack (the 33 above grew in loops 20 to 22; unchanged in loops 23 and 24). Go is the seventh reader: every one of the 38 pack sections names Go in `Run by` and none in `Not run by`; `check-cases.sh` counts seven names with a whole-word match | GO-4, FT-X-87, NFT-SEC-04 | `go/hostile_loader_test.go` and `go/hostile_pack_test.go` write each scheme by hand from `fixtures/hostile/README.md` and read the file by path; the case tables are checked equal to `cases.txt` (`TestHostileTablesHoldNoCaseTwiceAndNoOther`) | none; read only |
+| Go fuzz seed corpus | `go/testdata/fuzz/FuzzUnpack/` (56 files): the golden packet and body, the ring payloads, and every unpack and limit packet of `cases.txt`, each with and without its type byte | GO-5, FT-X-88 | read by `FuzzUnpack` and `TestFuzzSeedsReadWithTheSchemeOfTheirKind` | new inputs go to the Go build cache; a failing input would be written under `go/testdata/fuzz` (none exists) |
+| ring kinds and Go handoffs | the 15 kinds of `language-pair.sh` (GO-7): `user`, `nested`, `boolflag`, `booltrue`, `bitwhen`, `session` (all six other languages), `roundflags`, `roundwhen` (TypeScript, Rust, Java, C++; C# only packs), `listgroup`, `dictgroup`, `listflags` (TypeScript, Python, Java, C#), the three `-short` refusals; 114 explicit Go handoff lines, guarded by `ring-wiring.test.sh` | GO-7, FT-X-90 | hex inline in `language-pair.sh`; Go driver `.github/workflows/drivers/handoff-go/` | none |
+| Go session vectors | seed bytes 1..32, value `01` + 15 zero bytes, the AC-1 row: C# ciphertext `b55d0a29c56c203712b241232e`; TypeScript's keyed first-packet vectors | GO-6, FT-X-89 | inline in `go/session_test.go` | none |
 
 ## Data Isolation Strategy
 
@@ -99,6 +103,10 @@ Each call gets its own input buffer. The packages do not keep the last packet.
 | FT-X-36 | fake venvs: no pytest, usable, failing pytest, not a venv, missing | non-zero with the venv path; pytest called; non-zero; directory kept; venv built | exact | N/A | AZ-2341 AC-1 |
 | FT-X-37 | line counts and suite counts before and after the split | each file under 400 lines; C# 844, Rust 479, Java identical | exact | N/A | AZ-2342 AC-1, AC-2 |
 | NFT-SEC-03 | packet `01 01 00 ff ff ff ff` and a `List<long>` member for a `u32` list | no exception; value `[4294967295]`; the narrow member cannot be built | exact | N/A | AZ-2305 AC-3 |
+| FT-X-83 | the position row, Go typed and map | hex `4001000065cd1d00a3e1110100`, 5 fields, motion fields 0 | exact | N/A | GO-1; `fixtures/golden.hex` |
+| FT-X-87 | the 65 hostile cases in Go | allowed outcome each; unpack within 1 s; 0 panics | exact | 1 s per unpack | GO-4; `fixtures/hostile/README.md` |
+| FT-X-89 | seed 1..32, value `01` + 15 zero bytes, the AC-1 row | `b55d0a29c56c203712b241232e`, mismatched bytes 0 | exact | N/A | GO-6; C# ciphertext, session AC-1 |
+| FT-X-91 | the position row, 100 000 round trips, one core, no `-race` | elapsed time | threshold_max | <= 1 second (160 ms typed, 128 ms map in the compose run) | GO-8; AC-10 |
 
 ## External Dependency Mocks
 
