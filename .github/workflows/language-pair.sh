@@ -3,6 +3,10 @@ set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 drivers="$root/.github/workflows/drivers"
+# The C# and C++ drivers are built once a run into a private directory (mode 700), never into a predictable /tmp
+# path another local user could pre-create (the F24 pattern of the Java driver below).
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
 user_hex="0107007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e6e656c010004007265616403006d6170040004007265616407006770735f6669780300736574040065646974050073746f7265020004007265616405007772697465"
 nested_hex="01020003006d61700100010002006f7007006770735f666978050073746f72650200010002006f70040072656164010002006f7005007772697465"
 position_hex="4001000065cd1d00a3e1110100"
@@ -35,7 +39,12 @@ run_lang() {
   shift
   case "$lang" in
     csharp)
-      dotnet run --project "$drivers/csharp/Handoff.csproj" -- "$@"
+      # `dotnet run` costs about 2 s a call even when nothing changed (40 calls in the ring): build once a run and
+      # run the dll. The build goes to stderr: handoff() compares the stdout of a pack call with the expected hex.
+      if [ ! -f "$work/csharp/Handoff.dll" ]; then
+        dotnet build "$drivers/csharp/Handoff.csproj" --nologo -v q -o "$work/csharp" >&2 || return
+      fi
+      dotnet "$work/csharp/Handoff.dll" "$@"
       ;;
     typescript)
       node --experimental-strip-types "$drivers/handoff.ts" "$@"
@@ -47,18 +56,21 @@ run_lang() {
       cargo run --quiet --manifest-path "$drivers/handoff-rust/Cargo.toml" -- "$@"
       ;;
     cpp)
-      local bin="${PACKBIN_CPP_HANDOFF:-/tmp/packbin-handoff}"
+      local bin="${PACKBIN_CPP_HANDOFF:-$work/cpp-handoff}"
       local sdk="${PACKBIN_CXX_SYSROOT:-}"
       local flags=(-std=c++17 -O2 -Wall -Wextra -Werror -I"$root/cpp/include")
       if [ -n "$sdk" ]; then
         flags+=(-isysroot "$sdk" -I"$sdk/usr/include/c++/v1")
       fi
-      # `|| return` on the compile: handoff() runs run_lang under `if`, where set -e is off, and a stale
-      # binary must not stand in for a build that failed.
-      "${CXX:-c++}" "${flags[@]}" -o "$bin" \
-        "$drivers/handoff.cpp" "$root/cpp/src/core/values.cpp" "$root/cpp/src/core/pack.cpp" \
-        "$root/cpp/src/core/unpack.cpp" "$root/cpp/src/core/session.cpp" "$root/cpp/src/os_random.cpp" \
-        || return
+      # Compile once a run (it was compiled on every call, about 2 s each, 32 calls); a PACKBIN_CPP_HANDOFF path
+      # given by the caller is compiled on every call, as before. `|| return` on the compile: handoff() runs
+      # run_lang under `if`, where set -e is off, and a stale binary must not stand in for a build that failed.
+      if [ -n "${PACKBIN_CPP_HANDOFF:-}" ] || [ ! -x "$bin" ]; then
+        "${CXX:-c++}" "${flags[@]}" -o "$bin" \
+          "$drivers/handoff.cpp" "$root/cpp/src/core/values.cpp" "$root/cpp/src/core/pack.cpp" \
+          "$root/cpp/src/core/unpack.cpp" "$root/cpp/src/core/session.cpp" "$root/cpp/src/os_random.cpp" \
+          || return
+      fi
       "$bin" "$@"
       ;;
     java)

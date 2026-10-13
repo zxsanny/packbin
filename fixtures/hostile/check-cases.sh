@@ -26,7 +26,7 @@ bad() {
 # its Packet line (spaces allowed) and its Expected line. A package name counts as a whole word: the
 # text is split into words, so "Google" or "Got" in a reason is not the package Go.
 check_pack_section() {
-  local id="$1" expected="$2" hex="$3" section line run notrun pkg n packet
+  local id="$1" expected="$2" hex="$3" section line run notrun pkg n packet words
   section="$(awk -v head="## $id" '$0 == head { on = 1; next } /^## / { on = 0 } on' "$readme")"
   for line in Scheme Row; do
     grep -q "^- $line: " <<<"$section" || bad "pack case '$id': section has no '- $line:' line"
@@ -48,8 +48,9 @@ check_pack_section() {
   if [[ -z "$run" || -z "$notrun" ]]; then
     return
   fi
+  words="$(printf '%s\n%s\n' "$run" "$notrun" | tr -c 'A-Za-z0-9_#+\n' '\n')"
   for pkg in "${packages[@]}"; do
-    n="$({ printf '%s\n%s\n' "$run" "$notrun" | tr -c 'A-Za-z0-9_#+\n' '\n' | grep -x -F -- "$pkg" || true; } | wc -l | tr -d ' ')"
+    n="$(grep -cx -F -- "$pkg" <<<"$words" || true)"
     if [[ "$n" -ne 1 ]]; then
       bad "pack case '$id': package $pkg is named $n times in Run by and Not run by, expected once"
     fi
