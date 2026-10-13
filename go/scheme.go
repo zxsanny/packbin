@@ -61,7 +61,13 @@ func NewScheme(typeNumber int, fields ...Field) (*Scheme, error) {
 }
 
 // TypeNumber is the first byte of every packet of this scheme.
-func (s *Scheme) TypeNumber() int { return s.typeNumber }
+// A nil scheme (an ignored NewScheme error) has type number 0.
+func (s *Scheme) TypeNumber() int {
+	if s == nil {
+		return 0
+	}
+	return s.typeNumber
+}
 
 // checkNodes refuses a nil field and a Slot outside U2, and reports a constructor's refusal, at any
 // depth.

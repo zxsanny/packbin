@@ -188,3 +188,7 @@ CI-parity for batch 02: `check-cases.sh` ok: 65; `ring-wiring.test.sh` ok; `publ
 Rows left open for the assessment (none is decided; not in the README "Open rows" paragraph): 12 (empty anchored group id), 24 (`u2` as a list/dict element), 30 (a `Nested` row's slot width, Java charges 1), 33 (zero-width repeat round shape), 40 (unpack returns a short-packet shape with needed 0, no `BadValue`), and the Go-3 probe of the other five packages.
 
 Implement step complete: AZ-2440 to AZ-2451 are Done in `_docs/02_tasks/done/` (12 specs, 43 points; AZ-2441 grew to 5 with the anchored group, so 45); Jira In Testing.
+
+## Review fixes (after `review24.md` PASS_WITH_WARNINGS)
+
+Findings 1 to 4 fixed: speed bound asserted without `-race` (a second `run-suite.sh go` step; the test skips the bound under `-race`), fuzz step `-fuzzminimizetime=0`, nil-safe `TypeNumber`/`Limits`, `StartWith` nonce warning. Findings 5 (`reachKey` identity) and 6 (explicit ring lines) skipped. Real `go` compose service after the fixes: `go,go suite,120000,PASS` (race tests 29.8 s, speed 160/128 ms without `-race`, fuzz 1.19M execs in 60 s). Go suite ok (28 s), `run-suite.test.sh` ok.

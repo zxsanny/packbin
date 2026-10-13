@@ -65,7 +65,10 @@ func (s *PackSession) Start() ([]byte, error) {
 }
 
 // StartWith opens the session as the opener with 16 bytes the caller already has, and returns a copy
-// of them. A length other than 16 opens nothing and leaves the seed in place.
+// of them. A length other than 16 opens nothing and leaves the seed in place. It is for tests and for a
+// caller that draws the value from a cryptographic source itself: the value must be fresh and unique for
+// every connection of one seed. Two sessions of one seed that start with the same value share their
+// keystream, and because there is no tag the XOR of two payloads is then the XOR of their packets.
 func (s *PackSession) StartWith(nonce []byte) ([]byte, error) {
 	if err := s.open(nonce, true); err != nil {
 		return nil, err

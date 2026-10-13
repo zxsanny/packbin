@@ -41,6 +41,11 @@ func TestAC7SpeedRoundTrips(t *testing.T) {
 
 			// Assert
 			t.Logf("%s: fastest pass of %d round trips: %v (race detector: %v)", form.name, rounds, fastest, raceEnabled)
+			if raceEnabled {
+				// The race detector costs about 5x; the 1 s bound is asserted by the run without it
+				// (run-suite.sh go runs this test a second time with -run, no -race).
+				t.Skipf("%s: %v under the race detector; the 1 s bound is asserted without it", form.name, fastest)
+			}
 			if fastest > time.Second {
 				t.Fatalf("fastest pass %v, above 1s", fastest)
 			}

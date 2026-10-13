@@ -114,6 +114,7 @@ case "$1 $2" in
   "vet ./...") step=vet ;;
   "test -race") step=test ;;
   "test -list") step=list ;;
+  "test -run=^TestAC7"*) step=speed ;;
   "test -run="*) step=fuzz ;;
   "list -m") step=mods ;;
   "list -deps") step=deps ;;
@@ -179,8 +180,9 @@ row_is "PASS "
 expected="gofmt -l .
 go -C $goroot/go vet ./...
 go -C $goroot/go test -race -count=1 -v ./...
+go -C $goroot/go test -run=^TestAC7SpeedRoundTrips$ -count=1 -v ./...
 go -C $goroot/go test -list ^FuzzUnpack$ ./...
-go -C $goroot/go test -run=^$ -fuzz=^FuzzUnpack$ -fuzztime=60s mod.example/packbin
+go -C $goroot/go test -run=^$ -fuzz=^FuzzUnpack$ -fuzztime=60s -fuzzminimizetime=0 mod.example/packbin
 go -C $goroot/go list -m
 go -C $goroot/go list -m -f {{if not (or .Main .Indirect)}}{{.Path}}{{end}} all
 go -C $goroot/go list -deps -test -f {{with .Module}}{{.Path}}{{end}} ./..."
@@ -201,7 +203,7 @@ if ran " vet "; then bad "go: vet ran after gofmt failed"; fi
 row_is "FAIL suite failed"
 
 # G5 to G8. a failing vet, test, fuzz or dependency query fails the run and stops the later steps
-for step in vet test fuzz deps; do
+for step in vet test speed fuzz deps; do
   out="$(run_go "$goroot" GO_FUZZ=1 GO_FAIL="$step")"; code=$?
   [ "$code" -ne 0 ] || bad "go: a failing $step passed"
   row_is "FAIL suite failed"

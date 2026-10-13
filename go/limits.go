@@ -27,7 +27,13 @@ func DefaultLimits() Limits {
 }
 
 // Limits are the limits of s: the defaults unless s was made by WithLimits.
-func (s *Scheme) Limits() Limits { return s.limits }
+// A nil scheme (an ignored NewScheme error) has no limits: the zero Limits.
+func (s *Scheme) Limits() Limits {
+	if s == nil {
+		return Limits{}
+	}
+	return s.limits
+}
 
 // WithLimits is a copy of s that keeps the given limits; s is unchanged. Every field is the limit, not
 // an override: a field left at 0 is refused (start from DefaultLimits to change one). A limit below 1

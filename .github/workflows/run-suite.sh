@@ -37,7 +37,9 @@ go_fuzz() {
     echo "run-suite: go fuzz step skipped: the package has no FuzzUnpack target yet"
     return 0
   fi
-  go -C "$1" test -run='^$' -fuzz='^FuzzUnpack$' -fuzztime=60s "$pkg"
+  # -fuzzminimizetime=0: the default minimises every new input for up to 60 s, which left 121k execs in a 60 s run
+  # (1.4M without it, AZ-2444 report).
+  go -C "$1" test -run='^$' -fuzz='^FuzzUnpack$' -fuzztime=60s -fuzzminimizetime=0 "$pkg"
 }
 
 # One dependency at most (GO-11, G-3): go.mod's direct requirements and the modules of every package
@@ -122,6 +124,9 @@ case "$lang" in
       run go_fmt "$root/go"
       run go -C "$root/go" vet ./...
       run go -C "$root/go" test -race -count=1 -v ./...
+      # AC-10 (1 s for 100 000 round trips) is a bound on the production build: the race detector costs about 5x,
+      # so TestAC7SpeedRoundTrips asserts it only without -race and this step runs it there.
+      run go -C "$root/go" test -run='^TestAC7SpeedRoundTrips$' -count=1 -v ./...
       run go_fuzz "$root/go"
       run go_deps "$root/go"
     else
