@@ -176,3 +176,15 @@ Design: `go-tag` is planned when `go` is in the plan, uploaded after every requi
 | 52 | AZ-2450 | The full `publish-gate.test.sh` aborts on this Mac before `phase_checks` (cmake `cstddef` with Apple clang; host pip 21.2.4 cannot find wheels for the pinned twine/idf-component-manager). `gate_checks` (three real Docker gate runs, Go included) and `go_checks` passed; the readonly parts were run by hand (failures 0, 7 golden packs, plan ends in `go`, 6 languages without java) | step 11 runs it with the AGENT_GOTCHAS recipes (python3 3.10+ first on PATH, `PACKBIN_CXX_SYSROOT`) | clear |
 | 53 | AZ-2450 | The new tier `final` and `go-tag` change the "six" counts in `architecture.md`, `module-layout.md`, `_docs/04_deploy/packages.md`, `ci_cd_pipeline.md` | step 13 (architecture and module-layout are in AZ-2451; the deploy docs are step 13) | clear |
 | 54 | AZ-2450 | A bad Go version can only be retracted in the next `go.mod`; no `retract` directive yet | ADR-004 says so; add when needed | clear |
+
+## Batch 02 part 5 (AZ-2451, wave 4) — implement complete
+
+| Worker | Spec | Result |
+|--------|------|--------|
+| go readme | AZ-2451 (README Go section, Example tests, docs) | `go/example_test.go` (six `Example` tests: typed, map, group maps, `Nested`, `WithLimits`, `PackSession`; the code in the README was generated from the test file and checked to be verbatim); README +298 lines, 8 existing lines re-punctuated for Go in lists (parent checked by word diff: only list endings changed, no statement dropped); `architecture.md`, `module-layout.md` (workflows, "seven" counts), `components/07_go_package/description.md` (real API, decisions Go-1 to Go-4, open rows), `interaction-risks.md` (one Go row). Parent re-ran the Go suite: ok (27 s, six Examples included) |
+
+CI-parity for batch 02: `check-cases.sh` ok: 65; `ring-wiring.test.sh` ok; `publish-go.test.sh` ok (12 of 12); `run-suite.test.sh`, `report-row.test.sh` unchanged from batch 01; Go suite ok after every commit. The full `publish-gate.test.sh`, the full ring, the compose `go` service and the six other suites run at step 11.
+
+Rows left open for the assessment (none is decided; not in the README "Open rows" paragraph): 12 (empty anchored group id), 24 (`u2` as a list/dict element), 30 (a `Nested` row's slot width, Java charges 1), 33 (zero-width repeat round shape), 40 (unpack returns a short-packet shape with needed 0, no `BadValue`), and the Go-3 probe of the other five packages.
+
+Implement step complete: AZ-2440 to AZ-2451 are Done in `_docs/02_tasks/done/` (12 specs, 43 points; AZ-2441 grew to 5 with the anchored group, so 45); Jira In Testing.

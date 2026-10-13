@@ -70,6 +70,7 @@ Go package (loop 24, AZ-2222; decompose 1.8):
 | A Go golden mismatch still lets the other registries or the Go tag publish | AZ-2450 AC-1 | AZ-2450 |
 | A re-run moves or duplicates `go/vX.Y.Z` | AZ-2450 AC-3 | AZ-2450 |
 | The hostile checker counts "Go" inside another word and passes a section that omits Go | AZ-2446 AC-3 | AZ-2446 |
+| The README Go example and its `Example` test drift apart, so the README prints bytes the test does not check | AZ-2451 AC-1 | AZ-2451 |
 
 ## Deferred
 

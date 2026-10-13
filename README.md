@@ -25,6 +25,7 @@ Supported languages:
 - Python: 3.10+.
 - Rust: edition 2021.
 - C++: C++17; CMake 3.16+ or vcpkg on Linux and macOS (Windows is not supported: the package is not built or tested there); 32-bit microcontrollers (ESP32, RP2040, nRF52, STM32) through PlatformIO, Arduino and ESP-IDF 5.1+.
+- Go: Go 1.26+; `go get github.com/zxsanny/packbin/go@vX.Y.Z`, fetched from the repository by version tag (no registry). The standard library and `golang.org/x/crypto` (the session only); no cgo. See [Go](#go).
 
 Encryption is optional. `PackSession` hides the packed bytes on one connection and adds 0 bytes to each packet. The only extra send is 16 bytes, once, when the connection opens. It does not detect a changed byte, and anyone holding the 32-byte seed can read every session. See [Encrypted session](#encrypted-session).
 
@@ -460,6 +461,224 @@ Moving from 0.1.x — the C++ API changed; the bytes did not:
 
 Two kinds of scheme fail construction (`SchemeInvalid`, or a compile error for a `constexpr` scheme), because neither can round-trip: a `boolean` or an empty `group` anywhere except directly under `flags(...)` or `flag_bit(...)`, and a `u2` with more than 64 children. The wire bytes of every valid scheme are unchanged.
 
+## Example
+
+Go → binary → TypeScript
+
+### Go
+
+Go has no package registry, so nothing is uploaded: `go get` fetches the module from this repository by version tag. The module is `github.com/zxsanny/packbin/go` and lives in the `go/` folder, which is why Go reads its tag as `go/vX.Y.Z`. The release run pushes that tag at the same commit as the `vX.Y.Z` tag, and only after every language has matched the golden hex (ADR-004: a mismatch publishes no package and no Go tag). Go 1.26 or newer. The package uses the Go standard library and one dependency, `golang.org/x/crypto`, for the ChaCha20 of the session; there is no cgo. A published Go version is never deleted or moved: a bad one is retracted in the `go.mod` of the next version. Go versions start with the first release tag published after the Go package was added.
+
+```
+go get github.com/zxsanny/packbin/go@vX.Y.Z
+```
+
+The import path ends in `go`, so give the import its name, `packbin "github.com/zxsanny/packbin/go"`. The Go snippets in this README are the bodies of the `Example` tests in [`go/example_test.go`](go/example_test.go), copied unchanged without the function wrapper and with the same imports: `go test` runs them and compares what they print with the output shown under each. A row is a typed struct bound field by field with `Bind`, or a `map[string]any`.
+
+```go
+import (
+	"fmt"
+
+	packbin "github.com/zxsanny/packbin/go"
+)
+
+type Position struct {
+	Sid      uint16
+	Lat      int32
+	Lon      int32
+	Profile  uint8
+	Heading  *uint16
+	Speed    *uint8
+	Altitude *int16
+}
+
+position, err := packbin.NewScheme(0x40,
+	packbin.Bind(packbin.U16(0, "sid"), func(r *Position) uint16 { return r.Sid }, func(r *Position, v uint16) { r.Sid = v }),
+	packbin.Bind(packbin.I32(1, "lat"), func(r *Position) int32 { return r.Lat }, func(r *Position, v int32) { r.Lat = v }),
+	packbin.Bind(packbin.I32(2, "lon"), func(r *Position) int32 { return r.Lon }, func(r *Position, v int32) { r.Lon = v }),
+	packbin.Bind(packbin.U8(3, "profile"), func(r *Position) uint8 { return r.Profile }, func(r *Position, v uint8) { r.Profile = v }),
+	packbin.Flags(4,
+		packbin.Bind(packbin.U16(4, "heading"), func(r *Position) *uint16 { return r.Heading }, func(r *Position, v *uint16) { r.Heading = v }),
+		packbin.Bind(packbin.U8(5, "speed"), func(r *Position) *uint8 { return r.Speed }, func(r *Position, v *uint8) { r.Speed = v }),
+		packbin.Bind(packbin.I16(6, "altitude"), func(r *Position) *int16 { return r.Altitude }, func(r *Position, v *int16) { r.Altitude = v }),
+	),
+)
+if err != nil {
+	panic(err)
+}
+
+raw, err := packbin.Pack(position, &Position{Sid: 1, Lat: 500_000_000, Lon: 300_000_000, Profile: 1})
+if err != nil {
+	panic(err)
+}
+fmt.Printf("% x\n", raw)
+
+row, err := packbin.Unpack(raw, position)
+if err != nil {
+	panic(err)
+}
+got := row.(*Position)
+fmt.Println(got.Lat, got.Heading == nil)
+```
+
+```
+40 01 00 00 65 cd 1d 00 a3 e1 11 01 00
+500000000 true
+```
+
+The first line is the 13-byte packet of the first example (Python → binary → TypeScript; `fixtures/golden.hex`, the same bytes without the spaces). `Heading`, `Speed` and `Altitude` are pointers: a nil pointer is no value, so its bit in `motion` stays clear and the field takes no space, and a pointer to 0 is a value and is written. A bound scheme packs a `*Position` or a `Position`, and `Unpack` returns a `*Position`. `NewScheme` returns an error naming the field id for a gap, a repeated id or a wrong anchor, and no input makes `Pack`, `Unpack` or `NewScheme` panic.
+
+The same scheme without a struct reads and writes a `map[string]any` keyed by the field names. An integer field takes any Go integer type that holds the value, so the untyped constants below are fine. `heading`, `speed` and `altitude` are optional under `flags` here too: a key that is missing or `nil` leaves the bit clear, and `"heading": 90` sets bit 0 and writes `5a 00` after `motion`.
+
+```go
+position, err := packbin.NewScheme(0x40,
+	packbin.U16(0, "sid"),
+	packbin.I32(1, "lat"),
+	packbin.I32(2, "lon"),
+	packbin.U8(3, "profile"),
+	packbin.Flags(4,
+		packbin.U16(4, "heading"),
+		packbin.U8(5, "speed"),
+		packbin.I16(6, "altitude")),
+)
+if err != nil {
+	panic(err)
+}
+
+raw, err := packbin.Pack(position, map[string]any{"sid": 1, "lat": 500_000_000, "lon": 300_000_000, "profile": 1})
+if err != nil {
+	panic(err)
+}
+fmt.Printf("% x\n", raw)
+
+withHeading, err := packbin.Pack(position, map[string]any{"sid": 1, "lat": 500_000_000, "lon": 300_000_000, "profile": 1, "heading": 90})
+if err != nil {
+	panic(err)
+}
+fmt.Printf("% x\n", withHeading)
+
+row, err := packbin.UnpackMap(withHeading, position)
+if err != nil {
+	panic(err)
+}
+fmt.Printf("%T %v\n", row["heading"], row["heading"])
+_, hasSpeed := row["speed"]
+fmt.Println(hasSpeed)
+```
+
+```
+40 01 00 00 65 cd 1d 00 a3 e1 11 01 00
+40 01 00 00 65 cd 1d 00 a3 e1 11 01 01 5a 00
+uint16 90
+false
+```
+
+`UnpackMap` gives every value the Go type of its field: `uint8` to `uint64` for `u8` to `u64`, `int8` to `int64`, `float32`, `float64`, `[]byte` for `bytes` and `sized`, `uint8` for a `u2` slot, `[]uint8` for `bits` and `packed`, `true` for a set `bool`, `string`, `[]any` for a list and `map[string]any` for a dict or a group. A skipped field has no key. A row it returned therefore packs again to the same bytes.
+
+#### Go rows
+
+**Where Go differs from TypeScript.** The Go package follows TypeScript row for row and gives the same bytes. The few differences are decisions of the owner, and each one is a refusal or a different row shape, never different bytes. They are listed here and in the Loop 24 notes under [Untrusted input](#untrusted-input).
+
+**No value.** A `nil` value, a nil pointer, a nil slice and a nil map are no value. A stored `0` is a value and is written, an empty slice is a value with 0 items (`00 00` for a list, 0 rounds for a `Times`), and an empty string is `00 00`. A scheme binds every value field to one row type or to none. `Pack` and `UnpackMap` take and give the map form of any scheme, bound or not.
+
+**Groups are nested maps, both ways (owner decision Go-4).** A `Group` is a `map[string]any` under its name in a map row, on pack and on unpack, whether it is anchored or sits under `flags` or a flag bit. TypeScript packs a group's members from the nested object when one is given and from the flat keys of the row around it when not, and unpacks them flat; Go does neither. `u8 a; group(g, u8 b)` packs `{"a": 1, "g": {"b": 2}}` to `01 01 02`, and unpack gives `g` as a map. The flat row `{"a": 1, "b": 2}`, which TypeScript packs to the same bytes, is refused naming `b` and `g`: a flat key that names a member of a group whose map is not given is an error, never a value dropped silently (under `flags` too). The example below packs the nested shape, shows the flat row refused, and packs a group per round:
+
+```go
+scheme, err := packbin.NewScheme(1, packbin.U8(0, "a"), packbin.Group(1, "g", packbin.U8(1, "b")))
+if err != nil {
+	panic(err)
+}
+raw, err := packbin.Pack(scheme, map[string]any{"a": 1, "g": map[string]any{"b": 2}})
+if err != nil {
+	panic(err)
+}
+fmt.Printf("% x\n", raw)
+
+_, err = packbin.Pack(scheme, map[string]any{"a": 1, "b": 2})
+fmt.Println(err != nil)
+
+rounds, err := packbin.NewScheme(1, packbin.Repeat(0, packbin.U8(0, "k"), packbin.Group(1, "mark", packbin.U8(1, "v"))))
+if err != nil {
+	panic(err)
+}
+perRound, err := packbin.Pack(rounds, map[string]any{
+	"k":    []any{1, 2},
+	"mark": []any{map[string]any{"v": 7}, map[string]any{"v": 8}},
+})
+if err != nil {
+	panic(err)
+}
+fmt.Printf("% x\n", perRound)
+```
+
+```
+01 01 02
+true
+01 01 07 02 08
+```
+
+A group in a `Repeat` or `Times` round takes one map a round, `"mark": []any{map[string]any{"v": 7}, map[string]any{"v": 8}}` above; TypeScript slices the lists inside one group object per round instead (`{k: [1, 2], mark: {v: [7, 8]}}`), and that shape is a Go error. A lone map given once goes to every round when it holds scalars, and a list or dict inside it is refused, because Go cannot slice it per round. A group whose bit is set by being given is on even when a false `when` inside it writes nothing: `u8 mode; flags(group(g, when(mode == 1, u8 speed)), u16 heading)` with `mode` 0 and `heading` 90 packs `{"mode": 0, "g": {"speed": 7}, "heading": 90}` to `01 00 03 5a 00` (as TypeScript's nested form does) and a row with neither `g` nor `speed` to `01 00 02 5a 00`. TypeScript also packs the flat row `{"mode": 0, "speed": 7, "heading": 90}` to `01 00 02 5a 00` and drops `speed`; Go refuses that row naming `speed`. Unpacking `01 00 03 5a 00` gives `g` as an empty map.
+
+**A `Nested` row has a scope of its own.** `Nested(name, members...)` is a row inside the row, a `map[string]any` under its name or a struct bound with `Bind`. Its members have ids, references and names of their own, so a member may repeat a name of the row around it:
+
+```go
+scheme, err := packbin.NewScheme(1, packbin.U8(0, "mode"), packbin.Nested("in", packbin.U8(0, "mode"), packbin.U8(1, "x")))
+if err != nil {
+	panic(err)
+}
+raw, err := packbin.Pack(scheme, map[string]any{"mode": 1, "in": map[string]any{"mode": 2, "x": 3}})
+if err != nil {
+	panic(err)
+}
+fmt.Printf("% x\n", raw)
+```
+
+```
+01 01 02 03
+```
+
+C# gives a nested row its own scope too. TypeScript refuses the same names for its flat, unanchored group (`declared inside a group and outside it`), and the anchored `Group` of Go still refuses a name shared with the row around it, because its members share the scope. The items of a `List` or `Dict` whose element is a `Nested` or `Flags` are `map[string]any` in a map row (TypeScript takes any object).
+
+**Integers, `bool` and floats in a map row.** An integer field refuses a float, a whole `5.0` too (`expected an integer for u8, got float64`), as C# does since loop 21 (owner decision Go-2). TypeScript packs it, because JavaScript cannot tell 5.0 from 5. A map built by `json.Unmarshal` holds every number as `float64`, so it is refused for integer fields: unmarshal into a typed row, or convert the values to integers first. A `Bool` takes a Go `bool` and nothing else: `1` or `"yes"` is refused naming the field (owner decision Go-1; C# and TypeScript leave the bit clear for such a value). A float field takes any Go integer or float. `u64` and `i64` above 2^53 are exact in Go and pack as they are (TypeScript wants a `bigint` there), and a `u64` count above 2^53 is a real count that ends in a short read, where TypeScript calls it unreadable.
+
+**Byte slices.** `Bytes` and `Sized` take a `[]byte`. A `[]byte` is a byte run and never a list: given to a `List` in a map row, or as the list of rounds of a name in a `Repeat` or `Times`, it is refused (a `Uint8Array` is not an Array in TypeScript either), and so is `[]uint8{1, 2}` for a `u8` member of a round; use a `[]any` or a `[]int` there. A typed `[]byte` member bound to `List(U8(...))` works, as it holds the items of the list.
+
+**Typed rounds.** A typed `Repeat` or `Times` binds a `[]E` or `[]*E` of a struct `E` to the round, one element a round, and the members of the round to `E`. A nil slice is no value, an empty slice is 0 rounds, and a typed `Times` refuses a count that differs from the number of elements, naming the member (`the times count is 3, but the row holds 2 rounds`), as C# does. The map form keeps the TypeScript rules (a list longer than the count is refused; a shorter one for a member under `flags` reads as absent for the rounds it does not reach).
+
+**Strings, lists and dicts.** A Go string that is not valid UTF-8 is refused on pack, naming the field (a JavaScript string cannot hold one), and a string over 65,535 bytes or a list or dict over 65,535 items is refused as in the others. In a map row a list is a `[]any` or any slice but `[]byte`, and a dict is a `map[string]any` or any map with string keys; the keys are written in UTF-8 byte order.
+
+**A split flag bit inside a false `when`.** `u8 k; flagbyte m; when(k == 1, bit m { u8 a }); bit m { u8 b }` with `k` = 0, `a` = 5 and `b` = 6 packs `01 00 03 06`: the bit of `a` is set though `a` is not written, and the row that unpack gives back packs to `01 00 02 06`. Go copies TypeScript here (owner decision Go-3), a test pins it, and the other packages are still to be probed for it (loop 24 assessment).
+
+**Limits.** A scheme carries three limits, `MaxRounds` (65,535), `MaxSlots` (1,048,576) and `MaxBytes` (16,777,216), as a `Limits` value: `DefaultLimits()` returns the defaults and `scheme.Limits()` reads the ones of a scheme. `scheme.WithLimits(limits)` returns a copy with them. It takes all three values every time and refuses a field below 1 (`Limits{}` too) with an `InvalidScheme` error, where C#, TypeScript and Python default an omitted value, so start from `DefaultLimits()` and change the one you need. A packet past `MaxRounds`, or past `MaxSlots` in all the rounds of one call, is refused when the round would start, before its bytes are read, with a `TooMany` error. See [Untrusted input](#untrusted-input).
+
+```go
+scheme, err := packbin.NewScheme(1, packbin.Repeat(0, packbin.U8(0, "k")))
+if err != nil {
+	panic(err)
+}
+limits := packbin.DefaultLimits()
+limits.MaxSlots = 16_000_000
+raised, err := scheme.WithLimits(limits)
+if err != nil {
+	panic(err)
+}
+fmt.Println(raised.Limits())
+
+_, err = scheme.WithLimits(packbin.Limits{MaxRounds: 200_000})
+fmt.Println(err != nil)
+```
+
+```
+{65535 16000000 16777216}
+true
+```
+
+**Errors are values.** Every error is an `*packbin.Error` with a `Kind` (`ShortPacket`, `TrailingBytes`, `UnknownType`, `BadValue`, `InvalidScheme`, `PackRefused` or `TooMany`) and, where they apply, the field id and name, `Needed`, `Left`, `Actual` and a reason. `errors.Is(err, packbin.ErrShortPacket)` and the other sentinels match by kind. A refused pack returns nil bytes, never part of a packet. Error messages differ in form from the other packages (`1e+20` where C# prints the long integer, Go type names), so test for the kind and not for the text.
+
+**Concurrency.** A built `Scheme` is immutable and safe for concurrent `Pack` and `Unpack` from any number of goroutines. A `PackSession` is for one goroutine at a time.
+
+**Schemes Go refuses and TypeScript builds.** `NewScheme` reports a ninth member of one `Flags` (TypeScript throws at `flags()`), and it refuses the two hostile schemes `zero_progress_repeat_bool` (a `bool` outside `flags`) and `zero_progress_repeat_when` (a `when` that names a field outside its `repeat`), which TypeScript builds and unpacks to trailing bytes; both hostile cases accept `scheme_error`.
+
 ## Encrypted session
 
 One optional session beside clear pack. Load a 32-byte seed on each side. The opener calls start and sends those 16 bytes once. The waiter calls join with them. After that, pack and unpack use the same schemes as clear pack, and the payload stays the same length. A second client is a second session.
@@ -489,6 +708,49 @@ waiter.Unpack(payload, ping.On(row => got = row));
 ```
 
 The 16 bytes leave once. There is no second handshake on that connection.
+
+### Go
+
+```go
+ping, err := packbin.NewScheme(2, packbin.U8(0, "code"))
+if err != nil {
+	panic(err)
+}
+seed := sharedSeed()
+
+opener, err := packbin.LoadSession(seed)
+if err != nil {
+	panic(err)
+}
+nonce, err := opener.Start()
+if err != nil {
+	panic(err)
+}
+
+waiter, err := packbin.LoadSession(seed)
+if err != nil {
+	panic(err)
+}
+if err := waiter.Join(nonce); err != nil {
+	panic(err)
+}
+
+payload, err := opener.Pack(ping, map[string]any{"code": 7})
+if err != nil {
+	panic(err)
+}
+got, err := waiter.UnpackMap(payload, ping)
+if err != nil {
+	panic(err)
+}
+fmt.Println(len(nonce), len(payload), got["code"])
+```
+
+```
+16 2 7
+```
+
+`sharedSeed` stands for the 32 bytes both sides hold from the out-of-band exchange (the test fills it with a fixed value); `Start` draws the 16 random bytes, and `StartWith(nonce)` opens the opener side with 16 bytes the caller already holds, for tests. The payload has the length of the clear packet: 2 bytes here. `LoadSession` copies the seed, so the slice you pass is not wiped (as in TypeScript); the internal copy and the derived key block are zeroed once the session opens. A seed or value of the wrong length, a second open and a nil session are `BadValue` errors, `Pack` before `Start` or `Join` is a `PackRefused` error, and `Unpack` before `Join` is a `ShortPacket` error (needed 1, left 0). A `Pack` that fails spends no counter position. An `Unpack` spends one for every payload, readable or not, so the next message still unpacks. A packet over 2^38 bytes is refused, because the ChaCha20 counter would overflow. A `PackSession` is for one goroutine at a time; the schemes it packs with are safe to share.
 
 ### WebSocket: Vue client, C# server
 
@@ -741,6 +1003,8 @@ What travels for one position:
 
 Field numbers are the order in the scheme, starting at 0. They are not written. A gap, a repeated id, or an anchor that is not the next value id fails construction. The anchor is not written, repeat still has no count, and a list, a dict, and a nested group still start at 0. The snippets below are Python; `from packbin import *` leaves out `bool`, `bytes`, `dict` and `list` so that it does not replace the builtins, so the snippets that need them import them by name. The other languages use the same order and produce the same bytes. The first byte of every packet is the scheme type number.
 
+Go spells the helpers as exported functions that take the field id and the name: `U8`, `U16`, `U32`, `U64`, `I8` to `I64`, `F32`, `F64`, `Bytes`, `Be`, `Utf8`, `List`, `Dict`, `Flags`, `Bool`, `When` with `Eq`, `Repeat`, `Sized`, `U2` with `Slot`, `Bits`, `Packed` and `Times`, and `Group`, `Nested` and `FlagByte` with `Bit`. A row is a `map[string]any` keyed by the names, or a struct bound with `Bind`; `None` is a missing key or a `nil` value. The bytes of every snippet below are the bytes Go writes (see [Go rows](#go-rows)).
+
 ### Integers
 
 Little-endian. `u16` 1 is `01 00`. `i16` −2 is `fe ff`.
@@ -757,6 +1021,8 @@ BinaryPacker.pack(row, {"n": 1, "d": -2})
 `0` is a value and is written. A missing optional field is absence, which only `flags` can express.
 
 Pack refuses a value that does not fit. TypeScript takes an integer `number` or a `bigint` and throws a `RangeError` that names the member: `n: 300 does not fit in u8` for a value out of range, a fraction or `NaN`, and `n: expected a number for u8, got string` for anything else. It used to wrap 300 to `2c` and cut 1.5 to 1. Pass a `bigint` for a 64-bit value: a `number` that is not a safe integer is refused even where the width could hold it (`n: 9007199254740992 does not fit in u64; pass a bigint`). A row that unpack returned packs again. Java throws an `IllegalArgumentException` that names the field id (`0: 300 does not fit`) for an integer out of range, a `BigInteger` that would wrap, a fraction, a string or a boolean; a `Long` of -1 is still accepted for `u64`, as its bit pattern, so a row that unpack returned packs again. C# checks the dictionary form of a row the same way (`BinaryPacker.Pack(scheme, IReadOnlyDictionary<string, object?>)`; a typed row is held to its member types by the compiler). An integer field takes an integer type that fits its width (`byte` to `ulong`). Since loop 21 it never takes a `float`, `double` or `decimal`, whole or not: `U8: 5 is a Double; u8 takes an integer type, not a float, double or decimal (f32 and f64 take them)` (the slots below and `eq` refused whole floats since loop 20). C# unpack returns the exact integer types, so a row it returned packs again to the same bytes. A number out of range throws an `ArgumentException` that names the member (`U8: 300 does not fit in u8`), and so does a `bool`, string, `char`, enum or other object (`U8: expected a number for u8, got Boolean`). The slots of a `u2` and the items of `bits` and `packed` follow the same rule: an integer in range (0 to 3 for a `u2` slot and a width-2 `packed`, 0 or 1 for `bits` and a width-1 `packed`); a `float`, `double` or `decimal` (a whole `3.0` too, since loop 20), a number out of range, a `bool`, string, `char`, enum, other object or `null` throws an `ArgumentException` that names the member (`A: ...` for a `u2` slot). A `null` item used to pack as 0 and a fraction was rounded. Loop 19 probed the other five packages for a fraction in these slots: TypeScript refuses it (a whole `3.0` or `1.0` passes; C# refuses it since loop 20), Python refuses every fraction, a `Decimal` too, and also the whole floats `3.0` and `1.0` (it accepts an `IntEnum` member, which C# refuses), Rust takes integers only and refuses every float, and C++ cannot express one (the member type refuses it when the scheme is built or compiled). Java refuses a `Double` or `Float`, whole ones too, and since loop 20 a `BigDecimal` with a fraction and a `Long` or `BigInteger` above the slot (it cut `1.5` to 1 and 2^32 + 1 to 1). An enum member is a number only where the language says so: a Python `IntEnum` and a TypeScript numeric enum pack as their integer (`Level.High = 200` in a `u8` packs `01 c8`); a plain Python `Enum`, a TypeScript string enum and a C# or Java enum are refused naming the field, and a Rust enum is not a value (cast it: `Level::High as u8`). A test in each package pins this rule (loop 20).
+
+In Go an integer field takes any Go integer type that holds the value and never a float, a whole `5.0` too (`expected an integer for u8, got float64`, as C# since loop 21; TypeScript packs it). A map from `json.Unmarshal` holds every number as `float64`, so it is refused for integer fields: unmarshal into a typed row, or convert the values to integers first (owner decision Go-2). `u64` and `i64` above 2^53 are exact and pack as they are.
 
 ### Floats
 
@@ -792,6 +1058,8 @@ BinaryPacker.pack(row, {"b": b"abc"})
 
 A shorter or longer value is rejected.
 
+In Go `Bytes` takes a `[]byte` of exactly `n` bytes. A `[]byte` is a byte run and never a list.
+
 ### Big-endian
 
 `be` flips one number. The rest of the scheme stays little-endian. `u16` 1 becomes `00 01`.
@@ -818,6 +1086,8 @@ BinaryPacker.pack(row, {"name": "zxsanny"})
 01 07 00 7a 78 73 61 6e 6e 79
 ```
 
+In Go pack also refuses a string that is not valid UTF-8, naming the field.
+
 ### List
 
 A `u16` count, then that many elements. The element is one field, and its id restarts at 0 inside the list. `[1, 2]` of `u16` is count 2, then `01 00`, then `02 00`. An empty list is `00 00` and still leaves the next scheme field readable.
@@ -834,6 +1104,8 @@ BinaryPacker.pack(row, {"xs": [1, 2]})
 ```
 01 02 00 01 00 02 00
 ```
+
+In Go a list is a `[]any` or any slice but `[]byte` (a byte run is never a list), and a typed row binds a `[]E`: a nil slice is no value, and an empty slice is a list of 0 items (`00 00`). A typed `[]byte` member bound to `List(U8(...))` works.
 
 ### Dictionary
 
@@ -853,6 +1125,8 @@ BinaryPacker.pack(row, {"m": {"b": 1, "a": 2}})
 `02 00` is two pairs. `01 00 61` is the key `"a"`, then value `02`. `01 00 62` is `"b"`, then value `01`.
 
 In a typed C# row the dict member is a `Dictionary<string, E>`, an `IDictionary<string, E>` or a non-generic `IDictionary`, and each value is a row of the element field's type, under the same rules as a list, including the check at construction (`Dictionary<string, ActionList>` in the first C# example).
+
+In Go a dict is a `map[string]any` or any map with string keys, written in UTF-8 byte order, and a typed row binds a `map[string]E`.
 
 ### Flags
 
@@ -908,6 +1182,8 @@ BinaryPacker.pack(row, {"on": True, "n": 7})
 
 A `when` that tests a bool matches only when the bit is set, so test it with `eq(id, true)`. A clear bit is absent when a packet is read, so `eq(id, false)` could never match; since loop 18 every package refuses `eq` of a bool against anything but `true` when the scheme is built (C#: `when 1 tests bool field 0 ('On') against false; a bool is compared only with true`; TypeScript: `when 1: eq names bool field id 0 (on) and accepts only true, not false`). In Rust a bool value is the integer 0 or 1, so an `eq` on a bool must compare with 1 (any other value panics when the scheme is built). In C++ `eq(0, false)` is a compile error, and an `eq` built at run time from another value fails with `SchemeInvalid`.
 
+In Go a bool field takes a Go `bool` and nothing else: `1` or `"yes"` is refused naming the field, where C# and TypeScript leave the bit clear (owner decision Go-1). An empty group binds a `bool` or a `*bool`.
+
 ### When
 
 The group is written only when an earlier field equals the given value. The tested field must already have been read, and it must be in the same scope. The top level, the body of a `repeat` or `times`, a `list` or `dict` element and a nested row are separate scopes, and a `when` sees only the fields before it in its own. A field that was skipped (inside a `when` that did not match, or behind a clear flag bit) is absent, so a `when` that tests it does not match when a packet is read. `profile == 0` writes `shape`. Any other profile writes nothing after the profile byte.
@@ -949,7 +1225,7 @@ BinaryPacker.pack(row, {"lat": [10, 30], "lon": [20, 40]})
 01 0a 00 00 00 14 00 00 00 1e 00 00 00 28 00 00 00
 ```
 
-A field after `repeat` is eaten as another point. Use `times` when something follows the group. C#, TypeScript, Java, Rust and Python refuse a packet with more rounds than the scheme's round limit (`maxRounds`, 65,535 by default); see [Untrusted input](#untrusted-input). Pack refuses a `times` count above the same limit since loop 19, and a `repeat` list above it since loop 20, before it writes a round.
+A field after `repeat` is eaten as another point. Use `times` when something follows the group. C#, TypeScript, Java, Rust, Python and Go refuse a packet with more rounds than the scheme's round limit (`maxRounds`, 65,535 by default); see [Untrusted input](#untrusted-input). Pack refuses a `times` count above the same limit since loop 19, and a `repeat` list above it since loop 20, before it writes a round.
 
 A round can hold more than plain fields: a `when`, `flags` or a group. Give every name the round holds one list. Entry `i` is the value for round `i`, and `repeat` runs as many rounds as its longest list. `repeat(k, when(k == 1, v))` with `k = [1, 2]` and `v = [9]` packs `01 01 09 02` (Python packs it too since loop 22; before that it wanted `v = [9, None]` and raised a `ValueError`, `repeat fields must have equal lengths`, for `v = [9]`). Unpack gives the same shape: every name a round can hold has one entry per round, and a round that skipped the name has `null` (`undefined` in TypeScript), so a row packs again to the same bytes. TypeScript, C#, Java and Python do this. Rust and C++ keep each round as a row: a `Vec<E>` for a typed Rust `times`, `Value::Groups` in the map form of Rust (see Times under Rust), and an `Array<E, N>` in C++. TypeScript rows are flat, so give a group's members as lists under their own names: the nested form `{mark: {v: [7, undefined, 9]}}` throws `missing v`.
 
@@ -964,6 +1240,8 @@ C# packs such a row from a dictionary of lists (`BinaryPacker.Pack(scheme, IRead
 In a C# round, a value that is not a list goes to every round. `repeat(x, y)` with `x = 1` and `y = [4, 5]` packs `01 01 04 01 05`, and a scalar under `flags` or a flag bit sets the bit in every round: `repeat(flags(a), b)` with `a = 5` and `b = [1, 2]` packs `01 01 05 01 01 05 02`. A lone string for a `utf8` name goes to every round too. A lone dictionary for a `dict` name is refused since loop 18 (see below). A name that holds a byte run or a list per round (`bytes`, `sized`, `bits`, `packed`) needs a list with one entry per round: a lone `byte[]` or list of numbers for it, an empty `byte[]` included, throws an `ArgumentException` that names the field and says to wrap the value in a list. A typed row's `bytes` member in a round is always refused for that reason.
 
 A lone dictionary for a `dict` name in a `repeat` or `times` round is refused in C#, TypeScript, Python, Java and Rust (loop 18). Give one dictionary per round in a list: `d: [{"a": "x"}, {"b": "y"}]` packs as before. The error names the member (TypeScript: `d: a dictionary in a repeat or times round needs a list with one dictionary per round`; C# `ArgumentException`, Python `TypeError`, Java `IllegalArgumentException`, Rust `PackError::Type`). It used to be copied to every round (C#, Java, and Python and TypeScript under `times`) or read as one round (`repeat`; Python raised `ValueError` for unequal lengths), and the Rust map form packed it for one round and failed with `Missing` for two. C++ has no such value: its rounds are typed arrays. A lone byte buffer for a `bytes` or `sized` name in a round is refused in TypeScript, Python, Java and Rust since loop 19, as C# has refused it since loop 17; they copied it to every round before (see the loop 19 notes). In the Rust map form a lone scalar for a `times` member now goes to every round, as in the other packages (it went to round 0 only): `u8 n; times(n, u8 x, u8 y)` with `n` = 2, `x` = 1 and `y` = [4, 5] packs `01 02 01 04 01 05`; `repeat` has no lone-scalar form in the Rust map API.
+
+In Go the lists of a round are a `[]any` or any slice but `[]byte`, entry `i` for round `i`, and a `nil` entry leaves the name out of that round. A group in a round takes one map a round, and a typed round binds a `[]E` or `[]*E` of a struct (see [Go rows](#go-rows)). Unpack refuses the round past `MaxRounds` or `MaxSlots` with a `TooMany` error, and pack refuses a list above `MaxRounds`.
 
 ### Sized
 
@@ -1115,6 +1393,8 @@ var raw = BinaryPacker.Pack(route, new Route
 
 Zero rounds unpack to an empty collection, a `null` member packs no rounds, and a `times` whose count differs from the number of rows is refused naming the member (`'Points': the times count is 3, but it holds 2 rounds`; a count of 0 with rows too). The members of `E` are bound inside the round, so a member named like one of the outer row's members stays in its own round. The scheme builds if and only if typed `Unpack` can bind the member: any other member type fails when the scheme is built (`'Points': ... is not a collection of rows a times can bind; use E[], List<E> or IList<E> for a row class E`), and so does an `E` without a public parameterless constructor and a round field declared for another row type (`'Tail' is declared for row type Route, but this scheme is for Point`). The limits apply to the rows: `maxRounds` and `maxSlots` errors name the member (`'Points': the repeat count is 2, above the limit of 1 rounds`). The older bindings, a `List<List<object?>>` or an `object` member for the per-name lists, keep working.
 
+In Go a typed `Times` refuses a count that differs from the number of elements, as C# does (`the times count is 3, but the row holds 2 rounds`). The map form follows TypeScript.
+
 `packed` and `times` together are how one scheme holds a route: a header, N two-bit point kinds, N latitude/longitude pairs, then N−1 straight-leg bits only when a flag is set. That packet is
 
 ```
@@ -1125,14 +1405,14 @@ Zero rounds unpack to an empty collection, a `null` member packs no rounds, and 
 
 ## Untrusted input
 
-Unpack reads bytes from the network, so a packet may be built to hurt. In C#, TypeScript, Python, Rust and Java, `unpack` answers every packet it cannot read with an error value and no row. It does not throw; a typed C# `Unpack` of a packet that holds a `repeat` or `times` round returns an error value too since loop 20, when the row cannot hold the lists of rounds (see Limits to keep in mind). A typed C# `list` or `dict` member that cannot hold its field, and a `flags` as a direct `list` or `dict` element, no longer throw out of `Unpack`: the first is refused when the scheme is built and the second unpacks (loop 18). Its time grows with the length of the packet. In C#, TypeScript, Java, Rust and Python the memory the rounds of a `repeat` or `times` can take is bounded by the scheme's round limits, not by the packet: a packet with more rounds than the limits allow is refused (see Limits to keep in mind). That is the only amplification the limits remove: a `bits` or `packed` count is bounded only by the bytes left, so those items still cost memory in a straight line with the length of the packet (a 1 MiB packet of 8,388,608 `bits` items measured about 38 MB in C# and Java, about 230 MB in TypeScript and about 270 MB in Rust, net of the runtime), and the limits are per call, so concurrent calls add up. Cap the packet length where you read it from the network. C++ needs no round limit; its memory stays small for the reason given there. The cases it refuses:
+Unpack reads bytes from the network, so a packet may be built to hurt. In C#, TypeScript, Python, Rust, Java and Go, `unpack` answers every packet it cannot read with an error value and no row. It does not throw; a typed C# `Unpack` of a packet that holds a `repeat` or `times` round returns an error value too since loop 20, when the row cannot hold the lists of rounds (see Limits to keep in mind). A typed C# `list` or `dict` member that cannot hold its field, and a `flags` as a direct `list` or `dict` element, no longer throw out of `Unpack`: the first is refused when the scheme is built and the second unpacks (loop 18). Its time grows with the length of the packet. In C#, TypeScript, Java, Rust, Python and Go the memory the rounds of a `repeat` or `times` can take is bounded by the scheme's round limits, not by the packet: a packet with more rounds than the limits allow is refused (see Limits to keep in mind). That is the only amplification the limits remove: a `bits` or `packed` count is bounded only by the bytes left, so those items still cost memory in a straight line with the length of the packet (a 1 MiB packet of 8,388,608 `bits` items measured about 38 MB in C# and Java, about 230 MB in TypeScript and about 270 MB in Rust, net of the runtime), and the limits are per call, so concurrent calls add up. Cap the packet length where you read it from the network. C++ needs no round limit; its memory stays small for the reason given there. The cases it refuses:
 
 - a count that is negative, or larger than the bytes left
 - a count whose field is absent because its flag bit was clear
 - invalid UTF-8 in a string or a dictionary key
 - a `times` round, or a `list` or `dict` element, that reads no bytes. A `repeat` round that reads none ends the repeat, and the bytes left are trailing bytes
 
-The kind of error for these is not settled yet. Today they come back as a short-packet-style error, so test for failure, not for its exact kind. The C++ package already reports every failure as a `Result`; it does not check that a string is valid UTF-8.
+The kind of error for these is not settled yet. Today they come back as a short-packet-style error, so test for failure, not for its exact kind. Go does the same (a short-packet error with `Needed` 0), and reports a round past a limit as `TooMany`. The C++ package already reports every failure as a `Result`; it does not check that a string is valid UTF-8.
 
 These mistakes in a scheme are refused when you build it, not when a packet arrives:
 
@@ -1282,18 +1562,28 @@ Loop 23 (named packages). These changes break existing code: a scheme that built
 - Python: a count list in a `times` or `repeat` round that is shorter than the rounds, where the round with no entry has its `when` clear, packs again (`times(n) { u8 mode; when(mode == 1, u8 c); flags(bits v, count c) }` with `n = 2`, `mode = [1, 0]`, `c = [3]` packs `01 02 01 03 00 00 00`, as in TypeScript, Java and C#); loop 22 refused it with `2: 1 items, times count is 2` (`repeat`: `missing field c`). A round whose `when` holds still needs its entry.
 - C++ (documented, U20): a `bits`, `packed` or `sized` member bound to an `Array` or `Blob` is always present in a typed row (an empty one is a value with zero items), so its flag bit is always set and pack reaches the member. When the `when` that holds its count is clear, pack refuses with `BadValue` at the member's id whatever the count or the `packed` bias (count 0, a left-out count and bias -1 with count 1 included), where the other five pack `01 00 00` for a row with no value. To leave the member out, write it unbound (for example `packed(1, 2, 1, -1)`, no member pointer): its bit is then clear and it packs as the other five do for count 0, a left-out count, count 1 with bias -1 and a holding `when`.
 
+Loop 24 (Go). The seventh package, `go/`, is new: no existing package changed, and `fixtures/golden.hex` and the route packet are the same for all seven. Go runs the 65 hostile vectors of `fixtures/hostile/cases.txt` like the others. Go follows TypeScript row for row, and where it differs, the owner decided it; the differences are refusals and row shapes, never bytes (see [Go rows](#go-rows)):
+
+- Group rows are nested maps in both directions (Go-4). TypeScript packs the group's members from the nested object or from flat keys and unpacks them flat. In Go a flat key that names a member of a group whose map is not given is refused, a group in a round takes one map a round, and a list or dict inside a lone group map given once for every round is refused.
+- A `Nested` row is a scope of its own, so its members may repeat a name of the row around it (the anchored `Group` still refuses that).
+- A non-`bool` value for a `Bool` (Go-1) and a whole float for an integer field (Go-2) are refused. TypeScript clears the bit and packs the float. A `json.Unmarshal` map needs typed rows or integer values.
+- A typed `Times` refuses a count that differs from the slice length, as C# does. `[]byte` is a byte run and never a list or a list of rounds.
+- `WithLimits(Limits)` takes all three limits and refuses a value below 1.
+- `NewScheme` refuses `zero_progress_repeat_bool` and `zero_progress_repeat_when`, which TypeScript builds, and reports a ninth `Flags` member.
+- A split flag bit inside a false `when` packs as TypeScript does, with the bit of the unwritten member set (Go-3, pinned); the other packages are still to be probed.
+
 Limits to keep in mind:
 
-- Round limits (C#, TypeScript, Java, Rust and Python). A scheme carries two limits on one unpack call (and a third, `maxBytes`, on one pack call: see the loop 20 notes). `maxRounds`, default 65,535, is the most rounds one `repeat` or `times` field may start. `maxSlots`, default 1,048,576 (4,194,304 before loop 22), is the most slots all the rounds of the call may create together. A slot is one entry of a round's lists, one for each name the round can hold, even where the round read nothing, so a round of a 36-name `when` body takes 36 slots. Since loop 21 all six packages count the width of a round the same way: the number of distinct names it can hold. One slot each for a value field (an integer, a float, `utf8`, `bytes`, `bool`), a `sized`, `bits` or `packed` name, a `list` or `dict` name (however many items it holds), each slot name of a `u2`, and an empty group's own name; and one for each name inside a `when` (whether its condition holds in the round or not), a `flags`, a flag bit or a group, at any depth. A non-empty group's own name, a `flags` itself and its flag byte, a split flag byte, and the anchors of `when`, `repeat` and `times` are no slot. A name that the round declares twice (two `when` branches that both declare `k`) is one slot. One counter covers a whole pack call and a whole unpack call, shared by every `repeat` and `times` at any depth (top level, `flags`, groups, `when`, split bits, `list` and `dict` elements). Pack and unpack charge the same width at the same round, so a packet that pack writes at exactly `maxSlots` unpacks, and the round after it is refused by both. The one exception is Java: it counts a nested-row group (a `group(get, set, ...)` row, an empty one too) as one slot, its own name, where the others count the names inside it. A member that has no name (a Java typed accessor or lambda, a Python identity accessor `lambda row: row`) is a slot of its own, so two of those are two slots. A packet that would pass either limit is refused when the round that crosses it starts, before the round's bytes are read and before anything is allocated for it, with the same bad-value error as any other unreadable value (see above): no row, handler not called. On unpack a `times` count above `maxRounds` is not refused up front; a packet that states a huge count and holds few rounds still ends in a short read. Pack refuses a `times` count or a `repeat` list above `maxRounds` before it writes a round, and charges `maxSlots` per round (loops 19 and 20, see the notes above). Raise or lower the limits where you declare the scheme: `scheme.WithLimits(maxRounds: 200_000, maxSlots: 16_000_000)` (C#, `Scheme<T>`), `scheme.withLimits({ maxRounds: 200_000, maxSlots: 16_000_000 })` (TypeScript), `scheme.withLimits(200_000, 16_000_000L)` (Java), `scheme.with_limits(200_000, 16_000_000)` (Rust, on `MapScheme` and the typed `Scheme`; it takes and returns the scheme) and `scheme.with_limits(max_rounds=200_000, max_slots=16_000_000)` (Python; it returns a new scheme, and `scheme.max_rounds` and `scheme.max_slots` read the limits). The defaults are constants (`BinaryPacker.DefaultMaxRounds` and `DefaultMaxSlots`, `Scheme.DefaultMaxRounds` and `DefaultMaxSlots`, `Scheme.DEFAULT_MAX_ROUNDS` and `DEFAULT_MAX_SLOTS` in Java and Python, `packbin::DEFAULT_MAX_ROUNDS` and `DEFAULT_MAX_SLOTS`). A value below 1 is refused when you call it (an exception in C#, TypeScript and Java, a `ValueError` in Python, which also refuses a value that is not a whole number; a panic in Rust). C++ has no limit and needs none: it unpacks into `Array<T, N>` storage you own, of capacity at most 65,535, and returns `Error::TooMany` for a longer count. Time still grows with the length of the packet, so cap the packet length where you read it from the network as well.
-- Memory at the defaults of loop 21 (`maxSlots` 4,194,304; since loop 22 the default is 1,048,576, which refuses the 36-name body below after 29,127 rounds (the 29,128th does not fit) instead of at round 65,536, and takes less), for a 1 MiB packet of one-byte rounds in a `repeat` with a 36-name `when` body (resident set, runtime included; measured on a macOS arm64 laptop with Node 22, .NET 10, Java 21 and Rust 1.79 in release mode, three runs each; your figures will differ). Refused at round 65,536: about 86 MiB in TypeScript, 86 MiB in C# and 92 MiB in Java, where an unlimited run took about 400, 530 and 560 MiB, and about 64 MiB in Python 3.14 (one run), where an unlimited run took about 410 MiB; the same body inside 65,535 `list` elements is refused after about 76 MiB in Python. A Rust one-byte round cannot hold 36 names, so Rust is measured on a `times` of one-byte rounds, about 21 MiB (about 310 MiB unlimited), and on rounds that each set eight flag bits, about 64 MiB (about 1.3 to 1.4 GiB unlimited). A packet that stays inside the limits costs up to the limits and no more: 65,535 rounds of the 36-name body, accepted, peaked at about 106 MiB in TypeScript and 86 MiB in Java, and a 64-name body stopped by the slot limit at about 110 MiB in Java and C#. The C# packet that took 1.4 seconds to read is now refused in about 0.1 seconds. The ceiling is higher when the rounds set their names: a 300-name body stopped by the slot limit peaked at about 190 MB in C#, 350 MB in Java and 130 MB in TypeScript (net of the runtime, measured by the security audit), and 64 set flag bits per round in Rust peaked at about 430 MB (all of these measured at the old default of 4,194,304 slots); raise the limits only as far as your memory per concurrent call allows. `maxBytes` is also the memory bound of a pack call: the packet is built in memory, so a call takes about 2 to 3 times the packet while it writes, and a scheme left at the default 16 MiB is bounded accordingly; raise it with the same care. In Python a slot is one entry of a per-name list, so `maxSlots` bounds that memory too. The Python figures above were measured before loop 21, when unpack charged 8 more slots per name for the first round of each run; with that charge gone, many short runs can take more memory than those figures (see the loop 21 measurement below). Measured in loop 21 (resident set, runtime included): a 4.3 MB packet of 65,535 `list` elements, each holding a `times` of one round of 64 names (4,194,240 slots, just under the default limit), peaked at about 1,070 MB in TypeScript and about 550 MB in Python; the worst case at the defaults is therefore the slot limit times the cost of one slot in your runtime, and a service that takes packets from untrusted callers should lower `maxSlots` (the default was 4,194,304 until loop 22, which lowered it to 1,048,576, a quarter). Measured in loop 22 on the same 4.3 MB packet shape, resident set at the old and the new default: TypeScript 1,070 MB to 353 MB, Java 960 MB to 317 MB (`-Xmx4g`), C# 733 MB to 235 MB, Python 550 MB to 162 MB; Rust, on a stand-in shape (a list element cannot hold a `times`: 65,535 rounds of a 64-name `times`), 628 MB to 120 MB, and 64 set flag bits per round took 637 MB at the old default and 117 MB at the new. The peak is a third of the old one rather than a quarter because the runtime and the packet itself do not shrink. A scheme that needs more raises the limit, and then the old worst case applies again.
+- Round limits (C#, TypeScript, Java, Rust, Python and Go). A scheme carries two limits on one unpack call (and a third, `maxBytes`, on one pack call: see the loop 20 notes). `maxRounds`, default 65,535, is the most rounds one `repeat` or `times` field may start. `maxSlots`, default 1,048,576 (4,194,304 before loop 22), is the most slots all the rounds of the call may create together. A slot is one entry of a round's lists, one for each name the round can hold, even where the round read nothing, so a round of a 36-name `when` body takes 36 slots. Since loop 21 all six packages count the width of a round the same way: the number of distinct names it can hold. One slot each for a value field (an integer, a float, `utf8`, `bytes`, `bool`), a `sized`, `bits` or `packed` name, a `list` or `dict` name (however many items it holds), each slot name of a `u2`, and an empty group's own name; and one for each name inside a `when` (whether its condition holds in the round or not), a `flags`, a flag bit or a group, at any depth. A non-empty group's own name, a `flags` itself and its flag byte, a split flag byte, and the anchors of `when`, `repeat` and `times` are no slot. A name that the round declares twice (two `when` branches that both declare `k`) is one slot. One counter covers a whole pack call and a whole unpack call, shared by every `repeat` and `times` at any depth (top level, `flags`, groups, `when`, split bits, `list` and `dict` elements). Pack and unpack charge the same width at the same round, so a packet that pack writes at exactly `maxSlots` unpacks, and the round after it is refused by both. The one exception is Java: it counts a nested-row group (a `group(get, set, ...)` row, an empty one too) as one slot, its own name, where the others count the names inside it. A member that has no name (a Java typed accessor or lambda, a Python identity accessor `lambda row: row`) is a slot of its own, so two of those are two slots. A packet that would pass either limit is refused when the round that crosses it starts, before the round's bytes are read and before anything is allocated for it, with the same bad-value error as any other unreadable value (see above): no row, handler not called. On unpack a `times` count above `maxRounds` is not refused up front; a packet that states a huge count and holds few rounds still ends in a short read. Pack refuses a `times` count or a `repeat` list above `maxRounds` before it writes a round, and charges `maxSlots` per round (loops 19 and 20, see the notes above). Raise or lower the limits where you declare the scheme: `scheme.WithLimits(maxRounds: 200_000, maxSlots: 16_000_000)` (C#, `Scheme<T>`), `scheme.withLimits({ maxRounds: 200_000, maxSlots: 16_000_000 })` (TypeScript), `scheme.withLimits(200_000, 16_000_000L)` (Java), `scheme.with_limits(200_000, 16_000_000)` (Rust, on `MapScheme` and the typed `Scheme`; it takes and returns the scheme) and `scheme.with_limits(max_rounds=200_000, max_slots=16_000_000)` (Python; it returns a new scheme, and `scheme.max_rounds` and `scheme.max_slots` read the limits) and `scheme.WithLimits(limits)` (Go; it returns a copy, takes all three values of a `Limits` every time and reads them with `scheme.Limits()`, so start from `DefaultLimits()`). The defaults are constants (`BinaryPacker.DefaultMaxRounds` and `DefaultMaxSlots`, `Scheme.DefaultMaxRounds` and `DefaultMaxSlots`, `Scheme.DEFAULT_MAX_ROUNDS` and `DEFAULT_MAX_SLOTS` in Java and Python, `packbin::DEFAULT_MAX_ROUNDS` and `DEFAULT_MAX_SLOTS`, `packbin.DefaultMaxRounds`, `DefaultMaxSlots` and `DefaultMaxBytes` in Go). A value below 1 is refused when you call it (an exception in C#, TypeScript and Java, a `ValueError` in Python, which also refuses a value that is not a whole number; a panic in Rust; an `InvalidScheme` error value in Go). A Go `Nested` row is a scope of its own and charges the width of its own members. C++ has no limit and needs none: it unpacks into `Array<T, N>` storage you own, of capacity at most 65,535, and returns `Error::TooMany` for a longer count. Time still grows with the length of the packet, so cap the packet length where you read it from the network as well.
+- Memory at the defaults of loop 21 (`maxSlots` 4,194,304; since loop 22 the default is 1,048,576, which refuses the 36-name body below after 29,127 rounds (the 29,128th does not fit) instead of at round 65,536, and takes less), for a 1 MiB packet of one-byte rounds in a `repeat` with a 36-name `when` body (resident set, runtime included; measured on a macOS arm64 laptop with Node 22, .NET 10, Java 21 and Rust 1.79 in release mode, three runs each; your figures will differ). Refused at round 65,536: about 86 MiB in TypeScript, 86 MiB in C# and 92 MiB in Java, where an unlimited run took about 400, 530 and 560 MiB, and about 64 MiB in Python 3.14 (one run), where an unlimited run took about 410 MiB; the same body inside 65,535 `list` elements is refused after about 76 MiB in Python. A Rust one-byte round cannot hold 36 names, so Rust is measured on a `times` of one-byte rounds, about 21 MiB (about 310 MiB unlimited), and on rounds that each set eight flag bits, about 64 MiB (about 1.3 to 1.4 GiB unlimited). A packet that stays inside the limits costs up to the limits and no more: 65,535 rounds of the 36-name body, accepted, peaked at about 106 MiB in TypeScript and 86 MiB in Java, and a 64-name body stopped by the slot limit at about 110 MiB in Java and C#. The C# packet that took 1.4 seconds to read is now refused in about 0.1 seconds. The ceiling is higher when the rounds set their names: a 300-name body stopped by the slot limit peaked at about 190 MB in C#, 350 MB in Java and 130 MB in TypeScript (net of the runtime, measured by the security audit), and 64 set flag bits per round in Rust peaked at about 430 MB (all of these measured at the old default of 4,194,304 slots); raise the limits only as far as your memory per concurrent call allows. `maxBytes` is also the memory bound of a pack call: the packet is built in memory, so a call takes about 2 to 3 times the packet while it writes, and a scheme left at the default 16 MiB is bounded accordingly; raise it with the same care. In Python a slot is one entry of a per-name list, so `maxSlots` bounds that memory too. The Python figures above were measured before loop 21, when unpack charged 8 more slots per name for the first round of each run; with that charge gone, many short runs can take more memory than those figures (see the loop 21 measurement below). Measured in loop 21 (resident set, runtime included): a 4.3 MB packet of 65,535 `list` elements, each holding a `times` of one round of 64 names (4,194,240 slots, just under the default limit), peaked at about 1,070 MB in TypeScript and about 550 MB in Python; the worst case at the defaults is therefore the slot limit times the cost of one slot in your runtime, and a service that takes packets from untrusted callers should lower `maxSlots` (the default was 4,194,304 until loop 22, which lowered it to 1,048,576, a quarter). Measured in loop 22 on the same 4.3 MB packet shape, resident set at the old and the new default: TypeScript 1,070 MB to 353 MB, Java 960 MB to 317 MB (`-Xmx4g`), C# 733 MB to 235 MB, Python 550 MB to 162 MB; Rust, on a stand-in shape (a list element cannot hold a `times`: 65,535 rounds of a 64-name `times`), 628 MB to 120 MB, and 64 set flag bits per round took 637 MB at the old default and 117 MB at the new. The peak is a third of the old one rather than a quarter because the runtime and the packet itself do not shrink. A scheme that needs more raises the limit, and then the old worst case applies again. No peak-memory figure is measured for Go yet; its large-packet tests (a 16 MiB packet, a wide raised-limit unpack) pass under the race detector in a 7.6 GiB Docker VM.
 - In C#, a typed `Unpack` of a packet that holds a `repeat` or `times` round returns an error value naming the member when the row cannot hold the list of rounds for it (a scalar member always cannot), instead of throwing `InvalidCastException` (loop 20). A member that can hold the list (`object`, `List<object?>`, `List<List<object?>>`, `object[]`, `IList`, `IList<object?>`) is filled, but no public C# call returns an aligned row yet. Since loop 21 a typed round can bind a collection of rows instead (`E[]`, `List<E>` or `IList<E>`; see Times).
 - In C#, a typed `list` or `dict` member is checked when the scheme is built (see the loop 18 notes). Inside a `repeat` or `times` round a `list` member is checked against the list of rounds it must hold (loop 20 notes) and a `dict` member against the dictionary per round it must hold (loop 21 notes); a `bits`, `packed`, `when` or `times` element is not checked when the scheme is built. The accepted member types are fixed on purpose: a refusal can be relaxed later, an accepted type cannot be withdrawn. The owner kept this refusal in loop 19 (decision 10) and it may be relaxed in a later loop.
-- Pack caps a `times` count and a `repeat` list at the scheme's `maxRounds`, charges `maxSlots` per round and refuses a packet above `maxBytes`, in C#, TypeScript, Python, Java and Rust (loops 19 and 20). The slot width of a round is one rule in all six packages since loop 21 (first bullet), and pack and unpack charge it alike. C++ needs no cap: pack writes into your buffer and its rounds live in an `Array` of at most 65,535 items.
-- Open rows (loop 24). None of these is decided. C++ packs the clear bit for an unbound `bits`, `packed` or `sized` member (no member pointer) whose count sits behind a clear `when`, count above 0 included, where the other five refuse. C++ checks the `eq` field id of a `when` (loop 23) but not the count id of `times`, `bits`, `packed` or `sized`, nor a field's own id: an id above 32,767 wraps (`bits(1, 65536)` builds and binds field 0), and a count id of -1 builds and then fails every pack and unpack with `BadValue`. A C# dictionary row reads the names of a nested-row group (`group(get, set, ...)`) from the outer row, so an inner name takes the outer value, and a nested dictionary under the group's name is not read; TypeScript and Java read the nested object. Python raises `RuntimeError` (`count N is missing`) for a value given to a member whose count no field wrote, where TypeScript raises `RangeError` (`v: count c was not written`). Documented exceptions, not open: Java counts a nested-row group (a `group(get, set, ...)` row, an empty one too) as one slot where the others count the names inside it, and the Go package copies TypeScript's count (owner decision U16, loop 22). The Rust map form takes the values of a member under a `when` inside a `times` as rounds under `__times_<anchor>` only (owner decision U18, loop 23).
+- Pack caps a `times` count and a `repeat` list at the scheme's `maxRounds`, charges `maxSlots` per round and refuses a packet above `maxBytes`, in C#, TypeScript, Python, Java and Rust (loops 19 and 20) and in Go. The slot width of a round is one rule in all six packages since loop 21 (first bullet), and pack and unpack charge it alike. C++ needs no cap: pack writes into your buffer and its rounds live in an `Array` of at most 65,535 items.
+- Open rows (loop 24). None of these is decided. C++ packs the clear bit for an unbound `bits`, `packed` or `sized` member (no member pointer) whose count sits behind a clear `when`, count above 0 included, where the other five refuse. C++ checks the `eq` field id of a `when` (loop 23) but not the count id of `times`, `bits`, `packed` or `sized`, nor a field's own id: an id above 32,767 wraps (`bits(1, 65536)` builds and binds field 0), and a count id of -1 builds and then fails every pack and unpack with `BadValue`. A C# dictionary row reads the names of a nested-row group (`group(get, set, ...)`) from the outer row, so an inner name takes the outer value, and a nested dictionary under the group's name is not read; TypeScript and Java read the nested object. Python raises `RuntimeError` (`count N is missing`) for a value given to a member whose count no field wrote, where TypeScript raises `RangeError` (`v: count c was not written`). Documented exceptions, not open: Java counts a nested-row group (a `group(get, set, ...)` row, an empty one too) as one slot where the others count the names inside it, and the Go package copies TypeScript's count (owner decision U16, loop 22), a `Nested` row charging the width of its own members. The Rust map form takes the values of a member under a `when` inside a `times` as rounds under `__times_<anchor>` only (owner decision U18, loop 23).
 - C++ `eq(u8, true)` and `eq(u8, 1.5)` still build: a typed constant is converted to a 64-bit integer before the check. A C++ empty group that is a `when` source takes the id of the field after it, so a field with the same id wins for that `eq`.
 - In TypeScript a decoded dictionary keeps a key named `__proto__` as an ordinary own entry. Copy or merge decoded dictionaries with care: `Object.assign({}, dict)` sets the target's prototype from that entry. Read them with `Object.hasOwn`.
 - In C# every integer field arrives in `UnpackResult.Values` as its exact type (`byte`, `sbyte`, `ushort`, `short`, `uint`, `int`, `ulong`, `long`; an `f32` stays a `double`). Read through the row type and nothing changes for you; code that reads the narrow kinds straight from `Values` as `double` must change, as it had to for `u64` and `i64` before.
-- A session packs from several threads safely in C# and Java (each packet gets its own number). Unpacking on one session must be called in packet order, one caller at a time.
+- A session packs from several threads safely in C# and Java (each packet gets its own number). Unpacking on one session must be called in packet order, one caller at a time. A Go `PackSession` is for one goroutine at a time, for pack and unpack alike; a built Go `Scheme` is safe to share.
 
 ## License
 
