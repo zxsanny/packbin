@@ -70,3 +70,7 @@ Then the outcomes of loop 21 (refused or the same hex).
 ## Parent decision after the TypeScript reference (2026-10-12)
 
 Reference section 1. The text is `<m>: the count <c> is <N> in the row, but no field wrote it (the when that holds it is clear), so the member reads nothing; give the count 0, leave it out, or make the when hold`. Only the six no-value `c:3` cells (3 kinds x split bit and combined `flags`) change; count 0, count left out, a holding `when` with no value (`01010300`) and rows 53 to 55 are unchanged; `packed` compares the count after the bias.
+
+## Loop 22 result
+
+Refused in six (C++ already refused every such row: a typed row has no "no value" for a `bits`, `packed` or `sized` member, so it also refuses count 0, no count and a holding `when`, which the other five pack). `<m>: the count <c> is <N> in the row, but no field wrote it (the when that holds it is clear), so the member reads nothing; give the count 0, leave it out, or make the when hold`; count 0, count left out, a holding `when` and rows 53 to 55 pack as before; `packed` compares the count after the bias. TypeScript, Python, Java, C#, Rust changed. Tests: `loop22-novalue-count.test.ts`, `test_loop22_parity.py`, `ClearBitProbesTest`, `CountBehindClearWhenTests`, `loop22_parity_tests.rs`, `held_count_nested_late_host_tests.cpp`; hostile `pack_novalue_count_clear_when_{bits,packed,sized}`. Open: nested positions are not pinned (gap G3), TypeScript bigint count above 2^53 (U23).

@@ -69,3 +69,7 @@ SMOKE
 - No credentials are needed. Step 11 builds nothing new when its Docker image is cached; a cold run takes a few minutes.
 - Not in this script (they ran in the total test run, `_docs/03_implementation/test_run_loop21_report.md`): the publish gate, the ESP targets (the Pico example fails on this host by design; the CI `embedded` job runs it) and the two real-vcpkg checks.
 - Agent walk: no browser; the script above is the walk.
+
+## Result
+
+PASS. Agent run on `4140f24` (2026-10-13), owner rule of 2026-10-12 (`_docs/04_deploy/deployment_procedures.md` § Loop smoke gate): `13/13 steps passed` (hostile case file 65, C# 1840 on net10.0 and on netstandard2.0 and 478 focused, TypeScript 917 with strict `tsc`, Python 1106 in 30 s, Rust 489 lib (656 across binaries), Java 2252 checks, C++ GCC 16 `-Werror`, embedded ARM 0 targets failed, ring 83 s, AC-10 pass). The run was on a quieter host (load about 8) than the step 11 run; it re-ran the three timing tests that failed under load and they passed. Not in this script and not run locally: the ESP targets of `cpp-embedded-esp` (stopped by hand during step 11) and the vcpkg checks; the CI `embedded` job runs the ESP targets on the push.

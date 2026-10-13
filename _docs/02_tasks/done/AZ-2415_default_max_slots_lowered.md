@@ -77,3 +77,7 @@ Then green after the text and threshold updates.
 ## Parent decision after the TypeScript reference (2026-10-12)
 
 AC-2 reads: the default slot count is a quarter of the old one and the measured worst-case peak (F10 shape) is stated per package and stays under 400 MB. TypeScript: 1 070 MB before, about 355 MB after (33 % by peak RSS; the fixed floor of runtime and packet does not shrink). The method is in `reference_loop22.md` section 2. `pack_element_times_over_budget` is now refused by slots, not the bytes budget: each package updates its own loader expectation to the slots text; the parent adds a separate bytes-budget case in AZ-2417 (fixture files stay with the parent).
+
+## Loop 22 result
+
+Default `maxSlots` is 1 048 576 in TypeScript, Python, Java, C# and Rust (C++ has no limit). F10 worst-case peak before and after: TypeScript 1 070 to 353 MB, Java 960 to 317, C# 733 to 235, Python 550 to 162, Rust stand-in 628 to 120. `pack_slots_over_limit` refuses at round 16 132 with 1 048 580 slots; `pack_element_times_over_budget` is now refused by slots and the bytes route is `pack_element_times_over_bytes_budget`. Raising the limit to 4 194 304 still unpacks the old packet (TypeScript, Java, C#, Rust-side pack test; Python and Rust have no F10 unpack test, gap G1). Tests: `loop22-max-slots.test.ts`, `UnpackMemory.java`, `PackSlotBudgetTests`, `test_loop22_parity.py`, `loop22_parity_tests.rs`.

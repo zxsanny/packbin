@@ -57,3 +57,7 @@ None.
 ## Constraints
 
 - Test code only (plus one README line if needed); runs in the loader pass of wave 2.
+
+## Loop 22 result
+
+Standing wrong-rule tests in the loaders with a rule table (TypeScript 2, Python 4, Rust 4, Java 7, C# 3 groups, C++ 1): a deliberately wrong entry built in the test makes the loader fail naming the case. `row4_packed_*`: nothing to correct (`row4_packed_behind_clear_flag` exists only in the TypeScript SPEC table; the README width 1 lines belong to other cases).

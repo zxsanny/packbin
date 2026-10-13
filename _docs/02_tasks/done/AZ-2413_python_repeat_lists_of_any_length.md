@@ -69,3 +69,7 @@ Then all pass.
 ## Parent decision after the TypeScript reference (2026-10-12)
 
 Reference: `_docs/03_implementation/reference_loop22.md` section 3b. TypeScript packs the **lone value** (R1, R2a, R2b) and the **`when` list outside `flags`** (R3a to R3c, R3e); it **refuses** a short required list (R2d to R2f, `missing {name}`), so that shape is not "packed by the other five". Python changes for the lone value and the `when` list only; the short required list keeps the TypeScript rule (refused). The Java, C# and Rust workers record their outcome for rows R2d to R2f; a package that packs them is a question for the parent, not a change.
+
+## Loop 22 result
+
+Python no longer requires equal lengths for `repeat` lists: a lone value (R1, R2a, R2b) and a `when` list outside `flags` (R3a to R3c, R3e, R3f) pack to the TypeScript bytes; a short required list (R2d to R2f, R3d) is still refused naming the member (`KeyError 'missing field b'`). Java, C# and TypeScript probed: same outcomes. Tests: `test_loop22_parity.py` U14 block, three rewritten pins. Bound unchanged: `maxRounds`, `maxSlots`, `maxBytes` still apply.

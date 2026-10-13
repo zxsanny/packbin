@@ -65,3 +65,7 @@ Then flash at most 8 192 B and stack at most 512 B; numbers recorded.
 ## Constraints
 
 - Ends with `docker run gcc:16 make test` (and `make -C cpp clean` between host and container builds) and the arm embedded stage.
+
+## Loop 22 result
+
+`has_member` in `cpp/include/packbin/order.hpp` (the spec named `cpp/src/core`): a `times`/`repeat` whose body, looking through `when` and group children, has no member is refused at construction with `SchemeInvalid`; a zero-width `bytes`, a flag byte and a member-less `flags` still build. The arm stage did not move: flash 8152 of 8192 B, stack 456 of 512 B. The outer-source `when` spelling was already refused by C++'s source check; the new check matters for a source-less `when` (`eq(-1, ...)`), which C++ builds without error (U19, F36). Tests: `times_count_zero_host_tests.cpp`.

@@ -64,3 +64,7 @@ None (construction check in one package; the C# ring is unaffected).
 ## Constraints
 
 - Breaking change only for schemes that already failed at pack time.
+
+## Loop 22 result
+
+`List<double>`, `List<float>`, `List<decimal>` (and arrays, `IList<>`, nullables, and dictionaries with those values) bound to an integer list or dict are refused at build with `'Ids': List<Double> holds Double elements, which pack refuses for the u8 elements of its field; use an integer element type`; `f32`/`f64` lists unchanged. `CollectionShape.HoldsRange` no longer admits real types. Tests: `IntegerListFloatMemberTests.cs` (297 matrix rows, builds iff packs) plus two changed pins.

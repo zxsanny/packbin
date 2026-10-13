@@ -69,3 +69,7 @@ Then the same row.
 ## Parent decision after the TypeScript reference (2026-10-12)
 
 Reference section 3a. The README AZ-2248 shape is **Shape A**: `flags` inside the `times` body (rows A1 to A11); Rust matches those bytes. **Shape B** (`times` as a `flags` member, rows B1 to B6) is refused in TypeScript with `missing pt`; Rust must give the same outcome there as TypeScript (a refusal), so a Rust that accepts B is brought back to refusing it. The worker probes both shapes first and reports the Rust outcome per row.
+
+## Loop 22 result
+
+Rust packs a short, empty or lone list for a member under `flags` inside a `times` (shape A, rows A1 to A11) to the TypeScript bytes; shape B (`times` as a `flags` member) still refuses a short list as TypeScript does. Tests: `loop22_parity_tests.rs`; hostile `pack_times_short_list_flags`. Open: unpacked per-name lists hold only the rounds that read the name, so repacking from them shifts values (F35, README Times note); a list for a member under a `when` in a `times` is still refused (U18).

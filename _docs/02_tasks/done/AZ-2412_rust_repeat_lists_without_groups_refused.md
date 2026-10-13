@@ -59,3 +59,7 @@ Then bytes as at HEAD.
 ## Constraints
 
 - README Rounds section states that Rust takes rounds as groups only (step 13).
+
+## Loop 22 result
+
+Rust `pack` refuses per-name lists or a lone value for a `repeat` member given without `__repeat__` groups (map scheme; also under a clear `flags` or split bit): `repeat at id 0: 'n' is given without '__repeat__' groups; give the rounds of a repeat as '__repeat__' groups, one per round`. Groups, empty lists and absent values pack as before. Tests: `repeat_lists_without_groups_tests.rs`. Open: lists beside groups and names of a nested `times` are still dropped (U22, F37).

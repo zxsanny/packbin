@@ -60,3 +60,7 @@ Then every case matches its rule-table outcome in all six.
 ## Constraints
 
 - Runs after wave 1 (the rules must be in).
+
+## Loop 22 result
+
+`fixtures/hostile/cases.txt` has 65 cases (10 new: `pack_novalue_count_clear_when_*`, `pack_repeat_unequal_lists_lone`/`_when`, `pack_times_short_list_flags`, `pack_element_times_over_bytes_budget`, `construct_empty_when_times_body`, `construct_empty_when_repeat_body`, `construct_empty_nested_when_body`); the six loaders replay them with rule-table entries. The three construct cases are refused by the scope rule first in five packages (U21).
