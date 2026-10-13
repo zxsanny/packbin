@@ -235,7 +235,7 @@ out="$(GO_FIXTURE="$work/bad-golden.hex" run_go "$goroot" GO_FUZZ=1)"; code=$?
 [ "$code" -ne 0 ] || bad "go: a wrong golden row passed"
 [ ! -s "$work/go.log" ] || bad "go: a step ran with a wrong golden row: $(cat "$work/go.log")"
 
-# --- the other six (AZ-2457) ---
+# --- the other six (AZ-2477) ---
 # M1. a tree without a language's manifest fails, names the manifest, writes one FAIL row and runs no tool
 bare="$work/bare"
 mkdir -p "$bare/fixtures" "$bare/.github/workflows"

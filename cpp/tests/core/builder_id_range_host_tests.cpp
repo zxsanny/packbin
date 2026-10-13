@@ -1,4 +1,4 @@
-// AZ-2452 (U25): the C++ builder refuses every id outside [0, 32767] at build time. The table
+// AZ-2472 (U25): the C++ builder refuses every id outside [0, 32767] at build time. The table
 // stores an id as int16, so an id above 32767 wraps: 65536 wraps to 0 and 65537 to 1, both valid
 // ids that an earlier field or the field itself can hold. Every refusal case below therefore uses
 // an id that wraps to a VALID id (or, for the boundary pair, to a negative id the old code let

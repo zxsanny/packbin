@@ -5,13 +5,13 @@ branch: dev
 
 # Probe the six for a split-flag bit inside a false `when` with the member given (D7)
 
-**Task**: AZ-2458_split_flag_false_when_probe
+**Task**: AZ-2478_split_flag_false_when_probe
 **Name**: Probe the six for a split-flag bit inside a false `when` with the member given
 **Description**: D7 A: TypeScript packs a split-flag bit as the body with no payload for a member whose `when` is false (`01000306`, repacks as `01000206`); Go copies TypeScript (Go-3). Probe Python, Rust, C#, Java, C++ for the same row and fix the outliers so each package packs TypeScript's `01000206` (and tolerates reading `01000306`).
 **Complexity**: 3 points
 **Dependencies**: none
 **Component**: python, rust, csharp, java, cpp (probe first; fix outliers)
-**Tracker**: AZ-2458
+**Tracker**: AZ-2478
 **Epic**:
 
 ## Problem

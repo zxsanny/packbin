@@ -256,15 +256,15 @@ AZ-2440 through AZ-2451 are loop 24, the Go package (epic AZ-2222; owner decisio
 | AZ-2450 | go_release | 5 | AZ-2448, AZ-2449 | AZ-2222 |
 | AZ-2451 | go_readme | 2 | AZ-2447, AZ-2450 | AZ-2222 |
 
-AZ-2452 through AZ-2459 are loop 25 (owner batch 2026-10-14 on the loop 24 handoff: D1-D7 recommended A, F44 owner-applied before any Go tag; short wave U25 A, U26 A, Low-1 A; U24 B README-only; D8 Go peak memory). Wave 1 runs four single-package workers in parallel: AZ-2452 (`cpp/`, arm stage required), AZ-2453 (`csharp/`), AZ-2454 (`python/`), AZ-2455 (`go/`). Wave 2 runs the probes and the run-suite alignment: AZ-2456 (D1 probe four packages, docs-only), AZ-2457 (D6 align six `run-suite.sh` to Go on missing manifest), AZ-2458 (D7 probe five packages and fix outliers), AZ-2459 (U24 B README). AZ-2068 stays out. The first `go/vX.Y.Z` tag needs the owner's explicit go and the F44 ruleset applied; the agent cannot do either.
+AZ-2472 through AZ-2479 are loop 25 (owner batch 2026-10-14 on the loop 24 handoff: D1-D7 recommended A, F44 owner-applied before any Go tag; short wave U25 A, U26 A, Low-1 A; U24 B README-only; D8 Go peak memory). Wave 1 runs four single-package workers in parallel: AZ-2472 (`cpp/`, arm stage required), AZ-2473 (`csharp/`), AZ-2474 (`python/`), AZ-2475 (`go/`). Wave 2 runs the probes and the run-suite alignment: AZ-2476 (D1 probe four packages, docs-only), AZ-2477 (D6 align six `run-suite.sh` to Go on missing manifest), AZ-2478 (D7 probe five packages and fix outliers), AZ-2479 (U24 B README). AZ-2068 stays out. The first `go/vX.Y.Z` tag needs the owner's explicit go and the F44 ruleset applied; the agent cannot do either.
 
 | Task | Name | Complexity | Dependencies | Epic |
 |------|------|-----------|-------------|------|
-| AZ-2452 | cpp_builder_range_check | 3 | None | |
-| AZ-2453 | csharp_nested_dict_names | 2 | None | |
-| AZ-2454 | python_value_error_text | 1 | None | |
-| AZ-2455 | go_peak_memory | 1 | None | |
-| AZ-2456 | anchor_group_no_takers_probe | 1 | None | |
-| AZ-2457 | run_suite_missing_manifest_fail | 2 | None | |
-| AZ-2458 | split_flag_false_when_probe | 3 | None | |
-| AZ-2459 | readme_cpp_clear_bit_unbound | 1 | None | |
+| AZ-2472 | cpp_builder_range_check | 3 | None | |
+| AZ-2473 | csharp_nested_dict_names | 2 | None | |
+| AZ-2474 | python_value_error_text | 1 | None | |
+| AZ-2475 | go_peak_memory | 1 | None | |
+| AZ-2476 | anchor_group_no_takers_probe | 1 | None | |
+| AZ-2477 | run_suite_missing_manifest_fail | 2 | None | |
+| AZ-2478 | split_flag_false_when_probe | 3 | None | |
+| AZ-2479 | readme_cpp_clear_bit_unbound | 1 | None | |

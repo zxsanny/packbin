@@ -5,13 +5,13 @@ branch: dev
 
 # `run-suite.sh`: the six fail without their manifest (align with Go)
 
-**Task**: AZ-2457_run_suite_missing_manifest_fail
+**Task**: AZ-2477_run_suite_missing_manifest_fail
 **Name**: `run-suite.sh`: the six fail without their manifest (align with Go)
 **Description**: D6 A: `run-suite.sh` for TypeScript, Python, Rust, C#, Java, C++ returns a non-zero exit and names the missing manifest when its manifest (`package.json`, `pyproject.toml`, `Cargo.toml`, `*.csproj`, `pom.xml`, `cpp/CMakeLists.txt` or the project's equivalent) is missing — the Go wrapper's behavior. Today the six skip with a PASS row, which hides a corrupt tree.
 **Complexity**: 2 points
 **Dependencies**: none
 **Component**: `.github/workflows/run-suite.sh` (one script; the six languages are branches of one `case`)
-**Tracker**: AZ-2457
+**Tracker**: AZ-2477
 **Epic**:
 
 ## Problem

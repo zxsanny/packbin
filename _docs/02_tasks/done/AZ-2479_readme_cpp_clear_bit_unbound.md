@@ -5,13 +5,13 @@ branch: dev
 
 # README note: C++ clear bit for an unbound member behind a clear `when`
 
-**Task**: AZ-2459_readme_cpp_clear_bit_unbound
+**Task**: AZ-2479_readme_cpp_clear_bit_unbound
 **Name**: README note: C++ clear bit for an unbound member behind a clear `when`
 **Description**: U24 B (handoff 25): C++ packs the clear bit for an unbound `bits`/`packed`/`sized` member (no member pointer) whose count sits behind a clear `when`; an unbound member is C++'s "not carried" spelling. The README's data-type and "no value" wording picks that up so users do not reach for a null pointer in a language without one.
 **Complexity**: 1 point
 **Dependencies**: none
 **Component**: docs (README only)
-**Tracker**: AZ-2459
+**Tracker**: AZ-2479
 **Epic**:
 
 ## Problem

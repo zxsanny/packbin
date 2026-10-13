@@ -5,13 +5,13 @@ branch: dev
 
 # Python ValueError text for a value whose count no field wrote
 
-**Task**: AZ-2454_python_value_error_text
+**Task**: AZ-2474_python_value_error_text
 **Name**: Python ValueError text for a value whose count no field wrote
 **Description**: Python raises `ValueError` with the TypeScript text when a value is given to a member whose count no field wrote; today Python raises `RuntimeError("count N is missing")`, which breaks the one error type the other packages share.
 **Complexity**: 1 point
 **Dependencies**: none
 **Component**: python
-**Tracker**: AZ-2454
+**Tracker**: AZ-2474
 **Epic**:
 
 ## Problem

@@ -16,7 +16,7 @@ from packbin import (
 )
 
 
-# AZ-2454 (loop 25, Low-1): a value given to a member whose `count` no earlier field wrote is a user error.
+# AZ-2474 (loop 25, Low-1): a value given to a member whose `count` no earlier field wrote is a user error.
 # Python used to raise `RuntimeError("count N is missing")`; parity with TypeScript names this a `ValueError`
 # with the text `"<member>: count <count_id> was not written"`. Only `pack` is touched; `TypeError` for a wrong
 # Python value type stays, and `unpack` is unchanged.

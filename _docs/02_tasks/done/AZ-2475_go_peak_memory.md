@@ -5,13 +5,13 @@ branch: dev
 
 # Go peak memory for F10 and wide-round packets
 
-**Task**: AZ-2455_go_peak_memory
+**Task**: AZ-2475_go_peak_memory
 **Name**: Go peak memory for F10 and wide-round packets
 **Description**: Measure Go's peak memory for the F10 packet at `maxSlots` 4 194 304 and the wide-round packet at the defaults; land one figure per shape into the loop 22 memory table and the README memory bullet.
 **Complexity**: 1 point
 **Dependencies**: none
 **Component**: go
-**Tracker**: AZ-2455
+**Tracker**: AZ-2475
 **Epic**:
 
 ## Problem

@@ -5,13 +5,13 @@ branch: dev
 
 # Probe the other four for an anchored group with no takers (D1)
 
-**Task**: AZ-2456_anchor_group_no_takers_probe
+**Task**: AZ-2476_anchor_group_no_takers_probe
 **Name**: Probe the other four for an anchored group with no takers
 **Description**: D1 A: a `Flags(0, Group(0,"mark")), U8(0,"n")` row packs as TypeScript in Go. Probe the four packages that are not pinned yet (Python, Rust, C#, Java; C++ already pins the row) and document the outcomes. No code change if a package already matches TypeScript; a bug ticket if it does not.
 **Complexity**: 1 point
 **Dependencies**: none
 **Component**: all seven (probe only)
-**Tracker**: AZ-2456
+**Tracker**: AZ-2476
 **Epic**:
 
 ## Problem

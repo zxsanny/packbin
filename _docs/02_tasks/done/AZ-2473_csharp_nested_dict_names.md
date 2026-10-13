@@ -5,13 +5,13 @@ branch: dev
 
 # C# dictionary rows read nested-row group's names from the nested dictionary
 
-**Task**: AZ-2453_csharp_nested_dict_names
+**Task**: AZ-2473_csharp_nested_dict_names
 **Name**: C# dictionary rows read nested-row group's names from the nested dictionary
 **Description**: A dictionary row holding a nested-row group reads the group's member names from the inner dictionary of that row, not from the outer dictionary. Breaking: a flat row that provided those names at the outer level stops working.
 **Complexity**: 2 points
 **Dependencies**: none
 **Component**: csharp
-**Tracker**: AZ-2453
+**Tracker**: AZ-2473
 **Epic**:
 
 ## Problem

@@ -3,7 +3,7 @@ using Packbin;
 
 namespace Packbin.Tests;
 
-// AZ-2453 (U26 A, loop 25): a dictionary row holding a nested-row group reads the group's member names from the inner
+// AZ-2473 (U26 A, loop 25): a dictionary row holding a nested-row group reads the group's member names from the inner
 // dictionary of that row, not from the outer dictionary. The parity reference is TypeScript's Dict reader (U26) and
 // GO-12 ("the map form reads a nested-row group from the nested map").
 public class DictNestedRowGroupTests

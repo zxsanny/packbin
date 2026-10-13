@@ -5,13 +5,13 @@ branch: dev
 
 # C++ builder range check for every id
 
-**Task**: AZ-2452_cpp_builder_range_check
+**Task**: AZ-2472_cpp_builder_range_check
 **Name**: C++ builder range check on every id
 **Description**: The C++ builder refuses every id that cannot fit a wire count: a count id of `times`/`bits`/`packed`/`sized` above 32 767, a field id above 32 767, and a `when` anchor above 32 767 all wrap; a count id of `-1` builds but then fails every pack and unpack with `BadValue`.
 **Complexity**: 3 points
 **Dependencies**: none
 **Component**: cpp
-**Tracker**: AZ-2452
+**Tracker**: AZ-2472
 **Epic**:
 
 ## Problem
@@ -38,7 +38,7 @@ Reference: `_docs/02_task_plans/round-parity-and-construction-checks/` (U25 row)
 
 - Any `python/`, `rust/`, `csharp/`, `java/`, `typescript/`, `go/` touch.
 - Any `_docs/02_task_plans/**` wording changes (parent writes the row acceptance text at loop close).
-- README edits (U24 is AZ-2459).
+- README edits (U24 is AZ-2479).
 
 ## Acceptance Criteria
 

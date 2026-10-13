@@ -17,7 +17,7 @@ run() {
   "$@" || ok=1
 }
 
-# A suite whose manifest is missing has nothing to run: it fails, as Go always did (AZ-2448 AC-3, AZ-2457), so a
+# A suite whose manifest is missing has nothing to run: it fails, as Go always did (AZ-2448 AC-3, AZ-2477), so a
 # tree that lost a language cannot turn the check green. Whether a language is published is decided by the
 # publish gate (`publish-gate.sh`, AC-15), not by this script.
 missing_manifest() {

@@ -10,18 +10,18 @@ Loop works on `dev` in this session (no worktree). Intake: `_docs/loops/loop25/h
 
 ## Scope
 
-Specs claimed (`loop: 25`): AZ-2452 to AZ-2459 (8 specs, ~14 points). AZ-2068 stays out. F44 (owner-only) tracked in handoff.
+Specs claimed (`loop: 25`): AZ-2472 to AZ-2479 (8 specs, ~14 points). AZ-2068 stays out. F44 (owner-only) tracked in handoff.
 
 | id | points | component | source |
 |----|--------|-----------|--------|
-| AZ-2452 | 3 | cpp | U25 A (hostile constructs; builder id-range check) |
-| AZ-2453 | 2 | csharp | U26 A (dictionary rows read nested-row names from nested dict) |
-| AZ-2454 | 1 | python | Low-1 A (ValueError text for value with no count-writing field) |
-| AZ-2455 | 1 | go, docs | D8 (peak memory for F10 and wide-round packets, loop 22 table + README) |
-| AZ-2456 | 1 | all seven, docs | D1 A (probe the other four for anchor-group-with-no-takers; document) |
-| AZ-2457 | 2 | six | D6 A (align the six to Go on `run-suite.sh`: missing manifest fails) |
-| AZ-2458 | 3 | six | D7 A (probe the six for split-flag-in-false-when; fix outliers) |
-| AZ-2459 | 1 | docs | U24 B (README note: C++ clear bit for unbound member) |
+| AZ-2472 | 3 | cpp | U25 A (hostile constructs; builder id-range check) |
+| AZ-2473 | 2 | csharp | U26 A (dictionary rows read nested-row names from nested dict) |
+| AZ-2474 | 1 | python | Low-1 A (ValueError text for value with no count-writing field) |
+| AZ-2475 | 1 | go, docs | D8 (peak memory for F10 and wide-round packets, loop 22 table + README) |
+| AZ-2476 | 1 | all seven, docs | D1 A (probe the other four for anchor-group-with-no-takers; document) |
+| AZ-2477 | 2 | six | D6 A (align the six to Go on `run-suite.sh`: missing manifest fails) |
+| AZ-2478 | 3 | six | D7 A (probe the six for split-flag-in-false-when; fix outliers) |
+| AZ-2479 | 1 | docs | U24 B (README note: C++ clear bit for unbound member) |
 
 ## Steps
 | id | step | name | include | reason |
@@ -46,26 +46,26 @@ Specs claimed (`loop: 25`): AZ-2452 to AZ-2459 (8 specs, ~14 points). AZ-2068 st
 
 ### Files that change (ownership tiers)
 
-- `cpp/**` has one writer at a time (AZ-2452 only; `cpp/src/*` and `cpp/include/*` → arm embedded stage required; margin 40 B at loop 24 close).
-- `csharp/**` has one writer at a time (AZ-2453 only).
-- `python/**` has one writer at a time (AZ-2454 only).
-- `go/**` has one writer at a time (AZ-2455 only; tests + a memory-measurement helper file).
-- Multi-package touches (own only that package's tree): AZ-2456 probes six packages (`python/`, `rust/`, `java/`, `csharp/`, `cpp/`, cannot run `go/`) and may write a parity row doc; AZ-2457 touches `run-suite.sh` for each of the six (`typescript/`, `python/`, `rust/`, `csharp/`, `java/`, `cpp/`) and `_docs/02_task_plans/pack-output-budget-and-parity/` where AC-15 wording lives; AZ-2458 probes and may fix a walker in the outliers.
+- `cpp/**` has one writer at a time (AZ-2472 only; `cpp/src/*` and `cpp/include/*` → arm embedded stage required; margin 40 B at loop 24 close).
+- `csharp/**` has one writer at a time (AZ-2473 only).
+- `python/**` has one writer at a time (AZ-2474 only).
+- `go/**` has one writer at a time (AZ-2475 only; tests + a memory-measurement helper file).
+- Multi-package touches (own only that package's tree): AZ-2476 probes six packages (`python/`, `rust/`, `java/`, `csharp/`, `cpp/`, cannot run `go/`) and may write a parity row doc; AZ-2477 touches `run-suite.sh` for each of the six (`typescript/`, `python/`, `rust/`, `csharp/`, `java/`, `cpp/`) and `_docs/02_task_plans/pack-output-budget-and-parity/` where AC-15 wording lives; AZ-2478 probes and may fix a walker in the outliers.
 - Parent-only: `_docs/**` (incl. README), tracker, commits, `_docs/02_task_plans/**` acceptance text.
 
 ### Order of work (one wave; subagents run disjoint files in parallel)
 
 Wave 1 — four single-package tasks run in parallel (`subagents.md` cap 4):
-- AZ-2452 (cpp hostile constructs; arm stage)
-- AZ-2453 (csharp dict row names)
-- AZ-2454 (python ValueError)
-- AZ-2455 (go memory measurement)
+- AZ-2472 (cpp hostile constructs; arm stage)
+- AZ-2473 (csharp dict row names)
+- AZ-2474 (python ValueError)
+- AZ-2475 (go memory measurement)
 
-Wave 2 — three multi-package or decision tasks, run after wave 1 since the walker fixes AZ-2458 names may touch files that overlap with earlier work; D1 (AZ-2456) and U24 (AZ-2459) are documentation-only and may run in parallel with D7 (AZ-2458):
-- AZ-2456 (D1 probe + document; owns `_docs/02_task_plans/round-parity-and-construction-checks/` parity rows notes)
-- AZ-2457 (D6 align six to Go; owns `typescript/run-suite.sh` wrapper and the five others' manifests under `*/run-suite.sh`; AC-15 wording)
-- AZ-2458 (D7 probe six; may fix a walker in one or two outliers)
-- AZ-2459 (U24 README edit; owns `README.md` C++ clear-bit paragraph)
+Wave 2 — three multi-package or decision tasks, run after wave 1 since the walker fixes AZ-2478 names may touch files that overlap with earlier work; D1 (AZ-2476) and U24 (AZ-2479) are documentation-only and may run in parallel with D7 (AZ-2478):
+- AZ-2476 (D1 probe + document; owns `_docs/02_task_plans/round-parity-and-construction-checks/` parity rows notes)
+- AZ-2477 (D6 align six to Go; owns `typescript/run-suite.sh` wrapper and the five others' manifests under `*/run-suite.sh`; AC-15 wording)
+- AZ-2478 (D7 probe six; may fix a walker in one or two outliers)
+- AZ-2479 (U24 README edit; owns `README.md` C++ clear-bit paragraph)
 
 Non-interactive subagent commands (memory `noninteractive-subagent-commands`): every worker shell block ends on its own with `< /dev/null` and a `timeout`. The parent checks `git diff --cached` after each join and refuses any index write a worker did.
 

@@ -12,7 +12,7 @@ from packbin import BinaryPacker, Scheme, bits, eq, flag_byte, flags, packed, si
 # Python differences: the U6 text is the reference text with Python's names (`pt`, `c`); the rows that
 # TypeScript refuses with its own texts (43, 49, 52, 53) are refused here with the Python texts pinned by loops 19,
 # 20 and 25 (`times 1: body values are given ...`, `times: count 1 was not written`, `2: count 1 was not written`;
-# AZ-2454 switched `RuntimeError("count N is missing")` to `ValueError("count N was not written")`).
+# AZ-2474 switched `RuntimeError("count N is missing")` to `ValueError("count N was not written")`).
 
 
 def _u8(field_id: int, name: str):
