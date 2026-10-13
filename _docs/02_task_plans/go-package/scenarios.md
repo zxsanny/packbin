@@ -27,6 +27,19 @@ Source of rows: `intake` (new-task Step 4.7, 13-point handoff). Status: confirme
 | 4 | Where the six packages differ, which does Go copy | A — TypeScript at HEAD, except documented TypeScript-only exceptions (U6), where Go follows the five | yes |
 | 5 | `check-cases.sh` counts exactly six names; "Go" is a substring of other words | A — checker, the 41 README pack sections and the Go hostile loader change in one task; whole-word match | yes |
 
+Rows added by the assessment (`assess-round-1`, see `_docs/loops/loop24/assessment24.md`):
+
+| id | scenario | status | behavior (confirmed) | AC ref | source |
+|----|----------|--------|----------------------|--------|--------|
+| D1 | Empty anchored group id reuse | deferred (pending assessment, loop 25) | — | — | assess-round-1 |
+| D2 | `u2` as a list or dict element | deferred (pending assessment, loop 25) | — | — | assess-round-1 |
+| D3 | Slot width of a `Nested` row in a round | deferred (pending assessment, loop 25) | — | — | assess-round-1 |
+| D4 | Zero-width repeat round error kind | deferred (pending assessment, loop 25) | — | — | assess-round-1 |
+| D5 | `BadValue` from unpack | deferred (pending assessment, loop 25) | — | — | assess-round-1 |
+| D6 | Missing manifest in `run-suite.sh` | deferred (pending assessment, loop 25) | — | — | assess-round-1 |
+| D7 | Split bit inside a false `when` | deferred (pending assessment, loop 25) | — | — | assess-round-1 |
+| D8 | Go peak memory at the slot ceiling | deferred (gap-clear, loop 25) | — | GO-5 | assess-round-1 |
+
 ## Not walked
 
 - Permission denied: a library has no actors or roles.
