@@ -11,6 +11,8 @@ use packbin::{
 // (U13). Rows with groups only, with values that agree with the groups, or with no extra names
 // pack as at HEAD (b8b2809). A `repeat` cannot sit in a round, so a repeat nested in a repeat
 // body cannot be spelled (construction panics: "a round keeps no inner repeat rounds").
+// Follow-up (review Low 4, assessment G5, G6): the own name of a `flags` in the body and the
+// `__times_<anchor>` key of a nested `times` are refused the same way.
 
 fn n(x: u8) -> Value {
     Value::U8(x)
@@ -359,5 +361,117 @@ fn ac3_groups_only_and_nothing_given_pack_as_at_head() {
             ok("01010103"),
             ok("0100"),
         ]
+    );
+}
+
+// ---- G5: the own name of a flags in the body; G6: the key of a nested times ----
+
+/// `repeat { u8 n; flags fl { u8 a } }`
+fn flags_in_body() -> MapScheme {
+    MapScheme::new(
+        1,
+        vec![repeat(0, vec![u8("n"), flags(1, "fl", vec![u8("a")])])],
+    )
+}
+
+fn nested_key(w: u8) -> Value {
+    rounds(vec![row(&[("w", n(w))])])
+}
+
+#[test]
+fn g5_a_flags_name_without_groups_or_beside_groups_is_refused() {
+    // Arrange
+    let fb = flag_byte("fb");
+    let split = MapScheme::new(
+        1,
+        vec![
+            fb.byte(),
+            fb.bit(repeat(1, vec![u8("n"), flags(2, "fl", vec![u8("a")])])),
+        ],
+    );
+    let lone = row(&[("fl", n(5))]);
+    let beside = row(&[
+        ("__repeat__", rounds(vec![row(&[("n", n(1)), ("a", n(2))])])),
+        ("fl", n(5)),
+    ]);
+
+    // Act
+    let messages = [
+        text(hex_of(&flags_in_body(), &lone)),
+        text(hex_of(&flags_in_body(), &row(&[("fl", ints(&[5]))]))),
+        text(hex_of(&split, &lone)),
+        text(hex_of(&flags_in_body(), &beside)),
+    ];
+
+    // Assert: HEAD packed `01`, `01`, `0100`, `01010102`
+    assert_eq!(
+        messages,
+        [
+            without_groups(0, "fl"),
+            without_groups(0, "fl"),
+            without_groups(1, "fl"),
+            disagrees(0, "fl"),
+        ]
+    );
+}
+
+#[test]
+fn g6_a_nested_times_key_without_groups_or_beside_groups_is_refused() {
+    // Arrange
+    let lone = row(&[("__times_1", nested_key(9))]);
+    let beside = row(&[
+        (
+            "__repeat__",
+            rounds(vec![row(&[("n", n(1)), ("w", ints(&[9]))])]),
+        ),
+        ("__times_1", nested_key(9)),
+    ]);
+
+    // Act
+    let messages = [
+        text(hex_of(&nested_times(), &lone)),
+        text(hex_of(&nested_times_in_flags(), &lone)),
+        text(hex_of(&nested_times(), &beside)),
+    ];
+
+    // Assert: HEAD packed `01`, `0100`, `010109`
+    assert_eq!(
+        messages,
+        [
+            without_groups(0, "__times_1"),
+            without_groups(0, "__times_1"),
+            disagrees(0, "__times_1"),
+        ]
+    );
+}
+
+#[test]
+fn g5_g6_groups_only_empty_values_and_a_key_the_rounds_hold_pack_as_at_head() {
+    // Arrange: a key kept beside groups whose round holds the same key agrees with them
+    let groups_only = row(&[(
+        "__repeat__",
+        rounds(vec![row(&[("n", n(1)), ("a", n(2))]), row(&[("n", n(3))])]),
+    )]);
+    let held_key = row(&[
+        (
+            "__repeat__",
+            rounds(vec![row(&[("n", n(1)), ("__times_1", nested_key(9))])]),
+        ),
+        ("__times_1", nested_key(9)),
+    ]);
+
+    // Act
+    let bytes = [
+        hex_of(&flags_in_body(), &groups_only),
+        hex_of(&flags_in_body(), &row(&[("fl", ints(&[]))])),
+        hex_of(&nested_times(), &row(&[("__times_1", rounds(Vec::new()))])),
+        hex_of(&nested_times(), &held_key),
+    ];
+
+    // Assert
+    let ok = |hex: &str| Ok(hex.to_string());
+    assert_eq!(
+        bytes,
+        [ok("010101020300"), ok("01"), ok("01"), ok("010109")]
     );
 }

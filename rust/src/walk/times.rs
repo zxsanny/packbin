@@ -203,7 +203,7 @@ fn lists_agree(
 }
 
 /// Whether a field of `fields`, at any depth, is named `name`; with `nested` also inside a
-/// `times`.
+/// `times`, or `name` is the `__times_<anchor>` key of such a `times`.
 fn declares(fields: &[Field], name: &str, nested: bool) -> bool {
     fields.iter().any(|field| match &field.kind {
         FieldKind::Flags {
@@ -213,7 +213,9 @@ fn declares(fields: &[Field], name: &str, nested: bool) -> bool {
             name: own, members, ..
         } => own.as_ref() == name || declares(members, name, nested),
         FieldKind::When { members, .. } => declares(members, name, nested),
-        FieldKind::Times { members, .. } if nested => declares(members, name, nested),
+        FieldKind::Times {
+            anchor, members, ..
+        } if nested => times_name(*anchor).as_ref() == name || declares(members, name, nested),
         FieldKind::FlagBit { inner, .. } => declares(std::slice::from_ref(inner), name, nested),
         FieldKind::U2 { names } => names.iter().any(|own| own.as_ref() == name),
         _ => field_name(field) == Some(name),
@@ -221,10 +223,11 @@ fn declares(fields: &[Field], name: &str, nested: bool) -> bool {
 }
 
 /// A `repeat` takes its rounds only as `__repeat__` groups. With none, a value kept under a name of
-/// its body, at any depth and in a `times` nested in it (a non-list counts as a list of
-/// one item; an empty list holds nothing), would be dropped without a word, so it fails on the
-/// first such name. With groups, a value kept beside them under a name of the body must be what
-/// the rounds hold, as for a `times` (unpack gives none: a `repeat` has no per-name lists).
+/// its body (a `flags` name too), at any depth and in a `times` nested in it, or under the
+/// `__times_<anchor>` key of such a `times` (a non-list counts as a list of one item; an empty
+/// list or empty rounds hold nothing), would be dropped without a word, so it fails on the first
+/// such name, then key. With groups, a value kept beside them under such a name or key must be
+/// what the rounds hold, as for a `times` (unpack gives none: a `repeat` has no per-name lists).
 pub(super) fn check_repeat_lists(
     anchor: u32,
     members: &[Field],
@@ -236,12 +239,38 @@ pub(super) fn check_repeat_lists(
     }
     let mut names = Vec::new();
     collect_below(members, true, false, true, &mut names);
-    match names.iter().find(|below| holds_items(values, below.name)) {
-        Some(Below { name, .. }) => Err(PackError::Type(format!(
+    let name = names
+        .iter()
+        .find(|below| holds_items(values, below.name))
+        .map(|below| name_of(below.name));
+    let mut keys = Vec::new();
+    times_keys(members, &mut keys);
+    let key = || {
+        keys.into_iter().find(|key| match values.get(key.as_ref()) {
+            Some(Some(Value::Groups(rounds))) => !rounds.is_empty(),
+            _ => holds_items(values, key),
+        })
+    };
+    match name.or_else(key) {
+        Some(name) => Err(PackError::Type(format!(
             "repeat at id {anchor}: '{name}' is given without '__repeat__' groups; give the rounds \
              of a repeat as '__repeat__' groups, one per round"
         ))),
         None => Ok(()),
+    }
+}
+
+/// The `__times_<anchor>` keys of the `times` in `fields`, at any depth, in field order.
+fn times_keys(fields: &[Field], out: &mut Vec<Name>) {
+    for field in fields {
+        match &field.kind {
+            FieldKind::Times { anchor, .. } => out.push(times_name(*anchor)),
+            FieldKind::Flags { members, .. }
+            | FieldKind::When { members, .. }
+            | FieldKind::Group { members, .. } => times_keys(members, out),
+            FieldKind::FlagBit { inner, .. } => times_keys(std::slice::from_ref(inner), out),
+            _ => {}
+        }
     }
 }
 
@@ -365,7 +394,8 @@ fn names_below(fields: &[Field], under: bool) -> Vec<Below<'_>> {
     out
 }
 
-/// With `rounds` the names of a `times` nested in `fields` count too.
+/// With `rounds` the names of a `times` nested in `fields` and the own name of a `flags` count
+/// too (the names a `repeat` body may be given under).
 fn collect_below<'a>(
     fields: &'a [Field],
     flags: bool,
@@ -375,7 +405,12 @@ fn collect_below<'a>(
 ) {
     for field in fields {
         match &field.kind {
-            FieldKind::Flags { members, .. } => collect_below(members, true, when, rounds, out),
+            FieldKind::Flags { name, members, .. } => {
+                if rounds {
+                    out.push(Below { name, field, when });
+                }
+                collect_below(members, true, when, rounds, out);
+            }
             FieldKind::When { members, .. } => collect_below(members, flags, true, rounds, out),
             FieldKind::Times { members, .. } if rounds => {
                 collect_below(members, true, when, rounds, out);

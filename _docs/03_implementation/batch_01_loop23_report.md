@@ -41,3 +41,9 @@ Worker slips: none. No index writes (`git diff --cached` empty after every join)
 | 10 | AZ-2435 | Python and Rust have no slow marker; the raised-limit tests take 4 to 6 s and several hundred MB each in the default suite | none, or a marker later (`pyproject.toml` owner) | clear |
 | 11 | handoff | `mypy --strict` from PyPI today reports 16 errors in 4 files (the same set at HEAD and after AZ-2437), not one at `_pack.py:410`; CI runs no mypy | record the version in the handoff | clear |
 | 12 | AZ-2434 | The new TypeScript test files are not strict-typechecked (`@types/node` not installed); the documented check covers `src/index.ts` only | none | clear |
+
+## Review and assessment fixes (after `review23.md` PASS_WITH_WARNINGS, `assessment23.md` CLARIFY)
+
+- Review Low 4 / assessment G5, G6 (Rust): a `flags` own name in a `repeat` body and a top-level `__times_<anchor>` key of a nested `times` are refused without groups (U13 text) and checked beside groups (`list for '<name>' disagrees with its rounds`); a key identical to the rounds packs (`010109`). `collect_below`, `times_keys`, `declares` in `rust/src/walk/times.rs`; rustdoc `walk/mod.rs`. Tests `g5_*`, `g6_*`, `g5_g6_*` in `repeat_dropped_values_tests.rs`. `cargo test` 673 passed.
+- Assessment G4 (text): the C++ skip reasons of `pack_novalue_count_clear_when_*` (`cpp/tests/core/hostile_pack_loop21.hpp`) and the three "Not run by: C++" lines of `fixtures/hostile/README.md` now state the U20 trace and point to U24. C++ host and `gcc:16` green; `check-cases.sh` ok: 65.
+- To loop 24 (owner rows or flash): review Lows 1 (Python `RuntimeError` for an unwritten count with a value), 2 (C++ count ids wrap; U25), 3 (C++ unbound U11; U24), 5 (cosmetic), 6 (heavy AZ-2435 tests, judged at step 11); assessment U24, U25, U26.

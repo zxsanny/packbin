@@ -127,11 +127,11 @@ constexpr PackHandler kPackHandlers21[] = {
 constexpr PackSkip kPackSkips21[] = {
     // Loop 22 (AZ-2417): the reasons are the README's "Not run by" lines.
     {"pack_novalue_count_clear_when_bits",
-     "a typed row has no \"no value\" for a bits member: it always holds the member, so the row is refused anyway as a count that differs from the member's length"},
+     "a bits member bound to an `Array` is always present, so pack refuses the row with `BadValue` at the member because the count's `when` is clear (loop 23 trace, U20); written unbound it packs the clear bit where this case expects `pack_error` (open row U24)"},
     {"pack_novalue_count_clear_when_packed",
-     "a typed row has no \"no value\" for a packed member: it always holds the member, so the row is refused anyway as a count that differs from the member's length"},
+     "a packed member bound to an `Array` is always present, so pack refuses the row with `BadValue` at the member because the count's `when` is clear (loop 23 trace, U20); written unbound it packs the clear bit where this case expects `pack_error` (open row U24)"},
     {"pack_novalue_count_clear_when_sized",
-     "a typed row has no \"no value\" for a sized member: it always holds the member, so the row is refused anyway as a count that differs from the member's length"},
+     "a sized member bound to an `Array` is always present, so pack refuses the row with `BadValue` at the member because the count's `when` is clear (loop 23 trace, U20); written unbound it packs the clear bit where this case expects `pack_error` (open row U24)"},
     {"pack_repeat_unequal_lists_lone",
      "a typed row holds an `Array` of round items, so a lone value for one round member cannot be written"},
     {"pack_repeat_unequal_lists_when",
