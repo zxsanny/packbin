@@ -19,6 +19,22 @@ func (r *reader) unreadable(id int, name string) *Error {
 	return shortErr(id, name, 0, len(r.buf)-r.off)
 }
 
+// chargeRound charges the round of f that starts next, round number i (counted from 0) of its field:
+// a round past MaxRounds, or one that would take the slots of the call past MaxSlots, is refused with
+// the bytes left where it would start, before it allocates anything.
+func (r *reader) chargeRound(f *node, i int) error {
+	id, name := roundMember(f)
+	if i >= r.lim.MaxRounds {
+		return tooMany(id, name, len(r.buf)-r.off, "round %d is above the limit of %d rounds", i+1, r.lim.MaxRounds)
+	}
+	if width := f.shape.width; width > r.lim.MaxSlots-r.slots {
+		return tooMany(id, name, len(r.buf)-r.off, "the rounds would hold %d slots, above the limit of %d slots",
+			r.slots+width, r.lim.MaxSlots)
+	}
+	r.slots += f.shape.width
+	return nil
+}
+
 // readCount is the count f reads from the scope plus bias; false when the count field was not read
 // (a clear bit, a false when) or the count is negative or too large.
 func (r *reader) readCount(f *node, bias int) (int, bool) {
@@ -97,7 +113,10 @@ func (r *reader) rounds(f *node, count int, values map[string]any) error {
 		if count < 0 && r.off >= len(r.buf) {
 			break
 		}
-		// A round starts here: the one place the round limits (AZ-2444) charge it.
+		// A round starts here: the one place the round limits charge it, before any of its bytes.
+		if err := r.chargeRound(f, i); err != nil {
+			return err
+		}
 		before := r.off
 		one := make(map[string]any, len(f.shape.names))
 		r.enter(f.inner, one)

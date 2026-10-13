@@ -58,7 +58,7 @@ func dispatch(buf []byte, schemes []*Scheme) (*Scheme, *reader, error) {
 		return nil, nil, &Error{Kind: UnknownType, Field: NoField, Actual: int(buf[0])}
 	}
 	values := make(map[string]any, len(match.top.members))
-	r := &reader{buf: buf, off: 1, values: values}
+	r := &reader{buf: buf, off: 1, values: values, lim: match.limits}
 	r.enter(match.top, values)
 	if err := r.fields(match.fields, values); err != nil {
 		return nil, nil, err
@@ -81,6 +81,10 @@ type reader struct {
 	// values is the top-level row; reached are the rounds read (with 0 rounds or more), for a typed row.
 	values  map[string]any
 	reached map[reachKey]bool
+	// lim are the limits of the scheme; slots is what every round of this call has charged so far
+	// against lim.MaxSlots, one counter for every repeat and times at any depth.
+	lim   Limits
+	slots int
 }
 
 // enter makes the scope of a place whose row is out the one a when or a count reads.

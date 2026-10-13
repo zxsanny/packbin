@@ -83,3 +83,20 @@ API added: `Utf8(id, name)`, `Nested(name, members...)`, `List(name, element)`, 
 | 27 | AZ-2443 | A list or dict inside a lone group map given once for every round is refused (TypeScript slices per round) | Go-4 row 16 | clear |
 | 28 | AZ-2443 | Items of a `Nested`/`Flags` element in a map row are `map[string]any` only (TypeScript: any object); dict maps accept any map with string-kinded keys; keys sort in UTF-8 byte order | none | clear |
 | 29 | AZ-2443 | `-race -cover` together fails the AC-7 speed test on this host, also on a pristine `git archive HEAD` copy; plain and `-race` pass (plain 111/105 ms) | step 11 runs `-race` only (run-suite) | clear |
+
+## Batch 01 part 5 (AZ-2444, wave 2)
+
+| Worker | Spec | Result |
+|--------|------|--------|
+| go chain | AZ-2444 (limits, pack budgets, FuzzUnpack) | `go test -race` ok in 27 s (the F10 and wide-round packets are in the default suite); gofmt/vet clean; coverage 96.7%; files <= 390 lines; `FuzzUnpack` 60 s: 120,981 execs, 0 failures (with `-fuzzminimizetime=0` 1.4 M execs in 60 s); parent re-ran the suite: ok |
+
+API added: `Limits{MaxRounds, MaxSlots, MaxBytes}`, `DefaultLimits()`, `DefaultMaxRounds` 65535, `DefaultMaxSlots` 1048576, `DefaultMaxBytes` 16777216, `(*Scheme).Limits()`, `(*Scheme).WithLimits(Limits) (*Scheme, error)` (returns a copy; every field is the limit, a field below 1 including `Limits{}` is `InvalidScheme`), error kind `TooMany` (`too_many`) and `ErrTooMany`. Unpack charges each round in `reader.rounds` before its bytes are read (TooMany, needed 0, left = bytes left at the round); pack refuses a `times` count / `repeat` list above `MaxRounds`, charges slots per round, checks `MaxBytes` before every write (a lone utf8 under a times included).
+
+| # | Spec ref | Finding | Proposed handling | Status |
+|---|----------|---------|-------------------|--------|
+| 30 | AZ-2444 | Slot width of a `Nested` row in a round: Go charges the width of the row's own members (a 1000-member `Nested` is 1000 slots, memory bound holds); Java charges a nested-row group 1 slot, the others the names inside | owner row Go-5 (or assessment): keep, or charge 1 as Java | unclear |
+| 31 | AZ-2444 | Refused round error: TypeScript's interim shape (short packet, needed 0); Go uses `TooMany`, needed 0, left as in the `limit` cases (the hostile vocabulary allows `too_many` or `bad_value`) | AZ-2446 loader accepts `TooMany` for `limit` cases | clear |
+| 32 | AZ-2444 | `WithLimits` takes all three values every time and refuses a field below 1; C#/TypeScript/Python default an omitted value | README (AZ-2451): start from `DefaultLimits()` | clear |
+| 33 | AZ-2444 vs AZ-2442 | `empty-round-body` row 22 (zero-width repeat round, `01ff00`): Go gives `TrailingBytes` left 1 where TypeScript gives the short-packet shape needed 0, left 1 | probe at assessment | unclear |
+| 34 | AZ-2444 | No Go peak-RSS figure for the loop 22 memory table (F10 and wide raised-limit unpacks pass under `-race` in the 7.6 GiB Docker VM) | measure if wanted (separate) | clear |
+| 35 | AZ-2444, run-suite | The Go default suite takes 27 s under `-race` (4 s before the large-packet tests); `run-suite.sh go` adds the 60 s fuzz step | none | clear |

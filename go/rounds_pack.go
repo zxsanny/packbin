@@ -15,6 +15,9 @@ func (p *packer) counted(f *node, values, wrote map[string]any) error {
 	case kindU2:
 		return p.u2(f, values, wrote)
 	case kindRepeat:
+		if err := refuseRepeatOverLimit(f, values, p.lim.MaxRounds); err != nil {
+			return err
+		}
 		count := roundCount(f.shape, values)
 		if err := refuseShortOptional(f.shape, values, count); err != nil {
 			return err
@@ -26,6 +29,9 @@ func (p *packer) counted(f *node, values, wrote map[string]any) error {
 	case kindTimes:
 		count, err := borrowedCount(f, 0, wrote)
 		if err != nil {
+			return err
+		}
+		if err := refuseRoundsOverLimit(f, count, p.lim.MaxRounds); err != nil {
 			return err
 		}
 		if err := refuseTypedCount(f, values, count); err != nil {
@@ -47,7 +53,13 @@ func (p *packer) rounds(f *node, count int, values map[string]any) error {
 	saved := p.scope
 	defer func() { p.scope = saved }()
 	for i := range count {
-		// A round starts here: the one place the round limits (AZ-2444) charge it.
+		// A round starts here: the one place the round limits charge it, before any of its bytes.
+		if width := f.shape.width; width > p.lim.MaxSlots-p.slots {
+			id, name := roundMember(f)
+			return packErr(id, name, "%s: the rounds would hold %d slots, above the limit of %d slots",
+				name, p.slots+width, p.lim.MaxSlots)
+		}
+		p.slots += f.shape.width
 		view := sliceRound(f.shape, values, i)
 		p.scope = view
 		if err := p.fields(f.fields, scopeRoot{f.fields, view}, view, map[string]any{}); err != nil {
@@ -84,6 +96,9 @@ func (p *packer) sized(f *node, values, wrote map[string]any) error {
 	}
 	if count.neg || count.mag != uint64(len(raw)) {
 		return packErr(f.id, f.name, "%s: expected %s bytes, got %d", f.name, count, len(raw))
+	}
+	if err := p.room(f.id, f.name, len(raw)); err != nil {
+		return err
 	}
 	p.out = append(p.out, raw...)
 	wrote[f.name] = v
@@ -123,6 +138,9 @@ func (p *packer) items(f *node, values, wrote map[string]any) error {
 		}
 		out[i*width/8] |= byte(n.mag) << (i * width % 8)
 	}
+	if err := p.room(f.id, f.name, len(out)); err != nil {
+		return err
+	}
 	p.out = append(p.out, out...)
 	wrote[f.name] = v
 	return nil
@@ -137,6 +155,9 @@ func (p *packer) u2(f *node, values, wrote map[string]any) error {
 			return packErr(slot.id, slot.name, "%s: expected a 2-bit integer 0..3, got %s", slot.name, describe(v))
 		}
 		out[i>>2] |= byte(n.mag) << ((i & 3) * 2)
+	}
+	if err := p.room(f.fields[0].id, f.fields[0].name, len(out)); err != nil {
+		return err
 	}
 	p.out = append(p.out, out...)
 	for _, slot := range f.fields {

@@ -20,6 +20,9 @@ func (p *packer) writeString(id int, name, s string) error {
 	if !utf8.ValidString(s) {
 		return packErr(id, name, "%s: the string is not valid UTF-8", name)
 	}
+	if err := p.room(id, name, 2+len(s)); err != nil {
+		return err
+	}
 	p.out = append(p.out, byte(len(s)), byte(len(s)>>8))
 	p.out = append(p.out, s...)
 	return nil
@@ -69,6 +72,9 @@ func (p *packer) collection(f *node, v any) error {
 func (p *packer) count(f *node, n int) error {
 	if n > maxCollection {
 		return packErr(NoField, f.name, "%s: length %d, above %d", f.name, n, maxCollection)
+	}
+	if err := p.room(NoField, f.name, 2); err != nil {
+		return err
 	}
 	p.out = append(p.out, byte(n), byte(n>>8))
 	return nil

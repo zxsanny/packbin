@@ -19,6 +19,10 @@ const (
 	InvalidScheme
 	// PackRefused: pack cannot write the row; it returns nil bytes.
 	PackRefused
+	// TooMany: unpack refuses a repeat or times round past the scheme's MaxRounds or MaxSlots when
+	// the round would start, before its bytes are read. Field and Name are the round's first member,
+	// Needed is 0 and Left the bytes left where the round would start.
+	TooMany
 )
 
 // NoField is the Field of an error that belongs to no field: trailing bytes, an unknown type
@@ -39,6 +43,8 @@ func (k Kind) String() string {
 		return "scheme_error"
 	case PackRefused:
 		return "pack_error"
+	case TooMany:
+		return "too_many"
 	}
 	return fmt.Sprintf("kind(%d)", int(k))
 }
@@ -69,6 +75,7 @@ var (
 	ErrBadValue      = &Error{Kind: BadValue, Field: NoField}
 	ErrInvalidScheme = &Error{Kind: InvalidScheme, Field: NoField}
 	ErrPackRefused   = &Error{Kind: PackRefused, Field: NoField}
+	ErrTooMany       = &Error{Kind: TooMany, Field: NoField}
 )
 
 // Is reports whether target is an *Error of the same Kind.
@@ -92,6 +99,8 @@ func (e *Error) Error() string {
 		return fmt.Sprintf("packbin: invalid scheme%s: %s", at, e.Reason)
 	case PackRefused:
 		return fmt.Sprintf("packbin: pack refused%s: %s", at, e.Reason)
+	case TooMany:
+		return fmt.Sprintf("packbin: too many%s: %s", at, e.Reason)
 	}
 	return fmt.Sprintf("packbin: %v%s: %s", e.Kind, at, e.Reason)
 }
@@ -118,4 +127,8 @@ func packErr(id int, name, format string, args ...any) *Error {
 
 func shortErr(id int, name string, needed, left int) *Error {
 	return &Error{Kind: ShortPacket, Field: id, Name: name, Needed: needed, Left: left}
+}
+
+func tooMany(id int, name string, left int, format string, args ...any) *Error {
+	return &Error{Kind: TooMany, Field: id, Name: name, Left: left, Reason: fmt.Sprintf(format, args...)}
 }

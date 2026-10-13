@@ -19,6 +19,20 @@ type packer struct {
 	// scope is the row of the scope being packed: the top-level row, or the row of one round. A count
 	// the row gives for a field that was not written is read from it.
 	scope map[string]any
+	// lim are the limits of the scheme; slots is what every round of this call has charged so far
+	// against lim.MaxSlots, as unpack charges them.
+	lim   Limits
+	slots int
+}
+
+// room refuses, naming the member, a write of n bytes that would make the packet longer than
+// MaxBytes; nothing of it is written then. Called before every write, so the packet never grows past
+// the budget.
+func (p *packer) room(id int, name string, n int) error {
+	if need := len(p.out) + n; need > p.lim.MaxBytes {
+		return packErr(id, name, "%s: the packet would be %d bytes, above the limit of %d bytes", name, need, p.lim.MaxBytes)
+	}
+	return nil
 }
 
 // scopeRoot is where a split flag byte looks for its bits: the fields of its scope and their values.
@@ -38,7 +52,7 @@ func Pack(s *Scheme, row any) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	p := packer{out: make([]byte, 1, 32), scope: values}
+	p := packer{out: make([]byte, 1, 32), scope: values, lim: s.limits}
 	p.out[0] = byte(s.typeNumber)
 	if err := p.fields(s.fields, scopeRoot{s.fields, values}, values, map[string]any{}); err != nil {
 		return nil, err
@@ -117,6 +131,9 @@ func (p *packer) fields(fields []*node, root scopeRoot, values, wrote map[string
 			if p.flagBytes == nil {
 				p.flagBytes = map[*flagTag]*packedFlagByte{}
 			}
+			if err := p.room(NoField, flagByteName(f, fields), 1); err != nil {
+				return err
+			}
 			p.flagBytes[f.tag] = &packedFlagByte{at: len(p.out), flags: flags, inOrder: f.inOrder}
 			p.out = append(p.out, flags)
 		case kindFlagBit:
@@ -154,6 +171,39 @@ func (p *packer) fields(fields []*node, root scopeRoot, values, wrote map[string
 		}
 	}
 	return nil
+}
+
+// flagByteName is the name a refusal of the flag byte f carries: its own (a split byte), else the first
+// member its bits guard among fields (a combined Flags byte has no name of its own).
+func flagByteName(f *node, fields []*node) string {
+	if f.name != "" {
+		return f.name
+	}
+	for _, n := range fields {
+		if n.kind == kindFlagBit && n.tag == f.tag {
+			if name := declaredName(n); name != "" {
+				return name
+			}
+		}
+	}
+	return "flags"
+}
+
+// declaredName is the first name n declares, looking into a flag bit, when, repeat, times, flags and
+// group that has no name of its own.
+func declaredName(n *node) string {
+	if n.kind == kindFlagBit {
+		return declaredName(n.field)
+	}
+	if n.name != "" {
+		return n.name
+	}
+	for _, child := range n.fields {
+		if name := declaredName(child); name != "" {
+			return name
+		}
+	}
+	return ""
 }
 
 func (p *packer) flagBit(f *node, root scopeRoot, values, wrote map[string]any) error {
@@ -199,6 +249,11 @@ func (p *packer) flagBit(f *node, root scopeRoot, values, wrote map[string]any) 
 }
 
 func (p *packer) writeValue(f *node, v any) error {
+	if f.kind != kindUtf8 {
+		if err := p.room(f.id, f.name, f.size); err != nil {
+			return err
+		}
+	}
 	switch f.kind {
 	case kindInt:
 		n, ok := asInt(v)

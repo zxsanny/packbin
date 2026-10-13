@@ -11,6 +11,8 @@ type Scheme struct {
 	top *place
 	// row is the accessor of the first bound field; nil for a scheme that only packs maps.
 	row *accessor
+	// limits are the round, slot and output limits one Pack or Unpack call keeps.
+	limits Limits
 }
 
 // NewScheme builds a scheme from its type number (0..255) and its fields, numbered by order from 0.
@@ -55,7 +57,7 @@ func NewScheme(typeNumber int, fields ...Field) (*Scheme, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Scheme{typeNumber: typeNumber, fields: bound, top: top, row: row}, nil
+	return &Scheme{typeNumber: typeNumber, fields: bound, top: top, row: row, limits: DefaultLimits()}, nil
 }
 
 // TypeNumber is the first byte of every packet of this scheme.

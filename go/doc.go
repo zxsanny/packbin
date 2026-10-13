@@ -84,7 +84,7 @@
 //
 // Unpack reads with the scheme the first byte names. Errors are values: every error is an *Error,
 // whose Kind is ShortPacket (Field, Name, Needed, Left), TrailingBytes (Left), UnknownType (Actual),
-// BadValue, InvalidScheme or PackRefused; errors.Is matches it against ErrShortPacket and the other
+// BadValue, InvalidScheme, PackRefused or TooMany; errors.Is matches it against ErrShortPacket and the other
 // sentinels. A refused pack returns nil bytes, never part of a packet. No input makes Pack, Unpack or
 // NewScheme panic.
 //
@@ -147,7 +147,34 @@
 //	                                   a u16 pair count, then key (a Utf8) and element, keys in byte
 //	                                   order; takes no id
 //
-// Also to come, with these names: (*Scheme).WithLimits(Limits) (*Scheme, error) with the Limits
-// fields MaxRounds, MaxSlots and MaxBytes, the error kind TooMany, and PackSession (LoadSession,
-// Start, Join, Pack, Unpack, UnpackMap), which a single goroutine uses at a time.
+// # Limits
+//
+// A scheme carries three limits, so the cost of a call does not follow its input. Unpack refuses a
+// Repeat or Times field past MaxRounds rounds (default 65535) and rounds that together would take
+// more than MaxSlots slots (default 1048576), when the round would start, before its bytes are read:
+// the error is of kind TooMany, with Needed 0 and Left the bytes left where the round would start. A
+// Times count above MaxRounds is not refused up front, so a packet that states a huge count and holds
+// few rounds still ends in a short read. Pack refuses a Times count or a Repeat list above MaxRounds
+// before it writes a round, charges MaxSlots per round as unpack does (a PackRefused error), and
+// refuses a packet longer than MaxBytes (default 16777216), the type byte included, before the write
+// that would pass it.
+//
+// A slot is one name a round can hold: one for each value field, Sized, Bits or Packed name, List or
+// Dict name (however many items), each Slot of a U2, an empty Group's own name, and each name inside a
+// When (whether it holds or not), Flags, flag bit or Group; a non-empty Group's own name, a Flags and
+// its flag byte, a split flag byte and the anchors are none, and a name declared twice is one slot. A
+// Nested row is a scope of its own: it charges the width of its own members. One counter covers a
+// whole call, shared by every Repeat and Times at any depth, List and Dict elements included.
+//
+//	DefaultLimits() Limits             the defaults; DefaultMaxRounds, DefaultMaxSlots, DefaultMaxBytes
+//	(*Scheme).Limits() Limits          the limits of a scheme
+//	(*Scheme).WithLimits(Limits) (*Scheme, error)
+//	                                   a copy with these limits; every field is the limit, so start from
+//	                                   DefaultLimits to change one; a field below 1 is refused with
+//	                                   InvalidScheme
+//
+// Raise a limit only as far as the memory of one call allows.
+//
+// Also to come, with these names: PackSession (LoadSession, Start, Join, Pack, Unpack, UnpackMap),
+// which a single goroutine uses at a time.
 package packbin

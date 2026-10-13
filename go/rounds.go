@@ -21,6 +21,9 @@ type roundShape struct {
 	groups  []*node
 	// dicts are the dict names: a lone dictionary would reach every round as well.
 	dicts []*node
+	// width is the slots a round charges against MaxSlots: the distinct names unpack gives an entry a
+	// round (see roundWidth).
+	width int
 }
 
 func makeRoundShape(r *node) *roundShape {
@@ -42,7 +45,46 @@ func makeRoundShape(r *node) *roundShape {
 		}
 	}
 	sh.optional = optionalNames(r.fields, false, map[string]bool{}, nil)
+	sh.width = roundWidth(r.fields)
 	return sh
+}
+
+// roundWidth is the slots one round of fields charges: the distinct names it can hold, as every
+// package counts them. One slot each for a value field, a sized, bits or packed name, a list or dict
+// name (however many items), each name of a u2 and an empty group's own name; and one for each name
+// inside a when (whether its condition holds or not), flags, flag bit or group, at any depth. A
+// non-empty group's own name, a flags and its flag byte, a split flag byte and the anchors of when,
+// repeat and times are no slot, and a name declared twice is one slot. A Nested row is a scope of its
+// own, so it charges the width of its own members, apart from the names around it.
+func roundWidth(fields []*node) int {
+	names := map[string]bool{}
+	return nameSlots(fields, names) + len(names)
+}
+
+// nameSlots collects the names of fields into names and returns the slots of the Nested rows in them.
+func nameSlots(fields []*node, names map[string]bool) int {
+	extra := 0
+	for _, f := range fields {
+		switch f.kind {
+		case kindRepeat, kindTimes, kindFlagByte:
+		case kindWhen, kindFlags, kindU2:
+			extra += nameSlots(f.fields, names)
+		case kindFlagBit:
+			extra += nameSlots([]*node{f.field}, names)
+		case kindGroup:
+			switch {
+			case len(f.fields) == 0:
+				names[f.name] = true
+			case f.nested:
+				extra += roundWidth(f.fields)
+			default:
+				extra += nameSlots(f.fields, names)
+			}
+		default:
+			names[f.name] = true
+		}
+	}
+	return extra
 }
 
 // optionalNames collects the members a flag bit can leave absent: those reached through flags or a
@@ -163,6 +205,29 @@ func refuseShortOptional(sh *roundShape, values map[string]any, count int) error
 		if list, ok := isList(values[n.name]); ok && len(list) > 0 && len(list) < count {
 			return packErr(n.id, n.name, "%s: %d items, repeat count %d; give one entry per round, nil where the member is absent",
 				n.name, len(list), count)
+		}
+	}
+	return nil
+}
+
+// refuseRoundsOverLimit: unpack refuses a round past MaxRounds, so pack refuses a times count past it
+// before it writes any round: a lone scalar goes to every round, and a huge count would loop that
+// many times.
+func refuseRoundsOverLimit(f *node, count, limit int) error {
+	if count <= limit {
+		return nil
+	}
+	id, name := roundMember(f)
+	return packErr(id, name, "%s: the times count is %d, above the limit of %d rounds", name, count, limit)
+}
+
+// refuseRepeatOverLimit: a repeat writes a round per entry of its longest list, so pack refuses, before
+// any round, the first list among the round's names with more entries than MaxRounds, named by its own
+// member.
+func refuseRepeatOverLimit(f *node, values map[string]any, limit int) error {
+	for _, n := range f.shape.names {
+		if list, ok := isList(values[n.name]); ok && len(list) > limit {
+			return packErr(n.id, n.name, "%s: the repeat count is %d, above the limit of %d rounds", n.name, len(list), limit)
 		}
 	}
 	return nil
