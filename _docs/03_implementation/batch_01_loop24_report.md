@@ -116,3 +116,17 @@ API: `LoadSession(seed) (*PackSession, error)`, `Start()`, `StartWith(nonce)` (a
 | 36 | AZ-2445 | `module_test.go` (GO-11 check) required `go 1.26` exactly and counted every require line; x/crypto v0.58.0 needs `go 1.26.0` and `go mod tidy` adds `x/sys // indirect`. The test now accepts `go 1.26(.0)?` and counts direct requirements only (GO-11 as amended) | done | clear |
 | 37 | AZ-2445 | `StartWith(nonce)` is an addition beyond the TypeScript API shape (TypeScript tests use a fixed value another way) | none | clear |
 | 38 | step 11 | One `go test -race` run failed (not reproduced in 3 reruns) while the host load average was 87 from other sessions; likely the AC-7 speed bound (about 580 ms under `-race` against 1 s) | step 11: check `uptime` first; if AC-7 flakes in CI, measure on an idle runner and decide (owner) | unclear |
+
+## Batch 02 part 1 (AZ-2446, wave 3)
+
+| Worker | Spec | Result |
+|--------|------|--------|
+| go hostile | AZ-2446 (hostile vectors, seventh package in the checker) | 65 hostile subtests pass under `-race` (10 unpack, 2 limit, 15 construct, 38 pack; rules pinned with the whole Go text; wrong-rule self-tests for construct and pack; tables checked equal to `cases.txt`); `check-cases.sh` ok: 65 (seven names, whole-word match: `tr` + `grep -x -F`, bash 3.2); `cases.test.sh` passes with the new Go corruption cases and a "Google, Got, Gone" reason that does not count. Parent re-ran the Go suite (26 s) and `check-cases.sh`: ok |
+
+| # | Spec ref | Finding | Proposed handling | Status |
+|---|----------|---------|-------------------|--------|
+| 39 | AZ-2446 | The spec said 41 pack sections; `cases.txt` has 38 pack cases (65 = 10 unpack + 2 limit + 15 construct + 38 pack); all 38 name Go in `Run by`, no `Not run by` | spec text fixed | clear |
+| 40 | AZ-2446 | Unpack returns a short-packet-shaped error with needed 0 for a value it cannot use (the interim shape the README allows; the loader maps it to `bad_value`); `BadValue` exists but only the session returns it | assessment: leave, or return `BadValue` from unpack (owner) | unclear |
+| 41 | AZ-2446 | `zero_progress_repeat_bool` and `zero_progress_repeat_when`: TypeScript builds both and unpacks to `trailing_bytes`; Go refuses both at construction (a bool outside flags; a `when` naming a field outside the `repeat`); both cases accept `scheme_error` | README loop 24 paragraph states it | clear |
+| 42 | AZ-2446 | `pack_late_when_in_bit_body`: the group's members sit flat in the TypeScript row; Go reads the group as a nested map (Go-4) | `Run by` entry says so | clear |
+| 43 | AZ-2446 | TypeScript's `SPEC` rows (`row1_*`..`row7_*`) and its session test are outside `cases.txt` and were not ported here | AZ-2447 ports the parity rows; session is AZ-2445 | clear |
