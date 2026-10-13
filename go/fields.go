@@ -17,6 +17,7 @@ const (
 	kindFlagByte
 	kindFlagBit
 	kindWhen
+	kindGroup
 )
 
 // flagTag is the identity of one flag byte (a handle, or one read of it once a scheme is built).
@@ -26,12 +27,12 @@ type flagTag struct{ name string }
 // number of schemes and goroutines.
 type node struct {
 	kind      kind
-	id        int // value id; the anchor of flags and when; NoField for a flag byte or bit
+	id        int // value id; the anchor of flags, when and group; NoField for a flag byte or bit
 	name      string
 	size      int // bytes of an integer, a float or fixed bytes
 	signed    bool
 	bigEndian bool
-	fields    []*node  // flags and when members
+	fields    []*node  // flags, when and group members
 	flat      []*node  // flags: its flag byte and bits, made when the scheme is built
 	tag       *flagTag // flag byte: this read; flag bit: the byte it belongs to
 	inOrder   bool     // flag byte made by flags: its bits are decided as their members are reached
@@ -41,6 +42,7 @@ type node struct {
 	eqValue   any      // when: the value eq compares with
 	ref       string   // when: the name eq resolves to, set when the scheme is built
 	acc       *accessor
+	inner     *place // group: the fields of its row, set when the scheme is built
 	err       string // a constructor's refusal, reported by NewScheme
 }
 
@@ -192,6 +194,21 @@ func When(anchor int, cond Cond, members ...Field) Field {
 	return &node{kind: kindWhen, id: anchor, eqID: cond.id, eqValue: v, fields: nodesOf(members)}
 }
 
+// Group puts members under one name: a nested row (a map[string]any under name in a map row, a
+// struct or pointer to struct bound with Bind in a typed row; nil is no value). Under Flags or a
+// flag byte's Bit it is one bit, set when the group is given. Its ids continue the scope around it
+// (the anchor is the next id and is not written), and its members share that scope: a When may name
+// a field outside it, and a name may be declared once in either. A group with no members is a mark
+// like Bool (a bool in the row, set only for true), allowed only directly under Flags or a Bit.
+func Group(anchor int, name string, members ...Field) Field {
+	return &node{kind: kindGroup, id: anchor, name: name, fields: nodesOf(members)}
+}
+
+// isMark reports a field that is only a flag bit: a bool or an empty group.
+func isMark(n *node) bool {
+	return n.kind == kindBool || (n.kind == kindGroup && len(n.fields) == 0)
+}
+
 // fieldName is the name a field declares; a flag bit is named by its member.
 func fieldName(n *node) string {
 	if n == nil {
@@ -239,6 +256,11 @@ func kindLabel(n *node) string {
 		return "flag bit"
 	case kindWhen:
 		return "when"
+	case kindGroup:
+		if len(n.fields) == 0 {
+			return "empty group"
+		}
+		return "group"
 	}
 	return "field"
 }

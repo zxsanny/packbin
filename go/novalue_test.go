@@ -1,6 +1,7 @@
 package packbin
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -100,9 +101,6 @@ func TestBoolFalseAndAbsentLeaveTheBitClear(t *testing.T) {
 		{map[string]any{"on": false}, "0100"},
 		{map[string]any{}, "0100"},
 		{map[string]any{"on": true}, "0101"},
-		// As TypeScript: a value other than true leaves the bit clear.
-		{map[string]any{"on": 1}, "0100"},
-		{map[string]any{"on": "yes"}, "0100"},
 	} {
 		// Act
 		wire := mustPack(t, s, c.row)
@@ -117,6 +115,39 @@ func TestBoolFalseAndAbsentLeaveTheBitClear(t *testing.T) {
 	}
 	if back := mustUnpackMap(t, s, "0101"); !reflect.DeepEqual(back, map[string]any{"on": true}) {
 		t.Fatalf("set bit gave %v", back)
+	}
+}
+
+// Owner decision Go-1 (B): a map row that gives a bool, or an empty group, a value that is not a bool
+// is refused at pack, naming the field. TypeScript leaves the bit clear ({"on": 1} packs 0100 there);
+// Go deliberately differs.
+func TestGo1NonBoolForABoolIsRefused(t *testing.T) {
+	m := FlagByte("m")
+	schemes := map[string]*Scheme{
+		"flags":       mustScheme(t, 1, Flags(0, Bool(0, "on"))),
+		"split":       mustScheme(t, 1, m, m.Bit(Bool(0, "on"))),
+		"empty group": mustScheme(t, 1, Flags(0, Group(0, "on"))),
+		"in a group":  mustScheme(t, 1, Flags(0, Group(0, "g", Flags(0, Bool(0, "on"))))),
+	}
+	for name, s := range schemes {
+		for _, v := range []any{1, "yes", 0, 1.0, []byte{1}} {
+			t.Run(fmt.Sprintf("%s %#v", name, v), func(t *testing.T) {
+				// Arrange
+				row := map[string]any{"on": v}
+				if name == "in a group" {
+					row = map[string]any{"g": map[string]any{"on": v}}
+				}
+
+				// Act
+				raw, err := Pack(s, row)
+
+				// Assert
+				e := asError(t, err, PackRefused)
+				if raw != nil || e.Field != 0 || e.Name != "on" {
+					t.Fatalf("raw %x err %v", raw, e)
+				}
+			})
+		}
 	}
 }
 

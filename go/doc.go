@@ -39,9 +39,11 @@
 // slice is a value with 0 items. A scheme binds every value field to one row type, or none. A bound
 // scheme packs a *T (or a T) and Unpack returns a *T; Pack and UnpackMap still take and give the map
 // form of any scheme. In a map row an integer field takes any Go integer type that holds the value
-// (or a pointer to one), a float field any Go integer or float, fixed bytes a []byte, a bool a bool.
-// UnpackMap gives each value the Go type of its field (uint8 to uint64, int8 to int64, float32,
-// float64, []byte, true), so a row it returned packs again to the same bytes.
+// (or a pointer to one), a float field any Go integer or float, fixed bytes a []byte, a bool a bool
+// (any other value is refused: TypeScript leaves the bit clear), a group a map[string]any of its
+// members (a member given in the row around it is not the group's). UnpackMap gives each value the
+// Go type of its field (uint8 to uint64, int8 to int64, float32, float64, []byte, true, and a
+// map[string]any for a group), so a row it returned packs again to the same bytes.
 //
 // # Pack and unpack
 //
@@ -83,11 +85,15 @@
 //	When(anchor int, cond Cond, members ...Field) Field
 //	                                   the members only when an earlier field of the same scope
 //	                                   equals value; the anchor is not written
+//	Group(anchor int, name string, members ...Field) Field
+//	                                   the members as a row of their own under name (a nested map,
+//	                                   or a struct bound with Bind); under Flags or a Bit one bit,
+//	                                   set when the group is given; ids and when scope continue
+//	                                   around it; with no members a mark like Bool
 //	Bind[T, V any](f Field, get func(*T) V, set func(*T, V)) Field
-//	                                   binds a field to a member of the typed row T
+//	                                   binds a value field or a group to a member of the typed row T
 //	Repeat(anchor int, members ...Field) Field                (later) the members until the buffer ends
 //	Times(anchor, countID int, members ...Field) Field        (later) the members count times
-//	Group(anchor int, name string, members ...Field) Field    (later) several members under one bit
 //	Nested(name string, members ...Field) Field               (later) a nested row, ids from 0
 //	Sized(id int, name string, countID int) Field             (later) raw bytes, length an earlier integer
 //	U2(slots ...Field) Field; Slot(id int, name string) Field (later) 2-bit slots, low bits first

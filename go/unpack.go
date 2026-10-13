@@ -17,17 +17,14 @@ func Unpack(buf []byte, schemes ...*Scheme) (any, error) {
 		return values, nil
 	}
 	row := s.row.newRow()
-	for _, n := range s.values {
-		if v, ok := values[n.name]; ok {
-			n.acc.set(row, v)
-		}
-	}
+	fillRow(s.top, row, values)
 	return row, nil
 }
 
 // UnpackMap is Unpack with the row as a map keyed by field name, for every scheme. A value has the
-// Go type of its field: uint8 to uint64, int8 to int64, float32, float64, []byte, and true for a set
-// bool. A field that was not read (a clear bit, a when that did not match) has no key.
+// Go type of its field: uint8 to uint64, int8 to int64, float32, float64, []byte, true for a set
+// bool or empty group, and a map[string]any of its members for a group. A field that was not read (a
+// clear bit, a when that did not match) has no key.
 func UnpackMap(buf []byte, schemes ...*Scheme) (map[string]any, error) {
 	_, values, err := dispatch(buf, schemes)
 	if err != nil {
@@ -63,8 +60,11 @@ func dispatch(buf []byte, schemes []*Scheme) (*Scheme, map[string]any, error) {
 	if match == nil {
 		return nil, nil, &Error{Kind: UnknownType, Field: NoField, Actual: int(buf[0])}
 	}
-	r := reader{buf: buf, off: 1}
-	values := make(map[string]any, len(match.values))
+	values := make(map[string]any, len(match.top.members))
+	r := reader{buf: buf, off: 1, seen: values}
+	if match.top.nested {
+		r.seen, r.split = make(map[string]any, len(match.top.members)), true
+	}
 	if err := r.fields(match.fields, values); err != nil {
 		return nil, nil, err
 	}
@@ -78,6 +78,19 @@ type reader struct {
 	buf       []byte
 	off       int
 	flagBytes map[*flagTag]byte
+	// seen is every value read in the scope, by name, for a when to test: the top-level row, or, for
+	// a scheme with groups (split), a map of its own that also holds the members of the groups (they
+	// share the scope around them).
+	seen  map[string]any
+	split bool
+}
+
+// put stores a value read into out, the row of its place, and into the scope a when tests.
+func (r *reader) put(out map[string]any, name string, v any) {
+	out[name] = v
+	if r.split {
+		r.seen[name] = v
+	}
 }
 
 func (r *reader) take(f *node, size int) ([]byte, error) {
@@ -98,26 +111,26 @@ func (r *reader) fields(fields []*node, values map[string]any) error {
 			if err != nil {
 				return err
 			}
-			values[f.name] = readInt(b, f.size, f.signed, f.bigEndian)
+			r.put(values, f.name, readInt(b, f.size, f.signed, f.bigEndian))
 		case kindFloat:
 			b, err := r.take(f, f.size)
 			if err != nil {
 				return err
 			}
 			if f.size == 4 {
-				values[f.name] = math.Float32frombits(uint32(readUint(b, 4, f.bigEndian)))
+				r.put(values, f.name, math.Float32frombits(uint32(readUint(b, 4, f.bigEndian))))
 			} else {
-				values[f.name] = math.Float64frombits(readUint(b, 8, f.bigEndian))
+				r.put(values, f.name, math.Float64frombits(readUint(b, 8, f.bigEndian)))
 			}
 		case kindBytes:
 			b, err := r.take(f, f.size)
 			if err != nil {
 				return err
 			}
-			values[f.name] = append([]byte{}, b...)
+			r.put(values, f.name, append([]byte{}, b...))
 		case kindBool:
 			// Reached only through a set flag bit.
-			values[f.name] = true
+			r.put(values, f.name, true)
 		case kindFlagByte:
 			b, err := r.take(f, 1)
 			if err != nil {
@@ -135,7 +148,7 @@ func (r *reader) fields(fields []*node, values map[string]any) error {
 				return err
 			}
 		case kindWhen:
-			if sameValue(values[f.ref], f.eqValue) {
+			if sameValue(r.seen[f.ref], f.eqValue) {
 				if err := r.fields(f.fields, values); err != nil {
 					return err
 				}
@@ -144,8 +157,27 @@ func (r *reader) fields(fields []*node, values map[string]any) error {
 			if err := r.fields(f.flat, values); err != nil {
 				return err
 			}
+		case kindGroup:
+			if err := r.group(f, values); err != nil {
+				return err
+			}
 		}
 	}
+	return nil
+}
+
+// group reads a group into a map of its own under its name; a mark (reached only through a set flag
+// bit) is true.
+func (r *reader) group(f *node, values map[string]any) error {
+	if len(f.fields) == 0 {
+		values[f.name] = true
+		return nil
+	}
+	sub := make(map[string]any, len(f.fields))
+	if err := r.fields(f.fields, sub); err != nil {
+		return err
+	}
+	values[f.name] = sub
 	return nil
 }
 

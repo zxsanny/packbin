@@ -15,15 +15,22 @@ type accessor struct {
 	// set stores an unpacked value into a *T.
 	set    func(row any, v any)
 	newRow func() any
+	// childType is the struct type of a group's own row, and newChild makes a *childType; nil for a
+	// field that is not a group with members.
+	childType reflect.Type
+	newChild  func() any
 }
 
-// Bind binds a value field (an integer, float, fixed bytes or bool) to a member of the typed row T:
-// get reads it for Pack, set stores it after Unpack. V is the member's type: an integer type that
-// holds every value of the field (or a pointer to one), float32 or float64 (or a pointer), []byte,
-// bool (or *bool). A nil pointer or nil slice is no value; a stored 0 is a value.
+// Bind binds a value field (an integer, float, fixed bytes or bool) or a group to a member of the
+// typed row T: get reads it for Pack, set stores it after Unpack. V is the member's type: an integer
+// type that holds every value of the field (or a pointer to one), float32 or float64 (or a pointer),
+// []byte, bool (or *bool). A nil pointer or nil slice is no value; a stored 0 is a value. For a group
+// with members V is a struct G or a *G (nil is no value; a G is always given), and the group's
+// members are bound to G; for an empty group V is bool or *bool, as for a Bool.
 //
-// Every value field of a scheme is bound to the same T, or none is: a scheme with bound fields packs
-// a *T (or a T) and unpacks to a *T; it still packs and unpacks the map form by name.
+// Every value field and group of a scheme is bound to the same T, or none is (inside a group, to
+// the group's G): a scheme with bound fields packs a *T (or a T) and unpacks to a *T; it still packs
+// and unpacks the map form by name.
 func Bind[T, V any](f Field, get func(*T) V, set func(*T, V)) Field {
 	n := nodeOf(f)
 	if n == nil {
@@ -31,8 +38,8 @@ func Bind[T, V any](f Field, get func(*T) V, set func(*T, V)) Field {
 	}
 	c := *n
 	switch {
-	case !isValueKind(n.kind):
-		c.err = fmt.Sprintf("Bind takes an integer, float, fixed bytes or bool field, not %s", kindLabel(n))
+	case !isValueKind(n.kind) && n.kind != kindGroup:
+		c.err = fmt.Sprintf("Bind takes an integer, float, fixed bytes, bool or group field, not %s", kindLabel(n))
 	case n.acc != nil:
 		c.err = "the field is already bound"
 	case get == nil || set == nil:
@@ -61,11 +68,49 @@ func Bind[T, V any](f Field, get func(*T) V, set func(*T, V)) Field {
 		},
 		newRow: func() any { return new(T) },
 	}
+	if n.kind == kindGroup && len(n.fields) > 0 && c.err == "" {
+		bindGroupRow(c.acc, reflect.TypeFor[V](), func(row any) V { return get(row.(*T)) },
+			func(row any, v V) { set(row.(*T), v) })
+	}
 	return &c
+}
+
+// bindGroupRow makes the accessor of a group with members read and store its row as a *G, whatever
+// V is (a *G, or a G copied).
+func bindGroupRow[V any](acc *accessor, t reflect.Type, get func(row any) V, set func(row any, v V)) {
+	byPointer := t.Kind() == reflect.Pointer
+	acc.childType = t
+	if byPointer {
+		acc.childType = t.Elem()
+	}
+	acc.newChild = func() any { return reflect.New(acc.childType).Interface() }
+	acc.get = func(row any) (any, bool) {
+		v := get(row)
+		if byPointer {
+			p := reflect.ValueOf(&v).Elem()
+			return v, !p.IsNil()
+		}
+		p := reflect.New(t)
+		p.Elem().Set(reflect.ValueOf(&v).Elem())
+		return p.Interface(), true
+	}
+	acc.set = func(row any, child any) {
+		if byPointer {
+			set(row, child.(V))
+			return
+		}
+		set(row, *child.(*V))
+	}
 }
 
 // checkMemberType returns why a member of type t cannot hold the field n, or "".
 func checkMemberType(n *node, t reflect.Type) string {
+	if n.kind == kindGroup && len(n.fields) > 0 {
+		if t.Kind() == reflect.Struct || (t.Kind() == reflect.Pointer && t.Elem().Kind() == reflect.Struct) {
+			return ""
+		}
+		return fmt.Sprintf("a %v member cannot hold group %s; bind a struct or a pointer to a struct", t, n.name)
+	}
 	if n.kind == kindBytes {
 		if t.Kind() == reflect.Slice && t.Elem().Kind() == reflect.Uint8 {
 			return ""
@@ -82,7 +127,7 @@ func checkMemberType(n *node, t reflect.Type) string {
 		ok = holdsInt(elem, n.size*8, n.signed)
 	case kindFloat:
 		ok = elem.Kind() == reflect.Float64 || (elem.Kind() == reflect.Float32 && n.size == 4)
-	case kindBool:
+	case kindBool, kindGroup:
 		ok = elem.Kind() == reflect.Bool
 	}
 	if ok {

@@ -18,6 +18,12 @@ type packer struct {
 	flagBytes map[*flagTag]*packedFlagByte
 }
 
+// scopeRoot is where a split flag byte looks for its bits: the fields of its scope and their values.
+type scopeRoot struct {
+	fields []*node
+	values map[string]any
+}
+
 // Pack writes row with scheme s: the type number, then the fields in order. row is a
 // map[string]any keyed by field name, or, for a scheme whose fields are bound with Bind, a *T (or a
 // T). A refused row returns nil bytes and an *Error of kind PackRefused naming the field id.
@@ -31,7 +37,7 @@ func Pack(s *Scheme, row any) ([]byte, error) {
 	}
 	p := packer{out: make([]byte, 1, 32)}
 	p.out[0] = byte(s.typeNumber)
-	if err := p.fields(s.fields, s.fields, values, map[string]any{}); err != nil {
+	if err := p.fields(s.fields, scopeRoot{s.fields, values}, values, map[string]any{}); err != nil {
 		return nil, err
 	}
 	return p.out, nil
@@ -55,13 +61,7 @@ func (s *Scheme) rowValues(row any) (map[string]any, error) {
 		if m == nil {
 			return nil, packErr(id, name, "the row is a nil map")
 		}
-		values := make(map[string]any, len(m))
-		for k, v := range m {
-			if nv, present := normalize(v); present {
-				values[k] = nv
-			}
-		}
-		return values, nil
+		return mapValues(s.top, m)
 	}
 	if s.row == nil {
 		return nil, packErr(id, name, "a %s row needs fields bound with Bind; this scheme packs a map[string]any",
@@ -74,13 +74,7 @@ func (s *Scheme) rowValues(row any) (map[string]any, error) {
 		}
 		return nil, packErr(id, name, "the row is a %s; this scheme is bound to %v", typeName(row), s.row.rowType)
 	}
-	values := make(map[string]any, len(s.values))
-	for _, n := range s.values {
-		if v, present := n.acc.get(r); present {
-			values[n.name] = v
-		}
-	}
-	return values, nil
+	return typedValues(s.top, r), nil
 }
 
 // written is what a when reads while packing: the value pack wrote in the scope, or nil.
@@ -88,7 +82,9 @@ func written(wrote map[string]any, ref string) any {
 	return wrote[ref]
 }
 
-func (p *packer) fields(fields, all []*node, values, wrote map[string]any) error {
+// fields packs fields from values, the row of their place. wrote is what the scope has written so
+// far, by name (a group's members share the scope around it).
+func (p *packer) fields(fields []*node, root scopeRoot, values, wrote map[string]any) error {
 	for _, f := range fields {
 		switch f.kind {
 		case kindInt, kindFloat, kindBytes:
@@ -106,7 +102,7 @@ func (p *packer) fields(fields, all []*node, values, wrote map[string]any) error
 		case kindFlagByte:
 			var flags byte
 			if !f.inOrder {
-				flags = flagValueFor(all, f.tag, values, wrote)
+				flags = flagValueFor(root, f.tag, wrote)
 			}
 			if p.flagBytes == nil {
 				p.flagBytes = map[*flagTag]*packedFlagByte{}
@@ -114,26 +110,35 @@ func (p *packer) fields(fields, all []*node, values, wrote map[string]any) error
 			p.flagBytes[f.tag] = &packedFlagByte{at: len(p.out), flags: flags, inOrder: f.inOrder}
 			p.out = append(p.out, flags)
 		case kindFlagBit:
-			if err := p.flagBit(f, all, values, wrote); err != nil {
+			if err := p.flagBit(f, root, values, wrote); err != nil {
 				return err
 			}
 		case kindWhen:
 			if sameValue(written(wrote, f.ref), f.eqValue) {
-				if err := p.fields(f.fields, all, values, wrote); err != nil {
+				if err := p.fields(f.fields, root, values, wrote); err != nil {
 					return err
 				}
 			}
 		case kindFlags:
 			// Its flag byte is made here, so its bits are looked up among the fields made with it.
-			if err := p.fields(f.flat, f.flat, values, wrote); err != nil {
+			if err := p.fields(f.flat, scopeRoot{f.flat, values}, values, wrote); err != nil {
 				return err
+			}
+		case kindGroup:
+			// A mark is reached only through a set flag bit: the bit is the value. A group with members
+			// writes them from its own values; a group that is not given has none, so each required
+			// member is missing.
+			if len(f.fields) > 0 {
+				if err := p.fields(f.fields, root, groupValues(values, f), wrote); err != nil {
+					return err
+				}
 			}
 		}
 	}
 	return nil
 }
 
-func (p *packer) flagBit(f *node, all []*node, values, wrote map[string]any) error {
+func (p *packer) flagBit(f *node, root scopeRoot, values, wrote map[string]any) error {
 	b := p.flagBytes[f.tag]
 	if b == nil {
 		return nil
@@ -154,7 +159,7 @@ func (p *packer) flagBit(f *node, all []*node, values, wrote map[string]any) err
 		}
 		return nil
 	}
-	return p.fields([]*node{f.field}, all, values, wrote)
+	return p.fields([]*node{f.field}, root, values, wrote)
 }
 
 func (p *packer) writeValue(f *node, v any) error {
