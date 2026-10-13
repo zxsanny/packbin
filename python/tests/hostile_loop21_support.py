@@ -126,15 +126,15 @@ LOOP21_PACK_CASES = {
     ),
     "pack_bits_count_clear_when": (
         lambda: _pack(_counted_scheme("bits"), {"mode": 0, "c": 3, "v": [1, 0, 1]}),
-        RuntimeError,
+        ValueError,
     ),
     "pack_packed_count_clear_when": (
         lambda: _pack(_counted_scheme("packed"), {"mode": 0, "c": 3, "v": [1, 0, 1]}),
-        RuntimeError,
+        ValueError,
     ),
     "pack_sized_count_clear_when": (
         lambda: _pack(_counted_scheme("sized"), {"mode": 0, "c": 3, "v": b"\x01\x02\x03"}),
-        RuntimeError,
+        ValueError,
     ),
 }
 

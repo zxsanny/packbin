@@ -139,20 +139,29 @@ internal static partial class Walker
         seen[field.Name] = raw;
     }
 
-    // A typed row's nested row packs from its own values and its own `seen`, as unpack reads it into a scope of its own.
+    // A nested row (typed or dictionary) packs from its own values and its own `seen`, as unpack reads it into a scope
+    // of its own. In a dictionary row the inner values sit under the group's name (U26 A, loop 25): a flat row that
+    // left those names at the outer level now fails naming the missing nested dictionary.
     private static void PackGroup(
         Field field,
         IReadOnlyDictionary<string, object?> values,
         PackOut buffer,
         Scope seen)
     {
-        if (!(field.NestedRow && values is RowValues))
+        if (!field.NestedRow || field.Children.Length == 0)
         {
             foreach (var child in field.Children)
                 PackField(child, values, buffer, seen);
             return;
         }
-        var nested = (RowValues)RequireValue(field, values);
+        var raw = RequireValue(field, values);
+        IReadOnlyDictionary<string, object?> nested = raw switch
+        {
+            RowValues r => r,
+            IReadOnlyDictionary<string, object?> d => d,
+            _ => throw new ArgumentException(
+                $"'{field.Name}': expected a nested dictionary for a nested-row group, got {raw.GetType().Name}"),
+        };
         var inner = seen.Fresh();
         foreach (var child in field.Children)
             PackField(child, nested, buffer, inner);
@@ -182,7 +191,7 @@ internal static partial class Walker
     {
         if (field.Children.Length == 0)
             values[field.Name] = true;
-        var scope = field.NestedRow && values.Scoped ? values.Fresh() : values;
+        var scope = field.NestedRow && field.Children.Length > 0 ? values.Fresh() : values;
         foreach (var child in field.Children)
         {
             var err = UnpackField(child, bytes, ref offset, scope, repeatLists: false);

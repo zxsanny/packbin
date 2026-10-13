@@ -397,7 +397,7 @@ def pack_nodes(
         elif isinstance(node, _Sized):
             count = seen.get(node.count)
             if count is None:
-                raise RuntimeError(f"{node.field_id}: count {node.count} is missing")
+                raise ValueError(f"{node.field_id}: count {node.count} was not written")
             raw = take(node)
             seen[node.field_id] = raw
             if not isinstance(raw, (_builtin_bytes, bytearray, memoryview)):
@@ -411,18 +411,18 @@ def pack_nodes(
         elif isinstance(node, _Bits):
             count = seen.get(node.count)
             if count is None:
-                raise RuntimeError(f"{node.field_id}: count {node.count} is missing")
+                raise ValueError(f"{node.field_id}: count {node.count} was not written")
             value = take(node)
             seen[node.field_id] = value
             _write_bits(buf, str(node.field_id), int(count), value, budget, _name(node))
         elif isinstance(node, _Packed):
             label = str(node.field_id)
-            item_count = _borrowed(label, seen.get(node.count), node.bias)
+            item_count = _borrowed(label, seen.get(node.count), node.bias, node.count)
             value = take(node)
             seen[node.field_id] = value
             _write_packed(buf, label, node.width, item_count, value, budget, _name(node))
         elif isinstance(node, _Times):
-            item_count = _borrowed("times", seen.get(node.count), 0)
+            item_count = _borrowed("times", seen.get(node.count), 0, node.count)
             if item_count > budget.max_rounds:
                 raise ValueError(
                     f"{round_member(node)}: the times count is {item_count}, "

@@ -10,8 +10,9 @@ from packbin import BinaryPacker, Scheme, bits, eq, flag_byte, flags, packed, si
 # AZ-2387 (U7, rows 53 to 55): `bits`, `packed` and `sized` with a value behind a clear `when` are refused already;
 # row 56 (no value) is refused since AZ-2410 (loop 22), see tests/test_loop22_parity.py.
 # Python differences: the U6 text is the reference text with Python's names (`pt`, `c`); the rows that
-# TypeScript refuses with its own texts (43, 49, 52, 53) are refused here with the Python texts pinned by loops 19
-# and 20 (`times 1: body values are given ...`, `times: count is missing`, `2: count 1 is missing`).
+# TypeScript refuses with its own texts (43, 49, 52, 53) are refused here with the Python texts pinned by loops 19,
+# 20 and 25 (`times 1: body values are given ...`, `times: count 1 was not written`, `2: count 1 was not written`;
+# AZ-2454 switched `RuntimeError("count N is missing")` to `ValueError("count N was not written")`).
 
 
 def _u8(field_id: int, name: str):
@@ -152,7 +153,7 @@ def test_az2386_row52_a_plain_times_behind_a_clear_when_is_refused_for_any_count
     kind, message = _refusal(_count_behind_when("plain"), row)
 
     # Assert
-    assert (kind, message) == (RuntimeError, "times: count is missing")
+    assert (kind, message) == (ValueError, "times: count 1 was not written")
 
 
 def test_az2386_a_count_a_field_wrote_after_the_byte_is_not_refused():
@@ -193,8 +194,8 @@ def test_az2387_ac1_row53_a_counted_member_behind_a_clear_when_is_refused(member
     kind, message = _refusal(_counted(member, position), row)
 
     # Assert
-    assert kind is RuntimeError
-    assert message.endswith("is missing") and message.startswith("2: count")
+    assert kind is ValueError
+    assert message.endswith("was not written") and message.startswith("2: count")
 
 
 @pytest.mark.parametrize(

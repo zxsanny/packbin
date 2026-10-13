@@ -317,7 +317,8 @@ public class RoundValueTests
     [Fact]
     public void Repeat_NestedRowGroupRound_PacksItsFieldsByRoundIndex()
     {
-        // Arrange
+        // Arrange: with U26 A (loop 25) the nested-row group reads its members from the inner dictionary, so each
+        // round's Row holds its own {V} map instead of V sitting at the outer level.
         var scheme = new Scheme<RoundRow>(1,
             Field.Repeat(0,
                 Field.U8<RoundRow>(0, x => x.K),
@@ -325,7 +326,11 @@ public class RoundValueTests
         var values = new Dictionary<string, object?>
         {
             ["K"] = new byte[] { 1, 2 },
-            ["V"] = new byte[] { 7, 8 },
+            ["Row"] = new object?[]
+            {
+                new Dictionary<string, object?> { ["V"] = (byte)7 },
+                new Dictionary<string, object?> { ["V"] = (byte)8 },
+            },
         };
 
         // Act
@@ -336,7 +341,10 @@ public class RoundValueTests
         // Assert
         Assert.Equal("0101070208", Hex(raw));
         Assert.Null(got.Error);
-        Assert.Equal([7, 8], Cells(got.Values["V"]));
+        var rows = Items(got.Values["Row"]).Select(e => (IReadOnlyDictionary<string, object?>)e!).ToArray();
+        Assert.Equal(2, rows.Length);
+        Assert.Equal((byte)7, rows[0]["V"]);
+        Assert.Equal((byte)8, rows[1]["V"]);
         Assert.Equal(Hex(raw), Hex(again));
     }
 

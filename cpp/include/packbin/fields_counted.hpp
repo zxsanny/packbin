@@ -31,6 +31,10 @@ template <Kind K>
 constexpr Field counted_leaf(int id, int count_id) {
   Field f = leaf(K, id);
   f.ref_id = static_cast<std::int16_t>(count_id);
+  // A count id outside the 15-bit wire range is Invalid (U25, AZ-2452); the sentinel -1 means
+  // "no backing count", which builds and then fails every pack and unpack with BadValue.
+  if (count_id < -1 || count_id > 32767)
+    mark_invalid(f);
   return f;
 }
 

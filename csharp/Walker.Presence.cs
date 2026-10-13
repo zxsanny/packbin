@@ -59,12 +59,16 @@ internal static partial class Walker
     private static bool IsTrue(IReadOnlyDictionary<string, object?> values, string name) =>
         values.TryGetValue(name, out var v) && v is true;
 
-    // The values a group's fields read: a typed row's nested row has its own (null when the member is null), anything
-    // else shares the row around it.
-    private static IReadOnlyDictionary<string, object?>? ScopeOf(Field group, IReadOnlyDictionary<string, object?> values) =>
-        group.NestedRow && values is RowValues
-            ? values.TryGetValue(group.Name, out var nested) ? nested as RowValues : null
-            : values;
+    // The values a group's fields read: a nested-row group (typed or dictionary) has its own scope under its name
+    // (null when the inner value is missing), anything else shares the row around it.
+    private static IReadOnlyDictionary<string, object?>? ScopeOf(Field group, IReadOnlyDictionary<string, object?> values)
+    {
+        if (!group.NestedRow || group.Children.Length == 0)
+            return values;
+        if (!values.TryGetValue(group.Name, out var nested) || nested is null)
+            return null;
+        return nested as IReadOnlyDictionary<string, object?>;
+    }
 
     private static bool GroupOn(IReadOnlyDictionary<string, object?> values, Field group, Scope seen)
     {

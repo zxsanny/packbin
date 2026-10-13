@@ -111,11 +111,11 @@ def test_az2410_row56c_a_holding_when_with_no_value_packs_a_count_and_no_items(m
 @pytest.mark.parametrize("member", MEMBERS)
 def test_az2410_ac3_row56_plain_position_is_unchanged(member: str):
     # Arrange / Act
-    with pytest.raises(RuntimeError) as caught:
+    with pytest.raises(ValueError) as caught:
         BinaryPacker.pack(_counted(member, "plain"), {"mode": 0, "c": 3})
 
     # Assert
-    assert str(caught.value).startswith("2: count") and str(caught.value).endswith("is missing")
+    assert str(caught.value).startswith("2: count") and str(caught.value).endswith("was not written")
 
 
 def test_az2410_row56d_packed_compares_the_count_after_the_bias():

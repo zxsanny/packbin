@@ -238,6 +238,11 @@ constexpr Field leaf(Kind kind, int id) {
   Field f{};
   f.kind = kind;
   f.id = static_cast<std::int16_t>(id);
+  // An id outside the 15-bit wire range is Invalid (U25, AZ-2452): check_shape reports
+  // SchemeInvalid at the field's own id. The id -1 is reserved for list, dict, flag_byte and
+  // flag_bit entries that carry none, and for the counted sentinel in counted_leaf.
+  if (id < -1 || id > 32767)
+    f.flags = static_cast<std::uint8_t>(f.flags | flag::Invalid);
   return f;
 }
 

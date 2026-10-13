@@ -28,7 +28,8 @@ internal static partial class Walker
     // unpack returns, any other element is its one value. A name the row around it also holds is never lent to it, so a
     // missing member is reported by name (and a flags element cannot set a bit the element leaves clear). A flags
     // element that is a row of its members by name (what unpack returns) is that row even in a typed row; only an
-    // instance of the row type goes through its accessors.
+    // instance of the row type goes through its accessors. A nested-row group element wraps the item's members under
+    // the group's name, so PackGroup drills into it as it does for a top-level nested row (U26 A, loop 25).
     private static IReadOnlyDictionary<string, object?> ElementValues(
         IReadOnlyDictionary<string, object?> values,
         Field element,
@@ -44,7 +45,11 @@ internal static partial class Walker
         if (values is RowValues)
             return RowBinding.Element(element, item);
         if (element is { Type: Field.Kind.Group, Children.Length: > 0 } && item is IReadOnlyDictionary<string, object?> members)
+        {
+            if (element.NestedRow)
+                return new Dictionary<string, object?> { [element.Name] = members };
             return members.ToDictionary(p => p.Key, p => p.Value);
+        }
         return new Dictionary<string, object?> { [element.Name] = item };
     }
 

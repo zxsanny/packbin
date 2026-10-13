@@ -241,7 +241,10 @@ public class TypedParityTests
     {
         var scheme = new Scheme<SessionRow>(1, Field.Flags(0,
             Field.Group((SessionRow x) => x.Session, Field.U16<Session>(0, s => s.Login), Field.U32<Session>(1, s => s.Ts))));
-        var set = new Dictionary<string, object?> { ["Login"] = (ushort)7, ["Ts"] = 1000u };
+        var set = new Dictionary<string, object?>
+        {
+            ["Session"] = new Dictionary<string, object?> { ["Login"] = (ushort)7, ["Ts"] = 1000u },
+        };
         var row = new SessionRow { Session = new Session { Login = 7, Ts = 1000 } };
 
         Same(scheme, set, row, "01010700e8030000", got =>

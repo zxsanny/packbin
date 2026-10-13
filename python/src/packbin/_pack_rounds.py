@@ -11,9 +11,11 @@ _builtin_list = list
 _builtin_dict = dict
 
 
-def _borrowed(label: str, count: Any, bias: int) -> int:
+def _borrowed(label: str, count: Any, bias: int, ref: int | None = None) -> int:
+    if count is None and ref is not None:
+        raise ValueError(f"{label}: count {ref} was not written")
     if isinstance(count, bool) or not isinstance(count, int):
-        raise RuntimeError(f"{label}: count is missing")
+        raise ValueError(f"{label}: count missing")
     item_count = count + bias
     if item_count < 0:
         raise ValueError(f"{label}: item count {item_count}")

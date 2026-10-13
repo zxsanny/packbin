@@ -16,8 +16,9 @@ namespace Packbin.Tests;
 //   The whole row 56 shape fits in both. A bit holding a group that holds the member while the count stays outside
 //   (TypeScript's `g: { v }`) is spellable only with an anchored group: a nested-row group cannot name a count outside
 //   its own scope and is refused at build (pinned below).
-// - In a dictionary row a nested-row group reads its names from the row around it (a nested dictionary under the
-//   group's name is not read), so its dictionary rows are flat; typed rows use the nested object.
+// - With U26 A (loop 25) a nested-row group reads its names from the inner dictionary under its name in a dictionary
+//   row, matching the typed row's nested object; a flat row with those names at the outer level fails naming the
+//   missing nested dictionary.
 // - A counted member inside the clear inner `when` itself is the existing silent skip, not U11 (AC-2 as amended).
 public class NoValueCountNestedTests
 {
@@ -120,11 +121,12 @@ public class NoValueCountNestedTests
             ]),
         ["the row 56 shape inside a nested-row group"] = new("AC-1",
             (kind, bit) => new Scheme<Row>(1, Field.Group((Row x) => x.In, BodyShape(kind, bit, 0))),
-            _ => [D(("Mode", (byte)0), ("C", (byte)3)), new Row { In = new Body { Mode = 0, C = 3 } }],
+            _ => [D(("In", D(("Mode", (byte)0), ("C", (byte)3)))), new Row { In = new Body { Mode = 0, C = 3 } }],
             kind =>
             [
-                (D(("Mode", (byte)0), ("C", (byte)0)), "010000"), (D(("Mode", (byte)0)), "010000"),
-                (D(("Mode", (byte)1), ("C", (byte)3)), "01010300"), (With(D(("Mode", (byte)1), ("C", (byte)3)), kind), "01010301*"),
+                (D(("In", D(("Mode", (byte)0), ("C", (byte)0)))), "010000"), (D(("In", D(("Mode", (byte)0)))), "010000"),
+                (D(("In", D(("Mode", (byte)1), ("C", (byte)3)))), "01010300"),
+                (D(("In", With(D(("Mode", (byte)1), ("C", (byte)3)), kind))), "01010301*"),
                 (new Row { In = new Body { Mode = 0, C = 0 } }, "010000"), (new Row { In = new Body { Mode = 0 } }, "010000"),
                 (new Row { In = new Body { Mode = 1, C = 3 } }, "01010300"),
             ]),

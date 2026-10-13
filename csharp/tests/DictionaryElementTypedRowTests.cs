@@ -126,17 +126,18 @@ public class DictionaryElementTypedRowTests
     }
 
     [Fact]
-    public void Ac1_Repack_TypedListObjectOfNestedGroupElements_ThrowsInsteadOfWritingWrongBytes()
+    public void Ac1_Repack_TypedListObjectOfNestedGroupElements_RoundTripsThroughTheInnerDictionary()
     {
-        // Arrange
+        // Arrange: with U26 A (loop 25) a nested-row group reads its members from the inner dictionary of the item,
+        // so the unpacked list of inner dictionaries repacks back to the same bytes.
         var scheme = new Scheme<ListRow>(1, Field.List((ListRow x) => x.Pts,
             Field.Group((Holder h) => h.Item, Field.U8<Item>(0, i => i.A), Field.U8<Item>(1, i => i.B))));
         var row = Unpacked(scheme, AnchoredList);
 
         // Act
-        var error = Record.Exception(() => BinaryPacker.Pack(scheme, row));
+        var raw = BinaryPacker.Pack(scheme, row);
 
         // Assert
-        Assert.NotNull(error);
+        Assert.Equal(AnchoredList, Hex(raw));
     }
 }

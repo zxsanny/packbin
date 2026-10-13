@@ -165,8 +165,7 @@ public class LayoutTests
             Field.Group((SessionFlagRow x) => x.Session, Field.U16<Session>(0, s => s.Login), Field.U32<Session>(1, s => s.Ts))));
         var raw = BinaryPacker.Pack(scheme, new Dictionary<string, object?>
         {
-            ["Login"] = (ushort)7,
-            ["Ts"] = 1000u,
+            ["Session"] = new Dictionary<string, object?> { ["Login"] = (ushort)7, ["Ts"] = 1000u },
         });
         Assert.Equal("0700e8030000", Convert.ToHexString(raw.AsSpan(2)).ToLowerInvariant());
         Assert.Equal(6, raw.Length - 2);
@@ -174,15 +173,17 @@ public class LayoutTests
         Assert.Equal(new byte[] { 0x01, 0x00 }, absent);
         var got = BinaryPacker.Read(scheme, absent);
         Assert.Null(got.Error);
-        Assert.False(got.Values.ContainsKey("Login"));
-        Assert.False(got.Values.ContainsKey("Ts"));
+        Assert.False(got.Values.ContainsKey("Session"));
     }
 
     [Fact]
     public void FlagGroup_ZeroU8()
     {
         var scheme = new Scheme<NestedByteRow>(1, Field.Flags(0, Field.Group((NestedByteRow x) => x.G, Field.U8<NestedByte>(0, g => g.B))));
-        var stored = BinaryPacker.Pack(scheme, new Dictionary<string, object?> { ["B"] = (byte)0 });
+        var stored = BinaryPacker.Pack(scheme, new Dictionary<string, object?>
+        {
+            ["G"] = new Dictionary<string, object?> { ["B"] = (byte)0 },
+        });
         Assert.Equal(new byte[] { 0x01, 0x01, 0x00 }, stored);
     }
 
