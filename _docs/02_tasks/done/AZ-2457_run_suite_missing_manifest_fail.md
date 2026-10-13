@@ -10,7 +10,7 @@ branch: dev
 **Description**: D6 A: `run-suite.sh` for TypeScript, Python, Rust, C#, Java, C++ returns a non-zero exit and names the missing manifest when its manifest (`package.json`, `pyproject.toml`, `Cargo.toml`, `*.csproj`, `pom.xml`, `cpp/CMakeLists.txt` or the project's equivalent) is missing — the Go wrapper's behavior. Today the six skip with a PASS row, which hides a corrupt tree.
 **Complexity**: 2 points
 **Dependencies**: none
-**Component**: run-suite wrappers (`*/run-suite.sh`) in the six packages
+**Component**: `.github/workflows/run-suite.sh` (one script; the six languages are branches of one `case`)
 **Tracker**: AZ-2457
 **Epic**:
 
@@ -30,9 +30,9 @@ Reference: `_docs/00_problem/acceptance_criteria.md` AC-15; `_docs/02_task_plans
 
 ### Included
 
-- `typescript/run-suite.sh`, `python/run-suite.sh`, `rust/run-suite.sh`, `csharp/run-suite.sh`, `java/run-suite.sh`, `cpp/run-suite.sh` (one wrapper per package).
-- A hermetic test (shell under `tests/` or wherever the project puts suite tests) that removes the manifest in a temp copy and asserts the exit code and the error line.
-- Owns (exclusive write): the six `*/run-suite.sh` files above and the test file for this behavior.
+- `.github/workflows/run-suite.sh`: a `missing_manifest` helper and an `else` branch for csharp, typescript, python, rust, cpp and java (Go reuses the helper).
+- `.github/workflows/run-suite.test.sh`: a bare tree per language (exit non-zero, the message names the manifest, one FAIL row, no tool ran), an empty `csharp/` directory, and the manifest present with fake tools (csharp, rust, cpp, java; TypeScript's `bash -lc` cannot take a fake `npm`).
+- Owns (exclusive write): those two files; `_docs/04_deploy/ci_cd_pipeline.md` (one sentence).
 
 ### Excluded
 
@@ -52,10 +52,12 @@ Given a clean checkout (every manifest in place)
 When `./run-suite.sh <pkg>` runs
 Then the exit code and PASS rows match the loop 24 close output for that package; regressed rows 0.
 
-**AC-3: AC-15 wording follows the behavior**
-Given the AC-15 wording in `_docs/00_problem/acceptance_criteria.md` and the publish-gate task plan
-When read
-Then the text says `run-suite.sh` fails for a missing language manifest (not skips), so AC-15 cannot be reached by a false green.
+**AC-3: AC-15 is untouched**
+Given `publish-gate.sh` decides `absent <lang>` itself and no publish script calls `run-suite.sh`
+When the six fail on a missing manifest
+Then AC-15 (a language missing from the tagged tree publishes 0 packages) is unchanged; the CI doc says which script decides what.
+
+(Amended at implementation: the first draft planned six wrappers and an AC-15 wording change; there is one script, and AC-15 does not read it.)
 
 ## Unit Tests
 

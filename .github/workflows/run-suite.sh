@@ -17,6 +17,14 @@ run() {
   "$@" || ok=1
 }
 
+# A suite whose manifest is missing has nothing to run: it fails, as Go always did (AZ-2448 AC-3, AZ-2457), so a
+# tree that lost a language cannot turn the check green. Whether a language is published is decided by the
+# publish gate (`publish-gate.sh`, AC-15), not by this script.
+missing_manifest() {
+  printf 'run-suite: %s is missing; the %s suite has nothing to run\n' "$1" "$lang" >&2
+  ok=1
+}
+
 # Go (golang:1.27): every step runs in the module directory $1 through `go -C`.
 go_fmt() {
   local unformatted
@@ -65,11 +73,15 @@ case "$lang" in
       run env MSBUILDDISABLENODEREUSE=1 dotnet test "$root/csharp" -v n --nologo
       # The same suite against the netstandard2.0 build of the package.
       run env MSBUILDDISABLENODEREUSE=1 dotnet test "$root/csharp" -v n --nologo -p:PackbinTarget=netstandard2.0
+    else
+      missing_manifest "$root/csharp/*.csproj"
     fi
     ;;
   typescript)
     if [ -f "$root/typescript/package.json" ]; then
       run bash -lc "cd '$root/typescript' && if [ ! -f node_modules/typescript/lib/tsc.js ]; then npm ci; fi && npm test"
+    else
+      missing_manifest "$root/typescript/package.json"
     fi
     ;;
   python)
@@ -101,21 +113,29 @@ case "$lang" in
         ok=1
       fi
       run "$venv/bin/python" -m pytest -v --tb=short "$root/python/tests"
+    else
+      missing_manifest "$root/python/pyproject.toml"
     fi
     ;;
   rust)
     if [ -f "$root/rust/Cargo.toml" ]; then
       run cargo test --manifest-path "$root/rust/Cargo.toml" -- --nocapture
+    else
+      missing_manifest "$root/rust/Cargo.toml"
     fi
     ;;
   cpp)
     if [ -f "$root/cpp/Makefile" ]; then
       run make -C "$root/cpp" test
+    else
+      missing_manifest "$root/cpp/Makefile"
     fi
     ;;
   java)
     if [ -x "$root/java/test.sh" ] || [ -f "$root/java/test.sh" ]; then
       run bash "$root/java/test.sh"
+    else
+      missing_manifest "$root/java/test.sh"
     fi
     ;;
   go)
@@ -123,7 +143,7 @@ case "$lang" in
     # ("dubious ownership") and `go list -test` stops with "error obtaining VCS status" (CI run 38422313279).
     # No step needs the VCS stamp, so every go command here runs with -buildvcs=false.
     export GOFLAGS="${GOFLAGS:+$GOFLAGS }-buildvcs=false"
-    # Unlike the six above, a missing manifest fails: a Go suite that runs nothing must not pass (AZ-2448 AC-3).
+    # A missing manifest fails: a Go suite that runs nothing must not pass (AZ-2448 AC-3).
     if [ -f "$root/go/go.mod" ]; then
       run go_fmt "$root/go"
       run go -C "$root/go" vet ./...
@@ -134,8 +154,7 @@ case "$lang" in
       run go_fuzz "$root/go"
       run go_deps "$root/go"
     else
-      printf 'run-suite: %s is missing; the go suite has nothing to run\n' "$root/go/go.mod" >&2
-      ok=1
+      missing_manifest "$root/go/go.mod"
     fi
     ;;
   *)

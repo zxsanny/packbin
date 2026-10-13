@@ -235,5 +235,63 @@ out="$(GO_FIXTURE="$work/bad-golden.hex" run_go "$goroot" GO_FUZZ=1)"; code=$?
 [ "$code" -ne 0 ] || bad "go: a wrong golden row passed"
 [ ! -s "$work/go.log" ] || bad "go: a step ran with a wrong golden row: $(cat "$work/go.log")"
 
+# --- the other six (AZ-2457) ---
+# M1. a tree without a language's manifest fails, names the manifest, writes one FAIL row and runs no tool
+bare="$work/bare"
+mkdir -p "$bare/fixtures" "$bare/.github/workflows"
+cp "$goroot/fixtures/golden.hex" "$bare/fixtures/"
+cp "$goroot/.github/workflows/report-row.sh" "$bare/.github/workflows/"
+run_lang() { # lang tree
+  rm -f "$work/bare.rows"
+  : > "$work/go.log"
+  env SRC_ROOT="$2" FIXTURE="$2/fixtures/golden.hex" TEST_RESULTS="$work/bare" GO_LOG="$work/go.log" \
+    PACKBIN_PYTEST_VENV="$work/bare-venv" PATH="$gobin:$PATH" \
+    perl -e 'alarm 60; exec @ARGV' -- bash "$here/run-suite.sh" "$1" </dev/null 2>&1
+}
+for entry in csharp:csharp/*.csproj typescript:typescript/package.json python:python/pyproject.toml \
+  rust:rust/Cargo.toml cpp:cpp/Makefile java:java/test.sh; do
+  lang="${entry%%:*}"
+  manifest="${entry#*:}"
+  out="$(run_lang "$lang" "$bare")"; code=$?
+  [ "$code" -ne 0 ] || bad "$lang: a tree without $manifest passed"
+  case "$out" in *"$bare/$manifest is missing"*"the $lang suite has nothing to run"*) ;; *) bad "$lang: no message naming the missing $manifest: $out" ;; esac
+  grep -Eqx "report-row $lang $lang suite [0-9]+ FAIL suite failed" "$work/bare.rows" \
+    || bad "$lang: report row is not 'FAIL suite failed': $(cat "$work/bare.rows" 2>&1)"
+  [ "$(wc -l < "$work/bare.rows" | tr -d ' ')" -eq 1 ] || bad "$lang: expected exactly one report row: $(cat "$work/bare.rows")"
+  [ ! -s "$work/go.log" ] || bad "$lang: a tool ran without its manifest: $(cat "$work/go.log")"
+done
+
+# M2. csharp: a directory without a .csproj fails the same way (the glob matches nothing)
+mkdir -p "$bare/csharp"
+out="$(run_lang csharp "$bare")"; code=$?
+[ "$code" -ne 0 ] || bad "csharp: an empty csharp directory passed"
+rmdir "$bare/csharp"
+
+# M3. the manifest present: the suite runs its tool and its exit code is the result (fake tools on PATH)
+present="$work/present"
+mkdir -p "$present/fixtures" "$present/.github/workflows" "$present/csharp" "$present/rust" "$present/cpp" "$present/java"
+cp "$goroot/fixtures/golden.hex" "$present/fixtures/"
+cp "$goroot/.github/workflows/report-row.sh" "$present/.github/workflows/"
+: > "$present/csharp/Packbin.csproj"; : > "$present/rust/Cargo.toml"; : > "$present/cpp/Makefile"
+printf '#!/bin/sh\nexit 0\n' > "$present/java/test.sh"
+toolbin="$work/toolbin"
+mkdir -p "$toolbin"
+for tool in dotnet cargo make; do
+  printf '#!/bin/sh\necho "%s $*" >> "$GO_LOG"\nexit "${FAKE_TOOL_EXIT:-0}"\n' "$tool" > "$toolbin/$tool"
+  chmod +x "$toolbin/$tool"
+done
+for lang in csharp rust cpp java; do
+  rm -f "$work/bare.rows"
+  : > "$work/go.log"
+  out="$(env SRC_ROOT="$present" FIXTURE="$present/fixtures/golden.hex" TEST_RESULTS="$work/bare" GO_LOG="$work/go.log" \
+    PATH="$toolbin:$PATH" perl -e 'alarm 60; exec @ARGV' -- bash "$here/run-suite.sh" "$lang" </dev/null 2>&1)"; code=$?
+  [ "$code" -eq 0 ] || bad "$lang: a tree with its manifest failed (exit $code): $out"
+  grep -Eqx "report-row $lang $lang suite [0-9]+ PASS " "$work/bare.rows" || bad "$lang: no PASS row: $(cat "$work/bare.rows" 2>&1)"
+  if [ "$lang" != java ] && [ ! -s "$work/go.log" ]; then bad "$lang: its tool did not run"; fi
+  out="$(env SRC_ROOT="$present" FIXTURE="$present/fixtures/golden.hex" TEST_RESULTS="$work/bare" GO_LOG="$work/go.log" \
+    FAKE_TOOL_EXIT=1 PATH="$toolbin:$PATH" perl -e 'alarm 60; exec @ARGV' -- bash "$here/run-suite.sh" "$lang" </dev/null 2>&1)"; code=$?
+  if [ "$lang" != java ] && [ "$code" -eq 0 ]; then bad "$lang: a failing tool passed"; fi
+done
+
 if [ "$fail" -eq 0 ]; then echo "run-suite.test.sh: all checks passed"; fi
 exit "$fail"
