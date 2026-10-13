@@ -71,3 +71,7 @@ dotnet build-server shutdown </dev/null > "$LOGS/shutdown.log" 2>&1 || true
 echo "DONE $PASSED/$TOTAL stages passed (logs in $LOGS)"
 SMOKE
 ```
+
+## Result
+
+PASS. Agent run on `f31c61a` (2026-10-13; the code is identical to `487a75d`, the commit after the security fix wave), owner rule of 2026-10-12 (`_docs/04_deploy/deployment_procedures.md` § Loop smoke gate): `13/13 stages passed` (tree clean on `dev`; scaffold 107 s incl. hostile cases 65 with seven names and `publish-go.test.sh`; Go in the CI container 118 s: gofmt, vet, race tests, speed bound without `-race`, 60 s `FuzzUnpack`, dependency check; TypeScript 967; C# 1978; Python 1476 in 47 s; Rust 673 across 21 binaries; Java 2540 checks; C++ GCC 16 `-Werror`; embedded ARM 0 targets failed, flash 8152 of 8192 B; ring with Go 171 s; AC-10 pass; publish gate with seven languages 742 s, no failures, NOT RUN: vcpkg supports check and vcpkg consumer check). Host load 6 to 105 during the run (the Docker VM, Spotlight and other sessions; no swapping), no timing test failed. Not run on this host: `cpp-embedded-esp` (CI `embedded` job), and the first `go/vX.Y.Z` tag with the live proxy check (no tag this loop); the first Ubuntu run of the Go suite and the ring is the CI run on the `dev` push.

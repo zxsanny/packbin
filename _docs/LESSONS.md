@@ -8,12 +8,6 @@ Downstream skills consume this file:
 - `.cursor/skills/autodev/protocols/bootstrap-lessons.md` (Bootstrap B2 — Surface Recent Lessons)
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
-- [2026-10-11] [process] Check each AC of a cross-package spec against the reference rows it must keep before the specs are written: AZ-2331 AC-3 contradicted the loop 18 row `W-split-false-body-given`, six workers read it two ways, and it cost one owner question plus three follow-up workers. Put one cross-package table in front of the owner after the first wave
-  Source: _docs/06_metrics/retro_2026-10-11_loop19.md
-- [2026-10-11] [testing] Tell every reviewer to probe with a hostile value outside the type's range and with a row that packed before the change: the loop 19 review found Java `intValue()` ahead of the round cap, a C# count-0 regression and a C++ legitimate row now refused, all green in the package suites
-  Source: _docs/06_metrics/retro_2026-10-11_loop19.md
-- [2026-10-11] [architecture] A cap on one count does not bound the output: the audit measured 4.29 GB written for a 64 KB request through a lone `utf8` under one `times` (F28). Bound the bytes written per call, not only each count
-  Source: _docs/06_metrics/retro_2026-10-11_loop19.md
 - [2026-10-12] [testing] A construction check that mirrors a binding must be the binding's own predicate, tested as "builds if and only if it binds": the C# round collection rule was written from spec text and inverted (a buildable scheme refused, an unbindable one accepted); 23 member types times U8/U32 times Repeat/Times pinned it.
   Source: _docs/06_metrics/retro_2026-10-12_loop20.md
 - [2026-10-12] [architecture] A byte and slot budget bounds the output, not the work: an empty round body charges 0 and a 1.1 MB request bought 93 s of CPU in TypeScript (F33); every unit of work, the empty one included, must charge at least one unit.
@@ -38,3 +32,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-12_loop22.md
 - [2026-10-12] [process] Probe the 'the other packages do X' premise of a parity spec before writing the AC: two of the loop 22 premises (U14, U15) were false or ambiguous and the reference probe section caught them.
   Source: _docs/06_metrics/retro_2026-10-12_loop22.md
+- [2026-10-13] [architecture] A container sized by a count taken from the scheme (declared members) instead of the bytes read multiplies a small packet by the scheme width: Go's list of `Nested` rows peaked at 1.16 GB for a 64 KB packet with 256 members (F41). Size from bytes already read, and measure peak allocation for every collection of rows in the review, not by estimate.
+  Source: _docs/06_metrics/retro_2026-10-13_loop24.md
+- [2026-10-13] [testing] A timing bound belongs to the build it describes: the 1 s AC-10 loop was asserted under the race detector (about 5x slower) and failed at load 80 and 87; assert it in a second run without `-race` and let the race run check races only.
+  Source: _docs/06_metrics/retro_2026-10-13_loop24.md
+- [2026-10-13] [tooling] A docker image cache is not durable between loops (the embedded image was gone after a Docker restart: 260 s instead of 8 s), and a retry window counted in whole bash `SECONDS` needs at least 3 s to guarantee two tries (a 1 s window flaked 2 of 8 runs); budget a cold build and do not read a quiet log as a hang.
+  Source: _docs/06_metrics/retro_2026-10-13_loop24.md
