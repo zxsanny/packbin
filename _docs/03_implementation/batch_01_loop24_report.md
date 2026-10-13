@@ -42,8 +42,26 @@ Construction order now matches TypeScript (type number, ids, flag bits, presence
 
 | # | Spec ref | Finding | Proposed handling | Status |
 |---|----------|---------|-------------------|--------|
-| 11 | AZ-2441 AC-4, G-4, U26 | Row shape of a group in the map form. TypeScript (parent probe): pack reads the group's nested object when given, else the flat keys (both `{a:1,b:2}` and `{a:1,g:{b:2}}` pack `010102`; nested wins over a flat duplicate); unpack always gives flat keys, for anchored and unanchored groups. Go (from the parent's prompt, which read U26 too widely): nested map only, both ways; a flat key is ignored, so under `flags` flat `{c:2}` packs `0100` where TypeScript refuses `missing a` | owner row Go-4 | unclear |
+| 11 | AZ-2441 AC-4, G-4, U26 | Row shape of a group in the map form. TypeScript (parent probe): pack reads the group's nested object when given, else the flat keys (both `{a:1,b:2}` and `{a:1,g:{b:2}}` pack `010102`; nested wins over a flat duplicate); unpack always gives flat keys, for anchored and unanchored groups. Go (from the parent's prompt, which read U26 too widely): nested map only, both ways; a flat key is ignored, so under `flags` flat `{c:2}` packs `0100` where TypeScript refuses `missing a` | owner Go-4 A (2026-10-13): nested maps both ways; pack refuses a flat key naming a group member when the group map is absent (AZ-2442 worker); README states the TypeScript difference | clear |
 | 12 | AZ-2441 | Empty anchored group: its anchor must be the next id but takes none (`Flags(0, Group(0,"mark")), U8(0,"n")`), as TypeScript | probe the five at assessment | unclear |
 | 13 | AZ-2440 bug fixed in AZ-2441 | Typed unpack with two `when` branches sharing a name with different kinds (u8 x / bytes(2) x) could reflect-panic or truncate; `fillRow` now fills only the member whose type matches what unpack read | none (test `TestTypedWhenBranchesOfDifferentKindsFillOnlyTheRead`) | clear |
 | 14 | AZ-2441 | Message texts differ in form (`1e+20` vs the long integer, Go type names); refused-vs-built outcomes agree | none | clear |
 | 15 | AZ-2441 | AC-7 speed under load average 79 failed once with `-race -cover`, passed on rerun (670/506 ms race, 105/96 ms plain) | watch at step 11; the run-suite go step uses `-race` | clear |
+
+## Batch 01 part 3 (AZ-2442, wave 2)
+
+| Worker | Spec | Result |
+|--------|------|--------|
+| go chain | AZ-2442 (repeat, times, sized, u2, bits, packed; Go-4 A) | 114 tests + 592 subtests pass under `-race`; gofmt/vet clean; coverage 94.5%; files <= 340 lines. Parent re-ran the Go suite: ok |
+
+API added: `Repeat`, `Times`, `Sized`, `U2`/`Slot`, `Bits`, `Packed`; `Bind` takes slots, sized/bits/packed (`[]byte`), and a round bound to a slice `[]E` / `[]*E` of a struct. `UnpackMap` gives rounds as `[]any` per name, nil for a skipped round. One place each where a round starts (`packer.rounds`, `reader.rounds`) for AZ-2444 to charge.
+
+| # | Spec ref | Finding | Proposed handling | Status |
+|---|----------|---------|-------------------|--------|
+| 16 | AZ-2442, Go-4 | A group inside a round: TypeScript slices the lists inside a lone group object per round (`{k:[1,2], row:{v:[7,8]}}` packs `0101070208`); Go takes one map per round (`"row": []any{map{v:7}, map{v:8}}`, same bytes); a lone map goes to every round and a list inside it is refused | README sentence with the Go-4 note (AZ-2451) | clear |
+| 17 | AZ-2442 | Typed `Times`: a count that differs from the slice length is refused as C# does; the map form keeps the TypeScript rules | pinned; README (AZ-2451) | clear |
+| 18 | AZ-2442 | A row of a `flags` `times` whose bit is clear while the count is above 0 unpacks, then repacks with `missing pt` (as TypeScript) | AZ-2444: `FuzzUnpack` must not assert that unpacked rows repack (spec amended) | clear |
+| 19 | AZ-2442 | u64/i64 counts above 2^53: Go integers are exact, so these are real counts (a short packet) where TypeScript says unreadable | none (JS-only precision, as row 4) | clear |
+| 20 | AZ-2442 | `[]byte` is a byte run, never a round list; `[]uint8{1,2}` for a u8 member in a round is refused (use `[]any` or `[]int`) | README (AZ-2451) | clear |
+| 21 | AZ-2442 | `reached` is keyed per round node; per list element it must be scoped | AZ-2443 spec amended | clear |
+| 22 | AZ-2442 | A huge `times` count with a lone scalar loops on pack until AZ-2444 | AZ-2444 | clear |

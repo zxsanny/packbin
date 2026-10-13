@@ -77,6 +77,7 @@ Then the same hex; the short ones refused with no row
 
 - Go copies TypeScript at HEAD row for row (loop 24 fit decision 4); where TypeScript is a documented exception (U6 bigint `times` split) Go follows the five. A disagreement found while porting is reported to the parent, not decided inside the task (probe-first).
 - ADR-001: hand-written walker, no generator, no import of another package. Standard library plus `golang.org/x/crypto` only (G-3). No cgo.
+- AZ-2442 left `reached` keyed per round node: scope it per list or dict element. Rounds start in `packer.rounds` and `reader.rounds`; the map form of a round is aligned per-name lists (`[]any`, nil for a skipped round); a group inside a round is one map per round (Go-4). `[]byte` is a byte run, never a list.
 - Go runs only in Docker on the owner's Mac: `docker run --rm -v "$PWD":/src -w /src/go golang:1.27 go test -race ./...` (G-2).
 - Errors are values; no panic escapes `Pack`, `Unpack` or scheme construction on any input.
 

@@ -62,6 +62,8 @@ Then each names Go where Go has the behavior
 
 ## Constraints
 
+- The README states the Go differences decided in loop 24: group map rows are nested maps both ways (Go-4 A; TypeScript packs nested-or-flat and unpacks flat), a flat key naming a member of an absent group is refused, a group in a round is one map per round, typed `Times` refuses a count that differs from the slice length (as C#), `[]byte` is a byte run and never a round list, a non-bool for a bool (Go-1 B) and a whole float for an integer field (Go-2 A) are refused so a `json.Unmarshal` map needs typed rows or integer values.
+
 - Go copies TypeScript at HEAD row for row (loop 24 fit decision 4); where TypeScript is a documented exception (U6 bigint `times` split) Go follows the five. A disagreement found while porting is reported to the parent, not decided inside the task (probe-first).
 - ADR-001: hand-written walker, no generator, no import of another package. Standard library plus `golang.org/x/crypto` only (G-3). No cgo.
 - Go runs only in Docker on the owner's Mac: `docker run --rm -v "$PWD":/src -w /src/go golang:1.27 go test -race ./...` (G-2).

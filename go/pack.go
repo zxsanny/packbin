@@ -16,6 +16,9 @@ type packedFlagByte struct {
 type packer struct {
 	out       []byte
 	flagBytes map[*flagTag]*packedFlagByte
+	// scope is the row of the scope being packed: the top-level row, or the row of one round. A count
+	// the row gives for a field that was not written is read from it.
+	scope map[string]any
 }
 
 // scopeRoot is where a split flag byte looks for its bits: the fields of its scope and their values.
@@ -35,7 +38,7 @@ func Pack(s *Scheme, row any) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	p := packer{out: make([]byte, 1, 32)}
+	p := packer{out: make([]byte, 1, 32), scope: values}
 	p.out[0] = byte(s.typeNumber)
 	if err := p.fields(s.fields, scopeRoot{s.fields, values}, values, map[string]any{}); err != nil {
 		return nil, err
@@ -102,7 +105,10 @@ func (p *packer) fields(fields []*node, root scopeRoot, values, wrote map[string
 		case kindFlagByte:
 			var flags byte
 			if !f.inOrder {
-				flags = flagValueFor(root, f.tag, wrote)
+				var err error
+				if flags, err = flagValueFor(root, f.tag, wrote); err != nil {
+					return err
+				}
 			}
 			if p.flagBytes == nil {
 				p.flagBytes = map[*flagTag]*packedFlagByte{}
@@ -133,6 +139,10 @@ func (p *packer) fields(fields []*node, root scopeRoot, values, wrote map[string
 					return err
 				}
 			}
+		default:
+			if err := p.counted(f, values, wrote); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -145,19 +155,37 @@ func (p *packer) flagBit(f *node, root scopeRoot, values, wrote map[string]any) 
 	}
 	mask := byte(1) << f.bit
 	if b.inOrder {
-		if !bitOn(f.field, values, wrote) {
-			return nil
+		on, err := bitOn(f.field, values, wrote)
+		if err != nil {
+			return err
+		}
+		if !on {
+			// A times whose count was not written (skipped, or under a clear bit) writes no round, so
+			// the values given for it would be dropped without a word.
+			held, err := droppedBody(f.field, values, wrote)
+			if err != nil {
+				return err
+			}
+			if held != nil {
+				return packErr(held.id, held.name, "%s: a value is given, but the count of its times is not written, "+
+					"so its bit is clear; write the count before the times", held.name)
+			}
+			return p.refuseUnwrittenCount(f.field, values, wrote)
 		}
 		b.flags |= mask
 		p.out[b.at] = b.flags
 	} else if b.flags&mask == 0 {
-		// The bit was decided where the byte sits. A body whose condition is not written by then
-		// would be dropped without a word, and its own unpack reads no bit for it.
-		if held := droppedBody(f.field, values, wrote); held != nil {
-			return packErr(held.id, held.name, "%s: a value is given, but the condition of its when is not "+
-				"written before the flag byte, so its bit is clear; write that field before the flag byte", held.name)
+		// The bit was decided where the byte sits. A body whose condition or count is not written by
+		// then would be dropped without a word, and its own unpack reads no bit for it.
+		held, err := droppedBody(f.field, values, wrote)
+		if err != nil {
+			return err
 		}
-		return nil
+		if held != nil {
+			return packErr(held.id, held.name, "%s: a value is given, but the condition or count of its when or times "+
+				"is not written before the flag byte, so its bit is clear; write that field before the flag byte", held.name)
+		}
+		return p.refuseUnwrittenCount(f.field, values, wrote)
 	}
 	return p.fields([]*node{f.field}, root, values, wrote)
 }

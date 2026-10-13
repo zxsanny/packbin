@@ -19,7 +19,7 @@ func checkPresenceMarks(nodes []*node, onBit bool) error {
 			err = checkPresenceMarks([]*node{n.field}, true)
 		case kindFlags:
 			err = checkPresenceMarks(n.fields, true)
-		case kindWhen, kindGroup:
+		case kindWhen, kindGroup, kindRepeat, kindTimes:
 			err = checkPresenceMarks(n.fields, false)
 		}
 		if err != nil {
@@ -54,7 +54,7 @@ func checkMemberNames(nodes []*node) error {
 		for _, n := range nodes {
 			var err error
 			switch n.kind {
-			case kindInt, kindFloat, kindBytes, kindBool:
+			case kindInt, kindFloat, kindBytes, kindBool, kindSized, kindBits, kindPacked, kindSlot:
 				err = declare(n, conditional)
 			case kindGroup:
 				if err = declare(n, conditional); err == nil {
@@ -62,7 +62,7 @@ func checkMemberNames(nodes []*node) error {
 				}
 			case kindWhen:
 				err = walk(n.fields, true)
-			case kindFlags:
+			case kindFlags, kindU2, kindRepeat, kindTimes:
 				err = walk(n.fields, conditional)
 			case kindFlagBit:
 				err = walk([]*node{n.field}, conditional)
@@ -81,7 +81,7 @@ func checkMemberNames(nodes []*node) error {
 // field can never hold (a whole float such as 5.0 is the integer 5).
 func checkEq(w, src *node) error {
 	switch src.kind {
-	case kindInt:
+	case kindInt, kindSlot:
 		if !eqInRange(w.eqValue, src) {
 			lo, hi := intBounds(src)
 			return schemeErr(w.id, "", "when %d tests %s field %d ('%s') against %s; the value must be a whole number from %s to %s",
@@ -100,6 +100,11 @@ func checkEq(w, src *node) error {
 }
 
 func eqInRange(v any, src *node) bool {
+	if src.kind == kindSlot {
+		x, ok := asNumber(v)
+		_, isInt := asInt(v)
+		return ok && (isInt || x == math.Trunc(x)) && x >= 0 && x <= 3
+	}
 	if n, ok := asInt(v); ok {
 		return n.fits(src.size, src.signed)
 	}
@@ -124,6 +129,9 @@ func eqInRange(v any, src *node) bool {
 }
 
 func intBounds(n *node) (string, string) {
+	if n.kind == kindSlot {
+		return "0", "3"
+	}
 	bits := uint(n.size * 8)
 	if n.signed {
 		return strconv.FormatInt(-1<<(bits-1), 10), strconv.FormatInt(1<<(bits-1)-1, 10)
@@ -146,10 +154,7 @@ func describe(v any) string {
 		return strconv.FormatFloat(x, 'g', -1, 64)
 	}
 	if n, ok := asInt(v); ok {
-		if n.neg {
-			return "-" + strconv.FormatUint(n.mag, 10)
-		}
-		return strconv.FormatUint(n.mag, 10)
+		return n.String()
 	}
 	return "a value of type " + typeName(v)
 }

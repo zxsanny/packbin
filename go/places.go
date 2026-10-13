@@ -1,10 +1,15 @@
 package packbin
 
-// place is one row of a scheme: the top level, or a group. Its members are the value fields and the
-// groups at any depth in it (under flags, flag bits and when) outside a group of its own, in scheme
-// order. A group's own members are its inner place.
+import "fmt"
+
+// place is one row of a scheme: the top level, a group, or the row of one round. Its members are the
+// value fields, the groups and the rounds at any depth in it (under flags, flag bits, when and u2)
+// outside a group or round of its own, in scheme order. A group's or round's own members are its
+// inner place; in a map row the names of a round's members are names of the place around it.
 type place struct {
 	members []*node
+	// rounds are the repeat and times members.
+	rounds []*node
 	// marks are the bools and empty groups whose name no other kind of field of the place declares:
 	// a map row gives each of them a bool.
 	marks []*node
@@ -13,6 +18,15 @@ type place struct {
 	rows []*node
 	// nested: a group with members stands in this place.
 	nested bool
+	// foreign are the names declared only inside a group of this place (at any depth, in a round's
+	// group too), in scheme order, with the groups from this place to them: a map row that gives one
+	// flat while a group on its path is not given is refused (owner decision Go-4).
+	foreign []foreignName
+}
+
+type foreignName struct {
+	member *node
+	path   []*node
 }
 
 // buildPlace collects the place of nodes, as pack and unpack walk them (a flags by its flag bits).
@@ -22,10 +36,12 @@ func buildPlace(nodes []*node) *place {
 	pl.collect(nodes)
 	classes := map[string]int{}
 	for _, n := range pl.members {
-		classes[n.name] |= memberClass(n)
+		if !isRound(n) {
+			classes[n.name] |= memberClass(n)
+		}
 	}
 	for _, n := range pl.members {
-		if classes[n.name] != memberClass(n) {
+		if isRound(n) || classes[n.name] != memberClass(n) {
 			continue // a name a when branch declares as another kind: its value is checked where it is written
 		}
 		switch {
@@ -35,14 +51,21 @@ func buildPlace(nodes []*node) *place {
 			pl.rows = append(pl.rows, n)
 		}
 	}
+	pl.foreign = foreignNames(pl)
 	return pl
 }
 
 func (pl *place) collect(nodes []*node) {
 	for _, n := range nodes {
 		switch n.kind {
-		case kindInt, kindFloat, kindBytes, kindBool:
+		case kindInt, kindFloat, kindBytes, kindBool, kindSized, kindBits, kindPacked, kindSlot:
 			pl.members = append(pl.members, n)
+		case kindU2:
+			pl.collect(n.fields)
+		case kindRepeat, kindTimes:
+			// Its row and shape were made when its references were bound.
+			pl.members = append(pl.members, n)
+			pl.rounds = append(pl.rounds, n)
 		case kindGroup:
 			if len(n.fields) > 0 {
 				n.inner = buildPlace(n.fields)
@@ -127,15 +150,15 @@ func checkGroupBindings(pl *place) error {
 		switch {
 		case g.acc == nil && inner != nil:
 			at := firstBound(g.inner)
-			return schemeErr(at.id, at.name, "bound to row type %v, but its group %s is not bound", inner.rowType, g.name)
+			return schemeErr(at.id, at.name, "bound to row type %v, but its %s is not bound", inner.rowType, ownerLabel(g))
 		case g.acc != nil && inner == nil && len(g.inner.members) > 0:
 			at := g.inner.members[0]
-			return schemeErr(at.id, at.name, "not bound to row type %v (the row of group %s); bind every value field "+
-				"of a scheme, or none", g.acc.childType, g.name)
+			return schemeErr(at.id, at.name, "not bound to row type %v (the row of %s); bind every value field "+
+				"of a scheme, or none", g.acc.childType, ownerLabel(g))
 		case g.acc != nil && inner != nil && inner.rowType != g.acc.childType:
 			at := firstBound(g.inner)
-			return schemeErr(at.id, at.name, "bound to row type %v, but its group %s is bound to %v",
-				inner.rowType, g.name, g.acc.childType)
+			return schemeErr(at.id, at.name, "bound to row type %v, but its %s is bound to %v",
+				inner.rowType, ownerLabel(g), g.acc.childType)
 		}
 		if err := checkGroupBindings(g.inner); err != nil {
 			return err
@@ -153,126 +176,57 @@ func firstBound(pl *place) *node {
 	return pl.members[0]
 }
 
-// typedValues is a typed row (a *T of the place's row type) as the walker reads it: each present
-// value by field name, normalized; a group's values as a map of its own.
-func typedValues(pl *place, row any) map[string]any {
-	values := make(map[string]any, len(pl.members))
-	for _, n := range pl.members {
-		v, present := n.acc.get(row)
-		if !present {
-			continue
-		}
-		if n.inner != nil {
-			v = typedValues(n.inner, v)
-		}
-		values[n.name] = v
+// ownerLabel names a group (group g) or a round (repeat 0) in a message.
+func ownerLabel(n *node) string {
+	if isRound(n) {
+		return fmt.Sprintf("%s %d", kindLabel(n), n.id)
 	}
-	return values
+	return "group " + n.name
 }
 
-// mapValues is a map row as the walker reads it: each present value normalized, a group's value a
-// map of its own read the same way. A value of a group's member is read from the group's map only,
-// never from the row around it. A bool or empty group given anything but a bool is refused (owner
-// decision Go-1: TypeScript leaves the bit clear), and so is a group given anything but a map.
-func mapValues(pl *place, m map[string]any) (map[string]any, error) {
-	values := make(map[string]any, len(m))
-	for k, v := range m {
-		if nv, present := normalize(v); present {
-			values[k] = nv
+// foreignNames lists the names declared inside the groups of pl (and of its rounds) that pl itself
+// does not declare.
+func foreignNames(pl *place) []foreignName {
+	own := map[string]bool{}
+	var groups []*node
+	for _, n := range pl.members {
+		if !isRound(n) {
+			own[n.name] = true
+			if n.kind == kindGroup && n.inner != nil {
+				groups = append(groups, n)
+			}
+			continue
 		}
-	}
-	for _, n := range pl.marks {
-		if v, ok := values[n.name]; ok {
-			if _, isBool := v.(bool); !isBool {
-				return nil, packErr(n.id, n.name, "expected a bool for %s %s, got %s", kindLabel(n), n.name, typeName(v))
+		for _, m := range n.inner.members {
+			own[m.name] = true
+			if m.kind == kindGroup && m.inner != nil {
+				groups = append(groups, m)
 			}
 		}
 	}
-	for _, g := range pl.rows {
-		v, ok := values[g.name]
-		if !ok {
-			continue
+	var out []foreignName
+	seen := map[string]bool{}
+	var walk func(g *node, path []*node)
+	walk = func(g *node, path []*node) {
+		path = append(path[:len(path):len(path)], g)
+		for _, m := range g.inner.members {
+			names := []*node{m}
+			if isRound(m) {
+				names = m.inner.members
+			}
+			for _, x := range names {
+				if !own[x.name] && !seen[x.name] {
+					seen[x.name] = true
+					out = append(out, foreignName{member: x, path: path})
+				}
+				if x.kind == kindGroup && x.inner != nil {
+					walk(x, path)
+				}
+			}
 		}
-		sub, isMap := v.(map[string]any)
-		if !isMap {
-			return nil, packErr(g.id, g.name, "expected a map[string]any for group %s, got %s", g.name, typeName(v))
-		}
-		nested, err := mapValues(g.inner, sub)
-		if err != nil {
-			return nil, err
-		}
-		values[g.name] = nested
 	}
-	return values, nil
-}
-
-// fillRow stores unpacked values into a typed row of the place. A value is stored only into a member
-// of the Go type unpack gives that field, so a name two when branches declare with different kinds
-// fills only the member of the branch that was read.
-func fillRow(pl *place, row any, values map[string]any) {
-	for _, n := range pl.members {
-		v, ok := values[n.name]
-		if !ok || !unpackedAs(n, v) {
-			continue
-		}
-		if n.inner != nil {
-			child := n.acc.newChild()
-			fillRow(n.inner, child, v.(map[string]any))
-			v = child
-		}
-		n.acc.set(row, v)
+	for _, g := range groups {
+		walk(g, nil)
 	}
-}
-
-// unpackedAs reports whether v has the Go type unpack gives the field n.
-func unpackedAs(n *node, v any) bool {
-	switch n.kind {
-	case kindInt:
-		size, signed, ok := intTypeOf(v)
-		return ok && size == n.size && signed == n.signed
-	case kindFloat:
-		if n.size == 4 {
-			_, ok := v.(float32)
-			return ok
-		}
-		_, ok := v.(float64)
-		return ok
-	case kindBytes:
-		_, ok := v.([]byte)
-		return ok
-	case kindBool:
-		_, ok := v.(bool)
-		return ok
-	case kindGroup:
-		if n.inner == nil {
-			_, ok := v.(bool)
-			return ok
-		}
-		_, ok := v.(map[string]any)
-		return ok
-	}
-	return false
-}
-
-// intTypeOf is the size and signedness of a fixed-size Go integer.
-func intTypeOf(v any) (int, bool, bool) {
-	switch v.(type) {
-	case uint8:
-		return 1, false, true
-	case uint16:
-		return 2, false, true
-	case uint32:
-		return 4, false, true
-	case uint64:
-		return 8, false, true
-	case int8:
-		return 1, true, true
-	case int16:
-		return 2, true, true
-	case int32:
-		return 4, true, true
-	case int64:
-		return 8, true, true
-	}
-	return 0, false, false
+	return out
 }

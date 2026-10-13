@@ -56,7 +56,7 @@ func TestNewSchemeRefusals(t *testing.T) {
 		}, 0, "a string member cannot hold bytes(2); bind a []byte"},
 		{"bind flags", func() (*Scheme, error) {
 			return NewScheme(1, Bind(Flags(0, U8(0, "a")), func(*otherRow) uint8 { return 0 }, func(*otherRow, uint8) {}))
-		}, 0, "Bind takes an integer, float, fixed bytes, bool or group field, not flags"},
+		}, 0, "Bind takes a value field, a slot, a group, a repeat or a times, not flags"},
 		{"bind without a setter", func() (*Scheme, error) {
 			return NewScheme(1, Bind[otherRow, uint8](U8(0, "a"), func(*otherRow) uint8 { return 0 }, nil))
 		}, 0, "Bind needs a getter and a setter"},

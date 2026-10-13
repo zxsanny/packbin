@@ -219,18 +219,31 @@ func TestAC4AnchoredGroupMapRefusals(t *testing.T) {
 	}
 }
 
-// U26 A: a value given flat for a member of an absent group under flags is not the group's: the bit
-// stays clear (TypeScript sets it from the flat value and refuses the missing sibling).
-func TestU26FlatMemberDoesNotSetTheGroupBit(t *testing.T) {
+// Go-4 A: a value given flat for a member of an absent group is refused, naming the member (TypeScript
+// packs it from the flat key; here, under flags, it sets the bit and refuses the missing sibling).
+// Given inside the group's map it packs; a flat duplicate beside the given map is not read.
+func TestGo4FlatMemberOfAnAbsentGroupIsRefused(t *testing.T) {
 	// Arrange
 	s := siblingAndFlagsScheme(t)
+	deep := mustScheme(t, 1, U8(0, "a"), Group(1, "g", Group(1, "h", U8(1, "x"))))
 
 	// Act
-	wire := mustPack(t, s, gm("c", 2))
+	raw, err := Pack(s, gm("c", 2))
+	nested := mustPack(t, s, gm("g", gm("a", 1, "c", 2)))
+	beside := mustPack(t, s, gm("g", gm("a", 1, "c", 2), "c", 9))
+	deepRaw, deepErr := Pack(deep, gm("a", 1, "g", gm(), "x", 5))
 
 	// Assert
-	if wire != "0100" {
-		t.Fatalf("got %s", wire)
+	e := asError(t, err, PackRefused)
+	if raw != nil || e.Field != 1 || e.Name != "c" {
+		t.Fatalf("raw %x err %v", raw, e)
+	}
+	if nested != "0101010102" || beside != nested {
+		t.Fatalf("nested %s beside %s", nested, beside)
+	}
+	d := asError(t, deepErr, PackRefused)
+	if deepRaw != nil || d.Field != 1 || d.Name != "x" {
+		t.Fatalf("deep raw %x err %v", deepRaw, d)
 	}
 }
 

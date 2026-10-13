@@ -39,11 +39,25 @@
 // slice is a value with 0 items. A scheme binds every value field to one row type, or none. A bound
 // scheme packs a *T (or a T) and Unpack returns a *T; Pack and UnpackMap still take and give the map
 // form of any scheme. In a map row an integer field takes any Go integer type that holds the value
-// (or a pointer to one), a float field any Go integer or float, fixed bytes a []byte, a bool a bool
-// (any other value is refused: TypeScript leaves the bit clear), a group a map[string]any of its
-// members (a member given in the row around it is not the group's). UnpackMap gives each value the
-// Go type of its field (uint8 to uint64, int8 to int64, float32, float64, []byte, true, and a
-// map[string]any for a group), so a row it returned packs again to the same bytes.
+// (or a pointer to one), a float field any Go integer or float, fixed bytes and sized a []byte, bits
+// and packed a slice of integers, a u2 slot an integer 0..3, a bool a bool (any other value is
+// refused: TypeScript leaves the bit clear), a group a map[string]any of its members. A member of a
+// group given in the row around it while the group is not given is refused (TypeScript reads it
+// from there; owner decision Go-4). UnpackMap gives each value the Go type of its field (uint8 to
+// uint64, int8 to int64, float32, float64, []byte, uint8 for a slot, []uint8 for bits and packed,
+// true, and a map[string]any for a group), so a row it returned packs again to the same bytes.
+//
+// # Rounds
+//
+// In a map row the names a Repeat or Times round holds are names of the row around it, and each
+// takes a list ([]any or any other slice but []byte), entry i for round i; a value that is not a list
+// goes to every round, and a nil entry leaves the name out of that round. A group in a round takes
+// one map[string]any a round. Repeat writes as many rounds as its longest list; Times writes its
+// count and refuses a longer list. Unpack gives every name a round can hold a []any with one entry a
+// round, nil where the round skipped it, and no key when there was no round. A typed row binds a
+// round to a slice of a struct E (or of *E) with Bind, one element a round, and the round's fields to
+// E; a nil slice is no value, an empty slice 0 rounds, and a typed Times refuses a count other than
+// the elements. Typed Unpack gives an empty slice for 0 rounds read and nil for a round not read.
 //
 // # Pack and unpack
 //
@@ -91,15 +105,23 @@
 //	                                   set when the group is given; ids and when scope continue
 //	                                   around it; with no members a mark like Bool
 //	Bind[T, V any](f Field, get func(*T) V, set func(*T, V)) Field
-//	                                   binds a value field or a group to a member of the typed row T
-//	Repeat(anchor int, members ...Field) Field                (later) the members until the buffer ends
-//	Times(anchor, countID int, members ...Field) Field        (later) the members count times
-//	Nested(name string, members ...Field) Field               (later) a nested row, ids from 0
-//	Sized(id int, name string, countID int) Field             (later) raw bytes, length an earlier integer
-//	U2(slots ...Field) Field; Slot(id int, name string) Field (later) 2-bit slots, low bits first
-//	Bits(id int, name string, countID int) Field              (later) a 1-bit list
+//	                                   binds a value field, a slot, a group or a round to a member of
+//	                                   the typed row T
+//	Repeat(anchor int, members ...Field) Field
+//	                                   the members once a round until the buffer ends; no count
+//	Times(anchor, countID int, members ...Field) Field
+//	                                   the members count times; count is an earlier integer of the
+//	                                   scope; a round body is a scope of its own, holds no round and
+//	                                   at least one member
+//	Sized(id int, name string, countID int) Field
+//	                                   raw bytes, their length an earlier integer
+//	U2(slots ...Field) Field; Slot(id int, name string) Field
+//	                                   2-bit slots (0..3), four to a byte, low bits first
+//	Bits(id int, name string, countID int) Field
+//	                                   a list of 0 and 1, count items, low bits first
 //	Packed(width, id int, name string, countID, bias int) Field
-//	                                                          (later) a 1-bit or 2-bit list
+//	                                   a 1-bit or 2-bit list, count plus bias (0 or -1) items
+//	Nested(name string, members ...Field) Field               (later) a nested row, ids from 0
 //	Utf8(id int, name string) Field                           (later) a u16 byte count, then UTF-8
 //	List(name string, element Field) Field                    (later) a u16 count, then the elements
 //	Dict(name string, element Field) Field                    (later) a u16 pair count, keys in byte order

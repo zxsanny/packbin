@@ -18,6 +18,13 @@ const (
 	kindFlagBit
 	kindWhen
 	kindGroup
+	kindRepeat
+	kindTimes
+	kindSized
+	kindU2
+	kindSlot
+	kindBits
+	kindPacked
 )
 
 // flagTag is the identity of one flag byte (a handle, or one read of it once a scheme is built).
@@ -42,8 +49,15 @@ type node struct {
 	eqValue   any      // when: the value eq compares with
 	ref       string   // when: the name eq resolves to, set when the scheme is built
 	acc       *accessor
-	inner     *place // group: the fields of its row, set when the scheme is built
+	inner     *place // group, repeat, times: the fields of its row, set when the scheme is built
 	err       string // a constructor's refusal, reported by NewScheme
+	countID   int    // times, sized, bits, packed: the id of the count field
+	// refPath: the groups from the scope's row to the count field (sized, bits, packed, times), set
+	// when the scheme is built, so pack can read the count the row gives for a field in a group.
+	refPath []string
+	width   int         // packed: 1 or 2 bits an item
+	bias    int         // packed: 0 or -1, added to the count
+	shape   *roundShape // repeat, times: what a round asks of its values, set when the scheme is built
 }
 
 // Field is one field of a scheme, made by the constructors of this package.
@@ -232,8 +246,14 @@ func fieldID(n *node) int {
 }
 
 func isValueKind(k kind) bool {
-	return k == kindInt || k == kindFloat || k == kindBytes || k == kindBool
+	switch k {
+	case kindInt, kindFloat, kindBytes, kindBool, kindSized, kindBits, kindPacked, kindSlot:
+		return true
+	}
+	return false
 }
+
+func isRound(n *node) bool { return n.kind == kindRepeat || n.kind == kindTimes }
 
 func kindLabel(n *node) string {
 	switch n.kind {
@@ -261,6 +281,18 @@ func kindLabel(n *node) string {
 			return "empty group"
 		}
 		return "group"
+	case kindRepeat:
+		return "repeat"
+	case kindTimes:
+		return "times"
+	case kindSized:
+		return "sized"
+	case kindU2, kindSlot:
+		return "u2"
+	case kindBits:
+		return "bits"
+	case kindPacked:
+		return "packed"
 	}
 	return "field"
 }

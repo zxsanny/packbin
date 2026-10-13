@@ -21,7 +21,7 @@ func NewScheme(typeNumber int, fields ...Field) (*Scheme, error) {
 		return nil, schemeErr(NoField, "", "type number %d: expected 0..255", typeNumber)
 	}
 	nodes := nodesOf(fields)
-	if err := checkNodes(nodes); err != nil {
+	if err := checkNodes(nodes, false); err != nil {
 		return nil, err
 	}
 	if _, err := validateFieldIDs(nodes, 0); err != nil {
@@ -37,7 +37,13 @@ func NewScheme(typeNumber int, fields ...Field) (*Scheme, error) {
 	if err := checkMemberNames(flat); err != nil {
 		return nil, err
 	}
-	bound, err := bindReferences(flat, map[int]*node{})
+	if err := checkRoundNesting(flat, false); err != nil {
+		return nil, err
+	}
+	if err := checkRoundBodies(flat); err != nil {
+		return nil, err
+	}
+	bound, err := bindReferences(flat, refScope{}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -52,11 +58,15 @@ func NewScheme(typeNumber int, fields ...Field) (*Scheme, error) {
 // TypeNumber is the first byte of every packet of this scheme.
 func (s *Scheme) TypeNumber() int { return s.typeNumber }
 
-// checkNodes refuses a nil field and reports a constructor's refusal, at any depth.
-func checkNodes(nodes []*node) error {
+// checkNodes refuses a nil field and a Slot outside U2, and reports a constructor's refusal, at any
+// depth.
+func checkNodes(nodes []*node, inU2 bool) error {
 	for _, n := range nodes {
 		if n == nil {
 			return schemeErr(NoField, "", "a field is nil")
+		}
+		if n.kind == kindSlot && !inU2 {
+			return schemeErr(n.id, n.name, "slot %s: allowed only directly inside U2", n.name)
 		}
 		if n.err != "" {
 			at := n
@@ -66,11 +76,11 @@ func checkNodes(nodes []*node) error {
 			return schemeErr(fieldID(at), fieldName(at), "%s", n.err)
 		}
 		if n.kind == kindFlagBit {
-			if err := checkNodes([]*node{n.field}); err != nil {
+			if err := checkNodes([]*node{n.field}, false); err != nil {
 				return err
 			}
 		}
-		if err := checkNodes(n.fields); err != nil {
+		if err := checkNodes(n.fields, n.kind == kindU2); err != nil {
 			return err
 		}
 	}
@@ -81,17 +91,22 @@ func checkNodes(nodes []*node) error {
 func validateFieldIDs(nodes []*node, next int) (int, error) {
 	for _, n := range nodes {
 		switch n.kind {
-		case kindInt, kindFloat, kindBytes, kindBool:
+		case kindInt, kindFloat, kindBytes, kindBool, kindSized, kindBits, kindPacked, kindSlot:
 			if n.id != next {
 				return 0, schemeErr(n.id, n.name, "field id: expected %d, got %d", next, n.id)
 			}
 			next++
+		case kindU2:
+			var err error
+			if next, err = validateFieldIDs(n.fields, next); err != nil {
+				return 0, err
+			}
 		case kindFlagBit:
 			var err error
 			if next, err = validateFieldIDs([]*node{n.field}, next); err != nil {
 				return 0, err
 			}
-		case kindWhen, kindFlags, kindGroup:
+		case kindWhen, kindFlags, kindGroup, kindRepeat, kindTimes:
 			if n.id != next {
 				return 0, schemeErr(n.id, "", "%s anchor: expected %d, got %d", kindLabel(n), next, n.id)
 			}
@@ -112,7 +127,7 @@ func flatten(nodes []*node) []*node {
 		switch n.kind {
 		case kindFlags:
 			out = append(out, flagsFlat(n)...)
-		case kindWhen, kindGroup:
+		case kindWhen, kindGroup, kindRepeat, kindTimes:
 			c := *n
 			c.fields = flatten(n.fields)
 			out = append(out, &c)
@@ -213,10 +228,15 @@ func bindBitsOne(n *node, seen map[*flagTag]*flagRead, met map[*flagTag]int) (*n
 			c.fields[i] = b
 		}
 		return &c, nil
-	case kindWhen, kindGroup:
+	case kindWhen, kindGroup, kindRepeat, kindTimes:
+		// A when body sees the bytes read before it; a round is a scope of its own; a group is
+		// transparent.
 		inner := seen
-		if n.kind == kindWhen {
+		switch n.kind {
+		case kindWhen:
 			inner = copySeen(seen)
+		case kindRepeat, kindTimes:
+			inner = map[*flagTag]*flagRead{}
 		}
 		c := *n
 		fields, err := bindBitsAll(n.fields, inner, met)
@@ -224,67 +244,6 @@ func bindBitsOne(n *node, seen map[*flagTag]*flagRead, met map[*flagTag]int) (*n
 			return nil, err
 		}
 		c.fields = fields
-		return &c, nil
-	}
-	return n, nil
-}
-
-// bindReferences resolves the id each eq names to the name of a field declared earlier in the same
-// scope, so pack and unpack never look an id up, and checks the eq value against that field. flags,
-// flag bits, when and group share the scope around them. A flags gets its flag byte and bits here,
-// made from its bound members. scope maps an id to the value field that declared it.
-func bindReferences(nodes []*node, scope map[int]*node) ([]*node, error) {
-	out := make([]*node, len(nodes))
-	for i, n := range nodes {
-		b, err := bindRef(n, scope)
-		if err != nil {
-			return nil, err
-		}
-		out[i] = b
-	}
-	return out, nil
-}
-
-func bindRef(n *node, scope map[int]*node) (*node, error) {
-	switch n.kind {
-	case kindInt, kindFloat, kindBytes, kindBool:
-		scope[n.id] = n
-		return n, nil
-	case kindWhen:
-		src, ok := scope[n.eqID]
-		if !ok {
-			return nil, schemeErr(n.id, "",
-				"when %d: eq names field id %d, which is not declared earlier in the same scope", n.id, n.eqID)
-		}
-		if err := checkEq(n, src); err != nil {
-			return nil, err
-		}
-		c := *n
-		c.ref = src.name
-		fields, err := bindReferences(n.fields, scope)
-		if err != nil {
-			return nil, err
-		}
-		c.fields = fields
-		return &c, nil
-	case kindFlags, kindGroup:
-		c := *n
-		fields, err := bindReferences(n.fields, scope)
-		if err != nil {
-			return nil, err
-		}
-		c.fields = fields
-		if n.kind == kindFlags {
-			c.flat = flagsFlat(&c)
-		}
-		return &c, nil
-	case kindFlagBit:
-		c := *n
-		field, err := bindRef(n.field, scope)
-		if err != nil {
-			return nil, err
-		}
-		c.field = field
 		return &c, nil
 	}
 	return n, nil

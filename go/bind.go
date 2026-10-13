@@ -19,18 +19,25 @@ type accessor struct {
 	// field that is not a group with members.
 	childType reflect.Type
 	newChild  func() any
+	// roundRows gives the elements of a round's slice, each a *childType (nil for a nil pointer
+	// element); setRounds stores a slice made of such elements. Set for a repeat or times only.
+	roundRows func(v any) []any
+	setRounds func(row any, rows []any)
 }
 
-// Bind binds a value field (an integer, float, fixed bytes or bool) or a group to a member of the
-// typed row T: get reads it for Pack, set stores it after Unpack. V is the member's type: an integer
-// type that holds every value of the field (or a pointer to one), float32 or float64 (or a pointer),
-// []byte, bool (or *bool). A nil pointer or nil slice is no value; a stored 0 is a value. For a group
-// with members V is a struct G or a *G (nil is no value; a G is always given), and the group's
-// members are bound to G; for an empty group V is bool or *bool, as for a Bool.
+// Bind binds a value field (an integer, float, fixed bytes, bool, sized, bits, packed or a u2 slot),
+// a group or a round to a member of the typed row T: get reads it for Pack, set stores it after
+// Unpack. V is the member's type: an integer type that holds every value of the field (or a pointer
+// to one; any integer type for a slot), float32 or float64 (or a pointer), []byte (also for sized,
+// bits and packed), bool (or *bool). A nil pointer or nil slice is no value; a stored 0 is a value.
+// For a group with members V is a struct G or a *G (nil is no value; a G is always given), and the
+// group's members are bound to G; for an empty group V is bool or *bool, as for a Bool. For a Repeat
+// or Times V is a slice of a struct E or of a *E, one element a round, and the round's members are
+// bound to E.
 //
-// Every value field and group of a scheme is bound to the same T, or none is (inside a group, to
-// the group's G): a scheme with bound fields packs a *T (or a T) and unpacks to a *T; it still packs
-// and unpacks the map form by name.
+// Every value field, group and round of a scheme is bound to the same T, or none is (inside a group
+// or round, to its G or E): a scheme with bound fields packs a *T (or a T) and unpacks to a *T; it
+// still packs and unpacks the map form by name.
 func Bind[T, V any](f Field, get func(*T) V, set func(*T, V)) Field {
 	n := nodeOf(f)
 	if n == nil {
@@ -38,8 +45,8 @@ func Bind[T, V any](f Field, get func(*T) V, set func(*T, V)) Field {
 	}
 	c := *n
 	switch {
-	case !isValueKind(n.kind) && n.kind != kindGroup:
-		c.err = fmt.Sprintf("Bind takes an integer, float, fixed bytes, bool or group field, not %s", kindLabel(n))
+	case !isValueKind(n.kind) && n.kind != kindGroup && !isRound(n):
+		c.err = fmt.Sprintf("Bind takes a value field, a slot, a group, a repeat or a times, not %s", kindLabel(n))
 	case n.acc != nil:
 		c.err = "the field is already bound"
 	case get == nil || set == nil:
@@ -70,6 +77,10 @@ func Bind[T, V any](f Field, get func(*T) V, set func(*T, V)) Field {
 	}
 	if n.kind == kindGroup && len(n.fields) > 0 && c.err == "" {
 		bindGroupRow(c.acc, reflect.TypeFor[V](), func(row any) V { return get(row.(*T)) },
+			func(row any, v V) { set(row.(*T), v) })
+	}
+	if isRound(n) && c.err == "" {
+		bindRoundRows(c.acc, reflect.TypeFor[V](), func(row any) V { return get(row.(*T)) },
 			func(row any, v V) { set(row.(*T), v) })
 	}
 	return &c
@@ -105,13 +116,21 @@ func bindGroupRow[V any](acc *accessor, t reflect.Type, get func(row any) V, set
 
 // checkMemberType returns why a member of type t cannot hold the field n, or "".
 func checkMemberType(n *node, t reflect.Type) string {
+	if isRound(n) {
+		if t.Kind() == reflect.Slice && isStructOrPointer(t.Elem()) {
+			return ""
+		}
+		return fmt.Sprintf("a %v member cannot hold the rounds of %s %d; bind a slice of a struct or of a pointer to a struct",
+			t, kindLabel(n), n.id)
+	}
 	if n.kind == kindGroup && len(n.fields) > 0 {
 		if t.Kind() == reflect.Struct || (t.Kind() == reflect.Pointer && t.Elem().Kind() == reflect.Struct) {
 			return ""
 		}
 		return fmt.Sprintf("a %v member cannot hold group %s; bind a struct or a pointer to a struct", t, n.name)
 	}
-	if n.kind == kindBytes {
+	switch n.kind {
+	case kindBytes, kindSized, kindBits, kindPacked:
 		if t.Kind() == reflect.Slice && t.Elem().Kind() == reflect.Uint8 {
 			return ""
 		}
@@ -125,6 +144,8 @@ func checkMemberType(n *node, t reflect.Type) string {
 	switch n.kind {
 	case kindInt:
 		ok = holdsInt(elem, n.size*8, n.signed)
+	case kindSlot:
+		ok = holdsInt(elem, 8, false) || holdsInt(elem, 7, true)
 	case kindFloat:
 		ok = elem.Kind() == reflect.Float64 || (elem.Kind() == reflect.Float32 && n.size == 4)
 	case kindBool, kindGroup:
