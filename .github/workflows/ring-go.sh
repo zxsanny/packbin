@@ -27,7 +27,8 @@ fi
 
 mkdir -p "$(dirname "$out")"
 if command -v go > /dev/null; then
-  CGO_ENABLED=0 go build -buildvcs=false -C "$driver" -o "$out" "$pkg"
+  # -C must be the first flag of the command line.
+  CGO_ENABLED=0 go build -C "$driver" -buildvcs=false -o "$out" "$pkg"
   exit 0
 fi
 

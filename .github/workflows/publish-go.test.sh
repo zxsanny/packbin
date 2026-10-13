@@ -367,7 +367,25 @@ gt_gate_checks() {
   rm -rf "$gt_dir"
 }
 
+# The Go build of the ring and gate programs (ring-go.sh, run by publish-position.sh go): `go build` needs -C as
+# its FIRST flag, and -buildvcs=false in every form (CI run 38422313279: git refuses the runner-owned checkout in
+# the container; CI run 38431216035: `-buildvcs=false -C` is "invalid value for flag -C" with a host go).
+gt_build_flag_checks() {
+  local script="$here/ring-go.sh" line
+  while IFS= read -r line; do
+    case "$line" in
+      *"go build -C "*"-buildvcs=false"* | *"go build -buildvcs=false -o"*) ;;
+      *) fail "ring-go.sh: a go build line has no -buildvcs=false, or a flag before -C: $line" ;;
+    esac
+    case "$line" in
+      *"go build -buildvcs=false -C"*) fail "ring-go.sh: -C is not the first flag of go build: $line" ;;
+    esac
+  done < <(grep -E '(^|[ ])go build ' "$script" | grep -v '^[[:space:]]*#')
+  [ "$(grep -cE '(^|[ ])go build ' "$script")" -ge 2 ] || fail "ring-go.sh: the host and container go build lines are not both there"
+}
+
 go_checks() {
+  gt_build_flag_checks
   gt_tag_checks
   gt_rerun_checks
   gt_refusal_checks
