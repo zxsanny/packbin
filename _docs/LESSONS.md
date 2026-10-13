@@ -8,14 +8,6 @@ Downstream skills consume this file:
 - `.cursor/skills/autodev/protocols/bootstrap-lessons.md` (Bootstrap B2 — Surface Recent Lessons)
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
-- [2026-10-12] [testing] A construction check that mirrors a binding must be the binding's own predicate, tested as "builds if and only if it binds": the C# round collection rule was written from spec text and inverted (a buildable scheme refused, an unbindable one accepted); 23 member types times U8/U32 times Repeat/Times pinned it.
-  Source: _docs/06_metrics/retro_2026-10-12_loop20.md
-- [2026-10-12] [architecture] A byte and slot budget bounds the output, not the work: an empty round body charges 0 and a 1.1 MB request bought 93 s of CPU in TypeScript (F33); every unit of work, the empty one included, must charge at least one unit.
-  Source: _docs/06_metrics/retro_2026-10-12_loop20.md
-- [2026-10-12] [testing] A test that starts a child interpreter must give it the parent's import path: the AC-1 memory test passed with the worker's editable install and failed in the clean CI container with ModuleNotFoundError; and a timing bound that fails under load is settled by an idle A/B of the previous commit against HEAD in the same image (the budget cost 13 to 20 %).
-  Source: _docs/06_metrics/retro_2026-10-12_loop20.md
-- [2026-10-12] [tooling] On this Mac a subagent output file is a symlink (heartbeat must `stat -L`), `setsid` does not exist, monitor and `alarm` timers count wall time across sleep, and a network drop kills subagents and downloads: wait on one single-shot task that exits when the run is done, re-arm monitors, resume failed subagents by id.
-  Source: _docs/06_metrics/retro_2026-10-12_loop20.md
 - [2026-10-12] [architecture] A slot budget is a memory ceiling of maxSlots times the per-slot cost, and the cost differs by package (the same 4.3 MB packet: TypeScript 1 072 MB, Python 548 MB); removing Python's first-round surcharge raised its worst case from 90 MB to 548 MB. Change any charge only with a measured worst-case memory A/B in the same loop.
   Source: _docs/06_metrics/retro_2026-10-12_loop21.md
 - [2026-10-12] [process] A parity decision must name the constructs it covers and both the with-value and no-value rows: U3 was built for repeat only and U7's no-value row (010000) stayed inconsistent with U6 until the reference worker flagged it.
@@ -38,3 +30,11 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-13_loop24.md
 - [2026-10-13] [tooling] A docker image cache is not durable between loops (the embedded image was gone after a Docker restart: 260 s instead of 8 s), and a retry window counted in whole bash `SECONDS` needs at least 3 s to guarantee two tries (a 1 s window flaked 2 of 8 runs); budget a cold build and do not read a quiet log as a hang.
   Source: _docs/06_metrics/retro_2026-10-13_loop24.md
+- [2026-10-14] [process] A ticket key comes from the tracker, never from counting: the first three commits and eight specs of loop 25 named AZ-2452 to AZ-2459, existing Jira issues of other work in the shared project; New Task step 7 creates the tickets before any spec or commit uses a key.
+  Source: _docs/06_metrics/retro_2026-10-14_loop25.md
+- [2026-10-14] [testing] A refusal test passes for the wrong reason unless its input falls into a state that is otherwise valid (3 of 4 C++ count cases and the `when` anchor passed without the fix); make the mutation proof part of the worker's acceptance: revert the fix in a scratch copy, every case must go red.
+  Source: _docs/06_metrics/retro_2026-10-14_loop25.md
+- [2026-10-14] [tooling] A launcher that starts a toolchain per call costs minutes when a harness calls it hundreds of times (the ring: 239 s, about 150 s of it `dotnet run` 40 times and a C++ recompile 32 times; 43 s when built once into a private per-run directory); multiply the launch cost by the call count before accepting a harness time.
+  Source: _docs/06_metrics/retro_2026-10-14_loop25.md
+- [2026-10-14] [tooling] A watcher keyed on log growth reports STALLED for a stage that prints only at the end (the ring, the publish gate); add a second signal (the child process changes), and check `ps` for old shells when a task outlives the run: a worker's bare `cat` sat 70 minutes although its prompt forbade it.
+  Source: _docs/06_metrics/retro_2026-10-14_loop25.md
