@@ -7,7 +7,7 @@
 # runner's Compose) is proven by the first CI run, and the ownership assertion says so here.
 
 # shellcheck disable=SC2154,SC2016
-RO_SERVICES="csharp typescript python rust cpp java"
+RO_SERVICES="csharp typescript python rust cpp java go"
 RO_BUILD_LANGS="csharp typescript python rust java"
 RO_OVERRIDE="docker-compose.publish.yml"
 RO_OPS=7
@@ -206,7 +206,7 @@ ro_probe_checks() {
     ro_assert_denied "AZ-2215 AC-1 $lang (publish_container)" "$out"
   done
   after="$(ro_manifest "$tree")"
-  ro_assert_same "AZ-2215 AC-1 tree manifest after the six direct probes" "$before" "$after"
+  ro_assert_same "AZ-2215 AC-1 tree manifest after the seven direct probes" "$before" "$after"
 
   cp "$tree/.github/workflows/ro-probe.sh" "$tree/.github/workflows/publish-inside.sh"
   before="$(ro_manifest "$tree")"
@@ -323,7 +323,7 @@ ro_host_path_check() {
 }
 
 # AC-5: the gate under the read-only mount, with no node_modules (npm ci runs in the container copy), prints the golden
-# bytes in all six languages and changes nothing outside out/; the bad-fixture and missing-java copies behave as before.
+# bytes in all seven languages and changes nothing outside out/; the bad-fixture and missing-java copies behave as before.
 ro_gate_checks() {
   local tree out before after count logs
   tree="$(mktemp -d)"
@@ -334,9 +334,9 @@ ro_gate_checks() {
   SRC_ROOT="$tree" PACKBIN_OUT="$out" bash "$tree/.github/workflows/publish-gate.sh" > "$logs/gate.log" 2> "$logs/gate.err" \
     || fail "AZ-2215 AC-5 the gate failed: $(tail -n 5 "$logs/gate.err")"
   count="$(grep -c "^pack [a-z]* $expected\$" "$logs/gate.log" || true)"
-  assert_eq "$count" "6" "AZ-2215 AC-5 golden pack lines"
+  assert_eq "$count" "7" "AZ-2215 AC-5 golden pack lines"
   assert_eq "$(grep '^mismatch ' "$logs/gate.log")" "mismatch 0" "AZ-2215 AC-5 mismatch"
-  assert_eq "$(paste -sd ' ' "$out/publish-plan.txt")" "csharp typescript python rust cpp java" "AZ-2215 AC-5 plan"
+  assert_eq "$(paste -sd ' ' "$out/publish-plan.txt")" "csharp typescript python rust cpp java go" "AZ-2215 AC-5 plan"
   grep -q 'added [0-9]* package' "$logs/gate.err" || fail "AZ-2215 AC-5 npm ci did not run in the container copy: $(tail -n 5 "$logs/gate.err")"
   after="$(ro_manifest "$tree")"
   ro_assert_same "AZ-2215 AC-5 tree manifest after the gate" "$before" "$after"
@@ -355,7 +355,7 @@ ro_gate_checks() {
   before="$(ro_manifest "$tree")"
   SRC_ROOT="$tree" PACKBIN_OUT="$tree/.github/workflows/out/nojava" bash "$tree/.github/workflows/publish-gate.sh" > "$logs/nojava.log" 2> "$logs/nojava.err" \
     || fail "AZ-2215 AC-5 the gate without java failed: $(tail -n 5 "$logs/nojava.err")"
-  assert_eq "$(wc -l < "$tree/.github/workflows/out/nojava/publish-plan.txt" | tr -d ' ')" "5" "AZ-2215 AC-5 five languages without java"
+  assert_eq "$(wc -l < "$tree/.github/workflows/out/nojava/publish-plan.txt" | tr -d ' ')" "6" "AZ-2215 AC-5 six languages without java"
   after="$(ro_manifest "$tree")"
   ro_assert_same "AZ-2215 AC-5 tree manifest after the missing-java gate" "$before" "$after"
   rm -rf "$tree" "$logs"

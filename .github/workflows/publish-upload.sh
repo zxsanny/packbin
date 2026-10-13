@@ -3,8 +3,9 @@
 # refuses to start unless build.log holds `build ok` for every target given. Before each upload it
 # asks the registry whether the version is already there (publish-query.sh) and skips the target
 # with `already published <target> <version>`, so a re-run finishes a partial publish. Required
-# targets go first; the first failure stops the run. Registry tools run on the host. Cargo is the one tool that archives again: `cargo publish --no-verify` re-archives
-# the staged directory that the build phase already compiled and checked.
+# targets go first, then optional ones, then the final go-tag (publish-go.sh); the first failure stops
+# the run. Registry tools run on the host. Cargo is the one tool that archives again: `cargo publish
+# --no-verify` re-archives the staged directory that the build phase already compiled and checked.
 # Usage: publish-upload.sh <target>...
 set -euo pipefail
 
@@ -163,6 +164,7 @@ upload_target() {
         --namespace zxsanny --name packbin --allow-existing
       ;;
     arduino) push_branch "$artifacts/arduino/reg" "$(arduino_url)" arduino "arduino-$version" ;;
+    go-tag) PACKBIN_VERSION="$version" bash "$here/publish-go.sh" ;;
     *)
       echo "unknown target: $1" >&2
       exit 1
@@ -170,7 +172,7 @@ upload_target() {
   esac
 }
 
-for tier in required optional; do
+for tier in required optional final; do
   for target in "$@"; do
     if [ "$(target_tier "$target")" != "$tier" ]; then
       continue

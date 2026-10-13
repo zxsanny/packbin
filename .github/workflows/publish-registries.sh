@@ -69,7 +69,7 @@ for lang in "${PACKBIN_LANGS[@]}"; do
     fi
     if [ -z "$lacking" ]; then
       targets+=("$target")
-    elif [ "$(target_tier "$target")" = "required" ]; then
+    elif [ "$(target_tier "$target")" != "optional" ]; then
       refused+=("$target is required and lacks: $lacking")
     else
       skip_optional "$target" "$lacking"
@@ -93,7 +93,7 @@ require_tool python3
 for target in "${targets[@]}"; do
   case "$target" in
     java) require_tool gpg ;;
-    vcpkg | arduino) require_tool git ;;
+    vcpkg | arduino | go-tag) require_tool git ;;
   esac
 done
 if [ "$build_only" != "1" ]; then
@@ -103,6 +103,7 @@ if [ "$build_only" != "1" ]; then
       csharp) require_tool dotnet ;;
       typescript) require_tool npm ;;
       rust) require_tool cargo ;;
+      go-tag) require_tool go ;;
     esac
   done
 fi

@@ -255,6 +255,20 @@ def check_idf(directory, version):
     need("CMakeLists.txt" in members, "CMakeLists.txt is missing")
 
 
+@target("go-tag")
+def check_go_tag(directory, version):
+    lines = (directory / "tag.txt").read_text().splitlines()
+    need(len(lines) == 1, f"tag.txt has {len(lines)} lines, not 1")
+    tag, _, commit = lines[0].partition(" ")
+    need(tag == f"go/v{version}", f"tag.txt tag {tag} is not go/v{version}")
+    need(re.fullmatch(r"[0-9a-f]{40}", commit) is not None, f"tag.txt commit {commit!r} is not a 40-digit commit id")
+    module = (directory / "go.mod").read_text()
+    need(re.search(r"(?m)^module github\.com/zxsanny/packbin/go$", module), "go.mod does not declare module github.com/zxsanny/packbin/go")
+    licence = (directory / "LICENSE").read_text()
+    need(licence.startswith("MIT License\n"), "LICENSE is not the MIT license text")
+    need("Permission is hereby granted, free of charge" in licence, "LICENSE lacks the MIT grant")
+
+
 # The five targets built in a container: a symlink in their tree could make the host tools that run
 # next (cargo package, publish-sign.sh, publish-upload.sh) read or write a file outside it.
 CONTAINER_TARGETS = ("csharp", "typescript", "python", "rust", "java")

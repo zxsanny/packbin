@@ -3,7 +3,7 @@
 # publish-check.py and records `build ok <target>` in $PACKBIN_OUT/artifacts/build.log.
 # This script holds no upload or push command; publish-upload.sh runs only after it exits 0.
 # Exit codes: 0 every target built and checked, 1 a build or a check failed, 2 usage.
-# Usage: publish-build.sh <target>...   (csharp typescript python rust vcpkg platformio esp-idf arduino java)
+# Usage: publish-build.sh <target>...   (csharp typescript python rust vcpkg platformio esp-idf arduino java go-tag)
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -53,6 +53,26 @@ run_inside() {
     "$lang" "exec /src/.github/workflows/publish-inside.sh $lang"
 }
 
+# The Go module has no archive: its release is the tag go/v<version> at the commit of the checkout (ADR-004).
+# This records what the upload phase will tag, so publish-check.py can check it before any write: the
+# tag line, the module file and the license. It stops when the checkout is not a git work tree, or
+# when the tag v<version> exists locally at another commit than HEAD.
+prepare_go_tag() {
+  local dest="$1" commit tagged
+  if [ ! -e "$root/.git" ]; then
+    echo "go-tag needs a git checkout of the tag: $root has no .git" >&2
+    return 1
+  fi
+  commit="$(git -C "$root" rev-parse --verify "HEAD^{commit}")"
+  if tagged="$(git -C "$root" rev-parse --verify --quiet "refs/tags/v$version^{commit}")" && [ "$tagged" != "$commit" ]; then
+    echo "tag v$version is at $tagged, but the checkout is at $commit" >&2
+    return 1
+  fi
+  printf 'go/v%s %s\n' "$version" "$commit" > "$dest/tag.txt"
+  cp "$root/go/go.mod" "$dest/go.mod"
+  cp "$root/go/LICENSE" "$dest/LICENSE"
+}
+
 for target in "$@"; do
   current="$target"
   mkdir -p "$artifacts/$target"
@@ -66,6 +86,9 @@ for target in "$@"; do
       ;;
     vcpkg|platformio|esp-idf|arduino)
       bash "$here/publish-embedded.sh" "$target"
+      ;;
+    go-tag)
+      prepare_go_tag "$artifacts/go-tag"
       ;;
     *)
       echo "unknown target: $target" >&2

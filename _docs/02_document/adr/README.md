@@ -9,3 +9,6 @@ back, and the original ADR's `Superseded by` field is updated.
 | 001 | Walk field lists with runtime primitives | Accepted | 2026-09-22 | — |
 | 002 | Publish six packages from a version tag | Accepted | 2026-09-22 | — |
 | 003 | Publish C++ through a vcpkg git registry | Accepted | 2026-09-22 | — |
+| 004 | Go ships as a git tag from the same commit | Accepted | 2026-10-13 | — |
+
+ADR-004 amends the count of six in ADR-002 (the first tag's six packages stay history); ADR-002 itself is unchanged.

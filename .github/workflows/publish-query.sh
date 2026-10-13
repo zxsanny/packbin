@@ -124,6 +124,8 @@ target_published() {
         && answer_is_yes esp-idf
       ;;
     arduino) git_published arduino "$artifacts/arduino/reg" "$(arduino_url)" arduino "arduino-$version" ;;
+    # No registry answer: publish-go.sh asks the remote itself and always re-checks the Go proxy.
+    go-tag) return 1 ;;
     *) query_fail "$1" "unknown target" ;;
   esac
 }

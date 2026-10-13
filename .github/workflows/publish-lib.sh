@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PACKBIN_LANGS=(csharp typescript python rust cpp java)
+PACKBIN_LANGS=(csharp typescript python rust cpp java go)
 
 # The publish targets: name, the language whose presence plans it, and its tier. A required target
 # with a missing credential fails the run before any write and a failed upload fails it; an
 # optional target with a missing credential is skipped with a warning, and a failed upload of
-# one that has its credential fails the run too. Uploads run required targets first.
+# one that has its credential fails the run too. A final target is required too, but its upload runs
+# after every required and optional one: go-tag is not a registry upload, it publishes the Go module
+# (ADR-004) by pushing the tag go/vX.Y.Z, so it waits until every registry accepted the version.
+# Uploads run required targets first, then optional, then final.
 PACKBIN_TARGETS=(
   "csharp csharp required"
   "typescript typescript required"
@@ -17,6 +20,7 @@ PACKBIN_TARGETS=(
   "platformio cpp optional"
   "esp-idf cpp optional"
   "arduino cpp optional"
+  "go-tag go final"
 )
 
 targets_of_lang() {
@@ -55,6 +59,7 @@ target_credentials() {
     esp-idf) echo "IDF_COMPONENT_API_TOKEN" ;;
     vcpkg) if [[ "$(vcpkg_url)" == https://github.com/* ]]; then echo "GITHUB_TOKEN"; fi ;;
     arduino) if [[ "$(arduino_url)" == https://github.com/* ]]; then echo "GITHUB_TOKEN"; fi ;;
+    go-tag) if [[ "$(go_tag_url)" == https://github.com/* ]]; then echo "GITHUB_TOKEN"; fi ;;
     *)
       echo "unknown target: $1" >&2
       return 1
@@ -117,6 +122,7 @@ language_present() {
     rust) [ -f "$root/rust/Cargo.toml" ] ;;
     cpp) [ -f "$root/cpp/Makefile" ] ;;
     java) [ -f "$root/java/test.sh" ] ;;
+    go) [ -f "$root/go/go.mod" ] ;;
     *) return 1 ;;
   esac
 }
@@ -127,6 +133,11 @@ vcpkg_url() {
 
 arduino_url() {
   printf '%s\n' "${ARDUINO_REGISTRY_URL:-https://github.com/zxsanny/packbin.git}"
+}
+
+# The remote that receives the Go tag; the tests point it at a bare repository.
+go_tag_url() {
+  printf '%s\n' "${GO_TAG_REGISTRY_URL:-https://github.com/zxsanny/packbin.git}"
 }
 
 # Installs pip packages $2... into venv $1 at the exact versions of tool-pins.txt, wheels only.
@@ -157,15 +168,12 @@ ensure_tool() {
   export PATH
 }
 
-# Pushes HEAD of the repository at $1 to branch $3 (and the existing tag $4 when given) of remote URL $2,
-# all or nothing: a tag that already points elsewhere is refused and the branch stays where it was.
-# With GITHUB_TOKEN set and a github.com URL, the token answers the credential prompt.
-push_branch() {
-  local reg="$1" url="$2" branch="$3" tag="${4:-}" ask code=0
-  local refs=("HEAD:refs/heads/$branch")
-  if [ -n "$tag" ]; then
-    refs+=("refs/tags/$tag")
-  fi
+# Pushes refs $3... of the repository at $1 to remote URL $2, all or nothing (never forced: a ref that
+# already points elsewhere is refused). With GITHUB_TOKEN set and a github.com URL, the token answers
+# the credential prompt, so the push does not depend on credentials the checkout left in the git config.
+git_push() {
+  local reg="$1" url="$2" ask code=0
+  shift 2
   if [ -n "${GITHUB_TOKEN:-}" ] && [[ "$url" == https://github.com/* ]]; then
     ask="$(mktemp)"
     cat > "$ask" <<'EOF'
@@ -177,11 +185,22 @@ esac
 EOF
     chmod +x "$ask"
     GIT_ASKPASS="$ask" GIT_TERMINAL_PROMPT=0 git -C "$reg" -c credential.helper= \
-      push --atomic "$url" "${refs[@]}" || code=$?
+      push --atomic "$url" "$@" || code=$?
     rm -f "$ask"
     return "$code"
   fi
-  git -C "$reg" push --atomic "$url" "${refs[@]}"
+  git -C "$reg" push --atomic "$url" "$@"
+}
+
+# Pushes HEAD of the repository at $1 to branch $3 (and the existing tag $4 when given) of remote URL $2,
+# all or nothing: a tag that already points elsewhere is refused and the branch stays where it was.
+push_branch() {
+  local reg="$1" url="$2" branch="$3" tag="${4:-}"
+  local refs=("HEAD:refs/heads/$branch")
+  if [ -n "$tag" ]; then
+    refs+=("refs/tags/$tag")
+  fi
+  git_push "$reg" "$url" "${refs[@]}"
 }
 
 fixture_hex() {

@@ -79,6 +79,14 @@ case "$lang" in
     javac -encoding UTF-8 -d "$out" "${sources[@]}" "$drivers/Position.java"
     java -cp "$out" Position
     ;;
+  go)
+    # ring-go.sh builds the position program of the ring (drivers/handoff-go/position) with the go on
+    # PATH, or in the golang image when there is none (a Mac); its output goes to stderr so only the
+    # program's hex reaches stdout. The binary and the build caches live outside the read-only repo.
+    bin="${PACKBIN_GO_BIN:-/tmp/packbin-position-go}"
+    bash "$here/ring-go.sh" "$bin" ./position >&2
+    "$bin"
+    ;;
   *)
     echo "unknown language: $lang" >&2
     exit 1

@@ -123,10 +123,10 @@ gate_checks() {
   plan="$out/publish-plan.txt"
   local order
   order="$(paste -sd ' ' "$plan")"
-  assert_eq "$order" "csharp typescript python rust cpp java" "AC-1 call list"
+  assert_eq "$order" "csharp typescript python rust cpp java go" "AC-1 call list"
   local count
   count="$(grep -c '^pack ' "$out/log.txt" || true)"
-  assert_eq "$count" "6" "AC-1 pack calls"
+  assert_eq "$count" "7" "AC-1 pack calls"
   while read -r _ lang hex; do
     assert_eq "$hex" "$expected" "AC-1 $lang hex"
   done < <(grep '^pack ' "$out/log.txt")
@@ -163,7 +163,7 @@ gate_checks() {
   if ! grep -q '^absent java$' "$missing/log.txt"; then
     fail "AC-4 java was not absent"
   fi
-  assert_eq "$(wc -l < "$miss_out/publish-plan.txt" | tr -d ' ')" "5" "AC-4 five languages"
+  assert_eq "$(wc -l < "$miss_out/publish-plan.txt" | tr -d ' ')" "6" "AC-4 six languages"
 }
 
 manifest_checks() {
@@ -467,12 +467,15 @@ source "$here/publish-rerun.test.sh"
 source "$here/publish-pins.test.sh"
 # shellcheck source=publish-readonly.test.sh
 source "$here/publish-readonly.test.sh"
+# shellcheck source=publish-go.test.sh
+source "$here/publish-go.test.sh"
 
 static_checks
 crates_token_checks
 registry_checks
 vcpkg_checks
 gate_checks
+go_checks
 manifest_checks
 npm_dist_checks
 bash "$here/publish-position.test.sh" || fail "AZ-2238 AC-1 AC-2 publish-position.test.sh failed"
