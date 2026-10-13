@@ -67,7 +67,8 @@ internal static partial class Walker
             return values;
         if (!values.TryGetValue(group.Name, out var nested) || nested is null)
             return null;
-        return nested as IReadOnlyDictionary<string, object?>;
+        return nested as IReadOnlyDictionary<string, object?> ?? throw new ArgumentException(
+            $"'{group.Name}': expected a nested dictionary for a nested-row group, got {nested.GetType().Name}");
     }
 
     private static bool GroupOn(IReadOnlyDictionary<string, object?> values, Field group, Scope seen)

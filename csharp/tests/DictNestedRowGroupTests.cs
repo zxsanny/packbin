@@ -165,4 +165,33 @@ public class DictNestedRowGroupTests
         Assert.Equal((byte)7, inner["N"]);
         Assert.Equal((byte)1, dictResult.Values["X"]);
     }
+
+    private sealed class SessionHolder
+    {
+        public SessionBody? Session { get; set; }
+    }
+
+    private sealed class SessionBody
+    {
+        public ushort Login { get; set; }
+    }
+
+    [Theory]
+    [InlineData(5)]
+    [InlineData("not a dictionary")]
+    public void Pack_NestedRowGroupUnderFlagsGivenANonDictionary_IsRefusedNotDropped(object wrong)
+    {
+        // Arrange: review25 #1. A group under flags whose value is not a dictionary was read as absent: the bit stayed
+        // clear and the value was dropped without an error.
+        var scheme = new Scheme<SessionHolder>(1,
+            Field.Flags(0, Field.Group((SessionHolder x) => x.Session, Field.U16<SessionBody>(0, s => s.Login))));
+        var row = new Dictionary<string, object?> { ["Session"] = wrong };
+
+        // Act
+        var error = Record.Exception(() => BinaryPacker.Pack(scheme, row));
+
+        // Assert
+        var refused = Assert.IsType<ArgumentException>(error);
+        Assert.Contains("'Session'", refused.Message, StringComparison.Ordinal);
+    }
 }

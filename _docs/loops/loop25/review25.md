@@ -1,0 +1,15 @@
+# Loop 25 total review — 4e0b537..HEAD (8 specs, the owner batch of 2026-10-14)
+
+Verdict: **PASS_WITH_WARNINGS** — 0 Critical, 0 High, 1 Medium, 6 Low. One total review at high effort (eight angles) over the loop's diff: about 96 added and 34 removed non-test source lines (C++ builder, C# walker, Python pack, `run-suite.sh`, `language-pair.sh`, `check-cases.sh`, `go/mem_test.go`) and the probe tests. It was not in `plan25.md`; the owner's rule of one total review per loop applies, so it ran after steps 11 to 13.
+
+| # | Severity | Category | Finding | Outcome |
+|---|----------|----------|---------|---------|
+| 1 | Medium | correctness | `csharp/Walker.Presence.cs` `ScopeOf`: a nested-row group under `flags` given a non-dictionary value (`{"Session": 5}`) was read as absent, so the bit stayed clear and the value was dropped without an error | fixed: `ScopeOf` throws `ArgumentException` naming the group (the text `PackGroup` already used); two new tests in `DictNestedRowGroupTests.cs` failed before and pass now; C# suite 2005 passed |
+| 2 | Low | correctness | C++ range error names the id after the int16 cast (`when(65537)` reports field 1) | skipped: owner row Assessment25 G1 (A keep and document); B needs a `cpp/include` change and an arm run with a 40 B margin |
+| 3 | Low | test-coverage | `go/mem_test.go` is behind `packbin_memtest`, which no CI step compiles; it can stop building unnoticed | skipped: a `go vet -tags` pass costs time on every run against this loop's aim; recorded for the loop 26 handoff |
+| 4 | Low | efficiency | `test.yml` ring job built the C# handoff driver before `language-pair.sh` built it again | fixed: the step line is removed; `ring-wiring.test.sh` passes and `test.yml` parses |
+| 5 | Low | efficiency | Rust (`cargo run`, 32 calls) and Go (`ring-go.sh`, 114 calls) still pay a per-call launch cost | skipped: about 20 s of a 43 s ring; later |
+| 6 | Low | correctness | Two Python `_borrowed` call sites do not pass the count id, so a missing count could give two messages | no change needed: both are guarded by `count is not None`, so the `None` branch cannot reach them |
+| 7 | Low | efficiency | `check-cases.sh` still starts one `grep` per case on the README | skipped: marginal (2.6 s CPU per run) |
+
+Not findings (checked): C++ `leaf` and `counted_leaf` compare the `int` before the int16 cast and cover every id-bearing builder (`when`, `u2`, flag entries, groups and containers all build through `leaf`); the C++ private directory under `/tmp` is visible to `ring-cxx.sh` in CI; `UnpackGroup` stores the inner scope under the group's name, so unpack, `ElementValue` and `ElementValues` agree; the `trap ... EXIT` in `language-pair.sh` does not run in the `$(...)` subshells (bash resets traps there), so the build directory is removed once at exit and no `tmp.*` directory is left behind; `grep -cx` with `|| true` keeps `0` for a package name that is missing; the pragma push and pop of both new C++ test files balance; no `2>/dev/null` was added.

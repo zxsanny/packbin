@@ -128,7 +128,6 @@ jobs:
         run: |
           set -euo pipefail
           npm ci --prefix typescript
-          dotnet build .github/workflows/drivers/csharp/Handoff.csproj --nologo
           cargo build --quiet --manifest-path .github/workflows/drivers/handoff-rust/Cargo.toml
           bash .github/workflows/ring-go.sh /tmp/packbin-handoff-go
       - name: cross-language ring
