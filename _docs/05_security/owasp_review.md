@@ -82,3 +82,17 @@ List: OWASP Top 10 2025 (names unchanged since loop 16). Scope: `git diff a27433
 | A01, A04, A05, A07, A08, A09 | unchanged | no surface in the diff: the new tests start two fixed child processes (Python AC-1, Java `LoneUtf8Budget`, TypeScript `spawnSync`) without a shell, secret or network; F14, F15, F16, F19, F22, F23 carried; A07 and A09 N/A |
 
 Earlier findings re-stated: F10 Medium open (unchanged); F12 Medium open (unchanged); F28 fixed; F31, F32, F33, F34 Low open.
+
+## Loop 23 (2026-10-13)
+
+List: OWASP Top 10 2025 (names unchanged since loop 16). Scope: `git diff b8b2809..807e718` (HEAD 807e718; see `security_report.md`, "Loop 23 findings"; loops 21 and 22 are recorded there only).
+
+| Category | Status | Evidence |
+|----------|--------|----------|
+| A08 Software or Data Integrity Failures | PASS_WITH_WARNINGS | F37 fixed: the Rust map form refuses or checks every value kept under a `repeat` body name or nested `__times_<anchor>` key (fuzz: 0 silent drops at HEAD). F40 new (Low): C# dictionary rows give a nested-row group the outer row's values. F35 open, documented in the README. F13, F16, F23 carried |
+| A10 Mishandling of Exceptional Conditions | PASS_WITH_WARNINGS | F36 fixed: a C++ `when` with an `eq` source id outside 0..32 767 is `SchemeInvalid`. F39 new (Low): C++ count and own ids still wrap. F18 carried |
+| A03 Software Supply Chain | PASS_WITH_WARNINGS | no manifest, lockfile, workflow, image or script changed; F12 unchanged |
+| A01, A02, A04, A05, A06, A07, A09 | unchanged | no surface in the diff; F10 Medium open (no unpack limit changed); A07 and A09 N/A |
+
+Earlier findings re-stated: F10 and F12 Medium open; Low open 16.
+

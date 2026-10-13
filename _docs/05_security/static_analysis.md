@@ -130,3 +130,19 @@ Scope `a27433e..HEAD` (about 2 300 lines of source). Method and probes: `securit
 | Secrets, logging, crypto, SQL, templates, deserialization of types | none | no process, SQL, template, secret or log in the changed library code |
 
 Findings: F28, F29, F30, F17, F27 fixed; F31 fixed except Python's unpack surcharge; F33 and F34 new; F10, F12, F32 unchanged.
+
+## Loop 23 (2026-10-13)
+
+Scope `b8b2809..807e718` (six source files outside tests; loops 21 and 22 are recorded in `security_report.md` only). Method and probes: `security_report.md`, "Loop 23 findings" and "Loop 23 method".
+
+| Class | Result | Evidence |
+|-------|--------|----------|
+| Unchecked casts of ids in C++ | 1 fixed, 1 open | F36 fixed: `when()` checks the `int` source id before the int16 cast (`fields.hpp:99-100`). F39 open: `counted_leaf` (`fields_counted.hpp:33`) and `leaf` (`table.hpp:240`) still cast without a check; ASan and UBSan clean over 600 000 unpacks of wrapped schemes |
+| Silent loss of caller data on pack | 1 fixed, 1 new | F37 fixed in the Rust map form (`check_repeat_lists`, `lists_agree`, `times_keys`): 0 silent drops in 270 000 fuzz rows, 1 813 in 27 000 at b8b2809. F40 new: C# `PackGroup` reads a nested-row group from the outer dictionary |
+| Panics or escaping exceptions on the caller's row | none new | Rust fuzz 0 panics (overflow checks on); TypeScript only `RangeError`; Python exception profile identical to b8b2809 (`RuntimeError` for an unwritten count is pre-existing, observation) |
+| Work not bounded by the input | none | the new Rust walks recurse over the scheme table; `round_lists` copies the caller's round values once (linear); Python `_RoundValues` indexes one entry per round |
+| Unpack of untrusted bytes | no new path | no unpack source changed in any package |
+| Process, file, secret and network handling | none | new tests use fixed values only |
+
+Findings: F36 and F37 fixed; F39 and F40 new (Low); F35 documented and open; F10, F12 unchanged.
+

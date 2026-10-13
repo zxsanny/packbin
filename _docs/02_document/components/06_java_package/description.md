@@ -216,6 +216,9 @@ An empty nested row `group(get, set)` is allowed only as a flag bit and carries 
 - Pack: the no-value count row above throws.
 - Unpack: a packet whose rounds hold more than 1 048 576 slots is refused until `withLimits` raises `maxSlots` (both values are taken every time); a round body wider than 16 names can no longer run 65 535 rounds at the default.
 
+**Loop 23 changes** (AZ-2436 tests only; no source change; 2540 checks, 2252 at loop 22).
+- U11 below the top level (AZ-2436, G3): `NoValueCountNestedTest` (run from `PackbinTest`) pins the refusal in an anchored group, a nested-row group (counting inside its own row), a bit holding an anchored group, an outer holding `when`, a bit holding a holding `when`, and `times`/`repeat` rounds, for three kinds x split bit and combined `flags`; count 0, a left-out count and a holding inner `when` pack the TypeScript hex. A nested-row group whose member counts by a field of the row around it is refused at construction (its ids start at 0 and see no id outside it): not spellable, pinned as observed. A member inside the clear `when` itself is the silent skip (`010100`).
+
 ## 8. Dependency Graph
 
 **Must be implemented after**: the golden fixture file

@@ -33,7 +33,7 @@ The library, and the npm package name. The NuGet package name is `Packbin`. (sou
 
 ## Repeat
 
-A group that is read until the buffer is used up. The buffer must end on a group boundary. One leftover byte is a short packet. Its body, like that of `times`, must hold at least one member: an empty body is refused when the scheme is built (loop 21; C++ looks through `when` and groups since loop 22). In the Rust map form a `repeat` takes its rounds only as `__repeat__` groups (per-name lists without them are refused, loop 22); in the other packages the round count is the longest list. (source: schema.md)
+A group that is read until the buffer is used up. The buffer must end on a group boundary. One leftover byte is a short packet. Its body, like that of `times`, must hold at least one member: an empty body is refused when the scheme is built (loop 21; C++ looks through `when` and groups since loop 22). In the Rust map form a `repeat` takes its rounds only as `__repeat__` groups (per-name lists without them are refused, loop 22; since loop 23 a value kept beside the groups must agree with them, as for `times`); in the other packages the round count is the longest list. (source: schema.md)
 
 ## Short form
 

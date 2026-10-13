@@ -1,0 +1,16 @@
+# loop 23 running notes (parent)
+- TS AZ-2434/2436 done: 967/967; AC-3 parity 128 rows = Python; 2^53 exactly now refused (Python too); times U6 split pinned; test files not strict-tsc'd (no @types/node).
+- AZ-2436 AC-2 wording amended (member outside the clear when, inside a holding when); literal shape = silent skip, pinned.
+- PY AZ-2435/2436 done: 1440 passed; no pyproject slow marker (3 tests ~4 s each).
+- PY discovery (unclear): round body short count list `times {n:2, mode:[1,0], c:[3]}` -> ValueError list length (`_pack_rounds.py:78/82` `_at_round` in `_refuse_unwritten_count`); without counted member packs `01020103000000`. Compare TS at assessment.
+- AZ-2437 (Bug, 1 pt) opened for the Python short count list; TS packs 01020103000000 / 010103000000 (parent probe). Python worker resumes when a slot frees.
+- JAVA AZ-2436 done: 2540 checks; = TS on every hex; named anchored group not spellable (nested row group can't see outer ids, construction refusal pinned). Java short-count-list row: check at assessment.
+- RUST AZ-2433/2435/2436 done: 670 passed. AZ-2433 AC-1 spec example amended (agreeing list packs, check_lists rule). Empty list beside groups now refuses (as times). repeat-in-repeat unspellable. Open (loop 24 rows, unclear): a top-level `__times_N` key for a times nested in a repeat body is still dropped; a repeat-body `flags` name given without groups is not refused. Rust times short count list: refused by U18 list refusal (lists), groups pack TS hex; repeat lists refused by U13.
+- README text from rust worker: "Rust `repeat` (U22): a value kept beside `__repeat__` groups under a name of the body (also inside a nested `times`) must be what the rounds hold, else `repeat at id N: list for 'x' disagrees with its rounds`. Without groups, names of a `times` nested in the body are refused like the body's own (U13 text)."
+- C# AZ-2436 done: 1978 passed; = TS/Python hex; short count list packs as TS (pinned). Nested-row group: own id scope (build refusal pinned); dictionary row nested-row group reads names from outer row, a nested dict under the group's name is not read (existing, unclear, README/reference line?).
+- PY AZ-2437 done: 1476 passed. times row = loop 22 regression (packed at 88c063f); repeat row was refused at 88c063f by equal-length rule, then by U11 KeyError after AZ-2413. Fix `_RoundValues.unwritten_count` (_pack_rounds.py:62/88), `_pack.py:166/354/387/456/211`. mypy (PyPI today) 16 errors same at HEAD (handoff said 1 at :410 — version-dependent).
+- Java short-count-list row: not probed yet (assessment).
+- Java short count list (parent probe): packs 01020103000000 / 010103000000 in all 3 kinds x 2 bits = TS, C#, Python-after-AZ-2437. Rust: lists refused (U18/U13 by design), groups pack TS hex.
+- ASSESS round 1: CLARIFY 16/5/3/3. G4 cpp skip text + hostile README 510/519/528; G5 Rust flags own name in repeat body w/o groups dropped (rustdoc claims refused); G6 Rust top-level __times_1 for nested times dropped. U24 C++ unbound U11 (rec B; Go: nil=no value), U25 C++ id range (rec A), U26 C# dict nested-row group names (rec A; Go map takes nested map).
+- RUST G5/G6 fixed: 673 passed; agreeing __times key beside groups packs (check_lists rule).
+- SECURITY PASS_WITH_WARNINGS M2 L16: F36, F37 closed; F39 (U25), F40 (U26) new Low.

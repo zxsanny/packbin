@@ -202,6 +202,15 @@ The error shape is interim: a short-packet-style value. Its kind, label, `needed
 - Pack: the no-value count row above raises `ValueError`. A `repeat` row with a lone value or a short `when` list that raised `ValueError` before now packs.
 - Unpack: a packet whose rounds hold more than 1 048 576 slots is refused until `with_limits` raises `max_slots`; a round body wider than 16 names can no longer run 65 535 rounds at the default.
 
+**Loop 23 changes** (AZ-2437, AZ-2435 and AZ-2436 tests; golden and route bytes are unchanged; bytes of every row that still packs are unchanged; 1476 tests, 1099 at loop 22).
+- Short count list in a round (AZ-2437, found in the loop 23 batch; `_RoundValues.unwritten_count` in `_pack_rounds.py`, read by `count_of` into `_refuse_unwritten_count` and `_refuse_late_body` in `_pack.py`): in the U11 check a missing round entry reads as an absent count, so `times(n) { u8 mode; when(mode == 1) { u8 c }; flags { bits v (count c) } }` with `n = 2`, `mode = [1, 0]`, `c = [3]` packs `01020103000000` and the same body in a `repeat` packs `010103000000`, as TypeScript, Java and C# (loop 22 raised `ValueError: 2: 1 items, times count is 2` / `KeyError: missing field c`; the `times` row packed at `88c063f`, so this was a loop 22 regression). A round whose `when` holds still needs its entry. `_RoundValues.__call__` is the old `_at_round` closure line for line. Tests: `test_no_value_count_nested.py::test_az2437_*`.
+- Raised `max_slots` (AZ-2435, G1, tests only): the F10 packet unpacks with `max_slots=4_194_304` to the rows at HEAD and packs back to the same packet; the default refuses it (`ShortPacket`, `left` 3 194 814). Test: `test_raised_max_slots.py` (4 to 6 s, no slow marker).
+- U11 below the top level (AZ-2436, G3, tests only): six nested positions x three kinds x split bit and combined `flags`. Test: `test_no_value_count_nested.py`.
+- Open (review23 1): a value given for a `bits`, `packed` or `sized` whose count no field wrote raises `RuntimeError` (`3: count 2 is missing`) where TypeScript raises `RangeError` (`v: count c was not written`); pre-existing, AZ-2437 moves one more row onto it; no wire change.
+
+**Breaking changes for callers, loop 23**:
+- None: the short count list rows above, which raised, now pack.
+
 ## 8. Dependency Graph
 
 **Must be implemented after**: the golden fixture file

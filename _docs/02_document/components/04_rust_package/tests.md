@@ -436,47 +436,9 @@ All run in the `rust` service of `docker-compose.test.yml` with `cargo test`.
 | `AZ-2247 a data member name declared twice is refused` (29 tests) | `MapScheme::new` and `Scheme::new` panic with the whole message for the same name twice at one level, once outside and once inside a `times` round (both orders), two `times` bodies that share a name, a `times` body that names a member twice, a name inside and outside a `repeat` round, and 14 shapes (every data kind and every container that shares the scope), and for a raw `SchemeItem::Field` twice in a typed scheme; alternate `when` branches, a name outside then under a `when` and two in one `when` body, a flag byte read twice, two `flags` bytes named alike, and a list element named like a row member build; typed bound fields with one id keep the id message; five schemes keep their existing message after a duplicate (10 tests refuse, 19 pin; two files, `duplicate_names_tests.rs` 320 lines and `duplicate_names_kept_tests.rs` 210 lines) | `rust/src/duplicate_names_tests.rs`, `rust/src/duplicate_names_kept_tests.rs` |
 | orphan split-bit tests | a typed list whose element is a bare flag bit, and a `flags` member split bit without or before its flag byte, are refused at construction (AZ-2121) | `rust/src/element_tests.rs` |
 
-## Loop 19 Tests (AZ-2329 to AZ-2338, AZ-2342)
+## Loops 19 and later
 
-Source: `_docs/03_implementation/batch_01_loop19_report.md`, `_docs/loops/loop19/review19.md`, `_docs/03_implementation/test_run_loop19_report.md`. The suite went from 479 to 526 (wave 1), 528 and 533 after the review fixes (436 lib tests and 97 in the other targets); clippy is clean in the touched files.
-
-| Test file | Task | What it proves |
-|-----------|------|----------------|
-| `pack_round_cap_tests.rs` | AZ-2329 | `PackError::Type` for a count of 65 536, 70 000 and 4 000 000 000 in `times`, `__times_N`, a round, `flags` and a group; 65 535 packs; `with_limits(2, ..)` refuses 3 |
-| `split_form_loud_tests.rs` | AZ-2331 | a clear split bit errors when a `when` source or `times` count is written after the byte and the body would be written, or the count is not written; the false condition, the combined form and a never-written source (review A2) are silent; `ac3_split_form_when_false_...` rewritten |
-| `flags_member_scope_tests.rs` | AZ-2333 | each `flags` member has its own flag-byte scope; scheme S1 packs `0103030301050607` (TypeScript's bytes) and the other four rows match; S2 with no outer byte panics at construction |
-| `lone_bytes_in_round_tests.rs` | AZ-2332 | a lone `Value::Bytes` in a `times` round is refused (count 1 too); `utf8` still broadcasts |
-| `times_count_zero_tests.rs` | AZ-2335 | count 0 with a list or rounds errors; a lone scalar packs `0100` |
-| `eq_range_tests.rs` | AZ-2338 | `U16(300)` on `u8`, `U32(70000)` on `u16`, `I16(200)` on `i8`, `I8(-1)` on `u64`, `U64::MAX` on `i64`, a `u2` slot 4 and a flag byte 256 panic at construction |
-| `hostile_tests.rs` (438 lines) | AZ-2329 to AZ-2338 | the eight new hostile cases |
-
-Existing tests changed: `az2311_ac2_...` (lone buffer), `eq(i8, U8(255))` and `eq(u64, I64(-1))`, `flags_when_member_tests.rs`, `integrity_tests.rs`, `times_lone_value_tests.rs`. File split (AZ-2342): `walk/cursor.rs` and `field/leaf.rs` moved out of `walk/unpack.rs` and `field/mod.rs`; 479 tests before and after.
-
-## Loop 20 Tests (AZ-2354, AZ-2355, AZ-2356, AZ-2359, AZ-2360, AZ-2365, AZ-2367)
-
-Source: `_docs/03_implementation/batch_01_loop20_report.md` to `batch_04_loop20_report.md`, `_docs/loops/loop20/review20.md`, `_docs/03_implementation/reference_loop20_budget.md`, and the scenario mapping in `_docs/02_document/tests/blackbox-tests-13-loop20-pack-budget-and-parity.md` (FT-X-38 to FT-X-52). The library tests went from 436 to 469 (wave 1b), and the whole suite from 533 to 566 and 569 after the review fix pass: 472 lib tests plus 97 in the integration binaries. The AZ-2354 rows that need a `times` or `repeat` in a list element have no Rust equivalent (construction refuses it).
-
-| Test file | Task | What it proves |
-|-----------|------|----------------|
-| `pack_output_budget_tests.rs` | AZ-2354 | `ac1_row1_a_lone_utf8_under_a_capped_times_is_refused_at_once_naming_the_member`; the boundary rows 4 to 13; `ac4_row14_*` and the slot rows; `ac5_rows26_28_limits_api`, `ac5_row27_a_zero_max_bytes_is_refused` (and for the typed scheme) |
-| `pack_repeat_cap_tests.rs` | AZ-2355 | `ac1_row1_*`, `ac2_row2_*`, `ac3_row3_*`, rows 4 to 9 (the list-element row 10 does not apply) |
-| `loop20_parity_pins_tests.rs` | AZ-2356, AZ-2359, AZ-2360, review A4 | `az2356_ac1_*`, `az2356_ac2_*` (a lone scalar now packs `010000`, was refused), `review20_a4_the_split_form_keeps_count_zero_after_the_byte`; `az2360_ac1_*`, `review20_a4_a_skipped_count_with_a_stale_zero_is_refused_under_flags_naming_the_member` (failed on HEAD with `expected a type error, got Ok([1, 0, 0])`); `az2359_ac1_a_u8_slot_takes_only_an_integer_value` |
-| `hostile_tests.rs` | AZ-2367 | a `PACK_NOT_RUN` table (the list-element case is skipped with its reason); 491 lines |
-| `scheme/bound_collections.rs` | AZ-2365 | not a test file: split out of `scheme/bound.rs` (514 to 357 lines); the suite is unchanged by the move |
-
-Slow tests: the AC-4 slot rows take about 20 s in a debug build (rows 14 and 15 measured 8.5 s and 17.7 s; 0.8 s in release) and the hostile slots case 8.1 s in debug; kept at spec size (review A9). Decide with the total run whether CI should use a release build or smaller limits.
-
-## Loop 21 Tests (AZ-2382, AZ-2384, AZ-2385, AZ-2386, AZ-2387, AZ-2390, AZ-2392, AZ-2394)
-
-Source: `_docs/03_implementation/batch_01_loop21_report.md`, `test_run_loop21_report.md`, `reference_loop21_slots.md`. The suite went from 569 to 625 tests (step 11 container run); 22 of the 49 new tests failed on a `git archive HEAD` copy of the sources before the change.
-
-Test files: `rust/tests/round_slot_width_tests.rs` (AZ-2382: rows 1 to 14), `empty_round_body_tests.rs` (AZ-2390: rows 15 to 26 that a map scheme can express), `late_when_in_bit_body_tests.rs` (AZ-2385), `loop21_parity_probes_tests.rs` (AZ-2384, AZ-2386, AZ-2387 pins) and `count_behind_clear_when_tests.rs` (AZ-2386, AZ-2387: rows 44 to 56), `src/hostile_tests/refusals.rs` and `src/hostile_tests/pack_cases.rs` (AZ-2392, AZ-2394; `hostile_tests.rs` shrank by the split). Changed: `pack_output_budget_tests.rs` and `scope_tests.rs` (the narrower width).
-
-## Loop 22 Tests (AZ-2410, AZ-2412, AZ-2414, AZ-2415, AZ-2417, AZ-2418)
-
-Source: `_docs/03_implementation/batch_01_loop22_report.md`. The suite is 489 lib and integration tests.
-
-Test files: `tests/loop22_parity_tests.rs` (AZ-2410 rows 56 to 56d, AZ-2414 rows A1 to A11 and shape B, AZ-2415 default and the 64-slot-round packet), `repeat_lists_without_groups_tests.rs` (AZ-2412: refusals and unchanged rows), `times_tests.rs` and `times_longer_tests.rs` (three "under a flags member is refused" pins replaced by decision; a longer list still refused), `tests/count_behind_clear_when_tests.rs`, `tests/loop21_parity_probes_tests.rs`, `tests/round_limits_tests.rs` and `pack_output_budget_tests.rs` (numbers), `hostile_tests.rs` with `hostile_tests/pack_cases.rs` and `hostile_tests/refusals.rs` (AZ-2417; AZ-2418 four tests: wrong pack entry, wrong construct entry, entry for a case that is not refused, refused case without entry). Scenarios FT-X-66, FT-X-68, FT-X-70, FT-X-71, FT-X-73, FT-X-74.
+See [tests-by-loop.md](tests-by-loop.md) (loop 19 to loop 23 sections, moved in loop 23).
 
 ## Test Data Management
 

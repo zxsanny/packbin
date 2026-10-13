@@ -276,6 +276,10 @@ The error shape is interim: a short-packet-style value. Its kind, label, `needed
 - Pack: the no-value count row above is refused.
 - Unpack: a packet whose rounds hold more than 1 048 576 slots is refused until the scheme raises `maxSlots`; a round body wider than 16 names can no longer run 65 535 rounds at the default.
 
+**Loop 23 changes** (AZ-2436 tests only; no source change; 1978 tests on net10.0, 1840 at loop 22).
+- U11 below the top level (AZ-2436, G3): `NoValueCountNestedTests` pins the refusal in the nested positions C# can spell, for three kinds x split bit and combined `flags`; count 0, a left-out count and a holding inner `when` pack the TypeScript hex; a member inside the clear `when` itself is the silent skip. A nested-row group (`Field.Group(x => x.In, ...)`) has its own id scope, so a member in it cannot count by a field of the row around it: refused at build, pinned as observed. The AZ-2437 short count list rows pack the TypeScript hex (`Ac3_Pack_CountListShorterThanTheRoundsWhereTheMissingRoundIsClear_PacksAsTypeScript`).
+- Open (assessment23 U26): a dictionary row reads a nested-row group's names from the outer row, so an inner name shared with the outer row packs the outer value (`u8 Mode; group In { u8 Mode; u8 X }` with `{Mode: 1, X: 3}` packs `01 01 01 03`, the typed row packs `01 01 02 03`); a nested dictionary under the group's name is not read (`'X' (field id 1) has no value`). TypeScript and Java read the nested object.
+
 ## 8. Dependency Graph
 
 **Must be implemented after**: the golden fixture file
