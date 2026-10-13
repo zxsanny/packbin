@@ -9,7 +9,7 @@ leftovers:
   - the short wave decided on 2026-10-13 and not started: U25 A (C++ id range), U24 B (README), U26 A (C# nested dictionary), review23 Low 1 (Python `ValueError`) — loop 25
   - D8: Go peak-memory measurement (gap-clear, 1 point)
   - F44: the owner applies a tag ruleset on `go/v*` and `v*`; F10 and F12 stay open (Medium)
-  - the first `go/vX.Y.Z` tag, the live proxy check and the first Ubuntu CI run of the Go suite and the ring: after CI on this push, only on the owner's explicit go
+  - the first `go/vX.Y.Z` tag and the live proxy check: only on the owner's explicit go (CI is green on `dev` and `main` at `38414db` after two CI fixes, `0737002` and `38414db`: `-buildvcs=false` for the Go commands in the container, `-C` first in `go build`)
   - AZ-2068 (C++ AVR stretch) stays in `todo/`; Swift (AZ-2223) if the owner wants a next language
   - ESP targets of `cpp-embedded-esp` not run locally (CI `embedded` job runs them on the push)
 smoke: PASS

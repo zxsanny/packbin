@@ -49,7 +49,7 @@ This is the intake the next `/autodev` run starts from (launcher on `dev`, `kind
 
 ## Do not start before checking
 
-1. `git status` and `git log origin/main..HEAD`, and the CI state of `dev` and `main` (test.yml). The first CI run of loop 24 (72a573f): `ring` (the Go ring on Ubuntu) and `embedded` passed; `scaffold` failed in the Go dependency check (`go list` stamping VCS info in the container: fixed with `-buildvcs=false`, see `notes24.md`); the publish gate step after it had never run on CI before the fix commit, so its first CI result is the next proof. The `dev` scaffold run of 72a573f was *cancelled* at 28 s for an unknown reason.
+1. `git status` and `git log origin/main..HEAD`, and the CI state of `dev` and `main` (test.yml). **CI is green on both at `38414db`** (scaffold: seven suites incl. Go and the publish gate with seven languages; ring with Go; embedded): the first CI runs of loop 24 found two real bugs, both fixed (the Go commands needed `-buildvcs=false`: the container runs Go as root on a runner-owned checkout and git refuses it; and `-C` must be the first flag of `go build`, which the host-go branch of `ring-go.sh` broke). The `dev` scaffold run of `72a573f` was also *cancelled* once at 28 s for an unknown reason (not seen again). `embedded` runs only on CI.
 2. The tree is clean; `_docs/_process_leftovers/` is empty.
 3. Ask the open decisions first (one batch with the recommendations).
 4. The first `go/vX.Y.Z` tag: only with the owner's explicit go, the exact commit, CI green on `dev` and the F44 ruleset applied. The publish path (`go-tag`) and the live proxy check have run only in hermetic tests.
