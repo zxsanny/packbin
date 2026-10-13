@@ -19,16 +19,26 @@ func TestAC8GoModDeclaresGo126AndOneDependencyAtMost(t *testing.T) {
 	mod := string(raw)
 
 	// Act
-	requires := regexp.MustCompile(`(?m)^\s*(?:require\s+)?([a-z0-9.\-]+\.[a-z]+/[^\s]+)\s+v[0-9]`).FindAllStringSubmatch(mod, -1)
+	requires := regexp.MustCompile(`(?m)^\s*(?:require\s+)?([a-z0-9.\-]+\.[a-z]+/[^\s]+)\s+v[0-9][^\n]*`).FindAllStringSubmatch(mod, -1)
 
 	// Assert
 	if !regexp.MustCompile(`(?m)^module github\.com/zxsanny/packbin/go$`).MatchString(mod) {
 		t.Fatalf("module line: %s", mod)
 	}
-	if !regexp.MustCompile(`(?m)^go 1\.26$`).MatchString(mod) {
+	if !regexp.MustCompile(`(?m)^go 1\.26(\.0)?$`).MatchString(mod) {
 		t.Fatalf("go line: %s", mod)
 	}
-	if len(requires) > 1 || (len(requires) == 1 && requires[0][1] != "golang.org/x/crypto") {
+	direct := 0
+	for _, r := range requires {
+		if strings.HasSuffix(r[0], "// indirect") {
+			continue
+		}
+		direct++
+		if r[1] != "golang.org/x/crypto" {
+			t.Fatalf("requires: %v", requires)
+		}
+	}
+	if direct > 1 {
 		t.Fatalf("requires: %v", requires)
 	}
 }

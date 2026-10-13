@@ -175,6 +175,25 @@
 //
 // Raise a limit only as far as the memory of one call allows.
 //
-// Also to come, with these names: PackSession (LoadSession, Start, Join, Pack, Unpack, UnpackMap),
-// which a single goroutine uses at a time.
+// # Encrypted session
+//
+// PackSession is one optional encrypted connection beside clear Pack and Unpack, with the bytes of the
+// other packages (_docs/02_document/contracts/library/pack-session.md). The opener sends 16 bytes once,
+// the waiter joins with them, and a payload keeps the length of the clear packet. HKDF-SHA256 turns the
+// 32-byte seed and the 16 bytes into one key a direction; each direction counts its packets from 0 and
+// pads the packed bytes with ChaCha20 (RFC 8439). There is no tag: a flipped bit is not detected. A
+// PackSession is for one goroutine at a time.
+//
+//	opener, err := packbin.LoadSession(seed)   // seed is 32 bytes; the session keeps a copy
+//	hello, err := opener.Start()               // 16 random bytes: send them once, in the clear
+//	payload, err := opener.Pack(position, row) // same length as packbin.Pack
+//
+//	waiter, err := packbin.LoadSession(seed)
+//	err = waiter.Join(hello)
+//	row, err := waiter.Unpack(payload, position) // or UnpackMap
+//
+// StartWith(nonce) opens the opener side with 16 bytes the caller already has. A seed or value of the
+// wrong length makes no session (an *Error of kind BadValue); Pack before Start or Join is a PackRefused
+// error; Unpack before Join is a ShortPacket error. A Pack that fails spends no position; an Unpack
+// spends one for every payload, readable or not, so the next message still unpacks.
 package packbin

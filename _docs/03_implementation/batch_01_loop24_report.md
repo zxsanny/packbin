@@ -100,3 +100,19 @@ API added: `Limits{MaxRounds, MaxSlots, MaxBytes}`, `DefaultLimits()`, `DefaultM
 | 33 | AZ-2444 vs AZ-2442 | `empty-round-body` row 22 (zero-width repeat round, `01ff00`): Go gives `TrailingBytes` left 1 where TypeScript gives the short-packet shape needed 0, left 1 | probe at assessment | unclear |
 | 34 | AZ-2444 | No Go peak-RSS figure for the loop 22 memory table (F10 and wide raised-limit unpacks pass under `-race` in the 7.6 GiB Docker VM) | measure if wanted (separate) | clear |
 | 35 | AZ-2444, run-suite | The Go default suite takes 27 s under `-race` (4 s before the large-packet tests); `run-suite.sh go` adds the 60 s fuzz step | none | clear |
+
+## Batch 01 part 6 (AZ-2445, wave 2; developed in a scratch copy, merged by the parent)
+
+| Worker | Spec | Result |
+|--------|------|--------|
+| go session | AZ-2445 (PackSession matching C#) | 22 session tests pass: C# ciphertext `b55d0a29c56c203712b241232e`, TypeScript's keyed first-packet vectors, session AC-2 to AC-7, hostile session rows. Merged into `go/` (session.go, session_test.go, session_hostile_test.go, go.mod, go.sum, module_test.go patch, doc.go section). Suite after merge: ok (3 runs in a row, 23 s each) |
+
+`go.mod`: `go 1.26.0`, direct `golang.org/x/crypto v0.58.0`, indirect `golang.org/x/sys v0.49.0`; `go mod verify` ok. `go list -m all` lists x/net, x/term, x/text too (x/crypto's own requirements); the built packages use only the main module and x/crypto (the `run-suite.sh go` check, AZ-2448).
+
+API: `LoadSession(seed) (*PackSession, error)`, `Start()`, `StartWith(nonce)` (added: a fixed value for tests, as Rust's `start_with`), `Join(nonce)`, `Pack(sc, row)`, `Unpack(payload, schemes...)`, `UnpackMap(...)`, `SeedSize` 32, `NonceSize` 16. Wrong length, a second open or a nil session: `BadValue`; pack before open: `PackRefused`; unpack before join: `ShortPacket` (needed 1, left 0, as TypeScript and Rust). A failed Pack spends no counter position; an Unpack always advances the receive counter. `Load` copies the seed (the caller's slice is not wiped, as TypeScript); the internal copy and the derived key block are zeroed after open. A packet over 2^38 bytes is refused (x/crypto counter overflow).
+
+| # | Spec ref | Finding | Proposed handling | Status |
+|---|----------|---------|-------------------|--------|
+| 36 | AZ-2445 | `module_test.go` (GO-11 check) required `go 1.26` exactly and counted every require line; x/crypto v0.58.0 needs `go 1.26.0` and `go mod tidy` adds `x/sys // indirect`. The test now accepts `go 1.26(.0)?` and counts direct requirements only (GO-11 as amended) | done | clear |
+| 37 | AZ-2445 | `StartWith(nonce)` is an addition beyond the TypeScript API shape (TypeScript tests use a fixed value another way) | none | clear |
+| 38 | step 11 | One `go test -race` run failed (not reproduced in 3 reruns) while the host load average was 87 from other sessions; likely the AC-7 speed bound (about 580 ms under `-race` against 1 s) | step 11: check `uptime` first; if AC-7 flakes in CI, measure on an idle runner and decide (owner) | unclear |
