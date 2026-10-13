@@ -1,5 +1,7 @@
 # Dependency scan
 
+**Loop 25 (2026-10-14)**: no manifest, lockfile or image changed since loop 24 (`git diff --name-only 4e0b537..HEAD`); nothing was re-scanned.
+
 **Date**: 2026-10-06
 **Scope**: loop 16 (`git diff 9db438e..HEAD`, HEAD 5c95950; the owner's uncommitted C# and CI hunks are not part of it). New or changed supply-chain inputs: the npm package now ships a `tsc` build (`typescript/package.json`, `tsconfig.build.json`), three new actions in the `ring` job (`test.yml`), the vcpkg port (vendored sources), the `gcc:16` image used as the ring compiler. `tool-pins.txt`, `python/pyproject.toml`, `rust/Cargo.toml`, `java/api-check.sh` and `docker-compose.test.yml` are unchanged since loop 15 (`git diff` empty). Earlier loops condensed below.
 
