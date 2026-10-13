@@ -19,6 +19,8 @@ type roundShape struct {
 	// and groups are the groups, which can hold one: a lone one would reach every round.
 	buffers []*node
 	groups  []*node
+	// dicts are the dict names: a lone dictionary would reach every round as well.
+	dicts []*node
 }
 
 func makeRoundShape(r *node) *roundShape {
@@ -33,6 +35,8 @@ func makeRoundShape(r *node) *roundShape {
 		switch {
 		case m.kind == kindBytes || m.kind == kindSized || m.kind == kindBits || m.kind == kindPacked:
 			sh.buffers = append(sh.buffers, m)
+		case m.kind == kindDict:
+			sh.dicts = append(sh.dicts, m)
 		case m.kind == kindGroup && m.inner != nil:
 			sh.groups = append(sh.groups, m)
 		}
@@ -184,6 +188,13 @@ func refuseLoneBuffers(sh *roundShape, values map[string]any) error {
 			}
 		}
 	}
+	for _, n := range sh.dicts {
+		if v, ok := values[n.name]; ok {
+			if _, isL := isList(v); !isL {
+				return packErr(NoField, n.name, "%s: a dictionary in a repeat or times round needs a list with one dictionary per round", n.name)
+			}
+		}
+	}
 	for _, g := range sh.groups {
 		if sub, ok := values[g.name].(map[string]any); ok {
 			if err := refuseBuffersIn(g.inner, sub); err != nil {
@@ -200,6 +211,12 @@ func refuseBuffersIn(pl *place, values map[string]any) error {
 		case n.kind == kindBytes || n.kind == kindSized || n.kind == kindBits || n.kind == kindPacked:
 			if _, ok := values[n.name]; ok {
 				return packErr(n.id, n.name, "%s: a byte buffer in a repeat or times round needs a list with one buffer per round", n.name)
+			}
+		case n.kind == kindList || n.kind == kindDict:
+			if _, ok := values[n.name]; ok {
+				word := map[kind]string{kindList: "list", kindDict: "dictionary"}[n.kind]
+				return packErr(NoField, n.name, "%s: a %s in a repeat or times round needs a list with one %s per round",
+					n.name, word, word)
 			}
 		case n.kind == kindGroup && n.inner != nil:
 			if sub, ok := values[n.name].(map[string]any); ok {

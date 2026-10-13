@@ -1,9 +1,6 @@
 package packbin
 
-import (
-	"encoding/binary"
-	"math"
-)
+import "encoding/binary"
 
 // Unpack reads buf with the scheme its first byte names, out of schemes. The row is a *T for a scheme
 // whose fields are bound with Bind, else a map[string]any. A buffer that cannot be read returns a nil
@@ -83,7 +80,7 @@ type reader struct {
 	split bool
 	// values is the top-level row; reached are the rounds read (with 0 rounds or more), for a typed row.
 	values  map[string]any
-	reached map[*node]bool
+	reached map[reachKey]bool
 }
 
 // enter makes the scope of a place whose row is out the one a when or a count reads.
@@ -115,28 +112,18 @@ func (r *reader) take(f *node, size int) ([]byte, error) {
 func (r *reader) fields(fields []*node, values map[string]any) error {
 	for _, f := range fields {
 		switch f.kind {
-		case kindInt:
-			b, err := r.take(f, f.size)
+		case kindInt, kindFloat, kindBytes, kindUtf8:
+			v, err := r.scalar(f)
 			if err != nil {
 				return err
 			}
-			r.put(values, f.name, readInt(b, f.size, f.signed, f.bigEndian))
-		case kindFloat:
-			b, err := r.take(f, f.size)
+			r.put(values, f.name, v)
+		case kindList, kindDict:
+			v, err := r.collection(f)
 			if err != nil {
 				return err
 			}
-			if f.size == 4 {
-				r.put(values, f.name, math.Float32frombits(uint32(readUint(b, 4, f.bigEndian))))
-			} else {
-				r.put(values, f.name, math.Float64frombits(readUint(b, 8, f.bigEndian)))
-			}
-		case kindBytes:
-			b, err := r.take(f, f.size)
-			if err != nil {
-				return err
-			}
-			r.put(values, f.name, append([]byte{}, b...))
+			r.put(values, f.name, v)
 		case kindBool:
 			// Reached only through a set flag bit.
 			r.put(values, f.name, true)
@@ -186,12 +173,27 @@ func (r *reader) group(f *node, values map[string]any) error {
 		values[f.name] = true
 		return nil
 	}
-	sub := make(map[string]any, len(f.fields))
-	if err := r.fields(f.fields, sub); err != nil {
+	sub, err := r.row(f)
+	if err != nil {
 		return err
 	}
 	values[f.name] = sub
 	return nil
+}
+
+// row reads the members of a group into a map of its own. A nested row is a scope of its own: its
+// whens and counts read its own values.
+func (r *reader) row(f *node) (map[string]any, error) {
+	sub := make(map[string]any, len(f.fields))
+	if f.nested {
+		savedSeen, savedSplit := r.seen, r.split
+		r.enter(f.inner, sub)
+		defer func() { r.seen, r.split = savedSeen, savedSplit }()
+	}
+	if err := r.fields(f.fields, sub); err != nil {
+		return nil, err
+	}
+	return sub, nil
 }
 
 func readUint(b []byte, size int, bigEndian bool) uint64 {

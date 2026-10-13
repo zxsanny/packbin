@@ -25,6 +25,9 @@ const (
 	kindSlot
 	kindBits
 	kindPacked
+	kindUtf8
+	kindList
+	kindDict
 )
 
 // flagTag is the identity of one flag byte (a handle, or one read of it once a scheme is built).
@@ -58,6 +61,8 @@ type node struct {
 	width   int         // packed: 1 or 2 bits an item
 	bias    int         // packed: 0 or -1, added to the count
 	shape   *roundShape // repeat, times: what a round asks of its values, set when the scheme is built
+	elem    *node       // list, dict: the element, a scope of its own with ids from 0
+	nested  bool        // group made by Nested: ids, references and names of its own
 }
 
 // Field is one field of a scheme, made by the constructors of this package.
@@ -247,7 +252,7 @@ func fieldID(n *node) int {
 
 func isValueKind(k kind) bool {
 	switch k {
-	case kindInt, kindFloat, kindBytes, kindBool, kindSized, kindBits, kindPacked, kindSlot:
+	case kindInt, kindFloat, kindBytes, kindBool, kindSized, kindBits, kindPacked, kindSlot, kindUtf8, kindList, kindDict:
 		return true
 	}
 	return false
@@ -293,6 +298,12 @@ func kindLabel(n *node) string {
 		return "bits"
 	case kindPacked:
 		return "packed"
+	case kindUtf8:
+		return "utf8"
+	case kindList:
+		return "list"
+	case kindDict:
+		return "dict"
 	}
 	return "field"
 }

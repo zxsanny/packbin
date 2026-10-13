@@ -58,7 +58,10 @@ func buildPlace(nodes []*node) *place {
 func (pl *place) collect(nodes []*node) {
 	for _, n := range nodes {
 		switch n.kind {
-		case kindInt, kindFloat, kindBytes, kindBool, kindSized, kindBits, kindPacked, kindSlot:
+		case kindInt, kindFloat, kindBytes, kindBool, kindSized, kindBits, kindPacked, kindSlot, kindUtf8:
+			pl.members = append(pl.members, n)
+		case kindList, kindDict:
+			buildElementPlaces(n.elem)
 			pl.members = append(pl.members, n)
 		case kindU2:
 			pl.collect(n.fields)
@@ -69,7 +72,8 @@ func (pl *place) collect(nodes []*node) {
 		case kindGroup:
 			if len(n.fields) > 0 {
 				n.inner = buildPlace(n.fields)
-				pl.nested = true
+				// A nested row has a scope of its own; the members of other groups share this one.
+				pl.nested = pl.nested || !n.nested
 			}
 			pl.members = append(pl.members, n)
 		case kindFlagBit:
@@ -79,6 +83,16 @@ func (pl *place) collect(nodes []*node) {
 		case kindFlags:
 			pl.collect(n.flat)
 		}
+	}
+}
+
+// buildElementPlaces makes the place of the nested row a list or dict element ends in.
+func buildElementPlaces(e *node) {
+	switch {
+	case e.kind == kindGroup && len(e.fields) > 0:
+		e.inner = buildPlace(e.fields)
+	case e.kind == kindList || e.kind == kindDict:
+		buildElementPlaces(e.elem)
 	}
 }
 
@@ -140,27 +154,28 @@ func placeBinding(pl *place) (*accessor, error) {
 // members are not bound.
 func checkGroupBindings(pl *place) error {
 	for _, g := range pl.members {
-		if g.inner == nil {
+		rp := rowPlace(g)
+		if rp == nil {
 			continue
 		}
-		inner, err := placeBinding(g.inner)
+		inner, err := placeBinding(rp)
 		if err != nil {
 			return err
 		}
 		switch {
 		case g.acc == nil && inner != nil:
-			at := firstBound(g.inner)
+			at := firstBound(rp)
 			return schemeErr(at.id, at.name, "bound to row type %v, but its %s is not bound", inner.rowType, ownerLabel(g))
-		case g.acc != nil && inner == nil && len(g.inner.members) > 0:
-			at := g.inner.members[0]
+		case g.acc != nil && inner == nil && len(rp.members) > 0:
+			at := rp.members[0]
 			return schemeErr(at.id, at.name, "not bound to row type %v (the row of %s); bind every value field "+
 				"of a scheme, or none", g.acc.childType, ownerLabel(g))
 		case g.acc != nil && inner != nil && inner.rowType != g.acc.childType:
-			at := firstBound(g.inner)
+			at := firstBound(rp)
 			return schemeErr(at.id, at.name, "bound to row type %v, but its %s is bound to %v",
 				inner.rowType, ownerLabel(g), g.acc.childType)
 		}
-		if err := checkGroupBindings(g.inner); err != nil {
+		if err := checkGroupBindings(rp); err != nil {
 			return err
 		}
 	}
@@ -180,6 +195,9 @@ func firstBound(pl *place) *node {
 func ownerLabel(n *node) string {
 	if isRound(n) {
 		return fmt.Sprintf("%s %d", kindLabel(n), n.id)
+	}
+	if n.kind == kindList || n.kind == kindDict {
+		return kindLabel(n) + " " + n.name
 	}
 	return "group " + n.name
 }

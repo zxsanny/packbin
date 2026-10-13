@@ -6,22 +6,25 @@ type flagBitRef struct {
 	bit    int
 	field  *node
 	values map[string]any
+	// nested: the bit sits in a nested row, whose references read what that row has written, which
+	// is nothing before the row is packed.
+	nested bool
 }
 
 // collectFlagBits finds the bits of the flag byte tag among fields, at any depth of the scope (a
 // round is a scope of its own, so its bits belong to a byte read in it).
-func collectFlagBits(fields []*node, tag *flagTag, values map[string]any, out []flagBitRef) []flagBitRef {
+func collectFlagBits(fields []*node, tag *flagTag, values map[string]any, nested bool, out []flagBitRef) []flagBitRef {
 	for _, f := range fields {
 		switch f.kind {
 		case kindFlagBit:
 			if f.tag == tag {
-				out = append(out, flagBitRef{bit: f.bit, field: f.field, values: values})
+				out = append(out, flagBitRef{bit: f.bit, field: f.field, values: values, nested: nested})
 			}
-			out = collectFlagBits([]*node{f.field}, tag, values, out)
+			out = collectFlagBits([]*node{f.field}, tag, values, nested, out)
 		case kindWhen:
-			out = collectFlagBits(f.fields, tag, values, out)
+			out = collectFlagBits(f.fields, tag, values, nested, out)
 		case kindGroup:
-			out = collectFlagBits(f.fields, tag, groupValues(values, f), out)
+			out = collectFlagBits(f.fields, tag, groupValues(values, f), nested || f.nested, out)
 		}
 	}
 	return out
@@ -161,6 +164,9 @@ func countNeverWritten(f *node, values, wrote map[string]any) bool {
 		}
 		return anyNeverWritten(f.fields, values, wrote)
 	case kindGroup:
+		if f.nested {
+			wrote = map[string]any{}
+		}
 		return anyNeverWritten(f.fields, groupValues(values, f), wrote)
 	case kindFlags:
 		return anyNeverWritten(f.fields, values, wrote)
@@ -202,8 +208,12 @@ func droppedBody(f *node, values, wrote map[string]any) (*node, error) {
 // flagValueFor is the byte a split flag byte writes: a bit for each member on where the byte sits.
 func flagValueFor(root scopeRoot, tag *flagTag, wrote map[string]any) (byte, error) {
 	var flags byte
-	for _, b := range collectFlagBits(root.fields, tag, root.values, nil) {
-		on, err := bitOn(b.field, b.values, wrote)
+	for _, b := range collectFlagBits(root.fields, tag, root.values, false, nil) {
+		w := wrote
+		if b.nested {
+			w = map[string]any{}
+		}
+		on, err := bitOn(b.field, b.values, w)
 		if err != nil {
 			return 0, err
 		}

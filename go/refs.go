@@ -30,9 +30,18 @@ func bindReferences(nodes []*node, scope refScope, path []string) ([]*node, erro
 
 func bindRef(n *node, scope refScope, path []string) (*node, error) {
 	switch n.kind {
-	case kindInt, kindFloat, kindBytes, kindBool, kindSlot:
+	case kindInt, kindFloat, kindBytes, kindBool, kindSlot, kindUtf8:
 		scope[n.id] = declared{n, path}
 		return n, nil
+	case kindList, kindDict:
+		// An element is a scope of its own, closed in both directions.
+		c := *n
+		elems, err := bindReferences([]*node{n.elem}, refScope{}, nil)
+		if err != nil {
+			return nil, err
+		}
+		c.elem = elems[0]
+		return &c, nil
 	case kindSized, kindBits, kindPacked:
 		c := *n
 		if err := bindCount(&c, scope); err != nil {
@@ -75,11 +84,14 @@ func bindRef(n *node, scope refScope, path []string) (*node, error) {
 		return &c, nil
 	case kindFlags, kindGroup, kindU2:
 		c := *n
-		inner := path
-		if n.kind == kindGroup {
+		inner, innerScope := path, scope
+		switch {
+		case n.kind == kindGroup && n.nested:
+			inner, innerScope = nil, refScope{}
+		case n.kind == kindGroup:
 			inner = append(slices.Clip(path), n.name)
 		}
-		fields, err := bindReferences(n.fields, scope, inner)
+		fields, err := bindReferences(n.fields, innerScope, inner)
 		if err != nil {
 			return nil, err
 		}

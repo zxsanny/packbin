@@ -47,6 +47,9 @@ func NewScheme(typeNumber int, fields ...Field) (*Scheme, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := checkElements(bound); err != nil {
+		return nil, err
+	}
 	top := buildPlace(bound)
 	row, err := checkBinding(top)
 	if err != nil {
@@ -80,6 +83,11 @@ func checkNodes(nodes []*node, inU2 bool) error {
 				return err
 			}
 		}
+		if n.elem != nil {
+			if err := checkNodes([]*node{n.elem}, false); err != nil {
+				return err
+			}
+		}
 		if err := checkNodes(n.fields, n.kind == kindU2); err != nil {
 			return err
 		}
@@ -91,11 +99,16 @@ func checkNodes(nodes []*node, inU2 bool) error {
 func validateFieldIDs(nodes []*node, next int) (int, error) {
 	for _, n := range nodes {
 		switch n.kind {
-		case kindInt, kindFloat, kindBytes, kindBool, kindSized, kindBits, kindPacked, kindSlot:
+		case kindInt, kindFloat, kindBytes, kindBool, kindSized, kindBits, kindPacked, kindSlot, kindUtf8:
 			if n.id != next {
 				return 0, schemeErr(n.id, n.name, "field id: expected %d, got %d", next, n.id)
 			}
 			next++
+		case kindList, kindDict:
+			// An element numbers its fields from 0 in a scope of its own, and the list takes no id.
+			if _, err := validateFieldIDs([]*node{n.elem}, 0); err != nil {
+				return 0, err
+			}
 		case kindU2:
 			var err error
 			if next, err = validateFieldIDs(n.fields, next); err != nil {
@@ -106,7 +119,22 @@ func validateFieldIDs(nodes []*node, next int) (int, error) {
 			if next, err = validateFieldIDs([]*node{n.field}, next); err != nil {
 				return 0, err
 			}
-		case kindWhen, kindFlags, kindGroup, kindRepeat, kindTimes:
+		case kindGroup:
+			if n.nested {
+				// A nested row numbers its members from 0 and takes no id of the row around it.
+				if _, err := validateFieldIDs(n.fields, 0); err != nil {
+					return 0, err
+				}
+				continue
+			}
+			if n.id != next {
+				return 0, schemeErr(n.id, "", "%s anchor: expected %d, got %d", kindLabel(n), next, n.id)
+			}
+			var err error
+			if next, err = validateFieldIDs(n.fields, next); err != nil {
+				return 0, err
+			}
+		case kindWhen, kindFlags, kindRepeat, kindTimes:
 			if n.id != next {
 				return 0, schemeErr(n.id, "", "%s anchor: expected %d, got %d", kindLabel(n), next, n.id)
 			}
@@ -130,6 +158,10 @@ func flatten(nodes []*node) []*node {
 		case kindWhen, kindGroup, kindRepeat, kindTimes:
 			c := *n
 			c.fields = flatten(n.fields)
+			out = append(out, &c)
+		case kindList, kindDict:
+			c := *n
+			c.elem = flatten([]*node{n.elem})[0]
 			out = append(out, &c)
 		default:
 			out = append(out, n)
@@ -227,6 +259,15 @@ func bindBitsOne(n *node, seen map[*flagTag]*flagRead, met map[*flagTag]int) (*n
 			}
 			c.fields[i] = b
 		}
+		return &c, nil
+	case kindList, kindDict:
+		// An element is a scope of its own: it sees no flag byte of the row around it.
+		c := *n
+		elem, err := bindBitsOne(n.elem, map[*flagTag]*flagRead{}, met)
+		if err != nil {
+			return nil, err
+		}
+		c.elem = elem
 		return &c, nil
 	case kindWhen, kindGroup, kindRepeat, kindTimes:
 		// A when body sees the bytes read before it; a round is a scope of its own; a group is

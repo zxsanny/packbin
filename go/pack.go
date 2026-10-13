@@ -90,7 +90,7 @@ func written(wrote map[string]any, ref string) any {
 func (p *packer) fields(fields []*node, root scopeRoot, values, wrote map[string]any) error {
 	for _, f := range fields {
 		switch f.kind {
-		case kindInt, kindFloat, kindBytes:
+		case kindInt, kindFloat, kindBytes, kindUtf8:
 			v, ok := values[f.name]
 			if !ok {
 				return packErr(f.id, f.name, "missing %s", f.name)
@@ -99,6 +99,10 @@ func (p *packer) fields(fields []*node, root scopeRoot, values, wrote map[string
 				return err
 			}
 			wrote[f.name] = v
+		case kindList, kindDict:
+			if err := p.collection(f, values[f.name]); err != nil {
+				return err
+			}
 		case kindBool:
 			// Reached only through a set flag bit: the bit is the value, nothing follows it.
 			wrote[f.name] = true
@@ -134,7 +138,11 @@ func (p *packer) fields(fields []*node, root scopeRoot, values, wrote map[string
 			// A mark is reached only through a set flag bit: the bit is the value. A group with members
 			// writes them from its own values; a group that is not given has none, so each required
 			// member is missing.
-			if len(f.fields) > 0 {
+			if len(f.fields) > 0 && f.nested {
+				if err := p.nestedRow(f, groupValues(values, f)); err != nil {
+					return err
+				}
+			} else if len(f.fields) > 0 {
 				if err := p.fields(f.fields, root, groupValues(values, f), wrote); err != nil {
 					return err
 				}
@@ -217,6 +225,12 @@ func (p *packer) writeValue(f *node, v any) error {
 		} else {
 			p.out = appendUint(p.out, math.Float64bits(x), 8, f.bigEndian)
 		}
+	case kindUtf8:
+		s, ok := v.(string)
+		if !ok {
+			return packErr(f.id, f.name, "expected a string for utf8, got %s", typeName(v))
+		}
+		return p.writeString(f.id, f.name, s)
 	case kindBytes:
 		raw, ok := v.([]byte)
 		if !ok {

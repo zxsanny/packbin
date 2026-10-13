@@ -21,6 +21,8 @@ func checkPresenceMarks(nodes []*node, onBit bool) error {
 			err = checkPresenceMarks(n.fields, true)
 		case kindWhen, kindGroup, kindRepeat, kindTimes:
 			err = checkPresenceMarks(n.fields, false)
+		case kindList, kindDict:
+			err = checkPresenceMarks([]*node{n.elem}, false)
 		}
 		if err != nil {
 			return err
@@ -54,11 +56,20 @@ func checkMemberNames(nodes []*node) error {
 		for _, n := range nodes {
 			var err error
 			switch n.kind {
-			case kindInt, kindFloat, kindBytes, kindBool, kindSized, kindBits, kindPacked, kindSlot:
+			case kindInt, kindFloat, kindBytes, kindBool, kindSized, kindBits, kindPacked, kindSlot, kindUtf8:
 				err = declare(n, conditional)
+			case kindList, kindDict:
+				// An element is a row of its own, with the same rules.
+				if err = declare(n, conditional); err == nil {
+					err = checkMemberNames(elementScope(n.elem))
+				}
 			case kindGroup:
 				if err = declare(n, conditional); err == nil {
-					err = walk(n.fields, conditional)
+					if n.nested {
+						err = checkMemberNames(n.fields)
+					} else {
+						err = walk(n.fields, conditional)
+					}
 				}
 			case kindWhen:
 				err = walk(n.fields, true)

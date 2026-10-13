@@ -1,5 +1,7 @@
 package packbin
 
+import "reflect"
+
 // mapValues is a map row as the walker reads it: each present value normalized, a group's value a
 // map of its own read the same way, and a round's list of each name a []any of normalized entries
 // (nil where absent; a group's entries are maps). A value of a group's member is read from the
@@ -154,6 +156,8 @@ func typedValues(pl *place, row any) map[string]any {
 		}
 		if n.inner != nil {
 			v = typedValues(n.inner, v)
+		} else if n.kind == kindList || n.kind == kindDict {
+			v = toWalk(n, reflect.ValueOf(v))
 		}
 		values[n.name] = v
 	}
@@ -188,7 +192,7 @@ func typedRoundValues(r *node, v any, present bool, values map[string]any) {
 // of the Go type unpack gives that field, so a name two when branches declare with different kinds
 // fills only the member of the branch that was read. reached are the rounds unpack read, so a round
 // read with 0 rounds gives an empty slice and one not read (a clear bit, a false when) a nil slice.
-func fillRow(pl *place, row any, values map[string]any, reached map[*node]bool) {
+func fillRow(pl *place, row any, values map[string]any, reached map[reachKey]bool) {
 	for _, n := range pl.members {
 		if isRound(n) {
 			fillRounds(n, row, values, reached)
@@ -202,20 +206,22 @@ func fillRow(pl *place, row any, values map[string]any, reached map[*node]bool) 
 			child := n.acc.newChild()
 			fillRow(n.inner, child, v.(map[string]any), reached)
 			v = child
+		} else if n.kind == kindList || n.kind == kindDict {
+			v = fromWalk(n, v, n.acc.valueType, reached).Interface()
 		}
 		n.acc.set(row, v)
 	}
 }
 
 // fillRounds stores one element of the round's slice for each round unpack read.
-func fillRounds(r *node, row any, values map[string]any, reached map[*node]bool) {
+func fillRounds(r *node, row any, values map[string]any, reached map[reachKey]bool) {
 	count := 0
 	for _, n := range r.shape.names {
 		if list, ok := values[n.name].([]any); ok {
 			count = max(count, len(list))
 		}
 	}
-	if count == 0 && !reached[r] {
+	if count == 0 && !reached[reachOf(values, r)] {
 		return
 	}
 	rows := make([]any, count)
@@ -248,6 +254,15 @@ func unpackedAs(n *node, v any) bool {
 		return ok
 	case kindBytes, kindSized, kindBits, kindPacked:
 		_, ok := v.([]byte)
+		return ok
+	case kindUtf8:
+		_, ok := v.(string)
+		return ok
+	case kindList:
+		_, ok := v.([]any)
+		return ok
+	case kindDict:
+		_, ok := v.(map[string]any)
 		return ok
 	case kindSlot:
 		_, ok := v.(uint8)

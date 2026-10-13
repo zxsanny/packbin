@@ -13,7 +13,7 @@ func normalize(v any) (any, bool) {
 	switch x := v.(type) {
 	case nil:
 		return nil, false
-	case uint8, uint16, uint32, uint64, uint, int8, int16, int32, int64, int, float32, float64, bool:
+	case uint8, uint16, uint32, uint64, uint, int8, int16, int32, int64, int, float32, float64, bool, string:
 		return v, true
 	case []byte:
 		return x, x != nil
@@ -43,6 +43,8 @@ func normalize(v any) (any, bool) {
 		return derefOf(x)
 	case *bool:
 		return derefOf(x)
+	case *string:
+		return derefOf(x)
 	}
 	return normalizeReflect(reflect.ValueOf(v))
 }
@@ -71,6 +73,8 @@ func normalizeReflect(rv reflect.Value) (any, bool) {
 		return rv.Float(), true
 	case reflect.Bool:
 		return rv.Bool(), true
+	case reflect.String:
+		return rv.String(), true
 	case reflect.Slice:
 		if rv.IsNil() {
 			return nil, false

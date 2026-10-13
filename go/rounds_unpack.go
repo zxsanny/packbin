@@ -1,5 +1,18 @@
 package packbin
 
+import "reflect"
+
+// reachKey is a round and the row it is read into, so a round in each item of a list or dict, and in
+// each nested row, is told apart. A row is a map made for one place, so its address names it.
+type reachKey struct {
+	row uintptr
+	r   *node
+}
+
+func reachOf(values map[string]any, r *node) reachKey {
+	return reachKey{row: reflect.ValueOf(values).Pointer(), r: r}
+}
+
 // unreadable is the error of a count that is absent, negative or too large to read: the counted
 // field, nothing more needed, the bytes left where it starts.
 func (r *reader) unreadable(id int, name string) *Error {
@@ -74,9 +87,9 @@ func (r *reader) counted(f *node, values map[string]any) error {
 // round, nil where the round skipped it (none when there was no round).
 func (r *reader) rounds(f *node, count int, values map[string]any) error {
 	if r.reached == nil {
-		r.reached = map[*node]bool{}
+		r.reached = map[reachKey]bool{}
 	}
-	r.reached[f] = true
+	r.reached[reachOf(values, f)] = true
 	savedSeen, savedSplit := r.seen, r.split
 	defer func() { r.seen, r.split = savedSeen, savedSplit }()
 	var rows []map[string]any

@@ -59,6 +59,23 @@
 // E; a nil slice is no value, an empty slice 0 rounds, and a typed Times refuses a count other than
 // the elements. Typed Unpack gives an empty slice for 0 rounds read and nil for a round not read.
 //
+// # Strings, lists, dictionaries and nested rows
+//
+// A Utf8 value is a string (a *string or a named string type too). A List or Dict element is one
+// field with ids from 0: a scalar, Utf8, another List or Dict, a Nested (or a Flags, which is held as
+// one), but not an anchored Group. In a map row a list is a []any or any slice but []byte (a byte run,
+// never a list), a dict a map[string]any or any map with string keys, and an item of a Nested or Flags element a
+// map[string]any; unpack gives []any, map[string]any and a map[string]any per item. A typed row binds a
+// []E and a map[string]E, E a scalar type, a struct (or pointer to a struct) whose fields are bound
+// with Bind, or a slice or map again; a nil slice or map is no value and an empty one a value with 0
+// items. A dict key is a key, never a name of the row. A Nested row, like a Group, is a map[string]any
+// under its name, but its members have ids, references and names of their own, so they may repeat a name
+// of the row around it; the values of its members come from its own map or struct. In a Repeat or
+// Times round a List or Dict name takes one list or map a round (a lone map is refused). Pack refuses a
+// string that is not valid UTF-8, a string over 65535 bytes, and a list or dict over 65535 items;
+// unpack refuses a string or a dict key that is not valid UTF-8, a dict key given twice, and an element
+// that reads no byte.
+//
 // # Pack and unpack
 //
 //	func Pack(s *Scheme, row any) ([]byte, error)
@@ -75,8 +92,7 @@
 //
 // # Field constructors
 //
-// The whole API is listed here. The constructors marked (later) are not in this version yet; they
-// keep these names and signatures when they come.
+// The whole API is listed here.
 //
 //	U8, U16, U32, U64, I8, I16, I32, I64(id int, name string) Field
 //	                                   integers, little-endian
@@ -121,10 +137,15 @@
 //	                                   a list of 0 and 1, count items, low bits first
 //	Packed(width, id int, name string, countID, bias int) Field
 //	                                   a 1-bit or 2-bit list, count plus bias (0 or -1) items
-//	Nested(name string, members ...Field) Field               (later) a nested row, ids from 0
-//	Utf8(id int, name string) Field                           (later) a u16 byte count, then UTF-8
-//	List(name string, element Field) Field                    (later) a u16 count, then the elements
-//	Dict(name string, element Field) Field                    (later) a u16 pair count, keys in byte order
+//	Utf8(id int, name string) Field    a u16 byte count (at most 65535), then valid UTF-8
+//	Nested(name string, members ...Field) Field
+//	                                   a nested row under name: ids from 0, references and names of
+//	                                   its own; a map[string]any in a map row, a struct in a typed row
+//	List(name string, element Field) Field
+//	                                   a u16 count, then the elements; takes no id
+//	Dict(name string, element Field) Field
+//	                                   a u16 pair count, then key (a Utf8) and element, keys in byte
+//	                                   order; takes no id
 //
 // Also to come, with these names: (*Scheme).WithLimits(Limits) (*Scheme, error) with the Limits
 // fields MaxRounds, MaxSlots and MaxBytes, the error kind TooMany, and PackSession (LoadSession,

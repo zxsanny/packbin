@@ -83,6 +83,9 @@ func checkRoundNesting(nodes []*node, inRound bool) error {
 			err = checkRoundNesting(n.fields, inRound)
 		case kindFlagBit:
 			err = checkRoundNesting([]*node{n.field}, inRound)
+		case kindList, kindDict:
+			// An element starts outside any round.
+			err = checkRoundNesting([]*node{n.elem}, false)
 		}
 		if err != nil {
 			return err
@@ -108,6 +111,8 @@ func checkRoundBodies(nodes []*node) error {
 			err = checkRoundBodies(n.fields)
 		case kindFlagBit:
 			err = checkRoundBodies([]*node{n.field})
+		case kindList, kindDict:
+			err = checkRoundBodies([]*node{n.elem})
 		}
 		if err != nil {
 			return err

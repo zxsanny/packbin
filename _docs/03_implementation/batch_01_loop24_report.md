@@ -65,3 +65,21 @@ API added: `Repeat`, `Times`, `Sized`, `U2`/`Slot`, `Bits`, `Packed`; `Bind` tak
 | 20 | AZ-2442 | `[]byte` is a byte run, never a round list; `[]uint8{1,2}` for a u8 member in a round is refused (use `[]any` or `[]int`) | README (AZ-2451) | clear |
 | 21 | AZ-2442 | `reached` is keyed per round node; per list element it must be scoped | AZ-2443 spec amended | clear |
 | 22 | AZ-2442 | A huge `times` count with a lone scalar loops on pack until AZ-2444 | AZ-2444 | clear |
+
+## Batch 01 part 4 (AZ-2443, wave 2)
+
+| Worker | Spec | Result |
+|--------|------|--------|
+| go chain | AZ-2443 (utf8, list, dict, nested rows) | about 165 tests + 741 subtests pass under `-race`; gofmt/vet clean; coverage 96.7%; files <= 320 lines; about 78k random schemes: 0 panics. Parent re-ran the Go suite: ok |
+
+API added: `Utf8(id, name)`, `Nested(name, members...)`, `List(name, element)`, `Dict(name, element)`; `Bind` takes `string`/`*string`, `[]E`, `map[string]E`, a struct or `*struct` for a `Nested`/`Flags` element. A list or dict has no id; an element is its own scope for ids, references, names and flag bytes; `UnpackMap` gives `string`, `[]any`, `map[string]any`. `reached` is keyed by (row map, round node).
+
+| # | Spec ref | Finding | Proposed handling | Status |
+|---|----------|---------|-------------------|--------|
+| 23 | AZ-2443 AC-3, Go-4 | A `Nested` row has its own name scope: member names may repeat an outer name (TypeScript's unanchored group flattens names and refuses "declared inside a group and outside it"; C# also gives a nested row its own scope). The anchored `Group` still refuses a shared name | README line (AZ-2451); probe at assessment | clear |
+| 24 | AZ-2443 | `u2` or a `Slot` as a list/dict element: TypeScript builds (the slot name becomes the element name; with 2 slots the second reads from the outer row); Go refuses every `u2` element | assessment: a refused-vs-built difference, owner row if a single-slot `u2` should build | unclear |
+| 25 | AZ-2443 | `[]byte` for a `List` in a map row is refused (TypeScript: a `Uint8Array` is not an Array); a typed `[]byte` member bound to `List(U8)` works | README (AZ-2451) | clear |
+| 26 | AZ-2443 | Pack of a Go string that is not valid UTF-8 is refused naming the field (JS strings cannot hold it); unpack refuses invalid UTF-8 in a string or dict key as TypeScript, short-packet shape, needed 0 | none | clear |
+| 27 | AZ-2443 | A list or dict inside a lone group map given once for every round is refused (TypeScript slices per round) | Go-4 row 16 | clear |
+| 28 | AZ-2443 | Items of a `Nested`/`Flags` element in a map row are `map[string]any` only (TypeScript: any object); dict maps accept any map with string-kinded keys; keys sort in UTF-8 byte order | none | clear |
+| 29 | AZ-2443 | `-race -cover` together fails the AC-7 speed test on this host, also on a pristine `git archive HEAD` copy; plain and `-race` pass (plain 111/105 ms) | step 11 runs `-race` only (run-suite) | clear |
