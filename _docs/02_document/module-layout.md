@@ -190,6 +190,21 @@ A single `src/`, `crates/`, or `packages/` tree would put seven languages in one
 
 > See ADR 001_runtime-primitives-no-generator, ADR 004 (Go ships as a git tag, loop 24).
 
+### Component: swift
+
+- **Epic**: AZ-2223
+- **Directory**: `swift/` (library target `Packbin`; manifest `Package.swift` at the repository root, `swift-tools-version: 5.9`, iOS 15, macOS 12; installed from the `vX.Y.Z` tag, ADR-005)
+- **Public API**:
+  - the `public` declarations in `swift/Sources/Packbin/` (one module `Packbin`)
+- **Internal (do NOT import from other components)**:
+  - `internal` declarations in `swift/Sources/Packbin/`; tests `swift/Tests/PackbinTests/`, fuzz and hostile loaders under the test target
+  - Loop 26 (AZ-2223): created
+- **Owns (exclusive write during implementation)**: `swift/**`, `Package.swift`, `Package.resolved`
+- **Imports from**: none (Swift standard library; CryptoKit on Apple platforms, `swift-crypto` elsewhere)
+- **Consumed by**: Swift programs
+
+> See ADR 001_runtime-primitives-no-generator, ADR 005 (Swift installs from the root `Package.swift`, loop 26).
+
 ## Shared / Cross-Cutting
 
 No shared code package. The library does not log, authenticate, or load configuration. Each package implements the connection session in its own public entry. None imports another.
@@ -231,11 +246,11 @@ No shared code package. The library does not log, authenticate, or load configur
 
 ## Allowed Dependencies (layering)
 
-The seven packages are peers. None imports another.
+The eight packages are peers. None imports another.
 
 | Layer | Components | May import from |
 |-------|------------|-----------------|
-| 1. Packages | csharp, typescript, python, rust, cpp, java, go | none |
+| 1. Packages | csharp, typescript, python, rust, cpp, java, go, swift | none |
 | 0. Fixture and workflows | fixtures, .github/workflows | none |
 
 ## Layout Conventions (reference)
@@ -249,3 +264,4 @@ The seven packages are peers. None imports another.
 | C++ | `cpp/` | `cpp/include/packbin/`, `cpp/src/core/` | the headers in `cpp/include/packbin/` | `cpp/tests/core/`, `cpp/tests/compile-fail/` |
 | Java | `java/` | `java/src/main/java/packbin/` | `java/src/main/java/packbin/Packbin.java` | `java/src/test/` |
 | Go | `go/` | `go/` (one package `packbin`) | exported identifiers in `go/*.go` | `go/*_test.go` |
+| Swift | `swift/` (manifest `Package.swift` at the root) | `swift/Sources/Packbin/` | `public` declarations of module `Packbin` | `swift/Tests/PackbinTests/` |

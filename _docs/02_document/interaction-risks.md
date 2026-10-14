@@ -72,6 +72,20 @@ Go package (loop 24, AZ-2222; decompose 1.8):
 | The hostile checker counts "Go" inside another word and passes a section that omits Go | AZ-2446 AC-3 | AZ-2446 |
 | The README Go example and its `Example` test drift apart, so the README prints bytes the test does not check | AZ-2451 AC-1 | AZ-2451 |
 
+Swift package (loop 26, AZ-2223; decompose 1.8):
+
+| Risk | AC | Owner |
+|------|----|-------|
+| Swift agrees with its own tests but not with a peer on a ring kind (bytes cross a language seam) | AZ-2522 AC-1, AC-2 | AZ-2522 |
+| Swift follows spec text where TypeScript and the others agree otherwise (a parity row drifts) | AZ-2520 AC-1, AC-2 | AZ-2520 |
+| A Swift golden mismatch still lets the other registries publish | AZ-2523 AC-1 | AZ-2523 |
+| A re-run moves, creates or deletes a tag | AZ-2523 AC-3 | AZ-2523 |
+| The hostile checker counts "Swift" inside another word and passes a section that omits Swift | AZ-2519 AC-3 | AZ-2519 |
+| The README Swift example and its test drift apart, so the README prints bytes the test does not check | AZ-2524 AC-1 | AZ-2524 |
+| A hostile packet traps the Swift process (overflow, index, force unwrap) instead of throwing | AZ-2519 AC-1, AZ-2517 AC-2 | AZ-2519 |
+| A feature newer than Swift 5.9 compiles on `swift:6` and fails for a 5.9 consumer | AZ-2521 AC-4 | AZ-2521 |
+| The root `Package.swift` breaks resolution for consumers (an unsafe flag, a wrong path) | AZ-2523 AC-2 | AZ-2523 |
+
 ## Deferred
 
 None.

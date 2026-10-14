@@ -268,3 +268,20 @@ AZ-2472 through AZ-2479 are loop 25 (owner batch 2026-10-14 on the loop 24 hando
 | AZ-2477 | run_suite_missing_manifest_fail | 2 | None | |
 | AZ-2478 | split_flag_false_when_probe | 3 | None | |
 | AZ-2479 | readme_cpp_clear_bit_unbound | 1 | None | |
+
+AZ-2513 through AZ-2524 are loop 26, the Swift package (epic AZ-2223; owner decisions S-1 to S-5 and the five rulings of 2026-10-14; 47 points). `swift/` has one writer at a time: AZ-2513, then AZ-2514, AZ-2515, AZ-2516, AZ-2517, AZ-2519, AZ-2520, with AZ-2518 (session; also writes `Package.swift` and `Package.resolved`) after AZ-2513 and not beside another `swift/` writer. AZ-2521 (CI suite) runs beside the chain after AZ-2513; AZ-2522 (ring) after AZ-2518; AZ-2523 (release, ADR-005) after AZ-2521 and AZ-2522; AZ-2524 last. AZ-2068 stays out. No tag is pushed; the first tag after this loop needs the owner's explicit go and the F44 ruleset.
+
+| Task | Name | Complexity | Dependencies | Epic |
+|------|------|-----------|-------------|------|
+| AZ-2513 | swift_core | 5 | None | AZ-2223 |
+| AZ-2514 | swift_scheme_checks | 5 | AZ-2513 | AZ-2223 |
+| AZ-2515 | swift_rounds | 5 | AZ-2514 | AZ-2223 |
+| AZ-2516 | swift_collections | 5 | AZ-2515 | AZ-2223 |
+| AZ-2517 | swift_limits | 3 | AZ-2516 | AZ-2223 |
+| AZ-2518 | swift_session | 5 | AZ-2513 | AZ-2223 |
+| AZ-2519 | swift_hostile_vectors | 3 | AZ-2517, AZ-2518 | AZ-2223 |
+| AZ-2520 | swift_parity_rows | 3 | AZ-2519 | AZ-2223 |
+| AZ-2521 | swift_ci_suite | 3 | AZ-2513 | AZ-2223 |
+| AZ-2522 | swift_ring | 3 | AZ-2518 | AZ-2223 |
+| AZ-2523 | swift_release | 5 | AZ-2521, AZ-2522 | AZ-2223 |
+| AZ-2524 | swift_readme | 2 | AZ-2520, AZ-2523 | AZ-2223 |
