@@ -16,10 +16,11 @@ import Testing
         #expect(manifest.contains(".iOS(.v15)") && manifest.contains(".macOS(.v12)"))
         #expect(manifest.components(separatedBy: ".library(").count - 1 == 1)
         #expect(manifest.contains(#".library(name: "Packbin", targets: ["Packbin"])"#))
-        #expect(manifest.contains(#".target(name: "Packbin", path: "swift/Sources/Packbin")"#))
+        #expect(manifest.contains(".target(\n            name: \"Packbin\","))
+        #expect(manifest.contains(#"path: "swift/Sources/Packbin")"#))
     }
 
-    @Test func manifest_hasNoDependencyUnsafeFlagOrCTarget() throws {
+    @Test func manifest_hasNoUnsafeFlagOrCTarget() throws {
         // Arrange
         let manifest = try repositoryFile("Package.swift")
         let sources = repositoryRoot.appendingPathComponent("swift/Sources")
@@ -29,7 +30,6 @@ import Testing
         let cFiles = files.filter { file in [".c", ".h", ".m", ".cpp", ".cc", ".mm"].contains { file.hasSuffix($0) } }
 
         // Assert
-        #expect(!manifest.contains(".package("), "package dependencies 0")
         #expect(!manifest.contains("unsafeFlags"))
         #expect(!manifest.contains("cSettings") && !manifest.contains("cxxSettings") && !manifest.contains("systemLibrary"))
         #expect(!files.isEmpty && cFiles.isEmpty, "C targets 0")

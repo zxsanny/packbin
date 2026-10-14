@@ -26,4 +26,8 @@ Collected from the worker reports (`_docs/03_implementation/batch_NN_loop26_repo
 | AZ-2517 | refusing round name for the split-bits shape in unpack | the first name the round holds (`a`) | the split flag byte `m` | as Go; the hostile README says the label is not asserted |
 | AZ-2517 | a limit value | any `Int` from 1; message "expected a positive integer, got N" | refuses 2^53 and fractions | no such values in Swift; as C#, Python, Go |
 | AZ-2517 | unpack refusal over a limit | kind `.tooMany`, needed 0 | the interim short-packet shape with needed 0 | as Go; both allowed by the `limit` terms |
+| AZ-2518 | unpack with an unusable scheme list (none, or a repeated type number) | spends a packet position, then refuses | Go: refuses without spending; TypeScript and C#: spend one | Swift follows TypeScript and C# |
+| AZ-2518 | ChaCha20 block counter / packet position limits | refuses data needing a block after 2^32-1 and position 2^64-1 (unreachable for any real payload) | TypeScript wraps the block counter; Go refuses over 2^38 bytes and wraps its uint64 position | documented |
+| AZ-2518 | session API shape | throws, with Go's error kinds (setup failures `.badValue` "session: ..."; pack before open `.packError`; unpack before open `.short`, needed 1, left 0) | returns null/false (TypeScript, C#); errors as values (Go) | language idiom |
+| AZ-2518 | dependency on Apple platforms | SwiftPM resolves and clones swift-crypto and swift-asn1 on every platform; only linking is conditional (0 objects built on macOS) | — | README (AZ-2524) must say so |
 
