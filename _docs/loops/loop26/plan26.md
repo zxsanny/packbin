@@ -72,6 +72,13 @@ Workers: one `general-purpose` agent per task; brief carries ticket id, spec pat
 
 Each task's own ACs and test table; the one total run is `scripts/loop-tests.sh`. Swift pins SW-1 to SW-16 as `task_map.md` assigns them.
 
+### Carried from wave 2 (parent decisions, 2026-10-14)
+
+- AZ-2521 split the 5.9 compile into its own service `run-suite.sh swift-min` (accepted: a `swift:6` container cannot start `swift:5.9`); two Swift report rows per CI run.
+- `scripts/loop-tests.sh` (AZ-2500) has no Swift stage yet: a small parent task before step 11 adds stages and change detection for `swift/**`, `Package.swift`, and the `swift` and `swift-min` services (no ticket needed beyond AZ-2521's scope note; commit under AZ-2521).
+- The dependency check allows 0 or 1 direct dependency until AZ-2518 adds `swift-crypto`; AZ-2518 then switches it to exactly one (one line in `run-suite.sh`).
+- First-CI unknowns (cannot be run here): thread sanitizer under Docker on `ubuntu-latest` (`vm.mmap_rnd_bits`), the scaffold job's 60-minute limit, the SwiftPM cache path, `Foundation` Bool/integer split on Linux. Recorded for the loop 27 handoff.
+
 ### Risks
 
 - Swift traps on hostile input (High): each worker uses checked arithmetic and bounds-checked reads; AZ-2517 and AZ-2519 count traps; the thread-sanitizer and fuzz runs prove it in CI.

@@ -79,6 +79,8 @@ Then unpacks; with the default limit it is refused
 - Local runs are `swift test` at the repository root on the owner's Mac (Swift 6.3.3); Linux runs use `swift:6`. No language feature newer than Swift 5.9.
 - Errors are thrown as the typed `PackbinError`; no trap escapes `pack`, `unpack` or scheme construction on any input. Budget sums (rounds x body width, slots, output bytes) use checked arithmetic: an overflowing sum is a refusal, never a trap.
 
+- From AZ-2521 (loop 26): the CI fuzz step expects a swift-testing suite named `FuzzTests` that reads its duration in seconds from the environment variable `PACKBIN_FUZZ_SECONDS` (default 60 in `run-suite.sh swift`); a run shorter than the asked time fails, and a tree without `FuzzTests` gets a named skip line. The suite is verbose, never quiet.
+
 ## Risks & Mitigation
 
 **Risk 1: Fuzz time in CI**
