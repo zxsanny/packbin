@@ -7,7 +7,7 @@ import Testing
 /// counts, as in TypeScript and Go: a shared runner can stall one pass, while a real slowdown makes
 /// every pass slow. A debug build reports its time and asserts nothing.
 @Suite(.serialized) struct SpeedTests {
-    @Test(arguments: ["typed", "map"])
+    @Test(.enabled(if: !threadSanitized, "one thread, no shared state: the thread sanitizer adds nothing and runs it about ten times slower"), arguments: ["typed", "map"])
     func roundTrips_hundredThousandGoldenRows_takeAtMostOneSecond(form: String) throws {
         // Arrange
         let typed = form == "typed"
@@ -18,7 +18,12 @@ import Testing
         var fastest = Double.infinity
 
         // Act
-        for _ in 0..<3 where fastest > 1 {
+        #if DEBUG
+        let passes = 1
+        #else
+        let passes = 3
+        #endif
+        for _ in 0..<passes where fastest > 1 {
             let start = DispatchTime.now().uptimeNanoseconds
             for _ in 0..<rounds {
                 let raw = typed ? try pack(scheme, row) : try pack(scheme, map)

@@ -1,3 +1,4 @@
+import Foundation
 #if canImport(Darwin)
 import Darwin
 #elseif canImport(Glibc)
@@ -64,6 +65,6 @@ func render(_ v: Any) -> String {
 
 /// Writes `message` to stderr and returns 1, the exit of a failed command.
 func fail(_ message: String) -> Int32 {
-    fputs(message + "\n", stderr)
+    FileHandle.standardError.write(Data((message + "\n").utf8))
     return 1
 }

@@ -143,6 +143,9 @@ private struct Rowish {
         // Arrange: an NSDictionary keeps both keys; a [String: Any] would hold only one.
         let both = NSDictionary(objects: [1, 2], forKeys: ["\u{e9}" as NSString, "e\u{301}" as NSString])
         let scheme = try Scheme(1, .dict("d", .u8(0, "e")))
+        // Linux Foundation decides per process (its hash seed) whether the two keys collide and merge: a dictionary
+        // that already holds one key has nothing left to refuse, so the premise of this test is two kept keys.
+        guard both.count == 2 else { return }
 
         // Act
         let error = packbinError { try pack(scheme, ["d": both]) }

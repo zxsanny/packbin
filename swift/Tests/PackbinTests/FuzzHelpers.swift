@@ -23,9 +23,10 @@ let unpackBound: Double = threadSanitized ? 10 : 1
 
 /// How long one unpack of a mebibyte packet may take: the project bound in a release build. A debug
 /// build reads such a packet several times slower (0.8 s at most on the owner's Mac with the other
-/// suites running, 0.13 s in release), so it gets 3 s.
+/// suites running, 0.13 s in release), so it gets 3 s. The timed mebibyte tests do not run under the thread
+/// sanitizer (15 to 28 s a packet in the Linux container): it finds data races, and these read one thread.
 #if DEBUG
-let mebibyteBound: Double = threadSanitized ? 10 : 3
+let mebibyteBound: Double = 3
 #else
 let mebibyteBound: Double = 1
 #endif

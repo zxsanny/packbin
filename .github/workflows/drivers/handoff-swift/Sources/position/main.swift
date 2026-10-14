@@ -1,5 +1,6 @@
 // Prints the hex of the AC-1 position row (the golden 4001000065cd1d00a3e1110100), as the position
 // programs of the other packages do. ring-swift.sh builds it.
+import Foundation
 #if canImport(Darwin)
 import Darwin
 #elseif canImport(Glibc)
@@ -16,6 +17,6 @@ do {
     let digits = Array("0123456789abcdef")
     print(String(raw.flatMap { [digits[Int($0 >> 4)], digits[Int($0 & 0x0f)]] }))
 } catch {
-    fputs("position: \(error)\n", stderr)
+    FileHandle.standardError.write(Data("position: \(error)\n".utf8))
     exit(1)
 }

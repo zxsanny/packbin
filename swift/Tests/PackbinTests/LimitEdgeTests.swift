@@ -12,7 +12,8 @@ import Testing
         return item
     }
 
-    @Test func packAndUnpack_exactly1048576Slots_packAndUnpackAndOneRoundMoreIsRefused() throws {
+    @Test(.enabled(if: !threadSanitized, "one thread, no shared state: the thread sanitizer adds nothing and runs it about ten times slower"))
+    func packAndUnpack_exactly1048576Slots_packAndUnpackAndOneRoundMoreIsRefused() throws {
         // Arrange: 16 384 items of one 64-slot round each
         let (scheme, packet) = try f10(items: 16_384)
         let (_, over) = try f10(items: 16_385)
@@ -31,7 +32,8 @@ import Testing
     }
 
     /// list xs of 65 535 bytes(256), then bytes tail(253): 3 + 16 776 960 + 253 = 16 777 216 bytes.
-    @Test func packAndUnpack_exactly16MiB_packsAndUnpacksAndOneByteMoreIsRefused() throws {
+    @Test(.enabled(if: !threadSanitized, "one thread, no shared state: the thread sanitizer adds nothing and runs it about ten times slower"))
+    func packAndUnpack_exactly16MiB_packsAndUnpacksAndOneByteMoreIsRefused() throws {
         // Arrange
         let scheme = { (tail: Int) in try Scheme(1, .list("xs", .bytes(0, "x", size: 256)), .bytes(0, "tail", size: tail)) }
         let xs = [Any](repeating: [UInt8](repeating: 7, count: 256), count: 65_535)
@@ -47,7 +49,8 @@ import Testing
         #expect(isPackRefusal(error, "tail", bytesText("tail", 16_777_217, 16_777_216)))
     }
 
-    @Test func unpack_oldWorstPacket_isRefusedAtTheDefaultAndUnpacksWithMaxSlotsRaised() throws {
+    @Test(.enabled(if: !threadSanitized, "one thread, no shared state: the thread sanitizer adds nothing and runs it about ten times slower"))
+    func unpack_oldWorstPacket_isRefusedAtTheDefaultAndUnpacksWithMaxSlotsRaised() throws {
         // Arrange
         let (scheme, packet) = try f10()
         let raised = try scheme.withLimits(maxSlots: 4_194_304)
@@ -63,7 +66,8 @@ import Testing
         #expect(items.count == 65_535 && canon((items.last as? [String: Any])?["n"]) == "UInt8(1)")
     }
 
-    @Test func packAndUnpack_wideRoundWithMaxSlotsRaised_packsAndUnpacksAndTheDefaultRefusesIt() throws {
+    @Test(.enabled(if: !threadSanitized, "one thread, no shared state: the thread sanitizer adds nothing and runs it about ten times slower"))
+    func packAndUnpack_wideRoundWithMaxSlotsRaised_packsAndUnpacksAndTheDefaultRefusesIt() throws {
         // Arrange
         let (scheme, row) = try wideRound()
         let raised = try scheme.withLimits(maxSlots: 4_259_775)
@@ -111,7 +115,7 @@ import Testing
 
     /// TypeScript `round-scope-cost` (AZ-2391): a round and a list item cost the names they hold, not
     /// the fields around them; two sizes in one run, best of five.
-    @Test(arguments: ["times", "list"])
+    @Test(.enabled(if: !threadSanitized, "one thread, no shared state: the thread sanitizer adds nothing and runs it about ten times slower"), arguments: ["times", "list"])
     func pack_roundCost_doesNotGrowWithTheFieldsAroundIt(shape: String) throws {
         // Arrange
         func make(_ fill: Int) throws -> (Scheme, [String: Any]) {

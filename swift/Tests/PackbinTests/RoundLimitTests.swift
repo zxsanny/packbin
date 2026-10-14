@@ -129,7 +129,8 @@ import Testing
 
     /// A round of 37 names (k and 36 behind a when) at one byte a round: round 28 340 would hold
     /// 1 048 580 slots.
-    @Test func unpack_mebibyteOfOneByteRoundsWith37Names_isRefusedAtTheSlotLimitWithinASecond() throws {
+    @Test(.enabled(if: !threadSanitized, "one thread, no shared state: the thread sanitizer adds nothing and runs it about ten times slower"))
+    func unpack_mebibyteOfOneByteRoundsWith37Names_isRefusedAtTheSlotLimitWithinASecond() throws {
         // Arrange
         let members = (0..<36).map { i in i % 2 == 0 ? Field.u8(1 + i, "f\(i)") : Field.u16(1 + i, "f\(i)") }
         let layout = try Scheme(1, .repeat(0, .u8(0, "k"), .when(1, .eq(0, 1), members)))

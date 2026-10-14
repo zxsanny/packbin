@@ -83,7 +83,7 @@ import Testing
 
     /// A mebibyte of one byte (a count of 0, 1 or 255 for every count it reads) reaches the default round
     /// and slot limits of the round schemes, and is read by each scheme within the bound (`mebibyteBound`).
-    @Test(arguments: [UInt8(0), 1, 0xff])
+    @Test(.enabled(if: !threadSanitized, "one thread, no shared state: the thread sanitizer adds nothing and runs it about ten times slower"), arguments: [UInt8(0), 1, 0xff])
     func mebibyteOfOneByte_isReadByEverySchemeWithinTheBound(fill: UInt8) throws {
         // Arrange
         let fuzz = try FuzzRun()
