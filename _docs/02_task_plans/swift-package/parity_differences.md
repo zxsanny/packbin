@@ -36,4 +36,8 @@ Collected from the worker reports (`_docs/03_implementation/batch_NN_loop26_repo
 | AZ-2519 | outcome term `bad_value` from unpack | Swift unpack never throws `.badValue`; an unusable value comes back as `.short` with needed 0 (negative count, invalid UTF-8, count behind a clear flag); the loader reads it as `bad_value` | same shape | as TypeScript and Go; the hostile README says so |
 | AZ-2522 | ring row comparison | by Swift type and value (as Go's `reflect.DeepEqual`) | loose deepEqual | stricter |
 | AZ-2522 | ring repack | the driver repacks only roundflags and roundwhen | — | as Go and TypeScript; bitwhen cannot repack by design |
+| AZ-2520 | a Swift enum case given as a u8 value | refused ("expected an integer for u8, got ParityLevel"); its `rawValue` packs | a numeric enum is a number at runtime and packs | typed API |
+| AZ-2520 | a flat key beside a given group or nested row (`{g:{a:1}, b:2}`) | not read: refused with "missing b", or ignored where the member is not needed (`{k:0,c:3,g:{mode:0}}` packs `0100010000`) | reads the flat key (packs `01010102`; refuses the second row with U11) | extends Go-4 A; Go behaves as Swift; **owner to confirm** (open decision O1) |
+| AZ-2520 | U11 with a shared name in the outer row and the nested row not given (`{k:0,c:3}`) | packs `010000` | Go refuses with U11; TypeScript cannot build the scheme | **owner decides** whether Swift or Go aligns (open decision O2) |
+| AZ-2520 | a string for a bool | refused | clears the bit | Go-1 B, same rule as the documented `1` |
 
