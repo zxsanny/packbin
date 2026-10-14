@@ -1,18 +1,13 @@
 /// Packs a map row: the type number, then the fields in order. A value is read by its field's name;
 /// a missing key or a nil value is no value (only a flag bit can leave one out), a stored 0 is a
 /// value. An integer field takes any Swift integer type whose value fits, a float field any integer
-/// or float, fixed bytes a `[UInt8]` of exactly its size and a bool a `Bool`; a Foundation `NSNumber`
-/// is read as the `Bool`, integer or float it was made from. Any other value (a `Bool` or a `Double`
-/// for an integer, an integer for a bool) is refused. A refused row throws a `PackbinError` of kind
-/// `.packError` naming the field id, and no bytes are returned.
+/// or float, fixed bytes a `[UInt8]` of exactly its size, a bool or an empty group a `Bool`, and a
+/// group with members a `[String: Any]` its members are read from; a Foundation `NSNumber` is read as
+/// the `Bool`, integer or float it was made from. Any other value (a `Bool` or a `Double` for an
+/// integer, an integer for a bool, a group member given outside its group) is refused. A refused row
+/// throws a `PackbinError` of kind `.packError` naming the field id, and no bytes are returned.
 public func pack(_ scheme: Scheme, _ row: [String: Any]) throws -> [UInt8] {
-    let values = presentValues(row)
-    for mark in scheme.marks {
-        guard let v = values[mark.name] else { continue }
-        if case .bool = scalar(v) { continue }
-        throw PackbinError.pack(mark.id, mark.name, "expected a Bool for bool \(mark.name), got \(typeName(v))")
-    }
-    return try packValues(scheme, values)
+    try packValues(scheme, try mapValues(scheme.place, row))
 }
 
 /// Packs a typed row, a value of the type the scheme's fields are bound to with `bind(get:set:)`. A
@@ -20,7 +15,7 @@ public func pack(_ scheme: Scheme, _ row: [String: Any]) throws -> [UInt8] {
 public func pack<Row>(_ scheme: Scheme, _ row: Row) throws -> [UInt8] {
     let box = scheme.binding?.boxRow(row)
     if box == nil, let map = row as? [String: Any] { return try pack(scheme, map) }
-    let first = scheme.members.first
+    let first = scheme.place.members.first?.node
     guard let binding = scheme.binding else {
         throw PackbinError.pack(first?.errorID, first?.name ?? "",
             "a \(typeName(row)) row needs fields bound with bind(get:set:); this scheme packs a [String: Any]")
@@ -29,11 +24,7 @@ public func pack<Row>(_ scheme: Scheme, _ row: Row) throws -> [UInt8] {
         throw PackbinError.pack(first?.errorID, first?.name ?? "",
             "the row is a \(typeName(row)); this scheme is bound to \(binding.rowTypeName)")
     }
-    var values = [String: Any](minimumCapacity: scheme.members.count)
-    for n in scheme.members {
-        if let acc = n.accessor, let v = acc.get(box) { values[n.name] = v }
-    }
-    return try packValues(scheme, values)
+    return try packValues(scheme, typedValues(scheme.place, box))
 }
 
 private func packValues(_ scheme: Scheme, _ values: [String: Any]) throws -> [UInt8] {
@@ -41,7 +32,7 @@ private func packValues(_ scheme: Scheme, _ values: [String: Any]) throws -> [UI
     p.out.reserveCapacity(32)
     p.out.append(UInt8(truncatingIfNeeded: scheme.typeNumber))
     var wrote: [String: Any] = [:]
-    try p.fields(scheme.fields, root: scheme.fields, values, &wrote)
+    try p.fields(scheme.fields, root: FlagRoot(fields: scheme.fields, values: values), values, &wrote)
     return p.out
 }
 
@@ -58,9 +49,10 @@ private struct Packer {
     var out: [UInt8] = []
     var flagBytes: [PackedFlagByte] = []
 
-    /// Packs `nodes` from `values`. `wrote` is what the scope has written so far, by name, for a when
-    /// to test; `root` is where a split flag byte looks for its bits.
-    mutating func fields(_ nodes: [Node], root: [Node], _ values: [String: Any],
+    /// Packs `nodes` from `values`, the row they read (inside a group, the group's own values). `wrote`
+    /// is what the scope has written so far, by name, for a when to test; `root` is where a split flag
+    /// byte looks for its bits.
+    mutating func fields(_ nodes: [Node], root: FlagRoot, _ values: [String: Any],
                          _ wrote: inout [String: Any]) throws {
         for n in nodes {
             switch n.kind {
@@ -72,7 +64,7 @@ private struct Packer {
                 if n.referenced { wrote[n.name] = true }
             case .flagByte:
                 guard let tag = n.tag else { continue }
-                let flags = n.inOrder ? 0 : flagValue(root, tag, values, wrote)
+                let flags = n.inOrder ? 0 : flagValue(root, tag, wrote)
                 let record = PackedFlagByte(tag: tag, at: out.count, flags: flags, inOrder: n.inOrder)
                 if let i = flagBytes.firstIndex(where: { $0.tag === tag }) {
                     flagBytes[i] = record
@@ -88,12 +80,15 @@ private struct Packer {
                 }
             case .flags:
                 // A flags member: its own byte and bits, looked up among the fields made with it.
-                try fields(n.fields, root: n.fields, values, &wrote)
+                try fields(n.fields, root: FlagRoot(fields: n.fields, values: values), values, &wrote)
+            case .group:
+                // A mark is reached only through a set flag bit: the bit is its value, nothing follows it.
+                if !n.fields.isEmpty { try fields(n.fields, root: root, groupValues(values, n), &wrote) }
             }
         }
     }
 
-    private mutating func flagBit(_ n: Node, root: [Node], _ values: [String: Any],
+    private mutating func flagBit(_ n: Node, root: FlagRoot, _ values: [String: Any],
                                   _ wrote: inout [String: Any]) throws {
         guard let member = n.member, let i = flagBytes.firstIndex(where: { $0.tag === n.tag }) else { return }
         let mask = UInt8(truncatingIfNeeded: 1 << n.bit)

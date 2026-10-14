@@ -27,7 +27,33 @@ let row = try unpackMap(raw, position)
 
 A scheme is a type number (0...255) and fields numbered by order from 0. The ids are not written.
 Every field has a name: the key of its value in the map form of a row. A refused scheme throws a
-``PackbinError`` of kind ``PackbinError/Kind/schemeError`` naming the field id.
+``PackbinError`` of kind ``PackbinError/Kind/schemeError`` naming the field id: a gap, a repeated or
+negative id, an anchor that is not the next id, a `bool` or an empty group anywhere but directly under
+`flags` or a flag byte's bit, a flag bit whose byte is not read earlier in the same scope, a ninth bit
+of one flag byte, a name declared twice in one row (the branches of a `when` chain may share one), and
+a `when` whose `eq` names a field that is not an earlier integer or bool of the same scope, a bool with
+anything but `true`, or an integer with a value it can never hold.
+
+### Groups
+
+`.group(anchor, name, members...)` puts its members under one name. The members share the ids and the
+scope of the fields around the group (the anchor is the next id and is not written, and a `when` on
+either side may name a field on the other), and their names belong to the row around it. In a map row
+the members are a `[String: Any]` under the group's name, on pack and on unpack:
+
+```swift
+let scheme = try Scheme(1, .u8(0, "a"), .group(1, "g", .u8(1, "b")))
+let raw = try pack(scheme, ["a": 1, "g": ["b": 2]])   // 01 01 02
+let row = try unpackMap(raw, scheme)                  // ["a": 1, "g": ["b": 2]]
+```
+
+A member's value is read from the group's map only: `["a": 1, "b": 2]` is refused naming `b`, where
+TypeScript packs a flat key (owner ruling Go-4 A, as Go). Under `flags` or a flag bit the group's bit is
+set when the group is given (an empty map too). A group with no members is a mark, as `bool`: `true`
+sets its bit, it stands only directly under `flags` or a flag byte's bit, and the field after it takes
+the anchor's id (`.flags(0, .group(0, "mark")), .u8(0, "n")`). In a typed row the group is bound to a
+member of a ``PackbinRow`` type (or an optional of one, `nil` being no value) whose members the group's
+fields are bound to; a mark is bound to a `Bool`.
 
 ### Rows
 
@@ -45,9 +71,10 @@ let sid = Field.u16(0, "sid").bind(get: { (r: Position) in r.sid }, set: { $0.si
 ```
 
 `nil` (a missing key, a boxed `nil`, or a getter that returns `nil`) is no value; only a flag bit can
-leave a value out. A stored 0 is a value and is written. Every value field of a scheme is bound to the
-same row type, or none is; a bound scheme packs that type and `unpack` returns it, and `pack` and
-`unpackMap` still take and give the map form of any scheme.
+leave a value out. A stored 0 is a value and is written. Every value field and group of one row (the
+top level, or a group's members) is bound to the same row type, or none is; a bound scheme packs that
+type and `unpack` returns it, and `pack` and `unpackMap` still take and give the map form of any
+scheme.
 
 A member holds every value of its field: an integer type that holds the field's range (an `Int` for a
 `u16`, not a `UInt8`), `Float` (f32 only) or `Double`, `[UInt8]` for fixed bytes, `Bool` for a bool, or
@@ -89,9 +116,10 @@ The whole API is listed here.
   one byte, bit i is member i, a clear bit skips the member, at most 8 members, the anchor is not
   written; `.flagByte(_ handle: FlagByte)`: where a split-form flag byte is read;
   `.when(_ anchor: Int, _ condition: Condition, _ members: Field...)`: the members only when an
-  earlier field of the same scope equals the value, the anchor is not written. `flags` and `when` also
-  take their members as an array.
-- ``Field/bind(get:set:)``: binds a value field to a member of a ``PackbinRow``.
+  earlier field of the same scope equals the value, the anchor is not written;
+  `.group(_ anchor: Int, _ name: String, _ members: Field...)`: the members under one name (see
+  Groups). `flags`, `when` and `group` also take their members as an array.
+- ``Field/bind(get:set:)``: binds a value field or a group to a member of a ``PackbinRow``.
 - ``FlagByte``: `init(_ name: String)`, `name`, `bit(_ member: Field) -> Field` (the member under the
   next bit of the byte read before it in the same scope).
 - ``Condition``: `.eq(_ id: Int, _ value: some BinaryInteger)`, `.eq(_ id: Int, _ value: Bool)`.

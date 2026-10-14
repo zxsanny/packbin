@@ -95,6 +95,8 @@ Then `nil` is no value (flags bit clear, or refused naming the field where a val
 - Local runs are `swift test` at the repository root on the owner's Mac (Swift 6.3.3); Linux runs use `swift:6`. No language feature newer than Swift 5.9.
 - Errors are thrown as the typed `PackbinError`; no trap escapes `pack`, `unpack` or scheme construction on any input. A u16 length or count read from input is checked against the bytes left before any storage is reserved; offsets use checked arithmetic.
 
+- From AZ-2514 (loop 26): the element-kind check (an anchored group, `u2` or other kinds as a list or dict element, D2/D3 of loop 25) is built here, with the README schemes that use utf8, list and dict (AZ-2514 AC-2 remainder). `Condition.eq` takes only integers and `Bool`: no Double overload.
+
 ## Risks & Mitigation
 
 **Risk 1: Map value types**

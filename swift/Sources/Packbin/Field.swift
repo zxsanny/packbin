@@ -2,7 +2,7 @@
 public let flagBits = 8
 
 enum NodeKind: Sendable {
-    case int, float, bytes, bool, flags, flagByte, flagBit, when
+    case int, float, bytes, bool, flags, flagByte, flagBit, when, group
 }
 
 /// The identity of one flag byte: a handle, or one read of it once a scheme is built.
@@ -15,14 +15,14 @@ final class FlagTag: Sendable {
 /// `Field` can be shared by any number of schemes and tasks; walking a scheme copies no field.
 final class Node: Sendable {
     let kind: NodeKind
-    /// The value id; the anchor of flags and when; nil for a flag byte or bit.
+    /// The value id; the anchor of flags, when and group; nil for a flag byte or bit.
     let id: Int?
     let name: String
     /// Bytes of an integer, a float or fixed bytes.
     let size: Int
     let signed: Bool
     let bigEndian: Bool
-    /// Flags and when members; a flag bit's one member; a built flags member: its byte and bits.
+    /// Flags, when and group members; a flag bit's one member; a built flags member: its byte and bits.
     let fields: [Node]
     /// Flag byte: this read; flag bit: the byte it belongs to.
     let tag: FlagTag?
@@ -82,9 +82,12 @@ final class Node: Sendable {
     var isValue: Bool {
         switch kind {
         case .int, .float, .bytes, .bool: return true
-        case .flags, .flagByte, .flagBit, .when: return false
+        case .flags, .flagByte, .flagBit, .when, .group: return false
         }
     }
+
+    /// A bool or an empty group: a flag bit with no bytes of its own.
+    var isMark: Bool { kind == .bool || (kind == .group && fields.isEmpty) }
 
     var label: String {
         switch kind {
@@ -96,6 +99,7 @@ final class Node: Sendable {
         case .flagByte: return "flag byte"
         case .flagBit: return "flag bit"
         case .when: return "when"
+        case .group: return "group"
         }
     }
 }
@@ -157,7 +161,7 @@ public struct Field: Sendable {
         case .flagBit:
             guard let member = n.member else { return field }
             return Field(n.with(fields: [be(Field(member)).node]))
-        case .bytes, .bool, .flags, .flagByte, .when:
+        case .bytes, .bool, .flags, .flagByte, .when, .group:
             return field
         }
     }
@@ -189,6 +193,21 @@ public struct Field: Sendable {
     /// `when` with its members as an array.
     public static func when(_ anchor: Int, _ condition: Condition, _ members: [Field]) -> Field {
         Field(Node(.when, id: anchor, fields: members.map(\.node), condition: condition))
+    }
+
+    /// The members under one name. They share the ids and the scope of the fields around the group:
+    /// the anchor is the next id and is not written. In a map row the members are a `[String: Any]`
+    /// under `name`, on pack and on unpack; in a typed row the group is bound to a member whose type
+    /// is a ``PackbinRow`` the members are bound to. Under `flags` or a flag bit the group's bit is set
+    /// when it is given. With no members it is a mark, as `bool`: a flag bit with no payload, set only
+    /// for `true`, that stands only directly under `flags` or a flag byte's `bit`.
+    public static func group(_ anchor: Int, _ name: String, _ members: Field...) -> Field {
+        group(anchor, name, members)
+    }
+
+    /// `group` with its members as an array.
+    public static func group(_ anchor: Int, _ name: String, _ members: [Field]) -> Field {
+        Field(Node(.group, id: anchor, name: name, fields: members.map(\.node)))
     }
 }
 

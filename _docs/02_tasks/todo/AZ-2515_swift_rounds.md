@@ -75,6 +75,8 @@ Then refused naming the member and the count; a `nil` array is no value, an empt
 - Local runs are `swift test` at the repository root on the owner's Mac (Swift 6.3.3); Linux runs use `swift:6`. No language feature newer than Swift 5.9.
 - Errors are thrown as the typed `PackbinError`; no trap escapes `pack`, `unpack` or scheme construction on any input. A `times` count is a wire integer up to u64: its conversion to a Swift length, the round count times the body width, and the slot offsets use checked arithmetic (a count above `Int.max` throws, it does not trap).
 
+- From AZ-2514 (loop 26): the round-nesting check (repeat/times inside a round) and the count-id checks (a negative count id included, U25 A) belong to this task; AZ-2514 built groups and marks, `Field.group`, and the TypeScript check order in `Scheme.swift` (extend it, keep its order). The README schemes made from repeat, times, sized, u2, bits and packed are built here (AZ-2514 AC-2 remainder). A group inside a round is pinned here; a lone group map in a round follows Go's rule only if TypeScript shows the same hex (probe first).
+
 ## Risks & Mitigation
 
 **Risk 1: Rounds are the largest surface**

@@ -95,11 +95,53 @@ func packbinError(_ body: () throws -> Any) -> PackbinError? {
     }
 }
 
-/// A map compared by its keys and the type and value of each entry.
+/// A map compared by its keys and the type and value of each entry; a nested map (a group) as
+/// `key={...}`.
 func describeMap(_ map: [String: Any]) -> String {
     map.keys.sorted().map { key in
         let v = map[key] ?? "none"
+        if let nested = v as? [String: Any] { return "\(key)={\(describeMap(nested))}" }
         let shown = (v as? [UInt8]).map(hex) ?? "\(v)"
         return "\(key)=\(type(of: v)):\(shown)"
     }.joined(separator: ",")
+}
+
+/// A map compared by its keys and the value of each entry, whatever its type (`5` as an `Int` and as
+/// a `UInt8` are the same); a nested map as `key={...}`.
+func describeValues(_ map: [String: Any]) -> String {
+    map.keys.sorted().map { key in
+        let v = map[key] ?? "none"
+        if let nested = v as? [String: Any] { return "\(key)={\(describeValues(nested))}" }
+        return "\(key)=\((v as? [UInt8]).map(hex) ?? "\(v)")"
+    }.joined(separator: ",")
+}
+
+/// One scheme the construction checks refuse: the id and name the error names, and its reason (the
+/// whole reason, or its start when it ends in "...").
+struct RefusedScheme: CustomTestStringConvertible, Sendable {
+    let name: String
+    let build: @Sendable () throws -> Scheme
+    let field: Int?
+    let member: String
+    let reason: String
+    var testDescription: String { name }
+
+    init(_ name: String, field: Int?, _ member: String, _ reason: String,
+         _ build: @escaping @Sendable () throws -> Scheme) {
+        self.name = name
+        self.build = build
+        self.field = field
+        self.member = member
+        self.reason = reason
+    }
+}
+
+/// Whether `build` throws the scheme error `c` describes.
+func expectRefused(_ c: RefusedScheme) {
+    let error = packbinError { try c.build() }
+    let prefix = c.reason.hasSuffix("...") ? String(c.reason.dropLast(3)) : nil
+    let reason = error?.reason ?? ""
+    #expect(error?.kind == .schemeError)
+    #expect(error?.field == c.field && error?.name == c.member)
+    #expect(prefix.map { reason.hasPrefix($0) } ?? (reason == c.reason), "reason: \(reason)")
 }

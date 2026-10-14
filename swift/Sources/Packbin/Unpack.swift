@@ -11,16 +11,15 @@ public func unpack(_ buffer: [UInt8], _ schemes: [Scheme]) throws -> Any {
     let (scheme, values) = try dispatch(buffer, schemes)
     guard let binding = scheme.binding else { return values }
     let box = binding.makeBox()
-    for n in scheme.members {
-        if let acc = n.accessor, let v = values[n.name] { acc.set(box, v) }
-    }
+    fillRow(scheme.place, box, values)
     return binding.unbox(box)
 }
 
 /// `unpack` with the row as a map keyed by field name, for every scheme. A value has the Swift type
 /// of its field: `UInt8` to `UInt64`, `Int8` to `Int64`, `Float`, `Double`, `[UInt8]`, and `true` for
-/// a set bool. A field that was not read (a clear bit, a when that did not match) has no key, so a
-/// row it returned packs again to the same bytes.
+/// a set bool or mark, and a `[String: Any]` of its members for a group that was read. A field that
+/// was not read (a clear bit, a when that did not match) has no key, so a row it returned packs again
+/// to the same bytes.
 public func unpackMap(_ buffer: [UInt8], _ schemes: Scheme...) throws -> [String: Any] {
     try unpackMap(buffer, schemes)
 }
@@ -41,7 +40,7 @@ private func dispatch(_ buffer: [UInt8], _ schemes: [Scheme]) throws -> (Scheme,
         throw PackbinError(.unknownType, field: nil, actual: Int(first))
     }
     var r = Reader(buffer)
-    var values = [String: Any](minimumCapacity: scheme.members.count)
+    var values = [String: Any](minimumCapacity: scheme.place.members.count)
     try r.fields(scheme.fields, &values)
     if r.left > 0 { throw PackbinError(.trailing, field: nil, left: r.left) }
     return (scheme, values)
@@ -54,6 +53,8 @@ private struct Reader {
     /// The next byte to read; never above `buf.count`.
     var off = 1
     var flagBytes: [(tag: FlagTag, byte: UInt8)] = []
+    /// The values read so far that a when tests, by name, wherever they sit (a group shares the scope).
+    var seen: [String: Any] = [:]
 
     init(_ buf: [UInt8]) { self.buf = buf }
 
@@ -67,25 +68,26 @@ private struct Reader {
         return start
     }
 
+    /// Reads `nodes` into `values`, the row they belong to (inside a group, the group's own map).
     mutating func fields(_ nodes: [Node], _ values: inout [String: Any]) throws {
         for n in nodes {
             switch n.kind {
             case .int:
                 let x = readUInt(try take(n, n.size), n.size, n.bigEndian)
-                values[n.name] = integer(x, n.size, n.signed)
+                store(n, integer(x, n.size, n.signed), &values)
             case .float:
                 let x = readUInt(try take(n, n.size), n.size, n.bigEndian)
                 if n.size == 4 {
-                    values[n.name] = Float(bitPattern: UInt32(truncatingIfNeeded: x))
+                    store(n, Float(bitPattern: UInt32(truncatingIfNeeded: x)), &values)
                 } else {
-                    values[n.name] = Double(bitPattern: x)
+                    store(n, Double(bitPattern: x), &values)
                 }
             case .bytes:
                 let start = try take(n, n.size)
-                values[n.name] = Array(buf[start..<(start + n.size)])
+                store(n, Array(buf[start..<(start + n.size)]), &values)
             case .bool:
                 // Reached only through a set flag bit.
-                values[n.name] = true
+                store(n, true, &values)
             case .flagByte:
                 guard let tag = n.tag else { continue }
                 let byte = buf[try take(n, 1)]
@@ -100,13 +102,27 @@ private struct Reader {
                     try fields(n.fields, &values)
                 }
             case .when:
-                if let condition = n.condition, sameValue(values[n.ref], condition.value) {
+                if let condition = n.condition, sameValue(seen[n.ref], condition.value) {
                     try fields(n.fields, &values)
                 }
             case .flags:
                 try fields(n.fields, &values)
+            case .group:
+                // A mark is reached only through a set flag bit; a group with members is a map of its own.
+                if n.fields.isEmpty {
+                    values[n.name] = true
+                } else {
+                    var inner: [String: Any] = [:]
+                    try fields(n.fields, &inner)
+                    values[n.name] = inner
+                }
             }
         }
+    }
+
+    private mutating func store(_ n: Node, _ v: Any, _ values: inout [String: Any]) {
+        values[n.name] = v
+        if n.referenced { seen[n.name] = v }
     }
 
     private func readUInt(_ start: Int, _ size: Int, _ bigEndian: Bool) -> UInt64 {
