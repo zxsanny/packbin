@@ -26,6 +26,8 @@ check python "${RING_PYTHON:?}" "$(python3 -c 'import platform; print(platform.p
 check rust "${RING_RUST:?}" "$(rustc --version | awk '{ print $2 }')"
 check java "${RING_JDK:?}" "$(javac --version | awk '{ print $2 }')"
 check go "${RING_GO:?}" "$(go version | awk '{ print $3 }' | sed 's/^go//')"
+# The Swift that builds the Swift drivers: the runner's, else the swift:$RING_SWIFT image (ring-swift.sh).
+check swift "${RING_SWIFT:?}" "$(bash "$(dirname "${BASH_SOURCE[0]}")/ring-swift.sh" --version)"
 
 # The compiler is the one the ring uses: CXX, which is ring-cxx.sh (g++ from the gcc image) in the
 # ring job. Clang also defines __GNUC__ (as 4), so name the compiler family first.

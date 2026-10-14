@@ -165,6 +165,7 @@ run_stage_command() {
         && bash .github/workflows/run-suite.test.sh \
         && bash cpp/embedded/lib.test.sh \
         && bash .github/workflows/ring-wiring.test.sh \
+        && bash .github/workflows/ring-wiring-swift.test.sh \
         && bash scripts/loop-tests.test.sh ;;
     cpp) make -C cpp clean && docker compose -f docker-compose.test.yml run --rm cpp ;;
     cpp-embedded-arm) docker compose -f docker-compose.test.yml run --rm cpp-embedded ;;

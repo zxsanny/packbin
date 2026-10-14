@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# Builds the Swift drivers of the ring: ring-swift.sh <scratch dir> builds the package in
+# .github/workflows/drivers/handoff-swift (the handoff driver and the position program, on the root package by
+# path) with `swift build -c release`, the build output in <scratch dir>, never in the repository. The
+# binaries are <scratch dir>/release/handoff-swift and <scratch dir>/release/position.
+# ring-swift.sh --version prints the version of the Swift that builds them (ring-toolchains.sh checks it).
+#
+# It rebuilds only when a source or manifest of the package (Package.swift, Package.resolved, swift/Sources) or
+# of the driver package is newer than the stamp a finished build leaves in <scratch dir>, so language-pair.sh can
+# call it before every driver command (as the go case does). The stamp, not the binaries: a build that finds
+# nothing to compile leaves them old, and every later call would build again.
+#
+# With `swift` on PATH (the ring job: the runner's Swift; the owner's Mac: the local toolchain) it builds with
+# it. Without, on a Linux host it builds in the swift:$RING_SWIFT image (default: the tool-pins.txt `swift`
+# pin, the Swift suite image) with the Swift runtime linked in (--static-swift-stdlib), so the binaries run on
+# the host. The container sees the repo and the scratch dir at the host paths and runs as the caller.
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+root="$(cd "$here/../.." && pwd)"
+driver="$here/drivers/handoff-swift"
+tag="${RING_SWIFT:-$(bash "$here/tool-pin.sh" swift)}"
+
+if [ "${1:-}" = --version ]; then
+  if command -v swift > /dev/null; then
+    full="$(swift --version 2>&1)"
+  else
+    full="$(docker run --rm -i "swift:$tag" swift --version 2>&1 < /dev/null)"
+  fi
+  version="$(sed -n 's/.*Swift version \([0-9][0-9.]*\).*/\1/p' <<< "$full" | sed -n 1p)"
+  if [ -z "$version" ]; then
+    echo "ring-swift.sh: no Swift version in: $full" >&2
+    exit 1
+  fi
+  echo "$version"
+  exit 0
+fi
+
+scratch="${1:?scratch dir}"
+# A scratch dir another local user made could hold their binaries, which the ring would then run.
+if [ -e "$scratch" ] && [ ! -O "$scratch" ]; then
+  echo "ring-swift.sh: $scratch is not owned by $(id -un); pass a scratch dir of your own" >&2
+  exit 1
+fi
+handoff="$scratch/release/handoff-swift"
+position="$scratch/release/position"
+stamp="$scratch/ring-swift.built"
+if [ -x "$handoff" ] && [ -x "$position" ] && [ -f "$stamp" ] && [ -z "$(find "$root/Package.swift" \
+  "$root/Package.resolved" "$root/swift/Sources" "$driver" \( -name .build -o -name .swiftpm \) -prune \
+  -o -type f -newer "$stamp" -print -quit)" ]; then
+  exit 0
+fi
+rm -f "$stamp"
+
+mkdir -p "$scratch"
+scratch="$(cd "$scratch" && pwd)"
+stamp="$scratch/ring-swift.built"
+# The stamp gets the time the build starts, so a source saved during the build is newer than it.
+touch "$stamp.new"
+# The build log goes to stderr: language-pair.sh compares the stdout of a pack call with the expected hex.
+if command -v swift > /dev/null; then
+  swift build -c release --package-path "$driver" --scratch-path "$scratch" >&2
+  mv "$stamp.new" "$stamp"
+  exit 0
+fi
+
+if [ "$(uname -s)" != Linux ]; then
+  echo "ring-swift.sh: no swift on PATH; the swift:$tag image builds Linux binaries only, not for $(uname -s)" >&2
+  exit 1
+fi
+mounts=(-v "$root:$root")
+case "$scratch" in
+  "$root" | "$root"/*) ;;
+  *) mounts+=(-v "$scratch:$scratch") ;;
+esac
+docker run --rm -i --user "$(id -u):$(id -g)" -e HOME="$scratch/home" "${mounts[@]}" -w "$driver" "swift:$tag" \
+  swift build -c release --static-swift-stdlib --package-path "$driver" --scratch-path "$scratch" < /dev/null >&2
+mv "$stamp.new" "$stamp"

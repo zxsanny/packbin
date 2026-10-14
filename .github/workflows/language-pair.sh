@@ -7,6 +7,7 @@ drivers="$root/.github/workflows/drivers"
 # path another local user could pre-create (the F24 pattern of the Java driver below).
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
+swift_ring="${PACKBIN_SWIFT_RING:-/tmp/packbin-ring-swift}" # ring-swift.sh output, kept between runs as Go's
 user_hex="0107007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e6e656c010004007265616403006d6170040004007265616407006770735f6669780300736574040065646974050073746f7265020004007265616405007772697465"
 nested_hex="01020003006d61700100010002006f7007006770735f666978050073746f72650200010002006f70040072656164010002006f7005007772697465"
 position_hex="4001000065cd1d00a3e1110100"
@@ -95,6 +96,11 @@ run_lang() {
       bash "$root/.github/workflows/ring-go.sh" "$gobin" . || return
       "$gobin" "$@"
       ;;
+    swift)
+      # ring-swift.sh builds only when a source is newer than the binaries; `|| return` as at the cpp case.
+      bash "$root/.github/workflows/ring-swift.sh" "$swift_ring" || return
+      "$swift_ring/release/handoff-swift" "$@"
+      ;;
     *)
       echo "unknown language: $lang" >&2
       exit 1
@@ -131,6 +137,7 @@ handoff cpp csharp user "$user_hex"
 # Go (AZ-2449) joins every kind both ways with each member of that kind's ring: the handoff lines with go as the
 # producer and as the consumer follow the kind's chain (C# only produces roundflags and roundwhen, so for those two
 # kinds C# has no line with go as the producer). ring-wiring.test.sh fails when one is missing.
+# Swift (AZ-2522): the same lines, Go included, after each kind's Go lines (ring-wiring-swift.test.sh).
 handoff go csharp user "$user_hex"
 handoff csharp go user "$user_hex"
 handoff go typescript user "$user_hex"
@@ -143,6 +150,20 @@ handoff go java user "$user_hex"
 handoff java go user "$user_hex"
 handoff go cpp user "$user_hex"
 handoff cpp go user "$user_hex"
+handoff swift csharp user "$user_hex"
+handoff csharp swift user "$user_hex"
+handoff swift typescript user "$user_hex"
+handoff typescript swift user "$user_hex"
+handoff swift python user "$user_hex"
+handoff python swift user "$user_hex"
+handoff swift rust user "$user_hex"
+handoff rust swift user "$user_hex"
+handoff swift java user "$user_hex"
+handoff java swift user "$user_hex"
+handoff swift cpp user "$user_hex"
+handoff cpp swift user "$user_hex"
+handoff swift go user "$user_hex"
+handoff go swift user "$user_hex"
 
 handoff csharp typescript nested "$nested_hex"
 handoff typescript python nested "$nested_hex"
@@ -162,6 +183,20 @@ handoff go java nested "$nested_hex"
 handoff java go nested "$nested_hex"
 handoff go cpp nested "$nested_hex"
 handoff cpp go nested "$nested_hex"
+handoff swift csharp nested "$nested_hex"
+handoff csharp swift nested "$nested_hex"
+handoff swift typescript nested "$nested_hex"
+handoff typescript swift nested "$nested_hex"
+handoff swift python nested "$nested_hex"
+handoff python swift nested "$nested_hex"
+handoff swift rust nested "$nested_hex"
+handoff rust swift nested "$nested_hex"
+handoff swift java nested "$nested_hex"
+handoff java swift nested "$nested_hex"
+handoff swift cpp nested "$nested_hex"
+handoff cpp swift nested "$nested_hex"
+handoff swift go nested "$nested_hex"
+handoff go swift nested "$nested_hex"
 
 handoff csharp typescript boolflag "$boolflag_hex"
 handoff typescript python boolflag "$boolflag_hex"
@@ -181,6 +216,20 @@ handoff go java boolflag "$boolflag_hex"
 handoff java go boolflag "$boolflag_hex"
 handoff go cpp boolflag "$boolflag_hex"
 handoff cpp go boolflag "$boolflag_hex"
+handoff swift csharp boolflag "$boolflag_hex"
+handoff csharp swift boolflag "$boolflag_hex"
+handoff swift typescript boolflag "$boolflag_hex"
+handoff typescript swift boolflag "$boolflag_hex"
+handoff swift python boolflag "$boolflag_hex"
+handoff python swift boolflag "$boolflag_hex"
+handoff swift rust boolflag "$boolflag_hex"
+handoff rust swift boolflag "$boolflag_hex"
+handoff swift java boolflag "$boolflag_hex"
+handoff java swift boolflag "$boolflag_hex"
+handoff swift cpp boolflag "$boolflag_hex"
+handoff cpp swift boolflag "$boolflag_hex"
+handoff swift go boolflag "$boolflag_hex"
+handoff go swift boolflag "$boolflag_hex"
 
 handoff csharp typescript booltrue "$booltrue_hex"
 handoff typescript python booltrue "$booltrue_hex"
@@ -200,6 +249,20 @@ handoff go java booltrue "$booltrue_hex"
 handoff java go booltrue "$booltrue_hex"
 handoff go cpp booltrue "$booltrue_hex"
 handoff cpp go booltrue "$booltrue_hex"
+handoff swift csharp booltrue "$booltrue_hex"
+handoff csharp swift booltrue "$booltrue_hex"
+handoff swift typescript booltrue "$booltrue_hex"
+handoff typescript swift booltrue "$booltrue_hex"
+handoff swift python booltrue "$booltrue_hex"
+handoff python swift booltrue "$booltrue_hex"
+handoff swift rust booltrue "$booltrue_hex"
+handoff rust swift booltrue "$booltrue_hex"
+handoff swift java booltrue "$booltrue_hex"
+handoff java swift booltrue "$booltrue_hex"
+handoff swift cpp booltrue "$booltrue_hex"
+handoff cpp swift booltrue "$booltrue_hex"
+handoff swift go booltrue "$booltrue_hex"
+handoff go swift booltrue "$booltrue_hex"
 
 handoff csharp typescript bitwhen "$bitwhen_hex"
 handoff typescript python bitwhen "$bitwhen_hex"
@@ -219,6 +282,20 @@ handoff go java bitwhen "$bitwhen_hex"
 handoff java go bitwhen "$bitwhen_hex"
 handoff go cpp bitwhen "$bitwhen_hex"
 handoff cpp go bitwhen "$bitwhen_hex"
+handoff swift csharp bitwhen "$bitwhen_hex"
+handoff csharp swift bitwhen "$bitwhen_hex"
+handoff swift typescript bitwhen "$bitwhen_hex"
+handoff typescript swift bitwhen "$bitwhen_hex"
+handoff swift python bitwhen "$bitwhen_hex"
+handoff python swift bitwhen "$bitwhen_hex"
+handoff swift rust bitwhen "$bitwhen_hex"
+handoff rust swift bitwhen "$bitwhen_hex"
+handoff swift java bitwhen "$bitwhen_hex"
+handoff java swift bitwhen "$bitwhen_hex"
+handoff swift cpp bitwhen "$bitwhen_hex"
+handoff cpp swift bitwhen "$bitwhen_hex"
+handoff swift go bitwhen "$bitwhen_hex"
+handoff go swift bitwhen "$bitwhen_hex"
 
 handoff csharp typescript roundflags "$roundflags_hex"
 handoff typescript rust roundflags "$roundflags_hex"
@@ -234,6 +311,17 @@ handoff go java roundflags "$roundflags_hex"
 handoff java go roundflags "$roundflags_hex"
 handoff go cpp roundflags "$roundflags_hex"
 handoff cpp go roundflags "$roundflags_hex"
+handoff csharp swift roundflags "$roundflags_hex"
+handoff swift typescript roundflags "$roundflags_hex"
+handoff typescript swift roundflags "$roundflags_hex"
+handoff swift rust roundflags "$roundflags_hex"
+handoff rust swift roundflags "$roundflags_hex"
+handoff swift java roundflags "$roundflags_hex"
+handoff java swift roundflags "$roundflags_hex"
+handoff swift cpp roundflags "$roundflags_hex"
+handoff cpp swift roundflags "$roundflags_hex"
+handoff swift go roundflags "$roundflags_hex"
+handoff go swift roundflags "$roundflags_hex"
 
 handoff csharp typescript roundwhen "$roundwhen_hex"
 handoff typescript rust roundwhen "$roundwhen_hex"
@@ -249,6 +337,17 @@ handoff go java roundwhen "$roundwhen_hex"
 handoff java go roundwhen "$roundwhen_hex"
 handoff go cpp roundwhen "$roundwhen_hex"
 handoff cpp go roundwhen "$roundwhen_hex"
+handoff csharp swift roundwhen "$roundwhen_hex"
+handoff swift typescript roundwhen "$roundwhen_hex"
+handoff typescript swift roundwhen "$roundwhen_hex"
+handoff swift rust roundwhen "$roundwhen_hex"
+handoff rust swift roundwhen "$roundwhen_hex"
+handoff swift java roundwhen "$roundwhen_hex"
+handoff java swift roundwhen "$roundwhen_hex"
+handoff swift cpp roundwhen "$roundwhen_hex"
+handoff cpp swift roundwhen "$roundwhen_hex"
+handoff swift go roundwhen "$roundwhen_hex"
+handoff go swift roundwhen "$roundwhen_hex"
 
 # AZ-2239, AZ-2307, AZ-2449: TypeScript, Python, Java, C# and Go take part in the listgroup, dictgroup and listflags rings. Rust
 # refuses these schemes when it builds them (a list or dict element is one integer, float, bytes, utf8, list
@@ -267,6 +366,16 @@ handoff go java listgroup "$listgroup_hex"
 handoff java go listgroup "$listgroup_hex"
 handoff go csharp listgroup "$listgroup_hex"
 handoff csharp go listgroup "$listgroup_hex"
+handoff swift typescript listgroup "$listgroup_hex"
+handoff typescript swift listgroup "$listgroup_hex"
+handoff swift python listgroup "$listgroup_hex"
+handoff python swift listgroup "$listgroup_hex"
+handoff swift java listgroup "$listgroup_hex"
+handoff java swift listgroup "$listgroup_hex"
+handoff swift csharp listgroup "$listgroup_hex"
+handoff csharp swift listgroup "$listgroup_hex"
+handoff swift go listgroup "$listgroup_hex"
+handoff go swift listgroup "$listgroup_hex"
 
 handoff typescript python dictgroup "$dictgroup_hex"
 handoff python java dictgroup "$dictgroup_hex"
@@ -280,6 +389,16 @@ handoff go java dictgroup "$dictgroup_hex"
 handoff java go dictgroup "$dictgroup_hex"
 handoff go csharp dictgroup "$dictgroup_hex"
 handoff csharp go dictgroup "$dictgroup_hex"
+handoff swift typescript dictgroup "$dictgroup_hex"
+handoff typescript swift dictgroup "$dictgroup_hex"
+handoff swift python dictgroup "$dictgroup_hex"
+handoff python swift dictgroup "$dictgroup_hex"
+handoff swift java dictgroup "$dictgroup_hex"
+handoff java swift dictgroup "$dictgroup_hex"
+handoff swift csharp dictgroup "$dictgroup_hex"
+handoff csharp swift dictgroup "$dictgroup_hex"
+handoff swift go dictgroup "$dictgroup_hex"
+handoff go swift dictgroup "$dictgroup_hex"
 
 handoff typescript python listflags "$listflags_hex"
 handoff python java listflags "$listflags_hex"
@@ -293,6 +412,16 @@ handoff go java listflags "$listflags_hex"
 handoff java go listflags "$listflags_hex"
 handoff go csharp listflags "$listflags_hex"
 handoff csharp go listflags "$listflags_hex"
+handoff swift typescript listflags "$listflags_hex"
+handoff typescript swift listflags "$listflags_hex"
+handoff swift python listflags "$listflags_hex"
+handoff python swift listflags "$listflags_hex"
+handoff swift java listflags "$listflags_hex"
+handoff java swift listflags "$listflags_hex"
+handoff swift csharp listflags "$listflags_hex"
+handoff csharp swift listflags "$listflags_hex"
+handoff swift go listflags "$listflags_hex"
+handoff go swift listflags "$listflags_hex"
 
 # Each participant refuses a packet whose last element is short, and hands no row to its handler.
 for lang in typescript python java csharp go; do
@@ -304,8 +433,16 @@ for lang in typescript python java csharp go; do
     fi
   done
 done
+# Swift refuses them too; its loop is apart because ring-wiring.test.sh edits the exact line of the one above.
+for kind in listgroup dictgroup listflags; do
+  short="${kind}_short_hex"
+  if ! run_lang swift "unpack-$kind-short" "${!short}"; then
+    echo "swift unpack-$kind-short failed: it read a short element or the driver crashed (see the output above)" >&2
+    exit 1
+  fi
+done
 
-for lang in csharp typescript python rust cpp java go; do
+for lang in csharp typescript python rust cpp java swift go; do
   got="$(run_lang "$lang" "pack-session" | tr -d '[:space:]')"
   if [ "$got" != "$session_hex" ]; then
     echo "$lang pack-session mismatch" >&2
@@ -331,6 +468,20 @@ handoff go java session "$session_hex"
 handoff java go session "$session_hex"
 handoff go cpp session "$session_hex"
 handoff cpp go session "$session_hex"
+handoff swift csharp session "$session_hex"
+handoff csharp swift session "$session_hex"
+handoff swift typescript session "$session_hex"
+handoff typescript swift session "$session_hex"
+handoff swift python session "$session_hex"
+handoff python swift session "$session_hex"
+handoff swift rust session "$session_hex"
+handoff rust swift session "$session_hex"
+handoff swift java session "$session_hex"
+handoff java swift session "$session_hex"
+handoff swift cpp session "$session_hex"
+handoff cpp swift session "$session_hex"
+handoff swift go session "$session_hex"
+handoff go swift session "$session_hex"
 
 for lang in csharp typescript python rust cpp java go; do
   got="$(bash "$root/.github/workflows/publish-position.sh" "$lang" | tr -d '[:space:]')"
@@ -339,5 +490,11 @@ for lang in csharp typescript python rust cpp java go; do
     exit 1
   fi
 done
+# Swift's position program is run here until publish-position.sh builds it (AZ-2523).
+bash "$root/.github/workflows/ring-swift.sh" "$swift_ring"
+if [ "$("$swift_ring/release/position" | tr -d '[:space:]')" != "$position_hex" ]; then
+  echo "swift position mismatch" >&2
+  exit 1
+fi
 
 echo "language pairs passed"

@@ -94,6 +94,9 @@ jobs:
       RING_GCC: "16"
       RING_JDK: "26"
       RING_GO: "1.27"
+      # The swift:6 suite image tag (tool-pins.txt `swift`): the runner's Swift builds the Swift drivers, else
+      # ring-swift.sh builds them in that image.
+      RING_SWIFT: "6"
       # ubuntu-latest has no GCC 16 release (13; 26.04 has 15), so the ring compiles in the gcc:16 image the
       # cpp suite uses, through ring-cxx.sh. The macOS sysroot recipe of language-pair.sh stays off.
       CXX: ${{ github.workspace }}/.github/workflows/ring-cxx.sh
@@ -102,6 +105,8 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Swift ring wiring
+        run: bash .github/workflows/ring-wiring-swift.test.sh
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: ${{ env.RING_DOTNET }}.x
@@ -136,5 +141,6 @@ jobs:
           npm ci --prefix typescript
           cargo build --quiet --manifest-path .github/workflows/drivers/handoff-rust/Cargo.toml
           bash .github/workflows/ring-go.sh /tmp/packbin-handoff-go
+          bash .github/workflows/ring-swift.sh /tmp/packbin-ring-swift
       - name: cross-language ring
         run: bash .github/workflows/language-pair.sh
