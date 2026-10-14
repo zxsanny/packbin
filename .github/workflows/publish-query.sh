@@ -126,6 +126,8 @@ target_published() {
     arduino) git_published arduino "$artifacts/arduino/reg" "$(arduino_url)" arduino "arduino-$version" ;;
     # No registry answer: publish-go.sh asks the remote itself and always re-checks the Go proxy.
     go-tag) return 1 ;;
+    # Nothing to publish: publish-swift.sh resolves and builds a consumer of the tag on every run.
+    swift-check) return 1 ;;
     *) query_fail "$1" "unknown target" ;;
   esac
 }

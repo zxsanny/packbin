@@ -93,7 +93,7 @@ require_tool python3
 for target in "${targets[@]}"; do
   case "$target" in
     java) require_tool gpg ;;
-    vcpkg | arduino | go-tag) require_tool git ;;
+    vcpkg | arduino | go-tag | swift-check) require_tool git ;;
   esac
 done
 if [ "$build_only" != "1" ]; then
@@ -104,6 +104,7 @@ if [ "$build_only" != "1" ]; then
       typescript) require_tool npm ;;
       rust) require_tool cargo ;;
       go-tag) require_tool go ;;
+      swift-check) require_tool swift ;;
     esac
   done
 fi

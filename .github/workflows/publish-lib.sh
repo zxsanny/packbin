@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PACKBIN_LANGS=(csharp typescript python rust cpp java go)
+PACKBIN_LANGS=(csharp typescript python rust cpp java go swift)
 
 # The publish targets: name, the language whose presence plans it, and its tier. A required target
 # with a missing credential fails the run before any write and a failed upload fails it; an
@@ -9,6 +9,8 @@ PACKBIN_LANGS=(csharp typescript python rust cpp java go)
 # one that has its credential fails the run too. A final target is required too, but its upload runs
 # after every required and optional one: go-tag is not a registry upload, it publishes the Go module
 # (ADR-004) by pushing the tag go/vX.Y.Z, so it waits until every registry accepted the version.
+# swift-check uploads nothing and writes no tag: Swift installs from the vX.Y.Z tag through the root
+# Package.swift (ADR-005), and the check resolves and builds a consumer of that tag, after the Go tag.
 # Uploads run required targets first, then optional, then final.
 PACKBIN_TARGETS=(
   "csharp csharp required"
@@ -21,6 +23,7 @@ PACKBIN_TARGETS=(
   "esp-idf cpp optional"
   "arduino cpp optional"
   "go-tag go final"
+  "swift-check swift final"
 )
 
 targets_of_lang() {
@@ -60,6 +63,7 @@ target_credentials() {
     vcpkg) if [[ "$(vcpkg_url)" == https://github.com/* ]]; then echo "GITHUB_TOKEN"; fi ;;
     arduino) if [[ "$(arduino_url)" == https://github.com/* ]]; then echo "GITHUB_TOKEN"; fi ;;
     go-tag) if [[ "$(go_tag_url)" == https://github.com/* ]]; then echo "GITHUB_TOKEN"; fi ;;
+    swift-check) echo "" ;;
     *)
       echo "unknown target: $1" >&2
       return 1
@@ -123,6 +127,7 @@ language_present() {
     cpp) [ -f "$root/cpp/Makefile" ] ;;
     java) [ -f "$root/java/test.sh" ] ;;
     go) [ -f "$root/go/go.mod" ] ;;
+    swift) [ -f "$root/Package.swift" ] && [ -d "$root/swift" ] ;;
     *) return 1 ;;
   esac
 }
@@ -138,6 +143,11 @@ arduino_url() {
 # The remote that receives the Go tag; the tests point it at a bare repository.
 go_tag_url() {
   printf '%s\n' "${GO_TAG_REGISTRY_URL:-https://github.com/zxsanny/packbin.git}"
+}
+
+# The URL a Swift consumer depends on (ADR-005); the tests point it at a bare repository named packbin.git.
+swift_package_url() {
+  printf '%s\n' "${SWIFT_PACKAGE_URL:-https://github.com/zxsanny/packbin}"
 }
 
 # Installs pip packages $2... into venv $1 at the exact versions of tool-pins.txt, wheels only.

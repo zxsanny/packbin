@@ -87,6 +87,31 @@ case "$lang" in
     bash "$here/ring-go.sh" "$bin" ./position >&2
     "$bin"
     ;;
+  swift)
+    # ring-swift.sh builds the position program of the ring (drivers/handoff-swift, product position) with the
+    # swift on PATH (the swift container of the gate, the ring job, a Mac); its output goes to stderr so only the
+    # program's hex reaches stdout. The build lives in a scratch dir outside the repo, which may be read-only:
+    # the ring's own, so the ring job reuses the drivers it built. SwiftPM names a path dependency after its
+    # directory and the driver package depends on the root as `packbin`, so a root in a directory of another
+    # name (the gate container's /src), or a SRC_ROOT apart from these scripts (ring-swift.sh builds the tree it
+    # sits in), is built from a copy in a directory named packbin, with a scratch dir of its own.
+    ring="$here/ring-swift.sh"
+    scratch="${PACKBIN_SWIFT_RING:-/tmp/packbin-ring-swift}"
+    if [ "$(basename "$root")" != packbin ] || [ "$root" != "$(cd "$here/../.." && pwd)" ]; then
+      work="$(mktemp -d)"
+      mkdir -p "$work/packbin/.github/workflows/drivers"
+      cp -R "$root/Package.swift" "$root/Package.resolved" "$root/swift" "$work/packbin/"
+      cp -R "$here/ring-swift.sh" "$here/tool-pin.sh" "$here/tool-pins.txt" "$work/packbin/.github/workflows/"
+      cp -R "$drivers/handoff-swift" "$work/packbin/.github/workflows/drivers/"
+      # A read-only source keeps its modes in the copy; SwiftPM and the trap need to write and delete there.
+      chmod -R u+w "$work/packbin"
+      rm -rf "$work/packbin/.github/workflows/drivers/handoff-swift/.build" "$work/packbin/.github/workflows/drivers/handoff-swift/.swiftpm"
+      ring="$work/packbin/.github/workflows/ring-swift.sh"
+      scratch="$work/build"
+    fi
+    bash "$ring" "$scratch" >&2
+    "$scratch/release/position"
+    ;;
   *)
     echo "unknown language: $lang" >&2
     exit 1

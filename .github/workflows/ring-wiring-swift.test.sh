@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Swift wiring check of the cross-language ring (AZ-2522 AC-3), the sibling of ring-wiring.test.sh (at its line
 # cap): Swift joins every kind of language-pair.sh both ways with each member of that kind's ring, refuses the
-# short element packets, packs the session, runs its position program, and the driver package, ring-swift.sh,
-# ring-toolchains.sh and the ring job of test.yml carry the Swift pieces. Every guard is then proven against a
-# temp copy with one piece removed: the copy must be rejected, naming it. ring-swift.sh is also run against a
-# temp tree with a stand-in `swift` (rebuild only when a source is newer; the version it prints).
+# short element packets, packs the session, checks its position row through publish-position.sh (AZ-2523), and the
+# driver package, ring-swift.sh, ring-toolchains.sh and the ring job of test.yml carry the Swift pieces. Every guard
+# is then proven against a temp copy with one piece removed: the copy must be rejected, naming it. ring-swift.sh is
+# also run against a temp tree with a stand-in `swift` (rebuild only when a source is newer; the version it prints).
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -107,10 +107,8 @@ swift_violations() {
       grep -Eq "[ ]$kind[ ;]" <<< "$short_loop" || echo "the swift short packet loop has no $kind"
     done
   fi
-  grep -qxF 'bash "$root/.github/workflows/ring-swift.sh" "$swift_ring"' "$script" \
-    || echo "language-pair.sh does not build the Swift position program"
-  grep -qxF "if [ \"\$(\"\$swift_ring/release/position\" | tr -d '[:space:]')\" != \"\$position_hex\" ]; then" "$script" \
-    || echo "language-pair.sh does not check the Swift position program"
+  awk '/^for lang in /{ langs = $0 } index($0, "publish-position.sh") { print langs }' "$script" | grep -Eq '[ ]swift[ ;]' \
+    || echo "swift is not in the loop that checks the position row through publish-position.sh"
   for kind in ${swift_kinds% session}; do
     grep -qxF "    case \"$kind\":" "$kinds" || echo "the swift driver has no kind $kind"
   done
@@ -199,10 +197,10 @@ swift_wiring_checks() {
   done
   mutate "$script" "$tmp/s6.sh" 's/^  if ! run_lang swift "unpack-$kind-short"/  if ! run_lang go "unpack-$kind-short"/'
   expect_rejected "the swift short packet refusal" SW_SCRIPT="$tmp/s6.sh"
-  mutate "$script" "$tmp/s7.sh" '/"$swift_ring\/release\/position"/d'
-  expect_rejected "the swift position check" SW_SCRIPT="$tmp/s7.sh"
-  mutate "$script" "$tmp/s8.sh" '/^bash "$root\/.github\/workflows\/ring-swift.sh" "$swift_ring"$/d'
-  expect_rejected "the swift position build" SW_SCRIPT="$tmp/s8.sh"
+  # The position loop reads like the pack-session loop, so only the loop above the publish-position.sh line loses swift.
+  awk '{ lines[NR] = $0 } /^for lang in /{ n = NR } index($0, "publish-position.sh") { at = n }
+    END { sub(/ swift go; do$/, " go; do", lines[at]); for (i = 1; i <= NR; i++) print lines[i] }' "$script" > "$tmp/s7.sh"
+  expect_rejected "swift in the publish-position loop" SW_SCRIPT="$tmp/s7.sh"
   for kind in ${swift_kinds% session}; do
     mutate "$driver/Sources/handoff-swift/Kinds.swift" "$tmp/k-$kind.swift" "s/^    case \"$kind\":$/    case \"x$kind\":/"
     expect_rejected "the $kind kind of the swift driver" SW_KINDS="$tmp/k-$kind.swift"

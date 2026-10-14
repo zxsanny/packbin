@@ -483,18 +483,12 @@ handoff cpp swift session "$session_hex"
 handoff swift go session "$session_hex"
 handoff go swift session "$session_hex"
 
-for lang in csharp typescript python rust cpp java go; do
+for lang in csharp typescript python rust cpp java swift go; do
   got="$(bash "$root/.github/workflows/publish-position.sh" "$lang" | tr -d '[:space:]')"
   if [ "$got" != "$position_hex" ]; then
     echo "$lang position mismatch" >&2
     exit 1
   fi
 done
-# Swift's position program is run here until publish-position.sh builds it (AZ-2523).
-bash "$root/.github/workflows/ring-swift.sh" "$swift_ring"
-if [ "$("$swift_ring/release/position" | tr -d '[:space:]')" != "$position_hex" ]; then
-  echo "swift position mismatch" >&2
-  exit 1
-fi
 
 echo "language pairs passed"

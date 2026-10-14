@@ -110,6 +110,7 @@ copy_tree() {
     --exclude .git \
     --exclude test-results \
     --exclude .github/workflows/out \
+    --exclude .build --exclude .swiftpm \
     --exclude rust/target \
     --exclude .cache \
     --exclude cpp/build \
@@ -123,10 +124,10 @@ gate_checks() {
   plan="$out/publish-plan.txt"
   local order
   order="$(paste -sd ' ' "$plan")"
-  assert_eq "$order" "csharp typescript python rust cpp java go" "AC-1 call list"
+  assert_eq "$order" "csharp typescript python rust cpp java go swift" "AC-1 call list"
   local count
   count="$(grep -c '^pack ' "$out/log.txt" || true)"
-  assert_eq "$count" "7" "AC-1 pack calls"
+  assert_eq "$count" "8" "AC-1 pack calls"
   while read -r _ lang hex; do
     assert_eq "$hex" "$expected" "AC-1 $lang hex"
   done < <(grep '^pack ' "$out/log.txt")
@@ -141,12 +142,8 @@ gate_checks() {
   SRC_ROOT="$bad" PACKBIN_OUT="$bad_out" bash "$bad/.github/workflows/publish-gate.sh" >"$bad/log.txt"
   local code=$?
   set -e
-  if [ "$code" -eq 0 ]; then
-    fail "AC-3 mismatch still published"
-  fi
-  if [ -s "$bad_out/publish-plan.txt" ]; then
-    fail "AC-3 plan was not empty"
-  fi
+  [ "$code" -ne 0 ] || fail "AC-3 mismatch still published"
+  [ ! -s "$bad_out/publish-plan.txt" ] || fail "AC-3 plan was not empty"
   local packed
   packed="$(grep '^pack csharp ' "$bad/log.txt" | awk '{print $3}')"
   assert_eq "$packed" "$expected" "AC-3 pack ignored the bad fixture"
@@ -157,13 +154,9 @@ gate_checks() {
   rm -rf "$missing/java"
   local miss_out="$missing/.github/workflows/out"
   SRC_ROOT="$missing" PACKBIN_OUT="$miss_out" bash "$missing/.github/workflows/publish-gate.sh" >"$missing/log.txt"
-  if grep -qx java "$miss_out/publish-plan.txt"; then
-    fail "AC-4 java was published"
-  fi
-  if ! grep -q '^absent java$' "$missing/log.txt"; then
-    fail "AC-4 java was not absent"
-  fi
-  assert_eq "$(wc -l < "$miss_out/publish-plan.txt" | tr -d ' ')" "6" "AC-4 six languages"
+  ! grep -qx java "$miss_out/publish-plan.txt" || fail "AC-4 java was published"
+  grep -q '^absent java$' "$missing/log.txt" || fail "AC-4 java was not absent"
+  assert_eq "$(wc -l < "$miss_out/publish-plan.txt" | tr -d ' ')" "7" "AC-4 seven languages"
 }
 
 manifest_checks() {
@@ -469,6 +462,8 @@ source "$here/publish-pins.test.sh"
 source "$here/publish-readonly.test.sh"
 # shellcheck source=publish-go.test.sh
 source "$here/publish-go.test.sh"
+# shellcheck source=publish-swift.test.sh
+source "$here/publish-swift.test.sh"
 
 static_checks
 crates_token_checks
@@ -476,6 +471,7 @@ registry_checks
 vcpkg_checks
 gate_checks
 go_checks
+swift_checks
 manifest_checks
 npm_dist_checks
 bash "$here/publish-position.test.sh" || fail "AZ-2238 AC-1 AC-2 publish-position.test.sh failed"

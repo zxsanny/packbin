@@ -276,11 +276,11 @@ gt_table_checks() {
   script='source "$1"
 printf "%s|%s|%s|%s\n" "$(targets_of_lang go)" "$(target_tier go-tag)" "$(missing_credentials go-tag)" "${PACKBIN_LANGS[*]}"'
   out="$(env -u GO_TAG_REGISTRY_URL -u GITHUB_TOKEN bash -c "$script" _ "$here/publish-lib.sh")"
-  assert_eq "$out" "go-tag|final|GITHUB_TOKEN|csharp typescript python rust cpp java go" "go-tag table with the default remote"
+  assert_eq "$out" "go-tag|final|GITHUB_TOKEN|csharp typescript python rust cpp java go swift" "go-tag table with the default remote"
   out="$(env GO_TAG_REGISTRY_URL=/srv/go.git bash -c "$script" _ "$here/publish-lib.sh")"
-  assert_eq "$out" "go-tag|final||csharp typescript python rust cpp java go" "go-tag table with a local remote"
+  assert_eq "$out" "go-tag|final||csharp typescript python rust cpp java go swift" "go-tag table with a local remote"
   out="$(env GITHUB_TOKEN=g bash -c "$script" _ "$here/publish-lib.sh")"
-  assert_eq "$out" "go-tag|final||csharp typescript python rust cpp java go" "go-tag table with GITHUB_TOKEN"
+  assert_eq "$out" "go-tag|final||csharp typescript python rust cpp java go swift" "go-tag table with GITHUB_TOKEN"
   grep -qx 'for tier in required optional final; do' "$here/publish-upload.sh" || fail "the upload loop does not run the final tier last"
   grep -q 'ADR-004' "$here/publish-lib.sh" || fail "publish-lib.sh does not cite ADR-004"
 }

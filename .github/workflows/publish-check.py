@@ -276,6 +276,32 @@ def check_go_tag(directory, version):
     need("Permission is hereby granted, free of charge" in licence, "LICENSE lacks the MIT grant")
 
 
+# A semantic version (semver.org 2.0.0): the only kind of version a consumer's `exact:` requirement can name.
+SEMVER = re.compile(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
+                    r"(-(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?"
+                    r"(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?")
+
+
+@target("swift-check")
+def check_swift(directory, version):
+    need(SEMVER.fullmatch(version) is not None, f"version {version} is not a semantic version SwiftPM resolves (ADR-005)")
+    lines = (directory / "tag.txt").read_text().splitlines()
+    need(len(lines) == 1, f"tag.txt has {len(lines)} lines, not 1")
+    tag, _, commit = lines[0].partition(" ")
+    need(tag == f"v{version}", f"tag.txt tag {tag} is not v{version}")
+    need(re.fullmatch(r"[0-9a-f]{40}", commit) is not None, f"tag.txt commit {commit!r} is not a 40-digit commit id")
+    manifest = (directory / "Package.swift").read_text()
+    need(manifest.startswith("// swift-tools-version: 5.9\n"), "Package.swift does not declare swift-tools-version: 5.9")
+    need(re.search(r"platforms: \[\.iOS\(\.v15\), \.macOS\(\.v12\)\]", manifest), "Package.swift does not declare iOS 15 and macOS 12")
+    need(re.search(r'\.library\(name: "Packbin", targets: \["Packbin"\]\)', manifest), "Package.swift has no library product Packbin")
+    licence = (directory / "LICENSE").read_text()
+    need(licence.startswith("MIT License\n"), "LICENSE is not the MIT license text")
+    need("Permission is hereby granted, free of charge" in licence, "LICENSE lacks the MIT grant")
+    others = sorted(set(re.findall(r"SPDX-License-Identifier:\s*(\S+)", manifest + licence)) - {"MIT"})
+    need(not others, f"a license identifier that is not MIT: {', '.join(others)}")
+    need(re.search(r"(?m)^import Packbin$", (directory / "main.swift").read_text()), "the consumer main.swift does not import Packbin")
+
+
 # The five targets built in a container: a symlink in their tree could make the host tools that run
 # next (cargo package, publish-sign.sh, publish-upload.sh) read or write a file outside it.
 CONTAINER_TARGETS = ("csharp", "typescript", "python", "rust", "java")
