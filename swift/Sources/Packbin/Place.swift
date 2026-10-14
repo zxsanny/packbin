@@ -47,7 +47,7 @@ final class Place: Sendable {
     private static func collect(_ nodes: [Node], into out: inout [Member]) {
         for n in nodes {
             switch n.kind {
-            case .int, .float, .bytes, .bool, .sized, .slot, .bits, .packed:
+            case .int, .float, .bytes, .bool, .sized, .slot, .bits, .packed, .utf8, .list, .dict:
                 out.append(Member(node: n, inner: nil))
             case .group:
                 out.append(Member(node: n, inner: n.fields.isEmpty ? nil : Place(n.fields)))
@@ -114,25 +114,30 @@ func checkBindings(_ place: Place) throws {
             "not bound to row type \(first.rowTypeName); bind every value field of a scheme, or none")
     }
     for m in place.members {
-        guard let inner = m.inner else { continue }
-        let child = m.node.accessor?.child
-        let bound = inner.members.first { $0.node.accessor != nil }?.node ?? inner.members.first?.node
-        let owner = m.node.isRound ? "\(m.node.label) \(m.node.id ?? -1)" : "group \(m.node.name)"
-        switch (child, inner.binding) {
-        case let (nil, innerBinding?):
-            throw PackbinError.scheme(bound?.id, bound?.name ?? "", "bound to row type \(innerBinding.rowTypeName), "
-                + "but its \(owner) is not bound")
-        case let (child?, nil):
-            guard let first = inner.members.first?.node else { break }
-            throw PackbinError.scheme(first.id, first.name, "not bound to row type \(child.typeName) (the row of "
-                + "\(owner)); bind every value field of a scheme, or none")
-        case let (child?, innerBinding?) where child.type != innerBinding.rowType:
-            throw PackbinError.scheme(bound?.id, bound?.name ?? "", "bound to row type \(innerBinding.rowTypeName), "
-                + "but its \(owner) is bound to \(child.typeName)")
-        default:
-            break
-        }
+        guard let inner = m.inner ?? leafPlace(m.node) else { continue }
+        let owner = m.node.isRound ? "\(m.node.label) \(m.node.id ?? -1)" : "\(m.node.label) \(m.node.name)"
+        try checkChildBinding(owner, m.node.accessor?.child, inner)
         try checkBindings(inner)
+    }
+}
+
+/// The members of a group's, round's or element's row `inner` are bound to the row type `child` of the
+/// member that holds them, or none is when that member is not bound.
+private func checkChildBinding(_ owner: String, _ child: ChildType?, _ inner: Place) throws {
+    let bound = inner.members.first { $0.node.accessor != nil }?.node ?? inner.members.first?.node
+    switch (child, inner.binding) {
+    case let (nil, innerBinding?):
+        throw PackbinError.scheme(bound?.id, bound?.name ?? "", "bound to row type \(innerBinding.rowTypeName), "
+            + "but its \(owner) is not bound")
+    case let (child?, nil):
+        guard let first = inner.members.first?.node else { break }
+        throw PackbinError.scheme(first.id, first.name, "not bound to row type \(child.typeName) (the row of "
+            + "\(owner)); bind every value field of a scheme, or none")
+    case let (child?, innerBinding?) where child.type != innerBinding.rowType:
+        throw PackbinError.scheme(bound?.id, bound?.name ?? "", "bound to row type \(innerBinding.rowTypeName), "
+            + "but its \(owner) is bound to \(child.typeName)")
+    default:
+        break
     }
 }
 
@@ -200,6 +205,10 @@ func typedValues(_ place: Place, _ box: AnyObject) -> [String: Any] {
             continue
         }
         guard let acc = m.node.accessor, let v = acc.get(box) else { continue }
+        if m.node.isCollection {
+            if let walked = walkedCollection(m.node, v) { values[m.node.name] = walked }
+            continue
+        }
         guard let inner = m.inner else {
             values[m.node.name] = v
             continue
@@ -220,6 +229,10 @@ func fillRow(_ place: Place, _ box: AnyObject, _ values: [String: Any], _ reache
             continue
         }
         guard let acc = m.node.accessor, let v = values[m.node.name] else { continue }
+        if m.node.isCollection {
+            if let typed = acc.makeCollection?(m.node, v) { acc.set(box, typed) }
+            continue
+        }
         guard let inner = m.inner else {
             acc.set(box, v)
             continue

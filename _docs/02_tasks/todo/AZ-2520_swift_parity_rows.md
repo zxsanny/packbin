@@ -75,6 +75,8 @@ Then TypeScript's hex and refusals (`batch_02_loop25_report.md` tables); a `when
 - Local runs are `swift test` at the repository root on the owner's Mac (Swift 6.3.3); Linux runs use `swift:6`. No language feature newer than Swift 5.9.
 - Errors are thrown as the typed `PackbinError`; no trap escapes `pack`, `unpack` or scheme construction on any input.
 
+- From the batch reports (loop 26): `_docs/02_task_plans/swift-package/parity_differences.md` lists every documented difference; AC-2 and the README pin them. Two open probes: (a) U11 for a nested row under flags: Swift reads the pending count from the nested map with the nested row's own written values, Go reads it from the row around; probe Go and report; (b) the zero-width element asymmetry (pack builds, unpack refuses) copied from TypeScript.
+
 ## Risks & Mitigation
 
 **Risk 1: A real disagreement**

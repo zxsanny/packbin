@@ -55,6 +55,52 @@ the anchor's id (`.flags(0, .group(0, "mark")), .u8(0, "n")`). In a typed row th
 member of a ``PackbinRow`` type (or an optional of one, `nil` being no value) whose members the group's
 fields are bound to; a mark is bound to a `Bool`.
 
+A group without an anchor, `.group(name, members...)`, is a nested row: its members are numbered from
+0, have references and names of their own (so they may repeat a name of the row around it), and it
+takes no id of that row. It is a `[String: Any]` under its name both ways too, and a flat key that
+names one of its members while the group is not given is refused:
+
+```swift
+let scheme = try Scheme(1, .u8(0, "mode"), .group("in", .u8(0, "mode"), .u8(1, "x")))
+let raw = try pack(scheme, ["mode": 1, "in": ["mode": 2, "x": 3]])   // 01 01 02 03
+```
+
+TypeScript flattens such a group into the row and refuses names it shares with the row around it; Go
+and C# give a nested row its own scope, as Swift does.
+
+### Strings, lists and dicts
+
+`.utf8(id, name)` is a `String`: a u16 byte count (at most 65 535), then the UTF-8 bytes. Unpack refuses
+bytes that are not valid UTF-8 (a short packet with `needed` 0 and the bytes left where the string
+starts), never repairs them, and keeps a byte order mark.
+
+`.list(name, element)` is a u16 count (at most 65 535), then the items; `.dict(name, element)` a u16
+pair count, then each key (as `utf8`) and its item. A list or dict has no id; its element is one field,
+a scope of its own with ids from 0: an integer, a float, fixed bytes, `utf8`, another list or dict, a
+nested row, or `flags` (an item is then a row, as a nested row's). An anchored group, a `u2`, a flag
+byte and a `repeat` are refused as elements. Dict keys are written in unsigned UTF-8 byte order, not
+in Swift's `String` order, so a dictionary packs to the same bytes whatever its order, and a key is never
+a member of the row:
+
+```swift
+let scheme = try Scheme(1, .utf8(0, "name"), .list("xs", .u16(0, "x")), .dict("m", .u8(0, "v")))
+let raw = try pack(scheme, ["name": "uav", "xs": [1, 2], "m": ["b": 1, "a": 2]])
+// 01 03 00 75 61 76 02 00 01 00 02 00 02 00 01 00 61 02 01 00 62 01
+```
+
+In a map row a list is any array but a `[UInt8]` (a byte run, never a list) and a dict any dictionary
+with `String` keys; an item of a nested-row or flags element is a `[String: Any]`. `unpackMap` gives a
+`String`, an `[Any]` for a list and a `[String: Any]` for a dict. Swift compares strings by canonical
+equivalence, so two keys whose bytes differ but that are equal as Swift strings (an NFC and an NFD form)
+cannot both sit in a `[String: Any]`: unpack refuses such a packet as "dict key given twice" (as
+TypeScript refuses a key given twice), and pack refuses a Foundation dictionary that holds both. In a
+typed row a list is bound to an array and a dict to a `[String: E]` of the element's Swift type (a
+``PackbinRow`` for a nested-row or flags element, whose fields are bound to it; a `[UInt8]` holds a list
+of u8); the element is never bound on its own. `nil` is no value; an empty array, dictionary or string
+is a value with count 0 written. In a round a list, dict or byte run takes one value a round in an
+array; a lone dictionary, byte run, or list inside a group map given once for every round is refused,
+and a lone string goes to every round.
+
 ### Rounds and counted kinds
 
 `.repeat(anchor, members...)` writes its members once a round until the buffer ends (nothing may
@@ -100,22 +146,22 @@ let sid = Field.u16(0, "sid").bind(get: { (r: Position) in r.sid }, set: { $0.si
 ```
 
 `nil` (a missing key, a boxed `nil`, or a getter that returns `nil`) is no value; only a flag bit can
-leave a value out. A stored 0 is a value and is written. Every value field and group of one row (the
+leave a value out (a list or dict written where a value is required is refused naming it). A stored 0 is a value and is written. Every value field and group of one row (the
 top level, or a group's members) is bound to the same row type, or none is; a bound scheme packs that
 type and `unpack` returns it, and `pack` and `unpackMap` still take and give the map form of any
 scheme.
 
 A member holds every value of its field: an integer type that holds the field's range (an `Int` for a
-`u16`, not a `UInt8`), `Float` (f32 only) or `Double`, `[UInt8]` for fixed bytes, `Bool` for a bool, or
-an optional of one. Any other member type is refused when the scheme is built.
+`u16`, not a `UInt8`), `Float` (f32 only) or `Double`, `[UInt8]` for fixed bytes, `Bool` for a bool,
+`String` for utf8, an array or `[String: E]` for a list or dict, or an optional of one. Any other member type is refused when the scheme is built.
 
 In a map row an integer field takes any Swift integer type whose value fits; a float field any
-integer or float; fixed bytes a `[UInt8]` of exactly its size; a bool a `Bool`. A Foundation
+integer or float; fixed bytes a `[UInt8]` of exactly its size; a bool a `Bool`; utf8 a `String`. A Foundation
 `NSNumber` (from `JSONSerialization`) is read as the `Bool`, integer or float it was made from. A `Bool`
 or a `Double` (a whole `2.0` too) for an integer field, an integer for a bool, and any other type are
 refused, naming the field id. `unpackMap` gives each value the Swift type of its field (`UInt8` to
-`UInt64`, `Int8` to `Int64`, `Float`, `Double`, `[UInt8]`, `true`), so a row it returned packs again
-to the same bytes.
+`UInt64`, `Int8` to `Int64`, `Float`, `Double`, `[UInt8]`, `true`, `String`), so a row it returned
+packs again to the same bytes.
 
 ### Pack and unpack
 
@@ -146,16 +192,19 @@ The whole API is listed here.
   written; `.flagByte(_ handle: FlagByte)`: where a split-form flag byte is read;
   `.when(_ anchor: Int, _ condition: Condition, _ members: Field...)`: the members only when an
   earlier field of the same scope equals the value, the anchor is not written;
-  `.group(_ anchor: Int, _ name: String, _ members: Field...)`: the members under one name (see
-  Groups). `flags`, `when` and `group` also take their members as an array.
+  `.group(_ anchor: Int, _ name: String, _ members: Field...)`: the members under one name, and
+  `.group(_ name: String, _ members: Field...)`: a nested row (see Groups). `flags`, `when` and `group`
+  also take their members as an array.
+- `.utf8(_ id: Int, _ name: String)`, `.list(_ name: String, _ element: Field)`,
+  `.dict(_ name: String, _ element: Field)` (see Strings, lists and dicts).
 - Round and counted constructors: `.repeat(_ anchor: Int, _ members: Field...)`,
   `.times(_ anchor: Int, count: Int, _ members: Field...)` (both also take an array),
   `.sized(_ id: Int, _ name: String, count: Int)`, `.bits(_ id: Int, _ name: String, count: Int)`,
   `.packed(_ width: Int, _ id: Int, _ name: String, count: Int, bias: Int = 0)`,
   `.u2(_ slots: Field...)` (or an array), `.slot(_ id: Int, _ name: String)` (see Rounds and counted
   kinds).
-- ``Field/bind(get:set:)``: binds a value field, a group, a repeat or a times to a member of a
-  ``PackbinRow``.
+- ``Field/bind(get:set:)``: binds a value field, a list, a dict, a group, a repeat or a times to a
+  member of a ``PackbinRow``.
 - ``FlagByte``: `init(_ name: String)`, `name`, `bit(_ member: Field) -> Field` (the member under the
   next bit of the byte read before it in the same scope).
 - ``Condition``: `.eq(_ id: Int, _ value: some BinaryInteger)`, `.eq(_ id: Int, _ value: Bool)`.

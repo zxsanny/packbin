@@ -15,3 +15,12 @@ Collected from the worker reports (`_docs/03_implementation/batch_NN_loop26_repo
 | AZ-2515 | `times` count 2^64-1 behind a clear `when` | refused naming the field | packs `0100025a00` | documented U6 exception; Swift follows the others |
 | AZ-2515 | `[UInt8]` as the items of bits/packed | accepted (unpack gives `[UInt8]`, which must repack) | refuses a Uint8Array for bits | as Go |
 | AZ-2515 | mark `1` in a round; group entry `true` in a round; flat member list beside an absent group | refused | bit clear (`010201`); `missing v`; — | Go-1 B, Go-4 A in rounds |
+| AZ-2516 | nested-row member names | a nested row has a scope of its own: ten schemes TypeScript refuses ("declared inside a group and outside it") build; the anchored group still refuses a shared name | refuses | as Go and C# |
+| AZ-2516 | `u2` or a flag byte as a list/dict element | refused | builds (`0102000102`, `01010000`) | loop 25 D2 A, as Go |
+| AZ-2516 | a lone non-dictionary value for a dict name in a round | refused with the lone-dictionary text | refused, other text | text only |
+| AZ-2516 | a list/dict inside a group map given once for every round | refused | sliced per round | Go-4 A |
+| AZ-2516 | items of a nested-row or flags element in a map row | must be `[String: Any]`; a struct is refused | any object | typed API |
+| AZ-2516 | dict keys equal under Unicode normalization (NFC/NFD) | unpack refuses ("dict key given twice"); pack refuses an `NSDictionary` holding both forms | keeps both | owner ruling 2026-10-14 |
+| AZ-2516 | the nested row API | a `group` overload without an anchor (Go: `Nested`) | group without an anchor | naming |
+| AZ-2516 | refusal of a whole list/dict | field `nil` (a list has no id) and the list's name; item errors name the element's id and name | — | as Go |
+

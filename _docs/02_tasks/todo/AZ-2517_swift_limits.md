@@ -83,6 +83,8 @@ Then unpacks; with the default limit it is refused
 
 - From AZ-2515 (loop 26): there are no pack caps yet: a huge `times` count over lone scalars loops on pack until `maxRounds`/`maxSlots` exist, so the no-trap sweeps keep pack counts small until this task lands the caps. Unpack is already bounded (every round must consume a byte; a count is checked against the bytes left before any storage is made).
 
+- From AZ-2516 (loop 26): not built yet and owned here: pack output caps, the slot charge of a nested row in a round (D3), and `maxRounds` for list items. A zero-width element (`bytes(size: 0)`) packs (`010100`) but unpack refuses the same packet (short, needed 0, left 0), as TypeScript: report any change to the parent, do not decide it here. No storage is reserved from a count read off the wire; dicts are not pre-sized: keep it so.
+
 ## Risks & Mitigation
 
 **Risk 1: Fuzz time in CI**

@@ -96,7 +96,10 @@ func checkRoundNesting(_ nodes: [Node], inRound: Bool) throws {
             try checkRoundNesting(n.fields, inRound: true)
         case .when, .flags, .group, .flagBit:
             try checkRoundNesting(n.fields, inRound: inRound)
-        case .int, .float, .bytes, .bool, .flagByte, .sized, .u2, .slot, .bits, .packed:
+        case .list, .dict:
+            // A list or dict element is a row of its own and starts outside any round.
+            try checkRoundNesting(n.fields, inRound: false)
+        case .int, .float, .bytes, .bool, .flagByte, .sized, .u2, .slot, .bits, .packed, .utf8:
             break
         }
     }
@@ -114,9 +117,9 @@ func checkRoundBodies(_ nodes: [Node]) throws {
                     + "a round of it would charge no slot and write nothing")
             }
             try checkRoundBodies(n.fields)
-        case .when, .flags, .group, .flagBit:
+        case .when, .flags, .group, .flagBit, .list, .dict:
             try checkRoundBodies(n.fields)
-        case .int, .float, .bytes, .bool, .flagByte, .sized, .u2, .slot, .bits, .packed:
+        case .int, .float, .bytes, .bool, .flagByte, .sized, .u2, .slot, .bits, .packed, .utf8:
             break
         }
     }
@@ -127,7 +130,7 @@ private func holdsMember(_ nodes: [Node]) -> Bool {
         switch n.kind {
         case .when, .group, .repeatRound, .timesRound, .flagBit:
             return holdsMember(n.fields)
-        case .int, .float, .bytes, .bool, .flags, .flagByte, .sized, .u2, .slot, .bits, .packed:
+        case .int, .float, .bytes, .bool, .flags, .flagByte, .sized, .u2, .slot, .bits, .packed, .utf8, .list, .dict:
             return true
         }
     }

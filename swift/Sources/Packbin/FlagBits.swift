@@ -13,7 +13,8 @@ func bitOn(_ n: Node, _ values: [String: Any], _ wrote: [String: Any]) throws ->
     case .group:
         if n.fields.isEmpty { return isTrue(values[n.name]) }
         if values[n.name] != nil { return true }
-        return try anyOn(n.fields, [:], wrote)
+        // A nested row reads what it has written itself, which is nothing before it is packed.
+        return try anyOn(n.fields, [:], n.nested ? [:] : wrote)
     case .flags, .u2:
         return try anyOn(n.fields, values, wrote)
     case .flagBit:
@@ -34,7 +35,7 @@ func bitOn(_ n: Node, _ values: [String: Any], _ wrote: [String: Any]) throws ->
         return n.shape.map { roundCount($0, values) > 0 } ?? false
     case .flagByte:
         return false
-    case .int, .float, .bytes, .sized, .slot, .bits, .packed:
+    case .int, .float, .bytes, .sized, .slot, .bits, .packed, .utf8, .list, .dict:
         return values[n.name] != nil
     }
 }
@@ -62,13 +63,13 @@ func heldField(_ n: Node, _ values: [String: Any]) -> Node? {
         return firstHeld(n.fields, values)
     case .repeatRound, .timesRound:
         guard let shape = n.shape else { return nil }
-        let lone = shape.buffers.contains { values[$0.name] != nil }
+        let lone = (shape.dicts + shape.buffers).contains { values[$0.name] != nil }
         return roundCount(shape, values) > 0 || lone ? firstHeld(n.fields, values) : nil
     case .flagBit:
         return n.member.flatMap { heldField($0, values) }
     case .flagByte:
         return nil
-    case .int, .float, .bytes, .sized, .slot, .bits, .packed:
+    case .int, .float, .bytes, .sized, .slot, .bits, .packed, .utf8, .list, .dict:
         return values[n.name] != nil ? n : nil
     }
 }
@@ -91,10 +92,12 @@ private func countNeverWritten(_ n: Node, _ values: [String: Any], _ wrote: [Str
         return n.fields.contains { countNeverWritten($0, values, wrote) }
     case .group:
         let inner = groupValues(values, n)
-        return n.fields.contains { countNeverWritten($0, inner, wrote) }
+        let innerWrote = n.nested ? [:] : wrote
+        return n.fields.contains { countNeverWritten($0, inner, innerWrote) }
     case .flags, .flagBit:
         return n.fields.contains { countNeverWritten($0, values, wrote) }
-    case .int, .float, .bytes, .bool, .flagByte, .repeatRound, .sized, .u2, .slot, .bits, .packed:
+    case .int, .float, .bytes, .bool, .flagByte, .repeatRound, .sized, .u2, .slot, .bits, .packed, .utf8, .list,
+         .dict:
         return false
     }
 }
@@ -115,27 +118,30 @@ func groupValues(_ values: [String: Any], _ group: Node) -> [String: Any] {
 }
 
 /// One bit of a split flag byte: its member, and the values of the row the member reads (inside a
-/// group, the group's own values).
+/// group, the group's own values). `nested`: the bit sits in a nested row, whose references read what
+/// that row has written, which is nothing before the row is packed.
 private struct FlagBitRef {
     let bit: Int
     let member: Node
     let values: [String: Any]
+    let nested: Bool
 }
 
 /// The bits of the flag byte `tag` among `nodes`, at any depth of the scope.
-private func collectFlagBits(_ nodes: [Node], _ tag: FlagTag, _ values: [String: Any], into out: inout [FlagBitRef]) {
+private func collectFlagBits(_ nodes: [Node], _ tag: FlagTag, _ values: [String: Any], nested: Bool,
+                             into out: inout [FlagBitRef]) {
     for n in nodes {
         switch n.kind {
         case .flagBit:
             guard let member = n.member else { continue }
-            if n.tag === tag { out.append(FlagBitRef(bit: n.bit, member: member, values: values)) }
-            collectFlagBits([member], tag, values, into: &out)
+            if n.tag === tag { out.append(FlagBitRef(bit: n.bit, member: member, values: values, nested: nested)) }
+            collectFlagBits([member], tag, values, nested: nested, into: &out)
         case .when:
-            collectFlagBits(n.fields, tag, values, into: &out)
+            collectFlagBits(n.fields, tag, values, nested: nested, into: &out)
         case .group:
-            collectFlagBits(n.fields, tag, groupValues(values, n), into: &out)
+            collectFlagBits(n.fields, tag, groupValues(values, n), nested: nested || n.nested, into: &out)
         case .int, .float, .bytes, .bool, .flags, .flagByte, .repeatRound, .timesRound, .sized, .u2, .slot, .bits,
-             .packed:
+             .packed, .utf8, .list, .dict:
             break
         }
     }
@@ -151,9 +157,9 @@ struct FlagRoot {
 /// The byte a split flag byte writes: a bit for each member that is on where the byte sits.
 func flagValue(_ root: FlagRoot, _ tag: FlagTag, _ wrote: [String: Any]) throws -> UInt8 {
     var bits: [FlagBitRef] = []
-    collectFlagBits(root.fields, tag, root.values, into: &bits)
+    collectFlagBits(root.fields, tag, root.values, nested: false, into: &bits)
     var flags: UInt8 = 0
-    for b in bits where try bitOn(b.member, b.values, wrote) {
+    for b in bits where try bitOn(b.member, b.values, b.nested ? [:] : wrote) {
         flags |= UInt8(truncatingIfNeeded: 1 << b.bit)
     }
     return flags

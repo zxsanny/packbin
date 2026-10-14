@@ -8,7 +8,7 @@ public func unpack(_ buffer: [UInt8], _ schemes: Scheme...) throws -> Any {
 
 /// `unpack` with the schemes as an array.
 public func unpack(_ buffer: [UInt8], _ schemes: [Scheme]) throws -> Any {
-    let (scheme, values, reached) = try dispatch(buffer, schemes)
+    let (scheme, values, reached) = try dispatch(buffer, schemes, typed: true)
     guard let binding = scheme.binding else { return values }
     let box = binding.makeBox()
     fillRow(scheme.place, box, values, reached)
@@ -16,8 +16,9 @@ public func unpack(_ buffer: [UInt8], _ schemes: [Scheme]) throws -> Any {
 }
 
 /// `unpack` with the row as a map keyed by field name, for every scheme. A value has the Swift type
-/// of its field: `UInt8` to `UInt64`, `Int8` to `Int64`, `Float`, `Double`, `[UInt8]`, and `true` for
-/// a set bool or mark, a `[String: Any]` of its members for a group that was read, a `[UInt8]` for
+/// of its field: `UInt8` to `UInt64`, `Int8` to `Int64`, `Float`, `Double`, `[UInt8]`, `String`, an
+/// `[Any]` for a list, a `[String: Any]` for a dict, and `true` for a set bool or mark, a
+/// `[String: Any]` of its members for a group that was read, a `[UInt8]` for
 /// sized, bits and packed, a `UInt8` for a u2 slot, and for each name of a repeat or times round an
 /// `[Any?]` with one entry a round (`nil` where the round skipped it). A field that was not read (a
 /// clear bit, a when that did not match, a round of 0 rounds) has no key, so a row it returned packs
@@ -28,10 +29,12 @@ public func unpackMap(_ buffer: [UInt8], _ schemes: Scheme...) throws -> [String
 
 /// `unpackMap` with the schemes as an array.
 public func unpackMap(_ buffer: [UInt8], _ schemes: [Scheme]) throws -> [String: Any] {
-    try dispatch(buffer, schemes).1
+    try dispatch(buffer, schemes, typed: false).1
 }
 
-private func dispatch(_ buffer: [UInt8], _ schemes: [Scheme]) throws
+/// `typed`: the row is filled into the bound row type, so each item of a nested-row element keeps the
+/// rounds it read.
+private func dispatch(_ buffer: [UInt8], _ schemes: [Scheme], typed: Bool) throws
     -> (Scheme, [String: Any], Set<ObjectIdentifier>) {
     if schemes.isEmpty { throw PackbinError.scheme(nil, "", "unpack needs at least one scheme") }
     var seen = ByteSet()
@@ -43,6 +46,7 @@ private func dispatch(_ buffer: [UInt8], _ schemes: [Scheme]) throws
         throw PackbinError(.unknownType, field: nil, actual: Int(first))
     }
     var r = Reader(buffer)
+    r.typed = typed && scheme.binding != nil
     var values = [String: Any](minimumCapacity: scheme.place.members.count)
     try r.fields(scheme.fields, &values)
     if r.left > 0 { throw PackbinError(.trailing, field: nil, left: r.left) }
@@ -59,16 +63,22 @@ struct Reader {
     /// The values of the scope read so far that a when or a count reads, by name, wherever they sit (a
     /// group shares the scope; a round is a scope of its own).
     var seen: [String: Any] = [:]
-    /// The rounds read (with 0 rounds or more), for a typed row.
+    /// The rounds read (with 0 rounds or more), for a typed row; an item of a nested-row element keeps
+    /// its own.
     var reached = Set<ObjectIdentifier>()
+    /// The row is filled into a bound row type: items of a nested-row element are `ElementItem`s.
+    var typed = false
 
     init(_ buf: [UInt8]) { self.buf = buf }
 
     var left: Int { buf.count &- off }
 
     /// The index of the first of `size` bytes of `n`, which are then consumed.
-    mutating func take(_ n: Node, _ size: Int) throws -> Int {
-        guard size <= left else { throw PackbinError.shortPacket(n.id, n.name, needed: size, left: left) }
+    mutating func take(_ n: Node, _ size: Int) throws -> Int { try take(n.id, n.name, size) }
+
+    /// The index of the first of `size` bytes of the field `id` (`name`), which are then consumed.
+    mutating func take(_ id: Int?, _ name: String, _ size: Int) throws -> Int {
+        guard size <= left else { throw PackbinError.shortPacket(id, name, needed: size, left: left) }
         let start = off
         off += size
         return start
@@ -78,19 +88,10 @@ struct Reader {
     mutating func fields(_ nodes: [Node], _ values: inout [String: Any]) throws {
         for n in nodes {
             switch n.kind {
-            case .int:
-                let x = readUInt(try take(n, n.size), n.size, n.bigEndian)
-                store(n, integer(x, n.size, n.signed), &values)
-            case .float:
-                let x = readUInt(try take(n, n.size), n.size, n.bigEndian)
-                if n.size == 4 {
-                    store(n, Float(bitPattern: UInt32(truncatingIfNeeded: x)), &values)
-                } else {
-                    store(n, Double(bitPattern: x), &values)
-                }
-            case .bytes:
-                let start = try take(n, n.size)
-                store(n, Array(buf[start..<(start + n.size)]), &values)
+            case .int, .float, .bytes, .utf8:
+                store(n, try value(n), &values)
+            case .list, .dict:
+                store(n, try collection(n), &values)
             case .bool:
                 // Reached only through a set flag bit.
                 store(n, true, &values)
@@ -117,6 +118,8 @@ struct Reader {
                 // A mark is reached only through a set flag bit; a group with members is a map of its own.
                 if n.fields.isEmpty {
                     values[n.name] = true
+                } else if n.nested {
+                    values[n.name] = try nestedRow(n.fields)
                 } else {
                     var inner: [String: Any] = [:]
                     try fields(n.fields, &inner)
@@ -128,6 +131,22 @@ struct Reader {
                 // A slot is read by its u2.
                 break
             }
+        }
+    }
+
+    /// The value of an integer, float, fixed bytes or utf8 field.
+    mutating func value(_ n: Node) throws -> Any {
+        switch n.kind {
+        case .float:
+            let x = readUInt(try take(n, n.size), n.size, n.bigEndian)
+            return n.size == 4 ? Float(bitPattern: UInt32(truncatingIfNeeded: x)) as Any : Double(bitPattern: x)
+        case .bytes:
+            let start = try take(n, n.size)
+            return Array(buf[start..<(start + n.size)])
+        case .utf8:
+            return try readString(n.id, n.name)
+        default:
+            return integer(readUInt(try take(n, n.size), n.size, n.bigEndian), n.size, n.signed)
         }
     }
 

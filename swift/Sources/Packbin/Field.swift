@@ -4,6 +4,7 @@ public let flagBits = 8
 enum NodeKind: Sendable {
     case int, float, bytes, bool, flags, flagByte, flagBit, when, group
     case repeatRound, timesRound, sized, u2, slot, bits, packed
+    case utf8, list, dict
 }
 
 /// The identity of one flag byte: a handle, or one read of it once a scheme is built.
@@ -25,7 +26,7 @@ final class Node: Sendable {
     let signed: Bool
     let bigEndian: Bool
     /// Flags, when, group, repeat and times members; a u2's slots; a flag bit's one member; a built
-    /// flags member: its byte and bits.
+    /// flags member: its byte and bits; a list's or dict's one element.
     let fields: [Node]
     /// Flag byte: this read; flag bit: the byte it belongs to.
     let tag: FlagTag?
@@ -51,12 +52,17 @@ final class Node: Sendable {
     let accessor: Accessor?
     /// A constructor's refusal, reported by `Scheme.init`.
     let error: String?
+    /// A group without an anchor: a nested row with ids, references and names of its own.
+    let nested: Bool
+    /// A list or dict whose element is a nested row: the place of that row, made when the scheme is
+    /// built.
+    let rowPlace: Place?
 
     init(_ kind: NodeKind, id: Int?, name: String = "", size: Int = 0, signed: Bool = false,
          bigEndian: Bool = false, fields: [Node] = [], tag: FlagTag? = nil, inOrder: Bool = false,
          bit: Int = 0, condition: Condition? = nil, countID: Int? = nil, bias: Int = 0, ref: String = "",
          refPath: [String] = [], shape: RoundShape? = nil, referenced: Bool = false,
-         accessor: Accessor? = nil, error: String? = nil) {
+         accessor: Accessor? = nil, error: String? = nil, nested: Bool = false, rowPlace: Place? = nil) {
         self.kind = kind
         self.id = id
         self.name = name
@@ -76,17 +82,21 @@ final class Node: Sendable {
         self.referenced = referenced
         self.accessor = accessor
         self.error = error
+        self.nested = nested
+        self.rowPlace = rowPlace
     }
 
     /// A copy with the given properties changed; a nil argument keeps the property as it is.
-    func with(bigEndian: Bool? = nil, fields: [Node]? = nil, tag: FlagTag? = nil, bit: Int? = nil,
-              ref: String? = nil, refPath: [String]? = nil, shape: RoundShape? = nil, referenced: Bool? = nil,
-              accessor: Accessor? = nil, error: String? = nil) -> Node {
-        Node(kind, id: id, name: name, size: size, signed: signed, bigEndian: bigEndian ?? self.bigEndian,
+    func with(name: String? = nil, bigEndian: Bool? = nil, fields: [Node]? = nil, tag: FlagTag? = nil,
+              bit: Int? = nil, ref: String? = nil, refPath: [String]? = nil, shape: RoundShape? = nil,
+              referenced: Bool? = nil, accessor: Accessor? = nil, error: String? = nil,
+              rowPlace: Place? = nil) -> Node {
+        Node(kind, id: id, name: name ?? self.name, size: size, signed: signed, bigEndian: bigEndian ?? self.bigEndian,
              fields: fields ?? self.fields, tag: tag ?? self.tag, inOrder: inOrder, bit: bit ?? self.bit,
              condition: condition, countID: countID, bias: bias, ref: ref ?? self.ref,
              refPath: refPath ?? self.refPath, shape: shape ?? self.shape, referenced: referenced ?? self.referenced,
-             accessor: accessor ?? self.accessor, error: error ?? self.error)
+             accessor: accessor ?? self.accessor, error: error ?? self.error, nested: nested,
+             rowPlace: rowPlace ?? self.rowPlace)
     }
 
     /// The member a flag bit guards.
@@ -100,12 +110,17 @@ final class Node: Sendable {
 
     var isValue: Bool {
         switch kind {
-        case .int, .float, .bytes, .bool, .sized, .slot, .bits, .packed: return true
+        case .int, .float, .bytes, .bool, .sized, .slot, .bits, .packed, .utf8, .list, .dict: return true
         case .flags, .flagByte, .flagBit, .when, .group, .repeatRound, .timesRound, .u2: return false
         }
     }
 
     var isRound: Bool { kind == .repeatRound || kind == .timesRound }
+
+    var isCollection: Bool { kind == .list || kind == .dict }
+
+    /// The one element of a list or dict.
+    var element: Node? { isCollection ? fields.first : nil }
 
     /// Fields whose value is itself a run of bytes or items: one given for a round's name would reach
     /// every round.
@@ -132,6 +147,9 @@ final class Node: Sendable {
         case .slot: return "slot"
         case .bits: return "bits"
         case .packed: return "packed"
+        case .utf8: return "utf8"
+        case .list: return "list"
+        case .dict: return "dict"
         }
     }
 }
@@ -194,7 +212,7 @@ public struct Field: Sendable {
             guard let member = n.member else { return field }
             return Field(n.with(fields: [be(Field(member)).node]))
         case .bytes, .bool, .flags, .flagByte, .when, .group, .repeatRound, .timesRound, .sized, .u2, .slot,
-             .bits, .packed:
+             .bits, .packed, .utf8, .list, .dict:
             return field
         }
     }

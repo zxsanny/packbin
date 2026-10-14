@@ -21,7 +21,7 @@ extension Packer {
             try refuseLongLists(shape, values, count)
             try refuseLoneBuffers(shape, values)
             try rounds(n, shape, count, values)
-        case .int, .float, .bytes, .bool, .flags, .flagByte, .flagBit, .when, .group, .slot:
+        case .int, .float, .bytes, .bool, .flags, .flagByte, .flagBit, .when, .group, .slot, .utf8, .list, .dict:
             break
         }
     }
@@ -116,12 +116,18 @@ extension Packer {
         case .when:
             guard let condition = n.condition, sameValue(wrote[n.ref], condition.value) else { return }
             for child in n.fields { try refuseUnwrittenCount(child, values, wrote) }
+        case .group where n.nested:
+            // A nested row's counts are its own: they are read from its map and written in it.
+            let inner = groupValues(values, n)
+            var row = self
+            row.scope = inner
+            for child in n.fields { try row.refuseUnwrittenCount(child, inner, [:]) }
         case .group:
             let inner = groupValues(values, n)
             for child in n.fields { try refuseUnwrittenCount(child, inner, wrote) }
         case .flags, .flagBit:
             for child in n.fields { try refuseUnwrittenCount(child, values, wrote) }
-        case .int, .float, .bytes, .bool, .flagByte, .repeatRound, .u2, .slot:
+        case .int, .float, .bytes, .bool, .flagByte, .repeatRound, .u2, .slot, .utf8, .list, .dict:
             return
         }
     }

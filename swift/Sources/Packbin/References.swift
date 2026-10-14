@@ -19,7 +19,8 @@ private enum SourceKind {
 
 /// An `eq` id names an integer, slot or bool field read earlier in the same scope, and a count id of
 /// times, sized, bits and packed an integer or slot; flags, flag bits, an anchored group, u2 and a when
-/// share the scope around them, and a repeat or times body is a scope of its own, closed both ways. A
+/// share the scope around them, and a repeat or times body, a list or dict element and a group without
+/// an anchor are scopes of their own, closed both ways. A
 /// bool is compared only with `true` (a clear bit is absent, so `false` never matches), and an integer
 /// only with a value it can hold. The scheme keeps a copy of each when and counted field with the name
 /// filled in, so pack and unpack never look an id up; `refs` gets each name a when or count reads.
@@ -43,9 +44,13 @@ private func bindAll(_ nodes: [Node], path: [String], scope: inout [Int: Source]
         case .bool:
             declare(n, .bool, path, &scope)
             out.append(n)
-        case .float, .bytes:
+        case .float, .bytes, .utf8:
             declare(n, .other, path, &scope)
             out.append(n)
+        case .list, .dict:
+            // An element is a scope of its own, closed both ways; a list or dict declares no id.
+            var own: [Int: Source] = [:]
+            out.append(n.with(fields: try bindAll(n.fields, path: [], scope: &own, refs: &refs)))
         case .sized, .bits, .packed:
             let source = try resolveCount(n, scope)
             refs.insert(source.name)
@@ -68,6 +73,10 @@ private func bindAll(_ nodes: [Node], path: [String], scope: inout [Int: Source]
             let ref = try resolve(n, condition, scope)
             refs.insert(ref)
             out.append(n.with(fields: try bindAll(n.fields, path: path, scope: &scope, refs: &refs), ref: ref))
+        case .group where n.nested:
+            // A nested row has references of its own, read from its own map.
+            var own: [Int: Source] = [:]
+            out.append(n.with(fields: try bindAll(n.fields, path: [], scope: &own, refs: &refs)))
         case .group:
             out.append(n.with(fields: try bindAll(n.fields, path: path + [n.name], scope: &scope, refs: &refs)))
         case .flags, .flagBit, .u2:

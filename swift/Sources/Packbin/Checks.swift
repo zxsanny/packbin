@@ -19,11 +19,17 @@ func checkFieldIDs(_ nodes: [Node], next: Int) throws -> Int {
     var next = next
     for n in nodes {
         switch n.kind {
-        case .int, .float, .bytes, .bool, .sized, .slot, .bits, .packed:
+        case .int, .float, .bytes, .bool, .sized, .slot, .bits, .packed, .utf8:
             try expectID(n, next)
             next += 1
         case .flagBit, .u2:
             next = try checkFieldIDs(n.fields, next: next)
+        case .list, .dict:
+            // An element numbers its fields from 0 in a scope of its own; a list or dict takes no id.
+            _ = try checkFieldIDs(n.fields, next: 0)
+        case .group where n.nested:
+            // A nested row numbers its members from 0 and takes no id of the row around it.
+            _ = try checkFieldIDs(n.fields, next: 0)
         case .flags, .when, .group, .repeatRound, .timesRound:
             try expectID(n, next)
             next = try checkFieldIDs(n.fields, next: next)
@@ -53,9 +59,9 @@ func checkPresenceMarks(_ nodes: [Node], onFlagBit: Bool) throws {
         switch n.kind {
         case .flagBit, .flags:
             try checkPresenceMarks(n.fields, onFlagBit: true)
-        case .group, .when, .repeatRound, .timesRound:
+        case .group, .when, .repeatRound, .timesRound, .list, .dict:
             try checkPresenceMarks(n.fields, onFlagBit: false)
-        case .int, .float, .bytes, .bool, .flagByte, .sized, .u2, .slot, .bits, .packed:
+        case .int, .float, .bytes, .bool, .flagByte, .sized, .u2, .slot, .bits, .packed, .utf8:
             break
         }
     }
@@ -84,8 +90,16 @@ func checkMemberNames(_ nodes: [Node]) throws {
     func walk(_ nodes: [Node], _ conditional: Bool) throws {
         for n in nodes {
             switch n.kind {
-            case .int, .float, .bytes, .bool, .sized, .slot, .bits, .packed:
+            case .int, .float, .bytes, .bool, .sized, .slot, .bits, .packed, .utf8:
                 try declare(n, conditional)
+            case .list, .dict:
+                // An element is a row of its own, with the same rules.
+                try declare(n, conditional)
+                if let e = n.element { try checkMemberNames(elementScope(e)) }
+            case .group where n.nested:
+                // A nested row names its members in a scope of its own (as Go and C#).
+                try declare(n, conditional)
+                try checkMemberNames(n.fields)
             case .group:
                 try declare(n, conditional)
                 try walk(n.fields, conditional)

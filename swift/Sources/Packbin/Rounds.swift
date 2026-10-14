@@ -16,6 +16,8 @@ final class RoundShape: Sendable {
     let optional: [Node]
     /// The names whose value is itself a run of bytes or items: a lone one would reach every round.
     let buffers: [Node]
+    /// The dict names: a lone dictionary would reach every round as well.
+    let dicts: [Node]
     /// The groups with members among the names, which can hold a buffer.
     let groups: [Place.Member]
 
@@ -31,6 +33,7 @@ final class RoundShape: Sendable {
         self.names = names
         self.groups = groups
         buffers = names.filter(\.isBuffer)
+        dicts = names.filter { $0.kind == .dict }
         var optionalSeen = Set<String>()
         var optional: [Node] = []
         collectOptional(fields, underFlag: false, &optionalSeen, &optional)
@@ -52,17 +55,22 @@ private func collectOptional(_ nodes: [Node], underFlag: Bool, _ seen: inout Set
             if (underFlag || !held.isEmpty) && seen.insert(n.name).inserted { out.append(n) }
         case .repeatRound, .timesRound, .flagByte:
             break
-        case .int, .float, .bytes, .bool, .sized, .slot, .bits, .packed:
+        case .int, .float, .bytes, .bool, .sized, .slot, .bits, .packed, .utf8, .list, .dict:
             if underFlag && seen.insert(n.name).inserted { out.append(n) }
         }
     }
 }
 
-/// Gives each repeat and times its shape.
+/// Gives each repeat and times its shape, and each list or dict whose element is a nested row the place
+/// of that row.
 func shapeRounds(_ nodes: [Node]) -> [Node] {
     nodes.map { n in
         let fields = shapeRounds(n.fields)
-        return n.isRound ? n.with(fields: fields, shape: RoundShape(fields)) : n.with(fields: fields)
+        if n.isRound { return n.with(fields: fields, shape: RoundShape(fields)) }
+        if n.isCollection, let e = fields.first, e.kind == .group, !e.fields.isEmpty {
+            return n.with(fields: fields, rowPlace: Place(e.fields))
+        }
+        return n.with(fields: fields)
     }
 }
 
@@ -148,9 +156,13 @@ func refuseTypedCount(_ r: Node, _ shape: RoundShape, _ values: [String: Any], _
     }
 }
 
-/// One byte run or item list given for a name of a round (also inside a group map given once for every
-/// round) would reach every round, so it is refused: one per round goes in a list.
+/// One dictionary, byte run or item list given for a name of a round would reach every round, so it is
+/// refused: one per round goes in a list. Inside a group map given once for every round a list is
+/// refused too, as Go (TypeScript slices the lists inside one group object per round).
 func refuseLoneBuffers(_ shape: RoundShape, _ values: [String: Any]) throws {
+    for n in shape.dicts where values[n.name] != nil && !(values[n.name] is RoundList) {
+        throw loneCollection(n)
+    }
     for n in shape.buffers where values[n.name] != nil && !(values[n.name] is RoundList) {
         throw loneBuffer(n)
     }
@@ -163,10 +175,17 @@ func refuseLoneBuffers(_ shape: RoundShape, _ values: [String: Any]) throws {
 private func refuseBuffersIn(_ place: Place, _ values: [String: Any]) throws {
     for m in place.members {
         if m.node.isBuffer && values[m.node.name] != nil { throw loneBuffer(m.node) }
+        if m.node.isCollection && values[m.node.name] != nil { throw loneCollection(m.node) }
         if let inner = m.inner, let nested = values[m.node.name] as? [String: Any] {
             try refuseBuffersIn(inner, nested)
         }
     }
+}
+
+private func loneCollection(_ n: Node) -> PackbinError {
+    let word = n.kind == .dict ? "dictionary" : "list"
+    return PackbinError.pack(nil, n.name, "\(n.name): a \(word) in a repeat or times round needs a list with one "
+        + "\(word) per round")
 }
 
 private func loneBuffer(_ n: Node) -> PackbinError {

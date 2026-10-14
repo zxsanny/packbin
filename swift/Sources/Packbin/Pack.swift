@@ -1,8 +1,9 @@
 /// Packs a map row: the type number, then the fields in order. A value is read by its field's name;
 /// a missing key or a nil value is no value (only a flag bit can leave one out), a stored 0 is a
 /// value. An integer field takes any Swift integer type whose value fits, a float field any integer
-/// or float, fixed bytes a `[UInt8]` of exactly its size, a bool or an empty group a `Bool`, and a
-/// group with members a `[String: Any]` its members are read from; a Foundation `NSNumber` is read as
+/// or float, fixed bytes a `[UInt8]` of exactly its size, a bool or an empty group a `Bool`, a
+/// group with members a `[String: Any]` its members are read from, utf8 a `String`, a list any array
+/// but a `[UInt8]` and a dict any dictionary with `String` keys; a Foundation `NSNumber` is read as
 /// the `Bool`, integer or float it was made from. Any other value (a `Bool` or a `Double` for an
 /// integer, an integer for a bool, a group member given outside its group) is refused. A refused row
 /// throws a `PackbinError` of kind `.packError` naming the field id, and no bytes are returned.
@@ -61,9 +62,11 @@ struct Packer {
                          _ wrote: inout [String: Any]) throws {
         for n in nodes {
             switch n.kind {
-            case .int, .float, .bytes:
+            case .int, .float, .bytes, .utf8:
                 guard let v = values[n.name] else { throw PackbinError.pack(n.id, n.name, "missing \(n.name)") }
                 try write(n, v, &wrote)
+            case .list, .dict:
+                try collection(n, values[n.name])
             case .bool:
                 // Reached only through a set flag bit: the bit is the value, nothing follows it.
                 if n.referenced { wrote[n.name] = true }
@@ -88,7 +91,12 @@ struct Packer {
                 try fields(n.fields, root: FlagRoot(fields: n.fields, values: values), values, &wrote)
             case .group:
                 // A mark is reached only through a set flag bit: the bit is its value, nothing follows it.
-                if !n.fields.isEmpty { try fields(n.fields, root: root, groupValues(values, n), &wrote) }
+                if n.fields.isEmpty { continue }
+                if n.nested {
+                    try nestedRow(n.fields, groupValues(values, n))
+                } else {
+                    try fields(n.fields, root: root, groupValues(values, n), &wrote)
+                }
             case .sized, .u2, .bits, .packed, .repeatRound, .timesRound:
                 try counted(n, values, &wrote)
             case .slot:
@@ -129,7 +137,15 @@ struct Packer {
         try fields([member], root: root, values, &wrote)
     }
 
-    private mutating func write(_ n: Node, _ v: Any, _ wrote: inout [String: Any]) throws {
+    mutating func write(_ n: Node, _ v: Any, _ wrote: inout [String: Any]) throws {
+        if n.kind == .utf8 {
+            guard let text = stringValue(v) else {
+                throw PackbinError.pack(n.id, n.name, "\(n.name): expected a String for utf8, got \(described(scalar(v), v))")
+            }
+            try writeString(n.id, n.name, text)
+            if n.referenced { wrote[n.name] = text }
+            return
+        }
         switch (n.kind, scalar(v)) {
         case let (.int, .int(num)):
             guard num.fits(size: n.size, signed: n.signed) else {

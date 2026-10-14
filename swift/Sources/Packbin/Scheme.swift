@@ -32,6 +32,7 @@ public struct Scheme: Sendable {
         try checkRoundBodies(flat)
         var refs = Set<String>()
         let bound = shapeRounds(markReferenced(try bindReferences(flat, refs: &refs), refs))
+        try checkElements(bound)
         let place = Place(bound)
         try checkBindings(place)
         self.typeNumber = typeNumber
@@ -52,9 +53,9 @@ private func flatten(_ nodes: [Node]) -> [Node] {
         case .flagBit:
             // A split bit's member that is a flags stays one member: its own byte and bits.
             out.append(n.with(fields: n.fields.flatMap(flagMember)))
-        case .when, .group, .repeatRound, .timesRound:
+        case .when, .group, .repeatRound, .timesRound, .list, .dict:
             out.append(n.with(fields: flatten(n.fields)))
-        case .int, .float, .bytes, .bool, .flagByte, .sized, .u2, .slot, .bits, .packed:
+        case .int, .float, .bytes, .bool, .flagByte, .sized, .u2, .slot, .bits, .packed, .utf8:
             out.append(n)
         }
     }
@@ -131,10 +132,10 @@ private func bindBits(_ n: Node, seen: inout [ObjectIdentifier: FlagRead],
         fields.reserveCapacity(n.fields.count)
         for child in n.fields { fields.append(try bindBits(child, seen: &seen, met: &met)) }
         return n.with(fields: fields)
-    case .repeatRound, .timesRound:
-        // A round is a scope of its own: it sees no byte read around it.
+    case .repeatRound, .timesRound, .list, .dict:
+        // A round and a list or dict element are scopes of their own: they see no byte read around them.
         return n.with(fields: try bindFlagBits(n.fields, seen: [:], met: &met))
-    case .int, .float, .bytes, .bool, .sized, .u2, .slot, .bits, .packed:
+    case .int, .float, .bytes, .bool, .sized, .u2, .slot, .bits, .packed, .utf8:
         return n
     }
 }

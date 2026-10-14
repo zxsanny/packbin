@@ -35,7 +35,7 @@ extension Reader {
                 throw unreadable(id, name)
             }
             try rounds(n, count: count, &values)
-        case .int, .float, .bytes, .bool, .flags, .flagByte, .flagBit, .when, .group, .slot:
+        case .int, .float, .bytes, .bool, .flags, .flagByte, .flagBit, .when, .group, .slot, .utf8, .list, .dict:
             break
         }
     }

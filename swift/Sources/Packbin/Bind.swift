@@ -46,6 +46,7 @@ enum MemberBase: Sendable {
     case float(bits: Int)
     case bool
     case bytes
+    case string
 }
 
 /// The Swift integer types a member can be.
@@ -104,15 +105,19 @@ final class Accessor: Sendable {
     let child: ChildType?
     /// A repeat or times: the member's array made of the rows unpack made, one a round.
     let makeRounds: (@Sendable ([Any]) -> Any)?
+    /// A list or dict: the member's array or dictionary made of what unpack read for it (the built
+    /// list or dict node, and its value), or nil.
+    let makeCollection: (@Sendable (Node, Any) -> Any?)?
 
     init(binding: Binding, get: @escaping @Sendable (AnyObject) -> Any?,
          set: @escaping @Sendable (AnyObject, Any) -> Void, child: ChildType?,
-         makeRounds: (@Sendable ([Any]) -> Any)? = nil) {
+         makeRounds: (@Sendable ([Any]) -> Any)? = nil, makeCollection: (@Sendable (Node, Any) -> Any?)? = nil) {
         self.binding = binding
         self.get = get
         self.set = set
         self.child = child
         self.makeRounds = makeRounds
+        self.makeCollection = makeCollection
     }
 }
 
@@ -142,6 +147,7 @@ func memberBase(_ t: Any.Type) -> MemberBase? {
     case ObjectIdentifier(Double.self): return .float(bits: 64)
     case ObjectIdentifier(Bool.self): return .bool
     case ObjectIdentifier([UInt8].self): return .bytes
+    case ObjectIdentifier(String.self): return .string
     default: return nil
     }
 }
@@ -169,6 +175,10 @@ func memberRefusal(_ node: Node, _ base: MemberBase?, _ typeName: String) -> Str
         return nil
     case (.bytes, _), (.sized, _), (.bits, _), (.packed, _):
         return "a \(typeName) member cannot hold \(node.label); bind a [UInt8]"
+    case (.utf8, .string?):
+        return nil
+    case (.utf8, _):
+        return "a \(typeName) member cannot hold utf8; bind a String"
     case (.slot, .int?):
         holds = true
     default:
@@ -178,13 +188,16 @@ func memberRefusal(_ node: Node, _ base: MemberBase?, _ typeName: String) -> Str
 }
 
 extension Field {
-    /// Binds this value field (an integer, float, fixed bytes, bool, sized, bits, packed or u2 slot),
-    /// group, repeat or times to a member of the typed row `Row`: `get` reads it for pack, `set` stores
-    /// it after unpack. `Member` holds every value of the field: an integer type that holds the field's
-    /// range (any integer type for a slot), `Float` (f32 only) or `Double`, `[UInt8]` for bytes, sized,
-    /// bits and packed, `Bool` for bool or an empty group, a ``PackbinRow`` whose members the group's
-    /// fields are bound to, an array of a ``PackbinRow`` whose members a round's fields are bound to
-    /// (one element a round), or an optional of one. A nil optional is no value (a nil array writes no
+    /// Binds this value field (an integer, float, fixed bytes, bool, sized, bits, packed, u2 slot or
+    /// utf8), list, dict, group, repeat or times to a member of the typed row `Row`: `get` reads it for
+    /// pack, `set` stores it after unpack. `Member` holds every value of the field: an integer type
+    /// that holds the field's range (any integer type for a slot), `Float` (f32 only) or `Double`,
+    /// `[UInt8]` for bytes, sized, bits and packed, `Bool` for bool or an empty group, `String` for
+    /// utf8, an array (a list) or `[String: E]` (a dict) of the element's Swift type (a ``PackbinRow``
+    /// for a nested-row or flags element, whose members the element's fields are bound to), a
+    /// ``PackbinRow`` whose members the group's fields are bound to, an array of a ``PackbinRow`` whose
+    /// members a round's fields are bound to (one element a round), or an optional of one. A list's or
+    /// dict's element is never bound on its own. A nil optional is no value (a nil array writes no
     /// round); a stored 0 is a value. Every value field, group and round of one row (the scheme's top
     /// level, a group's members, or a round's) is bound to the same row type, or none is.
     public func bind<Row: PackbinRow, Member>(
@@ -197,8 +210,14 @@ extension Field {
         let optional = Member.self is OptionalMember.Type
         let rowGroup = n.kind == .group && !n.fields.isEmpty
         let rounds = n.isRound ? roundRows(Member.self) : nil
-        let child = rowGroup ? childType(Member.self)
-            : rounds.map { ChildType(type: ObjectIdentifier($0.rowType), typeName: String(describing: $0.rowType)) }
+        let child: ChildType?
+        if rowGroup {
+            child = childType(Member.self)
+        } else if let rounds {
+            child = ChildType(type: ObjectIdentifier(rounds.rowType), typeName: String(describing: rounds.rowType))
+        } else {
+            child = n.isCollection ? leafChild(n, Member.self) : nil
+        }
         let error: String?
         if !n.isValue && n.kind != .group && !n.isRound {
             error = "bind takes a value field, not \(n.label)"
@@ -209,6 +228,8 @@ extension Field {
                 + "bind an array of a PackbinRow" : nil
         } else if rowGroup {
             error = child == nil ? "a \(memberName) member cannot hold group \(n.name); bind a PackbinRow" : nil
+        } else if n.isCollection {
+            error = collectionRefusal(n, Member.self)
         } else {
             error = memberRefusal(n, base, memberName)
         }
@@ -231,7 +252,8 @@ extension Field {
                 set(&box.row, member)
             },
             child: child,
-            makeRounds: n.isRound ? roundMaker(Member.self) : nil)
+            makeRounds: n.isRound ? roundMaker(Member.self) : nil,
+            makeCollection: n.isCollection ? collectionMaker(Member.self) : nil)
         return Field(n.with(accessor: accessor, error: error))
     }
 }
@@ -241,8 +263,13 @@ private func roundMaker<Member>(_: Member.Type) -> @Sendable ([Any]) -> Any {
     { rows in roundRows(Member.self)?.makeRows(rows) ?? rows }
 }
 
+/// Makes the array or dictionary of a list or dict member from what unpack read for it.
+private func collectionMaker<Member>(_: Member.Type) -> @Sendable (Node, Any) -> Any? {
+    { node, value in typedCollection(node, value, Member.self) }
+}
+
 /// The row type of a group's member (read through one optional), or nil when it is no `PackbinRow`.
-private func childType(_ t: Any.Type) -> ChildType? {
+func childType(_ t: Any.Type) -> ChildType? {
     let base = (t as? OptionalMember.Type)?.wrappedType ?? t
     guard base is PackbinRow.Type else { return nil }
     return ChildType(type: ObjectIdentifier(base), typeName: String(describing: base))

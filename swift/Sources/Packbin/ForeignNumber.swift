@@ -25,6 +25,15 @@ func foreignScalar(_ v: Any) -> Scalar? {
         return nil
     }
 }
+
+/// Whether `v` is a Foundation dictionary with more keys than the `[String: Any]` it bridged to holds
+/// (`count`): two of its keys are equal as Swift strings although they differ as `NSString`s.
+func foreignKeysMerged(_ v: Any, _ count: Int) -> Bool {
+    guard type(of: v) is AnyObject.Type, let dictionary = v as? NSDictionary else { return false }
+    return dictionary.count != count
+}
 #else
 func foreignScalar(_ v: Any) -> Scalar? { nil }
+
+func foreignKeysMerged(_ v: Any, _ count: Int) -> Bool { false }
 #endif
