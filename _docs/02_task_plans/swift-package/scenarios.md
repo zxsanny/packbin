@@ -31,3 +31,12 @@ Source of rows: `intake` (new-task Step 4.7, epic handoff). Status: confirmed / 
 
 - Permission denied: a library has no actors or roles.
 - A Swift toolchain below 5.9: `Package.swift` refuses it; no behavior to define.
+
+Rows added by the assessment (`assess-round-1`, see `_docs/loops/loop26/assessment26.md`):
+
+| id | scenario | status | behavior (confirmed) | AC ref | source |
+|----|----------|--------|----------------------|--------|--------|
+| O1 | a flat key beside a given group or nested row | deferred (pending assessment, loop 27) | — | — | assess-round-1 |
+| O2 | U11 with a shared name and a nested row not given | deferred (pending assessment, loop 27) | — | — | assess-round-1 |
+| O3 | a public `PackSession.start(_ nonce:)` | deferred (pending assessment, loop 27) | — | — | assess-round-1 |
+
