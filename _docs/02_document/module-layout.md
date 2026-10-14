@@ -15,7 +15,7 @@
 
 ## ADR-driven exceptions to the conventional layout
 
-A single `src/`, `crates/`, or `packages/` tree would put seven languages in one convention. ADR 002 publishes six registries from one tag, and ADR 003 publishes C++ as its own vcpkg port. Each language therefore keeps that language's files inside its own root.
+A single `src/`, `crates/`, or `packages/` tree would put eight languages in one convention. ADR 002 publishes six registries from one tag, and ADR 003 publishes C++ as its own vcpkg port. Each language therefore keeps that language's files inside its own root.
 
 > See ADR 002_publish-from-version-tag, ADR 003_cpp-vcpkg-git-registry.
 
@@ -214,19 +214,19 @@ No shared code package. The library does not log, authenticate, or load configur
 - **Directory**: `fixtures/`
 - **Purpose**: `golden.hex`, the position row `4001000065cd1d00a3e1110100`
 - **Owned by**: AZ-1866
-- **Consumed by**: all seven packages, as a file read, not an import
+- **Consumed by**: all eight packages, as a file read, not an import
 
 ### fixtures/hostile
 
 - **Directory**: `fixtures/hostile/`
 - **Purpose**: `cases.txt`, packets and schemes that crafted input can send, with the expected outcome kinds; `check-cases.sh` checks the file format and `cases.test.sh` proves that check fails on corrupted copies. Since loop 15 (AZ-2220) the file held 19 cases; since loop 22 it holds 65 (unchanged in loop 23; ten added: three no-value count, two unequal `repeat` lists, a short `times` list under `flags`, a bytes-budget element case, three empty-`when` construct cases; `pack_slots_over_limit` and `pack_element_times_over_budget` renumbered for `maxSlots` 1,048,576), 55 since loop 21 (40 since loop 20, 33 since loop 19, 25 since loop 18); loop 18 added `eq_bool_false` (AZ-2126, a `construct` case every package builds by hand and expects refused) and a `pack` stage with five cases (AZ-2194; `pack_out_of_range_integer` is not run by C++, a typed row binds `std::uint8_t`), with `hostile_pack_cases.hpp` in the C++ runner and a loader test in each package; the `limit` stage (two cases, a `repeat` and a `times` past a low round limit) is replayed by C#, TypeScript, Java, Rust and (since loop 16) Python, and skipped by C++. Loop 19 added eight cases: `eq_out_of_range` (a `construct` case, AZ-2338) and seven `pack` cases (`pack_times_count_over_limit`, `pack_times_zero_with_values`, `pack_split_when_source_after_byte`, `pack_split_times_count_after_byte`, `pack_split_times_count_skipped`, `pack_lone_bytes_in_round`, `pack_split_false_condition_silent`); C++ skips two with reasons (`pack_times_count_over_limit`, `pack_lone_bytes_in_round`) in addition to `pack_out_of_range_integer`. Loop 20 added seven `pack` cases (AZ-2367): `pack_lone_utf8_under_times_over_budget`, `pack_element_times_over_budget`, `pack_slots_over_limit`, `pack_repeat_over_limit`, `pack_split_count_zero_after_byte_list`, `pack_split_count_zero_after_byte_scalar`, `pack_flags_skipped_count_with_values`; C++ runs two (the count 0 list and the skipped count) and skips five, Rust skips the element case (no `times` in a list element); the TypeScript loader (`PACK_REFUSAL`) and the C# loader pin the rule that fired, the Python, Java, Rust and C++ loaders assert refusal only (until loop 21). Loop 21 added fifteen cases (AZ-2394, `reference_loop21_slots.md`): `pack_round_slots_at_limit`, `pack_round_slots_over_limit`, `pack_round_slots_flags_at_limit`, `pack_round_slots_flags_over_limit`, `pack_flags_short_list`, `pack_flags_short_list_filled`, `pack_split_times_absent_body`, `pack_late_when_in_bit_body`, `pack_count_one_clear_when`, `pack_bits_count_clear_when`, `pack_packed_count_clear_when`, `pack_sized_count_clear_when` and the `construct` cases `construct_empty_times_body`, `construct_empty_repeat_body`, `construct_empty_round_body_list_element`; C++ skips seven and Rust two (stated in the fixture README); since AZ-2392 all six loaders name the rule or message each refused case must give
 - **Owned by**: AZ-2070
-- **Consumed by**: every package, as a file read. The C++ runner is `cpp/tests/core/hostile_host_tests.cpp`
+- **Consumed by**: every package, as a file read. The C++ runner is `cpp/tests/core/hostile_host_tests.cpp`. Loop 26: `cases.txt` unchanged at 65; `check-cases.sh` counts eight package names (Swift, AZ-2519); `fixtures/hostile/fuzz/corpus.txt` (new, AZ-2517) holds 28 unpack fuzz inputs (the 12 unpack and limit packets of `cases.txt` and 16 from Go's seed corpus), read by the Swift `FuzzTests`
 
 ### scripts
 
 - **Directory**: `scripts/`
-- **Purpose**: the loop's test run (AZ-2500, loop 25). `loop-tests.sh` runs the scaffold, the seven language suites in their CI containers, the ARM stage, the ring, AC-10 and the publish gate; a stage runs only when a file it covers changed since its last stamped pass, the suites run in parallel with a serial retry, and the gate is skipped unless the publish path changed. `loop-tests.test.sh` tests the selection and the execution (a fake `docker`) and is a step of the `scaffold` job.
+- **Purpose**: the loop's test run (AZ-2500, loop 25). `loop-tests.sh` runs the scaffold, the eight language suites in their CI containers (`swift` since loop 26; its scaffold stage also runs `ring-wiring-swift.test.sh`), the ARM stage, the ring, AC-10 and the publish gate; a stage runs only when a file it covers changed since its last stamped pass, the suites run in parallel with a serial retry, and the gate is skipped unless the publish path changed. `loop-tests.test.sh` tests the selection and the execution (a fake `docker`) and is a step of the `scaffold` job.
 - **Owns (exclusive write during implementation)**: `scripts/**`
 - **Consumed by**: step 11 and the loop smoke (`_docs/04_deploy/deployment_procedures.md` § Loop test script)
 

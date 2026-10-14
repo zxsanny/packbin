@@ -73,3 +73,18 @@
 
 **Duration**: one unpack of 4.26 MB per packet
 **Pass criteria**: `limits_raised_test.go` (`TestAC3RaisedSlotLimitUnpacksTheOldWorstPacketAndTheDefaultRefusesIt`, `TestAC3WideRoundPacketPacksAndUnpacksWithMaxSlotsRaisedAndTheDefaultRefusesIt`, `TestAC1HostileLimitRepeatRoundsOverLimit`, `TestAC1HostileLimitTimesRoundsOverLimit`, `TestAC1AZeroWidthBytesRoundNamesASlotSoMaxSlotsBoundsTheRounds`), `limits_test.go` (`TestAC1AMillionByteRoundPacketIsRefusedFastWhereMaxSlotsIsReached`, `TestAC1RaisedToTheLargestIntUnpacksPastTheDefault`), `limits_pack_test.go` (`TestAC1PackRefusesATimesCountAboveMaxRoundsBeforeAnyRound`, `TestAC1PackedPacketOfExactlyMaxBytesPacksAndOneMoreIsRefused`, `TestAC1ALoneStringUnderATimesIsRefusedNamingItInUnderASecond`, `TestAC1SlotsAreChargedBeforeABytesAndAcrossTheWholeCall`), `fuzz_unpack_test.go` (`FuzzUnpack` 60 s in `run-suite.sh go`; `TestAMebibyteOfAnyByteIsReadWithinTheBound`). **Not met, not claimed:** the "peak at or below `maxSlots` times the per-slot cost" figure of the loop 22 memory table (NFT-RES-LIM-04) has no Go row: the tests pass under `-race` in the 7.6 GiB Docker VM only. `_docs/LESSONS.md` (2026-10-12) asks for a measured worst-case A/B before any charge changes, and the README has no Go memory bullet figure yet. A known design: a list or dict name takes one slot however many items it holds, so unpack memory for lists of nested rows scales with the packet length (about 300x per element); callers cap the packet length (README). Open as assessment D8, a one-point measurement task for loop 25.
+
+### NFT-RES-LIM-06: Swift has the same defaults and refuses the same packets; its memory is not measured (loop 26)
+
+**Summary**: The Swift package (loop 26, AZ-2517, SW-5) carries the limits of the other packages: 65 535 rounds, 1 048 576 slots and 16 777 216 bytes by default, set per scheme with `withLimits`, which keeps the type number and refuses a value below 1 ("expected a positive integer, got N"). Unpack charges a round where it starts, before its bytes are read, and refuses with kind `.tooMany`, `needed` 0; pack refuses a `times` count or `repeat` list above the round limit before any round, charges slots per round and checks the byte budget before each write. A nested row in a round is charged its own members' width (as TypeScript and Go); list and dict items are not charged to the round or slot limits.
+**Traces to**: SW-5, AZ-2517 AC-1, AC-2, AC-3 (FT-X-129, FT-X-146)
+
+**Preconditions**:
+- the Mac's Swift 6.3.3 or the `swift:6.3.3` container; the size tests run in the plain debug and release runs, not under the thread sanitizer (they took 25 minutes and failed their 1 s bounds there before loop 26 moved them out)
+
+**Monitoring**:
+- the error kind, `needed`, `left` and the member named; elapsed time of the refusal (1 s in release, a looser bound in debug, none under the sanitizer)
+- memory: not measured (review26 #5; FT-X-153)
+
+**Duration**: one unpack per packet
+**Pass criteria**: `LimitEdgeTests` (`unpack_oldWorstPacket_isRefusedAtTheDefaultAndUnpacksWithMaxSlotsRaised`, `packAndUnpack_wideRoundWithMaxSlotsRaised_packsAndUnpacksAndTheDefaultRefusesIt`, `packAndUnpack_exactly1048576Slots_packAndUnpackAndOneRoundMoreIsRefused`, `packAndUnpack_exactly16MiB_packsAndUnpacksAndOneByteMoreIsRefused`), `RoundLimitTests` (`unpack_hostileLimitCases_areRefusedAsTooManyWithNeeded0`, `unpack_mebibyteOfOneByteRoundsWith37Names_isRefusedAtTheSlotLimitWithinASecond`), `PackRoundCapTests`, `PackBudgetTests`, `SlotWidthTests`, `FuzzTests` (60 s in `run-suite.sh swift`). **Not met, not claimed:** no Swift peak-memory figure exists for the F10 packet or the wide round (Go: about 625 MB and 94 MB, NFT-RES-LIM-05); a loop 27 measurement task.

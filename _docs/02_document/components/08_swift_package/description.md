@@ -34,6 +34,8 @@ Swift copies TypeScript row for row (loop 26 fit decision 4), except the documen
 
 `swift test` in the repository root (the manifest is there): golden, parity rows of TypeScript, the hostile vectors (`fixtures/hostile/cases.txt`, 65 cases), session vectors and RFC 8439 vectors, concurrency (8 tasks, thread sanitizer), the fuzz run (60 s in `run-suite.sh swift`), and the README examples (`ReadmeExampleTests.swift`: the README Swift blocks are its snippets, and their output is the README hex). `docker compose -f docker-compose.test.yml run --rm swift` is the suite as CI runs it.
 
+The test specification is [tests.md](tests.md) (AC-1 to AC-16, SW-1 to SW-16) and the per-loop list [tests-by-loop.md](tests-by-loop.md); scenarios FT-X-124 to FT-X-155 are in `tests/blackbox-tests-19-loop26-swift-package.md`. Loop 26 step 11: the suite is 335 tests in 55 suites; on the Mac `swift test` 335 pass; the `swift:6.3.3` container stage passed (620 s); Swift 6.0, the declared minimum, was not run.
+
 ## Deferred
 
 None.

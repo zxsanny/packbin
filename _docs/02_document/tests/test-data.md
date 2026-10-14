@@ -22,6 +22,10 @@
 | Go fuzz seed corpus | `go/testdata/fuzz/FuzzUnpack/` (56 files): the golden packet and body, the ring payloads, and every unpack and limit packet of `cases.txt`, each with and without its type byte | GO-5, FT-X-88 | read by `FuzzUnpack` and `TestFuzzSeedsReadWithTheSchemeOfTheirKind` | new inputs go to the Go build cache; a failing input would be written under `go/testdata/fuzz` (none exists) |
 | ring kinds and Go handoffs | the 15 kinds of `language-pair.sh` (GO-7): `user`, `nested`, `boolflag`, `booltrue`, `bitwhen`, `session` (all six other languages), `roundflags`, `roundwhen` (TypeScript, Rust, Java, C++; C# only packs), `listgroup`, `dictgroup`, `listflags` (TypeScript, Python, Java, C#), the three `-short` refusals; 114 explicit Go handoff lines, guarded by `ring-wiring.test.sh` | GO-7, FT-X-90 | hex inline in `language-pair.sh`; Go driver `.github/workflows/drivers/handoff-go/` | none |
 | Go session vectors | seed bytes 1..32, value `01` + 15 zero bytes, the AC-1 row: C# ciphertext `b55d0a29c56c203712b241232e`; TypeScript's keyed first-packet vectors | GO-6, FT-X-89 | inline in `go/session_test.go` | none |
+| hostile packets, eight loaders (loop 26) | the same 65 cases (unchanged in loops 23 to 26). Swift is the eighth reader: the pack and limit sections name Swift in `Run by`; `check-cases.sh` counts eight names with a whole-word match | SW-4, FT-X-128, NFT-SEC-05 | `HostileLoader.swift`, `HostilePacks.swift`, `HostileSchemes.swift`, `HostileRules.swift` write each scheme by hand and read the file by path; `HostileTests.tables_holdEveryCaseOnceAndNoOther` | none; read only |
+| unpack fuzz corpus | `fixtures/hostile/fuzz/corpus.txt` (new in loop 26, AZ-2517): 28 inputs, `name kind hex`: the 12 unpack and limit packets of `cases.txt` and 16 packets of Go's seed corpus (ring payloads, their `-short` forms, the golden packet) | SW-5, FT-X-129 | read by Swift `FuzzTests` (`corpus_holdsEveryHostileUnpackAndLimitPacket` checks every unpack and limit case is there); any package may read it | none; read only |
+| ring kinds and Swift hand-offs | the same 15 kinds; 136 `handoff` lines with Swift (22 of them Go-Swift), guarded by `ring-wiring-swift.test.sh` | SW-7, FT-X-131 | hex inline in `language-pair.sh`; Swift driver `.github/workflows/drivers/handoff-swift/` | none |
+| Swift session and RFC 8439 vectors | the Go session vectors above; RFC 8439 §2.3.2 (block) and §2.4.2 (ciphertext); 300 zero bytes at packet 5 against OpenSSL's key stream | SW-6, FT-X-130 | inline in `SessionTests.swift` and `ChaCha20Tests.swift` | none |
 
 ## Data Isolation Strategy
 
@@ -107,6 +111,10 @@ Each call gets its own input buffer. The packages do not keep the last packet.
 | FT-X-87 | the 65 hostile cases in Go | allowed outcome each; unpack within 1 s; 0 panics | exact | 1 s per unpack | GO-4; `fixtures/hostile/README.md` |
 | FT-X-89 | seed 1..32, value `01` + 15 zero bytes, the AC-1 row | `b55d0a29c56c203712b241232e`, mismatched bytes 0 | exact | N/A | GO-6; C# ciphertext, session AC-1 |
 | FT-X-91 | the position row, 100 000 round trips, one core, no `-race` | elapsed time | threshold_max | <= 1 second (160 ms typed, 128 ms map in the compose run) | GO-8; AC-10 |
+| FT-X-124 | the position row, Swift typed and map | hex `4001000065cd1d00a3e1110100`, 5 fields, motion fields 0 | exact | N/A | SW-1; `fixtures/golden.hex` |
+| FT-X-128 | the 65 hostile cases in Swift | allowed outcome each; unpack within 1 s; 0 traps | exact | 1 s per unpack | SW-4; `fixtures/hostile/README.md` |
+| FT-X-130 | seed 1..32, value `01` + 15 zero bytes, the AC-1 row | `b55d0a29c56c203712b241232e`, mismatched bytes 0 | exact | N/A | SW-6; C# ciphertext, session AC-1 |
+| FT-X-132 | the position row, 100 000 round trips, release build | elapsed time | threshold_max | <= 1 second (0.37 s typed, 0.19 s map in a worker run on the Mac) | SW-8; AC-10 |
 
 ## External Dependency Mocks
 
