@@ -13,6 +13,7 @@ This is the intake the next `/autodev` run starts from (launcher on `dev`, `kind
 - Library smoke gate: the agent runs the smoke script at the commit before the close commit and passes the gate when all steps pass. Commit the script (`smoke{NN}.md`) first: its step 1 needs a clean tree.
 - A tag needs the owner's explicit go with the exact commit.
 - Before a total run check `uptime`, `sysctl vm.swapusage` and active swapping (`vm_stat` Swapouts over 10 s). Loop 25: the step 11 run took 23 minutes at load 10 to 87 (the load came from vitest runs of another project, WindowServer and a browser) with no swapping and no timing failure. The ring now takes about 45 s (it took 239 s); the publish gate is the long stage (706 s).
+- **Run step 11 and the smoke with `scripts/loop-tests.sh`** (AZ-2500, owner decision 2026-10-14): stages chosen by changed files since their last stamped pass, the language suites in parallel with a serial retry, the publish gate only when the publish path changed (`_docs/04_deploy/deployment_procedures.md` § Loop test script). The first run has no stamps and runs everything; start loop 26's step 11 with `--plan` to see it. The TypeScript NFR timing test asserts 1.4 s (loop 25).
 - Watchers: a heartbeat keyed on log growth says STALLED for the ring and the publish gate, which print only at the end; look at the child processes before calling a stage hung.
 
 ## Where things stand when loop 25 closes

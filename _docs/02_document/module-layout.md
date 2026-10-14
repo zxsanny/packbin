@@ -208,6 +208,13 @@ No shared code package. The library does not log, authenticate, or load configur
 - **Owned by**: AZ-2070
 - **Consumed by**: every package, as a file read. The C++ runner is `cpp/tests/core/hostile_host_tests.cpp`
 
+### scripts
+
+- **Directory**: `scripts/`
+- **Purpose**: the loop's test run (AZ-2500, loop 25). `loop-tests.sh` runs the scaffold, the seven language suites in their CI containers, the ARM stage, the ring, AC-10 and the publish gate; a stage runs only when a file it covers changed since its last stamped pass, the suites run in parallel with a serial retry, and the gate is skipped unless the publish path changed. `loop-tests.test.sh` tests the selection and the execution (a fake `docker`) and is a step of the `scaffold` job.
+- **Owns (exclusive write during implementation)**: `scripts/**`
+- **Consumed by**: step 11 and the loop smoke (`_docs/04_deploy/deployment_procedures.md` § Loop test script)
+
 ### workflows
 
 - **Directory**: `.github/workflows/`

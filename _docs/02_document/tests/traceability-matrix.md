@@ -458,6 +458,9 @@
 | AZ-2479 AC-1 | The README names C++'s unbound member as the "not carried" spelling | FT-X-121; `README.md` bullet "Decided in loop 25" | Covered |
 | AZ-2479 AC-2 | The README records the decided open rows U25, U26 and Low-1 | FT-X-121; same bullet | Covered |
 | AZ-2479 AC-3 | Build and tests unchanged by the README edit | FT-X-121; step 11 (12 of 12 stages) | Covered |
+| AZ-2500 AC-1 | `scripts/loop-tests.sh` runs a stage only when a file it covers changed since its last stamped pass (a C# source selects the C# suite, the ring and AC-10; README.md only the publish gate; a file added in a package also the gate) | FT-X-122; `scripts/loop-tests.test.sh` cases 1 to 13 (mutation-checked) | Covered |
+| AZ-2500 AC-2 | A suite that fails beside the others is re-run alone and both results show; a second failure fails the run | FT-X-123; `scripts/loop-tests.test.sh` case 14 (fake `docker`); a real parallel run of four suites: 28 s against 70 s in sequence | Covered |
+| AZ-2500 AC-3 | A stamp is written only for a passing stage on a clean tree | FT-X-123; `scripts/loop-tests.test.sh` case 14 (mutation-checked) | Covered |
 | Assessment25 G1 | The C++ range-check error names the id after the 16-bit wrap (`when(65537)` reports field 1), not the id written | FT-X-113 (the tests assert the refusal, not the id); README names the wrapped id | Open (loop 26 owner row: A keep and document is recommended) |
 
 ## Restrictions Coverage
@@ -488,9 +491,9 @@
 
 | Category | Total Items | Covered | BLOCKED | WAIVED | Coverage |
 |----------|-----------|---------|---------|--------|----------|
-| Acceptance Criteria | 455 | 445 | 2 | 1 | 7 rows Open (3 from loop 21: Review21 #2, #7, Assessment21 G3; Review23 #5; Review24 #5, #6; Assessment25 G1); loop 25 added AZ-2472 to AZ-2479 (30 rows, all Covered) and closed 13 rows (Review23 #1, #2/U25, #3/U24, #6, Assessment23 U26, Assessment24 D1 to D8); loop 24's GO-1 to GO-16 stay Covered (GO-5 now has its memory figure; GO-7, GO-9 and GO-10 carry the NOT RUN part named in their row) and one BLOCKED row (Assessment24 D9); every other row Covered or WAIVED, except AZ-2220 AC-9 (not verified, see below) |
+| Acceptance Criteria | 458 | 448 | 2 | 1 | 7 rows Open (3 from loop 21: Review21 #2, #7, Assessment21 G3; Review23 #5; Review24 #5, #6; Assessment25 G1); loop 25 added AZ-2472 to AZ-2479 (30 rows, all Covered) and closed 13 rows (Review23 #1, #2/U25, #3/U24, #6, Assessment23 U26, Assessment24 D1 to D8); loop 24's GO-1 to GO-16 stay Covered (GO-5 now has its memory figure; GO-7, GO-9 and GO-10 carry the NOT RUN part named in their row) and one BLOCKED row (Assessment24 D9); every other row Covered or WAIVED, except AZ-2220 AC-9 (not verified, see below) |
 | Restrictions | 19 | 17 | 0 | 2 | every row Covered or WAIVED |
-| **Total** | 474 | 462 | 2 | 3 | 7 Open (3 loop 21, 1 loop 23, 2 loop 24, 1 loop 25), one row not verified |
+| **Total** | 477 | 465 | 2 | 3 | 7 Open (3 loop 21, 1 loop 23, 2 loop 24, 1 loop 25), one row not verified |
 
 ## Uncovered Items Analysis
 
@@ -523,3 +526,4 @@ Moved to [traceability-not-verified-loops-11-18.md](traceability-not-verified-lo
 <!-- autodev-step12-loop-update: loop 23, 2026-10-13, 33 AC rows added (AZ-2431 4, AZ-2432 4, AZ-2433 4, AZ-2434 3, AZ-2435 2, AZ-2436 4, AZ-2437 3, review23 and assessment23 9: 3 Covered (G4 text, G5, G6), 6 Open (Review23 #1 #2/U25 #3/U24 #5 #6, Assessment23 U26)); 6 loop 22 Open rows closed (Review22 #1 #2 #5 #6 #8 #9); loops 11 to 18 not-verified section moved to traceability-not-verified-loops-11-18.md -->
 <!-- autodev-step12-loop-update: loop 24, 2026-10-13, 27 rows added (GO-1 to GO-16 Covered, 4 of them with a NOT RUN or NOT MEASURED part; Assessment24 D8 and D1 to D7 and Review24 #5, #6 Open; D9 BLOCKED); AC-1 to AC-16 Test IDs gained the Go scenarios FT-X-83 to FT-X-93; scenarios FT-X-83 to FT-X-112 in blackbox-tests-17-loop24-go-package.md -->
 <!-- autodev-step12-loop-update: loop 25, 2026-10-14, 31 rows added (AZ-2472 to AZ-2479 30 rows Covered, Assessment25 G1 Open); 13 Open rows closed (Review23 #1 #2/U25 #3/U24 #6, Assessment23 U26, Assessment24 D1 to D8); scenarios FT-X-113 to FT-X-121 in blackbox-tests-18-loop25-owner-batch.md -->
+<!-- autodev-step12-loop-update: loop 25 addendum, 2026-10-14, 3 rows added (AZ-2500 AC-1 to AC-3 Covered; scenarios FT-X-122, FT-X-123) -->

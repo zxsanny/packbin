@@ -51,6 +51,8 @@ jobs:
         run: bash cpp/embedded/lib.test.sh
       - name: cross-language ring wiring
         run: bash .github/workflows/ring-wiring.test.sh
+      - name: loop test script
+        run: bash scripts/loop-tests.test.sh
       - name: suites
         run: |
           set -euo pipefail

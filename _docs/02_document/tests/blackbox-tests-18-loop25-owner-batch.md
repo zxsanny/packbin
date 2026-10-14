@@ -1,4 +1,4 @@
-# Blackbox Tests 18: Loop 25 owner batch (FT-X-113 to FT-X-121)
+# Blackbox Tests 18: Loop 25 owner batch (FT-X-113 to FT-X-123)
 
 Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md). Loop 25 (AZ-2472 to AZ-2479, 8 specs, 14 points) applied the owner batch of 2026-10-14 ("accept all recommended") on the loop 24 handoff: the short wave U25 A, U26 A, Low-1 A, U24 B, the probes D1 and D7, the `run-suite.sh` alignment D6 and the Go memory measurement D8. One table row per scenario, as in file 17.
 
@@ -19,6 +19,13 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md). L
 | FT-X-119 | D7: the split flag bit inside a false `when`, member given, in Python, Rust, C#, Java and C++ | `python/tests/test_loop25_probe_d1_d7.py`, `rust/tests/loop25_probe_d1_d7_tests.rs`, `csharp/tests/Loop25ProbeD1D7Tests.cs`, `java/src/test/java/packbin/Loop25ProbeD1D7Test.java`, `cpp/tests/core/loop25_probe_d1_d7_host_tests.cpp`; TypeScript measured with `node --experimental-strip-types` | pack `0101030506` (k=1) and `01000306` (k=0); unpack `{k:0, b:6}`; repack `01000206`; all five equal TypeScript and Go, so no walker changed | AZ-2478 AC-1 to AC-4 |
 | FT-X-120 | D1: the empty anchored group `Flags(0, Group(0,"mark")), U8(0,"n")` in the five other packages | the same five files, the `..._differs_from_typescript` tests; tables in `batch_02_loop25_report.md` | hex rows equal TypeScript wherever the scheme builds; Python refuses construction; Rust numbers the id slot (the `U8` is id 1) and builds a `when` on the mark; Java reads `Boolean.FALSE` as present and unpacks `{mark:{}}`; C++ builds a `when` on the mark. Kept and documented (decision A) | AZ-2476 AC-1 to AC-3 |
 | FT-X-121 | U24 B: the README names C++'s unbound member as the "not carried" spelling and records the decided open rows | `README.md` bullet "Decided in loop 25"; the pinned outcome `packed_bias_novalue_host_tests.cpp::u20_unbound_packed_bias...` | documented exception, no code change; build and tests unchanged | AZ-2479 AC-1 to AC-3 |
+
+## Loop test script (AZ-2500)
+
+| Id | What it checks | Evidence | Expected result | AC ref |
+|----|----------------|----------|-----------------|--------|
+| FT-X-122 | Stage selection by changed files: a C# source selects the C# suite, the ring and AC-10; `README.md` only the publish gate; an added package file also the gate; a test file not the ring or the gate; fixtures every suite; a dirty tree, an untracked file, a foreign or missing stamp run the stage; `--all`, `--only` | `scripts/loop-tests.test.sh` cases 1 to 13 (a temporary git repository, `--plan`); mutation: widening the gate's pattern fails it | each case prints the expected `PLAN <stage> RUN|SKIP`; 12 stages | AZ-2500 AC-1 |
+| FT-X-123 | Execution: a suite that fails beside the others is re-run alone and passes; one that fails again fails the run (exit 1); stamps only from a clean tree and only for passing stages | `scripts/loop-tests.test.sh` case 14 with a fake `docker`; mutation: stamping from a dirty tree fails it; a real run of four suites in parallel: 28 s against 70 s in sequence | as described; no stamp for a failed stage or a dirty tree | AZ-2500 AC-2, AC-3 |
 
 ## Harness speed-up (AZ-2477 follow-up, commit `d5646cf`)
 
