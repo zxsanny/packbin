@@ -25,7 +25,7 @@ import Testing
 
         // Assert
         #expect(isPackRefusal(error, "s", bytesText("s", 16_777_477, 16_777_216)))
-        #expect(error?.field == 1 && seconds < 1, "took \(seconds) s")
+        #expect(error?.field == 1 && withinOneSecond(seconds), "took \(seconds) s")
     }
 
     @Test func pack_elementThatHoldsATimes_isRefusedAtTheDefaultBudgetNamingItsMember() throws {

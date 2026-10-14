@@ -18,6 +18,11 @@ let threadSanitized: Bool = {
     return dlsym(defaultHandle, "__tsan_init") != nil
 }()
 
+/// Whether `seconds` is within the project bound of one second. The thread sanitizer slows a refusal that
+/// walks 65 535 rounds down by 40 times in the Linux container, so under it only the outcome is asserted,
+/// not the time: the bound is held by the plain debug and release runs.
+func withinOneSecond(_ seconds: Double) -> Bool { threadSanitized || seconds < 1 }
+
 /// How long one unpack of one fuzz input may take (project AC-2), and under the thread sanitizer.
 let unpackBound: Double = threadSanitized ? 10 : 1
 

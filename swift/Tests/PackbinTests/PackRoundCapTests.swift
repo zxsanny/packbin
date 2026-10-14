@@ -111,7 +111,7 @@ import Testing
 
         // Assert
         #expect(isPackRefusal(error, "k", "k: the times count is 4000000000, above the limit of 65535 rounds"))
-        #expect(seconds < 1, "took \(seconds) s")
+        #expect(withinOneSecond(seconds), "took \(seconds) s")
     }
 
     @Test func pack_timesCountOverTheLimitWithNoValue_isRefusedByTheLimit() throws {
