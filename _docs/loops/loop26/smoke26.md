@@ -10,7 +10,7 @@ The agent runs the script below itself (owner rule, `_docs/04_deploy/deployment_
 | 1 | on `dev`, tree clean | — |
 | 2 | `scripts/loop-tests.sh`: every stage passed or skipped as unchanged since its stamp (swift in the `swift:6.3.3` container, the seven other suites, scaffold, ARM, ring, AC-10, publish gate) | AZ-2513 to AZ-2524 |
 | 3 | strict release build on the Mac (`-warnings-as-errors`, `-strict-concurrency=complete`) | AZ-2513, SW-9 |
-| 4 | `swift test` on the Mac: 335 tests in 55 suites | SW-1 to SW-16 |
+| 4 | `swift test` on the Mac: 340 tests in 56 suites | SW-1 to SW-16 |
 | 5 | the hostile case checker (65 cases, eight package names) and the README Swift code check (inside step 4: `ReadmeExampleTests`) | AZ-2519, AZ-2524 |
 
 ```bash
@@ -46,7 +46,7 @@ stage() {
 stage "branch is dev and the working tree is clean" 20 "^dev " bash -c 'test "$(git branch --show-current)" = dev && test -z "$(git status --short)" && echo "dev $(git rev-parse --short HEAD), tree clean"'
 stage "scripts/loop-tests.sh: every stage passed or skipped as unchanged since its stamp" 4500 "^RESULT .* 0 failed" bash scripts/loop-tests.sh
 stage "Swift strict release build on the Mac" 900 "Build complete" swift build -c release -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete
-stage "Swift tests on the Mac (335 tests in 55 suites)" 900 "Test run with 335 tests in 55 suites passed" \
+stage "Swift tests on the Mac (340 tests in 56 suites)" 900 "Test run with 340 tests in 56 suites passed" \
   swift test -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete -Xswiftc -F -Xswiftc "$F" -Xlinker -rpath -Xlinker "$F" -Xlinker -rpath -Xlinker "$L"
 stage "hostile case checker: 65 cases, eight package names" 120 "hostile cases ok: 65" bash fixtures/hostile/check-cases.sh
 dotnet build-server shutdown </dev/null > "$LOGS/shutdown.log" 2>&1 || true
