@@ -56,4 +56,7 @@ SMOKE
 
 ## Result
 
-(written by the agent after the run)
+PASS. Agent run on `735cec7` (2026-10-14, owner rule of 2026-10-12 in `deployment_procedures.md`): the script printed `DONE 5/5 stages passed`.
+
+- The first run (at `d92a752`) printed 4/5: stage 4 expected the old count `335 tests in 55 suites` while the suite had grown to 340 tests in 56 after the security fixes (all 340 passed). The script was wrong, not the check: the expected count was corrected, committed (`735cec7`) and the whole script run again.
+- Stage 2 skipped all 13 stages as unchanged since their stamps: the four stages that changed after the first step 11 invocations (`swift` 741 s in the `swift:6.3.3` container, scaffold 198 s, ring 73 s, publish gate 1 338 s) had passed on the fourth step 11 invocation at `d92a752`.
