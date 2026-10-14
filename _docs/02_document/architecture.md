@@ -64,7 +64,7 @@ packbin is a library: the caller writes a field list, pack and unpack move the e
 | Language | C++ | C++17, freestanding core (`-fno-exceptions -fno-rtti`, no heap) | A C++ program or 32-bit firmware: Cortex-M, ESP32, RP2040 |
 | Language | Java | Java 17 (`--release 17`), Android API 26 | A Java program, including Android |
 | Language | Go | Go 1.26 minimum (`go 1.26.0` in `go.mod`); CI and compose use `golang:1.27`; standard library plus `golang.org/x/crypto` (the session only), no cgo | A Go program or service |
-| Language | Swift | `swift-tools-version: 5.9`, iOS 15, macOS 12; CI and compose use `swift:6` for the suite and `swift:5.9` for a library-only build; one dependency, `swift-crypto` (HKDF-SHA256 for the session), linked only off Apple platforms (CryptoKit there); ChaCha20 in the package | A Swift program on iOS, macOS or Linux |
+| Language | Swift | `swift-tools-version: 6.0` (Swift 6 language mode), iOS 15, macOS 12; CI and compose run the suite on `swift:6.3.3`; one dependency, `swift-crypto` (HKDF-SHA256 for the session), linked only off Apple platforms (CryptoKit there); ChaCha20 in the package | A Swift program on iOS, macOS or Linux |
 | Framework | none | — | A library, not an application |
 | Database | none | — | No stored packets |
 | Cache | none | — | Each call is independent |
@@ -97,9 +97,9 @@ The C++ package is one core for host programs and firmware. It writes into a cal
 **Infrastructure**:
 - No cloud application host
 - No container orchestration for the product
-- The test containers are the current .NET LTS SDK, the current Node LTS image, and the current stable images for Python, Rust, C++, and Java, and `golang:1.27` for Go, and `swift:6` and `swift:5.9` for Swift
+- The test containers are the current .NET LTS SDK, the current Node LTS image, and the current stable images for Python, Rust, C++, and Java, and `golang:1.27` for Go, and `swift:6.3.3` for Swift
 - Two more images run the C++ embedded targets: `cpp-embedded` (arm-none-eabi GCC, QEMU, cross g++ for s390x) and `cpp-embedded-esp` (`espressif/idf:v5.3.2`). The embedded harness reports a target as FAIL on a non-zero exit of its function or on a recorded failed check, and the stage exits 1 (loop 16, AZ-2099)
-- The `ring` job of `test.yml` runs the cross-language hand-offs (`language-pair.sh`) on the runner itself: it installs the toolchains of the seven other suites (versions in the job env `RING_*`, Go through `actions/setup-go` as `RING_GO`, checked by `ring-toolchains.sh`) and builds the Swift drivers with the runner's Swift, or in the `swift:6` image when that is not Swift 6 (`RING_SWIFT`, `ring-swift.sh`) and compiles C++ in the `gcc:16` image through `ring-cxx.sh`, because the runner has no GCC 16 release (loop 16, AZ-2193)
+- The `ring` job of `test.yml` runs the cross-language hand-offs (`language-pair.sh`) on the runner itself: it installs the toolchains of the seven other suites (versions in the job env `RING_*`, Go through `actions/setup-go` as `RING_GO`, checked by `ring-toolchains.sh`) and builds the Swift drivers with the runner's Swift, or in the `swift:6.3.3` image when the runner has no `swift` (`RING_SWIFT`, `ring-swift.sh`; `ring-toolchains.sh` requires Swift 6.3.3 either way) and compiles C++ in the `gcc:16` image through `ring-cxx.sh`, because the runner has no GCC 16 release (loop 16, AZ-2193)
 
 **Environment-specific configuration**:
 

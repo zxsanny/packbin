@@ -5,12 +5,12 @@ root="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$root"
 
 langs="csharp typescript python rust cpp java go swift"
-for lang in $langs swift-min; do
+for lang in $langs; do
   grep -q "^  ${lang}:" docker-compose.test.yml
   grep -q "^  ${lang}:" docker-compose.publish.yml
 done
-# The scaffold job runs a suite for each of the eight services, then the Swift 5.9 library build (AZ-2521 AC-4).
-grep -qx "          for lang in ${langs} swift-min; do" .github/workflows/test.yml
+# The scaffold job runs a suite for each of the eight services.
+grep -qx "          for lang in ${langs}; do" .github/workflows/test.yml
 if grep -q 'ports:' docker-compose.test.yml; then
   echo "compose publishes a port" >&2
   exit 1

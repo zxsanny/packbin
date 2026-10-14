@@ -6,11 +6,11 @@
 
 **Architectural Pattern**: stateless clear pack and unpack over an immutable scheme, plus a `PackSession` the caller holds (as the TypeScript and Go packages). Hand-written walkers, no code generation, no wrapper of the C++ core (ADR-001).
 
-**Upstream dependencies**: none inside the repo. Outside: the Swift standard library, and Foundation only where it can be imported, to read a Foundation `NSNumber` in a map row (`ForeignNumber.swift`); the session uses HKDF-SHA256 from CryptoKit on Apple platforms and `swift-crypto` (`Crypto`) on other platforms. The ChaCha20 stream is written in the package and checked against RFC 8439 (§2.3.2, §2.4.2). `swift-crypto` (exactly 3.12.5) is the only package dependency and is declared for non-Apple platforms only; SwiftPM still resolves and clones it, and `swift-asn1`, on Apple platforms, where nothing of it is linked.
+**Upstream dependencies**: none inside the repo. Outside: the Swift standard library, and Foundation only where it can be imported, to read a Foundation `NSNumber` in a map row (`ForeignNumber.swift`); the session uses HKDF-SHA256 from CryptoKit on Apple platforms and `swift-crypto` (`Crypto`) on other platforms. The ChaCha20 stream is written in the package and checked against RFC 8439 (§2.3.2, §2.4.2). `swift-crypto` (exactly 4.3.1) is the only package dependency and is declared for non-Apple platforms only; SwiftPM still resolves and clones it, and `swift-asn1`, on Apple platforms, where nothing of it is linked.
 
 **Downstream consumers**: Swift programs, added with `.package(url: "https://github.com/zxsanny/packbin", from: "X.Y.Z")` from the existing `vX.Y.Z` git tag (ADR-005). There is no registry upload and no `swift/vX.Y.Z` tag; the README has the install and the examples.
 
-**Layout**: the manifest `Package.swift` sits at the repository root (Swift Package Manager resolves a package only from there) with `swift-tools-version: 5.9`, platforms iOS 15 and macOS 12, one library product and target `Packbin` at `swift/Sources/Packbin`, tests at `swift/Tests/PackbinTests`.
+**Layout**: the manifest `Package.swift` sits at the repository root (Swift Package Manager resolves a package only from there) with `swift-tools-version: 6.0` (Swift 6 language mode), platforms iOS 15 and macOS 12, one library product and target `Packbin` at `swift/Sources/Packbin`, tests at `swift/Tests/PackbinTests`.
 
 ## 2. Interfaces
 
@@ -28,7 +28,7 @@ Swift copies TypeScript row for row (loop 26 fit decision 4), except the documen
 
 ## 4. Decisions
 
-`_docs/02_task_plans/swift-package/problem.md` S-1 to S-5 (owner, 2026-10-14): root `Package.swift`, in-package ChaCha20 with swift-crypto for HKDF on non-Apple platforms, release as a resolve check on the existing tag, tools 5.9 / iOS 15 / macOS 12 / `swift:6`, whole epic in loop 26. ADR-001, ADR-005.
+`_docs/02_task_plans/swift-package/problem.md` S-1 to S-5 (owner, 2026-10-14): root `Package.swift`, in-package ChaCha20 with swift-crypto for HKDF on non-Apple platforms, release as a resolve check on the existing tag, tools 5.9 / iOS 15 / macOS 12 / `swift:6`, whole epic in loop 26 (S-4 amended 2026-10-14, owner decision: Swift 6 only, tools 6.0, CI image `swift:6.3.3`). ADR-001, ADR-005.
 
 ## 5. Tests
 

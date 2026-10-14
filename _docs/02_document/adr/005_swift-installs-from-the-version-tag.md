@@ -70,4 +70,4 @@ The `vX.Y.Z` tag is the Swift release. Nothing in the workflow guards it against
 
 ## Notes
 
-None.
+- 2026-10-14, owner decision: the toolchain minimum is Swift 6.0. The manifest now declares `// swift-tools-version: 6.0` (iOS 15 and macOS 12 unchanged), the consumer that `publish-swift.sh` writes declares 6.0, and no Swift 5.9 build remains. The rest of this record stands.

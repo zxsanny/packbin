@@ -2,11 +2,11 @@ import Foundation
 import Testing
 
 /// AZ-2518 AC-5 (SW-11): one package dependency, swift-crypto at an exact version, linked by
-/// `Packbin` only where CryptoKit is missing; `Package.resolved` pins it (and swift-asn1, which
-/// swift-crypto requires) at versions whose manifests Swift 5.9 reads.
+/// `Packbin` only where CryptoKit is missing; `Package.resolved` pins it and swift-asn1, which
+/// swift-crypto requires, at the versions SwiftPM resolved.
 @Suite struct DependencyTests {
-    static let cryptoVersion = "3.12.5"
-    static let asn1Version = "1.3.2"
+    static let cryptoVersion = "4.3.1"
+    static let asn1Version = "1.7.3"
 
     @Test func manifest_hasExactlyOneDependency_swiftCryptoAtAnExactVersion() throws {
         // Arrange

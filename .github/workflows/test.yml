@@ -60,8 +60,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p test-results
-          # swift-min (the library on Swift 5.9, AC-4 of AZ-2521) after swift, the main build.
-          for lang in csharp typescript python rust cpp java go swift swift-min; do
+          for lang in csharp typescript python rust cpp java go swift; do
             docker compose -f docker-compose.test.yml run --rm "$lang"
           done
       - name: publish gate
@@ -94,9 +93,9 @@ jobs:
       RING_GCC: "16"
       RING_JDK: "26"
       RING_GO: "1.27"
-      # The swift:6 suite image tag (tool-pins.txt `swift`): the runner's Swift builds the Swift drivers, else
+      # The swift:6.3.3 suite image tag (tool-pins.txt `swift`): the runner's Swift builds the Swift drivers, else
       # ring-swift.sh builds them in that image.
-      RING_SWIFT: "6"
+      RING_SWIFT: "6.3.3"
       # ubuntu-latest has no GCC 16 release (13; 26.04 has 15), so the ring compiles in the gcc:16 image the
       # cpp suite uses, through ring-cxx.sh. The macOS sysroot recipe of language-pair.sh stays off.
       CXX: ${{ github.workspace }}/.github/workflows/ring-cxx.sh

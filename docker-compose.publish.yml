@@ -27,11 +27,9 @@ services:
   # The SwiftPM cache is a tmpfs here: the named volume of the base file is shared state the publish run must not use.
   # The build output is already outside /src (PACKBIN_SWIFT_SCRATCH of the base file).
   swift:
-    volumes: &swift-publish-volumes
+    volumes:
       - ./:/src:ro
       - type: tmpfs
         target: /test-results
       - type: tmpfs
         target: /root/.cache/org.swift.swiftpm
-  swift-min:
-    volumes: *swift-publish-volumes

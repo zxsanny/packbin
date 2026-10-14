@@ -66,7 +66,7 @@ go_deps() {
   fi
 }
 
-# Swift (swift:6, and swift:5.9 for swift-min): every step runs on the root Package.swift with these options.
+# Swift (swift:6.3.3): every step runs on the root Package.swift with these options.
 # The compose services put the build output outside the mounted tree (PACKBIN_SWIFT_SCRATCH); --force-resolved-versions
 # builds only what Package.resolved pins and never rewrites it (Go's -mod=readonly).
 swift_opts=(--package-path "$root" --scratch-path "${PACKBIN_SWIFT_SCRATCH:-$root/.build}" --force-resolved-versions)
@@ -263,14 +263,6 @@ case "$lang" in
       run swift test "${swift_opts[@]}" --skip-build --sanitize=thread --verbose
       run swift_speed
       run swift_deps
-    fi
-    ;;
-  swift-min)
-    # AC-4: the library builds with the manifest's minimum toolchain (swift:5.9 image, tool-pins.txt swift-min).
-    # Library only: the tests use swift-testing, which Swift 5.9 does not have. The scaffold job runs it after `swift`.
-    if swift_tree; then
-      run swift_resolve
-      run swift build "${swift_opts[@]}"
     fi
     ;;
   *)

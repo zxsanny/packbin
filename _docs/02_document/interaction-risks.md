@@ -83,7 +83,7 @@ Swift package (loop 26, AZ-2223; decompose 1.8):
 | The hostile checker counts "Swift" inside another word and passes a section that omits Swift | AZ-2519 AC-3 | AZ-2519 |
 | The README Swift example and its test drift apart, so the README prints bytes the test does not check | AZ-2524 AC-1 | AZ-2524 |
 | A hostile packet traps the Swift process (overflow, index, force unwrap) instead of throwing | AZ-2519 AC-1, AZ-2517 AC-2 | AZ-2519 |
-| A feature newer than Swift 5.9 compiles on `swift:6` and fails for a 5.9 consumer | AZ-2521 AC-4 | AZ-2521 |
+| A feature newer than Swift 5.9 compiles on `swift:6` and fails for a 5.9 consumer (superseded 2026-10-14: Swift 6 only, tools 6.0) | AZ-2521 AC-4 | AZ-2521 |
 | The root `Package.swift` breaks resolution for consumers (an unsafe flag, a wrong path) | AZ-2523 AC-2 | AZ-2523 |
 
 ## Deferred

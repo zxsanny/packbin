@@ -42,7 +42,7 @@ consumer="$work/consumer"
 mkdir -p "$consumer/Sources/consumer"
 cp "$artifacts/main.swift" "$consumer/Sources/consumer/main.swift"
 cat > "$consumer/Package.swift" <<EOF
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(

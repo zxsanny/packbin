@@ -12,7 +12,8 @@ import Testing
         let firstLine = manifest.split(separator: "\n").first.map(String.init)
 
         // Assert
-        #expect(firstLine == "// swift-tools-version: 5.9")
+        #expect(firstLine == "// swift-tools-version: 6.0")
+        #expect(!manifest.contains("swiftLanguage"), "Swift 6 language mode, the default of tools 6.0")
         #expect(manifest.contains(".iOS(.v15)") && manifest.contains(".macOS(.v12)"))
         #expect(manifest.components(separatedBy: ".library(").count - 1 == 1)
         #expect(manifest.contains(#".library(name: "Packbin", targets: ["Packbin"])"#))

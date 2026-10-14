@@ -26,7 +26,7 @@ Supported languages:
 - Rust: edition 2021.
 - C++: C++17; CMake 3.16+ or vcpkg on Linux and macOS (Windows is not supported: the package is not built or tested there); 32-bit microcontrollers (ESP32, RP2040, nRF52, STM32) through PlatformIO, Arduino and ESP-IDF 5.1+.
 - Go: Go 1.26+; `go get github.com/zxsanny/packbin/go@vX.Y.Z`, fetched from the repository by version tag (no registry). The standard library and `golang.org/x/crypto` (the session only); no cgo. See [Go](#go).
-- Swift: Swift 5.9+, iOS 15+, macOS 12+ and Linux; `.package(url: "https://github.com/zxsanny/packbin", from: "X.Y.Z")`, fetched from the repository by the `vX.Y.Z` tag (no registry, no Swift tag). One dependency, `swift-crypto`, linked only off Apple platforms (the session's HKDF). See [Swift](#swift).
+- Swift: Swift 6.0+ (Xcode 16+), iOS 15+, macOS 12+ and Linux; `.package(url: "https://github.com/zxsanny/packbin", from: "X.Y.Z")`, fetched from the repository by the `vX.Y.Z` tag (no registry, no Swift tag). One dependency, `swift-crypto`, linked only off Apple platforms (the session's HKDF). See [Swift](#swift).
 
 Encryption is optional. `PackSession` hides the packed bytes on one connection and adds 0 bytes to each packet. The only extra send is 16 bytes, once, when the connection opens. It does not detect a changed byte, and anyone holding the 32-byte seed can read every session. See [Encrypted session](#encrypted-session).
 
@@ -699,7 +699,7 @@ targets: [
 ]
 ```
 
-Swift 5.9 or newer (`swift-tools-version: 5.9`), iOS 15 and macOS 12 or newer, and Linux; CI runs the Swift suite in the `swift:6` image on Linux and builds the library alone with `swift:5.9`. tvOS and watchOS are not built or tested (the session needs tvOS 14 or watchOS 7). The package has one dependency, [`swift-crypto`](https://github.com/apple/swift-crypto) (exactly 3.12.5), for the HKDF-SHA256 of the session where CryptoKit is missing. SwiftPM resolves and clones it, and its dependency `swift-asn1`, on every platform, but links it only on Linux, Android, Windows and WASI; on Apple platforms the session uses CryptoKit. The ChaCha20 of the session is written in the package and checked against RFC 8439.
+Swift 6.0 or newer (`swift-tools-version: 6.0`; Xcode 16 or newer on Apple platforms), iOS 15 and macOS 12 or newer, and Linux. The package builds in the Swift 6 language mode. CI runs the Swift suite in the `swift:6.3.3` image on Linux; no older toolchain is built or tested. tvOS and watchOS are not built or tested (the session needs tvOS 14 or watchOS 7). The package has one dependency, [`swift-crypto`](https://github.com/apple/swift-crypto) (exactly 4.3.1), for the HKDF-SHA256 of the session where CryptoKit is missing. SwiftPM resolves and clones it, and its dependency `swift-asn1`, on every platform, but links it only on Linux, Android, Windows and WASI; on Apple platforms the session uses CryptoKit. The ChaCha20 of the session is written in the package and checked against RFC 8439.
 
 The module is `Packbin` (`import Packbin`). The Swift snippets in this README are the bodies of the tests in [`swift/Tests/PackbinTests/ReadmeExampleTests.swift`](swift/Tests/PackbinTests/ReadmeExampleTests.swift), copied unchanged without the indentation (the first one with the import): `swift test` runs them, compares what they print with the output shown under each, and fails when a snippet here differs from its test. A row is a typed struct bound field by field with `bind(get:set:)`, or a `[String: Any]`.
 

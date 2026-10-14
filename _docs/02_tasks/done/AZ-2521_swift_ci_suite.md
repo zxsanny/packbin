@@ -54,6 +54,8 @@ Given the Swift tree and a `swift:5.9` image
 When `run-suite.sh swift` runs its build-only step (`swift build`, no tests, no warnings-as-errors beyond the package's own)
 Then the package builds on Swift 5.9 (the manifest's minimum) with exit 0; a feature newer than 5.9 fails the step. Owner ruling 2026-10-14
 
+Superseded 2026-10-14 (owner decision): Swift 6 only; `swift-tools-version: 6.0`, Swift 6 language mode, no 5.9 build, CI image `swift:6.3.3`. The `swift-min` service and this step are removed.
+
 **AC-3: Absent tree (SW-9)**
 Given a tree without `Package.swift` or without `swift/`
 When `run-suite.sh swift` runs

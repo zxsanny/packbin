@@ -23,7 +23,7 @@ done
 git -C "$repo" add -A
 git -C "$repo" commit -q -m base
 
-stages="go typescript csharp python rust java cpp swift swift-min scaffold cpp-embedded-arm ring ac10 publish-gate"
+stages="go typescript csharp python rust java cpp swift scaffold cpp-embedded-arm ring ac10 publish-gate"
 plan() { LOOP_TESTS_ROOT="$repo" LOOP_TESTS_STAMPS="$stamps" bash "$script" --plan "$@"; }
 stamp_all() {
   mkdir -p "$stamps"
@@ -48,7 +48,7 @@ expect() {
 
 # 1. no stamps: everything runs
 out="$(plan)"
-[ "$(echo "$out" | grep -c ' RUN (no stamp')" -eq 14 ] || bad "no stamps: not all 14 stages run: $out"
+[ "$(echo "$out" | grep -c ' RUN (no stamp')" -eq 13 ] || bad "no stamps: not all 13 stages run: $out"
 
 # 2. stamped at HEAD and nothing changed: everything skips
 stamp_all
@@ -75,13 +75,13 @@ change cpp/tests/t.cpp; expect "cpp test" "cpp"; stamp_all
 change go/a_test.go; expect "go test" "go"; stamp_all
 
 # 8b. Swift: a test file runs both Swift suites only; a source file also the ring; the manifest also the scaffold and the gate
-change swift/Tests/t.swift; expect "swift test" "swift swift-min"; stamp_all
-change swift/Sources/a.swift; expect "swift source" "swift swift-min ring"; stamp_all
-change Package.swift; expect "swift manifest" "swift swift-min scaffold ring publish-gate"; stamp_all
+change swift/Tests/t.swift; expect "swift test" "swift"; stamp_all
+change swift/Sources/a.swift; expect "swift source" "swift ring"; stamp_all
+change Package.swift; expect "swift manifest" "swift scaffold ring publish-gate"; stamp_all
 
 # 9. the golden row and fixtures: every suite, the scaffold, the ring and the gate
 change fixtures/golden.hex
-expect "fixtures" "go typescript csharp python rust java cpp swift swift-min scaffold ring publish-gate"; stamp_all
+expect "fixtures" "go typescript csharp python rust java cpp swift scaffold ring publish-gate"; stamp_all
 
 # 9b. test.yml is parsed by the gate's own test and checked by the scaffold: both run, no suite
 change .github/workflows/test.yml; expect "test.yml" "scaffold publish-gate"; stamp_all
@@ -102,7 +102,7 @@ echo "$out" | grep -q "^PLAN go RUN (stamp .* is not an ancestor" || bad "foreig
 
 # 13. --all runs everything; --only picks the listed stages
 stamp_all
-[ "$(plan --all | grep -c ' RUN (--all)')" -eq 14 ] || bad "--all: not all 14 stages run"
+[ "$(plan --all | grep -c ' RUN (--all)')" -eq 13 ] || bad "--all: not all 13 stages run"
 out="$(plan --only ring,ac10)"
 [ "$(echo "$out" | grep -cE '^PLAN [a-z0-9-]+ (RUN|SKIP)')" -eq 2 ] || bad "--only ring,ac10 did not list exactly two stages: $out"
 

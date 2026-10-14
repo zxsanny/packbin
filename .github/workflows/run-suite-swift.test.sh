@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# run-suite.sh swift and swift-min (AZ-2521). Sourced by run-suite.test.sh, which defines bad, $here, $repo and
+# run-suite.sh swift (AZ-2521). Sourced by run-suite.test.sh, which defines bad, $here, $repo and
 # $work. `swift` is a fake that logs its arguments, so no toolchain, network or image is used. swift fails without
 # Package.swift or swift/, runs the resolve, the strict release build, the verbose tests, the FuzzTests fuzz step (or
 # says it is skipped), the thread-sanitizer run, the release speed test and the dependency check in that order, and
-# stops at the first failing step; swift-min builds the library only; the wiring rows read the compose files,
-# tool-pins.txt, Package.swift and test.yml.
+# stops at the first failing step; the wiring rows read the compose files, tool-pins.txt and test.yml.
 
 # shellcheck disable=SC2154
 swbin="$work/swiftbin"
@@ -94,8 +93,8 @@ sw_row_is() { # lang result: the one report row of the last run
 }
 sw_ran() { grep -qF -- "$1" "$work/swift.log"; }
 
-# S1 (AC-3). a tree without Package.swift, or without swift/, fails for swift and swift-min, names what is
-# missing, writes one FAIL row and runs no swift
+# S1 (AC-3). a tree without Package.swift, or without swift/, fails, names what is missing, writes one FAIL row
+# and runs no swift
 mkdir -p "$work/nomanifest/swift" "$work/nosources" "$work/nomanifest/fixtures" "$work/nosources/fixtures"
 for tree in nomanifest nosources; do
   mkdir -p "$work/$tree/.github/workflows"
@@ -103,18 +102,17 @@ for tree in nomanifest nosources; do
   cp "$swroot/.github/workflows/report-row.sh" "$work/$tree/.github/workflows/"
 done
 : > "$work/nosources/Package.swift"
-for lang in swift swift-min; do
-  out="$(run_swift "$lang" "$work/nomanifest")"; code=$?
-  [ "$code" -ne 0 ] || bad "$lang: a tree without Package.swift passed"
-  case "$out" in *"$work/nomanifest/Package.swift is missing"*"the $lang suite has nothing to run"*) ;; *) bad "$lang: no message naming the missing Package.swift: $out" ;; esac
-  sw_row_is "$lang" "FAIL suite failed"
-  [ ! -s "$work/swift.log" ] || bad "$lang: swift ran without Package.swift: $(cat "$work/swift.log")"
-  out="$(run_swift "$lang" "$work/nosources")"; code=$?
-  [ "$code" -ne 0 ] || bad "$lang: a tree without swift/ passed"
-  case "$out" in *"$work/nosources/swift is missing"*) ;; *) bad "$lang: no message naming the missing swift/: $out" ;; esac
-  sw_row_is "$lang" "FAIL suite failed"
-  [ ! -s "$work/swift.log" ] || bad "$lang: swift ran without swift/: $(cat "$work/swift.log")"
-done
+lang=swift
+out="$(run_swift "$lang" "$work/nomanifest")"; code=$?
+[ "$code" -ne 0 ] || bad "$lang: a tree without Package.swift passed"
+case "$out" in *"$work/nomanifest/Package.swift is missing"*"the $lang suite has nothing to run"*) ;; *) bad "$lang: no message naming the missing Package.swift: $out" ;; esac
+sw_row_is "$lang" "FAIL suite failed"
+[ ! -s "$work/swift.log" ] || bad "$lang: swift ran without Package.swift: $(cat "$work/swift.log")"
+out="$(run_swift "$lang" "$work/nosources")"; code=$?
+[ "$code" -ne 0 ] || bad "$lang: a tree without swift/ passed"
+case "$out" in *"$work/nosources/swift is missing"*) ;; *) bad "$lang: no message naming the missing swift/: $out" ;; esac
+sw_row_is "$lang" "FAIL suite failed"
+[ ! -s "$work/swift.log" ] || bad "$lang: swift ran without swift/: $(cat "$work/swift.log")"
 
 # S2 (AC-2). every gate in order on a clean tree with a FuzzTests suite; one PASS row
 o="--package-path $swroot --scratch-path $swscratch --force-resolved-versions"
@@ -196,26 +194,13 @@ case "$out" in *"lists no targets"*) ;; *) bad "swift: no message for a describe
 
 # S8. a fixture without the golden row fails before any swift step
 printf '00\n' > "$work/swift-bad-golden.hex"
-for lang in swift swift-min; do
-  out="$(SWIFT_FIXTURE="$work/swift-bad-golden.hex" run_swift "$lang" "$swroot")"; code=$?
-  [ "$code" -ne 0 ] || bad "$lang: a wrong golden row passed"
-  [ ! -s "$work/swift.log" ] || bad "$lang: a step ran with a wrong golden row: $(cat "$work/swift.log")"
-done
+lang=swift
+out="$(SWIFT_FIXTURE="$work/swift-bad-golden.hex" run_swift "$lang" "$swroot")"; code=$?
+[ "$code" -ne 0 ] || bad "$lang: a wrong golden row passed"
+[ ! -s "$work/swift.log" ] || bad "$lang: a step ran with a wrong golden row: $(cat "$work/swift.log")"
 
-# S9 (AC-4). swift-min resolves and builds the library: no tests, no warnings as errors, no sanitizer; its failure fails
-out="$(run_swift swift-min "$swroot")"; code=$?
-[ "$code" -eq 0 ] || bad "swift-min: a clean tree failed (exit $code): $out"
-sw_row_is swift-min "PASS "
-expected="swift package $o resolve
-swift build $o"
-[ "$(cat "$work/swift.log")" = "$expected" ] || bad "swift-min: the steps differ from the expected ones: $(cat "$work/swift.log")"
-for step in resolve min-build; do
-  out="$(run_swift swift-min "$swroot" SWIFT_FAIL="$step")"; code=$?
-  [ "$code" -ne 0 ] || bad "swift-min: a failing $step passed"
-done
-
-# S10 (AC-4). the wiring: each Swift service runs its own suite on the image tool-pins.txt names, swift-min's tag is the
-# manifest's swift-tools-version, and the scaffold job runs swift-min after swift
+# S10 (AC-4). the wiring: the Swift service runs its own suite on the image tool-pins.txt names, and the scaffold job
+# runs it
 service_line() { # compose file, service, key: the value of "    key:" in that service's block
   awk -v svc="  $2:" -v key="    $3: " '
     $0 == svc { inside = 1; next }
@@ -223,26 +208,18 @@ service_line() { # compose file, service, key: the value of "    key:" in that s
     inside && index($0, key) == 1 { print substr($0, length(key) + 1); exit }
   ' "$1"
 }
-for pair in swift:swift swift-min:swift-min; do
-  svc="${pair%%:*}"
-  pin="$(bash "$here/tool-pin.sh" "${pair#*:}")" || bad "$svc: tool-pins.txt has no ${pair#*:} pin"
-  [ "$(service_line "$repo/docker-compose.test.yml" "$svc" image)" = "swift:$pin" ] \
-    || bad "$svc: the compose image is not swift:$pin: $(service_line "$repo/docker-compose.test.yml" "$svc" image)"
-  [ "$(service_line "$repo/docker-compose.test.yml" "$svc" command)" = "[\"exec /src/.github/workflows/run-suite.sh $svc\"]" ] \
-    || bad "$svc: the compose service does not run run-suite.sh $svc"
-done
-tools="$(sed -n '1s|^// swift-tools-version: *\([0-9.]*\).*|\1|p' "$repo/Package.swift")"
-[ -n "$tools" ] && [ "$(bash "$here/tool-pin.sh" swift-min)" = "$tools" ] \
-  || bad "swift-min: the pin $(bash "$here/tool-pin.sh" swift-min) is not the manifest's swift-tools-version '$tools'"
+svc=swift
+pin="$(bash "$here/tool-pin.sh" "$svc")" || bad "$svc: tool-pins.txt has no $svc pin"
+[ "$(service_line "$repo/docker-compose.test.yml" "$svc" image)" = "swift:$pin" ] \
+  || bad "$svc: the compose image is not swift:$pin: $(service_line "$repo/docker-compose.test.yml" "$svc" image)"
+[ "$(service_line "$repo/docker-compose.test.yml" "$svc" command)" = "[\"exec /src/.github/workflows/run-suite.sh $svc\"]" ] \
+  || bad "$svc: the compose service does not run run-suite.sh $svc"
 suites="$(sed -n 's/^ *for lang in \(.*\); do$/\1/p' "$here/test.yml" | grep -w swift)"
-case " $suites " in *" swift swift-min "*) ;; *) bad "test.yml: the scaffold job does not run swift-min right after swift: '$suites'" ;; esac
+case " $suites " in *" swift "*) ;; *) bad "test.yml: the scaffold job does not run swift: '$suites'" ;; esac
 
 # S11. the build output is outside the mounted tree, and the publish file mounts the tree read-only
-for svc in swift swift-min; do
-  scratch="$(service_line "$repo/docker-compose.test.yml" "$svc" "  PACKBIN_SWIFT_SCRATCH")"
-  case "$scratch" in /src | /src/*) bad "$svc: the build output is inside the mounted tree: $scratch" ;; "") bad "$svc: no PACKBIN_SWIFT_SCRATCH" ;; esac
-done
+svc=swift
+scratch="$(service_line "$repo/docker-compose.test.yml" "$svc" "  PACKBIN_SWIFT_SCRATCH")"
+case "$scratch" in /src | /src/*) bad "$svc: the build output is inside the mounted tree: $scratch" ;; "") bad "$svc: no PACKBIN_SWIFT_SCRATCH" ;; esac
 ro="$(awk '$0 == "  swift:" { inside = 1; next } inside && /^  [^ ]/ { exit } inside' "$repo/docker-compose.publish.yml")"
 grep -qx '      - ./:/src:ro' <<< "$ro" || bad "swift: the publish file does not mount the tree read-only: $ro"
-grep -qF 'swift-min:' "$repo/docker-compose.publish.yml" && grep -qF 'volumes: *swift-publish-volumes' "$repo/docker-compose.publish.yml" \
-  || bad "swift-min: the publish file does not give it the read-only volumes"

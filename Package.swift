@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 import PackageDescription
 
 // swift-crypto gives HKDF-SHA256 where CryptoKit is missing; on Apple platforms its product is not
@@ -10,7 +10,7 @@ let package = Package(
         .library(name: "Packbin", targets: ["Packbin"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-crypto.git", exact: "3.12.5"),
+        .package(url: "https://github.com/apple/swift-crypto.git", exact: "4.3.1"),
     ],
     targets: [
         .target(

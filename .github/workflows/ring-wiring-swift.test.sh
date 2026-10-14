@@ -216,11 +216,11 @@ swift_wiring_checks() {
   mutate "$driver/Package.swift" "$tmp/p1.swift" 's#\.package(path: "../../../.."),#.package(url: "https://github.com/zxsanny/packbin", from: "0.2.2"),#'
   expect_rejected "the root package by path" SW_PACKAGE="$tmp/p1.swift"
   insert_after "$driver/Package.swift" "$tmp/p2.swift" '^        [.]package[(]path: ' \
-    '        .package(url: "https://github.com/apple/swift-crypto.git", exact: "3.12.5"),'
+    '        .package(url: "https://github.com/apple/swift-crypto.git", exact: "4.3.1"),'
   expect_rejected "a second dependency of the driver package" SW_PACKAGE="$tmp/p2.swift"
   mutate "$driver/Package.swift" "$tmp/p3.swift" 's/name: "position",/name: "where",/'
   expect_rejected "the position program" SW_PACKAGE="$tmp/p3.swift"
-  mutate "$driver/Package.resolved" "$tmp/r1.json" 's/"version" : "1.3.2"/"version" : "1.7.3"/'
+  mutate "$driver/Package.resolved" "$tmp/r1.json" 's/"version" : "1.7.3"/"version" : "1.6.0"/'
   expect_rejected "a driver pin that differs from the root package" SW_RESOLVED="$tmp/r1.json"
   mutate "$here/ring-toolchains.sh" "$tmp/t1.sh" '/^check swift /d'
   expect_rejected "the Swift version check" SW_TOOLS="$tmp/t1.sh"
@@ -228,13 +228,13 @@ swift_wiring_checks() {
   expect_rejected "the image tag from RING_SWIFT or the pin" SW_BUILD="$tmp/b1.sh"
   mutate "$here/ring-swift.sh" "$tmp/b2.sh" 's/"swift:$tag"/"swift:latest"/g'
   expect_rejected "the swift:\$tag image" SW_BUILD="$tmp/b2.sh"
-  mutate "$here/test.yml" "$tmp/w1.yml" 's/^      RING_SWIFT: "6"$/      RING_SWIFT: "7"/'
+  mutate "$here/test.yml" "$tmp/w1.yml" 's/^      RING_SWIFT: "6\.3\.3"$/      RING_SWIFT: "6.3.4"/'
   expect_rejected "RING_SWIFT bumped alone" SW_WORKFLOW="$tmp/w1.yml"
   mutate "$here/test.yml" "$tmp/w2.yml" '/^      RING_SWIFT: /d'
   expect_rejected "RING_SWIFT removed" SW_WORKFLOW="$tmp/w2.yml"
-  mutate "$here/tool-pins.txt" "$tmp/pins.txt" 's/^swift==6$/swift==7/'
+  mutate "$here/tool-pins.txt" "$tmp/pins.txt" 's/^swift==6\.3\.3$/swift==6.3.4/'
   expect_rejected "the tool-pins.txt swift pin bumped alone" SW_PINS="$tmp/pins.txt"
-  mutate "$here/../../docker-compose.test.yml" "$tmp/compose.yml" 's/image: swift:6$/image: swift:7/'
+  mutate "$here/../../docker-compose.test.yml" "$tmp/compose.yml" 's/image: swift:6\.3\.3$/image: swift:6.3.4/'
   expect_rejected "the swift suite image bumped alone" SW_COMPOSE="$tmp/compose.yml"
   mutate "$here/test.yml" "$tmp/w3.yml" '/^          bash \.github\/workflows\/ring-swift\.sh /d'
   expect_rejected "the Swift driver build step line" SW_WORKFLOW="$tmp/w3.yml"

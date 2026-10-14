@@ -175,7 +175,7 @@ sw_check_checks() {
   esac
   assert_eq "$(grep '^build ' "$sw_log" | cut -d'|' -f1)" "build $(sed 's/^package //; s/ resolve|.*$//' <<< "$first")" \
     "AC-2 the build uses the resolve's consumer state"
-  grep -qx '// swift-tools-version: 5.9' "$sw_log.manifest" || fail "AC-2 consumer tools version"
+  grep -qx '// swift-tools-version: 6.0' "$sw_log.manifest" || fail "AC-2 consumer tools version"
   grep -qxF "        .package(url: \"$sw_bare\", exact: \"0.1.9\")," "$sw_log.manifest" || fail "AC-2 consumer dependency: $(grep package "$sw_log.manifest")"
   grep -qF '.product(name: "Packbin", package: "packbin")' "$sw_log.manifest" || fail "AC-2 consumer product"
   sw_assert_untouched "AC-2 publish"
@@ -269,7 +269,7 @@ sw_refusal_checks() {
   local bad old new want n=0 tools dir cmd ok
   sw_setup
   cp "$sw_src/Package.swift" "$sw_dir/Package.swift"
-  for bad in "// swift-tools-version: 5.9|// swift-tools-version: 5.10|Package.swift does not declare swift-tools-version: 5.9" \
+  for bad in "// swift-tools-version: 6.0|// swift-tools-version: 5.9|Package.swift does not declare swift-tools-version: 6.0" \
     ".macOS(.v12)|.macOS(.v13)|Package.swift does not declare iOS 15 and macOS 12" \
     ".iOS(.v15)|.iOS(.v16)|Package.swift does not declare iOS 15 and macOS 12" \
     '.library(name: "Packbin"|.library(name: "PackbinKit"|Package.swift has no library product Packbin' \

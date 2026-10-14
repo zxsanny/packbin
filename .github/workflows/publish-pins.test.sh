@@ -4,7 +4,7 @@
 # fail, assert_eq, copy_tree, $root and $here. Each rule is also run against a violating temp copy.
 
 # shellcheck disable=SC2154,SC2016
-PINS_NAMES="npm twine platformio idf-component-manager build setuptools pytest swift swift-min"
+PINS_NAMES="npm twine platformio idf-component-manager build setuptools pytest swift"
 
 # Prints the violations of every workflow file in directory $1 (non-zero exit when there are any):
 # a non-local `uses:` that is not owner/repo@<40 lowercase hex>, a pinned one without a `# <tag>`

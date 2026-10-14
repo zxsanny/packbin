@@ -72,6 +72,8 @@ Workers: one `general-purpose` agent per task; brief carries ticket id, spec pat
 
 Each task's own ACs and test table; the one total run is `scripts/loop-tests.sh`. Swift pins SW-1 to SW-16 as `task_map.md` assigns them.
 
+Decision 2026-10-14 (owner, after the waves): Swift 6 only. `Package.swift` is `swift-tools-version: 6.0` (Swift 6 language mode), swift-crypto 4.3.1; the `swift-min` service, its 5.9 compile step and its loop-tests stage are removed; the CI image is `swift:6.3.3` (`swift:6` is not a Docker Hub tag). The wave-2 notes below are kept as history.
+
 ### Carried from wave 2 (parent decisions, 2026-10-14)
 
 - AZ-2521 split the 5.9 compile into its own service `run-suite.sh swift-min` (accepted: a `swift:6` container cannot start `swift:5.9`); two Swift report rows per CI run.

@@ -174,7 +174,7 @@ sw_position_checks() {
 # AC-5: the manifest, the license and ADR-005; the swift-check row of the target table; the check passes the real files.
 sw_static_checks() {
   local dir out adr script
-  [ "$(sed -n 1p "$root/Package.swift")" = "// swift-tools-version: 5.9" ] || fail "AC-5 Package.swift tools version"
+  [ "$(sed -n 1p "$root/Package.swift")" = "// swift-tools-version: 6.0" ] || fail "AC-5 Package.swift tools version"
   grep -qF 'platforms: [.iOS(.v15), .macOS(.v12)],' "$root/Package.swift" || fail "AC-5 Package.swift platforms"
   [ "$(sed -n 1p "$root/LICENSE")" = "MIT License" ] && grep -q 'Permission is hereby granted, free of charge' "$root/LICENSE" \
     || fail "AC-5 the root LICENSE is not MIT"

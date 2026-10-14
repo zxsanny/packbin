@@ -291,7 +291,7 @@ def check_swift(directory, version):
     need(tag == f"v{version}", f"tag.txt tag {tag} is not v{version}")
     need(re.fullmatch(r"[0-9a-f]{40}", commit) is not None, f"tag.txt commit {commit!r} is not a 40-digit commit id")
     manifest = (directory / "Package.swift").read_text()
-    need(manifest.startswith("// swift-tools-version: 5.9\n"), "Package.swift does not declare swift-tools-version: 5.9")
+    need(manifest.startswith("// swift-tools-version: 6.0\n"), "Package.swift does not declare swift-tools-version: 6.0")
     need(re.search(r"platforms: \[\.iOS\(\.v15\), \.macOS\(\.v12\)\]", manifest), "Package.swift does not declare iOS 15 and macOS 12")
     need(re.search(r'\.library\(name: "Packbin", targets: \["Packbin"\]\)', manifest), "Package.swift has no library product Packbin")
     licence = (directory / "LICENSE").read_text()

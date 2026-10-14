@@ -31,7 +31,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-pool_stages="go typescript csharp python rust java cpp swift swift-min scaffold"
+pool_stages="go typescript csharp python rust java cpp swift scaffold"
 serial_stages="cpp-embedded-arm ring ac10 publish-gate"
 
 is_test_path() {
@@ -58,7 +58,7 @@ covers() {
     csharp | typescript | python | rust | java | go | cpp)
       case "$f" in "$stage"/*) return 0 ;; esac
       suite_shared "$f" && return 0 ;;
-    swift | swift-min)
+    swift)
       case "$f" in swift/* | Package.swift | Package.resolved) return 0 ;; esac
       suite_shared "$f" && return 0 ;;
     cpp-embedded-arm)
@@ -169,7 +169,7 @@ run_stage_command() {
         && bash scripts/loop-tests.test.sh ;;
     cpp) make -C cpp clean && docker compose -f docker-compose.test.yml run --rm cpp ;;
     cpp-embedded-arm) docker compose -f docker-compose.test.yml run --rm cpp-embedded ;;
-    go | typescript | csharp | python | rust | java | swift | swift-min) docker compose -f docker-compose.test.yml run --rm "$1" ;;
+    go | typescript | csharp | python | rust | java | swift) docker compose -f docker-compose.test.yml run --rm "$1" ;;
     ring) env "${ring_env[@]}" bash .github/workflows/language-pair.sh ;;
     ac10) dotnet test csharp -c Release --nologo --filter "FullyQualifiedName~Nfr_PublicTyped" ;;
     publish-gate) env "${ring_env[@]}" bash .github/workflows/publish-gate.test.sh ;;

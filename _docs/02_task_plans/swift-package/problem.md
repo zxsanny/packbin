@@ -9,7 +9,7 @@ Loop 26 (on `dev`; no worktree). Intake: `_docs/loops/loop25/handoff26.md` and t
 
 ## What
 
-An eighth package, `swift/`: a Swift implementation of packbin that writes and reads the same bytes as C#, TypeScript, Python, Rust, C++, Java and Go for every feature they share: the wire format (scalars, flags, `when`, `repeat`/`times`, `sized`, two-bit slots, `bits`, `packed`), schemes, first-byte dispatch, field-id binding and the scheme-order check, UTF-8 strings, counted lists and dictionaries, the round limits and the shared hostile vectors, and `PackSession` (HKDF-SHA256 + ChaCha20, ciphertext equal to C#). Plus a Swift driver in the `language-pair.sh` ring, a Swift service in the CI suite (Linux `swift:6` image), the AC-10 speed loop, install from a git tag through Swift Package Manager, and a Swift section in the README. Errors are thrown as a typed error; hostile input never traps (no arithmetic overflow, out-of-range index or force unwrap reachable from input).
+An eighth package, `swift/`: a Swift implementation of packbin that writes and reads the same bytes as C#, TypeScript, Python, Rust, C++, Java and Go for every feature they share: the wire format (scalars, flags, `when`, `repeat`/`times`, `sized`, two-bit slots, `bits`, `packed`), schemes, first-byte dispatch, field-id binding and the scheme-order check, UTF-8 strings, counted lists and dictionaries, the round limits and the shared hostile vectors, and `PackSession` (HKDF-SHA256 + ChaCha20, ciphertext equal to C#). Plus a Swift driver in the `language-pair.sh` ring, a Swift service in the CI suite (Linux `swift:6.3.3` image), the AC-10 speed loop, install from a git tag through Swift Package Manager, and a Swift section in the README. Errors are thrown as a typed error; hostile input never traps (no arithmetic overflow, out-of-range index or force unwrap reachable from input).
 
 Swift copies every parity row decided through U26: where the seven disagree, Swift follows TypeScript at HEAD (or the decided row), as Go did. U24 is C++ only. U25 applies as a negative-id check. U26 A: the map form reads a nested-row group from the nested map. The D1b rows stay as documented (empty anchored group, `when` on a mark): Swift copies TypeScript.
 
@@ -22,9 +22,9 @@ Owner (2026-10-14, accept all recommended): "a new top-level `swift/` folder, a 
 - **S-1** `Package.swift` at the repository root; library target path `swift/Sources/Packbin`; no mirror repository; Swift Package Manager resolves the existing `vX.Y.Z` tags (no `swift/vX.Y.Z` tag).
 - **S-2** ChaCha20 is written in the package and checked against the RFC 8439 vectors (no underscored `_CryptoExtras`). HKDF-SHA256 comes from CryptoKit on Apple platforms and `swift-crypto` (`Crypto`) elsewhere: `swift-crypto` is the only dependency, declared for non-Apple platforms.
 - **S-3** AC-12 and AC-14 for a fetch-only language: the publish workflow, after the Swift golden check passes, runs `swift package resolve` and a build in a throwaway consumer against the tag. No Swift Package Index listing in this loop.
-- **S-4** `swift-tools-version: 5.9`, platforms iOS 15 and macOS 12, CI image `swift:6`. Language mode 5 unless Swift 6 strict concurrency costs nothing (decompose decides, recorded in the task).
+- **S-4** `swift-tools-version: 6.0` (Swift 6 only; Swift 6 language mode), platforms iOS 15 and macOS 12, CI image `swift:6.3.3`; no Swift 5.9 build. Amended 2026-10-14 by owner decision (was tools 5.9 with a `swift:5.9` library build).
 - **S-5** Scope: the whole epic in this loop, in waves; no tag is pushed.
-- Swift is installed on the owner's Mac (6.3.3): local runs use `swift test`; the Linux run uses the `swift:6` container.
+- Swift is installed on the owner's Mac (6.3.3): local runs use `swift test`; the Linux run uses the `swift:6.3.3` container.
 - Defaults to confirm in New Task step 5: rows are typed structs bound by getter/setter closures plus a `[String: Any]` map form (as Go G-4); `nil` is no value, an empty array is a value with 0 items (as Go G-5).
 
 ## Out of scope

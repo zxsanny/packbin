@@ -91,7 +91,7 @@ services:
       - ./fixtures/golden.hex:/fixture/golden.hex:ro
       - ./test-results:/test-results
   swift:
-    image: swift:6
+    image: swift:6.3.3
     working_dir: /src
     entrypoint: ["bash", "-c"]
     command: ["exec /src/.github/workflows/run-suite.sh swift"]
@@ -106,22 +106,6 @@ services:
       - ./fixtures/golden.hex:/fixture/golden.hex:ro
       - ./test-results:/test-results
       - swiftpm-cache:/root/.cache/org.swift.swiftpm
-  # AC-4 (AZ-2521): the library builds on the manifest's minimum toolchain (tool-pins.txt swift-min); no tests.
-  swift-min:
-    image: swift:5.9
-    working_dir: /src
-    entrypoint: ["bash", "-c"]
-    command: ["exec /src/.github/workflows/run-suite.sh swift-min"]
-    environment:
-      SRC_ROOT: /src
-      FIXTURE: /fixture/golden.hex
-      TEST_RESULTS: /test-results
-      PACKBIN_SWIFT_SCRATCH: /tmp/packbin-swift-build
-    volumes:
-      - ./:/src
-      - ./fixtures/golden.hex:/fixture/golden.hex:ro
-      - ./test-results:/test-results
-      - swiftpm-cache-min:/root/.cache/org.swift.swiftpm
   cpp-embedded:
     build:
       context: ./cpp/embedded
@@ -148,8 +132,5 @@ services:
       - ./test-results:/test-results
 
 volumes:
-  # The SwiftPM repository and manifest cache: the pinned swift-crypto is fetched once, not on every run. One volume
-  # for each toolchain: swift (6) and swift-min (5.9) run side by side in scripts/loop-tests.sh and must not share
-  # a cache between two SwiftPM versions.
+  # The SwiftPM repository and manifest cache: the pinned swift-crypto is fetched once, not on every run.
   swiftpm-cache:
-  swiftpm-cache-min:
