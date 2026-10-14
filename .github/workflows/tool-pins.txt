@@ -10,3 +10,7 @@ idf-component-manager==3.1.2
 build==1.6.1
 setuptools==84.0.0
 pytest==9.1.1
+# Image tags of the Swift suite (docker-compose.test.yml): swift:<swift> runs it, swift:<swift-min> builds the
+# library on the manifest's minimum toolchain (swift-tools-version, AC-4 of AZ-2521). Not pip packages.
+swift==6
+swift-min==5.9

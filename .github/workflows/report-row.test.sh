@@ -4,13 +4,13 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$root"
 
-langs="csharp typescript python rust cpp java go"
-for lang in $langs; do
+langs="csharp typescript python rust cpp java go swift"
+for lang in $langs swift-min; do
   grep -q "^  ${lang}:" docker-compose.test.yml
   grep -q "^  ${lang}:" docker-compose.publish.yml
 done
-# The scaffold job runs a suite for each of the seven services.
-grep -qx "          for lang in ${langs}; do" .github/workflows/test.yml
+# The scaffold job runs a suite for each of the eight services, then the Swift 5.9 library build (AZ-2521 AC-4).
+grep -qx "          for lang in ${langs} swift-min; do" .github/workflows/test.yml
 if grep -q 'ports:' docker-compose.test.yml; then
   echo "compose publishes a port" >&2
   exit 1
@@ -28,5 +28,7 @@ head -n 1 "$tmp/report.csv" | grep -qx 'Test ID,Test Name,Execution Time (ms),Re
 grep -qx 'csharp,csharp suite,10,PASS,' "$tmp/report.csv"
 TEST_RESULTS="$tmp" bash .github/workflows/report-row.sh go "go suite" 20 FAIL "suite failed"
 grep -qx 'go,go suite,20,FAIL,suite failed' "$tmp/report.csv"
+TEST_RESULTS="$tmp" bash .github/workflows/report-row.sh swift "swift suite" 30 FAIL "swift dependency resolve failed"
+grep -qx 'swift,swift suite,30,FAIL,swift dependency resolve failed' "$tmp/report.csv"
 [ "$(grep -c 'Test ID' "$tmp/report.csv")" -eq 1 ]
 echo "report row tests passed"

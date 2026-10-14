@@ -6,6 +6,7 @@
 # run-suite.sh go (AZ-2448): fails without go/go.mod, runs gofmt -l, go vet, go test -race, the
 # FuzzUnpack fuzz step (or says it is skipped) and the one-dependency check in that order, and stops
 # at the first failing step. `go` and `gofmt` are fakes too.
+# run-suite.sh swift and swift-min (AZ-2521): run-suite-swift.test.sh, sourced at the end.
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
@@ -292,6 +293,10 @@ for lang in csharp rust cpp java; do
     FAKE_TOOL_EXIT=1 PATH="$toolbin:$PATH" perl -e 'alarm 60; exec @ARGV' -- bash "$here/run-suite.sh" "$lang" </dev/null 2>&1)"; code=$?
   if [ "$lang" != java ] && [ "$code" -eq 0 ]; then bad "$lang: a failing tool passed"; fi
 done
+
+# --- swift and swift-min (AZ-2521): in their own file, so neither file passes 500 lines ---
+# shellcheck source=run-suite-swift.test.sh
+. "$here/run-suite-swift.test.sh"
 
 if [ "$fail" -eq 0 ]; then echo "run-suite.test.sh: all checks passed"; fi
 exit "$fail"

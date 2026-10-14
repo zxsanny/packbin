@@ -26,8 +26,11 @@ jobs:
           test -d java/src/test
           test -d go
           ls go/*_test.go >/dev/null
+          test -d swift/Sources/Packbin
+          ls swift/Tests/PackbinTests/*.swift >/dev/null
           for f in \
             go/go.mod \
+            Package.swift \
             fixtures/golden.hex \
             .github/workflows/test.yml \
             .github/workflows/publish.yml \
@@ -57,7 +60,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p test-results
-          for lang in csharp typescript python rust cpp java go; do
+          # swift-min (the library on Swift 5.9, AC-4 of AZ-2521) after swift, the main build.
+          for lang in csharp typescript python rust cpp java go swift swift-min; do
             docker compose -f docker-compose.test.yml run --rm "$lang"
           done
       - name: publish gate

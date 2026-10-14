@@ -6,6 +6,7 @@ root="${SRC_ROOT:-.}"
 fixture="${FIXTURE:-$root/fixtures/golden.hex}"
 results="${TEST_RESULTS:-$root/test-results}"
 ok=0
+failure=
 started=$(date +%s)
 
 grep -qx '4001000065cd1d00a3e1110100' "$fixture" || ok=1
@@ -61,6 +62,88 @@ go_deps() {
   extra="$(printf '%s\n%s\n' "$direct" "$built" | grep -vxF -e '' -e "$main" -e 'golang.org/x/crypto' | sort -u)"
   if [ -n "$extra" ]; then
     printf 'run-suite: go depends on modules other than golang.org/x/crypto:\n%s\n' "$extra" >&2
+    return 1
+  fi
+}
+
+# Swift (swift:6, and swift:5.9 for swift-min): every step runs on the root Package.swift with these options.
+# The compose services put the build output outside the mounted tree (PACKBIN_SWIFT_SCRATCH); --force-resolved-versions
+# builds only what Package.resolved pins and never rewrites it (Go's -mod=readonly).
+swift_opts=(--package-path "$root" --scratch-path "${PACKBIN_SWIFT_SCRATCH:-$root/.build}" --force-resolved-versions)
+swift_tests=
+
+# Both halves of the Swift tree: the manifest every consumer resolves and the sources it points at.
+swift_tree() {
+  local missing=0
+  [ -f "$root/Package.swift" ] || { missing_manifest "$root/Package.swift"; missing=1; }
+  [ -d "$root/swift" ] || { missing_manifest "$root/swift"; missing=1; }
+  return "$missing"
+}
+
+# A failed fetch of the pinned dependency is not a test failure: the report row says which it was.
+swift_resolve() {
+  if ! swift package "${swift_opts[@]}" resolve; then
+    failure="swift dependency resolve failed"
+    return 1
+  fi
+}
+
+# The test identifiers of the debug build (`Module.Suite/test()`), for the steps that run one suite.
+swift_list() {
+  swift_tests="$(swift test list "${swift_opts[@]}" --skip-build)" || return 1
+  printf '%s\n' "$swift_tests"
+}
+
+# The 60 s unpack fuzz run of the FuzzTests suite (AZ-2517), which reads its duration from PACKBIN_FUZZ_SECONDS.
+# Until that suite exists the step says it is skipped. A run shorter than asked fails: a suite that ignored the
+# duration would otherwise pass in seconds.
+swift_fuzz() {
+  local seconds="${PACKBIN_FUZZ_SECONDS:-60}" start elapsed
+  if ! grep -q '\.FuzzTests/' <<< "$swift_tests"; then
+    echo "run-suite: swift fuzz step skipped: the package has no FuzzTests suite yet"
+    return 0
+  fi
+  start=$(date +%s)
+  env PACKBIN_FUZZ_SECONDS="$seconds" swift test "${swift_opts[@]}" --skip-build --verbose --filter '\.FuzzTests/' || return 1
+  elapsed=$(( $(date +%s) - start ))
+  if [ "$elapsed" -lt "$seconds" ]; then
+    printf 'run-suite: the swift fuzz step ran %s s, under the %s s asked for\n' "$elapsed" "$seconds" >&2
+    return 1
+  fi
+}
+
+# SW-8: the speed bound holds for a release build only. A filter that matches nothing passes, so the suite must exist.
+swift_speed() {
+  if ! grep -q '\.SpeedTests/' <<< "$swift_tests"; then
+    echo "run-suite: swift has no SpeedTests suite; the release-build speed step has nothing to run" >&2
+    return 1
+  fi
+  swift build "${swift_opts[@]}" -c release --build-tests || return 1
+  swift test "${swift_opts[@]}" -c release --skip-build --verbose --filter '\.SpeedTests/'
+}
+
+# SW-11: one package dependency at most, swift-crypto (what swift-crypto itself requires is its business), no
+# unsafe flags, and every target of the package's own is a Swift target (no C, C++, system library or binary target).
+swift_deps() {
+  local described dumped types direct
+  described="$(swift package "${swift_opts[@]}" describe --type json)" || return 1
+  dumped="$(swift package "${swift_opts[@]}" dump-package)" || return 1
+  types="$(sed -n 's/^ *"module_type" : "\([^"]*\)".*/\1/p' <<< "$described")"
+  if [ -z "$types" ]; then
+    echo "run-suite: swift package describe lists no targets; the dependency check cannot read it" >&2
+    return 1
+  fi
+  if grep -vxF SwiftTarget <<< "$types" >/dev/null; then
+    printf 'run-suite: the swift package has targets that are not Swift targets:\n%s\n' "$(grep -vxF SwiftTarget <<< "$types" | sort -u)" >&2
+    return 1
+  fi
+  if grep -qF '"unsafeFlags"' <<< "$dumped"; then
+    echo "run-suite: Package.swift sets unsafe flags (they make the package unusable as a dependency)" >&2
+    return 1
+  fi
+  direct="$(sed -n 's/^ *"identity" : "\([^"]*\)".*/\1/p' <<< "$described" | grep -vxF swift-crypto | sort -u)"
+  if [ -n "$direct" ]; then
+    printf 'run-suite: swift depends on packages other than swift-crypto:\n%s\n' "$direct" >&2
     return 1
   fi
 }
@@ -157,6 +240,34 @@ case "$lang" in
       missing_manifest "$root/go/go.mod"
     fi
     ;;
+  swift)
+    # A tree without Package.swift or swift/ fails, as every other language does without its manifest (AC-3).
+    if swift_tree; then
+      run swift_resolve
+      # SW-9: 0 warnings in the release build. Warnings as errors and complete concurrency checking are given here,
+      # never in Package.swift: an unsafe flag there makes the package unusable as a dependency.
+      run swift build "${swift_opts[@]}" -c release -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete
+      # The tests are built first, so the verbose test output is not buried under the compiler command lines.
+      run swift build "${swift_opts[@]}" --build-tests
+      run swift test "${swift_opts[@]}" --skip-build --verbose
+      run swift_list
+      # Before the sanitizer run, which rebuilds the debug build with -sanitize=thread.
+      run swift_fuzz
+      # SW-14: a race reported by the thread sanitizer fails the run (its exit code is 66).
+      run swift build "${swift_opts[@]}" --build-tests --sanitize=thread
+      run swift test "${swift_opts[@]}" --skip-build --sanitize=thread --verbose
+      run swift_speed
+      run swift_deps
+    fi
+    ;;
+  swift-min)
+    # AC-4: the library builds with the manifest's minimum toolchain (swift:5.9 image, tool-pins.txt swift-min).
+    # Library only: the tests use swift-testing, which Swift 5.9 does not have. The scaffold job runs it after `swift`.
+    if swift_tree; then
+      run swift_resolve
+      run swift build "${swift_opts[@]}"
+    fi
+    ;;
   *)
     echo "unknown language: $lang" >&2
     ok=1
@@ -169,7 +280,7 @@ if [ "$ok" -eq 0 ]; then
   message=
 else
   result=FAIL
-  message="suite failed"
+  message="${failure:-suite failed}"
 fi
 TEST_RESULTS="$results" SRC_ROOT="$root" bash "$root/.github/workflows/report-row.sh" \
   "$lang" "$lang suite" "$elapsed_ms" "$result" "$message"
