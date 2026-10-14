@@ -31,12 +31,12 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-pool_stages="go typescript csharp python rust java cpp scaffold"
+pool_stages="go typescript csharp python rust java cpp swift swift-min scaffold"
 serial_stages="cpp-embedded-arm ring ac10 publish-gate"
 
 is_test_path() {
   case "$1" in
-    */tests/* | */test/* | java/src/test/* | *_test.go | go/testdata/*) return 0 ;;
+    */tests/* | */test/* | java/src/test/* | *_test.go | go/testdata/* | swift/Tests/*) return 0 ;;
   esac
   return 1
 }
@@ -54,16 +54,19 @@ covers() {
   local stage="$1" f="$2"
   case "$stage" in
     scaffold)
-      case "$f" in .github/* | fixtures/* | cpp/embedded/* | docker-compose* | scripts/* | go/go.mod) return 0 ;; esac ;;
+      case "$f" in .github/* | fixtures/* | cpp/embedded/* | docker-compose* | scripts/* | go/go.mod | Package.swift) return 0 ;; esac ;;
     csharp | typescript | python | rust | java | go | cpp)
       case "$f" in "$stage"/*) return 0 ;; esac
+      suite_shared "$f" && return 0 ;;
+    swift | swift-min)
+      case "$f" in swift/* | Package.swift | Package.resolved) return 0 ;; esac
       suite_shared "$f" && return 0 ;;
     cpp-embedded-arm)
       case "$f" in cpp/include/* | cpp/src/* | cpp/embedded/* | cpp/Makefile | docker-compose.test.yml) return 0 ;; esac ;;
     ring)
       is_test_path "$f" && return 1
       case "$f" in
-        csharp/* | typescript/* | python/* | rust/* | java/* | go/* | cpp/include/* | cpp/src/*) return 0 ;;
+        csharp/* | typescript/* | python/* | rust/* | java/* | go/* | swift/* | Package.swift | Package.resolved | cpp/include/* | cpp/src/*) return 0 ;;
         .github/workflows/language-pair.sh | .github/workflows/ring-* | .github/workflows/drivers/* | fixtures/*) return 0 ;;
       esac ;;
     ac10)
@@ -73,7 +76,7 @@ covers() {
         .github/workflows/publish* | .github/workflows/tool-pin* | docker-compose* | README.md | LICENSE | go/LICENSE) return 0 ;;
         .github/workflows/test.yml | .github/workflows/run-suite.sh | .github/workflows/ring-* | .github/workflows/drivers/*) return 0 ;;
         */package.json | typescript/package-lock.json | csharp/*.csproj | python/pyproject.toml | rust/Cargo.*) return 0 ;;
-        java/test.sh | cpp/library.json | cpp/idf_component.yml | cpp/CMakeLists.txt | go/go.mod | go/go.sum) return 0 ;;
+        java/test.sh | cpp/library.json | cpp/idf_component.yml | cpp/CMakeLists.txt | go/go.mod | go/go.sum | Package.swift | Package.resolved) return 0 ;;
         fixtures/golden.hex) return 0 ;;
       esac ;;
   esac
@@ -83,7 +86,7 @@ covers() {
 # A file added, deleted or renamed in a package changes what the publish gate packs.
 changes_package_files() {
   is_test_path "$1" && return 1
-  case "$1" in csharp/* | typescript/* | python/* | rust/* | java/* | cpp/* | go/*) return 0 ;; esac
+  case "$1" in csharp/* | typescript/* | python/* | rust/* | java/* | cpp/* | go/* | swift/*) return 0 ;; esac
   return 1
 }
 
@@ -165,7 +168,7 @@ run_stage_command() {
         && bash scripts/loop-tests.test.sh ;;
     cpp) make -C cpp clean && docker compose -f docker-compose.test.yml run --rm cpp ;;
     cpp-embedded-arm) docker compose -f docker-compose.test.yml run --rm cpp-embedded ;;
-    go | typescript | csharp | python | rust | java) docker compose -f docker-compose.test.yml run --rm "$1" ;;
+    go | typescript | csharp | python | rust | java | swift | swift-min) docker compose -f docker-compose.test.yml run --rm "$1" ;;
     ring) env "${ring_env[@]}" bash .github/workflows/language-pair.sh ;;
     ac10) dotnet test csharp -c Release --nologo --filter "FullyQualifiedName~Nfr_PublicTyped" ;;
     publish-gate) env "${ring_env[@]}" bash .github/workflows/publish-gate.test.sh ;;
