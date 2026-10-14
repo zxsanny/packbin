@@ -79,6 +79,8 @@ Then it fails as for the other languages (guarded by the manifest), proven by `r
 - Swift 6.3.3 runs on the owner's Mac (`swift test`); the suite is the `swift:6` container, as CI runs it. Tests run verbose, never quiet.
 - Errors are thrown as the typed `PackbinError`; a trap in any step fails the step.
 
+- From AZ-2513 (loop 26): the tests use swift-testing, so the `swift:5.9` step is `swift build` of the library only (never `swift build --build-tests`/`swift test`). `swift test -c release --filter SpeedTests` runs as its own step (local release figure: typed 0.37 s alone, 0.53 s inside the parallel run; Linux may be slower; if it nears 1 s, fill typed rows from the accessors directly). The Bool-versus-integer split of Foundation `NSNumber` (`__NSCFBoolean` vs `__NSCFNumber` on Darwin) is verified on macOS only: a failing JSON-bool test in the first `swift:6` run is expected-risk, report it, do not skip it.
+
 ## Risks & Mitigation
 
 **Risk 1: Shared files**
