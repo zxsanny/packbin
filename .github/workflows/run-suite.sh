@@ -119,7 +119,8 @@ swift_speed() {
     return 1
   fi
   swift build "${swift_opts[@]}" -c release --build-tests || return 1
-  swift test "${swift_opts[@]}" -c release --skip-build --verbose --filter '\.SpeedTests/'
+  # The 1 MiB hostile unpack (FuzzTests/mebibyte, SW-4) is timed in the same release run: a debug build is about 7 times slower.
+  swift test "${swift_opts[@]}" -c release --skip-build --verbose --filter '\.SpeedTests/' --filter '\.FuzzTests/mebibyte'
 }
 
 # SW-11: one package dependency at most, swift-crypto (what swift-crypto itself requires is its business), no

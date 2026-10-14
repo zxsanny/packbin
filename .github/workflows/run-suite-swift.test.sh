@@ -130,7 +130,7 @@ swift test $o --skip-build --verbose --filter \\.FuzzTests/
 swift build $o --build-tests --sanitize=thread
 swift test $o --skip-build --sanitize=thread --verbose
 swift build $o -c release --build-tests
-swift test $o -c release --skip-build --verbose --filter \\.SpeedTests/
+swift test $o -c release --skip-build --verbose --filter \\.SpeedTests/ --filter \\.FuzzTests/mebibyte
 swift package $o describe --type json
 swift package $o dump-package"
 [ "$(cat "$work/swift.log")" = "$expected" ] || bad "swift: the steps differ from the expected ones: $(diff <(printf '%s\n' "$expected") "$work/swift.log")"
@@ -147,7 +147,7 @@ if ! grep -qF -- "--scratch-path $swroot/.build --force-resolved-versions" "$wor
 out="$(run_swift swift "$swroot")"; code=$?
 [ "$code" -eq 0 ] || bad "swift: a tree without a fuzz suite failed (exit $code): $out"
 case "$out" in *"fuzz step skipped"*"no FuzzTests suite"*) ;; *) bad "swift: no skip line without a fuzz suite: $out" ;; esac
-if sw_ran "FuzzTests"; then bad "swift: fuzzed without a FuzzTests suite"; fi
+if sw_ran "--filter \\.FuzzTests/ " || grep -qE -- "--filter \\\\\.FuzzTests/$" "$work/swift.log"; then bad "swift: fuzzed without a FuzzTests suite"; fi
 
 # S4. a fuzz run shorter than asked fails (a suite that ignores PACKBIN_FUZZ_SECONDS) and stops the later steps
 out="$(run_swift swift "$swroot" SWIFT_FUZZ=1 SWIFT_FUZZ_SLEEP=0)"; code=$?
