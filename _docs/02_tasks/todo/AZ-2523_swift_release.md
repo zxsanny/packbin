@@ -87,6 +87,8 @@ Then ADR-005 Status Accepted; it states the install line, the gate rule, that no
 
 - From AZ-2521 (loop 26), files this task also owns: `publish-lib.sh` `PACKBIN_LANGS` and `publish-readonly.test.sh` `RO_SERVICES` (the `swift` and `swift-min` services exist in both compose files, `/src` read-only), the CI line for Swift in `_docs/02_document/module-layout.md`. `publish-pins.test.sh` already lists the `swift` and `swift-min` image pins (parent, 2026-10-14). The 5.9 compile step is a second service `run-suite.sh swift-min`, not a step inside `swift` (a `swift:6` container cannot start `swift:5.9`), so a CI run writes two Swift report rows.
 
+- From AZ-2522 (loop 26): `publish-position.sh` has no Swift yet; `language-pair.sh` runs the Swift position binary (`drivers/handoff-swift`, product `position`) directly behind a guard: this task moves swift into the publish-position loop and updates that guard. `ring-wiring-swift.test.sh` exists beside `ring-wiring.test.sh`. Any command here that builds Swift uses a `--scratch-path` outside the repository (never the root `.build`).
+
 ## Risks & Mitigation
 
 **Risk 1: A bad root manifest breaks every consumer**

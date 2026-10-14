@@ -70,17 +70,27 @@ corrupt_readme pack_package_in_neither '/^## pack_aligned_round_row$/,/^## /s/^-
   "pack case 'pack_aligned_round_row': package TypeScript is named 0 times"
 corrupt_readme pack_package_twice '/^## pack_aligned_round_row$/,/^## /s/^- Not run by: none.*/- Not run by: Rust (made up)./' \
   "pack case 'pack_aligned_round_row': package Rust is named 2 times"
-corrupt_readme pack_go_in_neither '/^## pack_aligned_round_row$/,/^## /s/, Go (map rows)\.$/./' \
+corrupt_readme pack_go_in_neither '/^## pack_aligned_round_row$/,/^## /s/, Go (map rows),/,/' \
   "pack case 'pack_aligned_round_row': package Go is named 0 times"
 corrupt_readme pack_go_twice '/^## pack_aligned_round_row$/,/^## /s/^- Not run by: none.*/- Not run by: Go (made up)./' \
   "pack case 'pack_aligned_round_row': package Go is named 2 times"
 # "Google" and "Got" are not the package Go: with Go dropped from Run by they must not make up for it.
-corrupt_readme pack_go_word_in_reason '/^## pack_aligned_round_row$/,/^## /{s/, Go (map rows)\.$/./;s/^- Not run by: none.*/- Not run by: none (Google, Got and Gone are no package)./;}' \
+corrupt_readme pack_go_word_in_reason '/^## pack_aligned_round_row$/,/^## /{s/, Go (map rows),/,/;s/^- Not run by: none.*/- Not run by: none (Google, Got and Gone are no package)./;}' \
   "pack case 'pack_aligned_round_row': package Go is named 0 times"
 # ... and with Go named once in Run by, a reason that holds "Google" still passes.
 sed '/^## pack_aligned_round_row$/,/^## /s/^- Not run by: none.*/- Not run by: none (Google, Got and Gone are no package)./' "$here/README.md" >"$tmp/google_reason.md"
 bash "$check" "$here/cases.txt" "$tmp/google_reason.md" >/dev/null
 echo "google_reason: accepted"
+# The same for Swift, the eighth package: missing or doubled fails, and "SwiftUI" in a reason is not Swift.
+corrupt_readme pack_swift_in_neither '/^## pack_aligned_round_row$/,/^## /s/, Swift (map rows)\.$/./' \
+  "pack case 'pack_aligned_round_row': package Swift is named 0 times"
+corrupt_readme pack_swift_twice '/^## pack_aligned_round_row$/,/^## /s/^- Not run by: none.*/- Not run by: Swift (made up)./' \
+  "pack case 'pack_aligned_round_row': package Swift is named 2 times"
+corrupt_readme pack_swift_word_in_reason '/^## pack_aligned_round_row$/,/^## /{s/, Swift (map rows)\.$/./;s/^- Not run by: none.*/- Not run by: none (SwiftUI, Swifts and Swift_ are no package)./;}' \
+  "pack case 'pack_aligned_round_row': package Swift is named 0 times"
+sed '/^## pack_aligned_round_row$/,/^## /s/^- Not run by: none.*/- Not run by: none (SwiftUI and Swifts are no package)./' "$here/README.md" >"$tmp/swiftui_reason.md"
+bash "$check" "$here/cases.txt" "$tmp/swiftui_reason.md" >/dev/null
+echo "swiftui_reason: accepted"
 corrupt_readme pack_no_not_run_list '/^## pack_aligned_round_row$/,/^## /{/^- Not run by:/d;}' \
   "pack case 'pack_aligned_round_row': section has no '- Not run by:' line"
 corrupt_readme pack_readme_packet_differs 's/^- Packet `01 0301 0202 0303`/- Packet `01 0301 0202 0304`/' \

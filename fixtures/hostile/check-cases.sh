@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Checks the format of the hostile-case file and that README.md describes every id. A pack case also
-# needs Scheme, Row, Run by and Not run by lines that together name each of the seven packages once.
+# needs Scheme, Row, Run by and Not run by lines that together name each of the eight packages once.
 # Usage: check-cases.sh [cases-file] [readme]
 set -euo pipefail
 set -f
@@ -10,7 +10,7 @@ cases="${1:-$here/cases.txt}"
 readme="${2:-$here/README.md}"
 
 terms="short_packet trailing_bytes bad_value too_many type_mismatch scheme_error"
-packages=("C#" "C++" "Go" "Java" "Python" "Rust" "TypeScript")
+packages=("C#" "C++" "Go" "Java" "Python" "Rust" "Swift" "TypeScript")
 errors=0
 count=0
 seen=" "
@@ -24,7 +24,7 @@ bad() {
 # A pack case's README section: the scheme, the row, and the Run by and Not run by lists, which
 # together name each package exactly once. A pack case that expects bytes also writes the packet in
 # its Packet line (spaces allowed) and its Expected line. A package name counts as a whole word: the
-# text is split into words, so "Google" or "Got" in a reason is not the package Go.
+# text is split into words, so "Google" or "Got" in a reason is not the package Go, nor "SwiftUI" Swift.
 check_pack_section() {
   local id="$1" expected="$2" hex="$3" section line run notrun pkg n packet words
   section="$(awk -v head="## $id" '$0 == head { on = 1; next } /^## / { on = 0 } on' "$readme")"

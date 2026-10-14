@@ -30,4 +30,10 @@ Collected from the worker reports (`_docs/03_implementation/batch_NN_loop26_repo
 | AZ-2518 | ChaCha20 block counter / packet position limits | refuses data needing a block after 2^32-1 and position 2^64-1 (unreachable for any real payload) | TypeScript wraps the block counter; Go refuses over 2^38 bytes and wraps its uint64 position | documented |
 | AZ-2518 | session API shape | throws, with Go's error kinds (setup failures `.badValue` "session: ..."; pack before open `.packError`; unpack before open `.short`, needed 1, left 0) | returns null/false (TypeScript, C#); errors as values (Go) | language idiom |
 | AZ-2518 | dependency on Apple platforms | SwiftPM resolves and clones swift-crypto and swift-asn1 on every platform; only linking is conditional (0 objects built on macOS) | — | README (AZ-2524) must say so |
+| AZ-2519 | `pack_out_of_range_integer` refusal text | "300 does not fit in u8" | "a: 300 does not fit in u8" | text only; Go matches Swift |
+| AZ-2519 | `pack_flags_short_list` refusal text | "nil where the member is absent" | "undefined" | language idiom; as Go |
+| AZ-2519 | `invalid_utf8_dict_key` | the error has no field id ("at m"); name, needed 0 and left 4 match | field "m" | pinned as is |
+| AZ-2519 | outcome term `bad_value` from unpack | Swift unpack never throws `.badValue`; an unusable value comes back as `.short` with needed 0 (negative count, invalid UTF-8, count behind a clear flag); the loader reads it as `bad_value` | same shape | as TypeScript and Go; the hostile README says so |
+| AZ-2522 | ring row comparison | by Swift type and value (as Go's `reflect.DeepEqual`) | loose deepEqual | stricter |
+| AZ-2522 | ring repack | the driver repacks only roundflags and roundwhen | — | as Go and TypeScript; bitwhen cannot repack by design |
 

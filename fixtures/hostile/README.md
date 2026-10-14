@@ -10,8 +10,8 @@
   - `stage`: `unpack` (build the scheme, unpack `hex`), `construct` (building the scheme must fail), `limit` (build the scheme with the limits the section gives, unpack `hex`) or `pack` (build the scheme and pack the row the section gives).
   - `expected`: outcome terms joined by `|`; any listed term is accepted, the first is preferred. A `pack` case has exactly one term: `bytes` or `pack_error`.
   - `hex`: lowercase, even length, starting with `01` for `unpack`, `limit` and a `pack` case that expects `bytes` (the packet that must come out); `-` for `construct` and for a `pack` case that expects `pack_error`.
-- A `limit` case is a small packet that a scheme with a low round limit refuses. The file holds bytes and outcomes only, so the limit is not in it: the `## <id>` section names it and each package writes it by hand with its own call (`WithLimits`, `withLimits`, `with_limits`; in Go `WithLimits(Limits)` takes all three limits, so the case starts from `DefaultLimits()` and sets `MaxRounds`). A literal packet over the default limit (65,535 rounds, about 1 MiB) cannot live in the file; each package's own default-limit tests cover it. C#, TypeScript, Java, Rust, Python and Go run `limit` cases (Python since loop 16). C++ unpacks into fixed arrays, so it has no round limit and its replay skips the stage.
-- A `pack` case states its scheme and row in its section, not in the file, and the outcome is the packet `bytes` or `pack_error`: pack throws or returns an error and returns no bytes. One term covers every refusal (out of range, missing, wrong length); the error type and message are not asserted, each package's own tests do that. Each pack section has `Scheme`, `Row`, `Run by` and `Not run by` lines. Some packages cannot write a row (a typed row has a static type, so an out-of-range integer cannot be put in it). `Run by` lists the packages whose vector test packs the row and asserts the outcome, `Not run by` the packages whose test reports the case skipped, with the reason for each. Together the two lists name each of the seven packages exactly once, each as a whole word ("Google" in a reason is not Go); `Not run by: none` is written when all seven run the case. The check counts package names in the two lists, so a reason must not name another package (write "the typed row", not "like Rust"). A package never skips a case silently: a package in `Run by` that cannot run it fails.
+- A `limit` case is a small packet that a scheme with a low round limit refuses. The file holds bytes and outcomes only, so the limit is not in it: the `## <id>` section names it and each package writes it by hand with its own call (`WithLimits`, `withLimits`, `with_limits`, Swift `withLimits(maxRounds:)`; in Go `WithLimits(Limits)` takes all three limits, so the case starts from `DefaultLimits()` and sets `MaxRounds`). A literal packet over the default limit (65,535 rounds, about 1 MiB) cannot live in the file; each package's own default-limit tests cover it. C#, TypeScript, Java, Rust, Python, Go and Swift run `limit` cases (Python since loop 16). C++ unpacks into fixed arrays, so it has no round limit and its replay skips the stage.
+- A `pack` case states its scheme and row in its section, not in the file, and the outcome is the packet `bytes` or `pack_error`: pack throws or returns an error and returns no bytes. One term covers every refusal (out of range, missing, wrong length); the error type and message are not asserted, each package's own tests do that. Each pack section has `Scheme`, `Row`, `Run by` and `Not run by` lines. Some packages cannot write a row (a typed row has a static type, so an out-of-range integer cannot be put in it). `Run by` lists the packages whose vector test packs the row and asserts the outcome, `Not run by` the packages whose test reports the case skipped, with the reason for each. Together the two lists name each of the eight packages exactly once, each as a whole word ("Google" in a reason is not Go, "SwiftUI" is not Swift); `Not run by: none` is written when all eight run the case. The check counts package names in the two lists, so a reason must not name another package (write "the typed row", not "like Rust"). A package never skips a case silently: a package in `Run by` that cannot run it fails.
 - `check-cases.sh` checks all of this and that every id has a section here. `cases.test.sh` proves the check passes on the committed file and fails on corrupted copies. Both run in the `scaffold` job of `.github/workflows/test.yml`.
 
 ## Notation
@@ -21,9 +21,9 @@
 - Wire rules: little-endian integers; `utf8` = `u16` length + bytes; `list` and `dict` = `u16` count; `sized`, `bits` and `times` take their count from an earlier integer field; `flags` = one `u8`, bit 0 = first child.
 - Outcome terms:
   - `short_packet`, `trailing_bytes`, `bad_value`, `too_many`, `type_mismatch`: unpack returns that error value, with no exception and no row.
-  - `scheme_error`: construction fails (an exception in C#, Java, TypeScript, Python and Rust; an `*Error` of kind `InvalidScheme` from `NewScheme` in Go; a compile error or `SchemeInvalid` in C++).
-  - `bytes` and `pack_error`: the two `pack` outcomes. `bytes` means pack returns exactly the packet in `hex`; `pack_error` means pack throws (C#, Java, TypeScript, Python) or returns an error (Rust `PackError`, C++ `BadValue`, Go an `*Error` of kind `PackRefused`) and returns no bytes.
-- A `limit` case returns an error value whose kind is `too_many` or `bad_value`, with `needed` 0 and `left` 1: the limit refuses a round when it would start, before the round's bytes are read, so a short read of a field (`needed` above 0) does not satisfy it. Packages that have no `too_many` or `bad_value` type yet return their interim bad-value error (a short-packet value with `needed` 0). Go has both kinds (`TooMany`, `BadValue`) but unpack returns the interim shape for a value it cannot use, as TypeScript does, so the Go loader reads a short packet with `needed` 0 as `bad_value`; a refused `limit` round is `TooMany`. The field label in that error differs by package and is not asserted.
+  - `scheme_error`: construction fails (an exception in C#, Java, TypeScript, Python and Rust; an `*Error` of kind `InvalidScheme` from `NewScheme` in Go; a thrown `PackbinError` of kind `.schemeError` in Swift; a compile error or `SchemeInvalid` in C++).
+  - `bytes` and `pack_error`: the two `pack` outcomes. `bytes` means pack returns exactly the packet in `hex`; `pack_error` means pack throws (C#, Java, TypeScript, Python) or returns an error (Rust `PackError`, C++ `BadValue`, Go an `*Error` of kind `PackRefused`; Swift throws a `PackbinError` of kind `.packError`) and returns no bytes.
+- A `limit` case returns an error value whose kind is `too_many` or `bad_value`, with `needed` 0 and `left` 1: the limit refuses a round when it would start, before the round's bytes are read, so a short read of a field (`needed` above 0) does not satisfy it. Packages that have no `too_many` or `bad_value` type yet return their interim bad-value error (a short-packet value with `needed` 0). Go has both kinds (`TooMany`, `BadValue`) but unpack returns the interim shape for a value it cannot use, as TypeScript does, so the Go loader reads a short packet with `needed` 0 as `bad_value`; a refused `limit` round is `TooMany`. Swift is the same: its unpack gives a short packet with `needed` 0 for a value it cannot use (the Swift loader reads it as `bad_value`), and a refused `limit` round is `.tooMany`. The field label in that error differs by package and is not asserted.
 - Until the error-kind decision (C15) is taken, a package without a type for a kind passes the case with any non-ok unpack result that is not an exception, and names the kind it returned in the test name or message.
 - Every `unpack` case returns within 1 second on CI hardware. A hang is a failure; each package test supplies its own time guard.
 
@@ -36,6 +36,8 @@
 **New in loop 22 (AZ-2417).** Ten cases at the end of the file, from the loop 22 reference (`_docs/03_implementation/reference_loop22.md`, TypeScript): `pack_novalue_count_clear_when_bits`, `pack_novalue_count_clear_when_packed`, `pack_novalue_count_clear_when_sized` (AZ-2410), `pack_repeat_unequal_lists_lone`, `pack_repeat_unequal_lists_when` (AZ-2413), `pack_times_short_list_flags` (AZ-2414), `pack_element_times_over_bytes_budget` (AZ-2415), and the `construct` cases `construct_empty_when_times_body`, `construct_empty_when_repeat_body`, `construct_empty_nested_when_body` (AZ-2416). The 55 older cases are unchanged except the texts that carry the default `maxSlots`, which AZ-2415 lowered from 4,194,304 to 1,048,576: the Limit lines of `repeat_rounds_over_limit` and `times_rounds_over_limit`, and the Expected lines of `pack_slots_over_limit` (refused at round 16,132 with 1,048,580 slots) and `pack_element_times_over_budget` (now refused by the slots limit; its bytes route is the new `pack_element_times_over_bytes_budget`). AZ-2412 (Rust refuses per-name `repeat` lists given without round groups) has no case: a case has one outcome and the five other packages pack those lists (`01 01 05 02 06` for `n = [1, 2]`, `x = [5, 6]`), so the Rust refusal is pinned in the Rust package tests only. The three `construct_empty_*when*` cases name the `when` source outside the round, so a package with a scope rule (Rust, Python, Java, C#) refuses them by that rule before it looks at the empty body; C++ runs its body rule (`check_shape`) before its scope rule (`resolve`), so in C++ the body rule fires first (loop 23). The case still asserts `scheme_error` only, and each package pins the empty-body rule itself in its own tests (C++ by direct `has_member`/`check_shape` checks since loop 23; the source-less `eq(-1, ...)` it used before is now refused, U19).
 
 **New in loop 24 (AZ-2446).** Go is the seventh package and replays all 65 cases: ten `unpack`, two `limit`, fifteen `construct` and 38 `pack`. No case changed. Each of the 38 `pack` sections names Go in `Run by` (Go packs every row in its map form, lists as `[]any`; a group's members sit in a nested map under the group's name, owner decision Go-4). The Go loader pins the whole text of every `pack_error` and `construct` refusal, as the other loaders pin the rule. Two unpack cases refuse the scheme in Go instead of reading the packet: `zero_progress_repeat_bool` (a bool outside `flags`) and `zero_progress_repeat_when` (a `when` naming a field outside the `repeat`); both accept `scheme_error`.
+
+**New in loop 26 (AZ-2519).** Swift is the eighth package and replays all 65 cases. No case changed. Each of the 38 `pack` sections and both `limit` sections name Swift in `Run by` (Swift packs every row in its map form, `[String: Any]`, lists as `[Any]` and `[Any?]` where an entry is absent; a group's members sit in a nested map under the group's name, as in Go). The Swift loader pins the whole text of every refusal, unpack errors included (field, `needed` and `left`), and names each case on the test output before it runs it, because a Swift trap ends the whole test process. As in Go, the two `zero_progress_repeat_*` unpack cases refuse the scheme (`scheme_error`).
 
 ## zero_progress_repeat_bool
 
@@ -178,7 +180,7 @@
 - Packet `01 11 22 33 44`: type `01`; four one-byte rounds. The fourth round would be the fourth started, above the limit, so it is refused when it would start, with its byte `44` left.
 - Expected: `too_many` or `bad_value`, with `needed` 0 and `left` 1. No handler call, no row. The label of the error is not asserted.
 - Source: loop 15, AZ-2216 to AZ-2219 (round limits); the bytes were run against each package's real code.
-- Run by: C# (`Scheme<T>.WithLimits(maxRounds: 3)`), TypeScript (`withLimits({ maxRounds: 3 })`), Java (`withLimits(3, Scheme.DEFAULT_MAX_SLOTS)`), Rust (`with_limits(3, DEFAULT_MAX_SLOTS)`), Python (`with_limits(max_rounds=3)`), Go (`WithLimits` of `DefaultLimits()` with `MaxRounds` 3; the error kind is `TooMany`).
+- Run by: C# (`Scheme<T>.WithLimits(maxRounds: 3)`), TypeScript (`withLimits({ maxRounds: 3 })`), Java (`withLimits(3, Scheme.DEFAULT_MAX_SLOTS)`), Rust (`with_limits(3, DEFAULT_MAX_SLOTS)`), Python (`with_limits(max_rounds=3)`), Go (`WithLimits` of `DefaultLimits()` with `MaxRounds` 3; the error kind is `TooMany`), Swift (`withLimits(maxRounds: 3)`; the error kind is `.tooMany`).
 - Not run by: C++ (fixed `Array<T, N>` storage and `Error::TooMany`, so no round budget to set). Its replay skips the stage.
 
 ## times_rounds_over_limit
@@ -188,7 +190,7 @@
 - Packet `01 04 11 22 33 44`: type `01`; `n` = 4; four one-byte rounds. The count 4 is above the limit but is not refused up front (the check is lazy, so `oversize_count_times` keeps its short read); round 4 is refused when it would start, with its byte `44` left.
 - Expected: `too_many` or `bad_value`, with `needed` 0 and `left` 1. No handler call, no row. The label of the error is not asserted.
 - Source: loop 15, AZ-2216 to AZ-2219; the bytes were run against each package's real code.
-- Run by: C#, TypeScript, Java, Rust, Python, Go (calls as in `repeat_rounds_over_limit`).
+- Run by: C#, TypeScript, Java, Rust, Python, Go (calls as in `repeat_rounds_over_limit`), Swift (calls as in `repeat_rounds_over_limit`).
 - Not run by: C++, for the reason given there.
 
 ## pack_out_of_range_integer
@@ -196,7 +198,7 @@
 - Scheme: id0 `u8 a`.
 - Row: `a = 300`.
 - Expected: `pack_error`. 300 does not fit in a `u8`; pack refuses the row and does not wrap it to `2c`.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form, `Value::U16(300)` for the `u8` field), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form, `Value::U16(300)` for the `u8` field), Go (map rows), Swift (map rows).
 - Not run by: C++ (a typed row binds a `std::uint8_t` member, so 300 cannot be written).
 - Source: AZ-2084 (TypeScript range check) and the loud-pack tickets of loop 13; probed in every listed package in loop 18.
 
@@ -205,7 +207,7 @@
 - Scheme: id0 `u8 a`; id1 `u8 b`.
 - Row: `a = 1`, no `b`.
 - Expected: `pack_error`. A walked field with no value is an error, never a shorter packet.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (the member of `b` is an `Opt<std::uint8_t>` left unset; pack returns `BadValue`), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (the member of `b` is an `Opt<std::uint8_t>` left unset; pack returns `BadValue`), Go (map rows), Swift (map rows).
 - Not run by: none.
 - Source: AZ-2088 (C# loud missing value); probed in every package in loop 18.
 
@@ -214,7 +216,7 @@
 - Scheme: id0 `u8 a`; id1 `times` anchor 1, count = id0 { id1 `u8 x` }.
 - Row: `a = 2`, `x = [1, 2, 3]`.
 - Expected: `pack_error`. A list longer than the count is refused, never cut to two entries.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of three items beside `a = 2`; pack returns `BadValue`), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of three items beside `a = 2`; pack returns `BadValue`), Go (map rows), Swift (map rows).
 - Not run by: none.
 - Source: AZ-2088 (C#), AZ-2185 (TypeScript), AZ-2186 (Python), AZ-2187 (Java); Rust refuses it with a type error; probed in every package in loop 18.
 
@@ -223,7 +225,7 @@
 - Scheme: as `pack_times_list_too_long`.
 - Row: `a = 2`, `x = [1]`.
 - Expected: `pack_error`. A list shorter than the count is refused, never padded or cut to one round.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of one item beside `a = 2`; pack returns `BadValue`), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of one item beside `a = 2`; pack returns `BadValue`), Go (map rows), Swift (map rows).
 - Not run by: none.
 - Source: AZ-2088 (C#); probed in every package in loop 18.
 
@@ -233,7 +235,7 @@
 - Row: `on = [true, false, true]`, `n = [1, 2, 3]` (one entry per round). In Rust, whose bool is an empty group, three round rows: `on` set in rounds 0 and 2, absent in round 1.
 - Packet `01 0301 0202 0303`: type `01`; per round one flags byte (bit 0 `on`, bit 1 `n` present) then `n`. The `false` leaves its bit clear and `n` still sits in its own round.
 - Expected: `bytes` `01030102020303`.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of three rounds with `Opt<bool> on` and `Opt<std::uint8_t> n`), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of three rounds with `Opt<bool> on` and `Opt<std::uint8_t> n`), Go (map rows), Swift (map rows).
 - Not run by: none.
 - Source: AZ-2179 (the `roundflags` ring) and AZ-2134 (Python aligned rows, loop 16); the bytes were run against each package's real code in loop 18.
 
@@ -242,7 +244,7 @@
 - Scheme: id0 `u32 n`; id1 `times` anchor 1, count = id0 { id1 `u8 x` }.
 - Row: `n = 65536`, `x = 7` (one scalar, not a list).
 - Expected: `pack_error`. The count is one above the default `maxRounds` (65,535). Pack refuses it before it writes any round, with no allocation proportional to the count (a count of 4,000,000,000 behaves the same). A scheme built with a higher `maxRounds` packs that many rounds.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), Go (map rows), Swift (map rows).
 - Not run by: C++ (it has no round limit on pack: the rounds live in a fixed `Array` of at most 65,535 items, and a count of 65,536 is refused only as a count that differs from the array length, which `pack_times_list_too_long` already covers).
 - Source: loop 19, AZ-2329 (owner decision 1, security F21, review R1).
 
@@ -251,7 +253,7 @@
 - Scheme: as `pack_times_list_too_long`.
 - Row: `a = 0`, `x = [5]`.
 - Expected: `pack_error`. A count of 0 with a list that holds a value is refused, never packed as zero rounds. A lone scalar with count 0 is not part of this case: all seven packages pack `0100` for it (documented).
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of one item beside `a = 0`; pack returns `BadValue`), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of one item beside `a = 0`; pack returns `BadValue`), Go (map rows), Swift (map rows).
 - Not run by: none.
 - Source: loop 19, AZ-2335 (owner decision 7).
 
@@ -260,7 +262,7 @@
 - Scheme: split-form `flag_byte` (id0 in Rust, no order id elsewhere); `u8 mode` written after the byte; bit 0 { `when` `eq(mode, 1)` { `u8 speed` } }.
 - Row: `mode = 1`, `speed = 7`.
 - Expected: `pack_error`. The byte is written before `mode`, so its bit 0 is clear although the condition holds and the body is given; writing the body anyway would make a packet whose bit says "absent". Pack refuses it, naming `speed`.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row with `speed` set and `mode` 1), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row with `speed` set and `mode` 1), Go (map rows), Swift (map rows).
 - Not run by: none.
 - Source: loop 19, AZ-2331 AC-1 (owner decision 3).
 
@@ -269,7 +271,7 @@
 - Scheme: split-form `flag_byte`; `u8 n` written after the byte; bit 0 { `times` count = `n` { `u8 pt` } }.
 - Row: `n = 2`, `pt = [5, 6]`.
 - Expected: `pack_error`. Same reason as `pack_split_when_source_after_byte`, for a count: the bit was decided before `n` was written.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of two beside `n = 2`), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of two beside `n = 2`), Go (map rows), Swift (map rows).
 - Not run by: none.
 - Source: loop 19, AZ-2331 AC-1.
 
@@ -278,7 +280,7 @@
 - Scheme: `u8 sel`; split-form `flag_byte`; `when` `eq(sel, 1)` { `u8 n` }; bit 0 { `times` count = `n` { `u8 pt` } }.
 - Row: `sel = 0`, `pt = [5]`.
 - Expected: `pack_error`. The `when` is false, so `n` is never written; rounds were given for a count that does not exist, and packing would drop them silently. Pack refuses it, naming `pt`.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of one beside `sel = 0` and no `n`), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of one beside `sel = 0` and no `n`), Go (map rows), Swift (map rows).
 - Not run by: none.
 - Source: loop 19, AZ-2331 AC-2.
 
@@ -287,7 +289,7 @@
 - Scheme: id0 `u8 n`; id1 `times` anchor 1, count = id0 { id1 `bytes(2) d` }.
 - Row: `n = 2`, `d` = one 2-byte buffer `0102` (not a list of buffers).
 - Expected: `pack_error`. A byte buffer given once for a round name is not broadcast to every round (it used to be in four packages); a list with one buffer per round (`[0102, 0304]` with `n = 2`) is the form that packs, to `010201020304`.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form, `Value::Bytes`), Go (map rows, a `[]byte` once).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form, `Value::Bytes`), Go (map rows, a `[]byte` once), Swift (map rows, a `[UInt8]` once).
 - Not run by: C++ (a typed row holds an `Array` of `Array`, so a lone buffer cannot be written).
 - Source: loop 19, AZ-2332 (owner decision 4, assessment U1).
 
@@ -297,7 +299,7 @@
 - Row: `mode = 0`, `speed = 7`, `heading = 90`.
 - Packet `01 00 02 5a00`: type `01`; `mode` 0; flag byte `02` (bit 1 only); `heading` `5a00`.
 - Expected: `bytes` `0100025a00`. The condition is false, so `speed` is not written and the bit stays clear. This is not an error: giving every member of a row while a condition decides which are written is normal use (decision 2026-10-11, AZ-2331 AC-3).
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row with `speed` set), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row with `speed` set), Go (map rows), Swift (map rows).
 - Not run by: none.
 - Source: loop 18 reference row W-split-false-body-given; loop 19, AZ-2331 AC-3 (owner decision A, 2026-10-11).
 
@@ -306,7 +308,7 @@
 - Scheme: id0 `u32 n`; id1 `times` anchor 1, count = id0 { id1 `utf8 s` }.
 - Row: `n = 65535`, `s` = 65,535 times `a` (one string, not a list).
 - Expected: `pack_error`. The count is at the default `maxRounds` (65,535), so the count check passes; the rounds are 65,537 bytes each (`u16` length and text), so the packet would pass the default `maxBytes` (16,777,216) at round 256. Pack refuses it at that round, naming `s`, and never builds the 4 GiB packet.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), Go (map rows), Swift (map rows).
 - Not run by: C++ (pack writes into a caller buffer of fixed size and rounds live in a fixed `Array`, so there is no output budget to pass).
 - Source: loop 20, AZ-2354 (reference row 1), AZ-2367.
 
@@ -315,7 +317,7 @@
 - Scheme: id0 `list items` of an element `group` { id0 `u32 n`; id1 `times` anchor 1, count = id0 { id1 `u64 k` } }.
 - Row: 40 items, each `n = 65535`, `k = 5` (one scalar per item).
 - Expected: `pack_error`. Since loop 22 (AZ-2415) the slots limit refuses it, not the bytes budget it was written to reach: the budget runs across the list elements as one counter, 16 items of 65,535 one-slot rounds are 1,048,560 slots, and round 17 of item 17 would hold 1,048,577 slots, above the default `maxSlots` (1,048,576). Pack refuses it there, naming `k` (`k: the rounds would hold 1048577 slots, above the limit of 1048576 slots` in TypeScript), and returns no bytes. The bytes route this case used to take (each item is about 524,284 bytes; the packet passed `maxBytes` in item 33) moved to `pack_element_times_over_bytes_budget`.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Go (map rows), Swift (map rows).
 - Not run by: Rust (a list element cannot hold a `times`), C++ (a fixed array of rounds and a caller buffer, as in `pack_lone_utf8_under_times_over_budget`).
 - Source: loop 20, AZ-2354 (reference row 2), AZ-2367; slots text updated in loop 22, AZ-2415, AZ-2417.
 
@@ -324,7 +326,7 @@
 - Scheme: id0 `u32 n`; id1 `times` anchor 1, count = id0 { 65 `u8` members, ids 1 to 65 }.
 - Row: `n = 65535`, each member `1` (one scalar per member).
 - Expected: `pack_error`. 65,535 rounds of 65 slots are 4,259,775 slots, above the default `maxSlots` (1,048,576, lowered from 4,194,304 in loop 22, AZ-2415); the bytes (4,259,780) stay far under `maxBytes`, so the slot count refuses the row, at round 16,132 (1,048,580 slots: `m0: the rounds would hold 1048580 slots, above the limit of 1048576 slots` in TypeScript), before that round's first byte. The width has no group, so it is 65 in every package.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), Go (map rows), Swift (map rows).
 - Not run by: C++ (a fixed array of rounds and a caller buffer, as in `pack_lone_utf8_under_times_over_budget`).
 - Source: loop 20, AZ-2354 (reference row 14), AZ-2367; numbers updated in loop 22, AZ-2415, AZ-2417.
 
@@ -333,7 +335,7 @@
 - Scheme: id0 `repeat` anchor 0 { id0 `u8 k` }.
 - Row: `k` = a list of 65,536 entries (each `7`).
 - Expected: `pack_error`. The list is one above the default `maxRounds` (65,535); pack refuses it before the first round, as unpack refuses the same packet.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), Go (map rows), Swift (map rows).
 - Not run by: C++ (the rounds live in a fixed `Array` of at most 65,535 items).
 - Source: loop 20, AZ-2355 (reference row 1), AZ-2367.
 
@@ -342,7 +344,7 @@
 - Scheme: split-form `flag_byte`; `u8 n` written after the byte; bit 0 { `times` count = `n` { `u8 pt` } }.
 - Row: `n = 0`, `pt = [5, 6]`.
 - Expected: `pack_error`. The count is 0 but the list holds values, so pack refuses it, as `pack_times_zero_with_values` does for a scheme without a flag byte. The bit was decided before `n` was written and the values would be dropped silently.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of two beside `n = 0`), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of two beside `n = 0`), Go (map rows), Swift (map rows).
 - Not run by: none.
 - Source: loop 20, AZ-2356 (owner decision 3), AZ-2367.
 
@@ -352,7 +354,7 @@
 - Row: `n = 0`, `pt = 5` (one scalar, not a list).
 - Packet `01 00 00`: type `01`; flag byte `00` (bit 0 clear); `n` = `00`. A lone scalar with count 0 packs zero rounds, so the bit stays clear and nothing follows `n`.
 - Expected: `bytes` `010000`. Not an error: a lone value for a count of 0 is the same as `pack_times_zero_with_values` leaves it (a scalar, not a list that holds a value).
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), Go (map rows), Swift (map rows).
 - Not run by: C++ (a typed row holds an `Array`, so a lone scalar cannot be written).
 - Source: loop 20, AZ-2356 (owner decision 3), AZ-2367.
 
@@ -361,7 +363,7 @@
 - Scheme: id0 `flags` anchor 0 { id0 `u8 n`; id1 `times` anchor 1, count = id0 { id1 `u8 pt` } }.
 - Row: `n` not given (its flag bit stays clear), `pt = [5, 6]`.
 - Expected: `pack_error`. The count is skipped, so no round count exists; pack refuses the rounds that were given, naming `pt`, and never drops them silently.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of two with `n` unset), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of two with `n` unset), Go (map rows), Swift (map rows).
 - Not run by: none.
 - Source: loop 20, AZ-2360, AZ-2367.
 
@@ -372,7 +374,7 @@
 - Row: `n = 1`, `a = [1]`, `b = [2, 3]`. In Rust, whose `repeat` rounds are groups: `__repeat__` holds two round rows (`b = 2`, `b = 3`).
 - Packet `01 01 01 02 03`: type `01`; `n` = 1; the one `times` round `01`; the two `repeat` rounds `02` and `03`.
 - Expected: `bytes` `0101010203`. The `times` charges 1 slot and the `repeat` 2: 3 slots, exactly the limit, so it packs. One counter runs through the whole pack call and is shared by every `repeat` and `times`; a round is charged by the number of distinct names it can hold, before its first byte.
-- Run by: TypeScript (`new Scheme(..., { maxSlots: 3 })`), Python (`with_limits(max_slots=3)`), Java (`withLimits(Scheme.DEFAULT_MAX_ROUNDS, 3)`), C# (`WithLimits(65535, 3)`), Rust (`with_limits(DEFAULT_MAX_ROUNDS, 3)`), Go (map rows).
+- Run by: TypeScript (`new Scheme(..., { maxSlots: 3 })`), Python (`with_limits(max_slots=3)`), Java (`withLimits(Scheme.DEFAULT_MAX_ROUNDS, 3)`), C# (`WithLimits(65535, 3)`), Rust (`with_limits(DEFAULT_MAX_ROUNDS, 3)`), Go (map rows), Swift (map rows, `withLimits(maxSlots: 3)`).
 - Not run by: C++ (fixed `Array` rounds and a caller buffer, so no round or slot budget to set).
 - Source: loop 21, AZ-2382 (reference row 13), AZ-2394.
 
@@ -382,7 +384,7 @@
 - Limit: as `pack_round_slots_at_limit` (`maxSlots` 3).
 - Row: `n = 1`, `a = [1]`, `b = [2, 3, 4]` (a third `repeat` round).
 - Expected: `pack_error`. The three rounds would hold 4 slots, one above the limit; pack refuses the third `repeat` round before its first byte and returns no bytes.
-- Run by: TypeScript, Python, Java, C#, Rust (calls as in `pack_round_slots_at_limit`, with three round rows), Go (map rows).
+- Run by: TypeScript, Python, Java, C#, Rust (calls as in `pack_round_slots_at_limit`, with three round rows), Go (map rows), Swift (map rows).
 - Not run by: C++ (as in `pack_round_slots_at_limit`).
 - Source: loop 21, AZ-2382 (reference row 14), AZ-2394.
 
@@ -393,7 +395,7 @@
 - Row: `on = [true, true]`, `v = [5, 6]`. In Rust, two round rows with `on` set and `v` 5, then 6.
 - Packet `01 0305 0306`: type `01`; per round one flags byte `03` (both bits set) then `v`.
 - Expected: `bytes` `0103050306`. Two rounds of width 2 are 4 slots, exactly the limit.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (round rows), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (round rows), Go (map rows), Swift (map rows).
 - Not run by: C++ (as in `pack_round_slots_at_limit`).
 - Source: loop 21, AZ-2381 and AZ-2382 (reference row 3), AZ-2394.
 
@@ -403,7 +405,7 @@
 - Limit: `maxSlots` 4.
 - Row: `on = [true, true, true]`, `v = [5, 6, 7]` (a third round; Rust gives three round rows).
 - Expected: `pack_error`. The third round would hold 6 slots, above the limit of 4; pack refuses it before its first byte. A package that also charged the `flags` name or its byte (width 3 or 4) would refuse the two-round row of `pack_round_slots_flags_at_limit`; a package that charged only `v` would accept this one.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (round rows), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (round rows), Go (map rows), Swift (map rows).
 - Not run by: C++ (as in `pack_round_slots_at_limit`).
 - Source: loop 21, AZ-2381 and AZ-2382 (reference row 3), AZ-2394.
 
@@ -412,7 +414,7 @@
 - Scheme: id0 `repeat` anchor 0 { id0 `u8 w`; id1 `flags` anchor 1 { id1 `u8 v` } }.
 - Row: `w = [1, 2]`, `v = [5]` (one entry for two rounds).
 - Expected: `pack_error`. A non-empty list under a member that a flag bit can leave absent must give one entry per round (an absent entry where the member is absent); a list shorter than the rounds is refused before any round, naming `v`, and the old packet `010101050200` is no longer produced. The `repeat` count comes from the longest list; `times` keeps accepting a short list under `flags`, and that is not part of this case.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Go (map rows), Swift (map rows).
 - Not run by: Rust (a `repeat` takes its rounds as groups, one row per round, so there is no list to be too short), C++ (a fixed `Array` of round items whose length is the round count, so a short list cannot be written).
 - Source: loop 21, AZ-2383 (reference row 27), AZ-2394.
 
@@ -422,7 +424,7 @@
 - Row: `w = [1, 2]`, `v = [5, absent]` (a full list whose second entry is the language's absent value: `undefined` or `null`, `None`, `null`; in Rust, round 2 has no `v`; in C++ an `Array` of two rounds whose second `Opt<std::uint8_t> v` is unset).
 - Packet `01 0101 05 0200`: type `01`; round 1: `w` = 1, flags byte `01`, `v` = 5; round 2: `w` = 2, flags byte `00`.
 - Expected: `bytes` `010101050200`. The same bytes the short list used to produce, now written with one entry per round.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (round rows), C++ (a typed row with the `Opt` unset in round 2), Go (map rows, a `nil` entry).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (round rows), C++ (a typed row with the `Opt` unset in round 2), Go (map rows, a `nil` entry), Swift (map rows, a `nil` entry in an `[Any?]`).
 - Not run by: none.
 - Source: loop 21, AZ-2383 (reference row 29), AZ-2394.
 
@@ -432,7 +434,7 @@
 - Row: `n = 2`, `heading = 90`, no `pt`. A row that also gives `pt = []` packs the same bytes.
 - Packet `01 02 02 5a00`: type `01`; flag byte `02` (bit 1 only); `n` = 2; `heading` `5a00`.
 - Expected: `bytes` `0102025a00`. The count is above 0 and the `times` has no rounds in the row, so its bit stays clear and nothing is dropped. The count `n` is written inside the packet whatever the bit says.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), Go (map rows), Swift (map rows).
 - Not run by: C++ (AZ-2384 excludes it, loop 21 finding): its row holds the rounds as an `Array`; a count of 2 with an `Array` of 0 items is a count mismatch, not an absent body, and the late rule (AZ-2385) refuses it.
 - Source: loop 21, AZ-2384 (reference rows 40 and 41), AZ-2394.
 
@@ -442,7 +444,7 @@
 - Row: `mode = 1`, `d = 5`, `a = 9`, no `b`.
 - Packet `01 01 01 05 09`: type `01`; flag byte `01` (bit 0 set by `d`); `mode` = 1; `d` = 5; `a` = 9.
 - Expected: `bytes` `0101010509`. Another member of the bit (`d`) is given, so the bit is set and the late `when` whose condition holds writes its body. (A row that gives only the late `a`, with no `d`, stays `pack_error` as in `pack_split_when_source_after_byte`, and is not part of this case.)
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row with `d` and `a` set), Go (map rows; the group is a nested map `g` holding `d` and `a`).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row with `d` and `a` set), Go (map rows; the group is a nested map `g` holding `d` and `a`), Swift (map rows; the group is a nested map `g` holding `d` and `a`).
 - Not run by: none.
 - Source: loop 21, AZ-2385 (the C++ change; the TypeScript probe of loop 21 gives the same bytes), AZ-2394.
 
@@ -451,7 +453,7 @@
 - Scheme: id0 `u8 mode`; id1 `when` anchor 1, `eq(0, 1)` { id1 `u8 c` }; split-form `flag_byte` (id2 in Rust); bit 0 { `times` count = `c` { `u8 pt` } }; bit 1 { `u16 heading` }.
 - Row: `mode = 0`, `c = 1`, `heading = 90`, no `pt`.
 - Expected: `pack_error`. The `when` is clear, so `c` is never written and the count is a value the packet cannot hold: the `times` would read a round the packet has no count for. Pack refuses it, naming `pt`. A count of 0 or a row without `c` packs `0100025a00` (not part of this case).
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row with `c` set to 1 and `mode` 0), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row with `c` set to 1 and `mode` 0), Go (map rows), Swift (map rows).
 - Not run by: none.
 - Source: loop 21, AZ-2386 (reference row 44), AZ-2394.
 
@@ -460,7 +462,7 @@
 - Scheme: id0 `u8 mode`; id1 `when` anchor 1, `eq(0, 1)` { id1 `u8 c` }; id2 `bits v`, count = id1.
 - Row: `mode = 0`, `c = 3`, `v = [1, 0, 1]`.
 - Expected: `pack_error`. The `when` is clear, so `c` is not written and `v` has no count on the wire; pack refuses the row, naming `v`, and never writes the bits.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row; the bits member is given three values), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row; the bits member is given three values), Go (map rows), Swift (map rows).
 - Not run by: none.
 - Source: loop 21, AZ-2387 (reference row 53), AZ-2394.
 
@@ -469,7 +471,7 @@
 - Scheme: as `pack_bits_count_clear_when`, with id2 `packed v` (width 1, bias 0), count = id1 in place of `bits`.
 - Row: `mode = 0`, `c = 3`, `v = [1, 0, 1]`.
 - Expected: `pack_error`, for the reason given in `pack_bits_count_clear_when`.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row; the packed member is given three values), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row; the packed member is given three values), Go (map rows), Swift (map rows).
 - Not run by: none.
 - Source: loop 21, AZ-2387 (reference row 53), AZ-2394.
 
@@ -478,7 +480,7 @@
 - Scheme: as `pack_bits_count_clear_when`, with id2 `sized v`, count = id1 in place of `bits`.
 - Row: `mode = 0`, `c = 3`, `v` = the three bytes `010203`.
 - Expected: `pack_error`, for the reason given in `pack_bits_count_clear_when`.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row; the sized member holds three bytes), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row; the sized member holds three bytes), Go (map rows), Swift (map rows).
 - Not run by: none.
 - Source: loop 21, AZ-2387 (reference row 53), AZ-2394.
 
@@ -508,7 +510,7 @@
 - Scheme: id0 `u8 mode`; id1 `when` anchor 1, `eq(0, 1)` { id1 `u8 c` }; split-form `flag_byte` (id2 in Rust); bit 0 { id2 `bits v`, count = id1 }.
 - Row: `mode = 0`, `c = 3`, no `v`.
 - Expected: `pack_error`. The `when` is clear, so `c` is never written, and the row holds a count above 0 for a member that has no value: the member would read nothing from a count the packet cannot hold. Pack refuses it, naming `v` and the count, and never writes the clear bit (the bits member, as in `pack_bits_count_clear_when`, but with no value given). A count of 0, a row without `c`, or a holding `when` (`mode = 1`) packs the clear bit (`010000`, `010000`, `01010300`) and is not part of this case; a row that gives `v` stays `pack_error` as in `pack_bits_count_clear_when`.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), Go (map rows), Swift (map rows).
 - Not run by: C++ (a bits member bound to an `Array` is always present, so pack refuses the row with `BadValue` at the member because the count's `when` is clear (loop 23 trace, U20); written unbound it packs the clear bit where this case expects `pack_error` (open row U24)).
 - Source: loop 22, AZ-2410 (reference row 56), AZ-2417.
 
@@ -517,7 +519,7 @@
 - Scheme: id0 `u8 mode`; id1 `when` anchor 1, `eq(0, 1)` { id1 `u8 c` }; split-form `flag_byte` (id2 in Rust); bit 0 { id2 `packed v` (width 1, bias 0), count = id1 }.
 - Row: `mode = 0`, `c = 3`, no `v`.
 - Expected: `pack_error`. The `when` is clear, so `c` is never written, and the row holds a count above 0 for a member that has no value: the member would read nothing from a count the packet cannot hold. Pack refuses it, naming `v` and the count, and never writes the clear bit (as above). A count of 0, a row without `c`, or a holding `when` (`mode = 1`) packs the clear bit (`010000`, `010000`, `01010300`) and is not part of this case; a row that gives `v` stays `pack_error` as in `pack_packed_count_clear_when`.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), Go (map rows), Swift (map rows).
 - Not run by: C++ (a packed member bound to an `Array` is always present, so pack refuses the row with `BadValue` at the member because the count's `when` is clear (loop 23 trace, U20); written unbound it packs the clear bit where this case expects `pack_error` (open row U24)).
 - Source: loop 22, AZ-2410 (reference row 56), AZ-2417.
 
@@ -526,7 +528,7 @@
 - Scheme: id0 `u8 mode`; id1 `when` anchor 1, `eq(0, 1)` { id1 `u8 c` }; split-form `flag_byte` (id2 in Rust); bit 0 { id2 `sized v`, count = id1 }.
 - Row: `mode = 0`, `c = 3`, no `v`.
 - Expected: `pack_error`. The `when` is clear, so `c` is never written, and the row holds a count above 0 for a member that has no value: the member would read nothing from a count the packet cannot hold. Pack refuses it, naming `v` and the count, and never writes the clear bit (as above). A count of 0, a row without `c`, or a holding `when` (`mode = 1`) packs the clear bit (`010000`, `010000`, `01010300`) and is not part of this case; a row that gives `v` stays `pack_error` as in `pack_sized_count_clear_when`.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), Go (map rows), Swift (map rows).
 - Not run by: C++ (a sized member bound to an `Array` is always present, so pack refuses the row with `BadValue` at the member because the count's `when` is clear (loop 23 trace, U20); written unbound it packs the clear bit where this case expects `pack_error` (open row U24)).
 - Source: loop 22, AZ-2410 (reference row 56), AZ-2417.
 
@@ -536,7 +538,7 @@
 - Row: `a = [1, 2]`, `b = 7` (a list beside one scalar).
 - Packet `01 01 07 02 07`: type `01`; round 1: `a` = 1, `b` = 7; round 2: `a` = 2, `b` = 7.
 - Expected: `bytes` `0101070207`. The round count is the longest list (2); a lone value is given to every round.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Go (map rows), Swift (map rows).
 - Not run by: Rust (a `repeat` takes its rounds as groups only, one row per round, so per-name lists are refused), C++ (a typed row holds an `Array` of round items, so a lone value for one round member cannot be written).
 - Source: loop 22, AZ-2413 (reference row R2a), AZ-2417.
 
@@ -546,7 +548,7 @@
 - Row: `k = [1, 2]`, `v = [9]` (the `when` holds in round 1 only, so the shorter list is enough).
 - Packet `01 01 09 02`: type `01`; round 1: `k` = 1, the `when` holds, `v` = 9; round 2: `k` = 2, the `when` is clear and reads no `v`.
 - Expected: `bytes` `01010902`. A list for a member that only some rounds reach may be shorter than the round count; a round whose `when` is clear never reads it.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Go (map rows), Swift (map rows).
 - Not run by: Rust (a `repeat` takes its rounds as groups only, one row per round, so per-name lists are refused), C++ (a typed row holds an `Array` of round items, so a shorter list for one round member cannot be written).
 - Source: loop 22, AZ-2413 (reference row R3a), AZ-2417.
 
@@ -556,7 +558,7 @@
 - Row: `c = 2`, `v = [5]` (one entry for two rounds).
 - Packet `01 02 01 05 00`: type `01`; `c` = 2; round 1: flags byte `01`, `v` = 5; round 2: flags byte `00` (the list ran out, so the bit stays clear).
 - Expected: `bytes` `0102010500`. A `times` accepts a short list under a `flags`; the older `repeat` rule of `pack_flags_short_list` (one entry per round) does not apply to it.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), Go (map rows), Swift (map rows).
 - Not run by: C++ (a typed row holds an `Array` with one item per round, so a list shorter than the count cannot be written).
 - Source: loop 22, AZ-2414 (reference row A1), AZ-2417.
 
@@ -565,7 +567,7 @@
 - Scheme: id0 `list items` of an element `group` { id0 `u32 n`; id1 `times` anchor 1, count = id0 { id1 `utf8 s` } }.
 - Row: 16 items, each `n = 65535`, `s` = 16 times `a` (one string per item, not a list).
 - Expected: `pack_error`. A round is 18 bytes (`u16` length and 16 characters), an item about 1,179,634 bytes, so the packet would be 18,874,147 bytes, above the default `maxBytes` (16,777,216): pack refuses it in item 15 at round 14,575 (16,777,233 bytes), naming `s`. The slots stay under the limit (16 x 65,535 = 1,048,560, below the default `maxSlots` of 1,048,576), so the bytes budget refuses it, not the slots limit; this is the route `pack_element_times_over_budget` took before AZ-2415. A scheme built with `maxBytes` 33,554,432 packs the row to 18,874,147 bytes and unpacks it.
-- Run by: TypeScript, Python, Java, C# (dictionary rows), Go (map rows).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Go (map rows), Swift (map rows).
 - Not run by: Rust (a list element cannot hold a `times`), C++ (a fixed array of rounds and a caller buffer, as in `pack_lone_utf8_under_times_over_budget`).
 - Source: loop 22, AZ-2415 (reference section 2), AZ-2417.
 

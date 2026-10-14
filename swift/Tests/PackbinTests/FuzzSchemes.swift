@@ -62,24 +62,12 @@ import Packbin
         "listflags": [try flagsList()],
         "position": [try positionMapScheme(), try positionTypedScheme()],
         "any": [],
-        "negative_count": [try Scheme(1, .i8(0, "n"), .sized(1, "payload", count: 0))],
-        "oversize_count": [try Scheme(1, .u32(0, "n"), .sized(1, "payload", count: 0))],
-        "oversize_count_times": [try Scheme(1, .u32(0, "n"), .times(1, count: 0, .u8(1, "v")))],
-        "oversize_list_count": [try Scheme(1, .list("xs", .u8(0, "x")))],
-        "invalid_utf8": [try Scheme(1, .utf8(0, "name"))],
-        "invalid_utf8_dict_key": [try Scheme(1, .dict("m", .u8(0, "v")))],
     ]
-    let repeatV = try Scheme(1, .repeat(0, .u8(0, "v")))
-    let timesV = try Scheme(1, .u8(0, "n"), .times(1, count: 0, .u8(1, "v")))
-    kinds["repeat_rounds_over_limit"] = [repeatV, try repeatV.withLimits(maxRounds: 3)]
-    kinds["times_rounds_over_limit"] = [timesV, try timesV.withLimits(maxRounds: 3)]
-    let maybe: [String: () throws -> Scheme] = [
-        "zero_progress_repeat_bool": { try Scheme(1, .repeat(0, .bool(0, "on"))) },
-        "zero_progress_repeat_when": { try Scheme(1, .u8(0, "mode"), .repeat(1, .when(1, .eq(0, 1), .u8(1, "v")))) },
-        "count_behind_clear_flag": { try Scheme(1, .flags(0, .u8(0, "n")), .sized(1, "payload", count: 0)) },
-        "count_behind_clear_flag_bits": { try Scheme(1, .flags(0, .u8(0, "n")), .bits(1, "segs", count: 0)) },
-    ]
-    for (kind, build) in maybe {
+    for (kind, build) in hostileLimitSchemes {
+        let s = try build()
+        kinds[kind] = [s, try hostileLimited(s)]
+    }
+    for (kind, build) in hostileUnpackSchemes {
         do {
             kinds[kind] = [try build()]
         } catch let error as PackbinError where error.kind == .schemeError {
