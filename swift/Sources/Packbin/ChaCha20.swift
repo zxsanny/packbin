@@ -11,9 +11,10 @@
 
     /// The 64-byte block for `key`, `nonce` and the block counter (RFC 8439 §2.3).
     public static func block(key: [UInt8], nonce: [UInt8], counter: UInt32) throws -> [UInt8] {
-        let (k, n) = try words(key, nonce)
+        var input = try Input(key, nonce)
+        defer { input.wipe() }
         var out = [UInt8](repeating: 0, count: blockSize)
-        fill(&out, k, n, counter)
+        fill(&out, input, counter)
         return out
     }
 
@@ -21,7 +22,8 @@
     /// counter is 32 bits: data that would need a block after 2^32 - 1 is refused with a `.badValue`
     /// and left unchanged, never wrapped onto block 0.
     public static func xor(_ data: inout [UInt8], key: [UInt8], nonce: [UInt8], counter: UInt32) throws {
-        let (k, n) = try words(key, nonce)
+        var input = try Input(key, nonce)
+        defer { input.wipe() }
         let blocks = (UInt64(data.count) + UInt64(blockSize - 1)) / UInt64(blockSize)
         guard UInt64(counter) + blocks <= 1 << 32 else {
             throw PackbinError(.badValue, field: nil, reason:
@@ -31,7 +33,7 @@
         var block = counter
         var offset = 0
         while offset < data.count {
-            fill(&pad, k, n, block)
+            fill(&pad, input, block)
             let count = min(blockSize, data.count - offset)
             for i in 0..<count {
                 data[offset + i] ^= pad[i]
@@ -45,14 +47,37 @@
         }
     }
 
-    private static func words(_ key: [UInt8], _ nonce: [UInt8]) throws -> ([UInt32], [UInt32]) {
-        guard key.count == keySize else {
-            throw PackbinError(.badValue, field: nil, reason: "session: the ChaCha20 key is \(key.count) bytes, not \(keySize)")
+    /// The state of §2.3 but the constants and the counter: the 8 key words and the 3 nonce words.
+    /// They are stored properties, so they live in the caller's frame and never in a heap array, and
+    /// the caller zeroes them when it is done (with no guarantee against a copy the compiler made in
+    /// registers or a spill slot).
+    private struct Input {
+        var k0, k1, k2, k3, k4, k5, k6, k7: UInt32
+        var n0, n1, n2: UInt32
+
+        init(_ key: [UInt8], _ nonce: [UInt8]) throws {
+            guard key.count == keySize else {
+                throw PackbinError(.badValue, field: nil, reason: "session: the ChaCha20 key is \(key.count) bytes, not \(keySize)")
+            }
+            guard nonce.count == nonceSize else {
+                throw PackbinError(.badValue, field: nil, reason: "session: the ChaCha20 nonce is \(nonce.count) bytes, not \(nonceSize)")
+            }
+            (k0, k1, k2, k3) = (littleEndian(key, 0), littleEndian(key, 4), littleEndian(key, 8), littleEndian(key, 12))
+            (k4, k5, k6, k7) = (littleEndian(key, 16), littleEndian(key, 20), littleEndian(key, 24), littleEndian(key, 28))
+            (n0, n1, n2) = (littleEndian(nonce, 0), littleEndian(nonce, 4), littleEndian(nonce, 8))
         }
-        guard nonce.count == nonceSize else {
-            throw PackbinError(.badValue, field: nil, reason: "session: the ChaCha20 nonce is \(nonce.count) bytes, not \(nonceSize)")
+
+        mutating func wipe() {
+            withUnsafeMutableBytes(of: &self) { zero($0) }
         }
-        return ((0..<8).map { littleEndian(key, $0 * 4) }, (0..<3).map { littleEndian(nonce, $0 * 4) })
+    }
+
+    /// Zeroes `bytes` in a call the optimizer keeps. Zeroing a value whose frame is about to end is a
+    /// dead store that `-O` removes (the assembly of `xor` showed no store to the key words), so the
+    /// stores happen in a function that is neither inlined nor optimized.
+    @inline(never) @_optimize(none)
+    private static func zero(_ bytes: UnsafeMutableRawBufferPointer) {
+        _ = bytes.initializeMemory(as: UInt8.self, repeating: 0)
     }
 
     private static func littleEndian(_ bytes: [UInt8], _ at: Int) -> UInt32 {
@@ -60,15 +85,13 @@
     }
 
     /// One block into `out` (64 bytes): the state of §2.3 (constants, key, counter, nonce), 20 rounds,
-    /// the input state added back, serialized little-endian.
-    private static func fill(_ out: inout [UInt8], _ k: [UInt32], _ n: [UInt32], _ counter: UInt32) {
-        let s: [UInt32] = [0x6170_7865, 0x3320_646e, 0x7962_2d32, 0x6b20_6574,
-                           k[0], k[1], k[2], k[3], k[4], k[5], k[6], k[7],
-                           counter, n[0], n[1], n[2]]
-        var x0 = s[0], x1 = s[1], x2 = s[2], x3 = s[3]
-        var x4 = s[4], x5 = s[5], x6 = s[6], x7 = s[7]
-        var x8 = s[8], x9 = s[9], x10 = s[10], x11 = s[11]
-        var x12 = s[12], x13 = s[13], x14 = s[14], x15 = s[15]
+    /// the input state added back, serialized little-endian. The state is 16 local words, no array.
+    private static func fill(_ out: inout [UInt8], _ i: Input, _ counter: UInt32) {
+        let c0: UInt32 = 0x6170_7865, c1: UInt32 = 0x3320_646e, c2: UInt32 = 0x7962_2d32, c3: UInt32 = 0x6b20_6574
+        var x0 = c0, x1 = c1, x2 = c2, x3 = c3
+        var x4 = i.k0, x5 = i.k1, x6 = i.k2, x7 = i.k3
+        var x8 = i.k4, x9 = i.k5, x10 = i.k6, x11 = i.k7
+        var x12 = counter, x13 = i.n0, x14 = i.n1, x15 = i.n2
         for _ in 0..<10 {
             quarter(&x0, &x4, &x8, &x12)
             quarter(&x1, &x5, &x9, &x13)
@@ -79,14 +102,18 @@
             quarter(&x2, &x7, &x8, &x13)
             quarter(&x3, &x4, &x9, &x14)
         }
-        let x = [x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15]
-        for i in 0..<16 {
-            let word = x[i] &+ s[i]
-            out[i * 4] = UInt8(truncatingIfNeeded: word)
-            out[i * 4 + 1] = UInt8(truncatingIfNeeded: word &>> 8)
-            out[i * 4 + 2] = UInt8(truncatingIfNeeded: word &>> 16)
-            out[i * 4 + 3] = UInt8(truncatingIfNeeded: word &>> 24)
-        }
+        put(&out, 0, x0 &+ c0); put(&out, 1, x1 &+ c1); put(&out, 2, x2 &+ c2); put(&out, 3, x3 &+ c3)
+        put(&out, 4, x4 &+ i.k0); put(&out, 5, x5 &+ i.k1); put(&out, 6, x6 &+ i.k2); put(&out, 7, x7 &+ i.k3)
+        put(&out, 8, x8 &+ i.k4); put(&out, 9, x9 &+ i.k5); put(&out, 10, x10 &+ i.k6); put(&out, 11, x11 &+ i.k7)
+        put(&out, 12, x12 &+ counter); put(&out, 13, x13 &+ i.n0); put(&out, 14, x14 &+ i.n1); put(&out, 15, x15 &+ i.n2)
+    }
+
+    /// Word `index` of a block, little-endian.
+    private static func put(_ out: inout [UInt8], _ index: Int, _ word: UInt32) {
+        out[index * 4] = UInt8(truncatingIfNeeded: word)
+        out[index * 4 + 1] = UInt8(truncatingIfNeeded: word &>> 8)
+        out[index * 4 + 2] = UInt8(truncatingIfNeeded: word &>> 16)
+        out[index * 4 + 3] = UInt8(truncatingIfNeeded: word &>> 24)
     }
 
     /// The quarter round of RFC 8439 §2.1.

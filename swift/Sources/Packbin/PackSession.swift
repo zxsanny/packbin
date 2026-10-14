@@ -33,6 +33,13 @@ public final class PackSession {
         self.seed = seed
     }
 
+    /// The seed of a session that never opened and the keys of one that did are zeroed when it goes.
+    deinit {
+        Self.wipe(&seed)
+        Self.wipe(&send)
+        Self.wipe(&recv)
+    }
+
     /// A session that keeps a copy of the 32-byte seed until `start` or `join`. A seed of any other
     /// length makes no session and throws a `.badValue`. The caller's array is not changed.
     public static func load(_ seed: [UInt8]) throws -> PackSession {
@@ -169,7 +176,10 @@ public final class PackSession {
     }
 
     /// Zeroes the bytes in place. Swift gives no guarantee that a dead store survives the optimizer
-    /// or that no copy was made earlier; the session keeps one buffer of its own for each secret.
+    /// or that no copy was made earlier. The session holds each secret in one buffer of its own and
+    /// wipes it when it is done: the seed when the session opens, the derived 64-byte block once it is
+    /// split into the two keys, and the keys in `deinit`. CryptoKit zeroes its own key storage, and
+    /// ChaCha20 zeroes its key words and its pad after each call.
     private static func wipe(_ bytes: inout [UInt8]) {
         for i in bytes.indices {
             bytes[i] = 0

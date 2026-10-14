@@ -98,6 +98,21 @@ PACKBIN_CREDENTIALS=(
   ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_ID_TOKEN_REQUEST_TOKEN
 )
 
+# Unsets every name of PACKBIN_CREDENTIALS but the ones given, in the calling shell: call it in a subshell or in a
+# script of its own, so the caller keeps them. The build phase keeps the Maven signing key; the Swift consumer check
+# (publish-swift.sh) keeps none, because SwiftPM runs the manifests of the dependencies as code (F48, loop 26 audit).
+unset_credentials() {
+  local var keep
+  for var in "${PACKBIN_CREDENTIALS[@]}"; do
+    for keep in "$@"; do
+      if [ "$var" = "$keep" ]; then
+        continue 2
+      fi
+    done
+    unset "$var"
+  done
+}
+
 publish_root() {
   local here
   here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

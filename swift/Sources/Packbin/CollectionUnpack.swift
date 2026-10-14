@@ -27,11 +27,21 @@ extension Reader {
         return String(decoding: raw, as: UTF8.self)
     }
 
+    /// A dict key: a string as `readString` reads it, refused with the same shape when it is not in
+    /// stream-safe form (``isStreamSafe(_:)``), before it is hashed or compared.
+    mutating func readKey(_ name: String) throws -> String {
+        let leftAtStart = left
+        let key = try readString(nil, name)
+        guard isStreamSafe(key.unicodeScalars) else { throw PackbinError.shortPacket(nil, name, needed: 0, left: leftAtStart) }
+        return key
+    }
+
     /// A list (`[Any]`) or dict (`[String: Any]`): a u16 count, then the items, each after its key for a
     /// dict. An item that reads no byte is refused, so a count of 65 535 cannot be walked for no input.
     /// A key given twice is refused as TypeScript refuses it (a short packet with `needed` 0 and `left`
     /// 0), and so are two keys that are equal as Swift strings although their bytes differ (NFC and
-    /// NFD), which one `[String: Any]` cannot hold apart (owner ruling 2026-10-14).
+    /// NFD), which one `[String: Any]` cannot hold apart (owner ruling 2026-10-14). A key that is not in
+    /// stream-safe form is refused before it reaches the dictionary.
     mutating func collection(_ n: Node) throws -> Any {
         guard let element = n.element else { return [Any]() }
         let count = try readLength(nil, n.name)
@@ -42,7 +52,7 @@ extension Reader {
         }
         var entries: [String: Any] = [:]
         for _ in 0..<count {
-            let key = try readString(nil, n.name)
+            let key = try readKey(n.name)
             let v = try item(n, element)
             guard entries[key] == nil else {
                 throw PackbinError(.short, field: nil, name: n.name, reason: "dict key given twice")
@@ -85,6 +95,24 @@ extension Reader {
         try self.fields(fields, &values)
         return values
     }
+}
+
+/// The most scalars with a nonzero canonical combining class a dict key may hold in a row: the limit of
+/// Unicode's stream-safe text format (UAX #15).
+let maxNonStarters = 30
+
+/// Whether `scalars` are in stream-safe form: no run of more than ``maxNonStarters`` scalars whose
+/// canonical combining class is not 0. Swift hashes and compares a `String` in NFC, and sorts each such
+/// run by combining class in time quadratic in its length; a scalar of class 0 ends the run. One linear
+/// pass, before the key is hashed (F47 of the loop 26 security audit). No scalar below U+0300 has a
+/// combining class, so those skip the property lookup.
+func isStreamSafe(_ scalars: some Sequence<Unicode.Scalar>) -> Bool {
+    var run = 0
+    for s in scalars {
+        run = s.value < 0x300 || s.properties.canonicalCombiningClass == .notReordered ? 0 : run + 1
+        if run > maxNonStarters { return false }
+    }
+    return true
 }
 
 /// Whether `raw` is well-formed UTF-8: no stray or missing continuation byte, no overlong form, no

@@ -52,11 +52,14 @@ sw_refs() {
 # $SW_RESOLVE_FAILS calls, else reads the URL and version of the consumer manifest (kept in $SW_SWIFT_LOG.manifest),
 # looks up the tag v<version> in that repository with git and writes Package.resolved (location, version and
 # revision replaceable by SW_PIN_LOCATION, SW_PIN_VERSION, SW_PIN_REVISION); `build` fails the first $SW_BUILD_FAILS
-# calls and needs a main.swift that imports Packbin.
+# calls and needs a main.swift that imports Packbin. Every call fails when a variable named in $SW_DENY_CREDENTIALS is set.
 sw_write_swift() {
   cat > "$1/swift" <<'EOF'
 #!/bin/bash
 printf '%s|tags=%s\n' "$*" "$(git --git-dir="$SW_BARE" for-each-ref --format='%(refname:short)' refs/tags | paste -sd , -)" >> "$SW_SWIFT_LOG"
+for var in ${SW_DENY_CREDENTIALS:-}; do
+  if [ -n "${!var+set}" ]; then echo "error: $var is set in the environment of swift $1" >&2; exit 1; fi
+done
 if [ "${1:-}" = --version ]; then echo "Swift version 6.1.2 (stub)"; exit 0; fi
 pkg="" prev=""
 for arg in "$@"; do
@@ -330,6 +333,7 @@ swift_checks() {
   sw_position_checks
   sw_static_checks
   sw_real_checks
+  sw_credential_checks
   sw_mutant_checks
 }
 

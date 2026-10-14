@@ -33,9 +33,7 @@ if [ ! -s "$plan" ]; then
 fi
 
 if [ "$build_only" = "1" ]; then
-  for var in "${PACKBIN_CREDENTIALS[@]}"; do
-    unset "$var"
-  done
+  unset_credentials
 fi
 
 require_tool() {
@@ -111,11 +109,7 @@ fi
 
 # The build sees no registry token. Only the signing key, which a real publish needs, passes through.
 (
-  for var in "${PACKBIN_CREDENTIALS[@]}"; do
-    if [ "$var" != "MAVEN_GPG_PRIVATE_KEY" ]; then
-      unset "$var"
-    fi
-  done
+  unset_credentials MAVEN_GPG_PRIVATE_KEY
   exec bash "$here/publish-build.sh" "${targets[@]}"
 )
 

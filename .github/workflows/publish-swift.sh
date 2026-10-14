@@ -13,12 +13,16 @@
 # $PACKBIN_SWIFT_PAUSE seconds (default 30), each try in a fresh scratch, cache, configuration and security
 # directory, so the answer is what a new app's resolve would get. A re-run of the tag runs the check again.
 #
-# Needs: PACKBIN_OUT, PACKBIN_VERSION; swift and python3 on PATH.
+# Needs: PACKBIN_OUT, PACKBIN_VERSION; swift and python3 on PATH. No credential: it unsets every one first.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=publish-lib.sh
 source "$here/publish-lib.sh"
+# SwiftPM compiles and runs the manifest of every dependency as a process that inherits this environment, so the
+# check runs with no credential of the publish step (F48); it needs none. No argument: no credential is kept.
+# shellcheck disable=SC2119
+unset_credentials
 
 version="${PACKBIN_VERSION:?PACKBIN_VERSION is required}"
 version="${version#v}"

@@ -29,7 +29,8 @@ extension Packer {
     }
 
     /// A list or dict `n` from its value: a u16 count, then the items (a dict's in unsigned UTF-8 byte
-    /// order of their keys, each after its key).
+    /// order of their keys, each after its key). A key that unpack would refuse (not in stream-safe
+    /// form) is refused here, so a row that packs unpacks.
     mutating func collection(_ n: Node, _ v: Any?) throws {
         guard let element = n.element else { return }
         if n.kind == .list {
@@ -46,6 +47,10 @@ extension Packer {
         let keys = entries.keys.sorted { $0.utf8.lexicographicallyPrecedes($1.utf8) }
         try writeCount(n, keys.count)
         for key in keys {
+            guard isStreamSafe(key.unicodeScalars) else {
+                throw PackbinError.pack(nil, n.name, "\(n.name): a dict key holds more than \(maxNonStarters) combining marks "
+                    + "in a row (not in Unicode's stream-safe form)")
+            }
             try writeString(nil, n.name, key)
             try packItem(n, element, entries[key] ?? nil)
         }

@@ -93,7 +93,10 @@ with `String` keys; an item of a nested-row or flags element is a `[String: Any]
 `String`, an `[Any]` for a list and a `[String: Any]` for a dict. Swift compares strings by canonical
 equivalence, so two keys whose bytes differ but that are equal as Swift strings (an NFC and an NFD form)
 cannot both sit in a `[String: Any]`: unpack refuses such a packet as "dict key given twice" (as
-TypeScript refuses a key given twice), and pack refuses a Foundation dictionary that holds both. In a
+TypeScript refuses a key given twice), and pack refuses a Foundation dictionary that holds both. A key
+that is not in Unicode's stream-safe form (more than 30 combining marks in a row) is refused, by unpack as
+a key that is not UTF-8 is and by pack naming the dict: Swift would reorder such a run in quadratic time
+each time it hashes the key. In a
 typed row a list is bound to an array and a dict to a `[String: E]` of the element's Swift type (a
 ``PackbinRow`` for a nested-row or flags element, whose fields are bound to it; a `[UInt8]` holds a list
 of u8); the element is never bound on its own. `nil` is no value; an empty array, dictionary or string

@@ -235,6 +235,23 @@ sw_real_checks() {
   rm -rf "$sw_dir"
 }
 
+# F48 (loop 26 audit): SwiftPM runs the manifests of the dependencies as code, so the consumer check sees no credential.
+# Every credential is set in the publish environment and the swift stub fails a call that any of them reaches.
+sw_credential_checks() {
+  local var set_args=()
+  sw_setup
+  for var in $SW_CREDENTIALS; do
+    set_args+=("$var=secret-$var")
+  done
+  sw_publish creds "${set_args[@]}" SW_DENY_CREDENTIALS="$SW_CREDENTIALS"
+  assert_eq "$sw_code" "0" "F48 publish with every credential set: $(tail -n 3 "$sw_dir/creds.out" | paste -sd " " -)"
+  assert_eq "$(grep -c '^--version|' "$sw_log")/$(sw_calls package)/$(sw_calls build)" "1/1/1" "F48 swift calls with no credential"
+  grep -qx "swift consumer resolves $sw_bare 0.1.9 at $sw_head and builds Packbin (try 1)" "$sw_dir/creds.out" \
+    || fail "F48 no pass line: $(tail -n 3 "$sw_dir/creds.out")"
+  sw_assert_untouched "F48"
+  rm -rf "$sw_dir"
+}
+
 # sw_mutant <label> <scenario> <file> <old> <new> [anchor]: a copy of the scripts whose <file> has the first <old> after
 # <anchor> replaced by <new>; <scenario> run against it must report a failure.
 sw_mutant() {
@@ -300,6 +317,9 @@ sw_mutant_checks() {
     'if [ "$(basename "$root")" != packbin ] || [ "$root" != "$(cd "$here/../.." && pwd)" ]; then' 'if false; then'
   sw_mutant "no copy for a SRC_ROOT apart" sw_position_checks publish-position.sh \
     ' || [ "$root" != "$(cd "$here/../.." && pwd)" ]; then' '; then'
+  sw_mutant "credentials reach the swift check" sw_credential_checks publish-swift.sh $'\nunset_credentials\n' $'\n'
+  sw_mutant "GITHUB_TOKEN out of the credentials" sw_credential_checks publish-lib.sh ' GITHUB_TOKEN' '' 'PACKBIN_CREDENTIALS=('
+  sw_mutant "the OIDC request token kept" sw_credential_checks publish-lib.sh ' ACTIONS_ID_TOKEN_REQUEST_TOKEN' '' 'PACKBIN_CREDENTIALS=('
   echo "rejects: $sw_mutants mutants"
   chmod -R u+w "$sw_mut"
   rm -rf "$sw_mut"
