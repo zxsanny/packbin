@@ -38,3 +38,12 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-14_loop25.md
 - [2026-10-14] [tooling] A watcher keyed on log growth reports STALLED for a stage that prints only at the end (the ring, the publish gate); add a second signal (the child process changes), and check `ps` for old shells when a task outlives the run: a worker's bare `cat` sat 70 minutes although its prompt forbade it.
   Source: _docs/06_metrics/retro_2026-10-14_loop25.md
+- [2026-10-14] [tooling] Verify a container image tag against the registry before writing it into a pin, a compose file and a guard: `swift:6` was in all three and does not exist on Docker Hub (`manifest unknown`); only the pull in step 11 showed it. Use the full version (`swift:6.3.3`) and run `docker pull` once when the pin is chosen.
+  Source: _docs/06_metrics/retro_2026-10-14_loop26.md
+- [2026-10-14] [testing] A sanitizer run changes the cost of a test 10 to 40 times (the thread sanitizer in the Linux container: a max-slot test 1 178 s, 1 MiB unpack 15 to 28 s against 0.12 s in release): single-threaded size and speed tests skip under it and time bounds are asserted in the plain runs only; find the cost by one early container run, not at the end.
+  Source: _docs/06_metrics/retro_2026-10-14_loop26.md
+- [2026-10-14] [estimation] A new-language loop needs one early run of its suite in the CI container (after the core task), because the host and the container differ in ways that cost three step 11 invocations (about 90 minutes) here: Swift 6 rejects `stderr` on Linux, Foundation merges dictionary keys per process, the image tag.
+  Source: _docs/06_metrics/retro_2026-10-14_loop26.md
+- [2026-10-14] [process] A security audit that measures finds what review cannot: F47 (dictionary keys normalized in quadratic time, 25 s for 1 MiB) was invisible in the code and appeared only when the auditor built a probe; put "build one probe per hostile-input angle" in the audit brief, with a peak-RSS and a CPU figure.
+  Source: _docs/06_metrics/retro_2026-10-14_loop26.md
+
