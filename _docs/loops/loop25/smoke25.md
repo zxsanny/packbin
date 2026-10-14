@@ -71,3 +71,12 @@ dotnet build-server shutdown </dev/null > "$LOGS/shutdown.log" 2>&1 || true
 echo "DONE $PASSED/$TOTAL stages passed (logs in $LOGS)"
 SMOKE
 ```
+
+## Result
+
+PASS, with one stage re-run. Agent run on `28adfa8` (2026-10-14, owner rule of 2026-10-12, `_docs/04_deploy/deployment_procedures.md` § Loop smoke gate): the script printed `DONE 12/13 stages passed`.
+
+- Stage 4 (TypeScript, 967 tests) failed at load 35 (another project's vitest run at 455 % CPU beside the Docker VM): 966 passed and `NFR 100000 pack-then-unpack round trips ≤ 1s` measured 1,280 ms on its best of three passes. No TypeScript source changed in the loop and the same suite had passed at step 11 (stage 3 of that run, 7 s).
+- Owner decision (2026-10-14): relax the TypeScript test bound to 1,400 ms (`typescript/tests/packbin.test.ts`, `performance-tests.md`; the product bound stays 1 s). The TypeScript stage was then re-run alone on the changed test: 967 of 967 passed, the NFR test took 686 ms at load 18. The other 12 stages are those of the script run above.
+- The script's 12/13 is not edited; the re-run is the only part of the gate that was not in the script run.
+- Stage times at load 10 to 35: scaffold 130 s, Go 117 s, C# 82 s, Python 124 s, Rust 20 s, Java 10 s, C++ 22 s, ARM 10 s (flash 8152 of 8192 B, stack 456 of 512 B, unchanged), ring 50 s (239 s before the loop's speed-up), AC-10 9 s, publish gate 703 s (no failures; NOT RUN: the vcpkg supports and consumer checks, no vcpkg tool on this host).

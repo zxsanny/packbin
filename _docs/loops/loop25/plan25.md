@@ -32,6 +32,7 @@ Specs claimed (`loop: 25`): AZ-2472 to AZ-2479 (8 specs, ~14 points). AZ-2068 st
 | feature-assess | 10.5 | Feature Assessment | yes | once, read-only; open rows go to the loop 26 handoff |
 | run-tests | 11 | Run Tests | yes | one total run: seven suites, hostile, golden, ring, publish-gate tests |
 | test-spec-sync | 12 | Test-Spec Sync | yes | traceability rows for the new AC |
+| code-review | — | Total review | yes | one total review at high effort over `4e0b537..HEAD`; the plan had omitted it and it ran after step 13 (`review25.md`) |
 | update-docs | 13 | Update Docs | yes | README (U24, D8), parity row docs (D1 and D7 outcomes), AC-15/D6 wording |
 | security | 14 | Security Audit | yes | hostile vector changes and the `run-suite.sh` behavior change |
 | performance | 15 | Performance Test | no | no new perf NFR (D8 is a measurement, not a bound) |
