@@ -2,7 +2,7 @@
 
 ## Architecture Vision
 
-packbin is a library: the caller writes a field list, pack and unpack move the exact bytes, and GitHub Actions tests every branch push and pull request and publishes C#, TypeScript, Python, Rust, C++, and Java on a version tag, and tags Go from the same commit (a `go/vX.Y.Z` git tag, ADR 004), after every one of them matches the golden hex.
+packbin is a library: the caller writes a field list, pack and unpack move the exact bytes, and GitHub Actions tests every branch push and pull request and publishes C#, TypeScript, Python, Rust, C++, and Java on a version tag, and tags Go from the same commit (a `go/vX.Y.Z` git tag, ADR 004), after every one of them matches the golden hex. Swift installs from that `vX.Y.Z` tag itself (the root `Package.swift`); after the same gate the release run checks that a throwaway consumer resolves and builds the tag (ADR 005).
 
 **Components and ownership**
 
@@ -14,6 +14,7 @@ packbin is a library: the caller writes a field list, pack and unpack move the e
 - C++ package — pack and unpack for a C++ program or 32-bit firmware, from one allocation-free core
 - Java package — pack and unpack for a Java program
 - Go package — pack and unpack for a Go program; the seventh package, shipped as a git tag `go/vX.Y.Z` of the module `github.com/zxsanny/packbin/go`, not uploaded to a registry (ADR 004)
+- Swift package — pack and unpack for a Swift program (iOS, macOS, Linux); the eighth package, resolved by Swift Package Manager from the root `Package.swift` at the `vX.Y.Z` tag, with no registry upload and no Swift tag (ADR 005; `components/08_swift_package/description.md`)
 - GitHub Actions — tests (three jobs: `scaffold`, `embedded` and the cross-language `ring`) on every branch push and pull request, publish on a version tag (after the tests pass on the tagged commit)
 
 **Principles**
@@ -21,8 +22,8 @@ packbin is a library: the caller writes a field list, pack and unpack move the e
 - The bytes are only the fields
 - The first release has no code generator
 - A short packet returns an error and no value. In C++ the error is a `Result` and the row keeps the fields read before it
-- Unpack treats its bytes as hostile (loop 11). In C#, TypeScript, Python, Rust, Java and Go it returns an error value, within a time and memory bound set by the input length, and never throws (the typed C# `Unpack` of a packet that holds a `repeat` or `times` round used to throw, F17; since loop 20 it returns an error value when the row cannot hold the lists of rounds, and a C# collection member that could throw is refused when the scheme is built since loop 18). In C#, TypeScript, Java, Rust, Python and Go a scheme also refuses a `repeat` or `times` round past 65,535 rounds, or past 1,048,576 slots for the whole call (4,194,304 before loop 22), so the memory of the rounds is set by the scheme's limits, not by the packet (loop 15, Python since loop 16; the scheme can raise them; C++ unpacks into fixed arrays, so it needs no limit). A `times` round or a `list`/`dict` element that reads nothing is an error; a `repeat` round that reads nothing ends the repeat and the rest is trailing bytes (C++ ends a `times`, `list` or `dict` container on such a round instead of failing, see below). The error shape is interim until C15
-- Pack bounds its output the way unpack bounds its rounds (loops 19 and 20). In C#, TypeScript, Python, Java, Rust and Go a scheme refuses, before the write, a `times` count or a `repeat` list above `maxRounds`, rounds that would hold more than `maxSlots` slots (charged per round with the width the package's unpack charges; since loop 21 one rule in all six: the distinct names a round can hold), and a packet longer than `maxBytes` (16,777,216 by default, the type byte included; it is also the memory bound of a pack call, 2 to 3 times the packet); the error names the member and the numbers, and the scheme can raise each limit. A `repeat` or `times` whose body holds no member is refused when the scheme is built (loop 21, F33), because a round of it would charge no slot and write no byte, so none of the three limits would bound its work. A lone string in a round is still repeated in every round, so the packet length is the caller's to bound. C++ needs none: it writes into the caller's buffer and its rounds live in fixed arrays
+- Unpack treats its bytes as hostile (loop 11). In C#, TypeScript, Python, Rust, Java and Go it returns an error value, within a time and memory bound set by the input length, and never throws; Swift throws a `PackbinError` within the same bounds and never traps (the typed C# `Unpack` of a packet that holds a `repeat` or `times` round used to throw, F17; since loop 20 it returns an error value when the row cannot hold the lists of rounds, and a C# collection member that could throw is refused when the scheme is built since loop 18). In C#, TypeScript, Java, Rust, Python, Go and Swift a scheme also refuses a `repeat` or `times` round past 65,535 rounds, or past 1,048,576 slots for the whole call (4,194,304 before loop 22), so the memory of the rounds is set by the scheme's limits, not by the packet (loop 15, Python since loop 16; the scheme can raise them; C++ unpacks into fixed arrays, so it needs no limit). A `times` round or a `list`/`dict` element that reads nothing is an error; a `repeat` round that reads nothing ends the repeat and the rest is trailing bytes (C++ ends a `times`, `list` or `dict` container on such a round instead of failing, see below). The error shape is interim until C15
+- Pack bounds its output the way unpack bounds its rounds (loops 19 and 20). In C#, TypeScript, Python, Java, Rust, Go and Swift a scheme refuses, before the write, a `times` count or a `repeat` list above `maxRounds`, rounds that would hold more than `maxSlots` slots (charged per round with the width the package's unpack charges; since loop 21 one rule in all six: the distinct names a round can hold), and a packet longer than `maxBytes` (16,777,216 by default, the type byte included; it is also the memory bound of a pack call, 2 to 3 times the packet); the error names the member and the numbers, and the scheme can raise each limit. A `repeat` or `times` whose body holds no member is refused when the scheme is built (loop 21, F33), because a round of it would charge no slot and write no byte, so none of the three limits would bound its work. A lone string in a round is still repeated in every round, so the packet length is the caller's to bound. C++ needs none: it writes into the caller's buffer and its rounds live in fixed arrays
 - A `bool` is a flag bit with no payload, set only for `true`, and stands only directly under `flags` or a flag-byte bit; one flags byte holds 8 bits; an empty group that could never set its bit is refused (loop 12). Every package refuses a violation when the field list is built, not when a packet arrives. Loop 18 (AZ-2126) extended this to the kinds a reference may name: a `when` names an integer field, a `u2` slot or a bool, and a bool is compared only with `true`; a count names an integer field or a `u2` slot; every package refuses the rest at construction
 - A `when` condition or borrowed count names a field read earlier in its own scope (the top level, one `repeat` or `times` round, one `list` or `dict` element, or a nested row), and a `repeat` or `times` round cannot hold another round (loop 13). Every package refuses a bad reference when the field list is built (Rust by name as well as by numeric id and Python since loop 16, AZ-2117 and AZ-2113). C#, TypeScript and Python refuse a nested round; Rust refuses all but a `times` inside a `repeat`; Java and C++ support it (Java gives each inner name one list per outer round, AZ-2127). In C#, TypeScript, Java and Python a round unpacks to one list entry per round, `null` or `undefined` for a skipped round, and pack reads item i of each list for round i
 - The C++ core allocates nothing and throws nothing
@@ -31,7 +32,7 @@ packbin is a library: the caller writes a field list, pack and unpack move the e
 
 ## 1. System Context
 
-**Problem being solved**: Seven languages (six registry packages and one Go module) must pack and unpack a binary layout the caller already has, without adding tag bytes that change the size.
+**Problem being solved**: Eight languages (six registry packages, one Go module and one Swift package resolved from the version tag) must pack and unpack a binary layout the caller already has, without adding tag bytes that change the size.
 
 **System boundaries**: Inside the library are the field helpers, pack, and unpack. Outside it are the caller's socket, the caller's field lists, and the public registries.
 
@@ -47,6 +48,7 @@ packbin is a library: the caller writes a field list, pack and unpack move the e
 | Maven Central | registry upload | Outbound | Java package |
 | proxy.golang.org | HTTPS module proxy (a check, no upload) | Outbound | Go module `github.com/zxsanny/packbin/go`: the release run pushes the git tag `go/vX.Y.Z` and asks the proxy that `go list -m` finds it |
 | vcpkg | git registry push | Outbound | C++ package `packbin` |
+| github.com via Swift Package Manager | git tag resolve (a check, no upload) | Outbound | Swift package: an app resolves the `vX.Y.Z` tag; the release run checks that a throwaway consumer resolves and builds it at the tagged commit |
 | PlatformIO, ESP-IDF component registry, Arduino | registry upload and git branch | Outbound | the same C++ sources for firmware |
 
 > See ADR 003 (Publish C++ through a vcpkg git registry).
@@ -62,6 +64,7 @@ packbin is a library: the caller writes a field list, pack and unpack move the e
 | Language | C++ | C++17, freestanding core (`-fno-exceptions -fno-rtti`, no heap) | A C++ program or 32-bit firmware: Cortex-M, ESP32, RP2040 |
 | Language | Java | Java 17 (`--release 17`), Android API 26 | A Java program, including Android |
 | Language | Go | Go 1.26 minimum (`go 1.26.0` in `go.mod`); CI and compose use `golang:1.27`; standard library plus `golang.org/x/crypto` (the session only), no cgo | A Go program or service |
+| Language | Swift | `swift-tools-version: 5.9`, iOS 15, macOS 12; CI and compose use `swift:6` for the suite and `swift:5.9` for a library-only build; one dependency, `swift-crypto` (HKDF-SHA256 for the session), linked only off Apple platforms (CryptoKit there); ChaCha20 in the package | A Swift program on iOS, macOS or Linux |
 | Framework | none | — | A library, not an application |
 | Database | none | — | No stored packets |
 | Cache | none | — | Each call is independent |
@@ -69,7 +72,7 @@ packbin is a library: the caller writes a field list, pack and unpack move the e
 | Hosting | none | — | No server |
 | CI/CD | GitHub Actions | — | Tests on branch push and pull request. Publish on a version tag, after the called tests pass |
 
-> See ADR 002 (Publish six packages from a version tag) and ADR 004 (Go ships as a git tag from the same commit).
+> See ADR 002 (Publish six packages from a version tag), ADR 004 (Go ships as a git tag from the same commit) and ADR 005 (Swift installs from the root Package.swift at the vX.Y.Z tag).
 
 **Key constraints from restrictions.md**:
 
@@ -94,9 +97,9 @@ The C++ package is one core for host programs and firmware. It writes into a cal
 **Infrastructure**:
 - No cloud application host
 - No container orchestration for the product
-- The test containers are the current .NET LTS SDK, the current Node LTS image, and the current stable images for Python, Rust, C++, and Java, and `golang:1.27` for Go
+- The test containers are the current .NET LTS SDK, the current Node LTS image, and the current stable images for Python, Rust, C++, and Java, and `golang:1.27` for Go, and `swift:6` and `swift:5.9` for Swift
 - Two more images run the C++ embedded targets: `cpp-embedded` (arm-none-eabi GCC, QEMU, cross g++ for s390x) and `cpp-embedded-esp` (`espressif/idf:v5.3.2`). The embedded harness reports a target as FAIL on a non-zero exit of its function or on a recorded failed check, and the stage exits 1 (loop 16, AZ-2099)
-- The `ring` job of `test.yml` runs the cross-language hand-offs (`language-pair.sh`) on the runner itself: it installs the toolchains of the seven suites (versions in the job env `RING_*`, Go through `actions/setup-go` as `RING_GO`, checked by `ring-toolchains.sh`) and compiles C++ in the `gcc:16` image through `ring-cxx.sh`, because the runner has no GCC 16 release (loop 16, AZ-2193)
+- The `ring` job of `test.yml` runs the cross-language hand-offs (`language-pair.sh`) on the runner itself: it installs the toolchains of the seven other suites (versions in the job env `RING_*`, Go through `actions/setup-go` as `RING_GO`, checked by `ring-toolchains.sh`) and builds the Swift drivers with the runner's Swift, or in the `swift:6` image when that is not Swift 6 (`RING_SWIFT`, `ring-swift.sh`) and compiles C++ in the `gcc:16` image through `ring-cxx.sh`, because the runner has no GCC 16 release (loop 16, AZ-2193)
 
 **Environment-specific configuration**:
 
@@ -144,9 +147,9 @@ The C++ package is one core for host programs and firmware. It writes into a cal
 | Maven Central | HTTPS publish | CI secret | registry policy | same commit, or none on a mismatch. A published version stays |
 | vcpkg | git push of the registry | CI secret | registry policy | same commit, or none on a mismatch. A pushed port version stays |
 
-> See ADR 002 (Publish six packages from a version tag), ADR 003 (Publish C++ through a vcpkg git registry), ADR 004 (Go ships as a git tag from the same commit).
+> See ADR 002 (Publish six packages from a version tag), ADR 003 (Publish C++ through a vcpkg git registry), ADR 004 (Go ships as a git tag from the same commit), ADR 005 (Swift installs from the root Package.swift at the vX.Y.Z tag).
 
-The publish builds and checks every artifact before the first upload, and the registry tools then run on the runner host (loop 14). Before each upload the registry is asked whether the version is already there, so a re-run of the tag finishes a partial publish. PlatformIO, ESP-IDF and Arduino are optional targets; the other six registries are required (`_docs/04_deploy/packages.md`). The Go tag is not a registry upload: it is the last step of the run, pushed after every registry target, and only after the same golden gate (ADR 004). The golden gate and the language builds run in containers that mount the repo read-only and write only their own artifacts folder, so a build step cannot change a script the host runs next with the credentials (loop 15).
+The publish builds and checks every artifact before the first upload, and the registry tools then run on the runner host (loop 14). Before each upload the registry is asked whether the version is already there, so a re-run of the tag finishes a partial publish. PlatformIO, ESP-IDF and Arduino are optional targets; the other six registries are required (`_docs/04_deploy/packages.md`). The Go tag is not a registry upload: it is the last step of the run, pushed after every registry target, and only after the same golden gate (ADR 004). The Swift check uploads nothing and creates no tag: after the registry uploads and the Go tag it resolves and builds the `vX.Y.Z` tag in a throwaway consumer, and fails the run when the pin is another commit or the build fails for 30 minutes (ADR 005). The golden gate and the language builds run in containers that mount the repo read-only and write only their own artifacts folder, so a build step cannot change a script the host runs next with the credentials (loop 15).
 
 There is no inbound vendor callback. The bytes the library reads are the caller's packet, checked against the golden fixture, not a vendor schema.
 
@@ -202,4 +205,4 @@ There is no inbound vendor callback. The bytes the library reads are the caller'
 
 **Consequences**: A golden mismatch publishes 0 packages.
 
-> See ADR 002 (Publish six packages from a version tag), ADR 003 (Publish C++ through a vcpkg git registry), ADR 004 (Go ships as a git tag from the same commit).
+> See ADR 002 (Publish six packages from a version tag), ADR 003 (Publish C++ through a vcpkg git registry), ADR 004 (Go ships as a git tag from the same commit), ADR 005 (Swift installs from the root Package.swift at the vX.Y.Z tag).

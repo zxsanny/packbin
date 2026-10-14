@@ -2,10 +2,10 @@
 
 **Component**: library
 **Producer task**: AZ-2019 — csharp_session
-**Consumer tasks**: AZ-2020, AZ-2021, AZ-2022, AZ-2023, AZ-2024, AZ-2025, AZ-2026
+**Consumer tasks**: AZ-2020, AZ-2021, AZ-2022, AZ-2023, AZ-2024, AZ-2025, AZ-2026, AZ-2445 (Go), AZ-2518 (Swift)
 **Version**: 1.0.0
 **Status**: current
-**Last Updated**: 2026-10-06
+**Last Updated**: 2026-10-14
 
 ## Purpose
 
@@ -41,4 +41,4 @@ Each direction keeps its own packet counter, starting at 0, and advances it by o
 
 ## Consumers
 
-TypeScript, Python, Rust, C++, Java, the six-language match, and the README. Archangel is not a consumer in this repository.
+TypeScript, Python, Rust, C++, Java, Go, Swift, the cross-language session match, and the README. Archangel is not a consumer in this repository.
