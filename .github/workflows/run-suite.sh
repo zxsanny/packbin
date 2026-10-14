@@ -123,7 +123,7 @@ swift_speed() {
   swift test "${swift_opts[@]}" -c release --skip-build --verbose --filter '\.SpeedTests/' --filter '\.FuzzTests/mebibyte'
 }
 
-# SW-11: one package dependency at most, swift-crypto (what swift-crypto itself requires is its business), no
+# SW-11: exactly one package dependency, swift-crypto (what swift-crypto itself requires is its business), no
 # unsafe flags, and every target of the package's own is a Swift target (no C, C++, system library or binary target).
 swift_deps() {
   local described dumped types direct
@@ -145,6 +145,10 @@ swift_deps() {
   direct="$(sed -n 's/^ *"identity" : "\([^"]*\)".*/\1/p' <<< "$described" | grep -vxF swift-crypto | sort -u)"
   if [ -n "$direct" ]; then
     printf 'run-suite: swift depends on packages other than swift-crypto:\n%s\n' "$direct" >&2
+    return 1
+  fi
+  if ! sed -n 's/^ *"identity" : "\([^"]*\)".*/\1/p' <<< "$described" | grep -qxF swift-crypto; then
+    echo "run-suite: the swift package does not depend on swift-crypto (SW-11 asks for exactly one dependency)" >&2
     return 1
   fi
 }

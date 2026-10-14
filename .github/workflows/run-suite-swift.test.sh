@@ -177,12 +177,13 @@ case "$out" in *"no SpeedTests suite"*) ;; *) bad "swift: no message for the mis
 if sw_ran "-c release --build-tests"; then bad "swift: the speed build ran without a SpeedTests suite"; fi
 
 # S7 (SW-11). a second package, a target that is not Swift, an unsafe flag or an unreadable describe fails and is
-# named; swift-crypto alone (S2) and no dependency pass
+# named; swift-crypto alone (S2) passes and no dependency fails (SW-11 asks for exactly one)
 out="$(run_swift swift "$swroot" SWIFT_DEPS="swift-crypto swift-collections")"; code=$?
 [ "$code" -ne 0 ] || bad "swift: a second package dependency passed"
 case "$out" in *"other than swift-crypto"*"swift-collections"*) ;; *) bad "swift: the extra package is not named: $out" ;; esac
 out="$(run_swift swift "$swroot" SWIFT_DEPS=)"; code=$?
-[ "$code" -eq 0 ] || bad "swift: a package without dependencies failed (exit $code): $out"
+[ "$code" -ne 0 ] || bad "swift: a package without swift-crypto passed"
+case "$out" in *"does not depend on swift-crypto"*) ;; *) bad "swift: no message for the missing swift-crypto: $out" ;; esac
 out="$(run_swift swift "$swroot" SWIFT_TYPES="SwiftTarget ClangTarget")"; code=$?
 [ "$code" -ne 0 ] || bad "swift: a C target passed"
 case "$out" in *"not Swift targets"*"ClangTarget"*) ;; *) bad "swift: the C target is not named: $out" ;; esac
