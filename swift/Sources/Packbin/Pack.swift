@@ -29,8 +29,8 @@ public func pack<Row>(_ scheme: Scheme, _ row: Row) throws -> [UInt8] {
 }
 
 private func packValues(_ scheme: Scheme, _ values: [String: Any]) throws -> [UInt8] {
-    var p = Packer(scope: values)
-    p.out.reserveCapacity(32)
+    var p = Packer(scope: values, limits: scheme)
+    p.out.reserveCapacity(min(32, scheme.maxBytes))
     p.out.append(UInt8(truncatingIfNeeded: scheme.typeNumber))
     var wrote: [String: Any] = [:]
     try p.fields(scheme.fields, root: FlagRoot(fields: scheme.fields, values: values), values, &wrote)
@@ -52,8 +52,19 @@ struct Packer {
     /// The row of the scope being packed: the top-level row, or the row of one round. A count the row
     /// gives for a field that was not written is read from it.
     var scope: [String: Any]
+    /// The scheme's limits; `slots` is what every round of this call has charged so far against
+    /// `maxSlots`, one counter for every repeat and times at any depth, as unpack charges them.
+    let maxRounds: Int
+    let maxSlots: Int
+    let maxBytes: Int
+    var slots = 0
 
-    init(scope: [String: Any]) { self.scope = scope }
+    init(scope: [String: Any], limits: Scheme) {
+        self.scope = scope
+        maxRounds = limits.maxRounds
+        maxSlots = limits.maxSlots
+        maxBytes = limits.maxBytes
+    }
 
     /// Packs `nodes` from `values`, the row they read (inside a group, the group's own values). `wrote`
     /// is what the scope has written so far, by name, for a when to test; `root` is where a split flag
@@ -73,6 +84,7 @@ struct Packer {
             case .flagByte:
                 guard let tag = n.tag else { continue }
                 let flags = n.inOrder ? 0 : try flagValue(root, tag, wrote)
+                try room(1, n.id, n.name.isEmpty ? firstBitName(nodes, tag) : n.name)
                 let record = PackedFlagByte(tag: tag, at: out.count, flags: flags, inOrder: n.inOrder)
                 if let i = flagBytes.firstIndex(where: { $0.tag === tag }) {
                     flagBytes[i] = record
@@ -151,6 +163,7 @@ struct Packer {
             guard num.fits(size: n.size, signed: n.signed) else {
                 throw PackbinError.pack(n.id, n.name, "\(num.neg ? "-" : "")\(num.mag) does not fit in \(n.label)")
             }
+            try room(n.size, n.id, n.name)
             append(num.bits, size: n.size, bigEndian: n.bigEndian)
             if n.referenced { wrote[n.name] = v }
         case (.int, let other):
@@ -165,6 +178,7 @@ struct Packer {
             guard raw.count == n.size else {
                 throw PackbinError.pack(n.id, n.name, "expected \(n.size) bytes, got \(raw.count)")
             }
+            try room(n.size, n.id, n.name)
             out.append(contentsOf: raw)
             if n.referenced { wrote[n.name] = raw }
         case (.bytes, let other):
@@ -182,9 +196,11 @@ struct Packer {
             if x.isFinite && !single.isFinite {
                 throw PackbinError.pack(n.id, n.name, "\(x) does not fit in f32")
             }
+            try room(4, n.id, n.name)
             append(UInt64(single.bitPattern), size: 4, bigEndian: n.bigEndian)
             if n.referenced { wrote[n.name] = single }
         } else {
+            try room(8, n.id, n.name)
             append(x.bitPattern, size: 8, bigEndian: n.bigEndian)
             if n.referenced { wrote[n.name] = x }
         }

@@ -22,6 +22,8 @@ extension Packer {
     mutating func writeString(_ id: Int?, _ name: String, _ text: String) throws {
         let count = text.utf8.count
         guard count <= maxCollection else { throw PackbinError.pack(id, name, "\(name): utf-8 length \(count)") }
+        // The length and the text are one write, so a refusal names the whole member.
+        try room(2 + count, id, name)
         appendCount(count)
         out.append(contentsOf: text.utf8)
     }
@@ -51,6 +53,7 @@ extension Packer {
 
     private mutating func writeCount(_ n: Node, _ count: Int) throws {
         guard count <= maxCollection else { throw PackbinError.pack(nil, n.name, "\(n.name): length \(count)") }
+        try room(2, nil, n.name)
         appendCount(count)
     }
 

@@ -45,8 +45,8 @@ private func hostileValue(_ random: inout SeededRandom, _ depth: Int) -> Any? {
 }
 
 /// The no-trap rule for rounds: no buffer or row makes unpack or pack of a round or counted kind
-/// trap; each ends in a row, bytes or a `PackbinError`. Pack counts stay small here (the round limits
-/// that cap a huge count come in AZ-2517).
+/// trap; each ends in a row, bytes or a `PackbinError`. A huge pack count is refused by the round
+/// limits before any round (AZ-2517).
 @Suite struct RoundNoTrapTests {
     @Test func unpackAndPack_randomRoundBuffersAndRows_throwOrGiveAValue() throws {
         // Arrange
@@ -69,7 +69,6 @@ private func hostileValue(_ random: inout SeededRandom, _ depth: Int) -> Any? {
                 if index < 4 {
                     var row: [String: Any] = [:]
                     for name in hostileNames where Bool.random(using: &random) { row[name] = hostileValue(&random, 0) as Any }
-                    if let n = row["n"] as? UInt64, n > 8 { row["n"] = 2 }
                     _ = try? pack(scheme, row)
                 }
                 outcomes += 1

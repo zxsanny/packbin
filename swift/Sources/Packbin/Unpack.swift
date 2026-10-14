@@ -45,7 +45,7 @@ private func dispatch(_ buffer: [UInt8], _ schemes: [Scheme], typed: Bool) throw
     guard let scheme = schemes.first(where: { $0.typeNumber == Int(first) }) else {
         throw PackbinError(.unknownType, field: nil, actual: Int(first))
     }
-    var r = Reader(buffer)
+    var r = Reader(buffer, limits: scheme)
     r.typed = typed && scheme.binding != nil
     var values = [String: Any](minimumCapacity: scheme.place.members.count)
     try r.fields(scheme.fields, &values)
@@ -68,8 +68,17 @@ struct Reader {
     var reached = Set<ObjectIdentifier>()
     /// The row is filled into a bound row type: items of a nested-row element are `ElementItem`s.
     var typed = false
+    /// The scheme's round limits; `slots` is what every round of this call has charged so far against
+    /// `maxSlots`, one counter for every repeat and times at any depth.
+    let maxRounds: Int
+    let maxSlots: Int
+    var slots = 0
 
-    init(_ buf: [UInt8]) { self.buf = buf }
+    init(_ buf: [UInt8], limits: Scheme) {
+        self.buf = buf
+        maxRounds = limits.maxRounds
+        maxSlots = limits.maxSlots
+    }
 
     var left: Int { buf.count &- off }
 

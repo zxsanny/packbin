@@ -130,6 +130,21 @@ four to a byte; a slot is 0...3, an integer count source and `eq` source, and un
 A count is a wire integer up to u64: one that is absent, negative or above `Int.max` cannot be read
 (`.short` with `needed` 0), and a count above 0 that the row gives behind a clear `when` is refused.
 
+### Limits
+
+A scheme carries three limits, the same defaults as every package: ``Scheme/maxRounds`` (65 535
+rounds of one repeat or times), ``Scheme/maxSlots`` (1 048 576 slots for all the rounds of one call)
+and ``Scheme/maxBytes`` (16 777 216 bytes of one packet, the type byte included). A round's slots are
+the distinct names it can hold (a nested row's own members count; a non-empty group's own name and a
+flag byte do not). Unpack refuses a round when it would start, before its bytes are read: `.tooMany`
+with `needed` 0. Pack refuses a times count or a repeat list above `maxRounds` before any round, a
+round past `maxSlots`, and a write past `maxBytes`, naming the member. ``Scheme/withLimits(maxRounds:maxSlots:maxBytes:)``
+gives a copy with other limits; a limit left out takes its default, one below 1 is refused:
+
+```swift
+let wide = try Scheme(1, .repeat(0, .u8(0, "k"))).withLimits(maxSlots: 4_194_304)
+```
+
 ### Rows
 
 A row is a `[String: Any]` keyed by field name, or a typed row: a type that conforms to
@@ -181,7 +196,9 @@ scheme at once. ``Field``, ``FlagByte``, ``Condition`` and ``PackbinError`` are 
 The whole API is listed here.
 
 - ``Scheme``: `init(_ typeNumber: Int, _ fields: Field...) throws`, `init(_:_: [Field]) throws`,
-  `typeNumber`.
+  `typeNumber`, `maxRounds`, `maxSlots`, `maxBytes`,
+  `withLimits(maxRounds: Int? = nil, maxSlots: Int? = nil, maxBytes: Int? = nil) throws -> Scheme`,
+  and the defaults `defaultMaxRounds`, `defaultMaxSlots`, `defaultMaxBytes` (see Limits).
 - ``Field`` constructors: `.u8`, `.u16`, `.u32`, `.u64`, `.i8`, `.i16`, `.i32`, `.i64`
   `(_ id: Int, _ name: String)`: integers, little-endian; `.f32`, `.f64(_ id:, _ name:)`: IEEE 754,
   little-endian, NaN and the infinities written as given, a finite value too large for f32 refused;

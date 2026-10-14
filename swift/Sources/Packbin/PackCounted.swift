@@ -10,6 +10,7 @@ extension Packer {
             try u2(n, values, &wrote)
         case .repeatRound:
             guard let shape = n.shape else { return }
+            try refuseRepeatOverLimit(shape, values)
             let count = roundCount(shape, values)
             try refuseShortOptional(shape, values, count)
             try refuseLoneBuffers(shape, values)
@@ -17,6 +18,7 @@ extension Packer {
         case .timesRound:
             guard let shape = n.shape else { return }
             let count = try borrowedCount(n, wrote)
+            try refuseRoundsOverLimit(n, count)
             try refuseTypedCount(n, shape, values, count)
             try refuseLongLists(shape, values, count)
             try refuseLoneBuffers(shape, values)
@@ -31,6 +33,8 @@ extension Packer {
         let saved = scope
         defer { scope = saved }
         for i in 0..<count {
+            // A round starts here: the one place pack charges it, before any of its bytes.
+            try chargeRound(n, shape)
             let view = sliceRound(shape, values, i)
             scope = view
             var wrote: [String: Any] = [:]
@@ -48,6 +52,7 @@ extension Packer {
         guard !count.neg && count.mag == UInt64(raw.count) else {
             throw PackbinError.pack(n.id, n.name, "\(n.name): expected \(shown(count, bias: 0)) bytes, got \(raw.count)")
         }
+        try room(raw.count, n.id, n.name)
         out.append(contentsOf: raw)
     }
 
@@ -79,6 +84,7 @@ extension Packer {
             let bit = i &* width
             packed[bit >> 3] |= UInt8(truncatingIfNeeded: num.mag) << UInt8(bit & 7)
         }
+        try room(packed.count, n.id, n.name)
         out.append(contentsOf: packed)
     }
 
@@ -93,6 +99,7 @@ extension Packer {
             packed[i >> 2] |= UInt8(truncatingIfNeeded: num.mag) << UInt8((i & 3) * 2)
             if slot.referenced { wrote[slot.name] = v }
         }
+        try room(packed.count, n.fields.first?.id, n.fields.first?.name ?? "")
         out.append(contentsOf: packed)
     }
 

@@ -23,4 +23,7 @@ Collected from the worker reports (`_docs/03_implementation/batch_NN_loop26_repo
 | AZ-2516 | dict keys equal under Unicode normalization (NFC/NFD) | unpack refuses ("dict key given twice"); pack refuses an `NSDictionary` holding both forms | keeps both | owner ruling 2026-10-14 |
 | AZ-2516 | the nested row API | a `group` overload without an anchor (Go: `Nested`) | group without an anchor | naming |
 | AZ-2516 | refusal of a whole list/dict | field `nil` (a list has no id) and the list's name; item errors name the element's id and name | — | as Go |
+| AZ-2517 | refusing round name for the split-bits shape in unpack | the first name the round holds (`a`) | the split flag byte `m` | as Go; the hostile README says the label is not asserted |
+| AZ-2517 | a limit value | any `Int` from 1; message "expected a positive integer, got N" | refuses 2^53 and fractions | no such values in Swift; as C#, Python, Go |
+| AZ-2517 | unpack refusal over a limit | kind `.tooMany`, needed 0 | the interim short-packet shape with needed 0 | as Go; both allowed by the `limit` terms |
 

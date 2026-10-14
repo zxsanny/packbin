@@ -64,6 +64,8 @@ extension Reader {
         defer { seen = saved }
         var rows: [[String: Any]] = []
         while count.map({ rows.count < $0 }) ?? (left > 0) {
+            // A round starts here: the one place unpack charges it, before its bytes are read.
+            try chargeRound(n, shape, rows.count)
             let before = off
             seen = [:]
             var one: [String: Any] = [:]

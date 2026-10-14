@@ -20,9 +20,12 @@ final class RoundShape: Sendable {
     let dicts: [Node]
     /// The groups with members among the names, which can hold a buffer.
     let groups: [Place.Member]
+    /// The slots one round charges against `maxSlots` (see `roundWidth`).
+    let width: Int
 
     init(_ fields: [Node]) {
         place = Place(fields)
+        width = roundWidth(fields)
         var seen = Set<String>()
         var names: [Node] = []
         var groups: [Place.Member] = []

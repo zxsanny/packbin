@@ -8,6 +8,12 @@ public struct Scheme: Sendable {
     let place: Place
     /// The row type the fields are bound to; nil for a scheme that packs only `[String: Any]`.
     var binding: Binding? { place.binding }
+    /// The most rounds one repeat or times field may start, on pack and on unpack (see `withLimits`).
+    public let maxRounds: Int
+    /// The most slots all the rounds of one pack or unpack call may hold together (see `withLimits`).
+    public let maxSlots: Int
+    /// The most bytes one pack call may write, the type byte included (see `withLimits`).
+    public let maxBytes: Int
 
     /// Builds a scheme from its type number (0...255) and its fields, numbered by order from 0. A
     /// refused scheme throws a `PackbinError` of kind `.schemeError` naming the field id.
@@ -38,6 +44,19 @@ public struct Scheme: Sendable {
         self.typeNumber = typeNumber
         self.fields = bound
         self.place = place
+        maxRounds = Scheme.defaultMaxRounds
+        maxSlots = Scheme.defaultMaxSlots
+        maxBytes = Scheme.defaultMaxBytes
+    }
+
+    /// `base` with the given limits, already checked.
+    init(_ base: Scheme, maxRounds: Int, maxSlots: Int, maxBytes: Int) {
+        typeNumber = base.typeNumber
+        fields = base.fields
+        place = base.place
+        self.maxRounds = maxRounds
+        self.maxSlots = maxSlots
+        self.maxBytes = maxBytes
     }
 }
 
