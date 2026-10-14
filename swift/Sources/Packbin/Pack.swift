@@ -28,7 +28,7 @@ public func pack<Row>(_ scheme: Scheme, _ row: Row) throws -> [UInt8] {
 }
 
 private func packValues(_ scheme: Scheme, _ values: [String: Any]) throws -> [UInt8] {
-    var p = Packer()
+    var p = Packer(scope: values)
     p.out.reserveCapacity(32)
     p.out.append(UInt8(truncatingIfNeeded: scheme.typeNumber))
     var wrote: [String: Any] = [:]
@@ -38,16 +38,21 @@ private func packValues(_ scheme: Scheme, _ values: [String: Any]) throws -> [UI
 
 /// A flag byte pack has written: where it sits, the bits set so far, and whether its bits are decided
 /// one by one as their members are reached (a combined `flags`).
-private struct PackedFlagByte {
+struct PackedFlagByte {
     let tag: FlagTag
     let at: Int
     var flags: UInt8
     let inOrder: Bool
 }
 
-private struct Packer {
+struct Packer {
     var out: [UInt8] = []
     var flagBytes: [PackedFlagByte] = []
+    /// The row of the scope being packed: the top-level row, or the row of one round. A count the row
+    /// gives for a field that was not written is read from it.
+    var scope: [String: Any]
+
+    init(scope: [String: Any]) { self.scope = scope }
 
     /// Packs `nodes` from `values`, the row they read (inside a group, the group's own values). `wrote`
     /// is what the scope has written so far, by name, for a when to test; `root` is where a split flag
@@ -64,7 +69,7 @@ private struct Packer {
                 if n.referenced { wrote[n.name] = true }
             case .flagByte:
                 guard let tag = n.tag else { continue }
-                let flags = n.inOrder ? 0 : flagValue(root, tag, wrote)
+                let flags = n.inOrder ? 0 : try flagValue(root, tag, wrote)
                 let record = PackedFlagByte(tag: tag, at: out.count, flags: flags, inOrder: n.inOrder)
                 if let i = flagBytes.firstIndex(where: { $0.tag === tag }) {
                     flagBytes[i] = record
@@ -84,6 +89,11 @@ private struct Packer {
             case .group:
                 // A mark is reached only through a set flag bit: the bit is its value, nothing follows it.
                 if !n.fields.isEmpty { try fields(n.fields, root: root, groupValues(values, n), &wrote) }
+            case .sized, .u2, .bits, .packed, .repeatRound, .timesRound:
+                try counted(n, values, &wrote)
+            case .slot:
+                // A slot is written by its u2.
+                break
             }
         }
     }
@@ -93,17 +103,27 @@ private struct Packer {
         guard let member = n.member, let i = flagBytes.firstIndex(where: { $0.tag === n.tag }) else { return }
         let mask = UInt8(truncatingIfNeeded: 1 << n.bit)
         if flagBytes[i].inOrder {
-            guard bitOn(member, values, wrote) else { return }
+            guard try bitOn(member, values, wrote) else {
+                // A times whose count was not written (skipped, or under a clear bit) writes no round, so
+                // the values given for it would be dropped without a word.
+                if let held = try droppedBody(member, values, wrote) {
+                    throw PackbinError.pack(held.id, held.name, "\(held.name): a value is given, but the count of "
+                        + "its times is not written, so its bit is clear; write the count before the times")
+                }
+                try refuseUnwrittenCount(member, values, wrote)
+                return
+            }
             flagBytes[i].flags |= mask
             out[flagBytes[i].at] = flagBytes[i].flags
         } else if flagBytes[i].flags & mask == 0 {
-            // The bit was decided where the byte sits. A body whose condition is not written by then
-            // would be dropped without a word, and its own unpack reads no bit for it.
-            if let held = droppedBody(member, values, wrote) {
+            // The bit was decided where the byte sits. A body whose condition or count is not written by
+            // then would be dropped without a word, and its own unpack reads no bit for it.
+            if let held = try droppedBody(member, values, wrote) {
                 throw PackbinError.pack(held.id, held.name, "\(held.name): a value is given, but the condition "
                     + "or count of its when or times is not written before the flag byte, so its bit is clear; "
                     + "write that field before the flag byte")
             }
+            try refuseUnwrittenCount(member, values, wrote)
             return
         }
         try fields([member], root: root, values, &wrote)
@@ -154,7 +174,7 @@ private struct Packer {
         }
     }
 
-    private mutating func append(_ x: UInt64, size: Int, bigEndian: Bool) {
+    mutating func append(_ x: UInt64, size: Int, bigEndian: Bool) {
         for i in 0..<size {
             let shift = UInt64(bigEndian ? size &- 1 &- i : i) &* 8
             out.append(UInt8(truncatingIfNeeded: x >> shift))
@@ -163,7 +183,7 @@ private struct Packer {
 }
 
 /// A value's type as a refusal names it: a Foundation number by what it holds.
-private func described(_ s: Scalar, _ v: Any) -> String {
+func described(_ s: Scalar, _ v: Any) -> String {
     switch s {
     case .int: return "an integer (\(typeName(v)))"
     case .float: return "a float (\(typeName(v)))"

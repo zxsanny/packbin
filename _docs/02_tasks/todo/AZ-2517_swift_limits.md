@@ -81,6 +81,8 @@ Then unpacks; with the default limit it is refused
 
 - From AZ-2521 (loop 26): the CI fuzz step expects a swift-testing suite named `FuzzTests` that reads its duration in seconds from the environment variable `PACKBIN_FUZZ_SECONDS` (default 60 in `run-suite.sh swift`); a run shorter than the asked time fails, and a tree without `FuzzTests` gets a named skip line. The suite is verbose, never quiet.
 
+- From AZ-2515 (loop 26): there are no pack caps yet: a huge `times` count over lone scalars loops on pack until `maxRounds`/`maxSlots` exist, so the no-trap sweeps keep pack counts small until this task lands the caps. Unpack is already bounded (every round must consume a byte; a count is checked against the bytes left before any storage is made).
+
 ## Risks & Mitigation
 
 **Risk 1: Fuzz time in CI**

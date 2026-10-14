@@ -3,6 +3,7 @@ public let flagBits = 8
 
 enum NodeKind: Sendable {
     case int, float, bytes, bool, flags, flagByte, flagBit, when, group
+    case repeatRound, timesRound, sized, u2, slot, bits, packed
 }
 
 /// The identity of one flag byte: a handle, or one read of it once a scheme is built.
@@ -15,14 +16,16 @@ final class FlagTag: Sendable {
 /// `Field` can be shared by any number of schemes and tasks; walking a scheme copies no field.
 final class Node: Sendable {
     let kind: NodeKind
-    /// The value id; the anchor of flags, when and group; nil for a flag byte or bit.
+    /// The value id; the anchor of flags, when, group, repeat and times; a u2's first slot's id; nil
+    /// for a flag byte or bit.
     let id: Int?
     let name: String
-    /// Bytes of an integer, a float or fixed bytes.
+    /// Bytes of an integer, a float or fixed bytes; bits per item of bits (1) and packed (1 or 2).
     let size: Int
     let signed: Bool
     let bigEndian: Bool
-    /// Flags, when and group members; a flag bit's one member; a built flags member: its byte and bits.
+    /// Flags, when, group, repeat and times members; a u2's slots; a flag bit's one member; a built
+    /// flags member: its byte and bits.
     let fields: [Node]
     /// Flag byte: this read; flag bit: the byte it belongs to.
     let tag: FlagTag?
@@ -31,8 +34,18 @@ final class Node: Sendable {
     /// Flag bit: its number in the byte.
     let bit: Int
     let condition: Condition?
-    /// When: the name `eq` resolves to, set when the scheme is built.
+    /// The id of the field that holds the count of times, sized, bits and packed.
+    let countID: Int?
+    /// Packed: 0, or -1 for one item less than the count.
+    let bias: Int
+    /// When: the name `eq` resolves to; times, sized, bits, packed: the name of the count. Set when
+    /// the scheme is built.
     let ref: String
+    /// The groups from the scope's row to the count field, by name: where pack finds the count the row
+    /// gives for a count that was not written.
+    let refPath: [String]
+    /// Repeat and times: the names of a round, worked out when the scheme is built.
+    let shape: RoundShape?
     /// A value field whose name a when tests: pack keeps what it wrote for it.
     let referenced: Bool
     let accessor: Accessor?
@@ -41,7 +54,8 @@ final class Node: Sendable {
 
     init(_ kind: NodeKind, id: Int?, name: String = "", size: Int = 0, signed: Bool = false,
          bigEndian: Bool = false, fields: [Node] = [], tag: FlagTag? = nil, inOrder: Bool = false,
-         bit: Int = 0, condition: Condition? = nil, ref: String = "", referenced: Bool = false,
+         bit: Int = 0, condition: Condition? = nil, countID: Int? = nil, bias: Int = 0, ref: String = "",
+         refPath: [String] = [], shape: RoundShape? = nil, referenced: Bool = false,
          accessor: Accessor? = nil, error: String? = nil) {
         self.kind = kind
         self.id = id
@@ -54,7 +68,11 @@ final class Node: Sendable {
         self.inOrder = inOrder
         self.bit = bit
         self.condition = condition
+        self.countID = countID
+        self.bias = bias
         self.ref = ref
+        self.refPath = refPath
+        self.shape = shape
         self.referenced = referenced
         self.accessor = accessor
         self.error = error
@@ -62,11 +80,12 @@ final class Node: Sendable {
 
     /// A copy with the given properties changed; a nil argument keeps the property as it is.
     func with(bigEndian: Bool? = nil, fields: [Node]? = nil, tag: FlagTag? = nil, bit: Int? = nil,
-              ref: String? = nil, referenced: Bool? = nil, accessor: Accessor? = nil,
-              error: String? = nil) -> Node {
+              ref: String? = nil, refPath: [String]? = nil, shape: RoundShape? = nil, referenced: Bool? = nil,
+              accessor: Accessor? = nil, error: String? = nil) -> Node {
         Node(kind, id: id, name: name, size: size, signed: signed, bigEndian: bigEndian ?? self.bigEndian,
              fields: fields ?? self.fields, tag: tag ?? self.tag, inOrder: inOrder, bit: bit ?? self.bit,
-             condition: condition, ref: ref ?? self.ref, referenced: referenced ?? self.referenced,
+             condition: condition, countID: countID, bias: bias, ref: ref ?? self.ref,
+             refPath: refPath ?? self.refPath, shape: shape ?? self.shape, referenced: referenced ?? self.referenced,
              accessor: accessor ?? self.accessor, error: error ?? self.error)
     }
 
@@ -81,10 +100,16 @@ final class Node: Sendable {
 
     var isValue: Bool {
         switch kind {
-        case .int, .float, .bytes, .bool: return true
-        case .flags, .flagByte, .flagBit, .when, .group: return false
+        case .int, .float, .bytes, .bool, .sized, .slot, .bits, .packed: return true
+        case .flags, .flagByte, .flagBit, .when, .group, .repeatRound, .timesRound, .u2: return false
         }
     }
+
+    var isRound: Bool { kind == .repeatRound || kind == .timesRound }
+
+    /// Fields whose value is itself a run of bytes or items: one given for a round's name would reach
+    /// every round.
+    var isBuffer: Bool { kind == .bytes || kind == .sized || kind == .bits || kind == .packed }
 
     /// A bool or an empty group: a flag bit with no bytes of its own.
     var isMark: Bool { kind == .bool || (kind == .group && fields.isEmpty) }
@@ -100,6 +125,13 @@ final class Node: Sendable {
         case .flagBit: return "flag bit"
         case .when: return "when"
         case .group: return "group"
+        case .repeatRound: return "repeat"
+        case .timesRound: return "times"
+        case .sized: return "sized"
+        case .u2: return "u2"
+        case .slot: return "slot"
+        case .bits: return "bits"
+        case .packed: return "packed"
         }
     }
 }
@@ -161,7 +193,8 @@ public struct Field: Sendable {
         case .flagBit:
             guard let member = n.member else { return field }
             return Field(n.with(fields: [be(Field(member)).node]))
-        case .bytes, .bool, .flags, .flagByte, .when, .group:
+        case .bytes, .bool, .flags, .flagByte, .when, .group, .repeatRound, .timesRound, .sized, .u2, .slot,
+             .bits, .packed:
             return field
         }
     }

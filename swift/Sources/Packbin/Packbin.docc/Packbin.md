@@ -55,6 +55,35 @@ the anchor's id (`.flags(0, .group(0, "mark")), .u8(0, "n")`). In a typed row th
 member of a ``PackbinRow`` type (or an optional of one, `nil` being no value) whose members the group's
 fields are bound to; a mark is bound to a `Bool`.
 
+### Rounds and counted kinds
+
+`.repeat(anchor, members...)` writes its members once a round until the buffer ends (nothing may
+follow it); `.times(anchor, count: id, members...)` exactly as many times as the integer field `id`,
+written earlier in the same scope. A round body is a scope of its own; a repeat or times cannot sit
+inside a round, and a body with no member is refused. In a map row each name a round holds takes an
+array, entry i for round i, `nil` where the round leaves the name out; a value that is not an array
+goes to every round, and a `[UInt8]` is a byte run, never an array of rounds. A group in a round takes
+one `[String: Any]` a round. `unpackMap` gives each name an `[Any?]` with one entry a round:
+
+```swift
+let route = try Scheme(1, .u8(0, "n"), .times(1, count: 0, .i32(1, "lat"), .i32(2, "lon")), .u8(3, "tail"))
+let raw = try pack(route, ["n": 2, "lat": [10, 30], "lon": [20, 40], "tail": 7])
+// 01 02 0a 00 00 00 14 00 00 00 1e 00 00 00 28 00 00 00 07
+```
+
+In a typed row a round is bound to an array of a ``PackbinRow`` (or an optional of one), one element a
+round, whose members the round's fields are bound to; a typed times refuses a count other than the
+elements. `nil` writes no round, and unpack gives an empty array for 0 rounds read and `nil` for a
+round that was not read.
+
+`.sized(id, name, count:)` is raw bytes (`[UInt8]`) whose length is an earlier integer;
+`.bits(id, name, count:)` a list of 0 and 1, one bit an item; `.packed(width, id, name, count:, bias:)`
+a list of `width`-bit items (width 1 or 2, bias 0 or -1). Their values are arrays of integers (a
+`[UInt8]` too) and unpack gives `[UInt8]`. `.u2(.slot(id, name), ...)` packs its slots two bits each,
+four to a byte; a slot is 0...3, an integer count source and `eq` source, and unpack gives a `UInt8`.
+A count is a wire integer up to u64: one that is absent, negative or above `Int.max` cannot be read
+(`.short` with `needed` 0), and a count above 0 that the row gives behind a clear `when` is refused.
+
 ### Rows
 
 A row is a `[String: Any]` keyed by field name, or a typed row: a type that conforms to
@@ -119,7 +148,14 @@ The whole API is listed here.
   earlier field of the same scope equals the value, the anchor is not written;
   `.group(_ anchor: Int, _ name: String, _ members: Field...)`: the members under one name (see
   Groups). `flags`, `when` and `group` also take their members as an array.
-- ``Field/bind(get:set:)``: binds a value field or a group to a member of a ``PackbinRow``.
+- Round and counted constructors: `.repeat(_ anchor: Int, _ members: Field...)`,
+  `.times(_ anchor: Int, count: Int, _ members: Field...)` (both also take an array),
+  `.sized(_ id: Int, _ name: String, count: Int)`, `.bits(_ id: Int, _ name: String, count: Int)`,
+  `.packed(_ width: Int, _ id: Int, _ name: String, count: Int, bias: Int = 0)`,
+  `.u2(_ slots: Field...)` (or an array), `.slot(_ id: Int, _ name: String)` (see Rounds and counted
+  kinds).
+- ``Field/bind(get:set:)``: binds a value field, a group, a repeat or a times to a member of a
+  ``PackbinRow``.
 - ``FlagByte``: `init(_ name: String)`, `name`, `bit(_ member: Field) -> Field` (the member under the
   next bit of the byte read before it in the same scope).
 - ``Condition``: `.eq(_ id: Int, _ value: some BinaryInteger)`, `.eq(_ id: Int, _ value: Bool)`.

@@ -1,11 +1,13 @@
-/// One row of a scheme: the top level or a group with members. Its members are the value fields and
-/// groups at any depth in it (under flags, flag bits and when) outside a group of its own, in scheme
-/// order. In a map row a group's members are a `[String: Any]` under its name, both ways (owner
-/// ruling 2026-10-14, Go-4 A); in a typed row a member of the group's own row type.
+/// One row of a scheme: the top level, a group with members, or the row of one round. Its members
+/// are the value fields, groups and rounds at any depth in it (under flags, flag bits, when and u2)
+/// outside a group or round of its own, in scheme order. In a map row a group's members are a
+/// `[String: Any]` under its name, both ways (owner ruling 2026-10-14, Go-4 A), and the names of a
+/// round's members are names of the place around it; in a typed row a group is a member of the
+/// group's own row type, and a round an array of the round's row type.
 final class Place: Sendable {
     struct Member: Sendable {
         let node: Node
-        /// The place of a group with members; nil for a value field or a mark.
+        /// The place of a group with members or of a round's row; nil for a value field or a mark.
         let inner: Place?
     }
 
@@ -22,6 +24,8 @@ final class Place: Sendable {
     /// The groups with members whose name no other kind of field of the place declares: a map row
     /// gives each of them a `[String: Any]`.
     let rows: [Member]
+    /// The repeat and times members.
+    let rounds: [Member]
     let foreign: [Foreign]
     /// The row type the members are bound to (the first bound one); `checkBindings` refuses a mix.
     let binding: Binding?
@@ -30,11 +34,12 @@ final class Place: Sendable {
         var members: [Member] = []
         Place.collect(nodes, into: &members)
         var classes: [String: Int] = [:]
-        for m in members { classes[m.node.name, default: 0] |= Place.memberClass(m.node) }
-        let single = members.filter { classes[$0.node.name] == Place.memberClass($0.node) }
+        for m in members where !m.node.isRound { classes[m.node.name, default: 0] |= Place.memberClass(m.node) }
+        let single = members.filter { !$0.node.isRound && classes[$0.node.name] == Place.memberClass($0.node) }
         self.members = members
         self.marks = single.filter { $0.node.isMark }.map(\.node)
         self.rows = single.filter { $0.inner != nil }
+        self.rounds = members.filter { $0.node.isRound }
         self.foreign = Place.foreignNames(members)
         self.binding = members.lazy.compactMap { $0.node.accessor?.binding }.first
     }
@@ -42,11 +47,13 @@ final class Place: Sendable {
     private static func collect(_ nodes: [Node], into out: inout [Member]) {
         for n in nodes {
             switch n.kind {
-            case .int, .float, .bytes, .bool:
+            case .int, .float, .bytes, .bool, .sized, .slot, .bits, .packed:
                 out.append(Member(node: n, inner: nil))
             case .group:
                 out.append(Member(node: n, inner: n.fields.isEmpty ? nil : Place(n.fields)))
-            case .flags, .flagBit, .when:
+            case .repeatRound, .timesRound:
+                out.append(Member(node: n, inner: n.shape?.place))
+            case .flags, .flagBit, .when, .u2:
                 collect(n.fields, into: &out)
             case .flagByte:
                 break
@@ -59,21 +66,32 @@ final class Place: Sendable {
         return n.kind == .group ? 4 : 1
     }
 
+    /// The names declared inside the groups of the place (and of its rounds' rows) that the place
+    /// itself does not declare; a round's names are names of the place.
     private static func foreignNames(_ members: [Member]) -> [Foreign] {
-        let own = Set(members.map(\.node.name))
+        var own = Set<String>()
+        var groups: [Member] = []
+        for m in members {
+            for x in m.node.isRound ? m.inner?.members ?? [] : [m] {
+                own.insert(x.node.name)
+                if !x.node.isRound && x.inner != nil { groups.append(x) }
+            }
+        }
         var seen = Set<String>()
         var out: [Foreign] = []
         func walk(_ group: Member, _ path: [Node]) {
             guard let inner = group.inner else { return }
             let path = path + [group.node]
             for m in inner.members {
-                if !own.contains(m.node.name) && seen.insert(m.node.name).inserted {
-                    out.append(Foreign(member: m.node, path: path))
+                for x in m.node.isRound ? m.inner?.members ?? [] : [m] {
+                    if !own.contains(x.node.name) && seen.insert(x.node.name).inserted {
+                        out.append(Foreign(member: x.node, path: path))
+                    }
+                    if !x.node.isRound { walk(x, path) }
                 }
-                walk(m, path)
             }
         }
-        for m in members { walk(m, []) }
+        for g in groups { walk(g, []) }
         return out
     }
 }
@@ -99,17 +117,18 @@ func checkBindings(_ place: Place) throws {
         guard let inner = m.inner else { continue }
         let child = m.node.accessor?.child
         let bound = inner.members.first { $0.node.accessor != nil }?.node ?? inner.members.first?.node
+        let owner = m.node.isRound ? "\(m.node.label) \(m.node.id ?? -1)" : "group \(m.node.name)"
         switch (child, inner.binding) {
         case let (nil, innerBinding?):
             throw PackbinError.scheme(bound?.id, bound?.name ?? "", "bound to row type \(innerBinding.rowTypeName), "
-                + "but its group \(m.node.name) is not bound")
+                + "but its \(owner) is not bound")
         case let (child?, nil):
             guard let first = inner.members.first?.node else { break }
             throw PackbinError.scheme(first.id, first.name, "not bound to row type \(child.typeName) (the row of "
-                + "group \(m.node.name)); bind every value field of a scheme, or none")
+                + "\(owner)); bind every value field of a scheme, or none")
         case let (child?, innerBinding?) where child.type != innerBinding.rowType:
             throw PackbinError.scheme(bound?.id, bound?.name ?? "", "bound to row type \(innerBinding.rowTypeName), "
-                + "but its group \(m.node.name) is bound to \(child.typeName)")
+                + "but its \(owner) is bound to \(child.typeName)")
         default:
             break
         }
@@ -118,23 +137,23 @@ func checkBindings(_ place: Place) throws {
 }
 
 /// A map row as the walker reads it: each given value read through its optionals, a mark's value a
-/// `Bool`, a group's value a map of its own read the same way. A name declared only inside a group,
-/// given in the row around it while the group is not given, is refused (owner ruling Go-4 A:
-/// TypeScript packs it from the flat key).
+/// `Bool`, a group's value a map of its own read the same way, and each name of a round a
+/// ``RoundList`` when it is given an array (each entry checked as the value of its field). A name
+/// declared only inside a group, given in the row around it while the group is not given, is refused
+/// (owner ruling Go-4 A: TypeScript packs it from the flat key).
 func mapValues(_ place: Place, _ row: [String: Any]) throws -> [String: Any] {
     var values = presentValues(row)
     for mark in place.marks {
         guard let v = values[mark.name] else { continue }
-        if case .bool = scalar(v) { continue }
-        throw PackbinError.pack(mark.id, mark.name, "expected a Bool for \(mark.label) \(mark.name), got \(typeName(v))")
+        values[mark.name] = try checkedMark(mark, v)
     }
     for group in place.rows {
-        let g = group.node
-        guard let v = values[g.name], let inner = group.inner else { continue }
-        guard let nested = v as? [String: Any] else {
-            throw PackbinError.pack(g.id, g.name, "expected a [String: Any] for group \(g.name), got \(typeName(v))")
-        }
-        values[g.name] = try mapValues(inner, nested)
+        guard let v = values[group.node.name] else { continue }
+        values[group.node.name] = try nestedRow(group, v)
+    }
+    for round in place.rounds {
+        guard let shape = round.node.shape else { continue }
+        try roundValues(shape, &values)
     }
     for f in place.foreign where values[f.member.name] != nil {
         guard let absent = absentGroup(values, f.path) else { continue }
@@ -144,7 +163,23 @@ func mapValues(_ place: Place, _ row: [String: Any]) throws -> [String: Any] {
     return values
 }
 
-/// The first group on `path` the row does not give, or nil.
+func checkedMark(_ mark: Node, _ v: Any) throws -> Any {
+    if case .bool = scalar(v) { return v }
+    throw PackbinError.pack(mark.id, mark.name, "expected a Bool for \(mark.label) \(mark.name), got \(typeName(v))")
+}
+
+/// A group's value as the map of its members, read as a row of its own.
+func nestedRow(_ group: Place.Member, _ v: Any) throws -> Any {
+    let g = group.node
+    guard let inner = group.inner else { return v }
+    guard let nested = v as? [String: Any] else {
+        throw PackbinError.pack(g.id, g.name, "expected a [String: Any] for group \(g.name), got \(typeName(v))")
+    }
+    return try mapValues(inner, nested)
+}
+
+/// The first group on `path` the row does not give, or nil. A group given as something other than a
+/// map (a round's list) ends the walk.
 private func absentGroup(_ values: [String: Any], _ path: [Node]) -> Node? {
     var map = values
     for g in path {
@@ -160,6 +195,10 @@ private func absentGroup(_ values: [String: Any], _ path: [Node]) -> Node? {
 func typedValues(_ place: Place, _ box: AnyObject) -> [String: Any] {
     var values = [String: Any](minimumCapacity: place.members.count)
     for m in place.members {
+        if m.node.isRound {
+            typedRoundValues(m, box, &values)
+            continue
+        }
         guard let acc = m.node.accessor, let v = acc.get(box) else { continue }
         guard let inner = m.inner else {
             values[m.node.name] = v
@@ -171,9 +210,15 @@ func typedValues(_ place: Place, _ box: AnyObject) -> [String: Any] {
 }
 
 /// Stores the values unpack read into a typed row of the place (held in a box); a group's values
-/// into a new row of the group's type.
-func fillRow(_ place: Place, _ box: AnyObject, _ values: [String: Any]) {
+/// into a new row of the group's type, a round's into an array of rows of the round's type.
+/// `reached` are the rounds unpack read, so a round read with 0 rounds gives an empty array and one
+/// not read (a clear bit, a false when) none.
+func fillRow(_ place: Place, _ box: AnyObject, _ values: [String: Any], _ reached: Set<ObjectIdentifier>) {
     for m in place.members {
+        if m.node.isRound {
+            fillRounds(m, box, values, reached)
+            continue
+        }
         guard let acc = m.node.accessor, let v = values[m.node.name] else { continue }
         guard let inner = m.inner else {
             acc.set(box, v)
@@ -181,7 +226,7 @@ func fillRow(_ place: Place, _ box: AnyObject, _ values: [String: Any]) {
         }
         guard let nested = v as? [String: Any], let binding = inner.binding else { continue }
         let childBox = binding.makeBox()
-        fillRow(inner, childBox, nested)
+        fillRow(inner, childBox, nested, reached)
         acc.set(box, binding.unbox(childBox))
     }
 }

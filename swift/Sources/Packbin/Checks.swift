@@ -19,12 +19,12 @@ func checkFieldIDs(_ nodes: [Node], next: Int) throws -> Int {
     var next = next
     for n in nodes {
         switch n.kind {
-        case .int, .float, .bytes, .bool:
+        case .int, .float, .bytes, .bool, .sized, .slot, .bits, .packed:
             try expectID(n, next)
             next += 1
-        case .flagBit:
+        case .flagBit, .u2:
             next = try checkFieldIDs(n.fields, next: next)
-        case .flags, .when, .group:
+        case .flags, .when, .group, .repeatRound, .timesRound:
             try expectID(n, next)
             next = try checkFieldIDs(n.fields, next: next)
         case .flagByte:
@@ -53,16 +53,16 @@ func checkPresenceMarks(_ nodes: [Node], onFlagBit: Bool) throws {
         switch n.kind {
         case .flagBit, .flags:
             try checkPresenceMarks(n.fields, onFlagBit: true)
-        case .group, .when:
+        case .group, .when, .repeatRound, .timesRound:
             try checkPresenceMarks(n.fields, onFlagBit: false)
-        case .int, .float, .bytes, .bool, .flagByte:
+        case .int, .float, .bytes, .bool, .flagByte, .sized, .u2, .slot, .bits, .packed:
             break
         }
     }
 }
 
-/// A row holds one value per name. An anchored group, `when`, `flags` and a flag bit share the place
-/// around them, and a group's own name belongs to that place too, so a name declared twice there is
+/// A row holds one value per name. An anchored group, `when`, `flags`, a flag bit, `u2`, `repeat` and
+/// `times` share the place around them, and a group's own name belongs to that place too, so a name declared twice there is
 /// refused, unless all but one of its declarations sit under a `when` (the branches of a chain may
 /// share a member).
 func checkMemberNames(_ nodes: [Node]) throws {
@@ -84,14 +84,14 @@ func checkMemberNames(_ nodes: [Node]) throws {
     func walk(_ nodes: [Node], _ conditional: Bool) throws {
         for n in nodes {
             switch n.kind {
-            case .int, .float, .bytes, .bool:
+            case .int, .float, .bytes, .bool, .sized, .slot, .bits, .packed:
                 try declare(n, conditional)
             case .group:
                 try declare(n, conditional)
                 try walk(n.fields, conditional)
             case .when:
                 try walk(n.fields, true)
-            case .flags, .flagBit:
+            case .flags, .flagBit, .u2, .repeatRound, .timesRound:
                 try walk(n.fields, conditional)
             case .flagByte:
                 break

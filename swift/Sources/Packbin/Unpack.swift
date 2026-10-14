@@ -8,18 +8,20 @@ public func unpack(_ buffer: [UInt8], _ schemes: Scheme...) throws -> Any {
 
 /// `unpack` with the schemes as an array.
 public func unpack(_ buffer: [UInt8], _ schemes: [Scheme]) throws -> Any {
-    let (scheme, values) = try dispatch(buffer, schemes)
+    let (scheme, values, reached) = try dispatch(buffer, schemes)
     guard let binding = scheme.binding else { return values }
     let box = binding.makeBox()
-    fillRow(scheme.place, box, values)
+    fillRow(scheme.place, box, values, reached)
     return binding.unbox(box)
 }
 
 /// `unpack` with the row as a map keyed by field name, for every scheme. A value has the Swift type
 /// of its field: `UInt8` to `UInt64`, `Int8` to `Int64`, `Float`, `Double`, `[UInt8]`, and `true` for
-/// a set bool or mark, and a `[String: Any]` of its members for a group that was read. A field that
-/// was not read (a clear bit, a when that did not match) has no key, so a row it returned packs again
-/// to the same bytes.
+/// a set bool or mark, a `[String: Any]` of its members for a group that was read, a `[UInt8]` for
+/// sized, bits and packed, a `UInt8` for a u2 slot, and for each name of a repeat or times round an
+/// `[Any?]` with one entry a round (`nil` where the round skipped it). A field that was not read (a
+/// clear bit, a when that did not match, a round of 0 rounds) has no key, so a row it returned packs
+/// again to the same bytes.
 public func unpackMap(_ buffer: [UInt8], _ schemes: Scheme...) throws -> [String: Any] {
     try unpackMap(buffer, schemes)
 }
@@ -29,7 +31,8 @@ public func unpackMap(_ buffer: [UInt8], _ schemes: [Scheme]) throws -> [String:
     try dispatch(buffer, schemes).1
 }
 
-private func dispatch(_ buffer: [UInt8], _ schemes: [Scheme]) throws -> (Scheme, [String: Any]) {
+private func dispatch(_ buffer: [UInt8], _ schemes: [Scheme]) throws
+    -> (Scheme, [String: Any], Set<ObjectIdentifier>) {
     if schemes.isEmpty { throw PackbinError.scheme(nil, "", "unpack needs at least one scheme") }
     var seen = ByteSet()
     for s in schemes where !seen.insert(s.typeNumber) {
@@ -43,18 +46,21 @@ private func dispatch(_ buffer: [UInt8], _ schemes: [Scheme]) throws -> (Scheme,
     var values = [String: Any](minimumCapacity: scheme.place.members.count)
     try r.fields(scheme.fields, &values)
     if r.left > 0 { throw PackbinError(.trailing, field: nil, left: r.left) }
-    return (scheme, values)
+    return (scheme, values, r.reached)
 }
 
 /// Reads a buffer from its second byte. Every read goes through `take`, which checks the bytes left
 /// first and throws `.short`, so no input reaches an index out of range.
-private struct Reader {
+struct Reader {
     let buf: [UInt8]
     /// The next byte to read; never above `buf.count`.
     var off = 1
     var flagBytes: [(tag: FlagTag, byte: UInt8)] = []
-    /// The values read so far that a when tests, by name, wherever they sit (a group shares the scope).
+    /// The values of the scope read so far that a when or a count reads, by name, wherever they sit (a
+    /// group shares the scope; a round is a scope of its own).
     var seen: [String: Any] = [:]
+    /// The rounds read (with 0 rounds or more), for a typed row.
+    var reached = Set<ObjectIdentifier>()
 
     init(_ buf: [UInt8]) { self.buf = buf }
 
@@ -116,16 +122,21 @@ private struct Reader {
                     try fields(n.fields, &inner)
                     values[n.name] = inner
                 }
+            case .sized, .u2, .bits, .packed, .repeatRound, .timesRound:
+                try counted(n, &values)
+            case .slot:
+                // A slot is read by its u2.
+                break
             }
         }
     }
 
-    private mutating func store(_ n: Node, _ v: Any, _ values: inout [String: Any]) {
+    mutating func store(_ n: Node, _ v: Any, _ values: inout [String: Any]) {
         values[n.name] = v
         if n.referenced { seen[n.name] = v }
     }
 
-    private func readUInt(_ start: Int, _ size: Int, _ bigEndian: Bool) -> UInt64 {
+    func readUInt(_ start: Int, _ size: Int, _ bigEndian: Bool) -> UInt64 {
         var x: UInt64 = 0
         for i in 0..<size {
             let shift = UInt64(bigEndian ? size &- 1 &- i : i) &* 8

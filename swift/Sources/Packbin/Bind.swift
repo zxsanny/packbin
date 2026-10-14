@@ -99,15 +99,20 @@ final class Accessor: Sendable {
     let get: @Sendable (AnyObject) -> Any?
     /// Stores a value unpack read (the Swift type of its field, a row of a group's type) into the member.
     let set: @Sendable (AnyObject, Any) -> Void
-    /// A group with members: the row type of its member.
+    /// A group with members: the row type of its member; a repeat or times: the type of its array's
+    /// elements.
     let child: ChildType?
+    /// A repeat or times: the member's array made of the rows unpack made, one a round.
+    let makeRounds: (@Sendable ([Any]) -> Any)?
 
     init(binding: Binding, get: @escaping @Sendable (AnyObject) -> Any?,
-         set: @escaping @Sendable (AnyObject, Any) -> Void, child: ChildType?) {
+         set: @escaping @Sendable (AnyObject, Any) -> Void, child: ChildType?,
+         makeRounds: (@Sendable ([Any]) -> Any)? = nil) {
         self.binding = binding
         self.get = get
         self.set = set
         self.child = child
+        self.makeRounds = makeRounds
     }
 }
 
@@ -160,10 +165,12 @@ func memberRefusal(_ node: Node, _ base: MemberBase?, _ typeName: String) -> Str
         holds = bits == 64 || node.size == 4
     case (.bool, .bool?):
         holds = true
-    case (.bytes, .bytes?):
+    case (.bytes, .bytes?), (.sized, .bytes?), (.bits, .bytes?), (.packed, .bytes?):
         return nil
-    case (.bytes, _):
+    case (.bytes, _), (.sized, _), (.bits, _), (.packed, _):
         return "a \(typeName) member cannot hold \(node.label); bind a [UInt8]"
+    case (.slot, .int?):
+        holds = true
     default:
         holds = false
     }
@@ -171,13 +178,15 @@ func memberRefusal(_ node: Node, _ base: MemberBase?, _ typeName: String) -> Str
 }
 
 extension Field {
-    /// Binds this value field (an integer, float, fixed bytes or bool) or group to a member of the
-    /// typed row `Row`: `get` reads it for pack, `set` stores it after unpack. `Member` holds every
-    /// value of the field: an integer type that holds the field's range, `Float` (f32 only) or
-    /// `Double`, `[UInt8]` for bytes, `Bool` for bool or an empty group, a ``PackbinRow`` whose
-    /// members the group's fields are bound to, or an optional of one. A nil optional is no value; a
-    /// stored 0 is a value. Every value field and group of one row (the scheme's top level, or a
-    /// group's members) is bound to the same row type, or none is.
+    /// Binds this value field (an integer, float, fixed bytes, bool, sized, bits, packed or u2 slot),
+    /// group, repeat or times to a member of the typed row `Row`: `get` reads it for pack, `set` stores
+    /// it after unpack. `Member` holds every value of the field: an integer type that holds the field's
+    /// range (any integer type for a slot), `Float` (f32 only) or `Double`, `[UInt8]` for bytes, sized,
+    /// bits and packed, `Bool` for bool or an empty group, a ``PackbinRow`` whose members the group's
+    /// fields are bound to, an array of a ``PackbinRow`` whose members a round's fields are bound to
+    /// (one element a round), or an optional of one. A nil optional is no value (a nil array writes no
+    /// round); a stored 0 is a value. Every value field, group and round of one row (the scheme's top
+    /// level, a group's members, or a round's) is bound to the same row type, or none is.
     public func bind<Row: PackbinRow, Member>(
         get: @escaping @Sendable (Row) -> Member,
         set: @escaping @Sendable (inout Row, Member) -> Void
@@ -187,12 +196,17 @@ extension Field {
         let base = memberBase(Member.self)
         let optional = Member.self is OptionalMember.Type
         let rowGroup = n.kind == .group && !n.fields.isEmpty
-        let child = rowGroup ? childType(Member.self) : nil
+        let rounds = n.isRound ? roundRows(Member.self) : nil
+        let child = rowGroup ? childType(Member.self)
+            : rounds.map { ChildType(type: ObjectIdentifier($0.rowType), typeName: String(describing: $0.rowType)) }
         let error: String?
-        if !n.isValue && n.kind != .group {
+        if !n.isValue && n.kind != .group && !n.isRound {
             error = "bind takes a value field, not \(n.label)"
         } else if n.accessor != nil {
             error = "the field is already bound"
+        } else if n.isRound {
+            error = rounds == nil ? "a \(memberName) member cannot hold the rounds of \(n.label) \(n.id ?? -1); "
+                + "bind an array of a PackbinRow" : nil
         } else if rowGroup {
             error = child == nil ? "a \(memberName) member cannot hold group \(n.name); bind a PackbinRow" : nil
         } else {
@@ -216,9 +230,15 @@ extension Field {
                 }
                 set(&box.row, member)
             },
-            child: child)
+            child: child,
+            makeRounds: n.isRound ? roundMaker(Member.self) : nil)
         return Field(n.with(accessor: accessor, error: error))
     }
+}
+
+/// Makes the array of a round's member from the rows unpack made, one a round.
+private func roundMaker<Member>(_: Member.Type) -> @Sendable ([Any]) -> Any {
+    { rows in roundRows(Member.self)?.makeRows(rows) ?? rows }
 }
 
 /// The row type of a group's member (read through one optional), or nil when it is no `PackbinRow`.

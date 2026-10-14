@@ -97,6 +97,8 @@ Then `nil` is no value (flags bit clear, or refused naming the field where a val
 
 - From AZ-2514 (loop 26): the element-kind check (an anchored group, `u2` or other kinds as a list or dict element, D2/D3 of loop 25) is built here, with the README schemes that use utf8, list and dict (AZ-2514 AC-2 remainder). `Condition.eq` takes only integers and `Bool`: no Double overload.
 
+- From AZ-2515 (loop 26): rounds record which round nodes a typed row reached (`Reader.reached`); scope this per list or dict element. Map-form round names are arrays (entry i for round i, `nil` where a round skips the name); `unpackMap` gives `[Any?]` per name. Reuse `RoundHelpers.swift` in the tests and the `Counted.swift`/`Rounds.swift` machinery; do not build a parallel path.
+
 ## Risks & Mitigation
 
 **Risk 1: Map value types**

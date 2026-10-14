@@ -22,13 +22,16 @@ public struct Scheme: Sendable {
         }
         let nodes = fields.map(\.node)
         try checkNodes(nodes)
+        try checkSlots(nodes, inU2: false)
         _ = try checkFieldIDs(nodes, next: 0)
         var met: [ObjectIdentifier: Int] = [:]
         let flat = try bindFlagBits(flatten(nodes), seen: [:], met: &met)
         try checkPresenceMarks(flat, onFlagBit: false)
         try checkMemberNames(flat)
+        try checkRoundNesting(flat, inRound: false)
+        try checkRoundBodies(flat)
         var refs = Set<String>()
-        let bound = markReferenced(try bindReferences(flat, refs: &refs), refs)
+        let bound = shapeRounds(markReferenced(try bindReferences(flat, refs: &refs), refs))
         let place = Place(bound)
         try checkBindings(place)
         self.typeNumber = typeNumber
@@ -46,9 +49,12 @@ private func flatten(_ nodes: [Node]) -> [Node] {
         switch n.kind {
         case .flags:
             out.append(contentsOf: flagsFlat(n))
-        case .when, .flagBit, .group:
+        case .flagBit:
+            // A split bit's member that is a flags stays one member: its own byte and bits.
+            out.append(n.with(fields: n.fields.flatMap(flagMember)))
+        case .when, .group, .repeatRound, .timesRound:
             out.append(n.with(fields: flatten(n.fields)))
-        case .int, .float, .bytes, .bool, .flagByte:
+        case .int, .float, .bytes, .bool, .flagByte, .sized, .u2, .slot, .bits, .packed:
             out.append(n)
         }
     }
@@ -59,10 +65,14 @@ private func flagsFlat(_ n: Node) -> [Node] {
     let tag = FlagTag("")
     var out = [Node(.flagByte, id: n.id, tag: tag, inOrder: true)]
     for (bit, child) in n.fields.enumerated() {
-        let member = child.kind == .flags ? [child.with(fields: flagsFlat(child))] : flatten([child])
-        out.append(Node(.flagBit, id: nil, fields: member, tag: tag, bit: bit))
+        out.append(Node(.flagBit, id: nil, fields: flagMember(child), tag: tag, bit: bit))
     }
     return out
+}
+
+/// The member of a flag bit: a flags keeps its own byte and bits as its fields.
+private func flagMember(_ child: Node) -> [Node] {
+    child.kind == .flags ? [child.with(fields: flagsFlat(child))] : flatten([child])
 }
 
 /// One read of a flag byte while a scheme is built: its own tag, and the bits taken so far.
@@ -73,9 +83,9 @@ private final class FlagRead {
 }
 
 /// Gives each read of a flag byte an identity of its own and numbers its bits by their place after it.
-/// A bit reads the flag byte of its own scope, read before it: the top level or a when body (which
-/// also sees the bytes read before it around it); each flags member sees the scope too, and a group
-/// shares the scope around it.
+/// A bit reads the flag byte of its own scope, read before it: the top level, a repeat or times round,
+/// or a when body (which also sees the bytes read before it around it); each flags member sees the
+/// scope too, and a group shares the scope around it.
 private func bindFlagBits(_ nodes: [Node], seen: [ObjectIdentifier: FlagRead],
                           met: inout [ObjectIdentifier: Int]) throws -> [Node] {
     var seen = seen
@@ -121,7 +131,10 @@ private func bindBits(_ n: Node, seen: inout [ObjectIdentifier: FlagRead],
         fields.reserveCapacity(n.fields.count)
         for child in n.fields { fields.append(try bindBits(child, seen: &seen, met: &met)) }
         return n.with(fields: fields)
-    case .int, .float, .bytes, .bool:
+    case .repeatRound, .timesRound:
+        // A round is a scope of its own: it sees no byte read around it.
+        return n.with(fields: try bindFlagBits(n.fields, seen: [:], met: &met))
+    case .int, .float, .bytes, .bool, .sized, .u2, .slot, .bits, .packed:
         return n
     }
 }
