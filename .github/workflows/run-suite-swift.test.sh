@@ -48,9 +48,9 @@ case "$step" in
     if [ -z "${SWIFT_NO_SPEED:-}" ]; then echo 'PackbinTests.SpeedTests/roundTrips(form:)'; fi
     if [ -n "${SWIFT_FUZZ:-}" ]; then echo 'PackbinTests.FuzzTests/unpack_corpusAndRandom()'; fi
     echo 'PackbinTests.GoldenTests/pack_goldenRow()'
-    if [ -z "${SWIFT_NO_SESSION:-}" ]; then echo 'PackbinTests.SessionTests/start_twice()'; fi
-    echo 'PackbinTests.SessionHostileTests/nonce_reuse()'
-    echo 'PackbinTests.ConcurrencyTests/oneScheme_manyTasks()' ;;
+    for suite in SessionTests SessionHostileTests ConcurrencyTests; do
+      [ "$suite" = "${SWIFT_NO_SUITE:-}" ] || echo "PackbinTests.$suite/case()"
+    done ;;
   fuzz)
     echo "fuzz seconds ${PACKBIN_FUZZ_SECONDS:-unset}" >> "$SWIFT_LOG.env"
     sleep "${SWIFT_FUZZ_SLEEP:-0}" ;;
@@ -77,6 +77,8 @@ mkdir -p "$swroot/swift/Sources/Packbin" "$swroot/fixtures" "$swroot/.github/wor
 cp "$repo/fixtures/golden.hex" "$swroot/fixtures/golden.hex"
 cp "$work/src/.github/workflows/report-row.sh" "$swroot/.github/workflows/"
 : > "$swroot/Package.swift"
+mkdir -p "$swroot/swift/Tests/PackbinTests"
+printf 'func f() async { await withTaskGroup(of: Int.self) { _ in } }\n' > "$swroot/swift/Tests/PackbinTests/ConcurrencyTests.swift"
 swscratch="$work/swift-scratch"
 
 run_swift() { # lang tree [VAR=value ...]: runs run-suite.sh <lang> with the fake swift first on PATH
@@ -122,6 +124,7 @@ o="--package-path $swroot --scratch-path $swscratch --force-resolved-versions"
 out="$(run_swift swift "$swroot" SWIFT_FUZZ=1)"; code=$?
 [ "$code" -eq 0 ] || bad "swift: a clean tree failed (exit $code): $out"
 sw_row_is swift "PASS "
+case "$out" in *"run-suite: swift step took "*" s: swift_resolve"*) ;; *) bad "swift: no step timing line in the output: $out" ;; esac
 expected="swift package $o resolve
 swift build $o -c release -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete
 swift build $o --build-tests
@@ -178,10 +181,20 @@ case "$out" in *"no SpeedTests suite"*) ;; *) bad "swift: no message for the mis
 if sw_ran "-c release --build-tests"; then bad "swift: the speed build ran without a SpeedTests suite"; fi
 
 # S6b. a suite of the thread-sanitizer run is gone from the list: the step fails by name, the filter never runs
-out="$(run_swift swift "$swroot" SWIFT_NO_SESSION=1)"; code=$?
-[ "$code" -ne 0 ] || bad "swift: a tree without SessionTests passed"
-case "$out" in *"no SessionTests suite"*) ;; *) bad "swift: no message for the missing SessionTests suite: $out" ;; esac
-if sw_ran "--sanitize=thread --verbose"; then bad "swift: the sanitized tests ran without a SessionTests suite"; fi
+for suite in SessionTests SessionHostileTests ConcurrencyTests; do
+  out="$(run_swift swift "$swroot" SWIFT_NO_SUITE="$suite")"; code=$?
+  [ "$code" -ne 0 ] || bad "swift: a tree without $suite passed"
+  case "$out" in *"no $suite suite"*) ;; *) bad "swift: no message for the missing $suite suite: $out" ;; esac
+  if sw_ran "--sanitize=thread --verbose"; then bad "swift: the sanitized tests ran without a $suite suite"; fi
+done
+
+# S6c. a test file that uses threads outside the sanitized suites fails by name; the allowed file passes (S2)
+printf 'func f() async { await withTaskGroup(of: Int.self) { _ in } }\n' > "$swroot/swift/Tests/PackbinTests/RaceTests.swift"
+out="$(run_swift swift "$swroot")"; code=$?
+rm -f "$swroot/swift/Tests/PackbinTests/RaceTests.swift"
+[ "$code" -ne 0 ] || bad "swift: a threaded test file outside the sanitized suites passed"
+case "$out" in *"use threads outside"*"RaceTests.swift"*) ;; *) bad "swift: the threaded file is not named: $out" ;; esac
+if sw_ran "--sanitize=thread --verbose"; then bad "swift: the sanitized tests ran with a threaded file outside the suites"; fi
 
 # S7 (SW-11). a second package, a target that is not Swift, an unsafe flag or an unreadable describe fails and is
 # named; swift-crypto alone (S2) passes and no dependency fails (SW-11 asks for exactly one)
