@@ -96,8 +96,18 @@ sw_gate_checks() {
 # A stand-in `swift` for ring-swift.sh: logs each call and writes the two programs into the --scratch-path of a build;
 # position prints the golden hex.
 sw_write_ring_swift() {
-  cat > "$1/swift" <<'EOF'
+  local pin
+  pin="$(bash "$sw_wf/tool-pin.sh" swift)"
+  # On Linux ring-swift.sh uses the swift on PATH only when --version names the pinned Swift; otherwise it builds in
+  # the swift:<pin> image (a runner carries another Swift), so the stand-in answers --version with the pin.
+  cat > "$1/swift" <<EOF
 #!/usr/bin/env bash
+if [ "\${1:-}" = --version ]; then
+  echo "Swift version $pin (stub)"
+  exit 0
+fi
+EOF
+  cat >> "$1/swift" <<'EOF'
 echo "swift $*" >> "$SW_RING_LOG"
 prev=""
 for arg in "$@"; do
