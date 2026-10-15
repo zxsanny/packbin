@@ -253,7 +253,7 @@ write_fake_swift() {
   cat > "$1/swift" <<'FAKE'
 #!/usr/bin/env bash
 echo "swift $*" >> "$FAKE_SWIFT_LOG"
-if [ "${1:-}" = --version ]; then echo "Swift version 6.1.2 (swift-6.1.2-RELEASE)"; exit 0; fi
+if [ "${1:-}" = --version ]; then echo "Swift version ${FAKE_SWIFT_VERSION:?} (swift-${FAKE_SWIFT_VERSION}-RELEASE)"; exit 0; fi
 while [ $# -gt 0 ]; do
   if [ "$1" = --scratch-path ] && [ ! -e "$2/release/position" ]; then mkdir -p "$2/release"; printf '#!/bin/sh\n' | tee "$2/release/handoff-swift" > "$2/release/position"; chmod +x "$2/release/"*; fi
   shift
@@ -262,10 +262,29 @@ FAKE
   chmod +x "$1/swift"
 }
 
+# write_fake_docker <bin dir>: a stand-in `docker` that logs each call, prints the pinned Swift for `swift --version`
+# and writes the two binaries into the --scratch-path of a build (the image build of ring-swift.sh).
+write_fake_docker() {
+  cat > "$1/docker" <<'FAKE'
+#!/usr/bin/env bash
+echo "docker $*" >> "$FAKE_SWIFT_LOG"
+case " $* " in *" --version "*) echo "Swift version ${FAKE_DOCKER_SWIFT:?} (swift-${FAKE_DOCKER_SWIFT}-RELEASE)"; exit 0 ;; esac
+while [ $# -gt 0 ]; do
+  if [ "$1" = --scratch-path ] && [ ! -e "$2/release/position" ]; then mkdir -p "$2/release"; printf '#!/bin/sh\n' | tee "$2/release/handoff-swift" > "$2/release/position"; chmod +x "$2/release/"*; fi
+  shift
+done
+FAKE
+  chmod +x "$1/docker"
+}
+
 # ring-swift.sh against a temp tree: it builds once, skips while no source is newer, rebuilds after a source
-# changes (once, though the binaries keep their time), and prints the version of the Swift on PATH.
+# changes (once, though the binaries keep their time), and prints the version of the Swift on PATH. On a Linux host
+# (a stand-in `uname`) with a Swift other than the pin it builds in the swift:<pin> image and reports the image's
+# version; with the pinned Swift it uses it.
 ring_swift_checks() {
-  local tree="$tmp/tree" bin="$tmp/fake-bin" log="$tmp/fake-swift.log" builds version
+  local tree="$tmp/tree" bin="$tmp/fake-bin" log="$tmp/fake-swift.log" builds version pin
+  pin="$(bash "$here/tool-pin.sh" swift)"
+  export FAKE_SWIFT_VERSION="$pin"
   mkdir -p "$tree/.github/workflows/drivers/handoff-swift" "$tree/swift/Sources/Packbin" "$bin"
   cp "$here/ring-swift.sh" "$here/tool-pin.sh" "$here/tool-pins.txt" "$tree/.github/workflows/"
   : > "$tree/Package.swift"; : > "$tree/Package.resolved"; : > "$tree/swift/Sources/Packbin/A.swift"
@@ -289,7 +308,36 @@ ring_swift_checks() {
   if [ "$builds" = 2 ]; then echo "builds once more only: the binaries of a no-op build stay old"; else fail "a call after the rebuild built again ($builds builds)"; fi
   grep -q -- "--scratch-path $tmp/scratch" "$log" || fail "the build did not use the scratch dir: $(cat "$log")"
   version="$(PATH="$bin:$PATH" FAKE_SWIFT_LOG="$log" bash "$tree/.github/workflows/ring-swift.sh" --version < /dev/null)"
-  if [ "$version" = 6.1.2 ]; then echo "prints the version: $version"; else fail "--version printed [$version], expected 6.1.2"; fi
+  if [ "$version" = "$pin" ]; then echo "prints the version: $version"; else fail "--version printed [$version], expected $pin"; fi
+  ring_swift_linux_checks "$tree" "$pin"
+}
+
+# A Linux host (stand-in uname) whose Swift is newer than the pin, as ubuntu-latest is: the drivers are built in
+# the swift:<pin> image, not with that Swift, and --version reports the image's.
+ring_swift_linux_checks() {
+  local tree="$1" pin="$2" lbin="$tmp/linux-bin" log="$tmp/linux-swift.log" version scratch="$tmp/linux-scratch"
+  mkdir -p "$lbin"
+  printf '#!/bin/sh\n[ "$1" = -s ] && echo Linux || exec /usr/bin/uname "$@"\n' > "$lbin/uname"; chmod +x "$lbin/uname"
+  write_fake_swift "$lbin"; write_fake_docker "$lbin"
+  : > "$log"
+  version="$(PATH="$lbin:$PATH" FAKE_SWIFT_VERSION=6.4 FAKE_DOCKER_SWIFT="$pin" FAKE_SWIFT_LOG="$log" \
+    bash "$tree/.github/workflows/ring-swift.sh" --version < /dev/null)"
+  if [ "$version" = "$pin" ]; then echo "linux host, another Swift: --version reports the image's $version"; else fail "linux --version printed [$version], expected the image's $pin"; fi
+  PATH="$lbin:$PATH" FAKE_SWIFT_VERSION=6.4 FAKE_DOCKER_SWIFT="$pin" FAKE_SWIFT_LOG="$log" \
+    bash "$tree/.github/workflows/ring-swift.sh" "$scratch" < /dev/null
+  if grep -q "^docker run .* swift:$pin swift build -c release --static-swift-stdlib" "$log" && ! grep -q '^swift build' "$log"; then
+    echo "linux host, another Swift: the drivers build in the swift:$pin image"
+  else
+    fail "a Linux host with Swift 6.4 did not build in the image: $(cat "$log")"
+  fi
+  : > "$log"; rm -rf "$scratch"
+  version="$(PATH="$lbin:$PATH" FAKE_SWIFT_VERSION="$pin" FAKE_SWIFT_LOG="$log" bash "$tree/.github/workflows/ring-swift.sh" --version < /dev/null)"
+  PATH="$lbin:$PATH" FAKE_SWIFT_VERSION="$pin" FAKE_SWIFT_LOG="$log" bash "$tree/.github/workflows/ring-swift.sh" "$scratch" < /dev/null
+  if [ "$version" = "$pin" ] && grep -q '^swift build -c release ' "$log" && ! grep -q '^docker' "$log"; then
+    echo "linux host, the pinned Swift: it builds the drivers"
+  else
+    fail "a Linux host with the pinned Swift did not use it: version [$version] $(cat "$log")"
+  fi
 }
 
 if ! command -v ruby > /dev/null; then

@@ -10,10 +10,12 @@
 # call it before every driver command (as the go case does). The stamp, not the binaries: a build that finds
 # nothing to compile leaves them old, and every later call would build again.
 #
-# With `swift` on PATH (the ring job: the runner's Swift; the owner's Mac: the local toolchain) it builds with
-# it. Without, on a Linux host it builds in the swift:$RING_SWIFT image (default: the tool-pins.txt `swift`
-# pin, the Swift suite image) with the Swift runtime linked in (--static-swift-stdlib), so the binaries run on
-# the host. The container sees the repo and the scratch dir at the host paths and runs as the caller.
+# With `swift` on PATH it builds with it on the owner's Mac (the local toolchain) and on a Linux host whose Swift is
+# the pinned one. On a Linux host (the ring job) with another Swift, or none, it builds in the swift:$RING_SWIFT
+# image (default: the tool-pins.txt `swift` pin, the Swift suite image) with the Swift runtime linked in
+# (--static-swift-stdlib), so the binaries run on the host: ubuntu-latest carries a newer Swift than the pin (6.4
+# against 6.3.3 on 2026-10-15) and the ring must build with the toolchain the suites use. The container sees the
+# repo and the scratch dir at the host paths and runs as the caller.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,13 +23,26 @@ root="$(cd "$here/../.." && pwd)"
 driver="$here/drivers/handoff-swift"
 tag="${RING_SWIFT:-$(bash "$here/tool-pin.sh" swift)}"
 
+version_of() { sed -n 's/.*Swift version \([0-9][0-9.]*\).*/\1/p' <<< "$1" | sed -n 1p; }
+
+# Whether the swift on PATH builds the drivers: always on a host that is not Linux (the owner's Mac); on Linux only
+# when it is the pinned version, compared to the precision of the pin as ring-toolchains.sh does.
+use_local_swift() {
+  command -v swift > /dev/null || return 1
+  [ "$(uname -s)" != Linux ] && return 0
+  local fields found
+  fields="$(awk -F. '{ print NF }' <<< "$tag")"
+  found="$(version_of "$(swift --version 2>&1)" | cut -d. -f1-"$fields")"
+  [ "$found" = "$tag" ]
+}
+
 if [ "${1:-}" = --version ]; then
-  if command -v swift > /dev/null; then
+  if use_local_swift; then
     full="$(swift --version 2>&1)"
   else
     full="$(docker run --rm -i "swift:$tag" swift --version 2>&1 < /dev/null)"
   fi
-  version="$(sed -n 's/.*Swift version \([0-9][0-9.]*\).*/\1/p' <<< "$full" | sed -n 1p)"
+  version="$(version_of "$full")"
   if [ -z "$version" ]; then
     echo "ring-swift.sh: no Swift version in: $full" >&2
     exit 1
@@ -58,14 +73,14 @@ stamp="$scratch/ring-swift.built"
 # The stamp gets the time the build starts, so a source saved during the build is newer than it.
 touch "$stamp.new"
 # The build log goes to stderr: language-pair.sh compares the stdout of a pack call with the expected hex.
-if command -v swift > /dev/null; then
+if use_local_swift; then
   swift build -c release --package-path "$driver" --scratch-path "$scratch" >&2
   mv "$stamp.new" "$stamp"
   exit 0
 fi
 
 if [ "$(uname -s)" != Linux ]; then
-  echo "ring-swift.sh: no swift on PATH; the swift:$tag image builds Linux binaries only, not for $(uname -s)" >&2
+  echo "ring-swift.sh: no usable swift on PATH; the swift:$tag image builds Linux binaries only, not for $(uname -s)" >&2
   exit 1
 fi
 mounts=(-v "$root:$root")
