@@ -10,7 +10,7 @@ Read `_docs/loops/loop28/record28.md`, `review28.md`, `assessment28.md`, the "Lo
 
 ## Do first
 
-1. Read the CI runs of the close push (`dev` and `main`): SP-2 needs two runs at most 25 minutes (run 1 was 22 min 51 s).
+1. The CI runs of the close push were green (`dev` 19 min 5 s, `main` 23 min 12 s): SP-2 is met. This note and the CI lines were committed after the close push and are unpushed until the owner's go; check `git status -sb`.
 2. Hopper: `todo/` holds AZ-2068 only (held as optional for 9 loops); no intake leftover.
 3. Candidate work (owner picks): cut the gate (readonly, phases, swift, gate groups: read what each does and where a fresh state per scenario is needed for a mutation proof, as in loop 27 CG-6); the `suites` matrix; review28 #3, #4; AZ-2068.
 4. Owner only: F44 and the first tags.

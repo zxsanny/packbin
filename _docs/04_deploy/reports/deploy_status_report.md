@@ -72,3 +72,7 @@ See `_docs/05_security/swift_peak_memory_loop28.md`: F10 packet 731 MB (macOS) a
 
 Run 38731123341, `test.yml`, five jobs all `success`, started together at 11:58:07 to 11:58:08: `scaffold` 53 s, `ring` 4 min 45 s, `embedded` 6 min 3 s, `suites` 17 min 17 s (the suites step 1 030 s), `publish-gate` 22 min 50 s (pull images 96 s, publish gate step 1 269 s). End to end 22 min 51 s against 33 to 38 minutes for the single `scaffold` job (SP-1 met; SP-2 met once, the close push of `dev` and `main` gives the second run). The wall time is now the gate job; the gate's four large groups (swift 284 s, readonly 263 s, phases 251 s, gate 191 s on the Mac) are where it is cut next.
 
+### CI runs of `182fbba` (loop 28 close, `dev` and `main`, 2026-10-15): PASS
+
+Runs 38736351180 (`dev`) and 38736693696 (`main`), `test.yml`, all five jobs `success` in both: `scaffold` 63 s and 50 s, `ring` 287 s and 304 s, `embedded` 354 s and 352 s, `suites` 1 044 s and 876 s, `publish-gate` 1 144 s and 1 392 s; end to end 19 min 5 s (`dev`) and 23 min 12 s (`main`). With run 38731123341 (22 min 51 s) that is 3 of 3 runs under 25 minutes: SP-2 met. The `main` run was 4 minutes slower on the gate job than the `dev` run on the same code; the spread between runs is about that size, so 25 minutes is tight when the runner is slow.
+

@@ -5,7 +5,7 @@ branch: dev
 plan_artifact: _docs/loops/loop28/plan28.md
 tasks_shipped: [AZ-2563, AZ-2564, AZ-2565, AZ-2566, AZ-2567]
 leftovers:
-  - SP-2 needs a second CI run at most 25 minutes: the close push (`dev` and `main`) is the second run; read it at the start of loop 29 if not done at close
+  - SP-2 met after the close: 3 runs at most 25 minutes (22 min 51 s, and the close push on `dev` 19 min 5 s and on `main` 23 min 12 s, runs 38736351180 and 38736693696); the gate job varies by about 4 minutes between runs, so 25 is tight
   - the gate's four large groups (Mac figures: swift 284 s, readonly 263 s, phases 251 s, gate 191 s of 1 059 s) are where the gate is cut next; on the runner the gate step is 1 269 s
   - the `suites` job (17 min) is now the second-longest; a matrix of one job per language is Option B of Card 1 if the gate is cut below it
   - review28 #4: the pattern "delete a bind-mounted path on the host, then start a container" is not audited in other scripts; #3 the global EXIT trap of `publish-timing.test.sh`
