@@ -36,3 +36,10 @@ Runs 38588698291 (`dev`) and 38588700455 (`main`), `test.yml`. `embedded` PASS (
 - Likely cause: `ring` — `ring-toolchains.sh` compares the runner's Swift with `RING_SWIFT` (6.3.3) at full precision and `ubuntu-latest` carries another Swift (or none that matches); read-only evidence is the step name and exit 1, the log itself needs a signed-in GitHub session (403 unauthenticated). `publish gate` — unknown without its log: one run passed on the same commit.
 - Flaky vs real: `ring` real and deterministic (both runs); `publish gate` flaky or environment (same commit, one PASS and one FAIL).
 - Next canonical action: read the two job logs (runs above, jobs 115937491350 and 115937490795); for `ring`, build the Swift drivers in the pinned `swift:6.3.3` image whenever the runner's Swift differs (as `ring-cxx.sh` does for GCC) and fix on `dev`, push again; for the gate, find the failing check at log line 1966.
+
+## CI run of `aefaf37` (ring fix push to `dev`, 2026-10-15): FAIL, `publish gate` only
+
+Run 38682003152, `test.yml`. `ring` PASS (4 min 44 s: the Swift fix of `aefaf37` holds on the runner), `embedded` PASS (5 min 43 s), `scaffold` FAIL at step 11 `publish gate` after 30 min 20 s (04:53:55 to 05:24:15); its `suites` step passed.
+- Likely cause: the gate runs about 30 min on the runner against 1 837 s (30.6 min) on the owner's Mac and 19 min in the failed `f30c87e` run, so the step ends by a time or resource limit or a Swift-scenario failure; the log needs a signed-in GitHub session (403 unauthenticated), the failing check is unread.
+- Flaky vs real: not flaky any more: `f30c87e` passed the gate once and failed once, `aefaf37` failed; the Swift gate scenarios (loop 26) are the only change since the last green gate (`b81102f`).
+- Next canonical action: the owner reads the gate log of job 116248405906 (the failing check name and last lines), or loop 27 reproduces the gate with the Swift scenarios in the CI image; then fix on `dev` and push again.
