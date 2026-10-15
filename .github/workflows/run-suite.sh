@@ -15,7 +15,12 @@ run() {
   if [ "$ok" -ne 0 ]; then
     return
   fi
+  local step_started step_label
+  step_started=$(date +%s)
   "$@" || ok=1
+  # The time of each step, so a slow stage shows which step costs it (swift_opts is the same on every Swift step).
+  step_label="${*//--package-path * --force-resolved-versions/}"
+  printf 'run-suite: %s step took %s s: %s\n' "$lang" "$(( $(date +%s) - step_started ))" "${step_label:0:110}" >&2
 }
 
 # A suite whose manifest is missing has nothing to run: it fails, as Go always did (AZ-2448 AC-3, AZ-2477), so a
@@ -121,6 +126,22 @@ swift_speed() {
   swift build "${swift_opts[@]}" -c release --build-tests || return 1
   # The 1 MiB hostile unpack (FuzzTests/mebibyte, SW-4) is timed in the same release run: a debug build is about 7 times slower.
   swift test "${swift_opts[@]}" -c release --skip-build --verbose --filter '\.SpeedTests/' --filter '\.FuzzTests/mebibyte'
+}
+
+# The thread sanitizer runs the suites that use threads: the concurrency suite (a task group over one scheme) and the
+# session suites. The library has no lock or mutable shared state, and the other suites are single-threaded, where the
+# sanitizer cost 368 s of the 651 s stage (loop 27). A suite that is gone from the list fails the step: a filter that
+# matches nothing would pass with no test run.
+swift_sanitized() {
+  local suite
+  for suite in ConcurrencyTests SessionTests SessionHostileTests; do
+    if ! grep -q "\.$suite/" <<< "$swift_tests"; then
+      printf 'run-suite: swift has no %s suite; the thread-sanitizer run would not run it\n' "$suite" >&2
+      return 1
+    fi
+  done
+  swift test "${swift_opts[@]}" --skip-build --sanitize=thread --verbose \
+    --filter '\.ConcurrencyTests/' --filter '\.SessionTests/' --filter '\.SessionHostileTests/'
 }
 
 # SW-11: exactly one package dependency, swift-crypto (what swift-crypto itself requires is its business), no
@@ -260,7 +281,7 @@ case "$lang" in
       run swift_fuzz
       # SW-14: a race reported by the thread sanitizer fails the run (its exit code is 66).
       run swift build "${swift_opts[@]}" --build-tests --sanitize=thread
-      run swift test "${swift_opts[@]}" --skip-build --sanitize=thread --verbose
+      run swift_sanitized
       run swift_speed
       run swift_deps
     fi

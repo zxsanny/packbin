@@ -47,7 +47,10 @@ case "$step" in
   list)
     if [ -z "${SWIFT_NO_SPEED:-}" ]; then echo 'PackbinTests.SpeedTests/roundTrips(form:)'; fi
     if [ -n "${SWIFT_FUZZ:-}" ]; then echo 'PackbinTests.FuzzTests/unpack_corpusAndRandom()'; fi
-    echo 'PackbinTests.GoldenTests/pack_goldenRow()' ;;
+    echo 'PackbinTests.GoldenTests/pack_goldenRow()'
+    if [ -z "${SWIFT_NO_SESSION:-}" ]; then echo 'PackbinTests.SessionTests/start_twice()'; fi
+    echo 'PackbinTests.SessionHostileTests/nonce_reuse()'
+    echo 'PackbinTests.ConcurrencyTests/oneScheme_manyTasks()' ;;
   fuzz)
     echo "fuzz seconds ${PACKBIN_FUZZ_SECONDS:-unset}" >> "$SWIFT_LOG.env"
     sleep "${SWIFT_FUZZ_SLEEP:-0}" ;;
@@ -126,7 +129,7 @@ swift test $o --skip-build --verbose
 swift test list $o --skip-build
 swift test $o --skip-build --verbose --filter \\.FuzzTests/
 swift build $o --build-tests --sanitize=thread
-swift test $o --skip-build --sanitize=thread --verbose
+swift test $o --skip-build --sanitize=thread --verbose --filter \\.ConcurrencyTests/ --filter \\.SessionTests/ --filter \\.SessionHostileTests/
 swift build $o -c release --build-tests
 swift test $o -c release --skip-build --verbose --filter \\.SpeedTests/ --filter \\.FuzzTests/mebibyte
 swift package $o describe --type json
@@ -173,6 +176,12 @@ out="$(run_swift swift "$swroot" SWIFT_NO_SPEED=1)"; code=$?
 [ "$code" -ne 0 ] || bad "swift: a tree without SpeedTests passed"
 case "$out" in *"no SpeedTests suite"*) ;; *) bad "swift: no message for the missing SpeedTests suite: $out" ;; esac
 if sw_ran "-c release --build-tests"; then bad "swift: the speed build ran without a SpeedTests suite"; fi
+
+# S6b. a suite of the thread-sanitizer run is gone from the list: the step fails by name, the filter never runs
+out="$(run_swift swift "$swroot" SWIFT_NO_SESSION=1)"; code=$?
+[ "$code" -ne 0 ] || bad "swift: a tree without SessionTests passed"
+case "$out" in *"no SessionTests suite"*) ;; *) bad "swift: no message for the missing SessionTests suite: $out" ;; esac
+if sw_ran "--sanitize=thread --verbose"; then bad "swift: the sanitized tests ran without a SessionTests suite"; fi
 
 # S7 (SW-11). a second package, a target that is not Swift, an unsafe flag or an unreadable describe fails and is
 # named; swift-crypto alone (S2) passes and no dependency fails (SW-11 asks for exactly one)
