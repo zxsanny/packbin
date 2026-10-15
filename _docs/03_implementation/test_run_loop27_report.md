@@ -24,7 +24,7 @@ Total 1 626 s. Exit 0.
 
 ## The cpp pool failure
 
-The first `cpp` run failed in the pool: `ld: cannot open output file build/packbin_tests: No such file or directory` (`cpp.first.log`). `cpp/build/` is shared with the `scaffold` stage (which builds C++ in a container at the same time); one stage removed the directory while the other linked. No file of `cpp/` changed in this loop. The script's own rule (re-run alone, keep both results) applied; this is not a clean pass and is carried as a leftover (pool race, pre-existing).
+The first `cpp` run failed in the pool: `ld: cannot open output file build/packbin_tests: No such file or directory` (`cpp.first.log`). Corrected in loop 28 (AZ-2565): this was not a race with `scaffold` (it never builds C++). The `cpp` stage ran `make -C cpp clean` on the host and started its container at once; Docker Desktop showed the container the old `cpp/build` for about a second after the host delete, so `mkdir -p build` found the old directory and the link failed. The stage now cleans inside the container. The script's own rule (re-run alone, keep both results) applied; this was not a clean pass.
 
 ## CI
 

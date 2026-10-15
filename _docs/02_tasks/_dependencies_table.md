@@ -285,3 +285,10 @@ AZ-2513 through AZ-2524 are loop 26, the Swift package (epic AZ-2223; owner deci
 | AZ-2522 | swift_ring | 3 | AZ-2518 | AZ-2223 |
 | AZ-2523 | swift_release | 5 | AZ-2521, AZ-2522 | AZ-2223 |
 | AZ-2524 | swift_readme | 2 | AZ-2520, AZ-2523 | AZ-2223 |
+| AZ-2563 | ci_gate_timings | 2 | None | AZ-2223 |
+| AZ-2564 | ci_job_split | 5 | AZ-2563 | AZ-2223 |
+| AZ-2565 | cpp_pool_race | 3 | None | AZ-2223 |
+| AZ-2566 | swift_limit_docs | 1 | None | AZ-2223 |
+| AZ-2567 | swift_peak_memory | 2 | None | AZ-2223 |
+
+AZ-2563 through AZ-2567 are loop 28 (owner 2026-10-15: speed check, then the S3 limit, the cpp pool race and the small leftovers; speed set accepted as recommended). AZ-2564 waits for AZ-2563 (both edit `publish-gate.test.sh`). AZ-2565 owns `scripts/loop-tests.sh` and its test; AZ-2566 owns README and ADR-005; AZ-2567 owns only a scratchpad driver and a record entry. AZ-2068 stays out.

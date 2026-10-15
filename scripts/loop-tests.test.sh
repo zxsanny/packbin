@@ -140,5 +140,28 @@ echo dirty >> "$repo/README.md"
 PATH="$shims:$PATH" CALLS="$tmp/calls" LOOP_TESTS_ROOT="$repo" LOOP_TESTS_STAMPS="$stamps" bash "$script" --all --only rust < /dev/null > /dev/null || bad "execution: rust failed on the dirty tree"
 [ ! -f "$stamps/rust" ] || bad "execution: a stamp was written from a dirty tree"
 
+# 15. the cpp stage does not write cpp/build on the host (AZ-2565). The container mounts the repository, and Docker Desktop
+# shows a container started within about a second of a host `rm -rf` the directory as it was: `mkdir -p build` found the
+# old one, the link then failed with "cannot open output file build/packbin_tests". The stage cleans inside the container.
+# cpp_host_writes <script>: runs the cpp stage with a recording `make` and `docker`; prints a line for each host-side make
+# and, when the container command does not clean cpp/build itself, one for that.
+cpp_host_writes() {
+  local sh="$tmp/cpp-shims" log="$tmp/cpp-calls"
+  rm -rf "$sh" "$log"; mkdir -p "$sh"
+  printf '#!/bin/sh\necho "host make $*" >> "%s"\n' "$log" > "$sh/make"
+  printf '#!/bin/sh\necho "docker $*" >> "%s"\n' "$log" > "$sh/docker"
+  chmod +x "$sh/make" "$sh/docker"
+  PATH="$sh:$PATH" LOOP_TESTS_ROOT="$repo" LOOP_TESTS_STAMPS="$tmp/cpp-stamps" bash "$1" --all --only cpp < /dev/null > /dev/null 2>&1 || true
+  grep '^host make' "$log" || true
+  grep -q '^docker .* make -C /src/cpp clean' "$log" || echo "the container command of the cpp stage does not run make -C /src/cpp clean"
+}
+out="$(cpp_host_writes "$script")"
+[ -z "$out" ] || bad "cpp stage: writes cpp/build from the host and from its container (stage cpp, path cpp/build): $out"
+# The old stage command put back must be rejected.
+mutant="$tmp/loop-tests-old-cpp.sh"
+sed 's|^    cpp) docker compose .*|    cpp) make -C cpp clean \&\& docker compose -f docker-compose.test.yml run --rm cpp ;;|' "$script" > "$mutant"
+cmp -s "$script" "$mutant" && bad "cpp stage: the mutant (the old command) was not applied"
+[ -n "$(cpp_host_writes "$mutant")" ] || bad "cpp stage: the old command (host make clean, then the container) was not rejected"
+
 if [ "$fail" -eq 0 ]; then echo "loop-tests.test.sh: all checks passed"; fi
 exit "$fail"

@@ -38,6 +38,7 @@ static_checks() {
   if [ -z "$gate_line" ] || [ -z "$publish_line" ] || [ "$gate_line" -ge "$publish_line" ]; then
     fail "registries run before the golden gate"
   fi
+  bash "$here/publish-timing.selftest.sh" || fail "AZ-2563 publish-timing.selftest.sh failed"
 }
 
 registry_checks() {
@@ -314,7 +315,7 @@ unless push.is_a?(Hash) && !as_list.call(push["branches"]).empty? &&
   errors << "test.yml push is not limited to branches"
 end
 errors << "test.yml permissions are not contents: read" unless test_wf["permissions"] == read_only
-%w[scaffold embedded].each do |name|
+%w[scaffold suites publish-gate embedded].each do |name|
   job = test_wf["jobs"][name]
   errors << "test.yml has no #{name} job" if job.nil?
   errors << "test.yml #{name} has no timeout-minutes" if job && !job.key?("timeout-minutes")
@@ -385,6 +386,7 @@ workflow_checks() {
   fi
   grep -q 'set -euo pipefail' "$test_yml" || fail "AC-5 a failing suite does not fail the job"
   grep -q 'docker compose -f docker-compose.test.yml run --rm' "$test_yml" || fail "AC-5 suites"
+  bash "$here/publish-jobs.test.sh" || fail "AZ-2564 publish-jobs.test.sh failed"
 
   local tmp
   tmp="$(mktemp -d)"
@@ -464,21 +466,24 @@ source "$here/publish-readonly.test.sh"
 source "$here/publish-go.test.sh"
 # shellcheck source=publish-swift.test.sh
 source "$here/publish-swift.test.sh"
+# shellcheck source=publish-timing.test.sh
+source "$here/publish-timing.test.sh"
 
-static_checks
-crates_token_checks
-registry_checks
-vcpkg_checks
-gate_checks
-go_checks
-swift_checks
-manifest_checks
-npm_dist_checks
-bash "$here/publish-position.test.sh" || fail "AZ-2238 AC-1 AC-2 publish-position.test.sh failed"
-workflow_checks
-pins_checks
-phase_checks
-readonly_checks
+timed static static_checks
+timed crates-token crates_token_checks
+timed registry registry_checks
+timed vcpkg vcpkg_checks
+timed gate gate_checks
+timed go go_checks
+timed swift swift_checks
+timed manifest manifest_checks
+timed npm npm_dist_checks
+timed position position_checks
+timed workflow workflow_checks
+timed pins pins_checks
+timed phases phase_checks
+timed readonly readonly_checks
+timed_total
 
 if [ "$failures" -ne 0 ]; then
   echo "$failures failure(s)" >&2

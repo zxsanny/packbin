@@ -9,7 +9,7 @@ for lang in $langs; do
   grep -q "^  ${lang}:" docker-compose.test.yml
   grep -q "^  ${lang}:" docker-compose.publish.yml
 done
-# The scaffold job runs a suite for each of the eight services.
+# The suites job runs a suite for each of the eight services.
 grep -qx "          for lang in ${langs}; do" .github/workflows/test.yml
 if grep -q 'ports:' docker-compose.test.yml; then
   echo "compose publishes a port" >&2

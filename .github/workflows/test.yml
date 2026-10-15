@@ -12,7 +12,7 @@ permissions:
 jobs:
   scaffold:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: required files and golden row
@@ -56,6 +56,14 @@ jobs:
         run: bash .github/workflows/ring-wiring.test.sh
       - name: loop test script
         run: bash scripts/loop-tests.test.sh
+
+  # The suites and the publish gate share nothing (the gate pulls its own images), so they run beside each other and
+  # beside scaffold, embedded and ring: the wall time is the longest job, not the sum (AZ-2564).
+  suites:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: suites
         run: |
           set -euo pipefail
@@ -63,6 +71,16 @@ jobs:
           for lang in csharp typescript python rust cpp java go swift; do
             docker compose -f docker-compose.test.yml run --rm "$lang"
           done
+
+  publish-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: pull images
+        run: docker compose -f docker-compose.test.yml -f docker-compose.publish.yml pull --quiet csharp typescript python rust cpp java go swift
+      - name: test results directory
+        run: mkdir -p test-results
       - name: publish gate
         run: bash .github/workflows/publish-gate.test.sh
 

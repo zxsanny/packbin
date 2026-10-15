@@ -167,7 +167,9 @@ run_stage_command() {
         && bash .github/workflows/ring-wiring.test.sh \
         && bash .github/workflows/ring-wiring-swift.test.sh \
         && bash scripts/loop-tests.test.sh ;;
-    cpp) make -C cpp clean && docker compose -f docker-compose.test.yml run --rm cpp ;;
+    # The clean runs in the container, not on the host: Docker Desktop shows a container started within about a second
+    # of a host `rm -rf` the directory as it was, so `mkdir -p build` saw the old one and the link failed (AZ-2565).
+    cpp) docker compose -f docker-compose.test.yml run --rm cpp 'make -C /src/cpp clean && exec /src/.github/workflows/run-suite.sh cpp' ;;
     cpp-embedded-arm) docker compose -f docker-compose.test.yml run --rm cpp-embedded ;;
     go | typescript | csharp | python | rust | java | swift) docker compose -f docker-compose.test.yml run --rm "$1" ;;
     ring) env "${ring_env[@]}" bash .github/workflows/language-pair.sh ;;

@@ -186,7 +186,7 @@ ro_static_checks() {
 # Hands a tree that a container wrote into as root back to the host user, so the host can delete it.
 # Docker Desktop maps ownership and never needs this; a Linux runner does (loop 15: the negative proof
 # below leaves root-owned files and `rm -rf` failed on the runner). The typescript service image is
-# already pulled by the suites that run before this test.
+# pulled by the "pull images" step of the publish-gate job (docker pulls it on first use too).
 ro_reclaim() {
   docker run --rm -v "$1:/w" --entrypoint chown node:24 -R "$(id -u):$(id -g)" /w
 }
@@ -392,7 +392,7 @@ ro_full_run_check() {
       [ -z "$owner" ] || fail "AZ-2215 AC-8 $owner is not owned by the host user"
     done
   else
-    echo "note: AZ-2215 AC-8 artifact ownership is not observable on Docker Desktop; the CI scaffold job is its proof"
+    echo "note: AZ-2215 AC-8 artifact ownership is not observable on Docker Desktop; the CI publish-gate job is its proof"
   fi
   if ! rm -rf "$ph_dir"; then
     echo "note: could not remove $ph_dir (files written by a build container)"

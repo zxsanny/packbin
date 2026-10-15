@@ -20,7 +20,7 @@ This record amends nothing. ADR-002 and ADR-004 stay as written: the registry pa
 
 We will ship Swift as the root `Package.swift` of the repository at the `vX.Y.Z` tag that starts `publish.yml`. After the same all-or-nothing golden gate, the publish job proves that a new app can resolve and build that tag.
 
-- **Install.** An app adds `.package(url: "https://github.com/zxsanny/packbin", from: "X.Y.Z")` and the product `Packbin`. SwiftPM reads the version from the tag `vX.Y.Z` (it drops the `v`). The manifest declares `// swift-tools-version: 5.9`, iOS 15 and macOS 12, and the library target lives in `swift/Sources/Packbin`.
+- **Install.** An app adds `.package(url: "https://github.com/zxsanny/packbin", from: "X.Y.Z")` and the product `Packbin`. SwiftPM reads the version from the tag `vX.Y.Z` (it drops the `v`). The manifest declares `// swift-tools-version: 6.0` (5.9 when this record was first written), iOS 15 and macOS 12, and the library target lives in `swift/Sources/Packbin`.
 - **There is no Swift tag.** The release is the `vX.Y.Z` tag itself, which the owner pushes. The workflow creates, moves and deletes no tag for Swift; there is no `swift/vX.Y.Z`.
 - **Gate.** `publish-gate.sh` runs the Swift position program (`.github/workflows/drivers/handoff-swift`, product `position`) through `publish-position.sh swift` in the `swift` container of `docker-compose.publish.yml`, and sums the byte mismatch over every language present. A Swift mismatch, like any other, publishes 0 packages and 0 Go tags, and runs no Swift check. A tree without `Package.swift` or without `swift/` prints `absent swift`, plans no Swift check, and the other packages and the Go tag publish as before.
 - **Check.** `swift-check` is a final target with no upload. The build phase records the tag and the commit of the checkout and checks the manifest, the license and the version (`publish-check.py swift-check`). It runs after every registry upload and after the Go tag. Then `publish-swift.sh` writes a throwaway consumer package that depends on `https://github.com/zxsanny/packbin` with `exact: "X.Y.Z"` and builds the Swift position program against `Packbin`. It runs `swift package resolve` and requires the pin of that URL to be version `X.Y.Z` at the commit of the checkout, then runs `swift build`. Each try starts from a fresh scratch, cache, configuration and security directory. A resolve or build that fails is retried for up to 30 minutes, then the step fails. A pin at another commit or version fails at once and names both commits. The check runs with the Swift on the runner (Linux).
@@ -55,6 +55,7 @@ The `vX.Y.Z` tag is the Swift release. Nothing in the workflow guards it against
 - The tag exists before the check runs, so a failed check leaves a failed job with the tag in place (re-run to check again)
 - The check proves Linux only; a macOS consumer build is not part of the publish job
 - The publish job resolves `swift-crypto` and `swift-asn1` from github.com and builds them, which adds minutes
+- The declared minimum, Swift 6.0, is unproven: a Swift 6.0 consumer and an Xcode 16.0 build were never run, because `swift-asn1` 1.7.3 declares tools 6.1; only `swift:6.3.3` (the CI suite, the release consumer check on the runner) and one run of the publish position test in `swift:6.4.1` exist (owner decision S3 B, loop 27: documented, not proven)
 
 ### Neutral / Open
 
@@ -71,3 +72,4 @@ The `vX.Y.Z` tag is the Swift release. Nothing in the workflow guards it against
 ## Notes
 
 - 2026-10-14, owner decision: the toolchain minimum is Swift 6.0. The manifest now declares `// swift-tools-version: 6.0` (iOS 15 and macOS 12 unchanged), the consumer that `publish-swift.sh` writes declares 6.0, and no Swift 5.9 build remains. The rest of this record stands.
+- 2026-10-15, loop 28 (AZ-2566): the S3 limit above is stated here and in the README, which names only the toolchains that ran. Pinning `swift-asn1` 1.6.0 and adding a `swift:6.0` consumer resolve stays open as option S3 A if the owner wants the 6.0 claim proven.

@@ -237,7 +237,7 @@ pin="$(bash "$here/tool-pin.sh" "$svc")" || bad "$svc: tool-pins.txt has no $svc
 [ "$(service_line "$repo/docker-compose.test.yml" "$svc" command)" = "[\"exec /src/.github/workflows/run-suite.sh $svc\"]" ] \
   || bad "$svc: the compose service does not run run-suite.sh $svc"
 suites="$(sed -n 's/^ *for lang in \(.*\); do$/\1/p' "$here/test.yml" | grep -w swift)"
-case " $suites " in *" swift "*) ;; *) bad "test.yml: the scaffold job does not run swift: '$suites'" ;; esac
+case " $suites " in *" swift "*) ;; *) bad "test.yml: the suites job does not run swift: '$suites'" ;; esac
 
 # S11. the build output is outside the mounted tree, and the publish file mounts the tree read-only
 svc=swift

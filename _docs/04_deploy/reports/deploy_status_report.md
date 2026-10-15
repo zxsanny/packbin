@@ -59,3 +59,12 @@ Run 38700362252, `test.yml`: `ring` 270 s, `embedded` 352 s, `scaffold` 1 977 s 
 ### CI runs of `b940ec4` (loop 27 close, `dev` and `main`, 2026-10-15): PASS
 
 Runs 38705480464 (`dev`) and 38705483876 (`main`), `test.yml`, all jobs `success`: `scaffold` 2 153 s and 2 295 s (`suites` 940 s and 984 s, `publish gate` 1 160 s and 1 245 s), `ring` 283 s and 242 s, `embedded` 317 s and 326 s; 36 and 38 minutes end to end. The gate has passed in 4 runs in a row (`94834ef`, `00ad75f`, and both runs of `b940ec4`): CG-3 met. `scaffold` stays under 3 000 s (CG-2); the two runs were slower than the 1 977 s of `00ad75f`, the spread between runs on the same code is about 3 minutes.
+
+### Loop 28: cause of the `cpp` pool stage failure (found by reproduction, 2026-10-15, AZ-2565)
+
+Not a race between pool stages. Only the `cpp` stage writes `cpp/build` in the pool (`scaffold` runs temp-tree tests and never builds C++). The stage ran `make -C cpp clean` on the host and then `docker compose run --rm cpp`; on Docker Desktop a container started within about a second of the host `rm -rf` still sees the old entries (a probe 0.34 s after the delete saw the stale file and directory twice; at 1.4 s and later they were gone). Reproduced with no other stage running: the old command alone, 12 runs from a populated build, failed 6 times in 0 to 1 s (`build/pack_without_scheme.cpp.out: No such file or directory`); each run after a failure (no `build/` left to delete) passed in 22 to 25 s. The loop 27 logs show the same sequence (`rm -rf build` on the host, `mkdir -p build` in the container, 35 s of g++, `ld: cannot open output file build/packbin_tests`). Fix: the container cleans (`make -C /src/cpp clean && exec run-suite.sh cpp`). Six stage runs from a populated build passed (24 to 28 s); 3 pool runs of `--all --only cpp,scaffold --jobs 3` passed with 0 retries (cpp 24 to 27 s, scaffold 172 to 174 s); a Mach-O `cpp/build` from the host is rebuilt as ELF without a manual clean. The exact `ld` message was not seen locally, only its sibling (same mechanism, different stale entry). Guard: `loop-tests.test.sh` check 15 rejects the old command (1 mutant).
+
+### Loop 28: Swift peak memory (AZ-2567)
+
+See `_docs/05_security/swift_peak_memory_loop28.md`: F10 packet 731 MB (macOS) and 738 MB (`swift:6.3.3` container), wide round 154 MB and 147 MB; no finding (below 1 000 MB). The Go figures (625 MB, 94 MB) are Go heap, not resident size.
+
