@@ -10,6 +10,6 @@ Read `_docs/loops/loop27/record27.md`, `review27.md`, `assessment27.md`, the "Lo
 
 ## Do first
 
-1. Read the Actions run of the loop 27 close push (`test.yml` on `dev` and on `main`): the gate step green is CG-3 run 3; a red run is triaged before anything else (`ci-fail-triage.md`).
+1. The CI runs of the loop 27 close push (`b940ec4`, `dev` and `main`) were green and CG-3 is met (4 green gate runs in a row; see the status report). This note and the status-report lines were committed after the close push and are unpushed until the owner's go; check `git status -sb`.
 2. Hopper: `todo/` holds AZ-2068 only. No intake leftover. Open owner rows are in `record27.md`.
 3. Owner decisions still open: F44 and the first tags (owner only); whether S3 B should be written into ADR-005 / the README as a stated limit (a small docs item).

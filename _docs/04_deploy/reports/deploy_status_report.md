@@ -55,3 +55,7 @@ Run 38694589648, `test.yml`: `ring` 265 s, `embedded` 296 s, `scaffold` 2 618 s 
 ### CI run of `00ad75f` (Swift sanitizer scope, 2026-10-15): PASS
 
 Run 38700362252, `test.yml`: `ring` 270 s, `embedded` 352 s, `scaffold` 1 977 s (`suites` 860 s against 1 238 s before, `publish gate` 1 061 s), all `success`; 33 min 1 s end to end (was 43 min 42 s). CG-3 stands at 2 of 3 green gate runs; the loop close push is the third.
+
+### CI runs of `b940ec4` (loop 27 close, `dev` and `main`, 2026-10-15): PASS
+
+Runs 38705480464 (`dev`) and 38705483876 (`main`), `test.yml`, all jobs `success`: `scaffold` 2 153 s and 2 295 s (`suites` 940 s and 984 s, `publish gate` 1 160 s and 1 245 s), `ring` 283 s and 242 s, `embedded` 317 s and 326 s; 36 and 38 minutes end to end. The gate has passed in 4 runs in a row (`94834ef`, `00ad75f`, and both runs of `b940ec4`): CG-3 met. `scaffold` stays under 3 000 s (CG-2); the two runs were slower than the 1 977 s of `00ad75f`, the spread between runs on the same code is about 3 minutes.
