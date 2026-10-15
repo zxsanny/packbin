@@ -51,3 +51,7 @@ The log of job 116248405906 was never read (sign-in). Reproduced in `swift:6.4.1
 ### CI run of `94834ef` (loop 27 gate fix, 2026-10-15): PASS
 
 Run 38694589648, `test.yml`: `ring` 265 s, `embedded` 296 s, `scaffold` 2 618 s (`suites` 1 238 s, `publish gate` 1 322 s), all `success`; 43 min 42 s end to end. The `aefaf37` cause named above is confirmed on the runner. CG-1 and CG-2 met (gate <= 1 500 s, `scaffold` <= 3 000 s); CG-3 (three green gate runs in a row) stands at 1 of 3.
+
+### CI run of `00ad75f` (Swift sanitizer scope, 2026-10-15): PASS
+
+Run 38700362252, `test.yml`: `ring` 270 s, `embedded` 352 s, `scaffold` 1 977 s (`suites` 860 s against 1 238 s before, `publish gate` 1 061 s), all `success`; 33 min 1 s end to end (was 43 min 42 s). CG-3 stands at 2 of 3 green gate runs; the loop close push is the third.
