@@ -68,3 +68,7 @@ Not a race between pool stages. Only the `cpp` stage writes `cpp/build` in the p
 
 See `_docs/05_security/swift_peak_memory_loop28.md`: F10 packet 731 MB (macOS) and 738 MB (`swift:6.3.3` container), wide round 154 MB and 147 MB; no finding (below 1 000 MB). The Go figures (625 MB, 94 MB) are Go heap, not resident size.
 
+### CI run of `b7d6577` (loop 28, job split, 2026-10-15): PASS
+
+Run 38731123341, `test.yml`, five jobs all `success`, started together at 11:58:07 to 11:58:08: `scaffold` 53 s, `ring` 4 min 45 s, `embedded` 6 min 3 s, `suites` 17 min 17 s (the suites step 1 030 s), `publish-gate` 22 min 50 s (pull images 96 s, publish gate step 1 269 s). End to end 22 min 51 s against 33 to 38 minutes for the single `scaffold` job (SP-1 met; SP-2 met once, the close push of `dev` and `main` gives the second run). The wall time is now the gate job; the gate's four large groups (swift 284 s, readonly 263 s, phases 251 s, gate 191 s on the Mac) are where it is cut next.
+

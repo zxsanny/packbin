@@ -1,13 +1,13 @@
 # Feature assessment — loop 28 (round 1)
 
-FEATURE ASSESSMENT loop 28 round 1: COMPLETE with one measurement pending — 14 covered / 2 pending the CI run / 0 gap-clear / 0 gap-unclear
+FEATURE ASSESSMENT loop 28 round 1: COMPLETE with one measurement pending — 15 covered / 1 pending the second CI run / 0 gap-clear / 0 gap-unclear
 
 Intent baseline: `_docs/02_task_plans/ci-split-and-leftovers/` (`problem.md`, `acceptance_criteria.md`, `scenarios.md`). Evidence: `_docs/03_implementation/test_run_loop28_report.md`, `review28.md` (inline review, 6 findings, 2 fixed), `deploy_status_report.md` "Loop 28" sections, `_docs/05_security/swift_peak_memory_loop28.md`.
 
 | Row | Status | Evidence |
 |-----|--------|----------|
-| SP-1 five jobs green, publish still gated | pending | `test.yml` has the five jobs (`publish-jobs.test.sh`: 13 mutants rejected); `publish.yml` unchanged; needs the pushed run |
-| SP-2 wall time at most 25 min, gate step at most 1 500 s | pending | needs two pushed runs |
+| SP-1 five jobs green, publish still gated | covered | run 38731123341: 5 of 5 `success`; `publish.yml` unchanged; `publish-jobs.test.sh` 13 mutants rejected |
+| SP-2 wall time at most 25 min, gate step at most 1 500 s | pending (1 of 2) | run 38731123341: 22 min 51 s, gate step 1 269 s; the close push gives the second run, read at the next loop's start if not done at close |
 | SP-3 no check removed | covered | same commands in exactly one job (`publish-jobs.test.sh` rules for the 6 static scripts, the 8-suite loop, the gate); plus `mkdir test-results` and `pull images` steps added |
 | SP-4 guards follow and bite | covered | `publish-jobs.test.sh` (13 mutants); `ring-wiring`, `run-suite`, `report-row`, `ring-wiring-swift` pass on the new file |
 | SP-5 14 timing lines, 0 assertions changed | covered | step 11 log: 14 lines + total; `publish-timing.selftest.sh` 2 mutants rejected; gate passes with unchanged assertions |
