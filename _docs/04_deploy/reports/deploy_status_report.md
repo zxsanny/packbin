@@ -114,3 +114,7 @@ Per-group seconds of the last run (annotation): static 0, crates-token 0, regist
 ### Left open
 
 `suites` (888 s) is now the longest job: a matrix of one job per language is the next step if the wall time matters. The phases group (158 s on the runner, 334 s on the Mac with two runs) and `readonly` (201 s) hold the remaining gate time: six builds of nine targets run one after another in the phases scenarios. An aborted gate leaves its `mktemp` directories (unchanged). The median of 3 is done (825 s).
+
+## Loop 30 (AZ-2600, CI speed)
+
+`test.yml` now runs 15 jobs: `suites` is a matrix (7 languages, Swift as two parts), the publish gate is `publish-gate-readonly`, `publish-gate-phases` and `publish-gate-rest`. CI run 38921222391 (`dev`, `4281aa9`): 15 of 15 green, wall 418 s (was 980 to 1 095 s); longest jobs `publish-gate-readonly` 415 s and `suites (swift, gates)` 379 s. The Go proxy wait of a tag run (19 minutes on go/v0.3.0) was a cached miss after a request 1.2 s after the push; `publish-go.sh` now waits for the tag and 30 s before the first request (unproven until the next tag). Details: `_docs/04_deploy/reports/ci_metrics_2026-10-16.md` section 6, `_docs/loops/loop30/notes30.md`.
