@@ -13,13 +13,34 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  precheck:
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      green: ${{ steps.proof.outputs.green }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: green test run for this commit
+        id: proof
+        env:
+          PACKBIN_REPO: ${{ github.repository }}
+          PACKBIN_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/workflows/publish-precheck.sh
+
   test:
+    needs: precheck
+    if: needs.precheck.outputs.green != 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/test.yml
 
   publish:
-    needs: test
+    needs: [precheck, test]
+    if: ${{ !cancelled() && needs.precheck.result == 'success' && (needs.test.result == 'success' || (needs.precheck.outputs.green == 'true' && needs.test.result == 'skipped')) }}
     permissions:
       contents: write
       id-token: write

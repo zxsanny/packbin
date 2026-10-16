@@ -77,8 +77,8 @@ services:
 
 ## CI/CD Integration
 
-**When to run**: every branch push and every pull request; a version tag runs the tests once, through `publish.yml`
-**Pipeline stage**: test, before a tag is allowed to publish: `publish.yml` calls `test.yml` and the `publish` job needs it
+**When to run**: every branch push and every pull request; a version tag runs the tests at most once, through `publish.yml`, and not at all when a successful push run of `test.yml` exists for the tagged commit (job `precheck`)
+**Pipeline stage**: test, before a tag is allowed to publish: `publish.yml` finds a green `test.yml` run for the commit (`precheck`) or calls `test.yml`, and the `publish` job needs one of the two
 **Gate behavior**: a failing test fails the check
 **Timeout**: `timeout-minutes` on every job: 60 for `scaffold`, 90 for `embedded` (about 40 minutes cold), 30 for `ring`, 120 for `publish` (60 until the loop 26 review: the Go proxy window and the Swift consumer window are 30 minutes each). The `go` suite adds about 2 minutes to `scaffold` (race tests about 30 s, the speed run, 60 s of fuzzing); the `swift` stage took 620 s in the container on the owner's Mac (loop 26 step 11), and the publish gate 1837 s; the first runner times are unknown
 
