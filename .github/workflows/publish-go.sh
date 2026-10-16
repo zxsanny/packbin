@@ -71,8 +71,13 @@ push_go_tag() {
 # the proxy is asked, so the proxy is never given the first miss; a re-run only re-checks.
 await_tag_visible() {
   local window="${PACKBIN_GO_TAG_WINDOW:-120}" pause="${PACKBIN_GO_TAG_PAUSE:-5}" settle="${PACKBIN_GO_PROXY_SETTLE:-30}"
-  local deadline=$((SECONDS + window)) attempt=0
-  while [ "$(remote_tag_commit)" != "$commit" ]; do
+  local deadline=$((SECONDS + window)) attempt=0 seen
+  while :; do
+    # A failed ls-remote stops the run with its own message; it is not "the tag is not visible".
+    seen="$(remote_tag_commit)" || exit 1
+    if [ "$seen" = "$commit" ]; then
+      break
+    fi
     attempt=$((attempt + 1))
     echo "go tag $tag is not visible on $url yet (try $attempt)"
     if [ "$SECONDS" -ge "$deadline" ]; then

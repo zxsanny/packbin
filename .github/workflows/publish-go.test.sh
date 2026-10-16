@@ -215,15 +215,15 @@ EOF
   chmod +x "$gt_bin/git"
   echo 4 > "$hide"
   started=$SECONDS
-  gt_publish lag GT_REAL_GIT="$real_git" GT_HIDE_FILE="$hide" GT_PUSHES="$gt_pushes" PACKBIN_GO_TAG_WINDOW=60 PACKBIN_GO_PROXY_SETTLE=4
-  [ $((SECONDS - started)) -ge 4 ] || fail "AZ-2600 the settle pause of 4 s did not happen: the run took $((SECONDS - started)) s"
+  gt_publish lag GT_REAL_GIT="$real_git" GT_HIDE_FILE="$hide" GT_PUSHES="$gt_pushes" PACKBIN_GO_TAG_WINDOW=60 PACKBIN_GO_PROXY_SETTLE=6
+  [ $((SECONDS - started)) -ge 6 ] || fail "AZ-2600 the settle pause of 6 s did not happen: the run took $((SECONDS - started)) s"
   assert_eq "$gt_code" "0" "AZ-2600 a tag that shows late: $(tail -n 4 "$gt_dir/lag.out")"
   assert_eq "$(cat "$hide")" "0" "AZ-2600 the hidden answers were not all asked for"
   grep -q '^go tag go/v0.1.9 is not visible on .* yet (try 1)$' "$gt_dir/lag.out" || fail "AZ-2600 no 'not visible' line: $(cat "$gt_dir/lag.out")"
   grep -q '^go tag go/v0.1.9 is not visible on .* yet (try 2)$' "$gt_dir/lag.out" || fail "AZ-2600 no second 'not visible' line"
   if grep -q 'not visible on .* yet (try 3)$' "$gt_dir/lag.out"; then fail "AZ-2600 a third wait for a tag that showed"; fi
-  grep -q '^go tag go/v0.1.9 is visible; waiting 4s before the first proxy request$' "$gt_dir/lag.out" || fail "AZ-2600 no settle line"
-  [ "$(grep -n 'waiting 4s' "$gt_dir/lag.out" | cut -d: -f1)" -lt "$(grep -n '^go proxy answers' "$gt_dir/lag.out" | cut -d: -f1)" ] \
+  grep -q '^go tag go/v0.1.9 is visible; waiting 6s before the first proxy request$' "$gt_dir/lag.out" || fail "AZ-2600 no settle line"
+  [ "$(grep -n 'waiting 6s' "$gt_dir/lag.out" | cut -d: -f1)" -lt "$(grep -n '^go proxy answers' "$gt_dir/lag.out" | cut -d: -f1)" ] \
     || fail "AZ-2600 the proxy answered before the settle pause"
   assert_eq "$(gt_go_calls)" "1" "AZ-2600 proxy asks after a late tag"
   rm -rf "$gt_dir"
@@ -241,6 +241,15 @@ EOF
   grep -q 'was pushed but did not show on .* within 0s; the proxy was not asked' "$gt_dir/never.out" || fail "AZ-2600 no 'did not show' message: $(tail -n 3 "$gt_dir/never.out")"
   assert_eq "$(gt_go_calls)" "0" "AZ-2600 the proxy was asked for a tag that did not show"
   assert_eq "$(gt_tags "$gt_bare")" "go/v0.1.9" "AZ-2600 the tag after a visibility failure"
+
+  # An ls-remote that fails after the push is a failed query, named as such; it is not a tag that does not show.
+  printf '#!/bin/bash\nif [ "$1" = ls-remote ] && [ -s "$GT_PUSHES" ]; then echo "fatal: unable to access" >&2; exit 128; fi\nexec "$GT_REAL_GIT" "$@"\n' > "$gt_bin/git"
+  git --git-dir="$gt_bare" tag -d go/v0.1.9 > /dev/null
+  : > "$gt_pushes"
+  gt_publish lsfail GT_REAL_GIT="$real_git" GT_PUSHES="$gt_pushes" PACKBIN_GO_TAG_WINDOW=0 PACKBIN_QUERY_ATTEMPTS=1
+  [ "$gt_code" -ne 0 ] || fail "AZ-2600 a failing ls-remote after the push passed"
+  grep -q 'cannot tell whether go-tag 0.1.9 is published: git ls-remote .* failed' "$gt_dir/lsfail.out" || fail "AZ-2600 no query failure message: $(tail -n 3 "$gt_dir/lsfail.out")"
+  if grep -q 'did not show' "$gt_dir/lsfail.out"; then fail "AZ-2600 a failed ls-remote was reported as a tag that did not show"; fi
 
   # A re-run finds the tag there: no visibility wait, no settle pause, the proxy is asked at once.
   rm -f "$gt_bin/git"
