@@ -6,22 +6,30 @@ gate_started=$SECONDS
 timed_current=""
 timed_start=0
 timed_count=0
+timed_lines=""
+
+# On GitHub Actions the timing lines also go out as ONE notice annotation (the lines joined by %0A): the check-run
+# annotations of a job are readable without a token, the job log is not, and GitHub keeps only 10 notices per step,
+# so a notice per line lost the last groups (AZ-2582). The notice follows the total line, or the aborted line.
+timed_notice() {
+  if [ "${GITHUB_ACTIONS:-}" = "true" ] && [ -n "$timed_lines" ]; then
+    echo "::notice title=publish gate timing::$timed_lines"
+  fi
+}
+
+timed_say() {
+  echo "$1"
+  timed_lines="${timed_lines:+$timed_lines%0A}$1"
+}
 
 timed_abort() {
   if [ -n "$timed_current" ]; then
     echo "publish-gate: $timed_current took $((SECONDS - timed_start)) s (aborted)" >&2
+    timed_lines="${timed_lines:+$timed_lines%0A}publish-gate: $timed_current took $((SECONDS - timed_start)) s (aborted)"
+    timed_notice
   fi
 }
 trap timed_abort EXIT
-
-# On GitHub Actions every timing line is also an annotation: the check-run annotations of a job are readable without a
-# token, the job log is not (the speed work of AZ-2582 reads the per-group seconds of a CI run from them).
-timed_say() {
-  echo "$1"
-  if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
-    echo "::notice title=publish gate timing::$1"
-  fi
-}
 
 timed() {
   timed_current="$1"
@@ -35,6 +43,7 @@ timed() {
 
 timed_total() {
   timed_say "publish-gate: total took $((SECONDS - gate_started)) s in $timed_count checks"
+  timed_notice
 }
 
 # The position program test runs as a child process; a failure counts like any other group failure.

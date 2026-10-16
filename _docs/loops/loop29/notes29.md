@@ -77,3 +77,11 @@ total 906 s (905 s wall), 14 checks, 0 failures, NOT RUN: the two vcpkg checks (
 | M3 `absent` line renamed | 1 FAIL: "AC-4 java was not absent" |
 | identity swift mutant ("no pin check" given its own text) | 1 FAIL: "the swift checks passed a copy with: no pin check"; the other 29 rejected |
 | timing notice line removed | `publish-timing.selftest.sh`: 2 FAIL (alpha, total) |
+
+## Batch 2 (after the first CI run)
+
+CI run 38868021571 (commit 178349f, batch 1): all 5 jobs success; `publish-gate` job 1 069 s (baseline median 1 370 s), `publish gate` step 1 005 s (was 1 057 to 1 328 s), pull images 60 s, `suites` 956 s, workflow end to end about 1 070 s. Per-group seconds from the annotations (GitHub keeps 10 notices per step, so only 10 of the 15 lines survived): swift 176, gate 122, vcpkg 15, npm 6, go 6, position 1, the rest 0; phases, readonly, pins, workflow and the total were cut off. The groups seen add up to about 330 s, so phases, readonly, pins and workflow are about 680 s of the 1 005 s on the runner, and the three readonly gate runs are the largest single item (about 3 x 120 s).
+
+Changes in batch 2:
+1. `publish-timing.test.sh`: one notice annotation per gate run holding all timing lines joined by `%0A` (also on abort). `publish-timing.selftest.sh` asserts exactly one notice for 15 lines, the lines of both groups and the total, a notice on abort, and none outside GitHub Actions. Mutants: the previous per-line helper (5 FAIL), no notice on abort (1 FAIL).
+2. `ro_gate_checks` runs its three scenarios (good, bad fixture, no java) together, each on its own tree copy, output directory and logs; the publish compose file gives each run a read-only bind of its own tree and tmpfs caches, so the runs share nothing. Same assertions, same messages. Mac: 123 s alone (was 227 to 235 s), 0 failures. Mutants M1, M2, M3 re-run on this version: 2, 1 and 1 FAIL as before.

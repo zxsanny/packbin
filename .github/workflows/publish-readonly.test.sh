@@ -325,43 +325,49 @@ ro_host_path_check() {
 # AC-5: the gate under the read-only mount, with no node_modules (npm ci runs in the container copy), prints the golden
 # bytes in all eight languages and changes nothing outside out/; the bad-fixture and missing-java copies behave as before.
 ro_gate_checks() {
-  local tree out before after count logs
-  tree="$(mktemp -d)"
+  local logs name tree before after count
   logs="$(mktemp -d)"
-  ro_tree "$tree"
-  out="$tree/.github/workflows/out/gate"
-  before="$(ro_manifest "$tree")"
-  SRC_ROOT="$tree" PACKBIN_OUT="$out" bash "$tree/.github/workflows/publish-gate.sh" > "$logs/gate.log" 2> "$logs/gate.err" \
-    || fail "AZ-2215 AC-5 the gate failed: $(tail -n 5 "$logs/gate.err")"
-  count="$(grep -c "^pack [a-z]* $expected\$" "$logs/gate.log" || true)"
-  assert_eq "$count" "8" "AZ-2215 AC-5 golden pack lines"
-  assert_eq "$(grep '^mismatch ' "$logs/gate.log")" "mismatch 0" "AZ-2215 AC-5 mismatch"
-  assert_eq "$(paste -sd ' ' "$out/publish-plan.txt")" "csharp typescript python rust cpp java go swift" "AZ-2215 AC-5 plan"
-  grep -q 'added [0-9]* package' "$logs/gate.err" || fail "AZ-2215 AC-5 npm ci did not run in the container copy: $(tail -n 5 "$logs/gate.err")"
-  after="$(ro_manifest "$tree")"
-  ro_assert_same "AZ-2215 AC-5 tree manifest after the gate" "$before" "$after"
+  # The three scenarios share nothing: each has its own tree copy, output directory and logs (the publish compose file
+  # binds the tree of each run read-only and gives it tmpfs caches), so they run together and are judged afterwards.
+  for name in good bad nojava; do
+    tree="$logs/$name-tree"
+    ro_tree "$tree"
+    case "$name" in
+      bad) printf '00\n' > "$tree/fixtures/golden.hex" ;;
+      nojava) rm -rf "$tree/java" ;;
+    esac
+    ro_manifest "$tree" > "$logs/$name.before"
+    (
+      rc=0
+      SRC_ROOT="$tree" PACKBIN_OUT="$tree/.github/workflows/out/$name" bash "$tree/.github/workflows/publish-gate.sh" \
+        > "$logs/$name.log" 2> "$logs/$name.err" < /dev/null || rc=$?
+      echo "$rc" > "$logs/$name.rc"
+    ) &
+  done
+  wait
 
-  printf '00\n' > "$tree/fixtures/golden.hex"
-  before="$(ro_manifest "$tree")"
-  if SRC_ROOT="$tree" PACKBIN_OUT="$tree/.github/workflows/out/bad" bash "$tree/.github/workflows/publish-gate.sh" > "$logs/bad.log" 2> "$logs/bad.err"; then
-    fail "AZ-2215 AC-5 a bad fixture passed the gate"
-  fi
+  tree="$logs/good-tree"
+  [ "$(cat "$logs/good.rc")" = "0" ] || fail "AZ-2215 AC-5 the gate failed: $(tail -n 5 "$logs/good.err")"
+  count="$(grep -c "^pack [a-z]* $expected\$" "$logs/good.log" || true)"
+  assert_eq "$count" "8" "AZ-2215 AC-5 golden pack lines"
+  assert_eq "$(grep '^mismatch ' "$logs/good.log")" "mismatch 0" "AZ-2215 AC-5 mismatch"
+  assert_eq "$(paste -sd ' ' "$tree/.github/workflows/out/good/publish-plan.txt")" "csharp typescript python rust cpp java go swift" "AZ-2215 AC-5 plan"
+  grep -q 'added [0-9]* package' "$logs/good.err" || fail "AZ-2215 AC-5 npm ci did not run in the container copy: $(tail -n 5 "$logs/good.err")"
+  ro_assert_same "AZ-2215 AC-5 tree manifest after the gate" "$(cat "$logs/good.before")" "$(ro_manifest "$tree")"
+
+  tree="$logs/bad-tree"
+  [ "$(cat "$logs/bad.rc")" != "0" ] || fail "AZ-2215 AC-5 a bad fixture passed the gate"
   [ ! -s "$tree/.github/workflows/out/bad/publish-plan.txt" ] || fail "AZ-2215 AC-5 the bad fixture left a plan"
   assert_eq "$(grep '^pack csharp ' "$logs/bad.log" | awk '{print $3}')" "$expected" "AC-3 pack ignored the bad fixture"
-  after="$(ro_manifest "$tree")"
-  ro_assert_same "AZ-2215 AC-5 tree manifest after the bad-fixture gate" "$before" "$after"
+  ro_assert_same "AZ-2215 AC-5 tree manifest after the bad-fixture gate" "$(cat "$logs/bad.before")" "$(ro_manifest "$tree")"
 
-  printf '4001000065cd1d00a3e1110100\n' > "$tree/fixtures/golden.hex"
-  rm -rf "$tree/java"
-  before="$(ro_manifest "$tree")"
-  SRC_ROOT="$tree" PACKBIN_OUT="$tree/.github/workflows/out/nojava" bash "$tree/.github/workflows/publish-gate.sh" > "$logs/nojava.log" 2> "$logs/nojava.err" \
-    || fail "AZ-2215 AC-5 the gate without java failed: $(tail -n 5 "$logs/nojava.err")"
+  tree="$logs/nojava-tree"
+  [ "$(cat "$logs/nojava.rc")" = "0" ] || fail "AZ-2215 AC-5 the gate without java failed: $(tail -n 5 "$logs/nojava.err")"
   assert_eq "$(wc -l < "$tree/.github/workflows/out/nojava/publish-plan.txt" | tr -d ' ')" "7" "AZ-2215 AC-5 seven languages without java"
   ! grep -qx java "$tree/.github/workflows/out/nojava/publish-plan.txt" || fail "AC-4 java was published"
   grep -q '^absent java$' "$logs/nojava.log" || fail "AC-4 java was not absent"
-  after="$(ro_manifest "$tree")"
-  ro_assert_same "AZ-2215 AC-5 tree manifest after the missing-java gate" "$before" "$after"
-  rm -rf "$tree" "$logs"
+  ro_assert_same "AZ-2215 AC-5 tree manifest after the missing-java gate" "$(cat "$logs/nojava.before")" "$(ro_manifest "$tree")"
+  rm -rf "$logs"
 }
 
 # AC-3, AC-6 and AC-8: a full build-only run (every container, the host embedded targets, signing) on a tree with a
