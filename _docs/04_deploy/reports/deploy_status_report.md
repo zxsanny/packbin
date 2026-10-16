@@ -99,7 +99,11 @@ Total 1 075 s: `gate_checks` 217 s and `ro_gate_checks` 227 s (each runs the rea
 |-----|--------|------------------|-----------|--------|------------|
 | 38731123341 (loop 28) | b7d6577 | 1 370 s | 1 269 s | 1 037 s | 22 min 51 s |
 | 38868021571 (batch 1) | 178349f | 1 069 s | 1 005 s | 956 s | about 17 min 50 s |
-| 38888934994 (final code) | 1ce48a2 | 689 s | 593 s | 888 s | about 14 min 50 s (`suites` is the longest job) |
+| 38888934994 (final code, run 1) | 1ce48a2 | 689 s | 593 s | 888 s | about 14 min 50 s (`suites` is the longest job) |
+| 38891164077 (close push, `dev`, run 2) | 2cade74 | 825 s | 720 s | 1 071 s | about 17 min 50 s (`suites` longest) |
+| 38891168328 (close push, `main`, run 3) | 2cade74 | 1 011 s | 947 s | 874 s | about 16 min 50 s (gate longest) |
+
+GC-1 is met: median of the three runs of the final code 825 s (limit 1 080 s), longest 1 011 s (limit 1 200 s). The same code varies by about 320 s between runs. `scaffold` 54 to 61 s, `embedded` 296 to 357 s, `ring` 271 to 284 s in the three runs.
 
 Per-group seconds of the last run (annotation): static 0, crates-token 0, registry 0, vcpkg 11, gate 74, go 5, swift 116, manifest 0, npm 4, position 1, workflow 3, pins 20, phases 158, readonly 201, total 593 in 14 checks.
 
@@ -109,4 +113,4 @@ Per-group seconds of the last run (annotation): static 0, crates-token 0, regist
 
 ### Left open
 
-`suites` (888 s) is now the longest job: a matrix of one job per language is the next step if the wall time matters. The phases group (158 s on the runner, 334 s on the Mac with two runs) and `readonly` (201 s) hold the remaining gate time: six builds of nine targets run one after another in the phases scenarios. An aborted gate leaves its `mktemp` directories (unchanged). Runs 2 and 3 of the median of 3 are the close pushes of `dev` and `main`.
+`suites` (888 s) is now the longest job: a matrix of one job per language is the next step if the wall time matters. The phases group (158 s on the runner, 334 s on the Mac with two runs) and `readonly` (201 s) hold the remaining gate time: six builds of nine targets run one after another in the phases scenarios. An aborted gate leaves its `mktemp` directories (unchanged). The median of 3 is done (825 s).

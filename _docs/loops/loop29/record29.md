@@ -5,7 +5,7 @@ branch: dev
 plan_artifact: _docs/loops/loop29/plan29.md
 tasks_shipped: [AZ-2582]
 leftovers:
-  - GC-1 runs 2 and 3 (the close pushes of `dev` and `main`) are read after the push; run 1 of the final code was 689 s against the 1 080 s limit
+  - GC-1 met after the close: 689, 825 and 1 011 s (median 825 s, limit 1 080 s); the same code varies by about 320 s between runs
   - `suites` (888 s) is now the longest job: a matrix of one job per language is the next speed step
   - the phases group still builds the nine targets six times one after another (158 s on the runner); `publish-phases.test.sh` is 501 lines (over the 500-line cap, not touched this loop): split it by responsibility
   - an aborted gate run leaves its `mktemp` directories, and 745 old ones sit in the Mac temp directory (the gate's older calls leave them); cleanup on abort was out of scope (GC-9 amended)

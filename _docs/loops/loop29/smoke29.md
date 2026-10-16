@@ -19,7 +19,7 @@ Commit 1ce48a2 (code); run 2026-10-16 by the agent, owner rule 2026-10-12 in `de
 
 ## For the operator
 
-- Runs 2 and 3 of the median of 3 for GC-1 are the close pushes of `dev` and `main`: I read them after the push and note them in the handoff.
+- Runs 2 and 3 of the median of 3 for GC-1 were the close pushes of `dev` and `main` (825 s and 1 011 s, with 689 s: median 825 s).
 
 ## Notes
 

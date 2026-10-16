@@ -18,7 +18,7 @@ FEATURE ASSESSMENT loop 29 round 1: COMPLETE — 17 covered / 1 out-of-scope / 0
 
 | id | scenario | status | evidence | source |
 |----|----------|--------|----------|--------|
-| GC-1 | gate job at most 1 080 s median of 3, none above 1 200 s | covered (run 1 of 3) | run 38888934994: 689 s; runs 2 and 3 are the close pushes of `dev` and `main` (leftover: read them after the push) | AC |
+| GC-1 | gate job at most 1 080 s median of 3, none above 1 200 s | covered | run 38888934994: 689 s; close push `dev` run 38891164077: 825 s; close push `main` run 38891168328: 1 011 s; median 825 s, longest 1 011 s | AC |
 | GC-2 | 14 timing lines and total in CI; Mac sum at most 800 s | covered | annotation of run 38888934994 (14 lines + total 593 s); `loop-tests.sh` publish-gate PASS 754 s | AC |
 | GC-3 | workflow end to end not longer than loop 28 | covered | `suites` 888 s is the longest job, about 14 min 50 s (loop 28: 22 min 51 s) | AC |
 | GC-4 | no unique assertion and no mutant lost | covered | ledger in notes29.md (3 assertions moved, 3 with twins); swift 30 of 30 mutants rejected at 1, 4 and 8 jobs | AC |
@@ -46,7 +46,7 @@ FEATURE ASSESSMENT loop 29 round 1: COMPLETE — 17 covered / 1 out-of-scope / 0
 | `suites` (888 s) is now the longest job; the gate job is 689 s | leftover: a matrix of one job per language is the next speed step |
 | The phases group still builds nine targets six times one after another (158 s on the runner) | leftover |
 | 745 old `mktemp` directories sit in the Mac temp directory (the gate's older calls leave them, as on abort) | leftover |
-| Runs 2 and 3 of the median of 3 are the close pushes | read after the push, recorded in the handoff |
+| Runs 2 and 3 of the median of 3 are the close pushes | read after the push: 825 s and 1 011 s (the same code varies by about 320 s between runs) |
 
 ## Not walked
 
