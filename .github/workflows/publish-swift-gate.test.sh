@@ -262,6 +262,16 @@ sw_credential_checks() {
   rm -rf "$sw_dir"
 }
 
+# How many of the mutant subshells are still running (other background jobs, such as the real swift checks, do not count).
+sw_mutants_running() {
+  local running pid n=0
+  running=" $(jobs -rp | paste -sd ' ' -) "
+  for pid in ${sw_mutant_pids[@]+"${sw_mutant_pids[@]}"}; do
+    case "$running" in *" $pid "*) n=$((n + 1)) ;; esac
+  done
+  echo "$n"
+}
+
 # sw_mutant <label> <scenario> <file> <old> <new> [anchor]: a copy of the scripts whose <file> has the first <old> after
 # <anchor> replaced by <new>; <scenario> run against it must report a failure.
 sw_mutant() {
@@ -283,7 +293,7 @@ sys.exit(3) if at < 0 or (anchor and s.find(anchor) < 0) else open(dst, "w").wri
   fi
   # Every mutant has its own copy, log and mktemp directories, so up to $sw_mutant_jobs run together; a new one
   # starts as soon as a slot is free. sw_mutant_verdicts reads the logs in the order of the calls.
-  while [ "$(jobs -r | wc -l | tr -d ' ')" -ge "$sw_mutant_jobs" ]; do
+  while [ "$(sw_mutants_running)" -ge "$sw_mutant_jobs" ]; do
     sleep 0.2
   done
   (
@@ -291,14 +301,18 @@ sys.exit(3) if at < 0 or (anchor and s.find(anchor) < 0) else open(dst, "w").wri
     sw_wf="$copy"
     "$scenario"
   ) > "$log" 2>&1 < /dev/null &
+  sw_mutant_pids+=("$!")
   sw_mutant_labels+=("$label")
   sw_mutant_logs+=("$log")
 }
 
 # Waits for the running mutants, then reports each one: a mutant the checks passed is a failure.
 sw_mutant_verdicts() {
-  local i
-  wait
+  local i pid
+  # A mutant makes its scenario fail, so a non-zero status is the expected outcome; the verdict is in the log.
+  for pid in ${sw_mutant_pids[@]+"${sw_mutant_pids[@]}"}; do
+    wait "$pid" || true
+  done
   for i in "${!sw_mutant_logs[@]}"; do
     if grep -q '^FAIL: ' "${sw_mutant_logs[$i]}"; then
       echo "rejects: ${sw_mutant_labels[$i]} ($(grep -m 1 '^FAIL: ' "${sw_mutant_logs[$i]}" | cut -c 7-140))"
@@ -311,6 +325,7 @@ sw_mutant_verdicts() {
 sw_mutant_checks() {
   local check='@target("swift-check")'
   sw_mutants=0
+  sw_mutant_pids=()
   sw_mutant_labels=()
   sw_mutant_logs=()
   sw_mutant_jobs="${PACKBIN_MUTANT_JOBS:-4}"

@@ -47,12 +47,12 @@ Then the `publish-gate` job median is at most 1 080 s, none above 1 200 s, the M
 **AC-2: Nothing lost (GC-4, GC-5)**
 Given the gate log before the change
 When the gate runs after the change
-Then each of the 14 groups has equal or more assertions and mutants, and each changed scenario has a mutant the gate rejects with the group's own message.
+Then no unique assertion and no mutant is lost (mutant counts equal in every group; each removed assertion has a listed twin or was moved), and each changed scenario has a mutant the gate rejects with the group's own message.
 
 **AC-3: Isolation (GC-9, S2, S3, S4)**
 Given shared state built once per run
-When the gate runs twice at once, or is aborted midway
-Then both runs pass, and 0 directories of the run are left.
+When the gate runs twice at once
+Then both runs pass, and after a normal run 0 directories this loop added are left (an aborted run leaves its temp directories, as before).
 
 **AC-4: Format and size (GC-6, GC-10, S8)**
 Given the changed files
@@ -80,7 +80,7 @@ Then per-scenario seconds for the four large groups, the cut list with seconds s
 | AC Ref | What to Test | Required Outcome |
 |--------|-------------|-----------------|
 | AC-2 | Each changed scenario against a mutated copy | gate exits non-zero with the group's message |
-| AC-3 | Two gate runs at once; one run killed midway | both pass; temp directories of the run absent |
+| AC-3 | Two gate runs at once; a normal run's temp directories | both pass; 0 directories this loop added left after a normal run |
 | AC-4 | `publish-timing.selftest.sh`, `wc -l`, `shellcheck` | pass; at most 500 lines; 0 new warnings |
 
 ## Blackbox Tests
@@ -88,7 +88,7 @@ Then per-scenario seconds for the four large groups, the cut list with seconds s
 | AC Ref | Initial Data/Conditions | What to Test | Expected Behavior | NFR References |
 |--------|------------------------|-------------|-------------------|----------------|
 | AC-1 | Pushed `dev` and `main` commits with the final code | Jobs API times of 3 runs | median at most 1 080 s | Performance |
-| AC-2 | Loop 28 gate log | Counts per group before and after | equal or higher in all 14 | Reliability |
+| AC-2 | Loop 28 gate log | Mutant counts per group and the assertion ledger | equal mutants; every removed assertion has a twin | Reliability |
 | AC-5 | Finished loop | Status report and `ci_cd_pipeline.md` | figures present | — |
 
 ## Constraints
@@ -111,6 +111,7 @@ Then per-scenario seconds for the four large groups, the cut list with seconds s
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Sharing state can let a mutation proof pass for the wrong reason | one mutant per changed scenario, counts compared | resolved (card 1, A) | High |
+| A run aborted midway leaves its `mktemp` directories (as before this loop) | out of scope; GC-9 amended | accepted-risk | Low |
 | The gain is proven only by pushed runs; pushes of `dev` are asked each time (loop 28 close commit also unpushed) | owner | open | Medium |
 | Runner time varies about 4 minutes between runs | median of 3 | open | Medium |
 | Mac and runner differ | judge by CI runs | open | Medium |

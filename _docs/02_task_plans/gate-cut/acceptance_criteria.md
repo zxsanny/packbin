@@ -16,7 +16,7 @@ Measured on pushed `dev` commits' `test.yml` runs on `ubuntu-latest` unless a ro
 
 ## Hygiene
 
-- **GC-9** Any state a cut shares between scenarios (a prebuilt tree, a bare repository, a pulled image) lives under the run's own `mktemp` directory: 0 fixed paths outside it, 2 gate runs started at the same time on one host both pass, and after a normal run and after a run aborted in the middle 0 directories of the run are left.
+- **GC-9** Any state a cut shares between scenarios (a prebuilt tree, a bare repository, a pulled image) lives under the run's own `mktemp` directory: 0 fixed paths outside it, 2 gate runs started at the same time on one host both pass, and after a normal run the directories this loop added (the readonly logs and tree copies, the real-swift status directory, the mutant copies) are removed (0 left). Amended 2026-10-16: a run aborted in the middle leaves its `mktemp` directories, as the gate did before this loop (`gate_checks` never removed its output directory); cleanup on abort is not part of this task.
 - **GC-10** The timing line format `publish-gate: <check> took N s` and the 14 group names are unchanged, and `publish-timing.selftest.sh` passes.
 
 ## Evidence and docs

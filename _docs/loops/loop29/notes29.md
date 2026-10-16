@@ -85,3 +85,7 @@ CI run 38868021571 (commit 178349f, batch 1): all 5 jobs success; `publish-gate`
 Changes in batch 2:
 1. `publish-timing.test.sh`: one notice annotation per gate run holding all timing lines joined by `%0A` (also on abort). `publish-timing.selftest.sh` asserts exactly one notice for 15 lines, the lines of both groups and the total, a notice on abort, and none outside GitHub Actions. Mutants: the previous per-line helper (5 FAIL), no notice on abort (1 FAIL).
 2. `ro_gate_checks` runs its three scenarios (good, bad fixture, no java) together, each on its own tree copy, output directory and logs; the publish compose file gives each run a read-only bind of its own tree and tmpfs caches, so the runs share nothing. Same assertions, same messages. Mac: 123 s alone (was 227 to 235 s), 0 failures. Mutants M1, M2, M3 re-run on this version: 2, 1 and 1 FAIL as before.
+
+## Total review (code-review high, f78553e..HEAD) and fixes
+
+5 findings: (1) a missing `bad.rc` read as a refusal: fixed, now "the bad-fixture gate run did not finish" (proved by a mutant that never writes it: 1 FAIL); (2) temp directories leak on abort: skipped, the gate leaked on abort before this loop, GC-9 and the spec amended; (3) the mutant throttle counted the real-swift job: fixed, counts its own pids (swift group standalone 151 s, 30 of 30 rejected); (4) `wait ... || true` on the real-swift job: fixed, exit status captured and reported; (5) unused locals: removed. After the fixes `ro_gate_checks` alone: 124 s, 0 failures.

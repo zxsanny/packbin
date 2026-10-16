@@ -344,8 +344,8 @@ sw_real_beside() {
 
 # shellcheck disable=SC2030,SC2031  # failures and not_run here are the parent shell's
 sw_real_join() {
-  local real_failures real_not_run
-  wait "$sw_real_pid" || true
+  local real_failures real_not_run real_rc=0
+  wait "$sw_real_pid" || real_rc=$?
   cat "$sw_real_dir/out"
   cat "$sw_real_dir/err" >&2
   if [ -s "$sw_real_dir/status" ]; then
@@ -354,8 +354,9 @@ sw_real_join() {
     if [ -n "$real_not_run" ]; then
       not_run="${not_run:+$not_run, }$real_not_run"
     fi
+    [ "$real_rc" -eq 0 ] || fail "sw_real_checks exited $real_rc after it reported"
   else
-    fail "sw_real_checks stopped before it finished"
+    fail "sw_real_checks stopped before it finished (exit $real_rc)"
   fi
   rm -rf "$sw_real_dir"
 }

@@ -325,7 +325,7 @@ ro_host_path_check() {
 # AC-5: the gate under the read-only mount, with no node_modules (npm ci runs in the container copy), prints the golden
 # bytes in all eight languages and changes nothing outside out/; the bad-fixture and missing-java copies behave as before.
 ro_gate_checks() {
-  local logs name tree before after count
+  local logs name tree count
   logs="$(mktemp -d)"
   # The three scenarios share nothing: each has its own tree copy, output directory and logs (the publish compose file
   # binds the tree of each run read-only and gives it tmpfs caches), so they run together and are judged afterwards.
@@ -356,7 +356,11 @@ ro_gate_checks() {
   ro_assert_same "AZ-2215 AC-5 tree manifest after the gate" "$(cat "$logs/good.before")" "$(ro_manifest "$tree")"
 
   tree="$logs/bad-tree"
-  [ "$(cat "$logs/bad.rc")" != "0" ] || fail "AZ-2215 AC-5 a bad fixture passed the gate"
+  if [ ! -s "$logs/bad.rc" ]; then
+    fail "AZ-2215 AC-5 the bad-fixture gate run did not finish"
+  elif [ "$(cat "$logs/bad.rc")" = "0" ]; then
+    fail "AZ-2215 AC-5 a bad fixture passed the gate"
+  fi
   [ ! -s "$tree/.github/workflows/out/bad/publish-plan.txt" ] || fail "AZ-2215 AC-5 the bad fixture left a plan"
   assert_eq "$(grep '^pack csharp ' "$logs/bad.log" | awk '{print $3}')" "$expected" "AC-3 pack ignored the bad fixture"
   ro_assert_same "AZ-2215 AC-5 tree manifest after the bad-fixture gate" "$(cat "$logs/bad.before")" "$(ro_manifest "$tree")"
