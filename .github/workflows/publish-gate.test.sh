@@ -134,30 +134,8 @@ gate_checks() {
   done < <(grep '^pack ' "$out/log.txt")
   assert_eq "$(grep '^mismatch ' "$out/log.txt" | awk '{print $2}')" "0" "AC-5 mismatch"
 
-  local bad
-  bad="$(mktemp -d)"
-  copy_tree "$bad"
-  printf '00\n' > "$bad/fixtures/golden.hex"
-  local bad_out="$bad/.github/workflows/out"
-  set +e
-  SRC_ROOT="$bad" PACKBIN_OUT="$bad_out" bash "$bad/.github/workflows/publish-gate.sh" >"$bad/log.txt"
-  local code=$?
-  set -e
-  [ "$code" -ne 0 ] || fail "AC-3 mismatch still published"
-  [ ! -s "$bad_out/publish-plan.txt" ] || fail "AC-3 plan was not empty"
-  local packed
-  packed="$(grep '^pack csharp ' "$bad/log.txt" | awk '{print $3}')"
-  assert_eq "$packed" "$expected" "AC-3 pack ignored the bad fixture"
-
-  local missing
-  missing="$(mktemp -d)"
-  copy_tree "$missing"
-  rm -rf "$missing/java"
-  local miss_out="$missing/.github/workflows/out"
-  SRC_ROOT="$missing" PACKBIN_OUT="$miss_out" bash "$missing/.github/workflows/publish-gate.sh" >"$missing/log.txt"
-  ! grep -qx java "$miss_out/publish-plan.txt" || fail "AC-4 java was published"
-  grep -q '^absent java$' "$missing/log.txt" || fail "AC-4 java was not absent"
-  assert_eq "$(wc -l < "$miss_out/publish-plan.txt" | tr -d ' ')" "7" "AC-4 seven languages"
+  # AC-3 (a bad fixture publishes nothing) and AC-4 (a missing language is absent, not published) run in
+  # ro_gate_checks on a read-only tree: the same script and scenarios, so they are not run twice here.
 }
 
 manifest_checks() {

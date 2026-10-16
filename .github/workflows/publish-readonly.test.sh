@@ -347,6 +347,7 @@ ro_gate_checks() {
     fail "AZ-2215 AC-5 a bad fixture passed the gate"
   fi
   [ ! -s "$tree/.github/workflows/out/bad/publish-plan.txt" ] || fail "AZ-2215 AC-5 the bad fixture left a plan"
+  assert_eq "$(grep '^pack csharp ' "$logs/bad.log" | awk '{print $3}')" "$expected" "AC-3 pack ignored the bad fixture"
   after="$(ro_manifest "$tree")"
   ro_assert_same "AZ-2215 AC-5 tree manifest after the bad-fixture gate" "$before" "$after"
 
@@ -356,6 +357,8 @@ ro_gate_checks() {
   SRC_ROOT="$tree" PACKBIN_OUT="$tree/.github/workflows/out/nojava" bash "$tree/.github/workflows/publish-gate.sh" > "$logs/nojava.log" 2> "$logs/nojava.err" \
     || fail "AZ-2215 AC-5 the gate without java failed: $(tail -n 5 "$logs/nojava.err")"
   assert_eq "$(wc -l < "$tree/.github/workflows/out/nojava/publish-plan.txt" | tr -d ' ')" "7" "AZ-2215 AC-5 seven languages without java"
+  ! grep -qx java "$tree/.github/workflows/out/nojava/publish-plan.txt" || fail "AC-4 java was published"
+  grep -q '^absent java$' "$logs/nojava.log" || fail "AC-4 java was not absent"
   after="$(ro_manifest "$tree")"
   ro_assert_same "AZ-2215 AC-5 tree manifest after the missing-java gate" "$before" "$after"
   rm -rf "$tree" "$logs"

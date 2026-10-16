@@ -38,6 +38,13 @@ printf '%s\n' "$out" | grep -Eq '^publish-gate: beta took [0-9]+ s$' || bad "a f
 printf '%s\n' "$out" | grep -qx 'failures=1' || bad "the failing group was not counted exactly once"
 printf '%s\n' "$out" | grep -Eq '^publish-gate: total took [0-9]+ s in 2 checks$' || bad "total line missing or wrong"
 
+# Act and assert: on GitHub Actions each timing line is also a notice annotation, and only there
+out="$(GITHUB_ACTIONS=true bash "$work/driver.sh" 2>&1 < /dev/null)" || bad "driver failed under GITHUB_ACTIONS"
+printf '%s\n' "$out" | grep -Eq '^::notice title=publish gate timing::publish-gate: alpha took [0-9]+ s$' || bad "no notice annotation for alpha"
+printf '%s\n' "$out" | grep -Eq '^::notice title=publish gate timing::publish-gate: total took [0-9]+ s in 2 checks$' || bad "no notice annotation for the total"
+printf '%s\n' "$out" | grep -q '^publish-gate: alpha took' || bad "the plain timing line is gone under GITHUB_ACTIONS"
+env -u GITHUB_ACTIONS bash "$work/driver.sh" 2>&1 < /dev/null | grep -q '::notice' && bad "a notice annotation outside GitHub Actions"
+
 # Act: a group that aborts under set -e
 rc=0
 out="$(bash "$work/driver.sh" abort 2>&1 < /dev/null)" || rc=$?

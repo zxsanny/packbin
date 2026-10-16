@@ -14,18 +14,27 @@ timed_abort() {
 }
 trap timed_abort EXIT
 
+# On GitHub Actions every timing line is also an annotation: the check-run annotations of a job are readable without a
+# token, the job log is not (the speed work of AZ-2582 reads the per-group seconds of a CI run from them).
+timed_say() {
+  echo "$1"
+  if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+    echo "::notice title=publish gate timing::$1"
+  fi
+}
+
 timed() {
   timed_current="$1"
   timed_start=$SECONDS
   shift
   "$@"
-  echo "publish-gate: $timed_current took $((SECONDS - timed_start)) s"
+  timed_say "publish-gate: $timed_current took $((SECONDS - timed_start)) s"
   timed_current=""
   timed_count=$((timed_count + 1))
 }
 
 timed_total() {
-  echo "publish-gate: total took $((SECONDS - gate_started)) s in $timed_count checks"
+  timed_say "publish-gate: total took $((SECONDS - gate_started)) s in $timed_count checks"
 }
 
 # The position program test runs as a child process; a failure counts like any other group failure.

@@ -325,16 +325,52 @@ sw_refusal_checks() {
 # shellcheck source=publish-swift-gate.test.sh
 source "$here/publish-swift-gate.test.sh"
 
+# sw_real_checks (the real swift fetches and builds, about two minutes) shares nothing with the stub scenarios and the
+# mutants (own mktemp directories, no stdin), so it runs beside them in a subshell; its failure count and its
+# NOT RUN note come back through a status file.
+# shellcheck disable=SC2030,SC2031  # the subshell keeps its own counters on purpose; sw_real_join adds them
+sw_real_beside() {
+  local real_dir real_failures real_not_run
+  real_dir="$(mktemp -d)"
+  (
+    failures=0
+    not_run=""
+    sw_real_checks
+    printf '%s\n%s\n' "$failures" "$not_run" > "$real_dir/status"
+  ) > "$real_dir/out" 2> "$real_dir/err" < /dev/null &
+  sw_real_pid=$!
+  sw_real_dir="$real_dir"
+}
+
+# shellcheck disable=SC2030,SC2031  # failures and not_run here are the parent shell's
+sw_real_join() {
+  local real_failures real_not_run
+  wait "$sw_real_pid" || true
+  cat "$sw_real_dir/out"
+  cat "$sw_real_dir/err" >&2
+  if [ -s "$sw_real_dir/status" ]; then
+    { read -r real_failures; read -r real_not_run; } < "$sw_real_dir/status"
+    failures=$((failures + real_failures))
+    if [ -n "$real_not_run" ]; then
+      not_run="${not_run:+$not_run, }$real_not_run"
+    fi
+  else
+    fail "sw_real_checks stopped before it finished"
+  fi
+  rm -rf "$sw_real_dir"
+}
+
 swift_checks() {
+  sw_real_beside
   sw_check_checks
   sw_rerun_checks
   sw_refusal_checks
   sw_gate_checks
   sw_position_checks
   sw_static_checks
-  sw_real_checks
   sw_credential_checks
   sw_mutant_checks
+  sw_real_join
 }
 
 if [ "$sw_standalone" = 1 ]; then

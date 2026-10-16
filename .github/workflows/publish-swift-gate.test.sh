@@ -281,21 +281,39 @@ sys.exit(3) if at < 0 or (anchor and s.find(anchor) < 0) else open(dst, "w").wri
     fail "mutant [$label]: its text is not in $file"
     return 0
   fi
+  # Every mutant has its own copy, log and mktemp directories, so up to $sw_mutant_jobs run together; a new one
+  # starts as soon as a slot is free. sw_mutant_verdicts reads the logs in the order of the calls.
+  while [ "$(jobs -r | wc -l | tr -d ' ')" -ge "$sw_mutant_jobs" ]; do
+    sleep 0.2
+  done
   (
     failures=0
     sw_wf="$copy"
     "$scenario"
-  ) > "$log" 2>&1 < /dev/null || true
-  if grep -q '^FAIL: ' "$log"; then
-    echo "rejects: $label ($(grep -m 1 '^FAIL: ' "$log" | cut -c 7-140))"
-  else
-    fail "the swift checks passed a copy with: $label"
-  fi
+  ) > "$log" 2>&1 < /dev/null &
+  sw_mutant_labels+=("$label")
+  sw_mutant_logs+=("$log")
+}
+
+# Waits for the running mutants, then reports each one: a mutant the checks passed is a failure.
+sw_mutant_verdicts() {
+  local i
+  wait
+  for i in "${!sw_mutant_logs[@]}"; do
+    if grep -q '^FAIL: ' "${sw_mutant_logs[$i]}"; then
+      echo "rejects: ${sw_mutant_labels[$i]} ($(grep -m 1 '^FAIL: ' "${sw_mutant_logs[$i]}" | cut -c 7-140))"
+    else
+      fail "the swift checks passed a copy with: ${sw_mutant_labels[$i]}"
+    fi
+  done
 }
 
 sw_mutant_checks() {
   local check='@target("swift-check")'
   sw_mutants=0
+  sw_mutant_labels=()
+  sw_mutant_logs=()
+  sw_mutant_jobs="${PACKBIN_MUTANT_JOBS:-4}"
   sw_mut="$(mktemp -d)"
   sw_mutant "no pin check" sw_rerun_checks publish-swift.sh 'if [ "$pin" != "$version $commit" ]; then' 'if false; then'
   sw_mutant "a pin of any location" sw_rerun_checks publish-swift.sh 'if p.get("location") == sys.argv[2]' 'if True'
@@ -330,6 +348,7 @@ sw_mutant_checks() {
   sw_mutant "credentials reach the swift check" sw_credential_checks publish-swift.sh $'\nunset_credentials\n' $'\n'
   sw_mutant "GITHUB_TOKEN out of the credentials" sw_credential_checks publish-lib.sh ' GITHUB_TOKEN' '' 'PACKBIN_CREDENTIALS=('
   sw_mutant "the OIDC request token kept" sw_credential_checks publish-lib.sh ' ACTIONS_ID_TOKEN_REQUEST_TOKEN' '' 'PACKBIN_CREDENTIALS=('
+  sw_mutant_verdicts
   echo "rejects: $sw_mutants mutants"
   chmod -R u+w "$sw_mut"
   rm -rf "$sw_mut"

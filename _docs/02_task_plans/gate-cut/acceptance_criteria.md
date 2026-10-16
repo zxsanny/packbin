@@ -4,15 +4,20 @@ Measured on pushed `dev` commits' `test.yml` runs on `ubuntu-latest` unless a ro
 
 ## Speed
 
-- **GC-1** The `publish-gate` job of `test.yml` takes at most 18 minutes as the median of 3 CI runs on `dev`, and no run above 20 minutes (baseline: 22 min 50 s, run 38731123341; 19 min 5 s and 23 min 12 s on the close pushes).
-- **GC-2** The `publish gate` step prints the 14 lines `publish-gate: <check> took N s` and the total in CI, and the sum of the timed groups on the Mac is at most 800 s (baseline 1 059 s).
+- **GC-1** The `publish-gate` job of `test.yml` takes at most 18 minutes (1 080 s) as the median of 3 CI runs of commits that carry the final gate code, and no run above 20 minutes. Pushes of `dev` and of `main` count, one push gives one run each (baseline: 1 370 s, 1 144 s and 1 392 s, a median of 1 370 s = 22 min 50 s; runs 38731123341, 38736351180, 38736693696). The runs are read from the public jobs API (`/actions/runs/<id>/jobs`, started and completed times); the `suites` job (876 to 1 044 s) is the next longest, so the workflow wall time cannot fall below it.
+- **GC-2** The `publish gate` step prints the 14 lines `publish-gate: <check> took N s` and the total in CI (also as `::notice` annotations, readable through the public check-runs API), and the sum of the timed groups on the Mac is at most 800 s (baseline 1 059 s).
 - **GC-3** `test.yml` end to end is at most the loop 28 figure: at most 22 minutes 51 s in the median of the same 3 runs (the gate must not move the cost to another job).
 
 ## Nothing guarded is lost
 
-- **GC-4** The count of assertions and of mutants per group is equal before and after: the failure-count line and the mutant-count lines of each of the 14 groups match the pre-change log (0 groups with fewer assertions; a group with more is allowed).
+- **GC-4** No unique assertion and no mutant is lost: the mutant counts of every group are equal (swift 30 of 30, the rest as in the loop 28 log), and each assertion that a cut removes is either moved to another scenario or identical in purpose to one that stays; the moved and removed assertions are listed in `_docs/loops/loop29/notes29.md` (0 unique assertions removed without a listed twin). Amended 2026-10-16: assertion counts per group are not printed by the gate, and a duplicate run removed from one group cannot keep its count.
 - **GC-5** For every cut, one mutation proof: a copy of the repository with the guarded behaviour broken still makes the gate fail with the group's own message (one mutant per changed scenario, 100 % rejected); the log of each mutant run is kept in the status report.
 - **GC-6** `publish-gate.test.sh` and every file it sources stay at most 500 lines (`quality-thresholds.md`), and `shellcheck` reports 0 new warnings.
+
+## Hygiene
+
+- **GC-9** Any state a cut shares between scenarios (a prebuilt tree, a bare repository, a pulled image) lives under the run's own `mktemp` directory: 0 fixed paths outside it, 2 gate runs started at the same time on one host both pass, and after a normal run and after a run aborted in the middle 0 directories of the run are left.
+- **GC-10** The timing line format `publish-gate: <check> took N s` and the 14 group names are unchanged, and `publish-timing.selftest.sh` passes.
 
 ## Evidence and docs
 
