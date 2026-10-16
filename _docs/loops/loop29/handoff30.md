@@ -13,4 +13,4 @@ Read `_docs/loops/loop29/record29.md`, `assessment29.md`, `notes29.md`, the "Loo
 1. GC-1 is met: the three runs of the final code took 689, 825 and 1 011 s (median 825 s, limit 1 080 s). The commit that noted them is unpushed until the owner's go; check `git status -sb`.
 2. Hopper: `todo/` holds AZ-2068 only (held as optional for 10 loops); no intake leftover.
 3. Candidate work (owner picks): the `suites` matrix (one job per language, the longest job now); the phases group (158 s on the runner: six full builds one after another); split `publish-phases.test.sh` (501 lines); review28 #3, #4; AZ-2068.
-4. Owner only: F44 and the first tags.
+4. Owner only: F44 (the tag ruleset). `v0.3.0` and `go/v0.3.0` were released on 2026-10-16 at the owner's request (tag on 2cade74; publish run 38894017715 green in 2 690 s for the publish job, about 45 minutes in all; GitHub Release https://github.com/zxsanny/packbin/releases/tag/v0.3.0). The tag run repeats `test.yml` (about 16 minutes) and the Go proxy took 40 minutes to serve the new tag; the session "Cut the tag publish run" (commit 84f0bbc) addresses the first.
