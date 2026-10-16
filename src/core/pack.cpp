@@ -23,9 +23,21 @@ Result put_u16(Writer& w, std::size_t value, int id) {
   return put_num<std::uint16_t>(w, static_cast<std::uint16_t>(value), false, id);
 }
 
-// The value of a count or `when` source, or false when it is absent.
+// True when a `when` that holds the count of `f` has a false condition: the count is set in the
+// row but never written, so a reader has no count (`bit` links the count to each `when` that
+// holds it, see `mark_held`).
+bool count_skipped(Field const* t, Field const& f, void* obj) {
+  for (Field const* k = t + f.ref; k->bit != 0;) {
+    k -= k->bit;
+    if (!when_matches(t, *k, obj))
+      return true;
+  }
+  return false;
+}
+
+// The value of a count, or false when it is absent or was not written.
 bool ref_value(Field const* t, Field const& f, void* obj, std::int64_t& out) {
-  return f.ref >= 0 && read_int(t[f.ref], obj, out);
+  return f.ref >= 0 && read_int(t[f.ref], obj, out) && !count_skipped(t, f, obj);
 }
 
 // The children of entry i, in order, on the same object.
@@ -75,9 +87,18 @@ Result pack_flag_byte(Pack& p, std::size_t i, void* obj) {
   Field const* t = p.t;
   std::uint8_t byte = 0;
   for (std::size_t j = i + 1; j < p.n; ++j) {
-    if (t[j].kind == Kind::FlagBit && t[j].ref == static_cast<std::int16_t>(i) &&
-        present(t, j + 1, obj))
-      byte = static_cast<std::uint8_t>(byte | (1u << t[j].bit));
+    if (t[j].kind != Kind::FlagBit || t[j].ref != static_cast<std::int16_t>(i) ||
+        !present(t, j + 1, obj))
+      continue;
+    // A body that only its late members hold cannot be read back (see `Field::late`).
+    if (!present(t, j + 1, obj, flag::Late)) {
+      for (std::size_t k = j; t[k].late != 0;) {
+        k += t[k].late;
+        if (present(t, k, obj))
+          return bad(p.w, t[k]);
+      }
+    }
+    byte = static_cast<std::uint8_t>(byte | (1u << t[j].bit));
   }
   return put_num<std::uint8_t>(p.w, byte, false, t[i].id);
 }
@@ -195,7 +216,7 @@ std::size_t item_count(Pack& p, std::size_t i, void* obj, void* m, Result& out) 
   if (f.kind == Kind::Times) {
     std::int64_t count = 0;
     if (!ref_value(p.t, f, obj, count) || count < 0 ||
-        (count != 0 && (m == nullptr || *f.count(m) != count))) {
+        (m == nullptr ? count != 0 : *f.count(m) != count)) {
       out = bad(p.w, f);
       return stop;
     }

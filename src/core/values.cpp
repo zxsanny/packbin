@@ -31,10 +31,31 @@ void set_flag(Field const& f, void* m, bool on) {
   *static_cast<bool*>(m) = on;
 }
 
+bool any_child_present(Field const* t, std::size_t i, void* obj, std::uint8_t skip) {
+  for (std::size_t j = i + 1; j < i + t[i].span; j += t[j].span) {
+    if (present(t, j, obj, skip))
+      return true;
+  }
+  return false;
+}
+
+// A times is present when its count is above zero or the row holds rounds (a count of zero
+// with rounds is refused on pack, not dropped). Rounds whose count is not in the row are present
+// too, so pack refuses them; a count that is not in the row and no rounds is no round.
+bool times_present(Field const* t, Field const& f, void* m, void* obj) {
+  bool rounds = m != nullptr && *f.count(m) != 0;
+  std::int64_t count = 0;
+  if (f.ref < 0 || !read_int(t[f.ref], obj, count))
+    return rounds;
+  return count != 0 || rounds;
+}
+
 }  // namespace
 
-bool present(Field const* t, std::size_t i, void* obj) {
+bool present(Field const* t, std::size_t i, void* obj, std::uint8_t skip) {
   Field const& f = t[i];
+  if ((f.flags & skip) != 0)
+    return false;
   void* m = member(f, obj);
   if (is_number(f.kind)) {
     if (m == nullptr)
@@ -54,11 +75,17 @@ bool present(Field const* t, std::size_t i, void* obj) {
     case Kind::Group:
       if (f.span == 1)
         return flag_on(f, m);
-      for (std::size_t j = i + 1; j < i + f.span; j += t[j].span) {
-        if (present(t, j, obj))
-          return true;
-      }
-      return false;
+      return any_child_present(t, i, obj, skip);
+    case Kind::Flags:
+    case Kind::FlagBit:
+    case Kind::U2:
+      return any_child_present(t, i, obj, skip);
+    case Kind::When:
+      return when_matches(t, f, obj) && any_child_present(t, i, obj, skip);
+    case Kind::Times:
+      return times_present(t, f, m, obj);
+    case Kind::Repeat:
+      return m != nullptr && *f.count(m) != 0;
     default:
       return m != nullptr;
   }
@@ -68,7 +95,7 @@ bool read_int(Field const& f, void* obj, std::int64_t& out) {
   void* m = member(f, obj);
   if (m == nullptr)
     return false;
-  if (f.kind == Kind::Bool) {
+  if (f.kind == Kind::Bool || (f.kind == Kind::Group && f.span == 1)) {
     bool on = flag_on(f, m);
     out = on ? 1 : 0;
     return true;

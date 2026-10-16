@@ -17,7 +17,7 @@ constexpr bool is_container(Kind k) {
   return k == Kind::Repeat || k == Kind::Times || k == Kind::List || k == Kind::Dict;
 }
 
-// Kinds whose value a `when` or a count can read.
+// Kinds whose value a `when` can read; a count reads integers only (see `resolve`).
 constexpr bool is_count_source(Kind k) {
   switch (k) {
     case Kind::U8:
@@ -92,8 +92,11 @@ constexpr int check_subtree(Field const* t, std::size_t i, int next, Check& c) {
 }
 
 // Index of the bound count source with order id `id` that comes before `before` in the scope
-// starting at `scope`, or -1.
+// starting at `scope`, or -1. An empty group is a source too, but it takes the id of the field
+// after it, so it binds only when no other field has that id.
 constexpr int find_ref(Field const* t, std::size_t scope, std::size_t before, int id) {
+  int group = -1;
+  bool other = false;
   std::size_t j = scope;
   while (j < before) {
     Field const& f = t[j];
@@ -101,28 +104,72 @@ constexpr int find_ref(Field const* t, std::size_t scope, std::size_t before, in
       j += f.span;
       continue;
     }
-    if (f.id == id && is_count_source(f.kind) && f.access != nullptr && f.span == 1)
-      return static_cast<int>(j);
+    if (f.id == id && f.span == 1) {
+      if (f.access != nullptr && is_count_source(f.kind))
+        return static_cast<int>(j);
+      if (f.kind == Kind::Group && f.access != nullptr) {
+        if (group < 0)
+          group = static_cast<int>(j);
+      } else {
+        other = true;
+      }
+    }
     ++j;
   }
-  return -1;
+  return other ? -1 : group;
 }
 
-// Index of the flag byte numbered `number` before `before` in the scope, or -1.
-constexpr int find_flag_byte(Field const* t, std::size_t scope, std::size_t before, int number) {
+// A `when` source that holds a u2 slot reads 0..3; otherwise the range of its integer type. A
+// presence source (bool or empty group) keeps its own rule (`true` only).
+constexpr bool eq_fits(Field const* t, std::size_t at, std::int64_t value) {
+  for (std::size_t k = 0; k < at; ++k) {
+    if (t[k].kind == Kind::U2 && at < k + t[k].span)
+      return value >= 0 && value <= 3;
+  }
+  switch (t[at].kind) {
+    case Kind::U8:
+      return value >= 0 && value <= 255;
+    case Kind::U16:
+      return value >= 0 && value <= 65535;
+    case Kind::U32:
+      return value >= 0 && value <= 4294967295;
+    case Kind::U64:
+      return value >= 0;
+    case Kind::I8:
+      return value >= -128 && value <= 127;
+    case Kind::I16:
+      return value >= -32768 && value <= 32767;
+    case Kind::I32:
+      return value >= -2147483647 - 1 && value <= 2147483647;
+    default:
+      return true;
+  }
+}
+
+// Index of the flag byte numbered `number` in t[begin, end) before `before`, or -1. A part that
+// ends before `before` and may not have run (a `when`, `flags`, a flag bit, a round or a list
+// or dict element) hides the bytes it holds; so does every member of `flags` that ends before
+// `before`, whatever it is. `members` is true when t[begin, end) are the members of `flags`.
+constexpr int find_flag_byte_in(Field const* t, std::size_t begin, std::size_t end,
+                                std::size_t before, int number, bool members) {
   int found = -1;
-  std::size_t j = scope;
-  while (j < before) {
+  for (std::size_t j = begin; j < end && j < before; j += t[j].span) {
     Field const& f = t[j];
-    if (is_container(f.kind) && j + f.span <= before) {
-      j += f.span;
+    bool closed = j + f.span <= before;
+    if (closed && (members || is_container(f.kind) || f.kind == Kind::When ||
+                   f.kind == Kind::Flags || f.kind == Kind::FlagBit))
       continue;
-    }
     if (f.kind == Kind::FlagByte && f.size == number)
       found = static_cast<int>(j);
-    ++j;
+    int inner = find_flag_byte_in(t, j + 1, j + f.span, before, number, f.kind == Kind::Flags);
+    if (inner >= 0)
+      found = inner;
   }
   return found;
+}
+
+constexpr int find_flag_byte(Field const* t, std::size_t scope, std::size_t before, int number) {
+  return find_flag_byte_in(t, scope, before, before, number, false);
 }
 
 // Position of the flag bit at `at` among the bits of its flag byte.
@@ -133,6 +180,54 @@ constexpr int bit_position(Field const* t, std::size_t byte, std::size_t at) {
       ++n;
   }
   return n;
+}
+
+// Links every `when` or `times` the flag bit at `bit` decides, directly or inside groups, `flags`
+// or a `when` (pack checks that `when`), whose source comes after the flag byte and before the flag
+// bit (resolved already): `late` on the bit leads to the first, `late` on each to the next. A
+// source inside the bit's own body is read where the body is read.
+constexpr void mark_late(Field* t, std::size_t bit, Check& c) {
+  std::size_t end = bit + t[bit].span;
+  std::size_t last = bit;
+  for (std::size_t i = bit + 1; i < end;) {
+    bool decided = t[i].kind == Kind::When || t[i].kind == Kind::Times;
+    bool late = t[i].ref > t[bit].ref && t[i].ref < static_cast<std::int16_t>(bit);
+    bool inside = t[i].kind == Kind::Group || t[i].kind == Kind::Flags ||
+                  (t[i].kind == Kind::When && !late);
+    if (decided && late) {
+      if (i - last > 255) {
+        c.fail_at(t[i].id);
+        return;
+      }
+      t[last].late = static_cast<std::uint8_t>(i - last);
+      t[i].flags = static_cast<std::uint8_t>(t[i].flags | flag::Late);
+      last = i;
+    }
+    i += inside ? 1 : t[i].span;
+  }
+}
+
+// Sets `bit` on the count source at `at` of the counted entry `user` (id `id`), and on each `when`
+// in `scope` that holds it, to the distance back to the nearest `when` that holds that entry, so
+// pack can tell a count that a false condition skips (see `Field::bit`). A `when` that also holds
+// `user` is true whenever `user` is reached, so the chain stops there.
+constexpr void mark_held(Field* t, std::size_t scope, std::size_t at, std::size_t user, int id,
+                         Check& c) {
+  for (std::size_t k = at;;) {
+    std::size_t w = k;
+    for (std::size_t j = scope; j < k; ++j) {
+      if (t[j].kind == Kind::When && k < j + t[j].span)
+        w = j;
+    }
+    if (w == k || user < w + t[w].span)
+      return;
+    if (k - w > 255) {
+      c.fail_at(id);
+      return;
+    }
+    t[k].bit = static_cast<std::uint8_t>(k - w);
+    k = w;
+  }
 }
 
 constexpr void resolve(Field* t, std::size_t begin, std::size_t end, std::size_t scope,
@@ -156,15 +251,37 @@ constexpr void resolve(Field* t, std::size_t begin, std::size_t end, std::size_t
     }
     if (f.ref_id >= 0) {
       int at = find_ref(t, scope, j, f.ref_id);
-      if (at < 0) {
+      // A bool is a source of a `when` for `true` only: a false bool is absent on the wire, so
+      // the `when` could never match on unpack. A count names an integer field only. A `when`
+      // whose value its source can never hold could never match either.
+      bool bool_ok = f.kind == Kind::When && f.eq == 1;
+      bool presence = at >= 0 && (t[at].kind == Kind::Bool || t[at].kind == Kind::Group);
+      if (at < 0 || (presence && !bool_ok) ||
+          (f.kind == Kind::When && !eq_fits(t, static_cast<std::size_t>(at), f.eq))) {
         c.fail_at(f.id);
         return;
       }
       f.ref = static_cast<std::int16_t>(at);
+      if (f.kind == Kind::Times || f.kind == Kind::Bits || f.kind == Kind::Packed ||
+          f.kind == Kind::Sized)
+        mark_held(t, scope, static_cast<std::size_t>(at), j, f.id, c);
     }
     if (f.span > 1)
       resolve(t, j + 1, j + f.span, is_container(f.kind) ? j + 1 : scope, c);
+    if (f.kind == Kind::FlagBit && !c.failed)
+      mark_late(t, j, c);
   }
+}
+
+// True when t[begin, end) holds a member, looking through `when` and groups: any other field
+// counts, so only a body of empty `when`s and groups holds none.
+constexpr bool has_member(Field const* t, std::size_t begin, std::size_t end) {
+  for (std::size_t j = begin; j < end; j += t[j].span) {
+    if ((t[j].kind != Kind::When && t[j].kind != Kind::Group) ||
+        has_member(t, j + 1, j + t[j].span))
+      return true;
+  }
+  return false;
 }
 
 // A u2 packs into a 16-byte buffer: at most 64 two-bit children.
@@ -182,7 +299,10 @@ constexpr void check_shape(Field const* t, std::size_t begin, std::size_t end, b
     bool is_presence = f.kind == Kind::Bool || (f.kind == Kind::Group && f.span == 1);
     bool too_wide = (f.kind == Kind::Flags && children > 8) ||
                     (f.kind == Kind::U2 && children > kMaxU2Children);
-    if (too_wide || (is_presence && !presence_ok) || (f.flags & flag::Invalid) != 0)
+    // A round with no member writes nothing, so the slot budget would not bound its work.
+    bool empty_round =
+        (f.kind == Kind::Repeat || f.kind == Kind::Times) && !has_member(t, j + 1, j + f.span);
+    if (too_wide || empty_round || (is_presence && !presence_ok) || (f.flags & flag::Invalid) != 0)
       c.fail_at(f.id);
     if (f.span > 1)
       check_shape(t, j + 1, j + f.span, f.kind == Kind::Flags || f.kind == Kind::FlagBit, c);

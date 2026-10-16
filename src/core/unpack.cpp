@@ -7,15 +7,17 @@ namespace detail {
 
 namespace {
 
+// Flag byte numbers are 0..7.
+constexpr std::size_t kFlagBytes = 8;
+
 // One unpack walk. The walk recurses once per nesting level through unpack_one and, for
 // counted kinds, unpack_items; everything else stays out of that path to keep the stack small.
 struct Walk {
   Field const* t;
   Reader& r;
   // The last value read for each flag byte number (0..7) in the scope being read.
-  std::uint8_t flag_bytes[8];
+  std::uint8_t flag_bytes[kFlagBytes];
 };
-
 
 Result unpack_one(Walk& w, std::size_t i, void* obj);
 
@@ -46,6 +48,19 @@ Result unpack_children(Walk& w, std::size_t i, void* obj) {
       return res;
   }
   return Result{};
+}
+
+// Runs Fn, then brings back the flag bytes of the scope around it, so a flag byte read inside is
+// not seen after it: a `when`, a `flags` member or the child of a flag bit (an error ends the whole
+// unpack).
+template <Result (*Fn)(Walk&, std::size_t, void*)>
+PACKBIN_NOINLINE
+Result with_outer_flags(Walk& w, std::size_t i, void* obj) {
+  std::uint8_t outer[kFlagBytes];
+  std::memcpy(outer, w.flag_bytes, sizeof(outer));
+  Result res = Fn(w, i, obj);
+  std::memcpy(w.flag_bytes, outer, sizeof(outer));
+  return res;
 }
 
 // Bytes, utf8 (after its u16 length) and sized (length from its count).
@@ -134,7 +149,7 @@ Result unpack_flags(Walk& w, std::size_t i, void* obj) {
   unsigned k = 0;
   for (std::size_t j = i + 1; res.ok() && j < i + t[i].span; j += t[j].span, ++k) {
     if (byte & (1u << k))
-      res = unpack_one(w, j, obj);
+      res = with_outer_flags<unpack_one>(w, j, obj);
   }
   return res;
 }
@@ -193,13 +208,15 @@ std::size_t item_count(Walk& w, std::size_t i, void* obj, void* m, Result& out) 
 }
 
 // Up to `count` items (a repeat: until the packet ends) of the children of entry i, each into
-// the next Array item. A null array skips the items.
+// the next Array item. A null array skips the items. Kept out of line: inlined into unpack_one it
+// grows the frame of every nesting level, not only of the counted ones.
+PACKBIN_NOINLINE
 Result unpack_items(Walk& w, std::size_t i, void* m, std::size_t count) {
   Field const& f = w.t[i];
   bool to_end = f.kind == Kind::Repeat;
   // The rounds read their own flag bytes, which may reuse the numbers of the outer scope; the
   // outer values come back when the container ends (an error ends the whole unpack).
-  std::uint8_t outer[8];
+  std::uint8_t outer[kFlagBytes];
   std::memcpy(outer, w.flag_bytes, sizeof(outer));
   for (std::size_t k = 0; to_end ? w.r.pos < w.r.len : k < count; ++k) {
     std::size_t at = w.r.pos;
@@ -249,14 +266,14 @@ Result unpack_one(Walk& w, std::size_t i, void* obj) {
     case Kind::Sized:
       return unpack_text(w, i, obj);
     case Kind::When:
-      return when_matches(w.t, f, obj) ? unpack_children(w, i, obj) : Result{};
+      return when_matches(w.t, f, obj) ? with_outer_flags<unpack_children>(w, i, obj) : Result{};
     case Kind::Flags:
       return unpack_flags(w, i, obj);
     case Kind::FlagByte:
       return get_num<std::uint8_t>(w.r, w.flag_bytes[f.size], false, f.id);
     case Kind::FlagBit:
       if (w.flag_bytes[w.t[f.ref].size] & (1u << f.bit))
-        return unpack_one(w, i + 1, obj);
+        return with_outer_flags<unpack_one>(w, i + 1, obj);
       return Result{};
     case Kind::Group:
       if (f.span == 1) {
