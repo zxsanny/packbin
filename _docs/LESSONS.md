@@ -46,4 +46,5 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-14_loop26.md
 - [2026-10-14] [process] A security audit that measures finds what review cannot: F47 (dictionary keys normalized in quadratic time, 25 s for 1 MiB) was invisible in the code and appeared only when the auditor built a probe; put "build one probe per hostile-input angle" in the audit brief, with a peak-RSS and a CPU figure.
   Source: _docs/06_metrics/retro_2026-10-14_loop26.md
-
+- [2026-10-16] [tooling] Time a duplicate before arguing about it, and read a platform limit before relying on an output channel: per-call timing showed two groups running the same three real gate scenarios (six runs of 70 to 90 s for three scenarios), and the first CI annotation per timing line lost the last five groups because GitHub keeps 10 notices per step; one notice with all lines fixed it.
+  Source: _docs/loops/loop29/notes29.md

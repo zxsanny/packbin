@@ -1,0 +1,16 @@
+# Loop 30 handoff — written 2026-10-16 while loop 29 was closing
+
+Read `_docs/loops/loop29/record29.md`, `assessment29.md`, `notes29.md`, the "Loop 29" section of `_docs/04_deploy/reports/deploy_status_report.md` and `_docs/03_implementation/test_run_loop29_report.md` first. Owner preferences from `_docs/loops/loop26/handoff27.md` stand (one total review and one step 11 run, decision batches with "accept all recommended" first, `< /dev/null` and timeouts on shell, pushes of `dev` asked each time, no tag without the owner's go).
+
+## State when loop 29 closes
+
+- `publish-gate` job: 689 s on run 38888934994 (was 1 370 s median); the Mac gate test is 754 s in `loop-tests.sh`. `suites` (888 s) is now the longest job; the workflow takes about 15 minutes.
+- The gate prints its 14 lines also as ONE `::notice` annotation, readable without a token: `curl -s "https://api.github.com/repos/zxsanny/packbin/check-runs/<job id>/annotations?per_page=100"` (job ids from `/actions/runs/<id>/jobs`). GitHub keeps only 10 notices per step, so never emit one per line.
+- `gh` is not installed on this Mac; the public API is used (60 calls an hour).
+
+## Do first
+
+1. Read the CI runs of the close pushes (`dev` and `main`): GC-1 needs the gate job of each at most 1 080 s (the median of 3 with run 38888934994). Note the three numbers in `ci_cd_pipeline.md` and the status report.
+2. Hopper: `todo/` holds AZ-2068 only (held as optional for 10 loops); no intake leftover.
+3. Candidate work (owner picks): the `suites` matrix (one job per language, the longest job now); the phases group (158 s on the runner: six full builds one after another); split `publish-phases.test.sh` (501 lines); review28 #3, #4; AZ-2068.
+4. Owner only: F44 and the first tags.

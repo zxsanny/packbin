@@ -76,3 +76,37 @@ Run 38731123341, `test.yml`, five jobs all `success`, started together at 11:58:
 
 Runs 38736351180 (`dev`) and 38736693696 (`main`), `test.yml`, all five jobs `success` in both: `scaffold` 63 s and 50 s, `ring` 287 s and 304 s, `embedded` 354 s and 352 s, `suites` 1 044 s and 876 s, `publish-gate` 1 144 s and 1 392 s; end to end 19 min 5 s (`dev`) and 23 min 12 s (`main`). With run 38731123341 (22 min 51 s) that is 3 of 3 runs under 25 minutes: SP-2 met. The `main` run was 4 minutes slower on the gate job than the `dev` run on the same code; the spread between runs is about that size, so 25 minutes is tight when the runner is slow.
 
+
+## Loop 29: publish gate cut (AZ-2582, 2026-10-16)
+
+Goal: the `publish-gate` job of `test.yml` at most 18 minutes (median of 3 runs of the final code), without losing an assertion or a mutant. Evidence, ledger and mutation proofs: `_docs/loops/loop29/notes29.md`; step 11: `_docs/03_implementation/test_run_loop29_report.md`.
+
+### Where the gate time went (Mac, load average 19 to 29, per sub-function and per call)
+
+Total 1 075 s: `gate_checks` 217 s and `ro_gate_checks` 227 s (each runs the real `publish-gate.sh` three times: 90 / 68 / 77 s and 81 / 73 / 73 s), `sw_real_checks` 131 s (real swift: 57 / 56 / 26 s), the 30 swift mutants 158 s (about 5 s each, one at a time), `ph_rerun_checks` 113 s, `ro_full_run_check` 46 s, `ph_failure_injection` 46 s. The other 9 groups: about 37 s.
+
+### Changes
+
+1. Duplicate runs: `gate_checks` keeps the default-root run; the bad-fixture and missing-java scenarios live in `ro_gate_checks` (three assertions moved there, three had twins that were already there).
+2. Swift mutants run four at a time (159 s to 72 s alone, same load).
+3. `sw_real_checks` runs beside the stub scenarios and mutants (swift group 284 to 160 s).
+4. `ro_gate_checks` runs its three scenarios together on three tree copies (227 to 124 s alone).
+5. The timing lines are also one `::notice` annotation on GitHub Actions (GitHub keeps 10 notices per step: the first version lost the last five lines, found on the first CI run).
+
+### CI runs
+
+| Run | Commit | publish-gate job | gate step | suites | end to end |
+|-----|--------|------------------|-----------|--------|------------|
+| 38731123341 (loop 28) | b7d6577 | 1 370 s | 1 269 s | 1 037 s | 22 min 51 s |
+| 38868021571 (batch 1) | 178349f | 1 069 s | 1 005 s | 956 s | about 17 min 50 s |
+| 38888934994 (final code) | 1ce48a2 | 689 s | 593 s | 888 s | about 14 min 50 s (`suites` is the longest job) |
+
+Per-group seconds of the last run (annotation): static 0, crates-token 0, registry 0, vcpkg 11, gate 74, go 5, swift 116, manifest 0, npm 4, position 1, workflow 3, pins 20, phases 158, readonly 201, total 593 in 14 checks.
+
+### Mac
+
+`scripts/loop-tests.sh` at e20e8fd: scaffold PASS 163 s, publish-gate PASS 754 s (load 10 to 16). Two complete gate tests at once: 989 s and 990 s, both pass.
+
+### Left open
+
+`suites` (888 s) is now the longest job: a matrix of one job per language is the next step if the wall time matters. The phases group (158 s on the runner, 334 s on the Mac with two runs) and `readonly` (201 s) hold the remaining gate time: six builds of nine targets run one after another in the phases scenarios. An aborted gate leaves its `mktemp` directories (unchanged). Runs 2 and 3 of the median of 3 are the close pushes of `dev` and `main`.
