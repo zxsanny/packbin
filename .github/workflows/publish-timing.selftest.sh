@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # AZ-2563: the timing lines of publish-gate.test.sh. A group prints its seconds, also when it fails; a group that aborts
-# the script is named by the EXIT trap; the gate runs exactly the 14 groups, each through `timed`.
+# the script is named by the EXIT trap; the gate runs exactly the 14 groups, each through `group` and `timed`; --groups
+# (AZ-2600) selects some of them.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -59,10 +60,39 @@ printf '%s\n' "$out" | grep -q 'not-reached' && bad "the run went on after an ab
 out="$(GITHUB_ACTIONS=true bash "$work/driver.sh" abort 2>&1 < /dev/null)" || true
 printf '%s\n' "$out" | grep -Eq '^::notice title=publish gate timing::.*publish-gate: gamma took [0-9]+ s \(aborted\)$' || bad "an aborting group has no notice annotation"
 
-# Act and assert: the gate runs the 14 groups, each through timed, and nothing bare
+# Act and assert: the gate runs the 14 groups, each through `group` (which calls timed), and nothing bare
 expected="static crates-token registry vcpkg gate go swift manifest npm position workflow pins phases readonly"
-got="$(sed -n 's/^timed \([a-z-]*\) [a-z_]*$/\1/p' "$here/publish-gate.test.sh" | tr '\n' ' ' | sed 's/ $//')"
-[ "$got" = "$expected" ] || bad "timed groups are [$got], expected [$expected]"
+got="$(sed -n 's/^group \([a-z-]*\) \([a-z_]*\)$/\1=\2/p' "$here/publish-gate.test.sh" | tr '\n' ' ' | sed 's/ $//')"
+expected_fns="static=static_checks crates-token=crates_token_checks registry=registry_checks vcpkg=vcpkg_checks gate=gate_checks go=go_checks swift=swift_checks manifest=manifest_checks npm=npm_dist_checks position=position_checks workflow=workflow_checks pins=pins_checks phases=phase_checks readonly=readonly_checks"
+[ "$got" = "$expected_fns" ] || bad "grouped checks are [$got], expected [$expected_fns]"
+listed="$(sed -n 's/^gate_groups="\(.*\)"$/\1/p' "$here/publish-gate.test.sh")"
+[ "$listed" = "$expected" ] || bad "gate_groups is [$listed], expected [$expected]"
+[ "$(grep -c ') timed "\$1" "\$2" ;;$' "$here/publish-gate.test.sh")" -eq 1 ] || bad "the group helper does not call timed exactly once"
+if grep -q '^timed [a-z-]* [a-z_]*$' "$here/publish-gate.test.sh"; then bad "a group is timed outside the --groups selection"; fi
+
+# Act and assert (AZ-2600): --groups runs only the named groups. The real selection lines of publish-gate.test.sh
+# (from gate_groups= to the first group call) run in a driver with a stand-in `timed`, so no real group runs.
+sed -n '/^gate_groups=/,/^group static /p' "$here/publish-gate.test.sh" | sed '$d' > "$work/select.sh"
+grep -q '^group() {' "$work/select.sh" || bad "the selection lines of publish-gate.test.sh were not found"
+for names in "manifest" "manifest,position" "position,manifest"; do
+  out="$(bash -c 'set -euo pipefail; timed() { echo "ran $1 $2"; }; names=$1; snip=$2; set -- --groups "$names"; source "$snip"
+    group static f_static; group manifest f_manifest; group position f_position; group readonly f_readonly' _ "$names" "$work/select.sh" 2>&1 < /dev/null)" \
+    || bad "--groups $names failed: $out"
+  expect="$(printf '%s\n' "$names" | tr ',' '\n' | sort | tr '\n' ' ')"
+  got="$(printf '%s\n' "$out" | sed -n 's/^ran \([a-z-]*\) .*/\1/p' | sort | tr '\n' ' ')"
+  [ "$got" = "$expect" ] || bad "--groups $names ran [$got], expected [$expect]"
+done
+out="$(bash -c 'set -euo pipefail; timed() { echo "ran $1 $2"; }; snip=$1; set --; source "$snip"; group static f_static; group manifest f_manifest' _ "$work/select.sh" 2>&1 < /dev/null)" \
+  || bad "no --groups failed: $out"
+[ "$(printf '%s\n' "$out" | grep -c '^ran ')" -eq 2 ] || bad "no --groups did not run every group asked for: $out"
+rc=0
+out="$(bash "$here/publish-gate.test.sh" --groups manifest,no-such-group 2>&1 < /dev/null)" || rc=$?
+[ "$rc" -eq 2 ] || bad "an unknown group exited $rc, expected 2"
+printf '%s\n' "$out" | grep -q "unknown group 'no-such-group'" || bad "an unknown group is not named: $out"
+printf '%s\n' "$out" | grep -q 'publish-gate: manifest took' && bad "a group ran although another was unknown"
+rc=0
+bash "$here/publish-gate.test.sh" --groups "" >/dev/null 2>&1 < /dev/null || rc=$?
+[ "$rc" -eq 2 ] || bad "an empty group list exited $rc, expected 2"
 for fn in static_checks crates_token_checks registry_checks vcpkg_checks gate_checks go_checks swift_checks manifest_checks \
   npm_dist_checks position_checks workflow_checks pins_checks phase_checks readonly_checks; do
   n="$(grep -c "^$fn\$" "$here/publish-gate.test.sh" || true)"

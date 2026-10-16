@@ -58,21 +58,40 @@ jobs:
         run: bash scripts/loop-tests.test.sh
 
   # The suites and the publish gate share nothing (the gate pulls its own images), so they run beside each other and
-  # beside scaffold, embedded and ring: the wall time is the longest job, not the sum (AZ-2564).
+  # beside scaffold, embedded and ring: the wall time is the longest job, not the sum (AZ-2564). Since AZ-2600 each
+  # language is its own job and Swift, the longest suite, runs as two (PACKBIN_SWIFT_PART, run-suite.sh); the publish
+  # gate is three jobs, each running its share of the check groups (publish-gate.test.sh --groups).
   suites:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lang: csharp
+          - lang: typescript
+          - lang: python
+          - lang: rust
+          - lang: cpp
+          - lang: java
+          - lang: go
+          - lang: swift
+            part: tests
+          - lang: swift
+            part: gates
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: suites
+      - name: suite
+        env:
+          SUITE: ${{ matrix.lang }}
+          PACKBIN_SWIFT_PART: ${{ matrix.part }}
         run: |
           set -euo pipefail
           mkdir -p test-results
-          for lang in csharp typescript python rust cpp java go swift; do
-            docker compose -f docker-compose.test.yml run --rm "$lang"
-          done
+          docker compose -f docker-compose.test.yml run --rm -e PACKBIN_SWIFT_PART "$SUITE"
 
-  publish-gate:
+  # The readonly group alone is the longest of the gate (302 s of 911 s on run 38903922126).
+  publish-gate-readonly:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -82,7 +101,30 @@ jobs:
       - name: test results directory
         run: mkdir -p test-results
       - name: publish gate
-        run: bash .github/workflows/publish-gate.test.sh
+        run: bash .github/workflows/publish-gate.test.sh --groups readonly
+
+  publish-gate-phases:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: pull images
+        run: docker compose -f docker-compose.test.yml -f docker-compose.publish.yml pull --quiet csharp typescript python rust cpp java go swift
+      - name: test results directory
+        run: mkdir -p test-results
+      - name: publish gate
+        run: bash .github/workflows/publish-gate.test.sh --groups gate,pins,phases
+
+  # The groups that start no container: no image pull.
+  publish-gate-rest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: test results directory
+        run: mkdir -p test-results
+      - name: publish gate
+        run: bash .github/workflows/publish-gate.test.sh --groups static,crates-token,registry,vcpkg,go,swift,manifest,npm,position,workflow
 
   embedded:
     runs-on: ubuntu-latest

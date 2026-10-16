@@ -6,7 +6,12 @@
 #
 # 1. Ask the remote about the tag. At the same commit: nothing to push. At another commit: fail naming
 #    both, because a Go tag never moves and is never deleted. Absent: push it (never forced).
-# 2. Ask proxy.golang.org for the module at that version (`go mod download -json`: it fetches the
+# 2. Wait until the tag is visible to an anonymous reader and PACKBIN_GO_PROXY_SETTLE seconds more (default 30), and
+#    only then ask the proxy: the first request of a version the proxy cannot find is cached as "not found"
+#    (golang/go#40170, up to about 30 minutes, nothing flushes it). On go/v0.3.0 the first request came 1.2 s after the
+#    push, the proxy answered "unknown revision", and the next 38 requests got the cached answer: 19 minutes (AZ-2600).
+#    A tag that was already there is not waited for.
+# 3. Ask proxy.golang.org for the module at that version (`go mod download -json`: it fetches the
 #    zip and verifies it against sum.golang.org, which `go list -m` does not), retrying for
 #    $PACKBIN_GO_PROXY_WINDOW seconds (default 1800) every $PACKBIN_GO_PROXY_PAUSE seconds (default 30).
 #    It runs on a re-run too, so a run that failed here is finished by running the tag again.
@@ -42,6 +47,8 @@ remote_tag_commit() {
   printf '%s\n' "$sha"
 }
 
+tag_pushed=0
+
 push_go_tag() {
   local remote
   remote="$(remote_tag_commit)" || exit 1
@@ -56,6 +63,27 @@ push_go_tag() {
   fi
   echo "push go tag $tag at $commit"
   git_push "$root" "$url" "$commit:refs/tags/$tag"
+  tag_pushed=1
+}
+
+# After a push: the tag shows on an anonymous ls-remote (up to $PACKBIN_GO_TAG_WINDOW seconds, default 120, every
+# $PACKBIN_GO_TAG_PAUSE seconds, default 5), then the settle pause. A tag that does not show fails the run before
+# the proxy is asked, so the proxy is never given the first miss; a re-run only re-checks.
+await_tag_visible() {
+  local window="${PACKBIN_GO_TAG_WINDOW:-120}" pause="${PACKBIN_GO_TAG_PAUSE:-5}" settle="${PACKBIN_GO_PROXY_SETTLE:-30}"
+  local deadline=$((SECONDS + window)) attempt=0
+  while [ "$(remote_tag_commit)" != "$commit" ]; do
+    attempt=$((attempt + 1))
+    echo "go tag $tag is not visible on $url yet (try $attempt)"
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      echo "go tag $tag was pushed but did not show on $url within ${window}s; the proxy was not asked;" \
+        "run the tag again to check again" >&2
+      return 1
+    fi
+    sleep "$pause"
+  done
+  echo "go tag $tag is visible; waiting ${settle}s before the first proxy request"
+  sleep "$settle"
 }
 
 # Succeeds when proxy.golang.org downloads `<module> v<version>`: the JSON of `go mod download` names
@@ -97,4 +125,7 @@ print(d["Error"] if d.get("Error") else "%s %s" % (d.get("Path", ""), d.get("Ver
 }
 
 push_go_tag
+if [ "$tag_pushed" -eq 1 ]; then
+  await_tag_visible
+fi
 proxy_check

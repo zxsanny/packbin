@@ -147,6 +147,60 @@ if grep -qF PACKBIN_FUZZ_SECONDS "$repo/docker-compose.test.yml" "$repo/docker-c
 run_swift swift "$swroot" PACKBIN_SWIFT_SCRATCH= >/dev/null
 if ! grep -qF -- "--scratch-path $swroot/.build --force-resolved-versions" "$work/swift.log"; then bad "swift: the default scratch path is not $swroot/.build: $(head -n 1 "$work/swift.log")"; fi
 
+# S2d (AZ-2600). CI runs the suite as two jobs (PACKBIN_SWIFT_PART tests and gates): together they run exactly the steps
+# of the single run, each part in the order of the single run, neither part runs a step of the other, and both
+# parts resolve and list the tests (the gates part lists those of its own sanitizer build)
+sort_u() { sort -u; }
+run_swift swift "$swroot" SWIFT_FUZZ=1 >/dev/null
+sort_u < "$work/swift.log" > "$work/swift.all.sorted"
+out="$(run_swift swift "$swroot" SWIFT_FUZZ=1 PACKBIN_SWIFT_PART=tests)"; code=$?
+[ "$code" -eq 0 ] || bad "swift: the tests part failed on a clean tree (exit $code): $out"
+sw_row_is swift "PASS "
+cp "$work/swift.log" "$work/swift.tests.log"
+expected_tests="swift package $o resolve
+swift build $o -c release -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete
+swift build $o --build-tests
+swift test $o --skip-build --verbose
+swift test list $o --skip-build
+swift test $o --skip-build --verbose --filter \\.FuzzTests/"
+[ "$(cat "$work/swift.tests.log")" = "$expected_tests" ] || bad "swift: the tests part steps differ: $(diff <(printf '%s\n' "$expected_tests") "$work/swift.tests.log")"
+out="$(run_swift swift "$swroot" SWIFT_FUZZ=1 PACKBIN_SWIFT_PART=gates)"; code=$?
+[ "$code" -eq 0 ] || bad "swift: the gates part failed on a clean tree (exit $code): $out"
+sw_row_is swift "PASS "
+cp "$work/swift.log" "$work/swift.gates.log"
+expected_gates="swift package $o resolve
+swift build $o --build-tests --sanitize=thread
+swift test list $o --skip-build
+swift test $o --skip-build --sanitize=thread --verbose --filter \\.ConcurrencyTests/ --filter \\.SessionTests/ --filter \\.SessionHostileTests/
+swift build $o -c release --build-tests
+swift test $o -c release --skip-build --verbose --filter \\.SpeedTests/ --filter \\.FuzzTests/mebibyte
+swift package $o describe --type json
+swift package $o dump-package"
+[ "$(cat "$work/swift.gates.log")" = "$expected_gates" ] || bad "swift: the gates part steps differ: $(diff <(printf '%s\n' "$expected_gates") "$work/swift.gates.log")"
+cat "$work/swift.tests.log" "$work/swift.gates.log" | sort_u > "$work/swift.parts.sorted"
+cmp -s "$work/swift.all.sorted" "$work/swift.parts.sorted" || bad "swift: the two parts do not run the steps of the single run: $(diff "$work/swift.all.sorted" "$work/swift.parts.sorted")"
+# a part the suite does not know fails by name before any step; an empty value is the single run
+out="$(run_swift swift "$swroot" PACKBIN_SWIFT_PART=all-of-it)"; code=$?
+[ "$code" -ne 0 ] || bad "swift: an unknown part passed"
+case "$out" in *"PACKBIN_SWIFT_PART is all-of-it, not all, tests or gates"*) ;; *) bad "swift: no message for an unknown part: $out" ;; esac
+sw_row_is swift "FAIL suite failed"
+[ ! -s "$work/swift.log" ] || bad "swift: a step ran for an unknown part: $(cat "$work/swift.log")"
+run_swift swift "$swroot" PACKBIN_SWIFT_PART= >/dev/null
+[ "$(wc -l < "$work/swift.log" | tr -d ' ')" -ge 11 ] || bad "swift: an empty PACKBIN_SWIFT_PART did not run every step"
+# the gates part keeps its guards: a missing SpeedTests or sanitizer suite fails it by name, a failed sanitizer build stops it
+out="$(run_swift swift "$swroot" PACKBIN_SWIFT_PART=gates SWIFT_NO_SPEED=1)"; code=$?
+[ "$code" -ne 0 ] || bad "swift: the gates part passed without SpeedTests"
+case "$out" in *"no SpeedTests suite"*) ;; *) bad "swift: the gates part has no message for the missing SpeedTests suite: $out" ;; esac
+out="$(run_swift swift "$swroot" PACKBIN_SWIFT_PART=gates SWIFT_NO_SUITE=SessionTests)"; code=$?
+[ "$code" -ne 0 ] || bad "swift: the gates part passed without SessionTests"
+case "$out" in *"no SessionTests suite"*) ;; *) bad "swift: the gates part has no message for the missing SessionTests suite: $out" ;; esac
+run_swift swift "$swroot" PACKBIN_SWIFT_PART=gates SWIFT_FAIL=tsan-build >/dev/null; code=$?
+[ "$code" -ne 0 ] || bad "swift: the gates part passed after a failed sanitizer build"
+if sw_ran "--skip-build --sanitize=thread" || sw_ran "describe"; then bad "swift: the gates part ran a step after the sanitizer build failed"; fi
+run_swift swift "$swroot" PACKBIN_SWIFT_PART=tests SWIFT_FAIL=release >/dev/null; code=$?
+[ "$code" -ne 0 ] || bad "swift: the tests part passed after a failed release build"
+if sw_ran "--build-tests"; then bad "swift: the tests part built the tests after the release build failed"; fi
+
 # S3. no FuzzTests suite yet: the step says it is skipped and does not fuzz
 out="$(run_swift swift "$swroot")"; code=$?
 [ "$code" -eq 0 ] || bad "swift: a tree without a fuzz suite failed (exit $code): $out"
@@ -236,8 +290,9 @@ pin="$(bash "$here/tool-pin.sh" "$svc")" || bad "$svc: tool-pins.txt has no $svc
   || bad "$svc: the compose image is not swift:$pin: $(service_line "$repo/docker-compose.test.yml" "$svc" image)"
 [ "$(service_line "$repo/docker-compose.test.yml" "$svc" command)" = "[\"exec /src/.github/workflows/run-suite.sh $svc\"]" ] \
   || bad "$svc: the compose service does not run run-suite.sh $svc"
-suites="$(sed -n 's/^ *for lang in \(.*\); do$/\1/p' "$here/test.yml" | grep -w swift)"
-case " $suites " in *" swift "*) ;; *) bad "test.yml: the suites job does not run swift: '$suites'" ;; esac
+# AZ-2600: the suites job is a matrix; its two swift entries run the two parts, no entry runs the whole suite
+swift_entries="$(ruby -ryaml -e 'inc = YAML.safe_load(File.read(ARGV[0]))["jobs"]["suites"]["strategy"]["matrix"]["include"]; puts inc.select { |e| e["lang"] == "swift" }.map { |e| e["part"].to_s }.sort.join(" ")' "$here/test.yml")"
+[ "$swift_entries" = "gates tests" ] || bad "test.yml: the suites matrix does not run the swift parts tests and gates once each: '$swift_entries'"
 
 # S11. the build output is outside the mounted tree, and the publish file mounts the tree read-only
 svc=swift

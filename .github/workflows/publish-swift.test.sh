@@ -134,7 +134,7 @@ sw_publish() {
   set +e
   env "${unset_args[@]}" PACKBIN_PUBLISH=1 PACKBIN_DOCKER=0 SRC_ROOT="$sw_src" PACKBIN_PLAN="$sw_plan" \
     PACKBIN_OUT="$sw_dir/out-$name" PACKBIN_VERSION=v0.1.9 SWIFT_PACKAGE_URL="$sw_bare" GO_TAG_REGISTRY_URL="$sw_bare" \
-    PACKBIN_QUERY_PAUSE=0 PACKBIN_SWIFT_PAUSE=0 PACKBIN_SWIFT_WINDOW=0 PACKBIN_GO_PROXY_PAUSE=0 PACKBIN_GO_PROXY_WINDOW=0 \
+    PACKBIN_QUERY_PAUSE=0 PACKBIN_SWIFT_PAUSE=0 PACKBIN_SWIFT_WINDOW=0 PACKBIN_GO_PROXY_PAUSE=0 PACKBIN_GO_PROXY_WINDOW=0 PACKBIN_GO_PROXY_SETTLE=0 PACKBIN_GO_TAG_PAUSE=0 \
     SW_BARE="$sw_bare" SW_SWIFT_LOG="$sw_log" GT_BARE="$sw_bare" GT_GO_LOG="$sw_golog" PATH="$sw_bin:$PATH" "$@" \
     bash "$sw_wf/publish-registries.sh" > "$sw_dir/$name.out" 2>&1 < /dev/null
   sw_code=$?

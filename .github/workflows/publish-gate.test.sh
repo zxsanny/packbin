@@ -330,20 +330,52 @@ source "$here/publish-swift.test.sh"
 # shellcheck source=publish-timing.test.sh
 source "$here/publish-timing.test.sh"
 
-timed static static_checks
-timed crates-token crates_token_checks
-timed registry registry_checks
-timed vcpkg vcpkg_checks
-timed gate gate_checks
-timed go go_checks
-timed swift swift_checks
-timed manifest manifest_checks
-timed npm npm_dist_checks
-timed position position_checks
-timed workflow workflow_checks
-timed pins pins_checks
-timed phases phase_checks
-timed readonly readonly_checks
+# The 14 check groups, in run order. CI runs them as three jobs (test.yml, publish-gate-*), each with --groups <a,b,..>
+# naming its share (AZ-2600); no argument runs all of them, as the Mac does. publish-jobs.test.sh reads this list, so a
+# group that no CI job runs, or two jobs run, is refused there.
+gate_groups="static crates-token registry vcpkg gate go swift manifest npm position workflow pins phases readonly"
+selected=" $gate_groups "
+if [ "${1:-}" = "--groups" ]; then
+  wanted="${2:-}"
+  if [ -z "$wanted" ]; then
+    echo "usage: publish-gate.test.sh [--groups a,b,..] ($gate_groups)" >&2
+    exit 2
+  fi
+  selected=" ${wanted//,/ } "
+  for name in $selected; do
+    case " $gate_groups " in
+      *" $name "*) ;;
+      *)
+        echo "publish-gate.test.sh: unknown group '$name' (groups: $gate_groups)" >&2
+        exit 2
+        ;;
+    esac
+  done
+fi
+
+echo "publish-gate: groups$selected"
+
+# group <name> <function>: runs one group through `timed` when it is selected.
+group() {
+  case "$selected" in
+    *" $1 "*) timed "$1" "$2" ;;
+  esac
+}
+
+group static static_checks
+group crates-token crates_token_checks
+group registry registry_checks
+group vcpkg vcpkg_checks
+group gate gate_checks
+group go go_checks
+group swift swift_checks
+group manifest manifest_checks
+group npm npm_dist_checks
+group position position_checks
+group workflow workflow_checks
+group pins pins_checks
+group phases phase_checks
+group readonly readonly_checks
 timed_total
 
 if [ "$failures" -ne 0 ]; then

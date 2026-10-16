@@ -274,23 +274,40 @@ case "$lang" in
     fi
     ;;
   swift)
+    # PACKBIN_SWIFT_PART splits the suite in two for CI (AZ-2600): `tests` is the strict release build, the debug
+    # tests and the fuzz run; `gates` is the thread-sanitizer run, the release speed test and the dependency check.
+    # Unset or `all` runs every step in one run, as the Mac does. The parts share no build output.
+    swift_part="${PACKBIN_SWIFT_PART:-all}"
+    case "$swift_part" in
+      all | tests | gates) ;;
+      *)
+        printf 'run-suite: PACKBIN_SWIFT_PART is %q, not all, tests or gates\n' "$swift_part" >&2
+        ok=1
+        ;;
+    esac
     # A tree without Package.swift or swift/ fails, as every other language does without its manifest (AC-3).
-    if swift_tree; then
+    if [ "$ok" -eq 0 ] && swift_tree; then
       run swift_resolve
-      # SW-9: 0 warnings in the release build. Warnings as errors and complete concurrency checking are given here,
-      # never in Package.swift: an unsafe flag there makes the package unusable as a dependency.
-      run swift build "${swift_opts[@]}" -c release -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete
-      # The tests are built first, so the verbose test output is not buried under the compiler command lines.
-      run swift build "${swift_opts[@]}" --build-tests
-      run swift test "${swift_opts[@]}" --skip-build --verbose
-      run swift_list
-      # Before the sanitizer run, which rebuilds the debug build with -sanitize=thread.
-      run swift_fuzz
-      # SW-14: a race reported by the thread sanitizer fails the run (its exit code is 66).
-      run swift build "${swift_opts[@]}" --build-tests --sanitize=thread
-      run swift_sanitized
-      run swift_speed
-      run swift_deps
+      if [ "$swift_part" != gates ]; then
+        # SW-9: 0 warnings in the release build. Warnings as errors and complete concurrency checking are given here,
+        # never in Package.swift: an unsafe flag there makes the package unusable as a dependency.
+        run swift build "${swift_opts[@]}" -c release -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete
+        # The tests are built first, so the verbose test output is not buried under the compiler command lines.
+        run swift build "${swift_opts[@]}" --build-tests
+        run swift test "${swift_opts[@]}" --skip-build --verbose
+        run swift_list
+        # Before the sanitizer run, which rebuilds the debug build with -sanitize=thread.
+        run swift_fuzz
+      fi
+      if [ "$swift_part" != tests ]; then
+        # SW-14: a race reported by the thread sanitizer fails the run (its exit code is 66).
+        run swift build "${swift_opts[@]}" --build-tests --sanitize=thread
+        # The gates part has no debug test build of its own: it lists the tests of the sanitizer build.
+        if [ "$swift_part" = gates ]; then run swift_list; fi
+        run swift_sanitized
+        run swift_speed
+        run swift_deps
+      fi
     fi
     ;;
   *)

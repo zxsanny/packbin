@@ -103,7 +103,7 @@ gt_publish() {
   set +e
   env "${unset_args[@]}" PACKBIN_PUBLISH=1 PACKBIN_DOCKER=0 SRC_ROOT="$gt_src" PACKBIN_PLAN="$gt_plan" \
     PACKBIN_OUT="$gt_dir/out-$name" PACKBIN_VERSION=v0.1.9 GO_TAG_REGISTRY_URL="$gt_bare" PACKBIN_QUERY_PAUSE=0 \
-    PACKBIN_GO_PROXY_PAUSE=0 PACKBIN_GO_PROXY_WINDOW=0 GONOSUMDB=bogus \
+    PACKBIN_GO_PROXY_PAUSE=0 PACKBIN_GO_PROXY_WINDOW=0 PACKBIN_GO_PROXY_SETTLE=0 PACKBIN_GO_TAG_PAUSE=0 GONOSUMDB=bogus \
     GT_BARE="$gt_bare" GT_GO_LOG="$gt_golog" PATH="$gt_bin:$PATH" "$@" \
     bash "$here/publish-registries.sh" > "$gt_dir/$name.out" 2>&1
   gt_code=$?
@@ -193,6 +193,61 @@ gt_rerun_checks() {
   assert_eq "$gt_code" "0" "AC-3 re-run after a proxy failure: $(tail -n 3 "$gt_dir/after.out")"
   assert_eq "$(gt_pushed)" "1" "AC-3 re-run after a proxy failure pushed"
   assert_eq "$(gt_go_calls)" "1" "AC-3 re-run after a proxy failure re-checks once"
+  rm -rf "$gt_dir"
+}
+
+# AZ-2600: the proxy gets its first request only after the pushed tag shows on an anonymous ls-remote and the settle
+# pause (a first request that finds no tag is cached as "not found" for about 30 minutes: 19 minutes on go/v0.3.0). A
+# `git` wrapper hides the tag from ls-remote $GT_HIDE_FILE times after the first push; the proxy stub logs each call.
+gt_visibility_checks() {
+  local real_git hide started
+  real_git="$(command -v git)"
+  gt_setup
+  hide="$gt_dir/hide"
+  cat > "$gt_bin/git" <<'EOF'
+#!/bin/bash
+if [ "$1" = ls-remote ] && [ -n "${GT_HIDE_FILE:-}" ] && [ -s "$GT_PUSHES" ]; then
+  n="$(cat "$GT_HIDE_FILE")"
+  if [ "$n" -gt 0 ]; then echo $((n - 1)) > "$GT_HIDE_FILE"; exit 0; fi
+fi
+exec "$GT_REAL_GIT" "$@"
+EOF
+  chmod +x "$gt_bin/git"
+  echo 4 > "$hide"
+  started=$SECONDS
+  gt_publish lag GT_REAL_GIT="$real_git" GT_HIDE_FILE="$hide" GT_PUSHES="$gt_pushes" PACKBIN_GO_TAG_WINDOW=60 PACKBIN_GO_PROXY_SETTLE=4
+  [ $((SECONDS - started)) -ge 4 ] || fail "AZ-2600 the settle pause of 4 s did not happen: the run took $((SECONDS - started)) s"
+  assert_eq "$gt_code" "0" "AZ-2600 a tag that shows late: $(tail -n 4 "$gt_dir/lag.out")"
+  assert_eq "$(cat "$hide")" "0" "AZ-2600 the hidden answers were not all asked for"
+  grep -q '^go tag go/v0.1.9 is not visible on .* yet (try 1)$' "$gt_dir/lag.out" || fail "AZ-2600 no 'not visible' line: $(cat "$gt_dir/lag.out")"
+  grep -q '^go tag go/v0.1.9 is not visible on .* yet (try 2)$' "$gt_dir/lag.out" || fail "AZ-2600 no second 'not visible' line"
+  if grep -q 'not visible on .* yet (try 3)$' "$gt_dir/lag.out"; then fail "AZ-2600 a third wait for a tag that showed"; fi
+  grep -q '^go tag go/v0.1.9 is visible; waiting 4s before the first proxy request$' "$gt_dir/lag.out" || fail "AZ-2600 no settle line"
+  [ "$(grep -n 'waiting 4s' "$gt_dir/lag.out" | cut -d: -f1)" -lt "$(grep -n '^go proxy answers' "$gt_dir/lag.out" | cut -d: -f1)" ] \
+    || fail "AZ-2600 the proxy answered before the settle pause"
+  assert_eq "$(gt_go_calls)" "1" "AZ-2600 proxy asks after a late tag"
+  rm -rf "$gt_dir"
+
+  # A tag that never shows: the run fails before any proxy request, the tag stays, and the message says so.
+  gt_setup
+  cat > "$gt_bin/git" <<'EOF'
+#!/bin/bash
+if [ "$1" = ls-remote ] && [ -s "$GT_PUSHES" ]; then exit 0; fi
+exec "$GT_REAL_GIT" "$@"
+EOF
+  chmod +x "$gt_bin/git"
+  gt_publish never GT_REAL_GIT="$real_git" GT_PUSHES="$gt_pushes" PACKBIN_GO_TAG_WINDOW=0
+  [ "$gt_code" -ne 0 ] || fail "AZ-2600 a tag that never shows passed"
+  grep -q 'was pushed but did not show on .* within 0s; the proxy was not asked' "$gt_dir/never.out" || fail "AZ-2600 no 'did not show' message: $(tail -n 3 "$gt_dir/never.out")"
+  assert_eq "$(gt_go_calls)" "0" "AZ-2600 the proxy was asked for a tag that did not show"
+  assert_eq "$(gt_tags "$gt_bare")" "go/v0.1.9" "AZ-2600 the tag after a visibility failure"
+
+  # A re-run finds the tag there: no visibility wait, no settle pause, the proxy is asked at once.
+  rm -f "$gt_bin/git"
+  gt_publish rerun PACKBIN_GO_PROXY_SETTLE=1
+  assert_eq "$gt_code" "0" "AZ-2600 re-run: $(tail -n 3 "$gt_dir/rerun.out")"
+  if grep -q 'not visible\|waiting' "$gt_dir/rerun.out"; then fail "AZ-2600 a re-run waited for a tag that was already there: $(cat "$gt_dir/rerun.out")"; fi
+  assert_eq "$(gt_go_calls)" "1" "AZ-2600 re-run proxy asks"
   rm -rf "$gt_dir"
 }
 
@@ -388,6 +443,7 @@ go_checks() {
   gt_build_flag_checks
   gt_tag_checks
   gt_rerun_checks
+  gt_visibility_checks
   gt_refusal_checks
   gt_version_checks
   gt_table_checks
