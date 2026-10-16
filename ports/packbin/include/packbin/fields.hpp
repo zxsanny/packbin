@@ -88,12 +88,16 @@ constexpr Node<C, 1> be(Node<C, 1> node) {
 }
 
 // The children are on the wire only when the earlier field `condition.field_id` equals
-// `condition.value`. The `when` id is the anchor: the id of its first child.
+// `condition.value`. The `when` id is the anchor: the id of its first child. A source id that
+// no field can have (negative, or above the int16 range of an id) is SchemeInvalid at the
+// `when`: such a `when` would never hold and pack would drop its members.
 template <typename... Ns>
 constexpr auto when(int id, Eq condition, Ns const&... children) {
   Field head = detail::leaf(Kind::When, id);
   head.ref_id = static_cast<std::int16_t>(condition.field_id);
   head.eq = condition.value;
+  if (condition.field_id < 0 || condition.field_id > 32767)
+    detail::mark_invalid(head);
   return detail::nest(head, children...);
 }
 

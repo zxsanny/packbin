@@ -31,6 +31,10 @@ template <Kind K>
 constexpr Field counted_leaf(int id, int count_id) {
   Field f = leaf(K, id);
   f.ref_id = static_cast<std::int16_t>(count_id);
+  // A count id outside the 15-bit wire range is Invalid (U25, AZ-2472); the sentinel -1 means
+  // "no backing count", which builds and then fails every pack and unpack with BadValue.
+  if (count_id < -1 || count_id > 32767)
+    mark_invalid(f);
   return f;
 }
 
@@ -141,7 +145,8 @@ constexpr Node<detail::MemberClass<M>, 1> packed(int width, int id, int count_id
   return Node<detail::MemberClass<M>, 1>{{f}};
 }
 
-// Groups of the children until the packet ends. The repeat id is the anchor.
+// Groups of the children until the packet ends. The repeat id is the anchor. A repeat or times
+// with no child is SchemeInvalid: it would write nothing in any round.
 template <typename... Ns>
 constexpr auto repeat(int id, Ns const&... children) {
   return detail::nest(detail::leaf(Kind::Repeat, id), children...);

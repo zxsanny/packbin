@@ -1,4 +1,8 @@
-set(SRC "${CURRENT_PORT_DIR}")
-file(INSTALL "${SRC}/include/packbin" DESTINATION "${CURRENT_PACKAGES_DIR}/include")
-file(INSTALL "${SRC}/src/" DESTINATION "${CURRENT_PACKAGES_DIR}/share/packbin/src")
-file(WRITE "${CURRENT_PACKAGES_DIR}/share/packbin/copyright" "MIT\n")
+vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
+vcpkg_cmake_configure(
+  SOURCE_PATH "${CURRENT_PORT_DIR}"
+  OPTIONS "-DPACKBIN_VERSION=${VERSION}")
+vcpkg_cmake_install()
+vcpkg_cmake_config_fixup(PACKAGE_NAME packbin CONFIG_PATH lib/cmake/packbin)
+file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
+vcpkg_install_copyright(FILE_LIST "${CURRENT_PORT_DIR}/LICENSE")
