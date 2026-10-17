@@ -263,6 +263,7 @@ run_gate_shares() {
     failed=1
     n=$(printf '%s\n' "$changed" | wc -l | tr -d ' ')
     echo "TREE changed while the shares ran ($n paths; on CI each gate job has its own checkout):"
+    echo "    a share wrote them, or something else (an editor, another run) changed the repository while this stage ran"
     printf '%s\n' "$changed" | head -n 10 | sed 's/^/    | /'
     if [ "$n" -gt 10 ]; then echo "    | and $((n - 10)) more"; fi
   else

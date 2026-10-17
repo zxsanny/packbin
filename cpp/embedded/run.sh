@@ -64,13 +64,11 @@ check_esp_part() {
 
 list_ids() {
   local list_stage="$1" part="${2:-all}"
-  if [ "$list_stage" = arm ] && [ "$part" = all ]; then
-    :
-  elif [ "$list_stage" = esp ]; then
-    check_esp_part "$part"
-  else
-    usage
-  fi
+  case "$list_stage" in
+    arm) [ "$part" = all ] || usage ;;
+    esp) check_esp_part "$part" ;;
+    *) usage ;;
+  esac
   select_rows "$list_stage" "$part" | cut -d'|' -f3
 }
 

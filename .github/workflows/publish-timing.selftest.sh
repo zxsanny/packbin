@@ -99,20 +99,41 @@ for fn in static_checks crates_token_checks registry_checks vcpkg_checks gate_ch
   [ "$n" -eq 0 ] || bad "$fn is called bare, outside timed"
 done
 
-# Act and assert (AZ-2607): a check file that the gate sources sets no EXIT trap of its own that drops the timing trap
-# (the vcpkg group did: an abort after it, in the same job, was not named). A trap line there must call timed_abort.
-for f in "$here"/publish-*.test.sh; do
-  case "$(basename "$f")" in publish-jobs.test.sh | publish-precheck.test.sh | publish-position.test.sh | publish-timing.test.sh) continue ;; esac
-  if grep -nE "^[[:space:]]*trap .* EXIT" "$f" | grep -v timed_abort; then
-    bad "$(basename "$f") sets an EXIT trap that does not call timed_abort"
-  fi
-done
+# Act and assert (AZ-2607): a check file that is sourced into the gate sets no EXIT trap of its own that drops the timing
+# trap (the vcpkg group did: an abort after it, in the same job, was not named). A trap line there must call timed_abort.
+# The sourced files are the ones some publish script names in a `source "$here/<file>"` line; a standalone script
+# (publish-jobs.test.sh, publish-position.test.sh, ...) owns its trap.
+# trap_offenders <dir>: one line per sourced publish-*.test.sh of <dir> with an EXIT trap that lacks timed_abort.
+trap_offenders() {
+  local dir="$1" f name
+  for f in "$dir"/publish-*.test.sh; do
+    name="$(basename "$f")"
+    grep -qF "source \"\$here/$name\"" "$dir"/publish-*.sh || continue
+    if grep -nE "^[[:space:]]*trap .* EXIT" "$f" | grep -qv timed_abort; then echo "$name"; fi
+  done
+}
+if out="$(trap_offenders "$here")" && [ -z "$out" ]; then
+  echo "EXIT traps of the sourced check files: each calls timed_abort"
+else
+  bad "sourced check files with an EXIT trap that does not call timed_abort: $out"
+fi
+mkdir -p "$work/traps"
+printf '%s\n' 'source "$here/publish-sourced-bad.test.sh"' > "$work/traps/publish-main.sh"
+printf '%s\n' "trap 'rm -rf x' EXIT" > "$work/traps/publish-sourced-bad.test.sh"
+printf '%s\n' "trap 'rm -rf x' EXIT" > "$work/traps/publish-standalone.test.sh"
+printf '%s\n' "trap 'rm -rf x; timed_abort' EXIT" > "$work/traps/publish-sourced-ok.test.sh"
+printf '%s\n' 'source "$here/publish-sourced-ok.test.sh"' >> "$work/traps/publish-main.sh"
+[ "$(trap_offenders "$work/traps")" = "publish-sourced-bad.test.sh" ] \
+  || bad "the trap rule did not single out the sourced file without timed_abort: [$(trap_offenders "$work/traps")]"
 sed 's/; if declare -F timed_abort > \/dev\/null; then timed_abort; fi//' "$here/publish-vcpkg.test.sh" > "$work/vcpkg-no-chain.sh"
 cmp -s "$here/publish-vcpkg.test.sh" "$work/vcpkg-no-chain.sh" && bad "the trap mutant did not change publish-vcpkg.test.sh"
-if grep -nE "^[[:space:]]*trap .* EXIT" "$work/vcpkg-no-chain.sh" | grep -qv timed_abort; then
+mkdir -p "$work/real"
+cp "$here"/publish-*.sh "$work/real/"
+cp "$work/vcpkg-no-chain.sh" "$work/real/publish-vcpkg.test.sh"
+if [ "$(trap_offenders "$work/real")" = "publish-vcpkg.test.sh" ]; then
   echo "trap check rejects: a vcpkg trap without timed_abort"
 else
-  bad "the trap check accepted a vcpkg trap without timed_abort"
+  bad "the trap check did not reject a vcpkg trap without timed_abort: [$(trap_offenders "$work/real")]"
 fi
 
 # ro_split <publish-gate.test.sh> <publish-readonly.test.sh>: prints one line per read-only check (a function
