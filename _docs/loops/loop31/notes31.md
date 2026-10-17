@@ -40,3 +40,30 @@ Wall 375 s (created 07:00:25, last job done 07:06:40); baseline 418 and 382 s (m
 | other suites | 25 to 70 | python 47, csharp 36, rust 32, cpp 31, typescript 16, java 9 |
 
 The old `readonly` group was 247 s; split in three it is 18 + 139 + 32 s. The image pull (85 to 90 s) now costs more than the group in two of the three jobs. Finding: with the suites and the gate regrouped the floor of the wall is `embedded` (317, 337 and 360 s on three runs), so the target of 360 s as the median needs the embedded job split (C4) as well; the loop 31 intake had left C4 out because embedded was not the long pole before this regrouping.
+
+## CI run of batch 2 + C4 (run 39014663944, `0fc35f8`, `dev` push, 20 jobs, all green)
+
+Wall 344 s (created 07:42:58, last job done 07:48:42), against 375 s for the batch 1 run and 418 / 382 s before loop 31 (median 400 s). Jobs by seconds, with what the notices show:
+
+| Job | s | Notice |
+|-----|--:|--------|
+| `publish-gate-readonly-gate` | 341 | readonly-gate **200** (139 on the batch 1 run), pins 26, pull about 85 |
+| `publish-gate-phases` | 285 | phases 222 (182 before), pull about 60 |
+| `suites (swift, gates)` | 282 | resolve 3, strict release build 95, sanitizer build 97, list 3, sanitized run 49, deps 0 |
+| `ring` | 265 | unchanged job |
+| `suites (swift, tests)` | 249 | resolve 4, debug build 96, tests 35, list 2, fuzz 72 |
+| `suites (swift, speed)` | 227 | resolve 4, `swift_speed` 187 (the real `swift test list -c release --skip-build` is accepted on CI) |
+| `embedded-esp-core` | 209 | esp32s3 27, esp32c3 24, Arduino-ESP32 example 71; total 202 s, so about 80 s of image pull and setup |
+| `publish-gate-rest` | 192 | readonly-full 38, vcpkg 24, workflow 38, npm 11, go 12, the rest 0 to 1; pull about 65 |
+| `publish-gate-readonly` | 169 | gate 68, readonly 18, pull about 80 |
+| `embedded-esp-packages` | 157 | ESP-IDF example 66, Pico example 35; total 153 s |
+| `publish-gate-swift` | 157 | swift 153 (215 on the batch 1 run: the same code varies by 1.4x) |
+| `suites (go)` | 156 | vet 10, test -race 45, fuzz 77 |
+| other | 29 to 91 | csharp 91 (72), python 73 (50), scaffold 68, rust 57, cpp 54, `embedded-arm` 52 (49: four targets 1 to 4 s, so the arm job is the image build), typescript 42, java 29 |
+
+What the numbers say:
+- C4 worked: the old 360 s `embedded` job is 209 / 157 / 52 s. Nothing in the wall is embedded any more.
+- The wall is now `publish-gate-readonly-gate`: the three real gate runs inside `ro_gate_checks` run at the same time on the runner and their sum varies (139 to 200 s on two runs). Next cuts, if the owner wants them: `ro_gate_checks` as three jobs (good, bad, nojava; each gate run about 70 s plus the pull), `pins` (26 s) out of that job, `phases` (222 s) in two groups (success scenarios, failure scenarios; each pays the setup).
+- Swift: the three parts are 282, 249, 227 s; `gates` is still the longest (two builds, 95 + 97 s).
+- Jobs per push: 20 (the free plan runs 20 at the same time); a `dev` + `main` push would be 40.
+- AC-1 needs two runs: this is the first (344 s); the second is the close push of `dev` (same code, docs only).
