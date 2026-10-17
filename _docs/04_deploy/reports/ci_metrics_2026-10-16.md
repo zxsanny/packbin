@@ -175,3 +175,19 @@ The wall is `ring` (273 s, unchanged since loop 28) with `suites (swift, tests)`
 | Checks | 16 gate groups, 66 layout mutant calls | 19 gate groups, 77 layout mutant calls, `ph_split` and `ro_split` mutants, 19 Swift mutants | each in exactly one place, enforced |
 
 Next long poles, in order: `ring` (273 s), `suites (swift, tests)` (246 s), `readonly-gate-good` (247 s including 63 s of waiting), `suites (swift, speed)` (224 s), `embedded-esp-core` (213 s). Not done: caches (C3), per-job pull lists (swift is 4 GB and seven gate jobs pull it), the PlatformIO install in the Arduino-ESP32 target, splitting `ring`.
+
+## 9. Loop 33 (AZ-2626): ring preparation in the background, exact gate pull lists
+
+Read as in section 7 (the jobs API and the job pages, no token). Jobs: 23 per push, none waited for a slot in run 1.
+
+| Run | Commit | Wall | Longest jobs (s) |
+|-----|--------|-----:|------------------|
+| 39031026351 (loop 33, batch 1 + review fixes) | `19f4c33` | **251 s** | `suites (swift, tests)` 248, `suites (swift, speed)` 221, `publish-gate-readonly` 211, `ring` 209, `publish-gate-swift` 207, `embedded-esp-core` 202 |
+
+| Item | Loop 32 | Loop 33 |
+|------|--------:|--------:|
+| `ring` | 268 / 255 s (steps: wiring 25 / 18, setups 29 / 32, gcc pull 21 / 31, toolchain versions with the swift pull 42 / 52, driver builds 101 / 76, ring 47 / 41) | 209 s (setups 63 under the parallel pulls, `build` + `wait` 92, toolchain versions 2, ring 39; notice: `pull-gcc` 73, `pull-swift` 68, `swift-drivers` 84, npm 2, cargo 2, Go 1, 152 s from start to the end of the wait) |
+| `pull images`, five-image jobs | phases 57, rest 59 s | phases 35, phases-rerun 35, rest 51 s |
+| Swift wiring check | in `ring` (18 to 25 s) | in `scaffold` |
+
+The wall is now `suites (swift, tests)` (248 s), then `suites (swift, speed)` (221 s); `ring`'s own critical path is the swift pull plus the Swift driver build (84 s, release with swift-crypto off Apple platforms). AC-2 (`ring` at most 180 s) was missed and accepted by the owner. Next: C3 (SwiftPM build caches for the ring's driver build and the three Swift suite parts); the gcc pull after the swift pull would save an estimated 15 to 25 s of `ring` only.
