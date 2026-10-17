@@ -8,19 +8,38 @@ results="${TEST_RESULTS:-$root/test-results}"
 ok=0
 failure=
 started=$(date +%s)
+steps=0
+timing_lines=
 
 grep -qx '4001000065cd1d00a3e1110100' "$fixture" || ok=1
+
+# A workflow-command message escaped as GitHub's toolkit does: % first, then CR and LF.
+notice_escape() {
+  local s="${1//"%"/%25}"
+  s="${s//$'\r'/%0D}"
+  printf '%s' "${s//$'\n'/%0A}"
+}
+
+# A timing line goes to stderr as it is and is kept, escaped, for the notice (lines joined by %0A).
+timing_say() {
+  printf '%s\n' "$1" >&2
+  timing_lines="${timing_lines:+$timing_lines%0A}$(notice_escape "$1")"
+}
 
 run() {
   if [ "$ok" -ne 0 ]; then
     return
   fi
-  local step_started step_label
+  local step_started step_label step_line
   step_started=$(date +%s)
   "$@" || ok=1
-  # The time of each step, so a slow stage shows which step costs it (swift_opts is the same on every Swift step).
-  step_label="${*//--package-path * --force-resolved-versions/}"
-  printf 'run-suite: %s step took %s s: %s\n' "$lang" "$(( $(date +%s) - step_started ))" "${step_label:0:110}" >&2
+  # The time of each step, so a slow stage shows which step costs it (swift_opts is the same on every Swift step, so
+  # it is cut from the label). The cut runs on the joined line: ${*//...} would try the pattern on each word alone.
+  step_label="$*"
+  step_label="${step_label// --package-path * --force-resolved-versions/}"
+  printf -v step_line 'run-suite: %s step took %s s: %s' "$lang" "$(( $(date +%s) - step_started ))" "${step_label:0:110}"
+  steps=$((steps + 1))
+  timing_say "$step_line"
 }
 
 # A suite whose manifest is missing has nothing to run: it fails, as Go always did (AZ-2448 AC-3, AZ-2477), so a
@@ -316,7 +335,20 @@ case "$lang" in
     ;;
 esac
 
-elapsed_ms=$(( ($(date +%s) - started) * 1000 ))
+elapsed=$(( $(date +%s) - started ))
+elapsed_ms=$(( elapsed * 1000 ))
+timing_say "run-suite: $lang total took $elapsed s in $steps steps"
+# On GitHub Actions the timing lines also go out as ONE notice annotation, as the publish gate's do
+# (publish-timing.test.sh): a job's check-run annotations are readable without a token, its log is not (AZ-2607).
+# Whether the run passed or not; a step skipped after a failure has no line. The title is a property value, so it
+# also escapes ':' and ','.
+if [ "${GITHUB_ACTIONS:-}" = true ]; then
+  title="$lang suite timing"
+  if [ "$lang" = swift ] && [ "${swift_part:-all}" != all ]; then title="swift ($swift_part) suite timing"; fi
+  title="$(notice_escape "$title")"
+  title="${title//:/%3A}"
+  printf '::notice title=%s::%s\n' "${title//,/%2C}" "$timing_lines"
+fi
 if [ "$ok" -eq 0 ]; then
   result=PASS
   message=

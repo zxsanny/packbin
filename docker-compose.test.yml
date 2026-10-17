@@ -8,6 +8,9 @@ services:
       SRC_ROOT: /src
       FIXTURE: /fixture/golden.hex
       TEST_RESULTS: /test-results
+      # Only a key, as in every suite service: Compose passes the runner's value through ("true" on GitHub Actions,
+      # where run-suite.sh writes its timing notice) and leaves the variable out when the host has none.
+      GITHUB_ACTIONS:
     volumes:
       - ./:/src
       - ./fixtures/golden.hex:/fixture/golden.hex:ro
@@ -21,6 +24,7 @@ services:
       SRC_ROOT: /src
       FIXTURE: /fixture/golden.hex
       TEST_RESULTS: /test-results
+      GITHUB_ACTIONS:
     volumes:
       - ./:/src
       - ./fixtures/golden.hex:/fixture/golden.hex:ro
@@ -34,6 +38,7 @@ services:
       SRC_ROOT: /src
       FIXTURE: /fixture/golden.hex
       TEST_RESULTS: /test-results
+      GITHUB_ACTIONS:
     volumes:
       - ./:/src
       - ./fixtures/golden.hex:/fixture/golden.hex:ro
@@ -47,6 +52,7 @@ services:
       SRC_ROOT: /src
       FIXTURE: /fixture/golden.hex
       TEST_RESULTS: /test-results
+      GITHUB_ACTIONS:
     volumes:
       - ./:/src
       - ./fixtures/golden.hex:/fixture/golden.hex:ro
@@ -60,6 +66,7 @@ services:
       SRC_ROOT: /src
       FIXTURE: /fixture/golden.hex
       TEST_RESULTS: /test-results
+      GITHUB_ACTIONS:
     volumes:
       - ./:/src
       - ./fixtures/golden.hex:/fixture/golden.hex:ro
@@ -73,6 +80,7 @@ services:
       SRC_ROOT: /src
       FIXTURE: /fixture/golden.hex
       TEST_RESULTS: /test-results
+      GITHUB_ACTIONS:
     volumes:
       - ./:/src
       - ./fixtures/golden.hex:/fixture/golden.hex:ro
@@ -86,6 +94,7 @@ services:
       SRC_ROOT: /src
       FIXTURE: /fixture/golden.hex
       TEST_RESULTS: /test-results
+      GITHUB_ACTIONS:
     volumes:
       - ./:/src
       - ./fixtures/golden.hex:/fixture/golden.hex:ro
@@ -99,6 +108,7 @@ services:
       SRC_ROOT: /src
       FIXTURE: /fixture/golden.hex
       TEST_RESULTS: /test-results
+      GITHUB_ACTIONS:
       # SwiftPM's build output stays in the container, outside the mounted tree (the host's .build is the Mac's).
       PACKBIN_SWIFT_SCRATCH: /tmp/packbin-swift-build
     volumes:

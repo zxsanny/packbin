@@ -7,9 +7,15 @@
 # FuzzUnpack fuzz step (or says it is skipped) and the one-dependency check in that order, and stops
 # at the first failing step. `go` and `gofmt` are fakes too.
 # run-suite.sh swift (AZ-2521): run-suite-swift.test.sh, sourced at the end.
+# The timing notice (AZ-2607 AC-2): on GitHub Actions one notice with every step line and the total line, else none.
+# RUN_SUITE_SH runs every row against another copy of run-suite.sh, RUN_SUITE_COMPOSE row N6 against another compose
+# file (the mutation proof of a change to them).
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
+suite_sh="${RUN_SUITE_SH:-$here/run-suite.sh}"
+# The CI scaffold job runs this file: no row may write a notice unless it sets GITHUB_ACTIONS itself.
+unset GITHUB_ACTIONS
 work="$(mktemp -d "${TMPDIR:-/tmp}/run-suite-test.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 fail=0
@@ -57,7 +63,7 @@ make_venv() { # dir import_exit pytest_exit
 run_suite() { # venv [extra PATH dir]
   SRC_ROOT="$root" FIXTURE="$root/fixtures/golden.hex" TEST_RESULTS="$work/results" \
     PACKBIN_PYTEST_VENV="$1" PATH="${2:+$2:}$PATH" \
-    perl -e 'alarm 60; exec @ARGV' -- bash "$here/run-suite.sh" python </dev/null 2>&1
+    perl -e 'alarm 60; exec @ARGV' -- bash "$suite_sh" python </dev/null 2>&1
 }
 
 # 1. a venv that cannot import pytest
@@ -157,7 +163,7 @@ run_go() { # tree [VAR=value ...]: runs run-suite.sh go with the fakes first on 
   : > "$work/go.log"
   env SRC_ROOT="$tree" FIXTURE="${GO_FIXTURE:-$tree/fixtures/golden.hex}" TEST_RESULTS="$work/goresults" \
     GO_LOG="$work/go.log" PATH="$gobin:$PATH" "$@" \
-    perl -e 'alarm 60; exec @ARGV' -- bash "$here/run-suite.sh" go </dev/null 2>&1
+    perl -e 'alarm 60; exec @ARGV' -- bash "$suite_sh" go </dev/null 2>&1
 }
 row_is() { # result: the one report row of the last run
   grep -Eqx "report-row go go suite [0-9]+ $1" "$work/goresults.rows" \
@@ -247,7 +253,7 @@ run_lang() { # lang tree
   : > "$work/go.log"
   env SRC_ROOT="$2" FIXTURE="$2/fixtures/golden.hex" TEST_RESULTS="$work/bare" GO_LOG="$work/go.log" \
     PACKBIN_PYTEST_VENV="$work/bare-venv" PATH="$gobin:$PATH" \
-    perl -e 'alarm 60; exec @ARGV' -- bash "$here/run-suite.sh" "$1" </dev/null 2>&1
+    perl -e 'alarm 60; exec @ARGV' -- bash "$suite_sh" "$1" </dev/null 2>&1
 }
 for entry in csharp:csharp/*.csproj typescript:typescript/package.json python:python/pyproject.toml \
   rust:rust/Cargo.toml cpp:cpp/Makefile java:java/test.sh; do
@@ -285,14 +291,90 @@ for lang in csharp rust cpp java; do
   rm -f "$work/bare.rows"
   : > "$work/go.log"
   out="$(env SRC_ROOT="$present" FIXTURE="$present/fixtures/golden.hex" TEST_RESULTS="$work/bare" GO_LOG="$work/go.log" \
-    PATH="$toolbin:$PATH" perl -e 'alarm 60; exec @ARGV' -- bash "$here/run-suite.sh" "$lang" </dev/null 2>&1)"; code=$?
+    PATH="$toolbin:$PATH" perl -e 'alarm 60; exec @ARGV' -- bash "$suite_sh" "$lang" </dev/null 2>&1)"; code=$?
   [ "$code" -eq 0 ] || bad "$lang: a tree with its manifest failed (exit $code): $out"
   grep -Eqx "report-row $lang $lang suite [0-9]+ PASS " "$work/bare.rows" || bad "$lang: no PASS row: $(cat "$work/bare.rows" 2>&1)"
   if [ "$lang" != java ] && [ ! -s "$work/go.log" ]; then bad "$lang: its tool did not run"; fi
   out="$(env SRC_ROOT="$present" FIXTURE="$present/fixtures/golden.hex" TEST_RESULTS="$work/bare" GO_LOG="$work/go.log" \
-    FAKE_TOOL_EXIT=1 PATH="$toolbin:$PATH" perl -e 'alarm 60; exec @ARGV' -- bash "$here/run-suite.sh" "$lang" </dev/null 2>&1)"; code=$?
+    FAKE_TOOL_EXIT=1 PATH="$toolbin:$PATH" perl -e 'alarm 60; exec @ARGV' -- bash "$suite_sh" "$lang" </dev/null 2>&1)"; code=$?
   if [ "$lang" != java ] && [ "$code" -eq 0 ]; then bad "$lang: a failing tool passed"; fi
 done
+
+# --- the timing notice (AZ-2607 AC-2) ---
+# On GitHub Actions a run ends with ONE notice on stdout, so the seconds of a CI suite job are readable without a token:
+# the title names the suite, the message is every step line of the run and the total line, each escaped (% first, then
+# CR and LF) and joined by %0A. The plain lines stay on stderr. notice_run keeps stdout and stderr apart.
+notice_run() { # lang tree [VAR=value ...]
+  local lang="$1" tree="$2"
+  shift 2
+  rm -f "$work/notice.rows"
+  : > "$work/go.log"
+  env SRC_ROOT="$tree" FIXTURE="$tree/fixtures/golden.hex" TEST_RESULTS="$work/notice" GO_LOG="$work/go.log" \
+    PATH="$gobin:$toolbin:$PATH" "$@" \
+    perl -e 'alarm 60; exec @ARGV' -- bash "$suite_sh" "$lang" </dev/null >"$work/notice.out" 2>"$work/notice.err"
+}
+notice_is() { # title lang steps: the last notice_run printed one notice, that title over its own step and total lines
+  local expected count
+  expected="$(grep -E "^run-suite: $2 (step|total) took " "$work/notice.err" \
+    | awk '{ gsub(/%/, "%25"); printf "%s%s", (NR > 1 ? "%0A" : ""), $0 }')"
+  count="$(grep -c '^::notice' "$work/notice.out")"
+  [ "$count" -eq 1 ] || bad "$2: $count notice lines on stdout, not 1: $(cat "$work/notice.out")"
+  [ "$(grep -c "^run-suite: $2 step took " "$work/notice.err")" -eq "$3" ] || bad "$2: not $3 step lines: $(cat "$work/notice.err")"
+  grep -Eq "^run-suite: $2 total took [0-9]+ s in $3 steps\$" "$work/notice.err" || bad "$2: no total line for $3 steps: $(cat "$work/notice.err")"
+  [ "$(grep '^::notice' "$work/notice.out")" = "::notice title=$1::$expected" ] \
+    || bad "$2: the notice is not '$1' over the timing lines: $(grep '^::notice' "$work/notice.out")"
+}
+
+# N1. a passing go run: one notice titled with the language, over the 6 step lines and the total line
+# Act
+notice_run go "$goroot" GO_FUZZ=1 GITHUB_ACTIONS=true; code=$?
+# Assert
+[ "$code" -eq 0 ] || bad "go: a clean tree failed under GITHUB_ACTIONS (exit $code): $(cat "$work/notice.err")"
+notice_is "go suite timing" go 6
+
+# N2. a failing step: the notice is still written, with the steps that ran and none of those skipped after it
+# Act
+notice_run go "$goroot" GO_FUZZ=1 GO_FAIL=test GITHUB_ACTIONS=true; code=$?
+# Assert
+[ "$code" -ne 0 ] || bad "go: a failing test passed under GITHUB_ACTIONS"
+notice_is "go suite timing" go 3
+row_file="$work/notice.rows"
+grep -Eqx "report-row go go suite [0-9]+ FAIL suite failed" "$row_file" || bad "go: no FAIL row beside the notice: $(cat "$row_file" 2>&1)"
+
+# N3. a label with % in it (the tree path) is escaped as %25, so GitHub does not read it as an escape
+# Arrange
+cp -R "$goroot" "$work/pct%2Ctree"
+# Act
+notice_run go "$work/pct%2Ctree" GO_FUZZ=1 GITHUB_ACTIONS=true
+# Assert
+notice_is "go suite timing" go 6
+grep -qF 'pct%252Ctree/go' "$work/notice.out" || bad "go: the % of a label is not escaped as %25: $(cat "$work/notice.out")"
+if grep -qF 'pct%2Ctree' "$work/notice.out"; then bad "go: a raw % of a label is in the notice: $(cat "$work/notice.out")"; fi
+
+# N4. a run without steps (no manifest) and a run of another language: one notice each, titled with that language
+# Act and assert
+notice_run csharp "$bare" GITHUB_ACTIONS=true
+notice_is "csharp suite timing" csharp 0
+notice_run rust "$present" GITHUB_ACTIONS=true
+notice_is "rust suite timing" rust 1
+
+# N5. GITHUB_ACTIONS unset (the Mac), empty or anything but true: no notice, and the plain step lines as before
+for value in unset "" false; do
+  # Act
+  if [ "$value" = unset ]; then notice_run go "$goroot" GO_FUZZ=1; else notice_run go "$goroot" GO_FUZZ=1 GITHUB_ACTIONS="$value"; fi
+  # Assert
+  if grep -q '::notice' "$work/notice.out" "$work/notice.err"; then bad "go: a notice with GITHUB_ACTIONS $value: $(cat "$work/notice.out")"; fi
+  [ "$(grep -c '^run-suite: go step took [0-9]* s: ' "$work/notice.err")" -eq 6 ] || bad "go: the plain step lines changed with GITHUB_ACTIONS $value: $(cat "$work/notice.err")"
+done
+
+# N6. the eight suite services pass the runner's GITHUB_ACTIONS into the container as a bare key: Compose sets it from
+# the host when it is set there and leaves it out when not (a value would make every Mac run write notices)
+# Act
+compose_ga="$(ruby -ryaml -e 'svc = YAML.safe_load(File.read(ARGV[0]))["services"]
+  puts %w[csharp typescript python rust cpp java go swift].reject { |s| e = svc.dig(s, "environment"); e.is_a?(Hash) && e.key?("GITHUB_ACTIONS") && e["GITHUB_ACTIONS"].nil? }.join(" ")' \
+  "${RUN_SUITE_COMPOSE:-$repo/docker-compose.test.yml}" </dev/null)" || bad "docker-compose.test.yml: ruby could not read the suite services"
+# Assert
+[ -z "$compose_ga" ] || bad "docker-compose.test.yml: the suite services '$compose_ga' do not pass GITHUB_ACTIONS through as a bare key"
 
 # --- swift (AZ-2521): in its own file, so neither file passes 500 lines ---
 # shellcheck source=run-suite-swift.test.sh

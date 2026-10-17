@@ -427,12 +427,13 @@ ro_symlink_check() {
   rm -rf "$dir"
 }
 
+# The read-only checks are three gate groups (AZ-2607), so CI can run them in separate jobs: `readonly` (these five),
+# `readonly-gate` (ro_gate_checks) and `readonly-full` (ro_full_run_check). publish-timing.selftest.sh refuses a check
+# that runs in no group or in two.
 readonly_checks() {
   ro_symlink_check
   ro_static_checks
   ro_probe_checks
   ro_out_checks
   ro_host_path_check
-  ro_gate_checks
-  ro_full_run_check
 }

@@ -468,7 +468,9 @@ PY
 vcpkg_checks() {
   local bare before
   vcpkg_tmp="$(mktemp -d)"
-  trap 'rm -rf "$vcpkg_tmp"' EXIT
+  # The timing trap (publish-timing.test.sh) is the gate's EXIT trap and names a group that aborts: keep it. It is not
+  # defined when `publish-gate.test.sh --vcpkg` runs these checks alone.
+  trap 'rm -rf "$vcpkg_tmp"; if declare -F timed_abort > /dev/null; then timed_abort; fi' EXIT
   bare="$vcpkg_tmp/vcpkg.git"
   git -c init.defaultBranch=vcpkg init --bare "$bare" >/dev/null
   if ! vcpkg_stage_registry "$bare" "$vcpkg_tmp" first; then

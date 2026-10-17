@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# run-suite.sh swift (AZ-2521). Sourced by run-suite.test.sh, which defines bad, $here, $repo and
-# $work. `swift` is a fake that logs its arguments, so no toolchain, network or image is used. swift fails without
+# run-suite.sh swift (AZ-2521). Sourced by run-suite.test.sh, which defines bad, $here, $repo, $work, $suite_sh
+# (the script under test), notice_run and notice_is. `swift` is a fake that logs its arguments, so no toolchain, network or image is used. swift fails without
 # Package.swift or swift/, runs the resolve, the strict release build, the verbose tests, the FuzzTests fuzz step (or
 # says it is skipped), the thread-sanitizer run, the release speed test and the dependency check in that order, and
 # stops at the first failing step; the wiring rows read the compose files, tool-pins.txt and test.yml.
@@ -89,7 +89,7 @@ run_swift() { # lang tree [VAR=value ...]: runs run-suite.sh <lang> with the fak
   env SRC_ROOT="$tree" FIXTURE="${SWIFT_FIXTURE:-$tree/fixtures/golden.hex}" TEST_RESULTS="$work/swiftresults" \
     SWIFT_LOG="$work/swift.log" PACKBIN_SWIFT_SCRATCH="$swscratch" PACKBIN_FUZZ_SECONDS=2 SWIFT_FUZZ_SLEEP=2 \
     PATH="$swbin:$PATH" "$@" \
-    perl -e 'alarm 60; exec @ARGV' -- bash "$here/run-suite.sh" "$lang" </dev/null 2>&1
+    perl -e 'alarm 60; exec @ARGV' -- bash "$suite_sh" "$lang" </dev/null 2>&1
 }
 sw_row_is() { # lang result: the one report row of the last run
   grep -Eqx "report-row $1 $1 suite [0-9]+ $2" "$work/swiftresults.rows" \
@@ -141,7 +141,7 @@ swift package $o dump-package"
 case "$out" in *"skipped"*) bad "swift: the fuzz skip line shows although FuzzTests exists: $out" ;; esac
 [ "$(cat "$work/swift.log.env" 2>&1)" = "fuzz seconds 2" ] || bad "swift: the fuzz run did not get its duration: $(cat "$work/swift.log.env" 2>&1)"
 # S2b. CI fuzzes 60 s: the default when PACKBIN_FUZZ_SECONDS is unset, and no compose file sets it
-grep -qF 'PACKBIN_FUZZ_SECONDS:-60' "$here/run-suite.sh" || bad "swift: the fuzz step does not default to 60 s"
+grep -qF 'PACKBIN_FUZZ_SECONDS:-60' "$suite_sh" || bad "swift: the fuzz step does not default to 60 s"
 if grep -qF PACKBIN_FUZZ_SECONDS "$repo/docker-compose.test.yml" "$repo/docker-compose.publish.yml"; then bad "swift: a compose file sets the fuzz duration"; fi
 # S2c. without PACKBIN_SWIFT_SCRATCH the build output is the package's own .build
 run_swift swift "$swroot" PACKBIN_SWIFT_SCRATCH= >/dev/null
@@ -200,6 +200,31 @@ if sw_ran "--skip-build --sanitize=thread" || sw_ran "describe"; then bad "swift
 run_swift swift "$swroot" PACKBIN_SWIFT_PART=tests SWIFT_FAIL=release >/dev/null; code=$?
 [ "$code" -ne 0 ] || bad "swift: the tests part passed after a failed release build"
 if sw_ran "--build-tests"; then bad "swift: the tests part built the tests after the release build failed"; fi
+
+# S2e (AZ-2607 AC-2). on GitHub Actions each part writes one notice titled with the part, over its own steps (the
+# numbers the parts are balanced from); the single run's title has no part; a failed step keeps the notice; a part
+# name is escaped as a property value (notice_run and notice_is: run-suite.test.sh)
+sw_notice() { # [VAR=value ...]
+  notice_run swift "$swroot" PATH="$swbin:$PATH" SWIFT_LOG="$work/swift.log" PACKBIN_SWIFT_SCRATCH="$swscratch" GITHUB_ACTIONS=true "$@"
+}
+# Act and assert
+sw_notice PACKBIN_SWIFT_PART=tests
+notice_is "swift (tests) suite timing" swift 6
+sw_notice PACKBIN_SWIFT_PART=gates
+notice_is "swift (gates) suite timing" swift 6
+sw_notice
+notice_is "swift suite timing" swift 10
+# the labels drop swift_opts, so the 110-character cut leaves the options that tell the four builds apart
+labels="$(sed -n 's/^run-suite: swift step took [0-9]* s: //p' "$work/notice.err")"
+if grep -qF -- '--package-path' <<< "$labels"; then bad "swift: a step label keeps the swift options: $labels"; fi
+[ -z "$(sort <<< "$labels" | uniq -d)" ] || bad "swift: two steps have the same label: $(sort <<< "$labels" | uniq -d)"
+grep -qx 'swift build --build-tests --sanitize=thread' <<< "$labels" || bad "swift: no label for the sanitizer build: $labels"
+sw_notice PACKBIN_SWIFT_PART=all
+notice_is "swift suite timing" swift 10
+sw_notice PACKBIN_SWIFT_PART=gates SWIFT_FAIL=tsan-build
+notice_is "swift (gates) suite timing" swift 2
+sw_notice PACKBIN_SWIFT_PART=a:b,c
+notice_is "swift (a%3Ab%2Cc) suite timing" swift 0
 
 # S3. no FuzzTests suite yet: the step says it is skipped and does not fuzz
 out="$(run_swift swift "$swroot")"; code=$?

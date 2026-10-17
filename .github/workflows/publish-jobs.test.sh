@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# AZ-2564 and AZ-2600: the job layout of test.yml. Exactly one job runs each part of the old `scaffold` job: the static
-# checks (`scaffold`), the suites (`suites`, a matrix: one job per language, Swift as two parts) and the publish gate
-# (three jobs, each running its share of the groups of publish-gate.test.sh); they run beside `embedded` and `ring`
-# (no needs, no if, no continue-on-error, a timeout), and a gate job that starts containers pulls its images first.
+# AZ-2564, AZ-2600 and AZ-2607: the job layout of test.yml. Exactly one job runs each part of the old `scaffold` job:
+# the static checks (`scaffold`), the suites (`suites`, a matrix: one job per language, Swift as two parts) and the
+# publish gate (the publish-gate-* jobs, each running its share of the groups of publish-gate.test.sh); they run beside
+# `embedded` and `ring` (no needs, no if, no continue-on-error, a timeout), and a gate job that starts containers pulls
+# its images first.
 # The real test.yml must pass; each mutant (one per rule) must be refused.
 set -euo pipefail
 
@@ -27,7 +28,10 @@ runs = lambda do |name, wanted|
 end
 all_runs = ->(wanted) { jobs.keys.flat_map { |n| runs.call(n, wanted).map { n } } }
 languages = %w[csharp typescript python rust cpp java go swift]
-gate_jobs = %w[publish-gate-readonly publish-gate-phases publish-gate-rest]
+# The gate jobs are the jobs named publish-gate-*; the groups that start containers need the images pulled first.
+gate_jobs = jobs.keys.select { |n| n.start_with?("publish-gate-") }
+container_groups = %w[gate phases readonly readonly-gate readonly-full]
+errors << "test.yml has no publish-gate-* job" if gate_jobs.empty?
 
 (%w[scaffold suites embedded ring] + gate_jobs).each do |name|
   errors << "test.yml has no #{name} job" unless jobs[name].is_a?(Hash)
@@ -42,7 +46,7 @@ end
     errors << "step '#{label}' of job #{name} has an if or continue-on-error" if step.key?("if") || step.key?("continue-on-error")
   end
 end
-errors << "a job named publish-gate is left: the gate is the three publish-gate-* jobs" if jobs.key?("publish-gate")
+errors << "a job named publish-gate is left: the gate is the publish-gate-* jobs" if jobs.key?("publish-gate")
 
 # The suites: one job per matrix entry; every language once, Swift as its two parts, nothing else.
 suites = jobs["suites"]
@@ -90,15 +94,15 @@ gate_jobs.each do |name|
   pull_at = steps.index do |s|
     lines_of.call(s).any? { |l| l.match?(/\Adocker compose .*docker-compose\.publish\.yml.* pull\b/) && languages.all? { |lang| l.split.include?(lang) } }
   end
-  # Groups that start containers (the golden gate, the read-only gate, the phases) need their images before the gate.
-  if (groups & %w[gate readonly phases]).any? && (pull_at.nil? || pull_at > gate_at)
+  # Groups that start containers (the golden gate, the read-only checks, the phases) need their images before the gate.
+  if (groups & container_groups).any? && (pull_at.nil? || pull_at > gate_at)
     errors << "job #{name} runs a group that starts containers without pulling its images before the gate"
   end
 end
 (all_groups - ran).each { |g| errors << "the gate group #{g} runs in no job" }
 (ran - all_groups).uniq.each { |g| errors << "the gate group #{g} is not a group of publish-gate.test.sh" }
 ran.group_by { |g| g }.select { |_, v| v.size > 1 }.each_key { |g| errors << "the gate group #{g} runs in more than one job" }
-errors << "a job other than the three gate jobs runs the publish gate" if jobs.keys.any? { |n| !gate_jobs.include?(n) && steps_of.call(jobs[n]).any? { |s| lines_of.call(s).any? { |l| l.include?("publish-gate.test.sh") } } }
+errors << "a job other than the publish-gate-* jobs runs the publish gate" if jobs.keys.any? { |n| !gate_jobs.include?(n) && steps_of.call(jobs[n]).any? { |s| lines_of.call(s).any? { |l| l.include?("publish-gate.test.sh") } } }
 
 static = %w[
   .github/workflows/report-row.test.sh fixtures/hostile/cases.test.sh .github/workflows/run-suite.test.sh
@@ -184,8 +188,12 @@ mutant "suites job removed" 'jobs.delete("suites")'
 mutant "suites step also in scaffold" 'jobs["scaffold"]["steps"] << deep.call(step_named.call("suites", "suite"))'
 mutant "a suite run in the ring job" 'jobs["ring"]["steps"] << { "name" => "go", "run" => "docker compose -f docker-compose.test.yml run --rm go" }'
 # the publish gate jobs
-mutant "phases group dropped" 'gate_step.call("publish-gate-phases")["run"] = "bash .github/workflows/publish-gate.test.sh --groups gate,pins"'
-mutant "readonly group also in the phases job" 'gate_step.call("publish-gate-phases")["run"] = "bash .github/workflows/publish-gate.test.sh --groups gate,pins,phases,readonly"'
+mutant "readonly-gate group dropped" 'gate_step.call("publish-gate-readonly-gate")["run"] = "bash .github/workflows/publish-gate.test.sh --groups pins"'
+mutant "readonly group also in the phases job" 'gate_step.call("publish-gate-phases")["run"] = "bash .github/workflows/publish-gate.test.sh --groups phases,readonly"'
+mutant "readonly-full also in the rest job" 'gate_step.call("publish-gate-rest")["run"] += ",readonly-full"'
+mutant "a container group moved to the job without a pull" 'gate_step.call("publish-gate-readonly")["run"] = "bash .github/workflows/publish-gate.test.sh --groups gate"; gate_step.call("publish-gate-rest")["run"] += ",readonly"'
+mutant "readonly-full job without the pull step" 'jobs["publish-gate-readonly-full"]["steps"].reject! { |s| s["name"] == "pull images" }'
+mutant "no gate job at all" 'jobs.keys.select { |n| n.start_with?("publish-gate-") }.each { |n| jobs.delete(n) }'
 mutant "a group that does not exist" 'gate_step.call("publish-gate-rest")["run"] += ",bogus"'
 mutant "the rest job names no group" 'gate_step.call("publish-gate-rest")["run"] = "bash .github/workflows/publish-gate.test.sh --groups ,"'
 mutant "a gate job without --groups" 'gate_step.call("publish-gate-phases")["run"] = "bash .github/workflows/publish-gate.test.sh"'
@@ -204,7 +212,8 @@ mutant "gate job continue-on-error" 'jobs["publish-gate-rest"]["continue-on-erro
 mutant "gate job without timeout" 'jobs["publish-gate-readonly"].delete("timeout-minutes")'
 mutant "gate job removed" 'jobs.delete("publish-gate-rest")'
 gate_mutant "a new group that no job runs" 's/^gate_groups="\(.*\)"$/gate_groups="\1 extra"/'
-gate_mutant "a group renamed in the list" 's/^gate_groups="\(.*\) readonly"$/gate_groups="\1 read-only"/'
+gate_mutant "a group renamed in the list" 's/^gate_groups="\(.*\) readonly-gate \(.*\)"$/gate_groups="\1 ro-gate \2"/'
+gate_mutant "a read-only group left out of the list" 's/^gate_groups="\(.*\) readonly-full"$/gate_groups="\1"/'
 # the static checks
 mutant "scaffold without the report columns step" 'jobs["scaffold"]["steps"].reject! { |s| s["name"] == "report columns" }'
 mutant "scaffold static check moved to ring" 'jobs["ring"]["steps"] << jobs["scaffold"]["steps"].find { |s| s["name"] == "suite runner" }; jobs["scaffold"]["steps"].reject! { |s| s["name"] == "suite runner" }'
