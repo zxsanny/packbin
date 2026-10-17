@@ -90,7 +90,7 @@ Fixed times that cannot shrink: the 60 s fuzz windows in Go and Swift (set by th
 | `publish-gate-phases` | 324 | | `ring` | 245 |
 | `embedded` | 317 | | `suites (go)` | 161 |
 
-The other jobs: `suites` python 111, csharp 79, cpp 61, rust 57, typescript 39, java 30; `scaffold` 71. Wall time 418 s (run created 15:06:29, last job done 15:13:26), against 980 to 1 095 s before (`suites` 896 to 1 026 s, `publish-gate` 977 to 1 091 s): about 9 to 11 minutes saved on every push. The new long poles are `publish-gate-readonly` (350 s group + image pull) and `suites (swift, gates)`. Per-group seconds of the gate: readonly 350; gate 68, pins 17, phases 152; swift 181, workflow 34, vcpkg 21, go 10, npm 6, registry 1, the rest 0. One run proves one point (the same code varies by about 1.5x): the close push of this loop adds a second.
+The other jobs: `suites` python 111, csharp 79, cpp 61, rust 57, typescript 39, java 30; `scaffold` 71. Wall time 418 s (run created 15:06:29, last job done 15:13:26), against 980 to 1 095 s before (`suites` 896 to 1 026 s, `publish-gate` 977 to 1 091 s): about 9 to 11 minutes saved on every push. The new long poles are `publish-gate-readonly` (350 s group + image pull) and `suites (swift, gates)`. Per-group seconds of the gate: readonly 350; gate 68, pins 17, phases 152; swift 181, workflow 34, vcpkg 21, go 10, npm 6, registry 1, the rest 0. One run proves one point (the same code varies by about 1.5x): the close push of this loop (run 38997835591, `5790486`, same job layout, only docs and a test change after `4281aa9`) took 382 s: `publish-gate-phases` 379, `suites (swift, tests)` 342, `embedded` 337, `publish-gate-readonly` 333, `ring` 304, `suites (swift, gates)` 284, `publish-gate-rest` 273, go 158, python 111, csharp 88, rust 60, `scaffold` 59, cpp 55, typescript 43, java 25 s. Two runs: 418 and 382 s (median 400 s), against 892 to 1 396 s before.
 
 No check was removed: 14 gate groups before and after (each runs in exactly one of the three jobs, enforced by `publish-jobs.test.sh`); 8 languages before and after (9 matrix entries, Swift as two parts that run exactly the steps of the single run, enforced by `run-suite-swift.test.sh`); `run:` steps in `test.yml` 19 to 24 (7 jobs, was 5); mutants of the layout guard 14 to 45.
 
@@ -106,7 +106,7 @@ With T3 the Go wait is no longer the long one, so T2 would save about 2 to 3 min
 
 | Item | Before | After | Status |
 |------|-------:|------:|--------|
-| test.yml wall | 980 to 1 095 s | 418 s | measured (1 run) |
+| test.yml wall | 980 to 1 095 s | 418 and 382 s | measured (2 runs) |
 | `suites` | 896 to 1 026 s (one job) | longest job 379 s | measured |
 | `publish-gate` | 977 to 1 091 s (one job) | longest job 415 s | measured |
 | Go proxy wait on a tag | 1 158 s | about 60 s expected | unproven until the next tag |

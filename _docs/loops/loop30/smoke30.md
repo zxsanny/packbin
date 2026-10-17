@@ -20,4 +20,4 @@ Agent run 2026-10-16, owner rule 2026-10-12 in `deployment_procedures.md`: **7/7
 ## For the operator
 
 - T3 (Go proxy wait) and T1 (tag run skips the repeated test) are proven only by the next tag; T2 option B's Swift part was not built (ADR-005 says the Swift check runs after the Go tag; about 70 s of gain): decision open.
-- Second and third CI run of the same code: the close push of `dev` (and of `main`, if the owner allows it).
+- Second CI run of the same layout: run 38997835591, 15 of 15 green, 382 s (first run 418 s). `main` was not pushed (owner: dev only).
