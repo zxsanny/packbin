@@ -75,6 +75,25 @@ elsif build_at && (build_at > wait_at || !code_lines.call(steps[wait_at]).last.m
 elsif !arg_of.call(start_at, "start", 2).split.include?('"swift:$RING_SWIFT"')
   errors << "the ring-prepare.sh start line of job #{name} does not pull \"swift:$RING_SWIFT\" before the Swift driver build"
 end
+# C3 (AZ-2627): the Swift drivers' build output (ring-swift.sh's scratch dir, ring-prepare.sh's default) is kept between
+# runs: restored by exact key before the start step, never on a tag run, and the start step learns hit or miss. That
+# cache step is the only step of the job with an if: any other could skip a check.
+cache_at = steps.index { |s| s["uses"].to_s.match?(/\Aactions\/cache@\h{40}\z/) }
+cache = cache_at && steps[cache_at]
+if cache.nil? || start_at.nil? || cache_at > start_at
+  errors << "job #{name} restores no Swift driver build cache before the ring-prepare.sh start step"
+else
+  key = cache.dig("with", "key").to_s
+  ["${{ env.RING_SWIFT }}", "hashFiles('Package.swift', 'Package.resolved', '.github/workflows/drivers/handoff-swift/Package.swift', '.github/workflows/drivers/handoff-swift/Package.resolved')"].each do |part|
+    errors << "the Swift driver build cache key #{key.inspect} does not name #{part}" unless key.include?(part)
+  end
+  errors << "the Swift driver build cache restores by a prefix (restore-keys): a hit must be the exact key" if cache["with"].is_a?(Hash) && cache["with"].key?("restore-keys")
+  errors << "the Swift driver build cache is not ring-swift.sh's scratch dir /tmp/packbin-ring-swift" unless cache.dig("with", "path") == "/tmp/packbin-ring-swift"
+  errors << "the Swift driver build cache also runs on a tag run: #{cache['if'].inspect}" unless cache["if"] == "${{ !startsWith(github.ref, 'refs/tags/') }}"
+  state = "${{ steps.#{cache['id']}.conclusion == 'success' && (steps.#{cache['id']}.outputs.cache-hit == 'true' && 'hit' || 'miss') || '' }}"
+  errors << "the ring-prepare.sh start step does not take the cache state from the cache step" unless steps[start_at].dig("env", "PACKBIN_SWIFT_CACHE") == state
+end
+steps.each { |s| errors << "step '#{s['name'] || s['uses']}' of job #{name} has an if (only the cache step may)" if s.key?("if") && !s.equal?(cache) }
 wiring = %r{\Abash \.github/workflows/ring-wiring-swift\.test\.sh\z}
 errors << "job #{name} runs ring-wiring-swift.test.sh, which belongs in scaffold (off the ring's critical path)" if at.call(wiring)
 check = steps_of.call(jobs["scaffold"]).find { |s| code_lines.call(s).any? { |l| l.match?(wiring) } }
@@ -145,6 +164,8 @@ swift_violations() {
   grep -qxF 'tag="${RING_SWIFT:-$(bash "$here/tool-pin.sh" swift)}"' "$build" \
     || echo "ring-swift.sh does not take the image tag from RING_SWIFT or the tool-pins.txt swift pin"
   grep -qF '"swift:$tag"' "$build" || echo "ring-swift.sh does not build in the swift:\$tag image"
+  grep -qxF '    bash "$here/swift-ccache.sh" run "$scratch/ccache" "$(id -u)" "$(id -g)" "${build[@]}" < /dev/null >&2' "$build" \
+    || echo "ring-swift.sh does not build through swift-ccache.sh as the caller when CI keeps its output"
   if ! pin="$(awk -F'==' '$1 == "swift" { print $2 }' "$pins")" || [ -z "$pin" ]; then
     echo "tool-pins.txt has no swift pin"
   fi
@@ -275,6 +296,24 @@ swift_wiring_checks() {
   expect_rejected "an if on the Swift ring wiring step" SW_WORKFLOW="$tmp/w5.yml"
   mutate "$here/test.yml" "$tmp/w6.yml" 's#\(actions/setup-go@\)[0-9a-f]\{40\}.*#\1v7.0.0#'
   expect_rejected "a uses: of the ring job pinned to a tag" SW_WORKFLOW="$tmp/w6.yml"
+  mutate "$here/ring-swift.sh" "$tmp/b3.sh" 's#bash "$here/swift-ccache.sh" run#bash "$here/other.sh" run#'
+  expect_rejected "the build through swift-ccache.sh" SW_BUILD="$tmp/b3.sh"
+  mutate "$here/test.yml" "$tmp/w13.yml" '/^      - name: Swift driver build cache$/,/^          key: swift-v1-ring-/d'
+  expect_rejected "the Swift driver build cache step" SW_WORKFLOW="$tmp/w13.yml"
+  mutate "$here/test.yml" "$tmp/w14.yml" 's/key: swift-v1-ring-${{ env.RING_SWIFT }}-/key: swift-v1-ring-/'
+  expect_rejected "the swift image tag in the ring cache key" SW_WORKFLOW="$tmp/w14.yml"
+  mutate "$here/test.yml" "$tmp/w15.yml" "s#, '.github/workflows/drivers/handoff-swift/Package.resolved')#)#"
+  expect_rejected "the driver Package.resolved in the ring cache key" SW_WORKFLOW="$tmp/w15.yml"
+  awk '/^      - name: Swift driver build cache$/ { on = 1 } on && /^        if: / { on = 0; next } { print }' "$here/test.yml" > "$tmp/w16.yml"
+  expect_rejected "the tag run left out of the ring cache" SW_WORKFLOW="$tmp/w16.yml"
+  mutate "$here/test.yml" "$tmp/w17.yml" '/^          PACKBIN_SWIFT_CACHE: ${{ steps.ring-swift-cache/d'
+  expect_rejected "the cache state of the start step" SW_WORKFLOW="$tmp/w17.yml"
+  insert_after "$here/test.yml" "$tmp/w18.yml" '^      - name: toolchain versions$' "        if: always()"
+  expect_rejected "an if on a ring step other than the cache" SW_WORKFLOW="$tmp/w18.yml"
+  insert_after "$here/test.yml" "$tmp/w19.yml" '^          key: swift-v1-ring-' "          restore-keys: swift-v1-ring-"
+  expect_rejected "a prefix restore of the ring cache" SW_WORKFLOW="$tmp/w19.yml"
+  mutate "$here/test.yml" "$tmp/w20.yml" 's#^          path: /tmp/packbin-ring-swift$#          path: /tmp/other#'
+  expect_rejected "the ring cache on another dir" SW_WORKFLOW="$tmp/w20.yml"
 }
 
 # write_fake_swift <bin dir>: a stand-in `swift` that logs each call, prints a Linux version line for
@@ -346,7 +385,7 @@ ring_swift_checks() {
 # A Linux host (stand-in uname) whose Swift is newer than the pin, as ubuntu-latest is: the drivers are built in
 # the swift:<pin> image, not with that Swift, and --version reports the image's.
 ring_swift_linux_checks() {
-  local tree="$1" pin="$2" lbin="$tmp/linux-bin" log="$tmp/linux-swift.log" version scratch="$tmp/linux-scratch"
+  local tree="$1" pin="$2" lbin="$tmp/linux-bin" log="$tmp/linux-swift.log" version scratch="$tmp/linux-scratch" out
   mkdir -p "$lbin"
   printf '#!/bin/sh\n[ "$1" = -s ] && echo Linux || exec /usr/bin/uname "$@"\n' > "$lbin/uname"; chmod +x "$lbin/uname"
   write_fake_swift "$lbin"; write_fake_docker "$lbin"
@@ -360,6 +399,16 @@ ring_swift_linux_checks() {
     echo "linux host, another Swift: the drivers build in the swift:$pin image"
   else
     fail "a Linux host with Swift 6.4 did not build in the image: $(cat "$log")"
+  fi
+  # CI keeps the scratch dir (AZ-2627): the container starts as root and swift-ccache.sh runs the build as the caller.
+  : > "$log"; rm -rf "$scratch"
+  out="$(PATH="$lbin:$PATH" FAKE_SWIFT_VERSION=6.4 FAKE_DOCKER_SWIFT="$pin" FAKE_SWIFT_LOG="$log" PACKBIN_SWIFT_CACHE=hit \
+    bash "$tree/.github/workflows/ring-swift.sh" "$scratch" 2>&1 < /dev/null)"
+  if grep -q "^docker run --rm -i -e HOME=$scratch/home .* swift:$pin bash $tree/.github/workflows/swift-ccache.sh run $scratch/ccache $(id -u) $(id -g) swift build -c release --static-swift-stdlib" "$log" \
+    && ! grep -q -- '--user' "$log" && grep -qx 'ring-swift: cache hit' <<< "$out"; then
+    echo "linux host, kept output: the drivers build through swift-ccache.sh as the caller"
+  else
+    fail "a kept-output build did not go through swift-ccache.sh as the caller: $(cat "$log") $out"
   fi
   : > "$log"; rm -rf "$scratch"
   version="$(PATH="$lbin:$PATH" FAKE_SWIFT_VERSION="$pin" FAKE_SWIFT_LOG="$log" bash "$tree/.github/workflows/ring-swift.sh" --version < /dev/null)"

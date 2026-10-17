@@ -90,7 +90,7 @@ callers.each do |name, ring_steps|
   steps.each do |step|
     label = step["name"] || step["uses"] || "unnamed"
     errors << "step '#{label}' of job #{name} has continue-on-error" if step.key?("continue-on-error")
-    errors << "step '#{label}' of job #{name} has an if condition" if step.key?("if")
+    errors << "step '#{label}' of job #{name} has an if condition" if step.key?("if") && !step["uses"].to_s.match?(/\Aactions\/cache@\h{40}\z/) # a cache step runs no check (AZ-2627)
     # The ring and the version check must both compile through the gcc image, not the runner's GCC.
     next unless ring_steps.include?(step) || code_lines.call(step).any? { |l| l.match?(toolchains) }
     env = [job["env"], step["env"]].select { |e| e.is_a?(Hash) }.reduce({}) { |all, e| all.merge(e) }

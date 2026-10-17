@@ -34,9 +34,20 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The Swift drivers' build output and their ccache directory, kept between runs (AZ-2627, C3): restored before
+      # the background build starts, saved only when the key misses. A tag run (publish.yml) builds from nothing.
+      - name: Swift driver build cache
+        id: ring-swift-cache
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /tmp/packbin-ring-swift
+          key: swift-v1-ring-${{ env.RING_SWIFT }}-${{ hashFiles('Package.swift', 'Package.resolved', '.github/workflows/drivers/handoff-swift/Package.swift', '.github/workflows/drivers/handoff-swift/Package.resolved') }}
       # The gcc and swift image pulls and the Swift driver build need none of the setup actions: they run in the
       # background while the setups run, and the wait below collects them (ring-prepare.sh, AZ-2626).
       - name: start image pulls and the Swift driver build
+        env:
+          PACKBIN_SWIFT_CACHE: ${{ steps.ring-swift-cache.conclusion == 'success' && (steps.ring-swift-cache.outputs.cache-hit == 'true' && 'hit' || 'miss') || '' }}
         run: bash .github/workflows/ring-prepare.sh start "$RUNNER_TEMP/ring-prepare" "gcc:$RING_GCC" "swift:$RING_SWIFT"
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
@@ -75,11 +86,11 @@ jobs:
 
   # The suites and the publish gate share nothing (the gate pulls its own images), so they run beside each other and
   # beside scaffold, embedded and ring: the wall time is the longest job, not the sum (AZ-2564). The free plan runs 20 jobs
-  # at the same time and this file makes 23 (AZ-2625), so the jobs are listed longest first (ring, the suites, the gate,
-  # the embedded targets, scaffold): the jobs that wait for a slot are the shortest. Since AZ-2600 each
-  # language is its own job and Swift, the longest suite, runs as three (PACKBIN_SWIFT_PART, run-suite.sh: tests,
-  # gates, speed; AZ-2607); the publish gate is the publish-gate-* jobs, each running its share of the check groups
-  # (publish-gate.test.sh --groups); the embedded targets are the embedded-* jobs (cpp/embedded/run.sh host <stage>).
+  # at the same time: this file makes 20 (AZ-2627: with 23, three jobs started 26 to 88 s late in every run, once the
+  # ring), so the short suites share a job: an entry's lang lists the suites it runs one after the other. Swift, the
+  # longest suite, runs as three (PACKBIN_SWIFT_PART, run-suite.sh: tests, gates, speed; AZ-2607); the publish gate is
+  # the publish-gate-* jobs, each running its share of the check groups (publish-gate.test.sh --groups); the embedded
+  # targets are the embedded-* jobs (cpp/embedded/run.sh host <stage>).
   suites:
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -95,21 +106,50 @@ jobs:
             part: speed
           - lang: go
           - lang: python
-          - lang: csharp
-          - lang: rust
-          - lang: cpp
-          - lang: typescript
-          - lang: java
+          - lang: csharp rust
+          - lang: cpp typescript java
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # C3 (AZ-2627): each Swift part keeps its build output and a ccache directory between runs, keyed on the part,
+      # the swift image tag and the package manifests; saved only when the key misses. A tag run (publish.yml) builds
+      # from nothing.
+      - name: Swift image tag
+        id: swift-pin
+        run: echo "tag=$(bash .github/workflows/tool-pin.sh swift)" >> "$GITHUB_OUTPUT"
+      - name: Swift build cache
+        id: swift-cache
+        if: ${{ matrix.part != '' && !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/swift-cache
+          key: swift-v1-${{ matrix.part }}-${{ steps.swift-pin.outputs.tag }}-${{ hashFiles('Package.swift', 'Package.resolved') }}
       - name: suite
         env:
           SUITE: ${{ matrix.lang }}
           PACKBIN_SWIFT_PART: ${{ matrix.part }}
+          PACKBIN_SWIFT_CACHE: ${{ steps.swift-cache.conclusion == 'success' && (steps.swift-cache.outputs.cache-hit == 'true' && 'hit' || 'miss') || '' }}
         run: |
           set -euo pipefail
           mkdir -p test-results
-          docker compose -f docker-compose.test.yml run --rm -e PACKBIN_SWIFT_PART "$SUITE"
+          # A Swift part mounts its kept build output and ccache directory where docker-compose.test.yml and
+          # run-suite.sh put them.
+          kept=()
+          if [ -n "$PACKBIN_SWIFT_CACHE" ]; then
+            mkdir -p "$RUNNER_TEMP/swift-cache/build" "$RUNNER_TEMP/swift-cache/ccache"
+            kept=(-v "$RUNNER_TEMP/swift-cache/build:/tmp/packbin-swift-build"
+              -v "$RUNNER_TEMP/swift-cache/ccache:/tmp/packbin-swift-ccache" -e PACKBIN_SWIFT_CACHE)
+          fi
+          # Each suite of the entry runs; a failed one does not stop the others, and the job fails naming them.
+          failed=""
+          for suite in $SUITE; do
+            docker compose -f docker-compose.test.yml run --rm "${kept[@]}" -e PACKBIN_SWIFT_PART "$suite" || failed="$failed $suite"
+          done
+          # The suite container runs as root: the cache save after a miss (tar as the runner's user) reads every file.
+          if [ "$PACKBIN_SWIFT_CACHE" = miss ]; then sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/swift-cache"; fi
+          if [ -n "$failed" ]; then
+            echo "::error title=suites failed::$failed"
+            exit 1
+          fi
 
   # The gate shares, chosen from the per-group seconds of the "publish gate timing" notice of each job (AZ-2607: the
   # read-only checks are separate groups; the swift group, 215 s, has a job of its own; AZ-2625: the three real gate runs

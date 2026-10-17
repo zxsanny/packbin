@@ -327,6 +327,13 @@ case "$lang" in
     esac
     # A tree without Package.swift or swift/ fails, as every other language does without its manifest (AC-3).
     if [ "$ok" -eq 0 ] && swift_tree; then
+      # C3 (AZ-2627): CI keeps the part's build output and a ccache directory between runs and says here whether it
+      # restored them (PACKBIN_SWIFT_CACHE hit or miss); unset on the Mac, which builds from nothing as before.
+      if [ -n "${PACKBIN_SWIFT_CACHE:-}" ]; then
+        # shellcheck source=swift-ccache.sh
+        . "$root/.github/workflows/swift-ccache.sh"
+        swift_ccache_start "${PACKBIN_SWIFT_CCACHE_DIR:-/tmp/packbin-swift-ccache}"
+      fi
       for swift_step in $swift_plan; do
         case "$swift_step" in
           resolve) run swift_resolve ;;
@@ -354,6 +361,9 @@ esac
 
 elapsed=$(( $(date +%s) - started ))
 elapsed_ms=$(( elapsed * 1000 ))
+if [ "$lang" = swift ] && [ -n "${PACKBIN_SWIFT_CACHE:-}" ] && command -v swift_ccache_summary > /dev/null; then
+  timing_say "run-suite: swift cache $PACKBIN_SWIFT_CACHE; ccache $(swift_ccache_summary)"
+fi
 timing_say "run-suite: $lang total took $elapsed s in $steps steps"
 # On GitHub Actions the timing lines also go out as ONE notice annotation, as the publish gate's do
 # (publish-timing.test.sh): a job's check-run annotations are readable without a token, its log is not (AZ-2607).

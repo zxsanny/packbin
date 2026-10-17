@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# AZ-2564, AZ-2600, AZ-2607, AZ-2625 and AZ-2626: the job layout of test.yml. Exactly one job runs each part of the old `scaffold` job:
-# the static checks (`scaffold`), the suites (`suites`, a matrix: one job per language, Swift as three parts) and the
-# publish gate (the publish-gate-* jobs, each running its share of the groups of publish-gate.test.sh); the embedded
-# targets are the embedded-* jobs (each part of cpp/embedded/run.sh in exactly one); they run beside `ring` (no needs,
-# no if, no continue-on-error, a timeout), and a gate job pulls exactly the images its groups start, before the gate.
-# The real test.yml must pass; each mutant (one per rule) must be refused.
+# AZ-2564, AZ-2600, AZ-2607, AZ-2625, AZ-2626 and AZ-2627: the job layout of test.yml. Exactly one job runs each part of
+# the old `scaffold` job: the static checks (`scaffold`), the suites (`suites`, a matrix: each language in one entry,
+# short suites sharing one, Swift as three parts with their build caches) and the publish gate (the publish-gate-* jobs,
+# each running its share of the groups of publish-gate.test.sh); the embedded targets are the embedded-* jobs (each part
+# of cpp/embedded/run.sh in exactly one); they run beside `ring` (no needs, no if, no continue-on-error, a timeout; the
+# only step with an if is a cache step), the file makes at most 20 jobs, and a gate job pulls exactly the images its
+# groups start, before the gate. The real test.yml must pass; each mutant (one per rule) must be refused.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,6 +24,8 @@ gate_source = File.read(ARGV[1])
 jobs = wf["jobs"].is_a?(Hash) ? wf["jobs"] : {}
 steps_of = ->(job) { job.is_a?(Hash) && job["steps"].is_a?(Array) ? job["steps"] : [] }
 lines_of = ->(step) { step["run"].to_s.lines.map(&:strip).reject(&:empty?) }
+# A cache step restores and saves build output only, it runs no check: the one kind of step that may have an if.
+cache_step = ->(step) { step["uses"].to_s.match?(/\Aactions\/cache@[0-9a-f]{40}\z/) }
 runs = lambda do |name, wanted|
   steps_of.call(jobs[name]).select { |s| lines_of.call(s).any? { |l| l == wanted } }
 end
@@ -54,10 +57,13 @@ end
   %w[if needs continue-on-error].each { |k| errors << "job #{name} has #{k}, so it does not run beside the others" if job.key?(k) }
   steps_of.call(job).each do |step|
     label = step["name"] || step["uses"] || "unnamed"
-    errors << "step '#{label}' of job #{name} has an if or continue-on-error" if step.key?("if") || step.key?("continue-on-error")
+    errors << "step '#{label}' of job #{name} has an if or continue-on-error" if (step.key?("if") && !cache_step.call(step)) || step.key?("continue-on-error")
   end
 end
 errors << "a job named publish-gate is left: the gate is the publish-gate-* jobs" if jobs.key?("publish-gate")
+# The free plan runs 20 jobs at once: with more, some start late, and a late long job sets the wall (AZ-2627).
+job_count = jobs.values.sum { |j| j.is_a?(Hash) && j.dig("strategy", "matrix", "include").is_a?(Array) ? j["strategy"]["matrix"]["include"].size : 1 }
+errors << "test.yml makes #{job_count} jobs, more than the 20 the free plan runs at once" if job_count > 20
 
 # The embedded jobs: no job-level if, needs or continue-on-error, a timeout; the only step with an if is the report
 # (if: always()), and every part of cpp/embedded/run.sh is called by exactly one job, once.
@@ -87,27 +93,54 @@ embedded_jobs.each do |name|
   errors << "job #{name} runs #{n} embedded parts, not one" unless n == 1
 end
 
-# The suites: one job per matrix entry; every language once, Swift as its two parts, nothing else.
+# The suites: one job per matrix entry, whose lang lists the suites it runs one after the other (AZ-2627); every language
+# in exactly one entry, Swift as its three parts, each alone in its entry; nothing else.
 suites = jobs["suites"]
 matrix = suites.is_a?(Hash) && suites["strategy"].is_a?(Hash) ? suites["strategy"]["matrix"] : nil
 entries = matrix.is_a?(Hash) && matrix["include"].is_a?(Array) ? matrix["include"] : []
 errors << "the suites job has no matrix of included entries" if entries.empty?
 errors << "the suites matrix has keys besides include (an exclude or a product would change the set)" if matrix.is_a?(Hash) && matrix.keys != ["include"]
 errors << "the suites matrix stops the other suites at the first failure (fail-fast is not false)" unless suites.is_a?(Hash) && suites["strategy"].is_a?(Hash) && suites["strategy"]["fail-fast"] == false
-got = entries.map { |e| e.is_a?(Hash) ? [e["lang"], e["part"]] : [nil, nil] }
+got = entries.flat_map { |e| e.is_a?(Hash) ? e["lang"].to_s.split.map { |l| [l, e["part"]] } : [] }
+entries.each { |e| errors << "the suites matrix entry #{e.inspect} names no suite" if e.is_a?(Hash) && e["lang"].to_s.split.empty? }
+entries.each { |e| errors << "the suites matrix entry #{e.inspect} runs a Swift part beside other suites" if e.is_a?(Hash) && e["part"] && e["lang"].to_s.split.size > 1 }
 want = (languages - ["swift"]).map { |l| [l, nil] } + [["swift", "tests"], ["swift", "gates"], ["swift", "speed"]]
 (want - got).each { |e| errors << "the suites matrix has no entry for #{e.compact.join(' ')}" }
 (got - want).each { |e| errors << "the suites matrix has an unknown entry #{e.inspect}" }
 got.group_by { |e| e }.select { |_, v| v.size > 1 }.each_key { |e| errors << "the suites matrix runs #{e.compact.join(' ')} twice" }
 entries.each { |e| errors << "the suites matrix entry #{e.inspect} has keys besides lang and part" if e.is_a?(Hash) && !(e.keys - %w[lang part]).empty? }
 
-body = 'docker compose -f docker-compose.test.yml run --rm -e PACKBIN_SWIFT_PART "$SUITE"'
+body = 'docker compose -f docker-compose.test.yml run --rm "${kept[@]}" -e PACKBIN_SWIFT_PART "$suite" || failed="$failed $suite"'
 errors << "the suites run in #{all_runs.call(body).inspect}, not only in the suites job" unless all_runs.call(body) == ["suites"]
 errors << "a job other than suites runs a suite through compose" unless jobs.keys.reject { |n| n == "suites" }.none? { |n| steps_of.call(jobs[n]).any? { |s| lines_of.call(s).any? { |l| l.include?("docker-compose.test.yml run") } } }
 suites_step = steps_of.call(suites).find { |st| lines_of.call(st).include?(body) }
-errors << "the suites step does not start with set -euo pipefail, so a failing suite can pass" unless suites_step && lines_of.call(suites_step).first == "set -euo pipefail"
+suite_lines = suites_step ? lines_of.call(suites_step) : []
+errors << "the suites step does not start with set -euo pipefail, so a failing suite can pass" unless suite_lines.first == "set -euo pipefail"
 errors << "the suites step does not take its language from the matrix" unless suites_step && suites_step.dig("env", "SUITE") == "${{ matrix.lang }}"
 errors << "the suites step does not take its Swift part from the matrix" unless suites_step && suites_step.dig("env", "PACKBIN_SWIFT_PART") == "${{ matrix.part }}"
+# Each suite of an entry runs although one before it failed, and the step then fails naming the failed ones.
+order = ['for suite in $SUITE; do', body, 'done', 'if [ -n "$failed" ]; then', 'echo "::error title=suites failed::$failed"', 'exit 1']
+at = order.map { |l| suite_lines.index(l) }
+errors << "the suites step does not run each suite of its entry, keep going after a failed one and fail naming it" if at.include?(nil) || at != at.sort
+# C3 (AZ-2627): a Swift part restores its kept build output by exact key (the part, the swift image tag, the package
+# manifests), before the suite step, and never on a tag run; the suite step learns from it whether it hit.
+cache_at = steps_of.call(suites).index { |st| cache_step.call(st) }
+cache = cache_at && steps_of.call(suites)[cache_at]
+pin = steps_of.call(suites).find { |st| st["id"] == "swift-pin" }
+errors << "the suites job reads no swift image tag for the cache key (a swift-pin step running tool-pin.sh swift)" unless pin && lines_of.call(pin) == ['echo "tag=$(bash .github/workflows/tool-pin.sh swift)" >> "$GITHUB_OUTPUT"']
+if cache.nil? || cache_at > steps_of.call(suites).index(suites_step).to_i
+  errors << "the suites job has no Swift build cache step before the suite step"
+else
+  errors << "the Swift build cache step runs for more than the Swift parts or on a tag run: #{cache['if'].inspect}" unless cache["if"] == "${{ matrix.part != '' && !startsWith(github.ref, 'refs/tags/') }}"
+  key = cache.dig("with", "key").to_s
+  ["${{ matrix.part }}", "${{ steps.swift-pin.outputs.tag }}", "hashFiles('Package.swift', 'Package.resolved')"].each do |part|
+    errors << "the Swift build cache key #{key.inspect} does not name #{part}" unless key.include?(part)
+  end
+  errors << "the Swift build cache restores by a prefix (restore-keys): a hit must be the exact key" if cache["with"].is_a?(Hash) && cache["with"].key?("restore-keys")
+  errors << "the Swift build cache path is not the runner's swift-cache directory" unless cache.dig("with", "path") == "${{ runner.temp }}/swift-cache"
+  state = "${{ steps.#{cache['id']}.conclusion == 'success' && (steps.#{cache['id']}.outputs.cache-hit == 'true' && 'hit' || 'miss') || '' }}"
+  errors << "the suites step does not take the cache state from the cache step" unless suites_step && suites_step.dig("env", "PACKBIN_SWIFT_CACHE") == state
+end
 
 # The publish gate: every group of publish-gate.test.sh runs in exactly one job, and no group name is made up.
 all_groups = (gate_source[/^gate_groups="([^"]*)"$/, 1] || "").split
@@ -216,7 +249,7 @@ mutant "matrix without the swift tests part" 'jobs["suites"]["strategy"]["matrix
 mutant "matrix without the swift gates part" 'jobs["suites"]["strategy"]["matrix"]["include"].reject! { |e| e["part"] == "gates" }'
 mutant "matrix without the swift speed part" 'jobs["suites"]["strategy"]["matrix"]["include"].reject! { |e| e["part"] == "speed" }'
 mutant "matrix with swift as one whole entry" 'inc = jobs["suites"]["strategy"]["matrix"]["include"]; inc.reject! { |e| e["lang"] == "swift" }; inc << { "lang" => "swift" }'
-mutant "matrix without typescript" 'jobs["suites"]["strategy"]["matrix"]["include"].reject! { |e| e["lang"] == "typescript" }'
+mutant "matrix without typescript" 'e = jobs["suites"]["strategy"]["matrix"]["include"].find { |x| x["lang"].to_s.split.include?("typescript") }; e["lang"] = (e["lang"].split - ["typescript"]).join(" ")'
 mutant "matrix runs go twice" 'jobs["suites"]["strategy"]["matrix"]["include"] << { "lang" => "go" }'
 mutant "matrix with a language that has no suite" 'jobs["suites"]["strategy"]["matrix"]["include"] << { "lang" => "ruby" }'
 mutant "matrix entry with an extra key" 'jobs["suites"]["strategy"]["matrix"]["include"].first["extra"] = "x"'
@@ -235,6 +268,28 @@ mutant "suites job without timeout" 'jobs["suites"].delete("timeout-minutes")'
 mutant "suites job removed" 'jobs.delete("suites")'
 mutant "suites step also in scaffold" 'jobs["scaffold"]["steps"] << deep.call(step_named.call("suites", "suite"))'
 mutant "a suite run in the ring job" 'jobs["ring"]["steps"] << { "name" => "go", "run" => "docker compose -f docker-compose.test.yml run --rm go" }'
+mutant "cpp in two entries" 'jobs["suites"]["strategy"]["matrix"]["include"] << { "lang" => "cpp" }'
+mutant "java dropped from its shared entry" 'e = jobs["suites"]["strategy"]["matrix"]["include"].find { |x| x["lang"].to_s.split.include?("java") }; e["lang"] = (e["lang"].split - ["java"]).join(" ")'
+mutant "a Swift part shares its entry" 'jobs["suites"]["strategy"]["matrix"]["include"].find { |x| x["part"] == "speed" }["lang"] = "swift go"; jobs["suites"]["strategy"]["matrix"]["include"].reject! { |x| x["lang"] == "go" }'
+mutant "an entry that names no suite" 'jobs["suites"]["strategy"]["matrix"]["include"] << { "lang" => " " }'
+mutant "suites step stops at its first failing suite" 'st = step_named.call("suites", "suite"); st["run"] = st["run"].sub(%q( || failed="$failed $suite"), "")'
+mutant "suites step does not fail after a failed suite" 'st = step_named.call("suites", "suite"); st["run"] = st["run"].sub(/^ *exit 1\n/, "")'
+mutant "suites step does not name the failed suites" 'st = step_named.call("suites", "suite"); st["run"] = st["run"].sub(%q(::$failed"), %q(::some suites"))'
+mutant "suites step runs only the first suite of its entry" 'st = step_named.call("suites", "suite"); st["run"] = st["run"].sub("for suite in $SUITE; do", "for suite in ${SUITE%% *}; do")'
+mutant "more than 20 jobs" '3.times { |i| jobs["extra-#{i}"] = deep.call(jobs["scaffold"]) }'
+mutant "an if on the suite step" 'step_named.call("suites", "suite")["if"] = "matrix.part != %q()"'
+mutant "cache step continue-on-error" 'step_named.call("suites", "Swift build cache")["continue-on-error"] = true'
+mutant "an if on a step that only names the cache" 'step_named.call("suites", "Swift image tag")["if"] = "always()"'
+mutant "cache step by a tag, not a commit" 'step_named.call("suites", "Swift build cache")["uses"] = "actions/cache@v6"'
+mutant "cache key without the image tag" 'c = step_named.call("suites", "Swift build cache"); c["with"]["key"] = c["with"]["key"].sub("${{ steps.swift-pin.outputs.tag }}-", "")'
+mutant "cache key without Package.resolved" 'c = step_named.call("suites", "Swift build cache"); c["with"]["key"] = c["with"]["key"].sub(/, .Package\.resolved./, "")'
+mutant "cache key without the part" 'c = step_named.call("suites", "Swift build cache"); c["with"]["key"] = c["with"]["key"].sub("${{ matrix.part }}-", "")'
+mutant "cache restored by a prefix" 'step_named.call("suites", "Swift build cache")["with"]["restore-keys"] = "swift-v1-"'
+mutant "cache also on a tag run" 'c = step_named.call("suites", "Swift build cache"); c["if"] = c["if"].sub(/ && !startsWith\(.*\)/, "")'
+mutant "cache after the suite step" 'st = jobs["suites"]["steps"]; c = st.find { |s| s["name"] == "Swift build cache" }; st.delete(c); st << c'
+mutant "cache step removed" 'jobs["suites"]["steps"].reject! { |s| s["name"] == "Swift build cache" }'
+mutant "suite step without the cache state" 'step_named.call("suites", "suite")["env"].delete("PACKBIN_SWIFT_CACHE")'
+mutant "image tag step reads another pin" 'st = step_named.call("suites", "Swift image tag"); st["run"] = st["run"].sub("tool-pin.sh swift", "tool-pin.sh go")'
 # the publish gate jobs
 mutant "readonly-gate-good group dropped" 'gate_step.call("publish-gate-readonly-gate-good")["run"] = "bash .github/workflows/publish-gate.test.sh --groups readonly-gate-bad"; gate_step.call("publish-gate-readonly-gate-bad")["run"] = "bash .github/workflows/publish-gate.test.sh --groups readonly-gate-nojava"'
 mutant "readonly-gate-bad also in the good job" 'gate_step.call("publish-gate-readonly-gate-good")["run"] += ",readonly-gate-bad"'

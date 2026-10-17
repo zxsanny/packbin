@@ -88,6 +88,16 @@ case "$scratch" in
   "$root" | "$root"/*) ;;
   *) mounts+=(-v "$scratch:$scratch") ;;
 esac
-docker run --rm -i --user "$(id -u):$(id -g)" -e HOME="$scratch/home" "${mounts[@]}" -w "$driver" "swift:$tag" \
-  swift build -c release --static-swift-stdlib --package-path "$driver" --scratch-path "$scratch" < /dev/null >&2
+build=(swift build -c release --static-swift-stdlib --package-path "$driver" --scratch-path "$scratch")
+if [ -z "${PACKBIN_SWIFT_CACHE:-}" ]; then
+  docker run --rm -i --user "$(id -u):$(id -g)" -e HOME="$scratch/home" "${mounts[@]}" -w "$driver" "swift:$tag" \
+    "${build[@]}" < /dev/null >&2
+else
+  # C3 (AZ-2627): CI keeps <scratch dir> between runs (PACKBIN_SWIFT_CACHE hit or miss) and its C compiles go through
+  # ccache, kept in <scratch dir>/ccache: the container starts as root to install it, swift-ccache.sh runs the build as
+  # the caller, so the binaries are the caller's as above, and prints its hits and misses.
+  echo "ring-swift: cache $PACKBIN_SWIFT_CACHE" >&2
+  docker run --rm -i -e HOME="$scratch/home" "${mounts[@]}" -w "$driver" "swift:$tag" \
+    bash "$here/swift-ccache.sh" run "$scratch/ccache" "$(id -u)" "$(id -g)" "${build[@]}" < /dev/null >&2
+fi
 mv "$stamp.new" "$stamp"

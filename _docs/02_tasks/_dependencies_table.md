@@ -295,9 +295,10 @@ AZ-2513 through AZ-2524 are loop 26, the Swift package (epic AZ-2223; owner deci
 | AZ-2607 | ci_speed_2 | 5 | AZ-2600 | AZ-2223 |
 | AZ-2625 | ci_speed_3 | 5 | AZ-2607 | AZ-2223 |
 | AZ-2626 | ci_speed_4 | 5 | AZ-2625 | AZ-2223 |
+| AZ-2627 | ci_speed_5 | 5 | AZ-2626 | AZ-2223 |
 
 AZ-2563 through AZ-2567 are loop 28 (owner 2026-10-15: speed check, then the S3 limit, the cpp pool race and the small leftovers; speed set accepted as recommended). AZ-2564 waits for AZ-2563 (both edit `publish-gate.test.sh`). AZ-2565 owns `scripts/loop-tests.sh` and its test; AZ-2566 owns README and ADR-005; AZ-2567 owns only a scratchpad driver and a record entry. AZ-2068 stays out.
 
 AZ-2582 is loop 29 (owner 2026-10-15: cut the publish gate; approach A, target at most 18 minutes).
 
-AZ-2600 is loop 30 (owner 2026-10-16: all recommended reductions of the CI metrics report). AZ-2607 is loop 31 (owner 2026-10-17: all six recommendations of the loop 31 handoff; one task, two batches). AZ-2625 is loop 32 (owner 2026-10-17: readonly-gate in three jobs, pins moved, phases in two, Swift strict build merged; target a median wall of at most 330 s; one task, one batch). AZ-2626 is loop 33 (owner 2026-10-17: ring off the critical path, exact pull list per gate job; target a median wall of at most 250 s and ring at most 180 s; one task, one batch). AZ-2068 stays out.
+AZ-2600 is loop 30 (owner 2026-10-16: all recommended reductions of the CI metrics report). AZ-2607 is loop 31 (owner 2026-10-17: all six recommendations of the loop 31 handoff; one task, two batches). AZ-2625 is loop 32 (owner 2026-10-17: readonly-gate in three jobs, pins moved, phases in two, Swift strict build merged; target a median wall of at most 330 s; one task, one batch). AZ-2626 is loop 33 (owner 2026-10-17: ring off the critical path, exact pull list per gate job; target a median wall of at most 250 s and ring at most 180 s; one task, one batch). AZ-2627 is loop 34 (owner 2026-10-17: Swift build caches with ccache for the C files, at most 20 jobs; target a median wall of at most 225 s; one task, one batch). AZ-2068 stays out.
