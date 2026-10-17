@@ -5,7 +5,7 @@ branch: dev
 plan_artifact: _docs/loops/loop31/plan31.md
 tasks_shipped: [AZ-2607]
 leftovers:
-  - AC-1 needs its second run: the close push of `dev` (owner's go); run 1 of the final layout is 344 s (run 39014663944)
+  - AC-1 met on the median of two runs: 344 s (run 39014663944) and 369 s (run 39018150736, the close push), median 356.5 s against 360 s; thin margin, the wall is set by `publish-gate-readonly-gate` (139, 200, 278 s on three runs)
   - next long poles of test.yml (344 s): `publish-gate-readonly-gate` 341 s (the three real gate runs of `readonly-gate` vary 139 to 200 s; candidates: three jobs, `pins` out), `publish-gate-phases` 285 s (222 s plus the pull; two groups), Swift `gates` 282 s (strict release build 95 + sanitizer build 97 s), `ring` 265 s; image pull of 85 to 90 s in four gate jobs; caches (C3) not done
   - the Arduino-ESP32 target installs PlatformIO that only the Pico example uses (`examples_tools`): unmeasured; the embedded notices show the target seconds
   - a group that prints only at its end (`readonly-full`, `ro_gate_checks`) keeps the Mac heartbeat flat: a "started" line from `timed` would show it alive; not asked

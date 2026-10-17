@@ -67,3 +67,24 @@ What the numbers say:
 - Swift: the three parts are 282, 249, 227 s; `gates` is still the longest (two builds, 95 + 97 s).
 - Jobs per push: 20 (the free plan runs 20 at the same time); a `dev` + `main` push would be 40.
 - AC-1 needs two runs: this is the first (344 s); the second is the close push of `dev` (same code, docs only).
+
+## Second run of the final layout (run 39018150736, `fbce19f`, the close push of `dev`, 20 jobs, all green)
+
+Wall 369 s (created 08:38:57, last job done 08:45:06; 367 s from the job timestamps). **AC-1: the median of the two runs of the final code is 356.5 s (344 and 369 s), at most 360 s: met by 3.5 s; the second run alone is above 360 s.** Baseline 418 and 382 s (median 400 s).
+
+| Job | s | Notice |
+|-----|--:|--------|
+| `publish-gate-readonly-gate` | 365 | readonly-gate **278** (139 and 200 s on the two earlier runs), pins 26, pull about 60 |
+| `publish-gate-phases` | 286 | phases 221 |
+| `suites (swift, gates)` | 282 | total 246 |
+| `ring` | 257 | unchanged job |
+| `suites (swift, tests)` | 248 | total 212 |
+| `publish-gate-readonly` | 218 | gate 126 (68 before), readonly 25 |
+| `embedded-esp-core` | 204 | esp32s3 34, esp32c3 30, Arduino-ESP32 example 82; total 198 |
+| `publish-gate-rest` | 179 | readonly-full 35, vcpkg 22, workflow 38; total 115 |
+| `publish-gate-swift` | 178 | swift 172 |
+| `embedded-esp-packages` | 158 | ESP-IDF example 49, Pico example 34; total 152 |
+| `suites (swift, speed)` | 153 | total 112 (191 before) |
+| other | 28 to 147 | go 147, python 116, csharp 91, scaffold 81, embedded-arm 54 (four targets 1 to 2 s), cpp 54, rust 53, typescript 40, java 28 |
+
+The same code on a second run: the wall moved by 25 s and the longest job by 24 s, from one group: `readonly-gate` (three real gate runs at the same time) took 139, 200 and 278 s on three runs and defines the wall every time since the embedded job was split. It is the next target (three jobs, one gate run each, about 70 to 125 s plus the pull); the three Swift parts (282, 248, 153 s) and `phases` (286 s) follow.

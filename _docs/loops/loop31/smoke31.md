@@ -20,5 +20,5 @@ Agent run 2026-10-17, owner rule 2026-10-12 in `deployment_procedures.md`: **8/8
 
 ## For the operator
 
-- AC-1 is the median of two runs: run 1 is 344 s (above); run 2 is the close push of `dev`, which waits for your go. The result is recorded in `notes31.md` and `ci_metrics_2026-10-16.md` section 7 afterwards.
+- AC-1 is the median of two runs: run 1 is 344 s, run 2 (the close push of `dev`, run 39018150736) is 369 s, both 20 of 20 jobs green: median 356.5 s, 3.5 s under the 360 s target; the second run alone is above it. `readonly-gate` (139, 200, 278 s) defines the wall: the next cut.
 - `main` was not pushed (owner: dev only, no tag).

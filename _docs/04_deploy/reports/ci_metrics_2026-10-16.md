@@ -122,11 +122,13 @@ Per-job seconds of every group, step and embedded target now come from one "timi
 | 38997835591 (loop 30 close) | `5790486` | 15 | 382 s | phases 379, swift tests 342, embedded 337, readonly 333 |
 | 39012012655 (batch 1) | `29c0ab6` | 17 | 375 s | swift gates 371, embedded 360, publish-gate-rest 306, phases 278 |
 | 39014663944 (batch 2 + C4) | `0fc35f8` | 20 | 344 s | readonly-gate 341, phases 285, swift gates 282, ring 265, swift tests 249 |
-| second run of the final code (AC-1) | close push | 20 | to be filled at the loop close | |
+| 39018150736 (second run of the final code, AC-1) | `fbce19f` (close push, docs only) | 20 | 369 s | readonly-gate 365, phases 286, swift gates 282, ring 257, swift tests 248 |
+
+AC-1: the median of the two runs of the final layout is 356.5 s (344 and 369 s), at most 360 s: met by 3.5 s; the second run alone is above the target. The `readonly-gate` group was 139, 200 and 278 s on the three runs: it defines the wall and is the next cut.
 
 | Item | Before | After | Status |
 |------|-------:|------:|--------|
-| `test.yml` wall | 418 and 382 s (median 400 s) | 375 s, then 344 s | run 1 of 2 for the final layout; median of two at the close |
+| `test.yml` wall | 418 and 382 s (median 400 s) | 375 s (batch 1), then 344 s and 369 s (final layout, median 356.5 s) | AC-1 met on the median of two runs |
 | `readonly` gate group | 247 to 350 s, one group | 18 s + 139 to 200 s + 32 s, three groups | measured; `readonly-gate` (three gate runs at once) varies 1.4x |
 | `embedded` | one job, 317 to 360 s | `embedded-esp-core` 209, `embedded-esp-packages` 157, `embedded-arm` 52 s | measured |
 | Swift | two parts, 284 to 342 s and 284 to 379 s | tests 249, gates 282, speed 227 s | measured; gates is the longest (two builds, 95 + 97 s) |
