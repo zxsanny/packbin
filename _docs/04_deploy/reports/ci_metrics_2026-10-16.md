@@ -147,6 +147,9 @@ Read as in section 7 (one jobs call and one annotations call per job, no token).
 |-----|--------|-----:|-----:|----------------------------------------------------------|
 | 39018150736 (loop 31 close) | `fbce19f` | 20 | 369 s | readonly-gate 365, phases 286, swift gates 282, ring 257, swift tests 248 |
 | 39024316436 (loop 32, batch 1) | `c0e8019` | 23 | **275 s** | ring 273, swift tests 246, readonly-gate-good 184 (63) = 247, swift speed 224, embedded-esp-core 213, readonly 205, rest 205, phases 196, swift gates 191 |
+| 39025925515 (loop 32 close push, AC-1 run 2) | `73ba412` | 23 | **264 s** | ring 261, swift speed 218, rest 209, esp-core 200, readonly-gate-bad 186, phases-rerun 185, readonly 183, readonly-gate-nojava 180, swift tests 180 |
+
+AC-1: the median of the two runs of the final code is 269.5 s (275 and 264 s), at most 330 s: met by 60 s. In run 2 `suites (swift, gates)` waited 60 s, `typescript` 61 s and `java` 67 s for a slot.
 
 Group and step seconds of run 39024316436, against the loop 31 runs:
 
@@ -165,8 +168,8 @@ The wall is `ring` (273 s, unchanged since loop 28) with `suites (swift, tests)`
 
 | Item | Before (loop 31) | After (loop 32) | Status |
 |------|-----------------:|----------------:|--------|
-| `test.yml` wall | 375 s, then 344 s and 369 s (final layout, median 356.5 s) | 275 s (run 1); run 2 is the close push, in `_docs/loops/loop32/notes32.md` | AC-1 (median of two at most 330 s) met on run 1 alone by 55 s |
-| Jobs per push | 20 | 23 (three waited 30 to 63 s for a slot, none set the wall) | counted and measured |
+| `test.yml` wall | 375 s, then 344 s and 369 s (final layout, median 356.5 s) | 275 s and 264 s (final code, median 269.5 s) | AC-1 (median of two at most 330 s) met by 60 s; both runs under 300 s |
+| Jobs per push | 20 | 23 (three waited for a slot on each run, 30 to 67 s, never the same jobs; none set the wall) | counted and measured |
 | Mac `publish-gate` stage | 613 s (5 shares, sum 1 901 s, ratio 0.32) | 391 s (8 shares, sum 2 395 s, ratio 0.16) | measured at step 11 (load 20 to 69) |
 | Step 11 | 1 341 s, 3 suites on the serial retry | 902 s, no retry | measured |
 | Checks | 16 gate groups, 66 layout mutant calls | 19 gate groups, 77 layout mutant calls, `ph_split` and `ro_split` mutants, 19 Swift mutants | each in exactly one place, enforced |

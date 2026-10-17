@@ -57,6 +57,25 @@ Wall 275 s (created 10:17:11, last job done 275 s later); the loop 31 runs were 
 
 The jobs that waited for a slot were `readonly-gate-good` (63 s), `suites (rust)` (35 s) and `readonly-gate-nojava` (30 s): not the last three in the file, so the queue does not start jobs in file order. None set the wall (the slowest, `readonly-gate-good`, ended at 247 s).
 
+## Second CI run (run 39025925515, `73ba412`, the close push of `dev`, 23 jobs, all green)
+
+Wall 264 s (created 10:42:29). **AC-1: the median of the two runs of the final code is 269.5 s (275 and 264 s), at most 330 s: met by 60 s; the goal of about 5 minutes (300 s) is met by both runs.** Loop 31: 344 and 369 s (median 356.5 s).
+
+| Job | s | Notice |
+|-----|--:|--------|
+| `ring` | 261 | unchanged job: the wall again |
+| `suites (swift, speed)` | 218 | `swift_speed` 182 |
+| `publish-gate-rest` | 209 | pins 22 |
+| `suites (swift, gates)` | 148 (wait 60) | tsan build 69, sanitized run 31; steps 106 |
+| `embedded-esp-core` | 200 | |
+| `readonly-gate-bad` / `-nojava` / `-good` | 186 / 180 / 177 | 122 / 118 / 86 |
+| `publish-gate-phases-rerun` / `phases` | 185 / 175 | 120 / 113 |
+| `publish-gate-readonly` | 183 | |
+| `suites (swift, tests)` | 180 | debug build 45, tests 19, fuzz 66; steps 135 |
+| other | 28 to 147 | go 134, python 106, `publish-gate-swift` 114, csharp 74, scaffold 65, cpp 63, rust 57, embedded-arm 56, typescript 37 (wait 61), java 28 (wait 67) |
+
+Three jobs waited for a slot again (`suites (swift, gates)` 60 s, `typescript` 61 s, `java` 67 s) and none set the wall: which jobs wait changes from run to run. The runner was faster in run 2 (every Swift step about 30 % shorter than in run 1), so the two walls differ by 11 s while individual jobs differ by up to 66 s.
+
 ## Step 11 (`scripts/loop-tests.sh`, commit eb1da7d)
 
 10 passed, 3 skipped as unchanged, 0 failed, 902 s; no stage needed the serial retry (load 20 to 69). The gate stage: eight shares at once, wall 391 s against a sum of 2 395 s (ratio 0.16), tree unchanged (1 712 paths); NOT RUN inside the gate on this Mac: the two vcpkg checks (no vcpkg tool), as in every Mac run. Details in `_docs/03_implementation/test_run_loop32_report.md`.

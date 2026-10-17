@@ -20,7 +20,7 @@ Agent run 2026-10-17, owner rule 2026-10-12 in `deployment_procedures.md`: **8/8
 
 ## For the operator
 
-- AC-1 is the median of two runs: run 1 is 275 s; run 2 is the close push of `dev` and is recorded in `notes32.md` and the loop record after it ran.
+- AC-1 is the median of two runs: run 1 is 275 s; run 2 (the close push, run 39025925515) is 264 s, both 23 of 23 jobs green: median 269.5 s (recorded after the push, in `notes32.md`).
 - `ring` (273 s) and `suites (swift, tests)` (246 s) set the wall now; no job the loop cut is above 250 s.
 - The two vcpkg checks are NOT RUN on this Mac (no vcpkg tool); the CI job `publish-gate-rest` runs them (green in run 1).
 - `main` was not pushed, no tag.

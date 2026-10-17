@@ -3,13 +3,13 @@
 loop: 32
 feature: ci-speed-3
 rounds: 1
-verdict: COMPLETE (AC-1 first run 275 s against the 330 s bound, the second run is the close push; `scenarios.md` absent: no new-task Step 4.7 for this CI loop, the spec ACs and the notes are the baseline)
+verdict: COMPLETE (AC-1 median of two runs 269.5 s (275 and 264 s) against the 330 s bound; `scenarios.md` absent: no new-task Step 4.7 for this CI loop, the spec ACs and the notes are the baseline)
 
 FEATURE ASSESSMENT loop 32 round 1: COMPLETE — 10 covered / 3 out-of-scope / 0 gap-clear / 0 gap-unclear
 
 | id | scenario | status | evidence |
 |----|----------|--------|----------|
-| AC-1 | CI wall, median of two `dev` runs at most 330 s | covered (run 1) | run 39024316436 (`c0e8019`): 275 s, 23 of 23 jobs green, against 344 and 369 s; run 2 is the close push |
+| AC-1 | CI wall, median of two `dev` runs at most 330 s | covered | run 39024316436 (`c0e8019`): 275 s; run 39025925515 (`73ba412`, the close push): 264 s; both 23 of 23 jobs green; median 269.5 s, against 344 and 369 s (median 356.5 s) in loop 31 |
 | AC-2 | `readonly-gate` as three groups and three jobs, each at most 220 s | covered | `ro_gate_run` + three check functions; groups 121, 88, 94 s; jobs 184, 176, 179 s (plus 63, 2, 30 s of waiting for a slot) |
 | AC-3 | `pins` in `publish-gate-rest` | covered | `test.yml`; `pins` 26 s in a 138 s group total, job 205 s |
 | AC-4 | `phases` in two groups, every phase check in one, each job at most 220 s | covered, cut changed | `phases` 105 s and `phases-rerun` 108 s (jobs 196 and 170 s); the cut is by the Mac profile (the owner's example of success against failure scenarios would have been 73 s against 213 s there); `ph_split` + 4 mutants |
