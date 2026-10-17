@@ -15,7 +15,9 @@ Owner (2026-10-17): accepted all six recommendations of `_docs/loops/loop30/hand
 - **`publish-phases.test.sh`** (501 lines) under the 500-line cap, split by responsibility.
 - **review28 #4:** audit `scripts/` and `.github/workflows/` for a host delete of a path right before a container binds it (the loop 28 cpp race); fix or prove harmless each site.
 
-Closed by the owner's batch: T2 option B (no ADR-005 amendment). Not in scope: C3 (caches), C4 (embedded split), AZ-2068, any tag or registry upload, F44, the `main` push.
+- **C4 (added by the owner, 2026-10-17, after the first CI run showed `embedded` at 360 s as the floor of the wall):** the `embedded` job becomes three (`embedded-arm`, `embedded-esp-core`, `embedded-esp-packages`) from one target table in `cpp/embedded/run.sh`; the Swift suite runs as three parts (`tests`, `gates`, `speed`); the gate jobs are regrouped by the measured group seconds (`swift` in its own job, `readonly-full` and the small groups together).
+
+Closed by the owner's batch: T2 option B (no ADR-005 amendment). Not in scope: C3 (caches), AZ-2068, any tag or registry upload, F44, the `main` push.
 
 ## Code sections / UI locations for this loop
 

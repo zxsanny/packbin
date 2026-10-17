@@ -8,22 +8,6 @@ Downstream skills consume this file:
 - `.cursor/skills/autodev/protocols/bootstrap-lessons.md` (Bootstrap B2 — Surface Recent Lessons)
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
-- [2026-10-12] [architecture] A slot budget is a memory ceiling of maxSlots times the per-slot cost, and the cost differs by package (the same 4.3 MB packet: TypeScript 1 072 MB, Python 548 MB); removing Python's first-round surcharge raised its worst case from 90 MB to 548 MB. Change any charge only with a measured worst-case memory A/B in the same loop.
-  Source: _docs/06_metrics/retro_2026-10-12_loop21.md
-- [2026-10-12] [process] A parity decision must name the constructs it covers and both the with-value and no-value rows: U3 was built for repeat only and U7's no-value row (010000) stayed inconsistent with U6 until the reference worker flagged it.
-  Source: _docs/06_metrics/retro_2026-10-12_loop21.md
-- [2026-10-12] [testing] Fixtures first, then one loader worker per package: the loaders found two parity gaps (Rust late when in a bit body, C++ absent split body) that each package's own pins missed.
-  Source: _docs/06_metrics/retro_2026-10-12_loop21.md
-- [2026-10-12] [tooling] A stage timeout written as `perl alarm` counts wall time across laptop sleep and its alarm survives `exec` into `docker compose`, which ignores it: step 11 stage 1 died with rc 142 and the ESP stage ran hours over its limit; check `uptime` and `sysctl vm.swapusage` before a total run (a swapping host turned a 107 s ring into 11 296 s and flaked three timing tests).
-  Source: _docs/06_metrics/retro_2026-10-12_loop22.md
-- [2026-10-12] [architecture] A lowered limit lowers peak memory by less than its ratio: a quarter of the slots gave 29 to 33 % of the old peak because the runtime and the packet stay; state memory acceptance in absolute MB per package and give a test bound 50 % slack.
-  Source: _docs/06_metrics/retro_2026-10-12_loop22.md
-- [2026-10-12] [testing] A hostile construct case whose scheme another rule refuses first passes for the wrong reason: the empty-when cases were refused by the scope rule in five packages; check which rule fires per package when a case is added and pin it.
-  Source: _docs/06_metrics/retro_2026-10-12_loop22.md
-- [2026-10-12] [architecture] Validation state stored on a user's node leaks between schemes: Python kept `count_source` on the shared leaf and the last scheme won; copy the node at bind, as a `times` already was.
-  Source: _docs/06_metrics/retro_2026-10-12_loop22.md
-- [2026-10-12] [process] Probe the 'the other packages do X' premise of a parity spec before writing the AC: two of the loop 22 premises (U14, U15) were false or ambiguous and the reference probe section caught them.
-  Source: _docs/06_metrics/retro_2026-10-12_loop22.md
 - [2026-10-13] [architecture] A container sized by a count taken from the scheme (declared members) instead of the bytes read multiplies a small packet by the scheme width: Go's list of `Nested` rows peaked at 1.16 GB for a 64 KB packet with 256 members (F41). Size from bytes already read, and measure peak allocation for every collection of rows in the review, not by estimate.
   Source: _docs/06_metrics/retro_2026-10-13_loop24.md
 - [2026-10-13] [testing] A timing bound belongs to the build it describes: the 1 s AC-10 loop was asserted under the race detector (about 5x slower) and failed at load 80 and 87; assert it in a second run without `-race` and let the race run check races only.
@@ -48,3 +32,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-14_loop26.md
 - [2026-10-16] [tooling] Time a duplicate before arguing about it, and read a platform limit before relying on an output channel: per-call timing showed two groups running the same three real gate scenarios (six runs of 70 to 90 s for three scenarios), and the first CI annotation per timing line lost the last five groups because GitHub keeps 10 notices per step; one notice with all lines fixed it.
   Source: _docs/loops/loop29/notes29.md
+- [2026-10-17] [process] Ship the per-job timing notices before the split and regroup from the numbers: batch 1 split by estimate and its first CI run moved the floor (the 360 s embedded job and a 215 s swift gate group), so a CI speed loop is two pushes and the owner should be asked for the second round up front.
+  Source: _docs/06_metrics/retro_2026-10-17_loop31.md
+- [2026-10-17] [testing] Hold every list that is split across jobs (gate groups, embedded targets, Swift steps) to exactly one place with a guard that derives the set from the files (`publish-gate-*`, `embedded-*`, the `source` lines) and a mutant per rule: it survived two regroupings with only list edits, where a guard that names jobs by hand breaks at each one.
+  Source: _docs/06_metrics/retro_2026-10-17_loop31.md
+- [2026-10-17] [testing] A fake toolchain cannot prove a command that moved to a new place: the Swift speed part's `swift test list -c release --skip-build` ran only against a fake `swift` until one real container run (accepted, SpeedTests listed); run each new real command path once before the push, and expect timing bounds to miss on a loaded Mac (read the failed bound, then the serial retry).
+  Source: _docs/06_metrics/retro_2026-10-17_loop31.md

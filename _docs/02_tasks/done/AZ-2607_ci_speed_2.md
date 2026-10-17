@@ -8,7 +8,7 @@ branch: dev
 **Task**: AZ-2607_ci_speed_2
 **Name**: CI speed 2
 **Description**: `test.yml` wall time falls from 382 to 418 s to at most 360 s; the Mac publish gate stage runs its shares in parallel.
-**Complexity**: 5 points
+**Complexity**: 5 points at intake; the owner added C4 and the Swift third part on 2026-10-17 after the first CI run (about 8 points of work in all)
 **Dependencies**: AZ-2600
 **Component**: ci
 **Tracker**: AZ-2607
@@ -20,6 +20,7 @@ branch: dev
 - Every suite writes one timing notice with its step seconds; the Swift parts are balanced from those numbers.
 - `scripts/loop-tests.sh` runs the CI gate shares in parallel on the Mac.
 - `publish-phases.test.sh` is under 500 lines; review28 #4 audited.
+- (Owner decision 2026-10-17, C4) the `embedded` job is three jobs from one target table; the Swift suite is three parts; the gate jobs are regrouped by the measured seconds.
 
 ## Acceptance Criteria
 
@@ -52,6 +53,11 @@ Then it and every file split from it is at most 500 lines, and `phase_checks` ru
 Given `scripts/`, `.github/workflows/` and `cpp/embedded/`
 When the audit runs
 Then every site that deletes a host path right before a container binds it is listed in `_docs/loops/loop31/notes31.md` as fixed or harmless with a reason, and none is left unfixed and harmful.
+
+**AC-7: embedded split (C4)**
+Given `cpp/embedded/run.sh` and the `embedded-*` jobs of `test.yml`
+When `run-parts.test.sh` and `publish-jobs.test.sh` run
+Then each of the 9 embedded targets (4 arm, 5 ESP) is in exactly one part (arm, ESP `core`, ESP `packages`), each part is called by exactly one `embedded-*` job, the unsplit forms still work, each job writes one timing notice with its target seconds, and no job of `test.yml` is the old `embedded` job; the `embedded-*` jobs are each at most 240 s on CI.
 
 ## Constraints
 

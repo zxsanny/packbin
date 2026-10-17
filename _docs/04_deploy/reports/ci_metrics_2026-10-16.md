@@ -112,3 +112,27 @@ With T3 the Go wait is no longer the long one, so T2 would save about 2 to 3 min
 | Go proxy wait on a tag | 1 158 s | about 60 s expected | unproven until the next tag |
 | tag run repeated tests (T1) | 13 min | 0 expected | unproven until the next tag |
 | Maven wait | 1 187 s | unchanged | Maven's own delay |
+
+## 7. Loop 31 (AZ-2607): read-only split, Swift in three parts, embedded in three jobs, Mac gate in parallel
+
+Per-job seconds of every group, step and embedded target now come from one "timing" notice annotation per job (readable without a token: `curl -s "https://api.github.com/repos/zxsanny/packbin/check-runs/<job id>/annotations?per_page=100"`); the job ids are in `.../actions/runs/<run id>/jobs`. Full job tables of both runs: `_docs/loops/loop31/notes31.md`.
+
+| Run | Commit | Jobs | Wall | Longest jobs (s) |
+|-----|--------|-----:|-----:|------------------|
+| 38997835591 (loop 30 close) | `5790486` | 15 | 382 s | phases 379, swift tests 342, embedded 337, readonly 333 |
+| 39012012655 (batch 1) | `29c0ab6` | 17 | 375 s | swift gates 371, embedded 360, publish-gate-rest 306, phases 278 |
+| 39014663944 (batch 2 + C4) | `0fc35f8` | 20 | 344 s | readonly-gate 341, phases 285, swift gates 282, ring 265, swift tests 249 |
+| second run of the final code (AC-1) | close push | 20 | to be filled at the loop close | |
+
+| Item | Before | After | Status |
+|------|-------:|------:|--------|
+| `test.yml` wall | 418 and 382 s (median 400 s) | 375 s, then 344 s | run 1 of 2 for the final layout; median of two at the close |
+| `readonly` gate group | 247 to 350 s, one group | 18 s + 139 to 200 s + 32 s, three groups | measured; `readonly-gate` (three gate runs at once) varies 1.4x |
+| `embedded` | one job, 317 to 360 s | `embedded-esp-core` 209, `embedded-esp-packages` 157, `embedded-arm` 52 s | measured |
+| Swift | two parts, 284 to 342 s and 284 to 379 s | tests 249, gates 282, speed 227 s | measured; gates is the longest (two builds, 95 + 97 s) |
+| `swift` gate group | 195 to 215 s inside `rest` | 153 to 157 s in its own job | measured |
+| Mac `publish-gate` stage | 1 141 s (loop 30), 754 s (loop 29) | 613 s (5 shares at once; sum 1 901 s, ratio 0.32) | measured at step 11 (load 20 to 100) |
+| Jobs per push | 15 | 20 (the free plan runs 20 at the same time; a `dev` + `main` push is 40) | counted; queueing on a double push not measured |
+| Checks | 14 gate groups, 8 languages in 9 matrix entries, 45 layout mutants | 16 gate groups, 8 languages in 10 matrix entries, 66 layout mutant calls, 9 embedded targets in 3 parts | each in exactly one place, enforced |
+
+Next long poles, in order: `publish-gate-readonly-gate` (341 s: three gate runs at once on the runner, plus about 85 s of image pull, plus `pins` 26 s), `publish-gate-phases` (285 s: 222 s of scenarios plus the pull), the Swift `gates` part (282 s), `ring` (265 s, unchanged). Not done: caches (C3), the PlatformIO install in the Arduino-ESP32 target, one pull for several gate jobs.

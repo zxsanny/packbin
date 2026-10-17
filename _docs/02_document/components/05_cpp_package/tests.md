@@ -410,7 +410,7 @@ Rollback if this version must not be used: publish a later vcpkg port version. A
 
 ## Embedded and Compile-Time Tests (loop 10)
 
-Run by `make test` in `cpp/` and by `cpp/embedded/run.sh` (the `cpp-embedded` and `cpp-embedded-esp` services of `docker-compose.test.yml`; the `embedded` job of `test.yml`). One result row per target goes to `test-results/report.csv`.
+Run by `make test` in `cpp/` and by `cpp/embedded/run.sh` (the `cpp-embedded` and `cpp-embedded-esp` services of `docker-compose.test.yml`; the `embedded-arm`, `embedded-esp-core` and `embedded-esp-packages` jobs of `test.yml`, one part of `run.sh` each since loop 31). One result row per target goes to `test-results/report.csv`.
 
 | Test | What it proves | Where |
 |------|----------------|-------|
@@ -423,7 +423,7 @@ Run by `make test` in `cpp/` and by `cpp/embedded/run.sh` (the `cpp-embedded` an
 | s390x big-endian on QEMU user | the same vectors, the same bytes | `cpp-s390x` |
 | ESP32-S3 and ESP32-C3 builds | ESP-IDF builds with 0 warnings | `cpp-esp32s3`, `cpp-esp32c3` |
 | Packaged examples | ESP-IDF component, Arduino-ESP32 library layout and Pico PlatformIO archive each build the README example | `cpp-example-esp-idf`, `cpp-example-esp32-arduino`, `cpp-example-pico` |
-| Harness result rule (AZ-2099) | `run_target` always returns 0; a target is FAIL when its function exits non-zero (errexit is on in a child process, and the log names the failed command: `target command failed: ...`) or when a `fail` left the marker `<id>.failed`, and the stage exits 1 when any target failed. With a broken `arm-none-eabi-nm` the old harness reported 4 PASS; the new one reports FAIL for `cpp-m0plus`, `cpp-m3-qemu` and `cpp-m4f` and exits 1 (measured on a Mac). `run_stage_target` is removed | `cpp/embedded/lib.test.sh` (31 checks against fake targets, run by the `scaffold` job; the 31st fails when a `cpp/embedded` script pipes `find` into `head`, which ends the pipeline with SIGPIPE under `pipefail`, AZ-2238), `cpp/embedded/lib.sh`, `cpp/embedded/run.sh` |
+| Harness result rule (AZ-2099) | `run_target` always returns 0; a target is FAIL when its function exits non-zero (errexit is on in a child process, and the log names the failed command: `target command failed: ...`) or when a `fail` left the marker `<id>.failed`, and the stage exits 1 when any target failed. With a broken `arm-none-eabi-nm` the old harness reported 4 PASS; the new one reports FAIL for `cpp-m0plus`, `cpp-m3-qemu` and `cpp-m4f` and exits 1 (measured on a Mac). `run_stage_target` is removed | `cpp/embedded/lib.test.sh` (31 checks against fake targets, run by the `scaffold` job; the 31st fails when a `cpp/embedded` script pipes `find` into `head`, which ends the pipeline with SIGPIPE under `pipefail`, AZ-2238), `cpp/embedded/lib.sh`, `cpp/embedded/run.sh`; the part split (every target in exactly one part, the host forms, the timing notice): `cpp/embedded/run-parts.test.sh` |
 
 ## vcpkg Port Checks (AZ-2098, AZ-2232, AZ-2240, loop 16)
 
