@@ -38,3 +38,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-17_loop31.md
 - [2026-10-17] [testing] A fake toolchain cannot prove a command that moved to a new place: the Swift speed part's `swift test list -c release --skip-build` ran only against a fake `swift` until one real container run (accepted, SpeedTests listed); run each new real command path once before the push, and expect timing bounds to miss on a loaded Mac (read the failed bound, then the serial retry).
   Source: _docs/06_metrics/retro_2026-10-17_loop31.md
+- [2026-10-17] [estimation] Profile the functions of a gate group on the Mac before cutting it: the group notice is too coarse, and the cut the owner suggested (success against failure scenarios) was 73 s against 213 s while the cut by the profile was 143 against 143 s (CI 105 and 108 s); one scratch run with a `prof` wrapper per function takes about 5 minutes.
+  Source: _docs/06_metrics/retro_2026-10-17_loop32.md
+- [2026-10-17] [testing] Run the commands of the cheap CI jobs locally before the first push of a CI change and compare lists as sets: the `scaffold` script `report-row.test.sh` checked the suites matrix in a fixed order and would have turned the job red the moment the matrix was reordered longest first.
+  Source: _docs/06_metrics/retro_2026-10-17_loop32.md
+- [2026-10-17] [process] More jobs than the plan's concurrent slots (23 against 20) cost 30 to 63 s of waiting for three jobs on the first run, and the jobs that waited were not the last in the file; none set the wall because the cuts left every job under 250 s, but measure the start times (`created_at`, `started_at`) of the first run instead of trusting a file-order assumption.
+  Source: _docs/06_metrics/retro_2026-10-17_loop32.md

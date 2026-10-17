@@ -3,7 +3,7 @@
 loop: 32
 feature: ci-speed-3
 rounds: 1
-verdict: COMPLETE (AC-1 first run 275 s against the 330 s bound, the second run is the close push; AC-8's real proof is step 11; `scenarios.md` absent: no new-task Step 4.7 for this CI loop, the spec ACs and the notes are the baseline)
+verdict: COMPLETE (AC-1 first run 275 s against the 330 s bound, the second run is the close push; `scenarios.md` absent: no new-task Step 4.7 for this CI loop, the spec ACs and the notes are the baseline)
 
 FEATURE ASSESSMENT loop 32 round 1: COMPLETE — 10 covered / 3 out-of-scope / 0 gap-clear / 0 gap-unclear
 
@@ -16,7 +16,7 @@ FEATURE ASSESSMENT loop 32 round 1: COMPLETE — 10 covered / 3 out-of-scope / 0
 | AC-5 | Swift strict build (SW-9) in exactly one part, `gates` at most 200 s, no part above 250 s | covered | `swift_strict` on the one release build; gates job 191 s (steps 157), tests 246, speed 224; `run-suite-swift.test.sh` S2f, 19 mutants of `run-suite.sh`; real container runs of both parts; a planted warning in a test file fails the speed part |
 | AC-6 | no check lost, 19 groups in exactly one job, a mutant per changed rule | covered | `publish-jobs.test.sh` (77 mutant calls, was 66), `publish-timing.selftest.sh` (`ro_split` 5 mutants, `ph_split` 4), `run-suite-swift.test.sh`; one assertion of the bad-fixture scenario ("the run did not finish") cannot occur with a foreground run and is gone (recorded in the notes) |
 | AC-7 | job count and queue wait read from the first run | covered | 23 jobs; three waited for a slot (63, 35, 30 s) and none set the wall; the jobs that waited are not the last in the file |
-| AC-8 | the Mac gate runs the new shares from `test.yml` | pending step 11 | `loop-tests.test.sh` passes locally; the real proof is the step 11 stage |
+| AC-8 | the Mac gate runs the new shares from `test.yml` | covered | step 11: eight shares at once, wall 391 s against a sum of 2 395 s (ratio 0.16), tree unchanged (1 712 paths); `loop-tests.test.sh` passes |
 | AC-9 | changed source files at most 500 lines | covered | largest changed file 448 lines (`publish-readonly.test.sh`) |
 | D1 | `report-row.test.sh` compared the suites matrix with the languages in a fixed order | covered | found by running the scaffold checks locally before the push; the comparison is a set now, with a mutant check (matrix without typescript is refused) |
 | D2 | `publish-workflow.test.sh` named the gate and embedded jobs by hand | covered | derived from the `publish-gate-*` and `embedded-*` job names |

@@ -162,3 +162,13 @@ Group and step seconds of run 39024316436, against the loop 31 runs:
 | waits for a slot | none | `readonly-gate-good` 63 s, `suites (rust)` 35 s, `readonly-gate-nojava` 30 s (the jobs that start late are not the last in the file) |
 
 The wall is `ring` (273 s, unchanged since loop 28) with `suites (swift, tests)` (246 s) second; nothing the loop cut is on the critical path any more. Mac profile of the loop 31 `phase_checks` (one run, seconds): static 1, setup 15, fabricated 1, empty plan 0, build-only 30, full publish 27, failure injection 48, pipeline violations 21, re-run checks 128 (total 272); the cut is by these seconds.
+
+| Item | Before (loop 31) | After (loop 32) | Status |
+|------|-----------------:|----------------:|--------|
+| `test.yml` wall | 375 s, then 344 s and 369 s (final layout, median 356.5 s) | 275 s (run 1); run 2 is the close push, in `_docs/loops/loop32/notes32.md` | AC-1 (median of two at most 330 s) met on run 1 alone by 55 s |
+| Jobs per push | 20 | 23 (three waited 30 to 63 s for a slot, none set the wall) | counted and measured |
+| Mac `publish-gate` stage | 613 s (5 shares, sum 1 901 s, ratio 0.32) | 391 s (8 shares, sum 2 395 s, ratio 0.16) | measured at step 11 (load 20 to 69) |
+| Step 11 | 1 341 s, 3 suites on the serial retry | 902 s, no retry | measured |
+| Checks | 16 gate groups, 66 layout mutant calls | 19 gate groups, 77 layout mutant calls, `ph_split` and `ro_split` mutants, 19 Swift mutants | each in exactly one place, enforced |
+
+Next long poles, in order: `ring` (273 s), `suites (swift, tests)` (246 s), `readonly-gate-good` (247 s including 63 s of waiting), `suites (swift, speed)` (224 s), `embedded-esp-core` (213 s). Not done: caches (C3), per-job pull lists (swift is 4 GB and seven gate jobs pull it), the PlatformIO install in the Arduino-ESP32 target, splitting `ring`.
