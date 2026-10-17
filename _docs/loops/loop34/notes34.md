@@ -42,3 +42,7 @@ Wall **226 s**, every job started at +0 s, all four caches hit, nothing saved. T
 ## Priming run 2 (run 39044320959, `779ace6`, batch 3: keys `v2`, 20 jobs, all green)
 
 Wall 228 s on the miss path (every Swift build from nothing): `suites (swift, speed)` 225, `suites (swift, tests)` 216, `ring` 209, `publish-gate-readonly` 204 s. Saved: tests 86 MB, gates 92 MB, speed 79 MB, ring 140 MB (397 MB). The measured runs of the final code are the next push and the close push.
+
+## Measured run D (run 39044659167, `7cb51ca`, the final code, 20 jobs, all green)
+
+Wall **217 s** (AC-1 target at most 225 s), every job started within 1 s, all four caches hit, nothing saved. Swift builds: `tests` debug 19 s, `gates` sanitizer 27 s, `speed` 101 s, ring `swift-drivers` 26 s (AC-4 met). Longest jobs: `publish-gate-readonly` 214, `embedded-esp-core` 200, `publish-gate-readonly-gate-good` 188 s. Smoke 10/10 (`smoke34.md`).

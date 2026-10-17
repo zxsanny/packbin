@@ -194,3 +194,24 @@ AC-1: median of the two runs 238 s, at most 250 s: met. Five-image pulls in run 
 | Swift wiring check | in `ring` (18 to 25 s) | in `scaffold` |
 
 The wall is now `suites (swift, tests)` (248 s), then `suites (swift, speed)` (221 s); `ring`'s own critical path is the swift pull plus the Swift driver build (84 s, release with swift-crypto off Apple platforms). AC-2 (`ring` at most 180 s) was missed and accepted by the owner. Next: C3 (SwiftPM build caches for the ring's driver build and the three Swift suite parts); the gcc pull after the swift pull would save an estimated 15 to 25 s of `ring` only.
+
+## 10. Loop 34 (AZ-2627): Swift build caches, 20 jobs
+
+Read as in section 7 (jobs API, annotations and the caches API, no token; the unauthenticated limit is 60 calls an hour). Jobs: 20 per push (the short suites share two jobs); no job waited for a slot on any run.
+
+| Run | Commit | Code | Wall | Longest jobs (s) |
+|-----|--------|------|-----:|------------------|
+| 39039632778 | `b832403` | batch 1, every cache missed (priming) | 267 s | `suites (swift, tests)` 263, `ring` 221, `suites (swift, gates)` 207 |
+| 39040035812 | `c870aa7` | batch 1, every cache hit (run A) | **210 s** | `embedded-esp-core` 207, `publish-gate-rest` 206, `publish-gate-readonly` 206 |
+| 39043302176 | `bb21e07` | batch 2 (ccache removed), stale `v1` entries (run B) | 226 s | `suites (swift, tests)` 223, `publish-gate-readonly` 211, `ring` 201 |
+| 39044320959 | `779ace6` | batch 3 (keys `v2`), every cache missed (priming 2) | 228 s | `suites (swift, speed)` 225, `suites (swift, tests)` 216, `ring` 209 |
+| 39044659167 | `7cb51ca` | final code, every cache hit (run D) | **217 s** | `publish-gate-readonly` 214, `embedded-esp-core` 200, `publish-gate-readonly-gate-good` 188 |
+
+| Swift build (s) | Loop 33 (3 runs) | Priming (miss) | Run A (hit) | Run B (stale hit) | Run D (hit, final) |
+|-----------------|-----------------:|---------------:|------------:|------------------:|-------------------:|
+| `tests` debug build | 99, 48, 97 | 103 | 17 | 75 | 19 |
+| `gates` sanitizer build | 101, 85, n/r | 108 | 26 | 79 | 27 |
+| `speed` (release build and speed tests) | 185, 131, 181 | 115 | 103 | 126 | 101 |
+| ring `swift-drivers` | 84, 89, 120 | 123 | 22 | 108 | 26 |
+
+A restore keeps every file's time to the nanosecond, so a hit compiles only the package's own targets; run B rebuilt BoringSSL because its `v1` entries were built with batch 1's ccache compiler (the keys now hash the build-setting script). Entries: `v2` tests 86, gates 92, speed 79, ring 140 MB. The wall is now the non-Swift floor: `publish-gate-readonly` (204 to 214 s), `embedded-esp-core` (194 to 207 s), `publish-gate-rest` (186 to 206 s).
