@@ -34,3 +34,7 @@ Wall **210 s** (AC-1 target at most 225 s). Every job started within 1 s of the 
 | `suites (swift, gates)` | 117 | sanitizer build 26 s (85) |
 
 ccache was asked 0 times in all four builds (0 hits, 0 misses, 0 uncacheable): the restore kept every file's time to the nanosecond, so no BoringSSL file was recompiled. Check: a test package round-tripped with GNU tar's default format rebuilt 3 of 3 C files, with `tar --posix` 0 of 3. The owner removed ccache (batch 2). The wall is now the non-Swift floor: `embedded-esp-core`, `publish-gate-rest`, `publish-gate-readonly` (206 to 207 s).
+
+## Measured run B (run 39043302176, `bb21e07`, batch 2: ccache removed, 20 jobs, all green)
+
+Wall **226 s**, every job started at +0 s, all four caches hit, nothing saved. The Swift builds were slow again: `tests` debug build 75 s, `gates` sanitizer build 79 s, `speed` 126 s, ring `swift-drivers` 108 s (run A: 17, 26, 103, 22). Cause: the `v1` entries were built with batch 1's `CC=/usr/lib/ccache/clang`; with plain clang SwiftPM recompiles every C file, and a hit never saves, so every run would have paid it. Owner (2026-10-17): batch 3, keys `v2` with the build-setting script in the hash (`run-suite.sh`, `ring-swift.sh`); one priming push, one measured push, the close push measured.

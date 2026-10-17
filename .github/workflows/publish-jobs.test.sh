@@ -123,7 +123,8 @@ order = ['for suite in $SUITE; do', body, 'done', 'if [ -n "$failed" ]; then', '
 at = order.map { |l| suite_lines.index(l) }
 errors << "the suites step does not run each suite of its entry, keep going after a failed one and fail naming it" if at.include?(nil) || at != at.sort
 # C3 (AZ-2627): a Swift part restores its kept build output by exact key (the part, the swift image tag, the package
-# manifests), before the suite step, and never on a tag run; the suite step learns from it whether it hit.
+# manifests and run-suite.sh, which sets the build), before the suite step, and never on a tag run; the suite step
+# learns from it whether it hit.
 cache_at = steps_of.call(suites).index { |st| cache_step.call(st) }
 cache = cache_at && steps_of.call(suites)[cache_at]
 pin = steps_of.call(suites).find { |st| st["id"] == "swift-pin" }
@@ -133,7 +134,7 @@ if cache.nil? || cache_at > steps_of.call(suites).index(suites_step).to_i
 else
   errors << "the Swift build cache step runs for more than the Swift parts or on a tag run: #{cache['if'].inspect}" unless cache["if"] == "${{ matrix.part != '' && !startsWith(github.ref, 'refs/tags/') }}"
   key = cache.dig("with", "key").to_s
-  ["${{ matrix.part }}", "${{ steps.swift-pin.outputs.tag }}", "hashFiles('Package.swift', 'Package.resolved')"].each do |part|
+  ["${{ matrix.part }}", "${{ steps.swift-pin.outputs.tag }}", "hashFiles('Package.swift', 'Package.resolved', '.github/workflows/run-suite.sh')"].each do |part|
     errors << "the Swift build cache key #{key.inspect} does not name #{part}" unless key.include?(part)
   end
   errors << "the Swift build cache restores by a prefix (restore-keys): a hit must be the exact key" if cache["with"].is_a?(Hash) && cache["with"].key?("restore-keys")
@@ -283,8 +284,9 @@ mutant "an if on a step that only names the cache" 'step_named.call("suites", "S
 mutant "cache step by a tag, not a commit" 'step_named.call("suites", "Swift build cache")["uses"] = "actions/cache@v6"'
 mutant "cache key without the image tag" 'c = step_named.call("suites", "Swift build cache"); c["with"]["key"] = c["with"]["key"].sub("${{ steps.swift-pin.outputs.tag }}-", "")'
 mutant "cache key without Package.resolved" 'c = step_named.call("suites", "Swift build cache"); c["with"]["key"] = c["with"]["key"].sub(/, .Package\.resolved./, "")'
+mutant "cache key without run-suite.sh" 'c = step_named.call("suites", "Swift build cache"); c["with"]["key"] = c["with"]["key"].sub(/, .\.github\/workflows\/run-suite\.sh./, "")'
 mutant "cache key without the part" 'c = step_named.call("suites", "Swift build cache"); c["with"]["key"] = c["with"]["key"].sub("${{ matrix.part }}-", "")'
-mutant "cache restored by a prefix" 'step_named.call("suites", "Swift build cache")["with"]["restore-keys"] = "swift-v1-"'
+mutant "cache restored by a prefix" 'step_named.call("suites", "Swift build cache")["with"]["restore-keys"] = "swift-v2-"'
 mutant "cache also on a tag run" 'c = step_named.call("suites", "Swift build cache"); c["if"] = c["if"].sub(/ && !startsWith\(.*\)/, "")'
 mutant "cache after the suite step" 'st = jobs["suites"]["steps"]; c = st.find { |s| s["name"] == "Swift build cache" }; st.delete(c); st << c'
 mutant "cache step removed" 'jobs["suites"]["steps"].reject! { |s| s["name"] == "Swift build cache" }'

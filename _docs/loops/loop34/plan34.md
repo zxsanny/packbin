@@ -36,6 +36,7 @@ Intake: owner answered the loop 34 batch (D1 to D4, from `_docs/loops/loop33/han
 - `docker-compose.test.yml` unchanged (CI mounts at the service's own paths). `--disable-index-store` not used in batch 1.
 - Guards: `publish-jobs.test.sh` (matrix, job count, suite step, cache rules, mutants), `run-suite-swift.test.sh` (S12), `ring-wiring-swift.test.sh` (ring cache rules, mutants, behaviour row), `ring-prepare.test.sh` (row 1b, mutant), `ring-wiring.test.sh` (cache-step exception in place).
 - Batch 2 (owner, 2026-10-17, after run A): ccache removed (`swift-ccache.sh` deleted, the ring back to its plain `--user` build); the notices keep the cache state only.
+- Batch 3 (owner, 2026-10-17, after run B): cache keys `v2`, hashing `run-suite.sh` (parts) and `ring-swift.sh` (ring) as well.
 ### Order of work
 1. ccache set-up in `run-suite.sh` + `run-suite-swift.test.sh` (parent). 2. compose and `test.yml` Swift cache steps. 3. `ring-swift.sh` + ring guard. 4. merged suites + `publish-jobs.test.sh`. 5. Total review → step 11 → owner push go → priming run (AC-5) → two measured runs (AC-1 to AC-4) → batch 2 only if a miss → close push.
 ### Proof

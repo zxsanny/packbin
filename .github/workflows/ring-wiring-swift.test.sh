@@ -84,7 +84,7 @@ if cache.nil? || start_at.nil? || cache_at > start_at
   errors << "job #{name} restores no Swift driver build cache before the ring-prepare.sh start step"
 else
   key = cache.dig("with", "key").to_s
-  ["${{ env.RING_SWIFT }}", "hashFiles('Package.swift', 'Package.resolved', '.github/workflows/drivers/handoff-swift/Package.swift', '.github/workflows/drivers/handoff-swift/Package.resolved')"].each do |part|
+  ["${{ env.RING_SWIFT }}", "hashFiles('Package.swift', 'Package.resolved', '.github/workflows/drivers/handoff-swift/Package.swift', '.github/workflows/drivers/handoff-swift/Package.resolved', '.github/workflows/ring-swift.sh')"].each do |part|
     errors << "the Swift driver build cache key #{key.inspect} does not name #{part}" unless key.include?(part)
   end
   errors << "the Swift driver build cache restores by a prefix (restore-keys): a hit must be the exact key" if cache["with"].is_a?(Hash) && cache["with"].key?("restore-keys")
@@ -298,11 +298,11 @@ swift_wiring_checks() {
   expect_rejected "a uses: of the ring job pinned to a tag" SW_WORKFLOW="$tmp/w6.yml"
   mutate "$here/ring-swift.sh" "$tmp/b3.sh" '/echo "ring-swift: cache $PACKBIN_SWIFT_CACHE"/d'
   expect_rejected "the cache state line of ring-swift.sh" SW_BUILD="$tmp/b3.sh"
-  mutate "$here/test.yml" "$tmp/w13.yml" '/^      - name: Swift driver build cache$/,/^          key: swift-v1-ring-/d'
+  mutate "$here/test.yml" "$tmp/w13.yml" '/^      - name: Swift driver build cache$/,/^          key: swift-v2-ring-/d'
   expect_rejected "the Swift driver build cache step" SW_WORKFLOW="$tmp/w13.yml"
-  mutate "$here/test.yml" "$tmp/w14.yml" 's/key: swift-v1-ring-${{ env.RING_SWIFT }}-/key: swift-v1-ring-/'
+  mutate "$here/test.yml" "$tmp/w14.yml" 's/key: swift-v2-ring-${{ env.RING_SWIFT }}-/key: swift-v2-ring-/'
   expect_rejected "the swift image tag in the ring cache key" SW_WORKFLOW="$tmp/w14.yml"
-  mutate "$here/test.yml" "$tmp/w15.yml" "s#, '.github/workflows/drivers/handoff-swift/Package.resolved')#)#"
+  mutate "$here/test.yml" "$tmp/w15.yml" "s#, '.github/workflows/drivers/handoff-swift/Package.resolved'##"
   expect_rejected "the driver Package.resolved in the ring cache key" SW_WORKFLOW="$tmp/w15.yml"
   awk '/^      - name: Swift driver build cache$/ { on = 1 } on && /^        if: / { on = 0; next } { print }' "$here/test.yml" > "$tmp/w16.yml"
   expect_rejected "the tag run left out of the ring cache" SW_WORKFLOW="$tmp/w16.yml"
@@ -310,8 +310,10 @@ swift_wiring_checks() {
   expect_rejected "the cache state of the start step" SW_WORKFLOW="$tmp/w17.yml"
   insert_after "$here/test.yml" "$tmp/w18.yml" '^      - name: toolchain versions$' "        if: always()"
   expect_rejected "an if on a ring step other than the cache" SW_WORKFLOW="$tmp/w18.yml"
-  insert_after "$here/test.yml" "$tmp/w19.yml" '^          key: swift-v1-ring-' "          restore-keys: swift-v1-ring-"
+  insert_after "$here/test.yml" "$tmp/w19.yml" '^          key: swift-v2-ring-' "          restore-keys: swift-v2-ring-"
   expect_rejected "a prefix restore of the ring cache" SW_WORKFLOW="$tmp/w19.yml"
+  mutate "$here/test.yml" "$tmp/w21.yml" "s#, '.github/workflows/ring-swift.sh')#)#"
+  expect_rejected "ring-swift.sh in the ring cache key" SW_WORKFLOW="$tmp/w21.yml"
   mutate "$here/test.yml" "$tmp/w20.yml" 's#^          path: /tmp/packbin-ring-swift$#          path: /tmp/other#'
   expect_rejected "the ring cache on another dir" SW_WORKFLOW="$tmp/w20.yml"
 }

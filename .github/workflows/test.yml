@@ -35,14 +35,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # The Swift drivers' build output, kept between runs (AZ-2627, C3): restored before the background build starts,
-      # saved only when the key misses. A tag run (publish.yml) builds from nothing.
+      # saved only when the key misses. The key hashes ring-swift.sh too, which sets the build: a hit never saves, so an
+      # entry built another way would be rebuilt on every run. A tag run (publish.yml) builds from nothing.
       - name: Swift driver build cache
         id: ring-swift-cache
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: /tmp/packbin-ring-swift
-          key: swift-v1-ring-${{ env.RING_SWIFT }}-${{ hashFiles('Package.swift', 'Package.resolved', '.github/workflows/drivers/handoff-swift/Package.swift', '.github/workflows/drivers/handoff-swift/Package.resolved') }}
+          key: swift-v2-ring-${{ env.RING_SWIFT }}-${{ hashFiles('Package.swift', 'Package.resolved', '.github/workflows/drivers/handoff-swift/Package.swift', '.github/workflows/drivers/handoff-swift/Package.resolved', '.github/workflows/ring-swift.sh') }}
       # The gcc and swift image pulls and the Swift driver build need none of the setup actions: they run in the
       # background while the setups run, and the wait below collects them (ring-prepare.sh, AZ-2626).
       - name: start image pulls and the Swift driver build
@@ -111,8 +112,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # C3 (AZ-2627): each Swift part keeps its build output between runs, keyed on the part, the swift image tag and
-      # the package manifests; saved only when the key misses. A tag run (publish.yml) builds from nothing. The restore
-      # keeps the files' times to the nanosecond, so SwiftPM rebuilds only the package's own targets (fresh checkout).
+      # the package manifests and run-suite.sh, which sets the build (a hit never saves, so an entry built another way,
+      # as with batch 1's ccache compiler, would be rebuilt on every run); saved only when the key misses. A tag run
+      # (publish.yml) builds from nothing. The restore keeps the files' times to the nanosecond, so SwiftPM rebuilds
+      # only the package's own targets (fresh checkout).
       - name: Swift image tag
         id: swift-pin
         run: echo "tag=$(bash .github/workflows/tool-pin.sh swift)" >> "$GITHUB_OUTPUT"
@@ -122,7 +125,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/swift-cache
-          key: swift-v1-${{ matrix.part }}-${{ steps.swift-pin.outputs.tag }}-${{ hashFiles('Package.swift', 'Package.resolved') }}
+          key: swift-v2-${{ matrix.part }}-${{ steps.swift-pin.outputs.tag }}-${{ hashFiles('Package.swift', 'Package.resolved', '.github/workflows/run-suite.sh') }}
       - name: suite
         env:
           SUITE: ${{ matrix.lang }}
