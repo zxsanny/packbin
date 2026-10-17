@@ -322,30 +322,31 @@ ro_host_path_check() {
   rm -rf "$tree" "$logs"
 }
 
-# AC-5: the gate under the read-only mount, with no node_modules (npm ci runs in the container copy), prints the golden
-# bytes in all eight languages and changes nothing outside out/; the bad-fixture and missing-java copies behave as before.
-ro_gate_checks() {
-  local logs name tree count
-  logs="$(mktemp -d)"
-  # The three scenarios share nothing: each has its own tree copy, output directory and logs (the publish compose file
-  # binds the tree of each run read-only and gives it tmpfs caches), so they run together and are judged afterwards.
-  for name in good bad nojava; do
-    tree="$logs/$name-tree"
-    ro_tree "$tree"
-    case "$name" in
-      bad) printf '00\n' > "$tree/fixtures/golden.hex" ;;
-      nojava) rm -rf "$tree/java" ;;
-    esac
-    ro_manifest "$tree" > "$logs/$name.before"
-    (
-      rc=0
-      SRC_ROOT="$tree" PACKBIN_OUT="$tree/.github/workflows/out/$name" bash "$tree/.github/workflows/publish-gate.sh" \
-        > "$logs/$name.log" 2> "$logs/$name.err" < /dev/null || rc=$?
-      echo "$rc" > "$logs/$name.rc"
-    ) &
-  done
-  wait
+# AC-5: the gate under the read-only mount, with no node_modules (npm ci runs in the container copy). The three scenarios
+# share nothing (each has its own tree copy, output directory and logs; the publish compose file binds the tree of each run
+# read-only and gives it tmpfs caches), so they are three gate groups, one CI job each (AZ-2625): the gate on the good tree
+# prints the golden bytes in all eight languages and changes nothing outside out/; the bad-fixture and missing-java copies
+# behave as before.
+# ro_gate_run <name> <logs>: copies the tree to <logs>/<name>-tree (the bad scenario with a one-byte golden.hex, the nojava
+# scenario without java/), records its manifest, runs the gate once and leaves <name>.log, .err, .rc and .before in <logs>.
+ro_gate_run() {
+  local name="$1" logs="$2" tree rc=0
+  tree="$logs/$name-tree"
+  ro_tree "$tree"
+  case "$name" in
+    bad) printf '00\n' > "$tree/fixtures/golden.hex" ;;
+    nojava) rm -rf "$tree/java" ;;
+  esac
+  ro_manifest "$tree" > "$logs/$name.before"
+  SRC_ROOT="$tree" PACKBIN_OUT="$tree/.github/workflows/out/$name" bash "$tree/.github/workflows/publish-gate.sh" \
+    > "$logs/$name.log" 2> "$logs/$name.err" < /dev/null || rc=$?
+  echo "$rc" > "$logs/$name.rc"
+}
 
+ro_gate_good_check() {
+  local logs tree count
+  logs="$(mktemp -d)"
+  ro_gate_run good "$logs"
   tree="$logs/good-tree"
   [ "$(cat "$logs/good.rc")" = "0" ] || fail "AZ-2215 AC-5 the gate failed: $(tail -n 5 "$logs/good.err")"
   count="$(grep -c "^pack [a-z]* $expected\$" "$logs/good.log" || true)"
@@ -354,17 +355,25 @@ ro_gate_checks() {
   assert_eq "$(paste -sd ' ' "$tree/.github/workflows/out/good/publish-plan.txt")" "csharp typescript python rust cpp java go swift" "AZ-2215 AC-5 plan"
   grep -q 'added [0-9]* package' "$logs/good.err" || fail "AZ-2215 AC-5 npm ci did not run in the container copy: $(tail -n 5 "$logs/good.err")"
   ro_assert_same "AZ-2215 AC-5 tree manifest after the gate" "$(cat "$logs/good.before")" "$(ro_manifest "$tree")"
+  rm -rf "$logs"
+}
 
+ro_gate_bad_check() {
+  local logs tree
+  logs="$(mktemp -d)"
+  ro_gate_run bad "$logs"
   tree="$logs/bad-tree"
-  if [ ! -s "$logs/bad.rc" ]; then
-    fail "AZ-2215 AC-5 the bad-fixture gate run did not finish"
-  elif [ "$(cat "$logs/bad.rc")" = "0" ]; then
-    fail "AZ-2215 AC-5 a bad fixture passed the gate"
-  fi
+  [ "$(cat "$logs/bad.rc")" != "0" ] || fail "AZ-2215 AC-5 a bad fixture passed the gate"
   [ ! -s "$tree/.github/workflows/out/bad/publish-plan.txt" ] || fail "AZ-2215 AC-5 the bad fixture left a plan"
   assert_eq "$(grep '^pack csharp ' "$logs/bad.log" | awk '{print $3}')" "$expected" "AC-3 pack ignored the bad fixture"
   ro_assert_same "AZ-2215 AC-5 tree manifest after the bad-fixture gate" "$(cat "$logs/bad.before")" "$(ro_manifest "$tree")"
+  rm -rf "$logs"
+}
 
+ro_gate_nojava_check() {
+  local logs tree
+  logs="$(mktemp -d)"
+  ro_gate_run nojava "$logs"
   tree="$logs/nojava-tree"
   [ "$(cat "$logs/nojava.rc")" = "0" ] || fail "AZ-2215 AC-5 the gate without java failed: $(tail -n 5 "$logs/nojava.err")"
   assert_eq "$(wc -l < "$tree/.github/workflows/out/nojava/publish-plan.txt" | tr -d ' ')" "7" "AZ-2215 AC-5 seven languages without java"
@@ -427,9 +436,9 @@ ro_symlink_check() {
   rm -rf "$dir"
 }
 
-# The read-only checks are three gate groups (AZ-2607), so CI can run them in separate jobs: `readonly` (these five),
-# `readonly-gate` (ro_gate_checks) and `readonly-full` (ro_full_run_check). publish-timing.selftest.sh refuses a check
-# that runs in no group or in two.
+# The read-only checks are five gate groups, so CI can run them in separate jobs (AZ-2607, AZ-2625): `readonly` (these
+# five), `readonly-gate-good`, `readonly-gate-bad` and `readonly-gate-nojava` (one real gate run each) and
+# `readonly-full` (ro_full_run_check). publish-timing.selftest.sh refuses a check that runs in no group or in two.
 readonly_checks() {
   ro_symlink_check
   ro_static_checks

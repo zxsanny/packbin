@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# AZ-2564, AZ-2600 and AZ-2607: the job layout of test.yml. Exactly one job runs each part of the old `scaffold` job:
+# AZ-2564, AZ-2600, AZ-2607 and AZ-2625: the job layout of test.yml. Exactly one job runs each part of the old `scaffold` job:
 # the static checks (`scaffold`), the suites (`suites`, a matrix: one job per language, Swift as three parts) and the
 # publish gate (the publish-gate-* jobs, each running its share of the groups of publish-gate.test.sh); the embedded
 # targets are the embedded-* jobs (each part of cpp/embedded/run.sh in exactly one); they run beside `ring` (no needs,
@@ -30,7 +30,7 @@ all_runs = ->(wanted) { jobs.keys.flat_map { |n| runs.call(n, wanted).map { n } 
 languages = %w[csharp typescript python rust cpp java go swift]
 # The gate jobs are the jobs named publish-gate-*; the groups that start containers need the images pulled first.
 gate_jobs = jobs.keys.select { |n| n.start_with?("publish-gate-") }
-container_groups = %w[gate phases readonly readonly-gate readonly-full]
+container_groups = %w[gate phases phases-rerun readonly readonly-gate-good readonly-gate-bad readonly-gate-nojava readonly-full pins]
 errors << "test.yml has no publish-gate-* job" if gate_jobs.empty?
 embedded_jobs = jobs.keys.select { |n| n.start_with?("embedded-") }
 errors << "test.yml has no embedded-* job" if embedded_jobs.empty?
@@ -125,7 +125,7 @@ gate_jobs.each do |name|
   pull_at = steps.index do |s|
     lines_of.call(s).any? { |l| l.match?(/\Adocker compose .*docker-compose\.publish\.yml.* pull\b/) && languages.all? { |lang| l.split.include?(lang) } }
   end
-  # Groups that start containers (the golden gate, the read-only checks, the phases) need their images before the gate.
+  # Groups that start containers (the golden gate, the read-only checks, the phases, the pins build) need their images before the gate.
   if (groups & container_groups).any? && (pull_at.nil? || pull_at > gate_at)
     errors << "job #{name} runs a group that starts containers without pulling its images before the gate"
   end
@@ -220,7 +220,16 @@ mutant "suites job removed" 'jobs.delete("suites")'
 mutant "suites step also in scaffold" 'jobs["scaffold"]["steps"] << deep.call(step_named.call("suites", "suite"))'
 mutant "a suite run in the ring job" 'jobs["ring"]["steps"] << { "name" => "go", "run" => "docker compose -f docker-compose.test.yml run --rm go" }'
 # the publish gate jobs
-mutant "readonly-gate group dropped" 'gate_step.call("publish-gate-readonly-gate")["run"] = "bash .github/workflows/publish-gate.test.sh --groups pins"'
+mutant "readonly-gate-good group dropped" 'gate_step.call("publish-gate-readonly-gate-good")["run"] = "bash .github/workflows/publish-gate.test.sh --groups readonly-gate-bad"; gate_step.call("publish-gate-readonly-gate-bad")["run"] = "bash .github/workflows/publish-gate.test.sh --groups readonly-gate-nojava"'
+mutant "readonly-gate-bad also in the good job" 'gate_step.call("publish-gate-readonly-gate-good")["run"] += ",readonly-gate-bad"'
+mutant "readonly-gate-nojava job without the pull step" 'jobs["publish-gate-readonly-gate-nojava"]["steps"].reject! { |s| s["name"] == "pull images" }'
+mutant "readonly-gate-good job without the pull step" 'jobs["publish-gate-readonly-gate-good"]["steps"].reject! { |s| s["name"] == "pull images" }'
+mutant "readonly-gate-bad moved to the job without a pull" 'gate_step.call("publish-gate-readonly-gate-bad")["run"] = "bash .github/workflows/publish-gate.test.sh --groups readonly-gate-good"; gate_step.call("publish-gate-swift")["run"] += ",readonly-gate-bad"'
+mutant "phases-rerun also in the phases job" 'gate_step.call("publish-gate-phases")["run"] += ",phases-rerun"'
+mutant "phases-rerun job without the pull step" 'jobs["publish-gate-phases-rerun"]["steps"].reject! { |s| s["name"] == "pull images" }'
+mutant "phases-rerun dropped" 'gate_step.call("publish-gate-phases-rerun")["run"] = "bash .github/workflows/publish-gate.test.sh --groups phases"'
+mutant "pins also in the readonly job" 'gate_step.call("publish-gate-readonly")["run"] += ",pins"'
+mutant "pins moved to the job without a pull" 'gate_step.call("publish-gate-rest")["run"] = gate_step.call("publish-gate-rest")["run"].sub(",pins", ""); gate_step.call("publish-gate-swift")["run"] += ",pins"'
 mutant "readonly group also in the phases job" 'gate_step.call("publish-gate-phases")["run"] = "bash .github/workflows/publish-gate.test.sh --groups phases,readonly"'
 mutant "readonly-full also in the phases job" 'gate_step.call("publish-gate-phases")["run"] += ",readonly-full"'
 mutant "swift group also in the rest job" 'gate_step.call("publish-gate-rest")["run"] += ",swift"'
@@ -245,7 +254,9 @@ mutant "gate job continue-on-error" 'jobs["publish-gate-rest"]["continue-on-erro
 mutant "gate job without timeout" 'jobs["publish-gate-readonly"].delete("timeout-minutes")'
 mutant "gate job removed" 'jobs.delete("publish-gate-rest")'
 gate_mutant "a new group that no job runs" 's/^gate_groups="\(.*\)"$/gate_groups="\1 extra"/'
-gate_mutant "a group renamed in the list" 's/^gate_groups="\(.*\) readonly-gate \(.*\)"$/gate_groups="\1 ro-gate \2"/'
+gate_mutant "a group renamed in the list" 's/^gate_groups="\(.*\) readonly-gate-bad \(.*\)"$/gate_groups="\1 ro-gate-bad \2"/'
+gate_mutant "the phases-rerun group left out of the list" 's/^gate_groups="\(.*\) phases-rerun \(.*\)"$/gate_groups="\1 \2"/'
+gate_mutant "an old readonly-gate group back in the list" 's/^gate_groups="\(.*\) readonly-full"$/gate_groups="\1 readonly-gate readonly-full"/'
 gate_mutant "a read-only group left out of the list" 's/^gate_groups="\(.*\) readonly-full"$/gate_groups="\1"/'
 # the embedded jobs
 mutant "embedded arm job removed" 'jobs.delete("embedded-arm")'

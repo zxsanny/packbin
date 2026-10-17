@@ -9,9 +9,11 @@ for lang in $langs; do
   grep -q "^  ${lang}:" docker-compose.test.yml
   grep -q "^  ${lang}:" docker-compose.publish.yml
 done
-# The suites job is a matrix with an entry for each of the eight services (Swift as two parts, AZ-2600).
-matrix="$(ruby -ryaml -e 'puts YAML.safe_load(File.read(ARGV[0]))["jobs"]["suites"]["strategy"]["matrix"]["include"].map { |e| e["lang"] }.uniq.join(" ")' .github/workflows/test.yml)"
-[ "$matrix" = "$langs" ] || { echo "suites matrix runs [$matrix], not [$langs]" >&2; exit 1; }
+# The suites job is a matrix with an entry for each of the eight services (Swift as three parts, AZ-2600, AZ-2607). The
+# entries are listed longest first (AZ-2625), so the languages are compared as a set, not in the order of $langs.
+matrix="$(ruby -ryaml -e 'puts YAML.safe_load(File.read(ARGV[0]))["jobs"]["suites"]["strategy"]["matrix"]["include"].map { |e| e["lang"] }.uniq.sort.join(" ")' .github/workflows/test.yml)"
+sorted_langs="$(tr ' ' '\n' <<< "$langs" | sort | paste -sd ' ' -)"
+[ "$matrix" = "$sorted_langs" ] || { echo "suites matrix runs [$matrix], not [$sorted_langs]" >&2; exit 1; }
 if grep -q 'ports:' docker-compose.test.yml; then
   echo "compose publishes a port" >&2
   exit 1

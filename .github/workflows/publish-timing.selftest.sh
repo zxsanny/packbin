@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # AZ-2563: the timing lines of publish-gate.test.sh. A group prints its seconds, also when it fails; a group that aborts
-# the script is named by the EXIT trap; the gate runs exactly the 16 groups, each through `group` and `timed`; --groups
-# (AZ-2600) selects some of them; each read-only check runs in exactly one of the three read-only groups (AZ-2607).
+# the script is named by the EXIT trap; the gate runs exactly the 19 groups, each through `group` and `timed`; --groups
+# (AZ-2600) selects some of them; each read-only check runs in exactly one of the five read-only groups (AZ-2607,
+# AZ-2625) and each phase check in exactly one of the two phase groups (AZ-2625).
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -60,10 +61,10 @@ printf '%s\n' "$out" | grep -q 'not-reached' && bad "the run went on after an ab
 out="$(GITHUB_ACTIONS=true bash "$work/driver.sh" abort 2>&1 < /dev/null)" || true
 printf '%s\n' "$out" | grep -Eq '^::notice title=publish gate timing::.*publish-gate: gamma took [0-9]+ s \(aborted\)$' || bad "an aborting group has no notice annotation"
 
-# Act and assert: the gate runs the 16 groups, each through `group` (which calls timed), and nothing bare
-expected="static crates-token registry vcpkg gate go swift manifest npm position workflow pins phases readonly readonly-gate readonly-full"
+# Act and assert: the gate runs the 19 groups, each through `group` (which calls timed), and nothing bare
+expected="static crates-token registry vcpkg gate go swift manifest npm position workflow pins phases phases-rerun readonly readonly-gate-good readonly-gate-bad readonly-gate-nojava readonly-full"
 got="$(sed -n 's/^group \([a-z-]*\) \([a-z_]*\)$/\1=\2/p' "$here/publish-gate.test.sh" | tr '\n' ' ' | sed 's/ $//')"
-expected_fns="static=static_checks crates-token=crates_token_checks registry=registry_checks vcpkg=vcpkg_checks gate=gate_checks go=go_checks swift=swift_checks manifest=manifest_checks npm=npm_dist_checks position=position_checks workflow=workflow_checks pins=pins_checks phases=phase_checks readonly=readonly_checks readonly-gate=ro_gate_checks readonly-full=ro_full_run_check"
+expected_fns="static=static_checks crates-token=crates_token_checks registry=registry_checks vcpkg=vcpkg_checks gate=gate_checks go=go_checks swift=swift_checks manifest=manifest_checks npm=npm_dist_checks position=position_checks workflow=workflow_checks pins=pins_checks phases=phase_checks phases-rerun=phase_rerun_checks readonly=readonly_checks readonly-gate-good=ro_gate_good_check readonly-gate-bad=ro_gate_bad_check readonly-gate-nojava=ro_gate_nojava_check readonly-full=ro_full_run_check"
 [ "$got" = "$expected_fns" ] || bad "grouped checks are [$got], expected [$expected_fns]"
 listed="$(sed -n 's/^gate_groups="\(.*\)"$/\1/p' "$here/publish-gate.test.sh")"
 [ "$listed" = "$expected" ] || bad "gate_groups is [$listed], expected [$expected]"
@@ -94,7 +95,7 @@ rc=0
 bash "$here/publish-gate.test.sh" --groups "" >/dev/null 2>&1 < /dev/null || rc=$?
 [ "$rc" -eq 2 ] || bad "an empty group list exited $rc, expected 2"
 for fn in static_checks crates_token_checks registry_checks vcpkg_checks gate_checks go_checks swift_checks manifest_checks \
-  npm_dist_checks position_checks workflow_checks pins_checks phase_checks readonly_checks ro_gate_checks ro_full_run_check; do
+  npm_dist_checks position_checks workflow_checks pins_checks phase_checks phase_rerun_checks readonly_checks ro_gate_good_check ro_gate_bad_check ro_gate_nojava_check ro_full_run_check; do
   n="$(grep -c "^$fn\$" "$here/publish-gate.test.sh" || true)"
   [ "$n" -eq 0 ] || bad "$fn is called bare, outside timed"
 done
@@ -167,12 +168,61 @@ ro_mutant() {
 }
 ro_mutant "a check dropped from readonly_checks" publish-readonly.test.sh '/^  ro_probe_checks$/d'
 ro_mutant "a check in readonly_checks and in its own group" publish-readonly.test.sh 's/^  ro_host_path_check$/  ro_host_path_check\
-  ro_gate_checks/'
+  ro_gate_good_check/'
 ro_mutant "a read-only group line removed" publish-gate.test.sh '/^group readonly-full ro_full_run_check$/d'
+ro_mutant "a scenario group line removed" publish-gate.test.sh '/^group readonly-gate-bad ro_gate_bad_check$/d'
 ro_mutant "a new read-only check in no group" publish-readonly.test.sh 's/^readonly_checks() {$/ro_extra_check() {\
   :\
 }\
 readonly_checks() {/'
+
+# ph_split <publish-gate.test.sh> <phases file> <failures file> <rerun file>: prints one line per phase check (a ph_*
+# function of the three files that is not part of the harness) that does not run exactly once, as a line of the body of
+# the function of a `group phases*` line of the first file; exit 0 when there is none. The harness functions are the
+# ones that build stubs, trees and runs for the checks; a new ph_* function is a check unless it is named there.
+ph_harness="ph_write_stub ph_write_spy ph_write_curl_stub ph_setup ph_cleanup ph_bares ph_publish ph_no_refs ph_set_credentials"
+ph_split() {
+  local gate="$1" fn body="" group_fn n bad_lines="" checks
+  shift
+  for group_fn in $(sed -n 's/^group phases[a-z-]* \([a-z_]*\)$/\1/p' "$gate"); do
+    body="$body$(awk -v f="$group_fn" '$0 == f "() {" { on = 1; next } on && /^\}$/ { exit } on { print }' "$@")"$'\n'
+  done
+  checks="$(sed -n 's/^\(ph_[a-z_]*\)() {$/\1/p' "$@" | grep -vxF -f <(tr ' ' '\n' <<< "$ph_harness") || true)"
+  [ -n "$checks" ] || bad_lines="no phase checks found"$'\n'
+  for fn in $checks; do
+    n="$(grep -cx "  $fn" <<< "$body" || true)"
+    [ "$n" -eq 1 ] || bad_lines="$bad_lines$fn runs in $n phase groups, not 1"$'\n'
+  done
+  printf '%s' "$bad_lines"
+  [ -z "$bad_lines" ]
+}
+
+# Act and assert (AZ-2625): the real files, then one mutant per rule.
+if out="$(ph_split "$here/publish-gate.test.sh" "$here/publish-phases.test.sh" "$here/publish-phases-failures.test.sh" "$here/publish-rerun.test.sh")"; then
+  echo "phase checks: each in exactly one group"
+else
+  bad "phase check split: $out"
+fi
+ph_mutant() {
+  local label="$1" file="$2" script="$3" gate="$here/publish-gate.test.sh" phases="$here/publish-phases.test.sh" copy
+  copy="$work/mutant-$(basename "$file")"
+  sed "$script" "$here/$file" > "$copy"
+  if cmp -s "$here/$file" "$copy"; then bad "the mutant did not change $file: $label"; return; fi
+  case "$file" in publish-gate.test.sh) gate="$copy" ;; *) phases="$copy" ;; esac
+  if out="$(ph_split "$gate" "$phases" "$here/publish-phases-failures.test.sh" "$here/publish-rerun.test.sh")"; then
+    bad "the phase split check accepted a mutant: $label"
+  else
+    echo "phase split rejects: $label ($out)"
+  fi
+}
+ph_mutant "a check dropped from phase_rerun_checks" publish-phases.test.sh '/^  ph_rerun_checks$/d'
+ph_mutant "a check in both phase groups" publish-phases.test.sh 's/^  ph_build_only$/  ph_build_only\
+  ph_rerun_checks/'
+ph_mutant "a phase group line removed" publish-gate.test.sh '/^group phases-rerun phase_rerun_checks$/d'
+ph_mutant "a new phase check in no group" publish-phases.test.sh 's/^phase_checks() {$/ph_extra_check() {\
+  :\
+}\
+phase_checks() {/'
 
 if [ "$failures" -ne 0 ]; then
   echo "$failures failure(s)" >&2

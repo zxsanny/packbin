@@ -23,7 +23,8 @@ unless push.is_a?(Hash) && !as_list.call(push["branches"]).empty? &&
   errors << "test.yml push is not limited to branches"
 end
 errors << "test.yml permissions are not contents: read" unless test_wf["permissions"] == read_only
-%w[scaffold suites publish-gate-readonly publish-gate-readonly-gate publish-gate-phases publish-gate-swift publish-gate-rest embedded-arm embedded-esp-core embedded-esp-packages].each do |name|
+# The gate and embedded jobs are the publish-gate-* and embedded-* jobs (publish-jobs.test.sh holds their groups and parts).
+(%w[scaffold suites] + test_wf["jobs"].keys.select { |n| n.start_with?("publish-gate-", "embedded-") }).each do |name|
   job = test_wf["jobs"][name]
   errors << "test.yml has no #{name} job" if job.nil?
   errors << "test.yml #{name} has no timeout-minutes" if job && !job.key?("timeout-minutes")

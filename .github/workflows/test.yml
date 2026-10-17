@@ -10,197 +10,6 @@ permissions:
   contents: read
 
 jobs:
-  scaffold:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: required files and golden row
-        run: |
-          set -euo pipefail
-          for d in csharp typescript python rust cpp; do
-            test -d "$d"
-            test -d "$d/tests"
-          done
-          test -d java
-          test -d java/src/test
-          test -d go
-          ls go/*_test.go >/dev/null
-          test -d swift/Sources/Packbin
-          ls swift/Tests/PackbinTests/*.swift >/dev/null
-          for f in \
-            go/go.mod \
-            Package.swift \
-            fixtures/golden.hex \
-            .github/workflows/test.yml \
-            .github/workflows/publish.yml \
-            .github/workflows/run-suite.sh \
-            docker-compose.test.yml \
-            docker-compose.publish.yml \
-            .dockerignore \
-            .env.example \
-            LICENSE
-          do
-            test -f "$f"
-          done
-          grep -qx 4001000065cd1d00a3e1110100 fixtures/golden.hex
-      - name: report columns
-        run: bash .github/workflows/report-row.test.sh
-      - name: hostile case file
-        run: bash fixtures/hostile/cases.test.sh
-      - name: suite runner
-        run: bash .github/workflows/run-suite.test.sh
-      - name: embedded harness
-        run: bash cpp/embedded/lib.test.sh
-      - name: cross-language ring wiring
-        run: bash .github/workflows/ring-wiring.test.sh
-      - name: loop test script
-        run: bash scripts/loop-tests.test.sh
-      - name: embedded parts
-        run: bash cpp/embedded/run-parts.test.sh
-
-  # The suites and the publish gate share nothing (the gate pulls its own images), so they run beside each other and
-  # beside scaffold, embedded and ring: the wall time is the longest job, not the sum (AZ-2564). Since AZ-2600 each
-  # language is its own job and Swift, the longest suite, runs as three (PACKBIN_SWIFT_PART, run-suite.sh: tests,
-  # gates, speed; AZ-2607); the publish gate is the publish-gate-* jobs, each running its share of the check groups
-  # (publish-gate.test.sh --groups); the embedded targets are the embedded-* jobs (cpp/embedded/run.sh host <stage>).
-  suites:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - lang: csharp
-          - lang: typescript
-          - lang: python
-          - lang: rust
-          - lang: cpp
-          - lang: java
-          - lang: go
-          - lang: swift
-            part: tests
-          - lang: swift
-            part: gates
-          - lang: swift
-            part: speed
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: suite
-        env:
-          SUITE: ${{ matrix.lang }}
-          PACKBIN_SWIFT_PART: ${{ matrix.part }}
-        run: |
-          set -euo pipefail
-          mkdir -p test-results
-          docker compose -f docker-compose.test.yml run --rm -e PACKBIN_SWIFT_PART "$SUITE"
-
-  # The gate shares, chosen from the per-group seconds of the "publish gate timing" notice of each job (AZ-2607: the
-  # read-only checks, 247 s as one group, are three groups; the swift group, 215 s, has a job of its own). A job whose
-  # groups start containers pulls the images first; publish-jobs.test.sh holds the list of those groups.
-  publish-gate-readonly:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: pull images
-        run: docker compose -f docker-compose.test.yml -f docker-compose.publish.yml pull --quiet csharp typescript python rust cpp java go swift
-      - name: test results directory
-        run: mkdir -p test-results
-      - name: publish gate
-        run: bash .github/workflows/publish-gate.test.sh --groups readonly,gate
-
-  publish-gate-readonly-gate:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: pull images
-        run: docker compose -f docker-compose.test.yml -f docker-compose.publish.yml pull --quiet csharp typescript python rust cpp java go swift
-      - name: test results directory
-        run: mkdir -p test-results
-      - name: publish gate
-        run: bash .github/workflows/publish-gate.test.sh --groups readonly-gate,pins
-
-  publish-gate-phases:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: pull images
-        run: docker compose -f docker-compose.test.yml -f docker-compose.publish.yml pull --quiet csharp typescript python rust cpp java go swift
-      - name: test results directory
-        run: mkdir -p test-results
-      - name: publish gate
-        run: bash .github/workflows/publish-gate.test.sh --groups phases
-
-  publish-gate-swift:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: test results directory
-        run: mkdir -p test-results
-      - name: publish gate
-        run: bash .github/workflows/publish-gate.test.sh --groups swift
-
-  # The small groups ride along with readonly-full, which pulls the images anyway.
-  publish-gate-rest:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: pull images
-        run: docker compose -f docker-compose.test.yml -f docker-compose.publish.yml pull --quiet csharp typescript python rust cpp java go swift
-      - name: test results directory
-        run: mkdir -p test-results
-      - name: publish gate
-        run: bash .github/workflows/publish-gate.test.sh --groups readonly-full,static,crates-token,registry,vcpkg,go,manifest,npm,position,workflow
-
-  # The embedded targets run as three jobs (AZ-2607, C4): the arm image and stage, and two parts of the ESP stage
-  # (cpp/embedded/run.sh host esp <part>). run-parts.test.sh and publish-jobs.test.sh hold every target to one part.
-  embedded-arm:
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: C++ embedded arm targets (Cortex-M QEMU, big-endian)
-        run: |
-          set -euo pipefail
-          mkdir -p test-results
-          bash cpp/embedded/run.sh host arm
-      - name: embedded report
-        if: always()
-        run: cat test-results/report.csv
-
-  embedded-esp-core:
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: C++ embedded ESP-IDF core builds and Arduino-ESP32 example
-        run: |
-          set -euo pipefail
-          mkdir -p test-results
-          bash cpp/embedded/run.sh host esp core
-      - name: embedded report
-        if: always()
-        run: cat test-results/report.csv
-
-  embedded-esp-packages:
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: C++ embedded examples from the packed component and archive
-        run: |
-          set -euo pipefail
-          mkdir -p test-results
-          bash cpp/embedded/run.sh host esp packages
-      - name: embedded report
-        if: always()
-        run: cat test-results/report.csv
-
   ring:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -264,3 +73,233 @@ jobs:
           bash .github/workflows/ring-swift.sh /tmp/packbin-ring-swift
       - name: cross-language ring
         run: bash .github/workflows/language-pair.sh
+
+  # The suites and the publish gate share nothing (the gate pulls its own images), so they run beside each other and
+  # beside scaffold, embedded and ring: the wall time is the longest job, not the sum (AZ-2564). The free plan runs 20 jobs
+  # at the same time and this file makes 23 (AZ-2625), so the jobs are listed longest first (ring, the suites, the gate,
+  # the embedded targets, scaffold): the jobs that wait for a slot are the shortest. Since AZ-2600 each
+  # language is its own job and Swift, the longest suite, runs as three (PACKBIN_SWIFT_PART, run-suite.sh: tests,
+  # gates, speed; AZ-2607); the publish gate is the publish-gate-* jobs, each running its share of the check groups
+  # (publish-gate.test.sh --groups); the embedded targets are the embedded-* jobs (cpp/embedded/run.sh host <stage>).
+  suites:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lang: swift
+            part: tests
+          - lang: swift
+            part: gates
+          - lang: swift
+            part: speed
+          - lang: go
+          - lang: python
+          - lang: csharp
+          - lang: rust
+          - lang: cpp
+          - lang: typescript
+          - lang: java
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: suite
+        env:
+          SUITE: ${{ matrix.lang }}
+          PACKBIN_SWIFT_PART: ${{ matrix.part }}
+        run: |
+          set -euo pipefail
+          mkdir -p test-results
+          docker compose -f docker-compose.test.yml run --rm -e PACKBIN_SWIFT_PART "$SUITE"
+
+  # The gate shares, chosen from the per-group seconds of the "publish gate timing" notice of each job (AZ-2607: the
+  # read-only checks are separate groups; the swift group, 215 s, has a job of its own; AZ-2625: the three real gate runs
+  # of the read-only checks are a job each, the phase scenarios are two jobs, pins rides with the small groups). A job
+  # whose groups start containers pulls the images first; publish-jobs.test.sh holds the list of those groups.
+  publish-gate-phases:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: pull images
+        run: docker compose -f docker-compose.test.yml -f docker-compose.publish.yml pull --quiet csharp typescript python rust cpp java go swift
+      - name: test results directory
+        run: mkdir -p test-results
+      - name: publish gate
+        run: bash .github/workflows/publish-gate.test.sh --groups phases
+
+  publish-gate-phases-rerun:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: pull images
+        run: docker compose -f docker-compose.test.yml -f docker-compose.publish.yml pull --quiet csharp typescript python rust cpp java go swift
+      - name: test results directory
+        run: mkdir -p test-results
+      - name: publish gate
+        run: bash .github/workflows/publish-gate.test.sh --groups phases-rerun
+
+  publish-gate-readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: pull images
+        run: docker compose -f docker-compose.test.yml -f docker-compose.publish.yml pull --quiet csharp typescript python rust cpp java go swift
+      - name: test results directory
+        run: mkdir -p test-results
+      - name: publish gate
+        run: bash .github/workflows/publish-gate.test.sh --groups readonly,gate
+
+  publish-gate-readonly-gate-good:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: pull images
+        run: docker compose -f docker-compose.test.yml -f docker-compose.publish.yml pull --quiet csharp typescript python rust cpp java go swift
+      - name: test results directory
+        run: mkdir -p test-results
+      - name: publish gate
+        run: bash .github/workflows/publish-gate.test.sh --groups readonly-gate-good
+
+  publish-gate-readonly-gate-bad:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: pull images
+        run: docker compose -f docker-compose.test.yml -f docker-compose.publish.yml pull --quiet csharp typescript python rust cpp java go swift
+      - name: test results directory
+        run: mkdir -p test-results
+      - name: publish gate
+        run: bash .github/workflows/publish-gate.test.sh --groups readonly-gate-bad
+
+  publish-gate-readonly-gate-nojava:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: pull images
+        run: docker compose -f docker-compose.test.yml -f docker-compose.publish.yml pull --quiet csharp typescript python rust cpp java go swift
+      - name: test results directory
+        run: mkdir -p test-results
+      - name: publish gate
+        run: bash .github/workflows/publish-gate.test.sh --groups readonly-gate-nojava
+
+  # The small groups ride along with readonly-full, which pulls the images anyway.
+  publish-gate-rest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: pull images
+        run: docker compose -f docker-compose.test.yml -f docker-compose.publish.yml pull --quiet csharp typescript python rust cpp java go swift
+      - name: test results directory
+        run: mkdir -p test-results
+      - name: publish gate
+        run: bash .github/workflows/publish-gate.test.sh --groups readonly-full,static,crates-token,registry,vcpkg,go,manifest,npm,position,workflow,pins
+
+  publish-gate-swift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: test results directory
+        run: mkdir -p test-results
+      - name: publish gate
+        run: bash .github/workflows/publish-gate.test.sh --groups swift
+
+  # The embedded targets run as three jobs (AZ-2607, C4): the arm image and stage, and two parts of the ESP stage
+  # (cpp/embedded/run.sh host esp <part>). run-parts.test.sh and publish-jobs.test.sh hold every target to one part.
+  embedded-arm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: C++ embedded arm targets (Cortex-M QEMU, big-endian)
+        run: |
+          set -euo pipefail
+          mkdir -p test-results
+          bash cpp/embedded/run.sh host arm
+      - name: embedded report
+        if: always()
+        run: cat test-results/report.csv
+
+  embedded-esp-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: C++ embedded ESP-IDF core builds and Arduino-ESP32 example
+        run: |
+          set -euo pipefail
+          mkdir -p test-results
+          bash cpp/embedded/run.sh host esp core
+      - name: embedded report
+        if: always()
+        run: cat test-results/report.csv
+
+  embedded-esp-packages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: C++ embedded examples from the packed component and archive
+        run: |
+          set -euo pipefail
+          mkdir -p test-results
+          bash cpp/embedded/run.sh host esp packages
+      - name: embedded report
+        if: always()
+        run: cat test-results/report.csv
+
+  scaffold:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: required files and golden row
+        run: |
+          set -euo pipefail
+          for d in csharp typescript python rust cpp; do
+            test -d "$d"
+            test -d "$d/tests"
+          done
+          test -d java
+          test -d java/src/test
+          test -d go
+          ls go/*_test.go >/dev/null
+          test -d swift/Sources/Packbin
+          ls swift/Tests/PackbinTests/*.swift >/dev/null
+          for f in \
+            go/go.mod \
+            Package.swift \
+            fixtures/golden.hex \
+            .github/workflows/test.yml \
+            .github/workflows/publish.yml \
+            .github/workflows/run-suite.sh \
+            docker-compose.test.yml \
+            docker-compose.publish.yml \
+            .dockerignore \
+            .env.example \
+            LICENSE
+          do
+            test -f "$f"
+          done
+          grep -qx 4001000065cd1d00a3e1110100 fixtures/golden.hex
+      - name: report columns
+        run: bash .github/workflows/report-row.test.sh
+      - name: hostile case file
+        run: bash fixtures/hostile/cases.test.sh
+      - name: suite runner
+        run: bash .github/workflows/run-suite.test.sh
+      - name: embedded harness
+        run: bash cpp/embedded/lib.test.sh
+      - name: cross-language ring wiring
+        run: bash .github/workflows/ring-wiring.test.sh
+      - name: loop test script
+        run: bash scripts/loop-tests.test.sh
+      - name: embedded parts
+        run: bash cpp/embedded/run-parts.test.sh

@@ -94,6 +94,9 @@ go_deps() {
 # The compose services put the build output outside the mounted tree (PACKBIN_SWIFT_SCRATCH); --force-resolved-versions
 # builds only what Package.resolved pins and never rewrites it (Go's -mod=readonly).
 swift_opts=(--package-path "$root" --scratch-path "${PACKBIN_SWIFT_SCRATCH:-$root/.build}" --force-resolved-versions)
+# SW-9: 0 warnings in the release build. Warnings as errors and complete concurrency checking are given here, never in
+# Package.swift: an unsafe flag there makes the package unusable as a dependency.
+swift_strict=(-Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete)
 swift_tests=
 
 # Both halves of the Swift tree: the manifest every consumer resolves and the sources it points at.
@@ -138,12 +141,14 @@ swift_fuzz() {
 }
 
 # SW-8: the speed bound holds for a release build only. A filter that matches nothing passes, so the suite must exist.
-# The single run has listed the tests of its debug build by now and fails before the release build. The speed part has
-# no debug or sanitizer build to list from: it builds first and lists the tests of its own release build.
+# SW-9: this is the one release build of the suite, with the tests, so it carries the strict flags and the 0 warnings
+# cover the test targets too. The single run has listed the tests of its debug build by now and fails before the
+# release build. The speed part has no debug or sanitizer build to list from: it builds first and lists the tests of its
+# own release build.
 swift_speed() {
   local built=
   if [ "${swift_part:-all}" = speed ]; then
-    swift build "${swift_opts[@]}" -c release --build-tests || return 1
+    swift build "${swift_opts[@]}" -c release --build-tests "${swift_strict[@]}" || return 1
     built=1
     swift_list -c release || return 1
   fi
@@ -151,7 +156,7 @@ swift_speed() {
     echo "run-suite: swift has no SpeedTests suite; the release-build speed step has nothing to run" >&2
     return 1
   fi
-  if [ -z "$built" ]; then swift build "${swift_opts[@]}" -c release --build-tests || return 1; fi
+  if [ -z "$built" ]; then swift build "${swift_opts[@]}" -c release --build-tests "${swift_strict[@]}" || return 1; fi
   # The 1 MiB hostile unpack (FuzzTests/mebibyte, SW-4) is timed in the same release run: a debug build is about 7 times slower.
   swift test "${swift_opts[@]}" -c release --skip-build --verbose --filter '\.SpeedTests/' --filter '\.FuzzTests/mebibyte'
 }
@@ -302,17 +307,18 @@ case "$lang" in
     fi
     ;;
   swift)
-    # PACKBIN_SWIFT_PART splits the suite in three for CI (AZ-2600, AZ-2607), each part its own job with its own build
-    # output, so no job is the sum of all of them. `tests`: the debug build, the tests and the fuzz run. `gates`: the
-    # strict release build, the thread-sanitizer build and run, the dependency check. `speed`: the release build with
-    # tests and the speed run. Unset or `all` runs every step in one run, as the Mac does. Every step is in exactly
-    # one part; resolve and list are the only repeats (a part cannot use another part's build output or test list).
+    # PACKBIN_SWIFT_PART splits the suite in three for CI (AZ-2600, AZ-2607, AZ-2625), each part its own job with its own
+    # build output, so no job is the sum of all of them. `tests`: the debug build, the tests and the fuzz run. `gates`:
+    # the thread-sanitizer build and run, the dependency check. `speed`: the one release build, with the tests and the
+    # strict flags of SW-9, and the speed run. Unset or `all` runs every step in one run, as the Mac does, with that one
+    # release build. Every step is in exactly one part; resolve and list are the only repeats (a part cannot use another
+    # part's build output or test list).
     swift_part="${PACKBIN_SWIFT_PART:-all}"
     swift_plan=
     case "$swift_part" in
-      all) swift_plan="resolve release debug test list fuzz tsan sanitized speed deps" ;;
+      all) swift_plan="resolve debug test list fuzz tsan sanitized speed deps" ;;
       tests) swift_plan="resolve debug test list fuzz" ;;
-      gates) swift_plan="resolve release tsan list sanitized deps" ;;
+      gates) swift_plan="resolve tsan list sanitized deps" ;;
       speed) swift_plan="resolve speed" ;;
       *)
         printf 'run-suite: PACKBIN_SWIFT_PART is %q, not all, tests, gates or speed\n' "$swift_part" >&2
@@ -324,9 +330,6 @@ case "$lang" in
       for swift_step in $swift_plan; do
         case "$swift_step" in
           resolve) run swift_resolve ;;
-          # SW-9: 0 warnings in the release build. Warnings as errors and complete concurrency checking are given here,
-          # never in Package.swift: an unsafe flag there makes the package unusable as a dependency.
-          release) run swift build "${swift_opts[@]}" -c release -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete ;;
           # The tests are built first, so the verbose test output is not buried under the compiler command lines.
           debug) run swift build "${swift_opts[@]}" --build-tests ;;
           test) run swift test "${swift_opts[@]}" --skip-build --verbose ;;

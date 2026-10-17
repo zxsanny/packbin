@@ -8,8 +8,9 @@
 # ran, so "no upload before every build" is a check on that first field.
 #
 # This file holds the harness (stubs, ph_setup, ph_publish, ph_bares), the static checks, the success
-# scenarios and phase_checks; publish-phases-failures.test.sh (sourced before phase_checks) holds the
-# failure scenarios: a failing build, fabricated bad artifacts and real-pipeline check violations.
+# scenarios and the two group functions, phase_checks and phase_rerun_checks; publish-phases-failures.test.sh
+# (sourced before them) holds the failure scenarios: a failing build, fabricated bad artifacts and real-pipeline check
+# violations.
 
 PH_TARGETS="csharp typescript python rust vcpkg platformio esp-idf arduino java"
 PH_CREDENTIALS="NUGET_TOKEN NPM_TOKEN PYPI_TOKEN CARGO_REGISTRY_TOKEN MAVEN_CENTRAL_TOKEN MAVEN_GPG_PRIVATE_KEY PLATFORMIO_AUTH_TOKEN IDF_COMPONENT_API_TOKEN GITHUB_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_ID_TOKEN_REQUEST_TOKEN"
@@ -307,6 +308,16 @@ ph_empty_plan() {
 # shellcheck source=publish-phases-failures.test.sh
 source "$here/publish-phases-failures.test.sh"
 
+ph_cleanup() {
+  if ! rm -rf "$ph_dir"; then
+    echo "note: could not remove $ph_dir (files written by a build container)"
+  fi
+}
+
+# The two phase gate groups (AZ-2625) each pay their own ph_setup and run in separate CI jobs. The cut is by the measured
+# seconds of a Mac run (ph_rerun_checks 128 s; the other scenarios 128 s together, setup 15 s each). `phases`: the
+# two-phase publish scenarios of AZ-2096, the static checks, the fabricated artifacts, an empty plan, a build-only run,
+# a full publish, the failure injection and the pipeline violations.
 phase_checks() {
   ph_static_checks
   ph_setup
@@ -316,8 +327,12 @@ phase_checks() {
   ph_full_publish
   ph_failure_injection
   ph_pipeline_violations
+  ph_cleanup
+}
+
+# `phases-rerun`: the re-run and registry-policy scenarios of publish-rerun.test.sh (AZ-2097).
+phase_rerun_checks() {
+  ph_setup
   ph_rerun_checks
-  if ! rm -rf "$ph_dir"; then
-    echo "note: could not remove $ph_dir (files written by a build container)"
-  fi
+  ph_cleanup
 }

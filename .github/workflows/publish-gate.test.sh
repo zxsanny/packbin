@@ -135,7 +135,8 @@ gate_checks() {
   assert_eq "$(grep '^mismatch ' "$out/log.txt" | awk '{print $2}')" "0" "AC-5 mismatch"
 
   # AC-3 (a bad fixture publishes nothing) and AC-4 (a missing language is absent, not published) run in
-  # ro_gate_checks on a read-only tree: the same script and scenarios, so they are not run twice here.
+  # ro_gate_good_check, ro_gate_bad_check and ro_gate_nojava_check on a read-only tree: the same script and scenarios, so
+  # they are not run twice here.
 }
 
 manifest_checks() {
@@ -330,11 +331,11 @@ source "$here/publish-swift.test.sh"
 # shellcheck source=publish-timing.test.sh
 source "$here/publish-timing.test.sh"
 
-# The 16 check groups, in run order. CI runs them as parallel jobs (test.yml, publish-gate-*), each with --groups
-# <a,b,..> naming its share (AZ-2600; the read-only checks are three groups since AZ-2607); no argument runs all of
-# them. The Mac runs the CI shares at the same time (scripts/loop-tests.sh). publish-jobs.test.sh reads this list, so a
+# The 19 check groups, in run order. CI runs them as parallel jobs (test.yml, publish-gate-*), each with --groups
+# <a,b,..> naming its share (AZ-2600; the read-only checks are five groups since AZ-2607 and AZ-2625, the phase scenarios
+# two since AZ-2625); no argument runs all of them. The Mac runs the CI shares at the same time (scripts/loop-tests.sh). publish-jobs.test.sh reads this list, so a
 # group that no CI job runs, or two jobs run, is refused there.
-gate_groups="static crates-token registry vcpkg gate go swift manifest npm position workflow pins phases readonly readonly-gate readonly-full"
+gate_groups="static crates-token registry vcpkg gate go swift manifest npm position workflow pins phases phases-rerun readonly readonly-gate-good readonly-gate-bad readonly-gate-nojava readonly-full"
 selected=" $gate_groups "
 if [ "${1:-}" = "--groups" ]; then
   wanted="${2:-}"
@@ -376,8 +377,11 @@ group position position_checks
 group workflow workflow_checks
 group pins pins_checks
 group phases phase_checks
+group phases-rerun phase_rerun_checks
 group readonly readonly_checks
-group readonly-gate ro_gate_checks
+group readonly-gate-good ro_gate_good_check
+group readonly-gate-bad ro_gate_bad_check
+group readonly-gate-nojava ro_gate_nojava_check
 group readonly-full ro_full_run_check
 timed_total
 
