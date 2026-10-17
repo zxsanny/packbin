@@ -25,6 +25,21 @@ Pull steps of the five-image jobs: `phases` 35 s (57), `phases-rerun` 35 s (abou
 
 Owner decision on the miss (2026-10-17): accept `ring` 209 s against 180 s and record it; no second code push; the next lever is C3 (Swift build caches: the ring's driver build and the three Swift suite parts) in loop 34. The other candidate (pull gcc after swift) was estimated at 185 to 195 s and would not move the wall.
 
+## Second CI run (run 39031606844, `2da10a6`, the close push of `dev`, 23 jobs, all green)
+
+Wall **225 s**. **AC-1: the median of the two runs of the final code is 238 s (251 and 225 s), at most 250 s: met by 12 s** (loop 32: 269.5 s). No job waited for a slot.
+
+| Job | s |
+|-----|--:|
+| `publish-gate-readonly` | 222 (the wall this time; all eight images) |
+| `embedded-esp-core` | 206 |
+| `ring` | 202 (AC-2: missed again, accepted) |
+| `publish-gate-rest` | 202 |
+| `suites (swift, tests)` | 188 (248 in run 1) |
+| `publish-gate-swift`, `readonly-gate-bad` | 183 |
+
+Pull steps of the five-image jobs: `phases` 34 s, `phases-rerun` 61 s, `rest` 65 s (run 1: 35, 35, 51; before: 57, about 57, 59). **AC-7's "shorter on both runs" is missed in run 2 for `phases-rerun` and `rest`**: without the 4 GB swift image the pull still swings from 34 to 65 s with the runner's network, so one before-run is no baseline for a pull step; the lists themselves are exact (the guard holds them). Recorded, not reworked (the loop was closed and pushed before run 2).
+
 ## Background processes across steps on the runner
 
 Proven by run 39031026351: the start step ended in 0 s, the pulls and the Swift build ran through the setup steps, the wait collected all six builds; no hang, no orphan warning in the job.

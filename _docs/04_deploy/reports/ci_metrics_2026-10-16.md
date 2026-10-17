@@ -183,6 +183,9 @@ Read as in section 7 (the jobs API and the job pages, no token). Jobs: 23 per pu
 | Run | Commit | Wall | Longest jobs (s) |
 |-----|--------|-----:|------------------|
 | 39031026351 (loop 33, batch 1 + review fixes) | `19f4c33` | **251 s** | `suites (swift, tests)` 248, `suites (swift, speed)` 221, `publish-gate-readonly` 211, `ring` 209, `publish-gate-swift` 207, `embedded-esp-core` 202 |
+| 39031606844 (loop 33 close push) | `2da10a6` | **225 s** | `publish-gate-readonly` 222, `embedded-esp-core` 206, `ring` 202, `publish-gate-rest` 202, `suites (swift, tests)` 188 |
+
+AC-1: median of the two runs 238 s, at most 250 s: met. Five-image pulls in run 2: 34, 61, 65 s (run 1: 35, 35, 51; before 57, about 57, 59): the runner's network swing is larger than the images left out.
 
 | Item | Loop 32 | Loop 33 |
 |------|--------:|--------:|
