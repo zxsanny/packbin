@@ -52,6 +52,8 @@ A cold debug build with tests compiles 565 units: 372 BoringSSL C files (swift-c
 
 The owner chose cache plus ccache (2026-10-17, after the spike): SwiftPM takes its C compiler from `CC`, and `CC=/usr/lib/ccache/clang` sends every C compile through ccache (the `--toolset` file's `cCompiler` is ignored for a host build). On a test package with a C target, a rebuild after the same restore ran the 3 C compiles again and ccache answered all 3 from its cache (3 of 3 hits, binary correct). ccache 4.9.1 comes from Ubuntu 24.04's apt in the container (new download per job, owner-approved).
 
+**Correction (2026-10-17, after measured run A).** The spike's conclusion was an artifact of its method: GNU tar's default format keeps file times to the second, so the round trip changed every time's fraction and SwiftPM rebuilt the C files; with `tar --posix` (nanosecond times, as actions/cache keeps them) a test package rebuilt 0 of 3 C files. On CI the restored build compiled no C file at all (run 39040035812: ccache asked 0 times in all four builds). The owner removed ccache (batch 2, 2026-10-17); AC-6 and the ccache clause of AC-3 are withdrawn.
+
 ## Code sections / UI locations for this loop
 
 Backend only (CI and test scripts), named in the owner's batch answer: "the three Swift suite jobs and the ring's driver build" and "merge short suite jobs so the workflow has at most 20 jobs".
@@ -69,13 +71,13 @@ Backend only (CI and test scripts), named in the owner's batch answer: "the thre
 
 **AC-2: no slot wait.** `test.yml` has at most 20 jobs (today 23); on both AC-1 runs every job starts within 15 s of the run's first job (loop 33: three jobs started 26 to 88 s late in every run).
 
-**AC-3: cache hits.** On both AC-1 runs, each of the four Swift builds (the `tests` debug build, the `gates` thread-sanitizer build, the `speed` release build, the ring's Swift driver build) restores its cache by exact key, and ccache answers at least 95 % of its C compiles from the cache; the job's timing notice gives the cache state (hit or miss) and the ccache hits and misses.
+**AC-3: cache hits.** On both AC-1 runs, each of the four Swift builds (the `tests` debug build, the `gates` thread-sanitizer build, the `speed` release build, the ring's Swift driver build) restores its cache by exact key; the job's timing notice gives the cache state (hit or miss). (The ccache clause, "ccache answers at least 95 % of its C compiles", is withdrawn with ccache, 2026-10-17.)
 
 **AC-4: build seconds.** On both AC-1 runs each of the four Swift builds is faster than the fastest loop 33 run of the same build: `tests` debug build under 48 s, `gates` thread-sanitizer build under 85 s, `speed` step under 131 s, ring `swift-drivers` under 84 s.
 
 **AC-5: a miss is today.** On a cache miss (no entry for the key, or the cache service fails) every Swift build runs from nothing as today, all its tests run and pass, and the job saves the cache for the next run; proven by the first push of the final code.
 
-**AC-6: ccache is best-effort.** When the ccache install fails in the container, the build runs without ccache, the job's result comes from the tests alone, and the timing notice says ccache was unavailable with the reason; proven by a test with a stand-in failing installer.
+**AC-6 (withdrawn 2026-10-17 with ccache): ccache is best-effort.** When the ccache install fails in the container, the build runs without ccache, the job's result comes from the tests alone, and the timing notice says ccache was unavailable with the reason; proven by a test with a stand-in failing installer.
 
 **AC-7: cache keys.** The key of each cache names the Swift build, the Swift image tag and a hash of `Package.swift` and `Package.resolved`; a push that changes neither saves no cache (exact hit, no save step). The caches of one dependency set total at most 3 GB (the repository limit is 10 GB).
 

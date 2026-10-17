@@ -142,8 +142,7 @@ case "$1" in
       echo "$line" >&2
       lines="${lines:+$lines%0A}$line"
     done
-    # The Swift driver build's cache state and ccache hits (ring-swift.sh, swift-ccache.sh) when CI keeps its output
-    # (AZ-2627): no such lines otherwise.
+    # The Swift driver build's cache state (ring-swift.sh) when CI keeps its output (AZ-2627): no such line otherwise.
     if [ -f "$dir/swift-drivers.log" ]; then
       while IFS= read -r line; do
         [ -n "$line" ] || continue
@@ -151,7 +150,7 @@ case "$1" in
         # Escaped as a workflow-command message (% first, then CR): the line comes from a log, not from this script.
         line="${line//"%"/%25}"
         lines="${lines:+$lines%0A}${line//$'\r'/%0D}"
-      done <<< "$(grep -E '^(ring-swift: cache |swift-ccache: )' "$dir/swift-drivers.log" || true)"
+      done <<< "$(grep '^ring-swift: cache ' "$dir/swift-drivers.log" || true)"
     fi
     line="ring-prepare: the wait took $waited s (limit $limit s), $(( $(date +%s) - $(cat "$dir/started") )) s since start"
     echo "$line" >&2

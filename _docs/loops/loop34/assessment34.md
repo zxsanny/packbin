@@ -14,7 +14,7 @@ FEATURE ASSESSMENT loop 34 round 1: COMPLETE — 19 covered / 2 out-of-scope / 0
 | AC-3 | four Swift builds hit by exact key; ccache at least 95 % hits; notice gives both | covered (CI hit rate pending) | cache steps (suites, ring); `run-suite.sh` cache line, `ring-prepare.sh` notice lines; S12b/c, ring-prepare row 1b; real Mac run: 372 of 372 hits after a restore |
 | AC-4 | each Swift build under its loop 33 best | covered (CI seconds pending) | real Mac run: debug build 52 s then 9 s (own sources not refreshed there) |
 | AC-5 | a miss builds as today and saves | covered (priming push pending) | no restore-keys; miss path = the old build plus ccache set-up; chown before the save; real Mac miss run passed |
-| AC-6 | failed ccache install is best-effort and named | covered | `swift-ccache.sh` notes; S12e (update, install), mutant "a failed install exits" rejected |
+| AC-6 | failed ccache install is best-effort and named | withdrawn (owner, 2026-10-17) | ccache removed in batch 2: CI recompiles no C file after a restore (run A) |
 | AC-7 | key = build, image tag, manifests; no save on a hit; at most 3 GB | covered (size pending) | `publish-jobs.test.sh` and `ring-wiring-swift.test.sh` key rules with mutants; actions/cache saves only on a miss |
 | AC-8 | each language in one job; a failed suite does not stop the others and is named | covered | suite step loop; `publish-jobs.test.sh` order rule, 9 mutants |
 | AC-9 | Mac unchanged | covered | `PACKBIN_SWIFT_CACHE` set only by `test.yml`; S12a (no install, no CC, no line; compose does not set it); step 11 run |
@@ -22,7 +22,7 @@ FEATURE ASSESSMENT loop 34 round 1: COMPLETE — 19 covered / 2 out-of-scope / 0
 | AC-11 | files at most 500 lines | covered | largest changed: `ring-wiring.test.sh` 500 (in place), `run-suite-swift.test.sh` 470 |
 | S1 | first push, no cache entry | covered | AC-5 |
 | S2 | hit, sources changed: own targets rebuild, C from ccache | covered | SwiftPM rebuilds after a checkout (fresh times); spike and real Mac run |
-| S3 | apt mirror down | covered | AC-6 |
+| S3 | apt mirror down | withdrawn | no apt download since batch 2 |
 | S4 | cache service down | covered | actions/cache restore failure = miss (`cache-hit` not `true`); save failure is a warning |
 | S5 | two pushes miss the same key | covered | actions/cache: the second save warns "already exists" |
 | S6 | a merged job, one suite fails | covered | AC-8 |
@@ -34,3 +34,7 @@ FEATURE ASSESSMENT loop 34 round 1: COMPLETE — 19 covered / 2 out-of-scope / 0
 ## Not walked
 
 None beyond the rows above: the batch report's 8 discoveries are all `clear` and handled; the review's 6 findings are fixed or decided.
+
+## Round 1 addendum (batch 2, 2026-10-17)
+
+Run A showed ccache asked 0 times; the owner removed it. AC-3's ccache clause and AC-6 are withdrawn, S3 goes with them; every other row keeps its evidence (the cache steps, keys, notices and merged suites are unchanged). Verdict stays COMPLETE.

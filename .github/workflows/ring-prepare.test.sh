@@ -114,18 +114,18 @@ done
 [ "$(grep -n '^docker pull ' "$t/calls" | tail -n 1 | cut -d: -f1)" -lt "$(grep -n '^end pull-' "$t/calls" | head -n 1 | cut -d: -f1)" ] \
   || fail "success: an image pull ended before the other began"
 
-if grep -qE 'ring-swift: cache|swift-ccache: ' "$t/out"; then fail "success: cache lines without a kept Swift build output"; fi
+if grep -q 'ring-swift: cache' "$t/out"; then fail "success: a cache line without a kept Swift build output"; fi
 
-# 1b. CI keeps the Swift build output (AZ-2627): the Swift build's cache line and ccache summary go into the notice,
-# before the wait line; no other line of its log does.
+# 1b. CI keeps the Swift build output (AZ-2627): the Swift build's cache line goes into the notice, escaped, before the
+# wait line; no other line of its log does.
 t="$tmp/cache"
 tree "$t"
-FAKE_SAY=$'ring-swift: cache hit\nswift-ccache: 372 hits, 0 misses, ready in 1 s\nswift-ccache: unavailable: no /tmp/a%41\nCompiling x.cc' GITHUB_ACTIONS=true run_all "$t"
+FAKE_SAY=$'ring-swift: cache hit\nring-swift: cache x%41\nCompiling x.cc' GITHUB_ACTIONS=true run_all "$t"
 [ "$start_rc$build_rc$wait_rc" = 000 ] || fail "cache lines: exit statuses $start_rc $build_rc $wait_rc ($(cat "$t/out"))"
-grep -q '^::notice .*%0Aring-swift: cache hit%0Aswift-ccache: 372 hits, 0 misses, ready in 1 s%0A.*%0Aring-prepare: the wait took' "$t/out" \
-  || fail "cache lines: the notice does not carry the Swift build's cache line and ccache summary: $(grep '::notice' "$t/out")"
+grep -q '^::notice .*%0Aring-swift: cache hit%0A.*%0Aring-prepare: the wait took' "$t/out" \
+  || fail "cache lines: the notice does not carry the Swift build's cache line: $(grep '::notice' "$t/out")"
 if grep -q '^::notice .*Compiling' "$t/out"; then fail "cache lines: a compile line went into the notice"; fi
-grep -q '^::notice .*%0Aswift-ccache: unavailable: no /tmp/a%2541%0A' "$t/out" || fail "cache lines: a % of a log line is not escaped in the notice"
+grep -q '^::notice .*%0Aring-swift: cache x%2541%0A' "$t/out" || fail "cache lines: a % of a log line is not escaped in the notice"
 
 # 2. No notice outside GitHub Actions.
 t="$tmp/local"
@@ -200,8 +200,8 @@ mutants=0
 mutant "start in the foreground" 's/^    ) < \/dev\/null > "\$dir\/start.log" 2>&1 &$/    ) < \/dev\/null > "$dir\/start.log" 2>\&1/' \
   '[ "$start_early" = no ]'
 mutant "builds one after the other" '/^    task [cgn][a-z]* /s/ &$//' '! overlap "$t"'
-FAKE_SAY='swift-ccache: 372 hits, 0 misses, ready in 1 s' GITHUB_ACTIONS=true mutant "wait drops the Swift build's cache lines" \
-  's/grep -E .\^(ring-swift: cache |swift-ccache: ). /grep -E "^none" /' '! grep -q "^::notice .*swift-ccache: 372 hits" "$t/out"'
+FAKE_SAY='ring-swift: cache hit' GITHUB_ACTIONS=true mutant "wait drops the Swift build's cache line" \
+  's/grep .\^ring-swift: cache . /grep "^none" /' '! grep -q "^::notice .*ring-swift: cache hit" "$t/out"'
 MUTANT_FAIL=swift-drivers mutant "wait ignores a failed build" 's/failures \$background \$foreground || rc=1/failures $background $foreground || true/' \
   '[ "$wait_rc" = 0 ]'
 MUTANT_FAIL=cargo mutant "wait ignores a failed build of build" 's/failures \$background \$foreground || rc=1/failures $background || rc=1/' \

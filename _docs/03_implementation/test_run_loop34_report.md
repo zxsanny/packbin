@@ -22,3 +22,7 @@ The scaffold miss is a process gap: before the batch commit I ran the guards I h
 - Guards: `publish-jobs.test.sh` (24 new mutants), `ring-wiring-swift.test.sh` (8 new mutants, one behaviour row), `run-suite.test.sh` with `run-suite-swift.test.sh` S12a to S12g, `ring-prepare.test.sh` (row 1b, 6 mutants), `ring-wiring.test.sh`, `scripts/loop-tests.test.sh`, `publish-gate.test.sh --groups workflow,static`: PASS.
 - Mutants of the new code in scratch copies: 11 of 12 rejected, the twelfth equivalent (batch report, review record).
 - Real runs in `swift:6.3.3` on the Mac: the `tests` part through compose with CI's mounts, miss then hit (372 of 372 ccache hits, debug build 52 s then 9 s); `swift-ccache.sh run` as uid 1001 (3 misses, then 3 hits after a restore; directories owned by the caller).
+
+## After batch 2 (ccache removed, 2026-10-17)
+
+`scripts/loop-tests.sh --only scaffold,ring`: scaffold PASS 239 s, ring PASS 60 s; `publish-jobs.test.sh` and `publish-gate.test.sh --groups workflow,static` PASS. The language suites were not re-run on the Mac: `run-suite.sh` changed only its CI-only cache line (S12, two mutants); CI runs every suite on runs B and C.

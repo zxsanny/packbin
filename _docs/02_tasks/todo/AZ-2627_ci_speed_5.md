@@ -41,10 +41,10 @@ AC-1 to AC-11 are in `_docs/02_task_plans/ci-speed-5/problem.md` (owner answers 
 
 **AC-1: CI wall.** Two `dev` pushes with primed caches: median wall at most 225 s, all jobs green.
 **AC-2: no slot wait.** At most 20 jobs; every job starts within 15 s of the first.
-**AC-3: cache hits.** All four Swift builds restore by exact key; ccache at least 95 % hits; the notice gives both.
+**AC-3: cache hits.** All four Swift builds restore by exact key; the notice gives the state. (ccache clause withdrawn.)
 **AC-4: build seconds.** `tests` debug build under 48 s, `gates` sanitizer build under 85 s, `speed` step under 131 s, ring `swift-drivers` under 84 s.
 **AC-5: a miss is today.** No entry or a failing cache service: builds from nothing, tests pass, cache saved.
-**AC-6: ccache best-effort.** A failed install builds without ccache and the notice says why.
+**AC-6: withdrawn** (ccache removed in batch 2, 2026-10-17: the restore keeps nanosecond times, so CI recompiles no C file).
 **AC-7: cache keys.** Build, image tag, hash of `Package.swift` and `Package.resolved`; no save on an exact hit; at most 3 GB per dependency set.
 **AC-8: merged suites.** Each language in exactly one job; a failing suite fails the job by name, the others still run; guard and mutants.
 **AC-9: Mac unchanged.** `scripts/loop-tests.sh` passes; no ccache, no kept build output.

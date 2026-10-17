@@ -43,7 +43,6 @@ case "$1" in
 esac
 if [ "$step" = unknown ]; then echo "fake swift: unexpected arguments $*" >&2; exit 2; fi
 if [ "$step" = "${SWIFT_FAIL:-}" ]; then echo "fake swift: $step failed" >&2; exit 1; fi
-case "$step" in *build | release) echo "cc $step ${CC:-none}" >> "$SWIFT_LOG.cc" ;; esac
 case "$step" in
   list)
     if [ -z "${SWIFT_NO_SPEED:-}" ]; then echo 'PackbinTests.SpeedTests/roundTrips(form:)'; fi
@@ -367,104 +366,19 @@ case "$scratch" in /src | /src/*) bad "$svc: the build output is inside the moun
 ro="$(awk '$0 == "  swift:" { inside = 1; next } inside && /^  [^ ]/ { exit } inside' "$repo/docker-compose.publish.yml")"
 grep -qx '      - ./:/src:ro' <<< "$ro" || bad "swift: the publish file does not mount the tree read-only: $ro"
 
-# S12 (AZ-2627, C3). CI keeps the build output and a ccache directory and says whether it restored them
-# (PACKBIN_SWIFT_CACHE hit or miss): run-suite.sh sets ccache up through swift-ccache.sh (stand-in apt-get, dpkg,
-# ccache and setpriv here), every build compiles C through it (CC), and the notice gives the cache state, the hits and
-# the misses. Without PACKBIN_SWIFT_CACHE (the Mac) nothing is installed and CC is not set; a failed install builds
-# without ccache and says why; kept packages install with dpkg, and a failed dpkg falls back to apt-get.
-cp "$repo/.github/workflows/swift-ccache.sh" "$swroot/.github/workflows/"
-ccbin="$work/ccbin" ccdir="$work/ccdir" cclog="$work/cc.log"
-mkdir -p "$ccbin"
-printf '#!/bin/sh\nexit 0\n' > "$work/fake-ccache-clang"
-cat > "$work/ccache-standin" <<'CCACHE'
-#!/bin/sh
-echo "ccache $* dir=${CCACHE_DIR:-}" >> "$CC_LOG"
-case "$1" in
-  --zero-stats) exit 0 ;;
-  --print-stats) printf 'cache_miss\t%s\ndirect_cache_hit\t%s\npreprocessed_cache_hit\t2\nlocal_storage_hit\t99\nunsupported_compiler_option\t3\ncalled_for_link\t7\n' "${CC_MISSES:-0}" "${CC_HITS:-370}" ;;
-esac
-CCACHE
-cat > "$ccbin/apt-get" <<'APT'
-#!/bin/sh
-echo "apt-get $*" >> "$CC_LOG"
-case " $* " in *" update "*) [ "${APT_FAIL:-}" = update ] && exit 100 ;; esac
-case " $* " in *" install "*)
-  [ "${APT_FAIL:-}" = install ] && exit 100
-  for a in "$@"; do case "$a" in Dir::Cache::archives=*) touch "${a#Dir::Cache::archives=}/ccache_4.9.1_amd64.deb" ;; esac; done
-  cp "$CC_STANDIN" "$CC_BIN" ;;
-esac
-exit 0
-APT
-printf '#!/bin/sh\necho "dpkg $*" >> "$CC_LOG"\n[ -z "${DPKG_FAIL:-}" ] || exit 1\ncp "$CC_STANDIN" "$CC_BIN"\n' > "$ccbin/dpkg"
-printf '#!/bin/sh\necho "setpriv $*" >> "$CC_LOG"\nwhile [ "$1" != -- ]; do shift; done\nshift\nexec "$@"\n' > "$ccbin/setpriv"
-chmod +x "$work/fake-ccache-clang" "$work/ccache-standin" "$ccbin"/*
-cc_run() { # [VAR=value ...]: the tests part on GitHub Actions with the stand-ins (no stand-in ccache installed yet)
-  rm -f "$ccbin/ccache" "$work/swift.log.cc"
-  : > "$cclog"
-  sw_notice PACKBIN_SWIFT_PART=tests PACKBIN_SWIFT_CCACHE_DIR="$ccdir" PACKBIN_SWIFT_CCACHE_BIN="$ccbin/ccache" \
-    PACKBIN_SWIFT_CCACHE_CC="$work/fake-ccache-clang" PATH="$ccbin:$swbin:$PATH" CC_LOG="$cclog" \
-    CC_STANDIN="$work/ccache-standin" CC_BIN="$ccbin/ccache" "$@"
+# S12 (AZ-2627, C3). CI keeps a part's build output and says whether it restored it (PACKBIN_SWIFT_CACHE hit or miss):
+# the notice carries the state after the step lines, also when a step fails; without it (the Mac) there is no such
+# line, and no compose file sets it.
+cache_notice() { # state: the line in stderr and, after the step lines, in the notice
+  grep -qx "run-suite: swift cache $1" "$work/notice.err" || bad "swift cache: no line 'cache $1': $(cat "$work/notice.err")"
+  grep -qF "%0Arun-suite: swift cache $1%0Arun-suite: swift total took" "$work/notice.out" || bad "swift cache: the notice has no 'cache $1' line before the total: $(cat "$work/notice.out")"
 }
-cc_line_is() { # expected cache line (a prefix): in stderr and, after the step lines, in the notice
-  grep -qF "run-suite: swift cache $1" "$work/notice.err" || bad "swift cache: no line '$1': $(cat "$work/notice.err")"
-  grep -qF "%0Arun-suite: swift cache $1" "$work/notice.out" || bad "swift cache: the notice has no line '$1': $(cat "$work/notice.out")"
-}
-# S12a. the Mac: no PACKBIN_SWIFT_CACHE, no install, no CC, no cache line
-rm -rf "$ccdir"
-cc_run; code=$?
-[ "$code" -eq 0 ] || bad "swift cache off: the suite failed: $(cat "$work/notice.err")"
-[ ! -s "$cclog" ] || bad "swift cache off: ccache was set up: $(cat "$cclog")"
-grep -qx 'cc tests-build none' "$work/swift.log.cc" || bad "swift cache off: CC was set for the build: $(cat "$work/swift.log.cc")"
+sw_notice PACKBIN_SWIFT_PART=tests
 if grep -q 'swift cache' "$work/notice.err"; then bad "swift cache off: a cache line: $(cat "$work/notice.err")"; fi
-if grep -qF PACKBIN_SWIFT_CACHE "$repo/docker-compose.test.yml"; then bad "docker-compose.test.yml sets PACKBIN_SWIFT_CACHE: the Mac would keep build output"; fi
-# S12b. a miss, apt-get works: installed, the package kept, CC through ccache, ccache's cache in the kept directory
-cc_run PACKBIN_SWIFT_CACHE=miss; code=$?
-[ "$code" -eq 0 ] || bad "swift cache miss: the suite failed: $(cat "$work/notice.err")"
-if ! grep -q '^apt-get update ' "$cclog" || ! grep -q '^apt-get install .* ccache$' "$cclog"; then
-  bad "swift cache miss: no apt-get install: $(cat "$cclog")"
-fi
-[ -f "$ccdir/debs/ccache_4.9.1_amd64.deb" ] || bad "swift cache miss: the ccache package was not kept in $ccdir/debs"
-grep -qx "ccache --zero-stats dir=$ccdir/cache" "$cclog" || bad "swift cache miss: the statistics were not zeroed in $ccdir/cache: $(cat "$cclog")"
-grep -qx "cc tests-build $work/fake-ccache-clang" "$work/swift.log.cc" || bad "swift cache miss: the build did not compile through ccache: $(cat "$work/swift.log.cc")"
-cc_line_is "miss; ccache 372 hits, 0 misses, 3 uncacheable, ready in "
-# S12c. a hit with the kept package: dpkg, no apt-get; the misses counted
-cc_run PACKBIN_SWIFT_CACHE=hit CC_HITS=10 CC_MISSES=5
-grep -q "^dpkg -i $ccdir/debs/ccache_4.9.1_amd64.deb" "$cclog" || bad "swift cache hit: the kept package was not installed with dpkg: $(cat "$cclog")"
-if grep -q '^apt-get' "$cclog"; then bad "swift cache hit: apt-get ran although the package was kept: $(cat "$cclog")"; fi
-cc_line_is "hit; ccache 12 hits, 5 misses, 3 uncacheable, ready in "
-# S12d. the kept package does not install: apt-get instead, and the log says so
-cc_run PACKBIN_SWIFT_CACHE=hit DPKG_FAIL=1
-grep -q '^apt-get install ' "$cclog" || bad "swift cache: a failed dpkg did not fall back to apt-get: $(cat "$cclog")"
-grep -qF "the kept ccache packages in $ccdir/debs did not install; apt-get instead" "$work/notice.err" || bad "swift cache: the dpkg fallback is not reported"
-cc_line_is "hit; ccache 372 hits"
-# S12e. apt-get fails (no kept package): the suite runs and passes without ccache, and the notice says why
-for failing in update install; do
-  rm -rf "$ccdir"
-  cc_run PACKBIN_SWIFT_CACHE=miss APT_FAIL="$failing"; code=$?
-  [ "$code" -eq 0 ] || bad "swift cache, apt-get $failing failing: the suite failed: $(cat "$work/notice.err")"
-  grep -qx 'cc tests-build none' "$work/swift.log.cc" || bad "swift cache, apt-get $failing failing: CC was set: $(cat "$work/swift.log.cc")"
-  case "$failing" in update) why="apt-get update failed" ;; install) why="apt-get install ccache failed" ;; esac
-  cc_line_is "miss; ccache unavailable: $why"
-done
-# S12f. a failing build keeps the cache line in the notice
-cc_run PACKBIN_SWIFT_CACHE=hit SWIFT_FAIL=tests-build; code=$?
+if grep -qF PACKBIN_SWIFT_CACHE "$repo/docker-compose.test.yml"; then bad "docker-compose.test.yml sets PACKBIN_SWIFT_CACHE: the Mac would report a kept build output"; fi
+sw_notice PACKBIN_SWIFT_PART=tests PACKBIN_SWIFT_CACHE=hit; code=$?
+[ "$code" -eq 0 ] || bad "swift cache hit: the suite failed: $(cat "$work/notice.err")"
+cache_notice hit
+sw_notice PACKBIN_SWIFT_PART=gates PACKBIN_SWIFT_CACHE=miss SWIFT_FAIL=tsan-build; code=$?
 [ "$code" -ne 0 ] || bad "swift cache: a failing build passed"
-cc_line_is "hit; ccache 372 hits"
-# S12g. `run` (the ring's container): set up as root, the command as <uid>:<gid> through setpriv, the summary on
-# stderr, the command's exit status; a bad call is a usage error
-: > "$cclog"; rm -f "$ccbin/ccache"; rm -rf "$ccdir"
-out="$(env PATH="$ccbin:$PATH" CC_LOG="$cclog" CC_STANDIN="$work/ccache-standin" CC_BIN="$ccbin/ccache" \
-  PACKBIN_SWIFT_CCACHE_BIN="$ccbin/ccache" PACKBIN_SWIFT_CCACHE_CC="$work/fake-ccache-clang" \
-  bash "$repo/.github/workflows/swift-ccache.sh" run "$ccdir" 1001 1002 sh -c 'echo "built CC=$CC"; exit 3' 2>&1 < /dev/null)"; code=$?
-[ "$code" -eq 3 ] || bad "swift-ccache.sh run: exit $code, not the command's 3: $out"
-grep -qx "built CC=$work/fake-ccache-clang" <<< "$out" || bad "swift-ccache.sh run: the command did not get CC: $out"
-grep -q '^setpriv --reuid=1001 --regid=1002 --clear-groups -- sh -c ' "$cclog" || bad "swift-ccache.sh run: the command did not run as 1001:1002: $(cat "$cclog")"
-grep -q '^swift-ccache: 372 hits, 0 misses, 3 uncacheable, ready in [0-9]* s$' <<< "$out" || bad "swift-ccache.sh run: no summary line: $out"
-# The caller makes the kept directories before the install runs as root (a root-made directory is not the caller's).
-made="$(grep -n "^setpriv --reuid=1001 --regid=1002 --clear-groups -- mkdir -p $ccdir/cache $ccdir/debs$" "$cclog" | cut -d: -f1)"
-first_apt="$(grep -n '^apt-get ' "$cclog" | head -n 1 | cut -d: -f1)"
-if [ -z "$made" ] || [ -z "$first_apt" ] || [ "$made" -gt "$first_apt" ]; then
-  bad "swift-ccache.sh run: the caller did not make $ccdir/cache and $ccdir/debs before the install: $(cat "$cclog")"
-fi
-bash "$repo/.github/workflows/swift-ccache.sh" run "$ccdir" < /dev/null > /dev/null 2>&1; code=$?
-[ "$code" -eq 2 ] || bad "swift-ccache.sh run without a command: exit $code, not 2"
+cache_notice miss

@@ -34,8 +34,8 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # The Swift drivers' build output and their ccache directory, kept between runs (AZ-2627, C3): restored before
-      # the background build starts, saved only when the key misses. A tag run (publish.yml) builds from nothing.
+      # The Swift drivers' build output, kept between runs (AZ-2627, C3): restored before the background build starts,
+      # saved only when the key misses. A tag run (publish.yml) builds from nothing.
       - name: Swift driver build cache
         id: ring-swift-cache
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
@@ -110,9 +110,9 @@ jobs:
           - lang: cpp typescript java
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # C3 (AZ-2627): each Swift part keeps its build output and a ccache directory between runs, keyed on the part,
-      # the swift image tag and the package manifests; saved only when the key misses. A tag run (publish.yml) builds
-      # from nothing.
+      # C3 (AZ-2627): each Swift part keeps its build output between runs, keyed on the part, the swift image tag and
+      # the package manifests; saved only when the key misses. A tag run (publish.yml) builds from nothing. The restore
+      # keeps the files' times to the nanosecond, so SwiftPM rebuilds only the package's own targets (fresh checkout).
       - name: Swift image tag
         id: swift-pin
         run: echo "tag=$(bash .github/workflows/tool-pin.sh swift)" >> "$GITHUB_OUTPUT"
@@ -131,13 +131,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p test-results
-          # A Swift part mounts its kept build output and ccache directory where docker-compose.test.yml and
-          # run-suite.sh put them.
+          # A Swift part mounts its kept build output where docker-compose.test.yml puts it (PACKBIN_SWIFT_SCRATCH).
           kept=()
           if [ -n "$PACKBIN_SWIFT_CACHE" ]; then
-            mkdir -p "$RUNNER_TEMP/swift-cache/build" "$RUNNER_TEMP/swift-cache/ccache"
-            kept=(-v "$RUNNER_TEMP/swift-cache/build:/tmp/packbin-swift-build"
-              -v "$RUNNER_TEMP/swift-cache/ccache:/tmp/packbin-swift-ccache" -e PACKBIN_SWIFT_CACHE)
+            mkdir -p "$RUNNER_TEMP/swift-cache/build"
+            kept=(-v "$RUNNER_TEMP/swift-cache/build:/tmp/packbin-swift-build" -e PACKBIN_SWIFT_CACHE)
           fi
           # Each suite of the entry runs; a failed one does not stop the others, and the job fails naming them.
           failed=""
