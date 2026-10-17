@@ -143,6 +143,7 @@ gate_jobs.each do |name|
   have = pulls.first[1].split.drop_while { |w| w != "pull" }.drop(1).reject { |w| w.start_with?("-") }
   (want - have).each { |img| errors << "job #{name} does not pull #{img}, which #{groups.select { |g| group_images.fetch(g, []).include?(img) }.join(', ')} starts" }
   (have - want).each { |img| errors << "job #{name} pulls #{img}, which none of its groups (#{groups.join(', ')}) starts" }
+  have.group_by { |img| img }.select { |_, v| v.size > 1 }.each_key { |img| errors << "job #{name} pulls #{img} twice" }
 end
 (all_groups - ran).each { |g| errors << "the gate group #{g} runs in no job" }
 (ran - all_groups).uniq.each { |g| errors << "the gate group #{g} is not a group of publish-gate.test.sh" }
@@ -266,6 +267,7 @@ mutant "phases pull without java" 'st = step_named.call("publish-gate-phases", "
 mutant "nojava pull without python" 'st = step_named.call("publish-gate-readonly-gate-nojava", "pull images"); st["run"] = st["run"].sub(" python", "")'
 mutant "phases pull with swift" 'step_named.call("publish-gate-phases", "pull images")["run"] += " swift"'
 mutant "rest pull with go" 'step_named.call("publish-gate-rest", "pull images")["run"] += " go"'
+mutant "phases pull names java twice" 'step_named.call("publish-gate-phases", "pull images")["run"] += " java"'
 mutant "nojava pull with java" 'step_named.call("publish-gate-readonly-gate-nojava", "pull images")["run"] += " java"'
 mutant "a pull in the swift job, whose group starts no container" 'jobs["publish-gate-swift"]["steps"].insert(1, deep.call(step_named.call("publish-gate-phases", "pull images")))'
 mutant "two pull steps in the phases job" 'jobs["publish-gate-phases"]["steps"].insert(1, deep.call(step_named.call("publish-gate-phases", "pull images")))'

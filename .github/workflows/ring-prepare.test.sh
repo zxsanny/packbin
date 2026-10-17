@@ -123,17 +123,14 @@ if grep -q '::notice' "$t/out"; then fail "local: a notice annotation outside Gi
 for case in "swift-drivers:wait:ring-prepare: swift-drivers failed (exit 3)" \
   "pull-gcc:wait:ring-prepare: pull-gcc failed (exit 3)" \
   "pull-swift:wait:ring-prepare: swift-drivers did not run" \
-  "cargo:build:ring-prepare: cargo failed (exit 3)"; do
+  "cargo:wait:ring-prepare: cargo failed (exit 3)"; do
   name="${case%%:*}" rest="${case#*:}"
   step="${rest%%:*}" message="${rest#*:}"
   t="$tmp/fail-$name"
   tree "$t"
   FAKE_FAIL="$name" run_all "$t"
-  if [ "$step" = wait ]; then
-    [ "$build_rc" = 0 ] && [ "$wait_rc" != 0 ] || fail "$name fails: build exited $build_rc, wait $wait_rc"
-  else
-    [ "$build_rc" != 0 ] || fail "$name fails: build passed"
-  fi
+  [ "$step" = wait ] && [ "$build_rc" = 0 ] && [ "$wait_rc" != 0 ] \
+    || fail "$name fails: build exited $build_rc, wait $wait_rc (wait is the verdict for every build)"
   has "$t" "$message" "$name fails"
   has "$t" "stand-in $name failed on purpose" "$name fails (its log)"
 done
@@ -147,25 +144,33 @@ t="$tmp/hang"
 tree "$t"
 FAKE_HANG=swift-drivers PACKBIN_RING_WAIT_SECONDS=2 run_all "$t"
 [ "$wait_rc" != 0 ] || fail "hang: wait passed"
-[ "$wait_ms" -ge 1500 ] && [ "$wait_ms" -lt 6000 ] || fail "hang: wait took $wait_ms ms against a 2 s limit"
+# The upper bound is loose: a loaded host slows the wait, it must only not wait on the hung build for good.
+[ "$wait_ms" -ge 2000 ] && [ "$wait_ms" -lt 20000 ] || fail "hang: wait took $wait_ms ms against a 2 s limit"
 has "$t" "ring-prepare: swift-drivers did not finish" hang
 touch "$tmp/stop"
 
-# 8. Usage and state dir rules.
+# 8. Usage and state dir rules: each refusal with its exit status and its own message.
 t="$tmp/rules"
 tree "$t"
 s="$t/.github/workflows/ring-prepare.sh"
-rc=0; bash "$s" start < /dev/null > /dev/null 2>&1 || rc=$?
-[ "$rc" = 2 ] || fail "rules: one argument exited $rc, not 2"
-rc=0; bash "$s" start "$t/nos" < /dev/null > /dev/null 2>&1 || rc=$?
-[ "$rc" = 2 ] && [ ! -e "$t/nos" ] || fail "rules: start without an image exited $rc or made the state dir"
+# refused <want status> <message> <args...>: ring-prepare.sh <args> exits <want status> and prints <message>.
+refused() {
+  local want="$1" message="$2" rc=0
+  shift 2
+  bash "$s" "$@" < /dev/null > "$t/rule.out" 2>&1 || rc=$?
+  if [ "$rc" != "$want" ] || ! grep -qF -- "$message" "$t/rule.out"; then
+    fail "rules: '$*' exited $rc without '$message' ($(cat "$t/rule.out"))"
+  fi
+}
+refused 2 "usage: ring-prepare.sh" start
+refused 2 "usage: ring-prepare.sh" start "$t/nos"
+refused 2 "two images named gcc" start "$t/nos" gcc:16 gcc:15
+refused 2 "pass a Docker Hub name:tag" start "$t/nos" ghcr.io/x/gcc:16
+[ ! -e "$t/nos" ] || fail "rules: a refused start made the state dir"
 mkdir "$t/taken"
-rc=0; bash "$s" start "$t/taken" gcc:16 < /dev/null > /dev/null 2>&1 || rc=$?
-[ "$rc" = 1 ] || fail "rules: start on an existing dir exited $rc, not 1"
-for sub in build wait; do
-  rc=0; bash "$s" "$sub" "$t/taken" < /dev/null > /dev/null 2>&1 || rc=$?
-  [ "$rc" = 1 ] || fail "rules: $sub on a dir start did not make exited $rc, not 1"
-done
+refused 1 "already exists; pass a new state dir" start "$t/taken" gcc:16
+refused 1 "is not a state dir of ring-prepare.sh start" build "$t/taken"
+refused 1 "is not a state dir of ring-prepare.sh start" wait "$t/taken"
 
 # 9. Mutants of the script: each must make one of the checks above fail.
 # mutant <label> <sed expression> <check>: <check> is a shell condition on the run of the mutated copy.
@@ -181,7 +186,9 @@ mutants=0
 mutant "start in the foreground" 's/^    ) < \/dev\/null > "\$dir\/start.log" 2>&1 &$/    ) < \/dev\/null > "$dir\/start.log" 2>\&1/' \
   '[ "$start_early" = no ]'
 mutant "builds one after the other" '/^    task [cgn][a-z]* /s/ &$//' '! overlap "$t"'
-MUTANT_FAIL=swift-drivers mutant "wait ignores a failed build" 's/failures \$background || rc=1/failures $background || true/' \
+MUTANT_FAIL=swift-drivers mutant "wait ignores a failed build" 's/failures \$background \$foreground || rc=1/failures $background $foreground || true/' \
+  '[ "$wait_rc" = 0 ]'
+MUTANT_FAIL=cargo mutant "wait ignores a failed build of build" 's/failures \$background \$foreground || rc=1/failures $background || rc=1/' \
   '[ "$wait_rc" = 0 ]'
 MUTANT_FAIL=pull-swift mutant "Swift build after a failed pull" 's/= 0 \]; then$/!= x ]; then/' \
   'grep -q ring-swift.sh "$t/calls"'

@@ -6,11 +6,13 @@
 #                                      once the swift image is in, all in the background; returns at once, so the setup
 #                                      actions run meanwhile.
 #   ring-prepare.sh build <state dir>  after the setup actions: npm ci (typescript), the Rust driver (cargo) and the Go
-#                                      driver (ring-go.sh) at the same time; fails naming each one that failed.
+#                                      driver (ring-go.sh) at the same time; names a failed one, but leaves the verdict
+#                                      to wait, so a background failure is reported in the same run.
 #   ring-prepare.sh wait <state dir>   waits for the background builds (at most PACKBIN_RING_WAIT_SECONDS, default 900:
-#                                      below the job's 30-minute timeout), fails naming each one that failed or did not
-#                                      finish, with its log, and prints the seconds of every build; on GitHub Actions
-#                                      also as ONE notice (a job's annotations are readable without a token).
+#                                      below the job's 30-minute timeout), fails naming each build of start or build
+#                                      that failed or did not finish, with its log, and prints the seconds of every
+#                                      build; on GitHub Actions also as ONE notice (annotations need no token to read).
+# Run build, then wait, last in the same step (ring-wiring-swift.test.sh holds the order in test.yml).
 # Each build keeps <name>.log, <name>.s (seconds) and <name>.rc (exit status, written last) in the state dir. The
 # drivers go where language-pair.sh looks (PACKBIN_GO_HANDOFF, PACKBIN_SWIFT_RING, the same defaults), and it rebuilds
 # one only when a source is newer, so the ring reuses these builds.
@@ -78,12 +80,17 @@ case "$1" in
       exit 1
     fi
     shift 2
+    background=""
+    for image in "$@"; do
+      # The image name (no registry path) names the build's files: two images of one name would share them.
+      case "${image%%:*}" in */* | "") echo "ring-prepare: $image: pass a Docker Hub name:tag" >&2; exit 2 ;; esac
+      case " $background " in *" pull-${image%%:*} "*) echo "ring-prepare: two images named ${image%%:*}" >&2; exit 2 ;; esac
+      background="$background pull-${image%%:*}"
+    done
+    background="${background# } swift-drivers"
     mkdir -p "$(dirname "$dir")"
     mkdir -m 700 "$dir"
     date +%s > "$dir/started"
-    background=""
-    for image in "$@"; do background="$background pull-${image%%:*}"; done
-    background="${background# } swift-drivers"
     echo "$background" > "$dir/names"
     # Detached from the step: no stdin, the output in a file, so the step ends while the builds go on.
     (
@@ -111,22 +118,22 @@ case "$1" in
     task go bash "$here/ring-go.sh" "${PACKBIN_GO_HANDOFF:-/tmp/packbin-handoff-go}" &
     wait
     # shellcheck disable=SC2086 # the names are single words
-    failures $foreground
-    echo "ring-prepare: built $foreground"
+    if failures $foreground; then echo "ring-prepare: built $foreground"; else echo "ring-prepare: wait fails the step"; fi
     ;;
   wait)
     owned_state
     limit="${PACKBIN_RING_WAIT_SECONDS:-900}"
     waited=$(date +%s)
+    # Whole seconds: -le, so the wait gives up after the full limit (up to 1 s later), never before it.
     for name in $background; do
-      while [ ! -f "$dir/$name.rc" ] && [ $(( $(date +%s) - waited )) -lt "$limit" ]; do
-        sleep 1
+      while [ ! -f "$dir/$name.rc" ] && [ $(( $(date +%s) - waited )) -le "$limit" ]; do
+        sleep 0.2
       done
     done
     waited=$(( $(date +%s) - waited ))
     rc=0
     # shellcheck disable=SC2086
-    failures $background || rc=1
+    failures $background $foreground || rc=1
     lines=""
     # shellcheck disable=SC2086
     for name in $background $foreground; do

@@ -66,8 +66,12 @@ ring_at = at.call(ring)
 prepare = ->(sub) { %r{\Abash \.github/workflows/ring-prepare\.sh #{sub} (\S+)#{sub == "start" ? '((?: \S+)+)' : ''}\z} }
 start_at, wait_at = at.call(prepare.call("start")), at.call(prepare.call("wait"))
 arg_of = ->(i, sub, n) { code_lines.call(steps[i]).map { |l| l[prepare.call(sub), n] }.compact.first }
-if start_at.nil? || wait_at.nil? || start_at > wait_at || wait_at > ring_at || arg_of.call(start_at, "start", 1) != arg_of.call(wait_at, "wait", 1)
+build_at = at.call(prepare.call("build"))
+dirs = [[start_at, "start"], [build_at, "build"], [wait_at, "wait"]].map { |i, sub| i && arg_of.call(i, sub, 1) }
+if start_at.nil? || wait_at.nil? || start_at > wait_at || wait_at > ring_at || dirs.compact.uniq.size != 1
   errors << "job #{name} does not start the Swift driver build (ring-prepare.sh start) and wait for it on the same dir before the ring"
+elsif build_at && (build_at > wait_at || !code_lines.call(steps[wait_at]).last.match?(prepare.call("wait")))
+  errors << "the ring-prepare.sh wait of job #{name} is not the last line after build, so a failed build could go unreported"
 elsif !arg_of.call(start_at, "start", 2).split.include?('"swift:$RING_SWIFT"')
   errors << "the ring-prepare.sh start line of job #{name} does not pull \"swift:$RING_SWIFT\" before the Swift driver build"
 end
@@ -253,6 +257,8 @@ swift_wiring_checks() {
   expect_rejected "the swift image left out of the start line" SW_WORKFLOW="$tmp/w11.yml"
   mutate "$here/test.yml" "$tmp/w7.yml" '/^          bash \.github\/workflows\/ring-prepare\.sh wait /d'
   expect_rejected "the wait for the Swift driver build" SW_WORKFLOW="$tmp/w7.yml"
+  awk '/ring-prepare\.sh build / { held = $0; next } { print } /ring-prepare\.sh wait / { print held }' "$here/test.yml" > "$tmp/w12.yml"
+  expect_rejected "the build after the wait" SW_WORKFLOW="$tmp/w12.yml"
   mutate "$here/test.yml" "$tmp/w8.yml" 's#\(ring-prepare\.sh wait \)"$RUNNER_TEMP/ring-prepare"#\1"$RUNNER_TEMP/other"#'
   expect_rejected "a wait on another state dir" SW_WORKFLOW="$tmp/w8.yml"
   # The wait moved to a step of its own after the ring.

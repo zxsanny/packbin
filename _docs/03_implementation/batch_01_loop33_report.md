@@ -13,6 +13,14 @@ Task: AZ-2626 (CI speed 4, 5 points), one batch. No per-batch review (owner pref
 
 CI-parity (focused, the scaffold scripts and guards this batch touches): `ring-prepare.test.sh`, `ring-wiring.test.sh`, `ring-wiring-swift.test.sh`, `publish-jobs.test.sh`, `publish-timing.selftest.sh`, `scripts/loop-tests.test.sh`, `publish-gate.test.sh --groups workflow,static`: all PASS. `shellcheck` clean on the two new files.
 
+## Real run on the Mac (14:28 to 14:35, load 7 to 11)
+
+`ring-prepare.sh start <dir> gcc:16 swift:6.3.3`, `build`, `wait` with the real commands (Docker Desktop, npm, cargo, Go in `golang:1.27`, the local Swift): start returned at once, build 1 s (npm 1, cargo 0, Go 0: outputs current), `pull-gcc` 156 s, `pull-swift` 422 s, `swift-drivers` 0 s (stamp current), wait 422 s, all exit 0, timing lines as designed. The pulls of images already present took minutes on this Mac (Docker Desktop resolves the registry to IPv6 first; a container start was 0.4 s, Docker Hub answered the host in 1 s); on the runners the same pulls took 21 to 52 s, so this is a Mac network matter, recorded, not changed.
+
+## Total review (built-in `/code-review`, high, 7 findings)
+
+Fixed in the review commit: a failed `build` stopped the step before `wait` (background failures unreported, no notice): `build` now names its failures and `wait` is the verdict for every build, and `ring-wiring-swift.test.sh` holds build before wait, the wait last in its step, one state dir (mutant w12); image names with a registry path or twice the same name are refused by `start` before it makes the state dir; the wait polls every 0.2 s (was 1 s); the rule checks of the test assert the message, not only the exit status; a pull line naming an image twice is refused (mutant); the hang check's upper bound is 20 s (was 6 s). Skipped: the timing helpers of the test (they feed the failure messages and the hang bound). Found by a repeat of the test after the fixes (1 failure in 5 runs): the wait gave up up to 1 s before its limit (whole seconds, `-lt`); it now waits the full limit (`-le`) and the hang check demands at least 2 s; 3 more runs clean.
+
 ## Discovered during implementation
 
 | Scenario or question | Spec ref | Proposed handling | clear / unclear |
