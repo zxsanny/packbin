@@ -38,3 +38,7 @@ ccache was asked 0 times in all four builds (0 hits, 0 misses, 0 uncacheable): t
 ## Measured run B (run 39043302176, `bb21e07`, batch 2: ccache removed, 20 jobs, all green)
 
 Wall **226 s**, every job started at +0 s, all four caches hit, nothing saved. The Swift builds were slow again: `tests` debug build 75 s, `gates` sanitizer build 79 s, `speed` 126 s, ring `swift-drivers` 108 s (run A: 17, 26, 103, 22). Cause: the `v1` entries were built with batch 1's `CC=/usr/lib/ccache/clang`; with plain clang SwiftPM recompiles every C file, and a hit never saves, so every run would have paid it. Owner (2026-10-17): batch 3, keys `v2` with the build-setting script in the hash (`run-suite.sh`, `ring-swift.sh`); one priming push, one measured push, the close push measured.
+
+## Priming run 2 (run 39044320959, `779ace6`, batch 3: keys `v2`, 20 jobs, all green)
+
+Wall 228 s on the miss path (every Swift build from nothing): `suites (swift, speed)` 225, `suites (swift, tests)` 216, `ring` 209, `publish-gate-readonly` 204 s. Saved: tests 86 MB, gates 92 MB, speed 79 MB, ring 140 MB (397 MB). The measured runs of the final code are the next push and the close push.
