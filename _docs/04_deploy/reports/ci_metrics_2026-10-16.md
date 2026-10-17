@@ -138,3 +138,27 @@ AC-1: the median of the two runs of the final layout is 356.5 s (344 and 369 s),
 | Checks | 14 gate groups, 8 languages in 9 matrix entries, 45 layout mutants | 16 gate groups, 8 languages in 10 matrix entries, 66 layout mutant calls, 9 embedded targets in 3 parts | each in exactly one place, enforced |
 
 Next long poles, in order: `publish-gate-readonly-gate` (341 s: three gate runs at once on the runner, plus about 85 s of image pull, plus `pins` 26 s), `publish-gate-phases` (285 s: 222 s of scenarios plus the pull), the Swift `gates` part (282 s), `ring` (265 s, unchanged). Not done: caches (C3), the PlatformIO install in the Arduino-ESP32 target, one pull for several gate jobs.
+
+## 8. Loop 32 (AZ-2625): read-only gate in three jobs, phases in two, pins moved, Swift strict build merged
+
+Read as in section 7 (one jobs call and one annotations call per job, no token). Jobs: 23 per push (20 before): `publish-gate-readonly-gate` became three jobs, `publish-gate-phases` two; the free plan runs 20 jobs at the same time, so up to three jobs wait for a slot.
+
+| Run | Commit | Jobs | Wall | Longest jobs (s, duration; wait for a slot in brackets) |
+|-----|--------|-----:|-----:|----------------------------------------------------------|
+| 39018150736 (loop 31 close) | `fbce19f` | 20 | 369 s | readonly-gate 365, phases 286, swift gates 282, ring 257, swift tests 248 |
+| 39024316436 (loop 32, batch 1) | `c0e8019` | 23 | **275 s** | ring 273, swift tests 246, readonly-gate-good 184 (63) = 247, swift speed 224, embedded-esp-core 213, readonly 205, rest 205, phases 196, swift gates 191 |
+
+Group and step seconds of run 39024316436, against the loop 31 runs:
+
+| Item | Loop 31 | Loop 32 |
+|------|--------:|--------:|
+| `readonly-gate` (three gate runs at once) | 139, 200, 278 | `-good` 121, `-bad` 88, `-nojava` 94 (one job each) |
+| `phases` | 221 | `phases` 105 + `phases-rerun` 108 (Mac profile: 143 s against 143 s) |
+| `pins` (in the `readonly-gate` job) | 26 | 26 (in `publish-gate-rest`, total 138) |
+| Swift `gates` part | 246 (strict release build about 95) | 157 (resolve 5, tsan build 100, list 3, sanitized run 48, deps 1) |
+| Swift `speed` part | 112 to 191 | 192 (resolve 4, `swift_speed` 188: the release build now carries the strict flags) |
+| Swift `tests` part | 212 | 213 |
+| job durations | readonly-gate 341 to 365, phases 285, swift gates 282 | readonly-gate-good 184, phases 196, swift gates 191 |
+| waits for a slot | none | `readonly-gate-good` 63 s, `suites (rust)` 35 s, `readonly-gate-nojava` 30 s (the jobs that start late are not the last in the file) |
+
+The wall is `ring` (273 s, unchanged since loop 28) with `suites (swift, tests)` (246 s) second; nothing the loop cut is on the critical path any more. Mac profile of the loop 31 `phase_checks` (one run, seconds): static 1, setup 15, fabricated 1, empty plan 0, build-only 30, full publish 27, failure injection 48, pipeline violations 21, re-run checks 128 (total 272); the cut is by these seconds.

@@ -333,8 +333,9 @@ source "$here/publish-timing.test.sh"
 
 # The 19 check groups, in run order. CI runs them as parallel jobs (test.yml, publish-gate-*), each with --groups
 # <a,b,..> naming its share (AZ-2600; the read-only checks are five groups since AZ-2607 and AZ-2625, the phase scenarios
-# two since AZ-2625); no argument runs all of them. The Mac runs the CI shares at the same time (scripts/loop-tests.sh). publish-jobs.test.sh reads this list, so a
-# group that no CI job runs, or two jobs run, is refused there.
+# two since AZ-2625); no argument runs all of them. The Mac runs the CI shares at the same time
+# (scripts/loop-tests.sh). publish-jobs.test.sh reads this list, so a group that no CI job runs, or two jobs run, is
+# refused there.
 gate_groups="static crates-token registry vcpkg gate go swift manifest npm position workflow pins phases phases-rerun readonly readonly-gate-good readonly-gate-bad readonly-gate-nojava readonly-full"
 selected=" $gate_groups "
 if [ "${1:-}" = "--groups" ]; then
