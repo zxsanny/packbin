@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# AZ-2564, AZ-2600, AZ-2607 and AZ-2625: the job layout of test.yml. Exactly one job runs each part of the old `scaffold` job:
+# AZ-2564, AZ-2600, AZ-2607, AZ-2625 and AZ-2626: the job layout of test.yml. Exactly one job runs each part of the old `scaffold` job:
 # the static checks (`scaffold`), the suites (`suites`, a matrix: one job per language, Swift as three parts) and the
 # publish gate (the publish-gate-* jobs, each running its share of the groups of publish-gate.test.sh); the embedded
 # targets are the embedded-* jobs (each part of cpp/embedded/run.sh in exactly one); they run beside `ring` (no needs,
-# no if, no continue-on-error, a timeout), and a gate job that starts containers pulls its images first.
+# no if, no continue-on-error, a timeout), and a gate job pulls exactly the images its groups start, before the gate.
 # The real test.yml must pass; each mutant (one per rule) must be refused.
 set -euo pipefail
 
@@ -28,9 +28,17 @@ runs = lambda do |name, wanted|
 end
 all_runs = ->(wanted) { jobs.keys.flat_map { |n| runs.call(n, wanted).map { n } } }
 languages = %w[csharp typescript python rust cpp java go swift]
-# The gate jobs are the jobs named publish-gate-*; the groups that start containers need the images pulled first.
+# The gate jobs are the jobs named publish-gate-*. The suite images each group starts (traced in the code, AZ-2626): the
+# golden gate and the read-only probes run all eight; the nojava gate copy has no java; the phase scenarios, the build of
+# readonly-full and the pins build start the five that publish-build.sh runs in containers (cpp builds on the host); the
+# other groups start none. A job pulls exactly the union for its groups: a missing image would be pulled on first use,
+# inside a timed group, and an extra one costs the pull (swift is 4 GB).
 gate_jobs = jobs.keys.select { |n| n.start_with?("publish-gate-") }
-container_groups = %w[gate phases phases-rerun readonly readonly-gate-good readonly-gate-bad readonly-gate-nojava readonly-full pins]
+built = %w[csharp typescript python rust java]
+group_images = { "gate" => languages, "readonly" => languages, "readonly-gate-good" => languages,
+                 "readonly-gate-bad" => languages, "readonly-gate-nojava" => languages - ["java"], "phases" => built,
+                 "phases-rerun" => built, "readonly-full" => built, "pins" => ["python"] }
+pull_line = /\Adocker compose .*docker-compose\.publish\.yml.* pull\b/
 errors << "test.yml has no publish-gate-* job" if gate_jobs.empty?
 embedded_jobs = jobs.keys.select { |n| n.start_with?("embedded-") }
 errors << "test.yml has no embedded-* job" if embedded_jobs.empty?
@@ -122,13 +130,19 @@ gate_jobs.each do |name|
   ran.concat(groups)
   steps = steps_of.call(jobs[name])
   gate_at = steps.index { |s| lines_of.call(s).any? { |l| l.start_with?(gate_cmd) } }
-  pull_at = steps.index do |s|
-    lines_of.call(s).any? { |l| l.match?(/\Adocker compose .*docker-compose\.publish\.yml.* pull\b/) && languages.all? { |lang| l.split.include?(lang) } }
+  pulls = steps.each_with_index.flat_map { |s, i| lines_of.call(s).select { |l| l.match?(pull_line) }.map { |l| [i, l] } }
+  want = groups.flat_map { |g| group_images.fetch(g, []) }.uniq
+  if want.empty?
+    errors << "job #{name} pulls images, but none of its groups starts a container" unless pulls.empty?
+    next
   end
-  # Groups that start containers (the golden gate, the read-only checks, the phases, the pins build) need their images before the gate.
-  if (groups & container_groups).any? && (pull_at.nil? || pull_at > gate_at)
-    errors << "job #{name} runs a group that starts containers without pulling its images before the gate"
+  if pulls.size != 1 || pulls.first[0] > gate_at
+    errors << "job #{name} runs a group that starts containers without pulling its images once before the gate"
+    next
   end
+  have = pulls.first[1].split.drop_while { |w| w != "pull" }.drop(1).reject { |w| w.start_with?("-") }
+  (want - have).each { |img| errors << "job #{name} does not pull #{img}, which #{groups.select { |g| group_images.fetch(g, []).include?(img) }.join(', ')} starts" }
+  (have - want).each { |img| errors << "job #{name} pulls #{img}, which none of its groups (#{groups.join(', ')}) starts" }
 end
 (all_groups - ran).each { |g| errors << "the gate group #{g} runs in no job" }
 (ran - all_groups).uniq.each { |g| errors << "the gate group #{g} is not a group of publish-gate.test.sh" }
@@ -138,6 +152,7 @@ errors << "a job other than the publish-gate-* jobs runs the publish gate" if jo
 static = %w[
   .github/workflows/report-row.test.sh fixtures/hostile/cases.test.sh .github/workflows/run-suite.test.sh
   cpp/embedded/lib.test.sh cpp/embedded/run-parts.test.sh .github/workflows/ring-wiring.test.sh scripts/loop-tests.test.sh
+  .github/workflows/ring-wiring-swift.test.sh .github/workflows/ring-prepare.test.sh
 ]
 static.each do |script|
   found = all_runs.call("bash #{script}")
@@ -247,6 +262,13 @@ mutant "readonly job without the pull step" 'jobs["publish-gate-readonly"]["step
 mutant "phases job without the pull step" 'jobs["publish-gate-phases"]["steps"].reject! { |s| s["name"] == "pull images" }'
 mutant "pull step after the gate" 'jobs["publish-gate-phases"]["steps"].reverse!'
 mutant "pull step without swift" 'st = step_named.call("publish-gate-readonly", "pull images"); st["run"] = st["run"].sub(" swift", "")'
+mutant "phases pull without java" 'st = step_named.call("publish-gate-phases", "pull images"); st["run"] = st["run"].sub(" java", "")'
+mutant "nojava pull without python" 'st = step_named.call("publish-gate-readonly-gate-nojava", "pull images"); st["run"] = st["run"].sub(" python", "")'
+mutant "phases pull with swift" 'step_named.call("publish-gate-phases", "pull images")["run"] += " swift"'
+mutant "rest pull with go" 'step_named.call("publish-gate-rest", "pull images")["run"] += " go"'
+mutant "nojava pull with java" 'step_named.call("publish-gate-readonly-gate-nojava", "pull images")["run"] += " java"'
+mutant "a pull in the swift job, whose group starts no container" 'jobs["publish-gate-swift"]["steps"].insert(1, deep.call(step_named.call("publish-gate-phases", "pull images")))'
+mutant "two pull steps in the phases job" 'jobs["publish-gate-phases"]["steps"].insert(1, deep.call(step_named.call("publish-gate-phases", "pull images")))'
 mutant "gate step with if" 'gate_step.call("publish-gate-rest")["if"] = "github.ref == %q(refs/heads/main)"'
 mutant "gate step continue-on-error" 'gate_step.call("publish-gate-readonly")["continue-on-error"] = true'
 mutant "gate job needs scaffold" 'jobs["publish-gate-phases"]["needs"] = "scaffold"'
@@ -275,6 +297,7 @@ mutant "embedded part misspelled" 'jobs["embedded-esp-packages"]["steps"][1]["ru
 # the static checks
 mutant "scaffold without the embedded parts step" 'jobs["scaffold"]["steps"].reject! { |s| s["name"] == "embedded parts" }'
 mutant "scaffold without the report columns step" 'jobs["scaffold"]["steps"].reject! { |s| s["name"] == "report columns" }'
+mutant "ring preparation test moved to ring" 'jobs["ring"]["steps"] << jobs["scaffold"]["steps"].find { |s| s["name"] == "ring preparation" }; jobs["scaffold"]["steps"].reject! { |s| s["name"] == "ring preparation" }'
 mutant "scaffold static check moved to ring" 'jobs["ring"]["steps"] << jobs["scaffold"]["steps"].find { |s| s["name"] == "suite runner" }; jobs["scaffold"]["steps"].reject! { |s| s["name"] == "suite runner" }'
 
 if [ "$failures" -ne 0 ]; then

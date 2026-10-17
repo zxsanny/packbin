@@ -34,8 +34,10 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Swift ring wiring
-        run: bash .github/workflows/ring-wiring-swift.test.sh
+      # The gcc and swift image pulls and the Swift driver build need none of the setup actions: they run in the
+      # background while the setups run, and the wait below collects them (ring-prepare.sh, AZ-2626).
+      - name: start image pulls and the Swift driver build
+        run: bash .github/workflows/ring-prepare.sh start "$RUNNER_TEMP/ring-prepare" "gcc:$RING_GCC" "swift:$RING_SWIFT"
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: ${{ env.RING_DOTNET }}.x
@@ -60,17 +62,14 @@ jobs:
           set -euo pipefail
           rustup toolchain install "$RING_RUST" --profile minimal --no-self-update
           rustup default "$RING_RUST"
-      - name: GCC image
-        run: docker pull "gcc:$RING_GCC"
-      - name: toolchain versions
-        run: bash .github/workflows/ring-toolchains.sh
+      # npm, the Rust driver and the Go driver at the same time, then the wait for the background pulls and Swift build.
       - name: driver dependencies and builds
         run: |
           set -euo pipefail
-          npm ci --prefix typescript
-          cargo build --quiet --manifest-path .github/workflows/drivers/handoff-rust/Cargo.toml
-          bash .github/workflows/ring-go.sh /tmp/packbin-handoff-go
-          bash .github/workflows/ring-swift.sh /tmp/packbin-ring-swift
+          bash .github/workflows/ring-prepare.sh build "$RUNNER_TEMP/ring-prepare"
+          bash .github/workflows/ring-prepare.sh wait "$RUNNER_TEMP/ring-prepare"
+      - name: toolchain versions
+        run: bash .github/workflows/ring-toolchains.sh
       - name: cross-language ring
         run: bash .github/workflows/language-pair.sh
 
@@ -115,14 +114,15 @@ jobs:
   # The gate shares, chosen from the per-group seconds of the "publish gate timing" notice of each job (AZ-2607: the
   # read-only checks are separate groups; the swift group, 215 s, has a job of its own; AZ-2625: the three real gate runs
   # of the read-only checks are a job each, the phase scenarios are two jobs, pins rides with the small groups). A job
-  # whose groups start containers pulls the images first; publish-jobs.test.sh holds the list of those groups.
+  # whose groups start containers pulls exactly their images first (AZ-2626: the phases, readonly-full and pins start
+  # five, the nojava gate copy seven, the gate and read-only probes all eight); publish-jobs.test.sh holds that map.
   publish-gate-phases:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: pull images
-        run: docker compose -f docker-compose.test.yml -f docker-compose.publish.yml pull --quiet csharp typescript python rust cpp java go swift
+        run: docker compose -f docker-compose.test.yml -f docker-compose.publish.yml pull --quiet csharp typescript python rust java
       - name: test results directory
         run: mkdir -p test-results
       - name: publish gate
@@ -134,7 +134,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: pull images
-        run: docker compose -f docker-compose.test.yml -f docker-compose.publish.yml pull --quiet csharp typescript python rust cpp java go swift
+        run: docker compose -f docker-compose.test.yml -f docker-compose.publish.yml pull --quiet csharp typescript python rust java
       - name: test results directory
         run: mkdir -p test-results
       - name: publish gate
@@ -182,20 +182,20 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: pull images
-        run: docker compose -f docker-compose.test.yml -f docker-compose.publish.yml pull --quiet csharp typescript python rust cpp java go swift
+        run: docker compose -f docker-compose.test.yml -f docker-compose.publish.yml pull --quiet csharp typescript python rust cpp go swift
       - name: test results directory
         run: mkdir -p test-results
       - name: publish gate
         run: bash .github/workflows/publish-gate.test.sh --groups readonly-gate-nojava
 
-  # The small groups ride along with readonly-full, which pulls the images anyway.
+  # The small groups ride along with readonly-full, which pulls its five images anyway.
   publish-gate-rest:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: pull images
-        run: docker compose -f docker-compose.test.yml -f docker-compose.publish.yml pull --quiet csharp typescript python rust cpp java go swift
+        run: docker compose -f docker-compose.test.yml -f docker-compose.publish.yml pull --quiet csharp typescript python rust java
       - name: test results directory
         run: mkdir -p test-results
       - name: publish gate
@@ -299,6 +299,11 @@ jobs:
         run: bash cpp/embedded/lib.test.sh
       - name: cross-language ring wiring
         run: bash .github/workflows/ring-wiring.test.sh
+      # Off the ring job's critical path since AZ-2626: both need only ruby and bash.
+      - name: Swift ring wiring
+        run: bash .github/workflows/ring-wiring-swift.test.sh
+      - name: ring preparation
+        run: bash .github/workflows/ring-prepare.test.sh
       - name: loop test script
         run: bash scripts/loop-tests.test.sh
       - name: embedded parts

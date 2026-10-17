@@ -60,13 +60,24 @@ errors << "RING_SWIFT is '#{have}' in job #{name}, tool-pins.txt has swift==#{pi
 errors << "RING_SWIFT is '#{have}' in job #{name}, the swift suite image is '#{image}'" if image != "swift:#{have}"
 at = ->(re) { steps.index { |s| code_lines.call(s).any? { |l| l.match?(re) } } }
 ring_at = at.call(ring)
-build_at = at.call(%r{\Abash \.github/workflows/ring-swift\.sh \S+\z})
-errors << "job #{name} does not build the Swift drivers through ring-swift.sh before the ring" if build_at.nil? || build_at > ring_at
-check_at = at.call(%r{\Abash \.github/workflows/ring-wiring-swift\.test\.sh\z})
-if check_at.nil?
-  errors << "job #{name} does not run ring-wiring-swift.test.sh"
-elsif steps[check_at].key?("if") || steps[check_at].key?("continue-on-error")
-  errors << "the ring-wiring-swift.test.sh step of job #{name} has an if or continue-on-error"
+# The Swift drivers are built by ring-prepare.sh start in the background, after its pull of "swift:$RING_SWIFT" (it calls
+# ring-swift.sh: ring-prepare.test.sh), and waited for on the same state dir before the ring; else the ring would start
+# a second build (AZ-2626).
+prepare = ->(sub) { %r{\Abash \.github/workflows/ring-prepare\.sh #{sub} (\S+)#{sub == "start" ? '((?: \S+)+)' : ''}\z} }
+start_at, wait_at = at.call(prepare.call("start")), at.call(prepare.call("wait"))
+arg_of = ->(i, sub, n) { code_lines.call(steps[i]).map { |l| l[prepare.call(sub), n] }.compact.first }
+if start_at.nil? || wait_at.nil? || start_at > wait_at || wait_at > ring_at || arg_of.call(start_at, "start", 1) != arg_of.call(wait_at, "wait", 1)
+  errors << "job #{name} does not start the Swift driver build (ring-prepare.sh start) and wait for it on the same dir before the ring"
+elsif !arg_of.call(start_at, "start", 2).split.include?('"swift:$RING_SWIFT"')
+  errors << "the ring-prepare.sh start line of job #{name} does not pull \"swift:$RING_SWIFT\" before the Swift driver build"
+end
+wiring = %r{\Abash \.github/workflows/ring-wiring-swift\.test\.sh\z}
+errors << "job #{name} runs ring-wiring-swift.test.sh, which belongs in scaffold (off the ring's critical path)" if at.call(wiring)
+check = steps_of.call(jobs["scaffold"]).find { |s| code_lines.call(s).any? { |l| l.match?(wiring) } }
+if check.nil?
+  errors << "scaffold does not run ring-wiring-swift.test.sh"
+elsif check.key?("if") || check.key?("continue-on-error")
+  errors << "the ring-wiring-swift.test.sh step of scaffold has an if or continue-on-error"
 end
 steps.each do |s|
   next unless s.key?("uses")
@@ -236,8 +247,22 @@ swift_wiring_checks() {
   expect_rejected "the tool-pins.txt swift pin bumped alone" SW_PINS="$tmp/pins.txt"
   mutate "$here/../../docker-compose.test.yml" "$tmp/compose.yml" 's/image: swift:6\.3\.3$/image: swift:6.3.4/'
   expect_rejected "the swift suite image bumped alone" SW_COMPOSE="$tmp/compose.yml"
-  mutate "$here/test.yml" "$tmp/w3.yml" '/^          bash \.github\/workflows\/ring-swift\.sh /d'
-  expect_rejected "the Swift driver build step line" SW_WORKFLOW="$tmp/w3.yml"
+  mutate "$here/test.yml" "$tmp/w3.yml" '/^        run: bash \.github\/workflows\/ring-prepare\.sh start /d'
+  expect_rejected "the Swift driver build start line" SW_WORKFLOW="$tmp/w3.yml"
+  mutate "$here/test.yml" "$tmp/w11.yml" '/ring-prepare\.sh start /s/ "swift:$RING_SWIFT"$//'
+  expect_rejected "the swift image left out of the start line" SW_WORKFLOW="$tmp/w11.yml"
+  mutate "$here/test.yml" "$tmp/w7.yml" '/^          bash \.github\/workflows\/ring-prepare\.sh wait /d'
+  expect_rejected "the wait for the Swift driver build" SW_WORKFLOW="$tmp/w7.yml"
+  mutate "$here/test.yml" "$tmp/w8.yml" 's#\(ring-prepare\.sh wait \)"$RUNNER_TEMP/ring-prepare"#\1"$RUNNER_TEMP/other"#'
+  expect_rejected "a wait on another state dir" SW_WORKFLOW="$tmp/w8.yml"
+  # The wait moved to a step of its own after the ring.
+  awk '/^          bash \.github\/workflows\/ring-prepare\.sh wait / { next } { print }
+    /^        run: bash \.github\/workflows\/language-pair\.sh$/ { print "      - name: late wait"
+      print "        run: bash .github/workflows/ring-prepare.sh wait \"$RUNNER_TEMP/ring-prepare\"" }' "$here/test.yml" > "$tmp/w9.yml"
+  expect_rejected "the wait after the ring" SW_WORKFLOW="$tmp/w9.yml"
+  awk '{ print } /^          bash \.github\/workflows\/ring-prepare\.sh wait / { print "          bash .github/workflows/ring-wiring-swift.test.sh" }' \
+    "$here/test.yml" > "$tmp/w10.yml"
+  expect_rejected "the Swift ring wiring check back in the ring job" SW_WORKFLOW="$tmp/w10.yml"
   mutate "$here/test.yml" "$tmp/w4.yml" '/^      - name: Swift ring wiring$/,/ring-wiring-swift\.test\.sh$/d'
   expect_rejected "the Swift ring wiring step" SW_WORKFLOW="$tmp/w4.yml"
   insert_after "$here/test.yml" "$tmp/w5.yml" '^      - name: Swift ring wiring$' "        if: github.ref == 'refs/heads/main'"

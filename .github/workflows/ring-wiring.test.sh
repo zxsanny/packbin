@@ -98,7 +98,7 @@ callers.each do |name, ring_steps|
       errors << "step '#{label}' of job #{name} does not compile through ring-cxx.sh (CXX is '#{env['CXX']}')"
     end
   end
-  # Go: a setup-go step pinned to a commit SHA at the version RING_GO names; the driver is built through ring-go.sh.
+  # Go: setup-go pinned to a commit SHA at RING_GO; the driver built by ring-go.sh or ring-prepare.sh build (calls it).
   setup_go = steps.find { |s| s["uses"].to_s.start_with?("actions/setup-go@") }
   if setup_go.nil?
     errors << "job #{name} has no actions/setup-go step"
@@ -106,7 +106,7 @@ callers.each do |name, ring_steps|
     errors << "the setup-go step of job #{name} is not pinned to a commit SHA" unless setup_go["uses"].match?(/@[0-9a-f]{40}\z/)
     errors << "the setup-go step of job #{name} does not take go-version from RING_GO" unless setup_go.dig("with", "go-version").to_s == "${{ env.RING_GO }}"
   end
-  go_build = %r{\Abash \.github/workflows/ring-go\.sh \S+\z}
+  go_build = %r{\Abash \.github/workflows/ring-(?:go\.sh|prepare\.sh build) \S+\z}
   errors << "job #{name} does not build the Go driver through ring-go.sh" unless steps.any? { |s| code_lines.call(s).any? { |l| l.match?(go_build) } }
   services = compose.is_a?(Hash) && compose["services"].is_a?(Hash) ? compose["services"] : {}
   used = steps.map { |s| [s["with"], s["run"]].to_s }.join("\n")
@@ -438,7 +438,7 @@ else
   sed 's#\(actions/setup-go@\)[0-9a-f]\{40\}.*#\1v7.0.0#' "$test_yml" > "$tmp/go-tag-pinned.yml"
   awk '/^      - uses: actions\/setup-go@/ { skip = 1; next } skip && /^        / { next } { skip = 0; print }' \
     "$test_yml" > "$tmp/no-setup-go.yml"
-  sed '/ring-go\.sh \/tmp/d' "$test_yml" > "$tmp/no-go-build.yml"
+  sed '/ring-prepare\.sh build /d' "$test_yml" > "$tmp/no-go-build.yml"
   insert_after '^        run: bash \.github/workflows/ring-toolchains\.sh$' \
     '      - name: ring script lint\n        run: |\n          bash -n .github/workflows/language-pair.sh\n          shellcheck .github/workflows/language-pair.sh' \
     > "$tmp/call-mentioned.yml"
