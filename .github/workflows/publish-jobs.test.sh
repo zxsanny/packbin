@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # AZ-2564, AZ-2600 and AZ-2607: the job layout of test.yml. Exactly one job runs each part of the old `scaffold` job:
-# the static checks (`scaffold`), the suites (`suites`, a matrix: one job per language, Swift as two parts) and the
-# publish gate (the publish-gate-* jobs, each running its share of the groups of publish-gate.test.sh); they run beside
-# `embedded` and `ring` (no needs, no if, no continue-on-error, a timeout), and a gate job that starts containers pulls
-# its images first.
+# the static checks (`scaffold`), the suites (`suites`, a matrix: one job per language, Swift as three parts) and the
+# publish gate (the publish-gate-* jobs, each running its share of the groups of publish-gate.test.sh); the embedded
+# targets are the embedded-* jobs (each part of cpp/embedded/run.sh in exactly one); they run beside `ring` (no needs,
+# no if, no continue-on-error, a timeout), and a gate job that starts containers pulls its images first.
 # The real test.yml must pass; each mutant (one per rule) must be refused.
 set -euo pipefail
 
@@ -32,8 +32,11 @@ languages = %w[csharp typescript python rust cpp java go swift]
 gate_jobs = jobs.keys.select { |n| n.start_with?("publish-gate-") }
 container_groups = %w[gate phases readonly readonly-gate readonly-full]
 errors << "test.yml has no publish-gate-* job" if gate_jobs.empty?
+embedded_jobs = jobs.keys.select { |n| n.start_with?("embedded-") }
+errors << "test.yml has no embedded-* job" if embedded_jobs.empty?
+errors << "a job named embedded is left: the embedded targets are the embedded-* jobs" if jobs.key?("embedded")
 
-(%w[scaffold suites embedded ring] + gate_jobs).each do |name|
+(%w[scaffold suites ring] + gate_jobs + embedded_jobs).each do |name|
   errors << "test.yml has no #{name} job" unless jobs[name].is_a?(Hash)
 end
 (%w[scaffold suites] + gate_jobs).each do |name|
@@ -48,6 +51,34 @@ end
 end
 errors << "a job named publish-gate is left: the gate is the publish-gate-* jobs" if jobs.key?("publish-gate")
 
+# The embedded jobs: no job-level if, needs or continue-on-error, a timeout; the only step with an if is the report
+# (if: always()), and every part of cpp/embedded/run.sh is called by exactly one job, once.
+embedded_jobs.each do |name|
+  job = jobs[name]
+  next unless job.is_a?(Hash)
+  errors << "job #{name} has no timeout-minutes" unless job.key?("timeout-minutes")
+  %w[if needs continue-on-error].each { |k| errors << "job #{name} has #{k}, so it does not run beside the others" if job.key?(k) }
+  steps_of.call(job).each do |step|
+    label = step["name"] || step["uses"] || "unnamed"
+    errors << "step '#{label}' of job #{name} has continue-on-error" if step.key?("continue-on-error")
+    errors << "step '#{label}' of job #{name} has an if (only the embedded report has if: always())" if step.key?("if") && !(label == "embedded report" && step["if"] == "always()")
+  end
+end
+embedded_cmds = ["bash cpp/embedded/run.sh host arm", "bash cpp/embedded/run.sh host esp core", "bash cpp/embedded/run.sh host esp packages"]
+embedded_ran = jobs.keys.flat_map do |name|
+  steps_of.call(jobs[name]).flat_map { |s| lines_of.call(s) }.select { |l| l.start_with?("bash cpp/embedded/run.sh") }.map { |l| [name, l] }
+end
+embedded_cmds.each do |cmd|
+  found = embedded_ran.select { |_, l| l == cmd }.map(&:first)
+  errors << "the embedded part '#{cmd}' runs in #{found.size} jobs, not exactly one" unless found.size == 1
+  errors << "the embedded part '#{cmd}' runs in #{found.first}, which is not an embedded-* job" if found.size == 1 && !embedded_jobs.include?(found.first)
+end
+embedded_ran.reject { |_, l| embedded_cmds.include?(l) }.each { |n, l| errors << "job #{n} runs #{l}, which is not one of the embedded parts" }
+embedded_jobs.each do |name|
+  n = embedded_ran.count { |j, _| j == name }
+  errors << "job #{name} runs #{n} embedded parts, not one" unless n == 1
+end
+
 # The suites: one job per matrix entry; every language once, Swift as its two parts, nothing else.
 suites = jobs["suites"]
 matrix = suites.is_a?(Hash) && suites["strategy"].is_a?(Hash) ? suites["strategy"]["matrix"] : nil
@@ -56,7 +87,7 @@ errors << "the suites job has no matrix of included entries" if entries.empty?
 errors << "the suites matrix has keys besides include (an exclude or a product would change the set)" if matrix.is_a?(Hash) && matrix.keys != ["include"]
 errors << "the suites matrix stops the other suites at the first failure (fail-fast is not false)" unless suites.is_a?(Hash) && suites["strategy"].is_a?(Hash) && suites["strategy"]["fail-fast"] == false
 got = entries.map { |e| e.is_a?(Hash) ? [e["lang"], e["part"]] : [nil, nil] }
-want = (languages - ["swift"]).map { |l| [l, nil] } + [["swift", "tests"], ["swift", "gates"]]
+want = (languages - ["swift"]).map { |l| [l, nil] } + [["swift", "tests"], ["swift", "gates"], ["swift", "speed"]]
 (want - got).each { |e| errors << "the suites matrix has no entry for #{e.compact.join(' ')}" }
 (got - want).each { |e| errors << "the suites matrix has an unknown entry #{e.inspect}" }
 got.group_by { |e| e }.select { |_, v| v.size > 1 }.each_key { |e| errors << "the suites matrix runs #{e.compact.join(' ')} twice" }
@@ -106,7 +137,7 @@ errors << "a job other than the publish-gate-* jobs runs the publish gate" if jo
 
 static = %w[
   .github/workflows/report-row.test.sh fixtures/hostile/cases.test.sh .github/workflows/run-suite.test.sh
-  cpp/embedded/lib.test.sh .github/workflows/ring-wiring.test.sh scripts/loop-tests.test.sh
+  cpp/embedded/lib.test.sh cpp/embedded/run-parts.test.sh .github/workflows/ring-wiring.test.sh scripts/loop-tests.test.sh
 ]
 static.each do |script|
   found = all_runs.call("bash #{script}")
@@ -167,6 +198,7 @@ fi
 # Act and assert: one mutant per rule. The suites matrix
 mutant "matrix without the swift tests part" 'jobs["suites"]["strategy"]["matrix"]["include"].reject! { |e| e["part"] == "tests" }'
 mutant "matrix without the swift gates part" 'jobs["suites"]["strategy"]["matrix"]["include"].reject! { |e| e["part"] == "gates" }'
+mutant "matrix without the swift speed part" 'jobs["suites"]["strategy"]["matrix"]["include"].reject! { |e| e["part"] == "speed" }'
 mutant "matrix with swift as one whole entry" 'inc = jobs["suites"]["strategy"]["matrix"]["include"]; inc.reject! { |e| e["lang"] == "swift" }; inc << { "lang" => "swift" }'
 mutant "matrix without typescript" 'jobs["suites"]["strategy"]["matrix"]["include"].reject! { |e| e["lang"] == "typescript" }'
 mutant "matrix runs go twice" 'jobs["suites"]["strategy"]["matrix"]["include"] << { "lang" => "go" }'
@@ -190,9 +222,10 @@ mutant "a suite run in the ring job" 'jobs["ring"]["steps"] << { "name" => "go",
 # the publish gate jobs
 mutant "readonly-gate group dropped" 'gate_step.call("publish-gate-readonly-gate")["run"] = "bash .github/workflows/publish-gate.test.sh --groups pins"'
 mutant "readonly group also in the phases job" 'gate_step.call("publish-gate-phases")["run"] = "bash .github/workflows/publish-gate.test.sh --groups phases,readonly"'
-mutant "readonly-full also in the rest job" 'gate_step.call("publish-gate-rest")["run"] += ",readonly-full"'
-mutant "a container group moved to the job without a pull" 'gate_step.call("publish-gate-readonly")["run"] = "bash .github/workflows/publish-gate.test.sh --groups gate"; gate_step.call("publish-gate-rest")["run"] += ",readonly"'
-mutant "readonly-full job without the pull step" 'jobs["publish-gate-readonly-full"]["steps"].reject! { |s| s["name"] == "pull images" }'
+mutant "readonly-full also in the phases job" 'gate_step.call("publish-gate-phases")["run"] += ",readonly-full"'
+mutant "swift group also in the rest job" 'gate_step.call("publish-gate-rest")["run"] += ",swift"'
+mutant "a container group moved to the job without a pull" 'gate_step.call("publish-gate-readonly")["run"] = "bash .github/workflows/publish-gate.test.sh --groups gate"; gate_step.call("publish-gate-swift")["run"] += ",readonly"'
+mutant "rest job (readonly-full) without the pull step" 'jobs["publish-gate-rest"]["steps"].reject! { |s| s["name"] == "pull images" }'
 mutant "no gate job at all" 'jobs.keys.select { |n| n.start_with?("publish-gate-") }.each { |n| jobs.delete(n) }'
 mutant "a group that does not exist" 'gate_step.call("publish-gate-rest")["run"] += ",bogus"'
 mutant "the rest job names no group" 'gate_step.call("publish-gate-rest")["run"] = "bash .github/workflows/publish-gate.test.sh --groups ,"'
@@ -214,7 +247,22 @@ mutant "gate job removed" 'jobs.delete("publish-gate-rest")'
 gate_mutant "a new group that no job runs" 's/^gate_groups="\(.*\)"$/gate_groups="\1 extra"/'
 gate_mutant "a group renamed in the list" 's/^gate_groups="\(.*\) readonly-gate \(.*\)"$/gate_groups="\1 ro-gate \2"/'
 gate_mutant "a read-only group left out of the list" 's/^gate_groups="\(.*\) readonly-full"$/gate_groups="\1"/'
+# the embedded jobs
+mutant "embedded arm job removed" 'jobs.delete("embedded-arm")'
+mutant "embedded packages part runs the core part twice" 'jobs["embedded-esp-packages"]["steps"][1]["run"] = jobs["embedded-esp-core"]["steps"][1]["run"]'
+mutant "embedded core job runs the whole ESP stage" 'jobs["embedded-esp-core"]["steps"][1]["run"] = jobs["embedded-esp-core"]["steps"][1]["run"].sub("host esp core", "host esp")'
+mutant "embedded part runs in two jobs" 'jobs["embedded-esp-core"]["steps"][1]["run"] += "\nbash cpp/embedded/run.sh host arm"'
+mutant "the unsplit embedded job is left" 'jobs["embedded"] = deep.call(jobs["embedded-arm"])'
+mutant "an unsplit embedded run in the ring job" 'jobs["ring"]["steps"] << { "name" => "embedded", "run" => "bash cpp/embedded/run.sh" }'
+mutant "embedded job with if" 'jobs["embedded-arm"]["if"] = "github.ref == %q(refs/heads/main)"'
+mutant "embedded job needs scaffold" 'jobs["embedded-esp-core"]["needs"] = "scaffold"'
+mutant "embedded job continue-on-error" 'jobs["embedded-esp-packages"]["continue-on-error"] = true'
+mutant "embedded job without timeout" 'jobs["embedded-arm"].delete("timeout-minutes")'
+mutant "embedded run step with if" 'jobs["embedded-arm"]["steps"][1]["if"] = "always()"'
+mutant "embedded run step continue-on-error" 'jobs["embedded-esp-core"]["steps"][1]["continue-on-error"] = true'
+mutant "embedded part misspelled" 'jobs["embedded-esp-packages"]["steps"][1]["run"] = jobs["embedded-esp-packages"]["steps"][1]["run"].sub("packages", "package")'
 # the static checks
+mutant "scaffold without the embedded parts step" 'jobs["scaffold"]["steps"].reject! { |s| s["name"] == "embedded parts" }'
 mutant "scaffold without the report columns step" 'jobs["scaffold"]["steps"].reject! { |s| s["name"] == "report columns" }'
 mutant "scaffold static check moved to ring" 'jobs["ring"]["steps"] << jobs["scaffold"]["steps"].find { |s| s["name"] == "suite runner" }; jobs["scaffold"]["steps"].reject! { |s| s["name"] == "suite runner" }'
 

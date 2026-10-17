@@ -280,6 +280,7 @@ run_stage_command() {
         && bash fixtures/hostile/check-cases.sh \
         && bash .github/workflows/run-suite.test.sh \
         && bash cpp/embedded/lib.test.sh \
+        && bash cpp/embedded/run-parts.test.sh \
         && bash .github/workflows/ring-wiring.test.sh \
         && bash .github/workflows/ring-wiring-swift.test.sh \
         && bash scripts/loop-tests.test.sh ;;

@@ -112,9 +112,10 @@ swift_resolve() {
   fi
 }
 
-# The test identifiers of the debug build (`Module.Suite/test()`), for the steps that run one suite.
+# The test identifiers of the build in the scratch path (`Module.Suite/test()`), for the steps that run one suite:
+# the debug build, or the one named by the options in $@ (the speed part lists its release build).
 swift_list() {
-  swift_tests="$(swift test list "${swift_opts[@]}" --skip-build)" || return 1
+  swift_tests="$(swift test list "${swift_opts[@]}" "$@" --skip-build)" || return 1
   printf '%s\n' "$swift_tests"
 }
 
@@ -137,12 +138,20 @@ swift_fuzz() {
 }
 
 # SW-8: the speed bound holds for a release build only. A filter that matches nothing passes, so the suite must exist.
+# The single run has listed the tests of its debug build by now and fails before the release build. The speed part has
+# no debug or sanitizer build to list from: it builds first and lists the tests of its own release build.
 swift_speed() {
+  local built=
+  if [ "${swift_part:-all}" = speed ]; then
+    swift build "${swift_opts[@]}" -c release --build-tests || return 1
+    built=1
+    swift_list -c release || return 1
+  fi
   if ! grep -q '\.SpeedTests/' <<< "$swift_tests"; then
     echo "run-suite: swift has no SpeedTests suite; the release-build speed step has nothing to run" >&2
     return 1
   fi
-  swift build "${swift_opts[@]}" -c release --build-tests || return 1
+  if [ -z "$built" ]; then swift build "${swift_opts[@]}" -c release --build-tests || return 1; fi
   # The 1 MiB hostile unpack (FuzzTests/mebibyte, SW-4) is timed in the same release run: a debug build is about 7 times slower.
   swift test "${swift_opts[@]}" -c release --skip-build --verbose --filter '\.SpeedTests/' --filter '\.FuzzTests/mebibyte'
 }
@@ -293,40 +302,45 @@ case "$lang" in
     fi
     ;;
   swift)
-    # PACKBIN_SWIFT_PART splits the suite in two for CI (AZ-2600): `tests` is the strict release build, the debug
-    # tests and the fuzz run; `gates` is the thread-sanitizer run, the release speed test and the dependency check.
-    # Unset or `all` runs every step in one run, as the Mac does. The parts share no build output.
+    # PACKBIN_SWIFT_PART splits the suite in three for CI (AZ-2600, AZ-2607), each part its own job with its own build
+    # output, so no job is the sum of all of them. `tests`: the debug build, the tests and the fuzz run. `gates`: the
+    # strict release build, the thread-sanitizer build and run, the dependency check. `speed`: the release build with
+    # tests and the speed run. Unset or `all` runs every step in one run, as the Mac does. Every step is in exactly
+    # one part; resolve and list are the only repeats (a part cannot use another part's build output or test list).
     swift_part="${PACKBIN_SWIFT_PART:-all}"
+    swift_plan=
     case "$swift_part" in
-      all | tests | gates) ;;
+      all) swift_plan="resolve release debug test list fuzz tsan sanitized speed deps" ;;
+      tests) swift_plan="resolve debug test list fuzz" ;;
+      gates) swift_plan="resolve release tsan list sanitized deps" ;;
+      speed) swift_plan="resolve speed" ;;
       *)
-        printf 'run-suite: PACKBIN_SWIFT_PART is %q, not all, tests or gates\n' "$swift_part" >&2
+        printf 'run-suite: PACKBIN_SWIFT_PART is %q, not all, tests, gates or speed\n' "$swift_part" >&2
         ok=1
         ;;
     esac
     # A tree without Package.swift or swift/ fails, as every other language does without its manifest (AC-3).
     if [ "$ok" -eq 0 ] && swift_tree; then
-      run swift_resolve
-      if [ "$swift_part" != gates ]; then
-        # SW-9: 0 warnings in the release build. Warnings as errors and complete concurrency checking are given here,
-        # never in Package.swift: an unsafe flag there makes the package unusable as a dependency.
-        run swift build "${swift_opts[@]}" -c release -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete
-        # The tests are built first, so the verbose test output is not buried under the compiler command lines.
-        run swift build "${swift_opts[@]}" --build-tests
-        run swift test "${swift_opts[@]}" --skip-build --verbose
-        run swift_list
-        # Before the sanitizer run, which rebuilds the debug build with -sanitize=thread.
-        run swift_fuzz
-      fi
-      if [ "$swift_part" != tests ]; then
-        # SW-14: a race reported by the thread sanitizer fails the run (its exit code is 66).
-        run swift build "${swift_opts[@]}" --build-tests --sanitize=thread
-        # The gates part has no debug test build of its own: it lists the tests of the sanitizer build.
-        if [ "$swift_part" = gates ]; then run swift_list; fi
-        run swift_sanitized
-        run swift_speed
-        run swift_deps
-      fi
+      for swift_step in $swift_plan; do
+        case "$swift_step" in
+          resolve) run swift_resolve ;;
+          # SW-9: 0 warnings in the release build. Warnings as errors and complete concurrency checking are given here,
+          # never in Package.swift: an unsafe flag there makes the package unusable as a dependency.
+          release) run swift build "${swift_opts[@]}" -c release -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete ;;
+          # The tests are built first, so the verbose test output is not buried under the compiler command lines.
+          debug) run swift build "${swift_opts[@]}" --build-tests ;;
+          test) run swift test "${swift_opts[@]}" --skip-build --verbose ;;
+          # The gates part has no debug test build of its own: it lists the tests of the sanitizer build.
+          list) run swift_list ;;
+          # Before the sanitizer run, which rebuilds the debug build with -sanitize=thread.
+          fuzz) run swift_fuzz ;;
+          # SW-14: a race reported by the thread sanitizer fails the run (its exit code is 66).
+          tsan) run swift build "${swift_opts[@]}" --build-tests --sanitize=thread ;;
+          sanitized) run swift_sanitized ;;
+          speed) run swift_speed ;;
+          deps) run swift_deps ;;
+        esac
+      done
     fi
     ;;
   *)

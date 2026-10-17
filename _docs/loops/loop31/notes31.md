@@ -20,3 +20,23 @@ The loop 28 effect (AZ-2565): on Docker Desktop a container still sees the old e
 | test files: `ro_tree` (`publish-readonly.test.sh`), `ro_full_run_check:382`, `publish-vcpkg.test.sh:355`, `publish-go.test.sh:150` | the read-only ones bind a fresh copy made just before (`copy_tree`), that no container has seen; vcpkg and go are host tools | harmless |
 
 0 harmful sites; nothing to fix.
+
+## First CI run of batch 1 (run 39012012655, `29c0ab6`, `dev` push, 17 jobs, all green)
+
+Wall 375 s (created 07:00:25, last job done 07:06:40); baseline 418 and 382 s (median 400 s). Per job, with the group or step seconds from the new timing notices (read without a token with the check-run annotations):
+
+| Job | s | What the notice shows |
+|-----|--:|-----------------------|
+| `suites (swift, gates)` | 371 | resolve 4, thread-sanitizer build 102, list 2, sanitized run 49, `swift_speed` 178 (a full release build with tests plus the speed run), deps 0 |
+| `embedded` | 360 | one 353 s step: `run.sh` builds the arm image, runs the arm stage (about 10 s of targets on the Mac), then the ESP stage in `espressif/idf:v5.3.2` (Mac: s3 46, c3 28, ESP-IDF example 102, Arduino example 54 s, plus the Pico example) |
+| `publish-gate-rest` | 306 | static 0, crates-token 0, registry 1, vcpkg 25, go 12, **swift 215**, manifest 0, npm 9, position 1, workflow 37 |
+| `publish-gate-phases` | 278 | image pull 90, phases 182 |
+| `suites (swift, tests)` | 278 | resolve 4, strict release build 64, debug test build 63, tests 28, list 2, fuzz 69 |
+| `ring` | 271 | driver builds 101, toolchain versions 41, ring 48 |
+| `publish-gate-readonly-gate` | 242 | readonly-gate 139, pins 15, pull about 85 |
+| `publish-gate-readonly` | 181 | pull 89, gate 69, readonly 18 |
+| `suites (go)` | 158 | vet 10, test -race 45, fuzz 77 |
+| `publish-gate-readonly-full` | 130 | readonly-full 32, pull and checkout about 98 |
+| other suites | 25 to 70 | python 47, csharp 36, rust 32, cpp 31, typescript 16, java 9 |
+
+The old `readonly` group was 247 s; split in three it is 18 + 139 + 32 s. The image pull (85 to 90 s) now costs more than the group in two of the three jobs. Finding: with the suites and the gate regrouped the floor of the wall is `embedded` (317, 337 and 360 s on three runs), so the target of 360 s as the median needs the embedded job split (C4) as well; the loop 31 intake had left C4 out because embedded was not the long pole before this regrouping.

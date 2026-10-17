@@ -3,7 +3,8 @@
 # (the script under test), notice_run and notice_is. `swift` is a fake that logs its arguments, so no toolchain, network or image is used. swift fails without
 # Package.swift or swift/, runs the resolve, the strict release build, the verbose tests, the FuzzTests fuzz step (or
 # says it is skipped), the thread-sanitizer run, the release speed test and the dependency check in that order, and
-# stops at the first failing step; the wiring rows read the compose files, tool-pins.txt and test.yml.
+# stops at the first failing step; CI runs it as three parts (tests, gates, speed, S2d); the wiring rows read the
+# compose files, tool-pins.txt and test.yml.
 
 # shellcheck disable=SC2154
 swbin="$work/swiftbin"
@@ -121,23 +122,26 @@ sw_row_is "$lang" "FAIL suite failed"
 
 # S2 (AC-2). every gate in order on a clean tree with a FuzzTests suite; one PASS row
 o="--package-path $swroot --scratch-path $swscratch --force-resolved-versions"
+c_resolve="swift package $o resolve"
+c_release="swift build $o -c release -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete"
+c_debug="swift build $o --build-tests"
+c_test="swift test $o --skip-build --verbose"
+c_list="swift test list $o --skip-build"
+c_fuzz="swift test $o --skip-build --verbose --filter \\.FuzzTests/"
+c_tsan_build="swift build $o --build-tests --sanitize=thread"
+c_tsan="swift test $o --skip-build --sanitize=thread --verbose --filter \\.ConcurrencyTests/ --filter \\.SessionTests/ --filter \\.SessionHostileTests/"
+c_speed_build="swift build $o -c release --build-tests"
+c_speed_list="swift test list $o -c release --skip-build"
+c_speed="swift test $o -c release --skip-build --verbose --filter \\.SpeedTests/ --filter \\.FuzzTests/mebibyte"
+c_describe="swift package $o describe --type json"
+c_dump="swift package $o dump-package"
 out="$(run_swift swift "$swroot" SWIFT_FUZZ=1)"; code=$?
 [ "$code" -eq 0 ] || bad "swift: a clean tree failed (exit $code): $out"
 sw_row_is swift "PASS "
 case "$out" in *"run-suite: swift step took "*" s: swift_resolve"*) ;; *) bad "swift: no step timing line in the output: $out" ;; esac
-expected="swift package $o resolve
-swift build $o -c release -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete
-swift build $o --build-tests
-swift test $o --skip-build --verbose
-swift test list $o --skip-build
-swift test $o --skip-build --verbose --filter \\.FuzzTests/
-swift build $o --build-tests --sanitize=thread
-swift test $o --skip-build --sanitize=thread --verbose --filter \\.ConcurrencyTests/ --filter \\.SessionTests/ --filter \\.SessionHostileTests/
-swift build $o -c release --build-tests
-swift test $o -c release --skip-build --verbose --filter \\.SpeedTests/ --filter \\.FuzzTests/mebibyte
-swift package $o describe --type json
-swift package $o dump-package"
+expected="$(printf '%s\n' "$c_resolve" "$c_release" "$c_debug" "$c_test" "$c_list" "$c_fuzz" "$c_tsan_build" "$c_tsan" "$c_speed_build" "$c_speed" "$c_describe" "$c_dump")"
 [ "$(cat "$work/swift.log")" = "$expected" ] || bad "swift: the steps differ from the expected ones: $(diff <(printf '%s\n' "$expected") "$work/swift.log")"
+cp "$work/swift.log" "$work/swift.all.log"
 case "$out" in *"skipped"*) bad "swift: the fuzz skip line shows although FuzzTests exists: $out" ;; esac
 [ "$(cat "$work/swift.log.env" 2>&1)" = "fuzz seconds 2" ] || bad "swift: the fuzz run did not get its duration: $(cat "$work/swift.log.env" 2>&1)"
 # S2b. CI fuzzes 60 s: the default when PACKBIN_FUZZ_SECONDS is unset, and no compose file sets it
@@ -147,71 +151,89 @@ if grep -qF PACKBIN_FUZZ_SECONDS "$repo/docker-compose.test.yml" "$repo/docker-c
 run_swift swift "$swroot" PACKBIN_SWIFT_SCRATCH= >/dev/null
 if ! grep -qF -- "--scratch-path $swroot/.build --force-resolved-versions" "$work/swift.log"; then bad "swift: the default scratch path is not $swroot/.build: $(head -n 1 "$work/swift.log")"; fi
 
-# S2d (AZ-2600). CI runs the suite as two jobs (PACKBIN_SWIFT_PART tests and gates): together they run exactly the steps
-# of the single run, each part in the order of the single run, neither part runs a step of the other, and both
-# parts resolve and list the tests (the gates part lists those of its own sanitizer build)
-sort_u() { sort -u; }
+# S2d (AZ-2600, AZ-2607). CI runs the suite as three jobs (PACKBIN_SWIFT_PART tests, gates and speed): each part runs
+# exactly the commands listed here, in this order (the single run's order, except that the gates part lists the tests
+# after its sanitizer build); no command is in two parts but the resolve and the list of the debug build; the three
+# parts together run the commands of the single run plus the speed part's own list of its release build; every part
+# stops at its first failing step
+sw_part_steps() { # part command...: the part passes on a clean tree with a FuzzTests suite and runs exactly these commands
+  local part="$1" out code expected
+  shift
+  expected="$(printf '%s\n' "$@")"
+  out="$(run_swift swift "$swroot" SWIFT_FUZZ=1 PACKBIN_SWIFT_PART="$part")"; code=$?
+  [ "$code" -eq 0 ] || bad "swift: the $part part failed on a clean tree (exit $code): $out"
+  sw_row_is swift "PASS "
+  [ "$(cat "$work/swift.log")" = "$expected" ] || bad "swift: the $part part steps differ: $(diff <(printf '%s\n' "$expected") "$work/swift.log")"
+  cp "$work/swift.log" "$work/swift.$part.log"
+}
+sw_part_stops() { # part step...: with each fake step failing in turn (one per command, in order), the part fails and runs nothing after it
+  local part="$1" step n=0 code
+  shift
+  for step in "$@"; do
+    n=$((n + 1))
+    run_swift swift "$swroot" SWIFT_FUZZ=1 PACKBIN_SWIFT_PART="$part" SWIFT_FAIL="$step" >/dev/null; code=$?
+    [ "$code" -ne 0 ] || bad "swift: the $part part passed after a failing $step"
+    sw_row_is swift "FAIL $(if [ "$step" = resolve ]; then echo swift dependency resolve failed; else echo suite failed; fi)"
+    [ "$(wc -l < "$work/swift.log" | tr -d ' ')" -eq "$n" ] || bad "swift: the $part part did not stop at its command $n ($step): $(cat "$work/swift.log")"
+  done
+}
+sw_part_steps tests "$c_resolve" "$c_debug" "$c_test" "$c_list" "$c_fuzz"
+sw_part_steps gates "$c_resolve" "$c_release" "$c_tsan_build" "$c_list" "$c_tsan" "$c_describe" "$c_dump"
+sw_part_steps speed "$c_resolve" "$c_speed_build" "$c_speed_list" "$c_speed"
+sw_part_stops tests resolve tests-build test list fuzz
+sw_part_stops gates resolve release tsan-build list tsan describe dump
+sw_part_stops speed resolve speed-build list speed
+# Two parts share only the resolve and the list of the debug build; the speed part's list of its release build is its own
+shared="$(cat "$work/swift.tests.log" "$work/swift.gates.log" "$work/swift.speed.log" | sort | uniq -d)"
+[ "$shared" = "$(printf '%s\n%s\n' "$c_list" "$c_resolve" | sort)" ] || bad "swift: the parts share more than the resolve and the list: $shared"
+cat "$work/swift.tests.log" "$work/swift.gates.log" "$work/swift.speed.log" | sort -u | grep -vxF "$c_speed_list" > "$work/swift.parts.sorted"
+sort -u "$work/swift.all.log" > "$work/swift.all.sorted"
+cmp -s "$work/swift.all.sorted" "$work/swift.parts.sorted" || bad "swift: the three parts do not run the commands of the single run: $(diff "$work/swift.all.sorted" "$work/swift.parts.sorted")"
+# the single run without a part, and with an empty one, is the all run
 run_swift swift "$swroot" SWIFT_FUZZ=1 >/dev/null
-sort_u < "$work/swift.log" > "$work/swift.all.sorted"
-out="$(run_swift swift "$swroot" SWIFT_FUZZ=1 PACKBIN_SWIFT_PART=tests)"; code=$?
-[ "$code" -eq 0 ] || bad "swift: the tests part failed on a clean tree (exit $code): $out"
-sw_row_is swift "PASS "
-cp "$work/swift.log" "$work/swift.tests.log"
-expected_tests="swift package $o resolve
-swift build $o -c release -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete
-swift build $o --build-tests
-swift test $o --skip-build --verbose
-swift test list $o --skip-build
-swift test $o --skip-build --verbose --filter \\.FuzzTests/"
-[ "$(cat "$work/swift.tests.log")" = "$expected_tests" ] || bad "swift: the tests part steps differ: $(diff <(printf '%s\n' "$expected_tests") "$work/swift.tests.log")"
-out="$(run_swift swift "$swroot" SWIFT_FUZZ=1 PACKBIN_SWIFT_PART=gates)"; code=$?
-[ "$code" -eq 0 ] || bad "swift: the gates part failed on a clean tree (exit $code): $out"
-sw_row_is swift "PASS "
-cp "$work/swift.log" "$work/swift.gates.log"
-expected_gates="swift package $o resolve
-swift build $o --build-tests --sanitize=thread
-swift test list $o --skip-build
-swift test $o --skip-build --sanitize=thread --verbose --filter \\.ConcurrencyTests/ --filter \\.SessionTests/ --filter \\.SessionHostileTests/
-swift build $o -c release --build-tests
-swift test $o -c release --skip-build --verbose --filter \\.SpeedTests/ --filter \\.FuzzTests/mebibyte
-swift package $o describe --type json
-swift package $o dump-package"
-[ "$(cat "$work/swift.gates.log")" = "$expected_gates" ] || bad "swift: the gates part steps differ: $(diff <(printf '%s\n' "$expected_gates") "$work/swift.gates.log")"
-cat "$work/swift.tests.log" "$work/swift.gates.log" | sort_u > "$work/swift.parts.sorted"
-cmp -s "$work/swift.all.sorted" "$work/swift.parts.sorted" || bad "swift: the two parts do not run the steps of the single run: $(diff "$work/swift.all.sorted" "$work/swift.parts.sorted")"
-# a part the suite does not know fails by name before any step; an empty value is the single run
+cmp -s "$work/swift.all.log" "$work/swift.log" || bad "swift: a run without PACKBIN_SWIFT_PART differs from the all run: $(diff "$work/swift.all.log" "$work/swift.log")"
+run_swift swift "$swroot" SWIFT_FUZZ=1 PACKBIN_SWIFT_PART= >/dev/null
+cmp -s "$work/swift.all.log" "$work/swift.log" || bad "swift: an empty PACKBIN_SWIFT_PART differs from the all run: $(diff "$work/swift.all.log" "$work/swift.log")"
+# a part the suite does not know fails by name before any step
 out="$(run_swift swift "$swroot" PACKBIN_SWIFT_PART=all-of-it)"; code=$?
 [ "$code" -ne 0 ] || bad "swift: an unknown part passed"
-case "$out" in *"PACKBIN_SWIFT_PART is all-of-it, not all, tests or gates"*) ;; *) bad "swift: no message for an unknown part: $out" ;; esac
+case "$out" in *"PACKBIN_SWIFT_PART is all-of-it, not all, tests, gates or speed"*) ;; *) bad "swift: no message for an unknown part: $out" ;; esac
 sw_row_is swift "FAIL suite failed"
 [ ! -s "$work/swift.log" ] || bad "swift: a step ran for an unknown part: $(cat "$work/swift.log")"
-run_swift swift "$swroot" PACKBIN_SWIFT_PART= >/dev/null
-[ "$(wc -l < "$work/swift.log" | tr -d ' ')" -ge 11 ] || bad "swift: an empty PACKBIN_SWIFT_PART did not run every step"
-# the gates part keeps its guards: a missing SpeedTests or sanitizer suite fails it by name, a failed sanitizer build stops it
-out="$(run_swift swift "$swroot" PACKBIN_SWIFT_PART=gates SWIFT_NO_SPEED=1)"; code=$?
-[ "$code" -ne 0 ] || bad "swift: the gates part passed without SpeedTests"
-case "$out" in *"no SpeedTests suite"*) ;; *) bad "swift: the gates part has no message for the missing SpeedTests suite: $out" ;; esac
+# the gates part keeps its guards: a missing sanitizer suite fails it by name
 out="$(run_swift swift "$swroot" PACKBIN_SWIFT_PART=gates SWIFT_NO_SUITE=SessionTests)"; code=$?
 [ "$code" -ne 0 ] || bad "swift: the gates part passed without SessionTests"
 case "$out" in *"no SessionTests suite"*) ;; *) bad "swift: the gates part has no message for the missing SessionTests suite: $out" ;; esac
-run_swift swift "$swroot" PACKBIN_SWIFT_PART=gates SWIFT_FAIL=tsan-build >/dev/null; code=$?
-[ "$code" -ne 0 ] || bad "swift: the gates part passed after a failed sanitizer build"
-if sw_ran "--skip-build --sanitize=thread" || sw_ran "describe"; then bad "swift: the gates part ran a step after the sanitizer build failed"; fi
-run_swift swift "$swroot" PACKBIN_SWIFT_PART=tests SWIFT_FAIL=release >/dev/null; code=$?
-[ "$code" -ne 0 ] || bad "swift: the tests part passed after a failed release build"
-if sw_ran "--build-tests"; then bad "swift: the tests part built the tests after the release build failed"; fi
+# the speed part lists its own release build, so a package without SpeedTests still fails it by name (S6), and the
+# SpeedTests suite is not a gates or tests part business
+out="$(run_swift swift "$swroot" PACKBIN_SWIFT_PART=speed SWIFT_NO_SPEED=1)"; code=$?
+[ "$code" -ne 0 ] || bad "swift: the speed part passed without SpeedTests"
+case "$out" in *"swift has no SpeedTests suite; the release-build speed step has nothing to run"*) ;; *) bad "swift: the speed part has no message for the missing SpeedTests suite: $out" ;; esac
+sw_row_is swift "FAIL suite failed"
+if sw_ran "--filter \\.SpeedTests/"; then bad "swift: the speed part ran the speed tests without a SpeedTests suite: $(cat "$work/swift.log")"; fi
+for part in tests gates; do
+  run_swift swift "$swroot" PACKBIN_SWIFT_PART="$part" SWIFT_NO_SPEED=1 >/dev/null; code=$?
+  [ "$code" -eq 0 ] || bad "swift: the $part part needs a SpeedTests suite (exit $code)"
+done
+# a release list that fails is the failure of that step, not a package without SpeedTests
+out="$(run_swift swift "$swroot" PACKBIN_SWIFT_PART=speed SWIFT_FAIL=list)"; code=$?
+[ "$code" -ne 0 ] || bad "swift: the speed part passed after a failed release list"
+case "$out" in *"no SpeedTests suite"*) bad "swift: a failed release list is reported as a missing SpeedTests suite: $out" ;; esac
 
 # S2e (AZ-2607 AC-2). on GitHub Actions each part writes one notice titled with the part, over its own steps (the
-# numbers the parts are balanced from); the single run's title has no part; a failed step keeps the notice; a part
-# name is escaped as a property value (notice_run and notice_is: run-suite.test.sh)
+# numbers the parts are balanced from; the speed part's 2 steps are the resolve and the whole speed step); the single
+# run's title has no part; a failed step keeps the notice; a part name is escaped as a property value (notice_run and
+# notice_is: run-suite.test.sh)
 sw_notice() { # [VAR=value ...]
   notice_run swift "$swroot" PATH="$swbin:$PATH" SWIFT_LOG="$work/swift.log" PACKBIN_SWIFT_SCRATCH="$swscratch" GITHUB_ACTIONS=true "$@"
 }
 # Act and assert
 sw_notice PACKBIN_SWIFT_PART=tests
-notice_is "swift (tests) suite timing" swift 6
+notice_is "swift (tests) suite timing" swift 5
 sw_notice PACKBIN_SWIFT_PART=gates
 notice_is "swift (gates) suite timing" swift 6
+sw_notice PACKBIN_SWIFT_PART=speed
+notice_is "swift (speed) suite timing" swift 2
 sw_notice
 notice_is "swift suite timing" swift 10
 # the labels drop swift_opts, so the 110-character cut leaves the options that tell the four builds apart
@@ -222,7 +244,9 @@ grep -qx 'swift build --build-tests --sanitize=thread' <<< "$labels" || bad "swi
 sw_notice PACKBIN_SWIFT_PART=all
 notice_is "swift suite timing" swift 10
 sw_notice PACKBIN_SWIFT_PART=gates SWIFT_FAIL=tsan-build
-notice_is "swift (gates) suite timing" swift 2
+notice_is "swift (gates) suite timing" swift 3
+sw_notice PACKBIN_SWIFT_PART=speed SWIFT_FAIL=list
+notice_is "swift (speed) suite timing" swift 2
 sw_notice PACKBIN_SWIFT_PART=a:b,c
 notice_is "swift (a%3Ab%2Cc) suite timing" swift 0
 
@@ -258,6 +282,11 @@ out="$(run_swift swift "$swroot" SWIFT_NO_SPEED=1)"; code=$?
 [ "$code" -ne 0 ] || bad "swift: a tree without SpeedTests passed"
 case "$out" in *"no SpeedTests suite"*) ;; *) bad "swift: no message for the missing SpeedTests suite: $out" ;; esac
 if sw_ran "-c release --build-tests"; then bad "swift: the speed build ran without a SpeedTests suite"; fi
+# the speed part has no list before its build, so it builds, lists the release build and then fails by the same name
+out="$(run_swift swift "$swroot" PACKBIN_SWIFT_PART=speed SWIFT_NO_SPEED=1)"; code=$?
+[ "$code" -ne 0 ] || bad "swift: the speed part of a tree without SpeedTests passed"
+case "$out" in *"no SpeedTests suite"*) ;; *) bad "swift: no message for the missing SpeedTests suite in the speed part: $out" ;; esac
+sw_ran "-c release --skip-build" || bad "swift: the speed part did not list its release build: $(cat "$work/swift.log")"
 
 # S6b. a suite of the thread-sanitizer run is gone from the list: the step fails by name, the filter never runs
 for suite in SessionTests SessionHostileTests ConcurrencyTests; do
@@ -315,9 +344,9 @@ pin="$(bash "$here/tool-pin.sh" "$svc")" || bad "$svc: tool-pins.txt has no $svc
   || bad "$svc: the compose image is not swift:$pin: $(service_line "$repo/docker-compose.test.yml" "$svc" image)"
 [ "$(service_line "$repo/docker-compose.test.yml" "$svc" command)" = "[\"exec /src/.github/workflows/run-suite.sh $svc\"]" ] \
   || bad "$svc: the compose service does not run run-suite.sh $svc"
-# AZ-2600: the suites job is a matrix; its two swift entries run the two parts, no entry runs the whole suite
+# AZ-2600, AZ-2607: the suites job is a matrix; its three swift entries run the three parts, no entry runs the whole suite
 swift_entries="$(ruby -ryaml -e 'inc = YAML.safe_load(File.read(ARGV[0]))["jobs"]["suites"]["strategy"]["matrix"]["include"]; puts inc.select { |e| e["lang"] == "swift" }.map { |e| e["part"].to_s }.sort.join(" ")' "$here/test.yml")"
-[ "$swift_entries" = "gates tests" ] || bad "test.yml: the suites matrix does not run the swift parts tests and gates once each: '$swift_entries'"
+[ "$swift_entries" = "gates speed tests" ] || bad "test.yml: the suites matrix does not run the swift parts tests, gates and speed once each: '$swift_entries'"
 
 # S11. the build output is outside the mounted tree, and the publish file mounts the tree read-only
 svc=swift
