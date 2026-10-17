@@ -148,7 +148,9 @@ case "$1" in
       while IFS= read -r line; do
         [ -n "$line" ] || continue
         echo "$line" >&2
-        lines="${lines:+$lines%0A}$line"
+        # Escaped as a workflow-command message (% first, then CR): the line comes from a log, not from this script.
+        line="${line//"%"/%25}"
+        lines="${lines:+$lines%0A}${line//$'\r'/%0D}"
       done <<< "$(grep -E '^(ring-swift: cache |swift-ccache: )' "$dir/swift-drivers.log" || true)"
     fi
     line="ring-prepare: the wait took $waited s (limit $limit s), $(( $(date +%s) - $(cat "$dir/started") )) s since start"

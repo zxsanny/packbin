@@ -120,11 +120,12 @@ if grep -qE 'ring-swift: cache|swift-ccache: ' "$t/out"; then fail "success: cac
 # before the wait line; no other line of its log does.
 t="$tmp/cache"
 tree "$t"
-FAKE_SAY=$'ring-swift: cache hit\nswift-ccache: 372 hits, 0 misses, ready in 1 s\nCompiling x.cc' GITHUB_ACTIONS=true run_all "$t"
+FAKE_SAY=$'ring-swift: cache hit\nswift-ccache: 372 hits, 0 misses, ready in 1 s\nswift-ccache: unavailable: no /tmp/a%41\nCompiling x.cc' GITHUB_ACTIONS=true run_all "$t"
 [ "$start_rc$build_rc$wait_rc" = 000 ] || fail "cache lines: exit statuses $start_rc $build_rc $wait_rc ($(cat "$t/out"))"
-grep -q '^::notice .*%0Aring-swift: cache hit%0Aswift-ccache: 372 hits, 0 misses, ready in 1 s%0Aring-prepare: the wait took' "$t/out" \
+grep -q '^::notice .*%0Aring-swift: cache hit%0Aswift-ccache: 372 hits, 0 misses, ready in 1 s%0A.*%0Aring-prepare: the wait took' "$t/out" \
   || fail "cache lines: the notice does not carry the Swift build's cache line and ccache summary: $(grep '::notice' "$t/out")"
 if grep -q '^::notice .*Compiling' "$t/out"; then fail "cache lines: a compile line went into the notice"; fi
+grep -q '^::notice .*%0Aswift-ccache: unavailable: no /tmp/a%2541%0A' "$t/out" || fail "cache lines: a % of a log line is not escaped in the notice"
 
 # 2. No notice outside GitHub Actions.
 t="$tmp/local"

@@ -53,14 +53,21 @@ swift_ccache_install() {
     return 1
   fi
   # ccache is installed: a failed copy only costs the next run the apt-get.
-  if ! { mkdir -p "$debs" && cp "$archives"/*.deb "$debs"/; }; then
+  if ! cp "$archives"/*.deb "$debs"/; then
     echo "swift-ccache: the ccache packages were not kept in $debs; the next run uses apt-get" >&2
   fi
+  rm -rf "$archives"
 }
 
 swift_ccache_start() {
   local dir="$1" started
   started=$(date +%s)
+  # The build's user makes the kept directories before the install runs as root: under a directory root made, the
+  # caller could not write its cache.
+  if ! swift_ccache_as mkdir -p "$dir/cache" "$dir/debs"; then
+    swift_ccache_note="unavailable: cannot create $dir/cache and $dir/debs"
+    return 0
+  fi
   if ! command -v "$swift_ccache_bin" > /dev/null && ! swift_ccache_install "$dir/debs"; then return 0; fi
   if [ ! -x "$swift_ccache_cc" ]; then
     swift_ccache_note="unavailable: no $swift_ccache_cc"
@@ -68,7 +75,7 @@ swift_ccache_start() {
   fi
   export CCACHE_DIR="$dir/cache"
   # A restored cache keeps the counts of the run that saved it.
-  if ! swift_ccache_as mkdir -p "$CCACHE_DIR" || ! swift_ccache_as "$swift_ccache_bin" --zero-stats > /dev/null; then
+  if ! swift_ccache_as "$swift_ccache_bin" --zero-stats > /dev/null; then
     swift_ccache_note="unavailable: ccache --zero-stats failed in $CCACHE_DIR"
     return 0
   fi
@@ -77,7 +84,9 @@ swift_ccache_start() {
   swift_ccache_note="ready in $(( $(date +%s) - started )) s"
 }
 
-# One line: the hits and misses since swift_ccache_start (ccache's machine-readable statistics), or why it was off.
+# One line: the hits, misses and uncacheable compiles since swift_ccache_start (ccache's machine-readable statistics;
+# links are left out), or why it was off. A compile ccache cannot cache is neither a hit nor a miss: without its count a
+# run whose C compiles bypass the cache would read as all hits.
 swift_ccache_summary() {
   local stats
   if [ -z "$swift_ccache_on" ]; then
@@ -89,9 +98,19 @@ swift_ccache_summary() {
     return 0
   fi
   awk -F '\t' -v note="$swift_ccache_note" '
+    BEGIN {
+      n = split("autoconf_test bad_compiler_arguments bad_input_file bad_output_file called_for_preprocessing " \
+        "compile_failed compiler_check_failed compiler_produced_empty_output compiler_produced_no_output " \
+        "compiler_produced_stdout could_not_find_compiler could_not_use_modules could_not_use_precompiled_header " \
+        "disabled error_hashing_extra_file internal_error modified_input_file multiple_source_files no_input_file " \
+        "output_to_stdout preprocessor_error recache unsupported_code_directive unsupported_compiler_option " \
+        "unsupported_environment_variable unsupported_source_language", keys, " ")
+      for (i = 1; i <= n; i++) uncacheable[keys[i]] = 1
+    }
     $1 == "direct_cache_hit" || $1 == "preprocessed_cache_hit" { hits += $2 }
     $1 == "cache_miss" { misses += $2 }
-    END { printf "%d hits, %d misses, %s\n", hits, misses, note }' <<< "$stats"
+    $1 in uncacheable { other += $2 }
+    END { printf "%d hits, %d misses, %d uncacheable, %s\n", hits, misses, other, note }' <<< "$stats"
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then

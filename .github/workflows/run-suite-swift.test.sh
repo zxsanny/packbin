@@ -381,7 +381,7 @@ cat > "$work/ccache-standin" <<'CCACHE'
 echo "ccache $* dir=${CCACHE_DIR:-}" >> "$CC_LOG"
 case "$1" in
   --zero-stats) exit 0 ;;
-  --print-stats) printf 'cache_miss\t%s\ndirect_cache_hit\t%s\npreprocessed_cache_hit\t2\nlocal_storage_hit\t99\n' "${CC_MISSES:-0}" "${CC_HITS:-370}" ;;
+  --print-stats) printf 'cache_miss\t%s\ndirect_cache_hit\t%s\npreprocessed_cache_hit\t2\nlocal_storage_hit\t99\nunsupported_compiler_option\t3\ncalled_for_link\t7\n' "${CC_MISSES:-0}" "${CC_HITS:-370}" ;;
 esac
 CCACHE
 cat > "$ccbin/apt-get" <<'APT'
@@ -426,12 +426,12 @@ fi
 [ -f "$ccdir/debs/ccache_4.9.1_amd64.deb" ] || bad "swift cache miss: the ccache package was not kept in $ccdir/debs"
 grep -qx "ccache --zero-stats dir=$ccdir/cache" "$cclog" || bad "swift cache miss: the statistics were not zeroed in $ccdir/cache: $(cat "$cclog")"
 grep -qx "cc tests-build $work/fake-ccache-clang" "$work/swift.log.cc" || bad "swift cache miss: the build did not compile through ccache: $(cat "$work/swift.log.cc")"
-cc_line_is "miss; ccache 372 hits, 0 misses, ready in "
+cc_line_is "miss; ccache 372 hits, 0 misses, 3 uncacheable, ready in "
 # S12c. a hit with the kept package: dpkg, no apt-get; the misses counted
 cc_run PACKBIN_SWIFT_CACHE=hit CC_HITS=10 CC_MISSES=5
 grep -q "^dpkg -i $ccdir/debs/ccache_4.9.1_amd64.deb" "$cclog" || bad "swift cache hit: the kept package was not installed with dpkg: $(cat "$cclog")"
 if grep -q '^apt-get' "$cclog"; then bad "swift cache hit: apt-get ran although the package was kept: $(cat "$cclog")"; fi
-cc_line_is "hit; ccache 12 hits, 5 misses, ready in "
+cc_line_is "hit; ccache 12 hits, 5 misses, 3 uncacheable, ready in "
 # S12d. the kept package does not install: apt-get instead, and the log says so
 cc_run PACKBIN_SWIFT_CACHE=hit DPKG_FAIL=1
 grep -q '^apt-get install ' "$cclog" || bad "swift cache: a failed dpkg did not fall back to apt-get: $(cat "$cclog")"
@@ -452,13 +452,19 @@ cc_run PACKBIN_SWIFT_CACHE=hit SWIFT_FAIL=tests-build; code=$?
 cc_line_is "hit; ccache 372 hits"
 # S12g. `run` (the ring's container): set up as root, the command as <uid>:<gid> through setpriv, the summary on
 # stderr, the command's exit status; a bad call is a usage error
-: > "$cclog"; rm -f "$ccbin/ccache"
+: > "$cclog"; rm -f "$ccbin/ccache"; rm -rf "$ccdir"
 out="$(env PATH="$ccbin:$PATH" CC_LOG="$cclog" CC_STANDIN="$work/ccache-standin" CC_BIN="$ccbin/ccache" \
   PACKBIN_SWIFT_CCACHE_BIN="$ccbin/ccache" PACKBIN_SWIFT_CCACHE_CC="$work/fake-ccache-clang" \
   bash "$repo/.github/workflows/swift-ccache.sh" run "$ccdir" 1001 1002 sh -c 'echo "built CC=$CC"; exit 3' 2>&1 < /dev/null)"; code=$?
 [ "$code" -eq 3 ] || bad "swift-ccache.sh run: exit $code, not the command's 3: $out"
 grep -qx "built CC=$work/fake-ccache-clang" <<< "$out" || bad "swift-ccache.sh run: the command did not get CC: $out"
 grep -q '^setpriv --reuid=1001 --regid=1002 --clear-groups -- sh -c ' "$cclog" || bad "swift-ccache.sh run: the command did not run as 1001:1002: $(cat "$cclog")"
-grep -q '^swift-ccache: 372 hits, 0 misses, ready in [0-9]* s$' <<< "$out" || bad "swift-ccache.sh run: no summary line: $out"
+grep -q '^swift-ccache: 372 hits, 0 misses, 3 uncacheable, ready in [0-9]* s$' <<< "$out" || bad "swift-ccache.sh run: no summary line: $out"
+# The caller makes the kept directories before the install runs as root (a root-made directory is not the caller's).
+made="$(grep -n "^setpriv --reuid=1001 --regid=1002 --clear-groups -- mkdir -p $ccdir/cache $ccdir/debs$" "$cclog" | cut -d: -f1)"
+first_apt="$(grep -n '^apt-get ' "$cclog" | head -n 1 | cut -d: -f1)"
+if [ -z "$made" ] || [ -z "$first_apt" ] || [ "$made" -gt "$first_apt" ]; then
+  bad "swift-ccache.sh run: the caller did not make $ccdir/cache and $ccdir/debs before the install: $(cat "$cclog")"
+fi
 bash "$repo/.github/workflows/swift-ccache.sh" run "$ccdir" < /dev/null > /dev/null 2>&1; code=$?
 [ "$code" -eq 2 ] || bad "swift-ccache.sh run without a command: exit $code, not 2"
