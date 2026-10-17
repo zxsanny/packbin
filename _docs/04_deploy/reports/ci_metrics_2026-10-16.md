@@ -206,6 +206,9 @@ Read as in section 7 (jobs API, annotations and the caches API, no token; the un
 | 39043302176 | `bb21e07` | batch 2 (ccache removed), stale `v1` entries (run B) | 226 s | `suites (swift, tests)` 223, `publish-gate-readonly` 211, `ring` 201 |
 | 39044320959 | `779ace6` | batch 3 (keys `v2`), every cache missed (priming 2) | 228 s | `suites (swift, speed)` 225, `suites (swift, tests)` 216, `ring` 209 |
 | 39044659167 | `7cb51ca` | final code, every cache hit (run D) | **217 s** | `publish-gate-readonly` 214, `embedded-esp-core` 200, `publish-gate-readonly-gate-good` 188 |
+| 39045847480 | `6bbb3b7` | the close push, same code (run E) | **210 s** | `publish-gate-readonly` 207, `publish-gate-rest` 188, `publish-gate-readonly-gate-bad` 183 |
+
+AC-1: the median of runs D and E is 213.5 s, at most 225 s: met.
 
 | Swift build (s) | Loop 33 (3 runs) | Priming (miss) | Run A (hit) | Run B (stale hit) | Run D (hit, final) |
 |-----------------|-----------------:|---------------:|------------:|------------------:|-------------------:|

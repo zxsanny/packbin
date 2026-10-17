@@ -46,3 +46,7 @@ Wall 228 s on the miss path (every Swift build from nothing): `suites (swift, sp
 ## Measured run D (run 39044659167, `7cb51ca`, the final code, 20 jobs, all green)
 
 Wall **217 s** (AC-1 target at most 225 s), every job started within 1 s, all four caches hit, nothing saved. Swift builds: `tests` debug 19 s, `gates` sanitizer 27 s, `speed` 101 s, ring `swift-drivers` 26 s (AC-4 met). Longest jobs: `publish-gate-readonly` 214, `embedded-esp-core` 200, `publish-gate-readonly-gate-good` 188 s. Smoke 10/10 (`smoke34.md`).
+
+## Measured run E (run 39045847480, `6bbb3b7`, the close push, docs only, 20 jobs, all green)
+
+Wall **210 s**, latest start +1 s. **AC-1: the median of the two runs of the final code is 213.5 s (217 and 210 s), at most 225 s: met by 11.5 s** (loop 33: 238 s). Longest: `publish-gate-readonly` 207, `publish-gate-rest` 188, `publish-gate-readonly-gate-bad` 183 s; the Swift jobs `tests` 178, `ring` 140, `speed` 136, `gates` 116 s.

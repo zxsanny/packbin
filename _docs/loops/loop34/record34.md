@@ -5,7 +5,7 @@ branch: dev
 plan_artifact: _docs/loops/loop34/plan34.md
 tasks_shipped: [AZ-2627]
 leftovers:
-  - AC-1: run D (39044659167, `7cb51ca`) 217 s; the close push is the second measured run of the final code (median in `notes34.md` after it)
+  - AC-1 met: runs 39044659167 (`7cb51ca`) 217 s and 39045847480 (`6bbb3b7`, the close push) 210 s, 20 of 20 jobs green each: median 213.5 s against 225 s (loop 33: 238 s)
   - AC-2 met on all five runs: 20 jobs, latest start +1 s (loop 33: three jobs 26 to 88 s late per run)
   - AC-4 met on run D: `tests` debug build 19 s, `gates` sanitizer build 27 s, `speed` 101 s, ring drivers 26 s (loop 33 best 48, 85, 131, 84)
   - AC-6 and AC-3's ccache clause withdrawn by the owner (2026-10-17): ccache removed in batch 2 because `actions/cache` keeps nanosecond file times and CI recompiled no C file (run A: ccache asked 0 times); the intake spike's plain-tar round trip had suggested otherwise
