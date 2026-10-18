@@ -1,8 +1,11 @@
+import { TextCache } from "./text.ts"
+
 // The bytes one pack call writes, type byte included, and the most it may write (`maxBytes`). The
 // buffer grows by doubling but never past `maxBytes`, so an append that fits costs one comparison and
 // memory follows the budget, not the rounds a row asks for.
 export class PackOut {
   readonly maxBytes: number
+  readonly text = new TextCache()
   #buf: Uint8Array
   #length = 1
 

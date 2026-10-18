@@ -42,14 +42,14 @@ _builtin_list = list
 _builtin_dict = dict
 
 
-def _text_field(label: str, value: Any) -> bytes:
+def _text_field(label: str, value: Any, budget: _PackBudget) -> bytes:
     """The wire bytes of a string (count and payload, compact text format)."""
     if not isinstance(value, str):
         raise TypeError(f"{label}: expected str")
     raw = value.encode("utf-8")
     if len(raw) > 65535:
         raise ValueError(f"{label}: utf-8 length {len(raw)}")
-    return encode_text(value, raw)
+    return encode_text(value, raw, budget.text)
 
 
 def _present_value(value: Any) -> bool:
@@ -320,7 +320,7 @@ def _pack_dict_items(buf: bytearray, owner: _Node, element: _Node, mapping: Any,
     buf.append(len(pairs) & 0xFF)
     buf.append((len(pairs) >> 8) & 0xFF)
     for key, value in pairs:
-        field = _text_field("dict", key)
+        field = _text_field("dict", key, budget)
         budget.room(buf, len(field), member)
         buf.extend(field)
         _pack_element(buf, element, value, budget)
@@ -473,7 +473,7 @@ def pack_nodes(
         elif isinstance(node, _Utf8):
             value = take(node)
             seen[node.field_id] = value
-            field = _text_field(str(node.field_id), value)
+            field = _text_field(str(node.field_id), value, budget)
             budget.room(buf, len(field), _name(node))
             buf.extend(field)
         elif isinstance(node, _List):

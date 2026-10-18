@@ -187,23 +187,30 @@ def _varint(n: int) -> bytes:
     return bytes((n & 0x7F | 0x80, (n >> 7) & 0x7F | 0x80, n >> 14))
 
 
-# The last string encoded and its field: a `times` or `repeat` round, a list or a dictionary often writes one
-# value again and again, and the parse costs a few microseconds per character.
-_last: tuple[str, bytes] = ("", b"\0")
+class TextCache:
+    """The last string one pack call encoded and its field: a `times` or `repeat` round, a list or a dictionary often
+    writes one value again and again, and the parse costs a few microseconds per character. One cache belongs to one
+    pack call (`_PackBudget.text`), so no text outlives the call or crosses to another."""
+
+    __slots__ = ("text", "field")
+
+    def __init__(self) -> None:
+        self.text = ""
+        self.field = b"\0"
 
 
-def encode_text(text: str, raw: bytes) -> bytes:
+def encode_text(text: str, raw: bytes, cache: TextCache | None = None) -> bytes:
     """The field of a string: count then payload. `raw` is its UTF-8 bytes, at most 65,535 of them."""
-    global _last
     if not raw:
         return b"\0"
     if len(raw) > MAX_TEXT_BYTES:
         raise ValueError(f"text longer than {MAX_TEXT_BYTES} UTF-8 bytes")
-    last = _last
-    if last[0] == text:
-        return last[1]
+    if cache is not None and cache.text == text:
+        return cache.field
     field = _field(text, raw)
-    _last = (text, field)
+    if cache is not None:
+        cache.text = text
+        cache.field = field
     return field
 
 

@@ -427,3 +427,49 @@ def test_ac8_100000_round_trips_of_a_20_character_ukrainian_string_take_at_most_
 
     # Assert
     assert elapsed <= 40.0, f"{elapsed:.1f} s"
+
+
+# AZ-2664 (HD-1, HD-2): the encode state belongs to the pack call.
+
+def test_hd1_interleaved_pack_calls_share_no_text_state():
+    # Arrange: two lone strings repeated under times, packed one after the other and again in the other order.
+    times_scheme = Scheme(1, dict, u8(0, lambda row: row["n"]), times(1, 0, utf8(1, lambda row: row["s"])))
+    first = _pack(times_scheme, {"n": 3, "s": "привіт, світе"})
+    second = _pack(times_scheme, {"n": 3, "s": "hello, world"})
+
+    # Act
+    again_second = _pack(times_scheme, {"n": 3, "s": "hello, world"})
+    again_first = _pack(times_scheme, {"n": 3, "s": "привіт, світе"})
+
+    # Assert: each call gives its own bytes, whatever the call before it packed.
+    assert again_first == first
+    assert again_second == second
+    assert first != second
+
+
+def test_hd1_no_module_keeps_a_text_or_a_field():
+    # Arrange
+    from packbin import _text_encode
+
+    _pack(ONE, {"s": "привіт"})
+
+    # Act
+    held = [name for name, value in vars(_text_encode).items() if isinstance(value, _text_encode.TextCache)]
+    last = hasattr(_text_encode, "_last")
+
+    # Assert
+    assert held == []
+    assert not last
+
+
+def test_hd2_a_lone_65535_character_string_under_256_rounds_packs_within_a_second():
+    # Arrange
+    scheme = Scheme(1, dict, u8(0, lambda row: row["n"]), times(1, 0, utf8(1, lambda row: row["s"])))
+    start = time.perf_counter()
+
+    # Act
+    packet = _pack(scheme, {"n": 200, "s": "q" * 65535})
+
+    # Assert
+    assert len(packet) > 200 * 65535
+    assert time.perf_counter() - start < 1.0

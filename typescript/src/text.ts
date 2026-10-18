@@ -231,18 +231,23 @@ function codePoints(text: string, points: Int32Array): number {
   return n
 }
 
-// The last text and its field: a lone string under a times or repeat is written once a round, so the
-// same text comes again and again. The array is never written after it is returned.
-let lastText = ""
-let lastField: Uint8Array = Uint8Array.of(0)
+// The last text one pack call encoded and its field: a lone string under a times or repeat is written
+// once a round, so the same text comes again and again. The cache belongs to one pack call (`PackOut`),
+// so no text outlives the call or crosses to another. The array is never written after it is returned.
+export class TextCache {
+  text = ""
+  field: Uint8Array = Uint8Array.of(0)
+}
 
 // The field bytes of one string: the count, then the payload. A text over 65,535 UTF-8 bytes is
 // refused naming `name`.
-export function encodeText(text: string, name: string): Uint8Array {
-  if (text === lastText) return lastField
+export function encodeText(text: string, name: string, cache?: TextCache): Uint8Array {
+  if (cache !== undefined && text === cache.text) return cache.field
   const field = encodeFresh(text, name)
-  lastText = text
-  lastField = field
+  if (cache !== undefined) {
+    cache.text = text
+    cache.field = field
+  }
   return field
 }
 

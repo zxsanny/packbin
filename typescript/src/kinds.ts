@@ -315,7 +315,7 @@ export function readInt(
 export function writeUtf8(out: PackOut, name: string, value: unknown): void {
   if (typeof value !== "string") throw new RangeError(`${name}: expected string`)
   // The count and the payload are one append, so a refusal reports the whole member.
-  out.append(name, encodeText(value, name))
+  out.append(name, encodeText(value, name, out.text))
 }
 
 export function readUtf8(

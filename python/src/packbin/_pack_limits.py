@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from packbin._nodes import _FlagBit, _Flags, _Group, _Node, _Repeat, _Times, _U2, _When
+from packbin._text_encode import TextCache
 from packbin._unpack import DEFAULT_MAX_ROUNDS, DEFAULT_MAX_SLOTS
 
 DEFAULT_MAX_BYTES = 16_777_216
@@ -52,7 +53,7 @@ class _PackBudget:
     started so far has charged (the width unpack charges, shared by every round at any depth), and `max_bytes`
     on the packet, type byte included. A check refuses before the round or the append it guards."""
 
-    __slots__ = ("max_rounds", "max_slots", "max_bytes", "slots")
+    __slots__ = ("max_rounds", "max_slots", "max_bytes", "slots", "text")
 
     def __init__(
         self,
@@ -64,6 +65,7 @@ class _PackBudget:
         self.max_slots = max_slots
         self.max_bytes = max_bytes
         self.slots = 0
+        self.text = TextCache()
 
     def room(self, buf: bytearray, size: int, member: str) -> None:
         """Called before `size` bytes are appended to `buf`."""

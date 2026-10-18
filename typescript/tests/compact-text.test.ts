@@ -17,7 +17,7 @@ import {
   utf8,
   type DispatchResult,
 } from "../src/index.ts"
-import { decodeText, encodeText } from "../src/text.ts"
+import { TextCache, decodeText, encodeText } from "../src/text.ts"
 import * as tables from "../src/text-tables.ts"
 import { random } from "./support/random.ts"
 import { fieldOf, hexOf, refPacketHex, rowOf, vectorRows } from "./support/text-vectors.ts"
@@ -411,5 +411,39 @@ describe("compact text in every string position", () => {
     // Assert
     assert.equal(wrong, 0)
     assert.ok(seconds <= 4, `${seconds} s`)
+  })
+})
+
+
+// AZ-2664 (HD-1, HD-2): the encode state belongs to the pack call.
+describe("AZ-2664: the text cache belongs to the pack call", () => {
+  const repeated = scheme<{ n: number; s: string }>(1, u8(0, (r) => r.n), times(1, 0, utf8(1, (r) => r.s)))
+
+  it("interleaved pack calls with different texts give each its own bytes", () => {
+    const first = hexOf(BinaryPacker.pack(repeated, { n: 3, s: "привіт, світе" }))
+    const second = hexOf(BinaryPacker.pack(repeated, { n: 3, s: "hello, world" }))
+
+    const againSecond = hexOf(BinaryPacker.pack(repeated, { n: 3, s: "hello, world" }))
+    const againFirst = hexOf(BinaryPacker.pack(repeated, { n: 3, s: "привіт, світе" }))
+
+    assert.equal(againFirst, first)
+    assert.equal(againSecond, second)
+    assert.notEqual(first, second)
+  })
+
+  it("a cache is only the one a caller hands in: a call without one leaves it untouched", () => {
+    const cache = new TextCache()
+    encodeText("привіт", "s")
+    assert.equal(cache.text, "")
+    encodeText("привіт", "s", cache)
+    assert.equal(cache.text, "привіт")
+    assert.equal(hexOf(cache.field), hexOf(encodeText("привіт", "s")))
+  })
+
+  it("a lone 65,535-character string under 200 rounds packs within a second", () => {
+    const start = Date.now()
+    const packet = BinaryPacker.pack(repeated, { n: 200, s: "q".repeat(65535) })
+    assert.ok(packet.length > 200 * 65535)
+    assert.ok(Date.now() - start < 1000)
   })
 })
