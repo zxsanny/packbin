@@ -8,9 +8,9 @@ import Testing
     static let short: [(String, @Sendable () throws -> Scheme, String, String, Int, Int)] = [
         ("a list count of 65535 over 3 bytes", { try Scheme(1, .list("l", .u8(0, "e"))) }, "01ffff010203", "e", 1, 0),
         ("a list of 65535 nested rows over no byte", { try Scheme(1, .list("l", .group("g", .u8(0, "a")))) }, "01ffff", "a", 1, 0),
-        ("a dict count of 65535 over 1 byte", { try Scheme(1, .dict("d", .u8(0, "e"))) }, "01ffff01", "d", 2, 1),
-        ("a utf8 length of 65535 over 1 byte", { try Scheme(1, .utf8(0, "s")) }, "01ffff61", "s", 65535, 1),
-        ("a utf8 length cut short", { try Scheme(1, .utf8(0, "s")) }, "0105", "s", 2, 1),
+        ("a dict count of 65535 over 1 byte", { try Scheme(1, .dict("d", .u8(0, "e"))) }, "01ffff01", "d", 1, 0),
+        ("a utf8 length of 65535 over 1 byte", { try Scheme(1, .utf8(0, "s")) }, "01ffff0361", "s", 65535, 1),
+        ("a utf8 length cut short", { try Scheme(1, .utf8(0, "s")) }, "0180", "s", 2, 1),
         ("a list count cut short", { try Scheme(1, .list("l", .u8(0, "e"))) }, "01ff", "l", 2, 1),
         ("65535 zero-width items stop at the first", { try Scheme(1, .list("l", .bytes(0, "e", size: 0))) }, "01ffff", "l", 0, 0),
     ]
@@ -38,7 +38,8 @@ import Testing
         // Arrange
         let (name, raw) = Self.invalid[i]
         let count = raw.count / 2
-        let length = hex([UInt8(count), 0])
+        // The only way to hold invalid UTF-8 without an escape sequence is the raw payload: 0x10, then the bytes.
+        let length = hex([UInt8(count + 1)]) + "10"
         let text = try Scheme(1, .utf8(0, "s"))
         let keyed = try Scheme(1, .dict("d", .u8(0, "e")))
 
@@ -56,8 +57,8 @@ import Testing
         let text = try Scheme(1, .utf8(0, "s"))
 
         // Act
-        let emoji = try unpackMap(bytes("010400f09f9880"), text)["s"] as? String
-        let nul = try unpackMap(bytes("01010000"), text)["s"] as? String
+        let emoji = try unpackMap(bytes("010510f09f9880"), text)["s"] as? String
+        let nul = try unpackMap(bytes("01021000"), text)["s"] as? String
 
         // Assert
         #expect(emoji == "\u{1F600}" && nul == "\u{0}")
@@ -79,7 +80,9 @@ import Testing
 
         // Assert
         #expect(longText?.field == 0 && longText?.reason == "s: utf-8 length 65536")
-        #expect(fullText.count == 1 + 2 + 65_535 && fullText[1] == 0xff && fullText[2] == 0xff)
+        // 65 535 letters 'a' pack to a payload of 32 769 bytes (a 3-byte count), the reference's bytes.
+        #expect(fullText.count == 1 + 3 + 32_769 && Array(fullText.prefix(8)) == [1, 0x81, 0x80, 0x02, 0xc9, 0x11, 0x11, 0x11])
+        #expect(utf8Of(try unpackMap(fullText, text)["s"]) == [UInt8](repeating: 0x61, count: 65_535))
         #expect(longList?.name == "l" && longList?.reason == "l: length 65536")
         #expect(longDict?.name == "d" && longDict?.reason == "d: length 65536")
     }

@@ -8,10 +8,20 @@ private func markKey(_ marks: Int) -> String {
     "a" + String(String.UnicodeScalarView((0..<marks).map { Unicode.Scalar($0 % 2 == 0 ? 0x301 : 0x316)! }))
 }
 
-/// A `dict("d", u8)` packet whose keys are `keys`, each with the value 1.
+/// A `dict("d", u8)` packet whose keys are `keys`, each with the value 1. A key is written as the raw payload
+/// of the compact text format (the byte 0x10, then its UTF-8 bytes), which is what the encoder writes for a
+/// run of combining marks and what the decoder reads for any text.
 private func dictPacket(_ keys: [[UInt8]]) -> [UInt8] {
     var packet: [UInt8] = [1, UInt8(keys.count & 0xff), UInt8(keys.count >> 8)]
-    for key in keys { packet += [UInt8(key.count & 0xff), UInt8(key.count >> 8)] + key + [1] }
+    for key in keys {
+        var count = key.count + 1
+        while count >= 0x80 {
+            packet.append(UInt8(count & 0x7f) | 0x80)
+            count >>= 7
+        }
+        packet.append(UInt8(count))
+        packet += [0x10] + key + [1]
+    }
     return packet
 }
 
@@ -76,7 +86,7 @@ private struct Marked: PackbinRow {
 
     @Test(.enabled(if: !threadSanitized, "one thread, no shared state: the thread sanitizer adds nothing and runs it about ten times slower"))
     func unpack_mebibyteOfSixteenKeysOfCombiningMarks_isRefusedWithinASecond() throws {
-        // Arrange: the audit's packet, 16 keys of 4 digits and 32 498 marks (65 000 bytes), 1 040 051 bytes;
+        // Arrange: the audit's packet, 16 keys of 4 digits and 32 498 marks (65 000 bytes), 1 040 083 bytes;
         // unrefused it took 25 s.
         let keys = (0..<16).map { k in Array(String(format: "%04d", k).utf8) + Array(markKey(32_498).utf8.dropFirst()) }
         let packet = dictPacket(keys)
@@ -86,7 +96,7 @@ private struct Marked: PackbinRow {
         let (error, seconds) = timed { unpackError(packet, scheme) }
 
         // Assert
-        #expect(keys[0].count == 65_000 && packet.count == 1_040_051)
+        #expect(keys[0].count == 65_000 && packet.count == 1_040_083)
         #expect(error?.kind == .short && error?.name == "d" && error?.needed == 0 && error?.left == packet.count - 3)
         #expect(withinOneSecond(seconds), "took \(seconds) s")
     }

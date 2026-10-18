@@ -70,9 +70,13 @@ and C# give a nested row its own scope, as Swift does.
 
 ### Strings, lists and dicts
 
-`.utf8(id, name)` is a `String`: a u16 byte count (at most 65 535), then the UTF-8 bytes. Unpack refuses
-bytes that are not valid UTF-8 (a short packet with `needed` 0 and the bytes left where the string
-starts), never repairs them, and keeps a byte order mark.
+`.utf8(id, name)` is a `String` of at most 65 535 UTF-8 bytes, written in the compact text format
+(`_docs/02_document/contracts/library/compact-text.md`): a LEB128 byte count of 1 to 3 bytes (0 is the
+empty string, 1 byte), then a payload of Ukrainian, Russian, English and number codes, or the raw UTF-8
+bytes after the byte `0x10` when that is not larger. Unpack refuses a payload that breaks a rule of the
+format, or holds bytes that are not valid UTF-8, with a short packet of `needed` 0 and the bytes left
+where the string starts; it never repairs them and keeps a byte order mark. A buffer that ends inside
+the count or the payload is a short packet naming the bytes it needed.
 
 `.list(name, element)` is a u16 count (at most 65 535), then the items; `.dict(name, element)` a u16
 pair count, then each key (as `utf8`) and its item. A list or dict has no id; its element is one field,

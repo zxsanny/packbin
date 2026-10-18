@@ -63,7 +63,7 @@ private func eightU8() -> [Field] { (0..<8).map { .u8($0, "f\($0)") } }
                   want: ["xs": [UInt8(1)] as [Any], "y": UInt8(2)], row: { ["xs": [1], "y": 2] }),
         UnpackRow("empty utf8, list and dict", {
             try Scheme(1, .utf8(0, "name"), .list("xs", .utf8(0, "x")), .dict("d", .utf8(0, "v")))
-        }, "01000000000000", want: ["name": "", "xs": [Any](), "d": [String: Any]()],
+        }, "010000000000", want: ["name": "", "xs": [Any](), "d": [String: Any]()],
                   row: { ["name": "", "xs": [String](), "d": [String: Any]()] }),
         UnpackRow("an empty sized payload", { try Scheme(1, .u16(0, "n"), .sized(1, "payload", count: 0)) }, "010000",
                   want: ["n": UInt16(0), "payload": [UInt8]()], row: { ["n": 0, "payload": [UInt8]()] }),
@@ -89,7 +89,7 @@ private func eightU8() -> [Field] { (0..<8).map { .u8($0, "f\($0)") } }
     static let shorts: [(String, @Sendable () throws -> Scheme, String, Int, String, Int, Int)] = [
         ("sized payload cut short", { try Scheme(1, .u16(0, "n"), .sized(1, "payload", count: 0)) }, "01030075", 1, "payload", 3, 1),
         ("bits cut short", { try Scheme(1, .u8(0, "n"), .bits(1, "segs", count: 0)) }, "010901", 1, "segs", 2, 1),
-        ("utf8 cut short", { try Scheme(1, .utf8(0, "name")) }, "0107007a78", 0, "name", 7, 2),
+        ("utf8 cut short", { try Scheme(1, .utf8(0, "name")) }, "0107107a", 0, "name", 7, 2),
         ("AC-5 a flags member cut short", wideFlags, "012034", 5, "extra", 2, 1),
         ("flag session group short read", sessionScheme, "010107", 0, "login", 2, 1),
         ("IT-07 a byte after the last whole round", {

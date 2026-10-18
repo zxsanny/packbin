@@ -98,7 +98,7 @@ let hostilePacks: [String: HostilePack] = [
         { ["mode": 0, "speed": 7, "heading": 90] }),
     "pack_lone_utf8_under_times_over_budget": HostilePack(
         { try Scheme(1, .u32(0, "n"), .times(1, count: 0, .utf8(1, "s"))) },
-        { ["n": 65_535, "s": String(repeating: "a", count: 65_535)] }),
+        { ["n": 65_535, "s": String(repeating: "q", count: 65_535)] }),
     "pack_element_times_over_budget": HostilePack(
         { try Scheme(1, .list("items", .group("item", .u32(0, "n"), .times(1, count: 0, .u64(1, "k"))))) },
         { items(40, ["n": 65_535, "k": 5]) }),
@@ -146,5 +146,5 @@ let hostilePacks: [String: HostilePack] = [
         { try Scheme(1, .u8(0, "c"), .times(1, count: 0, .flags(1, .u8(1, "v")))) }, { ["c": 2, "v": [5]] }),
     "pack_element_times_over_bytes_budget": HostilePack(
         { try Scheme(1, .list("items", .group("item", .u32(0, "n"), .times(1, count: 0, .utf8(1, "s"))))) },
-        { items(16, ["n": 65_535, "s": String(repeating: "a", count: 16)]) }),
+        { items(16, ["n": 65_535, "s": String(repeating: "q", count: 16)]) }),
 ]

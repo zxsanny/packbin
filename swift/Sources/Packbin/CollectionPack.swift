@@ -18,14 +18,21 @@ extension Packer {
         try self.fields(fields, root: FlagRoot(fields: fields, values: sub), sub, &wrote)
     }
 
-    /// A u16 byte count and the UTF-8 bytes of `text`.
+    /// The compact text field of `text` (``TextCodec``): a LEB128 byte count and the payload.
     mutating func writeString(_ id: Int?, _ name: String, _ text: String) throws {
         let count = text.utf8.count
         guard count <= maxCollection else { throw PackbinError.pack(id, name, "\(name): utf-8 length \(count)") }
+        // A text packed again under a repeat or times is not parsed again.
+        let field: [UInt8]
+        if let memo = textMemo, sameUTF8(memo.text, text, count) {
+            field = memo.field
+        } else {
+            field = textCodec.encode(text)
+            textMemo = (text, field)
+        }
         // The length and the text are one write, so a refusal names the whole member.
-        try room(2 + count, id, name)
-        appendCount(count)
-        out.append(contentsOf: text.utf8)
+        try room(field.count, id, name)
+        out.append(contentsOf: field)
     }
 
     /// A list or dict `n` from its value: a u16 count, then the items (a dict's in unsigned UTF-8 byte
@@ -104,6 +111,17 @@ private func dictEntries(_ n: Node, _ v: Any) throws -> [String: Any]? {
             + "though their UTF-8 bytes differ")
     }
     return entries
+}
+
+/// Whether `a` and `b`, which both hold `count` UTF-8 bytes, hold the same bytes (not Swift's canonical
+/// equivalence, which equates different bytes). One long string packed again is the same storage.
+private func sameUTF8(_ a: String, _ b: String, _ count: Int) -> Bool {
+    guard a.utf8.count == count else { return false }
+    if count > 15, let x = a.utf8.withContiguousStorageIfAvailable({ $0.baseAddress }),
+       let y = b.utf8.withContiguousStorageIfAvailable({ $0.baseAddress }), x != nil, x == y {
+        return true
+    }
+    return a.utf8.elementsEqual(b.utf8)
 }
 
 /// A utf8 value: a `String` (a Foundation string too).

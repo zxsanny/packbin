@@ -58,7 +58,7 @@ private let u11Three = "v: the count c is 3 in the row, but no field wrote it (t
         ("a list of two empty bytes", { try Scheme(1, .list("l", .bytes(0, "e", size: 0))) },
          { ["l": [[UInt8](), [UInt8]()]] }, "010200"),
         ("a dict of one empty bytes", { try Scheme(1, .dict("d", .bytes(0, "e", size: 0))) }, { ["d": ["a": [UInt8]()]] },
-         "010100010061"),
+         "010100021061"),
         ("a list of nested rows of empty bytes", { try Scheme(1, .list("l", .group("g", .bytes(0, "b", size: 0)))) },
          { ["l": [["b": [UInt8]()]]] }, "010100"),
     ]

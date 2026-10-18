@@ -1,10 +1,10 @@
 import Packbin
 import Testing
 
-let userHex = "0107007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e6e656c0100040072656164"
-    + "03006d6170040004007265616407006770735f6669780300736574040065646974050073746f7265020004007265616405007772697465"
-let nestedRingHex = "01020003006d61700100010002006f7007006770735f666978050073746f72650200010002006f7004007265"
-    + "6164010002006f7005007772697465"
+/// The `ref.user` and `ref.nested` packets of fixtures/text/vectors.txt.
+let userHex = "01062bfcfee119b20200030ba818078a8b1ca4ed51800300056b6aa330b00100032b0128036ae9c80400032b0128"
+    + "08106770735f66697803ea04800348516404ca25f0000200032b0128048bbc2c80"
+let nestedRingHex = "010200036ae9c8010001000209f908106770735f66697804ca25f000020001000209f9032b012801000209f9048bbc2c80"
 
 @Sendable func userScheme() throws -> Scheme {
     try Scheme(1, .utf8(0, "username"), .list("roles", .utf8(0, "role")),
@@ -24,20 +24,20 @@ let nestedRingHex = "01020003006d61700100010002006f7007006770735f666978050073746
 /// payloads of the collection kinds and their three `-short` packets.
 @Suite struct CollectionReadmeTests {
     static let readme: [UnpackRow] = [
-        UnpackRow("utf8 zxsanny", { try Scheme(1, .utf8(0, "name")) }, "0107007a7873616e6e79", want: ["name": "zxsanny"],
+        UnpackRow("utf8 zxsanny", { try Scheme(1, .utf8(0, "name")) }, "01062bfcfee119b2", want: ["name": "zxsanny"],
                   row: { ["name": "zxsanny"] }),
-        UnpackRow("utf8 empty", { try Scheme(1, .utf8(0, "name")) }, "010000", want: ["name": ""], row: { ["name": ""] }),
+        UnpackRow("utf8 empty", { try Scheme(1, .utf8(0, "name")) }, "0100", want: ["name": ""], row: { ["name": ""] }),
         UnpackRow("list of u16", { try Scheme(1, .list("xs", .u16(0, "x"))) }, "01020001000200",
                   want: ["xs": [UInt16(1), UInt16(2)] as [Any]], row: { ["xs": [1, 2]] }),
         UnpackRow("list empty", { try Scheme(1, .list("xs", .u16(0, "x"))) }, "010000", want: ["xs": [Any]()],
                   row: { ["xs": [Int]()] }),
         UnpackRow("empty list leaves the next field readable", { try Scheme(1, .list("xs", .u16(0, "x")), .u8(0, "t")) },
                   "01000007", want: ["xs": [Any](), "t": UInt8(7)], row: { ["xs": [Int](), "t": 7] }),
-        UnpackRow("dict of u8, keys in byte order", { try Scheme(1, .dict("m", .u8(0, "v"))) }, "0102000100610201006201",
+        UnpackRow("dict of u8, keys in byte order", { try Scheme(1, .dict("m", .u8(0, "v"))) }, "0102000210610202106201",
                   want: ["m": ["a": UInt8(2), "b": UInt8(1)]], row: { ["m": ["b": 1, "a": 2]] }),
         UnpackRow("the package docs example", {
             try Scheme(1, .utf8(0, "name"), .list("xs", .u16(0, "x")), .dict("m", .u8(0, "v")))
-        }, "010300756176" + "020001000200" + "02000100610201006201",
+        }, "01032ba4f8" + "020001000200" + "02000210610202106201",
                   want: ["name": "uav", "xs": [UInt16(1), UInt16(2)] as [Any], "m": ["a": UInt8(2), "b": UInt8(1)]],
                   row: { ["name": "uav", "xs": [1, 2], "m": ["b": 1, "a": 2]] }),
     ]
@@ -67,8 +67,8 @@ let nestedRingHex = "01020003006d61700100010002006f7007006770735f666978050073746
         let angstrom = try packHex(scheme, ["d": ["\u{212B}": 1, "\u{C6}": 2]])
 
         // Assert: Swift's String order puts U+212B (canonically U+00C5) before U+00C6; byte order does not.
-        #expect(wire == "01040001007a020200c3a9010300efbd9e040400f09f988003")
-        #expect(angstrom == "0102000200c386020300e284ab01")
+        #expect(wire == "01040002107a020310c3a9010410efbd9e040510f09f988003")
+        #expect(angstrom == "0102000310c386020410e284ab01")
     }
 
     static let ring: [(String, @Sendable () throws -> Scheme, @Sendable () -> [String: Any], String)] = [
@@ -77,7 +77,7 @@ let nestedRingHex = "01020003006d61700100010002006f7007006770735f666978050073746
             ["access": ["map": [["op": "gps_fix"]], "store": [["op": "read"], ["op": "write"]]]]
         }, nestedRingHex),
         ("listgroup", pairList, { ["pts": [["a": 1, "b": 2], ["a": 3, "b": 4]]] }, "01020001020304"),
-        ("dictgroup", pairDict, { ["m": ["y": ["a": 3, "b": 4], "x": ["a": 1, "b": 2]]] }, "01020001007801020100790304"),
+        ("dictgroup", pairDict, { ["m": ["y": ["a": 3, "b": 4], "x": ["a": 1, "b": 2]]] }, "01020002107801020210790304"),
         ("listflags", flagsList, { ["pts": [["a": 1], [String: Any](), ["b": 2]]] }, "010300010100020200"),
     ]
 
@@ -98,7 +98,7 @@ let nestedRingHex = "01020003006d61700100010002006f7007006770735f666978050073746
 
     static let short: [(String, @Sendable () throws -> Scheme, String, Int, String, Int, Int)] = [
         ("listgroup", pairList, "010200010203", 1, "b", 1, 0),
-        ("dictgroup", pairDict, "010200010078010201007903", 1, "b", 1, 0),
+        ("dictgroup", pairDict, "010200021078010202107903", 1, "b", 1, 0),
         ("listflags", flagsList, "0103000101000202", 1, "b", 2, 1),
     ]
 

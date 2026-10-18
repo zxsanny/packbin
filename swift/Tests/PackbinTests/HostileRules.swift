@@ -44,7 +44,7 @@ let hostilePackRules: [String: String] = [
     "pack_split_times_count_skipped": "packbin: pack refused at field 2 (pt): pt: \(late)",
     "pack_lone_bytes_in_round": "packbin: pack refused at field 1 (d): d: a byte buffer in a repeat or times round needs a "
         + "list with one buffer per round",
-    "pack_lone_utf8_under_times_over_budget": "packbin: pack refused at field 1 (s): s: the packet would be 16777477 bytes, "
+    "pack_lone_utf8_under_times_over_budget": "packbin: pack refused at field 1 (s): s: the packet would be 16777989 bytes, "
         + "above the limit of 16777216 bytes",
     "pack_element_times_over_budget": "packbin: pack refused at field 1 (k): k: the rounds would hold 1048577 slots, above "
         + "the limit of 1048576 slots",

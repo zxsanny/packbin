@@ -58,6 +58,8 @@ struct Packer {
     let maxSlots: Int
     let maxBytes: Int
     var slots = 0
+    /// The last long text written and its field, for the same text packed again in the next round.
+    var textMemo: (text: String, field: [UInt8])?
 
     init(scope: [String: Any], limits: Scheme) {
         self.scope = scope

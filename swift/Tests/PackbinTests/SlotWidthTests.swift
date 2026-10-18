@@ -62,8 +62,8 @@ private let widthShapes: [WidthShape] = [
                row: { n in
                    ["n": perRound(n) { 1 + $0 }, "l": perRound(n) { [$0, $0 + 1] }, "d": perRound(n) { ["k": $0] }]
                },
-               first: "n", atLimit: "010102000001010001006b000202000102010001006b01",
-               oneMore: "010102000001010001006b000202000102010001006b010302000203010001006b02", unpackLeft: 11),
+               first: "n", atLimit: "010102000001010002106b000202000102010002106b01",
+               oneMore: "010102000001010002106b000202000102010002106b010302000203010002106b02", unpackLeft: 11),
     WidthShape(name: "bytes and sized names: n, b, s", width: 3,
                body: { [.u8(0, "n"), .bytes(1, "b", size: 2), .sized(2, "s", count: 0)] },
                row: { n in

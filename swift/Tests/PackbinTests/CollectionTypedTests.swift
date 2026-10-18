@@ -80,7 +80,7 @@ private func optionalPairsTyped() throws -> Scheme {
         // Arrange
         let scheme = try pairsTyped()
         let row = PairRows(pts: [Pair(a: 1, b: 2), Pair(a: 3, b: 4)], m: ["y": Pair(a: 3, b: 4), "x": Pair(a: 1, b: 2)])
-        let wire = "0102000102030402000100780102010079" + "0304"
+        let wire = "0102000102030402000210780102021079" + "0304"
 
         // Act
         let packed = try packHex(scheme, row)

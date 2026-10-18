@@ -12,19 +12,19 @@ import Testing
     }
 
     private func sixteenItems() -> [String: Any] {
-        ["items": [Any](repeating: ["n": 65_535, "s": String(repeating: "a", count: 16)] as [String: Any], count: 16)]
+        ["items": [Any](repeating: ["n": 65_535, "s": String(repeating: "q", count: 16)] as [String: Any], count: 16)]
     }
 
     @Test func pack_loneStringUnderACappedTimes_isRefusedNamingItWithinASecond() throws {
         // Arrange
         let layout = try Scheme(1, .u32(0, "n"), .times(1, count: 0, .utf8(1, "s")))
-        let row: [String: Any] = ["n": 65_535, "s": String(repeating: "a", count: 65_535)]
+        let row: [String: Any] = ["n": 65_535, "s": String(repeating: "q", count: 65_535)]
 
         // Act
         let (error, seconds) = timed { packError(layout, row) }
 
         // Assert
-        #expect(isPackRefusal(error, "s", bytesText("s", 16_777_477, 16_777_216)))
+        #expect(isPackRefusal(error, "s", bytesText("s", 16_777_989, 16_777_216)))
         #expect(error?.field == 1 && withinOneSecond(seconds), "took \(seconds) s")
     }
 
@@ -46,15 +46,15 @@ import Testing
 
         // Assert
         #expect(wire.count == 18_874_147)
-        #expect(hex(Array(wire.prefix(16))) == "011000ffff0000100061616161616161")
-        #expect(hex(Array(wire.suffix(16))) == String(repeating: "61", count: 16))
+        #expect(hex(Array(wire.prefix(16))) == "011000ffff0000111071717171717171")
+        #expect(hex(Array(wire.suffix(16))) == String(repeating: "71", count: 16))
         let items = back["items"] as? [Any] ?? []
         #expect(items.count == 16)
         #expect(items.allSatisfy { item in
             let row = item as? [String: Any]
             let strings = row?["s"] as? [Any?] ?? []
             return row?["n"] as? UInt32 == 65_535 && strings.count == 65_535
-                && strings.allSatisfy { $0 as? String == String(repeating: "a", count: 16) }
+                && strings.allSatisfy { $0 as? String == String(repeating: "q", count: 16) }
         })
     }
 
@@ -63,11 +63,11 @@ import Testing
         let layout = try Scheme(1, .utf8(0, "s")).withLimits(maxBytes: 64)
 
         // Act
-        let exact = try packHex(layout, ["s": String(repeating: "a", count: 61)])
-        let error = packError(layout, ["s": String(repeating: "a", count: 62)])
+        let exact = try packHex(layout, ["s": String(repeating: "q", count: 61)])
+        let error = packError(layout, ["s": String(repeating: "q", count: 62)])
 
         // Assert
-        #expect(exact == "013d00" + String(repeating: "61", count: 61))
+        #expect(exact == "013e10" + String(repeating: "71", count: 61))
         #expect(isPackRefusal(error, "s", bytesText("s", 65, 64)))
     }
 

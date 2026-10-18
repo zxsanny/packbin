@@ -21,32 +21,32 @@ private struct Rowish {
 /// are refused.
 @Suite struct DictKeyTests {
     static let packs: [PackRow] = [
-        PackRow("AC-1 one key order", dictOfNumbers, "0101010001006109") { ["a": 1, "m": ["a": 9]] },
-        PackRow("AC-1 the other key order", dictOfNumbers, "0101010001006109") { ["m": ["a": 9], "a": 1] },
-        PackRow("AC-2 a key named like the dictionary", dictOfNumbers, "0101010001006d09") { ["a": 1, "m": ["m": 9]] },
-        PackRow("AC-2 a key named like the element", dictOfNumbers, "0101010001007609") { ["a": 1, "m": ["v": 9]] },
-        PackRow("AC-4 nested dictionaries keep to themselves", dictOfDicts, "01010100010078010001006109") {
+        PackRow("AC-1 one key order", dictOfNumbers, "0101010002106109") { ["a": 1, "m": ["a": 9]] },
+        PackRow("AC-1 the other key order", dictOfNumbers, "0101010002106109") { ["m": ["a": 9], "a": 1] },
+        PackRow("AC-2 a key named like the dictionary", dictOfNumbers, "0101010002106d09") { ["a": 1, "m": ["m": 9]] },
+        PackRow("AC-2 a key named like the element", dictOfNumbers, "0101010002107609") { ["a": 1, "m": ["v": 9]] },
+        PackRow("AC-4 nested dictionaries keep to themselves", dictOfDicts, "01010100021078010002106109") {
             ["a": 1, "m": ["x": ["a": 9]]]
         },
-        PackRow("AC-5 a __proto__ key is an ordinary key", dictOfDicts, "0101010009005f5f70726f746f5f5f010001006109") {
+        PackRow("AC-5 a __proto__ key is an ordinary key", dictOfDicts, "010101000a105f5f70726f746f5f5f010002106109") {
             ["m": ["__proto__": ["a": 9]], "a": 1]
         },
-        PackRow("TS-F1 a dict group member named like a row member", dictOfGroups, "010901000100780102") {
+        PackRow("TS-F1 a dict group member named like a row member", dictOfGroups, "010901000210780102") {
             ["a": 9, "m": ["x": ["a": 1, "b": 2]]]
         },
         PackRow("TS-F1 inside a group element", {
             try Scheme(1, .list("xs", .group("g", .u8(0, "a"), .dict("m", .group("p", .u8(0, "a"), .u8(1, "b"))))))
-        }, "0101000901000100780102") { ["xs": [["m": ["x": ["a": 1, "b": 2]], "a": 9]]] },
+        }, "0101000901000210780102") { ["xs": [["m": ["x": ["a": 1, "b": 2]], "a": 9]]] },
         PackRow("TS-F1 a dict of group inside a dict group element", {
             try Scheme(1, .dict("outer", .group("g", .u8(0, "a"), .dict("m", .group("p", .u8(0, "a"))))))
-        }, "01010001006b07010001007801") { ["outer": ["k": ["m": ["x": ["a": 1]], "a": 7]]] },
-        PackRow("an empty key sorts first", { try Scheme(1, .dict("d", .u8(0, "e"))) }, "0103000000030100610201006201") {
+        }, "01010002106b07010002107801") { ["outer": ["k": ["m": ["x": ["a": 1]], "a": 7]]] },
+        PackRow("an empty key sorts first", { try Scheme(1, .dict("d", .u8(0, "e"))) }, "01030000030210610202106201") {
             ["d": ["b": 1, "a": 2, "": 3]]
         },
-        PackRow("a plain dictionary packs", dictOfUtf8, "010100010061010078") { ["d": ["a": "x"]] },
-        PackRow("a [String: String] packs", dictOfUtf8, "010100010061010078") { ["d": ["a": "x"] as [String: String]] },
-        PackRow("a Foundation dictionary packs", dictOfUtf8, "010100010061010078") { ["d": NSDictionary(dictionary: ["a": "x"])] },
-        PackRow("a list of dictionaries in a round", dictInTimes, "01010100010061010078") { ["n": 1, "d": [["a": "x"]]] },
+        PackRow("a plain dictionary packs", dictOfUtf8, "010100021061021078") { ["d": ["a": "x"]] },
+        PackRow("a [String: String] packs", dictOfUtf8, "010100021061021078") { ["d": ["a": "x"] as [String: String]] },
+        PackRow("a Foundation dictionary packs", dictOfUtf8, "010100021061021078") { ["d": NSDictionary(dictionary: ["a": "x"])] },
+        PackRow("a list of dictionaries in a round", dictInTimes, "01010100021061021078") { ["n": 1, "d": [["a": "x"]]] },
         PackRow("a times with count 0 in flags and no dictionary", dictInFlagsTimes, "0100020500") { ["n": 0, "h": 5] },
         PackRow("declared group map: a key it does not declare stays out", {
             try Scheme(1, .u8(0, "a"), .group("g", .u8(0, "b")))
@@ -98,15 +98,15 @@ private struct Rowish {
     }
 
     static let unpacks: [UnpackRow] = [
-        UnpackRow("TS-F1 the unpacked row repacks", dictOfGroups, "010901000100780102",
+        UnpackRow("TS-F1 the unpacked row repacks", dictOfGroups, "010901000210780102",
                   want: ["a": UInt8(9), "m": ["x": ["a": UInt8(1), "b": UInt8(2)]]]),
-        UnpackRow("AC-5 a decoded __proto__ entry", dictOfDicts, "0101010009005f5f70726f746f5f5f010001006109",
+        UnpackRow("AC-5 a decoded __proto__ entry", dictOfDicts, "010101000a105f5f70726f746f5f5f010002106109",
                   want: ["a": UInt8(1), "m": ["__proto__": ["a": UInt8(9)]]]),
         UnpackRow("a __proto__ key with a dict value", { try Scheme(1, .dict("acl", .dict("inner", .u8(0, "v")))) },
-                  "010100" + "0900" + proto + "0100" + "0500" + "61646d696e01", want: ["acl": ["__proto__": ["admin": UInt8(1)]]]),
+                  "010100" + "0a10" + proto + "0100" + "0489297560" + "01", want: ["acl": ["__proto__": ["admin": UInt8(1)]]]),
         UnpackRow("a __proto__ key with a scalar value", { try Scheme(1, .dict("m", .u8(0, "v"))) },
-                  "010100" + "0900" + proto + "07", want: ["m": ["__proto__": UInt8(7)]]),
-        UnpackRow("a byte order mark is kept", { try Scheme(1, .utf8(0, "s")) }, "010600efbbbf616263", want: ["s": "\u{FEFF}abc"],
+                  "010100" + "0a10" + proto + "07", want: ["m": ["__proto__": UInt8(7)]]),
+        UnpackRow("a byte order mark is kept", { try Scheme(1, .utf8(0, "s")) }, "010710efbbbf616263", want: ["s": "\u{FEFF}abc"],
                   row: { ["s": "\u{FEFF}abc"] }),
     ]
 
@@ -118,9 +118,9 @@ private struct Rowish {
     }
 
     static let twice: [(String, String)] = [
-        ("a key given twice", "0102000900\(proto)00000900\(proto)0000"),
-        ("NFC and NFD forms of one key (AC-3b)", "0102000200c3a90000030065cc810000"),
-        ("NFD then NFC", "010200030065cc8100000200c3a90000"),
+        ("a key given twice", "010200" + "0a10\(proto)0000" + "0a10\(proto)0000"),
+        ("NFC and NFD forms of one key (AC-3b)", "010200" + "0310c3a9" + "0000" + "041065cc81" + "0000"),
+        ("NFD then NFC", "010200" + "041065cc81" + "0000" + "0310c3a9" + "0000"),
     ]
 
     @Test(arguments: twice)

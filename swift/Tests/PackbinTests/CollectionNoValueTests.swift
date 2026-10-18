@@ -33,8 +33,8 @@ private func requiredScheme() throws -> Scheme {
         ("nested boxed nil", { ["l": Optional<Any>.some([Int]?.none as Any) as Any] }, "0100"),
         ("an empty list", { ["l": [Int]()] }, "01010000"),
         ("an empty dictionary", { ["d": [String: Int]()] }, "01020000"),
-        ("an empty string", { ["s": ""] }, "01040000"),
-        ("all three empty", { ["l": [Int](), "d": [String: Int](), "s": ""] }, "0107000000000000"),
+        ("an empty string", { ["s": ""] }, "010400"),
+        ("all three empty", { ["l": [Int](), "d": [String: Int](), "s": ""] }, "01070000000000"),
     ]
 
     @Test(arguments: 0..<mapRows.count)
@@ -59,7 +59,7 @@ private func requiredScheme() throws -> Scheme {
         let wires = try rows.map { try packHex(scheme, $0) }
 
         // Assert
-        #expect(wires == ["0100", "01010000", "01020000", "01040000", "0107000000000000"])
+        #expect(wires == ["0100", "01010000", "01020000", "010400", "01070000000000"])
     }
 
     @Test func unpack_clearBitVersusCount0_givesNilVersusEmpty() throws {
@@ -68,7 +68,7 @@ private func requiredScheme() throws -> Scheme {
 
         // Act
         let clear = try unpack(bytes("0100"), scheme) as? OptionalCollections
-        let empty = try unpack(bytes("0107000000000000"), scheme) as? OptionalCollections
+        let empty = try unpack(bytes("01070000000000"), scheme) as? OptionalCollections
         let clearMap = try unpackMap(bytes("0100"), scheme)
         let emptyMap = try unpackMap(bytes("01010000"), scheme)
 

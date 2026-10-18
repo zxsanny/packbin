@@ -73,10 +73,10 @@ private let loneDict = "a dictionary in a repeat or times round needs a list wit
                   row: { ["n": 2, "c": [1, 1], "s": [[UInt8(9)], [UInt8(8)]]] }),
         UnpackRow("AC-2 one buffer for one round, in a list", timesBytes, "01010102",
                   want: ["n": UInt8(1), "b": [[UInt8(1), 2]] as [Any?]], row: { ["n": 1, "b": [[UInt8(1), 2]]] }),
-        UnpackRow("AC-3 a dictionary per round in a times", dictInTimes, "010201000100610100780100010062010079",
+        UnpackRow("AC-3 a dictionary per round in a times", dictInTimes, "0102" + "0100021061021078" + "0100021062021079",
                   want: ["n": UInt8(2), "d": [["a": "x"], ["b": "y"]] as [Any?]], row: { ["n": 2, "d": [["a": "x"], ["b": "y"]]] }),
         UnpackRow("AC-3 a dictionary per round in a repeat", { try Scheme(1, .repeat(0, .dict("d", .utf8(0, "e")))) },
-                  "0101000100610100780100010062010079", want: ["d": [["a": "x"], ["b": "y"]] as [Any?]],
+                  "01" + "0100021061021078" + "0100021062021079", want: ["d": [["a": "x"], ["b": "y"]] as [Any?]],
                   row: { ["d": [["a": "x"], ["b": "y"]]] }),
         UnpackRow("a list per round", listInRepeat, "010102000708020000",
                   want: ["k": [UInt8(1), UInt8(2)] as [Any?], "tags": [[UInt8(7), UInt8(8)] as [Any], [Any]()] as [Any?]],
@@ -96,7 +96,7 @@ private let loneDict = "a dictionary in a repeat or times round needs a list wit
                   row: { ["k": [1, 2], "rows": [[["c": 2, "v": [5, 6]]], [Any]()]] }),
         UnpackRow("a string under a when of a round", {
             try Scheme(1, .repeat(0, .u8(0, "k"), .when(1, .eq(0, 1), .utf8(1, "s"))))
-        }, "010101006100", want: ["k": [UInt8(1), UInt8(0)] as [Any?], "s": ["a", nil] as [Any?]],
+        }, "010102106100", want: ["k": [UInt8(1), UInt8(0)] as [Any?], "s": ["a", nil] as [Any?]],
                   row: { ["k": [1, 0], "s": ["a", nil] as [String?]] }),
     ]
 
@@ -116,8 +116,8 @@ private let loneDict = "a dictionary in a repeat or times round needs a list wit
         let one = try packHex(scheme, ["n": 2, "s": "a"])
 
         // Assert
-        #expect(two == "01020200616202006162")
-        #expect(one == "0102010061010061")
+        #expect(two == "01020310616203106162")
+        #expect(one == "0102021061021061")
     }
 
     @Test func pack_repeatInAListItemInARound_buildsAndPacksAsTypeScript() throws {

@@ -15,16 +15,33 @@ extension Reader {
         return Int(buf[start]) | Int(buf[start + 1]) << 8
     }
 
-    /// A u16 byte count and that many bytes of valid UTF-8. A string that is not valid is refused with
-    /// the shape of an unreadable count (as TypeScript's fatal decoder): the field, nothing more needed,
-    /// the bytes left where the string starts. Valid bytes are kept as they are, a byte order mark too.
+    /// A string field of the compact text format: a LEB128 byte count (1 to 3 bytes) and that many payload
+    /// bytes (``TextCodec``). A buffer that ends inside the count or the payload is short, with the field
+    /// and the bytes it needed. A payload that breaks a rule of the format (a bad count, start mode, pad,
+    /// code, capital, escape, UTF-8 or length) is refused with the shape of an unreadable count (as
+    /// TypeScript's fatal decoder): the field, nothing more needed, the bytes left where the string starts.
     mutating func readString(_ id: Int?, _ name: String) throws -> String {
         let leftAtStart = left
-        let count = try readLength(id, name)
+        var count = 0
+        var k = 0
+        while true {
+            guard k < 3 else { throw PackbinError.shortPacket(id, name, needed: 0, left: leftAtStart) }
+            guard k < leftAtStart else { throw PackbinError.shortPacket(id, name, needed: k + 1, left: leftAtStart) }
+            let b = Int(buf[off + k])
+            count |= (b & 0x7F) << (7 * k)
+            k += 1
+            if b & 0x80 == 0 {
+                guard k == 1 || b != 0 else { throw PackbinError.shortPacket(id, name, needed: 0, left: leftAtStart) }
+                break
+            }
+        }
+        off += k
+        if count == 0 { return "" }
         let start = try take(id, name, count)
-        let raw = buf[start..<(start + count)]
-        guard isValidUTF8(raw) else { throw PackbinError.shortPacket(id, name, needed: 0, left: leftAtStart) }
-        return String(decoding: raw, as: UTF8.self)
+        guard let text = buf.withUnsafeBufferPointer({ textCodec.decode($0, start, count) }) else {
+            throw PackbinError.shortPacket(id, name, needed: 0, left: leftAtStart)
+        }
+        return text
     }
 
     /// A dict key: a string as `readString` reads it, refused with the same shape when it is not in
@@ -113,18 +130,4 @@ func isStreamSafe(_ scalars: some Sequence<Unicode.Scalar>) -> Bool {
         if run > maxNonStarters { return false }
     }
     return true
-}
-
-/// Whether `raw` is well-formed UTF-8: no stray or missing continuation byte, no overlong form, no
-/// surrogate and nothing above U+10FFFF.
-private func isValidUTF8(_ raw: ArraySlice<UInt8>) -> Bool {
-    var it = raw.makeIterator()
-    var decoder = UTF8()
-    while true {
-        switch decoder.decode(&it) {
-        case .scalarValue: continue
-        case .emptyInput: return true
-        case .error: return false
-        }
-    }
 }
