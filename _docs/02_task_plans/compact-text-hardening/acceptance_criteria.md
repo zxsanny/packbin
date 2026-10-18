@@ -1,0 +1,7 @@
+# Compact text hardening — acceptance criteria
+
+- **HD-1.** After a Python or TypeScript pack call returns, the package keeps 0 references to the strings of that call: no module-level variable holds a text or a field (a test builds two schemes, packs different texts alternately and in two interleaved calls, and checks each result against the reference bytes; a source check finds no module-level mutable text cache).
+- **HD-2.** A lone 65,535-character string under `times` with 256 rounds still packs in at most 1 s in Python and TypeScript (the existing budget cases keep passing).
+- **HD-3.** CI runs the string speed test of Rust in the release configuration and asserts 1 s for 100,000 round trips of a 20-character Ukrainian string (the debug `cargo test` keeps its own bound); a deliberately slowed encoder makes that step fail (mutant in `run-suite.test.sh`).
+- **HD-4.** CI runs `TextSpeedTests` of Swift in the existing release speed step and asserts 1 s; the step fails when the suite is missing from the test list, and a mutant of the filter is caught by `run-suite-swift.test.sh`.
+- **HD-5.** The security audit report covers all eight decoders for: reads past the payload, allocation or time sized by untrusted numbers, UTF-8 validation of the escape and raw paths, the 65,535-byte text limit, expansion (at most 6N + 8), and the C++ `Packed` pass-through; every High or Critical finding is fixed in the loop or the loop does not close.
