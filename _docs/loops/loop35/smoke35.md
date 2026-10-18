@@ -5,18 +5,24 @@ Branch: dev
 
 ## Checks
 
-- [ ] 1. No application source is dirty at the close
-- [ ] 2. Step 11 stages at HEAD (`scripts/loop-tests.sh`): none failed
-- [ ] 3. The compact text vectors file is re-derived by the reference and every mutant is refused
-- [ ] 4. All eight packages hold exactly the emitted tables file
-- [ ] 5. `tables.json` is reproduced byte for byte from the recorded corpus
-- [ ] 6. Every size bound of the held-out report holds; CS-13 holds on every vector
-- [ ] 7. The position record is still the 13-byte golden packet
-- [ ] 8. No tag contains the loop and `origin/main` does not hold HEAD
+- [x] 1. No application source is dirty at the close
+- [x] 2. Step 11 stages at HEAD (`scripts/loop-tests.sh`): none failed
+- [x] 3. The compact text vectors file is re-derived by the reference and every mutant is refused
+- [x] 4. All eight packages hold exactly the emitted tables file
+- [x] 5. `tables.json` is reproduced byte for byte from the recorded corpus
+- [x] 6. Every size bound of the held-out report holds; CS-13 holds on every vector
+- [x] 7. The position record is still the 13-byte golden packet
+- [x] 8. No tag contains the loop and `origin/main` does not hold HEAD
 
 ## Result
 
-(filled by the run)
+Agent run 2026-10-18 at `1af9cf0` (owner rule 2026-10-12 in `deployment_procedures.md`): **8/8 steps passed**. Smoke: PASS. Step 2 ran the scaffold stage (261 s) and printed 12 stages as skipped because nothing they cover changed since the commits where they passed (`a9cabf1` for C#, the ring and the language suites at the second step 11 run, `f553ef9` for the ARM stage and the publish gate). Earlier: step 11 at `f553ef9` passed 11 of 13 stages (TypeScript only on its serial retry); C# and the ring failed on test data and the missed `dictgroup` ring bytes, fixed in `a9cabf1`; the second run passed 9 stages with the scaffold stage only on its serial retry (a load-sensitive build-timing check in `ring-prepare.test.sh`).
+
+## For the operator
+
+- `main` was not pushed and no tag exists: you asked for the `dev` push only, so the `loop_end_merge: main` step of `ci_cd_pipeline.md` was not executed (same as loops 33 and 34).
+- Skipped by your decision for this loop: `/feature-assess`, the security audit and the retrospective (carried to loop 36 in `handoff36.md`).
+- The CI run on `dev` is the proof of the timing bounds; its result is in `record35.md`.
 
 ## Script (run with the corpus directory: `bash smoke35.sh <dir>`)
 
