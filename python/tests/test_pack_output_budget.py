@@ -74,8 +74,8 @@ def test_ac1_row1_a_lone_utf8_under_a_capped_times_is_refused_naming_the_member(
     # Act
     message = _refusal(_lone_utf8(), row)
 
-    # Assert: 5 + 255 * 65 537 written, the next append is 65 537
-    assert message == "s: the packet would be 16777477 bytes, above the limit of 16777216 bytes"
+    # Assert: the field of 65 535 a is 32 772 bytes (compact text); 5 + 511 * 32 772 written, the next append passes
+    assert message == "s: the packet would be 16779269 bytes, above the limit of 16777216 bytes"
 
 
 def test_ac1_row1_pack_takes_under_a_second_and_under_256_mb():
@@ -149,7 +149,7 @@ def _item_with_lone_utf8_times() -> Scheme:
 
 def test_ac2_row3_an_element_row_under_the_slots_is_refused_by_the_bytes_budget():
     # Arrange: 16 items of 65 535 rounds, 1 048 560 slots (under the limit), 18 bytes a round
-    row = {"items": [{"n": 65535, "s": "a" * 16}] * 16}
+    row = {"items": [{"n": 65535, "s": "q" * 16}] * 16}
 
     # Act
     message = _refusal(_item_with_lone_utf8_times(), row)
@@ -161,7 +161,7 @@ def test_ac2_row3_an_element_row_under_the_slots_is_refused_by_the_bytes_budget(
 def test_ac2_row3_a_raised_bytes_budget_packs_the_element_row_that_the_slots_allow():
     # Arrange
     scheme = _item_with_lone_utf8_times().with_limits(max_bytes=33_554_432)
-    row = {"items": [{"n": 65535, "s": "a" * 16}] * 16}
+    row = {"items": [{"n": 65535, "s": "q" * 16}] * 16}
 
     # Act
     packed = BinaryPacker.pack(scheme, row)
@@ -178,10 +178,10 @@ def test_ac3_row4_a_packet_of_exactly_max_bytes_packs():
     scheme = Scheme(1, dict, _utf8(0, "s")).with_limits(max_bytes=64)
 
     # Act
-    packed = _pack(scheme, {"s": "a" * 61})
+    packed = _pack(scheme, {"s": "q" * 61})
 
     # Assert
-    assert packed == "013d00" + "61" * 61
+    assert packed == "013e10" + "71" * 61
 
 
 def test_ac3_row5_one_byte_more_is_refused_naming_the_member():
@@ -189,7 +189,7 @@ def test_ac3_row5_one_byte_more_is_refused_naming_the_member():
     scheme = Scheme(1, dict, _utf8(0, "s")).with_limits(max_bytes=64)
 
     # Act
-    message = _refusal(scheme, {"s": "a" * 62})
+    message = _refusal(scheme, {"s": "q" * 62})
 
     # Assert
     assert message == "s: the packet would be 65 bytes, above the limit of 64 bytes"

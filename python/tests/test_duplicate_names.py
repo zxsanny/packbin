@@ -189,7 +189,7 @@ def test_ac7_an_element_may_reuse_the_names_of_the_row_around_it_in_a_dict():
 
     packet = _pack(scheme, row)
 
-    assert (packet, _row(scheme, packet)) == ("0107010001006b01", row)
+    assert (packet, _row(scheme, packet)) == ("0107010002106b01", row)
 
 
 def test_ac7_a_name_twice_inside_a_list_element_is_refused():

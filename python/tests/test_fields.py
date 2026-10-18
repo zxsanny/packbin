@@ -27,6 +27,8 @@ from packbin import (
     when,
 )
 
+import text_vectors
+
 def test_bad_anchor_raises_and_matching_packs():
     matching = Scheme(
         1,
@@ -180,15 +182,15 @@ def test_u2_and_bits():
 def test_utf8_string():
     layout = Scheme(1, dict, utf8(0, lambda row: row["name"]))
     raw = BinaryPacker.pack(layout, {"name": "zxsanny"})
-    assert raw.hex() == "0107007a7873616e6e79"
-    assert len(raw) == 10
+    assert raw.hex() == "01062bfcfee119b2"
+    assert len(raw) == 8
     got = BinaryPacker.unpack(raw, layout.on(lambda row: None))
     assert got.ok is True
     assert got.value is not None
     assert got.value["name"] == "zxsanny"
 
     empty = BinaryPacker.pack(layout, {"name": ""})
-    assert empty.hex() == "010000"
+    assert empty.hex() == "0100"
     empty_got = BinaryPacker.unpack(empty, layout.on(lambda row: None))
     assert empty_got.ok is True
     assert empty_got.value is not None
@@ -197,12 +199,12 @@ def test_utf8_string():
     with pytest.raises(ValueError):
         BinaryPacker.pack(layout, {"name": "a" * 65536})
 
-    short = BinaryPacker.unpack(bytes([0x01, 0x07, 0x00, 0x7A, 0x78]), layout.on(lambda row: None))
+    short = BinaryPacker.unpack(bytes([0x01, 0x06, 0x2B, 0xFC]), layout.on(lambda row: None))
     assert short.ok is False
     assert short.value is None
     assert isinstance(short.error, ShortPacket)
     assert short.field == "0"
-    assert short.needed == 7
+    assert short.needed == 6
     assert short.left == 2
 
 
@@ -233,11 +235,7 @@ def test_counted_list():
 
 
 def test_dictionary():
-    user_hex = (
-        "0107007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e"
-        "6e656c010004007265616403006d6170040004007265616407006770735f66697803007365"
-        "74040065646974050073746f7265020004007265616405007772697465"
-    )
+    user_hex = text_vectors.row("ref.user").field.hex()
     layout = Scheme(
         1,
         dict,
@@ -283,10 +281,10 @@ def test_dictionary():
         list(lambda row: row["xs"], u8(0, lambda row: row)),
         map_field(lambda row: row["m"], utf8(0, lambda row: row)),
     )
-    assert BinaryPacker.pack(empty, {"s": "", "xs": [], "m": {}}).hex() == "01000000000000"
+    assert BinaryPacker.pack(empty, {"s": "", "xs": [], "m": {}}).hex() == "010000000000"
 
     dup = BinaryPacker.unpack(
-        bytes.fromhex("010200010061010078010061010079"),
+        bytes.fromhex("0102" "00" "021061" "021078" "021061" "021079"),
         Scheme(1, dict, map_field(lambda row: row["access"], utf8(0, lambda row: row))).on(lambda row: None),
     )
     assert dup.ok is False

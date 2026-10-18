@@ -165,4 +165,4 @@ def test_list_and_dict_elements_still_build():
         map_field(lambda row: row["m"], _u8(0, "v")),
     )
 
-    assert BinaryPacker.pack(row, {"xs": [1], "m": {"a": 2}}).hex() == "01010001010001006102"
+    assert BinaryPacker.pack(row, {"xs": [1], "m": {"a": 2}}).hex() == "01010001010002106102"

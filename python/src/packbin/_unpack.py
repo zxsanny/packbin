@@ -25,6 +25,7 @@ from packbin._nodes import (
     _Utf8,
     _When,
 )
+from packbin._text_decode import TextRefusal, decode_text
 
 _builtin_bytes = bytes
 _builtin_list = list
@@ -60,19 +61,13 @@ def _bad_value(data: memoryview, offset: int, label: str) -> ShortPacket:
 
 
 def _read_utf8(data: memoryview, offset: int, label: str) -> tuple[str, int] | ShortPacket:
-    left = len(data) - offset
-    if left < 2:
-        return ShortPacket(field=label, needed=2, left=left)
-    count = struct.unpack_from("<H", data, offset)[0]
-    body = offset + 2
-    left = len(data) - body
-    if left < count:
-        return ShortPacket(field=label, needed=count, left=left)
+    """A string in the compact text format; a refused field is a `ShortPacket` naming the field."""
     try:
-        text = _builtin_bytes(data[body : body + count]).decode("utf-8")
-    except UnicodeDecodeError:
+        return decode_text(data, offset)
+    except TextRefusal as refusal:
+        if refusal.kind == "short":
+            return ShortPacket(field=label, needed=refusal.needed, left=refusal.left)
         return _bad_value(data, offset, label)
-    return text, body + count
 
 
 def _read_u2(data: memoryview, offset: int, count: int, label: str) -> tuple[list[int], int] | ShortPacket:

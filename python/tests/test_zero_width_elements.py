@@ -49,8 +49,8 @@ def test_zero_width_list_element_deep_nesting_is_error():
 
 
 def test_zero_width_dict_value_is_error():
-    _assert_bad_value(_dict_of(_empty_bytes()), "01ffff01006100", 1)
-    _assert_bad_value(_dict_of(_empty_bytes()), "010100" "01006100", 1)
+    _assert_bad_value(_dict_of(_empty_bytes()), "01ffff02106100", 1)
+    _assert_bad_value(_dict_of(_empty_bytes()), "010100" "02106100", 1)
 
 
 def test_never_matching_when_element_is_error():

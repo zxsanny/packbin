@@ -90,7 +90,7 @@ LOOP22_PACK_CASES = {
     "pack_repeat_unequal_lists_when": (lambda: _pack(_repeat_when_scheme(), {"k": [1, 2], "v": [9]}), None),
     "pack_times_short_list_flags": (lambda: _pack(_times_flags_scheme(), {"c": 2, "v": [5]}), None),
     "pack_element_times_over_bytes_budget": (
-        lambda: _pack(_element_times_utf8_scheme(), {"items": [{"n": 65535, "s": "a" * 16} for _ in range(16)]}),
+        lambda: _pack(_element_times_utf8_scheme(), {"items": [{"n": 65535, "s": "q" * 16} for _ in range(16)]}),
         ValueError,
     ),
 }

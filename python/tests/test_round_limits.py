@@ -302,7 +302,7 @@ def _three_elements(container: str) -> bytes:
     element = bytes.fromhex("0107")
     if container == "list":
         return b"\x01" + (3).to_bytes(2, "little") + element * 3
-    entries = b"".join((1).to_bytes(2, "little") + key + element for key in (b"a", b"b", b"c"))
+    entries = b"".join(b"\x02\x10" + key + element for key in (b"a", b"b", b"c"))
     return b"\x01" + (3).to_bytes(2, "little") + entries
 
 

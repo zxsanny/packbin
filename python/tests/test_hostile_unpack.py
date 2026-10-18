@@ -42,11 +42,11 @@ def test_bias_below_zero_is_error():
 
 
 def test_invalid_utf8_string_is_error():
-    _short("010100ff", hs.utf8_name(), "0", 3)
+    _short("010210ff", hs.utf8_name(), "0", 3)
 
 
 def test_invalid_utf8_dict_key_is_error():
-    _short("0101000100ff05", hs.dict_of_u8(), "", 4)
+    _short("0101000210ff05", hs.dict_of_u8(), "", 4)
 
 
 @pytest.mark.parametrize("consumer", ["sized", "bits", "packed", "times"])

@@ -43,7 +43,7 @@ PACK_REFUSAL: dict[str, tuple[type[Exception], str]] = {
     ),
     "pack_lone_utf8_under_times_over_budget": (
         ValueError,
-        "s: the packet would be 16777477 bytes, above the limit of 16777216 bytes",
+        "s: the packet would be 16779269 bytes, above the limit of 16777216 bytes",
     ),
     "pack_element_times_over_budget": (
         ValueError,

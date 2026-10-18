@@ -49,4 +49,4 @@ def test_builder_names_import_explicitly():
 
     row = Scheme(1, dict, map_field(lambda row: row["m"], u8(0, lambda row: row)))
 
-    assert BinaryPacker.pack(row, {"m": {"b": 1, "a": 2}}).hex() == "0102000100610201006201"
+    assert BinaryPacker.pack(row, {"m": {"b": 1, "a": 2}}).hex() == "0102000210610202106201"

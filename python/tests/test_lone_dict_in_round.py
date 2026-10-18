@@ -66,7 +66,7 @@ def test_az_2308_ac3_a_list_of_dicts_in_times_packs_one_per_round():
 
     raw = BinaryPacker.pack(scheme, {"n": 2, "d": [{"k": 7}, {"k": 8}], "x": [1, 2]})
 
-    assert raw.hex() == "0102010001006b0701010001006b0802"
+    assert raw.hex() == "0102010002106b0701010002106b0802"
     assert _unpack(scheme, raw) == {"n": 2, "d": [{"k": 7}, {"k": 8}], "x": [1, 2]}
 
 
@@ -75,7 +75,7 @@ def test_az_2308_ac3_a_list_of_dicts_in_repeat_packs_one_per_round():
 
     raw = BinaryPacker.pack(scheme, {"d": [{"k": 7}, {"k": 8}], "x": [1, 2]})
 
-    assert raw.hex() == "01010001006b0701010001006b0802"
+    assert raw.hex() == "01010002106b0701010002106b0802"
     assert _unpack(scheme, raw) == {"d": [{"k": 7}, {"k": 8}], "x": [1, 2]}
 
 
@@ -84,7 +84,7 @@ def test_az_2308_a_dict_outside_a_round_is_a_dict_not_a_list():
 
     raw = BinaryPacker.pack(scheme, {"d": {"k": 7}})
 
-    assert raw.hex() == "01010001006b07"
+    assert raw.hex() == "01010002106b07"
     assert _unpack(scheme, raw) == {"d": {"k": 7}}
 
 
@@ -93,7 +93,7 @@ def test_az_2308_a_lone_string_for_a_utf8_name_keeps_broadcasting():
 
     raw = BinaryPacker.pack(scheme, {"n": 2, "s": "ab"})
 
-    assert raw.hex() == "01020200616202006162"
+    assert raw.hex() == "0102" "03106162" "03106162"
 
 
 def _flags_times_scheme() -> Scheme:

@@ -35,19 +35,21 @@ from packbin._pack_rounds import (
     _refuse_short_optional,
     _round_length,
 )
+from packbin._text_encode import encode_text
 
 _builtin_bytes = bytes
 _builtin_list = list
 _builtin_dict = dict
 
 
-def _utf8_payload(label: str, value: Any) -> bytes:
+def _text_field(label: str, value: Any) -> bytes:
+    """The wire bytes of a string (count and payload, compact text format)."""
     if not isinstance(value, str):
         raise TypeError(f"{label}: expected str")
     raw = value.encode("utf-8")
     if len(raw) > 65535:
         raise ValueError(f"{label}: utf-8 length {len(raw)}")
-    return raw
+    return encode_text(value, raw)
 
 
 def _present_value(value: Any) -> bool:
@@ -318,11 +320,9 @@ def _pack_dict_items(buf: bytearray, owner: _Node, element: _Node, mapping: Any,
     buf.append(len(pairs) & 0xFF)
     buf.append((len(pairs) >> 8) & 0xFF)
     for key, value in pairs:
-        raw = _utf8_payload("dict", key)
-        budget.room(buf, 2 + len(raw), member)
-        buf.append(len(raw) & 0xFF)
-        buf.append((len(raw) >> 8) & 0xFF)
-        buf.extend(raw)
+        field = _text_field("dict", key)
+        budget.room(buf, len(field), member)
+        buf.extend(field)
         _pack_element(buf, element, value, budget)
 
 
@@ -473,11 +473,9 @@ def pack_nodes(
         elif isinstance(node, _Utf8):
             value = take(node)
             seen[node.field_id] = value
-            raw = _utf8_payload(str(node.field_id), value)
-            budget.room(buf, 2 + len(raw), _name(node))
-            buf.append(len(raw) & 0xFF)
-            buf.append((len(raw) >> 8) & 0xFF)
-            buf.extend(raw)
+            field = _text_field(str(node.field_id), value)
+            budget.room(buf, len(field), _name(node))
+            buf.extend(field)
         elif isinstance(node, _List):
             _pack_list_items(buf, node, node.element, take(node), budget)
         elif isinstance(node, _Dict):

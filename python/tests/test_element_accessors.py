@@ -156,8 +156,8 @@ def test_ac5_a_dict_row_with_key_accessors_in_a_list_group_keeps_its_bytes_and_r
 def test_ac5_a_dict_row_with_key_accessors_in_a_dict_group_keeps_its_bytes_and_rows():
     scheme = Scheme(1, dict, map_field(lambda r: r["m"], group(0, u8(0, lambda p: p["x"]))))
 
-    assert BinaryPacker.pack(scheme, {"m": {"y": {"x": 3}, "x": {"x": 1}}}).hex() == "0102000100780101007903"
-    assert _unpacked(scheme, "0102000100780101007903") == {"m": {"x": {"x": 1}, "y": {"x": 3}}}
+    assert BinaryPacker.pack(scheme, {"m": {"y": {"x": 3}, "x": {"x": 1}}}).hex() == "0102000210780102107903"
+    assert _unpacked(scheme, "0102000210780102107903") == {"m": {"x": {"x": 1}, "y": {"x": 3}}}
 
 
 def test_ac5_a_list_of_flags_with_key_accessors_keeps_its_bytes_and_rows():
