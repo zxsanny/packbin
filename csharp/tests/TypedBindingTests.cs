@@ -106,7 +106,7 @@ public class TypedBindingTests
     }
 
     private const string ReadmeHex =
-        "0103006164610200040075736572050061646d696e020003006d61700200040072656164040065646974050073746f7265010005007772697465";
+        "0103a928800200030ba81804892975600200036ae9c80200032b01280348516404ca25f0000100048bbc2c80";
 
     private static string Hex(byte[] raw) => Convert.ToHexString(raw).ToLowerInvariant();
 
@@ -269,7 +269,7 @@ public class TypedBindingTests
         var got = Unpack(scheme, raw);
 
         // Assert
-        Assert.Equal("01" + "0200" + "010061" + "02006263" + "0100" + "01006b" + "010076", Hex(raw));
+        Assert.Equal("01" + "0200" + "021061" + "03106263" + "0100" + "02106b" + "021076", Hex(raw));
         Assert.Equal(new[] { "a", "bc" }, got.Tags.Select(t => t.Label));
         Assert.Equal("v", got.ByKey["k"].Label);
     }

@@ -141,7 +141,7 @@ public partial class HostileUnpackTests
     {
         var scheme = new Scheme<NameRow>(1, Field.Utf8<NameRow>(0, x => x.Name));
 
-        var outcome = HostileProbe.Unpack(scheme, "010200fffe");
+        var outcome = HostileProbe.Unpack(scheme, "010310fffe");
 
         HostileProbe.ExpectShort(outcome, "Name");
     }
@@ -151,7 +151,7 @@ public partial class HostileUnpackTests
     {
         var scheme = new Scheme<NameRow>(1, Field.Utf8<NameRow>(0, x => x.Name));
 
-        var got = BinaryPacker.Read(scheme, Convert.FromHexString("010200fffe"));
+        var got = BinaryPacker.Read(scheme, Convert.FromHexString("010310fffe"));
 
         Assert.NotNull(got.Error);
         Assert.Empty(got.Values);
@@ -163,7 +163,7 @@ public partial class HostileUnpackTests
         var scheme = new Scheme<MapRow>(1,
             Field.Dict((MapRow x) => x.M, Field.Utf8<ValueEl>(0, x => x.V)));
 
-        var outcome = HostileProbe.Unpack(scheme, "0101000100ff0000");
+        var outcome = HostileProbe.Unpack(scheme, "0101000210ff00");
 
         HostileProbe.ExpectShort(outcome, "M");
     }
@@ -186,7 +186,7 @@ public partial class HostileUnpackTests
         var scheme = new Scheme<WordsRow>(1,
             Field.List((WordsRow x) => x.Words, Field.Utf8<ValueEl>(0, x => x.V)));
 
-        var outcome = HostileProbe.Unpack(scheme, "0101000200fffe");
+        var outcome = HostileProbe.Unpack(scheme, "0101000310fffe");
 
         HostileProbe.ExpectShort(outcome, "V");
     }

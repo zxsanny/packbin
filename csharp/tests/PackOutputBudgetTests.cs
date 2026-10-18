@@ -48,15 +48,16 @@ public class PackOutputBudgetTests
     {
         // Arrange
         var scheme = LoneUtf8Times();
-        var text = new string('a', 65_535);
+        var text = new string('中', 21_845);
 
         // Act
         var error = typed
             ? Refused(scheme, Typed(("N", 65_535u), ("S", text)))
             : Refused(scheme, Row(("N", 65_535u), ("S", text)));
 
-        // Assert (5 + 255 * 65 537 bytes are written; the next utf8 append is 65 537)
-        Assert.Equal(Words(16_777_477, 16_777_216, "S"), error.Message);
+        // Assert (the text has no code, so it is the raw payload: 3 count bytes + 65 536; 5 + 255 * 65 539 bytes are
+        // written; the next utf8 append is 65 539)
+        Assert.Equal(Words(16_777_989, 16_777_216, "S"), error.Message);
     }
 
     [Fact]
@@ -64,7 +65,7 @@ public class PackOutputBudgetTests
     {
         // Arrange
         var scheme = LoneUtf8Times();
-        var values = Row(("N", 65_535u), ("S", new string('a', 65_535)));
+        var values = Row(("N", 65_535u), ("S", new string('中', 21_845)));
         Refused(scheme, values);
         var allocated = GC.GetAllocatedBytesForCurrentThread();
         var clock = Stopwatch.StartNew();
@@ -72,7 +73,7 @@ public class PackOutputBudgetTests
         // Act
         Refused(scheme, values);
 
-        // Assert (a buffer that doubled past the budget would allocate 2 GB; the test allocates the 255 rounds' text, ~17 MB)
+        // Assert (a buffer that doubled past the budget would allocate 2 GB; the test allocates the 256 rounds' text, ~34 MB)
         clock.Stop();
         Assert.True(clock.ElapsedMilliseconds < 1_000, $"took {clock.ElapsedMilliseconds} ms");
         var spent = GC.GetAllocatedBytesForCurrentThread() - allocated;
@@ -131,14 +132,14 @@ public class PackOutputBudgetTests
     {
         // Arrange
         var scheme = Utf8Only(64);
-        var text = new string('a', 61);
+        var text = new string('中', 20) + "a";
 
         // Act
         var raw = typed ? BinaryPacker.Pack(scheme, Typed(("S", text))) : BinaryPacker.Pack(scheme, Row(("S", text)));
 
         // Assert
         Assert.Equal(64, raw.Length);
-        Assert.Equal("013d00" + string.Concat(Enumerable.Repeat("61", 61)), Hex(raw));
+        Assert.Equal("013e10" + string.Concat(Enumerable.Repeat("e4b8ad", 20)) + "61", Hex(raw));
     }
 
     [Theory]
@@ -148,7 +149,7 @@ public class PackOutputBudgetTests
     {
         // Arrange
         var scheme = Utf8Only(64);
-        var text = new string('a', 62);
+        var text = new string('中', 20) + "aa";
 
         // Act
         var error = typed ? Refused(scheme, Typed(("S", text))) : Refused(scheme, Row(("S", text)));
@@ -280,12 +281,12 @@ public class PackOutputBudgetTests
         // Act
         var count = Refused(scheme.WithLimits(maxBytes: 2), one);
         var key = Refused(scheme.WithLimits(maxBytes: 4), one);
-        var packs = BinaryPacker.Pack(scheme.WithLimits(maxBytes: 9), one);
+        var packs = BinaryPacker.Pack(scheme.WithLimits(maxBytes: 8), one);
 
         // Assert
         Assert.Equal(Words(3, 2, "Access"), count.Message);
-        Assert.Equal(Words(8, 4, "Access"), key.Message);
-        Assert.Equal("01010003006b657901", Hex(packs));
+        Assert.Equal(Words(7, 4, "Access"), key.Message);
+        Assert.Equal("010100036bd8c801", Hex(packs));
     }
 
     private sealed class DictBag

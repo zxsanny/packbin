@@ -78,7 +78,7 @@ public class DictRepackTests
     {
         // Arrange
         var scheme = Keyed(anchored);
-        var packet = Convert.FromHexString("01" + "0200" + "0100" + "78" + "0102" + "0100" + "79" + "0304");
+        var packet = Convert.FromHexString("01" + "0200" + "021078" + "0102" + "021079" + "0304");
 
         // Act
         var read = BinaryPacker.Read(scheme, packet);
@@ -93,7 +93,7 @@ public class DictRepackTests
     public void Ac1_Pack_ReadOfGroupsHoldingAStringAndFlags_GivesTheOriginalBytes()
     {
         // Arrange
-        var strings = Convert.FromHexString("01" + "0100" + "07" + "0200" + "6869");
+        var strings = Convert.FromHexString("01" + "0100" + "07" + "022aaa");
         var flagged = Convert.FromHexString("01" + "0200" + "030102" + "0107");
 
         // Act

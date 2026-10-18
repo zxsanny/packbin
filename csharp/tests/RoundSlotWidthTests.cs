@@ -107,7 +107,7 @@ public class RoundSlotWidthTests
                 ("L", L(L((byte)0, (byte)1), L((byte)1, (byte)2), L((byte)2, (byte)3))),
                 ("D", L(new Dictionary<string, object?> { ["k"] = (byte)0 }, new Dictionary<string, object?> { ["k"] = (byte)1 },
                     new Dictionary<string, object?> { ["k"] = (byte)2 }))),
-            "010102000001010001006b000202000102010001006b01", "010102000001010001006b000202000102010001006b010302000203010001006b02",
+            "010102000001010002106b000202000102010002106b01", "010102000001010002106b000202000102010002106b010302000203010002106b02",
             "N", 11),
         new("10 bytes and sized names", 3,
             n => Repeat(n, Field.U8<SlotRow>(0, x => x.N), Field.Bytes<SlotRow>(1, x => x.Bb!, 2), Field.Sized<SlotRow>(2, x => x.S!, 0)),

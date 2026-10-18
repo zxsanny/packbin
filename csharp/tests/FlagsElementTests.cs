@@ -33,7 +33,7 @@ public class FlagsElementTests
     }
 
     private const string ListBytes = "01" + "0300" + "0101" + "00" + "02" + "0200";
-    private const string DictBytes = "01" + "0200" + "0100" + "78" + "0101" + "0100" + "79" + "02" + "0200";
+    private const string DictBytes = "01" + "0200" + "021078" + "0101" + "021079" + "02" + "0200";
 
     private static Field FlagsOfPoint() =>
         Field.Flags(0, Field.U8<Point>(0, p => p.A), Field.U16<Point>(1, p => p.B));

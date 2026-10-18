@@ -181,7 +181,7 @@ public class CollectionElementKindTests
         ListOf<List<object?>>? got = null;
 
         // Act
-        var err = BinaryPacker.Unpack(Convert.FromHexString("01" + "0100" + "0100" + "0100" + "78"), scheme.On(v => got = v));
+        var err = BinaryPacker.Unpack(Convert.FromHexString("01" + "0100" + "0100" + "021078"), scheme.On(v => got = v));
 
         // Assert
         Assert.Null(err);

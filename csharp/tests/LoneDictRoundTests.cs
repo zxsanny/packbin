@@ -45,8 +45,8 @@ public class LoneDictRoundTests
         Field.U8<RoundsRow>(0, x => x.C),
         Field.Times(1, 0, Field.U8<RoundsRow>(1, x => x.K), Field.Dict((RoundsRow x) => x.Maps, Field.U8<El>(0, e => e.V))));
 
-    private const string RepeatBytes = "01" + "01" + "0100" + "0100" + "61" + "05" + "02" + "0100" + "0100" + "62" + "06";
-    private const string TimesBytes = "01" + "02" + "01" + "0100" + "0100" + "61" + "05" + "02" + "0100" + "0100" + "62" + "06";
+    private const string RepeatBytes = "01" + "01" + "0100" + "021061" + "05" + "02" + "0100" + "021062" + "06";
+    private const string TimesBytes = "01" + "02" + "01" + "0100" + "021061" + "05" + "02" + "0100" + "021062" + "06";
 
     private static Dictionary<string, object?> PerRound(bool times)
     {
@@ -131,7 +131,7 @@ public class LoneDictRoundTests
         var raw = BinaryPacker.Pack(times ? RoundsTimes() : RoundsRepeat(), row);
 
         // Assert
-        const string rounds = "00" + "0100" + "0100" + "61" + "05" + "00" + "0100" + "0100" + "62" + "06";
+        const string rounds = "00" + "0100" + "021061" + "05" + "00" + "0100" + "021062" + "06";
         Assert.Equal(times ? "0102" + rounds : "01" + rounds, Hex(raw));
     }
 
@@ -163,6 +163,6 @@ public class LoneDictRoundTests
         var raw = BinaryPacker.Pack(scheme, values);
 
         // Assert
-        Assert.Equal("01" + "01" + "0100" + "78" + "02" + "0100" + "78", Hex(raw));
+        Assert.Equal("01" + "01" + "021078" + "02" + "021078", Hex(raw));
     }
 }

@@ -110,9 +110,9 @@ internal static partial class Walker
         var child = field.Children[0];
         foreach (var (keyBytes, value) in entries)
         {
-            buffer.Reserve(2 + keyBytes.Length, field.Name);
-            buffer.AddU16(keyBytes.Length);
-            buffer.AddRange(keyBytes);
+            var encodedKey = TextEncoder.Encode(keyBytes);
+            buffer.Reserve(encodedKey.Length, field.Name);
+            buffer.AddRange(encodedKey);
             PackField(child, ElementValues(values, child, value), buffer, seen.Fresh());
         }
     }
@@ -133,17 +133,9 @@ internal static partial class Walker
         var items = new Dictionary<string, object?>(Math.Min(count, bytes.Length - offset));
         for (var i = 0; i < count; i++)
         {
-            left = bytes.Length - offset;
-            if (left < 2)
-                return new ShortPacket(field.Name, 2, left);
-            var keyLen = bytes[offset] | (bytes[offset + 1] << 8);
-            offset += 2;
-            left = bytes.Length - offset;
-            if (left < keyLen)
-                return new ShortPacket(field.Name, keyLen, left);
-            if (!Compat.TryUtf8(bytes.Slice(offset, keyLen), out var key))
-                return InterimBadValue(field.Name, left);
-            offset += keyLen;
+            var error = TextDecoder.Read(field.Name, bytes, ref offset, out var key);
+            if (error is not null)
+                return error;
             var one = values.Fresh();
             var valueStart = offset;
             var err = UnpackField(child, bytes, ref offset, one, false);

@@ -28,7 +28,7 @@ public class GroupElementTests
     }
 
     private const string ListBytes = "01" + "0200" + "0102" + "0304";
-    private const string DictBytes = "01" + "0200" + "0100" + "78" + "0102" + "0100" + "79" + "0304";
+    private const string DictBytes = "01" + "0200" + "021078" + "0102" + "021079" + "0304";
 
     private static Field NestedField(bool dictionary) => dictionary
         ? Field.Dict((Row x) => x.Map, Field.Group((Holder h) => h.Item, Field.U8<Item>(0, i => i.A), Field.U8<Item>(1, i => i.B)))

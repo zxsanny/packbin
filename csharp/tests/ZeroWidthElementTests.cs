@@ -92,7 +92,7 @@ public class ZeroWidthElementTests
     [Fact]
     public void ZeroWidthDictValue_IsError()
     {
-        var outcome = HostileProbe.Unpack(ZeroDict(), "0101000100" + "61", 1);
+        var outcome = HostileProbe.Unpack(ZeroDict(), "010100" + "021061", 1);
 
         var error = HostileProbe.ExpectShort(outcome, "M");
         Assert.Equal(0, error.Needed);
@@ -102,7 +102,7 @@ public class ZeroWidthElementTests
     [Fact]
     public void ZeroWidthDictValue_CountFFFFWithOneKey_IsError()
     {
-        var outcome = HostileProbe.Unpack(ZeroDict(), "01ffff0100" + "61", 1);
+        var outcome = HostileProbe.Unpack(ZeroDict(), "01ffff" + "021061", 1);
 
         var error = HostileProbe.ExpectShort(outcome, "M");
         Assert.Equal(0, error.Needed);

@@ -6,7 +6,7 @@ namespace Packbin;
 
 internal static partial class Walker
 {
-    // utf8 length, list count and dictionary count are written as u16.
+    // utf8 text is limited to 65,535 bytes (its count is a varint, see TextEncoder); list count and dictionary count are written as u16.
     private const int MaxLength = ushort.MaxValue;
 
     private static void PackSized(
@@ -297,9 +297,9 @@ internal static partial class Walker
         var raw = Encoding.UTF8.GetBytes(text);
         if (raw.Length > MaxLength)
             throw new ArgumentException($"{field.Name}: utf-8 length {raw.Length}");
-        buffer.Reserve(2 + raw.Length, field.Name);
-        buffer.AddU16(raw.Length);
-        buffer.AddRange(raw);
+        var encoded = TextEncoder.Encode(raw);
+        buffer.Reserve(encoded.Length, field.Name);
+        buffer.AddRange(encoded);
         seen[field.Name] = text;
     }
 
@@ -310,17 +310,9 @@ internal static partial class Walker
         Scope values,
         bool repeatLists)
     {
-        var left = bytes.Length - offset;
-        if (left < 2)
-            return new ShortPacket(field.Name, 2, left);
-        var count = bytes[offset] | (bytes[offset + 1] << 8);
-        offset += 2;
-        left = bytes.Length - offset;
-        if (left < count)
-            return new ShortPacket(field.Name, count, left);
-        if (!Compat.TryUtf8(bytes.Slice(offset, count), out var text))
-            return InterimBadValue(field.Name, left);
-        offset += count;
+        var error = TextDecoder.Read(field.Name, bytes, ref offset, out var text);
+        if (error is not null)
+            return error;
         Store(values, field.Name, text, repeatLists);
         return null;
     }

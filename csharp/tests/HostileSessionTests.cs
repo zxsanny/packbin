@@ -51,7 +51,7 @@ public class HostileSessionTests
             Field.Repeat(1, Field.Bytes<ZeroRow>(1, x => x.B, 0))).On(_ => called())),
         "list-of-lists" => ("01ffffffff", new Scheme<NestedRow>(1,
             Field.List((NestedRow x) => x.Outer, Field.List((Mid m) => m.Inner, Field.Bytes<El>(0, e => e.B, 0)))).On(_ => called())),
-        _ => ("01ffff010061", new Scheme<MapRow>(1,
+        _ => ("01ffff021061", new Scheme<MapRow>(1,
             Field.Dict((MapRow x) => x.M, Field.Bytes<El>(0, e => e.B, 0))).On(_ => called())),
     };
 

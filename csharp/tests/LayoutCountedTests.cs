@@ -123,14 +123,14 @@ public class LayoutCountedTests
     {
         var scheme = new Scheme<Utf8Row>(1, Field.Utf8<Utf8Row>(0, x => x.Name));
         var raw = BinaryPacker.Pack(scheme, new Dictionary<string, object?> { ["Name"] = "zxsanny" });
-        Assert.Equal("0107007a7873616e6e79", Convert.ToHexString(raw).ToLowerInvariant());
-        Assert.Equal(10, raw.Length);
+        Assert.Equal("01062bfcfee119b2", Convert.ToHexString(raw).ToLowerInvariant());
+        Assert.Equal(8, raw.Length);
         var got = BinaryPacker.Read(scheme, raw);
         Assert.Null(got.Error);
         Assert.Equal("zxsanny", got.Values["Name"]);
 
         var empty = BinaryPacker.Pack(scheme, new Dictionary<string, object?> { ["Name"] = "" });
-        Assert.Equal("010000", Convert.ToHexString(empty).ToLowerInvariant());
+        Assert.Equal("0100", Convert.ToHexString(empty).ToLowerInvariant());
         var emptyGot = BinaryPacker.Read(scheme, empty);
         Assert.Null(emptyGot.Error);
         Assert.Equal("", emptyGot.Values["Name"]);
@@ -138,7 +138,7 @@ public class LayoutCountedTests
         Assert.Throws<ArgumentException>(() =>
             BinaryPacker.Pack(scheme, new Dictionary<string, object?> { ["Name"] = new string('a', 65536) }));
 
-        var shortGot = BinaryPacker.Read(scheme, new byte[] { 0x01, 0x07, 0x00, 0x7a, 0x78 });
+        var shortGot = BinaryPacker.Read(scheme, new byte[] { 0x01, 0x07, 0x2b, 0xfc });
         Assert.Empty(shortGot.Values);
         var missing = Assert.IsType<ShortPacket>(shortGot.Error);
         Assert.Equal("Name", missing.Field);
@@ -192,7 +192,7 @@ public class LayoutCountedTests
             Field.List((UserRow x) => x.Roles, Field.Utf8<Utf8El>(0, r => r.Role)),
             Field.Dict((UserRow x) => x.Access, Field.List((ActionList e) => e.Actions, Field.Utf8<ActionEl>(0, a => a.Action))));
         const string userHex =
-            "0107007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e6e656c010004007265616403006d6170040004007265616407006770735f6669780300736574040065646974050073746f7265020004007265616405007772697465";
+            "01062bfcfee119b20200030ba818078a8b1ca4ed51800300056b6aa330b00100032b0128036ae9c80400032b012808106770735f66697803ea04800348516404ca25f0000200032b0128048bbc2c80";
         var user = new Dictionary<string, object?>
         {
             ["Username"] = "zxsanny",
@@ -252,10 +252,10 @@ public class LayoutCountedTests
             ["B"] = new List<object?>(),
             ["C"] = new Dictionary<string, object?>(),
         });
-        Assert.Equal("01000000000000", Convert.ToHexString(emptyRaw).ToLowerInvariant());
+        Assert.Equal("010000000000", Convert.ToHexString(emptyRaw).ToLowerInvariant());
 
         var onlyDict = new Scheme<DictOnlyRow>(1, Field.Dict((DictOnlyRow x) => x.Access, Field.Utf8<ValueEl>(0, v => v.V)));
-        var dup = BinaryPacker.Read(onlyDict, PackbinTests.ParseHex("010200010061010078010061010079"));
+        var dup = BinaryPacker.Read(onlyDict, PackbinTests.ParseHex("010200021061021078021061021079"));
         Assert.NotNull(dup.Error);
         Assert.Empty(dup.Values);
 

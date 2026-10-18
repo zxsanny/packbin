@@ -51,14 +51,14 @@ public class TargetParityTests
     }
 
     [Theory]
-    [InlineData("010200c0af")]
-    [InlineData("010200c080")]
-    [InlineData("010300e080af")]
-    [InlineData("010300eda080")]
-    [InlineData("010400f4908080")]
-    [InlineData("010200e282")]
-    [InlineData("01010080")]
-    [InlineData("010100f5")]
+    [InlineData("010310c0af")]
+    [InlineData("010310c080")]
+    [InlineData("010410e080af")]
+    [InlineData("010410eda080")]
+    [InlineData("010510f4908080")]
+    [InlineData("010310e282")]
+    [InlineData("01021080")]
+    [InlineData("010210f5")]
     public void InvalidUtf8_IsRefused(string hex)
     {
         // Act
@@ -69,9 +69,9 @@ public class TargetParityTests
     }
 
     [Theory]
-    [InlineData("010300e282ac", "€")]
-    [InlineData("010400f09f9880", "\U0001F600")]
-    [InlineData("010300efbbbf", "﻿")]
+    [InlineData("010410e282ac", "€")]
+    [InlineData("010510f09f9880", "\U0001F600")]
+    [InlineData("010410efbbbf", "﻿")]
     public void ValidUtf8_IsRead(string hex, string expected)
     {
         // Act

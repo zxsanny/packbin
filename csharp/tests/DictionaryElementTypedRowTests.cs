@@ -38,7 +38,7 @@ public class DictionaryElementTypedRowTests
     }
 
     private const string FlagsList = "01" + "0200" + "01" + "01" + "02" + "0200";
-    private const string FlagsMap = "01" + "0200" + "0100" + "78" + "01" + "01" + "0100" + "79" + "02" + "0200";
+    private const string FlagsMap = "01" + "0200" + "021078" + "01" + "01" + "021079" + "02" + "0200";
     private const string AnchoredList = "01" + "0200" + "0102" + "0304";
 
     private static string Hex(byte[] raw) => Convert.ToHexString(raw).ToLowerInvariant();

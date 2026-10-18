@@ -181,7 +181,7 @@ public class TypedParityTests
             Name = "ada", N = 2, Payload = [1, 2], Nb = 3, Segs = [1, 0, 1], Np = 3, Items = [3, 1, 2], P = 1, Q = 3,
         };
 
-        Same(scheme, dict, row, "010300616461020102030503270d", got =>
+        Same(scheme, dict, row, "0103a92880020102030503270d", got =>
         {
             Assert.Equal("ada", got.Name);
             Assert.Equal(new byte[] { 1, 2 }, got.Payload);
@@ -290,7 +290,7 @@ public class TypedParityTests
             Field.List((UserRow x) => x.Roles, Field.Utf8<Utf8El>(0, r => r.Role)),
             Field.Dict((UserRow x) => x.Access, Field.List((ActionList e) => e.Actions, Field.Utf8<ActionEl>(0, a => a.Action))));
         const string hex =
-            "0107007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e6e656c010004007265616403006d6170040004007265616407006770735f6669780300736574040065646974050073746f7265020004007265616405007772697465";
+            "01062bfcfee119b20200030ba818078a8b1ca4ed51800300056b6aa330b00100032b0128036ae9c80400032b012808106770735f66697803ea04800348516404ca25f0000200032b0128048bbc2c80";
         var dict = new Dictionary<string, object?>
         {
             ["Username"] = "zxsanny",

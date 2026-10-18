@@ -46,7 +46,7 @@ public class RoundCollectionMemberTests
         {
             packet.AddRange(new byte[] { 1, 0 });
             if (dict)
-                packet.AddRange(new byte[] { 1, 0, 0x61 });
+                packet.AddRange(new byte[] { 2, 0x10, 0x61 });
             packet.Add(value);
             if (wide)
                 packet.AddRange(new byte[3]);
