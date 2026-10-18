@@ -66,7 +66,7 @@ describe("list and dict elements of kind group and flags", () => {
   it("AC-3 dict of group keeps each entry", () => {
     // Arrange
     const layout = scheme<Row>(1, dict((x) => x.m, pair()))
-    const wire = "01020001007801020100790304"
+    const wire = "01020002107801020210790304"
 
     // Act
     const packed = BinaryPacker.pack(layout, { m: { y: { a: 3, b: 4 }, x: { a: 1, b: 2 } } })
@@ -98,7 +98,7 @@ describe("list and dict elements of kind group and flags", () => {
   it("AC-4 dict of flags is accepted", () => {
     // Arrange
     const layout = scheme<Row>(1, dict((x) => x.m, optional()))
-    const wire = "01" + "0200" + "0100" + "78" + "00" + "0100" + "79" + "02" + "0200"
+    const wire = "01" + "0200" + "0210" + "78" + "00" + "0210" + "79" + "02" + "0200"
 
     // Act
     const packed = BinaryPacker.pack(layout, { m: { y: { b: 2 }, x: {} } })
@@ -146,7 +146,7 @@ describe("list and dict elements of kind group and flags", () => {
     const wire = BinaryPacker.pack(layout, row)
 
     // Assert
-    assert.equal(hex(wire), "01" + "0200" + "0100" + "0200" + "0100" + "0100" + "6b" + "0100" + "76")
+    assert.equal(hex(wire), "01" + "0200" + "0100" + "0200" + "0100" + "0210" + "6b" + "0210" + "76")
     repacks(layout, hex(wire))
   })
 

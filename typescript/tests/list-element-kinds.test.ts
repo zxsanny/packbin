@@ -163,7 +163,7 @@ describe("AC-6 elements that work today keep their bytes", () => {
       "dict of group",
       () => [dict((x) => x.m, pair())],
       { m: { y: { a: 3, b: 4 }, x: { a: 1, b: 2 } } },
-      "01020001007801020100790304",
+      "01020002107801020210790304",
     ],
     [
       "list of flags",

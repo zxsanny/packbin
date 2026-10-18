@@ -234,6 +234,7 @@ export const PACK: Record<string, () => Uint8Array> = {
       1,
       list((x) => x.items, group((x) => x.item, [u32(0, (x) => x.n), times(1, 0, [utf8(1, (x) => x.s)])])),
     ),
-    { items: Array.from({ length: 16 }, () => ({ n: 65535, s: "a".repeat(16) })) },
+    // Five CJK characters are written raw: 17 bytes a round whatever the tables hold.
+    { items: Array.from({ length: 16 }, () => ({ n: 65535, s: "\u4e2d".repeat(5) })) },
   ),
 }

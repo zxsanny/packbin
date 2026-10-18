@@ -65,14 +65,14 @@ describe("a value that is not a plain object is no dictionary", () => {
   it("a plain object and a prototype-less object still pack as a dictionary", () => {
     const bare = Object.assign(Object.create(null) as Row, { a: "x" })
 
-    assert.equal(hex(BinaryPacker.pack(outside(), { d: { a: "x" } })), "010100010061010078")
-    assert.equal(hex(BinaryPacker.pack(outside(), { d: bare })), "010100010061010078")
+    assert.equal(hex(BinaryPacker.pack(outside(), { d: { a: "x" } })), "010100021061021078")
+    assert.equal(hex(BinaryPacker.pack(outside(), { d: bare })), "010100021061021078")
   })
 
   it("a list of prototype-less rows still packs in a round", () => {
     const bare = Object.assign(Object.create(null) as Row, { a: "x" })
 
-    assert.equal(hex(BinaryPacker.pack(inTimes(), { n: 1, d: [bare] })), "01010100010061010078")
+    assert.equal(hex(BinaryPacker.pack(inTimes(), { n: 1, d: [bare] })), "01010100021061021078")
   })
 })
 

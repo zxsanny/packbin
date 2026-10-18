@@ -1,4 +1,5 @@
 import type { PackOut } from "./pack-out.ts"
+import { decodeText, encodeText } from "./text.ts"
 
 export type Value = Record<string, unknown>
 
@@ -313,35 +314,18 @@ export function readInt(
 
 export function writeUtf8(out: PackOut, name: string, value: unknown): void {
   if (typeof value !== "string") throw new RangeError(`${name}: expected string`)
-  const raw = new TextEncoder().encode(value)
-  if (raw.length > 65535) throw new RangeError(`${name}: utf-8 length ${raw.length}`)
-  // The length and the text are one append, so a refusal reports the whole member.
-  const counted = new Uint8Array(2 + raw.length)
-  counted[0] = raw.length & 0xff
-  counted[1] = (raw.length >> 8) & 0xff
-  counted.set(raw, 2)
-  out.append(name, counted)
+  // The count and the payload are one append, so a refusal reports the whole member.
+  out.append(name, encodeText(value, name))
 }
 
 export function readUtf8(
   cur: ViewCursor,
   name: string,
 ): { ok: true; value: string } | ShortErr {
-  const leftCount = cur.buf.length - cur.offset
-  if (leftCount < 2) return { ok: false, field: name, needed: 2, left: leftCount }
-  const count = cur.view.getUint16(cur.offset, true)
-  cur.offset += 2
-  const left = cur.buf.length - cur.offset
-  if (left < count) return { ok: false, field: name, needed: count, left }
-  const raw = cur.buf.subarray(cur.offset, cur.offset + count)
-  cur.offset += count
-  try {
-    return { ok: true, value: new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(raw) }
-  } catch (e) {
-    // The fatal decoder reports invalid UTF-8 with a TypeError; anything else is not ours.
-    if (e instanceof TypeError) return { ok: false, field: name, needed: 0, left: leftCount }
-    throw e
-  }
+  const r = decodeText(cur.buf, cur.offset)
+  if (!r.ok) return { ok: false, field: name, needed: r.needed, left: r.left }
+  cur.offset = r.next
+  return { ok: true, value: r.value }
 }
 
 export function readFloat(

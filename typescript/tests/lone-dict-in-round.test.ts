@@ -57,19 +57,19 @@ describe("AZ-2308 a lone dictionary in a round is refused", () => {
   it("AC-3 a list with one dictionary per round packs, in times and repeat", () => {
     const rows = [{ a: "x" }, { b: "y" }]
 
-    assert.equal(hex(BinaryPacker.pack(inTimes(), { n: 2, d: rows })), "010201000100610100780100010062010079")
-    assert.equal(hex(BinaryPacker.pack(inRepeat(), { d: rows })), "0101000100610100780100010062010079")
+    assert.equal(hex(BinaryPacker.pack(inTimes(), { n: 2, d: rows })), "010201000210610210780100021062021079")
+    assert.equal(hex(BinaryPacker.pack(inRepeat(), { d: rows })), "0101000210610210780100021062021079")
   })
 
   it("a dictionary outside a round still packs", () => {
     const layout = scheme<Row>(1, dict((r) => r.d, utf8(0, (r) => r.e)))
 
-    assert.equal(hex(BinaryPacker.pack(layout, { d: { a: "x" } })), "010100010061010078")
+    assert.equal(hex(BinaryPacker.pack(layout, { d: { a: "x" } })), "010100021061021078")
   })
 
   it("a lone string for a Utf8 name in a round still broadcasts", () => {
     const layout = scheme<Row>(1, u8(0, (r) => r.n), times(1, 0, [utf8(1, (r) => r.s)]))
 
-    assert.equal(hex(BinaryPacker.pack(layout, { n: 2, s: "a" })), "0102010061010061")
+    assert.equal(hex(BinaryPacker.pack(layout, { n: 2, s: "a" })), "0102021061021061")
   })
 })

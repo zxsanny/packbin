@@ -83,7 +83,7 @@ describe("AZ-2332 a lone byte buffer in a round is refused", () => {
     const wire = hex(BinaryPacker.pack(layout, { n: 2, s: "ab" }))
 
     // Assert
-    assert.equal(wire, "01020200616202006162")
+    assert.equal(wire, "01020310616203106162")
   })
 
   it("a bytes field outside a round still takes one buffer", () => {

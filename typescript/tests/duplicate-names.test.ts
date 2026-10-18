@@ -210,7 +210,7 @@ describe("list and dict elements have a member namespace of their own", () => {
     const wire = hex(BinaryPacker.pack(layout, { xs: [{ a: 1 }], ys: { k: { a: 2 } } }))
 
     // Assert
-    assert.equal(wire, "01010001" + "010001006b02")
+    assert.equal(wire, "01010001" + "010002106b02")
   })
 
   it("TS-F2 a nested group inside a list group element sharing a member is refused", () => {

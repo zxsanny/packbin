@@ -77,8 +77,8 @@ const SPEC: Record<string, string> = {
   row2c_packed_negative: "01fd",
   row2c_times_negative: "01fd",
   row2d_packed_negative_bias: "0100",
-  row3_invalid_utf8_string: "010100ff",
-  row3_invalid_utf8_dict_key: "0101000100ff05",
+  row3_invalid_utf8_string: "010310c328",
+  row3_invalid_utf8_dict_key: "010100" + "0310c328" + "05",
   row4_sized_behind_clear_flag: "0100",
   row4_bits_behind_clear_flag: "0100",
   row4_packed_behind_clear_flag: "0100",
@@ -86,8 +86,8 @@ const SPEC: Record<string, string> = {
   row6_times_zero_width_oversize: "01ffffffff",
   row6_times_zero_width_small: "0103",
   row7_list_of_list_zero_width: "01ffffffff",
-  row7_dict_zero_width_value: "01ffff010061",
-  row7_dict_zero_width_value_one: "010100010061",
+  row7_dict_zero_width_value: "01ffff021061",
+  row7_dict_zero_width_value_one: "010100021061",
   row5_list_oversize: "01ffff0100",
   row5_utf8_oversize: "01ffff61",
   row5_times_oversize: "01ff0102",
@@ -158,11 +158,11 @@ describe("hostile packets", () => {
   })
 
   it("invalid utf8 string is an error", async () => {
-    assertError(await run("row3_invalid_utf8_string"), "s", 3)
+    assertError(await run("row3_invalid_utf8_string"), "s", 4)
   })
 
   it("invalid utf8 dictionary key is an error", async () => {
-    assertError(await run("row3_invalid_utf8_dict_key"), "d", 4)
+    assertError(await run("row3_invalid_utf8_dict_key"), "d", 5)
   })
 
   it("count behind a clear flag is an error", async () => {
@@ -364,7 +364,7 @@ const NOVALUE_COUNT =
 
 // The rule each loop 20 refusal must name, so a refusal by some other rule does not pass.
 const PACK_REFUSAL: Record<string, RegExp> = {
-  pack_lone_utf8_under_times_over_budget: /^s: the packet would be 16777477 bytes, above the limit of 16777216 bytes$/,
+  pack_lone_utf8_under_times_over_budget: /^s: the packet would be 16779269 bytes, above the limit of 16777216 bytes$/,
   // The 40 items of 65 535 rounds are 2 621 400 slots: since loop 22 (maxSlots 1 048 576) the slots refuse it
   // (item 17), before the 16 MiB bytes budget it was written to reach. pack-output-budget.test.ts keeps the
   // bytes-budget element route with a scheme that fits the slots.
@@ -384,7 +384,7 @@ const PACK_REFUSAL: Record<string, RegExp> = {
   pack_novalue_count_clear_when_bits: NOVALUE_COUNT,
   pack_novalue_count_clear_when_packed: NOVALUE_COUNT,
   pack_novalue_count_clear_when_sized: NOVALUE_COUNT,
-  pack_element_times_over_bytes_budget: /^s: the packet would be 16777233 bytes, above the limit of 16777216 bytes$/,
+  pack_element_times_over_bytes_budget: /^s: the packet would be 16777231 bytes, above the limit of 16777216 bytes$/,
 }
 
 // Packs the case row and checks the bytes, or the refusal and the rule it names (`rules` is PACK_REFUSAL).

@@ -17,6 +17,7 @@ import {
   u16,
   utf8,
 } from "../src/index.ts"
+import { refPacketHex } from "./support/text-vectors.ts"
 
 type Row = Record<string, unknown>
 
@@ -44,7 +45,7 @@ const dictOfGroups = () =>
     dict((x) => x.m, group((x) => x.p, [u8(0, (x) => x.a), u8(1, (x) => x.b)])),
   )
 
-const PROTO_WIRE = "0101010009005f5f70726f746f5f5f010001006109"
+const PROTO_WIRE = "010101000a105f5f70726f746f5f5f010002106109"
 
 describe("dict entries are not members of the row", () => {
   it("AC-1 both key orders pack the same bytes", () => {
@@ -56,7 +57,7 @@ describe("dict entries are not members of the row", () => {
     const second = hex(BinaryPacker.pack(layout, { m: { a: 9 }, a: 1 }))
 
     // Assert
-    assert.deepEqual([first, second], ["0101010001006109", "0101010001006109"])
+    assert.deepEqual([first, second], ["0101010002106109", "0101010002106109"])
   })
 
   it("AC-2 a key named like the dictionary keeps its entry", () => {
@@ -68,7 +69,7 @@ describe("dict entries are not members of the row", () => {
     const other = hex(BinaryPacker.pack(layout, { a: 1, m: { v: 9 } }))
 
     // Assert
-    assert.deepEqual([named, other], ["0101010001006d09", "0101010001007609"])
+    assert.deepEqual([named, other], ["0101010002106d09", "0101010002107609"])
   })
 
   it("AC-3 a key does not supply a missing member", () => {
@@ -92,7 +93,7 @@ describe("dict entries are not members of the row", () => {
     const wire = hex(BinaryPacker.pack(layout, { a: 1, m: { x: { a: 9 } } }))
 
     // Assert
-    assert.equal(wire, "01010100010078010001006109")
+    assert.equal(wire, "01010100021078010002106109")
   })
 
   it("AC-5 a decoded __proto__ entry repacks identically", () => {
@@ -144,13 +145,13 @@ describe("dict of group keeps each entry apart from the row", () => {
     const second = hex(BinaryPacker.pack(layout, { m: { x: { a: 1, b: 2 } }, a: 9 }))
 
     // Assert
-    assert.deepEqual([first, second], ["010901000100780102", "010901000100780102"])
+    assert.deepEqual([first, second], ["010901000210780102", "010901000210780102"])
   })
 
   it("TS-F1 the unpacked row repacks to the same bytes", () => {
     // Arrange
     const layout = dictOfGroups()
-    const wire = "010901000100780102"
+    const wire = "010901000210780102"
 
     // Act
     const row = unpackRow(layout, wire)
@@ -173,7 +174,7 @@ describe("dict of group keeps each entry apart from the row", () => {
     const second = hex(BinaryPacker.pack(layout, { xs: [{ m: { x: { a: 1, b: 2 } }, a: 9 }] }))
 
     // Assert
-    assert.deepEqual([first, second], ["0101000901000100780102", "0101000901000100780102"])
+    assert.deepEqual([first, second], ["0101000901000210780102", "0101000901000210780102"])
   })
 
   it("TS-F1 a dict of group inside a dict group element keeps its entries apart", () => {
@@ -189,7 +190,7 @@ describe("dict of group keeps each entry apart from the row", () => {
 
     // Assert
     assert.equal(first, second)
-    assert.equal(first, "01010001006b07010001007801")
+    assert.equal(first, "01010002106b07010002107801")
   })
 })
 
@@ -316,12 +317,10 @@ describe("fixtures that use dictionaries are unchanged", () => {
     assert.equal(wire, golden)
   })
 
-  it("AC-7 the user and nested handoff packets are unchanged", () => {
+  it("AC-7 the user and nested handoff packets are the vectors file ref rows", () => {
     // Arrange
-    const userHex =
-      "0107007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e6e656c010004007265616403006d6170040004007265616407006770735f6669780300736574040065646974050073746f7265020004007265616405007772697465"
-    const nestedHex =
-      "01020003006d61700100010002006f7007006770735f666978050073746f72650200010002006f70040072656164010002006f7005007772697465"
+    const userHex = refPacketHex("ref.user")
+    const nestedHex = refPacketHex("ref.nested")
     const user = scheme<Row>(
       1,
       utf8(0, (x) => x.username),

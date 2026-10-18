@@ -13,6 +13,7 @@ import {
   u16,
   utf8,
 } from "../src/index.ts"
+import { refPacketHex } from "./support/text-vectors.ts"
 
 function toHex(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("hex")
@@ -119,12 +120,12 @@ describe("packbin fields", () => {
     assert.equal(shortRan, false)
   })
 
-  it("utf8 string count is the payload", () => {
+  it("utf8 string count is the payload length", () => {
     type Row = { name: string }
     const layout = scheme<Row>(1, utf8(0, (r) => r.name))
     const raw = BinaryPacker.pack(layout, { name: "zxsanny" })
-    assert.equal(toHex(raw), "0107007a7873616e6e79")
-    assert.equal(raw.length, 10)
+    assert.equal(toHex(raw), "01062bfcfee119b2")
+    assert.equal(raw.length, 8)
     let got: Row | undefined
     const result = BinaryPacker.unpack(raw, layout.on((value) => {
       got = value as Row
@@ -133,7 +134,7 @@ describe("packbin fields", () => {
     assert.equal(got!.name, "zxsanny")
 
     const empty = BinaryPacker.pack(layout, { name: "" })
-    assert.equal(toHex(empty), "010000")
+    assert.equal(toHex(empty), "0100")
     let emptyGot: Row | undefined
     const emptyResult = BinaryPacker.unpack(empty, layout.on((value) => {
       emptyGot = value as Row
@@ -149,7 +150,7 @@ describe("packbin fields", () => {
 
     let shortRan = false
     const short = BinaryPacker.unpack(
-      Uint8Array.of(0x01, 0x07, 0x00, 0x7a, 0x78),
+      Uint8Array.of(0x01, 0x06, 0x2b, 0xfc),
       layout.on(() => {
         shortRan = true
       }),
@@ -157,7 +158,7 @@ describe("packbin fields", () => {
     assert.equal(short.ok, false)
     if (short.ok) return
     assert.equal(short.field, "name")
-    assert.equal(short.needed, 7)
+    assert.equal(short.needed, 6)
     assert.equal(short.left, 2)
     assert.equal("name" in short, false)
     assert.equal(shortRan, false)
@@ -217,8 +218,7 @@ describe("packbin fields", () => {
   })
 
   it("dictionary field orders keys and nests lists", () => {
-    const userHex =
-      "0107007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e6e656c010004007265616403006d6170040004007265616407006770735f6669780300736574040065646974050073746f7265020004007265616405007772697465"
+    const userHex = refPacketHex("ref.user")
     type User = {
       username: string
       roles: string[]
@@ -289,7 +289,7 @@ describe("packbin fields", () => {
         utf8(0, (v) => v),
       ),
     )
-    assert.equal(toHex(BinaryPacker.pack(empties, { name: "", xs: [], d: {} })), "01000000000000")
+    assert.equal(toHex(BinaryPacker.pack(empties, { name: "", xs: [], d: {} })), "010000000000")
 
     const dup = scheme(
       1,
@@ -300,7 +300,7 @@ describe("packbin fields", () => {
     )
     let badRan = false
     const bad = BinaryPacker.unpack(
-      Buffer.from("010200010061010078010061010079", "hex"),
+      Buffer.from("010200021061021078021061021079", "hex"),
       dup.on(() => {
         badRan = true
       }),

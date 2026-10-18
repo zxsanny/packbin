@@ -17,12 +17,14 @@ function unpackRow<T extends Row>(layout: ReturnType<typeof scheme<T>>, hex: str
   return { result, row, called }
 }
 
-const PROTO = "5f5f70726f746f5f5f"
+// Key fields in the compact text format (fixtures/text/vectors.txt rules; `textfmt.py enc`).
+const PROTO_KEY = "0a105f5f70726f746f5f5f"
+const ADMIN_KEY = "0489297560"
 const acl = scheme<Row>(1, dict((x) => x.acl, dict((x) => x.inner, u8(0, (x) => x.v))))
 
 describe("dict keys", () => {
   it("dict_proto_key_is_ordinary", () => {
-    const { result, row } = unpackRow(acl, `010100${"0900"}${PROTO}0100${"0500"}61646d696e01`)
+    const { result, row } = unpackRow(acl, `010100${PROTO_KEY}0100${ADMIN_KEY}01`)
     assert.deepEqual(result, { ok: true })
     const entries = row!.acl as Record<string, unknown>
     assert.equal("admin" in entries, false)
@@ -34,20 +36,20 @@ describe("dict keys", () => {
   })
 
   it("dict_duplicate_proto_key_rejected", () => {
-    const { result, called } = unpackRow(acl, `010200${"0900"}${PROTO}0000${"0900"}${PROTO}0000`)
+    const { result, called } = unpackRow(acl, `010200${PROTO_KEY}0000${PROTO_KEY}0000`)
     assert.equal(result.ok, false)
     assert.equal(called, 0)
   })
 
   it("a decoded __proto__ entry packs back to the same bytes", () => {
-    const wire = `010100${"0900"}${PROTO}0100${"0500"}61646d696e01`
+    const wire = `010100${PROTO_KEY}0100${ADMIN_KEY}01`
     const { row } = unpackRow(acl, wire)
     assert.equal(hexOf(BinaryPacker.pack(acl, row!)), wire)
   })
 
   it("dict_proto_key_with_scalar_value_is_kept", () => {
     const flat = scheme<Row>(1, dict((x) => x.m, u8(0, (x) => x.v)))
-    const { result, row } = unpackRow(flat, `010100${"0900"}${PROTO}07`)
+    const { result, row } = unpackRow(flat, `010100${PROTO_KEY}07`)
     assert.deepEqual(result, { ok: true })
     assert.deepEqual(Object.keys(row!.m as object), ["__proto__"])
     assert.equal(Object.getOwnPropertyDescriptor(row!.m, "__proto__")!.value, 7)
@@ -92,14 +94,14 @@ describe("utf8 byte order mark", () => {
   const text = scheme<Row>(1, utf8(0, (x) => x.s))
 
   it("bom_is_kept", () => {
-    const { result, row } = unpackRow(text, "010600efbbbf616263")
+    const { result, row } = unpackRow(text, "010710efbbbf616263")
     assert.deepEqual(result, { ok: true })
     assert.equal(row!.s, "﻿abc")
   })
 
   it("a string that starts with U+FEFF round-trips", () => {
     const wire = BinaryPacker.pack(text, { s: "﻿abc" })
-    assert.equal(hexOf(wire), "010600efbbbf616263")
+    assert.equal(hexOf(wire), "010710efbbbf616263")
     const { row } = unpackRow(text, hexOf(wire))
     assert.equal(row!.s, "﻿abc")
   })

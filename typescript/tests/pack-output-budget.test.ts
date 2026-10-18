@@ -43,8 +43,10 @@ function unpack(layout: Scheme<Row>, bytes: Uint8Array): { result: DispatchResul
 const timesK = (limits = {}): Scheme<Row> =>
   new Scheme<Row>(1, [u32(0, (x) => x.n), times(1, 0, [u8(1, (x) => x.k)])], limits)
 
-// AC-2: a list whose item holds a count and a times of that many lone 16-char strings (18 bytes a round, one
+// AC-2: a list whose item holds a count and a times of that many lone 5-character strings (17 bytes a round, one
 // slot a round: 16 items of 65 535 rounds are 1 048 560 slots, under the default maxSlots, so the bytes budget refuses).
+// Five CJK characters are written raw, so the bytes a round do not depend on the table.
+const ROUND_TEXT = "\u4e2d".repeat(5)
 const elementTimes = (limits = {}): Scheme<Row> =>
   new Scheme<Row>(
     1,
@@ -76,39 +78,39 @@ describe("AZ-2354 pack has one output budget, maxBytes", () => {
     assert.equal(run.status, 0, run.stderr)
     assert.equal(outcome.bytes, undefined, "no bytes are returned")
     assert.equal(outcome.error, "RangeError")
-    assert.equal(outcome.message, "s: the packet would be 16777477 bytes, above the limit of 16777216 bytes")
+    assert.equal(outcome.message, "s: the packet would be 16779269 bytes, above the limit of 16777216 bytes")
     assert.ok(outcome.ms < 1000, `took ${outcome.ms} ms`)
     assert.ok(outcome.peakBytes < 256 * 1024 * 1024, `peak ${outcome.peakBytes} bytes`)
   })
 
   it("AC-2 an element that holds a times is refused at the default budget naming its member", () => {
     // Arrange
-    const items = Array.from({ length: 16 }, () => ({ n: 65_535, s: "a".repeat(16) }))
+    const items = Array.from({ length: 16 }, () => ({ n: 65_535, s: ROUND_TEXT }))
 
     // Act
     const message = refusal(() => BinaryPacker.pack(elementTimes(), { items }))
 
     // Assert
-    assert.equal(message, "s: the packet would be 16777233 bytes, above the limit of 16777216 bytes")
+    assert.equal(message, "s: the packet would be 16777231 bytes, above the limit of 16777216 bytes")
   })
 
   it("AC-2 with maxBytes raised to 32 MiB the same row packs and unpacks to it", () => {
     // Arrange
     const layout = elementTimes({ maxBytes: 33_554_432 })
-    const items = Array.from({ length: 16 }, () => ({ n: 65_535, s: "a".repeat(16) }))
+    const items = Array.from({ length: 16 }, () => ({ n: 65_535, s: ROUND_TEXT }))
 
     // Act
     const wire = BinaryPacker.pack(layout, { items })
     const { result, row } = unpack(layout, wire)
 
     // Assert
-    assert.equal(wire.length, 18_874_147)
-    assert.equal(hex(wire.subarray(0, 16)), "011000ffff0000100061616161616161")
-    assert.equal(hex(wire.subarray(wire.length - 16)), "61616161616161616161616161616161")
+    assert.equal(wire.length, 17_825_587)
+    assert.equal(hex(wire.subarray(0, 16)), "011000ffff00001010e4b8ade4b8ade4")
+    assert.equal(hex(wire.subarray(wire.length - 16)), "10e4b8ade4b8ade4b8ade4b8ade4b8ad")
     assert.deepEqual(result, { ok: true })
     const back = row!.items as { n: number; s: string[] }[]
     assert.equal(back.length, 16)
-    assert.ok(back.every((item) => item.n === 65_535 && item.s.length === 65_535 && item.s.every((s) => s === "a".repeat(16))))
+    assert.ok(back.every((item) => item.n === 65_535 && item.s.length === 65_535 && item.s.every((s) => s === ROUND_TEXT)))
   })
 
   it("AC-3 a packet of exactly maxBytes packs; one byte more is refused", () => {
@@ -116,12 +118,12 @@ describe("AZ-2354 pack has one output budget, maxBytes", () => {
     const layout = new Scheme<Row>(1, [utf8(0, (x) => x.s)], { maxBytes: 64 })
 
     // Act
-    const exact = BinaryPacker.pack(layout, { s: "a".repeat(61) })
-    const message = refusal(() => BinaryPacker.pack(layout, { s: "a".repeat(62) }))
+    const exact = BinaryPacker.pack(layout, { s: `${"\u4e2d".repeat(20)}x` })
+    const message = refusal(() => BinaryPacker.pack(layout, { s: `${"\u4e2d".repeat(20)}xx` }))
 
     // Assert
     assert.equal(exact.length, 64)
-    assert.equal(hex(exact), `013d00${"61".repeat(61)}`)
+    assert.equal(hex(exact), `013e10${"e4b8ad".repeat(20)}78`)
     assert.equal(message, "s: the packet would be 65 bytes, above the limit of 64 bytes")
   })
 
