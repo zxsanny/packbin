@@ -28,6 +28,23 @@ Same shape as TypeScript (`components/02_typescript_package/description.md` §2)
 
 Rows: a typed struct bound by getter and setter closures, or `map[string]any`. A nil pointer, slice or map is no value; an empty slice is a value with 0 items (G-5). In a map row an integer field takes any Go integer type that holds the value, a float field any Go integer or float, `Bytes` and `Sized` a `[]byte`, `Bits` and `Packed` a slice of integers, a `Bool` a bool. `UnpackMap` gives each value the Go type of its field, so a row it returned packs again to the same bytes.
 
+### Interface: Error correction (loop 38, ADR-007, `contracts/library/message-ecc.md`)
+
+Optional parity bytes per scheme: `n` from 0 to 32, default 0, which keeps the bytes, the errors and the speed of an unprotected scheme. `n` is not on the wire. C++ is pending (AZ-2688).
+
+| Name | Meaning |
+|------|---------|
+| `(*Scheme).WithParity(n) (*Scheme, error)` | a copy with `n` parity bytes, limits kept (`WithLimits` keeps the count); `n` outside 0 to `MaxParity` (32) is an `*Error` of kind `InvalidScheme` naming `n` and 32. `Parity()` reads it |
+| `UnpackRepair(buf, limit, schemes...) (any, int, error)` | repairs up to `limit` wrong bytes (0 to `n / 2`) before the type byte picks the scheme; the `int` is the bytes repaired. `UnpackMapRepair` gives the map; `Unpack` and `UnpackMap` are limit 0. Another limit, or a mix of counts, is `InvalidScheme` before any byte is read |
+| `Uncorrectable`, `ErrUncorrectable` | the new `Kind` (string `uncorrectable`) and its sentinel for `errors.Is`; names no field |
+| `TooMany` (reused) | a buffer above 254 bytes, `Field` `NoField`, `Left` the length. A buffer shorter than `n` is `ShortPacket` naming the field `parity` |
+
+- **Pack**: a clear message above `254 - n` bytes is a `PackRefused` error naming the length and the limit, with nil bytes.
+- **Dispatch**: the schemes of one call declare the same `n`; with one `n` the message is repaired first, then dispatched.
+- **Session**: `PackSession.Pack` pads, then appends the parity of the padded bytes. `PackSession.UnpackRepair` and `UnpackMapRepair` repair, drop the parity, remove the pad, then read; `Unpack` is limit 0. A payload refused as `Uncorrectable` spends a receive position; a bad limit or mix spends none. With `n` = 0 the payload has the length of clear pack.
+- **`t` and detection**: `t` defaults to 0 and then any corruption of up to `n` wrong bytes is detected. A `t` above 0 repairs up to `t` wrong bytes but gives up detection: corruption of `t + 1` to `n - t` bytes is still refused, a larger corruption may be repaired to a different message. The contract table lists the chance (`n` = 4: 1 in 4.29e+09 at `t` = 0, 1 in 990,537 at `t` = 1, 1 in 485 at `t` = 2). `t` above `n / 2` is an error before any byte is read.
+- **Size and speed**: a message is at most 254 bytes, parity included; pack refuses a clear message above `254 - n` bytes and writes nothing. Unpack of hostile bytes does at most 255 x 32 field operations beyond the unprotected walk and never throws or traps on them. Acceptance bound EC-13 (a bound, not a recorded measurement): 1,000 unpacks with correction of a 254-byte message with 16 parity bytes and 8 wrong bytes in 1 second; 1,000 packs of such blocks in 1 second.
+
 ## 3. Rules
 
 Go copies TypeScript row for row (loop 24 fit decision 4), except the documented TypeScript-only exceptions (U6, the bigint `times` count split), where it follows the five. A disagreement found while porting is reported, not decided in the task.

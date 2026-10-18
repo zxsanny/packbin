@@ -194,9 +194,12 @@ max_frame() {
 target_m4f() {
   local dir="$build/m4f"
   local arch=(-mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16)
-  arm_firmware_objects "$dir" "${arch[@]}"
-  arm_no_text_core_objects "$dir" "${arch[@]}"
-  arm_cxx "$dir" "$here/arm/size_main.cpp" size14.o "${arch[@]}" -DPACKBIN_NO_TEXT
+  # Cortex-M4F has no room for the message error correction tables (511 B of tables, about 2.2 KB
+  # of code against a 60 B margin), so the whole target builds with PACKBIN_NO_ECC.
+  local ecc_off=(-DPACKBIN_NO_ECC)
+  arm_firmware_objects "$dir" "${arch[@]}" "${ecc_off[@]}"
+  arm_no_text_core_objects "$dir" "${arch[@]}" "${ecc_off[@]}"
+  arm_cxx "$dir" "$here/arm/size_main.cpp" size14.o "${arch[@]}" "${ecc_off[@]}" -DPACKBIN_NO_TEXT
   arm_cxx "$dir" "$here/arm/size_main.cpp" baseline.o "${arch[@]}" -DPACKBIN_SIZE_BASELINE
   [ "$(count_warnings "$dir/compile.log")" -eq 0 ] || fail "compile warnings in size probe"
 

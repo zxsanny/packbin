@@ -46,21 +46,41 @@ public sealed class PackSession
     {
         if (_send is null)
             return null;
-        var clear = BinaryPacker.Pack(scheme, value);
+        var clear = BinaryPacker.PackClear(scheme, value);
+        Ecc.RequireFits(clear.Length, scheme.Parity);
         // Each call takes its own counter, so concurrent packs never reuse a keystream.
         SessionPad.Xor(_send, (ulong)(Interlocked.Increment(ref _sendCount) - 1), clear);
-        return clear;
+        // The code covers the padded bytes.
+        return Ecc.Protect(clear, scheme.Parity);
     }
 
-    public object? Unpack(ReadOnlySpan<byte> bytes, params SchemeHandler[] handlers)
+    public object? Unpack(ReadOnlySpan<byte> bytes, params SchemeHandler[] handlers) =>
+        Unpack(bytes, 0, out _, handlers);
+
+    // With parity bytes the payload is repaired (up to `limit` wrong bytes) before the pad is removed. The receive
+    // index advances for every payload, a refused one included.
+    public object? Unpack(ReadOnlySpan<byte> bytes, int limit, out int repaired, params SchemeHandler[] handlers)
     {
+        repaired = 0;
         if (_recv is null)
             return new ShortPacket("", 1, 0);
-        var clear = new byte[bytes.Length];
-        bytes.CopyTo(clear);
-        SessionPad.Xor(_recv, _recvCount, clear);
+        var parity = Ecc.SharedParity(handlers, limit);
+        var counter = _recvCount;
         _recvCount++;
-        return BinaryPacker.Unpack(clear, handlers);
+        if (parity == 0)
+        {
+            var clear = new byte[bytes.Length];
+            bytes.CopyTo(clear);
+            SessionPad.Xor(_recv, counter, clear);
+            return BinaryPacker.Unpack(clear, handlers);
+        }
+        BinaryPacker.RequireDistinct(handlers);
+        var error = Ecc.Repair(bytes, parity, limit, out var word, out repaired);
+        if (error is not null)
+            return error;
+        var padded = word.AsSpan(0, word.Length - parity);
+        SessionPad.Xor(_recv, counter, padded);
+        return BinaryPacker.Dispatch(padded, handlers);
     }
 
     private bool Open(ReadOnlySpan<byte> nonce, bool initiator)

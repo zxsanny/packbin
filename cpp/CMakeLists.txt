@@ -35,6 +35,13 @@ if(PACKBIN_NO_TEXT)
   target_compile_definitions(packbin PUBLIC PACKBIN_NO_TEXT)
 endif()
 
+# Without message error correction: a scheme with parity bytes is refused and no codec table or
+# repair code is linked. The Cortex-M4F flash budget needs it.
+option(PACKBIN_NO_ECC "Build without message error correction (parity bytes)" OFF)
+if(PACKBIN_NO_ECC)
+  target_compile_definitions(packbin PUBLIC PACKBIN_NO_ECC)
+endif()
+
 # Install and export only when packbin is the top-level project (the vcpkg port, or `cmake --install`
 # of cpp/ itself): a parent that add_subdirectory()s packbin must not install it with its own files.
 # Consumers then use find_package(packbin CONFIG REQUIRED) and the target packbin::packbin.

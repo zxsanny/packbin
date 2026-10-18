@@ -1,18 +1,31 @@
 /// Unpacks `buffer` with the scheme its first byte names, out of `schemes`. The row is the bound row
 /// type for a scheme whose fields are bound with `bind(get:set:)`, else a `[String: Any]` (see
 /// `unpackMap`). A buffer that cannot be read throws a `PackbinError` (`.short`, `.trailing`,
-/// `.unknownType`, `.badValue`) and gives no row; no input traps.
+/// `.unknownType`, `.badValue`) and gives no row; no input traps. Schemes with `parity` bytes check the
+/// message first and detect any wrong byte (`.uncorrectable`); `unpackRepair` repairs them.
 public func unpack(_ buffer: [UInt8], _ schemes: Scheme...) throws -> Any {
     try unpack(buffer, schemes)
 }
 
 /// `unpack` with the schemes as an array.
 public func unpack(_ buffer: [UInt8], _ schemes: [Scheme]) throws -> Any {
-    let (scheme, values, reached) = try dispatch(buffer, schemes, typed: true)
-    guard let binding = scheme.binding else { return values }
-    let box = binding.makeBox()
-    fillRow(scheme.place, box, values, reached)
-    return binding.unbox(box)
+    try unpackRepair(buffer, limit: 0, schemes).row
+}
+
+/// `unpack` that repairs up to `limit` wrong bytes of a protected message (0 to `parity` / 2) before the
+/// type byte picks the scheme, and gives the row with the count of bytes repaired. Every scheme of the
+/// call declares the same `parity`; a mix, or a limit out of range, throws a `.schemeError` before any
+/// byte is read. A message with more wrong bytes than `limit` repairs throws `.uncorrectable` and gives no
+/// row; one shorter than `parity` throws `.short` naming `parity`; one above 254 bytes throws `.tooMany`.
+/// Allowing repair gives up part of the detection: see `_docs/02_document/contracts/library/message-ecc.md`.
+public func unpackRepair(_ buffer: [UInt8], limit: Int, _ schemes: Scheme...) throws -> (row: Any, repaired: Int) {
+    try unpackRepair(buffer, limit: limit, schemes)
+}
+
+/// `unpackRepair` with the schemes as an array.
+public func unpackRepair(_ buffer: [UInt8], limit: Int, _ schemes: [Scheme]) throws -> (row: Any, repaired: Int) {
+    let fixed = try Ecc.repair(buffer, parity: try Ecc.sharedParity(schemes, limit: limit), limit: limit)
+    return (try readRow(fixed.clear, schemes), fixed.repaired)
 }
 
 /// `unpack` with the row as a map keyed by field name, for every scheme. A value has the Swift type
@@ -29,6 +42,33 @@ public func unpackMap(_ buffer: [UInt8], _ schemes: Scheme...) throws -> [String
 
 /// `unpackMap` with the schemes as an array.
 public func unpackMap(_ buffer: [UInt8], _ schemes: [Scheme]) throws -> [String: Any] {
+    try unpackMapRepair(buffer, limit: 0, schemes).row
+}
+
+/// `unpackRepair` with the row as a map, as `unpackMap` gives it.
+public func unpackMapRepair(_ buffer: [UInt8], limit: Int, _ schemes: Scheme...) throws
+    -> (row: [String: Any], repaired: Int) {
+    try unpackMapRepair(buffer, limit: limit, schemes)
+}
+
+/// `unpackMapRepair` with the schemes as an array.
+public func unpackMapRepair(_ buffer: [UInt8], limit: Int, _ schemes: [Scheme]) throws
+    -> (row: [String: Any], repaired: Int) {
+    let fixed = try Ecc.repair(buffer, parity: try Ecc.sharedParity(schemes, limit: limit), limit: limit)
+    return (try readMap(fixed.clear, schemes), fixed.repaired)
+}
+
+/// The row of an intact packet (the parity already checked and removed).
+func readRow(_ buffer: [UInt8], _ schemes: [Scheme]) throws -> Any {
+    let (scheme, values, reached) = try dispatch(buffer, schemes, typed: true)
+    guard let binding = scheme.binding else { return values }
+    let box = binding.makeBox()
+    fillRow(scheme.place, box, values, reached)
+    return binding.unbox(box)
+}
+
+/// The map row of an intact packet.
+func readMap(_ buffer: [UInt8], _ schemes: [Scheme]) throws -> [String: Any] {
     try dispatch(buffer, schemes, typed: false).1
 }
 

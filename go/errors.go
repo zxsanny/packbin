@@ -21,8 +21,12 @@ const (
 	PackRefused
 	// TooMany: unpack refuses a repeat or times round past the scheme's MaxRounds or MaxSlots when
 	// the round would start, before its bytes are read. Field and Name are the round's first member,
-	// Needed is 0 and Left the bytes left where the round would start.
+	// Needed is 0 and Left the bytes left where the round would start. A protected message of more than
+	// 254 bytes is refused the same way: Field is NoField and Left the length.
 	TooMany
+	// Uncorrectable: a protected message has more wrong bytes than the correction limit allows (or, with
+	// the limit 0, any wrong byte). It names no field and unpack returns no row.
+	Uncorrectable
 )
 
 // NoField is the Field of an error that belongs to no field: trailing bytes, an unknown type
@@ -45,6 +49,8 @@ func (k Kind) String() string {
 		return "pack_error"
 	case TooMany:
 		return "too_many"
+	case Uncorrectable:
+		return "uncorrectable"
 	}
 	return fmt.Sprintf("kind(%d)", int(k))
 }
@@ -76,6 +82,7 @@ var (
 	ErrInvalidScheme = &Error{Kind: InvalidScheme, Field: NoField}
 	ErrPackRefused   = &Error{Kind: PackRefused, Field: NoField}
 	ErrTooMany       = &Error{Kind: TooMany, Field: NoField}
+	ErrUncorrectable = &Error{Kind: Uncorrectable, Field: NoField}
 )
 
 // Is reports whether target is an *Error of the same Kind.
@@ -101,6 +108,8 @@ func (e *Error) Error() string {
 		return fmt.Sprintf("packbin: pack refused%s: %s", at, e.Reason)
 	case TooMany:
 		return fmt.Sprintf("packbin: too many%s: %s", at, e.Reason)
+	case Uncorrectable:
+		return "packbin: uncorrectable: " + e.Reason
 	}
 	return fmt.Sprintf("packbin: %v%s: %s", e.Kind, at, e.Reason)
 }

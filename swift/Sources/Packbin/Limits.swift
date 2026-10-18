@@ -13,11 +13,17 @@ extension Scheme {
 
     /// A copy of this scheme with the given limits; this scheme is unchanged. A limit left out takes
     /// its default, not this scheme's value. A limit below 1 throws a `PackbinError` of kind
-    /// `.schemeError` naming the limit.
-    public func withLimits(maxRounds: Int? = nil, maxSlots: Int? = nil, maxBytes: Int? = nil) throws -> Scheme {
-        Scheme(self, maxRounds: try checkedLimit("maxRounds", maxRounds, Scheme.defaultMaxRounds),
-               maxSlots: try checkedLimit("maxSlots", maxSlots, Scheme.defaultMaxSlots),
-               maxBytes: try checkedLimit("maxBytes", maxBytes, Scheme.defaultMaxBytes))
+    /// `.schemeError` naming the limit. `parity` is the count of parity bytes of message error
+    /// correction (0...32); left out it keeps this scheme's count, so setting a limit never drops
+    /// protection; another count throws a `.schemeError` naming `parity`, the count and 32.
+    public func withLimits(maxRounds: Int? = nil, maxSlots: Int? = nil, maxBytes: Int? = nil,
+                           parity: Int? = nil) throws -> Scheme {
+        let n = parity ?? self.parity
+        try Ecc.checkParity(n)
+        return Scheme(self, maxRounds: try checkedLimit("maxRounds", maxRounds, Scheme.defaultMaxRounds),
+                      maxSlots: try checkedLimit("maxSlots", maxSlots, Scheme.defaultMaxSlots),
+                      maxBytes: try checkedLimit("maxBytes", maxBytes, Scheme.defaultMaxBytes),
+                      parity: n)
     }
 }
 

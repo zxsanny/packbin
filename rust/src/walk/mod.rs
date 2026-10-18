@@ -17,6 +17,7 @@ pub(crate) use text::{decode as decode_text, encode as encode_text};
 #[cfg(test)]
 pub(crate) use cursor::packed_layout;
 
+use crate::ecc;
 use crate::field::MapScheme;
 use crate::value::{PackError, UnpackError, Values};
 
@@ -63,7 +64,17 @@ use crate::value::{PackError, UnpackError, Values};
 ///
 /// [`Value::List`]: crate::Value::List
 /// [`Value::Groups`]: crate::Value::Groups
+///
+/// A scheme with parity bytes (`MapScheme::with_parity`) appends them to the packet; a clear
+/// packet above `254 - n` bytes is a [`PackError::Type`] naming its length and the limit.
 pub fn pack(scheme: &MapScheme, values: &Values) -> Result<Vec<u8>, PackError> {
+    let mut bytes = pack::pack(scheme, values)?;
+    ecc::append(&mut bytes, scheme.parity)?;
+    Ok(bytes)
+}
+
+/// The clear packet, without parity bytes (the session pads it first).
+pub(crate) fn pack_clear(scheme: &MapScheme, values: &Values) -> Result<Vec<u8>, PackError> {
     pack::pack(scheme, values)
 }
 
@@ -94,6 +105,31 @@ pub fn pack(scheme: &MapScheme, values: &Values) -> Result<Vec<u8>, PackError> {
 ///
 /// [`Value::List`]: crate::Value::List
 /// [`Value::Groups`]: crate::Value::Groups
+///
+/// A scheme with parity bytes checks them first and detects only (limit 0): a corrupted packet
+/// is [`UnpackError::Uncorrectable`]. See [`unpack_repair`] to repair.
 pub fn unpack(scheme: &MapScheme, bytes: &[u8]) -> Result<Values, UnpackError> {
+    unpack_repair(scheme, bytes, 0).map(|(values, _)| values)
+}
+
+/// Unpacks like [`unpack`], repairing up to `limit` wrong bytes of a packet of a scheme with
+/// parity bytes, and returns the values with the number of bytes repaired (0 for an intact
+/// packet). `limit` is 0 to `n / 2`; more is [`UnpackError::BadLimit`] before any byte is read.
+/// Beyond the limit, or when no code word is within `limit` bytes of the packet, the error is
+/// [`UnpackError::Uncorrectable`]; a packet above 254 bytes is [`UnpackError::TooLong`]; one
+/// shorter than `n` is a [`UnpackError::Short`] naming the field `"parity"`. A wrong byte counts
+/// once however many of its bits differ. A scheme without parity bytes takes only limit 0 and
+/// reads as `unpack` does.
+pub fn unpack_repair(
+    scheme: &MapScheme,
+    bytes: &[u8],
+    limit: usize,
+) -> Result<(Values, usize), UnpackError> {
+    let (clear, repaired) = ecc::unprotect(bytes, scheme.parity, limit)?;
+    Ok((unpack::unpack(scheme, &clear)?, repaired))
+}
+
+/// Unpacks a packet whose parity bytes were already checked and dropped.
+pub(crate) fn unpack_clear(scheme: &MapScheme, bytes: &[u8]) -> Result<Values, UnpackError> {
     unpack::unpack(scheme, bytes)
 }

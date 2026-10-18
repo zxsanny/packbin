@@ -13,6 +13,8 @@ type Scheme struct {
 	row *accessor
 	// limits are the round, slot and output limits one Pack or Unpack call keeps.
 	limits Limits
+	// parity is the count of parity bytes pack appends and unpack checks (ecc.go); 0 is no protection.
+	parity int
 }
 
 // NewScheme builds a scheme from its type number (0..255) and its fields, numbered by order from 0.

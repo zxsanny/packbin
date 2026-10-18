@@ -17,6 +17,7 @@ import type { Value } from "./kinds.ts"
 import { hkdf } from "@noble/hashes/hkdf.js"
 import { sha256 } from "@noble/hashes/sha2.js"
 import { xorPad } from "./session-pad.ts"
+import { checkLimit, checkParity, checkSize, protect, repair, type EccErr } from "./ecc.ts"
 
 export type { Field, Acc } from "./fields.ts"
 export {
@@ -50,8 +51,12 @@ export {
 } from "./fields.ts"
 export type { Value, ShortErr, TypeMismatchErr } from "./kinds.ts"
 export type { UnpackErr } from "./walker.ts"
+export type { EccErr, TooLongErr, UncorrectableErr } from "./ecc.ts"
 
-export type DispatchResult = { ok: true } | UnpackErr
+// `repaired` is the count of bytes repaired, set when the schemes declare parity bytes (0 when intact);
+// a scheme without them returns `{ ok: true }` as before. A protected unpack can also be refused as
+// `uncorrectable` (more wrong bytes than the limit allows) or `too_long` (above 254 bytes).
+export type DispatchResult = { ok: true; repaired?: number } | UnpackErr | EccErr
 
 export type SchemeHandler<T> = {
   typeNumber: number
@@ -59,7 +64,8 @@ export type SchemeHandler<T> = {
   handler: (row: T) => void
 }
 
-export type SchemeLimits = { maxRounds?: number; maxSlots?: number; maxBytes?: number }
+// `parity` is the number of parity bytes pack appends, 0 to 32 (default 0, nothing appended).
+export type SchemeLimits = { maxRounds?: number; maxSlots?: number; maxBytes?: number; parity?: number }
 
 function checkedLimit(name: string, value: number | undefined, fallback: number): number {
   if (value === undefined) return fallback
@@ -84,6 +90,8 @@ export class Scheme<T> {
   readonly maxRounds: number
   readonly maxSlots: number
   readonly maxBytes: number
+  // Parity bytes pack appends and unpack checks (message-ecc contract); both sides share the number.
+  readonly parity: number
 
   // Every check runs here, so `new Scheme(...)` refuses what `scheme(...)` refuses.
   constructor(typeNumber: number, fields: Field[], limits: SchemeLimits = {}) {
@@ -99,14 +107,17 @@ export class Scheme<T> {
     this.maxRounds = checkedLimit("maxRounds", limits.maxRounds, Scheme.DefaultMaxRounds)
     this.maxSlots = checkedLimit("maxSlots", limits.maxSlots, Scheme.DefaultMaxSlots)
     this.maxBytes = checkedLimit("maxBytes", limits.maxBytes, Scheme.DefaultMaxBytes)
+    this.parity = limits.parity ?? 0
+    checkParity(this.parity)
     this.typeNumber = typeNumber
     this.fields = bindReferences(flat)
     validateElementKinds(this.fields)
   }
 
-  // A member left out takes the default, not this scheme's value; this scheme is unchanged.
+  // A limit left out takes the default, not this scheme's value; `parity` left out keeps this scheme's count, so
+  // setting a limit never drops protection. This scheme is unchanged.
   withLimits(limits: SchemeLimits = {}): Scheme<T> {
-    return new Scheme<T>(this.typeNumber, this.fields, limits)
+    return new Scheme<T>(this.typeNumber, this.fields, { ...limits, parity: limits.parity ?? this.parity })
   }
 
   on(handler: (row: T) => void): SchemeHandler<T> {
@@ -118,25 +129,46 @@ export function scheme<T>(typeNumber: number, ...fields: Field[]): Scheme<T> {
   return new Scheme(typeNumber, fields)
 }
 
+// The packed fields alone, parity not yet appended.
+function packClear<T extends object>(s: Scheme<T>, row: T): Uint8Array {
+  const out = new PackOut(s.maxBytes, s.typeNumber & 0xff)
+  const state: PackState = {
+    flagBytes: new Map<symbol, PackedFlagByte>(),
+    maxRounds: s.maxRounds,
+    maxSlots: s.maxSlots,
+    slots: 0,
+  }
+  packFields(s.fields, s.fields, flattenValues(row, s.fields), out, state, newScope())
+  return out.bytes()
+}
+
 export class BinaryPacker {
   static pack<T extends object>(s: Scheme<T>, row: T): Uint8Array {
-    const out = new PackOut(s.maxBytes, s.typeNumber & 0xff)
-    const state: PackState = {
-      flagBytes: new Map<symbol, PackedFlagByte>(),
-      maxRounds: s.maxRounds,
-      maxSlots: s.maxSlots,
-      slots: 0,
-    }
-    packFields(s.fields, s.fields, flattenValues(row, s.fields), out, state, newScope())
-    return out.bytes()
+    return protect(packClear(s, row), s.parity)
   }
 
+  // Detect only: a protected message with any wrong byte is refused as `uncorrectable`.
   static unpack(
     bytes: Uint8Array | ArrayBuffer,
     first: SchemeHandler<object>,
     ...rest: SchemeHandler<object>[]
   ): DispatchResult {
-    return unpackDispatch(toBuf(bytes), [first, ...rest])
+    return BinaryPacker.unpackRepair(bytes, 0, first, ...rest)
+  }
+
+  // Repairs up to `limit` wrong bytes (0 to parity / 2) before the type byte picks the handler. All
+  // handlers declare the same parity; a mix, or a limit out of range, throws before any byte is read.
+  static unpackRepair(
+    bytes: Uint8Array | ArrayBuffer,
+    limit: number,
+    first: SchemeHandler<object>,
+    ...rest: SchemeHandler<object>[]
+  ): DispatchResult {
+    const handlers = [first, ...rest]
+    const n = sharedParity(handlers, limit)
+    const fixed = repair(toBuf(bytes), n, limit)
+    if (!fixed.ok) return fixed
+    return unpackDispatch(fixed.clear, handlers, n > 0 ? fixed.repaired : undefined)
   }
 }
 
@@ -144,9 +176,22 @@ function toBuf(bytes: Uint8Array | ArrayBuffer): Uint8Array {
   return bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
 }
 
+// The parity every handler declares. Handlers with different counts could not share one repair.
+function sharedParity(handlers: SchemeHandler<object>[], limit: number): number {
+  const n = handlers[0]!.scheme.parity
+  for (const h of handlers) {
+    if (h.scheme.parity !== n) {
+      throw new RangeError(`handlers declare ${n} and ${h.scheme.parity} parity bytes; they must declare the same count`)
+    }
+  }
+  checkLimit(limit, n)
+  return n
+}
+
 function unpackDispatch(
   buf: Uint8Array,
   handlers: SchemeHandler<object>[],
+  repaired: number | undefined,
 ): DispatchResult {
   const seen = new Set<number>()
   for (const h of handlers) {
@@ -162,7 +207,7 @@ function unpackDispatch(
   const body = unpackBody(match.scheme.fields, buf, 1, match.scheme.maxRounds, match.scheme.maxSlots)
   if (!body.ok) return body
   match.handler(body.values as object)
-  return { ok: true }
+  return repaired === undefined ? { ok: true } : { ok: true, repaired }
 }
 
 export type UnpackOk = { ok: true } & Value
@@ -213,10 +258,12 @@ export class PackSession {
 
   pack<T extends object>(s: Scheme<T>, row: T): Uint8Array | null {
     if (this.#send === null) return null
-    const clear = BinaryPacker.pack(s, row)
+    const clear = packClear(s, row)
+    checkSize(clear.length, s.parity)
     xorPad(this.#send, this.#sendCount, clear)
     this.#sendCount++
-    return clear
+    // The parity covers the padded bytes, so the receiver repairs before it removes the pad.
+    return protect(clear, s.parity)
   }
 
   unpack(
@@ -224,12 +271,26 @@ export class PackSession {
     first: SchemeHandler<object>,
     ...rest: SchemeHandler<object>[]
   ): DispatchResult {
+    return this.unpackRepair(bytes, 0, first, ...rest)
+  }
+
+  // As `BinaryPacker.unpackRepair`. The receive index advances on every call that reads bytes, a
+  // refused one included, as it does for an unprotected payload.
+  unpackRepair(
+    bytes: Uint8Array | ArrayBuffer,
+    limit: number,
+    first: SchemeHandler<object>,
+    ...rest: SchemeHandler<object>[]
+  ): DispatchResult {
     if (this.#recv === null) return { ok: false, field: "", needed: 1, left: 0 }
-    const src = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
-    const clear = Uint8Array.from(src)
-    xorPad(this.#recv, this.#recvCount, clear)
-    this.#recvCount++
-    return BinaryPacker.unpack(clear, first, ...rest)
+    const handlers = [first, ...rest]
+    const n = sharedParity(handlers, limit)
+    const fixed = repair(toBuf(bytes), n, limit)
+    const index = this.#recvCount++
+    if (!fixed.ok) return fixed
+    const clear = Uint8Array.from(fixed.clear)
+    xorPad(this.#recv, index, clear)
+    return unpackDispatch(clear, handlers, n > 0 ? fixed.repaired : undefined)
   }
 
   #open(nonce: Uint8Array, initiator: boolean): boolean {

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from packbin._errors import ShortPacket, TrailingBytes, TypeMismatch, UnpackResult
+from packbin._errors import ShortPacket, TooLong, TrailingBytes, TypeMismatch, Uncorrectable, UnpackResult
 from packbin._nodes import (
     be,
     bits,
@@ -40,8 +40,10 @@ __all__ = [
     "PackSession",
     "Scheme",
     "ShortPacket",
+    "TooLong",
     "TrailingBytes",
     "TypeMismatch",
+    "Uncorrectable",
     "UnpackResult",
     "u8",
     "u16",

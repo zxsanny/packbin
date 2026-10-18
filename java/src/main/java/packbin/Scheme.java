@@ -17,6 +17,7 @@ public final class Scheme<T> {
     final int maxRounds;
     final long maxSlots;
     final long maxBytes;
+    final int parity;
 
     @SafeVarargs
     public Scheme(int typeNumber, Class<T> type, Field... fields) {
@@ -31,10 +32,11 @@ public final class Scheme<T> {
         this.maxRounds = DEFAULT_MAX_ROUNDS;
         this.maxSlots = DEFAULT_MAX_SLOTS;
         this.maxBytes = DEFAULT_MAX_BYTES;
+        this.parity = 0;
         MemberNames.validate(this.fields);
     }
 
-    private Scheme(Scheme<T> base, int maxRounds, long maxSlots, long maxBytes) {
+    private Scheme(Scheme<T> base, int maxRounds, long maxSlots, long maxBytes, int parity) {
         if (maxRounds < 1) {
             throw new IllegalArgumentException("maxRounds must be at least 1");
         }
@@ -44,12 +46,14 @@ public final class Scheme<T> {
         if (maxBytes < 1) {
             throw new IllegalArgumentException("maxBytes must be at least 1");
         }
+        Ecc.checkParity(parity);
         this.typeNumber = base.typeNumber;
         this.type = base.type;
         this.fields = base.fields;
         this.maxRounds = maxRounds;
         this.maxSlots = maxSlots;
         this.maxBytes = maxBytes;
+        this.parity = parity;
     }
 
     public int maxRounds() {
@@ -71,7 +75,7 @@ public final class Scheme<T> {
      * {@link #DEFAULT_MAX_BYTES}, not this scheme's maxBytes. Returns a new scheme; this one is unchanged.
      */
     public Scheme<T> withLimits(int maxRounds, long maxSlots) {
-        return new Scheme<>(this, maxRounds, maxSlots, DEFAULT_MAX_BYTES);
+        return new Scheme<>(this, maxRounds, maxSlots, DEFAULT_MAX_BYTES, parity);
     }
 
     /**
@@ -79,7 +83,21 @@ public final class Scheme<T> {
      * write. Keeps this scheme's other limits. Returns a new scheme; this one is unchanged.
      */
     public Scheme<T> withMaxBytes(long maxBytes) {
-        return new Scheme<>(this, maxRounds, maxSlots, maxBytes);
+        return new Scheme<>(this, maxRounds, maxSlots, maxBytes, parity);
+    }
+
+    /** The parity bytes pack appends and unpack checks (message-ecc contract), 0 to 32; 0 is the unprotected format. */
+    public int parity() {
+        return parity;
+    }
+
+    /**
+     * The same scheme with {@code parity} parity bytes (0 to 32) appended to every packed message; the sender and the
+     * receiver share the number. A number outside 0 to 32 is refused. Keeps this scheme's limits. Returns a new scheme;
+     * this one is unchanged.
+     */
+    public Scheme<T> withParity(int parity) {
+        return new Scheme<>(this, maxRounds, maxSlots, maxBytes, parity);
     }
 
     public Handler<T> on(Consumer<T> handler) {

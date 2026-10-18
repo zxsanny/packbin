@@ -245,6 +245,10 @@ fn variant(err: &UnpackError) -> &'static str {
         UnpackError::Trailing { .. } => "Trailing",
         UnpackError::Type { .. } => "Type",
         UnpackError::DuplicateType { .. } => "DuplicateType",
+        UnpackError::Uncorrectable => "Uncorrectable",
+        UnpackError::TooLong { .. } => "TooLong",
+        UnpackError::BadLimit { .. } => "BadLimit",
+        UnpackError::MixedParity { .. } => "MixedParity",
     }
 }
 

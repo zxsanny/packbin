@@ -6,16 +6,28 @@
 /// but a `[UInt8]` and a dict any dictionary with `String` keys; a Foundation `NSNumber` is read as
 /// the `Bool`, integer or float it was made from. Any other value (a `Bool` or a `Double` for an
 /// integer, an integer for a bool, a group member given outside its group) is refused. A refused row
-/// throws a `PackbinError` of kind `.packError` naming the field id, and no bytes are returned.
+/// throws a `PackbinError` of kind `.packError` naming the field id, and no bytes are returned. A scheme
+/// with `parity` bytes gets them appended; a clear packet above 254 - `parity` bytes is refused as a
+/// `.packError` naming its length and the limit.
 public func pack(_ scheme: Scheme, _ row: [String: Any]) throws -> [UInt8] {
-    try packValues(scheme, try mapValues(scheme.place, row))
+    try Ecc.protect(try packClear(scheme, row), parity: scheme.parity)
 }
 
 /// Packs a typed row, a value of the type the scheme's fields are bound to with `bind(get:set:)`. A
 /// `[String: Any]` (or any `[String: V]`) is packed as a map row.
 public func pack<Row>(_ scheme: Scheme, _ row: Row) throws -> [UInt8] {
+    try Ecc.protect(try packClear(scheme, row), parity: scheme.parity)
+}
+
+/// The packet of a map row without the parity bytes.
+func packClear(_ scheme: Scheme, _ row: [String: Any]) throws -> [UInt8] {
+    try packValues(scheme, try mapValues(scheme.place, row))
+}
+
+/// The packet of a typed (or map) row without the parity bytes.
+func packClear<Row>(_ scheme: Scheme, _ row: Row) throws -> [UInt8] {
     let box = scheme.binding?.boxRow(row)
-    if box == nil, let map = row as? [String: Any] { return try pack(scheme, map) }
+    if box == nil, let map = row as? [String: Any] { return try packClear(scheme, map) }
     let first = scheme.place.members.first?.node
     guard let binding = scheme.binding else {
         throw PackbinError.pack(first?.errorID, first?.name ?? "",

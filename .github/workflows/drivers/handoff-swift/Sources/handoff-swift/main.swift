@@ -85,6 +85,7 @@ func run(_ args: [String]) -> Int32 {
     default:
         break
     }
+    if cmd.hasPrefix("ecc-") { return eccCommand(args) }
     guard let (name, op, short) = splitCommand(cmd) else { return 2 }
     let found: Kind?
     do {

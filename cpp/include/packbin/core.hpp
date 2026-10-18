@@ -21,6 +21,9 @@ enum class Error : std::uint8_t {
   SchemeInvalid,
   // A string needs more encoder scratch than `pack` was given (`needed` is the bytes required).
   ScratchTooSmall,
+  // A protected message (a scheme with parity bytes) has more wrong bytes than the correction
+  // limit allows, or any wrong byte when the limit is 0. No values are read; no field is named.
+  Uncorrectable,
 };
 
 // Working memory of the compact-text encoder: 3 words (12 bytes) per Unicode code point of the
@@ -48,12 +51,18 @@ struct Scratch {
 
 // On failure, `offset` is the byte where the failure was found, `field` the order id (-1 when
 // no field applies) and `needed` the bytes that field required. On success, `offset` is the
-// number of bytes written or read.
+// number of bytes written or read (a protected message counts its parity bytes) and `repaired`
+// the wrong bytes `unpack_repair` fixed in the buffer (0 for any other call). A build with
+// PACKBIN_NO_ECC repairs nothing and has no `repaired`, so its Result is the one of earlier
+// releases (the member comes last so the positional initializers of the core stay as they are).
 struct Result {
   Error error = Error::Ok;
   std::size_t offset = 0;
   int field = -1;
   std::size_t needed = 0;
+#ifndef PACKBIN_NO_ECC
+  std::uint8_t repaired = 0;
+#endif
 
   constexpr bool ok() const { return error == Error::Ok; }
 };

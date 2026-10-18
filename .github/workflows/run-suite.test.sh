@@ -284,7 +284,7 @@ printf '#!/bin/sh\nexit 0\n' > "$present/java/test.sh"
 toolbin="$work/toolbin"
 mkdir -p "$toolbin"
 for tool in dotnet cargo make; do
-  printf '#!/bin/sh\necho "%s $*" >> "$GO_LOG"\ncase "$*" in *--list*) [ -n "${FAKE_NO_SPEED_TEST:-}" ] || echo "text_positions_tests::ac8_one_hundred_thousand_round_trips_of_a_20_character_ukrainian_string: test" ;; esac\nexit "${FAKE_TOOL_EXIT:-0}"\n' "$tool" > "$toolbin/$tool"
+  printf '#!/bin/sh\necho "%s $*" >> "$GO_LOG"\ncase "$*" in *--list*) [ -n "${FAKE_NO_SPEED_TEST:-}" ] || echo "text_positions_tests::ac8_one_hundred_thousand_round_trips_of_a_20_character_ukrainian_string: test"; [ -n "${FAKE_NO_ECC_SPEED_TEST:-}" ] || printf "ecc_repair_tests::ec13_repairs_within_the_bound: test\\necc_repair_tests::ec13_packs_within_the_bound: test\\n" ;; esac\nexit "${FAKE_TOOL_EXIT:-0}"\n' "$tool" > "$toolbin/$tool"
   chmod +x "$toolbin/$tool"
 done
 for lang in csharp rust cpp java; do
@@ -308,7 +308,9 @@ env SRC_ROOT="$present" FIXTURE="$present/fixtures/golden.hex" TEST_RESULTS="$wo
 grep -q 'cargo test --manifest-path .* --release --lib -- --list' "$work/go.log" || bad "rust: no release list of the tests: $(cat "$work/go.log")"
 grep -q 'cargo test --manifest-path .* --release --lib ac8_one_hundred_thousand_round_trips -- --nocapture' "$work/go.log" \
   || bad "rust: the string speed test does not run in the release configuration: $(cat "$work/go.log")"
-[ "$(grep -c '^cargo ' "$work/go.log")" -eq 3 ] || bad "rust: not the debug suite, the release list and the release run: $(cat "$work/go.log")"
+grep -q 'cargo test --manifest-path .* --release --lib ec13_ -- --nocapture' "$work/go.log" \
+  || bad "rust: the message ECC speed tests (ec13_) do not run in the release configuration: $(cat "$work/go.log")"
+[ "$(grep -c '^cargo ' "$work/go.log")" -eq 4 ] || bad "rust: not the debug suite, the release list and the two release runs: $(cat "$work/go.log")"
 
 # R2. a rust tree without the string speed test fails by name, and the filter is not run (a filter that matches
 # nothing passes) (AZ-2665 AC-3)
@@ -318,6 +320,14 @@ out="$(env SRC_ROOT="$present" FIXTURE="$present/fixtures/golden.hex" TEST_RESUL
 [ "$code" -ne 0 ] || bad "rust: a tree without the string speed test passed"
 case "$out" in *"rust has no string speed test"*) ;; *) bad "rust: no message for the missing string speed test: $out" ;; esac
 if grep -q 'ac8_one_hundred_thousand_round_trips -- --nocapture' "$work/go.log"; then bad "rust: the speed filter ran without the test: $(cat "$work/go.log")"; fi
+
+# R3. a rust tree without the message ECC speed tests (ec13_) fails by name too, and neither release run starts
+rm -f "$work/bare.rows"; : > "$work/go.log"
+out="$(env SRC_ROOT="$present" FIXTURE="$present/fixtures/golden.hex" TEST_RESULTS="$work/bare" GO_LOG="$work/go.log" \
+  FAKE_NO_ECC_SPEED_TEST=1 PATH="$toolbin:$PATH" perl -e 'alarm 60; exec @ARGV' -- bash "$suite_sh" rust </dev/null 2>&1)"; code=$?
+[ "$code" -ne 0 ] || bad "rust: a tree without the message ECC speed tests passed"
+case "$out" in *"rust has fewer than two message ECC speed tests"*) ;; *) bad "rust: no message for the missing ECC speed tests: $out" ;; esac
+if grep -q -- '--release --lib .* -- --nocapture' "$work/go.log"; then bad "rust: a release run started without the ECC speed tests: $(cat "$work/go.log")"; fi
 
 # --- the timing notice (AZ-2607 AC-2) ---
 # On GitHub Actions a run ends with ONE notice on stdout, so the seconds of a CI suite job are readable without a token:

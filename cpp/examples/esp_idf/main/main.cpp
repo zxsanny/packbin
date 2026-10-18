@@ -20,6 +20,9 @@ constexpr auto position = packbin::scheme<Position>(
     packbin::flags(4, packbin::u16<&Position::heading>(4), packbin::u8<&Position::speed>(5),
                    packbin::i16<&Position::altitude>(6)));
 
+// The same row with 4 parity bytes after it: a receiver repairs up to 2 wrong bytes.
+constexpr auto protected_position = packbin::parity(position, 4);
+
 // The board's hardware random number generator for PackSession::start.
 static bool board_random(std::uint8_t* out, std::size_t n, void*) {
   esp_fill_random(out, n);
@@ -37,6 +40,12 @@ extern "C" void app_main(void) {
   for (std::size_t i = 0; r.ok() && i < r.offset; ++i)
     std::printf("%02x", buf[i]);
   std::printf("\n");  // 4001000065cd1d00a3e1110100
+
+  std::uint8_t sent[20];
+  packbin::Result q = packbin::pack(protected_position, row, sent, sizeof(sent));
+  for (std::size_t i = 0; q.ok() && i < q.offset; ++i)
+    std::printf("%02x", sent[i]);
+  std::printf("\n");  // 4001000065cd1d00a3e1110100ca856682
 
   std::uint8_t seed[packbin::PackSession::SeedSize] = {1};
   std::uint8_t nonce[packbin::PackSession::NonceSize];

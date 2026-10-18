@@ -17,6 +17,7 @@ pub struct MapScheme {
     pub(crate) max_rounds: usize,
     pub(crate) max_slots: usize,
     pub(crate) max_bytes: usize,
+    pub(crate) parity: usize,
 }
 
 /// Names and fields counted once, as a capacity hint for the unpacked values.
@@ -118,6 +119,7 @@ impl MapScheme {
             max_rounds: DEFAULT_MAX_ROUNDS,
             max_slots: DEFAULT_MAX_SLOTS,
             max_bytes: DEFAULT_MAX_BYTES,
+            parity: 0,
         }
     }
 
@@ -149,6 +151,26 @@ impl MapScheme {
         }
         self.max_bytes = max_bytes;
         self
+    }
+
+    /// Returns the scheme with `n` parity bytes after every message (clone first to keep the
+    /// original; default 0, which leaves the bytes as they were). `pack` appends them and
+    /// `unpack` checks them and repairs up to the limit the caller passes to `unpack_repair`.
+    /// Both sides must share `n`. Panics, naming `n` and the limit, when `n` is above
+    /// [`MAX_PARITY`](crate::MAX_PARITY) (32).
+    pub fn with_parity(mut self, n: usize) -> Self {
+        if n > crate::ecc::MAX_PARITY {
+            panic!(
+                "parity bytes {n} is above the limit of {}",
+                crate::ecc::MAX_PARITY
+            );
+        }
+        self.parity = n;
+        self
+    }
+
+    pub fn parity(&self) -> usize {
+        self.parity
     }
 
     pub fn max_rounds(&self) -> usize {

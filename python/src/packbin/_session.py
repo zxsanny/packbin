@@ -4,8 +4,9 @@ import secrets
 from collections.abc import Mapping
 from typing import Any, TypeVar
 
+from packbin import _ecc
 from packbin._errors import ShortPacket, UnpackResult
-from packbin._scheme import BinaryPacker, Scheme, _Handler
+from packbin._scheme import BinaryPacker, Scheme, _checked_correction, _Handler
 from packbin._session_pad import hkdf_sha256, xor_pad
 
 T = TypeVar("T")
@@ -64,22 +65,36 @@ class PackSession:
     def pack(self, scheme: Scheme[T], row: T | Mapping[str, Any]) -> bytes | None:
         if self._send is None:
             return None
-        clear = bytearray(BinaryPacker.pack(scheme, row))
+        clear = bytearray(BinaryPacker._pack_clear(scheme, row))
         xor_pad(self._send, self._send_count, clear)
         self._send_count += 1
+        if scheme.parity:
+            clear += _ecc.parity(clear, scheme.parity)
         return bytes(clear)
 
     def unpack(
         self,
         data: bytes | bytearray | memoryview,
         *handlers: _Handler[Any],
+        limit: int = 0,
     ) -> UnpackResult[Any]:
+        """A protected message is repaired (up to `limit` wrong bytes) before the pad is removed; the receive
+        index advances for every payload that passes the checks of the call, a refused one included."""
         if self._recv is None:
             return UnpackResult(ok=False, value=None, error=ShortPacket(field="", needed=1, left=0))
-        clear = bytearray(data)
-        xor_pad(self._recv, self._recv_count, clear)
+        if not handlers:
+            raise TypeError("unpack() missing handlers")
+        by_type, parity = BinaryPacker._dispatch_table(handlers)
+        _checked_correction(limit, parity)
+        key, index = self._recv, self._recv_count
         self._recv_count += 1
-        return BinaryPacker.unpack(bytes(clear), *handlers)
+
+        def unpad(padded: bytes) -> bytes:
+            clear = bytearray(padded)
+            xor_pad(key, index, clear)
+            return bytes(clear)
+
+        return BinaryPacker._receive(bytearray(data), by_type, parity, limit, unpad)
 
     def _open(self, nonce: bytes, initiator: bool) -> bool:
         if self._seed is None or self._send is not None:

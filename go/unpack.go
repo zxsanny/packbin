@@ -5,17 +5,39 @@ import "encoding/binary"
 // Unpack reads buf with the scheme its first byte names, out of schemes. The row is a *T for a scheme
 // whose fields are bound with Bind, else a map[string]any. A buffer that cannot be read returns a nil
 // row and an *Error (ShortPacket, TrailingBytes, UnknownType or BadValue); it never panics.
+//
+// Schemes that declare parity bytes (WithParity) must all declare the same count. Unpack checks the
+// message against them and reads it only when it is intact: any wrong byte returns an *Error of kind
+// Uncorrectable, a message shorter than the count a ShortPacket naming the field "parity", and one above
+// 254 bytes a TooMany.
 func Unpack(buf []byte, schemes ...*Scheme) (any, error) {
-	s, r, err := dispatch(buf, schemes)
+	row, _, err := UnpackRepair(buf, 0, schemes...)
+	return row, err
+}
+
+// UnpackRepair is Unpack that repairs up to limit wrong bytes of a protected message before it reads
+// it, limit 0 to n/2 for the n parity bytes of the schemes (a limit outside that is an *Error of kind
+// InvalidScheme, returned before any byte is read). It also returns the count of bytes it repaired, 0
+// for an intact message. Beyond the limit it returns an *Error of kind Uncorrectable and no row, never a
+// wrong row for up to n minus limit wrong bytes; a larger corruption may be repaired to a different
+// message, so a larger limit gives up detection (contract message-ecc, "Detection and the correction
+// limit"). The caller's buffer is not written.
+func UnpackRepair(buf []byte, limit int, schemes ...*Scheme) (any, int, error) {
+	s, r, repaired, err := dispatch(buf, limit, schemes)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
+	return rowOf(s, r), repaired, nil
+}
+
+// rowOf is the row r read with s: a *T for a bound scheme, else the map of values.
+func rowOf(s *Scheme, r *reader) any {
 	if s.row == nil {
-		return r.values, nil
+		return r.values
 	}
 	row := s.row.newRow()
 	fillRow(s.top, row, r.values, r.reached)
-	return row, nil
+	return row
 }
 
 // UnpackMap is Unpack with the row as a map keyed by field name, for every scheme. A value has the
@@ -23,27 +45,72 @@ func Unpack(buf []byte, schemes ...*Scheme) (any, error) {
 // bool or empty group, and a map[string]any of its members for a group. A field that was not read (a
 // clear bit, a when that did not match) has no key.
 func UnpackMap(buf []byte, schemes ...*Scheme) (map[string]any, error) {
-	_, r, err := dispatch(buf, schemes)
-	if err != nil {
-		return nil, err
-	}
-	return r.values, nil
+	row, _, err := UnpackMapRepair(buf, 0, schemes...)
+	return row, err
 }
 
-func dispatch(buf []byte, schemes []*Scheme) (*Scheme, *reader, error) {
+// UnpackMapRepair is UnpackMap with the correction limit and the repaired count of UnpackRepair.
+func UnpackMapRepair(buf []byte, limit int, schemes ...*Scheme) (map[string]any, int, error) {
+	_, r, repaired, err := dispatch(buf, limit, schemes)
+	if err != nil {
+		return nil, 0, err
+	}
+	return r.values, repaired, nil
+}
+
+// sharedParity is the count of parity bytes every scheme of an unpack call declares. Schemes with
+// different counts could not share one repair: the call is refused, naming both counts.
+func sharedParity(schemes []*Scheme) (int, error) {
+	n := schemes[0].parity
+	for _, s := range schemes {
+		if s.parity != n {
+			return 0, schemeErr(NoField, "", "unpack schemes declare %d and %d parity bytes; they must declare the same count",
+				n, s.parity)
+		}
+	}
+	return n, nil
+}
+
+// checkSchemes refuses an unpack call whose scheme list is unusable and returns the parity count the
+// schemes share.
+func checkSchemes(schemes []*Scheme) (int, error) {
 	if len(schemes) == 0 {
-		return nil, nil, schemeErr(NoField, "", "unpack needs at least one scheme")
+		return 0, schemeErr(NoField, "", "unpack needs at least one scheme")
 	}
 	var seen [256]bool
 	for _, s := range schemes {
 		if s.unusable() {
-			return nil, nil, schemeErr(NoField, "", "a scheme is invalid: %s", s.notMade())
+			return 0, schemeErr(NoField, "", "a scheme is invalid: %s", s.notMade())
 		}
 		if seen[s.typeNumber] {
-			return nil, nil, schemeErr(NoField, "", "duplicate type number %d", s.typeNumber)
+			return 0, schemeErr(NoField, "", "duplicate type number %d", s.typeNumber)
 		}
 		seen[s.typeNumber] = true
 	}
+	return sharedParity(schemes)
+}
+
+// dispatch repairs buf, then reads it with the scheme its first byte names.
+func dispatch(buf []byte, limit int, schemes []*Scheme) (*Scheme, *reader, int, error) {
+	n, err := checkSchemes(schemes)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	if err := checkLimit(limit, n); err != nil {
+		return nil, nil, 0, err
+	}
+	fixed, repaired, err := repair(buf, n, limit)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	s, r, err := readPacket(fixed, schemes)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	return s, r, repaired, nil
+}
+
+func readPacket(buf []byte, schemes []*Scheme) (*Scheme, *reader, error) {
 	if len(buf) < 1 {
 		return nil, nil, shortErr(NoField, "", 1, 0)
 	}

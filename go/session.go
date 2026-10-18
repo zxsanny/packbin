@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -89,13 +88,18 @@ func (s *PackSession) Join(nonce []byte) error {
 
 // Pack packs row with scheme s as Pack does, then pads the bytes with the next position of this
 // session's send direction. Before Start or Join, or when the row is refused, it returns nil bytes and
-// an *Error and the position does not advance.
+// an *Error and the position does not advance. A scheme with parity bytes (WithParity) has them appended
+// after the pad, so the payload is the clear packet plus their count and the parity covers the padded
+// bytes.
 func (s *PackSession) Pack(sc *Scheme, row any) ([]byte, error) {
 	if !s.isOpen() {
 		return nil, &Error{Kind: PackRefused, Field: NoField, Reason: "the session is not open: call Start or Join first"}
 	}
-	plain, err := Pack(sc, row)
+	plain, err := packClear(sc, row)
 	if err != nil {
+		return nil, err
+	}
+	if err := checkRoom(len(plain), sc.parity); err != nil {
 		return nil, err
 	}
 	s.mu.Lock()
@@ -104,7 +108,7 @@ func (s *PackSession) Pack(sc *Scheme, row any) ([]byte, error) {
 		return nil, err
 	}
 	s.sendCount++
-	return plain, nil
+	return protect(plain, sc.parity)
 }
 
 // isOpen is true once the session is open.
@@ -123,40 +127,72 @@ func (s *PackSession) isOpen() bool {
 // Join or Start it returns an *Error of kind ShortPacket (needed 1, left 0), and a call with a nil or
 // repeated scheme, or none, returns an *Error of kind InvalidScheme without using a position.
 func (s *PackSession) Unpack(payload []byte, schemes ...*Scheme) (any, error) {
-	plain, err := s.receive(payload, schemes)
+	row, _, err := s.UnpackRepair(payload, 0, schemes...)
+	return row, err
+}
+
+// UnpackRepair is Unpack with the correction limit and the repaired count of UnpackRepair: the payload
+// is repaired before the pad is removed, because the parity covers the padded bytes. A limit outside
+// 0..n/2 returns an *Error of kind InvalidScheme without using a position; a payload that is refused as
+// Uncorrectable uses one.
+func (s *PackSession) UnpackRepair(payload []byte, limit int, schemes ...*Scheme) (any, int, error) {
+	plain, repaired, err := s.receive(payload, limit, schemes)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return Unpack(plain, schemes...)
+	match, r, err := readPacket(plain, schemes)
+	if err != nil {
+		return nil, 0, err
+	}
+	return rowOf(match, r), repaired, nil
 }
 
 // UnpackMap is Unpack with the row as a map keyed by field name, as UnpackMap gives it.
 func (s *PackSession) UnpackMap(payload []byte, schemes ...*Scheme) (map[string]any, error) {
-	plain, err := s.receive(payload, schemes)
-	if err != nil {
-		return nil, err
-	}
-	return UnpackMap(plain, schemes...)
+	row, _, err := s.UnpackMapRepair(payload, 0, schemes...)
+	return row, err
 }
 
-// receive is a copy of payload with the receive pad removed and the position advanced.
-func (s *PackSession) receive(payload []byte, schemes []*Scheme) ([]byte, error) {
+// UnpackMapRepair is UnpackRepair with the row as a map, as UnpackMap gives it.
+func (s *PackSession) UnpackMapRepair(payload []byte, limit int, schemes ...*Scheme) (map[string]any, int, error) {
+	plain, repaired, err := s.receive(payload, limit, schemes)
+	if err != nil {
+		return nil, 0, err
+	}
+	_, r, err := readPacket(plain, schemes)
+	if err != nil {
+		return nil, 0, err
+	}
+	return r.values, repaired, nil
+}
+
+// receive is the clear packet of a payload: a copy repaired and with its parity dropped, the receive pad
+// removed and the position advanced, and the count of bytes repaired.
+func (s *PackSession) receive(payload []byte, limit int, schemes []*Scheme) ([]byte, int, error) {
 	if !s.isOpen() {
-		return nil, shortErr(NoField, "", 1, 0)
+		return nil, 0, shortErr(NoField, "", 1, 0)
 	}
-	// An unusable scheme list is the caller's mistake, not the packet's: no position is spent on it.
-	var bad *Error
-	if _, _, err := dispatch(nil, schemes); errors.As(err, &bad) && bad.Kind == InvalidScheme {
-		return nil, bad
+	// An unusable scheme list or limit is the caller's mistake, not the packet's: no position is spent on it.
+	n, err := checkSchemes(schemes)
+	if err != nil {
+		return nil, 0, err
 	}
-	plain := append([]byte(nil), payload...)
+	if err := checkLimit(limit, n); err != nil {
+		return nil, 0, err
+	}
+	fixed, repaired, repairErr := repair(payload, n, limit)
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if repairErr != nil {
+		s.recvCount++
+		return nil, 0, repairErr
+	}
+	plain := append([]byte(nil), fixed...)
 	if err := pad(s.recv, s.recvCount, plain); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	s.recvCount++
-	return plain, nil
+	return plain, repaired, nil
 }
 
 // canOpen is called with the lock held.

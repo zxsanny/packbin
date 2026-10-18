@@ -30,6 +30,7 @@ jobs:
       # cpp suite uses, through ring-cxx.sh. The macOS sysroot recipe of language-pair.sh stays off.
       CXX: ${{ github.workspace }}/.github/workflows/ring-cxx.sh
       PACKBIN_CXX_SYSROOT: ""
+      PACKBIN_RING_WORK: ${{ github.workspace }}/ring-work
       DOTNET_NOLOGO: "1"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
     steps:
@@ -84,6 +85,10 @@ jobs:
         run: bash .github/workflows/ring-toolchains.sh
       - name: cross-language ring
         run: bash .github/workflows/language-pair.sh
+      # The message ECC ring (AZ-2689, EC-9): 8 writers x 8 readers over the position rows. It reuses the C# and C++ driver
+      # builds the ring step above kept in PACKBIN_RING_WORK (under the workspace: the gcc container sees /tmp and the repo).
+      - name: message ECC ring
+        run: bash .github/workflows/ring-ecc.sh
 
   # The suites and the publish gate share nothing (the gate pulls its own images), so they run beside each other and
   # beside scaffold, embedded and ring: the wall time is the longest job, not the sum (AZ-2564). The free plan runs 20 jobs
@@ -340,6 +345,14 @@ jobs:
         run: bash scripts/text/check-emitted.test.sh
       - name: compact text tables in the packages
         run: bash scripts/text/check-emitted.sh
+      - name: message ECC vectors
+        run: bash fixtures/ecc/check-vectors.test.sh
+      - name: message ECC contract table
+        run: bash fixtures/ecc/check-contract.sh
+      - name: message ECC reference bounds
+        run: python3 -I scripts/ecc/fuzz_reference.py
+      - name: message ECC ring self-test
+        run: bash .github/workflows/ring-ecc.test.sh
       - name: suite runner
         run: bash .github/workflows/run-suite.test.sh
       - name: embedded harness

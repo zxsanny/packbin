@@ -25,10 +25,26 @@ class TypeMismatch:
 
 
 @dataclass(frozen=True, slots=True)
+class Uncorrectable:
+    """A protected message with more wrong bytes than the correction limit allows; it names no field."""
+
+
+@dataclass(frozen=True, slots=True)
+class TooLong:
+    """A protected message of `length` bytes, above the `limit` of one message."""
+
+    length: int
+    limit: int
+
+
+@dataclass(frozen=True, slots=True)
 class UnpackResult(Generic[T]):
+    """`repaired` is the number of wrong bytes a protected scheme repaired before it read the row."""
+
     ok: bool
     value: T | None = None
-    error: ShortPacket | TrailingBytes | TypeMismatch | None = None
+    error: ShortPacket | TrailingBytes | TypeMismatch | Uncorrectable | TooLong | None = None
+    repaired: int = 0
 
     @property
     def field(self) -> str | None:

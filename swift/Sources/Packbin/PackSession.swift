@@ -2,7 +2,8 @@
 /// `_docs/02_document/contracts/library/pack-session.md` v1.0.0). Both sides load the same 32-byte
 /// seed; the opener calls `start()` and sends the 16 bytes it returns once, in the clear; the waiter
 /// calls `join(_:)` with them. A payload keeps the length of the clear packet. There is no tag: a
-/// flipped bit is not detected.
+/// flipped bit is not detected, unless the scheme declares `parity` bytes (message error correction):
+/// the parity covers the padded bytes and the payload is the clear length plus `parity`.
 ///
 /// Both sides derive two keys with HKDF-SHA256 (seed, the 16 bytes as salt, info "packbin"); the
 /// opener sends with the first and receives with the second, the waiter the other way round. Each
@@ -79,31 +80,46 @@ public final class PackSession {
     }
 
     /// Packs a map row as `pack(_:_:)` does, then pads it with the next position of the send
-    /// direction. Before `start` or `join` it throws a `.packError`; a refused row throws the error
-    /// `pack` throws. A failed call returns no bytes and spends no position.
+    /// direction, then appends the scheme's parity bytes (they cover the padded bytes). Before `start`
+    /// or `join` it throws a `.packError`; a refused row throws the error `pack` throws. A failed call
+    /// returns no bytes and spends no position.
     public func pack(_ scheme: Scheme, _ row: [String: Any]) throws -> [UInt8] {
         try requireOpen()
-        return try sealed(try Packbin.pack(scheme, row))
+        return try sealed(try Packbin.packClear(scheme, row), parity: scheme.parity)
     }
 
     /// Packs a typed row (or a map row) as `pack(_:_:)` does, then pads it as the map form does.
     public func pack<Row>(_ scheme: Scheme, _ row: Row) throws -> [UInt8] {
         try requireOpen()
-        return try sealed(try Packbin.pack(scheme, row))
+        return try sealed(try Packbin.packClear(scheme, row), parity: scheme.parity)
     }
 
-    /// Removes the pad of the next position of the receive direction from a copy of `payload` and
-    /// unpacks it as `unpack(_:_:)` does, so a payload that cannot be read throws what clear unpack
-    /// throws. Every call on an open session spends a position, whether or not the payload then reads
-    /// (as TypeScript and C#). Before `join` or `start` it throws the `.short` of an empty buffer
-    /// (needed 1, left 0).
+    /// Repairs nothing, removes the pad of the next position of the receive direction from a copy of
+    /// `payload` and unpacks it as `unpack(_:_:)` does, so a payload that cannot be read throws what
+    /// clear unpack throws (a protected scheme: `.uncorrectable` for any wrong byte). Every call on an
+    /// open session spends a position, whether or not the payload then reads (as TypeScript and C#).
+    /// Before `join` or `start` it throws the `.short` of an empty buffer (needed 1, left 0).
     public func unpack(_ payload: [UInt8], _ schemes: Scheme...) throws -> Any {
         try unpack(payload, schemes)
     }
 
     /// `unpack` with the schemes as an array.
     public func unpack(_ payload: [UInt8], _ schemes: [Scheme]) throws -> Any {
-        try Packbin.unpack(try opened(payload), schemes)
+        try unpackRepair(payload, limit: 0, schemes).row
+    }
+
+    /// As `unpack`, repairing up to `limit` wrong bytes of the padded payload before the pad is removed
+    /// (see the free `unpackRepair`), and giving the count of bytes repaired. A limit out of range or
+    /// schemes of different parity throw before the position is spent; a payload refused by the repair
+    /// spends it.
+    public func unpackRepair(_ payload: [UInt8], limit: Int, _ schemes: Scheme...) throws -> (row: Any, repaired: Int) {
+        try unpackRepair(payload, limit: limit, schemes)
+    }
+
+    /// `unpackRepair` with the schemes as an array.
+    public func unpackRepair(_ payload: [UInt8], limit: Int, _ schemes: [Scheme]) throws -> (row: Any, repaired: Int) {
+        let fixed = try opened(payload, limit: limit, schemes)
+        return (try Packbin.readRow(fixed.clear, schemes), fixed.repaired)
     }
 
     /// `unpack` with the row as a map keyed by field name, as `unpackMap(_:_:)` gives it.
@@ -113,7 +129,20 @@ public final class PackSession {
 
     /// `unpackMap` with the schemes as an array.
     public func unpackMap(_ payload: [UInt8], _ schemes: [Scheme]) throws -> [String: Any] {
-        try Packbin.unpackMap(try opened(payload), schemes)
+        try unpackMapRepair(payload, limit: 0, schemes).row
+    }
+
+    /// `unpackRepair` with the row as a map.
+    public func unpackMapRepair(_ payload: [UInt8], limit: Int, _ schemes: Scheme...) throws
+        -> (row: [String: Any], repaired: Int) {
+        try unpackMapRepair(payload, limit: limit, schemes)
+    }
+
+    /// `unpackMapRepair` with the schemes as an array.
+    public func unpackMapRepair(_ payload: [UInt8], limit: Int, _ schemes: [Scheme]) throws
+        -> (row: [String: Any], repaired: Int) {
+        let fixed = try opened(payload, limit: limit, schemes)
+        return (try Packbin.readMap(fixed.clear, schemes), fixed.repaired)
     }
 
     private func requireClosed() throws {
@@ -126,21 +155,32 @@ public final class PackSession {
         }
     }
 
-    /// `plain` padded with the next send position, which is then spent.
-    private func sealed(_ plain: [UInt8]) throws -> [UInt8] {
+    /// `plain` padded with the next send position, which is then spent, and the parity of the padded
+    /// bytes. A clear packet above the parity limit is refused before the position is spent.
+    private func sealed(_ plain: [UInt8], parity: Int) throws -> [UInt8] {
+        try Ecc.checkSize(plain.count, parity)
         var data = plain
         try Self.pad(&data, key: send, position: sendCount)
         sendCount += 1
-        return data
+        return try Ecc.protect(data, parity: parity)
     }
 
-    /// A copy of `payload` with the next receive pad removed; the position is spent.
-    private func opened(_ payload: [UInt8]) throws -> [UInt8] {
+    /// A copy of `payload` repaired, then with the next receive pad removed; the position is spent,
+    /// whether or not the repair succeeds (the last position is never spent, as it is never used).
+    private func opened(_ payload: [UInt8], limit: Int, _ schemes: [Scheme]) throws -> (clear: [UInt8], repaired: Int) {
         guard !recv.isEmpty else { throw PackbinError.shortPacket(nil, "", needed: 1, left: 0) }
-        var data = payload
+        let n = try Ecc.sharedParity(schemes, limit: limit)
+        let fixed: (clear: [UInt8], repaired: Int)
+        do {
+            fixed = try Ecc.repair(payload, parity: n, limit: limit)
+        } catch {
+            if recvCount < UInt64.max { recvCount += 1 }
+            throw error
+        }
+        var data = fixed.clear
         try Self.pad(&data, key: recv, position: recvCount)
         recvCount += 1
-        return data
+        return (data, fixed.repaired)
     }
 
     /// Derives both directions from the seed and the 16 bytes, then wipes the seed and the derived

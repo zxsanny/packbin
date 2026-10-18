@@ -84,7 +84,7 @@
 //
 // Unpack reads with the scheme the first byte names. Errors are values: every error is an *Error,
 // whose Kind is ShortPacket (Field, Name, Needed, Left), TrailingBytes (Left), UnknownType (Actual),
-// BadValue, InvalidScheme, PackRefused or TooMany; errors.Is matches it against ErrShortPacket and the other
+// BadValue, InvalidScheme, PackRefused, TooMany or Uncorrectable; errors.Is matches it against ErrShortPacket and the other
 // sentinels. A refused pack returns nil bytes, never part of a packet. No input makes Pack, Unpack or
 // NewScheme panic.
 //
@@ -177,6 +177,29 @@
 //	                                   InvalidScheme
 //
 // Raise a limit only as far as the memory of one call allows.
+//
+// # Error correction
+//
+// A scheme can declare n parity bytes, 0 to 32 (default 0, the bytes of a scheme without them are
+// unchanged). Pack appends them; Unpack checks them and refuses a message with any wrong byte as
+// Uncorrectable. UnpackRepair repairs up to a limit of n/2 wrong bytes and reports how many it
+// repaired. Beyond the limit it returns Uncorrectable and no row. A larger limit gives up detection
+// of larger corruption (_docs/02_document/contracts/library/message-ecc.md lists the chance). The count
+// is not written, so both sides declare the same n; the schemes of one Unpack call must all declare the
+// same n. A packet above 254 minus n bytes is not packed.
+//
+//	(*Scheme).WithParity(n int) (*Scheme, error)
+//	                                   a copy that declares n parity bytes (MaxParity is 32); another n
+//	                                   is refused with InvalidScheme naming n and 32
+//	(*Scheme).Parity() int             the parity bytes of a scheme
+//	UnpackRepair(buf []byte, limit int, schemes ...*Scheme) (any, int, error)
+//	UnpackMapRepair(buf []byte, limit int, schemes ...*Scheme) (map[string]any, int, error)
+//	                                   Unpack and UnpackMap with the limit (0 to n/2, else InvalidScheme
+//	                                   before any byte is read) and the count of bytes repaired
+//
+// A message shorter than n is a ShortPacket naming the field "parity"; one above 254 bytes is a
+// TooMany. In a PackSession the parity covers the padded bytes (the payload is n bytes longer), and
+// the session has UnpackRepair and UnpackMapRepair as well.
 //
 // # Encrypted session
 //

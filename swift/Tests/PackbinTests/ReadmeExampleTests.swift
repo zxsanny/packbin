@@ -16,7 +16,7 @@ let readmeOutputs: [String: [String]] = [
 ]
 
 /// The README snippet names, in README order.
-let readmeSnippetOrder = ["typed", "map", "session"]
+let readmeSnippetOrder = ["typed", "map", "ecc", "session"]
 
 /// The `hex` function of the first README snippet, for the snippets after it.
 func readmeHex(_ bytes: [UInt8]) -> String {
@@ -100,6 +100,27 @@ func readmeHex(_ bytes: [UInt8]) -> String {
         // Assert
         #expect(printed == readmeOutputs["map"])
         #expect(mismatchedBytes(raw, bytes(try goldenHex())) == 0)
+    }
+
+    @Test func eccSnippet_repairsTheWrongByteAndReturnsTheRow() throws {
+        // Act
+        // README begin ecc
+        // Packbin is imported as in the examples above.
+        struct Reading: PackbinRow {
+            var level: UInt16 = 0
+        }
+
+        let reading = try Scheme(2,
+            .u16(0, "level").bind(get: { (r: Reading) in r.level }, set: { $0.level = $1 })).withLimits(parity: 4)
+
+        var raw = try pack(reading, Reading(level: 7))   // 7 bytes
+        raw[1] ^= 0x55                                   // one wrong byte
+
+        let (row, repaired) = try unpackRepair(raw, limit: 2, reading)   // repaired == 1, (row as? Reading)?.level == 7
+        // README end
+
+        // Assert
+        #expect(raw.count == 7 && repaired == 1 && (row as? Reading)?.level == 7)
     }
 
     @Test func sessionSnippet_printsTheCSharpCiphertextAndUnpacksIt() throws {

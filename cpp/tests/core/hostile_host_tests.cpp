@@ -48,6 +48,8 @@ char const* term(packbin::Result const& r) {
       return "scheme_error";
     case Error::ScratchTooSmall:
       return "scratch_too_small";
+    case Error::Uncorrectable:
+      return "uncorrectable";
   }
   return "unknown";
 }

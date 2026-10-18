@@ -8,6 +8,9 @@ public sealed class Scheme<T> where T : class, new()
     public long MaxSlots { get; } = BinaryPacker.DefaultMaxSlots;
     public long MaxBytes { get; } = BinaryPacker.DefaultMaxBytes;
 
+    // Parity bytes appended to every packed message (0 to 32); 0 is the unprotected format of every earlier release.
+    public int Parity { get; }
+
     public Scheme(int typeNumber, params Field[] fields)
     {
         if (typeNumber is < 0 or > 255)
@@ -21,7 +24,7 @@ public sealed class Scheme<T> where T : class, new()
     {
     }
 
-    private Scheme(Scheme<T> source, int maxRounds, long maxSlots, long maxBytes)
+    private Scheme(Scheme<T> source, int maxRounds, long maxSlots, long maxBytes, int parity)
     {
         if (maxRounds < 1)
             throw new ArgumentOutOfRangeException(nameof(maxRounds), maxRounds, "must be at least 1");
@@ -34,6 +37,8 @@ public sealed class Scheme<T> where T : class, new()
         MaxRounds = maxRounds;
         MaxSlots = maxSlots;
         MaxBytes = maxBytes;
+        Ecc.RequireParity(parity);
+        Parity = parity;
     }
 
     // The loop 19 signature, kept so code compiled against it still binds. It sets the round and slot limits and leaves the
@@ -46,7 +51,10 @@ public sealed class Scheme<T> where T : class, new()
         int maxRounds = BinaryPacker.DefaultMaxRounds,
         long maxSlots = BinaryPacker.DefaultMaxSlots,
         long maxBytes = BinaryPacker.DefaultMaxBytes) =>
-        new(this, maxRounds, maxSlots, maxBytes);
+        new(this, maxRounds, maxSlots, maxBytes, Parity);
+
+    // The same scheme with `parity` bytes of error correction (message-ecc contract). Limits are kept.
+    public Scheme<T> WithParity(int parity) => new(this, MaxRounds, MaxSlots, MaxBytes, parity);
 
     public SchemeHandler On(Action<T> handler) => new SchemeHandler<T>(this, handler);
 }
@@ -54,6 +62,7 @@ public sealed class Scheme<T> where T : class, new()
 public abstract class SchemeHandler
 {
     internal abstract int TypeNumber { get; }
+    internal abstract int Parity { get; }
     internal abstract object? Dispatch(ReadOnlySpan<byte> fieldBytes);
 }
 
@@ -69,6 +78,8 @@ internal sealed class SchemeHandler<T> : SchemeHandler where T : class, new()
     }
 
     internal override int TypeNumber => _scheme.TypeNumber;
+
+    internal override int Parity => _scheme.Parity;
 
     internal override object? Dispatch(ReadOnlySpan<byte> fieldBytes)
     {
@@ -155,7 +166,14 @@ public static class BinaryPacker
     // The longest packet one pack call writes, the type byte included.
     public const long DefaultMaxBytes = 16_777_216;
 
-    public static byte[] Pack<T>(Scheme<T> scheme, IReadOnlyDictionary<string, object?> values) where T : class, new()
+    public static byte[] Pack<T>(Scheme<T> scheme, IReadOnlyDictionary<string, object?> values) where T : class, new() =>
+        Ecc.Protect(PackClear(scheme, values), scheme.Parity);
+
+    public static byte[] Pack<T>(Scheme<T> scheme, T? values) where T : class, new() =>
+        Ecc.Protect(PackClear(scheme, values), scheme.Parity);
+
+    // The packed fields without parity: what an unprotected scheme writes.
+    internal static byte[] PackClear<T>(Scheme<T> scheme, IReadOnlyDictionary<string, object?> values) where T : class, new()
     {
         var buffer = new PackOut(scheme.MaxBytes);
         buffer.Add((byte)scheme.TypeNumber);
@@ -165,14 +183,32 @@ public static class BinaryPacker
         return buffer.ToArray();
     }
 
-    public static byte[] Pack<T>(Scheme<T> scheme, T? values) where T : class, new()
+    internal static byte[] PackClear<T>(Scheme<T> scheme, T? values) where T : class, new()
     {
         if (values is IReadOnlyDictionary<string, object?> map)
-            return Pack(scheme, map);
-        return Pack(scheme, RowBinding.Read(scheme.Fields, values));
+            return PackClear(scheme, map);
+        return PackClear(scheme, RowBinding.Read(scheme.Fields, values));
     }
 
-    public static object? Unpack(ReadOnlySpan<byte> bytes, params SchemeHandler[] handlers)
+    public static object? Unpack(ReadOnlySpan<byte> bytes, params SchemeHandler[] handlers) =>
+        Unpack(bytes, 0, out _, handlers);
+
+    // Handlers that declare parity bytes share one count. The message is repaired (up to `limit` wrong bytes, 0 to
+    // parity / 2) before the type byte picks the handler; `repaired` is the number of bytes changed.
+    public static object? Unpack(ReadOnlySpan<byte> bytes, int limit, out int repaired, params SchemeHandler[] handlers)
+    {
+        repaired = 0;
+        RequireDistinct(handlers);
+        var parity = Ecc.SharedParity(handlers, limit);
+        if (parity == 0)
+            return Dispatch(bytes, handlers);
+        var error = Ecc.Repair(bytes, parity, limit, out var word, out repaired);
+        if (error is not null)
+            return error;
+        return Dispatch(word.AsSpan(0, word.Length - parity), handlers);
+    }
+
+    internal static void RequireDistinct(SchemeHandler[] handlers)
     {
         for (var i = 0; i < handlers.Length; i++)
         {
@@ -182,7 +218,11 @@ public static class BinaryPacker
                     throw new ArgumentException("duplicate type number");
             }
         }
+    }
 
+    // The unprotected walk: the type byte picks the handler.
+    internal static object? Dispatch(ReadOnlySpan<byte> bytes, SchemeHandler[] handlers)
+    {
         if (bytes.Length < 1)
             return new ShortPacket("", 1, 0);
 

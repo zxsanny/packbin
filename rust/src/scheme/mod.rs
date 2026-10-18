@@ -5,6 +5,7 @@ mod times;
 pub use bound::BoundField;
 use times::TimesItem;
 
+use crate::ecc;
 use crate::field::{
     check_order, field_name, flags as layout_flags, nested_element, rename_container, take_id,
     times as layout_times, when as layout_when, Eq, Field, MapScheme,
@@ -235,6 +236,13 @@ impl<T: 'static> Scheme<T> {
         self
     }
 
+    /// Returns the scheme with `n` parity bytes after every message (default 0; see
+    /// [`MapScheme::with_parity`]). Panics, naming `n` and the limit 32, when `n` is above it.
+    pub fn with_parity(mut self, n: usize) -> Self {
+        self.layout = self.layout.with_parity(n);
+        self
+    }
+
     pub fn max_rounds(&self) -> usize {
         self.layout.max_rounds()
     }
@@ -258,6 +266,13 @@ impl<T: 'static> Scheme<T> {
     }
 }
 
+impl<T> Scheme<T> {
+    /// The parity bytes after every message (0 unless `with_parity` set it).
+    pub fn parity(&self) -> usize {
+        self.layout.parity()
+    }
+}
+
 pub struct On<'a, T, F> {
     scheme: &'a Scheme<T>,
     handler: F,
@@ -265,6 +280,8 @@ pub struct On<'a, T, F> {
 
 pub trait DispatchHandler {
     fn type_number(&self) -> u8;
+    /// The parity bytes of the handler's scheme; a dispatch takes handlers of one count only.
+    fn parity(&self) -> usize;
     fn handle(&mut self, body: &[u8]) -> Result<(), UnpackError>;
 }
 
@@ -273,8 +290,12 @@ impl<'a, T: Default + 'static, F: FnMut(T)> DispatchHandler for On<'a, T, F> {
         self.scheme.type_number()
     }
 
+    fn parity(&self) -> usize {
+        self.scheme.parity()
+    }
+
     fn handle(&mut self, body: &[u8]) -> Result<(), UnpackError> {
-        let row = BinaryPacker::unpack(self.scheme, body)?;
+        let row = BinaryPacker::unpack_clear(self.scheme, body)?;
         (self.handler)(row);
         Ok(())
     }
@@ -287,38 +308,78 @@ impl BinaryPacker {
         walk::pack(&scheme.layout, &read_values(&scheme.binders, row))
     }
 
-    fn unpack<T: Default>(scheme: &Scheme<T>, bytes: &[u8]) -> Result<T, UnpackError> {
-        let values = walk::unpack(&scheme.layout, bytes)?;
+    /// The packed row without parity bytes: the session pads it before it adds them.
+    pub(crate) fn pack_clear<T>(scheme: &Scheme<T>, row: &T) -> Result<Vec<u8>, PackError> {
+        walk::pack_clear(&scheme.layout, &read_values(&scheme.binders, row))
+    }
+
+    /// Reads a message whose parity bytes were already checked and dropped.
+    fn unpack_clear<T: Default>(scheme: &Scheme<T>, bytes: &[u8]) -> Result<T, UnpackError> {
+        let values = walk::unpack_clear(&scheme.layout, bytes)?;
         Ok(build_row(&scheme.binders, &values))
     }
 
+    /// Dispatches on the type byte; a message of schemes with parity bytes is checked, not
+    /// repaired (limit 0, see [`BinaryPacker::unpack_with_repair`]).
     pub fn unpack_with(
         bytes: &[u8],
         handlers: &mut [&mut dyn DispatchHandler],
     ) -> Result<(), UnpackError> {
-        let mut seen = HashSet::new();
-        for handler in handlers.iter() {
-            let n = handler.type_number();
-            if !seen.insert(n) {
-                return Err(UnpackError::DuplicateType { type_number: n });
-            }
-        }
-        if bytes.is_empty() {
-            return Err(UnpackError::Short(ShortPacket {
-                field: String::new(),
-                needed: 1,
-                left: 0,
-            }));
-        }
-        let actual = bytes[0];
-        for handler in handlers.iter_mut() {
-            if handler.type_number() == actual {
-                return handler.handle(bytes);
-            }
-        }
-        Err(UnpackError::Type {
-            expected: 0,
-            actual,
-        })
+        Self::unpack_with_repair(bytes, handlers, 0).map(|_| ())
     }
+
+    /// Repairs up to `limit` wrong bytes (0 to `n / 2`), then dispatches on the type byte, so a
+    /// wrong type byte is repaired too. All handlers must declare the same parity count `n`, else
+    /// [`UnpackError::MixedParity`] names two that differ. Returns the number of bytes repaired.
+    pub fn unpack_with_repair(
+        bytes: &[u8],
+        handlers: &mut [&mut dyn DispatchHandler],
+        limit: usize,
+    ) -> Result<usize, UnpackError> {
+        let n = shared_parity(handlers)?;
+        ecc::check_limit(n, limit)?;
+        check_unique(handlers)?;
+        let (clear, repaired) = ecc::unprotect(bytes, n, limit)?;
+        dispatch(&clear, handlers)?;
+        Ok(repaired)
+    }
+}
+
+pub(crate) fn shared_parity(handlers: &[&mut dyn DispatchHandler]) -> Result<usize, UnpackError> {
+    ecc::shared_parity(handlers.iter().map(|handler| handler.parity()))
+}
+
+pub(crate) fn check_unique(handlers: &[&mut dyn DispatchHandler]) -> Result<(), UnpackError> {
+    let mut seen = HashSet::new();
+    for handler in handlers.iter() {
+        let n = handler.type_number();
+        if !seen.insert(n) {
+            return Err(UnpackError::DuplicateType { type_number: n });
+        }
+    }
+    Ok(())
+}
+
+/// Hands a clear message (parity bytes dropped) to the handler of its type byte.
+pub(crate) fn dispatch(
+    bytes: &[u8],
+    handlers: &mut [&mut dyn DispatchHandler],
+) -> Result<(), UnpackError> {
+    if bytes.is_empty() {
+        return Err(UnpackError::Short(ShortPacket {
+            field: String::new(),
+            needed: 1,
+            left: 0,
+        }));
+    }
+    let actual = bytes[0];
+    for handler in handlers.iter_mut() {
+        if handler.type_number() == actual {
+            return handler.handle(bytes);
+        }
+    }
+    Err(UnpackError::Type {
+        expected: 0,
+        actual,
+    })
 }

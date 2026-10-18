@@ -21,6 +21,8 @@ from packbin import (
     when,
 )
 
+from handoff_ecc import run_ecc
+
 
 USER = Scheme(
     1,
@@ -232,6 +234,8 @@ def main(argv: list[str]) -> int:
         if not result.ok or result.value is None:
             return 1
         return 0 if _session_fields_ok(result.value) else 1
+    if cmd.startswith("ecc-"):
+        return run_ecc(cmd, argv, POSITION)
     element = _element_command(cmd, argv)
     return 2 if element is None else element
 

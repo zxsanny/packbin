@@ -8,6 +8,11 @@ public final class BinaryPacker {
     private BinaryPacker() {}
 
     public static <T> byte[] pack(Scheme<T> scheme, T row) {
+        return Ecc.protect(packClear(scheme, row), scheme.parity);
+    }
+
+    /** The packed fields without parity: what an unprotected scheme writes. */
+    static <T> byte[] packClear(Scheme<T> scheme, T row) {
         Objects.requireNonNull(scheme, "scheme");
         Objects.requireNonNull(row, "row");
         ByteSink sink = new ByteSink(scheme.maxRounds, scheme.maxSlots, scheme.maxBytes);
@@ -16,9 +21,38 @@ public final class BinaryPacker {
         return sink.toArray();
     }
 
+    /** Detect only: a protected message with any wrong byte is refused as {@link Packbin.Uncorrectable}. Null when it unpacks. */
     public static Object unpack(byte[] data, Scheme.Handler<?>... handlers) {
+        Object result = unpackRepair(data, 0, handlers);
+        return result instanceof Packbin.Repaired ? null : result;
+    }
+
+    /**
+     * Repairs up to {@code limit} wrong bytes (0 to parity / 2) before the type byte picks the handler. All handlers
+     * declare the same parity; a mix, or a limit out of range, is refused with an IllegalArgumentException before any
+     * byte is read. Returns a {@link Packbin.Repaired} when the message unpacks (0 when it was intact or unprotected),
+     * and the error value otherwise.
+     */
+    public static Object unpackRepair(byte[] data, int limit, Scheme.Handler<?>... handlers) {
         Objects.requireNonNull(data, "data");
-        Objects.requireNonNull(handlers, "handlers");
+        int parity = Ecc.sharedParity(handlers, limit);
+        Map<Integer, Scheme.Handler<?>> byType = byType(handlers);
+        int repaired = 0;
+        byte[] clear = data;
+        if (parity > 0) {
+            Object checked = EccRepair.repair(data, parity, limit);
+            if (!(checked instanceof EccRepair.Fixed)) {
+                return checked;
+            }
+            clear = ((EccRepair.Fixed) checked).clear;
+            repaired = ((EccRepair.Fixed) checked).repaired;
+        }
+        Object err = unpackClear(clear, byType);
+        return err != null ? err : new Packbin.Repaired(repaired);
+    }
+
+    /** The handlers by type number; two handlers of one number are refused. */
+    static Map<Integer, Scheme.Handler<?>> byType(Scheme.Handler<?>[] handlers) {
         Map<Integer, Scheme.Handler<?>> byType = new HashMap<>();
         for (Scheme.Handler<?> handler : handlers) {
             Objects.requireNonNull(handler, "handler");
@@ -27,6 +61,11 @@ public final class BinaryPacker {
                 throw new IllegalArgumentException("duplicate type number " + typeNumber);
             }
         }
+        return byType;
+    }
+
+    /** The unprotected walk: the type byte picks the handler. Null when the bytes unpack. */
+    static Object unpackClear(byte[] data, Map<Integer, Scheme.Handler<?>> byType) {
         if (data.length < 1) {
             return new Packbin.ShortPacket("", 1, 0);
         }

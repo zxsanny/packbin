@@ -95,3 +95,23 @@ Start mode 4: the payload is the byte `10` followed by the UTF-8 bytes unchanged
 
 A borrowed view of the payload of a compact string (after its count header), not decoded. A C++ build with `PACKBIN_NO_TEXT` binds strings to it so a board without the codec can read the fields after a string and forward its bytes. (source: ADR-006; compact-text.md; AZ-2656)
 
+## Parity bytes
+
+The `n` bytes (0 to 32, default 0) that a scheme with error correction appends after the packed fields. A Reed-Solomon code over GF(256) makes them, and they also cover the clear length, which is not sent. `n` is not on the wire: both sides declare the same count. With `n` = 0 the bytes, the errors and the speed are those of a scheme without the setting. A message, parity included, is at most 254 bytes, so the clear message is at most `254 - n`. (source: ADR-007; message-ecc.md)
+
+## Correction limit
+
+The number `t` of wrong bytes a receiver is willing to repair, 0 to `n / 2`, chosen at each unpack call (default 0, detect only). A `t` above `n / 2` is refused before any byte is read. Repairing gives up detection: corruption of `t + 1` to `n - t` bytes is still refused, but a larger corruption may be repaired to a different message; the contract lists the chance for each `n` and `t`. (source: message-ecc.md, "Detection and the correction limit")
+
+## Repaired count
+
+The number of wrong bytes unpack repaired before it read the row: 0 for an intact message, 1 to `t` otherwise. It is the degree of the locator polynomial. Each package returns it beside the row in its own style (a result field, an out parameter, a second return value or a tuple). A wrong byte counts once however many of its bits differ. (source: message-ecc.md)
+
+## Code word
+
+The 255-byte word of the error-correcting code: the clear length (1 byte, covered by the code and not sent), the clear message, then the `n` parity bytes. The sent message is the code word without its first byte, at most 254 bytes. Covering the length makes a message with one byte more or less, for example a trailing `00`, fail the check. (source: message-ecc.md; ADR-007)
+
+## Uncorrectable
+
+The error kind of a protected message with more wrong bytes than the correction limit allows, or that no code word is that close to. It names no field and gives no row. With `t` = 0 any wrong byte is uncorrectable. Spelling: `Uncorrectable` (Python, C#, Java, Rust, Go), `"uncorrectable"` (TypeScript), `.uncorrectable` (Swift). (source: message-ecc.md)
+

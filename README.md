@@ -806,6 +806,205 @@ true
 
 **Schemes Swift refuses and TypeScript builds.** A `.bytes` with a negative size, a `u2` or a flag byte as a list or dict element, and the two hostile schemes `zero_progress_repeat_bool` and `zero_progress_repeat_when` (both hostile cases accept `scheme_error`). A list or dict whose element writes no byte (`.list("l", .bytes(0, "e", size: 0))`) packs, and unpack refuses the packet, as in TypeScript.
 
+## Error correction
+
+A scheme can declare `n` parity bytes, 0 to 32 (default 0). Pack appends them to the packed message; unpack detects any corruption of up to `n` wrong bytes and can repair up to `t` of them. A wrong byte counts once however many of its bits flipped. The code is Reed-Solomon over GF(256) and also covers the clear length, which is not sent, so a message with one byte more or less is refused. The format is the contract [`message-ecc.md`](_docs/02_document/contracts/library/message-ecc.md) (ADR 007).
+
+- **Off by default.** With `n` = 0 the bytes, the errors and the speed are those of a scheme without the setting.
+- **`n` is not on the wire.** Both sides declare the same `n`, as they share the field list.
+- **`t` is the receiver's choice, 0 to `n / 2`, default 0 (detect only).** A `t` above `n / 2` is refused before any byte is read. Beyond `t` wrong bytes unpack gives an error that names no field and no row, never a wrong row.
+- **Repairing costs detection.** With `t` > 0 corruption of `t + 1` to `n - t` bytes is still refused, but a larger corruption may be repaired to a different message. For the 13-byte fixture with `n` = 4, random bytes pass with a chance of 1 in 4.29e+09 at `t` = 0, 1 in 990,537 at `t` = 1 and 1 in 485 at `t` = 2 (the contract lists every `n` and `t`). Use `t` = 0 unless a lost message costs more than a wrong one.
+- **At most 254 bytes per message, parity included.** Pack refuses a clear message above `254 - n` bytes, writes nothing, and names the length and the limit. Unpack refuses a buffer above 254 bytes and a buffer shorter than `n` (a short-packet error naming the field `parity`).
+- **One `n` per unpack call.** The handlers (or schemes) of one call must declare the same `n`: the type byte can be one of the wrong bytes, so the message is repaired first and then dispatched. A mix is refused, naming both counts.
+- **Sessions.** The parity covers the padded bytes, so a payload is `n` bytes longer than the clear packet and is repaired before the pad is removed. The receive position advances for every payload read, a refused one included. Without parity a session still detects nothing.
+
+`withLimits` / `with_limits` keep a scheme's parity count unless `parity` is given. The packages spell the setting and the result differently:
+
+| Package | Declare `n` | Unpack with `t` | Repaired count | Too many wrong bytes |
+|---------|-------------|-----------------|----------------|----------------------|
+| Python | `scheme.with_limits(parity=n)`, `scheme.parity` | `BinaryPacker.unpack(data, *handlers, limit=t)`, `PackSession.unpack(..., limit=t)` | `UnpackResult.repaired` | `Uncorrectable()` in `UnpackResult.error` (`TooLong(length, limit)` above 254 bytes) |
+| TypeScript | `scheme.withLimits({ parity: n })`, `new Scheme(type, fields, { parity: n })`, `scheme.parity` | `BinaryPacker.unpackRepair(bytes, t, ...handlers)`, `PackSession.unpackRepair` | `repaired` in `{ ok: true, repaired }` (protected schemes only) | `{ ok: false, kind: "uncorrectable" }` (`kind: "too_long"` with `length`, `limit`) |
+| C# | `scheme.WithParity(n)`, `scheme.Parity` | `BinaryPacker.Unpack(bytes, t, out repaired, handlers)`, `PackSession.Unpack(bytes, t, out repaired, handlers)` | `out int repaired` | `Uncorrectable` returned (`TooLong` with `Length`, `Limit`) |
+| Rust | `scheme.with_parity(n)`, `scheme.parity()`, `MAX_PARITY` | `BinaryPacker::unpack_with_repair(bytes, handlers, t)`, `unpack_repair(&map_scheme, bytes, t)`, `PackSession::unpack_repair` | the `usize` in `Ok` (beside the values for `unpack_repair`) | `UnpackError::Uncorrectable` (`TooLong { len, limit }`, `BadLimit`, `MixedParity`) |
+| Java | `scheme.withParity(n)`, `scheme.parity()` | `BinaryPacker.unpackRepair(bytes, t, handlers...)`, `PackSession.unpackRepair` | `Packbin.Repaired.count` (what `unpackRepair` returns on success) | `Packbin.Uncorrectable` returned (`Packbin.TooLong` with `length`, `limit`) |
+| Go | `s.WithParity(n)`, `s.Parity()`, `MaxParity` | `UnpackRepair(buf, t, schemes...)`, `UnpackMapRepair`, and the same on `PackSession` | second return value | `*Error` of kind `Uncorrectable`, `ErrUncorrectable` (above 254 bytes: kind `TooMany`) |
+| Swift | `scheme.withLimits(parity: n)`, `scheme.parity` | `unpackRepair(buffer, limit: t, schemes...)`, `unpackMapRepair`, and the same on `PackSession` | `repaired` in the returned tuple | `PackbinError` of kind `.uncorrectable` (above 254 bytes: `.tooMany`) |
+| C++ | `parity(scheme<Row>(...), n)`, `scheme.parity` | `unpack_repair(scheme, data, len, row, t)`, `unpack_repair(data, len, t, on(...)...)`, `PackSession::unpack_repair` (the buffer is non-const) | `Result.repaired` | `Error::Uncorrectable` (above 254 bytes: `Error::TooMany`) |
+
+A `parity` outside 0 to 32, a limit above `n / 2` and a mix of counts are refused as the package refuses a bad scheme: a `ValueError` (Python), a `RangeError` (TypeScript), an `ArgumentOutOfRangeException` or `ArgumentException` (C#), a panic for `with_parity` and an `UnpackError` for the limit and the mix (Rust), an `IllegalArgumentException` (Java), an `InvalidScheme` error (Go), a `.schemeError` (Swift), `Error::SchemeInvalid` for `n` and for a mix of counts and `Error::BadValue` for the limit (C++; a `constexpr` scheme with `n` above 32 does not compile). A clear message above `254 - n` bytes at pack is the package's pack refusal (`PackRefused` in Go, `.packError` in Swift, `PackError::Type` in Rust, `Error::TooMany` in C++, with `offset` the clear length, `needed` the limit and the written bytes zeroed).
+
+Each example packs a 3-byte message (type byte and a `u16`) with `n` = 4, flips one byte and unpacks with `t` = 2. The message is 7 bytes and one byte is repaired.
+
+### Python
+
+```python
+from packbin import BinaryPacker, Scheme, u16
+
+class Reading:
+    def __init__(self):
+        self.level = 0
+
+reading = Scheme(2, Reading, u16(0, lambda row: row.level)).with_limits(parity=4)
+
+row = Reading()
+row.level = 7
+raw = bytearray(BinaryPacker.pack(reading, row))   # 7 bytes
+raw[1] ^= 0x55                                     # one wrong byte
+
+got = []
+result = BinaryPacker.unpack(raw, reading.on(got.append), limit=2)
+print(result.ok, result.repaired, got[0].level)    # True 1 7
+```
+
+### TypeScript
+
+```ts
+import { BinaryPacker, scheme, u16, type SchemeHandler } from "packbin"
+
+class Reading {
+  level = 0
+}
+
+const reading = scheme<Reading>(2, u16(0, (x: Reading) => x.level)).withLimits({ parity: 4 })
+
+const row = new Reading()
+row.level = 7
+const raw = BinaryPacker.pack(reading, row) // 7 bytes
+raw[1]! ^= 0x55 // one wrong byte
+
+let got: Reading | undefined
+const result = BinaryPacker.unpackRepair(raw, 2, reading.on((r) => { got = r }) as SchemeHandler<any>)
+console.log(result, got?.level) // { ok: true, repaired: 1 } 7
+```
+
+### C#
+
+```csharp
+using Packbin;
+
+sealed class Reading { public ushort Level { get; set; } }
+
+var reading = new Scheme<Reading>(2, f => [f.U16(0, x => x.Level)]).WithParity(4);
+
+var raw = BinaryPacker.Pack(reading, new Reading { Level = 7 });   // 7 bytes
+raw[1] ^= 0x55;                                                     // one wrong byte
+
+Reading? got = null;
+var error = BinaryPacker.Unpack(raw, 2, out var repaired, reading.On(row => got = row));
+// error is null, repaired is 1, got.Level is 7
+```
+
+### Rust
+
+```rust
+use packbin::{BinaryPacker, BoundField, Scheme};
+
+#[derive(Default)]
+struct Reading {
+    level: u16,
+}
+
+let reading = Scheme::new(2, [
+    BoundField::u16(0, |row: &Reading| row.level, |row, value| row.level = value).into(),
+])
+.with_parity(4);
+
+let mut raw = BinaryPacker::pack(&reading, &Reading { level: 7 }).unwrap(); // 7 bytes
+raw[1] ^= 0x55; // one wrong byte
+
+let mut got = Reading::default();
+let repaired =
+    BinaryPacker::unpack_with_repair(&raw, &mut [&mut reading.on(|row| got = row)], 2).unwrap();
+// repaired is 1, got.level is 7
+```
+
+### Java
+
+```java
+import packbin.*;
+
+public final class Reading { public int level; }
+
+Scheme<Reading> reading = new Scheme<>(2, Reading.class,
+        Packbin.u16(0, Access.get((Reading r) -> r.level), Access.set((Reading r, Object v) -> r.level = ((Number) v).intValue())))
+        .withParity(4);
+
+Reading row = new Reading();
+row.level = 7;
+byte[] raw = BinaryPacker.pack(reading, row);   // 7 bytes
+raw[1] ^= 0x55;                                 // one wrong byte
+
+Reading[] got = new Reading[1];
+Object result = BinaryPacker.unpackRepair(raw, 2, reading.on(r -> got[0] = r));
+// result is a Packbin.Repaired with count 1; got[0].level is 7. A failed unpack returns the error value instead.
+```
+
+### Go
+
+```go
+reading, err := packbin.NewScheme(2, packbin.U16(0, "level"))
+if err != nil {
+	panic(err)
+}
+reading, err = reading.WithParity(4)
+if err != nil {
+	panic(err)
+}
+
+raw, err := packbin.Pack(reading, map[string]any{"level": 7}) // 7 bytes
+if err != nil {
+	panic(err)
+}
+raw[1] ^= 0x55 // one wrong byte
+
+row, repaired, err := packbin.UnpackMapRepair(raw, 2, reading)
+if err != nil {
+	panic(err)
+}
+fmt.Println(repaired, row["level"]) // 1 7
+```
+
+### Swift
+
+```swift
+// Packbin is imported as in the examples above.
+struct Reading: PackbinRow {
+    var level: UInt16 = 0
+}
+
+let reading = try Scheme(2,
+    .u16(0, "level").bind(get: { (r: Reading) in r.level }, set: { $0.level = $1 })).withLimits(parity: 4)
+
+var raw = try pack(reading, Reading(level: 7))   // 7 bytes
+raw[1] ^= 0x55                                   // one wrong byte
+
+let (row, repaired) = try unpackRepair(raw, limit: 2, reading)   // repaired == 1, (row as? Reading)?.level == 7
+```
+
+### C++
+
+```cpp
+#include <packbin/packbin.hpp>
+
+using namespace packbin;
+
+struct Reading { std::uint16_t level = 0; };
+
+constexpr auto reading = parity(scheme<Reading>(2, u16<&Reading::level>(0)), 4);
+
+Reading row;
+row.level = 7;
+std::uint8_t raw[16];
+Result packed = pack(reading, row, raw, sizeof(raw));  // packed.offset is 7
+raw[1] ^= 0x55;                                        // one wrong byte
+
+Reading got;
+Result r = unpack_repair(reading, raw, packed.offset, got, 2);
+// r.ok(), r.repaired is 1, got.level is 7, and raw is the packed message again
+```
+
+With `t` = 0 (`BinaryPacker.unpack` and the other plain unpack calls) the same buffer is refused as uncorrectable. In C++ `unpack(scheme, data, len, row)` and `unpack(data, len, on(...)...)` are those detect-only calls: they take a read-only buffer, never write it, and give `Error::Uncorrectable` for any wrong byte; `unpack_repair` takes a writable buffer and a limit `t` from 0 to `n / 2` (more is `Error::BadValue` before any byte is read). `PACKBIN_NO_ECC` removes the feature and the 511 bytes of tables, and a scheme with `n` above 0 is then `SchemeInvalid`; the Cortex-M4F build defines it, because the tables and about 2.2 KB of code do not fit the 60 bytes of flash it has left (repair uses about 390 bytes of stack at `n` = 32 on a host). Unpack never throws or traps on hostile bytes: its work is at most 255 x 32 field operations plus the unprotected walk.
+
 ## Encrypted session
 
 One optional session beside clear pack. Load a 32-byte seed on each side. The opener calls start and sends those 16 bytes once. The waiter calls join with them. After that, pack and unpack use the same schemes as clear pack, and the payload stays the same length. A second client is a second session.

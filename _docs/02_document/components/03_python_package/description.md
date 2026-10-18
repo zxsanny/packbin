@@ -50,6 +50,25 @@ ShortPacket:
 | `pack` | scheme, row | payload the same length as clear pack | No | pack before start or join produces 0 payloads |
 | `unpack` | payload, scheme | the row, or the clear-unpack error | No | — |
 
+### Interface: Error correction (loop 38, ADR-007, `contracts/library/message-ecc.md`)
+
+Optional parity bytes per scheme: `n` from 0 to 32, default 0, which keeps the bytes, the errors and the speed of an unprotected scheme. `n` is not on the wire. C++ is pending (AZ-2688).
+
+| Name | Meaning |
+|------|---------|
+| `Scheme.with_limits(..., parity=n)` | sets `n`; `parity` left out keeps this scheme's count (a limit left out is still the default). A value that is not a whole number of 0 to 32 raises `ValueError` naming `n` and 32 |
+| `Scheme.parity` | the count |
+| `BinaryPacker.unpack(data, *handlers, limit=t)` | repairs up to `t` wrong bytes (0 to `n / 2`, default 0); another `limit` raises `ValueError` before any byte is read |
+| `UnpackResult.repaired` | the number of bytes repaired, 0 for an intact or unprotected message |
+| `Uncorrectable()` | in `UnpackResult.error` when more bytes are wrong than `t` allows; names no field, `value` is `None` |
+| `TooLong(length, limit)` | in `UnpackResult.error` for a buffer above 254 bytes. A buffer shorter than `n` is `ShortPacket(field="parity", needed=n, left=...)` |
+
+- **Pack**: a clear message above `254 - n` bytes raises `ValueError` naming the length and the limit.
+- **Dispatch**: all handlers of one `unpack` call declare the same `n`; a mix raises `ValueError` naming both counts. With one `n` the message is repaired first, then the type byte picks the handler.
+- **Session**: `PackSession.pack` pads the clear message, then appends the parity of the padded bytes (payload = clear length + `n`). `PackSession.unpack(..., limit=t)` repairs, drops the parity, removes the pad, then reads. The receive index advances for every payload that passes the checks of the call, a refused one included; a bad `limit` or a mix raises before it moves. With `n` = 0 the payload has the length of clear pack.
+- **`t` and detection**: `t` defaults to 0 and then any corruption of up to `n` wrong bytes is detected. A `t` above 0 repairs up to `t` wrong bytes but gives up detection: corruption of `t + 1` to `n - t` bytes is still refused, a larger corruption may be repaired to a different message. The contract table lists the chance (`n` = 4: 1 in 4.29e+09 at `t` = 0, 1 in 990,537 at `t` = 1, 1 in 485 at `t` = 2). `t` above `n / 2` is an error before any byte is read.
+- **Size and speed**: a message is at most 254 bytes, parity included; pack refuses a clear message above `254 - n` bytes and writes nothing. Unpack of hostile bytes does at most 255 x 32 field operations beyond the unprotected walk and never throws or traps on them. Acceptance bound EC-13 (a bound, not a recorded measurement): 1,000 unpacks with correction of a 254-byte message with 16 parity bytes and 8 wrong bytes in 5 seconds in Python (the bound for this package); 1,000 packs of such blocks in 1 second.
+
 ## 4. Data Access Patterns
 
 No queries and no cache.

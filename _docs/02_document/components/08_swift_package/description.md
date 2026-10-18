@@ -18,6 +18,23 @@ Same shape as TypeScript (`components/02_typescript_package/description.md` §2)
 
 Rows: a typed struct bound by getter and setter closures, or `[String: Any]`. `nil` is no value; an empty array is a value with 0 items. Hostile input throws and never traps.
 
+### Interface: Error correction (loop 38, ADR-007, `contracts/library/message-ecc.md`)
+
+Optional parity bytes per scheme: `n` from 0 to 32, default 0, which keeps the bytes, the errors and the speed of an unprotected scheme. `n` is not on the wire. C++ is pending (AZ-2688).
+
+| Name | Meaning |
+|------|---------|
+| `withLimits(maxRounds:maxSlots:maxBytes:parity:)` | `parity` sets `n`; left out it keeps this scheme's count (a limit left out is still the default). A count outside 0 to 32 throws `.schemeError` naming `parity`, the count and 32. `Scheme.parity` reads it |
+| `unpackRepair(_:limit:_:)`, `unpackMapRepair(_:limit:_:)` | repair up to `limit` wrong bytes (0 to `n / 2`) before the type byte picks the scheme; they return `(row, repaired)`; the schemes may also be given as an array. `unpack` and `unpackMap` are limit 0. Another limit, or a mix of counts, throws `.schemeError` before any byte is read |
+| `PackbinError.Kind.uncorrectable` | raw value `uncorrectable`; names no field |
+| `.tooMany` (reused) | a buffer above 254 bytes, `left` the length. A buffer shorter than `n` is `.short` naming `parity` |
+
+- **Pack**: a clear message above `254 - n` bytes throws `.packError` naming the length and the limit.
+- **Dispatch**: the schemes of one call declare the same `n`; with one `n` the message is repaired first, then dispatched.
+- **Session**: `pack` pads, then appends the parity of the padded bytes. `PackSession.unpackRepair(_:limit:_:)` and `unpackMapRepair` repair, drop the parity, remove the pad, then read. The position is spent whether or not the repair succeeds; a bad limit or mix throws before it is spent. With `n` = 0 the payload has the length of clear pack.
+- **`t` and detection**: `t` defaults to 0 and then any corruption of up to `n` wrong bytes is detected. A `t` above 0 repairs up to `t` wrong bytes but gives up detection: corruption of `t + 1` to `n - t` bytes is still refused, a larger corruption may be repaired to a different message. The contract table lists the chance (`n` = 4: 1 in 4.29e+09 at `t` = 0, 1 in 990,537 at `t` = 1, 1 in 485 at `t` = 2). `t` above `n / 2` is an error before any byte is read.
+- **Size and speed**: a message is at most 254 bytes, parity included; pack refuses a clear message above `254 - n` bytes and writes nothing. Unpack of hostile bytes does at most 255 x 32 field operations beyond the unprotected walk and never throws or traps on them. Acceptance bound EC-13 (a bound, not a recorded measurement): 1,000 unpacks with correction of a 254-byte message with 16 parity bytes and 8 wrong bytes in 1 second; 1,000 packs of such blocks in 1 second.
+
 ## 3. Rules
 
 Swift copies TypeScript row for row (loop 26 fit decision 4), except the documented TypeScript-only exceptions (U6), where it follows the others; the D1b rows stay as documented.

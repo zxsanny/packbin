@@ -40,6 +40,9 @@ func run(args []string) int {
 		return 2
 	}
 	cmd := args[0]
+	if strings.HasPrefix(cmd, "ecc-") {
+		return runEcc(args)
+	}
 	switch cmd {
 	case "pack-session":
 		return packSession()

@@ -2,7 +2,8 @@ mod hkdf;
 mod pad;
 mod sha256;
 
-use crate::scheme::{BinaryPacker, DispatchHandler, Scheme};
+use crate::ecc;
+use crate::scheme::{check_unique, dispatch, shared_parity, BinaryPacker, DispatchHandler, Scheme};
 use crate::value::{PackError, ShortPacket, UnpackError};
 use std::io::Read;
 
@@ -69,19 +70,36 @@ impl PackSession {
     }
 
     /// Packs `row` and encrypts it with the next pad position, which only a successful pack uses.
+    /// A scheme with parity bytes gets them over the encrypted bytes, after the pad.
     pub fn pack<T>(&mut self, scheme: &Scheme<T>, row: &T) -> Result<Vec<u8>, SessionPackError> {
         let send = self.send.as_ref().ok_or(SessionPackError::NotOpen)?;
-        let mut clear = BinaryPacker::pack(scheme, row).map_err(SessionPackError::Pack)?;
+        let mut clear = BinaryPacker::pack_clear(scheme, row).map_err(SessionPackError::Pack)?;
+        ecc::check_len(clear.len(), scheme.parity()).map_err(SessionPackError::Pack)?;
         pad::xor(send, self.send_count, &mut clear);
         self.send_count = self.send_count.wrapping_add(1);
+        ecc::push_parity(&mut clear, scheme.parity());
         Ok(clear)
     }
 
+    /// Reads a payload; with parity bytes it is checked, not repaired (limit 0).
     pub fn unpack(
         &mut self,
         bytes: &[u8],
         handlers: &mut [&mut dyn DispatchHandler],
     ) -> Result<(), UnpackError> {
+        self.unpack_repair(bytes, handlers, 0).map(|_| ())
+    }
+
+    /// Repairs up to `limit` wrong bytes of the payload, drops the parity, removes the pad, then
+    /// dispatches (see [`BinaryPacker::unpack_with_repair`]). Returns the bytes repaired. The
+    /// receive index moves for every payload read from a handler set and limit that were valid,
+    /// a refused one included, so the next payload from the sender is still read at its own index.
+    pub fn unpack_repair(
+        &mut self,
+        bytes: &[u8],
+        handlers: &mut [&mut dyn DispatchHandler],
+        limit: usize,
+    ) -> Result<usize, UnpackError> {
         let recv = match self.recv.as_ref() {
             Some(key) => key,
             None => {
@@ -92,10 +110,16 @@ impl PackSession {
                 }));
             }
         };
-        let mut clear = bytes.to_vec();
-        pad::xor(recv, self.recv_count, &mut clear);
+        let n = shared_parity(handlers)?;
+        ecc::check_limit(n, limit)?;
+        let index = self.recv_count;
         self.recv_count = self.recv_count.wrapping_add(1);
-        BinaryPacker::unpack_with(&clear, handlers)
+        check_unique(handlers)?;
+        let (padded, repaired) = ecc::unprotect(bytes, n, limit)?;
+        let mut clear = padded.into_owned();
+        pad::xor(recv, index, &mut clear);
+        dispatch(&clear, handlers)?;
+        Ok(repaired)
     }
 
     fn open(&mut self, nonce: &[u8], initiator: bool) -> bool {

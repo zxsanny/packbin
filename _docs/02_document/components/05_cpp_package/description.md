@@ -34,10 +34,11 @@ Row: a struct the caller owns. Members are bound by pointer to member.
   Array<T, N>: up to N items for repeat, times, list, dict, bits, packed
   Entry<V, Key>: one dictionary entry; the key is a View or a Text<N>
 Result:
-  error: Ok, ShortPacket, TrailingBytes, TypeMismatch, BufferFull, TooMany, BadValue, SchemeInvalid
+  error: Ok, ShortPacket, TrailingBytes, TypeMismatch, BufferFull, TooMany, BadValue, SchemeInvalid, ScratchTooSmall, Uncorrectable
   offset: the byte where the failure was found; on success the bytes written or read
   field: the order id of the failing field, or -1 when no field applies
   needed: the bytes that field required
+  repaired: the wrong bytes unpack_repair fixed (0 for any other call; absent under PACKBIN_NO_ECC)
 ```
 
 A value longer than its storage is `TooMany`, never cut.
@@ -54,6 +55,25 @@ A value longer than its storage is `TooMany`, never cut.
 | `unpack(scheme, data, len, row)`, `unpack(data, len, on(...)...)` | payload (non-const) | `Result` | No | `BadValue` before start or join; the pad is removed in place before the clear unpack runs, and the receive index advances for every payload, whether or not it then reads |
 
 `os_random` is a host `RandomFn`. Firmware passes its own (a hardware RNG).
+
+### Interface: Error correction (loop 38, ADR-007, `contracts/library/message-ecc.md`)
+
+Optional parity bytes per scheme: `n` from 0 to 32, default 0, which keeps the bytes, the errors and the speed of an unprotected scheme. `n` is not on the wire. Code: `cpp/include/packbin/ecc.hpp` (codec), `codec.hpp` and `session.hpp` (API).
+
+| Name | Meaning |
+|------|---------|
+| `parity(scheme<Row>(...), n)` | a copy with `n` parity bytes; `scheme.parity` reads it. `n` above 32 or below 0 is `SchemeInvalid` with `needed` 32, and a compile error when the scheme is `constexpr` |
+| `unpack_repair(scheme, data, len, row, limit)` | repairs up to `limit` wrong bytes in place (`data` is non-const), then reads; `Result.repaired` is the bytes fixed and `data` equals the packed message. `limit` outside 0 to `n / 2` is `BadValue` with `needed` `n / 2`, before any byte is read |
+| `unpack_repair(data, len, limit, on(...)...)` | the same, then dispatch on the repaired type byte |
+| `Error::Uncorrectable` | the new `Error`; no values, no field; the buffer is left as it was |
+
+- **Pack**: appends the parity. A clear message above `254 - n` bytes is `TooMany` (`offset` the clear length, `needed` the limit) and the written bytes are zeroed.
+- **Unpack**: `unpack(scheme, data, len, row)` and `unpack(data, len, on(...)...)` are detect-only, take a read-only buffer, never write it, and give `Uncorrectable` for any wrong byte. A buffer shorter than `n` is `ShortPacket` (`offset` the bytes present, `needed` `n`, `field` -1); a buffer above 254 bytes is `TooMany` (`needed` 254). A scheme with `n` = 0 is unchanged and has no 254-byte limit.
+- **Dispatch**: the handlers of one call declare the same `n`. A mix is `SchemeInvalid` at call time, `offset` the first count and `needed` the first count that differs. The message is repaired first, then dispatched.
+- **Session**: the parity covers the padded bytes. `PackSession::unpack_repair` repairs, drops the parity, removes the pad, then reads; `unpack` is limit 0. A refused protected payload (`Uncorrectable`, short, too long) spends a receive position; a bad limit or a mix spends none.
+- **Build**: `PACKBIN_NO_ECC` removes the codec, `Result.repaired` and the 511 bytes of tables; `parity(scheme, n)` with `n` above 0 is then `SchemeInvalid`. The Cortex-M4F target defines it: the tables and about 2.2 KB of code do not fit the 60 B flash margin, so its flash (8,132 B) and stack (492 B) are unchanged. `cpp/embedded/arm.sh` sets it for that target only; the Cortex-M0+, M3 and ESP32 builds keep the feature (the ESP32 firmware runs a pack and repair probe, `cpp/embedded/common/ecc_probe.cpp`).
+- **Size and stack**: with the feature linked on a host the code is about 2.2 KB plus 511 B of tables; repair uses about 390 B of stack at `n` = 32 (protect about 110 B). No heap, no exceptions, no global state. Unpack of hostile bytes does at most 255 x 32 field operations beyond the unprotected walk.
+- **`t` and detection**: `limit` 0 detects any corruption of up to `n` wrong bytes. A limit `t` above 0 keeps refusing corruption of `t + 1` to `n - t` bytes, but a larger corruption may be repaired to a different message. The contract table lists the chance for every `n` and `t`.
 
 ## 4. Data Access Patterns
 

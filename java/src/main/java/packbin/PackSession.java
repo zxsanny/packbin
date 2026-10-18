@@ -2,6 +2,8 @@ package packbin;
 
 import java.security.SecureRandom;
 import java.util.Arrays;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 
 public final class PackSession {
@@ -49,19 +51,46 @@ public final class PackSession {
         if (send == null) {
             return null;
         }
-        byte[] clear = BinaryPacker.pack(scheme, value);
+        byte[] clear = BinaryPacker.packClear(scheme, value);
+        Ecc.checkSize(clear.length, scheme.parity);
         SessionPad.xor(send, sendCount.getAndIncrement(), clear);
-        return clear;
+        // The code covers the padded bytes, so the receiver repairs before it removes the pad.
+        return Ecc.protect(clear, scheme.parity);
     }
 
     public Object unpack(byte[] bytes, Scheme.Handler<?>... handlers) {
+        Object result = unpackRepair(bytes, 0, handlers);
+        return result instanceof Packbin.Repaired ? null : result;
+    }
+
+    /**
+     * As {@link BinaryPacker#unpackRepair}: the payload is repaired (up to {@code limit} wrong bytes) before the pad
+     * is removed. The receive index advances for every payload read, a refused one included; a limit or a mix of
+     * handlers that is refused with an exception reads nothing.
+     */
+    public Object unpackRepair(byte[] bytes, int limit, Scheme.Handler<?>... handlers) {
         if (recv == null) {
             return new Packbin.ShortPacket("", 1, 0);
         }
-        byte[] clear = Arrays.copyOf(bytes, bytes.length);
-        SessionPad.xor(recv, recvCount, clear);
-        recvCount++;
-        return BinaryPacker.unpack(clear, handlers);
+        Objects.requireNonNull(bytes, "bytes");
+        int parity = Ecc.sharedParity(handlers, limit);
+        Map<Integer, Scheme.Handler<?>> byType = BinaryPacker.byType(handlers);
+        long index = recvCount++;
+        byte[] clear;
+        int repaired = 0;
+        if (parity == 0) {
+            clear = Arrays.copyOf(bytes, bytes.length);
+        } else {
+            Object checked = EccRepair.repair(bytes, parity, limit);
+            if (!(checked instanceof EccRepair.Fixed)) {
+                return checked;
+            }
+            clear = ((EccRepair.Fixed) checked).clear;
+            repaired = ((EccRepair.Fixed) checked).repaired;
+        }
+        SessionPad.xor(recv, index, clear);
+        Object err = BinaryPacker.unpackClear(clear, byType);
+        return err != null ? err : new Packbin.Repaired(repaired);
     }
 
     private boolean open(byte[] nonce, boolean initiator) {

@@ -18,6 +18,9 @@ public struct PackbinError: Error, Equatable, Sendable, CustomStringConvertible 
         case schemeError = "scheme_error"
         /// Pack cannot write the row; it returns no bytes.
         case packError = "pack_error"
+        /// A protected message has more wrong bytes than the correction limit repairs: no field is named
+        /// and no row is given (see `unpackRepair(_:limit:_:)`).
+        case uncorrectable = "uncorrectable"
     }
 
     public let kind: Kind
@@ -56,6 +59,7 @@ public struct PackbinError: Error, Equatable, Sendable, CustomStringConvertible 
         case .tooMany: return "packbin: too many\(at): \(reason)"
         case .schemeError: return "packbin: invalid scheme\(at): \(reason)"
         case .packError: return "packbin: pack refused\(at): \(reason)"
+        case .uncorrectable: return "packbin: uncorrectable message: more wrong bytes than the correction limit repairs"
         }
     }
 
@@ -75,6 +79,8 @@ public struct PackbinError: Error, Equatable, Sendable, CustomStringConvertible 
     static func pack(_ id: Int?, _ name: String, _ reason: String) -> PackbinError {
         PackbinError(.packError, field: id, name: name, reason: reason)
     }
+
+    static let uncorrectable = PackbinError(.uncorrectable, field: nil)
 
     static func shortPacket(_ id: Int?, _ name: String, needed: Int, left: Int) -> PackbinError {
         PackbinError(.short, field: id, name: name, needed: needed, left: left)

@@ -19,6 +19,7 @@ import {
   utf8,
   when,
 } from "../../../typescript/src/index.ts";
+import { runEcc } from "./handoff-ecc.ts";
 
 type UserRow = {
   username: string;
@@ -251,6 +252,8 @@ function deepEqual(a: unknown, b: unknown): boolean {
 }
 
 const cmd = process.argv[2];
+
+if (cmd?.startsWith("ecc-")) process.exit(runEcc(cmd, process.argv.slice(3), positionPacket as Scheme<object>));
 
 if (cmd === "pack-user") {
   const bytes = BinaryPacker.pack(userPacket, userValues);

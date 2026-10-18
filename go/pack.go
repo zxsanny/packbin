@@ -47,8 +47,18 @@ type scopeRoot struct {
 
 // Pack writes row with scheme s: the type number, then the fields in order. row is a
 // map[string]any keyed by field name, or, for a scheme whose fields are bound with Bind, a *T (or a
-// T). A refused row returns nil bytes and an *Error of kind PackRefused naming the field id.
+// T). A refused row returns nil bytes and an *Error of kind PackRefused naming the field id. A scheme
+// with parity bytes (WithParity) has them appended; a packet above 254 minus their count is refused.
 func Pack(s *Scheme, row any) ([]byte, error) {
+	plain, err := packClear(s, row)
+	if err != nil {
+		return nil, err
+	}
+	return protect(plain, s.parity)
+}
+
+// packClear is the packet of Pack before the parity bytes.
+func packClear(s *Scheme, row any) ([]byte, error) {
 	if s.unusable() {
 		return nil, packErr(NoField, "", "%s", s.notMade())
 	}

@@ -152,6 +152,26 @@ gives a copy with other limits; a limit left out takes its default, one below 1 
 let wide = try Scheme(1, .repeat(0, .u8(0, "k"))).withLimits(maxSlots: 4_194_304)
 ```
 
+### Message error correction
+
+A scheme can declare ``Scheme/parity`` parity bytes (0 to 32, default 0) with `withLimits(parity:)`;
+both sides share the count, it is not on the wire. `pack` appends the parity bytes (a Reed-Solomon code
+over GF(256), contract `_docs/02_document/contracts/library/message-ecc.md`), and a clear packet above
+254 - `parity` bytes is refused as a `.packError` naming its length and the limit. `unpack` detects any
+wrong byte; `unpackRepair(_:limit:_:)` repairs up to `limit` wrong bytes (0 to `parity` / 2) and gives
+`(row, repaired)`. Beyond that it throws `.uncorrectable`, naming no field and giving no row; a message
+shorter than `parity` throws `.short` naming `parity`, and one above 254 bytes `.tooMany`. Allowing repair
+gives up part of the detection (the contract lists the chances). The schemes of one call must declare the
+same `parity`, and `limit` must not pass `parity` / 2, or the call throws a `.schemeError` before any byte
+is read. A session pads first and adds the parity over the padded bytes, and repairs before it removes the pad.
+
+```swift
+let guarded = try Scheme(1, .u16(0, "a")).withLimits(parity: 4)
+var packet = try pack(guarded, ["a": 7])      // 3 clear bytes and 4 parity bytes
+packet[1] ^= 0x55                             // one wrong byte
+let (row, repaired) = try unpackRepair(packet, limit: 2, guarded)   // repaired == 1
+```
+
 ### Rows
 
 A row is a `[String: Any]` keyed by field name, or a typed row: a type that conforms to
@@ -231,8 +251,8 @@ A `PackSession` is used by one task at a time: it is a class and not `Sendable`.
 The whole API is listed here.
 
 - ``Scheme``: `init(_ typeNumber: Int, _ fields: Field...) throws`, `init(_:_: [Field]) throws`,
-  `typeNumber`, `maxRounds`, `maxSlots`, `maxBytes`,
-  `withLimits(maxRounds: Int? = nil, maxSlots: Int? = nil, maxBytes: Int? = nil) throws -> Scheme`,
+  `typeNumber`, `maxRounds`, `maxSlots`, `maxBytes`, `parity`,
+  `withLimits(maxRounds: Int? = nil, maxSlots: Int? = nil, maxBytes: Int? = nil, parity: Int? = nil) throws -> Scheme`,
   and the defaults `defaultMaxRounds`, `defaultMaxSlots`, `defaultMaxBytes` (see Limits).
 - ``Field`` constructors: `.u8`, `.u16`, `.u32`, `.u64`, `.i8`, `.i16`, `.i32`, `.i64`
   `(_ id: Int, _ name: String)`: integers, little-endian; `.f32`, `.f64(_ id:, _ name:)`: IEEE 754,
@@ -265,12 +285,15 @@ The whole API is listed here.
   `pack<Row>(_ scheme: Scheme, _ row: Row) throws -> [UInt8]`.
 - `unpack(_ buffer: [UInt8], _ schemes: Scheme...) throws -> Any` (the bound row type, or a
   `[String: Any]`), `unpackMap(_ buffer: [UInt8], _ schemes: Scheme...) throws -> [String: Any]`;
-  both also take the schemes as an array.
+  both also take the schemes as an array; `unpackRepair(_ buffer: [UInt8], limit: Int, _ schemes: Scheme...)
+  throws -> (row: Any, repaired: Int)` and `unpackMapRepair(...)` (`row: [String: Any]`), also with the
+  schemes as an array (see Message error correction).
 - ``PackbinError``: `kind`, `field` (`nil` for no field), `name`, `needed`, `left`, `actual`, `reason`;
   ``PackbinError/Kind``: `short`, `trailing`, `unknownType`, `badValue`, `tooMany`, `schemeError`,
-  `packError`, whose raw values are the outcome terms of the shared hostile vectors.
+  `packError`, `uncorrectable`, whose raw values are the outcome terms of the shared hostile vectors.
 - `flagBits`: the 8 bits one flag byte holds.
 - ``PackSession``: `seedSize` (32), `nonceSize` (16), `static load(_ seed: [UInt8]) throws -> PackSession`,
   `start() throws -> [UInt8]`, `start(_ nonce: [UInt8]) throws -> [UInt8]`,
   `join(_ nonce: [UInt8]) throws`, `pack(_:_:)` (a map or a typed row), `unpack(_ payload: [UInt8], _ schemes: Scheme...)`
-  and `unpackMap(...)`, both also with the schemes as an array (see Session).
+  and `unpackMap(...)`, both also with the schemes as an array, and `unpackRepair(_:limit:_:)` and
+  `unpackMapRepair(_:limit:_:)` (see Session).

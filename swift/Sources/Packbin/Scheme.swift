@@ -14,6 +14,9 @@ public struct Scheme: Sendable {
     public let maxSlots: Int
     /// The most bytes one pack call may write, the type byte included (see `withLimits`).
     public let maxBytes: Int
+    /// The parity bytes `pack` appends to every packet and `unpack` checks, 0...32 (default 0: nothing
+    /// is appended). Both sides share the count; it is not on the wire (see `withLimits`).
+    public let parity: Int
 
     /// Builds a scheme from its type number (0...255) and its fields, numbered by order from 0. A
     /// refused scheme throws a `PackbinError` of kind `.schemeError` naming the field id.
@@ -47,16 +50,18 @@ public struct Scheme: Sendable {
         maxRounds = Scheme.defaultMaxRounds
         maxSlots = Scheme.defaultMaxSlots
         maxBytes = Scheme.defaultMaxBytes
+        parity = 0
     }
 
     /// `base` with the given limits, already checked.
-    init(_ base: Scheme, maxRounds: Int, maxSlots: Int, maxBytes: Int) {
+    init(_ base: Scheme, maxRounds: Int, maxSlots: Int, maxBytes: Int, parity: Int) {
         typeNumber = base.typeNumber
         fields = base.fields
         place = base.place
         self.maxRounds = maxRounds
         self.maxSlots = maxSlots
         self.maxBytes = maxBytes
+        self.parity = parity
     }
 }
 

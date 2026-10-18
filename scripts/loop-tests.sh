@@ -71,7 +71,7 @@ covers() {
       is_test_path "$f" && return 1
       case "$f" in
         csharp/* | typescript/* | python/* | rust/* | java/* | go/* | swift/* | Package.swift | Package.resolved | cpp/include/* | cpp/src/*) return 0 ;;
-        .github/workflows/language-pair.sh | .github/workflows/ring-* | .github/workflows/drivers/* | fixtures/*) return 0 ;;
+        .github/workflows/language-pair.sh | .github/workflows/ring-* | .github/workflows/drivers/* | fixtures/* | scripts/ecc/*) return 0 ;;
       esac ;;
     ac10)
       case "$f" in csharp/*) return 0 ;; esac ;;
@@ -282,6 +282,10 @@ run_stage_command() {
         && bash fixtures/text/check-vectors.test.sh \
         && bash scripts/text/check-emitted.test.sh \
         && bash scripts/text/check-emitted.sh \
+        && bash fixtures/ecc/check-vectors.test.sh \
+        && bash fixtures/ecc/check-contract.sh \
+        && python3 -I scripts/ecc/fuzz_reference.py \
+        && bash .github/workflows/ring-ecc.test.sh \
         && bash .github/workflows/run-suite.test.sh \
         && bash cpp/embedded/lib.test.sh \
         && bash cpp/embedded/run-parts.test.sh \
@@ -294,7 +298,9 @@ run_stage_command() {
     cpp) docker compose -f docker-compose.test.yml run --rm cpp 'make -C /src/cpp clean && exec /src/.github/workflows/run-suite.sh cpp' ;;
     cpp-embedded-arm) docker compose -f docker-compose.test.yml run --rm cpp-embedded ;;
     go | typescript | csharp | python | rust | java | swift) docker compose -f docker-compose.test.yml run --rm "$1" ;;
-    ring) env "${ring_env[@]}" bash .github/workflows/language-pair.sh ;;
+    # The message ECC ring (AZ-2689) follows the ring and reuses its C# and C++ driver builds (PACKBIN_RING_WORK).
+    ring) env "${ring_env[@]}" PACKBIN_RING_WORK="$logs/ring-work" bash .github/workflows/language-pair.sh \
+        && env "${ring_env[@]}" PACKBIN_RING_WORK="$logs/ring-work" bash .github/workflows/ring-ecc.sh ;;
     ac10) dotnet test csharp -c Release --nologo --filter "FullyQualifiedName~Nfr_PublicTyped" ;;
     # Its own lines are also its summary, which run_group prints in place of the tail of the stage log.
     publish-gate) run_gate_shares | tee "$logs/publish-gate.summary" ;;

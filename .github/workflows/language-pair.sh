@@ -5,8 +5,8 @@ root="$(cd "$(dirname "$0")/../.." && pwd)"
 drivers="$root/.github/workflows/drivers"
 # The C# and C++ drivers are built once a run into a private directory (mode 700), never into a predictable /tmp
 # path another local user could pre-create (the F24 pattern of the Java driver below).
-work="$(mktemp -d)"
-trap 'rm -rf "$work"' EXIT
+work="${PACKBIN_RING_WORK:-$(mktemp -d)}" && mkdir -p -m 700 "$work" # PACKBIN_RING_WORK: kept for ring-ecc.sh to reuse the builds
+[ -n "${PACKBIN_RING_WORK:-}" ] || trap 'rm -rf "$work"' EXIT
 swift_ring="${PACKBIN_SWIFT_RING:-/tmp/packbin-ring-swift}" # ring-swift.sh output, kept between runs as Go's
 user_hex="01062bfcfee119b20200030ba818078a8b1ca4ed51800300056b6aa330b00100032b0128036ae9c80400032b012808106770735f66697803ea04800348516404ca25f0000200032b0128048bbc2c80"
 nested_hex="010200036ae9c8010001000209f908106770735f66697804ca25f000020001000209f9032b012801000209f9048bbc2c80"
@@ -77,15 +77,15 @@ run_lang() {
     java)
       local out="${PACKBIN_JAVA_HANDOFF:-/tmp/packbin-handoff-java}"
       # Rebuild when a driver file or any package source is newer than the last build, or a driver class is missing.
-      if [ ! -f "$out/Handoff.class" ] || [ ! -f "$out/HandoffElements.class" ] \
-        || [ -n "$(find "$root/java/src/main/java" "$drivers/Handoff.java" "$drivers/HandoffElements.java" -newer "$out/Handoff.class" -print -quit)" ]; then
+      if [ ! -f "$out/Handoff.class" ] || [ ! -f "$out/HandoffElements.class" ] || [ ! -f "$out/HandoffEcc.class" ] \
+        || [ -n "$(find "$root/java/src/main/java" "$drivers/Handoff.java" "$drivers/HandoffElements.java" "$drivers/HandoffEcc.java" -newer "$out/Handoff.class" -print -quit)" ]; then
         rm -rf "$out"
         mkdir -p "$out"
         local sources=()
         while IFS= read -r -d '' f; do
           sources+=("$f")
         done < <(find "$root/java/src/main/java" -name '*.java' -print0 | sort -z)
-        javac -encoding UTF-8 -d "$out" "${sources[@]}" "$drivers/Handoff.java" "$drivers/HandoffElements.java" || return
+        javac -encoding UTF-8 -d "$out" "${sources[@]}" "$drivers/Handoff.java" "$drivers/HandoffElements.java" "$drivers/HandoffEcc.java" || return
       fi
       java -cp "$out" Handoff "$@"
       ;;

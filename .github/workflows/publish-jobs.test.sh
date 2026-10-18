@@ -189,11 +189,17 @@ static = %w[
   cpp/embedded/lib.test.sh cpp/embedded/run-parts.test.sh .github/workflows/ring-wiring.test.sh scripts/loop-tests.test.sh
   .github/workflows/ring-wiring-swift.test.sh .github/workflows/ring-prepare.test.sh
   fixtures/text/check-vectors.test.sh scripts/text/check-emitted.test.sh scripts/text/check-emitted.sh
+  fixtures/ecc/check-vectors.test.sh fixtures/ecc/check-contract.sh .github/workflows/ring-ecc.test.sh
 ]
 static.each do |script|
   found = all_runs.call("bash #{script}")
   errors << "the static check bash #{script} runs in #{found.inspect}, not only in scaffold" unless found == ["scaffold"]
 end
+# The reference codec's seeded bounds (AZ-2689) are a python check, not a bash one; the ring run itself is in the ring job.
+found = all_runs.call("python3 -I scripts/ecc/fuzz_reference.py")
+errors << "the message ECC reference bounds run in #{found.inspect}, not only in scaffold" unless found == ["scaffold"]
+found = all_runs.call("bash .github/workflows/ring-ecc.sh")
+errors << "the message ECC ring runs in #{found.inspect}, not only in ring" unless found == ["ring"]
 
 errors.each { |e| puts e }
 exit(errors.empty? ? 0 : 1)
@@ -358,6 +364,10 @@ mutant "embedded part misspelled" 'jobs["embedded-esp-packages"]["steps"][1]["ru
 mutant "scaffold without the embedded parts step" 'jobs["scaffold"]["steps"].reject! { |s| s["name"] == "embedded parts" }'
 mutant "scaffold without the report columns step" 'jobs["scaffold"]["steps"].reject! { |s| s["name"] == "report columns" }'
 mutant "ring preparation test moved to ring" 'jobs["ring"]["steps"] << jobs["scaffold"]["steps"].find { |s| s["name"] == "ring preparation" }; jobs["scaffold"]["steps"].reject! { |s| s["name"] == "ring preparation" }'
+mutant "scaffold without the message ECC vectors step" 'jobs["scaffold"]["steps"].reject! { |s| s["name"] == "message ECC vectors" }'
+mutant "scaffold without the message ECC reference bounds step" 'jobs["scaffold"]["steps"].reject! { |s| s["name"] == "message ECC reference bounds" }'
+mutant "message ECC ring self-test moved to ring" 'jobs["ring"]["steps"] << jobs["scaffold"]["steps"].find { |s| s["name"] == "message ECC ring self-test" }; jobs["scaffold"]["steps"].reject! { |s| s["name"] == "message ECC ring self-test" }'
+mutant "message ECC ring dropped from ring" 'jobs["ring"]["steps"].reject! { |s| s["name"] == "message ECC ring" }'
 mutant "scaffold static check moved to ring" 'jobs["ring"]["steps"] << jobs["scaffold"]["steps"].find { |s| s["name"] == "suite runner" }; jobs["scaffold"]["steps"].reject! { |s| s["name"] == "suite runner" }'
 
 if [ "$failures" -ne 0 ]; then

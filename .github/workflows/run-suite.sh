@@ -150,7 +150,14 @@ rust_speed() {
     echo "run-suite: rust has no string speed test (ac8_one_hundred_thousand_round_trips); the release-build step has nothing to run" >&2
     return 1
   fi
-  cargo test --manifest-path "$manifest" --release --lib ac8_one_hundred_thousand_round_trips -- --nocapture
+  # EC-13 (AZ-2689): the message ECC bounds (1,000 repairs and 1,000 packs of a 254-byte block in 1 s) hold for a release
+  # build only, and a debug build is far slower. The listing must hold both ec13_ tests, or the filter runs nothing.
+  if [ "$(grep -c 'ec13_' <<< "$listed")" -lt 2 ]; then
+    echo "run-suite: rust has fewer than two message ECC speed tests (ec13_); the release-build step has nothing to run" >&2
+    return 1
+  fi
+  cargo test --manifest-path "$manifest" --release --lib ac8_one_hundred_thousand_round_trips -- --nocapture || return 1
+  cargo test --manifest-path "$manifest" --release --lib ec13_ -- --nocapture
 }
 
 # SW-8: the speed bound holds for a release build only. A filter that matches nothing passes, so the suite must exist.

@@ -1,7 +1,9 @@
-// ESP-IDF app that packs and unpacks the all-kinds scheme with the core. CI builds it for
-// esp32s3 and esp32c3 (no run); the bytes are proven on QEMU Cortex-M and s390x.
+// ESP-IDF app that packs and unpacks the all-kinds scheme with the core, and packs and repairs a
+// protected message. CI builds it for esp32s3 and esp32c3 (no run); the bytes are proven on QEMU
+// Cortex-M and s390x.
 
 #include "all_kinds.hpp"
+#include "ecc_probe.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -20,4 +22,6 @@ extern "C" void app_main(void) {
   std::printf("packbin all kinds: %u bytes, mismatched fields %d\n",
               static_cast<unsigned>(p.offset),
               u.ok() ? all_kinds::mismatched_fields(row, back) : -1);
+  // Message error correction with the encoder on: 4 parity bytes, the vector bytes, 2 repaired.
+  std::printf("packbin ecc: failed checks %d\n", ecc_probe::failed_checks());
 }

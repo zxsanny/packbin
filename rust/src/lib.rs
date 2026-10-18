@@ -1,9 +1,11 @@
+mod ecc;
 mod field;
 mod scheme;
 mod session;
 mod value;
 mod walk;
 
+pub use ecc::MAX_PARITY;
 pub use field::{
     be, bits, bytes, dict, eq, f32, f64, flag_byte, flags, group, i16, i32, i64, i8, id_name, list,
     packed, repeat, sized, times, u16, u2, u32, u64, u8, utf8, when, Eq, Field, FieldKey, FlagByte,
@@ -15,7 +17,7 @@ pub use value::{
     insert, mismatched_bytes, motion_field_count, to_hex, Name, PackError, ShortPacket,
     UnpackError, Value, Values,
 };
-pub use walk::{pack, unpack};
+pub use walk::{pack, unpack, unpack_repair};
 
 #[cfg(test)]
 mod borrowed_count_tests;
@@ -25,6 +27,10 @@ mod counted_tests;
 mod duplicate_names_kept_tests;
 #[cfg(test)]
 mod duplicate_names_tests;
+#[cfg(test)]
+mod ecc_repair_tests;
+#[cfg(test)]
+mod ecc_vectors_tests;
 #[cfg(test)]
 mod element_tests;
 #[cfg(test)]

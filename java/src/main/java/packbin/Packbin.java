@@ -192,6 +192,31 @@ public final class Packbin {
         }
     }
 
+    /** A protected message with more wrong bytes than the correction limit allows; names no field. */
+    public static final class Uncorrectable {
+        public Uncorrectable() {}
+    }
+
+    /** A protected message above 254 bytes, with the limit it passed. */
+    public static final class TooLong {
+        public final int length;
+        public final int limit;
+
+        public TooLong(int length, int limit) {
+            this.length = length;
+            this.limit = limit;
+        }
+    }
+
+    /** The result of a successful {@code unpackRepair}: the number of wrong bytes repaired, 0 when the message was intact. */
+    public static final class Repaired {
+        public final int count;
+
+        public Repaired(int count) {
+            this.count = count;
+        }
+    }
+
     public static final class Bound<T> {
         public final boolean ok;
         public final T value;

@@ -227,6 +227,8 @@ static class Handoff
                 if (args.Length < 2)
                     return 2;
                 return UnpackBitWhen(args[1]);
+            case "ecc-protect" or "ecc-repair" or "ecc-batch":
+                return HandoffEcc.Run(args, PositionScheme);
             default:
                 return HandoffElements.Run(args);
         }
