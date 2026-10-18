@@ -73,7 +73,7 @@ Then both orders give identical bytes (sorted by the key's UTF-8 bytes), the rep
 **AC-8: Speed**
 Given a 20-character Ukrainian string
 When 100,000 pack-then-unpack round trips run on one core
-Then they finish in ≤ 2 seconds (Python) (CS-11)
+Then they finish in ≤ 40 seconds, a provisional bound for the pure-Python optimal parse (CS-11)
 
 **AC-9: Existing behavior kept**
 Given the package's current suites

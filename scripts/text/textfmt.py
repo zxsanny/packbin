@@ -388,3 +388,24 @@ def decode(buf, off, tables):
 
 def hexstr(b):
     return b.hex()
+
+
+def _main(argv):
+    """textfmt.py enc TEXT | enc-hex HEX | dec FIELD_HEX : print the field hex or the text (for tests and workers)."""
+    if len(argv) != 3 or argv[1] not in ("enc", "enc-hex", "dec"):
+        print(_main.__doc__)
+        return 2
+    tables = Tables.load()
+    if argv[1] == "enc":
+        print(encode(argv[2], tables).hex())
+    elif argv[1] == "enc-hex":
+        print(encode(bytes.fromhex(argv[2]).decode("utf8"), tables).hex())
+    else:
+        text, end = decode(bytes.fromhex(argv[2]), 0, tables)
+        print(text)
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(_main(sys.argv))
