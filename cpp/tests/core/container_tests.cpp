@@ -9,16 +9,19 @@ using packbin::Array;
 using packbin::Entry;
 using packbin::Error;
 using packbin::Opt;
-using packbin::View;
+using packbin::Text;
 
 namespace {
 
-View view(char const* s) {
-  return View{reinterpret_cast<std::uint8_t const*>(s), std::strlen(s)};
+template <std::size_t N>
+void put_text(Text<N>& t, char const* s) {
+  t.len = static_cast<std::uint16_t>(std::strlen(s));
+  std::memcpy(t.data, s, t.len);
 }
 
-bool view_is(View const& v, char const* s) {
-  return v.len == std::strlen(s) && std::memcmp(v.data, s, v.len) == 0;
+template <std::size_t N>
+bool text_is(Text<N> const& t, char const* s) {
+  return t.len == std::strlen(s) && std::memcmp(t.data, s, t.len) == 0;
 }
 
 struct Numbers {
@@ -98,141 +101,148 @@ void element_ids_start_at_zero() {
   expect(p.ok() && check::same_hex(buf, p.offset, "200100020007000800"), "typed list payload");
 }
 
-using Actions = Array<View, 4>;
+using Word = Text<16>;
+using Actions = Array<Word, 4>;
 
 struct User {
-  View name;
-  Array<View, 4> roles;
-  Array<Entry<Actions>, 4> access;
+  Word name;
+  Array<Word, 4> roles;
+  Array<Entry<Actions, Word>, 4> access;
 };
 
 constexpr auto user = packbin::scheme<User>(
     1, packbin::utf8<&User::name>(0), packbin::list<&User::roles>(packbin::utf8(0)),
     packbin::dict<&User::access>(packbin::list(packbin::utf8(0))));
 
+// The ring packet `ref.user` of fixtures/text/vectors.txt.
 constexpr char const* kUserHex =
-    "0107007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e6e656c010004007265"
-    "616403006d6170040004007265616407006770735f6669780300736574040065646974050073746f726502000400"
-    "7265616405007772697465";
+    "01062bfcfee119b20200030ba818078a8b1ca4ed51800300056b6aa330b00100032b0128036ae9c80400032b0128"
+    "08106770735f66697803ea04800348516404ca25f0000200032b0128048bbc2c80";
 
 void set_actions(Actions& a, std::initializer_list<char const*> names) {
   a.count = 0;
   for (auto const* n : names)
-    a.items[a.count++] = view(n);
+    put_text(a.items[a.count++], n);
 }
 
 void dictionary() {
   User row;
-  row.name = view("zxsanny");
+  put_text(row.name, "zxsanny");
   row.roles.count = 2;
-  row.roles.items[0] = view("user");
-  row.roles.items[1] = view("dispatcher");
+  put_text(row.roles.items[0], "user");
+  put_text(row.roles.items[1], "dispatcher");
   row.access.count = 3;
-  row.access.items[0].key = view("channel");
+  put_text(row.access.items[0].key, "channel");
   set_actions(row.access.items[0].value, {"read"});
-  row.access.items[1].key = view("map");
+  put_text(row.access.items[1].key, "map");
   set_actions(row.access.items[1].value, {"read", "gps_fix", "set", "edit"});
-  row.access.items[2].key = view("store");
+  put_text(row.access.items[2].key, "store");
   set_actions(row.access.items[2].value, {"read", "write"});
   std::uint8_t buf[128];
-  auto p = packbin::pack(user, row, buf, sizeof(buf));
-  expect(p.ok() && p.offset == 104 && check::same_hex(buf, p.offset, kUserHex), "dict hex");
+  packbin::Scratch<16> scratch;
+  auto p = packbin::pack(user, row, buf, sizeof(buf), scratch);
+  expect(p.ok() && p.offset == 79 && check::same_hex(buf, p.offset, kUserHex), "dict hex");
 
   User back;
   auto u = packbin::unpack(user, buf, p.offset, back);
-  expect(u.ok() && view_is(back.name, "zxsanny") && back.roles.count == 2 &&
-             view_is(back.roles.items[1], "dispatcher"),
+  expect(u.ok() && text_is(back.name, "zxsanny") && back.roles.count == 2 &&
+             text_is(back.roles.items[1], "dispatcher"),
          "dict user and roles");
-  expect(back.access.count == 3 && view_is(back.access.items[1].key, "map") &&
+  expect(back.access.count == 3 && text_is(back.access.items[1].key, "map") &&
              back.access.items[1].value.count == 4 &&
-             view_is(back.access.items[1].value.items[1], "gps_fix") &&
-             view_is(back.access.items[2].value.items[1], "write"),
+             text_is(back.access.items[1].value.items[1], "gps_fix") &&
+             text_is(back.access.items[2].value.items[1], "write"),
          "dict entries");
 
   struct Empty {
-    View name;
+    Text<4> name;
     Array<std::uint8_t, 1> xs;
-    Array<Entry<View>, 1> m;
+    Array<Entry<Text<4>, Text<4>>, 1> m;
   };
   constexpr auto empty_scheme = packbin::scheme<Empty>(
       1, packbin::utf8<&Empty::name>(0), packbin::list<&Empty::xs>(packbin::u8(0)),
       packbin::dict<&Empty::m>(packbin::utf8(0)));
   Empty none;
-  none.name = view("");
-  auto e = packbin::pack(empty_scheme, none, buf, sizeof(buf));
-  expect(e.ok() && check::same_hex(buf, e.offset, "01000000000000"), "dict empty");
+  auto e = packbin::pack(empty_scheme, none, buf, sizeof(buf), scratch);
+  expect(e.ok() && check::same_hex(buf, e.offset, "010000000000"), "dict empty");
 
   struct Scores {
-    Array<Entry<std::uint8_t>, 4> m;
+    Array<Entry<std::uint8_t, Text<4>>, 4> m;
   };
   constexpr auto scores = packbin::scheme<Scores>(1, packbin::dict<&Scores::m>(packbin::u8(0)));
   Scores sorted;
   sorted.m.count = 2;
-  sorted.m.items[0] = Entry<std::uint8_t>{view("a"), 2};
-  sorted.m.items[1] = Entry<std::uint8_t>{view("b"), 1};
-  auto so = packbin::pack(scores, sorted, buf, sizeof(buf));
-  expect(so.ok() && check::same_hex(buf, so.offset, "0102000100610201006201"),
+  put_text(sorted.m.items[0].key, "a");
+  sorted.m.items[0].value = 2;
+  put_text(sorted.m.items[1].key, "b");
+  sorted.m.items[1].value = 1;
+  auto so = packbin::pack(scores, sorted, buf, sizeof(buf), scratch);
+  expect(so.ok() && check::same_hex(buf, so.offset, "01020002106102021062" "01"),
          "dict README example");
   Scores unsorted;
   unsorted.m.count = 2;
-  unsorted.m.items[0] = Entry<std::uint8_t>{view("b"), 1};
-  unsorted.m.items[1] = Entry<std::uint8_t>{view("a"), 2};
-  auto us = packbin::pack(scores, unsorted, buf, sizeof(buf));
+  put_text(unsorted.m.items[0].key, "b");
+  unsorted.m.items[0].value = 1;
+  put_text(unsorted.m.items[1].key, "a");
+  unsorted.m.items[1].value = 2;
+  auto us = packbin::pack(scores, unsorted, buf, sizeof(buf), scratch);
   expect(us.error == Error::BadValue, "dict keys must ascend in unsigned byte order");
-  unsorted.m.items[0] = Entry<std::uint8_t>{view("a"), 1};
-  auto same = packbin::pack(scores, unsorted, buf, sizeof(buf));
+  put_text(unsorted.m.items[0].key, "a");
+  auto same = packbin::pack(scores, unsorted, buf, sizeof(buf), scratch);
   expect(same.error == Error::BadValue, "dict pack refuses a repeated key");
 
   struct Plain {
-    Array<Entry<View>, 4> access;
+    Array<Entry<Text<4>, Text<4>>, 4> access;
   };
   constexpr auto dup = packbin::scheme<Plain>(1, packbin::dict<&Plain::access>(packbin::utf8(0)));
   std::uint8_t dup_bytes[15];
-  check::parse_hex("010200010061010078010061010079", dup_bytes, sizeof(dup_bytes));
+  check::parse_hex("010200021061021078021061021079", dup_bytes, sizeof(dup_bytes));
   Plain dup_row;
   auto d = packbin::unpack(dup, dup_bytes, sizeof(dup_bytes), dup_row);
   expect(d.error == Error::BadValue && d.offset == 9, "dict duplicate key");
 }
 
-using OpFields = Array<Entry<View>, 2>;
+using OpFields = Array<Entry<Word, Text<8>>, 2>;
 using OpRows = Array<OpFields, 2>;
 
 struct Nested {
-  Array<Entry<OpRows>, 2> access;
+  Array<Entry<OpRows, Text<8>>, 2> access;
 };
 
 constexpr auto nested = packbin::scheme<Nested>(
     1, packbin::dict<&Nested::access>(packbin::list(packbin::dict(packbin::utf8(0)))));
 
+// The ring packet `ref.nested` of fixtures/text/vectors.txt.
 constexpr char const* kNestedHex =
-    "01020003006d61700100010002006f7007006770735f666978050073746f72650200010002006f700400726561"
-    "64010002006f7005007772697465";
+    "010200036ae9c8010001000209f908106770735f66697804ca25f000020001000209f9032b012801000209f9"
+    "048bbc2c80";
 
 void set_op(OpFields& fields, char const* op) {
   fields.count = 1;
-  fields.items[0].key = view("op");
-  fields.items[0].value = view(op);
+  put_text(fields.items[0].key, "op");
+  put_text(fields.items[0].value, op);
 }
 
 void dict_of_lists_of_dicts() {
   Nested row;
   row.access.count = 2;
-  row.access.items[0].key = view("map");
+  put_text(row.access.items[0].key, "map");
   row.access.items[0].value.count = 1;
   set_op(row.access.items[0].value.items[0], "gps_fix");
-  row.access.items[1].key = view("store");
+  put_text(row.access.items[1].key, "store");
   row.access.items[1].value.count = 2;
   set_op(row.access.items[1].value.items[0], "read");
   set_op(row.access.items[1].value.items[1], "write");
   std::uint8_t buf[64];
-  auto p = packbin::pack(nested, row, buf, sizeof(buf));
+  packbin::Scratch<16> scratch;
+  auto p = packbin::pack(nested, row, buf, sizeof(buf), scratch);
   expect(p.ok() && check::same_hex(buf, p.offset, kNestedHex), "nested pair hex");
 
   Nested back;
   auto u = packbin::unpack(nested, buf, p.offset, back);
   expect(u.ok() && back.access.count == 2 && back.access.items[1].value.count == 2 &&
-             view_is(back.access.items[1].value.items[1].items[0].value, "write") &&
-             view_is(back.access.items[0].value.items[0].items[0].key, "op"),
+             text_is(back.access.items[1].value.items[1].items[0].value, "write") &&
+             text_is(back.access.items[0].value.items[0].items[0].key, "op"),
          "nested pair unpack");
 }
 

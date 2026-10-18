@@ -50,14 +50,15 @@ struct Row {
   packbin::Array<std::uint8_t, 8> kinds;
   std::uint8_t npoints = 0;
   packbin::Array<Point, 4> points;
-  packbin::View name;
+  packbin::Text<16> name;
   packbin::Array<std::uint16_t, 4> xs;
-  packbin::Array<packbin::Entry<packbin::View>, 2> tags;
+  packbin::Array<packbin::Entry<packbin::Text<8>, packbin::Text<8>>, 2> tags;
   packbin::Array<Pair, 4> pairs;
 };
 
 Row sample();
-// Packs `row` into `out`; on success `offset` is the packet length.
+// Packs `row` into `out`; on success `offset` is the packet length. The compact text encoder
+// works in a scratch that lives in this file's static memory, not on the caller's stack.
 packbin::Result pack(Row const& row, std::uint8_t* out, std::size_t cap);
 packbin::Result unpack(std::uint8_t const* data, std::size_t len, Row& row);
 // Field-by-field differences between two rows (0 when they match).

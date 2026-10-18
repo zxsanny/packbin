@@ -19,6 +19,30 @@ enum class Error : std::uint8_t {
   TooMany,
   BadValue,
   SchemeInvalid,
+  // A string needs more encoder scratch than `pack` was given (`needed` is the bytes required).
+  ScratchTooSmall,
+};
+
+// Working memory of the compact-text encoder: 3 words (12 bytes) per Unicode code point of the
+// longest string packed in one call. A string that needs more than the scratch holds is
+// `ScratchTooSmall` naming its field; the encoder never writes a different encoding instead.
+// Strings that the format stores as raw UTF-8 without a parse (a lower bound on the compact
+// size already loses) need none, and a packet without strings needs no scratch.
+constexpr std::size_t kScratchWordsPerChar = 3;
+
+struct ScratchRef {
+  std::uint32_t* words = nullptr;
+  std::size_t count = 0;
+};
+
+// Owned scratch for strings of up to `Chars` code points: `Scratch<64> sc; pack(s, row, out,
+// cap, sc);`. The words need no initial value.
+template <std::size_t Chars>
+struct Scratch {
+  static_assert(Chars > 0 && Chars <= 65535, "packbin: Scratch<N> holds 1..65535 characters");
+  std::uint32_t words[Chars * kScratchWordsPerChar];
+
+  operator ScratchRef() { return ScratchRef{words, Chars * kScratchWordsPerChar}; }
 };
 
 // On failure, `offset` is the byte where the failure was found, `field` the order id (-1 when

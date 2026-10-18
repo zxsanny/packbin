@@ -29,11 +29,17 @@ constexpr auto scheme = pb::scheme<Row>(
 
 static_assert(pb::validate(scheme).ok(), "all-kinds scheme is valid");
 
-pb::View text(char const* s) {
-  return pb::View{reinterpret_cast<std::uint8_t const*>(s), std::strlen(s)};
+// The encoder's working memory: 16 characters of the longest string, in static storage.
+pb::Scratch<16> scratch;
+
+template <std::size_t N>
+void set_text(pb::Text<N>& t, char const* s) {
+  t.len = static_cast<std::uint16_t>(std::strlen(s));
+  std::memcpy(t.data, s, t.len);
 }
 
-bool same_view(pb::View const& a, pb::View const& b) {
+template <std::size_t N>
+bool same_text(pb::Text<N> const& a, pb::Text<N> const& b) {
   return a.len == b.len && (a.len == 0 || std::memcmp(a.data, b.data, a.len) == 0);
 }
 
@@ -96,15 +102,15 @@ Row sample() {
   r.points.count = 2;
   r.points.items[0] = Point{500000000, 300000000};
   r.points.items[1] = Point{500010000, 300010000};
-  r.name = text("zxsanny");
+  set_text(r.name, "zxsanny");
   r.xs.count = 2;
   r.xs.items[0] = 1;
   r.xs.items[1] = 2;
   r.tags.count = 2;
-  r.tags.items[0].key = text("map");
-  r.tags.items[0].value = text("read");
-  r.tags.items[1].key = text("store");
-  r.tags.items[1].value = text("write");
+  set_text(r.tags.items[0].key, "map");
+  set_text(r.tags.items[0].value, "read");
+  set_text(r.tags.items[1].key, "store");
+  set_text(r.tags.items[1].value, "write");
   r.pairs.count = 2;
   r.pairs.items[0] = Pair{1, 2};
   r.pairs.items[1] = Pair{3, 4};
@@ -112,7 +118,7 @@ Row sample() {
 }
 
 pb::Result pack(Row const& row, std::uint8_t* out, std::size_t cap) {
-  return pb::pack(scheme, row, out, cap);
+  return pb::pack(scheme, row, out, cap, scratch);
 }
 
 pb::Result unpack(std::uint8_t const* data, std::size_t len, Row& row) {
@@ -152,10 +158,11 @@ int mismatched_fields(Row const& a, Row const& b) {
   n += a.npoints != b.npoints;
   n += differs(a.points, b.points,
                [](Point const& x, Point const& y) { return x.lat == y.lat && x.lon == y.lon; });
-  n += !same_view(a.name, b.name);
+  n += !same_text(a.name, b.name);
   n += differs(a.xs, b.xs, [](std::uint16_t x, std::uint16_t y) { return x == y; });
-  n += differs(a.tags, b.tags, [](pb::Entry<pb::View> const& x, pb::Entry<pb::View> const& y) {
-    return same_view(x.key, y.key) && same_view(x.value, y.value);
+  using Tag = pb::Entry<pb::Text<8>, pb::Text<8>>;
+  n += differs(a.tags, b.tags, [](Tag const& x, Tag const& y) {
+    return same_text(x.key, y.key) && same_text(x.value, y.value);
   });
   n += differs(a.pairs, b.pairs, [](Pair const& x, Pair const& y) {
     return x.a == y.a && x.b == y.b;

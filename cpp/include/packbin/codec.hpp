@@ -22,8 +22,6 @@ struct Scheme {
 
 namespace detail {
 
-constexpr bool constant_evaluated() { return __builtin_is_constant_evaluated(); }
-
 // Not constexpr on purpose: reaching one of these while a constexpr scheme is built stops the
 // compile. The id travels as a template argument so GCC and Clang both print it
 // (`scheme_field_id_breaks_order<2>` / `[with int Id = 2]`). Ids outside 0..255 report -1.
@@ -63,7 +61,7 @@ constexpr bool binds_row() {
 }
 
 Result pack_table(Field const* t, std::size_t n, std::uint8_t type_number, void const* row,
-                  Writer& w);
+                  Writer& w, ScratchRef scratch);
 Result unpack_table(Field const* t, std::size_t n, void* row, Reader& r);
 
 }  // namespace detail
@@ -92,13 +90,16 @@ constexpr Result validate(Scheme<Row, N> const& s) {
   return s.status;
 }
 
-// Writes the packet into `out`. On success `offset` is the packet length.
+// Writes the packet into `out`. On success `offset` is the packet length. A packet with strings
+// passes `scratch` (a `Scratch<Chars>`, 12 bytes per code point of its longest string) for the
+// optimal parse; a string that needs more is `ScratchTooSmall`.
 template <typename Row, std::size_t N>
-Result pack(Scheme<Row, N> const& s, Row const& row, std::uint8_t* out, std::size_t cap) {
+Result pack(Scheme<Row, N> const& s, Row const& row, std::uint8_t* out, std::size_t cap,
+            ScratchRef scratch = {}) {
   if (!s.status.ok())
     return s.status;
   Writer w{out, cap, 0};
-  return detail::pack_table(s.fields.data(), N, s.type_number, &row, w);
+  return detail::pack_table(s.fields.data(), N, s.type_number, &row, w, scratch);
 }
 
 // Reads one packet of this scheme into `row`. Optional members that the packet leaves out are

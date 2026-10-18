@@ -39,19 +39,20 @@ struct Route {
   packbin::Array<std::uint8_t, 8> kinds;
   packbin::Array<Point, 8> points;
   packbin::Array<std::uint8_t, 8> mask;
-  packbin::View name;
+  std::uint8_t tag = 0;
 };
 
 namespace pb = packbin;
 
-// The route scheme of the cross-language vectors plus a utf8 name: 14 table entries.
+// The route scheme of the cross-language vectors plus a u8 tag: 14 table entries. The probe has
+// no string and is built with PACKBIN_NO_TEXT, as a board without the compact text codec is.
 constexpr auto route = pb::scheme<Route>(
     0x34, pb::u16<&Route::sid>(0), pb::u16<&Route::owner>(1),
     pb::flags(2, pb::u16<&Route::leg>(2), pb::boolean<&Route::masked>(3),
               pb::u16<&Route::title>(4)),
     pb::u8<&Route::n>(5), pb::packed<&Route::kinds>(2, 6, 5),
     pb::times<&Route::points>(7, 5, pb::i32<&Point::lat>(7), pb::i32<&Point::lon>(8)),
-    pb::when(9, pb::eq(3, 1), pb::packed<&Route::mask>(1, 9, 5, -1)), pb::utf8<&Route::name>(10));
+    pb::when(9, pb::eq(3, 1), pb::packed<&Route::mask>(1, 9, 5, -1)), pb::u8<&Route::tag>(10));
 static_assert(route.fields.size() == 14, "the size probe uses a 14-entry scheme table");
 
 Route row;
@@ -76,8 +77,7 @@ int main() {
   row.points.items[1] = Point{500010000, 300010000};
   row.mask.count = 1;
   row.mask.items[0] = 1;
-  static char const name[] = "uav";
-  row.name = pb::View{reinterpret_cast<std::uint8_t const*>(name), 3};
+  row.tag = 42;
   pb::Result p{};
   pb::Result u{};
   std::size_t pack_stack =
@@ -86,7 +86,7 @@ int main() {
       stack_meter::measure([&] { u = pb::unpack(route, packet, p.offset, back); });
   bool same = back.sid == 16 && back.leg.has && back.leg.value == 21 && back.points.count == 2 &&
               back.points.items[1].lon == 300010000 && back.mask.count == 1 &&
-              back.name.len == 3;
+              back.tag == 42;
   failures = (p.ok() ? 0 : 1) + (u.ok() ? 0 : 1) + (same ? 0 : 1);
   say("TABLE_ENTRIES ", route.fields.size());
   say("PACKET_LEN ", p.offset);

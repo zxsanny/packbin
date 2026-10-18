@@ -11,47 +11,56 @@ using packbin::View;
 
 namespace {
 
-View view(char const* s) {
-  return View{reinterpret_cast<std::uint8_t const*>(s), std::strlen(s)};
+template <std::size_t N>
+void put_text(packbin::Text<N>& t, char const* s) {
+  t.len = static_cast<std::uint16_t>(std::strlen(s));
+  std::memcpy(t.data, s, t.len);
 }
 
-bool view_is(View const& v, char const* s) {
-  return v.len == std::strlen(s) && std::memcmp(v.data, s, v.len) == 0;
+template <std::size_t N>
+bool text_is(packbin::Text<N> const& t, char const* s) {
+  return t.len == std::strlen(s) && std::memcmp(t.data, s, t.len) == 0;
 }
 
 struct Name {
-  View name;
+  packbin::Text<16> name;
 };
 
 constexpr auto name_scheme = packbin::scheme<Name>(1, packbin::utf8<&Name::name>(0));
 
+// A Packed string is the payload as it is on the wire (the count is not part of it).
+struct PackedName {
+  packbin::Packed name;
+};
+
+constexpr auto packed_scheme = packbin::scheme<PackedName>(1, packbin::utf8<&PackedName::name>(0));
+
 void utf8_string() {
   std::uint8_t buf[16];
-  Name row{view("zxsanny")};
-  auto p = packbin::pack(name_scheme, row, buf, sizeof(buf));
-  expect(p.ok() && check::same_hex(buf, p.offset, "0107007a7873616e6e79"), "utf8 hex");
+  packbin::Scratch<16> scratch;
+  Name row;
+  put_text(row.name, "zxsanny");
+  auto p = packbin::pack(name_scheme, row, buf, sizeof(buf), scratch);
+  expect(p.ok() && check::same_hex(buf, p.offset, "01062bfcfee119b2"), "utf8 hex");
   Name back;
   auto u = packbin::unpack(name_scheme, buf, p.offset, back);
-  expect(u.ok() && view_is(back.name, "zxsanny"), "utf8 text");
+  expect(u.ok() && text_is(back.name, "zxsanny"), "utf8 text");
 
-  Name empty{view("")};
+  Name empty;
   auto e = packbin::pack(name_scheme, empty, buf, sizeof(buf));
-  expect(e.ok() && check::same_hex(buf, e.offset, "010000"), "utf8 empty");
+  expect(e.ok() && check::same_hex(buf, e.offset, "0100"), "utf8 empty");
+  auto eu = packbin::unpack(name_scheme, buf, e.offset, back);
+  expect(eu.ok() && back.name.len == 0, "utf8 empty unpack");
 
-  static std::uint8_t big[65536];
-  Name huge{View{big, sizeof(big)}};
-  auto h = packbin::pack(name_scheme, huge, buf, sizeof(buf));
-  expect(h.error == Error::BadValue && h.field == 0, "utf8 too long");
-
-  std::uint8_t cut[5];
-  check::parse_hex("0107007a78", cut, sizeof(cut));
+  std::uint8_t cut[4];
+  check::parse_hex("01062bfc", cut, sizeof(cut));
   auto s = packbin::unpack(name_scheme, cut, sizeof(cut), back);
-  expect(s.error == Error::ShortPacket && s.field == 0 && s.needed == 7 && s.offset == 3,
+  expect(s.error == Error::ShortPacket && s.field == 0 && s.needed == 6 && s.offset == 2,
          "utf8 short");
 }
 
 struct Message {
-  View text;
+  packbin::Text<48> text;
   View key;
 };
 
@@ -66,39 +75,58 @@ constexpr auto small_message = packbin::scheme<SmallMessage>(
     1, packbin::utf8<&SmallMessage::text>(0), packbin::bytes<&SmallMessage::key>(1, 16));
 
 void ac3_borrowed_and_ac4_fixed() {
-  char text[41] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMN";
   std::uint8_t key[16];
   for (std::size_t i = 0; i < sizeof(key); ++i)
     key[i] = static_cast<std::uint8_t>(i);
-  Message row{view(text), View{key, sizeof(key)}};
+  Message row;
+  put_text(row.text, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMN");
+  row.key = View{key, sizeof(key)};
   std::uint8_t buf[64];
-  auto p = packbin::pack(message, row, buf, sizeof(buf));
-  expect(p.ok() && p.offset == 1 + 2 + 40 + 16, "AC-3 packet length");
+  packbin::Scratch<48> scratch;
+  auto p = packbin::pack(message, row, buf, sizeof(buf), scratch);
+  expect(p.ok() && p.offset == 1 + 1 + 32 + 16, "AC-3 packet length");
 
   Message back;
   auto u = packbin::unpack(message, buf, p.offset, back);
-  expect(u.ok() && back.text.len == 40 && back.key.len == 16, "AC-3 view lengths");
-  expect(back.text.data == buf + 3 && back.key.data == buf + 43, "AC-3 views point into input");
+  expect(u.ok() && back.text.len == 40 && back.key.len == 16, "AC-3 lengths");
+  expect(text_is(back.text, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMN"), "AC-3 text decoded");
+  expect(back.key.data == buf + 34, "AC-3 bytes view points into input");
 
   SmallMessage small;
   auto f = packbin::unpack(small_message, buf, p.offset, small);
-  expect(f.error == Error::TooMany && f.field == 0 && f.offset == 3 && f.needed == 40,
+  expect(f.error == Error::TooMany && f.field == 0 && f.offset == 2 && f.needed == 40 &&
+             small.text.len == 0,
          "AC-4 Text<16> too small (S6)");
 
   SmallMessage fits;
-  fits.text.len = 5;
-  std::memcpy(fits.text.data, "hello", 5);
+  put_text(fits.text, "hello");
   fits.key = View{key, sizeof(key)};
-  auto fp = packbin::pack(small_message, fits, buf, sizeof(buf));
+  auto fp = packbin::pack(small_message, fits, buf, sizeof(buf), scratch);
   SmallMessage fits_back;
   auto fu = packbin::unpack(small_message, buf, fp.offset, fits_back);
-  expect(fp.ok() && fu.ok() && fits_back.text.len == 5 &&
-             std::memcmp(fits_back.text.data, "hello", 5) == 0,
-         "Text<16> round trip");
+  expect(fp.ok() && fu.ok() && text_is(fits_back.text, "hello"), "Text<16> round trip");
 
-  Message wrong{view("x"), View{key, 15}};
-  auto w = packbin::pack(message, wrong, buf, sizeof(buf));
+  Message wrong;
+  put_text(wrong.text, "x");
+  wrong.key = View{key, 15};
+  auto w = packbin::pack(message, wrong, buf, sizeof(buf), scratch);
   expect(w.error == Error::BadValue && w.field == 1, "bytes view must have length n");
+
+  // A Packed string borrows the payload after the count, raw or compact, and packs back as is.
+  PackedName held;
+  std::uint8_t one[8];
+  check::parse_hex("01021061", one, sizeof(one));
+  auto r = packbin::unpack(packed_scheme, one, 4, held);
+  expect(r.ok() && held.name.len == 2 && held.name.data == one + 2 && held.name.data[1] == 'a',
+         "Packed borrows a raw payload");
+  check::parse_hex("01062bfcfee119b2", one, sizeof(one));
+  auto c = packbin::unpack(packed_scheme, one, 8, held);
+  expect(c.ok() && held.name.len == 6 && held.name.data == one + 2 && held.name.data[0] == 0x2b,
+         "Packed borrows a compact payload");
+  std::uint8_t again[8];
+  auto back_again = packbin::pack(packed_scheme, held, again, sizeof(again));
+  expect(back_again.ok() && check::same_hex(again, back_again.offset, "01062bfcfee119b2"),
+         "Packed packs the bytes as given");
 }
 
 struct Payload {

@@ -46,6 +46,8 @@ char const* term(packbin::Result const& r) {
       return "bad_value";
     case Error::SchemeInvalid:
       return "scheme_error";
+    case Error::ScratchTooSmall:
+      return "scratch_too_small";
   }
   return "unknown";
 }
@@ -170,18 +172,19 @@ char const* oversize_list_count(std::uint8_t const* d, std::size_t n) {
 }
 
 struct TextRow {
-  View name;
+  packbin::Text<16> name;
 };
 
-// C++ borrows the bytes as they are; it does not validate UTF-8 (open concern, see the
-// exception in check_case).
+// The old rows hold a u16 count and bytes; read as the compact format the codec refuses them
+// (a stream that ends inside a code), so the open-concern exception in check_case no longer
+// fires for either row.
 char const* invalid_utf8(std::uint8_t const* d, std::size_t n) {
   auto s = packbin::scheme<TextRow>(1, packbin::utf8<&TextRow::name>(0));
   return unpack_term<TextRow>(s, d, n);
 }
 
 struct DictRow {
-  Array<Entry<std::uint8_t>, 4> m;
+  Array<Entry<std::uint8_t, packbin::Text<16>>, 4> m;
 };
 
 char const* invalid_utf8_dict_key(std::uint8_t const* d, std::size_t n) {
@@ -424,13 +427,6 @@ std::string run_guarded(Handler const& h, Case const& c) {
 void check_case(Handler const& h, Case const& c) {
   std::string got = run_guarded(h, c);
   bool ok = allows(c.expected, got);
-  // Open concern (AZ-2078 Flagged concerns): the core borrows UTF-8 bytes unchecked, so these
-  // two packets unpack Ok until the user decides between validating and marking C++ exempt.
-  if (!ok && got == "ok" && (c.id == "invalid_utf8" || c.id == "invalid_utf8_dict_key")) {
-    std::fprintf(stderr, "note: hostile %s: C++ borrows UTF-8 unchecked (open concern)\n",
-                 c.id.c_str());
-    ok = true;
-  }
   if (!ok)
     std::fprintf(stderr, "hostile %s: got %s, allowed %s\n", c.id.c_str(), got.c_str(),
                  c.expected.c_str());

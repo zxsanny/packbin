@@ -1,4 +1,8 @@
 #include "values.hpp"
+#include "text_count.hpp"
+#ifndef PACKBIN_NO_TEXT
+#include "text_encode.hpp"
+#endif
 
 #include <cstring>
 
@@ -13,6 +17,7 @@ struct Pack {
   Field const* t;
   std::size_t n;
   Writer& w;
+  ScratchRef scratch;
 };
 
 Result pack_one(Pack& p, std::size_t i, void* obj);
@@ -103,7 +108,8 @@ Result pack_flag_byte(Pack& p, std::size_t i, void* obj) {
   return put_num<std::uint8_t>(p.w, byte, false, t[i].id);
 }
 
-// Bytes, utf8 (with its u16 length) and sized (length checked against its count).
+// Bytes, utf8 (compact text, see text_encode.hpp; a Packed string is written as it is) and sized
+// (length checked against its count).
 PACKBIN_NOINLINE
 Result pack_text(Pack& p, std::size_t i, void* obj) {
   Field const& f = p.t[i];
@@ -122,11 +128,20 @@ Result pack_text(Pack& p, std::size_t i, void* obj) {
       return bad(w, f);
   }
   if (f.kind == Kind::Utf8) {
-    if (len > 65535)
+    if (!f.opaque()) {
+#ifndef PACKBIN_NO_TEXT
+      return txt::encode_field(w, p.scratch, f.id, data, len);
+#else
+      return fail(Error::SchemeInvalid, w.len, f.id);
+#endif
+    }
+    // A Packed string: the count of `len`, then the bytes as given, never decoded or checked.
+    if (len > txt::kMaxCount || (data == nullptr && len != 0))
       return bad(w, f);
-    Result r = put_u16(w, len, f.id);
-    if (!r.ok())
-      return r;
+    std::size_t need = txt::varint_size(len) + len;
+    if (w.cap - w.len < need)
+      return fail(Error::BufferFull, w.len, f.id, need);
+    w.len = static_cast<std::size_t>(txt::put_varint(w.data + w.len, len) - w.data);
   }
   return put_bytes(w, data, len, f.id);
 }
@@ -276,11 +291,11 @@ Result pack_one(Pack& p, std::size_t i, void* obj) {
 }  // namespace
 
 Result pack_table(Field const* t, std::size_t n, std::uint8_t type_number, void const* row,
-                  Writer& w) {
+                  Writer& w, ScratchRef scratch) {
   Result r = put_num<std::uint8_t>(w, type_number, false, -1);
   if (!r.ok())
     return r;
-  Pack p{t, n, w};
+  Pack p{t, n, w, scratch};
   // Pack only reads through the accessors; they return non-const pointers because unpack uses
   // the same table to write.
   void* obj = const_cast<void*>(row);

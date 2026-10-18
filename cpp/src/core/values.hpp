@@ -112,7 +112,8 @@ bool when_matches(Field const* t, Field const& f, void* obj);
 void clear_scope(Field const* t, std::size_t begin, std::size_t end, void* obj);
 void set_bool(Field const& f, void* m);
 
-// The bytes of a string or byte-block member: a View, a Text/Blob, or a std::uint8_t[n].
+// The bytes of a string or byte-block member: a View, a Packed, a Text/Blob, or a
+// std::uint8_t[n].
 void text_bytes(Field const& f, void* m, std::uint8_t const*& data, std::size_t& len);
 // Stores `n` read bytes at `p` into that member (nothing when m is null). A Text/Blob shorter
 // than `n` is TooMany at `offset`.

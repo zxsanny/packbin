@@ -28,6 +28,13 @@ if(PACKBIN_OS_RANDOM)
   target_sources(packbin PRIVATE src/os_random.cpp)
 endif()
 
+# Without the compact text codec: strings bind to Packed (the payload as it is) and no codec
+# table or code is linked. Public, so the headers of a consumer refuse a Text<N> member too.
+option(PACKBIN_NO_TEXT "Build without the compact text codec; strings bind to Packed" OFF)
+if(PACKBIN_NO_TEXT)
+  target_compile_definitions(packbin PUBLIC PACKBIN_NO_TEXT)
+endif()
+
 # Install and export only when packbin is the top-level project (the vcpkg port, or `cmake --install`
 # of cpp/ itself): a parent that add_subdirectory()s packbin must not install it with its own files.
 # Consumers then use find_package(packbin CONFIG REQUIRED) and the target packbin::packbin.

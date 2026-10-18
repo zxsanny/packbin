@@ -47,10 +47,11 @@ class PackSession {
   // the pack succeeds; on failure the clear bytes before the reported offset are zeroed and
   // nothing past it is written.
   template <typename Row, std::size_t N>
-  Result pack(Scheme<Row, N> const& s, Row const& row, std::uint8_t* out, std::size_t cap) {
+  Result pack(Scheme<Row, N> const& s, Row const& row, std::uint8_t* out, std::size_t cap,
+              ScratchRef scratch = {}) {
     if (!open_)
       return fail(Error::BadValue, 0, -1);
-    Result r = packbin::pack(s, row, out, cap);
+    Result r = packbin::pack(s, row, out, cap, scratch);
     if (!r.ok()) {
       if (out != nullptr && r.offset != 0)
         std::memset(out, 0, r.offset < cap ? r.offset : cap);

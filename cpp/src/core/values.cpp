@@ -138,7 +138,7 @@ void clear_scope(Field const* t, std::size_t begin, std::size_t end, void* obj) 
       *f.count(m) = 0;
       continue;
     }
-    if (m != nullptr && (f.borrowed() || f.fixed())) {
+    if (m != nullptr && (f.borrowed() || f.opaque() || f.fixed())) {
       clear_text(f, m);
       continue;
     }
@@ -150,6 +150,10 @@ void clear_scope(Field const* t, std::size_t begin, std::size_t end, void* obj) 
 void text_bytes(Field const& f, void* m, std::uint8_t const*& data, std::size_t& len) {
   if (f.borrowed()) {
     auto const* v = static_cast<View const*>(m);
+    data = v->data;
+    len = v->len;
+  } else if (f.opaque()) {
+    auto const* v = static_cast<Packed const*>(m);
     data = v->data;
     len = v->len;
   } else if (f.fixed()) {
@@ -169,6 +173,10 @@ Result store_text(Field const& f, void* m, std::uint8_t const* p, std::size_t n,
     *static_cast<View*>(m) = View{p, n};
     return Result{};
   }
+  if (f.opaque()) {
+    *static_cast<Packed*>(m) = Packed{p, n};
+    return Result{};
+  }
   if (f.fixed()) {
     if (n > f.size)
       return fail(Error::TooMany, offset, f.id, n);
@@ -185,25 +193,69 @@ Result store_text(Field const& f, void* m, std::uint8_t const* p, std::size_t n,
 void clear_text(Field const& f, void* m) {
   if (f.borrowed())
     *static_cast<View*>(m) = View{};
+  else if (f.opaque())
+    *static_cast<Packed*>(m) = Packed{};
   else if (f.fixed())
     *static_cast<std::uint16_t*>(m) = 0;
 }
 
+namespace {
+
+// A number is moved as its bytes through one 64-bit value, so the byte loops exist once and not
+// once per number type (flash on the smallest targets). The byte order comes from the field.
+std::uint64_t load_bits(std::uint8_t const* p, std::size_t n, bool be) {
+  std::uint64_t v = 0;
+  for (std::size_t k = 0; k < n; ++k)
+    v = (v << 8) | p[be ? k : n - 1 - k];
+  return v;
+}
+
+void store_bits(std::uint8_t* p, std::uint64_t v, std::size_t n, bool be) {
+  for (std::size_t k = 0; k < n; ++k) {
+    p[be ? n - 1 - k : k] = static_cast<std::uint8_t>(v);
+    v >>= 8;
+  }
+}
+
+template <typename T>
+std::uint64_t to_u64(T value) {
+  if constexpr (std::is_floating_point<T>::value)
+    return to_bits(value);
+  else
+    return static_cast<std::uint64_t>(value);
+}
+
+template <typename T>
+T from_u64(std::uint64_t bits) {
+  if constexpr (std::is_floating_point<T>::value)
+    return from_bits<T>(static_cast<unsigned_of<T>>(bits));
+  else
+    return static_cast<T>(bits);
+}
+
+}  // namespace
+
 Result put_number(Field const& f, void* m, Writer& w) {
   return visit_number(f.kind, f.id, [&](auto zero) {
     using T = decltype(zero);
-    return put_num<T>(w, load_member<T>(f, m), f.be(), f.id);
+    if (w.cap - w.len < sizeof(T))
+      return fail(Error::BufferFull, w.len, f.id, sizeof(T));
+    store_bits(w.data + w.len, to_u64(load_member<T>(f, m)), sizeof(T), f.be());
+    w.len += sizeof(T);
+    return Result{Error::Ok, w.len};
   });
 }
 
 Result get_number(Field const& f, void* m, Reader& r) {
   return visit_number(f.kind, f.id, [&](auto zero) {
     using T = decltype(zero);
-    T value{};
-    Result res = get_num<T>(r, value, f.be(), f.id);
-    if (res.ok() && m != nullptr)
+    if (r.left() < sizeof(T))
+      return fail(Error::ShortPacket, r.pos, f.id, sizeof(T));
+    T value = from_u64<T>(load_bits(r.data + r.pos, sizeof(T), f.be()));
+    r.pos += sizeof(T);
+    if (m != nullptr)
       store_member<T>(f, m, value);
-    return res;
+    return Result{Error::Ok, r.pos};
   });
 }
 

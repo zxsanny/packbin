@@ -5,21 +5,55 @@ CXXFLAGS += -isysroot $(PACKBIN_CXX_SYSROOT) -I$(PACKBIN_CXX_SYSROOT)/usr/includ
 endif
 # The core builds the embedded way on the host too.
 CORE_FLAGS := -fno-exceptions -fno-rtti
-HDRS := $(wildcard include/packbin/*.hpp) src/core/values.hpp
+HDRS := $(wildcard include/packbin/*.hpp) src/core/values.hpp src/core/text.hpp src/core/text_count.hpp src/core/text_encode.hpp src/core/text_decode.hpp
 # Firmware compiles CORE_SRCS only; HOST_SRCS hold the operating-system random source.
 CORE_SRCS := src/core/values.cpp src/core/pack.cpp src/core/unpack.cpp src/core/session.cpp
 HOST_SRCS := src/os_random.cpp
 # VECTOR_TESTS are shared with the firmware runner; HOST_TESTS need an operating system.
 VECTOR_TESTS := tests/core/scalar_tests.cpp tests/core/scheme_tests.cpp tests/core/grouped_tests.cpp tests/core/counted_tests.cpp tests/core/container_tests.cpp tests/core/session_tests.cpp
-HOST_TESTS := tests/core/main.cpp tests/core/host_tests.cpp tests/core/session_host_tests.cpp tests/core/hostile_host_tests.cpp tests/core/hostile_rule_check_host_tests.cpp tests/core/flag_scope_host_tests.cpp tests/core/source_kinds_host_tests.cpp tests/core/flags_when_member_host_tests.cpp tests/core/flags_times_repeat_member_host_tests.cpp tests/core/split_form_loud_host_tests.cpp tests/core/times_count_zero_host_tests.cpp tests/core/eq_value_checked_host_tests.cpp tests/core/late_source_host_tests.cpp tests/core/held_count_nested_late_host_tests.cpp tests/core/empty_body_rule_host_tests.cpp tests/core/packed_bias_novalue_host_tests.cpp tests/core/novalue_nested_host_tests.cpp tests/core/builder_id_range_host_tests.cpp tests/core/loop25_probe_d1_d7_host_tests.cpp
+HOST_TESTS := tests/core/main.cpp tests/core/host_tests.cpp tests/core/session_host_tests.cpp tests/core/hostile_host_tests.cpp tests/core/hostile_rule_check_host_tests.cpp tests/core/flag_scope_host_tests.cpp tests/core/source_kinds_host_tests.cpp tests/core/flags_when_member_host_tests.cpp tests/core/flags_times_repeat_member_host_tests.cpp tests/core/split_form_loud_host_tests.cpp tests/core/times_count_zero_host_tests.cpp tests/core/eq_value_checked_host_tests.cpp tests/core/late_source_host_tests.cpp tests/core/held_count_nested_late_host_tests.cpp tests/core/empty_body_rule_host_tests.cpp tests/core/packed_bias_novalue_host_tests.cpp tests/core/novalue_nested_host_tests.cpp tests/core/builder_id_range_host_tests.cpp tests/core/loop25_probe_d1_d7_host_tests.cpp tests/core/text_vectors_host_tests.cpp tests/core/text_codec_host_tests.cpp tests/core/text_api_host_tests.cpp
 TEST_BIN := build/packbin_tests
 EXPECT_FAIL := ./tests/compile-fail/expect-fail.sh "$(CXX) $(CXXFLAGS) $(CORE_FLAGS) -fsyntax-only"
+EXPECT_FAIL_NO_TEXT := ./tests/compile-fail/expect-fail.sh "$(CXX) $(CXXFLAGS) $(CORE_FLAGS) -DPACKBIN_NO_TEXT -fsyntax-only"
+# The core without the codec (embedded builds that define PACKBIN_NO_TEXT) and its own tests.
+NO_TEXT_TESTS := tests/core/no_text_tests.cpp
+NO_TEXT_BIN := build/packbin_no_text_tests
 
-.PHONY: test core-test clean compile-fail
+.PHONY: test core-test clean compile-fail object-check no-text-test
 
 $(TEST_BIN): $(HDRS) $(CORE_SRCS) $(HOST_SRCS) $(VECTOR_TESTS) $(HOST_TESTS) tests/core/check.hpp tests/core/hostile_pack_cases.hpp tests/core/hostile_pack_loop21.hpp tests/core/hostile_rule_check.hpp tests/core/member_cases.hpp
 	mkdir -p build
 	$(CXX) $(CXXFLAGS) $(CORE_FLAGS) -pthread -o $@ $(CORE_SRCS) $(HOST_SRCS) $(VECTOR_TESTS) $(HOST_TESTS)
+
+# The core compiled alone, the way firmware builds it, for the allocation and read-only checks.
+OBJ_DIR := build/obj
+CORE_OBJS := $(patsubst src/core/%.cpp,$(OBJ_DIR)/%.o,$(CORE_SRCS))
+
+$(OBJ_DIR)/%.o: src/core/%.cpp $(HDRS)
+	mkdir -p $(OBJ_DIR)
+	$(CXX) $(CXXFLAGS) $(CORE_FLAGS) -c -o $@ $<
+
+NO_TEXT_OBJ_DIR := build/obj-no-text
+NO_TEXT_OBJS := $(patsubst src/core/%.cpp,$(NO_TEXT_OBJ_DIR)/%.o,$(CORE_SRCS))
+
+$(NO_TEXT_OBJ_DIR)/%.o: src/core/%.cpp $(HDRS)
+	mkdir -p $(NO_TEXT_OBJ_DIR)
+	$(CXX) $(CXXFLAGS) $(CORE_FLAGS) -DPACKBIN_NO_TEXT -c -o $@ $<
+
+# AC-4: no heap, no exceptions, tables in read-only data. AZ-2656 AC-2: the same objects built
+# with PACKBIN_NO_TEXT hold no codec table and no codec symbol.
+object-check: $(CORE_OBJS) $(NO_TEXT_OBJS)
+	sh tests/core/check-objects.sh $(CORE_OBJS)
+	sh tests/core/check-objects.sh --no-text $(NO_TEXT_OBJS)
+	@size $(OBJ_DIR)/pack.o $(OBJ_DIR)/unpack.o $(NO_TEXT_OBJ_DIR)/pack.o $(NO_TEXT_OBJ_DIR)/unpack.o
+
+$(NO_TEXT_BIN): $(HDRS) $(CORE_SRCS) $(NO_TEXT_TESTS) tests/core/check.hpp
+	mkdir -p build
+	$(CXX) $(CXXFLAGS) $(CORE_FLAGS) -DPACKBIN_NO_TEXT -o $@ $(CORE_SRCS) $(NO_TEXT_TESTS)
+
+no-text-test: $(NO_TEXT_BIN)
+	./$(NO_TEXT_BIN)
+	sh tests/core/check-objects.sh --no-text-binary $(NO_TEXT_BIN)
 
 # Each case must fail to compile, and the compiler output must match the expected text.
 compile-fail: $(HDRS)
@@ -39,8 +73,14 @@ compile-fail: $(HDRS)
 	@$(EXPECT_FAIL) tests/compile-fail/flag_byte_in_flag_bit_child.cpp "breaks_order<2>|Id = 2\]"
 	@$(EXPECT_FAIL) tests/compile-fail/when_eq_bool_false.cpp "breaks_order<1>|Id = 1\]"
 	@$(EXPECT_FAIL) tests/compile-fail/when_eq_out_of_range.cpp "breaks_order<1>|Id = 1\]"
+	@$(EXPECT_FAIL) tests/compile-fail/utf8_view_member.cpp "Text<N>"
+	@$(EXPECT_FAIL) tests/compile-fail/utf8_view_list_element.cpp "utf8_element_must_be_Text_N_or_Packed_not_View"
+	@$(EXPECT_FAIL) tests/compile-fail/utf8_view_dict_key.cpp "utf8_element_must_be_Text_N_or_Packed_not_View"
+	@$(EXPECT_FAIL) tests/compile-fail/dict_key_packed.cpp "dict_key_must_be_Text_N"
+	@$(EXPECT_FAIL_NO_TEXT) tests/compile-fail/no_text_text_member.cpp "PACKBIN_NO_TEXT links no codec"
+	@$(EXPECT_FAIL_NO_TEXT) tests/compile-fail/no_text_text_element.cpp "Text_N_needs_the_codec_but_PACKBIN_NO_TEXT_is_defined"
 
-test: $(TEST_BIN) compile-fail
+test: $(TEST_BIN) compile-fail object-check no-text-test
 	./$(TEST_BIN)
 
 core-test: test

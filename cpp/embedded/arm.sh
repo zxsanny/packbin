@@ -52,6 +52,19 @@ arm_firmware_objects() {
   [ "$warnings" -eq 0 ] || fail "$warnings compile warning(s)"
 }
 
+# The core again without the compact text codec (PACKBIN_NO_TEXT), for the size probe only: the
+# all-kinds image and the vector runners keep the codec. Run after arm_firmware_objects (which
+# clears the directory).
+arm_no_text_core_objects() {
+  local dir="$1" src
+  shift
+  mkdir -p "$dir/no-text"
+  for src in "${core_srcs[@]}"; do
+    arm_cxx "$dir" "$cpp/$src" "no-text/core-$(basename "${src%.cpp}").o" "$@" -DPACKBIN_NO_TEXT \
+      -fstack-usage
+  done
+}
+
 arm_link() {
   local dir="$1" elf="$2" status=0
   shift 2
@@ -182,7 +195,8 @@ target_m4f() {
   local dir="$build/m4f"
   local arch=(-mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16)
   arm_firmware_objects "$dir" "${arch[@]}"
-  arm_cxx "$dir" "$here/arm/size_main.cpp" size14.o "${arch[@]}"
+  arm_no_text_core_objects "$dir" "${arch[@]}"
+  arm_cxx "$dir" "$here/arm/size_main.cpp" size14.o "${arch[@]}" -DPACKBIN_NO_TEXT
   arm_cxx "$dir" "$here/arm/size_main.cpp" baseline.o "${arch[@]}" -DPACKBIN_SIZE_BASELINE
   [ "$(count_warnings "$dir/compile.log")" -eq 0 ] || fail "compile warnings in size probe"
 
@@ -191,8 +205,8 @@ target_m4f() {
   local probe
   for probe in size14 baseline; do
     arm_link "$dir" "$probe.elf" "${arch[@]}" "${arm_link_common[@]}" --specs=nano.specs \
-      --specs=nosys.specs "${heap_wraps[@]}" "$dir"/core-*.o "$dir/$probe.o" "$dir/startup.o" \
-      "$dir/wrap.o"
+      --specs=nosys.specs "${heap_wraps[@]}" "$dir"/no-text/core-*.o "$dir/$probe.o" \
+      "$dir/startup.o" "$dir/wrap.o"
     qemu_run mps2-an386 "$dir/$probe.elf" "$dir/$probe.run.log" || fail "$probe exit $?"
   done
   qemu_run mps2-an386 "$dir/ac2.elf" "$dir/ac2.run.log" || fail "AC-2 firmware on M4F exit $?"
@@ -203,7 +217,10 @@ target_m4f() {
   delta=$((flash14 - flash0))
   echo "core objects (text data bss):"
   arm-none-eabi-size "$dir"/core-*.o | tee "$out/m4f-core-size.txt"
-  core_rw=$(awk 'NR > 1 { s += $2 + $3 } END { print s + 0 }' "$out/m4f-core-size.txt")
+  echo "core objects without the codec, PACKBIN_NO_TEXT (text data bss):"
+  arm-none-eabi-size "$dir"/no-text/core-*.o | tee "$out/m4f-core-no-text-size.txt"
+  core_rw=$(awk 'FNR > 1 { s += $2 + $3 } END { print s + 0 }' "$out/m4f-core-size.txt" \
+    "$out/m4f-core-no-text-size.txt")
   raw=$(for f in size14 ac2; do
     log_value PACK_STACK "$dir/$f.run.log"
     log_value UNPACK_STACK "$dir/$f.run.log"
@@ -218,7 +235,7 @@ target_m4f() {
   echo "size14 flash=$flash14 baseline flash=$flash0 delta=$delta budget=$flash_budget"
   echo "deepest measured pack/unpack stack=$stack budget=$stack_budget (largest core frame: $frame)"
   echo "core .data+.bss=$core_rw"
-  note "AC-5 flash core+14-field table ${delta} B of ${flash_budget}"
+  note "AC-5 flash core (PACKBIN_NO_TEXT) + 14-field table ${delta} B of ${flash_budget}"
   note "deepest pack/unpack stack ${stack} B of ${stack_budget} (raw ${raw} B less ${meter} B meter overhead)"
   note "largest single core frame ${frame%% *} B"
   note "core data+bss ${core_rw} B; all-kinds image $(arm-none-eabi-size "$dir/ac2.elf" | awk 'NR == 2 { print $1 + $2 }') B flash"

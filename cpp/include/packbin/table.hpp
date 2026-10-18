@@ -57,8 +57,20 @@ struct Opt {
   }
 };
 
-// Borrowed bytes: on unpack it points into the caller's input buffer; nothing is copied.
+// Borrowed bytes: on unpack it points into the caller's input buffer; nothing is copied. It
+// binds `bytes` and `sized` members, never a string.
 struct View {
+  std::uint8_t const* data = nullptr;
+  std::size_t len = 0;
+};
+
+// A string kept as it is on the wire: the payload bytes after the count header, borrowed from
+// the input (valid while the input lives), never decoded or validated. A field or list element
+// bound to `Packed` is read and skipped by its count, so a build without the codec
+// (PACKBIN_NO_TEXT) still reads the fields after a string and can forward the bytes. Pack
+// writes the count of `len` and the bytes as given: an opaque field for relays. An empty
+// string is `len == 0`.
+struct Packed {
   std::uint8_t const* data = nullptr;
   std::size_t len = 0;
 };
@@ -89,8 +101,9 @@ struct Array {
   T items[N] = {};
 };
 
-// One dictionary entry. The key is borrowed (`View`) or fixed (`Text<N>`).
-template <typename V, typename Key = View>
+// One dictionary entry. The key is a decoded copy (`Text<N>`): keys are ordered and checked for
+// repeats as text.
+template <typename V, typename Key>
 struct Entry {
   using value_type = V;
   using key_type = Key;
@@ -101,10 +114,11 @@ struct Entry {
 namespace flag {
 constexpr std::uint8_t BigEndian = 1;
 constexpr std::uint8_t Optional = 2;
-// String and byte storage: Borrowed is a View, Fixed is Text<N>/Blob<N>, neither is
-// std::uint8_t[n].
+// String and byte storage: Borrowed is a View (bytes, sized), Fixed is Text<N>/Blob<N>, Opaque
+// is a Packed string; none is std::uint8_t[n].
 constexpr std::uint8_t Borrowed = 4;
 constexpr std::uint8_t Fixed = 8;
+constexpr std::uint8_t Opaque = 64;
 // Set by a builder that could not bind this entry; the scheme check reports SchemeInvalid.
 constexpr std::uint8_t Invalid = 16;
 // A `when` or `times` that a flag bit decides and whose source is written after its flag byte
@@ -117,6 +131,12 @@ using Access = void* (*)(void* obj);
 // Item `i` of an Array, and the Array's count.
 using Item = void* (*)(void* array, std::size_t i);
 using Count = std::uint16_t* (*)(void* array);
+
+#if defined(__GNUC__)
+using EqValue = std::int64_t __attribute__((aligned(4)));
+#else
+using EqValue = std::int64_t;
+#endif
 
 // One entry of a scheme table. Children follow their parent in preorder; `span` counts the
 // entry and all of its descendants, so the next sibling is at `index + span`.
@@ -144,7 +164,9 @@ struct Field {
   // bit and pack refuses it; another member of the bit that holds a value sets the bit and the
   // body packs.
   std::uint8_t late = 0;
-  std::int64_t eq = 0;
+  // Aligned to 4 bytes, not 8: a 32-bit target pads every entry by 4 bytes for a 64-bit member
+  // (the 14-entry table of the size probe is 56 bytes smaller).
+  EqValue eq = 0;
   Access access = nullptr;
   Item item = nullptr;
   Count count = nullptr;
@@ -153,6 +175,7 @@ struct Field {
   constexpr bool optional() const { return (flags & flag::Optional) != 0; }
   constexpr bool borrowed() const { return (flags & flag::Borrowed) != 0; }
   constexpr bool fixed() const { return (flags & flag::Fixed) != 0; }
+  constexpr bool opaque() const { return (flags & flag::Opaque) != 0; }
 };
 
 // A built piece of a scheme: N table entries whose accessors apply to objects of type C
@@ -172,6 +195,15 @@ struct Eq {
 constexpr Eq eq(int field_id, std::int64_t value) { return Eq{field_id, value}; }
 
 namespace detail {
+
+constexpr bool constant_evaluated() { return __builtin_is_constant_evaluated(); }
+
+// Not constexpr on purpose, like the scheme stoppers in codec.hpp: a string element that cannot
+// be bound stops the compile when the scheme is built as a constant, and the name says why. A
+// scheme built at run time reports SchemeInvalid instead.
+inline void utf8_element_must_be_Text_N_or_Packed_not_View() {}
+inline void dict_key_must_be_Text_N() {}
+inline void Text_N_needs_the_codec_but_PACKBIN_NO_TEXT_is_defined() {}
 
 template <typename M>
 struct Member;
@@ -292,18 +324,65 @@ constexpr void mark_invalid(Field& f) {
   f.flags = static_cast<std::uint8_t>(f.flags | flag::Invalid);
 }
 
-// Storage of a string or byte block bound to a member of type T.
-template <typename T>
+#ifdef PACKBIN_NO_TEXT
+constexpr bool kNoText = true;
+#else
+constexpr bool kNoText = false;
+#endif
+
+// Storage of a string (K is Utf8) or byte block bound to a member of type T. A string binds a
+// Text<N> (a decoded copy) or a Packed (the payload as it is), never a View; a build without the
+// codec binds only Packed.
+template <Kind K, typename T>
 constexpr void bind_storage(Field& f) {
   if constexpr (std::is_same<T, View>::value) {
+    static_assert(K != Kind::Utf8,
+                  "packbin: a utf8 member is a Text<N> (decoded copy) or a Packed, never a View");
     f.flags = static_cast<std::uint8_t>(f.flags | flag::Borrowed);
+  } else if constexpr (std::is_same<T, Packed>::value) {
+    if (K != Kind::Utf8)
+      mark_invalid(f);
+    f.flags = static_cast<std::uint8_t>(f.flags | flag::Opaque);
   } else if constexpr (FixedSize<T>::value != 0) {
-    if (f.kind == Kind::Utf8 && !std::is_same<T, Text<FixedSize<T>::value>>::value)
+    static_assert(K != Kind::Utf8 || !kNoText ||
+                      !std::is_same<T, Text<FixedSize<T>::value>>::value,
+                  "packbin: PACKBIN_NO_TEXT links no codec: bind a utf8 member to Packed, not "
+                  "Text<N>");
+    if (K == Kind::Utf8 && !std::is_same<T, Text<FixedSize<T>::value>>::value)
       mark_invalid(f);
     f.flags = static_cast<std::uint8_t>(f.flags | flag::Fixed);
     f.size = static_cast<std::uint16_t>(FixedSize<T>::value);
   } else {
     mark_invalid(f);
+  }
+}
+
+// A list element or dict value bound to T: the element root `f` is a string, so T must be
+// a Text<N> or a Packed. The stoppers name the reason when the scheme is a constant.
+template <typename T>
+constexpr void bind_string_element(Field& f) {
+  if constexpr (std::is_same<T, View>::value) {
+    mark_invalid(f);
+    if (constant_evaluated())
+      utf8_element_must_be_Text_N_or_Packed_not_View();
+  } else if constexpr (kNoText && FixedSize<T>::value != 0) {
+    mark_invalid(f);
+    if (constant_evaluated())
+      Text_N_needs_the_codec_but_PACKBIN_NO_TEXT_is_defined();
+  } else {
+    bind_storage<Kind::Utf8, T>(f);
+  }
+}
+
+// A dict key: always a decoded Text<N>.
+template <typename T>
+constexpr void bind_key(Field& f) {
+  if constexpr (std::is_same<T, Packed>::value) {
+    mark_invalid(f);
+    if (constant_evaluated())
+      dict_key_must_be_Text_N();
+  } else {
+    bind_string_element<T>(f);
   }
 }
 
@@ -359,7 +438,7 @@ constexpr void bind_element(Field* f) {
       if (f[0].kind == Kind::Dict && f[0].span >= 3) {
         bind_array<T>(f[0]);
         f[1].access = &entry_key<Item>;
-        bind_storage<typename Item::key_type>(f[1]);
+        bind_key<typename Item::key_type>(f[1]);
         f[2].access = &entry_value<Item>;
         bind_element<typename Item::value_type>(f + 2);
       } else {
@@ -368,9 +447,10 @@ constexpr void bind_element(Field* f) {
     } else {
       mark_invalid(f[0]);
     }
-  } else if constexpr (std::is_same<T, View>::value || FixedSize<T>::value != 0) {
+  } else if constexpr (std::is_same<T, View>::value || std::is_same<T, Packed>::value ||
+                       FixedSize<T>::value != 0) {
     if (f[0].kind == Kind::Utf8 && f[0].span == 1)
-      bind_storage<T>(f[0]);
+      bind_string_element<T>(f[0]);
     else
       mark_invalid(f[0]);
   } else {

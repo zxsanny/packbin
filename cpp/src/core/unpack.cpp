@@ -1,4 +1,8 @@
 #include "values.hpp"
+#include "text_count.hpp"
+#ifndef PACKBIN_NO_TEXT
+#include "text_decode.hpp"
+#endif
 
 #include <cstring>
 
@@ -63,14 +67,51 @@ Result with_outer_flags(Walk& w, std::size_t i, void* obj) {
   return res;
 }
 
-// Bytes, utf8 (after its u16 length) and sized (length from its count).
+#ifndef PACKBIN_NO_TEXT
+// A string's payload `p` (`count` bytes, the count at `at`, the payload at `body`) into a Text<N>,
+// or checked and dropped when the field is unbound. A text that does not fit is TooMany with its
+// full size and the member empty.
+PACKBIN_NOINLINE
+Result decode_text(Field const& f, void* m, std::uint8_t const* p, std::size_t count,
+                   std::size_t at, std::size_t body) {
+  if (count == 0) {
+    if (m != nullptr)
+      clear_text(f, m);
+    return Result{};
+  }
+  txt::Sink sink{nullptr, txt::kMaxText};
+  if (m != nullptr && f.fixed()) {
+    sink.out = static_cast<std::uint8_t*>(m) + sizeof(std::uint16_t);
+    sink.cap = f.size;
+  }
+  if (!txt::decode_payload(p, count, sink)) {
+    if (m != nullptr)
+      clear_text(f, m);
+    return fail(Error::BadValue, at, f.id);
+  }
+  if (sink.over) {
+    if (m != nullptr)
+      clear_text(f, m);
+    return fail(Error::TooMany, body, f.id, sink.len);
+  }
+  if (m != nullptr)
+    *static_cast<std::uint16_t*>(m) = static_cast<std::uint16_t>(sink.len);
+  return Result{};
+}
+#endif
+
+// Bytes, sized (length from its count) and utf8 (after its count). A utf8 member takes the
+// decoded text (a Text<N>) or the payload as it is (a Packed, borrowed from the input); an
+// unbound string is checked by the codec, or only skipped by its count in a PACKBIN_NO_TEXT
+// build.
 PACKBIN_NOINLINE
 Result unpack_text(Walk& w, std::size_t i, void* obj) {
   Field const& f = w.t[i];
   Reader& r = w.r;
+  std::size_t at = r.pos;
   std::size_t len = f.size;
   if (f.kind == Kind::Utf8) {
-    Result res = get_u16(r, len, f.id);
+    Result res = txt::get_count(r, len, f.id);
     if (!res.ok())
       return res;
   } else if (f.kind == Kind::Sized) {
@@ -79,12 +120,20 @@ Result unpack_text(Walk& w, std::size_t i, void* obj) {
       return fail(Error::BadValue, r.pos, f.id);
     len = clamp_count(count);
   }
-  std::size_t at = r.pos;
+  std::size_t body = r.pos;
   std::uint8_t const* p = nullptr;
   Result res = get_bytes(r, p, len, f.id);
   if (!res.ok())
     return res;
-  return store_text(f, member(f, obj), p, len, at);
+  void* m = member(f, obj);
+  if (f.kind == Kind::Utf8 && !f.opaque()) {
+#ifdef PACKBIN_NO_TEXT
+    return m == nullptr ? Result{} : fail(Error::SchemeInvalid, at, f.id);
+#else
+    return decode_text(f, m, p, len, at, body);
+#endif
+  }
+  return store_text(f, m, p, len, body);
 }
 
 // Bits (width 1) or packed numbers (width 1 or 2) into an Array<std::uint8_t, N>.
