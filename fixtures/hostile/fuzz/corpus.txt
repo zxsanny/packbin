@@ -15,8 +15,8 @@ golden                                position                      4001000065cd
 ring_bitwhen                          bitwhen                       010001
 ring_boolflag                         boolflag                      0100
 ring_booltrue                         booltrue                      0101
-ring_dictgroup                        dictgroup                     01020001007801020100790304
-ring_dictgroup_short                  dictgroup                     010200010078010201007903
+ring_dictgroup                        dictgroup                     01020002107801020210790304
+ring_dictgroup_short                  dictgroup                     010200021078010202107903
 ring_listflags                        listflags                     010300010100020200
 ring_listflags_short                  listflags                     0103000101000202
 ring_listgroup                        listgroup                     01020001020304

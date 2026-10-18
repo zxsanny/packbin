@@ -28,11 +28,11 @@ roundwhen_hex="01010902"
 # the flags): [{a:1,b:2},{a:3,b:4}]; {y:{a:3,b:4}, x:{a:1,b:2}} written in unsigned key order; and
 # [{a:1},{},{b:2}], where a missing value is a clear flag bit.
 listgroup_hex="01020001020304"
-dictgroup_hex="01020001007801020100790304"
+dictgroup_hex="01020002107801020210790304"
 listflags_hex="010300010100020200"
 # The same packets with the last element cut short: its second value (or the flags item's u16) is missing.
 listgroup_short_hex="010200010203"
-dictgroup_short_hex="010200010078010201007903"
+dictgroup_short_hex="010200021078010202107903"
 listflags_short_hex="0103000101000202"
 
 run_lang() {

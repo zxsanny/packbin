@@ -326,7 +326,7 @@ public class HostilePackVectorTests
                         Field.U32<Utf8Item>(0, e => e.N),
                         Field.Times(1, 0, Field.Utf8<Utf8Item>(1, e => e.S))))),
             Row(("Items", Enumerable.Range(0, 16)
-                .Select(_ => (object?)Row(("N", 65_535u), ("S", new string('a', 16)))).ToList()))),
+                .Select(_ => (object?)Row(("N", 65_535u), ("S", new string('\u0001', 16)))).ToList()))),
     };
 
     // The member a loop 19 refusal names, so a refusal by some other rule does not pass.
