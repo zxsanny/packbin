@@ -9,7 +9,7 @@
 
 ## Purpose
 
-One optional connection session beside clear pack. The opener sends 16 bytes once. The waiter joins. Later payloads match the clear packed length. Each language implements this itself.
+One optional connection session beside clear pack. The opener sends 16 bytes once. The waiter joins. Later payloads match the clear packed length (a scheme that declares parity bytes adds them after the pad: clear length + `n`, `message-ecc.md`). Each language implements this itself.
 
 ## Shape
 
@@ -30,6 +30,8 @@ C++ shape: `load` and `join` return `bool`, and `start` has two forms, `start(no
 The opener's send direction is the waiter's receive direction. A second pack on the same direction uses the next position. Two sessions with different 16-byte values do not recover each other's rows.
 
 Clear pack and unpack stay as they are.
+
+Protected schemes (`message-ecc.md`, loop 38): the parity covers the padded bytes, the payload is the clear length + `n`, and unpack repairs before it removes the pad. A scheme with 0 parity bytes is exactly as above.
 
 ## Construction
 

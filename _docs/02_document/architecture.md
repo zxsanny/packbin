@@ -19,7 +19,7 @@ packbin is a library: the caller writes a field list, pack and unpack move the e
 
 **Principles**
 
-- The bytes are only the fields
+- The bytes are only the fields (one opt-in exception: a scheme may declare parity bytes that detect and repair a corrupted message, ADR 007; a scheme that does not has no extra byte)
 - The first release has no code generator
 - A short packet returns an error and no value. In C++ the error is a `Result` and the row keeps the fields read before it
 - Unpack treats its bytes as hostile (loop 11). In C#, TypeScript, Python, Rust, Java and Go it returns an error value, within a time and memory bound set by the input length, and never throws; Swift throws a `PackbinError` within the same bounds and never traps (the typed C# `Unpack` of a packet that holds a `repeat` or `times` round used to throw, F17; since loop 20 it returns an error value when the row cannot hold the lists of rounds, and a C# collection member that could throw is refused when the scheme is built since loop 18). In C#, TypeScript, Java, Rust, Python, Go and Swift a scheme also refuses a `repeat` or `times` round past 65,535 rounds, or past 1,048,576 slots for the whole call (4,194,304 before loop 22), so the memory of the rounds is set by the scheme's limits, not by the packet (loop 15, Python since loop 16; the scheme can raise them; C++ unpacks into fixed arrays, so it needs no limit). A `times` round or a `list`/`dict` element that reads nothing is an error; a `repeat` round that reads nothing ends the repeat and the rest is trailing bytes (C++ ends a `times`, `list` or `dict` container on such a round instead of failing, see below). The error shape is interim until C15

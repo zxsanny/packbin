@@ -22,9 +22,11 @@ Nothing detects a flipped bit today: `_docs/05_security/compact_text_decoder_rev
 
 1. One mechanism, a Reed-Solomon code over bytes, no separate CRC. It gives CRC-style detection with the same byte count. The decoder takes a correction limit `t` from 0 to `n/2`; `t = 0` is detect-only.
 2. The parity count is a per-scheme setting beside `Limits`. Both sides share the scheme, so no byte on the wire says it.
-3. One block holds at most 255 bytes including parity. A longer message gets a typed error at pack. Splitting into blocks is out of v1.
+3. One message sends at most 254 bytes including parity (the code word is 255 bytes; its first byte, the clear length, is covered by the code but not sent). A longer message gets a typed error at pack. Splitting into blocks is out of v1.
 4. Sessions: parity covers the encrypted bytes. A protected session payload is `n` bytes longer than clear pack, which amends `pack-session.md` ("the same length as clear pack") for protected schemes only.
 5. Embedded: encode is available on every target that has the flash; correction sits behind a build flag (`PACKBIN_NO_ECC`) and is off on the Cortex-M4F build.
+
+6. Added at implement (reference fuzz, loop 38): the code also covers the clear length, as a first byte that is not sent. A plain systematic code accepts a message with one trailing zero byte more or less (about 1 in 256 for a lost last byte), so EC-14 could not hold. Cost: the sent message is at most 254 bytes, not 255.
 
 ## Code sections / UI locations for this loop
 
@@ -42,6 +44,9 @@ Owner choice, 2026-10-18: "Package entry points + contracts": the scheme and the
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Correcting `t` bytes lowers the guaranteed detection to `n - t` bytes; garbage beyond capacity can decode to a wrong row | the contract states it; the caller picks `t` (`t = 0` gives full detection) | open | High |
-| Cortex-M4F flash margin is 60 B; even encode may not fit | encode and correction behind flags on that target; AC checks the size | open | Medium |
+| Cortex-M4F flash margin is 60 B; even encode may not fit | encode and correction behind flags on that target; EC-12 checks the size | resolved | Medium |
+| Scheme chosen by the type byte, which can be among the wrong bytes | all handlers of one dispatch share one parity count (card 1, EC-16) | resolved | High |
+| C++ receive buffer is read-only today | repair in place for protected schemes only (card 2, EC-17) | resolved | Medium |
+| Architecture principle "the bytes are only the fields" (ADR 001) | opt-in per scheme; new ADR 007 | resolved | Medium |
 | Session payload length changes for protected schemes | amend `pack-session.md`; unprotected schemes unchanged | resolved | Medium |
-| 255-byte block limit | typed error at pack; owner accepted | accepted-risk | Low |
+| 254-byte message limit | typed error at pack; owner accepted | accepted-risk | Low |

@@ -309,6 +309,19 @@ AZ-2513 through AZ-2524 are loop 26, the Swift package (epic AZ-2223; owner deci
 | AZ-2656 | cpp_text_api_and_embedded | 4 | AZ-2655 | AZ-2645 |
 | AZ-2657 | compact_text_hostile_ring_ci | 3 | AZ-2648 to AZ-2656 | AZ-2645 |
 | AZ-2658 | compact_text_docs | 2 | AZ-2657 | AZ-2645 |
+| AZ-2678 | ecc_format_spec | 5 | None | AZ-2677 |
+| AZ-2679 | ecc_reference_vectors | 3 | AZ-2678 | AZ-2677 |
+| AZ-2680 | python_ecc | 5 | AZ-2679 | AZ-2677 |
+| AZ-2681 | typescript_ecc | 5 | AZ-2679 | AZ-2677 |
+| AZ-2682 | csharp_ecc | 5 | AZ-2679 | AZ-2677 |
+| AZ-2683 | java_ecc | 5 | AZ-2679 | AZ-2677 |
+| AZ-2684 | rust_ecc | 5 | AZ-2679 | AZ-2677 |
+| AZ-2685 | go_ecc | 5 | AZ-2679 | AZ-2677 |
+| AZ-2686 | swift_ecc | 5 | AZ-2679 | AZ-2677 |
+| AZ-2687 | cpp_ecc_codec | 5 | AZ-2679 | AZ-2677 |
+| AZ-2688 | cpp_ecc_api_and_embedded | 4 | AZ-2687 | AZ-2677 |
+| AZ-2689 | ecc_ring_ci | 3 | AZ-2680 to AZ-2688 | AZ-2677 |
+| AZ-2690 | ecc_docs | 2 | AZ-2689 | AZ-2677 |
 
 AZ-2563 through AZ-2567 are loop 28 (owner 2026-10-15: speed check, then the S3 limit, the cpp pool race and the small leftovers; speed set accepted as recommended). AZ-2564 waits for AZ-2563 (both edit `publish-gate.test.sh`). AZ-2565 owns `scripts/loop-tests.sh` and its test; AZ-2566 owns README and ADR-005; AZ-2567 owns only a scratchpad driver and a record entry. AZ-2068 stays out.
 
@@ -319,3 +332,5 @@ AZ-2600 is loop 30 (owner 2026-10-16: all recommended reductions of the CI metri
 AZ-2646 through AZ-2658 are loop 35 (owner 2026-10-18: compact strings, epic AZ-2645; 57 points). Order: AZ-2646 (format, tables), AZ-2647 (reference, vectors), then AZ-2648 to AZ-2655 are independent peers (one package each, disjoint files), AZ-2656 after the C++ codec, AZ-2657 after every package, AZ-2658 last. Estimation: `LESSONS.md` says a new language costs 47 points over 12 specs; here each package changes one walker path, so 5 points per package with no bump. The Swift and C++ tasks carry the two largest risks (F47 for keys; scratch buffer and the size probe).
 
 AZ-2674 through AZ-2676 are loop 37 (owner 2026-10-18: the Low findings of review35, epic AZ-2645; 6 points). Disjoint files: AZ-2674 owns `cpp/Makefile`, `core.hpp` comment and a check script; AZ-2675 owns `csharp/tests`; AZ-2676 owns `_docs/02_task_plans/compact-strings/research`. Findings 7 and 8 are accepted with no code. AZ-2068 stays out.
+
+AZ-2678 through AZ-2690 are loop 38 (owner 2026-10-18: message error correction, epic AZ-2677; 57 points; full correction chosen over detect-first). Order: AZ-2678 (contract), AZ-2679 (reference and vectors), then AZ-2680 to AZ-2687 are independent of each other and own disjoint package folders, AZ-2688 follows AZ-2687, AZ-2689 (ring, CI) after all packages, AZ-2690 (docs) last.

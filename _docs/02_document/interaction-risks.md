@@ -8,7 +8,7 @@
 | F2 Unpack | caller → package | bytes |
 | F3 Publish | the six packages, via the golden fixture | the hex |
 | F3 Publish | Actions → the six registries | one package per language in the tag |
-| F4 Session | opener → waiter | 16 bytes, then a payload the same length as clear pack |
+| F4 Session | opener → waiter | 16 bytes, then a payload the same length as clear pack (clear length + `n` for a protected scheme) |
 
 ## Risks
 
@@ -93,3 +93,8 @@ None.
 | A flipped bit in a string payload shifts the codes and corrupts the next field | the field after the string is unchanged while the count header is intact; nothing is read past the payload | CS-8 | each package |
 | C++ borrows text from the input (`View`) while the codec has to decode it | `utf8` binds to `Text<N>` only; `TooMany` instead of a cut | CS-18 | AZ-2655, AZ-2656 |
 | The Cortex-M4F size probe links the codec through the string dispatch | `PACKBIN_NO_TEXT` removes it; flash and stack budgets hold | CS-12 | AZ-2656 |
+| A protected message loses or gains one byte at the end (a trailing `00`) and still passes a plain systematic check | the code covers the clear length: 0 of 10,000 shifted messages accepted at n = 4, t = 0 | EC-14 | each package |
+| A caller repairs `t` bytes and random bytes decode to a different row | the default is detect only (t = 0); the contract lists the chance for every n and t (n = 2, t = 1 accepts 1 in 17 random buffers) | EC-6, EC-15 | each package, contract |
+| The type byte of a protected message is among the wrong bytes and the scheme is chosen by it | one dispatch accepts handlers of one parity count only; the message is repaired, then dispatched | EC-16 | C++, TypeScript, Rust and any dispatch form |
+| A protected session payload is repaired after the pad is removed | the code covers the padded bytes, so repair comes before the pad is removed | EC-10 | each package |
+| C++ repair needs a scratch copy of up to 254 bytes on a small target | repair in place in the caller's writable buffer | EC-17 | C++ |
