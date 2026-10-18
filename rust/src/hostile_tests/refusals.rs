@@ -93,7 +93,7 @@ pub(super) const PACK_REFUSAL: RuleTable = &[
     ),
     (
         "pack_lone_utf8_under_times_over_budget",
-        "s: the packet would be 16777477 bytes, above the limit of 16777216 bytes",
+        "s: the packet would be 16779269 bytes, above the limit of 16777216 bytes",
     ),
     (
         "pack_slots_over_limit",

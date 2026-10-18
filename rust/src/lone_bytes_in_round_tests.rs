@@ -150,5 +150,5 @@ fn ac2_a_lone_string_for_a_utf8_name_still_goes_to_every_round() {
     let wire = hex(&scheme, &vals);
 
     // Assert
-    assert_eq!(wire, "0102010061010061");
+    assert_eq!(wire, "0102021061021061");
 }

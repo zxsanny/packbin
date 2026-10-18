@@ -330,7 +330,7 @@ fn element_when_flags_and_utf8_round_trip_per_round() {
     let back = unpack_row(&scheme, &bytes).expect("unpack");
 
     // Assert
-    assert_eq!(to_hex(&bytes), "01020102006162010200");
+    assert_eq!(to_hex(&bytes), "01020103106162010200");
     assert_eq!(back, row);
 }
 

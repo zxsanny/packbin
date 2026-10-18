@@ -393,7 +393,7 @@ fn user_handler_reads_first_byte() {
     let raw = BinaryPacker::pack(&scheme, &row).expect("pack");
     assert_eq!(
         to_hex(&raw),
-        "0103006164610200040075736572050061646d696e020003006d61700200040072656164040065646974050073746f7265010005007772697465"
+        "0103a928800200030ba81804892975600200036ae9c80200032b01280348516404ca25f0000100048bbc2c80"
     );
     let mut got = UserRow::default();
     BinaryPacker::unpack_with(&raw, &mut [&mut scheme.on(|found| got = found)]).expect("dispatch");

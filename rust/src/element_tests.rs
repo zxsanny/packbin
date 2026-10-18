@@ -26,7 +26,7 @@ fn zero_width_list_element_is_error() {
 fn zero_width_dict_value_is_error() {
     let result = within_one_second("dict of bytes(0)", || {
         let scheme = MapScheme::new(1, vec![dict("0", bytes("0", 0))]);
-        unpack(&scheme, &[0x01, 0xff, 0xff, 0x01, 0x00, 0x61]).map(|_| ())
+        unpack(&scheme, &[0x01, 0xff, 0xff, 0x02, 0x10, 0x61]).map(|_| ())
     });
     assert_eq!(result, Err(zero_width("0", 0)));
 }
@@ -265,7 +265,7 @@ fn count_ffff_short_packet_unchanged() {
         unpack(&dict_scheme, &[0x01, 0xff, 0xff]).map(|_| ()),
         Err(UnpackError::Short(ShortPacket {
             field: "0".to_string(),
-            needed: 2,
+            needed: 1,
             left: 0,
         }))
     );

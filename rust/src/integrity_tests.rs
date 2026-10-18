@@ -193,7 +193,7 @@ fn single_value_elements_still_round_trip() {
     let wide_back = unpack(&wide, &[1, 1, 0, 0x12, 0x34]).expect("be list");
     let table_back = unpack(
         &table,
-        &[1, 1, 0, 1, 0, b'k', 1, 0, 1, 0, 1, 0, b'n', 1, 0, b'v'],
+        &[1, 1, 0, 2, 0x10, b'k', 1, 0, 1, 0, 2, 0x10, b'n', 2, 0x10, b'v'],
     )
     .expect("dict of lists of dicts");
 

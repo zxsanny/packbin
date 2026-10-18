@@ -1,6 +1,7 @@
 use super::flag_bits::{
     check_split_bit, collect_flag_bits, member_on, refuse_unwritten_count, FlagInners, Form,
 };
+use super::text;
 use super::pack_out::{flags_byte_name, round_member, write_float, write_int, PackOut};
 use super::times::{
     check_aligned, check_lists, check_longer, check_repeat_cap, check_repeat_lists,
@@ -302,13 +303,7 @@ fn pack_one<'v>(
             let v = require(values, name)?;
             match v {
                 Value::Str(text) => {
-                    let raw = text.as_bytes();
-                    if raw.len() > 65535 {
-                        return Err(PackError::Type(name.to_string()));
-                    }
-                    out.admit(2 + raw.len(), || name.to_string())?;
-                    out.raw(&(raw.len() as u16).to_le_bytes());
-                    out.raw(raw);
+                    text::write(out, name, text)?;
                     wrote.insert(name, Cow::Borrowed(v));
                     Ok(())
                 }
@@ -349,13 +344,7 @@ fn pack_one<'v>(
                     let child =
                         field_name(element).ok_or_else(|| PackError::Type(name.to_string()))?;
                     for (key, item) in map {
-                        let raw = key.as_bytes();
-                        if raw.len() > 65535 {
-                            return Err(PackError::Type(name.to_string()));
-                        }
-                        out.admit(2 + raw.len(), || name.to_string())?;
-                        out.raw(&(raw.len() as u16).to_le_bytes());
-                        out.raw(raw);
+                        text::write(out, name, key)?;
                         let mut slice = Values::new();
                         slice.insert(name_of(child), Some(item.clone()));
                         let mut elem_wrote = Written::unread();

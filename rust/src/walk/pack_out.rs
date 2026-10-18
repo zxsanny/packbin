@@ -11,6 +11,9 @@ pub(super) struct PackOut {
     pub(super) max_rounds: usize,
     max_slots: usize,
     slots: usize,
+    /// The last long text written and its field: a lone string under a `times` is packed once per
+    /// round, and encoding 64 KiB costs far more than comparing it.
+    pub(super) text_cache: Option<(String, Vec<u8>)>,
 }
 
 impl PackOut {
@@ -23,6 +26,7 @@ impl PackOut {
             max_rounds: scheme.max_rounds,
             max_slots: scheme.max_slots,
             slots: 0,
+            text_cache: None,
         }
     }
 

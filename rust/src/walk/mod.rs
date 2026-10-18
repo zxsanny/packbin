@@ -3,12 +3,17 @@ mod element;
 mod flag_bits;
 mod pack;
 mod pack_out;
+mod text;
+#[allow(dead_code)]
+mod text_tables;
 mod times;
 mod unpack;
 mod written;
 
 #[cfg(test)]
 pub(crate) use element::capacity_hint;
+#[cfg(test)]
+pub(crate) use text::{decode as decode_text, encode as encode_text};
 #[cfg(test)]
 pub(crate) use cursor::packed_layout;
 

@@ -131,8 +131,8 @@ fn lists_and_flags_in_the_parent_and_the_element_keep_their_own_content() {
     assert_eq!(
         to_hex(&bytes),
         concat!(
-            "0102", "01000700", "0200", "010070", "010071", // parent
-            "00", "01000100", "0100", "010078", // round 1
+            "0102", "01000700", "0200", "021070", "021071", // parent
+            "00", "01000100", "0100", "021078", // round 1
             "0105", "0000", "0000",     // round 2
             "01000900"  // after
         )

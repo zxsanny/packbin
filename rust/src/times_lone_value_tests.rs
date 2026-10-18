@@ -116,7 +116,7 @@ fn az2311_ac2_a_lone_utf8_is_in_every_round_and_a_lone_byte_string_is_refused() 
     let (text_wire, raw_wire) = (hex(&text, &text_row), hex(&raw, &raw_row));
 
     // Assert
-    assert_eq!(text_wire, Ok("01020100610401006105".to_string()));
+    assert_eq!(text_wire, Ok("01020210610402106105".to_string()));
     assert!(matches!(raw_wire, Err(PackError::Type(m)) if m.contains("'1'")));
 }
 
@@ -213,7 +213,7 @@ fn az2308_ac3_a_list_of_dictionaries_packs_one_per_round() {
     // Assert
     assert_eq!(
         wire,
-        Ok(["0102", "0100", "01006b", "010061", "04", "0100", "01006b", "010062", "05"].concat())
+        Ok(["0102", "0100", "02106b", "021061", "04", "0100", "02106b", "021062", "05"].concat())
     );
 }
 

@@ -40,7 +40,7 @@ fn two_bound_lists_pack_their_own_members() {
     let bytes = BinaryPacker::pack(&two_lists_scheme(), &row).expect("pack");
 
     // Assert
-    assert_eq!(to_hex(&bytes), "01010001007802000200797902007a7a");
+    assert_eq!(to_hex(&bytes), "0101000210780200020b3903107a7a");
 }
 
 #[test]

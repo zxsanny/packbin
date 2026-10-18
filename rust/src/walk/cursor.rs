@@ -42,6 +42,11 @@ impl<'a> Cursor<'a> {
         Ok(())
     }
 
+    /// The bytes not read yet.
+    pub(super) fn rest(&self) -> &'a [u8] {
+        &self.data[self.pos.min(self.data.len())..]
+    }
+
     pub(crate) fn left(&self) -> usize {
         self.data.len().saturating_sub(self.pos)
     }

@@ -1,5 +1,6 @@
 use super::cursor::{packed_layout, read_float, read_int, Cursor};
 use super::element::{capacity_hint, unpack_element};
+use super::text;
 use super::times::round_lists;
 use crate::field::{field_name, times_name, Field, FieldKind, IntKind, MapScheme};
 use crate::value::{as_usize, name_of, ShortPacket, UnpackError, Value, Values};
@@ -263,17 +264,8 @@ fn unpack_one(
             values.insert(times_name(*anchor), Some(Value::Groups(rounds)));
         }
         FieldKind::Utf8 { name } => {
-            let count_raw = cur.take(2, name)?;
-            let count = u16::from_le_bytes([count_raw[0], count_raw[1]]) as usize;
-            let raw = cur.take(count, name)?;
-            let text = std::str::from_utf8(raw).map_err(|_| {
-                UnpackError::Short(ShortPacket {
-                    field: name.to_string(),
-                    needed: count,
-                    left: 0,
-                })
-            })?;
-            values.insert(name.clone(), Some(Value::Str(text.to_string())));
+            let text = text::read(cur, name)?;
+            values.insert(name.clone(), Some(Value::Str(text)));
         }
         FieldKind::List { name, element } => {
             let count_raw = cur.take(2, name)?;
@@ -293,18 +285,7 @@ fn unpack_one(
             let child = field_name(element).unwrap_or(name);
             let mut map = std::collections::BTreeMap::new();
             for _ in 0..count {
-                let key_len_raw = cur.take(2, name)?;
-                let key_len = u16::from_le_bytes([key_len_raw[0], key_len_raw[1]]) as usize;
-                let key_raw = cur.take(key_len, name)?;
-                let key = std::str::from_utf8(key_raw)
-                    .map_err(|_| {
-                        UnpackError::Short(ShortPacket {
-                            field: name.to_string(),
-                            needed: key_len,
-                            left: 0,
-                        })
-                    })?
-                    .to_string();
+                let key = text::read(cur, name)?;
                 let item = unpack_element(element, name, child, cur, flag_bits, groups)?;
                 if map.contains_key(&key) {
                     return Err(UnpackError::Short(ShortPacket {

@@ -197,7 +197,7 @@ fn ac8_a_utf8_list_element_named_like_a_row_member_builds_and_packs() {
     let bytes = hex(&scheme, &row);
 
     // Assert
-    assert_eq!(bytes, "01010100010061");
+    assert_eq!(bytes, "01010100021061");
 }
 
 #[test]

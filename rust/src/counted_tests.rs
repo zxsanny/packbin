@@ -112,15 +112,15 @@ fn utf8_string() {
     let mut vals = Values::new();
     insert(&mut vals, "name", Some(Value::Str("zxsanny".into())));
     let raw = pack(&scheme, &vals).unwrap();
-    assert_eq!(to_hex(&raw), "0107007a7873616e6e79");
-    assert_eq!(raw.len(), 10);
+    assert_eq!(to_hex(&raw), "01062bfcfee119b2");
+    assert_eq!(raw.len(), 8);
     let got = unpack(&scheme, &raw).unwrap();
     assert_eq!(got["name"], Some(Value::Str("zxsanny".into())));
 
     let mut empty_vals = Values::new();
     insert(&mut empty_vals, "name", Some(Value::Str(String::new())));
     let empty = pack(&scheme, &empty_vals).unwrap();
-    assert_eq!(to_hex(&empty), "010000");
+    assert_eq!(to_hex(&empty), "0100");
     let empty_got = unpack(&scheme, &empty).unwrap();
     assert_eq!(empty_got["name"], Some(Value::Str(String::new())));
 
@@ -128,7 +128,7 @@ fn utf8_string() {
     insert(&mut long_vals, "name", Some(Value::Str("a".repeat(65536))));
     assert!(pack(&scheme, &long_vals).is_err());
 
-    let err = unpack(&scheme, &[0x01, 0x07, 0x00, 0x7a, 0x78]).expect_err("short");
+    let err = unpack(&scheme, &[0x01, 0x06, 0x2b]).expect_err("short");
     match err {
         UnpackError::Short(ShortPacket {
             field,
@@ -136,8 +136,8 @@ fn utf8_string() {
             left,
         }) => {
             assert_eq!(field, "name");
-            assert_eq!(needed, 7);
-            assert_eq!(left, 2);
+            assert_eq!(needed, 6);
+            assert_eq!(left, 1);
         }
         other => panic!("expected ShortPacket, got {:?}", other),
     }
@@ -190,12 +190,7 @@ fn counted_list() {
 
 #[test]
 fn dictionary_field() {
-    const USER_HEX: &str = concat!(
-        "01",
-        "07007a7873616e6e7902000400757365720a0064697370617463686572",
-        "030007006368616e6e656c010004007265616403006d61700400040072656164",
-        "07006770735f6669780300736574040065646974050073746f7265020004007265616405007772697465"
-    );
+    const USER_HEX: &str = "01062bfcfee119b20200030ba818078a8b1ca4ed51800300056b6aa330b00100032b0128036ae9c80400032b012808106770735f66697803ea04800348516404ca25f0000200032b0128048bbc2c80";
 
     let scheme = MapScheme::new(
         1,
@@ -325,11 +320,11 @@ fn dictionary_field() {
     insert(&mut empty_vals, "access", Some(Value::Map(BTreeMap::new())));
     assert_eq!(
         to_hex(&pack(&empty_scheme, &empty_vals).unwrap()),
-        "01000000000000"
+        "010000000000"
     );
 
     let dup_scheme = MapScheme::new(1, vec![dict("access", utf8("v"))]);
-    let dup_err = unpack(&dup_scheme, &parse_hex("010200010061010078010061010079")).unwrap_err();
+    let dup_err = unpack(&dup_scheme, &parse_hex("010200021061021078021061021079")).unwrap_err();
     match dup_err {
         UnpackError::Short(ShortPacket {
             field,

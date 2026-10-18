@@ -74,6 +74,10 @@ mod session_hostile_tests;
 #[cfg(test)]
 mod split_form_loud_tests;
 #[cfg(test)]
+mod text_positions_tests;
+#[cfg(test)]
+mod text_vectors_tests;
+#[cfg(test)]
 mod times_count_zero_tests;
 #[cfg(test)]
 mod times_lone_value_tests;

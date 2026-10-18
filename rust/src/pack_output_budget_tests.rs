@@ -78,8 +78,8 @@ fn ac1_row1_a_lone_utf8_under_a_capped_times_is_refused_at_once_naming_the_membe
     // Act
     let message = refusal(&lone_utf8(), &vals);
 
-    // Assert: refused at round 255, with 16 711 940 bytes written
-    assert_eq!(message, over_bytes("s", 16_777_477, 16_777_216));
+    // Assert: refused at round 511, with 16 746 497 bytes written (a field of 32 772 bytes)
+    assert_eq!(message, over_bytes("s", 16_779_269, 16_777_216));
     assert!(
         started.elapsed().as_millis() < 1000,
         "{:?}",
@@ -93,11 +93,12 @@ fn ac3_rows4_5_a_packet_of_exactly_max_bytes_packs_and_one_more_byte_is_refused(
     let scheme = MapScheme::new(1, vec![utf8("s")]).with_max_bytes(64);
 
     // Act
-    let at = pack(&scheme, &row(&[("s", a_text(61))])).expect("64 bytes");
-    let over = refusal(&scheme, &row(&[("s", a_text(62))]));
+    // A tab is not in any alphabet, so the raw fallback wins: count, prefix byte, the bytes.
+    let at = pack(&scheme, &row(&[("s", Value::Str("\t".repeat(61)))])).expect("64 bytes");
+    let over = refusal(&scheme, &row(&[("s", Value::Str("\t".repeat(62)))]));
 
     // Assert
-    assert_eq!(to_hex(&at), format!("013d00{}", "61".repeat(61)));
+    assert_eq!(to_hex(&at), format!("013e10{}", "09".repeat(61)));
     assert_eq!(over, over_bytes("s", 65, 64));
 }
 
@@ -178,7 +179,7 @@ fn ac3_row13_a_list_count_prefix_is_named_by_the_list_and_a_dict_key_by_the_dict
 
     // Assert
     assert_eq!(by_count, over_bytes("xs", 3, 2));
-    assert_eq!(by_key, over_bytes("d", 8, 6));
+    assert_eq!(by_key, over_bytes("d", 7, 6));
 }
 
 #[test]
