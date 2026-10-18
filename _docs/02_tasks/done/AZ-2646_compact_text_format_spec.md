@@ -56,7 +56,7 @@ Then the output equals the committed `tables.json` byte for byte both times
 **AC-4: Raw fallback and empty string**
 Given the contract
 When its rules are applied to the empty string and to a string where the compact form is larger
-Then count 0 is the empty string (1 byte); start mode 4 (raw) is used when the compact payload is not smaller, so a field is never larger than 2 + the UTF-8 bytes (CS-13, CS-15)
+Then count 0 is the empty string (1 byte); start mode 4 (raw) is used when the compact payload is not smaller, so a field is never larger than 2 + the UTF-8 bytes up to 126 UTF-8 bytes, and at most 2 bytes larger above (the count header grows; CS-13, CS-15)
 
 **AC-5: Decoder refusals listed**
 Given the contract

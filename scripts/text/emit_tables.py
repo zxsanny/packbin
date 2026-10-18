@@ -114,7 +114,10 @@ def emit(lang):
         w("}  // namespace packbin::text")
     else:
         raise SystemExit("unknown language %s; one of %s" % (lang, " ".join(LANGS)))
-    return "\n".join(out) + "\n"
+    text = "\n".join(out) + "\n"
+    if lang == "go":
+        text = text.rstrip("\n") + "\n"  # gofmt rejects a trailing blank line, and CI runs gofmt -l
+    return text
 
 
 def main():

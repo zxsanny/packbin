@@ -188,6 +188,7 @@ static = %w[
   .github/workflows/report-row.test.sh fixtures/hostile/cases.test.sh .github/workflows/run-suite.test.sh
   cpp/embedded/lib.test.sh cpp/embedded/run-parts.test.sh .github/workflows/ring-wiring.test.sh scripts/loop-tests.test.sh
   .github/workflows/ring-wiring-swift.test.sh .github/workflows/ring-prepare.test.sh
+  fixtures/text/check-vectors.test.sh scripts/text/check-emitted.test.sh scripts/text/check-emitted.sh
 ]
 static.each do |script|
   found = all_runs.call("bash #{script}")

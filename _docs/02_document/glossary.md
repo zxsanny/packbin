@@ -74,3 +74,24 @@ A Git tag that starts the publish of each language present in that commit. Go is
 ## When
 
 A group that is written only when an earlier field equals a given value. The tested field is an integer, a `u2` slot or a bool; a bool is compared only with `true`, and the field list fails when it is built for any other test or source kind, in all six packages since loop 18 (AZ-2126). Since loop 19 (AZ-2338) it also fails when the tested value is one that an integer source can never hold (out of range, a string, `NaN`, a fraction, a bool); C++ checks out-of-range integers only. C++ accepts an empty group as a source (AZ-2334). (source: schema.md)
+
+## Compact text
+
+The wire form of every string since loop 35 (ADR-006, contract `compact-text.md`): a varint payload length, then a bit-packed payload coded with a canonical prefix code per mode. All eight packages write the same bytes. The tables in `fixtures/text/tables.json` are part of the format. (source: ADR-006; contracts/library/compact-text.md)
+
+## Mode (compact text)
+
+One of the four prefix-code tables of the compact text: Ukrainian, Russian, English or number. A string starts in one mode, and a switch symbol changes it. (source: compact-text.md)
+
+## Escape (compact text)
+
+The `ESC` symbol: the next code point follows as 1 to 4 UTF-8 bytes of 8 bits each. It carries every character that has no code in the tables (emoji, other scripts). (source: compact-text.md)
+
+## Raw fallback
+
+Start mode 4: the payload is the byte `10` followed by the UTF-8 bytes unchanged. The encoder uses it when the compact payload is not smaller, so a string field is at most 2 bytes larger than the old 2-byte count plus UTF-8. (source: compact-text.md)
+
+## Packed (C++)
+
+A borrowed view of the payload of a compact string (after its count header), not decoded. A C++ build with `PACKBIN_NO_TEXT` binds strings to it so a board without the codec can read the fields after a string and forward its bytes. (source: ADR-006; compact-text.md; AZ-2656)
+

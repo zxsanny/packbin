@@ -11,7 +11,7 @@ Measured on Tatoeba sentences (`research_report.md`); the bounds leave 5 to 10 %
 - **CS-3.** A string of ≤ 127 payload bytes carries a count header of 1 byte (CS-17), plus a prefix of 6 bits in the payload.
 - **CS-4.** A packet with no string, list or dictionary field keeps its bytes: the AC-1 position record stays 13 bytes.
 - **CS-14.** Numbers: coordinates with 4 decimals, ids of up to 8 digits, times `hh:mm` and counters are at most 56 % of today's size (measured 51 % with a number mode; 64 % with digits in the ordinary tables, 99 % when the tables are trained on sentences only). Ukrainian text followed by coordinates or a counter is at most 45 % (measured 39 %).
-- **CS-13.** No string field is ever larger than today's: for every string under 128 bytes of UTF-8, field size ≤ 2 + UTF-8 bytes (measured: Polish text and a 300-letter rare-letter run were larger than today without a raw fallback).
+- **CS-13.** The raw fallback bounds the loss: a string field is never larger than today's for texts of up to 126 UTF-8 bytes, at most 1 byte larger for 127 to 16,382 bytes (the count header becomes 2 bytes), and at most 2 bytes larger above that; field size ≤ 2 + UTF-8 bytes + (0, 1 or 2) (measured: Polish text and a 300-letter rare-letter run were larger than today without a raw fallback).
 
 ## Round trip
 

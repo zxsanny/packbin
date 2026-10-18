@@ -36,7 +36,7 @@ Every string field, list element, dictionary key and dictionary value is written
 ### Positive
 
 - 35 % of today's size for Ukrainian text, 34 % for Russian, 57 % for English, 51 % for coordinates and ids (held-out sentences; `fixtures/text/tables.report.md`)
-- A field is never larger than today's
+- A field is never larger than today's up to 126 UTF-8 bytes, and at most 2 bytes larger above (the raw fallback caps the loss)
 - A flipped bit costs about 7 to 9 % of the characters of its own string and does not reach the next field while the count is intact
 
 ### Negative

@@ -279,6 +279,9 @@ run_stage_command() {
         && bash .github/workflows/report-row.test.sh \
         && bash fixtures/hostile/cases.test.sh \
         && bash fixtures/hostile/check-cases.sh \
+        && bash fixtures/text/check-vectors.test.sh \
+        && bash scripts/text/check-emitted.test.sh \
+        && bash scripts/text/check-emitted.sh \
         && bash .github/workflows/run-suite.test.sh \
         && bash cpp/embedded/lib.test.sh \
         && bash cpp/embedded/run-parts.test.sh \

@@ -9,22 +9,25 @@ namespace {
 
 using packbin::Array;
 using packbin::Entry;
-using packbin::View;
+using Str = packbin::Text<16>;
 
-View view(char const* s) {
-  return View{reinterpret_cast<std::uint8_t const*>(s), std::strlen(s)};
+Str text(char const* s) {
+  Str t;
+  t.len = static_cast<std::uint16_t>(std::strlen(s));
+  std::memcpy(t.data, s, t.len);
+  return t;
 }
 
-bool view_is(View const& v, char const* s) {
+bool text_is(Str const& v, char const* s) {
   return v.len == std::strlen(s) && std::memcmp(v.data, s, v.len) == 0;
 }
 
-using Names = Array<View, 8>;
+using Names = Array<Str, 8>;
 
 void set_names(Names& names, std::initializer_list<char const*> items) {
   names.count = 0;
   for (auto const* item : items)
-    names.items[names.count++] = view(item);
+    names.items[names.count++] = text(item);
 }
 
 bool names_are(Names const& names, std::initializer_list<char const*> items) {
@@ -32,16 +35,16 @@ bool names_are(Names const& names, std::initializer_list<char const*> items) {
     return false;
   std::size_t i = 0;
   for (auto const* item : items) {
-    if (!view_is(names.items[i++], item))
+    if (!text_is(names.items[i++], item))
       return false;
   }
   return true;
 }
 
 struct User {
-  View name;
+  Str name;
   Names roles;
-  Array<Entry<Names>, 8> access;
+  Array<Entry<Names, Str>, 8> access;
 };
 
 constexpr auto user_scheme = packbin::scheme<User>(
@@ -50,31 +53,31 @@ constexpr auto user_scheme = packbin::scheme<User>(
 
 User user_row() {
   User row;
-  row.name = view("zxsanny");
+  row.name = text("zxsanny");
   set_names(row.roles, {"user", "dispatcher"});
   row.access.count = 3;
-  row.access.items[0].key = view("channel");
+  row.access.items[0].key = text("channel");
   set_names(row.access.items[0].value, {"read"});
-  row.access.items[1].key = view("map");
+  row.access.items[1].key = text("map");
   set_names(row.access.items[1].value, {"read", "gps_fix", "set", "edit"});
-  row.access.items[2].key = view("store");
+  row.access.items[2].key = text("store");
   set_names(row.access.items[2].value, {"read", "write"});
   return row;
 }
 
-Names const* find(Array<Entry<Names>, 8> const& access, char const* key) {
+Names const* find(Array<Entry<Names, Str>, 8> const& access, char const* key) {
   for (std::size_t i = 0; i < access.count; ++i) {
-    if (view_is(access.items[i].key, key))
+    if (text_is(access.items[i].key, key))
       return &access.items[i].value;
   }
   return nullptr;
 }
 
-using Fields = Array<Entry<View>, 4>;
+using Fields = Array<Entry<Str, Str>, 4>;
 using Rows = Array<Fields, 4>;
 
 struct Nested {
-  Array<Entry<Rows>, 4> access;
+  Array<Entry<Rows, Str>, 4> access;
 };
 
 constexpr auto nested_scheme = packbin::scheme<Nested>(
@@ -82,22 +85,22 @@ constexpr auto nested_scheme = packbin::scheme<Nested>(
 
 void set_op(Fields& fields, char const* op) {
   fields.count = 1;
-  fields.items[0].key = view("op");
-  fields.items[0].value = view(op);
+  fields.items[0].key = text("op");
+  fields.items[0].value = text(op);
 }
 
 bool op_is(Fields const& fields, char const* op) {
-  return fields.count == 1 && view_is(fields.items[0].key, "op") &&
-         view_is(fields.items[0].value, op);
+  return fields.count == 1 && text_is(fields.items[0].key, "op") &&
+         text_is(fields.items[0].value, op);
 }
 
 Nested nested_row() {
   Nested row;
   row.access.count = 2;
-  row.access.items[0].key = view("map");
+  row.access.items[0].key = text("map");
   row.access.items[0].value.count = 1;
   set_op(row.access.items[0].value.items[0], "gps_fix");
-  row.access.items[1].key = view("store");
+  row.access.items[1].key = text("store");
   row.access.items[1].value.count = 2;
   set_op(row.access.items[1].value.items[0], "read");
   set_op(row.access.items[1].value.items[1], "write");
@@ -230,7 +233,7 @@ bool user_ok(std::uint8_t const* data, std::size_t len) {
   auto const* channel = find(got.access, "channel");
   auto const* map = find(got.access, "map");
   auto const* store = find(got.access, "store");
-  return view_is(got.name, "zxsanny") && names_are(got.roles, {"user", "dispatcher"}) &&
+  return text_is(got.name, "zxsanny") && names_are(got.roles, {"user", "dispatcher"}) &&
          got.access.count == 3 && channel && names_are(*channel, {"read"}) && map &&
          names_are(*map, {"read", "gps_fix", "set", "edit"}) && store &&
          names_are(*store, {"read", "write"});
@@ -242,8 +245,8 @@ bool nested_ok(std::uint8_t const* data, std::size_t len) {
     return false;
   auto const& map = got.access.items[0];
   auto const& store = got.access.items[1];
-  return view_is(map.key, "map") && map.value.count == 1 && op_is(map.value.items[0], "gps_fix") &&
-         view_is(store.key, "store") && store.value.count == 2 &&
+  return text_is(map.key, "map") && map.value.count == 1 && op_is(map.value.items[0], "gps_fix") &&
+         text_is(store.key, "store") && store.value.count == 2 &&
          op_is(store.value.items[0], "read") && op_is(store.value.items[1], "write");
 }
 
@@ -313,10 +316,11 @@ int main(int argc, char** argv) {
     return 2;
   std::string cmd = argv[1];
   std::uint8_t buf[kMax];
+  packbin::Scratch<16> scratch;  // the longest string in the user and nested rows has 10 characters
   if (cmd == "pack-user")
-    return print(packbin::pack(user_scheme, user_row(), buf, sizeof(buf)), buf);
+    return print(packbin::pack(user_scheme, user_row(), buf, sizeof(buf), scratch), buf);
   if (cmd == "pack-nested")
-    return print(packbin::pack(nested_scheme, nested_row(), buf, sizeof(buf)), buf);
+    return print(packbin::pack(nested_scheme, nested_row(), buf, sizeof(buf), scratch), buf);
   if (cmd == "pack-boolflag") {
     BoolFlag row;
     row.on = false;

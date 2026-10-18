@@ -334,6 +334,12 @@ jobs:
         run: bash .github/workflows/report-row.test.sh
       - name: hostile case file
         run: bash fixtures/hostile/cases.test.sh
+      - name: compact text vectors
+        run: bash fixtures/text/check-vectors.test.sh
+      - name: compact text tables check
+        run: bash scripts/text/check-emitted.test.sh
+      - name: compact text tables in the packages
+        run: bash scripts/text/check-emitted.sh
       - name: suite runner
         run: bash .github/workflows/run-suite.test.sh
       - name: embedded harness

@@ -223,6 +223,24 @@ No shared code package. The library does not log, authenticate, or load configur
 - **Owned by**: AZ-2070
 - **Consumed by**: every package, as a file read. The C++ runner is `cpp/tests/core/hostile_host_tests.cpp`. Loop 26: `cases.txt` unchanged at 65; `check-cases.sh` counts eight package names (Swift, AZ-2519); `fixtures/hostile/fuzz/corpus.txt` (new, AZ-2517) holds 28 unpack fuzz inputs (the 12 unpack and limit packets of `cases.txt` and 16 from Go's seed corpus), read by the Swift `FuzzTests`
 
+### fixtures/text
+
+- **Directory**: `fixtures/text/`
+- **Purpose**: the compact text format (loop 35, AZ-2646, AZ-2647): `tables.json` (the frozen code-length tables, alphabets and character lists; part of the wire format), `tables.report.md`, `vectors.txt` (text, bytes, refusals, ring packets and bit-flip rows that every package loads), `check-vectors.sh` and `check-vectors.test.sh` (re-derive every row with the reference codec, with mutants), `README.md`
+- **Owned by**: AZ-2646, AZ-2647
+- **Consumed by**: all eight packages, as a file read (their tests load `vectors.txt` and compare their emitted tables file with `tables.json`)
+
+### scripts/text
+
+- **Directory**: `scripts/text/`
+- **Purpose**: `textfmt.py` (the reference encoder and decoder and a small command line), `train_tables.py` (trains and freezes `tables.json` from the Tatoeba corpus; `--check` reproduces it byte for byte), `gen_vectors.py`, `check_vectors.py`, `emit_tables.py` (emits the constants of `tables.json` as source for each language), `check-emitted.sh` and `check-emitted.test.sh` (each package keeps exactly the emitted file), `fuzz_reference.py`, `size_report.py`
+- **Owned by**: AZ-2646, AZ-2647, AZ-2657
+- **Consumed by**: the scaffold job of `test.yml` and `scripts/loop-tests.sh`; the package workers during implementation
+
+### Compact text in the packages (loop 35)
+
+Each package adds its codec next to its string walker and keeps the emitted tables file unedited (`python3 scripts/text/emit_tables.py <lang> --path` names it): C# `TextTables.cs`, `TextModes.cs`, `TextEdges.cs`, `TextEncoder.cs`, `TextDecoder.cs` (AZ-2650); TypeScript `src/text-tables.ts`, `src/text.ts` (AZ-2649); Python `_text_tables.py`, `_text_model.py`, `_text_encode.py`, `_text_decode.py` (AZ-2648); Rust `walk/text.rs`, `walk/text/encode.rs`, `walk/text/decode.rs`, `walk/text_tables.rs` (AZ-2652); C++ `include/packbin/text_tables.hpp`, `src/core/text.hpp`, `text_encode.hpp`, `text_decode.hpp` (AZ-2655, AZ-2656); Java `TextTables.java`, `TextModes.java`, `TextEncoder.java`, `TextDecoder.java` (AZ-2651); Go `text_tables.go`, `text_codes.go`, `text_encode.go`, `text_decode.go` (AZ-2653); Swift `TextTables.swift`, `Text.swift`, `TextEncode.swift`, `TextDecode.swift` (AZ-2654). The string walker functions of each package call the codec for a field, a list element, a dictionary key and a `repeat`, `times` or `flags` string.
+
 ### scripts
 
 - **Directory**: `scripts/`

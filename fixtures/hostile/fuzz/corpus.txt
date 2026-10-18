@@ -5,8 +5,8 @@ hostile_negative_count                negative_count                01ff61
 hostile_oversize_count                oversize_count                01ffffffff61
 hostile_oversize_count_times          oversize_count_times          01ffffffff00
 hostile_oversize_list_count           oversize_list_count           01ffff
-hostile_invalid_utf8                  invalid_utf8                  010200c328
-hostile_invalid_utf8_dict_key         invalid_utf8_dict_key         0101000100ff00
+hostile_invalid_utf8                  invalid_utf8                  010310c328
+hostile_invalid_utf8_dict_key         invalid_utf8_dict_key         0101000210ff00
 hostile_count_behind_clear_flag       count_behind_clear_flag       0100
 hostile_count_behind_clear_flag_bits  count_behind_clear_flag_bits  0100
 hostile_repeat_rounds_over_limit      repeat_rounds_over_limit      0111223344
@@ -21,9 +21,9 @@ ring_listflags                        listflags                     010300010100
 ring_listflags_short                  listflags                     0103000101000202
 ring_listgroup                        listgroup                     01020001020304
 ring_listgroup_short                  listgroup                     010200010203
-ring_nested                           nested                        01020003006d61700100010002006f7007006770735f666978050073746f72650200010002006f70040072656164010002006f7005007772697465
+ring_nested                           nested                        010200036ae9c8010001000209f908106770735f66697804ca25f000020001000209f9032b012801000209f9048bbc2c80
 ring_position                         position                      4001000065cd1d00a3e1110100
 ring_roundflags                       roundflags                    01030102020303
 ring_roundwhen                        roundwhen                     01010902
 ring_session                          any                           b55d0a29c56c203712b241232e
-ring_user                             user                          0107007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e6e656c010004007265616403006d6170040004007265616407006770735f6669780300736574040065646974050073746f7265020004007265616405007772697465
+ring_user                             user                          01062bfcfee119b20200030ba818078a8b1ca4ed51800300056b6aa330b00100032b0128036ae9c80400032b012808106770735f66697803ea04800348516404ca25f0000200032b0128048bbc2c80

@@ -18,7 +18,7 @@
 
 - Every scheme has type number `1`, so every packet starts with `01`.
 - Field order ids follow the README rule ("Field numbers are the order in the scheme"). A group's anchor equals the next value id and is not written. Ids continue through `flags`, `when`, `repeat` and `times` children. Only list and dict elements restart at 0.
-- Wire rules: little-endian integers; `utf8` = `u16` length + bytes; `list` and `dict` = `u16` count; `sized`, `bits` and `times` take their count from an earlier integer field; `flags` = one `u8`, bit 0 = first child.
+- Wire rules: little-endian integers; `utf8` = the compact text format of `_docs/02_document/contracts/library/compact-text.md` (a varint payload length, then the payload; loop 35, AZ-2646); `list` and `dict` = `u16` count; `sized`, `bits` and `times` take their count from an earlier integer field; `flags` = one `u8`, bit 0 = first child.
 - Outcome terms:
   - `short_packet`, `trailing_bytes`, `bad_value`, `too_many`, `type_mismatch`: unpack returns that error value, with no exception and no row.
   - `scheme_error`: construction fails (an exception in C#, Java, TypeScript, Python and Rust; an `*Error` of kind `InvalidScheme` from `NewScheme` in Go; a thrown `PackbinError` of kind `.schemeError` in Swift; a compile error or `SchemeInvalid` in C++).
@@ -84,14 +84,14 @@
 ## invalid_utf8
 
 - Scheme: id0 `utf8 name`.
-- Packet `01 02 00 c3 28`: type `01`; length `02 00` = 2; bytes `c3 28`, an invalid two-byte sequence.
+- Packet `01 03 10 c3 28`: type `01`; count `03`; payload `10 c3 28`: the raw-UTF-8 start byte `10` and then `c3 28`, an invalid two-byte sequence (loop 35: the string is a compact field; the old packet was `01 02 00 c3 28`).
 - Expected: `bad_value` or `short_packet`.
-- Source: TypeScript and Python L14 (`TypeError`, `UnicodeDecodeError`); Rust returns `Short` today. C++ borrows raw bytes and does not validate (open question).
+- Source: TypeScript and Python L14 (`TypeError`, `UnicodeDecodeError`); Rust returns `Short` today. Since loop 35 C++ validates UTF-8 in the codec and refuses it too.
 
 ## invalid_utf8_dict_key
 
 - Scheme: id0 `dict m` { element id0 `u8` }.
-- Packet `01 01 00 01 00 ff 00`: type `01`; count `01 00` = 1; key length `01 00` = 1; key byte `ff`; value `00`.
+- Packet `01 01 00 02 10 ff 00`: type `01`; count `01 00` = 1; key field `02 10 ff` (count 2, raw start byte `10`, key byte `ff`); value `00` (loop 35: the key is a compact field; the old packet was `01 01 00 01 00 ff 00`).
 - Expected: `bad_value` or `short_packet`.
 - Source: derived (Rust decodes dict keys). Unconfirmed for TypeScript and Python.
 
@@ -306,8 +306,8 @@
 ## pack_lone_utf8_under_times_over_budget
 
 - Scheme: id0 `u32 n`; id1 `times` anchor 1, count = id0 { id1 `utf8 s` }.
-- Row: `n = 65535`, `s` = 65,535 times `a` (one string, not a list).
-- Expected: `pack_error`. The count is at the default `maxRounds` (65,535), so the count check passes; the rounds are 65,537 bytes each (`u16` length and text), so the packet would pass the default `maxBytes` (16,777,216) at round 256. Pack refuses it at that round, naming `s`, and never builds the 4 GiB packet.
+- Row: `n = 65535`, `s` = 65,535 characters that the encoder writes raw (the cases use U+0001 or `q`: not smaller in the compact form; one string, not a list).
+- Expected: `pack_error`. The count is at the default `maxRounds` (65,535), so the count check passes; the rounds are 65,539 bytes each (a 3-byte count, the raw start byte and the text), so the packet would pass the default `maxBytes` (16,777,216) at round 256. Pack refuses it at that round, naming `s`, and never builds the 4 GiB packet.
 - Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), Go (map rows), Swift (map rows).
 - Not run by: C++ (pack writes into a caller buffer of fixed size and rounds live in a fixed `Array`, so there is no output budget to pass).
 - Source: loop 20, AZ-2354 (reference row 1), AZ-2367.
@@ -565,8 +565,8 @@
 ## pack_element_times_over_bytes_budget
 
 - Scheme: id0 `list items` of an element `group` { id0 `u32 n`; id1 `times` anchor 1, count = id0 { id1 `utf8 s` } }.
-- Row: 16 items, each `n = 65535`, `s` = 16 times `a` (one string per item, not a list).
-- Expected: `pack_error`. A round is 18 bytes (`u16` length and 16 characters), an item about 1,179,634 bytes, so the packet would be 18,874,147 bytes, above the default `maxBytes` (16,777,216): pack refuses it in item 15 at round 14,575 (16,777,233 bytes), naming `s`. The slots stay under the limit (16 x 65,535 = 1,048,560, below the default `maxSlots` of 1,048,576), so the bytes budget refuses it, not the slots limit; this is the route `pack_element_times_over_budget` took before AZ-2415. A scheme built with `maxBytes` 33,554,432 packs the row to 18,874,147 bytes and unpacks it.
+- Row: 16 items, each `n = 65535`, `s` = 16 characters that the encoder writes raw (U+0001 or `q`; one string per item, not a list). `a` x16 would be 10 bytes in the compact form and no longer reaches the budget.
+- Expected: `pack_error`. A round is 18 bytes (a 1-byte count, the raw start byte and 16 characters), an item about 1,179,634 bytes, so the packet would be 18,874,147 bytes, above the default `maxBytes` (16,777,216): pack refuses it in item 15 at round 14,575 (16,777,233 bytes), naming `s`. The slots stay under the limit (16 x 65,535 = 1,048,560, below the default `maxSlots` of 1,048,576), so the bytes budget refuses it, not the slots limit; this is the route `pack_element_times_over_budget` took before AZ-2415. A scheme built with `maxBytes` 33,554,432 packs the row to 18,874,147 bytes and unpacks it.
 - Run by: TypeScript, Python, Java, C# (dictionary rows), Go (map rows), Swift (map rows).
 - Not run by: Rust (a list element cannot hold a `times`), C++ (a fixed array of rounds and a caller buffer, as in `pack_lone_utf8_under_times_over_budget`).
 - Source: loop 22, AZ-2415 (reference section 2), AZ-2417.

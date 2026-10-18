@@ -227,9 +227,8 @@ BinaryPacker.Unpack(
 ```
 
 ```
-01 03 00 61 64 61 02 00 04 00 75 73 65 72 05 00 61 64 6d 69 6e
-02 00 03 00 6d 61 70 02 00 04 00 72 65 61 64 04 00 65 64 69 74
-05 00 73 74 6f 72 65 01 00 05 00 77 72 69 74 65
+01 03 a9 28 80 02 00 03 0b a8 18 04 89 29 75 60 02 00 03 6a e9 c8
+02 00 03 2b 01 28 03 48 51 64 04 ca 25 f0 00 01 00 04 8b bc 2c 80
 ```
 
 The first byte is the scheme type number.
@@ -359,19 +358,20 @@ In a `MapScheme`, `times` unpacks to the per-name lists and also to the rounds, 
 
 ### C++
 
-The C++ package packs into a buffer you own and reads from one. It throws nothing and allocates nothing, so the same code builds for a server and for a microcontroller (`-fno-exceptions -fno-rtti`). Strings and lists land in caller storage: `View` borrows bytes from the input buffer, `Text<N>` and `Array<T, N>` hold up to N, and more than N is the error `TooMany`, never a cut.
+The C++ package packs into a buffer you own and reads from one. It throws nothing and allocates nothing, so the same code builds for a server and for a microcontroller (`-fno-exceptions -fno-rtti`). Strings and lists land in caller storage: `Text<N>` (a decoded copy of up to N UTF-8 bytes) and `Array<T, N>` hold up to N, and more than N is the error `TooMany`, never a cut. A string is compact text (see [UTF-8](#utf-8)), which has to be decoded, so a string member is a `Text<N>` (or a `Packed`, below); a `View` cannot hold one and is a compile error on a `utf8` field. Pack of a string needs working memory for the encoder: pass a `Scratch<Chars>` as the last argument (12 bytes per character of the longest string in the packet); a string that needs more returns `ScratchTooSmall` naming the field and writes nothing for it, never different bytes. Packets without strings need no scratch.
 
 ```cpp
 #include <packbin/packbin.hpp>
 
 using namespace packbin;
 
-using Actions = Array<View, 8>;
+using Name = Text<16>;
+using Actions = Array<Name, 8>;
 
 struct User {
-    View username;
-    Array<View, 8> roles;
-    Array<Entry<Actions>, 8> access;  // keys in unsigned byte order
+    Name username;
+    Array<Name, 8> roles;
+    Array<Entry<Actions, Name>, 8> access;  // keys in unsigned byte order
 };
 
 struct Ping { std::uint8_t code = 0; };
@@ -386,7 +386,8 @@ constexpr auto note = scheme<Note>(3, u16<&Note::id>(0), utf8<&Note::title>(1));
 
 User row;  // fill it like the C# example: "ada", two roles, map and store
 std::uint8_t buf[128];
-Result packed = pack(user, row, buf, sizeof(buf));  // packed.offset is the packet length
+Scratch<16> scratch;  // 12 bytes per character of the longest string
+Result packed = pack(user, row, buf, sizeof(buf), scratch);  // packed.offset is the packet length
 
 User got;
 Ping pinged;
@@ -398,6 +399,10 @@ Result r = unpack(buf, packed.offset,
 ```
 
 The first byte picks the scheme; its handler runs only after the whole packet reads. A failure is a value: `r.error` is one of `ShortPacket`, `TrailingBytes`, `TypeMismatch`, `BufferFull`, `TooMany`, `BadValue`, `SchemeInvalid`, with `r.offset` (the byte) and `r.field` (the order id). A `constexpr` scheme with a gap, a repeated id or a wrong anchor does not compile, and the compiler names the id; a scheme built at run time reports it through `validate(scheme)`. A member that may be absent is `Opt<T>`.
+
+#### Strings without the codec: `Packed` and `PACKBIN_NO_TEXT`
+
+A board that only carries packets does not need the text codec. Define `PACKBIN_NO_TEXT` (the embedded builds of this repository do) and the codec is not linked: a field list that binds a `utf8` field to `Text<N>` is refused when it is built, a `utf8` field bound to `Packed` (`data`, `len`: a borrowed view of the payload after the count, valid while the input lives) is skipped by its count header, so the fields after it still read, and the bytes can be forwarded or stored without decoding. Pack of a `Packed` member writes its count and bytes as given and does not decode or validate them. A dictionary key must be a `Text<N>` (it needs ordering and duplicate checks), so a bound dictionary of strings needs the codec; an unbound `utf8` is skipped by its count.
 
 #### Microcontrollers
 
@@ -444,7 +449,7 @@ Moving from 0.1.x — the C++ API changed; the bytes did not:
 | `Scheme<T>(type, ...)`, `scheme(type, {...})`, `SchemeHandler` | `constexpr auto s = scheme<T>(type, ...)`; `on(s, row, handler)` |
 | `Value`, `Values`, `ValueList`, `ValueMap` (map rows) | struct rows with `Opt<T>`, `View`, `Text<N>`, `Blob<N>`, `Array<T, N>`, `Entry<V>` members |
 | `u16(0, &T::m)`, `bind_scalar`, `bind_optional`, `bind_accessors`, `BoundField<T>` | `u16<&T::m>(0)` (member binding only; no getter/setter) |
-| `std::optional<T>` / `std::string` / `std::vector<T>` members | `Opt<T>` / `View` or `Text<N>` / `Array<T, N>` |
+| `std::optional<T>` / `std::string` / `std::vector<T>` members | `Opt<T>` / `Text<N>` (a `View` for bytes) / `Array<T, N>` |
 | `flags(id, {a, b})`, `when(id, eq, {a})`, `repeat(id, {a})`, `times(id, n, {a})`, `group(id, {a})` | the same without braces: `flags(id, a, b)` …; `repeat` and `times` bind an `Array<E, N>` member: `repeat<&T::m>(id, ...)` |
 | `group(id, "name", {})` | `group<&T::flag>(id)` on a `bool` member |
 | `flag_byte()`, `Field::bit(field)` | `flag_byte(n)`, `flag_bit(n, field)` with n = 0..7 |
@@ -1137,7 +1142,7 @@ What travels for one position:
 | `f32` `f64` | IEEE 754 float |
 | `bytes(n)` | exactly `n` raw bytes |
 | `be(field)` | that number, big-endian |
-| `utf8` | UTF-8 string, `u16` length |
+| `utf8` | text in the compact text format: a varint payload length, then a bit-packed payload (see [UTF-8](#utf-8)) |
 | `list` | `u16` count, then that many elements |
 | `dict` | `u16` pair count; keys in unsigned byte order |
 | `flags(anchor, fields)` | one `u8`; bit 0 is the first field; a clear bit omits that field; at most 8 fields; the anchor is not written |
@@ -1230,7 +1235,9 @@ BinaryPacker.pack(row, {"n": 1})
 
 ### UTF-8
 
-A `u16` byte count, then the UTF-8 bytes. `"zxsanny"` is 7 bytes. An empty string is `00 00`. More than 65535 bytes is rejected.
+A string is written in the compact text format (loop 35, [ADR 006](_docs/02_document/adr/006_compact-text-format.md); the byte-exact rules are in the [contract](_docs/02_document/contracts/library/compact-text.md)): a varint payload length (1 byte to 127, 2 to 16,383, 3 above), then a bit-packed payload. Ukrainian, Russian and English letters, digits and `, . - : ! ?` are coded with short prefix codes (a table per language and a number mode, a capital shift and a capital lock), anything else is escaped to raw UTF-8, and a payload that would be larger than the plain UTF-8 bytes is written as those bytes. On held-out sentences a Ukrainian string takes about 35 % of the old size, Russian 34 %, English 57 %, coordinates and ids 51 %. `"zxsanny"` is the 7 bytes `06 2b fc fe e1 19 b2` in total (the old format needed 9). The empty string is the single byte `00`. A text of more than 65535 UTF-8 bytes is rejected on pack, naming the field.
+
+The tables are part of the wire format and frozen (`fixtures/text/tables.json`); there is no version byte, so a packet written before this format reads as an error or as other text. A string field is never larger than the old 2-byte count plus UTF-8 up to 126 UTF-8 bytes, and at most 2 bytes larger above that. A flipped bit in the payload damages only the characters of that string (about 7 to 9 % of them on average), never the next field while the count is intact. Unpack refuses a payload that ends inside a code, has a non-zero pad bit, escapes invalid UTF-8, or breaks a capital rule, naming the field. `fixtures/text/vectors.txt` holds the shared test rows that all eight packages pass.
 
 ```python
 row = Scheme(1, dict, utf8(0, lambda row: row["name"]))
@@ -1238,7 +1245,7 @@ BinaryPacker.pack(row, {"name": "zxsanny"})
 ```
 
 ```
-01 07 00 7a 78 73 61 6e 6e 79
+01 06 2b fc fe e1 19 b2
 ```
 
 In Go pack also refuses a string that is not valid UTF-8, naming the field.
@@ -1276,10 +1283,10 @@ BinaryPacker.pack(row, {"m": {"b": 1, "a": 2}})
 ```
 
 ```
-01 02 00 01 00 61 02 01 00 62 01
+01 02 00 02 10 61 02 02 10 62 01
 ```
 
-`02 00` is two pairs. `01 00 61` is the key `"a"`, then value `02`. `01 00 62` is `"b"`, then value `01`.
+`02 00` is two pairs. `02 10 61` is the key `"a"` (count 2, then the raw-text byte `10` and `61`; one letter is smaller raw), then value `02`. `02 10 62` is `"b"`, then value `01`.
 
 In a typed C# row the dict member is a `Dictionary<string, E>`, an `IDictionary<string, E>` or a non-generic `IDictionary`, and each value is a row of the element field's type, under the same rules as a list, including the check at construction (`Dictionary<string, ActionList>` in the first C# example).
 

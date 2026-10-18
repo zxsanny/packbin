@@ -93,7 +93,7 @@ Costs are integers, so the result does not depend on floating point.
 ## Invariants
 
 - Same string, same bytes in all 8 packages (`fixtures/text/vectors.txt`).
-- A string under 128 UTF-8 bytes is never larger than 2 + its UTF-8 bytes.
+- The raw payload is 1 + the UTF-8 bytes, so a field is never larger than 2 + its UTF-8 bytes (today's size) up to 126 UTF-8 bytes, at most 1 byte larger from 127 to 16,382 bytes, and at most 2 bytes larger above (the count header grows to 2 and then 3 bytes).
 - A payload of N bytes decodes to at most 6N + 8 UTF-8 bytes (the worst symbol in the frozen tables is the Russian о: a 3-bit code for 2 UTF-8 bytes, 5.33 bytes per payload byte).
 - Dictionary pairs are sorted by the key's UTF-8 bytes before the keys are encoded (unchanged). A repeated decoded key is refused (unchanged).
 
