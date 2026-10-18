@@ -18,15 +18,15 @@ func dictOfGroups(t testing.TB) *Scheme {
 	return mustScheme(t, 1, U8(0, "a"), Dict("m", Nested("p", U8(0, "a"), U8(1, "b"))))
 }
 
-const protoWire = "0101010009005f5f70726f746f5f5f010001006109"
+const protoWire = "010101000a105f5f70726f746f5f5f010002106109"
 
 // AC-2 (dict-keys-not-flattened): a dict key is a key, never a member of the row, whatever its name.
 func TestAC2DictEntriesAreNotMembersOfTheRow(t *testing.T) {
 	runPacks(t, []packCase{
-		{"a key named like the dictionary keeps its entry", dictOfNumbers, gm("a", 1, "m", gm("m", 9)), "0101010001006d09"},
-		{"a key named like the element", dictOfNumbers, gm("a", 1, "m", gm("v", 9)), "01010100010076" + "09"},
-		{"nested dictionaries keep to themselves", dictOfDicts, gm("a", 1, "m", gm("x", gm("a", 9))), "01010100010078010001006109"},
-		{"a dict of groups beside a member of the same name", dictOfGroups, gm("a", 9, "m", gm("x", gm("a", 1, "b", 2))), "010901000100780102"},
+		{"a key named like the dictionary keeps its entry", dictOfNumbers, gm("a", 1, "m", gm("m", 9)), "0101010002106d09"},
+		{"a key named like the element", dictOfNumbers, gm("a", 1, "m", gm("v", 9)), "0101010002107609"},
+		{"nested dictionaries keep to themselves", dictOfDicts, gm("a", 1, "m", gm("x", gm("a", 9))), "01010100021078010002106109"},
+		{"a dict of groups beside a member of the same name", dictOfGroups, gm("a", 9, "m", gm("x", gm("a", 1, "b", 2))), "010901000210780102"},
 		{"a __proto__ entry packs as an entry", dictOfDicts, gm("a", 1, "m", gm("__proto__", gm("a", 9))), protoWire},
 	})
 	runRefusals(t, []refusalCase{
@@ -44,13 +44,13 @@ func TestAC2DictInsideAnElementKeepsItsEntriesApart(t *testing.T) {
 	}
 	runPacks(t, []packCase{
 		{"a dict group in a list group", inGroup,
-			gm("xs", []any{gm("a", 9, "m", gm("x", gm("a", 1, "b", 2)))}), "0101000901000100780102"},
+			gm("xs", []any{gm("a", 9, "m", gm("x", gm("a", 1, "b", 2)))}), "0101000901000210780102"},
 		{"a dict group in a dict group", inDict,
-			gm("outer", gm("k", gm("a", 7, "m", gm("x", gm("a", 1))))), "01010001006b07010001007801"},
+			gm("outer", gm("k", gm("a", 7, "m", gm("x", gm("a", 1))))), "01010002106b07010002107801"},
 	})
 	// Arrange
 	s := dictOfGroups(t)
-	const wire = "010901000100780102"
+	const wire = "010901000210780102"
 
 	// Act
 	row := mustUnpackMap(t, s, wire)
@@ -98,8 +98,8 @@ func TestAC2ANonDictionaryIsRefused(t *testing.T) {
 		{"an entry that is not a string", outside, gm("d", map[string]any{"k": 5}), 0, "e", "expected a string"},
 	})
 	runPacks(t, []packCase{
-		{"a map with string keys of any value type", outside, gm("d", map[string]string{"a": "x"}), "010100010061010078"},
-		{"a map with a named key type", outside, gm("d", map[namedString]string{"a": "x"}), "010100010061010078"},
+		{"a map with string keys of any value type", outside, gm("d", map[string]string{"a": "x"}), "010100021061021078"},
+		{"a map with a named key type", outside, gm("d", map[namedString]string{"a": "x"}), "010100021061021078"},
 	})
 }
 
@@ -112,7 +112,7 @@ func TestDictKeysAreWrittenInByteOrder(t *testing.T) {
 	wire := mustPack(t, s, row)
 
 	// Assert
-	want := "01" + "0500" + "0000" + "00" + "0100" + "5a" + "03" + "0100" + "61" + "01" + "0100" + "62" + "02" + "0200" + "c3a9" + "04"
+	want := "01" + "0500" + "00" + "00" + "02105a" + "03" + "021061" + "01" + "021062" + "02" + "0310c3a9" + "04"
 	if wire != want {
 		t.Fatalf("got %s, want %s", wire, want)
 	}
@@ -190,7 +190,7 @@ func TestListNilSliceIsNoValueEmptySliceIsAValue(t *testing.T) {
 		{"absent", s, gm(), "0100"},
 		{"empty slice", s, gm("xs", []int{}), "01010000"},
 		{"empty map", s, gm("m", map[string]int{}), "01020000"},
-		{"both", s, gm("xs", []int{1}, "m", map[string]int{"a": 2}), "0103" + "0100" + "01" + "0100" + "0100" + "61" + "02"},
+		{"both", s, gm("xs", []int{1}, "m", map[string]int{"a": 2}), "0103" + "0100" + "01" + "0100" + "021061" + "02"},
 	})
 	back := mustUnpackMap(t, s(t), "01010000")
 	if v, ok := back["xs"].([]any); !ok || len(v) != 0 || back["m"] != nil {
@@ -209,7 +209,7 @@ func TestListHasNoIdAndLeavesTheNextFieldReadable(t *testing.T) {
 	runPacks(t, []packCase{
 		{"a list of ids", counted, gm("sid", 1, "items", []any{9, 10}), "200100020009000a00"},
 		{"a field after the list", followed, gm("xs", []any{1}, "y", 2), "0101000102"},
-		{"empty collections", empties, gm("name", "", "xs", []string{}, "d", map[string]string{}), "01000000000000"},
+		{"empty collections", empties, gm("name", "", "xs", []string{}, "d", map[string]string{}), "010000000000"},
 	})
 	if back := mustUnpackMap(t, followed(t), "0101000102"); !reflect.DeepEqual(back, gm("xs", []any{uint8(1)}, "y", uint8(2))) {
 		t.Fatalf("got %#v", back)

@@ -2,8 +2,10 @@ package packbin
 
 import "fmt"
 
-// Utf8 is a string: a u16 byte count (at most 65535), then the UTF-8 text. Its value is a string;
-// pack refuses bytes that are not valid UTF-8 and unpack refuses a packet that holds them.
+// Utf8 is a string in the compact text format (contract compact-text 1.0.0): a varint payload size, then
+// a payload of prefix codes in four modes (Ukrainian, Russian, English, number) or, when that is not
+// smaller, raw UTF-8. The text is at most 65535 UTF-8 bytes. Its value is a string; pack refuses bytes
+// that are not valid UTF-8 and unpack refuses a packet that holds them or a payload that breaks the format.
 func Utf8(id int, name string) Field { return &node{kind: kindUtf8, id: id, name: name} }
 
 // Nested is a nested row under name: its members are numbered from 0 and have references and names
@@ -22,7 +24,7 @@ func Nested(name string, members ...Field) Field {
 // binds a []E with Bind. A List has no id. Unpack gives a []any of items.
 func List(name string, element Field) Field { return collection(kindList, name, element) }
 
-// Dict is a u16 pair count (at most 65535), then the pairs: a key (a u16 byte count and UTF-8 text) and
+// Dict is a u16 pair count (at most 65535), then the pairs: a key (a text field as for Utf8) and
 // an element as for List. Keys are written in byte order, so a map packs to the same bytes whatever its
 // iteration order. The map form takes a map[string]any (or any map with string keys); a typed row binds a
 // map[string]E with Bind. A key is a key, never a member of the row. Unpack gives a map[string]any.

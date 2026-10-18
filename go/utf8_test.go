@@ -9,18 +9,18 @@ func nameScheme(t testing.TB) *Scheme { return mustScheme(t, 1, Utf8(0, "name"))
 
 func TestUtf8Pack(t *testing.T) {
 	runPacks(t, []packCase{
-		{"a string is its byte count then its bytes", nameScheme, gm("name", "zxsanny"), "0107007a7873616e6e79"},
-		{"an empty string", nameScheme, gm("name", ""), "010000"},
-		{"the count is bytes, not characters", nameScheme, gm("name", "é€"), "010500c3a9e282ac"},
-		{"a pointer to a string", nameScheme, gm("name", func() *string { s := "a"; return &s }()), "01010061"},
-		{"a named string type", nameScheme, gm("name", namedString("a")), "01010061"},
-		{"65535 bytes", nameScheme, gm("name", strings.Repeat("a", 65535)), "01ffff" + strings.Repeat("61", 65535)},
+		{"a string is its payload size then its payload", nameScheme, gm("name", "zxsanny"), "01062bfcfee119b2"},
+		{"an empty string", nameScheme, gm("name", ""), "0100"},
+		{"text with no code is raw UTF-8", nameScheme, gm("name", "é€"), "010610c3a9e282ac"},
+		{"a pointer to a string", nameScheme, gm("name", func() *string { s := "a"; return &s }()), "01021061"},
+		{"a named string type", nameScheme, gm("name", namedString("a")), "01021061"},
+		{"65535 bytes", nameScheme, gm("name", strings.Repeat("\x01", 65535)), "01808004" + "10" + strings.Repeat("01", 65535)},
 		{"a lone string goes to every round", func(t testing.TB) *Scheme {
 			return mustScheme(t, 1, U8(0, "n"), Times(1, 0, Utf8(1, "s")))
-		}, gm("n", 2, "s", "ab"), "01020200616202006162"},
+		}, gm("n", 2, "s", "ab"), "0102" + "03106162" + "03106162"},
 		{"a list of strings is one string a round", func(t testing.TB) *Scheme {
 			return mustScheme(t, 1, U8(0, "n"), Times(1, 0, Utf8(1, "s")))
-		}, gm("n", 2, "s", []string{"a", "bc"}), "010201006102006263"},
+		}, gm("n", 2, "s", []string{"a", "bc"}), "010202106103106263"},
 	})
 }
 
@@ -45,10 +45,10 @@ func TestUtf8Unpack(t *testing.T) {
 		wire string
 		want string
 	}{
-		{"a string", "0107007a7873616e6e79", "zxsanny"},
-		{"empty", "010000", ""},
-		{"a byte order mark is kept", "010600efbbbf616263", "\ufeffabc"},
-		{"multi-byte", "010500c3a9e282ac", "é€"},
+		{"a string", "01062bfcfee119b2", "zxsanny"},
+		{"empty", "0100", ""},
+		{"a byte order mark is kept", "010710efbbbf616263", "\ufeffabc"},
+		{"multi-byte", "010610c3a9e282ac", "é€"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -70,13 +70,13 @@ func TestUtf8UnpackRefusals(t *testing.T) {
 		wire         string
 		needed, left int
 	}{
-		{"short body", "0107007a78", 7, 2},
-		{"short count", "0107", 2, 1},
-		{"no count", "01", 2, 0},
-		{"invalid UTF-8", "010200ff fe", 0, 4},
-		{"an overlong sequence", "010200c080", 0, 4},
-		{"a surrogate", "010300eda080", 0, 5},
-		{"above U+10FFFF", "010400f4908080", 0, 6},
+		{"short body", "01072bfc", 7, 2},
+		{"short count", "0180", 2, 1},
+		{"no count", "01", 1, 0},
+		{"invalid UTF-8", "010310ff fe", 0, 4},
+		{"an overlong sequence", "010310c080", 0, 4},
+		{"a surrogate", "010410eda080", 0, 5},
+		{"above U+10FFFF", "010510f4908080", 0, 6},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -111,7 +111,7 @@ func TestUtf8TypedRow(t *testing.T) {
 	back, err := Unpack(mustHex(t, both), s)
 
 	// Assert
-	if both != "010100780102006162" || one != "01010078"+"00" {
+	if both != "010210780103106162" || one != "0102107800" {
 		t.Fatalf("both %s one %s", both, one)
 	}
 	if got := back.(*userRow); err != nil || got.Name != "x" || got.Alias == nil || *got.Alias != "ab" {

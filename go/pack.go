@@ -23,6 +23,10 @@ type packer struct {
 	// against lim.MaxSlots, as unpack charges them.
 	lim   Limits
 	slots int
+	// lastText is the last string written, found in out at lastAt for lastLen bytes (count and payload).
+	lastText string
+	lastAt   int
+	lastLen  int
 }
 
 // room refuses, naming the member, a write of n bytes that would make the packet longer than

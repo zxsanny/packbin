@@ -8,7 +8,7 @@ import "strings"
 var hostilePacks = map[string]func() ([]byte, error){
 	"pack_lone_utf8_under_times_over_budget": hostilePackOf(
 		hostileScheme(1, U32(0, "n"), Times(1, 0, Utf8(1, "s"))),
-		func() hostileRow { return hostileRow{"n": 65535, "s": strings.Repeat("a", 65535)} }),
+		func() hostileRow { return hostileRow{"n": 65535, "s": strings.Repeat(ctrl, 65535)} }),
 	"pack_element_times_over_budget": hostilePackOf(
 		hostileScheme(1, List("items", Nested("item", U32(0, "n"), Times(1, 0, U64(1, "k"))))),
 		func() hostileRow { return hostileItems(40, hostileRow{"n": 65535, "k": 5}) }),
@@ -98,5 +98,5 @@ var hostilePacks = map[string]func() ([]byte, error){
 		func() hostileRow { return hostileRow{"c": 2, "v": []any{5}} }),
 	"pack_element_times_over_bytes_budget": hostilePackOf(
 		hostileScheme(1, List("items", Nested("item", U32(0, "n"), Times(1, 0, Utf8(1, "s"))))),
-		func() hostileRow { return hostileItems(16, hostileRow{"n": 65535, "s": strings.Repeat("a", 16)}) }),
+		func() hostileRow { return hostileItems(16, hostileRow{"n": 65535, "s": strings.Repeat(ctrl, 16)}) }),
 }

@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// AC-7 (project AC-10): 100 000 pack-then-unpack round trips of the AC-1 row on one core take at most
+// AC-7 (project AC-10): 100 000 pack-then-unpack round trips of the AC-1 row (and of a 20-character string) on one core take at most
 // 1 second. The fastest of up to three passes counts, as in TypeScript: a shared runner can stall one
 // pass, while a real slowdown makes every pass slow.
 func TestAC7SpeedRoundTrips(t *testing.T) {
@@ -17,6 +17,8 @@ func TestAC7SpeedRoundTrips(t *testing.T) {
 	}{
 		{"typed", positionTypedScheme(t), goldenRow()},
 		{"map", positionMapScheme(t), goldenMap()},
+		// AZ-2653 AC-8: a 20-character Ukrainian string, packed with the compact text format and read back.
+		{"text", mustScheme(t, 1, Utf8(0, "s")), gm("s", "Доброго ранку, друже")},
 	} {
 		t.Run(form.name, func(t *testing.T) {
 			// Arrange

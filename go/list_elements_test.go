@@ -105,7 +105,7 @@ func TestAC2ElementsThatWorkKeepTheirBytes(t *testing.T) {
 	}{
 		{"list of group", pairNested, gm("pts", []any{gm("a", 1, "b", 2), gm("a", 3, "b", 4)}), "01020001020304"},
 		{"dict of group", dictPairNested, gm("m", map[string]any{"y": gm("a", 3, "b", 4), "x": gm("a", 1, "b", 2)}),
-			"01020001007801020100790304"},
+			"01020002107801020210790304"},
 		{"list of flags", listFlagsScheme, gm("pts", []any{gm("a", 1), gm(), gm("b", 2)}), "010300010100020200"},
 		{"list of leaf", func(t testing.TB) *Scheme { return mustScheme(t, 1, List("t", U8(0, "p"))) }, gm("t", []any{1, 2}), "0102000102"},
 		{"list of list of group", func(t testing.TB) *Scheme {
@@ -156,7 +156,7 @@ func TestAC2GroupAndFlagsElements(t *testing.T) {
 	})
 	t.Run("dict of flags", func(t *testing.T) {
 		s := mustScheme(t, 1, Dict("m", Flags(0, U8(0, "a"), U16(1, "b"))))
-		wire := "01" + "0200" + "0100" + "78" + "00" + "0100" + "79" + "02" + "0200"
+		wire := "01" + "0200" + "021078" + "00" + "021079" + "02" + "0200"
 		packed := mustPack(t, s, gm("m", map[string]any{"y": gm("b", 2), "x": gm()}))
 		got := mustUnpackMap(t, s, wire)
 		if packed != wire || !reflect.DeepEqual(got, gm("m", map[string]any{"x": gm(), "y": gm("b", uint16(2))})) {
@@ -165,7 +165,7 @@ func TestAC2GroupAndFlagsElements(t *testing.T) {
 	})
 	t.Run("leaf elements", func(t *testing.T) {
 		s := mustScheme(t, 1, List("ids", U16(0, "id")), Dict("names", Utf8(0, "name")))
-		wire := "01" + "0200" + "0100" + "0200" + "0100" + "0100" + "6b" + "0100" + "76"
+		wire := "01" + "0200" + "0100" + "0200" + "0100" + "02106b" + "021076"
 		got := mustPack(t, s, gm("ids", []any{1, 2}, "names", map[string]string{"k": "v"}))
 		if got != wire {
 			t.Fatalf("got %s", got)

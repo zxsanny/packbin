@@ -6,8 +6,9 @@ import (
 )
 
 const (
-	userHex   = "0107007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e6e656c010004007265616403006d6170040004007265616407006770735f6669780300736574040065646974050073746f7265020004007265616405007772697465"
-	nestedHex = "01020003006d61700100010002006f7007006770735f666978050073746f72650200010002006f70040072656164010002006f7005007772697465"
+	// The ring packets are the ref rows of fixtures/text/vectors.txt (checked by TestACTextRefRowsAreTheRingPackets).
+	userHex   = "01062bfcfee119b20200030ba818078a8b1ca4ed51800300056b6aa330b00100032b0128036ae9c80400032b012808106770735f66697803ea04800348516404ca25f0000200032b0128048bbc2c80"
+	nestedHex = "010200036ae9c8010001000209f908106770735f66697804ca25f000020001000209f9032b012801000209f9048bbc2c80"
 )
 
 func userScheme(t testing.TB) *Scheme {
@@ -42,15 +43,15 @@ func TestAC1ReadmeCollectionExamples(t *testing.T) {
 		back   map[string]any
 	}{
 		{"utf8 zxsanny", func(t testing.TB) *Scheme { return mustScheme(t, 1, Utf8(0, "name")) },
-			gm("name", "zxsanny"), "0107007a7873616e6e79", gm("name", "zxsanny")},
+			gm("name", "zxsanny"), "01062bfcfee119b2", gm("name", "zxsanny")},
 		{"utf8 empty", func(t testing.TB) *Scheme { return mustScheme(t, 1, Utf8(0, "name")) },
-			gm("name", ""), "010000", gm("name", "")},
+			gm("name", ""), "0100", gm("name", "")},
 		{"list of u16", func(t testing.TB) *Scheme { return mustScheme(t, 1, List("xs", U16(0, "x"))) },
 			gm("xs", []any{1, 2}), "01020001000200", gm("xs", []any{uint16(1), uint16(2)})},
 		{"list empty", func(t testing.TB) *Scheme { return mustScheme(t, 1, List("xs", U16(0, "x"))) },
 			gm("xs", []int{}), "010000", gm("xs", []any{})},
 		{"dict of u8, keys in byte order", func(t testing.TB) *Scheme { return mustScheme(t, 1, Dict("m", U8(0, "v"))) },
-			gm("m", map[string]any{"b": 1, "a": 2}), "0102000100610201006201",
+			gm("m", map[string]any{"b": 1, "a": 2}), "0102000210610202106201",
 			gm("m", map[string]any{"a": uint8(2), "b": uint8(1)})},
 	}
 	for _, c := range cases {
@@ -89,7 +90,7 @@ func TestAC4RingPayloadsRoundTrip(t *testing.T) {
 		}), nestedHex},
 		{"listgroup", pairNested, gm("pts", []any{gm("a", 1, "b", 2), gm("a", 3, "b", 4)}), "01020001020304"},
 		{"dictgroup", dictPairNested, gm("m", map[string]any{"y": gm("a", 3, "b", 4), "x": gm("a", 1, "b", 2)}),
-			"01020001007801020100790304"},
+			"01020002107801020210790304"},
 		{"listflags", listFlagsScheme, gm("pts", []any{gm("a", 1), gm(), gm("b", 2)}), "010300010100020200"},
 	}
 	for _, c := range cases {
@@ -121,7 +122,7 @@ func TestAC4ShortRingPayloadsAreRefused(t *testing.T) {
 		left   int
 	}{
 		{"listgroup", pairNested, "010200010203", 1, "b", 1, 0},
-		{"dictgroup", dictPairNested, "010200010078010201007903", 1, "b", 1, 0},
+		{"dictgroup", dictPairNested, "010200021078010202107903", 1, "b", 1, 0},
 		{"listflags", listFlagsScheme, "0103000101000202", 1, "b", 2, 1},
 	}
 	for _, c := range cases {

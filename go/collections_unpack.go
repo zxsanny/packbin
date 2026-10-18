@@ -3,7 +3,6 @@ package packbin
 import (
 	"encoding/binary"
 	"math"
-	"unicode/utf8"
 )
 
 // scalar reads an integer, float, fixed bytes or string field and returns its value.
@@ -34,25 +33,16 @@ func (r *reader) scalar(f *node) (any, error) {
 	return readInt(b, f.size, f.signed, f.bigEndian), nil
 }
 
-// utf8 reads a u16 byte count and that many bytes of valid UTF-8. A string that is not valid is
-// reported with the shape of a negative count: the field, nothing more needed, the bytes left where
-// the string starts.
+// utf8 reads a compact text field (text_decode.go). A field that is refused is reported with the shape
+// of a short packet: the field, the bytes needed and left if the buffer ended inside it, and for any
+// other refusal nothing more needed and the bytes left where the string starts.
 func (r *reader) utf8(id int, name string) (string, error) {
-	start := len(r.buf) - r.off
-	if start < 2 {
-		return "", shortErr(id, name, 2, start)
+	text, next, got := decodeText(r.buf, r.off)
+	if got.kind != textOK {
+		return "", shortErr(id, name, got.needed, got.left)
 	}
-	n := int(binary.LittleEndian.Uint16(r.buf[r.off:]))
-	r.off += 2
-	if left := len(r.buf) - r.off; left < n {
-		return "", shortErr(id, name, n, left)
-	}
-	raw := r.buf[r.off : r.off+n]
-	r.off += n
-	if !utf8.Valid(raw) {
-		return "", shortErr(id, name, 0, start)
-	}
-	return string(raw), nil
+	r.off = next
+	return text, nil
 }
 
 // collection reads a list ([]any) or a dict (map[string]any): a u16 count, then the items, each a key

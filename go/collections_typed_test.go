@@ -89,7 +89,7 @@ func TestTypedNestedElementsPackLikeMaps(t *testing.T) {
 	back, err := Unpack(mustHex(t, typed), s)
 
 	// Assert
-	want := "01" + "0200" + "0102" + "0304" + "0100" + "0506" + "0200" + "0100" + "78" + "0102" + "0100" + "79" + "0304" + "01" + "0100" + "0900"
+	want := "01" + "0200" + "0102" + "0304" + "0100" + "0506" + "0200" + "021078" + "0102" + "021079" + "0304" + "01" + "0100" + "0900"
 	if typed != want || viaMap != want {
 		t.Fatalf("typed %s map %s want %s", typed, viaMap, want)
 	}
@@ -245,8 +245,8 @@ func TestTypedNestedSlicesMapsAndPointers(t *testing.T) {
 	one, name := uint16(7), "n"
 	row := &shapes{Grid: [][]uint16{{1, 2}, {}}, Ptrs: []*uint16{&one}, Names: map[string]*string{"k": &name},
 		Maps: []map[string]uint8{{"a": 1}, {}}}
-	wire := "01" + "0200" + "0200" + "0100" + "0200" + "0000" + "0100" + "0700" + "0100" + "0100" + "6b" + "0100" + "6e" +
-		"0200" + "0100" + "0100" + "61" + "01" + "0000"
+	wire := "01" + "0200" + "0200" + "0100" + "0200" + "0000" + "0100" + "0700" + "0100" + "02106b" + "02106e" +
+		"0200" + "0100" + "021061" + "01" + "0000"
 
 	// Act
 	packed := mustPack(t, s, row)
@@ -282,8 +282,8 @@ func TestSplitFlagByteHoldsAListAndAString(t *testing.T) {
 		return mustScheme(t, 1, fb, fb.Bit(List("xs", U8(0, "x"))), fb.Bit(Utf8(0, "s")), fb.Bit(Dict("d", U8(0, "v"))))
 	}
 	runPacks(t, []packCase{
-		{"all three", s, gm("xs", []int{1}, "s", "a", "d", gm("k", 2)), "0107" + "0100" + "01" + "0100" + "61" + "0100" + "0100" + "6b" + "02"},
-		{"only the string", s, gm("s", "a"), "010201006" + "1"},
+		{"all three", s, gm("xs", []int{1}, "s", "a", "d", gm("k", 2)), "0107" + "0100" + "01" + "021061" + "0100" + "02106b" + "02"},
+		{"only the string", s, gm("s", "a"), "0102021061"},
 		{"an empty list and an empty dict", s, gm("xs", []int{}, "d", map[string]int{}), "0105" + "0000" + "0000"},
 	})
 }

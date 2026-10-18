@@ -185,13 +185,13 @@ func TestAC1PackedPacketOfExactlyMaxBytesPacksAndOneMoreIsRefused(t *testing.T) 
 	layout := limited(t, mustScheme(t, 1, Utf8(0, "s")), func(l *Limits) { l.MaxBytes = 64 })
 
 	// Act
-	exact, err := Pack(layout, map[string]any{"s": strings.Repeat("a", 61)})
+	exact, err := Pack(layout, map[string]any{"s": strings.Repeat(ctrl, 61)})
 
 	// Assert
-	if err != nil || len(exact) != 64 || hexOf(exact) != "013d00"+strings.Repeat("61", 61) {
+	if err != nil || len(exact) != 64 || hexOf(exact) != "013e10"+strings.Repeat("01", 61) {
 		t.Fatalf("%x, %v", exact, err)
 	}
-	refusedPack(t, layout, map[string]any{"s": strings.Repeat("a", 62)},
+	refusedPack(t, layout, map[string]any{"s": strings.Repeat(ctrl, 62)},
 		"s: the packet would be 65 bytes, above the limit of 64 bytes")
 }
 
@@ -247,7 +247,7 @@ func TestAC1TheTypeByteCountsAndAFlagByteOrAListCountIsNamedByItsMember(t *testi
 func TestAC1ALoneStringUnderATimesIsRefusedNamingItInUnderASecond(t *testing.T) {
 	// Arrange
 	layout := mustScheme(t, 1, U32(0, "n"), Times(1, 0, Utf8(1, "s")))
-	row := map[string]any{"n": 65_535, "s": strings.Repeat("a", 65_535)}
+	row := map[string]any{"n": 65_535, "s": strings.Repeat(ctrl, 65_535)}
 	start := time.Now()
 
 	// Act
@@ -255,7 +255,7 @@ func TestAC1ALoneStringUnderATimesIsRefusedNamingItInUnderASecond(t *testing.T) 
 
 	// Assert
 	e := asError(t, err, PackRefused)
-	if raw != nil || e.Name != "s" || e.Reason != "s: the packet would be 16777477 bytes, above the limit of 16777216 bytes" {
+	if raw != nil || e.Name != "s" || e.Reason != "s: the packet would be 16777989 bytes, above the limit of 16777216 bytes" {
 		t.Fatalf("%x, %+v", raw, e)
 	}
 	if time.Since(start) > time.Second {
@@ -270,7 +270,7 @@ func elementTimes(t testing.TB) *Scheme {
 func elementRows(items int) map[string]any {
 	row := make([]any, items)
 	for i := range row {
-		row[i] = map[string]any{"n": 65_535, "s": strings.Repeat("a", 16)}
+		row[i] = map[string]any{"n": 65_535, "s": strings.Repeat(ctrl, 16)}
 	}
 	return map[string]any{"items": row}
 }
@@ -292,8 +292,8 @@ func TestAC1AnElementTimesPacksAndUnpacksWithMaxBytesRaised(t *testing.T) {
 	row, unpackErr := UnpackMap(raw, layout)
 
 	// Assert
-	if err != nil || len(raw) != 18_874_147 || hexOf(raw[:16]) != "011000ffff0000100061616161616161" ||
-		hexOf(raw[len(raw)-16:]) != strings.Repeat("61", 16) {
+	if err != nil || len(raw) != 18_874_147 || hexOf(raw[:16]) != "011000ffff0000"+"1110"+strings.Repeat("01", 7) ||
+		hexOf(raw[len(raw)-16:]) != strings.Repeat("01", 16) {
 		t.Fatalf("%d bytes: %v", len(raw), err)
 	}
 	if unpackErr != nil {

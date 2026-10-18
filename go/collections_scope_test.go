@@ -17,7 +17,7 @@ func TestAC2ElementsHaveANamespaceOfTheirOwn(t *testing.T) {
 		}, gm("a", 7, "pts", []any{gm("a", 1, "b", 2)}), "010701000102"},
 		{"two elements may use the same member names", func(t testing.TB) *Scheme {
 			return mustScheme(t, 1, List("xs", Nested("p", U8(0, "a"))), Dict("ys", Nested("q", U8(0, "a"))))
-		}, gm("xs", []any{gm("a", 1)}, "ys", gm("k", gm("a", 2))), "01010001" + "010001006b02"},
+		}, gm("xs", []any{gm("a", 1)}, "ys", gm("k", gm("a", 2))), "01010001" + "010002106b02"},
 		{"a group element inside a group element has a scope of its own", func(t testing.TB) *Scheme {
 			return mustScheme(t, 1, List("outer", Nested("g", U8(0, "a"), List("inner", Nested("h", U8(0, "a"))))))
 		}, gm("outer", []any{gm("a", 1, "inner", []any{gm("a", 2)})}), "010100" + "01" + "0100" + "02"},

@@ -17,7 +17,7 @@ var hostileRefusals = map[string]*regexp.Regexp{
 	"pack_flags_short_list":                  lit("packbin: pack refused at field 1 (v): v: 1 items, repeat count 2; give one entry per round, nil where the member is absent"),
 	"pack_flags_skipped_count_with_values":   lit("packbin: pack refused at field 1 (pt): pt: a value is given, but the count of its times is not written, so its bit is clear; write the count before the times"),
 	"pack_lone_bytes_in_round":               lit("packbin: pack refused at field 1 (d): d: a byte buffer in a repeat or times round needs a list with one buffer per round"),
-	"pack_lone_utf8_under_times_over_budget": lit("packbin: pack refused at field 1 (s): s: the packet would be 16777477 bytes, above the limit of 16777216 bytes"),
+	"pack_lone_utf8_under_times_over_budget": lit("packbin: pack refused at field 1 (s): s: the packet would be 16777989 bytes, above the limit of 16777216 bytes"),
 	"pack_missing_required_value":            lit("packbin: pack refused at field 1 (b): missing b"),
 	"pack_novalue_count_clear_when_bits":     lit("packbin: pack refused at field 2 (v): v: " + hostileNovalue),
 	"pack_novalue_count_clear_when_packed":   lit("packbin: pack refused at field 2 (v): v: " + hostileNovalue),

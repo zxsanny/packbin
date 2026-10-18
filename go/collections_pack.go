@@ -6,25 +6,43 @@ import (
 	"unicode/utf8"
 )
 
-// maxCollection is the most items a list or dict, and the most bytes a string, can hold: a u16.
+// maxCollection is the most items a list or dict can hold: a u16.
 const maxCollection = 65535
 
 // walkedRow is a nested row that a typed row already turned into the values the walker reads.
 type walkedRow map[string]any
 
-// writeString writes a u16 byte count and the UTF-8 text of s.
+// writeString writes the compact text field of s: a count, then the payload (text_encode.go). A text
+// that comes again and again (a lone string under Times or Repeat) is copied from where it was last
+// written, not parsed again.
 func (p *packer) writeString(id int, name, s string) error {
-	if len(s) > maxCollection {
-		return packErr(id, name, "%s: utf-8 length %d, above %d", name, len(s), maxCollection)
+	if len(s) > maxTextBytes {
+		return packErr(id, name, "%s: utf-8 length %d, above %d", name, len(s), maxTextBytes)
 	}
 	if !utf8.ValidString(s) {
 		return packErr(id, name, "%s: the string is not valid UTF-8", name)
 	}
-	if err := p.room(id, name, 2+len(s)); err != nil {
+	if s == "" {
+		if err := p.room(id, name, 1); err != nil {
+			return err
+		}
+		p.out = append(p.out, 0)
+		return nil
+	}
+	if p.lastLen > 0 && s == p.lastText {
+		if err := p.room(id, name, p.lastLen); err != nil {
+			return err
+		}
+		p.out = append(p.out, p.out[p.lastAt:p.lastAt+p.lastLen]...)
+		return nil
+	}
+	var scratch [65 * 8]int32
+	plan, costs := planText(s, scratch[:])
+	if err := p.room(id, name, plan.size()); err != nil {
 		return err
 	}
-	p.out = append(p.out, byte(len(s)), byte(len(s)>>8))
-	p.out = append(p.out, s...)
+	p.lastText, p.lastAt, p.lastLen = s, len(p.out), plan.size()
+	p.out = appendTextField(p.out, s, plan, costs)
 	return nil
 }
 

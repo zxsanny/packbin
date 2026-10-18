@@ -105,8 +105,8 @@ func widthShapes() []widthShape {
 					"l": rounds(n, func(i int) any { return []any{i, i + 1} }),
 					"d": rounds(n, func(i int) any { return map[string]any{"k": i} })}
 			},
-			first: "n", atLimit: "010102000001010001006b000202000102010001006b01",
-			oneMore:    "010102000001010001006b000202000102010001006b010302000203010001006b02",
+			first: "n", atLimit: "010102000001010002106b000202000102010002106b01",
+			oneMore:    "010102000001010002106b000202000102010002106b010302000203010002106b02",
 			unpackLeft: 11},
 		{name: "bytes and sized names: n, b, s", width: 3,
 			body: func() []Field {

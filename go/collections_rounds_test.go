@@ -37,12 +37,12 @@ func TestAC2LoneDictInARoundIsRefused(t *testing.T) {
 	})
 	rows := []any{gm("a", "x"), gm("b", "y")}
 	runPacks(t, []packCase{
-		{"a list with one dictionary per round, times", dictInTimes, gm("n", 2, "d", rows), "010201000100610100780100010062010079"},
-		{"a list with one dictionary per round, repeat", dictInRepeat, gm("d", rows), "0101000100610100780100010062010079"},
+		{"a list with one dictionary per round, times", dictInTimes, gm("n", 2, "d", rows), "010201000210610210780100021062021079"},
+		{"a list with one dictionary per round, repeat", dictInRepeat, gm("d", rows), "0101000210610210780100021062021079"},
 		{"a typed slice of maps", dictInTimes, gm("n", 2, "d", []map[string]string{{"a": "x"}, {"b": "y"}}),
-			"010201000100610100780100010062010079"},
+			"010201000210610210780100021062021079"},
 		{"a dictionary outside a round", func(t testing.TB) *Scheme { return mustScheme(t, 1, Dict("d", Utf8(0, "e"))) },
-			gm("d", gm("a", "x")), "010100010061010078"},
+			gm("d", gm("a", "x")), "010100021061021078"},
 		{"a times with count 0 in flags and no dictionary", dictInFlagsTimes, gm("n", 0, "h", 5), "0100020500"},
 	})
 }

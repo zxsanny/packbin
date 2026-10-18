@@ -40,8 +40,9 @@ func TestF41ElementRowsAreNotSizedByTheScheme(t *testing.T) {
 	listPacket := []byte{1, 0xFF, 0xFF}
 	listPacket = append(listPacket, make([]byte, listItems)...)
 	dictPacket := []byte{1, byte(dictItems & 0xFF), byte(dictItems >> 8)}
+	// Each key is a raw text field: the count 5, the raw prefix, four bytes.
 	for i := range dictItems {
-		dictPacket = append(dictPacket, 4, 0, 'a'+byte(i>>12&15), 'a'+byte(i>>8&15), 'a'+byte(i>>4&15), 'a'+byte(i&15), 0)
+		dictPacket = append(dictPacket, 5, rawPrefix, 'a'+byte(i>>12&15), 'a'+byte(i>>8&15), 'a'+byte(i>>4&15), 'a'+byte(i&15), 0)
 	}
 	cases := []struct {
 		name   string

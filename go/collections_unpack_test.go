@@ -35,11 +35,11 @@ func TestUnpackOfCollectionsRefusesWhatItCannotRead(t *testing.T) {
 		{"half a list count", xs, "0101", "xs", 2, 1},
 		{"a zero-width element", zero, "010500", "xs", 0, 0},
 		{"a zero-width element of an inner list", zeroInList, "0101000500", "inner", 0, 0},
-		{"a zero-width dict value", zeroDict, "010100010061", "d", 0, 0},
-		{"a dict key given twice", dict, "0102000100610101006102", "m", 0, 0},
-		{"a dict key that is not UTF-8", dict, "0101000100ff00", "m", 0, 4},
-		{"a dict key cut short", dict, "01010003006162", "m", 3, 2},
-		{"a dict count of 65535 with no pairs", dict, "01ffff", "m", 2, 0},
+		{"a zero-width dict value", zeroDict, "010100021061", "d", 0, 0},
+		{"a dict key given twice", dict, "0102000210610102106102", "m", 0, 0},
+		{"a dict key that is not UTF-8", dict, "010100" + "0210ff" + "00", "m", 0, 4},
+		{"a dict key cut short", dict, "010100031061", "m", 3, 2},
+		{"a dict count of 65535 with no pairs", dict, "01ffff", "m", 1, 0},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

@@ -140,7 +140,7 @@
 //	                                   a list of 0 and 1, count items, low bits first
 //	Packed(width, id int, name string, countID, bias int) Field
 //	                                   a 1-bit or 2-bit list, count plus bias (0 or -1) items
-//	Utf8(id int, name string) Field    a u16 byte count (at most 65535), then valid UTF-8
+//	Utf8(id int, name string) Field    compact text: a varint size, then the payload (65535 UTF-8 bytes at most)
 //	Nested(name string, members ...Field) Field
 //	                                   a nested row under name: ids from 0, references and names of
 //	                                   its own; a map[string]any in a map row, a struct in a typed row
