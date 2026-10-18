@@ -84,7 +84,7 @@
 //
 // Unpack reads with the scheme the first byte names. Errors are values: every error is an *Error,
 // whose Kind is ShortPacket (Field, Name, Needed, Left), TrailingBytes (Left), UnknownType (Actual),
-// BadValue, InvalidScheme, PackRefused, TooMany or Uncorrectable; errors.Is matches it against ErrShortPacket and the other
+// BadValue, InvalidScheme, PackRefused, TooMany, Uncorrectable or TooLong; errors.Is matches it against ErrShortPacket and the other
 // sentinels. A refused pack returns nil bytes, never part of a packet. No input makes Pack, Unpack or
 // NewScheme panic.
 //
@@ -198,7 +198,7 @@
 //	                                   before any byte is read) and the count of bytes repaired
 //
 // A message shorter than n is a ShortPacket naming the field "parity"; one above 254 bytes is a
-// TooMany. In a PackSession the parity covers the padded bytes (the payload is n bytes longer), and
+// TooLong. In a PackSession the parity covers the padded bytes (the payload is n bytes longer), and
 // the session has UnpackRepair and UnpackMapRepair as well.
 //
 // # Encrypted session

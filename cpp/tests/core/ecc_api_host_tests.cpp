@@ -358,6 +358,37 @@ void dispatch_without_parity() {
          "EC-1 an unknown type byte is TypeMismatch");
 }
 
+// AZ-2695: the same refusal through unpack_repair: the locator looks right (degree up to the limit,
+// all roots in the message) but the repaired bytes are not a code word, so no row and no write.
+void repair_that_is_not_a_codeword_is_refused() {
+  struct Case {
+    int limit;
+    char const* hex;
+  };
+  Case const cases[] = {
+      {1, "4001000065cd1d4fa3e1110100ca5566b5"},
+      {1, "4001000065cd4c00a344110100ca7b6682"},
+      {2, "a401000065cdcb00a3e111011bca856682"},
+      {2, "519c0000a4101d00a3e1110100ca856682"},
+  };
+  int wrong = 0;
+  for (Case const& c : cases) {
+    Bytes word = ecc_test::from_hex(c.hex);
+    Bytes before = word;
+    Position row;
+    auto r = packbin::unpack_repair(p4, word.data(), word.size(), row, c.limit);
+    if (r.error != Error::Uncorrectable || r.repaired != 0 || word != before || row.sid != 0)
+      ++wrong;
+  }
+  Bytes word = ecc_test::from_hex("4001001165641600a3e1112ff56d4f3847fe3f2489");
+  Bytes before = word;
+  Position row;
+  auto r = packbin::unpack_repair(p8, word.data(), word.size(), row, 3);
+  if (r.error != Error::Uncorrectable || r.repaired != 0 || word != before || row.sid != 0)
+    ++wrong;
+  expect(wrong == 0, "AZ-2695 a repair that does not yield a code word is Uncorrectable, no row, no write");
+}
+
 // EC-17 for the larger counts: the repaired buffer is the protected message.
 void buffer_equals_message() {
   Bytes sent = protected_message(p16);
@@ -387,6 +418,7 @@ int run_core_ecc_api_host_tests() {
   dispatch_repairs_the_type_byte();
   dispatch_refusals();
   dispatch_without_parity();
+  repair_that_is_not_a_codeword_is_refused();
   buffer_equals_message();
   return check::failures();
 }

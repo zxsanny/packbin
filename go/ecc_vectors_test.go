@@ -95,7 +95,7 @@ func TestEccVectorsBadRepairIsRefusedWithTheNamedKind(t *testing.T) {
 					t.Fatalf("short error %+v, want parity needed %d left %d", e, n, len(received))
 				}
 			case "too_long":
-				if e := asError(t, err, TooMany); e.Left != len(received) {
+				if e := asError(t, err, TooLong); e.Left != len(received) {
 					t.Fatalf("too long error %+v, want left %d", e, len(received))
 				}
 			default:

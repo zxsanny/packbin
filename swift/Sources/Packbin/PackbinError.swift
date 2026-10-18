@@ -21,6 +21,9 @@ public struct PackbinError: Error, Equatable, Sendable, CustomStringConvertible 
         /// A protected message has more wrong bytes than the correction limit repairs: no field is named
         /// and no row is given (see `unpackRepair(_:limit:_:)`).
         case uncorrectable = "uncorrectable"
+        /// A protected message of more than 254 bytes: no field is named, `left` is its length and `reason`
+        /// names the length and the limit.
+        case tooLong = "too_long"
     }
 
     public let kind: Kind
@@ -60,6 +63,7 @@ public struct PackbinError: Error, Equatable, Sendable, CustomStringConvertible 
         case .schemeError: return "packbin: invalid scheme\(at): \(reason)"
         case .packError: return "packbin: pack refused\(at): \(reason)"
         case .uncorrectable: return "packbin: uncorrectable message: more wrong bytes than the correction limit repairs"
+        case .tooLong: return "packbin: too long: \(reason)"
         }
     }
 

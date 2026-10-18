@@ -169,12 +169,12 @@ enum Ecc {
 
     /// Checks `received` against `n` parity bytes and repairs up to `t` wrong bytes; `n` and `t` are the
     /// caller's and are checked first (`sharedParity`). Never traps on hostile bytes: a message that cannot
-    /// be read throws a `PackbinError` (`.short`, `.tooMany`, `.uncorrectable`). The input is never written.
+    /// be read throws a `PackbinError` (`.short`, `.tooLong`, `.uncorrectable`). The input is never written.
     static func repair(_ received: [UInt8], parity n: Int, limit t: Int) throws -> (clear: [UInt8], repaired: Int) {
         guard n > 0 else { return (received, 0) }
         let size = received.count
         if size > maxBlock {
-            throw PackbinError(.tooMany, field: nil, left: size,
+            throw PackbinError(.tooLong, field: nil, left: size,
                                reason: "the message is \(size) bytes, above the limit of \(maxBlock) bytes")
         }
         if size < n { throw PackbinError.shortPacket(nil, "parity", needed: n, left: size) }

@@ -2,7 +2,7 @@ mod ecc_support;
 
 use ecc_support::{corrupt, from_hex, position_row, position_scheme, PositionRow, Rng};
 use packbin::{
-    bytes, insert, pack, to_hex, BinaryPacker, BoundField, MapScheme, PackError, PackSession,
+    bytes, insert, pack, to_hex, BinaryPacker, BoundField, DispatchHandler, MapScheme, PackError, PackSession,
     Scheme, SessionPackError, UnpackError, Value, Values, NONCE_SIZE, SEED_SIZE,
 };
 
@@ -208,6 +208,63 @@ fn ec16_a_dispatch_of_mixed_parity_counts_is_refused_naming_both() {
         Err(UnpackError::MixedParity { first: 4, other: 2 })
     );
     assert_eq!(plain, Err(UnpackError::MixedParity { first: 4, other: 2 }));
+}
+
+#[test]
+fn ec16_a_duplicate_type_is_refused_before_the_receive_index_advances() {
+    // Arrange
+    let (mut opener, mut waiter) = pair();
+    let scheme = position_scheme(0x40, 4);
+    let twin = position_scheme(0x40, 4);
+    let payload = opener.pack(&scheme, &position_row()).expect("pack");
+    let (mut on_a, mut on_b) = (
+        scheme.on(|_| panic!("handler ran")),
+        twin.on(|_| panic!("handler ran")),
+    );
+
+    // Act
+    let refused = waiter.unpack_repair(&payload, &mut [&mut on_a, &mut on_b], 0);
+    let read = read_session(&mut waiter, &payload, 4, 0);
+
+    // Assert
+    assert_eq!(refused, Err(UnpackError::DuplicateType { type_number: 0x40 }));
+    assert_eq!(read, Ok((position_row(), 0)));
+}
+
+// A handler written against loop 37: it defines no parity().
+struct Loop37Handler {
+    type_number: u8,
+    ran: bool,
+}
+
+impl DispatchHandler for Loop37Handler {
+    fn type_number(&self) -> u8 {
+        self.type_number
+    }
+
+    fn handle(&mut self, _body: &[u8]) -> Result<(), UnpackError> {
+        self.ran = true;
+        Ok(())
+    }
+}
+
+#[test]
+fn a_handler_without_parity_compiles_has_parity_0_and_dispatches() {
+    // Arrange
+    let mut handler = Loop37Handler {
+        type_number: 0x40,
+        ran: false,
+    };
+    let message = BinaryPacker::pack(&position_scheme(0x40, 0), &position_row()).expect("pack");
+
+    // Act
+    let parity = handler.parity();
+    let read = BinaryPacker::unpack_with(&message, &mut [&mut handler]);
+
+    // Assert
+    assert_eq!(parity, 0);
+    assert_eq!(read, Ok(()));
+    assert!(handler.ran);
 }
 
 #[test]

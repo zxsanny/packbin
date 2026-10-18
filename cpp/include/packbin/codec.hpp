@@ -92,7 +92,7 @@ inline Result ecc_error(ecc::Kind kind, std::size_t len, int n) {
     case ecc::Kind::Short:
       return fail(Error::ShortPacket, len, -1, static_cast<std::size_t>(n));
     case ecc::Kind::TooLong:
-      return fail(Error::TooMany, len, -1, ecc::kMaxSent);
+      return fail(Error::TooLong, len, -1, ecc::kMaxSent);
     case ecc::Kind::BadLimit:
       return fail(Error::BadValue, 0, -1, static_cast<std::size_t>(n / 2));
     case ecc::Kind::BadParity:
@@ -118,7 +118,7 @@ inline Result repair_message(std::uint8_t* data, std::size_t len, int n, int lim
 }
 
 // Room for `n` parity bytes after `len` field bytes already in `out`. Fields above 254 - n are
-// `TooMany` and the written bytes are zeroed.
+// `TooLong` and the written bytes are zeroed.
 inline Result parity_room(std::uint8_t* out, std::size_t cap, std::size_t len, int n) {
   if (n == 0)
     return Result{};
@@ -127,7 +127,7 @@ inline Result parity_room(std::uint8_t* out, std::size_t cap, std::size_t len, i
   std::size_t limit = kMaxSent - static_cast<std::size_t>(n);
   if (len > limit) {
     std::memset(out, 0, len < cap ? len : cap);
-    return fail(Error::TooMany, len, -1, limit);
+    return fail(Error::TooLong, len, -1, limit);
   }
   if (cap - len < static_cast<std::size_t>(n))
     return fail(Error::BufferFull, len, -1, static_cast<std::size_t>(n));
@@ -261,7 +261,7 @@ Result unpack_clear_checked(Scheme<Row, N> const& s, std::uint8_t const* data, s
 // is the packet length. A packet with strings passes `scratch` (a `Scratch<Chars>`, 12 bytes per
 // code point of its longest string) for the optimal parse; a string that needs more is
 // `ScratchTooSmall`. A protected packet whose fields are longer than 254 minus the parity count
-// is `TooMany` (`offset` the field bytes, `needed` the limit) and `out` is left zeroed.
+// is `TooLong` (`offset` the field bytes, `needed` the limit) and `out` is left zeroed.
 template <typename Row, std::size_t N>
 Result pack(Scheme<Row, N> const& s, Row const& row, std::uint8_t* out, std::size_t cap,
             ScratchRef scratch = {}) {

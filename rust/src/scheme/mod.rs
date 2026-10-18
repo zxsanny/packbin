@@ -281,7 +281,10 @@ pub struct On<'a, T, F> {
 pub trait DispatchHandler {
     fn type_number(&self) -> u8;
     /// The parity bytes of the handler's scheme; a dispatch takes handlers of one count only.
-    fn parity(&self) -> usize;
+    /// Defaults to 0 so a handler written before parity existed still compiles.
+    fn parity(&self) -> usize {
+        0
+    }
     fn handle(&mut self, body: &[u8]) -> Result<(), UnpackError>;
 }
 

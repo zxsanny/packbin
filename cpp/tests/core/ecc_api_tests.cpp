@@ -236,14 +236,14 @@ bool refused_too_long(int n, std::size_t limit) {
   for (std::size_t i = 0; i < K + 1; ++i)
     if (out[i] != 0)
       return false;
-  return r.error == Error::TooMany && r.offset == K + 1 && r.needed == limit && out[K + 1] == 0xaa;
+  return r.error == Error::TooLong && r.offset == K + 1 && r.needed == limit && out[K + 1] == 0xaa;
 }
 
 void size_limit() {
   expect(packs_ok<249>(4), "EC-4 n = 4: a 250-byte clear message packs");
-  expect(refused_too_long<250>(4, 250), "EC-4 n = 4: a 251-byte clear message is TooMany, 250");
+  expect(refused_too_long<250>(4, 250), "EC-4 n = 4: a 251-byte clear message is TooLong, 250");
   expect(packs_ok<221>(32), "EC-4 n = 32: a 222-byte clear message packs");
-  expect(refused_too_long<222>(32, 222), "EC-4 n = 32: a 223-byte clear message is TooMany, 222");
+  expect(refused_too_long<222>(32, 222), "EC-4 n = 32: a 223-byte clear message is TooLong, 222");
   expect(packs_ok<253>(0), "EC-1 n = 0 packs the 254-byte clear message as before");
 
   // A 254-byte buffer under a protected scheme packs; one byte more is TooLong on unpack.
@@ -256,8 +256,9 @@ void size_limit() {
          "EC-4 a 254-byte message reads back");
   out[254] = 0;
   auto longer = packbin::unpack_repair(s, out, 255, back, 2);
-  expect(longer.error == Error::TooMany && longer.offset == 255 && longer.needed == 254,
-         "EC-4 a buffer above 254 bytes under a protected scheme is TooMany");
+  expect(longer.error == Error::TooLong && longer.offset == 255 && longer.needed == 254 &&
+             back.raw[0] == 0,
+         "EC-4 a buffer above 254 bytes under a protected scheme is TooLong, 0 values");
 }
 
 // EC-3: n above 32 or below 0 is SchemeInvalid at construction; no message is built from it.

@@ -9,7 +9,7 @@ import "encoding/binary"
 // Schemes that declare parity bytes (WithParity) must all declare the same count. Unpack checks the
 // message against them and reads it only when it is intact: any wrong byte returns an *Error of kind
 // Uncorrectable, a message shorter than the count a ShortPacket naming the field "parity", and one above
-// 254 bytes a TooMany.
+// 254 bytes a TooLong.
 func Unpack(buf []byte, schemes ...*Scheme) (any, error) {
 	row, _, err := UnpackRepair(buf, 0, schemes...)
 	return row, err

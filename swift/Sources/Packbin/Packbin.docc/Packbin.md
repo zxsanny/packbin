@@ -160,7 +160,7 @@ over GF(256), contract `_docs/02_document/contracts/library/message-ecc.md`), an
 254 - `parity` bytes is refused as a `.packError` naming its length and the limit. `unpack` detects any
 wrong byte; `unpackRepair(_:limit:_:)` repairs up to `limit` wrong bytes (0 to `parity` / 2) and gives
 `(row, repaired)`. Beyond that it throws `.uncorrectable`, naming no field and giving no row; a message
-shorter than `parity` throws `.short` naming `parity`, and one above 254 bytes `.tooMany`. Allowing repair
+shorter than `parity` throws `.short` naming `parity`, and one above 254 bytes `.tooLong`. Allowing repair
 gives up part of the detection (the contract lists the chances). The schemes of one call must declare the
 same `parity`, and `limit` must not pass `parity` / 2, or the call throws a `.schemeError` before any byte
 is read. A session pads first and adds the parity over the padded bytes, and repairs before it removes the pad.
@@ -290,7 +290,7 @@ The whole API is listed here.
   schemes as an array (see Message error correction).
 - ``PackbinError``: `kind`, `field` (`nil` for no field), `name`, `needed`, `left`, `actual`, `reason`;
   ``PackbinError/Kind``: `short`, `trailing`, `unknownType`, `badValue`, `tooMany`, `schemeError`,
-  `packError`, `uncorrectable`, whose raw values are the outcome terms of the shared hostile vectors.
+  `packError`, `uncorrectable`, `tooLong`, whose raw values are the outcome terms of the shared hostile vectors.
 - `flagBits`: the 8 bits one flag byte holds.
 - ``PackSession``: `seedSize` (32), `nonceSize` (16), `static load(_ seed: [UInt8]) throws -> PackSession`,
   `start() throws -> [UInt8]`, `start(_ nonce: [UInt8]) throws -> [UInt8]`,

@@ -120,7 +120,7 @@ import Testing
         #expect(second["k"] as? UInt8 == 7)
     }
 
-    @Test(arguments: ["empty", "a repeated type number", "one byte", "cut after the type", "a tail"])
+    @Test(arguments: ["empty", "one byte", "cut after the type", "a tail"])
     func unpack_aRefusedCall_stillSpendsAPositionAsTypeScript(name: String) throws {
         // Arrange
         let (opener, waiter) = try sessionPair()
@@ -132,7 +132,6 @@ import Testing
 
         // Act
         let error = packbinError {
-            if name == "a repeated type number" { return try waiter.unpackMap(first, scheme, scheme) }
             return try waiter.unpackMap(payloads[name] ?? first, scheme)
         }
         let row = try waiter.unpackMap(second, scheme)
@@ -140,6 +139,26 @@ import Testing
         // Assert
         #expect(error != nil)
         #expect(goldenFieldMismatches(row) == 0, "the second payload reads at position 1")
+    }
+
+    @Test func unpack_aRepeatedTypeNumber_isRefusedBeforeThePositionAdvances() throws {
+        // Arrange
+        let (opener, waiter) = try sessionPair()
+        let scheme = try positionMapScheme()
+        let first = try opener.pack(scheme, goldenMap())
+        let second = try opener.pack(scheme, goldenMap())
+
+        // Act
+        let refused = [packbinError { try waiter.unpack(first, scheme, scheme) },
+                       packbinError { try waiter.unpackMap(first, scheme, scheme) },
+                       packbinError { try waiter.unpackRepair(first, limit: 0, scheme, scheme) }]
+        let readFirst = try waiter.unpackMap(first, scheme)
+        let readSecond = try waiter.unpackMap(second, scheme)
+
+        // Assert
+        #expect(refused.allSatisfy { $0?.kind == .schemeError && $0?.reason == "duplicate type number \(scheme.typeNumber)" })
+        #expect(goldenFieldMismatches(readFirst) == 0, "the first payload still reads at position 0")
+        #expect(goldenFieldMismatches(readSecond) == 0, "the second payload reads at position 1")
     }
 
     @Test func unpack_shortAndOddPayloads_throwTheErrorOfClearUnpack() throws {

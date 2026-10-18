@@ -92,8 +92,8 @@ impl PackSession {
 
     /// Repairs up to `limit` wrong bytes of the payload, drops the parity, removes the pad, then
     /// dispatches (see [`BinaryPacker::unpack_with_repair`]). Returns the bytes repaired. The
-    /// receive index moves for every payload read from a handler set and limit that were valid,
-    /// a refused one included, so the next payload from the sender is still read at its own index.
+    /// receive index moves for every payload read from a handler set and limit that were valid
+    /// (distinct type numbers, one parity count), a refused one included, so the next payload from the sender is still read at its own index.
     pub fn unpack_repair(
         &mut self,
         bytes: &[u8],
@@ -112,9 +112,9 @@ impl PackSession {
         };
         let n = shared_parity(handlers)?;
         ecc::check_limit(n, limit)?;
+        check_unique(handlers)?;
         let index = self.recv_count;
         self.recv_count = self.recv_count.wrapping_add(1);
-        check_unique(handlers)?;
         let (padded, repaired) = ecc::unprotect(bytes, n, limit)?;
         let mut clear = padded.into_owned();
         pad::xor(recv, index, &mut clear);

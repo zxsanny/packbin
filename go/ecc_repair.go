@@ -17,7 +17,7 @@ func repair(received []byte, n, t int) ([]byte, int, error) {
 	}
 	size := len(received)
 	if size > maxBlock {
-		return nil, 0, &Error{Kind: TooMany, Field: NoField, Left: size,
+		return nil, 0, &Error{Kind: TooLong, Field: NoField, Left: size,
 			Reason: fmt.Sprintf("the message is %d bytes, above the limit of %d bytes", size, maxBlock)}
 	}
 	if size < n {

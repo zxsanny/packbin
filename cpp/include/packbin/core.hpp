@@ -24,6 +24,10 @@ enum class Error : std::uint8_t {
   // A protected message (a scheme with parity bytes) has more wrong bytes than the correction
   // limit allows, or any wrong byte when the limit is 0. No values are read; no field is named.
   Uncorrectable,
+  // A protected message longer than 254 bytes: a received buffer above 254, or fields above
+  // 254 minus the parity count on pack (`offset` the length, `needed` the limit). Distinct from
+  // `TooMany`.
+  TooLong,
 };
 
 // Working memory of the compact-text encoder: 3 words (12 bytes) per Unicode code point of the

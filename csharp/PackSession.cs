@@ -62,6 +62,8 @@ public sealed class PackSession
     public object? Unpack(ReadOnlySpan<byte> bytes, int limit, out int repaired, params SchemeHandler[] handlers)
     {
         repaired = 0;
+        // A duplicate type number is refused before any byte is read and before the receive index advances.
+        BinaryPacker.RequireDistinct(handlers);
         if (_recv is null)
             return new ShortPacket("", 1, 0);
         var parity = Ecc.SharedParity(handlers, limit);
@@ -74,7 +76,6 @@ public sealed class PackSession
             SessionPad.Xor(_recv, counter, clear);
             return BinaryPacker.Unpack(clear, handlers);
         }
-        BinaryPacker.RequireDistinct(handlers);
         var error = Ecc.Repair(bytes, parity, limit, out var word, out repaired);
         if (error is not null)
             return error;

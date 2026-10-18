@@ -30,6 +30,8 @@ mod duplicate_names_tests;
 #[cfg(test)]
 mod ecc_repair_tests;
 #[cfg(test)]
+mod ecc_reverify_tests;
+#[cfg(test)]
 mod ecc_vectors_tests;
 #[cfg(test)]
 mod element_tests;

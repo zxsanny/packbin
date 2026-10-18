@@ -165,6 +165,7 @@ export class BinaryPacker {
     ...rest: SchemeHandler<object>[]
   ): DispatchResult {
     const handlers = [first, ...rest]
+    requireDistinct(handlers)
     const n = sharedParity(handlers, limit)
     const fixed = repair(toBuf(bytes), n, limit)
     if (!fixed.ok) return fixed
@@ -174,6 +175,17 @@ export class BinaryPacker {
 
 function toBuf(bytes: Uint8Array | ArrayBuffer): Uint8Array {
   return bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
+}
+
+// A duplicate type number is refused before any byte is read, so a session's receive index stays put.
+function requireDistinct(handlers: SchemeHandler<object>[]): void {
+  const seen = new Set<number>()
+  for (const h of handlers) {
+    if (seen.has(h.typeNumber)) {
+      throw new RangeError(`duplicate type number ${h.typeNumber}`)
+    }
+    seen.add(h.typeNumber)
+  }
 }
 
 // The parity every handler declares. Handlers with different counts could not share one repair.
@@ -193,13 +205,6 @@ function unpackDispatch(
   handlers: SchemeHandler<object>[],
   repaired: number | undefined,
 ): DispatchResult {
-  const seen = new Set<number>()
-  for (const h of handlers) {
-    if (seen.has(h.typeNumber)) {
-      throw new RangeError(`duplicate type number ${h.typeNumber}`)
-    }
-    seen.add(h.typeNumber)
-  }
   if (buf.length < 1) return { ok: false, field: "", needed: 1, left: 0 }
   const actual = buf[0]!
   const match = handlers.find((h) => h.typeNumber === actual)
@@ -282,8 +287,9 @@ export class PackSession {
     first: SchemeHandler<object>,
     ...rest: SchemeHandler<object>[]
   ): DispatchResult {
-    if (this.#recv === null) return { ok: false, field: "", needed: 1, left: 0 }
     const handlers = [first, ...rest]
+    requireDistinct(handlers)
+    if (this.#recv === null) return { ok: false, field: "", needed: 1, left: 0 }
     const n = sharedParity(handlers, limit)
     const fixed = repair(toBuf(bytes), n, limit)
     const index = this.#recvCount++

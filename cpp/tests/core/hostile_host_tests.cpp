@@ -50,6 +50,8 @@ char const* term(packbin::Result const& r) {
       return "scratch_too_small";
     case Error::Uncorrectable:
       return "uncorrectable";
+    case Error::TooLong:
+      return "too_long";
   }
   return "unknown";
 }

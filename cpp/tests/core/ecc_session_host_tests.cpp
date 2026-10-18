@@ -172,6 +172,65 @@ void refused_arguments_keep_the_index() {
   expect(ok.ok() && same_row(row, position_row()), "the index was not used up by the refusals");
 }
 
+// A duplicate type number among the handlers is refused before the receive index advances, for a
+// protected scheme and for one without parity; the buffer is not touched.
+void duplicate_type_keeps_the_index() {
+  Pair pair;
+  open_pair(pair);
+  std::uint8_t wire[32];
+  auto p = pair.a.pack(p4, position_row(), wire, sizeof(wire));
+  std::uint8_t sent[32];
+  std::memcpy(sent, wire, p.offset);
+
+  Position r1, r2;
+  int runs = 0;
+  auto twice = pair.b.unpack_repair(wire, p.offset, 2,
+                                    packbin::on(p4, r1, [&](Position const&) { ++runs; }),
+                                    packbin::on(p4, r2, [&](Position const&) { ++runs; }));
+  expect(twice.error == Error::SchemeInvalid && runs == 0 && r1.sid == 0 &&
+             std::memcmp(sent, wire, p.offset) == 0,
+         "a duplicate type number is SchemeInvalid, no handler runs, the buffer is as it was");
+  auto detect = pair.b.unpack(wire, p.offset, packbin::on(p4, r1, [&](Position const&) {}),
+                              packbin::on(p4, r2, [&](Position const&) {}));
+  expect(detect.error == Error::SchemeInvalid, "the detect-only dispatch refuses it too");
+
+  Position row;
+  auto ok = pair.b.unpack(p4, wire, p.offset, row);
+  expect(ok.ok() && same_row(row, position_row()),
+         "AC-1 the receive index did not advance for the duplicate type number");
+
+  Pair plain_pair;
+  open_pair(plain_pair);
+  std::uint8_t clear_wire[32];
+  auto c = plain_pair.a.pack(plain, position_row(), clear_wire, sizeof(clear_wire));
+  auto dup0 = plain_pair.b.unpack(clear_wire, c.offset,
+                                  packbin::on(plain, r1, [](Position const&) {}),
+                                  packbin::on(plain, r2, [](Position const&) {}));
+  expect(dup0.error == Error::SchemeInvalid, "a duplicate type number without parity is refused");
+  auto ok0 = plain_pair.b.unpack(plain, clear_wire, c.offset, row);
+  expect(ok0.ok() && same_row(row, position_row()),
+         "AC-1 without parity the receive index did not advance either");
+}
+
+// A payload above 254 bytes is TooLong, not TooMany, 0 values, and it uses an index.
+void too_long_payload_in_a_session() {
+  Pair pair;
+  open_pair(pair);
+  std::uint8_t first[32];
+  std::uint8_t second[32];
+  pair.a.pack(p4, position_row(), first, sizeof(first));
+  auto p2 = pair.a.pack(p4, position_row(), second, sizeof(second));
+
+  static std::uint8_t big[255];
+  Position row;
+  auto longer = pair.b.unpack_repair(p4, big, sizeof(big), row, 2);
+  expect(longer.error == Error::TooLong && longer.offset == 255 && longer.needed == 254 &&
+             row.sid == 0,
+         "a session payload above 254 bytes is TooLong, 0 values");
+  auto next = pair.b.unpack_repair(p4, second, p2.offset, row, 2);
+  expect(next.ok() && same_row(row, position_row()), "the payload after it lines up");
+}
+
 // The session dispatch repairs first, then removes the pad, then picks the handler.
 void dispatch_in_a_session() {
   Pair pair;
@@ -217,6 +276,8 @@ int run_core_ecc_session_host_tests() {
   next_payload_after_an_uncorrectable_one();
   refused_arguments_keep_the_index();
   dispatch_in_a_session();
+  duplicate_type_keeps_the_index();
+  too_long_payload_in_a_session();
   malformed_payloads_use_an_index();
   return check::failures();
 }

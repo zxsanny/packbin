@@ -42,7 +42,7 @@ Then at least two tests fail.
 **AC-2: C++ numbers**
 Given the C++ component description
 When it is read
-Then every flash and stack number matches the last arm stage run (8,132 B flash and 492 B stack on Cortex-M4F; M0+, M3 and ESP32 pass or fail only), and no 456 or 8152 remains.
+Then every flash and stack number matches the last arm stage run (8,132 B flash and 492 B stack on Cortex-M4F; M0+, M3 and ESP32 pass or fail only), and no present-tense statement of 456 or 8152 remains (dated 'Loop N changes' history entries keep the numbers of their day).
 
 ## Constraints
 

@@ -16,7 +16,7 @@ public func unpack(_ buffer: [UInt8], _ schemes: [Scheme]) throws -> Any {
 /// type byte picks the scheme, and gives the row with the count of bytes repaired. Every scheme of the
 /// call declares the same `parity`; a mix, or a limit out of range, throws a `.schemeError` before any
 /// byte is read. A message with more wrong bytes than `limit` repairs throws `.uncorrectable` and gives no
-/// row; one shorter than `parity` throws `.short` naming `parity`; one above 254 bytes throws `.tooMany`.
+/// row; one shorter than `parity` throws `.short` naming `parity`; one above 254 bytes throws `.tooLong`.
 /// Allowing repair gives up part of the detection: see `_docs/02_document/contracts/library/message-ecc.md`.
 public func unpackRepair(_ buffer: [UInt8], limit: Int, _ schemes: Scheme...) throws -> (row: Any, repaired: Int) {
     try unpackRepair(buffer, limit: limit, schemes)
@@ -72,15 +72,21 @@ func readMap(_ buffer: [UInt8], _ schemes: [Scheme]) throws -> [String: Any] {
     try dispatch(buffer, schemes, typed: false).1
 }
 
+/// Refuses a scheme list with two schemes of one type number. A session checks it before it spends a
+/// receive position.
+func checkDuplicateTypes(_ schemes: [Scheme]) throws {
+    var seen = ByteSet()
+    for s in schemes where !seen.insert(s.typeNumber) {
+        throw PackbinError.scheme(nil, "", "duplicate type number \(s.typeNumber)")
+    }
+}
+
 /// `typed`: the row is filled into the bound row type, so each item of a nested-row element keeps the
 /// rounds it read.
 private func dispatch(_ buffer: [UInt8], _ schemes: [Scheme], typed: Bool) throws
     -> (Scheme, [String: Any], Set<ObjectIdentifier>) {
     if schemes.isEmpty { throw PackbinError.scheme(nil, "", "unpack needs at least one scheme") }
-    var seen = ByteSet()
-    for s in schemes where !seen.insert(s.typeNumber) {
-        throw PackbinError.scheme(nil, "", "duplicate type number \(s.typeNumber)")
-    }
+    try checkDuplicateTypes(schemes)
     guard let first = buffer.first else { throw PackbinError.shortPacket(nil, "", needed: 1, left: 0) }
     guard let scheme = schemes.first(where: { $0.typeNumber == Int(first) }) else {
         throw PackbinError(.unknownType, field: nil, actual: Int(first))

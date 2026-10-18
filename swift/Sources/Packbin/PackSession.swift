@@ -110,7 +110,7 @@ public final class PackSession {
 
     /// As `unpack`, repairing up to `limit` wrong bytes of the padded payload before the pad is removed
     /// (see the free `unpackRepair`), and giving the count of bytes repaired. A limit out of range or
-    /// schemes of different parity throw before the position is spent; a payload refused by the repair
+    /// schemes of different parity or two with one type number throw before the position is spent; a payload refused by the repair
     /// spends it.
     public func unpackRepair(_ payload: [UInt8], limit: Int, _ schemes: Scheme...) throws -> (row: Any, repaired: Int) {
         try unpackRepair(payload, limit: limit, schemes)
@@ -169,6 +169,7 @@ public final class PackSession {
     /// whether or not the repair succeeds (the last position is never spent, as it is never used).
     private func opened(_ payload: [UInt8], limit: Int, _ schemes: [Scheme]) throws -> (clear: [UInt8], repaired: Int) {
         guard !recv.isEmpty else { throw PackbinError.shortPacket(nil, "", needed: 1, left: 0) }
+        try Packbin.checkDuplicateTypes(schemes)
         let n = try Ecc.sharedParity(schemes, limit: limit)
         let fixed: (clear: [UInt8], repaired: Int)
         do {

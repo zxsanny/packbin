@@ -2,6 +2,7 @@ package packbin
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -300,13 +301,29 @@ func TestEccRepairAProtectedMessageReadByAnUnprotectedSchemeIsTrailingBytes(t *t
 	}
 }
 
-func TestEccRepairABufferAbove254BytesIsTooLongWithNoRow(t *testing.T) {
+func TestEccRepairABufferAbove254BytesIsTooLongNotTooManyWithNoRow(t *testing.T) {
 	// Act
 	row, _, err := readPosition(t, make([]byte, 255), 4, 2)
 
 	// Assert
-	if e := asError(t, err, TooMany); row != nil || e.Left != 255 {
+	e := asError(t, err, TooLong)
+	if row != nil || e.Left != 255 || errors.Is(err, ErrTooMany) || !errors.Is(err, ErrTooLong) ||
+		!strings.Contains(e.Reason, "255") || !strings.Contains(e.Reason, "254") {
 		t.Fatalf("row %v, error %+v", row, e)
+	}
+}
+
+func TestEccRepairAClearMessageAbove254MinusNIsPackRefusedNamingLengthAndLimit(t *testing.T) {
+	// Arrange
+	s := withParity(t, mustScheme(t, 0, Bytes(0, "b", 250)), 4)
+
+	// Act
+	packed, err := Pack(s, map[string]any{"b": bytes.Repeat([]byte{7}, 250)})
+
+	// Assert
+	e := asError(t, err, PackRefused)
+	if packed != nil || errors.Is(err, ErrTooLong) || !strings.Contains(e.Reason, "251") || !strings.Contains(e.Reason, "250") {
+		t.Fatalf("packed %x, error %+v", packed, e)
 	}
 }
 

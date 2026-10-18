@@ -228,6 +228,33 @@ void largest_message_n32() {
   expect(wrong == 0, "n = 32, t = 16 on a 254-byte message");
 }
 
+// AZ-2695: more wrong bytes than the limit, with a locator of degree 1 to t whose roots all lie in the
+// message, so the values are computed and only the syndromes of the repaired word refuse it. Found by
+// a seeded search on scripts/ecc/eccfmt.py (its decode ends in "repair does not verify").
+void repair_that_is_not_a_codeword_is_refused() {
+  struct Case {
+    int n;
+    int t;
+    char const* hex;
+  };
+  Case const cases[] = {
+      {4, 1, "839cde7f8afd336eddd7f2491a"},
+      {4, 2, "f53ab73e0c939f0a59061698b4012b"},
+      {6, 2, "a068880818bdb904ec8c6d20308ec18d55"},
+      {4, 1, "4001000065cd1d4fa3e1110100ca5566b5"},
+      {4, 2, "519c0000a4101d00a3e1110100ca856682"},
+  };
+  int wrong = 0;
+  for (Case const& c : cases) {
+    Bytes word = from_hex(c.hex);
+    Bytes before = word;
+    auto o = packbin::ecc::repair(word.data(), word.size(), c.n, c.t);
+    if (o.kind != Kind::Uncorrectable || o.repaired != 0 || word != before)
+      ++wrong;
+  }
+  expect(wrong == 0, "a repair that does not yield a code word is Uncorrectable and writes nothing");
+}
+
 // Hostile buffers: any n, t and length never crash; Ok only for a codeword of at most t errors;
 // anything else leaves the buffer as it was.
 void hostile_buffers() {
@@ -301,6 +328,7 @@ int run_core_ecc_repair_host_tests() {
   intact_short_and_shifted();
   n_zero_is_unchanged();
   largest_message_n32();
+  repair_that_is_not_a_codeword_is_refused();
   hostile_buffers();
   speed_bound();
   return check::failures();

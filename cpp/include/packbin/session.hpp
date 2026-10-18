@@ -78,8 +78,8 @@ class PackSession {
   // receive index advances for every packet the call accepts, whether or not it then reads,
   // and for a protected packet that is refused (`Uncorrectable`, short, too long) as well, so
   // the next packet from the sender still lines up. Only a refused argument (a limit above
-  // parity / 2, handlers that disagree on the parity count) leaves the index alone. This form
-  // detects only; see `unpack_repair`.
+  // parity / 2, handlers that disagree on the parity count or repeat a type number) leaves the
+  // index alone. This form detects only; see `unpack_repair`.
   template <typename Row, std::size_t N>
   Result unpack(Scheme<Row, N> const& s, std::uint8_t* data, std::size_t len, Row& row) {
     return unpack_repair(s, data, len, row, 0);
@@ -122,10 +122,8 @@ class PackSession {
     if (!open_)
       return fail(Error::BadValue, 0, -1);
     int n = 0;
-    if (!detail::unique_types(first, rest...)) {
-      pad(recv_.data(), recv_count_++, data, len);
+    if (!detail::unique_types(first, rest...))
       return fail(Error::SchemeInvalid, 0, -1);
-    }
     Result shared = detail::shared_parity(n, first, rest...);
     if (!shared.ok())
       return shared;

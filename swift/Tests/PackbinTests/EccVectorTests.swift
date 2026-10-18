@@ -48,7 +48,7 @@ import Testing
             case "short":
                 fits = error?.kind == .short && error?.name == "parity" && error?.needed == n && error?.left == received.count
             case "too_long":
-                fits = error?.kind == .tooMany && received.count > 254
+                fits = error?.kind == .tooLong && error?.left == received.count && received.count > 254
             default:
                 fits = error?.kind == .uncorrectable && error?.name == "" && error?.field == nil
             }

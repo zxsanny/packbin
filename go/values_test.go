@@ -61,7 +61,9 @@ func TestErrorTextPerKind(t *testing.T) {
 		"packbin: bad value at field 1 (n): negative count":  {Kind: BadValue, Field: 1, Name: "n", Reason: "negative count"},
 		"packbin: invalid scheme: duplicate type number 1":   {Kind: InvalidScheme, Field: NoField, Reason: "duplicate type number 1"},
 		"packbin: pack refused at field 0 (a): missing a":    {Kind: PackRefused, Field: 0, Name: "a", Reason: "missing a"},
-		"packbin: kind(99) at field 0: x":                    {Kind: Kind(99), Field: 0, Reason: "x"},
+		"packbin: too long: the message is 255 bytes, above the limit of 254 bytes": {Kind: TooLong, Field: NoField, Left: 255,
+			Reason: "the message is 255 bytes, above the limit of 254 bytes"},
+		"packbin: kind(99) at field 0: x": {Kind: Kind(99), Field: 0, Reason: "x"},
 	}
 	for want, e := range cases {
 		// Act

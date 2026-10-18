@@ -201,12 +201,13 @@ import Testing
         #expect(got.error?.kind == .trailing && got.error?.left == 4)
     }
 
-    @Test func unpack_aBufferAbove254Bytes_isRefusedAsTooManyWithNoRow() throws {
+    @Test func unpack_aBufferAbove254Bytes_isRefusedAsTooLongNotTooManyWithNoRow() throws {
         // Act
         let got = try readPosition([UInt8](repeating: 0, count: 255), parity: 4, limit: 2)
 
         // Assert
-        #expect(got.error?.kind == .tooMany && got.rowCount == 0)
+        #expect(got.error?.kind == .tooLong && got.error?.left == 255 && got.rowCount == 0)
+        #expect(got.error?.reason.contains("255") == true && got.error?.reason.contains("254") == true)
     }
 
     @Test func unpack_aBufferShorterThanTheParity_namesTheParityTheBytesNeededAndPresent() throws {
