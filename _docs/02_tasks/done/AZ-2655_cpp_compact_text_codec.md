@@ -113,4 +113,4 @@ Consumer of `compact-text.md` and `vectors.txt`.
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Wire break: packets with strings written before this loop cannot be read | Owner accepted 2026-10-18 (no tag was ever published) | accepted-risk | Medium |
-| Optimal parse scratch grows with text length (about 32 bytes per character: 8 states of 32-bit costs; to be confirmed in the design) | Caller-sized scratch, error when too small (card 4) | resolved | Low |
+| Optimal parse scratch grows with text length (12 bytes per code point as built: a base cost and 8 one-byte deltas per character) | Caller-sized scratch, error when too small (card 4) | resolved | Low |

@@ -233,7 +233,6 @@ def main():
     bad("bad.pad_not_zero", "pad", bytes(nz))
     bad("bad.code_only_prefix", "code", bytes.fromhex("0100"))
     # a valid payload whose pad is raised until the stream ends inside a code
-    base = bytearray(good)
     for extra in range(1, 8):
         trial = bytearray(good)
         pad = (trial[1] >> 5) + extra
@@ -246,8 +245,6 @@ def main():
             if e.kind == "code":
                 bad("bad.code_cut", "code", bytes(trial))
                 break
-    else:
-        pass
     ua_space = sym_s(" ")
     bad("bad.cap_then_space", "cap", field(build_payload(T, 0, [("s", 0, ("CAP",)), ("s", 0, ua_space)])))
     bad("bad.cap_at_end", "cap", field(build_payload(T, 0, [("s", 0, sym_l(0, "я")), ("s", 0, ("CAP",))])))

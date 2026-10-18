@@ -86,7 +86,7 @@ Costs are integers, so the result does not depend on floating point.
 ### C++ (the allocation-free core)
 
 - A string member binds to `Text<N>` (a decoded copy; `TooMany` when the text does not fit) or to `Packed` (a borrowed view of the payload after the count, no decoding; a no-text build skips a string by its count and can forward the bytes). It never binds to `View`.
-- Pack takes a caller-sized scratch buffer for the parse (about 32 bytes per character); a text that needs more scratch than given is an error naming the field, never a different encoding.
+- Pack takes a caller-sized scratch buffer for the parse (12 bytes per code point: 3 words); a text that needs more scratch than given is an error naming the field, never a different encoding.
 - A build with `PACKBIN_NO_TEXT` links no codec and refuses a field bound to `Text<N>` when the field list is built; a field bound to `Packed` is accepted. Pack of a `Packed` member writes its count and bytes as given and does not decode or validate them.
 - 0 heap allocations, 0 exceptions, tables in read-only memory.
 
@@ -118,5 +118,5 @@ Codes below are the canonical codes of the frozen tables; `bits` counts the symb
 
 | Version | Date | Change | Author |
 |---------|------|--------|--------|
-| 1.0.0 | 2026-10-18 | Frozen with tables.json (AZ-2646); owner decisions D1 to D5 and option D | loop 35 |
+| 1.0.0 | 2026-10-18 | Frozen with tables.json (AZ-2646); owner decisions D1 to D5 and option D. C++ scratch is 12 bytes per code point (corrected in the review) | loop 35 |
 | 0.1.0 | 2026-10-18 | Draft | loop 35 |
