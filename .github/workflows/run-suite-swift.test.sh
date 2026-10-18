@@ -46,6 +46,7 @@ if [ "$step" = "${SWIFT_FAIL:-}" ]; then echo "fake swift: $step failed" >&2; ex
 case "$step" in
   list)
     if [ -z "${SWIFT_NO_SPEED:-}" ]; then echo 'PackbinTests.SpeedTests/roundTrips(form:)'; fi
+    if [ -z "${SWIFT_NO_TEXT_SPEED:-}" ] && [ -z "${SWIFT_NO_SPEED:-}" ]; then echo 'PackbinTests.TextSpeedTests/roundTrips()'; fi
     if [ -n "${SWIFT_FUZZ:-}" ]; then echo 'PackbinTests.FuzzTests/unpack_corpusAndRandom()'; fi
     echo 'PackbinTests.GoldenTests/pack_goldenRow()'
     for suite in SessionTests SessionHostileTests ConcurrencyTests; do
@@ -130,7 +131,7 @@ c_fuzz="swift test $o --skip-build --verbose --filter \\.FuzzTests/"
 c_tsan_build="swift build $o --build-tests --sanitize=thread"
 c_tsan="swift test $o --skip-build --sanitize=thread --verbose --filter \\.ConcurrencyTests/ --filter \\.SessionTests/ --filter \\.SessionHostileTests/"
 c_speed_list="swift test list $o -c release --skip-build"
-c_speed="swift test $o -c release --skip-build --verbose --filter \\.SpeedTests/ --filter \\.FuzzTests/mebibyte"
+c_speed="swift test $o -c release --skip-build --verbose --filter \\.SpeedTests/ --filter \\.TextSpeedTests/ --filter \\.FuzzTests/mebibyte"
 c_describe="swift package $o describe --type json"
 c_dump="swift package $o dump-package"
 out="$(run_swift swift "$swroot" SWIFT_FUZZ=1)"; code=$?
@@ -226,6 +227,12 @@ for part in tests gates; do
   run_swift swift "$swroot" PACKBIN_SWIFT_PART="$part" SWIFT_NO_SPEED=1 >/dev/null; code=$?
   [ "$code" -eq 0 ] || bad "swift: the $part part needs a SpeedTests suite (exit $code)"
 done
+# AZ-2665 (CS-11): the string speed suite is its own suite, and a package that lost it fails the speed part by name,
+# without running the speed filters
+out="$(run_swift swift "$swroot" PACKBIN_SWIFT_PART=speed SWIFT_NO_TEXT_SPEED=1)"; code=$?
+[ "$code" -ne 0 ] || bad "swift: the speed part passed without TextSpeedTests"
+case "$out" in *"swift has no TextSpeedTests suite; the release-build string speed step has nothing to run"*) ;; *) bad "swift: the speed part has no message for the missing TextSpeedTests suite: $out" ;; esac
+if sw_ran "--filter \\.TextSpeedTests/"; then bad "swift: the speed part ran the string speed filter without a TextSpeedTests suite: $(cat "$work/swift.log")"; fi
 # a release list that fails is the failure of that step, not a package without SpeedTests
 out="$(run_swift swift "$swroot" PACKBIN_SWIFT_PART=speed SWIFT_FAIL=list)"; code=$?
 [ "$code" -ne 0 ] || bad "swift: the speed part passed after a failed release list"

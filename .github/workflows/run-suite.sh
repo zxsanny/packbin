@@ -140,6 +140,19 @@ swift_fuzz() {
   fi
 }
 
+# CS-11 (AZ-2665): the string speed bound (100,000 round trips in 1 s) holds for a release build only; the test asserts
+# 6 s under debug assertions, which is all `cargo test` above builds. A filter that matches nothing passes, so the
+# test must be in the list of the release build.
+rust_speed() {
+  local manifest="$root/rust/Cargo.toml" listed
+  listed="$(cargo test --manifest-path "$manifest" --release --lib -- --list)" || return 1
+  if ! grep -q 'ac8_one_hundred_thousand_round_trips' <<< "$listed"; then
+    echo "run-suite: rust has no string speed test (ac8_one_hundred_thousand_round_trips); the release-build step has nothing to run" >&2
+    return 1
+  fi
+  cargo test --manifest-path "$manifest" --release --lib ac8_one_hundred_thousand_round_trips -- --nocapture
+}
+
 # SW-8: the speed bound holds for a release build only. A filter that matches nothing passes, so the suite must exist.
 # SW-9: this is the one release build of the suite, with the tests, so it carries the strict flags and the 0 warnings
 # cover the test targets too. The single run has listed the tests of its debug build by now and fails before the
@@ -156,9 +169,14 @@ swift_speed() {
     echo "run-suite: swift has no SpeedTests suite; the release-build speed step has nothing to run" >&2
     return 1
   fi
+  # CS-11 (AZ-2665): the string speed test is its own suite, and `\.SpeedTests/` does not select it.
+  if ! grep -q '\.TextSpeedTests/' <<< "$swift_tests"; then
+    echo "run-suite: swift has no TextSpeedTests suite; the release-build string speed step has nothing to run" >&2
+    return 1
+  fi
   if [ -z "$built" ]; then swift build "${swift_opts[@]}" -c release --build-tests "${swift_strict[@]}" || return 1; fi
   # The 1 MiB hostile unpack (FuzzTests/mebibyte, SW-4) is timed in the same release run: a debug build is about 7 times slower.
-  swift test "${swift_opts[@]}" -c release --skip-build --verbose --filter '\.SpeedTests/' --filter '\.FuzzTests/mebibyte'
+  swift test "${swift_opts[@]}" -c release --skip-build --verbose --filter '\.SpeedTests/' --filter '\.TextSpeedTests/' --filter '\.FuzzTests/mebibyte'
 }
 
 # The thread sanitizer runs the suites that use threads (the concurrency suite and the session suites); the other suites
@@ -269,6 +287,7 @@ case "$lang" in
   rust)
     if [ -f "$root/rust/Cargo.toml" ]; then
       run cargo test --manifest-path "$root/rust/Cargo.toml" -- --nocapture
+      run rust_speed
     else
       missing_manifest "$root/rust/Cargo.toml"
     fi

@@ -284,7 +284,7 @@ printf '#!/bin/sh\nexit 0\n' > "$present/java/test.sh"
 toolbin="$work/toolbin"
 mkdir -p "$toolbin"
 for tool in dotnet cargo make; do
-  printf '#!/bin/sh\necho "%s $*" >> "$GO_LOG"\nexit "${FAKE_TOOL_EXIT:-0}"\n' "$tool" > "$toolbin/$tool"
+  printf '#!/bin/sh\necho "%s $*" >> "$GO_LOG"\ncase "$*" in *--list*) [ -n "${FAKE_NO_SPEED_TEST:-}" ] || echo "text_positions_tests::ac8_one_hundred_thousand_round_trips_of_a_20_character_ukrainian_string: test" ;; esac\nexit "${FAKE_TOOL_EXIT:-0}"\n' "$tool" > "$toolbin/$tool"
   chmod +x "$toolbin/$tool"
 done
 for lang in csharp rust cpp java; do
@@ -299,6 +299,25 @@ for lang in csharp rust cpp java; do
     FAKE_TOOL_EXIT=1 PATH="$toolbin:$PATH" perl -e 'alarm 60; exec @ARGV' -- bash "$suite_sh" "$lang" </dev/null 2>&1)"; code=$?
   if [ "$lang" != java ] && [ "$code" -eq 0 ]; then bad "$lang: a failing tool passed"; fi
 done
+
+# R1. rust runs the string speed test in the release configuration (AZ-2665 AC-1): after the debug suite, a
+# `--release --lib` run of the ac8 test, preceded by the release `--list` that proves the test exists
+rm -f "$work/bare.rows"; : > "$work/go.log"
+env SRC_ROOT="$present" FIXTURE="$present/fixtures/golden.hex" TEST_RESULTS="$work/bare" GO_LOG="$work/go.log" \
+  PATH="$toolbin:$PATH" perl -e 'alarm 60; exec @ARGV' -- bash "$suite_sh" rust </dev/null >/dev/null 2>&1
+grep -q 'cargo test --manifest-path .* --release --lib -- --list' "$work/go.log" || bad "rust: no release list of the tests: $(cat "$work/go.log")"
+grep -q 'cargo test --manifest-path .* --release --lib ac8_one_hundred_thousand_round_trips -- --nocapture' "$work/go.log" \
+  || bad "rust: the string speed test does not run in the release configuration: $(cat "$work/go.log")"
+[ "$(grep -c '^cargo ' "$work/go.log")" -eq 3 ] || bad "rust: not the debug suite, the release list and the release run: $(cat "$work/go.log")"
+
+# R2. a rust tree without the string speed test fails by name, and the filter is not run (a filter that matches
+# nothing passes) (AZ-2665 AC-3)
+rm -f "$work/bare.rows"; : > "$work/go.log"
+out="$(env SRC_ROOT="$present" FIXTURE="$present/fixtures/golden.hex" TEST_RESULTS="$work/bare" GO_LOG="$work/go.log" \
+  FAKE_NO_SPEED_TEST=1 PATH="$toolbin:$PATH" perl -e 'alarm 60; exec @ARGV' -- bash "$suite_sh" rust </dev/null 2>&1)"; code=$?
+[ "$code" -ne 0 ] || bad "rust: a tree without the string speed test passed"
+case "$out" in *"rust has no string speed test"*) ;; *) bad "rust: no message for the missing string speed test: $out" ;; esac
+if grep -q 'ac8_one_hundred_thousand_round_trips -- --nocapture' "$work/go.log"; then bad "rust: the speed filter ran without the test: $(cat "$work/go.log")"; fi
 
 # --- the timing notice (AZ-2607 AC-2) ---
 # On GitHub Actions a run ends with ONE notice on stdout, so the seconds of a CI suite job are readable without a token:
@@ -356,7 +375,7 @@ if grep -qF 'pct%2Ctree' "$work/notice.out"; then bad "go: a raw % of a label is
 notice_run csharp "$bare" GITHUB_ACTIONS=true
 notice_is "csharp suite timing" csharp 0
 notice_run rust "$present" GITHUB_ACTIONS=true
-notice_is "rust suite timing" rust 1
+notice_is "rust suite timing" rust 2
 
 # N5. GITHUB_ACTIONS unset (the Mac), empty or anything but true: no notice, and the plain step lines as before
 for value in unset "" false; do
