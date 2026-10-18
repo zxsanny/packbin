@@ -5,15 +5,22 @@ Branch: dev
 
 ## Checks
 
-- [ ] 1. No application source is dirty at the close
-- [ ] 2. Step 11 stages at HEAD: none failed
-- [ ] 3. HD-1: no module-level text cache in Python or TypeScript
-- [ ] 4. HD-3, HD-4: the Rust release and Swift TextSpeedTests steps are in CI and guarded
-- [ ] 5. HD-5: the decoder review note, nothing released
+- [x] 1. No application source is dirty at the close
+- [x] 2. Step 11 stages at HEAD: none failed
+- [x] 3. HD-1: no module-level text cache in Python or TypeScript
+- [x] 4. HD-3, HD-4: the Rust release and Swift TextSpeedTests steps are in CI and guarded
+- [x] 5. HD-5: the decoder review note, nothing released
 
 ## Result
 
-(filled by the run)
+Agent run 2026-10-18 at `bd9cc89` (owner rule 2026-10-12 in `deployment_procedures.md`): **5/5 steps passed**. Smoke: PASS. Step 2 ran 9 stages (740 s) and printed 4 as skipped because nothing they cover changed since their last pass; the Rust and Swift suites ran in their CI containers, so the new release speed step (Rust) and the `TextSpeedTests` filter (Swift) were exercised.
+
+## For the operator
+
+- `main` was not pushed and no tag exists (`loop_end_merge: main` is not executed: only the `dev` push was asked for).
+- AC HD-5 is only partly met: the project `/security` skill is reserved for you, so the note `_docs/05_security/compact_text_decoder_review_loop36.md` is a focused read of the decoders, not the audit. AZ-2666 stays In Progress until you run `/security`.
+- `/feature-assess` and the retrospective for loops 35 and 36 are still yours to run.
+- The first CI run measures what the Rust release build adds to the `csharp rust` suite job (flagged concern in `problem.md`).
 
 ## Script (`bash smoke36.sh`)
 
