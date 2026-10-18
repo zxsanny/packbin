@@ -417,7 +417,7 @@ describe("compact text in every string position", () => {
 
 // AZ-2664 (HD-1, HD-2): the encode state belongs to the pack call.
 describe("AZ-2664: the text cache belongs to the pack call", () => {
-  const repeated = scheme<{ n: number; s: string }>(1, u8(0, (r) => r.n), times(1, 0, utf8(1, (r) => r.s)))
+  const repeated = scheme<{ n: number; s: string }>(1, u8(0, (r) => r.n), times(1, 0, [utf8(1, (r) => r.s)]))
 
   it("interleaved pack calls with different texts give each its own bytes", () => {
     const first = hexOf(BinaryPacker.pack(repeated, { n: 3, s: "привіт, світе" }))
