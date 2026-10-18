@@ -36,7 +36,7 @@ func eccKind(err error) string {
 	switch {
 	case e.Kind == packbin.Uncorrectable:
 		return "uncorrectable"
-	case e.Kind == packbin.TooMany && e.Field == packbin.NoField:
+	case e.Kind == packbin.TooLong:
 		return "too_long"
 	case e.Kind == packbin.ShortPacket && e.Name == "parity":
 		return "short"

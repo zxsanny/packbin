@@ -17,7 +17,7 @@ private func eccBytes(_ token: String) -> [UInt8]? {
 private func eccKind(_ error: PackbinError) -> String {
     switch error.kind {
     case .uncorrectable: return "uncorrectable"
-    case .tooMany: return error.field == nil ? "too_long" : "unpack_failed"
+    case .tooLong: return "too_long"
     case .short: return error.name == "parity" ? "short" : "unpack_failed"
     case .trailing: return "trailing"
     case .unknownType: return "type_mismatch"

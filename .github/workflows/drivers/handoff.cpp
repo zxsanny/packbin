@@ -370,8 +370,8 @@ std::string ecc_repair(int n, int t, std::vector<std::uint8_t> received) {
       return "uncorrectable";
     case packbin::Error::SchemeInvalid:
       return "bad_parity";
-    case packbin::Error::TooMany:
-      return len > 254 ? "too_long" : "unpack_failed";
+    case packbin::Error::TooLong:
+      return "too_long";
     case packbin::Error::BadValue:
       return t < 0 || t > n / 2 ? "bad_limit" : "unpack_failed";
     case packbin::Error::ShortPacket:
