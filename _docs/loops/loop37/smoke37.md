@@ -5,16 +5,21 @@ Branch: dev
 
 ## Checks
 
-- [ ] 1. No application source is dirty at the close
-- [ ] 2. Step 11 stages at HEAD: none failed
-- [ ] 3. RL-1: a local Scratch<65535> fails the C++ build, a static one passes
-- [ ] 4. RL-2: no CompactText test file is over 500 lines
-- [ ] 5. RL-3: the research bench files are at most 500 lines and the bench imports
-- [ ] 6. Nothing is released
+- [x] 1. No application source is dirty at the close
+- [x] 2. Step 11 stages at HEAD: none failed
+- [x] 3. RL-1: a local Scratch<65535> fails the C++ build, a static one passes
+- [x] 4. RL-2: no CompactText test file is over 500 lines
+- [x] 5. RL-3: the research bench files are at most 500 lines and the bench imports
+- [x] 6. Nothing is released
 
 ## Result
 
-(filled after the run)
+Agent run 2026-10-18 at `7963837` (owner rule 2026-10-12 in `deployment_procedures.md`): **6/6 steps passed**. Smoke: PASS. Step 2 printed 13 stages as skipped because the full step 11 had passed at `6a8d273` (6 passed, 7 skipped, 0 failed, 476 s: csharp, cpp, cpp-embedded-arm, ring, ac10, publish-gate) and only docs changed after it. Not run locally: the vcpkg supports and consumer checks (CI runs them).
+
+## For the operator
+
+- `main` was not pushed and no tag exists (`loop_end_merge: main` is not executed: only the `dev` push was asked for).
+- `/feature-assess`, `/security` (AZ-2666) and the retrospective for loops 35 to 37 are still yours to run.
 
 ## Script (`bash smoke37.sh`)
 
