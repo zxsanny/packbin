@@ -296,9 +296,24 @@ AZ-2513 through AZ-2524 are loop 26, the Swift package (epic AZ-2223; owner deci
 | AZ-2625 | ci_speed_3 | 5 | AZ-2607 | AZ-2223 |
 | AZ-2626 | ci_speed_4 | 5 | AZ-2625 | AZ-2223 |
 | AZ-2627 | ci_speed_5 | 5 | AZ-2626 | AZ-2223 |
+| AZ-2646 | compact_text_format_spec | 5 | None | AZ-2645 |
+| AZ-2647 | compact_text_vectors | 3 | AZ-2646 | AZ-2645 |
+| AZ-2648 | python_compact_text | 5 | AZ-2647 | AZ-2645 |
+| AZ-2649 | typescript_compact_text | 5 | AZ-2647 | AZ-2645 |
+| AZ-2650 | csharp_compact_text | 5 | AZ-2647 | AZ-2645 |
+| AZ-2651 | java_compact_text | 5 | AZ-2647 | AZ-2645 |
+| AZ-2652 | rust_compact_text | 5 | AZ-2647 | AZ-2645 |
+| AZ-2653 | go_compact_text | 5 | AZ-2647 | AZ-2645 |
+| AZ-2654 | swift_compact_text | 5 | AZ-2647 | AZ-2645 |
+| AZ-2655 | cpp_compact_text_codec | 5 | AZ-2647 | AZ-2645 |
+| AZ-2656 | cpp_text_api_and_embedded | 4 | AZ-2655 | AZ-2645 |
+| AZ-2657 | compact_text_hostile_ring_ci | 3 | AZ-2648 to AZ-2656 | AZ-2645 |
+| AZ-2658 | compact_text_docs | 2 | AZ-2657 | AZ-2645 |
 
 AZ-2563 through AZ-2567 are loop 28 (owner 2026-10-15: speed check, then the S3 limit, the cpp pool race and the small leftovers; speed set accepted as recommended). AZ-2564 waits for AZ-2563 (both edit `publish-gate.test.sh`). AZ-2565 owns `scripts/loop-tests.sh` and its test; AZ-2566 owns README and ADR-005; AZ-2567 owns only a scratchpad driver and a record entry. AZ-2068 stays out.
 
 AZ-2582 is loop 29 (owner 2026-10-15: cut the publish gate; approach A, target at most 18 minutes).
 
 AZ-2600 is loop 30 (owner 2026-10-16: all recommended reductions of the CI metrics report). AZ-2607 is loop 31 (owner 2026-10-17: all six recommendations of the loop 31 handoff; one task, two batches). AZ-2625 is loop 32 (owner 2026-10-17: readonly-gate in three jobs, pins moved, phases in two, Swift strict build merged; target a median wall of at most 330 s; one task, one batch). AZ-2626 is loop 33 (owner 2026-10-17: ring off the critical path, exact pull list per gate job; target a median wall of at most 250 s and ring at most 180 s; one task, one batch). AZ-2627 is loop 34 (owner 2026-10-17: Swift build caches with ccache for the C files, at most 20 jobs; target a median wall of at most 225 s; one task, one batch). AZ-2068 stays out.
+
+AZ-2646 through AZ-2658 are loop 35 (owner 2026-10-18: compact strings, epic AZ-2645; 57 points). Order: AZ-2646 (format, tables), AZ-2647 (reference, vectors), then AZ-2648 to AZ-2655 are independent peers (one package each, disjoint files), AZ-2656 after the C++ codec, AZ-2657 after every package, AZ-2658 last. Estimation: `LESSONS.md` says a new language costs 47 points over 12 specs; here each package changes one walker path, so 5 points per package with no bump. The Swift and C++ tasks carry the two largest risks (F47 for keys; scratch buffer and the size probe).

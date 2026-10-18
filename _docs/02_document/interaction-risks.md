@@ -89,3 +89,7 @@ Swift package (loop 26, AZ-2223; decompose 1.8):
 ## Deferred
 
 None.
+| Two packages choose differently between equal-cost parses (a switch or LOCK at a tie) and write different bytes for one string | mismatched bytes: 0 on the vectors file and on the ring | CS-7, CS-19 | AZ-2646, AZ-2647 and each package |
+| A flipped bit in a string payload shifts the codes and corrupts the next field | the field after the string is unchanged while the count header is intact; nothing is read past the payload | CS-8 | each package |
+| C++ borrows text from the input (`View`) while the codec has to decode it | `utf8` binds to `Text<N>` only; `TooMany` instead of a cut | CS-18 | AZ-2655, AZ-2656 |
+| The Cortex-M4F size probe links the codec through the string dispatch | `PACKBIN_NO_TEXT` removes it; flash and stack budgets hold | CS-12 | AZ-2656 |
