@@ -40,7 +40,7 @@ final class HostileRefusals {
             Map.entry("pack_split_times_count_skipped", bad("pt: values given, but the count of its times was never written")),
             Map.entry("pack_lone_bytes_in_round", bad("d: a lone byte buffer is not a list of rounds")),
             Map.entry("pack_lone_utf8_under_times_over_budget",
-                    bad("s: the packet would be 16777477 bytes, above the limit of 16777216 bytes")),
+                    bad("s: the packet would be 16777989 bytes, above the limit of 16777216 bytes")),
             Map.entry("pack_element_times_over_budget",
                     bad("k: the rounds would hold 1048577 slots, above the limit of 1048576 slots")),
             Map.entry("pack_slots_over_limit",

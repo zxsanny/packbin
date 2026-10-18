@@ -43,13 +43,9 @@ final class ByteSink {
         size += n;
     }
 
-    /** A length prefix of 2 bytes and the text or key after it, as one append. */
-    void writePrefixed(Field member, byte[] text) {
-        ensure(member, 2L + text.length);
-        buf[size++] = (byte) text.length;
-        buf[size++] = (byte) (text.length >> 8);
-        System.arraycopy(text, 0, buf, size, text.length);
-        size += text.length;
+    /** A text or a dictionary key, as the compact text format writes it: a count, then the payload, as one append. */
+    void writeText(Field member, byte[] utf8) {
+        write(member, TextEncoder.encode(utf8));
     }
 
     /** The 2-byte count of a list or dict. */

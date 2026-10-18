@@ -47,18 +47,18 @@ final class LoneDictRoundTest {
 
     private static void listOfDictsPerRoundStillPacks() {
         Map<String, Object> row = Maps.map("n", 2, "d", List.of(Map.of("a", 1), Map.of("b", 2)));
-        PackbinTest.expectEq("AZ-2308 AC-3 times, one dictionary per round", "0102010001006101010001006202",
+        PackbinTest.expectEq("AZ-2308 AC-3 times, one dictionary per round", "0102010002106101010002106202",
                 PackbinTest.toHex(BinaryPacker.pack(times(), row)));
-        PackbinTest.expectEq("AZ-2308 AC-3 repeat, one dictionary per round", "01010001006101010001006202",
+        PackbinTest.expectEq("AZ-2308 AC-3 repeat, one dictionary per round", "01010002106101010002106202",
                 PackbinTest.toHex(BinaryPacker.pack(repeat(), Maps.map("d", List.of(Map.of("a", 1), Map.of("b", 2))))));
-        PackbinTest.expectEq("AZ-2308 AC-3 a dictionary outside a round", "010100010061" + "01",
+        PackbinTest.expectEq("AZ-2308 AC-3 a dictionary outside a round", "0101000210" + "6101",
                 PackbinTest.toHex(BinaryPacker.pack(Maps.scheme(1, dict()), Maps.map("d", Map.of("a", 1)))));
     }
 
     private static void loneUtf8StillBroadcasts() {
         Scheme<Map> utf8 = Maps.scheme(1, Packbin.u8(0, Access.get("n"), Access.set("n")),
                 Packbin.times(1, 0, Packbin.utf8(1, Access.get("s"), Access.set("s"))));
-        PackbinTest.expectEq("AZ-2308 excluded: lone utf8 broadcasts", "0102010078010078",
+        PackbinTest.expectEq("AZ-2308 excluded: lone utf8 broadcasts", "0102021078021078",
                 PackbinTest.toHex(BinaryPacker.pack(utf8, Maps.map("n", 2, "s", "x"))));
     }
 }

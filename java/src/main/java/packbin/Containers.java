@@ -82,7 +82,7 @@ final class Containers {
             if (rawKey.length > VarFields.MAX_U16) {
                 throw new IllegalArgumentException("dict: key length " + rawKey.length);
             }
-            sink.writePrefixed(field, rawKey);
+            sink.writeText(field, rawKey);
             Object value = items.get(key);
             if (value == null && isNestedRow(child)) {
                 throw new IllegalArgumentException("missing dict element \"" + key + "\"");
@@ -122,21 +122,10 @@ final class Containers {
         Map<String, Object> items = new LinkedHashMap<>();
         Set<String> seenKeys = new HashSet<>();
         for (int i = 0; i < count; i++) {
-            left = data.length - cur.pos;
-            if (left < 2) {
-                return new Object[] {items, new Packbin.ShortPacket("", 2, left)};
+            Object read = TextDecoder.read("", data, cur);
+            if (!(read instanceof String key)) {
+                return new Object[] {items, read};
             }
-            int keyLen = (data[cur.pos] & 0xff) | ((data[cur.pos + 1] & 0xff) << 8);
-            cur.pos += 2;
-            left = data.length - cur.pos;
-            if (left < keyLen) {
-                return new Object[] {items, new Packbin.ShortPacket("", keyLen, left)};
-            }
-            String key = VarFields.decodeUtf8(data, cur.pos, keyLen);
-            if (key == null) {
-                return new Object[] {items, new Packbin.ShortPacket("", keyLen, 0)};
-            }
-            cur.pos += keyLen;
             if (!seenKeys.add(key)) {
                 return new Object[] {items, new Packbin.ShortPacket("", 0, 0)};
             }

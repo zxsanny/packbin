@@ -7,7 +7,7 @@ import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
 /**
- * AZ-2354 AC-1: {@code u32 n; times(n) { utf8 s }} with n = 65 535 and a 65 535 byte string refuses to pack, naming
+ * AZ-2354 AC-1: {@code u32 n; times(n) { utf8 s }} with n = 65 535 and a 65 535 byte string that stays raw refuses to pack, naming
  * {@code s}, and keeps its memory near the budget: this class is the main of a child JVM whose heap holds well under
  * the 4.3 GB the packet used to need, so an unbounded buffer would end in an OutOfMemoryError there.
  */
@@ -21,7 +21,7 @@ final class LoneUtf8Budget {
         Scheme<java.util.Map> scheme = Maps.scheme(1, Packbin.u32(0, Access.get("n"), Access.set("n")),
                 Packbin.times(1, 0, Packbin.utf8(1, Access.get("s"), Access.set("s"))));
         char[] text = new char[65_535];
-        Arrays.fill(text, 'a');
+        Arrays.fill(text, (char) 1);
         try {
             BinaryPacker.pack(scheme, Maps.map("n", 65_535, "s", new String(text)));
             System.out.println("packed");

@@ -186,7 +186,7 @@ final class MissingNestedValueTest {
         expectThrows("AC-5 dict, two nulls name the first sorted key", scheme,
                 Maps.map("d", Maps.map("z", null, "c", null, "a", Maps.map("v", 1))), "missing dict element \"c\"");
         expectRoundTrip("AC-5 dict, every value present", scheme,
-                Maps.map("d", Maps.map("a", Maps.map("v", 1))), "01010001006101");
+                Maps.map("d", Maps.map("a", Maps.map("v", 1))), "01010002106101");
     }
 
     private static void ac5TypedListElement() {

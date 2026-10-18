@@ -129,15 +129,15 @@ final class PackbinFieldsTest {
     private static void utf8String() {
         Scheme<Map> layout = Maps.scheme(1, Packbin.utf8(0, Access.get("name"), Access.set("name")));
         byte[] raw = BinaryPacker.pack(layout, Maps.map("name", "zxsanny"));
-        expectEq("utf8 hex", "0107007a7873616e6e79", PackbinTest.toHex(raw));
-        expectEq("utf8 len", 10, raw.length);
+        expectEq("utf8 hex", "01062bfcfee119b2", PackbinTest.toHex(raw));
+        expectEq("utf8 len", 8, raw.length);
         Map[] got = new Map[1];
         Object err = BinaryPacker.unpack(raw, layout.on(row -> got[0] = row));
         expectTrue("utf8 ok", err == null);
         expectEq("utf8 text", "zxsanny", got[0].get("name"));
 
         byte[] empty = BinaryPacker.pack(layout, Maps.map("name", ""));
-        expectEq("utf8 empty", "010000", PackbinTest.toHex(empty));
+        expectEq("utf8 empty", "0100", PackbinTest.toHex(empty));
         Map[] emptyGot = new Map[1];
         Object emptyErr = BinaryPacker.unpack(empty, layout.on(row -> emptyGot[0] = row));
         expectTrue("utf8 empty ok", emptyErr == null);
@@ -152,13 +152,13 @@ final class PackbinFieldsTest {
         expectTrue("utf8 too long", failed);
 
         Map[] shortGot = new Map[1];
-        Object shortErr = BinaryPacker.unpack(new byte[] {0x01, 0x07, 0x00, 0x7a, 0x78}, layout.on(row -> shortGot[0] = row));
+        Object shortErr = BinaryPacker.unpack(new byte[] {0x01, 0x06, 0x2b, (byte) 0xfc, (byte) 0xfe}, layout.on(row -> shortGot[0] = row));
         expectTrue("utf8 short", shortErr != null);
         expectTrue("utf8 short handler did not run", shortGot[0] == null);
         Packbin.ShortPacket missing = (Packbin.ShortPacket) shortErr;
         expectEq("utf8 short field", "0", missing.field);
-        expectEq("utf8 short needed", 7, missing.needed);
-        expectEq("utf8 short left", 2, missing.left);
+        expectEq("utf8 short needed", 6, missing.needed);
+        expectEq("utf8 short left", 3, missing.left);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -206,8 +206,7 @@ final class PackbinFieldsTest {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static void dictionary() throws Exception {
-        String userHex =
-                "0107007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e6e656c010004007265616403006d6170040004007265616407006770735f6669780300736574040065646974050073746f7265020004007265616405007772697465";
+        String userHex = TextVectors.ref("ref.user");
         Scheme<Map> layout = Maps.scheme(1,
                 Packbin.utf8(0, Access.get("username"), Access.set("username")),
                 Packbin.list(Access.get("roles"), Access.set("roles"),
@@ -225,7 +224,7 @@ final class PackbinFieldsTest {
                 "access", access);
         byte[] raw = BinaryPacker.pack(layout, values);
         expectEq("dict hex", userHex, PackbinTest.toHex(raw));
-        expectEq("dict len", 104, raw.length);
+        expectEq("dict len", 79, raw.length);
         expectEq("dict twice", 0, PackbinTest.mismatchedBytes(raw, BinaryPacker.pack(layout, values)));
         byte[][] parallel = new byte[2][];
         Thread first = new Thread(() -> parallel[0] = BinaryPacker.pack(layout, values));
@@ -253,13 +252,13 @@ final class PackbinFieldsTest {
                 Packbin.utf8(0, Access.get("s"), Access.set("s")),
                 Packbin.list(Access.get("xs"), Access.set("xs"), Packbin.u8(0, Access.identity(), Access.ignore())),
                 Packbin.dict(Access.get("m"), Access.set("m"), Packbin.utf8(0, Access.identity(), Access.ignore())));
-        expectEq("dict empty", "01000000000000", PackbinTest.toHex(BinaryPacker.pack(empty, Maps.map("s", "", "xs", List.of(), "m", Map.of()))));
+        expectEq("dict empty", "010000000000", PackbinTest.toHex(BinaryPacker.pack(empty, Maps.map("s", "", "xs", List.of(), "m", Map.of()))));
 
         Scheme<Map> dup = Maps.scheme(1, Packbin.dict(
                 Access.get("access"), Access.set("access"),
                 Packbin.utf8(0, Access.identity(), Access.ignore())));
         Map[] badGot = new Map[1];
-        Object bad = BinaryPacker.unpack(PackbinTest.parseHex("010200010061010078010061010079"), dup.on(row -> badGot[0] = row));
+        Object bad = BinaryPacker.unpack(PackbinTest.parseHex("01" + "0200" + "021061" + "021078" + "021061" + "021079"), dup.on(row -> badGot[0] = row));
         expectTrue("dict dup", bad != null);
         expectTrue("dict dup handler did not run", badGot[0] == null);
 

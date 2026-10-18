@@ -13,9 +13,9 @@ import java.util.Map;
 final class ApiSafeReplacementsTest {
     private ApiSafeReplacementsTest() {}
 
-    // Recorded from the build before the change: keys "", a, ab, b, z, then 0xc3 0xa9 and 0xc3 0xa9 0x61.
+    // Recorded from the reference codec (scripts/text/textfmt.py): keys "", a, ab, b, z, then 0xc3 0xa9 and 0xc3 0xa9 0x61.
     private static final String UNSIGNED_ORDER_HEX =
-            "01070000000100370100610100340200616201003501006201003301007a0100310200c3a90100320300c3a961010036";
+            "010700000210370210610210340310616202103502106202103302107a0210310310c3a90210320410c3a961021036";
 
     static void run() {
         dictKeysSortAsUnsignedBytes();

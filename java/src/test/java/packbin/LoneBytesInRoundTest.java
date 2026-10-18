@@ -52,7 +52,7 @@ final class LoneBytesInRoundTest {
         refused("AZ-2332 AC-1 repeat bytes", REPEAT_BYTES, row("d", b(1, 2)), LONE);
         refused("AZ-2332 AC-1 hostile buffer of the wrong size", TIMES_BYTES, row("n", 2, "d", b(1)), LONE);
         refused("AZ-2332 AC-1 times sized", TIMES_SIZED, row("n", 2, "len", List.of(2, 2), "d", b(1, 2)), LONE);
-        PackbinTest.expectEq("AZ-2332 lone string still goes to every round", "01020200686902006869",
+        PackbinTest.expectEq("AZ-2332 lone string still goes to every round", "0102022aaa022aaa",
                 PackbinTest.toHex(BinaryPacker.pack(TIMES_UTF8, row("n", 2, "t", "hi"))));
     }
 

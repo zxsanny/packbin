@@ -146,8 +146,8 @@ final class HostileSessionTest {
     private static void zeroWidthDictValue() {
         Scheme<Map> scheme = Maps.scheme(1, Packbin.dict(Access.get("m"), Access.set("m"),
                 Packbin.bytes(0, Access.identity(), Access.ignore(), 0)));
-        expectSameErrorThenValid("R2-G1 01 ff ff 01 00 61", scheme, "01ffff010061", Maps.map("m", Map.of()));
-        PackbinTest.expectEq("R2-G1 clear unpack of 01 ff ff 01 00 61", "ShortPacket(,0,0)",
-                describe(clearResult(scheme, "01ffff010061")));
+        expectSameErrorThenValid("R2-G1 01 ff ff 02 10 61", scheme, "01ffff021061", Maps.map("m", Map.of()));
+        PackbinTest.expectEq("R2-G1 clear unpack of 01 ff ff 02 10 61", "ShortPacket(,0,0)",
+                describe(clearResult(scheme, "01ffff021061")));
     }
 }

@@ -39,7 +39,7 @@ final class HostileLoop22 {
             case "pack_element_times_over_bytes_budget" -> () -> {
                 List<Object> items = new ArrayList<>();
                 for (int i = 0; i < 16; i++) {
-                    items.add(Maps.map("n", 65_535, "s", "a".repeat(16)));
+                    items.add(Maps.map("n", 65_535, "s", String.valueOf((char) 1).repeat(16)));
                 }
                 return BinaryPacker.pack(Maps.scheme(1, Packbin.list(Access.get("items"), Access.set("items"),
                         Packbin.group(0, Packbin.u32(0, Access.get("n"), Access.set("n")),

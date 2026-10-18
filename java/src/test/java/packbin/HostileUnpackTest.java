@@ -212,19 +212,24 @@ final class HostileUnpackTest {
 
     private static void invalidUtf8IsErrorValue() {
         Scheme<Map> name = Maps.scheme(1, Packbin.utf8(0, Access.get("name"), Access.set("name")));
-        expectErrorValue("AC-5 utf8 ff fe", name, "010200fffe");
-        expectErrorValue("AC-5 utf8 c3 28", name, "010200c328");
-        expectErrorValue("AC-5 utf8 overlong c0 80", name, "010200c080");
-        expectErrorValue("AC-5 utf8 encoded surrogate ed a0 80", name, "010300eda080");
-        expectErrorValue("AC-5 utf8 truncated sequence e2 82", name, "010200e282");
+        expectErrorValue("AC-5 raw utf8 ff fe", name, "010310fffe");
+        expectErrorValue("AC-5 utf8 c3 28", name, "010310c328");
+        expectErrorValue("AC-5 utf8 overlong c0 80", name, "010310c080");
+        expectErrorValue("AC-5 utf8 encoded surrogate ed a0 80", name, "010410eda080");
+        expectErrorValue("AC-5 utf8 truncated sequence e2 82", name, "010310e282");
 
         Scheme<Map> dict = Maps.scheme(1, Packbin.dict(
                 Access.get("m"), Access.set("m"), Packbin.utf8(0, Access.identity(), Access.ignore())));
-        expectErrorValue("AC-5 dict key ff", dict, "0101000100ff0000");
+        expectErrorValue("AC-5 dict key ff", dict, "01" + "0100" + "0210ff" + "00");
 
         Scheme<Map> list = Maps.scheme(1, Packbin.list(
                 Access.get("xs"), Access.set("xs"), Packbin.utf8(0, Access.identity(), Access.ignore())));
-        expectErrorValue("AC-5 list element ff", list, "0101000100ff");
+        for (TextVectors.Row row : TextVectors.ofKind("bad")) {
+            if (row.cols[1].equals("utf8") || row.cols[1].equals("raw")) {
+                expectErrorValue("AC-6 " + row.id() + " is refused", name, "01" + row.cols[2]);
+            }
+        }
+        expectErrorValue("AC-5 list element ff", list, "01" + "0100" + "0210ff");
     }
 
     private static void validUtf8Unchanged() {

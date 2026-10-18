@@ -61,8 +61,8 @@ final class ZeroWidthElementTest {
     private static void zeroWidthDictValueIsError() {
         Scheme<Map> dict = Maps.scheme(1, Packbin.dict(Access.get("m"), Access.set("m"),
                 Packbin.bytes(0, Access.identity(), Access.ignore(), 0)));
-        expectEmptyElement("AC-2 dict count ffff, one key", dict, "01ffff010061", 0);
-        expectEmptyElement("AC-2 dict count 1, zero-width value", dict, "010100010061", 0);
+        expectEmptyElement("AC-2 dict count ffff, one key", dict, "01ffff021061", 0);
+        expectEmptyElement("AC-2 dict count 1, zero-width value", dict, "010100021061", 0);
     }
 
     /**

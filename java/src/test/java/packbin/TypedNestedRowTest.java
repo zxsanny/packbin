@@ -255,7 +255,7 @@ final class TypedNestedRowTest {
         Holder row = new Holder();
         row.items = List.of(item(3), item(4));
         row.byName = Map.of("a", item(6));
-        String hex = "01" + "0200" + "03" + "04" + "0100" + "0100" + "61" + "06";
+        String hex = "01" + "0200" + "03" + "04" + "0100" + "021061" + "06";
         PackbinTest.expectEq("AC-5 bytes", hex, PackbinTest.toHex(BinaryPacker.pack(scheme, row)));
 
         Holder back = unpackOne("AC-5", scheme, hex);

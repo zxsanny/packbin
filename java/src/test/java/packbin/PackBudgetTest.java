@@ -76,8 +76,8 @@ final class PackBudgetTest {
     private static void row1LoneUtf8UnderACappedTimes() {
         // Arrange
         Scheme<Map> scheme = Maps.scheme(1, u32(0, "n"), Packbin.times(1, 0, utf8(1, "s")));
-        Map row = Maps.map("n", 65_535, "s", repeated('a', 65_535));
-        String refused = "s: the packet would be 16777477 bytes, above the limit of 16777216 bytes";
+        Map row = Maps.map("n", 65_535, "s", repeated((char) 1, 65_535));
+        String refused = "s: the packet would be 16777989 bytes, above the limit of 16777216 bytes";
         // Act
         long start = System.nanoTime();
         String got = refusal(scheme, row);
@@ -122,7 +122,7 @@ final class PackBudgetTest {
 
     /**
      * The bytes-budget route through an element that holds a times, under the slots limit: 16 items of 65 535 rounds
-     * of one 16-char text are 1 048 560 slots and 18 874 147 bytes (the TypeScript row of reference_loop22.md).
+     * of one 16-char text that stays raw are 1 048 560 slots and 18 874 147 bytes (the TypeScript row of reference_loop22.md).
      */
     private static void rows2And3AnElementThatHoldsATimesUnderTheSlotsLimit() {
         // Arrange
@@ -130,7 +130,7 @@ final class PackBudgetTest {
                 Packbin.group(0, u32(0, "n"), Packbin.times(1, 0, utf8(1, "s")))));
         List<Object> items = new ArrayList<>();
         for (int i = 0; i < 16; i++) {
-            items.add(Maps.map("n", 65_535, "s", "abcdefghijklmnop"));
+            items.add(Maps.map("n", 65_535, "s", repeated((char) 1, 16)));
         }
         Map row = Maps.map("items", items);
         // Act
@@ -153,12 +153,12 @@ final class PackBudgetTest {
         Scheme<Map> text = Maps.scheme(1, utf8(0, "s")).withMaxBytes(64);
         Scheme<Map> repeat = Maps.scheme(1, Packbin.repeat(0, u8(0, "k"))).withMaxBytes(64);
         // Act
-        byte[] sixtyOne = BinaryPacker.pack(text, row("s", repeated('a', 61)));
+        byte[] sixtyOne = BinaryPacker.pack(text, row("s", repeated((char) 1, 61)));
         byte[] sixtyThree = BinaryPacker.pack(repeat, row("k", Collections.nCopies(63, 7)));
         // Assert
         PackbinTest.expectEq("AC-3 row 4 length", 64, sixtyOne.length);
-        PackbinTest.expectEq("AC-3 row 4 head", "013d0061", hexAt(sixtyOne, 0, 4));
-        refused("AC-3 row 5", text, row("s", repeated('a', 62)),
+        PackbinTest.expectEq("AC-3 row 4 head", "013e1001", hexAt(sixtyOne, 0, 4));
+        refused("AC-3 row 5", text, row("s", repeated((char) 1, 62)),
                 "s: the packet would be 65 bytes, above the limit of 64 bytes");
         PackbinTest.expectEq("AC-3 row 6 length", 64, sixtyThree.length);
         PackbinTest.expectEq("AC-3 row 6 head", "0107070707", hexAt(sixtyThree, 0, 5));
@@ -185,7 +185,7 @@ final class PackBudgetTest {
                 row("a", 1, "b", 2), "a: the packet would be 2 bytes, above the limit of 1 bytes");
         refused("AC-3 dict key names the dict",
                 Maps.scheme(1, Packbin.dict(Access.get("d"), Access.set("d"), u8(0, "v"))).withMaxBytes(4),
-                row("d", Maps.map("key", 1)), "d: the packet would be 8 bytes, above the limit of 4 bytes");
+                row("d", Maps.map("key", 1)), "d: the packet would be 7 bytes, above the limit of 4 bytes");
     }
 
     private static Map<String, Object> wideRow(int count) {

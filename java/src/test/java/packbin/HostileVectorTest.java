@@ -246,7 +246,7 @@ final class HostileVectorTest {
             case "pack_lone_utf8_under_times_over_budget" -> () -> BinaryPacker.pack(
                     Maps.scheme(1, Packbin.u32(0, Access.get("n"), Access.set("n")),
                             Packbin.times(1, 0, Packbin.utf8(1, Access.get("s"), Access.set("s")))),
-                    Maps.map("n", 65_535, "s", "a".repeat(65_535)));
+                    Maps.map("n", 65_535, "s", String.valueOf((char) 1).repeat(65_535)));
             case "pack_element_times_over_budget" -> () -> {
                 List<Object> items = new ArrayList<>();
                 for (int i = 0; i < 40; i++) {

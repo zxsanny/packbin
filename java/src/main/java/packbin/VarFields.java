@@ -269,7 +269,7 @@ final class VarFields {
         if (bytes.length > MAX_U16) {
             throw new IllegalArgumentException(field.id + ": utf-8 length " + bytes.length);
         }
-        sink.writePrefixed(field, bytes);
+        sink.writeText(field, bytes);
     }
 
     static Object unpackUtf8(
@@ -279,21 +279,10 @@ final class VarFields {
             Object row,
             Map<Object, Object> seen,
             boolean asList) {
-        int left = data.length - cur.pos;
-        if (left < 2) {
-            return new Packbin.ShortPacket(field.label(), 2, left);
+        Object text = TextDecoder.read(field.label(), data, cur);
+        if (!(text instanceof String)) {
+            return text;
         }
-        int count = (data[cur.pos] & 0xff) | ((data[cur.pos + 1] & 0xff) << 8);
-        cur.pos += 2;
-        left = data.length - cur.pos;
-        if (left < count) {
-            return new Packbin.ShortPacket(field.label(), count, left);
-        }
-        String text = decodeUtf8(data, cur.pos, count);
-        if (text == null) {
-            return new Packbin.ShortPacket(field.label(), count, 0);
-        }
-        cur.pos += count;
         seen.put(field.id, text);
         Walker.store(row, field, text, asList);
         return null;
