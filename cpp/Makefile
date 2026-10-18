@@ -1,5 +1,7 @@
 CXX ?= g++
-CXXFLAGS ?= -std=c++17 -O2 -Wall -Wextra -Werror -Iinclude
+# FRAME_LIMIT: a stack frame over 64 KB is a bug here; it catches a local Scratch<N> above 5,461 characters.
+FRAME_LIMIT := 65536
+CXXFLAGS ?= -std=c++17 -O2 -Wall -Wextra -Werror -Wframe-larger-than=$(FRAME_LIMIT) -Iinclude
 ifdef PACKBIN_CXX_SYSROOT
 CXXFLAGS += -isysroot $(PACKBIN_CXX_SYSROOT) -I$(PACKBIN_CXX_SYSROOT)/usr/include/c++/v1
 endif
@@ -19,7 +21,7 @@ EXPECT_FAIL_NO_TEXT := ./tests/compile-fail/expect-fail.sh "$(CXX) $(CXXFLAGS) $
 NO_TEXT_TESTS := tests/core/no_text_tests.cpp
 NO_TEXT_BIN := build/packbin_no_text_tests
 
-.PHONY: test core-test clean compile-fail object-check no-text-test
+.PHONY: test core-test clean compile-fail object-check no-text-test frame-check
 
 $(TEST_BIN): $(HDRS) $(CORE_SRCS) $(HOST_SRCS) $(VECTOR_TESTS) $(HOST_TESTS) tests/core/check.hpp tests/core/hostile_pack_cases.hpp tests/core/hostile_pack_loop21.hpp tests/core/hostile_rule_check.hpp tests/core/member_cases.hpp
 	mkdir -p build
@@ -80,7 +82,12 @@ compile-fail: $(HDRS)
 	@$(EXPECT_FAIL_NO_TEXT) tests/compile-fail/no_text_text_member.cpp "PACKBIN_NO_TEXT links no codec"
 	@$(EXPECT_FAIL_NO_TEXT) tests/compile-fail/no_text_text_element.cpp "Text_N_needs_the_codec_but_PACKBIN_NO_TEXT_is_defined"
 
-test: $(TEST_BIN) compile-fail object-check no-text-test
+# RL-1: a large Scratch as a local fails the build, a static one passes.
+frame-check: $(HDRS)
+	@mkdir -p build
+	@bash tests/frame-check.sh "$(CXX) $(CXXFLAGS) $(CORE_FLAGS) -c -o build/frame-check.o"
+
+test: $(TEST_BIN) compile-fail object-check no-text-test frame-check
 	./$(TEST_BIN)
 
 core-test: test

@@ -35,7 +35,7 @@ branch: dev
 **AC-1: One parser, same numbers**
 Given the current `bench.py` output
 When the file is split and imports the parse from `scripts/text/textfmt.py`
-Then no second parser remains, each file is at most 500 lines and the printed table equals the saved output of the old run (RL-3)
+Then the alphabets and canonical codes come from `textfmt.py` (the bench's own tokenizer stays, because it runs experimental schemes `textfmt.parse` cannot express), each file is at most 500 lines and the printed table equals the saved output of the old run (RL-3)
 
 ## Unit Tests
 

@@ -36,7 +36,8 @@ struct ScratchRef {
 };
 
 // Owned scratch for strings of up to `Chars` code points: `Scratch<64> sc; pack(s, row, out,
-// cap, sc);`. The words need no initial value.
+// cap, sc);`. The words need no initial value. Scratch<65535> is 786 KB: declare a large one
+// `static` (the host build refuses a frame over 64 KB, `-Wframe-larger-than`).
 template <std::size_t Chars>
 struct Scratch {
   static_assert(Chars > 0 && Chars <= 65535, "packbin: Scratch<N> holds 1..65535 characters");
