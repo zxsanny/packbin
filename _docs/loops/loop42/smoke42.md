@@ -5,15 +5,24 @@ Branch: dev
 
 ## Checks
 
-- [ ] 1. No application source is dirty at the close
-- [ ] 2. Step 11 stages at HEAD: none failed
-- [ ] 3. AZ-2713 AC-1 and AC-2: Python and TypeScript refuse out-of-order and repeated keys (the other six in step 2)
-- [ ] 4. AZ-2713 AC-3: C++ unpacks 65,535 keys at most 1 s (bound `Array` and unbound; the probe)
-- [ ] 5. AZ-2713 AC-4: text vectors and the shared hostile cases still pass
-- [ ] 6. AZ-2722: Python and TypeScript refuse a wrong payload type before the receive index moves
-- [ ] 7. The contract `compact-text.md` states the ascending-key rule
-- [ ] 8. No source file this loop touched is over 500 lines
-- [ ] 9. Nothing is released: no tag holds HEAD
+- [x] 1. No application source is dirty at the close
+- [x] 2. Step 11 stages at HEAD: none failed
+- [x] 3. AZ-2713 AC-1 and AC-2: Python and TypeScript refuse out-of-order and repeated keys (the other six in step 2)
+- [x] 4. AZ-2713 AC-3: C++ unpacks 65,535 keys at most 1 s (bound `Array` and unbound; the probe)
+- [x] 5. AZ-2713 AC-4: text vectors and the shared hostile cases still pass
+- [x] 6. AZ-2722: Python and TypeScript refuse a wrong payload type before the receive index moves
+- [x] 7. The contract `compact-text.md` states the ascending-key rule
+- [x] 8. No source file this loop touched is over 500 lines
+- [x] 9. Nothing is released: no tag holds HEAD
+
+## Result
+
+Agent run 2026-10-19 at `b427967` (owner rule 2026-10-12 in `deployment_procedures.md`): **9/9 steps passed** on the second run. The first run was 8/9: step 11 ran 12 stages green (csharp and python only on the serial retry) and Go failed twice on a timing check unrelated to dict keys (`TestAC3RaisedSlotLimitUnpacksTheOldWorstPacketAndTheDefaultRefusesIt`, the refusal took 1.14 s of 1 s under `-race`, at a load average of 27 to 30 from other sessions on the host); Go alone passed (`go test -race`, 79 s) and `scripts/loop-tests.sh` re-ran only Go: pass (183 s). The second smoke run then found every stage stamped at HEAD. Step 11 first run: 1677 s, ring 336 s, publish gate 419 s. Cortex-M4F: flash 7,920 B of 8,192, stack 504 B of 512 (embedded stage, `b427967` era, 12 s of the cpp-embedded-arm stage).
+
+## For the operator
+
+- The first `v*` tag, F44 and the `go/v*` tag are yours.
+- `/feature-assess`, `/security` follow-up and the retrospective are yours to run.
 
 ## Script (`bash smoke42.sh`)
 
