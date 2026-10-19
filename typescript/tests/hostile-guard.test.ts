@@ -27,12 +27,13 @@ describe("hostile worker hang guard (AZ-2728)", () => {
   })
 
   it("a start-up longer than the case guard is not charged to the first case", async () => {
-    // Arrange: ready comes three case guards late, measured as the runner measures it, well inside the start-up guard.
+    // Arrange: ready comes three case guards late, measured as the runner measures it. The start-up guard is 30 s
+    // nominal so that a load factor read here up to 8 times the runner's (0.9 s x 8) still ends inside it.
     const caseGuard = bound(GUARDS.caseSeconds)
     const jobs = [{ key: "first", readyAfterMs: 3 * caseGuard.seconds * 1000 }, { key: "second" }]
 
     // Act
-    const settled = await run(jobs)
+    const settled = await run(jobs, { ...GUARDS, startupSeconds: 30 })
 
     // Assert
     assert.deepEqual([...settled], [["first", "ran first"], ["second", "ran second"]])

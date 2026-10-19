@@ -348,4 +348,15 @@ target_avr_uno() {
     cat "$dir/f64.log"
     fail "AC-2 f64 refused without naming f64"
   fi
+
+  # Without __builtin_is_constant_evaluated a broken constant scheme compiles; its status names it.
+  status=0
+  avr-g++ "${core_flags[@]}" "${avr_arch[@]}" -I"$cpp/include" -fsyntax-only \
+    "$here/avr/broken_scheme_status.cpp" > "$dir/broken.log" 2>&1 || status=$?
+  if [ "$status" -eq 0 ]; then
+    note "broken constant scheme is SchemeInvalid"
+  else
+    cat "$dir/broken.log"
+    fail "broken constant scheme: status check did not compile"
+  fi
 }

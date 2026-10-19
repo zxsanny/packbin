@@ -47,6 +47,8 @@ function runBatch<J extends { key: string }, O>(
       arm(perCase, "hang: no result within")
     })
     worker.once("error", (e) => finish(pending(), e))
+    // A worker that ends without an error before its last result names the first case it left, at once.
+    worker.once("exit", (code) => finish(pending(), `the worker exited with code ${code} before this result`))
     arm(startup, "start-up: the worker did not post ready within")
   })
 }
