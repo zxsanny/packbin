@@ -9,7 +9,7 @@ Branch: dev
 - [ ] 2. Step 11 stages at HEAD: none failed
 - [ ] 3. AZ-2724 AC-1 to AC-3: the Python session computes one pad block for an unknown type and the same row for a known one
 - [ ] 4. AZ-2723 AC-1: the Python timing helper returns a load factor between 1 and 8
-- [ ] 5. AZ-2723 AC-3: the six helper files exist (eight packages) and no touched file is over 500 lines
+- [ ] 5. AZ-2723 AC-3: the eight helper files exist and no touched file is over 500 lines
 - [ ] 6. The contract `pack-session.md` states the pad cost
 - [ ] 7. Nothing is released: no tag holds HEAD
 
@@ -43,7 +43,7 @@ step "AZ-2723 AC-1: the Python and TypeScript load factors are between 1 and 8"
 if python/.venv/bin/python -c "import sys; sys.path.insert(0, 'python/tests'); import timing_support as t; f = t.load_factor(); print('python factor %.2f' % f); sys.exit(0 if 1 <= f <= 8 else 1)" < /dev/null > "$work/out.log" 2>&1; then ok "$(cat "$work/out.log")"; else ko "the Python load factor is out of range"; fi
 
 step "AZ-2723 AC-3: the timing helpers exist and no test file is over 500 lines"
-missing=""; for f in python/tests/timing_support.py typescript/tests/support/timing.ts csharp/tests/Timing.cs java/src/test/java/packbin/Timing.java rust/src/timing_support.rs go/timing_test.go; do [ -f "$f" ] || missing="$missing $f"; done
+missing=""; for f in python/tests/timing_support.py typescript/tests/support/timing.ts csharp/tests/Timing.cs java/src/test/java/packbin/Timing.java rust/src/timing_support.rs go/timing_test.go swift/Tests/PackbinTests/LoadFactor.swift cpp/tests/core/load_factor.hpp; do [ -f "$f" ] || missing="$missing $f"; done
 long="$(git diff --name-only fc87bc1 HEAD | grep -vE '^_docs/|\.md$|\.txt$' | while read -r f; do [ -f "$f" ] && wc -l < "$f" | awk -v f="$f" '$1 > 500 {print $1, f}'; done)"
 if [ -z "$missing$long" ]; then ok "all helper files present, none over 500 lines"; else ko "missing:$missing long: $long"; fi
 
