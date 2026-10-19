@@ -2,9 +2,7 @@
 
 #include "packbin/table.hpp"
 
-#include <cstddef>
-#include <cstdint>
-#include <type_traits>
+#include "packbin/platform.hpp"
 
 // Field builders. An unbound builder (`u16(4)`) reads and skips its bytes on unpack and is
 // absent on pack. A bound builder (`u16<&Row::sid>(0)`) reads and writes that member; an
@@ -17,7 +15,7 @@ namespace detail {
 template <Kind K, typename T, auto M>
 constexpr Node<typename Member<decltype(M)>::Class, 1> bind(int id) {
   using Type = typename Member<decltype(M)>::Type;
-  static_assert(std::is_same<Type, T>::value || std::is_same<Type, Opt<T>>::value,
+  static_assert(detail::is_same<Type, T>::value || detail::is_same<Type, Opt<T>>::value,
                 "packbin: the member type does not match the field kind");
   Field f = leaf(K, id);
   f.access = &access<M>;
@@ -72,11 +70,11 @@ constexpr Node<void, 1> bytes(int id, int n) {
 template <auto M>
 constexpr Node<typename detail::Member<decltype(M)>::Class, 1> bytes(int id) {
   using Type = typename detail::Member<decltype(M)>::Type;
-  static_assert(std::is_array<Type>::value &&
-                    std::is_same<std::remove_extent_t<Type>, std::uint8_t>::value,
+  static_assert(detail::is_array<Type>::value &&
+                    detail::is_same<detail::remove_extent_t<Type>, std::uint8_t>::value,
                 "packbin: bytes binds a std::uint8_t[n] member");
   Field f = detail::leaf(Kind::Bytes, id);
-  f.size = static_cast<std::uint16_t>(std::extent<Type>::value);
+  f.size = static_cast<std::uint16_t>(detail::extent<Type>::value);
   f.access = &detail::access<M>;
   return Node<typename detail::Member<decltype(M)>::Class, 1>{{f}};
 }

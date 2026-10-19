@@ -3,6 +3,7 @@
 #include "check.hpp"
 
 #include <cstring>
+#include <initializer_list>
 
 using check::expect;
 using packbin::Array;

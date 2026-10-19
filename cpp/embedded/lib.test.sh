@@ -121,6 +121,7 @@ target_m0plus() { false; note "after false"; }
 target_m3() { helper_copy; }
 target_m4f() { false | cat; note "after pipe"; }
 target_s390x() { note "ran after the failures"; }
+target_avr_uno() { note "ok"; }
 EOF
   run_stage arm
   check "AC-1 false: row FAIL with exit status and log path" \
@@ -140,7 +141,7 @@ EOF
   check "AC-1 the stage exit code is 1" rc_is 1
   check "AC-4 the target after the failed ones still ran and passed" \
     row_matches cpp-s390x ',PASS,ran after the failures; $'
-  check "AC-4 one row per target" rows 4
+  check "AC-4 one row per target" rows 5
   check "AC-4 the stage reports 3 failed targets" stage_says "embedded stage arm: 3 target(s) failed"
   show_evidence
 }
@@ -152,6 +153,7 @@ target_m0plus() { fail "budget A"; note "between"; fail "budget B"; note "after"
 target_m3() { ( fail "from a subshell" ); note "after the subshell"; }
 target_m4f() { note "before exit"; exit 3; }
 target_s390x() { note "ok"; }
+target_avr_uno() { note "ok"; }
 EOF
   run_stage arm
   check "AC-2 both reasons in one FAIL row, later commands ran" \
@@ -174,13 +176,14 @@ target_m0plus() { note "FAILURES 0"; if false; then :; fi; false || true; [ 1 -e
 target_m3() { note "ok"; }
 target_m4f() { note "ok"; }
 target_s390x() { note "ok"; }
+target_avr_uno() { note "ok"; }
 EOF
   run_stage arm
   check "F3 failures inside if, || and ! leave no failed-command line" \
     log_lacks cpp-m0plus "target command failed"
   check "AC-3 FAIL in an ordinary note does not fail the target" \
     row_matches cpp-m0plus ',PASS,FAILURES 0; $'
-  check "AC-3 all four rows PASS" rows 4
+  check "AC-3 all five rows PASS" rows 5
   check "AC-3 the stage exit code is 0" rc_is 0
   check "AC-3 the stage reports 0 failed targets" stage_says "embedded stage arm: 0 target(s) failed"
   show_evidence
@@ -194,6 +197,7 @@ target_m0plus() { note "ok"; }
 target_m3() { note "ok"; }
 target_m4f() { note "ok"; }
 target_s390x() { note "ok"; }
+target_avr_uno() { note "ok"; }
 EOF
   run_stage arm
   check "a stale failure marker from the earlier run is cleared" row_matches cpp-m0plus ',PASS,ok; $'

@@ -1,8 +1,6 @@
 #include "packbin/session.hpp"
 
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
+#include "packbin/platform.hpp"
 
 namespace packbin {
 namespace {

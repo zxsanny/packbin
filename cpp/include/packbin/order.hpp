@@ -2,8 +2,7 @@
 
 #include "packbin/table.hpp"
 
-#include <cstddef>
-#include <cstdint>
+#include "packbin/platform.hpp"
 
 // Field-order and reference rules, evaluated at compile time for a constexpr scheme and at
 // run time for a scheme built at run time. Same rules as the other five languages: each field
@@ -159,7 +158,7 @@ constexpr int find_flag_byte_in(Field const* t, std::size_t begin, std::size_t e
     if (closed && (members || is_container(f.kind) || f.kind == Kind::When ||
                    f.kind == Kind::Flags || f.kind == Kind::FlagBit))
       continue;
-    if (f.kind == Kind::FlagByte && f.size == number)
+    if (f.kind == Kind::FlagByte && std::int32_t{f.size} == number)
       found = static_cast<int>(j);
     int inner = find_flag_byte_in(t, j + 1, j + f.span, before, number, f.kind == Kind::Flags);
     if (inner >= 0)

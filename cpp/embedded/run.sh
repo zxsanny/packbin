@@ -8,7 +8,8 @@
 #                                  the ESP stage only; PART is core, packages or all (default all). CI runs
 #                                  the arm stage and the two ESP parts as three jobs (AZ-2607)
 #   cpp/embedded/run.sh arm        inside packbin-embedded: Cortex-M0+, Cortex-M4F (size/stack),
-#                                  Cortex-M3 on QEMU mps2-an385, s390x big-endian under QEMU user
+#                                  Cortex-M3 on QEMU mps2-an385, s390x big-endian under QEMU user,
+#                                  the AVR ATmega328P (Uno) build with avr-gcc
 #   cpp/embedded/run.sh esp        inside espressif/idf: the ESP32-S3 and ESP32-C3 builds and the three
 #                                  examples; PACKBIN_ESP_PART (core, packages; unset or all = every
 #                                  target) runs one part
@@ -33,6 +34,7 @@ embedded_table() {
     'arm|-|cpp-m3-qemu|C++ core Cortex-M3 QEMU mps2-an385 (AC-2 AC-3 AC-6)|target_m3' \
     'arm|-|cpp-m4f|C++ core Cortex-M4F size and stack (AC-1 AC-5)|target_m4f' \
     'arm|-|cpp-s390x|C++ core big-endian s390x QEMU user (AC-4)|target_s390x' \
+    'arm|-|cpp-avr-uno|C++ core AVR ATmega328P (Uno) avr-gcc build (AZ-2068)|target_avr_uno' \
     'esp|core|cpp-esp32s3|C++ core ESP32-S3 ESP-IDF build (AC-1)|target_esp32s3' \
     'esp|core|cpp-esp32c3|C++ core ESP32-C3 ESP-IDF build (AC-1)|target_esp32c3' \
     'esp|packages|cpp-example-esp-idf|C++ ESP-IDF example from the packed component|target_example_esp_idf' \

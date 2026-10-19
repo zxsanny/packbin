@@ -6,7 +6,7 @@
 #include "text.hpp"
 #include "text_count.hpp"
 
-#include <cstring>
+#include "packbin/platform.hpp"
 
 namespace packbin {
 namespace detail {

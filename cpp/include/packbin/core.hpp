@@ -1,12 +1,10 @@
 #pragma once
 
-// Allocation-free, exception-free core. Allowed headers only: <cstdint>, <cstddef>, <cstring>,
-// <type_traits>, <limits>, <array>, <utility>. No global or static mutable state.
+// Allocation-free, exception-free core. Standard names come only from packbin/platform.hpp (the C
+// integer and memory functions; no other standard header, so avr-gcc builds it). No global or
+// static mutable state.
 
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <type_traits>
+#include "packbin/platform.hpp"
 
 namespace packbin {
 
@@ -95,7 +93,7 @@ namespace detail {
 // unsigned value of the field width.
 template <typename U>
 void store(std::uint8_t* p, U value, bool be) {
-  static_assert(std::is_unsigned<U>::value, "store takes an unsigned width");
+  static_assert(detail::is_unsigned<U>::value, "store takes an unsigned width");
   for (std::size_t i = 0; i < sizeof(U); ++i) {
     std::size_t at = be ? sizeof(U) - 1 - i : i;
     p[at] = static_cast<std::uint8_t>(value >> (8 * i));
@@ -104,7 +102,7 @@ void store(std::uint8_t* p, U value, bool be) {
 
 template <typename U>
 U load(std::uint8_t const* p, bool be) {
-  static_assert(std::is_unsigned<U>::value, "load takes an unsigned width");
+  static_assert(detail::is_unsigned<U>::value, "load takes an unsigned width");
   U value = 0;
   for (std::size_t i = 0; i < sizeof(U); ++i) {
     std::size_t at = be ? sizeof(U) - 1 - i : i;
@@ -174,7 +172,7 @@ inline Result get_bytes(Reader& r, std::uint8_t const*& out, std::size_t n, int 
 // Integers and f32: T is one of std::uint8_t…std::uint64_t, std::int8_t…std::int64_t, float.
 template <typename T>
 Result put_num(Writer& w, T value, bool be, int field) {
-  static_assert(std::is_arithmetic<T>::value, "put_num takes a number");
+  static_assert(detail::is_arithmetic<T>::value, "put_num takes a number");
   if (w.cap - w.len < sizeof(T))
     return fail(Error::BufferFull, w.len, field, sizeof(T));
   detail::store(w.data + w.len, detail::to_bits(value), be);
@@ -184,7 +182,7 @@ Result put_num(Writer& w, T value, bool be, int field) {
 
 template <typename T>
 Result get_num(Reader& r, T& out, bool be, int field) {
-  static_assert(std::is_arithmetic<T>::value, "get_num takes a number");
+  static_assert(detail::is_arithmetic<T>::value, "get_num takes a number");
   if (r.left() < sizeof(T))
     return fail(Error::ShortPacket, r.pos, field, sizeof(T));
   out = detail::from_bits<T>(detail::load<detail::unsigned_of<T>>(r.data + r.pos, be));

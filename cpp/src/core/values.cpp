@@ -1,6 +1,6 @@
 #include "values.hpp"
 
-#include <cstring>
+#include "packbin/platform.hpp"
 
 namespace packbin {
 namespace detail {
@@ -219,7 +219,7 @@ void store_bits(std::uint8_t* p, std::uint64_t v, std::size_t n, bool be) {
 
 template <typename T>
 std::uint64_t to_u64(T value) {
-  if constexpr (std::is_floating_point<T>::value)
+  if constexpr (detail::is_floating_point<T>::value)
     return to_bits(value);
   else
     return static_cast<std::uint64_t>(value);
@@ -227,7 +227,7 @@ std::uint64_t to_u64(T value) {
 
 template <typename T>
 T from_u64(std::uint64_t bits) {
-  if constexpr (std::is_floating_point<T>::value)
+  if constexpr (detail::is_floating_point<T>::value)
     return from_bits<T>(static_cast<unsigned_of<T>>(bits));
   else
     return static_cast<T>(bits);

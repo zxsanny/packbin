@@ -408,6 +408,8 @@ A board that only carries packets does not need the text codec. Define `PACKBIN_
 
 The same package builds for 32-bit microcontrollers — Cortex-M0+/M3/M4/M33, ESP32, RP2040, nRF52, STM32 — with `-std=c++17 -fno-exceptions -fno-rtti`. It references no `malloc`, no `operator new` and no exception runtime, keeps no global state, and the scheme tables live in flash.
 
+The core also builds for 8-bit AVR (ATmega328P, Arduino Uno) with avr-gcc 7.3 and avr-libc, which ship no C++ library: CI compiles it with 0 warnings and links the Uno example, but no AVR image is run. The standard names come from `packbin/platform.hpp`. On AVR constant data, the scheme tables included, sits in RAM, so the example builds with `PACKBIN_NO_TEXT` and `PACKBIN_NO_ECC`, and `double` is 4 bytes, so `f64` does not compile. avr-gcc 7.3 has no `__builtin_is_constant_evaluated`: a constant scheme that breaks a rule is not stopped at compile time there (its `status` is `SchemeInvalid` and `pack`/`unpack` refuse it), and `static_assert(scheme.status.ok())` restores the stop.
+
 | Tool | Add packbin |
 |------|-------------|
 | PlatformIO | `lib_deps = zxsanny/packbin` and `build_src_flags = -std=gnu++17` in `platformio.ini` |
@@ -436,7 +438,7 @@ The port builds the static library from the vendored sources of the release. Por
 
 While the version is below 1.0, an installed packbin answers `find_package(packbin <major>.<minor> CONFIG)` only for the same minor (`0.9` finds 0.9.x, not 0.8 or 0.10), and a request that names only the major (`find_package(packbin 0 ...)`) finds nothing; from 1.0 the rule is the same major. A request without a version, as in the install row, is unchanged. A version range that spans minors (`0.9...0.10`, `0.9...<1.0`) is refused too, where a range inside one minor (`0.9...0.9.5`) is found.
 
-Examples: [`cpp/examples/pico`](cpp/examples/pico) (PlatformIO, Raspberry Pi Pico), [`cpp/examples/esp32_arduino`](cpp/examples/esp32_arduino) (Arduino-ESP32), [`cpp/examples/esp_idf`](cpp/examples/esp_idf) (ESP-IDF with the hardware RNG).
+Examples: [`cpp/examples/pico`](cpp/examples/pico) (PlatformIO, Raspberry Pi Pico), [`cpp/examples/esp32_arduino`](cpp/examples/esp32_arduino) (Arduino-ESP32), [`cpp/examples/esp_idf`](cpp/examples/esp_idf) (ESP-IDF with the hardware RNG), [`cpp/examples/avr_uno`](cpp/examples/avr_uno) (avr-gcc and avr-libc, Arduino Uno, no Arduino core).
 
 `PackSession::start` takes the board's random source as a `RandomFn` (`bool(std::uint8_t* out, std::size_t n, void* ctx)`): `esp_fill_random` on ESP32, the RNG peripheral on STM32 or nRF52. When it returns false, no session opens. Host programs pass `packbin::os_random`. `f64` needs an 8-byte `double`; where `double` is 4 bytes (avr-gcc), a scheme with `f64` does not compile.
 

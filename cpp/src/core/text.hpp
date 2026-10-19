@@ -5,8 +5,7 @@
 
 #include "packbin/text_tables.hpp"
 
-#include <cstddef>
-#include <cstdint>
+#include "packbin/platform.hpp"
 
 namespace packbin {
 namespace detail {

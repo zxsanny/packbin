@@ -2,8 +2,7 @@
 
 #include "packbin/codec.hpp"
 
-#include <cstddef>
-#include <cstdint>
+#include "packbin/platform.hpp"
 
 // The walkers recurse once per nesting level, so their frames set the stack budget. Leaf
 // helpers with large locals stay out of line to keep those frames small.

@@ -32,6 +32,7 @@ oracle() {
     'arm cpp-m3-qemu target_m3 -' \
     'arm cpp-m4f target_m4f -' \
     'arm cpp-s390x target_s390x -' \
+    'arm cpp-avr-uno target_avr_uno -' \
     'esp cpp-esp32s3 target_esp32s3 core' \
     'esp cpp-esp32c3 target_esp32c3 core' \
     'esp cpp-example-esp-idf target_example_esp_idf packages' \
@@ -221,7 +222,7 @@ targets_are_listed_once_and_match_the_oracle() {
   packages="$(listed esp packages)"
   union="$(printf '%s %s\n' "$core" "$packages" | tr ' ' '\n' | sort | tr '\n' ' ' | sed 's/ $//')"
   # Assert
-  check_eq "list arm is the four arm targets in order" "$(oracle_ids arm)" "$arm"
+  check_eq "list arm is the arm targets in order" "$(oracle_ids arm)" "$arm"
   check_eq "list esp is the five ESP targets in today's order" "$(oracle_ids esp)" "$all"
   check_eq "list esp all is the same as list esp" "$all" "$(listed esp all)"
   check_eq "list esp core is the core part in order" "$(oracle_ids esp core)" "$core"
@@ -459,7 +460,7 @@ in_container_forms_run_only_their_part() {
   write_stubs
   esp_part=core
   run_stage arm
-  check_eq "run.sh arm runs the four arm targets only, whatever PACKBIN_ESP_PART says" "$(oracle_ids arm)" "$(ids_in_report)"
+  check_eq "run.sh arm runs the arm targets only, whatever PACKBIN_ESP_PART says" "$(oracle_ids arm)" "$(ids_in_report)"
   check "the stage line of arm is unchanged" stage_says "^embedded stage arm: 0 target(s) failed$"
 
   new_tree stage_part_fails

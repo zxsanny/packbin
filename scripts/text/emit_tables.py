@@ -104,7 +104,7 @@ def emit(lang):
     elif lang == "cpp":
         w("// %s" % NOTE)
         w("#pragma once\n")
-        w("#include <cstdint>\n")
+        w('#include "packbin/platform.hpp"\n')
         w("namespace packbin::text {\n")
         w('inline constexpr char kTablesSha256[] = "%s";\n' % sha)
         for name, v in data:

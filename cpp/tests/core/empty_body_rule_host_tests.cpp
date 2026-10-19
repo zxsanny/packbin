@@ -189,7 +189,7 @@ void g2_member_shapes_pass_the_body_rule() {
 
 // Index of the first times or repeat in a table.
 template <std::size_t N>
-std::size_t round_at(std::array<pb::Field, N> const& t) {
+std::size_t round_at(pb::detail::FixedArray<pb::Field, N> const& t) {
   for (std::size_t i = 0; i < N; ++i)
     if (t[i].kind == pb::Kind::Times || t[i].kind == pb::Kind::Repeat)
       return i;

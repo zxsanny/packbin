@@ -2,8 +2,7 @@
 
 #include "packbin/table.hpp"
 
-#include <cstdint>
-#include <type_traits>
+#include "packbin/platform.hpp"
 
 // Flags, flag byte bits and groups.
 
@@ -31,7 +30,7 @@ constexpr auto group(int id, Ns const&... children) {
 template <auto M>
 constexpr Node<typename detail::Member<decltype(M)>::Class, 1> group(int id) {
   using Type = typename detail::Member<decltype(M)>::Type;
-  static_assert(std::is_same<Type, bool>::value || std::is_same<Type, Opt<bool>>::value,
+  static_assert(detail::is_same<Type, bool>::value || detail::is_same<Type, Opt<bool>>::value,
                 "packbin: an empty group binds a bool member");
   Field f = detail::leaf(Kind::Group, id);
   f.access = &detail::access<M>;

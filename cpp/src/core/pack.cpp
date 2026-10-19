@@ -4,7 +4,7 @@
 #include "text_encode.hpp"
 #endif
 
-#include <cstring>
+#include "packbin/platform.hpp"
 
 namespace packbin {
 namespace detail {
@@ -136,7 +136,7 @@ Result pack_text(Pack& p, std::size_t i, void* obj) {
 #endif
     }
     // A Packed string: the count of `len`, then the bytes as given, never decoded or checked.
-    if (len > txt::kMaxCount || (data == nullptr && len != 0))
+    if (txt::over_max_count(len) || (data == nullptr && len != 0))
       return bad(w, f);
     std::size_t need = txt::varint_size(len) + len;
     if (w.cap - w.len < need)

@@ -5,10 +5,7 @@
 #include "packbin/order.hpp"
 #include "packbin/table.hpp"
 
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <type_traits>
+#include "packbin/platform.hpp"
 
 namespace packbin {
 
@@ -18,7 +15,7 @@ struct Scheme {
   std::uint8_t type_number = 0;
   // Parity bytes appended to every packet (0 to 32, set with `parity(scheme, n)`), see ecc.hpp.
   std::uint8_t parity = 0;
-  std::array<Field, N> fields{};
+  detail::FixedArray<Field, N> fields{};
   // Ok, or SchemeInvalid with the field id that broke the order or reference rules.
   Result status{};
 };
@@ -177,7 +174,7 @@ inline Result finish_message(Result r, int n, std::uint8_t repaired) {
 
 template <typename Row, typename C>
 constexpr bool binds_row() {
-  return std::is_void<C>::value || std::is_same<C, Row>::value;
+  return detail::is_void<C>::value || detail::is_same<C, Row>::value;
 }
 
 Result pack_table(Field const* t, std::size_t n, std::uint8_t type_number, void const* row,

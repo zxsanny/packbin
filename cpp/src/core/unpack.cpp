@@ -4,7 +4,7 @@
 #include "text_decode.hpp"
 #endif
 
-#include <cstring>
+#include "packbin/platform.hpp"
 
 namespace packbin {
 namespace detail {

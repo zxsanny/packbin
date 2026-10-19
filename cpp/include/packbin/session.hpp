@@ -6,10 +6,7 @@
 
 #include "packbin/codec.hpp"
 
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
+#include "packbin/platform.hpp"
 
 namespace packbin {
 
@@ -155,9 +152,9 @@ class PackSession {
   static void pad(std::uint8_t const* key, std::uint64_t packet, std::uint8_t* data,
                   std::size_t len);
 
-  std::array<std::uint8_t, SeedSize> seed_{};
-  std::array<std::uint8_t, SeedSize> send_{};
-  std::array<std::uint8_t, SeedSize> recv_{};
+  detail::FixedArray<std::uint8_t, SeedSize> seed_{};
+  detail::FixedArray<std::uint8_t, SeedSize> send_{};
+  detail::FixedArray<std::uint8_t, SeedSize> recv_{};
   std::uint64_t send_count_ = 0;
   std::uint64_t recv_count_ = 0;
   bool loaded_ = false;

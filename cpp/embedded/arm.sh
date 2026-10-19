@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cortex-M and big-endian targets (packbin-embedded image). Sourced by run.sh after lib.sh.
+# Cortex-M, big-endian and AVR targets (packbin-embedded image). Sourced by run.sh after lib.sh.
 set -euo pipefail
 
 arm_link_common=(-nostartfiles -T "$here/arm/mps2.ld" -Wl,--gc-sections -Wl,--cref)
@@ -279,5 +279,73 @@ target_s390x() {
     note "AC-4 all-kinds packet equals Cortex-M3 bytes"
   else
     note "all-kinds cross-check not done: no Cortex-M3 packet (see cpp-m3-qemu row)"
+  fi
+}
+
+# AVR: the core on an ATmega328P (Arduino Uno) with avr-gcc 7.3, which has no C++ library and a 4-byte
+# double (AZ-2068). Build only: no AVR emulator runs the image.
+avr_arch=(-mmcu=atmega328p)
+# ATmega328P: 32 KB of flash less the 512 B Uno boot loader, 2 KB of RAM (static data and stack).
+avr_flash_budget=32256
+avr_ram_budget=2048
+
+avr_cxx() {
+  local dir="$1" src="$2" obj="$3" status=0
+  shift 3
+  avr-g++ "${core_flags[@]}" "${avr_arch[@]}" "$@" -ffunction-sections -fdata-sections \
+    -I"$cpp/include" -c "$src" -o "$dir/$obj" 2>&1 | tee -a "$dir/compile.log" || status=$?
+  if [ "$status" -ne 0 ]; then
+    fail "compile $(basename "$src") exit $status"
+    return 1
+  fi
+}
+
+target_avr_uno() {
+  local dir="$build/avr" src
+  rm -rf "$dir"
+  mkdir -p "$dir/full" "$dir/uno"
+  : > "$dir/compile.log"
+  # AC-1: the whole core, string codec and parity included, compiles with 0 warnings.
+  for src in "${core_srcs[@]}"; do
+    avr_cxx "$dir" "$cpp/$src" "full/$(basename "${src%.cpp}").o"
+  done
+  # The Uno example leaves out the string and parity tables: constant tables sit in RAM on AVR.
+  local small=(-DPACKBIN_NO_TEXT -DPACKBIN_NO_ECC)
+  for src in "${core_srcs[@]}"; do
+    avr_cxx "$dir" "$cpp/$src" "uno/core-$(basename "${src%.cpp}").o" "${small[@]}"
+  done
+  avr_cxx "$dir" "$cpp/examples/avr_uno/avr_uno.cpp" uno/avr_uno.o "${small[@]}"
+  local warnings
+  warnings=$(count_warnings "$dir/compile.log")
+  echo "compile warnings: $warnings"
+  [ "$warnings" -eq 0 ] || fail "$warnings compile warning(s)"
+
+  local status=0
+  avr-g++ "${core_flags[@]}" "${avr_arch[@]}" -Wl,--gc-sections -o "$dir/avr_uno.elf" \
+    "$dir"/uno/*.o 2>&1 | tee "$dir/link.log" || status=$?
+  if [ "$status" -ne 0 ]; then
+    fail "link avr_uno.elf exit $status"
+    return 1
+  fi
+  [ "$(count_warnings "$dir/link.log")" -eq 0 ] || fail "link warnings in avr_uno.elf"
+  avr-size "$dir/avr_uno.elf"
+  local flash ram
+  flash=$(avr-size "$dir/avr_uno.elf" | awk 'NR == 2 { print $1 + $2 }')
+  ram=$(avr-size "$dir/avr_uno.elf" | awk 'NR == 2 { print $2 + $3 }')
+  [ "$flash" -le "$avr_flash_budget" ] || fail "Uno flash $flash B over $avr_flash_budget B"
+  [ "$ram" -le "$avr_ram_budget" ] || fail "Uno static RAM $ram B over $avr_ram_budget B"
+  note "AC-1 0 warnings; Uno example flash $flash B of $avr_flash_budget static RAM $ram B of $avr_ram_budget"
+
+  # AC-2: a scheme with f64 does not compile, and the message names f64.
+  status=0
+  avr-g++ "${core_flags[@]}" "${avr_arch[@]}" -I"$cpp/include" -fsyntax-only \
+    "$here/avr/f64_refused.cpp" > "$dir/f64.log" 2>&1 || status=$?
+  if [ "$status" -eq 0 ]; then
+    fail "AC-2 a scheme with f64 compiled"
+  elif grep -q 'f64 needs an 8-byte double' "$dir/f64.log"; then
+    note "AC-2 f64 refused"
+  else
+    cat "$dir/f64.log"
+    fail "AC-2 f64 refused without naming f64"
   fi
 }

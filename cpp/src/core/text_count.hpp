@@ -6,15 +6,25 @@
 
 #include "packbin/core.hpp"
 
-#include <cstddef>
-#include <cstdint>
+#include "packbin/platform.hpp"
 
 namespace packbin {
 namespace detail {
 namespace txt {
 
-// The largest count a 3-byte varint holds.
-constexpr std::size_t kMaxCount = 2097151;
+// The largest count a 3-byte varint holds (above a 16-bit size_t).
+constexpr std::uint32_t kMaxCount = 2097151;
+
+// A length the 3-byte varint cannot hold; none where size_t is 16 bits (AVR), where the plain
+// comparison is a -Wtype-limits warning.
+inline bool over_max_count(std::size_t n) {
+#if SIZE_MAX > 0xFFFF
+  return n > kMaxCount;
+#else
+  (void)n;
+  return false;
+#endif
+}
 
 inline unsigned varint_size(std::size_t n) { return n < 128 ? 1 : n < 16384 ? 2 : 3; }
 

@@ -1,62 +1,24 @@
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { describe, it } from "node:test"
-import { Worker } from "node:worker_threads"
 import { BinaryPacker, bits, bytes, eq, i32, list, repeat, scheme, u64, u8, when, type DispatchResult } from "../src/index.ts"
 import { CONSTRUCT, type Outcome, type SessionOutcome } from "./support/hostile-cases.ts"
 import { PACK } from "./support/hostile-pack.ts"
+import { runJobs, type HangGuards } from "./support/hostile-runner.ts"
+import type { Job } from "./support/hostile-worker.ts"
 import { assertWithinMs, bound } from "./support/timing.ts"
 
-// A hang or an out-of-memory loop ends the worker, not the test run. The cases share one
-// worker; the case that hangs is reported and the rest restart in a fresh worker.
-const KILL_AFTER_MS = 5000
+// The cases run in one worker (support/hostile-runner.ts): a hang or an out-of-memory loop ends the worker, the case
+// that hangs is reported, and the rest restart in a fresh worker. Nominal guards for an idle host, scaled by the load
+// factor before each batch. A case ends in well under its bound(1), so 5 s with no result is a hang. Start-up (thread,
+// module load, type stripping) takes 0.25 s idle and took 11.9 s at host load 11 to 25 (loop 43), so 30 s is a hang
+// before any scaling.
+const GUARDS: HangGuards = { caseSeconds: 5, startupSeconds: 30 }
+const WORKER = new URL("./support/hostile-worker.ts", import.meta.url)
 
 type Row = Record<string, unknown>
 
-type Job = { key: string; id?: string; hex?: string; session?: boolean }
 type Settled = Outcome | SessionOutcome | Error
-
-function runBatch(jobs: Job[], done: Map<string, Settled>): Promise<void> {
-  return new Promise((resolve) => {
-    const worker = new Worker(new URL("./support/hostile-worker.ts", import.meta.url), {
-      workerData: jobs,
-      resourceLimits: { maxOldGenerationSizeMb: 256 },
-    })
-    let timer: NodeJS.Timeout
-    const finish = (stuck?: string, reason?: unknown) => {
-      clearTimeout(timer)
-      void worker.terminate()
-      if (stuck !== undefined) done.set(stuck, new Error(`${stuck}: ${String(reason)}`))
-      resolve()
-    }
-    const arm = () => {
-      clearTimeout(timer)
-      const next = jobs.find((j) => !done.has(j.key))
-      if (!next) return finish()
-      timer = setTimeout(
-        () => finish(next.key, `no result within ${KILL_AFTER_MS} ms (hang)`),
-        KILL_AFTER_MS,
-      )
-    }
-    worker.on("message", (m: { key: string; outcome: Outcome | SessionOutcome }) => {
-      done.set(m.key, m.outcome)
-      arm()
-    })
-    worker.once("error", (e) => {
-      const next = jobs.find((j) => !done.has(j.key))
-      finish(next?.key, e)
-    })
-    arm()
-  })
-}
-
-async function runAll(jobs: Job[]): Promise<Map<string, Settled>> {
-  const done = new Map<string, Settled>()
-  while (jobs.some((j) => !done.has(j.key))) {
-    await runBatch(jobs.filter((j) => !done.has(j.key)), done)
-  }
-  return done
-}
 
 const allCases = readFileSync(new URL("../../fixtures/hostile/cases.txt", import.meta.url), "utf8")
   .split("\n")
@@ -108,7 +70,7 @@ const jobs: Job[] = [
 let results: Promise<Map<string, Settled>> | undefined
 
 async function outcome(key: string): Promise<Outcome> {
-  results ??= runAll(jobs)
+  results ??= runJobs<Job, Outcome | SessionOutcome>(WORKER, jobs, GUARDS)
   const got = (await results).get(key)
   if (got instanceof Error) throw got
   return got as Outcome

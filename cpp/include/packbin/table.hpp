@@ -2,10 +2,7 @@
 
 #include "packbin/core.hpp"
 
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <type_traits>
+#include "packbin/platform.hpp"
 
 namespace packbin {
 
@@ -178,13 +175,17 @@ struct Field {
   constexpr bool opaque() const { return (flags & flag::Opaque) != 0; }
 };
 
+// The members before `eq` fill 16 bytes on every target, AVR included (`eq` is aligned to 4 there
+// too, so `late` sits in what was padding): a new member before `eq` grows every table entry.
+static_assert(offsetof(Field, eq) == 16, "Field members before eq take 16 bytes");
+
 // A built piece of a scheme: N table entries whose accessors apply to objects of type C
 // (void when nothing in it is bound).
 template <typename C, std::size_t N>
 struct Node {
   using Class = C;
   static constexpr std::size_t size = N;
-  std::array<Field, N> f{};
+  detail::FixedArray<Field, N> f{};
 };
 
 struct Eq {
@@ -196,7 +197,14 @@ constexpr Eq eq(int field_id, std::int64_t value) { return Eq{field_id, value}; 
 
 namespace detail {
 
+// GCC before 9 (avr-gcc 7.3) has no __builtin_is_constant_evaluated. There a constant scheme that
+// breaks a rule is not stopped at compile time; its status is SchemeInvalid with the field id, as
+// for a scheme built at run time, and `static_assert(scheme.status.ok())` restores the stop.
+#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ < 9
+constexpr bool constant_evaluated() { return false; }
+#else
 constexpr bool constant_evaluated() { return __builtin_is_constant_evaluated(); }
+#endif
 
 // Not constexpr on purpose, like the scheme stoppers in codec.hpp: a string element that cannot
 // be bound stops the compile when the scheme is built as a constant, and the name says why. A
@@ -221,15 +229,15 @@ void* access(void* obj) {
 }
 
 template <typename T>
-struct IsOpt : std::false_type {};
+struct IsOpt : detail::false_type {};
 template <typename T>
-struct IsOpt<Opt<T>> : std::true_type {};
+struct IsOpt<Opt<T>> : detail::true_type {};
 
 template <typename A, typename B>
 struct Join {
-  static_assert(std::is_void<A>::value || std::is_void<B>::value || std::is_same<A, B>::value,
+  static_assert(detail::is_void<A>::value || detail::is_void<B>::value || detail::is_same<A, B>::value,
                 "packbin: fields of one scope bind members of one row type");
-  using type = std::conditional_t<std::is_void<A>::value, B, A>;
+  using type = detail::conditional_t<detail::is_void<A>::value, B, A>;
 };
 
 template <typename... Cs>
@@ -247,7 +255,7 @@ constexpr std::size_t total() {
 }
 
 template <std::size_t M, typename Src>
-constexpr int copy_fields(std::array<Field, M>& dst, std::size_t& at, Src const& src) {
+constexpr int copy_fields(detail::FixedArray<Field, M>& dst, std::size_t& at, Src const& src) {
   for (std::size_t i = 0; i < Src::size; ++i)
     dst[at + i] = src.f[i];
   at += Src::size;
@@ -304,21 +312,21 @@ void* entry_value(void* e) {
 }
 
 template <typename T>
-struct IsArray : std::false_type {};
+struct IsArray : detail::false_type {};
 template <typename T, std::size_t N>
-struct IsArray<Array<T, N>> : std::true_type {};
+struct IsArray<Array<T, N>> : detail::true_type {};
 
 template <typename T>
-struct IsEntry : std::false_type {};
+struct IsEntry : detail::false_type {};
 template <typename V, typename K>
-struct IsEntry<Entry<V, K>> : std::true_type {};
+struct IsEntry<Entry<V, K>> : detail::true_type {};
 
 template <typename T>
-struct FixedSize : std::integral_constant<std::size_t, 0> {};
+struct FixedSize : detail::integral_constant<std::size_t, 0> {};
 template <std::size_t N>
-struct FixedSize<Text<N>> : std::integral_constant<std::size_t, N> {};
+struct FixedSize<Text<N>> : detail::integral_constant<std::size_t, N> {};
 template <std::size_t N>
-struct FixedSize<Blob<N>> : std::integral_constant<std::size_t, N> {};
+struct FixedSize<Blob<N>> : detail::integral_constant<std::size_t, N> {};
 
 constexpr void mark_invalid(Field& f) {
   f.flags = static_cast<std::uint8_t>(f.flags | flag::Invalid);
@@ -335,20 +343,20 @@ constexpr bool kNoText = false;
 // codec binds only Packed.
 template <Kind K, typename T>
 constexpr void bind_storage(Field& f) {
-  if constexpr (std::is_same<T, View>::value) {
+  if constexpr (detail::is_same<T, View>::value) {
     static_assert(K != Kind::Utf8,
                   "packbin: a utf8 member is a Text<N> (decoded copy) or a Packed, never a View");
     f.flags = static_cast<std::uint8_t>(f.flags | flag::Borrowed);
-  } else if constexpr (std::is_same<T, Packed>::value) {
+  } else if constexpr (detail::is_same<T, Packed>::value) {
     if (K != Kind::Utf8)
       mark_invalid(f);
     f.flags = static_cast<std::uint8_t>(f.flags | flag::Opaque);
   } else if constexpr (FixedSize<T>::value != 0) {
     static_assert(K != Kind::Utf8 || !kNoText ||
-                      !std::is_same<T, Text<FixedSize<T>::value>>::value,
+                      !detail::is_same<T, Text<FixedSize<T>::value>>::value,
                   "packbin: PACKBIN_NO_TEXT links no codec: bind a utf8 member to Packed, not "
                   "Text<N>");
-    if (K == Kind::Utf8 && !std::is_same<T, Text<FixedSize<T>::value>>::value)
+    if (K == Kind::Utf8 && !detail::is_same<T, Text<FixedSize<T>::value>>::value)
       mark_invalid(f);
     f.flags = static_cast<std::uint8_t>(f.flags | flag::Fixed);
     f.size = static_cast<std::uint16_t>(FixedSize<T>::value);
@@ -361,7 +369,7 @@ constexpr void bind_storage(Field& f) {
 // a Text<N> or a Packed. The stoppers name the reason when the scheme is a constant.
 template <typename T>
 constexpr void bind_string_element(Field& f) {
-  if constexpr (std::is_same<T, View>::value) {
+  if constexpr (detail::is_same<T, View>::value) {
     mark_invalid(f);
     if (constant_evaluated())
       utf8_element_must_be_Text_N_or_Packed_not_View();
@@ -377,7 +385,7 @@ constexpr void bind_string_element(Field& f) {
 // A dict key: always a decoded Text<N>.
 template <typename T>
 constexpr void bind_key(Field& f) {
-  if constexpr (std::is_same<T, Packed>::value) {
+  if constexpr (detail::is_same<T, Packed>::value) {
     mark_invalid(f);
     if (constant_evaluated())
       dict_key_must_be_Text_N();
@@ -390,27 +398,27 @@ template <typename T>
 constexpr bool holds(Kind k) {
   switch (k) {
     case Kind::U8:
-      return std::is_same<T, std::uint8_t>::value;
+      return detail::is_same<T, std::uint8_t>::value;
     case Kind::U16:
-      return std::is_same<T, std::uint16_t>::value;
+      return detail::is_same<T, std::uint16_t>::value;
     case Kind::U32:
-      return std::is_same<T, std::uint32_t>::value;
+      return detail::is_same<T, std::uint32_t>::value;
     case Kind::U64:
-      return std::is_same<T, std::uint64_t>::value;
+      return detail::is_same<T, std::uint64_t>::value;
     case Kind::I8:
-      return std::is_same<T, std::int8_t>::value;
+      return detail::is_same<T, std::int8_t>::value;
     case Kind::I16:
-      return std::is_same<T, std::int16_t>::value;
+      return detail::is_same<T, std::int16_t>::value;
     case Kind::I32:
-      return std::is_same<T, std::int32_t>::value;
+      return detail::is_same<T, std::int32_t>::value;
     case Kind::I64:
-      return std::is_same<T, std::int64_t>::value;
+      return detail::is_same<T, std::int64_t>::value;
     case Kind::F32:
-      return std::is_same<T, float>::value;
+      return detail::is_same<T, float>::value;
     case Kind::F64:
-      return std::is_same<T, double>::value;
+      return detail::is_same<T, double>::value;
     case Kind::Bool:
-      return std::is_same<T, bool>::value;
+      return detail::is_same<T, bool>::value;
     default:
       return false;
   }
@@ -447,7 +455,7 @@ constexpr void bind_element(Field* f) {
     } else {
       mark_invalid(f[0]);
     }
-  } else if constexpr (std::is_same<T, View>::value || std::is_same<T, Packed>::value ||
+  } else if constexpr (detail::is_same<T, View>::value || detail::is_same<T, Packed>::value ||
                        FixedSize<T>::value != 0) {
     if (f[0].kind == Kind::Utf8 && f[0].span == 1)
       bind_string_element<T>(f[0]);

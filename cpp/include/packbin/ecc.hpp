@@ -13,9 +13,7 @@
 
 #ifndef PACKBIN_NO_ECC
 
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
+#include "packbin/platform.hpp"
 
 namespace packbin::ecc {
 
