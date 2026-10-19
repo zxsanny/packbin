@@ -5,13 +5,22 @@ Branch: dev
 
 ## Checks
 
-- [ ] 1. No application source is dirty at the close
-- [ ] 2. Step 11 stages at HEAD: none failed
-- [ ] 3. AZ-2724 AC-1 to AC-3: the Python session computes one pad block for an unknown type and the same row for a known one
-- [ ] 4. AZ-2723 AC-1: the Python timing helper returns a load factor between 1 and 8
-- [ ] 5. AZ-2723 AC-3: the eight helper files exist and no touched file is over 500 lines
-- [ ] 6. The contract `pack-session.md` states the pad cost
-- [ ] 7. Nothing is released: no tag holds HEAD
+- [x] 1. No application source is dirty at the close
+- [x] 2. Step 11 stages at HEAD: none failed
+- [x] 3. AZ-2724 AC-1 to AC-3: the Python session computes one pad block for an unknown type and the same row for a known one
+- [x] 4. AZ-2723 AC-1: the Python timing helper returns a load factor between 1 and 8
+- [x] 5. AZ-2723 AC-3: the eight helper files exist and no touched file is over 500 lines
+- [x] 6. The contract `pack-session.md` states the pad cost
+- [x] 7. Nothing is released: no tag holds HEAD
+
+## Result
+
+Agent run 2026-10-19 at `5bee6cf` (owner rule 2026-10-12 in `deployment_procedures.md`): **7/7 steps passed**. Step 11: 11 stages passed, 2 skipped as unchanged, 0 failed, 961 s; TypeScript passed only on the serial retry: in the pool its first hostile test (`zero-progress repeat ends with trailing error`) stalled 11.9 s and the hang guard of the hostile worker (5 s) fired, then the next test hit the same guard; it is a worker start-up stall, not a scaled wall-clock bound, and nothing else failed. Go, Python, Rust, C#, Java, Swift and C++ passed in the pool with no retry at load 11 to 25. Pool suites 596 s, ring about 100 s.
+
+## For the operator
+
+- The first `v*` tag, F44 and the `go/v*` tag are yours.
+- `/feature-assess`, `/security` and the retrospective are yours to run.
 
 ## Script (`bash smoke43.sh`)
 
