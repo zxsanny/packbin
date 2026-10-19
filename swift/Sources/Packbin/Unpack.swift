@@ -24,6 +24,7 @@ public func unpackRepair(_ buffer: [UInt8], limit: Int, _ schemes: Scheme...) th
 
 /// `unpackRepair` with the schemes as an array.
 public func unpackRepair(_ buffer: [UInt8], limit: Int, _ schemes: [Scheme]) throws -> (row: Any, repaired: Int) {
+    try checkSchemes(schemes)
     let fixed = try Ecc.repair(buffer, parity: try Ecc.sharedParity(schemes, limit: limit), limit: limit)
     return (try readRow(fixed.clear, schemes), fixed.repaired)
 }
@@ -54,6 +55,7 @@ public func unpackMapRepair(_ buffer: [UInt8], limit: Int, _ schemes: Scheme...)
 /// `unpackMapRepair` with the schemes as an array.
 public func unpackMapRepair(_ buffer: [UInt8], limit: Int, _ schemes: [Scheme]) throws
     -> (row: [String: Any], repaired: Int) {
+    try checkSchemes(schemes)
     let fixed = try Ecc.repair(buffer, parity: try Ecc.sharedParity(schemes, limit: limit), limit: limit)
     return (try readMap(fixed.clear, schemes), fixed.repaired)
 }
@@ -72,9 +74,10 @@ func readMap(_ buffer: [UInt8], _ schemes: [Scheme]) throws -> [String: Any] {
     try dispatch(buffer, schemes, typed: false).1
 }
 
-/// Refuses a scheme list with two schemes of one type number. A session checks it before it spends a
-/// receive position.
-func checkDuplicateTypes(_ schemes: [Scheme]) throws {
+/// Refuses an empty scheme list, then one with two schemes of one type number, before the parity counts
+/// and the limit are checked and before a session spends a receive position (the order of every package).
+func checkSchemes(_ schemes: [Scheme]) throws {
+    if schemes.isEmpty { throw PackbinError.scheme(nil, "", "unpack needs at least one scheme") }
     var seen = ByteSet()
     for s in schemes where !seen.insert(s.typeNumber) {
         throw PackbinError.scheme(nil, "", "duplicate type number \(s.typeNumber)")
@@ -85,8 +88,6 @@ func checkDuplicateTypes(_ schemes: [Scheme]) throws {
 /// rounds it read.
 private func dispatch(_ buffer: [UInt8], _ schemes: [Scheme], typed: Bool) throws
     -> (Scheme, [String: Any], Set<ObjectIdentifier>) {
-    if schemes.isEmpty { throw PackbinError.scheme(nil, "", "unpack needs at least one scheme") }
-    try checkDuplicateTypes(schemes)
     guard let first = buffer.first else { throw PackbinError.shortPacket(nil, "", needed: 1, left: 0) }
     guard let scheme = schemes.first(where: { $0.typeNumber == Int(first) }) else {
         throw PackbinError(.unknownType, field: nil, actual: Int(first))

@@ -3,7 +3,7 @@ mod pad;
 mod sha256;
 
 use crate::ecc;
-use crate::scheme::{check_unique, dispatch, shared_parity, BinaryPacker, DispatchHandler, Scheme};
+use crate::scheme::{checked_parity, dispatch, BinaryPacker, DispatchHandler, Scheme};
 use crate::value::{PackError, ShortPacket, UnpackError};
 use std::io::Read;
 
@@ -93,7 +93,7 @@ impl PackSession {
     /// Repairs up to `limit` wrong bytes of the payload, drops the parity, removes the pad, then
     /// dispatches (see [`BinaryPacker::unpack_with_repair`]). Returns the bytes repaired. The
     /// receive index moves for every payload read from a handler set and limit that were valid
-    /// (distinct type numbers, one parity count), a refused one included, so the next payload from the sender is still read at its own index.
+    /// (at least one handler, distinct type numbers, one parity count), a refused one included, so the next payload from the sender is still read at its own index.
     pub fn unpack_repair(
         &mut self,
         bytes: &[u8],
@@ -110,9 +110,7 @@ impl PackSession {
                 }));
             }
         };
-        let n = shared_parity(handlers)?;
-        ecc::check_limit(n, limit)?;
-        check_unique(handlers)?;
+        let n = checked_parity(handlers, limit)?;
         let index = self.recv_count;
         self.recv_count = self.recv_count.wrapping_add(1);
         let (padded, repaired) = ecc::unprotect(bytes, n, limit)?;

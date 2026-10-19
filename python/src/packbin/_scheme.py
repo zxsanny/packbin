@@ -178,20 +178,22 @@ class BinaryPacker:
 
     @staticmethod
     def _dispatch_table(handlers: tuple[_Handler[Any], ...]) -> tuple[dict[int, _Handler[Any]], int]:
-        """The handlers by type number and their one parity count; a repeated number or a mix of counts is refused."""
+        """The handlers by type number and their one parity count; a repeated number, then a mix of counts, is
+        refused (the order of every package)."""
         by_type: dict[int, _Handler[Any]] = {}
-        parity = handlers[0].scheme._parity
         for handler in handlers:
             number = handler.scheme._type_number
             if number in by_type:
                 raise ValueError(f"duplicate type number {number}")
-            if handler.scheme._parity != parity:
-                raise ValueError(
-                    f"one unpack needs one parity count, got {parity} and {handler.scheme._parity} "
-                    f"(type numbers {next(iter(by_type))} and {number})"
-                )
             by_type[number] = handler
-        return by_type, parity
+        first = handlers[0].scheme
+        for handler in handlers:
+            if handler.scheme._parity != first._parity:
+                raise ValueError(
+                    f"one unpack needs one parity count, got {first._parity} and {handler.scheme._parity} "
+                    f"(type numbers {first._type_number} and {handler.scheme._type_number})"
+                )
+        return by_type, first._parity
 
     @staticmethod
     def _receive(

@@ -35,8 +35,8 @@ public final class BinaryPacker {
      */
     public static Object unpackRepair(byte[] data, int limit, Scheme.Handler<?>... handlers) {
         Objects.requireNonNull(data, "data");
-        int parity = Ecc.sharedParity(handlers, limit);
         Map<Integer, Scheme.Handler<?>> byType = byType(handlers);
+        int parity = Ecc.sharedParity(handlers, limit);
         int repaired = 0;
         byte[] clear = data;
         if (parity > 0) {
@@ -51,8 +51,15 @@ public final class BinaryPacker {
         return err != null ? err : new Packbin.Repaired(repaired);
     }
 
-    /** The handlers by type number; two handlers of one number are refused. */
+    /**
+     * The handlers by type number; an empty list or two handlers of one number are refused, before the parity counts
+     * and the limit are checked and before a receive index advances.
+     */
     static Map<Integer, Scheme.Handler<?>> byType(Scheme.Handler<?>[] handlers) {
+        Objects.requireNonNull(handlers, "handlers");
+        if (handlers.length == 0) {
+            throw new IllegalArgumentException("unpack needs at least one handler");
+        }
         Map<Integer, Scheme.Handler<?>> byType = new HashMap<>();
         for (Scheme.Handler<?> handler : handlers) {
             Objects.requireNonNull(handler, "handler");

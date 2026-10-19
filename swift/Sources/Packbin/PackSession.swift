@@ -169,7 +169,7 @@ public final class PackSession {
     /// whether or not the repair succeeds (the last position is never spent, as it is never used).
     private func opened(_ payload: [UInt8], limit: Int, _ schemes: [Scheme]) throws -> (clear: [UInt8], repaired: Int) {
         guard !recv.isEmpty else { throw PackbinError.shortPacket(nil, "", needed: 1, left: 0) }
-        try Packbin.checkDuplicateTypes(schemes)
+        try Packbin.checkSchemes(schemes)
         let n = try Ecc.sharedParity(schemes, limit: limit)
         let fixed: (clear: [UInt8], repaired: Int)
         do {

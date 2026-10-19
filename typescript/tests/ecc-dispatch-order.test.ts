@@ -50,5 +50,35 @@ describe("message ECC dispatch order (AZ-2694)", () => {
       assert.throws(refuse, /duplicate type number/)
       assert.equal(rows.length, 0)
     })
+
+    it(`a session that is not open answers not-open before it checks a duplicate type, parity ${parity} (AZ-2704)`, () => {
+      // Arrange
+      const scheme = positionScheme(parity)
+      const closed = PackSession.load(Uint8Array.from({ length: 32 }, (_, i) => i + 1))!
+      const handler = scheme.on(() => {}) as SchemeHandler<object>
+
+      // Act
+      const result = closed.unpackRepair(new Uint8Array(4), 0, handler, handler)
+
+      // Assert
+      assert.deepEqual(result, { ok: false, field: "", needed: 1, left: 0 })
+    })
+
+    it(`a duplicate type number is refused before a mix of parity counts and a bad limit, parity ${parity} (AZ-2704)`, () => {
+      // Arrange
+      const scheme = positionScheme(parity)
+      const other = positionScheme(parity === 0 ? 4 : 0)
+      const { waiter } = pair()
+      const handler = scheme.on(() => {}) as SchemeHandler<object>
+      const mixed = other.on(() => {}) as SchemeHandler<object>
+
+      // Act
+      const withMix = () => waiter.unpackRepair(new Uint8Array(4), 0, handler, mixed, handler)
+      const withLimit = () => BinaryPacker.unpackRepair(new Uint8Array(4), 9, handler, handler)
+
+      // Assert
+      assert.throws(withMix, /duplicate type number/)
+      assert.throws(withLimit, /duplicate type number/)
+    })
   }
 })

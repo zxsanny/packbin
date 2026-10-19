@@ -62,10 +62,10 @@ Optional parity bytes per scheme: `n` from 0 to 32, default 0, which keeps the b
 |------|---------|
 | `MapScheme::with_parity(n)`, `Scheme::with_parity(n)` | sets `n`; `with_limits` and `with_max_bytes` keep it. `n` above 32 panics, naming `n` and the limit. `parity()` reads it; `MAX_PARITY` is 32 |
 | `unpack_repair(&MapScheme, bytes, limit)` | `Result<(Values, usize), UnpackError>`: the values and the bytes repaired; `unpack` is limit 0 |
-| `BinaryPacker::unpack_with_repair(bytes, handlers, limit)` | `Result<usize, UnpackError>`, the bytes repaired, after the repair the type byte picks the handler; `unpack_with` is limit 0 and returns `()`. `DispatchHandler::parity()` is new |
+| `BinaryPacker::unpack_with_repair(bytes, handlers, limit)` | `Result<usize, UnpackError>`, the bytes repaired, after the repair the type byte picks the handler; `unpack_with` is limit 0 and returns `()`. `DispatchHandler::parity()` is required (no default, loop 40: a hand-written handler of a scheme with parity bytes cannot leave it out) |
 | `UnpackError::Uncorrectable` | more bytes wrong than `limit` allows; names no field |
 | `UnpackError::TooLong { len, limit }` | a buffer above 254 bytes. A buffer shorter than `n` is `Short` naming the field `parity` |
-| `UnpackError::BadLimit { limit, max }`, `MixedParity { first, other }` | a limit above `n / 2` (also any limit above 0 with `n` = 0), and handlers with different counts, both returned before any byte is read |
+| `UnpackError::BadLimit { limit, max }`, `MixedParity { first, other }`, `NoHandlers` | a limit above `n / 2` (also any limit above 0 with `n` = 0), handlers with different counts, and an empty handler list, all returned before any byte is read and before a session's receive index moves; the order is no handler, `DuplicateType`, `MixedParity`, `BadLimit` (`message-ecc.md`) |
 
 - **Pack**: a clear message above `254 - n` bytes is `PackError::Type` naming the length and the limit (`SessionPackError::Pack` in a session).
 - **Dispatch**: with one `n` the message is repaired first, then dispatched; a mix is `MixedParity`, a returned error and not a panic.

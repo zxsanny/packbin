@@ -12,7 +12,6 @@ use crate::field::{
 };
 use crate::value::{Name, PackError, ShortPacket, UnpackError, Value, Values};
 use crate::walk;
-use std::collections::HashSet;
 use std::marker::PhantomData;
 
 struct Binder<T> {
@@ -278,13 +277,33 @@ pub struct On<'a, T, F> {
     handler: F,
 }
 
+/// A handler of one scheme for [`BinaryPacker::unpack_with`] and a session dispatch.
+///
+/// ```
+/// use packbin::{DispatchHandler, UnpackError};
+/// struct Clear;
+/// impl DispatchHandler for Clear {
+///     fn type_number(&self) -> u8 { 1 }
+///     fn parity(&self) -> usize { 0 }
+///     fn handle(&mut self, _body: &[u8]) -> Result<(), UnpackError> { Ok(()) }
+/// }
+/// ```
+///
+/// `parity()` has no default, so a handler of a scheme with parity bytes cannot leave it out and
+/// lose the repair:
+///
+/// ```compile_fail
+/// use packbin::{DispatchHandler, UnpackError};
+/// struct Clear;
+/// impl DispatchHandler for Clear {
+///     fn type_number(&self) -> u8 { 1 }
+///     fn handle(&mut self, _body: &[u8]) -> Result<(), UnpackError> { Ok(()) }
+/// }
+/// ```
 pub trait DispatchHandler {
     fn type_number(&self) -> u8;
     /// The parity bytes of the handler's scheme; a dispatch takes handlers of one count only.
-    /// Defaults to 0 so a handler written before parity existed still compiles.
-    fn parity(&self) -> usize {
-        0
-    }
+    fn parity(&self) -> usize;
     fn handle(&mut self, body: &[u8]) -> Result<(), UnpackError>;
 }
 
@@ -339,24 +358,33 @@ impl BinaryPacker {
         handlers: &mut [&mut dyn DispatchHandler],
         limit: usize,
     ) -> Result<usize, UnpackError> {
-        let n = shared_parity(handlers)?;
-        ecc::check_limit(n, limit)?;
-        check_unique(handlers)?;
+        let n = checked_parity(handlers, limit)?;
         let (clear, repaired) = ecc::unprotect(bytes, n, limit)?;
         dispatch(&clear, handlers)?;
         Ok(repaired)
     }
 }
 
-pub(crate) fn shared_parity(handlers: &[&mut dyn DispatchHandler]) -> Result<usize, UnpackError> {
-    ecc::shared_parity(handlers.iter().map(|handler| handler.parity()))
+/// The parity count of a usable handler list, checked in the order of every package: an empty
+/// list, a duplicate type number, a mix of parity counts, then the limit. None reads a byte.
+pub(crate) fn checked_parity(
+    handlers: &[&mut dyn DispatchHandler],
+    limit: usize,
+) -> Result<usize, UnpackError> {
+    if handlers.is_empty() {
+        return Err(UnpackError::NoHandlers);
+    }
+    check_unique(handlers)?;
+    let n = ecc::shared_parity(handlers.iter().map(|handler| handler.parity()))?;
+    ecc::check_limit(n, limit)?;
+    Ok(n)
 }
 
-pub(crate) fn check_unique(handlers: &[&mut dyn DispatchHandler]) -> Result<(), UnpackError> {
-    let mut seen = HashSet::new();
+fn check_unique(handlers: &[&mut dyn DispatchHandler]) -> Result<(), UnpackError> {
+    let mut seen = [false; 256];
     for handler in handlers.iter() {
         let n = handler.type_number();
-        if !seen.insert(n) {
+        if std::mem::replace(&mut seen[n as usize], true) {
             return Err(UnpackError::DuplicateType { type_number: n });
         }
     }

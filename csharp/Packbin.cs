@@ -198,7 +198,7 @@ public static class BinaryPacker
     public static object? Unpack(ReadOnlySpan<byte> bytes, int limit, out int repaired, params SchemeHandler[] handlers)
     {
         repaired = 0;
-        RequireDistinct(handlers);
+        RequireHandlers(handlers);
         var parity = Ecc.SharedParity(handlers, limit);
         if (parity == 0)
             return Dispatch(bytes, handlers);
@@ -208,8 +208,11 @@ public static class BinaryPacker
         return Dispatch(word.AsSpan(0, word.Length - parity), handlers);
     }
 
-    internal static void RequireDistinct(SchemeHandler[] handlers)
+    // An empty list or a duplicate type number is refused before any byte is read and before a receive index advances.
+    internal static void RequireHandlers(SchemeHandler[] handlers)
     {
+        if (handlers.Length == 0)
+            throw new ArgumentException("unpack needs at least one handler");
         for (var i = 0; i < handlers.Length; i++)
         {
             for (var j = 0; j < i; j++)

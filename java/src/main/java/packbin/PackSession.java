@@ -73,8 +73,8 @@ public final class PackSession {
             return new Packbin.ShortPacket("", 1, 0);
         }
         Objects.requireNonNull(bytes, "bytes");
-        int parity = Ecc.sharedParity(handlers, limit);
         Map<Integer, Scheme.Handler<?>> byType = BinaryPacker.byType(handlers);
+        int parity = Ecc.sharedParity(handlers, limit);
         long index = recvCount++;
         byte[] clear;
         int repaired = 0;

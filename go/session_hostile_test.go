@@ -3,6 +3,7 @@ package packbin
 import (
 	"bytes"
 	"errors"
+	"strconv"
 	"testing"
 )
 
@@ -295,5 +296,29 @@ func TestSessionPackAndUnpackWithTypedRowsRefuseWrongRowTypes(t *testing.T) {
 	asError(t, err, PackRefused)
 	if out != nil || goodErr != nil || unpackErr != nil || got == nil {
 		t.Fatalf("%x %v %v %v", out, goodErr, unpackErr, got)
+	}
+}
+
+// AZ-2704: the checks run in one order in every package (not open, no scheme, duplicate type, parity mix,
+// limit): a repeated number is the refusal even when the list also mixes parity counts or the limit is bad.
+func TestDuplicateTypeIsRefusedBeforeAParityMixAndABadLimit(t *testing.T) {
+	// Arrange
+	_, waiter := sessionPair(t, sessionNonce(t))
+	scheme := positionMapScheme(t)
+	protected, err := scheme.WithParity(4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "duplicate type number " + strconv.Itoa(scheme.typeNumber)
+
+	// Act
+	_, _, withMix := waiter.UnpackRepair(make([]byte, 8), 0, scheme, protected)
+	_, _, withLimit := UnpackRepair(make([]byte, 8), 9, protected, protected)
+
+	// Assert
+	for name, err := range map[string]error{"with a parity mix": withMix, "with a bad limit": withLimit} {
+		if e := asError(t, err, InvalidScheme); e.Reason != want {
+			t.Fatalf("%s: reason %q, want %q", name, e.Reason, want)
+		}
 	}
 }

@@ -287,9 +287,9 @@ export class PackSession {
     first: SchemeHandler<object>,
     ...rest: SchemeHandler<object>[]
   ): DispatchResult {
+    if (this.#recv === null) return { ok: false, field: "", needed: 1, left: 0 }
     const handlers = [first, ...rest]
     requireDistinct(handlers)
-    if (this.#recv === null) return { ok: false, field: "", needed: 1, left: 0 }
     const n = sharedParity(handlers, limit)
     const fixed = repair(toBuf(bytes), n, limit)
     const index = this.#recvCount++

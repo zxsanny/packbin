@@ -62,10 +62,9 @@ public sealed class PackSession
     public object? Unpack(ReadOnlySpan<byte> bytes, int limit, out int repaired, params SchemeHandler[] handlers)
     {
         repaired = 0;
-        // A duplicate type number is refused before any byte is read and before the receive index advances.
-        BinaryPacker.RequireDistinct(handlers);
         if (_recv is null)
             return new ShortPacket("", 1, 0);
+        BinaryPacker.RequireHandlers(handlers);
         var parity = Ecc.SharedParity(handlers, limit);
         var counter = _recvCount;
         _recvCount++;

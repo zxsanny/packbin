@@ -231,15 +231,20 @@ fn ec16_a_duplicate_type_is_refused_before_the_receive_index_advances() {
     assert_eq!(read, Ok((position_row(), 0)));
 }
 
-// A handler written against loop 37: it defines no parity().
-struct Loop37Handler {
+// A hand-written handler: `parity()` is required (AZ-2704 AC-4, the compile-fail doc test on the trait).
+struct Handwritten {
     type_number: u8,
+    parity: usize,
     ran: bool,
 }
 
-impl DispatchHandler for Loop37Handler {
+impl DispatchHandler for Handwritten {
     fn type_number(&self) -> u8 {
         self.type_number
+    }
+
+    fn parity(&self) -> usize {
+        self.parity
     }
 
     fn handle(&mut self, _body: &[u8]) -> Result<(), UnpackError> {
@@ -249,22 +254,62 @@ impl DispatchHandler for Loop37Handler {
 }
 
 #[test]
-fn a_handler_without_parity_compiles_has_parity_0_and_dispatches() {
+fn a_hand_written_handler_of_a_parity_scheme_gets_the_repair() {
     // Arrange
-    let mut handler = Loop37Handler {
+    let mut handler = Handwritten {
         type_number: 0x40,
+        parity: 4,
         ran: false,
     };
-    let message = BinaryPacker::pack(&position_scheme(0x40, 0), &position_row()).expect("pack");
+    let mut message = BinaryPacker::pack(&position_scheme(0x40, 4), &position_row()).expect("pack");
+    message[3] ^= 0x5A;
 
     // Act
-    let parity = handler.parity();
-    let read = BinaryPacker::unpack_with(&message, &mut [&mut handler]);
+    let read = BinaryPacker::unpack_with_repair(&message, &mut [&mut handler], 2);
 
     // Assert
-    assert_eq!(parity, 0);
-    assert_eq!(read, Ok(()));
+    assert_eq!(read, Ok(1));
     assert!(handler.ran);
+}
+
+// AZ-2704: the checks run in one order in every package (not open, no handler, duplicate type,
+// parity mix, limit); none of them moves the receive index.
+#[test]
+fn an_empty_handler_list_is_refused_before_the_receive_index_advances() {
+    // Arrange
+    let (mut opener, mut waiter) = pair();
+    let payload = opener.pack(&position_scheme(0x40, 4), &position_row()).expect("pack");
+
+    // Act
+    let refused = waiter.unpack_repair(&payload, &mut [], 0);
+    let plain = BinaryPacker::unpack_with(&payload, &mut []);
+    let read = read_session(&mut waiter, &payload, 4, 0);
+
+    // Assert
+    assert_eq!(refused, Err(UnpackError::NoHandlers));
+    assert_eq!(plain, Err(UnpackError::NoHandlers));
+    assert_eq!(read, Ok((position_row(), 0)));
+}
+
+#[test]
+fn a_duplicate_type_is_refused_before_a_parity_mix_and_a_bad_limit() {
+    // Arrange
+    let (_, mut waiter) = pair();
+    let (a, b, twin) = (position_scheme(0x40, 4), second_scheme(2), position_scheme(0x40, 4));
+    let (mut on_a, mut on_b, mut on_twin) = (
+        a.on(|_| panic!("handler ran")),
+        b.on(|_| panic!("handler ran")),
+        twin.on(|_| panic!("handler ran")),
+    );
+    let duplicate = Err(UnpackError::DuplicateType { type_number: 0x40 });
+
+    // Act
+    let with_mix = waiter.unpack_repair(&[0; 8], &mut [&mut on_a, &mut on_b, &mut on_twin], 0);
+    let with_limit = BinaryPacker::unpack_with_repair(&[0; 8], &mut [&mut on_a, &mut on_twin], 9);
+
+    // Assert
+    assert_eq!(with_mix, duplicate);
+    assert_eq!(with_limit, duplicate);
 }
 
 #[test]

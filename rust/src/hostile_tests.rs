@@ -244,6 +244,7 @@ fn variant(err: &UnpackError) -> &'static str {
         UnpackError::Short(_) => "Short",
         UnpackError::Trailing { .. } => "Trailing",
         UnpackError::Type { .. } => "Type",
+        UnpackError::NoHandlers => "NoHandlers",
         UnpackError::DuplicateType { .. } => "DuplicateType",
         UnpackError::Uncorrectable => "Uncorrectable",
         UnpackError::TooLong { .. } => "TooLong",
