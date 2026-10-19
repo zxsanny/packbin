@@ -23,7 +23,7 @@ import Testing
         let missing = cases.filter { c in !corpus.contains { $0.name == "hostile_" + c[0] && $0.kind == c[0] && hex($0.packet) == c[3] } }
 
         // Assert
-        #expect(cases.count == 12)
+        #expect(cases.count == 17)
         #expect(missing.isEmpty, "not in the corpus: \(missing.map { $0[0] })")
         #expect(Set(corpus.map(\.name)).count == corpus.count)
     }
@@ -45,7 +45,7 @@ import Testing
 
         // Assert
         print("FuzzTests: corpus of \(corpus.count) inputs: \(reads) unpack calls, \(failures.count) failures")
-        #expect(corpus.count == 28)
+        #expect(corpus.count == 33)
         #expect(failures.isEmpty, "\(failures.prefix(10))")
     }
 

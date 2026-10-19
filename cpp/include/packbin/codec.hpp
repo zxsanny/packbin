@@ -356,6 +356,14 @@ bool differs(H const& h, int n, int& other) {
   return true;
 }
 
+// The first handler whose scheme was not built (its status is the failure), or ok.
+template <typename H, typename... Hs>
+Result handlers_built(H const& first, Hs const&... rest) {
+  Result r = first.scheme.status;
+  ((r.ok() ? (r = rest.scheme.status, 0) : 0), ...);
+  return r;
+}
+
 // The parity count every handler declares. A mix is `SchemeInvalid`: `offset` is the first
 // handler's count and `needed` the first count that differs.
 template <typename H, typename... Hs>

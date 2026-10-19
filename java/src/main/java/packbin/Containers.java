@@ -4,11 +4,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 final class Containers {
     private Containers() {}
@@ -103,6 +101,22 @@ final class Containers {
         return a.length - b.length;
     }
 
+    /** Code point order of two valid strings equals their UTF-8 byte order; String.compareTo (UTF-16 units) does not. */
+    private static int compareUtf8Order(String a, String b) {
+        int i = 0;
+        int j = 0;
+        while (i < a.length() && j < b.length()) {
+            int x = a.codePointAt(i);
+            int y = b.codePointAt(j);
+            if (x != y) {
+                return x < y ? -1 : 1;
+            }
+            i += Character.charCount(x);
+            j += Character.charCount(y);
+        }
+        return (a.length() - i) - (b.length() - j);
+    }
+
     static Object unpackDict(Field field, byte[] data, Cursor cur, Object row, boolean asList) {
         Object[] got = unpackDictItems(field.children.get(0), data, cur);
         if (got[1] != null) {
@@ -120,15 +134,17 @@ final class Containers {
         int count = (data[cur.pos] & 0xff) | ((data[cur.pos + 1] & 0xff) << 8);
         cur.pos += 2;
         Map<String, Object> items = new LinkedHashMap<>();
-        Set<String> seenKeys = new HashSet<>();
+        String previous = null;
         for (int i = 0; i < count; i++) {
             Object read = TextDecoder.read("", data, cur);
             if (!(read instanceof String key)) {
                 return new Object[] {items, read};
             }
-            if (!seenKeys.add(key)) {
+            // Keys must ascend strictly by UTF-8 bytes: one compare with the previous key finds a repeat too.
+            if (previous != null && compareUtf8Order(previous, key) >= 0) {
                 return new Object[] {items, new Packbin.ShortPacket("", 0, 0)};
             }
+            previous = key;
             Object[] got = unpackElement(element, data, cur);
             if (got[1] != null) {
                 return new Object[] {items, got[1]};

@@ -31,7 +31,10 @@ func repair(received []byte, n, t int) ([]byte, int, error) {
 	if t == 0 {
 		return nil, 0, uncorrectable("the message does not match its parity bytes")
 	}
-	lam := locator(synd)
+	// Berlekamp-Massey works in three buffers of n + 1 bytes, made once for the call: the locator never
+	// has more than n + 1 terms (degree at most n).
+	var lamBuf, prevBuf, tmpBuf [MaxParity + 1]byte
+	lam := lamBuf[:locator(synd, lamBuf[:n+1], prevBuf[:n+1], tmpBuf[:n+1])]
 	deg := len(lam) - 1
 	if deg == 0 || deg > t {
 		return nil, 0, uncorrectable(fmt.Sprintf("more wrong bytes than the limit of %d", t))
@@ -52,7 +55,8 @@ func repair(received []byte, n, t int) ([]byte, int, error) {
 		return nil, 0, uncorrectable("the locator has fewer roots than its degree")
 	}
 	// The error evaluator omega = (synd * lam) mod x^n, lowest degree first.
-	omega := make([]byte, n)
+	var omegaBuf [MaxParity]byte
+	omega := omegaBuf[:n]
 	for i := range n {
 		for j, c := range lam {
 			if i+j < n {
@@ -61,7 +65,8 @@ func repair(received []byte, n, t int) ([]byte, int, error) {
 		}
 	}
 	// The derivative in characteristic 2 keeps the odd-degree terms.
-	dlam := make([]byte, len(lam)-1)
+	var dlamBuf [MaxParity]byte
+	dlam := dlamBuf[:deg]
 	for i := 1; i < len(lam); i += 2 {
 		dlam[i-1] = lam[i]
 	}
@@ -110,16 +115,19 @@ func evaluate(p []byte, x byte) byte {
 	return y
 }
 
-// locator is the error locator by Berlekamp-Massey, lowest degree first, trimmed.
-func locator(synd []byte) []byte {
-	lam := []byte{1}
-	prev := []byte{1}
+// locator is the error locator by Berlekamp-Massey, lowest degree first, trimmed. It builds the locator
+// in lam and returns its length (degree + 1). lam, prev and tmp are zeroed buffers of n + 1 bytes (n =
+// len(synd)); the locator has at most l + 1 terms with l at most r + 1 after round r, so they never
+// overflow. prev and tmp trade places when the locator grows, so tmp is cleared before each copy.
+func locator(synd []byte, lam, prev, tmp []byte) int {
+	lam[0], prev[0] = 1, 1
+	ll, lp := 1, 1
 	l, m := 0, 1
 	b := byte(1)
 	for r := range synd {
 		d := synd[r]
 		for i := 1; i <= l; i++ {
-			if i < len(lam) {
+			if i < ll {
 				d ^= gf.mul(lam[i], synd[r-i])
 			}
 		}
@@ -127,22 +135,24 @@ func locator(synd []byte) []byte {
 			m++
 			continue
 		}
-		before := append([]byte(nil), lam...)
+		clear(tmp)
+		copy(tmp, lam[:ll])
+		lt := ll
 		coef := gf.mul(d, gf.inv(b))
-		for len(lam) < len(prev)+m {
-			lam = append(lam, 0)
-		}
-		for i, c := range prev {
+		ll = max(ll, lp+m)
+		for i, c := range prev[:lp] {
 			lam[i+m] ^= gf.mul(coef, c)
 		}
 		if 2*l <= r {
-			l, prev, b, m = r+1-l, before, d, 1
+			l, b, m = r+1-l, d, 1
+			prev, tmp = tmp, prev
+			lp = lt
 		} else {
 			m++
 		}
 	}
-	for len(lam) > 1 && lam[len(lam)-1] == 0 {
-		lam = lam[:len(lam)-1]
+	for ll > 1 && lam[ll-1] == 0 {
+		ll--
 	}
-	return lam
+	return ll
 }

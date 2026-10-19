@@ -69,8 +69,7 @@ internal static partial class Ecc
     // The number of bytes repaired, or 0 when the damage is beyond the limit (the word is left changed only on success).
     private static int Correct(byte[] word, int parity, int limit, byte[] syndromes)
     {
-        var lambda = Locator(syndromes, parity);
-        var degree = lambda.Length - 1;
+        var lambda = Locator(syndromes, parity, out var degree);
         if (degree == 0 || degree > limit)
             return 0;
         var size = word.Length;
@@ -78,7 +77,7 @@ internal static partial class Ecc
         var found = 0;
         for (var p = 0; p < size; p++)
         {
-            if (Evaluate(lambda, Exp[(255 - (size - 1 - p)) % 255]) != 0)
+            if (Evaluate(lambda, degree + 1, Exp[(255 - (size - 1 - p)) % 255]) != 0)
                 continue;
             if (found == degree)
                 return 0;
@@ -90,11 +89,11 @@ internal static partial class Ecc
         var omega = new byte[parity];
         for (var i = 0; i < parity; i++)
         {
-            for (var j = 0; j < lambda.Length && i + j < parity; j++)
+            for (var j = 0; j <= degree && i + j < parity; j++)
                 omega[i + j] ^= Mul(syndromes[i], lambda[j]);
         }
         var derivative = new byte[degree];
-        for (var i = 1; i < lambda.Length; i += 2)
+        for (var i = 1; i <= degree; i += 2)
             derivative[i - 1] = lambda[i];
 
         var fixedWord = (byte[])word.Clone();
@@ -102,10 +101,10 @@ internal static partial class Ecc
         {
             var x = Exp[(size - 1 - p) % 255];
             var xi = Inverse(x);
-            var denominator = Evaluate(derivative, xi);
+            var denominator = Evaluate(derivative, derivative.Length, xi);
             if (denominator == 0)
                 return 0;
-            fixedWord[p] ^= Mul(x, Mul(Evaluate(omega, xi), Inverse(denominator)));
+            fixedWord[p] ^= Mul(x, Mul(Evaluate(omega, omega.Length, xi), Inverse(denominator)));
         }
         if (AnyNonZero(Syndromes(fixedWord, parity)))
             return 0;
@@ -113,11 +112,14 @@ internal static partial class Ecc
         return degree;
     }
 
-    // Berlekamp-Massey. The error locator, lowest degree first, without trailing zeros.
-    private static byte[] Locator(byte[] syndromes, int parity)
+    // Berlekamp-Massey. The error locator, lowest degree first, in an array of parity + 1 bytes whose degree is `degree`
+    // (the bytes above it are zero). Three arrays of parity + 1 bytes for the whole call: the locator, the previous
+    // one and a scratch copy that trades places with the previous one when the length grows.
+    private static byte[] Locator(byte[] syndromes, int parity, out int degree)
     {
-        var lambda = new byte[2 * parity + 2];
-        var previous = new byte[2 * parity + 2];
+        var lambda = new byte[parity + 1];
+        var previous = new byte[parity + 1];
+        var saved = new byte[parity + 1];
         lambda[0] = 1;
         previous[0] = 1;
         var length = 0;
@@ -133,14 +135,14 @@ internal static partial class Ecc
                 shift++;
                 continue;
             }
-            var saved = (byte[])lambda.Clone();
+            Buffer.BlockCopy(lambda, 0, saved, 0, lambda.Length);
             var coefficient = Mul(d, Inverse(scale));
             for (var i = 0; i + shift < lambda.Length; i++)
                 lambda[i + shift] ^= Mul(coefficient, previous[i]);
             if (2 * length <= r)
             {
                 length = r + 1 - length;
-                previous = saved;
+                (previous, saved) = (saved, previous);
                 scale = d;
                 shift = 1;
             }
@@ -149,19 +151,17 @@ internal static partial class Ecc
                 shift++;
             }
         }
-        var degree = lambda.Length - 1;
+        degree = parity;
         while (degree > 0 && lambda[degree] == 0)
             degree--;
-        var trimmed = new byte[degree + 1];
-        Buffer.BlockCopy(lambda, 0, trimmed, 0, degree + 1);
-        return trimmed;
+        return lambda;
     }
 
     // Lowest degree first.
-    private static byte Evaluate(byte[] polynomial, int x)
+    private static byte Evaluate(byte[] polynomial, int count, int x)
     {
         byte y = 0;
-        for (var i = polynomial.Length - 1; i >= 0; i--)
+        for (var i = count - 1; i >= 0; i--)
             y = (byte)(Mul(y, x) ^ polynomial[i]);
         return y;
     }

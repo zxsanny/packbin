@@ -66,7 +66,12 @@ fn scheme_for(id: &str) -> MapScheme {
         "oversize_count_times" => MapScheme::new(1, vec![u32("0"), times(1, "0", vec![u8("1")])]),
         "oversize_list_count" => MapScheme::new(1, vec![list("0", u8("0"))]),
         "invalid_utf8" => MapScheme::new(1, vec![utf8("0")]),
-        "invalid_utf8_dict_key" => MapScheme::new(1, vec![dict("0", u8("0"))]),
+        "invalid_utf8_dict_key"
+        | "dict_keys_out_of_order"
+        | "dict_keys_repeated"
+        | "dict_keys_repeated_forms"
+        | "dict_keys_prefix_descends"
+        | "dict_keys_utf16_order" => MapScheme::new(1, vec![dict("0", u8("0"))]),
         "count_behind_clear_flag" => {
             MapScheme::new(1, vec![flags(0, "f", vec![u8("0")]), sized("1", "0")])
         }
@@ -232,6 +237,11 @@ fn rust_outcome(id: &str) -> &'static str {
         | "oversize_list_count"
         | "invalid_utf8"
         | "invalid_utf8_dict_key"
+        | "dict_keys_out_of_order"
+        | "dict_keys_repeated"
+        | "dict_keys_repeated_forms"
+        | "dict_keys_prefix_descends"
+        | "dict_keys_utf16_order"
         | "count_behind_clear_flag"
         | "count_behind_clear_flag_bits" => "Short",
         "when_names_later_field" | "count_names_later_field" => "scheme_error",

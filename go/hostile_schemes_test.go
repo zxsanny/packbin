@@ -9,6 +9,8 @@ import (
 // construction error (a package that refuses the scheme answers scheme_error, which several cases accept).
 type hostileBuild func() (*Scheme, error)
 
+func hostileDictOfU8() (*Scheme, error) { return NewScheme(1, Dict("m", U8(0, "v"))) }
+
 func hostileClearFlag() Field { return Flags(0, U8(0, "n")) }
 
 var hostileUnpackSchemes = map[string]hostileBuild{
@@ -16,12 +18,17 @@ var hostileUnpackSchemes = map[string]hostileBuild{
 	"zero_progress_repeat_when": func() (*Scheme, error) {
 		return NewScheme(1, U8(0, "mode"), Repeat(1, When(1, Eq(0, 1), U8(1, "v"))))
 	},
-	"negative_count":        func() (*Scheme, error) { return NewScheme(1, I8(0, "n"), Sized(1, "payload", 0)) },
-	"oversize_count":        func() (*Scheme, error) { return NewScheme(1, U32(0, "n"), Sized(1, "payload", 0)) },
-	"oversize_count_times":  func() (*Scheme, error) { return NewScheme(1, U32(0, "n"), Times(1, 0, U8(1, "v"))) },
-	"oversize_list_count":   func() (*Scheme, error) { return NewScheme(1, List("xs", U8(0, "x"))) },
-	"invalid_utf8":          func() (*Scheme, error) { return NewScheme(1, Utf8(0, "name")) },
-	"invalid_utf8_dict_key": func() (*Scheme, error) { return NewScheme(1, Dict("m", U8(0, "v"))) },
+	"negative_count":            func() (*Scheme, error) { return NewScheme(1, I8(0, "n"), Sized(1, "payload", 0)) },
+	"oversize_count":            func() (*Scheme, error) { return NewScheme(1, U32(0, "n"), Sized(1, "payload", 0)) },
+	"oversize_count_times":      func() (*Scheme, error) { return NewScheme(1, U32(0, "n"), Times(1, 0, U8(1, "v"))) },
+	"oversize_list_count":       func() (*Scheme, error) { return NewScheme(1, List("xs", U8(0, "x"))) },
+	"invalid_utf8":              func() (*Scheme, error) { return NewScheme(1, Utf8(0, "name")) },
+	"invalid_utf8_dict_key":     func() (*Scheme, error) { return NewScheme(1, Dict("m", U8(0, "v"))) },
+	"dict_keys_out_of_order":    hostileDictOfU8,
+	"dict_keys_repeated":        hostileDictOfU8,
+	"dict_keys_repeated_forms":  hostileDictOfU8,
+	"dict_keys_prefix_descends": hostileDictOfU8,
+	"dict_keys_utf16_order":     hostileDictOfU8,
 	"count_behind_clear_flag": func() (*Scheme, error) {
 		return NewScheme(1, hostileClearFlag(), Sized(1, "payload", 0))
 	},

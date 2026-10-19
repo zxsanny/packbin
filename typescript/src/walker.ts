@@ -2,6 +2,7 @@ import { fieldName, flatten, itemGroup, type Field } from "./fields.ts"
 import { refName } from "./ref-scope.ts"
 import { RoundLists, appendList, roundNames } from "./rounds.ts"
 import {
+  compareUtf8,
   readBits,
   readFloat,
   readInt,
@@ -232,17 +233,20 @@ export function unpackFields(
         const items: Value = {}
         const child = fieldName(f.element)
         const object = itemGroup(f.element) !== null
+        let previous: string | null = null
         for (let i = 0; i < count; i++) {
           const key = readUtf8(cur, f.name)
           if (!key.ok) return key
+          // Strictly ascending in UTF-8 byte order: an equal key is a repeat, a smaller one is out of order.
+          if (previous !== null && compareUtf8(key.value, previous) <= 0) {
+            return short(f.name, 0, 0)
+          }
+          previous = key.value
           const one: Value = {}
           const before = cur.offset
           const err = unpackFields([f.element], cur, one, flagBytes, null)
           if (err) return err
           if (cur.offset === before) return unreadable(f.name, cur)
-          if (Object.hasOwn(items, key.value)) {
-            return short(f.name, 0, 0)
-          }
           // Keys come from the wire: define them, so "__proto__" is an entry, not a prototype.
           Object.defineProperty(items, key.value, {
             value: object ? one : one[child],

@@ -173,8 +173,25 @@ export class BinaryPacker {
   }
 }
 
+// A payload of any other type is refused, never coerced: a string would become an empty buffer and a
+// number a zero-filled one of that length.
 function toBuf(bytes: Uint8Array | ArrayBuffer): Uint8Array {
-  return bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
+  if (bytes instanceof Uint8Array) return bytes
+  if (isUint8Array(bytes) || isArrayBuffer(bytes)) return new Uint8Array(bytes)
+  throw new TypeError("payload must be a Uint8Array or an ArrayBuffer")
+}
+
+// The byteLength getter checks the internal brand, so an ArrayBuffer of another realm passes and an
+// object that only claims the tag does not.
+const bufferLength = Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, "byteLength")!.get!
+function isArrayBuffer(v: unknown): v is ArrayBuffer {
+  try {
+    bufferLength.call(v)
+    return true
+  } catch (e) {
+    if (e instanceof TypeError) return false
+    throw e
+  }
 }
 
 // A duplicate type number is refused before any byte is read, so a session's receive index stays put.

@@ -73,7 +73,7 @@
 // of the row around it; the values of its members come from its own map or struct. In a Repeat or
 // Times round a List or Dict name takes one list or map a round (a lone map is refused). Pack refuses a
 // string that is not valid UTF-8, a string over 65535 bytes, and a list or dict over 65535 items;
-// unpack refuses a string or a dict key that is not valid UTF-8, a dict key given twice, and an element
+// unpack refuses a string or a dict key that is not valid UTF-8, a dict key not greater than the one before it (given twice or out of order, compared as UTF-8 bytes), and an element
 // that reads no byte.
 //
 // # Pack and unpack

@@ -292,8 +292,8 @@ func TestHostileTablesHoldNoCaseTwiceAndNoOther(t *testing.T) {
 			t.Errorf("%s: cases %v, Go schemes %v", stage, ids, keys)
 		}
 	}
-	if len(cases) != 65 {
-		t.Errorf("cases.txt holds %d cases, the loader was written for 65", len(cases))
+	if len(cases) != 70 {
+		t.Errorf("cases.txt holds %d cases, the loader was written for 70", len(cases))
 	}
 }
 

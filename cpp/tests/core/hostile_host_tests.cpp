@@ -356,6 +356,12 @@ constexpr Handler kHandlers[] = {
     {"oversize_list_count", oversize_list_count},
     {"invalid_utf8", invalid_utf8},
     {"invalid_utf8_dict_key", invalid_utf8_dict_key},
+    // The same bound dict; dict_order_host_tests.cpp runs these packets with a dict that is not bound.
+    {"dict_keys_out_of_order", invalid_utf8_dict_key},
+    {"dict_keys_repeated", invalid_utf8_dict_key},
+    {"dict_keys_repeated_forms", invalid_utf8_dict_key},
+    {"dict_keys_prefix_descends", invalid_utf8_dict_key},
+    {"dict_keys_utf16_order", invalid_utf8_dict_key},
     {"count_behind_clear_flag", count_behind_clear_flag},
     {"count_behind_clear_flag_bits", count_behind_clear_flag_bits},
     {"nine_flag_bits", nine_flag_bits},

@@ -7,6 +7,11 @@ hostile_oversize_count_times          oversize_count_times          01ffffffff00
 hostile_oversize_list_count           oversize_list_count           01ffff
 hostile_invalid_utf8                  invalid_utf8                  010310c328
 hostile_invalid_utf8_dict_key         invalid_utf8_dict_key         0101000210ff00
+hostile_dict_keys_out_of_order        dict_keys_out_of_order        0102000210620002106100
+hostile_dict_keys_repeated            dict_keys_repeated            0102000210610002106100
+hostile_dict_keys_repeated_forms      dict_keys_repeated_forms      0102000210610002c90000
+hostile_dict_keys_prefix_descends     dict_keys_prefix_descends     010200031061620002106100
+hostile_dict_keys_utf16_order         dict_keys_utf16_order         0102000510f0908080000410efbd9e00
 hostile_count_behind_clear_flag       count_behind_clear_flag       0100
 hostile_count_behind_clear_flag_bits  count_behind_clear_flag_bits  0100
 hostile_repeat_rounds_over_limit      repeat_rounds_over_limit      0111223344

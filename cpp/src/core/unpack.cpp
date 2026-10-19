@@ -203,30 +203,30 @@ Result unpack_flags(Walk& w, std::size_t i, void* obj) {
   return res;
 }
 
-bool same_key(Field const& key, void* a, void* b) {
-  std::uint8_t const* da = nullptr;
-  std::uint8_t const* db = nullptr;
-  std::size_t la = 0, lb = 0;
-  text_bytes(key, member(key, a), da, la);
-  text_bytes(key, member(key, b), db, lb);
-  return la == lb && (la == 0 || std::memcmp(da, db, la) == 0);
+#ifndef PACKBIN_NO_TEXT
+constexpr std::size_t kNoKey = static_cast<std::size_t>(-1);
+
+// The payload of the string whose count starts at `at` (it has been read once, so the count is valid).
+void payload_at(Reader const& r, std::size_t at, std::uint8_t const*& p, std::size_t& n) {
+  Reader s{r.data, r.len, at};
+  txt::get_count(s, n, 0);
+  p = s.data + s.pos;
 }
 
-// A dict entry whose key repeats an earlier entry's key is BadValue at the entry's offset.
+// A dict key must sort after the key before it by its decoded UTF-8 bytes (contract compact-text,
+// invariants): an equal key repeats it, a smaller one is out of order. Both are BadValue at the
+// entry's offset. The keys are compared from their payloads, so a dict that is not bound and a key
+// longer than the bound member are checked the same way, with no storage for the previous key.
 PACKBIN_NOINLINE
-Result check_new_key(Walk const& w, std::size_t i, void* m, std::size_t at) {
-  Field const& f = w.t[i];
-  Field const& key = w.t[i + 1];
-  if (m == nullptr || key.access == nullptr)
-    return Result{};
-  std::uint16_t count = *f.count(m);
-  void* last = f.item(m, count - 1u);
-  for (std::uint16_t k = 0; k + 1u < count; ++k) {
-    if (same_key(key, f.item(m, k), last))
-      return fail(Error::BadValue, at, f.id);
-  }
-  return Result{};
+Result check_key_order(Walk const& w, std::size_t i, std::size_t prev, std::size_t at) {
+  std::uint8_t const* a = nullptr;
+  std::uint8_t const* b = nullptr;
+  std::size_t na = 0, nb = 0;
+  payload_at(w.r, prev, a, na);
+  payload_at(w.r, at, b, nb);
+  return txt::compare_payloads(a, na, b, nb) < 0 ? Result{} : fail(Error::BadValue, at, w.t[i].id);
 }
+#endif
 
 // How many items a times, list or dict holds (read from its count field or the wire). A
 // repeat reads until the packet ends. SIZE_MAX means the unpack already failed with `out`.
@@ -267,6 +267,9 @@ Result unpack_items(Walk& w, std::size_t i, void* m, std::size_t count) {
   // outer values come back when the container ends (an error ends the whole unpack).
   std::uint8_t outer[kFlagBytes];
   std::memcpy(outer, w.flag_bytes, sizeof(outer));
+#ifndef PACKBIN_NO_TEXT
+  std::size_t prev_key = kNoKey;
+#endif
   for (std::size_t k = 0; to_end ? w.r.pos < w.r.len : k < count; ++k) {
     std::size_t at = w.r.pos;
     std::memset(w.flag_bytes, 0, sizeof(w.flag_bytes));
@@ -292,11 +295,16 @@ Result unpack_items(Walk& w, std::size_t i, void* m, std::size_t count) {
     }
     if (m != nullptr)
       ++*f.count(m);
+#ifndef PACKBIN_NO_TEXT
     if (f.kind == Kind::Dict) {
-      Result res = check_new_key(w, i, m, at);
-      if (!res.ok())
-        return res;
+      if (prev_key != kNoKey) {
+        Result res = check_key_order(w, i, prev_key, at);
+        if (!res.ok())
+          return res;
+      }
+      prev_key = at;
     }
+#endif
   }
   std::memcpy(w.flag_bytes, outer, sizeof(outer));
   return Result{};

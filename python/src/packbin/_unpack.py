@@ -223,19 +223,22 @@ def _unpack_dict_items(
     count = struct.unpack_from("<H", data, offset)[0]
     offset += 2
     mapping: dict[str, Any] = {}
+    previous: str | None = None
     for _ in range(count):
         got = _read_utf8(data, offset, "")
         if isinstance(got, ShortPacket):
             return mapping, offset, got
         key, offset = got
+        # str order is code point order, which is UTF-8 byte order; an equal key is a repeat, a smaller one is out of order.
+        if previous is not None and key <= previous:
+            return mapping, offset, ShortPacket(field="", needed=0, left=0)
+        previous = key
         before = offset
         value, offset, err = _unpack_element(data, offset, element, budget)
         if err is not None:
             return mapping, offset, err
         if offset == before:
             return mapping, offset, _bad_value(data, before, "")
-        if key in mapping:
-            return mapping, offset, ShortPacket(field="", needed=0, left=0)
         mapping[key] = value
     return mapping, offset, None
 

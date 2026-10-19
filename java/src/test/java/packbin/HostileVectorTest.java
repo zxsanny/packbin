@@ -48,6 +48,8 @@ final class HostileVectorTest {
         for (String id : List.of(
                 "zero_progress_repeat_bool", "zero_progress_repeat_when", "negative_count", "oversize_count",
                 "oversize_count_times", "oversize_list_count", "invalid_utf8", "invalid_utf8_dict_key",
+                "dict_keys_out_of_order", "dict_keys_repeated", "dict_keys_repeated_forms",
+                "dict_keys_prefix_descends", "dict_keys_utf16_order",
                 "count_behind_clear_flag", "count_behind_clear_flag_bits", "nine_flag_bits", "nine_flag_bits_split",
                 "when_names_later_field", "count_names_later_field", "when_names_outer_field_in_repeat",
                 "bool_outside_flags", "empty_group_outside_flags", "eq_bool_false", "eq_out_of_range",
@@ -389,7 +391,8 @@ final class HostileVectorTest {
             case "oversize_list_count" -> Maps.scheme(1, Packbin.list(
                     Access.get("xs"), Access.set("xs"), Packbin.u8(0, Access.identity(), Access.ignore())));
             case "invalid_utf8" -> Maps.scheme(1, Packbin.utf8(0, Access.get("name"), Access.set("name")));
-            case "invalid_utf8_dict_key" -> Maps.scheme(1, Packbin.dict(
+            case "invalid_utf8_dict_key", "dict_keys_out_of_order", "dict_keys_repeated", "dict_keys_repeated_forms",
+                    "dict_keys_prefix_descends", "dict_keys_utf16_order" -> Maps.scheme(1, Packbin.dict(
                     Access.get("m"), Access.set("m"), Packbin.u8(0, Access.identity(), Access.ignore())));
             case "count_behind_clear_flag" -> Maps.scheme(1,
                     Packbin.flags(0, Packbin.u8(0, Access.get("n"), Access.set("n"))),

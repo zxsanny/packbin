@@ -213,14 +213,14 @@ constexpr auto sdict = packbin::scheme<DictRow>(9, packbin::dict<&DictRow::d>(pa
 int dict_quad(std::size_t entries) {
   if (entries > 65535)
     entries = 65535;
-  // Distinct 3-byte ASCII keys as raw payloads: 04 10 a b c, then the u8 value.
+  // Distinct 3-byte ASCII keys in ascending order (loop 42, AZ-2713) as raw payloads: 04 10 a b c, then the u8 value.
   Bytes pkt{9, static_cast<std::uint8_t>(entries), static_cast<std::uint8_t>(entries >> 8)};
   for (std::size_t i = 0; i < entries; ++i) {
     pkt.push_back(4);
     pkt.push_back(0x10);
-    pkt.push_back(static_cast<std::uint8_t>(0x20 + i % 64));
-    pkt.push_back(static_cast<std::uint8_t>(0x20 + (i / 64) % 64));
     pkt.push_back(static_cast<std::uint8_t>(0x20 + (i / 4096) % 64));
+    pkt.push_back(static_cast<std::uint8_t>(0x20 + (i / 64) % 64));
+    pkt.push_back(static_cast<std::uint8_t>(0x20 + i % 64));
     pkt.push_back(0);
   }
   DictRow* row = new DictRow;
@@ -233,12 +233,12 @@ int dict_quad(std::size_t entries) {
               entries, pkt.size(), res.ok(), row->d.count, dt,
               static_cast<double>(entries) * (entries - 1) / 2, sizeof(DictRow) / 1024,
               peak_rss_kb());
-  // The same packet with the last key equal to the first: refused, at the same cost.
+  // The same packet with the last key equal to the key before it: refused.
   if (entries >= 2) {
     std::size_t last = 3 + (entries - 1) * 6;
-    pkt[last + 2] = pkt[3 + 2];
-    pkt[last + 3] = pkt[3 + 3];
-    pkt[last + 4] = pkt[3 + 4];
+    pkt[last + 2] = pkt[last - 6 + 2];
+    pkt[last + 3] = pkt[last - 6 + 3];
+    pkt[last + 4] = pkt[last - 6 + 4];
     Exact in2(pkt);
     a = Clock::now();
     res = packbin::unpack(sdict, in2.data(), in2.n, *row);

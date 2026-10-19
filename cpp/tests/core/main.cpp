@@ -30,6 +30,7 @@ int run_core_ecc_repair_host_tests();
 int run_core_ecc_api_tests();
 int run_core_ecc_api_host_tests();
 int run_core_ecc_session_host_tests();
+int run_core_dict_order_host_tests();
 
 int main() {
   run_core_scalar_tests();
@@ -62,6 +63,7 @@ int main() {
   run_core_ecc_api_tests();
   run_core_ecc_api_host_tests();
   run_core_ecc_session_host_tests();
+  run_core_dict_order_host_tests();
   if (check::failures() != 0) {
     std::fprintf(stderr, "%d failure(s)\n", check::failures());
     return 1;

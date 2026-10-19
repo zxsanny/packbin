@@ -15,6 +15,11 @@ let hostileUnpackSchemes: [String: HostileBuild] = [
     "oversize_list_count": { try Scheme(1, .list("xs", .u8(0, "x"))) },
     "invalid_utf8": { try Scheme(1, .utf8(0, "name")) },
     "invalid_utf8_dict_key": { try Scheme(1, .dict("m", .u8(0, "v"))) },
+    "dict_keys_out_of_order": { try Scheme(1, .dict("m", .u8(0, "v"))) },
+    "dict_keys_repeated": { try Scheme(1, .dict("m", .u8(0, "v"))) },
+    "dict_keys_repeated_forms": { try Scheme(1, .dict("m", .u8(0, "v"))) },
+    "dict_keys_prefix_descends": { try Scheme(1, .dict("m", .u8(0, "v"))) },
+    "dict_keys_utf16_order": { try Scheme(1, .dict("m", .u8(0, "v"))) },
     "count_behind_clear_flag": { try Scheme(1, .flags(0, .u8(0, "n")), .sized(1, "payload", count: 0)) },
     "count_behind_clear_flag_bits": { try Scheme(1, .flags(0, .u8(0, "n")), .bits(1, "segs", count: 0)) },
 ]

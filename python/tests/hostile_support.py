@@ -135,6 +135,11 @@ VECTOR_SCHEMES = {
     "oversize_list_count": list_of_u8,
     "invalid_utf8": utf8_name,
     "invalid_utf8_dict_key": dict_of_u8,
+    "dict_keys_out_of_order": dict_of_u8,
+    "dict_keys_repeated": dict_of_u8,
+    "dict_keys_repeated_forms": dict_of_u8,
+    "dict_keys_prefix_descends": dict_of_u8,
+    "dict_keys_utf16_order": dict_of_u8,
     "count_behind_clear_flag": lambda: count_behind_clear_flag("sized"),
     "count_behind_clear_flag_bits": lambda: count_behind_clear_flag("bits"),
 }

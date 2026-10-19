@@ -55,8 +55,9 @@ extension Reader {
 
     /// A list (`[Any]`) or dict (`[String: Any]`): a u16 count, then the items, each after its key for a
     /// dict. An item that reads no byte is refused, so a count of 65 535 cannot be walked for no input.
-    /// A key given twice is refused as TypeScript refuses it (a short packet with `needed` 0 and `left`
-    /// 0), and so are two keys that are equal as Swift strings although their bytes differ (NFC and
+    /// A key that is not strictly greater than the key before it, by UTF-8 bytes (AZ-2713), is refused
+    /// as TypeScript refuses a key given twice (a short packet with `needed` 0 and `left` 0). So are
+    /// two keys that are equal as Swift strings although their bytes differ (NFC and
     /// NFD), which one `[String: Any]` cannot hold apart (owner ruling 2026-10-14). A key that is not in
     /// stream-safe form is refused before it reaches the dictionary.
     mutating func collection(_ n: Node) throws -> Any {
@@ -68,8 +69,15 @@ extension Reader {
             return items
         }
         var entries: [String: Any] = [:]
+        var previous: String?
         for _ in 0..<count {
             let key = try readKey(n.name)
+            // Strictly ascending by UTF-8 bytes (not by Swift's canonical-equivalence order): an equal
+            // key is a repeated one, a smaller one is out of order, and both are refused as one error.
+            if let previous, !previous.utf8.lexicographicallyPrecedes(key.utf8) {
+                throw PackbinError(.short, field: nil, name: n.name, reason: "dict key given twice")
+            }
+            previous = key
             let v = try item(n, element)
             guard entries[key] == nil else {
                 throw PackbinError(.short, field: nil, name: n.name, reason: "dict key given twice")

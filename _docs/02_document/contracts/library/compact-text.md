@@ -89,14 +89,14 @@ Costs are integers, so the result does not depend on floating point.
 - Pack takes a caller-sized scratch buffer for the parse (12 bytes per code point: 3 words); a text that needs more scratch than given is an error naming the field, never a different encoding.
 - A build with `PACKBIN_NO_TEXT` links no codec and refuses a field bound to `Text<N>` when the field list is built; a field bound to `Packed` is accepted. Pack of a `Packed` member writes its count and bytes as given and does not decode or validate them.
 - 0 heap allocations, 0 exceptions, tables in read-only memory.
-- A bound dict compares each decoded key with the keys before it, so a hostile packet costs time in the square of the entries: about 70 ms for 4,096, 1 s for 16,384 and 17 s for 65,535 entries (F51). Size a dict's `Array` capacity to what a peer may send. An unbound dict does not check repeated keys (F56). A rule of strictly ascending keys on unpack in every package is the planned fix.
+- A dict key is checked against the previous key only, by decoding both payloads a byte at a time up to the first difference (no storage for the previous key), so a dict that is not bound is checked like a bound one and the time is linear in the packet. A build with `PACKBIN_NO_TEXT` decodes no string and checks no key order (a dict key must be a `Text<N>`, so a bound dict needs the codec; an unbound one is skipped by its counts).
 
 ## Invariants
 
 - Same string, same bytes in all 8 packages (`fixtures/text/vectors.txt`).
 - The raw payload is 1 + the UTF-8 bytes, so a field is never larger than 2 + its UTF-8 bytes (today's size) up to 126 UTF-8 bytes, at most 1 byte larger from 127 to 16,382 bytes, and at most 2 bytes larger above (the count header grows to 2 and then 3 bytes).
 - A payload of N bytes decodes to at most 6N + 8 UTF-8 bytes (the worst symbol in the frozen tables is the Russian о: a 3-bit code for 2 UTF-8 bytes, 5.33 bytes per payload byte).
-- Dictionary pairs are sorted by the key's UTF-8 bytes before the keys are encoded (unchanged). A repeated decoded key is refused (unchanged).
+- Dictionary pairs are sorted by the key's UTF-8 bytes before the keys are encoded (unchanged). On unpack a decoded key must be strictly greater than the key before it, compared as unsigned UTF-8 bytes (a prefix sorts before the longer key; U+FF5E sorts before U+10000, unlike UTF-16 order). An equal key is a repeated key and a smaller key is out of order; both refuse the packet with the package's dict-key error, and a key's several byte forms (compact or raw) count as one key. Every encoder already writes this order, so only hand-made or hostile packets are refused (loop 42, AZ-2713; F51, F56). This refuses packets the earlier decoders accepted, which is free until the first `v*` tag.
 
 ## Versioning Rules
 
@@ -119,6 +119,7 @@ Codes below are the canonical codes of the frozen tables; `bits` counts the symb
 
 | Version | Date | Change | Author |
 |---------|------|--------|--------|
+| 1.0.0 | 2026-10-19 | Loop 42 (AZ-2713): dict keys must be strictly ascending on unpack in all eight packages; the C++ quadratic key check is gone. No change to packets the encoders write | loop 42 |
 | 1.0.0 | 2026-10-19 | Loop 41 audit (AZ-2666): the C++ dict key cost and the unbound-dict difference documented (F51, F56). No wire change | loop 41 |
 | 1.0.0 | 2026-10-18 | Frozen with tables.json (AZ-2646); owner decisions D1 to D5 and option D. C++ scratch is 12 bytes per code point (corrected in the review) | loop 35 |
 | 0.1.0 | 2026-10-18 | Draft | loop 35 |

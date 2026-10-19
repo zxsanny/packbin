@@ -103,66 +103,93 @@ unsigned read_escaped(std::uint8_t const* p, std::size_t pos, std::size_t total,
   return decode_utf8(b, n, cp) == n ? n : 0;
 }
 
-// Decodes the symbols of a compact payload of `n` bytes (n >= 1, start mode 0 to 3).
-bool decode_compact(std::uint8_t const* p, std::size_t n, Sink& sink) {
+}  // namespace
+
+// Where a compact payload stands between symbols (contract: Decoding). Both the full decode and the
+// key order check step through it, so the two read a payload the same way.
+struct Cursor {
+  std::uint8_t const* p;
+  std::size_t total;
+  std::size_t pos = kHeaderBits;
+  unsigned mode;
+  bool lock = false;
+  bool cap = false;
+};
+
+namespace {
+
+// Starts a compact payload of `n` bytes (n >= 1, start mode 0 to 3). False: the header is refused.
+bool begin_compact(std::uint8_t const* p, std::size_t n, Cursor& c) {
   unsigned first = p[0];
-  unsigned mode = (first >> 2) & 7;
   unsigned pad = first >> 5;
   std::size_t total = 8 * n - pad;
   if (total < kHeaderBits || (pad != 0 && (p[n - 1] & ((1u << pad) - 1)) != 0))
     return false;
-  std::size_t pos = kHeaderBits;
-  bool lock = false;
-  bool cap = false;
-  while (pos < total) {
-    unsigned used = 0;
-    int sym = next_symbol(mode, p, pos, total, used);
-    if (sym < 0)
+  c.p = p;
+  c.total = total;
+  c.mode = (first >> 2) & 7;
+  return true;
+}
+
+// Reads one symbol (it may add no bytes, or one to four). False: the payload is refused.
+bool step_compact(Cursor& c, Sink& sink) {
+  unsigned used = 0;
+  int sym = next_symbol(c.mode, c.p, c.pos, c.total, used);
+  if (sym < 0)
+    return false;
+  c.pos += used;
+  Layout const& lay = kLayout[c.mode];
+  unsigned s = static_cast<unsigned>(sym);
+  if (s == lay.esc) {
+    std::uint8_t b[4];
+    unsigned got = c.cap ? 0 : read_escaped(c.p, c.pos, c.total, b);
+    if (got == 0 || !sink.put(b, got))
       return false;
-    pos += used;
-    Layout const& lay = kLayout[mode];
-    unsigned s = static_cast<unsigned>(sym);
-    if (s == lay.esc) {
-      std::uint8_t b[4];
-      unsigned got = cap ? 0 : read_escaped(p, pos, total, b);
-      if (got == 0 || !sink.put(b, got))
+    c.pos += 8 * got;
+  } else if (s >= lay.sw && s < lay.sw + 3u) {
+    if (c.cap)
+      return false;
+    unsigned j = s - lay.sw;
+    c.mode = j < c.mode ? j : j + 1;
+  } else if (c.mode != kNumMode && s == lay.cap) {
+    if (c.lock || c.cap)
+      return false;
+    c.cap = true;
+  } else if (c.mode != kNumMode && s == lay.lock) {
+    if (c.cap)
+      return false;
+    c.lock = !c.lock;
+  } else if (s < lay.letters) {
+    std::uint32_t cp = kTab.lower[c.mode][s];
+    std::uint32_t up = kTab.upper[c.mode][s];
+    if (c.cap) {
+      if (up == 0)
         return false;
-      pos += 8 * got;
-    } else if (s >= lay.sw && s < lay.sw + 3u) {
-      if (cap)
-        return false;
-      unsigned j = s - lay.sw;
-      mode = j < mode ? j : j + 1;
-    } else if (mode != kNumMode && s == lay.cap) {
-      if (lock || cap)
-        return false;
-      cap = true;
-    } else if (mode != kNumMode && s == lay.lock) {
-      if (cap)
-        return false;
-      lock = !lock;
-    } else if (s < lay.letters) {
-      std::uint32_t cp = kTab.lower[mode][s];
-      std::uint32_t up = kTab.upper[mode][s];
-      if (cap) {
-        if (up == 0)
-          return false;
-        cp = up;
-        cap = false;
-      } else if (lock && up != 0) {
-        cp = up;
-      }
-      if (!sink.put_cp(cp))
-        return false;
-    } else {
-      if (cap)
-        return false;
-      std::uint32_t cp = mode == kNumMode ? tbl::kNumset[s] : tbl::kShared[s - lay.shared];
-      if (!sink.put_cp(cp))
-        return false;
+      cp = up;
+      c.cap = false;
+    } else if (c.lock && up != 0) {
+      cp = up;
     }
+    return sink.put_cp(cp);
+  } else {
+    if (c.cap)
+      return false;
+    std::uint32_t cp = c.mode == kNumMode ? tbl::kNumset[s] : tbl::kShared[s - lay.shared];
+    return sink.put_cp(cp);
   }
-  return !cap;
+  return true;
+}
+
+// Decodes the symbols of a compact payload of `n` bytes (n >= 1, start mode 0 to 3).
+bool decode_compact(std::uint8_t const* p, std::size_t n, Sink& sink) {
+  Cursor c{};
+  if (!begin_compact(p, n, c))
+    return false;
+  while (c.pos < c.total) {
+    if (!step_compact(c, sink))
+      return false;
+  }
+  return !c.cap;
 }
 
 bool valid_utf8(std::uint8_t const* p, std::size_t n) {
@@ -195,6 +222,68 @@ inline bool decode_payload(std::uint8_t const* p, std::size_t n, Sink& sink) {
   if (mode == kRawMode)
     return check_raw(p, n) && sink.put(p + 1, n - 1);
   return decode_compact(p, n, sink);
+}
+
+// The decoded bytes of a payload that has already decoded once, one at a time and with no storage
+// beyond a few integers. A payload the codec would refuse reads as ended where it fails.
+struct Stream {
+  std::uint8_t const* raw = nullptr;
+  std::size_t raw_left = 0;
+  Cursor c{};
+  bool compact = false;
+  std::uint8_t buf[4] = {};
+  unsigned have = 0;
+  unsigned at = 0;
+
+  Stream(std::uint8_t const* p, std::size_t n) {
+    if (n == 0)
+      return;
+    if (is_raw(p[0])) {
+      raw = p + 1;
+      raw_left = n - 1;
+    } else {
+      compact = begin_compact(p, n, c);
+    }
+  }
+
+  // The next byte, or -1 at the end.
+  int next() {
+    if (at < have)
+      return buf[at++];
+    if (raw_left != 0) {
+      --raw_left;
+      return *raw++;
+    }
+    while (compact && c.pos < c.total) {
+      Sink sink{buf, sizeof(buf)};
+      if (!step_compact(c, sink)) {
+        compact = false;
+        break;
+      }
+      if (sink.len != 0) {
+        have = static_cast<unsigned>(sink.len);
+        at = 1;
+        return buf[0];
+      }
+    }
+    return -1;
+  }
+};
+
+// Compares the decoded bytes of two payloads as unsigned bytes (a prefix is smaller): negative,
+// zero or positive. The work is the length of the common prefix plus one byte of each.
+inline int compare_payloads(std::uint8_t const* a, std::size_t na, std::uint8_t const* b,
+                            std::size_t nb) {
+  Stream sa(a, na);
+  Stream sb(b, nb);
+  for (;;) {
+    int x = sa.next();
+    int y = sb.next();
+    if (x != y)
+      return x - y;
+    if (x < 0)
+      return 0;
+  }
 }
 
 }  // namespace txt

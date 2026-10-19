@@ -151,6 +151,16 @@ public class HostileVectorTests
             new Scheme<NameRow>(1, Field.Utf8<NameRow>(0, x => x.Name)), hex, 1),
         ["invalid_utf8_dict_key"] = hex => HostileProbe.Unpack(
             new Scheme<MapRow>(1, Field.Dict((MapRow x) => x.M, Field.U8<ByteEl>(0, x => x.V))), hex, 1),
+        ["dict_keys_out_of_order"] = hex => HostileProbe.Unpack(
+            new Scheme<MapRow>(1, Field.Dict((MapRow x) => x.M, Field.U8<ByteEl>(0, x => x.V))), hex, 1),
+        ["dict_keys_repeated"] = hex => HostileProbe.Unpack(
+            new Scheme<MapRow>(1, Field.Dict((MapRow x) => x.M, Field.U8<ByteEl>(0, x => x.V))), hex, 1),
+        ["dict_keys_repeated_forms"] = hex => HostileProbe.Unpack(
+            new Scheme<MapRow>(1, Field.Dict((MapRow x) => x.M, Field.U8<ByteEl>(0, x => x.V))), hex, 1),
+        ["dict_keys_prefix_descends"] = hex => HostileProbe.Unpack(
+            new Scheme<MapRow>(1, Field.Dict((MapRow x) => x.M, Field.U8<ByteEl>(0, x => x.V))), hex, 1),
+        ["dict_keys_utf16_order"] = hex => HostileProbe.Unpack(
+            new Scheme<MapRow>(1, Field.Dict((MapRow x) => x.M, Field.U8<ByteEl>(0, x => x.V))), hex, 1),
         ["count_behind_clear_flag"] = hex => HostileProbe.Unpack(
             new Scheme<GatedRow>(1,
                 Field.Flags(0, Field.U8<GatedRow>(0, x => x.N)),

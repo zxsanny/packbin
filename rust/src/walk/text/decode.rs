@@ -178,6 +178,8 @@ fn decode_payload(payload: &[u8]) -> Result<String, &'static str> {
     if cap {
         return Err("cap");
     }
+    // The buffer grew by doubling from a guess; the caller keeps no spare capacity (F60).
+    out.shrink_to_fit();
     Ok(out)
 }
 

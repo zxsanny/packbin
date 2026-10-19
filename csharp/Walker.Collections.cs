@@ -131,11 +131,16 @@ internal static partial class Walker
         offset += 2;
         var child = field.Children[0];
         var items = new Dictionary<string, object?>(Math.Min(count, bytes.Length - offset));
+        string? previous = null;
         for (var i = 0; i < count; i++)
         {
             var error = TextDecoder.Read(field.Name, bytes, ref offset, out var key);
             if (error is not null)
                 return error;
+            // Keys must ascend strictly by UTF-8 bytes: one compare with the previous key finds a repeat too.
+            if (previous is not null && CompareUtf8Order(previous, key) >= 0)
+                return new ShortPacket(field.Name, 0, 0);
+            previous = key;
             var one = values.Fresh();
             var valueStart = offset;
             var err = UnpackField(child, bytes, ref offset, one, false);
@@ -144,13 +149,26 @@ internal static partial class Walker
             // A zero-width value would let a few bytes ask for 65 535 empty entries.
             if (offset == valueStart)
                 return InterimBadValue(field.Name, bytes.Length - valueStart);
-            if (items.ContainsKey(key))
-                return new ShortPacket(field.Name, 0, 0);
             items[key] = ElementValue(child, one);
         }
         Store(values, field.Name, items, repeatLists);
         return null;
     }
+
+    // UTF-8 byte order of two strings: UTF-16 unit order with surrogates moved above U+E000..U+FFFF
+    // (plain ordinal order puts U+10000 before U+FF5E; UTF-8 bytes put it after).
+    private static int CompareUtf8Order(string a, string b)
+    {
+        var n = Math.Min(a.Length, b.Length);
+        for (var i = 0; i < n; i++)
+        {
+            if (a[i] != b[i])
+                return Fold(a[i]).CompareTo(Fold(b[i]));
+        }
+        return a.Length.CompareTo(b.Length);
+    }
+
+    private static int Fold(char c) => c >= '\uE000' ? c - 0x800 : c >= '\uD800' ? c + 0x2000 : c;
 
     private static int CompareUtf8Bytes(byte[] a, byte[] b)
     {

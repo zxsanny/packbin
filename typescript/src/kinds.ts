@@ -318,6 +318,24 @@ export function writeUtf8(out: PackOut, name: string, value: unknown): void {
   out.append(name, encodeText(value, name, out.text))
 }
 
+// UTF-8 byte order of two well-formed strings, without encoding them: code point order. The first
+// differing UTF-16 unit decides, except that a surrogate (a code point above U+FFFF) sorts after
+// U+E000..U+FFFF, so surrogates are moved above that range before the compare.
+export function compareUtf8(a: string, b: string): number {
+  const n = Math.min(a.length, b.length)
+  for (let i = 0; i < n; i++) {
+    const x = a.charCodeAt(i)
+    const y = b.charCodeAt(i)
+    if (x !== y) return rank(x) - rank(y)
+  }
+  return a.length - b.length
+}
+
+function rank(unit: number): number {
+  if (unit < 0xd800) return unit
+  return unit >= 0xe000 ? unit - 0x800 : unit + 0x2000
+}
+
 export function readUtf8(
   cur: ViewCursor,
   name: string,

@@ -101,8 +101,8 @@ struct Array {
   T items[N] = {};
 };
 
-// One dictionary entry. The key is a decoded copy (`Text<N>`): keys are ordered and checked for
-// repeats as text.
+// One dictionary entry. The key is a decoded copy (`Text<N>`): keys are ordered and checked
+// as text (strictly ascending on unpack).
 template <typename V, typename Key>
 struct Entry {
   using value_type = V;

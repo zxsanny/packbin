@@ -709,3 +709,21 @@ Summary. No read past the payload, no allocation or time sized by an untrusted n
 
 ### Evidence and limits (loop 41)
 Method: four read-only arms on `git archive HEAD` copies at `915a908` (Python 3.14.8, Node 22.23.0, Rust stable in debug and release, Go 1.27 in its container, .NET 10.0.103, Java 21.0.2 with `--release 17`, Swift 6.3.3 Command Line Tools, Apple clang 21.0.0 with ASan and UBSan). Every timing above is one run on a host at load 4 to 14 and is indicative; medians were stable, maxima were preemption. Not checked: Linux and x64 (except Go, in its Linux container), GCC, .NET Framework and Mono (only the netstandard2.0 UTF-8 branch on .NET 10), Java runtimes other than 21, the C++ `PACKBIN_NO_TEXT` and `PACKBIN_NO_ECC` builds, coverage-guided fuzzing, concurrent unpack on one session, timing side channels, Swift typed unpack (by reading only), and the encoders (they read the caller's row, not packet bytes).
+
+## Loop 42 update (dict key order and the cheap loop 41 Lows, AZ-2713, AZ-2722)
+
+**Date**: 2026-10-19. **Scope**: the dict decoders of all eight packages, the C++ session scheme check, the C# and Go repair arrays, the Rust decoded string, the Python and TypeScript session payload type. No new input surface; the rule only refuses more.
+
+**Verdict**: unchanged (PASS_WITH_WARNINGS). F51 (Medium) and F56 are fixed; F57, F59, F60 and the two F19 instances are fixed; F58 is deferred by the owner. Medium open after the loop: F10, F12.
+
+| # | Status | Fix |
+|---|--------|-----|
+| 51 | fixed in loop 42 | Every package refuses a dict key that is not strictly greater than the key before it, compared as unsigned UTF-8 bytes. The C++ core decodes the previous and the new key a byte at a time up to the first difference (`txt::Stream`, `compare_payloads`) and keeps one offset. The probe `dict-quad` (`fixtures/hostile/fuzz/cpp/`, now with ascending keys): 16,384 keys 1.06 s before, 0.001 s; 65,535 keys 16.9 s before, 0.002 s (-O2, load 8) |
+| 56 | fixed in loop 42 | The same check runs for a dict that is not bound (hostile cases `dict_keys_*`, `dict_order_host_tests.cpp`); a `PACKBIN_NO_TEXT` build decodes no string and checks no order |
+| 57 | fixed in loop 42 | A C++ session unpack with a scheme or a handler whose status is not Ok answers that status before the buffer is touched and before a receive position is spent |
+| 59 | fixed in loop 42 | C# repair: three arrays of n + 1 bytes per call (1,048 B for the whole worst-case call, 3.7 to 4.2 KB for the locator alone before); Go repair: fixed arrays on the stack |
+| 60 | fixed in loop 42 | The Rust decoded string is shrunk to its length |
+| 19 | fixed (Python, TypeScript) | The session payload type is checked before the receive index moves; no coercion of a string or a number |
+| 58 | open (owner, loop 42) | Python session pad cost before the type byte |
+
+Cost: the C++ Cortex-M4F image is 7,920 B of 8,192 (the order check is built only with the codec, so the M4F core lost `check_new_key`: 272 B margin, was 60 B) and its stack 504 B of 512 (8 B margin, was 20 B).

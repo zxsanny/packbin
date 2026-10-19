@@ -98,7 +98,9 @@ class PackSession {
                        int limit) {
     if (!open_)
       return fail(Error::BadValue, 0, -1);
-    int n = s.status.ok() ? detail::parity_of(s) : 0;
+    if (!s.status.ok())
+      return s.status;
+    int n = detail::parity_of(s);
     if (!detail::limit_ok(n, limit))
       return fail(Error::BadValue, 0, -1, static_cast<std::size_t>(n / 2));
     if (n == 0) {
@@ -124,6 +126,9 @@ class PackSession {
     int n = 0;
     if (!detail::unique_types(first, rest...))
       return fail(Error::SchemeInvalid, 0, -1);
+    Result built = detail::handlers_built(first, rest...);
+    if (!built.ok())
+      return built;
     Result shared = detail::shared_parity(n, first, rest...);
     if (!shared.ok())
       return shared;

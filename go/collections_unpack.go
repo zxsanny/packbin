@@ -47,7 +47,8 @@ func (r *reader) utf8(id int, name string) (string, error) {
 
 // collection reads a list ([]any) or a dict (map[string]any): a u16 count, then the items, each a key
 // and an element for a dict. An element that reads no byte is refused, so a count of 65535 cannot be
-// walked for no input; a key given twice is refused.
+// walked for no input; a dict key must be greater than the one before it (compared as UTF-8 bytes), so a
+// key given twice or out of order is refused.
 func (r *reader) collection(f *node) (any, error) {
 	if left := len(r.buf) - r.off; left < 2 {
 		return nil, shortErr(NoField, f.name, 2, left)
@@ -68,7 +69,8 @@ func (r *reader) collection(f *node) (any, error) {
 		return items, nil
 	}
 	entries := make(map[string]any, room)
-	for range count {
+	prev := ""
+	for i := range count {
 		key, err := r.utf8(NoField, f.name)
 		if err != nil {
 			return nil, err
@@ -77,9 +79,10 @@ func (r *reader) collection(f *node) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		if _, dup := entries[key]; dup {
+		if i > 0 && key <= prev {
 			return nil, shortErr(NoField, f.name, 0, 0)
 		}
+		prev = key
 		entries[key] = v
 	}
 	return entries, nil

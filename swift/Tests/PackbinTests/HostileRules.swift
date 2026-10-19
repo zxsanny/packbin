@@ -24,6 +24,12 @@ let hostileUnpackRules: [String: String] = [
     "invalid_utf8": "packbin: short packet at field 0 (name): needed 0, left 4",
     // A dict key has no field id: the error names the dict.
     "invalid_utf8_dict_key": "packbin: short packet at m: needed 0, left 4",
+    // A key not strictly greater than the one before it (AZ-2713): the repeated-key error, which carries no byte count.
+    "dict_keys_out_of_order": "packbin: short packet at m: needed 0, left 0",
+    "dict_keys_repeated": "packbin: short packet at m: needed 0, left 0",
+    "dict_keys_repeated_forms": "packbin: short packet at m: needed 0, left 0",
+    "dict_keys_prefix_descends": "packbin: short packet at m: needed 0, left 0",
+    "dict_keys_utf16_order": "packbin: short packet at m: needed 0, left 0",
     "count_behind_clear_flag": "packbin: short packet at field 1 (payload): needed 0, left 0",
     "count_behind_clear_flag_bits": "packbin: short packet at field 1 (segs): needed 0, left 0",
     "repeat_rounds_over_limit": "packbin: too many at field 0 (v): round 4 is above the limit of 3 rounds",

@@ -24,6 +24,8 @@ mod borrowed_count_tests;
 #[cfg(test)]
 mod counted_tests;
 #[cfg(test)]
+mod dict_order_tests;
+#[cfg(test)]
 mod duplicate_names_kept_tests;
 #[cfg(test)]
 mod duplicate_names_tests;

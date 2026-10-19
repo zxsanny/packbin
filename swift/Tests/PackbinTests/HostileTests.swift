@@ -44,9 +44,9 @@ import Testing
         let stages = Dictionary(grouping: cases, by: \.stage).mapValues { Set($0.map(\.id)) }
 
         // Assert
-        #expect(cases.count == 65)
+        #expect(cases.count == 70)
         #expect(Set(cases.map(\.id)).count == cases.count)
-        #expect(stages.mapValues(\.count) == ["unpack": 10, "limit": 2, "construct": 15, "pack": 38])
+        #expect(stages.mapValues(\.count) == ["unpack": 15, "limit": 2, "construct": 15, "pack": 38])
         #expect(stages == tables)
         #expect(Set(hostileRules.keys) == Set(refused) && hostileRules.count == refused.count)
     }

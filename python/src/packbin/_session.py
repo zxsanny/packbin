@@ -79,13 +79,15 @@ class PackSession:
         limit: int = 0,
     ) -> UnpackResult[Any]:
         """A protected message is repaired (up to `limit` wrong bytes) before the pad is removed; the receive
-        index advances for every payload that passes the checks of the call, a refused one included."""
+        index advances for every payload that passes the checks of the call, a refused one included. A payload
+        that is not bytes-like raises TypeError before the index moves and before any allocation."""
         if self._recv is None:
             return UnpackResult(ok=False, value=None, error=ShortPacket(field="", needed=1, left=0))
         if not handlers:
             raise TypeError("unpack() missing handlers")
         by_type, parity = BinaryPacker._dispatch_table(handlers)
         _checked_correction(limit, parity)
+        payload = bytearray(memoryview(data))
         key, index = self._recv, self._recv_count
         self._recv_count += 1
 
@@ -94,7 +96,7 @@ class PackSession:
             xor_pad(key, index, clear)
             return bytes(clear)
 
-        return BinaryPacker._receive(bytearray(data), by_type, parity, limit, unpad)
+        return BinaryPacker._receive(payload, by_type, parity, limit, unpad)
 
     def _open(self, nonce: bytes, initiator: bool) -> bool:
         if self._seed is None or self._send is not None:

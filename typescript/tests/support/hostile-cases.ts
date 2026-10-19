@@ -178,6 +178,11 @@ export const SCHEMES: Record<string, () => Scheme<Row>> = {
   oversize_list_count: () => scheme<Row>(1, list((x) => x.xs, u8(0, (x) => x.x))),
   invalid_utf8: () => scheme<Row>(1, utf8(0, (x) => x.name)),
   invalid_utf8_dict_key: () => scheme<Row>(1, dict((x) => x.m, u8(0, (x) => x.v))),
+  dict_keys_out_of_order: () => scheme<Row>(1, dict((x) => x.m, u8(0, (x) => x.v))),
+  dict_keys_repeated: () => scheme<Row>(1, dict((x) => x.m, u8(0, (x) => x.v))),
+  dict_keys_repeated_forms: () => scheme<Row>(1, dict((x) => x.m, u8(0, (x) => x.v))),
+  dict_keys_prefix_descends: () => scheme<Row>(1, dict((x) => x.m, u8(0, (x) => x.v))),
+  dict_keys_utf16_order: () => scheme<Row>(1, dict((x) => x.m, u8(0, (x) => x.v))),
   count_behind_clear_flag: () => scheme<Row>(1, clearFlag(), sized(1, (x) => x.payload, 0)),
   count_behind_clear_flag_bits: () => scheme<Row>(1, clearFlag(), bits(1, (x) => x.segs, 0)),
 

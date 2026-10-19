@@ -287,7 +287,9 @@ fn unpack_one(
             for _ in 0..count {
                 let key = text::read(cur, name)?;
                 let item = unpack_element(element, name, child, cur, flag_bits, groups)?;
-                if map.contains_key(&key) {
+                // Keys must ascend strictly by UTF-8 bytes (String order): one compare with the previous
+                // key refuses a repeated and an out-of-order key alike, with no lookup.
+                if map.last_key_value().is_some_and(|(prev, _)| *prev >= key) {
                     return Err(UnpackError::Short(ShortPacket {
                         field: name.to_string(),
                         needed: 0,
