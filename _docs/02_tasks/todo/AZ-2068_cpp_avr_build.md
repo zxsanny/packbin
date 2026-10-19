@@ -1,3 +1,8 @@
+---
+loop: 44
+branch: dev
+---
+
 # C++ core on 8-bit AVR (stretch)
 
 **Task**: AZ-2068_cpp_avr_build
