@@ -49,6 +49,8 @@ Given the new check in `test.yml`
 When the run completes twice
 Then the median is at most 25 s above the loop 34 median of 213.5 s (EC-13 for speed bounds).
 
+Result (loop 40, 2026-10-19): met. Runs 39135620507 (`1e07978`, 205 s) and 39140952528 (`75b1d39`, 216 s), the first two green `test.yml` runs after loop 38, median 210.5 s.
+
 ## Unit Tests
 
 | AC Ref | What to Test | Required Outcome |

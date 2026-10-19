@@ -322,6 +322,7 @@ AZ-2513 through AZ-2524 are loop 26, the Swift package (epic AZ-2223; owner deci
 | AZ-2688 | cpp_ecc_api_and_embedded | 4 | AZ-2687 | AZ-2677 |
 | AZ-2689 | ecc_ring_ci | 3 | AZ-2680 to AZ-2688 | AZ-2677 |
 | AZ-2690 | ecc_docs | 2 | AZ-2689 | AZ-2677 |
+| AZ-2704 | ecc_dispatch_check_order | 3 | AZ-2694 | AZ-2677 |
 
 AZ-2563 through AZ-2567 are loop 28 (owner 2026-10-15: speed check, then the S3 limit, the cpp pool race and the small leftovers; speed set accepted as recommended). AZ-2564 waits for AZ-2563 (both edit `publish-gate.test.sh`). AZ-2565 owns `scripts/loop-tests.sh` and its test; AZ-2566 owns README and ADR-005; AZ-2567 owns only a scratchpad driver and a record entry. AZ-2068 stays out.
 
@@ -336,3 +337,5 @@ AZ-2674 through AZ-2676 are loop 37 (owner 2026-10-18: the Low findings of revie
 AZ-2678 through AZ-2690 are loop 38 (owner 2026-10-18: message error correction, epic AZ-2677; 57 points; full correction chosen over detect-first). Order: AZ-2678 (contract), AZ-2679 (reference and vectors), then AZ-2680 to AZ-2687 are independent of each other and own disjoint package folders, AZ-2688 follows AZ-2687, AZ-2689 (ring, CI) after all packages, AZ-2690 (docs) last.
 
 AZ-2694 and AZ-2695 are loop 39 (owner 2026-10-18: review cleanups of loop 38, epic AZ-2677; 5 points; short loop). Disjoint: AZ-2694 owns the ECC paths of all eight packages and one contract sentence; AZ-2695 owns the re-verify tests and the C++ component description. Run AZ-2694 first, AZ-2695 after (both touch the same test folders). Parity setter shape and the default correction limit stay out.
+
+AZ-2704 is loop 40 (owner 2026-10-19: the loop 39 review Lows, epic AZ-2677; 3 points; short loop). One task: the dispatch check order of all eight packages and a required Rust `parity()`. The default correction limit and the 254-byte limit stay.
