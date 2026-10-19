@@ -38,5 +38,5 @@ The input is the 13-byte position fixture `4001000065cd1d00a3e1110100` as the cl
 | # | Input | Expected Result | Comparison | Reference |
 |---|-------|-----------------|------------|-----------|
 | 15 | 200,000 seeded random 15-byte buffers, n = 2, t = 0 | accepted ≤ 12 | threshold_max | EC-7 |
-| 16 | 1,000 corrections of a 255-byte block, 16 parity bytes, 8 wrong bytes | ≤ 1 s (Python ≤ 5 s) | threshold_max | EC-13 |
+| 16 | 1,000 corrections of a 254-byte message, 16 parity bytes, 8 wrong bytes | ≤ 1 s (Python ≤ 5 s) | threshold_max | EC-13 |
 | 17 | 20,000 seeded corruptions of 1 to 4 bytes of row 4, t = 0 | refused: 20,000; accepted: 0 (reference script result) | exact | EC-6 |

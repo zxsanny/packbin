@@ -412,11 +412,12 @@ def test_a_lone_surrogate_is_refused_on_pack_as_before():
 # AC-8: speed
 
 
-def test_ac8_100000_round_trips_of_a_20_character_ukrainian_string_take_at_most_40_seconds():
+def test_ac8_100000_round_trips_of_a_20_character_ukrainian_string_take_at_most_25_seconds():
     # Arrange: two strings in turn, so that the codec's memory of the last string is never used
     texts = ["Добрий день, як справи", "Привіт, світе! Київ 24"]
     assert all(len(text) >= 20 for text in texts)
     reader = ONE.on(lambda _row: None)
+    limit = timing_support.bound(25.0)
     started = time.perf_counter()
 
     # Act
@@ -427,7 +428,7 @@ def test_ac8_100000_round_trips_of_a_20_character_ukrainian_string_take_at_most_
     elapsed = time.perf_counter() - started
 
     # Assert
-    assert elapsed <= 40.0, f"{elapsed:.1f} s"
+    timing_support.assert_within(elapsed, limit, "100000 round trips of a 20-character Ukrainian string")
 
 
 # AZ-2664 (HD-1, HD-2): the encode state belongs to the pack call.

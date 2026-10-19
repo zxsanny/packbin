@@ -4,12 +4,12 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 
 ### FT-U-01: UTF-8 name
 
-**Summary**: The string `zxsanny` packs to 9 bytes and unpacks to the same text.
-**Traces to**: AZ-1938 AC-1
+**Summary**: The string `zxsanny` packs to 7 bytes (count 6, then 6 payload bytes) and unpacks to the same text.
+**Traces to**: AZ-1938 AC-1; since loop 35 the compact text format: CS-7, CS-19
 **Category**: Bytes
 
 **Preconditions**:
-- The field is a counted UTF-8 string
+- The field is a compact-text string: a count (a varint of 1 to 3 bytes holding the payload length), then the payload (contract `compact-text.md`)
 
 **Input data**: string `zxsanny`
 
@@ -17,20 +17,20 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 
 | Step | Consumer Action | Expected System Response |
 |------|----------------|------------------------|
-| 1 | pack the string | 9 bytes |
+| 1 | pack the string | 7 bytes |
 | 2 | unpack those bytes | the text |
 
-**Expected outcome**: hex `07007a7873616e6e79`. Unpacked text `zxsanny`. Mismatched bytes: 0.
+**Expected outcome**: hex `062bfcfee119b2` (count `06`, payload `2bfcfee119b2`, from `scripts/text/textfmt.py enc zxsanny`). Unpacked text `zxsanny`. Mismatched bytes: 0.
 **Max execution time**: 1s
 
 ### FT-U-02: Empty string
 
-**Summary**: An empty string is a 2-byte count of zero.
-**Traces to**: AZ-1938 AC-2
+**Summary**: An empty string is 1 byte: a count of zero and no payload.
+**Traces to**: AZ-1938 AC-2; since loop 35: CS-15
 **Category**: Bytes
 
 **Preconditions**:
-- The field is a counted UTF-8 string
+- The field is a compact-text string (count of 1 to 3 bytes, then the payload; a count of 0 has no payload)
 
 **Input data**: empty string
 
@@ -40,17 +40,17 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 |------|----------------|------------------------|
 | 1 | pack and unpack | a value |
 
-**Expected outcome**: hex `0000`. Text length 0.
+**Expected outcome**: hex `00` (1 byte; vector `enc.hand.empty`). Text length 0.
 **Max execution time**: 1s
 
 ### FT-U-03: String over the count limit
 
 **Summary**: A string of 65536 UTF-8 bytes does not produce a buffer.
-**Traces to**: AZ-1938 AC-3
+**Traces to**: AZ-1938 AC-3; since loop 35: CS-17
 **Category**: Bytes
 
 **Preconditions**:
-- The count is an unsigned 16-bit length
+- The longest text is 65,535 UTF-8 bytes; the count header is a varint of 1 to 3 bytes (contract `compact-text.md`)
 
 **Input data**: 65536 bytes of `a`
 

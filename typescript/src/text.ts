@@ -150,8 +150,10 @@ function edgesOf(m: number, cp: number, lock: number): void {
   addEdge(ESC_AT[m]!, len[ESC_AT[m]!]! + 8 * esc, -1, esc)
 }
 
-// Output bits of the encoder.
-let outBuf: Uint8Array = new Uint8Array(0)
+// Output bits of the encoder. `outBuf` is the field being written; it is reset to `NO_BYTES` before the
+// field is returned, so no module-level variable keeps the bytes of a finished call.
+const NO_BYTES = new Uint8Array(0)
+let outBuf: Uint8Array = NO_BYTES
 let outPos = 0
 let acc = 0
 let accBits = 0
@@ -265,6 +267,19 @@ function encodeFresh(text: string, name: string): Uint8Array {
   if (textBytes > MAX_TEXT_BYTES) throw new RangeError(`${name}: utf-8 length ${textBytes}`)
 
   const f = size <= SCRATCH_CHARS ? scratchCosts : new Int32Array((n + 1) * 8)
+  const field = encodeParse(points, f, n, textBytes)
+  outBuf = NO_BYTES
+  // The scratch arrays are shared by every call: clear the part this text used, so none keeps its code
+  // points or costs after the call.
+  if (size <= SCRATCH_CHARS) {
+    scratchPoints.fill(0, 0, n)
+    scratchCosts.fill(0, 0, (n + 1) * 8)
+  }
+  return field
+}
+
+// The optimal parse of `n` code points `points` by the cost table `f`, and the field it writes.
+function encodeParse(points: Int32Array, f: Int32Array, n: number, textBytes: number): Uint8Array {
   for (let s = 0; s < 8; s++) f[n * 8 + s] = 0
   for (let i = n - 1; i >= 0; i--) {
     const base = i * 8

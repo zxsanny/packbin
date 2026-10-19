@@ -10,7 +10,7 @@ Loop 38. "Parity bytes" is the number `n` a scheme declares (0 to 32). "Correcti
 
 - **EC-2.** A scheme with `n` parity bytes (n = 1, 2, 4, 8, 16, 32) packs to exactly the clear length + `n` bytes. The first bytes are the clear message. For the position fixture the output equals the vectors in `input_data/expected_results/results_report.md` (rows 2 to 6). Mismatched bytes across the eight packages: 0.
 - **EC-3.** A scheme that declares `n` above 32 fails when the scheme is built, with an error naming `n` and the limit 32. Messages built from it: 0.
-- **EC-4.** Pack of a clear message longer than 254 − `n` bytes returns a typed error naming the clear length and the limit, and writes 0 bytes. With `n` = 32 a 222-byte clear message packs and a 223-byte one is refused. Unpack of a buffer longer than 255 bytes under a protected scheme returns the same kind of error and 0 values.
+- **EC-4.** Pack of a clear message longer than 254 − `n` bytes returns a typed error naming the clear length and the limit, and writes 0 bytes. With `n` = 32 a 222-byte clear message packs and a 223-byte one is refused. Unpack of a buffer longer than 254 bytes under a protected scheme returns the same kind of error (`too_long`, contract `message-ecc.md`) and 0 values.
 
 ## Detection and correction
 
@@ -35,7 +35,7 @@ Loop 38. "Parity bytes" is the number `n` a scheme declares (0 to 32). "Correcti
 
 ## Targets and speed
 
-- **EC-12.** The Cortex-M4F build with the feature switched off has the same flash size as before this loop (8,132 B, limit 8,192 B) and the same stack size (492 B). The ESP32 and Pico builds with encode switched on build with 0 errors and 0 warnings, and a message packed there equals the vector bytes.
+- **EC-12.** The Cortex-M4F build with the feature switched off (built with `PACKBIN_NO_ECC`) is as built now: 7,920 B of 8,192 B flash and 504 B of 512 B stack (`_docs/AGENT_GOTCHAS.md`; it was 8,132 B and 492 B when this loop was written, so the figure is the last arm stage run, not a constant). The ESP32 and Pico builds with encode switched on build with 0 errors and 0 warnings. "A message packed on the ESP32 and Pico equals the vector bytes" is proven on the host, on QEMU Cortex-M3 and on s390x (big-endian), not on either chip (owner decision 2026-10-20).
 - **EC-13.** Unpack with correction of a 254-byte message with 16 parity bytes and 8 wrong bytes finishes 1,000 times in ≤ 1 second on one core in C#, TypeScript, Rust, C++, Java, Go and Swift. In Python the same loop takes ≤ 5 seconds. Pack of 1,000 such blocks takes ≤ 1 second in every package, Python included.
 
 ## Inherited project criteria

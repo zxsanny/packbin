@@ -27,5 +27,5 @@ Owner's words at intake: "Both features" = compact strings (epic AZ-2645, plan `
 | concern | policy/owner | status | severity |
 |---------|--------------|--------|----------|
 | Scope is wide (about 35 tasks, 8 packages); `feature-assess` caps new rows at 12 per round and lists the rest under `## Not walked` | skill Step 2 cap; owner sees the list | accepted-risk | Low |
-| Epic AZ-2677 was still To Do in Jira at loop 39 | tracker drift; check the live status and report it, do not transition without the owner's yes | open | Low |
+| Jira on 2026-10-19: epic AZ-2677 is Done, but epics AZ-2645 (compact strings) and AZ-2059 (C++ on microcontrollers) are still To Do with every child Done | tracker drift; do not transition without the owner's yes | open | Low |
 | `scenarios.md` rows of both plans may predate the assessment axes | skill Escalation: proceed from specs and `problem.md` | accepted-risk | Low |

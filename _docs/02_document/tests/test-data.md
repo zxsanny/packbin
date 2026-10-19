@@ -8,6 +8,7 @@
 | flags | flags 0x00 and 0x20 around a uint16, and a stored 0 | FT-P-04, FT-P-05, FT-N-01 | inline | none |
 | groups | conditional group and a repeated pair | FT-P-06, FT-P-07, FT-N-02 | inline | none |
 | strings | `zxsanny`, empty, and 65536 bytes of `a` | FT-U-01, FT-U-02, FT-U-03, FT-U-04 | inline | none |
+| compact text vectors (loop 35) | `fixtures/text/vectors.txt`: 346 `enc`, 10 `alt`, 32 `bad`, 4 `ref` and 26 `flip` rows (text, expected field bytes, refusal kind, ring packet, bit-flip target); tables `fixtures/text/tables.json` (sha256 in the contract `compact-text.md`); sentence-set sizes `fixtures/text/tables.report.md` (the Tatoeba corpus is not in the repository); size of the `enc` rows `_docs/02_task_plans/compact-strings/size_report.md` | CS-1 to CS-20, FT-U-01, FT-U-02 | each package reads the file by path; `fixtures/text/check-vectors.sh` re-derives every row with `scripts/text/textfmt.py` | none; the files are read only |
 | lists | `[1, 2]`, one big-endian 1, list then a following byte, empty, 65536 elements | FT-L-01, FT-L-02, FT-L-03, FT-L-04 | inline | none |
 | dictionaries | the 103-byte user value, empty triple, a repeated key | FT-D-01, FT-D-02, FT-D-03, FT-D-04, FT-D-05 | inline | none |
 | handoffs | producer hex consumed by the next language | FT-H-01, FT-H-02, FT-H-03 | inline | none |
@@ -55,8 +56,8 @@ Each call gets its own input buffer. The packages do not keep the last packet.
 | FT-N-03 | version tag, golden mismatch > 0 | packages published 0 | exact | N/A | results_report.md publish row 3 |
 | FT-N-04 | tag whose tree lacks a language | packages published 0 for that registry | exact | N/A | results_report.md publish row 4 |
 | NFT-PERF-01 | position, 100000 round trips, one core | elapsed time | threshold_max | ≤ 1 second | results_report.md speed row 1 |
-| FT-U-01 | string `zxsanny` | hex `07007a7873616e6e79`, text `zxsanny` | exact | N/A | AZ-1938 AC-1 |
-| FT-U-02 | empty string | hex `0000`, text length 0 | exact | N/A | AZ-1938 AC-2 |
+| FT-U-01 | string `zxsanny` | hex `062bfcfee119b2` (compact text, 7 bytes), text `zxsanny` | exact | N/A | AZ-1938 AC-1, CS-7 |
+| FT-U-02 | empty string | hex `00` (compact text, 1 byte), text length 0 | exact | N/A | AZ-1938 AC-2, CS-15 |
 | FT-U-03 | 65536 bytes of `a` | bytes written 0 | exact | N/A | AZ-1938 AC-3 |
 | FT-U-04 | count 7, 2 bytes left | needed 7, left 2, value count 0 | exact | N/A | AZ-1938 AC-4 |
 | FT-L-01 | list `[1, 2]` little-endian | hex `020001000200`, list `[1, 2]` | exact | N/A | AZ-1939 AC-1 |

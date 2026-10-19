@@ -393,12 +393,12 @@ describe("compact text in every string position", () => {
     assert.equal(got.row, undefined)
   })
 
-  it("AC-8 100 000 round trips of a 20-character Ukrainian string take at most 4 seconds", () => {
+  it("AC-8 100 000 round trips of a 20-character Ukrainian string take at most 2.5 seconds", () => {
     // Arrange
     // 1024 different texts, so the repeated-text shortcut of a lone string under times never answers.
     const texts = Array.from({ length: 1024 }, (_, i) => `Привіт, як справи ${String(i % 100).padStart(2, "0")}`.slice(0, 20))
     assert.ok(texts.every((t) => Array.from(t).length === 20))
-    const limit = bound(4)
+    const limit = bound(2.5)
     const started = performance.now()
 
     // Act

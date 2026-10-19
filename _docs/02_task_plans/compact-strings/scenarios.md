@@ -31,6 +31,22 @@ Source of rows: `intake` (new-task Step 4.7). Status: confirmed / out-of-scope /
 | 7 | Many byte strings decode to the same text (non-canonical) | A — decoder accepts any valid stream with zero pad bits | CS-9 |
 | 8 | C++ does not validate UTF-8 today | A — validate escape and raw bytes in all 8 | CS-16 |
 
+## Assessment round 1 (loop 45)
+
+Rows added by `feature-assess` (`_docs/loops/loop45/assessment45.md`). `deferred (pending assessment)` rows are flipped by `new-task --clarify` / `--extend`.
+
+| id | scenario | status | behavior | AC ref | source |
+|----|----------|--------|----------|--------|--------|
+| CS-D1 | TypeScript keeps module-level state (`outBuf`, scratch) after a pack call | confirmed | TypeScript clears `outBuf` and the used part of the scratch arrays after a pack call (owner 2026-10-20) | AZ-2733 AC-1, AC-2 | assess-round-1 |
+| CS-D2 | C++ has no test of a `Text<N>` inside a flags/when group, `times` or `repeat` | confirmed | `times` and `repeat` tested; under flags: bit set with an empty text is 1 byte and a clear bit leaves the text empty. The C++ table writes a bound `Text<N>` under flags always (no absent optional text; `Opt<Text<N>>` is `SchemeInvalid`): excluded by the owner on 2026-10-20 | AZ-2733 AC-3 | assess-round-1 |
+| CS-D3 | Test-spec documents still describe the old string format and carry no CS ids | confirmed | test-spec documents show the compact bytes and carry the CS, HD, RL ids | AZ-2733 AC-4 | assess-round-1 |
+| CS-D4 | Go fuzz seeds hold old-format string bytes | confirmed | Go seeds hold the compact-format packets of the corpus | AZ-2733 AC-5 | assess-round-1 |
+| CS-D5 | Retrain the tables on the owner's real messages before the first tag | deferred | waits for the owner's 100 to 200 real messages before the first v* tag; no work now (owner 2026-10-20, answer B) | — | assess-round-1 |
+| CS-D6 | Provisional speed limits for Python (40 s) and TypeScript (4 s) never confirmed | confirmed | Python and TypeScript speed bounds load-aware from one measurement (owner 2026-10-20, answer B) | AZ-2733 AC-8 | assess-round-1 |
+| CS-D7 | A big text repeated in many rounds has no speed test in Java, C#, Rust, C++ | deferred | one 1 s repeated-text test in Java, C#, Rust, C++ next loop, fix only if it fails (owner 2026-10-20, answer A); `handoff46.md` | — | assess-round-1 |
+| CS-D8 | A lone surrogate behaves differently by language | out-of-scope | `feature-description.md`: lone-surrogate behavior per language does not change | — | assess-round-1 |
+| CS-D9 | Size report not saved at the path AZ-2657 asked for | confirmed | `size_report.md` saved with the run date and recipe hashes | AZ-2733 AC-6 | assess-round-1 |
+
 ## Not walked
 
 - A caller-supplied dictionary of words (v1 has none, owner D4).
