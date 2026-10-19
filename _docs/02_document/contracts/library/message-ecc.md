@@ -5,7 +5,7 @@
 **Consumer tasks**: AZ-2679, AZ-2680, AZ-2681, AZ-2682, AZ-2683, AZ-2684, AZ-2685, AZ-2686, AZ-2687, AZ-2688, AZ-2689, AZ-2690
 **Version**: 1.0.0
 **Status**: current
-**Last Updated**: 2026-10-18
+**Last Updated**: 2026-10-19
 **Reference**: `scripts/ecc/eccfmt.py`; vectors `fixtures/ecc/vectors.txt`; position rows `_docs/02_task_plans/message-error-correction/input_data/expected_results/results_report.md`
 
 ## Purpose
@@ -53,10 +53,10 @@ parity    = n bytes, none when n = 0
 | Unpack, longer than 254 | The \`too_long\` error, a kind distinct from the rounds/too-many error in every package; 0 values. |
 | Repaired count | A non-negative integer next to the row in the package's style (result field, out parameter or second return value). C++: `Result.repaired`. For a scheme without parity a package may leave the count out (TypeScript, Java and Rust do on their plain unpack), since there is nothing to repair. |
 | Session | The code covers the **padded** bytes: pack = clear pack, pad, then parity; the payload is the clear length + `n`. Unpack = repair, drop the parity, remove the pad, then read. The receive index advances as it does for any payload. A scheme with `n` = 0 keeps the payload the same length as clear pack (`pack-session.md`). The receive index advances for every payload that reaches the repair step, including an uncorrectable one, so the next payload from the same sender is still read; a bad limit or a mix of counts is refused before it advances. |
-| Dispatch | A call that picks the scheme from the type byte (C++ `on(...)`, TypeScript `SchemeHandler`, Rust `unpack_with`, and any other package with such a call) accepts handlers only when all declare the same `n`; a mix is refused when the call is built, naming both counts. With a shared `n` the message is repaired first, then dispatched. Where a package has no build step for the call, the mix is refused at the call, before any byte is read. A duplicate type number among the handlers is refused the same way (when the call is built, or at the call before any byte is read), so the receive index never advances for it. The checks of a call run in one order in every package: a session that is not open answers first (its short result, needed 1, left 0; `BadValue` in C++), then an empty handler list, a duplicate type number, a mix of parity counts and a correction limit outside 0..n/2 are refused; none of them moves the receive index. |
+| Dispatch | A call that picks the scheme from the type byte (C++ `on(...)`, TypeScript `SchemeHandler`, Rust `unpack_with`, and any other package with such a call) accepts handlers only when all declare the same `n`; a mix is refused when the call is built, naming both counts. With a shared `n` the message is repaired first, then dispatched. Where a package has no build step for the call, the mix is refused at the call, before any byte is read. A duplicate type number among the handlers is refused the same way (when the call is built, or at the call before any byte is read), so the receive index never advances for it. The checks of a call run in one order in every package: a session that is not open answers first (its short result, needed 1, left 0; `BadValue` in C++), then an empty handler list, a duplicate type number, a mix of parity counts and a correction limit outside 0..n/2 are refused; where a handler states its own count (Rust `DispatchHandler::parity()`), a count above 32 is refused with the limit (`BadParity`, `bad_parity`); none of them moves the receive index. |
 | C++ buffer | \`unpack_repair\` takes a writable buffer and repairs it in place; after a successful call the buffer equals the protected message, and a refused call writes nothing. The read-only \`unpack\` stays and, for a protected scheme, only checks (Uncorrectable on a wrong byte). A scheme with \`n\` = 0 is unchanged. |
 | Compact text | A string in a protected message is read after the repair; the compact-text refusals are unchanged. |
-| Hostile bytes | Unpack never throws or traps; its work is at most 255 x 32 field operations plus the unprotected walk; it allocates nothing proportional to `n` beyond a few arrays of `n + 1` bytes. |
+| Hostile bytes | Unpack never throws or traps; its work is at most about 3 x 255 x 32 field operations (two syndrome passes, the locator, the root search and the error values; under 0.1 ms at N = 254, n = 32 in the compiled packages) plus the unprotected walk; it allocates nothing proportional to `n` beyond a few arrays of `n + 1` bytes. |
 | Build flag | C++ `PACKBIN_NO_ECC` removes repair (and the encoder where the target selects it). Cortex-M4F builds with it set. |
 
 Refusal names (`kind`), used by `fixtures/ecc/vectors.txt`: `uncorrectable`, `short`, `too_long`, `bad_parity`, `bad_limit`.
@@ -99,3 +99,4 @@ Any change to the field polynomial, the roots, the length byte, the position of 
 | Version | Date | Change |
 |---------|------|--------|
 | 1.0.0 | 2026-10-18 | First version (loop 38, AZ-2678). |
+| 1.0.0 | 2026-10-19 | Loop 41 audit (AZ-2666): the work bound restated (F55); a handler's count above 32 refused at dispatch (F52). No wire change. |

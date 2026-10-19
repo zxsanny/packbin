@@ -272,6 +272,57 @@ fn a_hand_written_handler_of_a_parity_scheme_gets_the_repair() {
     assert!(handler.ran);
 }
 
+// AZ-2666 (loop 41 audit, R-1): a hand-written handler that declares more than 32 parity bytes is
+// refused before any byte is read; it used to panic on any message of n to 254 bytes.
+#[test]
+fn a_hand_written_handler_above_32_parity_bytes_is_refused_without_reading() {
+    // Arrange
+    let message = [0u8; 254];
+    let mut results = Vec::new();
+
+    // Act
+    for parity in [33, 254, usize::MAX] {
+        let mut handler = Handwritten {
+            type_number: 0x40,
+            parity,
+            ran: false,
+        };
+        let read = BinaryPacker::unpack_with_repair(&message, &mut [&mut handler], 0);
+        results.push((read, handler.ran));
+    }
+
+    // Assert
+    assert_eq!(
+        results,
+        vec![
+            (Err(UnpackError::BadParity { parity: 33, max: 32 }), false),
+            (Err(UnpackError::BadParity { parity: 254, max: 32 }), false),
+            (Err(UnpackError::BadParity { parity: usize::MAX, max: 32 }), false),
+        ]
+    );
+}
+
+#[test]
+fn a_session_handler_above_32_parity_bytes_is_refused_before_the_receive_index_advances() {
+    // Arrange
+    let (mut opener, mut waiter) = pair();
+    let payload = opener.pack(&position_scheme(0x40, 4), &position_row()).expect("pack");
+    let mut handler = Handwritten {
+        type_number: 0x40,
+        parity: 40,
+        ran: false,
+    };
+
+    // Act
+    let refused = waiter.unpack_repair(&[0u8; 60], &mut [&mut handler], 0);
+    let read = read_session(&mut waiter, &payload, 4, 0);
+
+    // Assert
+    assert_eq!(refused, Err(UnpackError::BadParity { parity: 40, max: 32 }));
+    assert!(!handler.ran);
+    assert_eq!(read, Ok((position_row(), 0)));
+}
+
 // AZ-2704: the checks run in one order in every package (not open, no handler, duplicate type,
 // parity mix, limit); none of them moves the receive index.
 #[test]

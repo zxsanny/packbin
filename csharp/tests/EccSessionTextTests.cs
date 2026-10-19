@@ -159,6 +159,26 @@ public class EccSessionTextTests
         Assert.True(EccFixture.IsRow(got));
     }
 
+    [Fact]
+    public void SessionPack_WithoutParity_TakesAClearMessageAbove254Bytes()
+    {
+        // Arrange
+        var (opener, waiter) = OpenPair();
+        var scheme = EccFixture.Blob(300);
+        var row = EccFixture.BlobOf(300);
+        row.Data[0] = 0xA5;
+        EccFixture.BlobRow? got = null;
+
+        // Act
+        var payload = opener.Pack(scheme, row)!;
+        var error = waiter.Unpack(payload, scheme.On(v => got = v));
+
+        // Assert
+        Assert.Equal(300, payload.Length);
+        Assert.Null(error);
+        Assert.Equal(row.Data, got!.Data);
+    }
+
     // ---- EC-11: compact text
 
     private static NoteRow Sample(string name) => new() { Id = 513, Name = name, After = 77 };

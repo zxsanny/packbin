@@ -50,11 +50,11 @@ def decode_text(data: bytes | bytearray | memoryview, offset: int) -> tuple[str,
     if start + count > size:
         raise TextRefusal("short", count, size - start)
     end = start + count
-    payload = bytes(view[start:end])
-    first = payload[0]
+    first = view[start]
     mode = (first >> 2) & 7
     if mode == 4:
-        return _raw(first, payload), end
+        return _raw(first, view[start + 1 : end]), end
+    payload = bytes(view[start:end])
     if mode > 4:
         raise TextRefusal("mode")
     pad = first >> 5
@@ -66,16 +66,16 @@ def decode_text(data: bytes | bytearray | memoryview, offset: int) -> tuple[str,
     return _symbols(payload, mode, left), end
 
 
-def _raw(first: int, payload: bytes) -> str:
+def _raw(first: int, body: memoryview) -> str:
+    # The limit is checked before the copy and the decode, so a long count costs no memory.
     if first != RAW_PREFIX:
         raise TextRefusal("raw")
+    if len(body) > MAX_TEXT_BYTES:
+        raise TextRefusal("length")
     try:
-        text = payload[1:].decode("utf-8")
+        return bytes(body).decode("utf-8")
     except UnicodeDecodeError:
         raise TextRefusal("utf8") from None
-    if len(payload) - 1 > MAX_TEXT_BYTES:
-        raise TextRefusal("length")
-    return text
 
 
 def _symbols(payload: bytes, mode: int, left: int) -> str:

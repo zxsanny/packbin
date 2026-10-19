@@ -20,7 +20,7 @@ internal static partial class Ecc
 {
     // Checks the received bytes of a protected message and repairs up to `limit` wrong bytes. Returns the error value, or
     // null with `word` holding the repaired bytes (the clear message is its first word.Length - parity bytes) and
-    // `repaired` the number of bytes changed. Never throws: the work is at most 255 x 32 field operations.
+    // `repaired` the number of bytes changed. Never throws: the work is at most about 3 x 255 x 32 field operations.
     internal static object? Repair(ReadOnlySpan<byte> received, int parity, int limit, out byte[] word, out int repaired)
     {
         word = [];

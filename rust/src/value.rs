@@ -33,8 +33,9 @@ pub struct ShortPacket {
 /// Why an unpack returned no values. `Uncorrectable`: a protected message with more wrong bytes
 /// than the correction limit allows, or that no code word is that close to (no field named).
 /// `TooLong`: a protected message above 254 bytes. `BadLimit`: a correction limit above half the
-/// parity count, refused before any byte is read. `MixedParity`: a dispatch whose handlers
-/// declare different parity counts. `NoHandlers`: a dispatch with an empty handler list.
+/// parity count, refused before any byte is read. `BadParity`: a dispatch whose handlers declare
+/// more than 32 parity bytes, refused before any byte is read. `MixedParity`: a dispatch whose
+/// handlers declare different parity counts. `NoHandlers`: a dispatch with an empty handler list.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum UnpackError {
     Short(ShortPacket),
@@ -45,6 +46,7 @@ pub enum UnpackError {
     Uncorrectable,
     TooLong { len: usize, limit: usize },
     BadLimit { limit: usize, max: usize },
+    BadParity { parity: usize, max: usize },
     MixedParity { first: usize, other: usize },
 }
 

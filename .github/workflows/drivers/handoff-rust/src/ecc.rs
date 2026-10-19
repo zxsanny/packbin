@@ -23,6 +23,7 @@ fn kind_of(error: &UnpackError) -> &'static str {
         UnpackError::Uncorrectable => "uncorrectable",
         UnpackError::TooLong { .. } => "too_long",
         UnpackError::BadLimit { .. } => "bad_limit",
+        UnpackError::BadParity { .. } => "bad_parity",
         UnpackError::Short(short) if short.field == "parity" => "short",
         UnpackError::Trailing { .. } => "trailing",
         UnpackError::Type { .. } => "type_mismatch",

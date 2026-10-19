@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    AZ-2666 hostile-input probes for the C# package (loop 41). The package sources are compiled into this console
+    program, so the probes can call the internal decoder (TextDecoder.Read, Ecc.Repair) as well as the public unpack.
+    Copy this directory out of the checkout before building, so obj/ and bin/ never land in the repository:
+      cp -R <repo>/fixtures/hostile/fuzz/csharp /tmp/probe-cs
+      env MSBUILDDISABLENODEREUSE=1 dotnet build -c Release -p:PackbinSrc=<repo>/csharp -o /tmp/probe-cs/out /tmp/probe-cs/PackbinProbe.csproj
+      /tmp/probe-cs/out/PackbinProbe <repo> <probe> [seed] [count]
+    See Program.cs for the probe names.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>PackbinProbe</AssemblyName>
+    <RootNamespace>PackbinProbe</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(PackbinSrc)/*.cs" />
+  </ItemGroup>
+
+  <Target Name="RequirePackbinSrc" BeforeTargets="CoreCompile" Condition="'$(PackbinSrc)' == ''">
+    <Error Text="Pass -p:PackbinSrc=&lt;repo&gt;/csharp (the folder of the package sources)." />
+  </Target>
+
+</Project>

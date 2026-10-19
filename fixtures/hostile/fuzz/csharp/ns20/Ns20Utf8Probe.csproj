@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    AZ-2666: the netstandard2.0 branch of Compat.TryUtf8 (strict UTF8Encoding, DecoderFallbackException caught), compiled
+    with NETSTANDARD2_0 defined into a net10.0 console and compared with System.Text.Unicode.Utf8.IsValid.
+    It checks the branch's own logic on the .NET 10 runtime only; .NET Framework and Mono are not covered.
+      env MSBUILDDISABLENODEREUSE=1 dotnet build -c Release -p:PackbinSrc=<repo>/csharp -o <out> <copy of this dir>/Ns20Utf8Probe.csproj
+      <out>/Ns20Utf8Probe [seed] [count]
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <DefineConstants>$(DefineConstants);NETSTANDARD2_0</DefineConstants>
+    <NoWarn>$(NoWarn);SYSLIB0021;SYSLIB0045;CA1416</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(PackbinSrc)/Compat.cs" />
+  </ItemGroup>
+</Project>

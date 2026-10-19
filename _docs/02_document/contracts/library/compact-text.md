@@ -5,7 +5,7 @@
 **Consumer tasks**: AZ-2647, AZ-2648, AZ-2649, AZ-2650, AZ-2651, AZ-2652, AZ-2653, AZ-2654, AZ-2655, AZ-2656, AZ-2657, AZ-2658
 **Version**: 1.0.0
 **Status**: frozen
-**Last Updated**: 2026-10-18
+**Last Updated**: 2026-10-19
 **Tables**: `fixtures/text/tables.json`, sha256 `764ad13ee701af908b7c802abe67d0ac8639bc9bce5a3af666695c5f6df1d9c4`
 
 ## Purpose
@@ -89,6 +89,7 @@ Costs are integers, so the result does not depend on floating point.
 - Pack takes a caller-sized scratch buffer for the parse (12 bytes per code point: 3 words); a text that needs more scratch than given is an error naming the field, never a different encoding.
 - A build with `PACKBIN_NO_TEXT` links no codec and refuses a field bound to `Text<N>` when the field list is built; a field bound to `Packed` is accepted. Pack of a `Packed` member writes its count and bytes as given and does not decode or validate them.
 - 0 heap allocations, 0 exceptions, tables in read-only memory.
+- A bound dict compares each decoded key with the keys before it, so a hostile packet costs time in the square of the entries: about 70 ms for 4,096, 1 s for 16,384 and 17 s for 65,535 entries (F51). Size a dict's `Array` capacity to what a peer may send. An unbound dict does not check repeated keys (F56). A rule of strictly ascending keys on unpack in every package is the planned fix.
 
 ## Invariants
 
@@ -118,5 +119,6 @@ Codes below are the canonical codes of the frozen tables; `bits` counts the symb
 
 | Version | Date | Change | Author |
 |---------|------|--------|--------|
+| 1.0.0 | 2026-10-19 | Loop 41 audit (AZ-2666): the C++ dict key cost and the unbound-dict difference documented (F51, F56). No wire change | loop 41 |
 | 1.0.0 | 2026-10-18 | Frozen with tables.json (AZ-2646); owner decisions D1 to D5 and option D. C++ scratch is 12 bytes per code point (corrected in the review) | loop 35 |
 | 0.1.0 | 2026-10-18 | Draft | loop 35 |

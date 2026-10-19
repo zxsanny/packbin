@@ -8,20 +8,6 @@ Downstream skills consume this file:
 - `.cursor/skills/autodev/protocols/bootstrap-lessons.md` (Bootstrap B2 — Surface Recent Lessons)
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
-- [2026-10-14] [tooling] A watcher keyed on log growth reports STALLED for a stage that prints only at the end (the ring, the publish gate); add a second signal (the child process changes), and check `ps` for old shells when a task outlives the run: a worker's bare `cat` sat 70 minutes although its prompt forbade it.
-  Source: _docs/06_metrics/retro_2026-10-14_loop25.md
-- [2026-10-14] [tooling] Verify a container image tag against the registry before writing it into a pin, a compose file and a guard: `swift:6` was in all three and does not exist on Docker Hub (`manifest unknown`); only the pull in step 11 showed it. Use the full version (`swift:6.3.3`) and run `docker pull` once when the pin is chosen.
-  Source: _docs/06_metrics/retro_2026-10-14_loop26.md
-- [2026-10-14] [testing] A sanitizer run changes the cost of a test 10 to 40 times (the thread sanitizer in the Linux container: a max-slot test 1 178 s, 1 MiB unpack 15 to 28 s against 0.12 s in release): single-threaded size and speed tests skip under it and time bounds are asserted in the plain runs only; find the cost by one early container run, not at the end.
-  Source: _docs/06_metrics/retro_2026-10-14_loop26.md
-- [2026-10-14] [estimation] A new-language loop needs one early run of its suite in the CI container (after the core task), because the host and the container differ in ways that cost three step 11 invocations (about 90 minutes) here: Swift 6 rejects `stderr` on Linux, Foundation merges dictionary keys per process, the image tag.
-  Source: _docs/06_metrics/retro_2026-10-14_loop26.md
-- [2026-10-14] [process] A security audit that measures finds what review cannot: F47 (dictionary keys normalized in quadratic time, 25 s for 1 MiB) was invisible in the code and appeared only when the auditor built a probe; put "build one probe per hostile-input angle" in the audit brief, with a peak-RSS and a CPU figure.
-  Source: _docs/06_metrics/retro_2026-10-14_loop26.md
-- [2026-10-16] [tooling] Time a duplicate before arguing about it, and read a platform limit before relying on an output channel: per-call timing showed two groups running the same three real gate scenarios (six runs of 70 to 90 s for three scenarios), and the first CI annotation per timing line lost the last five groups because GitHub keeps 10 notices per step; one notice with all lines fixed it.
-  Source: _docs/loops/loop29/notes29.md
-- [2026-10-17] [process] Ship the per-job timing notices before the split and regroup from the numbers: batch 1 split by estimate and its first CI run moved the floor (the 360 s embedded job and a 215 s swift gate group), so a CI speed loop is two pushes and the owner should be asked for the second round up front.
-  Source: _docs/06_metrics/retro_2026-10-17_loop31.md
 - [2026-10-17] [testing] Hold every list that is split across jobs (gate groups, embedded targets, Swift steps) to exactly one place with a guard that derives the set from the files (`publish-gate-*`, `embedded-*`, the `source` lines) and a mutant per rule: it survived two regroupings with only list edits, where a guard that names jobs by hand breaks at each one.
   Source: _docs/06_metrics/retro_2026-10-17_loop31.md
 - [2026-10-17] [testing] A fake toolchain cannot prove a command that moved to a new place: the Swift speed part's `swift test list -c release --skip-build` ran only against a fake `swift` until one real container run (accepted, SpeedTests listed); run each new real command path once before the push, and expect timing bounds to miss on a loaded Mac (read the failed bound, then the serial retry).
@@ -46,3 +32,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-17_loop34.md
 - [2026-10-17] [tooling] An exact-key cache that saves only on a miss keeps whatever built its entries: after ccache was removed, the `v1` entries (built with `CC=ccache`) made every hit recompile all 372 BoringSSL files with plain clang (75 s instead of 17 s). Put the script that sets the build (`run-suite.sh`, `ring-swift.sh`) in the key, and bump the key whenever the build changes otherwise.
   Source: _docs/06_metrics/retro_2026-10-17_loop34.md
+- [2026-10-19] [testing] When a review names a cross-package inconsistency in some packages, tabulate that rule (call x check x package) for all eight before the first fix: the dispatch check order took loops 39 and 40 because each review found more packages that differed (Java, C# and Python surfaced only in loop 40's survey).
+  Source: _docs/06_metrics/retro_2026-10-19_loop41.md
+- [2026-10-19] [testing] Give every suite timing bound a reference loop run in the same process (as Python AC-10 in `75b1d39`) instead of a fixed number of seconds: fixed bounds passed only on the serial retry in 6 suite runs of loops 38 to 40 and turned CI red twice when loop 38 added about 5 % to pack and unpack.
+  Source: _docs/06_metrics/retro_2026-10-19_loop41.md
+- [2026-10-19] [process] Put a carried owner-run skill (`/security`, `/feature-assess`, the retro) into the next intake's hopper question instead of the record's leftovers: AZ-2666 and the retro were carried in five records and the owner took them at once when loop 41 offered them.
+  Source: _docs/06_metrics/retro_2026-10-19_loop41.md

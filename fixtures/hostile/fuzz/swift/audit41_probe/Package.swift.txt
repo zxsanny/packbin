@@ -1,0 +1,15 @@
+// swift-tools-version: 6.0
+// Manifest of the audit probe package (copy it to Package.swift next to the copied sources; see
+// main.swift). On macOS the Packbin sources use CryptoKit, so nothing is fetched. On Linux add the
+// swift-crypto dependency of the repository's Package.swift to the Packbin target.
+import PackageDescription
+
+let package = Package(
+    name: "audit41probe",
+    platforms: [.macOS(.v12)],
+    targets: [
+        .target(name: "Packbin", path: "swift/Sources/Packbin"),
+        .executableTarget(name: "Probe", dependencies: ["Packbin"], path: "Sources/Probe",
+                          swiftSettings: [.swiftLanguageMode(.v5)]),
+    ]
+)

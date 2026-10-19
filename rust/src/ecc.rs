@@ -230,8 +230,15 @@ fn repair(word: &mut [u8], n: usize, t: usize, synd: &[u8]) -> Result<usize, Unp
     Ok(degree)
 }
 
-/// A correction limit above `n / 2` is refused before any byte is read.
+/// A parity count above 32 (a hand-written handler declares its own) and a correction limit above
+/// `n / 2` are refused before any byte is read.
 pub(crate) fn check_limit(n: usize, t: usize) -> Result<(), UnpackError> {
+    if n > MAX_PARITY {
+        return Err(UnpackError::BadParity {
+            parity: n,
+            max: MAX_PARITY,
+        });
+    }
     if t > n / 2 {
         return Err(UnpackError::BadLimit {
             limit: t,

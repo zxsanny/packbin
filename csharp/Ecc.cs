@@ -63,11 +63,12 @@ internal static partial class Ecc
                 nameof(parity), parity, $"parity bytes n = {parity}, above the limit of {MaxParity} (0..{MaxParity})");
     }
 
-    // A clear message above 254 - n bytes is refused before anything is written.
+    // With parity, a clear message above 254 - n bytes is refused before anything is written; without parity
+    // there is no block, so no limit.
     internal static void RequireFits(int clearLength, int parity)
     {
         var limit = MaxBlock - parity;
-        if (clearLength > limit)
+        if (parity > 0 && clearLength > limit)
             throw new ArgumentException(
                 $"the clear message is {clearLength} bytes, above the limit of {limit} bytes with {parity} parity bytes");
     }

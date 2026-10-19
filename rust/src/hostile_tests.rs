@@ -249,6 +249,7 @@ fn variant(err: &UnpackError) -> &'static str {
         UnpackError::Uncorrectable => "Uncorrectable",
         UnpackError::TooLong { .. } => "TooLong",
         UnpackError::BadLimit { .. } => "BadLimit",
+        UnpackError::BadParity { .. } => "BadParity",
         UnpackError::MixedParity { .. } => "MixedParity",
     }
 }
