@@ -339,3 +339,5 @@ AZ-2678 through AZ-2690 are loop 38 (owner 2026-10-18: message error correction,
 AZ-2694 and AZ-2695 are loop 39 (owner 2026-10-18: review cleanups of loop 38, epic AZ-2677; 5 points; short loop). Disjoint: AZ-2694 owns the ECC paths of all eight packages and one contract sentence; AZ-2695 owns the re-verify tests and the C++ component description. Run AZ-2694 first, AZ-2695 after (both touch the same test folders). Parity setter shape and the default correction limit stay out.
 
 AZ-2704 is loop 40 (owner 2026-10-19: the loop 39 review Lows, epic AZ-2677; 3 points; short loop). One task: the dispatch check order of all eight packages and a required Rust `parity()`. The default correction limit and the 254-byte limit stay.
+
+AZ-2713 and AZ-2722 are loop 42 (owner 2026-10-19: "accept all recommended"; epic AZ-2645; 8 + 3 points). AZ-2713: the strictly ascending dict keys of all eight packages; AZ-2722: F57, F59, F60 and the F19 instances (F58 deferred). They share no source file except per-package test folders and `AZ-2722` touches C++ `session.hpp`/`codec.hpp` while AZ-2713 touches `unpack.cpp`. AZ-2068 stays out.

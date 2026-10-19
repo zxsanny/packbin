@@ -95,6 +95,40 @@
 - Expected: `bad_value` or `short_packet`.
 - Source: derived (Rust decodes dict keys). Unconfirmed for TypeScript and Python.
 
+## dict_keys_out_of_order
+
+- Scheme: id0 `dict m` { element id0 `u8` } (as `invalid_utf8_dict_key`).
+- Packet `01 02 00 02 10 62 00 02 10 61 00`: count 2; key `b` (`02 10 62`) with value `00`, then key `a` (`02 10 61`) with value `00`. The keys are not in strictly ascending UTF-8 byte order (loop 42, AZ-2713).
+- Expected: `bad_value` or `short_packet` (the package's dict-key error; Swift's is `short`).
+- Source: the strictly-ascending rule of `compact-text.md` (invariants).
+
+## dict_keys_repeated
+
+- Scheme: as `dict_keys_out_of_order`.
+- Packet `01 02 00 02 10 61 00 02 10 61 00`: key `a` twice in the same byte form. Equal is not strictly greater.
+- Expected: `bad_value` or `short_packet`.
+- Source: the strictly-ascending rule. C++ also refuses it for a dict that is not bound (F56).
+
+## dict_keys_repeated_forms
+
+- Scheme: as `dict_keys_out_of_order`.
+- Packet `01 02 00 02 10 61 00 02 c9 00 00`: key `a` as the raw payload `10 61`, then `a` as the compact payload `c9 00`; the decoded keys are equal.
+- Expected: `bad_value` or `short_packet`.
+- Source: the strictly-ascending rule (the check compares decoded bytes, not payload bytes).
+
+## dict_keys_prefix_descends
+
+- Scheme: as `dict_keys_out_of_order`.
+- Packet `01 02 00 03 10 61 62 00 02 10 61 00`: key `ab`, then its prefix `a`. A prefix sorts before the longer key.
+- Expected: `bad_value` or `short_packet`.
+- Source: the strictly-ascending rule.
+
+## dict_keys_utf16_order
+
+- Scheme: as `dict_keys_out_of_order`.
+- Packet `01 02 00 05 10 f0 90 80 80 00 04 10 ef bd 9e 00`: key U+10000 (`f0 90 80 80`), then U+FF5E (`ef bd 9e`). U+10000 sorts after U+FF5E by UTF-8 bytes but before it by UTF-16 code units (`D800 DC00` < `FF5E`), so a package that compares strings by UTF-16 units would accept this packet.
+- Expected: `bad_value` or `short_packet`.
+- Source: the strictly-ascending rule; the order is the UTF-8 byte order the encoders already sort by.
 ## count_behind_clear_flag
 
 - Scheme: id0 `flags` anchor 0 { id0 `u8 n` }; id1 `sized payload`, count = id0.
