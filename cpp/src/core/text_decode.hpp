@@ -242,7 +242,7 @@ struct Stream {
       raw = p + 1;
       raw_left = n - 1;
     } else {
-      compact = begin_compact(p, n, c);
+      compact = ((p[0] >> 2) & 7) <= kNumMode && begin_compact(p, n, c);
     }
   }
 

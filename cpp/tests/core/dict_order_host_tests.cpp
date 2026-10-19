@@ -8,6 +8,7 @@
 #include "check.hpp"
 
 #include <chrono>
+#include <cstdio>
 #include <cstdint>
 #include <cstring>
 #include <memory>
@@ -184,6 +185,18 @@ void session_scheme_not_built_spends_nothing() {
   expect(std::memcmp(wire, copy, sizeof(wire)) == 0, "the buffer is not touched");
   auto next = b.unpack(kPlain, wire, p.offset, out);
   expect(next.ok() && out.sid == 0x1234, "the next valid payload is read at the same position");
+
+  // A handler whose scheme was not built is refused the same way, before the pad and the position.
+  // The valid unpack above removed the pad in place and spent position 0; a third payload comes next.
+  std::uint8_t second[16];
+  auto p2 = a.pack(kPlain, row, second, sizeof(second));
+  std::memcpy(copy, second, sizeof(copy));
+  int runs = 0;
+  auto h = b.unpack(second, p2.offset, packbin::on(bad, out, [&](Position const&) { ++runs; }));
+  expect(h.error == Error::SchemeInvalid && runs == 0, "a handler with an unbuilt scheme is SchemeInvalid");
+  expect(std::memcmp(second, copy, sizeof(copy)) == 0, "the buffer is not touched by the handler call");
+  auto again = b.unpack(kPlain, second, p2.offset, out);
+  expect(again.ok() && out.sid == 0x1234, "the receive position is unchanged after the handler call");
 }
 
 }  // namespace
