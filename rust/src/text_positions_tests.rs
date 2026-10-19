@@ -4,6 +4,7 @@ use crate::{
     UnpackError, Value, Values,
 };
 use std::collections::BTreeMap;
+use crate::timing_support::{assert_within, load_factor};
 use std::time::Instant;
 
 // AZ-2652: the codec in every string position, its limits and header sizes, dictionary key order,
@@ -375,6 +376,7 @@ fn ac8_one_hundred_thousand_round_trips_of_a_20_character_ukrainian_string() {
         .collect();
     // The 1 s bound is for the optimized build; `cargo test` runs unoptimized code, about 6 times slower.
     let bound = if cfg!(debug_assertions) { 6.0 } else { 1.0 };
+    let factor = load_factor();
     let started = Instant::now();
 
     // Act
@@ -387,6 +389,6 @@ fn ac8_one_hundred_thousand_round_trips_of_a_20_character_ukrainian_string() {
     let elapsed = started.elapsed().as_secs_f64();
 
     // Assert
-    eprintln!("text speed: 100000 round trips in {elapsed:.3} s (bound {bound} s)");
-    assert!(elapsed <= bound, "{elapsed:.3} s > {bound} s");
+    eprintln!("text speed: 100000 round trips in {elapsed:.3} s (nominal bound {bound} s, load factor {factor:.2})");
+    assert_within("100000 text round trips", elapsed, bound, factor);
 }

@@ -9,6 +9,7 @@ import pytest
 from packbin import BinaryPacker, ShortPacket, TooLong, TrailingBytes, TypeMismatch, Uncorrectable, UnpackResult
 
 import ecc_support as support
+import timing_support
 from ecc_support import POSITION_HEX, POSITION_VALUES
 
 # AZ-2680 AC-1, AC-4, AC-7: the scheme setting, the correction limit of unpack, hostile bytes and the speed bound.
@@ -203,6 +204,7 @@ def test_ec13_1000_corrections_of_a_254_byte_message_with_16_parity_bytes_and_8_
     clean = BinaryPacker.pack(scheme, {"b": body})
     damaged, _ = support.corrupt(random.Random(0xEC13), clean, 8)
     handler = scheme.on(lambda _row: None)
+    time_bound = timing_support.bound(5.0)
 
     # Act
     started = time.perf_counter()
@@ -212,13 +214,14 @@ def test_ec13_1000_corrections_of_a_254_byte_message_with_16_parity_bytes_and_8_
 
     # Assert
     assert (len(clean), result.ok, result.value["b"], result.repaired) == (254, True, body, 8)
-    assert seconds <= 5.0
+    timing_support.assert_within(seconds, time_bound, "1000 corrections of a 254-byte message")
 
 
 def test_ec13_1000_packs_of_a_254_byte_message_with_16_parity_bytes_take_at_most_1_s():
     # Arrange
     scheme = support.raw_scheme(0x40, 16)
     row = {"b": list(range(237))}
+    time_bound = timing_support.bound(1.0)
 
     # Act
     started = time.perf_counter()
@@ -228,4 +231,4 @@ def test_ec13_1000_packs_of_a_254_byte_message_with_16_parity_bytes_take_at_most
 
     # Assert
     assert len(packet) == 254
-    assert seconds <= 1.0
+    timing_support.assert_within(seconds, time_bound, "1000 packs of a 254-byte message")

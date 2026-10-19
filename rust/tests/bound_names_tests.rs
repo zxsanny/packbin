@@ -1,6 +1,11 @@
 use packbin::{to_hex, BinaryPacker, BoundField, Scheme, UnpackError};
 use std::collections::BTreeMap;
-use std::time::{Duration, Instant};
+use std::time::Instant;
+
+#[path = "../src/timing_support.rs"]
+mod timing_support;
+
+use timing_support::{assert_within, load_factor};
 
 fn strings(items: &[&str]) -> Vec<String> {
     items.iter().map(|s| s.to_string()).collect()
@@ -164,13 +169,11 @@ fn assert_unpack_fails_fast<T: Default + 'static>(scheme: &Scheme<T>, hex: &str)
         .step_by(2)
         .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
         .collect();
+    let factor = load_factor();
     let started = Instant::now();
     let result = unpack_row(scheme, &bytes);
     assert!(result.is_err(), "{hex}: expected an error");
-    assert!(
-        started.elapsed() < Duration::from_secs(1),
-        "{hex}: too slow"
-    );
+    assert_within(hex, started.elapsed().as_secs_f64(), 1.0, factor);
 }
 
 #[derive(Default)]

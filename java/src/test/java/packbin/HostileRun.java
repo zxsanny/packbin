@@ -2,7 +2,10 @@ package packbin;
 
 import java.util.Map;
 
-/** One unpack on a daemon thread: a hang shows as {@code finished == false} instead of stalling CI. */
+/**
+ * One unpack on a daemon thread: a hang shows as {@code finished == false} instead of stalling CI. The limit is the nominal
+ * one times the load factor ({@link Timing}).
+ */
 @SuppressWarnings({"unchecked", "rawtypes"})
 final class HostileRun {
     static final long LIMIT_MS = 1000;
@@ -37,7 +40,7 @@ final class HostileRun {
         worker.setDaemon(true);
         worker.start();
         try {
-            worker.join(limitMs);
+            worker.join(Timing.recentBound(limitMs / 1000.0).millis());
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("interrupted while waiting for unpack", ex);

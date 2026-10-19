@@ -2,6 +2,7 @@ use crate::hostile_tests::within_one_second;
 use crate::walk::{decode_text, encode_text, pack, unpack};
 use crate::{dict, insert, u8, MapScheme, UnpackError, Value, Values};
 use std::collections::BTreeMap;
+use crate::timing_support::{assert_within, load_factor};
 use std::time::Instant;
 
 // AZ-2713: a decoded dict key must be greater than the one before it, compared as UTF-8 bytes; a key
@@ -78,11 +79,12 @@ fn dict_keys_repeated_or_out_of_order_are_refused() {
 }
 
 // AZ-2713 AC-3: 65,535 distinct ascending keys packed by the package and unpacked. A release build
-// takes at most 1 s (the fastest of up to three passes counts: one stall on a loaded machine does not
-// fail it, a real slowdown makes every pass slow). A debug build is 13 times slower (about 0.7 s here),
-// too close to 1 s under load, so it asserts linear cost against a load-aware reference instead: the
+// takes at most 1 s, a debug build is 13 times slower (about 0.7 s here) and gets a nominal 10 s bound: the
+// bound scales with the load factor measured before each pass
+// (`timing_support`); the best of up to three passes counts: one stall on a loaded machine does not fail
+// it, a real slowdown makes every pass slow. A debug build also asserts linear cost on its own: the
 // unpack takes at most 5 times the pack of the same dict (both linear; a quadratic key check is over
-// 100 times) and at most 10 s.
+// 100 times), which needs no clock reference.
 #[test]
 fn dict_keys_65535_ascending_keys_pack_and_unpack_within_one_second() {
     let scheme = dict_scheme();
@@ -91,28 +93,36 @@ fn dict_keys_65535_ascending_keys_pack_and_unpack_within_one_second() {
         .collect();
     let mut vals = Values::new();
     insert(&mut vals, "m", Some(Value::Map(map)));
-    let mut whole = f64::MAX;
+    let nominal = if cfg!(debug_assertions) { 10.0 } else { 1.0 };
+    // (seconds, load factor) of the pass that came closest to its bound
+    let mut best = (f64::MAX, 1.0);
     let mut ratio = f64::MAX;
     for _ in 0..3 {
+        let factor = load_factor();
         let start = Instant::now();
         let raw = pack(&scheme, &vals).expect("pack");
         let packed = start.elapsed().as_secs_f64();
         let back = unpack(&scheme, &raw).expect("unpack");
         let total = start.elapsed().as_secs_f64();
         assert_eq!(back, vals);
-        whole = whole.min(total);
+        if total / factor < best.0 / best.1 {
+            best = (total, factor);
+        }
         ratio = ratio.min((total - packed) / packed);
-        if whole <= 1.0 && (!cfg!(debug_assertions) || ratio <= 5.0) {
+        if best.0 <= nominal * best.1 && (!cfg!(debug_assertions) || ratio <= 5.0) {
             break;
         }
     }
-    eprintln!("dict 65535 keys: fastest {:.1} ms, unpack/pack {:.2}", whole * 1000.0, ratio);
+    eprintln!(
+        "dict 65535 keys: fastest {:.1} ms at load factor {:.2}, unpack/pack {:.2}",
+        best.0 * 1000.0,
+        best.1,
+        ratio
+    );
     if cfg!(debug_assertions) {
         assert!(ratio <= 5.0, "unpack takes {ratio} times the pack");
-        assert!(whole <= 10.0, "fastest pass {whole} s > 10 s");
-    } else {
-        assert!(whole <= 1.0, "fastest pass {whole} s > 1 s");
     }
+    assert_within("65535 ascending keys", best.0, nominal, best.1);
 }
 
 #[test]

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
+import { assertWithinMs, bound } from "./support/timing.ts"
 import {
   BinaryPacker,
   Scheme,
@@ -369,6 +370,7 @@ describe("limits of a large packet", () => {
     const bytes = roundsPacket(1_048_576).fill(0, 1)
 
     // Act
+    const limit = bound(1)
     const started = performance.now()
     const { result, rows } = run(layout, bytes)
     const elapsed = performance.now() - started
@@ -377,7 +379,7 @@ describe("limits of a large packet", () => {
     // A round holds 37 names (k and the 36 behind the when): round 28,340 would hold 1,048,580 slots.
     assert.deepEqual(result, refused("k", 1_020_237))
     assert.equal(rows.length, 0)
-    assert.ok(elapsed < 1000, `refusal took ${elapsed} ms`)
+    assertWithinMs(elapsed, limit, "refusal")
   })
 })
 

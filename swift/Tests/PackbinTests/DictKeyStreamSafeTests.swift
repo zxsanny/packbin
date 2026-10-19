@@ -93,12 +93,13 @@ private struct Marked: PackbinRow {
         let scheme = try dictScheme()
 
         // Act
+        let limit = bound(1)
         let (error, seconds) = timed { unpackError(packet, scheme) }
 
         // Assert
         #expect(keys[0].count == 65_000 && packet.count == 1_040_083)
         #expect(error?.kind == .short && error?.name == "d" && error?.needed == 0 && error?.left == packet.count - 3)
-        #expect(withinOneSecond(seconds), "took \(seconds) s")
+        expectWithinUnlessSanitized(seconds, limit)
     }
 
     @Test(.enabled(if: !threadSanitized, "one thread, no shared state: the thread sanitizer adds nothing and runs it about ten times slower"))
@@ -109,10 +110,11 @@ private struct Marked: PackbinRow {
         let scheme = try dictScheme()
 
         // Act
+        let limit = bound(1)
         let (map, seconds) = try timed { try unpackMap(packet, scheme) }
 
         // Assert
         #expect((map["d"] as? [String: Any])?.count == 16)
-        #expect(withinOneSecond(seconds), "took \(seconds) s")
+        expectWithinUnlessSanitized(seconds, limit)
     }
 }

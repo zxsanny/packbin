@@ -233,6 +233,7 @@ public class EccRepairTests
         BinaryPacker.Unpack(damaged[0], 8, out _, handler);
 
         // Act
+        var limit = Timing.Bound(1.0);
         var clock = Stopwatch.StartNew();
         foreach (var message in damaged)
         {
@@ -246,7 +247,7 @@ public class EccRepairTests
         Assert.Equal(254, clean.Length);
         Assert.Equal(0, wrong);
         Assert.Equal(row.Data, got!.Data);
-        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(1), $"1000 repairs took {clock.Elapsed.TotalSeconds:F3} s");
+        limit.AssertWithin(clock.Elapsed, "1000 repairs");
     }
 
     [Fact]
@@ -260,6 +261,7 @@ public class EccRepairTests
         var length = 0;
 
         // Act
+        var limit = Timing.Bound(1.0);
         var clock = Stopwatch.StartNew();
         for (var i = 0; i < 1000; i++)
             length = BinaryPacker.Pack(scheme, row).Length;
@@ -267,6 +269,6 @@ public class EccRepairTests
 
         // Assert
         Assert.Equal(254, length);
-        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(1), $"1000 packs took {clock.Elapsed.TotalSeconds:F3} s");
+        limit.AssertWithin(clock.Elapsed, "1000 packs");
     }
 }

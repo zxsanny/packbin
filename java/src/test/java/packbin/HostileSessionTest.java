@@ -53,7 +53,7 @@ final class HostileSessionTest {
         worker.setDaemon(true);
         worker.start();
         try {
-            worker.join(HostileRun.LIMIT_MS);
+            worker.join(Timing.recentBound(HostileRun.LIMIT_MS / 1000.0).millis());
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("interrupted while waiting for unpack", ex);

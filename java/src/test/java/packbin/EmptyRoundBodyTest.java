@@ -72,6 +72,7 @@ final class EmptyRoundBodyTest {
     /** AC-2, row 20: a list of groups holding times(65535) {} fails at build, before any packet is attempted. */
     private static void theF33RequestFailsAtBuild() {
         // Arrange
+        Timing.Limit limit = Timing.bound(1.0);
         long start = System.nanoTime();
         // Act
         String message = refusal(() -> Maps.scheme(1, Packbin.list(Access.get("items"), Access.set("items"),
@@ -79,7 +80,7 @@ final class EmptyRoundBodyTest {
         long ms = (System.nanoTime() - start) / 1_000_000;
         // Assert
         PackbinTest.expectEq("AC-2 row 20 the F33 shape is refused at build", "times 1" + REST, message);
-        PackbinTest.expectTrue("AC-2 row 20 refused within 1000 ms (" + ms + " ms)", ms < 1000);
+        limit.expectWithin("AC-2 row 20 refused at build", ms / 1000.0);
     }
 
     /** Rows 21 to 23 and 26: a member that charges a slot or writes a byte is enough; the budgets bound it. */

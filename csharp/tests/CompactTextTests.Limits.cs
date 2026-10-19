@@ -168,6 +168,7 @@ public partial class CompactTextTests
             RoundTrip(scheme, row);
 
             // Act
+            var limit = Timing.Bound(1.0);
             var watch = Stopwatch.StartNew();
             for (var i = 0; i < 100_000; i++)
                 RoundTrip(scheme, row);
@@ -175,7 +176,7 @@ public partial class CompactTextTests
 
             // Assert
             output.WriteLine($"AZ-2650 AC-8: {watch.Elapsed.TotalMilliseconds:F0} ms for 100000 round trips of 20 characters");
-            Assert.True(watch.Elapsed.TotalMilliseconds <= 1000.0, $"took {watch.Elapsed.TotalMilliseconds:F0} ms");
+            limit.AssertWithin(watch.Elapsed, "100000 round trips of 20 characters");
         }
 
         private static void RoundTrip(Scheme<NameRow> scheme, NameRow row)

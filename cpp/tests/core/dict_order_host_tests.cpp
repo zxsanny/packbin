@@ -6,6 +6,7 @@
 #include "packbin/session.hpp"
 
 #include "check.hpp"
+#include "load_factor.hpp"
 
 #include <chrono>
 #include <cstdio>
@@ -110,23 +111,26 @@ void many_keys_are_linear() {
   std::vector<std::uint8_t> good = many_keys(false);
   auto bound = packbin::scheme<BigBound>(1, packbin::dict<&BigBound::m>(packbin::u8(0)));
   auto row = std::make_unique<BigBound>();
+  auto limit = load_factor::bound(1.0);
   auto t0 = std::chrono::steady_clock::now();
   auto r = packbin::unpack(bound, good.data(), good.size(), *row);
   expect(r.ok() && row->m.count == 65535, "65,535 ascending keys unpack into a bound Array");
-  expect(seconds_since(t0) < 1.0, "65,535 keys unpack in under a second (bound)");
+  load_factor::expect_within(seconds_since(t0), limit, "65,535 keys unpack in under a second (bound)");
 
   auto unbound = packbin::scheme<Unit>(1, packbin::dict(packbin::u8(0)));
   Unit unit;
+  limit = load_factor::bound(1.0);
   t0 = std::chrono::steady_clock::now();
   r = packbin::unpack(unbound, good.data(), good.size(), unit);
   expect(r.ok(), "65,535 ascending keys unpack in a dict that is not bound");
-  expect(seconds_since(t0) < 1.0, "65,535 keys unpack in under a second (unbound)");
+  load_factor::expect_within(seconds_since(t0), limit, "65,535 keys unpack in under a second (unbound)");
 
   std::vector<std::uint8_t> bad = many_keys(true);
+  limit = load_factor::bound(1.0);
   t0 = std::chrono::steady_clock::now();
   r = packbin::unpack(unbound, bad.data(), bad.size(), unit);
   expect(r.error == Error::BadValue, "the last key of 65,535 sorting first is refused");
-  expect(seconds_since(t0) < 1.0, "the refusal is as fast (unbound)");
+  load_factor::expect_within(seconds_since(t0), limit, "the refusal is as fast (unbound)");
 }
 
 // Two keys of 65,535 bytes that differ in the last byte: the compare reads each payload once.
@@ -143,13 +147,15 @@ void long_keys_share_a_prefix() {
   }
   auto unbound = packbin::scheme<Unit>(1, packbin::dict(packbin::u8(0)));
   Unit unit;
+  auto limit = load_factor::bound(1.0);
   auto t0 = std::chrono::steady_clock::now();
   auto r = packbin::unpack(unbound, p.data(), p.size(), unit);
   expect(r.ok(), "two 65,535 byte keys that differ in the last byte, ascending");
   p[3 + 4 + 65535 + 1 + 3 + 1 + 65534] = 'a';  // the second key's last byte: now equal
   r = packbin::unpack(unbound, p.data(), p.size(), unit);
   expect(r.error == Error::BadValue, "the same keys, equal, are refused");
-  expect(seconds_since(t0) < 1.0, "long keys with a shared prefix are checked in under a second");
+  load_factor::expect_within(seconds_since(t0), limit,
+                             "long keys with a shared prefix are checked in under a second");
 }
 
 struct Position {

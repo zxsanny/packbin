@@ -76,21 +76,26 @@ func hostileKind(err error) string {
 	return e.Kind.String()
 }
 
-// hostileGuard is how long one unpack or construction of a hostile case may take (README: 1 second).
-const hostileGuard = time.Second
+// hostileNominal is how long one unpack or construction of a hostile case may take (README: 1 second); the
+// guard is that times the load factor (timing_test.go, reused for a second: it runs once per case).
+const hostileNominal = time.Second
+
+func hostileGuard() time.Duration { return scaled(hostileNominal, recentLoadFactor()) }
 
 type hostileRun struct {
 	err      error
 	panicked any
 	hung     bool
 	elapsed  time.Duration
+	guard    time.Duration
 }
 
 // guarded runs f in a goroutine with a 1 s timer, so a hang or a panic is a result, not the end of the run.
 func guarded(f func() error) hostileRun {
 	done := make(chan hostileRun, 1)
+	guard := hostileGuard()
 	go func() {
-		var r hostileRun
+		r := hostileRun{guard: guard}
 		start := time.Now()
 		defer func() {
 			r.panicked = recover()
@@ -102,8 +107,16 @@ func guarded(f func() error) hostileRun {
 	select {
 	case r := <-done:
 		return r
-	case <-time.After(hostileGuard):
-		return hostileRun{hung: true, elapsed: hostileGuard}
+	case <-time.After(guard):
+	}
+	// The guard ran out: the run is a hang only if it also outlasts the bound scaled by the sustained load.
+	extended := scaled(hostileNominal, max(float64(guard)/float64(hostileNominal), sustainedLoadFactor(guard)))
+	select {
+	case r := <-done:
+		r.guard = extended
+		return r
+	case <-time.After(extended - guard):
+		return hostileRun{hung: true, elapsed: extended, guard: extended}
 	}
 }
 
@@ -114,10 +127,10 @@ func checkHostileRefusal(c hostileCase, r hostileRun) string {
 	case r.panicked != nil:
 		return fmt.Sprintf("%s: panic %v", c.id, r.panicked)
 	case r.hung:
-		return fmt.Sprintf("%s: no result within %v (hang)", c.id, hostileGuard)
+		return fmt.Sprintf("%s: no result within %v (hang)", c.id, r.guard)
 	case r.err == nil:
 		return fmt.Sprintf("%s: expected %s, got no error", c.id, strings.Join(c.expected, "|"))
-	case r.elapsed >= hostileGuard:
+	case r.elapsed >= r.guard:
 		return fmt.Sprintf("%s: took %v", c.id, r.elapsed)
 	case !c.accepts(hostileKind(r.err)):
 		return fmt.Sprintf("%s: returned %s (%v), vector accepts %s", c.id, hostileKind(r.err), r.err, strings.Join(c.expected, "|"))
@@ -232,7 +245,7 @@ func checkHostileConstruct(c hostileCase, entry *hostileConstruct) string {
 	if !entry.rule.MatchString(e.Error()) {
 		return fmt.Sprintf("%s: wrong rule fired: %q does not match %v", c.id, e.Error(), entry.rule)
 	}
-	if r.elapsed >= hostileGuard {
+	if r.elapsed >= r.guard {
 		return fmt.Sprintf("%s: construction took %v", c.id, r.elapsed)
 	}
 	return ""

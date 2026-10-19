@@ -724,6 +724,6 @@ Method: four read-only arms on `git archive HEAD` copies at `915a908` (Python 3.
 | 59 | fixed in loop 42 | C# repair: three arrays of n + 1 bytes per call (1,048 B for the whole worst-case call, 3.7 to 4.2 KB for the locator alone before); Go repair: fixed arrays on the stack |
 | 60 | fixed in loop 42 | The Rust decoded string is shrunk to its length |
 | 19 | fixed (Python, TypeScript) | The session payload type is checked before the receive index moves; no coercion of a string or a number |
-| 58 | open (owner, loop 42) | Python session pad cost before the type byte |
+| 58 | fixed in loop 43 (AZ-2724) | The Python session removes the pad of the first byte, checks the type, and only then removes the rest; a payload of an unknown type costs one pad block (a test counts `_block` calls); `pack-session.md` and the README say a caller bounds the payload length |
 
 Cost: the C++ Cortex-M4F image is 7,920 B of 8,192 (the order check is built only with the codec, so the M4F core lost `check_new_key`: 272 B margin, was 60 B) and its stack 504 B of 512 (8 B margin, was 20 B).

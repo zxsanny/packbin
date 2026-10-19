@@ -16,6 +16,7 @@ import Testing
         let map = goldenMap()
         let rounds = 100_000
         var fastest = Double.infinity
+        var limit = LoadBound(nominal: 1, factor: 1)
 
         // Act
         #if DEBUG
@@ -23,7 +24,8 @@ import Testing
         #else
         let passes = 3
         #endif
-        for _ in 0..<passes where fastest > 1 {
+        for _ in 0..<passes where !limit.holds(fastest) {
+            limit = bound(1)
             let start = DispatchTime.now().uptimeNanoseconds
             for _ in 0..<rounds {
                 let raw = typed ? try pack(scheme, row) : try pack(scheme, map)
@@ -36,7 +38,7 @@ import Testing
         // Assert
         print("AC-7 \(form): fastest pass of \(rounds) round trips: \(fastest) s (\(buildKind))")
         #if !DEBUG
-        #expect(fastest <= 1, "fastest pass \(fastest) s, above 1 s")
+        expectWithin(fastest, limit)
         #endif
     }
 }

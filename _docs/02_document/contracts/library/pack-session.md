@@ -31,6 +31,8 @@ The opener's send direction is the waiter's receive direction. A second pack on 
 
 Clear pack and unpack stay as they are.
 
+Cost of the pad: the pad is linear in the payload length, and the Python session computes it in pure Python (about 93 us per 64 bytes), so a caller bounds the payload length it hands to `unpack` (a network read limit). The Python session removes the pad of the first byte and checks the type against the handlers before it removes the rest, so a payload of an unknown type costs one block whatever its length (loop 43, AZ-2724; F58). With parity the 254-byte limit bounds it.
+
 Protected schemes (`message-ecc.md`, loop 38): the parity covers the padded bytes, the payload is the clear length + `n`, and unpack repairs before it removes the pad. A scheme with 0 parity bytes is exactly as above.
 
 ## Construction

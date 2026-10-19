@@ -22,6 +22,8 @@ from packbin import (
 )
 from packbin._validate import _validate_round_bodies
 
+import timing_support
+
 # AZ-2390 (F33): rows 15 to 26 of `_docs/03_implementation/reference_loop21_slots.md` section 2. A round body
 # must hold a member (looking through `when` and groups), or the scheme is refused when it is built.
 # Python differences: a group has no name and an empty one never builds (rows 19 and 26 end at that error), and a
@@ -86,6 +88,7 @@ def test_ac1_row19_an_empty_group_in_a_body_is_refused_by_the_group_rule_first()
 
 def test_ac2_row20_the_f33_request_shape_fails_at_build_in_under_a_second():
     # Arrange
+    limit = timing_support.bound(1.0)
     started = time.perf_counter()
 
     # Act
@@ -94,7 +97,7 @@ def test_ac2_row20_the_f33_request_shape_fails_at_build_in_under_a_second():
 
     # Assert
     assert message == _text("times", 1)
-    assert elapsed < 1.0
+    timing_support.assert_within(elapsed, limit, "the F33 request shape at build")
 
 
 def test_ac3_row21_a_zero_width_bytes_body_builds_and_pack_is_bounded_by_the_slots():

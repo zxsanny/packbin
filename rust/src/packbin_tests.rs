@@ -5,6 +5,7 @@ use crate::{
     Values,
 };
 use std::fs;
+use crate::timing_support::{assert_within, load_factor};
 use std::time::Instant;
 
 fn position_scheme() -> MapScheme {
@@ -155,6 +156,7 @@ fn ac5_short_buffer_then_position_pack() {
 fn nfr_round_trips_under_one_second() {
     let scheme = position_scheme();
     let vals = position_values();
+    let factor = load_factor();
     let start = Instant::now();
     let mut last = Values::new();
     for _ in 0..100_000 {
@@ -165,7 +167,7 @@ fn nfr_round_trips_under_one_second() {
     assert!(!last.contains_key("type"));
     assert_eq!(last.get("lat"), Some(&Some(Value::I32(500_000_000))));
     assert_no_gpu();
-    assert!(elapsed.as_secs_f64() <= 1.0, "elapsed {:?} > 1s", elapsed);
+    assert_within("100000 round trips", elapsed.as_secs_f64(), 1.0, factor);
     eprintln!("nfr elapsed_ms {:.1}", elapsed.as_secs_f64() * 1000.0);
 }
 

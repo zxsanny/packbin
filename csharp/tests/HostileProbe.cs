@@ -6,7 +6,7 @@ internal static class HostileProbe
 {
     internal sealed record Outcome(object? Error, bool HandlerCalled);
 
-    // Runs unpack on its own background thread so a hang fails the test after the guard instead of blocking CI.
+    // Runs unpack on its own background thread so a hang fails the test after the guard (scaled by the load factor) instead of blocking CI.
     internal static Outcome Unpack<T>(Scheme<T> scheme, string hex, double guardSeconds = 2) where T : class, new()
     {
         var bytes = Convert.FromHexString(hex);
@@ -28,9 +28,10 @@ internal static class HostileProbe
         {
             IsBackground = true,
         };
+        var limit = Timing.RecentBound(guardSeconds);
         worker.Start();
-        if (!worker.Join(TimeSpan.FromSeconds(guardSeconds)))
-            Assert.Fail($"unpack of {hex} did not return within {guardSeconds} s");
+        if (!worker.Join(limit.Span))
+            Assert.Fail($"unpack of {hex} did not return: {limit.Describe(limit.Seconds, "guard")}");
         if (thrown is not null)
             Assert.Fail($"unpack of {hex} threw {thrown.GetType().Name}: {thrown.Message}");
         return outcome!;

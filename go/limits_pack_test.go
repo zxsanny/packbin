@@ -112,6 +112,7 @@ func TestAC1LoweredRepeatLimitLowersWhatPacks(t *testing.T) {
 func TestAC1PackRefusesATimesCountAboveMaxRoundsBeforeAnyRound(t *testing.T) {
 	// Arrange
 	layout := timesK32(t)
+	factor := loadFactor()
 	start := time.Now()
 
 	// Act / Assert
@@ -121,9 +122,7 @@ func TestAC1PackRefusesATimesCountAboveMaxRoundsBeforeAnyRound(t *testing.T) {
 		"k: the times count is 4000000000, above the limit of 65535 rounds")
 	refusedPack(t, layout, map[string]any{"n": 70_000},
 		"k: the times count is 70000, above the limit of 65535 rounds")
-	if time.Since(start) > time.Second {
-		t.Fatalf("the refusals looped over the rounds: %v", time.Since(start))
-	}
+	assertWithin(t, "the refusals looped over the rounds", time.Since(start), time.Second, factor)
 }
 
 func TestAC1LoweredTimesLimitLowersWhatPacks(t *testing.T) {
@@ -248,19 +247,19 @@ func TestAC1ALoneStringUnderATimesIsRefusedNamingItInUnderASecond(t *testing.T) 
 	// Arrange
 	layout := mustScheme(t, 1, U32(0, "n"), Times(1, 0, Utf8(1, "s")))
 	row := map[string]any{"n": 65_535, "s": strings.Repeat(ctrl, 65_535)}
+	factor := loadFactor()
 	start := time.Now()
 
 	// Act
 	raw, err := Pack(layout, row)
+	took := time.Since(start)
 
 	// Assert
 	e := asError(t, err, PackRefused)
 	if raw != nil || e.Name != "s" || e.Reason != "s: the packet would be 16777989 bytes, above the limit of 16777216 bytes" {
 		t.Fatalf("%x, %+v", raw, e)
 	}
-	if time.Since(start) > time.Second {
-		t.Fatalf("took %v", time.Since(start))
-	}
+	assertWithin(t, "the refusal of a lone string under a times", took, time.Second, factor)
 }
 
 func elementTimes(t testing.TB) *Scheme {

@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process"
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { describe, it } from "node:test"
+import { assertWithin, assertWithinMs, bound } from "./support/timing.ts"
 import {
   BinaryPacker,
   Scheme,
@@ -397,6 +398,7 @@ describe("compact text in every string position", () => {
     // 1024 different texts, so the repeated-text shortcut of a lone string under times never answers.
     const texts = Array.from({ length: 1024 }, (_, i) => `Привіт, як справи ${String(i % 100).padStart(2, "0")}`.slice(0, 20))
     assert.ok(texts.every((t) => Array.from(t).length === 20))
+    const limit = bound(4)
     const started = performance.now()
 
     // Act
@@ -410,7 +412,7 @@ describe("compact text in every string position", () => {
 
     // Assert
     assert.equal(wrong, 0)
-    assert.ok(seconds <= 4, `${seconds} s`)
+    assertWithin(seconds, limit, "AC-8 100000 round trips")
   })
 })
 
@@ -441,9 +443,11 @@ describe("AZ-2664: the text cache belongs to the pack call", () => {
   })
 
   it("a lone 65,535-character string under 200 rounds packs within a second", () => {
-    const start = Date.now()
+    const limit = bound(1)
+    const start = performance.now()
     const packet = BinaryPacker.pack(repeated, { n: 200, s: "q".repeat(65535) })
+    const elapsed = performance.now() - start
     assert.ok(packet.length > 200 * 65535)
-    assert.ok(Date.now() - start < 1000)
+    assertWithinMs(elapsed, limit, "one 65535-character string under 200 rounds")
   })
 })

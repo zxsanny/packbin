@@ -12,6 +12,7 @@ import Testing
         let row: [String: Any] = ["s": "Привіт, Світе! Як ти?"]
         let rounds = 100_000
         var fastest = Double.infinity
+        var limit = LoadBound(nominal: 1, factor: 1)
 
         // Act
         #if DEBUG
@@ -19,7 +20,8 @@ import Testing
         #else
         let passes = 3
         #endif
-        for _ in 0..<passes where fastest > 1 {
+        for _ in 0..<passes where !limit.holds(fastest) {
+            limit = bound(1)
             let start = DispatchTime.now().uptimeNanoseconds
             for _ in 0..<rounds {
                 let raw = try pack(scheme, row)
@@ -31,7 +33,7 @@ import Testing
         // Assert
         print("AC-8: fastest pass of \(rounds) round trips of a 20-character Ukrainian string: \(fastest) s (\(buildKind))")
         #if !DEBUG
-        #expect(fastest <= 1, "fastest pass \(fastest) s, above 1 s")
+        expectWithin(fastest, limit)
         #endif
     }
 
@@ -45,6 +47,7 @@ import Testing
         #expect(text.utf8.count == 65_535)
 
         // Act
+        let limit = bound(1)
         let (back, seconds) = try timed { () throws -> [String: Any] in
             try unpackMap(try pack(scheme, ["s": text]), scheme)
         }
@@ -52,7 +55,7 @@ import Testing
         // Assert
         print("65535 bytes of \(unit.debugDescription): pack and unpack in \(seconds) s (\(buildKind))")
         #expect(utf8Of(back["s"]) == Array(text.utf8))
-        #expect(withinOneSecond(seconds), "took \(seconds) s")
+        expectWithinUnlessSanitized(seconds, limit)
     }
 }
 

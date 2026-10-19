@@ -72,6 +72,7 @@ func TestAC3RaisedSlotLimitUnpacksTheOldWorstPacketAndTheDefaultRefusesIt(t *tes
 	raised := limited(t, layout, func(l *Limits) { l.MaxSlots = 4_194_304 })
 
 	// Act
+	factor := loadFactor()
 	start := time.Now()
 	_, defaultErr := UnpackMap(packet, layout)
 	refusedIn := time.Since(start)
@@ -79,9 +80,7 @@ func TestAC3RaisedSlotLimitUnpacksTheOldWorstPacketAndTheDefaultRefusesIt(t *tes
 
 	// Assert
 	refusedAt(t, defaultErr, 3_194_814) // refused at item 16 385, after 16 384 items hold 1 048 576 slots
-	if refusedIn > time.Second {
-		t.Fatalf("the refusal took %v", refusedIn)
-	}
+	assertWithin(t, "the refusal", refusedIn, time.Second, factor)
 	if raisedErr != nil {
 		t.Fatal(raisedErr)
 	}

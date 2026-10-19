@@ -24,6 +24,7 @@ import {
   type DispatchResult,
   type Scheme,
 } from "../../src/index.ts"
+import { bound, type Bound } from "./timing.ts"
 
 type Row = Record<string, unknown>
 
@@ -34,6 +35,8 @@ export type Outcome = {
   // Set when building the scheme threw RangeError: the `scheme_error` outcome.
   schemeError?: string
   ms: number
+  // The one-second bound scaled by the load seen right before the unpack started (support/timing.ts).
+  limit?: Bound
 }
 
 // Count 0 is the first value of the scheme; flag-guarded counts hide it behind a clear bit.
@@ -279,6 +282,7 @@ export function runCase(id: string, hex: string): Outcome {
     else out.threw = `construction: ${String(e)}`
     return out
   }
+  out.limit = bound(1)
   const start = performance.now()
   try {
     out.result = BinaryPacker.unpack(
@@ -294,7 +298,7 @@ export function runCase(id: string, hex: string): Outcome {
   return out
 }
 
-export type SessionOutcome = { first?: DispatchResult; second?: DispatchResult; threw?: string; ms: number }
+export type SessionOutcome = { first?: DispatchResult; second?: DispatchResult; threw?: string; ms: number; limit?: Bound }
 
 const sessionSeed = () => Uint8Array.from({ length: 32 }, (_, i) => i + 1)
 const sessionNonce = Uint8Array.from({ length: 16 }, (_, i) => i + 1)
@@ -313,6 +317,7 @@ export function runSession(): SessionOutcome {
   const receiver = scheme<Row>(1, u8(0, (x) => x.k), repeat(1, emptyRound()))
   const next = scheme<Row>(2, u8(0, (x) => x.k))
   const out: SessionOutcome = { ms: 0 }
+  out.limit = bound(1)
   const start = performance.now()
   try {
     const hostile = opener.pack(sender, { k: 0, extra: 5 })!

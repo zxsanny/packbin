@@ -102,4 +102,6 @@ mod when_kept_tests;
 #[cfg(test)]
 mod when_names_tests;
 #[cfg(test)]
+mod timing_support;
+#[cfg(test)]
 mod when_written_tests;

@@ -30,15 +30,18 @@ struct HostileFileError: Error, CustomStringConvertible {
     var description: String { "cases.txt line \"\(line)\": want 4 fields" }
 }
 
-/// What one guarded call of a case gave: its error (nil when it returned), and how long it took.
+/// What one guarded call of a case gave: its error (nil when it returned), how long it took, and the bound
+/// taken just before it.
 struct HostileRun {
     let error: Error?
     let seconds: Double
+    let limit: LoadBound
 }
 
 /// A trap ends the whole test process, so each case is named before it runs: a crash log points at it.
 func runHostile(_ c: HostileCase, _ body: () throws -> Void) -> HostileRun {
     print("HostileTests: \(c.stage) \(c.id)")
+    let limit = bound(unpackNominal, maxAge: 1)
     let (error, seconds) = timed { () -> Error? in
         do {
             try body()
@@ -47,7 +50,7 @@ func runHostile(_ c: HostileCase, _ body: () throws -> Void) -> HostileRun {
             return error
         }
     }
-    return HostileRun(error: error, seconds: seconds)
+    return HostileRun(error: error, seconds: seconds, limit: limit)
 }
 
 /// The outcome term of an error. Unpack reports a value it cannot use in the interim bad-value shape of
@@ -58,7 +61,7 @@ func hostileTerm(_ e: PackbinError) -> String {
 }
 
 /// What is wrong with a run that must end in a `PackbinError` whose outcome term the case lists and
-/// whose text is `rule`, within the bound (`unpackBound`), or nil.
+/// whose text is `rule`, within the bound (`unpackNominal` scaled by the load factor), or nil.
 func checkHostileRefusal(_ c: HostileCase, _ run: HostileRun, _ rule: String?) -> String? {
     guard let error = run.error else { return "\(c.id): expected \(c.expected.joined(separator: "|")), got no error" }
     guard let e = error as? PackbinError else { return "\(c.id): not a PackbinError: \(error)" }
@@ -67,7 +70,8 @@ func checkHostileRefusal(_ c: HostileCase, _ run: HostileRun, _ rule: String?) -
     }
     guard let rule else { return "\(c.id): no rule is pinned for this refusal: \(e)" }
     if e.description != rule { return "\(c.id): refused by another rule: \"\(e)\", want \"\(rule)\"" }
-    if run.seconds > unpackBound { return "\(c.id): took \(run.seconds) s, bound \(unpackBound) s" }
+    let (ok, decided) = run.limit.judge(run.seconds)
+    if !ok { return "\(c.id): \(decided.describe(run.seconds))" }
     return nil
 }
 

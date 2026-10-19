@@ -6,6 +6,8 @@ import pytest
 
 from packbin import BinaryPacker, ShortPacket, Scheme, dict as map_field, u8
 
+import timing_support
+
 SCHEME = Scheme(1, dict, map_field(lambda row: row["d"], u8(0, lambda row: row["v"])))
 
 
@@ -68,20 +70,11 @@ def test_the_pack_side_writes_keys_in_utf8_byte_order():
     assert list(result.value["d"].items()) == [("a", 0), ("b", 1), ("～", 2), ("\U00010000", 3)]
 
 
-def _reference_seconds() -> float:
-    best = float("inf")
-    for _ in range(3):
-        start = time.perf_counter()
-        sorted(f"key{n:05d}".encode() for n in range(65_535))
-        best = min(best, time.perf_counter() - start)
-    return best
-
-
 def test_65535_ascending_keys_packed_by_the_package_unpack_within_a_second():
     # Arrange: the bound is 1 s on a quiet machine and grows with the load seen by a reference loop in this process.
     keys = {f"key{n:05d}": n & 0xFF for n in range(65_535)}
     packet = BinaryPacker.pack(SCHEME, {"d": keys})
-    reference = _reference_seconds()
+    limit = timing_support.bound(1.0)
     start = time.perf_counter()
 
     # Act
@@ -91,5 +84,4 @@ def test_65535_ascending_keys_packed_by_the_package_unpack_within_a_second():
     # Assert
     assert result.ok is True
     assert len(result.value["d"]) == 65_535
-    bound = 1.0 * max(1.0, reference / 0.03)
-    assert elapsed <= bound, f"elapsed {elapsed:.3f}s, bound {bound:.3f}s (reference loop {reference:.3f}s)"
+    timing_support.assert_within(elapsed, limit, "65535 ascending dict keys")

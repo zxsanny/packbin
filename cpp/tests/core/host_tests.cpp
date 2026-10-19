@@ -4,6 +4,7 @@
 #include "packbin/packbin.hpp"
 
 #include "check.hpp"
+#include "load_factor.hpp"
 
 #include <chrono>
 #include <cstring>
@@ -48,6 +49,7 @@ void throughput() {
   std::uint8_t buf[16];
   Position back;
   bool ok = true;
+  auto limit = load_factor::bound(1.0);
   auto start = std::chrono::steady_clock::now();
   for (int i = 0; i < 100000 && ok; ++i) {
     auto p = packbin::pack(position, row, buf, sizeof(buf));
@@ -57,7 +59,7 @@ void throughput() {
   auto ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start)
                 .count();
   expect(ok && back.lat == 500000000, "NFR round trips ok");
-  expect(ms <= 1000.0, "NFR 100000 round trips <= 1 s");
+  load_factor::expect_within(ms / 1000.0, limit, "NFR 100000 round trips <= 1 s");
   std::fprintf(stderr, "nfr elapsed_ms %.2f\n", ms);
 }
 

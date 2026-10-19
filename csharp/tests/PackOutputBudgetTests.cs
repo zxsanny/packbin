@@ -68,6 +68,7 @@ public class PackOutputBudgetTests
         var values = Row(("N", 65_535u), ("S", new string('中', 21_845)));
         Refused(scheme, values);
         var allocated = GC.GetAllocatedBytesForCurrentThread();
+        var limit = Timing.Bound(1.0);
         var clock = Stopwatch.StartNew();
 
         // Act
@@ -75,7 +76,7 @@ public class PackOutputBudgetTests
 
         // Assert (a buffer that doubled past the budget would allocate 2 GB; the test allocates the 256 rounds' text, ~34 MB)
         clock.Stop();
-        Assert.True(clock.ElapsedMilliseconds < 1_000, $"took {clock.ElapsedMilliseconds} ms");
+        limit.AssertWithin(clock.Elapsed, "refusal of the lone UTF-8 under a capped times");
         var spent = GC.GetAllocatedBytesForCurrentThread() - allocated;
         Assert.True(spent < 256L * 1024 * 1024, $"allocated {spent} bytes");
     }

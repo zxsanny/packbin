@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { spawnSync } from "node:child_process"
 import { fileURLToPath } from "node:url"
 import { describe, it } from "node:test"
+import { assertWithinMs, bound } from "./support/timing.ts"
 import {
   BinaryPacker,
   Scheme,
@@ -71,6 +72,7 @@ describe("AZ-2354 pack has one output budget, maxBytes", () => {
     const child = fileURLToPath(new URL("./support/lone-utf8-budget.ts", import.meta.url))
 
     // Act
+    const limit = bound(1)
     const run = spawnSync(process.execPath, [child], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 30_000 })
     const outcome = JSON.parse(run.stdout) as { error?: string; message?: string; bytes?: number; ms: number; peakBytes: number }
 
@@ -79,7 +81,7 @@ describe("AZ-2354 pack has one output budget, maxBytes", () => {
     assert.equal(outcome.bytes, undefined, "no bytes are returned")
     assert.equal(outcome.error, "RangeError")
     assert.equal(outcome.message, "s: the packet would be 16779269 bytes, above the limit of 16777216 bytes")
-    assert.ok(outcome.ms < 1000, `took ${outcome.ms} ms`)
+    assertWithinMs(outcome.ms, limit, "pack")
     assert.ok(outcome.peakBytes < 256 * 1024 * 1024, `peak ${outcome.peakBytes} bytes`)
   })
 

@@ -7,13 +7,21 @@ import (
 	"time"
 )
 
-// unpackBound is how long one unpack of one fuzz input may take (project AC-2); the race detector
-// slows an unpack down several times over.
-func unpackBound() time.Duration {
+// nominalUnpackBound is how long one unpack of one fuzz input may take (project AC-2): 1 s, 10 s under the
+// race detector, which slows an unpack down several times over.
+func nominalUnpackBound() time.Duration {
 	if raceEnabled {
 		return 10 * time.Second
 	}
 	return time.Second
+}
+
+// unpackBound is nominalUnpackBound times the largest of the load factor reused from the last second, one
+// measured now and the sustained factor over a window as long as the unpack (timing_test.go): called only
+// once an unpack has run past the nominal bound, so the measurement is paid on a slow unpack, not on every
+// fuzz input.
+func unpackBound(elapsed time.Duration) time.Duration {
+	return scaled(nominalUnpackBound(), max(recentLoadFactor(), loadFactor(), sustainedLoadFactor(elapsed)))
 }
 
 // fuzzInputCap is the longest input FuzzUnpack reads. A packet near 1 MiB takes up to a second with every
@@ -44,8 +52,10 @@ func checkUnpack(t *testing.T, packet []byte, schemes ...*Scheme) {
 	start := time.Now()
 	row, err := Unpack(packet, schemes...)
 	byName, mapErr := UnpackMap(packet, schemes...)
-	if elapsed := time.Since(start); elapsed > unpackBound() {
-		t.Fatalf("unpack of %d bytes took %v: %x", len(packet), elapsed, head(packet))
+	if elapsed := time.Since(start); elapsed > nominalUnpackBound() {
+		if bound := unpackBound(elapsed); elapsed > bound {
+			t.Fatalf("unpack of %d bytes took %v, over the load-aware bound %v: %x", len(packet), elapsed, bound, head(packet))
+		}
 	}
 	if (err == nil) != (mapErr == nil) {
 		t.Fatalf("Unpack error %v, UnpackMap error %v: %x", err, mapErr, head(packet))

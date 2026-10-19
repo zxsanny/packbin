@@ -3,6 +3,7 @@
 #include "packbin/packbin.hpp"
 
 #include "check.hpp"
+#include "load_factor.hpp"
 
 #include <chrono>
 #include <cstdint>
@@ -249,6 +250,7 @@ void speed() {
   packbin::Scratch<20> scratch;
   Line back;
   std::size_t good = 0;
+  auto limit = load_factor::bound(1.0);
   auto start = std::chrono::steady_clock::now();
   for (int i = 0; i < 100000; ++i) {
     auto p = packbin::pack(line_scheme, row, buf, sizeof(buf), scratch);
@@ -259,7 +261,7 @@ void speed() {
       std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
   std::printf("text speed: 100000 round trips of 20 characters in %.3f s\n", seconds);
   expect(good == 100000 && is(back, "Доброго ранку, друже"), "AC-7 round trips are correct");
-  expect(seconds <= 1.0, "AC-7 100,000 round trips within one second");
+  load_factor::expect_within(seconds, limit, "AC-7 100,000 round trips within one second");
 }
 
 // The committed tables are the emitter's output for fixtures/text/tables.json.

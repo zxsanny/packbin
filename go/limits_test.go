@@ -309,6 +309,7 @@ func TestAC1AMillionByteRoundPacketIsRefusedFastWhereMaxSlotsIsReached(t *testin
 	wire[0] = 1
 
 	// Act
+	factor := loadFactor()
 	start := time.Now()
 	row, err := UnpackMap(wire, layout)
 	elapsed := time.Since(start)
@@ -318,9 +319,7 @@ func TestAC1AMillionByteRoundPacketIsRefusedFastWhereMaxSlotsIsReached(t *testin
 		t.Fatal("a refused unpack gave a row")
 	}
 	refusedAt(t, err, 1_020_237)
-	if elapsed > time.Second {
-		t.Fatalf("the refusal took %v", elapsed)
-	}
+	assertWithin(t, "the refusal", elapsed, time.Second, factor)
 }
 
 func TestAC1LimitsBelongToTheSchemeThatMatches(t *testing.T) {

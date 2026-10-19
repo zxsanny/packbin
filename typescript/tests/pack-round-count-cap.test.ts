@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
+import { assertWithinMs, bound } from "./support/timing.ts"
 import { BinaryPacker, Scheme, flags, scheme, times, u8, u16, u32, type DispatchResult } from "../src/index.ts"
 
 type Row = Record<string, unknown>
@@ -38,14 +39,16 @@ describe("AZ-2329 pack refuses a times count above maxRounds", () => {
   it("AC-1 a 4-billion count with a lone scalar is refused at once, before any round", () => {
     // Arrange
     const layout = timesK()
-    const before = Date.now()
+    const limit = bound(1)
+    const before = performance.now()
 
     // Act
     const message = refusal(() => BinaryPacker.pack(layout, { n: 4_000_000_000, k: 7 }))
+    const elapsed = performance.now() - before
 
     // Assert
     assert.match(message, /^k: the times count is 4000000000, above the limit of 65535 rounds$/)
-    assert.ok(Date.now() - before < 1000, "the refusal does not loop over the rounds")
+    assertWithinMs(elapsed, limit, "the refusal does not loop over the rounds")
   })
 
   it("AC-1 a count over the limit with no value is refused by the limit, not by the missing value", () => {

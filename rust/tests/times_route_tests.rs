@@ -1,5 +1,10 @@
 use packbin::{eq, to_hex, BinaryPacker, BoundField, Scheme, SchemeItem, UnpackError, Value};
-use std::time::{Duration, Instant};
+use std::time::Instant;
+
+#[path = "../src/timing_support.rs"]
+mod timing_support;
+
+use timing_support::{assert_within, load_factor};
 
 fn parse_hex(hex: &str) -> Vec<u8> {
     (0..hex.len())
@@ -103,12 +108,10 @@ fn ac5_typed_route_matches_the_fixture_both_ways() {
 }
 
 fn assert_unpack_fails_fast<T: Default + 'static>(scheme: &Scheme<T>, hex: &str) -> UnpackError {
+    let factor = load_factor();
     let started = Instant::now();
     let result = unpack_row(scheme, &parse_hex(hex));
-    assert!(
-        started.elapsed() < Duration::from_secs(1),
-        "{hex}: too slow"
-    );
+    assert_within(hex, started.elapsed().as_secs_f64(), 1.0, factor);
     result
         .err()
         .unwrap_or_else(|| panic!("{hex}: expected an error"))

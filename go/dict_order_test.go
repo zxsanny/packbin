@@ -72,9 +72,9 @@ func TestDictKeysUnpackAcceptsAscendingUTF8BytesAndRefusesTheRest(t *testing.T) 
 	}
 }
 
-// AZ-2713 AC-3: 65,535 distinct ascending keys packed by the package and unpacked take at most 1 second.
-// The fastest of up to three passes counts, as in TestAC7SpeedRoundTrips; the race detector run skips the
-// bound.
+// AZ-2713 AC-3: 65,535 distinct ascending keys packed by the package and unpacked take at most 1 second
+// times the load factor (timing_test.go). The fastest of up to three passes counts, as in
+// TestAC7SpeedRoundTrips; the race detector run skips the bound.
 func TestDictKeysSpeed65535AscendingKeysWithinOneSecond(t *testing.T) {
 	// Arrange
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(1))
@@ -84,10 +84,11 @@ func TestDictKeysSpeed65535AscendingKeysWithinOneSecond(t *testing.T) {
 		m[fmt.Sprintf("key%05d", i)] = uint8(i)
 	}
 	row := map[string]any{"m": m}
-	fastest := time.Duration(1<<63 - 1)
+	fastest, factor := time.Duration(1<<63-1), 1.0
 
 	// Act
-	for pass := 0; pass < 3 && fastest > time.Second; pass++ {
+	for pass := 0; pass < 3 && fastest > scaled(time.Second, factor); pass++ {
+		passFactor := loadFactor()
 		start := time.Now()
 		raw, err := Pack(s, row)
 		if err != nil {
@@ -97,15 +98,15 @@ func TestDictKeysSpeed65535AscendingKeysWithinOneSecond(t *testing.T) {
 		if err != nil || len(got["m"].(map[string]any)) != 65535 {
 			t.Fatalf("unpack: %v", err)
 		}
-		fastest = min(fastest, time.Since(start))
+		if took := time.Since(start); float64(took)/passFactor < float64(fastest)/factor {
+			fastest, factor = took, passFactor
+		}
 	}
 
 	// Assert
-	t.Logf("pack and unpack of 65535 keys: %v (race detector: %v)", fastest, raceEnabled)
+	t.Logf("pack and unpack of 65535 keys: %v at load factor %.2f (race detector: %v)", fastest, factor, raceEnabled)
 	if raceEnabled {
 		t.Skipf("%v under the race detector; the 1 s bound is asserted without it", fastest)
 	}
-	if fastest > time.Second {
-		t.Fatalf("fastest pass %v, above 1s", fastest)
-	}
+	assertWithin(t, "pack and unpack of 65535 keys, fastest pass", fastest, time.Second, factor)
 }

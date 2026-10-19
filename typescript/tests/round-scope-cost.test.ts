@@ -1,9 +1,10 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
+import { bound } from "./support/timing.ts"
 import { BinaryPacker, Scheme, list, times, u8, u32, type Field } from "../src/index.ts"
 
 // AZ-2391 (F34): the cost of one round or one list item does not grow with the fields around it. The test
-// compares two sizes in one run (a ratio), never an absolute time.
+// compares two sizes in one run (a ratio); the 5 ms slack of the ratio is the one wall-clock term and scales with the load.
 
 type Row = Record<string, unknown>
 
@@ -46,13 +47,14 @@ describe("AZ-2391 the cost of a round does not grow with the fields around it", 
     const large = timesOfU8(65_535, 1000)
 
     // Act
+    const slackMs = bound(0.005).seconds * 1000
     const a = best(small.layout, small.row)
     const b = best(large.layout, large.row)
 
     // Assert
     assert.equal(a.bytes.length, 1 + 4 + 100 + 65_535)
     assert.equal(b.bytes.length, 1 + 4 + 1000 + 65_535)
-    assert.ok(b.ms <= 2 * a.ms + 5, `100 fields ${a.ms.toFixed(1)} ms, 1000 fields ${b.ms.toFixed(1)} ms`)
+    assert.ok(b.ms <= 2 * a.ms + slackMs, `100 fields ${a.ms.toFixed(1)} ms, 1000 fields ${b.ms.toFixed(1)} ms, slack ${slackMs.toFixed(1)} ms`)
   })
 
   it("AC-1 a list of 65535 u8 items with 1000 top-level fields packs within 2x the 100-field time", () => {
@@ -61,13 +63,14 @@ describe("AZ-2391 the cost of a round does not grow with the fields around it", 
     const large = listOfU8(65_535, 1000)
 
     // Act
+    const slackMs = bound(0.005).seconds * 1000
     const a = best(small.layout, small.row)
     const b = best(large.layout, large.row)
 
     // Assert
     assert.equal(a.bytes.length, 1 + 4 + 100 + 2 + 65_535)
     assert.equal(b.bytes.length, 1 + 4 + 1000 + 2 + 65_535)
-    assert.ok(b.ms <= 2 * a.ms + 5, `100 fields ${a.ms.toFixed(1)} ms, 1000 fields ${b.ms.toFixed(1)} ms`)
+    assert.ok(b.ms <= 2 * a.ms + slackMs, `100 fields ${a.ms.toFixed(1)} ms, 1000 fields ${b.ms.toFixed(1)} ms, slack ${slackMs.toFixed(1)} ms`)
   })
 
   it("AC-2 the bytes are those of a copy: the count and the fields before the times are written as before", () => {

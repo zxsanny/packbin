@@ -138,11 +138,12 @@ import Testing
         packet[0] = 1
 
         // Act
+        let limit = bound(1)
         let (error, seconds) = timed { unpackError(packet, layout) }
 
         // Assert
         #expect(isRefusedRound(error, "k", left: 1_020_237))
-        #expect(seconds < 1, "refusal took \(seconds) s")
+        expectWithin(seconds, limit)
     }
 
     /// The hostile `limit` cases (fixtures/hostile/cases.txt): `maxRounds` 3, `too_many` with `needed`

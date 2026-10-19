@@ -68,6 +68,7 @@ final class DictKeyOrderTest {
         TextVectorsTest.Outcome warm = TextVectorsTest.unpack(scheme, packed);
         PackbinTest.expectTrue("AZ-2713 AC-3 warm-up unpack is clean", warm.error == null && warm.row != null);
 
+        Timing.Limit limit = Timing.bound(1.0);
         long start = System.nanoTime();
         TextVectorsTest.Outcome got = TextVectorsTest.unpack(scheme, packed);
         double seconds = (System.nanoTime() - start) / 1e9;
@@ -75,6 +76,6 @@ final class DictKeyOrderTest {
         System.out.println("AZ-2713 AC-3 unpack of 65535 ascending keys (" + packed.length + " bytes): " + seconds + " s");
         PackbinTest.expectTrue("AZ-2713 AC-3 unpack is clean", got.error == null && got.row != null);
         PackbinTest.expectEq("AZ-2713 AC-3 all keys kept", 65_535, ((Map) got.row.get("m")).size());
-        PackbinTest.expectTrue("AZ-2713 AC-3 unpack in " + seconds + " s (at most 1)", seconds <= 1.0);
+        limit.expectWithin("AZ-2713 AC-3 unpack of 65535 ascending keys", seconds);
     }
 }

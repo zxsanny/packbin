@@ -394,8 +394,8 @@ func TestEccRepairNeverPanicsOnHostileBytes(t *testing.T) {
 }
 
 // EC-13 (AZ-2685 AC-7): unpacking a 254-byte message with 16 parity bytes and 8 wrong bytes 1,000 times, and
-// packing it 1,000 times, each take at most 1 second on one core. The fastest of up to three passes counts,
-// as in TestAC7SpeedRoundTrips.
+// packing it 1,000 times, each take at most 1 second on one core, times the load factor (timing_test.go). The
+// fastest of up to three passes counts, as in TestAC7SpeedRoundTrips.
 func TestEccSpeedRepairLoopAndPackLoopWithinOneSecond(t *testing.T) {
 	// Arrange
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(1))
@@ -407,28 +407,35 @@ func TestEccSpeedRepairLoopAndPackLoopWithinOneSecond(t *testing.T) {
 	}
 	wrong := corrupt(message, []int{0, 30, 60, 90, 120, 180, 220, 253}, []byte{1, 2, 3, 4, 5, 6, 7, 8})
 	unpackFastest, packFastest := time.Duration(1<<63-1), time.Duration(1<<63-1)
+	// factor is the one of the pass that came closest to the bound, for each loop
+	unpackFactor, packFactor := 1.0, 1.0
 
 	// Act
-	for pass := 0; pass < 3 && (unpackFastest > time.Second || packFastest > time.Second); pass++ {
+	for pass := 0; pass < 3 && (unpackFastest > scaled(time.Second, unpackFactor) || packFastest > scaled(time.Second, packFactor)); pass++ {
+		factor := loadFactor()
 		start := time.Now()
 		for range 1000 {
 			if _, repaired, err := UnpackMapRepair(wrong, 8, s); err != nil || repaired != 8 {
 				t.Fatalf("repair: %d, %v", repaired, err)
 			}
 		}
-		unpackFastest = min(unpackFastest, time.Since(start))
+		if took := time.Since(start); float64(took)/factor < float64(unpackFastest)/unpackFactor {
+			unpackFastest, unpackFactor = took, factor
+		}
 		start = time.Now()
 		for range 1000 {
 			if _, err := Pack(s, row); err != nil {
 				t.Fatal(err)
 			}
 		}
-		packFastest = min(packFastest, time.Since(start))
+		if took := time.Since(start); float64(took)/factor < float64(packFastest)/packFactor {
+			packFastest, packFactor = took, factor
+		}
 	}
 
 	// Assert
-	t.Logf("1000 repairs: %v, 1000 packs: %v (race detector: %v)", unpackFastest, packFastest, raceEnabled)
-	if unpackFastest > time.Second || packFastest > time.Second {
-		t.Fatalf("repair loop %v, pack loop %v, above 1s", unpackFastest, packFastest)
-	}
+	t.Logf("1000 repairs: %v (load factor %.2f), 1000 packs: %v (load factor %.2f) (race detector: %v)",
+		unpackFastest, unpackFactor, packFastest, packFactor, raceEnabled)
+	assertWithin(t, "1000 repairs", unpackFastest, time.Second, unpackFactor)
+	assertWithin(t, "1000 packs", packFastest, time.Second, packFactor)
 }

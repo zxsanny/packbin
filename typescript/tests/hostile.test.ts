@@ -5,6 +5,7 @@ import { Worker } from "node:worker_threads"
 import { BinaryPacker, bits, bytes, eq, i32, list, repeat, scheme, u64, u8, when, type DispatchResult } from "../src/index.ts"
 import { CONSTRUCT, type Outcome, type SessionOutcome } from "./support/hostile-cases.ts"
 import { PACK } from "./support/hostile-pack.ts"
+import { assertWithinMs, bound } from "./support/timing.ts"
 
 // A hang or an out-of-memory loop ends the worker, not the test run. The cases share one
 // worker; the case that hangs is reported and the rest restart in a fresh worker.
@@ -126,11 +127,11 @@ function kindOf(out: Outcome): string {
   return "bad_value"
 }
 
-function assertRejected(out: Outcome, ms = 1000): void {
+function assertRejected(out: Outcome): void {
   assert.equal(out.threw, undefined, `unpack threw: ${out.threw}`)
   assert.equal(out.called, false, "handler must not be called")
   assert.ok(out.result && out.result.ok === false, `expected ok:false, got ${JSON.stringify(out.result)}`)
-  assert.ok(out.ms < ms, `unpack took ${out.ms} ms`)
+  assertWithinMs(out.ms, out.limit ?? bound(1), "unpack")
 }
 
 function assertError(out: Outcome, field: string, left: number): void {
@@ -220,7 +221,7 @@ describe("hostile packets", () => {
   it("session unpack of hostile payload", async () => {
     const out = (await outcome("session")) as SessionOutcome
     assert.equal(out.threw, undefined, `session threw: ${out.threw}`)
-    assert.ok(out.ms < 1000, `session unpack took ${out.ms} ms`)
+    assertWithinMs(out.ms, out.limit ?? bound(1), "session unpack")
     assert.deepEqual(out.first, { ok: false, field: "", needed: 0, left: 1 })
     // The receive counter advanced by one, so the next pad still matches.
     assert.deepEqual(out.second, { ok: true })
@@ -327,6 +328,7 @@ type VectorCase = (typeof allCases)[number]
 function checkConstruct(c: VectorCase, entry: ConstructEntry | undefined): void {
   assert.ok(entry, `no TypeScript scheme for construct case ${c.id}`)
   assert.ok(c.expected.includes("scheme_error"), `${c.id}: vector expects ${c.expected.join("|")}`)
+  const limit = bound(1)
   const start = performance.now()
   assert.throws(entry.build, (e: unknown) => {
     assert.ok(e instanceof RangeError, `${c.id}: expected RangeError, got ${String(e)}`)
@@ -334,7 +336,7 @@ function checkConstruct(c: VectorCase, entry: ConstructEntry | undefined): void 
     return true
   })
   // The refusal comes at build, before any item or round exists (construct_empty_round_body_list_element).
-  assert.ok(performance.now() - start < 1000, `${c.id}: construction took ${performance.now() - start} ms`)
+  assertWithinMs(performance.now() - start, limit, `${c.id}: construction`)
 }
 
 describe("shared construct vectors (fixtures/hostile/cases.txt)", () => {

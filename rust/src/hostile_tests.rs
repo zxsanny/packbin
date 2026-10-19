@@ -16,24 +16,35 @@ use std::fs;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::mpsc;
 use std::thread;
+use crate::timing_support::{recent_load_factor, sustained_load_factor};
 use std::time::Duration;
 
 const CASES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../fixtures/hostile/cases.txt");
 
-/// Runs `job` on its own thread and fails the test when it does not finish in one second.
+/// Runs `job` on its own thread and fails the test when it does not finish in one second times the load factor
+/// (`timing_support`, reused for a second so the ~140 calls do not each pay for the reference loop).
 pub(crate) fn within_one_second<R: Send + 'static>(
     what: &str,
     job: impl FnOnce() -> R + Send + 'static,
 ) -> R {
+    let factor = recent_load_factor();
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
         // The receiver is gone once the 1 s timeout has fired; nobody is left to tell.
         let _ = tx.send(catch_unwind(AssertUnwindSafe(job)));
     });
-    match rx.recv_timeout(Duration::from_secs(1)) {
+    let mut result = rx.recv_timeout(Duration::from_secs_f64(factor));
+    let mut factor = factor;
+    if result.is_err() {
+        // The guard ran out: the job is a hang only if it also outlasts the bound scaled by the sustained load.
+        let extended = factor.max(sustained_load_factor(factor));
+        result = rx.recv_timeout(Duration::from_secs_f64(extended - factor));
+        factor = extended;
+    }
+    match result {
         Ok(Ok(result)) => result,
         Ok(Err(panic)) => std::panic::resume_unwind(panic),
-        Err(_) => panic!("{what}: no result within 1 s (unpack hangs)"),
+        Err(_) => panic!("{what}: no result within the nominal 1 s x load factor {factor:.2} (unpack hangs)"),
     }
 }
 

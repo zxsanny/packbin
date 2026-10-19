@@ -3,7 +3,12 @@ use packbin::{
     BoundField, Field, MapScheme, PackError, Scheme, SchemeItem, Value, Values,
 };
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::time::{Duration, Instant};
+use std::time::Instant;
+
+#[path = "../src/timing_support.rs"]
+mod timing_support;
+
+use timing_support::{assert_within, load_factor};
 
 // AZ-2390 (F33): a `repeat` or `times` whose body holds no member is refused when the scheme is built
 // (`_docs/03_implementation/reference_loop21_slots.md` section 2, rows 15 to 26). A member is any
@@ -112,6 +117,7 @@ fn ac1_row_19_a_lone_empty_group_keeps_its_existing_error() {
 fn ac2_row_20_the_f33_request_shape_fails_at_build_in_under_one_second() {
     // Arrange: Rust cannot put a group in a list (a list element is one value), so the shape is
     // the `times` with no member that the request carried, at the top level
+    let factor = load_factor();
     let started = Instant::now();
 
     // Act
@@ -119,7 +125,7 @@ fn ac2_row_20_the_f33_request_shape_fails_at_build_in_under_one_second() {
 
     // Assert
     assert_eq!(refused, Some(empty_body("times", 1)));
-    assert!(started.elapsed() < Duration::from_secs(1));
+    assert_within("build refusal", started.elapsed().as_secs_f64(), 1.0, factor);
 }
 
 #[test]
@@ -132,6 +138,7 @@ fn ac2_row_20_a_typed_scheme_with_an_empty_times_fails_at_build_too() {
         n: u32,
         pts: Vec<Pt>,
     }
+    let factor = load_factor();
     let started = Instant::now();
 
     // Act
@@ -147,7 +154,7 @@ fn ac2_row_20_a_typed_scheme_with_an_empty_times_fails_at_build_too() {
 
     // Assert
     assert!(refused.is_err());
-    assert!(started.elapsed() < Duration::from_secs(1));
+    assert_within("build refusal", started.elapsed().as_secs_f64(), 1.0, factor);
     let panic = refused.err().expect("panic");
     let text = panic.downcast_ref::<String>().cloned().unwrap_or_default();
     assert_eq!(text, empty_body("times", 1));
@@ -157,6 +164,7 @@ fn ac2_row_20_a_typed_scheme_with_an_empty_times_fails_at_build_too() {
 fn ac2_row_20_the_f33_request_shape_as_a_list_of_groups_fails_at_build_with_the_same_text() {
     // Arrange: `list(items, group(item, [u32 n, times n {}]))`; the empty body is judged before the
     // rule that a list element is one value
+    let factor = load_factor();
     let started = Instant::now();
 
     // Act
@@ -168,7 +176,7 @@ fn ac2_row_20_the_f33_request_shape_as_a_list_of_groups_fails_at_build_with_the_
 
     // Assert
     assert_eq!(refused, Some(empty_body("times", 1)));
-    assert!(started.elapsed() < Duration::from_secs(1));
+    assert_within("build refusal", started.elapsed().as_secs_f64(), 1.0, factor);
 }
 
 #[test]

@@ -3,6 +3,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
+import { assertWithinMs, bound } from "./support/timing.ts"
 import {
   BinaryPacker,
   eq,
@@ -331,7 +332,8 @@ describe("packbin", () => {
     // The fastest of up to three passes counts: a shared CI runner can stall one pass (1,026 ms in loop 15
     // against 230 ms on a laptop), while a real slowdown makes every pass slow. A pass inside the bound ends it.
     // The bound is 1.4 s, not the 1 s of AC-10: on a loaded host (load 35, loop 25) all three passes took 1,280 ms.
-    const boundMs = 1400
+    const limit = bound(1.4)
+    const boundMs = limit.seconds * 1000
     let fastest = Infinity
     for (let pass = 0; pass < 3 && fastest > boundMs; pass++) {
       const start = performance.now()
@@ -347,7 +349,7 @@ describe("packbin", () => {
       fastest = Math.min(fastest, performance.now() - start)
     }
     assertNoGpu()
-    assert.ok(fastest <= boundMs, `fastest of the passes: ${fastest}ms`)
+    assertWithinMs(fastest, limit, "fastest of the passes")
   })
 
   it("packs a class instance and flattens a nested group", () => {

@@ -237,6 +237,7 @@ final class EccRepairTest {
         Map<String, Object> value = Maps.map("b", Arrays.copyOfRange(clear, 1, clear.length));
         Scheme<Map> blob = EccSupport.blob(237, 16);
         int repaired = 0;
+        Timing.Limit unpackLimit = Timing.bound(1.0);
         long unpackStart = System.nanoTime();
 
         // Act
@@ -246,6 +247,7 @@ final class EccRepairTest {
             }
         }
         long unpackMs = (System.nanoTime() - unpackStart) / 1_000_000;
+        Timing.Limit packLimit = Timing.bound(1.0);
         long packStart = System.nanoTime();
         byte[] last = null;
         for (int i = 0; i < 1000; i++) {
@@ -256,7 +258,7 @@ final class EccRepairTest {
         // Assert
         PackbinTest.expectEq("EC-13 the 254-byte message repairs 1,000 times", 1000, repaired);
         PackbinTest.expectEq("EC-13 packing gives the 254-byte message", 254, last.length);
-        PackbinTest.expectTrue("EC-13 the repair loop of 1,000 takes " + unpackMs + " ms, within 1,000 ms", unpackMs <= 1000);
-        PackbinTest.expectTrue("EC-13 the pack loop of 1,000 takes " + packMs + " ms, within 1,000 ms", packMs <= 1000);
+        unpackLimit.expectWithin("EC-13 the repair loop of 1,000", unpackMs / 1000.0);
+        packLimit.expectWithin("EC-13 the pack loop of 1,000", packMs / 1000.0);
     }
 }

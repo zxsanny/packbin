@@ -21,6 +21,7 @@ public class Ac10TimingTests(ITestOutputHelper output)
         var row = new PackbinTests.PositionRow { Sid = 1, Lat = 500_000_000, Lon = 300_000_000, Profile = 1 };
         RoundTrip(row);
 
+        var limit = Timing.Bound(1.0);
         var watch = Stopwatch.StartNew();
         for (var i = 0; i < 100_000; i++)
             RoundTrip(row);
@@ -29,7 +30,7 @@ public class Ac10TimingTests(ITestOutputHelper output)
         var elapsed = watch.Elapsed.TotalMilliseconds;
         output.WriteLine($"AC-10 public typed path: {elapsed:F0} ms for 100000 round trips");
         PackbinTests.AssertNoGpuLibrary();
-        Assert.True(elapsed <= 1000.0, $"100000 public typed round trips took {elapsed:F0} ms, the bound is 1000 ms");
+        limit.AssertWithin(elapsed / 1000.0, "100000 public typed round trips");
     }
 
     private static void RoundTrip(PackbinTests.PositionRow row)

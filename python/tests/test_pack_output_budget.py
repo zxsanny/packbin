@@ -11,6 +11,8 @@ import packbin
 from packbin import BinaryPacker, ShortPacket, Scheme, flag_byte, flags, group, repeat, times, u8, u32, u64, utf8
 from packbin import list as list_field
 
+import timing_support
+
 # The rows are the TypeScript reference table `_docs/03_implementation/reference_loop20_budget.md` (AZ-2354,
 # rows 1 to 28): same outcome, same member, same numbers in the message.
 
@@ -96,6 +98,7 @@ def test_ac1_row1_pack_takes_under_a_second_and_under_256_mb():
     )
 
     # Act
+    limit = timing_support.bound(1.0)
     # The child finds the package where this process found it (pytest's `pythonpath`, not an installed copy).
     src = str(Path(packbin.__file__).resolve().parent.parent)
     env = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [src, os.environ.get("PYTHONPATH")]))}
@@ -106,7 +109,7 @@ def test_ac1_row1_pack_takes_under_a_second_and_under_256_mb():
     # Assert
     assert done.returncode == 0, done.stderr
     elapsed, peak = (float(part) for part in done.stdout.split())
-    assert elapsed < 1.0
+    timing_support.assert_within(elapsed, limit, "pack of the capped lone utf8 row")
     assert peak < 256 * 1024 * 1024
 
 

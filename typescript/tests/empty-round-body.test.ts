@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
+import { assertWithinMs, bound } from "./support/timing.ts"
 import {
   BinaryPacker,
   Scheme,
@@ -101,6 +102,7 @@ describe("AZ-2390 an empty round body is refused at construction", () => {
 
   it("AC-2 the F33 request shape (a list of groups holding times(65535) {}) fails at build in under 1 s", () => {
     // Act
+    const limit = bound(1)
     const started = performance.now()
     const message = refusal(
       () =>
@@ -112,7 +114,7 @@ describe("AZ-2390 an empty round body is refused at construction", () => {
 
     // Assert
     assert.equal(message, EMPTY_TIMES)
-    assert.ok(ms < 1000, `took ${ms} ms`)
+    assertWithinMs(ms, limit, "build")
   })
 
   it("AC-3 a body with one u8 builds and packs as before", () => {

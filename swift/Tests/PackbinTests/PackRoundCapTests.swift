@@ -107,11 +107,12 @@ import Testing
         let layout = try timesK32()
 
         // Act
+        let limit = bound(1)
         let (error, seconds) = timed { packError(layout, ["n": 4_000_000_000, "k": 7]) }
 
         // Assert
         #expect(isPackRefusal(error, "k", "k: the times count is 4000000000, above the limit of 65535 rounds"))
-        #expect(withinOneSecond(seconds), "took \(seconds) s")
+        expectWithinUnlessSanitized(seconds, limit)
     }
 
     @Test func pack_timesCountOverTheLimitWithNoValue_isRefusedByTheLimit() throws {

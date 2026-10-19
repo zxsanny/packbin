@@ -21,11 +21,13 @@ import Testing
         let row: [String: Any] = ["n": 65_535, "s": String(repeating: "q", count: 65_535)]
 
         // Act
+        let limit = bound(1)
         let (error, seconds) = timed { packError(layout, row) }
 
         // Assert
         #expect(isPackRefusal(error, "s", bytesText("s", 16_777_989, 16_777_216)))
-        #expect(error?.field == 1 && withinOneSecond(seconds), "took \(seconds) s")
+        #expect(error?.field == 1)
+        expectWithinUnlessSanitized(seconds, limit)
     }
 
     @Test func pack_elementThatHoldsATimes_isRefusedAtTheDefaultBudgetNamingItsMember() throws {

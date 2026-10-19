@@ -87,6 +87,7 @@ import Testing
         var dict: [String: Any] = [:]
         for i in 0..<65_535 { dict[String(format: "k%05d", i)] = 1 }
         var fastest = Double.infinity
+        var limit = LoadBound(nominal: 1, factor: 1)
 
         // Act
         #if DEBUG
@@ -95,7 +96,8 @@ import Testing
         let passes = 3
         #endif
         var count = 0
-        for _ in 0..<passes where fastest > 1 {
+        for _ in 0..<passes where !limit.holds(fastest) {
+            limit = bound(1)
             let (back, seconds) = try timed { () throws -> [String: Any] in
                 try unpackMap(try pack(scheme, ["m": dict]), scheme)
             }
@@ -107,7 +109,7 @@ import Testing
         print("65535 ascending dict keys: fastest pack and unpack \(fastest) s (\(buildKind))")
         #expect(count == 65_535)
         #if !DEBUG
-        #expect(fastest <= 1, "fastest pass \(fastest) s, above 1 s")
+        expectWithin(fastest, limit)
         #endif
     }
 }

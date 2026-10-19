@@ -222,6 +222,7 @@ final class TextPositionsTest {
         String text = "Добрий день, друже!!";
         PackbinTest.expectEq("AC-8 the text has 20 characters", 20, text.codePointCount(0, text.length()));
         Map<String, Object> row = Maps.map("s", text);
+        Timing.Limit limit = Timing.bound(1.0);
         long start = System.nanoTime();
         int wrong = 0;
         for (int i = 0; i < 100_000; i++) {
@@ -235,6 +236,6 @@ final class TextPositionsTest {
         double seconds = (System.nanoTime() - start) / 1e9;
         System.out.println("AC-8 100000 round trips of a 20-character Ukrainian string: " + seconds + " s");
         PackbinTest.expectEq("AC-8 every round trip is exact", 0, wrong);
-        PackbinTest.expectTrue("AC-8 100000 round trips in " + seconds + " s (at most 1)", seconds <= 1.0);
+        limit.expectWithin("AC-8 100000 round trips", seconds);
     }
 }

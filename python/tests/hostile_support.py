@@ -32,7 +32,16 @@ from packbin import (
     when,
 )
 
+import timing_support
+
 GUARD_SECONDS = 5.0
+NOMINAL_UNPACK_SECONDS = 1.0
+
+
+class _Elapsed(float):
+    """Seconds of a guarded unpack, with the load-aware bound measured right before it started."""
+
+    limit: timing_support.Bound
 
 
 def _scheme(*fields: Any) -> Scheme[Any]:
@@ -301,7 +310,7 @@ def error_kind(result: UnpackResult[Any]) -> str:
 
 def unpack_guarded(
     scheme: Scheme[Any], data: bytes, unpack: Any = None
-) -> tuple[UnpackResult[Any], list[Any], float]:
+) -> tuple[UnpackResult[Any], list[Any], _Elapsed]:
     """Unpack in a forked child that is killed after GUARD_SECONDS, so a hang fails
     the test instead of CI and leaves nothing spinning behind."""
     ctx = multiprocessing.get_context("fork")
@@ -317,6 +326,7 @@ def unpack_guarded(
         send.send(outcome)
 
     child = ctx.Process(target=work, daemon=True)
+    limit = timing_support.bound(NOMINAL_UNPACK_SECONDS)
     start = time.perf_counter()
     child.start()
     send.close()
@@ -331,12 +341,14 @@ def unpack_guarded(
     if isinstance(outcome, BaseException):
         raise AssertionError(f"unpack raised {outcome!r}") from outcome
     result, seen = outcome
-    return result, seen, elapsed
+    timed = _Elapsed(elapsed)
+    timed.limit = limit
+    return result, seen, timed
 
 
-def assert_rejected(result: UnpackResult[Any], seen: list[Any], elapsed: float) -> None:
+def assert_rejected(result: UnpackResult[Any], seen: list[Any], elapsed: _Elapsed) -> None:
     assert result.ok is False
     assert result.value is None
     assert result.error is not None
     assert seen == []
-    assert elapsed < 1.0, f"unpack took {elapsed:.3f}s"
+    timing_support.assert_within(elapsed, elapsed.limit, "hostile unpack")

@@ -7,8 +7,8 @@ import (
 )
 
 // AC-7 (project AC-10): 100 000 pack-then-unpack round trips of the AC-1 row (and of a 20-character string) on one core take at most
-// 1 second. The fastest of up to three passes counts, as in TypeScript: a shared runner can stall one
-// pass, while a real slowdown makes every pass slow.
+// 1 second times the load factor (timing_test.go). The fastest of up to three passes counts, as in TypeScript:
+// a shared runner can stall one pass, while a real slowdown makes every pass slow.
 func TestAC7SpeedRoundTrips(t *testing.T) {
 	for _, form := range []struct {
 		name   string
@@ -24,10 +24,11 @@ func TestAC7SpeedRoundTrips(t *testing.T) {
 			// Arrange
 			const rounds = 100_000
 			defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(1))
-			fastest := time.Duration(1<<63 - 1)
+			fastest, factor := time.Duration(1<<63-1), 1.0
 
 			// Act
-			for pass := 0; pass < 3 && fastest > time.Second; pass++ {
+			for pass := 0; pass < 3 && fastest > scaled(time.Second, factor); pass++ {
+				passFactor := loadFactor()
 				start := time.Now()
 				for range rounds {
 					raw, err := Pack(form.scheme, form.row)
@@ -38,19 +39,19 @@ func TestAC7SpeedRoundTrips(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				fastest = min(fastest, time.Since(start))
+				if took := time.Since(start); float64(took)/passFactor < float64(fastest)/factor {
+					fastest, factor = took, passFactor
+				}
 			}
 
 			// Assert
-			t.Logf("%s: fastest pass of %d round trips: %v (race detector: %v)", form.name, rounds, fastest, raceEnabled)
+			t.Logf("%s: fastest pass of %d round trips: %v at load factor %.2f (race detector: %v)", form.name, rounds, fastest, factor, raceEnabled)
 			if raceEnabled {
 				// The race detector costs about 5x; the 1 s bound is asserted by the run without it
 				// (run-suite.sh go runs this test a second time with -run, no -race).
 				t.Skipf("%s: %v under the race detector; the 1 s bound is asserted without it", form.name, fastest)
 			}
-			if fastest > time.Second {
-				t.Fatalf("fastest pass %v, above 1s", fastest)
-			}
+			assertWithin(t, "fastest pass of "+form.name, fastest, time.Second, factor)
 		})
 	}
 }

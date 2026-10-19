@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
+import { assertWithinMs, bound } from "./support/timing.ts"
 import { BinaryPacker, bytes, scheme } from "../src/index.ts"
 import { protect, repair } from "../src/ecc.ts"
 import { random } from "./support/random.ts"
@@ -238,6 +239,7 @@ describe("message ECC repair", () => {
     const message = protect(clear, 16)
     const wrong = corrupt(message, [0, 30, 60, 90, 120, 180, 220, 253], [1, 2, 3, 4, 5, 6, 7, 8])
     let repaired = 0
+    const limit = bound(1)
     const unpackStart = performance.now()
 
     // Act
@@ -254,7 +256,7 @@ describe("message ECC repair", () => {
     // Assert
     assert.equal(repaired, 1000)
     assert.deepEqual(last, message)
-    assert.ok(unpackMs <= 1000, `repair loop ${unpackMs} ms`)
-    assert.ok(packMs <= 1000, `pack loop ${packMs} ms`)
+    assertWithinMs(unpackMs, limit, "repair loop")
+    assertWithinMs(packMs, limit, "pack loop")
   })
 })

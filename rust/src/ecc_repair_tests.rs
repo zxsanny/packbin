@@ -1,5 +1,6 @@
 use crate::ecc::{append, unprotect};
 use crate::{to_hex, UnpackError};
+use crate::timing_support::{assert_within, load_factor};
 use std::time::Instant;
 
 // AZ-2684: repair and refusal on the 13-byte position fixture (EC-5 to EC-8, EC-14) and the speed bound (EC-13).
@@ -313,6 +314,7 @@ fn ec13_one_thousand_repairs_of_a_254_byte_message_with_8_wrong_bytes_stay_withi
     let bound = if cfg!(debug_assertions) { 6.0 } else { 1.0 };
 
     // Act
+    let factor = load_factor();
     let started = Instant::now();
     for _ in 0..1000 {
         let (got, repaired) = unprotect(&word, 16, 8).expect("repair");
@@ -321,10 +323,7 @@ fn ec13_one_thousand_repairs_of_a_254_byte_message_with_8_wrong_bytes_stay_withi
     let seconds = started.elapsed().as_secs_f64();
 
     // Assert
-    assert!(
-        seconds <= bound,
-        "1000 repairs took {seconds} s, bound {bound} s"
-    );
+    assert_within("1000 repairs", seconds, bound, factor);
 }
 
 #[test]
@@ -335,6 +334,7 @@ fn ec13_one_thousand_packs_of_a_254_byte_message_stay_within_the_bound() {
     let bound = if cfg!(debug_assertions) { 6.0 } else { 1.0 };
 
     // Act
+    let factor = load_factor();
     let started = Instant::now();
     let mut last = Vec::new();
     for _ in 0..1000 {
@@ -344,8 +344,5 @@ fn ec13_one_thousand_packs_of_a_254_byte_message_stay_within_the_bound() {
 
     // Assert
     assert_eq!(last, sent);
-    assert!(
-        seconds <= bound,
-        "1000 packs took {seconds} s, bound {bound} s"
-    );
+    assert_within("1000 packs", seconds, bound, factor);
 }

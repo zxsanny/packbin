@@ -79,12 +79,13 @@ final class PackBudgetTest {
         Map row = Maps.map("n", 65_535, "s", repeated((char) 1, 65_535));
         String refused = "s: the packet would be 16777989 bytes, above the limit of 16777216 bytes";
         // Act
+        Timing.Limit limit = Timing.bound(1.0);
         long start = System.nanoTime();
         String got = refusal(scheme, row);
         long ms = (System.nanoTime() - start) / 1_000_000;
         // Assert
         PackbinTest.expectEq("AC-1 row 1 message", refused, got);
-        PackbinTest.expectTrue("AC-1 row 1 refused in " + ms + " ms (under 1000)", ms < 1000);
+        limit.expectWithin("AC-1 row 1 refused", ms / 1000.0);
         LoneUtf8Budget.expectRefusedInASmallHeap(refused);
     }
 

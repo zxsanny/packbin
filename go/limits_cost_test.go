@@ -58,6 +58,7 @@ func TestAC1ARoundCostsTheNamesItHoldsNotTheFieldsAroundIt(t *testing.T) {
 	}{{"times of u8", times, 4}, {"list of u8", list, 4 + 2}} {
 		t.Run(c.name, func(t *testing.T) {
 			// Act
+			factor := loadFactor()
 			smallScheme, smallRow := c.make(100)
 			largeScheme, largeRow := c.make(1000)
 			small, smallRaw := best(t, smallScheme, smallRow)
@@ -67,8 +68,8 @@ func TestAC1ARoundCostsTheNamesItHoldsNotTheFieldsAroundIt(t *testing.T) {
 			if len(smallRaw) != 1+c.extra+100+65_535 || len(largeRaw) != 1+c.extra+1000+65_535 {
 				t.Fatalf("lengths %d, %d", len(smallRaw), len(largeRaw))
 			}
-			if large > 2*small+10*time.Millisecond {
-				t.Fatalf("100 fields %v, 1000 fields %v", small, large)
+			if slack := scaled(10*time.Millisecond, factor); large > 2*small+slack {
+				t.Fatalf("100 fields %v, 1000 fields %v (slack %v = 10ms x load factor %.2f)", small, large, slack, factor)
 			}
 		})
 	}

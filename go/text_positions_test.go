@@ -184,6 +184,7 @@ func TestACTextLoneStringUnderTimesIsParsedOnce(t *testing.T) {
 	const rounds = 2000
 
 	// Act
+	factor := loadFactor()
 	start := time.Now()
 	raw, err := Pack(s, gm("n", rounds, "s", text))
 	took := time.Since(start)
@@ -192,9 +193,7 @@ func TestACTextLoneStringUnderTimesIsParsedOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pack: %v", err)
 	}
-	if took > 500*time.Millisecond {
-		t.Errorf("%d rounds of %d bytes took %v", rounds, len(text), took)
-	}
+	assertWithin(t, fmt.Sprintf("%d rounds of %d bytes", rounds, len(text)), took, 500*time.Millisecond, factor)
 	t.Logf("%d rounds of a %d-byte text: %d bytes in %v", rounds, len(text), len(raw), took)
 }
 

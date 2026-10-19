@@ -5,6 +5,7 @@
 
 #include "check.hpp"
 #include "ecc_support_host.hpp"
+#include "load_factor.hpp"
 
 #include <chrono>
 #include <cstdint>
@@ -294,6 +295,7 @@ void speed_bound() {
   corrupt(broken, 8, rng);
   int wrong = 0;
   Bytes work;
+  auto repair_limit = load_factor::bound(1.0);
   auto start = Clock::now();
   for (int i = 0; i < 1000; ++i) {
     work = broken;
@@ -303,9 +305,10 @@ void speed_bound() {
   }
   double repair_s = std::chrono::duration<double>(Clock::now() - start).count();
   expect(wrong == 0, "the speed loop repairs every block");
-  expect(repair_s <= 1.0, "1,000 repairs of 254 bytes with 8 wrong bytes within 1 s");
+  load_factor::expect_within(repair_s, repair_limit, "1,000 repairs of 254 bytes with 8 wrong bytes within 1 s");
 
   std::uint8_t parity[16];
+  auto protect_limit = load_factor::bound(1.0);
   start = Clock::now();
   for (int i = 0; i < 1000; ++i) {
     clear[0] = static_cast<std::uint8_t>(i);
@@ -314,7 +317,7 @@ void speed_bound() {
   }
   double protect_s = std::chrono::duration<double>(Clock::now() - start).count();
   expect(wrong == 0, "the pack loop protects every block");
-  expect(protect_s <= 1.0, "1,000 protects of 254 bytes within 1 s");
+  load_factor::expect_within(protect_s, protect_limit, "1,000 protects of 254 bytes within 1 s");
   std::printf("ecc speed: 1,000 repairs %.3f s, 1,000 protects %.3f s\n", repair_s, protect_s);
 }
 

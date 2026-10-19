@@ -92,12 +92,13 @@ import Testing
             .withLimits(maxRounds: Int.max, maxSlots: 1)
 
         // Act
+        let limit = bound(1)
         let (error, seconds) = timed { unpackError(bytes("01ffffffffffffff7f07"), layout) }
 
         // Assert
         #expect(isRefusedRound(error, "k", left: 0))
         #expect(error?.reason == "the rounds would hold 2 slots, above the limit of 1 slots")
-        #expect(withinOneSecond(seconds), "took \(seconds) s")
+        expectWithinUnlessSanitized(seconds, limit)
     }
 
     @Test func unpack_maximalCountAtTheDefaultLimits_isRefusedWhenRound65536StartsWithinASecond() throws {
@@ -106,11 +107,12 @@ import Testing
         let packet = bytes("01ffffffffffffff7f") + [UInt8](repeating: 7, count: 70_000)
 
         // Act
+        let limit = bound(1)
         let (error, seconds) = timed { unpackError(packet, layout) }
 
         // Assert
         #expect(isRefusedRound(error, "k", left: 70_000 - 65_535))
-        #expect(withinOneSecond(seconds), "took \(seconds) s")
+        expectWithinUnlessSanitized(seconds, limit)
     }
 
     /// TypeScript `round-scope-cost` (AZ-2391): a round and a list item cost the names they hold, not

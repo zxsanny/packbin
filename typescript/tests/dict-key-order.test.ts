@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { BinaryPacker, dict, scheme, u8 } from "../src/index.ts"
 import { compareUtf8 } from "../src/kinds.ts"
+import { assertWithin, bound } from "./support/timing.ts"
 
 type Row = { d: Record<string, number> }
 
@@ -85,26 +86,13 @@ describe("dict keys strictly ascending (AZ-2713)", () => {
     const d: Record<string, number> = {}
     for (let n = 0; n < 65535; n++) d[`key${String(n).padStart(5, "0")}`] = n & 0xff
     const bytes = BinaryPacker.pack(layout, { d })
-    const reference = referenceSeconds()
+    const limit = bound(1)
     const start = performance.now()
     const { result, row } = unpack(bytes)
     const elapsed = (performance.now() - start) / 1000
     assert.deepEqual(result, { ok: true })
     assert.equal(Object.keys(row!.d).length, 65535)
     // 1 s on a quiet machine; the bound grows with the load a reference loop sees in this process.
-    const bound = Math.max(1, reference / 0.03)
-    assert.ok(elapsed <= bound, `elapsed ${elapsed.toFixed(3)} s, bound ${bound.toFixed(3)} s (reference ${reference.toFixed(3)} s)`)
+    assertWithin(elapsed, limit, "65535 ascending keys")
   })
 })
-
-function referenceSeconds(): number {
-  let best = Infinity
-  for (let i = 0; i < 3; i++) {
-    const start = performance.now()
-    const keys: string[] = []
-    for (let n = 0; n < 65535; n++) keys.push(`key${String(n).padStart(5, "0")}`)
-    keys.sort(compareUtf8)
-    best = Math.min(best, (performance.now() - start) / 1000)
-  }
-  return best
-}

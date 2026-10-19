@@ -4,6 +4,7 @@ use crate::{
     when, BinaryPacker, BoundField, MapScheme, PackError, Scheme, SchemeItem, ShortPacket,
     UnpackError, Value, Values, DEFAULT_MAX_BYTES, DEFAULT_MAX_SLOTS,
 };
+use crate::timing_support::{assert_within, load_factor};
 use std::time::Instant;
 
 // AZ-2354: pack has one output budget, `max_bytes` (default 16 MiB, type byte included), and
@@ -73,6 +74,7 @@ fn wide_row() -> Values {
 fn ac1_row1_a_lone_utf8_under_a_capped_times_is_refused_at_once_naming_the_member() {
     // Arrange
     let vals = row(&[("n", Value::U32(65_535)), ("s", a_text(65_535))]);
+    let factor = load_factor();
     let started = Instant::now();
 
     // Act
@@ -80,11 +82,7 @@ fn ac1_row1_a_lone_utf8_under_a_capped_times_is_refused_at_once_naming_the_membe
 
     // Assert: refused at round 511, with 16 746 497 bytes written (a field of 32 772 bytes)
     assert_eq!(message, over_bytes("s", 16_779_269, 16_777_216));
-    assert!(
-        started.elapsed().as_millis() < 1000,
-        "{:?}",
-        started.elapsed()
-    );
+    assert_within("refusal", started.elapsed().as_secs_f64(), 1.0, factor);
 }
 
 #[test]

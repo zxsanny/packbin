@@ -102,9 +102,10 @@ public class HostileSessionTests
         {
             IsBackground = true,
         };
+        var limit = Timing.RecentBound(seconds);
         worker.Start();
-        if (!worker.Join(TimeSpan.FromSeconds(seconds)))
-            Assert.Fail($"unpack did not return within {seconds} s");
+        if (!worker.Join(limit.Span))
+            Assert.Fail($"unpack did not return: {limit.Describe(limit.Seconds, "guard")}");
         if (thrown is not null)
             Assert.Fail($"unpack threw {thrown.GetType().Name}: {thrown.Message}");
         return result;

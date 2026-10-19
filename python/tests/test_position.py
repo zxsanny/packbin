@@ -15,6 +15,8 @@ from packbin import (
     u16,
 )
 
+import timing_support
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GOLDEN_HEX = (REPO_ROOT / "fixtures" / "golden.hex").read_text().strip()
 POSITION_HEX = "4001000065cd1d00a3e1110100"
@@ -156,41 +158,16 @@ def test_trailing_bytes():
     assert got.error.left == 1
 
 
-# AC-10 gives Python 2 s for the loop below on the machine the figure was measured on: the owner's Mac, 0.95 to 1.0 s here,
-# where the reference loop below takes 0.072 s. The GitHub runner runs Python 2.1 times slower (CI took 2.035 s and
-# 2.088 s against the plain 2.0 s bound), so the bound grows with the speed of the machine, measured by the
-# reference loop in the same process: the same margin (2.0 s over 0.072 s) on every machine, 2.0 s on one as fast as the
-# Mac or faster. A packbin that costs twice as much relative to the reference still fails everywhere.
-REFERENCE_SECONDS = 0.072
+# AC-10 gives Python 2 s for the loop below on the machine the figure was measured on: the owner's Mac, 0.95 to 1.0 s.
+# The GitHub runner runs Python 2.1 times slower (CI took 2.035 s and 2.088 s against the plain 2.0 s bound), so the
+# bound grows with the speed of the machine, measured by the shared reference loop (timing_support) in this process:
+# 2.0 s on a machine as fast as the Mac or faster. A packbin that costs twice as much relative to the reference still
+# fails everywhere.
 BOUND_SECONDS = 2.0
 
 
-def _reference_loop_seconds() -> float:
-    """The same loop in standard-library calls only: hand-written little-endian encode and decode of the AC-1 row."""
-    best = float("inf")
-    for _ in range(3):
-        start = time.perf_counter()
-        for _ in range(100_000):
-            raw = b"".join(
-                (
-                    POSITION_VALUES["sid"].to_bytes(2, "little"),
-                    POSITION_VALUES["lat"].to_bytes(4, "little", signed=True),
-                    POSITION_VALUES["lon"].to_bytes(4, "little", signed=True),
-                    POSITION_VALUES["profile"].to_bytes(1, "little"),
-                )
-            )
-            {
-                "sid": int.from_bytes(raw[0:2], "little"),
-                "lat": int.from_bytes(raw[2:6], "little", signed=True),
-                "lon": int.from_bytes(raw[6:10], "little", signed=True),
-                "profile": raw[10],
-            }
-        best = min(best, time.perf_counter() - start)
-    return best
-
-
 def test_nfr_round_trips():
-    reference = _reference_loop_seconds()
+    limit = timing_support.bound(BOUND_SECONDS)
     start = time.perf_counter()
     for _ in range(100_000):
         raw = BinaryPacker.pack(POSITION, POSITION_VALUES)
@@ -198,8 +175,7 @@ def test_nfr_round_trips():
         assert got.ok is True
     elapsed = time.perf_counter() - start
     _assert_no_gpu()
-    bound = BOUND_SECONDS * max(1.0, reference / REFERENCE_SECONDS)
-    assert elapsed <= bound, f"elapsed {elapsed:.3f}s, bound {bound:.3f}s (reference loop {reference:.3f}s)"
+    timing_support.assert_within(elapsed, limit, "AC-10 100000 round trips")
 
 
 def _assert_no_gpu():

@@ -104,6 +104,7 @@ public class EmptyRoundBodyTests
     public void Ac2_F33RequestShape_FailsAtBuildInUnderOneSecond()
     {
         // Arrange
+        var limit = Timing.Bound(1.0);
         var clock = Stopwatch.StartNew();
 
         // Act
@@ -112,7 +113,7 @@ public class EmptyRoundBodyTests
 
         // Assert (row 20)
         Assert.Equal(Empty("times", 1), error.Message);
-        Assert.True(clock.ElapsedMilliseconds < 1000, $"build took {clock.ElapsedMilliseconds} ms");
+        limit.AssertWithin(clock.Elapsed, "build of the F33 shape");
     }
 
     public static TheoryData<string, Func<Scheme<BodyRow>>, string> EmptyWhereverItStands() => new()

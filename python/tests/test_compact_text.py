@@ -14,6 +14,7 @@ from packbin import list as list_field
 from packbin import _text_tables
 
 import text_vectors
+import timing_support
 from text_vectors import Row
 
 # AZ-2648: every string position uses the compact text format (contract compact-text 1.0.0); the rows are
@@ -465,11 +466,13 @@ def test_hd1_no_module_keeps_a_text_or_a_field():
 def test_hd2_a_lone_65535_character_string_under_256_rounds_packs_within_a_second():
     # Arrange
     scheme = Scheme(1, dict, u8(0, lambda row: row["n"]), times(1, 0, utf8(1, lambda row: row["s"])))
+    limit = timing_support.bound(1.0)
     start = time.perf_counter()
 
     # Act
     packet = _pack(scheme, {"n": 200, "s": "q" * 65535})
+    elapsed = time.perf_counter() - start
 
     # Assert
     assert len(packet) > 200 * 65535
-    assert time.perf_counter() - start < 1.0
+    timing_support.assert_within(elapsed, limit, "one 65535-character string under 200 rounds")

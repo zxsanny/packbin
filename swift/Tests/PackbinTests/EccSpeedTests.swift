@@ -18,11 +18,13 @@ extension SpeedTests {
         var last: [UInt8] = []
 
         // Act
+        let repairLimit = bound(1)
         let (_, repairSeconds) = timed { () -> Void in
             for _ in 0..<1_000 {
                 if let got = try? unpackMapRepair(wrong, limit: 8, scheme), got.repaired == 8 { repaired += 1 }
             }
         }
+        let packLimit = bound(1)
         let (_, packSeconds) = try timed { () throws -> Void in
             for _ in 0..<1_000 {
                 last = try pack(scheme, row)
@@ -33,7 +35,8 @@ extension SpeedTests {
         print("EC-13: 1000 repairs of 8 wrong bytes in \(repairSeconds) s, 1000 packs in \(packSeconds) s (\(eccBuildKind))")
         #expect(message.count == 254 && repaired == 1_000 && last == message)
         #if !DEBUG
-        #expect(repairSeconds <= 1 && packSeconds <= 1, "repair \(repairSeconds) s, pack \(packSeconds) s")
+        expectWithin(repairSeconds, repairLimit)
+        expectWithin(packSeconds, packLimit)
         #endif
     }
 }

@@ -91,6 +91,7 @@ public sealed class DictKeyOrderTests
             Assert.Null(BinaryPacker.Read(MapScheme, packet).Error);
 
             // Act
+            var limit = Timing.Bound(1.0);
             var watch = Stopwatch.StartNew();
             var read = BinaryPacker.Read(MapScheme, packet);
             watch.Stop();
@@ -99,7 +100,7 @@ public sealed class DictKeyOrderTests
             output.WriteLine($"AZ-2713 AC-3: {watch.Elapsed.TotalMilliseconds:F0} ms to unpack 65535 keys ({packet.Length} bytes)");
             Assert.Null(read.Error);
             Assert.Equal(65_535, ((Dictionary<string, object?>)read.Values["M"]!).Count);
-            Assert.True(watch.Elapsed.TotalMilliseconds <= 1000.0, $"took {watch.Elapsed.TotalMilliseconds:F0} ms");
+            limit.AssertWithin(watch.Elapsed, "unpack of 65535 keys");
         }
     }
 }

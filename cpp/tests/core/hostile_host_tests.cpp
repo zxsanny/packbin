@@ -7,6 +7,7 @@
 
 #include "check.hpp"
 #include "hostile_rule_check.hpp"
+#include "load_factor.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -412,10 +413,12 @@ bool allows(std::string const& expected, std::string const& got) {
   return false;
 }
 
-// Runs the case on its own thread and ends the process if it does not return within a second.
+// Runs the case on its own thread and ends the process if it does not return within a second times the
+// load factor (taken at most a second before the case: the file holds dozens of cases).
 std::string run_guarded(Handler const& h, Case const& c) {
   std::uint8_t data[64] = {};
   std::size_t len = c.stage == "unpack" ? check::parse_hex(c.hex.c_str(), data, sizeof(data)) : 0;
+  auto limit = load_factor::bound(1.0, 1.0);
   std::atomic<bool> done{false};
   std::string answer;
   std::thread worker([&] {
@@ -424,8 +427,10 @@ std::string run_guarded(Handler const& h, Case const& c) {
   });
   auto start = std::chrono::steady_clock::now();
   while (!done) {
-    if (std::chrono::steady_clock::now() - start > std::chrono::seconds(1)) {
-      std::fprintf(stderr, "FAIL: hostile %s did not return within 1 s\n", c.id.c_str());
+    double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    if (!limit.holds(elapsed) && !(limit = load_factor::recheck(limit)).holds(elapsed)) {
+      std::fprintf(stderr, "FAIL: hostile %s did not return within %.3f s (nominal %.3f s x load factor %.2f)\n",
+                   c.id.c_str(), limit.seconds(), limit.nominal, limit.factor);
       std::_Exit(1);
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(1));

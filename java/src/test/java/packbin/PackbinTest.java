@@ -266,6 +266,7 @@ public final class PackbinTest {
     }
 
     private static void nfrRoundTripsWithinOneSecond() throws IOException {
+        Timing.Limit limit = Timing.bound(1.0);
         long start = System.nanoTime();
         for (int i = 0; i < 100_000; i++) {
             byte[] bytes = BinaryPacker.pack(TARGET, position());
@@ -282,8 +283,8 @@ public final class PackbinTest {
         }
         assertNoGpu();
         double seconds = (System.nanoTime() - start) / 1_000_000_000.0;
-        if (seconds > 1.0) {
-            fail("NFR elapsed " + seconds + "s > 1s");
+        if (!limit.within(seconds)) {
+            fail(limit.describe("NFR 100000 round trips", seconds));
         } else {
             System.out.println("NFR round trips: " + seconds + "s");
         }

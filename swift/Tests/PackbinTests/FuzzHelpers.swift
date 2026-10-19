@@ -18,33 +18,33 @@ let threadSanitized: Bool = {
     return dlsym(defaultHandle, "__tsan_init") != nil
 }()
 
-/// Whether `seconds` is within the project bound of one second. The thread sanitizer slows a refusal that
-/// walks 65 535 rounds down by 40 times in the Linux container, so under it only the outcome is asserted,
-/// not the time: the bound is held by the plain debug and release runs.
-func withinOneSecond(_ seconds: Double) -> Bool { threadSanitized || seconds < 1 }
+/// How long one unpack of one fuzz input may take (project AC-2), nominally, and under the thread sanitizer.
+let unpackNominal: Double = threadSanitized ? 10 : 1
 
-/// How long one unpack of one fuzz input may take (project AC-2), and under the thread sanitizer.
-let unpackBound: Double = threadSanitized ? 10 : 1
-
-/// How long one unpack of a mebibyte packet may take: the project bound in a release build. A debug
+/// How long one unpack of a mebibyte packet may take, nominally: the project bound in a release build. A debug
 /// build reads such a packet several times slower (0.8 s at most on the owner's Mac with the other
 /// suites running, 0.13 s in release), so it gets 3 s. The timed mebibyte tests do not run under the thread
 /// sanitizer (15 to 28 s a packet in the Linux container): it finds data races, and these read one thread.
 #if DEBUG
-let mebibyteBound: Double = 3
+let mebibyteNominal: Double = 3
 #else
-let mebibyteBound: Double = 1
+let mebibyteNominal: Double = 1
 #endif
 
-/// What the reads of a fuzz run found: the failures, the unpack calls and the slowest of them.
+/// What the reads of a fuzz run found: the failures, the unpack calls and the slowest of them. Each read
+/// scales `nominal` by a load factor taken at most a second before it (`LoadFactor.swift`).
 struct FuzzTally {
-    /// The seconds one unpack may take.
-    var bound = unpackBound
+    /// The seconds one unpack may take on an idle host.
+    var nominal = unpackNominal
+    /// The load factor of the last read.
+    var factor = 1.0
     var failures: [String] = []
     var reads = 0
     var slowest = 0.0
 
-    var summary: String { "\(reads) unpack calls, slowest \(slowest) s (bound \(bound) s), \(failures.count) failures" }
+    var summary: String {
+        "\(reads) unpack calls, slowest \(slowest) s (nominal bound \(nominal) s, load factor \(factor)), \(failures.count) failures"
+    }
 }
 
 /// The schemes of a fuzz run and the checks each read must pass.
@@ -76,13 +76,16 @@ struct FuzzRun: Sendable {
     /// One packet read typed and as a map: both give a row, or both the same well-formed error, within
     /// the bound. A row read by one scheme is packed again to look for a trap (a refusal is allowed).
     private func read(_ packet: [UInt8], _ with: [Scheme], _ tally: inout FuzzTally) {
+        let limit = bound(tally.nominal, maxAge: 1)
         let (row, typedSeconds) = timed { Result { try unpack(packet, with) } }
         let (map, mapSeconds) = timed { Result { try unpackMap(packet, with) } }
         let seconds = max(typedSeconds, mapSeconds)
         tally.reads += 2
         tally.slowest = max(tally.slowest, seconds)
-        if seconds > tally.bound {
-            tally.failures.append("unpack of \(packet.count) bytes by types \(with.map(\.typeNumber)) took \(seconds) s")
+        let (ok, decided) = limit.judge(seconds)
+        tally.factor = decided.factor
+        if !ok {
+            tally.failures.append("unpack of \(packet.count) bytes by types \(with.map(\.typeNumber)): \(decided.describe(seconds))")
         }
         switch (row, map) {
         case let (.success(typedRow), .success(mapRow)):

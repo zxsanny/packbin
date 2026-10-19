@@ -206,6 +206,7 @@ class BinaryPacker:
         """Repair a protected message (`unpad` removes a session's pad from the repaired bytes), then dispatch."""
         view = memoryview(data)
         repaired = 0
+        body: bytes | memoryview = view
         if parity:
             size = view.nbytes
             if size > _ecc.MAX_BLOCK:
@@ -215,10 +216,15 @@ class BinaryPacker:
             fixed = _ecc.repair(view.tobytes(), parity, limit)
             if fixed is None:
                 return UnpackResult(ok=False, value=None, error=Uncorrectable())
-            clear, repaired = fixed
-            view = memoryview(unpad(clear) if unpad else clear)
-        elif unpad:
-            view = memoryview(unpad(view.tobytes()))
+            body, repaired = fixed
+        if unpad:
+            body = bytes(body)
+            # The pad of one byte costs one block: an unknown type is refused before the pad of the rest is computed (F58).
+            head = int(unpad(body[:1])[0]) if body else -1
+            if body and head not in by_type:
+                return UnpackResult(ok=False, value=None, error=TypeMismatch(expected=-1, actual=head))
+            body = unpad(body)
+        view = memoryview(body)
         left = len(view)
         if left < 1:
             return UnpackResult(ok=False, value=None, error=ShortPacket(field="", needed=1, left=left))
