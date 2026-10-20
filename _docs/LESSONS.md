@@ -8,12 +8,6 @@ Downstream skills consume this file:
 - `.cursor/skills/autodev/protocols/bootstrap-lessons.md` (Bootstrap B2 — Surface Recent Lessons)
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
-- [2026-10-17] [testing] Hold every list that is split across jobs (gate groups, embedded targets, Swift steps) to exactly one place with a guard that derives the set from the files (`publish-gate-*`, `embedded-*`, the `source` lines) and a mutant per rule: it survived two regroupings with only list edits, where a guard that names jobs by hand breaks at each one.
-  Source: _docs/06_metrics/retro_2026-10-17_loop31.md
-- [2026-10-17] [testing] A fake toolchain cannot prove a command that moved to a new place: the Swift speed part's `swift test list -c release --skip-build` ran only against a fake `swift` until one real container run (accepted, SpeedTests listed); run each new real command path once before the push, and expect timing bounds to miss on a loaded Mac (read the failed bound, then the serial retry).
-  Source: _docs/06_metrics/retro_2026-10-17_loop31.md
-- [2026-10-17] [estimation] Profile the functions of a gate group on the Mac before cutting it: the group notice is too coarse, and the cut the owner suggested (success against failure scenarios) was 73 s against 213 s while the cut by the profile was 143 against 143 s (CI 105 and 108 s); one scratch run with a `prof` wrapper per function takes about 5 minutes.
-  Source: _docs/06_metrics/retro_2026-10-17_loop32.md
 - [2026-10-17] [testing] Run the commands of the cheap CI jobs locally before the first push of a CI change and compare lists as sets: the `scaffold` script `report-row.test.sh` checked the suites matrix in a fixed order and would have turned the job red the moment the matrix was reordered longest first.
   Source: _docs/06_metrics/retro_2026-10-17_loop32.md
 - [2026-10-17] [process] More jobs than the plan's concurrent slots (23 against 20) cost 30 to 63 s of waiting for three jobs on the first run, and the jobs that waited were not the last in the file; none set the wall because the cuts left every job under 250 s, but measure the start times (`created_at`, `started_at`) of the first run instead of trusting a file-order assumption.
@@ -38,3 +32,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-19_loop41.md
 - [2026-10-19] [process] Put a carried owner-run skill (`/security`, `/feature-assess`, the retro) into the next intake's hopper question instead of the record's leftovers: AZ-2666 and the retro were carried in five records and the owner took them at once when loop 41 offered them.
   Source: _docs/06_metrics/retro_2026-10-19_loop41.md
+- [2026-10-20] [testing] Time a new speed case in every package before the criterion names one bound for all of them: the 1 s of 200 repeated 65,535-character texts held in Python, TypeScript, Go, Swift, Rust and C# but failed in Java (2.9 s) and C++ (1.9 s) in loop 46, costing a production change, an owner decision and AZ-2742.
+  Source: _docs/06_metrics/retro_2026-10-20_loop46.md
+- [2026-10-20] [testing] A load factor from a short reference loop under-reports a loaded pool (1.11 while the C++ case ran 2.1 times its idle time at load 45), so a pool-run bound below about 2.5 times the idle figure fails the first run and passes only on the serial retry.
+  Source: _docs/06_metrics/retro_2026-10-20_loop46.md
+- [2026-10-20] [process] When several tasks share package directories, spawn one worker per package with every task id for that package in its prompt: loop 46 ran 5 tasks over 8 packages and the CI scripts as 9 workers in two waves of four with no overlapping write and no merge repair.
+  Source: _docs/06_metrics/retro_2026-10-20_loop46.md
