@@ -37,11 +37,13 @@ Intake: hopper hit on wave A of epic AZ-2750 (`handoff51.md`): AZ-2752 (flags, b
 2. AZ-2753: `repeat`, `group`, `times`, lists and dicts over caller-owned storage through `Row` (item counts and element access by path); round and slot limits; ascending keys; the route-of-points worked example.
 
 ### Proof
-Differential test (std bytes equal core bytes, std rows equal core rows) per kind; refusal tests; every cut and a trailing byte; the embedded stage (base set within 8,192 B flash and 512 B stack, no heap or panic link).
+Differential test (std bytes equal core bytes, std rows equal core rows) per kind; refusal tests; every cut and a trailing byte; the embedded stage (base set within 512 B stack and, by owner decision in this loop, 16,384 B flash, was 8,192; no heap or panic link).
 
 ### Risks
 The `Row` trait was designed for flat ids (card 1); nested members need a path or a scope. If the shape cannot stay a plain trait, stop and report before adding a macro or generics.
 
 ## Assessment rounds
 
-None yet.
+| round | verdict | new specs | report |
+|-------|---------|-----------|--------|
+| 1 | COMPLETE | none (dicts moved to AZ-2754, already in todo) | _docs/loops/loop51/assessment51.md |
