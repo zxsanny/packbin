@@ -8,12 +8,7 @@ Downstream skills consume this file:
 - `.cursor/skills/autodev/protocols/bootstrap-lessons.md` (Bootstrap B2 — Surface Recent Lessons)
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
-- [2026-10-17] [testing] Run the commands of the cheap CI jobs locally before the first push of a CI change and compare lists as sets: the `scaffold` script `report-row.test.sh` checked the suites matrix in a fixed order and would have turned the job red the moment the matrix was reordered longest first.
-  Source: _docs/06_metrics/retro_2026-10-17_loop32.md
-- [2026-10-17] [process] More jobs than the plan's concurrent slots (23 against 20) cost 30 to 63 s of waiting for three jobs on the first run, and the jobs that waited were not the last in the file; none set the wall because the cuts left every job under 250 s, but measure the start times (`created_at`, `started_at`) of the first run instead of trusting a file-order assumption.
-  Source: _docs/06_metrics/retro_2026-10-17_loop32.md
-- [2026-10-17] [estimation] Split a combined CI step's time per command before estimating a cut: the ring's "driver builds" step (76 to 101 s) hid an 84 s Swift driver build, and two image pulls at the same time took 73 and 68 s against 21 to 31 and about 42 to 52 s alone, so the 150 to 170 s estimate came out at 209 s.
-  Source: _docs/06_metrics/retro_2026-10-17_loop33.md
+
 - [2026-10-17] [testing] A bounded wait on whole seconds (`date +%s`) with `-lt` gives up up to 1 s early: compare with `-le`, assert at least the limit, and repeat a new timing test five times before the commit (one run in five showed it).
   Source: _docs/06_metrics/retro_2026-10-17_loop33.md
 - [2026-10-17] [tooling] Docker Desktop on this Mac pulls even images it already has in minutes (156 and 422 s for gcc and swift, IPv6-first registry path) while the runners take 21 to 73 s: never estimate CI pull time from a Mac pull, read the job's step times.
@@ -38,3 +33,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-20_loop46.md
 - [2026-10-20] [process] When several tasks share package directories, spawn one worker per package with every task id for that package in its prompt: loop 46 ran 5 tasks over 8 packages and the CI scripts as 9 workers in two waves of four with no overlapping write and no merge repair.
   Source: _docs/06_metrics/retro_2026-10-20_loop46.md
+- [2026-10-20] [estimation] Before sizing a "port package X's design" task, grep the target's public types for owned heap types and decide whether the requested property (no heap, no panic) is a switch or a second API: AZ-2749 was 5 points on the handoff and 34 after reading the Rust sources (a `HashMap<Rc<str>, Value>` API cannot be made `no_std` by a feature).
+  Source: _docs/06_metrics/retro_2026-10-20_loop50.md
+- [2026-10-20] [testing] Prove "no heap, no panic" on the linked image with a seeded defect that must fail the check: the lint deny list was clean while the image held three panic paths (`copy_from_slice`, `slice::reverse`, a range index).
+  Source: _docs/06_metrics/retro_2026-10-20_loop50.md
+- [2026-10-20] [tooling] Read a list that a loop feeds to docker, QEMU or cargo on a spare file descriptor (`read -u 3 ... 3< <(list)`), or the first child that reads stdin eats the remaining lines and later items are silently never run.
+  Source: _docs/06_metrics/retro_2026-10-20_loop50.md
