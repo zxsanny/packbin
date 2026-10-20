@@ -26,3 +26,5 @@ From the loop 49 record (`record49.md`). Nothing here is owner-decided yet.
 - Likely cause: unknown from annotations. The push changed only a C++ test file, so it is not this loop's code.
 - Flaky vs real: looks flaky (same commit green on `dev`), not proven.
 - Next canonical action: read the job log (118499654249) with the owner's token, or push again; no queue or manual re-run is invented here.
+
+Retrigger (docs-only push `7ac9268` to `dev` and `main`): `dev` run 39385267962 and `main` run 39385272798 both green, 20 of 20 jobs. The `suites (csharp rust)` failure on `main` run 39384081368 did not repeat; recorded as an unproven flake (the failing test was never read: the job log needs a token and none was given). If it shows again, read the log first.
