@@ -1,0 +1,5 @@
+# Size limits per feature set, in bytes: name flash stack. "-" is no limit yet. Flash is the image
+# with the probe minus the same image without it; stack is the deepest pack or unpack call less the
+# meter's own overhead (the C++ stage measures both the same way). base is the Cortex-M4F budget of the
+# C++ core (cpp/embedded/lib.sh); the other sets have none until the owner sets one (AZ-2749 AC-3).
+base 8192 512

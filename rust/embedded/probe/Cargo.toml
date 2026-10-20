@@ -1,0 +1,34 @@
+[package]
+name = "packbin-probe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Static library for the Cortex-M4F image of the heap-free packbin API (AZ-2751)"
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+packbin = { path = "../..", default-features = false }
+
+# Feature sets of the packbin crate the probe is built with; the others belong to the probe itself.
+[features]
+text = ["packbin/text"]
+ecc = ["packbin/ecc"]
+session = ["packbin/session"]
+# Seeded defects: a probe that reaches a panic path and one that allocates. The embedded stage
+# builds them and requires the link checks to fail (never part of a real image).
+seed_panic = []
+seed_heap = []
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = false
+
+[profile.dev]
+panic = "abort"
+
+[workspace]

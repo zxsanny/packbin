@@ -16,15 +16,15 @@ bad() { echo "FAIL: $1"; fail=1; }
 git init -q "$repo"
 git -C "$repo" config user.email test@example.com
 git -C "$repo" config user.name test
-mkdir -p "$repo/csharp/tests" "$repo/typescript" "$repo/go" "$repo/swift/Sources" "$repo/swift/Tests" "$repo/cpp/include" "$repo/cpp/tests" "$repo/fixtures" "$repo/.github/workflows"
-for f in csharp/A.cs csharp/tests/T.cs typescript/a.ts go/a.go go/a_test.go swift/Sources/a.swift swift/Tests/t.swift Package.swift cpp/include/a.hpp cpp/tests/t.cpp README.md \
+mkdir -p "$repo/csharp/tests" "$repo/typescript" "$repo/go" "$repo/swift/Sources" "$repo/swift/Tests" "$repo/cpp/include" "$repo/cpp/tests" "$repo/rust/src" "$repo/rust/tests" "$repo/rust/embedded/probe/src" "$repo/fixtures" "$repo/.github/workflows"
+for f in csharp/A.cs csharp/tests/T.cs typescript/a.ts go/a.go go/a_test.go swift/Sources/a.swift swift/Tests/t.swift Package.swift cpp/include/a.hpp cpp/tests/t.cpp rust/src/lib.rs rust/tests/t.rs rust/embedded/probe/src/lib.rs README.md \
   fixtures/golden.hex .github/workflows/publish.yml .github/workflows/language-pair.sh .github/workflows/test.yml; do
   echo "$f" > "$repo/$f"
 done
 git -C "$repo" add -A
 git -C "$repo" commit -q -m base
 
-stages="go typescript csharp python rust java cpp swift scaffold cpp-embedded-arm ring ac10 publish-gate"
+stages="go typescript csharp python rust java cpp swift scaffold cpp-embedded-arm rust-embedded ring ac10 publish-gate"
 plan() { LOOP_TESTS_ROOT="$repo" LOOP_TESTS_STAMPS="$stamps" bash "$script" --plan "$@"; }
 stamp_all() {
   mkdir -p "$stamps"
@@ -49,7 +49,7 @@ expect() {
 
 # 1. no stamps: everything runs
 out="$(plan)"
-[ "$(echo "$out" | grep -c ' RUN (no stamp')" -eq 13 ] || bad "no stamps: not all 13 stages run: $out"
+[ "$(echo "$out" | grep -c ' RUN (no stamp')" -eq 14 ] || bad "no stamps: not all 14 stages run: $out"
 
 # 2. stamped at HEAD and nothing changed: everything skips
 stamp_all
@@ -71,6 +71,11 @@ expect "added source file" "csharp ring ac10 publish-gate"; stamp_all
 # 7. a C++ header: the C++ suite, the ARM stage and the ring; a C++ test: the C++ suite only
 change cpp/include/a.hpp; expect "cpp header" "cpp cpp-embedded-arm ring"; stamp_all
 change cpp/tests/t.cpp; expect "cpp test" "cpp"; stamp_all
+
+# 7b. Rust: a source file runs the suite, the Rust embedded stage and the ring; a test file the suite only
+change rust/src/lib.rs; expect "rust source" "rust rust-embedded ring"; stamp_all
+change rust/tests/t.rs; expect "rust test" "rust"; stamp_all
+change rust/embedded/probe/src/lib.rs; expect "rust probe" "rust rust-embedded ring"; stamp_all
 
 # 8. a Go test file: the Go suite only
 change go/a_test.go; expect "go test" "go"; stamp_all
@@ -103,7 +108,7 @@ grep -q "^PLAN go RUN (stamp .* is not an ancestor" <<< "$out" || bad "foreign s
 
 # 13. --all runs everything; --only picks the listed stages
 stamp_all
-[ "$(plan --all | grep -c ' RUN (--all)')" -eq 13 ] || bad "--all: not all 13 stages run"
+[ "$(plan --all | grep -c ' RUN (--all)')" -eq 14 ] || bad "--all: not all 14 stages run"
 out="$(plan --only ring,ac10)"
 [ "$(echo "$out" | grep -cE '^PLAN [a-z0-9-]+ (RUN|SKIP)')" -eq 2 ] || bad "--only ring,ac10 did not list exactly two stages: $out"
 

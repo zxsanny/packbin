@@ -36,7 +36,7 @@ while [ $# -gt 0 ]; do
 done
 
 pool_stages="go typescript csharp python rust java cpp swift scaffold"
-serial_stages="cpp-embedded-arm ring ac10 publish-gate"
+serial_stages="cpp-embedded-arm rust-embedded ring ac10 publish-gate"
 
 is_test_path() {
   case "$1" in
@@ -67,6 +67,8 @@ covers() {
       suite_shared "$f" && return 0 ;;
     cpp-embedded-arm)
       case "$f" in cpp/include/* | cpp/src/* | cpp/embedded/* | cpp/Makefile | docker-compose.test.yml) return 0 ;; esac ;;
+    rust-embedded)
+      case "$f" in rust/src/* | rust/Cargo.* | rust/embedded/* | cpp/embedded/arm/* | cpp/embedded/lib.sh | cpp/embedded/arm.sh | docker-compose.test.yml) return 0 ;; esac ;;
     ring)
       is_test_path "$f" && return 1
       case "$f" in
@@ -289,6 +291,7 @@ run_stage_command() {
         && bash .github/workflows/run-suite.test.sh \
         && bash cpp/embedded/lib.test.sh \
         && bash cpp/embedded/run-parts.test.sh \
+        && bash rust/embedded/checks.test.sh \
         && bash .github/workflows/ring-wiring.test.sh \
         && bash .github/workflows/ring-wiring-rows.test.sh \
         && bash .github/workflows/ring-wiring-swift.test.sh \
@@ -300,6 +303,8 @@ run_stage_command() {
     # of a host `rm -rf` the directory as it was, so `mkdir -p build` saw the old one and the link failed (AZ-2565).
     cpp) docker compose -f docker-compose.test.yml run --rm cpp 'make -C /src/cpp clean && exec /src/.github/workflows/run-suite.sh cpp' ;;
     cpp-embedded-arm) docker compose -f docker-compose.test.yml run --rm cpp-embedded ;;
+    # The heap-free Rust API on a Cortex-M4F (AZ-2751): static libraries with the host cargo, the image stage in Docker.
+    rust-embedded) bash rust/embedded/run.sh host ;;
     go | typescript | csharp | python | rust | java | swift) docker compose -f docker-compose.test.yml run --rm "$1" ;;
     # The message ECC ring (AZ-2689) follows the ring and reuses its C# and C++ driver builds (PACKBIN_RING_WORK).
     ring) env "${ring_env[@]}" PACKBIN_RING_WORK="$logs/ring-work" bash .github/workflows/language-pair.sh \

@@ -262,6 +262,9 @@ jobs:
   embedded-arm:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      # The Rust version of the ring job (RING_RUST), for the heap-free Rust API's static library (AZ-2751).
+      PACKBIN_EMBEDDED_RUST: "1.98"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: C++ embedded arm targets (Cortex-M QEMU, big-endian)
@@ -269,6 +272,17 @@ jobs:
           set -euo pipefail
           mkdir -p test-results
           bash cpp/embedded/run.sh host arm
+      - name: Rust toolchain with the thumbv7em-none-eabihf target
+        run: |
+          set -euo pipefail
+          rustup toolchain install "$PACKBIN_EMBEDDED_RUST" --profile minimal --no-self-update
+          rustup default "$PACKBIN_EMBEDDED_RUST"
+          rustup target add thumbv7em-none-eabihf
+      - name: Rust heap-free API on Cortex-M4F (QEMU run, sizes, heap and panic link checks)
+        run: |
+          set -euo pipefail
+          mkdir -p test-results
+          bash rust/embedded/run.sh host
       - name: embedded report
         if: always()
         run: cat test-results/report.csv
@@ -357,6 +371,8 @@ jobs:
         run: bash .github/workflows/run-suite.test.sh
       - name: embedded harness
         run: bash cpp/embedded/lib.test.sh
+      - name: Rust embedded link checks
+        run: bash rust/embedded/checks.test.sh
       - name: cross-language ring wiring
         run: bash .github/workflows/ring-wiring.test.sh
       - name: cross-language ring row wiring

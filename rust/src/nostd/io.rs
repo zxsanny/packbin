@@ -26,7 +26,9 @@ impl<'a> Writer<'a> {
         let full = || Fault::new(Error::BufferFull, self.len, field, src.len());
         let end = self.len.checked_add(src.len()).ok_or_else(full)?;
         let dst = self.buf.get_mut(self.len..end).ok_or_else(full)?;
-        dst.copy_from_slice(src);
+        for (slot, byte) in dst.iter_mut().zip(src) {
+            *slot = *byte;
+        }
         self.len = end;
         Ok(())
     }

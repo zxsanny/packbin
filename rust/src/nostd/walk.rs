@@ -85,15 +85,19 @@ fn pack_field<R: Row + ?Sized>(
     let low = little
         .get(..width)
         .ok_or_else(|| bad_value(writer.len(), field))?;
-    for (slot, byte) in ordered.iter_mut().zip(low.iter()) {
-        *slot = *byte;
+    // `reverse()` and `copy_from_slice` have panic paths; zipped copies do not.
+    if field.big_endian {
+        for (slot, byte) in ordered.iter_mut().zip(low.iter().rev()) {
+            *slot = *byte;
+        }
+    } else {
+        for (slot, byte) in ordered.iter_mut().zip(low.iter()) {
+            *slot = *byte;
+        }
     }
     let wire = ordered
-        .get_mut(..width)
+        .get(..width)
         .ok_or_else(|| bad_value(writer.len(), field))?;
-    if field.big_endian {
-        wire.reverse();
-    }
     writer.put(wire, id)
 }
 

@@ -1,0 +1,4 @@
+# The feature sets of the packbin crate the embedded stage builds and reports (name|cargo features).
+# A task that adds code behind a feature adds its set here (text: AZ-2754, ecc: AZ-2755, session:
+# AZ-2756); a set whose feature has no code yet would only repeat the figures of base.
+base|

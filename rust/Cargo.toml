@@ -5,6 +5,8 @@ edition = "2021"
 license = "MIT"
 description = "Pack and unpack a caller-owned field list"
 readme = "README.md"
+# The embedded stage (AZ-2751) builds a probe crate against this one; it is not part of the package.
+exclude = ["embedded/"]
 
 [lib]
 path = "src/lib.rs"
