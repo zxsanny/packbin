@@ -727,3 +727,8 @@ Method: four read-only arms on `git archive HEAD` copies at `915a908` (Python 3.
 | 58 | fixed in loop 43 (AZ-2724) | The Python session removes the pad of the first byte, checks the type, and only then removes the rest; a payload of an unknown type costs one pad block (a test counts `_block` calls); `pack-session.md` and the README say a caller bounds the payload length |
 
 Cost: the C++ Cortex-M4F image is 7,920 B of 8,192 (the order check is built only with the codec, so the M4F core lost `check_new_key`: 272 B margin, was 60 B) and its stack 504 B of 512 (8 B margin, was 20 B).
+
+## Loop 50 addendum (heap-free Rust API, AZ-2749, AZ-2751)
+
+2026-10-20: no new finding, verdict PASS; details in `nostd_review_loop50.md`. The new decoder (`packbin::nostd`, flat schemes only) is proven free of panic paths and heap calls on a linked Cortex-M4F image, and agrees with the map API on every cut, extended and retyped packet and on 30,000 random packets. Three observations (O1 to O3) are listed there; none changes the counts above (Critical 0, High 0, Medium 2, Low 17).
+

@@ -16,7 +16,9 @@ pub fn pack<R: Row + ?Sized>(scheme: &Scheme<'_>, row: &R, out: &mut [u8]) -> Re
     Ok(writer.len())
 }
 
-/// Like [`pack`], into a new `Vec` of at most `limit` bytes (needs the `alloc` feature).
+/// Like [`pack`], into a new `Vec` of at most `limit` bytes (needs the `alloc` feature). The `Vec` is
+/// allocated at `limit` before the pack runs: `limit` is the caller's budget, never a length read
+/// from a packet.
 #[cfg(feature = "alloc")]
 pub fn pack_vec<R: Row + ?Sized>(
     scheme: &Scheme<'_>,

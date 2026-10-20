@@ -269,3 +269,45 @@ fn the_golden_fixture_is_the_same_packet_for_both() {
     let n = nostd::pack(&scheme, &row, &mut out).expect("repack nostd");
     assert_eq!(&out[..n], wire.as_slice());
 }
+
+#[test]
+fn random_bytes_are_accepted_or_refused_alike_by_both_walkers() {
+    // Arrange: 6,000 packets per layout, half with the scheme's type byte, any length up to 64
+    let mut rng = Rng(0xDEAD_BEEF_CAFE_F00D);
+    for (name, specs) in layouts() {
+        let fields = nostd_fields(&specs);
+        let scheme = nostd::Scheme::new(0x31, &fields);
+        let reference = std_scheme(0x31, &specs);
+        for round in 0..6_000 {
+            let len = (rng.next() % 65) as usize;
+            let mut bytes: Vec<u8> = (0..len).map(|_| rng.next() as u8).collect();
+            if round % 2 == 0 {
+                if let Some(first) = bytes.first_mut() {
+                    *first = 0x31;
+                }
+            }
+            // Act
+            let mut row = Slots::default();
+            let ours = nostd::unpack(&scheme, &bytes, &mut row);
+            let theirs = packbin::unpack(&reference, &bytes);
+            // Assert
+            assert_eq!(
+                ours.is_ok(),
+                theirs.is_ok(),
+                "{name} round {round}: {bytes:02x?}"
+            );
+            if let Ok(read) = theirs {
+                let got = values_of(&row, &specs);
+                for i in 0..specs.len() {
+                    let key = i.to_string();
+                    let a = got[key.as_str()].clone().unwrap();
+                    let b = read
+                        .get(key.as_str())
+                        .and_then(|v| v.as_ref())
+                        .expect("std value");
+                    assert!(same(&a, b), "{name} round {round} field {i}");
+                }
+            }
+        }
+    }
+}
