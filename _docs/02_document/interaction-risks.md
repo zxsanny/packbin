@@ -98,3 +98,13 @@ None.
 | The type byte of a protected message is among the wrong bytes and the scheme is chosen by it | one dispatch accepts handlers of one parity count only; the message is repaired, then dispatched | EC-16 | C++, TypeScript, Rust and any dispatch form |
 | A protected session payload is repaired after the pad is removed | the code covers the padded bytes, so repair comes before the pad is removed | EC-10 | each package |
 | C++ repair needs a scratch copy of up to 254 bytes on a small target | repair in place in the caller's writable buffer | EC-17 | C++ |
+
+### Rust no_std core (epic AZ-2750, loop 50)
+
+| Risk | Mitigation (testable) | AC | Owner |
+|------|----------------------|----|-------|
+| The core walker and the std walker write different bytes for one row | the differential test packs and unpacks every fixture row with both | AZ-2749 AC-2, AZ-2757 AC-2 | AZ-2749, AZ-2757 |
+| A heap call or a panic path is linked into decode and nothing notices | link checks on the decode objects, each proven to fail on a seeded mutant | AZ-2751 AC-4, AC-5 | AZ-2751 |
+| Adding Cargo features changes the std build, the ring driver or the crates.io publish | the default-feature suite and ring stay green; `cargo publish --dry-run` with default and with no default features | AZ-2749 AC-7, AZ-2757 AC-3 | AZ-2749, AZ-2757 |
+| A new CI job name is missing from the job guards | `publish-jobs.test.sh` and the wiring tests list the new job | AZ-2751 (included scope) | AZ-2751 |
+| Shared pure code (ecc tables, sha256) is edited for the core and the std suite moves | the std ecc and session suites run unchanged | AZ-2755 AC-4, AZ-2756 AC-1 | AZ-2755, AZ-2756 |

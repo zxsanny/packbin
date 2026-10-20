@@ -353,3 +353,16 @@ AZ-2735, AZ-2736, AZ-2737, AZ-2739 and AZ-2740 are loop 46 (owner 2026-10-20: "a
 AZ-2744 and AZ-2745 are loop 47 (owner 2026-10-20: "accept all recommended" on the hopper rows of `handoff47.md`; epic AZ-2645; 3 + 2 points). They are independent and own disjoint files: AZ-2744 owns `.github/workflows/language-pair.sh`, the new `ring-lib.sh`, `ring-wiring.test.sh`, `ring-wiring-swift.test.sh`, `ring-ecc.sh`, `ring-prepare.test.sh` and one new session-ecc wiring test; AZ-2745 owns `.github/workflows/run-suite.sh` and `run-suite-swift.test.sh`. No package source file. AZ-2742 (the C++ shortcut) stays To Do for a later loop.
 
 AZ-2742 and AZ-2747 are loop 48 (owner 2026-10-20: "accept all recommended" on the leftovers of `record47.md` and `handoff48.md`; epic AZ-2645; 3 + 1 points). They are independent and own disjoint files: AZ-2742 owns `cpp/src/core`, `cpp/tests/core/text_repeat_host_tests.cpp` and the C++ margins in `_docs/AGENT_GOTCHAS.md`; AZ-2747 owns the ring scripts and wiring tests under `.github/workflows`. No shared source file.
+
+AZ-2749 and AZ-2751 through AZ-2757 are loop 50 (owner 2026-10-20: option B "port the C++ heap-free core" of the Complexity Budget, then "accept all recommended"; epic AZ-2750; 34 points in eight slices). `LESSONS.md` says a new language costs 47 points over 12 specs; here one core module follows a proven C++ design, so no bump, but the first 5-point estimate of AZ-2749 was for the whole feature and was wrong. Order: AZ-2749 (core types, features, flat schemes, differential harness), then AZ-2751 (embedded profile CI) and AZ-2752 (flags, bits, when) both need only AZ-2749, AZ-2753 after AZ-2752, AZ-2754 after AZ-2753, AZ-2755 after AZ-2749, AZ-2756 after AZ-2755, AZ-2757 last. All write `rust/src/core/**` (AZ-2751 writes CI and `rust/embedded`), so they run one after another.
+
+| Task | Name | Complexity | Dependencies | Epic |
+|------|------|-----------|-------------|------|
+| AZ-2749 | rust_nostd_core (features, flat schemes, host proof) | 5 | None | AZ-2750 |
+| AZ-2751 | rust_core_embedded_profile | 5 | AZ-2749 | AZ-2750 |
+| AZ-2752 | rust_core_bits_and_when | 5 | AZ-2749 | AZ-2750 |
+| AZ-2753 | rust_core_lists_and_dicts | 5 | AZ-2752 | AZ-2750 |
+| AZ-2754 | rust_core_compact_text | 5 | AZ-2753 | AZ-2750 |
+| AZ-2755 | rust_core_ecc | 3 | AZ-2749 | AZ-2750 |
+| AZ-2756 | rust_core_session | 3 | AZ-2755 | AZ-2750 |
+| AZ-2757 | rust_core_hostile_and_docs | 3 | AZ-2749, AZ-2751, AZ-2752, AZ-2753, AZ-2754, AZ-2755, AZ-2756 | AZ-2750 |
