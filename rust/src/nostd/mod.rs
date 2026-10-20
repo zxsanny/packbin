@@ -68,6 +68,8 @@ mod pack;
 mod present;
 mod row;
 mod scheme;
+#[cfg(feature = "session")]
+mod session;
 mod strings;
 mod table;
 #[cfg(feature = "text")]
@@ -86,6 +88,8 @@ pub use scheme::{
 };
 #[cfg(feature = "text")]
 pub use text::SCRATCH_WORDS_PER_CHAR;
+#[cfg(feature = "session")]
+pub use session::{Session, NONCE_SIZE, SEED_SIZE};
 pub use walk::{pack, pack_with, unpack};
 #[cfg(feature = "ecc")]
 pub use walk::{unpack_repair, Unpacked};

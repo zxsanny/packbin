@@ -7,3 +7,4 @@
 base 16384 512
 text - -
 ecc - -
+session - -

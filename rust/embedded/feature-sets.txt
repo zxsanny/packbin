@@ -5,3 +5,4 @@
 base|
 text|text
 ecc|ecc
+session|session

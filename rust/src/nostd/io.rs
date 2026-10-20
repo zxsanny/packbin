@@ -28,8 +28,14 @@ impl<'a> Writer<'a> {
         self.buf.get(..self.len).unwrap_or(&[])
     }
 
+    /// The bytes written so far, for the session pad.
+    #[cfg(feature = "session")]
+    pub(crate) fn written_mut(&mut self) -> &mut [u8] {
+        self.buf.get_mut(..self.len).unwrap_or(&mut [])
+    }
+
     /// Zeroes the bytes written so far (a refused protected message leaves none behind).
-    #[cfg(feature = "ecc")]
+    #[cfg(any(feature = "ecc", feature = "session"))]
     pub(crate) fn zero(&mut self) {
         for byte in self.buf.iter_mut().take(self.len) {
             *byte = 0;

@@ -23,6 +23,8 @@ mod field;
 mod scheme;
 #[cfg(feature = "std")]
 mod session;
+#[cfg(any(feature = "std", feature = "session"))]
+mod session_core;
 #[cfg(feature = "std")]
 mod value;
 #[cfg(feature = "std")]

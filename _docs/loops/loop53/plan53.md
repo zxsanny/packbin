@@ -30,7 +30,7 @@ Intake: hopper hit on wave C of epic AZ-2750 (`handoff53.md`): AZ-2756 (`session
 ## Implementation
 
 ### Files that change
-`rust/src/nostd/session.rs` (new, behind `session`), shared hash/KDF/pad code factored out of `rust/src/session/**` so std and core run one copy, `rust/tests/nostd_session_tests.rs`, `rust/tests/nostd_hostile_replay_tests.rs`, `nostd_support/**`, `rust/embedded/feature-sets.txt` + probe, `_docs/**`.
+`rust/src/nostd/session.rs` (new, behind `session`), the hash/KDF/pad moved to `rust/src/session_core/` (shared by `rust/src/session/**` and the core, one copy, no `chunks*`), the walk split into `pack_clear` + `read`, `.github/workflows/run-suite.sh` (+ its test), `rust/tests/nostd_session_tests.rs`, `rust/tests/nostd_hostile_replay_tests.rs`, `nostd_support/**`, `rust/embedded/feature-sets.txt` + probe, `_docs/**`.
 
 ### Order of work
 1. Batch 1 (AZ-2756): read the std session; move hash / key derivation / pad into a shared core module with no `Vec`; `nostd::session` with seed, caller nonce, seal, open on caller buffers; cross-open + differential tests; refusal tests.

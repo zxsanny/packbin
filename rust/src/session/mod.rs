@@ -1,14 +1,11 @@
-mod hkdf;
-mod pad;
-mod sha256;
-
 use crate::ecc;
 use crate::scheme::{checked_parity, dispatch, BinaryPacker, DispatchHandler, Scheme};
+use crate::session_core::{pad, split_keys};
 use crate::value::{PackError, ShortPacket, UnpackError};
 use std::io::Read;
 
-pub const SEED_SIZE: usize = 32;
-pub const NONCE_SIZE: usize = 16;
+pub const SEED_SIZE: usize = crate::session_core::SEED_SIZE;
+pub const NONCE_SIZE: usize = crate::session_core::NONCE_SIZE;
 
 /// Why `PackSession::pack` returned no payload: the session has no send key yet, or the row
 /// cannot be packed (the same `PackError` as `BinaryPacker::pack`).
@@ -125,21 +122,10 @@ impl PackSession {
             return false;
         }
         let mut seed = self.seed.take().unwrap();
-        let mut both = [0u8; SEED_SIZE * 2];
-        hkdf::derive(&seed, nonce, b"packbin", &mut both);
+        let (send, recv) = split_keys(&seed, nonce, initiator);
         seed.fill(0);
-        let mut first = [0u8; SEED_SIZE];
-        let mut second = [0u8; SEED_SIZE];
-        first.copy_from_slice(&both[..SEED_SIZE]);
-        second.copy_from_slice(&both[SEED_SIZE..]);
-        if initiator {
-            self.send = Some(first);
-            self.recv = Some(second);
-        } else {
-            self.send = Some(second);
-            self.recv = Some(first);
-        }
-        both.fill(0);
+        self.send = Some(send);
+        self.recv = Some(recv);
         true
     }
 }

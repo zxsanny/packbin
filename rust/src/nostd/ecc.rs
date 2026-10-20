@@ -19,9 +19,9 @@ fn fault(kind: Kind, len: usize, n: usize) -> Fault {
     }
 }
 
-/// Appends the `n` parity bytes of the bytes written so far. Fields above `254 - n` bytes are
-/// `TooLong` (`offset` the field bytes, `needed` the limit) and the written bytes are zeroed.
-pub(crate) fn seal(w: &mut Writer<'_>, n: usize) -> Result<(), Fault> {
+/// The checks of [`seal`] that need no work: fields above `254 - n` bytes are `TooLong` (`offset`
+/// the field bytes, `needed` the limit; the written bytes are zeroed) and `n` bytes must fit.
+pub(crate) fn room(w: &mut Writer<'_>, n: usize) -> Result<(), Fault> {
     let len = w.len();
     let limit = MAX_SENT.saturating_sub(n);
     if len > limit {
@@ -31,6 +31,13 @@ pub(crate) fn seal(w: &mut Writer<'_>, n: usize) -> Result<(), Fault> {
     if w.room() < n {
         return Err(Fault::new(Error::BufferFull, len, -1, n));
     }
+    Ok(())
+}
+
+/// Appends the `n` parity bytes of the bytes written so far (after [`room`]'s checks).
+pub(crate) fn seal(w: &mut Writer<'_>, n: usize) -> Result<(), Fault> {
+    room(w, n)?;
+    let len = w.len();
     let mut parity = [0u8; ecc_core::MAX_PARITY];
     let kind = protect(w.written(), n, &mut parity);
     if kind != Kind::Ok {

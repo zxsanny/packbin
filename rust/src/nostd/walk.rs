@@ -34,23 +34,33 @@ pub fn pack_with(
     out: &mut [u8],
     scratch: &mut [u32],
 ) -> Result<usize, Fault> {
-    validate(scheme)?;
     let mut writer = Writer::new(out);
-    writer.put(&[scheme.type_number], -1)?;
-    let mut budget = budget_of(scheme);
-    Pack {
-        t: scheme.fields,
-        w: &mut writer,
-        row,
-        budget: &mut budget,
-        scratch,
-    }
-    .top()?;
+    pack_clear(scheme, row, &mut writer, scratch)?;
     #[cfg(feature = "ecc")]
     if scheme.parity != 0 {
         super::ecc::seal(&mut writer, usize::from(scheme.parity))?;
     }
     Ok(writer.len())
+}
+
+/// The packet without its parity bytes: the type number, then each field.
+pub(crate) fn pack_clear(
+    scheme: &Scheme<'_>,
+    row: &dyn Row,
+    writer: &mut Writer<'_>,
+    scratch: &mut [u32],
+) -> Result<(), Fault> {
+    validate(scheme)?;
+    writer.put(&[scheme.type_number], -1)?;
+    let mut budget = budget_of(scheme);
+    Pack {
+        t: scheme.fields,
+        w: writer,
+        row,
+        budget: &mut budget,
+        scratch,
+    }
+    .top()
 }
 
 /// Like [`pack`], into a new `Vec` of at most `limit` bytes (needs the `alloc` feature). The `Vec` is
@@ -119,7 +129,7 @@ pub fn unpack_repair(
 }
 
 /// Reads the fields of a checked scheme from the clear bytes of a packet.
-fn read(scheme: &Scheme<'_>, bytes: &[u8], row: &mut dyn Row) -> Result<usize, Fault> {
+pub(crate) fn read(scheme: &Scheme<'_>, bytes: &[u8], row: &mut dyn Row) -> Result<usize, Fault> {
     let mut reader = Reader::new(bytes);
     let first = reader.take(1, -1)?;
     if first.first() != Some(&scheme.type_number) {

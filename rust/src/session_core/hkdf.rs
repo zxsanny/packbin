@@ -1,0 +1,83 @@
+use super::sha256::Sha256;
+
+const BLOCK: usize = 64;
+
+/// HMAC-SHA-256 of the pieces of a message joined, with no buffer for the joined message. One
+/// 64-byte block holds the key, then the inner pad, then the outer pad.
+fn hmac_sha256(key: &[u8], parts: &[&[u8]]) -> [u8; 32] {
+    let mut block = [0u8; BLOCK];
+    if key.len() > BLOCK {
+        for (slot, byte) in block.iter_mut().zip(super::sha256::hash(key)) {
+            *slot = byte;
+        }
+    } else {
+        for (slot, byte) in block.iter_mut().zip(key) {
+            *slot = *byte;
+        }
+    }
+    for byte in block.iter_mut() {
+        *byte ^= 0x36;
+    }
+    let mut inner = Sha256::new();
+    inner.update(&block);
+    for part in parts {
+        inner.update(part);
+    }
+    let digest = inner.finish();
+    for byte in block.iter_mut() {
+        *byte ^= 0x36 ^ 0x5c;
+    }
+    let mut outer = Sha256::new();
+    outer.update(&block);
+    outer.update(&digest);
+    outer.finish()
+}
+
+/// HKDF-SHA-256 (RFC 5869): fills `output` (at most 255 blocks of 32 bytes; a longer tail stays
+/// as it was).
+pub fn derive(ikm: &[u8], salt: &[u8], info: &[u8], output: &mut [u8]) {
+    let prk = hmac_sha256(salt, &[ikm]);
+    let mut previous = [0u8; 32];
+    let mut have_previous = false;
+    let mut counter = 0u8;
+    let mut offset = 0usize;
+    while offset < output.len() {
+        let Some(next) = counter.checked_add(1) else {
+            return;
+        };
+        counter = next;
+        let prior: &[u8] = if have_previous { &previous } else { &[] };
+        previous = hmac_sha256(&prk, &[prior, info, &[counter]]);
+        have_previous = true;
+        let end = offset.saturating_add(32).min(output.len());
+        let Some(chunk) = output.get_mut(offset..end) else {
+            return;
+        };
+        for (slot, byte) in chunk.iter_mut().zip(previous.iter()) {
+            *slot = *byte;
+        }
+        offset = end;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
+    }
+
+    #[test]
+    fn rfc5869_case_1() {
+        let ikm = [0x0bu8; 22];
+        let salt: Vec<u8> = (0u8..=0x0c).collect();
+        let info: Vec<u8> = (0xf0u8..=0xf9).collect();
+        let mut okm = [0u8; 42];
+        derive(&ikm, &salt, &info, &mut okm);
+        assert_eq!(
+            hex(&okm),
+            "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865"
+        );
+    }
+}

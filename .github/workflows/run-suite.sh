@@ -301,6 +301,10 @@ case "$lang" in
       run cargo test --manifest-path "$root/rust/Cargo.toml" --no-default-features --features text --test nostd_text_tests -- --nocapture
       run cargo test --manifest-path "$root/rust/Cargo.toml" --no-default-features --features ecc --test nostd_ecc_tests -- --nocapture
       run cargo test --manifest-path "$root/rust/Cargo.toml" --features text,ecc --test nostd_dict_tests --test nostd_text_differential_tests -- --nocapture
+      # the session of the heap-free API, without `std` (nothing allocates) and with `std` and `ecc` (the same bytes as
+      # the `std` PackSession, parity over the padded bytes) (AZ-2756)
+      run cargo test --manifest-path "$root/rust/Cargo.toml" --no-default-features --features session --test nostd_session_tests -- --nocapture
+      run cargo test --manifest-path "$root/rust/Cargo.toml" --features session,ecc --test nostd_session_tests -- --nocapture
       run rust_speed
     else
       missing_manifest "$root/rust/Cargo.toml"
