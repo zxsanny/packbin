@@ -18,3 +18,11 @@ From the loop 49 record (`record49.md`). Nothing here is owner-decided yet.
 ## Read after the push
 
 - `test.yml` on `dev` and `main` for the loop 49 push (loop 48: wall about 220 s, longest job `embedded-esp-core` 204 s).
+
+## CI read after the push (loop 49, `4fb2fe6`)
+
+`test.yml` on `dev` (run 39384078387): green. On `main` (run 39384081368): 19 of 20 jobs green, `suites (csharp rust)` FAILED (`suites failed | csharp`; both `dotnet test` steps reported their timing, 37 s and 33 s). The same job on `dev` passed on the same commit. The failing test name is in the job log, which needs a token; the annotations do not name it.
+
+- Likely cause: unknown from annotations. The push changed only a C++ test file, so it is not this loop's code.
+- Flaky vs real: looks flaky (same commit green on `dev`), not proven.
+- Next canonical action: read the job log (118499654249) with the owner's token, or push again; no queue or manual re-run is invented here.
