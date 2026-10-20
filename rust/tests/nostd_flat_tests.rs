@@ -299,3 +299,43 @@ fn a_row_that_refuses_a_value_on_unpack_is_bad_value_at_the_field() {
         (Error::BadValue, 0, 1)
     );
 }
+
+#[test]
+fn writer_and_reader_edges_are_errors_not_panics() {
+    // Arrange
+    let mut small = [0u8; 3];
+    let mut writer = packbin::nostd::Writer::new(&mut small);
+    // Act
+    let fit = writer.put(&[1, 2, 3], 7);
+    let empty_at_end = writer.put(&[], 7);
+    let over = writer.put(&[4], 7);
+    // Assert
+    assert_eq!((fit, empty_at_end), (Ok(()), Ok(())));
+    assert_eq!(writer.len(), 3);
+    let fault = over.expect_err("full");
+    assert_eq!(
+        (fault.error, fault.offset, fault.field, fault.needed),
+        (Error::BufferFull, 3, 7, 1)
+    );
+    let data = [9u8, 8];
+    let mut reader = packbin::nostd::Reader::new(&data);
+    assert_eq!(reader.take(2, 0).expect("two"), &[9, 8]);
+    assert_eq!(reader.take(0, 0).expect("none at the end"), &[] as &[u8]);
+    let short = reader.take(1, 5).expect_err("past the end");
+    assert_eq!(
+        (short.error, short.offset, short.field, short.needed),
+        (Error::ShortPacket, 2, 5, 1)
+    );
+    assert_eq!(
+        reader.take(usize::MAX, 5).expect_err("huge").error,
+        Error::ShortPacket
+    );
+    assert!(reader.finish().is_ok());
+    let mut early = packbin::nostd::Reader::new(&data);
+    early.take(1, 0).expect("one");
+    assert_eq!(
+        early.finish().expect_err("trailing").error,
+        Error::TrailingBytes
+    );
+    assert_eq!(early.pos(), 1);
+}

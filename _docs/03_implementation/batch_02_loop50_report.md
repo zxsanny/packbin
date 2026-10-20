@@ -18,10 +18,10 @@ Owner rule (2026-10-06): one total review per loop.
 
 - Embedded image stage (`docker compose run --rm rust-embedded`, Cortex-M4F on QEMU mps2-an386, toolchain 1.79 on this Mac, GCC 13.2.1 in the image):
   - golden fixture decoded on the device image: `GOLDEN_OK 1`; the 14-field route packs to 44 bytes and unpacks equal
-  - `base`: flash 2,656 B (limit 8,192), stack 88 B (limit 512; raw 152 less the meter's 64)
+  - `base`: flash 2,652 B (limit 8,192, after the review fixes; 2,656 B before), stack 88 B (limit 512; raw 152 less the meter's 64)
   - no heap symbol and no panic symbol in the linked image
   - seeded panic defect (table indexed by input): caught, `panic_bounds_check`; seeded heap defect (`Vec` through a malloc-backed allocator): caught, `__rust_no_alloc_shim_is_unstable`, `malloc`
-  - a limit lowered by one byte (flash 2,655, stack 87): the stage fails and prints `flash 2656 B over 2655 B` and `stack 88 B over 87 B`
+  - a limit lowered by one byte (flash 2,651, stack 87): the stage fails and prints `flash 2652 B over 2651 B` and `stack 88 B over 87 B`
 - Library tests after the panic-path fixes: 11 flat and 3 differential pass; clippy (deny unwrap, expect, panic, indexing, arithmetic) clean; doc test passes.
 - Guards: `publish-jobs.test.sh`, `publish-workflow.test.sh`, `run-parts.test.sh`, `lib.test.sh`, `loop-tests.test.sh` pass.
 - CI-parity: PASS. The new CI steps (toolchain, `rust/embedded/run.sh host`, `checks.test.sh`) have not run on GitHub yet; the first push reads them.

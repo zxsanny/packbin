@@ -26,6 +26,8 @@ int pb_rs_golden(std::uint8_t const* input, std::size_t len);
 namespace {
 
 std::uint8_t packet[96];
+// Declared in both images so that their static RAM is comparable (the stage requires the library to add none).
+std::uint8_t golden[16];
 
 void say(char const* key, unsigned long value) {
   sh_write(key);
@@ -34,8 +36,6 @@ void say(char const* key, unsigned long value) {
 }
 
 #ifndef RUST_BASELINE
-std::uint8_t golden[16];
-
 int nibble(char c) {
   if (c >= '0' && c <= '9')
     return c - '0';
@@ -56,7 +56,9 @@ std::size_t parse_hex(char const* hex, std::uint8_t* out, std::size_t cap) {
 void say_hex(char const* key, std::uint8_t const* data, std::size_t n) {
   static char const digits[] = "0123456789abcdef";
   char line[2 * sizeof(packet) + 1];
-  for (std::size_t i = 0; i < n && i < sizeof(packet); ++i) {
+  if (n > sizeof(packet))
+    n = sizeof(packet);
+  for (std::size_t i = 0; i < n; ++i) {
     line[2 * i] = digits[data[i] >> 4];
     line[2 * i + 1] = digits[data[i] & 0xf];
   }
@@ -89,7 +91,10 @@ int main() {
     unpack_stack = golden_stack;
 #else
   std::size_t pack_stack = stack_meter::measure([&] { packet[0] = 1; });
-  std::size_t unpack_stack = stack_meter::measure([&] { packet[1] = packet[0]; });
+  std::size_t unpack_stack = stack_meter::measure([&] {
+    packet[1] = packet[0];
+    golden[1] = golden[0];
+  });
 #endif
   say("PACK_STACK ", pack_stack);
   say("UNPACK_STACK ", unpack_stack);

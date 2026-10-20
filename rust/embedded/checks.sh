@@ -18,12 +18,12 @@ panic_hits() {
 
 # limit_of uses $limits_file, which target.sh (or the test) sets.
 # shellcheck disable=SC2154
-# limit_of <set> <column> prints the limit (a number, or "-" for none) from limits.txt.
+# limit_of <set> <column> prints the limit (a number, "-" for none, "missing" when the set has no line).
 limit_of() {
-  awk -v set="$1" -v col="$2" '$1 == set && $1 !~ /^#/ { print $col; found = 1 } END { if (!found) print "-" }' "$limits_file"
+  awk -v set="$1" -v col="$2" '$1 == set && $1 !~ /^#/ { print $col; found = 1 } END { if (!found) print "missing" }' "$limits_file"
 }
 
 # within <value> <limit>: success when the limit is "-" or the value fits.
 within() {
-  [ "$2" = "-" ] || [ "$1" -le "$2" ]
+  [ "$2" = "-" ] || [ "$2" = "missing" ] || [ "$1" -le "$2" ]
 }

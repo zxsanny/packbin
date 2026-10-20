@@ -50,18 +50,24 @@ rust_link() {
 }
 
 target_rust_m4f() {
-  local dir="$build/rust-m4f" set features lib meter flash0 flash stack raw hits sets=0
+  local dir="$build/rust-m4f" set features lib meter flash0 ram0 ram flash stack raw hits sets=0
   rust_common_objects "$dir"
   rust_link "$dir" baseline.elf baseline.o
   qemu_run mps2-an386 "$dir/baseline.elf" "$dir/baseline.run.log" || fail "baseline image exit $?"
   # The meter reads its own unpainted guard as used; the baseline measures an empty call.
   meter=$(log_value PACK_STACK "$dir/baseline.run.log")
   flash0=$(arm-none-eabi-size "$dir/baseline.elf" | awk 'NR == 2 { print $1 + $2 }')
-  while IFS='|' read -r set features; do
+  ram0=$(arm-none-eabi-size "$dir/baseline.elf" | awk 'NR == 2 { print $2 + $3 }')
+  # The list is read on fd 3 so that QEMU and the toolchain cannot swallow the sets that follow.
+  while IFS='|' read -r -u 3 set features; do
     sets=$((sets + 1))
     lib="$(rust_lib "$set")"
     if [ ! -f "$lib" ]; then
       fail "$set: no static library at $lib (run rust/embedded/run.sh libs)"
+      continue
+    fi
+    if [ "$(limit_of "$set" 2)" = missing ]; then
+      fail "$set: no line in limits.txt (write '$set - -' for no limit)"
       continue
     fi
     rust_link "$dir" "$set.elf" main.o "$lib"
@@ -74,13 +80,16 @@ target_rust_m4f() {
     [ "$(log_value FAILURES "$dir/$set.run.log")" = 0 ] || fail "$set: a probe call failed"
     [ "$(log_value GOLDEN_OK "$dir/$set.run.log")" = 1 ] || fail "$set: the golden fixture did not decode on the device image"
     flash=$(( $(arm-none-eabi-size "$dir/$set.elf" | awk 'NR == 2 { print $1 + $2 }') - flash0 ))
+    # The C++ stage requires the core to add no .data or .bss (no static mutable state); so does this one.
+    ram=$(( $(arm-none-eabi-size "$dir/$set.elf" | awk 'NR == 2 { print $2 + $3 }') - ram0 ))
+    [ "$ram" -eq 0 ] || fail "$set: the library adds ${ram} B of .data and .bss"
     raw=$(for key in PACK_STACK UNPACK_STACK; do log_value "$key" "$dir/$set.run.log"; done | sort -n | tail -n 1)
     stack=$((raw - meter))
-    echo "SIZE $set flash=$flash B (limit $(limit_of "$set" 2)) stack=$stack B (limit $(limit_of "$set" 3)) raw=$raw meter=$meter"
+    echo "SIZE $set ram=$ram B flash=$flash B (limit $(limit_of "$set" 2)) stack=$stack B (limit $(limit_of "$set" 3)) raw=$raw meter=$meter"
     note "$set flash ${flash} B of $(limit_of "$set" 2); stack ${stack} B of $(limit_of "$set" 3); golden decoded on the device image"
     within "$flash" "$(limit_of "$set" 2)" || fail "$set: flash ${flash} B over $(limit_of "$set" 2) B"
     within "$stack" "$(limit_of "$set" 3)" || fail "$set: stack ${stack} B over $(limit_of "$set" 3) B"
-  done < <(rust_sets)
+  done 3< <(rust_sets)
   [ "$sets" -gt 0 ] || fail "feature-sets.txt lists no set"
 }
 

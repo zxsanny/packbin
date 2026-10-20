@@ -41,7 +41,7 @@ expect "both checks run on one image: panic" "_ZN4core9panicking5panic17h01E" "$
 expect "flash limit of base" "8192" "$(limit_of base 2)"
 expect "stack limit of base" "512" "$(limit_of base 3)"
 expect "no limit is a dash" "-" "$(limit_of wide 2)"
-expect "an unknown set has no limit" "-" "$(limit_of other 2)"
+expect "an unknown set is missing, not unlimited" "missing" "$(limit_of other 2)"
 within 8192 8192 || { echo "FAIL: 8192 fits 8192" >&2; bad=$((bad + 1)); }
 within 8193 8192 && { echo "FAIL: 8193 fits 8192" >&2; bad=$((bad + 1)); }
 within 99999999 - || { echo "FAIL: no limit rejects" >&2; bad=$((bad + 1)); }
