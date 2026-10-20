@@ -1,3 +1,7 @@
+---
+loop: 53
+branch: dev
+---
 # Rust core: hostile corpus, differential proof, publish check and docs
 
 **Task**: AZ-2757_rust_core_hostile_and_docs

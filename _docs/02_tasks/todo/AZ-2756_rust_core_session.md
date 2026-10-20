@@ -1,3 +1,7 @@
+---
+loop: 53
+branch: dev
+---
 # Rust core: session without allocation
 
 **Task**: AZ-2756_rust_core_session
