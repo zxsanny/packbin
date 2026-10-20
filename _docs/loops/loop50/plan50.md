@@ -32,7 +32,7 @@ Intake: hopper hit on `AZ-2749` (the only unclaimed spec, from the loop 49 recor
 Optional; patched when a batch diverges.
 
 ### Files that change
-`rust/Cargo.toml`, `rust/src/lib.rs`, new `rust/src/core/**`, new `rust/tests/core_*`, `rust/embedded/**`, the CI workflow and its job guards (AZ-2751), `_docs/**`.
+`rust/Cargo.toml`, `rust/src/lib.rs`, new `rust/src/nostd/**`, new `rust/tests/nostd_*`, `rust/embedded/**`, the CI workflow and its job guards (AZ-2751), `_docs/**`.
 
 ### Order of work
 1. AZ-2749 batch: features and the `no_std` switch, error and Result types, Reader/Writer, scalars and bytes, `Row`, scheme checks, differential test, golden on host.

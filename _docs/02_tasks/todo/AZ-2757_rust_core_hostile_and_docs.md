@@ -45,7 +45,7 @@ Then both pass; the default build is unchanged
 **AC-4: Documents**
 Given the finished work
 When module layout, the component description and the README are read
-Then they name the `core` module, the features and the CI job
+Then they name the `nostd` module, the features and the CI job
 
 ## Unit Tests
 

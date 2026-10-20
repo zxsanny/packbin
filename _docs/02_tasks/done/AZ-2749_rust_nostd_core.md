@@ -7,7 +7,7 @@ branch: dev
 
 **Task**: AZ-2749_rust_nostd_core
 **Name**: Rust core: features, flat schemes and the host proof
-**Description**: The Rust package gets Cargo features (`std` default, `alloc`, `text`, `ecc`, `session`) and a `core` module that builds with `#![no_std]` and no allocator: errors as values, caller buffers, a `Row` trait, plain-data schemes with construction checks, scalar and bytes fields. The golden fixture decodes on the host with the same code.
+**Description**: The Rust package gets Cargo features (`std` default, `alloc`, `text`, `ecc`, `session`) and a `nostd` module (`packbin::nostd`) that builds with `#![no_std]` and no allocator: errors as values, caller buffers, a `Row` trait, plain-data schemes with construction checks, scalar and bytes fields. The golden fixture decodes on the host with the same code.
 **Complexity**: 5 points
 **Dependencies**: None
 **Component**: rust (core)
@@ -21,7 +21,7 @@ The meshbell field mesh (sibling repository, same owner) is written in Rust: nod
 ## Outcome
 
 - A Cargo feature set where `default-features = false` builds the core with `#![no_std]` and no `alloc`.
-- A `core` API with the error kinds and `Result` shape of the C++ core, a `Reader` and `Writer` over caller buffers, number fields (u8 to u64, i8 to i64, f32, f64, bool, big-endian flag), fixed bytes, and construction checks that refuse an invalid scheme before any byte moves.
+- A `core` API with the error kinds and `Result` shape of the C++ core, a `Reader` and `Writer` over caller buffers, number fields (u8 to u64, i8 to i64, f32, f64, big-endian flag; bool is a flag bit and comes with AZ-2752), fixed bytes, and construction checks that refuse an invalid scheme before any byte moves.
 - The default (`std`) build is unchanged; a differential test compares std and core output.
 
 ## Scope

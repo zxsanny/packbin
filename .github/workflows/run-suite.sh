@@ -294,6 +294,8 @@ case "$lang" in
   rust)
     if [ -f "$root/rust/Cargo.toml" ]; then
       run cargo test --manifest-path "$root/rust/Cargo.toml" -- --nocapture
+      # the heap-free API builds and passes with `std` and `alloc` off (AZ-2749)
+      run cargo test --manifest-path "$root/rust/Cargo.toml" --no-default-features --test nostd_flat_tests -- --nocapture
       run rust_speed
     else
       missing_manifest "$root/rust/Cargo.toml"

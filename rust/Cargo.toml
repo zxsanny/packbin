@@ -8,3 +8,11 @@ readme = "README.md"
 
 [lib]
 path = "src/lib.rs"
+
+[features]
+default = ["std"]
+std = ["alloc"]
+alloc = []
+text = []
+ecc = []
+session = []
