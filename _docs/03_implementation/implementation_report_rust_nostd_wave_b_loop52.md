@@ -10,7 +10,7 @@ Tasks: AZ-2754 (compact text and dictionaries, `text` feature), AZ-2755 (message
 
 Focused proof: 850 tests with all features (818 + 2 default before ECC), the text differential (20 layouts x 3,000 random rows, every cut, every bit flip, random bytes), the 427-row text vectors file, the 1,339-row ECC vectors file, the six hostile dictionary packets, the embedded stage (QEMU Cortex-M4F: no heap, no panic path).
 
-Sizes (embedded stage, no limits set for `text`, `ecc`): base 14,532 B flash (was 13,724) and 456 B stack (limit 16,384 and 512); text 24,856 B and 1,328 B; ecc 17,804 B and 760 B. The figures of `text` and `ecc` include the probe's own round trip (rows, scratch of 192 B).
+Sizes (embedded stage, no limits set for `text`, `ecc`): base 14,532 B flash (was 13,724) and 456 B stack (limit 16,384 and 512); text 24,888 B and 1,344 B; ecc 17,804 B and 760 B. The figures of `text` and `ecc` include the probe's own round trip (rows, scratch of 192 B).
 
 ## Discovered during implementation
 
@@ -25,5 +25,5 @@ Sizes (embedded stage, no limits set for `text`, `ecc`): base 14,532 B flash (wa
 | 7 | `unpack_repair` returns `Unpacked { bytes, repaired }` (the C++ `Result::repaired`) | AZ-2755 AC-1 | done | clear |
 | 8 | Several schemes with different parity in one dispatch (the C++ rule) is not in the core: it has no dispatch | AZ-2755 excluded | stays out | clear |
 | 9 | Base flash grew 784 B (Utf8Wire, count header, new kinds in the checks); the dictionary and `Utf8` paths are behind `text` | AZ-2751 AC-3 | the base limit of 16,384 B holds with 1,852 B margin | clear |
-| 10 | The device stack of the text set is 1,328 B (probe frames included); no limit exists | owner | owner sets the limits of `text` and `ecc` | unclear (owner) |
+| 10 | The device stack of the text set is 1,344 B (probe frames included); no limit exists | owner | owner sets the limits of `text` and `ecc` | unclear (owner) |
 | 11 | The C++ `when` of a skipped source (loop 51) is still no ticket | handoff52 | ticket in the loop record | clear |

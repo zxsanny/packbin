@@ -39,3 +39,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-20_loop51.md
 - [2026-10-20] [estimation] Before sizing a slice of a port, check that each kind in it can be decided with the code already there: dictionaries sat in the lists slice, but key order is compared on decoded text, which only the text slice brings (loop 51).
   Source: _docs/06_metrics/retro_2026-10-20_loop51.md
+- [2026-10-20] [tooling] A clippy-clean `no_std` module can still link a panic path: `slice::split_at_mut` (and `rotate_left`, `copy_within`) panic out of line, found only by the link check on the device image; use `get_mut` ranges and run the embedded stage after the first new kind of code, not at the end (loop 52).
+  Source: _docs/06_metrics/retro_2026-10-20_loop52.md
+- [2026-10-20] [testing] Pair every "refused when the feature is off" test with the same scheme accepted when it is on: a wrong table size (`list(0, 2)` for a one-entry element) made the refusal test pass for the wrong reason, and a wire-string test with the same mistake failed (loop 52).
+  Source: _docs/06_metrics/retro_2026-10-20_loop52.md
+- [2026-10-20] [process] Under host load above 25 the publish gate fails on environment flakes (NuGet "resource temporarily unavailable", a timing self-test pipe, a SwiftPM cache path); read the failing share's log before assuming a regression, re-run the stage alone, and run it when the load is below 15 (loop 52: three runs, green on the third).
+  Source: _docs/06_metrics/retro_2026-10-20_loop52.md

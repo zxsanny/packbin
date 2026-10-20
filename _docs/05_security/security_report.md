@@ -736,3 +736,8 @@ Cost: the C++ Cortex-M4F image is 7,920 B of 8,192 (the order check is built onl
 ## Loop 51 addendum (heap-free Rust API, nested kinds, AZ-2752, AZ-2753)
 
 2026-10-20: verdict PASS, one new Low (L51-1: CPU per packet grows with the square of the scheme size, since references are resolved where they are used); details in `nostd_review_loop51.md`. Every count from a packet is bounded by storage, `max_rounds`, `max_slots` or the packet length, and 27 layouts are read alike by the map API and `nostd`. Two observations (stack margin of the flat probe, 472 of 512 B; the device image drives flat schemes only) go to AZ-2757. Counts: Critical 0, High 0, Medium 2, Low 18.
+
+## Loop 52 addendum (heap-free Rust API, text, dictionaries and ECC, AZ-2754, AZ-2755)
+
+2026-10-20: verdict PASS, one new Low (L52-1: a repair stays in the caller's buffer when the field read then fails); details in `nostd_review_loop52.md`. The compact-text decoder, the dictionary key order and the repair are bounded by the row's storage, the packet length and 254 bytes, linked without heap or panic symbols on the Cortex-M4F image for the sets `base`, `text` and `ecc`, and agree with the map API on every cut, bit flip and random packet of 20 layouts.
+

@@ -43,3 +43,13 @@ Source of rows: `intake` (new-task Step 4.7 at the 13-point handoff). Status: co
 
 - Two threads sealing with one session (the session is `&mut`; the caller owns exclusion).
 - A target other than Cortex-M4F (ESP32 is built by meshbell; `xtensa` has no stable Rust target here).
+
+## Assessment round 2 (loop 52)
+
+| id | scenario | status | behavior (confirmed) | AC ref | source |
+|----|----------|--------|----------------------|--------|--------|
+| X1 | strings in every presence context (flags, flag bit, `when`, group, rounds, list, dict) | confirmed | same bytes and values as std in 20 layouts | AZ-2754 AC-1 | assess-round-1 (loop 52) |
+| X2 | a wire string as a list element, a flags member, under a flag bit | confirmed | payload forwarded as it is | AZ-2754 AC-3 | assess-round-1 (loop 52) |
+| X3 | std ECC on the shared core | confirmed | std suite and vectors unchanged | AZ-2755 | assess-round-1 (loop 52) |
+| X4 | size limits of `text`, `ecc`, `session` | deferred | owner input | — | assess-round-1 (loop 52) |
+| X5 | a repeat of long raw strings (the C++ memo is not ported) | deferred | AZ-2757 measures it | AZ-2757 | assess-round-1 (loop 52) |
