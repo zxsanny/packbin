@@ -1,3 +1,8 @@
+---
+loop: 52
+branch: dev
+---
+
 # Rust core: message ECC without allocation
 
 **Task**: AZ-2755_rust_core_ecc

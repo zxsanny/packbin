@@ -1,3 +1,8 @@
+---
+loop: 52
+branch: dev
+---
+
 # Rust core: compact text with caller scratch
 
 **Task**: AZ-2754_rust_core_compact_text
