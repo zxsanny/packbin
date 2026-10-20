@@ -18,3 +18,7 @@ From the loop 48 record (`record48.md`). Nothing here is owner-decided yet excep
 ## Read after the push
 
 - `test.yml` on `dev` and `main` for the loop 48 push: ring and scaffold job times (loop 47: ring 143 s, scaffold 166 s, wall 274 s; a second run was not read) and the Swift `sanitized` step.
+
+## CI read after the push (loop 48, `ac03ac8`)
+
+`test.yml` on `dev` (run 39380861306) and on `main` (run 39380864877): both green, 20 of 20 jobs. `dev`: longest job `embedded-esp-core` 204 s, then `suites (swift, tests)` 192 s, `publish-gate-swift` 190 s, `ring` 184 s; `main`: `ring` 220 s, `publish-gate-readonly` 201 s, `embedded-esp-core` 201 s. Both runs ended within about 3 minutes 40 s of the push (the first run on `dev` that is not slower than loop 47's 274 s wall; the loop 47 Swift `tests` 272 s is 192 s here, so the TSan step is not the long pole).
