@@ -1,3 +1,8 @@
+---
+loop: 51
+branch: dev
+---
+
 # Rust core: repeat, group, times, lists and dicts
 
 **Task**: AZ-2753_rust_core_lists_and_dicts

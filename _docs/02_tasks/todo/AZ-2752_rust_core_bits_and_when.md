@@ -1,3 +1,8 @@
+---
+loop: 51
+branch: dev
+---
+
 # Rust core: flags, bits, u2, packed, sized and when
 
 **Task**: AZ-2752_rust_core_bits_and_when
