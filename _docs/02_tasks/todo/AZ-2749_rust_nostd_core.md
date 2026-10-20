@@ -1,3 +1,8 @@
+---
+loop: 50
+branch: dev
+---
+
 # Rust: a `no_std` core for packbin
 
 **Task**: AZ-2749_rust_nostd_core
@@ -7,7 +12,7 @@
 **Dependencies**: None
 **Component**: rust (core, features, embedded CI)
 **Tracker**: AZ-2749
-**Epic**: pending
+**Epic**: AZ-2750
 
 ## Problem
 
