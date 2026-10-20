@@ -187,6 +187,7 @@ errors << "a job other than the publish-gate-* jobs runs the publish gate" if jo
 static = %w[
   .github/workflows/report-row.test.sh fixtures/hostile/cases.test.sh .github/workflows/run-suite.test.sh
   cpp/embedded/lib.test.sh cpp/embedded/run-parts.test.sh .github/workflows/ring-wiring.test.sh scripts/loop-tests.test.sh
+  .github/workflows/ring-wiring-rows.test.sh
   .github/workflows/ring-wiring-swift.test.sh .github/workflows/ring-prepare.test.sh
   fixtures/text/check-vectors.test.sh scripts/text/check-emitted.test.sh scripts/text/check-emitted.sh
   fixtures/ecc/check-vectors.test.sh fixtures/ecc/check-contract.sh .github/workflows/ring-ecc.test.sh

@@ -290,6 +290,7 @@ run_stage_command() {
         && bash cpp/embedded/lib.test.sh \
         && bash cpp/embedded/run-parts.test.sh \
         && bash .github/workflows/ring-wiring.test.sh \
+        && bash .github/workflows/ring-wiring-rows.test.sh \
         && bash .github/workflows/ring-wiring-swift.test.sh \
         && bash .github/workflows/ring-wiring-session-ecc.test.sh \
         && bash .github/workflows/ring-lib.test.sh \

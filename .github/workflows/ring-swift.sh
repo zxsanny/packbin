@@ -6,7 +6,7 @@
 # ring-swift.sh --version prints the version of the Swift that builds them (ring-toolchains.sh checks it).
 #
 # It rebuilds only when a source or manifest of the package (Package.swift, Package.resolved, swift/Sources) or
-# of the driver package is newer than the stamp a finished build leaves in <scratch dir>, so language-pair.sh can
+# of the driver package is newer than the stamp a finished build leaves in <scratch dir>, so ring-lib.sh can
 # call it before every driver command (as the go case does). The stamp, not the binaries: a build that finds
 # nothing to compile leaves them old, and every later call would build again.
 #
@@ -72,7 +72,7 @@ scratch="$(cd "$scratch" && pwd)"
 stamp="$scratch/ring-swift.built"
 # The stamp gets the time the build starts, so a source saved during the build is newer than it.
 touch "$stamp.new"
-# The build log goes to stderr: language-pair.sh compares the stdout of a pack call with the expected hex.
+# The build log goes to stderr: ring-lib.sh compares the stdout of a pack call with the expected hex.
 if use_local_swift; then
   swift build -c release --package-path "$driver" --scratch-path "$scratch" >&2
   mv "$stamp.new" "$stamp"

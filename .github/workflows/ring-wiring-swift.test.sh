@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Swift wiring check of the cross-language ring (AZ-2522 AC-3), the sibling of ring-wiring.test.sh (at its line
-# cap): Swift joins every kind of language-pair.sh both ways with each member of that kind's ring, refuses the
+# Swift wiring check of the cross-language ring (AZ-2522 AC-3), the sibling of ring-wiring.test.sh
+# and ring-wiring-rows.test.sh (the C# and Go rows): Swift joins every kind of language-pair.sh both ways with each member of that kind's ring, refuses the
 # short element packets, packs the session, checks its position row through publish-position.sh (AZ-2523), and the
 # driver package, ring-swift.sh, ring-toolchains.sh and the ring job of test.yml carry the Swift pieces. Every guard
 # is then proven against a temp copy with one piece removed: the copy must be rejected, naming it. ring-swift.sh is

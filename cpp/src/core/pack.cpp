@@ -296,6 +296,9 @@ Result pack_table(Field const* t, std::size_t n, std::uint8_t type_number, void 
   if (!r.ok())
     return r;
   Pack p{t, n, w, scratch};
+#ifndef PACKBIN_NO_TEXT
+  txt::forget_raw(scratch);
+#endif
   // Pack only reads through the accessors; they return non-const pointers because unpack uses
   // the same table to write.
   void* obj = const_cast<void*>(row);

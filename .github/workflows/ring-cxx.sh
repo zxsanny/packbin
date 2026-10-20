@@ -5,7 +5,7 @@
 # always run on the runner's glibc.
 #
 # The container sees the repo, the working directory and /tmp at the same paths as the host, so every
-# path language-pair.sh and publish-position.sh pass (-I, sources, -o /tmp/...) is valid inside it. It
+# path ring-lib.sh and publish-position.sh pass (-I, sources, -o /tmp/...) is valid inside it. It
 # runs as the caller, so the files it writes belong to the runner user.
 set -euo pipefail
 

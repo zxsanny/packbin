@@ -14,7 +14,7 @@
 #                                      build; on GitHub Actions also as ONE notice (annotations need no token to read).
 # Run build, then wait, last in the same step (ring-wiring-swift.test.sh holds the order in test.yml).
 # Each build keeps <name>.log, <name>.s (seconds) and <name>.rc (exit status, written last) in the state dir. The
-# drivers go where language-pair.sh looks (PACKBIN_GO_HANDOFF, PACKBIN_SWIFT_RING, the same defaults), and it rebuilds
+# drivers go where ring-lib.sh looks (PACKBIN_GO_HANDOFF, PACKBIN_SWIFT_RING, the same defaults), and it rebuilds
 # one only when a source is newer, so the ring reuses these builds.
 set -euo pipefail
 

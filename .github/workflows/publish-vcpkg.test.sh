@@ -52,7 +52,7 @@ vcpkg_run() {
 }
 
 # PACKBIN_CXX_SYSROOT is the macOS SDK path that this host's compiler needs to find the C++ headers (the
-# recipe of language-pair.sh and publish-position.sh). Prints the compile flags for it; prints nothing when it is unset,
+# recipe of ring-lib.sh and publish-position.sh). Prints the compile flags for it; prints nothing when it is unset,
 # as on the CI runner.
 vcpkg_sysroot_flags() {
   local sdk="${PACKBIN_CXX_SYSROOT:-}"

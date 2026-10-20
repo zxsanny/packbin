@@ -190,6 +190,7 @@ No queries and no cache.
 
 **Breaking changes for callers, loop 23**:
 - Construction: a `when` whose `eq` names an id below 0 or above 32 767 is `SchemeInvalid` (a compile error for a `constexpr` scheme); it built before and dropped its members on pack.
+- Repeated raw text (loop 48, AZ-2742; `put_raw`, `is_last_raw`, `forget_raw` in `text_encode.hpp`, `pack_table` in `pack.cpp`): a string that the format stores raw (the compact form is not smaller) is not parsed again when the next string of the same `pack` call equals it. The caller's `Scratch` keeps two words between strings, the payload offset of the last raw field and its length; the text is compared byte for byte with that field in the output buffer, and a match writes the raw field without the parse (the parse is a function of the text, so the bytes are the same). Every parse clears word 0 unless it ends raw, and `pack_table` clears it at the start, so a word left by another call or by a parse is never read. A compact field has no memo: a repeated text that compacts runs the parse each round. 200 rounds of one 65,535-character text: pack 13 ms (1.9 s before). Flash of the `PACKBIN_NO_TEXT` budget image and the stack are unchanged (7,920 B and 504 B); the all-kinds image grew 64 B (19,056 B to 19,120 B). Test: `text_repeat_host_tests.cpp`.
 
 ## 8. Dependency Graph
 

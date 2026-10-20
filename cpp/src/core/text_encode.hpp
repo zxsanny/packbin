@@ -308,6 +308,39 @@ Result put_field(Writer& w, std::size_t size, int id, std::uint8_t** payload) {
   return Result{Error::Ok, w.len};
 }
 
+// Scratch word 0 and 1 remember, between two strings of one `pack`, the last string written raw: the
+// offset of its payload (0 for none) and its length. Both are in the buffer the packet is built in,
+// so a later string that equals it is known to lose to the raw form without a parse (the parse is a
+// function of the text alone). A parse overwrites the words, so it clears word 0 unless it ends raw.
+constexpr std::size_t kRawMemoWords = 2;
+
+void forget_raw(ScratchRef const& scratch) {
+  if (scratch.count >= kRawMemoWords)
+    scratch.words[0] = 0;
+}
+
+bool is_last_raw(Writer const& w, ScratchRef const& scratch, std::uint8_t const* s, std::size_t len) {
+  return scratch.count >= kRawMemoWords && scratch.words[0] != 0 && scratch.words[1] == len &&
+         std::memcmp(w.data + scratch.words[0] + 1, s, len) == 0;
+}
+
+// Writes the raw field (prefix byte, then the text) and remembers it.
+Result put_raw(Writer& w, ScratchRef const& scratch, int id, std::uint8_t const* s,
+               std::size_t len) {
+  std::uint8_t* p = nullptr;
+  Result r = put_field(w, len + 1, id, &p);
+  if (!r.ok())
+    return r;
+  p[0] = kRawPrefix;
+  std::memcpy(p + 1, s, len);
+  if (scratch.count >= kRawMemoWords) {
+    auto at = static_cast<std::uint32_t>(p - w.data);
+    scratch.words[0] = static_cast<std::size_t>(at) == static_cast<std::size_t>(p - w.data) ? at : 0;
+    scratch.words[1] = static_cast<std::uint32_t>(len);
+  }
+  return r;
+}
+
 }  // namespace
 
 // Writes one string field (count, payload) for the UTF-8 text `s`. Nothing is written when the
@@ -320,6 +353,8 @@ inline Result encode_field(Writer& w, ScratchRef const& scratch, int id, std::ui
   std::uint8_t* p = nullptr;
   if (len == 0)
     return put_field(w, 0, id, &p);
+  if (is_last_raw(w, scratch, s, len))
+    return put_raw(w, scratch, id, s, len);
   // One pass: validate, count the characters and bound the compact size from below. A character
   // costs at least the shortest code, and one outside the tables at least ESC and its bytes.
   std::size_t chars = 0;
@@ -344,15 +379,11 @@ inline Result encode_field(Writer& w, ScratchRef const& scratch, int id, std::ui
       Result r = put_field(w, size, id, &p);
       if (r.ok())
         write_compact(p, size, bits, start, s, len, chars, costs);
+      forget_raw(scratch);
       return r;
     }
   }
-  Result r = put_field(w, raw, id, &p);
-  if (r.ok()) {
-    p[0] = kRawPrefix;
-    std::memcpy(p + 1, s, len);
-  }
-  return r;
+  return put_raw(w, scratch, id, s, len);
 }
 
 }  // namespace txt

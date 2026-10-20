@@ -359,6 +359,8 @@ jobs:
         run: bash cpp/embedded/lib.test.sh
       - name: cross-language ring wiring
         run: bash .github/workflows/ring-wiring.test.sh
+      - name: cross-language ring row wiring
+        run: bash .github/workflows/ring-wiring-rows.test.sh
       # Off the ring job's critical path since AZ-2626: both need only ruby and bash.
       - name: Swift ring wiring
         run: bash .github/workflows/ring-wiring-swift.test.sh

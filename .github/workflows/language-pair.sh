@@ -49,7 +49,7 @@ handoff java cpp user "$user_hex"
 handoff cpp csharp user "$user_hex"
 # Go (AZ-2449) joins every kind both ways with each member of that kind's ring: the handoff lines with go as the
 # producer and as the consumer follow the kind's chain (C# only produces roundflags and roundwhen, so for those two
-# kinds C# has no line with go as the producer). ring-wiring.test.sh fails when one is missing.
+# kinds C# has no line with go as the producer). ring-wiring-rows.test.sh fails when one is missing.
 # Swift (AZ-2522): the same lines, Go included, after each kind's Go lines (ring-wiring-swift.test.sh).
 handoff go csharp user "$user_hex"
 handoff csharp go user "$user_hex"
@@ -266,7 +266,7 @@ handoff go swift roundwhen "$roundwhen_hex"
 # refuses these schemes when it builds them (a list or dict element is one integer, float, bytes, utf8, list
 # or dict; README upgrade notes, integrity_tests.rs) and C++ builds an invalid scheme for them (bind_element in
 # table.hpp), so neither is run. A package that joins gets its handoff lines here and the commands in its driver;
-# ring-wiring.test.sh fails when a C# or Go line below is missing.
+# ring-wiring-rows.test.sh fails when a C# or Go line below is missing.
 handoff typescript python listgroup "$listgroup_hex"
 handoff python java listgroup "$listgroup_hex"
 handoff java csharp listgroup "$listgroup_hex"
@@ -346,7 +346,7 @@ for lang in typescript python java csharp go; do
     fi
   done
 done
-# Swift refuses them too; its loop is apart because ring-wiring.test.sh edits the exact line of the one above.
+# Swift refuses them too; its loop is apart because ring-wiring-rows.test.sh edits the exact line of the one above.
 for kind in listgroup dictgroup listflags; do
   short="${kind}_short_hex"
   if ! run_lang swift "unpack-$kind-short" "${!short}"; then

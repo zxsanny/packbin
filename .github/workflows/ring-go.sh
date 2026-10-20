@@ -3,7 +3,7 @@
 # "./position" = the position program], both in .github/workflows/drivers/handoff-go.
 #
 # It rebuilds only when a non-test Go source, go.mod or go.sum of the package (go/) or the driver module is
-# newer than the binary, so language-pair.sh can call it before every driver command (as the java case does).
+# newer than the binary, so ring-lib.sh can call it before every driver command (as the java case does).
 #
 # -buildvcs=false: the publish gate runs this in the golang container as root on a checkout owned by the
 # runner user; git refuses that repository ("dubious ownership") and `go build` stops with "error obtaining
