@@ -11,6 +11,8 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 failures=0
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
+ring_all="$tmp/ring-all.sh" # the rows (language-pair.sh) and the runner (ring-lib.sh) in one file: the guards read both
+cat "$here/ring-lib.sh" "$here/language-pair.sh" > "$ring_all"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -114,7 +116,7 @@ RUBY
 # swift_violations: one line per missing Swift piece. Each file can be replaced by a copy: SW_SCRIPT, SW_KINDS,
 # SW_MAIN, SW_PACKAGE, SW_RESOLVED, SW_TOOLS, SW_BUILD, SW_WORKFLOW, SW_PINS, SW_COMPOSE (defaults: the real files).
 swift_violations() {
-  local script="${SW_SCRIPT:-$here/language-pair.sh}" kinds="${SW_KINDS:-$here/drivers/handoff-swift/Sources/handoff-swift/Kinds.swift}"
+  local script="${SW_SCRIPT:-$ring_all}" kinds="${SW_KINDS:-$here/drivers/handoff-swift/Sources/handoff-swift/Kinds.swift}"
   local main="${SW_MAIN:-$here/drivers/handoff-swift/Sources/handoff-swift/main.swift}"
   local package="${SW_PACKAGE:-$here/drivers/handoff-swift/Package.swift}" tools="${SW_TOOLS:-$here/ring-toolchains.sh}"
   local build="${SW_BUILD:-$here/ring-swift.sh}" workflow="${SW_WORKFLOW:-$here/test.yml}"
@@ -178,7 +180,7 @@ swift_violations() {
 expect_rejected() {
   local label="$1" var="${2%%=*}" copy="${2#*=}" real out
   case "$var" in
-    SW_SCRIPT) real="$here/language-pair.sh" ;;
+    SW_SCRIPT) real="$ring_all" ;;
     SW_KINDS) real="$here/drivers/handoff-swift/Sources/handoff-swift/Kinds.swift" ;;
     SW_MAIN) real="$here/drivers/handoff-swift/Sources/handoff-swift/main.swift" ;;
     SW_PACKAGE) real="$here/drivers/handoff-swift/Package.swift" ;;
@@ -208,7 +210,7 @@ mutate() { sed "$3" "$1" > "$2"; }
 insert_after() { awk -v re="$3" -v add="$4" '{ print } $0 ~ re { print add }' "$1" > "$2"; }
 
 swift_wiring_checks() {
-  local out line n=0 kind script="$here/language-pair.sh" driver="$here/drivers/handoff-swift"
+  local out line n=0 kind script="$ring_all" driver="$here/drivers/handoff-swift"
   out="$(swift_violations)"
   if [ -n "$out" ]; then fail "swift ring: $out"; return; fi
   echo "accepts: the real files"
@@ -428,36 +430,11 @@ ring_swift_linux_checks() {
   fi
 }
 
-# AZ-2739 AC-3: a driver without the protected session command, or one that packs other bytes, ends the ring with exit 1
-# and one line that names the language. The stage is the text of language-pair.sh from its comment to the done of its
-# loop, run with a stand-in run_lang that misbehaves for one language: BAD (missing: exit 2 and no output; other: other bytes).
-session_ecc_failure_checks() {
-  local stage="$tmp/session-ecc-stage.sh" lang mode out rc want
-  sed -n '/^# A driver without the protected session command/,/^done$/p' "$here/language-pair.sh" > "$stage"
-  if ! grep -qF 'pack-session-ecc' "$stage"; then fail "language-pair.sh has no stage that packs session-ecc"; return; fi
-  for lang in none csharp typescript python rust cpp java swift go; do
-    for mode in missing other; do
-      rc=0
-      out="$(BAD="$lang" MODE="$mode" STAGE="$stage" bash -c 'set -euo pipefail; session_ecc_hex=aa
-        run_lang() { if [ "$1" != "$BAD" ]; then echo aa; elif [ "$MODE" = missing ]; then return 2; else echo bb; fi; }
-        source "$STAGE"' 2>&1)" || rc=$?
-      want="$lang pack-session-ecc failed"; [ "$mode" = other ] && want="$lang pack-session-ecc mismatch"
-      if [ "$lang" = none ]; then
-        [ "$rc" -eq 0 ] && [ -z "$out" ] || fail "the session-ecc stage failed for eight good drivers: exit $rc, [$out]"
-      elif [ "$rc" -ne 1 ] || [ "$out" != "$want" ]; then
-        fail "the session-ecc stage, $mode driver $lang: exit $rc, [$out], expected exit 1 and [$want]"
-      fi
-    done
-  done
-  echo "rejects: a driver without pack-session-ecc or with other bytes, each of the eight named"
-}
-
 if ! command -v ruby > /dev/null; then
   fail "ruby is required to parse the workflow YAML"
 else
   swift_wiring_checks
 fi
-session_ecc_failure_checks
 ring_swift_checks
 
 if [ "$failures" -ne 0 ]; then

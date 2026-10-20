@@ -6,8 +6,8 @@
 #
 # A driver (.github/workflows/drivers) takes `ecc-batch <file>`: one result line for each `protect <n> <hex>` or
 # `repair <n> <t> <hex>` line of the file, so a language costs two process starts, not one for each row. run_lang is the
-# one of language-pair.sh, read from it, so a driver is built and started exactly as there. The file is a path, not
-# stdin: run_lang may build through docker, which would take stdin.
+# one of ring-lib.sh (the runner language-pair.sh sources), read from it, so a driver is built and started exactly as
+# there. The file is a path, not stdin: run_lang may build through docker, which would take stdin.
 #
 # Environment: RING_ECC_RUN (a command that runs a driver in place of run_lang: `$RING_ECC_RUN <lang> <args>`; the
 # self-test of this script), PACKBIN_RING_WORK (the driver builds language-pair.sh kept), RING_ECC_LANGS (the
@@ -33,9 +33,13 @@ checker="$root/scripts/ecc/ring_ecc.py"
 if [ -n "${RING_ECC_RUN:-}" ]; then
   run_lang() { "$RING_ECC_RUN" "$@"; }
 else
-  definition="$(sed -n '/^run_lang() {$/,/^}$/p' "$here/language-pair.sh")"
+  if [ ! -f "$here/ring-lib.sh" ]; then
+    echo "ring-ecc: $here/ring-lib.sh is missing" >&2
+    exit 1
+  fi
+  definition="$(sed -n '/^run_lang() {$/,/^}$/p' "$here/ring-lib.sh")"
   if [ -z "$definition" ]; then
-    echo "ring-ecc: language-pair.sh has no run_lang to reuse" >&2
+    echo "ring-ecc: ring-lib.sh has no run_lang to reuse" >&2
     exit 1
   fi
   eval "$definition"

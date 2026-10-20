@@ -291,6 +291,8 @@ run_stage_command() {
         && bash cpp/embedded/run-parts.test.sh \
         && bash .github/workflows/ring-wiring.test.sh \
         && bash .github/workflows/ring-wiring-swift.test.sh \
+        && bash .github/workflows/ring-wiring-session-ecc.test.sh \
+        && bash .github/workflows/ring-lib.test.sh \
         && bash .github/workflows/ring-prepare.test.sh \
         && bash scripts/loop-tests.test.sh ;;
     # The clean runs in the container, not on the host: Docker Desktop shows a container started within about a second

@@ -186,12 +186,12 @@ swift_speed() {
   swift test "${swift_opts[@]}" -c release --skip-build --verbose --filter '\.SpeedTests/' --filter '\.TextSpeedTests/' --filter '\.FuzzTests/mebibyte'
 }
 
-# The thread sanitizer runs the suites that use threads (the concurrency suite and the session suites); the other suites
+# The thread sanitizer runs the suites that use threads (the concurrency suites, text and byte, and the session suites); the other suites
 # are single-threaded, where it only costs time. A suite gone from the list fails the step, since a filter that matches
 # nothing passes with no test run, and so does a test file that uses threads outside those suites.
 swift_sanitized() {
   local suite threaded
-  for suite in ConcurrencyTests SessionTests SessionHostileTests; do
+  for suite in ConcurrencyTests TextConcurrencyTests SessionTests SessionHostileTests; do
     if ! grep -q "\.$suite/" <<< "$swift_tests"; then
       printf 'run-suite: swift has no %s suite; the thread-sanitizer run would not run it\n' "$suite" >&2
       return 1
@@ -199,14 +199,14 @@ swift_sanitized() {
   done
   if [ -d "$root/swift/Tests" ]; then
     threaded="$(grep -rlE 'withTaskGroup|withThrowingTaskGroup|Task(\.detached)? *\{|Thread\.|DispatchQueue' "$root/swift/Tests" \
-      | grep -vE '/(Concurrency|Session|SessionHostile)Tests\.swift$')"
+      | grep -vE '/(Concurrency|TextConcurrency|Session|SessionHostile)Tests\.swift$')"
     if [ -n "$threaded" ]; then
       printf 'run-suite: swift test files use threads outside the thread-sanitizer suites:\n%s\n' "$threaded" >&2
       return 1
     fi
   fi
   swift test "${swift_opts[@]}" --skip-build --sanitize=thread --verbose \
-    --filter '\.ConcurrencyTests/' --filter '\.SessionTests/' --filter '\.SessionHostileTests/'
+    --filter '\.ConcurrencyTests/' --filter '\.TextConcurrencyTests/' --filter '\.SessionTests/' --filter '\.SessionHostileTests/'
 }
 
 # SW-11: exactly one package dependency, swift-crypto (what swift-crypto itself requires is its business), no

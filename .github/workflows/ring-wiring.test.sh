@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# Wiring check for the cross-language ring (AZ-2193 AC-1, AC-6): test.yml must run language-pair.sh from a
-# job that runs on every push and pull request, as its own check, and that a failing ring fails. It parses
-# the workflow with Ruby yaml like the publish gate does, then runs the same check against copies of
-# test.yml that each break one rule: every copy must be rejected. It also runs language-pair.sh against PATH
-# shims for its toolchains (consumer_failure_checks), to check the line a failing pair prints.
+# Wiring check for the cross-language ring (AZ-2193 AC-1, AC-6): test.yml must run language-pair.sh from a job that runs
+# on every push and pull request, as its own check, and that a failing ring fails. It parses the workflow with Ruby yaml
+# like the publish gate does, then runs the same check against copies of test.yml that each break one rule: every copy
+# must be rejected. It also runs language-pair.sh against PATH shims for its toolchains (consumer_failure_checks).
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,14 +11,16 @@ compose_yml="$here/../../docker-compose.test.yml"
 failures=0
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
+ring_all="$tmp/ring-all.sh" # the rows (language-pair.sh) and the runner (ring-lib.sh) in one file: the guards read both
+cat "$here/ring-lib.sh" "$here/language-pair.sh" > "$ring_all"
 
 fail() {
   echo "FAIL: $*" >&2
   failures=$((failures + 1))
 }
 
-# Prints the violations of workflow file $1, checked against the suite images in compose file $2 (default:
-# the real one); exit status 1 when there are any.
+# Prints the violations of workflow file $1, checked against the suite images in compose file $2 (default: the real
+# one); exit status 1 when there are any.
 ring_wiring() {
   ruby -ryaml - "$1" "${2:-$compose_yml}" <<'RUBY'
 workflow = YAML.safe_load(File.read(ARGV.fetch(0)))
@@ -181,9 +182,9 @@ drop_step() {
   awk -v head="      - name: $1" '$0 == head { skip = 1; next } skip { skip = 0; next } { print }' "$test_yml"
 }
 
-# write_shim <dir> <tool> <pack output> <pack exit status> <unpack exit status>: a stand-in for the toolchain
-# command <tool> that language-pair.sh runs. A pack-* driver command prints <pack output> and exits with the
-# pack status, an unpack-* command exits with the unpack status; every call is logged to $SHIM_LOG.
+# write_shim <dir> <tool> <pack output> <pack exit status> <unpack exit status>: a stand-in for the toolchain command
+# <tool> the ring runs. A pack-* command prints <pack output> and exits with the pack status, an unpack-* command exits
+# with the unpack status; every call is logged to $SHIM_LOG.
 write_shim() {
   cat > "$1/$2" <<SHIM
 #!/bin/sh
@@ -198,8 +199,7 @@ SHIM
   chmod +x "$1/$2"
 }
 
-# expect_ring <label> <expected output> <expected exit status>: runs language-pair.sh from the temp tree
-# with the shims first on PATH; stdout and stderr together must be exactly the expected text.
+# expect_ring <label> <expected output> <exit status>: runs language-pair.sh in the temp tree, the shims first on PATH.
 expect_ring() {
   local label="$1" want="$2" want_rc="$3" out rc=0
   : > "$shim_log"
@@ -222,7 +222,7 @@ consumer_failure_checks() {
     return
   fi
   mkdir -p "$shims" "$ring_tree/.github/workflows"
-  cp "$here/language-pair.sh" "$ring_tree/.github/workflows/language-pair.sh"
+  cp "$here/language-pair.sh" "$here/ring-lib.sh" "$ring_tree/.github/workflows/"
 
   write_shim "$shims" dotnet "$user_hex" 0 0
   write_shim "$shims" python3 "$user_hex" 0 0
@@ -250,7 +250,7 @@ consumer_failure_checks() {
 # missing piece of the script $1 (default: the real one) or of the driver $2 (default: the real one). The driver builds
 # its commands as pack-{kind}, unpack-{kind} and unpack-{kind}-short for each kind in the array of its Run loop.
 element_ring_violations() {
-  local script="${1:-$here/language-pair.sh}" driver="${2:-$here/drivers/csharp/HandoffElements.cs}" kind form
+  local script="${1:-$ring_all}" driver="${2:-$here/drivers/csharp/HandoffElements.cs}" kind form
   for form in 'pack-{kind}' 'unpack-{kind}' 'unpack-{kind}-short'; do
     grep -qF "\$\"$form\"" "$driver" \
       || echo "the csharp driver does not build the command $form"
@@ -271,7 +271,7 @@ element_ring_violations() {
 # expect_element_ring_rejected <label> <language-pair.sh copy>: the copy lacks something and the check names it.
 expect_element_ring_rejected() {
   local label="$1" copy="$2" out
-  if cmp -s "$here/language-pair.sh" "$copy"; then
+  if cmp -s "$ring_all" "$copy"; then
     fail "temp copy is unchanged: $label"
     return
   fi
@@ -290,7 +290,7 @@ expect_driver_rejected() {
     fail "temp copy is unchanged: $label"
     return
   fi
-  out="$(element_ring_violations "$here/language-pair.sh" "$copy")"
+  out="$(element_ring_violations "$ring_all" "$copy")"
   if [ -z "$out" ]; then
     fail "the element ring check passed a driver without: $label"
   else
@@ -306,9 +306,9 @@ element_ring_checks() {
     return
   fi
   for kind in listgroup dictgroup listflags; do
-    sed "/^handoff csharp [a-z]* ${kind} /d" "$here/language-pair.sh" > "$tmp/no-producer-$kind.sh"
+    sed "/^handoff csharp [a-z]* ${kind} /d" "$ring_all" > "$tmp/no-producer-$kind.sh"
     expect_element_ring_rejected "the csharp producer line of $kind" "$tmp/no-producer-$kind.sh"
-    sed "/^handoff [a-z]* csharp ${kind} /d" "$here/language-pair.sh" > "$tmp/no-consumer-$kind.sh"
+    sed "/^handoff [a-z]* csharp ${kind} /d" "$ring_all" > "$tmp/no-consumer-$kind.sh"
     expect_element_ring_rejected "the csharp consumer line of $kind" "$tmp/no-consumer-$kind.sh"
   done
   for kind in listgroup dictgroup listflags; do
@@ -320,7 +320,7 @@ element_ring_checks() {
     expect_driver_rejected "the $form command of the csharp driver" "$tmp/no-form-$form.cs"
   done
   sed 's/^for lang in typescript python java csharp go; do$/for lang in typescript python java go; do/' \
-    "$here/language-pair.sh" > "$tmp/no-short-csharp.sh"
+    "$ring_all" > "$tmp/no-short-csharp.sh"
   expect_element_ring_rejected "csharp in the short packet loop" "$tmp/no-short-csharp.sh"
 }
 
@@ -347,7 +347,7 @@ go_expected_lines() {
 
 # go_ring_violations [script] [driver kinds.go] [toolchains]: one line per missing piece (defaults: the real files).
 go_ring_violations() {
-  local script="${1:-$here/language-pair.sh}" driver="${2:-$here/drivers/handoff-go/kinds.go}"
+  local script="${1:-$ring_all}" driver="${2:-$here/drivers/handoff-go/kinds.go}"
   local toolchains="${3:-$here/ring-toolchains.sh}" kind row tab=$'\t'
   go_expected_lines > "$tmp/go-expected.txt"
   grep -Fxv -f "$script" "$tmp/go-expected.txt" | sed 's/^/no handoff line: /' || true
@@ -368,7 +368,7 @@ go_ring_violations() {
 # expect_go_rejected <label> <script copy> [<driver copy> [<toolchains copy>]]: the copy lacks something, the check names it.
 expect_go_rejected() {
   local label="$1" copy="$2" driver="${3:-}" tools="${4:-}" out
-  if cmp -s "$here/language-pair.sh" "$copy" && [ -z "$driver$tools" ]; then fail "temp copy is unchanged: $label"; return; fi
+  if cmp -s "$ring_all" "$copy" && [ -z "$driver$tools" ]; then fail "temp copy is unchanged: $label"; return; fi
   out="$(go_ring_violations "$copy" "${driver:-$here/drivers/handoff-go/kinds.go}" "${tools:-$here/ring-toolchains.sh}")"
   if [ -z "$out" ]; then
     fail "the Go ring check passed a copy without: $label"
@@ -384,24 +384,24 @@ go_ring_checks() {
   # Every one of the Go handoff lines, removed alone, is named.
   while IFS= read -r line; do
     n=$((n + 1))
-    grep -Fxv -- "$line" "$here/language-pair.sh" > "$tmp/no-go-line.sh"
+    grep -Fxv -- "$line" "$ring_all" > "$tmp/no-go-line.sh"
     if ! go_ring_violations "$tmp/no-go-line.sh" | grep -qF "no handoff line: $line"; then
       fail "removing [$line] was not named by the Go ring check"
     fi
   done < "$tmp/go-expected.txt"
   echo "rejects: each of the $n Go handoff lines removed alone"
-  sed 's/^\(for lang in .*\) go; do$/\1; do/' "$here/language-pair.sh" > "$tmp/no-loop-go.sh"
+  sed 's/^\(for lang in .*\) go; do$/\1; do/' "$ring_all" > "$tmp/no-loop-go.sh"
   expect_go_rejected "go in the short packet, pack-session and position loops" "$tmp/no-loop-go.sh"
-  awk '/^    go[)]$/ { sub(/go[)]/, "gox)") } { print }' "$here/language-pair.sh" > "$tmp/no-go-case.sh"
+  awk '/^    go[)]$/ { sub(/go[)]/, "gox)") } { print }' "$ring_all" > "$tmp/no-go-case.sh"
   expect_go_rejected "the go case of run_lang" "$tmp/no-go-case.sh"
   for kind in user dictgroup; do
     sed "s/^\\(${tab}${tab}\\)\"$kind\": {/\\1\"x$kind\": {/" "$here/drivers/handoff-go/kinds.go" > "$tmp/no-driver-$kind.go"
-    expect_go_rejected "the $kind kind of the go driver" "$here/language-pair.sh" "$tmp/no-driver-$kind.go"
+    expect_go_rejected "the $kind kind of the go driver" "$ring_all" "$tmp/no-driver-$kind.go"
   done
   sed 's/"listflags": true//' "$here/drivers/handoff-go/kinds.go" > "$tmp/no-short-listflags.go"
-  expect_go_rejected "the short listflags refusal of the go driver" "$here/language-pair.sh" "$tmp/no-short-listflags.go"
+  expect_go_rejected "the short listflags refusal of the go driver" "$ring_all" "$tmp/no-short-listflags.go"
   sed 's/^check go /check gox /' "$here/ring-toolchains.sh" > "$tmp/no-go-toolchain.sh"
-  expect_go_rejected "the Go version check" "$here/language-pair.sh" "" "$tmp/no-go-toolchain.sh"
+  expect_go_rejected "the Go version check" "$ring_all" "" "$tmp/no-go-toolchain.sh"
 }
 
 if ! command -v ruby > /dev/null; then

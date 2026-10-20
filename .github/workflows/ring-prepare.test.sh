@@ -2,7 +2,7 @@
 # Test of ring-prepare.sh (AZ-2626 AC-3 to AC-5) in a temp tree with stand-in docker, npm, cargo, ring-go.sh and
 # ring-swift.sh: start returns while the pulls and the Swift build go on, the second pull and the Swift build follow
 # each other, build runs its three builds at the same time, wait names a failed, skipped or hung build with its log,
-# and prints one timing notice on GitHub Actions only. The driver paths are the ones language-pair.sh reads. Mutants of
+# and prints one timing notice on GitHub Actions only. The driver paths are the ones ring-lib.sh (the runner of language-pair.sh) reads. Mutants of
 # the script (no background, serial builds, failures ignored) must each be caught.
 # shellcheck disable=SC2016 # the sed expressions and the mutant checks are single-quoted on purpose
 set -euo pipefail
@@ -19,9 +19,9 @@ fail() {
 
 now_ms() { perl -MTime::HiRes=time -e 'printf "%d\n", time * 1000'; }
 
-# Both defaults must be the paths language-pair.sh runs the drivers from, or the ring builds them again.
+# Both defaults must be the paths ring-lib.sh runs the drivers from, or the ring builds them again.
 for default in 'PACKBIN_SWIFT_RING:-/tmp/packbin-ring-swift' 'PACKBIN_GO_HANDOFF:-/tmp/packbin-handoff-go'; do
-  grep -qF "$default" "$here/language-pair.sh" || fail "language-pair.sh does not read $default"
+  grep -qF "$default" "$here/ring-lib.sh" || fail "ring-lib.sh does not read $default"
   grep -qF "$default" "$here/ring-prepare.sh" || fail "ring-prepare.sh does not build to $default"
 done
 

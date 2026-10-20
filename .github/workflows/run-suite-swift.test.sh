@@ -49,7 +49,7 @@ case "$step" in
     if [ -z "${SWIFT_NO_TEXT_SPEED:-}" ] && [ -z "${SWIFT_NO_SPEED:-}" ]; then echo 'PackbinTests.TextSpeedTests/roundTrips()'; fi
     if [ -n "${SWIFT_FUZZ:-}" ]; then echo 'PackbinTests.FuzzTests/unpack_corpusAndRandom()'; fi
     echo 'PackbinTests.GoldenTests/pack_goldenRow()'
-    for suite in SessionTests SessionHostileTests ConcurrencyTests; do
+    for suite in SessionTests SessionHostileTests ConcurrencyTests TextConcurrencyTests; do
       [ "$suite" = "${SWIFT_NO_SUITE:-}" ] || echo "PackbinTests.$suite/case()"
     done ;;
   fuzz)
@@ -80,6 +80,7 @@ cp "$work/src/.github/workflows/report-row.sh" "$swroot/.github/workflows/"
 : > "$swroot/Package.swift"
 mkdir -p "$swroot/swift/Tests/PackbinTests"
 printf 'func f() async { await withTaskGroup(of: Int.self) { _ in } }\n' > "$swroot/swift/Tests/PackbinTests/ConcurrencyTests.swift"
+printf 'func f() { Thread { }.start(); DispatchQueue.global().async { } }\n' > "$swroot/swift/Tests/PackbinTests/TextConcurrencyTests.swift"
 swscratch="$work/swift-scratch"
 
 run_swift() { # lang tree [VAR=value ...]: runs run-suite.sh <lang> with the fake swift first on PATH
@@ -129,7 +130,7 @@ c_test="swift test $o --skip-build --verbose"
 c_list="swift test list $o --skip-build"
 c_fuzz="swift test $o --skip-build --verbose --filter \\.FuzzTests/"
 c_tsan_build="swift build $o --build-tests --sanitize=thread"
-c_tsan="swift test $o --skip-build --sanitize=thread --verbose --filter \\.ConcurrencyTests/ --filter \\.SessionTests/ --filter \\.SessionHostileTests/"
+c_tsan="swift test $o --skip-build --sanitize=thread --verbose --filter \\.ConcurrencyTests/ --filter \\.TextConcurrencyTests/ --filter \\.SessionTests/ --filter \\.SessionHostileTests/"
 c_speed_list="swift test list $o -c release --skip-build"
 c_speed="swift test $o -c release --skip-build --verbose --filter \\.SpeedTests/ --filter \\.TextSpeedTests/ --filter \\.FuzzTests/mebibyte"
 c_describe="swift package $o describe --type json"
@@ -307,7 +308,7 @@ case "$out" in *"no SpeedTests suite"*) ;; *) bad "swift: no message for the mis
 sw_ran "-c release --skip-build" || bad "swift: the speed part did not list its release build: $(cat "$work/swift.log")"
 
 # S6b. a suite of the thread-sanitizer run is gone from the list: the step fails by name, the filter never runs
-for suite in SessionTests SessionHostileTests ConcurrencyTests; do
+for suite in SessionTests SessionHostileTests ConcurrencyTests TextConcurrencyTests; do
   out="$(run_swift swift "$swroot" SWIFT_NO_SUITE="$suite")"; code=$?
   [ "$code" -ne 0 ] || bad "swift: a tree without $suite passed"
   case "$out" in *"no $suite suite"*) ;; *) bad "swift: no message for the missing $suite suite: $out" ;; esac
@@ -320,6 +321,7 @@ out="$(run_swift swift "$swroot")"; code=$?
 rm -f "$swroot/swift/Tests/PackbinTests/RaceTests.swift"
 [ "$code" -ne 0 ] || bad "swift: a threaded test file outside the sanitized suites passed"
 case "$out" in *"use threads outside"*"RaceTests.swift"*) ;; *) bad "swift: the threaded file is not named: $out" ;; esac
+case "$out" in *"TextConcurrencyTests.swift"*) bad "swift: the allowed TextConcurrencyTests.swift is named: $out" ;; esac
 if sw_ran "--sanitize=thread --verbose"; then bad "swift: the sanitized tests ran with a threaded file outside the suites"; fi
 
 # S7 (SW-11). a second package, a target that is not Swift, an unsafe flag or an unreadable describe fails and is
