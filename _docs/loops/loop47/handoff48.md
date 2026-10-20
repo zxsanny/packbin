@@ -17,3 +17,7 @@ From the loop 47 record (`record47.md`). Nothing here is owner-decided yet excep
 ## Read after the push
 
 - The CI time of the ring job and of the Swift `sanitized` step (AZ-2745 AC-5); the local TSan figure for the text test is 2.7 s.
+
+## CI read after the push (loop 47, `ebce1b6`)
+
+`test.yml` on `dev` (run 39370459426) and on `main` (run 39370461865): both green, 20 jobs, `dev` wall 274 s (queue to done). Longest job `suites (swift, tests)` 272 s (loop 34 median wall was 213.5 s; this part holds the sanitized step and the host-noisy runner was not re-run), then `suites (swift, speed)` 230 s, `suites (swift, gates)` 229 s, `publish-gate-readonly` 218 s; `ring` 143 s (was 209 s at loop 33), `scaffold` 166 s. AZ-2744 AC-3 holds on the runner (the two new wiring steps are inside `scaffold`); AZ-2745 AC-5 added time is not separable from the one run: the Swift `tests` job is the longest, so read a second run before judging.
