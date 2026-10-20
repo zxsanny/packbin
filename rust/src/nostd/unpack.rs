@@ -25,7 +25,7 @@ pub(crate) struct Unpack<'t, 'r, 'b> {
 }
 
 fn bad(at: usize, f: &Field) -> Fault {
-    Fault::new(Error::BadValue, at, id_of(f), 0)
+    Fault::bad(at, id_of(f))
 }
 
 /// A count read from a packet as a length: one that does not fit `usize` fails the ordinary
@@ -52,11 +52,7 @@ impl Unpack<'_, '_, '_> {
     /// it, so a flag byte read inside a part that may not run is not seen after it.
     fn scoped(&mut self, i: usize, whole: bool) -> Result<(), Fault> {
         let outer = self.flag_bytes;
-        let result = if whole {
-            self.one(i)
-        } else {
-            members(self.t, i).try_for_each(|j| self.one(j))
-        };
+        let result = if whole { self.one(i) } else { self.top_of(i) };
         self.flag_bytes = outer;
         result
     }
@@ -109,7 +105,7 @@ impl Unpack<'_, '_, '_> {
             }
             Kind::U2 => self.u2(i, &f),
             Kind::Bits | Kind::Packed => self.small(i, &f),
-            Kind::Group => members(self.t, i).try_for_each(|j| self.one(j)),
+            Kind::Group => self.top_of(i),
             Kind::Repeat | Kind::Times | Kind::List => self.container(i, &f),
             _ => Err(Fault::new(Error::SchemeInvalid, self.r.pos(), id_of(&f), 0)),
         }

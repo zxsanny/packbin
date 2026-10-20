@@ -418,3 +418,14 @@ pub fn compare(read: &Values, row: &dyn Row, leaves: &[(u16, Leaf)]) -> Result<(
     }
     Ok(())
 }
+
+/// True when the `std` walker refuses the scheme (`MapScheme::new` panics), with the panic message
+/// kept off the test output.
+pub fn std_refuses(nodes: &[Node]) -> bool {
+    let nodes = nodes.to_vec();
+    let quiet = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let refused = std::panic::catch_unwind(move || MapScheme::new(1, std_fields(&nodes))).is_err();
+    std::panic::set_hook(quiet);
+    refused
+}

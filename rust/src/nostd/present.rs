@@ -67,11 +67,21 @@ pub(crate) fn present(t: &[Field], i: usize, row: &dyn Row, skip_late: bool) -> 
         }
         Kind::Bytes | Kind::Sized | Kind::Bits | Kind::Packed => row.bytes(f.id).is_some(),
         Kind::Group => any_member(t, i, row, skip_late),
-        Kind::Repeat => row.count(f.id).is_some_and(|n| n != 0),
+        Kind::Repeat => repeat_present(t, i, f, row, skip_late),
         Kind::Times => !(skip_late && is_late(t, i)) && times_present(t, i, f, row),
         Kind::List => row.count(f.id).is_some(),
         _ => false,
     }
+}
+
+/// A `repeat` is on when one of its rounds holds a value (rounds that hold none are left out, as
+/// the std walker does).
+fn repeat_present(t: &[Field], i: usize, f: &Field, row: &dyn Row, skip_late: bool) -> bool {
+    let n = row.count(f.id).unwrap_or(0);
+    (0..n).any(|k| {
+        row.item(f.id, k)
+            .is_some_and(|item| any_member(t, i, item, skip_late))
+    })
 }
 
 /// A `times` is on when its count is above zero or the row holds rounds (a count of zero with

@@ -34,6 +34,11 @@ pub struct Fault {
 }
 
 impl Fault {
+    /// `BadValue` at `offset` naming the field with order id `field`.
+    pub(crate) const fn bad(offset: usize, field: i32) -> Self {
+        Fault::new(Error::BadValue, offset, field, 0)
+    }
+
     pub(crate) const fn new(error: Error, offset: usize, field: i32, needed: usize) -> Self {
         Fault {
             error,

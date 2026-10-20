@@ -1,10 +1,12 @@
 //! The heap-free API: plain-data schemes, caller buffers, errors as values.
 //!
 //! It builds with `#![no_std]` and no allocator (`default-features = false`). A scheme is a
-//! `const` slice of [`Field`]s; the caller's data is read and written through the [`Row`] trait
-//! by field id; [`pack`] writes into a caller buffer and [`unpack`] reads from one. Every call
-//! returns a `Result`; no path reachable from untrusted bytes panics. The bytes are those of
-//! the `std` API (the wire format does not change).
+//! `const` slice of [`Field`]s in order, a parent entry followed by its members (`span` counts
+//! them: `flags(1, 2), u8(1), u16(2)`); the caller's data is read and written through the
+//! [`Row`] trait by field id, and the items of a `repeat`, `times` or `list` are rows of their
+//! own. [`pack`] writes into a caller buffer and [`unpack`] reads from one. Every call returns a
+//! `Result`; no path reachable from untrusted bytes panics. The bytes are those of the `std` API
+//! (the wire format does not change).
 //!
 //! ```
 //! use packbin::nostd::{i32, pack, u16, u8, unpack, Fault, Num, Row, Scheme};

@@ -5,7 +5,7 @@
 mod nostd_support;
 
 use nostd_support::random::{assert_read_alike, pack_both, random_row, Rng};
-use nostd_support::tree::{build, values_of, Node};
+use nostd_support::tree::{build, std_refuses, values_of, Node};
 use nostd_support::Slots;
 use packbin::nostd::{self, Error, Kind, Num, Row};
 
@@ -281,18 +281,6 @@ fn ac4_unpack_leaves_a_member_the_packet_skips_absent() {
     // Assert
     assert_eq!((row.num(1), row.flag(2), row.num(3)), (None, false, None));
     assert_eq!(row.num(0), Some(Num::U8(0)));
-}
-
-fn std_refuses(nodes: &[Node]) -> bool {
-    let nodes = nodes.to_vec();
-    let quiet = std::panic::take_hook();
-    std::panic::set_hook(Box::new(|_| {}));
-    let refused = std::panic::catch_unwind(move || {
-        packbin::MapScheme::new(1, nostd_support::tree::std_fields(&nodes))
-    })
-    .is_err();
-    std::panic::set_hook(quiet);
-    refused
 }
 
 fn assert_refused(label: &str, fields: &[nostd::Field]) {

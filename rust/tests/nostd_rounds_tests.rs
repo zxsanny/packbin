@@ -5,7 +5,7 @@
 mod nostd_support;
 
 use nostd_support::random::{assert_read_alike, pack_both, random_row, set_items, Rng};
-use nostd_support::tree::{build, nostd_fields, std_fields, values_of, Node};
+use nostd_support::tree::{build, nostd_fields, std_refuses, values_of, Node};
 use nostd_support::Slots;
 use packbin::nostd::{self, Error, Fault, Kind, Num, Row};
 
@@ -249,24 +249,25 @@ fn ac4_hostile_counts_end_with_an_error_kind_at_once() {
     let lists = build(0x01, &[list(n(U16))]);
     let rounds = nostd::Scheme::new(0x01, &times.fields);
     let items = nostd::Scheme::new(0x01, &lists.fields);
-    let start = std::time::Instant::now();
+    let (mut round_row, mut item_row) = (Slots::default(), Slots::default());
     // Act
     let a = nostd::unpack(
         &rounds,
         &[0x01, 0xff, 0xff, 0xff, 0xff, 0x61],
-        &mut Slots::default(),
+        &mut round_row,
     );
-    let b = nostd::unpack(&items, &[0x01, 0xff, 0xff, 1, 0], &mut Slots::default());
-    // Assert
+    let b = nostd::unpack(&items, &[0x01, 0xff, 0xff, 1, 0], &mut item_row);
+    // Assert: the read stopped in the round or item where the bytes ran out
     assert_eq!(a.map_err(|f| f.error), Err(Error::ShortPacket));
     assert_eq!(b.map_err(|f| f.error), Err(Error::ShortPacket));
-    assert!(start.elapsed() < std::time::Duration::from_secs(1));
+    assert_eq!(round_row.items[1].as_ref().map(Vec::len), Some(2));
+    assert_eq!(item_row.items[0].as_ref().map(Vec::len), Some(2));
 }
 
 #[test]
 fn zero_progress_repeat_round_ends_it_and_the_rest_is_trailing() {
-    // Arrange: u8 m; repeat { when (m in the round...) } is refused, so use a round of a
-    // false `when` and a bits field of count 0: repeat { u8 c; when (c == 9) { u8 } }
+    // Arrange: repeat { u8 c; when (c == 9) { u8 } } over `21 01 02`: the first round reads
+    // c = 1, the second c = 2; a round always reads its u8, so the repeat ends at the packet end
     let built = build(0x21, &[Repeat(vec![n(U8), When(0, 9, vec![n(U8)])])]);
     let scheme = nostd::Scheme::new(0x21, &built.fields);
     // Act
@@ -276,14 +277,17 @@ fn zero_progress_repeat_round_ends_it_and_the_rest_is_trailing() {
     assert!(assert_read_alike(&built, &[0x21, 1, 2], "zero progress"));
 }
 
-fn std_refuses(nodes: &[Node]) -> bool {
-    let nodes = nodes.to_vec();
-    let quiet = std::panic::take_hook();
-    std::panic::set_hook(Box::new(|_| {}));
-    let refused =
-        std::panic::catch_unwind(move || packbin::MapScheme::new(1, std_fields(&nodes))).is_err();
-    std::panic::set_hook(quiet);
-    refused
+#[test]
+fn a_repeat_in_flags_whose_rounds_hold_no_value_is_off_like_std() {
+    // Arrange: flags { repeat { u8 }; u8 } with one round that holds nothing
+    let built = build(0x21, &[Flags(vec![Repeat(vec![n(U8)]), n(U8)])]);
+    let mut empty = Slots::default();
+    set_items(&mut empty, 0, vec![Slots::default()]);
+    // Act
+    let (ours, theirs) = pack_both(&built, &empty);
+    // Assert
+    assert_eq!(ours, Ok(vec![0x21, 0x00]));
+    assert_eq!(theirs, Ok(vec![0x21, 0x00]));
 }
 
 #[test]

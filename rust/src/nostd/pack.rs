@@ -47,7 +47,7 @@ pub(crate) struct Pack<'t, 'w, 'b> {
 }
 
 fn bad(at: usize, f: &Field) -> Fault {
-    Fault::new(Error::BadValue, at, id_of(f), 0)
+    Fault::bad(at, id_of(f))
 }
 
 /// A number as its little-endian bytes, reversed for a big-endian field.
