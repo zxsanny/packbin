@@ -1,6 +1,7 @@
 package packbin;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -18,6 +19,8 @@ final class ByteSink {
     private long slots;
     private byte[] buf = new byte[32];
     private int size;
+    private byte[] lastUtf8;
+    private byte[] lastField;
 
     ByteSink(int maxRounds, long maxSlots, long maxBytes) {
         this.maxRounds = maxRounds;
@@ -43,9 +46,17 @@ final class ByteSink {
         size += n;
     }
 
-    /** A text or a dictionary key, as the compact text format writes it: a count, then the payload, as one append. */
+    /**
+     * A text or a dictionary key, as the compact text format writes it: a count, then the payload, as one append. The
+     * last text and its field are kept for the rest of this pack call (a times or repeat round often writes one text again
+     * and again, and the parse costs a few microseconds per character); the sink ends with the call, so no text outlives it.
+     */
     void writeText(Field member, byte[] utf8) {
-        write(member, TextEncoder.encode(utf8));
+        if (lastField == null || !Arrays.equals(utf8, lastUtf8)) {
+            lastField = TextEncoder.encode(utf8);
+            lastUtf8 = utf8;
+        }
+        write(member, lastField);
     }
 
     /** The 2-byte count of a list or dict. */

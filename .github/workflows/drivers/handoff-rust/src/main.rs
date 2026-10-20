@@ -302,6 +302,42 @@ fn hex_nibble(b: u8) -> Option<u8> {
     }
 }
 
+// The position row under the session, packed with `scheme`: the plain one (session) or the one with 4 parity
+// bytes (session-ecc, EC-10).
+fn pack_session(scheme: Scheme<Position>) -> u8 {
+    let Some(mut opener) = PackSession::load(&session_seed()) else {
+        return 1;
+    };
+    if opener.start_with(&session_nonce()).is_none() {
+        return 1;
+    }
+    let Ok(payload) = opener.pack(&scheme, &position_row()) else {
+        return 1;
+    };
+    println!("{}", to_hex(&payload));
+    0
+}
+
+fn unpack_session(hex: Option<&String>, scheme: Scheme<Position>) -> u8 {
+    let Some(hex) = hex else {
+        return 1;
+    };
+    let Some(raw) = from_hex(hex) else {
+        return 1;
+    };
+    let Some(mut waiter) = PackSession::load(&session_seed()) else {
+        return 1;
+    };
+    if !waiter.join(&session_nonce()) {
+        return 1;
+    }
+    let mut got = Position::default();
+    match waiter.unpack(&raw, &mut [&mut scheme.on(|row| got = row)]) {
+        Ok(()) if session_fields_ok(&got) => 0,
+        _ => 1,
+    }
+}
+
 fn run(args: &[String]) -> u8 {
     let Some(cmd) = args.first().map(String::as_str) else {
         return 2;
@@ -355,39 +391,10 @@ fn run(args: &[String]) -> u8 {
                 _ => 1,
             }
         }
-        "pack-session" => {
-            let Some(mut opener) = PackSession::load(&session_seed()) else {
-                return 1;
-            };
-            if opener.start_with(&session_nonce()).is_none() {
-                return 1;
-            }
-            let Ok(payload) = opener.pack(&position_scheme(), &position_row()) else {
-                return 1;
-            };
-            println!("{}", to_hex(&payload));
-            0
-        }
-        "unpack-session" => {
-            let Some(hex) = args.get(1) else {
-                return 1;
-            };
-            let Some(raw) = from_hex(hex) else {
-                return 1;
-            };
-            let Some(mut waiter) = PackSession::load(&session_seed()) else {
-                return 1;
-            };
-            if !waiter.join(&session_nonce()) {
-                return 1;
-            }
-            let scheme = position_scheme();
-            let mut got = Position::default();
-            match waiter.unpack(&raw, &mut [&mut scheme.on(|row| got = row)]) {
-                Ok(()) if session_fields_ok(&got) => 0,
-                _ => 1,
-            }
-        }
+        "pack-session" => pack_session(position_scheme()),
+        "pack-session-ecc" => pack_session(position_scheme().with_parity(4)),
+        "unpack-session" => unpack_session(args.get(1), position_scheme()),
+        "unpack-session-ecc" => unpack_session(args.get(1), position_scheme().with_parity(4)),
         _ if cmd.starts_with("ecc-") => ecc::run(args),
         _ => 2,
     }

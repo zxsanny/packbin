@@ -27,7 +27,8 @@ public final class Handoff {
             case "pack-bitwhen" -> System.out.println(hex(BinaryPacker.pack(bitWhenScheme(), bitWhenValues())));
             case "pack-roundflags" -> System.out.println(hex(BinaryPacker.pack(roundFlagsScheme(), roundFlagsValues())));
             case "pack-roundwhen" -> System.out.println(hex(BinaryPacker.pack(roundWhenScheme(), roundWhenValues())));
-            case "pack-session" -> System.exit(packSession());
+            case "pack-session" -> System.exit(packSession(positionScheme()));
+            case "pack-session-ecc" -> System.exit(packSession(positionScheme().withParity(4)));
             case "unpack-user" -> System.exit(userOk(requireHex(args)) ? 0 : 1);
             case "unpack-nested" -> System.exit(nestedOk(requireHex(args)) ? 0 : 1);
             case "unpack-boolflag" -> System.exit(boolFlagOk(requireHex(args), false) ? 0 : 1);
@@ -35,7 +36,8 @@ public final class Handoff {
             case "unpack-bitwhen" -> System.exit(bitWhenOk(requireHex(args)) ? 0 : 1);
             case "unpack-roundflags" -> System.exit(roundFlagsOk(requireHex(args)) ? 0 : 1);
             case "unpack-roundwhen" -> System.exit(roundWhenOk(requireHex(args)) ? 0 : 1);
-            case "unpack-session" -> System.exit(sessionOk(requireHex(args)) ? 0 : 1);
+            case "unpack-session" -> System.exit(sessionOk(requireHex(args), positionScheme()) ? 0 : 1);
+            case "unpack-session-ecc" -> System.exit(sessionOk(requireHex(args), positionScheme().withParity(4)) ? 0 : 1);
             case "ecc-protect", "ecc-repair", "ecc-batch" -> System.exit(HandoffEcc.run(cmd, args, positionScheme()));
             default -> System.exit(HandoffElements.run(cmd, args));
         }
@@ -49,12 +51,14 @@ public final class Handoff {
         return bytes;
     }
 
-    private static int packSession() {
+    // The position row under the session; the scheme is the plain one (session) or has 4 parity bytes (session-ecc, EC-10).
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static int packSession(Scheme<Map> scheme) {
         PackSession opener = PackSession.load(SESSION_SEED);
         if (opener == null || opener.start(SESSION_NONCE) == null) {
             return 1;
         }
-        byte[] payload = opener.pack(positionScheme(), positionValues());
+        byte[] payload = opener.pack(scheme, positionValues());
         if (payload == null) {
             return 1;
         }
@@ -63,13 +67,13 @@ public final class Handoff {
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private static boolean sessionOk(String hex) {
+    private static boolean sessionOk(String hex, Scheme<Map> scheme) {
         PackSession waiter = PackSession.load(SESSION_SEED);
         if (waiter == null || !waiter.join(SESSION_NONCE)) {
             return false;
         }
         Map[] got = new Map[1];
-        Object err = waiter.unpack(parse(hex), positionScheme().on(row -> got[0] = row));
+        Object err = waiter.unpack(parse(hex), scheme.on(row -> got[0] = row));
         if (err != null || got[0] == null) {
             return false;
         }

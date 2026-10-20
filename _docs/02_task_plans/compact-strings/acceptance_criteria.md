@@ -15,7 +15,7 @@ Measured on Tatoeba sentences (`research_report.md`); the bounds leave 5 to 10 %
 
 ## Round trip
 
-- **CS-5.** For every corpus string and 100,000 random Unicode strings (capitals, emoji, other scripts, combining marks, the empty string, 65,535-byte strings), unpack of pack returns the same string. Mismatches: 0. No string is refused for its content.
+- **CS-5.** For every corpus string and at least 3,000 random Unicode strings per package in the suites (capitals, emoji, other scripts, combining marks, the empty string, 65,535-byte strings), unpack of pack returns the same string. Mismatches: 0. No string is refused for its content. A run of 100,000 random strings per package is a manual probe before any change to an encoder or decoder (the loop 35 differential runs and the loop 41 probes under `fixtures/hostile/fuzz/`); the suites do not run it (owner 2026-10-20, loop 46, AZ-2736).
 - **CS-6.** A list of strings and a dictionary of string to list of string round-trip with the same counts and the same pair order (sorted by the key's UTF-8 bytes). Mismatches: 0.
 
 ## Cross-language
@@ -26,7 +26,7 @@ Measured on Tatoeba sentences (`research_report.md`); the bounds leave 5 to 10 %
 
 - **CS-8.** Flip any one bit inside a string's payload bytes: every other field of the packet unpacks unchanged (mismatched fields: 0) and the string field returns either a string or an error naming the field. Reads past the payload: 0.
 - **CS-9.** A payload that ends inside a code, or holds a code that is not defined, returns an error naming the field and 0 values (inherits AC-8, AC-9).
-- **CS-10.** 100,000 hostile payloads (random bytes, longest runs, repeated shift and escape) never crash, never hang and never produce more than 6 output bytes per payload byte plus 8 (worst case in the frozen tables 5.33). Unpack time per payload ≤ 1 ms for 64 KiB.
+- **CS-10.** At least 30,000 hostile payloads per package in the suites (random bytes, damaged valid packets, longest runs, repeated shift and escape) never crash, never hang and never produce more than 6 output bytes per payload byte plus 8 (worst case in the frozen tables 5.33). Unpack time per payload ≤ 1 ms for 64 KiB (measured in the loop 41 probes; no package has a suite test of this bound). A run of 100,000 payloads per package is a manual probe before any decoder change (`fixtures/hostile/fuzz/`); the suites do not run it (owner 2026-10-20, loop 46, AZ-2736).
 
 ## Speed and size on devices
 

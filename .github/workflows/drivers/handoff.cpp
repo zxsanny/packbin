@@ -126,6 +126,9 @@ constexpr auto position_scheme = packbin::scheme<Position>(
     packbin::flags(4, packbin::u16<&Position::heading>(4), packbin::u8<&Position::speed>(5),
                    packbin::i16<&Position::altitude>(6)));
 
+// The position row under the session with 4 parity bytes (session-ecc, EC-10).
+constexpr auto position_ecc_scheme = packbin::parity(position_scheme, 4);
+
 Position position_row() {
   Position row;
   row.sid = 1;
@@ -303,10 +306,11 @@ bool roundwhen_ok(std::uint8_t const* data, std::size_t len) {
                             data, len);
 }
 
-bool session_ok(std::uint8_t* data, std::size_t len) {
+template <typename Scheme>
+bool session_ok(Scheme const& scheme, std::uint8_t* data, std::size_t len) {
   packbin::PackSession waiter;
   Position got;
-  if (!open_session(waiter, false) || !waiter.unpack(position_scheme, data, len, got).ok())
+  if (!open_session(waiter, false) || !waiter.unpack(scheme, data, len, got).ok())
     return false;
   return got.sid == 1 && got.lat == 500000000 && got.lon == 300000000 && got.profile == 1 &&
          !got.heading.has && !got.speed.has && !got.altitude.has;
@@ -459,10 +463,12 @@ int main(int argc, char** argv) {
     return print(packbin::pack(roundflags_scheme, roundflags_row(), buf, sizeof(buf)), buf);
   if (cmd == "pack-roundwhen")
     return print(packbin::pack(roundwhen_scheme, roundwhen_row(), buf, sizeof(buf)), buf);
-  if (cmd == "pack-session") {
+  if (cmd == "pack-session" || cmd == "pack-session-ecc") {
     packbin::PackSession opener;
     if (!open_session(opener, true))
       return 1;
+    if (cmd == "pack-session-ecc")
+      return print(opener.pack(position_ecc_scheme, position_row(), buf, sizeof(buf)), buf);
     return print(opener.pack(position_scheme, position_row(), buf, sizeof(buf)), buf);
   }
   if (argc < 3)
@@ -483,6 +489,8 @@ int main(int argc, char** argv) {
   if (cmd == "unpack-roundwhen")
     return roundwhen_ok(buf, len) ? 0 : 1;
   if (cmd == "unpack-session")
-    return session_ok(buf, len) ? 0 : 1;
+    return session_ok(position_scheme, buf, len) ? 0 : 1;
+  if (cmd == "unpack-session-ecc")
+    return session_ok(position_ecc_scheme, buf, len) ? 0 : 1;
   return 2;
 }

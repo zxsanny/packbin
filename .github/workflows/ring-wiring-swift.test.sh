@@ -17,7 +17,7 @@ fail() {
   failures=$((failures + 1))
 }
 
-swift_kinds="user nested boolflag booltrue bitwhen roundflags roundwhen listgroup dictgroup listflags session"
+swift_kinds="user nested boolflag booltrue bitwhen roundflags roundwhen listgroup dictgroup listflags session session-ecc" # session-ecc: AZ-2739, hex in session_ecc_hex
 # The members of each kind's ring (as language-pair.sh runs them), Go included.
 swift_members() {
   case "$1" in
@@ -31,8 +31,8 @@ swift_expected_lines() {
   for kind in $swift_kinds; do
     for member in $(swift_members "$kind"); do
       # C# only produces the round kinds (no public C# API reads an aligned round row yet).
-      case "$kind$member" in roundflagscsharp | roundwhencsharp) ;; *) echo "handoff swift $member $kind \"\$${kind}_hex\"" ;; esac
-      echo "handoff $member swift $kind \"\$${kind}_hex\""
+      case "$kind$member" in roundflagscsharp | roundwhencsharp) ;; *) echo "handoff swift $member $kind \"\$${kind//-/_}_hex\"" ;; esac
+      echo "handoff $member swift $kind \"\$${kind//-/_}_hex\""
     done
   done
 }
@@ -133,6 +133,8 @@ swift_violations() {
   fi
   awk '/^for lang in /{ langs = $0 } index($0, "\"pack-session\"") { print langs }' "$script" | grep -Eq '[ ]swift[ ;]' \
     || echo "swift is not in the loop that checks pack-session"
+  awk '/^for lang in /{ langs = $0 } index($0, "\"pack-session-ecc\"") { print langs }' "$script" | grep -Eq '[ ]swift[ ;]' \
+    || echo "swift is not in the loop that checks pack-session-ecc"
   short_loop="$(awk '/^for kind in /{ loop = $0 } index($0, "if ! run_lang swift \"unpack-$kind-short\" \"${!short}\"; then") { print loop }' "$script")"
   if [ -z "$short_loop" ]; then
     echo "no loop refuses the short element packets with swift"
@@ -143,13 +145,13 @@ swift_violations() {
   fi
   awk '/^for lang in /{ langs = $0 } index($0, "publish-position.sh") { print langs }' "$script" | grep -Eq '[ ]swift[ ;]' \
     || echo "swift is not in the loop that checks the position row through publish-position.sh"
-  for kind in ${swift_kinds% session}; do
+  for kind in ${swift_kinds% session session-ecc}; do
     grep -qxF "    case \"$kind\":" "$kinds" || echo "the swift driver has no kind $kind"
   done
   for kind in listgroup dictgroup listflags; do
     grep '^let shortKinds: ' "$kinds" | grep -qF "\"$kind\"" || echo "the swift driver does not refuse the short $kind packet"
   done
-  for kind in pack-session unpack-session; do
+  for kind in pack-session unpack-session pack-session-ecc unpack-session-ecc; do
     grep -qxF "    case \"$kind\":" "$main" || echo "the swift driver has no $kind command"
   done
   grep -qxF '        .package(path: "../../../.."),' "$package" \
@@ -227,6 +229,10 @@ swift_wiring_checks() {
   expect_rejected "the handoff-swift binary in run_lang" SW_SCRIPT="$tmp/s3.sh"
   mutate "$script" "$tmp/s4.sh" 's/^\(for lang in .*\) swift go; do$/\1 go; do/'
   expect_rejected "swift in the pack-session loop" SW_SCRIPT="$tmp/s4.sh"
+  # Only the loop that checks pack-session-ecc loses swift (s4 edits every loop of the eight languages).
+  awk '{ lines[NR] = $0 } /^for lang in /{ n = NR } index($0, "\"pack-session-ecc\"") { at = n }
+    END { sub(/ swift go; do$/, " go; do", lines[at]); for (i = 1; i <= NR; i++) print lines[i] }' "$script" > "$tmp/s4-ecc.sh"
+  expect_rejected "swift in the pack-session-ecc loop" SW_SCRIPT="$tmp/s4-ecc.sh"
   for kind in listgroup dictgroup listflags; do
     mutate "$script" "$tmp/s5-$kind.sh" "s/^\\(for kind in .*\\)$kind\\(.*; do\\)$/\\1\\2/"
     expect_rejected "$kind in the swift short packet loop" SW_SCRIPT="$tmp/s5-$kind.sh"
@@ -237,7 +243,7 @@ swift_wiring_checks() {
   awk '{ lines[NR] = $0 } /^for lang in /{ n = NR } index($0, "publish-position.sh") { at = n }
     END { sub(/ swift go; do$/, " go; do", lines[at]); for (i = 1; i <= NR; i++) print lines[i] }' "$script" > "$tmp/s7.sh"
   expect_rejected "swift in the publish-position loop" SW_SCRIPT="$tmp/s7.sh"
-  for kind in ${swift_kinds% session}; do
+  for kind in ${swift_kinds% session session-ecc}; do
     mutate "$driver/Sources/handoff-swift/Kinds.swift" "$tmp/k-$kind.swift" "s/^    case \"$kind\":$/    case \"x$kind\":/"
     expect_rejected "the $kind kind of the swift driver" SW_KINDS="$tmp/k-$kind.swift"
   done
@@ -245,7 +251,7 @@ swift_wiring_checks() {
     mutate "$driver/Sources/handoff-swift/Kinds.swift" "$tmp/short-$kind.swift" "/^let shortKinds: /s/\"$kind\"/\"x\"/"
     expect_rejected "the short $kind refusal of the swift driver" SW_KINDS="$tmp/short-$kind.swift"
   done
-  for kind in pack-session unpack-session; do
+  for kind in pack-session unpack-session pack-session-ecc unpack-session-ecc; do
     mutate "$driver/Sources/handoff-swift/main.swift" "$tmp/m-$kind.swift" "s/^    case \"$kind\":$/    case \"x$kind\":/"
     expect_rejected "the $kind command of the swift driver" SW_MAIN="$tmp/m-$kind.swift"
   done
@@ -422,11 +428,36 @@ ring_swift_linux_checks() {
   fi
 }
 
+# AZ-2739 AC-3: a driver without the protected session command, or one that packs other bytes, ends the ring with exit 1
+# and one line that names the language. The stage is the text of language-pair.sh from its comment to the done of its
+# loop, run with a stand-in run_lang that misbehaves for one language: BAD (missing: exit 2 and no output; other: other bytes).
+session_ecc_failure_checks() {
+  local stage="$tmp/session-ecc-stage.sh" lang mode out rc want
+  sed -n '/^# A driver without the protected session command/,/^done$/p' "$here/language-pair.sh" > "$stage"
+  if ! grep -qF 'pack-session-ecc' "$stage"; then fail "language-pair.sh has no stage that packs session-ecc"; return; fi
+  for lang in none csharp typescript python rust cpp java swift go; do
+    for mode in missing other; do
+      rc=0
+      out="$(BAD="$lang" MODE="$mode" STAGE="$stage" bash -c 'set -euo pipefail; session_ecc_hex=aa
+        run_lang() { if [ "$1" != "$BAD" ]; then echo aa; elif [ "$MODE" = missing ]; then return 2; else echo bb; fi; }
+        source "$STAGE"' 2>&1)" || rc=$?
+      want="$lang pack-session-ecc failed"; [ "$mode" = other ] && want="$lang pack-session-ecc mismatch"
+      if [ "$lang" = none ]; then
+        [ "$rc" -eq 0 ] && [ -z "$out" ] || fail "the session-ecc stage failed for eight good drivers: exit $rc, [$out]"
+      elif [ "$rc" -ne 1 ] || [ "$out" != "$want" ]; then
+        fail "the session-ecc stage, $mode driver $lang: exit $rc, [$out], expected exit 1 and [$want]"
+      fi
+    done
+  done
+  echo "rejects: a driver without pack-session-ecc or with other bytes, each of the eight named"
+}
+
 if ! command -v ruby > /dev/null; then
   fail "ruby is required to parse the workflow YAML"
 else
   swift_wiring_checks
 fi
+session_ecc_failure_checks
 ring_swift_checks
 
 if [ "$failures" -ne 0 ]; then

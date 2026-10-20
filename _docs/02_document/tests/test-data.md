@@ -10,7 +10,7 @@
 | strings | `zxsanny`, empty, and 65536 bytes of `a` | FT-U-01, FT-U-02, FT-U-03, FT-U-04 | inline | none |
 | compact text vectors (loop 35) | `fixtures/text/vectors.txt`: 346 `enc`, 10 `alt`, 32 `bad`, 4 `ref` and 26 `flip` rows (text, expected field bytes, refusal kind, ring packet, bit-flip target); tables `fixtures/text/tables.json` (sha256 in the contract `compact-text.md`); sentence-set sizes `fixtures/text/tables.report.md` (the Tatoeba corpus is not in the repository); size of the `enc` rows `_docs/02_task_plans/compact-strings/size_report.md` | CS-1 to CS-20, FT-U-01, FT-U-02 | each package reads the file by path; `fixtures/text/check-vectors.sh` re-derives every row with `scripts/text/textfmt.py` | none; the files are read only |
 | lists | `[1, 2]`, one big-endian 1, list then a following byte, empty, 65536 elements | FT-L-01, FT-L-02, FT-L-03, FT-L-04 | inline | none |
-| dictionaries | the 103-byte user value, empty triple, a repeated key | FT-D-01, FT-D-02, FT-D-03, FT-D-04, FT-D-05 | inline | none |
+| dictionaries | the 79-byte user value, empty triple, a repeated key | FT-D-01, FT-D-02, FT-D-03, FT-D-04, FT-D-05 | inline | none |
 | handoffs | producer hex consumed by the next language | FT-H-01, FT-H-02, FT-H-03 | inline | none |
 | borrowed count | width-2 kinds `0,1,2,3`, width-1 bias −1, two pairs then `7`, and the route fixture | FT-C-01, FT-C-02, FT-C-03, FT-C-04, FT-C-05 | inline | none |
 | hostile packets | `fixtures/hostile/cases.txt`: 33 cases (loop 19 added `eq_out_of_range` and seven `pack` cases, see FT-X-24 to FT-X-33; the 25 of loop 18 follow): packets and invalid schemes with the outcome kinds each may return (zero-progress repeat, hostile counts, invalid UTF-8, nine flag bits, later and outer references, bool outside flags, `eq(bool, false)` (AZ-2126), two `limit` cases: a `repeat` and a `times` past a low round limit, AZ-2220), and five `pack` cases (AZ-2194: out-of-range integer, missing value, `times` list too long and too short, aligned round row `01030102020303`; each README section has `Scheme`, `Row`, `Run by` and `Not run by`) | AZ-2069 package tasks (AZ-2071 to AZ-2075, AZ-2078 and later), format check in the `scaffold` job | each package reads the file by path and writes the scheme by hand from `fixtures/hostile/README.md` | none; the file is read only |
@@ -64,13 +64,13 @@ Each call gets its own input buffer. The packages do not keep the last packet.
 | FT-L-02 | list `[1]` big-endian | hex `01000001` | exact | N/A | AZ-1939 AC-2 |
 | FT-L-03 | list `[1]` then byte 2 | hex `01000102`, list `[1]`, next field 2, bytes left 0 | exact | N/A | AZ-1939 AC-3 |
 | FT-L-04 | empty list, and 65536 elements | empty hex `0000`; long list writes 0 bytes | exact | N/A | AZ-1939 AC-4 |
-| FT-D-01 | user value | 103-byte hex, bytes left 0, six-language mismatch 0 | exact | N/A | AZ-1940 AC-1 |
+| FT-D-01 | user value | 79-byte hex, bytes left 0, six-language mismatch 0 | exact | N/A | AZ-1940 AC-1 |
 | FT-D-02 | access keys inserted store, channel, map | mismatch against FT-D-01 is 0 | exact | N/A | AZ-1940 AC-2 |
-| FT-D-03 | the 103-byte user hex | username, two roles, three access lists, wrong fields 0, bytes left 0 | exact | N/A | AZ-1940 AC-3 |
-| FT-D-04 | empty string, list, and dictionary | hex `000000000000` | exact | N/A | AZ-1940 AC-4 |
+| FT-D-03 | the 79-byte user hex | username, two roles, three access lists, wrong fields 0, bytes left 0 | exact | N/A | AZ-1940 AC-3 |
+| FT-D-04 | empty string, list, and dictionary | hex `010000000000` | exact | N/A | AZ-1940 AC-4 |
 | FT-D-05 | one dictionary key twice | value count 0 | exact | N/A | AZ-1940 AC-5 |
 | FT-H-01 | six user-value handoffs | wrong fields 0, bytes left 0 | exact | N/A | AZ-1941 AC-1 |
-| FT-H-02 | nested map and store | 58-byte hex, wrong fields 0, bytes left 0 | exact | N/A | AZ-1941 AC-2 |
+| FT-H-02 | nested map and store | 49-byte hex, wrong fields 0, bytes left 0 | exact | N/A | AZ-1941 AC-2 |
 | FT-H-03 | position record in each language | hex `4001000065cd1d00a3e1110100`, mismatch 0 | exact | N/A | AZ-1941 AC-3 |
 | FT-C-01 | count 4, values 0, 1, 2, 3, width 2, bias 0 | byte `e4`, four values, count not repeated, six-language mismatch 0 | exact | N/A | 04_borrowed_count AC-1 |
 | FT-C-02 | count 9 and eight bits of 1, bias −1; count 1, bias −1 | byte `ff`; 0 bitset bytes | exact | N/A | 04_borrowed_count AC-2 |

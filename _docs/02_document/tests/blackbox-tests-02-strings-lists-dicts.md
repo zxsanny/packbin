@@ -166,7 +166,7 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 
 ### FT-D-01: User value
 
-**Summary**: The username, roles, and access lists pack to the 103-byte hex.
+**Summary**: The username, roles, and access lists pack to the 79-byte hex (compact text, since loop 35).
 **Traces to**: AZ-1940 AC-1
 **Category**: Bytes
 
@@ -179,10 +179,10 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 
 | Step | Consumer Action | Expected System Response |
 |------|----------------|------------------------|
-| 1 | pack | 103 bytes |
+| 1 | pack | 79 bytes |
 | 2 | unpack those bytes | the same fields |
 
-**Expected outcome**: hex `07007a7873616e6e7902000400757365720a0064697370617463686572030007006368616e6e656c010004007265616403006d6170040004007265616407006770735f6669780300736574040065646974050073746f7265020004007265616405007772697465`. Bytes left 0. Mismatched bytes across the six languages: 0.
+**Expected outcome**: hex `01062bfcfee119b20200030ba818078a8b1ca4ed51800300056b6aa330b00100032b0128036ae9c80400032b012808106770735f66697803ea04800348516404ca25f0000200032b0128048bbc2c80` (the first byte `01` is the scheme number; each string is compact text; it was 103 bytes with a 2-byte count before loop 35). Bytes left 0. Mismatched bytes across the six languages: 0.
 **Max execution time**: 1s
 
 ### FT-D-02: Key insert order
@@ -200,21 +200,21 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 
 | Step | Consumer Action | Expected System Response |
 |------|----------------|------------------------|
-| 1 | pack | 103 bytes |
+| 1 | pack | 79 bytes |
 
 **Expected outcome**: mismatched bytes against FT-D-01: 0.
 **Max execution time**: 1s
 
 ### FT-D-03: Unpack the user value
 
-**Summary**: The 103-byte hex unpacks to the username, both roles, and the three access lists.
+**Summary**: The 79-byte hex unpacks to the username, both roles, and the three access lists.
 **Traces to**: AZ-1940 AC-3
 **Category**: Bytes
 
 **Preconditions**:
 - The buffer is the FT-D-01 hex
 
-**Input data**: the 103-byte user hex
+**Input data**: the 79-byte user hex
 
 **Steps**:
 
@@ -227,7 +227,7 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 
 ### FT-D-04: Empty string, list, and dictionary
 
-**Summary**: Three empty counted fields are 6 bytes.
+**Summary**: The scheme number and three empty counted fields are 6 bytes (1 + 1 + 2 + 2).
 **Traces to**: AZ-1940 AC-4
 **Category**: Bytes
 
@@ -242,7 +242,7 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 |------|----------------|------------------------|
 | 1 | pack | 6 bytes |
 
-**Expected outcome**: hex `000000000000`.
+**Expected outcome**: hex `010000000000`: scheme number `01`, the empty string `00` (1 byte), the empty list `0000`, the empty dictionary `0000` (before loop 35 the string had a 2-byte count).
 **Max execution time**: 1s
 
 ### FT-D-05: Repeated dictionary key
@@ -280,7 +280,7 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 
 | Step | Consumer Action | Expected System Response |
 |------|----------------|------------------------|
-| 1 | pack in the producer | the 103-byte hex |
+| 1 | pack in the producer | the 79-byte hex |
 | 2 | unpack that hex in the consumer | the same fields |
 
 **Expected outcome**: wrong fields 0. Bytes left 0.
@@ -288,7 +288,7 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 
 ### FT-H-02: Nested dictionary handoff
 
-**Summary**: A dictionary of lists of dictionaries packs to 58 bytes and unpacks in the next language.
+**Summary**: A dictionary of lists of dictionaries packs to 49 bytes and unpacks in the next language.
 **Traces to**: AZ-1941 AC-2
 **Category**: Bytes
 
@@ -301,10 +301,10 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 
 | Step | Consumer Action | Expected System Response |
 |------|----------------|------------------------|
-| 1 | pack in the producer | 58 bytes |
+| 1 | pack in the producer | 49 bytes |
 | 2 | unpack that hex in the consumer | the same rows |
 
-**Expected outcome**: hex `020003006d61700100010002006f7007006770735f666978050073746f72650200010002006f70040072656164010002006f7005007772697465`. Wrong fields 0. Bytes left 0.
+**Expected outcome**: hex `010200036ae9c8010001000209f908106770735f66697804ca25f000020001000209f9032b012801000209f9048bbc2c80` (the first byte `01` is the scheme number; it was 58 bytes before loop 35). Wrong fields 0. Bytes left 0.
 **Max execution time**: 1s
 
 ### FT-H-03: Position record after the new fields

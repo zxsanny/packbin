@@ -84,7 +84,11 @@ mod session_hostile_tests;
 #[cfg(test)]
 mod split_form_loud_tests;
 #[cfg(test)]
+mod text_concurrency_tests;
+#[cfg(test)]
 mod text_positions_tests;
+#[cfg(test)]
+mod text_repeat_tests;
 #[cfg(test)]
 mod text_vectors_tests;
 #[cfg(test)]

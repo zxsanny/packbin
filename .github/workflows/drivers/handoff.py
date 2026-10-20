@@ -144,6 +144,8 @@ def _element_command(cmd: str, argv: list[str]) -> int | None:
 
 SESSION_SEED = bytes(range(1, 33))
 SESSION_NONCE = bytes.fromhex("01000000000000000000000000000000")
+# The position row under the session: the scheme as it is (session) and with 4 parity bytes (session-ecc, EC-10).
+SESSION_SCHEMES = {"session": POSITION, "session-ecc": POSITION.with_limits(parity=4)}
 
 
 def _session_fields_ok(row) -> bool:
@@ -180,11 +182,11 @@ def main(argv: list[str]) -> int:
     if cmd == "pack-bitwhen":
         print(BinaryPacker.pack(BITWHEN, BITWHEN_VALUES).hex())
         return 0
-    if cmd == "pack-session":
+    if cmd in ("pack-session", "pack-session-ecc"):
         opener = PackSession.load(SESSION_SEED)
         if opener is None or opener.start(SESSION_NONCE) is None:
             return 1
-        payload = opener.pack(POSITION, POSITION_VALUES)
+        payload = opener.pack(SESSION_SCHEMES[cmd[len("pack-"):]], POSITION_VALUES)
         if payload is None:
             return 1
         print(payload.hex())
@@ -224,13 +226,14 @@ def main(argv: list[str]) -> int:
         if not result.ok or result.value is None:
             return 1
         return 0 if result.value == {"k": 0} else 1
-    if cmd == "unpack-session":
+    if cmd in ("unpack-session", "unpack-session-ecc"):
         if len(argv) < 2:
             return 1
         waiter = PackSession.load(SESSION_SEED)
         if waiter is None or not waiter.join(SESSION_NONCE):
             return 1
-        result = waiter.unpack(bytes.fromhex(argv[1]), POSITION.on(lambda row: None))
+        scheme = SESSION_SCHEMES[cmd[len("unpack-"):]]
+        result = waiter.unpack(bytes.fromhex(argv[1]), scheme.on(lambda row: None))
         if not result.ok or result.value is None:
             return 1
         return 0 if _session_fields_ok(result.value) else 1

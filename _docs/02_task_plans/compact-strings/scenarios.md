@@ -43,9 +43,12 @@ Rows added by `feature-assess` (`_docs/loops/loop45/assessment45.md`). `deferred
 | CS-D4 | Go fuzz seeds hold old-format string bytes | confirmed | Go seeds hold the compact-format packets of the corpus | AZ-2733 AC-5 | assess-round-1 |
 | CS-D5 | Retrain the tables on the owner's real messages before the first tag | deferred | waits for the owner's 100 to 200 real messages before the first v* tag; no work now (owner 2026-10-20, answer B) | — | assess-round-1 |
 | CS-D6 | Provisional speed limits for Python (40 s) and TypeScript (4 s) never confirmed | confirmed | Python and TypeScript speed bounds load-aware from one measurement (owner 2026-10-20, answer B) | AZ-2733 AC-8 | assess-round-1 |
-| CS-D7 | A big text repeated in many rounds has no speed test in Java, C#, Rust, C++ | deferred | one 1 s repeated-text test in Java, C#, Rust, C++ next loop, fix only if it fails (owner 2026-10-20, answer A); `handoff46.md` | — | assess-round-1 |
+| CS-D7 | A big text repeated in many rounds has no speed test in Java, C#, Rust, C++ | confirmed | one 1 s repeated-text test in Java, C#, Rust, C++, fix only if it fails (owner 2026-10-20, answer A) | AZ-2737 AC-1, AC-2 | assess-round-1 · loop 46 |
 | CS-D8 | A lone surrogate behaves differently by language | out-of-scope | `feature-description.md`: lone-surrogate behavior per language does not change | — | assess-round-1 |
 | CS-D9 | Size report not saved at the path AZ-2657 asked for | confirmed | `size_report.md` saved with the run date and recipe hashes | AZ-2733 AC-6 | assess-round-1 |
+| CS-S3 | Eight workers pack and unpack different texts at once in C#, Java, Rust, Go, Swift | confirmed | every result equals the reference bytes or its own input (owner 2026-10-20) | AZ-2735 AC-1, AC-2 | assess-round-1 · loop 46 |
+| CS-A5 | CS-5 asks 100,000 random strings; suites run fewer and Python, C#, Swift none | confirmed | criteria say 3,000 per package; Python, C#, Swift gain the test (owner 2026-10-20, answer B) | AZ-2736 AC-1, AC-2 | assess-round-1 · loop 46 |
+| CS-A10 | CS-10 asks 100,000 hostile payloads; suites run fewer, Go 20,000, Python, C#, Swift none | confirmed | criteria say 30,000 per package; Python, C#, Swift gain the test, Go rises to 30,000 (owner 2026-10-20, answer B) | AZ-2736 AC-1, AC-3 | assess-round-1 · loop 46 |
 
 ## Not walked
 

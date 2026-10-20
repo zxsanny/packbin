@@ -241,7 +241,7 @@ func TestACTextRandomTextsRoundTrip(t *testing.T) {
 func TestACTextRandomBuffersNeverPanic(t *testing.T) {
 	// Arrange
 	rng := rand.New(rand.NewSource(2653))
-	for range 20000 {
+	for range 30000 {
 		buf := make([]byte, rng.Intn(24))
 		rng.Read(buf)
 		if len(buf) > 0 && rng.Intn(2) == 0 {

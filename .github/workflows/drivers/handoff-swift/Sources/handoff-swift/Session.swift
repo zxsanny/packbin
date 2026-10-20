@@ -14,31 +14,38 @@ private func ringSession() throws -> PackSession {
 /// 01 followed by 15 zero bytes.
 private let ringNonce: [UInt8] = [1] + [UInt8](repeating: 0, count: 15)
 
-func packSession() -> Int32 {
+/// The position scheme with `parity` parity bytes (0: the scheme as it is). The session-ecc commands use 4 (EC-10).
+private func sessionScheme(parity: Int) throws -> Scheme {
+    let position = try positionScheme()
+    return parity == 0 ? position : try position.withLimits(parity: parity)
+}
+
+/// `pack-session` (parity 0) and `pack-session-ecc` (parity 4): the position row under the session.
+func packSession(_ cmd: String, parity: Int) -> Int32 {
     do {
         let opener = try ringSession()
         _ = try opener.start(ringNonce)
-        let payload = try opener.pack(try positionScheme(), ["sid": 1, "lat": 500_000_000, "lon": 300_000_000, "profile": 1])
+        let payload = try opener.pack(try sessionScheme(parity: parity), ["sid": 1, "lat": 500_000_000, "lon": 300_000_000, "profile": 1])
         print(hexString(payload))
         return 0
     } catch {
-        return fail("pack-session: \(error)")
+        return fail("\(cmd): \(error)")
     }
 }
 
-func unpackSession(_ hex: String) -> Int32 {
-    guard let payload = hexBytes(hex) else { return fail("unpack-session: bad hex: \(hex.debugDescription)") }
+func unpackSession(_ cmd: String, _ hex: String, parity: Int) -> Int32 {
+    guard let payload = hexBytes(hex) else { return fail("\(cmd): bad hex: \(hex.debugDescription)") }
     let row: [String: Any]
     do {
         let waiter = try ringSession()
         try waiter.join(ringNonce)
-        row = try waiter.unpackMap(payload, try positionScheme())
+        row = try waiter.unpackMap(payload, try sessionScheme(parity: parity))
     } catch {
-        return fail("unpack-session: \(error)")
+        return fail("\(cmd): \(error)")
     }
     let want: [String: Any] = ["sid": UInt16(1), "lat": Int32(500_000_000), "lon": Int32(300_000_000), "profile": UInt8(1)]
     if render(row) != render(want) {
-        return fail("unpack-session: read \(render(row)), expected \(render(want))")
+        return fail("\(cmd): read \(render(row)), expected \(render(want))")
     }
     return 0
 }

@@ -326,7 +326,7 @@ element_ring_checks() {
 
 # AZ-2449 AC-3: Go joins every kind of language-pair.sh both ways with each member of that kind's ring (go_members),
 # refuses the short element packets, packs the session and the position row, and has its kinds in the driver.
-go_kinds="user nested boolflag booltrue bitwhen roundflags roundwhen listgroup dictgroup listflags session"
+go_kinds="user nested boolflag booltrue bitwhen roundflags roundwhen listgroup dictgroup listflags session session-ecc" # session-ecc: AZ-2739, hex in session_ecc_hex
 go_members() {
   case "$1" in
     roundflags | roundwhen) echo "csharp typescript rust java cpp" ;;
@@ -339,8 +339,8 @@ go_expected_lines() {
   for kind in $go_kinds; do
     for member in $(go_members "$kind"); do
       # C# only produces the round kinds (no public C# API reads an aligned round row yet).
-      case "$kind$member" in roundflagscsharp | roundwhencsharp) ;; *) echo "handoff go $member $kind \"\$${kind}_hex\"" ;; esac
-      echo "handoff $member go $kind \"\$${kind}_hex\""
+      case "$kind$member" in roundflagscsharp | roundwhencsharp) ;; *) echo "handoff go $member $kind \"\$${kind//-/_}_hex\"" ;; esac
+      echo "handoff $member go $kind \"\$${kind//-/_}_hex\""
     done
   done
 }
@@ -352,11 +352,11 @@ go_ring_violations() {
   go_expected_lines > "$tmp/go-expected.txt"
   grep -Fxv -f "$script" "$tmp/go-expected.txt" | sed 's/^/no handoff line: /' || true
   grep -Eq '^    go[)]$' "$script" || echo "run_lang has no go case"
-  for row in 'for row in "listgroup|short element packets' '"pack-session"|pack-session' 'publish-position[.]sh|position row'; do
+  for row in 'for row in "listgroup|short element packets' '"pack-session"|pack-session' '"pack-session-ecc"|pack-session-ecc' 'publish-position[.]sh|position row'; do
     awk -v pat="${row%%|*}" '/^for lang in /{ langs = $0 } index($0, pat) || $0 ~ pat { print langs }' "$script" \
       | grep -Eq '[ ]go[ ;]' || echo "go is not in the loop that checks ${row#*|}"
   done
-  for kind in ${go_kinds% session}; do
+  for kind in ${go_kinds% session session-ecc}; do
     grep -q "^${tab}${tab}\"$kind\": *{" "$driver" || echo "the go driver has no kind $kind"
   done
   for kind in listgroup dictgroup listflags; do

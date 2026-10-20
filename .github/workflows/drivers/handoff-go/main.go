@@ -10,6 +10,8 @@
 //	pack-session                prints the ciphertext of the position row (seed bytes 1..32, value 01
 //	                            and 15 zero bytes)
 //	unpack-session <hex>        joins and exits 0 only if the position row comes back
+//	pack-session-ecc            the same row with 4 parity bytes after the ciphertext (EC-10)
+//	unpack-session-ecc <hex>    joins and exits 0 only if the position row comes back from that payload
 //
 // Any other command exits 2. The position program is ./position in this module (it prints the golden
 // hex of the AC-1 row); build either with ring-go.sh.
@@ -45,12 +47,19 @@ func run(args []string) int {
 	}
 	switch cmd {
 	case "pack-session":
-		return packSession()
+		return packSession(cmd, position())
+	case "pack-session-ecc":
+		return packSession(cmd, positionEcc())
 	case "unpack-session":
 		if len(args) < 2 {
 			return 2
 		}
-		return unpackSession(args[1])
+		return unpackSession(cmd, args[1], position())
+	case "unpack-session-ecc":
+		if len(args) < 2 {
+			return 2
+		}
+		return unpackSession(cmd, args[1], positionEcc())
 	}
 	name, op, isShort := splitCommand(cmd)
 	if op == "" {

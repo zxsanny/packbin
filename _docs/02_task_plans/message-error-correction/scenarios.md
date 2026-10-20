@@ -44,7 +44,7 @@ Rows added by `feature-assess` (`_docs/loops/loop45/assessment45.md`). `deferred
 | id | scenario | status | behavior | AC ref | source |
 |----|----------|--------|----------|--------|--------|
 | EC-D1 | ESP32 and Pico 'packed there equals the vector bytes' is not run on either chip | confirmed | host, QEMU Cortex-M3 and s390x runs are the proof; the criterion text says so (owner 2026-10-20, answer A) | AZ-2733 AC-7 | assess-round-1 |
-| EC-D2 | A protected session payload has no cross-language pair | deferred | one protected session payload added to the session cross-language check next loop (owner 2026-10-20, answer B); `handoff46.md` | — | assess-round-1 |
+| EC-D2 | A protected session payload has no cross-language pair | confirmed | one protected session payload (n = 4) added to the session cross-language check, both directions as for the unprotected one (owner 2026-10-20, answer B) | AZ-2739 AC-1, AC-2 | assess-round-1 · loop 46 |
 | EC-D3 | Rust `DispatchHandler::parity()` has no default | confirmed | covered in assessment45 (compile-fail doctest) | AZ-2704 AC-4 | assess-round-1 |
 | EC-D4 | A buffer above 254 bytes is `TooLong` in all eight | confirmed | covered in assessment45 | AZ-2694 AC-2 | assess-round-1 |
 | EC-D5 | One order of the argument checks of a dispatch call | confirmed | covered in assessment45 | AZ-2704 AC-1..3 | assess-round-1 |

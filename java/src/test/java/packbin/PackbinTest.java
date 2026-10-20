@@ -81,6 +81,8 @@ public final class PackbinTest {
         Loop25ProbeD1D7Test.run();
         TextVectorsTest.run();
         TextPositionsTest.run();
+        TextConcurrencyTest.run();
+        TextRepeatSpeedTest.run();
         DictKeyOrderTest.run();
         EccVectorsTest.run();
         EccRepairTest.run();

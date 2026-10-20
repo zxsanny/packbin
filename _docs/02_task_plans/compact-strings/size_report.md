@@ -1,35 +1,29 @@
 # Compact text: size report
 
-Task AZ-2733 AC-6 (assessment 45 row CS-D9; AZ-2657 AC-5). Run date: 2026-10-20. Repository HEAD `558b7ac`, with `scripts/text/` and `fixtures/text/` unmodified in the working tree.
+Written by `scripts/text/size_report.py` (AZ-2657 AC-5, AZ-2733 AC-6, AZ-2740 AC-3). Run date: 2026-10-20.
 
-Command (Python 3.14.8, `python3` first on `PATH`):
-
-```
-python3 scripts/text/size_report.py fixtures/text/vectors.txt OUT.md
-```
-
-Exit code 0. `OUT.md` was a scratch file; its content is the last section below, unedited. The script writes only that table and the CS-13 line, no date and no hashes, so this header (date, hashes, held-out section) was added by hand after the run. Running the script with this file as the output path replaces the file and drops the header.
+Command: `python3 scripts/text/size_report.py fixtures/text/vectors.txt _docs/02_task_plans/compact-strings/size_report.md`
 
 ## Recipe files (sha256)
 
 | file | sha256 |
 |------|--------|
-| `scripts/text/size_report.py` | `8b2c5e831ab3ebc968369e82a08d74b36fd9673a1f99827c9c6b3dda6ab63338` |
+| `scripts/text/size_report.py` | `f90f1642fda17d404fb3eefc088e813e43d1e6d6478f330fbf8e0cb617565a4e` |
 | `scripts/text/textfmt.py` (reference encoder) | `e32875847cb0441a09de827779e774531c64f1ad627a5452c55216f49242e8a9` |
 | `scripts/text/train_tables.py` | `fd0c4ae81f586bb48ac4d33fed655c49060628ea9af2d54e04ea253e59cedd7e` |
 | `fixtures/text/tables.json` (same as the sha256 in `compact-text.md`) | `764ad13ee701af908b7c802abe67d0ac8639bc9bce5a3af666695c5f6df1d9c4` |
 | `fixtures/text/vectors.txt` | `aa2594d93d21efeb43485d895265c83888eaa2edb46cbd4a2afee850bdc84f07` |
 | `fixtures/text/tables.report.md` | `a69352c538d30d36a8911cb9e62e47e646820f6bdfb5c2e8fd469ff1000c6b33` |
 
-The Tatoeba corpus files of the training recipe are not in the repository. Their sha256 are recorded in `scripts/text/train_tables.py` (`CORPUS_SHA256`): ukr `882a6b3976993fba09393926cb21a7e1cc97908cd73598dd9f736f949c853a7e`, rus `db438e855b6b99874c4bef8770cdedbfae3e3ff1d48afa503852d3ec27bc2b92`, eng `ac9f0d48a44c7ac4f3eab724567774487b9841dcfcb3b2bcac48e1cc5636cd96`. They were not hashed in this run.
+The Tatoeba corpus files of the training recipe are not in the repository. Their sha256 are recorded in `scripts/text/train_tables.py` (`CORPUS_SHA256`): eng `ac9f0d48a44c7ac4f3eab724567774487b9841dcfcb3b2bcac48e1cc5636cd96`, rus `db438e855b6b99874c4bef8770cdedbfae3e3ff1d48afa503852d3ec27bc2b92`, ukr `882a6b3976993fba09393926cb21a7e1cc97908cd73598dd9f736f949c853a7e`. They are not hashed by this script.
 
 ## CS-13 on every `enc` row
 
-PASS: the script checked all 346 `enc` rows of `vectors.txt` (field never larger than today's 2-byte count plus UTF-8 up to 126 UTF-8 bytes, at most 1 byte larger up to 16,382, at most 2 above). The same 346 rows total 48,387 bytes today and 40,701 bytes compact (summed from the table below; the `random.*` and `size.*` rows hold texts that do not compress, so the total is not a measure of CS-1, CS-2 or CS-14).
+PASS: the script checked all 346 `enc` rows of `vectors.txt` (field never larger than today's 2-byte count plus UTF-8 up to 126 UTF-8 bytes, at most 1 byte larger up to 16,382, at most 2 above). The same 346 rows total 48387 bytes today and 40701 bytes compact (summed from the table below; the `random.*` and `size.*` rows hold texts that do not compress, so the total is not a measure of CS-1, CS-2 or CS-14).
 
 ## Held-out sentence sets (CS-1, CS-2, CS-14): copied, not re-run
 
-These sizes need the Tatoeba corpus, which is not in the repository, so this run could not produce them. The table is copied from `fixtures/text/tables.report.md` (sha256 above, written by `scripts/text/train_tables.py --corpus DIR`); `train_tables.py --corpus DIR --check` and the `OVER` grep are run by the agent with the corpus (`_docs/loops/loop35/smoke35.md` steps 5 and 6), not by CI.
+These sizes need the Tatoeba corpus. The table is copied from `fixtures/text/tables.report.md` (sha256 above, written by `scripts/text/train_tables.py --corpus DIR`); `train_tables.py --corpus DIR --check` and the `OVER` grep are run by the agent with the corpus (`_docs/loops/loop35/smoke35.md` steps 5 and 6), not by CI.
 
 | set | messages | chars | today (bytes) | compact (bytes) | compact / today | bits per char | bound | |
 |-----|---------:|------:|--------------:|----------------:|----------------:|--------------:|------:|---|
@@ -43,7 +37,7 @@ These sizes need the Tatoeba corpus, which is not in the repository, so this run
 | numbers | 1000 | 15320 | 20642 | 10456 | 50.7 % | 5.46 | 56 % | ok |
 | text+coords | 800 | 34927 | 56820 | 22137 | 39.0 % | 5.07 | 45 % | ok |
 
-## Size of the vectors (output of `size_report.py`, unedited)
+## Size of the vectors
 
 Whole string fields; `today` is the 2-byte count plus UTF-8.
 

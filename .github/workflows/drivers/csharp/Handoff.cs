@@ -170,6 +170,9 @@ static class Handoff
         ["V"] = new object?[] { (byte)9 },
     };
 
+    // The position row under the session with 4 parity bytes (session-ecc, EC-10).
+    static readonly Scheme<PositionRow> PositionEccScheme = PositionScheme.WithParity(4);
+
     static readonly byte[] SessionSeed = Enumerable.Range(1, 32).Select(i => (byte)i).ToArray();
     static readonly byte[] SessionNonce = Convert.FromHexString("01000000000000000000000000000000");
 
@@ -187,7 +190,9 @@ static class Handoff
                 Console.WriteLine(Convert.ToHexString(BinaryPacker.Pack(NestedScheme, NestedValues)).ToLowerInvariant());
                 return 0;
             case "pack-session":
-                return PackSessionOpener();
+                return PackSessionOpener(PositionScheme);
+            case "pack-session-ecc":
+                return PackSessionOpener(PositionEccScheme);
             case "pack-boolflag":
                 Console.WriteLine(Convert.ToHexString(BinaryPacker.Pack(BoolFlagScheme, new BoolFlagRow { On = false })).ToLowerInvariant());
                 return 0;
@@ -214,7 +219,11 @@ static class Handoff
             case "unpack-session":
                 if (args.Length < 2)
                     return 2;
-                return UnpackSession(args[1]) ? 0 : 1;
+                return UnpackSession(args[1], PositionScheme) ? 0 : 1;
+            case "unpack-session-ecc":
+                if (args.Length < 2)
+                    return 2;
+                return UnpackSession(args[1], PositionEccScheme) ? 0 : 1;
             case "unpack-boolflag":
                 if (args.Length < 2)
                     return 2;
@@ -234,25 +243,25 @@ static class Handoff
         }
     }
 
-    static int PackSessionOpener()
+    static int PackSessionOpener(Scheme<PositionRow> scheme)
     {
         var opener = PackSession.Load(SessionSeed);
         if (opener is null || opener.Start(SessionNonce) is null)
             return 1;
-        var payload = opener.Pack(PositionScheme, PositionRowValue);
+        var payload = opener.Pack(scheme, PositionRowValue);
         if (payload is null)
             return 1;
         Console.WriteLine(Convert.ToHexString(payload).ToLowerInvariant());
         return 0;
     }
 
-    static bool UnpackSession(string hex)
+    static bool UnpackSession(string hex, Scheme<PositionRow> scheme)
     {
         var waiter = PackSession.Load(SessionSeed);
         if (waiter is null || !waiter.Join(SessionNonce))
             return false;
         PositionRow? got = null;
-        var err = waiter.Unpack(Convert.FromHexString(hex), PositionScheme.On(v => got = v));
+        var err = waiter.Unpack(Convert.FromHexString(hex), scheme.On(v => got = v));
         if (err is not null || got is null)
             return false;
         return got.Sid == 1

@@ -10,6 +10,8 @@
 //   pack-session                prints the ciphertext of the position row (seed bytes 1..32, value 01
 //                               and 15 zero bytes)
 //   unpack-session <hex>        joins and exits 0 only if the position row comes back
+//   pack-session-ecc            the same row with 4 parity bytes after the ciphertext (EC-10)
+//   unpack-session-ecc <hex>    joins and exits 0 only if the position row comes back from that payload
 //
 // Any other command, or a missing hex, exits 2; hex that is not hex exits 1 with a message. The position
 // program is the `position` product of this package; ring-swift.sh builds both.
@@ -78,10 +80,15 @@ func run(_ args: [String]) -> Int32 {
     let hex = args.count > 1 ? args[1] : nil
     switch cmd {
     case "pack-session":
-        return packSession()
+        return packSession(cmd, parity: 0)
+    case "pack-session-ecc":
+        return packSession(cmd, parity: 4)
     case "unpack-session":
         guard let hex else { return 2 }
-        return unpackSession(hex)
+        return unpackSession(cmd, hex, parity: 0)
+    case "unpack-session-ecc":
+        guard let hex else { return 2 }
+        return unpackSession(cmd, hex, parity: 4)
     default:
         break
     }
