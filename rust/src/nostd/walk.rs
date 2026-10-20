@@ -1,11 +1,19 @@
 use super::check::validate;
 use super::error::{Error, Fault};
 use super::io::{Reader, Writer};
-use super::pack::Pack;
+use super::pack::{Budget, Pack};
 use super::present::clear;
 use super::row::Row;
 use super::scheme::Scheme;
 use super::unpack::Unpack;
+
+fn budget_of(scheme: &Scheme<'_>) -> Budget {
+    Budget {
+        max_rounds: scheme.max_rounds,
+        max_slots: scheme.max_slots,
+        slots: 0,
+    }
+}
 
 /// Packs `row` into `out` and returns the bytes written: the type number, then each field.
 /// A scheme that is not valid, a row without a value for a field (or with one of another kind or
@@ -14,10 +22,12 @@ pub fn pack(scheme: &Scheme<'_>, row: &dyn Row, out: &mut [u8]) -> Result<usize,
     validate(scheme)?;
     let mut writer = Writer::new(out);
     writer.put(&[scheme.type_number], -1)?;
+    let mut budget = budget_of(scheme);
     Pack {
         t: scheme.fields,
         w: &mut writer,
         row,
+        budget: &mut budget,
     }
     .top()?;
     Ok(writer.len())
@@ -42,11 +52,7 @@ pub fn pack_vec(
 /// cleared ([`Row::clear`]), so one the packet leaves out reads as absent. A failure may leave the
 /// fields read before it in `row`. Nothing is read from a packet of another type number
 /// ([`Error::TypeMismatch`], `needed` the expected one).
-pub fn unpack(
-    scheme: &Scheme<'_>,
-    bytes: &[u8],
-    row: &mut dyn Row,
-) -> Result<usize, Fault> {
+pub fn unpack(scheme: &Scheme<'_>, bytes: &[u8], row: &mut dyn Row) -> Result<usize, Fault> {
     validate(scheme)?;
     let mut reader = Reader::new(bytes);
     let first = reader.take(1, -1)?;
@@ -59,11 +65,13 @@ pub fn unpack(
         ));
     }
     clear(scheme.fields, 0, scheme.fields.len(), row);
+    let mut budget = budget_of(scheme);
     Unpack {
         t: scheme.fields,
         r: &mut reader,
         row,
         flag_bytes: [0; 8],
+        budget: &mut budget,
     }
     .top()?;
     reader.finish()?;

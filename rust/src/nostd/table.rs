@@ -78,9 +78,8 @@ pub(crate) fn parent_of(t: &[Field], i: usize) -> Option<usize> {
     None
 }
 
-/// Counted kinds whose members read into an item of their own (none yet in this slice).
-pub(crate) fn is_container(_kind: Kind) -> bool {
-    false
+pub(crate) fn is_container(kind: Kind) -> bool {
+    kind.is_container()
 }
 
 /// Where the scope of `i` starts: the first member of the innermost container that holds it,
@@ -182,8 +181,8 @@ fn late_for(t: &[Field], bit: usize, byte: usize, i: usize) -> bool {
     source_of(t, i).is_some_and(|s| s > byte && s < bit)
 }
 
-/// The entries of the flag bit at `bit` that it decides late, in order: walked like the C++
-/// `mark_late`, looking into groups, `flags` and `when`s that are not late themselves.
+/// The entries of the flag bit at `bit` that it decides late (`when`s and `times`), in order:
+/// walked like the C++ `mark_late`, looking into groups, `flags` and `when`s that are not late.
 pub(crate) fn for_each_late(t: &[Field], bit: usize, mut each: impl FnMut(usize) -> bool) -> bool {
     let Some(byte) = flag_byte_of(t, bit) else {
         return true;
@@ -194,12 +193,12 @@ pub(crate) fn for_each_late(t: &[Field], bit: usize, mut each: impl FnMut(usize)
         let Some(k) = kind(t, i) else {
             return true;
         };
-        let decided = k == Kind::When;
+        let decided = matches!(k, Kind::When | Kind::Times);
         let late = decided && late_for(t, bit, byte, i);
         if late && !each(i) {
             return false;
         }
-        let inside = k == Kind::Flags || (k == Kind::When && !late);
+        let inside = matches!(k, Kind::Flags | Kind::Group) || (k == Kind::When && !late);
         i = if inside {
             i.saturating_add(1)
         } else {
@@ -209,9 +208,9 @@ pub(crate) fn for_each_late(t: &[Field], bit: usize, mut each: impl FnMut(usize)
     true
 }
 
-/// True when the `when` at `i` is decided late by the nearest flag bit around it.
+/// True when the `when` or `times` at `i` is decided late by the nearest flag bit around it.
 pub(crate) fn is_late(t: &[Field], i: usize) -> bool {
-    if kind(t, i) != Some(Kind::When) {
+    if !matches!(kind(t, i), Some(Kind::When | Kind::Times)) {
         return false;
     }
     let mut p = parent_of(t, i);
@@ -224,7 +223,7 @@ pub(crate) fn is_late(t: &[Field], i: usize) -> bool {
             });
             return hit;
         }
-        if !matches!(kind(t, k), Some(Kind::Flags | Kind::When)) {
+        if !matches!(kind(t, k), Some(Kind::Flags | Kind::When | Kind::Group)) {
             return false;
         }
         p = parent_of(t, k);
@@ -240,4 +239,19 @@ pub(crate) fn slot_of(k: usize, width: u64) -> (usize, u32) {
     } else {
         (k >> 3, (k & 7) as u32)
     }
+}
+
+/// The slots one round of the body `begin..stop` charges: one per member it can hold (a `u2`
+/// one per member; a `list` one; a flag byte none), looking into `flags`, groups, `when`s, flag
+/// bits and an inner `times`.
+pub(crate) fn round_width(t: &[Field], begin: usize, stop: usize) -> usize {
+    level(t, begin, stop)
+        .map(|j| match get(t, j) {
+            None => 0,
+            Some(f) if f.kind == Kind::FlagByte => 0,
+            Some(f) if f.kind == Kind::List => 1,
+            Some(f) if f.kind.has_members() => round_width(t, j.saturating_add(1), end(t, j)),
+            Some(_) => 1,
+        })
+        .fold(0usize, usize::saturating_add)
 }

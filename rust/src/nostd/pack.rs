@@ -6,13 +6,44 @@ use super::present::{present, read_int, source_value, when_matches};
 use super::row::Row;
 use super::scheme::{Field, Kind};
 use super::table::{
-    bit_position, flag_byte_of, for_each_late, get, id_of, level, members, slot_of,
+    bit_position, end, flag_byte_of, for_each_late, get, id_of, level, members, round_width,
+    slot_of,
 };
+
+/// The round limits of one call and the slots its rounds have charged so far.
+pub(crate) struct Budget {
+    pub max_rounds: usize,
+    pub max_slots: usize,
+    pub slots: usize,
+}
+
+impl Budget {
+    /// Admits round number `started` (from 0) of the container `f` that charges `width` slots;
+    /// the round that would pass a limit is `TooMany` naming the limit.
+    pub(crate) fn start_round(
+        &mut self,
+        f: &Field,
+        at: usize,
+        started: usize,
+        width: usize,
+    ) -> Result<(), Fault> {
+        if started >= self.max_rounds {
+            return Err(Fault::new(Error::TooMany, at, id_of(f), self.max_rounds));
+        }
+        let total = self.slots.saturating_add(width);
+        if total > self.max_slots {
+            return Err(Fault::new(Error::TooMany, at, id_of(f), self.max_slots));
+        }
+        self.slots = total;
+        Ok(())
+    }
+}
 
 pub(crate) struct Pack<'t, 'w, 'b> {
     pub t: &'t [Field],
     pub w: &'w mut Writer<'b>,
     pub row: &'t dyn Row,
+    pub budget: &'w mut Budget,
 }
 
 fn bad(at: usize, f: &Field) -> Fault {
@@ -84,8 +115,59 @@ impl Pack<'_, '_, '_> {
             }
             Kind::U2 => self.u2(i, &f),
             Kind::Bits | Kind::Packed => self.small(i, &f),
+            Kind::Group => self.members(i),
+            Kind::Repeat | Kind::Times | Kind::List => self.container(i, &f),
             _ => Err(Fault::new(Error::SchemeInvalid, self.w.len(), id_of(&f), 0)),
         }
+    }
+
+    /// The items of a `repeat` (as many as the row holds), a `times` (its count, which must be
+    /// the row's) or a `list` (a u16 count first), each packed from its own item row.
+    fn container(&mut self, i: usize, f: &Field) -> Result<(), Fault> {
+        let at = self.w.len();
+        let held = self.row.count(f.id);
+        let n = match f.kind {
+            Kind::Times => {
+                let count = source_value(self.t, i, self.row)
+                    .and_then(|c| usize::try_from(c).ok())
+                    .ok_or_else(|| bad(at, f))?;
+                if held.unwrap_or(0) != count {
+                    return Err(bad(at, f));
+                }
+                count
+            }
+            Kind::List => {
+                let n = held.ok_or_else(|| bad(at, f))?;
+                let wire = u16::try_from(n).map_err(|_| bad(at, f))?;
+                self.w.put(&wire.to_le_bytes(), id_of(f))?;
+                n
+            }
+            _ => held.unwrap_or(0),
+        };
+        let rounds = f.kind != Kind::List;
+        if rounds && n > self.budget.max_rounds {
+            return Err(Fault::new(
+                Error::TooMany,
+                at,
+                id_of(f),
+                self.budget.max_rounds,
+            ));
+        }
+        let width = round_width(self.t, i.saturating_add(1), end(self.t, i));
+        for k in 0..n {
+            if rounds {
+                self.budget.start_round(f, self.w.len(), k, width)?;
+            }
+            let item = self.row.item(f.id, k).ok_or_else(|| bad(self.w.len(), f))?;
+            Pack {
+                t: self.t,
+                w: &mut *self.w,
+                row: item,
+                budget: &mut *self.budget,
+            }
+            .members(i)?;
+        }
+        Ok(())
     }
 
     fn number(&mut self, f: &Field, width: usize) -> Result<(), Fault> {

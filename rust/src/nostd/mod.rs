@@ -63,8 +63,9 @@ pub use error::{Error, Fault};
 pub use io::{Reader, Writer};
 pub use row::{Num, Row};
 pub use scheme::{
-    be, bits, boolean, bytes, f32, f64, flag_bit, flag_byte, flags, i16, i32, i64, i8, packed,
-    sized, u16, u2, u32, u64, u8, when, Field, Kind, Scheme, MAX_FIELDS, NO_ID,
+    be, bits, boolean, bytes, f32, f64, flag_bit, flag_byte, flags, group, i16, i32, i64, i8, list,
+    packed, repeat, sized, times, u16, u2, u32, u64, u8, when, Field, Kind, Scheme,
+    DEFAULT_MAX_ROUNDS, DEFAULT_MAX_SLOTS, MAX_FIELDS, NO_ID,
 };
 pub use walk::{pack, unpack};
 

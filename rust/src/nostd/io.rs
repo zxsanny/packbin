@@ -77,6 +77,11 @@ impl<'a> Reader<'a> {
         Ok(bytes)
     }
 
+    /// True when bytes are left to read.
+    pub(crate) fn has_more(&self) -> bool {
+        self.pos < self.data.len()
+    }
+
     /// Fails with [`Error::TrailingBytes`] when bytes are left.
     pub fn finish(&self) -> Result<(), Fault> {
         if self.pos < self.data.len() {

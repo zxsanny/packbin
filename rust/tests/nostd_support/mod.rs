@@ -2,6 +2,8 @@
 #![allow(dead_code)]
 
 #[cfg(feature = "std")]
+pub mod random;
+#[cfg(feature = "std")]
 pub mod tree;
 
 use packbin::nostd::{Num, Row};
@@ -14,7 +16,9 @@ pub struct Slots {
     pub nums: Vec<Option<Num>>,
     pub blobs: Vec<Option<Vec<u8>>>,
     pub flags: Vec<bool>,
-    /// The storage `slots` offers, `SLOTS` when `None`.
+    /// The items of `repeat`, `times` and `list` fields, by id.
+    pub items: Vec<Option<Vec<Slots>>>,
+    /// The storage `slots` and `item_mut` offer, `SLOTS` when `None`.
     pub cap: Option<usize>,
 }
 
@@ -76,6 +80,9 @@ impl Row for Slots {
         if let Some(f) = self.flags.get_mut(at) {
             *f = false;
         }
+        if let Some(i) = self.items.get_mut(at) {
+            *i = None;
+        }
     }
     fn slots(&mut self, id: u16) -> Option<&mut [u8]> {
         let at = usize::from(id);
@@ -87,13 +94,49 @@ impl Row for Slots {
         self.blobs[at].as_deref_mut()
     }
     fn set_count(&mut self, id: u16, n: usize) -> bool {
-        match self.blobs.get_mut(usize::from(id)) {
-            Some(Some(b)) if n <= b.len() => {
-                b.truncate(n);
-                true
+        let at = usize::from(id);
+        if let Some(Some(b)) = self.blobs.get_mut(at) {
+            if n > b.len() {
+                return false;
             }
-            _ => false,
+            b.truncate(n);
+            return true;
         }
+        if self.items.len() <= at {
+            self.items.resize(at + 1, None);
+        }
+        let items = self.items[at].get_or_insert_with(Vec::new);
+        if n > items.len() {
+            return false;
+        }
+        items.truncate(n);
+        true
+    }
+    fn count(&self, id: u16) -> Option<usize> {
+        self.items.get(usize::from(id))?.as_ref().map(Vec::len)
+    }
+    fn item(&self, id: u16, k: usize) -> Option<&dyn Row> {
+        let item = self.items.get(usize::from(id))?.as_ref()?.get(k)?;
+        Some(item as &dyn Row)
+    }
+    fn item_mut(&mut self, id: u16, k: usize) -> Option<&mut dyn Row> {
+        let at = usize::from(id);
+        let cap = self.cap.unwrap_or(SLOTS);
+        if k >= cap {
+            return None;
+        }
+        if self.items.len() <= at {
+            self.items.resize(at + 1, None);
+        }
+        let inner = Slots {
+            cap: self.cap,
+            ..Slots::default()
+        };
+        let items = self.items[at].get_or_insert_with(Vec::new);
+        if items.len() <= k {
+            items.resize(k + 1, inner);
+        }
+        Some(&mut items[k] as &mut dyn Row)
     }
 }
 

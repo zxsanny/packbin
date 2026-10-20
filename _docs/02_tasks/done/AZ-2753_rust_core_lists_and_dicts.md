@@ -14,6 +14,8 @@ branch: dev
 **Tracker**: AZ-2753
 **Epic**: AZ-2750
 
+> **Loop 51 change:** dictionaries (the `dict` kind and AC-3, key order) moved to AZ-2754: every key is a string and the order is compared on decoded text, which needs the text decoder of that slice. This task ships `repeat`, `group`, `times` and lists.
+
 ## Problem
 
 Messages with a variable number of items need `repeat`, `group`, `times`, lists and dicts. In a heap-free core the items live in storage the caller provides, so the limits and the failure kinds must be explicit.
@@ -42,7 +44,7 @@ Given a count above the round limit, a slot count above the slot limit, storage 
 When pack and unpack run
 Then `TooMany` (with the field and the limit); nothing is written past the caller's storage
 
-**AC-3: Dictionary order**
+**AC-3: Dictionary order** (moved to AZ-2754 AC-5)
 Given keys not strictly ascending, or a duplicate key
 When unpack and pack run
 Then the packet is refused (as the std walker refuses it)

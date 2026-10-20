@@ -36,6 +36,14 @@ pub enum Kind {
     Bits,
     /// The value of `Field::source` plus `Field::bias` numbers of `Field::width` bits.
     Packed,
+    /// Members written one after another on the same row.
+    Group,
+    /// Rounds of the members until the packet ends, each into an item of the row.
+    Repeat,
+    /// (value of `Field::source`) rounds of the members, each into an item of the row.
+    Times,
+    /// A u16 item count, then the items: its one member is the element, ids from 0.
+    List,
 }
 
 impl Kind {
@@ -66,15 +74,32 @@ impl Kind {
 
     /// Kinds whose entry is followed by member entries (`Field::span` above 1 is allowed).
     pub(crate) fn has_members(self) -> bool {
-        matches!(self, Kind::Flags | Kind::FlagBit | Kind::When | Kind::U2)
+        matches!(
+            self,
+            Kind::Flags
+                | Kind::FlagBit
+                | Kind::When
+                | Kind::U2
+                | Kind::Group
+                | Kind::Repeat
+                | Kind::Times
+                | Kind::List
+        )
+    }
+
+    /// Kinds whose members read into items of their own (`Row::item`): a scope of their own.
+    pub(crate) fn is_container(self) -> bool {
+        matches!(self, Kind::Repeat | Kind::Times | Kind::List)
     }
 }
 
 /// One entry of a scheme table. Members follow their parent in order; `span` counts the entry
 /// and all entries below it, so the next sibling is at `index + span`. Build entries with the
 /// functions of this module (`u16(0)`, `be(i32(1))`, `flags(2, 3)`); the `id` is the field's
-/// order id: each field takes the next one, 0 first, and `flags`, `when` and `u2` take the id of
-/// their first member. A flag byte and a flag bit take none ([`NO_ID`]).
+/// order id: each field takes the next one, 0 first, and `flags`, `when`, `u2`, `group`,
+/// `repeat` and `times` take the id of their first member. A flag byte and a flag bit take none
+/// ([`NO_ID`]). A `list` takes the next id like a field (the row finds its items by it; the
+/// other packages give a list a name only), and its element's ids start again at 0.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Field {
     pub kind: Kind,
@@ -236,11 +261,50 @@ pub const fn u2(id: u16, n: u16) -> Field {
     parent(Kind::U2, id, n)
 }
 
-/// A packet layout: a type number (the first byte) and the table of fields in order.
+/// Members written one after another (at least one; a presence bit with no members is a
+/// [`boolean`]). Under `flags` the group is on when any member is.
+pub const fn group(id: u16, entries: u16) -> Field {
+    parent(Kind::Group, id, entries)
+}
+
+/// Rounds of the members until the packet ends; round `k` is item `k` of the row
+/// ([`Row::item`](super::Row::item)). Not inside another `repeat` or `times` round.
+pub const fn repeat(id: u16, entries: u16) -> Field {
+    parent(Kind::Repeat, id, entries)
+}
+
+/// (value of the earlier integer field `count`) rounds of the members; round `k` is item `k`.
+/// Not inside another `times` round.
+pub const fn times(id: u16, count: u16, entries: u16) -> Field {
+    Field {
+        source: count,
+        ..parent(Kind::Times, id, entries)
+    }
+}
+
+/// A u16 item count, then the items. The element (the `entries` table entries that follow: a
+/// number, `bytes`, a `list` or a `u2` of one member) has ids from 0 in each item.
+pub const fn list(id: u16, entries: u16) -> Field {
+    parent(Kind::List, id, entries)
+}
+
+/// The most rounds one `repeat` or `times` may start (the std default).
+pub const DEFAULT_MAX_ROUNDS: usize = 65_535;
+/// The most slots (members a round can hold, summed over every round started) one call may
+/// charge (the std default).
+pub const DEFAULT_MAX_SLOTS: usize = 1_048_576;
+
+/// A packet layout: a type number (the first byte), the table of fields in order, and the round
+/// limits (a round past either is [`Error::TooMany`](super::Error::TooMany)).
 #[derive(Clone, Copy, Debug)]
 pub struct Scheme<'a> {
     pub type_number: u8,
     pub fields: &'a [Field],
+    /// The most rounds one `repeat` or `times` may start where it stands (each time it is read).
+    pub max_rounds: usize,
+    /// The most slots all rounds of one call may charge together; a round charges one slot per
+    /// member its body can hold.
+    pub max_slots: usize,
 }
 
 impl<'a> Scheme<'a> {
@@ -248,6 +312,16 @@ impl<'a> Scheme<'a> {
         Scheme {
             type_number,
             fields,
+            max_rounds: DEFAULT_MAX_ROUNDS,
+            max_slots: DEFAULT_MAX_SLOTS,
+        }
+    }
+
+    pub const fn with_limits(self, max_rounds: usize, max_slots: usize) -> Self {
+        Scheme {
+            max_rounds,
+            max_slots,
+            ..self
         }
     }
 }

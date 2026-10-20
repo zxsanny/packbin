@@ -101,8 +101,27 @@ pub trait Row {
         None
     }
 
-    /// The number of values unpack wrote into `slots`; `false` refuses it.
+    /// The number of values unpack wrote into `slots`, or of items it filled for a `repeat`,
+    /// `times` or `list`; `false` refuses it.
     fn set_count(&mut self, _id: u16, _n: usize) -> bool {
         false
+    }
+
+    /// The items a `repeat`, `times` or `list` holds on pack (`None`: the row holds none).
+    fn count(&self, _id: u16) -> Option<usize> {
+        None
+    }
+
+    /// Item `k` of a `repeat`, `times` or `list` on pack: a row of its own, whose ids are those of
+    /// the round's members (a list element: id 0).
+    fn item(&self, _id: u16, _k: usize) -> Option<&dyn Row> {
+        None
+    }
+
+    /// Storage for item `k` on unpack (`None` when the row has no room for it: that is
+    /// [`Error::TooMany`](super::Error::TooMany)). Unpack clears the item's members, reads them
+    /// into it, and calls `set_count` with the items filled when the container ends.
+    fn item_mut(&mut self, _id: u16, _k: usize) -> Option<&mut dyn Row> {
+        None
     }
 }

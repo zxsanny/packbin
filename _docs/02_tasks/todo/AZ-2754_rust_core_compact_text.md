@@ -3,7 +3,7 @@
 **Task**: AZ-2754_rust_core_compact_text
 **Name**: Rust core: compact text with caller scratch
 **Description**: The compact string format in the heap-free core: the optimal parse runs in caller scratch words; text off forwards a payload unchanged.
-**Complexity**: 5 points
+**Complexity**: 5 points (plus dictionaries from AZ-2753, about 2 points: re-estimate at intake)
 **Dependencies**: AZ-2753
 **Component**: rust (core)
 **Tracker**: AZ-2754
@@ -22,6 +22,7 @@ Strings in meshbell messages use the compact format. The std codec allocates; th
 
 ### Included
 - The core codec (encoder in scratch, decoder), the shared generated tables, the `Scratch` shape, the `text` feature switch.
+- Dictionaries (moved from AZ-2753 in loop 51): the `dict` kind (u16 entry count, then a string key and the element per entry, keys in the item rows as in lists), and the key order check (strictly ascending by the decoded UTF-8 bytes, a repeated key refused, on pack and unpack, as the std walker does). Every key is a string and the order is compared on decoded text (the C++ core decodes both payloads, `compare_payloads`), so the kind needs this slice's decoder.
 
 ### Excluded
 - Retraining the tables (owner, CS-D5); a different encoding when scratch is short (never done).
@@ -43,6 +44,11 @@ Given a scheme with a `Packed` member and a scheme with a string member, built w
 When validate, pack and unpack run
 Then the `Packed` payload is forwarded unchanged; the string member is refused at validate
 
+**AC-5: Dictionaries (from AZ-2753 AC-3)**
+Given the dictionary schemes of the std tests and the hostile `dict_keys_*` and `invalid_utf8_dict_key` packets
+When the core packs and unpacks
+Then the bytes equal the std bytes; keys not strictly ascending, or a repeated key, are refused on pack and unpack as std refuses them; the item storage limit is `TooMany` as for lists
+
 **AC-4: Untrusted payloads**
 Given a flipped bit in a payload, a payload cut short, an invalid code
 When `unpack` runs
@@ -56,6 +62,7 @@ Then an error or a text that differs in that field only; the next field is intac
 | AC-2 | scratch one word short | `ScratchTooSmall` |
 | AC-3 | no-text build cases | forward / refused |
 | AC-4 | hostile payloads | bounded, no panic |
+| AC-5 | dict differential, unordered and repeated keys | equal / refused |
 
 ## Constraints
 

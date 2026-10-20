@@ -3,7 +3,6 @@
 //! of `nostd` order id `id`; a flag byte number `n` is the `std` flag byte `b<n>`.
 #![allow(dead_code)]
 
-use super::Slots;
 use packbin::nostd::{self, Kind, Num, Row};
 use packbin::{insert, MapScheme, Value, Values};
 
@@ -23,10 +22,15 @@ pub enum Node {
     /// Width, count id, bias.
     Packed(u8, u16, i8),
     U2(u16),
+    Group(Vec<Node>),
+    Repeat(Vec<Node>),
+    /// Count id, body.
+    Times(u16, Vec<Node>),
+    List(Box<Node>),
 }
 
 /// What a row holds for one `nostd` id.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Leaf {
     Num(Kind),
     Bytes(u16),
@@ -35,6 +39,12 @@ pub enum Leaf {
     Bits(u16),
     Packed(u8, u16, i8),
     U2,
+    /// The members of one round.
+    Repeat(Vec<(u16, Leaf)>),
+    /// The `std` key of the rounds, the count id, the members of one round.
+    Times(String, u16, Vec<(u16, Leaf)>),
+    /// The element (id 0 of each item).
+    List(Box<Leaf>),
 }
 
 pub struct Built {
@@ -47,8 +57,9 @@ pub fn build(type_number: u8, nodes: &[Node]) -> Built {
     let mut fields = Vec::new();
     let mut leaves = Vec::new();
     let mut next = 0u16;
+    let mut anchor = 0u32;
     for node in nodes {
-        to_nostd(node, &mut next, &mut fields, &mut leaves);
+        to_nostd(node, &mut next, &mut anchor, &mut fields, &mut leaves);
     }
     let reference = MapScheme::new(i32::from(type_number), std_fields(nodes));
     Built {
@@ -71,9 +82,9 @@ pub fn std_fields(nodes: &[Node]) -> Vec<packbin::Field> {
 /// The `nostd` table alone.
 pub fn nostd_fields(nodes: &[Node]) -> Vec<nostd::Field> {
     let mut fields = Vec::new();
-    let mut next = 0u16;
+    let (mut next, mut anchor) = (0u16, 0u32);
     for node in nodes {
-        to_nostd(node, &mut next, &mut fields, &mut Vec::new());
+        to_nostd(node, &mut next, &mut anchor, &mut fields, &mut Vec::new());
     }
     fields
 }
@@ -94,13 +105,16 @@ fn leaf_field(kind: Kind, id: u16) -> nostd::Field {
     }
 }
 
+/// `next` is the `nostd` order id, `anchor` the `std` one (kept to name a `times`' rounds).
 fn to_nostd(
     node: &Node,
     next: &mut u16,
+    anchor: &mut u32,
     out: &mut Vec<nostd::Field>,
     leaves: &mut Vec<(u16, Leaf)>,
 ) {
     let id = *next;
+    let here = *anchor;
     let leaf = match node {
         Node::Num(k) | Node::Be(k) => Some((Leaf::Num(*k), leaf_field(*k, id))),
         Node::Bytes(n) => Some((Leaf::Bytes(*n), nostd::bytes(id, *n))),
@@ -118,10 +132,16 @@ fn to_nostd(
             field
         });
         *next += 1;
+        *anchor += 1;
         return;
     }
+    let head = out.len();
     match node {
-        Node::FlagByte(n) => out.push(nostd::flag_byte(*n)),
+        Node::FlagByte(n) => {
+            out.push(nostd::flag_byte(*n));
+            *anchor += 1;
+            return;
+        }
         Node::U2(n) => {
             out.push(nostd::u2(id, *n));
             for k in 0..*n {
@@ -129,26 +149,51 @@ fn to_nostd(
                 out.push(nostd::u8(id + k));
             }
             *next += n;
+            *anchor += u32::from(*n);
+            return;
         }
-        Node::Flags(body) | Node::When(_, _, body) => {
-            let head = out.len();
+        Node::Flags(body) | Node::When(_, _, body) | Node::Group(body) => {
             out.push(match node {
                 Node::When(source, value, _) => nostd::when(id, *source, *value, 0),
+                Node::Group(_) => nostd::group(id, 0),
                 _ => nostd::flags(id, 0),
             });
             for member in body {
-                to_nostd(member, next, out, leaves);
+                to_nostd(member, next, anchor, out, leaves);
             }
-            out[head].span = (out.len() - head) as u16;
+        }
+        Node::Repeat(body) | Node::Times(_, body) => {
+            out.push(match node {
+                Node::Times(count, _) => nostd::times(id, *count, 0),
+                _ => nostd::repeat(id, 0),
+            });
+            let mut inner = Vec::new();
+            for member in body {
+                to_nostd(member, next, anchor, out, &mut inner);
+            }
+            leaves.push(match node {
+                Node::Times(count, _) => {
+                    (id, Leaf::Times(format!("__times_{here}"), *count, inner))
+                }
+                _ => (id, Leaf::Repeat(inner)),
+            });
+        }
+        Node::List(element) => {
+            out.push(nostd::list(id, 0));
+            let mut inner = Vec::new();
+            let (mut e, mut a) = (0u16, 0u32);
+            to_nostd(element, &mut e, &mut a, out, &mut inner);
+            let (_, leaf) = inner.pop().expect("an element");
+            leaves.push((id, Leaf::List(Box::new(leaf))));
+            *next += 1;
         }
         Node::FlagBit(n, inner) => {
-            let head = out.len();
             out.push(nostd::flag_bit(*n, 0));
-            to_nostd(inner, next, out, leaves);
-            out[head].span = (out.len() - head) as u16;
+            to_nostd(inner, next, anchor, out, leaves);
         }
         _ => unreachable!("leaves are handled above"),
     }
+    out[head].span = (out.len() - head) as u16;
 }
 
 fn name(id: u16) -> String {
@@ -186,7 +231,20 @@ fn step(id: &mut u16, anchor: &mut u32) -> String {
     n
 }
 
-/// `id` follows the `nostd` order ids, `anchor` the `std` ones (a `std` flag byte takes one).
+/// A list element in `std`: one field named `e`.
+fn std_element(node: &Node) -> packbin::Field {
+    match node {
+        Node::Num(k) => std_number(*k, "e"),
+        Node::Be(k) => packbin::be(std_number(*k, "e")),
+        Node::Bytes(n) => packbin::bytes("e", usize::from(*n)),
+        Node::U2(1) => packbin::u2(&["e"]),
+        Node::List(inner) => packbin::list("e", std_element(inner)),
+        other => panic!("not an element: {other:?}"),
+    }
+}
+
+/// `id` follows the `nostd` order ids, `anchor` the `std` ones (a `std` flag byte takes one, a
+/// `std` list none).
 fn to_std(node: &Node, id: &mut u16, anchor: &mut u32) -> packbin::Field {
     let here = *anchor;
     match node {
@@ -213,25 +271,55 @@ fn to_std(node: &Node, id: &mut u16, anchor: &mut u32) -> packbin::Field {
             let members = body.iter().map(|m| to_std(m, id, anchor)).collect();
             packbin::flags(here, format!("x{here}"), members)
         }
+        Node::Group(body) => {
+            let members = body.iter().map(|m| to_std(m, id, anchor)).collect();
+            packbin::group(here, format!("g{here}"), members)
+        }
         Node::When(source, value, body) => {
             let members = body.iter().map(|m| to_std(m, id, anchor)).collect();
             packbin::when(here, packbin::eq(name(*source), eq_value(*value)), members)
+        }
+        Node::Repeat(body) => {
+            let members = body.iter().map(|m| to_std(m, id, anchor)).collect();
+            packbin::repeat(here, members)
+        }
+        Node::Times(count, body) => {
+            let members = body.iter().map(|m| to_std(m, id, anchor)).collect();
+            packbin::times(here, name(*count), members)
+        }
+        Node::List(element) => {
+            let n = name(*id);
+            *id += 1;
+            packbin::list(n, std_element(element))
         }
     }
 }
 
 /// The `std` values of a `nostd` row: absent members (and false bools) are left out.
-pub fn values_of(row: &Slots, leaves: &[(u16, Leaf)]) -> Values {
+pub fn values_of(row: &dyn Row, leaves: &[(u16, Leaf)]) -> Values {
     let mut values = Values::new();
     for (id, leaf) in leaves {
-        if let Some(v) = value_of(row, *id, *leaf) {
-            insert(&mut values, name(*id), Some(v));
+        if let Some(v) = value_of(row, *id, leaf) {
+            insert(&mut values, key_of(*id, leaf), Some(v));
         }
     }
     values
 }
 
-pub fn value_of(row: &Slots, id: u16, leaf: Leaf) -> Option<Value> {
+fn key_of(id: u16, leaf: &Leaf) -> String {
+    match leaf {
+        Leaf::Repeat(_) => "__repeat__".to_string(),
+        Leaf::Times(key, ..) => key.clone(),
+        _ => name(id),
+    }
+}
+
+fn items(row: &dyn Row, id: u16) -> Vec<&dyn Row> {
+    let n = row.count(id).unwrap_or(0);
+    (0..n).filter_map(|k| row.item(id, k)).collect()
+}
+
+pub fn value_of(row: &dyn Row, id: u16, leaf: &Leaf) -> Option<Value> {
     match leaf {
         Leaf::Num(_) | Leaf::U2 => row.num(id).map(to_value),
         Leaf::Bytes(_) | Leaf::Sized(_) => row.bytes(id).map(|b| Value::Bytes(b.to_vec())),
@@ -239,6 +327,22 @@ pub fn value_of(row: &Slots, id: u16, leaf: Leaf) -> Option<Value> {
             .bytes(id)
             .map(|b| Value::List(b.iter().map(|v| Value::U8(*v)).collect())),
         Leaf::Bool => row.flag(id).then_some(Value::U8(1)),
+        Leaf::Repeat(body) => {
+            let rounds = items(row, id);
+            (!rounds.is_empty())
+                .then(|| Value::Groups(rounds.iter().map(|r| values_of(*r, body)).collect()))
+        }
+        Leaf::Times(_, _, body) => row
+            .count(id)
+            .map(|_| Value::Groups(items(row, id).iter().map(|r| values_of(*r, body)).collect())),
+        Leaf::List(element) => row.count(id).map(|_| {
+            Value::List(
+                items(row, id)
+                    .iter()
+                    .map(|r| value_of(*r, 0, element).unwrap_or(Value::Bytes(vec![0xEE; 99])))
+                    .collect(),
+            )
+        }),
     }
 }
 
@@ -262,6 +366,9 @@ pub fn same(a: &Value, b: &Value) -> bool {
     match (a, b) {
         (Value::F32(x), Value::F32(y)) => x.to_bits() == y.to_bits(),
         (Value::F64(x), Value::F64(y)) => x.to_bits() == y.to_bits(),
+        (Value::List(x), Value::List(y)) => {
+            x.len() == y.len() && x.iter().zip(y).all(|(p, q)| same(p, q))
+        }
         _ => a == b,
     }
 }
@@ -269,4 +376,45 @@ pub fn same(a: &Value, b: &Value) -> bool {
 /// The `std` value of `id` in `values`, as `values_of` would write it.
 pub fn std_value(values: &Values, id: u16) -> Option<&Value> {
     values.get(name(id).as_str()).and_then(|v| v.as_ref())
+}
+
+/// Every leaf of `row` holds what `read` (a `std` unpack) holds for it; rounds member by member
+/// (the `std` rounds also hold the bytes of each `flags` and flag byte, not compared).
+pub fn compare(read: &Values, row: &dyn Row, leaves: &[(u16, Leaf)]) -> Result<(), String> {
+    for (id, leaf) in leaves {
+        let theirs = read
+            .get(key_of(*id, leaf).as_str())
+            .and_then(|v| v.as_ref());
+        match (leaf, theirs) {
+            (Leaf::Repeat(body) | Leaf::Times(_, _, body), Some(Value::Groups(rounds))) => {
+                let ours = items(row, *id);
+                if ours.len() != rounds.len() {
+                    return Err(format!(
+                        "id {id}: {} rounds, std {}",
+                        ours.len(),
+                        rounds.len()
+                    ));
+                }
+                for (r, (mine, std_round)) in ours.iter().zip(rounds).enumerate() {
+                    compare(std_round, *mine, body)
+                        .map_err(|e| format!("id {id} round {r}: {e}"))?;
+                }
+                if matches!(leaf, Leaf::Times(..)) && row.count(*id).is_none() {
+                    return Err(format!("id {id}: no rounds, std {}", rounds.len()));
+                }
+            }
+            _ => {
+                let ours = value_of(row, *id, leaf);
+                let equal = match (&ours, theirs) {
+                    (Some(x), Some(y)) => same(x, y),
+                    (None, None) => true,
+                    _ => false,
+                };
+                if !equal {
+                    return Err(format!("id {id}: nostd {ours:?} std {theirs:?}"));
+                }
+            }
+        }
+    }
+    Ok(())
 }

@@ -3,10 +3,13 @@
 
 use super::error::{Error, Fault};
 use super::io::Reader;
-use super::present::{source_value, when_matches};
+use super::pack::Budget;
+use super::present::{clear, source_value, when_matches};
 use super::row::{Num, Row};
 use super::scheme::{Field, Kind};
-use super::table::{bit_position, flag_byte_of, get, id_of, level, members, slot_of};
+use super::table::{
+    bit_position, end, flag_byte_of, get, id_of, level, members, round_width, slot_of,
+};
 
 /// Flag byte numbers are 0 to 7.
 const FLAG_BYTES: usize = 8;
@@ -15,8 +18,10 @@ pub(crate) struct Unpack<'t, 'r, 'b> {
     pub t: &'t [Field],
     pub r: &'r mut Reader<'b>,
     pub row: &'r mut dyn Row,
-    /// The last value read for each flag byte number in the scope being read.
+    /// The last value read for each flag byte number in the scope being read (a round starts
+    /// with none, and the scope around it gets its own back when the container ends).
     pub flag_bytes: [u8; FLAG_BYTES],
+    pub budget: &'r mut Budget,
 }
 
 fn bad(at: usize, f: &Field) -> Fault {
@@ -104,8 +109,78 @@ impl Unpack<'_, '_, '_> {
             }
             Kind::U2 => self.u2(i, &f),
             Kind::Bits | Kind::Packed => self.small(i, &f),
+            Kind::Group => members(self.t, i).try_for_each(|j| self.one(j)),
+            Kind::Repeat | Kind::Times | Kind::List => self.container(i, &f),
             _ => Err(Fault::new(Error::SchemeInvalid, self.r.pos(), id_of(&f), 0)),
         }
+    }
+
+    /// Items of a `repeat` (until the packet ends), a `times` (its count as read) or a `list` (a
+    /// u16 count), each read into the row's next item. A `repeat` round that reads nothing ends
+    /// it (the bytes left are trailing); a `list` element that reads nothing is `BadValue`.
+    fn container(&mut self, i: usize, f: &Field) -> Result<(), Fault> {
+        let n = match f.kind {
+            Kind::Times => source_value(self.t, i, &*self.row)
+                .and_then(|c| u64::try_from(c).ok())
+                .map(clamp)
+                .ok_or_else(|| bad(self.r.pos(), f))?,
+            Kind::List => {
+                let wire = self.r.take(2, id_of(f))?;
+                let lo = wire.first().copied().unwrap_or(0);
+                let hi = wire.get(1).copied().unwrap_or(0);
+                usize::from(u16::from_le_bytes([lo, hi]))
+            }
+            _ => usize::MAX,
+        };
+        let to_end = f.kind == Kind::Repeat;
+        let rounds = f.kind != Kind::List;
+        let width = round_width(self.t, i.saturating_add(1), end(self.t, i));
+        let mut filled = 0usize;
+        while if to_end {
+            self.r.has_more()
+        } else {
+            filled < n
+        } {
+            let at = self.r.pos();
+            if rounds {
+                self.budget.start_round(f, at, filled, width)?;
+            }
+            let wanted = if to_end { filled.saturating_add(1) } else { n };
+            let item = self.row.item_mut(f.id, filled).ok_or(Fault::new(
+                Error::TooMany,
+                at,
+                id_of(f),
+                wanted,
+            ))?;
+            clear(self.t, i.saturating_add(1), end(self.t, i), item);
+            Unpack {
+                t: self.t,
+                r: &mut *self.r,
+                row: item,
+                flag_bytes: [0; FLAG_BYTES],
+                budget: &mut *self.budget,
+            }
+            .top_of(i)?;
+            if self.r.pos() == at {
+                if to_end {
+                    break;
+                }
+                if !rounds {
+                    return Err(bad(at, f));
+                }
+            }
+            filled = filled.saturating_add(1);
+        }
+        let done = self.r.pos();
+        self.row
+            .set_count(f.id, filled)
+            .then_some(())
+            .ok_or_else(|| bad(done, f))
+    }
+
+    /// The members of entry `i`, into this walk's row.
+    fn top_of(&mut self, i: usize) -> Result<(), Fault> {
+        members(self.t, i).try_for_each(|j| self.one(j))
     }
 
     fn number(&mut self, f: &Field, width: usize) -> Result<(), Fault> {

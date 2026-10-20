@@ -66,7 +66,22 @@ pub(crate) fn present(t: &[Field], i: usize, row: &dyn Row, skip_late: bool) -> 
                 && any_member(t, i, row, skip_late)
         }
         Kind::Bytes | Kind::Sized | Kind::Bits | Kind::Packed => row.bytes(f.id).is_some(),
+        Kind::Group => any_member(t, i, row, skip_late),
+        Kind::Repeat => row.count(f.id).is_some_and(|n| n != 0),
+        Kind::Times => !(skip_late && is_late(t, i)) && times_present(t, i, f, row),
+        Kind::List => row.count(f.id).is_some(),
         _ => false,
+    }
+}
+
+/// A `times` is on when its count is above zero or the row holds rounds (a count of zero with
+/// rounds is refused on pack, not dropped); with no count written, rounds make it on, so pack
+/// refuses them.
+fn times_present(t: &[Field], i: usize, f: &Field, row: &dyn Row) -> bool {
+    let rounds = row.count(f.id).is_some_and(|n| n != 0);
+    match source_value(t, i, row) {
+        Some(count) => count != 0 || rounds,
+        None => rounds,
     }
 }
 
@@ -81,7 +96,7 @@ pub(crate) fn clear(t: &[Field], begin: usize, stop: usize, row: &mut dyn Row) {
         let Some(f) = get(t, j) else {
             return;
         };
-        if f.kind.has_members() {
+        if f.kind.has_members() && !f.kind.is_container() {
             clear(t, j.saturating_add(1), end(t, j), row);
         } else if f.kind != Kind::FlagByte {
             row.clear(f.id);
