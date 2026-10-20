@@ -732,3 +732,7 @@ Cost: the C++ Cortex-M4F image is 7,920 B of 8,192 (the order check is built onl
 
 2026-10-20: no new finding, verdict PASS; details in `nostd_review_loop50.md`. The new decoder (`packbin::nostd`, flat schemes only) is proven free of panic paths and heap calls on a linked Cortex-M4F image, and agrees with the map API on every cut, extended and retyped packet and on 30,000 random packets. Three observations (O1 to O3) are listed there; none changes the counts above (Critical 0, High 0, Medium 2, Low 17).
 
+
+## Loop 51 addendum (heap-free Rust API, nested kinds, AZ-2752, AZ-2753)
+
+2026-10-20: verdict PASS, one new Low (L51-1: CPU per packet grows with the square of the scheme size, since references are resolved where they are used); details in `nostd_review_loop51.md`. Every count from a packet is bounded by storage, `max_rounds`, `max_slots` or the packet length, and 27 layouts are read alike by the map API and `nostd`. Two observations (stack margin of the flat probe, 472 of 512 B; the device image drives flat schemes only) go to AZ-2757. Counts: Critical 0, High 0, Medium 2, Low 18.

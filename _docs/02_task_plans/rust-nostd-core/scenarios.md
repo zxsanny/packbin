@@ -25,6 +25,10 @@ Source of rows: `intake` (new-task Step 4.7 at the 13-point handoff). Status: co
 |----|----------|--------|----------------------|--------|--------|
 | D1 | a row refuses a value on unpack | confirmed | `BadValue` naming the field | AZ-2749 (test added after batch 1) | assess-round-1 |
 | D2 | link checks catch real defects | confirmed | seeded panic and heap defects fail the checks | AZ-2751 AC-4, AC-5 | assess-round-1 |
+| D3 | dictionary keys and their order | confirmed | moved with the `dict` kind to AZ-2754 (keys are strings, order compared decoded) | AZ-2754 AC-5 | assess-round-1 (loop 51) |
+| D4 | a `times` inside a `repeat` passes 65,535 rounds in total, not in one place | confirmed | the core limits rounds per container where it stands, plus slots and storage; std refuses | AZ-2753 AC-2 (documented on `Scheme::max_rounds`) | assess-round-1 (loop 51) |
+| D5 | a `when` whose source sits in a `when` that does not hold | confirmed | not a match (source not written), as std; the C++ core differs (its own unpack refuses its packet) | AZ-2752; C++ fix outside the epic | assess-round-1 (loop 51) |
+| D6 | stack of a nested scheme on the device | deferred | flat probe 472 of 512 B; a nested probe and the stack look go with the hostile and docs slice | AZ-2757 | assess-round-1 (loop 51) |
 
 ## Fit decisions
 

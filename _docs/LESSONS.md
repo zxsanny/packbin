@@ -9,12 +9,6 @@ Downstream skills consume this file:
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
 
-- [2026-10-17] [testing] A bounded wait on whole seconds (`date +%s`) with `-lt` gives up up to 1 s early: compare with `-le`, assert at least the limit, and repeat a new timing test five times before the commit (one run in five showed it).
-  Source: _docs/06_metrics/retro_2026-10-17_loop33.md
-- [2026-10-17] [tooling] Docker Desktop on this Mac pulls even images it already has in minutes (156 and 422 s for gcc and swift, IPv6-first registry path) while the runners take 21 to 73 s: never estimate CI pull time from a Mac pull, read the job's step times.
-  Source: _docs/06_metrics/retro_2026-10-17_loop33.md
-- [2026-10-17] [testing] Before committing a change to a shape other scripts read (the `suites` matrix entries became "csharp rust"), `git grep` every reader of it and run them, not only the guards you edited: `report-row.test.sh` also parsed the matrix, and the step 11 scaffold stage caught it after the batch commit.
-  Source: _docs/06_metrics/retro_2026-10-17_loop34.md
 - [2026-10-17] [tooling] A cache spike must restore the way the real cache does: GNU tar's default format keeps file times to the second, so a plain `tar` round trip made SwiftPM rebuild all 372 BoringSSL C files and I designed ccache around it; `actions/cache` (posix format, nanosecond times) rebuilt none, ccache was asked 0 times on CI and was removed. Round-trip with `tar --posix` (or the real action) and check one CI run before adding a tool on a spike's word.
   Source: _docs/06_metrics/retro_2026-10-17_loop34.md
 - [2026-10-17] [tooling] The unauthenticated GitHub API allows 60 calls an hour: a 30 s run watcher plus the notices of two runs used them up mid-run, and the failed polls read as "still running". Poll at 60 s with one call per tick, read jobs and annotations once at the end, and check `/rate_limit` when a poll fails; the public run page shows the run's result and total duration without the API.
@@ -39,3 +33,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-20_loop50.md
 - [2026-10-20] [tooling] Read a list that a loop feeds to docker, QEMU or cargo on a spare file descriptor (`read -u 3 ... 3< <(list)`), or the first child that reads stdin eats the remaining lines and later items are silently never run.
   Source: _docs/06_metrics/retro_2026-10-20_loop50.md
+- [2026-10-20] [architecture] In a heap-free port, link the device image after the first nested kind and read flash and stack before writing the next one: on-the-fly reference lookups took the Rust image from 2.6 KB to 11 KB against an 8 KB limit, seen only at the end of the slice (loop 51).
+  Source: _docs/06_metrics/retro_2026-10-20_loop51.md
+- [2026-10-20] [testing] Place every container kind under every presence context (`flags` member, flag bit, `when` body) in a differential layout list: a `repeat`-in-`flags` divergence passed 27 layouts and 80,000 random rows and was found by the review (loop 51).
+  Source: _docs/06_metrics/retro_2026-10-20_loop51.md
+- [2026-10-20] [estimation] Before sizing a slice of a port, check that each kind in it can be decided with the code already there: dictionaries sat in the lists slice, but key order is compared on decoded text, which only the text slice brings (loop 51).
+  Source: _docs/06_metrics/retro_2026-10-20_loop51.md
