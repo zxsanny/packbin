@@ -159,3 +159,45 @@ fn ac5_a_dictionary_of_strings_round_trips() {
     assert_eq!(first.bytes(DICT_KEY), Some("hello".as_bytes()));
     assert_eq!(first.bytes(0), Some("world".as_bytes()));
 }
+
+#[test]
+fn ac2_scratch_is_shared_by_every_string_in_a_dictionary_and_a_list() {
+    // Arrange: a compact value of 13 characters inside a dictionary item, then inside a list
+    const TEXT: &str = "привіт, світе";
+    let chars = TEXT.chars().count();
+    let mut dict_row = Slots::default();
+    let mut item = Slots::default();
+    item.set_bytes(DICT_KEY, b"k");
+    item.set_bytes(0, TEXT.as_bytes());
+    nostd_support::random::set_items(
+        &mut dict_row,
+        0,
+        vec![item.clone(), {
+            let mut second = item.clone();
+            second.set_bytes(DICT_KEY, b"l");
+            second
+        }],
+    );
+    let scheme = Scheme::new(1, &OF_STRINGS);
+    let list_fields = [packbin::nostd::list(0, 1), utf8(0)];
+    let list_scheme = Scheme::new(1, &list_fields);
+    let mut list_row = Slots::default();
+    let mut element = Slots::default();
+    element.set_bytes(0, TEXT.as_bytes());
+    nostd_support::random::set_items(&mut list_row, 0, vec![element.clone(), element]);
+    for (name, scheme, row) in [
+        ("dict", &scheme, &dict_row),
+        ("list", &list_scheme, &list_row),
+    ] {
+        let mut out = [0u8; 128];
+        // Act
+        let short = vec![0u32; chars * 3 - 1];
+        let exact = vec![0u32; chars * 3];
+        let refused = pack_with(scheme, row, &mut out, &mut short.clone()).expect_err(name);
+        let packed = pack_with(scheme, row, &mut out, &mut exact.clone());
+        // Assert
+        assert_eq!(refused.error, Error::ScratchTooSmall, "{name}");
+        assert_eq!(refused.needed, chars * 3, "{name}");
+        assert!(packed.is_ok(), "{name}: {packed:?}");
+    }
+}

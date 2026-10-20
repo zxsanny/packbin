@@ -253,3 +253,32 @@ fn ac3_a_wire_string_forwards_the_payload_unchanged_with_or_without_text() {
 fn ac3_a_utf8_member_is_valid_with_the_feature() {
     assert!(validate(&ONE).is_ok());
 }
+
+#[test]
+fn ac3_wire_strings_stand_in_a_list_a_flags_member_and_under_a_flag_bit() {
+    // Arrange: the same payloads read back whatever the container
+    use packbin::nostd::{flag_bit, flag_byte, flags, list, Field, Row};
+    let in_list: [Field; 2] = [list(0, 1), utf8_wire(0)];
+    let in_flags: [Field; 3] = [flags(0, 2), utf8_wire(0), u8(1)];
+    let under_bit: [Field; 4] = [flag_byte(0), flag_bit(0, 1), utf8_wire(0), u8(1)];
+    // Act and Assert: a list of two payloads
+    let scheme = Scheme::new(1, &in_list);
+    let wire = [1, 2, 0, 2, 0xAA, 0xBB, 1, 0xCC];
+    let mut row = big();
+    assert_eq!(unpack(&scheme, &wire, &mut row), Ok(wire.len()));
+    assert_eq!(row.item(0, 1).and_then(|i| i.bytes(0)), Some(&[0xCC][..]));
+    let mut out = [0u8; 16];
+    let n = pack(&scheme, &row, &mut out).expect("list");
+    assert_eq!(&out[..n], &wire);
+    // a flags member present, then absent
+    let scheme = Scheme::new(1, &in_flags);
+    let mut row = big();
+    assert_eq!(unpack(&scheme, &[1, 0b11, 1, 0x61, 9], &mut row), Ok(5));
+    assert_eq!(row.bytes(0), Some(&[0x61][..]));
+    assert_eq!(unpack(&scheme, &[1, 0b10, 9], &mut big()), Ok(3));
+    // under a flag bit
+    let scheme = Scheme::new(1, &under_bit);
+    let mut row = big();
+    assert_eq!(unpack(&scheme, &[1, 1, 1, 0x62, 9], &mut row), Ok(5));
+    assert_eq!(row.bytes(0), Some(&[0x62][..]));
+}

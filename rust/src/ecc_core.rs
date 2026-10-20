@@ -130,8 +130,8 @@ fn generator(n: usize) -> [u8; WIDTH] {
     g
 }
 
-/// Writes the `n` parity bytes of `clear` to the start of `parity_out` (nothing for `n` = 0 or on
-/// a refusal). A protected message is the clear bytes followed by these.
+/// Writes the `n` parity bytes of `clear` to the start of `parity_out`, which holds at least `n`
+/// bytes (`Short` otherwise; nothing is written for `n` = 0 or on a refusal). A protected message is the clear bytes followed by these.
 pub fn protect(clear: &[u8], n: usize, parity_out: &mut [u8]) -> Kind {
     if n > MAX_PARITY {
         return Kind::BadParity;
@@ -142,8 +142,9 @@ pub fn protect(clear: &[u8], n: usize, parity_out: &mut [u8]) -> Kind {
     if clear.len() > MAX_SENT.saturating_sub(n) {
         return Kind::TooLong;
     }
+    // `parity_out` holds at least `n` bytes; a shorter one is the "fewer than n bytes" refusal.
     let Some(reg) = parity_out.get_mut(..n) else {
-        return Kind::BadParity;
+        return Kind::Short;
     };
     for slot in reg.iter_mut() {
         *slot = 0;

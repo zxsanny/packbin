@@ -284,7 +284,7 @@ impl Costs<'_> {
 
 /// Walks the validated UTF-8 backwards: the code point that ends at `end`, its byte length, and
 /// where it starts.
-fn step_back(s: &[u8], end: usize) -> (u32, usize, usize) {
+fn step_back(s: &[u8], end: usize) -> Option<(u32, usize, usize)> {
     let mut at = end;
     while at > 0 {
         at = at.saturating_sub(1);
@@ -292,18 +292,16 @@ fn step_back(s: &[u8], end: usize) -> (u32, usize, usize) {
             break;
         }
     }
-    match s.get(at..end).and_then(decode_utf8) {
-        Some((cp, n)) => (cp, n, at),
-        None => (0, 1, at),
-    }
+    let (cp, n) = s.get(at..end).and_then(decode_utf8)?;
+    Some((cp, n, at))
 }
 
 /// Fills the scratch from the end of the text. Returns the cost of the whole text from the best
-/// start mode, and that mode.
-fn solve(s: &[u8], chars: usize, costs: &mut Costs<'_>) -> (u32, usize) {
+/// start mode, and that mode; `None` when the text is not the validated UTF-8 it must be.
+fn solve(s: &[u8], chars: usize, costs: &mut Costs<'_>) -> Option<(u32, usize)> {
     let mut end = s.len();
     for i in (0..chars).rev() {
-        let (cp, nbytes, start) = step_back(s, end);
+        let (cp, nbytes, start) = step_back(s, end)?;
         end = start;
         let c = classify(cp);
         // Costs are kept relative to the cheapest state of the next character (the end costs 0): a
@@ -349,7 +347,7 @@ fn solve(s: &[u8], chars: usize, costs: &mut Costs<'_>) -> (u32, usize) {
             start = m;
         }
     }
-    (costs.at(0, start.saturating_mul(2)), start)
+    Some((costs.at(0, start.saturating_mul(2)), start))
 }
 
 /// Writes bits, most significant first, into a zeroed buffer.
@@ -387,7 +385,14 @@ impl BitOut<'_> {
 
 /// Writes the symbols of the winning parse: from the state, the edge whose cost plus the cost of
 /// the rest equals the cheapest, the smallest first symbol among them.
-fn write_parse(s: &[u8], chars: usize, mut state: usize, costs: &Costs<'_>, out: &mut BitOut<'_>) {
+/// False when no edge fits the cost table (the table and the parse disagree).
+fn write_parse(
+    s: &[u8],
+    chars: usize,
+    mut state: usize,
+    costs: &Costs<'_>,
+    out: &mut BitOut<'_>,
+) -> bool {
     let mut at = 0usize;
     let mut i = 0usize;
     while i < chars {
@@ -424,7 +429,7 @@ fn write_parse(s: &[u8], chars: usize, mut state: usize, costs: &Costs<'_>, out:
             continue;
         }
         let Some(x) = best else {
-            return;
+            return false;
         };
         if x.kind == 1 {
             // CAP is the first symbol of this edge, the letter follows
@@ -439,6 +444,7 @@ fn write_parse(s: &[u8], chars: usize, mut state: usize, costs: &Costs<'_>, out:
         at = at.saturating_add(nbytes);
         i = i.saturating_add(1);
     }
+    true
 }
 
 /// Writes one string field (count, payload) for the UTF-8 text `s`. Nothing is written when the
@@ -484,7 +490,7 @@ pub(crate) fn encode_field(
             return Err(Fault::new(Error::ScratchTooSmall, w.len(), id, words));
         };
         let mut costs = Costs { w: cells, n: chars };
-        let (cost, start) = solve(s, chars, &mut costs);
+        let (cost, start) = solve(s, chars, &mut costs).ok_or_else(|| Fault::bad(w.len(), id))?;
         let bits = HEADER_BITS.saturating_add(usize::try_from(cost).unwrap_or(usize::MAX));
         let size = bits.div_ceil(8);
         if size < raw {
@@ -495,7 +501,9 @@ pub(crate) fn encode_field(
             let mut out = BitOut { p, pos: 0 };
             out.put(size.saturating_mul(8).saturating_sub(bits) as u32, 3);
             out.put(start as u32, 3);
-            write_parse(s, chars, start.saturating_mul(2), &costs, &mut out);
+            if !write_parse(s, chars, start.saturating_mul(2), &costs, &mut out) {
+                return Err(Fault::bad(w.len(), id));
+            }
             return Ok(());
         }
     }

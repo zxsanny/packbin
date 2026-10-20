@@ -82,8 +82,9 @@ mod text_walk {
             let body = self.r.pos();
             let payload = self.r.take(len, id_of(f))?;
             if payload.is_empty() {
-                // An empty text: the row's storage is asked for, so the member reads as empty.
-                self.row.slots(f.id);
+                // An empty text: the row's storage is asked for, so the member reads as empty (a
+                // row without storage for it still takes the count).
+                let _storage = self.row.slots(f.id);
                 return self.set_len(f, at, 0);
             }
             let slots = self
@@ -94,8 +95,9 @@ mod text_walk {
             let ok = decode_payload(payload, &mut sink);
             let (len, over) = (sink.len, sink.over);
             if !ok || over {
-                // The member reads as empty, as after a clear.
-                self.row.set_count(f.id, 0);
+                // The member reads as empty, as after a clear; a row that refuses the count keeps
+                // its storage, and the fault below is the one reported.
+                let _cleared = self.row.set_count(f.id, 0);
                 return Err(if ok {
                     Fault::new(Error::TooMany, body, id_of(f), len)
                 } else {

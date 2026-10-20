@@ -26,8 +26,8 @@ fn ac3_a_utf8_member_is_refused_at_validate_and_by_pack_and_unpack() {
 #[test]
 fn ac3_a_dict_and_a_list_of_strings_are_refused_at_validate() {
     // Arrange
-    let dict_fields = [dict(0, 3), key(), u8(0)];
-    let list_fields = [list(0, 2), utf8(0)];
+    let dict_fields = [dict(0, 2), key(), u8(0)];
+    let list_fields = [list(0, 1), utf8(0)];
     let dict_scheme = Scheme::new(1, &dict_fields);
     let list_scheme = Scheme::new(1, &list_fields);
     // Act and Assert

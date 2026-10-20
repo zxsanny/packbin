@@ -97,7 +97,9 @@ pub struct Unpacked {
 /// Repairs up to `limit` wrong bytes of `data` in place (parity bytes included; `limit` from 0 to
 /// parity / 2, more is [`Error::BadValue`] before any byte is read), then reads the packet. On
 /// success `data` equals the packet as it was packed. Beyond the limit the result is
-/// [`Error::Uncorrectable`] and `data` is not changed. A limit of 0 detects only.
+/// [`Error::Uncorrectable`] and `data` is not changed. A limit of 0 detects only. The repair is
+/// done before the fields are read: a packet that then fails to read (another type number, a
+/// field that does not fit) leaves the repaired bytes in `data`.
 #[cfg(feature = "ecc")]
 pub fn unpack_repair(
     scheme: &Scheme<'_>,
