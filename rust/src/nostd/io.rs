@@ -22,6 +22,24 @@ impl<'a> Writer<'a> {
         self.len == 0
     }
 
+    /// Bytes left in the buffer.
+    pub(crate) fn room(&self) -> usize {
+        self.buf.len().saturating_sub(self.len)
+    }
+
+    /// The next `n` bytes of the buffer, not yet counted as written ([`Writer::advance`] does).
+    pub(crate) fn reserve(&mut self, n: usize, field: i32) -> Result<&mut [u8], Fault> {
+        let at = self.len;
+        let full = || Fault::new(Error::BufferFull, at, field, n);
+        let end = at.checked_add(n).ok_or_else(full)?;
+        self.buf.get_mut(at..end).ok_or_else(full)
+    }
+
+    /// Counts `n` reserved bytes as written.
+    pub(crate) fn advance(&mut self, n: usize) {
+        self.len = self.len.saturating_add(n).min(self.buf.len());
+    }
+
     pub fn put(&mut self, src: &[u8], field: i32) -> Result<(), Fault> {
         let full = || Fault::new(Error::BufferFull, self.len, field, src.len());
         let end = self.len.checked_add(src.len()).ok_or_else(full)?;

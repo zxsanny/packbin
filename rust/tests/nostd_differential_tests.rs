@@ -82,6 +82,7 @@ fn nostd_fields(specs: &[Spec]) -> Vec<nostd::Field> {
                 Kind::F32 => nostd::f32(id),
                 Kind::F64 => nostd::f64(id),
                 Kind::Bytes => nostd::bytes(id, s.size),
+                other => unreachable!("flat layouts hold no {other:?}"),
             };
             if s.big_endian {
                 nostd::be(f)
@@ -110,6 +111,7 @@ fn std_scheme(type_number: u8, specs: &[Spec]) -> MapScheme {
                 Kind::F32 => packbin::f32(&name),
                 Kind::F64 => packbin::f64(&name),
                 Kind::Bytes => packbin::bytes(&name, usize::from(s.size)),
+                other => unreachable!("flat layouts hold no {other:?}"),
             };
             if s.big_endian {
                 packbin::be(f)
@@ -143,6 +145,7 @@ fn random_row(rng: &mut Rng, specs: &[Spec]) -> Slots {
                 row.blobs[i] = Some(blob);
                 continue;
             }
+            other => unreachable!("flat layouts hold no {other:?}"),
         };
         packbin::nostd::Row::set_num(&mut row, id, num);
     }

@@ -1,18 +1,25 @@
+use super::check::validate;
 use super::error::{Error, Fault};
 use super::io::{Reader, Writer};
-use super::row::{Num, Row};
-use super::scheme::{validate, Field, Kind, Scheme};
+use super::pack::Pack;
+use super::present::clear;
+use super::row::Row;
+use super::scheme::Scheme;
+use super::unpack::Unpack;
 
 /// Packs `row` into `out` and returns the bytes written: the type number, then each field.
 /// A scheme that is not valid, a row without a value for a field (or with one of another kind or
 /// length) and an `out` that is too small are errors; the failure names the field.
-pub fn pack<R: Row + ?Sized>(scheme: &Scheme<'_>, row: &R, out: &mut [u8]) -> Result<usize, Fault> {
+pub fn pack(scheme: &Scheme<'_>, row: &dyn Row, out: &mut [u8]) -> Result<usize, Fault> {
     validate(scheme)?;
     let mut writer = Writer::new(out);
     writer.put(&[scheme.type_number], -1)?;
-    for field in scheme.fields {
-        pack_field(&mut writer, field, row)?;
+    Pack {
+        t: scheme.fields,
+        w: &mut writer,
+        row,
     }
+    .top()?;
     Ok(writer.len())
 }
 
@@ -20,9 +27,9 @@ pub fn pack<R: Row + ?Sized>(scheme: &Scheme<'_>, row: &R, out: &mut [u8]) -> Re
 /// allocated at `limit` before the pack runs: `limit` is the caller's budget, never a length read
 /// from a packet.
 #[cfg(feature = "alloc")]
-pub fn pack_vec<R: Row + ?Sized>(
+pub fn pack_vec(
     scheme: &Scheme<'_>,
-    row: &R,
+    row: &dyn Row,
     limit: usize,
 ) -> Result<alloc::vec::Vec<u8>, Fault> {
     let mut out = alloc::vec![0u8; limit];
@@ -31,13 +38,14 @@ pub fn pack_vec<R: Row + ?Sized>(
     Ok(out)
 }
 
-/// Unpacks `bytes` into `row` and returns the bytes read, all of them. A failure may leave the
+/// Unpacks `bytes` into `row` and returns the bytes read, all of them. Every member is first
+/// cleared ([`Row::clear`]), so one the packet leaves out reads as absent. A failure may leave the
 /// fields read before it in `row`. Nothing is read from a packet of another type number
 /// ([`Error::TypeMismatch`], `needed` the expected one).
-pub fn unpack<R: Row + ?Sized>(
+pub fn unpack(
     scheme: &Scheme<'_>,
     bytes: &[u8],
-    row: &mut R,
+    row: &mut dyn Row,
 ) -> Result<usize, Fault> {
     validate(scheme)?;
     let mut reader = Reader::new(bytes);
@@ -50,90 +58,14 @@ pub fn unpack<R: Row + ?Sized>(
             usize::from(scheme.type_number),
         ));
     }
-    for field in scheme.fields {
-        unpack_field(&mut reader, field, row)?;
+    clear(scheme.fields, 0, scheme.fields.len(), row);
+    Unpack {
+        t: scheme.fields,
+        r: &mut reader,
+        row,
+        flag_bytes: [0; 8],
     }
+    .top()?;
     reader.finish()?;
     Ok(reader.pos())
-}
-
-fn bad_value(writer_len: usize, field: &Field) -> Fault {
-    Fault::new(Error::BadValue, writer_len, i32::from(field.id), 0)
-}
-
-fn pack_field<R: Row + ?Sized>(
-    writer: &mut Writer<'_>,
-    field: &Field,
-    row: &R,
-) -> Result<(), Fault> {
-    let id = i32::from(field.id);
-    if field.kind == Kind::Bytes {
-        let value = row
-            .bytes(field.id)
-            .filter(|b| b.len() == usize::from(field.size))
-            .ok_or_else(|| bad_value(writer.len(), field))?;
-        return writer.put(value, id);
-    }
-    let num = row
-        .num(field.id)
-        .filter(|n| n.kind() == field.kind)
-        .ok_or_else(|| bad_value(writer.len(), field))?;
-    let width = field
-        .kind
-        .width()
-        .ok_or_else(|| bad_value(writer.len(), field))?;
-    let little = num.bits().to_le_bytes();
-    let mut ordered = [0u8; 8];
-    let low = little
-        .get(..width)
-        .ok_or_else(|| bad_value(writer.len(), field))?;
-    // `reverse()` and `copy_from_slice` have panic paths; zipped copies do not.
-    if field.big_endian {
-        for (slot, byte) in ordered.iter_mut().zip(low.iter().rev()) {
-            *slot = *byte;
-        }
-    } else {
-        for (slot, byte) in ordered.iter_mut().zip(low.iter()) {
-            *slot = *byte;
-        }
-    }
-    let wire = ordered
-        .get(..width)
-        .ok_or_else(|| bad_value(writer.len(), field))?;
-    writer.put(wire, id)
-}
-
-fn unpack_field<R: Row + ?Sized>(
-    reader: &mut Reader<'_>,
-    field: &Field,
-    row: &mut R,
-) -> Result<(), Fault> {
-    let id = i32::from(field.id);
-    let at = reader.pos();
-    if field.kind == Kind::Bytes {
-        let value = reader.take(usize::from(field.size), id)?;
-        return if row.set_bytes(field.id, value) {
-            Ok(())
-        } else {
-            Err(bad_value(at, field))
-        };
-    }
-    let width = field.kind.width().ok_or_else(|| bad_value(at, field))?;
-    let wire = reader.take(width, id)?;
-    let mut bits: u64 = 0;
-    if field.big_endian {
-        for byte in wire {
-            bits = (bits << 8) | u64::from(*byte);
-        }
-    } else {
-        for byte in wire.iter().rev() {
-            bits = (bits << 8) | u64::from(*byte);
-        }
-    }
-    let num = Num::from_bits(field.kind, bits).ok_or_else(|| bad_value(at, field))?;
-    if row.set_num(field.id, num) {
-        Ok(())
-    } else {
-        Err(bad_value(at, field))
-    }
 }

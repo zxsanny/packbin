@@ -47,18 +47,24 @@
     clippy::arithmetic_side_effects
 )]
 
+mod check;
 mod error;
 mod io;
+mod pack;
+mod present;
 mod row;
 mod scheme;
+mod table;
+mod unpack;
 mod walk;
 
+pub use check::validate;
 pub use error::{Error, Fault};
 pub use io::{Reader, Writer};
 pub use row::{Num, Row};
 pub use scheme::{
-    be, bytes, f32, f64, i16, i32, i64, i8, u16, u32, u64, u8, validate, Field, Kind, Scheme,
-    MAX_FIELDS,
+    be, bits, boolean, bytes, f32, f64, flag_bit, flag_byte, flags, i16, i32, i64, i8, packed,
+    sized, u16, u2, u32, u64, u8, when, Field, Kind, Scheme, MAX_FIELDS, NO_ID,
 };
 pub use walk::{pack, unpack};
 

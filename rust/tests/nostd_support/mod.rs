@@ -1,12 +1,21 @@
 //! A row for the nostd tests: numbers and byte strings kept by field id.
 #![allow(dead_code)]
 
+#[cfg(feature = "std")]
+pub mod tree;
+
 use packbin::nostd::{Num, Row};
+
+/// Storage each `sized`, `bits` or `packed` field gets on unpack unless `cap` says otherwise.
+pub const SLOTS: usize = 64;
 
 #[derive(Default, Clone, Debug, PartialEq)]
 pub struct Slots {
     pub nums: Vec<Option<Num>>,
     pub blobs: Vec<Option<Vec<u8>>>,
+    pub flags: Vec<bool>,
+    /// The storage `slots` offers, `SLOTS` when `None`.
+    pub cap: Option<usize>,
 }
 
 impl Slots {
@@ -44,6 +53,47 @@ impl Row for Slots {
         }
         self.blobs[at] = Some(value.to_vec());
         true
+    }
+    fn flag(&self, id: u16) -> bool {
+        self.flags.get(usize::from(id)).copied().unwrap_or(false)
+    }
+    fn set_flag(&mut self, id: u16, on: bool) -> bool {
+        let at = usize::from(id);
+        if self.flags.len() <= at {
+            self.flags.resize(at + 1, false);
+        }
+        self.flags[at] = on;
+        true
+    }
+    fn clear(&mut self, id: u16) {
+        let at = usize::from(id);
+        if let Some(n) = self.nums.get_mut(at) {
+            *n = None;
+        }
+        if let Some(b) = self.blobs.get_mut(at) {
+            *b = None;
+        }
+        if let Some(f) = self.flags.get_mut(at) {
+            *f = false;
+        }
+    }
+    fn slots(&mut self, id: u16) -> Option<&mut [u8]> {
+        let at = usize::from(id);
+        if self.blobs.len() <= at {
+            self.blobs.resize(at + 1, None);
+        }
+        let cap = self.cap.unwrap_or(SLOTS);
+        self.blobs[at] = Some(vec![0; cap]);
+        self.blobs[at].as_deref_mut()
+    }
+    fn set_count(&mut self, id: u16, n: usize) -> bool {
+        match self.blobs.get_mut(usize::from(id)) {
+            Some(Some(b)) if n <= b.len() => {
+                b.truncate(n);
+                true
+            }
+            _ => false,
+        }
     }
 }
 

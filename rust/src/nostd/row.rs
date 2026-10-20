@@ -60,7 +60,7 @@ impl Num {
             Kind::I64 => Num::I64(bits as i64),
             Kind::F32 => Num::F32(f32::from_bits(bits as u32)),
             Kind::F64 => Num::F64(f64::from_bits(bits)),
-            Kind::Bytes => return None,
+            _ => return None,
         })
     }
 }
@@ -68,10 +68,41 @@ impl Num {
 /// The caller's data, read and written by field id. A scheme field `u16(0)` asks `num(0)` on
 /// pack and calls `set_num(0, ..)` on unpack. `num` and `bytes` return `None` for an id the row
 /// has no value for; `set_num` and `set_bytes` return `false` to refuse a value. Either becomes
-/// [`Error::BadValue`](super::Error::BadValue) naming the field.
+/// [`Error::BadValue`](super::Error::BadValue) naming the field, except where a member may be
+/// absent: in `flags`, under a flag bit and in a `when` body, `None` (or a `false` flag) leaves
+/// the member off the wire.
+///
+/// The methods with a default body serve the other field kinds; a row implements those its
+/// schemes use.
 pub trait Row {
     fn num(&self, id: u16) -> Option<Num>;
     fn bytes(&self, id: u16) -> Option<&[u8]>;
     fn set_num(&mut self, id: u16, value: Num) -> bool;
     fn set_bytes(&mut self, id: u16, value: &[u8]) -> bool;
+
+    /// A `boolean`: true sets its presence bit.
+    fn flag(&self, _id: u16) -> bool {
+        false
+    }
+
+    /// Unpack sets a `boolean` whose bit is set; `false` refuses it.
+    fn set_flag(&mut self, _id: u16, _on: bool) -> bool {
+        false
+    }
+
+    /// Unpack calls this for every member before it reads a packet, so a member the packet leaves
+    /// out reads as absent afterwards: `num` and `bytes` return `None`, `flag` returns false.
+    fn clear(&mut self, _id: u16) {}
+
+    /// Storage for the values of a `sized`, `bits` or `packed` field on unpack: the slice is the
+    /// capacity (a longer value is [`Error::TooMany`](super::Error::TooMany), nothing written).
+    /// Unpack fills the first values, then calls `set_count`; pack reads them from `bytes`.
+    fn slots(&mut self, _id: u16) -> Option<&mut [u8]> {
+        None
+    }
+
+    /// The number of values unpack wrote into `slots`; `false` refuses it.
+    fn set_count(&mut self, _id: u16, _n: usize) -> bool {
+        false
+    }
 }
