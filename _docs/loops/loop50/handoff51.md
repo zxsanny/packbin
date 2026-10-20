@@ -17,7 +17,11 @@ Suggested: loop 51 = wave A (10 points), loop 52 = wave B, loop 53 = wave C. AZ-
 - Size limits for the `text`, `ecc` and `session` feature sets (none until you set them; the base set has 8,192 B flash and 512 B stack).
 - CS-D5 (retrain the tables on the 100 to 200 real messages) before the first `v*` tag; the first `v*` and `go/v*` tags and F44 stay yours.
 
-## Read after the push
+## CI read after the push (loop 50, `95fb73c`)
+
+`test.yml` on `dev` (run 39404544126) and on `main` (run 39404547488): both green, 20 of 20 jobs. `embedded-arm` took 86 s with the Rust steps (Rust 1.98 install, thumb target, the stage), well below the longest job (`suites (swift, gates)` 234 s), so the job does not need splitting. Wall of the run about 4 minutes.
+
+## Read after the push (done, see above)
 
 - `test.yml` on `dev` and `main` for the loop 50 push: the `embedded-arm` job now installs Rust 1.98 and runs `rust/embedded/run.sh host`; read its wall time from the annotations (loop 48: wall about 220 s, longest job `embedded-esp-core` 204 s). If `embedded-arm` becomes the longest job, split the Rust steps out (the free plan runs 20 jobs; one must be given up elsewhere).
 - If the new steps fail on GitHub, read the job log first (no token on this host: annotations only name the step).

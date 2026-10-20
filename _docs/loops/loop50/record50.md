@@ -13,7 +13,7 @@ decisions:
   - agent: step 13/14 run before step 11 so that step 11 ran on the final tree (stamps need a clean tree, the publish gate forbids writes); the total review fixes came after and were re-verified by the default suite, the embedded stage and the guard tests
 leftovers:
   - `_docs/02_tasks/todo/AZ-2752` to `AZ-2757` (six slices, 23 points, unclaimed): flags/bits/when; repeat/group/times/lists/dicts; compact text; ECC; session; hostile corpus, publish check and docs. Order and waves in `handoff51.md`
-  - read the `embedded-arm` job time on GitHub after the push (it grew by the Rust install, build and stage; split it if it becomes the longest job)
+  - CI read: `dev` run 39404544126 and `main` run 39404547488 green, `embedded-arm` 86 s (not the longest job); nothing to split
   - O1 of `nostd_review_loop50.md`: a sentence in the `Row` rustdoc that a panicking `Row` callback is the caller's (AZ-2757)
   - `cargo package` says the `readme` file of `rust/` is missing (before this loop too): check how the publish gate supplies it (AZ-2757 AC-3)
   - feature sets `text`, `ecc`, `session` get lines in `rust/embedded/feature-sets.txt` and `limits.txt` from AZ-2754, AZ-2755, AZ-2756 (owner sets the limits; the stage fails on a set without a limits line)
