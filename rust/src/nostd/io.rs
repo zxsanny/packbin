@@ -22,6 +22,20 @@ impl<'a> Writer<'a> {
         self.len == 0
     }
 
+    /// The bytes written so far.
+    #[cfg(feature = "ecc")]
+    pub(crate) fn written(&self) -> &[u8] {
+        self.buf.get(..self.len).unwrap_or(&[])
+    }
+
+    /// Zeroes the bytes written so far (a refused protected message leaves none behind).
+    #[cfg(feature = "ecc")]
+    pub(crate) fn zero(&mut self) {
+        for byte in self.buf.iter_mut().take(self.len) {
+            *byte = 0;
+        }
+    }
+
     /// Bytes left in the buffer.
     pub(crate) fn room(&self) -> usize {
         self.buf.len().saturating_sub(self.len)

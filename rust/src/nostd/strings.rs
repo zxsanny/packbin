@@ -116,7 +116,12 @@ mod text_walk {
         /// equal key repeats it, a smaller one is out of order. Both are `BadValue` at the
         /// entry's offset. The keys are compared from their payloads in the input, with no
         /// storage for the earlier one.
-        pub(crate) fn check_key_order(&self, f: &Field, prev: usize, at: usize) -> Result<(), Fault> {
+        pub(crate) fn check_key_order(
+            &self,
+            f: &Field,
+            prev: usize,
+            at: usize,
+        ) -> Result<(), Fault> {
             let payload = |from: usize| {
                 let mut r = self.r.at(from);
                 let n = get_count(&mut r, id_of(f)).ok()?;

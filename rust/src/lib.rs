@@ -15,6 +15,8 @@ pub mod nostd;
 
 #[cfg(feature = "std")]
 mod ecc;
+#[cfg(any(feature = "std", feature = "ecc"))]
+mod ecc_core;
 #[cfg(feature = "std")]
 mod field;
 #[cfg(feature = "std")]

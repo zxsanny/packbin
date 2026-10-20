@@ -296,6 +296,11 @@ case "$lang" in
       run cargo test --manifest-path "$root/rust/Cargo.toml" -- --nocapture
       # the heap-free API builds and passes with `std` and `alloc` off (AZ-2749)
       run cargo test --manifest-path "$root/rust/Cargo.toml" --no-default-features --test nostd_flat_tests -- --nocapture
+      # the parts of the heap-free API behind a feature, on without `std` and off (AZ-2754, AZ-2755): the default
+      # run above already covers the two "off" tests and the rest with the features off
+      run cargo test --manifest-path "$root/rust/Cargo.toml" --no-default-features --features text --test nostd_text_tests -- --nocapture
+      run cargo test --manifest-path "$root/rust/Cargo.toml" --no-default-features --features ecc --test nostd_ecc_tests -- --nocapture
+      run cargo test --manifest-path "$root/rust/Cargo.toml" --features text,ecc --test nostd_dict_tests --test nostd_text_differential_tests -- --nocapture
       run rust_speed
     else
       missing_manifest "$root/rust/Cargo.toml"

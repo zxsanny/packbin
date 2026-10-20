@@ -312,7 +312,13 @@ grep -q 'cargo test --manifest-path .* --release --lib ec13_ -- --nocapture' "$w
   || bad "rust: the message ECC speed tests (ec13_) do not run in the release configuration: $(cat "$work/go.log")"
 grep -q 'cargo test --manifest-path .* --no-default-features --test nostd_flat_tests -- --nocapture' "$work/go.log" \
   || bad "rust: the heap-free API does not run without default features: $(cat "$work/go.log")"
-[ "$(grep -c '^cargo ' "$work/go.log")" -eq 5 ] || bad "rust: not the debug suite, the no-default-features run, the release list and the two release runs: $(cat "$work/go.log")"
+grep -q 'cargo test --manifest-path .* --no-default-features --features text --test nostd_text_tests -- --nocapture' "$work/go.log" \
+  || bad "rust: the text feature does not run without default features: $(cat "$work/go.log")"
+grep -q 'cargo test --manifest-path .* --no-default-features --features ecc --test nostd_ecc_tests -- --nocapture' "$work/go.log" \
+  || bad "rust: the ecc feature does not run without default features: $(cat "$work/go.log")"
+grep -q 'cargo test --manifest-path .* --features text,ecc --test nostd_dict_tests --test nostd_text_differential_tests -- --nocapture' "$work/go.log" \
+  || bad "rust: the text differential and dictionary tests do not run with the feature on: $(cat "$work/go.log")"
+[ "$(grep -c '^cargo ' "$work/go.log")" -eq 8 ] || bad "rust: not the debug suite, the four heap-free API runs, the release list and the two release runs: $(cat "$work/go.log")"
 
 # R2. a rust tree without the string speed test fails by name, and the filter is not run (a filter that matches
 # nothing passes) (AZ-2665 AC-3)
@@ -387,7 +393,7 @@ if grep -qF 'pct%2Ctree' "$work/notice.out"; then bad "go: a raw % of a label is
 notice_run csharp "$bare" GITHUB_ACTIONS=true
 notice_is "csharp suite timing" csharp 0
 notice_run rust "$present" GITHUB_ACTIONS=true
-notice_is "rust suite timing" rust 3
+notice_is "rust suite timing" rust 6
 
 # N5. GITHUB_ACTIONS unset (the Mac), empty or anything but true: no notice, and the plain step lines as before
 for value in unset "" false; do

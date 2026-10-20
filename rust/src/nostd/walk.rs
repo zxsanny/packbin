@@ -46,6 +46,10 @@ pub fn pack_with(
         scratch,
     }
     .top()?;
+    #[cfg(feature = "ecc")]
+    if scheme.parity != 0 {
+        super::ecc::seal(&mut writer, usize::from(scheme.parity))?;
+    }
     Ok(writer.len())
 }
 
@@ -67,9 +71,53 @@ pub fn pack_vec(
 /// Unpacks `bytes` into `row` and returns the bytes read, all of them. Every member is first
 /// cleared ([`Row::clear`]), so one the packet leaves out reads as absent. A failure may leave the
 /// fields read before it in `row`. Nothing is read from a packet of another type number
-/// ([`Error::TypeMismatch`], `needed` the expected one).
+/// ([`Error::TypeMismatch`], `needed` the expected one). A protected scheme (`with_parity`)
+/// detects only: the buffer is not touched, and any wrong byte is [`Error::Uncorrectable`]; use
+/// `unpack_repair` to fix wrong bytes in a writable buffer.
 pub fn unpack(scheme: &Scheme<'_>, bytes: &[u8], row: &mut dyn Row) -> Result<usize, Fault> {
     validate(scheme)?;
+    #[cfg(feature = "ecc")]
+    if scheme.parity != 0 {
+        let n = usize::from(scheme.parity);
+        super::ecc::detect(bytes, n)?;
+        let clear = bytes.get(..bytes.len().saturating_sub(n)).unwrap_or(&[]);
+        return read(scheme, clear, row).map(|used| used.saturating_add(n));
+    }
+    read(scheme, bytes, row)
+}
+
+/// What [`unpack_repair`] reports: the bytes read (parity included) and the wrong bytes fixed.
+#[cfg(feature = "ecc")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Unpacked {
+    pub bytes: usize,
+    pub repaired: usize,
+}
+
+/// Repairs up to `limit` wrong bytes of `data` in place (parity bytes included; `limit` from 0 to
+/// parity / 2, more is [`Error::BadValue`] before any byte is read), then reads the packet. On
+/// success `data` equals the packet as it was packed. Beyond the limit the result is
+/// [`Error::Uncorrectable`] and `data` is not changed. A limit of 0 detects only.
+#[cfg(feature = "ecc")]
+pub fn unpack_repair(
+    scheme: &Scheme<'_>,
+    data: &mut [u8],
+    row: &mut dyn Row,
+    limit: usize,
+) -> Result<Unpacked, Fault> {
+    validate(scheme)?;
+    let n = usize::from(scheme.parity);
+    let repaired = super::ecc::fix(data, n, limit)?;
+    let clear = data.get(..data.len().saturating_sub(n)).unwrap_or(&[]);
+    let used = read(scheme, clear, row)?;
+    Ok(Unpacked {
+        bytes: used.saturating_add(n),
+        repaired,
+    })
+}
+
+/// Reads the fields of a checked scheme from the clear bytes of a packet.
+fn read(scheme: &Scheme<'_>, bytes: &[u8], row: &mut dyn Row) -> Result<usize, Fault> {
     let mut reader = Reader::new(bytes);
     let first = reader.take(1, -1)?;
     if first.first() != Some(&scheme.type_number) {

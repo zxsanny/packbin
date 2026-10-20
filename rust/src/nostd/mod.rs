@@ -51,6 +51,8 @@
 
 mod check;
 mod count;
+#[cfg(feature = "ecc")]
+pub mod ecc;
 mod error;
 mod io;
 mod pack;
@@ -71,11 +73,13 @@ pub use row::{Num, Row};
 pub use scheme::{
     be, bits, boolean, bytes, dict, f32, f64, flag_bit, flag_byte, flags, group, i16, i32, i64, i8,
     key, list, packed, repeat, sized, times, u16, u2, u32, u64, u8, utf8, utf8_wire, when, Field,
-    Kind, Scheme, DEFAULT_MAX_ROUNDS, DEFAULT_MAX_SLOTS, DICT_KEY, MAX_FIELDS, NO_ID,
+    Kind, Scheme, DEFAULT_MAX_ROUNDS, DEFAULT_MAX_SLOTS, DICT_KEY, MAX_FIELDS, MAX_PARITY, NO_ID,
 };
 #[cfg(feature = "text")]
 pub use text::SCRATCH_WORDS_PER_CHAR;
 pub use walk::{pack, pack_with, unpack};
+#[cfg(feature = "ecc")]
+pub use walk::{unpack_repair, Unpacked};
 
 #[cfg(feature = "alloc")]
 pub use walk::pack_vec;

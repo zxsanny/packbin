@@ -1,3 +1,6 @@
+/// The most parity bytes a scheme may declare.
+pub const MAX_PARITY: usize = 32;
+
 /// The most fields a scheme may have: ids run from 0 to 32767.
 pub const MAX_FIELDS: usize = 32768;
 
@@ -348,6 +351,8 @@ pub struct Scheme<'a> {
     /// The most slots all rounds of one call may charge together; a round charges one slot per
     /// member its body can hold.
     pub max_slots: usize,
+    /// Parity bytes after every packet (0 to 32; needs the `ecc` feature when above 0).
+    pub parity: u8,
 }
 
 impl<'a> Scheme<'a> {
@@ -357,7 +362,15 @@ impl<'a> Scheme<'a> {
             fields,
             max_rounds: DEFAULT_MAX_ROUNDS,
             max_slots: DEFAULT_MAX_SLOTS,
+            parity: 0,
         }
+    }
+
+    /// The scheme with `n` parity bytes after every packet (message error correction): `pack`
+    /// appends them, `unpack` detects wrong bytes and `unpack_repair` fixes them. A count above
+    /// 32, or above 0 without the `ecc` feature, is refused by [`validate`](super::validate).
+    pub const fn with_parity(self, n: u8) -> Self {
+        Scheme { parity: n, ..self }
     }
 
     pub const fn with_limits(self, max_rounds: usize, max_slots: usize) -> Self {

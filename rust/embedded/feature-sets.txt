@@ -4,3 +4,4 @@
 # defines `pb_rs_extra`, a round trip of the parts the set builds (main.cpp calls it when it exists).
 base|
 text|text
+ecc|ecc

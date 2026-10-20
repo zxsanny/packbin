@@ -3,7 +3,7 @@
 //! `u2` take the id of their first member; a flag byte and a flag bit take none.
 
 use super::error::{Error, Fault};
-use super::scheme::{Field, Kind, Scheme, MAX_FIELDS, NO_ID};
+use super::scheme::{Field, Kind, Scheme, MAX_FIELDS, MAX_PARITY, NO_ID};
 use super::table::{bit_position, end, flag_byte_of, get, id_of, kind, level, members, source_of};
 
 /// The most members of one `flags` byte and the most bits of one flag byte.
@@ -32,7 +32,17 @@ pub fn validate(scheme: &Scheme<'_>) -> Result<(), Fault> {
         next = order(t, j, next)?;
     }
     shape(t, 0, t.len(), false, Round::None)?;
-    refs(t, 0, t.len())
+    refs(t, 0, t.len())?;
+    parity(scheme)
+}
+
+/// A parity count above 32, or above 0 without the `ecc` feature, is refused.
+fn parity(scheme: &Scheme<'_>) -> Result<(), Fault> {
+    let max = if cfg!(feature = "ecc") { MAX_PARITY } else { 0 };
+    if usize::from(scheme.parity) > max {
+        return Err(Fault::new(Error::SchemeInvalid, 0, -1, max));
+    }
+    Ok(())
 }
 
 /// Every entry fits in its parent, a field without members spans itself only, and a flag bit
