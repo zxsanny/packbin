@@ -196,11 +196,49 @@ void a_memo_left_in_the_scratch_is_not_believed() {
   expect(r.ok() && packet == want, "AC-2 a memo left in the scratch is not believed");
 }
 
+// AC-2: a compact result leaves no memo. The parse overwrites Scratch words 0 and 1 with its own cost cells
+// (for "hello world hello world" word 0 is 103 and word 1 a packed delta), so `encode_field` must clear word 0
+// after it writes a compact field; a stale word 0 would let a later text of the right length be compared with
+// whatever the buffer holds at that offset. Word 0 is 0 after a compact field, also right after a raw one.
+void a_compact_result_leaves_no_memo_in_the_scratch() {
+  // Arrange
+  std::string raw(200, 'q');
+  std::string compact = "hello world hello world";
+  static pb::Scratch<kSmallChars> scratch;
+  auto pack_rounds = [&](std::vector<std::string> const& texts) {
+    SmallRepeated row;
+    row.n = static_cast<std::uint8_t>(texts.size());
+    row.rounds.count = static_cast<std::uint16_t>(texts.size());
+    for (std::size_t i = 0; i < texts.size(); ++i) {
+      row.rounds.items[i].s.len = static_cast<std::uint16_t>(texts[i].size());
+      std::memcpy(row.rounds.items[i].s.data, texts[i].data(), texts[i].size());
+    }
+    std::vector<std::uint8_t> packet(2 + kSmallRounds * (3 + 1 + 4 * kSmallChars));
+    return pb::pack(small_scheme, row, packet.data(), packet.size(), scratch);
+  };
+
+  // Act
+  auto after_raw = pack_rounds({raw});
+  std::uint32_t memo_after_raw = scratch.words[0];
+  auto after_compact = pack_rounds({raw, compact});
+  std::uint32_t memo_after_compact = scratch.words[0];
+  scratch.words[0] = 1;
+  auto compact_first = pack_rounds({compact});
+  std::uint32_t memo_after_compact_first = scratch.words[0];
+
+  // Assert
+  expect(after_raw.ok() && after_compact.ok() && compact_first.ok(), "AC-2 the rounds pack");
+  expect(memo_after_raw != 0, "AC-2 a raw field leaves a memo (the check below is not vacuous)");
+  expect(memo_after_compact == 0, "AC-2 a compact field after a raw one clears the memo");
+  expect(memo_after_compact_first == 0, "AC-2 a compact field clears a stale memo");
+}
+
 }  // namespace
 
 int run_core_text_repeat_host_tests() {
   two_hundred_rounds_of_65535_characters_within_one_second();
   rounds_pack_to_the_bytes_each_packs_to_alone();
   a_memo_left_in_the_scratch_is_not_believed();
+  a_compact_result_leaves_no_memo_in_the_scratch();
   return 0;
 }
