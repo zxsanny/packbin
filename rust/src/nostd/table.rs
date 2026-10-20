@@ -249,7 +249,7 @@ pub(crate) fn round_width(t: &[Field], begin: usize, stop: usize) -> usize {
         .map(|j| match get(t, j) {
             None => 0,
             Some(f) if f.kind == Kind::FlagByte => 0,
-            Some(f) if f.kind == Kind::List => 1,
+            Some(f) if f.kind.is_counted() => 1,
             Some(f) if f.kind.has_members() => round_width(t, j.saturating_add(1), end(t, j)),
             Some(_) => 1,
         })

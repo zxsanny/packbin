@@ -5,3 +5,4 @@
 # when the bit-level and conditional kinds (AZ-2752) took the image to 11028 B (meshbell parts have 1 MB
 # and more). The other sets have none until the owner sets one (AZ-2749 AC-3).
 base 16384 512
+text - -

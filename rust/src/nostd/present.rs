@@ -65,11 +65,13 @@ pub(crate) fn present(t: &[Field], i: usize, row: &dyn Row, skip_late: bool) -> 
                 && when_matches(t, i, row)
                 && any_member(t, i, row, skip_late)
         }
-        Kind::Bytes | Kind::Sized | Kind::Bits | Kind::Packed => row.bytes(f.id).is_some(),
+        Kind::Bytes | Kind::Sized | Kind::Bits | Kind::Packed | Kind::Utf8 | Kind::Utf8Wire => {
+            row.bytes(f.id).is_some()
+        }
         Kind::Group => any_member(t, i, row, skip_late),
         Kind::Repeat => repeat_present(t, i, f, row, skip_late),
         Kind::Times => !(skip_late && is_late(t, i)) && times_present(t, i, f, row),
-        Kind::List => row.count(f.id).is_some(),
+        Kind::List | Kind::Dict => row.count(f.id).is_some(),
         _ => false,
     }
 }

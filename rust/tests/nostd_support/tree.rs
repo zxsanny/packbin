@@ -3,7 +3,7 @@
 //! of `nostd` order id `id`; a flag byte number `n` is the `std` flag byte `b<n>`.
 #![allow(dead_code)]
 
-use packbin::nostd::{self, Kind, Num, Row};
+use packbin::nostd::{self, Kind, Num, Row, DICT_KEY};
 use packbin::{insert, MapScheme, Value, Values};
 
 #[derive(Clone, Debug)]
@@ -27,6 +27,12 @@ pub enum Node {
     /// Count id, body.
     Times(u16, Vec<Node>),
     List(Box<Node>),
+    /// A decoded string (needs `text`).
+    Utf8,
+    /// A string kept as on the wire.
+    Wire,
+    /// A dictionary of this element (needs `text`).
+    Dict(Box<Node>),
 }
 
 /// What a row holds for one `nostd` id.
@@ -45,6 +51,10 @@ pub enum Leaf {
     Times(String, u16, Vec<(u16, Leaf)>),
     /// The element (id 0 of each item).
     List(Box<Leaf>),
+    Utf8,
+    Wire,
+    /// The element (id 0 of each item; the key sits under `DICT_KEY`).
+    Dict(Box<Leaf>),
 }
 
 pub struct Built {
@@ -119,6 +129,8 @@ fn to_nostd(
         Node::Num(k) | Node::Be(k) => Some((Leaf::Num(*k), leaf_field(*k, id))),
         Node::Bytes(n) => Some((Leaf::Bytes(*n), nostd::bytes(id, *n))),
         Node::Bool => Some((Leaf::Bool, nostd::boolean(id))),
+        Node::Utf8 => Some((Leaf::Utf8, nostd::utf8(id))),
+        Node::Wire => Some((Leaf::Wire, nostd::utf8_wire(id))),
         Node::Sized(c) => Some((Leaf::Sized(*c), nostd::sized(id, *c))),
         Node::Bits(c) => Some((Leaf::Bits(*c), nostd::bits(id, *c))),
         Node::Packed(w, c, b) => Some((Leaf::Packed(*w, *c, *b), nostd::packed(*w, id, *c, *b))),
@@ -187,6 +199,16 @@ fn to_nostd(
             leaves.push((id, Leaf::List(Box::new(leaf))));
             *next += 1;
         }
+        Node::Dict(element) => {
+            out.push(nostd::dict(id, 0));
+            out.push(nostd::key());
+            let mut inner = Vec::new();
+            let (mut e, mut a) = (0u16, 0u32);
+            to_nostd(element, &mut e, &mut a, out, &mut inner);
+            let (_, leaf) = inner.pop().expect("an element");
+            leaves.push((id, Leaf::Dict(Box::new(leaf))));
+            *next += 1;
+        }
         Node::FlagBit(n, inner) => {
             out.push(nostd::flag_bit(*n, 0));
             to_nostd(inner, next, anchor, out, leaves);
@@ -239,6 +261,8 @@ fn std_element(node: &Node) -> packbin::Field {
         Node::Bytes(n) => packbin::bytes("e", usize::from(*n)),
         Node::U2(1) => packbin::u2(&["e"]),
         Node::List(inner) => packbin::list("e", std_element(inner)),
+        Node::Utf8 => packbin::utf8("e"),
+        Node::Dict(inner) => packbin::dict("e", std_element(inner)),
         other => panic!("not an element: {other:?}"),
     }
 }
@@ -251,6 +275,8 @@ fn to_std(node: &Node, id: &mut u16, anchor: &mut u32) -> packbin::Field {
         Node::Num(k) => std_number(*k, &step(id, anchor)),
         Node::Be(k) => packbin::be(std_number(*k, &step(id, anchor))),
         Node::Bytes(n) => packbin::bytes(step(id, anchor), usize::from(*n)),
+        Node::Utf8 => packbin::utf8(step(id, anchor)),
+        Node::Wire => panic!("a wire string has no std field"),
         Node::Bool => packbin::group(here, step(id, anchor), vec![]),
         Node::Sized(c) => packbin::sized(step(id, anchor), name(*c)),
         Node::Bits(c) => packbin::bits(step(id, anchor), name(*c)),
@@ -259,6 +285,11 @@ fn to_std(node: &Node, id: &mut u16, anchor: &mut u32) -> packbin::Field {
             let names: Vec<String> = (0..*n).map(|_| step(id, anchor)).collect();
             let refs: Vec<&str> = names.iter().map(String::as_str).collect();
             packbin::u2(&refs)
+        }
+        Node::Dict(element) => {
+            let n = name(*id);
+            *id += 1;
+            packbin::dict(n, std_element(element))
         }
         Node::FlagByte(n) => {
             *anchor += 1;
@@ -327,6 +358,24 @@ pub fn value_of(row: &dyn Row, id: u16, leaf: &Leaf) -> Option<Value> {
             .bytes(id)
             .map(|b| Value::List(b.iter().map(|v| Value::U8(*v)).collect())),
         Leaf::Bool => row.flag(id).then_some(Value::U8(1)),
+        Leaf::Utf8 => row
+            .bytes(id)
+            .map(|b| Value::Str(String::from_utf8_lossy(b).into_owned())),
+        Leaf::Wire => row.bytes(id).map(|b| Value::Bytes(b.to_vec())),
+        Leaf::Dict(element) => row.count(id).map(|_| {
+            Value::Map(
+                items(row, id)
+                    .iter()
+                    .map(|r| {
+                        let key = String::from_utf8_lossy(r.bytes(DICT_KEY).unwrap_or(&[]));
+                        (
+                            key.into_owned(),
+                            value_of(*r, 0, element).unwrap_or(Value::Bytes(vec![0xEE; 99])),
+                        )
+                    })
+                    .collect(),
+            )
+        }),
         Leaf::Repeat(body) => {
             let rounds = items(row, id);
             (!rounds.is_empty())
@@ -368,6 +417,9 @@ pub fn same(a: &Value, b: &Value) -> bool {
         (Value::F64(x), Value::F64(y)) => x.to_bits() == y.to_bits(),
         (Value::List(x), Value::List(y)) => {
             x.len() == y.len() && x.iter().zip(y).all(|(p, q)| same(p, q))
+        }
+        (Value::Map(x), Value::Map(y)) => {
+            x.len() == y.len() && x.iter().zip(y).all(|(p, q)| p.0 == q.0 && same(p.1, q.1))
         }
         _ => a == b,
     }

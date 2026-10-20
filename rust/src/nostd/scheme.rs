@@ -44,6 +44,16 @@ pub enum Kind {
     Times,
     /// A u16 item count, then the items: its one member is the element, ids from 0.
     List,
+    /// A string: a varint count, then the compact payload. The row holds the UTF-8 text (needs
+    /// the `text` feature). With id [`NO_ID`] it is the key of a `dict`.
+    Utf8,
+    /// A string kept as it is on the wire: the row holds the payload after the count, never
+    /// decoded or checked, so it needs no codec.
+    Utf8Wire,
+    /// A u16 entry count, then per entry a string key and the element, in strictly ascending key
+    /// order (needs the `text` feature). Its two members are the key (`key()`) and the element;
+    /// the element's ids start from 0.
+    Dict,
 }
 
 impl Kind {
@@ -84,12 +94,18 @@ impl Kind {
                 | Kind::Repeat
                 | Kind::Times
                 | Kind::List
+                | Kind::Dict
         )
     }
 
     /// Kinds whose members read into items of their own (`Row::item`): a scope of their own.
     pub(crate) fn is_container(self) -> bool {
-        matches!(self, Kind::Repeat | Kind::Times | Kind::List)
+        matches!(self, Kind::Repeat | Kind::Times | Kind::List | Kind::Dict)
+    }
+
+    /// Kinds that start with a u16 item count (and charge no round).
+    pub(crate) fn is_counted(self) -> bool {
+        matches!(self, Kind::List | Kind::Dict)
     }
 }
 
@@ -287,6 +303,33 @@ pub const fn times(id: u16, count: u16, entries: u16) -> Field {
 pub const fn list(id: u16, entries: u16) -> Field {
     parent(Kind::List, id, entries)
 }
+
+/// A string; the row holds the UTF-8 text through [`Row::bytes`](super::Row::bytes) on pack and
+/// [`Row::slots`](super::Row::slots) on unpack (needs the `text` feature).
+pub const fn utf8(id: u16) -> Field {
+    entry(Kind::Utf8, id)
+}
+
+/// A string whose payload the row holds as it is on the wire (the bytes after the count).
+pub const fn utf8_wire(id: u16) -> Field {
+    entry(Kind::Utf8Wire, id)
+}
+
+/// The key of a `dict`: the first of its two members. A row holds it under [`DICT_KEY`].
+pub const fn key() -> Field {
+    entry(Kind::Utf8, NO_ID)
+}
+
+/// A u16 entry count, then entries of a string key and an element, keys strictly ascending by
+/// their UTF-8 bytes. The `entries` table entries that follow are the key (`key()`) and the
+/// element (a number, `bytes`, a string, a `list`, a `dict` or a `u2` of one member), whose ids
+/// start from 0 in each item.
+pub const fn dict(id: u16, entries: u16) -> Field {
+    parent(Kind::Dict, id, entries)
+}
+
+/// The id under which a `dict` item row holds its key.
+pub const DICT_KEY: u16 = NO_ID;
 
 /// The most rounds one `repeat` or `times` may start (the std default).
 pub const DEFAULT_MAX_ROUNDS: usize = 65_535;

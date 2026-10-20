@@ -6,7 +6,7 @@ pub mod random;
 #[cfg(feature = "std")]
 pub mod tree;
 
-use packbin::nostd::{Num, Row};
+use packbin::nostd::{Num, Row, DICT_KEY};
 
 /// Storage each `sized`, `bits` or `packed` field gets on unpack unless `cap` says otherwise.
 pub const SLOTS: usize = 64;
@@ -20,6 +20,8 @@ pub struct Slots {
     pub items: Vec<Option<Vec<Slots>>>,
     /// The storage `slots` and `item_mut` offer, `SLOTS` when `None`.
     pub cap: Option<usize>,
+    /// What a `dict` item holds under `DICT_KEY`.
+    pub key: Option<Vec<u8>>,
 }
 
 impl Slots {
@@ -40,6 +42,9 @@ impl Row for Slots {
         self.nums.get(usize::from(id)).copied().flatten()
     }
     fn bytes(&self, id: u16) -> Option<&[u8]> {
+        if id == DICT_KEY {
+            return self.key.as_deref();
+        }
         self.blobs.get(usize::from(id))?.as_deref()
     }
     fn set_num(&mut self, id: u16, value: Num) -> bool {
@@ -51,6 +56,10 @@ impl Row for Slots {
         true
     }
     fn set_bytes(&mut self, id: u16, value: &[u8]) -> bool {
+        if id == DICT_KEY {
+            self.key = Some(value.to_vec());
+            return true;
+        }
         let at = usize::from(id);
         if self.blobs.len() <= at {
             self.blobs.resize(at + 1, None);
@@ -70,6 +79,10 @@ impl Row for Slots {
         true
     }
     fn clear(&mut self, id: u16) {
+        if id == DICT_KEY {
+            self.key = None;
+            return;
+        }
         let at = usize::from(id);
         if let Some(n) = self.nums.get_mut(at) {
             *n = None;
@@ -85,6 +98,10 @@ impl Row for Slots {
         }
     }
     fn slots(&mut self, id: u16) -> Option<&mut [u8]> {
+        if id == DICT_KEY {
+            self.key = Some(vec![0; self.cap.unwrap_or(SLOTS)]);
+            return self.key.as_deref_mut();
+        }
         let at = usize::from(id);
         if self.blobs.len() <= at {
             self.blobs.resize(at + 1, None);
@@ -94,6 +111,15 @@ impl Row for Slots {
         self.blobs[at].as_deref_mut()
     }
     fn set_count(&mut self, id: u16, n: usize) -> bool {
+        if id == DICT_KEY {
+            return match self.key.as_mut() {
+                Some(k) if n <= k.len() => {
+                    k.truncate(n);
+                    true
+                }
+                _ => false,
+            };
+        }
         let at = usize::from(id);
         if let Some(Some(b)) = self.blobs.get_mut(at) {
             if n > b.len() {

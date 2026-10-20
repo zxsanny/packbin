@@ -35,6 +35,15 @@ impl<'a> Writer<'a> {
         self.buf.get_mut(at..end).ok_or_else(full)
     }
 
+    /// Reserves the next `n` bytes and counts them as written.
+    pub(crate) fn take(&mut self, n: usize, field: i32) -> Result<&mut [u8], Fault> {
+        let at = self.len;
+        let full = || Fault::new(Error::BufferFull, at, field, n);
+        let end = at.checked_add(n).ok_or_else(full)?;
+        self.len = if end <= self.buf.len() { end } else { at };
+        self.buf.get_mut(at..end).ok_or_else(full)
+    }
+
     /// Counts `n` reserved bytes as written.
     pub(crate) fn advance(&mut self, n: usize) {
         self.len = self.len.saturating_add(n).min(self.buf.len());
@@ -75,6 +84,15 @@ impl<'a> Reader<'a> {
         let bytes = self.data.get(self.pos..end).ok_or_else(short)?;
         self.pos = end;
         Ok(bytes)
+    }
+
+    /// A reader of the same input that starts at byte `at`.
+    #[cfg(feature = "text")]
+    pub(crate) fn at(&self, at: usize) -> Reader<'a> {
+        Reader {
+            data: self.data,
+            pos: at.min(self.data.len()),
+        }
     }
 
     /// True when bytes are left to read.

@@ -113,6 +113,35 @@ pub fn random_row(rng: &mut Rng, leaves: &[(u16, Leaf)]) -> Slots {
                 }
                 row.set_bytes(id, &v);
             }
+            Leaf::Utf8 => {
+                if !rng.one_in(10) {
+                    row.set_bytes(id, text(rng).as_bytes());
+                }
+            }
+            Leaf::Wire => {
+                if !rng.one_in(10) {
+                    let b: Vec<u8> = (0..rng.below(6)).map(|_| rng.next() as u8).collect();
+                    row.set_bytes(id, &b);
+                }
+            }
+            Leaf::Dict(element) => {
+                if rng.one_in(16) {
+                    continue;
+                }
+                let n = rng.below(4) as usize;
+                let mut keys: Vec<String> = (0..n).map(|_| text(rng)).collect();
+                keys.sort();
+                keys.dedup();
+                let items = keys
+                    .iter()
+                    .map(|k| {
+                        let mut item = random_row(rng, &[(0u16, (**element).clone())]);
+                        item.key = Some(k.clone().into_bytes());
+                        item
+                    })
+                    .collect();
+                set_items(&mut row, id, items);
+            }
             Leaf::Repeat(body) => {
                 let n = rng.below(4) as usize;
                 let rounds = (0..n).map(|_| random_row(rng, body)).collect();
@@ -140,6 +169,36 @@ pub fn random_row(rng: &mut Rng, leaves: &[(u16, Leaf)]) -> Slots {
     row
 }
 
+/// A random string: letters of the three alphabets, capitals, digits, punctuation and now and then
+/// a character outside the tables.
+pub fn text(rng: &mut Rng) -> String {
+    const POOLS: [&str; 8] = [
+        "абвгґдеєжзиіїйклмнопрстуфхцчшщьюя'",
+        "абвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+        "abcdefghijklmnopqrstuvwxyz'",
+        "АБВГҐДЕЄЖЗИІЇЙКЛМНОПРСТУФХЦЧШЩЬЮЯ",
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        "0123456789.,-: ",
+        " ,.!?;()\"%/@+=*#&_$\n",
+        "😀é中ß\u{0}",
+    ];
+    let len = match rng.below(10) {
+        0 => 0,
+        1 => 40 + rng.below(60) as usize,
+        _ => 1 + rng.below(12) as usize,
+    };
+    let mut pool = rng.below(8) as usize;
+    let mut out = String::new();
+    for _ in 0..len {
+        if rng.one_in(6) {
+            pool = rng.below(8) as usize;
+        }
+        let chars: Vec<char> = POOLS[pool].chars().collect();
+        out.push(chars[rng.below(chars.len() as u64) as usize]);
+    }
+    out
+}
+
 /// Gives `row` the items of container `id`.
 pub fn set_items(row: &mut Slots, id: u16, items: Vec<Slots>) {
     let at = usize::from(id);
@@ -155,8 +214,9 @@ pub fn rng_free_count(id: u16) -> i64 {
 
 pub fn pack_both(built: &Built, row: &Slots) -> (Result<Vec<u8>, Error>, Result<Vec<u8>, String>) {
     let scheme = nostd::Scheme::new(0x21, &built.fields);
-    let mut out = vec![0u8; 512];
-    let ours = nostd::pack(&scheme, row, &mut out)
+    let mut out = vec![0u8; 16_384];
+    let mut scratch = vec![0u32; 3 * 256];
+    let ours = nostd::pack_with(&scheme, row, &mut out, &mut scratch)
         .map(|n| out[..n].to_vec())
         .map_err(|f| f.error);
     let theirs = packbin::pack(&built.reference, &values_of(row, &built.leaves))

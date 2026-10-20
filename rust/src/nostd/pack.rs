@@ -44,6 +44,8 @@ pub(crate) struct Pack<'t, 'w, 'b> {
     pub w: &'w mut Writer<'b>,
     pub row: &'t dyn Row,
     pub budget: &'w mut Budget,
+    /// Working words of the string encoder (`text`); empty for a packet without strings.
+    pub scratch: &'w mut [u32],
 }
 
 fn bad(at: usize, f: &Field) -> Fault {
@@ -117,6 +119,11 @@ impl Pack<'_, '_, '_> {
             Kind::Bits | Kind::Packed => self.small(i, &f),
             Kind::Group => self.members(i),
             Kind::Repeat | Kind::Times | Kind::List => self.container(i, &f),
+            #[cfg(feature = "text")]
+            Kind::Dict => self.container(i, &f),
+            #[cfg(feature = "text")]
+            Kind::Utf8 => self.utf8(&f),
+            Kind::Utf8Wire => self.utf8_wire(&f),
             _ => Err(Fault::new(Error::SchemeInvalid, self.w.len(), id_of(&f), 0)),
         }
     }
@@ -136,15 +143,19 @@ impl Pack<'_, '_, '_> {
                 }
                 count
             }
-            Kind::List => {
+            Kind::List | Kind::Dict => {
                 let n = held.ok_or_else(|| bad(at, f))?;
                 let wire = u16::try_from(n).map_err(|_| bad(at, f))?;
+                #[cfg(feature = "text")]
+                if f.kind == Kind::Dict && !self.keys_ascending(f, n) {
+                    return Err(bad(at, f));
+                }
                 self.w.put(&wire.to_le_bytes(), id_of(f))?;
                 n
             }
             _ => held.unwrap_or(0),
         };
-        let rounds = f.kind != Kind::List;
+        let rounds = !f.kind.is_counted();
         if rounds && n > self.budget.max_rounds {
             return Err(Fault::new(
                 Error::TooMany,
@@ -164,6 +175,7 @@ impl Pack<'_, '_, '_> {
                 w: &mut *self.w,
                 row: item,
                 budget: &mut *self.budget,
+                scratch: &mut *self.scratch,
             }
             .members(i)?;
         }

@@ -19,6 +19,21 @@ fn budget_of(scheme: &Scheme<'_>) -> Budget {
 /// A scheme that is not valid, a row without a value for a field (or with one of another kind or
 /// length) and an `out` that is too small are errors; the failure names the field.
 pub fn pack(scheme: &Scheme<'_>, row: &dyn Row, out: &mut [u8]) -> Result<usize, Fault> {
+    pack_with(scheme, row, out, &mut [])
+}
+
+/// Like [`pack`], with working words for the compact text encoder (`text`): a string whose
+/// compact form may be shorter than its raw form needs 3 words per code point
+/// ([`SCRATCH_WORDS_PER_CHAR`](super::SCRATCH_WORDS_PER_CHAR)) of the longest such string. The
+/// words need no initial value. A string that needs more is
+/// [`Error::ScratchTooSmall`](super::Error::ScratchTooSmall) naming the field and the words
+/// needed; the encoder never writes a different encoding instead.
+pub fn pack_with(
+    scheme: &Scheme<'_>,
+    row: &dyn Row,
+    out: &mut [u8],
+    scratch: &mut [u32],
+) -> Result<usize, Fault> {
     validate(scheme)?;
     let mut writer = Writer::new(out);
     writer.put(&[scheme.type_number], -1)?;
@@ -28,6 +43,7 @@ pub fn pack(scheme: &Scheme<'_>, row: &dyn Row, out: &mut [u8]) -> Result<usize,
         w: &mut writer,
         row,
         budget: &mut budget,
+        scratch,
     }
     .top()?;
     Ok(writer.len())

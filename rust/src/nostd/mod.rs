@@ -50,13 +50,17 @@
 )]
 
 mod check;
+mod count;
 mod error;
 mod io;
 mod pack;
 mod present;
 mod row;
 mod scheme;
+mod strings;
 mod table;
+#[cfg(feature = "text")]
+mod text;
 mod unpack;
 mod walk;
 
@@ -65,11 +69,13 @@ pub use error::{Error, Fault};
 pub use io::{Reader, Writer};
 pub use row::{Num, Row};
 pub use scheme::{
-    be, bits, boolean, bytes, f32, f64, flag_bit, flag_byte, flags, group, i16, i32, i64, i8, list,
-    packed, repeat, sized, times, u16, u2, u32, u64, u8, when, Field, Kind, Scheme,
-    DEFAULT_MAX_ROUNDS, DEFAULT_MAX_SLOTS, MAX_FIELDS, NO_ID,
+    be, bits, boolean, bytes, dict, f32, f64, flag_bit, flag_byte, flags, group, i16, i32, i64, i8,
+    key, list, packed, repeat, sized, times, u16, u2, u32, u64, u8, utf8, utf8_wire, when, Field,
+    Kind, Scheme, DEFAULT_MAX_ROUNDS, DEFAULT_MAX_SLOTS, DICT_KEY, MAX_FIELDS, NO_ID,
 };
-pub use walk::{pack, unpack};
+#[cfg(feature = "text")]
+pub use text::SCRATCH_WORDS_PER_CHAR;
+pub use walk::{pack, pack_with, unpack};
 
 #[cfg(feature = "alloc")]
 pub use walk::pack_vec;

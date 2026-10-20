@@ -107,6 +107,11 @@ impl Unpack<'_, '_, '_> {
             Kind::Bits | Kind::Packed => self.small(i, &f),
             Kind::Group => self.top_of(i),
             Kind::Repeat | Kind::Times | Kind::List => self.container(i, &f),
+            #[cfg(feature = "text")]
+            Kind::Dict => self.container(i, &f),
+            #[cfg(feature = "text")]
+            Kind::Utf8 => self.utf8(&f),
+            Kind::Utf8Wire => self.utf8_wire(&f),
             _ => Err(Fault::new(Error::SchemeInvalid, self.r.pos(), id_of(&f), 0)),
         }
     }
@@ -120,7 +125,7 @@ impl Unpack<'_, '_, '_> {
                 .and_then(|c| u64::try_from(c).ok())
                 .map(clamp)
                 .ok_or_else(|| bad(self.r.pos(), f))?,
-            Kind::List => {
+            Kind::List | Kind::Dict => {
                 let wire = self.r.take(2, id_of(f))?;
                 let lo = wire.first().copied().unwrap_or(0);
                 let hi = wire.get(1).copied().unwrap_or(0);
@@ -129,9 +134,11 @@ impl Unpack<'_, '_, '_> {
             _ => usize::MAX,
         };
         let to_end = f.kind == Kind::Repeat;
-        let rounds = f.kind != Kind::List;
+        let rounds = !f.kind.is_counted();
         let width = round_width(self.t, i.saturating_add(1), end(self.t, i));
         let mut filled = 0usize;
+        #[cfg(feature = "text")]
+        let mut prev_key: Option<usize> = None;
         while if to_end {
             self.r.has_more()
         } else {
@@ -166,6 +173,13 @@ impl Unpack<'_, '_, '_> {
                 }
             }
             filled = filled.saturating_add(1);
+            #[cfg(feature = "text")]
+            if f.kind == Kind::Dict {
+                if let Some(prev) = prev_key {
+                    self.check_key_order(f, prev, at)?;
+                }
+                prev_key = Some(at);
+            }
         }
         let done = self.r.pos();
         self.row

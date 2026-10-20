@@ -16,6 +16,9 @@ extern "C" {
 int pb_rs_route_pack(std::uint8_t* out, std::size_t cap);
 int pb_rs_route_unpack(std::uint8_t const* input, std::size_t len);
 int pb_rs_golden(std::uint8_t const* input, std::size_t len);
+// What a feature set adds (text, ecc, session): defined by the probe only for those sets, so the base
+// image leaves the weak reference null.
+int pb_rs_extra() __attribute__((weak));
 }
 #endif
 
@@ -82,13 +85,18 @@ int main() {
   std::size_t pack_stack = stack_meter::measure([&] { p = pb_rs_route_pack(packet, sizeof(packet)); });
   std::size_t unpack_stack = stack_meter::measure(
       [&] { u = pb_rs_route_unpack(packet, p > 0 ? static_cast<std::size_t>(p) : 0); });
-  failures = (golden_len == 13 ? 0 : 1) + (g == 0 ? 0 : 1) + (p > 0 ? 0 : 1) + (u == 0 ? 0 : 1);
+  int x = 0;
+  std::size_t extra_stack = 0;
+  if (pb_rs_extra != nullptr)
+    extra_stack = stack_meter::measure([&] { x = pb_rs_extra(); });
+  failures = (golden_len == 13 ? 0 : 1) + (g == 0 ? 0 : 1) + (p > 0 ? 0 : 1) + (u == 0 ? 0 : 1) + (x == 0 ? 0 : 1);
   say("GOLDEN_OK ", g == 0 ? 1 : 0);
   say("PACKET_LEN ", p > 0 ? static_cast<unsigned long>(p) : 0);
   if (p > 0)
     say_hex("ROUTE_HEX ", packet, static_cast<std::size_t>(p));
   if (unpack_stack < golden_stack)
     unpack_stack = golden_stack;
+  say("EXTRA_STACK ", extra_stack);
 #else
   std::size_t pack_stack = stack_meter::measure([&] { packet[0] = 1; });
   std::size_t unpack_stack = stack_meter::measure([&] {

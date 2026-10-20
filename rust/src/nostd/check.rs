@@ -3,7 +3,7 @@
 //! `u2` take the id of their first member; a flag byte and a flag bit take none.
 
 use super::error::{Error, Fault};
-use super::scheme::{Field, Kind, Scheme, MAX_FIELDS};
+use super::scheme::{Field, Kind, Scheme, MAX_FIELDS, NO_ID};
 use super::table::{bit_position, end, flag_byte_of, get, id_of, kind, level, members, source_of};
 
 /// The most members of one `flags` byte and the most bits of one flag byte.
@@ -43,9 +43,21 @@ fn spans(t: &[Field], begin: usize, stop: usize) -> Result<(), Fault> {
         let span = usize::from(f.span);
         let fits = span >= 1 && end(t, j) <= stop;
         let own = f.kind.has_members() || span == 1;
-        let one_member = !matches!(f.kind, Kind::FlagBit | Kind::List)
-            || (span >= 2
-                && get(t, j.saturating_add(1)).map(|m| usize::from(m.span)) == span.checked_sub(1));
+        let one_member = match f.kind {
+            Kind::FlagBit | Kind::List => {
+                span >= 2
+                    && get(t, j.saturating_add(1)).map(|m| usize::from(m.span))
+                        == span.checked_sub(1)
+            }
+            // The key, then one element.
+            Kind::Dict => {
+                span >= 3
+                    && get(t, j.saturating_add(1)).map(|m| m.span) == Some(1)
+                    && get(t, j.saturating_add(2)).map(|m| usize::from(m.span))
+                        == span.checked_sub(2)
+            }
+            _ => true,
+        };
         if !fits || !own || !one_member {
             return Err(invalid(j, f));
         }
@@ -65,6 +77,11 @@ fn order(t: &[Field], j: usize, next: u32) -> Result<u32, Fault> {
         }
         Kind::List if in_order => {
             members(t, j).try_fold(0, |n, m| order(t, m, n))?;
+            Ok(next.saturating_add(1))
+        }
+        // The key has no order id; the element starts again at 0.
+        Kind::Dict if in_order => {
+            members(t, j).skip(1).try_fold(0, |n, m| order(t, m, n))?;
             Ok(next.saturating_add(1))
         }
         _ if in_order => Ok(next.saturating_add(1)),
@@ -107,7 +124,11 @@ fn shape(
             Kind::Repeat => round == Round::None && body(),
             Kind::Times => round != Round::Times && f.source <= MAX_ID && body(),
             Kind::List => element_ok(t, j.saturating_add(1)),
-            Kind::Bytes => true,
+            Kind::Dict => {
+                TEXT && key_ok(t, j.saturating_add(1)) && element_ok(t, j.saturating_add(2))
+            }
+            Kind::Utf8 => TEXT && f.size == 0,
+            Kind::Bytes | Kind::Utf8Wire => true,
             _ => f.size == 0,
         };
         if !ok {
@@ -117,7 +138,7 @@ fn shape(
         let inner = match f.kind {
             Kind::Repeat => Round::Repeat,
             Kind::Times => Round::Times,
-            Kind::List => Round::None,
+            Kind::List | Kind::Dict => Round::None,
             _ => round,
         };
         shape(t, j.saturating_add(1), end(t, j), presence, inner)?;
@@ -137,11 +158,26 @@ fn has_member(t: &[Field], begin: usize, stop: usize) -> bool {
     })
 }
 
-/// A list element is one number, `bytes`, `list` or a `u2` of one member: an item holds one value.
+/// True when the `text` feature (the codec of `Utf8` and `Dict`) is built.
+const TEXT: bool = cfg!(feature = "text");
+
+/// A dictionary key is a decoded string with no order id.
+fn key_ok(t: &[Field], at: usize) -> bool {
+    get(t, at).is_some_and(|f| f.kind == Kind::Utf8 && f.id == NO_ID && f.span == 1)
+}
+
+/// A list or dictionary element is one number, `bytes`, a string, a `list`, a `dict` or a `u2` of
+/// one member: an item holds one value.
 fn element_ok(t: &[Field], at: usize) -> bool {
     match get(t, at) {
-        Some(f) if f.kind.width().is_some() || f.kind == Kind::Bytes || f.kind == Kind::List => {
-            true
+        Some(f)
+            if f.kind.width().is_some()
+                || matches!(
+                    f.kind,
+                    Kind::Bytes | Kind::List | Kind::Utf8 | Kind::Utf8Wire | Kind::Dict
+                ) =>
+        {
+            f.kind != Kind::Utf8 || (TEXT && f.id != NO_ID)
         }
         Some(f) if f.kind == Kind::U2 => f.span == 2,
         _ => false,

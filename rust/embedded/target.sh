@@ -83,7 +83,7 @@ target_rust_m4f() {
     # The C++ stage requires the core to add no .data or .bss (no static mutable state); so does this one.
     ram=$(( $(arm-none-eabi-size "$dir/$set.elf" | awk 'NR == 2 { print $2 + $3 }') - ram0 ))
     [ "$ram" -eq 0 ] || fail "$set: the library adds ${ram} B of .data and .bss"
-    raw=$(for key in PACK_STACK UNPACK_STACK; do log_value "$key" "$dir/$set.run.log"; done | sort -n | tail -n 1)
+    raw=$(for key in PACK_STACK UNPACK_STACK EXTRA_STACK; do log_value "$key" "$dir/$set.run.log"; done | sort -n | tail -n 1)
     stack=$((raw - meter))
     echo "SIZE $set ram=$ram B flash=$flash B (limit $(limit_of "$set" 2)) stack=$stack B (limit $(limit_of "$set" 3)) raw=$raw meter=$meter"
     note "$set flash ${flash} B of $(limit_of "$set" 2); stack ${stack} B of $(limit_of "$set" 3); golden decoded on the device image"
