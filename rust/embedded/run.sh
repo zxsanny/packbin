@@ -17,7 +17,7 @@ repo="$(cd "$rust_here/../.." && pwd)"
 stage="${1:-host}"
 
 build_libs() {
-  local line set features
+  local set features
   command -v cargo > /dev/null || { echo "run.sh: cargo is not installed" >&2; exit 1; }
   while IFS='|' read -r set features; do
     build_one "$set" "$features"

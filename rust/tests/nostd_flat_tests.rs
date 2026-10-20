@@ -263,3 +263,39 @@ fn pack_vec_returns_exactly_the_packet() {
     assert_eq!(packed, golden());
     assert_eq!(small.error, Error::BufferFull);
 }
+
+struct Refusing;
+
+impl Row for Refusing {
+    fn num(&self, _id: u16) -> Option<Num> {
+        None
+    }
+    fn bytes(&self, _id: u16) -> Option<&[u8]> {
+        None
+    }
+    fn set_num(&mut self, _id: u16, _value: Num) -> bool {
+        false
+    }
+    fn set_bytes(&mut self, _id: u16, _value: &[u8]) -> bool {
+        false
+    }
+}
+
+#[test]
+fn a_row_that_refuses_a_value_on_unpack_is_bad_value_at_the_field() {
+    // Arrange
+    let fields = [bytes(0, 2)];
+    let blob_scheme = Scheme::new(1, &fields);
+    // Act
+    let number = unpack(&POSITION, &golden(), &mut Refusing).expect_err("number refused");
+    let blob = unpack(&blob_scheme, &[1, 7, 8], &mut Refusing).expect_err("blob refused");
+    // Assert
+    assert_eq!(
+        (number.error, number.field, number.offset),
+        (Error::BadValue, 0, 1)
+    );
+    assert_eq!(
+        (blob.error, blob.field, blob.offset),
+        (Error::BadValue, 0, 1)
+    );
+}

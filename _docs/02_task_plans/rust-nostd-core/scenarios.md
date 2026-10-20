@@ -19,6 +19,13 @@ Source of rows: `intake` (new-task Step 4.7 at the 13-point handoff). Status: co
 | R13 | build over the owner's size limits | confirmed | CI job fails with figure and limit | AZ-2751 AC-3 | intake |
 | R14 | frame mode, MAC-only call, cycle counts, Swift frame mode | out-of-scope | meshbell PB-04, PB-10, PB-06b | — | intake |
 
+## Assessment round 1 (loop 50)
+
+| id | scenario | status | behavior (confirmed) | AC ref | source |
+|----|----------|--------|----------------------|--------|--------|
+| D1 | a row refuses a value on unpack | confirmed | `BadValue` naming the field | AZ-2749 (test added after batch 1) | assess-round-1 |
+| D2 | link checks catch real defects | confirmed | seeded panic and heap defects fail the checks | AZ-2751 AC-4, AC-5 | assess-round-1 |
+
 ## Fit decisions
 
 | card | collision | chosen option | constraint recorded |

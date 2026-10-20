@@ -9,6 +9,7 @@ trap 'rm -rf "$tmp"' EXIT
 limits_file="$tmp/limits.txt"
 printf '# comment\nbase 8192 512\nwide - -\n' > "$limits_file"
 # shellcheck source=checks.sh
+# shellcheck source=checks.sh
 source "$here/checks.sh"
 bad=0
 expect() { # description, expected, actual

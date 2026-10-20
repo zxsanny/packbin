@@ -16,6 +16,8 @@ panic_hits() {
   awk '$NF ~ /(panicking|panic_fmt|panic_bounds_check|unwrap_failed|expect_failed|slice_index_fail|slice_end_index_len_fail|slice_start_index_len_fail|slice_index_order_fail|len_mismatch_fail|rust_begin_unwind|rust_panic|handle_alloc_error|unreachable_display|assert_failed)/ { print $NF }' "$1" | sort -u
 }
 
+# limit_of uses $limits_file, which target.sh (or the test) sets.
+# shellcheck disable=SC2154
 # limit_of <set> <column> prints the limit (a number, or "-" for none) from limits.txt.
 limit_of() {
   awk -v set="$1" -v col="$2" '$1 == set && $1 !~ /^#/ { print $col; found = 1 } END { if (!found) print "-" }' "$limits_file"
