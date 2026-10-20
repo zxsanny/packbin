@@ -8,6 +8,15 @@
 //! `Result`; no path reachable from untrusted bytes panics. The bytes are those of the `std` API
 //! (the wire format does not change).
 //!
+//! Cargo features: `text` adds strings ([`utf8`]: the row holds UTF-8 text through
+//! [`Row::bytes`] on pack and [`Row::slots`] with [`Row::set_count`] on unpack) and dictionaries
+//! ([`dict`] with [`key()`]: an item row holds its key under [`DICT_KEY`] and its element under id
+//! 0; keys are strictly ascending by their UTF-8 bytes). The compact encoder keeps its parse in
+//! the caller's scratch words ([`pack_with`], [`SCRATCH_WORDS_PER_CHAR`] per code point);
+//! [`utf8_wire`] keeps a string as it is on the wire and needs no feature. `ecc` adds parity
+//! bytes after every packet ([`Scheme::with_parity`], [`unpack_repair`], the codec in
+//! [`ecc`]).
+//!
 //! ```
 //! use packbin::nostd::{i32, pack, u16, u8, unpack, Fault, Num, Row, Scheme};
 //!
