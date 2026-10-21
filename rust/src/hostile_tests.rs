@@ -479,6 +479,12 @@ fn run_all_cases(construct_rules: RuleTable, pack_rules: RuleTable) {
             other => panic!("{id}: unknown stage {other}"),
         }
     }
+    for (skipped, _) in CONSTRUCT_NOT_RUN.iter().chain(PACK_NOT_RUN) {
+        assert!(
+            seen.contains(*skipped),
+            "{skipped}: skipped by the Rust loader but not a case of cases.txt"
+        );
+    }
     assert_tables_cover(
         construct_rules,
         &construct_refused,

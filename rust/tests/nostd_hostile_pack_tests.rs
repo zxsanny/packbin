@@ -318,8 +318,17 @@ fn ac1_every_pack_case_runs_or_is_skipped_with_a_reason_exactly_once() {
         .filter(|c| c.stage == "pack")
         .map(|c| c.id.as_str())
         .collect();
+    let unused_skips: Vec<&str> = SKIPS
+        .iter()
+        .map(|(id, _)| *id)
+        .filter(|id| !packs.contains(id))
+        .collect();
     // Assert
-    assert_eq!(packs.len(), 43);
+    assert!(!packs.is_empty(), "cases.txt holds no pack case");
+    assert!(
+        unused_skips.is_empty(),
+        "skips for ids that are not pack cases of cases.txt: {unused_skips:?}"
+    );
     for id in &packs {
         let ran = run(id).is_some();
         let skipped = SKIPS
@@ -332,8 +341,6 @@ fn ac1_every_pack_case_runs_or_is_skipped_with_a_reason_exactly_once() {
             "{id} must run or be skipped, once"
         );
     }
-    assert_eq!(packs.iter().filter(|id| run(id).is_some()).count(), 25);
-    assert_eq!(SKIPS.len(), 18);
 }
 
 #[test]

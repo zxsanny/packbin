@@ -21,10 +21,13 @@ import Testing
 
         // Act
         let missing = cases.filter { c in !corpus.contains { $0.name == "hostile_" + c[0] && $0.kind == c[0] && hex($0.packet) == c[3] } }
+        let caseIDs = Set(cases.map { $0[0] })
+        let unused = corpus.filter { $0.name.hasPrefix("hostile_") && !caseIDs.contains($0.kind) }
 
         // Assert
-        #expect(cases.count == 17)
+        #expect(!cases.isEmpty, "cases.txt holds no unpack or limit case")
         #expect(missing.isEmpty, "not in the corpus: \(missing.map { $0[0] })")
+        #expect(unused.isEmpty, "corpus input without an unpack or limit case: \(unused.map(\.kind))")
         #expect(Set(corpus.map(\.name)).count == corpus.count)
     }
 

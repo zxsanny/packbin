@@ -61,13 +61,25 @@ fn ac1_every_case_has_a_scheme_or_a_stated_skip() {
         .filter(|c| fields_of(&c.id).is_none() && !SKIPS.iter().any(|(id, _)| *id == c.id))
         .map(|c| c.id.as_str())
         .collect();
+    let unused_skips: Vec<&str> = SKIPS
+        .iter()
+        .map(|(id, _)| *id)
+        .filter(|id| !all.iter().any(|c| c.id == *id))
+        .collect();
     // Assert
     assert!(
         missing.is_empty(),
         "cases with neither a scheme nor a skip: {missing:?}"
     );
+    assert!(
+        unused_skips.is_empty(),
+        "skips for ids that are not cases of cases.txt: {unused_skips:?}"
+    );
     assert!(SKIPS.iter().all(|(_, reason)| !reason.is_empty()));
-    assert!(all.iter().filter(|c| c.stage != "pack").count() >= 32);
+    assert!(
+        all.iter().any(|c| c.stage != "pack"),
+        "cases.txt holds no case but pack cases"
+    );
 }
 
 #[test]
@@ -90,7 +102,7 @@ fn ac1_each_unpack_and_limit_case_returns_an_outcome_its_row_allows() {
         );
         ran += 1;
     }
-    assert_eq!(ran, 17, "15 unpack cases and 2 limit cases");
+    assert!(ran > 0, "cases.txt holds no unpack or limit case");
 }
 
 #[test]
@@ -113,7 +125,7 @@ fn ac1_each_construct_case_is_a_scheme_error() {
         );
         ran += 1;
     }
-    assert_eq!(ran, 14, "15 construct cases less the skipped one");
+    assert!(ran > 0, "cases.txt holds no construct case to run");
 }
 
 #[test]
@@ -194,9 +206,26 @@ fn ac1_the_fuzz_corpus_reads_without_a_panic_and_its_hostile_inputs_keep_their_o
     });
     // Assert
     assert!(inputs.len() >= 33);
-    let mut hostile = 0;
+    for c in by_case
+        .iter()
+        .filter(|c| c.stage == "unpack" || c.stage == "limit")
+    {
+        let name = format!("hostile_{}", c.id);
+        let packet = from_hex(&c.hex);
+        assert!(
+            inputs
+                .iter()
+                .any(|(n, kind, bytes)| *n == name && *kind == c.id && *bytes == packet),
+            "case {} has no input {name} in the fuzz corpus",
+            c.id
+        );
+    }
     for (name, kind, bytes) in &inputs {
         let Some(case) = by_case.iter().find(|c| &c.id == kind) else {
+            assert!(
+                !name.starts_with("hostile_"),
+                "corpus input {name} names {kind}, which is not a case of cases.txt"
+            );
             continue;
         };
         assert!(name.starts_with("hostile_"), "{name}");
@@ -206,9 +235,7 @@ fn ac1_the_fuzz_corpus_reads_without_a_panic_and_its_hostile_inputs_keep_their_o
             "{name}: got {got}, allowed {}",
             case.expected
         );
-        hostile += 1;
     }
-    assert_eq!(hostile, 17, "every unpack and limit case is in the corpus");
 }
 
 #[test]

@@ -28,7 +28,7 @@ import Testing
     }
 
     /// The four tables hold exactly the cases of their stage, and a rule for exactly the cases that end
-    /// in an error, so no case is skipped and no stale entry stays.
+    /// in an error, so no case is skipped and no stale entry stays. A difference names the case id.
     @Test func tables_holdEveryCaseOnceAndNoOther() throws {
         // Arrange
         let cases = try hostileCases()
@@ -41,14 +41,10 @@ import Testing
         let refused = cases.filter { $0.stage != "construct" && $0.expected != ["bytes"] }.map(\.id)
 
         // Act
-        let stages = Dictionary(grouping: cases, by: \.stage).mapValues { Set($0.map(\.id)) }
+        let problems = hostileTableProblems(cases, tables: tables, rules: Set(hostileRules.keys), refused: refused)
 
         // Assert
-        #expect(cases.count == 75)
-        #expect(Set(cases.map(\.id)).count == cases.count)
-        #expect(stages.mapValues(\.count) == ["unpack": 15, "limit": 2, "construct": 15, "pack": 43])
-        #expect(stages == tables)
-        #expect(Set(hostileRules.keys) == Set(refused) && hostileRules.count == refused.count)
+        #expect(problems.isEmpty, "\(problems)")
     }
 
     /// AZ-2418 AC-1 as for the other packages: a rule table with one wrong entry cannot pass, and the
@@ -92,4 +88,32 @@ import Testing
         // Assert
         #expect(failure?.hasPrefix("oversize_count_times: refused by another rule") == true, "\(String(describing: failure))")
     }
+}
+
+/// What differs between cases.txt and the Swift tables, one entry per case id: a case twice, a stage no
+/// table runs, a case without a handler, a handler without a case, a rule for a case that is not refused
+/// and a refused case without a rule. Empty when they agree.
+func hostileTableProblems(
+    _ cases: [HostileCase], tables: [String: Set<String>], rules: Set<String>, refused: [String]
+) -> [String] {
+    var problems: [String] = []
+    var seen = Set<String>()
+    for c in cases {
+        if !seen.insert(c.id).inserted { problems.append("case \(c.id) is listed twice") }
+        guard let handlers = tables[c.stage] else {
+            problems.append("case \(c.id) has the stage \(c.stage), which no Swift table runs")
+            continue
+        }
+        if !handlers.contains(c.id) { problems.append("case \(c.id) has no Swift handler (\(c.stage))") }
+    }
+    for (stage, handlers) in tables {
+        let ids = Set(cases.filter { $0.stage == stage }.map(\.id))
+        if ids.isEmpty { problems.append("cases.txt holds no \(stage) case") }
+        for id in handlers.subtracting(ids).sorted() {
+            problems.append("Swift \(stage) handler \(id) has no case in cases.txt")
+        }
+    }
+    for id in rules.subtracting(refused).sorted() { problems.append("rule \(id) is for a case that is not refused") }
+    for id in Set(refused).subtracting(rules).sorted() { problems.append("refused case \(id) has no rule") }
+    return problems.sorted()
 }

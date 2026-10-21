@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -296,17 +297,22 @@ func TestHostileTablesHoldNoCaseTwiceAndNoOther(t *testing.T) {
 	}
 
 	// Act and assert
+	for _, c := range cases {
+		if _, known := tables[c.stage]; !known {
+			t.Errorf("case %s has the stage %q, which no Go table runs", c.id, c.stage)
+		}
+	}
 	for stage, keys := range tables {
 		var ids []string
 		for _, c := range hostileStage(cases, stage) {
 			ids = append(ids, c.id)
 		}
-		if len(ids) == 0 || !sameSet(ids, keys) {
-			t.Errorf("%s: cases %v, Go schemes %v", stage, ids, keys)
+		if len(ids) == 0 {
+			t.Errorf("%s: cases.txt holds no case of this stage", stage)
 		}
-	}
-	if len(cases) != 75 {
-		t.Errorf("cases.txt holds %d cases, the loader was written for 75", len(cases))
+		if msg := idDifference(ids, keys); msg != "" {
+			t.Errorf("%s: %s", stage, msg)
+		}
 	}
 }
 
@@ -316,6 +322,35 @@ func keysOf[V any](m map[string]V) []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+// idDifference names each case id that has no Go handler, each handler id that has no case, and each
+// id that cases.txt holds twice; "" when the two sets agree.
+func idDifference(caseIDs, handlerIDs []string) string {
+	seen := map[string]int{}
+	for _, id := range caseIDs {
+		seen[id]++
+	}
+	var problems []string
+	for id, n := range seen {
+		if n > 1 {
+			problems = append(problems, "case "+id+" is listed twice")
+		}
+	}
+	handlers := map[string]bool{}
+	for _, id := range handlerIDs {
+		handlers[id] = true
+		if seen[id] == 0 {
+			problems = append(problems, "Go handler "+id+" has no case in cases.txt")
+		}
+	}
+	for id := range seen {
+		if !handlers[id] {
+			problems = append(problems, "case "+id+" has no Go handler")
+		}
+	}
+	sort.Strings(problems)
+	return strings.Join(problems, "; ")
 }
 
 func sameSet(a, b []string) bool {
