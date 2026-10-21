@@ -316,3 +316,6 @@ The error shape is interim: a short-packet-style value. Its kind, label, `needed
 **Log format**: none inside the package
 
 **Log storage**: none
+
+**Loop 54 (AZ-2815):** `PackOut.EncodeText` keeps the last text's UTF-8 bytes and its compact field for one pack call and writes the field again when the next text's bytes are equal (a `times` or `repeat` round often writes one text again and again); `PackUtf8` is the only caller for a field. 200 rounds of a 65,535-character text take 24 to 36 ms, not 0.9 to 1.0 s; `main` CI had failed on the 1 s bound in loops 49 and 53. No text outlives a pack call; the dictionary-key encode is unchanged.
+

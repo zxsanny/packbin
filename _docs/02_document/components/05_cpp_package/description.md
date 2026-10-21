@@ -209,3 +209,10 @@ No queries and no cache.
 **Log format**: none inside the package
 
 **Log storage**: none
+
+**Loop 54 changes** (AZ-2816, AZ-2823; no wire change; the arm embedded stage passes at 7,952 B flash, a margin of 240 B, and 504 B stack, unchanged):
+- A `when` whose source sits in a clear `when` is false on pack and unpack (`source_skipped` and `when_matches` in `values.cpp`; `resolve` in `order.hpp` calls `mark_held` for a `when` source as it does for a count source; `Field::bit` in `table.hpp`). `source_skipped` is the former `count_skipped` of `pack.cpp`, now shared by counts and `when`s. Before, C++ matched the row value of the skipped source, packed `010005` for `u8 mode=0; when(mode==1){u16 a; u8 k=2}; when(k==2){u8 b=5}` and refused its own packet; a plain unread source (value 0) matched `when(k == 0)` on unpack. Reference packets: `0100` (Python, Rust, all eight packages through the corpus cases `pack_when_of_skipped_source` and `..._zero`).
+- The link from a `when` source back to its holding `when` is one byte: a source more than 255 entries behind its `when` is `SchemeInvalid`, as for a count (pinned by `ac6_source_link_is_limited_to_255_entries`). The other packages have no such limit.
+- `when_matches` and `source_skipped` call each other, one level per enclosing `when` of the source; the sources come earlier in the table, so the recursion ends. The stack depth of a long chain is not measured on the Cortex-M4F image (handoff 55).
+- Tests: `when_skipped_source_host_tests.cpp`; corpus handlers in `hostile_pack_loop21.hpp`.
+
