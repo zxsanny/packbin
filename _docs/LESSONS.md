@@ -9,12 +9,6 @@ Downstream skills consume this file:
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
 
-- [2026-10-20] [testing] Time a new speed case in every package before the criterion names one bound for all of them: the 1 s of 200 repeated 65,535-character texts held in Python, TypeScript, Go, Swift, Rust and C# but failed in Java (2.9 s) and C++ (1.9 s) in loop 46, costing a production change, an owner decision and AZ-2742.
-  Source: _docs/06_metrics/retro_2026-10-20_loop46.md
-- [2026-10-20] [testing] A load factor from a short reference loop under-reports a loaded pool (1.11 while the C++ case ran 2.1 times its idle time at load 45), so a pool-run bound below about 2.5 times the idle figure fails the first run and passes only on the serial retry.
-  Source: _docs/06_metrics/retro_2026-10-20_loop46.md
-- [2026-10-20] [process] When several tasks share package directories, spawn one worker per package with every task id for that package in its prompt: loop 46 ran 5 tasks over 8 packages and the CI scripts as 9 workers in two waves of four with no overlapping write and no merge repair.
-  Source: _docs/06_metrics/retro_2026-10-20_loop46.md
 - [2026-10-20] [estimation] Before sizing a "port package X's design" task, grep the target's public types for owned heap types and decide whether the requested property (no heap, no panic) is a switch or a second API: AZ-2749 was 5 points on the handoff and 34 after reading the Rust sources (a `HashMap<Rc<str>, Value>` API cannot be made `no_std` by a feature).
   Source: _docs/06_metrics/retro_2026-10-20_loop50.md
 - [2026-10-20] [testing] Prove "no heap, no panic" on the linked image with a seeded defect that must fail the check: the lint deny list was clean while the image held three panic paths (`copy_from_slice`, `slice::reverse`, a range index).
@@ -39,3 +33,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-21_loop53.md
 - [2026-10-21] [tooling] Slice iterators (`chunks_mut`, `chunks_exact`) link a division and a panic at opt-level z that clippy and the host build do not show; read bytes by index with `get` in code the device image links, and run the embedded stage after the first use (loop 53).
   Source: _docs/06_metrics/retro_2026-10-21_loop53.md
+- [2026-10-21] [performance] Measure the stack of a recursive walker on the device image with the deepest shape the AC allows before trusting the handoff's suspect: the 3-deep `when` chain was 780 B and the flag-byte chain 668 B against 512 B, and the cost was the tree walk (130 to 144 B per nested level), not the `when_matches` recursion the review had named (loop 55).
+  Source: _docs/06_metrics/retro_2026-10-21_loop55.md
+- [2026-10-21] [process] When a fix leaves a carve-out path (a held `when` that reads a flag byte still recursed), write it in the batch report's discoveries table: the assessment turned that one row into AZ-3141 and found the second over-budget shape (loop 55).
+  Source: _docs/06_metrics/retro_2026-10-21_loop55.md
+- [2026-10-21] [tooling] Check `xcode-select -p` before applying a host recipe from AGENT_GOTCHAS: with Xcode.app selected (Swift 6.4) the Command Line Tools flags for swift-testing break the build, and a plain `swift test` works (loop 55).
+  Source: _docs/06_metrics/retro_2026-10-21_loop55.md
