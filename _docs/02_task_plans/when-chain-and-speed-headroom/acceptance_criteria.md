@@ -24,6 +24,11 @@ Given the measured stack is above 512 B
 When the loop closes
 Then the check is changed so the stack is at most 512 B with packets unchanged, or the owner has decided a depth limit; the loop does not close with the stage red or the image without the chain.
 
+**AC-E1: Chain with flag bytes** (assess round 1, AZ-3141)
+Given three nested held `when`s that each hold a flag byte
+When packed and unpacked in C++ and Python and measured on the Cortex-M4F image
+Then packets are byte-equal, stack is at most 512 B, and the figure is recorded; over 512 B without a saving that fits goes to the owner.
+
 ## B: bool and group-presence source behind a clear `when` (AC-B)
 
 **AC-B1: Source skipped, bool true in the row**

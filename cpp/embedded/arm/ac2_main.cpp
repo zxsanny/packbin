@@ -69,12 +69,39 @@ int main() {
     chain_failures += (cp.ok() ? 0 : 1) + (cu.ok() ? 0 : 1) +
                       all_kinds::chain_mismatched(crow, cback) + all_kinds::chain_failures(i);
   }
+  // AZ-3141: the flag-byte chain, a flag scope entered at every level.
+  std::size_t fchain_pack_stack = 0;
+  std::size_t fchain_unpack_stack = 0;
+  int fchain_failures = 0;
+  for (std::size_t i = 0; i < all_kinds::flag_chain_row_count; ++i) {
+    all_kinds::FlagChainRow frow = all_kinds::flag_chain_sample(i);
+    all_kinds::FlagChainRow fback;
+    packbin::Result fp{};
+    packbin::Result fu{};
+    std::size_t ps = stack_meter::measure(
+        [&] { fp = all_kinds::flag_chain_pack(frow, chain_packet, sizeof(chain_packet)); });
+    std::size_t us = stack_meter::measure(
+        [&] { fu = all_kinds::flag_chain_unpack(chain_packet, fp.offset, fback); });
+    say("FLAG_CHAIN_ROW_PACK_STACK ", ps);
+    say("FLAG_CHAIN_ROW_UNPACK_STACK ", us);
+    if (ps > fchain_pack_stack)
+      fchain_pack_stack = ps;
+    if (us > fchain_unpack_stack)
+      fchain_unpack_stack = us;
+    fchain_failures += (fp.ok() ? 0 : 1) + (fu.ok() ? 0 : 1) +
+                       all_kinds::flag_chain_mismatched(frow, fback) +
+                       all_kinds::flag_chain_failures(i);
+  }
   // The chain figures print on their own lines; PACK_STACK / UNPACK_STACK carry the larger of the
   // sample row and the chain, which is what the stage reads.
   if (chain_pack_stack > pack_stack)
     pack_stack = chain_pack_stack;
   if (chain_unpack_stack > unpack_stack)
     unpack_stack = chain_unpack_stack;
+  if (fchain_pack_stack > pack_stack)
+    pack_stack = fchain_pack_stack;
+  if (fchain_unpack_stack > unpack_stack)
+    unpack_stack = fchain_unpack_stack;
   hex(packet, p.offset);
   say("TABLE_ENTRIES ", all_kinds::table_entries());
   say("PACK_OK ", p.ok() ? 1 : 0);
@@ -84,10 +111,14 @@ int main() {
   say("CHAIN_PACK_STACK ", chain_pack_stack);
   say("CHAIN_UNPACK_STACK ", chain_unpack_stack);
   say("CHAIN_FAILURES ", static_cast<unsigned long>(chain_failures));
+  say("FLAG_CHAIN_PACK_STACK ", fchain_pack_stack);
+  say("FLAG_CHAIN_UNPACK_STACK ", fchain_unpack_stack);
+  say("FLAG_CHAIN_FAILURES ", static_cast<unsigned long>(fchain_failures));
   say("PACK_STACK ", pack_stack);
   say("UNPACK_STACK ", unpack_stack);
   say("WRAPPER_CALLS ", 0);
-  int failures = (p.ok() ? 0 : 1) + (u.ok() ? 0 : 1) + fields + (same ? 0 : 1) + chain_failures;
+  int failures = (p.ok() ? 0 : 1) + (u.ok() ? 0 : 1) + fields + (same ? 0 : 1) + chain_failures +
+                 fchain_failures;
   say("FAILURES ", static_cast<unsigned long>(failures));
   return failures;
 }

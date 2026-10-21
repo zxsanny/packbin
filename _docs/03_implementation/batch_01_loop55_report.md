@@ -40,3 +40,14 @@ Python `pytest -v --tb=short python/tests` 3877 passed; TypeScript `npm test` 24
 | AZ-3134 | Swift CI release speed step filters `TextSpeedTests/`; the new test is an extension of `TextSpeedTests` so it runs there | none | clear |
 | env | `xcode-select` now points to Xcode.app; the old Swift flags break the build | `AGENT_GOTCHAS.md` updated | clear |
 | AZ-3133 | Go and Swift loaders hard-coded the case counts (72 to 75, pack 40 to 43) | updated in the same batch | clear |
+
+## Batch 02 (assessment round 1, AZ-3141)
+
+AZ-3141 (C++ flag-byte chain): `FlagChainRow` (0x5c) in the all-kinds image; first measure 668 B net on unpack; `unpack_children` enters a held `when` that reads a flag byte and a `FlagBit` itself; 500 B net, deepest overall 504 B (margin 8 B); flash 8,120 B (margin 72 B, was 152 B); avr 15,672 B; packets byte-equal to Python (`5c0101070101080101090105`, `5c00`, `5c01010700`, `5c010107010000`). `make -C cpp test` host and `gcc:16`, arm stage exit 0 (m0plus, m3-qemu, m4f, s390x, avr-uno PASS; vectors 287 of 287). CI-parity: PASS.
+
+### Discovered during implementation
+
+| Spec ref | Discovery | Proposed handling | clear / unclear |
+|----------|-----------|-------------------|-----------------|
+| AZ-3141 | Flash margin is now 72 B; any next edit to `cpp/src/core` needs a flash saving first | recorded in `AGENT_GOTCHAS.md` and the package description | clear |
+| AZ-3141 | Two more places still recurse through `unpack_one` for a held `when` or flag bit (`unpack_table`, a `times` round) | not measured; a `times` round resets the chain per round; no AC names it | clear (listed in handoff 56) |

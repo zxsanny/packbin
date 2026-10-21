@@ -36,9 +36,37 @@ void ac3_chain_rows_equal_python() {
   }
 }
 
+// AZ-3141: the same chain with a flag byte and one bit in every `when` body (scheme id 0x5c). Python
+// bytes of the four rows (0 all held, 1 m = 0, 2 k1 = 0, 3 no d2 and k2 = 0).
+char const* const flag_python_hex[] = {"5c0101070101080101090105", "5c00", "5c01010700",
+                                       "5c010107010000"};
+
+void az3141_flag_chain_rows_equal_python() {
+  // Arrange
+  for (std::size_t i = 0; i < all_kinds::flag_chain_row_count; ++i) {
+    all_kinds::FlagChainRow row = all_kinds::flag_chain_sample(i);
+    std::uint8_t buf[16];
+
+    // Act
+    packbin::Result p = all_kinds::flag_chain_pack(row, buf, sizeof(buf));
+    all_kinds::FlagChainRow back;
+    std::uint8_t want[16];
+    std::size_t n = check::parse_hex(flag_python_hex[i], want, sizeof(want));
+    packbin::Result u = all_kinds::flag_chain_unpack(want, n, back);
+
+    // Assert
+    check::expect(p.ok() && check::same_hex(buf, p.offset, flag_python_hex[i]),
+                  "AZ-3141 AC-1 flag chain packet equals Python");
+    check::expect(u.ok() && all_kinds::flag_chain_mismatched(row, back) == 0,
+                  "AZ-3141 AC-1 flag chain Python bytes unpack to the row");
+    check::expect(all_kinds::flag_chain_failures(i) == 0, "AZ-3141 AC-1 flag chain image check agrees");
+  }
+}
+
 }  // namespace
 
 int run_core_when_chain_host_tests() {
   ac3_chain_rows_equal_python();
+  az3141_flag_chain_rows_equal_python();
   return check::failures();
 }

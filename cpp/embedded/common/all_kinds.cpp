@@ -38,6 +38,20 @@ constexpr auto chain_scheme = pb::scheme<ChainRow>(
 
 static_assert(pb::validate(chain_scheme).ok(), "chain scheme is valid");
 
+constexpr auto flag_chain_scheme = pb::scheme<FlagChainRow>(
+    0x5c, pb::u8<&FlagChainRow::m>(0),
+    pb::when(
+        1, pb::eq(0, 1), pb::flag_byte(0), pb::flag_bit(0, pb::u8<&FlagChainRow::d1>(1)),
+        pb::u8<&FlagChainRow::k1>(2),
+        pb::when(
+            3, pb::eq(2, 1), pb::flag_byte(0), pb::flag_bit(0, pb::u8<&FlagChainRow::d2>(3)),
+            pb::u8<&FlagChainRow::k2>(4),
+            pb::when(5, pb::eq(4, 1), pb::flag_byte(0),
+                     pb::flag_bit(0, pb::u8<&FlagChainRow::d3>(5)), pb::u8<&FlagChainRow::k3>(6),
+                     pb::when(7, pb::eq(6, 1), pb::u8<&FlagChainRow::b>(7))))));
+
+static_assert(pb::validate(flag_chain_scheme).ok(), "flag-byte chain scheme is valid");
+
 // The encoder's working memory: 16 characters of the longest string, in static storage.
 pb::Scratch<16> scratch;
 
@@ -241,6 +255,74 @@ int chain_failures(std::size_t index) {
   ChainRow back;
   pb::Result u = chain_unpack(want, want_len, back);
   return n + (u.ok() ? 0 : 1) + chain_mismatched(row, back);
+}
+
+FlagChainRow flag_chain_sample(std::size_t index) {
+  FlagChainRow r;
+  r.m = index == 1 ? 0 : 1;
+  if (index == 1)
+    return r;
+  r.d1 = 7;
+  r.k1 = index == 2 ? 0 : 1;
+  if (index == 2)
+    return r;
+  if (index == 3) {
+    r.k2 = 0;
+    return r;
+  }
+  r.d2 = 8;
+  r.k2 = 1;
+  r.d3 = 9;
+  r.k3 = 1;
+  r.b = 5;
+  return r;
+}
+
+pb::Result flag_chain_pack(FlagChainRow const& row, std::uint8_t* out, std::size_t cap) {
+  return pb::pack(flag_chain_scheme, row, out, cap);
+}
+
+pb::Result flag_chain_unpack(std::uint8_t const* data, std::size_t len, FlagChainRow& row) {
+  return pb::unpack(flag_chain_scheme, data, len, row);
+}
+
+int flag_chain_mismatched(FlagChainRow const& a, FlagChainRow const& b) {
+  return (a.m != b.m) + differs(a.d1, b.d1) + differs(a.k1, b.k1) + differs(a.d2, b.d2) +
+         differs(a.k2, b.k2) + differs(a.d3, b.d3) + differs(a.k3, b.k3) + differs(a.b, b.b);
+}
+
+std::uint8_t const* flag_chain_expected(std::size_t index, std::size_t& len) {
+  static std::uint8_t const all_held[] = {0x5c, 0x01, 0x01, 0x07, 0x01, 0x01, 0x08,
+                                          0x01, 0x01, 0x09, 0x01, 0x05};
+  static std::uint8_t const m_clear[] = {0x5c, 0x00};
+  static std::uint8_t const k1_clear[] = {0x5c, 0x01, 0x01, 0x07, 0x00};
+  static std::uint8_t const k2_clear[] = {0x5c, 0x01, 0x01, 0x07, 0x01, 0x00, 0x00};
+  switch (index) {
+    case 0:
+      len = sizeof(all_held);
+      return all_held;
+    case 1:
+      len = sizeof(m_clear);
+      return m_clear;
+    case 2:
+      len = sizeof(k1_clear);
+      return k1_clear;
+    default:
+      len = sizeof(k2_clear);
+      return k2_clear;
+  }
+}
+
+int flag_chain_failures(std::size_t index) {
+  FlagChainRow row = flag_chain_sample(index);
+  std::uint8_t buf[16];
+  pb::Result p = flag_chain_pack(row, buf, sizeof(buf));
+  std::size_t want_len = 0;
+  std::uint8_t const* want = flag_chain_expected(index, want_len);
+  int n = (!p.ok() || p.offset != want_len || std::memcmp(buf, want, want_len) != 0) ? 1 : 0;
+  FlagChainRow back;
+  pb::Result u = flag_chain_unpack(want, want_len, back);
+  return n + (u.ok() ? 0 : 1) + flag_chain_mismatched(row, back);
 }
 
 }  // namespace all_kinds

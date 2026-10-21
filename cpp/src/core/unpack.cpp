@@ -52,30 +52,10 @@ bool reads_flag_byte(Field const* t, std::size_t begin, std::size_t end) {
   return false;
 }
 
-// The children of entry i, in order, on the same object. A child `when` that does not hold is
-// skipped, and one that holds and reads no flag byte is entered in this loop (its children follow
-// it) instead of through unpack_one, so a chain of `when`s nested in `when`s costs the stack of one
-// level; a `when` that reads a flag byte takes the flag scope of unpack_one.
-Result unpack_children(Walk& w, std::size_t i, void* obj) {
-  std::size_t end = i + w.t[i].span;
-  for (std::size_t j = i + 1; j < end;) {
-    Field const& f = w.t[j];
-    if (f.kind == Kind::When) {
-      if (!when_matches(w.t, f, obj)) {
-        j += f.span;
-        continue;
-      }
-      if (!reads_flag_byte(w.t, j + 1, j + f.span)) {
-        ++j;
-        continue;
-      }
-    }
-    Result res = unpack_one(w, j, obj);
-    if (!res.ok())
-      return res;
-    j += f.span;
-  }
-  return Result{};
+Result unpack_children(Walk& w, std::size_t i, void* obj);
+
+bool flag_bit_set(Walk const& w, Field const& f) {
+  return (w.flag_bytes[w.t[f.ref].size] & (1u << f.bit)) != 0;
 }
 
 // Runs Fn, then brings back the flag bytes of the scope around it, so a flag byte read inside is
@@ -89,6 +69,47 @@ Result with_outer_flags(Walk& w, std::size_t i, void* obj) {
   Result res = Fn(w, i, obj);
   std::memcpy(w.flag_bytes, outer, sizeof(outer));
   return res;
+}
+
+// The children of entry i, in order, on the same object. A child `when` that does not hold is
+// skipped, and one that holds is entered here (its children follow it, or, when it reads a flag
+// byte, a nested call of this function inside its own flag scope) and a flag bit are entered here
+// instead of through unpack_one, so a chain of `when`s nested in `when`s costs the stack of this
+// function and with_outer_flags per flag scope, and a flag bit's child one frame less.
+Result unpack_children(Walk& w, std::size_t i, void* obj) {
+  std::size_t end = i + w.t[i].span;
+  for (std::size_t j = i + 1; j < end;) {
+    Field const& f = w.t[j];
+    if (f.kind == Kind::When) {
+      if (!when_matches(w.t, f, obj)) {
+        j += f.span;
+        continue;
+      }
+      if (!reads_flag_byte(w.t, j + 1, j + f.span)) {
+        ++j;
+        continue;
+      }
+      Result res = with_outer_flags<unpack_children>(w, j, obj);
+      if (!res.ok())
+        return res;
+      j += f.span;
+      continue;
+    }
+    if (f.kind == Kind::FlagBit) {
+      if (flag_bit_set(w, f)) {
+        Result res = with_outer_flags<unpack_one>(w, j + 1, obj);
+        if (!res.ok())
+          return res;
+      }
+      j += f.span;
+      continue;
+    }
+    Result res = unpack_one(w, j, obj);
+    if (!res.ok())
+      return res;
+    j += f.span;
+  }
+  return Result{};
 }
 
 #ifndef PACKBIN_NO_TEXT
@@ -353,7 +374,7 @@ Result unpack_one(Walk& w, std::size_t i, void* obj) {
     case Kind::FlagByte:
       return get_num<std::uint8_t>(w.r, w.flag_bytes[f.size], false, f.id);
     case Kind::FlagBit:
-      if (w.flag_bytes[w.t[f.ref].size] & (1u << f.bit))
+      if (flag_bit_set(w, f))
         return with_outer_flags<unpack_one>(w, i + 1, obj);
       return Result{};
     case Kind::Group:

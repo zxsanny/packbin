@@ -374,3 +374,9 @@ AZ-3132, AZ-3133 and AZ-3134 are loop 55 (owner 2026-10-21: "Accept all recommen
 | AZ-3132 | cpp_when_chain_stack | 3 | None | AZ-2645 |
 | AZ-3133 | when_bool_source_corpus | 3 | None | AZ-2645 |
 | AZ-3134 | repeated_text_headroom | 3 | None | AZ-2645 |
+
+AZ-3141 is loop 55 assess round 1 (EXTEND, gap E1): AZ-3132 left a held `when` whose body reads a flag byte on `unpack_one`, so its chain stack is unmeasured. 2 points, epic AZ-2645, depends on AZ-3132 (done); owns `cpp/` only.
+
+| Task | Name | Complexity | Dependencies | Epic |
+|------|------|-----------|-------------|------|
+| AZ-3141 | cpp_when_chain_flag_byte_stack | 2 | AZ-3132 | AZ-2645 |

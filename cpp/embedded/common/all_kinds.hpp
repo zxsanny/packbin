@@ -78,6 +78,33 @@ std::uint8_t const* chain_expected(std::size_t index, std::size_t& len);
 // Differences of row `index` from the reference: packet bytes and unpacked fields (0 when equal).
 int chain_failures(std::size_t index);
 
+// AZ-3141: the same shape with a flag byte and one bit in the body of every `when`, so each level
+// enters its own flag scope (the walk cannot take a held `when` in its loop):
+// u8 m; when(m==1){ flag_byte; bit{ u8 d1 }; u8 k1; when(k1==1){ flag_byte; bit{ u8 d2 }; u8 k2;
+// when(k2==1){ flag_byte; bit{ u8 d3 }; u8 k3; when(k3==1){ u8 b } } } }
+struct FlagChainRow {
+  std::uint8_t m = 0;
+  packbin::Opt<std::uint8_t> d1;
+  packbin::Opt<std::uint8_t> k1;
+  packbin::Opt<std::uint8_t> d2;
+  packbin::Opt<std::uint8_t> k2;
+  packbin::Opt<std::uint8_t> d3;
+  packbin::Opt<std::uint8_t> k3;
+  packbin::Opt<std::uint8_t> b;
+};
+
+// Rows of the flag-byte chain: 0 all held, 1 m = 0, 2 m = 1 and k1 = 0, 3 m = 1, k1 = 1, no d2
+// (bit clear) and k2 = 0.
+constexpr std::size_t flag_chain_row_count = 4;
+FlagChainRow flag_chain_sample(std::size_t index);
+packbin::Result flag_chain_pack(FlagChainRow const& row, std::uint8_t* out, std::size_t cap);
+packbin::Result flag_chain_unpack(std::uint8_t const* data, std::size_t len, FlagChainRow& row);
+int flag_chain_mismatched(FlagChainRow const& a, FlagChainRow const& b);
+// The packet of row `index` from the Python package (2026-10-21); `len` is its length.
+std::uint8_t const* flag_chain_expected(std::size_t index, std::size_t& len);
+// Differences of row `index` from the reference: packet bytes and unpacked fields (0 when equal).
+int flag_chain_failures(std::size_t index);
+
 Row sample();
 // Packs `row` into `out`; on success `offset` is the packet length. The compact text encoder
 // works in a scratch that lives in this file's static memory, not on the caller's stack.
