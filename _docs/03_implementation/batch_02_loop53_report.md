@@ -20,7 +20,7 @@ One total `/code-review` at the end of the loop (owner rule 2026-10-06).
 - AC-2: `nostd_fixture_differential_tests`: golden, 346 + 42 text vector rows, 35 ECC `enc` rows, every hostile case and corpus input and mutations of them, construct cases refused by both walkers
 - AC-3: `cargo publish --dry-run` from a copy with the root `README.md` (as `publish-inside.sh`): pass, 145 files; `cargo build --no-default-features`: pass
 - AC-4: `nostd_docs_tests` (README, module layout, component description name `nostd`, the features and `embedded-arm`)
-- Embedded stage (QEMU Cortex-M4F): PASS, no heap or panic symbol. Base 14,652 B / 456 B (was 14,532 B: +120 B from the `pack_clear` split), `text` 26,592 B / 2,760 B (nested probe), `ecc` 17,932 B / 760 B, `session` 18,196 B / 1,776 B
+- Embedded stage (QEMU Cortex-M4F): PASS, no heap or panic symbol. Base 14,700 B / 456 B (was 14,532 B: +168 B from the `pack_clear` split and the value check in `small()`), `text` 26,632 B / 2,760 B (nested probe), `ecc` 17,980 B / 760 B, `session` 18,404 B / 1,832 B (final HEAD)
 - CI-parity: PASS (the `run-suite.sh rust` command list run by hand: default, no-default flat, text, ecc, the `text,ecc` hostile set, session x2, `text,ecc,session` all targets; clippy with the `nostd` deny lints; `run-suite.test.sh`; `checks.test.sh`; embedded stage)
 
 ## Discovered during implementation
