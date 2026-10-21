@@ -33,12 +33,21 @@ bool ref_value(Field const* t, Field const& f, void* obj, std::int64_t& out) {
   return f.ref >= 0 && read_int(t[f.ref], obj, out) && !source_skipped(t, f, obj);
 }
 
-// The children of entry i, in order, on the same object.
+// The children of entry i, in order, on the same object. A child `when` that holds is entered in
+// this loop (its children follow it) instead of through pack_one, so a chain of `when`s nested in
+// `when`s costs the stack of one level.
 Result pack_children(Pack& p, std::size_t i, void* obj) {
-  for (std::size_t j = i + 1; j < i + p.t[i].span; j += p.t[j].span) {
+  std::size_t end = i + p.t[i].span;
+  for (std::size_t j = i + 1; j < end;) {
+    Field const& f = p.t[j];
+    if (f.kind == Kind::When) {
+      j += when_matches(p.t, f, obj) ? 1 : f.span;
+      continue;
+    }
     Result r = pack_one(p, j, obj);
     if (!r.ok())
       return r;
+    j += f.span;
   }
   return Result{};
 }

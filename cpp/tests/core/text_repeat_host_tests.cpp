@@ -77,7 +77,7 @@ void two_hundred_rounds_of_65535_characters_within_one_second() {
   double seconds = seconds_since(start);
 
   // Assert
-  std::printf("text repeat: %zu rounds of %zu characters, pack %.3f s, unpack %.3f s, packet %zu bytes\n",
+  std::printf("AZ-3134 text repeat: %zu rounds of %zu characters, pack %.3f s, unpack %.3f s, packet %zu bytes\n",
               kRounds, kChars, pack_seconds, unpack_seconds, packed.offset);
   expect(packed.ok(), "AC-1 200 rounds of 65,535 characters pack");
   expect(packed.offset > kRounds * kChars, "AC-1 the packet holds every round");

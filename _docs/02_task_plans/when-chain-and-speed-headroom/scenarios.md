@@ -11,8 +11,8 @@ Source of rows: `intake` (new-task Step 4.7). Status: confirmed / out-of-scope /
 | A5 | AVR and `PACKBIN_NO_TEXT` builds with the chain | confirmed | inside their margins, or a saving first | AC-A2 | intake |
 | B1 | bool source in a false `when`, true in the row | confirmed | consuming `when` false on pack and unpack | AC-B1 | intake |
 | B2 | bool source written, true / false | confirmed | true: body written; false: absent, body not written | AC-B2 | intake |
-| B3 | group presence bit as the source | confirmed | same as B1 and B2 | AC-B3 | intake |
-| B4 | a package that has no group-presence source kind | confirmed | the case is skipped only where the kind does not exist, named in the runner | AC-B3 | intake |
+| B3 | empty group (presence bit) as the source | confirmed | same as B1 and B2 in C++ and Rust, which are the only packages that accept it | AC-B3 | intake |
+| B4 | the other six packages with an empty-group source | confirmed | out of the corpus: they refuse it at construction (existing rule, not changed) | AC-B3 | intake |
 | D1 | the 65,535 x 200 case in Go and Swift | confirmed | new test, passes within half the bound | AC-D1, AC-D2 | intake |
 | D2 | a package above half its bound | confirmed | walker keeps the last round's encoded text, bytes unchanged | AC-D3 | intake |
 | D3 | CI runner slower than this Mac | confirmed | the CI figure is read after the push and written in the record | AC-D4 | intake |

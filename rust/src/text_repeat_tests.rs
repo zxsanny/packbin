@@ -3,7 +3,7 @@ use crate::walk::{encode_text, pack, unpack};
 use crate::{insert, times, u8, utf8, MapScheme, Value, Values};
 use std::time::Instant;
 
-// AZ-2737 (CS-D7, TW-5): HD-2 of the Python and TypeScript suites for the Rust pack walker. One text of 65,535
+// AZ-2737 (CS-D7, TW-5), AZ-3134 (timing print): HD-2 of the Python and TypeScript suites for the Rust pack walker. One text of 65,535
 // characters written in 200 rounds of `times` is packed and unpacked within a second nominal.
 
 const ROUNDS: usize = 200;
@@ -29,8 +29,8 @@ fn hd2_a_lone_65535_character_text_under_200_rounds_packs_and_unpacks_within_a_s
 
     // Assert
     eprintln!(
-        "text repeat: {CHARACTERS} characters x {ROUNDS} rounds packed in {packed_at:.3} s, unpacked in {:.3} s \
-         (nominal bound 1 s, load factor {factor:.2})",
+        "AZ-3134 pack {packed_at:.3} s, unpack {:.3} s ({CHARACTERS} characters x {ROUNDS} rounds, \
+         nominal bound 1 s, load factor {factor:.2})",
         elapsed - packed_at
     );
     assert!(packet.len() > ROUNDS * CHARACTERS, "{} bytes", packet.len());

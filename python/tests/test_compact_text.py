@@ -465,15 +465,24 @@ def test_hd1_no_module_keeps_a_text_or_a_field():
 
 
 def test_hd2_a_lone_65535_character_string_under_256_rounds_packs_within_a_second():
-    # Arrange
+    # Arrange: AZ-3134, one 65535-character text in 200 rounds; pack and unpack are timed apart.
+    text = "q" * 65535
     scheme = Scheme(1, dict, u8(0, lambda row: row["n"]), times(1, 0, utf8(1, lambda row: row["s"])))
     limit = timing_support.bound(1.0)
-    start = time.perf_counter()
 
     # Act
-    packet = _pack(scheme, {"n": 200, "s": "q" * 65535})
-    elapsed = time.perf_counter() - start
+    start = time.perf_counter()
+    packet = _pack(scheme, {"n": 200, "s": text})
+    packed_at = time.perf_counter()
+    result = _unpack(scheme, packet)
+    unpacked_at = time.perf_counter()
+    pack_seconds = packed_at - start
+    unpack_seconds = unpacked_at - packed_at
+    print(f"AZ-3134 pack {pack_seconds:.3f} s, unpack {unpack_seconds:.3f} s")
 
     # Assert
     assert len(packet) > 200 * 65535
-    timing_support.assert_within(elapsed, limit, "one 65535-character string under 200 rounds")
+    assert result.ok
+    assert result.value == {"n": 200, "s": [text] * 200}
+    timing_support.assert_within(pack_seconds, limit, "one 65535-character string under 200 rounds, pack")
+    timing_support.assert_within(unpack_seconds, limit, "one 65535-character string under 200 rounds, unpack")

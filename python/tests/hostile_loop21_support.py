@@ -22,8 +22,9 @@ from packbin import (
     when,
 )
 
-# The fifteen cases of loop 21 (AZ-2394) in fixtures/hostile/cases.txt. The schemes and rows are the ones their
-# README sections give, in Python builder syntax. Python has no named group: the `when`s of
+# The fifteen cases of loop 21 (AZ-2394) and the three bool-source cases of loop 55 (AZ-3133) in
+# fixtures/hostile/cases.txt. The schemes and rows are the ones their README sections give, in Python builder syntax.
+# Python has no named group: the `when`s of
 # pack_late_when_in_bit_body sit in an anchored group inside the bit, and the list element of
 # construct_empty_round_body_list_element is an anchored group.
 
@@ -109,6 +110,15 @@ def _skipped_source_scheme(value: int) -> Scheme[Any]:
     )
 
 
+def _bool_source_scheme() -> Scheme[Any]:
+    # u8 mode; when(mode == 1) { flags { bool on }; u8 a }; when(on == true) { u8 b }: on sits in a clear when (AZ-3133).
+    return _scheme(
+        _u8(0, "mode"),
+        when(1, eq(0, 1), flags(1, flag_bool(1, lambda row: row["on"])), _u8(2, "a")),
+        when(3, eq(1, True), _u8(3, "b")),
+    )
+
+
 def _pack(scheme: Scheme[Any], row: dict[str, Any]) -> bytes:
     return BinaryPacker.pack(scheme, row)
 
@@ -151,6 +161,18 @@ LOOP21_PACK_CASES = {
     ),
     "pack_when_of_skipped_source_zero": (
         lambda: _pack(_skipped_source_scheme(0), {"mode": 0, "a": 7, "k": 0, "b": 5}),
+        None,
+    ),
+    "pack_when_of_skipped_bool_source": (
+        lambda: _pack(_bool_source_scheme(), {"mode": 0, "on": True, "a": 7, "b": 5}),
+        None,
+    ),
+    "pack_when_of_held_bool_source": (
+        lambda: _pack(_bool_source_scheme(), {"mode": 1, "on": True, "a": 7, "b": 5}),
+        None,
+    ),
+    "pack_when_of_held_bool_source_clear": (
+        lambda: _pack(_bool_source_scheme(), {"mode": 1, "on": False, "a": 7, "b": 5}),
         None,
     ),
 }

@@ -38,7 +38,7 @@ final class TextRepeatSpeedTest {
         PackbinTest.expectEq("review46 unpacked rounds", input, got.row == null ? null : got.row.get("s"));
     }
 
-    // AZ-2737 AC-1.
+    // AZ-2737 AC-1; the printed label is AZ-3134 (loop 55 headroom table).
     private static void aLone65535CharacterTextUnder200RoundsPacksAndUnpacksWithinASecond() {
         // Arrange
         Scheme<Map> scheme = Maps.scheme(1, Packbin.u8(0, Access.get("n"), Access.set("n")),
@@ -67,7 +67,7 @@ final class TextRepeatSpeedTest {
         }
         PackbinTest.expectEq("AZ-2737 AC-1 unpacked rounds", ROUNDS, texts.size());
         PackbinTest.expectEq("AZ-2737 AC-1 unpacked rounds that differ from the input", 0, wrong);
-        System.out.println("AZ-2737 65535 characters x 200 rounds: pack " + (packed - start) / 1e9 + " s, unpack " + (end - packed) / 1e9 + " s");
+        System.out.println("AZ-3134 65535 characters x 200 rounds: pack " + (packed - start) / 1e9 + " s, unpack " + (end - packed) / 1e9 + " s");
         limit.expectWithinNanos("AZ-2737 AC-1 pack and unpack of 65535 characters x 200 rounds", end - start);
     }
 }

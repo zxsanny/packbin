@@ -443,11 +443,25 @@ describe("AZ-2664: the text cache belongs to the pack call", () => {
   })
 
   it("a lone 65,535-character string under 200 rounds packs within a second", () => {
+    // AZ-3134: pack and unpack of one 65,535-character text in 200 rounds, each time printed.
+    // Arrange
     const limit = bound(1)
-    const start = performance.now()
-    const packet = BinaryPacker.pack(repeated, { n: 200, s: "q".repeat(65535) })
-    const elapsed = performance.now() - start
+    const text = "q".repeat(65535)
+    let rounds: unknown
+    // Act
+    const packStart = performance.now()
+    const packet = BinaryPacker.pack(repeated, { n: 200, s: text })
+    const packMs = performance.now() - packStart
+    const unpackStart = performance.now()
+    BinaryPacker.unpack(packet, repeated.on((r) => {
+      rounds = r.s
+    }))
+    const unpackMs = performance.now() - unpackStart
+    console.log(`AZ-3134 pack ${(packMs / 1000).toFixed(3)} s, unpack ${(unpackMs / 1000).toFixed(3)} s`)
+    // Assert
     assert.ok(packet.length > 200 * 65535)
-    assertWithinMs(elapsed, limit, "one 65535-character string under 200 rounds")
+    assert.ok(Array.isArray(rounds) && rounds.length === 200 && rounds.every((x) => x === text), "the 200 rounds equal the input")
+    assertWithinMs(packMs, limit, "pack of one 65535-character string under 200 rounds")
+    assertWithinMs(unpackMs, limit, "unpack of one 65535-character string under 200 rounds")
   })
 })

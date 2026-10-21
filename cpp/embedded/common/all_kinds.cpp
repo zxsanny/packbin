@@ -29,6 +29,15 @@ constexpr auto scheme = pb::scheme<Row>(
 
 static_assert(pb::validate(scheme).ok(), "all-kinds scheme is valid");
 
+constexpr auto chain_scheme = pb::scheme<ChainRow>(
+    0x5b, pb::u8<&ChainRow::m>(0),
+    pb::when(1, pb::eq(0, 1), pb::u8<&ChainRow::k1>(1),
+             pb::when(2, pb::eq(1, 1), pb::u8<&ChainRow::k2>(2),
+                      pb::when(3, pb::eq(2, 1), pb::u8<&ChainRow::k3>(3),
+                               pb::when(4, pb::eq(3, 1), pb::u8<&ChainRow::b>(4))))));
+
+static_assert(pb::validate(chain_scheme).ok(), "chain scheme is valid");
+
 // The encoder's working memory: 16 characters of the longest string, in static storage.
 pb::Scratch<16> scratch;
 
@@ -171,5 +180,67 @@ int mismatched_fields(Row const& a, Row const& b) {
 }
 
 std::size_t table_entries() { return scheme.fields.size(); }
+
+ChainRow chain_sample(std::size_t index) {
+  ChainRow r;
+  r.m = index == 1 ? 0 : 1;
+  if (index == 1)
+    return r;
+  r.k1 = index == 2 ? 0 : 1;
+  if (index == 2)
+    return r;
+  r.k2 = index == 3 ? 0 : 1;
+  if (index == 3)
+    return r;
+  r.k3 = 1;
+  r.b = 5;
+  return r;
+}
+
+pb::Result chain_pack(ChainRow const& row, std::uint8_t* out, std::size_t cap) {
+  return pb::pack(chain_scheme, row, out, cap);
+}
+
+pb::Result chain_unpack(std::uint8_t const* data, std::size_t len, ChainRow& row) {
+  return pb::unpack(chain_scheme, data, len, row);
+}
+
+int chain_mismatched(ChainRow const& a, ChainRow const& b) {
+  return (a.m != b.m) + differs(a.k1, b.k1) + differs(a.k2, b.k2) + differs(a.k3, b.k3) +
+         differs(a.b, b.b);
+}
+
+std::uint8_t const* chain_expected(std::size_t index, std::size_t& len) {
+  static std::uint8_t const all_true[] = {0x5b, 0x01, 0x01, 0x01, 0x01, 0x05};
+  static std::uint8_t const m_clear[] = {0x5b, 0x00};
+  static std::uint8_t const k1_clear[] = {0x5b, 0x01, 0x00};
+  static std::uint8_t const k2_clear[] = {0x5b, 0x01, 0x01, 0x00};
+  switch (index) {
+    case 0:
+      len = sizeof(all_true);
+      return all_true;
+    case 1:
+      len = sizeof(m_clear);
+      return m_clear;
+    case 2:
+      len = sizeof(k1_clear);
+      return k1_clear;
+    default:
+      len = sizeof(k2_clear);
+      return k2_clear;
+  }
+}
+
+int chain_failures(std::size_t index) {
+  ChainRow row = chain_sample(index);
+  std::uint8_t buf[16];
+  pb::Result p = chain_pack(row, buf, sizeof(buf));
+  std::size_t want_len = 0;
+  std::uint8_t const* want = chain_expected(index, want_len);
+  int n = (!p.ok() || p.offset != want_len || std::memcmp(buf, want, want_len) != 0) ? 1 : 0;
+  ChainRow back;
+  pb::Result u = chain_unpack(want, want_len, back);
+  return n + (u.ok() ? 0 : 1) + chain_mismatched(row, back);
+}
 
 }  // namespace all_kinds

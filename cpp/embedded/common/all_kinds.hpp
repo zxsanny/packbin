@@ -56,6 +56,28 @@ struct Row {
   packbin::Array<Pair, 4> pairs;
 };
 
+// AZ-3132: a source three `when`s deep, the stack cost of `when_matches` and `source_skipped`
+// calling each other once per enclosing `when`:
+// u8 m; when(m==1){ u8 k1; when(k1==1){ u8 k2; when(k2==1){ u8 k3; when(k3==1){ u8 b } } } }
+struct ChainRow {
+  std::uint8_t m = 0;
+  packbin::Opt<std::uint8_t> k1;
+  packbin::Opt<std::uint8_t> k2;
+  packbin::Opt<std::uint8_t> k3;
+  packbin::Opt<std::uint8_t> b;
+};
+
+// Rows of the chain scheme: 0 all true, 1 m = 0, 2 m = 1 and k1 = 0, 3 m = 1, k1 = 1 and k2 = 0.
+constexpr std::size_t chain_row_count = 4;
+ChainRow chain_sample(std::size_t index);
+packbin::Result chain_pack(ChainRow const& row, std::uint8_t* out, std::size_t cap);
+packbin::Result chain_unpack(std::uint8_t const* data, std::size_t len, ChainRow& row);
+int chain_mismatched(ChainRow const& a, ChainRow const& b);
+// The packet of row `index` from the Python package (2026-10-21); `len` is its length.
+std::uint8_t const* chain_expected(std::size_t index, std::size_t& len);
+// Differences of row `index` from the reference: packet bytes and unpacked fields (0 when equal).
+int chain_failures(std::size_t index);
+
 Row sample();
 // Packs `row` into `out`; on success `offset` is the packet length. The compact text encoder
 // works in a scratch that lives in this file's static memory, not on the caller's stack.

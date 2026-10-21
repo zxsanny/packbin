@@ -156,6 +156,37 @@ std::string pack_when_of_skipped_source_zero() {
   return pack_answer(s, row);
 }
 
+// AZ-3133: u8 mode; when eq(mode, 1) { flags { bool on }; u8 a }; when eq(on, true) { u8 b }. With
+// mode 0 the first when is clear, so `on` is never written and is absent: the second when is false
+// whatever the row holds for `on`, packet `0100`. With mode 1 a set bit keeps the body
+// (`0101010705`), a clear bit leaves it out (`01010007`).
+struct BoolSource {
+  Opt<std::uint8_t> mode;
+  Opt<bool> on;
+  Opt<std::uint8_t> a;
+  Opt<std::uint8_t> b;
+};
+
+std::string pack_when_of_bool_source(int mode, bool on) {
+  auto s = pb::scheme<BoolSource>(
+      1, pb::u8<&BoolSource::mode>(0),
+      pb::when(1, pb::eq(0, 1), pb::flags(1, pb::boolean<&BoolSource::on>(1)),
+               pb::u8<&BoolSource::a>(2)),
+      pb::when(3, pb::eq(1, true), pb::u8<&BoolSource::b>(3)));
+  BoolSource row;
+  row.mode = static_cast<std::uint8_t>(mode);
+  row.on = on;
+  row.a = 7;
+  row.b = 5;
+  return pack_answer(s, row);
+}
+
+std::string pack_when_of_skipped_bool_source() { return pack_when_of_bool_source(0, true); }
+
+std::string pack_when_of_held_bool_source() { return pack_when_of_bool_source(1, true); }
+
+std::string pack_when_of_held_bool_source_clear() { return pack_when_of_bool_source(1, false); }
+
 constexpr PackHandler kPackHandlers21[] = {
     {"pack_flags_short_list_filled", pack_flags_short_list_filled},
     {"pack_late_when_in_bit_body", pack_late_when_in_bit_body},
@@ -165,6 +196,9 @@ constexpr PackHandler kPackHandlers21[] = {
     {"pack_sized_count_clear_when", pack_sized_count_clear_when},
     {"pack_when_of_skipped_source", pack_when_of_skipped_source},
     {"pack_when_of_skipped_source_zero", pack_when_of_skipped_source_zero},
+    {"pack_when_of_skipped_bool_source", pack_when_of_skipped_bool_source},
+    {"pack_when_of_held_bool_source", pack_when_of_held_bool_source},
+    {"pack_when_of_held_bool_source_clear", pack_when_of_held_bool_source_clear},
 };
 
 // The slot cases need a round budget and a short list needs a list: C++ has neither.

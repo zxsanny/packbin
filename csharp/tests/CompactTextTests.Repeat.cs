@@ -16,7 +16,8 @@ public partial class CompactTextTests
     private static readonly Scheme<RepeatRow> RepeatedText =
         new(1, Field.U8<RepeatRow>(0, x => x.N), Field.Times(1, 0, Field.Utf8<RepeatRow>(1, x => x.S)));
 
-    // AZ-2737 (CS-D7, TW-5): HD-2 of the Python and TypeScript suites for the C# pack walker.
+    // AZ-2737 (CS-D7, TW-5): HD-2 of the Python and TypeScript suites for the C# pack walker; AZ-2815 added the reuse of the
+    // last encoded text; AZ-3134 prints the pack and unpack seconds apart.
     [Collection("Timing")]
     public sealed class RepeatedTextSpeed(ITestOutputHelper output)
     {
@@ -42,8 +43,10 @@ public partial class CompactTextTests
             var packed = watch.Elapsed;
             var read = BinaryPacker.Read(RepeatedText, raw);
             watch.Stop();
+            var unpacked = watch.Elapsed - packed;
 
             // Assert
+            output.WriteLine($"AZ-3134 pack {packed.TotalSeconds:F3} s, unpack {unpacked.TotalSeconds:F3} s ({(typed ? "typed" : "dictionary")}, load factor {limit.Factor:F2})");
             output.WriteLine($"AZ-2737 AC-1 ({(typed ? "typed" : "dictionary")}): {watch.Elapsed.TotalMilliseconds:F0} ms ({packed.TotalMilliseconds:F0} ms to pack), {raw.Length} bytes, load factor {limit.Factor:F2}");
             Assert.True(raw.Length > Rounds * Characters);
             Assert.Null(read.Error);

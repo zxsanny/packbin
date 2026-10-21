@@ -135,6 +135,8 @@ mod times_tests;
 #[cfg(all(test, feature = "std"))]
 mod when_kept_tests;
 #[cfg(all(test, feature = "std"))]
+mod when_bool_source_tests;
+#[cfg(all(test, feature = "std"))]
 mod when_names_tests;
 #[cfg(all(test, feature = "std"))]
 mod timing_support;

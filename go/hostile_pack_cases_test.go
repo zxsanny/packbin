@@ -101,6 +101,22 @@ var hostilePacks = map[string]func() ([]byte, error){
 		func() hostileRow { return hostileItems(16, hostileRow{"n": 65535, "s": strings.Repeat(ctrl, 16)}) }),
 	"pack_when_of_skipped_source":      hostilePackOf(hostileWhenOfSkippedSource(2), hostileSkippedSourceRow(2)),
 	"pack_when_of_skipped_source_zero": hostilePackOf(hostileWhenOfSkippedSource(0), hostileSkippedSourceRow(0)),
+
+	"pack_when_of_skipped_bool_source":    hostilePackOf(hostileWhenOfBoolSource, hostileBoolSourceRow(0, true)),
+	"pack_when_of_held_bool_source":       hostilePackOf(hostileWhenOfBoolSource, hostileBoolSourceRow(1, true)),
+	"pack_when_of_held_bool_source_clear": hostilePackOf(hostileWhenOfBoolSource, hostileBoolSourceRow(1, false)),
+}
+
+// u8 mode; when(eq(mode, 1)) { flags { bool on }; u8 a }; when(eq(on, true)) { u8 b }: the bool source sits inside
+// the first when, so a clear first when leaves it absent (AZ-3133).
+func hostileWhenOfBoolSource() (*Scheme, error) {
+	return NewScheme(1, U8(0, "mode"),
+		When(1, Eq(0, 1), Flags(1, Bool(1, "on")), U8(2, "a")),
+		When(3, Eq(1, true), U8(3, "b")))
+}
+
+func hostileBoolSourceRow(mode int, on bool) func() hostileRow {
+	return func() hostileRow { return hostileRow{"mode": mode, "on": on, "a": 7, "b": 5} }
 }
 
 // u8 mode; when(eq(mode, 1)) { u16 a; u8 k }; when(eq(k, want)) { u8 b }: the source k sits inside the first when.

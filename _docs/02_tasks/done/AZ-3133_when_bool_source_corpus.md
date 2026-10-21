@@ -20,12 +20,12 @@ branch: dev
 
 ## Outcome
 
-- Corpus cases for the bool source (and the group-presence source where the package has the kind) run in all eight packages and agree with Python.
+- Corpus cases for the bool source run in all eight packages and agree with Python; the empty-group source is pinned in the C++ and Rust package tests.
 
 ## Scope
 
 ### Included
-- Cases `pack_when_of_skipped_bool_source` (mode 0), `pack_when_of_held_bool_source` (mode 1 on true) and the false row, plus the group-presence variant; runners of the eight packages; Python bytes by the probe.
+- Cases `pack_when_of_skipped_bool_source` (mode 0), `pack_when_of_held_bool_source` (mode 1 on true) and the false row, runners of the eight packages (Python bytes: `0100`, `0101010705`, `01010007`); a C++ test and a Rust test of the empty-group variant (only those two accept an empty group as a `when` source).
 - A package that differs is fixed when it is the same defect, else ticketed.
 - If the C++ core needs a code change, margins stay inside the Cortex-M4F budgets (coordinate with AZ-3132: same package worker).
 
@@ -44,15 +44,15 @@ Given mode 1, on true / on false, a 7, b 5
 When packed and unpacked
 Then the packets are `01 01 07 05` and `01 00 07` (after the scheme id) and the rows round-trip.
 
-**AC-3: Group presence bit** (AC-B3)
-Given the same shape with a group presence bit as the source
+**AC-3: Group presence bit, C++ and Rust** (AC-B3)
+Given the same shape with an empty group in `flags` as the source (only C++ and Rust accept it)
 When mode is 0 and when mode is 1
-Then the outcome follows AC-1 and AC-2 and equals the Python packet.
+Then the outcome follows AC-1 and AC-2 and the C++ packets equal the Rust packets.
 
 **AC-4: Eight packages** (AC-B4)
 Given the shared corpus cases
 When the eight runners run
-Then 0 packages fail and 0 skip them (a package without the group-presence kind is named in its runner).
+Then 0 packages fail and 0 skip the three bool cases.
 
 ## Non-Functional Requirements
 

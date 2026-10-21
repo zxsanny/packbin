@@ -383,6 +383,9 @@ pub(super) fn pack_case(id: &str) -> Result<Vec<u8>, PackError> {
         ),
         "pack_when_of_skipped_source" => when_of_skipped_source(2),
         "pack_when_of_skipped_source_zero" => when_of_skipped_source(0),
+        "pack_when_of_skipped_bool_source" => when_of_bool_source(0, true),
+        "pack_when_of_held_bool_source" => when_of_bool_source(1, true),
+        "pack_when_of_held_bool_source_clear" => when_of_bool_source(1, false),
         other => panic!("no scheme written for hostile pack case {other}"),
     }
 }
@@ -404,6 +407,31 @@ fn when_of_skipped_source(k: u8) -> Result<Vec<u8>, PackError> {
             ("mode", Value::U8(0)),
             ("a", Value::U16(7)),
             ("k", Value::U8(k)),
+            ("b", Value::U8(5)),
+        ]),
+    )
+}
+
+/// `u8 mode; when mode = 1 { flags { bool on }; u8 a }; when on = true { u8 b }` with `a` 7, `b` 5:
+/// a `bool` in a clear `when` is absent, so the second `when` is false whatever the row holds.
+fn when_of_bool_source(mode: u8, on: bool) -> Result<Vec<u8>, PackError> {
+    pack(
+        &MapScheme::new(
+            1,
+            vec![
+                u8("mode"),
+                when(
+                    1,
+                    eq("mode", Value::U8(1)),
+                    vec![flags(1, "f", vec![group(1, "on", vec![])]), u8("a")],
+                ),
+                when(3, eq("on", Value::U8(1)), vec![u8("b")]),
+            ],
+        ),
+        &row(&[
+            ("mode", Value::U8(mode)),
+            ("on", Value::U8(u8::from(on))),
+            ("a", Value::U8(7)),
             ("b", Value::U8(5)),
         ]),
     )

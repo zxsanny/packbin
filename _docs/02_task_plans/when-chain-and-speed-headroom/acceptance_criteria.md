@@ -36,15 +36,15 @@ Given the same scheme and mode 1, on true, a 7, b 5 / mode 1, on false, a 7, b 5
 When they are packed and unpacked
 Then the packets are `01 01 07 05` and `01 00 07` (after the scheme id) and the rows round-trip (`on` false unpacks absent).
 
-**AC-B3: Group presence bit**
-Given the same shape with a group presence bit (a one-member `group`) as the source in place of the bool, in each package that has the kind
+**AC-B3: Group presence bit (C++ and Rust)**
+Given the same shape with an empty group in `flags` (a presence bit) as the source in place of the bool; only C++ and Rust accept an empty group as a `when` source (README, loop 25 notes: Python and Java refuse it, TypeScript refuses the `when`)
 When mode is 0 and when mode is 1
-Then the outcome follows AC-B1 and AC-B2 and equals the Python packet.
+Then the outcome follows AC-B1 and AC-B2, and the C++ packets equal the Rust packets; this is pinned in the C++ and Rust package tests, not in the shared corpus.
 
 **AC-B4: Eight packages**
 Given the shared corpus cases
 When the runners of the eight packages run
-Then 0 packages fail and 0 skip them; a package that differs is fixed in this loop or ticketed with the owner told.
+Then 0 packages fail and 0 skip them (bool cases only; the group variant is C++ and Rust); a package that differs is fixed in this loop or ticketed with the owner told.
 
 ## D: repeated-text headroom (AC-D)
 

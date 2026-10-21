@@ -41,6 +41,8 @@
 
 **New in loop 54 (AZ-2816).** Two `pack` cases at the end of the file, from the C++ probe of loop 51 and the Python and Rust packets of 2026-10-21: `pack_when_of_skipped_source` and `pack_when_of_skipped_source_zero`. A `when` whose source field sits inside a `when` that is clear is false: the source is not written, so it is absent, whatever value the row holds for it. C++ wrote the second body (`01 00 05`) and its own unpack refused the packet. The 70 older cases are unchanged.
 
+**New in loop 55 (AZ-3133).** Three `pack` cases at the end of the file, from the Python packets of 2026-10-21: `pack_when_of_skipped_bool_source`, `pack_when_of_held_bool_source` and `pack_when_of_held_bool_source_clear`. A `bool` source of a `when` that sits in a `when` that is clear is absent, so the `when` that names it (`eq(on, true)`) is false whatever the row holds; when the source is written, a set bit keeps the body and a clear bit leaves it out. The 72 older cases are unchanged.
+
 ## zero_progress_repeat_bool
 
 - Scheme: id0 `repeat` anchor 0 { id0 `bool on` }.
@@ -647,3 +649,33 @@
 - Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row with plain members, where an unread `k` holds 0), Go (map rows), Swift (map rows).
 - Not run by: none.
 - Source: loop 54, AZ-2816.
+
+## pack_when_of_skipped_bool_source
+
+- Scheme: id0 `u8 mode`; id1 `when` anchor 1, `eq(0, 1)` { id1 `flags` { id1 `bool on` }; id2 `u8 a` }; id3 `when` anchor 3, `eq(1, true)` { id3 `u8 b` }. The source `on` of the second `when` sits inside the first.
+- Row: `mode = 0`, `on = true`, `a = 7`, `b = 5` (the row holds an `on` that would match the second `when`).
+- Packet `01 00`: type `01`; `mode` = 0. The first `when` is clear, so the flags byte and `a` are not written and `on` is absent; the second `when` names an absent source, so it is false and `b` is not written.
+- Expected: `bytes` `0100`.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row with `on`, `a` and `b` set), Go (map rows), Swift (map rows).
+- Not run by: none.
+- Source: loop 55, AZ-3133 (Python packet of 2026-10-21).
+
+## pack_when_of_held_bool_source
+
+- Scheme: as `pack_when_of_skipped_bool_source`.
+- Row: `mode = 1`, `on = true`, `a = 7`, `b = 5`.
+- Packet `01 01 01 07 05`: type `01`; `mode` = 1; flags byte `01` (`on` set); `a` = 7; `b` = 5, because the source was written and is true.
+- Expected: `bytes` `0101010705`.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row), Go (map rows), Swift (map rows).
+- Not run by: none.
+- Source: loop 55, AZ-3133.
+
+## pack_when_of_held_bool_source_clear
+
+- Scheme: as `pack_when_of_skipped_bool_source`.
+- Row: `mode = 1`, `on = false`, `a = 7`, `b = 5`.
+- Packet `01 01 00 07`: type `01`; `mode` = 1; flags byte `00` (`on` clear); `a` = 7; the second `when` is false, so `b` is not written.
+- Expected: `bytes` `01010007`.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row), Go (map rows), Swift (map rows).
+- Not run by: none.
+- Source: loop 55, AZ-3133.

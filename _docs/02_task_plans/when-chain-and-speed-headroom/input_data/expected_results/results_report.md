@@ -20,7 +20,7 @@ Scheme `u8 mode; when(mode==1){ flags{ bool on }; u8 a }; when(on==true){ u8 b }
 | mode 1, on true, a 7, b 5 | `01 01 07 05` | `{mode: 1, on: true, a: 7, b: 5}` |
 | mode 1, on false, a 7, b 5 | `01 00 07` | `{mode: 1, a: 7}` |
 
-The group-presence variant's bytes come from the same probe in the task (Python is the reference).
+The group-presence variant (`flags{ group }` empty group as the source) exists in C++ and Rust only; the C++ packets must equal the Rust packets for the same three rows (Rust is the reference there).
 
 ## D: repeated text
 

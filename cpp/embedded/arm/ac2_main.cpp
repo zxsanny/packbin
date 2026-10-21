@@ -11,6 +11,7 @@ namespace {
 
 std::uint8_t packet[256];
 std::uint8_t again[256];
+std::uint8_t chain_packet[16];
 all_kinds::Row row;
 all_kinds::Row back;
 
@@ -46,16 +47,47 @@ int main() {
   packbin::Result r = all_kinds::pack(back, again, sizeof(again));
   bool same = r.ok() && r.offset == p.offset && std::memcmp(packet, again, p.offset) == 0;
 
+  // AZ-3132: the chain scheme's rows; the deepest figure over the chain counts in the stack budget.
+  std::size_t chain_pack_stack = 0;
+  std::size_t chain_unpack_stack = 0;
+  int chain_failures = 0;
+  for (std::size_t i = 0; i < all_kinds::chain_row_count; ++i) {
+    all_kinds::ChainRow crow = all_kinds::chain_sample(i);
+    all_kinds::ChainRow cback;
+    packbin::Result cp{};
+    packbin::Result cu{};
+    std::size_t ps =
+        stack_meter::measure([&] { cp = all_kinds::chain_pack(crow, chain_packet, sizeof(chain_packet)); });
+    std::size_t us = stack_meter::measure(
+        [&] { cu = all_kinds::chain_unpack(chain_packet, cp.offset, cback); });
+    say("CHAIN_ROW_PACK_STACK ", ps);
+    say("CHAIN_ROW_UNPACK_STACK ", us);
+    if (ps > chain_pack_stack)
+      chain_pack_stack = ps;
+    if (us > chain_unpack_stack)
+      chain_unpack_stack = us;
+    chain_failures += (cp.ok() ? 0 : 1) + (cu.ok() ? 0 : 1) +
+                      all_kinds::chain_mismatched(crow, cback) + all_kinds::chain_failures(i);
+  }
+  // The chain figures print on their own lines; PACK_STACK / UNPACK_STACK carry the larger of the
+  // sample row and the chain, which is what the stage reads.
+  if (chain_pack_stack > pack_stack)
+    pack_stack = chain_pack_stack;
+  if (chain_unpack_stack > unpack_stack)
+    unpack_stack = chain_unpack_stack;
   hex(packet, p.offset);
   say("TABLE_ENTRIES ", all_kinds::table_entries());
   say("PACK_OK ", p.ok() ? 1 : 0);
   say("UNPACK_OK ", u.ok() ? 1 : 0);
   say("MISMATCHED_FIELDS ", static_cast<unsigned long>(fields));
   say("REPACK_SAME ", same ? 1 : 0);
+  say("CHAIN_PACK_STACK ", chain_pack_stack);
+  say("CHAIN_UNPACK_STACK ", chain_unpack_stack);
+  say("CHAIN_FAILURES ", static_cast<unsigned long>(chain_failures));
   say("PACK_STACK ", pack_stack);
   say("UNPACK_STACK ", unpack_stack);
   say("WRAPPER_CALLS ", 0);
-  int failures = (p.ok() ? 0 : 1) + (u.ok() ? 0 : 1) + fields + (same ? 0 : 1);
+  int failures = (p.ok() ? 0 : 1) + (u.ok() ? 0 : 1) + fields + (same ? 0 : 1) + chain_failures;
   say("FAILURES ", static_cast<unsigned long>(failures));
   return failures;
 }

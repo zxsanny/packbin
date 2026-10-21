@@ -44,12 +44,36 @@ Result get_u16(Reader& r, std::size_t& out, int id) {
   return res;
 }
 
-// The children of entry i, in order, on the same object.
+// True when a flag byte is read anywhere in t[begin, end).
+bool reads_flag_byte(Field const* t, std::size_t begin, std::size_t end) {
+  for (std::size_t k = begin; k < end; ++k)
+    if (t[k].kind == Kind::FlagByte)
+      return true;
+  return false;
+}
+
+// The children of entry i, in order, on the same object. A child `when` that does not hold is
+// skipped, and one that holds and reads no flag byte is entered in this loop (its children follow
+// it) instead of through unpack_one, so a chain of `when`s nested in `when`s costs the stack of one
+// level; a `when` that reads a flag byte takes the flag scope of unpack_one.
 Result unpack_children(Walk& w, std::size_t i, void* obj) {
-  for (std::size_t j = i + 1; j < i + w.t[i].span; j += w.t[j].span) {
+  std::size_t end = i + w.t[i].span;
+  for (std::size_t j = i + 1; j < end;) {
+    Field const& f = w.t[j];
+    if (f.kind == Kind::When) {
+      if (!when_matches(w.t, f, obj)) {
+        j += f.span;
+        continue;
+      }
+      if (!reads_flag_byte(w.t, j + 1, j + f.span)) {
+        ++j;
+        continue;
+      }
+    }
     Result res = unpack_one(w, j, obj);
     if (!res.ok())
       return res;
+    j += f.span;
   }
   return Result{};
 }

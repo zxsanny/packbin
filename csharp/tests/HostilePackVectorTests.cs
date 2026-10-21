@@ -78,6 +78,20 @@ public class HostilePackVectorTests
         Field.When(1, Condition.Eq(0, 1), Field.U16<SkippedRow>(1, x => x.A), Field.U8<SkippedRow>(2, x => x.K)),
         Field.When(3, Condition.Eq(2, value), Field.U8<SkippedRow>(3, x => x.B)));
 
+    private sealed class BoolSourceRow
+    {
+        public byte Mode { get; set; }
+        public bool? On { get; set; }
+        public byte? A { get; set; }
+        public byte? B { get; set; }
+    }
+
+    // u8 mode; when(mode == 1) { flags { bool on }; u8 a }; when(on == true) { u8 b }: on sits in a clear when (AZ-3133).
+    private static Scheme<BoolSourceRow> BoolSourceScheme() => new(1,
+        Field.U8<BoolSourceRow>(0, x => x.Mode),
+        Field.When(1, Condition.Eq(0, 1), Field.Flags(1, Field.Bool<BoolSourceRow>(1, x => x.On)), Field.U8<BoolSourceRow>(2, x => x.A)),
+        Field.When(3, Condition.Eq(1, true), Field.U8<BoolSourceRow>(3, x => x.B)));
+
     private sealed class StrandedRow
     {
         public byte Mode { get; set; }
@@ -318,6 +332,12 @@ public class HostilePackVectorTests
             SkippedSourceScheme(2), Row(("Mode", (byte)0), ("A", (ushort)7), ("K", (byte)2), ("B", (byte)5))),
         ["pack_when_of_skipped_source_zero"] = () => BinaryPacker.Pack(
             SkippedSourceScheme(0), Row(("Mode", (byte)0), ("A", (ushort)7), ("K", (byte)0), ("B", (byte)5))),
+        ["pack_when_of_skipped_bool_source"] = () => BinaryPacker.Pack(
+            BoolSourceScheme(), Row(("Mode", (byte)0), ("On", true), ("A", (byte)7), ("B", (byte)5))),
+        ["pack_when_of_held_bool_source"] = () => BinaryPacker.Pack(
+            BoolSourceScheme(), Row(("Mode", (byte)1), ("On", true), ("A", (byte)7), ("B", (byte)5))),
+        ["pack_when_of_held_bool_source_clear"] = () => BinaryPacker.Pack(
+            BoolSourceScheme(), Row(("Mode", (byte)1), ("On", false), ("A", (byte)7), ("B", (byte)5))),
         ["pack_novalue_count_clear_when_bits"] = () => BinaryPacker.Pack(
             SplitCounted(() => Field.Bits<StrandedRow>(2, x => x.V, 1)), Row(("Mode", (byte)0), ("C", (byte)3))),
         ["pack_novalue_count_clear_when_packed"] = () => BinaryPacker.Pack(

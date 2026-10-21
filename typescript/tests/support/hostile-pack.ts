@@ -54,6 +54,14 @@ const skippedSource = (value: number) => scheme<Row>(
   when(3, eq(2, value), [u8(3, (x) => x.b)]),
 )
 
+// u8 mode; when(mode == 1) { flags { bool on }; u8 a }; when(on == true) { u8 b }: on sits in a clear when (AZ-3133).
+const boolSource = () => scheme<Row>(
+  1,
+  u8(0, (x) => x.mode),
+  when(1, eq(0, 1), [flags(1, [bool(1, (x) => x.on)]), u8(2, (x) => x.a)]),
+  when(3, eq(1, true), [u8(3, (x) => x.b)]),
+)
+
 // repeat { u8 w; flags { u8 v } }
 const optionalRepeat = () => scheme<Row>(1, repeat(0, [u8(0, (x) => x.w), flags(1, [u8(1, (x) => x.v)])]))
 
@@ -226,6 +234,9 @@ export const PACK: Record<string, () => Uint8Array> = {
   ),
   pack_when_of_skipped_source: () => BinaryPacker.pack(skippedSource(2), { mode: 0, a: 7, k: 2, b: 5 }),
   pack_when_of_skipped_source_zero: () => BinaryPacker.pack(skippedSource(0), { mode: 0, a: 7, k: 0, b: 5 }),
+  pack_when_of_skipped_bool_source: () => BinaryPacker.pack(boolSource(), { mode: 0, on: true, a: 7, b: 5 }),
+  pack_when_of_held_bool_source: () => BinaryPacker.pack(boolSource(), { mode: 1, on: true, a: 7, b: 5 }),
+  pack_when_of_held_bool_source_clear: () => BinaryPacker.pack(boolSource(), { mode: 1, on: false, a: 7, b: 5 }),
   ...novalueCountCases(),
   pack_repeat_unequal_lists_lone: () => BinaryPacker.pack(
     scheme<Row>(1, repeat(0, [u8(0, (x) => x.a), u8(1, (x) => x.b)])),

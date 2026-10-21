@@ -53,7 +53,11 @@ int all_kinds_packet() {
     std::printf("%02x", buf[i]);
   std::printf("\nALL_KINDS pack_ok=%d unpack_ok=%d mismatched_fields=%d repack_same=%d\n",
               p.ok() ? 1 : 0, u.ok() ? 1 : 0, fields, same ? 1 : 0);
-  return (p.ok() ? 0 : 1) + (u.ok() ? 0 : 1) + fields + (same ? 0 : 1);
+  int chain = 0;
+  for (std::size_t i = 0; i < all_kinds::chain_row_count; ++i)
+    chain += all_kinds::chain_failures(i);
+  std::printf("ALL_KINDS_CHAIN failures=%d\n", chain);
+  return (p.ok() ? 0 : 1) + (u.ok() ? 0 : 1) + fields + (same ? 0 : 1) + chain;
 }
 
 }  // namespace

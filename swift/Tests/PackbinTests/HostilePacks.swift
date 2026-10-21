@@ -72,6 +72,16 @@ private func skippedSourceRow(_ k: Int) -> @Sendable () -> [String: Any] {
     { ["mode": 0, "a": 7, "k": k, "b": 5] }
 }
 
+/// u8 mode; when mode == 1 { flags { bool on }; u8 a }; when on == true { u8 b }: the bool source sits inside a clear when.
+private func skippedBoolSourceWhen() throws -> Scheme {
+    try Scheme(1, .u8(0, "mode"), .when(1, .eq(0, 1), .flags(1, .bool(1, "on")), .u8(2, "a")),
+               .when(3, .eq(1, true), .u8(3, "b")))
+}
+
+private func boolSourceRow(mode: Int, on: Bool) -> @Sendable () -> [String: Any] {
+    { ["mode": mode, "on": on, "a": 7, "b": 5] }
+}
+
 /// `count` items, each `item`.
 private func items(_ count: Int, _ item: [String: Any]) -> [String: Any] {
     ["items": [Any](repeating: item, count: count)]
@@ -161,4 +171,7 @@ let hostilePacks: [String: HostilePack] = [
         { items(16, ["n": 65_535, "s": String(repeating: "q", count: 16)]) }),
     "pack_when_of_skipped_source": HostilePack(skippedSourceWhen(2), skippedSourceRow(2)),
     "pack_when_of_skipped_source_zero": HostilePack(skippedSourceWhen(0), skippedSourceRow(0)),
+    "pack_when_of_skipped_bool_source": HostilePack(skippedBoolSourceWhen, boolSourceRow(mode: 0, on: true)),
+    "pack_when_of_held_bool_source": HostilePack(skippedBoolSourceWhen, boolSourceRow(mode: 1, on: true)),
+    "pack_when_of_held_bool_source_clear": HostilePack(skippedBoolSourceWhen, boolSourceRow(mode: 1, on: false)),
 ]

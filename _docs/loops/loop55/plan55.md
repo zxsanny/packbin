@@ -28,3 +28,5 @@ ship: false
 ## Implementation
 
 Order: C++ worker (AZ-3132 first, because its embedded stage takes about 3 minutes and edits `cpp/embedded`, then its part of AZ-3133 and AZ-3134), the other seven package workers in parallel (AZ-3133 and AZ-3134 for each package). `fixtures/hostile/cases.txt` is written by the parent before the workers start. No two workers share a file.
+
+Divergence (batch 1): AZ-3132 needed a production change in `cpp/src/core/pack.cpp` and `unpack.cpp` (flat loop for held child `when`s; 780 B to 504 B stack, flash +88 B), which the plan did not list. The empty-group variant of AZ-3133 is C++ and Rust only (README: other packages refuse an empty group as a source).
