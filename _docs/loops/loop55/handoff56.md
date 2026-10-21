@@ -25,4 +25,5 @@ AZ-3132 (3-deep `when` chain on the Cortex-M4F image: 780 B of stack at first, 5
 
 ## CI read after the push
 
-Recorded in `record55.md` (`ci:` line); the seven AZ-3134 figures on CI come from the job logs of that run (`gh api repos/zxsanny/packbin/actions/jobs/<id>/logs --allow-escape-sequences`).
+- Read for the loop 55 push (2ea66b0): `dev` run 39578808351 and `main` run 39578810954 both green, 0 jobs not success (215 s and 435 s). The seven AZ-3134 figures are in `record55.md` (`ci:`): the largest is Go with `-race`, 0.366 s of the 1 s bound (0.5 s half bound); Python and C# print no time on CI. Nothing to act on.
+- `gh` is logged in on this host: `gh run list --repo zxsanny/packbin --workflow test.yml`; job logs with `gh api repos/zxsanny/packbin/actions/jobs/<id>/logs --allow-escape-sequences`. First action of loop 56: nothing from CI; start from the candidates above.

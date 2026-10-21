@@ -16,7 +16,7 @@ leftovers:
   - L55-1: Cortex-M4F flash margin 72 B, stack margin 8 B
   - security Low L52-1, observations O1 to O4 (`_docs/05_security/nostd_review_loop53.md`), L51-1, L54-1
   - Jira: AZ-3132, AZ-3133, AZ-3134, AZ-3141 In Testing; epic AZ-2645 open
-ci: pending (read after the push; see the CI read in `handoff56.md`)
+ci: `test.yml` after the push of 2ea66b0, read with `gh`: `dev` run 39578808351 success, 215 s, 0 jobs not success; `main` run 39578810954 success, 435 s, 0 jobs not success. AZ-3134 on CI (pack + unpack, 65,535 x 200, bound 1 s): Go 0.274 + 0.092 s (`-race` build), TypeScript 0.116 + 0.050 s, Java 0.028 + 0.006 s, Rust 0.037 + 0.012 s (debug, load factor 3.05), C++ 0.016 + 0.016 s, Swift 0.016 + 0.012 s (release; debug 0.022 + 0.040 s, not asserted); Python and C# pass but print no time in the CI log (pytest hides stdout, the C# logger is not verbose). All at most 0.37 s, under the 0.5 s half bound
 smoke: PASS (agent run 5/5 at bf7e674, owner rule 2026-10-12)
 smoke_artifact: _docs/loops/loop55/smoke55.md
 assessment_artifact: _docs/loops/loop55/assessment55.md
