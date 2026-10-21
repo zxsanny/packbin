@@ -34,6 +34,7 @@ public partial class CompactTextTests
             Unpacked(Pack(warm, typed));
             var row = new RepeatRow { N = Rounds, S = text };
             var limit = Timing.Bound(1.0);
+            var headroom = Timing.Bound(0.25);
 
             // Act
             var watch = Stopwatch.StartNew();
@@ -50,6 +51,8 @@ public partial class CompactTextTests
             Assert.Equal(Rounds, rounds.Count);
             Assert.All(rounds, round => Assert.True(ReferenceEquals(round, rounds[0]) || (string)round! == text));
             limit.AssertWithin(watch.Elapsed, "one 65535-character string under 200 rounds, packed and unpacked");
+            // AZ-2815: the text is encoded once per call; a quarter of the bound keeps a lost reuse from passing on a fast host.
+            headroom.AssertWithin(watch.Elapsed, "the same, with the headroom the reuse gives");
         }
 
         private static byte[] Pack(RepeatRow row, bool typed) =>

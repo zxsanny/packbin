@@ -14,7 +14,6 @@
 
 #pragma GCC diagnostic ignored "-Warray-bounds"
 
-using member_cases::pack_refused;
 using member_cases::round_trip;
 using member_cases::same_opt;
 using member_cases::unpack_only;
@@ -54,9 +53,9 @@ auto source_in_when(int value) {
 }
 
 // The row packs to the bytes and the bytes unpack to `want` (the fields a skipped when never reads
-// stay unset), without the skipped fields being part of the unpacked row.
-template <typename S>
-void packs_and_unpacks(S const& s, Row const& in, char const* hex, Row const& want, char const* name) {
+// stay unset).
+template <typename S, typename R>
+void packs_and_unpacks(S const& s, R const& in, char const* hex, R const& want, char const* name) {
   std::uint8_t buf[32];
   auto p = pb::pack(s, in, buf, sizeof(buf));
   check::expect(p.ok() && check::same_hex(buf, p.offset, hex), member_cases::say(name, "pack bytes").c_str());
@@ -112,20 +111,12 @@ auto source_two_whens_deep() {
       pb::when(3, pb::eq(2, 2), pb::u8<&Nested::b>(3)));
 }
 
-template <typename S, typename R>
-void nested_case(S const& s, R const& in, char const* hex, R const& want, char const* name) {
-  std::uint8_t buf[32];
-  auto p = pb::pack(s, in, buf, sizeof(buf));
-  check::expect(p.ok() && check::same_hex(buf, p.offset, hex), member_cases::say(name, "pack bytes").c_str());
-  unpack_only(s, hex, want, name);
-}
-
 void ac4_nested_skip() {
   auto s = source_two_whens_deep();
-  nested_case(s, nested(0, 1, 2, 5), "0100", nested(0, -1, -1, -1), "AC-4 outer when false");
-  nested_case(s, nested(1, 0, 2, 5), "010100", nested(1, 0, -1, -1), "AC-4 inner when false");
-  nested_case(s, nested(1, 1, 2, 5), "0101010205", nested(1, 1, 2, 5), "AC-4 both hold, k=2");
-  nested_case(s, nested(1, 1, 3, 5), "01010103", nested(1, 1, 3, -1), "AC-4 both hold, k=3");
+  packs_and_unpacks(s, nested(0, 1, 2, 5), "0100", nested(0, -1, -1, -1), "AC-4 outer when false");
+  packs_and_unpacks(s, nested(1, 0, 2, 5), "010100", nested(1, 0, -1, -1), "AC-4 inner when false");
+  packs_and_unpacks(s, nested(1, 1, 2, 5), "0101010205", nested(1, 1, 2, 5), "AC-4 both hold, k=2");
+  packs_and_unpacks(s, nested(1, 1, 3, 5), "01010103", nested(1, 1, 3, -1), "AC-4 both hold, k=3");
 }
 
 struct Held {
@@ -156,8 +147,8 @@ auto both_in_one_when() {
 void ac5_one_when_holds_both() {
   auto s = both_in_one_when();
   round_trip(s, held(1, 2, 5), "01010205", "AC-5 k=2, consumer written");
-  nested_case(s, held(1, 3, 5), "010103", held(1, 3, -1), "AC-5 k=3, consumer false");
-  nested_case(s, held(0, 2, 5), "0100", held(0, -1, -1), "AC-5 outer false");
+  packs_and_unpacks(s, held(1, 3, 5), "010103", held(1, 3, -1), "AC-5 k=3, consumer false");
+  packs_and_unpacks(s, held(0, 2, 5), "0100", held(0, -1, -1), "AC-5 outer false");
 }
 
 // AC-2 with plain members: an unread source holds 0 in the row, which must not match `when(k == 0)`.
@@ -183,15 +174,15 @@ void ac2_plain_members_unread_source_is_not_zero() {
   in.k = 0;
   in.b = 5;
   Plain want;
-  nested_case(plain_source_in_when(0), in, "0100", want, "AC-2 plain members, k==0, source skipped");
+  packs_and_unpacks(plain_source_in_when(0), in, "0100", want, "AC-2 plain members, k==0, source skipped");
   in.k = 2;
-  nested_case(plain_source_in_when(2), in, "0100", want, "AC-1 plain members, k==2, source skipped");
+  packs_and_unpacks(plain_source_in_when(2), in, "0100", want, "AC-1 plain members, k==2, source skipped");
   Plain on;
   on.mode = 1;
   on.a = 7;
   on.k = 0;
   on.b = 5;
-  nested_case(plain_source_in_when(0), on, "010107000005", on, "AC-3 plain members, k==0, source written");
+  packs_and_unpacks(plain_source_in_when(0), on, "010107000005", on, "AC-3 plain members, k==0, source written");
 }
 
 // AC-6 (AZ-2823): a `when` source holds a link back to the `when` that holds it, as a count does,
