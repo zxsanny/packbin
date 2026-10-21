@@ -53,3 +53,14 @@ Source of rows: `intake` (new-task Step 4.7 at the 13-point handoff). Status: co
 | X3 | std ECC on the shared core | confirmed | std suite and vectors unchanged | AZ-2755 | assess-round-1 (loop 52) |
 | X4 | size limits of `text`, `ecc`, `session` | deferred | owner input | — | assess-round-1 (loop 52) |
 | X5 | a repeat of long raw strings (the C++ memo is not ported) | deferred | AZ-2757 measures it | AZ-2757 | assess-round-1 (loop 52) |
+
+## Assessment round 3 (loop 53)
+
+| id | scenario | status | behavior (confirmed) | AC ref | source |
+|----|----------|--------|----------------------|--------|--------|
+| S1 | session refusals: sizes, not open, already open, full buffer, tampered type, `Uncorrectable`, `TooLong` | confirmed | an error kind, no partial output, send position kept | AZ-2756 AC-3 | assess-round-1 (loop 53) |
+| S2 | session without heap or panic path | confirmed | embedded stage `session` set | AZ-2756 AC-2 | assess-round-1 (loop 53) |
+| S3 | every fixture file read alike by both walkers | confirmed | bytes and values equal, schemes refused alike | AZ-2757 AC-2 | assess-round-1 (loop 53) |
+| S4 | publish and documents | confirmed | dry-run passes; documents name `nostd`, features, CI job | AZ-2757 AC-3, AC-4 | assess-round-1 (loop 53) |
+| X5 | a repeat of long raw strings | confirmed | memo ported (5.96 s to 14 ms) | AZ-2757 | assess-round-1 (loop 53) |
+| X4 | size limits | out-of-scope | owner input; figures reported | — | assess-round-1 (loop 53) |
