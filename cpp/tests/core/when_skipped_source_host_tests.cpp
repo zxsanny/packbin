@@ -194,6 +194,26 @@ void ac2_plain_members_unread_source_is_not_zero() {
   nested_case(plain_source_in_when(0), on, "010107000005", on, "AC-3 plain members, k==0, source written");
 }
 
+// AC-6 (AZ-2823): a `when` source holds a link back to the `when` that holds it, as a count does,
+// and the link is at most 255 entries long; a longer one is refused when the scheme is checked.
+template <std::size_t... Is>
+auto source_behind_fillers(std::index_sequence<Is...>) {
+  constexpr int fillers = static_cast<int>(sizeof...(Is));
+  return pb::scheme<Held>(
+      1, pb::u8<&Held::mode>(0),
+      pb::when(1, pb::eq(0, 1), pb::u8(1 + static_cast<int>(Is))..., pb::u8<&Held::k>(1 + fillers)),
+      pb::when(2 + fillers, pb::eq(1 + fillers, 2), pb::u8<&Held::b>(2 + fillers)));
+}
+
+void ac6_source_link_is_limited_to_255_entries() {
+  check::expect(pb::validate(source_behind_fillers(std::make_index_sequence<254>())).ok(),
+                "AC-6 source 255 entries behind its when builds");
+  check::expect(!pb::validate(source_behind_fillers(std::make_index_sequence<255>())).ok(),
+                "AC-6 source 256 entries behind its when is refused");
+  check::expect(!pb::validate(source_behind_fillers(std::make_index_sequence<300>())).ok(),
+                "AC-6 source 301 entries behind its when is refused");
+}
+
 }  // namespace
 
 int run_core_when_skipped_source_host_tests() {
@@ -203,5 +223,6 @@ int run_core_when_skipped_source_host_tests() {
   ac3_held_source();
   ac4_nested_skip();
   ac5_one_when_holds_both();
+  ac6_source_link_is_limited_to_255_entries();
   return check::failures();
 }

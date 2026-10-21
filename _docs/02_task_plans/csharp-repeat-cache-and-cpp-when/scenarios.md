@@ -16,6 +16,7 @@ Source of rows: `intake` (new-task Step 4.7). Status: confirmed / out-of-scope /
 | W6 | any of the other seven packages packs or unpacks the same scheme | confirmed | same bytes; the shared case runs in all eight | AC-W6 | intake |
 | W7 | the Cortex-M4F, AVR and no-text builds | confirmed | budgets hold or a saving comes first | AC-W7 | intake |
 | W8 | a scheme with no skipped source | confirmed | bytes unchanged | AC-W8 | intake |
+| W10 | the source of a `when` sits more than 255 entries behind its holding `when` | confirmed | the scheme is refused when it is checked, as for a count; 255 builds | AC-W9 | assess-round-1 |
 | W9 | closing row U24 (three C++ runner skips) | deferred (owner decides separately, not asked for this loop) | — | — | intake |
 
 ## Fit decisions

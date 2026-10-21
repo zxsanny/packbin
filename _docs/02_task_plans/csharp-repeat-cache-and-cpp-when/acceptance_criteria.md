@@ -29,3 +29,7 @@ Outcomes only. Numbers are the pass line.
 | AZ-2737 AC-1 / CS-D7 (65,535 characters, 200 rounds, 1 s) | AC-C1 |
 | Embedded budget (8,192 B flash, 512 B stack, `AGENT_GOTCHAS.md`) | AC-W7 |
 | CS-S3 (two threads, no shared mutable state) | AC-C4 |
+
+## Added by the feature assessment, round 1
+
+- **AC-W9 (AZ-2823): link limit.** A `when` source 255 entries behind its holding `when` builds; 256 and 301 entries are refused when the scheme is checked (the limit counts already have).

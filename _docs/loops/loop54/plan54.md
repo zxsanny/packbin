@@ -28,3 +28,9 @@ ship: false
 ## Implementation
 
 Order: AZ-2815 first (it edits `csharp/**`), then AZ-2816 (C++ core, corpus, eight runners incl. `csharp/tests`). No worker pair shares a file.
+
+## Assessment rounds
+
+| round | verdict | new specs | report |
+|-------|---------|-----------|--------|
+| 1 | EXTEND | AZ-2823_cpp_when_source_link_limit | _docs/loops/loop54/assessment54.md |
