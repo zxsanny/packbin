@@ -381,6 +381,30 @@ pub(super) fn pack_case(id: &str) -> Result<Vec<u8>, PackError> {
             ),
             &row(&[("c", Value::U8(2)), ("v", ints(&[5]))]),
         ),
+        "pack_when_of_skipped_source" => when_of_skipped_source(2),
+        "pack_when_of_skipped_source_zero" => when_of_skipped_source(0),
         other => panic!("no scheme written for hostile pack case {other}"),
     }
+}
+
+/// `u8 mode; when mode = 1 { u16 a; u8 k }; when k = <k> { u8 b }` with `mode = 0` and a row `k`
+/// equal to the second condition: `k` sits in a clear `when`, so it is absent and the second `when`
+/// is false whatever its value.
+fn when_of_skipped_source(k: u8) -> Result<Vec<u8>, PackError> {
+    pack(
+        &MapScheme::new(
+            1,
+            vec![
+                u8("mode"),
+                when(1, eq("mode", Value::U8(1)), vec![u16("a"), u8("k")]),
+                when(3, eq("k", Value::U8(k)), vec![u8("b")]),
+            ],
+        ),
+        &row(&[
+            ("mode", Value::U8(0)),
+            ("a", Value::U16(7)),
+            ("k", Value::U8(k)),
+            ("b", Value::U8(5)),
+        ]),
+    )
 }

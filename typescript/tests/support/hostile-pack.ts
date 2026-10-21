@@ -46,6 +46,14 @@ const slotsScheme = () => scheme<Row>(
   ]),
 )
 
+// u8 mode; when(mode == 1) { u16 a; u8 k }; when(k == value) { u8 b }: k sits in a clear when (AZ-2816).
+const skippedSource = (value: number) => scheme<Row>(
+  1,
+  u8(0, (x) => x.mode),
+  when(1, eq(0, 1), [u16(1, (x) => x.a), u8(2, (x) => x.k)]),
+  when(3, eq(2, value), [u8(3, (x) => x.b)]),
+)
+
 // repeat { u8 w; flags { u8 v } }
 const optionalRepeat = () => scheme<Row>(1, repeat(0, [u8(0, (x) => x.w), flags(1, [u8(1, (x) => x.v)])]))
 
@@ -216,6 +224,8 @@ export const PACK: Record<string, () => Uint8Array> = {
     clearWhenCount((c) => sized(2, (x) => x.v, c)),
     { mode: 0, c: 3, v: Uint8Array.from([1, 2, 3]) },
   ),
+  pack_when_of_skipped_source: () => BinaryPacker.pack(skippedSource(2), { mode: 0, a: 7, k: 2, b: 5 }),
+  pack_when_of_skipped_source_zero: () => BinaryPacker.pack(skippedSource(0), { mode: 0, a: 7, k: 0, b: 5 }),
   ...novalueCountCases(),
   pack_repeat_unequal_lists_lone: () => BinaryPacker.pack(
     scheme<Row>(1, repeat(0, [u8(0, (x) => x.a), u8(1, (x) => x.b)])),

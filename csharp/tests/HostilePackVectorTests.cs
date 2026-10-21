@@ -64,6 +64,20 @@ public class HostilePackVectorTests
         public bool? Mark { get; set; }
     }
 
+    private sealed class SkippedRow
+    {
+        public byte Mode { get; set; }
+        public ushort? A { get; set; }
+        public byte? K { get; set; }
+        public byte? B { get; set; }
+    }
+
+    // u8 mode; when(mode == 1) { u16 a; u8 k }; when(k == value) { u8 b }: k sits in a clear when (AZ-2816).
+    private static Scheme<SkippedRow> SkippedSourceScheme(int value) => new(1,
+        Field.U8<SkippedRow>(0, x => x.Mode),
+        Field.When(1, Condition.Eq(0, 1), Field.U16<SkippedRow>(1, x => x.A), Field.U8<SkippedRow>(2, x => x.K)),
+        Field.When(3, Condition.Eq(2, value), Field.U8<SkippedRow>(3, x => x.B)));
+
     private sealed class StrandedRow
     {
         public byte Mode { get; set; }
@@ -300,6 +314,10 @@ public class HostilePackVectorTests
                 Field.When(1, Condition.Eq(0, 1), Field.U8<StrandedSizedRow>(1, x => x.C)),
                 Field.Sized<StrandedSizedRow>(2, x => x.V, 1)),
             Row(("Mode", (byte)0), ("C", (byte)3), ("V", new byte[] { 1, 2, 3 }))),
+        ["pack_when_of_skipped_source"] = () => BinaryPacker.Pack(
+            SkippedSourceScheme(2), Row(("Mode", (byte)0), ("A", (ushort)7), ("K", (byte)2), ("B", (byte)5))),
+        ["pack_when_of_skipped_source_zero"] = () => BinaryPacker.Pack(
+            SkippedSourceScheme(0), Row(("Mode", (byte)0), ("A", (ushort)7), ("K", (byte)0), ("B", (byte)5))),
         ["pack_novalue_count_clear_when_bits"] = () => BinaryPacker.Pack(
             SplitCounted(() => Field.Bits<StrandedRow>(2, x => x.V, 1)), Row(("Mode", (byte)0), ("C", (byte)3))),
         ["pack_novalue_count_clear_when_packed"] = () => BinaryPacker.Pack(

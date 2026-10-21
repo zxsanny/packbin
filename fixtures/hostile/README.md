@@ -39,6 +39,8 @@
 
 **New in loop 26 (AZ-2519).** Swift is the eighth package and replays all 65 cases. No case changed. Each of the 38 `pack` sections and both `limit` sections name Swift in `Run by` (Swift packs every row in its map form, `[String: Any]`, lists as `[Any]` and `[Any?]` where an entry is absent; a group's members sit in a nested map under the group's name, as in Go). The Swift loader pins the whole text of every refusal, unpack errors included (field, `needed` and `left`), and names each case on the test output before it runs it, because a Swift trap ends the whole test process. As in Go, the two `zero_progress_repeat_*` unpack cases refuse the scheme (`scheme_error`).
 
+**New in loop 54 (AZ-2816).** Two `pack` cases at the end of the file, from the C++ probe of loop 51 and the Python and Rust packets of 2026-10-21: `pack_when_of_skipped_source` and `pack_when_of_skipped_source_zero`. A `when` whose source field sits inside a `when` that is clear is false: the source is not written, so it is absent, whatever value the row holds for it. C++ wrote the second body (`01 00 05`) and its own unpack refused the packet. The 70 older cases are unchanged.
+
 ## zero_progress_repeat_bool
 
 - Scheme: id0 `repeat` anchor 0 { id0 `bool on` }.
@@ -625,3 +627,23 @@
 - No packet: as `construct_empty_when_times_body`; a `when` that holds nothing but another empty `when` holds no member either.
 - Expected: `scheme_error` (C++: `Error::SchemeInvalid` at construction, since AZ-2416).
 - Source: loop 22, AZ-2416, AZ-2417.
+
+## pack_when_of_skipped_source
+
+- Scheme: id0 `u8 mode`; id1 `when` anchor 1, `eq(0, 1)` { id1 `u16 a`; id2 `u8 k` }; id3 `when` anchor 3, `eq(2, 2)` { id3 `u8 b` }. The source `k` of the second `when` sits inside the first.
+- Row: `mode = 0`, `a = 7`, `k = 2`, `b = 5` (the row holds a `k` that would match the second `when`).
+- Packet `01 00`: type `01`; `mode` = 0. The first `when` is clear, so `a` and `k` are not written and `k` is absent; the second `when` names an absent source, so it is false and `b` is not written.
+- Expected: `bytes` `0100`. With `mode = 1` the same scheme packs `01 01 07 00 02 05` (not part of this case).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row with `a`, `k` and `b` set), Go (map rows), Swift (map rows).
+- Not run by: none.
+- Source: loop 51 (C++ probe, handoff 52), AZ-2816; the Python and Rust packets give the same bytes.
+
+## pack_when_of_skipped_source_zero
+
+- Scheme: as `pack_when_of_skipped_source`, with `eq(2, 0)` on the second `when`.
+- Row: `mode = 0`, `a = 7`, `k = 0`, `b = 5`.
+- Packet `01 00`: as `pack_when_of_skipped_source`. A skipped source is absent, not 0, so `eq(2, 0)` is false too.
+- Expected: `bytes` `0100`. With `mode = 1` the same scheme packs `01 01 07 00 00 05` (not part of this case).
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row with plain members, where an unread `k` holds 0), Go (map rows), Swift (map rows).
+- Not run by: none.
+- Source: loop 54, AZ-2816.

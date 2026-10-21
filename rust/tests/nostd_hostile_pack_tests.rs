@@ -198,6 +198,8 @@ fn run(id: &str) -> Option<Answer> {
             ];
             answer(&nodes, &row(&[(0, u8n(0)), (1, u8n(1)), (3, Num::U16(90))]))
         }
+        "pack_when_of_skipped_source" => when_of_skipped_source(2),
+        "pack_when_of_skipped_source_zero" => when_of_skipped_source(0),
         "pack_bits_count_clear_when" => counted_values(Bits(1), &[1, 0, 1]),
         "pack_packed_count_clear_when" => counted_values(Packed(1, 1, 0), &[1, 0, 1]),
         "pack_sized_count_clear_when" => counted_values(Sized(1), &[1, 2, 3]),
@@ -207,6 +209,18 @@ fn run(id: &str) -> Option<Answer> {
         "pack_novalue_count_clear_when_sized" => novalue(Sized(1)),
         _ => return None,
     })
+}
+
+/// `u8 mode; when mode = 1 { u16 a; u8 k }; when k = <k> { u8 b }` with mode 0: `k` sits in a clear
+/// `when`, so it is absent and the second `when` is false although the row holds a matching `k`.
+fn when_of_skipped_source(k: u8) -> Answer {
+    let nodes = [
+        n(U8),
+        When(0, 1, vec![n(U16), n(U8)]),
+        When(2, i64::from(k), vec![n(U8)]),
+    ];
+    let r = row(&[(0, u8n(0)), (1, Num::U16(7)), (2, u8n(k)), (3, u8n(5))]);
+    answer(&nodes, &r)
 }
 
 /// `u8 mode; when mode = 1 { u8 c }; <counted by c>` with mode 0 and c 3: the count is not
@@ -231,6 +245,7 @@ fn expected(id: &str) -> Answer {
         "pack_split_false_condition_silent" => bytes("0100025a00"),
         "pack_flags_short_list_filled" => bytes("010101050200"),
         "pack_late_when_in_bit_body" => bytes("0101010509"),
+        "pack_when_of_skipped_source" | "pack_when_of_skipped_source_zero" => bytes("0100"),
         "pack_missing_required_value"
         | "pack_times_list_too_long"
         | "pack_times_list_too_short"
@@ -284,7 +299,7 @@ fn ac1_every_pack_case_runs_or_is_skipped_with_a_reason_exactly_once() {
         .map(|c| c.id.as_str())
         .collect();
     // Assert
-    assert_eq!(packs.len(), 38);
+    assert_eq!(packs.len(), 40);
     for id in &packs {
         let ran = run(id).is_some();
         let skipped = SKIPS
@@ -297,7 +312,7 @@ fn ac1_every_pack_case_runs_or_is_skipped_with_a_reason_exactly_once() {
             "{id} must run or be skipped, once"
         );
     }
-    assert_eq!(packs.iter().filter(|id| run(id).is_some()).count(), 20);
+    assert_eq!(packs.iter().filter(|id| run(id).is_some()).count(), 22);
     assert_eq!(SKIPS.len(), 18);
 }
 

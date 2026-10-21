@@ -17,6 +17,7 @@ int run_core_times_count_zero_host_tests();
 int run_core_eq_value_checked_host_tests();
 int run_core_late_source_host_tests();
 int run_core_held_count_nested_late_host_tests();
+int run_core_when_skipped_source_host_tests();
 int run_core_empty_body_rule_host_tests();
 int run_core_packed_bias_novalue_host_tests();
 int run_core_novalue_nested_host_tests();
@@ -51,6 +52,7 @@ int main() {
   run_core_eq_value_checked_host_tests();
   run_core_late_source_host_tests();
   run_core_held_count_nested_late_host_tests();
+  run_core_when_skipped_source_host_tests();
   run_core_empty_body_rule_host_tests();
   run_core_packed_bias_novalue_host_tests();
   run_core_novalue_nested_host_tests();

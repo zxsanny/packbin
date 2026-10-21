@@ -28,21 +28,9 @@ Result put_u16(Writer& w, std::size_t value, int id) {
   return put_num<std::uint16_t>(w, static_cast<std::uint16_t>(value), false, id);
 }
 
-// True when a `when` that holds the count of `f` has a false condition: the count is set in the
-// row but never written, so a reader has no count (`bit` links the count to each `when` that
-// holds it, see `mark_held`).
-bool count_skipped(Field const* t, Field const& f, void* obj) {
-  for (Field const* k = t + f.ref; k->bit != 0;) {
-    k -= k->bit;
-    if (!when_matches(t, *k, obj))
-      return true;
-  }
-  return false;
-}
-
 // The value of a count, or false when it is absent or was not written.
 bool ref_value(Field const* t, Field const& f, void* obj, std::int64_t& out) {
-  return f.ref >= 0 && read_int(t[f.ref], obj, out) && !count_skipped(t, f, obj);
+  return f.ref >= 0 && read_int(t[f.ref], obj, out) && !source_skipped(t, f, obj);
 }
 
 // The children of entry i, in order, on the same object.

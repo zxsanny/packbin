@@ -60,6 +60,18 @@ private func novalueCount(_ member: Field) -> HostileBuild {
     }
 }
 
+/// u8 mode; when mode == 1 { u16 a; u8 k }; when k == `value` { u8 b }: the source k sits inside a clear when.
+private func skippedSourceWhen(_ value: Int) -> HostileBuild {
+    {
+        try Scheme(1, .u8(0, "mode"), .when(1, .eq(0, 1), .u16(1, "a"), .u8(2, "k")),
+                   .when(3, .eq(2, value), .u8(3, "b")))
+    }
+}
+
+private func skippedSourceRow(_ k: Int) -> @Sendable () -> [String: Any] {
+    { ["mode": 0, "a": 7, "k": k, "b": 5] }
+}
+
 /// `count` items, each `item`.
 private func items(_ count: Int, _ item: [String: Any]) -> [String: Any] {
     ["items": [Any](repeating: item, count: count)]
@@ -147,4 +159,6 @@ let hostilePacks: [String: HostilePack] = [
     "pack_element_times_over_bytes_budget": HostilePack(
         { try Scheme(1, .list("items", .group("item", .u32(0, "n"), .times(1, count: 0, .utf8(1, "s"))))) },
         { items(16, ["n": 65_535, "s": String(repeating: "q", count: 16)]) }),
+    "pack_when_of_skipped_source": HostilePack(skippedSourceWhen(2), skippedSourceRow(2)),
+    "pack_when_of_skipped_source_zero": HostilePack(skippedSourceWhen(0), skippedSourceRow(0)),
 ]

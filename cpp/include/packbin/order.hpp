@@ -206,10 +206,10 @@ constexpr void mark_late(Field* t, std::size_t bit, Check& c) {
   }
 }
 
-// Sets `bit` on the count source at `at` of the counted entry `user` (id `id`), and on each `when`
+// Sets `bit` on the count or `when` source at `at` of the entry `user` (id `id`), and on each `when`
 // in `scope` that holds it, to the distance back to the nearest `when` that holds that entry, so
-// pack can tell a count that a false condition skips (see `Field::bit`). A `when` that also holds
-// `user` is true whenever `user` is reached, so the chain stops there.
+// pack and unpack can tell a source that a false condition skips (see `Field::bit`). A `when` that
+// also holds `user` is true whenever `user` is reached, so the chain stops there.
 constexpr void mark_held(Field* t, std::size_t scope, std::size_t at, std::size_t user, int id,
                          Check& c) {
   for (std::size_t k = at;;) {
@@ -262,7 +262,7 @@ constexpr void resolve(Field* t, std::size_t begin, std::size_t end, std::size_t
       }
       f.ref = static_cast<std::int16_t>(at);
       if (f.kind == Kind::Times || f.kind == Kind::Bits || f.kind == Kind::Packed ||
-          f.kind == Kind::Sized)
+          f.kind == Kind::Sized || f.kind == Kind::When)
         mark_held(t, scope, static_cast<std::size_t>(at), j, f.id, c);
     }
     if (f.span > 1)

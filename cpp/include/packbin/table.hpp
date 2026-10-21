@@ -149,8 +149,8 @@ struct Field {
   // `bytes(n)` length; Text/Blob/Array capacity; flag byte group number.
   std::uint16_t size = 0;
   // `packed` bit width (1 or 2) and count bias (0 or -1); a flag bit's position. On the count
-  // source of a `times`, `bits`, `packed` or `sized`, and on a `when` that holds that source,
-  // `bit` is the distance back to the nearest `when` that holds it, or 0.
+  // or `when` source of a `times`, `bits`, `packed`, `sized` or `when`, and on a `when` that holds
+  // that source, `bit` is the distance back to the nearest `when` that holds it, or 0.
   std::uint8_t width = 0;
   std::int8_t bias = 0;
   std::uint8_t bit = 0;

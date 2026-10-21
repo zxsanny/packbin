@@ -110,9 +110,19 @@ bool read_int(Field const& f, void* obj, std::int64_t& out) {
   return r.ok();
 }
 
+bool source_skipped(Field const* t, Field const& f, void* obj) {
+  for (Field const* k = t + f.ref; k->bit != 0;) {
+    k -= k->bit;
+    if (!when_matches(t, *k, obj))
+      return true;
+  }
+  return false;
+}
+
 bool when_matches(Field const* t, Field const& f, void* obj) {
   std::int64_t value = 0;
-  return f.ref >= 0 && read_int(t[f.ref], obj, value) && value == f.eq;
+  return f.ref >= 0 && read_int(t[f.ref], obj, value) && value == f.eq &&
+         !source_skipped(t, f, obj);
 }
 
 void clear_scope(Field const* t, std::size_t begin, std::size_t end, void* obj) {

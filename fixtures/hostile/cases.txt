@@ -70,3 +70,5 @@ construct_empty_when_times_body   construct  scheme_error                 -
 construct_empty_when_repeat_body  construct  scheme_error                 -
 construct_empty_nested_when_body   construct  scheme_error                -
 pack_element_times_over_bytes_budget pack    pack_error                   -
+pack_when_of_skipped_source     pack       bytes                        0100
+pack_when_of_skipped_source_zero pack      bytes                        0100

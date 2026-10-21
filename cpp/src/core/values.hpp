@@ -106,7 +106,12 @@ constexpr bool is_number(Kind k) {
 // the members a flag bit decides after its byte is read).
 bool present(Field const* t, std::size_t i, void* obj, std::uint8_t skip = 0);
 bool read_int(Field const& f, void* obj, std::int64_t& out);
-// True when the `when` entry `f` matches: its source field is present and equals `f.eq`.
+// True when a `when` that holds the source of the count or `when` entry `f` has a false condition:
+// the source is set in the row but never written, so a reader has no value for it (`bit` links
+// the source to each `when` that holds it, see `mark_held`).
+bool source_skipped(Field const* t, Field const& f, void* obj);
+// True when the `when` entry `f` matches: its source field is present, is not skipped, and equals
+// `f.eq`.
 bool when_matches(Field const* t, Field const& f, void* obj);
 void clear_scope(Field const* t, std::size_t begin, std::size_t end, void* obj);
 void set_bool(Field const& f, void* m);

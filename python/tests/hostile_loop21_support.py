@@ -100,6 +100,15 @@ def _counted_scheme(member: str) -> Scheme[Any]:
     return _scheme(_u8(0, "mode"), when(1, eq(0, 1), _u8(1, "c")), consumers[member]())
 
 
+def _skipped_source_scheme(value: int) -> Scheme[Any]:
+    # u8 mode; when(mode == 1) { u16 a; u8 k }; when(k == value) { u8 b }: k sits in a clear when (AZ-2816).
+    return _scheme(
+        _u8(0, "mode"),
+        when(1, eq(0, 1), u16(1, lambda row: row["a"]), _u8(2, "k")),
+        when(3, eq(2, value), _u8(3, "b")),
+    )
+
+
 def _pack(scheme: Scheme[Any], row: dict[str, Any]) -> bytes:
     return BinaryPacker.pack(scheme, row)
 
@@ -135,6 +144,14 @@ LOOP21_PACK_CASES = {
     "pack_sized_count_clear_when": (
         lambda: _pack(_counted_scheme("sized"), {"mode": 0, "c": 3, "v": b"\x01\x02\x03"}),
         ValueError,
+    ),
+    "pack_when_of_skipped_source": (
+        lambda: _pack(_skipped_source_scheme(2), {"mode": 0, "a": 7, "k": 2, "b": 5}),
+        None,
+    ),
+    "pack_when_of_skipped_source_zero": (
+        lambda: _pack(_skipped_source_scheme(0), {"mode": 0, "a": 7, "k": 0, "b": 5}),
+        None,
     ),
 }
 

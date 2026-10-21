@@ -114,6 +114,48 @@ std::string pack_sized_count_clear_when() {
   return pack_answer(s, row);
 }
 
+// AZ-2816: u8 mode; when eq(mode, 1) { u16 a; u8 k }; when eq(k, 2 or 0) { u8 b }, with mode 0 (the
+// first when is clear, so k is never written and is absent): the second when is false and b is not
+// written, packet `0100`. The first row holds optional members with k 2; the second plain members,
+// where an unread k holds 0.
+struct SkippedOpt {
+  Opt<std::uint8_t> mode;
+  Opt<std::uint16_t> a;
+  Opt<std::uint8_t> k;
+  Opt<std::uint8_t> b;
+};
+
+std::string pack_when_of_skipped_source() {
+  auto s = pb::scheme<SkippedOpt>(
+      1, pb::u8<&SkippedOpt::mode>(0),
+      pb::when(1, pb::eq(0, 1), pb::u16<&SkippedOpt::a>(1), pb::u8<&SkippedOpt::k>(2)),
+      pb::when(3, pb::eq(2, 2), pb::u8<&SkippedOpt::b>(3)));
+  SkippedOpt row;
+  row.mode = 0;
+  row.a = 7;
+  row.k = 2;
+  row.b = 5;
+  return pack_answer(s, row);
+}
+
+struct SkippedPlain {
+  std::uint8_t mode = 0;
+  std::uint16_t a = 0;
+  std::uint8_t k = 0;
+  std::uint8_t b = 0;
+};
+
+std::string pack_when_of_skipped_source_zero() {
+  auto s = pb::scheme<SkippedPlain>(
+      1, pb::u8<&SkippedPlain::mode>(0),
+      pb::when(1, pb::eq(0, 1), pb::u16<&SkippedPlain::a>(1), pb::u8<&SkippedPlain::k>(2)),
+      pb::when(3, pb::eq(2, 0), pb::u8<&SkippedPlain::b>(3)));
+  SkippedPlain row;
+  row.a = 7;
+  row.b = 5;
+  return pack_answer(s, row);
+}
+
 constexpr PackHandler kPackHandlers21[] = {
     {"pack_flags_short_list_filled", pack_flags_short_list_filled},
     {"pack_late_when_in_bit_body", pack_late_when_in_bit_body},
@@ -121,6 +163,8 @@ constexpr PackHandler kPackHandlers21[] = {
     {"pack_bits_count_clear_when", pack_bits_count_clear_when},
     {"pack_packed_count_clear_when", pack_packed_count_clear_when},
     {"pack_sized_count_clear_when", pack_sized_count_clear_when},
+    {"pack_when_of_skipped_source", pack_when_of_skipped_source},
+    {"pack_when_of_skipped_source_zero", pack_when_of_skipped_source_zero},
 };
 
 // The slot cases need a round budget and a short list needs a list: C++ has neither.

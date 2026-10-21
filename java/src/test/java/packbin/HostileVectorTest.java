@@ -74,6 +74,9 @@ final class HostileVectorTest {
         for (String id : HostileLoop22.IDS) {
             PackbinTest.expectTrue("hostile vector " + id + " present in cases.txt", seen.contains(id));
         }
+        for (String id : HostileLoop54.IDS) {
+            PackbinTest.expectTrue("hostile vector " + id + " present in cases.txt", seen.contains(id));
+        }
     }
 
     private static void replay(Case c) {
@@ -278,7 +281,8 @@ final class HostileVectorTest {
             case "pack_flags_skipped_count_with_values" -> () -> BinaryPacker.pack(
                     Maps.scheme(1, Packbin.flags(0, u8(0, "n"), Packbin.times(1, 0, u8(1, "pt")))),
                     Maps.map("pt", List.of(5, 6)));
-            default -> orElse(HostileLoop21.packFor(id), () -> HostileLoop22.packFor(id));
+            default -> orElse(HostileLoop21.packFor(id),
+                    () -> orElse(HostileLoop22.packFor(id), () -> HostileLoop54.packFor(id)));
         };
     }
 

@@ -99,4 +99,17 @@ var hostilePacks = map[string]func() ([]byte, error){
 	"pack_element_times_over_bytes_budget": hostilePackOf(
 		hostileScheme(1, List("items", Nested("item", U32(0, "n"), Times(1, 0, Utf8(1, "s"))))),
 		func() hostileRow { return hostileItems(16, hostileRow{"n": 65535, "s": strings.Repeat(ctrl, 16)}) }),
+	"pack_when_of_skipped_source":      hostilePackOf(hostileWhenOfSkippedSource(2), hostileSkippedSourceRow(2)),
+	"pack_when_of_skipped_source_zero": hostilePackOf(hostileWhenOfSkippedSource(0), hostileSkippedSourceRow(0)),
+}
+
+// u8 mode; when(eq(mode, 1)) { u16 a; u8 k }; when(eq(k, want)) { u8 b }: the source k sits inside the first when.
+func hostileWhenOfSkippedSource(want int) func() (*Scheme, error) {
+	return hostileScheme(1, U8(0, "mode"),
+		When(1, Eq(0, 1), U16(1, "a"), U8(2, "k")),
+		When(3, Eq(2, want), U8(3, "b")))
+}
+
+func hostileSkippedSourceRow(k int) func() hostileRow {
+	return func() hostileRow { return hostileRow{"mode": 0, "a": 7, "k": k, "b": 5} }
 }
