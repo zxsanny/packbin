@@ -32,4 +32,4 @@ Source of rows: `intake` (new-task Step 4.7). Status: confirmed / out-of-scope /
 
 | id | scenario | status | behavior | AC ref | source |
 |----|----------|--------|----------|--------|--------|
-| F4b | flash saving short of 8,040 B (8,080 B reached) | deferred (pending assessment) | owner decides: accept and carry, or another round | — | assess-round-1 |
+| F4b | flash saving short of 8,040 B (8,080 B reached) | out-of-scope (accepted loop 56) | owner chose accept and carry; byte search and fold retry later | — | assess-round-1 |

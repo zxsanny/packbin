@@ -3,7 +3,7 @@
 loop: 56
 feature: held-when-one-path-and-flash
 rounds: 1
-verdict: CLARIFY
+verdict: COMPLETE (gap accepted)
 report_of_round: 1
 
 ## Round 1
@@ -11,6 +11,7 @@ report_of_round: 1
 **Date**: 2026-10-21
 **Implement pass**: batch 01, `_docs/03_implementation/batch_01_loop56_report.md`
 **Verdict**: CLARIFY — 11 covered / 1 out-of-scope / 0 gap-clear / 1 gap-unclear
+**Owner answer (2026-10-21)**: F4 option A, accept and carry. F4 is `out-of-scope (accepted loop 56)`; the byte search and the fold retry go to the loop record leftovers and handoff 57. Verdict after the answer: COMPLETE.
 
 ### Coverage matrix
 
