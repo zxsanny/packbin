@@ -327,6 +327,21 @@ fn ac3_a_row_without_a_value_is_refused_without_output() {
 }
 
 #[test]
+fn ac3_a_refused_bits_value_leaves_no_plaintext_anywhere_in_the_buffer() {
+    // Arrange: the third value is out of range, found after the first two were counted
+    const FIELDS: [Field; 2] = [u8(0), packbin::nostd::bits(1, 0)];
+    let scheme = Scheme::new(1, &FIELDS);
+    let row = Slots::with(&[(0, Num::U8(4))], &[(1, &[1, 1, 1, 2])]);
+    let (mut opener, _) = pair();
+    let mut out = [0xAAu8; 16];
+    // Act
+    let refused = opener.pack(&scheme, &row, &mut out);
+    // Assert
+    assert_eq!(refused.err().map(|f| f.error), Some(Error::BadValue));
+    assert!(out.iter().all(|b| *b == 0xAA || *b == 0), "{out:02x?}");
+}
+
+#[test]
 fn ac3_a_tampered_type_number_is_refused_and_the_next_packet_still_opens() {
     // Arrange
     let (mut opener, mut waiter) = pair();

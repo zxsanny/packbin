@@ -106,10 +106,7 @@ impl Session {
         out: &mut [u8],
         scratch: &mut [u32],
     ) -> Result<usize, Fault> {
-        let key = match self.keys.as_ref() {
-            Some(keys) => keys.send,
-            None => return Err(refused(0)),
-        };
+        let keys = self.keys.as_ref().ok_or_else(|| refused(0))?;
         let mut writer = Writer::new(out);
         let sealed = pack_clear(scheme, row, &mut writer, scratch)
             .and_then(|()| parity_room(scheme, &mut writer));
@@ -117,7 +114,7 @@ impl Session {
             writer.zero();
             return Err(fault);
         }
-        pad::xor(&key, self.send_count, writer.written_mut());
+        pad::xor(&keys.send, self.send_count, writer.written_mut());
         self.send_count = self.send_count.wrapping_add(1);
         #[cfg(feature = "ecc")]
         if scheme.parity != 0 {
@@ -184,6 +181,26 @@ impl Session {
             repaired,
         })
     }
+}
+
+impl Drop for Session {
+    /// Wipes the seed and both keys (best effort: the compiler is asked to keep the writes).
+    fn drop(&mut self) {
+        if let Some(seed) = self.seed.as_mut() {
+            wipe(seed);
+        }
+        if let Some(keys) = self.keys.as_mut() {
+            wipe(&mut keys.send);
+            wipe(&mut keys.recv);
+        }
+    }
+}
+
+fn wipe(bytes: &mut [u8]) {
+    for byte in bytes.iter_mut() {
+        *byte = 0;
+    }
+    core::hint::black_box(bytes);
 }
 
 /// The room a protected scheme's parity bytes need, checked before the pad uses a position.

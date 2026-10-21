@@ -131,9 +131,4 @@ pub fn scheme_of<'a>(fields: &'a [packbin::nostd::Field], id: &str) -> Scheme<'a
     }
 }
 
-pub fn from_hex(hex: &str) -> Vec<u8> {
-    (0..hex.len())
-        .step_by(2)
-        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).expect("hex"))
-        .collect()
-}
+pub use super::from_hex;

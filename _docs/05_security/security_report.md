@@ -741,3 +741,7 @@ Cost: the C++ Cortex-M4F image is 7,920 B of 8,192 (the order check is built onl
 
 2026-10-20: verdict PASS, one new Low (L52-1: a repair stays in the caller's buffer when the field read then fails); details in `nostd_review_loop52.md`. The compact-text decoder, the dictionary key order and the repair are bounded by the row's storage, the packet length and 254 bytes, linked without heap or panic symbols on the Cortex-M4F image for the sets `base`, `text` and `ecc`, and agree with the map API on every cut, bit flip and random packet of 20 layouts.
 
+
+## Loop 53 addendum (AZ-2756, AZ-2757)
+
+Review of the session on caller buffers, the shared pad/hash/HKDF, the raw text memo and the stricter presence rule: `_docs/05_security/nostd_review_loop53.md`. Verdict PASS: no Critical, High or Medium. One Low (L53-1, a refused `bits` value left plaintext in the buffer) found by the code review and fixed in the loop. Open observations: the pad is not a MAC (O1), an injected packet shifts the receive position (O2), `session_core/` is outside the clippy deny list (O3), nonce reuse is the caller's duty (O4), L52-1.

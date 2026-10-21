@@ -290,15 +290,16 @@ impl Pack<'_, '_, '_> {
             return Err(bad(at, f));
         }
         let max = if width == 2 { 3 } else { 1 };
+        // Every value is checked before a byte is written: a refusal leaves nothing in the buffer.
+        if values.iter().any(|value| *value > max) {
+            return Err(bad(at, f));
+        }
         let nbytes = clamp_bits(values.len(), width);
         let dst = self.w.reserve(nbytes, id_of(f))?;
         for slot in dst.iter_mut() {
             *slot = 0;
         }
         for (k, value) in values.iter().enumerate() {
-            if *value > max {
-                return Err(bad(at, f));
-            }
             let (byte, shift) = slot_of(k, width);
             let slot = dst.get_mut(byte).ok_or_else(|| bad(at, f))?;
             *slot |= value.checked_shl(shift).unwrap_or(0);
