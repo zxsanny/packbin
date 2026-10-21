@@ -1,0 +1,17 @@
+# Worker rules — loop 56 (AZ-3143, AZ-3144, AZ-3145)
+
+Read `_docs/02_task_plans/text-and-ecc-test-waves/worker-rules.md` first (shell hygiene, forbidden git commands, package recipes, report shape); it applies unchanged except where this file differs. Specs: `_docs/02_tasks/todo/AZ-3143_*.md`, `AZ-3144_*.md`, `AZ-3145_*.md`. ACs and numbers: `acceptance_criteria.md` and `input_data/expected_results/results_report.md` in this folder. Read `_docs/AGENT_GOTCHAS.md` (flash margin 72 B, stack margin 8 B; gcc:16 check; arm stage ~3 min; `make -C cpp clean` between host and container builds).
+
+## C++ worker (owns `cpp/` only): AZ-3143, then AZ-3144
+
+- AZ-3143: a `flag::` constant (128) set by the resolver (`cpp/include/packbin/order.hpp`) on every `when` whose span holds a flag byte, on every build path (host builders and generated tables); unpack reads the bit; remove `reads_flag_byte`. `static_assert(offsetof(Field, eq) == 16)` must hold. Measure the flash with the arm embedded stage (`docker compose -f docker-compose.test.yml run --rm cpp-embedded`, ~3 min; this is the one compose run allowed; start it once per task, not per edit). Report the flash figure before starting AZ-3144. Add the host test of AC-2.
+- AZ-3144: only after AZ-3143 is measured. Fold the `When` and `FlagBit` handling of `unpack_children` and the `unpack_one` cases into one function. If the flash goes above 8120 B or either chain's stack above 504 B / 500 B, undo the fold (restore your own edit by hand) and report the figures; that is an accepted outcome. Add the third image scheme (3-deep `when` chain inside a `times` round) and its rows to `cpp/embedded/common/` the way AZ-3132/AZ-3141 added theirs (see `git log -p -3 -- cpp/embedded/common/all_kinds.cpp`), checked against Python bytes. Report the three stack figures and the flash.
+- Run before finishing: `make -C cpp test` (host), `docker run --rm -v "$PWD":/src -w /src/cpp gcc:16 make test` (run `make -C cpp clean` before switching), and the arm stage. A new failing test is a finding. A depth limit or any wire change is never yours: stop and report.
+- You do not write `_docs/` (the parent writes the margins from your report) or `fixtures/`.
+
+## Loader worker (owns `go/hostile_loader_test.go`, `swift/Tests/PackbinTests/HostileTests.swift`, `swift/Tests/PackbinTests/FuzzTests.swift`, and the Rust file that reads `fixtures/hostile/cases.txt`): AZ-3145
+
+- Find the Rust loader (`rust/src/hostile_tests.rs` `run_all_cases` and the no-heap/ring loaders; `git grep -n "cases.txt" -- rust go swift`) and every literal count of cases; derive each from the file. Go also has `go/fuzz_unpack_test.go`; Swift `FuzzTests.swift:26` asserts 17.
+- A count mismatch must be replaced by a check that names the case id: a case line without a handler, and a handler without a case. Keep every existing assertion that is not a count.
+- Broken-copy proof (AC-2): copy the repository (or just `fixtures/`, `go`, `swift`, `rust`) to a directory under the scratchpad given in your prompt and edit only the copy's `cases.txt` (add one valid-looking line, then remove one line); run the focused test of each loader there and show it fails naming the id. Never edit `fixtures/` in the real tree. If a loader reads `../fixtures/hostile/cases.txt` by relative path the copy works as is.
+- Run the Go, Swift and Rust suites once each at the end on the real tree (Go in `golang:1.27`, Swift with a plain `swift test` since `xcode-select -p` is Xcode.app, Rust `cargo test`). Only one swift build at a time.
