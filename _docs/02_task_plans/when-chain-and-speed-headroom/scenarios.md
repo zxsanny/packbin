@@ -17,7 +17,7 @@ Source of rows: `intake` (new-task Step 4.7). Status: confirmed / out-of-scope /
 | D2 | a package above half its bound | confirmed | walker keeps the last round's encoded text, bytes unchanged | AC-D3 | intake |
 | D3 | CI runner slower than this Mac | confirmed | the CI figure is read after the push and written in the record | AC-D4 | intake |
 | D4 | closing row U24, session stack, nostd ring driver | deferred (owner decides separately) | — | — | intake |
-| E1 | a chain of `when`s whose bodies each read a flag byte | confirmed | stack measured on the Cortex-M4F, at most 512 B, packets equal Python's | AC-E1 | assess-round-1 |
+| E1 | a chain of `when`s whose bodies each read a flag byte | confirmed (covered, round 2) | stack measured on the Cortex-M4F, at most 512 B, packets equal Python's | AC-E1 | assess-round-1 |
 
 ## Fit decisions
 

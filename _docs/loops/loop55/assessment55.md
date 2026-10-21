@@ -2,9 +2,9 @@
 
 loop: 55
 feature: when-chain-and-speed-headroom
-rounds: 1
-verdict: EXTEND
-report_of_round: 1
+rounds: 2
+verdict: COMPLETE
+report_of_round: 2
 
 ## Round 1
 
@@ -45,3 +45,15 @@ none
 
 - The empty-group source in the Rust no-heap core (the bool cases run there through the hostile replay; the empty-group variant is tested in the std Rust tests only).
 - A `when` chain with a `repeat` or `times` body between the levels (rounds restart the scope; the loop-54 AC-W8 byte-identity check covers it).
+
+## Round 2
+
+**Date**: 2026-10-21
+**Implement pass**: batch 02, AZ-3141 (`_docs/03_implementation/batch_01_loop55_report.md` § Batch 02)
+**Verdict**: COMPLETE — 1 covered / 0 out-of-scope / 0 gap-clear / 0 gap-unclear
+
+| id | scenario | status | evidence | source |
+|----|----------|--------|----------|--------|
+| E1 | a chain of `when`s whose bodies each read a flag byte | covered | AC-E1 (AZ-3141 AC-1 to AC-3); `when_chain_host_tests.cpp` `az3141_flag_chain_rows_equal_python`, image `FlagChainRow` 0x5c, `FLAG_CHAIN_FAILURES 0` on M3, M4F, s390x; arm stage: 500 B net unpack, deepest 504 B; `unpack_children`, `with_outer_flags` | assess-round-1 |
+
+New candidates (listed, not gaps): a held `when` or flag bit reached through `unpack_table` or a `times` round still recurses through `unpack_one`; no AC names it and a `times` round restarts the chain per round. Carried to handoff 56.
