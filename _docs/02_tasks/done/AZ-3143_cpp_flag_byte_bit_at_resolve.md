@@ -59,3 +59,7 @@ branch: dev
 |---------|----------------|--------|----------|
 | A generated table path may not set the bit | test both build paths (AC-2) | open | Medium |
 | The saving may be below 80 B | report the figure; AC-1 not met means a ticket, not a loosened bound | open | Medium |
+
+## Outcome of loop 56
+
+AC-2 and AC-3 met. AC-1 missed: flash 8,080 B against 8,040 B (a 40 B saving, margin 112 B). The owner accepted the gap and carried the byte search to a later loop (assessment 56, F4).

@@ -59,3 +59,7 @@ The held-`when` and flag-bit handling exists twice: in `unpack_children` and in 
 |---------|----------------|--------|----------|
 | The fold may not fit the flash | measure after AZ-3143; if not, no fold | open | Medium |
 | The fold may deepen the walk (margin 8 B) | measure before commit | open | Medium |
+
+## Outcome of loop 56
+
+AC-1 as allowed outcome: the fold was tried (one `unpack_held`) and not kept: flash 8,140 B and stack 676 B net. AC-2, AC-3 and AC-4 met on the unfolded code (flash 8,080 B, chain through a `times` round 436 B net, packets equal Python's).

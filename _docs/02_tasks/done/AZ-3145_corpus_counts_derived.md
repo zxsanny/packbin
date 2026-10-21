@@ -55,3 +55,7 @@ The loaders hard-code the number of cases (Go and Swift: 75; Swift fuzz: 17). A 
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Loaders read a fixed path; a broken copy needs an env override or a temporary swap | swap only in a scratchpad copy of the tree, never edit `fixtures/` | open | Low |
+
+## Outcome of loop 56
+
+All ACs met. Go, Swift and the Rust heap-free loaders name a missing or unused handler by case id. The plain Rust loader cannot name an unused unpack or limit handler; the `corpus.txt` counts (Swift 33, Rust nostd at least 33) stay hard-coded.
