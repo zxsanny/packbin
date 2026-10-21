@@ -71,11 +71,12 @@ Result with_outer_flags(Walk& w, std::size_t i, void* obj) {
   return res;
 }
 
-// The children of entry i, in order, on the same object. A child `when` that does not hold is
-// skipped, and one that holds is entered here (its children follow it, or, when it reads a flag
-// byte, a nested call of this function inside its own flag scope) and a flag bit are entered here
-// instead of through unpack_one, so a chain of `when`s nested in `when`s costs the stack of this
-// function and with_outer_flags per flag scope, and a flag bit's child one frame less.
+// The children of entry i, in order, on the same object. Two kinds of child are entered here and not
+// through unpack_one: a `when` (skipped when it does not hold; when it holds and reads no flag byte
+// its children follow it in this loop; when it reads a flag byte, a nested call of this function
+// inside its own flag scope) and a flag bit (its child inside the flag scope). A chain of such
+// entries then costs the stack of this function and with_outer_flags per flag scope. unpack_table,
+// a `times` round and a flags member still reach these kinds through unpack_one.
 Result unpack_children(Walk& w, std::size_t i, void* obj) {
   std::size_t end = i + w.t[i].span;
   for (std::size_t j = i + 1; j < end;) {

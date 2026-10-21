@@ -44,7 +44,7 @@ Then the packets are `01 01 07 05` and `01 00 07` (after the scheme id) and the 
 **AC-B3: Group presence bit (C++ and Rust)**
 Given the same shape with an empty group in `flags` (a presence bit) as the source in place of the bool; only C++ and Rust accept an empty group as a `when` source (README, loop 25 notes: Python and Java refuse it, TypeScript refuses the `when`)
 When mode is 0 and when mode is 1
-Then the outcome follows AC-B1 and AC-B2, and the C++ packets equal the Rust packets; this is pinned in the C++ and Rust package tests, not in the shared corpus.
+Then the outcome follows AC-B1 and AC-B2 in each package (C++ writes `u8 a` before the group, so its bytes are Rust's with `a` and the flags byte swapped); this is pinned in the C++ and Rust package tests, not in the shared corpus.
 
 **AC-B4: Eight packages**
 Given the shared corpus cases

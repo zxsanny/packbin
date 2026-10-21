@@ -47,7 +47,7 @@ Then the packets are `01 01 07 05` and `01 00 07` (after the scheme id) and the 
 **AC-3: Group presence bit, C++ and Rust** (AC-B3)
 Given the same shape with an empty group in `flags` as the source (only C++ and Rust accept it)
 When mode is 0 and when mode is 1
-Then the outcome follows AC-1 and AC-2 and the C++ packets equal the Rust packets.
+Then the outcome follows AC-1 and AC-2 in each package; the C++ test writes `u8 a` before the group (the member after an empty group takes the group's id, AZ-2334), so its bytes are the Rust bytes with `a` and the flags byte swapped, not equal.
 
 **AC-4: Eight packages** (AC-B4)
 Given the shared corpus cases
