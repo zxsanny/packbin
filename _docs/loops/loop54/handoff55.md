@@ -25,4 +25,5 @@ AZ-2815 (C# reuses the last round's encoded text: 0.9 to 1.0 s down to 24 to 36 
 
 ## CI read after the push
 
-- `gh` is logged in on this host now (keyring): read a run with `gh run list --repo zxsanny/packbin --workflow test.yml` and a job log with `gh api repos/zxsanny/packbin/actions/jobs/<id>/logs --allow-escape-sequences`. First action of loop 55: read the `test.yml` runs of the loop 54 push on `dev` and `main`.
+- Read for the loop 54 push (455cc97): `dev` run 39548740720 and `main` run 39548743174 both green, 0 jobs not success; the C# suite job passed on `main` (180 s). Nothing to act on.
+- `gh` is logged in on this host now (keyring): read a run with `gh run list --repo zxsanny/packbin --workflow test.yml` and a job log with `gh api repos/zxsanny/packbin/actions/jobs/<id>/logs --allow-escape-sequences`. First action of loop 55: nothing from CI; start from the candidates above.

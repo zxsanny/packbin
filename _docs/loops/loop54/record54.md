@@ -19,6 +19,7 @@ leftovers:
   - the repeated-text tests of the other seven packages were never timed against their CI bound
   - security Low L52-1, observations O1 to O4 (`_docs/05_security/nostd_review_loop53.md`), L51-1
   - Jira: AZ-2815, AZ-2816, AZ-2823 In Testing; epic AZ-2645 open
+ci: `test.yml` after the push of 455cc97, read with `gh`: `dev` run 39548740720 success, 217 s, 0 jobs not success; `main` run 39548743174 success, 408 s (queued behind the `dev` run), 0 jobs not success; `suites (csharp rust)` 190 s and 180 s (the job that was red on `main` in loops 49 and 53)
 smoke: PASS (agent run 7/7 at aaafdf6, owner rule 2026-10-12)
 smoke_artifact: _docs/loops/loop54/smoke54.md
 assessment_artifact: _docs/loops/loop54/assessment54.md
