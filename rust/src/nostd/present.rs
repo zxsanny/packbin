@@ -65,8 +65,9 @@ pub(crate) fn present(t: &[Field], i: usize, row: &dyn Row, skip_late: bool) -> 
                 && when_matches(t, i, row)
                 && any_member(t, i, row, skip_late)
         }
-        Kind::Bytes | Kind::Sized | Kind::Bits | Kind::Packed | Kind::Utf8 | Kind::Utf8Wire => {
-            row.bytes(f.id).is_some()
+        Kind::Bytes | Kind::Utf8 | Kind::Utf8Wire => row.bytes(f.id).is_some(),
+        Kind::Sized | Kind::Bits | Kind::Packed => {
+            row.bytes(f.id).is_some() || counted_without_value(t, i, row)
         }
         Kind::Group => any_member(t, i, row, skip_late),
         Kind::Repeat => repeat_present(t, i, f, row, skip_late),
@@ -96,6 +97,12 @@ fn times_present(t: &[Field], i: usize, f: &Field, row: &dyn Row) -> bool {
         Some(count) => count != 0 || rounds,
         None => rounds || unwritten_count(t, i, row),
     }
+}
+
+/// A counted member (`sized`, `bits`, `packed`) with no value, whose count the row holds above zero
+/// but is not written (its `when` is clear): the member is on, so pack refuses it, naming it.
+fn counted_without_value(t: &[Field], i: usize, row: &dyn Row) -> bool {
+    source_value(t, i, row).is_none() && unwritten_count(t, i, row)
 }
 
 /// True when the row holds a count above zero for the source of the entry at `user`, whether or

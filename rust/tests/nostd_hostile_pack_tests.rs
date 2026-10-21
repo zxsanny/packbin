@@ -1,6 +1,7 @@
 //! AZ-2757 AC-1, the `pack` stage: the pack cases of `fixtures/hostile/cases.txt` the C++ runner runs
 //! are run on the core with the same rows and must refuse with the same error naming the same
-//! field (or pack the exact bytes); the cases the C++ runner skips are skipped with its reasons.
+//! field (or pack the exact bytes); the cases a row cannot spell are skipped with the C++ reasons.
+//! The three `novalue` cases the C++ runner skips (open row U24) run on the core, which refuses them.
 //! Needs `std` and `text`.
 #![cfg(all(feature = "std", feature = "text"))]
 
@@ -200,6 +201,10 @@ fn run(id: &str) -> Option<Answer> {
         "pack_bits_count_clear_when" => counted_values(Bits(1), &[1, 0, 1]),
         "pack_packed_count_clear_when" => counted_values(Packed(1, 1, 0), &[1, 0, 1]),
         "pack_sized_count_clear_when" => counted_values(Sized(1), &[1, 2, 3]),
+        // Beyond the C++ runner (open row U24 there): the core refuses these, as std does.
+        "pack_novalue_count_clear_when_bits" => novalue(Bits(1)),
+        "pack_novalue_count_clear_when_packed" => novalue(Packed(1, 1, 0)),
+        "pack_novalue_count_clear_when_sized" => novalue(Sized(1)),
         _ => return None,
     })
 }
@@ -210,6 +215,13 @@ fn counted_values(member: Node, values: &[u8]) -> Answer {
     let nodes = [n(U8), When(0, 1, vec![n(U8)]), member];
     let r = Slots::with(&[(0, u8n(0)), (1, u8n(3))], &[(2, values)]);
     answer(&nodes, &r)
+}
+
+/// `u8 mode; when mode = 1 { u8 c }; flag byte; bit 0 { <counted by c> }` with mode 0, c 3 and no
+/// value: `c` is never written, so the member has no count on the wire and the clear bit would hide it.
+fn novalue(member: Node) -> Answer {
+    let nodes = [n(U8), When(0, 1, vec![n(U8)]), FlagByte(0), bit(0, member)];
+    answer(&nodes, &row(&[(0, u8n(0)), (1, u8n(3))]))
 }
 
 /// The answer each case of the C++ table must give: the packet, or `BadValue` naming this id.
@@ -231,13 +243,16 @@ fn expected(id: &str) -> Answer {
         | "pack_count_one_clear_when"
         | "pack_bits_count_clear_when"
         | "pack_packed_count_clear_when"
-        | "pack_sized_count_clear_when" => refused(2),
+        | "pack_sized_count_clear_when"
+        | "pack_novalue_count_clear_when_bits"
+        | "pack_novalue_count_clear_when_packed"
+        | "pack_novalue_count_clear_when_sized" => refused(2),
         other => panic!("no expected answer for {other}"),
     }
 }
 
 /// The pack cases the C++ runner skips, with its reasons.
-const SKIPS: [(&str, &str); 21] = [
+const SKIPS: [(&str, &str); 18] = [
     ("pack_out_of_range_integer", "a row holds a typed Num, so 300 cannot be written for a u8 (a Num::U16 is another kind: BadValue, covered by nostd_flat_tests)"),
     ("pack_times_count_over_limit", "the rounds are caller items and the count is checked against their number: a count of 65,536 is refused as a count that differs from the items, which pack_times_list_too_long already covers"),
     ("pack_lone_bytes_in_round", "a row holds items per round, so a lone buffer cannot be broadcast"),
@@ -246,9 +261,6 @@ const SKIPS: [(&str, &str); 21] = [
     ("pack_slots_over_limit", "the rounds are caller items and the slot budget is a scheme limit (round_limits tests cover it)"),
     ("pack_repeat_over_limit", "the rounds are caller items (round_limits tests cover the 65,535 limit)"),
     ("pack_split_count_zero_after_byte_scalar", "a row holds items, so a lone scalar cannot be written"),
-    ("pack_novalue_count_clear_when_bits", "a bits member is always present in a row: the core refuses the row at the member because the count's when is clear (loop 23 trace, U20)"),
-    ("pack_novalue_count_clear_when_packed", "a packed member is always present in a row: as pack_novalue_count_clear_when_bits"),
-    ("pack_novalue_count_clear_when_sized", "a sized member is always present in a row: as pack_novalue_count_clear_when_bits"),
     ("pack_repeat_unequal_lists_lone", "a row holds items per round, so a lone value for one round member cannot be written"),
     ("pack_repeat_unequal_lists_when", "a row holds items per round, so a shorter list for one round member cannot be written"),
     ("pack_times_short_list_flags", "a row holds one item per round, so a list shorter than the count cannot be written"),
@@ -285,8 +297,8 @@ fn ac1_every_pack_case_runs_or_is_skipped_with_a_reason_exactly_once() {
             "{id} must run or be skipped, once"
         );
     }
-    assert_eq!(packs.iter().filter(|id| run(id).is_some()).count(), 17);
-    assert_eq!(SKIPS.len(), 21);
+    assert_eq!(packs.iter().filter(|id| run(id).is_some()).count(), 20);
+    assert_eq!(SKIPS.len(), 18);
 }
 
 #[test]
