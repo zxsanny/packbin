@@ -17,6 +17,7 @@ leftovers:
   - C++ core: a `when` whose source sits in a false `when` is matched (`21 00 05`, TrailingBytes); not a ticket yet (handoff54)
   - security Low L52-1, observations O1 to O4 (`_docs/05_security/nostd_review_loop53.md`), L51-1
   - step 11: vcpkg checks NOT RUN on this host
+  - CI after the push of 7d8723f: `test` on `dev` green (run 39537581654); `test` on `main` red (run 39537652411): job `suites (csharp rust)`, "suites failed: csharp", the rust steps of that job passed; 0 files under `csharp/` changed in the loop; logs need a token, so the failing test is unknown. Read-only triage, no re-run. Owner: re-run the job on `main` (UI), and read the log if it fails again
   - Jira: AZ-2756, AZ-2757 In Testing; epic AZ-2750 open
 smoke: PASS (agent run 9/9 at 6526c08, owner rule 2026-10-12)
 smoke_artifact: _docs/loops/loop53/smoke53.md

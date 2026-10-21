@@ -27,4 +27,6 @@ AZ-2749, AZ-2751 to AZ-2757 shipped in loops 50 to 53. Jira: AZ-2756 and AZ-2757
 
 ## CI read after the push
 
+- **`main` is red on a C# suite** (run 39537652411, job `suites (csharp rust)`, "suites failed: csharp") while the same commit is green on `dev` (run 39537581654). The loop touched no C# file; the rust steps of the red job passed. First action of loop 54: ask the owner to re-run that job on `main` and, if it fails again, read the log for the test name (it needs a token; the annotation does not name it).
+
 - `test.yml` on `dev` and `main` for the loop 53 push: `embedded-arm` now builds four Rust sets (base, text, ecc, session); the rust suite job runs eight lines (two new session runs and the hostile set with `text,ecc`). Read the wall time and the figures from the annotations (no token on this host).
