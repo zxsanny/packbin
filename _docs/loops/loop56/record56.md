@@ -17,6 +17,7 @@ leftovers:
   - owner: size limits for text/ecc/session; CS-D5; first `v*` / `go/v*` tags; F44; close the epic AZ-2750; U24 in the C++ package
   - L55-1 now: Cortex-M4F flash margin 112 B, stack margin 8 B
   - Jira: AZ-3143, AZ-3144, AZ-3145 In Testing; epic AZ-2645 open
+ci: `test.yml` after the push of eeba68e, read with `gh`: `dev` run 39613482603 success (about 407 s), 20 jobs, 0 not success; `main` run 39613447961 success (about 214 s), 20 jobs, 0 not success
 smoke: PASS (agent run 5/5 at 22d92b6, owner rule 2026-10-12)
 smoke_artifact: _docs/loops/loop56/smoke56.md
 assessment_artifact: _docs/loops/loop56/assessment56.md

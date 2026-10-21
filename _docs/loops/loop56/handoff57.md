@@ -25,4 +25,4 @@ AZ-3143 (a `Field::flags` bit set at resolve time replaces the per-call scan of 
 
 ## CI read after the push
 
-Read the `dev` and `main` `test.yml` runs of the loop 56 push with `gh run list --repo zxsanny/packbin --workflow test.yml`; job logs with `gh api repos/zxsanny/packbin/actions/jobs/<id>/logs --allow-escape-sequences`. The result goes into `record56.md` (`ci:`).
+Read for the loop 56 push (eeba68e): `dev` run 39613482603 and `main` run 39613447961 both green, 20 jobs each, 0 not success. First action of loop 57: nothing from CI; start from the candidates above. `gh` lists runs with `gh run list --repo zxsanny/packbin --workflow test.yml`; job logs with `gh api repos/zxsanny/packbin/actions/jobs/<id>/logs --allow-escape-sequences`. The result goes into `record56.md` (`ci:`).
