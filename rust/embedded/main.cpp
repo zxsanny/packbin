@@ -96,6 +96,7 @@ int main() {
     say_hex("ROUTE_HEX ", packet, static_cast<std::size_t>(p));
   if (unpack_stack < golden_stack)
     unpack_stack = golden_stack;
+  say("EXTRA_RESULT ", static_cast<unsigned long>(x));
   say("EXTRA_STACK ", extra_stack);
 #else
   std::size_t pack_stack = stack_meter::measure([&] { packet[0] = 1; });

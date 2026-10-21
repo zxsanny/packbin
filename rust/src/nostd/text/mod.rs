@@ -6,10 +6,13 @@
 
 mod decode;
 mod encode;
+mod parse;
+mod raw;
 mod stream;
 
 pub(crate) use decode::{decode_payload, Sink};
 pub(crate) use encode::encode_field;
+pub(crate) use raw::forget_raw;
 pub(crate) use stream::compare_payloads;
 
 #[allow(dead_code)]

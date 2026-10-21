@@ -316,7 +316,7 @@ grep -q 'cargo test --manifest-path .* --no-default-features --features text --t
   || bad "rust: the text feature does not run without default features: $(cat "$work/go.log")"
 grep -q 'cargo test --manifest-path .* --no-default-features --features ecc --test nostd_ecc_tests -- --nocapture' "$work/go.log" \
   || bad "rust: the ecc feature does not run without default features: $(cat "$work/go.log")"
-grep -q 'cargo test --manifest-path .* --features text,ecc --test nostd_dict_tests --test nostd_text_differential_tests -- --nocapture' "$work/go.log" \
+grep -q 'cargo test --manifest-path .* --features text,ecc --test nostd_dict_tests --test nostd_text_differential_tests --test nostd_hostile_tests --test nostd_hostile_pack_tests --test nostd_fixture_differential_tests --test nostd_raw_repeat_tests -- --nocapture' "$work/go.log" \
   || bad "rust: the text differential and dictionary tests do not run with the feature on: $(cat "$work/go.log")"
 grep -q 'cargo test --manifest-path .* --no-default-features --features session --test nostd_session_tests -- --nocapture' "$work/go.log" \
   || bad "rust: the session feature does not run without default features: $(cat "$work/go.log")"

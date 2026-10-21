@@ -296,11 +296,12 @@ case "$lang" in
       run cargo test --manifest-path "$root/rust/Cargo.toml" -- --nocapture
       # the heap-free API builds and passes with `std` and `alloc` off (AZ-2749)
       run cargo test --manifest-path "$root/rust/Cargo.toml" --no-default-features --test nostd_flat_tests -- --nocapture
-      # the parts of the heap-free API behind a feature, on without `std` and off (AZ-2754, AZ-2755): the default
+      # the parts of the heap-free API behind a feature, on without `std` and off (AZ-2754, AZ-2755), and the hostile corpus and
+      # the fixture differential on the core with them on (AZ-2757): the default
       # run above already covers the two "off" tests and the rest with the features off
       run cargo test --manifest-path "$root/rust/Cargo.toml" --no-default-features --features text --test nostd_text_tests -- --nocapture
       run cargo test --manifest-path "$root/rust/Cargo.toml" --no-default-features --features ecc --test nostd_ecc_tests -- --nocapture
-      run cargo test --manifest-path "$root/rust/Cargo.toml" --features text,ecc --test nostd_dict_tests --test nostd_text_differential_tests -- --nocapture
+      run cargo test --manifest-path "$root/rust/Cargo.toml" --features text,ecc --test nostd_dict_tests --test nostd_text_differential_tests --test nostd_hostile_tests --test nostd_hostile_pack_tests --test nostd_fixture_differential_tests --test nostd_raw_repeat_tests -- --nocapture
       # the session of the heap-free API, without `std` (nothing allocates) and with `std` and `ecc` (the same bytes as
       # the `std` PackSession, parity over the padded bytes) (AZ-2756)
       run cargo test --manifest-path "$root/rust/Cargo.toml" --no-default-features --features session --test nostd_session_tests -- --nocapture

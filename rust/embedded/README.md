@@ -20,5 +20,5 @@ rust/embedded/run.sh image   # inside packbin-embedded (what docker-compose.test
   `panic_bounds_check`, `unwrap_failed`, slice-length failures) in the linked image; `checks.test.sh` tests it
   without a toolchain. The target `rust-mutants` links probes with a seeded panic path and a seeded heap call
   (`seed_panic`, `seed_heap`) and fails unless the checks catch both.
-- A panic path comes from `unwrap`, `expect`, indexing, `slice::reverse` and `copy_from_slice`; `nostd` uses
+- A panic path comes from `unwrap`, `expect`, indexing, `slice::reverse`, `copy_from_slice`, `split_at_mut` and any `chunks*` (they link a division and a panic at opt-level z); `nostd` uses
   `get`, checked arithmetic and zipped copies, and denies the clippy lints that find the rest.

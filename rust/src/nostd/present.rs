@@ -88,13 +88,23 @@ fn repeat_present(t: &[Field], i: usize, f: &Field, row: &dyn Row, skip_late: bo
 
 /// A `times` is on when its count is above zero or the row holds rounds (a count of zero with
 /// rounds is refused on pack, not dropped); with no count written, rounds make it on, so pack
-/// refuses them.
+/// refuses them. A count the row holds above zero for a source that is not written (its `when` is
+/// clear) is a value the packet cannot hold: the `times` is on too, and pack refuses it.
 fn times_present(t: &[Field], i: usize, f: &Field, row: &dyn Row) -> bool {
     let rounds = row.count(f.id).is_some_and(|n| n != 0);
     match source_value(t, i, row) {
         Some(count) => count != 0 || rounds,
-        None => rounds,
+        None => rounds || unwritten_count(t, i, row),
     }
+}
+
+/// True when the row holds a count above zero for the source of the entry at `user`, whether or
+/// not that source is written.
+fn unwritten_count(t: &[Field], user: usize, row: &dyn Row) -> bool {
+    source_of(t, user)
+        .and_then(|at| get(t, at))
+        .and_then(|source| read_int(source, row))
+        .is_some_and(|count| count != 0)
 }
 
 fn any_member(t: &[Field], i: usize, row: &dyn Row, skip_late: bool) -> bool {

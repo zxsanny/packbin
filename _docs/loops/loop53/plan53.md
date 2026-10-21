@@ -36,6 +36,9 @@ Intake: hopper hit on wave C of epic AZ-2750 (`handoff53.md`): AZ-2756 (`session
 1. Batch 1 (AZ-2756): read the std session; move hash / key derivation / pad into a shared core module with no `Vec`; `nostd::session` with seed, caller nonce, seal, open on caller buffers; cross-open + differential tests; refusal tests.
 2. Batch 2 (AZ-2757): hostile-corpus replay runner (scheme built from case text), skip table with reasons, differential over every fixture file, nested-scheme stack probe on the device image, `session` set in `feature-sets.txt`, raw-memo measurement, `cargo publish --dry-run`, docs.
 
+### Diverged in batch 2 (plan-diff-sync)
+The corpus found a core defect (`times` count above 0 with an unwritten source packed as absent: fixed in `nostd/present.rs`), and the raw-text measurement (5.96 s against 1 s nominal) made the C++ raw memo a requirement: `nostd/text/` is split into `encode.rs`, `parse.rs`, `raw.rs` (the file was over the 500-line cap). Added: `nostd_hostile_tests`, `nostd_hostile_pack_tests`, `nostd_fixture_differential_tests`, `nostd_raw_repeat_tests`, `nostd_docs_tests`, `nostd_support/hostile.rs`, the nested probe, `EXTRA_RESULT` in `rust/embedded/main.cpp`.
+
 ### Proof
 Cross-open bytes equal std for the same seed and nonce; link check shows no heap symbol with `session` on; hostile replay: each case returns its named refusal or is skipped with the C++ runner's reason.
 

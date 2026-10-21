@@ -1,6 +1,8 @@
 //! A row for the nostd tests: numbers and byte strings kept by field id.
 #![allow(dead_code)]
 
+#[cfg(all(feature = "std", feature = "text"))]
+pub mod hostile;
 #[cfg(feature = "std")]
 pub mod random;
 #[cfg(feature = "std")]

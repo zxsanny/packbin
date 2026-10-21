@@ -356,6 +356,57 @@ An optional member of `E` (a `BoundField::opt_u16` under `SchemeItem::flags`, or
 
 In a `MapScheme`, `times` unpacks to the per-name lists and also to the rounds, as `Value::Groups` under `__times_<anchor>` (present, and empty for a count of 0). A list holds only the rounds that read its name, so the rounds tell which round a value belongs to. `repeat` gives its rounds under `__repeat__` (since loop 23 a per-name value kept beside them is checked against them as below, `repeat at id 0: list for 'x' disagrees with its rounds`). Pack reads the rounds, and it fails with `PackError::Type("times at id 1: list for '1' disagrees with its rounds")` when a per-name list differs from them. To change a value, edit the rounds and drop or rewrite the per-name lists, or edit the lists and remove the `__times_<anchor>` key. The second way does not work for a member below a `when`: a list cannot say which round holds it, so pack without the `__times_<anchor>` key fails with `PackError::Type("times at id 1: '1' is under a flags or when; give its values per round under '__times_1'")` when a non-empty list or a single value is kept under that member. Edit its rounds instead (an empty list still packs). A member below a `flags` or a flag bit takes a list one entry per round since loop 22, as in TypeScript, Python, Java and C#: item `i` is round `i`, and a short or empty list reads as absent for the rounds it does not reach (`u8 c; times(c, flags(1, u8(1, v)))` with `c` = 2 and `v` = [5] packs `01 02 01 05 00`). Unpack gives a list that holds only the rounds that read the name, so a value of round 3 sits at item 2 of `v`. Do not drop the `__times_<anchor>` rounds and pack from that list: the value moves to an earlier round with no error (`v` = [5, 7] from rounds 1 and 3 repacks as `01 03 01 05 01 07 00`). Edit and pack the rounds instead.
 
+#### Heap-free API for firmware (`packbin::nostd`)
+
+The same crate has a second API for devices with no heap: plain-data schemes, caller buffers and errors as values. It builds with `#![no_std]` and no allocator when you turn the default features off, and the bytes are those of the map API above.
+
+```toml
+packbin = { version = "0.1", default-features = false, features = ["text", "ecc", "session"] }
+```
+
+| Feature | Adds |
+|---------|------|
+| `std` (default, implies `alloc`) | the map API, `PackSession`, `Vec` results |
+| `alloc` | `nostd::pack_vec` |
+| `text` | strings (`utf8`) and dictionaries (`dict`) in the compact text format; `pack_with` takes the encoder's working words |
+| `ecc` | parity bytes after every packet (`Scheme::with_parity`, `unpack_repair`, the codec in `nostd::ecc`) |
+| `session` | `nostd::Session`: a seed, a nonce you supply, `pack` and `unpack` of padded packets in your buffers |
+
+```rust
+use packbin::nostd::{i32, pack, u16, u8, unpack, Fault, Num, Row, Scheme};
+
+#[derive(Default)]
+struct Position { sid: u16, lat: i32, profile: u8 }
+
+impl Row for Position {
+    fn num(&self, id: u16) -> Option<Num> {
+        match id { 0 => Some(Num::U16(self.sid)), 1 => Some(Num::I32(self.lat)), 2 => Some(Num::U8(self.profile)), _ => None }
+    }
+    fn bytes(&self, _id: u16) -> Option<&[u8]> { None }
+    fn set_num(&mut self, id: u16, value: Num) -> bool {
+        match (id, value) {
+            (0, Num::U16(v)) => { self.sid = v; true }
+            (1, Num::I32(v)) => { self.lat = v; true }
+            (2, Num::U8(v)) => { self.profile = v; true }
+            _ => false,
+        }
+    }
+    fn set_bytes(&mut self, _id: u16, _value: &[u8]) -> bool { false }
+}
+
+const SCHEME: Scheme = Scheme::new(0x40, &[u16(0), i32(1), u8(2)]);
+
+fn main() -> Result<(), Fault> {
+    let mut out = [0u8; 16];
+    let n = pack(&SCHEME, &Position { sid: 1, lat: 500_000_000, profile: 1 }, &mut out)?;
+    let mut back = Position::default();
+    unpack(&SCHEME, &out[..n], &mut back)?;
+    Ok(())
+}
+```
+
+A session between two nodes: `let mut node = Session::load(&seed)?; node.start(&nonce)?;` (the peer calls `join(&nonce)`), then `node.pack(&scheme, &row, &mut out)` and `peer.unpack(&scheme, &mut data, &mut row)` (`unpack_repair` with `ecc`). The nonce is yours to generate and must not open two sessions under one seed. Every call returns a `Result`; no path reachable from untrusted bytes panics. The CI job `embedded-arm` links the library for a Cortex-M4F, runs it in QEMU and fails when a heap or panic symbol is linked (`rust/embedded/`).
+
 ### C++
 
 The C++ package packs into a buffer you own and reads from one. It throws nothing and allocates nothing, so the same code builds for a server and for a microcontroller (`-fno-exceptions -fno-rtti`). Strings and lists land in caller storage: `Text<N>` (a decoded copy of up to N UTF-8 bytes) and `Array<T, N>` hold up to N, and more than N is the error `TooMany`, never a cut. A string is compact text (see [UTF-8](#utf-8)), which has to be decoded, so a string member is a `Text<N>` (or a `Packed`, below); a `View` cannot hold one and is a compile error on a `utf8` field. Pack of a string needs working memory for the encoder: pass a `Scratch<Chars>` as the last argument (12 bytes per character of the longest string in the packet); a string that needs more returns `ScratchTooSmall` naming the field and writes nothing for it, never different bytes. A `Scratch` for a long string is large (`Scratch<65535>` is 786 KB): declare it `static` or on the heap, never as a local; the repository's own build refuses a stack frame over 64 KB. Packets without strings need no scratch.

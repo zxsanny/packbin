@@ -23,7 +23,7 @@ impl<'a> Writer<'a> {
     }
 
     /// The bytes written so far.
-    #[cfg(feature = "ecc")]
+    #[cfg(any(feature = "ecc", feature = "text"))]
     pub(crate) fn written(&self) -> &[u8] {
         self.buf.get(..self.len).unwrap_or(&[])
     }

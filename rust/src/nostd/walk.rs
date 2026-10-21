@@ -51,6 +51,9 @@ pub(crate) fn pack_clear(
     scratch: &mut [u32],
 ) -> Result<(), Fault> {
     validate(scheme)?;
+    // The scratch may hold the memo of an earlier call: a pack starts without one.
+    #[cfg(feature = "text")]
+    super::text::forget_raw(scratch);
     writer.put(&[scheme.type_number], -1)?;
     let mut budget = budget_of(scheme);
     Pack {
