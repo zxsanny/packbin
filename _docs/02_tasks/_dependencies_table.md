@@ -366,3 +366,11 @@ AZ-2749 and AZ-2751 through AZ-2757 are loop 50 (owner 2026-10-20: option B "por
 | AZ-2755 | rust_core_ecc | 3 | AZ-2749 | AZ-2750 |
 | AZ-2756 | rust_core_session | 3 | AZ-2755 | AZ-2750 |
 | AZ-2757 | rust_core_hostile_and_docs | 3 | AZ-2749, AZ-2751, AZ-2752, AZ-2753, AZ-2754, AZ-2755, AZ-2756 | AZ-2750 |
+
+AZ-3132, AZ-3133 and AZ-3134 are loop 55 (owner 2026-10-21: "Accept all recommended: A+B+D" on `handoff55.md`; epic AZ-2645; 3 + 3 + 3 points). They are independent. Shared write area: the C++ package (AZ-3132 `cpp/embedded`, margins; AZ-3133 `cpp/tests/core` runner and `fixtures/hostile/cases.txt`; AZ-3134 `cpp/tests/core/text_repeat_host_tests.cpp`) and each package's tests directory, so one worker per package carries all three tasks (loop 46 lesson).
+
+| Task | Name | Complexity | Dependencies | Epic |
+|------|------|-----------|-------------|------|
+| AZ-3132 | cpp_when_chain_stack | 3 | None | AZ-2645 |
+| AZ-3133 | when_bool_source_corpus | 3 | None | AZ-2645 |
+| AZ-3134 | repeated_text_headroom | 3 | None | AZ-2645 |
