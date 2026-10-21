@@ -380,3 +380,11 @@ AZ-3141 is loop 55 assess round 1 (EXTEND, gap E1): AZ-3132 left a held `when` w
 | Task | Name | Complexity | Dependencies | Epic |
 |------|------|-----------|-------------|------|
 | AZ-3141 | cpp_when_chain_flag_byte_stack | 2 | AZ-3132 | AZ-2645 |
+
+AZ-3143, AZ-3144 and AZ-3145 are loop 56 (owner 2026-10-21: "Accept recommended for loop 56" on `handoff56.md`; epic AZ-2645; 3 + 3 + 2 points). AZ-3144 depends on AZ-3143 (flash saving first). AZ-3143 and AZ-3144 own `cpp/` only; AZ-3145 owns the Go, Swift and Rust test loaders only, so the two lines run in parallel.
+
+| Task | Name | Complexity | Dependencies | Epic |
+|------|------|-----------|-------------|------|
+| AZ-3143 | cpp_flag_byte_bit_at_resolve | 3 | None | AZ-2645 |
+| AZ-3144 | cpp_held_when_one_path | 3 | AZ-3143 | AZ-2645 |
+| AZ-3145 | corpus_counts_derived | 2 | None | AZ-2645 |
