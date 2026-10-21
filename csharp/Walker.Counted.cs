@@ -297,7 +297,7 @@ internal static partial class Walker
         var raw = Encoding.UTF8.GetBytes(text);
         if (raw.Length > MaxLength)
             throw new ArgumentException($"{field.Name}: utf-8 length {raw.Length}");
-        var encoded = TextEncoder.Encode(raw);
+        var encoded = buffer.EncodeText(raw);
         buffer.Reserve(encoded.Length, field.Name);
         buffer.AddRange(encoded);
         seen[field.Name] = text;

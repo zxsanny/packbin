@@ -10,6 +10,8 @@ internal sealed class PackOut
 
     private readonly long _maxBytes;
     private byte[] _data;
+    private byte[]? _lastUtf8;
+    private byte[]? _lastField;
 
     public PackOut(long maxBytes)
     {
@@ -46,6 +48,19 @@ internal sealed class PackOut
         Grow(raw.Length);
         Buffer.BlockCopy(raw, 0, _data, Count, raw.Length);
         Count += raw.Length;
+    }
+
+    // The compact field of a text. The last text and its field are kept for the rest of this pack call (a times or
+    // repeat round often writes one text again and again, and the parse costs a few microseconds per character); the
+    // object ends with the call, so no text outlives it.
+    public byte[] EncodeText(byte[] utf8)
+    {
+        if (_lastField is null || !utf8.AsSpan().SequenceEqual(_lastUtf8))
+        {
+            _lastField = TextEncoder.Encode(utf8);
+            _lastUtf8 = utf8;
+        }
+        return _lastField;
     }
 
     // A byte already written, such as a combined flags byte that its bits fill in afterwards.
