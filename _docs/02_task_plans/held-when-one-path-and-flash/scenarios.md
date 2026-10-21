@@ -27,3 +27,9 @@ Source of rows: `intake` (new-task Step 4.7). Status: confirmed / out-of-scope /
 ## Not walked
 
 - Row U24, the first tags, and the loop 53 candidates: owner decides separately.
+
+## Assessment rounds
+
+| id | scenario | status | behavior | AC ref | source |
+|----|----------|--------|----------|--------|--------|
+| F4b | flash saving short of 8,040 B (8,080 B reached) | deferred (pending assessment) | owner decides: accept and carry, or another round | — | assess-round-1 |
