@@ -105,6 +105,34 @@ std::uint8_t const* flag_chain_expected(std::size_t index, std::size_t& len);
 // Differences of row `index` from the reference: packet bytes and unpacked fields (0 when equal).
 int flag_chain_failures(std::size_t index);
 
+// AZ-3144: the plain chain of AZ-3132 inside a `times` round, so the walk reaches the first `when` of
+// every item through unpack_items and unpack_one, not through unpack_children:
+// u8 n; times(n) { u8 m; when(m==1){ u8 k1; when(k1==1){ u8 k2; when(k2==1){ u8 k3; when(k3==1){ u8 b }}}}}
+struct RoundItem {
+  std::uint8_t m = 0;
+  packbin::Opt<std::uint8_t> k1;
+  packbin::Opt<std::uint8_t> k2;
+  packbin::Opt<std::uint8_t> k3;
+  packbin::Opt<std::uint8_t> b;
+};
+
+struct RoundChainRow {
+  std::uint8_t n = 0;
+  packbin::Array<RoundItem, 2> items;
+};
+
+// Rows of the round chain: 0 two items, all true; 1 first item m = 0, second k1 = 0; 2 one item with
+// k2 = 0; 3 first item k3 = 0, second m = 0.
+constexpr std::size_t round_chain_row_count = 4;
+RoundChainRow round_chain_sample(std::size_t index);
+packbin::Result round_chain_pack(RoundChainRow const& row, std::uint8_t* out, std::size_t cap);
+packbin::Result round_chain_unpack(std::uint8_t const* data, std::size_t len, RoundChainRow& row);
+int round_chain_mismatched(RoundChainRow const& a, RoundChainRow const& b);
+// The packet of row `index` from the Python package (2026-10-21); `len` is its length.
+std::uint8_t const* round_chain_expected(std::size_t index, std::size_t& len);
+// Differences of row `index` from the reference: packet bytes and unpacked fields (0 when equal).
+int round_chain_failures(std::size_t index);
+
 Row sample();
 // Packs `row` into `out`; on success `offset` is the packet length. The compact text encoder
 // works in a scratch that lives in this file's static memory, not on the caller's stack.

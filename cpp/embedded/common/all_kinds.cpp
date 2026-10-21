@@ -52,6 +52,17 @@ constexpr auto flag_chain_scheme = pb::scheme<FlagChainRow>(
 
 static_assert(pb::validate(flag_chain_scheme).ok(), "flag-byte chain scheme is valid");
 
+constexpr auto round_chain_scheme = pb::scheme<RoundChainRow>(
+    0x5d, pb::u8<&RoundChainRow::n>(0),
+    pb::times<&RoundChainRow::items>(
+        1, 0, pb::u8<&RoundItem::m>(1),
+        pb::when(2, pb::eq(1, 1), pb::u8<&RoundItem::k1>(2),
+                 pb::when(3, pb::eq(2, 1), pb::u8<&RoundItem::k2>(3),
+                          pb::when(4, pb::eq(3, 1), pb::u8<&RoundItem::k3>(4),
+                                   pb::when(5, pb::eq(4, 1), pb::u8<&RoundItem::b>(5)))))));
+
+static_assert(pb::validate(round_chain_scheme).ok(), "round chain scheme is valid");
+
 // The encoder's working memory: 16 characters of the longest string, in static storage.
 pb::Scratch<16> scratch;
 
@@ -323,6 +334,105 @@ int flag_chain_failures(std::size_t index) {
   FlagChainRow back;
   pb::Result u = flag_chain_unpack(want, want_len, back);
   return n + (u.ok() ? 0 : 1) + flag_chain_mismatched(row, back);
+}
+
+namespace {
+
+RoundItem round_item(int m, int k1, int k2, int k3, int b) {
+  RoundItem item;
+  item.m = static_cast<std::uint8_t>(m);
+  if (k1 >= 0)
+    item.k1 = static_cast<std::uint8_t>(k1);
+  if (k2 >= 0)
+    item.k2 = static_cast<std::uint8_t>(k2);
+  if (k3 >= 0)
+    item.k3 = static_cast<std::uint8_t>(k3);
+  if (b >= 0)
+    item.b = static_cast<std::uint8_t>(b);
+  return item;
+}
+
+}  // namespace
+
+RoundChainRow round_chain_sample(std::size_t index) {
+  RoundChainRow r;
+  switch (index) {
+    case 0:
+      r.n = 2;
+      r.items.count = 2;
+      r.items.items[0] = round_item(1, 1, 1, 1, 5);
+      r.items.items[1] = round_item(1, 1, 1, 1, 6);
+      break;
+    case 1:
+      r.n = 2;
+      r.items.count = 2;
+      r.items.items[0] = round_item(0, -1, -1, -1, -1);
+      r.items.items[1] = round_item(1, 0, -1, -1, -1);
+      break;
+    case 2:
+      r.n = 1;
+      r.items.count = 1;
+      r.items.items[0] = round_item(1, 1, 0, -1, -1);
+      break;
+    default:
+      r.n = 2;
+      r.items.count = 2;
+      r.items.items[0] = round_item(1, 1, 1, 0, -1);
+      r.items.items[1] = round_item(0, -1, -1, -1, -1);
+      break;
+  }
+  return r;
+}
+
+pb::Result round_chain_pack(RoundChainRow const& row, std::uint8_t* out, std::size_t cap) {
+  return pb::pack(round_chain_scheme, row, out, cap);
+}
+
+pb::Result round_chain_unpack(std::uint8_t const* data, std::size_t len, RoundChainRow& row) {
+  return pb::unpack(round_chain_scheme, data, len, row);
+}
+
+int round_chain_mismatched(RoundChainRow const& a, RoundChainRow const& b) {
+  if (a.n != b.n)
+    return 1;
+  return differs(a.items, b.items, [](RoundItem const& x, RoundItem const& y) {
+    return x.m == y.m && !differs(x.k1, y.k1) && !differs(x.k2, y.k2) && !differs(x.k3, y.k3) &&
+           !differs(x.b, y.b);
+  });
+}
+
+std::uint8_t const* round_chain_expected(std::size_t index, std::size_t& len) {
+  static std::uint8_t const all_true[] = {0x5d, 0x02, 0x01, 0x01, 0x01, 0x01, 0x05,
+                                          0x01, 0x01, 0x01, 0x01, 0x06};
+  static std::uint8_t const first_clear[] = {0x5d, 0x02, 0x00, 0x01, 0x00};
+  static std::uint8_t const k2_clear[] = {0x5d, 0x01, 0x01, 0x01, 0x00};
+  static std::uint8_t const k3_clear[] = {0x5d, 0x02, 0x01, 0x01, 0x01, 0x00, 0x00};
+  switch (index) {
+    case 0:
+      len = sizeof(all_true);
+      return all_true;
+    case 1:
+      len = sizeof(first_clear);
+      return first_clear;
+    case 2:
+      len = sizeof(k2_clear);
+      return k2_clear;
+    default:
+      len = sizeof(k3_clear);
+      return k3_clear;
+  }
+}
+
+int round_chain_failures(std::size_t index) {
+  RoundChainRow row = round_chain_sample(index);
+  std::uint8_t buf[16];
+  pb::Result p = round_chain_pack(row, buf, sizeof(buf));
+  std::size_t want_len = 0;
+  std::uint8_t const* want = round_chain_expected(index, want_len);
+  int n = (!p.ok() || p.offset != want_len || std::memcmp(buf, want, want_len) != 0) ? 1 : 0;
+  RoundChainRow back;
+  pb::Result u = round_chain_unpack(want, want_len, back);
+  return n + (u.ok() ? 0 : 1) + round_chain_mismatched(row, back);
 }
 
 }  // namespace all_kinds

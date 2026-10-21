@@ -34,6 +34,7 @@ int run_core_ecc_session_host_tests();
 int run_core_dict_order_host_tests();
 int run_core_text_repeat_host_tests();
 int run_core_when_chain_host_tests();
+int run_core_when_flag_bit_host_tests();
 int run_core_when_group_source_host_tests();
 
 int main() {
@@ -71,6 +72,7 @@ int main() {
   run_core_dict_order_host_tests();
   run_core_text_repeat_host_tests();
   run_core_when_chain_host_tests();
+  run_core_when_flag_bit_host_tests();
   run_core_when_group_source_host_tests();
   if (check::failures() != 0) {
     std::fprintf(stderr, "%d failure(s)\n", check::failures());

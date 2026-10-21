@@ -121,6 +121,9 @@ constexpr std::uint8_t Invalid = 16;
 // A `when` or `times` that a flag bit decides and whose source is written after its flag byte
 // (see `Field::late`).
 constexpr std::uint8_t Late = 32;
+// Set at resolve time on a `when` whose span holds a flag byte: the unpack walk enters it in its own
+// flag scope (see `check_table`).
+constexpr std::uint8_t HoldsFlagByte = 128;
 }  // namespace flag
 
 // Returns the bound member inside one row or element object.
@@ -173,6 +176,7 @@ struct Field {
   constexpr bool borrowed() const { return (flags & flag::Borrowed) != 0; }
   constexpr bool fixed() const { return (flags & flag::Fixed) != 0; }
   constexpr bool opaque() const { return (flags & flag::Opaque) != 0; }
+  constexpr bool holds_flag_byte() const { return (flags & flag::HoldsFlagByte) != 0; }
 };
 
 // The members before `eq` fill 16 bytes on every target, AVR included (`eq` is aligned to 4 there

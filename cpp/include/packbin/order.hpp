@@ -229,6 +229,15 @@ constexpr void mark_held(Field* t, std::size_t scope, std::size_t at, std::size_
   }
 }
 
+// True when t[begin, end) holds an entry of kind `k`.
+constexpr bool holds_kind(Field const* t, std::size_t begin, std::size_t end, Kind k) {
+  for (std::size_t j = begin; j < end; ++j) {
+    if (t[j].kind == k)
+      return true;
+  }
+  return false;
+}
+
 constexpr void resolve(Field* t, std::size_t begin, std::size_t end, std::size_t scope,
                        Check& c) {
   for (std::size_t j = begin; j < end && !c.failed; j += t[j].span) {
@@ -267,6 +276,8 @@ constexpr void resolve(Field* t, std::size_t begin, std::size_t end, std::size_t
     }
     if (f.span > 1)
       resolve(t, j + 1, j + f.span, is_container(f.kind) ? j + 1 : scope, c);
+    if (f.kind == Kind::When && holds_kind(t, j + 1, j + f.span, Kind::FlagByte))
+      f.flags = static_cast<std::uint8_t>(f.flags | flag::HoldsFlagByte);
     if (f.kind == Kind::FlagBit && !c.failed)
       mark_late(t, j, c);
   }

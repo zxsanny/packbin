@@ -63,10 +63,40 @@ void az3141_flag_chain_rows_equal_python() {
   }
 }
 
+// AZ-3144: the plain chain inside a `times` round (scheme id 0x5d). Python bytes of the four rows
+// (0 two items all true, 1 first item m = 0 and second k1 = 0, 2 one item with k2 = 0, 3 first item
+// k3 = 0 and second m = 0).
+char const* const round_python_hex[] = {"5d0201010101050101010106", "5d02000100", "5d01010100",
+                                        "5d020101010000"};
+
+void az3144_round_chain_rows_equal_python() {
+  // Arrange
+  for (std::size_t i = 0; i < all_kinds::round_chain_row_count; ++i) {
+    all_kinds::RoundChainRow row = all_kinds::round_chain_sample(i);
+    std::uint8_t buf[16];
+
+    // Act
+    packbin::Result p = all_kinds::round_chain_pack(row, buf, sizeof(buf));
+    all_kinds::RoundChainRow back;
+    std::uint8_t want[16];
+    std::size_t n = check::parse_hex(round_python_hex[i], want, sizeof(want));
+    packbin::Result u = all_kinds::round_chain_unpack(want, n, back);
+
+    // Assert
+    check::expect(p.ok() && check::same_hex(buf, p.offset, round_python_hex[i]),
+                  "AZ-3144 AC-3 round chain packet equals Python");
+    check::expect(u.ok() && all_kinds::round_chain_mismatched(row, back) == 0,
+                  "AZ-3144 AC-3 round chain Python bytes unpack to the row");
+    check::expect(all_kinds::round_chain_failures(i) == 0,
+                  "AZ-3144 AC-3 round chain image check agrees");
+  }
+}
+
 }  // namespace
 
 int run_core_when_chain_host_tests() {
   ac3_chain_rows_equal_python();
   az3141_flag_chain_rows_equal_python();
+  az3144_round_chain_rows_equal_python();
   return check::failures();
 }

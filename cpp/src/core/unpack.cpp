@@ -44,14 +44,6 @@ Result get_u16(Reader& r, std::size_t& out, int id) {
   return res;
 }
 
-// True when a flag byte is read anywhere in t[begin, end).
-bool reads_flag_byte(Field const* t, std::size_t begin, std::size_t end) {
-  for (std::size_t k = begin; k < end; ++k)
-    if (t[k].kind == Kind::FlagByte)
-      return true;
-  return false;
-}
-
 Result unpack_children(Walk& w, std::size_t i, void* obj);
 
 bool flag_bit_set(Walk const& w, Field const& f) {
@@ -86,7 +78,7 @@ Result unpack_children(Walk& w, std::size_t i, void* obj) {
         j += f.span;
         continue;
       }
-      if (!reads_flag_byte(w.t, j + 1, j + f.span)) {
+      if (!f.holds_flag_byte()) {
         ++j;
         continue;
       }
