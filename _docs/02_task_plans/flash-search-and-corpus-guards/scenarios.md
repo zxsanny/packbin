@@ -27,3 +27,9 @@ Source of rows: `intake` (new-task Step 4.7). Status: confirmed / out-of-scope /
 ## Not walked
 
 - Row U24, the first tags, size limits, CS-D5, F44, epic AZ-2750, and the loop 53 candidates: owner decides separately.
+
+## Assessment round 1 (loop 57)
+
+| id | scenario | status | note |
+|----|----------|--------|------|
+| S4 | the fold fits | confirmed (accepted loop 57) | owner 2026-10-22: one decision function `held_of` counts as the fold; see `_docs/loops/loop57/assessment57.md` |
