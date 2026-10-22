@@ -15,7 +15,7 @@ leftovers:
   - owner: size limits for text/ecc/session; CS-D5; first `v*` / `go/v*` tags; F44; close the epic AZ-2750; U24 in the C++ package
   - L57-1: Cortex-M4F flash margin 160 B (pinned), stack margin 8 B
   - Jira: connector absent. AZ-3163 and AZ-3164 are To Do (`_docs/_process_leftovers/2026-10-22_loop59_jira_in_testing.md`); the two loop 60 tasks have no key yet (`_docs/_process_leftovers/2026-10-22_loop60_jira_create_tasks.md`); epic AZ-2645 open
-ci: see below (read after the push)
+ci: `test.yml` after the push of 9bb9626 (dev and main, both fast-forward from 7816c25): NOT READ. GitHub listed no run for the commit 28 minutes after the push (`gh run list`, `check-runs` total 0; `git ls-remote` shows both heads at 9bb9626; githubstatus said operational). Loop 59 saw runs start 17 and 24 minutes late. No other trigger was used. First action of loop 61: read the two runs with `gh run list --repo zxsanny/packbin --workflow test.yml`
 smoke: PASS (agent run 6/6 at 740e7fe, owner rule 2026-10-12)
 smoke_artifact: _docs/loops/loop60/smoke60.md
 step11: RESULT 2 passed, 12 skipped as unchanged, 0 failed at 740e7fe (`test_run_loop60_report.md`)

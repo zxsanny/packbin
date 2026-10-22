@@ -8,6 +8,7 @@ Two test-only tasks (Jira keys pending), commit 740e7fe: the C++ dict key order 
 
 ## First actions of loop 61
 
+0. Read the CI of the loop 60 push (9bb9626, `dev` and `main`): GitHub had started no `test.yml` run 28 minutes after the push. `gh run list --repo zxsanny/packbin --workflow test.yml`; if there is still none, report it, do not trigger a run by hand. A red job: read its log first (`AGENT_GOTCHAS.md`).
 1. Replay the Jira leftovers when the Atlassian connector is back, in this order: `2026-10-22_loop59_jira_in_testing.md` (AZ-3163 and AZ-3164 to In Testing), then `2026-10-22_loop60_jira_create_tasks.md` (search by key range first, create the two tasks under AZ-2645, rename the two `AZ-PENDING_*` spec files in `done/`, move them to In Testing).
 2. Do not open another Review-Lows loop for the four Lows below (retro lesson of loop 60): pick product work or an owner item.
 
