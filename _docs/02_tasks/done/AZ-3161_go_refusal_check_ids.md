@@ -52,3 +52,7 @@ branch: dev
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Test-only change | no edit under `cpp/src`, `cpp/include` or any library source | open | Low |
+
+## Outcome of loop 58
+
+AC-3 and AC-4 met. `TestHostileEveryRefusalPinsOneRule` prints the `idDifference` message. With `pack_missing_required_value` replaced by an invented id in a copy of `hostileRefusals` it fails: `Go handler pack_invented_extra_id has no case in cases.txt; case pack_missing_required_value has no Go handler`. `golang:1.27` gofmt, vet and `go test -race -count=1 ./...` pass.

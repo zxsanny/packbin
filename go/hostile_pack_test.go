@@ -225,7 +225,7 @@ func TestHostileEveryRefusalPinsOneRule(t *testing.T) {
 	}
 
 	// Act and assert
-	if idDifference(refused, keysOf(hostileRefusals)) != "" {
-		t.Fatalf("pack_error cases %v, pinned rules %v", refused, keysOf(hostileRefusals))
+	if msg := idDifference(refused, keysOf(hostileRefusals)); msg != "" {
+		t.Fatalf("pack_error cases and pinned rules differ: %s", msg)
 	}
 }

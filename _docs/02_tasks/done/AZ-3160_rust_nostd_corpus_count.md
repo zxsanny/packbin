@@ -52,3 +52,7 @@ The test counts `corpus.txt` lines with the loader's own filter (`!trim().is_emp
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Test-only change | no edit under `cpp/src`, `cpp/include` or any library source | open | Low |
+
+## Outcome of loop 58
+
+AC-1 and AC-2 met. `listed_inputs()` in `rust/tests/nostd_hostile_tests.rs` counts corpus lines of exactly three fields whose last is hex, not by the loader's comment/blank filter. A loader copy that also drops lines starting with a letter fails: `corpus.txt lists 33 inputs, the loader read 0`. A corpus copy with one extra input line passes (34 and 34).

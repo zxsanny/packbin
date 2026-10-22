@@ -54,3 +54,7 @@ branch: dev
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Test-only change | no edit under `cpp/src`, `cpp/include` or any library source | open | Low |
+
+## Outcome of loop 58
+
+AC-5, AC-6 and AC-7 met. `pack_orders_keys_as_unsigned_bytes` packs raw string keys through `packbin::pack` (7 checks: `7f` then `c2 80`, prefix pair `a` then `ab`, longer-first `ab` then `b`, and the reverse and equal pairs refused with `BadValue`). A scratch `pack.cpp` with a signed compare fails the two high-byte checks; one with a length-first compare fails `ab then b`. Real source passes on the Mac host and in `gcc:16`; no file under `cpp/src` or `cpp/include` changed.

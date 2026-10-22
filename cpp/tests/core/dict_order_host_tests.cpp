@@ -205,12 +205,48 @@ void session_scheme_not_built_spends_nothing() {
   expect(again.ok() && out.sid == 0x1234, "the receive position is unchanged after the handler call");
 }
 
+struct Keyed {
+  Array<Entry<std::uint8_t, Text<4>>, 2> m;
+};
+
+void put_key(Text<4>& key, char const* bytes, std::size_t n) {
+  key.len = static_cast<std::uint16_t>(n);
+  std::memcpy(key.data, bytes, n);
+}
+
+// The pack side compares keys as unsigned bytes: a signed compare puts U+0080 (c2 80) before DEL
+// (7f), a length-first compare puts "ab" after "b".
+bool packs_in_order(char const* first, std::size_t n1, char const* second, std::size_t n2) {
+  auto s = packbin::scheme<Keyed>(1, packbin::dict<&Keyed::m>(packbin::u8(0)));
+  Keyed row;
+  row.m.count = 2;
+  put_key(row.m.items[0].key, first, n1);
+  put_key(row.m.items[1].key, second, n2);
+  std::uint8_t buf[32];
+  packbin::Scratch<16> scratch;
+  auto r = packbin::pack(s, row, buf, sizeof(buf), scratch);
+  if (!r.ok())
+    expect(r.error == Error::BadValue, "a refused key order is BadValue");
+  return r.ok();
+}
+
+void pack_orders_keys_as_unsigned_bytes() {
+  expect(packs_in_order("\x7f", 1, "\xc2\x80", 2), "pack: 7f then c2 80 (a high byte after a low one)");
+  expect(!packs_in_order("\xc2\x80", 2, "\x7f", 1), "pack: c2 80 then 7f is refused");
+  expect(packs_in_order("a", 1, "ab", 2), "pack: a then ab (the prefix first)");
+  expect(!packs_in_order("ab", 2, "a", 1), "pack: ab then a is refused");
+  expect(!packs_in_order("a", 1, "a", 1), "pack: a twice is refused");
+  expect(packs_in_order("ab", 2, "b", 1), "pack: ab then b (the longer key sorts first)");
+  expect(!packs_in_order("b", 1, "ab", 2), "pack: b then ab is refused");
+}
+
 }  // namespace
 
 int run_core_dict_order_host_tests() {
   packets_by_order();
   many_keys_are_linear();
   long_keys_share_a_prefix();
+  pack_orders_keys_as_unsigned_bytes();
   session_scheme_not_built_spends_nothing();
   return check::failures();
 }
