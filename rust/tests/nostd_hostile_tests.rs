@@ -51,25 +51,39 @@ fn construct(id: &str) -> &'static str {
 }
 
 #[test]
-fn ac1_every_case_has_a_scheme_or_a_stated_skip() {
+fn ac1_the_skipped_cases_are_exactly_the_stated_skips() {
     // Arrange
     let all = cases();
+    let expected: Vec<&str> = SKIPS.iter().map(|(id, _)| *id).collect();
     // Act
-    let missing: Vec<&str> = all
+    let skipped: Vec<&str> = all
         .iter()
-        .filter(|c| c.stage != "pack")
-        .filter(|c| fields_of(&c.id).is_none() && !SKIPS.iter().any(|(id, _)| *id == c.id))
+        .filter(|c| c.stage != "pack" && fields_of(&c.id).is_none())
         .map(|c| c.id.as_str())
         .collect();
-    let unused_skips: Vec<&str> = SKIPS
+    let moved_to_skip: Vec<&str> = skipped
         .iter()
-        .map(|(id, _)| *id)
+        .copied()
+        .filter(|id| !expected.contains(id))
+        .collect();
+    let moved_to_run: Vec<&str> = expected
+        .iter()
+        .copied()
+        .filter(|id| !skipped.contains(id) && all.iter().any(|c| c.id == *id))
+        .collect();
+    let unused_skips: Vec<&str> = expected
+        .iter()
+        .copied()
         .filter(|id| !all.iter().any(|c| c.id == *id))
         .collect();
     // Assert
     assert!(
-        missing.is_empty(),
-        "cases with neither a scheme nor a skip: {missing:?}"
+        moved_to_skip.is_empty(),
+        "cases with neither a scheme nor a stated skip (moved from run to skip): {moved_to_skip:?}"
+    );
+    assert!(
+        moved_to_run.is_empty(),
+        "stated skips that now have a scheme (moved from skip to run): {moved_to_run:?}"
     );
     assert!(
         unused_skips.is_empty(),
@@ -205,7 +219,18 @@ fn ac1_the_fuzz_corpus_reads_without_a_panic_and_its_hostile_inputs_keep_their_o
         }
     });
     // Assert
-    assert!(inputs.len() >= 33);
+    let listed = std::fs::read_to_string(CORPUS)
+        .expect("corpus.txt")
+        .lines()
+        .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
+        .count();
+    assert_eq!(
+        inputs.len(),
+        listed,
+        "corpus.txt lists {listed} inputs, the loader read {}",
+        inputs.len()
+    );
+    assert!(listed > 0, "corpus.txt holds no input");
     for c in by_case
         .iter()
         .filter(|c| c.stage == "unpack" || c.stage == "limit")

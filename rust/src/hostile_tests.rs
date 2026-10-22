@@ -1,16 +1,15 @@
 mod pack_cases;
 mod refusals;
+mod schemes;
 
 use crate::walk::unpack;
-use crate::{
-    bits, dict, eq, flag_byte, flags, group, i8, list, repeat, sized, times, to_hex, u16, u32, u8,
-    utf8, when, BoundField, MapScheme, Scheme, UnpackError, Value, DEFAULT_MAX_SLOTS,
-};
+use crate::{to_hex, BoundField, MapScheme, Scheme, UnpackError};
 use pack_cases::{pack_case, PACK_NOT_RUN};
 use refusals::{
     assert_construct_rule, assert_pack_rule, assert_tables_cover, RuleTable, CONSTRUCT_REFUSAL,
     PACK_REFUSAL,
 };
+use schemes::{limit_scheme_for, rust_outcome, scheme_for, unused_handlers};
 use std::collections::HashSet;
 use std::fs;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -53,122 +52,6 @@ fn parse_hex(hex: &str) -> Vec<u8> {
         .step_by(2)
         .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
         .collect()
-}
-
-fn zero_progress_when() -> MapScheme {
-    MapScheme::new(
-        1,
-        vec![
-            u8("0"),
-            repeat(1, vec![when(1, eq("0", Value::U8(1)), vec![u8("1")])]),
-        ],
-    )
-}
-
-/// The scheme each case names, written by hand from fixtures/hostile/README.md.
-fn scheme_for(id: &str) -> MapScheme {
-    match id {
-        "zero_progress_repeat_bool" => {
-            MapScheme::new(1, vec![repeat(0, vec![group(0, "0", vec![])])])
-        }
-        "zero_progress_repeat_when" | "when_names_outer_field_in_repeat" => zero_progress_when(),
-        "negative_count" => MapScheme::new(1, vec![i8("0"), sized("1", "0")]),
-        "oversize_count" => MapScheme::new(1, vec![u32("0"), sized("1", "0")]),
-        "oversize_count_times" => MapScheme::new(1, vec![u32("0"), times(1, "0", vec![u8("1")])]),
-        "oversize_list_count" => MapScheme::new(1, vec![list("0", u8("0"))]),
-        "invalid_utf8" => MapScheme::new(1, vec![utf8("0")]),
-        "invalid_utf8_dict_key"
-        | "dict_keys_out_of_order"
-        | "dict_keys_repeated"
-        | "dict_keys_repeated_forms"
-        | "dict_keys_prefix_descends"
-        | "dict_keys_utf16_order" => MapScheme::new(1, vec![dict("0", u8("0"))]),
-        "count_behind_clear_flag" => {
-            MapScheme::new(1, vec![flags(0, "f", vec![u8("0")]), sized("1", "0")])
-        }
-        "count_behind_clear_flag_bits" => {
-            MapScheme::new(1, vec![flags(0, "f", vec![u8("0")]), bits("1", "0")])
-        }
-        "when_names_later_field" => MapScheme::new(
-            1,
-            vec![
-                u8("0"),
-                when(1, eq("2", Value::U8(1)), vec![u8("1")]),
-                u8("2"),
-            ],
-        ),
-        "count_names_later_field" => MapScheme::new(1, vec![sized("0", "1"), u16("1")]),
-        "nine_flag_bits" => MapScheme::new(
-            1,
-            vec![flags(0, "f", (0..9).map(|i| u8(i.to_string())).collect())],
-        ),
-        "nine_flag_bits_split" => {
-            let byte = flag_byte("0");
-            let mut fields = vec![byte.byte()];
-            fields.extend((1..10).map(|i| byte.bit(u8(i.to_string()))));
-            MapScheme::new(1, fields)
-        }
-        "construct_empty_times_body" => MapScheme::new(1, vec![u8("0"), times(1, "0", vec![])]),
-        "construct_empty_when_times_body" => MapScheme::new(
-            1,
-            vec![
-                u8("0"),
-                u8("1"),
-                times(2, "1", vec![when(2, eq("0", Value::U8(1)), vec![])]),
-            ],
-        ),
-        "construct_empty_when_repeat_body" => MapScheme::new(
-            1,
-            vec![
-                u8("0"),
-                repeat(1, vec![when(1, eq("0", Value::U8(1)), vec![])]),
-            ],
-        ),
-        "construct_empty_nested_when_body" => MapScheme::new(
-            1,
-            vec![
-                u8("0"),
-                u8("1"),
-                times(
-                    2,
-                    "1",
-                    vec![when(
-                        2,
-                        eq("0", Value::U8(1)),
-                        vec![when(2, eq("0", Value::U8(1)), vec![])],
-                    )],
-                ),
-            ],
-        ),
-        "construct_empty_repeat_body" => MapScheme::new(1, vec![repeat(0, vec![])]),
-        "empty_group_outside_flags" => MapScheme::new(1, vec![u8("0"), group(1, "1", vec![])]),
-        "eq_bool_false" => MapScheme::new(
-            1,
-            vec![
-                flags(0, "f", vec![group(0, "0", vec![])]),
-                when(1, eq("0", Value::U8(0)), vec![u8("1")]),
-            ],
-        ),
-        "eq_out_of_range" => MapScheme::new(
-            1,
-            vec![u8("a"), when(1, eq("a", Value::U16(300)), vec![u8("v")])],
-        ),
-        other => panic!("no scheme written for hostile case {other}"),
-    }
-}
-
-/// Rounds the scheme of a `limit` case allows; max_slots stays at its default.
-const LOW_ROUNDS: usize = 3;
-
-/// The scheme a `limit` case names: written by hand from fixtures/hostile/README.md.
-fn limit_scheme_for(id: &str) -> MapScheme {
-    match id {
-        "repeat_rounds_over_limit" => MapScheme::new(1, vec![repeat(0, vec![u8("0")])])
-            .with_limits(LOW_ROUNDS, DEFAULT_MAX_SLOTS),
-        "times_rounds_over_limit" => MapScheme::new(1, vec![u8("0"), times(1, "0", vec![u8("1")])])
-            .with_limits(LOW_ROUNDS, DEFAULT_MAX_SLOTS),
-        other => panic!("no scheme written for hostile limit case {other}"),
-    }
 }
 
 /// Construct cases a Rust scheme cannot spell, with the reason (the README "Expected" line of each).
@@ -223,40 +106,6 @@ fn panic_text(panic: &(dyn std::any::Any + Send)) -> String {
         (*s).to_string()
     } else {
         String::new()
-    }
-}
-
-/// What Rust returns for each case today; the labels are undecided until C15.
-fn rust_outcome(id: &str) -> &'static str {
-    match id {
-        "zero_progress_repeat_bool"
-        | "nine_flag_bits"
-        | "nine_flag_bits_split"
-        | "bool_outside_flags"
-        | "empty_group_outside_flags"
-        | "eq_bool_false"
-        | "eq_out_of_range"
-        | "construct_empty_times_body"
-        | "construct_empty_repeat_body"
-        | "construct_empty_when_times_body"
-        | "construct_empty_when_repeat_body"
-        | "construct_empty_nested_when_body" => "scheme_error",
-        "zero_progress_repeat_when" | "when_names_outer_field_in_repeat" => "scheme_error",
-        "negative_count"
-        | "oversize_count"
-        | "oversize_count_times"
-        | "oversize_list_count"
-        | "invalid_utf8"
-        | "invalid_utf8_dict_key"
-        | "dict_keys_out_of_order"
-        | "dict_keys_repeated"
-        | "dict_keys_repeated_forms"
-        | "dict_keys_prefix_descends"
-        | "dict_keys_utf16_order"
-        | "count_behind_clear_flag"
-        | "count_behind_clear_flag_bits" => "Short",
-        "when_names_later_field" | "count_names_later_field" => "scheme_error",
-        other => panic!("no Rust outcome recorded for hostile case {other}"),
     }
 }
 
@@ -398,6 +247,7 @@ fn a_refused_case_without_a_rule_entry_fails_the_loader() {
 fn run_all_cases(construct_rules: RuleTable, pack_rules: RuleTable) {
     let text = fs::read_to_string(CASES).expect("fixtures/hostile/cases.txt");
     let mut seen = HashSet::new();
+    let mut listed = Vec::new();
     let mut outcomes = Vec::new();
     let (mut construct_refused, mut pack_refused) = (Vec::new(), Vec::new());
     for line in text.lines() {
@@ -409,6 +259,7 @@ fn run_all_cases(construct_rules: RuleTable, pack_rules: RuleTable) {
         assert_eq!(cols.len(), 4, "bad case line: {line}");
         let (id, stage, expected, hex) = (cols[0], cols[1], cols[2], cols[3]);
         assert!(seen.insert(id.to_string()), "duplicate case {id}");
+        listed.push((id.to_string(), stage.to_string()));
         let allows_scheme_error = expected.split('|').any(|t| t == "scheme_error");
         match stage {
             "construct" => {
@@ -485,6 +336,8 @@ fn run_all_cases(construct_rules: RuleTable, pack_rules: RuleTable) {
             "{skipped}: skipped by the Rust loader but not a case of cases.txt"
         );
     }
+    let unused = unused_handlers(&listed);
+    assert!(unused.is_empty(), "{}", unused.join("; "));
     assert_tables_cover(
         construct_rules,
         &construct_refused,

@@ -21,7 +21,7 @@ ship: false
 | deploy | 16 | Deploy | no | not a ship loop |
 | release | 16.5 | Release | no | — |
 | migration | 16.7 | Data/Traffic Cutover | no | — |
-| retrospective | 17 | Retrospective | yes | loop 56 + 57 = 2 since retro 55? under 5 loops: no |
+| retrospective | 17 | Retrospective | no | last retro loop 55, under 5 loops |
 | local-deploy | — | Local deploy + open site | yes | at close |
 | smoke | — | Smoke acceptance | yes | at close |
 

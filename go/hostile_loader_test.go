@@ -352,19 +352,3 @@ func idDifference(caseIDs, handlerIDs []string) string {
 	sort.Strings(problems)
 	return strings.Join(problems, "; ")
 }
-
-func sameSet(a, b []string) bool {
-	seen := map[string]int{}
-	for _, x := range a {
-		seen[x]++
-	}
-	for _, x := range b {
-		seen[x]--
-	}
-	for _, n := range seen {
-		if n != 0 {
-			return false
-		}
-	}
-	return true
-}

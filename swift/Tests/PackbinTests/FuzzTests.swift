@@ -35,6 +35,8 @@ import Testing
         // Arrange
         let fuzz = try FuzzRun()
         let corpus = try fuzzCorpus()
+        let listed = try repositoryFile("fixtures/hostile/fuzz/corpus.txt").split(separator: "\n")
+            .filter { !$0.hasPrefix("#") && !$0.allSatisfy(\.isWhitespace) }.count
 
         // Act
         var failures: [String] = []
@@ -48,7 +50,8 @@ import Testing
 
         // Assert
         print("FuzzTests: corpus of \(corpus.count) inputs: \(reads) unpack calls, \(failures.count) failures")
-        #expect(corpus.count == 33)
+        #expect(corpus.count == listed, "corpus.txt lists \(listed) inputs, the loader read \(corpus.count)")
+        #expect(listed > 0)
         #expect(failures.isEmpty, "\(failures.prefix(10))")
     }
 
