@@ -51,3 +51,7 @@ Nothing asserts the recorded flash figure; a later edit can spend the whole marg
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | The pin value depends on AZ-3151/AZ-3152 outcomes | set last | open | Low |
+
+## Outcome of loop 57
+
+AC-10 met: `flash_pin=8032` in `cpp/embedded/lib.sh`, checked in `arm.sh` `target_m4f`; with the pin at 8,031 B on a copy the stage fails with `flash 8032 B measured is over the pin of 8031 B`. AC-11 is written by the parent in step 13.

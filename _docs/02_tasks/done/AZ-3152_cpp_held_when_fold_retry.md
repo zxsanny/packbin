@@ -55,3 +55,7 @@ The held-`when` and flag-bit handling exists twice (review #1 of loop 55, Medium
 |---------|----------------|--------|----------|
 | The fold may fail again (flash or stack) | allowed outcome: not made | open | Medium |
 | Stack margin 8 B | measure before commit | open | Medium |
+
+## Outcome of loop 57
+
+Kept, as a decision function and not a walker: `held_of` (NOINLINE) returns Skip / Inline / Scope / Bit and `unpack_children` and the merged `When` / `FlagBit` case of `unpack_one` both ask it. Flash 8,032 B (limit 8,080 B); stack net flag chain unpack 476 B, plain chain unpack 288 B, round chain unpack 432 B (limits 500 / 292 / 436 B). Try A (one range-walking `unpack_range`) measured 7,976 B flash but 580 B on the flag chain and was restored: a 4-argument function puts its last argument on the stack and blocks the tail call from `unpack_one`.

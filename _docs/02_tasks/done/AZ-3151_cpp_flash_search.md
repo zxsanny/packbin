@@ -55,3 +55,7 @@ AZ-3143 saved 40 B and missed its 8,040 B target: the Cortex-M4F image is 8,080 
 | Saving may be below 40 B | report the figure; ticket, no loosened bound | open | Medium |
 | A saving by dropping a check changes behavior | corpora must be identical to HEAD | open | High |
 | Stack margin 8 B | measure before commit | open | Medium |
+
+## Outcome of loop 57
+
+AC-1 and AC-2 met. `keys_ascending` compares bytes inline instead of calling `memcmp` (the only libc string function the probe pulled in beyond the baseline): flash 8,080 B to 8,008 B (a 72 B saving), stack unchanged.

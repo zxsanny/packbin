@@ -57,3 +57,7 @@ The plain Rust loader cannot name an unused unpack or limit handler (`scheme_for
 |---------|----------------|--------|----------|
 | The expected-skip set can go stale | a stale entry fails by id | open | Low |
 | Rust `match` handlers may need a handler table to be countable | smallest change that names the id | open | Low |
+
+## Outcome of loop 57
+
+AC-6 to AC-9 met, each shown on a broken copy. Rust handlers are tables (`rust/src/hostile_tests/schemes.rs`) with `unused_handlers`; the nostd test compares the skipped set with an explicit `SKIPS` set in both directions; Swift and Rust nostd counts equal the corpus line count; Go `sameSet` is gone. Go, Rust and Swift suites pass.
