@@ -210,13 +210,16 @@ struct Keyed {
 };
 
 void put_key(Text<4>& key, char const* bytes, std::size_t n) {
+  expect(n <= sizeof(key.data), "put_key: the key fits its Text");
+  if (n > sizeof(key.data))
+    return;
   key.len = static_cast<std::uint16_t>(n);
   std::memcpy(key.data, bytes, n);
 }
 
 // The pack side compares keys as unsigned bytes: a signed compare puts U+0080 (c2 80) before DEL
 // (7f), a length-first compare puts "ab" after "b".
-bool packs_in_order(char const* first, std::size_t n1, char const* second, std::size_t n2) {
+Error pack_error(char const* first, std::size_t n1, char const* second, std::size_t n2) {
   auto s = packbin::scheme<Keyed>(1, packbin::dict<&Keyed::m>(packbin::u8(0)));
   Keyed row;
   row.m.count = 2;
@@ -224,20 +227,17 @@ bool packs_in_order(char const* first, std::size_t n1, char const* second, std::
   put_key(row.m.items[1].key, second, n2);
   std::uint8_t buf[32];
   packbin::Scratch<16> scratch;
-  auto r = packbin::pack(s, row, buf, sizeof(buf), scratch);
-  if (!r.ok())
-    expect(r.error == Error::BadValue, "a refused key order is BadValue");
-  return r.ok();
+  return packbin::pack(s, row, buf, sizeof(buf), scratch).error;
 }
 
 void pack_orders_keys_as_unsigned_bytes() {
-  expect(packs_in_order("\x7f", 1, "\xc2\x80", 2), "pack: 7f then c2 80 (a high byte after a low one)");
-  expect(!packs_in_order("\xc2\x80", 2, "\x7f", 1), "pack: c2 80 then 7f is refused");
-  expect(packs_in_order("a", 1, "ab", 2), "pack: a then ab (the prefix first)");
-  expect(!packs_in_order("ab", 2, "a", 1), "pack: ab then a is refused");
-  expect(!packs_in_order("a", 1, "a", 1), "pack: a twice is refused");
-  expect(packs_in_order("ab", 2, "b", 1), "pack: ab then b (the longer key sorts first)");
-  expect(!packs_in_order("b", 1, "ab", 2), "pack: b then ab is refused");
+  expect(pack_error("\x7f", 1, "\xc2\x80", 2) == Error::Ok, "pack: 7f then c2 80 (a high byte after a low one)");
+  expect(pack_error("\xc2\x80", 2, "\x7f", 1) == Error::BadValue, "pack: c2 80 then 7f is BadValue");
+  expect(pack_error("a", 1, "ab", 2) == Error::Ok, "pack: a then ab (the prefix first)");
+  expect(pack_error("ab", 2, "a", 1) == Error::BadValue, "pack: ab then a is BadValue");
+  expect(pack_error("a", 1, "a", 1) == Error::BadValue, "pack: a twice is BadValue");
+  expect(pack_error("ab", 2, "b", 1) == Error::Ok, "pack: ab then b (the longer key sorts first)");
+  expect(pack_error("b", 1, "ab", 2) == Error::BadValue, "pack: b then ab is BadValue");
 }
 
 }  // namespace

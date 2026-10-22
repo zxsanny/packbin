@@ -174,15 +174,19 @@ fn corpus() -> Vec<(String, String, Vec<u8>)> {
         .collect()
 }
 
-/// The inputs corpus.txt lists, counted by a rule that is not the loader's filter: an input is a
-/// line of exactly three fields whose last is hex digits (the header comment has more fields).
+/// The inputs corpus.txt lists, counted by the README rule and not by the loader's filter: an input
+/// is `name kind hex`, the name only `[a-z0-9_]`, so a comment never counts, whatever it ends with.
 fn listed_inputs() -> usize {
     std::fs::read_to_string(CORPUS)
         .expect("corpus.txt")
         .lines()
         .filter(|l| {
             let f: Vec<&str> = l.split_whitespace().collect();
-            f.len() == 3 && !f[2].is_empty() && f[2].bytes().all(|b| b.is_ascii_hexdigit())
+            f.len() == 3
+                && f[0]
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+                && f[2].bytes().all(|b| b.is_ascii_hexdigit())
         })
         .count()
 }

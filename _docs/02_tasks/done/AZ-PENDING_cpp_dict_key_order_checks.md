@@ -54,3 +54,7 @@ branch: dev
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Test-only change | no edit under `cpp/src`, `cpp/include` or any library source | open | Low |
+
+## Outcome of loop 59
+
+AC-4 to AC-6 met. `put_key` expects `n <= sizeof(key.data)` and returns without copying otherwise; `pack_error` returns the `Error` and each of the 7 pairs asserts `Error::Ok` or `Error::BadValue` with its own message. Scratch copies: one flipped pair fails as `FAIL: pack: ab then a is BadValue`; a call with a 5-byte key fails `FAIL: put_key: the key fits its Text`. Real source passes on the Mac host (`make -C cpp test`) and in `gcc:16`; no file under `cpp/src` or `cpp/include` changed.

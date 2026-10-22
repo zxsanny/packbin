@@ -54,3 +54,7 @@ branch: dev
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Test-only change | no edit under `cpp/src`, `cpp/include` or any library source | open | Low |
+
+## Outcome of loop 59
+
+AC-1 to AC-3 met. `listed_inputs()` counts three-field lines whose name is `[a-z0-9_]+` and whose last field is hex; the dead `is_empty` check is gone. Scratch copies: a `# note abcd` line leaves the count unchanged and the test passes; one extra input line raises both counts (34 and 34); a loader that also drops lines starting with a letter fails `corpus.txt lists 34 inputs, the loader read 0`. Real tree: `cargo test --features text --test nostd_hostile_tests` 6 passed.
