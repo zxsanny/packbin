@@ -388,3 +388,12 @@ AZ-3143, AZ-3144 and AZ-3145 are loop 56 (owner 2026-10-21: "Accept recommended 
 | AZ-3143 | cpp_flag_byte_bit_at_resolve | 3 | None | AZ-2645 |
 | AZ-3144 | cpp_held_when_one_path | 3 | AZ-3143 | AZ-2645 |
 | AZ-3145 | corpus_counts_derived | 2 | None | AZ-2645 |
+
+AZ-3151 to AZ-3154 are loop 57 (owner 2026-10-22: "Accept all recommended" on `handoff57.md`; epic AZ-2645; 3 + 3 + 3 + 1 points). AZ-3152 depends on AZ-3151 (flash saving first); AZ-3154 depends on AZ-3152 (pin set last). AZ-3151, AZ-3152 and AZ-3154 own `cpp/` only; AZ-3153 owns the Rust, Swift and Go test loaders only, so the C++ line and the loader line are disjoint.
+
+| Task | Name | Complexity | Dependencies | Epic |
+|------|------|-----------|-------------|------|
+| AZ-3151 | cpp_flash_search | 3 | None | AZ-2645 |
+| AZ-3152 | cpp_held_when_fold_retry | 3 | AZ-3151 | AZ-2645 |
+| AZ-3153 | corpus_guards | 3 | None | AZ-2645 |
+| AZ-3154 | cpp_flash_pin | 1 | AZ-3152 | AZ-2645 |
