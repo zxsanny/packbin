@@ -24,4 +24,4 @@ AZ-3151 (inline byte loop in `keys_ascending` instead of `memcmp`: flash 8,080 B
 
 ## CI read after the push
 
-Read for the loop 57 push; the result goes into `record57.md` (`ci:`). `gh` lists runs with `gh run list --repo zxsanny/packbin --workflow test.yml`; job logs with `gh api repos/zxsanny/packbin/actions/jobs/<id>/logs --allow-escape-sequences`.
+Read for the loop 57 push (83ea810): `dev` run 39771726639 and `main` run 39771458707 both green, 20 jobs each, 0 not success. First action of loop 58: nothing from CI; start from the candidates above. The result is in `record57.md` (`ci:`). `gh` lists runs with `gh run list --repo zxsanny/packbin --workflow test.yml`; job logs with `gh api repos/zxsanny/packbin/actions/jobs/<id>/logs --allow-escape-sequences`.
