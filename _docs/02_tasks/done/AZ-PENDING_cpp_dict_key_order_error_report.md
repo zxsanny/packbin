@@ -54,3 +54,7 @@ A failing pair prints a fixed message, not the `Error` returned; `put_key` leave
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Test-only change | no edit under `cpp/src`, `cpp/include` or any library source | open | Low |
+
+## Outcome of loop 60
+
+AC-1 to AC-3 met. `put_key` returns whether it copied; `pack_error` returns `kKeyRefused` (`Error::TooLong`) without packing when a key is refused; `error_name` and `expect_pair` print `pack: <pair>: got <Error>, want <Error>` for each of the 7 pairs. Scratch copies: a flipped pair fails `FAIL: pack: ab then a: got BadValue, want Ok`; a 5-byte key fails `FAIL: put_key: the key fits its Text` and `FAIL: pack: a twice: got TooLong, want BadValue`. Real source passes on the Mac host (`make -C cpp test`) and in `gcc:16`; no file under `cpp/src` or `cpp/include` changed.

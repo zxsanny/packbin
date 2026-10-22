@@ -52,3 +52,7 @@ The count rule checks the name only: a line with a bad kind or an upper-case hex
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
 | Test-only change | no edit under `cpp/src`, `cpp/include` or any library source | open | Low |
+
+## Outcome of loop 60
+
+AC-4 and AC-5 met. `listed_inputs()` splits each line with four `next()` calls (no `Vec`), counts it when name and kind are `[a-z0-9_]+` and the hex is lowercase; the real corpus gives 33 = the loader's count. Scratch copies: `# note abcd` passes; one extra valid line passes (both counts 34); an upper-case hex line or `Bad-Kind` fails `corpus.txt lists 33 inputs, the loader read 34`; a loader that also drops letter-led lines fails `read 0`. `cargo test --features text --test nostd_hostile_tests` 6 passed.
