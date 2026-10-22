@@ -5,13 +5,13 @@ branch: dev
 
 # C++ dict key order test: guard put_key, name each refusal
 
-**Task**: AZ-PENDING_cpp_dict_key_order_checks (Jira key pending, see `_docs/_process_leftovers/2026-10-22_loop59_jira_cpp_task.md`)
+**Task**: AZ-3164_cpp_dict_key_order_checks
 **Name**: C++ dict key order test: guard put_key, name each refusal
 **Description**: `put_key` checks the key length against the key capacity; the pack helper returns the `Error` and each pair asserts its own result and message.
 **Complexity**: 2 points
 **Dependencies**: None
 **Component**: `cpp/tests/core/dict_order_host_tests.cpp`
-**Tracker**: pending
+**Tracker**: AZ-3164
 **Epic**: AZ-2645
 
 ## Problem

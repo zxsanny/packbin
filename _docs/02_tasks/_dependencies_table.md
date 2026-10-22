@@ -406,9 +406,9 @@ AZ-3160 to AZ-3162 are loop 58 (owner 2026-10-22: "Accept all recommended" on `h
 | AZ-3161 | go_refusal_check_ids | 1 | None | AZ-2645 |
 | AZ-3162 | cpp_dict_key_order_high_byte | 2 | None | AZ-2645 |
 
-AZ-3163 and the C++ task (Jira key pending) are loop 59 (owner 2026-10-22: "Review Lows of loop 58" from `handoff59.md`; epic AZ-2645; 2 + 2 points). Both are test-only and own disjoint files.
+AZ-3163 and AZ-3164 are loop 59 (owner 2026-10-22: "Review Lows of loop 58" from `handoff59.md`; epic AZ-2645; 2 + 2 points). Both are test-only and own disjoint files.
 
 | Task | Name | Complexity | Dependencies | Epic |
 |------|------|-----------|-------------|------|
 | AZ-3163 | rust_nostd_corpus_count_name_rule | 2 | None | AZ-2645 |
-| AZ-PENDING | cpp_dict_key_order_checks | 2 | None | AZ-2645 |
+| AZ-3164 | cpp_dict_key_order_checks | 2 | None | AZ-2645 |

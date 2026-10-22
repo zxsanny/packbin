@@ -9,7 +9,7 @@ ship: false
 ## Steps
 | id | step | name | include | reason |
 |----|------|------|---------|--------|
-| new-task | 9 | New Task | no | done at P0 (2 tasks: AZ-3163, C++ task pending its Jira key) |
+| new-task | 9 | New Task | no | done at P0 (2 tasks: AZ-3163, AZ-3164) |
 | decompose-feature | 9.5 | Decompose Feature | no | each task is 2 points |
 | implement | 10 | Implement | yes | two test-only edits, disjoint files, done by the parent |
 | feature-assess | 10.5 | Feature Assessment | no | test-only pass; skipped as in loop 58 |
@@ -28,10 +28,10 @@ ship: false
 ## Implementation
 
 ### Files that change
-rust/tests/nostd_hostile_tests.rs (AZ-3163); cpp/tests/core/dict_order_host_tests.cpp (C++ task).
+rust/tests/nostd_hostile_tests.rs (AZ-3163); cpp/tests/core/dict_order_host_tests.cpp (AZ-3164).
 ### Order of work
 Independent; Rust then C++.
 ### Proof
 Broken-copy runs per AC; Rust `cargo test`; C++ host `make -C cpp test` and gcc:16; arm stage figures unchanged (flash 8,032 B).
 ### Risks
-L57-1 (flash margin 160 B, stack 8 B) — untouched, no library edit. Jira outage: the C++ task key is pending (leftover).
+L57-1 (flash margin 160 B, stack 8 B) — untouched, no library edit.
