@@ -412,3 +412,10 @@ AZ-3163 and AZ-3164 are loop 59 (owner 2026-10-22: "Review Lows of loop 58" from
 |------|------|-----------|-------------|------|
 | AZ-3163 | rust_nostd_corpus_count_name_rule | 2 | None | AZ-2645 |
 | AZ-3164 | cpp_dict_key_order_checks | 2 | None | AZ-2645 |
+
+AZ-PENDING tasks are loop 60 (owner 2026-10-22: "Review Lows of loop 59 + retro" from `handoff60.md`; epic AZ-2645; 2 + 2 points). Jira keys pending (connector absent). Both are test-only and own disjoint files.
+
+| Task | Name | Complexity | Dependencies | Epic |
+|------|------|-----------|-------------|------|
+| AZ-PENDING | cpp_dict_key_order_error_report | 2 | None | AZ-2645 |
+| AZ-PENDING | rust_nostd_corpus_kind_hex_rule | 2 | None | AZ-2645 |
