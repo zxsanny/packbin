@@ -210,8 +210,10 @@ bool keys_ascending(Field const* t, std::size_t i, void* m) {
     text_bytes(key, member(key, f.item(m, k - 1)), a, la);
     text_bytes(key, member(key, f.item(m, k)), b, lb);
     std::size_t common = la < lb ? la : lb;
-    int c = common == 0 ? 0 : std::memcmp(a, b, common);
-    if (c > 0 || (c == 0 && la >= lb))
+    std::size_t at = 0;
+    while (at < common && a[at] == b[at])
+      ++at;
+    if (at < common ? a[at] > b[at] : la >= lb)
       return false;
   }
   return true;

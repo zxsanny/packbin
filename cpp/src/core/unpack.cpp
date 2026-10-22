@@ -63,41 +63,46 @@ Result with_outer_flags(Walk& w, std::size_t i, void* obj) {
   return res;
 }
 
-// The children of entry i, in order, on the same object. Two kinds of child are entered here and not
-// through unpack_one: a `when` (skipped when it does not hold; when it holds and reads no flag byte
-// its children follow it in this loop; when it reads a flag byte, a nested call of this function
-// inside its own flag scope) and a flag bit (its child inside the flag scope). A chain of such
-// entries then costs the stack of this function and with_outer_flags per flag scope. unpack_table,
-// a `times` round and a flags member still reach these kinds through unpack_one.
+// What a `when` or a flag bit asks of the walker that reaches it; unpack_children and unpack_one
+// both ask here, so the two kinds are decided in one place. Skip: nothing to read. Inline: a `when`
+// that holds and reads no flag byte, whose children are walked as part of the walker's own loop.
+// Scope: a `when` that holds and reads a flag byte, whose children are walked in their own flag
+// scope. Bit: a set flag bit, whose child is walked in the flag scope.
+enum class Held : std::uint8_t { Skip, Inline, Scope, Bit };
+
+PACKBIN_NOINLINE
+Held held_of(Walk const& w, Field const& f, void* obj) {
+  if (f.kind == Kind::When) {
+    if (!when_matches(w.t, f, obj))
+      return Held::Skip;
+    return f.holds_flag_byte() ? Held::Scope : Held::Inline;
+  }
+  return flag_bit_set(w, f) ? Held::Bit : Held::Skip;
+}
+
+// The children of entry i, in order, on the same object. A `when` or a flag bit is entered here and
+// not through unpack_one: an Inline `when` keeps its children in this loop, a Scope `when` is a nested
+// call of this function inside its own flag scope and a flag bit enters its child in the flag scope.
+// A chain of such entries then costs the stack of this function and with_outer_flags per flag scope.
+// unpack_table, a `times` round and a flags member still reach these kinds through unpack_one.
 Result unpack_children(Walk& w, std::size_t i, void* obj) {
   std::size_t end = i + w.t[i].span;
   for (std::size_t j = i + 1; j < end;) {
     Field const& f = w.t[j];
-    if (f.kind == Kind::When) {
-      if (!when_matches(w.t, f, obj)) {
-        j += f.span;
-        continue;
-      }
-      if (!f.holds_flag_byte()) {
+    Result res{};
+    if (f.kind == Kind::When || f.kind == Kind::FlagBit) {
+      Held held = held_of(w, f, obj);
+      if (held == Held::Inline) {
         ++j;
         continue;
       }
-      Result res = with_outer_flags<unpack_children>(w, j, obj);
-      if (!res.ok())
-        return res;
-      j += f.span;
-      continue;
+      if (held == Held::Scope)
+        res = with_outer_flags<unpack_children>(w, j, obj);
+      else if (held == Held::Bit)
+        res = with_outer_flags<unpack_one>(w, j + 1, obj);
+    } else {
+      res = unpack_one(w, j, obj);
     }
-    if (f.kind == Kind::FlagBit) {
-      if (flag_bit_set(w, f)) {
-        Result res = with_outer_flags<unpack_one>(w, j + 1, obj);
-        if (!res.ok())
-          return res;
-      }
-      j += f.span;
-      continue;
-    }
-    Result res = unpack_one(w, j, obj);
     if (!res.ok())
       return res;
     j += f.span;
@@ -361,15 +366,21 @@ Result unpack_one(Walk& w, std::size_t i, void* obj) {
     case Kind::Sized:
       return unpack_text(w, i, obj);
     case Kind::When:
-      return when_matches(w.t, f, obj) ? with_outer_flags<unpack_children>(w, i, obj) : Result{};
+    case Kind::FlagBit:
+      switch (held_of(w, f, obj)) {
+        case Held::Inline:
+        case Held::Scope:
+          return with_outer_flags<unpack_children>(w, i, obj);
+        case Held::Bit:
+          return with_outer_flags<unpack_one>(w, i + 1, obj);
+        case Held::Skip:
+          break;
+      }
+      return Result{};
     case Kind::Flags:
       return unpack_flags(w, i, obj);
     case Kind::FlagByte:
       return get_num<std::uint8_t>(w.r, w.flag_bytes[f.size], false, f.id);
-    case Kind::FlagBit:
-      if (flag_bit_set(w, f))
-        return with_outer_flags<unpack_one>(w, i + 1, obj);
-      return Result{};
     case Kind::Group:
       if (f.span == 1) {
         set_bool(f, member(f, obj));
