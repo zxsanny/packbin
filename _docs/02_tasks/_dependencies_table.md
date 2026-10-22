@@ -397,3 +397,11 @@ AZ-3151 to AZ-3154 are loop 57 (owner 2026-10-22: "Accept all recommended" on `h
 | AZ-3152 | cpp_held_when_fold_retry | 3 | AZ-3151 | AZ-2645 |
 | AZ-3153 | corpus_guards | 3 | None | AZ-2645 |
 | AZ-3154 | cpp_flash_pin | 1 | AZ-3152 | AZ-2645 |
+
+AZ-3160 to AZ-3162 are loop 58 (owner 2026-10-22: "Accept all recommended" on `handoff58.md`; epic AZ-2645; 2 + 1 + 2 points). All three are test-only and own disjoint files: Rust nostd test (AZ-3160), Go pack test (AZ-3161), C++ `dict_order_host_tests.cpp` (AZ-3162).
+
+| Task | Name | Complexity | Dependencies | Epic |
+|------|------|-----------|-------------|------|
+| AZ-3160 | rust_nostd_corpus_count | 2 | None | AZ-2645 |
+| AZ-3161 | go_refusal_check_ids | 1 | None | AZ-2645 |
+| AZ-3162 | cpp_dict_key_order_high_byte | 2 | None | AZ-2645 |
