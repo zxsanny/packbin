@@ -26,4 +26,4 @@ AZ-3160 (Rust nostd corpus count by its own rule), AZ-3161 (Go refusal check nam
 
 ## CI read after the push
 
-(filled after the loop 58 push; the result is in `record58.md` `ci:`.)
+Read for the loop 58 push (b348640): `dev` run 39802598603 and `main` run 39802662931 both green, 20 jobs each, 0 not success. First action of loop 59: nothing from CI; start from the candidates above. The result is in `record58.md` (`ci:`). `gh` lists runs with `gh run list --repo zxsanny/packbin --workflow test.yml`; job logs with `gh api repos/zxsanny/packbin/actions/jobs/<id>/logs --allow-escape-sequences`.
