@@ -15,6 +15,7 @@ leftovers:
   - owner: size limits for text/ecc/session; CS-D5; first `v*` / `go/v*` tags; F44; close the epic AZ-2750; U24 in the C++ package
   - L57-1: Cortex-M4F flash margin 160 B (pinned), stack margin 8 B
   - Jira: AZ-3163 and AZ-3164 are To Do; the move to In Testing is pending (`_docs/_process_leftovers/2026-10-22_loop59_jira_in_testing.md`); epic AZ-2645 open
+ci: `test.yml` after the push of 7816c25, read with `gh`: `main` run 39819154297 success (20 jobs, 0 not success, 4 min); `dev` run 39819562915 success (20 jobs, 0 not success, 18 min: GitHub Actions was degraded, the runs began 17 and 24 minutes after the push and `publish-gate-readonly` sat 15 minutes in "pull images")
 smoke: PASS (agent run 6/6 at 2a0d510, owner rule 2026-10-12)
 smoke_artifact: _docs/loops/loop59/smoke59.md
 step11: RESULT 2 passed, 12 skipped as unchanged, 0 failed at 2a0d510 (`test_run_loop59_report.md`)

@@ -32,4 +32,4 @@ AZ-3163 (Rust nostd corpus count by the README name rule) and AZ-3164 (C++ dict 
 
 ## CI read after the push
 
-Read for the loop 59 push after it lands: `gh run list --repo zxsanny/packbin --workflow test.yml`; job logs with `gh api repos/zxsanny/packbin/actions/jobs/<id>/logs --allow-escape-sequences`.
+Read for the loop 59 push (7816c25): `main` run 39819154297 and `dev` run 39819562915 both green, 20 jobs each, 0 not success. GitHub Actions was degraded that afternoon (the runs began late, one image pull took 15 minutes), so the wall times say nothing about the workflow. First action of loop 60 on CI: nothing; the result is in `record59.md` (`ci:`). `gh` lists runs with `gh run list --repo zxsanny/packbin --workflow test.yml`.
