@@ -1,6 +1,6 @@
 # Acceptance criteria — loop 60
 
-Baseline (loop 59 close): Cortex-M4F flash 8,032 B (pin 8032, budget 8,192 B), stack figures unchanged since loop 57; the shared hostile corpora pass in all eight packages; `corpus.txt` lists 34 inputs.
+Baseline (loop 59 close): Cortex-M4F flash 8,032 B (pin 8032, budget 8,192 B), stack figures unchanged since loop 57; the shared hostile corpora pass in all eight packages; `corpus.txt` lists 33 inputs.
 
 ## C++ dict key order test
 
@@ -10,7 +10,7 @@ Baseline (loop 59 close): Cortex-M4F flash 8,032 B (pin 8032, budget 8,192 B), s
 
 ## Rust corpus count rule
 
-- **AC-4** `listed_inputs` counts a line as an input when it has exactly three whitespace fields, the first and the second match `[a-z0-9_]+`, and the third is lowercase hex digits; it makes no `Vec` per line. On the real `corpus.txt` it returns the loader's count (34).
+- **AC-4** `listed_inputs` counts a line as an input when it has exactly three whitespace fields, the first and the second match `[a-z0-9_]+`, and the third is lowercase hex digits; it makes no `Vec` per line. On the real `corpus.txt` it returns the loader's count (33).
 - **AC-5** Scratch copies of `corpus.txt`: a line with an upper-case hex last field, a line with a kind outside `[a-z0-9_]+`, and a `# note abcd` comment leave the count unchanged and the test passes; one extra valid input line raises both counts by one and passes. A loader copy that also drops lines starting with a letter still fails naming the expected and loaded counts.
 
 ## Out of scope

@@ -32,9 +32,9 @@ The count rule checks the name only: a line with a bad kind or an upper-case hex
 
 ## Acceptance Criteria
 
-**AC-4: Rule** — Given the real `corpus.txt`, When `listed_inputs` runs, Then it returns the loader's count (34), checks name, kind and lowercase hex, and allocates no `Vec` per line.
+**AC-4: Rule** — Given the real `corpus.txt`, When `listed_inputs` runs, Then it returns the loader's count (33), checks name, kind and lowercase hex, and allocates no `Vec` per line.
 
-**AC-5: Copies** — Given scratch copies with an upper-case hex last field, a kind outside `[a-z0-9_]+`, or `# note abcd`, Then the count is unchanged and the test passes; given one extra valid input line, both counts rise by one; given a loader copy that also drops lines starting with a letter, the test fails naming expected and loaded counts.
+**AC-5: Copies** — Given a scratch copy with `# note abcd`, Then the count is unchanged and the test passes; given an upper-case hex last field or a kind outside `[a-z0-9_]+`, Then the line is not counted and the test fails naming `lists 33 inputs, the loader read 34`; given one extra valid input line, both counts rise by one; given a loader copy that also drops lines starting with a letter, the test fails naming expected and loaded counts.
 
 ## Non-Functional Requirements
 

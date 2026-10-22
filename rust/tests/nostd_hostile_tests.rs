@@ -175,18 +175,28 @@ fn corpus() -> Vec<(String, String, Vec<u8>)> {
 }
 
 /// The inputs corpus.txt lists, counted by the README rule and not by the loader's filter: an input
-/// is `name kind hex`, the name only `[a-z0-9_]`, so a comment never counts, whatever it ends with.
+/// is `name kind hex`, name and kind only `[a-z0-9_]`, hex lowercase, so a comment never counts,
+/// whatever it ends with.
 fn listed_inputs() -> usize {
+    let word = |s: &str| {
+        s.bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+    };
     std::fs::read_to_string(CORPUS)
         .expect("corpus.txt")
         .lines()
         .filter(|l| {
-            let f: Vec<&str> = l.split_whitespace().collect();
-            f.len() == 3
-                && f[0]
-                    .bytes()
-                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
-                && f[2].bytes().all(|b| b.is_ascii_hexdigit())
+            let mut f = l.split_whitespace();
+            match (f.next(), f.next(), f.next(), f.next()) {
+                (Some(name), Some(kind), Some(hex), None) => {
+                    word(name)
+                        && word(kind)
+                        && hex
+                            .bytes()
+                            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+                }
+                _ => false,
+            }
         })
         .count()
 }

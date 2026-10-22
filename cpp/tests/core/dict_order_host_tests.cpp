@@ -209,13 +209,36 @@ struct Keyed {
   Array<Entry<std::uint8_t, Text<4>>, 2> m;
 };
 
-void put_key(Text<4>& key, char const* bytes, std::size_t n) {
-  expect(n <= sizeof(key.data), "put_key: the key fits its Text");
-  if (n > sizeof(key.data))
-    return;
+bool put_key(Text<4>& key, char const* bytes, std::size_t n) {
+  bool fits = n <= sizeof(key.data);
+  expect(fits, "put_key: the key fits its Text");
+  if (!fits)
+    return false;
   key.len = static_cast<std::uint16_t>(n);
   std::memcpy(key.data, bytes, n);
+  return true;
 }
+
+char const* error_name(Error e) {
+  switch (e) {
+    case Error::Ok: return "Ok";
+    case Error::ShortPacket: return "ShortPacket";
+    case Error::TrailingBytes: return "TrailingBytes";
+    case Error::TypeMismatch: return "TypeMismatch";
+    case Error::BufferFull: return "BufferFull";
+    case Error::TooMany: return "TooMany";
+    case Error::BadValue: return "BadValue";
+    case Error::SchemeInvalid: return "SchemeInvalid";
+    case Error::ScratchTooSmall: return "ScratchTooSmall";
+    case Error::Uncorrectable: return "Uncorrectable";
+    case Error::TooLong: return "TooLong";
+  }
+  return "unknown";
+}
+
+// What `pack_error` returns for a key `put_key` refused: no pair expects it, so a refused key can
+// not pass as Ok or BadValue.
+constexpr Error kKeyRefused = Error::TooLong;
 
 // The pack side compares keys as unsigned bytes: a signed compare puts U+0080 (c2 80) before DEL
 // (7f), a length-first compare puts "ab" after "b".
@@ -223,21 +246,30 @@ Error pack_error(char const* first, std::size_t n1, char const* second, std::siz
   auto s = packbin::scheme<Keyed>(1, packbin::dict<&Keyed::m>(packbin::u8(0)));
   Keyed row;
   row.m.count = 2;
-  put_key(row.m.items[0].key, first, n1);
-  put_key(row.m.items[1].key, second, n2);
+  if (!put_key(row.m.items[0].key, first, n1) || !put_key(row.m.items[1].key, second, n2))
+    return kKeyRefused;
   std::uint8_t buf[32];
   packbin::Scratch<16> scratch;
   return packbin::pack(s, row, buf, sizeof(buf), scratch).error;
 }
 
+// One check per pair; a failure names the pair and both Errors.
+void expect_pair(Error want, char const* first, std::size_t n1, char const* second, std::size_t n2,
+                 char const* what) {
+  Error got = pack_error(first, n1, second, n2);
+  char msg[128];
+  std::snprintf(msg, sizeof(msg), "pack: %s: got %s, want %s", what, error_name(got), error_name(want));
+  expect(got == want, msg);
+}
+
 void pack_orders_keys_as_unsigned_bytes() {
-  expect(pack_error("\x7f", 1, "\xc2\x80", 2) == Error::Ok, "pack: 7f then c2 80 (a high byte after a low one)");
-  expect(pack_error("\xc2\x80", 2, "\x7f", 1) == Error::BadValue, "pack: c2 80 then 7f is BadValue");
-  expect(pack_error("a", 1, "ab", 2) == Error::Ok, "pack: a then ab (the prefix first)");
-  expect(pack_error("ab", 2, "a", 1) == Error::BadValue, "pack: ab then a is BadValue");
-  expect(pack_error("a", 1, "a", 1) == Error::BadValue, "pack: a twice is BadValue");
-  expect(pack_error("ab", 2, "b", 1) == Error::Ok, "pack: ab then b (the longer key sorts first)");
-  expect(pack_error("b", 1, "ab", 2) == Error::BadValue, "pack: b then ab is BadValue");
+  expect_pair(Error::Ok, "\x7f", 1, "\xc2\x80", 2, "7f then c2 80 (a high byte after a low one)");
+  expect_pair(Error::BadValue, "\xc2\x80", 2, "\x7f", 1, "c2 80 then 7f");
+  expect_pair(Error::Ok, "a", 1, "ab", 2, "a then ab (the prefix first)");
+  expect_pair(Error::BadValue, "ab", 2, "a", 1, "ab then a");
+  expect_pair(Error::BadValue, "a", 1, "a", 1, "a twice");
+  expect_pair(Error::Ok, "ab", 2, "b", 1, "ab then b (the longer key sorts first)");
+  expect_pair(Error::BadValue, "b", 1, "ab", 2, "b then ab");
 }
 
 }  // namespace
