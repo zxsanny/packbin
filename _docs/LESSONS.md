@@ -9,14 +9,6 @@ Downstream skills consume this file:
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
 
-- [2026-10-20] [architecture] In a heap-free port, link the device image after the first nested kind and read flash and stack before writing the next one: on-the-fly reference lookups took the Rust image from 2.6 KB to 11 KB against an 8 KB limit, seen only at the end of the slice (loop 51).
-  Source: _docs/06_metrics/retro_2026-10-20_loop51.md
-- [2026-10-20] [testing] Place every container kind under every presence context (`flags` member, flag bit, `when` body) in a differential layout list: a `repeat`-in-`flags` divergence passed 27 layouts and 80,000 random rows and was found by the review (loop 51).
-  Source: _docs/06_metrics/retro_2026-10-20_loop51.md
-- [2026-10-20] [estimation] Before sizing a slice of a port, check that each kind in it can be decided with the code already there: dictionaries sat in the lists slice, but key order is compared on decoded text, which only the text slice brings (loop 51).
-  Source: _docs/06_metrics/retro_2026-10-20_loop51.md
-- [2026-10-20] [tooling] A clippy-clean `no_std` module can still link a panic path: `slice::split_at_mut` (and `rotate_left`, `copy_within`) panic out of line, found only by the link check on the device image; use `get_mut` ranges and run the embedded stage after the first new kind of code, not at the end (loop 52).
-  Source: _docs/06_metrics/retro_2026-10-20_loop52.md
 - [2026-10-20] [testing] Pair every "refused when the feature is off" test with the same scheme accepted when it is on: a wrong table size (`list(0, 2)` for a one-entry element) made the refusal test pass for the wrong reason, and a wire-string test with the same mistake failed (loop 52).
   Source: _docs/06_metrics/retro_2026-10-20_loop52.md
 - [2026-10-20] [process] Under host load above 25 the publish gate fails on environment flakes (NuGet "resource temporarily unavailable", a timing self-test pipe, a SwiftPM cache path); read the failing share's log before assuming a regression, re-run the stage alone, and run it when the load is below 15 (loop 52: three runs, green on the third).
@@ -43,3 +35,7 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/loops/loop63/record63.md
 - [2026-10-23] [estimation] Copy stack and flash baselines into an AC from the latest stage log, not from the previous loop's table: AC-3 named the loop 61 pack figures (412 / 448 / 500 B) when HEAD measured 404 / 440 / 492 B after loop 62 (loop 63).
   Source: _docs/loops/loop63/record63.md
+- [2026-10-23] [process] Open a flash-saving loop only with a named consumer for the bytes: loop 62 took 18 min for -224 B and loop 63 took 3 h 42 min for -84 B, with 468 B of flash margin and nothing in the hopper that needs it (loops 62 and 63).
+  Source: _docs/06_metrics/retro_2026-10-23_loop64.md
+- [2026-10-23] [tooling] Do not push a record-only commit after a loop close: `3619a2d` (docs only) started the whole `test.yml` on `dev` and `main` (554 s and 678 s); put the CI read into the next loop's first commit instead (loop 63).
+  Source: _docs/06_metrics/retro_2026-10-23_loop64.md
