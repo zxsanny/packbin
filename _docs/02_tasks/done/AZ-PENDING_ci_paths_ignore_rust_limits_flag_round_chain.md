@@ -16,7 +16,7 @@ branch: dev
 
 ## Problem and outcome
 
-`_docs/02_task_plans/ci-paths-ignore-size-limits-times-flag-chain/` (problem, acceptance_criteria AC-1..AC-11, expected results E1..E9). Owner decisions of 2026-10-23: limits at measured + 5%; stack case measured and gated at 512 B (over: report and stop); CS-D5 deferred; `paths-ignore` on `push` only.
+`_docs/02_task_plans/ci-paths-ignore-size-limits-times-flag-chain/` (problem, acceptance_criteria AC-1..AC-11, expected results E1..E9). Owner decisions of 2026-10-23: limits at measured + 5%; stack case measured (612 B, over the 512 B budget): `stack_budget` 2,048 B and `stack_pin` 612 B (the target parts have 8 KB of RAM or more); CS-D5 deferred; `paths-ignore` on `push` only.
 
 ## Scope
 

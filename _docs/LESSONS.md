@@ -9,8 +9,6 @@ Downstream skills consume this file:
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
 
-- [2026-10-20] [testing] Pair every "refused when the feature is off" test with the same scheme accepted when it is on: a wrong table size (`list(0, 2)` for a one-entry element) made the refusal test pass for the wrong reason, and a wire-string test with the same mistake failed (loop 52).
-  Source: _docs/06_metrics/retro_2026-10-20_loop52.md
 - [2026-10-20] [process] Under host load above 25 the publish gate fails on environment flakes (NuGet "resource temporarily unavailable", a timing self-test pipe, a SwiftPM cache path); read the failing share's log before assuming a regression, re-run the stage alone, and run it when the load is below 15 (loop 52: three runs, green on the third).
   Source: _docs/06_metrics/retro_2026-10-20_loop52.md
 - [2026-10-21] [testing] Replay the whole shared hostile corpus on every new port, including the cases the reference port skips: the core passed every differential test of loops 50 to 52 and still packed an unwritten count as absent; only the case file and its skipped neighbours showed it (loop 53).
@@ -39,3 +37,5 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-23_loop64.md
 - [2026-10-23] [tooling] Do not push a record-only commit after a loop close: `3619a2d` (docs only) started the whole `test.yml` on `dev` and `main` (554 s and 678 s); put the CI read into the next loop's first commit instead (loop 63).
   Source: _docs/06_metrics/retro_2026-10-23_loop64.md
+- [2026-10-23] [process] Read the source of a handoff candidate before offering it as an option: "flag-byte chain inside a `times` round" was an unbuilt, unmeasured case, not a stack saving, and my option text said it was; the owner had to be asked again after the first measurement (612 B against a 512 B budget) (loop 65).
+  Source: _docs/loops/loop65/record65.md
