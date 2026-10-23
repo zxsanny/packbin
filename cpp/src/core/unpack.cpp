@@ -211,7 +211,7 @@ Result unpack_small(Walk& w, std::size_t i, void* obj) {
     *static_cast<std::uint8_t*>(f.item(m, static_cast<std::size_t>(k))) =
         static_cast<std::uint8_t>((byte >> shift) & mask);
   }
-  *f.count(m) = static_cast<std::uint16_t>(count);
+  *array_count(m) = static_cast<std::uint16_t>(count);
   return res;
 }
 
@@ -318,7 +318,7 @@ Result unpack_items(Walk& w, std::size_t i, void* m, std::size_t count) {
     std::memset(w.flag_bytes, 0, sizeof(w.flag_bytes));
     void* item = nullptr;
     if (m != nullptr) {
-      std::uint16_t filled = *f.count(m);
+      std::uint16_t filled = *array_count(m);
       if (filled >= f.size)
         return fail(Error::TooMany, at, f.id, static_cast<std::size_t>(filled) + 1);
       item = f.item(m, filled);
@@ -337,7 +337,7 @@ Result unpack_items(Walk& w, std::size_t i, void* m, std::size_t count) {
       return Result{};
     }
     if (m != nullptr)
-      ++*f.count(m);
+      ++*array_count(m);
 #ifndef PACKBIN_NO_TEXT
     if (f.kind == Kind::Dict) {
       if (prev_key != kNoKey) {

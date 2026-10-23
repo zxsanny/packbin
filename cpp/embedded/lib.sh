@@ -24,7 +24,7 @@ stack_budget=512
 # Pin on the Cortex-M4F flash figure (AZ-3154): the figure after loop 57, so a later edit that spends
 # the margin fails the stage by its own bytes instead of passing under 8192. Raise it only with a line
 # in _docs/AGENT_GOTCHAS.md saying what the bytes bought.
-flash_pin=8032
+flash_pin=7808
 
 # VECTOR_TESTS straight from cpp/Makefile, so the runner always builds the host's list.
 vector_tests() {

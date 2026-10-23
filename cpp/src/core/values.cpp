@@ -43,7 +43,7 @@ bool any_child_present(Field const* t, std::size_t i, void* obj, std::uint8_t sk
 // with rounds is refused on pack, not dropped). Rounds whose count is not in the row are present
 // too, so pack refuses them; a count that is not in the row and no rounds is no round.
 bool times_present(Field const* t, Field const& f, void* m, void* obj) {
-  bool rounds = m != nullptr && *f.count(m) != 0;
+  bool rounds = m != nullptr && *array_count(m) != 0;
   std::int64_t count = 0;
   if (f.ref < 0 || !read_int(t[f.ref], obj, count))
     return rounds;
@@ -85,7 +85,7 @@ bool present(Field const* t, std::size_t i, void* obj, std::uint8_t skip) {
     case Kind::Times:
       return times_present(t, f, m, obj);
     case Kind::Repeat:
-      return m != nullptr && *f.count(m) != 0;
+      return m != nullptr && *array_count(m) != 0;
     default:
       return m != nullptr;
   }
@@ -141,11 +141,11 @@ void clear_scope(Field const* t, std::size_t begin, std::size_t end, void* obj) 
       continue;
     }
     if (m != nullptr && is_container(f.kind)) {
-      *f.count(m) = 0;
+      *array_count(m) = 0;
       continue;
     }
     if (m != nullptr && (f.kind == Kind::Bits || f.kind == Kind::Packed)) {
-      *f.count(m) = 0;
+      *array_count(m) = 0;
       continue;
     }
     if (m != nullptr && (f.borrowed() || f.opaque() || f.fixed())) {

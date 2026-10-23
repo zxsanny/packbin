@@ -98,6 +98,12 @@ struct Array {
   T items[N] = {};
 };
 
+using OneItemArray = Array<std::uint8_t, 1>;
+static_assert(offsetof(OneItemArray, count) == 0, "Array count is its first member");
+
+// The count of any Array: its first member, so no per-entry pointer is needed.
+inline std::uint16_t* array_count(void* a) { return static_cast<std::uint16_t*>(a); }
+
 // One dictionary entry. The key is a decoded copy (`Text<N>`): keys are ordered and checked
 // as text (strictly ascending on unpack).
 template <typename V, typename Key>
@@ -128,9 +134,8 @@ constexpr std::uint8_t HoldsFlagByte = 128;
 
 // Returns the bound member inside one row or element object.
 using Access = void* (*)(void* obj);
-// Item `i` of an Array, and the Array's count.
+// Item `i` of an Array.
 using Item = void* (*)(void* array, std::size_t i);
-using Count = std::uint16_t* (*)(void* array);
 
 #if defined(__GNUC__)
 using EqValue = std::int64_t __attribute__((aligned(4)));
@@ -169,7 +174,6 @@ struct Field {
   EqValue eq = 0;
   Access access = nullptr;
   Item item = nullptr;
-  Count count = nullptr;
 
   constexpr bool be() const { return (flags & flag::BigEndian) != 0; }
   constexpr bool optional() const { return (flags & flag::Optional) != 0; }
@@ -182,6 +186,10 @@ struct Field {
 // The members before `eq` fill 16 bytes on every target, AVR included (`eq` is aligned to 4 there
 // too, so `late` sits in what was padding): a new member before `eq` grows every table entry.
 static_assert(offsetof(Field, eq) == 16, "Field members before eq take 16 bytes");
+
+// The entry is 32 bytes on 32-bit ARM and x86-32 (the count of an Array is read in place, not
+// through a per-entry pointer): a new member there spends flash in every table entry.
+static_assert(sizeof(void*) != 4 || sizeof(Field) <= 32, "Field is at most 32 bytes on 32-bit targets");
 
 // A built piece of a scheme: N table entries whose accessors apply to objects of type C
 // (void when nothing in it is bound).
@@ -300,10 +308,6 @@ void* array_item(void* a, std::size_t i) {
   return &static_cast<A*>(a)->items[i];
 }
 
-template <typename A>
-std::uint16_t* array_count(void* a) {
-  return &static_cast<A*>(a)->count;
-}
 
 template <typename E>
 void* entry_key(void* e) {
@@ -431,7 +435,6 @@ constexpr bool holds(Kind k) {
 template <typename A>
 constexpr void bind_array(Field& f) {
   f.item = &array_item<A>;
-  f.count = &array_count<A>;
   f.size = static_cast<std::uint16_t>(A::capacity);
 }
 

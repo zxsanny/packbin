@@ -419,3 +419,9 @@ AZ-PENDING tasks are loop 60 (owner 2026-10-22: "Review Lows of loop 59 + retro"
 |------|------|-----------|-------------|------|
 | AZ-PENDING | cpp_dict_key_order_error_report | 2 | None | AZ-2645 |
 | AZ-PENDING | rust_nostd_corpus_kind_hex_rule | 2 | None | AZ-2645 |
+
+AZ-PENDING task is loop 62 (owner 2026-10-23: "Field layout" from `handoff62.md`; epic AZ-2645). Jira key pending (connector absent).
+
+| Task | Name | Complexity | Dependencies | Epic |
+|------|------|-----------|-------------|------|
+| AZ-PENDING | cpp_field_layout_shrink | 3 | None | AZ-2645 |

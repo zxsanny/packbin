@@ -155,7 +155,7 @@ Result pack_small(Pack& p, std::size_t i, void* obj) {
   unsigned width = f.kind == Kind::Bits ? 1 : f.width;
   if (f.kind == Kind::Packed)
     count += f.bias;
-  if (m == nullptr || count < 0 || *f.count(m) != count)
+  if (m == nullptr || count < 0 || *array_count(m) != count)
     return bad(w, f);
   unsigned per = 8 / width;
   unsigned max = (1u << width) - 1;
@@ -203,7 +203,7 @@ PACKBIN_NOINLINE
 bool keys_ascending(Field const* t, std::size_t i, void* m) {
   Field const& f = t[i];
   Field const& key = t[i + 1];
-  std::size_t count = *f.count(m);
+  std::size_t count = *array_count(m);
   for (std::size_t k = 1; k < count; ++k) {
     std::uint8_t const *a = nullptr, *b = nullptr;
     std::size_t la = 0, lb = 0;
@@ -226,11 +226,11 @@ std::size_t item_count(Pack& p, std::size_t i, void* obj, void* m, Result& out) 
   Field const& f = p.t[i];
   constexpr std::size_t stop = static_cast<std::size_t>(-1);
   if (f.kind == Kind::Repeat)
-    return m == nullptr ? 0 : *f.count(m);
+    return m == nullptr ? 0 : *array_count(m);
   if (f.kind == Kind::Times) {
     std::int64_t count = 0;
     if (!ref_value(p.t, f, obj, count) || count < 0 ||
-        (m == nullptr ? count != 0 : *f.count(m) != count)) {
+        (m == nullptr ? count != 0 : *array_count(m) != count)) {
       out = bad(p.w, f);
       return stop;
     }
@@ -240,8 +240,8 @@ std::size_t item_count(Pack& p, std::size_t i, void* obj, void* m, Result& out) 
     out = bad(p.w, f);
     return stop;
   }
-  out = put_u16(p.w, *f.count(m), f.id);
-  return out.ok() ? *f.count(m) : stop;
+  out = put_u16(p.w, *array_count(m), f.id);
+  return out.ok() ? *array_count(m) : stop;
 }
 
 Result pack_one(Pack& p, std::size_t i, void* obj) {

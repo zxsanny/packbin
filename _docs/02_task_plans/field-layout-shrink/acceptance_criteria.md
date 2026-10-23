@@ -5,7 +5,7 @@ Project ACs inherited: the C++ package suite (host, `gcc:16`, ring) and the embe
 **AC-1: Entry size**
 Given the C++ package built for 32-bit ARM (Cortex-M4F)
 When `sizeof(Field)` is read
-Then it is at most 28 B (36 B today), and on no other target (x64, AArch64, x86-32, AVR) is it larger than today.
+Then it is at most 32 B (36 B today), and on no other target (x64, AArch64, x86-32, AVR) is it larger than today.
 
 **AC-2: Flash**
 Given the flash-budget image of the arm embedded stage (`PACKBIN_NO_TEXT`, 14-entry table)
@@ -41,3 +41,10 @@ Then they compile; 0 source changes outside `cpp/include/packbin/table.hpp` and 
 Given AC-2 is met
 When the loop closes
 Then `flash_pin` in `cpp/embedded/lib.sh` is lowered to the measured figure, and `AGENT_GOTCHAS.md` and the C++ description state the new `sizeof(Field)`, flash figure and margin.
+
+**AC-9: Guarded** (new-task Step 4.7, scenario S6)
+Given AC-2 is met
+When a later edit makes `Field` larger on a 32-bit target
+Then the build fails at compile time (a size check on `Field`, next to the `offsetof(Field, eq) == 16` guard), not only the arm stage.
+
+Owner decision 2026-10-23 (in chat): AC-1 relaxed from 28 B to 32 B after the first measurement (dropping the count pointer alone: flash 7,808 B, stack 496 B; the item pointer needs the element size and stays).
