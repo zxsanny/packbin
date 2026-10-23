@@ -15,7 +15,7 @@ leftovers:
   - owner: size limits for text/ecc/session; CS-D5; first `v*` / `go/v*` tags; F44; close the epic AZ-2750; U24 in the C++ package
   - L63-1: Cortex-M4F flash margin 468 B (pin 7,724 B), stack margin 16 B; the error-path stack of the out-of-line `bad` is bounded by arithmetic (about 492 B), not measured
   - Jira: connector absent. AZ-3163 and AZ-3164 are To Do (`2026-10-22_loop59_jira_in_testing.md`); five tasks have no key yet (`2026-10-22_loop60_jira_create_tasks.md`); epic AZ-2645 open
-  - push: NOT DONE. `github.com` did not resolve at close; `dev` and `main` are 4 commits behind local `dev` (`handoff64.md` action 0). CI of loop 63 is therefore unread
+  - push: `dev` and `main` pushed at 7923b0b (fast-forward, 2026-10-23) after a first attempt failed on DNS; the CI of that push was not readable at close (`api.github.com` unreachable): read it at the next loop start (`handoff64.md` action 0)
 smoke: PASS (agent run 5/5, owner rule 2026-10-12)
 smoke_artifact: _docs/loops/loop63/smoke63.md
 assessment_artifact: _docs/loops/loop63/assessment63.md

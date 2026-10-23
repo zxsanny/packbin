@@ -8,7 +8,7 @@ From the loop 63 record (`record63.md`). Nothing here is owner-decided unless it
 
 ## First actions of loop 64
 
-0. **Push first.** The loop 63 close was committed locally only: `github.com` did not resolve at close (2026-10-23). When the network is back: `git fetch --prune`, then `git push origin dev` and `git push origin HEAD:main` (both fast-forward; `loop_end_merge: main`), then the CI of that push: `gh run list --repo zxsanny/packbin --branch dev` and `--branch main`.
+0. CI of the loop 63 push (`dev` and `main` at `7923b0b`; `api.github.com` was unreachable when it was pushed, so the result is unread): `gh run list --repo zxsanny/packbin --branch dev` and `--branch main`.
 1. Replay the Jira leftovers when the Atlassian connector is back: `2026-10-22_loop59_jira_in_testing.md`, then `2026-10-22_loop60_jira_create_tasks.md` (now five tasks: add the loop 63 `cpp_pack_flash_saving`; search by key range first).
 2. A retro is due (loops 61 to 63 since the last one): `/retrospective` when the loop is not a short one.
 
