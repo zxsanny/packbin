@@ -189,6 +189,18 @@ void two_bit_values() {
   Kinds wide{4, 0, 0, 0};
   auto w = packbin::pack(one, wide, buf, sizeof(buf));
   expect(w.error == Error::BadValue && w.field == 0, "u2 value 4");
+
+  // The refusals name the child that failed and leave the offset at the end of the type byte; a
+  // buffer with no room for the packed bytes is BufferFull, as before the bytes were written in place.
+  Kinds second{1, 4, 0, 0};
+  auto s = packbin::pack(u2_scheme, second, buf, sizeof(buf));
+  expect(s.error == Error::BadValue && s.field == 1 && s.offset == 1, "u2 second child 4");
+  Kinds fourth{0, 0, 0, 7};
+  auto f = packbin::pack(u2_scheme, fourth, buf, sizeof(buf));
+  expect(f.error == Error::BadValue && f.field == 3 && f.offset == 1, "u2 fourth child 7");
+  auto full = packbin::pack(u2_scheme, row, buf, 1);
+  expect(full.error == Error::BufferFull && full.field == 0 && full.offset == 1 && full.needed == 1,
+         "u2 buffer full");
 }
 
 struct Bits {
