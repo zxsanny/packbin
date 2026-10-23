@@ -39,3 +39,7 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-22_loop60.md
 - [2026-10-22] [process] With the Jira connector absent, write task specs as `AZ-PENDING_*` with one create-leftover holding the replay payload, and replay the In Testing leftovers first when the connector returns (loops 59 and 60).
   Source: _docs/06_metrics/retro_2026-10-22_loop60.md
+- [2026-10-23] [tooling] Measure flash and stack candidates on tree copies in the scratchpad with a driver that sources `cpp/embedded/lib.sh` and `arm.sh` and calls `target_m4f` in `packbin-embedded:local` (about 5 s a shape against 3 minutes for the stage, and the repo stays at HEAD); run the real stage once on the kept shape (loop 63).
+  Source: _docs/loops/loop63/record63.md
+- [2026-10-23] [estimation] Copy stack and flash baselines into an AC from the latest stage log, not from the previous loop's table: AC-3 named the loop 61 pack figures (412 / 448 / 500 B) when HEAD measured 404 / 440 / 492 B after loop 62 (loop 63).
+  Source: _docs/loops/loop63/record63.md
