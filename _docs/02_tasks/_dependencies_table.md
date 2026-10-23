@@ -425,3 +425,4 @@ AZ-PENDING task is loop 62 (owner 2026-10-23: "Field layout" from `handoff62.md`
 | Task | Name | Complexity | Dependencies | Epic |
 |------|------|-----------|-------------|------|
 | AZ-PENDING | cpp_field_layout_shrink | 3 | None | AZ-2645 |
+| AZ-PENDING | cpp_pack_flash_saving | 3 | None | AZ-2645 |

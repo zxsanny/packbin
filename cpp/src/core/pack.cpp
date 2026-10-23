@@ -22,6 +22,8 @@ struct Pack {
 
 Result pack_one(Pack& p, std::size_t i, void* obj);
 
+// Out of line: inlined at its 13 call sites it costs 52 B more flash on the Cortex-M4F.
+PACKBIN_NOINLINE
 Result bad(Writer const& w, Field const& f) { return fail(Error::BadValue, w.len, f.id); }
 
 Result put_u16(Writer& w, std::size_t value, int id) {
@@ -185,9 +187,12 @@ Result pack_u2(Pack& p, std::size_t i, void* obj) {
   std::size_t nbytes = (k + 3) / 4;
   if (w.cap - w.len < nbytes)
     return fail(Error::BufferFull, w.len, f.id, nbytes);
-  std::uint8_t raw[16] = {};
-  if (nbytes > sizeof(raw))
+  if (nbytes > 16)
     return bad(w, f);
+  // Written in place: a local buffer and put_bytes cost 40 B more flash.
+  std::uint8_t* raw = w.data + w.len;
+  for (std::size_t b = 0; b < nbytes; ++b)
+    raw[b] = 0;
   for (std::size_t c = 0; c < k; ++c) {
     Field const& child = t[i + 1 + c];
     std::int64_t value = 0;
@@ -195,7 +200,8 @@ Result pack_u2(Pack& p, std::size_t i, void* obj) {
       return bad(w, child);
     raw[c / 4] = static_cast<std::uint8_t>(raw[c / 4] | (value << ((c % 4) * 2)));
   }
-  return put_bytes(w, raw, nbytes, f.id);
+  w.len += nbytes;
+  return Result{Error::Ok, w.len};
 }
 
 // Dict keys go on the wire in strictly increasing unsigned byte order, as in every package.
