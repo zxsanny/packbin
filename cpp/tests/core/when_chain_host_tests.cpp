@@ -92,11 +92,42 @@ void az3144_round_chain_rows_equal_python() {
   }
 }
 
+// Loop 65: the flag-byte chain inside a `times` round (scheme id 0x5e). Python bytes of the four rows
+// (0 two items every flag bit set, 1 first item m = 0 and second k1 = 0, 2 one item with k2 = 0, 3 first
+// item with every flag bit clear and k3 = 0 and second m = 0).
+char const* const flag_round_python_hex[] = {
+    "5e0201010701010801010901050101070101080101090106", "5e020001010700", "5e0101010701010800",
+    "5e020100010001000000"};
+
+void loop65_flag_round_chain_rows_equal_python() {
+  // Arrange
+  for (std::size_t i = 0; i < all_kinds::flag_round_chain_row_count; ++i) {
+    all_kinds::FlagRoundChainRow row = all_kinds::flag_round_chain_sample(i);
+    std::uint8_t buf[32];
+
+    // Act
+    packbin::Result p = all_kinds::flag_round_chain_pack(row, buf, sizeof(buf));
+    all_kinds::FlagRoundChainRow back;
+    std::uint8_t want[32];
+    std::size_t n = check::parse_hex(flag_round_python_hex[i], want, sizeof(want));
+    packbin::Result u = all_kinds::flag_round_chain_unpack(want, n, back);
+
+    // Assert
+    check::expect(p.ok() && check::same_hex(buf, p.offset, flag_round_python_hex[i]),
+                  "loop 65 AC-7 flag round chain packet equals Python");
+    check::expect(u.ok() && all_kinds::flag_round_chain_mismatched(row, back) == 0,
+                  "loop 65 AC-7 flag round chain Python bytes unpack to the row");
+    check::expect(all_kinds::flag_round_chain_failures(i) == 0,
+                  "loop 65 AC-7 flag round chain image check agrees");
+  }
+}
+
 }  // namespace
 
 int run_core_when_chain_host_tests() {
   ac3_chain_rows_equal_python();
   az3141_flag_chain_rows_equal_python();
   az3144_round_chain_rows_equal_python();
+  loop65_flag_round_chain_rows_equal_python();
   return check::failures();
 }

@@ -27,3 +27,12 @@ limit_of() {
 within() {
   [ "$2" = "-" ] || [ "$2" = "missing" ] || [ "$1" -le "$2" ]
 }
+
+# unlimited_sets <limits file> <feature-sets file> prints each set of the feature-sets file whose line in the
+# limits file lacks a numeric flash or stack limit (a "-" or no line): the owner set every limit on 2026-10-23.
+unlimited_sets() {
+  awk -F'|' '!/^#/ && NF { print $1 }' "$2" | while read -r set; do
+    awk -v set="$set" '$1 == set && $1 !~ /^#/ { found = 1; if ($2 !~ /^[0-9]+$/ || $3 !~ /^[0-9]+$/) bad = 1 }
+                       END { if (!found || bad) print set }' "$1"
+  done
+}

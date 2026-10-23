@@ -46,5 +46,12 @@ within 8192 8192 || { echo "FAIL: 8192 fits 8192" >&2; bad=$((bad + 1)); }
 within 8193 8192 && { echo "FAIL: 8193 fits 8192" >&2; bad=$((bad + 1)); }
 within 99999999 - || { echo "FAIL: no limit rejects" >&2; bad=$((bad + 1)); }
 
+# The owner's limits (2026-10-23): every set of feature-sets.txt has a numeric flash and stack limit.
+expect "every feature set has numeric limits" "" "$(unlimited_sets "$here/limits.txt" "$here/feature-sets.txt")"
+sed 's/^ecc .*/ecc - -/' "$here/limits.txt" > "$tmp/mutant-limits.txt"
+expect "a dash limit is caught" "ecc" "$(unlimited_sets "$tmp/mutant-limits.txt" "$here/feature-sets.txt")"
+grep -v '^session ' "$here/limits.txt" > "$tmp/missing-limits.txt"
+expect "a set without a line is caught" "session" "$(unlimited_sets "$tmp/missing-limits.txt" "$here/feature-sets.txt")"
+
 [ "$bad" -eq 0 ] || { echo "checks.test.sh: $bad check(s) failed" >&2; exit 1; }
 echo "checks.test.sh: all checks passed"

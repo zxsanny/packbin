@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Wiring check for the cross-language ring (AZ-2193 AC-1, AC-6): test.yml must run language-pair.sh from a job that runs
-# on every push and pull request, as its own check, and that a failing ring fails. It parses the workflow with Ruby yaml
+# on every push (except one that touches only _docs/) and pull request, as its own check, and that a failing ring fails. It parses the workflow with Ruby yaml
 # like the publish gate does, then runs the same check against copies of test.yml that each break one rule: every copy
 # must be rejected. The checks of language-pair.sh itself (PATH shims, the C# element rings, the Go ring) are in
 # ring-wiring-rows.test.sh.
@@ -37,7 +37,11 @@ if on.is_a?(Hash) && on.key?("push") && on.key?("pull_request")
   push = on["push"]
   if push.is_a?(Hash)
     push.each_key do |key|
-      errors << "push has the filter #{key}" unless key == "branches"
+      errors << "push has the filter #{key}" unless %w[branches paths-ignore].include?(key)
+    end
+    # The one filter the owner allows (2026-10-23): a push that touches only _docs/ starts no run.
+    if as_list.call(push["paths-ignore"]) != ["_docs/**"]
+      errors << "push ignores the paths #{as_list.call(push['paths-ignore']).inspect}, not exactly _docs/**"
     end
     if push.key?("branches") && as_list.call(push["branches"]) != ["**"]
       errors << "push is limited to the branches #{as_list.call(push['branches']).inspect}"
@@ -187,6 +191,8 @@ else
     "$test_yml" > "$tmp/call-commented.yml"
   sed 's#language-pair\.sh$#language-pair.sh || true#' "$test_yml" > "$tmp/call-or-true.yml"
   insert_after '^  push:$' '    paths: ["csharp/**"]' > "$tmp/push-paths.yml"
+  sed 's#^    paths-ignore: \["_docs/\*\*"\]$#    paths-ignore: ["_docs/**", "cpp/**"]#' "$test_yml" > "$tmp/push-ignores-cpp.yml"
+  sed '/^    paths-ignore: \["_docs\/\*\*"\]$/d' "$test_yml" > "$tmp/push-no-ignore.yml"
   insert_after '^  pull_request:$' '    branches: [main]' > "$tmp/pr-branches.yml"
   insert_after '^  pull_request:$' '    paths-ignore: ["**.md"]' > "$tmp/pr-paths-ignore.yml"
   insert_after '^  pull_request:$' '    types: [opened]' > "$tmp/pr-types.yml"
@@ -249,6 +255,8 @@ else
   expect_rejected "call turned into a comment" "$tmp/call-commented.yml"
   expect_rejected "call followed by || true" "$tmp/call-or-true.yml"
   expect_rejected "path filter on push" "$tmp/push-paths.yml"
+  expect_rejected "push without the _docs paths-ignore (the file before loop 65)" "$tmp/push-no-ignore.yml"
+  expect_rejected "paths-ignore on push beyond _docs" "$tmp/push-ignores-cpp.yml"
   expect_rejected "push limited to one branch" "$tmp/push-main-only.yml"
   expect_rejected "branch filter on pull_request" "$tmp/pr-branches.yml"
   expect_rejected "paths-ignore on pull_request" "$tmp/pr-paths-ignore.yml"

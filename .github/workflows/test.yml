@@ -3,6 +3,8 @@ name: test
 on:
   push:
     branches: ["**"]
+    # A push that touches only the documents (a loop record) starts no run; any other path still runs in full.
+    paths-ignore: ["_docs/**"]
   pull_request:
   workflow_call:
 

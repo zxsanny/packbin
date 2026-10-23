@@ -11,7 +11,7 @@ namespace {
 
 std::uint8_t packet[256];
 std::uint8_t again[256];
-std::uint8_t chain_packet[16];
+std::uint8_t chain_packet[32];
 all_kinds::Row row;
 all_kinds::Row back;
 
@@ -115,6 +115,30 @@ int main() {
                        all_kinds::round_chain_mismatched(rrow, rback) +
                        all_kinds::round_chain_failures(i);
   }
+  // Loop 65: the flag-byte chain inside a `times` round.
+  std::size_t frchain_pack_stack = 0;
+  std::size_t frchain_unpack_stack = 0;
+  int frchain_failures = 0;
+  for (std::size_t i = 0; i < all_kinds::flag_round_chain_row_count; ++i) {
+    all_kinds::FlagRoundChainRow frrow = all_kinds::flag_round_chain_sample(i);
+    all_kinds::FlagRoundChainRow frback;
+    packbin::Result frp{};
+    packbin::Result fru{};
+    std::size_t ps = stack_meter::measure([&] {
+      frp = all_kinds::flag_round_chain_pack(frrow, chain_packet, sizeof(chain_packet));
+    });
+    std::size_t us = stack_meter::measure(
+        [&] { fru = all_kinds::flag_round_chain_unpack(chain_packet, frp.offset, frback); });
+    say("FLAG_ROUND_CHAIN_ROW_PACK_STACK ", ps);
+    say("FLAG_ROUND_CHAIN_ROW_UNPACK_STACK ", us);
+    if (ps > frchain_pack_stack)
+      frchain_pack_stack = ps;
+    if (us > frchain_unpack_stack)
+      frchain_unpack_stack = us;
+    frchain_failures += (frp.ok() ? 0 : 1) + (fru.ok() ? 0 : 1) +
+                        all_kinds::flag_round_chain_mismatched(frrow, frback) +
+                        all_kinds::flag_round_chain_failures(i);
+  }
   // The chain figures print on their own lines; PACK_STACK / UNPACK_STACK carry the larger of the
   // sample row and the chain, which is what the stage reads.
   if (chain_pack_stack > pack_stack)
@@ -129,6 +153,10 @@ int main() {
     pack_stack = rchain_pack_stack;
   if (rchain_unpack_stack > unpack_stack)
     unpack_stack = rchain_unpack_stack;
+  if (frchain_pack_stack > pack_stack)
+    pack_stack = frchain_pack_stack;
+  if (frchain_unpack_stack > unpack_stack)
+    unpack_stack = frchain_unpack_stack;
   hex(packet, p.offset);
   say("TABLE_ENTRIES ", all_kinds::table_entries());
   say("PACK_OK ", p.ok() ? 1 : 0);
@@ -144,11 +172,14 @@ int main() {
   say("ROUND_CHAIN_PACK_STACK ", rchain_pack_stack);
   say("ROUND_CHAIN_UNPACK_STACK ", rchain_unpack_stack);
   say("ROUND_CHAIN_FAILURES ", static_cast<unsigned long>(rchain_failures));
+  say("FLAG_ROUND_CHAIN_PACK_STACK ", frchain_pack_stack);
+  say("FLAG_ROUND_CHAIN_UNPACK_STACK ", frchain_unpack_stack);
+  say("FLAG_ROUND_CHAIN_FAILURES ", static_cast<unsigned long>(frchain_failures));
   say("PACK_STACK ", pack_stack);
   say("UNPACK_STACK ", unpack_stack);
   say("WRAPPER_CALLS ", 0);
   int failures = (p.ok() ? 0 : 1) + (u.ok() ? 0 : 1) + fields + (same ? 0 : 1) + chain_failures +
-                 fchain_failures + rchain_failures;
+                 fchain_failures + rchain_failures + frchain_failures;
   say("FAILURES ", static_cast<unsigned long>(failures));
   return failures;
 }

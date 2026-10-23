@@ -239,7 +239,7 @@ target_m4f() {
   echo "deepest measured pack/unpack stack=$stack budget=$stack_budget (largest core frame: $frame)"
   echo "core .data+.bss=$core_rw"
   note "AC-5 flash core (PACKBIN_NO_TEXT) + 14-field table ${delta} B of ${flash_budget} (pin ${flash_pin} B)"
-  note "deepest pack/unpack stack ${stack} B of ${stack_budget} (raw ${raw} B less ${meter} B meter overhead)"
+  note "deepest pack/unpack stack ${stack} B of ${stack_budget} (pin ${stack_pin} B; raw ${raw} B less ${meter} B meter overhead)"
   note "largest single core frame ${frame%% *} B"
   note "core data+bss ${core_rw} B; all-kinds image $(arm-none-eabi-size "$dir/ac2.elf" | awk 'NR == 2 { print $1 + $2 }') B flash"
   [ "$(log_value FAILURES "$dir/size14.run.log")" = 0 ] || fail "size probe round trip"
@@ -247,6 +247,7 @@ target_m4f() {
   [ "$delta" -le "$flash_budget" ] || fail "flash ${delta} B over ${flash_budget} B"
   [ "$delta" -le "$flash_pin" ] || fail "flash ${delta} B measured is over the pin of ${flash_pin} B (cpp/embedded/lib.sh flash_pin)"
   [ "$stack" -le "$stack_budget" ] || fail "stack ${stack} B over ${stack_budget} B"
+  [ "$stack" -le "$stack_pin" ] || fail "stack ${stack} B measured is over the pin of ${stack_pin} B (cpp/embedded/lib.sh stack_pin)"
   [ "$core_rw" -eq 0 ] || fail "core data+bss ${core_rw} B"
 }
 

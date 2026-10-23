@@ -65,8 +65,12 @@ int all_kinds_packet() {
   for (std::size_t i = 0; i < all_kinds::round_chain_row_count; ++i)
     round_chain += all_kinds::round_chain_failures(i);
   std::printf("ALL_KINDS_ROUND_CHAIN failures=%d\n", round_chain);
+  int flag_round_chain = 0;
+  for (std::size_t i = 0; i < all_kinds::flag_round_chain_row_count; ++i)
+    flag_round_chain += all_kinds::flag_round_chain_failures(i);
+  std::printf("ALL_KINDS_FLAG_ROUND_CHAIN failures=%d\n", flag_round_chain);
   return (p.ok() ? 0 : 1) + (u.ok() ? 0 : 1) + fields + (same ? 0 : 1) + chain + flag_chain +
-         round_chain;
+         round_chain + flag_round_chain;
 }
 
 }  // namespace

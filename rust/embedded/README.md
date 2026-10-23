@@ -15,7 +15,7 @@ rust/embedded/run.sh image   # inside packbin-embedded (what docker-compose.test
   (`cpp/embedded/`), so Rust and C++ figures come from one method. A second image without the library gives the
   meter's overhead and the flash baseline.
 - `feature-sets.txt` lists the feature sets built and reported; `limits.txt` the flash and stack limits per set
-  (`-` is none). The stage fails above a limit and prints the figure and the limit.
+  (`-` is none; since 2026-10-23 every set has one: the owner set text, ecc and session at the figure measured in loop 65 plus 5%, `checks.test.sh` fails on a set without numbers). The stage fails above a limit and prints the figure and the limit.
 - `checks.sh` finds heap symbols (`__rust_alloc`, `malloc`, ...) and panic paths (`core::panicking`,
   `panic_bounds_check`, `unwrap_failed`, slice-length failures) in the linked image; `checks.test.sh` tests it
   without a toolchain. The target `rust-mutants` links probes with a seeded panic path and a seeded heap call

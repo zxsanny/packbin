@@ -3,8 +3,10 @@
 # meter's own overhead (the C++ stage measures both the same way). base flash was the Cortex-M4F budget
 # of the C++ core (8192, cpp/embedded/lib.sh) until loop 51: the owner raised it to 16384 on 2026-10-20
 # when the bit-level and conditional kinds (AZ-2752) took the image to 11028 B (meshbell parts have 1 MB
-# and more). The other sets have none until the owner sets one (AZ-2749 AC-3).
+# and more). The other three sets were limitless until 2026-10-23, when the owner set each limit at
+# the figure measured on HEAD of loop 65 plus 5%, rounded up (text 26632 / 2760, ecc 17980 / 760,
+# session 18404 / 1832; AZ-2749 AC-3). A raise needs a line here saying what the bytes bought.
 base 16384 512
-text - -
-ecc - -
-session - -
+text 27964 2898
+ecc 18879 798
+session 19325 1924
