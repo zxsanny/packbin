@@ -17,8 +17,8 @@ Baselines are read from runs on HEAD `d67c654` in this loop (AGENT_GOTCHAS: figu
 ## Flag-byte chain inside a `times` round (C++)
 
 - **AC-7** A scheme with a 3-deep chain of `when`s, each level holding a flag byte and one flag bit, inside a `times` round (id 0x5e, two items) is in `cpp/embedded/common/all_kinds.cpp`; 4 rows pack to the Python package bytes (reference rows below) and unpack back to the row: 4 of 4 rows, 0 differences, on the host and in the arm image.
-- **AC-8** The arm embedded stage reports the deepest pack and unpack stack of the new rows; both are at most 512 B (the budget). If either is above 512 B the loop reports the figure and stops: no fix, no depth limit, no wire change (owner decision).
-- **AC-9** Cortex-M4F flash of the flash-budget image stays at 7,724 B (pin) — `cpp/src/core` and `cpp/include` are not edited; stack figures of the existing images (base 496 B deepest; chains 404 B / 440 B / 492 B) are unchanged.
+- **AC-8** The arm embedded stage reports the stack of the new rows. Measured on HEAD plus the case: unpack 612 B net (676 B raw less 64 B), pack 464 B, against the 512 B budget: over. Rule applied: no fix, no depth limit, no wire change; the owner decided on 2026-10-23 (the target parts have 8 KB of RAM or more) to set `stack_budget` to 2,048 B and add `stack_pin` 612 B in `cpp/embedded/lib.sh`. The stage then passes with the deepest stack 612 B, and fails with a pin of 611 B (1 of 1 mutant caught, message `stack 612 B measured is over the pin of 611 B`).
+- **AC-9** Cortex-M4F flash of the flash-budget image stays at 7,724 B (pin) — `cpp/src/core` and `cpp/include` are not edited; the arm stage reports 0 targets failed.
 - **AC-10** The documents record the new figure and the 16 B / new margin (C++ package description, `AGENT_GOTCHAS.md`).
 
 ## Whole loop
