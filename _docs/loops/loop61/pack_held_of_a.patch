@@ -1,0 +1,64 @@
+--- a/cpp/src/core/pack.cpp
++++ b/cpp/src/core/pack.cpp
+@@ -33,18 +33,39 @@
+   return f.ref >= 0 && read_int(t[f.ref], obj, out) && !source_skipped(t, f, obj);
+ }
+ 
++// What a `when` or a flag bit asks of the walker that reaches it; pack_children and pack_one both
++// ask here, so the two kinds are decided in one place, as unpack's held_of does. Skip: nothing to
++// write. Inline: a `when` that holds, whose children are walked as part of the walker's own loop.
++// Bit: a flag bit that is present, whose child follows it.
++enum class Held : std::uint8_t { Skip, Inline, Bit };
++
++PACKBIN_NOINLINE
++Held held_of(Pack const& p, Field const& f, void* obj) {
++  if (f.kind == Kind::When)
++    return when_matches(p.t, f, obj) ? Held::Inline : Held::Skip;
++  return present(p.t, static_cast<std::size_t>(&f - p.t) + 1, obj) ? Held::Bit : Held::Skip;
++}
++
+ // The children of entry i, in order, on the same object. A child `when` that holds is entered in
+-// this loop (its children follow it) instead of through pack_one, so a chain of `when`s nested in
+-// `when`s costs the stack of one level.
++// this loop (its children follow it) and the child of a present flag bit is entered from here, not
++// through pack_one, so a chain of `when`s and flag bits nested in each other costs the stack of one
++// level.
+ Result pack_children(Pack& p, std::size_t i, void* obj) {
+   std::size_t end = i + p.t[i].span;
+   for (std::size_t j = i + 1; j < end;) {
+     Field const& f = p.t[j];
+-    if (f.kind == Kind::When) {
+-      j += when_matches(p.t, f, obj) ? 1 : f.span;
+-      continue;
++    Result r{};
++    if (f.kind == Kind::When || f.kind == Kind::FlagBit) {
++      Held held = held_of(p, f, obj);
++      if (held == Held::Inline) {
++        ++j;
++        continue;
++      }
++      if (held == Held::Bit)
++        r = pack_one(p, j + 1, obj);
++    } else {
++      r = pack_one(p, j, obj);
+     }
+-    Result r = pack_one(p, j, obj);
+     if (!r.ok())
+       return r;
+     j += f.span;
+@@ -256,13 +277,13 @@
+     case Kind::Sized:
+       return pack_text(p, i, obj);
+     case Kind::When:
+-      return when_matches(p.t, f, obj) ? pack_children(p, i, obj) : Result{};
++      return held_of(p, f, obj) == Held::Inline ? pack_children(p, i, obj) : Result{};
+     case Kind::Flags:
+       return pack_flags(p, i, obj);
+     case Kind::FlagByte:
+       return pack_flag_byte(p, i, obj);
+     case Kind::FlagBit:
+-      return present(p.t, i + 1, obj) ? pack_one(p, i + 1, obj) : Result{};
++      return held_of(p, f, obj) == Held::Bit ? pack_one(p, i + 1, obj) : Result{};
+     case Kind::Group:
+       return pack_children(p, i, obj);
+     case Kind::U2:
