@@ -39,3 +39,7 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/loops/loop66/record66.md
 - [2026-10-24] [process] A new `ph_*` function in `publish-phases*.test.sh` must be named in `ph_harness` of `publish-timing.selftest.sh` or the phase-split guard fails the whole share 7; only the full gate showed it (the groups run alone passed), so run `publish-timing.selftest.sh` before the first commit of a helper (loop 66).
   Source: _docs/loops/loop66/record66.md
+- [2026-10-25] [architecture] On Cortex-M a `Result` returned through a hidden pointer puts a 16 B temporary and an on-stack fifth argument in every walk frame: folding a 32 B save frame into the walker (copy for a `when` only, `keep` pointer for the restore) cut a flag-scope level from 80 B to 56 B and the 0x5e image from 612 B to 540 B, and the same fold written as a `bool` argument saved only 48 B; measure shapes on a tree copy with the M4F target alone (3 s a run) before the full stage (loop 67).
+  Source: _docs/loops/loop67/record67.md
+- [2026-10-25] [tooling] An array copied under `if (x)` and read under `if (x)` fails the `gcc:16` host build (`-Werror=maybe-uninitialized`, -O1 to -O3) while Apple clang and arm `-Os` pass: check a new walker shape with `docker run gcc:16 g++ -O2 -Wall -Wextra -Werror -c` on the one file at the four levels before the first commit; a pointer that is null when nothing was saved compiles clean (loop 67).
+  Source: _docs/loops/loop67/record67.md
