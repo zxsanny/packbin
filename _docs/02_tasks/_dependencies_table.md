@@ -435,3 +435,4 @@ AZ-3170 is loop 65 (CI paths-ignore, Rust limits, flag-byte chain) and AZ-3171 i
 | AZ-3170 | ci_paths_ignore_rust_limits_flag_round_chain | 3 | None | AZ-2645 |
 | AZ-3171 | publish_gate_load_aware | 3 | None | AZ-2645 |
 | AZ-3185 | cpp_unpack_flag_scope_stack | 3 | None | AZ-2645 |
+| AZ-3189 | cpp_m33f_target_nrf54l15 | 3 | None | AZ-2645 |
