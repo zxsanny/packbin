@@ -180,7 +180,7 @@ readonly_checks() {/'
 # function of the three files that is not part of the harness) that does not run exactly once, as a line of the body of
 # the function of a `group phases*` line of the first file; exit 0 when there is none. The harness functions are the
 # ones that build stubs, trees and runs for the checks; a new ph_* function is a check unless it is named there.
-ph_harness="ph_write_stub ph_write_spy ph_write_curl_stub ph_setup ph_cleanup ph_bares ph_publish ph_no_refs ph_set_credentials"
+ph_harness="ph_write_stub ph_write_spy ph_write_curl_stub ph_setup ph_cleanup ph_bares ph_publish ph_no_refs ph_set_credentials ph_quote"
 ph_split() {
   local gate="$1" fn body="" group_fn n bad_lines="" checks
   shift
