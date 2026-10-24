@@ -168,6 +168,12 @@ ph_publish() {
   set -e
 }
 
+# ph_quote <file>: the last 25 lines of a run's output for a failure message. A tool's own error (a pip install in
+# the build container) comes before `build failed: <target>`, so 3 lines hid it in loop 65.
+ph_quote() {
+  tail -n 25 "$1"
+}
+
 ph_no_refs() {
   local label="$1" repo
   for repo in "$ph_vcpkg" "$ph_arduino"; do
@@ -214,6 +220,14 @@ ph_static_checks() {
   grep -q '<groupId>io.github.zxsanny</groupId>' "$here/publish-inside.sh" || fail "Java group id is not io.github.zxsanny"
   if grep -q 'maven-bundle.zip" -C' "$here/publish-inside.sh"; then
     fail "maven bundle is a jar archive"
+  fi
+  local quote_in
+  quote_in="$(mktemp)"
+  { seq 1 29; echo 'ERROR: stub pip failed'; seq 31 39; echo 'build failed: python'; } > "$quote_in"
+  ph_quote "$quote_in" | grep -qx 'ERROR: stub pip failed' || fail "loop 66 AC-4 ph_quote hides a tool error 10 lines before the failure line"
+  rm -f "$quote_in"
+  if grep -q 'tail -n 3' "$here/publish-phases-failures.test.sh"; then
+    fail "loop 66 AC-4 a failure message in publish-phases-failures.test.sh quotes 3 lines"
   fi
 }
 

@@ -5,13 +5,13 @@ branch: dev
 
 # C++ pack.cpp: find a 72 B flash saving, then decide on the pack-side held_of
 
-**Task**: AZ-PENDING_cpp_pack_flash_saving
+**Task**: AZ-3169_cpp_pack_flash_saving
 **Name**: C++ pack.cpp: find a 72 B flash saving, then decide on the pack-side held_of
 **Description**: Look in `cpp/src/core/pack.cpp` for a Cortex-M4F flash saving of at least 72 B with the same bytes, results and stack; only when it is found, rebuild the loop 61 pack-side `held_of` on top of it and keep it only when it pays for itself.
 **Complexity**: 3 points
 **Dependencies**: None
 **Component**: `cpp/src/core/pack.cpp`
-**Tracker**: pending (Jira connector absent, see `_docs/_process_leftovers/2026-10-22_loop60_jira_create_tasks.md`)
+**Tracker**: AZ-3169 (Jira connector absent, see `_docs/_process_leftovers/2026-10-22_loop60_jira_create_tasks.md`)
 **Epic**: AZ-2645
 
 ## Problem

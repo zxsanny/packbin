@@ -49,6 +49,7 @@ printf '%s|GOPROXY=%s|GOFLAGS=%s|GONOSUMDB=%s|dir=%s|gomod=%s|remote=%s\n' "$*" 
   "${GONOSUMDB-unset}" "$(basename "$PWD")" "$([ -f go.mod ] && echo yes || echo no)" \
   "$(git --git-dir="$GT_BARE" for-each-ref --format='%(refname:short)' refs/tags | paste -sd , -)" >> "$GT_GO_LOG"
 calls="$(grep -c '^mod download ' "$GT_GO_LOG")"
+sleep "${GT_GO_DELAY:-0}"
 spec="${@: -1}"
 path="${spec%@*}"
 version="${spec#*@}"
@@ -108,6 +109,19 @@ gt_publish() {
     bash "$here/publish-registries.sh" > "$gt_dir/$name.out" 2>&1
   gt_code=$?
   set -e
+}
+
+# gt_window: a proxy window that holds several asks on this host: 3 s plus four times the slowest of three asks of the
+# stub (whole seconds), so a loaded host or a GT_GO_DELAY stub cannot end the window after the first ask.
+gt_window() {
+  local slowest=0 start
+  for _ in 1 2 3; do
+    start=$SECONDS
+    GT_BARE="$gt_bare" GT_GO_LOG="$gt_dir/probe.log" GT_GO_FAILS=999 PATH="$gt_bin:$PATH" \
+      go mod download -json "probe@v0.0.0" > /dev/null 2>&1 || true
+    [ $((SECONDS - start)) -le "$slowest" ] || slowest=$((SECONDS - start))
+  done
+  echo $((3 + 4 * slowest))
 }
 
 gt_go_calls() {
@@ -182,7 +196,7 @@ gt_rerun_checks() {
   rm -rf "$gt_dir"
 
   gt_setup
-  gt_publish never GT_GO_FAILS=999 PACKBIN_GO_PROXY_WINDOW=3
+  gt_publish never GT_GO_FAILS=999 PACKBIN_GO_PROXY_WINDOW="$(gt_window)"
   [ "$gt_code" -ne 0 ] || fail "AC-3 a proxy that never answers passed"
   [ "$(gt_go_calls)" -ge 2 ] || fail "AC-3 the proxy was asked once only: $(gt_go_calls)"
   grep -q 'the tag go/v0.1.9 stays' "$gt_dir/never.out" && grep -q 're-run only re-checks' "$gt_dir/never.out" \

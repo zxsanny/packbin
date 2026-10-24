@@ -5,13 +5,13 @@ branch: dev
 
 # C++ pack side held_of: measure the flash and stack cost
 
-**Task**: AZ-PENDING_cpp_pack_held_of_measure
+**Task**: AZ-3167_cpp_pack_held_of_measure
 **Name**: C++ pack side held_of: measure the flash and stack cost
 **Description**: Build the pack-side counterpart of unpack's `held_of` (one function that decides skip, inline or flag-bit child for a `when` or a flag bit, asked by `pack_children` and `pack_one`), measure it on the Cortex-M4F image, keep it only when flash stays at or under the pin.
 **Complexity**: 2 points
 **Dependencies**: None
 **Component**: `cpp/src/core/pack.cpp`
-**Tracker**: pending (Jira connector absent; payload in `_docs/_process_leftovers/2026-10-22_loop60_jira_create_tasks.md`)
+**Tracker**: AZ-3167 (Jira connector absent; payload in `_docs/_process_leftovers/2026-10-22_loop60_jira_create_tasks.md`)
 **Epic**: AZ-2645
 
 ## Problem

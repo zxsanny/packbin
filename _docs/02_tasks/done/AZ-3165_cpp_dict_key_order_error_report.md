@@ -5,13 +5,13 @@ branch: dev
 
 # C++ dict key order test: print the Error, do not pack a refused key
 
-**Task**: AZ-PENDING_cpp_dict_key_order_error_report
+**Task**: AZ-3165_cpp_dict_key_order_error_report
 **Name**: C++ dict key order test: print the Error, do not pack a refused key
 **Description**: Each of the 7 pairs reports the `Error` returned and expected by name; `put_key` returns whether it copied and a refused key is never packed.
 **Complexity**: 2 points
 **Dependencies**: None
 **Component**: `cpp/tests/core/dict_order_host_tests.cpp`
-**Tracker**: pending (Jira connector absent, see `_docs/_process_leftovers/2026-10-22_loop60_jira_create_tasks.md`)
+**Tracker**: AZ-3165 (Jira connector absent, see `_docs/_process_leftovers/2026-10-22_loop60_jira_create_tasks.md`)
 **Epic**: AZ-2645
 
 ## Problem

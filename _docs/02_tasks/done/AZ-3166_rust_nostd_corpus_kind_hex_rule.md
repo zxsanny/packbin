@@ -5,13 +5,13 @@ branch: dev
 
 # Rust nostd corpus count: kind and lowercase hex, no Vec per line
 
-**Task**: AZ-PENDING_rust_nostd_corpus_kind_hex_rule
+**Task**: AZ-3166_rust_nostd_corpus_kind_hex_rule
 **Name**: Rust nostd corpus count: kind and lowercase hex, no Vec per line
 **Description**: `listed_inputs` counts an input as three fields with a `[a-z0-9_]+` name, a `[a-z0-9_]+` kind and a lowercase-hex last field, splitting each line without a `Vec`.
 **Complexity**: 2 points
 **Dependencies**: None
 **Component**: `rust/tests/nostd_hostile_tests.rs`
-**Tracker**: pending (Jira connector absent, see `_docs/_process_leftovers/2026-10-22_loop60_jira_create_tasks.md`)
+**Tracker**: AZ-3166 (Jira connector absent, see `_docs/_process_leftovers/2026-10-22_loop60_jira_create_tasks.md`)
 **Epic**: AZ-2645
 
 ## Problem

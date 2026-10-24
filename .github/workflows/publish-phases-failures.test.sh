@@ -177,7 +177,7 @@ ph_pipeline_violations() {
   cp "$ph_dir/pyproject.orig" "$pyproject"
   [ "$ph_code" -ne 0 ] || fail "AZ-2096 AC-4 a wheel with the wrong version was published"
   grep -q '^check failed: python: packbin-0.1.0-py3-none-any.whl does not carry version 0.1.9$' "$ph_dir/violation-version.out" \
-    || fail "AZ-2096 AC-4 version failure not named: $(tail -n 3 "$ph_dir/violation-version.out")"
+    || fail "AZ-2096 AC-4 version failure not named: $(ph_quote "$ph_dir/violation-version.out")"
   [ ! -s "$ph_log" ] || fail "AZ-2096 AC-4 an upload ran after a failed check"
 
   cp "$csproj" "$ph_dir/csproj.orig"
@@ -187,7 +187,7 @@ ph_pipeline_violations() {
   cp "$ph_dir/csproj.orig" "$csproj"
   [ "$ph_code" -ne 0 ] || fail "AZ-2096 AC-4 a nupkg without a license was published"
   grep -q '^check failed: csharp: license MIT is not declared' "$ph_dir/violation-license.out" \
-    || fail "AZ-2096 AC-4 license failure not named: $(tail -n 3 "$ph_dir/violation-license.out")"
+    || fail "AZ-2096 AC-4 license failure not named: $(ph_quote "$ph_dir/violation-license.out")"
   [ ! -s "$ph_log" ] || fail "AZ-2096 AC-4 an upload ran after a failed license check"
   printf 'csharp\ntypescript\npython\nrust\ncpp\njava\n' > "$ph_plan"
 }

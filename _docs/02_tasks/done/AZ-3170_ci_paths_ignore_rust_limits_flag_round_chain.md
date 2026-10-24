@@ -5,13 +5,13 @@ branch: dev
 
 # CI paths-ignore, Rust size limits, flag-byte chain in a `times` round
 
-**Task**: AZ-PENDING_ci_paths_ignore_rust_limits_flag_round_chain
+**Task**: AZ-3170_ci_paths_ignore_rust_limits_flag_round_chain
 **Name**: CI paths-ignore, Rust size limits, flag-byte chain in a `times` round
 **Description**: Stop `test.yml` running on `_docs/**`-only pushes; set the text, ecc and session limits of the Rust embedded stage at today's figure plus 5%; add and measure the 3-deep flag-byte `when` chain inside a `times` round (scheme 0x5e) in the C++ all-kinds image.
 **Complexity**: 3 points
 **Dependencies**: None
 **Component**: `.github/workflows/test.yml`, `rust/embedded/`, `cpp/embedded/`, `cpp/tests/core/`
-**Tracker**: pending (Jira connector absent; payload in `_docs/_process_leftovers/2026-10-22_loop60_jira_create_tasks.md`, to be extended)
+**Tracker**: AZ-3170 (Jira connector absent; payload in `_docs/_process_leftovers/2026-10-22_loop60_jira_create_tasks.md`, to be extended)
 **Epic**: AZ-2645
 
 ## Problem and outcome

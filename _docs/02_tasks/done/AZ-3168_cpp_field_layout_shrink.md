@@ -5,13 +5,13 @@ branch: dev
 
 # C++ Field layout: drop the Array-only count pointer from every table entry
 
-**Task**: AZ-PENDING_cpp_field_layout_shrink
+**Task**: AZ-3168_cpp_field_layout_shrink
 **Name**: C++ Field layout: drop the Array-only pointers from every table entry
 **Description**: Make the C++ table entry (`Field`) 4 B smaller on 32-bit ARM by not carrying the Array-only `count` pointer in every entry (the count is the first member of every Array), with the same packets, results, API and stack; keep it only when the Cortex-M4F flash falls at least 56 B under the pin.
 **Complexity**: 3 points
 **Dependencies**: None
 **Component**: `cpp/include/packbin/table.hpp`, `cpp/src/core`
-**Tracker**: pending (Jira connector absent, see `_docs/_process_leftovers/2026-10-22_loop60_jira_create_tasks.md`)
+**Tracker**: AZ-3168 (Jira connector absent, see `_docs/_process_leftovers/2026-10-22_loop60_jira_create_tasks.md`)
 **Epic**: AZ-2645
 
 ## Problem

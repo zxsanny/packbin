@@ -413,16 +413,24 @@ AZ-3163 and AZ-3164 are loop 59 (owner 2026-10-22: "Review Lows of loop 58" from
 | AZ-3163 | rust_nostd_corpus_count_name_rule | 2 | None | AZ-2645 |
 | AZ-3164 | cpp_dict_key_order_checks | 2 | None | AZ-2645 |
 
-AZ-PENDING tasks are loop 60 (owner 2026-10-22: "Review Lows of loop 59 + retro" from `handoff60.md`; epic AZ-2645; 2 + 2 points). Jira keys pending (connector absent). Both are test-only and own disjoint files.
+AZ-3165 to AZ-3166 are loop 60 (owner 2026-10-22: "Review Lows of loop 59 + retro" from `handoff60.md`; epic AZ-2645; 2 + 2 points). Both are test-only and own disjoint files. Jira keys created 2026-10-24 (loop 66 replay).
 
 | Task | Name | Complexity | Dependencies | Epic |
 |------|------|-----------|-------------|------|
-| AZ-PENDING | cpp_dict_key_order_error_report | 2 | None | AZ-2645 |
-| AZ-PENDING | rust_nostd_corpus_kind_hex_rule | 2 | None | AZ-2645 |
+| AZ-3165 | cpp_dict_key_order_error_report | 2 | None | AZ-2645 |
+| AZ-3166 | rust_nostd_corpus_kind_hex_rule | 2 | None | AZ-2645 |
 
-AZ-PENDING task is loop 62 (owner 2026-10-23: "Field layout" from `handoff62.md`; epic AZ-2645). Jira key pending (connector absent).
+AZ-3167 is loop 61, AZ-3168 loop 62, AZ-3169 loop 63 (epic AZ-2645; keys created 2026-10-24).
 
 | Task | Name | Complexity | Dependencies | Epic |
 |------|------|-----------|-------------|------|
-| AZ-PENDING | cpp_field_layout_shrink | 3 | None | AZ-2645 |
-| AZ-PENDING | cpp_pack_flash_saving | 3 | None | AZ-2645 |
+| AZ-3167 | cpp_pack_held_of_measure | 2 | None | AZ-2645 |
+| AZ-3168 | cpp_field_layout_shrink | 3 | None | AZ-2645 |
+| AZ-3169 | cpp_pack_flash_saving | 3 | None | AZ-2645 |
+
+AZ-3170 is loop 65 (CI paths-ignore, Rust limits, flag-byte chain) and AZ-3171 is loop 66 (publish gate under load); epic AZ-2645.
+
+| Task | Name | Complexity | Dependencies | Epic |
+|------|------|-----------|-------------|------|
+| AZ-3170 | ci_paths_ignore_rust_limits_flag_round_chain | 3 | None | AZ-2645 |
+| AZ-3171 | publish_gate_load_aware | 3 | None | AZ-2645 |
