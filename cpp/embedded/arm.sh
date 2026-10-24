@@ -251,6 +251,70 @@ target_m4f() {
   [ "$core_rw" -eq 0 ] || fail "core data+bss ${core_rw} B"
 }
 
+# Cortex-M33F, the nRF54L15 core (AZ-3189): the whole core (string codec and message error correction on) and the
+# all-kinds scheme on QEMU mps2-an505, with the vector runner. Flash is the all-kinds image, stack is net of the meter
+# overhead; both are held to the ceilings and pins in lib.sh (m33f_*). Reads and writes nothing of the M4F row.
+target_m33f() {
+  local dir="$build/m33f"
+  local arch=(-mthumb -mcpu=cortex-m33 -mfloat-abi=hard -mfpu=fpv5-sp-d16)
+  # Shadows the global of the M3/M4 images for the link helpers below: the AN505 memory map has its own script.
+  local arm_link_common=(-nostartfiles -T "$here/arm/mps2-an505.ld" -Wl,--gc-sections -Wl,--cref)
+  arm_firmware_objects "$dir" "${arch[@]}"
+  local t listed objs=()
+  local -a tests
+  listed="$(vector_tests)"
+  read -r -a tests <<< "$listed"
+  for t in "${tests[@]}"; do
+    arm_cxx "$dir" "$cpp/$t" "test-$(basename "${t%.cpp}").o" "${arch[@]}"
+    objs+=("$dir/test-$(basename "${t%.cpp}").o")
+  done
+  arm_cxx "$dir" "$here/common/vectors_main.cpp" vectors_main.o "${arch[@]}"
+  arm_cxx "$dir" "$here/arm/size_main.cpp" baseline.o "${arch[@]}" -DPACKBIN_SIZE_BASELINE
+  [ "$(count_warnings "$dir/compile.log")" -eq 0 ] || fail "compile warnings in the M33F objects"
+
+  arm_link_ac2 "$dir" "${arch[@]}"
+  image_checks "$dir" ac2
+  arm_link "$dir" vectors.elf "${arch[@]}" "${arm_link_common[@]}" --specs=nano.specs \
+    --specs=rdimon.specs "$dir"/core-*.o "$dir/all_kinds.o" "${objs[@]}" \
+    "$dir/vectors_main.o" "$dir/startup.o"
+  image_checks "$dir" vectors
+  arm_link "$dir" baseline.elf "${arch[@]}" "${arm_link_common[@]}" --specs=nano.specs \
+    --specs=nosys.specs "${heap_wraps[@]}" "$dir/baseline.o" "$dir/startup.o" "$dir/wrap.o"
+
+  qemu_run mps2-an505 "$dir/baseline.elf" "$dir/baseline.run.log" || fail "M33F baseline exit $?"
+  qemu_run mps2-an505 "$dir/ac2.elf" "$dir/ac2.run.log" || fail "AC-2 firmware on M33F exit $?"
+  [ "$(log_value WRAPPER_CALLS "$dir/ac2.run.log")" = 0 ] || fail "malloc/new wrapper called"
+  [ "$(log_value FAILURES "$dir/ac2.run.log")" = 0 ] || fail "AC-2 round trip failed on M33F"
+  qemu_run mps2-an505 "$dir/vectors.elf" "$dir/vectors.run.log" || fail "M33F vector runner exit $?"
+  check_vectors "$dir/vectors.run.log"
+  # The packet the M33F image builds equals the one the Cortex-M3 image builds (target_m3 runs earlier in the stage).
+  log_value ALL_KINDS_HEX "$dir/ac2.run.log" > "$out/m33f-all-kinds.hex"
+  [ "$(cat "$out/m33f-all-kinds.hex")" = "$(log_value ALL_KINDS_HEX "$dir/vectors.run.log")" ] \
+    || fail "all-kinds packet differs between the M33F AC-2 firmware and the runner"
+  [ -f "$out/m3-all-kinds.hex" ] || fail "no Cortex-M3 packet to compare with ($out/m3-all-kinds.hex: cpp-m3-qemu runs first)"
+  cmp -s "$out/m3-all-kinds.hex" "$out/m33f-all-kinds.hex" || fail "all-kinds packet differs between Cortex-M3 and Cortex-M33F"
+
+  local flash raw meter stack core_rw
+  flash=$(arm-none-eabi-size "$dir/ac2.elf" | awk 'NR == 2 { print $1 + $2 }')
+  raw=$(for f in ac2; do
+    log_value PACK_STACK "$dir/$f.run.log"
+    log_value UNPACK_STACK "$dir/$f.run.log"
+  done | sort -n | tail -n 1)
+  meter=$(log_value PACK_STACK "$dir/baseline.run.log")
+  stack=$((raw - meter))
+  core_rw=$(arm-none-eabi-size "$dir"/core-*.o | awk 'FNR > 1 { s += $2 + $3 } END { print s + 0 }')
+  echo "m33f all-kinds image flash=$flash budget=$m33f_flash_budget pin=$m33f_flash_pin"
+  echo "m33f stack raw=$raw meter overhead=$meter net=$stack budget=$m33f_stack_budget pin=$m33f_stack_pin"
+  note "Cortex-M33F whole core: all-kinds image flash ${flash} B of ${m33f_flash_budget} (pin ${m33f_flash_pin} B)"
+  note "deepest pack/unpack stack ${stack} B of ${m33f_stack_budget} (pin ${m33f_stack_pin} B; raw ${raw} B less ${meter} B meter overhead)"
+  note "core data+bss ${core_rw} B"
+  [ "$flash" -le "$m33f_flash_budget" ] || fail "M33F flash ${flash} B over ${m33f_flash_budget} B"
+  [ "$flash" -le "$m33f_flash_pin" ] || fail "M33F flash ${flash} B measured is over the pin of ${m33f_flash_pin} B (cpp/embedded/lib.sh m33f_flash_pin)"
+  [ "$stack" -le "$m33f_stack_budget" ] || fail "M33F stack ${stack} B over ${m33f_stack_budget} B"
+  [ "$stack" -le "$m33f_stack_pin" ] || fail "M33F stack ${stack} B measured is over the pin of ${m33f_stack_pin} B (cpp/embedded/lib.sh m33f_stack_pin)"
+  [ "$core_rw" -eq 0 ] || fail "M33F core data+bss ${core_rw} B"
+}
+
 target_s390x() {
   local dir="$build/s390x"
   rm -rf "$dir"

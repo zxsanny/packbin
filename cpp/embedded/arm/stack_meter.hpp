@@ -8,7 +8,8 @@
 
 namespace stack_meter {
 
-constexpr std::size_t kWindow = 8192;
+// Larger than the largest stack ceiling (m33f_stack_budget in lib.sh), so a stack above it is a number, not the window.
+constexpr std::size_t kWindow = 16384;
 // Bytes just below the measuring frame left unpainted for paint()'s own frame.
 constexpr std::size_t kGuard = 64;
 constexpr std::uint8_t kPaint = 0xa5;

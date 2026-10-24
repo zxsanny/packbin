@@ -34,6 +34,17 @@ stack_pin=540
 # in _docs/AGENT_GOTCHAS.md saying what the bytes bought.
 flash_pin=7712
 
+# The Cortex-M33F target (AZ-3189, loop 68): the owner's target part is the nRF54L15 (Cortex-M33F, 256 KB of RAM, about
+# 1.5 MB of NVM, 128 KiB of RAM in a non-secure image), so the ceilings are chip-scale (owner, 2026-10-25) and the whole
+# core is built: string codec and message error correction on. The Cortex-M4F target above stays as the small-part bar.
+# The flash figure is the all-kinds image (text plus data); the stack figure is net of the meter, like the M4F one.
+m33f_flash_budget=65536
+m33f_stack_budget=8192
+# Pins on the M33F figures (loop 68): a later edit that spends bytes fails the row by its own bytes. Raise them only with
+# a line in _docs/AGENT_GOTCHAS.md saying what the bytes bought.
+m33f_flash_pin=25720
+m33f_stack_pin=724
+
 # VECTOR_TESTS straight from cpp/Makefile, so the runner always builds the host's list.
 vector_tests() {
   make --no-print-directory -s -C "$cpp" -f Makefile -f "$here/print-var.mk" print-VECTOR_TESTS
