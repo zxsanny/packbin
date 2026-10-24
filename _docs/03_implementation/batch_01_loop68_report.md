@@ -18,7 +18,7 @@
 
 ## What the prototype found
 
-- QEMU `mps2-an505` starts the Cortex-M33 in Secure state. Code linked at 0 (the non-secure alias) locks up on the first fetch (`Lockup: can't escalate 3 to HardFault`); code at 0x10000000 and RAM at 0x38000000 (secure aliases of SSRAM1 and SSRAM2/3) run. RAM at 0x28000000, 0x30000000 and 0x21000000 with code at 0x10000000 also failed or were not tried past the first fault; only 0x38000000 ran.
+- QEMU `mps2-an505` starts the Cortex-M33 in Secure state. Code linked at 0 (the non-secure alias) locks up on the first fetch (`Lockup: can't escalate 3 to HardFault`); code at 0x10000000 and RAM at 0x38000000 (secure aliases of SSRAM1 and SSRAM2/3) run. With code at 0x10000000, RAM at 0x30000000 and 0x21000000 also locked up and 0x38000000 ran (RAM at 0x28000000 and 0x21000000 were first tried with code at 0, which fails by itself).
 - The stack meter window was 8,192 B, equal to the new ceiling, so an overrun would have read as the window size; it is 16,384 B now (the M4F meter overhead is still 64 B).
 - `lib.test.sh` stubs every target function and counts rows: it failed 6 checks until `target_m33f` was stubbed and the counts became 6.
 
