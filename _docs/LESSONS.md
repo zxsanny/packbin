@@ -9,10 +9,6 @@ Downstream skills consume this file:
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
 
-- [2026-10-20] [process] Under host load above 25 the publish gate fails on environment flakes (NuGet "resource temporarily unavailable", a timing self-test pipe, a SwiftPM cache path); read the failing share's log before assuming a regression, re-run the stage alone, and run it when the load is below 15 (loop 52: three runs, green on the third).
-  Source: _docs/06_metrics/retro_2026-10-20_loop52.md
-- [2026-10-21] [testing] Replay the whole shared hostile corpus on every new port, including the cases the reference port skips: the core passed every differential test of loops 50 to 52 and still packed an unwritten count as absent; only the case file and its skipped neighbours showed it (loop 53).
-  Source: _docs/06_metrics/retro_2026-10-21_loop53.md
 - [2026-10-21] [performance] Measure the case an acceptance bound names (TW-5: 200 rounds of 65,535 characters) before closing a codec slice; a port that drops the original's memo is 600 times slower (5.96 s against 10 ms) and every functional test still passes (loop 53).
   Source: _docs/06_metrics/retro_2026-10-21_loop53.md
 - [2026-10-21] [tooling] Slice iterators (`chunks_mut`, `chunks_exact`) link a division and a panic at opt-level z that clippy and the host build do not show; read bytes by index with `get` in code the device image links, and run the embedded stage after the first use (loop 53).
@@ -39,3 +35,7 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-23_loop64.md
 - [2026-10-23] [process] Read the source of a handoff candidate before offering it as an option: "flag-byte chain inside a `times` round" was an unbuilt, unmeasured case, not a stack saving, and my option text said it was; the owner had to be asked again after the first measurement (612 B against a 512 B budget) (loop 65).
   Source: _docs/loops/loop65/record65.md
+- [2026-10-24] [testing] Size a wall-clock window in a test from a probe of the same stub (3 s plus four times the slowest of three asks), not from a constant: a fixed 3 s window saw one proxy ask on a loaded host; a 5 s stub delay reproduces it in 137 s and a one-try copy of `proxy_check` proves the check still bites (loop 66).
+  Source: _docs/loops/loop66/record66.md
+- [2026-10-24] [process] A new `ph_*` function in `publish-phases*.test.sh` must be named in `ph_harness` of `publish-timing.selftest.sh` or the phase-split guard fails the whole share 7; only the full gate showed it (the groups run alone passed), so run `publish-timing.selftest.sh` before the first commit of a helper (loop 66).
+  Source: _docs/loops/loop66/record66.md

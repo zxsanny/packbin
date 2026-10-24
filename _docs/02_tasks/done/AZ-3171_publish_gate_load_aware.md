@@ -20,7 +20,7 @@ In loop 65 the full publish gate, run with 8 shares at once on a host at load 9 
 
 ## Outcome
 
-- The Go window check passes however slow one proxy ask is, and still fails when the check loop stops after one try.
+- The Go window check passes when the stub is as slow as the probe measures (a constant 5 s per ask in AC-1), and still fails when the check loop stops after one try. A single ask that becomes more than four times slower than the probe is not covered (recorded risk).
 - A failed `pip install` in the publish tests shows pip's own error in the run output.
 - The gate result under load is reported from the share logs, not guessed.
 
