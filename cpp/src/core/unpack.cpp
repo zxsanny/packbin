@@ -51,8 +51,8 @@ bool flag_bit_set(Walk const& w, Field const& f) {
 }
 
 // Runs Fn, then brings back the flag bytes of the scope around it, so a flag byte read inside is
-// not seen after it: a `when`, a `flags` member or the child of a flag bit (an error ends the whole
-// unpack).
+// not seen after it: a `flags` member or the child of a flag bit (a `when` does this in
+// unpack_children; an error ends the whole unpack).
 template <Result (*Fn)(Walk&, std::size_t, void*)>
 PACKBIN_NOINLINE
 Result with_outer_flags(Walk& w, std::size_t i, void* obj) {
@@ -83,9 +83,17 @@ Held held_of(Walk const& w, Field const& f, void* obj) {
 // The children of entry i, in order, on the same object. A `when` or a flag bit is entered here and
 // not through unpack_one: an Inline `when` keeps its children in this loop, a Scope `when` is a nested
 // call of this function inside its own flag scope and a flag bit enters its child in the flag scope.
-// A chain of such entries then costs the stack of this function and with_outer_flags per flag scope.
+// A chain of such entries then costs the stack of this function per flag scope: a `when` keeps the
+// outer flag bytes in its own frame, a separate with_outer_flags frame cost 32 B more per level.
 // unpack_table, a `times` round and a flags member still reach these kinds through unpack_one.
 Result unpack_children(Walk& w, std::size_t i, void* obj) {
+  // A `when` is a flag scope, a group is not: only a `when` brings the outer bytes back at its end.
+  std::uint8_t outer[kFlagBytes];
+  std::uint8_t const* keep = nullptr;
+  if (w.t[i].kind == Kind::When) {
+    std::memcpy(outer, w.flag_bytes, sizeof(outer));
+    keep = outer;
+  }
   std::size_t end = i + w.t[i].span;
   for (std::size_t j = i + 1; j < end;) {
     Field const& f = w.t[j];
@@ -97,7 +105,7 @@ Result unpack_children(Walk& w, std::size_t i, void* obj) {
         continue;
       }
       if (held == Held::Scope)
-        res = with_outer_flags<unpack_children>(w, j, obj);
+        res = unpack_children(w, j, obj);
       else if (held == Held::Bit)
         res = with_outer_flags<unpack_one>(w, j + 1, obj);
     } else {
@@ -107,6 +115,8 @@ Result unpack_children(Walk& w, std::size_t i, void* obj) {
       return res;
     j += f.span;
   }
+  if (keep != nullptr)
+    std::memcpy(w.flag_bytes, keep, sizeof(outer));
   return Result{};
 }
 
@@ -370,7 +380,7 @@ Result unpack_one(Walk& w, std::size_t i, void* obj) {
       switch (held_of(w, f, obj)) {
         case Held::Inline:
         case Held::Scope:
-          return with_outer_flags<unpack_children>(w, i, obj);
+          return unpack_children(w, i, obj);
         case Held::Bit:
           return with_outer_flags<unpack_one>(w, i + 1, obj);
         case Held::Skip:

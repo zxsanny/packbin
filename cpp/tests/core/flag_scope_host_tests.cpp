@@ -131,6 +131,44 @@ void outer_byte_serves_a_bit_after_a_flag_bit_child() {
               "AC-3 flag-bit child rows");
 }
 
+// Loop 67: a `when` that holds a flag byte keeps the outer byte 0 in its own frame; the bit after the
+// `when` reads the outer byte, not the one the `when` read.
+struct WhenScoped {
+  std::uint8_t mode = 0;
+  Opt<std::uint8_t> x;
+  Opt<std::uint8_t> b;
+};
+
+constexpr auto outer_then_when = packbin::scheme<WhenScoped>(
+    1, packbin::u8<&WhenScoped::mode>(0), packbin::flag_byte(0),
+    packbin::when(1, packbin::eq(0, 1), packbin::flag_byte(0),
+                  packbin::flag_bit(0, packbin::u8<&WhenScoped::x>(1))),
+    packbin::flag_bit(0, packbin::u8<&WhenScoped::b>(2)));
+
+void outer_byte_serves_a_bit_after_a_when() {
+  for (unsigned c = 0; c < 8; ++c) {
+    WhenScoped row;
+    row.mode = (c & 4) ? 1 : 0;
+    if (c & 2)
+      row.x = 5;
+    if (c & 1)
+      row.b = 7;
+    if (row.mode == 0)
+      row.x = Opt<std::uint8_t>{};
+    std::uint8_t buf[16];
+    auto p = packbin::pack(outer_then_when, row, buf, sizeof(buf));
+    expect(p.ok(), "when scope pack");
+    WhenScoped back;
+    back.x = 9;
+    back.b = 9;
+    auto u = packbin::unpack(outer_then_when, buf, p.offset, back);
+    expect(u.ok() && back.mode == row.mode && back.x.has == row.x.has &&
+               back.b.has == row.b.has && (!row.x.has || back.x.value == 5) &&
+               (!row.b.has || back.b.value == 7),
+           "when scope: the outer byte serves the bit after the when");
+  }
+}
+
 }  // namespace
 
 int run_core_flag_scope_host_tests() {
@@ -140,5 +178,6 @@ int run_core_flag_scope_host_tests() {
   byte_in_a_flags_member_serves_its_own_bits();
   outer_byte_serves_a_bit_after_a_flags_member();
   outer_byte_serves_a_bit_after_a_flag_bit_child();
+  outer_byte_serves_a_bit_after_a_when();
   return check::failures();
 }

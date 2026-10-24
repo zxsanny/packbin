@@ -24,14 +24,15 @@ flash_budget=8192
 # in 612 B, and the parts the core targets have 8 KB of RAM or more. The ceiling is loose on purpose; the pin below
 # is the promise.
 stack_budget=2048
-# Pin on the deepest pack/unpack stack of the Cortex-M4F all-kinds image (loop 65), net of the meter: a later edit
+# Pin on the deepest pack/unpack stack of the Cortex-M4F all-kinds image (loop 67: 540 B, a `when` keeps the
+# outer flag bytes in its own `unpack_children` frame), net of the meter: a later edit
 # that deepens the walk fails the stage by its own bytes. Raise it only with a line in _docs/AGENT_GOTCHAS.md saying
 # what the bytes bought.
-stack_pin=612
-# Pin on the Cortex-M4F flash figure (AZ-3154): the figure after loop 63, so a later edit that spends
+stack_pin=540
+# Pin on the Cortex-M4F flash figure (AZ-3154): the figure after loop 67, so a later edit that spends
 # the margin fails the stage by its own bytes instead of passing under 8192. Raise it only with a line
 # in _docs/AGENT_GOTCHAS.md saying what the bytes bought.
-flash_pin=7724
+flash_pin=7712
 
 # VECTOR_TESTS straight from cpp/Makefile, so the runner always builds the host's list.
 vector_tests() {
