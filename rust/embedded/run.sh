@@ -19,6 +19,11 @@ stage="${1:-host}"
 build_libs() {
   local set features
   command -v cargo > /dev/null || { echo "run.sh: cargo is not installed" >&2; exit 1; }
+  # The libraries are built with the toolchain of the embedded-arm job (PACKBIN_EMBEDDED_RUST, 1.98 by default), not the
+  # host default: the pins of limits-m33f.txt are figures of that toolchain, and Rust 1.79 gives fewer bytes of flash but
+  # more of stack (AZ-3231). Install it with: rustup toolchain install 1.98 --profile minimal -t thumbv7em-none-eabihf
+  # -t thumbv8m.main-none-eabihf
+  export RUSTUP_TOOLCHAIN="${PACKBIN_EMBEDDED_RUST:-1.98}"
   # The list is read on fd 3: cargo must not be able to read (and drop) the lines that follow.
   while IFS='|' read -r -u 3 set features; do
     build_one "$set" "$features" thumbv7em-none-eabihf build
