@@ -471,3 +471,12 @@ See [tests-by-loop.md](tests-by-loop.md) (loop 19 to loop 23 sections, moved in 
 | FT-X-160 | the `frame` set on the Cortex-M4F image | `rust/embedded` stage |
 
 Run: `cargo test --features frame --test frame_vectors_tests`, `--no-default-features --features frame --test frame_vectors_tests`, `--features frame --lib frame_`, `--features frame,session,ecc --lib frame_`, `--features frame --doc` (all in `run-suite.sh`).
+
+## Loop 70: Rust Cortex-M33F row (AZ-3231)
+
+| Test | What it proves | Where |
+|------|----------------|-------|
+| FT-X-161 | the five sets on the Cortex-M33F image: golden decoded, route packet equal to the M4F run, no heap or panic symbol, 0 B RAM, under 64 KB / 8 KB and under the pins | `rust/embedded` stage, row `rust-m33f` |
+| FT-X-162 | the pins bite and the harness holds them: a pin one byte low fails the row; every set has numbers within the ceilings | `PACKBIN_RUST_EMBEDDED_LIMITS_M33F` smoke, `rust/embedded/checks.test.sh` |
+
+Run: `rust/embedded/run.sh host` (libraries for both targets, then the image stage in `packbin-embedded`).

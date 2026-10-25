@@ -99,7 +99,7 @@ The C++ package is one core for host programs and firmware. It writes into a cal
 - No cloud application host
 - No container orchestration for the product
 - The test containers are the current .NET LTS SDK, the current Node LTS image, and the current stable images for Python, Rust, C++, and Java, and `golang:1.27` for Go, and `swift:6.3.3` for Swift
-- The heap-free Rust API runs in the same `cpp-embedded` image (loop 50, `rust/embedded/run.sh`; the static library is built by the host cargo for `thumbv7em-none-eabihf`, the image links it and runs it on QEMU).
+- The heap-free Rust API runs in the same `cpp-embedded` image (loop 50, `rust/embedded/run.sh`; the static library is built by the host cargo for `thumbv7em-none-eabihf` and, since loop 70, `thumbv8m.main-none-eabihf` (the nRF54L15 row `rust-m33f`), the image links it and runs it on QEMU).
 - Two more images run the C++ embedded targets: `cpp-embedded` (arm-none-eabi GCC, QEMU, cross g++ for s390x) and `cpp-embedded-esp` (`espressif/idf:v5.3.2`). The embedded harness reports a target as FAIL on a non-zero exit of its function or on a recorded failed check, and the stage exits 1 (loop 16, AZ-2099)
 - The `ring` job of `test.yml` runs the cross-language hand-offs (`language-pair.sh`) on the runner itself: it installs the toolchains of the seven other suites (versions in the job env `RING_*`, Go through `actions/setup-go` as `RING_GO`, checked by `ring-toolchains.sh`) and builds the Swift drivers with the runner's Swift, or in the `swift:6.3.3` image when the runner has no `swift` (`RING_SWIFT`, `ring-swift.sh`; `ring-toolchains.sh` requires Swift 6.3.3 either way) and compiles C++ in the `gcc:16` image through `ring-cxx.sh`, because the runner has no GCC 16 release (loop 16, AZ-2193)
 

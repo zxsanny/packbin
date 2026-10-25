@@ -479,3 +479,4 @@ Moved to [traceability-not-verified-loops-11-18.md](traceability-not-verified-lo
 <!-- autodev-step12-loop-update: loop 54 (AZ-2815, AZ-2816, AZ-2823), 2026-10-21, 15 rows added in traceability-matrix-loop-54.md (13 Covered, 2 Open) -->
 <!-- autodev-step12-loop-update: loop 55 (AZ-3132, AZ-3133, AZ-3134, AZ-3141), 2026-10-21, 15 rows added in traceability-matrix-loop-55.md (12 Covered, 3 Open) -->
 <!-- autodev-step12-loop-update: loop 69 (AZ-3200 to AZ-3204), 2026-10-25, 28 rows added in traceability-matrix-loop-69.md (27 Covered, 1 Open: CI flash of the frame set) -->
+<!-- autodev-step12-loop-update: loop 70 (AZ-3231), 2026-10-25, 11 rows added in traceability-matrix-loop-70.md (10 Covered, 1 Open: CI figures of the M33F row) -->
