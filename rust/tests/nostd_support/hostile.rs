@@ -50,6 +50,9 @@ pub fn term(error: Error) -> &'static str {
         Error::ScratchTooSmall => "scratch_too_small",
         Error::Uncorrectable => "uncorrectable",
         Error::TooLong => "too_long",
+        Error::TagMismatch => "tag_mismatch",
+        Error::Duplicate => "duplicate",
+        Error::TooOld => "too_old",
     }
 }
 
