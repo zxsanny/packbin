@@ -365,6 +365,8 @@ jobs:
         run: bash fixtures/crypto/check-vectors.test.sh
       - name: frame mode vectors
         run: bash fixtures/frame/check-vectors.test.sh
+      - name: frame mode README examples
+        run: bash scripts/frame/readme-examples.sh
       - name: message ECC vectors
         run: bash fixtures/ecc/check-vectors.test.sh
       - name: message ECC contract table

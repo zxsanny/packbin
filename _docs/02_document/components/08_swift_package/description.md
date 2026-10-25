@@ -43,6 +43,21 @@ Swift copies TypeScript row for row (loop 26 fit decision 4), except the documen
 - Swift traps on arithmetic overflow, index out of range and force unwrap; every size or index derived from input is computed with checked arithmetic, so no input traps (SW-4, SW-15).
 - The round limits are TypeScript's (65 535 rounds, 1 048 576 slots, 16 MiB output).
 
+### Frame mode (loop 71, AZ-3234)
+
+| Name | Meaning |
+|------|---------|
+| `FrameSession.load(key:epoch:config:)` | throws `badValue` for a key not 32 bytes, an epoch above 0xFFFFFF, a tag length other than 4, 8, 16 or no direction; `setPrevious`, `clearPrevious`, `close()` (a closed session throws `badValue`) |
+| `seal(direction:context:ad:clear:plain:into:)` | the body length, or a `PackbinError`; writes nothing on a refusal |
+| `open(direction:context:ad:body:clearLength:into:)` and the form with `window: inout ReplayWindow, counter:` | a `FrameOpened` (`slot`, `clearLength`, `plainLength`) or a `PackbinError` |
+| `ReplayWindow` | a `Sendable` struct: `check(_:)` (`fresh`, `duplicate`, `tooOld`), `commit(_:)`, `top`, `bits` |
+| `MacKey.derive(key:epoch:label:)`, `tag(_:length:)`, `verify(_:tag:)`, `close()` | tags of 4, 8, 16 or 32 bytes |
+| `PackbinError.Kind` | new cases `tagMismatch` "tag_mismatch", `duplicate` "duplicate", `tooOld` "too_old" and `bufferFull` "buffer_full" (Swift had no buffer-full kind); the pinned case list of `ShortTrailingTests` holds the 9 old values plus these four; the short-packet refusal is the existing `short` |
+
+`FrameSession` and `MacKey` are `@unchecked Sendable`: `seal`, `open`, `tag` and `verify` are safe from many threads; `setPrevious`, `clearPrevious` and `close` are not safe beside another call. Files: `swift/Sources/Packbin/FrameSession.swift` (327 lines), `FrameTypes.swift` (157), `FrameCrypto.swift` (130), `MacKey.swift` (97); the test hooks are `@_spi(Vectors)` (`FramePrimitives`, `FrameProbe`). The 8-task seal test lives in `ConcurrencyTests.swift` (the thread-sanitizer pattern of `run-suite.sh` allows four file names).
+
+- **Frame mode** (loop 71, contract `pack-session.md` 2.0.0, ADR 008): a `FrameSession` beside the stream `PackSession` (which is untouched), a `ReplayWindow` the caller owns (64 messages; `check` never changes state, `commit` only after an `Ok` open) and a `MacKey` for the MAC-only call. Seal and open follow the contract's order (argument checks, then the replay check without any MAC for `Duplicate` and `TooOld`, then the tag with the current key and then the previous key, then decrypt and commit). The bytes equal the Rust ones: the package passes every row of `fixtures/frame/vectors.txt` (157 rows, E1 to E5 included) and the 27 rows of `fixtures/crypto/vectors.txt`. The platform HMAC cannot expose precomputed pad states, so a session holds the 32-byte MAC key per direction and a `MacKey` the 32-byte label key (the contract's 72-byte figure does not apply); the HMAC key schedule runs on each call. Keys are overwritten on release; the tag compare folds every byte with no early exit; both are best effort in a managed runtime (stated in the API docs). The `msg_id` uniqueness rule is in the docs of `seal` and of the message context. A test-only counter of MAC computations proves a duplicate or too-old frame costs none (the Rust figure of SHA-256 compressions has no equivalent here). The README example of the package is the code of its example test (`scripts/frame/readme-examples.sh`).
+
 ## 4. Decisions
 
 `_docs/02_task_plans/swift-package/problem.md` S-1 to S-5 (owner, 2026-10-14): root `Package.swift`, in-package ChaCha20 with swift-crypto for HKDF on non-Apple platforms, release as a resolve check on the existing tag, tools 5.9 / iOS 15 / macOS 12 / `swift:6`, whole epic in loop 26 (S-4 amended 2026-10-14, owner decision: Swift 6 only, tools 6.0, CI image `swift:6.3.3`). ADR-001, ADR-005.

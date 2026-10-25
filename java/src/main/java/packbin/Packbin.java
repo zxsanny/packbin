@@ -197,6 +197,39 @@ public final class Packbin {
         public Uncorrectable() {}
     }
 
+    /** Frame mode: an argument or configuration out of range, a closed session or key, or a mode that does not fit. */
+    public static final class BadValue {
+        public final String what;
+
+        public BadValue(String what) {
+            this.what = what;
+        }
+    }
+
+    /** Frame mode: the caller's output buffer is shorter than the bytes the call would write. */
+    public static final class BufferFull {
+        public final int needed;
+
+        public BufferFull(int needed) {
+            this.needed = needed;
+        }
+    }
+
+    /** Frame mode: no loaded key produced the received tag; nothing was decrypted and the window did not change. */
+    public static final class TagMismatch {
+        public TagMismatch() {}
+    }
+
+    /** Frame mode: the replay window already holds this counter; no MAC was computed. */
+    public static final class Duplicate {
+        public Duplicate() {}
+    }
+
+    /** Frame mode: the counter is 64 or more behind the highest committed one; no MAC was computed. */
+    public static final class TooOld {
+        public TooOld() {}
+    }
+
     /** A protected message above 254 bytes, with the limit it passed. */
     public static final class TooLong {
         public final int length;

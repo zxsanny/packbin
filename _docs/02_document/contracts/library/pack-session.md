@@ -2,7 +2,7 @@
 
 **Component**: library
 **Producer task**: AZ-2019 — csharp_session
-**Frame mode producer tasks**: AZ-3200 (this text), AZ-3202 (vectors), AZ-3203 (Rust); umbrella AZ-3192
+**Frame mode producer tasks**: AZ-3200 (this text), AZ-3202 (vectors), AZ-3203 (Rust), AZ-3232, AZ-3233, AZ-3234 (C#, Java, Swift); umbrella AZ-3192
 **Consumer tasks**: AZ-2020, AZ-2021, AZ-2022, AZ-2023, AZ-2024, AZ-2025, AZ-2026, AZ-2445 (Go), AZ-2518 (Swift)
 **Version**: 2.0.0
 **Status**: current
@@ -187,9 +187,10 @@ The values E1 to E5 of `_docs/02_task_plans/rust-m33f-and-frame-mode/input_data/
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.0.0 (consumers) | 2026-10-25 | C#, Java and Swift implement frame mode and the MAC-only call (AZ-3232, AZ-3233, AZ-3234, loop 71) and pass every row of `fixtures/frame/vectors.txt` and `fixtures/crypto/vectors.txt`; no byte, rule or version changed. |
 | 2.0.0 | 2026-10-25 | Adds the Configuration section, `frame` mode and the MAC-only call (AZ-3192, ADR 008). Stream mode text, bytes, operations and results are unchanged from 1.0.0. |
 | 1.0.0 | 2026-10-14 | Stream session. |
 
 ## Consumers
 
-TypeScript, Python, Rust, C++, Java, Go, Swift, the cross-language session match, and the README. Frame mode: Rust first (AZ-3203); meshbell (a separate repository) pins the packbin commit; C#, Java and Swift follow in later tasks. Archangel is not a consumer in this repository.
+TypeScript, Python, Rust, C++, Java, Go, Swift, the cross-language session match, and the README. Frame mode: Rust first (AZ-3203), then C#, Java and Swift (loop 71); meshbell (a separate repository) pins the packbin commit; the other packages follow in later tasks. Archangel is not a consumer in this repository.

@@ -447,3 +447,7 @@ AZ-3199 is the epic "Frame mode" (loop 69, umbrella AZ-3192, plan `_docs/02_task
 | AZ-3203 | rust_frame_mode_core | 5 | AZ-3200, AZ-3201, AZ-3202 | AZ-3199 |
 | AZ-3204 | rust_frame_embedded_set | 3 | AZ-3203 | AZ-3199 |
 | AZ-3231 | rust_m33f_embedded_row | 3 | None | AZ-2750 |
+| AZ-3232 | csharp_frame_mode | 5 | None (contract 2.0.0) | AZ-3199 |
+| AZ-3233 | java_frame_mode | 5 | None (contract 2.0.0) | AZ-3199 |
+| AZ-3234 | swift_frame_mode | 5 | None (contract 2.0.0) | AZ-3199 |
+| AZ-3235 | frame_mode_docs_csharp_java_swift | 2 | AZ-3232, AZ-3233, AZ-3234 | AZ-3199 |

@@ -24,6 +24,14 @@ public struct PackbinError: Error, Equatable, Sendable, CustomStringConvertible 
         /// A protected message of more than 254 bytes: no field is named, `left` is its length and `reason`
         /// names the length and the limit.
         case tooLong = "too_long"
+        /// Frame mode: the tag of a received frame matches neither the current nor the previous key.
+        case tagMismatch = "tag_mismatch"
+        /// Frame mode: the replay window has already committed the counter of the frame.
+        case duplicate = "duplicate"
+        /// Frame mode: the counter of the frame is 64 or more behind the highest the replay window committed.
+        case tooOld = "too_old"
+        /// Frame mode: the caller's output buffer is shorter than the bytes the call would write.
+        case bufferFull = "buffer_full"
     }
 
     public let kind: Kind
@@ -64,6 +72,10 @@ public struct PackbinError: Error, Equatable, Sendable, CustomStringConvertible 
         case .packError: return "packbin: pack refused\(at): \(reason)"
         case .uncorrectable: return "packbin: uncorrectable message: more wrong bytes than the correction limit repairs"
         case .tooLong: return "packbin: too long: \(reason)"
+        case .tagMismatch: return "packbin: tag mismatch: \(reason)"
+        case .duplicate: return "packbin: duplicate frame: \(reason)"
+        case .tooOld: return "packbin: frame too old: \(reason)"
+        case .bufferFull: return "packbin: buffer full: \(reason)"
         }
     }
 

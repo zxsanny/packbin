@@ -115,7 +115,8 @@ let shortCases: [ShortCase] = [
         let joined = terms.joined(separator: " ")
 
         // Assert
-        #expect(joined == "short_packet trailing_bytes type_mismatch bad_value too_many scheme_error pack_error uncorrectable too_long")
+        #expect(joined == "short_packet trailing_bytes type_mismatch bad_value too_many scheme_error pack_error uncorrectable too_long "
+            + "tag_mismatch duplicate too_old buffer_full")
     }
 }
 

@@ -50,3 +50,10 @@ java -cp "$main_out:$test_out" packbin.PackbinTest
 java -cp "$main_out:$test_out" packbin.SchemeTest
 java -cp "$main_out:$test_out" packbin.FieldIdBindingTest
 java -cp "$main_out:$test_out" packbin.SessionTest
+java -cp "$main_out:$test_out" packbin.CryptoVectorsTest
+java -cp "$main_out:$test_out" packbin.FrameVectorsTest
+java -cp "$main_out:$test_out" packbin.FrameTamperReplayTest
+java -cp "$main_out:$test_out" packbin.FrameMacRefusalsTest
+java -cp "$main_out:$test_out" packbin.FrameHostileTest
+java -cp "$main_out:$test_out" packbin.FrameLifecycleTest
+java -cp "$main_out:$test_out" packbin.FrameReadmeExample

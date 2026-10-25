@@ -14,30 +14,57 @@ final class SessionPad {
 
     private SessionPad() {}
 
+    /** HKDF-SHA256 with the stream session's fixed info {@code "packbin"}. */
     static byte[] hkdfSha256(byte[] ikm, byte[] salt, int length) {
+        return hkdfSha256(ikm, salt, INFO, length);
+    }
+
+    static byte[] hkdfSha256(byte[] ikm, byte[] salt, byte[] info, int length) {
+        byte[] prk = hkdfExtract(salt, ikm);
+        byte[] out = hkdfExpand(prk, info, length);
+        Arrays.fill(prk, (byte) 0);
+        return out;
+    }
+
+    /** RFC 5869 extract; an empty salt is the RFC's string of 32 zeros. */
+    static byte[] hkdfExtract(byte[] salt, byte[] ikm) {
+        byte[] key = salt.length == 0 ? new byte[32] : salt;
+        Mac mac = hmac(key);
+        return mac.doFinal(ikm);
+    }
+
+    /** RFC 5869 expand of {@code length} bytes (at most 255 blocks). */
+    static byte[] hkdfExpand(byte[] prk, byte[] info, int length) {
+        Mac mac = hmac(prk);
+        byte[] out = new byte[length];
+        byte[] block = new byte[0];
+        int offset = 0;
+        int counter = 1;
+        while (offset < length) {
+            mac.update(block);
+            mac.update(info);
+            mac.update((byte) counter);
+            block = mac.doFinal();
+            int n = Math.min(block.length, length - offset);
+            System.arraycopy(block, 0, out, offset, n);
+            offset += n;
+            counter++;
+        }
+        Arrays.fill(block, (byte) 0);
+        return out;
+    }
+
+    /**
+     * An HMAC-SHA256 instance keyed with {@code key}. An empty key is the same MAC as one zero byte (HMAC pads the
+     * key with zeros), and the platform refuses an empty key, so a single zero byte stands in for it.
+     */
+    static Mac hmac(byte[] key) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(salt, "HmacSHA256"));
-            byte[] prk = mac.doFinal(ikm);
-            byte[] out = new byte[length];
-            byte[] block = new byte[0];
-            int offset = 0;
-            int counter = 1;
-            while (offset < length) {
-                mac.init(new SecretKeySpec(prk, "HmacSHA256"));
-                mac.update(block);
-                mac.update(INFO);
-                mac.update((byte) counter);
-                block = mac.doFinal();
-                int n = Math.min(block.length, length - offset);
-                System.arraycopy(block, 0, out, offset, n);
-                offset += n;
-                counter++;
-            }
-            Arrays.fill(prk, (byte) 0);
-            return out;
+            mac.init(new SecretKeySpec(key.length == 0 ? new byte[1] : key, "HmacSHA256"));
+            return mac;
         } catch (GeneralSecurityException e) {
-            throw new IllegalStateException("HKDF-SHA256 unavailable", e);
+            throw new IllegalStateException("HMAC-SHA256 unavailable", e);
         }
     }
 
@@ -48,14 +75,19 @@ final class SessionPad {
     }
 
     static void xor(byte[] key, byte[] nonce, int counter, byte[] data) {
+        xor(key, nonce, counter, data, 0, data.length);
+    }
+
+    /** ChaCha20 over {@code data[from, from + length)} in place, the first block using {@code counter}. */
+    static void xor(byte[] key, byte[] nonce, int counter, byte[] data, int from, int length) {
         byte[] block = new byte[64];
         int offset = 0;
         int blockCounter = counter;
-        while (offset < data.length) {
+        while (offset < length) {
             block(key, nonce, blockCounter, block);
-            int n = Math.min(64, data.length - offset);
+            int n = Math.min(64, length - offset);
             for (int i = 0; i < n; i++) {
-                data[offset + i] ^= block[i];
+                data[from + offset + i] ^= block[i];
             }
             offset += n;
             blockCounter++;
@@ -63,7 +95,7 @@ final class SessionPad {
         Arrays.fill(block, (byte) 0);
     }
 
-    private static void block(byte[] key, byte[] nonce, int counter, byte[] output) {
+    static void block(byte[] key, byte[] nonce, int counter, byte[] output) {
         int[] state = new int[16];
         state[0] = CONSTANTS[0];
         state[1] = CONSTANTS[1];

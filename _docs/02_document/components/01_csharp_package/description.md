@@ -71,6 +71,21 @@ Optional parity bytes per scheme: `n` from 0 to 32, default 0, which keeps the b
 - **`t` and detection**: `t` defaults to 0 and then any corruption of up to `n` wrong bytes is detected. A `t` above 0 repairs up to `t` wrong bytes but gives up detection: corruption of `t + 1` to `n - t` bytes is still refused, a larger corruption may be repaired to a different message. The contract table lists the chance (`n` = 4: 1 in 4.29e+09 at `t` = 0, 1 in 990,537 at `t` = 1, 1 in 485 at `t` = 2). `t` above `n / 2` is an error before any byte is read.
 - **Size and speed**: a message is at most 254 bytes, parity included; pack refuses a clear message above `254 - n` bytes and writes nothing. Unpack of hostile bytes does at most about 3 x 255 x 32 field operations beyond the unprotected walk and never throws or traps on them. Acceptance bound EC-13 (a bound, not a recorded measurement): 1,000 unpacks with correction of a 254-byte message with 16 parity bytes and 8 wrong bytes in 1 second; 1,000 packs of such blocks in 1 second.
 
+### Interface: FrameSession (loop 71, AZ-3232)
+
+| Name | Meaning |
+|------|---------|
+| `FrameSession.Load(key, epoch, FrameConfig)` | a session, or `null` for a key not 32 bytes, an epoch above 0xFFFFFF, a tag length other than 4, 8, 16 or no direction; `SetPrevious(key, epoch)` and `ClearPrevious()` manage the previous slot (not safe beside a concurrent `Open`) |
+| `Seal(direction, MsgContext, ad, clear, plain, output, out written)` | `null` on success, else `BadValue`, `TooLong` or `BufferFull`; writes nothing on a refusal; safe from many threads |
+| `Open(direction, MsgContext, ad, body, clearLength, plain, out FrameOpened, ReplayWindow?, counter)` | `null` on success (slot `Current` or `Previous`), else `BadValue`, `TooLong`, `BufferFull`, `ShortPacket`, `TagMismatch`, `Duplicate` or `TooOld` |
+| `ReplayWindow` | `Check(counter)` (`Fresh`, `Duplicate`, `TooOld`), `Commit(counter)`, `Top`, `Bits`; not thread safe |
+| `MacKey.Derive(key, epoch, label)`, `Tag(message or parts, tag)`, `Verify(message or parts, tag)` | tags of 4, 8, 16 or 32 bytes; a label of 0 or 33 bytes gives `null` |
+| `BadValue`, `BufferFull`, `TagMismatch`, `Duplicate`, `TooOld` | new error classes (`FrameErrors.cs`); `TooLong` and `ShortPacket` are the existing ones |
+
+Files: `csharp/FrameSession.cs` (267 lines), `MacKey.cs` (118), `FrameTypes.cs` (98), `FrameCrypto.cs` (66), `ReplayWindow.cs` (63), `FrameKeys.cs` (58), `FrameErrors.cs` (36). Builds on `net10.0` and `netstandard2.0` (no `CryptographicOperations` call; the compare and the wipe go through `Compat`).
+
+- **Frame mode** (loop 71, contract `pack-session.md` 2.0.0, ADR 008): a `FrameSession` beside the stream `PackSession` (which is untouched), a `ReplayWindow` the caller owns (64 messages; `check` never changes state, `commit` only after an `Ok` open) and a `MacKey` for the MAC-only call. Seal and open follow the contract's order (argument checks, then the replay check without any MAC for `Duplicate` and `TooOld`, then the tag with the current key and then the previous key, then decrypt and commit). The bytes equal the Rust ones: the package passes every row of `fixtures/frame/vectors.txt` (157 rows, E1 to E5 included) and the 27 rows of `fixtures/crypto/vectors.txt`. The platform HMAC cannot expose precomputed pad states, so a session holds the 32-byte MAC key per direction and a `MacKey` the 32-byte label key (the contract's 72-byte figure does not apply); the HMAC key schedule runs on each call. Keys are overwritten on release; the tag compare folds every byte with no early exit; both are best effort in a managed runtime (stated in the API docs). The `msg_id` uniqueness rule is in the docs of `seal` and of the message context. A test-only counter of MAC computations proves a duplicate or too-old frame costs none (the Rust figure of SHA-256 compressions has no equivalent here). The README example of the package is the code of its example test (`scripts/frame/readme-examples.sh`).
+
 ## 4. Data Access Patterns
 
 No queries and no cache. The call does not store the packet.

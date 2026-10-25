@@ -410,6 +410,11 @@ public final class PackbinTest {
         }
     }
 
+    /** The number of failed checks so far, for test classes that run on their own. */
+    static int failureCount() {
+        return failures;
+    }
+
     static void fail(String message) {
         failures++;
         System.err.println("FAIL " + message);

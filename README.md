@@ -1391,7 +1391,7 @@ The encrypted session above is a stream: it needs packets in order, none lost, a
 
 **For one key, epoch and direction, never seal two different messages with the same `msg_id`.** A reused `msg_id` breaks the confidentiality of both messages, and packbin cannot check it. meshbell builds `msg_id` from the source (2 bytes), the id field (2 bytes) and the creation wave (4 bytes); sequences restart every wave, waves never repeat and source ids are never reissued, so it is unique. A new epoch derives new keys and nonces.
 
-The byte-for-byte definition, the replay rules and the error kinds (`TagMismatch`, `Duplicate`, `TooOld` besides the existing ones) are in `_docs/02_document/contracts/library/pack-session.md` (2.0.0); the shared test rows are in `fixtures/frame/vectors.txt`. Rust is the first package (Cargo feature `frame`, no heap, no panic path, 20 KB of flash and 2 KB of stack on a Cortex-M4F).
+The byte-for-byte definition, the replay rules and the error kinds (`TagMismatch`, `Duplicate`, `TooOld` besides the existing ones) are in `_docs/02_document/contracts/library/pack-session.md` (2.0.0); the shared test rows are in `fixtures/frame/vectors.txt`. Rust is the first package (Cargo feature `frame`, no heap, no panic path, 20 KB of flash and 2 KB of stack on a Cortex-M4F); C#, Java and Swift follow below with the same bytes (they pass the same `fixtures/frame/vectors.txt`). In those three the frame API is a `FrameSession` type beside `PackSession`, with a `ReplayWindow` you own and a `MacKey`; `Load` and `Derive` return null (C#, Java) or throw `badValue` (Swift) for an out-of-range key, epoch, tag length or label. Keys are wiped when you dispose, close or release the session; a managed runtime may keep copies, and the tag compare is written without an early exit but a JIT is not under the library's control, so both are best effort.
 
 ### Rust
 
@@ -1426,6 +1426,111 @@ fn main() -> Result<(), Fault> {
 ```
 
 The Cargo feature is `frame` (`packbin = { version = "...", default-features = false, features = ["frame"] }` builds `#![no_std]` with frame mode only). The same example runs as a doc test of the crate. A node that is short of stack declares `Session::frame_unloaded()` where it lives and calls `load_frame_in_place` on it.
+
+### C#
+
+`FrameSession.Seal` and `Open` write into buffers you own and return `null` on success or the error object (`BadValue`, `TooLong`, `BufferFull`, `ShortPacket`, `TagMismatch`, `Duplicate`, `TooOld`). `Seal` is safe from many threads; `SetPrevious`, `ClearPrevious` and `Dispose` are not safe beside another call. The library builds for `net10.0` and `netstandard2.0`.
+
+```csharp
+// A 32-byte key shared by the nodes, an epoch (0 to 0xFFFFFF) and a tag of 4, 8 or 16 bytes.
+byte[] key = new byte[32]; // use a random key from your key store
+using var node = FrameSession.Load(key, 1, new FrameConfig(4, FrameDirections.Up | FrameDirections.Down))!;
+
+// msg_id: 8 bytes that are unique per (key, epoch, direction) for every message ever sealed.
+var message = new MsgContext(new byte[] { 0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0 }, kind: 4);
+byte[] header = [0, 1, 0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0, 4]; // authenticated, not sent
+
+var body = new byte[255];
+var error = node.Seal(FrameDirection.Up, message, header, [], "hello, relay"u8, body, out var length);
+// error is null, or BadValue, TooLong or BufferFull; length is the body length (12 + 4 here)
+
+// The receiver keeps one ReplayWindow per sender and passes a counter that comes from authenticated bytes.
+var window = new ReplayWindow();
+var plain = new byte[255];
+var opened = node.Open(FrameDirection.Up, message, header, body.AsSpan(0, length), 0, plain, out var result, window, counter: 7);
+// opened is null, or TagMismatch, Duplicate, TooOld, ShortPacket, TooLong, BufferFull or BadValue
+// plain[..result.PlainLength] is the text and result.Slot says which key opened it
+var again = node.Open(FrameDirection.Up, message, header, body.AsSpan(0, length), 0, plain, out _, window, counter: 7); // Duplicate
+
+// The MAC-only call: a 4-byte network check over a message given in parts.
+using var network = MacKey.Derive(key, 1, "net"u8)!;
+var tag = new byte[4];
+network.Tag(new ReadOnlyMemory<byte>[] { new byte[] { 1, 2, 3, 4 }, body.AsMemory(0, length) }, tag);
+var valid = network.Verify(new ReadOnlyMemory<byte>[] { new byte[] { 1, 2, 3, 4 }, body.AsMemory(0, length) }, tag);
+```
+
+### Java
+
+`FrameSession.seal` and `open` return a `Sealed` or `Opened` result, or an error object (`Packbin.BadValue`, `TooLong`, `BufferFull`, `ShortPacket`, `TagMismatch`, `Duplicate`, `TooOld`); `seal` leaves the output untouched on a refusal. The code stays within Android API level 26.
+
+```java
+byte[] key = new byte[32]; // the shared 32-byte key, from your key store
+byte[] msgId = {0, 0x30, 0x10, 0x05, (byte) 0xe8, 3, 0, 0}; // unique per (key, epoch, direction), never reused
+byte[] header = {0, 1, 0, 0x30, 0x10, 0x05, (byte) 0xe8, 3, 0, 0, 4}; // authenticated, not sent
+
+try (FrameSession node = FrameSession.load(key, 1, 4, FrameSession.UP)) { // epoch 1, 4-byte tag; null if out of range
+    MsgContext ctx = new MsgContext(msgId, 4);
+    byte[] body = new byte[255];
+    FrameSession.Sealed sealed = (FrameSession.Sealed) node.seal(FrameSession.UP, ctx, header, null,
+            "hello, relay".getBytes(StandardCharsets.US_ASCII), body); // body = ciphertext + 4-byte tag
+
+    ReplayWindow window = new ReplayWindow(); // one per sender, yours to keep
+    byte[] plain = new byte[255];
+    long counter = 7; // from bytes the tag covers, e.g. the message id
+    Object opened = node.open(FrameSession.UP, ctx, header, Arrays.copyOf(body, sealed.length), 0, window, counter, plain);
+    int plainLength = ((FrameSession.Opened) opened).plainLength; // plain[0, plainLength) holds the message
+    Object again = node.open(FrameSession.UP, ctx, header, Arrays.copyOf(body, sealed.length), 0, window, counter, plain);
+    boolean duplicate = again instanceof Packbin.Duplicate; // refused before any MAC; also TagMismatch, TooOld, ...
+
+    try (MacKey net = MacKey.derive(key, 1, "net".getBytes(StandardCharsets.US_ASCII))) { // MAC-only call
+        byte[] tag = new byte[4];
+        net.tag(tag, new byte[] {1, 0, 0, 0}, body); // the message may be passed in parts
+        boolean valid = net.verify(tag, new byte[] {1, 0, 0, 0}, body); // constant-time compare
+    }
+}
+```
+
+### Swift
+
+`FrameSession.seal` and `open` throw `PackbinError` with the kinds `badValue`, `tooLong`, `short`, `bufferFull`, `tagMismatch`, `duplicate` and `tooOld`; `FrameSession` and `MacKey` are `Sendable` and `seal`, `open`, `tag` and `verify` may run on many threads at once.
+
+```swift
+// Load once: the keys of each direction are derived here. One tag length (4, 8 or 16) per key.
+let key = [UInt8](repeating: 0x11, count: 32)
+let node = try FrameSession.load(key: key, epoch: 1, config: FrameConfig(tagLength: 4))
+
+// A message id that is never sealed twice with other contents under one (key, epoch, direction).
+let context = MessageContext(msgID: [0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0], kind: 4)
+let ad: [UInt8] = [0, 1, 0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0, 4]  // authenticated, not sent
+
+// Seal into your own buffer: clear part, then ciphertext, then the 4-byte tag.
+var body = [UInt8](repeating: 0, count: 255)
+let length = try node.seal(direction: .up, context: context, ad: ad, clear: [],
+                           plain: Array("hello, relay".utf8), into: &body)  // 12 + 4 bytes
+
+// Open with the sender's replay window. The counter must come from bytes the tag covers.
+var window = ReplayWindow()
+var plain = [UInt8](repeating: 0, count: 255)
+let opened = try node.open(direction: .up, context: context, ad: ad, body: Array(body[0..<length]),
+                           clearLength: 0, window: &window, counter: 7, into: &plain)
+// opened.slot == .current, String(decoding: plain[0..<opened.plainLength], as: UTF8.self) == "hello, relay"
+
+// The same frame again is refused before any MAC is computed.
+var replayKind: PackbinError.Kind?
+do {
+    _ = try node.open(direction: .up, context: context, ad: ad, body: Array(body[0..<length]), clearLength: 0,
+                      window: &window, counter: 7, into: &plain)
+} catch let error as PackbinError {
+    replayKind = error.kind  // .duplicate
+}
+
+// MAC-only: a 4-byte network check over a wave number and the frame bytes, hashed in parts.
+let net = try MacKey.derive(key: [UInt8](repeating: 0x22, count: 32), epoch: 7, label: Array("net".utf8))
+let wave: [UInt8] = [0xe8, 3, 0, 0]
+let frame: [UInt8] = Array(0xc0...0xd3)
+let tag = try net.tag([wave, frame], length: 4)  // 56db9bec
+let valid = net.verify([wave, frame], tag: tag)
+```
 
 ## Data types
 

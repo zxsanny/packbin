@@ -68,6 +68,21 @@ Optional parity bytes per scheme: `n` from 0 to 32, default 0, which keeps the b
 - **`t` and detection**: `t` defaults to 0 and then any corruption of up to `n` wrong bytes is detected. A `t` above 0 repairs up to `t` wrong bytes but gives up detection: corruption of `t + 1` to `n - t` bytes is still refused, a larger corruption may be repaired to a different message. The contract table lists the chance (`n` = 4: 1 in 4.29e+09 at `t` = 0, 1 in 990,537 at `t` = 1, 1 in 485 at `t` = 2). `t` above `n / 2` is an error before any byte is read.
 - **Size and speed**: a message is at most 254 bytes, parity included; pack refuses a clear message above `254 - n` bytes and writes nothing. Unpack of hostile bytes does at most about 3 x 255 x 32 field operations beyond the unprotected walk and never throws or traps on them. Acceptance bound EC-13 (a bound, not a recorded measurement): 1,000 unpacks with correction of a 254-byte message with 16 parity bytes and 8 wrong bytes in 1 second; 1,000 packs of such blocks in 1 second.
 
+### Interface: FrameSession (loop 71, AZ-3233)
+
+| Name | Meaning |
+|------|---------|
+| `FrameSession.load(key, epoch, tagLen, directions...)` | a session, or `null` for a value out of range; `setPrevious(key, epoch)`, `clearPrevious()`, `close()` (wipes the keys; later calls give `BadValue`) |
+| `seal(dir, MsgContext, ad, clear, plain, out)` (and an `outOffset` form) | a `Sealed` (with `length`) or an error object; writes nothing on a refusal; safe from many threads |
+| `open(dir, MsgContext, ad, body, clearLength, ReplayWindow, counter, out)` (and a ranged form) | an `Opened` (`slot`, `clearLength`, `plainLength`) or an error object; a null window skips the replay check |
+| `ReplayWindow` | `check(counter)` (`FRESH`, `DUPLICATE`, `TOO_OLD`), `commit(counter)`, `top()`, `bits()`; unsigned counters |
+| `MacKey.derive(key, epoch, label)`, `tag(out, parts...)`, `verify(tag, parts...)`, `close()` | tags of 4, 8, 16 or 32 bytes |
+| `Packbin.BadValue`, `BufferFull`, `TagMismatch`, `Duplicate`, `TooOld` | new nested error classes beside `Uncorrectable`; `TooLong` and `ShortPacket` are the existing ones |
+
+Files: `java/src/main/java/packbin/FrameSession.java` (352 lines), `MacKey.java` (96), `ReplayWindow.java` (87), `FrameCrypto.java` (84), `MsgContext.java` (26); `SessionPad.java` gains overloads (`hkdfSha256` with an info argument, `hkdfExtract`, `hkdfExpand`, `hmac`, a ranged `xor`; the stream bytes are unchanged). `api-check.sh` reports no main-source API above Android API level 26; `java/test.sh` runs the new test classes (`CryptoVectorsTest`, `FrameVectorsTest`, `FrameTamperReplayTest`, `FrameMacRefusalsTest`, `FrameHostileTest`, `FrameLifecycleTest`, `FrameReadmeExample`).
+
+- **Frame mode** (loop 71, contract `pack-session.md` 2.0.0, ADR 008): a `FrameSession` beside the stream `PackSession` (which is untouched), a `ReplayWindow` the caller owns (64 messages; `check` never changes state, `commit` only after an `Ok` open) and a `MacKey` for the MAC-only call. Seal and open follow the contract's order (argument checks, then the replay check without any MAC for `Duplicate` and `TooOld`, then the tag with the current key and then the previous key, then decrypt and commit). The bytes equal the Rust ones: the package passes every row of `fixtures/frame/vectors.txt` (157 rows, E1 to E5 included) and the 27 rows of `fixtures/crypto/vectors.txt`. The platform HMAC cannot expose precomputed pad states, so a session holds the 32-byte MAC key per direction and a `MacKey` the 32-byte label key (the contract's 72-byte figure does not apply); the HMAC key schedule runs on each call. Keys are overwritten on release; the tag compare folds every byte with no early exit; both are best effort in a managed runtime (stated in the API docs). The `msg_id` uniqueness rule is in the docs of `seal` and of the message context. A test-only counter of MAC computations proves a duplicate or too-old frame costs none (the Rust figure of SHA-256 compressions has no equivalent here). The README example of the package is the code of its example test (`scripts/frame/readme-examples.sh`).
+
 ## 4. Data Access Patterns
 
 No queries and no cache.

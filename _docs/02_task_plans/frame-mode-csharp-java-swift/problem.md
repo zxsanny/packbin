@@ -5,7 +5,7 @@ branch: dev
 
 # Loop 71: frame mode in C#, Java and Swift (AZ-3192 follow-up)
 
-Intake stub. Phase 1 grasp only; Phases 2 to 4 follow in this loop.
+Phase 1 grasp and Phase 2 scope confirmed (owner, 2026-10-25, "accept all recommended").
 
 ## What
 
@@ -22,11 +22,17 @@ Owner words: "continue implementation" after picking the option that names the s
 - Swift: `swift/Sources/Packbin/PackSession.swift`, `SessionKeys.swift`, `swift/Tests/PackbinTests/`.
 - Shared, read only: `fixtures/frame/vectors.txt`, `fixtures/crypto/vectors.txt`, `_docs/02_document/contracts/library/pack-session.md` (2.0.0), the Rust reference in `rust/src/nostd` and `rust/src/session_core`, `scripts/frame/framefmt.py`.
 
+## Decisions (owner, 2026-10-25)
+
+All three packages in this loop, order C#, Java, Swift; PB-02 primitive tests included in the three; the frame API on its own type, always built; one replay window per caller object (as Rust); same vectors, error kinds and bytes as Rust; best-effort key wipe and constant-time compare; README example per language and component descriptions; no cross-language ring.
+
+Acceptance criteria: `acceptance_criteria.md`. Expected results: `input_data/expected_results/results_report.md`. Scenarios: `scenarios.md`. Feature handoff: `feature-description.md` (17 points, decompose).
+
 ## Flagged concerns
 
 | concern | policy / owner | status | severity |
 | --- | --- | --- | --- |
-| Which of the three packages first, and whether all three fit one loop | owner | open (Phase 2) | Medium |
-| PB-02 primitive vector tests in these three packages come with the frame work | owner (loop 69 narrowed PB-02 to Rust) | open (Phase 2) | Low |
+| All three packages in one loop | owner chose all three, C# first | accepted-risk (parallel disjoint trees) | Medium |
+| PB-02 primitive vector tests in these three packages come with the frame work | owner, included | resolved | Low |
 | Constant-time tag compare and key wipe differ by runtime (GC, JIT, ARC) | each package's best effort, stated in the doc | open | Medium |
 | Replay window value type per language (unsigned 64) | contract fixes the bits | open | Low |
