@@ -190,7 +190,7 @@ static = %w[
   .github/workflows/ring-wiring-rows.test.sh
   .github/workflows/ring-wiring-swift.test.sh .github/workflows/ring-prepare.test.sh
   fixtures/text/check-vectors.test.sh scripts/text/check-emitted.test.sh scripts/text/check-emitted.sh
-  fixtures/crypto/check-vectors.test.sh fixtures/ecc/check-vectors.test.sh fixtures/ecc/check-contract.sh .github/workflows/ring-ecc.test.sh
+  fixtures/crypto/check-vectors.test.sh fixtures/frame/check-vectors.test.sh fixtures/ecc/check-vectors.test.sh fixtures/ecc/check-contract.sh .github/workflows/ring-ecc.test.sh
 ]
 static.each do |script|
   found = all_runs.call("bash #{script}")
@@ -366,6 +366,7 @@ mutant "scaffold without the embedded parts step" 'jobs["scaffold"]["steps"].rej
 mutant "scaffold without the report columns step" 'jobs["scaffold"]["steps"].reject! { |s| s["name"] == "report columns" }'
 mutant "ring preparation test moved to ring" 'jobs["ring"]["steps"] << jobs["scaffold"]["steps"].find { |s| s["name"] == "ring preparation" }; jobs["scaffold"]["steps"].reject! { |s| s["name"] == "ring preparation" }'
 mutant "scaffold without the primitive reference vectors step" 'jobs["scaffold"]["steps"].reject! { |s| s["name"] == "primitive reference vectors" }'
+mutant "scaffold without the frame mode vectors step" 'jobs["scaffold"]["steps"].reject! { |s| s["name"] == "frame mode vectors" }'
 mutant "scaffold without the message ECC vectors step" 'jobs["scaffold"]["steps"].reject! { |s| s["name"] == "message ECC vectors" }'
 mutant "scaffold without the message ECC reference bounds step" 'jobs["scaffold"]["steps"].reject! { |s| s["name"] == "message ECC reference bounds" }'
 mutant "message ECC ring self-test moved to ring" 'jobs["ring"]["steps"] << jobs["scaffold"]["steps"].find { |s| s["name"] == "message ECC ring self-test" }; jobs["scaffold"]["steps"].reject! { |s| s["name"] == "message ECC ring self-test" }'
