@@ -34,6 +34,7 @@ impl MacKey {
         for byte in derived.iter_mut() {
             *byte = 0;
         }
+        core::hint::black_box(&mut derived);
         Ok(MacKey { pads, epoch })
     }
 

@@ -478,3 +478,4 @@ Moved to [traceability-not-verified-loops-11-18.md](traceability-not-verified-lo
 <!-- autodev-step12-loop-update: loop 46 (AZ-2735 to AZ-2740), 2026-10-20, 3 rows added in traceability-matrix-loops-35-46-text.md (CS-S3, EC-D2, AZ-2740 AC-1 to AC-3 Covered); CS-5 and CS-10 flipped from Partial to Covered; HD-2 row names the Java, C#, Rust and C++ tests; the 29 loop 45 rows moved to that file -->
 <!-- autodev-step12-loop-update: loop 54 (AZ-2815, AZ-2816, AZ-2823), 2026-10-21, 15 rows added in traceability-matrix-loop-54.md (13 Covered, 2 Open) -->
 <!-- autodev-step12-loop-update: loop 55 (AZ-3132, AZ-3133, AZ-3134, AZ-3141), 2026-10-21, 15 rows added in traceability-matrix-loop-55.md (12 Covered, 3 Open) -->
+<!-- autodev-step12-loop-update: loop 69 (AZ-3200 to AZ-3204), 2026-10-25, 28 rows added in traceability-matrix-loop-69.md (27 Covered, 1 Open: CI flash of the frame set) -->

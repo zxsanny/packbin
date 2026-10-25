@@ -189,6 +189,15 @@ impl DirKeys {
         for byte in mac.iter_mut() {
             *byte = 0;
         }
+        core::hint::black_box(&mut mac);
+    }
+
+    fn wipe(&mut self) {
+        for byte in self.enc.iter_mut() {
+            *byte = 0;
+        }
+        self.pads.wipe();
+        core::hint::black_box(&mut *self);
     }
 }
 
@@ -226,16 +235,20 @@ impl SlotKeys {
     }
 }
 
-impl Drop for SlotKeys {
-    /// Overwrites the keys and pad states (best effort: the compiler is asked to keep the writes).
-    fn drop(&mut self) {
+impl SlotKeys {
+    /// Overwrites the keys and pad states in place (best effort: the compiler is asked to keep the writes).
+    fn wipe(&mut self) {
+        self.epoch = 0;
         for keys in self.dirs.iter_mut() {
-            for byte in keys.enc.iter_mut() {
-                *byte = 0;
-            }
-            keys.pads.wipe();
+            keys.wipe();
         }
         core::hint::black_box(&mut self.dirs);
+    }
+}
+
+impl Drop for SlotKeys {
+    fn drop(&mut self) {
+        self.wipe();
     }
 }
 
@@ -302,6 +315,7 @@ impl Session {
         state.loaded = false;
         state.tag_len = config.tag_len;
         state.directions = config.directions;
+        state.previous.wipe();
         state.has_previous = false;
         state.current.fill(key, epoch, config.directions);
         state.loaded = true;
@@ -336,13 +350,23 @@ impl Session {
 
     /// Drops the previous (key, epoch) and overwrites its keys.
     pub fn clear_previous(&mut self) {
-        self.frame.previous = SlotKeys::empty();
+        self.frame.previous.wipe();
         self.frame.has_previous = false;
     }
 }
 
 #[cfg(test)]
 impl Session {
+    /// True when no byte of the previous slot's keys is set.
+    pub(crate) fn test_previous_is_zero(&self) -> bool {
+        let slot = &self.frame.previous;
+        slot.epoch == 0
+            && slot
+                .dirs
+                .iter()
+                .all(|k| k.enc.iter().all(|b| *b == 0) && k.pads.mac(&[]) == Pads::empty().mac(&[]))
+    }
+
     /// The encryption key of `direction` and the HMAC of the probe message `probe` under its MAC key.
     pub(crate) fn test_material(
         &self,

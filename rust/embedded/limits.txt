@@ -11,5 +11,5 @@ text 27964 2898
 ecc 18879 798
 session 19325 1924
 frame 20480 1991
-# frame (AZ-3203, 2026-10-25): measured 19700 B of flash and 1896 B of stack on the Cortex-M4F image; the owner's bounds are
-# 20480 B and 2048 B, so flash stays at the bound (measured plus 5% is 20685 B) and stack is measured plus 5%.
+# frame (AZ-3203, 2026-10-25): measured 19772 B of flash and 1896 B of stack on the Cortex-M4F image; the owner's bounds are
+# 20480 B and 2048 B, so flash stays at the bound (measured plus 5% is 20761 B) and stack is measured plus 5%.

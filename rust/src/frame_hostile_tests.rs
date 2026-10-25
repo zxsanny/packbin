@@ -306,3 +306,42 @@ fn a_session_that_holds_stream_state_is_not_given_frame_keys() {
         Error::BadValue
     );
 }
+
+#[test]
+fn reloading_or_clearing_overwrites_the_previous_slot() {
+    // Arrange
+    let config = FrameConfig {
+        tag_len: 4,
+        directions: all(),
+    };
+    let mut s = Session::load_frame(&[1; 32], 1, config).unwrap();
+    s.set_previous(&[2; 32], 0).unwrap();
+    assert!(!s.test_previous_is_zero());
+    // Act
+    s.clear_previous();
+    // Assert
+    assert!(s.test_previous_is_zero());
+    s.set_previous(&[3; 32], 0).unwrap();
+    s.load_frame_in_place(&[4; 32], 2, config).unwrap();
+    assert!(s.test_previous_is_zero());
+}
+
+#[test]
+fn a_body_or_clear_part_above_255_bytes_is_refused_before_any_hashing() {
+    // Arrange
+    let s = session(&[5; 32], 3, 4);
+    let ctx = MsgCtx {
+        msg_id: [6; 8],
+        kind: 1,
+    };
+    let mut out = [SENTINEL; 300];
+    crate::session_core::counters::take();
+    // Act
+    let long_body = s.open_frame(Direction::Up, &ctx, &[], &[0u8; 10_000], 0, None, &mut out);
+    let long_clear = s.open_frame(Direction::Up, &ctx, &[], &[0u8; 20], 256, None, &mut out);
+    // Assert
+    assert_eq!(long_body.unwrap_err().error, Error::TooLong);
+    assert_eq!(long_clear.unwrap_err().error, Error::TooLong);
+    assert_eq!(crate::session_core::counters::take(), (0, 0));
+    assert!(out.iter().all(|b| *b == SENTINEL));
+}

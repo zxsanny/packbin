@@ -129,7 +129,7 @@ Seal is deterministic: the same inputs give the same bytes. It never uses the pr
 
 ### Open (the order is normative)
 
-1. Argument checks: direction loaded and `kind` at most 15 (else `BadValue`), `len(ad)` at most 255 (else `TooLong`, as in seal). `len(body) < clear_len + tag_len` is `ShortPacket`. An output buffer shorter than `len(body) - clear_len - tag_len` is `BufferFull`.
+1. Argument checks: direction loaded and `kind` at most 15 (else `BadValue`); `len(ad)`, `len(body)` and `clear_len` each at most 255 (else `TooLong`, as in seal; a longer body is refused before any hashing). `len(body) < clear_len + tag_len` is `ShortPacket`. An output buffer shorter than `len(body) - clear_len - tag_len` is `BufferFull`.
 2. Replay check (only when the caller passes a window and the message's counter): `Duplicate` or `TooOld` ends the call here, with no MAC computed.
 3. Tag check with the current key: build `N` from the caller's `msg_id`, `kind`, `d` and the current epoch, recompute the tag over `M` from the received bytes, and compare all `tag_len` bytes in constant time.
 4. On a mismatch, if a previous (key, epoch) is loaded, repeat step 3 once with it (keys and nonce from the previous epoch). Still no match: `TagMismatch`.
@@ -144,7 +144,9 @@ The output buffer is not written unless the result is `Ok`.
 - State: `top` (a 64-bit integer, the highest committed counter) and `bits` (a 64-bit integer; bit i set means counter `top - i` was committed). `bits = 0` means empty. 16 bytes.
 - `check(n)`: if empty or `n > top`: `Fresh`. If `top - n >= 64`: `TooOld`. If bit `top - n` is set: `Duplicate`. Otherwise `Fresh`. `check` never changes the state.
 - `commit(n)`: if empty: `top = n`, `bits = 1`. If `n > top`: shift `bits` left by `n - top` (0 when the shift is 64 or more), set bit 0, `top = n`. Otherwise set bit `top - n`.
-- The counter is the caller's: a value that increases with every message of one sender.
+- The counter is the caller's: a value that increases with every message of one sender. **It must come from bytes the tag covers** (for example the `msg_id` or the associated data), never from an unauthenticated field of the wire: the counter is an argument of open and is not part of the tag, so a captured frame replayed under a counter the attacker chooses would be accepted and could move the window (meshbell derives it from the same source, id field and creation wave that build `msg_id`).
+- A window serves one sender and one key lifetime. A frame that opens under the previous key commits into the same window, so a caller keeps the previous key only for the changeover and calls clear-previous when it ends.
+- A window restored from stored `(top, bits)` with `bits = 0` is empty: replay protection is off until the next commit. A caller that restores a window validates it (bit 0 set when `bits` is not 0).
 
 ### Results and error kinds
 
@@ -159,7 +161,7 @@ Frame mode reuses `BadValue` (configuration or argument out of range), `TooLong`
 - A tag truncated to 32 bits is allowed for HMAC (NIST SP 800-107 Rev. 1, carried into SP 800-224); LoRaWAN uses a 4-byte MIC on every frame. Polynomial MACs (GHASH, Poly1305) are not truncated to 32 bits.
 - Forgery odds with a 4-byte tag are 2^-32 per try (about 68 years on average at one try per second). Callers count tag failures per sender as an attack indicator.
 - The compare has no early exit and no secret-dependent branch; SHA-256 and ChaCha20 use no secret-indexed tables.
-- A captured device reveals only its own key; callers rotate shared keys after a loss.
+- A captured device reveals only its own key; callers rotate shared keys after a loss. The keys are symmetric: any holder of a direction key can forge any source for that direction, and `tag_len` is not in `M`, so one `tag_len` is used per (key, epoch) across all devices.
 - Derived keys and HMAC states are overwritten when the session or key object is dropped (best effort, as the stream session does).
 
 ## MAC-only call

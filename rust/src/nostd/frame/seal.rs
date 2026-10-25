@@ -157,8 +157,14 @@ impl Session {
     /// argument checks, the replay window (when given, with the message's counter: `Duplicate` or `TooOld`
     /// before any hashing), the tag with the current key and then once with the previous key
     /// (`TagMismatch`), decryption into `out`, and only then the window commit. A failed open leaves `out`
-    /// and the window as they were. A body shorter than `clear_len` plus the tag is `ShortPacket`; an `out`
-    /// shorter than the plaintext is `BufferFull`.
+    /// and the window as they were. A body or `clear_len` above 255 is `TooLong` (before any hashing); a body
+    /// shorter than `clear_len` plus the tag is `ShortPacket`; an `out` shorter than the plaintext is
+    /// `BufferFull`.
+    ///
+    /// **The counter must come from bytes the tag covers** (the `msg_id` or the associated data), never from an
+    /// unauthenticated field of the wire: it is an argument, not part of the tag, so a captured frame replayed
+    /// under a counter the attacker chooses would open and could move the window. A frame that opens under the
+    /// previous key commits into the same window: keep the previous key only for the changeover.
     #[allow(clippy::too_many_arguments)]
     pub fn open_frame(
         &self,
@@ -174,6 +180,9 @@ impl Session {
             .frame_state()
             .ok_or_else(|| refuse(Error::BadValue, 0))?;
         call_checks(state, direction, ctx, ad)?;
+        if body.len() > MAX_BODY || clear_len > MAX_BODY {
+            return Err(refuse(Error::TooLong, MAX_BODY));
+        }
         let tag_len = usize::from(state.tag_len);
         let framing = clear_len.saturating_add(tag_len);
         let plain_len = body

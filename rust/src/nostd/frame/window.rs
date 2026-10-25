@@ -26,7 +26,9 @@ impl ReplayWindow {
         ReplayWindow { top: 0, bits: 0 }
     }
 
-    /// A window restored from `parts` (for example saved before a restart). `bits == 0` is empty.
+    /// A window restored from `parts` (for example saved before a restart). `bits == 0` is empty, whatever `top`
+    /// is: a window read back from erased flash turns replay protection off until the next commit, so a caller
+    /// checks that `bits` is 0 or has bit 0 set before it trusts the restored state.
     pub const fn from_parts(top: u64, bits: u64) -> Self {
         ReplayWindow { top, bits }
     }

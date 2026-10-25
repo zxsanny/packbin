@@ -14,7 +14,7 @@
 
 ## Test Suite
 
-- Embedded stage (Cortex-M4F, host cargo 1.79, QEMU): frame 19,700 B flash / 1,896 B stack (limits 20,480 B / 1,991 B); base 14,700 B / 456 B, text 26,632 B / 2,760 B, ecc 17,980 B / 760 B, session 18,404 B / 1,832 B: identical to the same stage run on a tree copy of 06206b1 (before AZ-3203)
+- Embedded stage (Cortex-M4F, host cargo 1.79, QEMU): frame 19,772 B flash / 1,896 B stack (limits 20,480 B / 1,991 B); base 14,700 B / 456 B, text 26,632 B / 2,760 B, ecc 17,980 B / 760 B, session 18,404 B / 1,832 B: identical to the same stage run on a tree copy of 06206b1 (before AZ-3203)
 - rust-mutants: seeded panic and heap defects caught
 - rust:1.98 matrix as batch 3 plus the doc test: all green
 - CI-parity: PASS

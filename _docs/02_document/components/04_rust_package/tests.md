@@ -459,3 +459,15 @@ See [tests-by-loop.md](tests-by-loop.md) (loop 19 to loop 23 sections, moved in 
 2. Do not leave a registry token on disk
 
 **Data isolation strategy**: each test builds its own value in memory. There is no database and no shared mutable fixture.
+
+## Loop 69: frame mode (AZ-3200 to AZ-3204)
+
+| Test | What it proves | Where |
+|------|----------------|-------|
+| FT-X-156 | the four primitives match the published vectors | `src/crypto_vectors_tests.rs`, `fixtures/crypto/check-vectors.test.sh` |
+| FT-X-157 | every non-key row of `fixtures/frame/vectors.txt` through the public API, with and without `std` | `tests/frame_vectors_tests.rs` |
+| FT-X-158 | key rows, every single-bit tamper of E1 to E3, replay before crypto (0 compressions), previous slot, MAC-only, cost counters | `src/frame_core_tests.rs` |
+| FT-X-159 | refusals with no partial output, hostile bodies, stream and frame calls kept apart, in-place load, sizes, model of the window | `src/frame_hostile_tests.rs` |
+| FT-X-160 | the `frame` set on the Cortex-M4F image | `rust/embedded` stage |
+
+Run: `cargo test --features frame --test frame_vectors_tests`, `--no-default-features --features frame --test frame_vectors_tests`, `--features frame --lib frame_`, `--features frame,session,ecc --lib frame_`, `--features frame --doc` (all in `run-suite.sh`).

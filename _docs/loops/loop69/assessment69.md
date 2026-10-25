@@ -26,7 +26,7 @@ report_of_round: 1
 | S8 | epoch 0xFFFFFF and 0x1000000, direction, kind, tag_len bounds | covered | AZ-3203 AC-1; fixture rows `keys.d*.e*`, `refuse.seal.epoch1000000/tag0/tag5/tag32/kind16`; `frame_core_tests::the_key_rows_of_the_fixture_match`; `check_load`, `load_frame_in_place` | intake |
 | S9 | MAC-only in parts, label and `n` bounds | covered | AZ-3203 AC-5; fixture rows `mac.*` (E4, E5, 27 length rows in 1 to 3 parts, bounds, verify); `frame_core_tests::mac_only_tags_do_not_depend_on_the_split_and_the_key_is_small`; `frame/mac.rs` | intake |
 | S10 | a caller reuses a `msg_id` | out-of-scope | `AZ-3200` `### Excluded`: "Scenario S10 (a caller reusing a `msg_id`): the library cannot check it"; the bold rule is in the README, the contract and the rustdoc of `seal_frame` | intake |
-| S11 | device build with `frame` on and off | covered | AZ-3204 AC-1 and AC-2; embedded stage `frame` set 19,700 B / 1,896 B, four sets identical to a run on `06206b1`, `stream_hits` check, `checks.test.sh` | intake |
+| S11 | device build with `frame` on and off | covered | AZ-3204 AC-1 and AC-2; embedded stage `frame` set 19,772 B / 1,896 B, four sets identical to a run on `06206b1`, `stream_hits` check, `checks.test.sh` | intake |
 | S12 | stream bytes unchanged | covered | AZ-3203 AC-7, AZ-3200 AC-3; default `cargo test` 831 passed, 0 failed (rust:1.98); `nostd_session_tests` 13 and 22 passed; the contract's stream text is unchanged; the ring runs in step 11 | intake |
 | D1 | open with an `ad` of 256 bytes: the contract named the check, not the kind | covered | contract Open step 1 now says `TooLong`; fixture row `refuse.open.ad256`; Rust assertion in `refusals_leave_no_partial_output...` (added in this pass, before the matrix; code and fixture were fixed by the implement pass, not by this skill) | batch_02 discoveries |
 | D2 | loading a 600-byte session by value costs 560 B of stack | covered | `Session::frame_unloaded` and `load_frame_in_place`; `frame_hostile_tests::loading_in_place_gives_the_same_frames_as_load_frame_and_replaces_the_keys`; stage stack 1,896 B | batch_03 discoveries |
@@ -42,7 +42,7 @@ none
 
 ### Residual risk (not a gap in a written criterion)
 
-- **R1**: the CI runner (Rust 1.98, Linux) reports larger flash than this Mac (cargo 1.79): loop 68 CI base 15,060 B against 14,700 B here (+2.4%), text +2.0%, ecc +4.0%, session +2.2%; stack is lower on CI. `frame` is 19,700 B here, about 20,200 B to 20,500 B on CI, against the owner's bound of 20,480 B. Read the CI figure after the push; a raise needs a line in `limits.txt` and the owner (the bound is his).
+- **R1**: the CI runner (Rust 1.98, Linux) reports larger flash than this Mac (cargo 1.79): loop 68 CI base 15,060 B against 14,700 B here (+2.4%), text +2.0%, ecc +4.0%, session +2.2%; stack is lower on CI. `frame` is 19,772 B here, about 20,200 B to 20,500 B on CI, against the owner's bound of 20,480 B. Read the CI figure after the push; a raise needs a line in `limits.txt` and the owner (the bound is his).
 - **R2**: the cross-language ring and the full step 11 run have not run yet; the first run is the single total run of this loop.
 - **R3**: frame-mode security audit (step 14 in the plan) is still to run.
 

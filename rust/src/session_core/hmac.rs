@@ -37,6 +37,7 @@ impl Pads {
         for byte in ipad.iter_mut().chain(opad.iter_mut()) {
             *byte = 0;
         }
+        core::hint::black_box((&mut ipad, &mut opad));
         pads
     }
 

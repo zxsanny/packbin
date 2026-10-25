@@ -146,6 +146,8 @@ def open_frame(key, epoch, d, tag_len, msg_id, kind, ad, clear_len, body, dirs=(
     """Returns (slot, plain, window_after_text or None); raises Fault. The window is never changed on a fault."""
     check_load(key, epoch, tag_len)
     _args(d, dirs, msg_id, kind, ad)
+    if len(body) > MAX_BODY or clear_len > MAX_BODY:
+        raise Fault("TooLong")
     if len(body) < clear_len + tag_len:
         raise Fault("ShortPacket")
     plain_len = len(body) - clear_len - tag_len

@@ -138,6 +138,8 @@ def build():
     b.add("open", "refuse.open.kind16", **open_fields(opened, body, kind=16))
     b.add("open", "refuse.open.unloaded", **open_fields(opened, body, dirs="2"))
     b.add("open", "refuse.open.ad256", **open_fields(opened, body, ad=rows.hx(det("ad256", 256))))
+    b.add("open", "refuse.open.body256", **open_fields(opened, rows.hx(det("body256", 256))))
+    b.add("open", "refuse.open.clear256", **open_fields(opened, body, clear_len=256))
     b.add("open", "refuse.open.short", **open_fields(opened, rows.hx(rows.unhex(body)[:3])))
     b.add("open", "refuse.open.buffer", **open_fields(opened, body, out_len=11))
 
