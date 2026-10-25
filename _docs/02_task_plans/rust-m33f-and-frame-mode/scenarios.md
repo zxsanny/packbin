@@ -29,3 +29,7 @@ Source of rows: `intake` (new-task Step 4.7). Status: confirmed / out-of-scope /
 
 - Several senders sharing one replay window (the caller owns one window per sender; the contract says so).
 - A frame-mode session loaded from the std `PackSession` type (the spec names `nostd::Session`; the std type is not changed in this loop).
+
+## Assessment round 1 (loop 69)
+
+D1 (open with `ad` of 256 bytes), D2 (load by value costs stack) and D3 (`frame` not implied by `std`): covered, see `_docs/loops/loop69/assessment69.md`. Verdict COMPLETE.

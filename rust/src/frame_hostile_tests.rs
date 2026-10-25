@@ -68,6 +68,10 @@ fn refusals_leave_no_partial_output_and_hostile_input_never_panics() {
         Error::BufferFull
     );
     assert!(out.iter().all(|b| *b == SENTINEL));
+    let long_ad = [0u8; 256];
+    let opened = s.open_frame(Direction::Up, &ctx, &long_ad, &[0u8; 8], 0, None, &mut out);
+    assert_eq!(opened.unwrap_err().error, Error::TooLong);
+    assert!(out.iter().all(|b| *b == SENTINEL));
     assert!(Session::load_frame(
         &[1; 32],
         0x1000000,
@@ -227,4 +231,78 @@ fn random_frames_round_trip_and_the_window_follows_the_model() {
             seen.push(n);
         }
     }
+}
+
+#[test]
+fn loading_in_place_gives_the_same_frames_as_load_frame_and_replaces_the_keys() {
+    // Arrange
+    let config = FrameConfig {
+        tag_len: 4,
+        directions: all(),
+    };
+    let ctx = MsgCtx {
+        msg_id: [4; 8],
+        kind: 3,
+    };
+    let seal = |s: &Session| {
+        let mut out = [0u8; 32];
+        let n = s
+            .seal_frame(Direction::Down, &ctx, &[1, 2], &[], b"in place", &mut out)
+            .unwrap();
+        out[..n].to_vec()
+    };
+    let by_value = Session::load_frame(&[8; 32], 5, config).unwrap();
+    let mut in_place = Session::frame_unloaded();
+    assert!(seal_refused(&in_place, &ctx));
+    // Act
+    in_place.load_frame_in_place(&[8; 32], 5, config).unwrap();
+    // Assert
+    assert_eq!(seal(&in_place), seal(&by_value));
+    in_place.set_previous(&[9; 32], 4).unwrap();
+    in_place.load_frame_in_place(&[7; 32], 6, config).unwrap();
+    let old = seal(&session(&[9; 32], 4, 4));
+    let mut out = [0u8; 32];
+    let refused = in_place.open_frame(Direction::Down, &ctx, &[1, 2], &old, 0, None, &mut out);
+    assert_eq!(refused.unwrap_err().error, Error::TagMismatch);
+    let bad_tag = FrameConfig {
+        tag_len: 5,
+        directions: all(),
+    };
+    assert_eq!(
+        in_place
+            .load_frame_in_place(&[7; 32], 6, bad_tag)
+            .unwrap_err()
+            .error,
+        Error::BadValue
+    );
+    assert_eq!(
+        in_place
+            .load_frame_in_place(&[7; 32], 0x1000000, config)
+            .unwrap_err()
+            .error,
+        Error::BadValue
+    );
+}
+
+fn seal_refused(s: &Session, ctx: &MsgCtx) -> bool {
+    let mut out = [0u8; 32];
+    s.seal_frame(Direction::Up, ctx, &[], &[], b"x", &mut out)
+        .is_err()
+}
+
+#[cfg(feature = "session")]
+#[test]
+fn a_session_that_holds_stream_state_is_not_given_frame_keys() {
+    let mut stream = Session::load(&[1u8; 32]).unwrap();
+    let config = FrameConfig {
+        tag_len: 4,
+        directions: all(),
+    };
+    assert_eq!(
+        stream
+            .load_frame_in_place(&[2; 32], 1, config)
+            .unwrap_err()
+            .error,
+        Error::BadValue
+    );
 }

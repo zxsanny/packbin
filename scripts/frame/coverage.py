@@ -16,7 +16,7 @@ TAMPER_ALL = ("ad_first", "ad_last", "ct_first", "ct_last", "tag_first", "tag_la
 TAMPER_E3 = ("clear_first", "clear_last", "clearlen_down")
 REFUSALS = ("epoch1000000", "dir0", "dir4", "kind16", "unloaded", "tag0", "tag5", "tag32", "ad256", "body256",
             "outshort")
-OPEN_REFUSALS = ("kind16", "unloaded", "short", "buffer")
+OPEN_REFUSALS = ("kind16", "unloaded", "ad256", "short", "buffer")
 REPLAY_SEQUENCE = ("check:100", "commit:100", "check:100", "check:99", "commit:99", "check:37", "commit:37",
                    "check:36", "check:37", "check:163", "commit:163", "check:100", "check:99", "check:200",
                    "commit:200", "check:163", "check:100")

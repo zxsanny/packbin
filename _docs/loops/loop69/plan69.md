@@ -53,4 +53,6 @@ E1 to E5 reproduce in Python (AZ-3202) and Rust (AZ-3203); embedded figures read
 
 ## Assessment rounds
 
-None yet.
+| round | verdict | new specs | report |
+|-------|---------|-----------|--------|
+| 1 | COMPLETE | none | _docs/loops/loop69/assessment69.md |

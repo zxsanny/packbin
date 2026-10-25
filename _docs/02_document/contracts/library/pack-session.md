@@ -129,7 +129,7 @@ Seal is deterministic: the same inputs give the same bytes. It never uses the pr
 
 ### Open (the order is normative)
 
-1. Argument checks: direction loaded, `kind` at most 15, `len(ad)` at most 255. `len(body) < clear_len + tag_len` is `ShortPacket`. An output buffer shorter than `len(body) - clear_len - tag_len` is `BufferFull`.
+1. Argument checks: direction loaded and `kind` at most 15 (else `BadValue`), `len(ad)` at most 255 (else `TooLong`, as in seal). `len(body) < clear_len + tag_len` is `ShortPacket`. An output buffer shorter than `len(body) - clear_len - tag_len` is `BufferFull`.
 2. Replay check (only when the caller passes a window and the message's counter): `Duplicate` or `TooOld` ends the call here, with no MAC computed.
 3. Tag check with the current key: build `N` from the caller's `msg_id`, `kind`, `d` and the current epoch, recompute the tag over `M` from the received bytes, and compare all `tag_len` bytes in constant time.
 4. On a mismatch, if a previous (key, epoch) is loaded, repeat step 3 once with it (keys and nonce from the previous epoch). Still no match: `TagMismatch`.
