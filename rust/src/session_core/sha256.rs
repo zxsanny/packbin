@@ -21,6 +21,8 @@ fn at(w: &[u32; 16], i: usize) -> u32 {
 /// One block. The message schedule is a window of 16 words (not 64) to keep the stack small; the
 /// block is read byte by byte, since `chunks_exact` links a division and a panic path.
 fn compress(state: &mut [u32; 8], block: &[u8; 64]) {
+    #[cfg(all(test, feature = "std"))]
+    super::counters::sha_compression();
     let mut w = [0u32; 16];
     let mut word = 0u32;
     for (i, byte) in block.iter().enumerate() {
@@ -97,6 +99,18 @@ impl Sha256 {
         }
     }
 
+    /// A hash that continues from the chaining state `state` after `bytes_done` bytes (a multiple of 64):
+    /// the HMAC pad blocks are compressed once, at key load.
+    #[cfg(feature = "frame")]
+    pub fn resume(state: [u32; 8], bytes_done: u64) -> Self {
+        Sha256 {
+            state,
+            block: [0u8; 64],
+            filled: 0,
+            total: bytes_done,
+        }
+    }
+
     pub fn update(&mut self, data: &[u8]) {
         self.total = self.total.wrapping_add(data.len() as u64);
         for byte in data {
@@ -140,6 +154,14 @@ impl Sha256 {
             self.filled = 0;
         }
     }
+}
+
+/// The chaining state after the one block `block` (the start of a precomputed HMAC pad).
+#[cfg(feature = "frame")]
+pub fn midstate(block: &[u8; 64]) -> [u32; 8] {
+    let mut state = INITIAL;
+    compress(&mut state, block);
+    state
 }
 
 pub fn hash(data: &[u8]) -> [u8; 32] {

@@ -306,6 +306,12 @@ case "$lang" in
       # the `std` PackSession, parity over the padded bytes) (AZ-2756)
       run cargo test --manifest-path "$root/rust/Cargo.toml" --no-default-features --features session --test nostd_session_tests -- --nocapture
       run cargo test --manifest-path "$root/rust/Cargo.toml" --features session,ecc --test nostd_session_tests -- --nocapture
+      # frame mode of the session (AZ-3203): the shared fixture without `std` (nothing allocates) and with it, the crate's own
+      # tests, and both modes of the session in one build
+      run cargo test --manifest-path "$root/rust/Cargo.toml" --no-default-features --features frame --test frame_vectors_tests -- --nocapture
+      run cargo test --manifest-path "$root/rust/Cargo.toml" --features frame --test frame_vectors_tests -- --nocapture
+      run cargo test --manifest-path "$root/rust/Cargo.toml" --features frame --lib frame_ -- --nocapture
+      run cargo test --manifest-path "$root/rust/Cargo.toml" --features frame,session,ecc --lib frame_ -- --nocapture
       run rust_speed
     else
       missing_manifest "$root/rust/Cargo.toml"

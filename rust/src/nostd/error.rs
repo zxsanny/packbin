@@ -19,8 +19,16 @@ pub enum Error {
     ScratchTooSmall,
     /// A protected message has more wrong bytes than the correction limit allows.
     Uncorrectable,
-    /// A protected message is longer than 254 bytes.
+    /// A protected message is longer than 254 bytes; a frame body is longer than 255 bytes, or its
+    /// associated data is longer than 255 bytes.
     TooLong,
+    /// Frame mode: the tag of a frame does not match (a changed byte, or another key, epoch,
+    /// direction, `kind` or `msg_id`).
+    TagMismatch,
+    /// Frame mode: the replay window has already seen the counter of this frame.
+    Duplicate,
+    /// Frame mode: the counter of this frame is 64 or more behind the highest the window saw.
+    TooOld,
 }
 
 /// A failed call: what, and where. `offset` is the byte where the failure was found, `field` the

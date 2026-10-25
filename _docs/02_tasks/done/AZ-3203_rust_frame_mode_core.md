@@ -133,3 +133,5 @@ Property test: random keys, epochs, contexts, `ad`, `clear` and `plain` within t
 |---------|----------------|--------|----------|
 | PB-04 was 8 points; split into this task (5) and AZ-3204 (3) | decompose, owner 2026-10-25 | resolved | Low |
 | Public names in the spec are proposals | the contract (AZ-3200) fixes names; "names may change, capabilities may not" | accepted-risk | Low |
+| The spec says `frame` is "always on with `std`, as `session` is"; in this crate `session` is not implied by `std` (the `nostd` session needs `--features session`), so `frame` follows `session`: an opt-in feature, tested with `--features frame` and `--no-default-features --features frame` | agent follows the crate's practice; owner may change it | accepted-risk | Low |
+| With `session` and `frame` both on, `Session` also holds the stream fields; the 640 B size bound is asserted for the frame-only build | agent | accepted-risk | Low |

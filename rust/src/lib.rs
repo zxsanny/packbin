@@ -4,8 +4,8 @@
 //! [`PackSession`]) builds schemes at run time and owns its values; it is on by default. The
 //! [`nostd`] API is plain data and caller buffers: it builds with `#![no_std]` and no allocator
 //! (`default-features = false`) for firmware. Cargo features: `std` (default, implies `alloc`),
-//! `alloc` (convenience wrappers that return `Vec<u8>`), `text`, `ecc` and `session` (parts of
-//! the [`nostd`] API; the `std` API always has all three).
+//! `alloc` (convenience wrappers that return `Vec<u8>`), `text`, `ecc`, `session` and `frame` (parts
+//! of the [`nostd`] API; the `std` API always has the first three).
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "alloc")]
@@ -23,7 +23,7 @@ mod field;
 mod scheme;
 #[cfg(feature = "std")]
 mod session;
-#[cfg(any(feature = "std", feature = "session"))]
+#[cfg(any(feature = "std", feature = "session", feature = "frame"))]
 mod session_core;
 #[cfg(feature = "std")]
 mod value;
@@ -58,6 +58,10 @@ mod counted_tests;
 mod crypto_vectors_tests;
 #[cfg(all(test, feature = "std"))]
 mod dict_order_tests;
+#[cfg(all(test, feature = "std", feature = "frame"))]
+mod frame_core_tests;
+#[cfg(all(test, feature = "std", feature = "frame"))]
+mod frame_hostile_tests;
 #[cfg(all(test, feature = "std"))]
 mod duplicate_names_kept_tests;
 #[cfg(all(test, feature = "std"))]

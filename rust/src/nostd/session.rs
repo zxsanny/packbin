@@ -3,25 +3,35 @@
 //! keyed by the packet index. The hash, the key derivation and the pad are the code the `std`
 //! `PackSession` runs, so the bytes are the same. No heap, no OS calls: the nonce is the caller's.
 
+#[cfg(feature = "session")]
 use super::error::{Error, Fault};
+#[cfg(feature = "session")]
 use super::io::Writer;
+#[cfg(feature = "session")]
 use super::row::Row;
+#[cfg(feature = "session")]
 use super::scheme::Scheme;
+#[cfg(feature = "session")]
 use super::walk::{pack_clear, read};
+#[cfg(feature = "session")]
 use crate::session_core::{pad, split_keys, NONCE_SIZE as NONCE, SEED_SIZE as SEED};
 
-#[cfg(feature = "ecc")]
+#[cfg(all(feature = "session", feature = "ecc"))]
 use super::walk::Unpacked;
 
 /// The bytes of a seed.
+#[cfg(feature = "session")]
 pub const SEED_SIZE: usize = SEED;
 /// The bytes of a nonce.
+#[cfg(feature = "session")]
 pub const NONCE_SIZE: usize = NONCE;
 
+#[cfg(feature = "session")]
 fn refused(needed: usize) -> Fault {
     Fault::new(Error::BadValue, 0, -1, needed)
 }
 
+#[cfg(feature = "session")]
 struct Keys {
     send: [u8; SEED_SIZE],
     recv: [u8; SEED_SIZE],
@@ -31,12 +41,38 @@ struct Keys {
 /// the same packet index. The caller supplies the nonce of [`Session::start`]; one nonce must open
 /// only one session per seed, which the library cannot check.
 pub struct Session {
+    #[cfg(feature = "session")]
     seed: Option<[u8; SEED_SIZE]>,
+    #[cfg(feature = "session")]
     keys: Option<Keys>,
+    #[cfg(feature = "session")]
     send_count: u64,
+    #[cfg(feature = "session")]
     recv_count: u64,
+    /// The frame-mode keys, set by `load_frame` (`frame` module); a session is a stream or a frame session.
+    #[cfg(feature = "frame")]
+    pub(super) frame: Option<super::frame::FrameState>,
 }
 
+#[cfg(feature = "frame")]
+impl Session {
+    /// A session that holds only frame keys (a stream call on it is refused).
+    pub(super) fn with_frame(frame: super::frame::FrameState) -> Session {
+        Session {
+            #[cfg(feature = "session")]
+            seed: None,
+            #[cfg(feature = "session")]
+            keys: None,
+            #[cfg(feature = "session")]
+            send_count: 0,
+            #[cfg(feature = "session")]
+            recv_count: 0,
+            frame: Some(frame),
+        }
+    }
+}
+
+#[cfg(feature = "session")]
 impl Session {
     /// Keeps `seed`. A seed that is not [`SEED_SIZE`] bytes is [`Error::BadValue`] (`needed` 32).
     pub fn load(seed: &[u8]) -> Result<Self, Fault> {
@@ -52,6 +88,8 @@ impl Session {
             keys: None,
             send_count: 0,
             recv_count: 0,
+            #[cfg(feature = "frame")]
+            frame: None,
         })
     }
 
@@ -183,8 +221,10 @@ impl Session {
     }
 }
 
+#[cfg(feature = "session")]
 impl Drop for Session {
-    /// Wipes the seed and both keys (best effort: the compiler is asked to keep the writes).
+    /// Wipes the seed and both keys (best effort: the compiler is asked to keep the writes). The
+    /// frame keys wipe themselves.
     fn drop(&mut self) {
         if let Some(seed) = self.seed.as_mut() {
             wipe(seed);
@@ -196,6 +236,7 @@ impl Drop for Session {
     }
 }
 
+#[cfg(feature = "session")]
 fn wipe(bytes: &mut [u8]) {
     for byte in bytes.iter_mut() {
         *byte = 0;
@@ -204,6 +245,7 @@ fn wipe(bytes: &mut [u8]) {
 }
 
 /// The room a protected scheme's parity bytes need, checked before the pad uses a position.
+#[cfg(feature = "session")]
 fn parity_room(scheme: &Scheme<'_>, writer: &mut Writer<'_>) -> Result<(), Fault> {
     #[cfg(feature = "ecc")]
     if scheme.parity != 0 {
