@@ -23,7 +23,7 @@ code=0
 for target in net10.0 netstandard2.0; do
   extra=""
   [ "$target" = netstandard2.0 ] && extra="-p:PackbinTarget=netstandard2.0"
-  env MSBUILDDISABLENODEREUSE=1 limit 900 dotnet test csharp --nologo $extra --filter "FullyQualifiedName~Frame|FullyQualifiedName~CryptoVector" > "$work/cs-$target.log" 2>&1 < /dev/null || code=1
+  limit 900 env MSBUILDDISABLENODEREUSE=1 dotnet test csharp --nologo $extra --filter "FullyQualifiedName~Frame|FullyQualifiedName~CryptoVector" > "$work/cs-$target.log" 2>&1 < /dev/null || code=1
   grep -qE 'Passed!.*Failed: +0' "$work/cs-$target.log" || code=1
 done
 step 2 "C# frame and primitive tests pass on net10.0 and netstandard2.0" "$code" "$(grep -hE 'Passed!|Failed!' "$work"/cs-*.log | tr '\n' ' ' | cut -c1-240)"
