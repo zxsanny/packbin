@@ -76,6 +76,10 @@ target_rust_m4f() {
     [ -z "$hits" ] || fail "$set: the heap is linked ($hits)"
     hits="$(panic_hits "$dir/$set.nm" | tr '\n' ' ')"
     [ -z "$hits" ] || fail "$set: a panic path is linked ($hits)"
+    if [[ ",$features," != *,session,* ]]; then
+      hits="$(stream_hits "$dir/$set.nm" | tr '\n' ' ')"
+      [ -z "$hits" ] || fail "$set: the stream session is linked without the session feature ($hits)"
+    fi
     qemu_run mps2-an386 "$dir/$set.elf" "$dir/$set.run.log" || fail "$set: image exit $?"
     [ "$(log_value FAILURES "$dir/$set.run.log")" = 0 ] || fail "$set: a probe call failed"
     [ "$(log_value GOLDEN_OK "$dir/$set.run.log")" = 1 ] || fail "$set: the golden fixture did not decode on the device image"

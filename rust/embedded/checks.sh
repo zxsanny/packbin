@@ -16,6 +16,12 @@ panic_hits() {
   awk '$NF ~ /(panicking|panic_fmt|panic_bounds_check|unwrap_failed|expect_failed|slice_index_fail|slice_end_index_len_fail|slice_start_index_len_fail|slice_index_order_fail|len_mismatch_fail|rust_begin_unwind|rust_panic|handle_alloc_error|unreachable_display|assert_failed)/ { print $NF }' "$1" | sort -u
 }
 
+# Symbols of the stream session: the key split, the stream pad and the stream methods of the session. A set built
+# without the `session` feature must link none of them (frame mode alone has its own keys and nonce).
+stream_hits() {
+  awk '$NF ~ /(split_keys|3pad3xor17h|7session.*(4pack|6unpack|5start|4join|4load17h))/ { print $NF }' "$1" | sort -u
+}
+
 # limit_of uses $limits_file, which target.sh (or the test) sets.
 # shellcheck disable=SC2154
 # limit_of <set> <column> prints the limit (a number, "-" for none, "missing" when the set has no line).

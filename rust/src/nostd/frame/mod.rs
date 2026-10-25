@@ -12,6 +12,37 @@
 //! breaks the confidentiality of both messages and the library cannot check it (meshbell builds `msg_id`
 //! from the source, the id field and the creation wave, so it is unique by construction). A new epoch
 //! derives new keys and nonces.
+//!
+//! ```
+//! use packbin::nostd::{Direction, Directions, Fault, FrameConfig, MacKey, MsgCtx, ReplayWindow, Session};
+//!
+//! # fn main() -> Result<(), Fault> {
+//! let key = [0x11u8; 32];
+//! let config = FrameConfig { tag_len: 4, directions: Directions::NONE.with(Direction::Up) };
+//! let node = Session::load_frame(&key, 1, config)?;
+//! let ctx = MsgCtx { msg_id: [0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0], kind: 4 };
+//! let ad = [0u8, 1, 0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0, 4]; // the header: authenticated, not sent
+//!
+//! let mut body = [0u8; 255];
+//! let n = node.seal_frame(Direction::Up, &ctx, &ad, &[], b"hello, relay", &mut body)?;
+//! assert_eq!(n, 12 + 4);
+//!
+//! let mut window = ReplayWindow::new();
+//! let mut plain = [0u8; 255];
+//! let opened =
+//!     node.open_frame(Direction::Up, &ctx, &ad, &body[..n], 0, Some((&mut window, 7)), &mut plain)?;
+//! assert_eq!(&plain[..opened.plain_len], b"hello, relay");
+//! // the same frame again is a duplicate, and no hashing ran for it
+//! let again = node.open_frame(Direction::Up, &ctx, &ad, &body[..n], 0, Some((&mut window, 7)), &mut plain);
+//! assert!(again.is_err());
+//!
+//! let mac = MacKey::derive(&[0x22; 32], 7, b"net")?;
+//! let mut tag = [0u8; 4];
+//! mac.tag(&[b"wave", b"frame bytes"], &mut tag)?;
+//! assert!(mac.verify(&[b"wave", b"frame bytes"], &tag));
+//! # Ok(())
+//! # }
+//! ```
 #![forbid(unsafe_code)]
 
 mod mac;
@@ -147,18 +178,17 @@ impl DirKeys {
         }
     }
 
-    fn derive(key: &[u8; 32], epoch: u32, direction: Direction) -> Self {
+    /// Fills `self` in place (a 96-byte slot is written where it lives, not built and copied).
+    fn fill(&mut self, key: &[u8; 32], epoch: u32, direction: Direction) {
         let salt = salt(epoch);
         let d = direction as u8;
-        let mut enc = [0u8; 32];
-        hkdf::derive(key, &salt, &[d, b'e', b'n', b'c'], &mut enc);
+        hkdf::derive(key, &salt, &[d, b'e', b'n', b'c'], &mut self.enc);
         let mut mac = [0u8; 32];
         hkdf::derive(key, &salt, &[d, b'm', b'a', b'c'], &mut mac);
-        let pads = Pads::new(&mac);
+        self.pads = Pads::new(&mac);
         for byte in mac.iter_mut() {
             *byte = 0;
         }
-        DirKeys { enc, pads }
     }
 }
 
@@ -169,21 +199,25 @@ pub(super) struct SlotKeys {
 }
 
 impl SlotKeys {
-    fn derive(key: &[u8; 32], epoch: u32, directions: Directions) -> Self {
-        let one = |direction: Direction| {
-            if directions.contains(direction) {
-                DirKeys::derive(key, epoch, direction)
-            } else {
-                DirKeys::empty()
-            }
-        };
+    #[inline(always)]
+    const fn empty() -> Self {
         SlotKeys {
-            epoch,
-            dirs: [
-                one(Direction::Up),
-                one(Direction::Down),
-                one(Direction::Group),
-            ],
+            epoch: 0,
+            dirs: [DirKeys::empty(), DirKeys::empty(), DirKeys::empty()],
+        }
+    }
+
+    /// Derives the keys of each loaded direction into `self`.
+    fn fill(&mut self, key: &[u8; 32], epoch: u32, directions: Directions) {
+        self.epoch = epoch;
+        for direction in [Direction::Up, Direction::Down, Direction::Group] {
+            if let Some(keys) = self.dirs.get_mut(direction.index()) {
+                if directions.contains(direction) {
+                    keys.fill(key, epoch, direction);
+                } else {
+                    *keys = DirKeys::empty();
+                }
+            }
         }
     }
 
@@ -205,12 +239,31 @@ impl Drop for SlotKeys {
     }
 }
 
-/// The frame half of a [`Session`].
+/// The frame half of a [`Session`]; `loaded` is false until the keys are derived into it.
 pub(super) struct FrameState {
+    loaded: bool,
     tag_len: u8,
     directions: Directions,
     current: SlotKeys,
-    previous: Option<SlotKeys>,
+    previous: SlotKeys,
+    has_previous: bool,
+}
+
+impl FrameState {
+    pub(super) const fn empty() -> Self {
+        FrameState {
+            loaded: false,
+            tag_len: 0,
+            directions: Directions::NONE,
+            current: SlotKeys::empty(),
+            previous: SlotKeys::empty(),
+            has_previous: false,
+        }
+    }
+
+    pub(super) fn previous(&self) -> Option<&SlotKeys> {
+        self.has_previous.then_some(&self.previous)
+    }
 }
 
 fn check_load(epoch: u32) -> Result<(), Fault> {
@@ -221,39 +274,70 @@ fn check_load(epoch: u32) -> Result<(), Fault> {
 }
 
 impl Session {
-    /// A frame-mode session: keys for each loaded direction are derived once, here. A `tag_len` that is
-    /// not 4, 8 or 16, or an `epoch` above 0xFFFFFF, is [`Error::BadValue`]. A stream call on this
-    /// session is `BadValue`, and a frame call on a stream session is `BadValue`.
-    pub fn load_frame(key: &[u8; 32], epoch: u32, config: FrameConfig) -> Result<Session, Fault> {
+    /// A session with no keys: every call on it is refused. A constant, so a caller that is short of stack
+    /// declares it where it lives and loads into it with [`Session::load_frame_in_place`].
+    pub const fn frame_unloaded() -> Session {
+        Session::unloaded()
+    }
+
+    /// Derives the keys of each loaded direction into this session, in place (nothing of the 600-byte
+    /// session is built elsewhere and copied). A `tag_len` that is not 4, 8 or 16, an `epoch` above
+    /// 0xFFFFFF, or a session that already holds stream state is [`Error::BadValue`]. Loading again
+    /// replaces the keys and drops the previous slot.
+    pub fn load_frame_in_place(
+        &mut self,
+        key: &[u8; 32],
+        epoch: u32,
+        config: FrameConfig,
+    ) -> Result<(), Fault> {
         check_load(epoch)?;
         if !matches!(config.tag_len, 4 | 8 | 16) {
             return Err(refuse(Error::BadValue, 4));
         }
-        Ok(Session::with_frame(FrameState {
-            tag_len: config.tag_len,
-            directions: config.directions,
-            current: SlotKeys::derive(key, epoch, config.directions),
-            previous: None,
-        }))
+        #[cfg(feature = "session")]
+        if self.has_stream_state() {
+            return Err(refuse(Error::BadValue, 0));
+        }
+        let state = &mut self.frame;
+        state.loaded = false;
+        state.tag_len = config.tag_len;
+        state.directions = config.directions;
+        state.has_previous = false;
+        state.current.fill(key, epoch, config.directions);
+        state.loaded = true;
+        Ok(())
+    }
+
+    /// A frame-mode session: keys for each loaded direction are derived once, here (see
+    /// [`Session::load_frame_in_place`], which does the same without moving the session). A stream call
+    /// on this session is `BadValue`, and a frame call on a stream session is `BadValue`.
+    pub fn load_frame(key: &[u8; 32], epoch: u32, config: FrameConfig) -> Result<Session, Fault> {
+        let mut session = Session::unloaded();
+        session.load_frame_in_place(key, epoch, config)?;
+        Ok(session)
+    }
+
+    pub(super) fn frame_state(&self) -> Option<&FrameState> {
+        self.frame.loaded.then_some(&self.frame)
     }
 
     /// Keeps a previous (key, epoch) that [`Session::open_frame`] tries when the current key's tag does not
     /// match (the key just replaced, for frames sealed before the change). Seal never uses it.
     pub fn set_previous(&mut self, key: &[u8; 32], epoch: u32) -> Result<(), Fault> {
         check_load(epoch)?;
-        let state = self
-            .frame
-            .as_mut()
-            .ok_or_else(|| refuse(Error::BadValue, 0))?;
-        state.previous = Some(SlotKeys::derive(key, epoch, state.directions));
+        if !self.frame.loaded {
+            return Err(refuse(Error::BadValue, 0));
+        }
+        let directions = self.frame.directions;
+        self.frame.previous.fill(key, epoch, directions);
+        self.frame.has_previous = true;
         Ok(())
     }
 
     /// Drops the previous (key, epoch) and overwrites its keys.
     pub fn clear_previous(&mut self) {
-        if let Some(state) = self.frame.as_mut() {
-            state.previous = None;
-        }
+        self.frame.previous = SlotKeys::empty();
+        self.frame.has_previous = false;
     }
 }
 
@@ -265,7 +349,7 @@ impl Session {
         direction: Direction,
         probe: &[u8],
     ) -> Option<([u8; 32], [u8; 32])> {
-        let keys = self.frame.as_ref()?.current.dir(direction)?;
+        let keys = self.frame_state()?.current.dir(direction)?;
         Some((keys.enc, keys.pads.mac(&[probe])))
     }
 }

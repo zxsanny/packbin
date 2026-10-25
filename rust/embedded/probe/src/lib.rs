@@ -293,13 +293,16 @@ mod ecc_extra;
 #[cfg(feature = "session")]
 mod session_extra;
 
+#[cfg(feature = "frame")]
+mod frame_extra;
+
 /// What a feature set adds to the image: the round trips of the parts that set builds, called by
 /// `main.cpp` when the symbol exists (a weak reference); defined only by a set with parts. 0 when
 /// every round trip holds, else a number that names the step.
 ///
 /// # Safety
 /// No arguments.
-#[cfg(any(feature = "text", feature = "ecc", feature = "session"))]
+#[cfg(any(feature = "text", feature = "ecc", feature = "session", feature = "frame"))]
 #[no_mangle]
 pub extern "C" fn pb_rs_extra() -> i32 {
     #[cfg(feature = "text")]
@@ -321,6 +324,13 @@ pub extern "C" fn pb_rs_extra() -> i32 {
         let r = session_extra::roundtrip();
         if r != 0 {
             return r + 300;
+        }
+    }
+    #[cfg(feature = "frame")]
+    {
+        let r = frame_extra::roundtrip();
+        if r != 0 {
+            return r + 400;
         }
     }
     0

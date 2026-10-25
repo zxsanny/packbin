@@ -22,3 +22,4 @@ rust/embedded/run.sh image   # inside packbin-embedded (what docker-compose.test
   (`seed_panic`, `seed_heap`) and fails unless the checks catch both.
 - A panic path comes from `unwrap`, `expect`, indexing, `slice::reverse`, `copy_from_slice`, `split_at_mut` and any `chunks*` (they link a division and a panic at opt-level z); `nostd` uses
   `get`, checked arithmetic and zipped copies, and denies the clippy lints that find the rest.
+- The `frame` set (AZ-3203) builds the crate with `frame` only: its probe seals the first worked example of frame mode and opens it with a replay window, then computes and verifies a MAC-only tag. A set whose features lack `session` must link no stream-session symbol (`stream_hits` in `checks.sh`); the probe loads its session in place (`Session::frame_unloaded`, `load_frame_in_place`), because a copy of the 600-byte session cost 560 B of stack more.

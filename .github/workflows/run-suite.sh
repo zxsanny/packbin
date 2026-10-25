@@ -312,6 +312,7 @@ case "$lang" in
       run cargo test --manifest-path "$root/rust/Cargo.toml" --features frame --test frame_vectors_tests -- --nocapture
       run cargo test --manifest-path "$root/rust/Cargo.toml" --features frame --lib frame_ -- --nocapture
       run cargo test --manifest-path "$root/rust/Cargo.toml" --features frame,session,ecc --lib frame_ -- --nocapture
+      run cargo test --manifest-path "$root/rust/Cargo.toml" --features frame --doc -- --nocapture
       run rust_speed
     else
       missing_manifest "$root/rust/Cargo.toml"

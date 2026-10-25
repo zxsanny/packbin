@@ -51,13 +51,13 @@ pub struct Session {
     recv_count: u64,
     /// The frame-mode keys, set by `load_frame` (`frame` module); a session is a stream or a frame session.
     #[cfg(feature = "frame")]
-    pub(super) frame: Option<super::frame::FrameState>,
+    pub(super) frame: super::frame::FrameState,
 }
 
 #[cfg(feature = "frame")]
 impl Session {
-    /// A session that holds only frame keys (a stream call on it is refused).
-    pub(super) fn with_frame(frame: super::frame::FrameState) -> Session {
+    /// A session with no keys at all and zeroed frame slots: a constant, so it is written where it is declared.
+    pub(super) const fn unloaded() -> Session {
         Session {
             #[cfg(feature = "session")]
             seed: None,
@@ -67,8 +67,14 @@ impl Session {
             send_count: 0,
             #[cfg(feature = "session")]
             recv_count: 0,
-            frame: Some(frame),
+            frame: super::frame::FrameState::empty(),
         }
+    }
+
+    /// True when this session holds stream state (a seed or keys).
+    #[cfg(feature = "session")]
+    pub(super) fn has_stream_state(&self) -> bool {
+        self.seed.is_some() || self.keys.is_some()
     }
 }
 
@@ -89,7 +95,7 @@ impl Session {
             send_count: 0,
             recv_count: 0,
             #[cfg(feature = "frame")]
-            frame: None,
+            frame: super::frame::FrameState::empty(),
         })
     }
 

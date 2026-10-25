@@ -38,6 +38,15 @@ printf '08000500 T malloc\n08000600 T _ZN4core9panicking5panic17h01E\n' > "$tmp/
 expect "both checks run on one image: heap" "malloc" "$(heap_hits "$tmp/both.nm")"
 expect "both checks run on one image: panic" "_ZN4core9panicking5panic17h01E" "$(panic_hits "$tmp/both.nm")"
 
+expect "clean image has no stream session symbol" "" "$(stream_hits "$clean")"
+printf '08000100 T main\n08000600 T _ZN7packbin12session_core3pad14xor_with_nonce17h0123456789abcdefE\n08000700 T _ZN7packbin5nostd5frame4seal3E\n' > "$tmp/frame.nm"
+expect "a frame-only image has no stream session symbol" "" "$(stream_hits "$tmp/frame.nm")"
+for sym in _ZN7packbin12session_core3pad3xor17h0123456789abcdefE _ZN7packbin12session_core10split_keys17h0123456789abcdefE \
+  _ZN7packbin5nostd7session7Session4load17h0123456789abcdefE _ZN7packbin5nostd7session7Session4pack17h0123456789abcdefE; do
+  printf '08000100 T main\n08000500 T %s\n' "$sym" > "$tmp/stream.nm"
+  expect "stream symbol $sym is found" "$sym" "$(stream_hits "$tmp/stream.nm")"
+done
+
 expect "flash limit of base" "8192" "$(limit_of base 2)"
 expect "stack limit of base" "512" "$(limit_of base 3)"
 expect "no limit is a dash" "-" "$(limit_of wide 2)"

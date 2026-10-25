@@ -116,8 +116,7 @@ impl Session {
         out: &mut [u8],
     ) -> Result<usize, Fault> {
         let state = self
-            .frame
-            .as_ref()
+            .frame_state()
             .ok_or_else(|| refuse(Error::BadValue, 0))?;
         call_checks(state, direction, ctx, ad)?;
         let tag_len = usize::from(state.tag_len);
@@ -172,8 +171,7 @@ impl Session {
         out: &mut [u8],
     ) -> Result<Opened, Fault> {
         let state = self
-            .frame
-            .as_ref()
+            .frame_state()
             .ok_or_else(|| refuse(Error::BadValue, 0))?;
         call_checks(state, direction, ctx, ad)?;
         let tag_len = usize::from(state.tag_len);
@@ -205,8 +203,7 @@ impl Session {
                 Some(n) => (Slot::Current, &state.current, n),
                 None => {
                     let previous = state
-                        .previous
-                        .as_ref()
+                        .previous()
                         .ok_or_else(|| refuse(Error::TagMismatch, 0))?;
                     let n = verify(previous, direction, ctx, ad, clear, ciphertext, tag)
                         .ok_or_else(|| refuse(Error::TagMismatch, 0))?;

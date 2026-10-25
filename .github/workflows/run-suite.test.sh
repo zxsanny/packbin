@@ -330,7 +330,9 @@ grep -q 'cargo test --manifest-path .* --features frame --lib frame_ -- --nocapt
   || bad "rust: the frame tests of the crate do not run: $(cat "$work/go.log")"
 grep -q 'cargo test --manifest-path .* --features frame,session,ecc --lib frame_ -- --nocapture' "$work/go.log" \
   || bad "rust: the frame tests do not run with the session and ecc on: $(cat "$work/go.log")"
-[ "$(grep -c '^cargo ' "$work/go.log")" -eq 14 ] || bad "rust: not the debug suite, the ten heap-free API runs, the release list and the two release runs: $(cat "$work/go.log")"
+grep -q 'cargo test --manifest-path .* --features frame --doc -- --nocapture' "$work/go.log" \
+  || bad "rust: the frame doc example does not run: $(cat "$work/go.log")"
+[ "$(grep -c '^cargo ' "$work/go.log")" -eq 15 ] || bad "rust: not the debug suite, the eleven heap-free API runs, the release list and the two release runs: $(cat "$work/go.log")"
 
 # R2. a rust tree without the string speed test fails by name, and the filter is not run (a filter that matches
 # nothing passes) (AZ-2665 AC-3)
@@ -405,7 +407,7 @@ if grep -qF 'pct%2Ctree' "$work/notice.out"; then bad "go: a raw % of a label is
 notice_run csharp "$bare" GITHUB_ACTIONS=true
 notice_is "csharp suite timing" csharp 0
 notice_run rust "$present" GITHUB_ACTIONS=true
-notice_is "rust suite timing" rust 12
+notice_is "rust suite timing" rust 13
 
 # N5. GITHUB_ACTIONS unset (the Mac), empty or anything but true: no notice, and the plain step lines as before
 for value in unset "" false; do

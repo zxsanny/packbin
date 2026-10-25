@@ -1391,7 +1391,41 @@ The encrypted session above is a stream: it needs packets in order, none lost, a
 
 **For one key, epoch and direction, never seal two different messages with the same `msg_id`.** A reused `msg_id` breaks the confidentiality of both messages, and packbin cannot check it. meshbell builds `msg_id` from the source (2 bytes), the id field (2 bytes) and the creation wave (4 bytes); sequences restart every wave, waves never repeat and source ids are never reissued, so it is unique. A new epoch derives new keys and nonces.
 
-The byte-for-byte definition, the replay rules and the error kinds (`TagMismatch`, `Duplicate`, `TooOld` besides the existing ones) are in `_docs/02_document/contracts/library/pack-session.md` (2.0.0); the shared test rows are in `fixtures/frame/vectors.txt`. Rust is the first package (feature `frame`, no heap); its example is in the Rust section of this file once the feature ships.
+The byte-for-byte definition, the replay rules and the error kinds (`TagMismatch`, `Duplicate`, `TooOld` besides the existing ones) are in `_docs/02_document/contracts/library/pack-session.md` (2.0.0); the shared test rows are in `fixtures/frame/vectors.txt`. Rust is the first package (Cargo feature `frame`, no heap, no panic path, 20 KB of flash and 2 KB of stack on a Cortex-M4F).
+
+### Rust
+
+```rust
+use packbin::nostd::{Direction, Directions, Fault, FrameConfig, MacKey, MsgCtx, ReplayWindow, Session};
+
+fn main() -> Result<(), Fault> {
+    let key = [0x11u8; 32];
+    let config = FrameConfig { tag_len: 4, directions: Directions::NONE.with(Direction::Up) };
+    let node = Session::load_frame(&key, 1, config)?;
+    let ctx = MsgCtx { msg_id: [0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0], kind: 4 };
+    let ad = [0u8, 1, 0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0, 4]; // the header: authenticated, not sent
+
+    let mut body = [0u8; 255];
+    let n = node.seal_frame(Direction::Up, &ctx, &ad, &[], b"hello, relay", &mut body)?;
+    assert_eq!(n, 12 + 4); // the plaintext and a 4-byte tag
+
+    let mut window = ReplayWindow::new();
+    let mut plain = [0u8; 255];
+    let opened = node.open_frame(Direction::Up, &ctx, &ad, &body[..n], 0, Some((&mut window, 7)), &mut plain)?;
+    assert_eq!(&plain[..opened.plain_len], b"hello, relay");
+    // the same frame again is a duplicate: refused before any hashing
+    assert!(node.open_frame(Direction::Up, &ctx, &ad, &body[..n], 0, Some((&mut window, 7)), &mut plain).is_err());
+
+    // the MAC-only call: a 4-byte tag over a message in parts
+    let mac = MacKey::derive(&[0x22; 32], 7, b"net")?;
+    let mut tag = [0u8; 4];
+    mac.tag(&[b"wave", b"frame bytes"], &mut tag)?;
+    assert!(mac.verify(&[b"wave", b"frame bytes"], &tag));
+    Ok(())
+}
+```
+
+The Cargo feature is `frame` (`packbin = { version = "...", default-features = false, features = ["frame"] }` builds `#![no_std]` with frame mode only). The same example runs as a doc test of the crate. A node that is short of stack declares `Session::frame_unloaded()` where it lives and calls `load_frame_in_place` on it.
 
 ## Data types
 
