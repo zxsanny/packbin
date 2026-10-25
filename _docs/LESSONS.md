@@ -9,14 +9,6 @@ Downstream skills consume this file:
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
 
-- [2026-10-21] [performance] Measure the case an acceptance bound names (TW-5: 200 rounds of 65,535 characters) before closing a codec slice; a port that drops the original's memo is 600 times slower (5.96 s against 10 ms) and every functional test still passes (loop 53).
-  Source: _docs/06_metrics/retro_2026-10-21_loop53.md
-- [2026-10-21] [tooling] Slice iterators (`chunks_mut`, `chunks_exact`) link a division and a panic at opt-level z that clippy and the host build do not show; read bytes by index with `get` in code the device image links, and run the embedded stage after the first use (loop 53).
-  Source: _docs/06_metrics/retro_2026-10-21_loop53.md
-- [2026-10-21] [performance] Measure the stack of a recursive walker on the device image with the deepest shape the AC allows before trusting the handoff's suspect: the 3-deep `when` chain was 780 B and the flag-byte chain 668 B against 512 B, and the cost was the tree walk (130 to 144 B per nested level), not the `when_matches` recursion the review had named (loop 55).
-  Source: _docs/06_metrics/retro_2026-10-21_loop55.md
-- [2026-10-21] [process] When a fix leaves a carve-out path (a held `when` that reads a flag byte still recursed), write it in the batch report's discoveries table: the assessment turned that one row into AZ-3141 and found the second over-budget shape (loop 55).
-  Source: _docs/06_metrics/retro_2026-10-21_loop55.md
 - [2026-10-21] [tooling] Check `xcode-select -p` before applying a host recipe from AGENT_GOTCHAS: with Xcode.app selected (Swift 6.4) the Command Line Tools flags for swift-testing break the build, and a plain `swift test` works (loop 55).
   Source: _docs/06_metrics/retro_2026-10-21_loop55.md
 - [2026-10-22] [process] A test-only cleanup loop whose own review finds as many Lows as it fixed (4, 4, 4 in loops 58 to 60) is a treadmill: accept test-code Lows in the handoff and open a cleanup loop only for a Low that can hide a failure (loop 60).
@@ -43,3 +35,7 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/loops/loop67/record67.md
 - [2026-10-25] [tooling] An array copied under `if (x)` and read under `if (x)` fails the `gcc:16` host build (`-Werror=maybe-uninitialized`, -O1 to -O3) while Apple clang and arm `-Os` pass: check a new walker shape with `docker run gcc:16 g++ -O2 -Wall -Wextra -Werror -c` on the one file at the four levels before the first commit; a pointer that is null when nothing was saved compiles clean (loop 67).
   Source: _docs/loops/loop67/record67.md
+- [2026-10-25] [estimation] Check a byte or stack budget against a named part before shaving bytes: loops 61 to 67 cut flash and stack of the C++ core against 8 KB and 2 KB figures that came from an early criterion, and the owner's answer in loop 68 (the nRF54L15: 256 KB of RAM, about 1.5 MB of NVM) made them 30 and 100 times too small; ask for the target part at the first size loop (loop 68).
+  Source: _docs/06_metrics/retro_2026-10-25_loop68.md
+- [2026-10-25] [tooling] A wall-clock heartbeat cannot tell a laptop sleep or a DST clock change from a stall: the publish gate reported 24,249 s while every share log ended `publish gate tests passed`; read the share's own end line and the container process ages before killing a long run (loop 68).
+  Source: _docs/06_metrics/retro_2026-10-25_loop68.md
