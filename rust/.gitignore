@@ -1,3 +1,4 @@
 /target/
 /embedded/build/
+/embedded/build-m33f/
 /embedded/probe/target/

@@ -1,0 +1,11 @@
+# Size limits per feature set on the Cortex-M33F (nRF54L15, AZ-3231): name flash stack, in bytes, read like limits.txt.
+# These are pins: the figures measured on HEAD of loop 70 with Rust 1.98.1 (the toolchain of the embedded-arm job)
+# on QEMU mps2-an505, equal to the measured value, so a later edit that spends bytes fails the row by its own bytes.
+# The row also holds every set to the chip-scale ceilings of cpp/embedded/lib.sh (m33f_flash_budget 65536 B,
+# m33f_stack_budget 8192 B; owner, 2026-10-25). A raise needs a line in _docs/AGENT_GOTCHAS.md saying what the
+# bytes bought.
+base 15132 456
+text 27268 2736
+ecc 18764 744
+session 18884 1528
+frame 20236 1752

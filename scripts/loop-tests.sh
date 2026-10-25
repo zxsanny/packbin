@@ -305,7 +305,7 @@ run_stage_command() {
     # of a host `rm -rf` the directory as it was, so `mkdir -p build` saw the old one and the link failed (AZ-2565).
     cpp) docker compose -f docker-compose.test.yml run --rm cpp 'make -C /src/cpp clean && exec /src/.github/workflows/run-suite.sh cpp' ;;
     cpp-embedded-arm) docker compose -f docker-compose.test.yml run --rm cpp-embedded ;;
-    # The heap-free Rust API on a Cortex-M4F (AZ-2751): static libraries with the host cargo, the image stage in Docker.
+    # The heap-free Rust API on a Cortex-M4F and a Cortex-M33F (AZ-2751, AZ-3231): static libraries with the host cargo, the image stage in Docker.
     rust-embedded) bash rust/embedded/run.sh host ;;
     go | typescript | csharp | python | rust | java | swift) docker compose -f docker-compose.test.yml run --rm "$1" ;;
     # The message ECC ring (AZ-2689) follows the ring and reuses its C# and C++ driver builds (PACKBIN_RING_WORK).

@@ -62,5 +62,12 @@ expect "a dash limit is caught" "ecc" "$(unlimited_sets "$tmp/mutant-limits.txt"
 grep -v '^session ' "$here/limits.txt" > "$tmp/missing-limits.txt"
 expect "a set without a line is caught" "session" "$(unlimited_sets "$tmp/missing-limits.txt" "$here/feature-sets.txt")"
 
+# The Cortex-M33F pins (AZ-3231): a numeric flash and stack for every set, within the chip-scale ceilings of the C++ row.
+expect "every feature set has numeric M33F pins" "" "$(unlimited_sets "$here/limits-m33f.txt" "$here/feature-sets.txt")"
+sed 's/^frame .*/frame - -/' "$here/limits-m33f.txt" > "$tmp/mutant-m33f.txt"
+expect "a dash M33F pin is caught" "frame" "$(unlimited_sets "$tmp/mutant-m33f.txt" "$here/feature-sets.txt")"
+over="$(awk '!/^#/ && NF && ($2 > 65536 || $3 > 8192) { print $1 }' "$here/limits-m33f.txt")"
+expect "no M33F pin is above the ceilings" "" "$over"
+
 [ "$bad" -eq 0 ] || { echo "checks.test.sh: $bad check(s) failed" >&2; exit 1; }
 echo "checks.test.sh: all checks passed"

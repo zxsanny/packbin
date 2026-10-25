@@ -446,3 +446,4 @@ AZ-3199 is the epic "Frame mode" (loop 69, umbrella AZ-3192, plan `_docs/02_task
 | AZ-3202 | frame_golden_vectors | 4 | AZ-3200, AZ-3201 | AZ-3199 |
 | AZ-3203 | rust_frame_mode_core | 5 | AZ-3200, AZ-3201, AZ-3202 | AZ-3199 |
 | AZ-3204 | rust_frame_embedded_set | 3 | AZ-3203 | AZ-3199 |
+| AZ-3231 | rust_m33f_embedded_row | 3 | None | AZ-2750 |

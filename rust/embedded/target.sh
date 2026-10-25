@@ -5,16 +5,27 @@
 set -euo pipefail
 
 rust_dir="$root/rust/embedded"
-# PACKBIN_RUST_EMBEDDED_LIMITS names another limits file (the smoke test lowers a limit by one byte).
+# PACKBIN_RUST_EMBEDDED_LIMITS names another limits file (the smoke test lowers a limit by one byte);
+# PACKBIN_RUST_EMBEDDED_LIMITS_M33F does the same for the Cortex-M33F row.
 limits_file="${PACKBIN_RUST_EMBEDDED_LIMITS:-$rust_dir/limits.txt}"
+limits_file_m33f="${PACKBIN_RUST_EMBEDDED_LIMITS_M33F:-$rust_dir/limits-m33f.txt}"
+# The target of a row: target_rust_m33f shadows these (and limits_file and arm_link_common) with locals, which the
+# helpers below see.
 rust_target=thumbv7em-none-eabihf
+rust_build=build
 rust_arch=(-mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16)
+rust_machine=mps2-an386
+# Ceilings in bytes for flash and stack; empty for none (the Cortex-M4F row is held by limits.txt alone).
+rust_flash_ceiling=
+rust_stack_ceiling=
+# The folder of an earlier row whose route packet this row must reproduce; empty for none.
+rust_same_as=
 # shellcheck source=checks.sh
 source "$rust_dir/checks.sh"
 
 # The static library cargo built for one set (run.sh libs).
 rust_lib() {
-  echo "$rust_dir/build/$1/$rust_target/release/libpackbin_probe.a"
+  echo "$rust_dir/$rust_build/$1/$rust_target/release/libpackbin_probe.a"
 }
 
 # The feature sets of feature-sets.txt, one "name|features" line each, comments and blanks left out.
@@ -50,10 +61,30 @@ rust_link() {
 }
 
 target_rust_m4f() {
-  local dir="$build/rust-m4f" set features lib meter flash0 ram0 ram flash stack raw hits sets=0
+  rust_row "$build/rust-m4f"
+}
+
+# Cortex-M33F, the nRF54L15 core (AZ-3231): the same sets, checks and method as the M4F row on QEMU mps2-an505
+# (Secure state: code at 0x10000000, RAM at 0x38000000), held to the chip-scale ceilings of lib.sh (m33f_*) and to
+# the pins of limits-m33f.txt. Reads and writes nothing of the M4F row.
+# limits_file, rust_* and arm_link_common are read by the helpers (dynamic scope).
+# shellcheck disable=SC2034,SC2054
+target_rust_m33f() {
+  local rust_target=thumbv8m.main-none-eabihf rust_build=build-m33f
+  local rust_arch=(-mthumb -mcpu=cortex-m33 -mfloat-abi=hard -mfpu=fpv5-sp-d16)
+  local rust_machine=mps2-an505 limits_file="$limits_file_m33f"
+  local rust_flash_ceiling="$m33f_flash_budget" rust_stack_ceiling="$m33f_stack_budget"
+  local rust_same_as="$build/rust-m4f"
+  local arm_link_common=(-nostartfiles -T "$here/arm/mps2-an505.ld" -Wl,--gc-sections -Wl,--cref)
+  rust_row "$build/rust-m33f"
+}
+
+# One row: every set of feature-sets.txt linked, run, checked and measured for the target the caller set.
+rust_row() {
+  local dir="$1" set features lib meter flash0 ram0 ram flash stack raw hits sets=0
   rust_common_objects "$dir"
   rust_link "$dir" baseline.elf baseline.o
-  qemu_run mps2-an386 "$dir/baseline.elf" "$dir/baseline.run.log" || fail "baseline image exit $?"
+  qemu_run "$rust_machine" "$dir/baseline.elf" "$dir/baseline.run.log" || fail "baseline image exit $?"
   # The meter reads its own unpainted guard as used; the baseline measures an empty call.
   meter=$(log_value PACK_STACK "$dir/baseline.run.log")
   flash0=$(arm-none-eabi-size "$dir/baseline.elf" | awk 'NR == 2 { print $1 + $2 }')
@@ -80,9 +111,16 @@ target_rust_m4f() {
       hits="$(stream_hits "$dir/$set.nm" | tr '\n' ' ')"
       [ -z "$hits" ] || fail "$set: the stream session is linked without the session feature ($hits)"
     fi
-    qemu_run mps2-an386 "$dir/$set.elf" "$dir/$set.run.log" || fail "$set: image exit $?"
+    qemu_run "$rust_machine" "$dir/$set.elf" "$dir/$set.run.log" || fail "$set: image exit $?"
     [ "$(log_value FAILURES "$dir/$set.run.log")" = 0 ] || fail "$set: a probe call failed"
     [ "$(log_value GOLDEN_OK "$dir/$set.run.log")" = 1 ] || fail "$set: the golden fixture did not decode on the device image"
+    if [ -n "$rust_same_as" ]; then
+      if [ ! -f "$rust_same_as/$set.run.log" ]; then
+        fail "$set: no run of the earlier row to compare with ($rust_same_as/$set.run.log: rust-m4f runs first)"
+      elif [ "$(log_value ROUTE_HEX "$dir/$set.run.log")" != "$(log_value ROUTE_HEX "$rust_same_as/$set.run.log")" ]; then
+        fail "$set: the route packet differs from the earlier row's"
+      fi
+    fi
     flash=$(( $(arm-none-eabi-size "$dir/$set.elf" | awk 'NR == 2 { print $1 + $2 }') - flash0 ))
     # The C++ stage requires the core to add no .data or .bss (no static mutable state); so does this one.
     ram=$(( $(arm-none-eabi-size "$dir/$set.elf" | awk 'NR == 2 { print $2 + $3 }') - ram0 ))
@@ -93,6 +131,8 @@ target_rust_m4f() {
     note "$set flash ${flash} B of $(limit_of "$set" 2); stack ${stack} B of $(limit_of "$set" 3); golden decoded on the device image"
     within "$flash" "$(limit_of "$set" 2)" || fail "$set: flash ${flash} B over $(limit_of "$set" 2) B"
     within "$stack" "$(limit_of "$set" 3)" || fail "$set: stack ${stack} B over $(limit_of "$set" 3) B"
+    within "$flash" "${rust_flash_ceiling:--}" || fail "$set: flash ${flash} B over the ceiling of ${rust_flash_ceiling} B"
+    within "$stack" "${rust_stack_ceiling:--}" || fail "$set: stack ${stack} B over the ceiling of ${rust_stack_ceiling} B"
   done 3< <(rust_sets)
   [ "$sets" -gt 0 ] || fail "feature-sets.txt lists no set"
 }

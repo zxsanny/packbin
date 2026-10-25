@@ -274,13 +274,13 @@ jobs:
           set -euo pipefail
           mkdir -p test-results
           bash cpp/embedded/run.sh host arm
-      - name: Rust toolchain with the thumbv7em-none-eabihf target
+      - name: Rust toolchain with the thumbv7em-none-eabihf and thumbv8m.main-none-eabihf targets
         run: |
           set -euo pipefail
           rustup toolchain install "$PACKBIN_EMBEDDED_RUST" --profile minimal --no-self-update
           rustup default "$PACKBIN_EMBEDDED_RUST"
-          rustup target add thumbv7em-none-eabihf
-      - name: Rust heap-free API on Cortex-M4F (QEMU run, sizes, heap and panic link checks)
+          rustup target add thumbv7em-none-eabihf thumbv8m.main-none-eabihf
+      - name: Rust heap-free API on Cortex-M4F and Cortex-M33F (QEMU run, sizes, heap and panic link checks)
         run: |
           set -euo pipefail
           mkdir -p test-results
