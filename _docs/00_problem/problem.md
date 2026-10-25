@@ -6,7 +6,7 @@
 
 **packbin** is a small open-source library that packs and unpacks binary packets from a field list. One description per packet says the order, the widths, the endian, and which flags bit includes the next field. The same list is what C#, TypeScript, Python, Rust, C++, and Java execute.
 
-The bytes on the wire are only the fields. packbin does not add a tag, a length prefix, a version byte, or a schema id.
+The bytes on the wire are only the fields. packbin does not add a tag, a length prefix, a version byte, or a schema id. Frame mode of the session (ADR-008) is the one exception: it authenticates, so its body ends with a tag; stream mode and clear pack are as written.
 
 ## Who
 

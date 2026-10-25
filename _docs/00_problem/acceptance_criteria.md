@@ -39,7 +39,7 @@ Outcomes only. Numbers are the pass line.
 - Kotlin, a wiki, or a seventh language before the six languages agree on the golden bytes
 - A code generator in the first release
 - Any speed target other than AC-10, including allocation budgets, SIMD, and a zero-copy API. Exception: C++ has a no-heap, flash and stack budget and borrowed (zero-copy) strings and bytes (`_docs/02_task_plans/cpp-microcontroller/acceptance_criteria.md` AC-2, AC-5, AC-8, decided 2026-10-04).
-- Authentication, secrets, or TLS inside the library
+- Authentication, secrets, or TLS inside the library. Exception: frame mode of the session authenticates its frames with a truncated HMAC tag (ADR-008, `_docs/02_task_plans/rust-m33f-and-frame-mode/acceptance_criteria.md`); key storage, secrets management and TLS stay out
 - GitHub Packages as the install path
 - A calendar deadline
 

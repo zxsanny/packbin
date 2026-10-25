@@ -81,6 +81,14 @@ pub fn xor(key: &[u8; 32], packet: u64, data: &mut [u8]) {
     }
 }
 
+/// The ChaCha20 block of any 12-byte nonce and counter, for the reference-vector tests.
+#[cfg(test)]
+pub(crate) fn block_of(key: &[u8; 32], nonce: &[u8; 12], counter: u32) -> [u8; 64] {
+    let mut output = [0u8; 64];
+    block(key, nonce, counter, &mut output);
+    output
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

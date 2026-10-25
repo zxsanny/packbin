@@ -1385,6 +1385,14 @@ What travels for one position:
 
 `VITE_PACKBIN_SEED` is compiled into the JavaScript bundle, so anyone who downloads the app can read it. The session hides packets from a network observer. It does not hide them from a person who has the app. Change the seed with a release, and keep the old value on the server until clients have updated.
 
+## Frame session
+
+The encrypted session above is a stream: it needs packets in order, none lost, and it does not detect a changed byte. For a radio link (frames are lost, reordered and duplicated, anyone can write to the channel) the session has a second mode, `frame`. Each message carries a caller-supplied 8-byte `msg_id`; the keys come from the caller's 32-byte key and a 24-bit `epoch` with nothing sent first; the body is `clear part, ciphertext, tag` with a tag of 4, 8 or 16 bytes (a truncated HMAC-SHA256, checked in constant time before any plaintext is written); a 64-message replay window the caller owns refuses duplicates and old frames before any hashing; an optional previous key opens frames sealed just before a key change; and a MAC-only call gives a 4-byte tag over a message in parts, for a per-hop check. Stream mode, clear pack and their bytes do not change; only the frame body carries a tag (ADR-008).
+
+**For one key, epoch and direction, never seal two different messages with the same `msg_id`.** A reused `msg_id` breaks the confidentiality of both messages, and packbin cannot check it. meshbell builds `msg_id` from the source (2 bytes), the id field (2 bytes) and the creation wave (4 bytes); sequences restart every wave, waves never repeat and source ids are never reissued, so it is unique. A new epoch derives new keys and nonces.
+
+The byte-for-byte definition, the replay rules and the error kinds (`TagMismatch`, `Duplicate`, `TooOld` besides the existing ones) are in `_docs/02_document/contracts/library/pack-session.md` (2.0.0); the shared test rows are in `fixtures/frame/vectors.txt`. Rust is the first package (feature `frame`, no heap); its example is in the Rust section of this file once the feature ships.
+
 ## Data types
 
 | Helper | What it writes |

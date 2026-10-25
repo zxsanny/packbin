@@ -60,6 +60,12 @@ pub fn derive(ikm: &[u8], salt: &[u8], info: &[u8], output: &mut [u8]) {
     }
 }
 
+/// HMAC-SHA-256 of one message, for the reference-vector tests.
+#[cfg(test)]
+pub(crate) fn hmac_sha256_of(key: &[u8], data: &[u8]) -> [u8; 32] {
+    hmac_sha256(key, &[data])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

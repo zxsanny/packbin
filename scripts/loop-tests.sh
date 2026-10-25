@@ -284,6 +284,7 @@ run_stage_command() {
         && bash fixtures/text/check-vectors.test.sh \
         && bash scripts/text/check-emitted.test.sh \
         && bash scripts/text/check-emitted.sh \
+        && bash fixtures/crypto/check-vectors.test.sh \
         && bash fixtures/ecc/check-vectors.test.sh \
         && bash fixtures/ecc/check-contract.sh \
         && python3 -I scripts/ecc/fuzz_reference.py \

@@ -55,6 +55,8 @@ mod borrowed_count_tests;
 #[cfg(all(test, feature = "std"))]
 mod counted_tests;
 #[cfg(all(test, feature = "std"))]
+mod crypto_vectors_tests;
+#[cfg(all(test, feature = "std"))]
 mod dict_order_tests;
 #[cfg(all(test, feature = "std"))]
 mod duplicate_names_kept_tests;

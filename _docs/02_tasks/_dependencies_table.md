@@ -436,3 +436,13 @@ AZ-3170 is loop 65 (CI paths-ignore, Rust limits, flag-byte chain) and AZ-3171 i
 | AZ-3171 | publish_gate_load_aware | 3 | None | AZ-2645 |
 | AZ-3185 | cpp_unpack_flag_scope_stack | 3 | None | AZ-2645 |
 | AZ-3189 | cpp_m33f_target_nrf54l15 | 3 | None | AZ-2645 |
+
+AZ-3199 is the epic "Frame mode" (loop 69, umbrella AZ-3192, plan `_docs/02_task_plans/rust-m33f-and-frame-mode/`). The meshbell spec PB-04 (8 points) is split into AZ-3203 (5) and AZ-3204 (3); PB-02 covers the fixture, the Python check and Rust only (owner, 2026-10-25). Estimation: LESSONS applied: no per-entry multiplication; every size figure (flash, stack, compressions) is read from a run in the task, not from the spec.
+
+| Task | Name | Complexity | Dependencies | Epic |
+|------|------|-----------|-------------|------|
+| AZ-3200 | frame_mode_contract_and_adr | 4 | None | AZ-3199 |
+| AZ-3201 | primitive_vectors_python_and_rust | 3 | None | AZ-3199 |
+| AZ-3202 | frame_golden_vectors | 4 | AZ-3200, AZ-3201 | AZ-3199 |
+| AZ-3203 | rust_frame_mode_core | 5 | AZ-3200, AZ-3201, AZ-3202 | AZ-3199 |
+| AZ-3204 | rust_frame_embedded_set | 3 | AZ-3203 | AZ-3199 |

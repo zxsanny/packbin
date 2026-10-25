@@ -168,7 +168,7 @@ There is no inbound vendor callback. The bytes the library reads are the caller'
 
 ## 7. Security Architecture
 
-**Authentication**: none inside the library
+**Authentication**: none in clear pack and stream sessions; frame mode of the session (ADR-008, `pack-session.md` 2.0.0) encrypts and authenticates with a truncated HMAC-SHA256 tag, with keys the caller holds
 
 **Authorization**: none
 
