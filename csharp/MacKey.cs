@@ -72,7 +72,7 @@ public sealed class MacKey : IDisposable
             return false;
         Span<byte> full = stackalloc byte[FrameCrypto.HashSize];
         FrameCrypto.Hmac(_key, message, full);
-        var equal = FrameCrypto.FixedEquals(full.Slice(0, tag.Length), tag);
+        var equal = FrameCrypto.TagsEqual(full.Slice(0, tag.Length), tag);
         Compat.Zero(full);
         return equal;
     }
@@ -84,7 +84,7 @@ public sealed class MacKey : IDisposable
             return false;
         Span<byte> full = stackalloc byte[FrameCrypto.HashSize];
         Compute(parts, full);
-        var equal = FrameCrypto.FixedEquals(full.Slice(0, tag.Length), tag);
+        var equal = FrameCrypto.TagsEqual(full.Slice(0, tag.Length), tag);
         Compat.Zero(full);
         return equal;
     }

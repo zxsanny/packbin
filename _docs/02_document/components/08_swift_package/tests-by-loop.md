@@ -27,3 +27,11 @@ Source: `_docs/03_implementation/batch_01..10_loop26_report.md`, `implementation
 Changes after the waves (2026-10-14): Swift 6 only (tools 6.0, swift-crypto 4.3.1, the `swift-min` service and its 5.9 compile step removed, CI image `swift:6.3.3`); the review fixes (separate SwiftPM cache volumes, `publish.yml` timeout 120 minutes); the step 11 fixes (the drivers write through `FileHandle.standardError`, the sanitizer run no longer runs the size and speed tests, the `NSDictionary` test).
 
 Not run in loop 26: Swift 6.0 itself, the first Ubuntu runner run, the first tag and its live consumer resolve, a Swift peak-memory figure, tvOS, watchOS, Android, Windows and WASI. The open owner rows O1 to O3 are in the traceability matrix.
+
+## Loop 71 (frame mode, AZ-3232 to AZ-3235)
+
+Source: `_docs/03_implementation/batch_01_loop71_report.md`, `_docs/loops/loop71/assessment71.md`.
+
+| Test class | Task | What it proves |
+|------------|------|----------------|
+| `FrameVectorTests`, `CryptoVectorTests`, `FrameTamperTests`, `FrameReplayTests`, `FrameMacTests`, `FrameRefusalTests`, `FrameWipeTests`, `FrameReadmeExampleTests` and the 8-task seal test in `ConcurrencyTests` | AZ-3234 | 461 tests in all (38 new + 1); the case-list pin of `ShortTrailingTests` holds the 4 new kinds; `ReadmeExampleTests` skips the frame block |

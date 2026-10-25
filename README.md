@@ -1387,11 +1387,11 @@ What travels for one position:
 
 ## Frame session
 
-The encrypted session above is a stream: it needs packets in order, none lost, and it does not detect a changed byte. For a radio link (frames are lost, reordered and duplicated, anyone can write to the channel) the session has a second mode, `frame`. Each message carries a caller-supplied 8-byte `msg_id`; the keys come from the caller's 32-byte key and a 24-bit `epoch` with nothing sent first; the body is `clear part, ciphertext, tag` with a tag of 4, 8 or 16 bytes (a truncated HMAC-SHA256, checked in constant time before any plaintext is written); a 64-message replay window the caller owns refuses duplicates and old frames before any hashing; an optional previous key opens frames sealed just before a key change; and a MAC-only call gives a 4-byte tag over a message in parts, for a per-hop check. Stream mode, clear pack and their bytes do not change; only the frame body carries a tag (ADR-008).
+The encrypted session above is a stream: it needs packets in order, none lost, and it does not detect a changed byte. For a radio link (frames are lost, reordered and duplicated, anyone can write to the channel) the session has a second mode, `frame`. Each message carries a caller-supplied 8-byte `msg_id`; the keys come from the caller's 32-byte key and a 24-bit `epoch` with nothing sent first; the body is `clear part, ciphertext, tag` with a tag of 4, 8 or 16 bytes (a truncated HMAC-SHA256, checked before any plaintext is written, with a constant-time compare where the runtime allows); a 64-message replay window the caller owns refuses duplicates and old frames before any hashing; an optional previous key opens frames sealed just before a key change; and a MAC-only call gives a 4-byte tag over a message in parts, for a per-hop check. Stream mode, clear pack and their bytes do not change; only the frame body carries a tag (ADR-008).
 
 **For one key, epoch and direction, never seal two different messages with the same `msg_id`.** A reused `msg_id` breaks the confidentiality of both messages, and packbin cannot check it. meshbell builds `msg_id` from the source (2 bytes), the id field (2 bytes) and the creation wave (4 bytes); sequences restart every wave, waves never repeat and source ids are never reissued, so it is unique. A new epoch derives new keys and nonces.
 
-The byte-for-byte definition, the replay rules and the error kinds (`TagMismatch`, `Duplicate`, `TooOld` besides the existing ones) are in `_docs/02_document/contracts/library/pack-session.md` (2.0.0); the shared test rows are in `fixtures/frame/vectors.txt`. Rust is the first package (Cargo feature `frame`, no heap, no panic path, 20 KB of flash and 2 KB of stack on a Cortex-M4F); C#, Java and Swift follow below with the same bytes (they pass the same `fixtures/frame/vectors.txt`). In those three the frame API is a `FrameSession` type beside `PackSession`, with a `ReplayWindow` you own and a `MacKey`; `Load` and `Derive` return null (C#, Java) or throw `badValue` (Swift) for an out-of-range key, epoch, tag length or label. Keys are wiped when you dispose, close or release the session; a managed runtime may keep copies, and the tag compare is written without an early exit but a JIT is not under the library's control, so both are best effort.
+The byte-for-byte definition, the replay rules and the error kinds (`TagMismatch`, `Duplicate`, `TooOld` besides the existing ones) are in `_docs/02_document/contracts/library/pack-session.md` (2.0.0); the shared test rows are in `fixtures/frame/vectors.txt`. Rust is the first package (Cargo feature `frame`, no heap, no panic path, 20 KB of flash and 2 KB of stack on a Cortex-M4F); C#, Java and Swift follow below with the same bytes (they pass the same `fixtures/frame/vectors.txt`). In those three the frame API is a `FrameSession` type beside `PackSession`, with a `ReplayWindow` you own and a `MacKey`; `Load` and `Derive` return null (C#, Java) or throw `badValue` (Swift) for an out-of-range key, epoch, tag length or label. Keys are wiped when you call `Dispose` (C#) or `close()` (Java, Swift) and, in Swift, when the session is released; C# and Java have no finalizer, so a session you never dispose keeps its keys until the garbage collector reuses the memory, and a managed runtime may keep copies as well, and the tag compare uses the platform's fixed-time compare (C# on .NET 10, Java) or a fold without an early exit, but a JIT is not under the library's control, so both are best effort.
 
 ### Rust
 
@@ -1429,7 +1429,7 @@ The Cargo feature is `frame` (`packbin = { version = "...", default-features = f
 
 ### C#
 
-`FrameSession.Seal` and `Open` write into buffers you own and return `null` on success or the error object (`BadValue`, `TooLong`, `BufferFull`, `ShortPacket`, `TagMismatch`, `Duplicate`, `TooOld`). `Seal` is safe from many threads; `SetPrevious`, `ClearPrevious` and `Dispose` are not safe beside another call. The library builds for `net10.0` and `netstandard2.0`.
+`FrameSession.Seal` and `Open` write into buffers you own and return `null` on success or the error object (`BadValue`, `TooLong`, `BufferFull`, `ShortPacket`, `TagMismatch`, `Duplicate`, `TooOld`). `Seal` is safe from many threads; `SetPrevious`, `ClearPrevious` and `Dispose` must not run beside a `Seal` or `Open`. The library builds for `net10.0` and `netstandard2.0`.
 
 ```csharp
 // A 32-byte key shared by the nodes, an epoch (0 to 0xFFFFFF) and a tag of 4, 8 or 16 bytes.
@@ -1485,7 +1485,7 @@ try (FrameSession node = FrameSession.load(key, 1, 4, FrameSession.UP)) { // epo
     try (MacKey net = MacKey.derive(key, 1, "net".getBytes(StandardCharsets.US_ASCII))) { // MAC-only call
         byte[] tag = new byte[4];
         net.tag(tag, new byte[] {1, 0, 0, 0}, body); // the message may be passed in parts
-        boolean valid = net.verify(tag, new byte[] {1, 0, 0, 0}, body); // constant-time compare
+        boolean valid = net.verify(tag, new byte[] {1, 0, 0, 0}, body); // best-effort constant-time compare
     }
 }
 ```

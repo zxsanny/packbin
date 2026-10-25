@@ -45,7 +45,7 @@ public final class FrameReadmeExample {
             try (MacKey net = MacKey.derive(key, 1, "net".getBytes(StandardCharsets.US_ASCII))) { // MAC-only call
                 byte[] tag = new byte[4];
                 net.tag(tag, new byte[] {1, 0, 0, 0}, body); // the message may be passed in parts
-                boolean valid = net.verify(tag, new byte[] {1, 0, 0, 0}, body); // constant-time compare
+                boolean valid = net.verify(tag, new byte[] {1, 0, 0, 0}, body); // best-effort constant-time compare
                 // README-END
                 return new String[] {new String(plain, 0, plainLength, StandardCharsets.US_ASCII),
                         duplicate ? "Duplicate" : FrameSupport.kind(again), Boolean.toString(valid)};

@@ -51,3 +51,11 @@ Test files: `ClearBitProbesTest.java` (`u11NoValueCountBehindAClearWhen`), `Roun
 ## Loop 24 (Go joins the ring; no Java test change)
 
 Loop 24 added the Go package (AZ-2222, `components/07_go_package/`). No Java source or test changed (batch report: the six suites have no source change). What is new for this package is its place in the ring: Go joins every kind both ways (`user`, `nested`, `boolflag`, `booltrue`, `bitwhen`, `session`, `roundflags`, `roundwhen`, `listgroup`, `dictgroup`, `listflags`), through `language-pair.sh` (114 Go lines in all, guarded by `ring-wiring.test.sh`; scenario FT-X-90). The hostile case file is unchanged at 65 cases and is now read by seven loaders (FT-X-87). Java charges a nested-row group 1 slot where Go charges the width of a `Nested` row's own members (assessment D3, open); the U6 row was not run in Java.
+
+## Loop 71 (frame mode, AZ-3232 to AZ-3235)
+
+Source: `_docs/03_implementation/batch_01_loop71_report.md`, `_docs/loops/loop71/assessment71.md`.
+
+| Test class | Task | What it proves |
+|------------|------|----------------|
+| `FrameVectorsTest`, `CryptoVectorsTest`, `FrameTamperReplayTest`, `FrameMacRefusalsTest`, `FrameHostileTest`, `FrameLifecycleTest`, `FrameReadmeExample` (helpers `FrameSupport`, `FrameRows`, `FrameExamples`) | AZ-3233 | run by `java/test.sh`; the same list as C#; `api-check` PASS at Android API 26 |

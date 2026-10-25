@@ -50,6 +50,16 @@ internal static class FrameCrypto
         Finish(hash, full);
     }
 
+    // The compare the callers use: the platform's fixed-time compare where it exists (net10.0), the fold below elsewhere.
+    internal static bool TagsEqual(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
+    {
+#if NETSTANDARD2_0
+        return FixedEquals(left, right);
+#else
+        return System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(left, right);
+#endif
+    }
+
     // The tag compare: folds every byte of both spans into one value and decides only at the end. A different length is
     // public (the tag length is fixed per key), so it is the one early exit. NoOptimization keeps the JIT from turning the
     // fold into a loop that stops at the first difference; the guarantee is best effort on a managed runtime.

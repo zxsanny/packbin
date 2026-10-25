@@ -46,3 +46,11 @@ Test files: `CountBehindClearWhenTests.cs` (AZ-2410: six `Ac1_*`/`Ac2_*`/`Ac3_*`
 ## Loop 24 (Go joins the ring; no C# test change)
 
 Loop 24 added the Go package (AZ-2222, `components/07_go_package/`). No C# source or test changed (batch report: the six suites have no source change). What is new for this package is its place in the ring: Go joins `user`, `nested`, `boolflag`, `booltrue`, `bitwhen` and `session` both ways, `roundflags` and `roundwhen` as producer only (`csharp -> go`; no public C# reader of an aligned round row, AZ-2092), and `listgroup`, `dictgroup`, `listflags` both ways, through `language-pair.sh` (114 Go lines in all, guarded by `ring-wiring.test.sh`; scenario FT-X-90). The hostile case file is unchanged at 65 cases and is now read by seven loaders (FT-X-87). C# is the reference of the Go session (ciphertext `b55d0a29c56c203712b241232e`) and of the whole-float refusal (Go-2 A follows C# since loop 21); `Walker.StrandedCounts.cs` was read for the U6 row.
+
+## Loop 71 (frame mode, AZ-3232 to AZ-3235)
+
+Source: `_docs/03_implementation/batch_01_loop71_report.md`, `_docs/loops/loop71/assessment71.md`.
+
+| Test class | Task | What it proves |
+|------------|------|----------------|
+| `FrameVectorTests`, `CryptoVectorTests`, `FrameTamperTests`, `FrameReplayTests`, `FrameMacOnlyTests`, `FrameRefusalTests`, `FrameWipeAndCompareTests`, `FrameConcurrencyTests`, `FrameReadmeExample` | AZ-3232 | 66 tests (4305 in all, both targets): the 157 frame rows and 27 primitive rows, tamper sweep, replay with the MAC counter, previous slot, MAC-only, refusals, 1,000 hostile inputs, wipe and compare, 8-thread seal, the README example |

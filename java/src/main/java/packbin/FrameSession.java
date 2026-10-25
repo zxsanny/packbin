@@ -18,13 +18,15 @@ import java.util.Arrays;
  * different contents.</b> Reuse breaks the confidentiality of both messages and the library cannot check it. A new epoch
  * derives new keys and nonces.
  *
- * <p>{@code seal} is deterministic, stateless and thread-safe; {@code open} is thread-safe too, but the
- * {@link ReplayWindow} it updates is not. Load once, never per message: the keys are derived at load.
+ * <p>{@code seal} is deterministic, stateless and thread-safe; {@code open} may run from many threads too, but the
+ * {@link ReplayWindow} it updates is not thread-safe. {@code setPrevious}, {@code clearPrevious} and {@code close} replace or
+ * overwrite keys that {@code seal} and {@code open} read: call them only while no other call is running. Load once, never
+ * per message: the keys are derived at load.
  *
  * <p>Limits of the runtime, stated once: the derived keys are overwritten at {@link #close()} (best effort), but the
- * platform HMAC and the garbage collector may hold copies the library cannot reach. The tag compare folds every byte with
- * no early exit and no branch on the data; the JIT or the platform may still change the timing. Do not call
- * {@code close} while another thread is inside {@code seal} or {@code open}.
+ * platform HMAC and the garbage collector may hold copies the library cannot reach, and nothing wipes them if you never
+ * call {@code close} (there is no cleaner). The tag compare is {@code MessageDigest.isEqual}; the platform may still change
+ * the timing.
  */
 public final class FrameSession implements AutoCloseable {
     public static final int UP = 1;
@@ -257,6 +259,10 @@ public final class FrameSession implements AutoCloseable {
                 return new Packbin.TooOld();
             }
         }
+        // One read of the caller's buffer: the tag is checked and the text decrypted from the same bytes, even when the
+        // buffer changes while we work.
+        bodyBytes = Arrays.copyOfRange(bodyBytes, bodyStart, bodyStart + bodyLen);
+        bodyStart = 0;
         int cipherAt = bodyStart + clearLength;
         int tagAt = cipherAt + plainLen;
         byte[] clearBytes = Arrays.copyOfRange(bodyBytes, bodyStart, cipherAt);

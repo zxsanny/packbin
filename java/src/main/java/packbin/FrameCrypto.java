@@ -2,6 +2,8 @@ package packbin;
 
 import javax.crypto.Mac;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicLong;
 
 /** The pieces of frame mode shared by {@link FrameSession} and {@link MacKey}: salt, nonce, HMAC and the tag compare. */
@@ -58,16 +60,11 @@ final class FrameCrypto {
     }
 
     /**
-     * True when the two ranges are equal. Every byte is folded into one accumulator, with no early exit and no branch on
-     * the data, so the time does not depend on where the ranges differ. Constant time is best effort: the JIT may
-     * change the code, and the platform gives no guarantee. The lengths are not secret.
+     * True when the two ranges are equal, compared with {@link MessageDigest#isEqual}, which the JDK documents as taking time
+     * that depends only on the length. Constant time is still best effort on a managed runtime. The lengths are not secret.
      */
     static boolean constantTimeEquals(byte[] a, int aOff, byte[] b, int bOff, int len) {
-        int diff = 0;
-        for (int i = 0; i < len; i++) {
-            diff |= a[aOff + i] ^ b[bOff + i];
-        }
-        return diff == 0;
+        return MessageDigest.isEqual(Arrays.copyOfRange(a, aOff, aOff + len), Arrays.copyOfRange(b, bOff, bOff + len));
     }
 
     static boolean constantTimeEquals(byte[] a, byte[] b) {

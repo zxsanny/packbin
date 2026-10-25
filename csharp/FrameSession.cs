@@ -10,11 +10,12 @@ namespace Packbin;
 /// type beside the stream <see cref="PackSession"/>; the two never share state.
 /// <para>
 /// <see cref="Seal"/> is deterministic, stateless and safe to call from many threads. <see cref="Open"/> reads the
-/// previous slot, which <see cref="SetPrevious"/> and <see cref="ClearPrevious"/> replace: call those while no open runs.
+/// previous slot, which <see cref="SetPrevious"/> and <see cref="ClearPrevious"/> replace, and <see cref="Dispose"/> overwrites
+/// the keys: call those three while no seal or open runs.
 /// </para>
 /// <para>
-/// Limits of a managed runtime: the tag compare folds every byte with no early exit, but the JIT is not promised to keep that;
-/// <see cref="Dispose"/> overwrites the key arrays this object owns, but the runtime, the platform HMAC and the garbage
+/// Limits of a managed runtime: the tag compare is the platform's fixed-time compare on net10.0 and a fold of every byte with no early exit on netstandard2.0, but a JIT is not promised to keep that;
+/// the key arrays this object owns are overwritten only by <see cref="Dispose"/> (there is no finalizer), and the runtime, the platform HMAC and the garbage
 /// collector may hold copies it cannot reach. Both are best effort.
 /// </para>
 /// </summary>
@@ -174,9 +175,13 @@ public sealed class FrameSession : IDisposable
                 return new TooOld();
         }
 
-        var clear = body.Slice(0, clearLength);
-        var cipher = body.Slice(clearLength, plainLength);
-        var tag = body.Slice(clearLength + plainLength);
+        // One read of the caller's buffer: the tag is checked and the text decrypted from the same bytes, even when the
+        // buffer is a receive ring that changes under us.
+        Span<byte> frame = stackalloc byte[body.Length];
+        body.CopyTo(frame);
+        var clear = frame.Slice(0, clearLength);
+        var cipher = frame.Slice(clearLength, plainLength);
+        var tag = frame.Slice(clearLength + plainLength);
         Span<byte> nonce = stackalloc byte[12];
         var keys = _current;
         var slot = FrameSlot.Current;
@@ -260,7 +265,7 @@ public sealed class FrameSession : IDisposable
         WriteNonce(message, direction, keys.Epoch, nonce);
         Span<byte> full = stackalloc byte[FrameCrypto.HashSize];
         Tag(keys.Mac(direction), nonce, ad, clear, cipher, full);
-        var equal = FrameCrypto.FixedEquals(full.Slice(0, tag.Length), tag);
+        var equal = FrameCrypto.TagsEqual(full.Slice(0, tag.Length), tag);
         Compat.Zero(full);
         return equal;
     }
