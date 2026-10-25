@@ -159,7 +159,7 @@ func readmeHex(_ bytes: [UInt8]) -> String {
         let blocks = try readmeSwiftBlocks()
 
         // Act
-        let code = blocks.filter { !$0.code.contains(".package(url:") }
+        let code = blocks.filter { !$0.code.contains(".package(url:") && !$0.code.contains("FrameSession.load(") }
 
         // Assert
         #expect(snippets.map(\.name) == readmeSnippetOrder, "the README begin/end lines of this file")

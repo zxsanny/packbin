@@ -30,3 +30,7 @@ Source of rows: `intake` (new-task Step 4.7). Status: confirmed / out-of-scope /
 
 - Several senders sharing one replay window (caller owns one window per sender; contract says so).
 - A frame session built from a `PackSession` instance (not in this loop).
+
+## Assessment round 1 (loop 71)
+
+Rows S1 to S13 covered or out-of-scope; see `_docs/loops/loop71/assessment71.md`. Verdict COMPLETE. Open check for step 11: the Linux Swift run (swift-crypto).
