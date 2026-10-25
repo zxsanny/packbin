@@ -8,13 +8,6 @@ Downstream skills consume this file:
 - `.cursor/skills/autodev/protocols/bootstrap-lessons.md` (Bootstrap B2 — Surface Recent Lessons)
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
-
-- [2026-10-21] [tooling] Check `xcode-select -p` before applying a host recipe from AGENT_GOTCHAS: with Xcode.app selected (Swift 6.4) the Command Line Tools flags for swift-testing break the build, and a plain `swift test` works (loop 55).
-  Source: _docs/06_metrics/retro_2026-10-21_loop55.md
-- [2026-10-22] [process] A test-only cleanup loop whose own review finds as many Lows as it fixed (4, 4, 4 in loops 58 to 60) is a treadmill: accept test-code Lows in the handoff and open a cleanup loop only for a Low that can hide a failure (loop 60).
-  Source: _docs/06_metrics/retro_2026-10-22_loop60.md
-- [2026-10-22] [testing] Compute the expected count of a corpus AC with the rule's own command and one real run, not `grep -c .` on the file (a comment line made it 34 where the rule says 33), and run the broken copies before the AC wording is final (loop 60).
-  Source: _docs/06_metrics/retro_2026-10-22_loop60.md
 - [2026-10-22] [process] With the Jira connector absent, write task specs as `AZ-PENDING_*` with one create-leftover holding the replay payload, and replay the In Testing leftovers first when the connector returns (loops 59 and 60).
   Source: _docs/06_metrics/retro_2026-10-22_loop60.md
 - [2026-10-23] [tooling] Measure flash and stack candidates on tree copies in the scratchpad with a driver that sources `cpp/embedded/lib.sh` and `arm.sh` and calls `target_m4f` in `packbin-embedded:local` (about 5 s a shape against 3 minutes for the stage, and the repo stays at HEAD); run the real stage once on the kept shape (loop 63).
@@ -39,3 +32,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-25_loop68.md
 - [2026-10-25] [tooling] A wall-clock heartbeat cannot tell a laptop sleep or a DST clock change from a stall: the publish gate reported 24,249 s while every share log ended `publish gate tests passed`; read the share's own end line and the container process ages before killing a long run (loop 68).
   Source: _docs/06_metrics/retro_2026-10-25_loop68.md
+- [2026-10-25] [testing] Run the CI step list itself (`docker compose -f docker-compose.test.yml run --rm rust`) before committing a change to a public Rust type: a hand-picked test matrix missed the exhaustive `match` on `Error` in the nostd test support, and step 11 found it (loop 69).
+  Source: _docs/06_metrics/retro_2026-10-25_loop69.md
+- [2026-10-25] [architecture] A 600-byte value returned by value from a constructor cost 2.4 to 2.9 KB of device stack (probe 2,968 B against a 2,048 B bound) however the code was arranged; an in-place constructor (`frame_unloaded`, `load_frame_in_place`) gave 1,896 B, so measure the stack on the first build of a large type and design the constructor in place (loop 69).
+  Source: _docs/06_metrics/retro_2026-10-25_loop69.md
+- [2026-10-25] [architecture] Review a new security API for caller misuse before writing its tests: the independent review found that the replay counter is an open argument that the tag does not cover (one captured frame could poison a window), a rule the contract now states; the crypto core had no finding (loop 69).
+  Source: _docs/06_metrics/retro_2026-10-25_loop69.md

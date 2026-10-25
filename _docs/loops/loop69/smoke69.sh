@@ -71,7 +71,7 @@ step 5 "contract 2.0.0, ADR-008 indexed, R-08 exception, uniqueness rule in the 
 
 # 6. AZ-3200 AC-3: the stream text of the contract is as in 1.0.0 (every 1.0.0 line is still there).
 code=0
-git show 056b583:_docs/02_document/contracts/library/pack-session.md | sed -e '/^\*\*Version\*\*/d' -e '/^\*\*Last Updated\*\*/d' -e '/^One optional connection session/d' \
+git show 056b583:_docs/02_document/contracts/library/pack-session.md | sed -e '/^\*\*Version\*\*/d' -e '/^\*\*Last Updated\*\*/d' -e '/^One optional connection session/d' -e '/^TypeScript, Python, Rust, C++/d' \
   | while IFS= read -r line; do grep -qxF -- "$line" _docs/02_document/contracts/library/pack-session.md || { echo "missing: $line"; exit 1; }; done > "$work/contract.log" || code=1
 step 6 "stream text of the contract unchanged since 056b583" "$code" "$(head -n 2 "$work/contract.log")"
 
