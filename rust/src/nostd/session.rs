@@ -14,7 +14,7 @@ use super::scheme::Scheme;
 #[cfg(feature = "session")]
 use super::walk::{pack_clear, read};
 #[cfg(feature = "session")]
-use crate::session_core::{pad, split_keys, NONCE_SIZE as NONCE, SEED_SIZE as SEED};
+use crate::session_core::{pad, split_keys, wipe::wipe, NONCE_SIZE as NONCE, SEED_SIZE as SEED};
 
 #[cfg(all(feature = "session", feature = "ecc"))]
 use super::walk::Unpacked;
@@ -121,11 +121,11 @@ impl Session {
         if self.keys.is_some() {
             return Err(refused(0));
         }
-        let mut seed = self.seed.take().ok_or_else(|| refused(0))?;
-        let (send, recv) = split_keys(&seed, nonce, initiator);
-        for byte in seed.iter_mut() {
-            *byte = 0;
-        }
+        // The seed is wiped where it lives before the slot is emptied: `take` would leave its bytes there.
+        let seed = self.seed.as_mut().ok_or_else(|| refused(0))?;
+        let (send, recv) = split_keys(seed, nonce, initiator);
+        wipe(seed);
+        self.seed = None;
         self.keys = Some(Keys { send, recv });
         Ok(())
     }
@@ -229,8 +229,7 @@ impl Session {
 
 #[cfg(feature = "session")]
 impl Drop for Session {
-    /// Wipes the seed and both keys (best effort: the compiler is asked to keep the writes). The
-    /// frame keys wipe themselves.
+    /// Wipes the seed and both keys through the volatile wipe. The frame keys wipe themselves.
     fn drop(&mut self) {
         if let Some(seed) = self.seed.as_mut() {
             wipe(seed);
@@ -240,14 +239,6 @@ impl Drop for Session {
             wipe(&mut keys.recv);
         }
     }
-}
-
-#[cfg(feature = "session")]
-fn wipe(bytes: &mut [u8]) {
-    for byte in bytes.iter_mut() {
-        *byte = 0;
-    }
-    core::hint::black_box(bytes);
 }
 
 /// The room a protected scheme's parity bytes need, checked before the pad uses a position.

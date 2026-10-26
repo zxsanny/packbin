@@ -8,6 +8,7 @@ pub(crate) mod hkdf;
 pub(crate) mod hmac;
 pub(crate) mod pad;
 pub(crate) mod sha256;
+pub(crate) mod wipe;
 
 #[cfg(any(feature = "std", feature = "session"))]
 pub(crate) const SEED_SIZE: usize = 32;
@@ -32,9 +33,7 @@ pub(crate) fn split_keys(
     for (slot, byte) in second.iter_mut().zip(both.iter().skip(SEED_SIZE)) {
         *slot = *byte;
     }
-    for byte in both.iter_mut() {
-        *byte = 0;
-    }
+    wipe::wipe(&mut both);
     if initiator {
         (first, second)
     } else {

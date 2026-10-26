@@ -1,3 +1,5 @@
+use super::wipe::wipe;
+
 fn quarter(w: &mut [u32; 16], a: usize, b: usize, c: usize, d: usize) {
     let (Some(&wa), Some(&wb), Some(&wc), Some(&wd)) = (w.get(a), w.get(b), w.get(c), w.get(d))
     else {
@@ -61,6 +63,8 @@ fn block(key: &[u8; 32], nonce: &[u8; 12], counter: u32, output: &mut [u8; 64]) 
     for (slot, byte) in output.iter_mut().zip(mixed.flat_map(u32::to_le_bytes)) {
         *slot = byte;
     }
+    wipe(&mut state);
+    wipe(&mut work);
 }
 
 /// XORs the ChaCha20 stream of `key` and packet number `packet` into `data`.
@@ -82,6 +86,7 @@ pub fn xor(key: &[u8; 32], packet: u64, data: &mut [u8]) {
         *byte ^= pad.get(used).copied().unwrap_or(0);
         used += 1;
     }
+    wipe(&mut pad);
 }
 
 /// XORs the RFC 8439 ChaCha20 stream of `key` and the 12-byte `nonce`, block counter from 0, into `data`.
@@ -99,9 +104,7 @@ pub fn xor_with_nonce(key: &[u8; 32], nonce: &[u8; 12], data: &mut [u8]) {
         *byte ^= pad.get(used).copied().unwrap_or(0);
         used += 1;
     }
-    for byte in pad.iter_mut() {
-        *byte = 0;
-    }
+    wipe(&mut pad);
 }
 
 /// The ChaCha20 block of any 12-byte nonce and counter, for the reference-vector tests.

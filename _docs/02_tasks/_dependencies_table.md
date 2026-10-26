@@ -454,3 +454,4 @@ AZ-3199 is the epic "Frame mode" (loop 69, umbrella AZ-3192, plan `_docs/02_task
 | AZ-3254 | csharp_frame_hardening | 3 | None (contract 2.0.0) | AZ-3199 |
 | AZ-3255 | java_frame_hardening | 3 | None (contract 2.0.0) | AZ-3199 |
 | AZ-3256 | swift_frame_hardening | 2 | None (contract 2.0.0) | AZ-3199 |
+| AZ-3275 | rust_key_wipes | 3 | None (contract 2.0.0) | AZ-3199 |

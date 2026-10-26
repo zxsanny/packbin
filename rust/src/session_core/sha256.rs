@@ -125,7 +125,8 @@ impl Sha256 {
         }
     }
 
-    pub fn finish(mut self) -> [u8; 32] {
+    /// The digest. The hasher keeps its padded state, so a caller that hashed key bytes can wipe it where it lives.
+    pub fn finish(&mut self) -> [u8; 32] {
         let bit_len = self.total.wrapping_mul(8);
         self.update_padding(0x80);
         while self.filled != 56 {
@@ -141,6 +142,12 @@ impl Sha256 {
             *slot = byte;
         }
         out
+    }
+
+    /// Overwrites the chaining state and the block buffer, which hold key-derived words while a key is hashed.
+    pub(crate) fn wipe(&mut self) {
+        super::wipe::wipe(&mut self.state);
+        super::wipe::wipe(&mut self.block);
     }
 
     /// One padding byte; the length counter is not touched.
@@ -167,7 +174,9 @@ pub fn midstate(block: &[u8; 64]) -> [u32; 8] {
 pub fn hash(data: &[u8]) -> [u8; 32] {
     let mut sha = Sha256::new();
     sha.update(data);
-    sha.finish()
+    let digest = sha.finish();
+    sha.wipe();
+    digest
 }
 
 #[cfg(test)]

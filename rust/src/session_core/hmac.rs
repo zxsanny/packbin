@@ -1,6 +1,7 @@
 //! HMAC-SHA-256 with the key blocks compressed once: a key is two 8-word chaining states (64 bytes), so a
 //! call costs the message's own compressions plus one for the outer hash. Fixed buffers, no heap, no panic path.
 use super::sha256::{midstate, Sha256};
+use super::wipe::wipe;
 
 const BLOCK: usize = 64;
 
@@ -34,10 +35,8 @@ impl Pads {
             inner: midstate(&ipad),
             outer: midstate(&opad),
         };
-        for byte in ipad.iter_mut().chain(opad.iter_mut()) {
-            *byte = 0;
-        }
-        core::hint::black_box((&mut ipad, &mut opad));
+        wipe(&mut ipad);
+        wipe(&mut opad);
         pads
     }
 
@@ -53,11 +52,9 @@ impl Pads {
         outer.finish()
     }
 
-    /// Overwrites both states (best effort: the compiler is asked to keep the writes).
+    /// Overwrites both states through the volatile wipe.
     pub(crate) fn wipe(&mut self) {
-        for word in self.inner.iter_mut().chain(self.outer.iter_mut()) {
-            *word = 0;
-        }
-        core::hint::black_box(&mut *self);
+        wipe(&mut self.inner);
+        wipe(&mut self.outer);
     }
 }

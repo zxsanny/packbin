@@ -2,7 +2,7 @@
 
 use super::{ct_eq, refuse, salt, MAX_EPOCH};
 use crate::nostd::error::{Error, Fault};
-use crate::session_core::{hkdf, hmac::Pads};
+use crate::session_core::{hkdf, hmac::Pads, wipe::wipe};
 
 /// An HMAC-SHA-256 key derived from a 32-byte key, an epoch and a label, with its pad states
 /// computed once. 68 bytes, no heap. Debug prints the epoch only.
@@ -31,10 +31,7 @@ impl MacKey {
             &mut derived,
         );
         let pads = Pads::new(&derived);
-        for byte in derived.iter_mut() {
-            *byte = 0;
-        }
-        core::hint::black_box(&mut derived);
+        wipe(&mut derived);
         Ok(MacKey { pads, epoch })
     }
 

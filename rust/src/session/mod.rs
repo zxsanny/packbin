@@ -1,6 +1,6 @@
 use crate::ecc;
 use crate::scheme::{checked_parity, dispatch, BinaryPacker, DispatchHandler, Scheme};
-use crate::session_core::{pad, split_keys};
+use crate::session_core::{pad, split_keys, wipe::wipe};
 use crate::value::{PackError, ShortPacket, UnpackError};
 use std::io::Read;
 
@@ -118,12 +118,16 @@ impl PackSession {
     }
 
     fn open(&mut self, nonce: &[u8], initiator: bool) -> bool {
-        if self.seed.is_none() || self.send.is_some() || nonce.len() != NONCE_SIZE {
+        if self.send.is_some() || nonce.len() != NONCE_SIZE {
             return false;
         }
-        let mut seed = self.seed.take().unwrap();
-        let (send, recv) = split_keys(&seed, nonce, initiator);
-        seed.fill(0);
+        // The seed is wiped where it lives before the slot is emptied: `take` would leave its bytes there.
+        let Some(seed) = self.seed.as_mut() else {
+            return false;
+        };
+        let (send, recv) = split_keys(seed, nonce, initiator);
+        wipe(seed);
+        self.seed = None;
         self.send = Some(send);
         self.recv = Some(recv);
         true

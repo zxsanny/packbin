@@ -51,7 +51,7 @@ mod window;
 
 use super::error::{Error, Fault};
 use super::session::Session;
-use crate::session_core::{hkdf, hmac::Pads};
+use crate::session_core::{hkdf, hmac::Pads, wipe::wipe};
 
 pub use mac::MacKey;
 pub use window::{Freshness, ReplayWindow};
@@ -186,18 +186,12 @@ impl DirKeys {
         let mut mac = [0u8; 32];
         hkdf::derive(key, &salt, &[d, b'm', b'a', b'c'], &mut mac);
         self.pads = Pads::new(&mac);
-        for byte in mac.iter_mut() {
-            *byte = 0;
-        }
-        core::hint::black_box(&mut mac);
+        wipe(&mut mac);
     }
 
     fn wipe(&mut self) {
-        for byte in self.enc.iter_mut() {
-            *byte = 0;
-        }
+        wipe(&mut self.enc);
         self.pads.wipe();
-        core::hint::black_box(&mut *self);
     }
 }
 
@@ -236,13 +230,12 @@ impl SlotKeys {
 }
 
 impl SlotKeys {
-    /// Overwrites the keys and pad states in place (best effort: the compiler is asked to keep the writes).
+    /// Overwrites the keys and pad states in place through the volatile wipe.
     fn wipe(&mut self) {
         self.epoch = 0;
         for keys in self.dirs.iter_mut() {
             keys.wipe();
         }
-        core::hint::black_box(&mut self.dirs);
     }
 }
 
