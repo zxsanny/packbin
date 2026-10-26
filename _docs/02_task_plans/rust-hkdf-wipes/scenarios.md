@@ -19,9 +19,15 @@ Source: `new-task` Step 4.7 (3 points: up to 8 rows). Fit analysis found no coll
 | 2 | Rust app | loads a frame session, then rotates to a new epoch | repeat | each key slot fill derives as at HEAD and clears its temporaries every time | confirmed | AC-2, AC-4, AC-7 |
 | 3 | Rust app | asks `derive` for more than 255 blocks, or the output slice ends early | partial failure | the early return clears `prk` and `previous` as the normal end does | confirmed | AC-2.2 |
 | 4 | Rust app | `MacKey::derive` with an epoch above 0xFFFFFF or a bad label | invalid input | `BadValue` before any key is derived; nothing to clear | confirmed | inherited (loop 69) |
-| 5 | Rust app | HMAC with a key longer than 64 bytes (hashed key path) | boundary | `block` cleared as for a short key; the hash result moved into the block is a by-value copy (L73-1) | confirmed | AC-2.1, AC-4.2 |
+| 5 | Rust app | HMAC with a key longer than 64 bytes (hashed key path) | boundary | `block` cleared as for a short key; the hashed key and its hasher cleared too (batch 01, D4) | confirmed | AC-2.1, AC-4.2 |
 | 6 | Two threads, std | each runs its own `PackSession` | concurrent | no shared state; each call clears its own stack | confirmed | AC-7 |
 | 7 | Rust app | drops a heap-free `Session`, a frame session or a `MacKey` | existing data | seed, keys and pads cleared through the helper | confirmed | AC-4.1 |
 | 8 | Firmware build | `session` or `frame` embedded set | existing-feature overlap | links with no heap and no panic path; figures within AC-5.2 | confirmed | AC-5 |
 
 No `unknown` row. No problem card.
+
+## Assessment rows
+
+| # | Actor | Trigger | State | Proposed behavior | Status | AC |
+|---|-------|---------|-------|-------------------|--------|----|
+| D6 | Rust app | seals, opens or tags a frame | per message | the 32-byte HMAC output is not wiped (not key material; the same bytes stay in the hasher) | out-of-scope (owner, 2026-10-26, clarify round 1: leave them), source assess-round-1 | — |

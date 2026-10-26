@@ -14,6 +14,7 @@ Inherited and unchanged: the frame-mode criteria of loop 69 (Rust frame mode, AZ
 - **AC-2.1**: before every return of `hmac_sha256` (`session_core/hkdf.rs`), `block` (64 B), `digest` (32 B) and the `state` (8 words) and `block` (64 B) of both SHA-256 hashers are overwritten through the helper.
 - **AC-2.2**: before every return of `derive`, `prk` (32 B) and `previous` (32 B) are overwritten through the helper: the normal end and both early returns (counter past 255 blocks, `get_mut` miss).
 - **AC-2.3**: RFC 5869 case 1 (`rfc5869_case_1`) and the HKDF and HMAC rows of `fixtures/crypto/vectors.txt` pass with output byte for byte as at HEAD.
+- **AC-2.4** (owner, 2026-10-26, after the security review): `compress` (`session_core/sha256.rs`) overwrites its 16-word schedule window through the helper before it returns, on every path (key load, HKDF, every MAC).
 
 ## AC-3 Stream pad temporaries
 
@@ -24,7 +25,7 @@ Inherited and unchanged: the frame-mode criteria of loop 69 (Rust frame mode, AZ
 ## AC-4 Existing wipes move to the helper
 
 - **AC-4.1**: these 9 wipes call the helper and nothing else clears them: `Pads::new` `ipad` and `opad`, `Pads::wipe` (`session_core/hmac.rs`); `split_keys` `both` (`session_core/mod.rs`); `PackSession::open` `seed` (`session/mod.rs`); `wipe` (`nostd/session.rs`); `fill` `mac`, the key slot `wipe` and `SlotKeys::wipe` (`nostd/frame/mod.rs`); `MacKey::derive` `derived` (`nostd/frame/mac.rs`).
-- **AC-4.2**: the task record holds a code-read list of every Rust temporary that held key bytes, key-derived words, a pad block or keystream, each with its wipe line or the reason it has none (by-value moves, L73-1; the `compress` schedule, owner decision).
+- **AC-4.2**: the task record holds a code-read list of every Rust temporary that held key bytes, key-derived words, a pad block or keystream, each with its wipe line or the reason it has none (by-value moves and compiler spills, L73-1).
 
 ## AC-5 Embedded figures
 
@@ -36,6 +37,7 @@ Inherited and unchanged: the frame-mode criteria of loop 69 (Rust frame mode, AZ
 
 - **AC-6.1**: `pad::xor` over 1 MiB in a release build takes at most 1.15 times as long as the same build of a HEAD copy, on this Mac, the smallest of 3 runs each, both run in the same session. The figures go in the task record.
 - **AC-6.2**: every existing Rust load-aware timing check passes (`timing_support.rs` helpers, no new fixed bound).
+- **AC-6.3**: `MacKey::tag` of a 36-byte message in a release build takes at most 1.10 times as long as the claim commit, same method as AC-6.1.
 
 ## AC-7 Bytes unchanged
 
@@ -44,8 +46,8 @@ Inherited and unchanged: the frame-mode criteria of loop 69 (Rust frame mode, AZ
 
 ## AC-8 Docs
 
-- **AC-8.1**: the Rust package description (`_docs/02_document/components/04_rust_package/description.md`) names the wipe helper, what it guarantees (the writes are not removed by the compiler) and what it does not (copies left by moves, L73-1; the SHA-256 round schedule). The contract `pack-session.md` keeps "best effort".
+- **AC-8.1**: the Rust package description (`_docs/02_document/components/04_rust_package/description.md`) names the wipe helper, what it guarantees (the writes are not removed by the compiler) and what it does not (copies left by moves and spills, L73-1). The contract `pack-session.md` keeps "best effort".
 
 ## Out of scope
 
-A `Drop` wipe for the std `PackSession` keys (the managed stream sessions have none either); the `zeroize` crate; wiping the SHA-256 round schedule; a replay window per key slot (F69-2); frame mode with `std`; frame mode in Python, TypeScript, Go and C++; a cross-language frame ring; any change to C#, Java or Swift.
+A `Drop` wipe for the std `PackSession` keys (the managed stream sessions have none either); the `zeroize` crate; the full HMAC outputs (owner, D6); a replay window per key slot (F69-2); frame mode with `std`; frame mode in Python, TypeScript, Go and C++; a cross-language frame ring; any change to C#, Java or Swift.

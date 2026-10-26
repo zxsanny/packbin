@@ -1,7 +1,7 @@
 //! The one wipe of key material in the crate (AZ-3275): a volatile write per element, which the compiler
 //! may not remove as a dead store, then a compiler fence, so the writes are not moved after the code that
 //! follows. It does not reach copies the compiler made by moving a value or returning it by value (L73-1),
-//! and the SHA-256 round schedule is not wiped (owner, 2026-10-26).
+//! nor values the compiler keeps in registers or spills (the SHA-256 working words).
 use core::sync::atomic::{compiler_fence, Ordering};
 
 /// Overwrites every element of `items` with zero (`T::default()`).

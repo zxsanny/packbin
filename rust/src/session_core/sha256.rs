@@ -75,6 +75,9 @@ fn compress(state: &mut [u32; 8], block: &[u8; 64]) {
     for (slot, v) in state.iter_mut().zip([a, b, c, d, e, f, g, h]) {
         *slot = slot.wrapping_add(v);
     }
+    // The last 16 schedule words give back the whole block when the recurrence is run backwards, and at key load
+    // the block is the key XOR a pad (security review, loop 73).
+    super::wipe::wipe(&mut w);
 }
 
 const INITIAL: [u32; 8] = [
@@ -125,7 +128,8 @@ impl Sha256 {
         }
     }
 
-    /// The digest. The hasher keeps its padded state, so a caller that hashed key bytes can wipe it where it lives.
+    /// The digest. Call it once per hasher: it keeps its padded state, so a second call or a later `update` gives a
+    /// wrong digest. A caller that hashed key bytes wipes the hasher where it lives.
     pub fn finish(&mut self) -> [u8; 32] {
         let bit_len = self.total.wrapping_mul(8);
         self.update_padding(0x80);

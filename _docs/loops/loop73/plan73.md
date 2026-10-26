@@ -42,3 +42,10 @@ One batch, parent alone: helper, HKDF and SHA-256, pad, the existing wipes, embe
 
 ### Risks
 Divergence from the spec, recorded as Discovered 1 to 7: two more plain-loop wipes moved; `Option::take` left the seed in the session, now wiped in place; the full HMAC outputs left unwiped (not key material; owner candidate).
+
+## Assessment rounds
+
+| round | verdict | new specs | report |
+|-------|---------|-----------|--------|
+| 1 | CLARIFY | none (D6 answered: out of scope) | _docs/loops/loop73/assessment73.md |
+| 2 | COMPLETE | — | _docs/loops/loop73/assessment73.md |

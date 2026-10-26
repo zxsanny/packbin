@@ -26,7 +26,7 @@ meshbell's Rust side and the nRF54L15 firmware run this code through the std `Pa
 ## Outcome
 
 - One wipe helper (owner, 2026-10-26): each element overwritten through `core::ptr::write_volatile`, then `core::sync::atomic::compiler_fence`; one documented `unsafe` block; `frame` keeps `#![forbid(unsafe_code)]`.
-- The HKDF and pad temporaries are cleared before every return, and the 9 existing wipes call the helper.
+- The HKDF and pad temporaries are cleared before every return, the SHA-256 schedule window at the end of every compression (owner, after the security review), and the 9 existing wipes call the helper.
 - Wire bytes, the vectors and the embedded golden packet are unchanged; the embedded `session` and `frame` figures stay within the bounds below and the M33F pins are re-set.
 
 ## Scope
@@ -37,7 +37,8 @@ meshbell's Rust side and the nRF54L15 firmware run this code through the std `Pa
 - `rust/embedded/limits-m33f.txt` (re-pin `session` and `frame`), `_docs/AGENT_GOTCHAS.md` (what the bytes bought), `_docs/02_document/components/04_rust_package/description.md`, `_docs/02_document/module-layout.md` (the new `wipe.rs`).
 
 ### Excluded
-- A `Drop` wipe for the std `PackSession` keys (the managed stream sessions have none either); the `zeroize` crate; wiping the SHA-256 round schedule `w` and the `compress` working words (owner decision); the constant-time compare in `nostd/frame/mod.rs`; C#, Java, Swift, Python, TypeScript, Go, C++; `fixtures/`; the contract text ("best effort" stays).
+- A `Drop` wipe for the std `PackSession` keys (the managed stream sessions have none either); the `zeroize` crate; the `compress` working words (registers or spills, L73-1); the constant-time compare in `nostd/frame/mod.rs`; C#, Java, Swift, Python, TypeScript, Go, C++; `fixtures/`; the contract text ("best effort" stays).
+- The full 32-byte HMAC outputs of frame seal, open and `MacKey` (owner, 2026-10-26, assessment round 1, D6: leave them; not key material).
 
 ## Acceptance Criteria
 
@@ -51,7 +52,7 @@ Then `session_core` has exactly 1 wipe function with exactly 1 `unsafe` block (w
 **AC-2: HKDF temporaries cleared**
 Given `hmac_sha256` and `derive` in `session_core/hkdf.rs`
 When either returns (in `derive`: the normal end and both early returns)
-Then `block` (64 B), `digest` (32 B), the `state` and `block` of both hashers, `prk` (32 B) and `previous` (32 B) have been overwritten through the helper, and RFC 5869 case 1 and the HKDF and HMAC rows of `fixtures/crypto/vectors.txt` give the same bytes as at HEAD.
+Then `block` (64 B), `digest` (32 B), the `state` and `block` of both hashers, `prk` (32 B), `previous` (32 B) and, in every `compress`, the 16-word schedule window have been overwritten through the helper, and RFC 5869 case 1 and the HKDF and HMAC rows of `fixtures/crypto/vectors.txt` give the same bytes as at HEAD.
 
 **AC-3: Stream pad temporaries cleared**
 Given `session_core/pad.rs`
@@ -61,7 +62,7 @@ Then `state` and `work` (16 words each) and the 64-byte keystream `pad` have bee
 **AC-4: Existing wipes moved**
 Given the 9 wipes `Pads::new` `ipad` and `opad`, `Pads::wipe`, `split_keys` `both`, `PackSession::open` `seed`, `nostd::session` `wipe`, frame `fill` `mac`, the key slot `wipe`, `SlotKeys::wipe` and `MacKey::derive` `derived`
 When the code is read
-Then each calls the helper and nothing else clears them, and the batch report holds a code-read list of every Rust temporary that held key bytes, key-derived words, a pad block or keystream, each with its wipe line or the reason it has none (by-value moves, L73-1; the `compress` schedule, owner decision).
+Then each calls the helper and nothing else clears them, and the batch report holds a code-read list of every Rust temporary that held key bytes, key-derived words, a pad block or keystream, each with its wipe line or the reason it has none (by-value moves and compiler spills, L73-1).
 
 **AC-5: Embedded figures**
 Given `docker compose -f docker-compose.test.yml run --rm rust-embedded` (libraries from `rust/embedded/run.sh libs`, Rust 1.98)
@@ -81,7 +82,7 @@ Then every test passes, and the embedded golden packet decodes on both rows (`GO
 **AC-8: Docs**
 Given the Rust package description
 When it is read
-Then it names the wipe helper, what it guarantees (the writes are not removed by the compiler) and what it does not (copies left by moves and by-value returns, L73-1; the SHA-256 round schedule); `module-layout.md` lists `session_core/wipe.rs`; `pack-session.md` keeps "best effort".
+Then it names the wipe helper, what it guarantees (the writes are not removed by the compiler) and what it does not (copies left by moves, by-value returns and spills, L73-1); `module-layout.md` lists `session_core/wipe.rs`; `pack-session.md` keeps "best effort".
 
 ## Non-Functional Requirements
 
@@ -113,7 +114,7 @@ Then it names the wipe helper, what it guarantees (the writes are not removed by
 
 ## Constraints
 
-- Owner decision (2026-10-26): one volatile helper for every Rust wipe; no `zeroize`; the SHA-256 round schedule is not wiped.
+- Owner decisions (2026-10-26): one volatile helper for every Rust wipe; no `zeroize`; the SHA-256 schedule window is wiped at the end of every compression (after the security review; the first answer, leave it, is replaced); the full HMAC outputs are left (D6).
 - `rust/src/nostd` and `session_core` never call `split_at_mut`, `rotate_left`, `copy_within`, `reverse`, `copy_from_slice` or any `chunks*` (`_docs/AGENT_GOTCHAS.md`).
 - `rustfmt` on single files only; restore `rust/src/walk/text_tables.rs` after it.
 - Embedded figures are read from a run on this tree in this loop, never estimated.
@@ -134,8 +135,9 @@ Then it names the wipe helper, what it guarantees (the writes are not removed by
 |---------|----------------|--------|----------|
 | `black_box` is a hint; wipes need a write the compiler keeps | owner, 2026-10-26: one volatile helper | resolved | Medium |
 | One `unsafe` block in a crate whose `frame` module forbids `unsafe` | owner, 2026-10-26: the helper lives in `session_core` | resolved | Low |
-| The SHA-256 round schedule and `compress` working words are not wiped | owner, 2026-10-26: left, documented | resolved | Low |
+| The SHA-256 schedule window equals the last block hashed | owner, 2026-10-26, after the security review: wiped at the end of every compression | resolved | Low |
 | Moves and by-value returns can leave copies no code can reach (L73-1) | the contract keeps "best effort" | open | Low |
 | Three clears per ChaCha20 block slow the pad; no Rust timing check covers it | AC-6 | open | Low |
 | M4F frame set has 316 B of flash under its owner bound | AC-5 stop condition | open | Low |
 | The std `PackSession` keeps its keys until the memory is reused (no `Drop`) | out of scope, candidate | open | Low |
+| Full HMAC outputs not wiped in Rust, while Java wipes its copies (D6) | owner, 2026-10-26: leave them, not key material | resolved | Low |

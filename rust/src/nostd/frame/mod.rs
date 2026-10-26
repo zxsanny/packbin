@@ -218,7 +218,7 @@ impl SlotKeys {
                 if directions.contains(direction) {
                     keys.fill(key, epoch, direction);
                 } else {
-                    *keys = DirKeys::empty();
+                    keys.wipe();
                 }
             }
         }

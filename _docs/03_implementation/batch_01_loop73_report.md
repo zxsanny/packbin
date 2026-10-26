@@ -123,6 +123,10 @@ CI-parity: PASS — `docker compose -f docker-compose.test.yml run --rm rust` (t
 | 6 | full 32-byte HMAC outputs (`mac.rs` `tag` / `verify`, `seal.rs`) are not wiped; Java wipes its `full` arrays since loop 72 (AC-2.2 there) | none | left: not key material, and the same bytes stay in the outer hasher; wiping the hasher too costs every frame MAC | unclear (owner: a candidate for parity with Java) |
 | 7 | the `.unwrap()` on the seed in the std `PackSession::open` | none | replaced by `let … else` on the lines this change rewrote | clear |
 
+## Completeness (implement Step 15)
+
+AZ-3275: PASS. Description, Outcome and Scope.Included match the diff of a1c456a; Excluded items are untouched (no C#, Java, Swift, `fixtures/`, contract text, std `PackSession` `Drop`). No `placeholder`, `stub`, `TODO`, `fake`, `mock` or `unwrap(` added. Pipeline: single component; the helper is called from every production wipe site (code-read list), not from tests only.
+
 ## Commit
 
 `[AZ-3275] Wipe Rust key material through one volatile helper`. Body: one line + `Loop: 73`.
