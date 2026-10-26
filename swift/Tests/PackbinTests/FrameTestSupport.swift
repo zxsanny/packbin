@@ -1,5 +1,5 @@
 import Foundation
-@_spi(Vectors) import Packbin
+import Packbin
 import Testing
 
 /// A sealed message of the worked examples E1 to E3 of the contract, from the rows of `fixtures/frame/vectors.txt`.

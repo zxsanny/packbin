@@ -1,4 +1,4 @@
-@_spi(Vectors) import Packbin
+import Packbin
 
 /// One row of `fixtures/frame/vectors.txt` or `fixtures/crypto/vectors.txt`: the `name=value` fields, in file order
 /// of the names that matter here. The frame rows start with `op=`, the primitive rows with the primitive and its

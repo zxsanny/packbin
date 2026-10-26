@@ -44,7 +44,9 @@ final class SessionPad {
             mac.update(block);
             mac.update(info);
             mac.update((byte) counter);
-            block = mac.doFinal();
+            byte[] next = mac.doFinal();
+            Arrays.fill(block, (byte) 0);
+            block = next;
             int n = Math.min(block.length, length - offset);
             System.arraycopy(block, 0, out, offset, n);
             offset += n;
@@ -123,6 +125,9 @@ final class SessionPad {
         for (int i = 0; i < 16; i++) {
             writeU32Le(output, i * 4, work[i] + state[i]);
         }
+        // state holds the key words and work the mixed words the pad is added from: zero both.
+        Arrays.fill(state, 0);
+        Arrays.fill(work, 0);
     }
 
     private static void quarter(int[] w, int a, int b, int c, int d) {

@@ -1,5 +1,5 @@
 import Foundation
-@_spi(Vectors) import Packbin
+import Packbin
 import Testing
 
 /// What a probe saw when an object was released.

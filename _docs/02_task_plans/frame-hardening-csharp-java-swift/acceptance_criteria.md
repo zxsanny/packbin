@@ -2,11 +2,13 @@
 
 Inherited and unchanged: the frame-mode criteria of loop 71 (`../frame-mode-csharp-java-swift/acceptance_criteria.md`), which this loop must keep green. The criteria below are new.
 
-## AC-1 No key or counter hook in a shipped build (review item 5)
+## AC-1 Test hooks only through the language's official own-tests visibility (review item 5)
 
-- **AC-1.1 Swift**: `FrameSession.derivedKeys(for:previous:)` and `MacKey.storedKey` are not `public`. A consumer target that imports `Packbin` without `@testable` and calls either one fails to compile. The Swift frame tests still read both.
-- **AC-1.2 C#**: the `Packbin.dll` built by `dotnet pack -c Release` exposes no member outside the assembly that returns a stored key array, a derived key array or the MAC count. That covers `FrameSession.KeyArrays`, `CurrentKeys` and `MacComputations` and `MacKey.KeyArray`, reached either directly or through an `InternalsVisibleTo` grant that a consumer could satisfy by naming its assembly `Packbin.Tests`. The C# frame tests still read them, and the `ac10` Release test build still compiles.
-- **AC-1.3 Java**: no class outside the shipped jar can call `encKeyForTest`, `macKeyForTest`, `macComputationsForTest` or `MacKey.keyForTest`. A class compiled as `package packbin;` in a second jar on the classpath fails to call them, either because the package is sealed or because the hooks are not in the jar. The Java frame tests still read the keys.
+Owner decision B (2026-10-26). The tests need hooks to prove what the public API cannot show: keys zeroed after close, no HMAC before the replay check, derived keys and primitives equal to the vectors. Each package exposes them only through its language's official visibility for its own tests. No access level is a security boundary against code in the same process; this is API hygiene.
+
+- **AC-1.1 Swift**: no `@_spi` is left in `swift/Sources`. `derivedKeys(for:previous:)`, `storedKey`, `FrameProbe`, `FramePrimitives`, `ChaCha20`, `load(…probe:)` and `derive(…probe:)` are `package`. The tests use a plain `import Packbin`, with no `@testable`. The strict release test build (`swift build -c release --build-tests -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete`) passes without `-enable-testing`. A probe file outside the package that imports `Packbin` (with or without `@_spi(Vectors)`) and calls a hook fails to compile.
+- **AC-1.2 C#**: the hooks stay `internal`, reached by the tests through `InternalsVisibleTo("Packbin.Tests")` as at loop 71; none is `public`.
+- **AC-1.3 Java**: the hooks stay package-private; none is `public` or `protected`. The MAC count readers read the per-instance counters (AC-3).
 
 ## AC-2 Pad and HMAC temporaries are wiped (review item 6)
 
@@ -28,7 +30,7 @@ Inherited and unchanged: the frame-mode criteria of loop 71 (`../frame-mode-csha
 
 ## AC-5 C# `Seal` with overlapping buffers (review item 10)
 
-- **AC-5.1**: `Seal` gives the same `output` bytes as with separate buffers in three cases: `plain` is `output[clear.Length ..]`, which is the in-place layout; `plain` starts at `output[0]`; and `clear` is `output[0 .. clear.Length]` with `plain` following it. In each case, check against frame vector row E1 of `fixtures/frame/vectors.txt`, or against any row with clear and plain bytes.
+- **AC-5.1**: `Seal` gives the same `output` bytes as with separate buffers in four cases: `plain` is `output[clear.Length ..]`, which is the in-place layout; `plain` starts at `output[0]`; `clear` is `output[0 .. clear.Length]` with `plain` following it; and `ad` lies inside `output`. In each case, check against frame vector row `E1.seal` of `fixtures/frame/vectors.txt`.
 - **AC-5.2**: `Open` keeps its loop 71 behaviour (body copied once). An `Open` whose `plain` output overlaps `body` returns the plaintext of the vector row.
 
 ## AC-6 Bytes unchanged

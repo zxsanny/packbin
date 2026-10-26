@@ -2,6 +2,7 @@ package packbin;
 
 import javax.crypto.Mac;
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * The MAC-only call of frame mode (contract {@code pack-session.md} 2.0.0): a tag without encryption, for a per-hop
@@ -19,6 +20,8 @@ public final class MacKey implements AutoCloseable {
     private final int epoch;
     private final byte[] key;
     private volatile boolean closed;
+    /** The MAC computations this key started. */
+    private final AtomicLong macComputations = new AtomicLong();
 
     private MacKey(int epoch, byte[] key) {
         this.epoch = epoch;
@@ -51,6 +54,7 @@ public final class MacKey implements AutoCloseable {
         }
         byte[] full = full(parts);
         System.arraycopy(full, 0, out, 0, out.length);
+        Arrays.fill(full, (byte) 0);
         return null;
     }
 
@@ -60,7 +64,9 @@ public final class MacKey implements AutoCloseable {
             return false;
         }
         byte[] full = full(parts);
-        return FrameCrypto.constantTimeEquals(full, 0, tag, 0, tag.length);
+        boolean equal = FrameCrypto.constantTimeEquals(full, 0, tag, 0, tag.length);
+        Arrays.fill(full, (byte) 0);
+        return equal;
     }
 
     /** Overwrites the key (best effort, see the class note). Closing twice is harmless. */
@@ -70,7 +76,9 @@ public final class MacKey implements AutoCloseable {
         Arrays.fill(key, (byte) 0);
     }
 
+    /** The full 32-byte HMAC; the caller zeroes it once the tag is copied or compared. */
     private byte[] full(byte[][] parts) {
+        macComputations.incrementAndGet();
         Mac mac = FrameCrypto.mac(key);
         if (parts != null) {
             for (byte[] part : parts) {
@@ -87,6 +95,11 @@ public final class MacKey implements AutoCloseable {
     /** Test access: the live key array, to see the wipe. */
     byte[] keyForTest() {
         return key;
+    }
+
+    /** Test-only: the number of HMAC computations this key started so far. */
+    long macComputationsForTest() {
+        return macComputations.get();
     }
 
     @Override

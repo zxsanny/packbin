@@ -10,12 +10,12 @@ Scope: AZ-3232, AZ-3233, AZ-3234 (commits `d99414e`, `a41caf5`). Reviewer: an in
 | 2 | Low | C#, Java | the body was hashed and then read again to decrypt (check-then-use on a buffer that can change) | **Fixed**: one copy of at most 255 bytes, tag and decrypt use the copy (Swift: immutable array, immune) |
 | 3 | Low | C#, Java | constant-time compare best effort (`NoOptimization`; a plain loop) | **Fixed**: `CryptographicOperations.FixedTimeEquals` on net10.0 (fold kept for netstandard2.0), `MessageDigest.isEqual` in Java; Swift unchanged (`@inline(never) @_optimize(none)`) |
 | 4 | Info | all | docs overstated: "checked in constant time", "wiped on release" (only Swift wipes at deinit), "open is thread-safe" | **Fixed** in README, Java example comment, API docs, component descriptions |
-| 5 | Low | C#, Java, Swift | test hooks (`derivedKeys`, `storedKey`, `*ForTest`, `InternalsVisibleTo`) ship in release builds | carried (handoff) |
-| 6 | Low | C#, Java | `SessionPad.Block` leaves `state`/`work` unwiped; Java `full` HMAC array not wiped; Swift pad zeroed by a loop the optimizer may drop | carried: shared stream code, outside this loop |
-| 7 | Low | Java, C# | a MAC counter on the production path (Java static `AtomicLong`) | carried |
-| 8 | Info | C# | `Load` returns null for an empty direction set; Java, Swift and Rust build a session whose every call is `BadValue` | carried |
+| 5 | Low | C#, Java, Swift | test hooks (`derivedKeys`, `storedKey`, `*ForTest`, `InternalsVisibleTo`) ship in release builds | **Loop 72, owner decision B**: C# `internal` and Java package-private accepted as each language's official own-tests visibility (API hygiene, not a boundary); Swift `@_spi(Vectors) public` replaced by `package` (AZ-3256) |
+| 6 | Low | C#, Java | `SessionPad.Block` leaves `state`/`work` unwiped; Java `full` HMAC array not wiped; Swift pad zeroed by a loop the optimizer may drop | **Fixed in loop 72**: `state`, `work` and the pad block wiped in C# and Java, Java `full` arrays and tag-compare copies, Java HKDF T(i), Swift pad and stream keys through `FrameCrypto.wipe`, Swift full HMACs (AZ-3254, AZ-3255, AZ-3256) |
+| 7 | Low | Java, C# | a MAC counter on the production path (Java static `AtomicLong`) | **Fixed in loop 72**: per-instance counters in Java `FrameSession` and `MacKey`, no static mutable state (AZ-3255); C# already counted per instance |
+| 8 | Info | C# | `Load` returns null for an empty direction set; Java, Swift and Rust build a session whose every call is `BadValue` | **Fixed in loop 72**: C# builds that session too (AZ-3254) |
 | 9 | Low (contract) | all | a forged high counter on a captured valid frame moves the window top (permanent `TooOld`); the counter must come from authenticated bytes | by contract; stated in every API doc |
-| 10 | Low | C# | `Seal` with `plain` or `clear` overlapping `output` corrupts the message (authenticated, leaks nothing) | carried |
+| 10 | Low | C# | `Seal` with `plain` or `clear` overlapping `output` corrupts the message (authenticated, leaks nothing) | **Fixed in loop 72**: the body is built in a stack buffer and copied last, so `ad`, `clear` and `plain` may overlap `output` (AZ-3254) |
 
 ## Verified correct (reviewer, per check)
 

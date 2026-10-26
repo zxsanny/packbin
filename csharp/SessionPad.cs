@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 
 namespace Packbin;
@@ -25,6 +26,7 @@ internal static class SessionPad
             offset += n;
             counter++;
         }
+        Compat.Zero(block);
     }
 
     private static void Block(ReadOnlySpan<byte> key, ReadOnlySpan<byte> nonce, uint counter, Span<byte> output)
@@ -63,6 +65,9 @@ internal static class SessionPad
             }
             BinaryPrimitives.WriteUInt32LittleEndian(output.Slice(i * 4), work[i]);
         }
+        // The key words and the pad words (best effort, as every wipe on a managed runtime).
+        Compat.Zero(MemoryMarshal.AsBytes(state));
+        Compat.Zero(MemoryMarshal.AsBytes(work));
     }
 
     private static void Quarter(Span<uint> w, int a, int b, int c, int d)

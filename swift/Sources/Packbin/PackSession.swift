@@ -216,15 +216,13 @@ public final class PackSession {
         try ChaCha20.xor(&data, key: key, nonce: nonce, counter: 0)
     }
 
-    /// Zeroes the bytes in place. Swift gives no guarantee that a dead store survives the optimizer
-    /// or that no copy was made earlier. The session holds each secret in one buffer of its own and
+    /// Zeroes the bytes in place through `FrameCrypto.wipe`, a call the optimizer keeps. Swift gives no
+    /// guarantee that no copy was made earlier. The session holds each secret in one buffer of its own and
     /// wipes it when it is done: the seed when the session opens, the derived 64-byte block once it is
     /// split into the two keys, and the keys in `deinit`. CryptoKit zeroes its own key storage, and
     /// ChaCha20 zeroes its key words and its pad after each call.
     private static func wipe(_ bytes: inout [UInt8]) {
-        for i in bytes.indices {
-            bytes[i] = 0
-        }
+        FrameCrypto.wipe(&bytes)
     }
 
     private static func sessionError(_ reason: String) -> PackbinError {

@@ -1,5 +1,5 @@
 import Foundation
-@_spi(Vectors) import Packbin
+import Packbin
 import Testing
 
 /// The rows of `fixtures/crypto/vectors.txt` the primitives do not match, each as `<primitive> <source>: <what>`;

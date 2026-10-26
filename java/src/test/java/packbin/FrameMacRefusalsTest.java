@@ -2,7 +2,7 @@ package packbin;
 
 import java.util.Arrays;
 
-/** AZ-3233 AC-7 (MAC-only), AC-8 (every refusal kind) and AC-9 (tag compare). */
+/** AZ-3233 AC-7 (MAC-only), AC-8 (every refusal kind) and AC-9 (tag compare); AZ-3255 AC-3 (per-key MAC count). */
 public final class FrameMacRefusalsTest {
     private static final byte[] NET = {'n', 'e', 't'};
 
@@ -16,6 +16,7 @@ public final class FrameMacRefusalsTest {
     static void run() {
         macOnlyTagsDoNotDependOnTheSplit();
         macOnlyRefusals();
+        eachMacKeyCountsOnlyItsOwnMacs();
         loadRefusals();
         sealRefusalsWriteNothing();
         openRefusals();
@@ -86,6 +87,23 @@ public final class FrameMacRefusalsTest {
             for (int n : new int[] {4, 8, 16, 32}) {
                 PackbinTest.expectTrue("n = " + n + " is accepted", mac.tag(new byte[n], new byte[3]) == null);
             }
+        }
+    }
+
+    private static void eachMacKeyCountsOnlyItsOwnMacs() {
+        // Arrange
+        try (MacKey a = MacKey.derive(key(0x22), 7, NET); MacKey b = MacKey.derive(key(0x22), 7, NET)) {
+            byte[] tag = new byte[4];
+            long bBefore = b.macComputationsForTest();
+
+            // Act
+            a.tag(tag, NET);
+            a.verify(tag, NET);
+            a.tag(new byte[5], NET);
+
+            // Assert
+            PackbinTest.expectEq("A counts its tag and verify, not the refused length", 2L, a.macComputationsForTest());
+            PackbinTest.expectEq("B's count does not move while A computes", 0L, b.macComputationsForTest() - bBefore);
         }
     }
 

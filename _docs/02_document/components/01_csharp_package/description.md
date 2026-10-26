@@ -75,7 +75,7 @@ Optional parity bytes per scheme: `n` from 0 to 32, default 0, which keeps the b
 
 | Name | Meaning |
 |------|---------|
-| `FrameSession.Load(key, epoch, FrameConfig)` | a session, or `null` for a key not 32 bytes, an epoch above 0xFFFFFF, a tag length other than 4, 8, 16 or no direction; `SetPrevious(key, epoch)` and `ClearPrevious()` manage the previous slot (not safe beside a concurrent `Open`) |
+| `FrameSession.Load(key, epoch, FrameConfig)` | a session, or `null` for a key not 32 bytes, an epoch above 0xFFFFFF, a tag length other than 4, 8, 16 or a direction bit outside `All`; with no direction it is a session whose every `Seal` and `Open` is `BadValue` (as Rust, Java and Swift, loop 72); `SetPrevious(key, epoch)` and `ClearPrevious()` manage the previous slot (not safe beside a concurrent `Open`) |
 | `Seal(direction, MsgContext, ad, clear, plain, output, out written)` | `null` on success, else `BadValue`, `TooLong` or `BufferFull`; writes nothing on a refusal; safe from many threads |
 | `Open(direction, MsgContext, ad, body, clearLength, plain, out FrameOpened, ReplayWindow?, counter)` | `null` on success (slot `Current` or `Previous`), else `BadValue`, `TooLong`, `BufferFull`, `ShortPacket`, `TagMismatch`, `Duplicate` or `TooOld` |
 | `ReplayWindow` | `Check(counter)` (`Fresh`, `Duplicate`, `TooOld`), `Commit(counter)`, `Top`, `Bits`; not thread safe |

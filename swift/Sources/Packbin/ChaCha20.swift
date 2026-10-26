@@ -1,16 +1,17 @@
 /// ChaCha20 (RFC 8439 §2.3 and §2.4), written in the package (owner decision S-2): CryptoKit has no
-/// raw ChaCha20 stream. It is the pad of `PackSession` and is not public API; the `Vectors` SPI lets
-/// the tests check it against the RFC, in a release build too, where `@testable` does not work.
+/// raw ChaCha20 stream. It is the pad of `PackSession` and `FrameSession`. Package access: the package's
+/// tests use it to check it against the RFC; apps cannot.
 ///
 /// Every 32-bit addition wraps (`&+`), as the RFC defines it, and every shift is a masking shift, so
 /// no input traps.
-@_spi(Vectors) public enum ChaCha20 {
-    public static let keySize = 32
-    public static let nonceSize = 12
-    public static let blockSize = 64
+@available(tvOS 14.0, watchOS 7.0, *)
+package enum ChaCha20 {
+    package static let keySize = 32
+    package static let nonceSize = 12
+    package static let blockSize = 64
 
     /// The 64-byte block for `key`, `nonce` and the block counter (RFC 8439 §2.3).
-    public static func block(key: [UInt8], nonce: [UInt8], counter: UInt32) throws -> [UInt8] {
+    package static func block(key: [UInt8], nonce: [UInt8], counter: UInt32) throws -> [UInt8] {
         var input = try Input(key, nonce)
         defer { input.wipe() }
         var out = [UInt8](repeating: 0, count: blockSize)
@@ -21,7 +22,7 @@
     /// XORs `data` with the key stream that starts at block `counter` (RFC 8439 §2.4). The block
     /// counter is 32 bits: data that would need a block after 2^32 - 1 is refused with a `.badValue`
     /// and left unchanged, never wrapped onto block 0.
-    public static func xor(_ data: inout [UInt8], key: [UInt8], nonce: [UInt8], counter: UInt32) throws {
+    package static func xor(_ data: inout [UInt8], key: [UInt8], nonce: [UInt8], counter: UInt32) throws {
         var input = try Input(key, nonce)
         defer { input.wipe() }
         let blocks = (UInt64(data.count) + UInt64(blockSize - 1)) / UInt64(blockSize)
@@ -42,9 +43,7 @@
             // Wraps only after the last block a run may use (checked above), and is not used again.
             block = block &+ 1
         }
-        for i in pad.indices {
-            pad[i] = 0
-        }
+        FrameCrypto.wipe(&pad)
     }
 
     /// The state of §2.3 but the constants and the counter: the 8 key words and the 3 nonce words.

@@ -105,9 +105,9 @@ public final class FrameSession: @unchecked Sendable, CustomStringConvertible {
         try FrameSession(key: key, epoch: epoch, config: config, probe: nil)
     }
 
-    /// `load(key:epoch:config:)` with the test hooks of ``FrameProbe``.
-    @_spi(Vectors)
-    public static func load(key: [UInt8], epoch: UInt32, config: FrameConfig, probe: FrameProbe) throws -> FrameSession {
+    /// `load(key:epoch:config:)` with the test hooks of `FrameProbe`. Package access: the package's tests use it;
+    /// apps cannot.
+    package static func load(key: [UInt8], epoch: UInt32, config: FrameConfig, probe: FrameProbe) throws -> FrameSession {
         try FrameSession(key: key, epoch: epoch, config: config, probe: probe)
     }
 
@@ -175,7 +175,7 @@ public final class FrameSession: @unchecked Sendable, CustomStringConvertible {
         let nonce = Self.nonce(context, direction, current.epoch)
         var ciphertext = plain
         try ChaCha20.xor(&ciphertext, key: current.enc[direction.index], nonce: nonce, counter: 0)
-        let tag = clear.withUnsafeBytes { c in
+        var tag = clear.withUnsafeBytes { c in
             ciphertext.withUnsafeBytes { e in
                 fullTag(current.mac[direction.index], nonce, ad, clear: c, cipher: e)
             }
@@ -183,6 +183,7 @@ public final class FrameSession: @unchecked Sendable, CustomStringConvertible {
         out.replaceSubrange(0..<clear.count, with: clear)
         out.replaceSubrange(clear.count..<(clear.count + ciphertext.count), with: ciphertext)
         out.replaceSubrange((bodyLength - tagLength)..<bodyLength, with: tag[0..<tagLength])
+        FrameCrypto.wipe(&tag)
         return bodyLength
     }
 
@@ -306,7 +307,8 @@ public final class FrameSession: @unchecked Sendable, CustomStringConvertible {
                             _ ad: [UInt8], _ clear: UnsafeRawBufferPointer, _ cipher: UnsafeRawBufferPointer,
                             _ received: UnsafeRawBufferPointer) -> Bool {
         let nonce = Self.nonce(context, direction, slot.epoch)
-        let expected = fullTag(slot.mac[direction.index], nonce, ad, clear: clear, cipher: cipher)
+        var expected = fullTag(slot.mac[direction.index], nonce, ad, clear: clear, cipher: cipher)
+        defer { FrameCrypto.wipe(&expected) }
         return expected.withUnsafeBytes { FrameCrypto.equal(UnsafeRawBufferPointer(rebasing: $0[..<tagLength]), received) }
     }
 
@@ -317,9 +319,9 @@ public final class FrameSession: @unchecked Sendable, CustomStringConvertible {
 
     /// The stored key bytes of `direction` (the HMAC key is the "pad state" of this implementation: CryptoKit
     /// keeps the pad states inside its HMAC object, which is built per call). All zero once the session is
-    /// closed. Nil for the previous slot when none is loaded.
-    @_spi(Vectors)
-    public func derivedKeys(for direction: FrameDirection, previous wantPrevious: Bool = false)
+    /// closed. Nil for the previous slot when none is loaded. Package access: the package's tests use it; apps
+    /// cannot.
+    package func derivedKeys(for direction: FrameDirection, previous wantPrevious: Bool = false)
         -> (enc: [UInt8], mac: [UInt8])? {
         guard let slot = wantPrevious ? previous : current else { return nil }
         return (slot.enc[direction.index], slot.mac[direction.index])

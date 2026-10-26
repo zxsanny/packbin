@@ -1,4 +1,4 @@
-@_spi(Vectors) import Packbin
+import Packbin
 import Testing
 
 /// AZ-3234 AC-5 and AC-6 (S2, S3, S5; AC-G2.2, AC-G2.3): the replay check runs before any MAC, a failed open never

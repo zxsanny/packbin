@@ -46,13 +46,15 @@ public sealed class FrameSession : IDisposable
     /// <summary>
     /// Derives the keys of each loaded direction from a 32-byte key and an epoch of at most 0xFFFFFF. Returns null (the
     /// contract's <see cref="BadValue"/>, as <see cref="PackSession.Load"/> returns null) for a key that is not 32 bytes, an
-    /// epoch above 0xFFFFFF, a tag length that is not 4, 8 or 16, or no direction.
+    /// epoch above 0xFFFFFF, a tag length that is not 4, 8 or 16, or a direction bit outside <see cref="FrameDirections.All"/>.
+    /// With <see cref="FrameDirections.None"/> it returns a session that refuses every <see cref="Seal"/> and
+    /// <see cref="Open"/> as <see cref="BadValue"/>.
     /// </summary>
     public static FrameSession? Load(ReadOnlySpan<byte> key, uint epoch, FrameConfig config)
     {
         var directions = config.Directions;
         if (key.Length != KeySize || epoch > FrameCrypto.MaxEpoch || (config.TagLength != 4 && config.TagLength != 8 && config.TagLength != 16)
-            || directions == FrameDirections.None || ((int)directions & ~(int)FrameDirections.All) != 0)
+            || ((int)directions & ~(int)FrameDirections.All) != 0)
             return null;
         return new FrameSession(config.TagLength, directions, FrameKeys.Derive(key, epoch, directions));
     }
@@ -87,7 +89,8 @@ public sealed class FrameSession : IDisposable
     /// used. Returns null on success. A direction not loaded, a <c>kind</c> above 15, a default <see cref="MsgContext"/> or a
     /// released session is <see cref="BadValue"/>; <paramref name="ad"/> above 255 bytes, or <c>clear + plain + tag</c> above 255,
     /// is <see cref="TooLong"/>; an <paramref name="output"/> shorter than the body is <see cref="BufferFull"/>. On any refusal
-    /// nothing is written, and on a failure after writing started the written bytes are zeroed.
+    /// nothing is written. The body is built apart and copied to <paramref name="output"/> last, so <paramref name="ad"/>,
+    /// <paramref name="clear"/> and <paramref name="plain"/> may overlap it (sealing in place gives the same bytes).
     /// <para>
     /// <b>For one (key, epoch, direction), never seal two different messages with the same <c>msg_id</c>.</b> Reuse breaks the
     /// confidentiality of both messages, and the library cannot check it (see <see cref="MsgContext"/>). A new epoch derives new
@@ -112,23 +115,17 @@ public sealed class FrameSession : IDisposable
         var keys = _current;
         Span<byte> nonce = stackalloc byte[12];
         WriteNonce(message, direction, keys.Epoch, nonce);
-        var done = false;
-        try
-        {
-            clear.CopyTo(output);
-            plain.CopyTo(output.Slice(clear.Length));
-            var cipher = output.Slice(clear.Length, plain.Length);
-            SessionPad.Xor(keys.Enc(direction), nonce, 0, cipher);
-            Span<byte> full = stackalloc byte[FrameCrypto.HashSize];
-            Tag(keys.Mac(direction), nonce, ad, output.Slice(0, clear.Length), cipher, full);
-            full.Slice(0, _tagLength).CopyTo(output.Slice(clear.Length + plain.Length));
-            done = true;
-        }
-        finally
-        {
-            if (!done)
-                Compat.Zero(output.Slice(0, bodyLength));
-        }
+        // ad, clear and plain are read in full before the one write to output, so any overlap with it gives the same body.
+        Span<byte> body = stackalloc byte[bodyLength];
+        clear.CopyTo(body);
+        var cipher = body.Slice(clear.Length, plain.Length);
+        plain.CopyTo(cipher);
+        SessionPad.Xor(keys.Enc(direction), nonce, 0, cipher);
+        Span<byte> full = stackalloc byte[FrameCrypto.HashSize];
+        Tag(keys.Mac(direction), nonce, ad, body.Slice(0, clear.Length), cipher, full);
+        full.Slice(0, _tagLength).CopyTo(body.Slice(clear.Length + plain.Length));
+        Compat.Zero(full);
+        body.CopyTo(output);
         written = bodyLength;
         return null;
     }

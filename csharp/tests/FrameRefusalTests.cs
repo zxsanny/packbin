@@ -28,7 +28,54 @@ public class FrameRefusalTests
         foreach (var tag in new[] { 0, 1, 5, 12, 17, 32, -4 })
             Assert.Null(FrameSession.Load(Key, 1, new FrameConfig(tag, FrameDirections.All)));
         Assert.Null(FrameSession.Load(Key.AsSpan(0, 31), 1, new FrameConfig(4, FrameDirections.All)));
-        Assert.Null(FrameSession.Load(Key, 1, new FrameConfig(4, FrameDirections.None)));
+        Assert.Null(FrameSession.Load(new byte[33], 1, new FrameConfig(4, FrameDirections.All)));
+        Assert.Null(FrameSession.Load(Key, 1, new FrameConfig(4, (FrameDirections)8)));
+        Assert.Null(FrameSession.Load(Key, 1, new FrameConfig(4, FrameDirections.All | (FrameDirections)8)));
+    }
+
+    [Theory]
+    [InlineData(4)]
+    [InlineData(8)]
+    [InlineData(16)]
+    public void Ac3_LoadWithNoDirectionGivesASessionThatRefusesEverySealAndOpen(int tag)
+    {
+        using var none = FrameSession.Load(Key, 0, new FrameConfig(tag, FrameDirections.None));
+        using var all = FrameSession.Load(Key, 0, new FrameConfig(tag, FrameDirections.All))!;
+        Assert.NotNull(none);
+
+        foreach (var direction in new[] { FrameDirection.Up, FrameDirection.Down, FrameDirection.Group })
+        {
+            var message = new MsgContext(Id, 1);
+            var body = new byte[32];
+            Assert.Null(all.Seal(direction, message, [], [], new byte[4], body, out var length));
+            var output = Sentinels(64);
+            var plain = Sentinels(64);
+            var window = new ReplayWindow(5, 1);
+
+            var seal = none!.Seal(direction, message, [], [], new byte[4], output, out var written);
+            var open = none.Open(direction, message, [], body.AsSpan(0, length), 0, plain, out var opened, window, 6);
+
+            Assert.IsType<BadValue>(seal);
+            Assert.IsType<BadValue>(open);
+            Assert.Equal(0, written);
+            Assert.Equal(0, opened.PlainLength);
+            AssertUntouched(output);
+            AssertUntouched(plain);
+            Assert.Equal((5UL, 1UL), (window.Top, window.Bits));
+        }
+    }
+
+    [Fact]
+    public void Ac3_LoadWithNoDirectionStillRefusesABadKeyEpochTagLengthOrDirectionBit()
+    {
+        var none = FrameDirections.None;
+
+        Assert.Null(FrameSession.Load(Key.AsSpan(0, 31), 0, new FrameConfig(4, none)));
+        Assert.Null(FrameSession.Load(new byte[33], 0, new FrameConfig(4, none)));
+        Assert.Null(FrameSession.Load(Key, 0x1000000, new FrameConfig(4, none)));
+        Assert.Null(FrameSession.Load(Key, 0, new FrameConfig(5, none)));
+        Assert.Null(FrameSession.Load(Key, 0, new FrameConfig(32, none)));
+        Assert.Null(FrameSession.Load(Key, 0, new FrameConfig(4, (FrameDirections)8)));
     }
 
     [Theory]

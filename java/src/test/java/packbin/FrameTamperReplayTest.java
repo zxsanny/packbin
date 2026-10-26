@@ -3,7 +3,8 @@ package packbin;
 import java.util.Arrays;
 
 /**
- * AZ-3233 AC-4 (tampering never yields plaintext), AC-5 (replay is refused before any MAC) and AC-6 (previous slot).
+ * AZ-3233 AC-4 (tampering never yields plaintext), AC-5 (replay is refused before any MAC) and AC-6 (previous slot);
+ * AZ-3255 AC-3 (each session counts only its own MACs).
  */
 public final class FrameTamperReplayTest {
     private FrameTamperReplayTest() {}
@@ -17,6 +18,7 @@ public final class FrameTamperReplayTest {
         everyBitFlipAndFieldChangeIsATagMismatch();
         sealedBodiesEqualTheFixtureBytes();
         duplicateAndOldCountersComputeNoMac();
+        eachSessionCountsOnlyItsOwnMacs();
         aFreshTamperedBodyDoesNotCommit();
         previousSlotOpensOldBodiesAndTheCurrentOnesToo();
         aFrameOpenedUnderThePreviousKeyCommitsIntoTheWindow();
@@ -98,13 +100,13 @@ public final class FrameTamperReplayTest {
             ReplayWindow window = new ReplayWindow();
             window.commit(100);
             ReplayWindow expected = ReplayWindow.fromParts(100, 1);
-            long before = FrameSession.macComputationsForTest();
+            long before = s.macComputationsForTest();
             byte[] out = FrameSupport.filled(300);
 
             // Act
             Object dup = open(s, e.dir, e.ctx, e.ad, body, 0, window, 100, out);
             Object old = open(s, e.dir, e.ctx, e.ad, body, 0, window, 36, out);
-            long computed = FrameSession.macComputationsForTest() - before;
+            long computed = s.macComputationsForTest() - before;
 
             // Assert
             PackbinTest.expectTrue("seen counter is Duplicate", dup instanceof Packbin.Duplicate);
@@ -118,8 +120,33 @@ public final class FrameTamperReplayTest {
 
             // Assert
             PackbinTest.expectTrue("fresh valid body opens", fresh instanceof FrameSession.Opened);
-            PackbinTest.expectTrue("MAC computed for the fresh body", FrameSession.macComputationsForTest() > before);
+            PackbinTest.expectTrue("MAC computed for the fresh body", s.macComputationsForTest() > before);
             PackbinTest.expectEq("committed counter is now a duplicate", ReplayWindow.Freshness.DUPLICATE, window.check(101));
+        }
+    }
+
+    private static void eachSessionCountsOnlyItsOwnMacs() {
+        // Arrange
+        FrameExamples e = FrameExamples.all()[0];
+        try (FrameSession a = e.session(4); FrameSession b = e.session(4)) {
+            byte[] body = e.sealed(a);
+            ReplayWindow windowB = ReplayWindow.fromParts(100, 1);
+            long aBefore = a.macComputationsForTest();
+            long bBefore = b.macComputationsForTest();
+
+            // Act
+            Object opened = open(a, e.dir, e.ctx, e.ad, body, 0, new ReplayWindow(), 100, new byte[300]);
+            Object dup = open(b, e.dir, e.ctx, e.ad, body, 0, windowB, 100, new byte[300]);
+            Object old = open(b, e.dir, e.ctx, e.ad, body, 0, windowB, 36, new byte[300]);
+
+            // Assert
+            PackbinTest.expectTrue("A opens the body", opened instanceof FrameSession.Opened);
+            PackbinTest.expectTrue("B refuses the seen counter as Duplicate", dup instanceof Packbin.Duplicate);
+            PackbinTest.expectTrue("B refuses the old counter as TooOld", old instanceof Packbin.TooOld);
+            PackbinTest.expectEq("A's count rises by the one MAC its open started", 1L,
+                    a.macComputationsForTest() - aBefore);
+            PackbinTest.expectEq("B's count does not move while A opens and B refuses replays", 0L,
+                    b.macComputationsForTest() - bBefore);
         }
     }
 

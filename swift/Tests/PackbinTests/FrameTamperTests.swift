@@ -1,4 +1,4 @@
-@_spi(Vectors) import Packbin
+import Packbin
 import Testing
 
 /// AZ-3234 AC-4 (S4; AC-G2.1): a changed byte never yields plaintext. Every single bit of the associated data, the

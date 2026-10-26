@@ -1,4 +1,4 @@
-@_spi(Vectors) import Packbin
+import Packbin
 import Testing
 
 /// AZ-2518 AC-4 (SW-6): the in-package ChaCha20 against RFC 8439 §2.3.2 (one block) and §2.4.2 (114

@@ -3,6 +3,7 @@ package packbin;
 import javax.crypto.Mac;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Frame mode of the pack session (contract {@code pack-session.md} 2.0.0): sealed, authenticated frames for links that
@@ -91,6 +92,8 @@ public final class FrameSession implements AutoCloseable {
     private volatile Keys previous;
     private final Object previousLock = new Object();
     private volatile boolean closed;
+    /** The MAC computations this session started; a replay refusal must start none. */
+    private final AtomicLong macComputations = new AtomicLong();
 
     private FrameSession(Keys current, int tagLen, int directions) {
         this.current = current;
@@ -196,6 +199,7 @@ public final class FrameSession implements AutoCloseable {
         System.arraycopy(clearBytes, 0, out, outOffset, clearBytes.length);
         System.arraycopy(cipher, 0, out, outOffset + clearBytes.length, cipher.length);
         System.arraycopy(tag, 0, out, outOffset + clearBytes.length + cipher.length, tagLen);
+        Arrays.fill(tag, (byte) 0);
         return new Sealed(body);
     }
 
@@ -301,11 +305,15 @@ public final class FrameSession implements AutoCloseable {
             int cipherLen, int tagAt) {
         byte[] nonce = FrameCrypto.nonce(ctx.msgId, ctx.kind, direction, keys.epoch);
         byte[] full = tagOver(keys.mac[direction], nonce, ad, clear, body, cipherAt, cipherLen);
-        return FrameCrypto.constantTimeEquals(full, 0, body, tagAt, tagLen) ? nonce : null;
+        boolean equal = FrameCrypto.constantTimeEquals(full, 0, body, tagAt, tagLen);
+        Arrays.fill(full, (byte) 0);
+        return equal ? nonce : null;
     }
 
-    private static byte[] tagOver(byte[] macKey, byte[] nonce, byte[] ad, byte[] clear, byte[] cipher, int cipherAt,
+    /** The full 32-byte HMAC; the caller zeroes it once the tag is copied or compared. */
+    private byte[] tagOver(byte[] macKey, byte[] nonce, byte[] ad, byte[] clear, byte[] cipher, int cipherAt,
             int cipherLen) {
+        macComputations.incrementAndGet();
         Mac mac = FrameCrypto.mac(macKey);
         mac.update(nonce);
         mac.update((byte) ad.length);
@@ -351,8 +359,8 @@ public final class FrameSession implements AutoCloseable {
         return keys == null ? null : keys.mac[direction];
     }
 
-    /** Test-only: the number of HMAC computations the package started so far. */
-    static long macComputationsForTest() {
-        return FrameCrypto.macComputations();
+    /** Test-only: the number of HMAC computations this session started so far. */
+    long macComputationsForTest() {
+        return macComputations.get();
     }
 }

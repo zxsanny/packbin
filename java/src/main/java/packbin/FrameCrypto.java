@@ -4,7 +4,6 @@ import javax.crypto.Mac;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Arrays;
-import java.util.concurrent.atomic.AtomicLong;
 
 /** The pieces of frame mode shared by {@link FrameSession} and {@link MacKey}: salt, nonce, HMAC and the tag compare. */
 final class FrameCrypto {
@@ -12,14 +11,7 @@ final class FrameCrypto {
     static final int MAX_EPOCH = 0xFFFFFF;
     private static final byte[] LABEL = "packbin-frame".getBytes(StandardCharsets.US_ASCII);
 
-    /** Test-only: the number of HMAC computations started (a replay refusal must not start one). */
-    private static final AtomicLong MAC_COMPUTATIONS = new AtomicLong();
-
     private FrameCrypto() {}
-
-    static long macComputations() {
-        return MAC_COMPUTATIONS.get();
-    }
 
     /** {@code "packbin-frame"} followed by the epoch as a 32-bit little-endian integer. */
     static byte[] salt(int epoch) {
@@ -47,9 +39,8 @@ final class FrameCrypto {
         return n;
     }
 
-    /** A keyed HMAC-SHA256, counted. */
+    /** A keyed HMAC-SHA256; the caller counts it ({@link FrameSession} and {@link MacKey} each keep their own count). */
     static Mac mac(byte[] key) {
-        MAC_COMPUTATIONS.incrementAndGet();
         return SessionPad.hmac(key);
     }
 
@@ -62,9 +53,15 @@ final class FrameCrypto {
     /**
      * True when the two ranges are equal, compared with {@link MessageDigest#isEqual}, which the JDK documents as taking time
      * that depends only on the length. Constant time is still best effort on a managed runtime. The lengths are not secret.
+     * Both copies are zeroed before return: one of them holds the expected tag.
      */
     static boolean constantTimeEquals(byte[] a, int aOff, byte[] b, int bOff, int len) {
-        return MessageDigest.isEqual(Arrays.copyOfRange(a, aOff, aOff + len), Arrays.copyOfRange(b, bOff, bOff + len));
+        byte[] left = Arrays.copyOfRange(a, aOff, aOff + len);
+        byte[] right = Arrays.copyOfRange(b, bOff, bOff + len);
+        boolean equal = MessageDigest.isEqual(left, right);
+        Arrays.fill(left, (byte) 0);
+        Arrays.fill(right, (byte) 0);
+        return equal;
     }
 
     static boolean constantTimeEquals(byte[] a, byte[] b) {

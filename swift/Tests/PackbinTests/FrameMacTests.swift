@@ -1,4 +1,4 @@
-@_spi(Vectors) import Packbin
+import Packbin
 import Testing
 
 /// AZ-3234 AC-7 (S8; AC-G2.4): the MAC-only call on E4 and E5 and its refusals.

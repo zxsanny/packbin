@@ -80,50 +80,49 @@ struct MacStream {
 }
 
 /// The primitives the package uses, for the shared primitive vectors (`fixtures/crypto/vectors.txt`): each call
-/// is the platform function the frame code calls. Not public API (the `Vectors` SPI).
-@_spi(Vectors) @available(tvOS 14.0, watchOS 7.0, *)
-public enum FramePrimitives {
+/// is the platform function the frame code calls. Package access: the package's tests use it; apps cannot.
+@available(tvOS 14.0, watchOS 7.0, *)
+package enum FramePrimitives {
     /// SHA-256 of the message.
-    public static func sha256(_ message: [UInt8]) -> [UInt8] {
+    package static func sha256(_ message: [UInt8]) -> [UInt8] {
         Array(SHA256.hash(data: message))
     }
 
     /// HMAC-SHA256 of the message under the key, in one piece.
-    public static func hmac256(key: [UInt8], data: [UInt8]) -> [UInt8] {
+    package static func hmac256(key: [UInt8], data: [UInt8]) -> [UInt8] {
         var stream = MacStream(key: key)
         stream.add(data)
         return stream.finish()
     }
 
     /// The HKDF-SHA256 extract step (RFC 5869 §2.2); an empty salt is the RFC's string of zeros.
-    public static func hkdfExtract(ikm: [UInt8], salt: [UInt8]) -> [UInt8] {
+    package static func hkdfExtract(ikm: [UInt8], salt: [UInt8]) -> [UInt8] {
         Array(HKDF<SHA256>.extract(inputKeyMaterial: SymmetricKey(data: ikm), salt: salt))
     }
 
     /// The HKDF-SHA256 output of `length` bytes (extract and expand).
-    public static func hkdf256(ikm: [UInt8], salt: [UInt8], info: [UInt8], length: Int) -> [UInt8] {
+    package static func hkdf256(ikm: [UInt8], salt: [UInt8], info: [UInt8], length: Int) -> [UInt8] {
         let derived = HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: ikm), salt: salt, info: info,
                                              outputByteCount: length)
         return derived.withUnsafeBytes { [UInt8]($0) }
     }
 
     /// The tag compare of frame mode: equal lengths and all bytes equal, every byte read before the decision.
-    public static func tagsEqual(_ a: [UInt8], _ b: [UInt8]) -> Bool {
+    package static func tagsEqual(_ a: [UInt8], _ b: [UInt8]) -> Bool {
         FrameCrypto.equal(a, b)
     }
 }
 
-/// Hooks for the tests (the `Vectors` SPI): a count of MAC computations and a look at the key bytes once a
-/// session or key object is released.
-@_spi(Vectors)
-public struct FrameProbe: Sendable {
+/// Hooks for the tests: a count of MAC computations and a look at the key bytes once a session or key object is
+/// released. Package access: the package's tests use it; apps cannot.
+package struct FrameProbe: Sendable {
     /// Called once per HMAC computation of a session (seal, and each slot an open tries).
-    public var onMac: (@Sendable () -> Void)?
+    package var onMac: (@Sendable () -> Void)?
     /// Called from `deinit` after the keys were overwritten, with every key byte the object held (all zero
     /// when the wipe worked).
-    public var onRelease: (@Sendable ([UInt8]) -> Void)?
+    package var onRelease: (@Sendable ([UInt8]) -> Void)?
 
-    public init(onMac: (@Sendable () -> Void)? = nil, onRelease: (@Sendable ([UInt8]) -> Void)? = nil) {
+    package init(onMac: (@Sendable () -> Void)? = nil, onRelease: (@Sendable ([UInt8]) -> Void)? = nil) {
         self.onMac = onMac
         self.onRelease = onRelease
     }

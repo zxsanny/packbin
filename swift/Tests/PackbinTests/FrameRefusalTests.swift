@@ -1,4 +1,4 @@
-@_spi(Vectors) import Packbin
+import Packbin
 import Testing
 
 /// AZ-3234 AC-8 (S6; AC-G2.5): each refusal of the contract returns its kind with nothing written, and 1,000 hostile

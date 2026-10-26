@@ -1,5 +1,5 @@
 import Foundation
-@_spi(Vectors) import Packbin
+import Packbin
 import Testing
 
 /// `text` with the first digit of `field` changed in the line `matches` accepts.

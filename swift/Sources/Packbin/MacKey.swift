@@ -49,9 +49,9 @@ public final class MacKey: @unchecked Sendable, CustomStringConvertible {
         try MacKey(key: key, epoch: epoch, label: label, probe: nil)
     }
 
-    /// `derive(key:epoch:label:)` with the test hooks of ``FrameProbe`` (only `onRelease` is used).
-    @_spi(Vectors)
-    public static func derive(key: [UInt8], epoch: UInt32, label: [UInt8], probe: FrameProbe) throws -> MacKey {
+    /// `derive(key:epoch:label:)` with the test hooks of `FrameProbe` (only `onRelease` is used). Package access:
+    /// the package's tests use it; apps cannot.
+    package static func derive(key: [UInt8], epoch: UInt32, label: [UInt8], probe: FrameProbe) throws -> MacKey {
         try MacKey(key: key, epoch: epoch, label: label, probe: probe)
     }
 
@@ -62,15 +62,20 @@ public final class MacKey: @unchecked Sendable, CustomStringConvertible {
         guard [4, 8, 16, 32].contains(n) else {
             throw PackbinError.frame(.badValue, "the tag length is \(n), not 4, 8, 16 or 32")
         }
-        return Array(fullTag(parts)[0..<n])
+        var full = fullTag(parts)
+        defer { FrameCrypto.wipe(&full) }
+        return Array(full[0..<n])
     }
 
     /// True when `tag` (4, 8, 16 or 32 bytes) is the tag of the parts joined. Every byte is compared with no
     /// early exit. A tag of another length, or a closed key, gives false.
     public func verify(_ parts: [[UInt8]], tag: [UInt8]) -> Bool {
         guard !closed, [4, 8, 16, 32].contains(tag.count) else { return false }
-        let full = fullTag(parts)
-        return FrameCrypto.equal(Array(full[0..<tag.count]), tag)
+        var full = fullTag(parts)
+        defer { FrameCrypto.wipe(&full) }
+        return full.withUnsafeBytes { f in
+            tag.withUnsafeBytes { FrameCrypto.equal(UnsafeRawBufferPointer(rebasing: f[..<tag.count]), $0) }
+        }
     }
 
     /// Overwrites the key and refuses every later `tag` with a `.badValue` (and every `verify` with false).
@@ -91,7 +96,7 @@ public final class MacKey: @unchecked Sendable, CustomStringConvertible {
         return stream.finish()
     }
 
-    /// The stored `K_label`, all zero once the key is closed.
-    @_spi(Vectors)
-    public var storedKey: [UInt8] { labelKey }
+    /// The stored `K_label`, all zero once the key is closed. Package access: the package's tests use it; apps
+    /// cannot.
+    package var storedKey: [UInt8] { labelKey }
 }

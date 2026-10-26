@@ -56,4 +56,5 @@ java -cp "$main_out:$test_out" packbin.FrameTamperReplayTest
 java -cp "$main_out:$test_out" packbin.FrameMacRefusalsTest
 java -cp "$main_out:$test_out" packbin.FrameHostileTest
 java -cp "$main_out:$test_out" packbin.FrameLifecycleTest
+java -cp "$main_out:$test_out" packbin.FrameStaticStateTest
 java -cp "$main_out:$test_out" packbin.FrameReadmeExample
