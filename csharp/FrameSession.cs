@@ -6,8 +6,8 @@ namespace Packbin;
 /// Frame mode of the session (<c>pack-session.md</c> 2.0.0): sealed, authenticated frames for links that lose, reorder and
 /// duplicate messages. A frame body is <c>clear ‖ ciphertext ‖ tag</c>: ChaCha20 under a key per (key, epoch, direction),
 /// a nonce built from the caller's <c>msg_id</c>, the <c>kind</c>, the direction and the epoch, and a tag that is the first
-/// 4, 8 or 16 bytes of HMAC-SHA256 over the nonce, the associated data, the clear part and the ciphertext. It is a separate
-/// type beside the stream <see cref="PackSession"/>; the two never share state.
+/// 4, 8 or 16 bytes of HMAC-SHA256 over the nonce, the associated data, the clear part and the ciphertext. It is the only
+/// session of the package (ADR-009).
 /// <para>
 /// <see cref="Seal"/> is deterministic, stateless and safe to call from many threads. <see cref="Open"/> reads the
 /// previous slot, which <see cref="SetPrevious"/> and <see cref="ClearPrevious"/> replace, and <see cref="Dispose"/> overwrites
@@ -45,7 +45,7 @@ public sealed class FrameSession : IDisposable
 
     /// <summary>
     /// Derives the keys of each loaded direction from a 32-byte key and an epoch of at most 0xFFFFFF. Returns null (the
-    /// contract's <see cref="BadValue"/>, as <see cref="PackSession.Load"/> returns null) for a key that is not 32 bytes, an
+    /// contract's <see cref="BadValue"/>) for a key that is not 32 bytes, an
     /// epoch above 0xFFFFFF, a tag length that is not 4, 8 or 16, or a direction bit outside <see cref="FrameDirections.All"/>.
     /// With <see cref="FrameDirections.None"/> it returns a session that refuses every <see cref="Seal"/> and
     /// <see cref="Open"/> as <see cref="BadValue"/>.

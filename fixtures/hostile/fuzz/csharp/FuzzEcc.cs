@@ -4,13 +4,12 @@ using Packbin;
 
 namespace PackbinProbe;
 
-// AC-2 probe (a): seeded random and corrupted protected messages against Ecc.Repair, the public Unpack (dispatch after
-// repair, then the text decoder) and a PackSession pair kept in lock step. Seeds: fixtures/ecc/vectors.txt rows.
+// AC-2 probe (a): seeded random and corrupted protected messages against Ecc.Repair and the public Unpack (dispatch after
+// repair, then the text decoder). Seeds: fixtures/ecc/vectors.txt rows.
 internal static class FuzzEcc
 {
     private static readonly Scheme<NameRow>[] Single = new Scheme<NameRow>[33];
     private static readonly SchemeHandler[][] Handlers = new SchemeHandler[33][];
-    private static readonly (PackSession Send, PackSession Recv)?[] Sessions = new (PackSession, PackSession)?[33];
 
     internal static void Run(int seed, int count)
     {
@@ -25,15 +24,14 @@ internal static class FuzzEcc
         Console.WriteLine($"vector rows {vectors.Count}, iterations {count}");
         var repair = new Stats("Ecc.Repair");
         var unpack = new Stats("Unpack (4 handlers)");
-        var session = new Stats("PackSession.Unpack");
-        long repairedOk = 0, countDiffers = 0, missed = 0, sessionDesync = 0, miscorrected = 0;
+        long repairedOk = 0, countDiffers = 0, missed = 0, miscorrected = 0;
         foreach (var (n, t, received) in vectors)
             RepairOnce(received, n, t, null, -1, repair, ref repairedOk, ref countDiffers, ref missed, ref miscorrected);
         for (var i = 0; i < count; i++)
         {
             var n = r.Next(5) == 0 ? new[] { 1, 2, 31, 32 }[r.Next(4)] : r.Next(1, 33);
             var t = r.Next(3) == 0 ? n / 2 : r.Next(n / 2 + 1);
-            var (clear, text) = Clear(r, n);
+            var clear = Clear(r, n);
             var sent = Gf.Protect(clear, n);
             var received = (byte[])sent.Clone();
             var k = Damage(r, ref received, n, t, clear);
@@ -44,21 +42,15 @@ internal static class FuzzEcc
                 unpack.Context = (n, t);
                 Timed(unpack, packet, () => BinaryPacker.Unpack(packet, t, out _, Handlers[n]));
             }
-            if (i % 8 == 0 && text is not null)
-                SessionOnce(r, n, t, text, session, ref sessionDesync);
         }
         repair.Retime(b => Ecc.Repair(b, repair.SlowestContext.N, repair.SlowestContext.T, out _, out _));
         unpack.Retime(b => BinaryPacker.Unpack(b, unpack.SlowestContext.T, out _, Handlers[unpack.SlowestContext.N]));
         repair.Print();
         unpack.Print();
-        session.Print();
         Console.WriteLine($"repairs that returned a word: {repairedOk}; changed bytes != repaired count: {countDiffers}; " +
-                          $"damage within t not repaired: {missed}; repaired to another code word (beyond n - t, R06): {miscorrected}; " +
-                          $"session payloads within t that did not decode (desync): {sessionDesync}");
+                          $"damage within t not repaired: {missed}; repaired to another code word (beyond n - t, R06): {miscorrected}");
         if (missed > 0)
             Program.Fail($"{missed} messages with at most t wrong bytes were not repaired");
-        if (sessionDesync > 0)
-            Program.Fail($"{sessionDesync} session payloads within t did not decode");
     }
 
     private static void Timed(Stats stats, byte[] packet, Func<object?> call)
@@ -157,7 +149,7 @@ internal static class FuzzEcc
     }
 
     // A clear message for n parity bytes: a packet of the protected single-text scheme (type 1) or random bytes.
-    private static (byte[] Clear, string? Text) Clear(Random r, int n)
+    private static byte[] Clear(Random r, int n)
     {
         var room = Ecc.MaxBlock - n;
         if (r.Next(2) == 0)
@@ -169,47 +161,11 @@ internal static class FuzzEcc
             var text = sb.ToString();
             var packet = BinaryPacker.PackClear(Schemes.Single, new NameRow { Name = text });
             if (packet.Length <= room)
-                return (packet, text);
+                return packet;
         }
         var clear = new byte[r.Next(0, room + 1)];
         r.NextBytes(clear);
-        return (clear, null);
-    }
-
-    // One payload through a session pair of this n: corrupted up to n bytes; a payload within t must decode.
-    private static void SessionOnce(Random r, int n, int t, string text, Stats stats, ref long desync)
-    {
-        if (Sessions[n] is null)
-        {
-            var seed = new byte[32];
-            r.NextBytes(seed);
-            var send = PackSession.Load(seed)!;
-            var recv = PackSession.Load(seed)!;
-            var nonce = send.Start()!;
-            recv.Join(nonce);
-            Sessions[n] = (send, recv);
-        }
-        var (sender, receiver) = Sessions[n]!.Value;
-        var payload = sender.Pack(Single[n], new NameRow { Name = text })!;
-        var k = r.Next(3) == 0 ? r.Next(n + 2) : r.Next(t + 1);
-        Gf.Corrupt(payload, k, r);
-        string? got = null;
-        var copy = (byte[])payload.Clone();
-        var t0 = Stopwatch.GetTimestamp();
-        try
-        {
-            var error = receiver.Unpack(payload, t, out _, Single[n].On(row => got = row.Name));
-            stats.Outcome(error);
-        }
-        catch (Exception ex)
-        {
-            stats.Threw(ex, payload);
-        }
-        stats.Time(t0, payload);
-        if (!copy.AsSpan().SequenceEqual(payload))
-            Program.Fail("PackSession.Unpack wrote its input");
-        if (k <= t && got != text)
-            desync++;
+        return clear;
     }
 
     // fix and bad rows of fixtures/ecc/vectors.txt: (n, t, received).

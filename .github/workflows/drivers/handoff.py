@@ -4,7 +4,6 @@ import sys
 
 from packbin import (
     BinaryPacker,
-    PackSession,
     Scheme,
     bool as flag_bool,
     dict as map_field,
@@ -69,13 +68,6 @@ POSITION = Scheme(
         i16(6, lambda row: row["altitude"]),
     ),
 )
-
-POSITION_VALUES = {
-    "sid": 1,
-    "lat": 500_000_000,
-    "lon": 300_000_000,
-    "profile": 1,
-}
 
 BOOLFLAG = Scheme(1, dict, flags(0, flag_bool(0, lambda row: row["on"])))
 
@@ -142,27 +134,6 @@ def _element_command(cmd: str, argv: list[str]) -> int | None:
     return None
 
 
-SESSION_SEED = bytes(range(1, 33))
-SESSION_NONCE = bytes.fromhex("01000000000000000000000000000000")
-# The position row under the session: the scheme as it is (session) and with 4 parity bytes (session-ecc, EC-10).
-SESSION_SCHEMES = {"session": POSITION, "session-ecc": POSITION.with_limits(parity=4)}
-
-
-def _session_fields_ok(row) -> bool:
-    if row.get("sid") != 1:
-        return False
-    if row.get("lat") != 500_000_000:
-        return False
-    if row.get("lon") != 300_000_000:
-        return False
-    if row.get("profile") != 1:
-        return False
-    for name in ("heading", "speed", "altitude"):
-        if name in row and row[name] is not None:
-            return False
-    return True
-
-
 def main(argv: list[str]) -> int:
     if len(argv) < 1:
         return 2
@@ -181,15 +152,6 @@ def main(argv: list[str]) -> int:
         return 0
     if cmd == "pack-bitwhen":
         print(BinaryPacker.pack(BITWHEN, BITWHEN_VALUES).hex())
-        return 0
-    if cmd in ("pack-session", "pack-session-ecc"):
-        opener = PackSession.load(SESSION_SEED)
-        if opener is None or opener.start(SESSION_NONCE) is None:
-            return 1
-        payload = opener.pack(SESSION_SCHEMES[cmd[len("pack-"):]], POSITION_VALUES)
-        if payload is None:
-            return 1
-        print(payload.hex())
         return 0
     if cmd == "unpack-user":
         if len(argv) < 2:
@@ -226,17 +188,6 @@ def main(argv: list[str]) -> int:
         if not result.ok or result.value is None:
             return 1
         return 0 if result.value == {"k": 0} else 1
-    if cmd in ("unpack-session", "unpack-session-ecc"):
-        if len(argv) < 2:
-            return 1
-        waiter = PackSession.load(SESSION_SEED)
-        if waiter is None or not waiter.join(SESSION_NONCE):
-            return 1
-        scheme = SESSION_SCHEMES[cmd[len("unpack-"):]]
-        result = waiter.unpack(bytes.fromhex(argv[1]), scheme.on(lambda row: None))
-        if not result.ok or result.value is None:
-            return 1
-        return 0 if _session_fields_ok(result.value) else 1
     if cmd.startswith("ecc-"):
         return run_ecc(cmd, argv, POSITION)
     element = _element_command(cmd, argv)

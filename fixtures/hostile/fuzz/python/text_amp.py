@@ -177,18 +177,6 @@ def main() -> None:
     one_char = BinaryPacker.pack(ONE, {"s": "я"})[1:]
     packet = b"\x01" + (65535).to_bytes(2, "little") + one_char * 65535
     measure("list of 65,535 one-letter strings", LIST, packet, reps=3)
-    # session: the pad is removed from the whole payload before anything is parsed (n = 0 has no 254-byte limit)
-    from packbin import PackSession
-    for size in (254, 65536, 262144, 1048576):
-        receiver = PackSession.load(bytes(range(1, 33)))
-        receiver.join(bytes(16))
-        payload = os.urandom(size)
-        for n in ((0,) if size > 254 else (0, 32)):
-            sch = ONE.with_limits(parity=n)
-            t0 = time.perf_counter()
-            res = receiver.unpack(payload, sch.on(lambda row: None), limit=n // 2)
-            dt = time.perf_counter() - t0
-            print(f"  session unpack of {size:8d} random bytes, n={n:2d}: {type(res.error).__name__:14s} {dt * 1e3:9.2f} ms ({dt / size * 1e6:.2f} us per byte)")
     rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     print(f"max RSS of the run {rss / 1e6:.1f} MB, load {os.getloadavg()}")
 

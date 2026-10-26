@@ -10,10 +10,9 @@ import java.util.concurrent.atomic.AtomicLong;
  * lose, reorder and duplicate messages. A frame body is {@code clear ‖ ciphertext ‖ tag}: ChaCha20 under a key per
  * (key, epoch, direction) from HKDF-SHA256, a nonce built from the caller's 8-byte message id, the 4-bit {@code kind}, the
  * direction and the epoch, and a tag that is the first 4, 8 or 16 bytes of HMAC-SHA256 over the nonce, the associated data,
- * the clear part and the ciphertext (encrypt, then MAC). It is separate from the stream {@link PackSession}, which is
- * unchanged. All results are the package's error objects: {@link Sealed} or {@link Opened} on success, otherwise
- * {@link Packbin.BadValue}, {@link Packbin.TooLong}, {@link Packbin.BufferFull}, {@link Packbin.ShortPacket},
- * {@link Packbin.TagMismatch}, {@link Packbin.Duplicate} or {@link Packbin.TooOld}.
+ * the clear part and the ciphertext (encrypt, then MAC). All results are the package's error objects: {@link Sealed} or
+ * {@link Opened} on success, otherwise {@link Packbin.BadValue}, {@link Packbin.TooLong}, {@link Packbin.BufferFull},
+ * {@link Packbin.ShortPacket}, {@link Packbin.TagMismatch}, {@link Packbin.Duplicate} or {@link Packbin.TooOld}.
  *
  * <p><b>Uniqueness rule (the caller's duty): for one (key, epoch, direction), a message id is never sealed twice with
  * different contents.</b> Reuse breaks the confidentiality of both messages and the library cannot check it. A new epoch

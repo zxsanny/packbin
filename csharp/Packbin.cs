@@ -208,7 +208,7 @@ public static class BinaryPacker
         return Dispatch(word.AsSpan(0, word.Length - parity), handlers);
     }
 
-    // An empty list or a duplicate type number is refused before any byte is read and before a receive index advances.
+    // An empty list or a duplicate type number is refused before any byte is read.
     internal static void RequireHandlers(SchemeHandler[] handlers)
     {
         if (handlers.Length == 0)

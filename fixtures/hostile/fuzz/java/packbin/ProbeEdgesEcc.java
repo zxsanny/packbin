@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.function.Supplier;
 
-/** AC-2 probe (d): the ECC, dispatch and session edge cases a random run is unlikely to hit (as the C# EdgesEcc). */
+/** AC-2 probe (d): the ECC and dispatch edge cases a random run is unlikely to hit (as the C# EdgesEcc). */
 @SuppressWarnings({"unchecked", "rawtypes"})
 final class ProbeEdgesEcc {
     private ProbeEdgesEcc() {}
@@ -18,8 +18,6 @@ final class ProbeEdgesEcc {
         lengths();
         callerChecks();
         dispatch();
-        sessionIndex();
-        sessionClearSize();
         signedBytes();
     }
 
@@ -147,88 +145,6 @@ final class ProbeEdgesEcc {
         byte[] copy = wrongType.clone();
         BinaryPacker.unpackRepair(wrongType, 2, single.on(x -> {}));
         AuditProbe.check(Arrays.equals(copy, wrongType), "dispatch: the repaired input buffer is not written");
-    }
-
-    private static void sessionIndex() {
-        byte[] seed = new byte[32];
-        for (int i = 0; i < 32; i++) {
-            seed[i] = (byte) i;
-        }
-        PackSession send = PackSession.load(seed);
-        PackSession recv = PackSession.load(seed);
-        PackSession unopened = PackSession.load(seed);
-        AuditProbe.check(unopened.unpackRepair(new byte[5], -5) instanceof Packbin.ShortPacket s && s.needed == 1 && s.left == 0,
-                "session: not open answers first (before the empty handler list and the bad limit)");
-        recv.join(send.start());
-        Scheme<Map> scheme = AuditProbe.SINGLE.withParity(4);
-        byte[][] payloads = new byte[8][];
-        for (int i = 0; i < 8; i++) {
-            payloads[i] = send.pack(scheme, row("p" + i));
-        }
-        Object[] got = {null};
-        Scheme.Handler<?> h = scheme.on(x -> got[0] = ((Map) x).get("s"));
-        List<String> results = new ArrayList<>();
-        java.util.function.BiConsumer<String, Supplier<Object>> step = (label, call) -> {
-            got[0] = null;
-            try {
-                Object e = call.get();
-                results.add(label + ": " + (e == null || e instanceof Packbin.Repaired ? "ok " + got[0] : e.getClass().getSimpleName()));
-            } catch (RuntimeException ex) {
-                results.add(label + ": threw " + ex.getClass().getSimpleName());
-            }
-        };
-        byte[] garbage = new byte[payloads[0].length];
-        new Random(7).nextBytes(garbage);
-        step.accept("0 garbage", () -> recv.unpackRepair(garbage, 2, h));
-        step.accept("1 p1", () -> recv.unpackRepair(payloads[1], 2, h));
-        step.accept("2 255 bytes", () -> recv.unpackRepair(new byte[255], 2, h));
-        step.accept("3 p3 with 2 wrong bytes", () -> {
-            byte[] p = payloads[3].clone();
-            p[0] ^= 1;
-            p[p.length - 1] ^= 2;
-            return recv.unpackRepair(p, 2, h);
-        });
-        step.accept("4 3 bytes", () -> recv.unpackRepair(new byte[3], 2, h));
-        step.accept("- bad limit", () -> recv.unpackRepair(payloads[5], 3, h));
-        step.accept("- mixed", () -> recv.unpackRepair(payloads[5], 0, h, AuditProbe.MAP.withParity(2).on(x -> {})));
-        step.accept("- duplicate", () -> recv.unpackRepair(payloads[5], 0, h, scheme.on(x -> {})));
-        step.accept("- empty", () -> recv.unpackRepair(payloads[5], 0));
-        step.accept("5 p5", () -> recv.unpackRepair(payloads[5], 2, h));
-        step.accept("6 p6 detect-only with 1 wrong byte", () -> {
-            byte[] p = payloads[6].clone();
-            p[1] ^= 4;
-            return recv.unpack(p, h);
-        });
-        step.accept("7 p7", () -> recv.unpack(payloads[7], h));
-        System.out.println("session steps: " + String.join("; ", results));
-        AuditProbe.check(results.get(1).equals("1 p1: ok p1") && results.get(3).equals("3 p3 with 2 wrong bytes: ok p3")
-                && results.get(9).equals("5 p5: ok p5") && results.get(10).endsWith("Uncorrectable")
-                && results.get(11).equals("7 p7: ok p7"),
-                "session: refused payloads advance the receive index, refused calls do not");
-    }
-
-    private static void sessionClearSize() {
-        byte[] seed = new byte[32];
-        PackSession send = PackSession.load(seed);
-        PackSession recv = PackSession.load(seed);
-        recv.join(send.start());
-        Map<String, Object> big = row("中".repeat(100));
-        byte[] clear = BinaryPacker.pack(AuditProbe.SINGLE, big);
-        try {
-            byte[] payload = send.pack(AuditProbe.SINGLE, big);
-            Object[] got = {null};
-            Object error = recv.unpack(payload, AuditProbe.SINGLE.on(x -> got[0] = ((Map) x).get("s")));
-            AuditProbe.check(payload.length == clear.length && error == null && big.get("s").equals(got[0]),
-                    "session n=0: a " + clear.length + "-byte clear message packs to " + payload.length + " bytes and unpacks");
-        } catch (RuntimeException ex) {
-            AuditProbe.fail("session n=0: pack of a " + clear.length + "-byte clear message threw " + ex);
-        }
-        try {
-            byte[] p = send.pack(AuditProbe.SINGLE.withParity(4), big);
-            AuditProbe.fail("session n=4: a " + clear.length + "-byte clear message packed to " + p.length + " bytes");
-        } catch (IllegalArgumentException ex) {
-            AuditProbe.check(true, "session n=4: a " + clear.length + "-byte clear message is refused (" + ex.getMessage() + ")");
-        }
     }
 
     /** Every byte value 0x80..0xff (negative in Java) at every position of a short protected message. */

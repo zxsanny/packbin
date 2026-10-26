@@ -6,48 +6,20 @@ import java.util.Map;
 import java.util.Random;
 
 /**
- * AZ-2683 AC-1 (the setting), AC-6 (session, compact text, dispatch) and the hostile-bytes rule for protected
- * schemes.
+ * AZ-2683 AC-1 (the setting), AC-6 (compact text, dispatch) and the hostile-bytes rule for protected schemes.
  */
 @SuppressWarnings({"unchecked", "rawtypes"})
 final class EccSchemeTest {
-    private static final byte[] NONCE = PackbinTest.parseHex("01000000000000000000000000000000");
-    private static final String CIPHER_HEX = "b55d0a29c56c203712b241232e";
-
     private EccSchemeTest() {}
 
     static void run() {
         theSettingAndItsDefault();
-        sessionPayloadIsPaddedClearPlusParity();
-        sessionWithoutParityIsUnchanged();
-        sessionRepairsBeforeTheRead();
-        sessionRefusalStillAdvancesTheIndex();
-        sessionLimitAboveHalfThrowsBeforeTheIndexMoves();
-        sessionSizeRefusalLeavesTheSendIndex();
-        sessionProtectedPayloadReadWithoutParityIsRefused();
         compactTextAfterRepair();
         compactTextDetectOnly();
         dispatchReachesTheRightHandler();
         dispatchOfMixedParityIsRefused();
         dispatchWithoutParityIsUnchanged();
         hostileBytesNeverThrow();
-    }
-
-    private static PackSession[] pair() {
-        byte[] seed = new byte[32];
-        for (int i = 0; i < seed.length; i++) {
-            seed[i] = (byte) (i + 1);
-        }
-        PackSession opener = PackSession.load(seed);
-        PackSession waiter = PackSession.load(seed);
-        PackbinTest.expectTrue("session opens", opener.start(NONCE) != null && waiter.join(NONCE));
-        return new PackSession[] {opener, waiter};
-    }
-
-    private static EccSupport.Run receive(PackSession session, byte[] message, int limit, int parity) {
-        EccSupport.Run run = new EccSupport.Run();
-        run.result = session.unpackRepair(message, limit, EccSupport.positionScheme(parity).on(run.rows::add));
-        return run;
     }
 
     private static void theSettingAndItsDefault() {
@@ -65,105 +37,6 @@ final class EccSchemeTest {
         PackbinTest.expectEq("EC-1 the limit setters keep the count", 4, tuned.parity());
         PackbinTest.expectEq("EC-1 withParity keeps the limits", 7, tuned.withParity(2).maxRounds());
         PackbinTest.expectEq("EC-3 the largest count is accepted", 32, plain.withParity(32).parity());
-    }
-
-    private static void sessionPayloadIsPaddedClearPlusParity() {
-        // Arrange
-        PackSession opener = pair()[0];
-
-        // Act
-        byte[] payload = opener.pack(EccSupport.positionScheme(4), EccSupport.positionRow());
-
-        // Assert
-        PackbinTest.expectEq("EC-10 the payload is the clear length + n", 17, payload.length);
-        PackbinTest.expectEq("EC-10 the first bytes are the padded clear message", CIPHER_HEX,
-                PackbinTest.toHex(java.util.Arrays.copyOf(payload, 13)));
-        PackbinTest.expectEq("EC-10 the parity covers the padded bytes", PackbinTest.toHex(Ecc.protect(java.util.Arrays.copyOf(payload, 13), 4)),
-                PackbinTest.toHex(payload));
-    }
-
-    private static void sessionWithoutParityIsUnchanged() {
-        // Arrange
-        PackSession[] both = pair();
-
-        // Act
-        byte[] payload = both[0].pack(EccSupport.positionScheme(0), EccSupport.positionRow());
-        EccSupport.Run got = receive(both[1], payload, 0, 0);
-
-        // Assert
-        PackbinTest.expectEq("EC-10 n = 0 keeps the payload as long as the clear message", CIPHER_HEX, PackbinTest.toHex(payload));
-        PackbinTest.expectTrue("EC-10 n = 0 unpacks with 0 repaired", got.recovered(0, 1));
-    }
-
-    private static void sessionRepairsBeforeTheRead() {
-        // Arrange
-        PackSession[] both = pair();
-        byte[] payload = both[0].pack(EccSupport.positionScheme(4), EccSupport.positionRow());
-
-        // Act
-        EccSupport.Run got = receive(both[1], EccSupport.corrupt(payload, new int[] {2, 15}, new int[] {0x80, 0x21}), 2, 4);
-
-        // Assert
-        PackbinTest.expectTrue("EC-10 n = 4: two wrong bytes are repaired before the pad is removed and the row is recovered",
-                got.recovered(2, 1));
-    }
-
-    private static void sessionRefusalStillAdvancesTheIndex() {
-        // Arrange
-        PackSession[] both = pair();
-        byte[] first = both[0].pack(EccSupport.positionScheme(4), EccSupport.positionRow());
-        byte[] second = both[0].pack(EccSupport.positionScheme(4), EccSupport.positionRow(9));
-
-        // Act
-        EccSupport.Run refused = receive(both[1], EccSupport.corrupt(first, new int[] {1, 5, 11}, new int[] {1, 2, 3}), 2, 4);
-        EccSupport.Run next = receive(both[1], second, 2, 4);
-
-        // Assert
-        PackbinTest.expectTrue("EC-10 n = 4, t = 2: three wrong bytes are refused", refused.uncorrectable());
-        PackbinTest.expectEq("EC-10 a refused payload hands over no row", 0, refused.rows.size());
-        PackbinTest.expectTrue("EC-10 the next payload from the sender is read", next.recovered(0, 9));
-    }
-
-    private static void sessionLimitAboveHalfThrowsBeforeTheIndexMoves() {
-        // Arrange
-        PackSession[] both = pair();
-        byte[] payload = both[0].pack(EccSupport.positionScheme(4), EccSupport.positionRow());
-
-        // Act
-        PackbinTest.expectThrows("EC-10 a limit above n / 2",
-                () -> receive(both[1], payload, 3, 4), "correction limit must be 0 to 2 for 4 parity bytes, got 3");
-        EccSupport.Run after = receive(both[1], payload, 2, 4);
-
-        // Assert
-        PackbinTest.expectTrue("EC-10 the receive index did not move", after.recovered(0, 1));
-    }
-
-    private static void sessionSizeRefusalLeavesTheSendIndex() {
-        // Arrange
-        PackSession opener = pair()[0];
-        Map<String, Object> over = Maps.map("b", new byte[222]);
-
-        // Act
-        PackbinTest.expectThrows("EC-4 a message above the limit is refused by the session",
-                () -> opener.pack(EccSupport.blob(222, 32), over),
-                "the packet would be 223 bytes, above the limit of 222 bytes for 32 parity bytes");
-        byte[] first = opener.pack(EccSupport.positionScheme(0), EccSupport.positionRow());
-
-        // Assert
-        PackbinTest.expectEq("EC-4 the send index did not move", CIPHER_HEX, PackbinTest.toHex(first));
-    }
-
-    private static void sessionProtectedPayloadReadWithoutParityIsRefused() {
-        // Arrange
-        PackSession[] both = pair();
-        byte[] payload = both[0].pack(EccSupport.positionScheme(4), EccSupport.positionRow());
-
-        // Act
-        EccSupport.Run got = receive(both[1], payload, 0, 0);
-
-        // Assert
-        PackbinTest.expectTrue("EC-10 the protected payload read without parity is refused, not thrown",
-                !got.ok() && got.rows.isEmpty());
     }
 
     private static Scheme<Map> note() {

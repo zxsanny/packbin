@@ -1,6 +1,6 @@
 use packbin::{
     eq, flag_byte, flags, i16, insert, pack, to_hex, u16, u8, unpack, when, BinaryPacker,
-    BoundField, MapScheme, PackSession, Scheme, SchemeItem, Value, Values,
+    BoundField, MapScheme, Scheme, SchemeItem, Value, Values,
 };
 use std::collections::BTreeMap;
 use std::process::ExitCode;
@@ -241,42 +241,6 @@ fn position_scheme() -> Scheme<Position> {
     )
 }
 
-fn position_row() -> Position {
-    Position {
-        sid: 1,
-        lat: 500_000_000,
-        lon: 300_000_000,
-        profile: 1,
-        heading: None,
-        speed: None,
-        altitude: None,
-    }
-}
-
-fn session_seed() -> [u8; 32] {
-    let mut seed = [0u8; 32];
-    for (i, b) in seed.iter_mut().enumerate() {
-        *b = (i + 1) as u8;
-    }
-    seed
-}
-
-fn session_nonce() -> [u8; 16] {
-    let mut nonce = [0u8; 16];
-    nonce[0] = 0x01;
-    nonce
-}
-
-fn session_fields_ok(row: &Position) -> bool {
-    row.sid == 1
-        && row.lat == 500_000_000
-        && row.lon == 300_000_000
-        && row.profile == 1
-        && row.heading.is_none()
-        && row.speed.is_none()
-        && row.altitude.is_none()
-}
-
 fn from_hex(s: &str) -> Option<Vec<u8>> {
     if s.len() % 2 != 0 {
         return None;
@@ -299,42 +263,6 @@ fn hex_nibble(b: u8) -> Option<u8> {
         b'a'..=b'f' => Some(b - b'a' + 10),
         b'A'..=b'F' => Some(b - b'A' + 10),
         _ => None,
-    }
-}
-
-// The position row under the session, packed with `scheme`: the plain one (session) or the one with 4 parity
-// bytes (session-ecc, EC-10).
-fn pack_session(scheme: Scheme<Position>) -> u8 {
-    let Some(mut opener) = PackSession::load(&session_seed()) else {
-        return 1;
-    };
-    if opener.start_with(&session_nonce()).is_none() {
-        return 1;
-    }
-    let Ok(payload) = opener.pack(&scheme, &position_row()) else {
-        return 1;
-    };
-    println!("{}", to_hex(&payload));
-    0
-}
-
-fn unpack_session(hex: Option<&String>, scheme: Scheme<Position>) -> u8 {
-    let Some(hex) = hex else {
-        return 1;
-    };
-    let Some(raw) = from_hex(hex) else {
-        return 1;
-    };
-    let Some(mut waiter) = PackSession::load(&session_seed()) else {
-        return 1;
-    };
-    if !waiter.join(&session_nonce()) {
-        return 1;
-    }
-    let mut got = Position::default();
-    match waiter.unpack(&raw, &mut [&mut scheme.on(|row| got = row)]) {
-        Ok(()) if session_fields_ok(&got) => 0,
-        _ => 1,
     }
 }
 
@@ -391,10 +319,6 @@ fn run(args: &[String]) -> u8 {
                 _ => 1,
             }
         }
-        "pack-session" => pack_session(position_scheme()),
-        "pack-session-ecc" => pack_session(position_scheme().with_parity(4)),
-        "unpack-session" => unpack_session(args.get(1), position_scheme()),
-        "unpack-session-ecc" => unpack_session(args.get(1), position_scheme().with_parity(4)),
         _ if cmd.starts_with("ecc-") => ecc::run(args),
         _ => 2,
     }

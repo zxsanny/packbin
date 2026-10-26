@@ -26,7 +26,6 @@ final class MissingNestedValueTest {
         ac5DictElements();
         ac5TypedListElement();
         ac5OtherElementKindsKeepTheirMessages();
-        sessionPackThrowsAndSendsNoFrame();
     }
 
     private static Field u8(int id, String name) {
@@ -220,22 +219,5 @@ final class MissingNestedValueTest {
         expectThrows("AC-5 list of flags",
                 Maps.scheme(1, listOf("l", Packbin.flags(0, u8(0, "x")))),
                 Maps.map("l", Arrays.asList(Maps.map("x", 1), null)), "expected map");
-    }
-
-    /** The blackbox row: a session refuses the row with no frame and its counter stays where it was. */
-    private static void sessionPackThrowsAndSendsNoFrame() {
-        byte[] seed = new byte[PackSession.SEED_SIZE];
-        PackSession sender = PackSession.load(seed);
-        PackSession reader = PackSession.load(seed);
-        byte[] nonce = sender.start();
-        PackbinTest.expectTrue("session opens", nonce != null && reader.join(nonce));
-        Scheme<Map> scheme = Maps.scheme(1, group("g", u8(0, "v")), u8(0, "tail"));
-        PackbinTest.expectThrows("session pack of a null member",
-                () -> sender.pack(scheme, Maps.map("g", null, "tail", 7)), MISSING_GROUP);
-        byte[] sealed = sender.pack(scheme, Maps.map("g", Maps.map("v", 3), "tail", 7));
-        Map[] got = new Map[1];
-        Object err = reader.unpack(sealed, scheme.on(r -> got[0] = r));
-        PackbinTest.expectTrue("the next valid row is read by the peer (" + err + ")", err == null && got[0] != null);
-        PackbinTest.expectEq("the next valid row", Maps.map("g", Maps.map("v", 3), "tail", 7), got[0]);
     }
 }

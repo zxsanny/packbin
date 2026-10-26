@@ -2,22 +2,15 @@ package packbin;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
 
 final class SessionPad {
-    private static final byte[] INFO = "packbin".getBytes(StandardCharsets.US_ASCII);
     private static final int[] CONSTANTS = {
             0x61707865, 0x3320646e, 0x79622d32, 0x6b206574
     };
 
     private SessionPad() {}
-
-    /** HKDF-SHA256 with the stream session's fixed info {@code "packbin"}. */
-    static byte[] hkdfSha256(byte[] ikm, byte[] salt, int length) {
-        return hkdfSha256(ikm, salt, INFO, length);
-    }
 
     static byte[] hkdfSha256(byte[] ikm, byte[] salt, byte[] info, int length) {
         byte[] prk = hkdfExtract(salt, ikm);
@@ -68,12 +61,6 @@ final class SessionPad {
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("HMAC-SHA256 unavailable", e);
         }
-    }
-
-    static void xor(byte[] key, long packet, byte[] data) {
-        byte[] nonce = new byte[12];
-        writeU64Le(nonce, 0, packet);
-        xor(key, nonce, 0, data);
     }
 
     static void xor(byte[] key, byte[] nonce, int counter, byte[] data) {
@@ -157,11 +144,5 @@ final class SessionPad {
         buf[offset + 1] = (byte) (value >>> 8);
         buf[offset + 2] = (byte) (value >>> 16);
         buf[offset + 3] = (byte) (value >>> 24);
-    }
-
-    private static void writeU64Le(byte[] buf, int offset, long value) {
-        for (int i = 0; i < 8; i++) {
-            buf[offset + i] = (byte) (value >>> (8 * i));
-        }
     }
 }

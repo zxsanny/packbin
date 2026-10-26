@@ -4,8 +4,7 @@
 Text: varint boundaries and refusals, a count far above the bytes present, the 65,535 boundary in the compact and
 the raw path, ESC cut at every byte, pad and mode refusals, CAP and LOCK rules, a duplicate dictionary key written in
 three byte forms. ECC: 254/255 bytes, shorter than n, exactly n, the caller's buffer, the check order of a dispatch
-(session not open, empty list, duplicate type, parity mix, limit), and the session receive index after each kind of
-refused payload, read back by the next payload of the sender.
+(empty list, duplicate type, parity mix, limit) and a payload of the wrong Python type.
 """
 
 from __future__ import annotations
@@ -20,13 +19,10 @@ sys.path.insert(0, os.path.join(REPO, "python", "src"))
 
 from packbin import (  # noqa: E402
     BinaryPacker,
-    PackSession,
     Scheme,
     ShortPacket,
     TooLong,
     TrailingBytes,
-    TypeMismatch,
-    Uncorrectable,
     u8,
     utf8,
 )
@@ -232,88 +228,8 @@ def ecc_edges() -> None:
         check("empty handler list refused", False, "accepted")
     except TypeError as e:
         check("empty handler list refused (TypeError)", True, str(e))
-
-
-def session_edges() -> None:
-    seed = bytes(range(1, 33))
-    nonce = bytes(range(16))
-    n = 4
-    sch = Scheme(1, dict, utf8(0, lambda r: r["s"])).with_limits(parity=n)
-    h = sch.on(lambda r: None)
-    other = Scheme(1, dict, utf8(0, lambda r: r["s"])).with_limits(parity=2).on(lambda r: None)
-    closed = PackSession.load(seed)
-    res = closed.unpack(b"\x01", h, h)
-    check("session not open answers first (before the duplicate type)", isinstance(res.error, ShortPacket) and res.error.needed == 1 and res.error.left == 0, str(res.error))
-    sender = PackSession.load(seed)
-    receiver = PackSession.load(seed)
-    sender.start(nonce)
-    receiver.join(nonce)
-
-    def next_ok(tag: str) -> None:
-        msg = sender.pack(sch, {"s": tag})
-        res = receiver.unpack(msg, h, limit=2)
-        check(f"  the next payload is read after {tag}", res.ok and res.value == {"s": tag}, str(res))
-
-    cases = [
-        ("too_long (255 bytes)", lambda: bytes(255), TooLong),
-        ("short (3 bytes < n)", lambda: bytes(3), ShortPacket),
-        ("uncorrectable (3 wrong bytes)", None, Uncorrectable),
-        ("type mismatch after repair", None, TypeMismatch),
-        ("empty payload", lambda: b"", ShortPacket),
-    ]
-    for name, make, want in cases:
-        msg = sender.pack(sch, {"s": "x"})  # the sender spends a position for every payload
-        if name.startswith("uncorrectable"):
-            payload = bytearray(msg)
-            for p in range(3):
-                payload[p] ^= 0xA5
-            payload = bytes(payload)
-        elif name.startswith("type mismatch"):
-            payload = bytes(msg)
-            hp = Scheme(2, dict, utf8(0, lambda r: r["s"])).with_limits(parity=n).on(lambda r: None)
-            before = receiver._recv_count
-            res = receiver.unpack(payload, hp, limit=2)
-            check(f"session: {name} refused, index +1", isinstance(res.error, want) and receiver._recv_count == before + 1, str(res.error))
-            next_ok(name)
-            continue
-        else:
-            payload = make()
-        before = receiver._recv_count
-        res = receiver.unpack(payload, h, limit=2)
-        check(f"session: {name} refused, index +1", isinstance(res.error, want) and receiver._recv_count == before + 1, str(res.error))
-        next_ok(name)
-    for name, call in (
-        ("duplicate type", lambda: receiver.unpack(b"\x01", h, h)),
-        ("parity mix", lambda: receiver.unpack(b"\x01", h, other)),
-        ("bad limit", lambda: receiver.unpack(b"\x01", h, limit=3)),
-    ):
-        before = receiver._recv_count
-        try:
-            call()
-            check(f"session: {name} refused", False, "accepted")
-        except ValueError:
-            check(f"session: {name} refused, index unchanged", receiver._recv_count == before)
-    before = receiver._recv_count
     try:
-        receiver.unpack(b"\x01", )  # type: ignore[call-arg]
-    except TypeError:
-        check("session: empty handler list refused, index unchanged", receiver._recv_count == before)
-    next_ok("the caller mistakes")
-    # a payload of the wrong Python type
-    before = receiver._recv_count
-    try:
-        receiver.unpack("not bytes", h)  # type: ignore[arg-type]
-        info("session: str payload", "accepted?")
-    except TypeError as e:
-        info("session: str payload", f"TypeError ({e}); receive index moved by {receiver._recv_count - before}")
-    sender.pack(sch, {"s": "lost"})  # keep the sender in step with the index the receiver spent
-    next_ok("a str payload")
-    before = receiver._recv_count
-    t0 = time.perf_counter()
-    res = receiver.unpack(50_000_000, h)  # type: ignore[arg-type]
-    info("session: int payload 50,000,000", f"{type(res.error).__name__}, {time.perf_counter() - t0:.3f} s (bytearray(int) allocates that many zero bytes), index +{receiver._recv_count - before}")
-    try:
-        BinaryPacker.unpack(50_000_000, h)  # type: ignore[arg-type]
+        BinaryPacker.unpack(50_000_000, h1)  # type: ignore[arg-type]
         info("clear unpack: int payload", "accepted?")
     except TypeError as e:
         info("clear unpack: int payload", f"TypeError ({e})")
@@ -324,6 +240,5 @@ if __name__ == "__main__":
     print(f"python {sys.version.split()[0]}, load {os.getloadavg()}")
     text_edges()
     ecc_edges()
-    session_edges()
     print(f"{fails} FAIL, load {os.getloadavg()}")
     sys.exit(1 if fails else 0)

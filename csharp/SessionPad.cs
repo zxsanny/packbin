@@ -6,13 +6,6 @@ namespace Packbin;
 
 internal static class SessionPad
 {
-    internal static void Xor(ReadOnlySpan<byte> key, ulong packet, Span<byte> data)
-    {
-        Span<byte> nonce = stackalloc byte[12];
-        BinaryPrimitives.WriteUInt64LittleEndian(nonce, packet);
-        Xor(key, nonce, 0, data);
-    }
-
     internal static void Xor(ReadOnlySpan<byte> key, ReadOnlySpan<byte> nonce, uint counter, Span<byte> data)
     {
         Span<byte> block = stackalloc byte[64];

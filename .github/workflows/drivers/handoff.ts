@@ -1,7 +1,6 @@
 import {
   BinaryPacker,
   type Field,
-  PackSession,
   Scheme,
   bool,
   dict,
@@ -210,16 +209,6 @@ const positionPacket = scheme<PositionRow>(
   ]),
 );
 
-const positionValues: PositionRow = {
-  sid: 1,
-  lat: 500_000_000,
-  lon: 300_000_000,
-  profile: 1,
-};
-
-const sessionSeed = Uint8Array.from({ length: 32 }, (_, i) => i + 1);
-const sessionNonce = Buffer.from("01000000000000000000000000000000", "hex");
-
 function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (Array.isArray(a) && Array.isArray(b)) {
@@ -372,44 +361,6 @@ if (cmd === "unpack-roundwhen") {
     roundWhenPacket,
     { k: [1, 2], v: [9, undefined] },
   );
-}
-
-// The position row of the session payload: the values of positionValues and no optional field.
-function isSessionRow(row: PositionRow | undefined): boolean {
-  return (
-    row !== undefined &&
-    row.sid === 1 &&
-    row.lat === 500_000_000 &&
-    row.lon === 300_000_000 &&
-    row.profile === 1 &&
-    (row.heading === undefined || row.heading === null) &&
-    (row.speed === undefined || row.speed === null) &&
-    (row.altitude === undefined || row.altitude === null)
-  );
-}
-
-// pack-session and pack-session-ecc: the position row under the session, with 0 and with 4 parity bytes (EC-10).
-for (const [name, packet] of [["session", positionPacket], ["session-ecc", positionPacket.withLimits({ parity: 4 })]] as const) {
-  if (cmd === `pack-${name}`) {
-    const opener = PackSession.load(sessionSeed);
-    if (!opener || !opener.start(sessionNonce)) process.exit(1);
-    const payload = opener.pack(packet, positionValues);
-    if (!payload) process.exit(1);
-    process.stdout.write(Buffer.from(payload).toString("hex") + "\n");
-    process.exit(0);
-  }
-  if (cmd === `unpack-${name}`) {
-    const hex = process.argv[3] ?? "";
-    const waiter = PackSession.load(sessionSeed);
-    if (!waiter || !waiter.join(sessionNonce)) process.exit(1);
-    let row: PositionRow | undefined;
-    const result = waiter.unpack(Buffer.from(hex, "hex"), packet.on((value) => {
-      row = value as PositionRow;
-    }));
-    if (result.ok && isSessionRow(row)) process.exit(0);
-    process.stderr.write(`${cmd}: ${JSON.stringify(result)} read ${JSON.stringify(row)}\n`);
-    process.exit(1);
-  }
 }
 
 for (const [kind, { packet, values }] of Object.entries(elementCases)) {

@@ -455,3 +455,24 @@ AZ-3199 is the epic "Frame mode" (loop 69, umbrella AZ-3192, plan `_docs/02_task
 | AZ-3255 | java_frame_hardening | 3 | None (contract 2.0.0) | AZ-3199 |
 | AZ-3256 | swift_frame_hardening | 2 | None (contract 2.0.0) | AZ-3199 |
 | AZ-3275 | rust_key_wipes | 3 | None (contract 2.0.0) | AZ-3199 |
+
+Loop 74 (2026-10-26, ADR-009: remove the stream session; D1 frame names; D2 crypto kept). Estimation: LESSONS "every figure from a run on HEAD" applied (embedded and fixture figures in the plan's `acceptance_criteria.md`); deletions are low novelty, the couplings set the order (`feature-description.md`). Frame ports AZ-3292..AZ-3295 are in `backlog/` for loop 75.
+
+| Task | Name | Complexity | Dependencies | Epic |
+|------|------|-----------|-------------|------|
+| AZ-3280 | ring_ci_stream_removal | 3 | None | AZ-3199 |
+| AZ-3281 | csharp_stream_removal | 2 | AZ-3280 | AZ-3199 |
+| AZ-3282 | java_stream_removal | 2 | AZ-3280 | AZ-3199 |
+| AZ-3283 | python_stream_removal_crypto | 3 | AZ-3280 | AZ-3199 |
+| AZ-3284 | rust_stream_removal | 5 | AZ-3280 | AZ-3199 |
+| AZ-3285 | swift_stream_removal_and_names | 3 | AZ-3280 | AZ-3199 |
+| AZ-3286 | cpp_stream_removal_crypto | 5 | AZ-3280 | AZ-3199 |
+| AZ-3287 | go_stream_removal_crypto | 3 | AZ-3280 | AZ-3199 |
+| AZ-3288 | typescript_stream_removal_crypto | 3 | AZ-3280 | AZ-3199 |
+| AZ-3289 | rust_frame_names | 3 | AZ-3284 | AZ-3199 |
+| AZ-3290 | java_frame_names | 3 | AZ-3282 | AZ-3199 |
+| AZ-3291 | docs_stream_removal | 5 | AZ-3280..AZ-3290 | AZ-3199 |
+| AZ-3292 | cpp_frame_mode (loop 75) | 5 | AZ-3286, AZ-3291 | AZ-3199 |
+| AZ-3293 | go_frame_mode (loop 75) | 5 | AZ-3287, AZ-3291 | AZ-3199 |
+| AZ-3294 | python_frame_mode (loop 75) | 5 | AZ-3283, AZ-3291 | AZ-3199 |
+| AZ-3295 | typescript_frame_mode (loop 75) | 5 | AZ-3288, AZ-3291 | AZ-3199 |

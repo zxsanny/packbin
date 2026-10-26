@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Swift wiring check of the cross-language ring (AZ-2522 AC-3), the sibling of ring-wiring.test.sh
 # and ring-wiring-rows.test.sh (the C# and Go rows): Swift joins every kind of language-pair.sh both ways with each member of that kind's ring, refuses the
-# short element packets, packs the session, checks its position row through publish-position.sh (AZ-2523), and the
+# short element packets, checks its position row through publish-position.sh (AZ-2523), and the
 # driver package, ring-swift.sh, ring-toolchains.sh and the ring job of test.yml carry the Swift pieces. Every guard
 # is then proven against a temp copy with one piece removed: the copy must be rejected, naming it. ring-swift.sh is
 # also run against a temp tree with a stand-in `swift` (rebuild only when a source is newer; the version it prints).
@@ -19,7 +19,7 @@ fail() {
   failures=$((failures + 1))
 }
 
-swift_kinds="user nested boolflag booltrue bitwhen roundflags roundwhen listgroup dictgroup listflags session session-ecc" # session-ecc: AZ-2739, hex in session_ecc_hex
+swift_kinds="user nested boolflag booltrue bitwhen roundflags roundwhen listgroup dictgroup listflags"
 # The members of each kind's ring (as language-pair.sh runs them), Go included.
 swift_members() {
   case "$1" in
@@ -33,8 +33,8 @@ swift_expected_lines() {
   for kind in $swift_kinds; do
     for member in $(swift_members "$kind"); do
       # C# only produces the round kinds (no public C# API reads an aligned round row yet).
-      case "$kind$member" in roundflagscsharp | roundwhencsharp) ;; *) echo "handoff swift $member $kind \"\$${kind//-/_}_hex\"" ;; esac
-      echo "handoff $member swift $kind \"\$${kind//-/_}_hex\""
+      case "$kind$member" in roundflagscsharp | roundwhencsharp) ;; *) echo "handoff swift $member $kind \"\$${kind}_hex\"" ;; esac
+      echo "handoff $member swift $kind \"\$${kind}_hex\""
     done
   done
 }
@@ -114,10 +114,9 @@ RUBY
 }
 
 # swift_violations: one line per missing Swift piece. Each file can be replaced by a copy: SW_SCRIPT, SW_KINDS,
-# SW_MAIN, SW_PACKAGE, SW_RESOLVED, SW_TOOLS, SW_BUILD, SW_WORKFLOW, SW_PINS, SW_COMPOSE (defaults: the real files).
+# SW_PACKAGE, SW_RESOLVED, SW_TOOLS, SW_BUILD, SW_WORKFLOW, SW_PINS, SW_COMPOSE (defaults: the real files).
 swift_violations() {
   local script="${SW_SCRIPT:-$ring_all}" kinds="${SW_KINDS:-$here/drivers/handoff-swift/Sources/handoff-swift/Kinds.swift}"
-  local main="${SW_MAIN:-$here/drivers/handoff-swift/Sources/handoff-swift/main.swift}"
   local package="${SW_PACKAGE:-$here/drivers/handoff-swift/Package.swift}" tools="${SW_TOOLS:-$here/ring-toolchains.sh}"
   local build="${SW_BUILD:-$here/ring-swift.sh}" workflow="${SW_WORKFLOW:-$here/test.yml}"
   local pins="${SW_PINS:-$here/tool-pins.txt}" compose="${SW_COMPOSE:-$here/../../docker-compose.test.yml}"
@@ -133,10 +132,6 @@ swift_violations() {
     grep -qxF '      "$swift_ring/release/handoff-swift" "$@"' <<< "$case_block" \
       || echo "the swift case of run_lang does not run the built handoff-swift"
   fi
-  awk '/^for lang in /{ langs = $0 } index($0, "\"pack-session\"") { print langs }' "$script" | grep -Eq '[ ]swift[ ;]' \
-    || echo "swift is not in the loop that checks pack-session"
-  awk '/^for lang in /{ langs = $0 } index($0, "\"pack-session-ecc\"") { print langs }' "$script" | grep -Eq '[ ]swift[ ;]' \
-    || echo "swift is not in the loop that checks pack-session-ecc"
   short_loop="$(awk '/^for kind in /{ loop = $0 } index($0, "if ! run_lang swift \"unpack-$kind-short\" \"${!short}\"; then") { print loop }' "$script")"
   if [ -z "$short_loop" ]; then
     echo "no loop refuses the short element packets with swift"
@@ -147,14 +142,11 @@ swift_violations() {
   fi
   awk '/^for lang in /{ langs = $0 } index($0, "publish-position.sh") { print langs }' "$script" | grep -Eq '[ ]swift[ ;]' \
     || echo "swift is not in the loop that checks the position row through publish-position.sh"
-  for kind in ${swift_kinds% session session-ecc}; do
+  for kind in $swift_kinds; do
     grep -qxF "    case \"$kind\":" "$kinds" || echo "the swift driver has no kind $kind"
   done
   for kind in listgroup dictgroup listflags; do
     grep '^let shortKinds: ' "$kinds" | grep -qF "\"$kind\"" || echo "the swift driver does not refuse the short $kind packet"
-  done
-  for kind in pack-session unpack-session pack-session-ecc unpack-session-ecc; do
-    grep -qxF "    case \"$kind\":" "$main" || echo "the swift driver has no $kind command"
   done
   grep -qxF '        .package(path: "../../../.."),' "$package" \
     || echo "the swift driver package does not depend on the root package by path"
@@ -182,7 +174,6 @@ expect_rejected() {
   case "$var" in
     SW_SCRIPT) real="$ring_all" ;;
     SW_KINDS) real="$here/drivers/handoff-swift/Sources/handoff-swift/Kinds.swift" ;;
-    SW_MAIN) real="$here/drivers/handoff-swift/Sources/handoff-swift/main.swift" ;;
     SW_PACKAGE) real="$here/drivers/handoff-swift/Package.swift" ;;
     SW_RESOLVED) real="$here/drivers/handoff-swift/Package.resolved" ;;
     SW_TOOLS) real="$here/ring-toolchains.sh" ;;
@@ -229,33 +220,23 @@ swift_wiring_checks() {
   expect_rejected "the || return of the Swift build in run_lang" SW_SCRIPT="$tmp/s2.sh"
   mutate "$script" "$tmp/s3.sh" 's/"$swift_ring\/release\/handoff-swift" "$@"/"$swift_ring\/release\/position" "$@"/'
   expect_rejected "the handoff-swift binary in run_lang" SW_SCRIPT="$tmp/s3.sh"
-  mutate "$script" "$tmp/s4.sh" 's/^\(for lang in .*\) swift go; do$/\1 go; do/'
-  expect_rejected "swift in the pack-session loop" SW_SCRIPT="$tmp/s4.sh"
-  # Only the loop that checks pack-session-ecc loses swift (s4 edits every loop of the eight languages).
-  awk '{ lines[NR] = $0 } /^for lang in /{ n = NR } index($0, "\"pack-session-ecc\"") { at = n }
-    END { sub(/ swift go; do$/, " go; do", lines[at]); for (i = 1; i <= NR; i++) print lines[i] }' "$script" > "$tmp/s4-ecc.sh"
-  expect_rejected "swift in the pack-session-ecc loop" SW_SCRIPT="$tmp/s4-ecc.sh"
   for kind in listgroup dictgroup listflags; do
     mutate "$script" "$tmp/s5-$kind.sh" "s/^\\(for kind in .*\\)$kind\\(.*; do\\)$/\\1\\2/"
     expect_rejected "$kind in the swift short packet loop" SW_SCRIPT="$tmp/s5-$kind.sh"
   done
   mutate "$script" "$tmp/s6.sh" 's/^  if ! run_lang swift "unpack-$kind-short"/  if ! run_lang go "unpack-$kind-short"/'
   expect_rejected "the swift short packet refusal" SW_SCRIPT="$tmp/s6.sh"
-  # The position loop reads like the pack-session loop, so only the loop above the publish-position.sh line loses swift.
+  # Only the loop above the publish-position.sh line loses swift.
   awk '{ lines[NR] = $0 } /^for lang in /{ n = NR } index($0, "publish-position.sh") { at = n }
     END { sub(/ swift go; do$/, " go; do", lines[at]); for (i = 1; i <= NR; i++) print lines[i] }' "$script" > "$tmp/s7.sh"
   expect_rejected "swift in the publish-position loop" SW_SCRIPT="$tmp/s7.sh"
-  for kind in ${swift_kinds% session session-ecc}; do
+  for kind in $swift_kinds; do
     mutate "$driver/Sources/handoff-swift/Kinds.swift" "$tmp/k-$kind.swift" "s/^    case \"$kind\":$/    case \"x$kind\":/"
     expect_rejected "the $kind kind of the swift driver" SW_KINDS="$tmp/k-$kind.swift"
   done
   for kind in listgroup dictgroup listflags; do
     mutate "$driver/Sources/handoff-swift/Kinds.swift" "$tmp/short-$kind.swift" "/^let shortKinds: /s/\"$kind\"/\"x\"/"
     expect_rejected "the short $kind refusal of the swift driver" SW_KINDS="$tmp/short-$kind.swift"
-  done
-  for kind in pack-session unpack-session pack-session-ecc unpack-session-ecc; do
-    mutate "$driver/Sources/handoff-swift/main.swift" "$tmp/m-$kind.swift" "s/^    case \"$kind\":$/    case \"x$kind\":/"
-    expect_rejected "the $kind command of the swift driver" SW_MAIN="$tmp/m-$kind.swift"
   done
   mutate "$driver/Package.swift" "$tmp/p1.swift" 's#\.package(path: "../../../.."),#.package(url: "https://github.com/zxsanny/packbin", from: "0.2.2"),#'
   expect_rejected "the root package by path" SW_PACKAGE="$tmp/p1.swift"

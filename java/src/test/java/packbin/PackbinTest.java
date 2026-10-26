@@ -53,7 +53,6 @@ public final class PackbinTest {
         NestedRoundTest.run();
         TypedNestedRowTest.run();
         FlagPresenceTest.run();
-        HostileSessionTest.run();
         FlagScopeContainerTest.run();
         TimesLongerTest.run();
         PackStrictTest.run();

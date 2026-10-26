@@ -25,11 +25,6 @@ public class TopRangeAndSessionTests
         public byte V { get; set; }
     }
 
-    private sealed class PayloadRow
-    {
-        public uint? N { get; set; }
-    }
-
     private sealed class SignedCountRow
     {
         public long N { get; set; }
@@ -127,66 +122,5 @@ public class TopRangeAndSessionTests
         var before = GC.GetAllocatedBytesForCurrentThread();
         action();
         return GC.GetAllocatedBytesForCurrentThread() - before;
-    }
-
-    [Fact]
-    public void ConcurrentPack_YieldsDistinctCiphertextsOnEveryCounter()
-    {
-        // Arrange
-        const int threads = 8;
-        const int perThread = 2000;
-        var seed = Enumerable.Range(1, 32).Select(i => (byte)i).ToArray();
-        var nonce = Enumerable.Range(1, 16).Select(i => (byte)i).ToArray();
-        var sender = PackSession.Load(seed)!;
-        var receiver = PackSession.Load(seed)!;
-        sender.Start(nonce);
-        receiver.Join(nonce);
-        var scheme = new Scheme<PayloadRow>(1, Field.U32<PayloadRow>(0, x => x.N));
-        var plain = BinaryPacker.Pack(scheme, new PayloadRow { N = 7 });
-        var all = new string[threads * perThread];
-        var start = new Barrier(threads);
-
-        // Act
-        var workers = Enumerable.Range(0, threads).Select(t => new Thread(() =>
-        {
-            start.SignalAndWait();
-            for (var i = 0; i < perThread; i++)
-                all[t * perThread + i] = Convert.ToHexString(sender.Pack(scheme, new PayloadRow { N = 7 })!);
-        })).ToList();
-        workers.ForEach(w => w.Start());
-        workers.ForEach(w => w.Join());
-
-        // Assert: every counter 0..N-1 was used exactly once, so the ciphertext set is the one a single thread gives
-        var key = (byte[])SessionPrivates.Get(receiver, "_recv");
-        var expected = new HashSet<string>();
-        for (ulong k = 0; k < threads * perThread; k++)
-        {
-            var cipher = (byte[])plain.Clone();
-            SessionPad.Xor(key, k, cipher);
-            expected.Add(Convert.ToHexString(cipher));
-        }
-        Assert.Equal(threads * perThread, all.Distinct().Count());
-        Assert.True(expected.SetEquals(all));
-    }
-
-    [Fact]
-    public void SequentialPack_KeepsTheCiphertextBytesOfCounterOrder()
-    {
-        var seed = Enumerable.Range(1, 32).Select(i => (byte)i).ToArray();
-        var nonce = Enumerable.Range(1, 16).Select(i => (byte)i).ToArray();
-        var sender = PackSession.Load(seed)!;
-        var receiver = PackSession.Load(seed)!;
-        sender.Start(nonce);
-        receiver.Join(nonce);
-        var scheme = new Scheme<PayloadRow>(1, Field.U32<PayloadRow>(0, x => x.N));
-        var seen = new List<uint?>();
-
-        for (uint i = 0; i < 5; i++)
-        {
-            var cipher = sender.Pack(scheme, new PayloadRow { N = i })!;
-            Assert.Null(receiver.Unpack(cipher, scheme.On(r => seen.Add(r.N))));
-        }
-
-        Assert.Equal(new uint?[] { 0, 1, 2, 3, 4 }, seen);
     }
 }

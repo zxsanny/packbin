@@ -1,7 +1,7 @@
 // AZ-2666 hostile-input probes for the C# package: compact text decoder and message ECC unpack (loop 41 audit).
 // Build: see PackbinProbe.csproj. Run: PackbinProbe <repo> <probe> [seed] [count]
 //   fuzz-text   seeded random and mutated strings against TextDecoder.Read and the public Unpack (single, list, dict)
-//   fuzz-ecc    seeded random and corrupted protected messages against Ecc.Repair, the public Unpack and PackSession
+//   fuzz-ecc    seeded random and corrupted protected messages against Ecc.Repair and the public Unpack
 //   ecc-worst   per-call time of the costliest repairs at N = 254, n = 32 (t = 16 and t = 0)
 //   text-amp <case>   decoded size and time of the largest texts; case: max, over, silent, packet1m, packet16m, dict, collide, baseline
 //   edges       the AC-1 / AC-2 edge cases a random run is unlikely to hit (prints PASS / FAIL per case)

@@ -388,8 +388,6 @@ jobs:
       # Off the ring job's critical path since AZ-2626: both need only ruby and bash.
       - name: Swift ring wiring
         run: bash .github/workflows/ring-wiring-swift.test.sh
-      - name: session-ecc ring wiring
-        run: bash .github/workflows/ring-wiring-session-ecc.test.sh
       - name: ring runner split
         run: bash .github/workflows/ring-lib.test.sh
       - name: ring preparation

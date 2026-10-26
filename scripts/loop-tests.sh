@@ -297,7 +297,6 @@ run_stage_command() {
         && bash .github/workflows/ring-wiring.test.sh \
         && bash .github/workflows/ring-wiring-rows.test.sh \
         && bash .github/workflows/ring-wiring-swift.test.sh \
-        && bash .github/workflows/ring-wiring-session-ecc.test.sh \
         && bash .github/workflows/ring-lib.test.sh \
         && bash .github/workflows/ring-prepare.test.sh \
         && bash scripts/loop-tests.test.sh ;;

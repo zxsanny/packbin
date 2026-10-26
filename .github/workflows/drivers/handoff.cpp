@@ -126,18 +126,6 @@ constexpr auto position_scheme = packbin::scheme<Position>(
     packbin::flags(4, packbin::u16<&Position::heading>(4), packbin::u8<&Position::speed>(5),
                    packbin::i16<&Position::altitude>(6)));
 
-// The position row under the session with 4 parity bytes (session-ecc, EC-10).
-constexpr auto position_ecc_scheme = packbin::parity(position_scheme, 4);
-
-Position position_row() {
-  Position row;
-  row.sid = 1;
-  row.lat = 500000000;
-  row.lon = 300000000;
-  row.profile = 1;
-  return row;
-}
-
 struct BoolFlag {
   packbin::Opt<bool> on;
 };
@@ -222,16 +210,6 @@ int print(packbin::Result r, std::uint8_t const* buf) {
   return 0;
 }
 
-bool open_session(packbin::PackSession& s, bool opener) {
-  std::uint8_t seed[32];
-  for (std::size_t i = 0; i < sizeof(seed); ++i)
-    seed[i] = static_cast<std::uint8_t>(i + 1);
-  std::uint8_t nonce[16] = {1};
-  if (!s.load(seed, sizeof(seed)))
-    return false;
-  return opener ? s.start(nonce, sizeof(nonce)) : s.join(nonce, sizeof(nonce));
-}
-
 bool user_ok(std::uint8_t const* data, std::size_t len) {
   User got;
   if (!packbin::unpack(user_scheme, data, len, got).ok())
@@ -304,16 +282,6 @@ bool roundwhen_ok(std::uint8_t const* data, std::size_t len) {
   std::uint8_t again[kMax];
   return read && same_bytes(packbin::pack(roundwhen_scheme, got, again, sizeof(again)), again,
                             data, len);
-}
-
-template <typename Scheme>
-bool session_ok(Scheme const& scheme, std::uint8_t* data, std::size_t len) {
-  packbin::PackSession waiter;
-  Position got;
-  if (!open_session(waiter, false) || !waiter.unpack(scheme, data, len, got).ok())
-    return false;
-  return got.sid == 1 && got.lat == 500000000 && got.lon == 300000000 && got.profile == 1 &&
-         !got.heading.has && !got.speed.has && !got.altitude.has;
 }
 
 // The message ECC commands (AZ-2689; contract message-ecc.md).
@@ -463,14 +431,6 @@ int main(int argc, char** argv) {
     return print(packbin::pack(roundflags_scheme, roundflags_row(), buf, sizeof(buf)), buf);
   if (cmd == "pack-roundwhen")
     return print(packbin::pack(roundwhen_scheme, roundwhen_row(), buf, sizeof(buf)), buf);
-  if (cmd == "pack-session" || cmd == "pack-session-ecc") {
-    packbin::PackSession opener;
-    if (!open_session(opener, true))
-      return 1;
-    if (cmd == "pack-session-ecc")
-      return print(opener.pack(position_ecc_scheme, position_row(), buf, sizeof(buf)), buf);
-    return print(opener.pack(position_scheme, position_row(), buf, sizeof(buf)), buf);
-  }
   if (argc < 3)
     return 2;
   std::size_t len = parse_hex(argv[2], buf);
@@ -488,9 +448,5 @@ int main(int argc, char** argv) {
     return roundflags_ok(buf, len) ? 0 : 1;
   if (cmd == "unpack-roundwhen")
     return roundwhen_ok(buf, len) ? 0 : 1;
-  if (cmd == "unpack-session")
-    return session_ok(position_scheme, buf, len) ? 0 : 1;
-  if (cmd == "unpack-session-ecc")
-    return session_ok(position_ecc_scheme, buf, len) ? 0 : 1;
   return 2;
 }

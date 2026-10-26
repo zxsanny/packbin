@@ -21,7 +21,7 @@ BUDGET = float(sys.argv[3]) if len(sys.argv) > 3 else 25.0
 sys.path.insert(0, os.path.join(REPO, "python", "src"))
 
 import packbin  # noqa: E402
-from packbin import BinaryPacker, PackSession, UnpackResult  # noqa: E402
+from packbin import BinaryPacker, UnpackResult  # noqa: E402
 
 
 def _load(name: str, path: str):
@@ -140,12 +140,9 @@ def mutate(data: bytes) -> bytes:
     return bytes(buf)
 
 
-def public_unpack(packet, handlers, limit: int = 0, session: PackSession | None = None) -> UnpackResult:
+def public_unpack(packet, handlers, limit: int = 0) -> UnpackResult:
     """The public call; anything but an `UnpackResult` coming out is the finding."""
-    if session is None:
-        out = BinaryPacker.unpack(packet, *handlers, limit=limit)
-    else:
-        out = session.unpack(packet, *handlers, limit=limit)
+    out = BinaryPacker.unpack(packet, *handlers, limit=limit)
     if not isinstance(out, UnpackResult):
         raise AssertionError(f"unpack returned {type(out)!r}")
     return out

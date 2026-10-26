@@ -308,19 +308,16 @@ def error_kind(result: UnpackResult[Any]) -> str:
     return type(error).__name__
 
 
-def unpack_guarded(
-    scheme: Scheme[Any], data: bytes, unpack: Any = None
-) -> tuple[UnpackResult[Any], list[Any], _Elapsed]:
+def unpack_guarded(scheme: Scheme[Any], data: bytes) -> tuple[UnpackResult[Any], list[Any], _Elapsed]:
     """Unpack in a forked child that is killed after GUARD_SECONDS, so a hang fails
     the test instead of CI and leaves nothing spinning behind."""
     ctx = multiprocessing.get_context("fork")
-    run = unpack or BinaryPacker.unpack
     recv, send = ctx.Pipe(duplex=False)
 
     def work() -> None:
         seen: list[Any] = []
         try:
-            outcome: Any = (run(data, scheme.on(seen.append)), seen)
+            outcome: Any = (BinaryPacker.unpack(data, scheme.on(seen.append)), seen)
         except BaseException as exc:  # reported to the test below
             outcome = exc
         send.send(outcome)

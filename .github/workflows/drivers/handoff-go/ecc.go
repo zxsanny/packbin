@@ -21,6 +21,24 @@ import (
 // "-" is the empty buffer. The kind names are the ones of fixtures/ecc/vectors.txt (uncorrectable, short, too_long,
 // bad_parity, bad_limit) plus trailing, type_mismatch and unpack_failed for the walk of the unprotected fields.
 
+// position is the AC-1 scheme, the clear message the ECC commands protect and repair.
+func position() *packbin.Scheme {
+	s, err := packbin.NewScheme(0x40,
+		packbin.U16(0, "sid"),
+		packbin.I32(1, "lat"),
+		packbin.I32(2, "lon"),
+		packbin.U8(3, "profile"),
+		packbin.Flags(4,
+			packbin.U16(4, "heading"),
+			packbin.U8(5, "speed"),
+			packbin.I16(6, "altitude")))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "position scheme: %v\n", err)
+		os.Exit(1)
+	}
+	return s
+}
+
 func eccBytes(token string) ([]byte, error) {
 	if token == "-" {
 		return []byte{}, nil

@@ -10,6 +10,12 @@ import Packbin
 // "-" is the empty buffer. The kind names are the ones of fixtures/ecc/vectors.txt (uncorrectable, short, too_long,
 // bad_parity, bad_limit) plus trailing, type_mismatch and unpack_failed for the walk of the unprotected fields.
 
+/// The AC-1 scheme, the clear message the ECC commands protect and repair.
+func positionScheme() throws -> Scheme {
+    try Scheme(0x40, .u16(0, "sid"), .i32(1, "lat"), .i32(2, "lon"), .u8(3, "profile"),
+               .flags(4, .u16(4, "heading"), .u8(5, "speed"), .i16(6, "altitude")))
+}
+
 private func eccBytes(_ token: String) -> [UInt8]? {
     token == "-" ? [] : hexBytes(token)
 }

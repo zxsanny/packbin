@@ -23,11 +23,6 @@ public class WrittenWhenTests
         public bool? On { get; set; }
     }
 
-    private sealed class RequiredRow
-    {
-        public byte? A { get; set; }
-    }
-
     private static string Hex(byte[] raw) => Convert.ToHexString(raw).ToLowerInvariant();
 
     private static Scheme<ChainRow> Chain() => new(1,
@@ -218,27 +213,6 @@ public class WrittenWhenTests
         Assert.Equal("0100", Hex(raw));
         Assert.Null(err);
         Assert.Null(got!.V);
-    }
-
-    [Fact]
-    public void Ac4_FailedPack_DoesNotAdvanceTheSession()
-    {
-        // Arrange
-        var scheme = new Scheme<RequiredRow>(1, Field.U8<RequiredRow>(0, x => x.A));
-        var seed = new byte[PackSession.SeedSize];
-        var opener = PackSession.Load(seed)!;
-        var waiter = PackSession.Load(seed)!;
-        Assert.True(waiter.Join(opener.Start()!));
-        RequiredRow? got = null;
-
-        // Act
-        Assert.Throws<ArgumentException>(() => opener.Pack(scheme, new RequiredRow()));
-        var packet = opener.Pack(scheme, new RequiredRow { A = 7 });
-        var err = waiter.Unpack(packet!, scheme.On(r => got = r));
-
-        // Assert
-        Assert.Null(err);
-        Assert.Equal((byte?)7, got!.A);
     }
 
     [Fact]

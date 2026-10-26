@@ -102,14 +102,6 @@ static class Handoff
             Field.U8<PositionRow>(5, x => x.Speed),
             Field.I16<PositionRow>(6, x => x.Altitude)));
 
-    static readonly PositionRow PositionRowValue = new()
-    {
-        Sid = 1,
-        Lat = 500_000_000,
-        Lon = 300_000_000,
-        Profile = 1,
-    };
-
     sealed class BoolFlagRow
     {
         public bool? On { get; set; }
@@ -170,12 +162,6 @@ static class Handoff
         ["V"] = new object?[] { (byte)9 },
     };
 
-    // The position row under the session with 4 parity bytes (session-ecc, EC-10).
-    static readonly Scheme<PositionRow> PositionEccScheme = PositionScheme.WithParity(4);
-
-    static readonly byte[] SessionSeed = Enumerable.Range(1, 32).Select(i => (byte)i).ToArray();
-    static readonly byte[] SessionNonce = Convert.FromHexString("01000000000000000000000000000000");
-
     static int Main(string[] args)
     {
         if (args.Length == 0)
@@ -189,10 +175,6 @@ static class Handoff
             case "pack-nested":
                 Console.WriteLine(Convert.ToHexString(BinaryPacker.Pack(NestedScheme, NestedValues)).ToLowerInvariant());
                 return 0;
-            case "pack-session":
-                return PackSessionOpener(PositionScheme);
-            case "pack-session-ecc":
-                return PackSessionOpener(PositionEccScheme);
             case "pack-boolflag":
                 Console.WriteLine(Convert.ToHexString(BinaryPacker.Pack(BoolFlagScheme, new BoolFlagRow { On = false })).ToLowerInvariant());
                 return 0;
@@ -216,14 +198,6 @@ static class Handoff
                 if (args.Length < 2)
                     return 2;
                 return UnpackNested(args[1]) ? 0 : 1;
-            case "unpack-session":
-                if (args.Length < 2)
-                    return 2;
-                return UnpackSession(args[1], PositionScheme) ? 0 : 1;
-            case "unpack-session-ecc":
-                if (args.Length < 2)
-                    return 2;
-                return UnpackSession(args[1], PositionEccScheme) ? 0 : 1;
             case "unpack-boolflag":
                 if (args.Length < 2)
                     return 2;
@@ -241,36 +215,6 @@ static class Handoff
             default:
                 return HandoffElements.Run(args);
         }
-    }
-
-    static int PackSessionOpener(Scheme<PositionRow> scheme)
-    {
-        var opener = PackSession.Load(SessionSeed);
-        if (opener is null || opener.Start(SessionNonce) is null)
-            return 1;
-        var payload = opener.Pack(scheme, PositionRowValue);
-        if (payload is null)
-            return 1;
-        Console.WriteLine(Convert.ToHexString(payload).ToLowerInvariant());
-        return 0;
-    }
-
-    static bool UnpackSession(string hex, Scheme<PositionRow> scheme)
-    {
-        var waiter = PackSession.Load(SessionSeed);
-        if (waiter is null || !waiter.Join(SessionNonce))
-            return false;
-        PositionRow? got = null;
-        var err = waiter.Unpack(Convert.FromHexString(hex), scheme.On(v => got = v));
-        if (err is not null || got is null)
-            return false;
-        return got.Sid == 1
-            && got.Lat == 500_000_000
-            && got.Lon == 300_000_000
-            && got.Profile == 1
-            && got.Heading is null
-            && got.Speed is null
-            && got.Altitude is null;
     }
 
     // expectOn: the row must read on = true; otherwise on must be absent or false.

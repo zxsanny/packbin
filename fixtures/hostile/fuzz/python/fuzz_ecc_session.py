@@ -1,11 +1,11 @@
-# Run: python3.14 -I -B fuzz_ecc_session.py <repo checkout> [seed] [seconds per part]   (AZ-2666 probe (a), Python, ECC + session)
-"""Seeded ECC inputs against the Python repair and the protected unpack path, then hostile session payloads.
+# Run: python3.14 -I -B fuzz_ecc_session.py <repo checkout> [seed] [seconds per part]   (AZ-2666 probe (a), Python, ECC)
+"""Seeded ECC inputs against the Python repair and the protected unpack path.
 
-ECC: random buffers, code words with k wrong bytes, cut or extended words, `fixtures/ecc/vectors.txt` rows and
-protected corpus packets go through `_ecc.repair` and `scripts/ecc/eccfmt.py` (a different answer is a mismatch),
-then through a dispatch of two schemes that share n; the caller's buffer must stay unchanged. Session: payloads
-(good, mutated, random, with wrong bytes) on an open session; caller mistakes must not move the receive index, every
-payload must move it by one, and the sender's next payload must still be read. Shared setup is `fuzz_common.py`.
+Random buffers, code words with k wrong bytes, cut or extended words, `fixtures/ecc/vectors.txt` rows and protected
+corpus packets go through `_ecc.repair` and `scripts/ecc/eccfmt.py` (a different answer is a mismatch), then through
+a dispatch of two schemes that share n; the caller's buffer must stay unchanged. The stream session part went with
+the stream session (loop 74, ADR-009); the file name stays for the README and the sibling probes. Shared setup is
+`fuzz_common.py`.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # -I leaves the 
 
 import fuzz_common as C  # noqa: E402
 from fuzz_common import Stats, mutate, note, rng  # noqa: E402
-from packbin import PackSession, Scheme, repeat, u8, utf8  # noqa: E402
+from packbin import Scheme, repeat, u8, utf8  # noqa: E402
 from packbin import list as list_field  # noqa: E402
 from packbin import _ecc  # noqa: E402
 
@@ -135,72 +135,10 @@ def run_ecc(deadline: float) -> None:
     print(pub.report())
 
 
-def hostile_payload(good: bytes, n: int) -> bytes:
-    r = rng.random()
-    if r < 0.4:
-        return good
-    if r < 0.7:
-        return mutate(good)
-    if r < 0.8:
-        return bytes(rng.randrange(256) for _ in range(rng.choice([0, 1, n, 254, 255, 300])))
-    payload = bytearray(good)
-    for p in rng.sample(range(len(payload)), min(len(payload), rng.randint(1, max(1, n)))):
-        payload[p] ^= rng.randrange(1, 256)
-    return bytes(payload)
-
-
-def run_session(deadline: float) -> None:
-    st = Stats("session unpack with hostile payloads (index check)")
-    seed = bytes(range(1, 33))
-    nonce = bytes(16)
-    while time.perf_counter() < deadline:
-        n = rng.choice([0, 1, 2, 4, 8, 16, 32])
-        t = rng.randint(0, n // 2)
-        sender = PackSession.load(seed)
-        receiver = PackSession.load(seed)
-        sender.start(nonce)
-        receiver.join(nonce)
-        s1 = Scheme(1, dict, utf8(0, lambda row: row["s"])).with_limits(parity=n)
-        h = s1.on(lambda r: None)
-        expected = 0
-        for step in range(rng.randint(2, 12)):
-            payload = hostile_payload(sender.pack(s1, {"s": "привіт " + str(step)}), n)
-            for bad in ("dup", "limit"):  # caller mistakes that must not move the index
-                try:
-                    if bad == "dup":
-                        receiver.unpack(payload, h, h, limit=t)
-                    else:
-                        receiver.unpack(payload, h, limit=n // 2 + 1)
-                    note(f"session accepted a {bad} call")
-                except ValueError:
-                    pass
-            if receiver._recv_count != expected:
-                note(f"session index moved on a refused call: {receiver._recv_count} != {expected}")
-                expected = receiver._recv_count
-            try:
-                res = st.timed(f"n={n} t={t} N={len(payload)}", lambda: C.public_unpack(payload, (h,), limit=t, session=receiver))
-                if res.ok:
-                    st.accepted += 1
-                else:
-                    st.refused += 1
-            except Exception as e:  # noqa: BLE001
-                st.exceptions += 1
-                note(f"session unpack raised {type(e).__name__}: {e} on n={n} {payload.hex()[:200]}")
-            expected += 1
-            if receiver._recv_count != expected:
-                note(f"session index {receiver._recv_count} after a payload, expected {expected}")
-                expected = receiver._recv_count
-        res = receiver.unpack(sender.pack(s1, {"s": "end"}), h, limit=t)  # the next good payload is still read
-        if not res.ok or res.value != {"s": "end"}:
-            note(f"session lost sync after hostile payloads (n={n}): {res}")
-    print(st.report())
-
-
 def main() -> int:
     signal.alarm(int(C.BUDGET * 2.5) + 60)  # a hang ends the run (SIGALRM) instead of holding a core
     t0 = C.banner()
     run_ecc(time.perf_counter() + C.BUDGET)
-    run_session(time.perf_counter() + C.BUDGET / 2)
     return C.finish(t0)
 
 

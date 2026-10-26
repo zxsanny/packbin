@@ -14,7 +14,7 @@ rm -rf "$dest"
 mkdir -p "$dest/src/packbin" "$dest/src/core" "$dest/examples/esp32_arduino"
 sed "s/^version=.*/version=$version/" "$cpp/arduino/library.properties" >"$dest/library.properties"
 cp "$cpp/arduino/packbin.h" "$dest/src/packbin.h"
-# Headers only declare; src/os_random.cpp (the operating-system random source) is not copied.
+# Headers only declare; only the sources of src/core are copied.
 cp "$cpp"/include/packbin/*.hpp "$dest/src/packbin/"
 cp "$cpp"/src/core/*.cpp "$cpp"/src/core/*.hpp "$dest/src/core/"
 cp "$cpp/examples/esp32_arduino/esp32_arduino.ino" "$dest/examples/esp32_arduino/"

@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 namespace Packbin.Tests;
 
 // Replays fixtures/crypto/vectors.txt (AZ-3201, PB-02) through the primitives the package uses: the platform SHA-256, the
-// platform HMAC-SHA256 as FrameCrypto starts it, Compat.HkdfSha256 and the ChaCha20 of SessionPad.
+// platform HMAC-SHA256 as FrameCrypto starts it, Compat.HkdfSha256 and the ChaCha20 of SessionPad that frame mode uses.
 internal static class CryptoVectors
 {
     internal sealed record Row(string Primitive, string Id, Dictionary<string, string> Fields);

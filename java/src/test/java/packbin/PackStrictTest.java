@@ -24,7 +24,6 @@ final class PackStrictTest {
         oversizeBigNumbersAreRefusedForBothFloats();
         oddNumbersAreRefusedForIntegers();
         ac6ValidRowsKeepTheirBytes();
-        ac7SessionPackRefusesTheSame();
         refusalsReachEveryPlaceAScalarIsPacked();
         az2234Ac9U2OutsideRoundsIsUnchanged();
     }
@@ -212,43 +211,6 @@ final class PackStrictTest {
         PackbinTest.expectTrue("AC-6 u64 above 2^63 unpacks (" + err + ")", err == null && got[0] != null);
         PackbinTest.expectEq("AC-6 unpack then repack of a u64 above 2^63", "01ffffffffffffffff",
                 got[0] == null ? "" : PackbinTest.toHex(BinaryPacker.pack(u64, got[0])));
-    }
-
-    private static void ac7SessionPackRefusesTheSame() {
-        byte[] seed = new byte[PackSession.SEED_SIZE];
-        PackSession sender = PackSession.load(seed);
-        PackSession reader = PackSession.load(seed);
-        byte[] nonce = sender.start();
-        PackbinTest.expectTrue("AC-7 session opens", nonce != null && reader.join(nonce));
-        Scheme<Map> u8 = scheme("u8");
-        Scheme<Map> f32 = scheme("f32");
-        Scheme<Map> i64 = scheme("i64");
-        expectSessionRefused("AC-7 u8 300", sender, u8, 300);
-        expectSessionRefused("AC-7 u8 \"5\"", sender, u8, "5");
-        expectSessionRefused("AC-7 u8 BigDecimal 1.5", sender, u8, new BigDecimal("1.5"));
-        expectSessionRefused("AC-7 f32 1e39", sender, f32, 1e39);
-        expectSessionRefused("AC-7 f32 true", sender, f32, true);
-        expectSessionRefused("AC-7 i64 BigInteger 2^63", sender, i64, BigInteger.ONE.shiftLeft(63));
-
-        Map[] got = new Map[1];
-        byte[] sealed = sender.pack(u8, Maps.map("a", 7));
-        Object err = reader.unpack(sealed, u8.on(r -> got[0] = r));
-        PackbinTest.expectTrue("AC-7 the next valid row is read by the peer (" + err + ")", err == null && got[0] != null);
-        PackbinTest.expectEq("AC-7 a", 7, got[0] == null ? null : got[0].get("a"));
-    }
-
-    private static void expectSessionRefused(String label, PackSession session, Scheme<Map> scheme, Object value) {
-        try {
-            session.pack(scheme, Maps.map("a", value));
-        } catch (IllegalArgumentException ex) {
-            PackbinTest.expectTrue(label + ": names field 0: \"" + ex.getMessage() + "\"",
-                    ex.getClass() == IllegalArgumentException.class && ex.getMessage().startsWith("0: "));
-            return;
-        } catch (RuntimeException ex) {
-            PackbinTest.fail(label + ": threw " + ex + ", expected IllegalArgumentException");
-            return;
-        }
-        PackbinTest.fail(label + ": packed, expected a refusal");
     }
 
     /** The same check runs under flags and when, in repeat and times rounds, and in list and dict elements. */

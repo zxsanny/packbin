@@ -31,13 +31,11 @@ from packbin._nodes import (
     when,
 )
 from packbin._scheme import BinaryPacker, Scheme
-from packbin._session import PackSession
 
 # bool, bytes, dict and list are importable by name (`as` re-exports them) but left out of `*`:
 # a star import would replace the caller's builtins with field builders.
 __all__ = [
     "BinaryPacker",
-    "PackSession",
     "Scheme",
     "ShortPacket",
     "TooLong",

@@ -11,13 +11,6 @@ declare -F run_lang > /dev/null || { echo "language-pair: ring-lib.sh has no run
 user_hex="01062bfcfee119b20200030ba818078a8b1ca4ed51800300056b6aa330b00100032b0128036ae9c80400032b012808106770735f66697803ea04800348516404ca25f0000200032b0128048bbc2c80"
 nested_hex="010200036ae9c8010001000209f908106770735f66697804ca25f000020001000209f9032b012801000209f9048bbc2c80"
 position_hex="4001000065cd1d00a3e1110100"
-session_hex="b55d0a29c56c203712b241232e"
-# EC-10 (AZ-2739): the same position row under the same session with 4 parity bytes: the padded bytes above, then
-# the 4 parity bytes of scripts/ecc/eccfmt.py over them. Derived apart from every package, from position_hex alone:
-# HKDF-SHA256 (seed bytes 1..32, salt the 16-byte nonce, info "packbin"), the first 32 output bytes as the ChaCha20
-# key (RFC 8439; first packet: the 12-byte nonce is 0, block counter 0) XORed onto position_hex, then
-# eccfmt.parity(padded, 4).
-session_ecc_hex="b55d0a29c56c203712b241232e2ce30c57"
 # flags { bool on }: the bit is set only for true (README, bool).
 boolflag_hex="0100"
 booltrue_hex="0101"
@@ -354,92 +347,6 @@ for kind in listgroup dictgroup listflags; do
     exit 1
   fi
 done
-
-for lang in csharp typescript python rust cpp java swift go; do
-  got="$(run_lang "$lang" "pack-session" | tr -d '[:space:]')"
-  if [ "$got" != "$session_hex" ]; then
-    echo "$lang pack-session mismatch" >&2
-    exit 1
-  fi
-done
-
-handoff csharp typescript session "$session_hex"
-handoff typescript python session "$session_hex"
-handoff python rust session "$session_hex"
-handoff rust java session "$session_hex"
-handoff java cpp session "$session_hex"
-handoff cpp csharp session "$session_hex"
-handoff go csharp session "$session_hex"
-handoff csharp go session "$session_hex"
-handoff go typescript session "$session_hex"
-handoff typescript go session "$session_hex"
-handoff go python session "$session_hex"
-handoff python go session "$session_hex"
-handoff go rust session "$session_hex"
-handoff rust go session "$session_hex"
-handoff go java session "$session_hex"
-handoff java go session "$session_hex"
-handoff go cpp session "$session_hex"
-handoff cpp go session "$session_hex"
-handoff swift csharp session "$session_hex"
-handoff csharp swift session "$session_hex"
-handoff swift typescript session "$session_hex"
-handoff typescript swift session "$session_hex"
-handoff swift python session "$session_hex"
-handoff python swift session "$session_hex"
-handoff swift rust session "$session_hex"
-handoff rust swift session "$session_hex"
-handoff swift java session "$session_hex"
-handoff java swift session "$session_hex"
-handoff swift cpp session "$session_hex"
-handoff cpp swift session "$session_hex"
-handoff swift go session "$session_hex"
-handoff go swift session "$session_hex"
-
-# A driver without the protected session command fails here, named, before any pair reads it.
-for lang in csharp typescript python rust cpp java swift go; do
-  if ! got="$(run_lang "$lang" "pack-session-ecc" | tr -d '[:space:]')"; then
-    echo "$lang pack-session-ecc failed" >&2
-    exit 1
-  fi
-  if [ "$got" != "$session_ecc_hex" ]; then
-    echo "$lang pack-session-ecc mismatch" >&2
-    exit 1
-  fi
-done
-
-handoff csharp typescript session-ecc "$session_ecc_hex"
-handoff typescript python session-ecc "$session_ecc_hex"
-handoff python rust session-ecc "$session_ecc_hex"
-handoff rust java session-ecc "$session_ecc_hex"
-handoff java cpp session-ecc "$session_ecc_hex"
-handoff cpp csharp session-ecc "$session_ecc_hex"
-handoff go csharp session-ecc "$session_ecc_hex"
-handoff csharp go session-ecc "$session_ecc_hex"
-handoff go typescript session-ecc "$session_ecc_hex"
-handoff typescript go session-ecc "$session_ecc_hex"
-handoff go python session-ecc "$session_ecc_hex"
-handoff python go session-ecc "$session_ecc_hex"
-handoff go rust session-ecc "$session_ecc_hex"
-handoff rust go session-ecc "$session_ecc_hex"
-handoff go java session-ecc "$session_ecc_hex"
-handoff java go session-ecc "$session_ecc_hex"
-handoff go cpp session-ecc "$session_ecc_hex"
-handoff cpp go session-ecc "$session_ecc_hex"
-handoff swift csharp session-ecc "$session_ecc_hex"
-handoff csharp swift session-ecc "$session_ecc_hex"
-handoff swift typescript session-ecc "$session_ecc_hex"
-handoff typescript swift session-ecc "$session_ecc_hex"
-handoff swift python session-ecc "$session_ecc_hex"
-handoff python swift session-ecc "$session_ecc_hex"
-handoff swift rust session-ecc "$session_ecc_hex"
-handoff rust swift session-ecc "$session_ecc_hex"
-handoff swift java session-ecc "$session_ecc_hex"
-handoff java swift session-ecc "$session_ecc_hex"
-handoff swift cpp session-ecc "$session_ecc_hex"
-handoff cpp swift session-ecc "$session_ecc_hex"
-handoff swift go session-ecc "$session_ecc_hex"
-handoff go swift session-ecc "$session_ecc_hex"
 
 for lang in csharp typescript python rust cpp java swift go; do
   got="$(bash "$root/.github/workflows/publish-position.sh" "$lang" | tr -d '[:space:]')"

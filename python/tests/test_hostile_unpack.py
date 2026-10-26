@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from packbin import PackSession, Scheme, ShortPacket, TrailingBytes, i8, u8, u32, u64
+from packbin import BinaryPacker, Scheme, ShortPacket, TrailingBytes, i8, u8, u32, u64
 
 import hostile_support as hs
 from hostile_support import assert_rejected, error_kind, unpack_guarded
-
-NONCE = bytes.fromhex("01000000000000000000000000000000")
 
 
 def _short(hex_bytes: str, scheme: Scheme, field: str, left: int):
@@ -79,16 +77,11 @@ def test_oversize_counts_stay_short_packet():
         assert error_kind(result) == "short_packet"
 
 
-def test_session_unpack_hostile_payload():
-    sender = PackSession(bytes(range(1, 33)))
-    waiter = PackSession(bytes(range(1, 33)))
-    assert sender.start(NONCE) == NONCE
-    assert waiter.join(NONCE)
-    wire = Scheme(1, dict, u8(0, lambda row: row["k"]), u8(1, lambda row: row["x"]))
-    payload = sender.pack(wire, {"k": 0, "x": 5})
-    assert payload is not None
-    clear, _, _ = unpack_guarded(hs.zero_progress_when(), bytes.fromhex("010005"))
+def test_a_payload_that_is_not_bytes_like_is_refused_with_a_type_error():
+    # Arrange
+    wire = Scheme(0x40, dict, u8(0, lambda row: row["a"]))
 
-    result, seen, elapsed = unpack_guarded(hs.zero_progress_when(), payload, waiter.unpack)
-    assert_rejected(result, seen, elapsed)
-    assert result == clear
+    for payload in ("abc", 5, None):
+        # Act and Assert
+        with pytest.raises(TypeError):
+            BinaryPacker.unpack(payload, wire.on(lambda row: None))  # type: ignore[arg-type]

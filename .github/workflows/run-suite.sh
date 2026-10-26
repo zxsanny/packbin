@@ -186,12 +186,12 @@ swift_speed() {
   swift test "${swift_opts[@]}" -c release --skip-build --verbose --filter '\.SpeedTests/' --filter '\.TextSpeedTests/' --filter '\.FuzzTests/mebibyte'
 }
 
-# The thread sanitizer runs the suites that use threads (the concurrency suites, text and byte, and the session suites); the other suites
+# The thread sanitizer runs the suites that use threads (the concurrency suites, text and byte); the other suites
 # are single-threaded, where it only costs time. A suite gone from the list fails the step, since a filter that matches
 # nothing passes with no test run, and so does a test file that uses threads outside those suites.
 swift_sanitized() {
   local suite threaded
-  for suite in ConcurrencyTests TextConcurrencyTests SessionTests SessionHostileTests; do
+  for suite in ConcurrencyTests TextConcurrencyTests; do
     if ! grep -q "\.$suite/" <<< "$swift_tests"; then
       printf 'run-suite: swift has no %s suite; the thread-sanitizer run would not run it\n' "$suite" >&2
       return 1
@@ -199,14 +199,14 @@ swift_sanitized() {
   done
   if [ -d "$root/swift/Tests" ]; then
     threaded="$(grep -rlE 'withTaskGroup|withThrowingTaskGroup|Task(\.detached)? *\{|Thread\.|DispatchQueue' "$root/swift/Tests" \
-      | grep -vE '/(Concurrency|TextConcurrency|Session|SessionHostile)Tests\.swift$')"
+      | grep -vE '/(Concurrency|TextConcurrency)Tests\.swift$')"
     if [ -n "$threaded" ]; then
       printf 'run-suite: swift test files use threads outside the thread-sanitizer suites:\n%s\n' "$threaded" >&2
       return 1
     fi
   fi
   swift test "${swift_opts[@]}" --skip-build --sanitize=thread --verbose \
-    --filter '\.ConcurrencyTests/' --filter '\.TextConcurrencyTests/' --filter '\.SessionTests/' --filter '\.SessionHostileTests/'
+    --filter '\.ConcurrencyTests/' --filter '\.TextConcurrencyTests/'
 }
 
 # SW-11: exactly one package dependency, swift-crypto (what swift-crypto itself requires is its business), no
@@ -302,16 +302,12 @@ case "$lang" in
       run cargo test --manifest-path "$root/rust/Cargo.toml" --no-default-features --features text --test nostd_text_tests -- --nocapture
       run cargo test --manifest-path "$root/rust/Cargo.toml" --no-default-features --features ecc --test nostd_ecc_tests -- --nocapture
       run cargo test --manifest-path "$root/rust/Cargo.toml" --features text,ecc --test nostd_dict_tests --test nostd_text_differential_tests --test nostd_hostile_tests --test nostd_hostile_pack_tests --test nostd_fixture_differential_tests --test nostd_raw_repeat_tests -- --nocapture
-      # the session of the heap-free API, without `std` (nothing allocates) and with `std` and `ecc` (the same bytes as
-      # the `std` PackSession, parity over the padded bytes) (AZ-2756)
-      run cargo test --manifest-path "$root/rust/Cargo.toml" --no-default-features --features session --test nostd_session_tests -- --nocapture
-      run cargo test --manifest-path "$root/rust/Cargo.toml" --features session,ecc --test nostd_session_tests -- --nocapture
-      # frame mode of the session (AZ-3203): the shared fixture without `std` (nothing allocates) and with it, the crate's own
-      # tests, and both modes of the session in one build
+      # frame mode (AZ-3203): the shared fixture without `std` (nothing allocates) and with it, the crate's own tests, and
+      # frame mode with message ECC in one build
       run cargo test --manifest-path "$root/rust/Cargo.toml" --no-default-features --features frame --test frame_vectors_tests -- --nocapture
       run cargo test --manifest-path "$root/rust/Cargo.toml" --features frame --test frame_vectors_tests -- --nocapture
       run cargo test --manifest-path "$root/rust/Cargo.toml" --features frame --lib frame_ -- --nocapture
-      run cargo test --manifest-path "$root/rust/Cargo.toml" --features frame,session,ecc --lib frame_ -- --nocapture
+      run cargo test --manifest-path "$root/rust/Cargo.toml" --features frame,ecc --lib frame_ -- --nocapture
       run cargo test --manifest-path "$root/rust/Cargo.toml" --features frame --doc -- --nocapture
       run rust_speed
     else

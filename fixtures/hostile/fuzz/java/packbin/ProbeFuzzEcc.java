@@ -9,14 +9,13 @@ import java.util.Map;
 import java.util.Random;
 
 /**
- * AC-2 probe (a): seeded random and corrupted protected messages against EccRepair.repair, the public unpackRepair
- * (dispatch after repair, then the text decoder) and a PackSession pair kept in lock step. Seeds: fixtures/ecc/vectors.txt.
+ * AC-2 probe (a): seeded random and corrupted protected messages against EccRepair.repair and the public unpackRepair
+ * (dispatch after repair, then the text decoder). Seeds: fixtures/ecc/vectors.txt.
  */
 @SuppressWarnings({"unchecked", "rawtypes"})
 final class ProbeFuzzEcc {
     private static final Scheme<Map>[] SINGLE = new Scheme[33];
     private static final Scheme.Handler<?>[][] HANDLERS = new Scheme.Handler[33][];
-    private static final PackSession[][] SESSIONS = new PackSession[33][];
 
     private ProbeFuzzEcc() {}
 
@@ -31,16 +30,14 @@ final class ProbeFuzzEcc {
         System.out.println("vector rows " + vectors.size() + ", iterations " + count);
         AuditProbe.Stats repair = new AuditProbe.Stats("EccRepair.repair");
         AuditProbe.Stats unpack = new AuditProbe.Stats("unpackRepair (4 handlers)");
-        AuditProbe.Stats session = new AuditProbe.Stats("PackSession.unpackRepair");
-        long[] c = new long[5]; // repaired ok, count differs, missed, miscorrected, session desync
+        long[] c = new long[4]; // repaired ok, count differs, missed, miscorrected
         for (Object[] v : vectors) {
             repairOnce((byte[]) v[2], (int) v[0], (int) v[1], null, -1, repair, c);
         }
         for (int i = 0; i < count; i++) {
             int n = r.nextInt(5) == 0 ? new int[] {1, 2, 31, 32}[r.nextInt(4)] : 1 + r.nextInt(32);
             int t = r.nextInt(3) == 0 ? n / 2 : r.nextInt(n / 2 + 1);
-            Object[] clearText = clear(r, n);
-            byte[] clear = (byte[]) clearText[0];
+            byte[] clear = clear(r, n);
             byte[] sent = ProbeGf.protect(clear, n);
             byte[][] holder = {sent.clone()};
             int k = damage(r, holder, n, t, clear);
@@ -53,23 +50,16 @@ final class ProbeFuzzEcc {
                 unpack.contextT = t;
                 ProbeFuzzText.runUnpack(received, unpack, () -> BinaryPacker.unpackRepair(received, tt, HANDLERS[nn]));
             }
-            if (i % 8 == 0 && clearText[1] != null) {
-                sessionOnce(r, n, t, (String) clearText[1], session, c);
-            }
         }
         repair.retime(b -> EccRepair.repair(b, repair.slowN, repair.slowT));
         unpack.retime(b -> BinaryPacker.unpackRepair(b, unpack.slowT, HANDLERS[unpack.slowN]));
         repair.print();
         unpack.print();
-        session.print();
         System.out.printf("repairs that returned a word: %d; changed bytes != repaired count: %d; damage within t not repaired: %d; "
-                + "repaired to another code word (beyond n - t, R06): %d; session payloads within t that did not decode (desync): %d%n",
-                c[0], c[1], c[2], c[3], c[4]);
+                + "repaired to another code word (beyond n - t, R06): %d%n",
+                c[0], c[1], c[2], c[3]);
         if (c[2] > 0) {
             AuditProbe.fail(c[2] + " messages with at most t wrong bytes were not repaired");
-        }
-        if (c[4] > 0) {
-            AuditProbe.fail(c[4] + " session payloads within t did not decode");
         }
     }
 
@@ -156,8 +146,8 @@ final class ProbeFuzzEcc {
         return -1;
     }
 
-    /** {clear bytes, text or null}: a packet of the single-text scheme (type 1) or random bytes. */
-    private static Object[] clear(Random r, int n) {
+    /** A packet of the single-text scheme (type 1) or random bytes. */
+    private static byte[] clear(Random r, int n) {
         int room = Ecc.MAX_BLOCK - n;
         if (r.nextInt(2) == 0) {
             int chars = r.nextInt(Math.max(1, room / 3));
@@ -166,48 +156,16 @@ final class ProbeFuzzEcc {
                 int k = r.nextInt(4);
                 sb.append(k == 0 ? (char) ('а' + r.nextInt(32)) : k == 1 ? ' ' : k == 2 ? (char) ('0' + r.nextInt(10)) : (char) ('a' + r.nextInt(26)));
             }
-            String text = sb.toString();
             Map<String, Object> row = new HashMap<>();
-            row.put("s", text);
+            row.put("s", sb.toString());
             byte[] packet = BinaryPacker.packClear(AuditProbe.SINGLE, row);
             if (packet.length <= room) {
-                return new Object[] {packet, text};
+                return packet;
             }
         }
         byte[] clear = new byte[r.nextInt(room + 1)];
         r.nextBytes(clear);
-        return new Object[] {clear, null};
-    }
-
-    private static void sessionOnce(Random r, int n, int t, String text, AuditProbe.Stats stats, long[] c) {
-        if (SESSIONS[n] == null) {
-            byte[] seed = new byte[32];
-            r.nextBytes(seed);
-            PackSession send = PackSession.load(seed);
-            PackSession recv = PackSession.load(seed);
-            recv.join(send.start());
-            SESSIONS[n] = new PackSession[] {send, recv};
-        }
-        Map<String, Object> row = new HashMap<>();
-        row.put("s", text);
-        byte[] payload = SESSIONS[n][0].pack(SINGLE[n], row);
-        int k = r.nextInt(3) == 0 ? r.nextInt(n + 2) : r.nextInt(t + 1);
-        ProbeGf.corrupt(payload, k, r);
-        Object[] got = {null};
-        byte[] copy = payload.clone();
-        long t0 = System.nanoTime();
-        try {
-            stats.outcome(SESSIONS[n][1].unpackRepair(payload, t, SINGLE[n].on(x -> got[0] = ((Map) x).get("s"))));
-        } catch (RuntimeException | Error ex) {
-            stats.threw(ex, payload);
-        }
-        stats.time(t0, payload);
-        if (!Arrays.equals(copy, payload)) {
-            AuditProbe.fail("PackSession.unpackRepair wrote its input");
-        }
-        if (k <= t && !text.equals(got[0])) {
-            c[4]++;
-        }
+        return clear;
     }
 
     private static List<Object[]> vectors() throws IOException {

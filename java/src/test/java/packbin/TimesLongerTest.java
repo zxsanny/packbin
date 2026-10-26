@@ -15,7 +15,6 @@ final class TimesLongerTest {
         ac3MemberUnderFlagsIsCheckedToo();
         ac4ExtraEntriesAreRefusedWhateverTheyHold();
         ac5ShorterListsAndScalarsKeepTheirBehavior();
-        ac6SessionPackRefusesToo();
         aMemberWithoutAFieldIdIsNamedByItsKind();
     }
 
@@ -84,23 +83,6 @@ final class TimesLongerTest {
         PackbinTest.expectThrows("AC-5 x:[1] is short, as before", () ->
                 BinaryPacker.pack(PLAIN, Maps.map("a", 2, "x", List.of(1))), "1: expected int, got null");
         PackbinTest.expectEq("AC-5 lone x=5 bytes", "01020505", pack("AC-5", PLAIN, Maps.map("a", 2, "x", 5)));
-    }
-
-    private static void ac6SessionPackRefusesToo() {
-        byte[] seed = new byte[PackSession.SEED_SIZE];
-        PackSession sender = PackSession.load(seed);
-        PackSession reader = PackSession.load(seed);
-        byte[] nonce = sender.start();
-        PackbinTest.expectTrue("AC-6 session opens", nonce != null && reader.join(nonce));
-        PackbinTest.expectThrows("AC-6 session pack of a 3-entry list",
-                () -> sender.pack(PLAIN, Maps.map("a", 2, "x", List.of(1, 2, 3))),
-                "1: list has 3 entries for a count of 2");
-
-        Map[] got = new Map[1];
-        byte[] sealed = sender.pack(PLAIN, Maps.map("a", 2, "x", List.of(1, 2)));
-        Object err = reader.unpack(sealed, PLAIN.on(r -> got[0] = r));
-        PackbinTest.expectTrue("AC-6 the next valid row is read by the peer (" + err + ")", err == null && got[0] != null);
-        PackbinTest.expectEq("AC-6 x", List.of(1, 2), got[0] == null ? null : got[0].get("x"));
     }
 
     /** A nested row, list or dict has no field id, so the message names its kind, never "-1". */

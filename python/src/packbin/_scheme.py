@@ -201,9 +201,8 @@ class BinaryPacker:
         by_type: dict[int, _Handler[Any]],
         parity: int,
         limit: int,
-        unpad: Callable[[bytes], bytes] | None = None,
     ) -> UnpackResult[Any]:
-        """Repair a protected message (`unpad` removes a session's pad from the repaired bytes), then dispatch."""
+        """Repair a protected message, then dispatch."""
         view = memoryview(data)
         repaired = 0
         body: bytes | memoryview = view
@@ -217,13 +216,6 @@ class BinaryPacker:
             if fixed is None:
                 return UnpackResult(ok=False, value=None, error=Uncorrectable())
             body, repaired = fixed
-        if unpad:
-            body = bytes(body)
-            # The pad of one byte costs one block: an unknown type is refused before the pad of the rest is computed (F58).
-            head = int(unpad(body[:1])[0]) if body else -1
-            if body and head not in by_type:
-                return UnpackResult(ok=False, value=None, error=TypeMismatch(expected=-1, actual=head))
-            body = unpad(body)
         view = memoryview(body)
         left = len(view)
         if left < 1:

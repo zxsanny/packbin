@@ -49,7 +49,7 @@ case "$step" in
     if [ -z "${SWIFT_NO_TEXT_SPEED:-}" ] && [ -z "${SWIFT_NO_SPEED:-}" ]; then echo 'PackbinTests.TextSpeedTests/roundTrips()'; fi
     if [ -n "${SWIFT_FUZZ:-}" ]; then echo 'PackbinTests.FuzzTests/unpack_corpusAndRandom()'; fi
     echo 'PackbinTests.GoldenTests/pack_goldenRow()'
-    for suite in SessionTests SessionHostileTests ConcurrencyTests TextConcurrencyTests; do
+    for suite in ConcurrencyTests TextConcurrencyTests; do
       [ "$suite" = "${SWIFT_NO_SUITE:-}" ] || echo "PackbinTests.$suite/case()"
     done ;;
   fuzz)
@@ -130,7 +130,7 @@ c_test="swift test $o --skip-build --verbose"
 c_list="swift test list $o --skip-build"
 c_fuzz="swift test $o --skip-build --verbose --filter \\.FuzzTests/"
 c_tsan_build="swift build $o --build-tests --sanitize=thread"
-c_tsan="swift test $o --skip-build --sanitize=thread --verbose --filter \\.ConcurrencyTests/ --filter \\.TextConcurrencyTests/ --filter \\.SessionTests/ --filter \\.SessionHostileTests/"
+c_tsan="swift test $o --skip-build --sanitize=thread --verbose --filter \\.ConcurrencyTests/ --filter \\.TextConcurrencyTests/"
 c_speed_list="swift test list $o -c release --skip-build"
 c_speed="swift test $o -c release --skip-build --verbose --filter \\.SpeedTests/ --filter \\.TextSpeedTests/ --filter \\.FuzzTests/mebibyte"
 c_describe="swift package $o describe --type json"
@@ -214,9 +214,9 @@ case "$out" in *"PACKBIN_SWIFT_PART is all-of-it, not all, tests, gates or speed
 sw_row_is swift "FAIL suite failed"
 [ ! -s "$work/swift.log" ] || bad "swift: a step ran for an unknown part: $(cat "$work/swift.log")"
 # the gates part keeps its guards: a missing sanitizer suite fails it by name
-out="$(run_swift swift "$swroot" PACKBIN_SWIFT_PART=gates SWIFT_NO_SUITE=SessionTests)"; code=$?
-[ "$code" -ne 0 ] || bad "swift: the gates part passed without SessionTests"
-case "$out" in *"no SessionTests suite"*) ;; *) bad "swift: the gates part has no message for the missing SessionTests suite: $out" ;; esac
+out="$(run_swift swift "$swroot" PACKBIN_SWIFT_PART=gates SWIFT_NO_SUITE=TextConcurrencyTests)"; code=$?
+[ "$code" -ne 0 ] || bad "swift: the gates part passed without TextConcurrencyTests"
+case "$out" in *"no TextConcurrencyTests suite"*) ;; *) bad "swift: the gates part has no message for the missing TextConcurrencyTests suite: $out" ;; esac
 # the speed part lists its own release build, so a package without SpeedTests still fails it by name (S6), and the
 # SpeedTests suite is not a gates or tests part business
 out="$(run_swift swift "$swroot" PACKBIN_SWIFT_PART=speed SWIFT_NO_SPEED=1)"; code=$?
@@ -308,7 +308,7 @@ case "$out" in *"no SpeedTests suite"*) ;; *) bad "swift: no message for the mis
 sw_ran "-c release --skip-build" || bad "swift: the speed part did not list its release build: $(cat "$work/swift.log")"
 
 # S6b. a suite of the thread-sanitizer run is gone from the list: the step fails by name, the filter never runs
-for suite in SessionTests SessionHostileTests ConcurrencyTests TextConcurrencyTests; do
+for suite in ConcurrencyTests TextConcurrencyTests; do
   out="$(run_swift swift "$swroot" SWIFT_NO_SUITE="$suite")"; code=$?
   [ "$code" -ne 0 ] || bad "swift: a tree without $suite passed"
   case "$out" in *"no $suite suite"*) ;; *) bad "swift: no message for the missing $suite suite: $out" ;; esac

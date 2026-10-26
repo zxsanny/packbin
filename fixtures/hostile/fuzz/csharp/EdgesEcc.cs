@@ -2,7 +2,7 @@ using Packbin;
 
 namespace PackbinProbe;
 
-// AC-2 probe (d): the ECC, dispatch and session edge cases a random run is unlikely to hit.
+// AC-2 probe (d): the ECC and dispatch edge cases a random run is unlikely to hit.
 internal static class EdgesEcc
 {
     internal static void Run()
@@ -11,8 +11,6 @@ internal static class EdgesEcc
         Lengths();
         CallerChecks();
         Dispatch();
-        SessionIndex();
-        SessionClearSize();
     }
 
     // Every n = 1..32 and N = n..254: intact, t wrong bytes, t + 1, random, wrong unsent length byte, all 0xff, all zero.
@@ -133,85 +131,5 @@ internal static class EdgesEcc
         var copy = (byte[])wrongType.Clone();
         BinaryPacker.Unpack(wrongType, 2, out _, single.On(_ => { }));
         Program.Check(copy.AsSpan().SequenceEqual(wrongType), "dispatch: the repaired input buffer is not written");
-    }
-
-    // Refused payloads spend a receive position; refused calls (bad limit, mix, duplicate, empty) do not.
-    private static void SessionIndex()
-    {
-        var seed = Enumerable.Range(0, 32).Select(i => (byte)i).ToArray();
-        var send = PackSession.Load(seed)!;
-        var recv = PackSession.Load(seed)!;
-        var unopened = PackSession.Load(seed)!;
-        Program.Check(unopened.Unpack(new byte[5], -5, out _) is ShortPacket { Needed: 1, Left: 0 },
-            "session: not open answers first (before the empty handler list and the bad limit)");
-        recv.Join(send.Start()!);
-        var scheme = Schemes.Single.WithParity(4);
-        var payloads = Enumerable.Range(0, 8).Select(i => send.Pack(scheme, new NameRow { Name = "p" + i })!).ToArray();
-        string? got = null;
-        var h = scheme.On(row => got = row.Name);
-        var results = new List<string>();
-        void Step(string label, Func<object?> call)
-        {
-            got = null;
-            try
-            {
-                var e = call();
-                results.Add($"{label}: {e?.GetType().Name ?? "ok " + got}");
-            }
-            catch (Exception ex)
-            {
-                results.Add($"{label}: threw {ex.GetType().Name}");
-            }
-        }
-        var garbage = new byte[payloads[0].Length];
-        new Random(7).NextBytes(garbage);
-        Step("0 garbage", () => recv.Unpack(garbage, 2, out _, h));
-        Step("1 p1", () => recv.Unpack(payloads[1], 2, out _, h));
-        Step("2 255 bytes", () => recv.Unpack(new byte[255], 2, out _, h));
-        Step("3 p3 with 2 wrong bytes", () => { var p = (byte[])payloads[3].Clone(); p[0] ^= 1; p[^1] ^= 2; return recv.Unpack(p, 2, out _, h); });
-        Step("4 3 bytes", () => recv.Unpack(new byte[3], 2, out _, h));
-        Step("- bad limit", () => recv.Unpack(payloads[5], 3, out _, h));
-        Step("- mixed", () => recv.Unpack(payloads[5], 0, out _, h, Schemes.Map.WithParity(2).On(_ => { })));
-        Step("- duplicate", () => recv.Unpack(payloads[5], 0, out _, h, scheme.On(_ => { })));
-        Step("- empty", () => recv.Unpack(payloads[5], 0, out _));
-        Step("5 p5", () => recv.Unpack(payloads[5], 2, out _, h));
-        Step("6 p6 detect-only with 1 wrong byte", () => { var p = (byte[])payloads[6].Clone(); p[1] ^= 4; return recv.Unpack(p, h); });
-        Step("7 p7", () => recv.Unpack(payloads[7], h));
-        Console.WriteLine("session steps: " + string.Join("; ", results));
-        Program.Check(results[1] == "1 p1: ok p1" && results[3] == "3 p3 with 2 wrong bytes: ok p3" && results[9] == "5 p5: ok p5" &&
-                      results[10].EndsWith("Uncorrectable") && results[11] == "7 p7: ok p7",
-            "session: refused payloads advance the receive index, refused calls do not");
-    }
-
-    // A scheme without parity keeps clear pack's length in a session (pack-session.md): 300+ bytes must pack.
-    private static void SessionClearSize()
-    {
-        var seed = new byte[32];
-        var send = PackSession.Load(seed)!;
-        var recv = PackSession.Load(seed)!;
-        recv.Join(send.Start()!);
-        var row = new NameRow { Name = new string('中', 100) };
-        var clear = BinaryPacker.Pack(Schemes.Single, row);
-        try
-        {
-            var payload = send.Pack(Schemes.Single, row);
-            string? got = null;
-            var error = recv.Unpack(payload!, Schemes.Single.On(x => got = x.Name));
-            Program.Check(payload!.Length == clear.Length && error is null && got == row.Name,
-                $"session n=0: a {clear.Length}-byte clear message packs to {payload.Length} bytes and unpacks");
-        }
-        catch (Exception ex)
-        {
-            Program.Fail($"session n=0: pack of a {clear.Length}-byte clear message threw {ex.GetType().Name}: {ex.Message}");
-        }
-        try
-        {
-            var protectedPayload = send.Pack(Schemes.Single.WithParity(4), row);
-            Program.Fail($"session n=4: a {clear.Length}-byte clear message packed to {protectedPayload?.Length} bytes");
-        }
-        catch (ArgumentException ex)
-        {
-            Program.Check(true, $"session n=4: a {clear.Length}-byte clear message is refused ({ex.Message})");
-        }
     }
 }
