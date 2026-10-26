@@ -8,12 +8,6 @@ Downstream skills consume this file:
 - `.cursor/skills/autodev/protocols/bootstrap-lessons.md` (Bootstrap B2 — Surface Recent Lessons)
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
-- [2026-10-22] [process] With the Jira connector absent, write task specs as `AZ-PENDING_*` with one create-leftover holding the replay payload, and replay the In Testing leftovers first when the connector returns (loops 59 and 60).
-  Source: _docs/06_metrics/retro_2026-10-22_loop60.md
-- [2026-10-23] [tooling] Measure flash and stack candidates on tree copies in the scratchpad with a driver that sources `cpp/embedded/lib.sh` and `arm.sh` and calls `target_m4f` in `packbin-embedded:local` (about 5 s a shape against 3 minutes for the stage, and the repo stays at HEAD); run the real stage once on the kept shape (loop 63).
-  Source: _docs/loops/loop63/record63.md
-- [2026-10-23] [estimation] Copy stack and flash baselines into an AC from the latest stage log, not from the previous loop's table: AC-3 named the loop 61 pack figures (412 / 448 / 500 B) when HEAD measured 404 / 440 / 492 B after loop 62 (loop 63).
-  Source: _docs/loops/loop63/record63.md
 - [2026-10-23] [process] Open a flash-saving loop only with a named consumer for the bytes: loop 62 took 18 min for -224 B and loop 63 took 3 h 42 min for -84 B, with 468 B of flash margin and nothing in the hopper that needs it (loops 62 and 63).
   Source: _docs/06_metrics/retro_2026-10-23_loop64.md
 - [2026-10-23] [tooling] Do not push a record-only commit after a loop close: `3619a2d` (docs only) started the whole `test.yml` on `dev` and `main` (554 s and 678 s); put the CI read into the next loop's first commit instead (loop 63).
@@ -38,3 +32,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-25_loop69.md
 - [2026-10-25] [architecture] Review a new security API for caller misuse before writing its tests: the independent review found that the replay counter is an open argument that the tag does not cover (one captured frame could poison a window), a rule the contract now states; the crypto core had no finding (loop 69).
   Source: _docs/06_metrics/retro_2026-10-25_loop69.md
+- [2026-10-26] [architecture] Before offering the owner "leave X, it only holds derived data" for a crypto temporary, check whether X can be inverted back to its input: the SHA-256 schedule window left on the stack gives back the whole block (the key XOR a pad at key load), and the owner's first answer rested on that wrong premise (loop 73).
+  Source: _docs/06_metrics/retro_2026-10-26_loop73.md
+- [2026-10-26] [architecture] When a secret lives in an `Option`, wipe it in place and then set `None`; `take()` moves the value out and can leave its bytes in the slot (both Rust session `open`s did, loop 73).
+  Source: _docs/06_metrics/retro_2026-10-26_loop73.md
+- [2026-10-26] [estimation] A byte-budget change across feature sets can trade one set against another: the wipe helper out of line cost `session` +16 B and `frame` +152 B, forced inline +128 B and +96 B; compare each form per set and in total against the tightest bound before choosing (loop 73).
+  Source: _docs/06_metrics/retro_2026-10-26_loop73.md
