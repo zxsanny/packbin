@@ -14,10 +14,11 @@ step() { # step <n> <name> <exit code> [detail]
 }
 limit() { perl -e 'alarm shift; exec @ARGV' -- "$@"; }
 
-# 1. The tree is clean (the smoke runs at the commit before the close commit).
+# 1. No application source is dirty (the smoke runs at the commit before the close commit; _docs/ waits for it).
 code=0
-[ -z "$(git status --porcelain)" ] || code=1
-step 1 "the working tree is clean" "$code" "$(git status --porcelain | head -n 3)"
+dirty="$(git status --porcelain -- . ':(exclude)_docs')"
+[ -z "$dirty" ] || code=1
+step 1 "no application source is dirty" "$code" "$(printf '%s' "$dirty" | head -n 3)"
 
 # 2. AZ-3254: the C# frame, primitive and session tests on both targets.
 code=0
