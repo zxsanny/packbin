@@ -50,3 +50,4 @@ Batches of disjoint write sets (`feature-description.md` couplings). Workers run
 | round | verdict | new specs | report |
 |-------|---------|-----------|--------|
 | 1 | CLARIFY (D6, owner: add `FrameConfig` and `FrameDirections` to Java) | AZ-3322_java_frame_config | _docs/loops/loop74/assessment74.md |
+| 2 | COMPLETE | none | _docs/loops/loop74/assessment74.md |

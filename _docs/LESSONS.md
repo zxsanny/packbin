@@ -38,3 +38,10 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-26_loop73.md
 - [2026-10-26] [estimation] A byte-budget change across feature sets can trade one set against another: the wipe helper out of line cost `session` +16 B and `frame` +152 B, forced inline +128 B and +96 B; compare each form per set and in total against the tightest bound before choosing (loop 73).
   Source: _docs/06_metrics/retro_2026-10-26_loop73.md
+- [2026-10-27] [architecture] Before hardening a type (wiping the keys of a stream session at destroy), ask what the type is for: no application needed the stream session, and one owner question turned the loop 74 hardening task into a removal of eight packages' worth of code (loop 74).
+  Source: _docs/06_metrics/retro_2026-10-27_loop74.md
+- [2026-10-27] [architecture] When the tests of a removed feature go, list what only they covered: the C++ session vector test was the only check of the crypto on Cortex-M3, M33F and big-endian s390x, and the replacement ran on the host only until the security review found it (loop 74).
+  Source: _docs/06_metrics/retro_2026-10-27_loop74.md
+- [2026-10-27] [estimation] Before a spec refuses a case in one package of a shared API, read how the sibling packages treat it (the Java spec refused an empty direction set that Rust, C# and Swift accept), and diff the public API of all packages when a rename must match everywhere (Swift `Freshness`) (loop 74).
+  Source: _docs/06_metrics/retro_2026-10-27_loop74.md
+

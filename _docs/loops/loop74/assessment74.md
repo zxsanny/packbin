@@ -2,9 +2,9 @@
 
 loop: 74
 feature: remove-stream-session
-rounds: 1
-verdict: CLARIFY
-report_of_round: 1
+rounds: 2
+verdict: COMPLETE
+report_of_round: 2
 
 ## Round 1
 
@@ -61,3 +61,36 @@ none
 - none: every batch report of this loop has its `## Discovered during implementation` table.
 
 **Owner answer (2026-10-27, AskQuestion "Java shape")**: A — "Add them (Recommended)". New spec AZ-3322_java_frame_config (2 points); router: `new-task --clarify` → implement → feature-assess round 2.
+
+## Round 2
+
+**Date**: 2026-10-27
+**Implement pass**: batch 05 (9f68eb4), report `_docs/03_implementation/batch_05_loop74_report.md`
+**Verdict**: COMPLETE — 6 covered / 0 out-of-scope / 0 gap-clear / 0 gap-unclear (new rows this round; the 13 + 3 rows of round 1 are unchanged)
+
+### Coverage matrix
+
+| id | scenario | status | evidence | source |
+|----|----------|--------|----------|--------|
+| D6 | A Java caller loads a frame session | covered | AZ-3322 AC-1: `javap -public` shows `FrameConfig`, `FrameDirections` and one `load(byte[], int, FrameConfig)`, 0 varargs loads; `FrameSession.java` `load`; README Java example and `FrameReadmeExample.java` | assess-round-1 |
+| E1 | Java loads with a null config, a null direction set, or a tag length other than 4, 8, 16 | covered | AZ-3322 AC-3: `FrameConfigTest` (3 load refusals give null) ; `FrameSession.java` `load` | batch 05 |
+| E2 | Java loads with an empty direction set | covered | `FrameConfigTest.anEmptySetLoadsASessionThatRefusesEveryCall` (load succeeds, seal and open in UP, DOWN, GROUP are `BadValue` and write nothing); same behavior as C# `FrameRefusalTests.Ac3_LoadWithNoDirectionGivesASessionThatRefusesEverySealAndOpen`, Rust `seal.rs`, Swift `checkCall` | batch 05 discoveries |
+| E3 | A call in a direction outside the loaded set | covered | `FrameConfigTest` (`of(UP)` refuses `seal(DOWN)` and `open(GROUP)` as `BadValue`, `seal(UP)` works); `FrameMacRefusalsTest` not-loaded-direction checks | batch 05 |
+| E4 | Frame bytes after the load-shape change | covered | AZ-3322 AC-2: `frame vectors: 157 rows checked, 0 mismatches`; `CryptoVectorsTest` 27 rows | batch 05 |
+| E5 | The README Java frame example after the change | covered | AZ-3322 AC-4: `scripts/frame/readme-examples.sh` PASS for C#, Java, Swift and Rust; the five docs and the contract no longer say Java lacks `FrameConfig` or `FrameDirections` (`git grep` of the old phrases: 0 hits outside history records) | batch 05 |
+
+### Gaps that need a decision (gap-unclear)
+
+none
+
+### Gaps that are clear (gap-clear)
+
+none
+
+### Not walked
+
+- none
+
+### Harness gaps
+
+- none: `batch_05_loop74_report.md` has its `## Discovered during implementation` table.
