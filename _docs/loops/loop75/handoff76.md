@@ -14,7 +14,7 @@ Frame mode (`FrameSession`, `ReplayWindow`, `MacKey`, the D1 names, `TagMismatch
 
 ## Owner input needed
 
-- **C++ `open` and a receive ring**: copy the body into the call (about 255 B more stack; the frame pin 912 B rises) or keep the documented requirement that the caller's body does not change during the call?
+- Decided (owner, 2026-10-27, after the close): C++ `open` keeps the documented requirement that the caller's body does not change during the call; no 255 B stack copy. Not an open question any more.
 - Unchanged: CS-D5; the first `v*` and `go/v*` tags and F44; close the epic AZ-2750; U24 in the C++ package; whether to drop the M4F row; the release notes of the next 0.x; meshbell renames its Rust `Session`.
 - Whether to add a cross-language frame ring (`fixtures/frame/ring-cases.txt`) now that all eight packages have frame mode.
 - A public-key pairing step: a candidate from the loop 74 intake, not decided.
@@ -28,6 +28,6 @@ Frame mode (`FrameSession`, `ReplayWindow`, `MacKey`, the D1 names, `TagMismatch
 
 ## Risks
 
-- **L75-1**: the C++ `open` snapshot (owner decision above).
+- **L75-1**: the C++ `open` body must not change during the call (owner decided 2026-10-27 to keep it documented).
 - **L75-2**: see the timing selftest flake.
 - **L74-2, L73-1, L72-1, L71-1, L71-2** (unchanged): see `handoff75.md`.

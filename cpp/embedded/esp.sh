@@ -41,7 +41,7 @@ PY
     done
     checked=$((checked + 1))
   done < "$dir/core-commands.txt"
-  [ "$checked" -eq 6 ] || fail "expected 6 packbin sources in the build and found $checked"
+  [ "$checked" -eq 7 ] || fail "expected 7 packbin sources in the build and found $checked"
   local warnings
   warnings=$(count_warnings "$log")
   echo "$chip: $checked packbin sources with the AC-1 flags; build warnings: $warnings"
