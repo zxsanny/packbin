@@ -52,15 +52,15 @@ run_lang() {
     java)
       local out="${PACKBIN_JAVA_HANDOFF:-/tmp/packbin-handoff-java}"
       # Rebuild when a driver file or any package source is newer than the last build, or a driver class is missing.
-      if [ ! -f "$out/Handoff.class" ] || [ ! -f "$out/HandoffElements.class" ] || [ ! -f "$out/HandoffEcc.class" ] \
-        || [ -n "$(find "$root/java/src/main/java" "$drivers/Handoff.java" "$drivers/HandoffElements.java" "$drivers/HandoffEcc.java" -newer "$out/Handoff.class" -print -quit)" ]; then
+      if [ ! -f "$out/Handoff.class" ] || [ ! -f "$out/HandoffElements.class" ] || [ ! -f "$out/HandoffEcc.class" ] || [ ! -f "$out/HandoffFrame.class" ] \
+        || [ -n "$(find "$root/java/src/main/java" "$drivers/Handoff.java" "$drivers/HandoffElements.java" "$drivers/HandoffEcc.java" "$drivers/HandoffFrame.java" -newer "$out/Handoff.class" -print -quit)" ]; then
         rm -rf "$out"
         mkdir -p "$out"
         local sources=()
         while IFS= read -r -d '' f; do
           sources+=("$f")
         done < <(find "$root/java/src/main/java" -name '*.java' -print0 | sort -z)
-        javac -encoding UTF-8 -d "$out" "${sources[@]}" "$drivers/Handoff.java" "$drivers/HandoffElements.java" "$drivers/HandoffEcc.java" || return
+        javac -encoding UTF-8 -d "$out" "${sources[@]}" "$drivers/Handoff.java" "$drivers/HandoffElements.java" "$drivers/HandoffEcc.java" "$drivers/HandoffFrame.java" || return
       fi
       java -cp "$out" Handoff "$@"
       ;;

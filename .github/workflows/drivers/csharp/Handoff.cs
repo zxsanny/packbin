@@ -213,6 +213,8 @@ static class Handoff
             case "ecc-protect" or "ecc-repair" or "ecc-batch":
                 return HandoffEcc.Run(args, PositionScheme);
             default:
+                if (args[0].StartsWith("frame-"))
+                    return HandoffFrame.Run(args);
                 return HandoffElements.Run(args);
         }
     }

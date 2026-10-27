@@ -5,4 +5,4 @@ edition = "2021"
 publish = false
 
 [dependencies]
-packbin = { path = "../../../../rust" }
+packbin = { path = "../../../../rust", features = ["std", "frame"] }

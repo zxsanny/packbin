@@ -309,6 +309,8 @@ case "$lang" in
       run cargo test --manifest-path "$root/rust/Cargo.toml" --features frame --lib frame_ -- --nocapture
       run cargo test --manifest-path "$root/rust/Cargo.toml" --features frame,ecc --lib frame_ -- --nocapture
       run cargo test --manifest-path "$root/rust/Cargo.toml" --features frame --doc -- --nocapture
+      # all features together (AZ-3338 AC-6)
+      run cargo test --manifest-path "$root/rust/Cargo.toml" --all-features -- --nocapture
       run rust_speed
     else
       missing_manifest "$root/rust/Cargo.toml"

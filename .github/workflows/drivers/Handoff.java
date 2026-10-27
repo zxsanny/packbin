@@ -31,7 +31,13 @@ public final class Handoff {
             case "unpack-roundflags" -> System.exit(roundFlagsOk(requireHex(args)) ? 0 : 1);
             case "unpack-roundwhen" -> System.exit(roundWhenOk(requireHex(args)) ? 0 : 1);
             case "ecc-protect", "ecc-repair", "ecc-batch" -> System.exit(HandoffEcc.run(cmd, args, positionScheme()));
-            default -> System.exit(HandoffElements.run(cmd, args));
+            default -> {
+                if (cmd.startsWith("frame-")) {
+                    System.exit(HandoffFrame.run(cmd, args));
+                } else {
+                    System.exit(HandoffElements.run(cmd, args));
+                }
+            }
         }
     }
 

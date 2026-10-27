@@ -73,6 +73,7 @@ func unpackKind(_ cmd: String, _ k: Kind, _ hex: String, short: Bool) -> Int32 {
 func run(_ args: [String]) -> Int32 {
     guard let cmd = args.first else { return 2 }
     let hex = args.count > 1 ? args[1] : nil
+    if cmd.hasPrefix("frame-") { return frameCommand(args) }
     if cmd.hasPrefix("ecc-") { return eccCommand(args) }
     guard let (name, op, short) = splitCommand(cmd) else { return 2 }
     let found: Kind?

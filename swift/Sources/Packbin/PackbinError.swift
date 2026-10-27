@@ -1,8 +1,9 @@
 /// Every error the package throws. `pack`, `unpack` and `Scheme.init` throw only this type and never
 /// trap on any input.
 public struct PackbinError: Error, Equatable, Sendable, CustomStringConvertible {
-    /// What went wrong. The raw value is the outcome term of the shared hostile vectors
-    /// (`fixtures/hostile/README.md`); a case is never renamed, later versions only add cases.
+    /// What went wrong. The raw value is a stable error kind: pack/unpack kinds match the shared
+    /// hostile vectors (`fixtures/hostile/README.md`); frame-mode kinds match `fixtures/frame/`.
+    /// A case is never renamed, later versions only add cases.
     public enum Kind: String, Sendable, CaseIterable {
         /// The buffer ends inside a field: `field`, `name`, `needed` and `left` are set.
         case short = "short_packet"

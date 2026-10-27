@@ -91,6 +91,8 @@ jobs:
       # builds the ring step above kept in PACKBIN_RING_WORK (under the workspace: the gcc container sees /tmp and the repo).
       - name: message ECC ring
         run: bash .github/workflows/ring-ecc.sh
+      - name: frame ring
+        run: bash .github/workflows/ring-frame.sh
 
   # The suites and the publish gate share nothing (the gate pulls its own images), so they run beside each other and
   # beside scaffold, embedded and ring: the wall time is the longest job, not the sum (AZ-2564). The free plan runs 20 jobs

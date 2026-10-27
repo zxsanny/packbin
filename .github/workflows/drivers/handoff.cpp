@@ -398,12 +398,148 @@ int ecc_main(int argc, char** argv) {
   return 2;
 }
 
+// The frame commands (AZ-3338; contract pack-session 3.0.0, frame mode).
+//   frame-batch <file>   one line per line of the file: seal, open, mac, verify
+
+std::string frame_hex(std::uint8_t const* data, std::size_t len) {
+  return len == 0 ? "-" : hex_of(data, len);
+}
+
+char const* frame_kind(packbin::Error e) {
+  switch (e) {
+    case packbin::Error::BadValue: return "BadValue";
+    case packbin::Error::TooLong: return "TooLong";
+    case packbin::Error::BufferFull: return "BufferFull";
+    case packbin::Error::ShortPacket: return "ShortPacket";
+    case packbin::Error::TagMismatch: return "TagMismatch";
+    default: return "error";
+  }
+}
+
+packbin::FrameDirection frame_dir(int d) {
+  switch (d) {
+    case 1: return packbin::FrameDirection::Up;
+    case 2: return packbin::FrameDirection::Down;
+    case 3: return packbin::FrameDirection::Group;
+    default: return packbin::FrameDirection::Up;
+  }
+}
+
+std::string frame_seal(std::vector<std::string> const& w) {
+  auto key = ecc_bytes(w[0]);
+  int epoch = std::stoi(w[1]), d = std::stoi(w[2]), tag_len = std::stoi(w[3]);
+  auto msg_id = ecc_bytes(w[4]);
+  int kind = std::stoi(w[5]);
+  auto ad = ecc_bytes(w[6]), clear = ecc_bytes(w[7]), plain = ecc_bytes(w[8]);
+  packbin::FrameSession session;
+  auto r = session.load({key.data(), key.size()}, static_cast<std::uint32_t>(epoch),
+      {static_cast<std::uint8_t>(tag_len), static_cast<packbin::FrameDirections>(1 << (d - 1))});
+  if (!r.ok()) return frame_kind(r.error);
+  packbin::MsgContext ctx{};
+  std::memcpy(ctx.msg_id, msg_id.data(), msg_id.size() < 8 ? msg_id.size() : 8);
+  ctx.kind = static_cast<std::uint8_t>(kind);
+  std::uint8_t out[300];
+  r = session.seal(frame_dir(d), ctx, {ad.data(), ad.size()}, {clear.data(), clear.size()},
+      {plain.data(), plain.size()}, {out, sizeof(out)});
+  return r.ok() ? frame_hex(out, r.offset) : frame_kind(r.error);
+}
+
+std::string frame_open(std::vector<std::string> const& w) {
+  auto key = ecc_bytes(w[0]);
+  int epoch = std::stoi(w[1]), d = std::stoi(w[2]), tag_len = std::stoi(w[3]);
+  auto msg_id = ecc_bytes(w[4]);
+  int kind = std::stoi(w[5]);
+  auto ad = ecc_bytes(w[6]);
+  int clear_len = std::stoi(w[7]);
+  auto body = ecc_bytes(w[8]);
+  packbin::FrameSession session;
+  auto r = session.load({key.data(), key.size()}, static_cast<std::uint32_t>(epoch),
+      {static_cast<std::uint8_t>(tag_len), static_cast<packbin::FrameDirections>(1 << (d - 1))});
+  if (!r.ok()) return frame_kind(r.error);
+  packbin::MsgContext ctx{};
+  std::memcpy(ctx.msg_id, msg_id.data(), msg_id.size() < 8 ? msg_id.size() : 8);
+  ctx.kind = static_cast<std::uint8_t>(kind);
+  std::uint8_t out[300];
+  packbin::FrameOpened opened;
+  r = session.open(frame_dir(d), ctx, {ad.data(), ad.size()}, {body.data(), body.size()},
+      static_cast<std::size_t>(clear_len), {out, sizeof(out)}, opened);
+  return r.ok() ? frame_hex(out, opened.plain_len) : frame_kind(r.error);
+}
+
+std::string frame_mac(std::vector<std::string> const& w) {
+  auto key = ecc_bytes(w[0]);
+  int epoch = std::stoi(w[1]);
+  auto label = ecc_bytes(w[2]);
+  int n = std::stoi(w[3]);
+  auto message = ecc_bytes(w[4]);
+  packbin::MacKey mk;
+  auto r = mk.derive({key.data(), key.size()}, static_cast<std::uint32_t>(epoch),
+      {label.data(), label.size()});
+  if (!r.ok()) return frame_kind(r.error);
+  std::uint8_t out[32];
+  packbin::ByteSpan part{message.data(), message.size()};
+  r = mk.tag(&part, 1, {out, static_cast<std::size_t>(n)});
+  return r.ok() ? frame_hex(out, static_cast<std::size_t>(n)) : frame_kind(r.error);
+}
+
+std::string frame_verify(std::vector<std::string> const& w) {
+  auto key = ecc_bytes(w[0]);
+  int epoch = std::stoi(w[1]);
+  auto label = ecc_bytes(w[2]);
+  // n = w[3], not used for verify
+  auto message = ecc_bytes(w[4]), tag = ecc_bytes(w[5]);
+  packbin::MacKey mk;
+  auto r = mk.derive({key.data(), key.size()}, static_cast<std::uint32_t>(epoch),
+      {label.data(), label.size()});
+  if (!r.ok()) return frame_kind(r.error);
+  packbin::ByteSpan part{message.data(), message.size()};
+  return mk.verify(&part, 1, {tag.data(), tag.size()}) ? "valid" : "invalid";
+}
+
+std::string frame_line(std::vector<std::string> const& w) {
+  if (w[0] == "seal") return frame_seal({w.begin() + 1, w.end()});
+  if (w[0] == "open") return frame_open({w.begin() + 1, w.end()});
+  if (w[0] == "mac") return frame_mac({w.begin() + 1, w.end()});
+  if (w[0] == "verify") return frame_verify({w.begin() + 1, w.end()});
+  if (w[0] == "open-skip" || w[0] == "verify-skip") return "skip";
+  return "";
+}
+
+int frame_main(int argc, char** argv) {
+  if (argc == 3 && std::string(argv[1]) == "frame-batch") {
+    std::ifstream file(argv[2]);
+    if (!file) {
+      std::fprintf(stderr, "frame-batch: cannot read %s\n", argv[2]);
+      return 1;
+    }
+    std::string text;
+    while (std::getline(file, text)) {
+      std::istringstream words(text);
+      std::vector<std::string> w;
+      for (std::string word; words >> word;)
+        w.push_back(word);
+      if (!w.empty()) {
+        auto out = frame_line(w);
+        if (out.empty()) {
+          std::fprintf(stderr, "frame line: %s\n", text.c_str());
+          return 1;
+        }
+        std::printf("%s\n", out.c_str());
+      }
+    }
+    return 0;
+  }
+  return 2;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
   if (argc < 2)
     return 2;
   std::string cmd = argv[1];
+  if (cmd.rfind("frame-", 0) == 0)
+    return frame_main(argc, argv);
   if (cmd.rfind("ecc-", 0) == 0)
     return ecc_main(argc, argv);
   std::uint8_t buf[kMax];

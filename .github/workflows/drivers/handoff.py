@@ -21,6 +21,7 @@ from packbin import (
 )
 
 from handoff_ecc import run_ecc
+from handoff_frame import run_frame
 
 
 USER = Scheme(
@@ -190,6 +191,8 @@ def main(argv: list[str]) -> int:
         return 0 if result.value == {"k": 0} else 1
     if cmd.startswith("ecc-"):
         return run_ecc(cmd, argv, POSITION)
+    if cmd.startswith("frame-"):
+        return run_frame(cmd, argv)
     element = _element_command(cmd, argv)
     return 2 if element is None else element
 

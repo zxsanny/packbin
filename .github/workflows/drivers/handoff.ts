@@ -19,6 +19,7 @@ import {
   when,
 } from "../../../typescript/src/index.ts";
 import { runEcc } from "./handoff-ecc.ts";
+import { runFrame } from "./handoff-frame.ts";
 
 type UserRow = {
   username: string;
@@ -242,6 +243,7 @@ function deepEqual(a: unknown, b: unknown): boolean {
 
 const cmd = process.argv[2];
 
+if (cmd?.startsWith("frame-")) process.exit(runFrame(cmd, process.argv.slice(3)));
 if (cmd?.startsWith("ecc-")) process.exit(runEcc(cmd, process.argv.slice(3), positionPacket as Scheme<object>));
 
 if (cmd === "pack-user") {

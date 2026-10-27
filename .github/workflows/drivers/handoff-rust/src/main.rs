@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use std::process::ExitCode;
 
 mod ecc;
+mod frame;
 mod rounds;
 
 #[derive(Default, Debug, PartialEq)]
@@ -319,6 +320,7 @@ fn run(args: &[String]) -> u8 {
                 _ => 1,
             }
         }
+        _ if cmd.starts_with("frame-") => frame::run(args),
         _ if cmd.starts_with("ecc-") => ecc::run(args),
         _ => 2,
     }
