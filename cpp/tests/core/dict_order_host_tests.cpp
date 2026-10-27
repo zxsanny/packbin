@@ -1,9 +1,8 @@
 // Dict keys must be strictly ascending by their decoded UTF-8 bytes (compact-text invariants; AZ-2713):
 // out of order and repeated keys are refused whether the dict is bound or not, the check is one
-// compare with the previous key, and a session scheme that was not built spends no receive position
-// (AZ-2722, F57).
+// compare with the previous key, and a scheme that was not built answers its own error (AZ-2722,
+// F57).
 #include "packbin/codec.hpp"
-#include "packbin/session.hpp"
 
 #include "check.hpp"
 #include "load_factor.hpp"
@@ -20,7 +19,6 @@ using check::expect;
 using packbin::Array;
 using packbin::Entry;
 using packbin::Error;
-using packbin::PackSession;
 using packbin::Text;
 
 namespace {
@@ -164,45 +162,27 @@ struct Position {
 
 constexpr auto kPlain = packbin::scheme<Position>(0x40, packbin::u16<&Position::sid>(0));
 
-// F57: a scheme that was not built answers its own error before the buffer or the receive position
-// is touched, so the next valid payload still lines up.
-void session_scheme_not_built_spends_nothing() {
-  std::uint8_t seed[32];
-  for (std::size_t i = 0; i < sizeof(seed); ++i)
-    seed[i] = static_cast<std::uint8_t>(i + 1);
-  std::uint8_t nonce[16] = {1};
-  PackSession a;
-  PackSession b;
-  expect(a.load(seed, sizeof(seed)) && b.load(seed, sizeof(seed)) &&
-             a.start(nonce, sizeof(nonce)) && b.join(nonce, sizeof(nonce)),
-         "both sessions open");
+// F57: a scheme that was not built answers its own error, alone or as a handler, and the handler
+// does not run.
+void unbuilt_scheme_is_refused() {
+  // Arrange
   Position row;
   row.sid = 0x1234;
   std::uint8_t wire[16];
-  auto p = a.pack(kPlain, row, wire, sizeof(wire));
-  expect(p.ok(), "the sender packs");
-  std::uint8_t copy[16];
-  std::memcpy(copy, wire, sizeof(wire));
-
+  auto p = packbin::pack(kPlain, row, wire, sizeof(wire));
   auto bad = packbin::parity(kPlain, 40);
   Position out;
-  auto r = b.unpack(bad, wire, p.offset, out);
-  expect(r.error == Error::SchemeInvalid, "a scheme with 40 parity bytes is SchemeInvalid");
-  expect(std::memcmp(wire, copy, sizeof(wire)) == 0, "the buffer is not touched");
-  auto next = b.unpack(kPlain, wire, p.offset, out);
-  expect(next.ok() && out.sid == 0x1234, "the next valid payload is read at the same position");
-
-  // A handler whose scheme was not built is refused the same way, before the pad and the position.
-  // The valid unpack above removed the pad in place and spent position 0; a third payload comes next.
-  std::uint8_t second[16];
-  auto p2 = a.pack(kPlain, row, second, sizeof(second));
-  std::memcpy(copy, second, sizeof(copy));
   int runs = 0;
-  auto h = b.unpack(second, p2.offset, packbin::on(bad, out, [&](Position const&) { ++runs; }));
-  expect(h.error == Error::SchemeInvalid && runs == 0, "a handler with an unbuilt scheme is SchemeInvalid");
-  expect(std::memcmp(second, copy, sizeof(copy)) == 0, "the buffer is not touched by the handler call");
-  auto again = b.unpack(kPlain, second, p2.offset, out);
-  expect(again.ok() && out.sid == 0x1234, "the receive position is unchanged after the handler call");
+
+  // Act
+  auto r = packbin::unpack(bad, wire, p.offset, out);
+  auto h = packbin::unpack(wire, p.offset, packbin::on(bad, out, [&](Position const&) { ++runs; }));
+
+  // Assert
+  expect(p.ok() && r.error == Error::SchemeInvalid,
+         "a scheme with 40 parity bytes is SchemeInvalid");
+  expect(h.error == Error::SchemeInvalid && runs == 0,
+         "a handler with an unbuilt scheme is SchemeInvalid and does not run");
 }
 
 struct Keyed {
@@ -279,6 +259,6 @@ int run_core_dict_order_host_tests() {
   many_keys_are_linear();
   long_keys_share_a_prefix();
   pack_orders_keys_as_unsigned_bytes();
-  session_scheme_not_built_spends_nothing();
+  unbuilt_scheme_is_refused();
   return check::failures();
 }

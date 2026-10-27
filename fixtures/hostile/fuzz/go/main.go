@@ -1,5 +1,5 @@
 // Command packbinprobe is the Go hostile-input probe of AZ-2666 (loop 41): the compact text decoder and the
-// message ECC unpack path (plain and session), through the public API of github.com/zxsanny/packbin/go.
+// message ECC unpack path, through the public API of github.com/zxsanny/packbin/go.
 //
 // How to run: sh run.sh <packbin checkout> <work dir> <command> [args] (see run.sh; on a Mac without Go,
 // in the golang:1.27 image). The binary takes the checkout first and reads fixtures/text/vectors.txt,
@@ -7,13 +7,13 @@
 //
 //	random  <seed> <calls>  (a) seeded random and mutated inputs: text unpack (lone string, list, dict), ECC
 //	                        unpack (random buffers, code words with k wrong bytes, vector seeds), strings in
-//	                        protected messages, a session pair whose next payload must read after each hostile one
+//	                        protected messages
 //	ecctime <calls>         (b) repair time at n = 32, N = 254 for the inputs that make the most work
 //	textamp <case>          (c) decoded bytes per payload byte, time and peak RSS: one|list1m|list8m|controls|short|dictpre
 //	edges                   (d) the AC-1 / AC-2 edge cases a random run is unlikely to reach
 //	allocs                  allocations and bytes per unpack call on the ECC paths (contract: a few arrays of n+1)
 //
-// Exit status 1 when an invariant is broken (a panic, a call above 1 s, a wrong repair, a desync).
+// Exit status 1 when an invariant is broken (a panic, a call above 1 s, a wrong repair).
 package main
 
 import (

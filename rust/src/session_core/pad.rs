@@ -67,30 +67,7 @@ fn block(key: &[u8; 32], nonce: &[u8; 12], counter: u32, output: &mut [u8; 64]) 
     wipe(&mut work);
 }
 
-/// XORs the ChaCha20 stream of `key` and packet number `packet` into `data`.
-#[cfg(any(feature = "std", feature = "session"))]
-pub fn xor(key: &[u8; 32], packet: u64, data: &mut [u8]) {
-    let mut nonce = [0u8; 12];
-    for (slot, byte) in nonce.iter_mut().zip(packet.to_le_bytes()) {
-        *slot = byte;
-    }
-    let mut counter = 0u32;
-    let mut pad = [0u8; 64];
-    let mut used = 64usize;
-    for byte in data.iter_mut() {
-        if used == 64 {
-            block(key, &nonce, counter, &mut pad);
-            counter = counter.wrapping_add(1);
-            used = 0;
-        }
-        *byte ^= pad.get(used).copied().unwrap_or(0);
-        used += 1;
-    }
-    wipe(&mut pad);
-}
-
 /// XORs the RFC 8439 ChaCha20 stream of `key` and the 12-byte `nonce`, block counter from 0, into `data`.
-#[cfg(feature = "frame")]
 pub fn xor_with_nonce(key: &[u8; 32], nonce: &[u8; 12], data: &mut [u8]) {
     let mut counter = 0u32;
     let mut pad = [0u8; 64];

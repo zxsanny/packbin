@@ -1,5 +1,5 @@
 // AZ-2666 audit probe, mode edge: the AC-1 and AC-2 edge cases a random run is unlikely to hit
-// (ECC sweeps, refusal order, session positions, text limits, ESC cuts, keys, Packed).
+// (ECC sweeps, refusal order, text limits, ESC cuts, keys, Packed).
 
 #include "probe_common.hpp"
 #include "text_decode.hpp"
@@ -113,61 +113,6 @@ int edge(std::string const& fix) {
     e.data()[31] ^= 0x33;
     o = ecc::repair(e.data(), 32, 32, 16);
     expect(o.ok() && o.repaired == 1, "N = n (empty clear): a parity byte repaired");
-  }
-  // Session order: not open first, then duplicate, mix, limit; none spends a position.
-  {
-    PackSession closed;
-    auto sp = packbin::parity(ebase40, 4);
-    auto mix = packbin::parity(ebase41, 2);
-    ERow x, y;
-    std::uint8_t buf[16] = {};
-    auto none = [](auto&) {};
-    expect(closed.unpack_repair(buf, 16, 99, packbin::on(sp, x, none), packbin::on(sp, y, none))
-                   .error == Error::BadValue,
-           "session not open answers BadValue before the duplicate and the limit");
-    PackSession a, b;
-    open_pair(a, b);
-    expect(b.unpack_repair(buf, 16, 0, packbin::on(sp, x, none), packbin::on(sp, y, none)).error ==
-               Error::SchemeInvalid,
-           "duplicate type number: SchemeInvalid");
-    expect(b.unpack_repair(buf, 16, 0, packbin::on(sp, x, none), packbin::on(mix, y, none)).error ==
-               Error::SchemeInvalid,
-           "parity mix: SchemeInvalid");
-    expect(b.unpack_repair(sp, buf, 16, x, 3).error == Error::BadValue, "limit 3 for n = 4: BadValue");
-    ERow row;
-    row.a = 7;
-    std::uint8_t out[64];
-    packbin::Result pk = a.pack(sp, row, out, sizeof(out));
-    ERow got;
-    expect(pk.ok() && b.unpack(sp, out, pk.offset, got).ok() && got.a == 7,
-           "after four argument refusals the first payload still reads (no position spent)");
-    // A refused payload (uncorrectable, short, too long) spends one position.
-    for (int kind = 0; kind < 3; ++kind) {
-      pk = a.pack(sp, row, out, sizeof(out));
-      std::uint8_t bad[300] = {};
-      std::size_t len = kind == 0 ? pk.offset : kind == 1 ? 2 : 255;
-      std::memcpy(bad, out, std::min<std::size_t>(pk.offset, len));
-      if (kind == 0)
-        for (int e = 0; e < 3; ++e)
-          bad[e] ^= 0xFF;
-      packbin::Result rr = b.unpack_repair(sp, bad, len, got, 2);
-      Error want = kind == 0 ? Error::Uncorrectable : kind == 1 ? Error::ShortPacket : Error::TooLong;
-      row.a = static_cast<std::uint8_t>(10 + kind);
-      pk = a.pack(sp, row, out, sizeof(out));
-      packbin::Result next = b.unpack(sp, out, pk.offset, got);
-      char const* name = kind == 0   ? "uncorrectable payload spends one position"
-                         : kind == 1 ? "short payload spends one position"
-                                     : "too-long payload spends one position";
-      expect(rr.error == want && next.ok() && got.a == 10 + kind, name);
-    }
-    // Plain (n = 0) session with an invalid scheme: does a refused scheme spend a position?
-    auto broken = packbin::parity(ebase40, 40);  // SchemeInvalid
-    packbin::Result br = b.unpack(broken, buf, 16, got);
-    row.a = 21;
-    pk = a.pack(sp, row, out, sizeof(out));
-    packbin::Result after = b.unpack(sp, out, pk.offset, got);
-    std::printf("note invalid_scheme_session_unpack error=%d next_reads=%d (1: no position spent)\n",
-                static_cast<int>(br.error), after.ok() && got.a == 21);
   }
   // Text: limits and the raw path.
   {

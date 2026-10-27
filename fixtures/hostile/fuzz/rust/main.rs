@@ -1,26 +1,24 @@
 //! packbin hostile-input probe, Rust (AZ-2666, loop 41): the compact text decoder and the message ECC
-//! unpack path (plain, dispatch and session), through the public API only.
+//! unpack path (plain and dispatch), through the public API only.
 //!
 //! How to run: `sh run.sh <packbin checkout> <build dir> <debug|release> <command> [args]` (see run.sh).
-//! The sources are main.rs and the files it includes (tools, calls, random, perf, edges, session).
+//! The sources are main.rs and the files it includes (tools, calls, random, perf, edges).
 //! The binary takes the checkout first: it reads `fixtures/text/vectors.txt`, `fixtures/ecc/vectors.txt`,
 //! `fixtures/hostile/fuzz/corpus.txt` and the frozen code lengths in `rust/src/walk/text_tables.rs`.
 //!
 //!   random  <seed> <calls>   (a) seeded random and mutated inputs: text unpack (lone string, list, dict),
 //!                            ECC unpack (random buffers, code words with k wrong bytes, vector seeds),
-//!                            strings inside protected messages, and a session pair whose next payload must
-//!                            still read after every hostile one. Prints seed, calls, accepted/refused,
+//!                            and strings inside protected messages. Prints seed, calls, accepted/refused,
 //!                            panics and the slowest call.
 //!   ecctime <calls>          (b) repair time at n = 32, N = 254 for the inputs that make the most work.
 //!   textamp <case>           (c) decoded bytes per payload byte, time and peak RSS:
 //!                            one | list1m | list8m | controls | short
 //!   edges                    (d) the AC-1 / AC-2 edge cases a random run is unlikely to reach.
 //!
-//! Exit status 1 when an invariant is broken (a panic, a call above 1 s, a wrong repair, a desync).
+//! Exit status 1 when an invariant is broken (a panic, a call above 1 s, a wrong repair).
 use packbin::{
-    bytes, dict, insert, list, pack, unpack, unpack_repair, utf8, BinaryPacker, BoundField,
-    DispatchHandler, MapScheme, PackSession, Scheme, UnpackError, Value, Values, NONCE_SIZE,
-    SEED_SIZE,
+    bytes, dict, insert, list, pack, unpack, unpack_repair, utf8, BinaryPacker, DispatchHandler,
+    MapScheme, UnpackError, Value, Values,
 };
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::time::{Duration, Instant};
@@ -30,7 +28,6 @@ include!("calls.rs");
 include!("random.rs");
 include!("perf.rs");
 include!("edges.rs");
-include!("session.rs");
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();

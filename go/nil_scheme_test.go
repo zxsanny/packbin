@@ -25,7 +25,6 @@ func TestNilSchemeAccessorsDoNotPanic(t *testing.T) {
 func TestZeroValueSchemeIsRefused(t *testing.T) {
 	zero := &Scheme{}
 	good := mustScheme(t, 5, U8(0, "a"))
-	opener, waiter := sessionPair(t, sessionNonce(t))
 	const named = "not made by NewScheme"
 	t.Run("Pack", func(t *testing.T) {
 		_, err := Pack(zero, map[string]any{})
@@ -57,24 +56,6 @@ func TestZeroValueSchemeIsRefused(t *testing.T) {
 	t.Run("accessors", func(t *testing.T) {
 		if zero.TypeNumber() != 0 || zero.Limits() != (Limits{}) {
 			t.Fatalf("type number %d, limits %+v", zero.TypeNumber(), zero.Limits())
-		}
-	})
-	t.Run("PackSession.Pack", func(t *testing.T) {
-		_, err := opener.Pack(zero, map[string]any{})
-		asError(t, err, PackRefused)
-	})
-	t.Run("PackSession.Unpack and UnpackMap spend no position", func(t *testing.T) {
-		_, err := waiter.Unpack([]byte{0}, zero)
-		asError(t, err, InvalidScheme)
-		_, err = waiter.UnpackMap([]byte{0}, zero)
-		asError(t, err, InvalidScheme)
-		payload, err := opener.Pack(good, map[string]any{"a": uint8(7)})
-		if err != nil {
-			t.Fatalf("pack: %v", err)
-		}
-		row, err := waiter.UnpackMap(payload, good)
-		if err != nil || row["a"] != uint8(7) {
-			t.Fatalf("the first position was spent: %v, %v", row, err)
 		}
 	})
 }

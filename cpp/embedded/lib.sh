@@ -16,7 +16,7 @@ cache="${PACKBIN_EMBEDDED_CACHE:-$root/.cache/embedded}"
 # Feature AC-1 flags; every core and test source on every target builds with these.
 core_flags=(-std=c++17 -fno-exceptions -fno-rtti -Os -Wall -Wextra -Werror)
 c_flags=(-std=c11 -Os -Wall -Wextra -Werror)
-core_srcs=(src/core/values.cpp src/core/pack.cpp src/core/unpack.cpp src/core/session.cpp)
+core_srcs=(src/core/values.cpp src/core/pack.cpp src/core/unpack.cpp src/core/crypto.cpp)
 
 # Budgets from feature AC-5.
 flash_budget=8192

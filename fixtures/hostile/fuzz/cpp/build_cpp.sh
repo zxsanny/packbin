@@ -6,7 +6,7 @@ set -euo pipefail
 REPO=$1; PROBE=$2; OUT=$3
 mode=${4:-both}
 SRCS=("$PROBE"/*.cpp)
-CORE=("$REPO/cpp/src/core/values.cpp" "$REPO/cpp/src/core/pack.cpp" "$REPO/cpp/src/core/unpack.cpp" "$REPO/cpp/src/core/session.cpp")
+CORE=("$REPO/cpp/src/core/values.cpp" "$REPO/cpp/src/core/pack.cpp" "$REPO/cpp/src/core/unpack.cpp" "$REPO/cpp/src/core/crypto.cpp")
 INC=(-I"$REPO/cpp/include" -I"$REPO/cpp/src/core" -I"$PROBE")
 if command -v xcrun > /dev/null; then
   SDK="$(xcrun --show-sdk-path)"

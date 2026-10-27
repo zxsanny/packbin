@@ -62,7 +62,7 @@ import Testing
             var context = example.context
             context.kind = (context.kind + 1) & 15
             var window = ReplayWindow(top: 7, bits: 1)
-            var tries: [(String, FrameSession, FrameDirection, MessageContext)] = [
+            var tries: [(String, FrameSession, FrameDirection, MsgContext)] = [
                 ("kind", try example.session(), example.direction, context),
                 ("direction", try example.session(), other, example.context),
                 ("epoch", try FrameSession.load(key: example.key, epoch: example.epoch + 1,
@@ -74,7 +74,7 @@ import Testing
             ]
             for bit in 0..<64 {
                 tries.append(("msg_id bit \(bit)", try example.session(), example.direction,
-                              MessageContext(msgID: flipped(example.context.msgID, bit: bit), kind: example.context.kind)))
+                              MsgContext(msgID: flipped(example.context.msgID, bit: bit), kind: example.context.kind)))
             }
 
             // Act

@@ -1131,33 +1131,6 @@ fmt.Println(len(nonce), len(payload), got["code"])
 
 `sharedSeed` stands for the 32 bytes both sides hold from the out-of-band exchange (the test fills it with a fixed value); `Start` draws the 16 random bytes, and `StartWith(nonce)` opens the opener side with 16 bytes the caller already holds, for tests. The payload has the length of the clear packet: 2 bytes here. `LoadSession` copies the seed, so the slice you pass is not wiped (as in TypeScript); the internal copy and the derived key block are zeroed once the session opens. A seed or value of the wrong length, a second open and a nil session are `BadValue` errors, `Pack` before `Start` or `Join` is a `PackRefused` error, and `Unpack` before `Join` is a `ShortPacket` error (needed 1, left 0). A `Pack` that fails spends no counter position. An `Unpack` spends one for every payload, readable or not, so the next message still unpacks. A packet over 2^38 bytes is refused, because the ChaCha20 counter would overflow. A `PackSession` is safe for concurrent use: payloads are numbered in the order the `Pack` calls take its lock, so the receiver must `Unpack` them in that order (concurrent senders serialise their sending in the same order, or send the position themselves).
 
-### Swift
-
-`position` and `hex` are the map scheme and the function of the Swift examples above.
-
-```swift
-let seed: [UInt8] = Array(1...32)   // the 32 bytes both sides hold, shared out of band
-let opener = try PackSession.load(seed)
-let hello = try opener.start([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])   // start() draws them at random
-let waiter = try PackSession.load(seed)
-try waiter.join(hello)
-
-let payload = try opener.pack(position, ["sid": 1, "lat": 500_000_000, "lon": 300_000_000, "profile": 1])
-print(hex(payload))
-
-let back = try waiter.unpackMap(payload, position)
-if let lat = back["lat"] {
-    print(hello.count, payload.count, lat)
-}
-```
-
-```
-b5 5d 0a 29 c5 6c 20 37 12 b2 41 23 2e
-16 13 500000000
-```
-
-`start()` draws the 16 bytes at random and returns them: send them to the waiter once. `start(_:)` opens the opener side with 16 bytes the caller already holds, for tests, as here; with this seed and value the payload is the C# ciphertext of the golden row, and it has the length of the clear packet (13 bytes). `load` copies the seed, so the array you pass is not changed; the copy and the derived key block are zeroed when the session opens. A seed or value of another length and a second open throw `.badValue`, `pack` before `start` or `join` throws `.packError`, and `unpack` before `join` throws `.short` (needed 1, left 0). A failed `pack` spends no counter position. Every `unpack` of an open session spends one, readable or not, so the next message still unpacks; an `unpack` with no usable scheme list spends one too (as TypeScript and C#; Go spends none). A `PackSession` is used by one task at a time, and the receiver unpacks the payloads in the order they were packed.
-
 ### WebSocket: Vue client, C# server
 
 The browser opens the socket, so it is the opener. Its first message is the 16 bytes. The server treats the first message on every socket as those bytes and keeps one session per socket. Every later message in either direction is one packed packet, encrypted.
@@ -1500,7 +1473,7 @@ let key = [UInt8](repeating: 0x11, count: 32)
 let node = try FrameSession.load(key: key, epoch: 1, config: FrameConfig(tagLength: 4))
 
 // A message id that is never sealed twice with other contents under one (key, epoch, direction).
-let context = MessageContext(msgID: [0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0], kind: 4)
+let context = MsgContext(msgID: [0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0], kind: 4)
 let ad: [UInt8] = [0, 1, 0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0, 4]  // authenticated, not sent
 
 // Seal into your own buffer: clear part, then ciphertext, then the 4-byte tag.

@@ -5,7 +5,7 @@ package main
 // The seed corpus is read from the checkout named by PACKBIN_CHECKOUT (run.sh sets it): the text vectors,
 // the ECC vectors and fixtures/hostile/fuzz/corpus.txt. Each target fails on a panic, on a call above 1 s,
 // and on a broken invariant (decoded size above 6N + 8, a repair that is not a code word within the limit,
-// a written input, a session whose next payload no longer reads).
+// a written input).
 
 import (
 	"bytes"
@@ -85,34 +85,6 @@ func FuzzEccRepair(f *testing.F) {
 			if rep > limit || len(again) != len(buf) || hamming(again, buf) != rep {
 				t.Fatalf("repair not a code word within the limit: n %d t %d repaired %d", n, limit, rep)
 			}
-		}
-	})
-}
-
-func FuzzSession(f *testing.F) {
-	s := fuzzSeeds(f)
-	for _, e := range s.ecc {
-		f.Add(uint8(e.n), uint8(e.n/2), e.buf)
-	}
-	f.Fuzz(func(t *testing.T, nByte, limitByte uint8, hostile []byte) {
-		n := int(nByte) % 33
-		limit := int(limitByte) % (n/2 + 1)
-		opener, _ := pb.LoadSession(bytes.Repeat([]byte{9}, pb.SeedSize))
-		waiter, _ := pb.LoadSession(bytes.Repeat([]byte{9}, pb.SeedSize))
-		nonce, _ := opener.StartWith(bytes.Repeat([]byte{3}, pb.NonceSize))
-		if err := waiter.Join(nonce); err != nil {
-			t.Fatal(err)
-		}
-		body := []byte("the next payload")
-		scheme := rawScheme(1, len(body), n)
-		_ = sessionPack(opener, body, n) // index 0: replaced on the wire by the hostile bytes
-		next := sessionPack(opener, body, n)
-		start := time.Now()
-		_, _, _ = waiter.UnpackMapRepair(hostile, limit, scheme)
-		within(t, start, hostile)
-		row, _, err := waiter.UnpackMapRepair(next, 0, scheme)
-		if got, _ := row["b"].([]byte); err != nil || !bytes.Equal(got, body) {
-			t.Fatalf("the payload after a hostile one did not read: %v", err)
 		}
 	})
 }

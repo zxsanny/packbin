@@ -94,7 +94,7 @@ final class Released: @unchecked Sendable {
         // Arrange
         let session = try FrameSession.load(key: repeatedKey(0x5A), epoch: 9, config: FrameConfig(tagLength: 4))
         try session.setPrevious(key: repeatedKey(0x6B), epoch: 8)
-        let context = MessageContext(msgID: messageID(1), kind: 1)
+        let context = MsgContext(msgID: messageID(1), kind: 1)
         let body = try sealBody(session, .up, context, plain: [1, 2])
         let live = session.derivedKeys(for: .down)
 

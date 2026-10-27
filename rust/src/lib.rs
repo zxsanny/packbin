@@ -1,11 +1,11 @@
 //! Pack and unpack a caller-owned field list.
 //!
-//! Two APIs share one wire format. The `std` API (`MapScheme`, `Values`, [`pack`], [`unpack`],
-//! [`PackSession`]) builds schemes at run time and owns its values; it is on by default. The
-//! [`nostd`] API is plain data and caller buffers: it builds with `#![no_std]` and no allocator
+//! Two APIs share one wire format. The `std` API (`MapScheme`, `Values`, [`pack`], [`unpack`])
+//! builds schemes at run time and owns its values; it is on by default. The [`nostd`] API is plain
+//! data and caller buffers: it builds with `#![no_std]` and no allocator
 //! (`default-features = false`) for firmware. Cargo features: `std` (default, implies `alloc`),
-//! `alloc` (convenience wrappers that return `Vec<u8>`), `text`, `ecc`, `session` and `frame` (parts
-//! of the [`nostd`] API; the `std` API always has the first three).
+//! `alloc` (convenience wrappers that return `Vec<u8>`), `text`, `ecc` and `frame` (parts of the
+//! [`nostd`] API; the `std` API always has the first two). Frame mode (`frame`) is the only session.
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "alloc")]
@@ -21,9 +21,9 @@ mod ecc_core;
 mod field;
 #[cfg(feature = "std")]
 mod scheme;
-#[cfg(feature = "std")]
-mod session;
-#[cfg(any(feature = "std", feature = "session", feature = "frame"))]
+// Frame mode is the crate's one user of the crypto; the default test build also has it for the 27 rows of
+// fixtures/crypto/vectors.txt (crypto_vectors_tests).
+#[cfg(any(feature = "frame", all(test, feature = "std")))]
 mod session_core;
 #[cfg(feature = "std")]
 mod value;
@@ -40,8 +40,6 @@ pub use field::{
 };
 #[cfg(feature = "std")]
 pub use scheme::{BinaryPacker, BoundField, DispatchHandler, On, Scheme, SchemeItem};
-#[cfg(feature = "std")]
-pub use session::{PackSession, SessionPackError, NONCE_SIZE, SEED_SIZE};
 #[cfg(feature = "std")]
 pub use value::{
     insert, mismatched_bytes, motion_field_count, to_hex, Name, PackError, ShortPacket,
@@ -116,8 +114,6 @@ mod repeat_lists_without_groups_tests;
 mod round_tests;
 #[cfg(all(test, feature = "std"))]
 mod scope_tests;
-#[cfg(all(test, feature = "std"))]
-mod session_hostile_tests;
 #[cfg(all(test, feature = "std"))]
 mod split_form_loud_tests;
 #[cfg(all(test, feature = "std"))]

@@ -156,9 +156,6 @@ inline Result seal(std::uint8_t*, std::size_t len, int) { return Result{Error::O
 
 #endif
 
-// A correction limit is 0 to n / 2 (0 only for a scheme without parity).
-inline bool limit_ok(int n, int limit) { return limit >= 0 && limit <= n / 2; }
-
 // A read of the field bytes done: the whole message was consumed, parity included.
 inline Result finish_message(Result r, int n, std::uint8_t repaired) {
   if (r.ok()) {
@@ -351,14 +348,6 @@ bool differs(H const& h, int n, int& other) {
     return false;
   other = parity_of(h.scheme);
   return true;
-}
-
-// The first handler whose scheme was not built (its status is the failure), or ok.
-template <typename H, typename... Hs>
-Result handlers_built(H const& first, Hs const&... rest) {
-  Result r = first.scheme.status;
-  ((r.ok() ? (r = rest.scheme.status, 0) : 0), ...);
-  return r;
 }
 
 // The parity count every handler declares. A mix is `SchemeInvalid`: `offset` is the first

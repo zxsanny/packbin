@@ -1,12 +1,16 @@
-// Host-only checks: wall-clock throughput, threads and the process map. The firmware runner
-// does not build this file.
+// Host-only checks: wall-clock throughput, threads, the process map and a source scan of the
+// core for operating-system headers and random sources. The firmware runner does not build this
+// file.
 
 #include "packbin/packbin.hpp"
 
 #include "check.hpp"
 #include "load_factor.hpp"
 
+#include <dirent.h>
+
 #include <chrono>
+#include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <sstream>
@@ -88,11 +92,113 @@ void no_gpu() {
     expect(blob.find(bad) == std::string::npos, bad);
 }
 
+// Reads a whole source file into `buf`; false when it is missing or does not fit.
+bool read_text(char const* path, char* buf, std::size_t cap) {
+  std::FILE* f = std::fopen(path, "rb");
+  if (f == nullptr)
+    return false;
+  std::size_t n = std::fread(buf, 1, cap - 1, f);
+  bool whole = std::feof(f) != 0;
+  std::fclose(f);
+  buf[n] = '\0';
+  return whole;
+}
+
+bool names_an_os_rng(char const* text) {
+  return std::strstr(text, "sys/random.h") != nullptr ||
+         std::strstr(text, "/dev/urandom") != nullptr ||
+         std::strstr(text, "arc4random") != nullptr;
+}
+
+bool only_core_headers(char const* text) {
+  static char const* const allowed[] = {"cstdint", "cstddef", "cstring", "type_traits",
+                                        "limits",  "array",   "utility"};
+  for (char const* at = std::strstr(text, "#include <"); at != nullptr;
+       at = std::strstr(at + 1, "#include <")) {
+    char const* name = at + std::strlen("#include <");
+    char const* end = std::strchr(name, '>');
+    if (end == nullptr)
+      return false;
+    bool ok = false;
+    for (char const* a : allowed)
+      if (std::strlen(a) == static_cast<std::size_t>(end - name) &&
+          std::strncmp(name, a, std::strlen(a)) == 0)
+        ok = true;
+    if (!ok)
+      return false;
+  }
+  return true;
+}
+
+char const* cpp_root() {
+  static char const* const roots[] = {"", "cpp/", "../"};
+  char buf[256];
+  for (char const* root : roots) {
+    std::snprintf(buf, sizeof(buf), "%ssrc/core/pack.cpp", root);
+    std::FILE* f = std::fopen(buf, "rb");
+    if (f != nullptr) {
+      std::fclose(f);
+      return root;
+    }
+  }
+  return nullptr;
+}
+
+int scan_core_file(char const* path, int& dirty) {
+  static char text[1 << 16];
+  if (!read_text(path, text, sizeof(text))) {
+    std::fprintf(stderr, "AC-3 cannot read %s\n", path);
+    ++dirty;
+    return 0;
+  }
+  if (names_an_os_rng(text) || !only_core_headers(text)) {
+    std::fprintf(stderr, "AC-3 OS reference in %s\n", path);
+    ++dirty;
+  }
+  return 1;
+}
+
+// Every source of src/core and the headers the core is built from include no operating-system
+// header and name no OS random source (the firmware builds them as they are).
+void ac3_no_os_in_core() {
+  char const* root = cpp_root();
+  expect(root != nullptr, "AC-3 sources found");
+  if (root == nullptr)
+    return;
+  char path[256];
+  int scanned = 0;
+  int dirty = 0;
+
+  std::snprintf(path, sizeof(path), "%ssrc/core", root);
+  DIR* dir = opendir(path);
+  expect(dir != nullptr, "AC-3 src/core listed");
+  for (dirent* e = dir ? readdir(dir) : nullptr; e != nullptr; e = readdir(dir)) {
+    std::size_t len = std::strlen(e->d_name);
+    bool source = len > 4 && (std::strcmp(e->d_name + len - 4, ".cpp") == 0 ||
+                              std::strcmp(e->d_name + len - 4, ".hpp") == 0);
+    if (!source)
+      continue;
+    std::snprintf(path, sizeof(path), "%ssrc/core/%s", root, e->d_name);
+    scanned += scan_core_file(path, dirty);
+  }
+  if (dir != nullptr)
+    closedir(dir);
+
+  static char const* const headers[] = {"core.hpp",  "table.hpp", "fields.hpp",
+                                        "order.hpp", "codec.hpp", "ecc.hpp"};
+  for (char const* h : headers) {
+    std::snprintf(path, sizeof(path), "%sinclude/packbin/%s", root, h);
+    scanned += scan_core_file(path, dirty);
+  }
+  expect(scanned >= 9 && dirty == 0, "AC-3 0 OS random references in the core");
+}
+
 }  // namespace
 
 int run_core_host_tests() {
   throughput();
   parallel_pack();
   no_gpu();
+  ac3_no_os_in_core();
   return check::failures();
 }

@@ -65,7 +65,7 @@ case "$lang" in
     fi
     "${CXX:-g++}" "${flags[@]}" -o "$bin" \
       "$drivers/position.cpp" "$root/cpp/src/core/values.cpp" "$root/cpp/src/core/pack.cpp" \
-      "$root/cpp/src/core/unpack.cpp" "$root/cpp/src/core/session.cpp" "$root/cpp/src/os_random.cpp"
+      "$root/cpp/src/core/unpack.cpp" "$root/cpp/src/core/crypto.cpp"
     "$bin"
     ;;
   java)

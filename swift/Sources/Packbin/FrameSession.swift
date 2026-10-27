@@ -38,7 +38,7 @@ struct FrameSlotKeys: Sendable {
 /// with a radio. A frame is `clear ‖ ciphertext ‖ tag`: ChaCha20 under a key per (key, epoch, direction) from
 /// HKDF-SHA256, a nonce built from the caller's 8-byte `msgID`, the `kind` nibble, the direction and the epoch,
 /// and a tag that is the first 4, 8 or 16 bytes of HMAC-SHA256 over the nonce, the associated data, the clear
-/// part and the ciphertext (encrypt, then MAC). Unlike the stream `PackSession` it detects a changed byte.
+/// part and the ciphertext (encrypt, then MAC), so a changed byte is detected.
 ///
 /// The keys of each loaded direction are derived once, at load. `seal` is deterministic (the same inputs give
 /// the same bytes) and keeps no state; `open` checks the caller's ``ReplayWindow`` first (no hashing for a
@@ -159,8 +159,8 @@ public final class FrameSession: @unchecked Sendable, CustomStringConvertible {
     /// **The uniqueness rule (the caller's duty): for one (key, epoch, direction), never seal two different
     /// messages with the same `context.msgID`.** The library keeps no record and cannot check it; a reused
     /// `msgID` repeats the key stream and breaks the confidentiality of both messages. A new epoch derives new
-    /// keys and nonces. See ``MessageContext``.
-    public func seal(direction: FrameDirection, context: MessageContext, ad: [UInt8], clear: [UInt8],
+    /// keys and nonces. See ``MsgContext``.
+    public func seal(direction: FrameDirection, context: MsgContext, ad: [UInt8], clear: [UInt8],
                      plain: [UInt8], into out: inout [UInt8]) throws -> Int {
         try requireOpen()
         try checkCall(direction, context, ad)
@@ -196,7 +196,7 @@ public final class FrameSession: @unchecked Sendable, CustomStringConvertible {
     /// negative `clearLength` throws a `.badValue`; `ad`, `body` or `clearLength` above 255 throws a `.tooLong`
     /// (before any hashing); a body shorter than `clearLength` plus the tag throws a `.short`; an `out` shorter
     /// than the plaintext throws a `.bufferFull`.
-    public func open(direction: FrameDirection, context: MessageContext, ad: [UInt8], body: [UInt8],
+    public func open(direction: FrameDirection, context: MsgContext, ad: [UInt8], body: [UInt8],
                      clearLength: Int, into out: inout [UInt8]) throws -> FrameOpened {
         try opened(direction, context, ad, body, clearLength, nil, &out)
     }
@@ -208,7 +208,7 @@ public final class FrameSession: @unchecked Sendable, CustomStringConvertible {
     /// **The counter must come from bytes the tag covers** (the `msgID` or the associated data), never from an
     /// unauthenticated field of the wire; see ``ReplayWindow``. A frame that opens under the previous key
     /// commits into the same window.
-    public func open(direction: FrameDirection, context: MessageContext, ad: [UInt8], body: [UInt8],
+    public func open(direction: FrameDirection, context: MsgContext, ad: [UInt8], body: [UInt8],
                      clearLength: Int, window: inout ReplayWindow, counter: UInt64,
                      into out: inout [UInt8]) throws -> FrameOpened {
         let result = try opened(direction, context, ad, body, clearLength, (window, counter), &out)
@@ -216,7 +216,7 @@ public final class FrameSession: @unchecked Sendable, CustomStringConvertible {
         return result
     }
 
-    private func opened(_ direction: FrameDirection, _ context: MessageContext, _ ad: [UInt8], _ body: [UInt8],
+    private func opened(_ direction: FrameDirection, _ context: MsgContext, _ ad: [UInt8], _ body: [UInt8],
                         _ clearLength: Int, _ replay: (window: ReplayWindow, counter: UInt64)?,
                         _ out: inout [UInt8]) throws -> FrameOpened {
         try requireOpen()
@@ -267,7 +267,7 @@ public final class FrameSession: @unchecked Sendable, CustomStringConvertible {
         if closed { throw PackbinError.frame(.badValue, "the session is closed") }
     }
 
-    private func checkCall(_ direction: FrameDirection, _ context: MessageContext, _ ad: [UInt8]) throws {
+    private func checkCall(_ direction: FrameDirection, _ context: MsgContext, _ ad: [UInt8]) throws {
         guard directions.contains(direction: direction) else {
             throw PackbinError.frame(.badValue, "direction \(direction.rawValue) is not loaded")
         }
@@ -283,7 +283,7 @@ public final class FrameSession: @unchecked Sendable, CustomStringConvertible {
     }
 
     /// `msg_id ‖ ((kind << 4) | direction) ‖ epoch` as 24 bits.
-    private static func nonce(_ context: MessageContext, _ direction: FrameDirection, _ epoch: UInt32) -> [UInt8] {
+    private static func nonce(_ context: MsgContext, _ direction: FrameDirection, _ epoch: UInt32) -> [UInt8] {
         context.msgID + [context.kind << 4 | direction.rawValue, UInt8(truncatingIfNeeded: epoch),
                          UInt8(truncatingIfNeeded: epoch >> 8), UInt8(truncatingIfNeeded: epoch >> 16)]
     }
@@ -303,7 +303,7 @@ public final class FrameSession: @unchecked Sendable, CustomStringConvertible {
     }
 
     /// Whether the received tag is the first `tagLength` bytes of the slot's tag. All of them are compared.
-    private func tagMatches(_ slot: FrameSlotKeys, _ direction: FrameDirection, _ context: MessageContext,
+    private func tagMatches(_ slot: FrameSlotKeys, _ direction: FrameDirection, _ context: MsgContext,
                             _ ad: [UInt8], _ clear: UnsafeRawBufferPointer, _ cipher: UnsafeRawBufferPointer,
                             _ received: UnsafeRawBufferPointer) -> Bool {
         let nonce = Self.nonce(context, direction, slot.epoch)

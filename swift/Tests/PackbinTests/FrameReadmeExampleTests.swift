@@ -12,7 +12,7 @@ import Testing
         let node = try FrameSession.load(key: key, epoch: 1, config: FrameConfig(tagLength: 4))
 
         // A message id that is never sealed twice with other contents under one (key, epoch, direction).
-        let context = MessageContext(msgID: [0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0], kind: 4)
+        let context = MsgContext(msgID: [0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0], kind: 4)
         let ad: [UInt8] = [0, 1, 0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0, 4]  // authenticated, not sent
 
         // Seal into your own buffer: clear part, then ciphertext, then the 4-byte tag.

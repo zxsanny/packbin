@@ -97,9 +97,9 @@ image_checks() {
   throw=$(count_fixed "__cxa_throw" "$map")
   alloc=$(count_fixed "__cxa_allocate_exception" "$map")
   heap=$(awk '$NF ~ /^(malloc|calloc|realloc|_Znwj|_Znaj|_malloc_r|__wrap_.*)$/ { n++ } END { print n + 0 }' "$syms")
-  osrnd=$(awk '$NF ~ /(getrandom|arc4random|os_random)/ { n++ } END { print n + 0 }' "$syms")
+  osrnd=$(awk '$NF ~ /(getrandom|arc4random)/ { n++ } END { print n + 0 }' "$syms")
   urandom=$(count_fixed "/dev/urandom" "$elf")
-  echo "$stem: __cxa_throw=$throw __cxa_allocate_exception=$alloc heap_symbols=$heap os_random_symbols=$osrnd dev_urandom=$urandom"
+  echo "$stem: __cxa_throw=$throw __cxa_allocate_exception=$alloc heap_symbols=$heap os_rng_symbols=$osrnd dev_urandom=$urandom"
   [ "$((throw + alloc))" -eq 0 ] || fail "$stem references exceptions ($throw throw $alloc allocate)"
   [ "$osrnd" -eq 0 ] && [ "$urandom" -eq 0 ] || fail "$stem references OS random"
   if [ "$stem" = ac2 ]; then
@@ -180,7 +180,7 @@ target_m3() {
 
   qemu_run mps2-an385 "$dir/vectors.elf" "$dir/vectors.run.log" || fail "vector runner exit $?"
   check_vectors "$dir/vectors.run.log"
-  note "AC-6 session vectors $(awk '$1 == "VECTORS_RUN" && $2 == "session_tests.cpp" { print $3 }' "$dir/vectors.run.log") run and OS random refs 0"
+  note "AC-6 OS random refs 0"
   log_value ALL_KINDS_HEX "$dir/ac2.run.log" > "$out/m3-all-kinds.hex"
   [ "$(log_value ALL_KINDS_HEX "$dir/vectors.run.log")" = "$(cat "$out/m3-all-kinds.hex")" ] \
     || fail "all-kinds packet differs between the AC-2 firmware and the runner"

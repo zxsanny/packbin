@@ -34,6 +34,17 @@ func positionTypedScheme(parity: Int) throws -> Scheme {
     try positionTypedScheme().withLimits(parity: parity)
 }
 
+/// The fields of a map row that differ from the AC-1 row (sid 1, lat 500000000, lon 300000000,
+/// profile 1, no motion field).
+func goldenFieldMismatches(_ row: [String: Any]) -> Int {
+    var bad = 0
+    if row["sid"] as? UInt16 != 1 { bad += 1 }
+    if row["lat"] as? Int32 != 500_000_000 { bad += 1 }
+    if row["lon"] as? Int32 != 300_000_000 { bad += 1 }
+    if row["profile"] as? UInt8 != 1 { bad += 1 }
+    return bad + ["heading", "speed", "altitude"].filter { row[$0] != nil }.count
+}
+
 /// A scheme that reads a clear message of any bytes as its type byte and a fixed run `b` of the rest, with
 /// `parity` parity bytes, so the vector rows (which are raw bytes) go through the public calls.
 func rawScheme(for clear: [UInt8], parity: Int) throws -> Scheme {

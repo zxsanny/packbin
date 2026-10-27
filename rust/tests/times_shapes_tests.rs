@@ -1,6 +1,5 @@
 use packbin::{
-    eq, to_hex, BinaryPacker, BoundField, PackError, PackSession, Scheme, SchemeItem,
-    SessionPackError, UnpackError, Value, NONCE_SIZE, SEED_SIZE,
+    eq, to_hex, BinaryPacker, BoundField, PackError, Scheme, SchemeItem, UnpackError, Value,
 };
 
 fn unpack_row<T: Default + 'static>(scheme: &Scheme<T>, bytes: &[u8]) -> Result<T, UnpackError> {
@@ -411,75 +410,4 @@ fn a_vec_of_i32_tuple_elements_packs_both_members_per_round() {
     // Assert
     assert_eq!(to_hex(&bytes), "010203000000040000000500000006000000");
     assert_eq!(back, row);
-}
-
-fn seed() -> [u8; SEED_SIZE] {
-    std::array::from_fn(|i| i as u8 + 1)
-}
-
-fn session_pair() -> (PackSession, PackSession) {
-    let mut opener = PackSession::load(&seed()).expect("load opener");
-    let mut waiter = PackSession::load(&seed()).expect("load waiter");
-    let nonce = opener.start_with(&[7u8; NONCE_SIZE]).expect("start");
-    assert!(waiter.join(&nonce));
-    (opener, waiter)
-}
-
-fn receive(waiter: &mut PackSession, scheme: &Scheme<Twin>, bytes: &[u8]) -> Twin {
-    let mut got = None;
-    waiter
-        .unpack(bytes, &mut [&mut scheme.on(|row| got = Some(row))])
-        .expect("unpack");
-    got.expect("handler ran")
-}
-
-#[test]
-fn a_session_peer_reads_the_times_row_the_opener_packed() {
-    // Arrange
-    let scheme = twin_scheme();
-    let (mut opener, mut waiter) = session_pair();
-    let row = Twin {
-        n: 2,
-        first: vec![pt(1, 2), pt(3, 4)],
-        second: vec![pt(5, 6), pt(7, 8)],
-        tail: 9,
-    };
-
-    // Act
-    let sealed = opener.pack(&scheme, &row).expect("pack");
-    let back = receive(&mut waiter, &scheme, &sealed);
-
-    // Assert
-    assert_eq!(back, row);
-}
-
-#[test]
-fn a_session_pack_that_fails_on_the_count_leaves_the_next_pack_readable() {
-    // Arrange
-    let scheme = twin_scheme();
-    let (mut opener, mut waiter) = session_pair();
-    let broken = Twin {
-        n: 2,
-        first: vec![pt(1, 2), pt(3, 4)],
-        second: vec![pt(5, 6)],
-        tail: 9,
-    };
-    let good = Twin {
-        n: 1,
-        first: vec![pt(1, 2)],
-        second: vec![pt(5, 6)],
-        tail: 4,
-    };
-
-    // Act
-    let failed = opener.pack(&scheme, &broken);
-    let sealed = opener.pack(&scheme, &good).expect("pack");
-    let back = receive(&mut waiter, &scheme, &sealed);
-
-    // Assert
-    assert!(matches!(
-        failed,
-        Err(SessionPackError::Pack(PackError::Type(_)))
-    ));
-    assert_eq!(back, good);
 }

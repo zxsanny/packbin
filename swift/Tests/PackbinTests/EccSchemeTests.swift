@@ -1,8 +1,8 @@
 import Packbin
 import Testing
 
-/// AZ-2686 AC-1, AC-2, AC-5 and AC-6 (EC-1 to EC-4, EC-8, EC-10, EC-11, EC-16): the scheme setting, the protected
-/// bytes of the position fixture, the size limit, the session, a compact text and the dispatch rule.
+/// AZ-2686 AC-1, AC-2, AC-5 and AC-6 (EC-1 to EC-4, EC-8, EC-11, EC-16): the scheme setting, the protected
+/// bytes of the position fixture, the size limit, a compact text and the dispatch rule.
 @Suite struct EccSchemeTests {
     @Test func parity_defaultsToZeroAndWithLimitsKeepsTheCountItWasGiven() throws {
         // Arrange
@@ -231,109 +231,5 @@ import Testing
 
         // Assert
         #expect(row["a"] as? UInt8 == 5 && repaired.row["a"] as? UInt8 == 5 && repaired.repaired == 0)
-    }
-}
-
-/// EC-10: the parity covers the padded bytes of a session payload.
-@Suite struct EccSessionTests {
-    @Test func pack_payloadIsThePaddedClearMessagePlusTheParityOfThePaddedBytes() throws {
-        // Arrange
-        let (opener, _) = try sessionPair()
-
-        // Act
-        let payload = try opener.pack(try positionScheme(parity: 4), goldenMap())
-        // The payload is a protected message of its own whose "clear" bytes are the padded ones.
-        let raw = try rawScheme(for: Array(payload.prefix(13)), parity: 4)
-        let intact = try unpackMapRepair(payload, limit: 0, raw)
-
-        // Assert
-        #expect(payload.count == 17)
-        #expect(hex(Array(payload.prefix(13))) == sessionCipherHex)
-        #expect(intact.repaired == 0 && (intact.row["b"] as? [UInt8]).map(hex) == String(sessionCipherHex.dropFirst(2)))
-    }
-
-    @Test func pack_aSchemeWithZeroParity_keepsThePayloadAsLongAsTheClearMessage() throws {
-        // Arrange
-        let (opener, waiter) = try sessionPair()
-        let scheme = try positionScheme(parity: 0)
-
-        // Act
-        let payload = try opener.pack(scheme, goldenMap())
-        let got = try waiter.unpackMapRepair(payload, limit: 0, scheme)
-
-        // Assert
-        #expect(hex(payload) == sessionCipherHex)
-        #expect(got.repaired == 0 && goldenFieldMismatches(got.row) == 0)
-    }
-
-    @Test func unpackRepair_twoWrongBytesAreRepairedBeforeThePadIsRemovedAndTheRowIsRecovered() throws {
-        // Arrange
-        let (opener, waiter) = try sessionPair()
-        let scheme = try positionTypedScheme(parity: 4)
-        let payload = try opener.pack(scheme, goldenRow())
-
-        // Act
-        let got = try waiter.unpackRepair(corrupt(payload, [2, 15], [0x80, 0x21]), limit: 2, scheme)
-
-        // Assert
-        #expect(got.row as? Position == goldenRow() && got.repaired == 2)
-    }
-
-    @Test func unpackRepair_threeWrongBytesWithLimitTwoAreRefusedThenTheNextPayloadIsRead() throws {
-        // Arrange
-        let (opener, waiter) = try sessionPair()
-        let scheme = try positionScheme(parity: 4)
-        let first = try opener.pack(scheme, goldenMap())
-        let second = try opener.pack(scheme, goldenMap().merging(["sid": 9]) { $1 })
-
-        // Act
-        let refused = packbinError { try waiter.unpackMapRepair(corrupt(first, [1, 5, 11], [1, 2, 3]), limit: 2, scheme) }
-        let next = try waiter.unpackMapRepair(second, limit: 2, scheme)
-
-        // Assert
-        #expect(refused?.kind == .uncorrectable)
-        #expect(next.repaired == 0 && next.row["sid"] as? UInt16 == 9)
-    }
-
-    @Test func unpackRepair_aLimitAboveHalfTheParity_throwsBeforeThePositionIsSpent() throws {
-        // Arrange
-        let (opener, waiter) = try sessionPair()
-        let scheme = try positionScheme(parity: 4)
-        let payload = try opener.pack(scheme, goldenMap())
-
-        // Act
-        let error = packbinError { try waiter.unpackMapRepair(payload, limit: 3, scheme) }
-        let after = try waiter.unpackMapRepair(payload, limit: 2, scheme)
-
-        // Assert
-        #expect(error?.kind == .schemeError)
-        #expect(after.repaired == 0 && goldenFieldMismatches(after.row) == 0)
-    }
-
-    @Test func pack_aMessageAboveTheParityLimit_isRefusedAndTheSendPositionDoesNotMove() throws {
-        // Arrange
-        let (opener, _) = try sessionPair()
-        let clear = [UInt8](repeating: 0, count: 223)
-        let big = try rawScheme(for: clear, parity: 32)
-
-        // Act
-        let error = packbinError { try opener.pack(big, rawRow(clear)) }
-        let first = try opener.pack(try positionScheme(parity: 0), goldenMap())
-
-        // Assert
-        #expect(error?.kind == .packError)
-        #expect(hex(first) == sessionCipherHex)
-    }
-
-    @Test func unpack_theProtectedPayloadReadByAnUnprotectedScheme_isRefusedNotTrapped() throws {
-        // Arrange
-        let (opener, waiter) = try sessionPair()
-        let payload = try opener.pack(try positionScheme(parity: 4), goldenMap())
-
-        // Act
-        let error = packbinError { try waiter.unpackMap(payload, try positionScheme(parity: 0)) }
-
-        // Assert
-        #expect(error?.kind == .trailing)
     }
 }

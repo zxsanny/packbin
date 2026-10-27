@@ -76,8 +76,8 @@ private func load(_ row: VectorRow) throws -> FrameSession {
     return try FrameSession.load(key: vectorBytes(row["key"] ?? ""), epoch: UInt32(row["epoch"] ?? "") ?? 0, config: config)
 }
 
-private func context(_ row: VectorRow) -> MessageContext {
-    MessageContext(msgID: vectorBytes(row["msg_id"] ?? ""), kind: UInt8(row["kind"] ?? "") ?? 0)
+private func context(_ row: VectorRow) -> MsgContext {
+    MsgContext(msgID: vectorBytes(row["msg_id"] ?? ""), kind: UInt8(row["kind"] ?? "") ?? 0)
 }
 
 private func failed(_ error: Error) -> VectorRow {

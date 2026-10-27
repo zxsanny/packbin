@@ -15,7 +15,6 @@ packbin = { path = "../..", default-features = false }
 [features]
 text = ["packbin/text"]
 ecc = ["packbin/ecc"]
-session = ["packbin/session"]
 frame = ["packbin/frame"]
 # Seeded defects: a probe that reaches a panic path and one that allocates. The embedded stage
 # builds them and requires the link checks to fail (never part of a real image).

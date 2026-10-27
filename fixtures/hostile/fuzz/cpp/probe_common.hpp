@@ -2,11 +2,10 @@
 
 // Shared helpers, rows and schemes of the AZ-2666 loop 41 audit probe; the build and the modes are
 // described in audit41_probe.cpp. Every mode lives in a file of its own:
-//   probe_text_fuzz.cpp   text-fuzz          probe_ecc_fuzz.cpp   ecc-fuzz (plain and session)
+//   probe_text_fuzz.cpp   text-fuzz          probe_ecc_fuzz.cpp   ecc-fuzz
 //   probe_edge.cpp        edge               probe_timing.cpp     ecc-worst, text-amp, text-long, dict-quad
 
 #include "packbin/codec.hpp"
-#include "packbin/session.hpp"
 #include "text.hpp"
 
 #include <sys/resource.h>
@@ -26,7 +25,6 @@ using packbin::Array;
 using packbin::Entry;
 using packbin::Error;
 using packbin::Packed;
-using packbin::PackSession;
 using packbin::Text;
 namespace txt = packbin::detail::txt;
 namespace ecc = packbin::ecc;
@@ -230,17 +228,6 @@ inline Bytes protect_clear(Bytes const& clear, int n) {
   if (k != ecc::Kind::Ok)
     out.clear();
   return out;
-}
-
-inline void open_pair(PackSession& a, PackSession& b) {
-  std::uint8_t seed[32];
-  for (int i = 0; i < 32; ++i)
-    seed[i] = static_cast<std::uint8_t>(i + 1);
-  std::uint8_t nonce[16] = {1};
-  a.load(seed, 32);
-  b.load(seed, 32);
-  a.start(nonce, 16);
-  b.join(nonce, 16);
 }
 
 // ---------------------------------------------------------------- the modes

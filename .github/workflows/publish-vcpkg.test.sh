@@ -102,7 +102,7 @@ vcpkg_stage_registry() {
 vcpkg_port_checks() {
   local bare="$1" file portfile
   for file in CMakeLists.txt LICENSE portfile.cmake vcpkg.json include/packbin/packbin.hpp \
-    src/core/pack.cpp src/os_random.cpp; do
+    src/core/pack.cpp src/core/crypto.cpp; do
     git --git-dir="$bare" cat-file -e "vcpkg:ports/packbin/$file" || fail "AZ-2098 AC-4 the port lacks $file"
   done
   cmp -s <(git --git-dir="$bare" show vcpkg:ports/packbin/LICENSE) "$root/LICENSE" \

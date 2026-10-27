@@ -59,7 +59,7 @@ public struct FrameConfig: Sendable, Equatable {
 /// (it keeps no state). A new epoch derives new keys and nonces. Example: meshbell builds `msgID` as source
 /// (2 bytes), id field (2 bytes) and creation wave (4 bytes); sequences restart every wave, waves never repeat
 /// and source ids are never reissued, so it is unique by construction.
-public struct MessageContext: Sendable, Equatable {
+public struct MsgContext: Sendable, Equatable {
     public var msgID: [UInt8]
     public var kind: UInt8
 

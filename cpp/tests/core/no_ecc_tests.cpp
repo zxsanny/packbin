@@ -1,12 +1,11 @@
 // A core built with PACKBIN_NO_ECC (AZ-2688, EC-12): no message error correction is linked. A
-// scheme without parity packs, unpacks and runs a session as before; a scheme that declares
-// parity bytes is refused at construction. Built and run by `make no-ecc-test`.
+// scheme without parity packs and unpacks as before; a scheme that declares parity bytes is
+// refused at construction. Built and run by `make no-ecc-test`.
 #ifndef PACKBIN_NO_ECC
 #error "no_ecc_tests.cpp is built with -DPACKBIN_NO_ECC"
 #endif
 
 #include "packbin/codec.hpp"
-#include "packbin/session.hpp"
 
 #include "check.hpp"
 
@@ -68,30 +67,11 @@ void parity_above_zero_is_refused() {
   expect(r.error == Error::SchemeInvalid && out[0] == 0xaa, "no message is built from it");
 }
 
-void session_without_parity() {
-  std::uint8_t seed[32];
-  for (std::size_t i = 0; i < sizeof(seed); ++i)
-    seed[i] = static_cast<std::uint8_t>(i + 1);
-  std::uint8_t nonce[16] = {1};
-  packbin::PackSession a;
-  packbin::PackSession b;
-  expect(a.load(seed, 32) && b.load(seed, 32) && a.start(nonce, 16) && b.join(nonce, 16),
-         "sessions open");
-  std::uint8_t out[32];
-  auto p = a.pack(plain, position_row(), out, sizeof(out));
-  expect(p.ok() && p.offset == 13 && check::same_hex(out, 13, "b55d0a29c56c203712b241232e"),
-         "session pack keeps the same-length payload");
-  Position back;
-  auto u = b.unpack(plain, out, p.offset, back);
-  expect(u.ok() && back.sid == 1 && back.lon == 300000000, "session unpack reads it");
-}
-
 }  // namespace
 
 int main() {
   parity_zero_is_the_plain_scheme();
   parity_above_zero_is_refused();
-  session_without_parity();
   if (check::failures() != 0) {
     std::fprintf(stderr, "%d failure(s)\n", check::failures());
     return 1;

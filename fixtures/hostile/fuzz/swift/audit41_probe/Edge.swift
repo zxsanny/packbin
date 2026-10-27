@@ -69,37 +69,6 @@ func edge(_ fix: String) throws -> Int32 {
     expect(kind { try unpackMapRepair([0x40], limit: 0, [s4, s4]) } == "scheme_error", "duplicate type: scheme_error")
     expect(kind { try unpackMapRepair([0x40], limit: 0, []) } == "scheme_error", "no scheme: scheme_error")
     expect(kind { try Scheme(1, .u8(0, "a")).withLimits(parity: 33) } == "scheme_error", "parity 33: scheme_error")
-    // Session order and positions.
-    let seed = (1...32).map { UInt8($0) }
-    let closed = try PackSession.load(seed)
-    do {
-        _ = try closed.unpackMapRepair([0x40], limit: 99, [s4, s4])
-        expect(false, "session not open")
-    } catch let e as PackbinError {
-        expect(e.kind == .short && e.needed == 1 && e.left == 0, "session not open answers first (short, needed 1, left 0)")
-    }
-    let a = try PackSession.load(seed)
-    let b = try PackSession.load(seed)
-    try b.join(try a.start([UInt8](repeating: 7, count: 16)))
-    _ = kind { try b.unpackMapRepair([0x40], limit: 3, [s4]) }
-    _ = kind { try b.unpackMapRepair([0x40], limit: 0, [s4, s2]) }
-    _ = kind { try b.unpackMapRepair([0x40], limit: 0, [s4, s4]) }
-    _ = kind { try b.unpackMapRepair([0x40], limit: 0, []) }
-    var p = try a.pack(s4, ["k": [UInt8(7)].map { $0 as Any }])
-    expect(((try? b.unpackMapRepair(p, limit: 0, [s4]))?.row["k"] as? [Any?])?.first as? UInt8 == 7,
-           "four argument refusals spend no position")
-    for (i, name) in ["uncorrectable", "short", "too_long"].enumerated() {
-        p = try a.pack(s4, ["k": [UInt8(1)].map { $0 as Any }])
-        var bad = p
-        if i == 0 { for j in 0..<3 { bad[j] ^= 0xFF } }
-        if i == 1 { bad = Array(p.prefix(2)) }
-        if i == 2 { bad += [UInt8](repeating: 0, count: 255 - p.count) }
-        let k = kind { try b.unpackMapRepair(bad, limit: 2, [s4]) }
-        p = try a.pack(s4, ["k": [UInt8(10 + i)].map { $0 as Any }])
-        let next = ((try? b.unpackMapRepair(p, limit: 0, [s4]))?.row["k"] as? [Any?])?.first as? UInt8
-        expect(k == (i == 0 ? "uncorrectable" : i == 1 ? "short_packet" : "too_long") && next == UInt8(10 + i),
-               "a refused \(name) payload spends one position")
-    }
     // Text limits.
     let one = try Scheme(1, .utf8(0, "s"))
     let raw = [UInt8](repeating: 0x61, count: 65_535)

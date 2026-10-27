@@ -4,8 +4,8 @@ import Testing
 /// AZ-3234 AC-5 and AC-6 (S2, S3, S5; AC-G2.2, AC-G2.3): the replay check runs before any MAC, a failed open never
 /// moves the window, and the previous key opens what was sealed just before a key change.
 @Suite struct FrameReplayTests {
-    private func context(_ n: UInt64) -> MessageContext {
-        MessageContext(msgID: messageID(n), kind: 3)
+    private func context(_ n: UInt64) -> MsgContext {
+        MsgContext(msgID: messageID(n), kind: 3)
     }
 
     @Test func open_aSeenCounterAndOneSixtyFourBehind_areRefusedWithNoMacAndTheWindowUnchanged() throws {

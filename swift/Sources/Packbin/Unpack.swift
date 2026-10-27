@@ -75,7 +75,7 @@ func readMap(_ buffer: [UInt8], _ schemes: [Scheme]) throws -> [String: Any] {
 }
 
 /// Refuses an empty scheme list, then one with two schemes of one type number, before the parity counts
-/// and the limit are checked and before a session spends a receive position (the order of every package).
+/// and the limit are checked (the order of every package).
 func checkSchemes(_ schemes: [Scheme]) throws {
     if schemes.isEmpty { throw PackbinError.scheme(nil, "", "unpack needs at least one scheme") }
     var seen = ByteSet()

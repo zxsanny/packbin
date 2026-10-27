@@ -355,15 +355,6 @@ fn edges(checkout: &str) -> bool {
             BinaryPacker::unpack_with_repair(&buf, &mut [&mut h], 0).map(|r| format!("repaired {r}")).map_err(|e| format!("{e:?}"))
         });
     }
-    // The same declared count through a session (the session path shares the dispatch check).
-    e.check("session unpack_repair, handler parity() = 40, 60-byte payload", Some(false), || {
-        let mut opener = PackSession::load(&[4; SEED_SIZE]).ok_or("load")?;
-        let mut waiter = PackSession::load(&[4; SEED_SIZE]).ok_or("load")?;
-        let nonce = opener.start_with(&[6; NONCE_SIZE]).ok_or("start")?;
-        waiter.join(&nonce);
-        let mut h = Rec::new(1, 40);
-        waiter.unpack_repair(&[1u8; 60], &mut [&mut h], 0).map(|r| format!("repaired {r}")).map_err(|e| format!("{e:?}"))
-    });
     // Dispatch check order, plain call.
     e.check("dispatch: no handlers", Some(false), || {
         BinaryPacker::unpack_with_repair(&[1, 2, 3], &mut [], 99).map(|_| String::new()).map_err(|e| format!("{e:?}"))
@@ -385,8 +376,6 @@ fn edges(checkout: &str) -> bool {
         let mut a = Rec::new(1, 4);
         BinaryPacker::unpack_with_repair(&w, &mut [&mut a], 2).map(|_| String::new()).map_err(|e| format!("{e:?}"))
     });
-    // Session: refusals before the index; payloads that use one index each.
-    e.check("session: check order and receive index", Some(true), || session_order());
     report_usage("edges");
     println!("edges: {} rows, {} FAIL", e.rows, e.fails);
     e.fails == 0

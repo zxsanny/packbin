@@ -73,11 +73,6 @@ pub fn pack(scheme: &MapScheme, values: &Values) -> Result<Vec<u8>, PackError> {
     Ok(bytes)
 }
 
-/// The clear packet, without parity bytes (the session pads it first).
-pub(crate) fn pack_clear(scheme: &MapScheme, values: &Values) -> Result<Vec<u8>, PackError> {
-    pack::pack(scheme, values)
-}
-
 /// Unpacks a packet built with `scheme` into values keyed by field name.
 ///
 /// - Each `flags` byte and flag byte is returned under its own name as `Value::U8` holding the

@@ -287,9 +287,8 @@ impl Session {
     }
 
     /// Derives the keys of each loaded direction into this session, in place (nothing of the 600-byte
-    /// session is built elsewhere and copied). A `tag_len` that is not 4, 8 or 16, an `epoch` above
-    /// 0xFFFFFF, or a session that already holds stream state is [`Error::BadValue`]. Loading again
-    /// replaces the keys and drops the previous slot.
+    /// session is built elsewhere and copied). A `tag_len` that is not 4, 8 or 16 or an `epoch` above
+    /// 0xFFFFFF is [`Error::BadValue`]. Loading again replaces the keys and drops the previous slot.
     pub fn load_frame_in_place(
         &mut self,
         key: &[u8; 32],
@@ -299,10 +298,6 @@ impl Session {
         check_load(epoch)?;
         if !matches!(config.tag_len, 4 | 8 | 16) {
             return Err(refuse(Error::BadValue, 4));
-        }
-        #[cfg(feature = "session")]
-        if self.has_stream_state() {
-            return Err(refuse(Error::BadValue, 0));
         }
         let state = &mut self.frame;
         state.loaded = false;
@@ -316,8 +311,7 @@ impl Session {
     }
 
     /// A frame-mode session: keys for each loaded direction are derived once, here (see
-    /// [`Session::load_frame_in_place`], which does the same without moving the session). A stream call
-    /// on this session is `BadValue`, and a frame call on a stream session is `BadValue`.
+    /// [`Session::load_frame_in_place`], which does the same without moving the session).
     pub fn load_frame(key: &[u8; 32], epoch: u32, config: FrameConfig) -> Result<Session, Fault> {
         let mut session = Session::unloaded();
         session.load_frame_in_place(key, epoch, config)?;

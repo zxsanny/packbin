@@ -4,7 +4,7 @@ import (
 	pb "github.com/zxsanny/packbin/go"
 )
 
-// The probe schemes, the unpack and repair wrappers, the mutator and the session helpers.
+// The probe schemes, the unpack and repair wrappers and the mutator.
 
 // ---------------------------------------------------------------- schemes and calls
 
@@ -134,12 +134,4 @@ func clone(b []byte) []byte { return append([]byte(nil), b...) }
 func rawScheme(ty, l, n int) *pb.Scheme {
 	s := must(pb.NewScheme(ty, pb.Bytes(0, "b", l)))
 	return must(s.WithParity(n))
-}
-
-func sessionPack(s *pb.PackSession, body []byte, n int) []byte {
-	out, err := s.Pack(rawScheme(1, len(body), n), map[string]any{"b": body})
-	if err != nil {
-		panic(err)
-	}
-	return out
 }

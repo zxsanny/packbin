@@ -1,5 +1,5 @@
 // AZ-2666 audit probe, mode ecc-fuzz: random and mutated protected messages through ecc::check,
-// ecc::repair, the API (single scheme and on(...)) and an open session pair (see audit41_probe.cpp).
+// ecc::repair and the API (single scheme and on(...)) (see audit41_probe.cpp).
 
 #include "probe_common.hpp"
 
@@ -55,9 +55,6 @@ int ecc_fuzz(std::string const& fix, std::uint64_t seed, double budget) {
   std::size_t calls = 0, repaired_ok = 0, intact = 0, refused = 0, miscorrected = 0;
   std::size_t kinds[6] = {};
   Slowest slow;
-  PackSession sa, sb;
-  open_pair(sa, sb);
-  std::size_t session_calls = 0, session_desync = 0;
   auto t0 = Clock::now();
   while (seconds_since(t0) < budget) {
     for (int burst = 0; burst < 64; ++burst) {
@@ -154,73 +151,6 @@ int ecc_fuzz(std::string const& fix, std::uint64_t seed, double budget) {
         (void)u;
         (void)ud;
       }
-      // Session: the sender packs one payload per receive call; the receiver gets it intact,
-      // damaged or replaced, and must stay in line with the sender.
-      {
-        auto sp = packbin::parity(ebase40, n);
-        ERow row;
-        row.a = static_cast<std::uint8_t>(session_calls);
-        std::uint8_t out[300];
-        packbin::Result pk = sa.pack(sp, row, out, sizeof(out));
-        if (!pk.ok()) {
-          fail_note("session_pack", received);
-          continue;
-        }
-        Bytes payload(out, out + pk.offset);
-        unsigned how = static_cast<unsigned>(r.below(6));
-        Bytes deliver = payload;
-        if (how == 1) {
-          for (int e = 0; e < t + 1 + static_cast<int>(r.below(4)); ++e)
-            deliver[r.below(deliver.size())] ^= static_cast<std::uint8_t>(1 + r.below(255));
-        } else if (how == 2) {
-          deliver = received;
-        } else if (how == 3) {
-          deliver.resize(r.below(deliver.size()));
-        } else if (how == 4) {
-          deliver.resize(255 + r.below(4), 0);
-        } else if (how == 5 && t > 0) {
-          for (int e = 0; e < t; ++e)
-            deliver[r.below(deliver.size())] ^= static_cast<std::uint8_t>(1 + r.below(255));
-        }
-        // An argument refusal first (must not spend a position).
-        if (r.chance(20)) {
-          Exact bad(deliver);
-          ERow x;
-          packbin::Result br = sb.unpack_repair(sp, bad.data(), bad.n, x, n / 2 + 1);
-          if (br.error != Error::BadValue)
-            fail_note("session_bad_limit_not_refused", deliver);
-          auto mix = packbin::parity(ebase41, n == 32 ? 31 : n + 1);
-          ERow y;
-          auto none = [](auto&) {};
-          packbin::Result mr = sb.unpack_repair(bad.data(), bad.n, 0, packbin::on(sp, x, none),
-                                                packbin::on(mix, y, none));
-          if (mr.error != Error::SchemeInvalid)
-            fail_note("session_mix_not_refused", deliver);
-          packbin::Result dr = sb.unpack_repair(bad.data(), bad.n, 0, packbin::on(sp, x, none),
-                                                packbin::on(sp, y, none));
-          if (dr.error != Error::SchemeInvalid)
-            fail_note("session_duplicate_not_refused", deliver);
-        }
-        Exact d(deliver);
-        ERow got;
-        packbin::Result ru = sb.unpack_repair(sp, d.data(), d.n, got, t);
-        ++session_calls;
-        bool expect_ok = how == 0 || (how == 5);
-        if (expect_ok && (!ru.ok() || got.a != row.a))
-          fail_note("session_lost_good_payload", deliver);
-        // Every 4th step: a fresh intact payload must read (the indexes are still in line).
-        if (r.chance(25)) {
-          ERow row2;
-          row2.a = 0x5A;
-          packbin::Result pk2 = sa.pack(sp, row2, out, sizeof(out));
-          ERow got2;
-          packbin::Result r2 = sb.unpack(sp, out, pk2.offset, got2);
-          if (!r2.ok() || got2.a != 0x5A) {
-            ++session_desync;
-            fail_note("session_desync", deliver);
-          }
-        }
-      }
     }
   }
   std::printf("mode=ecc-fuzz seed=%llu seconds=%.1f\n", static_cast<unsigned long long>(seed),
@@ -229,7 +159,6 @@ int ecc_fuzz(std::string const& fix, std::uint64_t seed, double budget) {
               calls, intact, repaired_ok, refused, miscorrected);
   std::printf("kinds ok=%zu uncorrectable=%zu short=%zu too_long=%zu bad_parity=%zu bad_limit=%zu\n",
               kinds[0], kinds[1], kinds[2], kinds[3], kinds[4], kinds[5]);
-  std::printf("session_calls=%zu session_desync=%zu\n", session_calls, session_desync);
   std::printf("slowest_repair_us=%.1f (input %zu B)\n", slow.t * 1e6, slow.input.size());
   std::printf("peak_rss_kb=%ld failures=%d\nresult=%s\n", peak_rss_kb(), g_fail,
               g_fail == 0 ? "PASS" : "FAIL");

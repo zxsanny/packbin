@@ -3,7 +3,7 @@ import Testing
 
 /// AZ-2518 AC-4 (SW-6): the in-package ChaCha20 against RFC 8439 §2.3.2 (one block) and §2.4.2 (114
 /// bytes over two blocks from counter 1, the second block partial). The bytes are the RFC's; OpenSSL
-/// 3.6 (`openssl enc -chacha20`) and TypeScript's `session-pad.ts` give the same.
+/// 3.6 (`openssl enc -chacha20`) gives the same.
 @Suite struct ChaCha20Tests {
     /// The key of both RFC examples: 00 01 02 ... 1f.
     static let key = (0..<32).map { UInt8($0) }

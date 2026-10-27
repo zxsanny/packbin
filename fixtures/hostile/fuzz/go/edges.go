@@ -415,7 +415,6 @@ func edges(checkout string) bool {
 		_, _, err := pb.UnpackMapRepair(protect([]byte{7, 1, 2, 3}, 4), 2, s4, s4b)
 		return "", err
 	})
-	e.check("session: check order and receive index", yes, time.Second, sessionOrder)
 	reportUsage("edges")
 	fmt.Printf("edges: %d rows, %d FAIL\n", e.rows, e.fails)
 	return e.fails == 0

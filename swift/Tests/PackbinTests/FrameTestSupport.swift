@@ -9,7 +9,7 @@ struct WorkedExample {
     let epoch: UInt32
     let direction: FrameDirection
     let tagLength: Int
-    let context: MessageContext
+    let context: MsgContext
     let ad: [UInt8]
     let clear: [UInt8]
     let plain: [UInt8]
@@ -27,7 +27,7 @@ func workedExamples() throws -> [WorkedExample] {
         return WorkedExample(
             name: name, key: vectorBytes(row["key"] ?? ""), epoch: UInt32(row["epoch"] ?? "") ?? 0,
             direction: try FrameDirection(number: Int(row["dir"] ?? "") ?? 0), tagLength: Int(row["tag_len"] ?? "") ?? 0,
-            context: MessageContext(msgID: vectorBytes(row["msg_id"] ?? ""), kind: UInt8(row["kind"] ?? "") ?? 0),
+            context: MsgContext(msgID: vectorBytes(row["msg_id"] ?? ""), kind: UInt8(row["kind"] ?? "") ?? 0),
             ad: vectorBytes(row["ad"] ?? "-"), clear: vectorBytes(row["clear"] ?? "-"),
             plain: vectorBytes(row["plain"] ?? "-"), body: vectorBytes(row["body"] ?? "-"))
     }
@@ -45,7 +45,7 @@ struct OpenOutcome {
 
 /// Opens `body` into a sentinel-filled buffer of `outLength` bytes with `window` and `counter` (no window when
 /// `counter` is nil).
-func attemptOpen(_ session: FrameSession, _ direction: FrameDirection, _ context: MessageContext, ad: [UInt8],
+func attemptOpen(_ session: FrameSession, _ direction: FrameDirection, _ context: MsgContext, ad: [UInt8],
                  body: [UInt8], clearLength: Int, window: inout ReplayWindow, counter: UInt64? = nil,
                  outLength: Int = 300) -> OpenOutcome {
     var out = [UInt8](repeating: frameSentinel, count: outLength)
@@ -103,7 +103,7 @@ final class MacCount: @unchecked Sendable {
 }
 
 /// Seals one message into an exact-size buffer and returns the body.
-func sealBody(_ session: FrameSession, _ direction: FrameDirection, _ context: MessageContext,
+func sealBody(_ session: FrameSession, _ direction: FrameDirection, _ context: MsgContext,
               ad: [UInt8] = [], clear: [UInt8] = [], plain: [UInt8]) throws -> [UInt8] {
     var out = [UInt8](repeating: frameSentinel, count: 255)
     let n = try session.seal(direction: direction, context: context, ad: ad, clear: clear, plain: plain, into: &out)

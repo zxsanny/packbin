@@ -1,5 +1,5 @@
 use crate::session_core::hkdf::{derive, hmac_sha256_of};
-use crate::session_core::pad::{block_of, xor};
+use crate::session_core::pad::{block_of, xor_with_nonce};
 use crate::session_core::sha256::{hash, Sha256};
 
 // AZ-3201: every row of fixtures/crypto/vectors.txt (sha256, hmac256, hkdf256, chacha-block, chacha-xor) against
@@ -111,8 +111,8 @@ fn chacha_block_row(row: &Row) -> bool {
     hex(&block) == row.text("block")
 }
 
-/// The cipher through the block, and through the crate's own `xor` when the row is a stream the crate can make
-/// (counter 0, packet number in the first 8 nonce bytes).
+/// The cipher through the block, and through the crate's own `xor_with_nonce` (frame mode's cipher) when the
+/// row starts at block counter 0, the only counter that call starts from.
 fn chacha_xor_row(row: &Row) -> bool {
     let key: [u8; 32] = row.array("key");
     let nonce: [u8; 12] = row.array("nonce");
@@ -126,10 +126,8 @@ fn chacha_xor_row(row: &Row) -> bool {
         }
     }
     let expected = row.text("cipher");
-    let stream_row = counter == 0 && nonce[8..] == [0u8; 4];
-    if stream_row {
-        let packet = u64::from_le_bytes(nonce[..8].try_into().expect("8 bytes"));
-        xor(&key, packet, &mut by_xor);
+    if counter == 0 {
+        xor_with_nonce(&key, &nonce, &mut by_xor);
         if hex(&by_xor) != expected {
             return false;
         }

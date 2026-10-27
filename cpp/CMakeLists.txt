@@ -5,7 +5,7 @@ set(PACKBIN_CORE_SRCS
     src/core/values.cpp
     src/core/pack.cpp
     src/core/unpack.cpp
-    src/core/session.cpp)
+    src/core/crypto.cpp)
 
 if(ESP_PLATFORM)
   idf_component_register(SRCS ${PACKBIN_CORE_SRCS} INCLUDE_DIRS include)
@@ -21,12 +21,6 @@ target_include_directories(packbin PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 target_compile_features(packbin PUBLIC cxx_std_17)
-
-# The operating-system random source for PackSession::start; firmware passes its own.
-option(PACKBIN_OS_RANDOM "Build packbin::os_random for host programs" ON)
-if(PACKBIN_OS_RANDOM)
-  target_sources(packbin PRIVATE src/os_random.cpp)
-endif()
 
 # Without the compact text codec: strings bind to Packed (the payload as it is) and no codec
 # table or code is linked. Public, so the headers of a consumer refuse a Text<N> member too.

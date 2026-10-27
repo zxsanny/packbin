@@ -44,7 +44,7 @@ run_lang() {
       if [ -n "${PACKBIN_CPP_HANDOFF:-}" ] || [ ! -x "$bin" ]; then
         "${CXX:-c++}" "${flags[@]}" -o "$bin" \
           "$drivers/handoff.cpp" "$root/cpp/src/core/values.cpp" "$root/cpp/src/core/pack.cpp" \
-          "$root/cpp/src/core/unpack.cpp" "$root/cpp/src/core/session.cpp" "$root/cpp/src/os_random.cpp" \
+          "$root/cpp/src/core/unpack.cpp" "$root/cpp/src/core/crypto.cpp" \
           || return
       fi
       "$bin" "$@"

@@ -1,4 +1,4 @@
-// Probe calls: the schemes, unpack and repair wrappers, the mutator and the session helpers (included
+// Probe calls: the schemes, unpack and repair wrappers, the mutator and the dispatch handler (included
 // by main.rs).
 
 // ---------------------------------------------------------------- schemes and calls
@@ -126,22 +126,6 @@ fn mutate(rng: &mut Rng, data: &mut Vec<u8>, pool: &[Vec<u8>]) {
             _ => {}
         }
     }
-}
-
-#[derive(Default)]
-struct Raw(Vec<u8>);
-
-fn raw_scheme(len: usize, n: usize) -> Scheme<Raw> {
-    Scheme::new(
-        1,
-        [BoundField::bytes(0, len, |r: &Raw| r.0.clone(), |r: &mut Raw, v| r.0 = v).into()],
-    )
-    .with_parity(n)
-}
-
-/// The session payload of the clear message `[01] + body` with `n` parity bytes.
-fn session_pack(s: &mut PackSession, body: &[u8], n: usize) -> Vec<u8> {
-    s.pack(&raw_scheme(body.len(), n), &Raw(body.to_vec())).expect("pack")
 }
 
 /// A dispatch handler that keeps the message it was handed.

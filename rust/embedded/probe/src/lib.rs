@@ -290,9 +290,6 @@ mod text_extra;
 #[cfg(feature = "ecc")]
 mod ecc_extra;
 
-#[cfg(feature = "session")]
-mod session_extra;
-
 #[cfg(feature = "frame")]
 mod frame_extra;
 
@@ -302,7 +299,7 @@ mod frame_extra;
 ///
 /// # Safety
 /// No arguments.
-#[cfg(any(feature = "text", feature = "ecc", feature = "session", feature = "frame"))]
+#[cfg(any(feature = "text", feature = "ecc", feature = "frame"))]
 #[no_mangle]
 pub extern "C" fn pb_rs_extra() -> i32 {
     #[cfg(feature = "text")]
@@ -317,13 +314,6 @@ pub extern "C" fn pb_rs_extra() -> i32 {
         let r = ecc_extra::roundtrip();
         if r != 0 {
             return r + 200;
-        }
-    }
-    #[cfg(feature = "session")]
-    {
-        let r = session_extra::roundtrip();
-        if r != 0 {
-            return r + 300;
         }
     }
     #[cfg(feature = "frame")]

@@ -1,5 +1,5 @@
 /// ChaCha20 (RFC 8439 §2.3 and §2.4), written in the package (owner decision S-2): CryptoKit has no
-/// raw ChaCha20 stream. It is the pad of `PackSession` and `FrameSession`. Package access: the package's
+/// raw ChaCha20 stream. It is the cipher of `FrameSession`. Package access: the package's
 /// tests use it to check it against the RFC; apps cannot.
 ///
 /// Every 32-bit addition wraps (`&+`), as the RFC defines it, and every shift is a masking shift, so

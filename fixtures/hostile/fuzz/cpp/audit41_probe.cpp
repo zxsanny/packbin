@@ -13,7 +13,7 @@
 // With Command Line Tools only, clang also needs -I"$SDK/usr/include/c++/v1" (as the Makefile's
 // PACKBIN_CXX_SYSROOT adds); the script passes it. By hand (PROBE is this directory):
 //   SDK="$(xcrun --show-sdk-path)"   # macOS only; drop -isysroot elsewhere
-//   CORE="$REPO/cpp/src/core/values.cpp $REPO/cpp/src/core/pack.cpp $REPO/cpp/src/core/unpack.cpp $REPO/cpp/src/core/session.cpp"
+//   CORE="$REPO/cpp/src/core/values.cpp $REPO/cpp/src/core/pack.cpp $REPO/cpp/src/core/unpack.cpp $REPO/cpp/src/core/crypto.cpp"
 //   INC="-isysroot $SDK -I$SDK/usr/include/c++/v1 -I$REPO/cpp/include -I$REPO/cpp/src/core -I$PROBE"
 //   # sanitizer build (the fuzz and edge modes)
 //   clang++ -std=c++17 -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined \
@@ -23,7 +23,7 @@
 //
 // Run (FIX is "$REPO/fixtures"; every mode ends on its own):
 //   probe_asan text-fuzz FIX <seed> <seconds>   random + mutated string fields: direct decoder and unpack
-//   probe_asan ecc-fuzz  FIX <seed> <seconds>   random + mutated protected messages, API and session
+//   probe_asan ecc-fuzz  FIX <seed> <seconds>   random + mutated protected messages through the API
 //   probe_asan edge      FIX                    the AC edge cases (exits 1 on any failed expectation)
 //   probe_o2   ecc-worst <iterations>           254-byte buffers at n = 32: slowest and median per call
 //   probe_o2   text-amp                         largest accepted text, many max texts in one packet

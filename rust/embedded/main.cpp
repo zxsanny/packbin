@@ -16,7 +16,7 @@ extern "C" {
 int pb_rs_route_pack(std::uint8_t* out, std::size_t cap);
 int pb_rs_route_unpack(std::uint8_t const* input, std::size_t len);
 int pb_rs_golden(std::uint8_t const* input, std::size_t len);
-// What a feature set adds (text, ecc, session): defined by the probe only for those sets, so the base
+// What a feature set adds (text, ecc, frame): defined by the probe only for those sets, so the base
 // image leaves the weak reference null.
 int pb_rs_extra() __attribute__((weak));
 }

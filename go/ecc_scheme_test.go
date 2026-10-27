@@ -7,8 +7,8 @@ import (
 	"testing"
 )
 
-// The scheme setting, the session, a compact text field and the dispatch rule of message ECC: AZ-2685 AC-1,
-// AC-2 (EC-1, EC-2, EC-3) and AC-6 (EC-10, EC-11, EC-16).
+// The scheme setting, a compact text field and the dispatch rule of message ECC: AZ-2685 AC-1, AC-2 (EC-1,
+// EC-2, EC-3) and AC-6 (EC-11, EC-16).
 
 func TestEccSchemeDeclaresNoParityUnlessToldAndWithLimitsKeepsIt(t *testing.T) {
 	// Arrange
@@ -103,165 +103,6 @@ func TestEccSchemeUnpackWithoutRepairDetectsAndAcceptsAnIntactMessage(t *testing
 	if typed != nil {
 		t.Fatalf("a wrong byte returned the row %v", typed)
 	}
-}
-
-func TestEccSessionPayloadIsThePaddedClearMessagePlusNAndTheParityCoversThePaddedBytes(t *testing.T) {
-	// Arrange
-	opener, _ := sessionPair(t, sessionNonce(t))
-	s := positionParity(t, 4)
-
-	// Act
-	payload, err := opener.Pack(s, goldenMap())
-
-	// Assert
-	if err != nil || len(payload) != 13+4 || hexOf(payload[:13]) != sessionCipherHex {
-		t.Fatalf("payload %x, %v", payload, err)
-	}
-	want, perr := protect(payload[:13], 4)
-	if perr != nil || !bytes.Equal(payload, want) {
-		t.Fatalf("parity %x does not cover the padded bytes: want %x, %v", payload[13:], want, perr)
-	}
-}
-
-func TestEccSessionN0KeepsThePayloadAsLongAsTheClearMessage(t *testing.T) {
-	// Arrange
-	opener, waiter := sessionPair(t, sessionNonce(t))
-	s := positionParity(t, 0)
-
-	// Act
-	payload, err := opener.Pack(s, goldenMap())
-	row, repaired, rerr := waiter.UnpackMapRepair(payload, 0, s)
-
-	// Assert
-	if err != nil || hexOf(payload) != sessionCipherHex || rerr != nil || repaired != 0 || !isPosition(row) {
-		t.Fatalf("payload %x %v; row %v %d %v", payload, err, row, repaired, rerr)
-	}
-}
-
-func TestEccSessionN4TwoWrongBytesAreRepairedBeforeThePadIsRemoved(t *testing.T) {
-	// Arrange
-	opener, waiter := sessionPair(t, sessionNonce(t))
-	s := positionParity(t, 4)
-	payload, err := opener.Pack(s, goldenMap())
-	if err != nil {
-		t.Fatal(err)
-	}
-	wrong := corrupt(payload, []int{2, 15}, []byte{0x80, 0x21})
-	before := append([]byte(nil), wrong...)
-
-	// Act
-	row, repaired, rerr := waiter.UnpackMapRepair(wrong, 2, s)
-
-	// Assert
-	if rerr != nil || repaired != 2 || !isPosition(row) || !bytes.Equal(wrong, before) {
-		t.Fatalf("row %v, %d, %v", row, repaired, rerr)
-	}
-}
-
-func TestEccSessionTypedRowIsRecoveredThroughUnpackRepair(t *testing.T) {
-	// Arrange
-	opener, waiter := sessionPair(t, sessionNonce(t))
-	s := withParity(t, positionTypedScheme(t), 4)
-	payload, err := opener.Pack(s, goldenRow())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Act
-	row, repaired, rerr := waiter.UnpackRepair(corrupt(payload, []int{0, 16}, []byte{0xff, 0x01}), 2, s)
-
-	// Assert
-	got, ok := row.(*Position)
-	if rerr != nil || repaired != 2 || !ok || *got != *goldenRow() {
-		t.Fatalf("row %v, %d, %v", row, repaired, rerr)
-	}
-}
-
-func TestEccSessionThreeWrongBytesAreRefusedThenTheNextPayloadIsRead(t *testing.T) {
-	// Arrange
-	opener, waiter := sessionPair(t, sessionNonce(t))
-	s := positionParity(t, 4)
-	first := mustSessionPack(t, opener, s, goldenMap())
-	second := mustSessionPack(t, opener, s, map[string]any{"sid": 9, "lat": 1, "lon": 2, "profile": 3})
-
-	// Act
-	refused, _, refusedErr := waiter.UnpackMapRepair(corrupt(first, []int{1, 5, 11}, []byte{1, 2, 3}), 2, s)
-	next, repaired, nextErr := waiter.UnpackMapRepair(second, 2, s)
-
-	// Assert
-	asError(t, refusedErr, Uncorrectable)
-	if refused != nil || nextErr != nil || repaired != 0 || next["sid"] != uint16(9) {
-		t.Fatalf("refused %v; next %v, %d, %v", refused, next, repaired, nextErr)
-	}
-}
-
-func TestEccSessionALimitAboveHalfNIsRefusedBeforeTheReceivePositionMoves(t *testing.T) {
-	// Arrange
-	opener, waiter := sessionPair(t, sessionNonce(t))
-	s := positionParity(t, 4)
-	payload, err := opener.Pack(s, goldenMap())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Act
-	_, _, badErr := waiter.UnpackMapRepair(payload, 3, s)
-	row, repaired, err := waiter.UnpackMapRepair(payload, 2, s)
-
-	// Assert
-	asError(t, badErr, InvalidScheme)
-	if err != nil || repaired != 0 || !isPosition(row) {
-		t.Fatalf("after the refusal: %v, %d, %v", row, repaired, err)
-	}
-}
-
-func TestEccSessionAMessageAboveTheLimitIsRefusedAndTheSendPositionDoesNotMove(t *testing.T) {
-	// Arrange
-	opener, _ := sessionPair(t, sessionNonce(t))
-	big := withParity(t, mustScheme(t, 0, Bytes(0, "b", 222)), 32)
-
-	// Act
-	refused, refusedErr := opener.Pack(big, map[string]any{"b": make([]byte, 222)})
-	first, err := opener.Pack(positionParity(t, 0), goldenMap())
-
-	// Assert
-	asError(t, refusedErr, PackRefused)
-	if refused != nil || err != nil || hexOf(first) != sessionCipherHex {
-		t.Fatalf("refused %x; first %x, %v", refused, first, err)
-	}
-}
-
-func TestEccSessionAProtectedPayloadReadWithoutRepairIsRefusedNotThrown(t *testing.T) {
-	// Arrange
-	opener, waiter := sessionPair(t, sessionNonce(t))
-	payload, err := opener.Pack(positionParity(t, 4), goldenMap())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Act
-	row, rerr := waiter.UnpackMap(payload, positionMapScheme(t))
-
-	// Assert
-	if row != nil || rerr == nil {
-		t.Fatalf("row %v, %v", row, rerr)
-	}
-}
-
-func TestEccSessionUnpackWithoutLimitDetectsAWrongByte(t *testing.T) {
-	// Arrange
-	opener, waiter := sessionPair(t, sessionNonce(t))
-	s := positionParity(t, 2)
-	payload, err := opener.Pack(s, goldenMap())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Act
-	_, uerr := waiter.Unpack(corrupt(payload, []int{4}, []byte{9}), s)
-
-	// Assert
-	asError(t, uerr, Uncorrectable)
 }
 
 type note struct {
@@ -409,28 +250,32 @@ func TestEccDispatchSchemesWithDifferentParityAreRefusedNamingBothCounts(t *test
 	// Act
 	_, _, mixed := UnpackMapRepair(message, 0, four, two)
 	_, plainErr := Unpack(message, four, plain)
-	opener, waiter := sessionPair(t, sessionNonce(t))
-	payload := mustSessionPack(t, opener, four, map[string]any{"a": 1, "b": 2})
-	_, sessionErr := waiter.UnpackMap(payload, four, two)
-	after, _, afterErr := waiter.UnpackMapRepair(payload, 0, four)
 
 	// Assert
-	for _, err := range []error{mixed, plainErr, sessionErr} {
+	for _, err := range []error{mixed, plainErr} {
 		e := asError(t, err, InvalidScheme)
 		if !strings.Contains(e.Reason, "4") || !(strings.Contains(e.Reason, "2") || strings.Contains(e.Reason, "0")) {
 			t.Errorf("reason %q does not name both counts", e.Reason)
 		}
 	}
-	if afterErr != nil || after["a"] != uint16(1) {
-		t.Fatalf("a refused call spent the receive position: %v, %v", after, afterErr)
-	}
 }
 
-func mustSessionPack(t testing.TB, sess *PackSession, s *Scheme, row any) []byte {
-	t.Helper()
-	payload, err := sess.Pack(s, row)
-	if err != nil {
-		t.Fatalf("session Pack: %v", err)
+// AZ-2704: the checks run in one order in every package (no scheme, duplicate type, parity mix, limit): a
+// repeated number is the refusal even when the list also mixes parity counts or the limit is bad.
+func TestDuplicateTypeIsRefusedBeforeAParityMixAndABadLimit(t *testing.T) {
+	// Arrange
+	scheme := positionMapScheme(t)
+	protected := withParity(t, scheme, 4)
+	want := fmt.Sprintf("duplicate type number %d", scheme.typeNumber)
+
+	// Act
+	_, _, withMix := UnpackRepair(make([]byte, 8), 0, scheme, protected)
+	_, _, withLimit := UnpackRepair(make([]byte, 8), 9, protected, protected)
+
+	// Assert
+	for name, err := range map[string]error{"with a parity mix": withMix, "with a bad limit": withLimit} {
+		if e := asError(t, err, InvalidScheme); e.Reason != want {
+			t.Fatalf("%s: reason %q, want %q", name, e.Reason, want)
+		}
 	}
-	return payload
 }

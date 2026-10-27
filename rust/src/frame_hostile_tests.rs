@@ -1,5 +1,5 @@
 //! Frame mode, refusals and random input (AZ-3203): refusal kinds with no partial output, hostile bodies,
-//! the stream and frame calls kept apart, type sizes and a property test of round trips and the window.
+//! type sizes and a property test of round trips and the window.
 
 use crate::nostd::{
     Direction, Directions, Error, FrameConfig, Freshness, MsgCtx, ReplayWindow, Session,
@@ -127,38 +127,9 @@ fn refusals_leave_no_partial_output_and_hostile_input_never_panics() {
     }
 }
 
-#[cfg(feature = "session")]
-#[test]
-fn a_frame_call_on_a_stream_session_and_a_stream_call_on_a_frame_session_are_refused() {
-    let stream = Session::load(&[1u8; 32]).unwrap();
-    let ctx = MsgCtx {
-        msg_id: [0; 8],
-        kind: 0,
-    };
-    let mut out = [0u8; 16];
-    assert_eq!(
-        stream
-            .seal_frame(Direction::Up, &ctx, &[], &[], b"x", &mut out)
-            .unwrap_err()
-            .error,
-        Error::BadValue
-    );
-    assert_eq!(
-        stream
-            .open_frame(Direction::Up, &ctx, &[], &[0; 8], 0, None, &mut out)
-            .unwrap_err()
-            .error,
-        Error::BadValue
-    );
-    let mut frame = session(&[1; 32], 1, 4);
-    assert_eq!(frame.start(&[0u8; 16]).unwrap_err().error, Error::BadValue);
-    assert!(!frame.is_open());
-}
-
 #[test]
 fn the_frame_types_are_small() {
     assert_eq!(core::mem::size_of::<ReplayWindow>(), 16);
-    #[cfg(not(feature = "session"))]
     assert!(
         core::mem::size_of::<Session>() <= 640,
         "{}",
@@ -288,23 +259,6 @@ fn seal_refused(s: &Session, ctx: &MsgCtx) -> bool {
     let mut out = [0u8; 32];
     s.seal_frame(Direction::Up, ctx, &[], &[], b"x", &mut out)
         .is_err()
-}
-
-#[cfg(feature = "session")]
-#[test]
-fn a_session_that_holds_stream_state_is_not_given_frame_keys() {
-    let mut stream = Session::load(&[1u8; 32]).unwrap();
-    let config = FrameConfig {
-        tag_len: 4,
-        directions: all(),
-    };
-    assert_eq!(
-        stream
-            .load_frame_in_place(&[2; 32], 1, config)
-            .unwrap_err()
-            .error,
-        Error::BadValue
-    );
 }
 
 #[test]

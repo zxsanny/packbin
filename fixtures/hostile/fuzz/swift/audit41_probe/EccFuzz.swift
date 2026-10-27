@@ -1,5 +1,4 @@
-// AZ-2666 audit probe, mode ecc-fuzz: random and mutated protected messages, plain and through a
-// session pair kept in step with its sender.
+// AZ-2666 audit probe, mode ecc-fuzz: random and mutated protected messages through the repairing unpack.
 
 import Foundation
 import Packbin
@@ -18,13 +17,7 @@ func eccFuzz(_ fix: String, _ seed: UInt64, _ budget: Double) throws -> Int32 {
         let packed = try pack(base[n], row)
         if packed != protectRef(Array(packed.prefix(packed.count - n)), n) { note("encoder_differs_n\(n)", packed) }
     }
-    var seed16 = [UInt8](repeating: 0, count: 32)
-    for i in 0..<32 { seed16[i] = UInt8(i + 1) }
-    let sender = try PackSession.load(seed16)
-    let nonce = try sender.start([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-    let receiver = try PackSession.load(seed16)
-    try receiver.join(nonce)
-    var calls = 0, repaired = 0, intact = 0, miscorrected = 0, sessionCalls = 0, desync = 0
+    var calls = 0, repaired = 0, intact = 0, miscorrected = 0
     var kinds: [String: Int] = [:]
     var slow = Slowest()
     let t0 = now()
@@ -58,6 +51,13 @@ func eccFuzz(_ fix: String, _ seed: UInt64, _ budget: Double) throws -> Int32 {
                 for i in received.indices { received[i] = style == 0 ? r.byte() : style == 1 ? 0xFF : 0x00 }
             }
             let before = received
+            if r.chance(20) {
+                // Argument refusals come before any byte is read.
+                do { _ = try unpackMapRepair(received, limit: n / 2 + 1, [base[n]]); note("bad_limit_accepted", received) } catch {}
+                do { _ = try unpackMapRepair(received, limit: 0, [base[n], base[n]]); note("duplicate_accepted", received) } catch {}
+                let other = try Scheme(0x41, .repeat(0, .u8(0, "k"))).withLimits(parity: n == 32 ? 31 : n + 1)
+                do { _ = try unpackMapRepair(received, limit: 0, [base[n], other]); note("mix_accepted", received) } catch {}
+            }
             let a = now()
             do {
                 let (row, count) = try unpackMapRepair(received, limit: t, [base[n]])
@@ -81,50 +81,11 @@ func eccFuzz(_ fix: String, _ seed: UInt64, _ budget: Double) throws -> Int32 {
             }
             if received != before { note("input_written", before) }
             calls += 1
-            // Session: one payload a call, intact, damaged or replaced; the indexes must stay in line.
-            let row: [String: Any] = ["k": [UInt8(sessionCalls & 0xFF)].map { $0 as Any }]
-            let payload = try sender.pack(base[n], row)
-            var deliver = payload
-            let how = r.below(6)
-            switch how {
-            case 1: for _ in 0..<(t + 1 + r.below(4)) { deliver[r.below(deliver.count)] ^= UInt8(1 + r.below(255)) }
-            case 2: deliver = received
-            case 3: deliver = Array(deliver.prefix(r.below(deliver.count)))
-            case 4: deliver += [UInt8](repeating: 0, count: 255 + r.below(4) - deliver.count)
-            case 5: for _ in 0..<t { deliver[r.below(deliver.count)] ^= UInt8(1 + r.below(255)) }
-            default: break
-            }
-            if r.chance(20) {
-                // Argument refusals spend no position.
-                do { _ = try receiver.unpackMapRepair(deliver, limit: n / 2 + 1, [base[n]]); note("bad_limit_accepted", deliver) } catch {}
-                do { _ = try receiver.unpackMapRepair(deliver, limit: 0, [base[n], base[n]]); note("duplicate_accepted", deliver) } catch {}
-                let other = try Scheme(0x41, .repeat(0, .u8(0, "k"))).withLimits(parity: n == 32 ? 31 : n + 1)
-                do { _ = try receiver.unpackMapRepair(deliver, limit: 0, [base[n], other]); note("mix_accepted", deliver) } catch {}
-            }
-            do {
-                let (got, _) = try receiver.unpackMapRepair(deliver, limit: t, [base[n]])
-                let v = (got["k"] as? [Any?])?.first as? UInt8
-                if (how == 0 || how == 5) && v != UInt8(sessionCalls & 0xFF) { note("session_wrong_row", deliver) }
-            } catch {
-                if how == 0 || how == 5 { note("session_lost_good_payload", deliver) }
-            }
-            sessionCalls += 1
-            if r.chance(25) {
-                let p2 = try sender.pack(base[n], ["k": [UInt8(0x5A)].map { $0 as Any }])
-                do {
-                    let (got, _) = try receiver.unpackMapRepair(p2, limit: 0, [base[n]])
-                    if (got["k"] as? [Any?])?.first as? UInt8 != 0x5A { desync += 1; note("session_desync", p2) }
-                } catch {
-                    desync += 1
-                    note("session_desync", p2)
-                }
-            }
         }
     }
     print("mode=ecc-fuzz seed=\(seed) seconds=\(String(format: "%.1f", seconds(t0)))")
     print("calls=\(calls) intact=\(intact) repaired=\(repaired) miscorrected_beyond_n_minus_t=\(miscorrected)")
     print("refusals=\(kinds.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: ","))")
-    print("session_calls=\(sessionCalls) session_desync=\(desync)")
     print("slowest_call_us=\(String(format: "%.1f", slow.t * 1e6)) (input \(slow.size) B)")
     print("peak_rss_kb=\(peakRSSKB()) failures=\(failures) traps=0")
     print("result=\(failures == 0 ? "PASS" : "FAIL")")

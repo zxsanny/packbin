@@ -1,9 +1,9 @@
 # The feature sets of the packbin crate the embedded stage builds and reports (name|cargo features).
-# A task that adds code behind a feature adds its set here (text: AZ-2754, ecc: AZ-2755, session:
-# AZ-2756, frame: AZ-3203); a set whose feature has no code yet would only repeat the figures of base. A set's probe
-# defines `pb_rs_extra`, a round trip of the parts the set builds (main.cpp calls it when it exists).
+# A task that adds code behind a feature adds its set here (text: AZ-2754, ecc: AZ-2755, frame: AZ-3203; the
+# session set of AZ-2756 went with the stream session in loop 74, AZ-3284); a set whose feature has no code yet would
+# only repeat the figures of base. A set's probe defines `pb_rs_extra`, a round trip of the parts the set builds
+# (main.cpp calls it when it exists).
 base|
 text|text
 ecc|ecc
-session|session
 frame|frame

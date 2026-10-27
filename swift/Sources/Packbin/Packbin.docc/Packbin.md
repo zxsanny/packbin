@@ -163,7 +163,7 @@ wrong byte; `unpackRepair(_:limit:_:)` repairs up to `limit` wrong bytes (0 to `
 shorter than `parity` throws `.short` naming `parity`, and one above 254 bytes `.tooLong`. Allowing repair
 gives up part of the detection (the contract lists the chances). The schemes of one call must declare the
 same `parity`, and `limit` must not pass `parity` / 2, or the call throws a `.schemeError` before any byte
-is read. A session pads first and adds the parity over the padded bytes, and repairs before it removes the pad.
+is read.
 
 ```swift
 let guarded = try Scheme(1, .u16(0, "a")).withLimits(parity: 4)
@@ -216,35 +216,7 @@ every size and value is converted with checked arithmetic.
 ### Concurrency
 
 A built ``Scheme`` is immutable and `Sendable`: any number of tasks can pack and unpack with one
-scheme at once. ``Field``, ``FlagByte``, ``Condition`` and ``PackbinError`` are `Sendable` too. A
-``PackSession`` is not: it is used by one task at a time.
-
-### Session
-
-``PackSession`` is one optional encrypted connection beside clear pack, with the same bytes as the
-other packages (contract `pack-session` v1.0.0). Both sides load the same 32-byte seed; the opener
-calls `start()` and sends the 16 bytes it returns once, in the clear; the waiter joins with them:
-
-```swift
-let opener = try PackSession.load(seed)            // 32 bytes
-let hello = try opener.start()                     // send these 16 bytes once
-let waiter = try PackSession.load(seed)
-try waiter.join(hello)
-let payload = try opener.pack(position, row)       // the clear packet's length
-let back = try waiter.unpackMap(payload, position)
-```
-
-HKDF-SHA256 (the seed, the 16 bytes as salt, info `packbin`, 64 bytes) gives one key a direction;
-packet n of a direction is XORed with the ChaCha20 (RFC 8439) stream whose nonce is n little-endian,
-from block 0. There is no tag. HKDF comes from CryptoKit on Apple platforms and from swift-crypto's
-`Crypto` elsewhere (the package's only dependency, linked only there); ChaCha20 is written in the
-package. A seed or value of another length throws a ``PackbinError/Kind/badValue`` and opens nothing;
-`pack` before `start` or `join` throws a ``PackbinError/Kind/packError``, `unpack` the
-``PackbinError/Kind/short`` of an empty buffer. A failed pack spends no position; every unpack of an
-open session spends one, whether or not its payload reads. The seed is copied on load (the caller's
-array is not changed) and the copy and the derived key block are zeroed when the session opens.
-
-A `PackSession` is used by one task at a time: it is a class and not `Sendable`.
+scheme at once. ``Field``, ``FlagByte``, ``Condition`` and ``PackbinError`` are `Sendable` too.
 
 ### Public names
 
@@ -292,8 +264,3 @@ The whole API is listed here.
   ``PackbinError/Kind``: `short`, `trailing`, `unknownType`, `badValue`, `tooMany`, `schemeError`,
   `packError`, `uncorrectable`, `tooLong`, whose raw values are the outcome terms of the shared hostile vectors.
 - `flagBits`: the 8 bits one flag byte holds.
-- ``PackSession``: `seedSize` (32), `nonceSize` (16), `static load(_ seed: [UInt8]) throws -> PackSession`,
-  `start() throws -> [UInt8]`, `start(_ nonce: [UInt8]) throws -> [UInt8]`,
-  `join(_ nonce: [UInt8]) throws`, `pack(_:_:)` (a map or a typed row), `unpack(_ payload: [UInt8], _ schemes: Scheme...)`
-  and `unpackMap(...)`, both also with the schemes as an array, and `unpackRepair(_:limit:_:)` and
-  `unpackMapRepair(_:limit:_:)` (see Session).

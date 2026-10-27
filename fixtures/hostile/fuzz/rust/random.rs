@@ -228,45 +228,7 @@ fn random(checkout: &str, seed: u64, calls: u64) -> bool {
     }
     ep.print("text in protected msg");
 
-    // Session: after every hostile payload the next valid payload must read (no receive-index desync).
-    let mut se = Tally::default();
-    let mut opener = PackSession::load(&[9; SEED_SIZE]).expect("load");
-    let mut waiter = PackSession::load(&[9; SEED_SIZE]).expect("load");
-    let nonce = opener.start_with(&[3; NONCE_SIZE]).expect("start");
-    assert!(waiter.join(&nonce));
-    for _ in 0..calls / 4 {
-        let n = rng.below(33);
-        let t = rng.below(n / 2 + 1);
-        let len = 1 + rng.below(40.min(253 - n));
-        let a = rng.fill(len);
-        let b = rng.fill(len);
-        let wire_a = session_pack(&mut opener, &a, n);
-        let wire_b = session_pack(&mut opener, &b, n);
-        let mut hostile = wire_a.clone();
-        let k = rng.below(n + 2);
-        if rng.below(3) == 0 {
-            mutate(&mut rng, &mut hostile, &[]);
-        } else {
-            corrupt(&mut hostile, k, &mut rng);
-        }
-        let mut h = Rec::new(1, n);
-        let (r, dt) = guarded(|| waiter.unpack_repair(&hostile, &mut [&mut h], t));
-        if let Some(Ok(_)) = &r {
-            if hostile.len() == wire_a.len() && hamming(&hostile, &wire_a) <= t && h.got.as_deref().map(|g| &g[1..]) != Some(&a[..]) {
-                violation(&mut se, format!("session repaired to another row: n {n} t {t}"));
-            }
-        }
-        se.record(r.map(|r| r.is_ok()), dt, &hostile);
-        let mut h2 = Rec::new(1, n);
-        let next = waiter.unpack_repair(&wire_b, &mut [&mut h2], 0);
-        if next.is_err() || h2.got.as_deref().map(|g| &g[1..]) != Some(&b[..]) {
-            violation(&mut se, format!("next payload not read after a hostile one: {next:?} n {n}"));
-            break;
-        }
-    }
-    se.print("session hostile+next");
-
     report_usage("random");
-    let bad = [&ts, &tl, &td, &er, &ec, &ev, &ep, &se].iter().any(|t| t.panics > 0 || t.violations > 0);
+    let bad = [&ts, &tl, &td, &er, &ec, &ev, &ep].iter().any(|t| t.panics > 0 || t.violations > 0);
     !bad
 }

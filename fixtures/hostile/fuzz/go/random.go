@@ -233,45 +233,6 @@ func random(checkout string, seed uint64, calls int) bool {
 	ep.print("text in protected msg")
 	all = append(all, ep)
 
-	se := &tally{}
-	opener, _ := pb.LoadSession(bytes.Repeat([]byte{9}, pb.SeedSize))
-	waiter, _ := pb.LoadSession(bytes.Repeat([]byte{9}, pb.SeedSize))
-	nonce, _ := opener.StartWith(bytes.Repeat([]byte{3}, pb.NonceSize))
-	if err := waiter.Join(nonce); err != nil {
-		panic(err)
-	}
-	for range calls / 4 {
-		n := r.below(33)
-		t := r.below(n/2 + 1)
-		l := 1 + r.below(min(40, 253-n))
-		a, b := r.fill(l), r.fill(l)
-		wireA := sessionPack(opener, a, n)
-		wireB := sessionPack(opener, b, n)
-		hostile := clone(wireA)
-		if r.below(3) == 0 {
-			hostile = mutate(r, hostile, nil)
-		} else {
-			corrupt(hostile, r.below(n+2), r)
-		}
-		scheme := rawScheme(1, l, n)
-		var row map[string]any
-		var err error
-		p, dt := guarded(func() { row, _, err = waiter.UnpackMapRepair(hostile, t, scheme) })
-		if !p && err == nil && len(hostile) == len(wireA) && hamming(hostile, wireA) <= t {
-			if got, _ := row["b"].([]byte); !bytes.Equal(got, a) {
-				se.violation("session repaired to another row: n %d t %d", n, t)
-			}
-		}
-		se.record(p, err == nil, dt, hostile)
-		row2, _, err2 := waiter.UnpackMapRepair(wireB, 0, scheme)
-		if got, _ := row2["b"].([]byte); err2 != nil || !bytes.Equal(got, b) {
-			se.violation("next payload not read after a hostile one: %v n %d", err2, n)
-			break
-		}
-	}
-	se.print("session hostile+next")
-	all = append(all, se)
-
 	reportUsage("random")
 	for _, t := range all {
 		if t.panics > 0 || t.violations > 0 {

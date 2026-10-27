@@ -15,7 +15,7 @@ pub struct PositionRow {
     pub altitude: Option<i16>,
 }
 
-/// The position scheme of the session tests; `type_number` lets a dispatch hold two of them.
+/// The position scheme of the ECC tests; `type_number` lets a dispatch hold two of them.
 pub fn position_scheme(type_number: i32, parity: usize) -> Scheme<PositionRow> {
     Scheme::new(
         type_number,

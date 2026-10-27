@@ -5,7 +5,7 @@
 #   <packbin checkout>  a checkout (or `git archive HEAD go fixtures` copy) holding go/ and fixtures/; read only
 #   <work dir>          an empty directory outside the checkout; the probe module is assembled there
 #   <command>           random <seed> <calls> | ecctime <calls> | textamp <one|list1m|list8m|controls|short>
-#                       | edges | allocs | fuzz <FuzzTextLone|FuzzTextList|FuzzEccRepair|FuzzSession> <seconds>
+#                       | edges | allocs | fuzz <FuzzTextLone|FuzzTextList|FuzzEccRepair> <seconds>
 # The probe module requires github.com/zxsanny/packbin/go and replaces it with <checkout>/go at run time.
 # Go is not needed on the host; on a Mac without Go run it in the CI image, the checkout read-only:
 #   docker run --rm -m 2g -v <checkout>:/src:ro -v <this dir>:/probe:ro -v <work dir>:/work \

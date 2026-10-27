@@ -1,6 +1,5 @@
 #include <cstdio>
 
-#include "esp_random.h"
 #include "packbin/packbin.hpp"
 
 // The golden position row: the same 13 bytes as every other packbin language.
@@ -23,12 +22,6 @@ constexpr auto position = packbin::scheme<Position>(
 // The same row with 4 parity bytes after it: a receiver repairs up to 2 wrong bytes.
 constexpr auto protected_position = packbin::parity(position, 4);
 
-// The board's hardware random number generator for PackSession::start.
-static bool board_random(std::uint8_t* out, std::size_t n, void*) {
-  esp_fill_random(out, n);
-  return true;
-}
-
 extern "C" void app_main(void) {
   Position row;
   row.sid = 1;
@@ -47,11 +40,8 @@ extern "C" void app_main(void) {
     std::printf("%02x", sent[i]);
   std::printf("\n");  // 4001000065cd1d00a3e1110100ca856682
 
-  std::uint8_t seed[packbin::PackSession::SeedSize] = {1};
-  std::uint8_t nonce[packbin::PackSession::NonceSize];
-  packbin::PackSession session;
-  if (session.load(seed, sizeof(seed)) && session.start(board_random, nullptr, nonce)) {
-    packbin::Result s = session.pack(position, row, buf, sizeof(buf));
-    std::printf("session packet %u bytes\n", static_cast<unsigned>(s.offset));
-  }
+  Position back;
+  packbin::Result u = packbin::unpack(position, buf, r.offset, back);
+  std::printf("unpacked %d, lat %ld\n", u.ok() ? 1 : 0,
+              static_cast<long>(back.lat));  // unpacked 1, lat 500000000
 }

@@ -277,7 +277,7 @@ pub struct On<'a, T, F> {
     handler: F,
 }
 
-/// A handler of one scheme for [`BinaryPacker::unpack_with`] and a session dispatch.
+/// A handler of one scheme for [`BinaryPacker::unpack_with`].
 ///
 /// ```
 /// use packbin::{DispatchHandler, UnpackError};
@@ -328,11 +328,6 @@ pub struct BinaryPacker;
 impl BinaryPacker {
     pub fn pack<T>(scheme: &Scheme<T>, row: &T) -> Result<Vec<u8>, PackError> {
         walk::pack(&scheme.layout, &read_values(&scheme.binders, row))
-    }
-
-    /// The packed row without parity bytes: the session pads it before it adds them.
-    pub(crate) fn pack_clear<T>(scheme: &Scheme<T>, row: &T) -> Result<Vec<u8>, PackError> {
-        walk::pack_clear(&scheme.layout, &read_values(&scheme.binders, row))
     }
 
     /// Reads a message whose parity bytes were already checked and dropped.

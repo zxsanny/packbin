@@ -4,13 +4,13 @@ import Testing
 /// AZ-3234 AC-8 (S6; AC-G2.5): each refusal of the contract returns its kind with nothing written, and 1,000 hostile
 /// bodies, lengths and clear lengths from a fixed seed cause no crash and the kind the contract's order gives.
 @Suite struct FrameRefusalTests {
-    private let context = MessageContext(msgID: messageID(1), kind: 1)
+    private let context = MsgContext(msgID: messageID(1), kind: 1)
 
     private func session(tag: Int = 4, directions: FrameDirections = .all) throws -> FrameSession {
         try FrameSession.load(key: repeatedKey(0x33), epoch: 5, config: FrameConfig(tagLength: tag, directions: directions))
     }
 
-    private func sealError(_ session: FrameSession, direction: FrameDirection = .up, context: MessageContext? = nil,
+    private func sealError(_ session: FrameSession, direction: FrameDirection = .up, context: MsgContext? = nil,
                            ad: Int = 0, clear: Int = 0, plain: Int = 1, out: Int = 255) -> (PackbinError.Kind?, Bool) {
         var buffer = [UInt8](repeating: frameSentinel, count: out)
         let error = packbinError {
@@ -42,8 +42,8 @@ import Testing
         // Arrange
         let both = try session()
         let upOnly = try session(directions: .up)
-        let big = MessageContext(msgID: messageID(1), kind: 16)
-        let short = MessageContext(msgID: [1, 2, 3], kind: 1)
+        let big = MsgContext(msgID: messageID(1), kind: 16)
+        let short = MsgContext(msgID: [1, 2, 3], kind: 1)
 
         // Act
         let results: [(name: String, kind: PackbinError.Kind?, untouched: Bool)] = [
@@ -83,7 +83,7 @@ import Testing
         let sealer = try self.session()
         let body = try sealBody(sealer, .up, context, ad: [1], clear: [2, 2], plain: [3, 3, 3])
         var window = ReplayWindow(top: 70, bits: 0b11)
-        let kind16 = MessageContext(msgID: messageID(1), kind: 16)
+        let kind16 = MsgContext(msgID: messageID(1), kind: 16)
 
         // Act
         let cases: [(String, OpenOutcome)] = [
@@ -166,7 +166,7 @@ import Testing
             let direction = FrameDirection.allCases[Int.random(in: 0..<3, using: &random)]
             let kind = UInt8.random(in: 0...20, using: &random)
             let idLength = Int.random(in: 0...1, using: &random) == 0 ? 8 : Int.random(in: 0...10, using: &random)
-            let ctx = MessageContext(msgID: (0..<idLength).map { _ in UInt8.random(in: 0...255, using: &random) }, kind: kind)
+            let ctx = MsgContext(msgID: (0..<idLength).map { _ in UInt8.random(in: 0...255, using: &random) }, kind: kind)
             let adLength = Int.random(in: 0...300, using: &random)
             let ad = (0..<adLength).map { _ in UInt8.random(in: 0...255, using: &random) }
             let bodyLength = Int.random(in: 0...300, using: &random)
@@ -211,7 +211,7 @@ import Testing
             let ad = (0..<Int.random(in: 0...255, using: &random)).map { _ in UInt8.random(in: 0...255, using: &random) }
             let clear = (0..<clearLength).map { _ in UInt8.random(in: 0...255, using: &random) }
             let plain = (0..<plainLength).map { _ in UInt8.random(in: 0...255, using: &random) }
-            let ctx = MessageContext(msgID: messageID(random.next()), kind: UInt8.random(in: 0...15, using: &random))
+            let ctx = MsgContext(msgID: messageID(random.next()), kind: UInt8.random(in: 0...15, using: &random))
             let body = try sealBody(session, direction, ctx, ad: ad, clear: clear, plain: plain)
             var window = ReplayWindow()
             let outcome = attemptOpen(session, direction, ctx, ad: ad, body: body, clearLength: clearLength, window: &window,

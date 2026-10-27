@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -97,6 +98,24 @@ func goldenRow() *Position {
 
 func goldenMap() map[string]any {
 	return map[string]any{"sid": 1, "lat": 500_000_000, "lon": 300_000_000, "profile": 1}
+}
+
+// goldenFieldMismatches counts the fields of an unpacked map row that differ from goldenMap, and the
+// flag fields it holds although the golden row has none.
+func goldenFieldMismatches(row map[string]any) int {
+	want := map[string]any{"sid": uint16(1), "lat": int32(500_000_000), "lon": int32(300_000_000), "profile": uint8(1)}
+	bad := 0
+	for k, v := range want {
+		if !reflect.DeepEqual(row[k], v) {
+			bad++
+		}
+	}
+	for _, k := range []string{"heading", "speed", "altitude"} {
+		if _, ok := row[k]; ok {
+			bad++
+		}
+	}
+	return bad
 }
 
 func mismatchedBytes(a, b []byte) int {

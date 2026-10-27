@@ -4,10 +4,9 @@
 # The row also holds every set to the chip-scale ceilings of cpp/embedded/lib.sh (m33f_flash_budget 65536 B,
 # m33f_stack_budget 8192 B; owner, 2026-10-25). A raise needs a line in _docs/AGENT_GOTCHAS.md saying what the
 # bytes bought.
-# session and frame re-pinned in loop 73 (AZ-3275): the volatile wipe of the HKDF, SHA-256 schedule and stream pad
-# temporaries, +32 B and +168 B of flash, -24 B of stack each.
+# frame re-pinned in loop 73 (AZ-3275): the volatile wipe of the key temporaries, +168 B of flash, -24 B of stack.
+# The session set went with the stream session in loop 74 (AZ-3284).
 base 15132 456
 text 27268 2736
 ecc 18764 744
-session 18916 1504
 frame 20404 1728

@@ -12,11 +12,10 @@ import Testing
 let readmeOutputs: [String: [String]] = [
     "typed": ["40 01 00 00 65 cd 1d 00 a3 e1 11 01 00", "500000000 true"],
     "map": ["40 01 00 00 65 cd 1d 00 a3 e1 11 01 00", "40 01 00 00 65 cd 1d 00 a3 e1 11 01 01 5a 00", "UInt16 90", "true"],
-    "session": ["b5 5d 0a 29 c5 6c 20 37 12 b2 41 23 2e", "16 13 500000000"],
 ]
 
 /// The README snippet names, in README order.
-let readmeSnippetOrder = ["typed", "map", "ecc", "session"]
+let readmeSnippetOrder = ["typed", "map", "ecc"]
 
 /// The `hex` function of the first README snippet, for the snippets after it.
 func readmeHex(_ bytes: [UInt8]) -> String {
@@ -121,36 +120,6 @@ func readmeHex(_ bytes: [UInt8]) -> String {
 
         // Assert
         #expect(raw.count == 7 && repaired == 1 && (row as? Reading)?.level == 7)
-    }
-
-    @Test func sessionSnippet_printsTheCSharpCiphertextAndUnpacksIt() throws {
-        // Arrange: the snippet's `print` lines are collected; `position` and `hex` are the map
-        // snippet's scheme and the first snippet's function.
-        var printed: [String] = []
-        func print(_ items: Any...) { printed.append(items.map { "\($0)" }.joined(separator: " ")) }
-        let position = try positionMapScheme()
-        let hex = readmeHex
-
-        // Act
-        // README begin session
-        let seed: [UInt8] = Array(1...32)   // the 32 bytes both sides hold, shared out of band
-        let opener = try PackSession.load(seed)
-        let hello = try opener.start([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])   // start() draws them at random
-        let waiter = try PackSession.load(seed)
-        try waiter.join(hello)
-
-        let payload = try opener.pack(position, ["sid": 1, "lat": 500_000_000, "lon": 300_000_000, "profile": 1])
-        print(hex(payload))
-
-        let back = try waiter.unpackMap(payload, position)
-        if let lat = back["lat"] {
-            print(hello.count, payload.count, lat)
-        }
-        // README end
-
-        // Assert
-        #expect(printed == readmeOutputs["session"])
-        #expect(mismatchedBytes(payload, bytes(sessionCipherHex)) == 0)
     }
 
     @Test func readme_swiftBlocks_areTheSnippets() throws {

@@ -130,16 +130,6 @@ func allocs() bool {
 				n, c.name, a, float64(ms1.TotalAlloc-ms0.TotalAlloc)/201)
 		}
 	}
-	// The same through a session payload of 254 bytes at n 32.
-	opener, _ := pb.LoadSession(bytes.Repeat([]byte{1}, pb.SeedSize))
-	waiter, _ := pb.LoadSession(bytes.Repeat([]byte{1}, pb.SeedSize))
-	nonce, _ := opener.StartWith(bytes.Repeat([]byte{2}, pb.NonceSize))
-	_ = waiter.Join(nonce)
-	scheme := rawScheme(1, 221, 32)
-	wire := sessionPack(opener, r.fill(221), 32)
-	corrupt(wire, 16, r)
-	a := testing.AllocsPerRun(200, func() { _, _, _ = waiter.UnpackMapRepair(wire, 16, scheme) })
-	fmt.Printf("session n 32, 16 wrong, t=16     %5.0f allocs/call (each call uses a new receive index: the repair runs, the read fails)\n", a)
 	reportUsage("allocs")
 	return true
 }

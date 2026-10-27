@@ -17,7 +17,7 @@ private func requireSendable<T: Sendable>(_: T.Type) {}
         requireSendable(FrameSession.self)
         requireSendable(MacKey.self)
         requireSendable(ReplayWindow.self)
-        requireSendable(MessageContext.self)
+        requireSendable(MsgContext.self)
         requireSendable(FrameConfig.self)
         requireSendable(FrameOpened.self)
 
@@ -85,8 +85,8 @@ private func requireSendable<T: Sendable>(_: T.Type) {}
     }
 }
 
-private func frameContext(_ n: Int) -> MessageContext {
-    MessageContext(msgID: messageID(UInt64(n)), kind: UInt8(n % 16))
+private func frameContext(_ n: Int) -> MsgContext {
+    MsgContext(msgID: messageID(UInt64(n)), kind: UInt8(n % 16))
 }
 
 private func framePlain(_ n: Int) -> [UInt8] {

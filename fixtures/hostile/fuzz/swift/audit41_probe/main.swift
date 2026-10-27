@@ -21,7 +21,7 @@
 //
 // Run (FIX is "$REPO/fixtures"; every mode ends on its own):
 //   Probe text-fuzz FIX <seed> <seconds>   random + mutated string fields through unpack
-//   Probe ecc-fuzz  FIX <seed> <seconds>   random + mutated protected messages, plain and session
+//   Probe ecc-fuzz  FIX <seed> <seconds>   random + mutated protected messages through unpack
 //   Probe edge      FIX                    the AC edge cases (exits 1 on any failed expectation)
 //   Probe ecc-worst <iterations>           254-byte buffers at n = 32: slowest and median per call
 //   Probe text-amp                         largest accepted text, many max texts in one packet
