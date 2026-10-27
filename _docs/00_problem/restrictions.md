@@ -12,7 +12,7 @@
 - Kotlin is not in the first publish.
 - Vue and React import the TypeScript package. They do not get a separate package.
 - The first release has no code generator. Each language writes the field list in that language.
-- The bytes on the wire are only the fields. packbin does not add a tag, a length prefix, a version byte, or a schema id. One exception, frame mode only (ADR-008): a frame-mode body ends with its authentication tag of 4, 8 or 16 bytes (the length bytes of the tag input are never sent); stream mode and clear pack keep the rule as written.
+- The bytes on the wire are only the fields. packbin does not add a tag, a length prefix, a version byte, or a schema id. One exception, frame mode only (ADR-008): a frame-mode body ends with its authentication tag of 4, 8 or 16 bytes (the length bytes of the tag input are never sent); clear pack keeps the rule as written. Frame mode is the only session since loop 74 (ADR-009: the stream session is removed).
 - Install is from the public registry for that language. GitHub Packages is not an install path.
 
 ## Operational

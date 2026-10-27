@@ -39,10 +39,10 @@ Outcomes only. Numbers are the pass line.
 - Kotlin, a wiki, or a seventh language before the six languages agree on the golden bytes
 - A code generator in the first release
 - Any speed target other than AC-10, including allocation budgets, SIMD, and a zero-copy API. Exception: C++ has a no-heap, flash and stack budget and borrowed (zero-copy) strings and bytes (`_docs/02_task_plans/cpp-microcontroller/acceptance_criteria.md` AC-2, AC-5, AC-8, decided 2026-10-04).
-- Authentication, secrets, or TLS inside the library. Exception: frame mode of the session authenticates its frames with a truncated HMAC tag (ADR-008, `_docs/02_task_plans/rust-m33f-and-frame-mode/acceptance_criteria.md`); key storage, secrets management and TLS stay out
+- Authentication, secrets, or TLS inside the library. Exception: frame mode, the only session since loop 74 (ADR-009), authenticates its frames with a truncated HMAC tag (ADR-008, `_docs/02_task_plans/rust-m33f-and-frame-mode/acceptance_criteria.md`); key storage, secrets management and TLS stay out
 - GitHub Packages as the install path
 - A calendar deadline
 
 ## Later features
 
-Session criteria are in `_docs/02_task_plans/pack-session/acceptance_criteria.md`. They do not replace AC-1 through AC-16.
+Stream session criteria (`_docs/02_task_plans/pack-session/acceptance_criteria.md`): retired in loop 74 with the stream session (ADR-009; the removal's criteria are `_docs/02_task_plans/remove-stream-session/acceptance_criteria.md`). Frame mode criteria are in `_docs/02_task_plans/rust-m33f-and-frame-mode/acceptance_criteria.md` and `_docs/02_task_plans/frame-mode-csharp-java-swift/acceptance_criteria.md`. They do not replace AC-1 through AC-16.

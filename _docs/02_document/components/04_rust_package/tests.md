@@ -424,11 +424,11 @@ All run in the `rust` service of `docker-compose.test.yml` with `cargo test`.
 | Test | What it proves | Where |
 |------|----------------|-------|
 | `ac1_*` to `ac4_*` name-scope tests | a `when` or count naming an outer field, an earlier body's field, a later field or an undeclared name, by name or by id, panics at construction naming the owner; same-scope references still build and round-trip (AZ-2117) | `rust/src/name_scope_tests.rs` |
-| session pack tests | `PackSession::pack` returns `Err(NotOpen)` before open and leaves the counter at zero, returns the `PackError` of clear pack, and a failed pack uses no pad position (AZ-2105) | `rust/tests/session_tests.rs`, `rust/tests/times_shapes_tests.rs` |
+| session pack tests (retired in loop 74, ADR 009; `times_shapes_tests.rs` keeps its 9 non-session tests) | `PackSession::pack` returns `Err(NotOpen)` before open and leaves the counter at zero, returns the `PackError` of clear pack, and a failed pack uses no pad position (AZ-2105) | `rust/tests/session_tests.rs`, `rust/tests/times_shapes_tests.rs` |
 | `ac1_count_2_pow_63_with_bias_minus_one_is_a_pack_error` | a `packed` count of 2^63 with bias -1 is a `PackError::Type` (AZ-2118) | `rust/src/borrowed_count_tests.rs` |
 | map `times` under `flags` and `when` | a non-empty list or a single value under such a member is refused naming it; an empty list, an absent member, rounds and direct members still pack (AZ-2189) | `rust/src/times_tests.rs` |
 | `ac1_*` and `ac2_*` flag group tests | a group of `u2`, `sized`, `bits`, `packed`, a nested group or nested `flags` sets its bit, at any depth; a missing sibling fails with `PackError::Missing` naming it (AZ-2128) | `rust/src/flag_group_tests.rs` |
-| `ac1_*`, `ac2_*`, `r2_g1_*` hostile session tests | a waiter unpacking a zero-progress packet, a list of zero-width lists or a dict with a zero-width value returns the clear-unpack error, and the next valid message unpacks (AZ-2114; the zero-progress scheme uses a zero-width `bytes` repeat, because the README `when` scheme is refused at construction) | `rust/src/session_hostile_tests.rs` |
+| `ac1_*`, `ac2_*`, `r2_g1_*` hostile session tests (retired in loop 74, ADR 009) | a waiter unpacking a zero-progress packet, a list of zero-width lists or a dict with a zero-width value returns the clear-unpack error, and the next valid message unpacks (AZ-2114; the zero-progress scheme uses a zero-width `bytes` repeat, because the README `when` scheme is refused at construction) | `rust/src/session_hostile_tests.rs` |
 | `ac1_*` to `ac5_*` written-value tests | a `when` on a field that an earlier `when` or a clear bit skipped does not match; the typed scheme agrees; `eq(bool, false)` on a clear bit writes no body; a `sized`, `bits`, `packed` or `times` count that names a skipped field is `PackError::Missing`; a `repeat` or `times` round decides from what the round wrote (AZ-2237; 11 tests) | `rust/src/when_written_tests.rs` |
 | `ac8_*` kept-bytes tests | the chains, rounds, split flag byte, `u2` slot and flags byte that already packed correctly keep their bytes (AZ-2237; 7 tests) | `rust/src/when_kept_tests.rs` |
 | `a_when_on_a_flags_byte_*`, `a_count_that_names_*`, `a_name_a_times_round_wrote_*` | a `when` or count that names a `flags` byte or a split flag byte reads the byte pack wrote, not a value kept in the row (`0105010709`, `0101010508`, `010105aa`); after a `times` the names its rounds wrote are lists, so a `when` on one does not match and its body is not written (`0101000007`), with rounds or per-name lists; a count of such a name is not an integer (AZ-2237 review fixes; 11 tests) | `rust/src/when_names_tests.rs` |
@@ -438,7 +438,7 @@ All run in the `rust` service of `docker-compose.test.yml` with `cargo test`.
 
 ## Loops 19 and later
 
-See [tests-by-loop.md](tests-by-loop.md) (loop 19 to loop 23 sections, moved in loop 23; loop 24 adds Go to the ring, no test change here).
+See [tests-by-loop.md](tests-by-loop.md) (loop 19 to loop 23 sections, moved in loop 23; loop 24 adds Go to the ring, no test change here; loop 74 retires the stream session tests, ADR 009).
 
 ## Test Data Management
 
@@ -467,10 +467,10 @@ See [tests-by-loop.md](tests-by-loop.md) (loop 19 to loop 23 sections, moved in 
 | FT-X-156 | the four primitives match the published vectors | `src/crypto_vectors_tests.rs`, `fixtures/crypto/check-vectors.test.sh` |
 | FT-X-157 | every non-key row of `fixtures/frame/vectors.txt` through the public API, with and without `std` | `tests/frame_vectors_tests.rs` |
 | FT-X-158 | key rows, every single-bit tamper of E1 to E3, replay before crypto (0 compressions), previous slot, MAC-only, cost counters | `src/frame_core_tests.rs` |
-| FT-X-159 | refusals with no partial output, hostile bodies, stream and frame calls kept apart, in-place load, sizes, model of the window | `src/frame_hostile_tests.rs` |
+| FT-X-159 | refusals with no partial output, hostile bodies, in-place load, sizes, model of the window (the 2 `session`-gated tests that kept stream and frame calls apart were retired in loop 74, ADR 009: 8 tests to 6) | `src/frame_hostile_tests.rs` |
 | FT-X-160 | the `frame` set on the Cortex-M4F image | `rust/embedded` stage |
 
-Run: `cargo test --features frame --test frame_vectors_tests`, `--no-default-features --features frame --test frame_vectors_tests`, `--features frame --lib frame_`, `--features frame,session,ecc --lib frame_`, `--features frame --doc` (all in `run-suite.sh`).
+Run: `cargo test --features frame --test frame_vectors_tests`, `--no-default-features --features frame --test frame_vectors_tests`, `--features frame --lib frame_`, `--features frame,ecc --lib frame_` (it was `frame,session,ecc` until the `session` feature was retired in loop 74), `--features frame --doc` (all in `run-suite.sh`).
 
 ## Loop 70: Rust Cortex-M33F row (AZ-3231)
 

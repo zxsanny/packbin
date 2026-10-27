@@ -1,6 +1,6 @@
 # Primitive reference vectors
 
-The published test vectors of the four primitives of the stream session (AZ-3201, spec PB-02): SHA-256, HMAC-SHA256, HKDF-SHA256 and the ChaCha20 block. The rows are copied from the publications, not generated, and every one is re-derived by an independent implementation before a package trusts it. The Rust package matches them in `rust/src/crypto_vectors_tests.rs`; the other seven packages follow.
+The published test vectors of the four primitives of frame mode, packbin's only session (AZ-3201, spec PB-02; `_docs/02_document/contracts/library/pack-session.md` 3.0.0, ADR 009): SHA-256, HMAC-SHA256, HKDF-SHA256 and the ChaCha20 block and cipher. The rows are copied from the publications, not generated, and every one is re-derived by an independent implementation before a package trusts it. All eight packages read all 27 rows: the four with frame mode in `rust/src/crypto_vectors_tests.rs`, `csharp/tests/CryptoVectorTests.cs`, `java/src/test/java/packbin/CryptoVectorsTest.java` and `swift/Tests/PackbinTests/CryptoVectorTests.swift`, and the four whose frame-mode port comes in loop 75 against their internal, unexported crypto module (owner decision D2, loop 74) in `cpp/tests/core/crypto_vectors_host_tests.cpp`, `go/crypto_vectors_test.go`, `python/tests/test_crypto_vectors.py` and `typescript/tests/crypto-vectors.test.ts`.
 
 | File | What it is |
 |------|------------|

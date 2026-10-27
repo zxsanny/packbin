@@ -4,9 +4,9 @@
 
 **Purpose**: Pack and unpack a caller-owned scheme for Go programs, with the same bytes as the other six packages.
 
-**Architectural Pattern**: stateless clear pack and unpack over an immutable `Scheme`, plus a `PackSession` the caller holds (as the TypeScript package). Hand-written walkers, no code generation (ADR-001).
+**Architectural Pattern**: stateless clear pack and unpack over an immutable `Scheme`. No session until the frame-mode port (AZ-3293, loop 75): the stream `PackSession` is removed (loop 74, ADR 009), and an unexported crypto module waits for frame mode. Hand-written walkers, no code generation (ADR-001).
 
-**Upstream dependencies**: none inside the repo. Outside: the Go standard library and `golang.org/x/crypto` (ChaCha20, session only). `go.mod` names `go 1.26.0`, the direct requirement `golang.org/x/crypto v0.58.0` and `golang.org/x/sys` as indirect; no cgo. The suite check requires that the packages the build uses come from the main module and x/crypto only.
+**Upstream dependencies**: none inside the repo. Outside: the Go standard library and `golang.org/x/crypto` (ChaCha20, used by the unexported crypto module `crypto.go` only; kept for the frame-mode port, ADR 009 and owner decision D2). `go.mod` names `go 1.26.0`, the direct requirement `golang.org/x/crypto v0.58.0` and `golang.org/x/sys` as indirect; no cgo. The suite check requires that the packages the build uses come from the main module and x/crypto only.
 
 **Downstream consumers**: Go programs, fetched with `go get github.com/zxsanny/packbin/go@vX.Y.Z` from the git tag `go/vX.Y.Z` (ADR-004). There is no registry upload; the README has the install and the examples (`README.md`, Example, Go).
 
@@ -24,7 +24,7 @@ Same shape as TypeScript (`components/02_typescript_package/description.md` §2)
 | Typed rows | `Bind[T, V](field, get func(*T) V, set func(*T, V))` binds a value field, a slot, a group, a nested row, a list, a dict or a round to a member of the struct `T`; a bound scheme packs a `*T` or a `T` and `Unpack` returns a `*T` |
 | Limits | `Limits{MaxRounds, MaxSlots, MaxBytes}`, `DefaultLimits()`, `DefaultMaxRounds` 65 535, `DefaultMaxSlots` 1 048 576, `DefaultMaxBytes` 16 777 216; `WithLimits` returns a copy, takes all three values and refuses a value below 1 with `InvalidScheme` |
 | Errors | `*Error{Kind, Field, Name, Needed, Left, Actual, Reason}`; kinds `ShortPacket`, `TrailingBytes`, `UnknownType`, `BadValue`, `InvalidScheme`, `PackRefused`, `TooMany`; `errors.Is` sentinels (`ErrShortPacket`, ...). A refused pack returns nil bytes |
-| Session | `LoadSession(seed) (*PackSession, error)` (`SeedSize` 32), `Start()`, `StartWith(nonce)` (`NonceSize` 16, for tests), `Join(nonce)`, `Pack(s, row)`, `Unpack(payload, schemes...)`, `UnpackMap(...)` (`contracts/library/pack-session.md`) |
+| Session | retired (loop 74, AZ-3287, ADR 009): the stream `PackSession` (`LoadSession`, `Start`, `StartWith`, `Join`, `Pack`, `Unpack`, `UnpackMap`, the seed and nonce sizes) is removed; `go doc -all` names no session. Go gains frame mode in loop 75 (AZ-3293), with the D1 type names `FrameSession`, `FrameConfig`, `FrameDirection`, `FrameDirections`, `FrameSlot`, `FrameOpened`, `MsgContext`, `ReplayWindow`, `Freshness`, `MacKey` |
 
 Rows: a typed struct bound by getter and setter closures, or `map[string]any`. A nil pointer, slice or map is no value; an empty slice is a value with 0 items (G-5). In a map row an integer field takes any Go integer type that holds the value, a float field any Go integer or float, `Bytes` and `Sized` a `[]byte`, `Bits` and `Packed` a slice of integers, a `Bool` a bool. `UnpackMap` gives each value the Go type of its field, so a row it returned packs again to the same bytes.
 
@@ -41,7 +41,11 @@ Optional parity bytes per scheme: `n` from 0 to 32, default 0, which keeps the b
 
 - **Pack**: a clear message above `254 - n` bytes is a `PackRefused` error naming the length and the limit, with nil bytes.
 - **Dispatch**: the schemes of one call declare the same `n`; with one `n` the message is repaired first, then dispatched.
-- **Session**: `PackSession.Pack` pads, then appends the parity of the padded bytes. `PackSession.UnpackRepair` and `UnpackMapRepair` repair, drop the parity, remove the pad, then read; `Unpack` is limit 0. A payload refused as `Uncorrectable` spends a receive position; a bad limit or mix spends none. With `n` = 0 the payload has the length of clear pack.
+- **Session** (retired, loop 74, ADR 009): the stream session's protected payload (pad, then parity) went with `PackSession`; `message-ecc.md` 1.0.1 has no session row.
+
+### Internal: crypto module (loop 74, owner decision D2)
+
+`go/crypto.go`, unexported: `sha256Of`, `hmacSHA256`, `hkdfExtract` and `hkdfSHA256(ikm, salt, info, length)` from the standard library (`crypto/sha256`, `crypto/hmac`, `crypto/hkdf`), `chacha20Block` and `chacha20XOR` over `golang.org/x/crypto/chacha20`; errors on a bad key or nonce size, an HKDF output above 8,160 bytes and a stream past block counter 2^32 - 1. It has no caller until the frame-mode port. `go/crypto_vectors_test.go` checks the 27 rows of `fixtures/crypto/vectors.txt`, 6 mutant copies and the refusals.
 - **`t` and detection**: `t` defaults to 0 and then any corruption of up to `n` wrong bytes is detected. A `t` above 0 repairs up to `t` wrong bytes but gives up detection: corruption of `t + 1` to `n - t` bytes is still refused, a larger corruption may be repaired to a different message. The contract table lists the chance (`n` = 4: 1 in 4.29e+09 at `t` = 0, 1 in 990,537 at `t` = 1, 1 in 485 at `t` = 2). `t` above `n / 2` is an error before any byte is read.
 - **Size and speed**: a message is at most 254 bytes, parity included; pack refuses a clear message above `254 - n` bytes and writes nothing. Unpack of hostile bytes does at most about 3 x 255 x 32 field operations beyond the unprotected walk and never throws or traps on them. Acceptance bound EC-13 (a bound, not a recorded measurement): 1,000 unpacks with correction of a 254-byte message with 16 parity bytes and 8 wrong bytes in 1 second; 1,000 packs of such blocks in 1 second.
 
@@ -49,10 +53,10 @@ Optional parity bytes per scheme: `n` from 0 to 32, default 0, which keeps the b
 
 Go copies TypeScript row for row (loop 24 fit decision 4), except the documented TypeScript-only exceptions (U6, the bigint `times` count split), where it follows the five. A disagreement found while porting is reported, not decided in the task.
 
-- A built `Scheme` is immutable and safe for concurrent `Pack` and `Unpack` from any number of goroutines (GO-14); a `PackSession` is for one goroutine at a time.
+- A built `Scheme` is immutable and safe for concurrent `Pack` and `Unpack` from any number of goroutines (GO-14).
 - Errors are values. No input makes `Pack`, `Unpack`, `UnpackMap` or `NewScheme` panic (GO-15). An unreadable value found by unpack is a short-packet-shaped error with `Needed` 0, as in TypeScript; a round past a limit is `TooMany`.
 - The round limits are charged where a round starts (`packer.rounds`, `reader.rounds`), before its bytes are read; pack refuses a count or list above `MaxRounds`, charges `MaxSlots` per round and checks `MaxBytes` before every write. The slot width of a round is TypeScript's; a `Nested` row is a scope of its own and charges the width of its own members.
-- Session: C# ciphertext `b55d0a29c56c203712b241232e` and TypeScript's keyed first-packet vectors are the checks. `LoadSession` copies the seed (the caller's slice is not wiped); the copy and the derived key block are zeroed once the session opens. A failed `Pack` spends no counter position; every `Unpack` spends one. A packet over 2^38 bytes is refused (x/crypto counter overflow).
+- Session: retired (loop 74, ADR 009). The stream session's checks (the C# ciphertext `b55d0a29c56c203712b241232e`, TypeScript's keyed first-packet vectors) and its seed wipe went with it; the ciphertext stays in `fixtures/hostile/fuzz/corpus.txt` as the `ring_session` hostile input.
 
 ## 4. Decisions
 
@@ -70,6 +74,6 @@ Open (assessment, not decided): the empty anchored group's anchor, `u2` as a lis
 
 ## 5. Tests
 
-`go test -race ./...` in `go/` (about 25 s): golden, parity rows of TypeScript, the hostile vectors (`fixtures/hostile/cases.txt`, 65 cases), session vectors, concurrency (8 goroutines), `FuzzUnpack` (60 s in `run-suite.sh go`), and the six `Example` tests whose output is the README text. `docker compose -f docker-compose.test.yml run --rm go` is the suite as CI runs it.
+`go test -race ./...` in `go/` (about 25 s): golden, parity rows of TypeScript, the hostile vectors (`fixtures/hostile/cases.txt`), the 27 crypto rows (`crypto_vectors_test.go`), concurrency (8 goroutines), `FuzzUnpack` (60 s in `run-suite.sh go`), and the five `Example` tests whose output is the README text (six before loop 74: the session example went with the stream session, ADR 009). Loop 74: 325 top-level tests pass and 1 skips under `-race` (355 before; 3,001 with subtests); `session.go`, `session_test.go`, `session_hostile_test.go`, `session_concurrent_test.go` and the `ring_session_*` fuzz seeds are deleted; `ecc_scheme_test.go` (20 to 12), `nil_scheme_test.go` (8 subtests to 6) and `example_test.go` (6 to 5) keep their non-session tests. `docker compose -f docker-compose.test.yml run --rm go` is the suite as CI runs it.
 
 Peak memory (loop 25, AZ-2475): `go/mem_test.go`, behind the build tag `packbin_memtest` and so outside `go test ./...`, samples the heap in use during the unpack in `golang:1.27` (one run each, about 10 %): the F10 packet (4.26 MB, `MaxSlots` 4,194,304) peaks at about 625 MB and a 1 MiB wide-round packet (16,128 rounds of 65 one-byte members, the defaults) at about 94 MB. Run it with `go test -tags packbin_memtest -v -run TestMem -count=1 ./...`.

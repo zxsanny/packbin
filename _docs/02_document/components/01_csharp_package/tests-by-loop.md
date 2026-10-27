@@ -45,7 +45,7 @@ Test files: `CountBehindClearWhenTests.cs` (AZ-2410: six `Ac1_*`/`Ac2_*`/`Ac3_*`
 
 ## Loop 24 (Go joins the ring; no C# test change)
 
-Loop 24 added the Go package (AZ-2222, `components/07_go_package/`). No C# source or test changed (batch report: the six suites have no source change). What is new for this package is its place in the ring: Go joins `user`, `nested`, `boolflag`, `booltrue`, `bitwhen` and `session` both ways, `roundflags` and `roundwhen` as producer only (`csharp -> go`; no public C# reader of an aligned round row, AZ-2092), and `listgroup`, `dictgroup`, `listflags` both ways, through `language-pair.sh` (114 Go lines in all, guarded by `ring-wiring.test.sh`; scenario FT-X-90). The hostile case file is unchanged at 65 cases and is now read by seven loaders (FT-X-87). C# is the reference of the Go session (ciphertext `b55d0a29c56c203712b241232e`) and of the whole-float refusal (Go-2 A follows C# since loop 21); `Walker.StrandedCounts.cs` was read for the U6 row.
+Loop 24 added the Go package (AZ-2222, `components/07_go_package/`). No C# source or test changed (batch report: the six suites have no source change). What is new for this package is its place in the ring: Go joins `user`, `nested`, `boolflag`, `booltrue`, `bitwhen` and `session` both ways, `roundflags` and `roundwhen` as producer only (`csharp -> go`; no public C# reader of an aligned round row, AZ-2092), and `listgroup`, `dictgroup`, `listflags` both ways (the `session` ring kind was retired in loop 74, ADR 009), through `language-pair.sh` (114 Go lines in all, guarded by `ring-wiring.test.sh`; scenario FT-X-90). The hostile case file is unchanged at 65 cases and is now read by seven loaders (FT-X-87). C# is the reference of the Go session (ciphertext `b55d0a29c56c203712b241232e`) and of the whole-float refusal (Go-2 A follows C# since loop 21); `Walker.StrandedCounts.cs` was read for the U6 row.
 
 ## Loop 71 (frame mode, AZ-3232 to AZ-3235)
 
@@ -54,3 +54,15 @@ Source: `_docs/03_implementation/batch_01_loop71_report.md`, `_docs/loops/loop71
 | Test class | Task | What it proves |
 |------------|------|----------------|
 | `FrameVectorTests`, `CryptoVectorTests`, `FrameTamperTests`, `FrameReplayTests`, `FrameMacOnlyTests`, `FrameRefusalTests`, `FrameWipeAndCompareTests`, `FrameConcurrencyTests`, `FrameReadmeExample` | AZ-3232 | 66 tests (4305 in all, both targets): the 157 frame rows and 27 primitive rows, tamper sweep, replay with the MAC counter, previous slot, MAC-only, refusals, 1,000 hostile inputs, wipe and compare, 8-thread seal, the README example |
+
+## Loop 74: the stream session is removed (AZ-3281, ADR 009)
+
+Source: `_docs/03_implementation/batch_01_loop74_report.md`. The stream session tests are retired (deleted), the mixed files keep their non-session tests, and the frame and crypto rows did not move.
+
+| Test | Task | What changed |
+|------|------|--------------|
+| `SessionTests`, `HostileSessionTests` (AZ-2114), the helper `SessionPrivates` | AZ-3281 | retired with `PackSession.cs`: deleted (32 tests) |
+| `EccSessionTextTests` (14 to 7: EC-10 out, EC-11 kept), `EccDispatchOrderTests` (11 to 5), `TopRangeAndSessionTests` (16 to 14), `WrittenWhenTests` (10 to 9) | AZ-3281 | kept in loop 74: the non-session tests stay; the class names keep "Session" (a rename changes the test ids); the duplicate-type-before-parity-mix check (AZ-2704 AC-3) runs on the clear `BinaryPacker.Unpack` |
+| `FrameVectorTests`, `CryptoVectorTests` | AZ-3281 | 157 frame rows and 27 primitive rows pass, unchanged |
+
+Suite: 4,287 of 4,287 on `net10.0` and on `netstandard2.0` (4,319 before), 0 warnings.

@@ -7,7 +7,8 @@
 | F1 | Pack | caller has a value | any of the eight language packages | High |
 | F2 | Unpack | caller has bytes | any of the eight language packages | High |
 | F3 | Publish | version tag | GitHub Actions | High |
-| F4 | Session | caller has a 32-byte seed | any of the eight language packages | High |
+| F4 | Session (stream) | retired (loop 74, ADR 009) | none | — |
+| F5 | Frame session | caller has a 32-byte key and an epoch | C#, Java, Rust, Swift (C++, Go, Python, TypeScript in loop 75) | High |
 
 ## Flow Dependencies
 
@@ -16,7 +17,8 @@
 | F1 | a field list | F2, via the golden fixture |
 | F2 | F1's byte layout | F1 |
 | F3 | F1 and F2 passing on that commit | the same hex |
-| F4 | F1's clear bytes | the other side of the same session |
+| F4 | retired (loop 74, ADR 009) | — |
+| F5 | the caller's own message layout (the clear part and the plaintext are the caller's bytes, often F1's) | the other side, through the same key, epoch, tag length and direction |
 
 ## Flow F1: Pack
 
@@ -222,37 +224,44 @@ flowchart TD
 | End-to-end latency | the check fails the workflow | not a latency SLO |
 | Throughput | one publish per tag | first tag was exactly six packages; since the Go release a tag is six packages and one Go tag; Swift adds no package and no tag, only the consumer check (the `publish` job's limit is 120 minutes since loop 26) |
 
-## Flow F4: Session
+## Flow F4: Session (retired)
+
+Retired (loop 74, ADR 009). The stream session (a shared 32-byte seed, a 16-byte opener nonce sent once, a ChaCha20 pad per payload, an implicit counter and no tag) is removed from all eight packages; a lost payload put every later one out of step, and it authenticated nothing. Frame mode (Flow F5) is the only session. The flow as it stood is in the git history of this file (commit `10cc0be` and earlier).
+
+## Flow F5: Frame session
 
 ### Description
 
-The caller loads a 32-byte seed, the opener sends 16 bytes once, and the waiter joins. Later payloads are the clear packed bytes XORed to the same length. In C++ the opener passes a `RandomFn` (`packbin::os_random` on a host, a hardware RNG on firmware) or its own nonce, and the pad is applied in place on the caller's buffer.
+Each side loads a `FrameSession` from the caller's 32-byte key, a 24-bit epoch, a tag length (4, 8 or 16) and the directions it uses (up, down, group); there is no handshake and nothing is sent at load. The sender seals one message into a body `clear ‖ ciphertext ‖ tag`: ChaCha20 under a key per (key, epoch, direction) from HKDF-SHA256, a nonce built from the caller's 8-byte `msg_id`, the `kind` nibble, the direction and the epoch, and a truncated HMAC-SHA256 tag over the nonce, the associated data, the clear part and the ciphertext. The receiver opens it: the replay window first (when the caller passes one), then the tag in constant time under the current key and, once, under the previous key, then the decrypt, then the window commit. Each message stands alone, so a lost, reordered or duplicated frame does not affect the others. The bytes are `pack-session.md` 3.0.0 § Frame mode and the 157 rows of `fixtures/frame/vectors.txt`. Type names in every package with frame mode: `FrameSession`, `FrameConfig`, `FrameDirection`, `FrameDirections`, `FrameSlot`, `FrameOpened`, `MsgContext`, `ReplayWindow`, `Freshness`, `MacKey` (Java has all of them except `FrameConfig` and `FrameDirections` (its load takes the tag length and the directions as arguments) and adds `FrameSealed`).
 
 ### Preconditions
 
-- Clear pack of the row is already the golden hex
-- The caller holds the seed. The library does not store it and does not open a socket
+- Both sides hold the same key, epoch and tag length, and load the direction they use
+- For one (key, epoch, direction) a `msg_id` is never sealed twice with different contents (the caller's duty; packbin cannot check it)
+- The replay counter the caller passes to open comes from bytes the tag covers (the `msg_id` or the associated data)
+- The library does not store the key and does not open a socket
 
 ### Data Flow
 
 | Step | From | To | Data | Format |
 |------|------|----|------|--------|
-| 1 | Opener | Waiter | 16 bytes | raw |
-| 2 | Opener | Waiter | payload | same length as clear pack |
-| 3 | Waiter | Opener | the row | the five fields |
+| 1 | Sender | Receiver | the body: clear part, ciphertext, tag | raw, at most 255 bytes; the associated data and the nonce are not sent |
+| 2 | Receiver | its caller | the plaintext and `FrameOpened` (the slot that opened it, the clear and plain lengths) | the caller's buffer, written only on success |
 
 ### Error Scenarios
 
 | Error | Where | Detection | Recovery |
 |-------|-------|-----------|----------|
-| Seed length is not 32, or join length is not 16 | Load or Join | the call returns nothing (C++: `false`) | 0 sessions |
-| The random function fails (C++) | Start | `start` returns `false` | the session does not open; the nonce output is unchanged |
-| Pack before start or join | Pack | no payload (C++: `BadValue`) | 0 payloads |
-| A payload is dropped | the next unpack on that direction | the row does not match | that direction stays out of step. There is no tag |
+| Key, epoch, tag length or direction out of range; a direction not loaded; `kind` above 15 | Load, Seal or Open | `BadValue` | nothing written; 0 sessions or 0 frames |
+| Body longer than 255 bytes; output buffer too short; body shorter than the clear part and the tag | Seal or Open | `TooLong`, `BufferFull`, `ShortPacket` | nothing written (seal zeroes what it wrote) |
+| A replayed or old frame | Open, before any hashing | `Duplicate` or `TooOld` | the frame is dropped; the window is unchanged |
+| A changed byte, a wrong key or epoch, or a frame replayed under another `msg_id` | Open | `TagMismatch` | the output buffer and the window are unchanged; callers count tag failures per sender |
+| A frame is lost | the link | the receiver never sees it | none needed: the next frame opens on its own |
 
 ### Performance Expectations
 
 | Metric | Target | Notes |
 |--------|--------|-------|
-| Payload length | equal to clear pack | added bytes 0 |
-| Eight languages (Go since loop 24, Swift since loop 26) | one payload | mismatched bytes 0 |
+| Added bytes | the tag length, 4, 8 or 16 bytes | the clear part and the ciphertext are the caller's bytes, unchanged in length |
+| Packages with frame mode (C#, Java, Rust, Swift; C++, Go, Python, TypeScript in loop 75) | the 157 frame rows | mismatched bytes 0 |
+| Rust heap-free core on the M4F image | the `frame` set within its bounds of 20,480 B flash and 1,991 B stack (`rust/embedded/limits.txt`) | measured 20,332 B and 1,728 B with Rust 1.98.1 (loop 74, unchanged by the removal) |

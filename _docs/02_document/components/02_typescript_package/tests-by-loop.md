@@ -51,4 +51,16 @@ Test files: `loop22-novalue-count.test.ts` (AZ-2410: three kinds, split bit and 
 
 ## Loop 24 (Go joins the ring; no TypeScript test change)
 
-Loop 24 added the Go package (AZ-2222, `components/07_go_package/`). No TypeScript source or test changed (batch report: the six suites have no source change). What is new for this package is its place in the ring: Go joins every kind both ways (`user`, `nested`, `boolflag`, `booltrue`, `bitwhen`, `session`, `roundflags`, `roundwhen`, `listgroup`, `dictgroup`, `listflags`), through `language-pair.sh` (114 Go lines in all, guarded by `ring-wiring.test.sh`; scenario FT-X-90). The hostile case file is unchanged at 65 cases and is now read by seven loaders (FT-X-87). TypeScript is Go's row-for-row reference (loop 24 fit decision 4): about 55 rows of its loop 18 to 23 tables were packed with node and compared with the Go tests, all equal; the keyed first-packet session vectors are also pinned in `go/session_test.go`.
+Loop 24 added the Go package (AZ-2222, `components/07_go_package/`). No TypeScript source or test changed (batch report: the six suites have no source change). What is new for this package is its place in the ring: Go joins every kind both ways (`user`, `nested`, `boolflag`, `booltrue`, `bitwhen`, `session`, `roundflags`, `roundwhen`, `listgroup`, `dictgroup`, `listflags`) (the `session` ring kind was retired in loop 74, ADR 009), through `language-pair.sh` (114 Go lines in all, guarded by `ring-wiring.test.sh`; scenario FT-X-90). The hostile case file is unchanged at 65 cases and is now read by seven loaders (FT-X-87). TypeScript is Go's row-for-row reference (loop 24 fit decision 4): about 55 rows of its loop 18 to 23 tables were packed with node and compared with the Go tests, all equal; the keyed first-packet session vectors are also pinned in `go/session_test.go`.
+
+## Loop 74: the stream session is removed (AZ-3288, ADR 009)
+
+Source: `_docs/03_implementation/batch_03_loop74_report.md`. The stream session tests are retired (deleted), the mixed files keep their non-session tests, and the frame and crypto rows did not move.
+
+| Test | Task | What changed |
+|------|------|--------------|
+| `session.test.ts` (AZ-2243), `session-payload-type.test.ts` | AZ-3288 | retired with `PackSession`: deleted |
+| `crypto-vectors.test.ts` (new, 45 tests) | AZ-3288 | the internal `src/crypto.ts` (was `src/session-pad.ts`) on the 27 rows of `fixtures/crypto/vectors.txt`; 6 mutant copies each fail on their own row; 10 refusals; the package entry exports none of the crypto names; four broken copies of `crypto.ts` each fail 9 to 16 tests |
+| `ecc-scheme.test.ts` (16 to 9), `ecc-dispatch-order.test.ts` (8 to 4), `int-range.test.ts` (12 to 11), `hostile.test.ts` (97 to 96), `support/hostile-cases.ts`, `support/hostile-worker.ts` | AZ-3288 | the non-session halves stay |
+
+Suite: `npm test` 2,446 passed, 0 failed (2,442 before); `tsc -p tsconfig.build.json --noEmit` exit 0; the built `dist/index.js` exports 30 names, none of them a session or crypto name; `dependencies` still lists only `@noble/hashes` 2.4.0.

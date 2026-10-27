@@ -182,9 +182,11 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 **Expected outcome**: a `static_assert` naming `f64`; the `f32` build succeeds (host stand-in until the avr-gcc task).
 **Max execution time**: 60s
 
-### FT-E-10: The session runs on the board
+### FT-E-10: The session runs on the board (retired, loop 74)
 
-**Summary**: The session runs on the board (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
+> **Retired in loop 74 (ADR 009, AZ-3286).** The C++ stream session (`session.hpp`, `session.cpp`, `os_random`) is removed, so no board runs this scenario; the text below is history. The core's internal crypto module (`src/core/crypto.cpp`) is checked on the host by `crypto_vectors_host_tests.cpp` (27 rows); C++ frame mode and its board run come with AZ-3292 (loop 75). The OS-call scan of the core moved to `host_tests.cpp`.
+
+**Summary**: The session ran on the board (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
 **Traces to**: cpp-microcontroller AC-10
 **Category**: Bytes
 

@@ -73,43 +73,43 @@
 | scheme-field-order AC-4 | Every Rust scheme build runs the check | FT-O-04 | Covered |
 | scheme-field-order AC-5 | The failure rule is written next to the order sentence | FT-O-05 | Covered |
 | scheme-field-order AC-6 | Existing packets keep their bytes | FT-O-06 | Covered |
-| pack-session AC-1 | Clear pack is unchanged | FT-P-01 | Covered |
-| pack-session AC-2 | One connection round-trips | FT-K-02 | Covered |
-| pack-session AC-3 | The waiter can send | FT-K-03 | Covered |
-| pack-session AC-4 | A second packet round-trips | FT-K-04 | Covered |
-| pack-session AC-5 | Two clients do not share a stream | FT-K-05 | Covered |
-| pack-session AC-6 | A bad setup creates nothing | FT-K-06 | Covered |
-| pack-session AC-7 | Pack before the connection is open fails | FT-K-07 | Covered |
-| pack-session AC-8 | The README shows both ways | FT-K-08 | Covered |
+| pack-session AC-1 | Clear pack is unchanged (still holds; the session it was compared with is retired, loop 74, ADR 009) | FT-P-01 | Covered |
+| pack-session AC-2 | One connection round-trips | FT-K-02 | Retired (loop 74, ADR 009) |
+| pack-session AC-3 | The waiter can send | FT-K-03 | Retired (loop 74, ADR 009) |
+| pack-session AC-4 | A second packet round-trips | FT-K-04 | Retired (loop 74, ADR 009) |
+| pack-session AC-5 | Two clients do not share a stream | FT-K-05 | Retired (loop 74, ADR 009) |
+| pack-session AC-6 | A bad setup creates nothing | FT-K-06 | Retired (loop 74, ADR 009) |
+| pack-session AC-7 | Pack before the connection is open fails | FT-K-07 | Retired (loop 74, ADR 009) |
+| pack-session AC-8 | The README shows both ways | FT-K-08 | Retired (loop 74, ADR 009) |
 | AZ-2019 AC-1 | Clear pack is unchanged | FT-P-01 | Covered |
-| AZ-2019 AC-2 | The opener and the waiter round-trip | FT-K-02 | Covered |
-| AZ-2019 AC-3 | The waiter sends | FT-K-03 | Covered |
-| AZ-2019 AC-4 | A second packet round-trips | FT-K-04 | Covered |
-| AZ-2019 AC-5 | Two sessions stay apart | FT-K-05 | Covered |
-| AZ-2019 AC-6 | Bad lengths create nothing | FT-K-06 | Covered |
-| AZ-2019 AC-7 | Pack before open fails | FT-K-07 | Covered |
-| AZ-2020 AC-1 | The ciphertext matches C# | FT-K-09 | Covered |
-| AZ-2020 AC-2 | The waiter recovers the row | FT-K-02 | Covered |
+| AZ-2019 AC-2 | The opener and the waiter round-trip | FT-K-02 | Retired (loop 74, ADR 009) |
+| AZ-2019 AC-3 | The waiter sends | FT-K-03 | Retired (loop 74, ADR 009) |
+| AZ-2019 AC-4 | A second packet round-trips | FT-K-04 | Retired (loop 74, ADR 009) |
+| AZ-2019 AC-5 | Two sessions stay apart | FT-K-05 | Retired (loop 74, ADR 009) |
+| AZ-2019 AC-6 | Bad lengths create nothing | FT-K-06 | Retired (loop 74, ADR 009) |
+| AZ-2019 AC-7 | Pack before open fails | FT-K-07 | Retired (loop 74, ADR 009) |
+| AZ-2020 AC-1 | The ciphertext matches C# | FT-K-09 | Retired (loop 74, ADR 009) |
+| AZ-2020 AC-2 | The waiter recovers the row | FT-K-02 | Retired (loop 74, ADR 009) |
 | AZ-2020 AC-3 | Clear pack is unchanged | FT-P-01 | Covered |
-| AZ-2020 AC-4 | Bad lengths create nothing | FT-K-06 | Covered |
-| AZ-2021 AC-1 | The ciphertext matches C# | FT-K-09 | Covered |
-| AZ-2021 AC-2 | The waiter recovers the row | FT-K-02 | Covered |
+| AZ-2020 AC-4 | Bad lengths create nothing | FT-K-06 | Retired (loop 74, ADR 009) |
+| AZ-2021 AC-1 | The ciphertext matches C# | FT-K-09 | Retired (loop 74, ADR 009) |
+| AZ-2021 AC-2 | The waiter recovers the row | FT-K-02 | Retired (loop 74, ADR 009) |
 | AZ-2021 AC-3 | Clear pack is unchanged | FT-P-01 | Covered |
-| AZ-2021 AC-4 | Bad lengths create nothing | FT-K-06 | Covered |
-| AZ-2022 AC-1 | The ciphertext matches C# | FT-K-09 | Covered |
-| AZ-2022 AC-2 | The waiter recovers the row | FT-K-02 | Covered |
+| AZ-2021 AC-4 | Bad lengths create nothing | FT-K-06 | Retired (loop 74, ADR 009) |
+| AZ-2022 AC-1 | The ciphertext matches C# | FT-K-09 | Retired (loop 74, ADR 009) |
+| AZ-2022 AC-2 | The waiter recovers the row | FT-K-02 | Retired (loop 74, ADR 009) |
 | AZ-2022 AC-3 | Clear pack is unchanged | FT-P-01 | Covered |
-| AZ-2022 AC-4 | Bad lengths create nothing | FT-K-06 | Covered |
-| AZ-2023 AC-1 | The ciphertext matches C# | FT-K-09 | Covered |
-| AZ-2023 AC-2 | The waiter recovers the row | FT-K-02 | Covered |
+| AZ-2022 AC-4 | Bad lengths create nothing | FT-K-06 | Retired (loop 74, ADR 009) |
+| AZ-2023 AC-1 | The ciphertext matches C# | FT-K-09 | Retired (loop 74, ADR 009) |
+| AZ-2023 AC-2 | The waiter recovers the row | FT-K-02 | Retired (loop 74, ADR 009) |
 | AZ-2023 AC-3 | Clear pack is unchanged | FT-P-01 | Covered |
-| AZ-2023 AC-4 | Bad lengths create nothing | FT-K-06 | Covered |
-| AZ-2024 AC-1 | The ciphertext matches C# | FT-K-09 | Covered |
-| AZ-2024 AC-2 | The waiter recovers the row | FT-K-02 | Covered |
+| AZ-2023 AC-4 | Bad lengths create nothing | FT-K-06 | Retired (loop 74, ADR 009) |
+| AZ-2024 AC-1 | The ciphertext matches C# | FT-K-09 | Retired (loop 74, ADR 009) |
+| AZ-2024 AC-2 | The waiter recovers the row | FT-K-02 | Retired (loop 74, ADR 009) |
 | AZ-2024 AC-3 | Clear pack is unchanged | FT-P-01 | Covered |
-| AZ-2024 AC-4 | Bad lengths create nothing | FT-K-06 | Covered |
-| AZ-2025 AC-1 | One ciphertext | FT-K-09 | Covered |
-| AZ-2025 AC-2 | A peer unpacks it | FT-K-09 | Covered |
+| AZ-2024 AC-4 | Bad lengths create nothing | FT-K-06 | Retired (loop 74, ADR 009) |
+| AZ-2025 AC-1 | One ciphertext | FT-K-09 | Retired (loop 74, ADR 009) |
+| AZ-2025 AC-2 | A peer unpacks it | FT-K-09 | Retired (loop 74, ADR 009) |
 | cpp-microcontroller AC-1 | The core builds the embedded way | FT-E-01 | Covered |
 | cpp-microcontroller AC-2 | No heap and no exceptions in a firmware image | FT-E-02 | Covered |
 | cpp-microcontroller AC-3 | The same bytes on the target CPU | FT-E-03 | Covered |
@@ -119,7 +119,7 @@
 | cpp-microcontroller AC-7 | Scheme order is checked without throwing | FT-E-07 | Covered |
 | cpp-microcontroller AC-8 | Strings and bytes are borrowed | FT-E-08 | Covered |
 | cpp-microcontroller AC-9 | `f64` needs an 8-byte double | FT-E-09 | Covered |
-| cpp-microcontroller AC-10 | The session runs on the board | FT-E-10 | Covered |
+| cpp-microcontroller AC-10 | The session runs on the board | FT-E-10 | Retired (loop 74, ADR 009) |
 | cpp-microcontroller AC-11 | Host programs use the core API | FT-E-11 | Covered |
 | cpp-microcontroller AC-12 | Installable from the embedded registries | FT-E-12 | Covered |
 | cpp-microcontroller AC-13 | Every target runs in CI | FT-E-13 | Covered |
@@ -138,8 +138,8 @@
 | AZ-2081 AC-4 | A u2 over 64 children is refused | FT-X-07 | Covered |
 | AZ-2081 AC-5 | Embedded runner and budgets hold | FT-E-05 | Covered |
 | AZ-2025 AC-3 | Clear pack still matches | FT-P-01 | Covered |
-| AZ-2026 AC-1 | Both examples are in the README | FT-K-08 | Covered |
-| AZ-2026 AC-2 | The session example matches the contract | FT-K-08 | Covered |
+| AZ-2026 AC-1 | Both examples are in the README | FT-K-08 | Retired (loop 74, ADR 009) |
+| AZ-2026 AC-2 | The session example matches the contract | FT-K-08 | Retired (loop 74, ADR 009) |
 | AZ-2120 AC-1 | C# `When` under a combined `Flags`: `Mode=1, Speed=7, Heading=90` packs `01 01 03 07 5a00` and unpacks to the same row | FT-X-13; tests: C# `FlagsWhenMemberTests.Ac3_Typed_ConditionHoldsAndBodyPresent_WritesTheBodyAndRoundTrips`, `Ac3_Dictionary_ConditionHoldsAndBodyPresent_WritesTheBodyAndRoundTrips` | Covered |
 | AZ-2120 AC-2 | The other five packages pack the same scheme to the C# bytes | FT-X-13; tests: C# `FlagsWhenMemberTests`, TypeScript `flags-when-member`, Python `test_flags_when_member`, Rust `flags_when_member_tests` + `flags_member_typed_tests`, Java `FlagsWhenMemberTest`, C++ `flags_when_member_host_tests` | Covered |
 | AZ-2120 AC-3 | `when` under `flags`, all six: `01 01 03 07 5a00`; `Mode=0` leaves the bit clear and round-trips | FT-X-13; tests: C# `FlagsWhenMemberTests`, TypeScript `flags-when-member`, Python `test_flags_when_member`, Rust `flags_when_member_tests` + `flags_member_typed_tests`, Java `FlagsWhenMemberTest`, C++ `flags_when_member_host_tests` | Covered |
@@ -456,7 +456,7 @@ The rows of loops 35 to 46 for compact strings, text hardening and the repairs (
 | Assessment24 D8, GO-5 | Covered (loop 25) | Go peak memory measured: F10 packet 625 MB at `maxSlots` 4,194,304, wide round 94 MB at the defaults | The slot ceiling is now a measured memory figure for Go (README memory bullet, loop 22 table) | `go/mem_test.go` behind the tag `packbin_memtest` (NFT-RES-LIM-05) |
 | Assessment26 CI, Review26 #3, SW-6, SW-9, SW-10 | BLOCKED | The Swift parts of `test.yml` ran only on the owner's Mac (host and the `swift:6.3.3` container); no tag was pushed (S-5) | A CI step that fails only on `ubuntu-latest` (runner Swift against `RING_SWIFT`, sanitizer ASLR, scaffold time); a consumer that cannot resolve the first tag | The first push to Actions (`dev`) and the first tag are the proof; the tag is the owner's decision, F44 stays with the owner |
 | Review26 #4, #5, #6, Loop26 platforms | Open (NOT RUN or NOT MEASURED) | Swift 6.0 toolchain and a Swift 6.0 consumer, Swift peak memory, ChaCha20 allocations, tvOS, watchOS, Android, Windows, WASI | A consumer on Xcode 16.0 cannot build this repository with swift-asn1 1.7.3 pinned (needs Swift 6.1); memory above the Go figures | Loop 27 handoff (`_docs/loops/loop26/notes26.md`) |
-| Assessment26 O1, O2, O3 | Open (owner decisions) | Flat key beside a given group or nested row; U11 with a shared name and the nested row not given; public `PackSession.start(_ nonce:)` | Behavior differs from TypeScript (O1, O2) or invites key-stream reuse (O3); no wire change | Loop 27 owner batch; the observed outcome is pinned by Swift `ParityProbeTests` (O1) |
+| Assessment26 O1, O2, O3 | Open (owner decisions) | Flat key beside a given group or nested row; U11 with a shared name and the nested row not given; public `PackSession.start(_ nonce:)` (O3 retired with the stream session, loop 74, ADR 009) | Behavior differs from TypeScript (O1, O2) or invites key-stream reuse (O3); no wire change | Loop 27 owner batch; the observed outcome is pinned by Swift `ParityProbeTests` (O1) |
 
 ## Loops 11 to 18: specs with no AC rows yet (Not verified)
 
@@ -481,3 +481,4 @@ Moved to [traceability-not-verified-loops-11-18.md](traceability-not-verified-lo
 <!-- autodev-step12-loop-update: loop 69 (AZ-3200 to AZ-3204), 2026-10-25, 28 rows added in traceability-matrix-loop-69.md (27 Covered, 1 Open: CI flash of the frame set) -->
 <!-- autodev-step12-loop-update: loop 70 (AZ-3231), 2026-10-25, 11 rows added in traceability-matrix-loop-70.md (10 Covered, 1 Open: CI figures of the M33F row) -->
 <!-- autodev-step12-loop-update: loop 71 (AZ-3232 to AZ-3235), 2026-10-25, 16 rows added in traceability-matrix-loop-71.md (blackbox-tests-24) (15 Covered, 1 Open: Android and iOS device runs) -->
+<!-- loop 74 (AZ-3291, ADR 009), 2026-10-27: the stream session rows (pack-session AC-2 to AC-8, AZ-2019 to AZ-2026 session ACs, cpp-microcontroller AC-10, Assessment26 O3) marked Retired; FT-K-02 to FT-K-09 and FT-E-10 kept as history -->

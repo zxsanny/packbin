@@ -31,7 +31,7 @@ Step 12 of loop 19 added AC rows for the specs the handoff named (AZ-2088, AZ-21
 | AZ-2103 | npm package as JavaScript + .d.ts | 6 | `.github/workflows/publish-npm.test.sh` |
 | AZ-2110 | Java zero-width elements and orphan flag bits | 5 | `java/src/test/java/packbin/ZeroWidthElementTest.java` |
 | AZ-2113 | Python refuses when and count names that point to a later field | 4 | `fixtures/hostile/README.md`, `python/tests/test_bool_placement.py`, `python/tests/test_zero_width_elements.py` |
-| AZ-2114 | Hostile session unpack tests for C#, Java and Rust | 2 | `csharp/tests/HostileSessionTests.cs`, `java/src/test/java/packbin/HostileSessionTest.java`, `rust/src/session_hostile_tests.rs` |
+| AZ-2114 (retired in loop 74, ADR 009) | Hostile session unpack tests for C#, Java and Rust | 2 | `csharp/tests/HostileSessionTests.cs`, `java/src/test/java/packbin/HostileSessionTest.java`, `rust/src/session_hostile_tests.rs` |
 | AZ-2115 | Pin the split-form reference bytes in TypeScript and C# tests | 1 | `csharp/tests/SplitFormReferenceTests.cs`, `typescript/tests/split-form-reference.test.ts` |
 | AZ-2119 | C# group as list or dict element throws KeyNotFoundException on unpack | 3 | `.github/workflows/drivers/csharp/HandoffElements.cs`, `csharp/tests/GroupElementTests.cs` |
 | AZ-2121 | Orphan flag-bit tests for every container | 4 | `csharp/tests/FlagScopeContainerTests.cs`, `java/src/test/java/packbin/FlagScopeContainerTest.java` |
@@ -61,7 +61,7 @@ Step 12 of loop 19 added AC rows for the specs the handoff named (AZ-2088, AZ-21
 | AZ-2238 | Three harness fixes: `publish-position.sh` installs with `cd` + `npm ci`, `examples.sh` captures `find` output before it picks the first line, `language-pair.sh` names a failing consumer | 5 | `.github/workflows/publish-gate.test.sh`, `.github/workflows/publish-position.test.sh`, `.github/workflows/ring-wiring.test.sh` |
 | AZ-2239 | `listgroup` ring in `language-pair.sh` for the packages that support the shapes | 6 | `.github/workflows/drivers/HandoffElements.java`, `.github/workflows/drivers/csharp/HandoffElements.cs`, `.github/workflows/drivers/handoff.py`, `.github/workflows/drivers/handoff.ts`, `.github/workflows/language-pair.sh` |
 | AZ-2240 | `publish-check.py` checks `exports`, `types` and the dist modules of the npm tarball, and the CMake file, LICENSE and host dependencies of the vcpkg port | 6 | `.github/workflows/publish-npm.test.sh`, `.github/workflows/publish-vcpkg.test.sh` |
-| AZ-2243 | TypeScript `PackSession.load` takes only a `Uint8Array` seed | 6 | `typescript/tests/session.test.ts` |
+| AZ-2243 (retired in loop 74, ADR 009) | TypeScript `PackSession.load` takes only a `Uint8Array` seed | 6 | `typescript/tests/session.test.ts` |
 | AZ-2246 | Java duplicate member names refused at construction | 11 | `java/src/test/java/packbin/DuplicateNamesTest.java` |
 
 ### No test or fixture file cites the id (Not verified: tests may exist under another name)
@@ -79,8 +79,8 @@ Step 12 of loop 19 added AC rows for the specs the handoff named (AZ-2088, AZ-21
 | AZ-2086 | Rust typed times | 6 |
 | AZ-2099 | Embedded harness fails a target on any failed command | 6 |
 | AZ-2100 | Python split form and repeat/times fixes | 9 |
-| AZ-2104 | Python seed check and safe star-import | 5 |
-| AZ-2105 | Rust session pack error | 4 |
+| AZ-2104 | Python seed check (retired in loop 74, ADR 009) and safe star-import | 5 |
+| AZ-2105 (retired in loop 74, ADR 009) | Rust session pack error | 4 |
 | AZ-2107 | Python zero-width elements | 4 |
 | AZ-2108 | TypeScript zero-width elements and orphan flag bits | 5 |
 | AZ-2109 | C# zero-width elements and orphan flag bits | 5 |
@@ -90,8 +90,8 @@ Step 12 of loop 19 added AC rows for the specs the handoff named (AZ-2088, AZ-21
 | AZ-2117 | Rust scope check covers name-based references | 4 |
 | AZ-2118 | Rust pack borrowed_count uses checked_add | 1 |
 | AZ-2122 | TypeScript __proto__ dict key, when-in-repeat round scope, BOM kept | 4 |
-| AZ-2123 | C# top-range u64/i64 overflow, capacity reserve, atomic session counter | 4 |
-| AZ-2124 | Java atomic PackSession send counter | 2 |
+| AZ-2123 (session counter part retired in loop 74, ADR 009) | C# top-range u64/i64 overflow, capacity reserve, atomic session counter | 4 |
+| AZ-2124 (retired in loop 74, ADR 009) | Java atomic PackSession send counter | 2 |
 | AZ-2125 | Rust cap collection capacity at the bytes left | 2 |
 | AZ-2129 | TypeScript constructor checks | 4 |
 | AZ-2130 | C# empty nested-row group | 4 |
@@ -105,9 +105,9 @@ Step 12 of loop 19 added AC rows for the specs the handoff named (AZ-2088, AZ-21
 | AZ-2189 | Rust map `times` refuses a per-name value it cannot align | 4 |
 | AZ-2192 | Python float fields accept only numbers and name the field on overflow | 6 |
 | AZ-2197 | TypeScript `when` reads what pack wrote | 6 |
-| AZ-2231 | Python `PackSession.load` takes only a bytes-like seed | 5 |
+| AZ-2231 (retired in loop 74, ADR 009) | Python `PackSession.load` takes only a bytes-like seed | 5 |
 | AZ-2236 | TypeScript refuses an anchored group as a list or dict element when the scheme is built | 7 |
-| AZ-2244 | Python `PackSession.start` and `join` take only a bytes-like nonce | 9 |
+| AZ-2244 (retired in loop 74, ADR 009) | Python `PackSession.start` and `join` take only a bytes-like nonce | 9 |
 | AZ-2245 | Python duplicate member names refused at construction | 10 |
 | AZ-2247 | Rust duplicate data member names refused at construction | 11 |
 | AZ-2248 | Python `times` short or empty list for a member under `flags` | 8 |

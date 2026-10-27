@@ -1,8 +1,10 @@
-# Blackbox Tests 5: Sessions
+# Blackbox Tests 5: Sessions (retired)
 
 Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 
-### FT-K-02: One connection round-trips
+> **Retired in loop 74 (ADR 009).** The stream session these scenarios test (a shared 32-byte seed, a 16-byte opener nonce, payloads the length of clear pack, no tag) is removed from all eight packages (AZ-3280 to AZ-3288), and no package or CI step runs FT-K-02 to FT-K-09 any more. The scenarios are kept as history and are not deleted. Frame mode, the one session, is tested by FT-X-156 to FT-X-160 ([blackbox-tests-22-loop69-frame-mode.md](blackbox-tests-22-loop69-frame-mode.md)) and FT-X-163 to FT-X-165 ([blackbox-tests-24-loop71-frame-mode-managed.md](blackbox-tests-24-loop71-frame-mode-managed.md)); the crypto primitives of C++, Go, Python and TypeScript by their 27-row crypto vector tests (loop 74).
+
+### FT-K-02: One connection round-trips (retired, loop 74)
 
 **Summary**: The opener sends 16 bytes, the waiter joins, and the waiter unpacks one packed position row.
 **Traces to**: pack-session AC-2, AZ-2019 AC-2, AZ-2020 AC-2, AZ-2021 AC-2, AZ-2022 AC-2, AZ-2023 AC-2, AZ-2024 AC-2
@@ -24,7 +26,7 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 **Expected outcome**: field mismatches 0. Added bytes 0.
 **Max execution time**: 1s
 
-### FT-K-03: The waiter sends
+### FT-K-03: The waiter sends (retired, loop 74)
 
 **Summary**: After one forward packet, the waiter packs the same row and the opener unpacks it.
 **Traces to**: pack-session AC-3, AZ-2019 AC-3
@@ -45,7 +47,7 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 **Expected outcome**: field mismatches 0.
 **Max execution time**: 1s
 
-### FT-K-04: A second packet on the same connection
+### FT-K-04: A second packet on the same connection (retired, loop 74)
 
 **Summary**: A second row on the same direction unpacks as that second row.
 **Traces to**: pack-session AC-4, AZ-2019 AC-4
@@ -65,7 +67,7 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 **Expected outcome**: field mismatches 0.
 **Max execution time**: 1s
 
-### FT-K-05: Two sessions stay apart
+### FT-K-05: Two sessions stay apart (retired, loop 74)
 
 **Summary**: Two openers from one seed and two different 16-byte values do not recover each other's row.
 **Traces to**: pack-session AC-5, AZ-2019 AC-5
@@ -86,7 +88,7 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 **Expected outcome**: original rows returned 0.
 **Max execution time**: 1s
 
-### FT-K-06: A bad setup creates nothing
+### FT-K-06: A bad setup creates nothing (retired, loop 74)
 
 **Summary**: A seed whose length is not 32, or a join value whose length is not 16, creates no session.
 **Traces to**: pack-session AC-6, AZ-2019 AC-6, AZ-2020 AC-4, AZ-2021 AC-4, AZ-2022 AC-4, AZ-2023 AC-4, AZ-2024 AC-4
@@ -106,7 +108,7 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 **Expected outcome**: sessions created 0.
 **Max execution time**: 1s
 
-### FT-K-07: Pack before the connection is open
+### FT-K-07: Pack before the connection is open (retired, loop 74)
 
 **Summary**: A loaded seed that has not started or joined produces no payload.
 **Traces to**: pack-session AC-7, AZ-2019 AC-7
@@ -127,7 +129,7 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 **Expected outcome**: payloads produced 0.
 **Max execution time**: 1s
 
-### FT-K-08: The README shows clear pack and one session
+### FT-K-08: The README shows clear pack and one session (retired, loop 74)
 
 **Summary**: The README keeps a clear pack example and shows one session that sends 16 bytes once.
 **Traces to**: pack-session AC-8, AZ-2026 AC-1, AZ-2026 AC-2
@@ -148,7 +150,7 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 **Expected outcome**: session examples 1. Missing operations 0. The session example has one 16-byte send.
 **Max execution time**: 1s
 
-### FT-K-09: Six languages, one session payload
+### FT-K-09: Six languages, one session payload (retired, loop 74)
 
 **Summary**: Six openers with one seed and one 16-byte value pack the same 13-byte payload, and a waiter in another language unpacks it.
 **Traces to**: AZ-2025 AC-1, AZ-2025 AC-2, AZ-2020 AC-1, AZ-2021 AC-1, AZ-2022 AC-1, AZ-2023 AC-1, AZ-2024 AC-1

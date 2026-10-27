@@ -75,7 +75,7 @@ Each criterion, its tests and the scenario that carries it (FT-X ids in [blackbo
 | GO-3 TypeScript parity rows | `parity_bigint_test.go`, `parity_loop20_test.go`, `parity_flags_when_test.go`, `parity_fields_test.go`, `parity_reference_test.go`, `u11_test.go`, `split_rounds_test.go`, `round_lists_test.go` | FT-X-85, FT-X-86 |
 | GO-4 65 hostile cases | `hostile_loader_test.go` (10 unpack, 2 limit, 15 construct), `hostile_pack_test.go` (38 pack), `fixtures/hostile/check-cases.sh` | FT-X-87 |
 | GO-5 round limits, fuzz | `limits_test.go`, `limits_pack_test.go`, `limits_raised_test.go`, `limits_width_test.go`, `limits_cost_test.go`, `fuzz_unpack_test.go` (`FuzzUnpack` 60 s in `run-suite.sh go`) | FT-X-88 |
-| GO-6 session | `session_test.go`, `session_hostile_test.go` | FT-X-89 |
+| GO-6 session (retired in loop 74, ADR 009) | `session_test.go`, `session_hostile_test.go` (deleted) | FT-X-89 (retired) |
 | GO-7 ring | `language-pair.sh` Go lines, `ring-wiring.test.sh` | FT-X-90 |
 | GO-8 speed | `speed_test.go` | FT-X-91 |
 | GO-9 CI suite | `run-suite.test.sh`, `report-row.test.sh`, the `go` compose service | FT-X-92 |
@@ -93,7 +93,7 @@ All run in the `go` service. The Go suite reaches the same rows as the TypeScrip
 
 ## Loops 19 and later
 
-See [tests-by-loop.md](tests-by-loop.md) (loop 24 section).
+See [tests-by-loop.md](tests-by-loop.md) (loop 24 section; loop 74 section: the stream session tests retired, ADR 009).
 
 ## Test Data Management
 
@@ -106,7 +106,8 @@ See [tests-by-loop.md](tests-by-loop.md) (loop 24 section).
 | short | a buffer that ends inside a field | inline in the tests | under 1 KB |
 | hostile | the 65 cases of `fixtures/hostile/cases.txt` | read by path by the Go loaders | 65 cases |
 | fuzz seeds | `go/testdata/fuzz/FuzzUnpack/` (56 files): golden, ring payloads, hostile unpack and limit packets | committed | 4000 bytes in all |
-| session | seed bytes 1..32, value `01` + 15 zero bytes | inline in `session_test.go` | 48 bytes |
+| session (retired in loop 74, ADR 009) | seed bytes 1..32, value `01` + 15 zero bytes | was inline in `session_test.go` | 48 bytes |
+| crypto (loop 74) | the 27 rows of `fixtures/crypto/vectors.txt` | read by `crypto_vectors_test.go` | about 11 KB |
 
 **Setup procedure**:
 1. `docker compose -f docker-compose.test.yml run --rm go` (builds nothing on the host; Go is not installed on the owner's Mac)

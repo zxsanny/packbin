@@ -26,8 +26,8 @@ In-crate tests (`frame_core_tests.rs`): every single bit of `ad`, clear part, ci
 
 ## FT-X-159: refusals, hostile input, in-place load, sizes
 
-`frame_hostile_tests.rs`: refusal kinds with no partial output, 2,000 random hostile bodies (no panic, output untouched on failure), a frame call on a stream session and the reverse refused (`session` on), `load_frame_in_place` equals `load_frame` and replaces keys, a session with stream state is refused frame keys, 300 random round trips, a 5,000-step model of the replay window; `size_of`: `ReplayWindow` 16 B, `MacKey` 68 B, frame-only `Session` 588 B.
+`frame_hostile_tests.rs`: refusal kinds with no partial output, 2,000 random hostile bodies (no panic, output untouched on failure), a frame call on a stream session and the reverse refused (`session` on; retired in loop 74, ADR 009), `load_frame_in_place` equals `load_frame` and replaces keys, a session with stream state is refused frame keys, 300 random round trips, a 5,000-step model of the replay window; `size_of`: `ReplayWindow` 16 B, `MacKey` 68 B, frame-only `Session` 588 B.
 
 ## FT-X-160: frame set on the Cortex-M4F image
 
-Embedded stage `frame` set (`rust/embedded`): the probe seals and opens E1 with a window and verifies E4 on QEMU `mps2-an386`; 19,772 B flash (limit 20,480 B), 1,896 B stack (limit 1,991 B), 0 B RAM, no heap or panic symbol, no stream-session symbol (`stream_hits`); base, text, ecc and session figures equal to the run on the commit before (14,700 / 456, 26,632 / 2,760, 17,980 / 760, 18,404 / 1,832). CI figures are read after the push.
+Embedded stage `frame` set (`rust/embedded`): the probe seals and opens E1 with a window and verifies E4 on QEMU `mps2-an386`; 19,772 B flash (limit 20,480 B), 1,896 B stack (limit 1,991 B), 0 B RAM, no heap or panic symbol, no stream-session symbol (retired in loop 74, ADR 009: `stream_hits`); base, text, ecc and session figures equal to the run on the commit before (14,700 / 456, 26,632 / 2,760, 17,980 / 760, 18,404 / 1,832). CI figures are read after the push.

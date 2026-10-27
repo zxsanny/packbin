@@ -4,7 +4,7 @@
 |----|----------|--------|----------|
 | AZ-3200 AC-1 | every byte of frame mode is determined by the contract | Covered | FT-X-157 (E1 to E5 recomputed by `independent_check.py`, written from the contract text) |
 | AZ-3200 AC-2 | E1 to E5 follow from the contract | Covered | FT-X-157; 5 of 5 match |
-| AZ-3200 AC-3 | stream mode unchanged | Covered | contract diff (stream text kept); default Rust suite 831 passed; session tests 13 and 22 passed |
+| AZ-3200 AC-3 (stream mode retired in loop 74, ADR 009) | stream mode unchanged | Covered | contract diff (stream text kept); default Rust suite 831 passed; session tests 13 and 22 passed |
 | AZ-3200 AC-4 | scope recorded (ADR-008, R-08 exception) | Covered | ADR-008, `restrictions.md`, `problem.md`, `acceptance_criteria.md`, `architecture.md` |
 | AZ-3200 AC-5 | open order and refusals | Covered | FT-X-158 (replay before MAC, no plaintext before the tag, window untouched on failure) |
 | AZ-3200 AC-6 | uniqueness rule in bold | Covered | README "Frame session", contract, rustdoc of `seal_frame` |
@@ -21,7 +21,7 @@
 | AZ-3203 AC-4 | previous slot | Covered | FT-X-158 |
 | AZ-3203 AC-5 | MAC-only | Covered | FT-X-157, FT-X-158 (`MacKey` 68 B) |
 | AZ-3203 AC-6 | cost per message | Covered | FT-X-158 (counters: at most 4 blocks, 6 compressions) |
-| AZ-3203 AC-7 | stream unchanged | Covered | default suite, session tests; ring in step 11 |
+| AZ-3203 AC-7 (stream mode retired in loop 74, ADR 009) | stream unchanged | Covered | default suite, session tests; ring in step 11 |
 | AZ-3203 AC-8 | refusals and hostile input | Covered | FT-X-159 |
 | AZ-3203 AC-9 | sizes | Covered | FT-X-159 (16 B, 68 B, 588 B frame-only) |
 | AZ-3204 AC-1 | device image | Covered | FT-X-160 (19,772 B, 1,896 B; round trip and verify on the device) |

@@ -414,11 +414,11 @@ Run by `make test` in `cpp/` and by `cpp/embedded/run.sh` (the `cpp-embedded` an
 
 | Test | What it proves | Where |
 |------|----------------|-------|
-| Core suites | scalars, schemes, grouped kinds, counted kinds, containers and the session, built with `-fno-exceptions -fno-rtti`. Since loop 16 (AZ-2135) `grouped_tests.cpp` also pins the split-bit rules: a flag byte read inside a `when` is not seen by a bit after it (`01 00 01 06` for `{k: 0, b: 6}`, `01 01 01 01 05 06` for `{k: 1, a: 5, b: 6}`), a scheme whose only flag byte for a bit sits inside a `when` is `SchemeInvalid` naming the bit, sibling `when` branches keep their own bytes, and a `when` inside a round gives the round's byte back when it ends | `cpp/tests/core/*_tests.cpp`, `make test` |
+| Core suites | scalars, schemes, grouped kinds, counted kinds and containers (the session suites were retired in loop 74, ADR 009; the 27 crypto rows run on the host in `crypto_vectors_host_tests.cpp`), built with `-fno-exceptions -fno-rtti`. Since loop 16 (AZ-2135) `grouped_tests.cpp` also pins the split-bit rules: a flag byte read inside a `when` is not seen by a bit after it (`01 00 01 06` for `{k: 0, b: 6}`, `01 01 01 01 05 06` for `{k: 1, a: 5, b: 6}`), a scheme whose only flag byte for a bit sits inside a `when` is `SchemeInvalid` naming the bit, sibling `when` branches keep their own bytes, and a `when` inside a round gives the round's byte back when it ends | `cpp/tests/core/*_tests.cpp`, `make test` |
 | Compile-fail cases | ten cases that must not compile and must print the expected text (`pack_without_scheme`, `f64_needs_8_byte_double`, `scheme_gap`, `scheme_repeated_id`, `scheme_wrong_anchor`, `scheme_when_ahead`, `flags_overflow`, `bool_outside_flags`, `empty_group_outside_flags`, `u2_too_wide`) | `cpp/tests/compile-fail/`, `make compile-fail` |
 | Hostile vectors | every `unpack` and `construct` case of `fixtures/hostile/cases.txt` (17 of the 19) returns an error value or refuses the scheme, and returns within the time guard; the two `limit` cases are skipped, because C++ unpacks into caller-owned fixed arrays and has no round limit (AZ-2220) | `cpp/tests/core/hostile_host_tests.cpp` |
 | Cortex-M0+ build | 0 errors, 0 warnings, 0 references to `__cxa_*` or the heap | `cpp-m0plus` |
-| Cortex-M3 on QEMU `mps2-an385` | every vector run equals the number asserted (241 `expect(` calls in the six vector files after loop 16, 223 before); malloc and new wrapper calls are 0; session vectors; one image runs at most 300 seconds (`qemu_timeout_s`), and a hung image is killed and fails the target | `cpp-m3-qemu` |
+| Cortex-M3 on QEMU `mps2-an385` | every vector run equals the number asserted (241 `expect(` calls in the six vector files after loop 16, 223 before); malloc and new wrapper calls are 0; session vectors until loop 74 (retired, ADR 009: the vector runners assert 268 rows, 290 before); one image runs at most 300 seconds (`qemu_timeout_s`), and a hung image is killed and fails the target | `cpp-m3-qemu` |
 | Cortex-M4F size and stack | flash for the core plus a 14-field table ≤ 8192 bytes; deepest pack or unpack ≤ 512 bytes of stack; `.data` and `.bss` 0. Measured after loop 16: 7784 bytes of flash (7728 before) and 488 bytes of stack | `cpp-m4f` |
 | Cortex-M33F (nRF54L15 core) on QEMU `mps2-an505`, whole core | the whole core builds and runs (string codec and message error correction on, `-mcpu=cortex-m33 -mfloat-abi=hard -mfpu=fpv5-sp-d16`); all-kinds image flash ≤ 65,536 bytes (pin `m33f_flash_pin` 25,720 B, loop 68); deepest pack or unpack stack net of the meter ≤ 8,192 bytes (pin `m33f_stack_pin` 724 B); `.data` and `.bss` 0; the all-kinds packet equals the Cortex-M3 packet; 290 vectors run of 290 asserted; code linked at the secure alias 0x10000000 and RAM at 0x38000000 (`arm/mps2-an505.ld`) | `cpp-m33f` |
 | s390x big-endian on QEMU user | the same vectors, the same bytes | `cpp-s390x` |
@@ -446,7 +446,7 @@ The consumer check uses the vcpkg of the GitHub runner (`VCPKG_INSTALLATION_ROOT
 
 ## Loops 19 and later
 
-See [tests-by-loop.md](tests-by-loop.md) (loop 19 to loop 23 sections, moved in loop 23; loop 24 adds Go to the ring, no test change here).
+See [tests-by-loop.md](tests-by-loop.md) (loop 19 to loop 23 sections, moved in loop 23; loop 24 adds Go to the ring, no test change here; loop 74 retires the stream session tests, ADR 009).
 
 ## Test Data Management
 

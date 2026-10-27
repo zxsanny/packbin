@@ -75,7 +75,7 @@ Each criterion, its tests and the scenario that carries it (FT-X ids in [blackbo
 | SW-3 TypeScript parity rows | `ParityLoop20Tests`, `ParityFlagsWhenTests`, `ParityFieldsTests`, `ParityReferenceTests`, `ParityBigintTests`, `ParityProbeTests`, `U11Tests`, `SchemeCheckTests`, `ConstructionTests`, `EqCheckTests`, `RoundValueTests`, `SplitRoundTests` | FT-X-126, FT-X-127 |
 | SW-4 65 hostile cases | `HostileTests` (10 unpack, 2 limit, 15 construct, 38 pack, wrong-rule self-tests), `NoTrapTests`, `RoundNoTrapTests`, `fixtures/hostile/check-cases.sh` | FT-X-128 |
 | SW-5 round limits, fuzz | `LimitSurfaceTests`, `RoundLimitTests`, `LimitEdgeTests`, `PackRoundCapTests`, `PackBudgetTests`, `SlotWidthTests`, `FuzzTests` (60 s in `run-suite.sh swift`) | FT-X-129 |
-| SW-6 session, RFC 8439 | `SessionTests`, `SessionHostileTests`, `ChaCha20Tests` | FT-X-130 |
+| SW-6 session (retired in loop 74, ADR 009), RFC 8439 | `ChaCha20Tests` (`SessionTests` and `SessionHostileTests` deleted in loop 74) | FT-X-130 (session part retired) |
 | SW-7 ring | `language-pair.sh` Swift lines, `ring-wiring-swift.test.sh` | FT-X-131 |
 | SW-8 speed | `SpeedTests` | FT-X-132 |
 | SW-9 CI suite | `run-suite-swift.test.sh`, `run-suite.test.sh`, `report-row.test.sh`, the `swift` compose service | FT-X-133 |
@@ -93,7 +93,7 @@ The Swift suite reaches the same rows as the TypeScript and Go tables: `maxRound
 
 ## Loops 26 and later
 
-See [tests-by-loop.md](tests-by-loop.md) (loop 26 section).
+See [tests-by-loop.md](tests-by-loop.md) (loop 26 section; loop 74 section: the stream session tests retired, ADR 009).
 
 ## Test Data Management
 
@@ -106,7 +106,7 @@ See [tests-by-loop.md](tests-by-loop.md) (loop 26 section).
 | short | a buffer that ends inside a field, one trailing byte | inline in `ShortTrailingTests` | under 1 KB |
 | hostile | the 65 cases of `fixtures/hostile/cases.txt` | read by path by the Swift loaders (`HostileLoader.swift` and siblings) | 65 cases |
 | fuzz corpus | `fixtures/hostile/fuzz/corpus.txt`: 28 inputs (12 unpack and limit packets of `cases.txt`, 16 from Go's seed corpus) | committed | one line each |
-| session | seed bytes 1..32, value `01` + 15 zero bytes; RFC 8439 §2.3.2 and §2.4.2 | inline in `SessionTests.swift`, `ChaCha20Tests.swift` | under 1 KB |
+| session (retired in loop 74, ADR 009); RFC 8439 | seed bytes 1..32, value `01` + 15 zero bytes (retired); RFC 8439 §2.3.2 and §2.4.2 | inline in `ChaCha20Tests.swift` (`SessionTests.swift` deleted) | under 1 KB |
 
 **Setup procedure**:
 1. On the Mac: `swift test` at the repository root with the `-F` and rpath flags of `_docs/AGENT_GOTCHAS.md`; one `swift build` or `swift test` at a time (SwiftPM locks `.build`)

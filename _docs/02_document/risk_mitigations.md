@@ -186,7 +186,7 @@ The contract lists every `t` for `n` = 1, 2, 4, 8 and 16. Rows above are a selec
 
 **Trigger conditions**: A Cortex-M4F caller declares parity bytes in a scheme, or a change drops `PACKBIN_NO_ECC` from the Cortex-M4F stage of `cpp/embedded/arm.sh`.
 
-**Affected components**: C++ package (`ecc.hpp`, `codec.hpp`, `session.hpp`, `cpp/embedded/arm.sh`), README ("Error correction"), `components/05_cpp_package/description.md`
+**Affected components**: C++ package (`ecc.hpp`, `codec.hpp`, `cpp/embedded/arm.sh`; `session.hpp` until it was removed with the stream session, retired in loop 74, ADR 009), README ("Error correction"), `components/05_cpp_package/description.md`
 
 **Mitigation strategy**:
 1. The feature is compiled out with `PACKBIN_NO_ECC`; the Cortex-M4F target defines it for every object, and the build gate keeps the flash and stack numbers of the unprotected image

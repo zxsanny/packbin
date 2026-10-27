@@ -15,7 +15,7 @@ Each AC of AZ-3232 (C#), AZ-3233 (Java) and AZ-3234 (Swift) has the same number 
 | AZ-3232/3233/3234 AC-9 | tag compare folds every byte | Covered | C# `FrameWipeAndCompareTests`; Java `FrameLifecycleTest`; Swift `FrameWipeTests` |
 | AZ-3232/3233/3234 AC-10 | wipe on release, use after release is `BadValue` | Covered | the same classes as AC-9 |
 | AZ-3232/3233/3234 AC-11 | 8 threads seal equals single-thread | Covered | C# `FrameConcurrencyTests`; Java `FrameLifecycleTest`; Swift `ConcurrencyTests` (thread sanitizer) |
-| AZ-3232/3233/3234 AC-12 | stream unchanged; targets (net10.0 and netstandard2.0; API 26 and release 17; strict concurrency) | Covered | existing session suites + step 11 csharp, java, swift stages |
+| AZ-3232/3233/3234 AC-12 (stream session suites retired in loop 74, ADR 009) | stream unchanged; targets (net10.0 and netstandard2.0; API 26 and release 17; strict concurrency) | Covered | existing session suites + step 11 csharp, java, swift stages |
 | AZ-3235 AC-1 | README examples equal the example tests | Covered | `scripts/frame/readme-examples.sh` (PASS x3; CI step added in `test.yml`) |
 | AZ-3235 AC-2 | components and layout list every new type and file | Covered | `components/{01,06,08}_*/description.md`, `module-layout.md` (reviewed) |
 | AZ-3235 AC-3 | contract note names the three consumers, version unchanged | Covered | `pack-session.md` Change Log and Consumers |

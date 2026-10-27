@@ -52,4 +52,17 @@ Test files: `test_loop22_parity.py` (AZ-2410 rows 56 to 56d and plain, AZ-2413 r
 
 ## Loop 24 (Go joins the ring; no Python test change)
 
-Loop 24 added the Go package (AZ-2222, `components/07_go_package/`). No Python source or test changed (batch report: the six suites have no source change). What is new for this package is its place in the ring: Go joins `user`, `nested`, `boolflag`, `booltrue`, `bitwhen`, `session`, `listgroup`, `dictgroup` and `listflags` both ways (Python is not in the `roundflags` and `roundwhen` rings), through `language-pair.sh` (114 Go lines in all, guarded by `ring-wiring.test.sh`; scenario FT-X-90). The hostile case file is unchanged at 65 cases and is now read by seven loaders (FT-X-87). Python 3.14 in Docker was used to check the U6 row (a `times` count above 2^53) for Go.
+Loop 24 added the Go package (AZ-2222, `components/07_go_package/`). No Python source or test changed (batch report: the six suites have no source change). What is new for this package is its place in the ring: Go joins `user`, `nested`, `boolflag`, `booltrue`, `bitwhen`, `session`, `listgroup`, `dictgroup` and `listflags` both ways (Python is not in the `roundflags` and `roundwhen` rings) (the `session` ring kind was retired in loop 74, ADR 009), through `language-pair.sh` (114 Go lines in all, guarded by `ring-wiring.test.sh`; scenario FT-X-90). The hostile case file is unchanged at 65 cases and is now read by seven loaders (FT-X-87). Python 3.14 in Docker was used to check the U6 row (a `times` count above 2^53) for Go.
+
+## Loop 74: the stream session is removed (AZ-3283, ADR 009)
+
+Source: `_docs/03_implementation/batch_01_loop74_report.md`. The stream session tests are retired (deleted), the mixed files keep their non-session tests, and the frame and crypto rows did not move.
+
+| Test | Task | What changed |
+|------|------|--------------|
+| `test_session.py` (AZ-2104, AZ-2231, AZ-2244), `test_session_pad_after_type.py`, `test_session_payload_type.py` | AZ-3283 | retired with `_session.py`: deleted |
+| `test_crypto_vectors.py` (new, 41 cases) | AZ-3283 | `_crypto.py` (was `_session_pad.py`) on the 27 rows (SHA-256 6, HMAC 8, HKDF 3, ChaCha20 block 6, XOR 4); 6 in-suite mutant copies each fail on exactly the changed row; 7 guard cases (key and nonce size, counter range, a stream past the last block counter, HKDF length) |
+| `test_ecc_session_text_dispatch.py` renamed `test_ecc_text_dispatch.py` (79 to 71) | AZ-3283 | EC-10 out; the text dispatch tests stay |
+| `test_ecc_dispatch_order.py` (6 to 4), `test_hostile_unpack.py` (16, one plain-unpack test moved in), `test_star_import.py` (5 to 7) | AZ-3283 | the duplicate-type-before-parity-mix check runs on `BinaryPacker.unpack`; no stream name is exported |
+
+Suite: 3,793 passed, 0 failed, 0 skipped on Python 3.14 (3,877 before); `pyproject.toml` `dependencies = []`.

@@ -434,7 +434,7 @@ Source: `_docs/03_implementation/batch_01_loop17_report.md`, `batch_02_loop17_re
 | `LoneRoundValueTests` (26) | AZ-2182 | a lone value goes to every round; a lone byte run or list for a `Bytes`, `Sized`, `Bits` or `Packed` name is refused | 20 of 26 |
 | `GroupElementTests` (10) | AZ-2119 | a `List` or `Dict` of groups unpacks, typed and dictionary | 7 of 10 |
 | `StrictNumberTests` (50) | AZ-2191 | dictionary rows pack numbers strictly | 25 of 50 |
-| `HostileSessionTests` (6), `SplitFormReferenceTests` (3), `FlagScopeContainerTests` (9), `SessionPrivates` (helper) | AZ-2114, AZ-2115, AZ-2121 | tests only: hostile session inputs, the split-form reference scheme (`010901045a00`, `010100`), flag-byte scopes of containers | 0 (pins) |
+| `HostileSessionTests` (6; retired in loop 74, ADR 009), `SplitFormReferenceTests` (3), `FlagScopeContainerTests` (9), `SessionPrivates` (helper; retired in loop 74) | AZ-2114, AZ-2115, AZ-2121 | tests only: hostile session inputs, the split-form reference scheme (`010901045a00`, `010100`), flag-byte scopes of containers | 0 (pins) |
 
 Changed by owner decision (2026-10-06, AZ-2181 reverses C# AZ-2088 AC-6): six `HostileUnpackTests.Counts.cs` float-count tests now assert the construction error, and three `WrittenCountTests` sites expect `ArgumentException`.
 
@@ -459,7 +459,7 @@ Existing tests changed or deleted (the decided concerns reverse them; none weake
 
 ## Loops 19 and later
 
-See [tests-by-loop.md](tests-by-loop.md) (loop 19 to loop 23 sections, moved in loop 23; loop 24 adds Go to the ring, no test change here).
+See [tests-by-loop.md](tests-by-loop.md) (loop 19 to loop 23 sections, moved in loop 23; loop 24 adds Go to the ring, no test change here; loop 71 frame mode; loop 74 retires the stream session tests, ADR 009).
 
 ## Test Data Management
 

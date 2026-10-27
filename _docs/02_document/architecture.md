@@ -64,8 +64,8 @@ packbin is a library: the caller writes a field list, pack and unpack move the e
 | Language | Rust | current stable at first publish; a heap-free `nostd` API for firmware (`default-features = false`, loop 50) | A native node, or Cortex-M firmware (meshbell) |
 | Language | C++ | C++17, freestanding core (`-fno-exceptions -fno-rtti`, no heap) | A C++ program or 32-bit firmware: Cortex-M, ESP32, RP2040 |
 | Language | Java | Java 17 (`--release 17`), Android API 26 | A Java program, including Android |
-| Language | Go | Go 1.26 minimum (`go 1.26.0` in `go.mod`); CI and compose use `golang:1.27`; standard library plus `golang.org/x/crypto` (the session only), no cgo | A Go program or service |
-| Language | Swift | `swift-tools-version: 6.0` (Swift 6 language mode), iOS 15, macOS 12; CI and compose run the suite on `swift:6.3.3`; one dependency, `swift-crypto` (HKDF-SHA256 for the session), linked only off Apple platforms (CryptoKit there); ChaCha20 in the package | A Swift program on iOS, macOS or Linux |
+| Language | Go | Go 1.26 minimum (`go 1.26.0` in `go.mod`); CI and compose use `golang:1.27`; standard library plus `golang.org/x/crypto` (ChaCha20 in the internal crypto module `go/crypto.go`, kept for the frame-mode port of loop 75, ADR 009), no cgo | A Go program or service |
+| Language | Swift | `swift-tools-version: 6.0` (Swift 6 language mode), iOS 15, macOS 12; CI and compose run the suite on `swift:6.3.3`; one dependency, `swift-crypto` (HKDF-SHA256 and HMAC-SHA256 for frame mode), linked only off Apple platforms (CryptoKit there); ChaCha20 in the package | A Swift program on iOS, macOS or Linux |
 | Framework | none | — | A library, not an application |
 | Database | none | — | No stored packets |
 | Cache | none | — | Each call is independent |
@@ -168,7 +168,9 @@ There is no inbound vendor callback. The bytes the library reads are the caller'
 
 ## 7. Security Architecture
 
-**Authentication**: none in clear pack and stream sessions; frame mode of the session (ADR-008, `pack-session.md` 2.0.0) encrypts and authenticates with a truncated HMAC-SHA256 tag, with keys the caller holds
+**Authentication**: none in clear pack; frame mode, packbin's only session (ADR-008, ADR-009, `pack-session.md` 3.0.0), encrypts and authenticates with a truncated HMAC-SHA256 tag, with keys the caller holds. Frame mode is in C#, Java, Rust and Swift under one set of type names (`FrameSession`, `FrameConfig`, `FrameDirection`, `FrameDirections`, `FrameSlot`, `FrameOpened`, `MsgContext`, `ReplayWindow`, `Freshness`, `MacKey`; Java has all of them except `FrameConfig` and `FrameDirections` (its load takes the tag length and the directions as arguments) and adds `FrameSealed`); C++, Go, Python and TypeScript have no session until their frame-mode ports (loop 75) and keep SHA-256, HMAC-SHA256, HKDF-SHA256 and ChaCha20 in an internal, unexported module checked on the 27 rows of `fixtures/crypto/vectors.txt`. The stream session (a shared seed, an opener nonce, no tag) was removed in loop 74
+
+> See ADR 008 (Frame mode authenticates; stream mode does not) and ADR 009 (Frame mode is the only session; the stream session is removed).
 
 **Authorization**: none
 

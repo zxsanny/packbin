@@ -53,4 +53,16 @@ Test files: `times_count_zero_host_tests.cpp` (AZ-2416: `az2416_empty_when_round
 
 ## Loop 24 (Go joins the ring; no C++ test change)
 
-Loop 24 added the Go package (AZ-2222, `components/07_go_package/`). No C++ source or test changed (batch report: the six suites have no source change). What is new for this package is its place in the ring: Go joins `user`, `nested`, `boolflag`, `booltrue`, `bitwhen`, `session`, `roundflags` and `roundwhen` both ways, built through `ring-cxx.sh` as before (C++ is not in the list and dict rings), through `language-pair.sh` (114 Go lines in all, guarded by `ring-wiring.test.sh`; scenario FT-X-90). The hostile case file is unchanged at 65 cases and is now read by seven loaders (FT-X-87).
+Loop 24 added the Go package (AZ-2222, `components/07_go_package/`). No C++ source or test changed (batch report: the six suites have no source change). What is new for this package is its place in the ring: Go joins `user`, `nested`, `boolflag`, `booltrue`, `bitwhen`, `session`, `roundflags` and `roundwhen` both ways, built through `ring-cxx.sh` as before (C++ is not in the list and dict rings) (the `session` ring kind was retired in loop 74, ADR 009), through `language-pair.sh` (114 Go lines in all, guarded by `ring-wiring.test.sh`; scenario FT-X-90). The hostile case file is unchanged at 65 cases and is now read by seven loaders (FT-X-87).
+
+## Loop 74: the stream session is removed (AZ-3286, ADR 009)
+
+Source: `_docs/03_implementation/batch_02_loop74_report.md`. The stream session tests are retired (deleted), the mixed files keep their non-session tests, and the frame and crypto rows did not move.
+
+| Test | Task | What changed |
+|------|------|--------------|
+| `tests/core/session_tests.cpp`, `session_host_tests.cpp`, `ecc_session_host_tests.cpp` | AZ-3286 | retired with `session.hpp`, `session.cpp` and `os_random`: deleted |
+| `tests/core/crypto_vectors_host_tests.cpp` (new, host only) | AZ-3286 | the internal `src/core/crypto.cpp` on the 27 rows of `fixtures/crypto/vectors.txt` (SHA-256 and HMAC also fed in 37-byte pieces); 6 of 6 one-digit copies fail on their own row; six broken copies of `crypto.cpp` (a round constant, a rotate, the HKDF counter, the opad, two removed limits) each fail it |
+| `dict_order_host_tests.cpp` (5 tests / 19 expects to 5 / 13), `no_ecc_tests.cpp` (3 / 9 to 2 / 6), `host_tests.cpp` (3 / 3 to 4 / 6: it received the core OS scan) | AZ-3286 | the non-session tests stay |
+
+Vector runners: 268 asserted, 268 run (290 before; the deleted `session_tests.cpp` had 22). Host `make -C cpp test` and `gcc:16` exit 0, 0 warnings; Cortex-M4F 7,712 B / 540 B and M33F 25,720 B / 724 B (the pins), AVR Uno 15,402 B flash / 196 B RAM, all as before. The ESP-IDF stage was not run on the Mac (CI runs it).

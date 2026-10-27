@@ -53,4 +53,17 @@ Test files: `tests/loop22_parity_tests.rs` (AZ-2410 rows 56 to 56d, AZ-2414 rows
 
 ## Loop 24 (Go joins the ring; no Rust test change)
 
-Loop 24 added the Go package (AZ-2222, `components/07_go_package/`). No Rust source or test changed (batch report: the six suites have no source change). What is new for this package is its place in the ring: Go joins `user`, `nested`, `boolflag`, `booltrue`, `bitwhen`, `session`, `roundflags` and `roundwhen` both ways (Rust is not in the list and dict rings), through `language-pair.sh` (114 Go lines in all, guarded by `ring-wiring.test.sh`; scenario FT-X-90). The hostile case file is unchanged at 65 cases and is now read by seven loaders (FT-X-87). `walk/flag_bits.rs` was read for the U6 row.
+Loop 24 added the Go package (AZ-2222, `components/07_go_package/`). No Rust source or test changed (batch report: the six suites have no source change). What is new for this package is its place in the ring: Go joins `user`, `nested`, `boolflag`, `booltrue`, `bitwhen`, `session`, `roundflags` and `roundwhen` both ways (Rust is not in the list and dict rings) (the `session` ring kind was retired in loop 74, ADR 009), through `language-pair.sh` (114 Go lines in all, guarded by `ring-wiring.test.sh`; scenario FT-X-90). The hostile case file is unchanged at 65 cases and is now read by seven loaders (FT-X-87). `walk/flag_bits.rs` was read for the U6 row.
+
+## Loop 74: the stream session is removed (AZ-3284, AZ-3289, ADR 009)
+
+Source: `_docs/03_implementation/batch_02_loop74_report.md` (AZ-3284), `batch_03_loop74_report.md` (AZ-3289). The stream session tests are retired (deleted), the mixed files keep their non-session tests, and the frame and crypto rows did not move.
+
+| Test | Task | What changed |
+|------|------|--------------|
+| `tests/session_tests.rs` (AZ-2105), `src/session_hostile_tests.rs` (AZ-2114), `tests/nostd_session_tests.rs` (AZ-2756), `rust/embedded/probe/src/session_extra.rs` | AZ-3284 | retired with the `session` feature: deleted |
+| `tests/ecc_session_dispatch_tests.rs` renamed `tests/ecc_dispatch_tests.rs` (16 to 8), `tests/times_shapes_tests.rs` (11 to 9), `src/frame_hostile_tests.rs` (8 to 6, the 2 `session`-gated tests out) | AZ-3284 | the non-session tests stay |
+| `src/crypto_vectors_tests.rs` | AZ-3284 | 27 of 27 rows in the default `cargo test` (`session_core` builds with `frame` or for the std tests) |
+| `src/frame_core_tests.rs`, `src/frame_hostile_tests.rs`, `tests/frame_vectors_tests.rs`, `rust/embedded/probe/src/frame_extra.rs`, the module doc example | AZ-3289 | written with the D1 names (`FrameSession`, `FrameDirection`, `FrameDirections`, `FrameSlot`, `FrameOpened`, `MsgContext`); 157 of 157 frame rows; the embedded figures did not move |
+
+Suite (AZ-3284): the CI step list in the `rust` compose service, 11 steps, 912 passed, 0 failed, 1 ignored; default `cargo test` 832 to 809; `cargo build --features session` is refused. `rust/embedded/run.sh host`: no `session` set, every figure equal to the commit before (Cortex-M4F `frame` 20,332 B / 1,728 B, M33F 20,404 B / 1,728 B). AZ-3289: `run-suite.sh rust` on the host exit 0, 0 failed, 1 ignored; `cargo doc --features frame` lists the ten D1 names and none of the old six (no aliases); `rust/embedded/run.sh host` every SIZE line equal and `rust-mutants` PASS; the module doc test is the README Rust example, and `scripts/frame/readme-examples.sh` checks it (PASS Rust).
