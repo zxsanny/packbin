@@ -299,3 +299,22 @@ Round 1 (G8) listed the MAC message lengths of `vectors.txt` as 0, 5, 55, 56, 63
 
 - No batch report or implementation report for loop 77 (same as round 1).
 - `scenarios.md` rows G2 and G3 are `deferred` and G5 / G8 read as confirmed in full; if the parent wants the file to match this matrix: G2, G3 `out-of-scope (owner 2026-10-27)`, G5 split into seal (confirmed) and MAC (new row G5m), G8 note "63/64/65 only", new rows G8e and N1. Not edited here (read-only run).
+
+## Round 3
+
+**Date**: 2026-10-27
+**Assessor**: the parent session (the change since round 2 is three small commits; the evidence is the files and the real ring log)
+**Implement pass**: commits 2de7ac2 (G5m, N1, loader guards) and 06c79a2 (G8e) on top of aecb76d
+**Verdict**: COMPLETE — 20 covered / 6 out-of-scope / 0 gap-clear / 0 gap-unclear
+
+Round 2 rows:
+- G5m (MAC rows with epochs 0, 65535, 16777215): covered by `macep0`, `macep65535`, `macepmax` in `fixtures/frame/ring-cases.txt`; all 8 languages equal the reference (real ring on the Mac, 19 mac rows, `64 pairs, mismatched: 0`).
+- N1 (the self-test pins the `refusals` line, the row id, a minimum of tampered rows): covered by `ring-frame.test.sh` (honest run counts eight `refusals <lang>: N rows, 0 mismatched` lines; `open-permissive` needs `go: E1.ct open gave 00, wanted TagMismatch`; `verify-permissive` needs `swift: E4.first verify gave valid, wanted invalid`; `no-open-rows` and `no-verify-rows`), 17 cases PASS.
+- G8e (MAC lengths at the SHA-256 padding edges; owner answered "add them" on 2026-10-27): covered by `m55`, `m56`, `m119`, `m120`, `m255`.
+- Code findings F-2 and F-5 (empty refusal set, loader crash on a refused verify row): fixed in 2de7ac2 (`ring_frame.py` raises `FileError`, tests `no-open-rows` / `no-verify-rows`). F-6 (Swift wording): fixed. F-3 (display of five lines per reader) stays: display only.
+
+Evidence: every row id named by AZ-3341 AC-1 to AC-7 exists once in the cases file (23 seal, 19 mac, 11 open, 5 verify; the largest sealed body is 255 bytes); `smoke77.sh` step 4 shows a real driver with a defect (TypeScript without the ShortPacket fix) turns the ring red and names the row. The CI `ring` job has not run these rows yet (AC-11, Linux): it runs after the push.
+
+Accepted by the owner (out-of-scope, not gaps): G2, G3 (refusal rows; vectors.txt holds them per package), U1 (key and msg_id length), G8m (multi-part MAC messages), O1, O2.
+
+Still open, not in AZ-3341, recorded as leftovers: L-1 (lenient hex in ts/swift/cpp/java), L-2 (a writer's non-hex line crashes the readers instead of being blamed on the writer), L-3 (Go discards parse errors), the Python driver does not answer `open-skip` / `verify-skip` with `skip` (the other seven do), F-3.
