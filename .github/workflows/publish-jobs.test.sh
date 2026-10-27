@@ -190,7 +190,7 @@ static = %w[
   .github/workflows/ring-wiring-rows.test.sh
   .github/workflows/ring-wiring-swift.test.sh .github/workflows/ring-prepare.test.sh
   fixtures/text/check-vectors.test.sh scripts/text/check-emitted.test.sh scripts/text/check-emitted.sh
-  fixtures/crypto/check-vectors.test.sh fixtures/frame/check-vectors.test.sh fixtures/ecc/check-vectors.test.sh fixtures/ecc/check-contract.sh .github/workflows/ring-ecc.test.sh
+  fixtures/crypto/check-vectors.test.sh fixtures/frame/check-vectors.test.sh fixtures/ecc/check-vectors.test.sh fixtures/ecc/check-contract.sh .github/workflows/ring-ecc.test.sh .github/workflows/ring-frame.test.sh
 ]
 static.each do |script|
   found = all_runs.call("bash #{script}")
@@ -201,6 +201,8 @@ found = all_runs.call("python3 -I scripts/ecc/fuzz_reference.py")
 errors << "the message ECC reference bounds run in #{found.inspect}, not only in scaffold" unless found == ["scaffold"]
 found = all_runs.call("bash .github/workflows/ring-ecc.sh")
 errors << "the message ECC ring runs in #{found.inspect}, not only in ring" unless found == ["ring"]
+found = all_runs.call("bash .github/workflows/ring-frame.sh")
+errors << "the frame ring runs in #{found.inspect}, not only in ring" unless found == ["ring"]
 
 errors.each { |e| puts e }
 exit(errors.empty? ? 0 : 1)

@@ -142,8 +142,7 @@ func frameCommand(_ args: [String]) -> Int32 {
     guard args.count == 2, args[0] == "frame-batch" else { return 2 }
     let path = args[1]
     guard let contents = try? String(contentsOfFile: path, encoding: .utf8) else {
-        fputs("frame-batch: cannot read \(path)\n", stderr)
-        return 1
+        return fail("frame-batch: cannot read \(path)")
     }
     for line in contents.split(separator: "\n") {
         let words = line.split(separator: " ").map(String.init)

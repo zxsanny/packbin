@@ -4,7 +4,6 @@
 import { readFileSync } from "node:fs";
 import {
   FrameConfig,
-  FrameDirections,
   FrameOpened,
   FrameSession,
   MacKey,
@@ -40,7 +39,7 @@ function mapKind(result: object): string {
 function seal(words: string[]): string {
   const [key, epoch, d, tagLen] = [bytesOf(words[0]!), Number(words[1]), Number(words[2]), Number(words[3])];
   const [msgId, kind, ad, clear, plain] = [bytesOf(words[4]!), Number(words[5]), bytesOf(words[6]!), bytesOf(words[7]!), bytesOf(words[8]!)];
-  const session = FrameSession.load(key, epoch, new FrameConfig(tagLen, new FrameDirections(1 << (d - 1))));
+  const session = FrameSession.load(key, epoch, new FrameConfig(tagLen, 1 << (d - 1)));
   if (session === null) return "BadValue";
   const out = new Uint8Array(300);
   const result = session.seal(d, new MsgContext(msgId, kind), ad, clear, plain, out);
@@ -51,7 +50,7 @@ function seal(words: string[]): string {
 function open(words: string[]): string {
   const [key, epoch, d, tagLen] = [bytesOf(words[0]!), Number(words[1]), Number(words[2]), Number(words[3])];
   const [msgId, kind, ad, clearLen, body] = [bytesOf(words[4]!), Number(words[5]), bytesOf(words[6]!), Number(words[7]), bytesOf(words[8]!)];
-  const session = FrameSession.load(key, epoch, new FrameConfig(tagLen, new FrameDirections(1 << (d - 1))));
+  const session = FrameSession.load(key, epoch, new FrameConfig(tagLen, 1 << (d - 1)));
   if (session === null) return "BadValue";
   const out = new Uint8Array(300);
   const result = session.open(d, new MsgContext(msgId, kind), ad, body, clearLen, out);

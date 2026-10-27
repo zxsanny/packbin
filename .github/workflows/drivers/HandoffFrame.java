@@ -56,7 +56,7 @@ final class HandoffFrame {
         int fkind = Integer.parseInt(w[5]);
         byte[] ad = bytesOf(w[6]), clear = bytesOf(w[7]), plain = bytesOf(w[8]);
         FrameSession session = FrameSession.load(key, epoch,
-                new FrameConfig(tagLen, new FrameDirections(1 << (d - 1))));
+                new FrameConfig(tagLen, FrameDirections.of(direction(d))));
         if (session == null) return "BadValue";
         byte[] out = new byte[300];
         Object result = session.seal(direction(d), new MsgContext(msgId, fkind), ad, clear, plain, out);
@@ -73,7 +73,7 @@ final class HandoffFrame {
         int clearLen = Integer.parseInt(w[7]);
         byte[] body = bytesOf(w[8]);
         FrameSession session = FrameSession.load(key, epoch,
-                new FrameConfig(tagLen, new FrameDirections(1 << (d - 1))));
+                new FrameConfig(tagLen, FrameDirections.of(direction(d))));
         if (session == null) return "BadValue";
         byte[] out = new byte[300];
         Object result = session.open(direction(d), new MsgContext(msgId, fkind), ad, body, clearLen, null, 0, out);
