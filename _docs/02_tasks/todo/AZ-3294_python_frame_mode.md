@@ -1,3 +1,8 @@
+---
+loop: 75
+branch: dev
+---
+
 # Frame mode in Python
 
 **Task**: AZ-3294_python_frame_mode

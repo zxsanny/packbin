@@ -1,3 +1,8 @@
+---
+loop: 75
+branch: dev
+---
+
 # Frame mode in TypeScript
 
 **Task**: AZ-3295_typescript_frame_mode

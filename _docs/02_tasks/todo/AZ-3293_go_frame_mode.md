@@ -1,3 +1,8 @@
+---
+loop: 75
+branch: dev
+---
+
 # Frame mode in Go
 
 **Task**: AZ-3293_go_frame_mode

@@ -1,3 +1,8 @@
+---
+loop: 75
+branch: dev
+---
+
 # Frame mode in C++
 
 **Task**: AZ-3292_cpp_frame_mode
