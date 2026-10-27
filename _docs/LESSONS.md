@@ -48,3 +48,7 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/loops/loop75/record75.md
 - [2026-10-27] [estimation] Put the 500-line cap and the "no new `lib` requirement for consumers" rule in every worker prompt: a worker test file reached 544 lines and one declaration needed a newer lib, both found after the fact (loop 75).
   Source: _docs/loops/loop75/record75.md
+- [2026-10-27] [estimation] Probe each handoff candidate on HEAD before writing its spec: in loop 76 three of seven descriptions were wrong or incomplete (a probe that crashed instead of doing an extra compile; a Rust failure in 22 test files and not only the frame set; a probe FAIL that was a key-order error in the probe) and the wrong key order also sat in two more probes the handoff did not list (loop 76).
+  Source: _docs/loops/loop76/record76.md
+- [2026-10-27] [tooling] A CI suite that names its test targets one by one (`--test <name>`) hides a missing feature gate in every other test file; build every feature set with `--no-run` after adding a test file (loop 76).
+  Source: _docs/loops/loop76/record76.md
