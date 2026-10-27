@@ -64,15 +64,17 @@ class FrameSession:
     @classmethod
     def load(cls, key: BytesLike, epoch: int, config: FrameConfig) -> FrameSession | BadValue:
         """Derives the keys of each loaded direction from a 32-byte key and an epoch of at most 0xFFFFFF. Gives `BadValue` for a
-        key that is not 32 bytes, an epoch above 0xFFFFFF, a tag length that is not 4, 8 or 16, or a direction bit outside
+        key that is not 32 bytes, an epoch above 0xFFFFFF, a tag length that is not 4, 8 or 16, a `directions` that is not an int (a float or a bool) or a direction bit outside
         `FrameDirections.ALL`. With `FrameDirections.NONE` it gives a session that refuses every `seal` and `open` as `BadValue`."""
         material = snapshot(key, "key")
         require_int(epoch, "epoch")
-        directions = int(config.directions)
         if len(material) != KEY_SIZE or not 0 <= epoch <= MAX_EPOCH:
             return BadValue("key is not 32 bytes or epoch above 0xFFFFFF")
         if not is_int(config.tag_len) or config.tag_len not in (4, 8, 16):
             return BadValue("tag length is not 4, 8 or 16")
+        directions = config.directions
+        if not is_int(directions):
+            return BadValue("directions is not an int")
         if directions & ~_FULL_DIRECTIONS:
             return BadValue("direction bit outside up, down and group")
         return cls(config.tag_len, directions, FrameKeys(material, epoch, directions))
@@ -168,7 +170,7 @@ class FrameSession:
         the window commit. `plain` and the window are untouched unless the result is a `FrameOpened`.
 
         A direction not loaded, a `kind` above 15, a `msg_id` that is not 8 bytes, a negative `clear_length`, a `counter`
-        outside 0 to 2**64 - 1 or a closed session is `BadValue`; `ad`, `body` or `clear_length` above 255 is `TooLong`
+        outside 0 to 2**64 - 1 when a `window` is given (without one the counter is ignored) or a closed session is `BadValue`; `ad`, `body` or `clear_length` above 255 is `TooLong`
         (before any hashing); a body shorter than `clear_length + tag` is `ShortPacket`; a `plain` shorter than the plaintext
         is `BufferFull`.
 
@@ -181,7 +183,7 @@ class FrameSession:
         ad_bytes = snapshot(ad, "ad")
         frame = snapshot(body, "body")  # one read: the tag is checked and the text decrypted from the same bytes
         out = writable(plain, "plain")
-        if not self._call_allowed(direction, message) or clear_length < 0 or (window is not None and counter > _MAX_COUNTER):
+        if not self._call_allowed(direction, message) or clear_length < 0 or (window is not None and not 0 <= counter <= _MAX_COUNTER):
             return BadValue("direction not loaded, kind above 15, msg_id not 8 bytes, bad length or counter, or closed session")
         if len(ad_bytes) > MAX_BODY:
             return TooLong(len(ad_bytes), MAX_BODY)

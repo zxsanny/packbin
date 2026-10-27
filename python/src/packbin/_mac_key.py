@@ -52,18 +52,18 @@ class MacKey:
         return cls(bytearray(_crypto.hkdf_sha256(material, salt(epoch), b"\x00" + name, 32)), epoch)
 
     def tag(self, parts: BytesLike | Iterable[BytesLike], n: int) -> bytes | BadValue:
-        """The first `n` bytes of the HMAC of the message. `n` other than 4, 8, 16 or 32, or a closed key, is `BadValue`."""
+        """The first `n` bytes of the HMAC of the message. `n` other than 4, 8, 16 or 32, a closed key, or a key that is not 32 bytes (a `MacKey` not made by `derive`) is `BadValue`."""
         require_int(n, "n")
         pieces = _pieces(parts)
-        if n not in _TAG_LENGTHS or self._closed:
+        if n not in _TAG_LENGTHS or self._closed or len(self._key) != KEY_SIZE:
             return BadValue("tag length not 4, 8, 16 or 32, or closed key")
         return hmac_of(self._key, pieces)[:n]
 
     def verify(self, parts: BytesLike | Iterable[BytesLike], tag: BytesLike) -> bool:
-        """True when `tag` (4, 8, 16 or 32 bytes) is the tag of the message. False for any other length and for a closed key."""
+        """True when `tag` (4, 8, 16 or 32 bytes) is the tag of the message. False for any other length, for a closed key and for a key that is not 32 bytes."""
         expected = snapshot(tag, "tag")
         pieces = _pieces(parts)
-        if len(expected) not in _TAG_LENGTHS or self._closed:
+        if len(expected) not in _TAG_LENGTHS or self._closed or len(self._key) != KEY_SIZE:
             return False
         return tags_equal(hmac_of(self._key, pieces)[: len(expected)], expected)
 

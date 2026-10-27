@@ -13,8 +13,8 @@ import {
   type FrameErr,
 } from "./frame-errors.ts"
 import { FrameKeys } from "./frame-keys.ts"
-import { FrameConfig, FrameOpened, FrameSlot, Freshness, msgIdOf, type FrameSealed } from "./frame-types.ts"
-import { isCounter, type ReplayWindow } from "./replay-window.ts"
+import { FrameConfig, FrameOpened, FrameSlot, Freshness, MsgContext, msgIdOf, type FrameSealed } from "./frame-types.ts"
+import { isCounter, ReplayWindow } from "./replay-window.ts"
 
 const ALL_DIRECTIONS = 7
 const FIRST_BLOCK = 0
@@ -77,7 +77,7 @@ export class FrameSession {
     const { tagLength, directions } = config
     if (!isBytes(key) || key.length !== KEY_SIZE || !epochOk(epoch)) return null
     if (tagLength !== 4 && tagLength !== 8 && tagLength !== 16) return null
-    if (!Number.isInteger(directions) || directions < 0 || (directions & ~ALL_DIRECTIONS) !== 0) return null
+    if (!Number.isInteger(directions) || directions < 0 || directions > ALL_DIRECTIONS) return null
     return new FrameSession(tagLength, directions, FrameKeys.derive(key, epoch, directions))
   }
 
@@ -122,7 +122,8 @@ export class FrameSession {
     plain: Uint8Array,
     output: Uint8Array,
   ): FrameSealed | FrameErr {
-    const id = this.#callId(direction, message)
+    const kind = kindOf(message)
+    const id = this.#callId(direction, message, kind)
     if (id === undefined || !isBytes(ad) || !isBytes(clear) || !isBytes(plain) || !isBytes(output)) {
       return badValue("direction not loaded, kind not 0 to 15, no msg_id, a non-byte argument or closed session")
     }
@@ -132,7 +133,7 @@ export class FrameSession {
     if (output.length < length) return bufferFull(length)
 
     const keys = this.#current
-    const nonce = makeNonce(id, (message as { kind: number }).kind, direction, keys.epoch)
+    const nonce = makeNonce(id, kind as number, direction, keys.epoch)
     const body = new Uint8Array(length)
     body.set(clear)
     const cipher = chacha20Xor(keys.enc(direction), nonce, FIRST_BLOCK, plain)
@@ -166,11 +167,13 @@ export class FrameSession {
     body: Uint8Array,
     clearLength: number,
     plain: Uint8Array,
-    window?: ReplayWindow,
+    window?: ReplayWindow | null,
     counter: bigint = 0n,
   ): FrameOpened | FrameErr {
-    const id = this.#callId(direction, message)
-    const counterOk = window === undefined || isCounter(counter)
+    const kind = kindOf(message)
+    const id = this.#callId(direction, message, kind)
+    const noWindow = window === undefined || window === null
+    const counterOk = noWindow || (window instanceof ReplayWindow && isCounter(counter))
     if (
       id === undefined ||
       !isBytes(ad) ||
@@ -190,7 +193,7 @@ export class FrameSession {
     const plainLength = body.length - framing
     if (plain.length < plainLength) return bufferFull(plainLength)
 
-    if (window !== undefined) {
+    if (!noWindow) {
       const freshness = window.check(counter)
       if (freshness === Freshness.Duplicate) return duplicate()
       if (freshness === Freshness.TooOld) return tooOld()
@@ -201,22 +204,21 @@ export class FrameSession {
     const clear = frame.subarray(0, clearLength)
     const cipher = frame.subarray(clearLength, clearLength + plainLength)
     const tag = frame.subarray(clearLength + plainLength)
-    const kind = (message as { kind: number }).kind
     let keys = this.#current
     let slot: FrameSlot = FrameSlot.Current
-    if (!this.#matches(keys, direction, id, kind, adCopy, clear, cipher, tag)) {
+    if (!this.#matches(keys, direction, id, kind as number, adCopy, clear, cipher, tag)) {
       const previous = this.#previous
-      if (previous === undefined || !this.#matches(previous, direction, id, kind, adCopy, clear, cipher, tag)) {
+      if (previous === undefined || !this.#matches(previous, direction, id, kind as number, adCopy, clear, cipher, tag)) {
         return tagMismatch()
       }
       keys = previous
       slot = FrameSlot.Previous
     }
 
-    const text = chacha20Xor(keys.enc(direction), makeNonce(id, kind, direction, keys.epoch), FIRST_BLOCK, cipher)
+    const text = chacha20Xor(keys.enc(direction), makeNonce(id, kind as number, direction, keys.epoch), FIRST_BLOCK, cipher)
     plain.set(text)
     wipe(text)
-    window?.commit(counter)
+    if (!noWindow) window.commit(counter)
     return new FrameOpened(slot, clearLength, plainLength)
   }
 
@@ -230,13 +232,13 @@ export class FrameSession {
   declare [Symbol.dispose]: () => void
 
   // The message's id when the call is allowed (session open, direction loaded, a valid context with a kind of 0 to 15).
-  #callId(direction: number, message: unknown): Uint8Array | undefined {
+  // `kind` is the value the caller read once with `kindOf`, so validation and the nonce use the same one.
+  #callId(direction: number, message: unknown, kind: unknown): Uint8Array | undefined {
     if (this.#closed) return undefined
     if (!Number.isInteger(direction) || direction < 1 || direction > 3) return undefined
     if ((this.#directions & (1 << (direction - 1))) === 0) return undefined
     const id = msgIdOf(message)
     if (id === undefined) return undefined
-    const kind = (message as { kind: unknown }).kind
     return typeof kind === "number" && Number.isInteger(kind) && kind >= 0 && kind <= 15 ? id : undefined
   }
 
@@ -272,6 +274,11 @@ if (typeof Symbol.dispose === "symbol") {
     configurable: true,
     writable: true,
   })
+}
+
+// The kind of a context, read once per call (a subclass may define it as a getter that answers differently each time).
+function kindOf(message: unknown): unknown {
+  return message instanceof MsgContext ? message.kind : undefined
 }
 
 // msg_id (8) ‖ ((kind << 4) | direction) (1) ‖ epoch as 24 bits (3).

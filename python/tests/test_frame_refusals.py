@@ -8,6 +8,7 @@ from packbin import (
     FrameConfig,
     FrameDirection,
     FrameDirections,
+    FrameOpened,
     FrameSession,
     MsgContext,
     ReplayWindow,
@@ -164,6 +165,49 @@ def test_a_counter_outside_64_bits_is_bad_value_and_leaves_the_window_alone():
     # Assert
     assert isinstance(result, BadValue)
     assert (window.top, window.bits) == (3, 1)
+
+
+def test_a_negative_counter_with_a_window_is_bad_value_without_an_exception_and_leaves_both_alone():
+    # Arrange
+    session = make_session()
+    body = bytearray(32)
+    length = session.seal(UP, MsgContext(ID, 1), b"", b"", b"x", body)
+    assert isinstance(length, int)
+    window = ReplayWindow(3, 1)
+    plain = sentinels(8)
+
+    # Act
+    result = session.open(UP, MsgContext(ID, 1), b"", bytes(body[:length]), 0, plain, window, -1)
+
+    # Assert
+    assert isinstance(result, BadValue)
+    assert untouched(plain)
+    assert (window.top, window.bits) == (3, 1)
+
+
+def test_a_negative_counter_without_a_window_is_ignored():
+    # Arrange
+    session = make_session()
+    body = bytearray(32)
+    length = session.seal(UP, MsgContext(ID, 1), b"", b"", b"x", body)
+    assert isinstance(length, int)
+    plain = bytearray(8)
+
+    # Act
+    result = session.open(UP, MsgContext(ID, 1), b"", bytes(body[:length]), 0, plain, None, -1)
+
+    # Assert
+    assert isinstance(result, FrameOpened)
+    assert bytes(plain[:1]) == b"x"
+
+
+@pytest.mark.parametrize("directions", [3.0, True, "3", None])
+def test_load_refuses_a_directions_value_that_is_not_an_int(directions: object):
+    # Act
+    result = FrameSession.load(KEY, 1, FrameConfig(4, directions))  # type: ignore[arg-type]
+
+    # Assert
+    assert isinstance(result, BadValue)
 
 
 def test_sealing_in_place_gives_the_same_bytes_as_sealing_apart():

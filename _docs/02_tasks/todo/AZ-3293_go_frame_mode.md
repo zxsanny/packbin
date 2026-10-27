@@ -87,4 +87,4 @@ Then 0 failures
 
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
-| Concurrency rules of open, set-previous, clear-previous and close in Go | the contract's rules; the loop 75 plan names the Go mechanism | open | Low |
+| Concurrency rules of open, set-previous, clear-previous and close in Go | the contract's rules; Go: an `RWMutex` (`seal` and `open` read-lock; `SetPrevious`, `ClearPrevious`, `Close` write-lock) | closed (loop 75, assessment75.md) | Low |

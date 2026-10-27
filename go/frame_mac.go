@@ -42,15 +42,16 @@ func DeriveMacKey(key []byte, epoch uint32, label []byte) (*MacKey, error) {
 func (m *MacKey) Epoch() uint32 { return m.epoch }
 
 // Tag writes the first len(tag) bytes of the HMAC of the message (the parts joined, never copied) into tag. A tag
-// length other than 4, 8, 16 or 32, or a closed key, is a BadValue and nothing is written.
+// length other than 4, 8, 16 or 32, a closed key or a zero-value MacKey (not from DeriveMacKey: no key) is a
+// BadValue and nothing is written.
 func (m *MacKey) Tag(tag []byte, parts ...[]byte) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if !macTagLengthAllowed(len(tag)) {
 		return frameBad("the tag length %d is not 4, 8, 16 or 32", len(tag))
 	}
-	if m.closed {
-		return frameBad("the key is closed")
+	if m.closed || len(m.key) != 32 {
+		return frameBad("the key is closed or was not derived by DeriveMacKey")
 	}
 	full := hmacParts(m.key, parts...)
 	copy(tag, full[:len(tag)])
@@ -59,11 +60,11 @@ func (m *MacKey) Tag(tag []byte, parts ...[]byte) error {
 }
 
 // Verify is true when tag (4, 8, 16 or 32 bytes) is the tag of the message. It is false for any other length and
-// for a closed key.
+// for a closed key and a zero-value MacKey.
 func (m *MacKey) Verify(tag []byte, parts ...[]byte) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	if !macTagLengthAllowed(len(tag)) || m.closed {
+	if !macTagLengthAllowed(len(tag)) || m.closed || len(m.key) != 32 {
 		return false
 	}
 	full := hmacParts(m.key, parts...)

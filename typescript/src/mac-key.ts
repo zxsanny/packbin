@@ -86,5 +86,7 @@ if (typeof Symbol.dispose === "symbol") {
 
 function partsOf(message: Uint8Array | readonly Uint8Array[]): readonly Uint8Array[] | undefined {
   if (isBytes(message)) return [message]
-  return Array.isArray(message) && message.every(isBytes) ? message : undefined
+  if (!Array.isArray(message)) return undefined
+  for (let i = 0; i < message.length; i++) if (!isBytes(message[i])) return undefined
+  return message
 }

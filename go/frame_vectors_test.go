@@ -392,7 +392,7 @@ func TestAC1EveryRowOfTheFrameFixtureMatches(t *testing.T) {
 	if len(problems) != 0 {
 		t.Fatalf("%d of %d rows differ:\n%s", len(problems), len(rows), strings.Join(problems, "\n"))
 	}
-	if len(rows) < 157 {
+	if len(rows) != 157 {
 		t.Fatalf("only %d rows", len(rows))
 	}
 	for _, op := range []string{"keys", "seal", "open", "mac", "replay"} {

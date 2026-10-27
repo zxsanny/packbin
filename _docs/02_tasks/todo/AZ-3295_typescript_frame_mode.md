@@ -87,4 +87,4 @@ Then 0 failures
 
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
-| Concurrency rules of open, set-previous, clear-previous and close in TypeScript | the contract's rules; the loop 75 plan names the TypeScript mechanism | open | Low |
+| Concurrency rules of open, set-previous, clear-previous and close in TypeScript | the contract's rules; TypeScript: synchronous calls, no object shared between workers | closed (loop 75, assessment75.md) | Low |

@@ -87,4 +87,4 @@ Then 0 failures
 
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
-| Concurrency rules of open, set-previous, clear-previous and close in C++ | the contract's rules; the loop 75 plan names the C++ mechanism | open | Low |
+| Concurrency rules of open, set-previous, clear-previous and close in C++ | the contract's rules; C++: `seal` and `open` are `const` reads and may run on many threads (8-thread seal test); `load`, `set_previous`, `clear_previous` and the destructor must not run beside any call | closed (loop 75, assessment75.md) | Low |

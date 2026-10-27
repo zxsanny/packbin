@@ -96,3 +96,13 @@ def test_a_closed_key_refuses_tag_and_verify():
     # Assert
     assert isinstance(mac.tag(MESSAGE, 4), BadValue)
     assert mac.verify(MESSAGE, tag) is False
+
+
+def test_a_mac_key_that_was_not_derived_refuses_tag_and_verify():
+    # Arrange
+    keyless = MacKey(bytearray(), 0)
+    keyless_tag = _crypto.hmac_sha256(b"", b"x")[:4]
+
+    # Act and Assert
+    assert isinstance(keyless.tag(b"x", 4), BadValue)
+    assert keyless.verify(b"x", keyless_tag) is False

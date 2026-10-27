@@ -218,7 +218,11 @@ class FrameSession {
   // length. The same inputs give the same bytes; the session does not change and the previous key is not
   // used. A session that is not loaded, a direction not loaded or a `kind` above 15 is BadValue; `ad`
   // above 255 bytes, or `clear + plain + tag` above 255, is TooLong; an `out` shorter than the body is
-  // BufferFull. On any refusal nothing is written. `ad`, `clear` and `plain` must not overlap `out`.
+  // BufferFull. On any refusal nothing is written.
+  //
+  // **`ad`, `clear` and `plain` must not overlap `out`** (its first `clear + plain + tag` bytes): the call
+  // does not check this (a guard cost 72 bytes of flash on the Cortex-M33F frame image), and an overlap
+  // gives a wrong tag or a wrong body.
   //
   // **For one (key, epoch, direction), never seal two different messages with the same `msg_id`.** Reuse
   // breaks the confidentiality of both messages, and the library cannot check it (see MsgContext). A new
@@ -234,8 +238,11 @@ class FrameSession {
   // window are untouched unless the result is Ok. A session that is not loaded, a direction not loaded
   // or a `kind` above 15 is BadValue; `ad`, `body` or `clear_len` above 255 is TooLong (before any
   // hashing); a body shorter than `clear_len` plus the tag is ShortPacket; a `plain` shorter than the
-  // plaintext is BufferFull. `plain` may start at the ciphertext inside `body` (decrypt in place); `body`
-  // must not change while the call runs.
+  // plaintext is BufferFull. `plain` may start at the ciphertext inside `body` (decrypt in place).
+  //
+  // **`body` must not change while the call runs.** `open` reads it twice, once for the tag and once for
+  // the decrypt, so a receive ring that an interrupt handler or DMA writes must be copied by the caller
+  // first; a body that changes between the two reads can pass the tag and decrypt other bytes.
   //
   // The counter must come from bytes the tag covers, never from an unauthenticated wire field: it is not
   // part of the tag.

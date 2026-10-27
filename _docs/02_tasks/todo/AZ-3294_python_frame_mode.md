@@ -87,4 +87,4 @@ Then 0 failures
 
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
-| Concurrency rules of open, set-previous, clear-previous and close in Python | the contract's rules; the loop 75 plan names the Python mechanism | open | Low |
+| Concurrency rules of open, set-previous, clear-previous and close in Python | the contract's rules; Python: the caller's duty, written in the docstrings (`seal` is safe from many threads; `set_previous`, `clear_previous`, `close` must not run beside `seal` or `open`) | closed (loop 75, assessment75.md) | Low |

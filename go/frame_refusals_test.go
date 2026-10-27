@@ -2,6 +2,8 @@ package packbin
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
 	"errors"
 	"testing"
 )
@@ -464,6 +466,27 @@ func TestMacOnlyRefusals(t *testing.T) {
 				m.Close()
 			}
 		})
+	}
+}
+
+func TestAZeroValueMacKeyRefusesTagAndVerify(t *testing.T) {
+	// Arrange
+	var m MacKey
+	keyless := hmac.New(sha256.New, nil)
+	keyless.Write([]byte("x"))
+	keylessTag := keyless.Sum(nil)[:4]
+	out := sentinels(4)
+
+	// Act
+	tagErr := m.Tag(out, []byte("x"))
+	verified := m.Verify(keylessTag, []byte("x"))
+
+	// Assert
+	if !errors.Is(tagErr, ErrBadValue) || !untouched(out) {
+		t.Fatalf("Tag of a zero MacKey: err %v, untouched %v", tagErr, untouched(out))
+	}
+	if verified {
+		t.Fatal("a zero MacKey accepted the keyless tag")
 	}
 }
 
