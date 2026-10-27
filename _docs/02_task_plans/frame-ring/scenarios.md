@@ -22,9 +22,9 @@ Source: `_docs/loops/loop77/assessment77.md` (round 1). Status values: confirmed
 | G5m | The same epochs in MAC rows | confirmed | AZ-3341 AC-4 | assess-round-2 |
 | G6 | Kinds 0, 8, 15; msg_id edge values | confirmed | AZ-3341 AC-5 | assess-round-1 |
 | G7 | AD empty and 255 bytes; clear part of 40 | confirmed | AZ-3341 AC-6 | assess-round-1 |
-| G8 | MAC n = 32, labels 1 and 32, empty message, 63/64/65 bytes | confirmed | AZ-3341 AC-7 | 63/64/65 only; multi-part messages excluded (driver line format) |
+| G8 | MAC n = 32, labels 1 and 32, empty message, 63/64/65 bytes | confirmed | AZ-3341 AC-7 | plus G8e lengths; multi-part messages excluded (driver line format) |
 | G8m | MAC message in several parts | out-of-scope | - | needs a new driver line format |
-| G8e | MAC message lengths 55, 56, 119, 120, 255 (SHA-256 padding edges) | deferred (pending owner answer) | - | assess-round-2, gap-unclear |
+| G8e | MAC message lengths 55, 56, 119, 120, 255 (SHA-256 padding edges) | confirmed | AZ-3341 AC-7 | assess-round-2; owner 2026-10-27: add them |
 | N1 | The self-test pins the `refusals` line, the row id of a failure, and a minimum of tampered rows | confirmed | AZ-3341 AC-8, AC-12 | assess-round-2 |
 | G9 | Swift `PackbinError.Kind` comment | confirmed | AZ-3341 AC-10 | assess-round-1 |
 | U1 | Key not 32 bytes (Rust), msg_id not 8 bytes (Rust, C++) | out-of-scope | - | owner 2026-10-27: option A, leave out; the types forbid it |

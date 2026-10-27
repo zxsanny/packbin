@@ -74,7 +74,7 @@ When each language runs them
 Then all outputs equal the reference.
 
 **AC-7: MAC variants**
-Given MAC rows with n = 32, labels of 1 and 32 bytes, an empty message, and messages of 63, 64 and 65 bytes
+Given MAC rows with n = 32, labels of 1 and 32 bytes, an empty message, and messages of 55, 56, 63, 64, 65, 119, 120 and 255 bytes (the 64-byte block edges of the cipher and the SHA-256 padding edges of the MAC; assessment round 2, G8e, owner 2026-10-27)
 When each language computes and verifies them
 Then all tags equal the reference and verify to `valid`.
 
