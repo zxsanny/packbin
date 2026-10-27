@@ -64,11 +64,11 @@ Optional parity bytes per scheme: `n` from 0 to 32, default 0, which keeps the b
 
 ### Interface: FrameSession (loop 71, AZ-3233; the only session since loop 74)
 
-Public types (the D1 names, top-level since AZ-3290, loop 74): `FrameSession`, `FrameDirection` (an enum `UP`, `DOWN`, `GROUP`, wire byte 1, 2, 3; it replaced the `int` constants `FrameSession.UP`, `DOWN`, `GROUP`), `FrameSlot` (`CURRENT`, `PREVIOUS`), `FrameOpened`, `FrameSealed` (Java's seal result; `FrameSlot`, `FrameOpened` and `FrameSealed` were `FrameSession.Slot`, `Opened`, `Sealed`), `MsgContext`, `ReplayWindow`, `Freshness` (moved out of `ReplayWindow`), `MacKey`. Java has no `FrameConfig` and no `FrameDirections`: load takes the tag length and the directions as arguments.
+Public types (the D1 names, top-level since AZ-3290, loop 74): `FrameSession`, `FrameDirection` (an enum `UP`, `DOWN`, `GROUP`, wire byte 1, 2, 3; it replaced the `int` constants `FrameSession.UP`, `DOWN`, `GROUP`), `FrameSlot` (`CURRENT`, `PREVIOUS`), `FrameOpened`, `FrameSealed` (Java's seal result; `FrameSlot`, `FrameOpened` and `FrameSealed` were `FrameSession.Slot`, `Opened`, `Sealed`), `MsgContext`, `ReplayWindow`, `Freshness` (moved out of `ReplayWindow`), `MacKey`. `FrameConfig` (the tag length and a `FrameDirections` set) and `FrameDirections` (`of(FrameDirection...)`, `ALL`) came with AZ-3322: load takes a `FrameConfig`.
 
 | Name | Meaning |
 |------|---------|
-| `FrameSession.load(key, epoch, tagLen, FrameDirection... directions)` | a session, or `null` for a value out of range; a `null` direction is refused; `setPrevious(key, epoch)`, `clearPrevious()`, `close()` (wipes the keys; later calls give `BadValue`) |
+| `FrameSession.load(key, epoch, FrameConfig)` | a session, or `null` for a key, epoch, config or tag length out of range or null; seal and open refuse a null direction as `BadValue`; `setPrevious(key, epoch)`, `clearPrevious()`, `close()` (wipes the keys; later calls give `BadValue`) |
 | `seal(FrameDirection, MsgContext, ad, clear, plain, out)` (and an `outOffset` form) | a `FrameSealed` (with `length`) or an error object; writes nothing on a refusal; safe from many threads |
 | `open(FrameDirection, MsgContext, ad, body, clearLength, ReplayWindow, counter, out)` (and a ranged form) | a `FrameOpened` (`slot`, `clearLength`, `plainLength`) or an error object; a null window skips the replay check; a direction the session did not load is `BadValue` |
 | `ReplayWindow` | `check(counter)` (`Freshness.FRESH`, `DUPLICATE`, `TOO_OLD`), `commit(counter)`, `top()`, `bits()`; unsigned counters |

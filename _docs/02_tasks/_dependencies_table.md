@@ -476,3 +476,4 @@ Loop 74 (2026-10-26, ADR-009: remove the stream session; D1 frame names; D2 cryp
 | AZ-3293 | go_frame_mode (loop 75) | 5 | AZ-3287, AZ-3291 | AZ-3199 |
 | AZ-3294 | python_frame_mode (loop 75) | 5 | AZ-3283, AZ-3291 | AZ-3199 |
 | AZ-3295 | typescript_frame_mode (loop 75) | 5 | AZ-3288, AZ-3291 | AZ-3199 |
+| AZ-3322 | java_frame_config (assessment round 1, D6) | 2 | AZ-3290 | AZ-3199 |

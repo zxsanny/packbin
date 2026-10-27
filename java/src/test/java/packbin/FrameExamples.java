@@ -45,7 +45,7 @@ final class FrameExamples {
     }
 
     FrameSession session(int tagLen) {
-        return FrameSession.load(key, epoch, tagLen, FrameDirection.values());
+        return FrameSession.load(key, epoch, new FrameConfig(tagLen, FrameDirections.ALL));
     }
 
     byte[] sealed(FrameSession session) {

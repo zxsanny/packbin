@@ -9,7 +9,7 @@
 
 ## Purpose
 
-One optional session beside clear pack: frame mode, sealed and authenticated frames for links that lose, reorder and duplicate messages (ADR 008). It is the only session since 3.0.0: the stream mode of 1.0.0 and 2.0.0 (a shared seed, an opener nonce, an implicit packet counter, no tag) is removed (ADR 009). Clear pack and unpack are unchanged. Each language implements frame mode itself, with the type names `FrameSession`, `FrameConfig`, `FrameDirection`, `FrameDirections`, `FrameSlot`, `FrameOpened`, `MsgContext`, `ReplayWindow`, `Freshness` and `MacKey`, spelled the same in every package (Java passes the tag length and the directions to `load` as arguments, so it has no `FrameConfig` or `FrameDirections`, and adds `FrameSealed` for its seal result).
+One optional session beside clear pack: frame mode, sealed and authenticated frames for links that lose, reorder and duplicate messages (ADR 008). It is the only session since 3.0.0: the stream mode of 1.0.0 and 2.0.0 (a shared seed, an opener nonce, an implicit packet counter, no tag) is removed (ADR 009). Clear pack and unpack are unchanged. Each language implements frame mode itself, with the type names `FrameSession`, `FrameConfig`, `FrameDirection`, `FrameDirections`, `FrameSlot`, `FrameOpened`, `MsgContext`, `ReplayWindow`, `Freshness` and `MacKey`, spelled the same in every package (Java also has `FrameSealed` for its seal result).
 
 ## Configuration
 

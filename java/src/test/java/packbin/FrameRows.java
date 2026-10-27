@@ -27,8 +27,8 @@ final class FrameRows {
     }
 
     private static FrameSession load(Map<String, String> row) {
-        return FrameSession.load(FrameSupport.hex(row.get("key")), integer(row, "epoch"), integer(row, "tag_len"),
-                directions(row));
+        return FrameSession.load(FrameSupport.hex(row.get("key")), integer(row, "epoch"),
+                new FrameConfig(integer(row, "tag_len"), FrameDirections.of(directions(row))));
     }
 
     private static MsgContext ctx(Map<String, String> row) {
@@ -46,7 +46,7 @@ final class FrameRows {
             return out;
         }
         FrameDirection dir = dir(row);
-        try (FrameSession session = FrameSession.load(key, epoch, 4, FrameDirection.values())) {
+        try (FrameSession session = FrameSession.load(key, epoch, new FrameConfig(4, FrameDirections.ALL))) {
             out.put("k_enc", FrameSupport.unhex(session.encKeyForTest(dir, false)));
             out.put("k_mac", FrameSupport.unhex(session.macKeyForTest(dir, false)));
         }

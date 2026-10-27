@@ -35,11 +35,11 @@ public final class FrameSession implements AutoCloseable {
         final byte[][] enc = new byte[4][];
         final byte[][] mac = new byte[4][];
 
-        Keys(byte[] key, int epoch, int directions) {
+        Keys(byte[] key, int epoch, FrameDirections directions) {
             this.epoch = epoch;
             byte[] salt = FrameCrypto.salt(epoch);
             for (FrameDirection direction : FrameDirection.values()) {
-                if ((directions & bit(direction)) != 0) {
+                if (directions.contains(direction)) {
                     int d = direction.wire;
                     enc[d] = SessionPad.hkdfSha256(key, salt, info(d, "enc"), 32);
                     mac[d] = SessionPad.hkdfSha256(key, salt, info(d, "mac"), 32);
@@ -58,7 +58,7 @@ public final class FrameSession implements AutoCloseable {
     }
 
     private final int tagLen;
-    private final int directions;
+    private final FrameDirections directions;
     private final Keys current;
     private volatile Keys previous;
     private final Object previousLock = new Object();
@@ -66,31 +66,29 @@ public final class FrameSession implements AutoCloseable {
     /** The MAC computations this session started; a replay refusal must start none. */
     private final AtomicLong macComputations = new AtomicLong();
 
-    private FrameSession(Keys current, int tagLen, int directions) {
+    private FrameSession(Keys current, int tagLen, FrameDirections directions) {
         this.current = current;
         this.tagLen = tagLen;
         this.directions = directions;
     }
 
     /**
-     * A frame session for the 32-byte {@code key} at {@code epoch} (0 to 0xFFFFFF), with {@code tagLen} 4, 8 or 16 bytes,
-     * fixed for the lifetime of the key (one tag length is used per key and epoch across all devices), and the directions
-     * it may seal and open (a call in another direction is refused; a direction listed twice counts once). Returns null
-     * for anything out of range or a null direction (the contract's BadValue); the key is copied.
+     * A frame session for the 32-byte {@code key} at {@code epoch} (0 to 0xFFFFFF) with the {@code config}'s tag length (4,
+     * 8 or 16 bytes, fixed for the lifetime of the key) and directions (the session seals and opens in these only; a call
+     * in another direction is refused). Returns null (the contract's BadValue) for a key or epoch out of range, a null
+     * config, a tag length other than 4, 8 or 16, and a null direction set; the key is copied. An empty set loads a session
+     * that refuses every seal and open as BadValue, as in the other packages.
      */
-    public static FrameSession load(byte[] key, int epoch, int tagLen, FrameDirection... directions) {
-        if (key == null || key.length != 32 || epoch < 0 || epoch > FrameCrypto.MAX_EPOCH
-                || (tagLen != 4 && tagLen != 8 && tagLen != 16) || directions == null) {
+    public static FrameSession load(byte[] key, int epoch, FrameConfig config) {
+        if (key == null || key.length != 32 || epoch < 0 || epoch > FrameCrypto.MAX_EPOCH || config == null) {
             return null;
         }
-        int mask = 0;
-        for (FrameDirection direction : directions) {
-            if (direction == null) {
-                return null;
-            }
-            mask |= bit(direction);
+        int tagLen = config.tagLength;
+        FrameDirections directions = config.directions;
+        if ((tagLen != 4 && tagLen != 8 && tagLen != 16) || directions == null) {
+            return null;
         }
-        return new FrameSession(new Keys(key, epoch, mask), tagLen, mask);
+        return new FrameSession(new Keys(key, epoch, directions), tagLen, directions);
     }
 
     /**
@@ -298,18 +296,13 @@ public final class FrameSession implements AutoCloseable {
     }
 
     private Object callChecks(FrameDirection direction, MsgContext ctx, byte[] ad) {
-        if (closed || ctx == null || !ctx.valid() || direction == null || (directions & bit(direction)) == 0) {
+        if (closed || ctx == null || !ctx.valid() || !directions.contains(direction)) {
             return new Packbin.BadValue("direction, kind or message id");
         }
         if (ad != null && ad.length > 255) {
             return new Packbin.TooLong(ad.length, 255);
         }
         return null;
-    }
-
-    /** The bit of {@code direction} in a set of loaded directions. */
-    private static int bit(FrameDirection direction) {
-        return 1 << direction.wire;
     }
 
     private static byte[] orEmpty(byte[] bytes) {

@@ -36,7 +36,7 @@ public final class FrameLifecycleTest {
         byte[] prevKey = new byte[32];
         Arrays.fill(prevKey, (byte) 0x45);
         MsgContext ctx = new MsgContext(new byte[8], 2);
-        FrameSession s = FrameSession.load(key, 5, 8, FrameDirection.values());
+        FrameSession s = FrameSession.load(key, 5, new FrameConfig(8, FrameDirections.ALL));
         s.setPrevious(prevKey, 4);
         byte[] body = new byte[40];
         Object sealed = s.seal(UP, ctx, null, null, new byte[5], body);
@@ -110,7 +110,7 @@ public final class FrameLifecycleTest {
         Timing.Limit limit = Timing.bound(20.0);
         byte[][][] bodies = new byte[THREADS][PER_THREAD][];
         AtomicReference<Throwable> failure = new AtomicReference<>();
-        try (FrameSession s = FrameSession.load(key, 9, 4, FrameDirection.values())) {
+        try (FrameSession s = FrameSession.load(key, 9, new FrameConfig(4, FrameDirections.ALL))) {
             Thread[] threads = new Thread[THREADS];
             long start = System.nanoTime();
 

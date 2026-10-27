@@ -67,7 +67,7 @@ Optional parity bytes per scheme: `n` from 0 to 32, default 0, which keeps the b
 
 ### Interface: FrameSession (loop 71, AZ-3232; the only session since loop 74)
 
-Public types (the D1 names, shared by every package with frame mode; Java has all of them except `FrameConfig` and `FrameDirections` (its load takes the tag length and the directions as arguments) and adds `FrameSealed`): `FrameSession`, `FrameConfig`, `FrameDirection`, `FrameDirections`, `FrameSlot`, `FrameOpened`, `MsgContext`, `ReplayWindow`, `Freshness`, `MacKey`.
+Public types (the D1 names, shared by every package with frame mode; Java has all of them and adds `FrameSealed`): `FrameSession`, `FrameConfig`, `FrameDirection`, `FrameDirections`, `FrameSlot`, `FrameOpened`, `MsgContext`, `ReplayWindow`, `Freshness`, `MacKey`.
 
 | Name | Meaning |
 |------|---------|

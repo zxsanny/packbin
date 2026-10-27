@@ -45,7 +45,7 @@ Swift copies TypeScript row for row (loop 26 fit decision 4), except the documen
 
 ### Frame mode (loop 71, AZ-3234; the only session since loop 74)
 
-Public types (the D1 names, shared by every package with frame mode; Java has all of them except `FrameConfig` and `FrameDirections` (its load takes the tag length and the directions as arguments) and adds `FrameSealed`): `FrameSession`, `FrameConfig`, `FrameDirection`, `FrameDirections`, `FrameSlot`, `FrameOpened`, `MsgContext` (was `MessageContext` until loop 74, AZ-3285), `ReplayWindow`, `Freshness` (top-level since loop 74; it was nested as `ReplayWindow.Freshness`), `MacKey`.
+Public types (the D1 names, shared by every package with frame mode; Java has all of them and adds `FrameSealed`): `FrameSession`, `FrameConfig`, `FrameDirection`, `FrameDirections`, `FrameSlot`, `FrameOpened`, `MsgContext` (was `MessageContext` until loop 74, AZ-3285), `ReplayWindow`, `Freshness` (top-level since loop 74; it was nested as `ReplayWindow.Freshness`), `MacKey`.
 
 | Name | Meaning |
 |------|---------|

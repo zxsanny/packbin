@@ -44,3 +44,9 @@ Batches of disjoint write sets (`feature-description.md` couplings). Workers run
 ### Risks
 - A cross-package reader missed by the inventory (`git grep` every reader before each commit, `AGENT_GOTCHAS.md`).
 - Host load during step 11 (check `uptime` and `ps` first; load above 60 is not a result).
+
+## Assessment rounds
+
+| round | verdict | new specs | report |
+|-------|---------|-----------|--------|
+| 1 | CLARIFY (D6, owner: add `FrameConfig` and `FrameDirections` to Java) | AZ-3322_java_frame_config | _docs/loops/loop74/assessment74.md |

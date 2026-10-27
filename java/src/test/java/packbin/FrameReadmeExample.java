@@ -28,7 +28,9 @@ public final class FrameReadmeExample {
         byte[] msgId = {0, 0x30, 0x10, 0x05, (byte) 0xe8, 3, 0, 0}; // unique per (key, epoch, direction), never reused
         byte[] header = {0, 1, 0, 0x30, 0x10, 0x05, (byte) 0xe8, 3, 0, 0, 4}; // authenticated, not sent
 
-        try (FrameSession node = FrameSession.load(key, 1, 4, FrameDirection.UP)) { // epoch 1, 4-byte tag; null if out of range
+        FrameConfig config = new FrameConfig(4, FrameDirections.of(FrameDirection.UP)); // 4-byte tag; up frames only
+
+        try (FrameSession node = FrameSession.load(key, 1, config)) { // epoch 1; null if out of range
             MsgContext ctx = new MsgContext(msgId, 4);
             byte[] body = new byte[255];
             FrameSealed sealed = (FrameSealed) node.seal(FrameDirection.UP, ctx, header, null,

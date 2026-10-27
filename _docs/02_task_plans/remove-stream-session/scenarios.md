@@ -26,3 +26,9 @@
 ## Not walked
 
 - Permission denied, undo, concurrent: a library removal has no actor roles; concurrency of frame mode is unchanged (its rules are in the contract).
+
+## Assessment round 1
+
+| id | scenario | status | behavior (confirmed) | AC ref | source |
+|----|----------|--------|----------------------|--------|--------|
+| D6 | A Java caller loads a frame session | confirmed | `FrameSession.load(key, epoch, FrameConfig)` with `FrameConfig(tagLength, FrameDirections)`, the shape of Rust, C# and Swift; the varargs load is gone (owner, 2026-10-27, option A) | AZ-3322 AC-1..AC-4 | assess-round-1 |

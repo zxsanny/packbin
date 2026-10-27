@@ -11,7 +11,7 @@ import java.util.List;
  */
 public final class FrameStaticStateTest {
     private static final Class<?>[] GUARDED = {FrameSession.class, MacKey.class, FrameCrypto.class, FrameDirection.class,
-        FrameSlot.class, FrameSealed.class, FrameOpened.class, Freshness.class};
+        FrameDirections.class, FrameConfig.class, FrameSlot.class, FrameSealed.class, FrameOpened.class, Freshness.class};
 
     private FrameStaticStateTest() {}
 

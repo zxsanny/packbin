@@ -113,19 +113,18 @@ public final class FrameMacRefusalsTest {
 
     private static void loadRefusals() {
         byte[] key = key(1);
-        PackbinTest.expectTrue("epoch 0x1000000", FrameSession.load(key, 0x1000000, 4, UP) == null);
-        PackbinTest.expectTrue("epoch -1", FrameSession.load(key, -1, 4, UP) == null);
-        PackbinTest.expectTrue("epoch 0xFFFFFF", FrameSession.load(key, 0xFFFFFF, 4, UP) != null);
+        FrameConfig up4 = new FrameConfig(4, FrameDirections.of(UP));
+        PackbinTest.expectTrue("epoch 0x1000000", FrameSession.load(key, 0x1000000, up4) == null);
+        PackbinTest.expectTrue("epoch -1", FrameSession.load(key, -1, up4) == null);
+        PackbinTest.expectTrue("epoch 0xFFFFFF", FrameSession.load(key, 0xFFFFFF, up4) != null);
         for (int tag : new int[] {0, 5, 32, 3, 17}) {
-            PackbinTest.expectTrue("tag_len " + tag, FrameSession.load(key, 1, tag, UP) == null);
+            PackbinTest.expectTrue("tag_len " + tag, FrameSession.load(key, 1, new FrameConfig(tag, FrameDirections.of(UP))) == null);
         }
         for (int tag : new int[] {4, 8, 16}) {
-            PackbinTest.expectTrue("tag_len " + tag, FrameSession.load(key, 1, tag, UP) != null);
+            PackbinTest.expectTrue("tag_len " + tag, FrameSession.load(key, 1, new FrameConfig(tag, FrameDirections.of(UP))) != null);
         }
-        PackbinTest.expectTrue("null direction in the list", FrameSession.load(key, 1, 4, UP, null) == null);
-        PackbinTest.expectTrue("null direction list", FrameSession.load(key, 1, 4, (FrameDirection[]) null) == null);
-        PackbinTest.expectTrue("key of 31 bytes", FrameSession.load(new byte[31], 1, 4, UP) == null);
-        PackbinTest.expectTrue("null key", FrameSession.load(null, 1, 4, UP) == null);
+        PackbinTest.expectTrue("key of 31 bytes", FrameSession.load(new byte[31], 1, up4) == null);
+        PackbinTest.expectTrue("null key", FrameSession.load(null, 1, up4) == null);
     }
 
     private static void expectSealRefusal(String label, Class<?> expected, FrameSession s, FrameDirection dir, MsgContext ctx,
@@ -143,7 +142,7 @@ public final class FrameMacRefusalsTest {
 
     private static void sealRefusalsWriteNothing() {
         MsgContext ctx = new MsgContext(new byte[8], 3);
-        try (FrameSession s = FrameSession.load(key(9), 2, 4, UP, DOWN)) {
+        try (FrameSession s = FrameSession.load(key(9), 2, new FrameConfig(4, FrameDirections.of(UP, DOWN)))) {
             expectSealRefusal("null direction", Packbin.BadValue.class, s, null, ctx, null, null, new byte[3], 300);
             expectSealRefusal("direction not loaded", Packbin.BadValue.class, s, GROUP, ctx, null, null, new byte[3], 300);
             expectSealRefusal("kind 16", Packbin.BadValue.class, s, UP, new MsgContext(new byte[8], 16), null, null, new byte[3], 300);
@@ -170,7 +169,7 @@ public final class FrameMacRefusalsTest {
 
     private static void openRefusals() {
         MsgContext ctx = new MsgContext(new byte[8], 3);
-        try (FrameSession s = FrameSession.load(key(9), 2, 4, UP, DOWN)) {
+        try (FrameSession s = FrameSession.load(key(9), 2, new FrameConfig(4, FrameDirections.of(UP, DOWN)))) {
             byte[] body = new byte[20];
             Object sealed = s.seal(UP, ctx, null, new byte[2], new byte[14], body);
             PackbinTest.expectTrue("sealed 20 bytes", sealed instanceof FrameSealed);

@@ -70,12 +70,12 @@ public final class FrameTamperReplayTest {
                         e.clear.length);
                 expectTagMismatch("E" + e.dir.wire + " direction", s, e.dir == UP ? DOWN : UP, e.ctx, e.ad, body, e.clear.length);
                 expectTagMismatch("E" + e.dir.wire + " clear_len + 1", s, e.dir, e.ctx, e.ad, body, e.clear.length + 1);
-                try (FrameSession otherEpoch = FrameSession.load(e.key, e.epoch + 1, 4, FrameDirection.values())) {
+                try (FrameSession otherEpoch = FrameSession.load(e.key, e.epoch + 1, new FrameConfig(4, FrameDirections.ALL))) {
                     expectTagMismatch("E" + e.dir.wire + " epoch", otherEpoch, e.dir, e.ctx, e.ad, body, e.clear.length);
                 }
                 byte[] otherKey = e.key.clone();
                 otherKey[0] ^= 1;
-                try (FrameSession other = FrameSession.load(otherKey, e.epoch, 4, FrameDirection.values())) {
+                try (FrameSession other = FrameSession.load(otherKey, e.epoch, new FrameConfig(4, FrameDirections.ALL))) {
                     expectTagMismatch("E" + e.dir.wire + " key", other, e.dir, e.ctx, e.ad, body, e.clear.length);
                 }
             }
@@ -174,7 +174,7 @@ public final class FrameTamperReplayTest {
     private static byte[] sealUnder(byte fill, int epoch, MsgContext ctx, byte[] ad, byte[] plain) {
         byte[] key = new byte[32];
         Arrays.fill(key, fill);
-        try (FrameSession s = FrameSession.load(key, epoch, 4, DOWN)) {
+        try (FrameSession s = FrameSession.load(key, epoch, new FrameConfig(4, FrameDirections.of(DOWN)))) {
             byte[] out = new byte[64];
             FrameSealed sealed = (FrameSealed) s.seal(DOWN, ctx, ad, null, plain, out);
             return Arrays.copyOf(out, sealed.length);
@@ -192,8 +192,8 @@ public final class FrameTamperReplayTest {
         Arrays.fill(b, (byte) 0xBB);
         byte[] a = new byte[32];
         Arrays.fill(a, (byte) 0xAA);
-        try (FrameSession two = FrameSession.load(b, 7, 4, DOWN);
-                FrameSession one = FrameSession.load(b, 7, 4, DOWN)) {
+        try (FrameSession two = FrameSession.load(b, 7, new FrameConfig(4, FrameDirections.of(DOWN)));
+                FrameSession one = FrameSession.load(b, 7, new FrameConfig(4, FrameDirections.of(DOWN)))) {
             PackbinTest.expectTrue("previous slot set", two.setPrevious(a, 6));
 
             // Act
@@ -225,7 +225,7 @@ public final class FrameTamperReplayTest {
         byte[] b = new byte[32];
         Arrays.fill(b, (byte) 0xBB);
         ReplayWindow window = new ReplayWindow();
-        try (FrameSession s = FrameSession.load(b, 7, 4, DOWN)) {
+        try (FrameSession s = FrameSession.load(b, 7, new FrameConfig(4, FrameDirections.of(DOWN)))) {
             s.setPrevious(a, 6);
 
             // Act

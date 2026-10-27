@@ -27,8 +27,8 @@ public final class FrameHostileTest {
         int opened = 0;
         int unknown = 0;
         int[] counts = new int[16];
-        try (FrameSession s4 = FrameSession.load(key, 3, 4, FrameDirection.values());
-                FrameSession s16 = FrameSession.load(key, 3, 16, FrameDirection.UP, FrameDirection.GROUP)) {
+        try (FrameSession s4 = FrameSession.load(key, 3, new FrameConfig(4, FrameDirections.ALL));
+                FrameSession s16 = FrameSession.load(key, 3, new FrameConfig(16, FrameDirections.of(FrameDirection.UP, FrameDirection.GROUP)))) {
             s4.setPrevious(key, 2);
             ReplayWindow window = new ReplayWindow();
             for (int i = 0; i < ROUNDS; i++) {
