@@ -171,7 +171,8 @@ def text_edges() -> None:
         check(f"duplicate key, {name}: refused", not res.ok and isinstance(res.error, ShortPacket), str(res.error))
     nfc = "é".encode()
     nfd = "é".encode()
-    packet = b"\x01\x02\x00" + varint(1 + len(nfc)) + b"\x10" + nfc + b"\x05" + varint(1 + len(nfd)) + b"\x10" + nfd + b"\x06"
+    # Dictionary keys must ascend strictly by UTF-8 bytes: NFD (65 cc 81) sorts before NFC (c3 a9).
+    packet = b"\x01\x02\x00" + varint(1 + len(nfd)) + b"\x10" + nfd + b"\x05" + varint(1 + len(nfc)) + b"\x10" + nfc + b"\x06"
     res = BinaryPacker.unpack(packet, d.on(lambda r: None))
     info("keys NFC 'é' and NFD 'e+U+0301'", f"{'accepted as two keys' if res.ok else 'refused'} (no normalization; Swift F47 differs)")
 

@@ -99,12 +99,17 @@ Given the loop's diff
 When it is read
 Then no file under `csharp/*.cs` or `java/src/main` changed for H6 (the packages are right).
 
+**AC-H6.4: Python and TypeScript probes** (assessment round 1, AZ-3334)
+Given the Python and TypeScript `edges` probes
+When each runs with the NFD key first
+Then each prints `accepted as two keys (no normalization; Swift F47 differs)` for the NFC/NFD case, exits 0 with 0 FAIL (it printed `refused` before)
+
 ## H7: Session names (item 7)
 
 **AC-H7.1: No stale name**
 Given the tracked files outside `_docs/loops/`, `_docs/02_tasks/done/`, `_docs/03_implementation/` and this plan folder
 When `git grep -n "TopRangeAndSessionTests\|EccSessionTextTests\|fuzz_ecc_session"` runs
-Then it prints 0 lines (10 lines in 10 files today).
+Then it prints exactly 1 line, the loop 74 history row of `_docs/02_document/components/01_csharp_package/tests-by-loop.md`, which names the old classes once next to the new ones (10 lines in 10 files today).
 
 **AC-H7.2: Same tests, same results**
 Given the C# suite, `fuzz_ecc` for Python and for TypeScript

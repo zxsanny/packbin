@@ -118,7 +118,8 @@ trap_offenders() {
   for f in "$dir"/publish-*.test.sh; do
     name="$(basename "$f")"
     grep -qF "source \"\$here/$name\"" "$dir"/publish-*.sh || continue
-    if grep -nE "^[[:space:]]*trap .* EXIT" "$f" | grep -qv timed_abort; then echo "$name"; fi
+    traps="$(grep -nE "^[[:space:]]*trap .* EXIT" "$f" || true)"
+    if [ -n "$traps" ] && grep -qv timed_abort <<< "$traps"; then echo "$name"; fi
   done
 }
 if out="$(trap_offenders "$here")" && [ -z "$out" ]; then

@@ -180,7 +180,8 @@ function textEdges(): void {
   }
   const nfc = new Uint8Array(Buffer.from("é", "utf8"))
   const nfd = new Uint8Array(Buffer.from("é", "utf8"))
-  const res = pb.BinaryPacker.unpack(cat(B(1, 2, 0), varint(1 + nfc.length), B(0x10), nfc, B(5), varint(1 + nfd.length), B(0x10), nfd, B(6)), d.on(() => {}))
+  // Dictionary keys must ascend strictly by UTF-8 bytes: NFD (65 cc 81) sorts before NFC (c3 a9).
+  const res = pb.BinaryPacker.unpack(cat(B(1, 2, 0), varint(1 + nfd.length), B(0x10), nfd, B(5), varint(1 + nfc.length), B(0x10), nfc, B(6)), d.on(() => {}))
   info("keys NFC 'é' and NFD 'e+U+0301'", res.ok ? "accepted as two keys (no normalization; Swift F47 differs)" : "refused")
   let row: any = null
   const proto = new Uint8Array(Buffer.from("__proto__", "utf8"))

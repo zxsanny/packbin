@@ -29,6 +29,13 @@ Slug `hygiene-after-frame-ports`; tasks AZ-3329..AZ-3333 (11 points), epic AZ-26
 
 Only rows with `include: yes` are executed (plus close steps).
 
+## Assessment rounds
+
+| round | verdict | new specs | report |
+|-------|---------|-----------|--------|
+| 1 | CLARIFY | AZ-3334_py_ts_edges_key_order | _docs/loops/loop76/assessment76.md |
+| 2 | COMPLETE | — | _docs/loops/loop76/assessment76.md |
+
 ## Implementation
 
 ### Files that change

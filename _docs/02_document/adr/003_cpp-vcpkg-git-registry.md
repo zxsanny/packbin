@@ -66,4 +66,4 @@ Amended 2026-10-06 (AZ-2098): the port builds and exports `packbin::packbin`; th
 
 Amended 2026-10-06 (AZ-2232): the staged port declares `supports` `linux | osx`, and the installed `packbin-config-version.cmake` uses `SameMinorVersion` below 1.0 and `SameMajorVersion` from 1.0.
 
-Corrected 2026-10-27 (AZ-3332, loop 76): the Consequences named a second reason for the Linux and macOS limit, that `os_random` had no Windows branch. `os_random` was removed in loop 74 (AZ-3286, ADR 009), so that reason was gone; the only reason is that the C++ core is built and tested only with gcc on Linux and clang on macOS. The `supports` line is unchanged.
+Corrected 2026-10-27 (AZ-3332, loop 76): the Consequences named a second reason for the Linux and macOS limit, that `os_random` had no Windows branch. `os_random` was removed in loop 74 (AZ-3286, ADR 009), so that reason was gone; the reason that remains is that the C++ core is built and tested only with gcc on Linux and clang on macOS. The `supports` line is unchanged.

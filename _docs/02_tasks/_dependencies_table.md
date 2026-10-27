@@ -482,3 +482,4 @@ Loop 74 (2026-10-26, ADR-009: remove the stream session; D1 frame names; D2 cryp
 | AZ-3331 | rust_feature_set_tests (loop 76) | 3 | None | AZ-2645 |
 | AZ-3332 | docs_swift_docc_vcpkg_reason (loop 76) | 2 | None | AZ-2645 |
 | AZ-3333 | session_names (loop 76) | 2 | None | AZ-2645 |
+| AZ-3334 | py_ts_edges_key_order (loop 76, assessment round 1) | 1 | AZ-3329 | AZ-2645 |

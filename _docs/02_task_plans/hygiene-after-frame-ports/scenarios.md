@@ -15,7 +15,9 @@ Source of rows: `intake` (new-task Step 4.7, loop 76). Status: confirmed / out-o
 | S9 | A reader of ADR-003 or the C++ description asks why the vcpkg port is Linux and macOS only | confirmed | the answer is "built and tested only with gcc on Linux and clang on macOS", not `os_random` | AZ-3332 AC-3 | intake |
 | S10 | A maintainer runs the C# or Java `edges` probe with two dictionary keys in descending byte order | out-of-scope | the dictionary-order tests of the packages already pin the refusal; the probe keeps the one ascending case | — | intake |
 | S11 | A script, doc or CI file names a file that item 7 renames | confirmed | none is left: `git grep` finds 0 stale names | AZ-3333 AC-1 | intake |
-| S12 | The renamed Python and TypeScript fuzz probes run | confirmed | same exit code and same PASS lines as before the rename | AZ-3333 AC-2 | intake |
+| S12 | The renamed Python and TypeScript fuzz probes run | confirmed | exit 0, 0 mismatches and the same final verdict line as before the rename (these probes print no PASS lines) | AZ-3333 AC-2 | intake |
+| S13 | The Python and TypeScript `edges` probes build the NFC/NFD case | confirmed | NFD key first; the info line reads "accepted as two keys" (owner, 2026-10-27, assessment round 1 row A1) | AZ-3334 AC-1, AC-2 | assess-round-1 |
+| S14 | A maintainer runs `cargo test` in a non-default Rust feature set (none, alloc, text, ecc, text+ecc, text+ecc+frame) | confirmed | each set's tests run once and the counts are recorded; a failing set is a finding, not a fix in this loop (owner, 2026-10-27, row A2) | AZ-3331 AC-1 (compile), the recorded run in the assessment report | assess-round-1 |
 
 ## Fit decisions
 
