@@ -11,7 +11,7 @@
 [![build (main)](https://img.shields.io/github/actions/workflow/status/zxsanny/packbin/test.yml?branch=main&label=build%20(main))](https://github.com/zxsanny/packbin/actions/workflows/test.yml?query=branch%3Amain)
 [![publish](https://img.shields.io/github/actions/workflow/status/zxsanny/packbin/publish.yml?label=publish)](https://github.com/zxsanny/packbin/actions/workflows/publish.yml)
 
-Binary packing and unpacking across languages with an optional encryption, declarative mapping, and zero overhead in the binary data.
+Binary packing and unpacking across languages with optional authenticated encryption (frame mode), declarative mapping, and no overhead in the binary data: a clear packet carries only its fields, and a sealed frame adds a 4, 8 or 16-byte tag.
 
 Both sides keep the same field list. The bytes are only the values. Unpack takes the buffer and handlers. The first byte selects the handler, and that handler's scheme reads the rest.
 
@@ -1094,7 +1094,7 @@ fn main() -> Result<(), Fault> {
 }
 ```
 
-The Cargo feature is `frame` (`packbin = { version = "...", default-features = false, features = ["frame"] }` builds `#![no_std]` with frame mode only). The same example runs as a doc test of the crate. A node that is short of stack declares `FrameSession::frame_unloaded()` where it lives and calls `load_frame_in_place` on it.
+The Cargo feature is `frame` (`packbin = { version = "...", default-features = false, features = ["frame"] }` builds `#![no_std]` with frame mode only). The same example runs as a doc test of the crate. A node that is short of stack declares `FrameSession::frame_unloaded()` where it lives and calls `load_frame_in_place` on it. `load_frame` returns the session by value, so a copy of its key state (about 600 bytes) is left in the caller's stack slot, which Rust does not wipe when a value moves; on a device use `load_frame_in_place`.
 
 ### C#
 

@@ -20,5 +20,5 @@ ADR-004 amends the count of six in ADR-002 (the first tag's six packages stay hi
 ADR-005 amends nothing: Swift adds no package and no tag, and ADR-002 and ADR-004 stay as written.
 ADR-006 amends nothing: the compact text codec is one more runtime primitive under ADR-001; the string wire form changes, no other ADR does.
 ADR-007 amends nothing: ADR-001's "the wire size is the sum of the present fields" holds for every scheme that does not declare parity bytes; the one exception is opt-in.
-ADR-008 amends ADR-001's "the wire size is the sum of the present fields" and the "authentication: none" line of the architecture for frame mode only: the body ends with its tag. Stream mode is unchanged.
+ADR-008 amends ADR-001's "the wire size is the sum of the present fields" and the "authentication: none" line of the architecture for frame mode only: the body ends with its tag. Stream mode was unchanged then and is removed by ADR-009.
 ADR-009 amends ADR-008: its frame-mode decision stands; the stream mode beside it, and "one session type serves the websocket (stream) and the radio (frame)", are removed. ADR-008 itself is unchanged.

@@ -5,6 +5,7 @@
 - **Deciders**: project owner (route A, 2026-10-19)
 - **Supersedes**: —
 - **Superseded by**: —
+- **Amended by**: ADR-009 (the stream mode beside frame mode is removed; this ADR's frame-mode decision stands)
 
 ## Context
 

@@ -104,30 +104,93 @@ bool read_text(char const* path, char* buf, std::size_t cap) {
   return whole;
 }
 
-bool names_an_os_rng(char const* text) {
-  return std::strstr(text, "sys/random.h") != nullptr ||
-         std::strstr(text, "/dev/urandom") != nullptr ||
-         std::strstr(text, "arc4random") != nullptr;
+bool ident_char(char c) {
+  return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
 }
 
-bool only_core_headers(char const* text) {
+// True when `call` (such as `rand(`) occurs where no identifier character comes before it, so
+// `operand(` and `brand(` are not the call but `std::rand(` and ` rand(` are.
+bool names_call(char const* text, char const* call) {
+  for (char const* at = std::strstr(text, call); at != nullptr; at = std::strstr(at + 1, call))
+    if (at == text || !ident_char(at[-1]))
+      return true;
+  return false;
+}
+
+// A source of random bytes of an operating system, a C library or a vendor SDK, by file, device
+// or function; `random.h` also covers "esp_random.h", "sys/random.h" and "board_random.hpp".
+bool names_an_os_rng(char const* text) {
+  static char const* const names[] = {
+      "random.h",       "/dev/urandom",          "/dev/random",        "arc4random",
+      "getrandom",      "getentropy",            "esp_random",         "esp_fill_random",
+      "random_device",  "RandomNumberGenerator", "SecRandomCopyBytes", "BCryptGenRandom",
+      "CryptGenRandom", "RtlGenRandom",          "RAND_bytes",         "mbedtls_ctr_drbg",
+      "rand48"};
+  static char const* const calls[] = {"rand(", "srand(", "random(", "rand_r("};
+  for (char const* n : names)
+    if (std::strstr(text, n) != nullptr)
+      return true;
+  for (char const* c : calls)
+    if (names_call(text, c))
+      return true;
+  return false;
+}
+
+// The first `close` of the line starting at `p`, or null when the line ends first.
+char const* closing(char const* p, char close) {
+  for (; *p != '\0' && *p != '\n'; ++p)
+    if (*p == close)
+      return p;
+  return nullptr;
+}
+
+bool allowed_header(char const* name, std::size_t len) {
   static char const* const allowed[] = {"cstdint", "cstddef", "cstring", "type_traits",
                                         "limits",  "array",   "utility"};
-  for (char const* at = std::strstr(text, "#include <"); at != nullptr;
-       at = std::strstr(at + 1, "#include <")) {
-    char const* name = at + std::strlen("#include <");
-    char const* end = std::strchr(name, '>');
+  for (char const* a : allowed)
+    if (std::strlen(a) == len && std::strncmp(name, a, len) == 0)
+      return true;
+  return false;
+}
+
+// A quoted include is a header of the library: packbin/<name>.hpp, or <name>.hpp in src/core.
+bool own_header(char const* name, std::size_t len) {
+  if (len < 5 || std::strncmp(name + len - 4, ".hpp", 4) != 0)
+    return false;
+  if (len > 8 && std::strncmp(name, "packbin/", 8) == 0)
+    name += 8;
+  for (; *name != '"'; ++name)
+    if (*name == '/')
+      return false;
+  return true;
+}
+
+// Every `#include` of `text` (spaces allowed around the #, mid-line and commented out too) names
+// a header of the library, or a standard header the core allows between <>; anything else, such
+// as <random>, <unistd.h>, "esp_random.h" or a macro, is false.
+bool only_core_includes(char const* text) {
+  for (char const* hash = std::strchr(text, '#'); hash != nullptr;
+       hash = std::strchr(hash + 1, '#')) {
+    char const* p = hash + 1;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    if (std::strncmp(p, "include", 7) != 0)
+      continue;
+    p += 7;
+    while (*p == ' ' || *p == '\t')
+      ++p;
+    char const* end = (*p == '<' || *p == '"') ? closing(p + 1, *p == '<' ? '>' : '"') : nullptr;
     if (end == nullptr)
       return false;
-    bool ok = false;
-    for (char const* a : allowed)
-      if (std::strlen(a) == static_cast<std::size_t>(end - name) &&
-          std::strncmp(name, a, std::strlen(a)) == 0)
-        ok = true;
-    if (!ok)
+    std::size_t len = static_cast<std::size_t>(end - (p + 1));
+    if (*p == '<' ? !allowed_header(p + 1, len) : !own_header(p + 1, len))
       return false;
   }
   return true;
+}
+
+bool core_text_clean(char const* text) {
+  return !names_an_os_rng(text) && only_core_includes(text);
 }
 
 char const* cpp_root() {
@@ -151,7 +214,7 @@ int scan_core_file(char const* path, int& dirty) {
     ++dirty;
     return 0;
   }
-  if (names_an_os_rng(text) || !only_core_headers(text)) {
+  if (!core_text_clean(text)) {
     std::fprintf(stderr, "AC-3 OS reference in %s\n", path);
     ++dirty;
   }
@@ -193,6 +256,61 @@ void ac3_no_os_in_core() {
   expect(scanned >= 9 && dirty == 0, "AC-3 0 OS random references in the core");
 }
 
+// The scan has to see what it is for: each snippet below is source a core file must not hold, and
+// the clean ones (prose about random bytes, names that only end like a call) must pass.
+void ac3_scan_catches_each_pattern() {
+  static char const* const dirty[] = {
+      "#include <sys/random.h>\n",
+      "#include \"sys/random.h\"\n",
+      "#include <esp_random.h>\n",
+      "#include \"esp_random.h\"\n",
+      "#include \"packbin/board_random.hpp\"\n",
+      "#include \"driver/rng.h\"\n",
+      "#include \"nrf_rng.h\"\n",
+      "#include <random>\n",
+      "#include <cstdlib>\n",
+      "#include <stdlib.h>\n",
+      "#include <unistd.h>\n",
+      "#  include\t<fcntl.h>\n",
+      "#include RANDOM_HEADER\n",
+      "int a;\n#include \"../outside.hpp\"\n",
+      "esp_fill_random(out, n);\n",
+      "uint32_t r = esp_random();\n",
+      "getrandom(out, n, 0);\n",
+      "arc4random_buf(out, n);\n",
+      "getentropy(out, n);\n",
+      "std::fopen(\"/dev/urandom\", \"rb\");\n",
+      "std::fopen(\"/dev/random\", \"rb\");\n",
+      "std::random_device rd;\n",
+      "var g = RandomNumberGenerator.Create();\n",
+      "int x = rand();\n",
+      "int x = std::rand() % 7;\n",
+      "srand(1);\n",
+      "x = random();\n",
+      "rand_r(&seed);\n",
+      "double d = drand48();\n",
+      "RAND_bytes(out, n);\n",
+      "SecRandomCopyBytes(nullptr, n, out);\n",
+      "BCryptGenRandom(nullptr, out, n, 2);\n",
+      "mbedtls_ctr_drbg_random(&ctx, out, n);\n"};
+  static char const* const clean[] = {
+      "#include \"packbin/platform.hpp\"\n#include \"values.hpp\"\n#include <cstdint>\n",
+      "# include <array>\n#include \"packbin/text_tables.hpp\"\n",
+      "// The caller supplies random bytes; the core draws none.\n",
+      "int operand(int x); int brand(int y); int grand(int z);\n",
+      "int strand(int a) { return operand(a); }\n"};
+  for (char const* snippet : dirty) {
+    char msg[160];
+    std::snprintf(msg, sizeof(msg), "AC-3 the scan misses: %.100s", snippet);
+    expect(!core_text_clean(snippet), msg);
+  }
+  for (char const* snippet : clean) {
+    char msg[160];
+    std::snprintf(msg, sizeof(msg), "AC-3 the scan flags clean text: %.100s", snippet);
+    expect(core_text_clean(snippet), msg);
+  }
+}
+
 }  // namespace
 
 int run_core_host_tests() {
@@ -200,5 +318,6 @@ int run_core_host_tests() {
   parallel_pack();
   no_gpu();
   ac3_no_os_in_core();
+  ac3_scan_catches_each_pattern();
   return check::failures();
 }

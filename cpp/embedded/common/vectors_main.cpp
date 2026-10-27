@@ -13,6 +13,7 @@ int run_core_scalar_tests();
 int run_core_scheme_tests();
 int run_core_grouped_tests();
 int run_core_counted_tests();
+int run_core_crypto_tests();
 int run_core_ecc_api_tests();
 
 namespace {
@@ -79,6 +80,7 @@ int main() {
   run_core_scheme_tests();
   run_core_grouped_tests();
   run_core_counted_tests();
+  run_core_crypto_tests();
   run_core_ecc_api_tests();
   print_files();
   int failures = check::failures() + all_kinds_packet();
