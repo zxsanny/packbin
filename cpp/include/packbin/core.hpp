@@ -26,6 +26,14 @@ enum class Error : std::uint8_t {
   // 254 minus the parity count on pack (`offset` the length, `needed` the limit). Distinct from
   // `TooMany`.
   TooLong,
+  // Frame mode (frame.hpp): the tag matches neither the current key nor the previous key. Nothing was
+  // decrypted and nothing was written.
+  TagMismatch,
+  // Frame mode: the replay window has already committed this counter. No tag was computed.
+  Duplicate,
+  // Frame mode: the counter is 64 or more behind the highest committed counter of the replay window. No
+  // tag was computed.
+  TooOld,
 };
 
 // Working memory of the compact-text encoder: 3 words (12 bytes) per Unicode code point of the

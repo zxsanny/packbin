@@ -8,7 +8,7 @@
 | F2 | Unpack | caller has bytes | any of the eight language packages | High |
 | F3 | Publish | version tag | GitHub Actions | High |
 | F4 | Session (stream) | retired (loop 74, ADR 009) | none | — |
-| F5 | Frame session | caller has a 32-byte key and an epoch | C#, Java, Rust, Swift (C++, Go, Python, TypeScript in loop 75) | High |
+| F5 | Frame session | caller has a 32-byte key and an epoch | all eight packages (C++, Go, Python, TypeScript since loop 75) | High |
 
 ## Flow Dependencies
 
@@ -263,5 +263,5 @@ Each side loads a `FrameSession` from the caller's 32-byte key, a 24-bit epoch, 
 | Metric | Target | Notes |
 |--------|--------|-------|
 | Added bytes | the tag length, 4, 8 or 16 bytes | the clear part and the ciphertext are the caller's bytes, unchanged in length |
-| Packages with frame mode (C#, Java, Rust, Swift; C++, Go, Python, TypeScript in loop 75) | the 157 frame rows | mismatched bytes 0 |
+| Packages with frame mode (all eight; C++, Go, Python, TypeScript since loop 75) | the 157 frame rows | mismatched bytes 0 |
 | Rust heap-free core on the M4F image | the `frame` set within its bounds of 20,480 B flash and 1,991 B stack (`rust/embedded/limits.txt`) | measured 20,332 B and 1,728 B with Rust 1.98.1 (loop 74, unchanged by the removal) |

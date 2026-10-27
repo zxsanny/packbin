@@ -53,6 +53,12 @@ char const* term(packbin::Result const& r) {
       return "uncorrectable";
     case Error::TooLong:
       return "too_long";
+    case Error::TagMismatch:
+      return "tag_mismatch";
+    case Error::Duplicate:
+      return "duplicate";
+    case Error::TooOld:
+      return "too_old";
   }
   return "unknown";
 }

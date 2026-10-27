@@ -84,8 +84,8 @@
 //
 // Unpack reads with the scheme the first byte names. Errors are values: every error is an *Error,
 // whose Kind is ShortPacket (Field, Name, Needed, Left), TrailingBytes (Left), UnknownType (Actual),
-// BadValue, InvalidScheme, PackRefused, TooMany, Uncorrectable or TooLong; errors.Is matches it against ErrShortPacket and the other
-// sentinels. A refused pack returns nil bytes, never part of a packet. No input makes Pack, Unpack or
+// BadValue, InvalidScheme, PackRefused, TooMany, Uncorrectable, TooLong or (frame mode) BufferFull, TagMismatch, Duplicate or
+// TooOld; errors.Is matches it against ErrShortPacket and the other sentinels. A refused pack returns nil bytes, never part of a packet. No input makes Pack, Unpack or
 // NewScheme panic.
 //
 // A built Scheme is immutable and safe for concurrent Pack and Unpack from any number of goroutines.
@@ -199,4 +199,20 @@
 //
 // A message shorter than n is a ShortPacket naming the field "parity"; one above 254 bytes is a
 // TooLong.
+//
+// # Frame mode
+//
+// Sealed, authenticated frames for links that lose, reorder and duplicate messages (pack-session.md 3.0.0):
+//
+//	LoadFrameSession(key []byte, epoch uint32, config FrameConfig) (*FrameSession, error)
+//	(*FrameSession).Seal(direction, message MsgContext, ad, clear, plain, out []byte) (int, error)
+//	(*FrameSession).Open(direction, message, ad, body []byte, clearLength int, plain []byte,
+//	                     window *ReplayWindow, counter uint64) (FrameOpened, error)
+//	(*FrameSession).SetPrevious, ClearPrevious, Close
+//	DeriveMacKey(key []byte, epoch uint32, label []byte) (*MacKey, error)
+//	(*MacKey).Tag(tag []byte, parts ...[]byte) error, Verify(tag []byte, parts ...[]byte) bool, Close
+//
+// The caller owns one ReplayWindow per sender. The errors are *Error values of the kinds BadValue, TooLong,
+// BufferFull, ShortPacket, TagMismatch, Duplicate and TooOld. Seal and Open are safe from any number of
+// goroutines; Close overwrites the derived keys, best effort (see FrameSession).
 package packbin

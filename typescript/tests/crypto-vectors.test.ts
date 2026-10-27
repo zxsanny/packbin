@@ -230,7 +230,7 @@ describe("crypto refusals (AZ-3288)", () => {
 })
 
 describe("crypto stays internal (AZ-3288 AC-1)", () => {
-  it("the package entry exports no stream session and no crypto name", async () => {
+  it("the package entry exports no stream session (FrameSession is the one session) and no crypto name", async () => {
     // Arrange
     const internal = [
       ...["PackSession", "xorPad", "xorWithNonce"],
@@ -242,6 +242,6 @@ describe("crypto stays internal (AZ-3288 AC-1)", () => {
 
     // Assert
     assert.ok(names.includes("BinaryPacker"), names.join(", "))
-    assert.deepEqual(names.filter((name) => internal.includes(name) || /session/i.test(name)), [])
+    assert.deepEqual(names.filter((name) => internal.includes(name) || (/session/i.test(name) && name !== "FrameSession")), [])
   })
 })

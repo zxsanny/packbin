@@ -16,7 +16,7 @@ cache="${PACKBIN_EMBEDDED_CACHE:-$root/.cache/embedded}"
 # Feature AC-1 flags; every core and test source on every target builds with these.
 core_flags=(-std=c++17 -fno-exceptions -fno-rtti -Os -Wall -Wextra -Werror)
 c_flags=(-std=c11 -Os -Wall -Wextra -Werror)
-core_srcs=(src/core/values.cpp src/core/pack.cpp src/core/unpack.cpp src/core/crypto.cpp)
+core_srcs=(src/core/values.cpp src/core/pack.cpp src/core/unpack.cpp src/core/crypto.cpp src/core/frame.cpp)
 
 # Budgets from feature AC-5.
 flash_budget=8192
@@ -44,6 +44,14 @@ m33f_stack_budget=8192
 # a line in _docs/AGENT_GOTCHAS.md saying what the bytes bought.
 m33f_flash_pin=25720
 m33f_stack_pin=724
+# Pins on the frame image of the same row (AZ-3292, loop 75): the frame session and the MAC-only call alone (no pack or
+# unpack in the image). Flash is the image (text plus data, 8,416 B on HEAD); stack is the deepest call of load,
+# set_previous, seal, open and the MAC-only call at 255-byte bodies, 16-byte tags and 255 bytes of associated data, net of
+# the meter (912 B; raw 976 B less 64 B; the MAC-only derive is the deepest call, HKDF inside HMAC above the 328 B
+# SHA-256 compress). A later edit that spends bytes fails the row by its own bytes; raise the pins only with a line in
+# _docs/AGENT_GOTCHAS.md saying what the bytes bought.
+m33f_frame_flash_pin=8416
+m33f_frame_stack_pin=912
 
 # VECTOR_TESTS straight from cpp/Makefile, so the runner always builds the host's list.
 vector_tests() {

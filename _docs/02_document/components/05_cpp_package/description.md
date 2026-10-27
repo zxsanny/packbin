@@ -4,7 +4,7 @@
 
 **Purpose**: Pack and unpack a caller-owned scheme into caller buffers, for host C++ programs and 32-bit microcontrollers.
 
-**Architectural Pattern**: one allocation-free, exception-free core (C++17, no heap, no RTTI, no global state). No session until the frame-mode port (AZ-3292, loop 75): the stream session is removed (loop 74, ADR 009), and an internal crypto module waits for frame mode. The wire bytes are the same as in the other five languages.
+**Architectural Pattern**: one allocation-free, exception-free core (C++17, no heap, no RTTI, no global state). Frame mode (`FrameSession` in `frame.hpp`, loop 75, AZ-3292) is the one session, and it follows the same rules: the caller's buffers, no heap, no exceptions. The stream session was removed in loop 74 (ADR 009). The wire bytes are the same as in the other five languages.
 
 **Upstream dependencies**: none inside the repo.
 
@@ -14,7 +14,7 @@
 
 ### Interface: packbin
 
-Public headers are `codec.hpp`, `core.hpp`, `ecc.hpp`, `fields.hpp`, `fields_grouped.hpp`, `fields_counted.hpp`, `order.hpp`, `platform.hpp`, `table.hpp` and `text_tables.hpp`. `packbin.hpp` (and `cpp/arduino/packbin.h`) includes `codec.hpp`. The core sources are `cpp/src/core/*.cpp`; since loop 74 no source is host-only (`session.hpp`, `os_random.hpp` and `os_random.cpp` were removed with the stream session, ADR 009).
+Public headers are `codec.hpp`, `core.hpp`, `ecc.hpp`, `fields.hpp`, `fields_grouped.hpp`, `fields_counted.hpp`, `order.hpp`, `platform.hpp`, `table.hpp`, `text_tables.hpp` and (loop 75) `frame.hpp`. `packbin.hpp` includes `codec.hpp` and `frame.hpp`; `cpp/arduino/packbin.h` includes `codec.hpp`. The core sources are `cpp/src/core/*.cpp`; since loop 74 no source is host-only (`session.hpp`, `os_random.hpp` and `os_random.cpp` were removed with the stream session, ADR 009).
 
 | Method | Input | Output | Async | Error Types |
 |--------|-------|--------|-------|-------------|
@@ -45,11 +45,27 @@ A value longer than its storage is `TooMany`, never cut.
 
 ### Interface: PackSession (removed in loop 74)
 
-Retired (loop 74, AZ-3286, ADR 009): the stream session `PackSession` (`load` of a 32-byte seed, `start` with the caller's nonce or a `RandomFn`, `join`, `pack` padded in place, `unpack`; no tag) is removed with `include/packbin/session.hpp`, the host random source `os_random.hpp` and `src/os_random.cpp`, `src/core/session.cpp` and the tests `session_tests.cpp`, `session_host_tests.cpp` and `ecc_session_host_tests.cpp`. The ESP-IDF example no longer draws a hardware nonce. C++ gains frame mode in loop 75 (AZ-3292), with the D1 type names `FrameSession`, `FrameConfig`, `FrameDirection`, `FrameDirections`, `FrameSlot`, `FrameOpened`, `MsgContext`, `ReplayWindow`, `Freshness`, `MacKey`.
+Retired (loop 74, AZ-3286, ADR 009): the stream session `PackSession` (`load` of a 32-byte seed, `start` with the caller's nonce or a `RandomFn`, `join`, `pack` padded in place, `unpack`; no tag) is removed with `include/packbin/session.hpp`, the host random source `os_random.hpp` and `src/os_random.cpp`, `src/core/session.cpp` and the tests `session_tests.cpp`, `session_host_tests.cpp` and `ecc_session_host_tests.cpp`. The ESP-IDF example no longer draws a hardware nonce. Frame mode (below, loop 75) is the one session.
+
+### Interface: FrameSession (loop 75, AZ-3292; the only session)
+
+`cpp/include/packbin/frame.hpp` (312 lines) and `cpp/src/core/frame.cpp` (314 lines). Public names (the D1 names, as in the other packages with frame mode): `FrameSession`, `FrameConfig`, `FrameDirection` (`Up`, `Down`, `Group`), `FrameDirections` (`None`, `Up`, `Down`, `Group`, `All`, with `|` and `&`), `FrameSlot` (`Current`, `Previous`), `FrameOpened`, `MsgContext`, `ReplayWindow`, `Freshness` (`Fresh`, `Duplicate`, `TooOld`), `MacKey`, and the input and output spans `ByteSpan` and `MutableByteSpan`. `Error` in `core.hpp` gained `TagMismatch`, `Duplicate` and `TooOld`; `BadValue`, `TooLong`, `BufferFull` and `ShortPacket` are the existing kinds. Every call returns a `Result`.
+
+| Name | Meaning |
+|------|---------|
+| `FrameSession::load(key, epoch, FrameConfig{tag_len, directions})` | `Ok`, else `BadValue` (the session as it was) for a key that is not 32 bytes, an epoch above 0xFFFFFF, a tag length other than 4, 8, 16 or a direction bit outside `All`; with `None` every `seal` and `open` is `BadValue`; `set_previous(key, epoch)` and `clear_previous()` manage the previous slot; an unloaded session refuses every call as `BadValue`; the object holds the keys (about 400 B), is not copyable and its destructor overwrites them |
+| `seal(direction, MsgContext, ad, clear, plain, out)` | `Ok` with `offset` the body length, else `BadValue`, `TooLong` or `BufferFull` (`needed`); writes nothing on a refusal; `const` |
+| `open(direction, MsgContext, ad, body, clear_len, plain, FrameOpened&, ReplayWindow*, counter)` | `Ok` (`opened.slot`, `clear_len`, `plain_len`), else `BadValue`, `TooLong`, `ShortPacket`, `BufferFull`, `Duplicate`, `TooOld` or `TagMismatch`; `plain` may start at the ciphertext inside `body`; `const` |
+| `ReplayWindow(top, bits)` | `check(counter)`, `commit(counter)`, `top()`, `bits()`; 16 bytes, `constexpr`, not thread safe |
+| `MacKey::derive(key, epoch, label)`, `tag(message or parts, out)`, `verify(message or parts, tag)` | tags of 4, 8, 16 or 32 bytes; `derive` is `BadValue` for a bad key, epoch or label (1 to 32 bytes); `clear()` and the destructor overwrite the key |
+
+Concurrency: `seal`, `open`, `MacKey::tag` and `MacKey::verify` only read the object, so many threads may call them at once, each with its own buffers (and `open` with its own window; eight threads sealing 200 frames each equal the single-thread bodies in `frame_api_host_tests.cpp`); `load`, `set_previous`, `clear_previous`, `derive`, `clear` and the destructors change it, so call them while no other call runs. Wipe: the keys, the derived HMAC states and the temporaries are overwritten with volatile stores before they leave scope, but a compiler may keep a copy in a register or a spilled slot and the caller's own copy of the 32-byte key is the caller's to clear, so the wipe is best effort; the tag compare folds every byte with no early exit, which the compiler is not promised to keep. `MacKey` holds the 32-byte `K_label` (36 bytes with the epoch), not precomputed pad states, and the session keeps 32-byte `enc` and `mac` keys per direction (the Rust 72-byte figure does not apply, as in C#, Java and Swift), so a tag costs two more SHA-256 compressions; the bytes are equal. No heap and no OS call.
+
+Firmware: the frame image (`cpp/embedded/arm/frame_main.cpp`: the frame session and the MAC-only call alone, no pack or unpack) is linked and run on QEMU `mps2-an505` in `target_m33f` of `cpp/embedded/arm.sh`, inside the existing `cpp-m33f` row (no new row). It is pinned at 8,416 B of flash (`m33f_frame_flash_pin`) and 912 B of stack net of the meter (`m33f_frame_stack_pin`, raw 976 B less the 64 B meter overhead; the deepest call is `MacKey::derive`, HKDF inside HMAC above the 328 B `Sha256::compress`), both in `cpp/embedded/lib.sh`, under the row's ceilings of 64 KB and 8 KB; `image_checks` in `arm.sh` also refuses a heap symbol in the frame image. The existing pins are unchanged (Cortex-M4F 7,712 B and 540 B, the all-kinds image on the Cortex-M33F 25,720 B and 724 B). The package passes the 157 frame rows and the 27 crypto rows on the host, E1 to E5 and the four refusals of AC-3 on the target, and the README example is the code of `frame_readme_host_tests.cpp` (`scripts/frame/readme-examples.sh`).
 
 ### Internal: crypto module (loop 74, owner decision D2)
 
-`cpp/src/core/crypto.hpp` and `crypto.cpp`, namespace `packbin::detail::crypto`: a streaming `Sha256` (one 64-byte block buffer, no padded copy of the message), HMAC-SHA256, HKDF-SHA256 (at most 8,160 bytes of output; the old code wrapped its block counter), the ChaCha20 block and XOR (refused past block counter 2^32 - 1; the XOR loop counts the remaining bytes, so a 16-bit `size_t` on AVR cannot wrap) and a volatile `wipe`; key material in locals is wiped before a function returns. No header under `include/` names it, no heap, no OS call, no mutable global. Built into the core (`CORE_SRCS` in `cpp/Makefile`, `cpp/CMakeLists.txt`) for the frame-mode port; `cpp/tests/core/crypto_vectors_host_tests.cpp` checks the 27 rows of `fixtures/crypto/vectors.txt` (SHA-256 and HMAC also fed in 37-byte pieces, 6 one-digit copies fail on their own row). The largest single core frame is now `Sha256::compress` at 328 B (it was `PackSession::open`, 528 B). The device figures did not move: Cortex-M4F 7,712 B flash and 540 B stack, Cortex-M33F 25,720 B and 724 B, AVR Uno 15,402 B flash and 196 B of RAM; the vector runners assert 268 rows (290 before: `session_tests.cpp` had 22).
+`cpp/src/core/crypto.hpp` and `crypto.cpp`, namespace `packbin::detail::crypto`: a streaming `Sha256` (one 64-byte block buffer, no padded copy of the message), HMAC-SHA256, HKDF-SHA256 (at most 8,160 bytes of output; the old code wrapped its block counter), the ChaCha20 block and XOR (refused past block counter 2^32 - 1; the XOR loop counts the remaining bytes, so a 16-bit `size_t` on AVR cannot wrap) and a volatile `wipe`; key material in locals is wiped before a function returns. No header under `include/` names it, no heap, no OS call, no mutable global. Built into the core (`CORE_SRCS` in `cpp/Makefile`, `cpp/CMakeLists.txt`) and used by `frame.cpp` since loop 75; `cpp/tests/core/crypto_vectors_host_tests.cpp` checks the 27 rows of `fixtures/crypto/vectors.txt` (SHA-256 and HMAC also fed in 37-byte pieces, 6 one-digit copies fail on their own row). The largest single core frame is now `Sha256::compress` at 328 B (it was `PackSession::open`, 528 B). The device figures did not move: Cortex-M4F 7,712 B flash and 540 B stack, Cortex-M33F 25,720 B and 724 B, AVR Uno 15,402 B flash and 196 B of RAM; the vector runners assert 268 rows (290 before: `session_tests.cpp` had 22).
 
 ### Interface: Error correction (loop 38, ADR-007, `contracts/library/message-ecc.md`)
 
@@ -80,7 +96,7 @@ No queries and no cache.
 
 ## 5. Implementation Details
 
-**State Management**: clear pack and unpack are stateless and reentrant; the core keeps no global or static mutable state. Scheme tables are `const` and can live in flash. The package has no session state since loop 74 (the stream session's send and receive counters went with it, ADR 009).
+**State Management**: clear pack and unpack are stateless and reentrant; the core keeps no global or static mutable state. Scheme tables are `const` and can live in flash. The only session state is a `FrameSession`'s keys (the current and the optional previous slot, in the object); the replay window is the caller's `ReplayWindow` (the stream session's send and receive counters went in loop 74, ADR 009).
 
 **Unpack rules (loop 10)**:
 - Flag bytes are scoped per container. `flag_byte(n)` and `flag_bit(n, field)` pair by the number n (0..7) inside one scope. Each round of a `repeat`, `times`, `list` or `dict` starts with its own cleared flag bytes, and the outer values come back when the container ends.

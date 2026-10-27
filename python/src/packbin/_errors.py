@@ -38,6 +38,36 @@ class TooLong:
 
 
 @dataclass(frozen=True, slots=True)
+class BadValue:
+    """A configuration or argument is out of range (epoch above 0xFFFFFF, a direction not loaded, a `kind` above 15, a
+    label or tag length that is not allowed, a call on a closed session)."""
+
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class BufferFull:
+    """The caller's output buffer is shorter than the `needed` bytes the call writes."""
+
+    needed: int
+
+
+@dataclass(frozen=True, slots=True)
+class TagMismatch:
+    """The tag does not match with the current key, nor with the previous key when one is loaded. Nothing was decrypted."""
+
+
+@dataclass(frozen=True, slots=True)
+class Duplicate:
+    """The replay window has already committed this counter. No tag was computed."""
+
+
+@dataclass(frozen=True, slots=True)
+class TooOld:
+    """The counter is 64 or more behind the highest counter the replay window committed. No tag was computed."""
+
+
+@dataclass(frozen=True, slots=True)
 class UnpackResult(Generic[T]):
     """`repaired` is the number of wrong bytes a protected scheme repaired before it read the row."""
 

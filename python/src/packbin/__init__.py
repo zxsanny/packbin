@@ -1,6 +1,30 @@
 from __future__ import annotations
 
-from packbin._errors import ShortPacket, TooLong, TrailingBytes, TypeMismatch, Uncorrectable, UnpackResult
+from packbin._errors import (
+    BadValue,
+    BufferFull,
+    Duplicate,
+    ShortPacket,
+    TagMismatch,
+    TooLong,
+    TooOld,
+    TrailingBytes,
+    TypeMismatch,
+    Uncorrectable,
+    UnpackResult,
+)
+from packbin._frame_session import FrameSession
+from packbin._frame_types import (
+    FrameConfig,
+    FrameDirection,
+    FrameDirections,
+    FrameOpened,
+    FrameSlot,
+    Freshness,
+    MsgContext,
+)
+from packbin._mac_key import MacKey
+from packbin._replay_window import ReplayWindow
 from packbin._nodes import (
     be,
     bits,
@@ -35,10 +59,25 @@ from packbin._scheme import BinaryPacker, Scheme
 # bool, bytes, dict and list are importable by name (`as` re-exports them) but left out of `*`:
 # a star import would replace the caller's builtins with field builders.
 __all__ = [
+    "BadValue",
     "BinaryPacker",
+    "BufferFull",
+    "Duplicate",
+    "FrameConfig",
+    "FrameDirection",
+    "FrameDirections",
+    "FrameOpened",
+    "FrameSession",
+    "FrameSlot",
+    "Freshness",
+    "MacKey",
+    "MsgContext",
+    "ReplayWindow",
     "Scheme",
     "ShortPacket",
+    "TagMismatch",
     "TooLong",
+    "TooOld",
     "TrailingBytes",
     "TypeMismatch",
     "Uncorrectable",

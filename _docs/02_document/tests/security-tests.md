@@ -45,7 +45,7 @@ The library has no authentication. These checks are about secrets and hostile bu
 
 ### NFT-SEC-04: Hostile input cannot panic or hang the Go package (the session seed wipe retired in loop 74)
 
-> Steps 3 (the session part) and 4 are **retired in loop 74 (ADR 009, AZ-3287)**: the Go stream session and its tests are removed. Steps 1 and 2 and the non-session part of step 3 stand. The Go crypto module that frame mode will use (`crypto.go`) is checked by `crypto_vectors_test.go` on the 27 rows of `fixtures/crypto/vectors.txt`, with its refusals.
+> Steps 3 (the session part) and 4 are **retired in loop 74 (ADR 009, AZ-3287)**: the Go stream session and its tests are removed. Steps 1 and 2 and the non-session part of step 3 stand. The Go crypto module that frame mode uses since loop 75 (`crypto.go`) is checked by `crypto_vectors_test.go` on the 27 rows of `fixtures/crypto/vectors.txt`, with its refusals.
 
 **Summary**: No input makes Go `Pack`, `Unpack`, `UnpackMap`, `NewScheme` or (until loop 74) a session call panic (GO-4, GO-15); every bad buffer is an `*Error` value, an unpack of a hostile case returns within 1 second, and (retired in loop 74, ADR 009) `LoadSession` kept a copy of the seed that it zeroed once the session opened (loop 24, AZ-2440, AZ-2445, AZ-2446).
 **Traces to**: GO-4, GO-6, GO-15, AZ-2445 AC-3, AZ-2446 AC-1

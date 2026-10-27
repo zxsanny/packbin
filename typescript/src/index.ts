@@ -50,6 +50,29 @@ export type { Value, ShortErr, TypeMismatchErr } from "./kinds.ts"
 export type { UnpackErr } from "./walker.ts"
 export type { EccErr, TooLongErr, UncorrectableErr } from "./ecc.ts"
 
+// Frame mode (contract pack-session 3.0.0): sealed, authenticated frames, a replay window the caller owns, the MAC-only call.
+export { FrameSession } from "./frame-session.ts"
+export { MacKey, type MacTag } from "./mac-key.ts"
+export { ReplayWindow } from "./replay-window.ts"
+export {
+  FrameConfig,
+  FrameDirection,
+  FrameDirections,
+  FrameOpened,
+  FrameSlot,
+  Freshness,
+  MsgContext,
+  type FrameSealed,
+} from "./frame-types.ts"
+export type {
+  BadValueErr,
+  BufferFullErr,
+  DuplicateErr,
+  FrameErr,
+  TagMismatchErr,
+  TooOldErr,
+} from "./frame-errors.ts"
+
 // `repaired` is the count of bytes repaired, set when the schemes declare parity bytes (0 when intact);
 // a scheme without them returns `{ ok: true }` as before. A protected unpack can also be refused as
 // `uncorrectable` (more wrong bytes than the limit allows) or `too_long` (above 254 bytes).

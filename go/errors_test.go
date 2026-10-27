@@ -127,6 +127,7 @@ func TestErrorKindNamesMatchHostileVocabulary(t *testing.T) {
 		ShortPacket: "short_packet", TrailingBytes: "trailing_bytes", UnknownType: "type_mismatch",
 		BadValue: "bad_value", InvalidScheme: "scheme_error", PackRefused: "pack_error", TooMany: "too_many",
 		Uncorrectable: "uncorrectable", TooLong: "too_long",
+		BufferFull: "buffer_full", TagMismatch: "tag_mismatch", Duplicate: "duplicate", TooOld: "too_old",
 	}
 
 	for k, name := range want {

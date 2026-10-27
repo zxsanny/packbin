@@ -5,3 +5,4 @@
 // (`-fno-exceptions -fno-rtti`, no heap) and for host programs.
 
 #include "packbin/codec.hpp"
+#include "packbin/frame.hpp"

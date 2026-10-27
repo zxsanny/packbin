@@ -212,6 +212,9 @@ char const* error_name(Error e) {
     case Error::ScratchTooSmall: return "ScratchTooSmall";
     case Error::Uncorrectable: return "Uncorrectable";
     case Error::TooLong: return "TooLong";
+    case Error::TagMismatch: return "TagMismatch";
+    case Error::Duplicate: return "Duplicate";
+    case Error::TooOld: return "TooOld";
   }
   return "unknown";
 }

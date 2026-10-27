@@ -21,14 +21,14 @@ Supported languages:
 
 - Java: Java 17+, Android API 26+.
 - C#: .NET 10+, and .NET Standard 2.0 for .NET Framework 4.6.2+, Unity, Mono and Xamarin (the .NET Standard build is tested on the .NET 10 runtime). Typed rows are read and written through accessors that `Expression.Compile` builds once, when each field is created. Under AOT or Unity IL2CPP these expression delegates run through the interpreter: the result is the same but slower, and the package has not been run on Unity. A Unity IL2CPP test run is planned before a release that advertises Unity. Under IL2CPP, keep row types from being stripped (`link.xml` or `[Preserve]`).
-- TypeScript: Node.js 22+; browsers through a bundler such as Vite. One dependency, `@noble/hashes` (SHA-256, HMAC and HKDF, kept for frame mode, which the TypeScript package gains in a later release).
+- TypeScript: Node.js 22+; browsers through a bundler such as Vite. One dependency, `@noble/hashes` (SHA-256, HMAC and HKDF for frame mode).
 - Python: 3.10+.
 - Rust: edition 2021.
 - C++: C++17; CMake 3.16+ or vcpkg on Linux and macOS (Windows is not supported: the package is not built or tested there); 32-bit microcontrollers (ESP32, RP2040, nRF52, STM32) through PlatformIO, Arduino and ESP-IDF 5.1+.
-- Go: Go 1.26+; `go get github.com/zxsanny/packbin/go@vX.Y.Z`, fetched from the repository by version tag (no registry). The standard library and `golang.org/x/crypto` (ChaCha20, kept for frame mode, which the Go package gains in a later release); no cgo. See [Go](#go).
+- Go: Go 1.26+; `go get github.com/zxsanny/packbin/go@vX.Y.Z`, fetched from the repository by version tag (no registry). The standard library and `golang.org/x/crypto` (ChaCha20 for frame mode); no cgo. See [Go](#go).
 - Swift: Swift 6.0+ (Xcode 16+; a 6.0 consumer and an Xcode 16.0 build are unproven, only Swift 6.3.3 is built in CI), iOS 15+, macOS 12+ and Linux; `.package(url: "https://github.com/zxsanny/packbin", from: "X.Y.Z")`, fetched from the repository by the `vX.Y.Z` tag (no registry, no Swift tag). One dependency, `swift-crypto`, linked only off Apple platforms (the session's HKDF). See [Swift](#swift).
 
-Encryption is optional. Frame mode seals each message on its own: it encrypts, authenticates with a 4, 8 or 16-byte tag, and refuses a changed, replayed or misdirected frame, with no handshake, for links that lose and reorder messages (Rust, C#, Java, Swift; C++, Go, Python and TypeScript follow). Over a connection such as a WebSocket, use TLS. See [Frame session](#frame-session).
+Encryption is optional. Frame mode seals each message on its own: it encrypts, authenticates with a 4, 8 or 16-byte tag, and refuses a changed, replayed or misdirected frame, with no handshake, for links that lose and reorder messages (all eight packages). Over a connection such as a WebSocket, use TLS. See [Frame session](#frame-session).
 
 ## Example
 
@@ -513,7 +513,7 @@ Moving from 0.1.x — the C++ API changed; the bytes did not:
 | `UnpackResult`, `ShortPacket`, `TrailingBytes`, `TypeMismatch`, `std::runtime_error` | `Result` and `Error` |
 | `validate_order(fields)` | `validate(scheme)`, or a compile error for a `constexpr` scheme |
 | `to_hex`, `mismatched_bytes`, `present`, `motion_field_count`, `id_name`, `pack_body`, `unpack_body`, `Field` | removed |
-| `PackSession` (`load`, `start`, `join`, `pack`, `unpack`) | removed (loop 74, ADR-009); frame mode comes to C++ in a later release |
+| `PackSession` (`load`, `start`, `join`, `pack`, `unpack`) | removed (loop 74, ADR-009); frame mode is the one session in C++ (see [Frame session](#frame-session)) |
 
 Two kinds of scheme fail construction (`SchemeInvalid`, or a compile error for a `constexpr` scheme), because neither can round-trip: a `boolean` or an empty `group` anywhere except directly under `flags(...)` or `flag_bit(...)`, and a `u2` with more than 64 children. The wire bytes of every valid scheme are unchanged.
 
@@ -523,7 +523,7 @@ Go → binary → TypeScript
 
 ### Go
 
-Go has no package registry, so nothing is uploaded: `go get` fetches the module from this repository by version tag. The module is `github.com/zxsanny/packbin/go` and lives in the `go/` folder, which is why Go reads its tag as `go/vX.Y.Z`. The release run pushes that tag at the same commit as the `vX.Y.Z` tag, and only after every language has matched the golden hex (ADR-004: a mismatch publishes no package and no Go tag). Go 1.26 or newer. The package uses the Go standard library and one dependency, `golang.org/x/crypto`, for ChaCha20 (kept, tested on the shared crypto vectors, for frame mode, which the Go package gains in a later release); there is no cgo. A published Go version is never deleted or moved: a bad one is retracted in the `go.mod` of the next version. Go versions start with the first release tag published after the Go package was added.
+Go has no package registry, so nothing is uploaded: `go get` fetches the module from this repository by version tag. The module is `github.com/zxsanny/packbin/go` and lives in the `go/` folder, which is why Go reads its tag as `go/vX.Y.Z`. The release run pushes that tag at the same commit as the `vX.Y.Z` tag, and only after every language has matched the golden hex (ADR-004: a mismatch publishes no package and no Go tag). Go 1.26 or newer. The package uses the Go standard library and one dependency, `golang.org/x/crypto`, for ChaCha20 (ChaCha20, tested on the shared crypto vectors, for frame mode); there is no cgo. A published Go version is never deleted or moved: a bad one is retracted in the `go.mod` of the next version. Go versions start with the first release tag published after the Go package was added.
 
 ```
 go get github.com/zxsanny/packbin/go@vX.Y.Z
@@ -1060,7 +1060,7 @@ One optional session beside clear pack: frame mode, for links that lose, reorder
 
 **For one key, epoch and direction, never seal two different messages with the same `msg_id`.** A reused `msg_id` breaks the confidentiality of both messages, and packbin cannot check it. meshbell builds `msg_id` from the source (2 bytes), the id field (2 bytes) and the creation wave (4 bytes); sequences restart every wave, waves never repeat and source ids are never reissued, so it is unique. A new epoch derives new keys and nonces.
 
-The byte-for-byte definition, the replay rules and the error kinds (`TagMismatch`, `Duplicate`, `TooOld` besides the existing ones) are in `_docs/02_document/contracts/library/pack-session.md` (3.0.0); the shared test rows are in `fixtures/frame/vectors.txt`. Rust is the first package (Cargo feature `frame`, no heap, no panic path, 20 KB of flash and 2 KB of stack on a Cortex-M4F); C#, Java and Swift follow below with the same bytes (they pass the same `fixtures/frame/vectors.txt`). The frame types have the same names in every package: `FrameSession`, `FrameConfig`, `FrameDirection`, `FrameDirections`, `FrameSlot`, `FrameOpened`, `MsgContext`, a `ReplayWindow` you own, `Freshness` and `MacKey` (Java also has a `FrameSealed`, its seal result); `Load` and `Derive` return null (C#, Java) or throw `badValue` (Swift) for an out-of-range key, epoch, tag length or label. Keys are wiped when you call `Dispose` (C#) or `close()` (Java, Swift) and, in Swift, when the session is released; C# and Java have no finalizer, so a session you never dispose keeps its keys until the garbage collector reuses the memory, and a managed runtime may keep copies as well, and the tag compare uses the platform's fixed-time compare (C# on .NET 10, Java) or a fold without an early exit, but a JIT is not under the library's control, so both are best effort.
+The byte-for-byte definition, the replay rules and the error kinds (`TagMismatch`, `Duplicate`, `TooOld` besides the existing ones) are in `_docs/02_document/contracts/library/pack-session.md` (3.0.0); the shared test rows are in `fixtures/frame/vectors.txt`. Rust is the first package (Cargo feature `frame`, no heap, no panic path, 20 KB of flash and 2 KB of stack on a Cortex-M4F); C++, C#, Go, Java, Python, Swift and TypeScript follow below with the same bytes (every package passes the same 157 rows of `fixtures/frame/vectors.txt`). The frame types have the same names in every package: `FrameSession`, `FrameConfig`, `FrameDirection`, `FrameDirections`, `FrameSlot`, `FrameOpened`, `MsgContext`, a `ReplayWindow` you own, `Freshness` and `MacKey` (Java also has a `FrameSealed`, its seal result); `Load` and `Derive` return null (C#, Java, TypeScript), an error (Go, C++), a `BadValue` object (Python) or throw `badValue` (Swift) for an out-of-range key, epoch, tag length or label. In every package except Rust the `MacKey` holds the 32-byte `K_label` and not the precomputed pad states of the contract text (the standard HMAC of that runtime does not expose them): a tag costs two more SHA-256 compressions and is the same bytes. Keys are wiped when you call `Dispose` (C#) or `close()` (Java, Swift) and, in Swift, when the session is released; C# and Java have no finalizer, so a session you never dispose keeps its keys until the garbage collector reuses the memory, and a managed runtime may keep copies as well, and the tag compare uses the platform's fixed-time compare (C# on .NET 10, Java) or a fold without an early exit, but a JIT is not under the library's control, so both are best effort.
 
 ### Rust
 
@@ -1201,6 +1201,187 @@ let wave: [UInt8] = [0xe8, 3, 0, 0]
 let frame: [UInt8] = Array(0xc0...0xd3)
 let tag = try net.tag([wave, frame], length: 4)  // 56db9bec
 let valid = net.verify([wave, frame], tag: tag)
+```
+
+### C++
+
+`FrameSession::load`, `set_previous`, `clear_previous`, `seal` and `open`, and `MacKey::derive`, `tag` and `verify`, return a `packbin::Result` whose `error` is `Ok` or one of `BadValue`, `TooLong`, `BufferFull`, `ShortPacket`, `TagMismatch`, `Duplicate` and `TooOld` (`offset` is the body length after a seal and the plaintext length after an open). Nothing throws and nothing allocates (`packbin/platform.hpp` names only, so the AVR target builds); the destructors wipe the keys. `seal` and `open` are `const` and may run on many threads at once; `load`, `set_previous`, `clear_previous` and the destructor must not run beside any other call, and a `ReplayWindow` is not thread safe. `seal` inputs must not overlap the output buffer; `open` may decrypt in place over the ciphertext. On a Cortex-M33F the frame image alone is 8,416 B of flash and 912 B of stack (`cpp/embedded/lib.sh` pins both).
+
+```cpp
+#include <packbin/packbin.hpp>
+
+#include <cstdint>
+#include <cstring>
+
+// Frame mode: sealed, authenticated frames. True when every step below gave the answer the comments name.
+bool frame_example() {
+  namespace pb = packbin;
+
+  // A 32-byte key shared by the nodes, an epoch (0 to 0xFFFFFF) and a tag of 4, 8 or 16 bytes.
+  std::uint8_t key[32] = {};  // use a random key from your key store
+  pb::FrameSession node;
+  if (!node.load(key, 1, {4, pb::FrameDirections::Up | pb::FrameDirections::Down}).ok())
+    return false;  // BadValue: the key, the epoch or the tag length is out of range
+
+  // msg_id: 8 bytes that are unique per (key, epoch, direction) for every message ever sealed.
+  // **For one (key, epoch, direction), never seal two different messages with the same msg_id.**
+  // Reuse breaks the confidentiality of both messages, and packbin cannot check it.
+  pb::MsgContext message{{0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0}, 4};
+  std::uint8_t const header[] = {0, 1, 0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0, 4};  // authenticated, not sent
+  std::uint8_t const text[] = {'h', 'e', 'l', 'l', 'o', ',', ' ', 'r', 'e', 'l', 'a', 'y'};
+
+  std::uint8_t body[255];
+  pb::Result sealed = node.seal(pb::FrameDirection::Up, message, header, {}, text, body);
+  // sealed.error is Ok, or BadValue, TooLong or BufferFull; sealed.offset is the body length (12 + 4 here)
+
+  // The receiver keeps one ReplayWindow per sender and passes a counter that comes from authenticated bytes.
+  pb::ReplayWindow window;
+  std::uint8_t plain[255];
+  pb::FrameOpened opened;
+  pb::Result first = node.open(pb::FrameDirection::Up, message, header, {body, sealed.offset}, 0, plain,
+                               opened, &window, 7);
+  // first.error is Ok, or TagMismatch, Duplicate, TooOld, ShortPacket, TooLong, BufferFull or BadValue
+  // plain[0 .. opened.plain_len) is the text and opened.slot says which key opened it
+  pb::Result again = node.open(pb::FrameDirection::Up, message, header, {body, sealed.offset}, 0, plain,
+                               opened, &window, 7);  // Duplicate
+
+  // The MAC-only call: a 4-byte network check over a message given in parts.
+  pb::MacKey network;
+  std::uint8_t const label[] = {'n', 'e', 't'};
+  std::uint8_t const wave[] = {1, 2, 3, 4};
+  pb::ByteSpan parts[] = {wave, {body, sealed.offset}};
+  std::uint8_t tag[4];
+  bool tagged = network.derive(key, 1, label).ok() && network.tag(parts, 2, tag).ok();
+  bool valid = network.verify(parts, 2, tag);
+
+  return sealed.ok() && first.ok() && first.offset == sizeof(text) && std::memcmp(plain, text, sizeof(text)) == 0 &&
+         again.error == pb::Error::Duplicate && tagged && valid;
+}
+```
+
+### Go
+
+`LoadFrameSession` and `DeriveMacKey` return an `error` for an out-of-range key, epoch, tag length or label; `Seal` and `Open` return a `*packbin.Error` of kind `BadValue`, `TooLong`, `BufferFull`, `ShortPacket`, `TagMismatch`, `Duplicate` or `TooOld` (`errors.Is(err, packbin.ErrDuplicate)` works). `Seal` and `Open` are safe from many goroutines; `SetPrevious`, `ClearPrevious` and `Close` wait for the calls in flight. A `ReplayWindow` is not safe for concurrent use. The tag compare is `crypto/subtle.ConstantTimeCompare`; `Close` overwrites the keys, best effort (the standard library's HMAC and HKDF states and the garbage collector may keep copies).
+
+```go
+// A 32-byte key shared by the nodes, an epoch (0 to 0xFFFFFF) and a tag of 4, 8 or 16 bytes.
+key := make([]byte, 32) // use a random key from your key store
+node, err := packbin.LoadFrameSession(key, 1, packbin.FrameConfig{
+	TagLength:  4,
+	Directions: packbin.FrameDirectionsUp | packbin.FrameDirectionsDown,
+})
+if err != nil {
+	panic(err)
+}
+defer node.Close() // overwrites the derived keys, best effort
+
+// **For one (key, epoch, direction), never seal two different messages with the same msg_id.**
+message := packbin.NewMsgContext([]byte{0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0}, 4)
+header := []byte{0, 1, 0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0, 4} // authenticated, not sent
+
+body := make([]byte, 255)
+length, err := node.Seal(packbin.FrameUp, message, header, nil, []byte("hello, relay"), body)
+if err != nil {
+	panic(err) // *packbin.Error of kind BadValue, TooLong or BufferFull
+}
+body = body[:length] // 12 + 4 bytes here
+
+// The receiver keeps one ReplayWindow per sender and passes a counter that comes from authenticated bytes.
+window := &packbin.ReplayWindow{}
+plain := make([]byte, 255)
+opened, err := node.Open(packbin.FrameUp, message, header, body, 0, plain, window, 7)
+if err != nil {
+	panic(err) // kind TagMismatch, Duplicate, TooOld, ShortPacket, TooLong, BufferFull or BadValue
+}
+// plain[:opened.PlainLength] is the text and opened.Slot says which key opened it
+_, again := node.Open(packbin.FrameUp, message, header, body, 0, plain, window, 7) // errors.Is(again, packbin.ErrDuplicate)
+
+// The MAC-only call: a 4-byte network check over a message given in parts.
+network, err := packbin.DeriveMacKey(key, 1, []byte("net"))
+if err != nil {
+	panic(err)
+}
+defer network.Close()
+tag := make([]byte, 4)
+if err := network.Tag(tag, []byte{1, 2, 3, 4}, body); err != nil {
+	panic(err)
+}
+valid := network.Verify(tag, []byte{1, 2, 3, 4}, body)
+```
+
+### Python
+
+`FrameSession.load` and `MacKey.derive` return the object or a `BadValue` object, and both are context managers whose exit overwrites the keys in place (best effort: CPython keeps copies the library cannot reach). `seal` returns the body length or an error object; `open` returns a `FrameOpened` or an error object (`BadValue`, `TooLong`, `BufferFull`, `ShortPacket`, `TagMismatch`, `Duplicate`, `TooOld`). A wrong Python type (a `str` for the associated data, a read-only output buffer) raises `TypeError`. The tag compare is `hmac.compare_digest`. `seal` is safe from many threads; `set_previous`, `clear_previous` and `close` must not run beside a `seal` or `open`.
+
+```python
+from packbin import (
+    Duplicate, FrameConfig, FrameDirection, FrameDirections, FrameOpened, FrameSession, MacKey, MsgContext, ReplayWindow,
+)
+
+# A 32-byte key shared by the nodes, an epoch (0 to 0xFFFFFF) and a tag of 4, 8 or 16 bytes.
+key = bytes(32)  # use a random key from your key store
+config = FrameConfig(tag_len=4, directions=FrameDirections.UP | FrameDirections.DOWN)
+with FrameSession.load(key, 1, config) as node:  # a BadValue object instead of a session when an argument is out of range
+    # msg_id: 8 bytes that are unique per (key, epoch, direction) for every message ever sealed.
+    message = MsgContext(bytes([0, 0x30, 0x10, 0x05, 0xE8, 3, 0, 0]), kind=4)
+    header = bytes([0, 1, 0, 0x30, 0x10, 0x05, 0xE8, 3, 0, 0, 4])  # authenticated, not sent
+
+    body = bytearray(255)
+    length = node.seal(FrameDirection.UP, message, header, b"", b"hello, relay", body)
+    # length is the body length (12 + 4 here), or BadValue, TooLong or BufferFull
+
+    # The receiver keeps one ReplayWindow per sender and passes a counter that comes from authenticated bytes.
+    window = ReplayWindow()
+    plain = bytearray(255)
+    opened = node.open(FrameDirection.UP, message, header, body[:length], 0, plain, window, counter=7)
+    # opened is a FrameOpened (plain[:opened.plain_length] is the text, opened.slot says which key opened it),
+    # or TagMismatch, Duplicate, TooOld, ShortPacket, TooLong, BufferFull or BadValue
+    again = node.open(FrameDirection.UP, message, header, body[:length], 0, plain, window, counter=7)  # Duplicate
+
+# The MAC-only call: a 4-byte network check over a message given in parts.
+with MacKey.derive(key, 1, b"net") as network:
+    tag = network.tag([bytes([1, 2, 3, 4]), body[:length]], 4)
+    valid = network.verify([bytes([1, 2, 3, 4]), body[:length]], tag)
+```
+
+### TypeScript
+
+`FrameSession.load` and `MacKey.derive` return `null` for an out-of-range argument. `seal`, `open` and `tag` return a result object: `ok: true` with `length`, a `FrameOpened` (`slot`, `clearLength`, `plainLength`) or `tag`, or `ok: false` with a `kind` of `"bad_value"`, `"too_long"`, `"buffer_full"`, `"short"`, `"tag_mismatch"`, `"duplicate"` or `"too_old"`. The replay counter is a `bigint`, so the full 64-bit range is exact. The calls are synchronous: do not share one session between workers. `close()` overwrites the keys, best effort (a JavaScript engine may keep copies).
+
+```ts
+import { FrameConfig, FrameDirection, FrameDirections, FrameSession, MacKey, MsgContext, ReplayWindow } from "packbin"
+
+// A 32-byte key shared by the nodes, an epoch (0 to 0xFFFFFF) and a tag of 4, 8 or 16 bytes.
+const key = new Uint8Array(32) // use a random key from your key store
+const node = FrameSession.load(key, 1, new FrameConfig(4, FrameDirections.Up | FrameDirections.Down))!
+
+// msg_id: 8 bytes that are unique per (key, epoch, direction) for every message ever sealed.
+const message = new MsgContext(Uint8Array.of(0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0), 4)
+const header = Uint8Array.of(0, 1, 0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0, 4) // authenticated, not sent
+
+const body = new Uint8Array(255)
+const sealed = node.seal(FrameDirection.Up, message, header, new Uint8Array(0), new TextEncoder().encode("hello, relay"), body)
+if (!sealed.ok) throw new Error("seal refused") // sealed.kind is "bad_value", "too_long" or "buffer_full"
+const frame = body.subarray(0, sealed.length) // 12 + 4 bytes here
+
+// The receiver keeps one ReplayWindow per sender and passes a counter that comes from authenticated bytes.
+const window = new ReplayWindow()
+const plain = new Uint8Array(255)
+const opened = node.open(FrameDirection.Up, message, header, frame, 0, plain, window, 7n)
+// opened.ok is true: plain.subarray(0, opened.plainLength) is the text and opened.slot says which key opened it;
+// otherwise opened.kind is "tag_mismatch", "duplicate", "too_old", "too_long", "buffer_full" or "bad_value"
+const again = node.open(FrameDirection.Up, message, header, frame, 0, plain, window, 7n) // { ok: false, kind: "duplicate" }
+
+// The MAC-only call: a 4-byte network check over a message given in parts.
+const network = MacKey.derive(key, 1, new TextEncoder().encode("net"))!
+const wave = Uint8Array.of(1, 2, 3, 4)
+const made = network.tag([wave, frame], 4)
+if (!made.ok) throw new Error("tag refused")
+const valid = network.verify([wave, frame], made.tag)
+
+// Close both when done: the derived keys are overwritten (best effort, see the notes below).
+node.close()
+network.close()
 ```
 
 ## Data types

@@ -29,6 +29,17 @@ const (
 	// TooLong: unpack refuses a protected message of more than 254 bytes. It names no field, Left is the
 	// length and Reason names the length and the limit.
 	TooLong
+	// BufferFull (frame mode): the caller's output buffer is shorter than the bytes the call must write.
+	// Needed is the length the buffer needs.
+	BufferFull
+	// TagMismatch (frame mode): the tag matches neither the current key nor the previous key. Nothing was
+	// decrypted.
+	TagMismatch
+	// Duplicate (frame mode): the replay window already committed this counter. No tag was computed.
+	Duplicate
+	// TooOld (frame mode): the counter is 64 or more behind the highest committed counter of the replay
+	// window. No tag was computed.
+	TooOld
 )
 
 // NoField is the Field of an error that belongs to no field: trailing bytes, an unknown type
@@ -55,6 +66,14 @@ func (k Kind) String() string {
 		return "uncorrectable"
 	case TooLong:
 		return "too_long"
+	case BufferFull:
+		return "buffer_full"
+	case TagMismatch:
+		return "tag_mismatch"
+	case Duplicate:
+		return "duplicate"
+	case TooOld:
+		return "too_old"
 	}
 	return fmt.Sprintf("kind(%d)", int(k))
 }
@@ -88,6 +107,10 @@ var (
 	ErrTooMany       = &Error{Kind: TooMany, Field: NoField}
 	ErrUncorrectable = &Error{Kind: Uncorrectable, Field: NoField}
 	ErrTooLong       = &Error{Kind: TooLong, Field: NoField}
+	ErrBufferFull    = &Error{Kind: BufferFull, Field: NoField}
+	ErrTagMismatch   = &Error{Kind: TagMismatch, Field: NoField}
+	ErrDuplicate     = &Error{Kind: Duplicate, Field: NoField}
+	ErrTooOld        = &Error{Kind: TooOld, Field: NoField}
 )
 
 // Is reports whether target is an *Error of the same Kind.
@@ -117,6 +140,14 @@ func (e *Error) Error() string {
 		return "packbin: uncorrectable: " + e.Reason
 	case TooLong:
 		return "packbin: too long: " + e.Reason
+	case BufferFull:
+		return fmt.Sprintf("packbin: buffer full: needed %d bytes", e.Needed)
+	case TagMismatch:
+		return "packbin: tag mismatch"
+	case Duplicate:
+		return "packbin: duplicate: the replay window already committed this counter"
+	case TooOld:
+		return "packbin: too old: the counter is 64 or more behind the replay window"
 	}
 	return fmt.Sprintf("packbin: %v%s: %s", e.Kind, at, e.Reason)
 }

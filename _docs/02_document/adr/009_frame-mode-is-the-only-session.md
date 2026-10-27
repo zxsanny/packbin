@@ -36,12 +36,12 @@ The removal covers each package's stream `PackSession` (Rust std, C#, Java, Swif
 
 - One session model in every package; a user cannot pick an unauthenticated mode by mistake
 - Less code, tests and CI time in eight packages; the Rust `session` embedded set and its flash and stack pins go away
-- The four packages without frame mode keep their HKDF and ChaCha20 for the frame-mode port
+- The four packages without frame mode kept their HKDF and ChaCha20 for the frame-mode port, which landed in loop 75 (AZ-3292..AZ-3295)
 
 ### Negative
 
 - A breaking change for any user of `PackSession` from v0.1.x to v0.3.0 (none known); the next release notes say so
-- C++, Go, Python and TypeScript have no session at all until their frame-mode ports land
+- C++, Go, Python and TypeScript had no session at all between loop 74 and loop 75; their frame-mode ports landed in loop 75 (AZ-3292..AZ-3295)
 - Encryption with zero bytes of overhead is gone: frame mode costs at least a 4-byte tag per message
 - The frame types are renamed in Rust, Java and Swift (Rust `Session` becomes `FrameSession`), a source change for meshbell's Rust code and any frame-mode user
 

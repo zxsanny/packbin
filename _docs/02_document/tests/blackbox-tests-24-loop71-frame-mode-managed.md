@@ -9,7 +9,7 @@ Source: `_docs/02_task_plans/frame-mode-csharp-java-swift/` (acceptance_criteria
 | Input | `fixtures/frame/vectors.txt` (157 rows, E1 to E5, boundary and refusal rows) and `fixtures/crypto/vectors.txt` (27 rows) |
 | Expected | every output field of every row matches in C# (`net10.0` and `netstandard2.0`), Java and Swift; a copy with one expected byte changed fails naming the row; the bodies equal the Rust ones |
 | Run by | C# `FrameVectorTests`, `CryptoVectorTests`; Java `FrameVectorsTest`, `CryptoVectorsTest`; Swift `FrameVectorTests`, `CryptoVectorTests` |
-| Not run by | Python, TypeScript, C++, Go (later tasks) |
+| Not run by | Python, TypeScript, C++, Go (done in loop 75, blackbox-tests-25) |
 
 ## FT-X-164: tampering, replay before crypto, previous slot, MAC-only, hostile input
 

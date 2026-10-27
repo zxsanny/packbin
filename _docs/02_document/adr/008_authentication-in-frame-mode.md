@@ -46,5 +46,5 @@ Frame mode encrypts and authenticates; stream mode does not authenticate (it run
 
 ### Neutral / Open
 
-- Frame mode ships in Rust first (AZ-3203); the other packages are later tasks
+- Frame mode ships in Rust first (AZ-3203); the other packages followed: C#, Java and Swift in loop 71, C++, Go, Python and TypeScript in loop 75
 - A frame-mode security audit is a later task

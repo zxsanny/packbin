@@ -11,11 +11,15 @@ sources = {
     "C#": ("csharp/tests/FrameReadmeExample.cs", ""),
     "Java": ("java/src/test/java/packbin/FrameReadmeExample.java", "    }\n}\n"),
     "Swift": ("swift/Tests/PackbinTests/FrameReadmeExampleTests.swift", ""),
+    "C++": ("cpp/tests/core/frame_readme_host_tests.cpp", ""),
+    "Go": ("go/frame_readme_test.go", ""),
+    "Python": ("python/tests/test_frame_readme_example.py", ""),
+    "TypeScript": ("typescript/tests/frame-readme-example.test.ts", ""),
 }
 failed = 0
 for lang, (path, tail) in sources.items():
     text = open(f"{root}/{path}", encoding="utf-8").read()
-    m = re.search(r"^[ \t]*// README-BEGIN\n(.*?)^[ \t]*// README-END\n", text, re.S | re.M)
+    m = re.search(r"^[ \t]*(?://|#) README-BEGIN\n(.*?)^[ \t]*(?://|#) README-END\n", text, re.S | re.M)
     if not m:
         print(f"FAIL {lang}: no README-BEGIN/END markers in {path}")
         failed += 1

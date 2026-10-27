@@ -5,7 +5,8 @@ set(PACKBIN_CORE_SRCS
     src/core/values.cpp
     src/core/pack.cpp
     src/core/unpack.cpp
-    src/core/crypto.cpp)
+    src/core/crypto.cpp
+    src/core/frame.cpp)
 
 if(ESP_PLATFORM)
   idf_component_register(SRCS ${PACKBIN_CORE_SRCS} INCLUDE_DIRS include)

@@ -102,8 +102,8 @@ image_checks() {
   echo "$stem: __cxa_throw=$throw __cxa_allocate_exception=$alloc heap_symbols=$heap os_rng_symbols=$osrnd dev_urandom=$urandom"
   [ "$((throw + alloc))" -eq 0 ] || fail "$stem references exceptions ($throw throw $alloc allocate)"
   [ "$osrnd" -eq 0 ] && [ "$urandom" -eq 0 ] || fail "$stem references OS random"
-  if [ "$stem" = ac2 ]; then
-    [ "$heap" -eq 0 ] || fail "ac2 references the heap ($heap symbol(s))"
+  if [ "$stem" = ac2 ] || [ "$stem" = frame ]; then
+    [ "$heap" -eq 0 ] || fail "$stem references the heap ($heap symbol(s))"
   fi
   printf '%s %s %s %s\n' "$throw" "$alloc" "$heap" "$((osrnd + urandom))" > "$dir/$stem.refs"
 }
@@ -270,6 +270,7 @@ target_m33f() {
   done
   arm_cxx "$dir" "$here/common/vectors_main.cpp" vectors_main.o "${arch[@]}"
   arm_cxx "$dir" "$here/arm/size_main.cpp" baseline.o "${arch[@]}" -DPACKBIN_SIZE_BASELINE
+  arm_cxx "$dir" "$here/arm/frame_main.cpp" frame_main.o "${arch[@]}"
   [ "$(count_warnings "$dir/compile.log")" -eq 0 ] || fail "compile warnings in the M33F objects"
 
   arm_link_ac2 "$dir" "${arch[@]}"
@@ -280,11 +281,18 @@ target_m33f() {
   image_checks "$dir" vectors
   arm_link "$dir" baseline.elf "${arch[@]}" "${arm_link_common[@]}" --specs=nano.specs \
     --specs=nosys.specs "${heap_wraps[@]}" "$dir/baseline.o" "$dir/startup.o" "$dir/wrap.o"
+  # The frame image (AZ-3292): the frame session and the MAC-only call alone, no pack or unpack in it.
+  arm_link "$dir" frame.elf "${arch[@]}" "${arm_link_common[@]}" --specs=nano.specs \
+    --specs=nosys.specs "${heap_wraps[@]}" "$dir"/core-*.o "$dir/frame_main.o" "$dir/startup.o" "$dir/wrap.o"
+  image_checks "$dir" frame
 
   qemu_run mps2-an505 "$dir/baseline.elf" "$dir/baseline.run.log" || fail "M33F baseline exit $?"
   qemu_run mps2-an505 "$dir/ac2.elf" "$dir/ac2.run.log" || fail "AC-2 firmware on M33F exit $?"
   [ "$(log_value WRAPPER_CALLS "$dir/ac2.run.log")" = 0 ] || fail "malloc/new wrapper called"
   [ "$(log_value FAILURES "$dir/ac2.run.log")" = 0 ] || fail "AC-2 round trip failed on M33F"
+  qemu_run mps2-an505 "$dir/frame.elf" "$dir/frame.run.log" || fail "frame image on M33F exit $?"
+  [ "$(log_value WRAPPER_CALLS "$dir/frame.run.log")" = 0 ] || fail "malloc/new wrapper called by the frame image"
+  [ "$(log_value FAILURES "$dir/frame.run.log")" = 0 ] || fail "frame image failures on M33F"
   qemu_run mps2-an505 "$dir/vectors.elf" "$dir/vectors.run.log" || fail "M33F vector runner exit $?"
   check_vectors "$dir/vectors.run.log"
   # The packet the M33F image builds equals the one the Cortex-M3 image builds (target_m3 runs earlier in the stage).
@@ -313,6 +321,21 @@ target_m33f() {
   [ "$stack" -le "$m33f_stack_budget" ] || fail "M33F stack ${stack} B over ${m33f_stack_budget} B"
   [ "$stack" -le "$m33f_stack_pin" ] || fail "M33F stack ${stack} B measured is over the pin of ${m33f_stack_pin} B (cpp/embedded/lib.sh m33f_stack_pin)"
   [ "$core_rw" -eq 0 ] || fail "M33F core data+bss ${core_rw} B"
+
+  # The frame image: its flash is the image (text plus data), its stack the deepest call of the image net of the
+  # meter overhead; both are held to the ceilings above and to their own pins (AZ-3292).
+  local frame_flash frame_raw frame_stack
+  frame_flash=$(arm-none-eabi-size "$dir/frame.elf" | awk 'NR == 2 { print $1 + $2 }')
+  frame_raw=$(log_value FRAME_STACK "$dir/frame.run.log")
+  frame_stack=$((frame_raw - meter))
+  echo "m33f frame image flash=$frame_flash budget=$m33f_flash_budget pin=$m33f_frame_flash_pin"
+  echo "m33f frame stack raw=$frame_raw meter overhead=$meter net=$frame_stack budget=$m33f_stack_budget pin=$m33f_frame_stack_pin"
+  note "Cortex-M33F frame image flash ${frame_flash} B of ${m33f_flash_budget} (pin ${m33f_frame_flash_pin} B)"
+  note "deepest frame call stack ${frame_stack} B of ${m33f_stack_budget} (pin ${m33f_frame_stack_pin} B; raw ${frame_raw} B less ${meter} B meter overhead)"
+  [ "$frame_flash" -le "$m33f_flash_budget" ] || fail "M33F frame flash ${frame_flash} B over ${m33f_flash_budget} B"
+  [ "$frame_flash" -le "$m33f_frame_flash_pin" ] || fail "M33F frame flash ${frame_flash} B measured is over the pin of ${m33f_frame_flash_pin} B (cpp/embedded/lib.sh m33f_frame_flash_pin)"
+  [ "$frame_stack" -le "$m33f_stack_budget" ] || fail "M33F frame stack ${frame_stack} B over ${m33f_stack_budget} B"
+  [ "$frame_stack" -le "$m33f_frame_stack_pin" ] || fail "M33F frame stack ${frame_stack} B measured is over the pin of ${m33f_frame_stack_pin} B (cpp/embedded/lib.sh m33f_frame_stack_pin)"
 }
 
 target_s390x() {

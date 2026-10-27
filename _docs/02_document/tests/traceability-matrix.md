@@ -481,4 +481,5 @@ Moved to [traceability-not-verified-loops-11-18.md](traceability-not-verified-lo
 <!-- autodev-step12-loop-update: loop 69 (AZ-3200 to AZ-3204), 2026-10-25, 28 rows added in traceability-matrix-loop-69.md (27 Covered, 1 Open: CI flash of the frame set) -->
 <!-- autodev-step12-loop-update: loop 70 (AZ-3231), 2026-10-25, 11 rows added in traceability-matrix-loop-70.md (10 Covered, 1 Open: CI figures of the M33F row) -->
 <!-- autodev-step12-loop-update: loop 71 (AZ-3232 to AZ-3235), 2026-10-25, 16 rows added in traceability-matrix-loop-71.md (blackbox-tests-24) (15 Covered, 1 Open: Android and iOS device runs) -->
+<!-- autodev-step12-loop-update: loop 75 (AZ-3292 to AZ-3295), 2026-10-27, 13 rows added in traceability-matrix-loop-75.md (blackbox-tests-25) (10 Covered, 3 Open: step 11 suites, the QEMU frame image, hardware and ring candidates) -->
 <!-- loop 74 (AZ-3291, ADR 009), 2026-10-27: the stream session rows (pack-session AC-2 to AC-8, AZ-2019 to AZ-2026 session ACs, cpp-microcontroller AC-10, Assessment26 O3) marked Retired; FT-K-02 to FT-K-09 and FT-E-10 kept as history -->
