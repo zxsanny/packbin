@@ -1,3 +1,4 @@
+#![cfg(feature = "std")]
 use packbin::{times, u32, u8, unpack, MapScheme, ShortPacket, UnpackError, Value};
 
 // AZ-2435 (assessment22 gap G1, AZ-2415 AC-3): the default `maxSlots` fell from 4 194 304 to

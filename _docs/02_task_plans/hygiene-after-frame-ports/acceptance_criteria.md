@@ -109,7 +109,7 @@ Then it prints 0 lines (10 lines in 10 files today).
 **AC-H7.2: Same tests, same results**
 Given the C# suite, `fuzz_ecc` for Python and for TypeScript
 When they run before and after the rename
-Then the C# test count and result are equal, and each fuzz probe exits with the same code and prints the same set of PASS lines.
+Then the C# test count (4,220 listed by `dotnet test csharp --list-tests`) and result are equal, and each fuzz probe exits 0 with 0 mismatches and 0 foreign exceptions and prints the same final verdict line (the probes print no `PASS` lines).
 
 ## Loop-level
 

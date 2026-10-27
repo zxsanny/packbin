@@ -1,5 +1,5 @@
 //! AZ-2754 AC-5: dictionaries in the heap-free core. Needs the `text` feature.
-#![cfg(feature = "text")]
+#![cfg(all(feature = "std", feature = "text"))]
 
 mod nostd_support;
 

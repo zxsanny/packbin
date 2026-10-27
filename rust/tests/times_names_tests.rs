@@ -1,3 +1,4 @@
+#![cfg(feature = "std")]
 use packbin::{to_hex, BinaryPacker, BoundField, Scheme, SchemeItem, UnpackError};
 
 fn unpack_row<T: Default + 'static>(scheme: &Scheme<T>, bytes: &[u8]) -> Result<T, UnpackError> {

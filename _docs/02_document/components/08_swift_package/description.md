@@ -14,7 +14,7 @@
 
 ## 2. Interfaces
 
-Same shape as TypeScript (`components/02_typescript_package/description.md` §2) and Go (`components/07_go_package/description.md` §2): a scheme built from fields by order id, `pack(scheme, row) throws -> [UInt8]`, `unpack(buffer, schemes) throws`, first-byte dispatch over a scheme list, a typed `PackbinError`, and frame mode (below, `contracts/library/pack-session.md` 3.0.0); the stream `PackSession` start/join/pack/unpack is removed (loop 74, AZ-3285, ADR 009). The exact Swift names are listed in the package documentation, `swift/Sources/Packbin/Packbin.docc/Packbin.md` (Public names; that list does not name the frame types yet, a pre-existing gap noted in loop 74).
+Same shape as TypeScript (`components/02_typescript_package/description.md` §2) and Go (`components/07_go_package/description.md` §2): a scheme built from fields by order id, `pack(scheme, row) throws -> [UInt8]`, `unpack(buffer, schemes) throws`, first-byte dispatch over a scheme list, a typed `PackbinError`, and frame mode (below, `contracts/library/pack-session.md` 3.0.0); the stream `PackSession` start/join/pack/unpack is removed (loop 74, AZ-3285, ADR 009). The exact Swift names are listed in the package documentation, `swift/Sources/Packbin/Packbin.docc/Packbin.md` (Public names, which lists the frame types since loop 76, AZ-3332).
 
 Rows: a typed struct bound by getter and setter closures, or `[String: Any]`. `nil` is no value; an empty array is a value with 0 items. Hostile input throws and never traps.
 

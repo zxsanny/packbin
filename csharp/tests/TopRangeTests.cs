@@ -2,7 +2,7 @@ using Packbin;
 
 namespace Packbin.Tests;
 
-public class TopRangeAndSessionTests
+public class TopRangeTests
 {
     private sealed class WideRow
     {

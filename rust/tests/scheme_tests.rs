@@ -1,3 +1,4 @@
+#![cfg(feature = "std")]
 use packbin::{
     flags, i16, to_hex, u16, u8, BinaryPacker, BoundField, Scheme, ShortPacket, UnpackError,
 };

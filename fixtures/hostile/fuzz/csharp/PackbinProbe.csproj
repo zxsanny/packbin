@@ -25,6 +25,8 @@
 
   <ItemGroup>
     <Compile Include="$(PackbinSrc)/*.cs" />
+    <!-- The netstandard2.0 probe (ns20/Program.cs) has its own project and its own entry point. -->
+    <Compile Remove="ns20/**" />
   </ItemGroup>
 
   <Target Name="RequirePackbinSrc" BeforeTargets="CoreCompile" Condition="'$(PackbinSrc)' == ''">

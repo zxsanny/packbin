@@ -1,4 +1,4 @@
-// Shared setup of the AZ-2666 TypeScript fuzz probes (fuzz_text.ts, fuzz_ecc_session.ts); not run on its own.
+// Shared setup of the AZ-2666 TypeScript fuzz probes (fuzz_text.ts, fuzz_ecc.ts); not run on its own.
 // Reads the runnable probe's command line (<repo checkout> [seed] [seconds per part]), imports the package sources from
 // the checkout, and holds the seeded generator (mulberry32), the findings list, the per-part statistics, the seed
 // inputs (text and ECC vectors, the hostile corpus and cases), the mutator, and the reference codecs

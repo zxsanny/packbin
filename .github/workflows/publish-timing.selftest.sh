@@ -8,6 +8,13 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 failures=0
 bad() { echo "FAIL: $*" >&2; failures=$((failures + 1)); }
+# bad_in <captured text> <message>: bad, then the text the check matched against (stderr), so a failure shows its evidence.
+bad_in() {
+  local text="$1"
+  shift
+  bad "$@"
+  printf '  captured output:\n  | %s\n' "${text//$'\n'/$'\n  | '}" >&2
+}
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -35,20 +42,21 @@ out="$(bash "$work/driver.sh" 2>&1 < /dev/null)" || rc=$?
 
 # Assert: both groups timed, the failing one counted once, the total names 2 checks, exit 0.
 [ "$rc" -eq 0 ] || bad "driver exit $rc, expected 0"
-printf '%s\n' "$out" | grep -Eq '^publish-gate: alpha took [0-9]+ s$' || bad "alpha has no timing line"
-printf '%s\n' "$out" | grep -Eq '^publish-gate: beta took [0-9]+ s$' || bad "a failing group has no timing line"
-printf '%s\n' "$out" | grep -qx 'failures=1' || bad "the failing group was not counted exactly once"
-printf '%s\n' "$out" | grep -Eq '^publish-gate: total took [0-9]+ s in 2 checks$' || bad "total line missing or wrong"
+grep -Eq '^publish-gate: alpha took [0-9]+ s$' <<< "$out" || bad_in "$out" "alpha has no timing line"
+grep -Eq '^publish-gate: beta took [0-9]+ s$' <<< "$out" || bad_in "$out" "a failing group has no timing line"
+grep -qx 'failures=1' <<< "$out" || bad_in "$out" "the failing group was not counted exactly once"
+grep -Eq '^publish-gate: total took [0-9]+ s in 2 checks$' <<< "$out" || bad_in "$out" "total line missing or wrong"
 
 # Act and assert: on GitHub Actions the timing lines also go out as ONE notice annotation (GitHub keeps 10 per step), and only there
 out="$(GITHUB_ACTIONS=true bash "$work/driver.sh" 2>&1 < /dev/null)" || bad "driver failed under GITHUB_ACTIONS"
-[ "$(printf '%s\n' "$out" | grep -c '^::notice ')" -eq 1 ] || bad "expected exactly one notice annotation"
-printf '%s\n' "$out" | grep -Eq '^::notice title=publish gate timing::publish-gate: alpha took [0-9]+ s%0Apublish-gate: beta took [0-9]+ s%0Apublish-gate: total took [0-9]+ s in 2 checks$' || bad "the notice lacks the lines of both groups and the total"
-printf '%s\n' "$out" | grep -q '^publish-gate: alpha took' || bad "the plain timing line is gone under GITHUB_ACTIONS"
-env -u GITHUB_ACTIONS bash "$work/driver.sh" 2>&1 < /dev/null | grep -q '::notice' && bad "a notice annotation outside GitHub Actions"
+[ "$(grep -c '^::notice ' <<< "$out")" -eq 1 ] || bad_in "$out" "expected exactly one notice annotation"
+grep -Eq '^::notice title=publish gate timing::publish-gate: alpha took [0-9]+ s%0Apublish-gate: beta took [0-9]+ s%0Apublish-gate: total took [0-9]+ s in 2 checks$' <<< "$out" || bad_in "$out" "the notice lacks the lines of both groups and the total"
+grep -q '^publish-gate: alpha took' <<< "$out" || bad_in "$out" "the plain timing line is gone under GITHUB_ACTIONS"
+out="$(env -u GITHUB_ACTIONS bash "$work/driver.sh" 2>&1 < /dev/null)" || bad "driver failed outside GitHub Actions"
+grep -q '::notice' <<< "$out" && bad_in "$out" "a notice annotation outside GitHub Actions"
 many="$(GITHUB_ACTIONS=true bash -c 'set -euo pipefail; failures=0; here="'"$here"'"; source "$here/publish-timing.test.sh"; g() { :; }; for n in 1 2 3 4 5 6 7 8 9 10 11 12 13 14; do timed "g$n" g; done; timed_total' 2>&1 < /dev/null)"
-[ "$(printf '%s\n' "$many" | grep -c '^::notice ')" -eq 1 ] || bad "15 timing lines did not make exactly one notice"
-printf '%s\n' "$many" | grep -q 'g14 took [0-9]* s%0Apublish-gate: total took' || bad "the last group is missing from the notice"
+[ "$(grep -c '^::notice ' <<< "$many")" -eq 1 ] || bad_in "$many" "15 timing lines did not make exactly one notice"
+grep -q 'g14 took [0-9]* s%0Apublish-gate: total took' <<< "$many" || bad_in "$many" "the last group is missing from the notice"
 
 # Act: a group that aborts under set -e
 rc=0
@@ -56,10 +64,10 @@ out="$(bash "$work/driver.sh" abort 2>&1 < /dev/null)" || rc=$?
 
 # Assert
 [ "$rc" -ne 0 ] || bad "an aborting group did not fail the run"
-printf '%s\n' "$out" | grep -Eq '^publish-gate: gamma took [0-9]+ s \(aborted\)$' || bad "an aborting group is not named"
-printf '%s\n' "$out" | grep -q 'not-reached' && bad "the run went on after an aborting group"
+grep -Eq '^publish-gate: gamma took [0-9]+ s \(aborted\)$' <<< "$out" || bad_in "$out" "an aborting group is not named"
+grep -q 'not-reached' <<< "$out" && bad_in "$out" "the run went on after an aborting group"
 out="$(GITHUB_ACTIONS=true bash "$work/driver.sh" abort 2>&1 < /dev/null)" || true
-printf '%s\n' "$out" | grep -Eq '^::notice title=publish gate timing::.*publish-gate: gamma took [0-9]+ s \(aborted\)$' || bad "an aborting group has no notice annotation"
+grep -Eq '^::notice title=publish gate timing::.*publish-gate: gamma took [0-9]+ s \(aborted\)$' <<< "$out" || bad_in "$out" "an aborting group has no notice annotation"
 
 # Act and assert: the gate runs the 19 groups, each through `group` (which calls timed), and nothing bare
 expected="static crates-token registry vcpkg gate go swift manifest npm position workflow pins phases phases-rerun readonly readonly-gate-good readonly-gate-bad readonly-gate-nojava readonly-full"
@@ -85,12 +93,12 @@ for names in "manifest" "manifest,position" "position,manifest"; do
 done
 out="$(bash -c 'set -euo pipefail; timed() { echo "ran $1 $2"; }; snip=$1; set --; source "$snip"; group static f_static; group manifest f_manifest' _ "$work/select.sh" 2>&1 < /dev/null)" \
   || bad "no --groups failed: $out"
-[ "$(printf '%s\n' "$out" | grep -c '^ran ')" -eq 2 ] || bad "no --groups did not run every group asked for: $out"
+[ "$(grep -c '^ran ' <<< "$out")" -eq 2 ] || bad_in "$out" "no --groups did not run every group asked for"
 rc=0
 out="$(bash "$here/publish-gate.test.sh" --groups manifest,no-such-group 2>&1 < /dev/null)" || rc=$?
 [ "$rc" -eq 2 ] || bad "an unknown group exited $rc, expected 2"
-printf '%s\n' "$out" | grep -q "unknown group 'no-such-group'" || bad "an unknown group is not named: $out"
-printf '%s\n' "$out" | grep -q 'publish-gate: manifest took' && bad "a group ran although another was unknown"
+grep -q "unknown group 'no-such-group'" <<< "$out" || bad_in "$out" "an unknown group is not named"
+grep -q 'publish-gate: manifest took' <<< "$out" && bad_in "$out" "a group ran although another was unknown"
 rc=0
 bash "$here/publish-gate.test.sh" --groups "" >/dev/null 2>&1 < /dev/null || rc=$?
 [ "$rc" -eq 2 ] || bad "an empty group list exited $rc, expected 2"

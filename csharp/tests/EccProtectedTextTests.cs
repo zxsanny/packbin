@@ -3,7 +3,7 @@ using Packbin;
 namespace Packbin.Tests;
 
 // AZ-2682: message ECC around a compact-text field (EC-11). The EC-10 session tests went with the stream session (ADR-009).
-public class EccSessionTextTests
+public class EccProtectedTextTests
 {
     private sealed class NoteRow
     {

@@ -229,7 +229,8 @@ final class ProbeEdgesText {
         AuditProbe.check(unpackDict(b(0x02, 0x10, 0x61), b(0x02, 0x10, 0x61)) instanceof Packbin.ShortPacket, "dict: key 'a' twice is refused");
         AuditProbe.check(unpackDict(b(0x00), b(0x00)) instanceof Packbin.ShortPacket, "dict: empty key twice is refused");
         AuditProbe.check(Integer.valueOf(1).equals(unpackDict(b(0x00))), "dict: one empty key is accepted");
-        AuditProbe.check(Integer.valueOf(2).equals(unpackDict(AuditProbe.bytes("0310c3a9"), AuditProbe.bytes("041065cc81"))),
+        // Dictionary keys must ascend strictly by UTF-8 bytes: NFD (65 cc 81) sorts before NFC (c3 a9).
+        AuditProbe.check(Integer.valueOf(2).equals(unpackDict(AuditProbe.bytes("041065cc81"), AuditProbe.bytes("0310c3a9"))),
                 "dict: NFC and NFD forms of é are two keys (strings compared, not normalized)");
     }
 

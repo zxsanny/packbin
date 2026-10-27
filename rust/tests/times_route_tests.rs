@@ -1,3 +1,4 @@
+#![cfg(feature = "std")]
 use packbin::{eq, to_hex, BinaryPacker, BoundField, Scheme, SchemeItem, UnpackError, Value};
 use std::time::Instant;
 

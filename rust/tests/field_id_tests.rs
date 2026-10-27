@@ -1,3 +1,4 @@
+#![cfg(feature = "std")]
 use packbin::{eq, mismatched_bytes, to_hex, BinaryPacker, BoundField, Scheme, SchemeItem, Value};
 
 fn parse_hex(hex: &str) -> Vec<u8> {

@@ -80,6 +80,8 @@ pub(crate) fn hmac_sha256_of(key: &[u8], data: &[u8]) -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(not(feature = "std"))]
+    use std::{format, string::String, vec::Vec};
 
     fn hex(bytes: &[u8]) -> String {
         bytes.iter().map(|b| format!("{b:02x}")).collect()

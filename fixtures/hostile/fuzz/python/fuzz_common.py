@@ -1,4 +1,4 @@
-"""Shared setup of the AZ-2666 fuzz probes (`fuzz_text.py`, `fuzz_ecc_session.py`); not run on its own.
+"""Shared setup of the AZ-2666 fuzz probes (`fuzz_text.py`, `fuzz_ecc.py`); not run on its own.
 
 Reads the command line of the runnable probe (`<repo checkout> [seed] [seconds per part]`), puts the checkout's
 `python/src` on the path, loads the reference codecs (`scripts/text/textfmt.py`, `scripts/ecc/eccfmt.py`) and the

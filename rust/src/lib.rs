@@ -10,6 +10,8 @@
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
+#[cfg(all(test, not(feature = "std")))]
+extern crate std;
 
 pub mod nostd;
 

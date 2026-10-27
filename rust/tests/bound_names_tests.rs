@@ -1,3 +1,4 @@
+#![cfg(feature = "std")]
 use packbin::{to_hex, BinaryPacker, BoundField, Scheme, UnpackError};
 use std::collections::BTreeMap;
 use std::time::Instant;

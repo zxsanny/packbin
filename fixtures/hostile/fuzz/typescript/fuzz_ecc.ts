@@ -1,9 +1,8 @@
-// Run: node fuzz_ecc_session.ts <repo checkout> [seed] [seconds per part]   (AZ-2666 probe (a), TypeScript, ECC; Node 22.18+, python3 >= 3.9 on PATH or $PYTHON)
+// Run: node fuzz_ecc.ts <repo checkout> [seed] [seconds per part]   (AZ-2666 probe (a), TypeScript, ECC; Node 22.18+, python3 >= 3.9 on PATH or $PYTHON)
 // Random buffers, code words with k wrong bytes, cut or extended words, fixtures/ecc/vectors.txt rows and protected
 // corpus packets go through ecc.repair and scripts/ecc/eccfmt.py (a different answer is a mismatch), then through
 // BinaryPacker.unpackRepair with two schemes that share n; the caller's buffer must stay unchanged. The stream session
-// part went with the stream session (loop 74, ADR-009); the file name stays for the README and the sibling probes.
-// Shared setup is fuzz_common.ts next to this file.
+// part went with the stream session (loop 74, ADR-009). Shared setup is fuzz_common.ts next to this file.
 import {
   Stats, budget, cat, ecc, eccSeeds, finish, hex, int, mutate, note, packets, pb, pick, randBytes, reference, rnd, start,
 } from "./fuzz_common.ts"

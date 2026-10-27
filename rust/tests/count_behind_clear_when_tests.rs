@@ -1,3 +1,4 @@
+#![cfg(feature = "std")]
 use packbin::{
     bits, eq, flag_byte, flags, group, insert, pack, packed, sized, times, to_hex, u16, u8, when,
     Field, MapScheme, PackError, Value, Values,

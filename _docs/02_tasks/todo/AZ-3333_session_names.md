@@ -42,7 +42,7 @@ Then it prints 0 lines (10 lines in 10 files today), except one history sentence
 **AC-2: Same tests, same results**
 Given the C# suite (`env MSBUILDDISABLENODEREUSE=1 dotnet test csharp --nologo`) and the two renamed fuzz probes
 When they run before and after the rename
-Then the C# test count and result are equal, and each fuzz probe exits with the same code and prints the same set of PASS lines
+Then the C# test count (4,220 listed) and result are equal, and each fuzz probe exits 0 with 0 mismatches and 0 foreign exceptions and prints the same final verdict line (these probes print no `PASS` lines; the first draft of this AC said they do)
 
 **AC-3: No collision**
 Given the new file and class names
@@ -55,7 +55,7 @@ Then none exists already (a new C# class name is unique in the test project)
 |--------|-------------|-----------------|
 | AC-1 | the `git grep` | 0 lines |
 | AC-2 | C# suite before and after | equal count, PASS |
-| AC-2 | `fuzz_ecc` (Python) and (TypeScript) before and after | equal exit code and PASS lines |
+| AC-2 | `fuzz_ecc` (Python) and (TypeScript) before and after | exit 0, 0 mismatches, same verdict line |
 
 ## Blackbox Tests
 

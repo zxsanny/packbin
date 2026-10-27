@@ -262,5 +262,44 @@ The whole API is listed here.
   schemes as an array (see Message error correction).
 - ``PackbinError``: `kind`, `field` (`nil` for no field), `name`, `needed`, `left`, `actual`, `reason`;
   ``PackbinError/Kind``: `short`, `trailing`, `unknownType`, `badValue`, `tooMany`, `schemeError`,
-  `packError`, `uncorrectable`, `tooLong`, whose raw values are the outcome terms of the shared hostile vectors.
+  `packError`, `uncorrectable`, `tooLong`, whose raw values are the outcome terms of the shared hostile vectors, and the
+  frame mode kinds `tagMismatch`, `duplicate`, `tooOld` and `bufferFull` (raw values `tag_mismatch`, `duplicate`, `too_old`,
+  `buffer_full`).
 - `flagBits`: the 8 bits one flag byte holds.
+- ``FrameSession``: frame mode, sealed and authenticated frames (contract
+  `_docs/02_document/contracts/library/pack-session.md`); a `final class`, `@unchecked Sendable` and
+  `CustomStringConvertible`, available from tvOS 14.0 and watchOS 7.0. Members:
+  `static func load(key: [UInt8], epoch: UInt32, config: FrameConfig) throws -> FrameSession`,
+  `setPrevious(key: [UInt8], epoch: UInt32) throws`, `clearPrevious()`, `close()`, `isClosed`,
+  `description`,
+  `seal(direction: FrameDirection, context: MsgContext, ad: [UInt8], clear: [UInt8], plain: [UInt8],
+  into out: inout [UInt8]) throws -> Int`,
+  `open(direction: FrameDirection, context: MsgContext, ad: [UInt8], body: [UInt8],
+  clearLength: Int, into out: inout [UInt8]) throws -> FrameOpened`, the same `open` with
+  `window: inout ReplayWindow, counter: UInt64` before `into out:`, and the constants
+  `keySize` (32), `maxEpoch` (0xFFFFFF) and `maxBody` (255). Every refusal throws a ``PackbinError``
+  of kind `badValue`, `tooLong`, `short`, `bufferFull`, `tagMismatch`, `duplicate` or `tooOld`.
+- ``FrameConfig``: what a session is loaded with;
+  `init(tagLength: Int, directions: FrameDirections = .all)`, `tagLength` (4, 8 or 16, else `load`
+  throws a `badValue`), `directions`.
+- ``FrameDirection``: `enum FrameDirection: UInt8, Sendable, CaseIterable` with `.up` (1), `.down`
+  (2) and `.group` (3), and `init(number: Int) throws` (any other number throws a `badValue`).
+- ``FrameDirections``: an `OptionSet` of the directions a session loads keys for; `.up`, `.down`,
+  `.group`, `.all`, `rawValue`, `init(rawValue: UInt8)` (keeps the low 3 bits) and
+  `contains(direction: FrameDirection) -> Bool`.
+- ``FrameSlot``: which loaded key opened a frame; `.current`, `.previous`.
+- ``FrameOpened``: what an opened frame reports; `slot`, `clearLength`, `plainLength` and
+  `init(slot: FrameSlot, clearLength: Int, plainLength: Int)`.
+- ``MsgContext``: what the caller supplies per message; `msgID: [UInt8]` (8 bytes), `kind: UInt8`
+  (0 to 15) and `init(msgID: [UInt8], kind: UInt8)`, neither checked until `seal` or `open`. The
+  caller never seals a `msgID` twice with different contents for one (key, epoch, direction).
+- ``Freshness``: what a ``ReplayWindow`` says about a counter; `.fresh`, `.duplicate`, `.tooOld`.
+- ``ReplayWindow``: the replay window of one sender, owned by the caller; `init()`,
+  `init(top: UInt64, bits: UInt64)`, `top` and `bits` (readable; set only by an `init` or `commit`),
+  `check(_ counter: UInt64) -> Freshness` (never changes the window) and
+  `mutating func commit(_ counter: UInt64)`.
+- ``MacKey``: the MAC-only call of frame mode; a `final class`, `@unchecked Sendable` and
+  `CustomStringConvertible`, available from tvOS 14.0 and watchOS 7.0. Members: `epoch`,
+  `static func derive(key: [UInt8], epoch: UInt32, label: [UInt8]) throws -> MacKey`,
+  `tag(_ parts: [[UInt8]], length n: Int) throws -> [UInt8]` (`n` is 4, 8, 16 or 32),
+  `verify(_ parts: [[UInt8]], tag: [UInt8]) -> Bool`, `close()`, `isClosed` and `description`.

@@ -62,7 +62,7 @@ Source: `_docs/03_implementation/batch_01_loop74_report.md`. The stream session 
 | Test | Task | What changed |
 |------|------|--------------|
 | `SessionTests`, `HostileSessionTests` (AZ-2114), the helper `SessionPrivates` | AZ-3281 | retired with `PackSession.cs`: deleted (32 tests) |
-| `EccSessionTextTests` (14 to 7: EC-10 out, EC-11 kept), `EccDispatchOrderTests` (11 to 5), `TopRangeAndSessionTests` (16 to 14), `WrittenWhenTests` (10 to 9) | AZ-3281 | kept in loop 74: the non-session tests stay; the class names keep "Session" (a rename changes the test ids); the duplicate-type-before-parity-mix check (AZ-2704 AC-3) runs on the clear `BinaryPacker.Unpack` |
+| `EccSessionTextTests` (14 to 7: EC-10 out, EC-11 kept), `EccDispatchOrderTests` (11 to 5), `TopRangeAndSessionTests` (16 to 14), `WrittenWhenTests` (10 to 9) | AZ-3281 | kept in loop 74: the non-session tests stay; the class names kept "Session" in loop 74 (a rename changes the test ids); loop 76 (AZ-3333) renamed `EccSessionTextTests` to `EccProtectedTextTests` and `TopRangeAndSessionTests` to `TopRangeTests`, the test count unchanged; the duplicate-type-before-parity-mix check (AZ-2704 AC-3) runs on the clear `BinaryPacker.Unpack` |
 | `FrameVectorTests`, `CryptoVectorTests` | AZ-3281 | 157 frame rows and 27 primitive rows pass, unchanged |
 
 Suite: 4,287 of 4,287 on `net10.0` and on `netstandard2.0` (4,319 before), 0 warnings.

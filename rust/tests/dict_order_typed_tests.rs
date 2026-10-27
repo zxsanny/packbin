@@ -1,3 +1,4 @@
+#![cfg(feature = "std")]
 use packbin::{BinaryPacker, BoundField, Scheme, UnpackError};
 use std::collections::BTreeMap;
 

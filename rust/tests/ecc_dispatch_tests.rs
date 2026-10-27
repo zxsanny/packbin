@@ -1,3 +1,4 @@
+#![cfg(feature = "std")]
 mod ecc_support;
 
 use ecc_support::{corrupt, position_row, position_scheme, PositionRow, Rng};

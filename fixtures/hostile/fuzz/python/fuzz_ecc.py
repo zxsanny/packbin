@@ -1,11 +1,10 @@
-# Run: python3.14 -I -B fuzz_ecc_session.py <repo checkout> [seed] [seconds per part]   (AZ-2666 probe (a), Python, ECC)
+# Run: python3.14 -I -B fuzz_ecc.py <repo checkout> [seed] [seconds per part]   (AZ-2666 probe (a), Python, ECC)
 """Seeded ECC inputs against the Python repair and the protected unpack path.
 
 Random buffers, code words with k wrong bytes, cut or extended words, `fixtures/ecc/vectors.txt` rows and protected
 corpus packets go through `_ecc.repair` and `scripts/ecc/eccfmt.py` (a different answer is a mismatch), then through
 a dispatch of two schemes that share n; the caller's buffer must stay unchanged. The stream session part went with
-the stream session (loop 74, ADR-009); the file name stays for the README and the sibling probes. Shared setup is
-`fuzz_common.py`.
+the stream session (loop 74, ADR-009). Shared setup is `fuzz_common.py`.
 """
 
 from __future__ import annotations

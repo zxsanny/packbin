@@ -16,7 +16,7 @@ One directory per package holds the probes of the loop 41 security audit of the 
 
 | Directory | What runs | Probes |
 |-----------|-----------|--------|
-| `python/` | `python3.14 -I -B <file> <checkout> [seed] [seconds]` | `fuzz_text.py`, `fuzz_ecc_session.py` (the name stays; since loop 74 it fuzzes the repair and the clear protected unpack only; shared `fuzz_common.py`; differential against `scripts/text/textfmt.py` and `scripts/ecc/eccfmt.py`), `ecc_worst.py`, `text_amp.py`, `edges.py` |
+| `python/` | `python3.14 -I -B <file> <checkout> [seed] [seconds]` | `fuzz_text.py`, `fuzz_ecc.py` (it fuzzes the repair and the clear protected unpack; the stream session part went in loop 74; shared `fuzz_common.py`; differential against `scripts/text/textfmt.py` and `scripts/ecc/eccfmt.py`), `ecc_worst.py`, `text_amp.py`, `edges.py` |
 | `typescript/` | `node <file> <checkout> ...` (needs `typescript/node_modules`) | the same five, plus bounds-checked copies of `text.ts` and `ecc.ts` written to the OS temp dir |
 | `rust/` | `sh run.sh <checkout> <build dir> <debug\|release> <command>` | random, ecctime, textamp, edges (debug keeps overflow checks on) |
 | `go/` | `sh run.sh` in `golang:1.27` (command in the file) | random, ecctime, textamp, edges, allocs, and four `go test -fuzz` targets in `fuzz_test.go` |

@@ -1,3 +1,4 @@
+#![cfg(feature = "std")]
 use packbin::{
     eq, to_hex, BinaryPacker, BoundField, PackError, Scheme, SchemeItem, UnpackError, Value,
 };

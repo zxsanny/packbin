@@ -1,3 +1,4 @@
+#![cfg(feature = "std")]
 use packbin::{
     eq, flags, group, repeat, times, u32, u8, unpack, when, BinaryPacker, BoundField, MapScheme,
     Scheme, SchemeItem, ShortPacket, UnpackError, Value, Values, DEFAULT_MAX_ROUNDS,

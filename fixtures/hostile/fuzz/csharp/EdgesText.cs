@@ -211,7 +211,8 @@ internal static class EdgesText
         Program.Check(Unpack([0x02, 0x10, 0x61], [0x02, 0x10, 0x61]) is ShortPacket, "dict: key 'a' twice is refused");
         Program.Check(Unpack([0x00], [0x00]) is ShortPacket, "dict: empty key twice is refused");
         Program.Check(Unpack([0x00]) is 1, "dict: one empty key is accepted");
-        Program.Check(Unpack(Program.Bytes("0310c3a9"), Program.Bytes("041065cc81")) is 2, "dict: NFC and NFD forms of é are two keys (bytes compared)");
+        // Dictionary keys must ascend strictly by UTF-8 bytes: NFD (65 cc 81) sorts before NFC (c3 a9).
+        Program.Check(Unpack(Program.Bytes("041065cc81"), Program.Bytes("0310c3a9")) is 2, "dict: NFC and NFD forms of é are two keys (bytes compared)");
     }
 
     // Every payload of 1 and 2 bytes, and every 3-byte payload: no exception, the 6N+8 bound, well-formed text.
