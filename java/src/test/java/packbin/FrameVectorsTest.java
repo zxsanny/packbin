@@ -31,6 +31,7 @@ public final class FrameVectorsTest {
         // Act
         List<String> mismatches = new ArrayList<>();
         int checked = check(lines, mismatches);
+        System.out.println("frame vectors: " + checked + " rows checked, " + mismatches.size() + " mismatches");
 
         // Assert
         PackbinTest.expectTrue("frame vectors: mismatches " + mismatches, mismatches.isEmpty());

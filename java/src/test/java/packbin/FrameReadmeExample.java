@@ -28,18 +28,18 @@ public final class FrameReadmeExample {
         byte[] msgId = {0, 0x30, 0x10, 0x05, (byte) 0xe8, 3, 0, 0}; // unique per (key, epoch, direction), never reused
         byte[] header = {0, 1, 0, 0x30, 0x10, 0x05, (byte) 0xe8, 3, 0, 0, 4}; // authenticated, not sent
 
-        try (FrameSession node = FrameSession.load(key, 1, 4, FrameSession.UP)) { // epoch 1, 4-byte tag; null if out of range
+        try (FrameSession node = FrameSession.load(key, 1, 4, FrameDirection.UP)) { // epoch 1, 4-byte tag; null if out of range
             MsgContext ctx = new MsgContext(msgId, 4);
             byte[] body = new byte[255];
-            FrameSession.Sealed sealed = (FrameSession.Sealed) node.seal(FrameSession.UP, ctx, header, null,
+            FrameSealed sealed = (FrameSealed) node.seal(FrameDirection.UP, ctx, header, null,
                     "hello, relay".getBytes(StandardCharsets.US_ASCII), body); // body = ciphertext + 4-byte tag
 
             ReplayWindow window = new ReplayWindow(); // one per sender, yours to keep
             byte[] plain = new byte[255];
             long counter = 7; // from bytes the tag covers, e.g. the message id
-            Object opened = node.open(FrameSession.UP, ctx, header, Arrays.copyOf(body, sealed.length), 0, window, counter, plain);
-            int plainLength = ((FrameSession.Opened) opened).plainLength; // plain[0, plainLength) holds the message
-            Object again = node.open(FrameSession.UP, ctx, header, Arrays.copyOf(body, sealed.length), 0, window, counter, plain);
+            Object opened = node.open(FrameDirection.UP, ctx, header, Arrays.copyOf(body, sealed.length), 0, window, counter, plain);
+            int plainLength = ((FrameOpened) opened).plainLength; // plain[0, plainLength) holds the message
+            Object again = node.open(FrameDirection.UP, ctx, header, Arrays.copyOf(body, sealed.length), 0, window, counter, plain);
             boolean duplicate = again instanceof Packbin.Duplicate; // refused before any MAC; also TagMismatch, TooOld, ...
 
             try (MacKey net = MacKey.derive(key, 1, "net".getBytes(StandardCharsets.US_ASCII))) { // MAC-only call

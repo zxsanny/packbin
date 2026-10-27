@@ -42,7 +42,7 @@ func kindName(_ error: PackbinError) -> String {
     }
 }
 
-func freshnessName(_ value: ReplayWindow.Freshness) -> String {
+func freshnessName(_ value: Freshness) -> String {
     switch value {
     case .fresh: return "Fresh"
     case .duplicate: return "Duplicate"

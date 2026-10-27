@@ -13,13 +13,17 @@ final class FrameRows {
         return Integer.parseInt(row.get(name));
     }
 
-    private static int[] directions(Map<String, String> row) {
+    private static FrameDirection[] directions(Map<String, String> row) {
         String dirs = row.getOrDefault("dirs", "123");
-        int[] out = new int[dirs.length()];
+        FrameDirection[] out = new FrameDirection[dirs.length()];
         for (int i = 0; i < out.length; i++) {
-            out[i] = dirs.charAt(i) - '0';
+            out[i] = FrameSupport.direction(dirs.charAt(i) - '0');
         }
         return out;
+    }
+
+    private static FrameDirection dir(Map<String, String> row) {
+        return FrameSupport.direction(integer(row, "dir"));
     }
 
     private static FrameSession load(Map<String, String> row) {
@@ -41,8 +45,8 @@ final class FrameRows {
             }
             return out;
         }
-        int dir = integer(row, "dir");
-        try (FrameSession session = FrameSession.load(key, epoch, 4, 1, 2, 3)) {
+        FrameDirection dir = dir(row);
+        try (FrameSession session = FrameSession.load(key, epoch, 4, FrameDirection.values())) {
             out.put("k_enc", FrameSupport.unhex(session.encKeyForTest(dir, false)));
             out.put("k_mac", FrameSupport.unhex(session.macKeyForTest(dir, false)));
         }
@@ -58,9 +62,9 @@ final class FrameRows {
         }
         try (FrameSession s = session) {
             byte[] buf = FrameSupport.filled(row.containsKey("out_len") ? integer(row, "out_len") : 300);
-            Object result = s.seal(integer(row, "dir"), ctx(row), FrameSupport.hex(row.get("ad")),
+            Object result = s.seal(dir(row), ctx(row), FrameSupport.hex(row.get("ad")),
                     FrameSupport.hex(row.get("clear")), FrameSupport.hex(row.get("plain")), buf);
-            if (result instanceof FrameSession.Sealed sealed) {
+            if (result instanceof FrameSealed sealed) {
                 out.put("body", FrameSupport.unhex(java.util.Arrays.copyOf(buf, sealed.length)));
                 byte[] rest = java.util.Arrays.copyOfRange(buf, sealed.length, buf.length);
                 if (!FrameSupport.allSentinel(rest)) {
@@ -86,7 +90,7 @@ final class FrameRows {
         ReplayWindow before = window == null ? null : ReplayWindow.fromParts(window.top(), window.bits());
         Object result = openRow(row, window, out);
         if (window != null) {
-            if (!(result instanceof FrameSession.Opened) && !window.equals(before)) {
+            if (!(result instanceof FrameOpened) && !window.equals(before)) {
                 out.put("result", "a failed open changed the window");
             }
             out.put("window_after", window.toString());
@@ -109,11 +113,11 @@ final class FrameRows {
             byte[] buf = FrameSupport.filled(row.containsKey("out_len") ? integer(row, "out_len") : 300);
             boolean replay = window != null && row.containsKey("counter");
             long counter = replay ? Long.parseUnsignedLong(row.get("counter")) : 0;
-            Object result = s.open(integer(row, "dir"), ctx(row), FrameSupport.hex(row.get("ad")),
+            Object result = s.open(dir(row), ctx(row), FrameSupport.hex(row.get("ad")),
                     FrameSupport.hex(row.get("body")), integer(row, "clear_len"), replay ? window : null, counter, buf);
             out.put("result", FrameSupport.kind(result));
-            if (result instanceof FrameSession.Opened opened) {
-                out.put("slot", opened.slot == FrameSession.Slot.CURRENT ? "current" : "previous");
+            if (result instanceof FrameOpened opened) {
+                out.put("slot", opened.slot == FrameSlot.CURRENT ? "current" : "previous");
                 out.put("plain", FrameSupport.unhex(java.util.Arrays.copyOf(buf, opened.plainLength)));
                 byte[] rest = java.util.Arrays.copyOfRange(buf, opened.plainLength, buf.length);
                 if (!FrameSupport.allSentinel(rest)) {

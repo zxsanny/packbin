@@ -60,7 +60,7 @@ final class FrameSupport {
 
     /** The contract's name of a result object, "Ok" for a success. */
     static String kind(Object result) {
-        if (result == null || result instanceof FrameSession.Sealed || result instanceof FrameSession.Opened) {
+        if (result == null || result instanceof FrameSealed || result instanceof FrameOpened) {
             return "Ok";
         }
         if (result instanceof Packbin.BadValue) {
@@ -85,6 +85,16 @@ final class FrameSupport {
             return "TooOld";
         }
         return "other:" + result.getClass().getName();
+    }
+
+    /** The direction with byte {@code wire} (1 to 3), or null for any other number (a direction the API cannot name). */
+    static FrameDirection direction(int wire) {
+        for (FrameDirection direction : FrameDirection.values()) {
+            if (direction.wire == wire) {
+                return direction;
+            }
+        }
+        return null;
     }
 
     static byte[] filled(int length) {

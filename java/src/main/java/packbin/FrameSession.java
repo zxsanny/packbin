@@ -10,8 +10,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * lose, reorder and duplicate messages. A frame body is {@code clear ‖ ciphertext ‖ tag}: ChaCha20 under a key per
  * (key, epoch, direction) from HKDF-SHA256, a nonce built from the caller's 8-byte message id, the 4-bit {@code kind}, the
  * direction and the epoch, and a tag that is the first 4, 8 or 16 bytes of HMAC-SHA256 over the nonce, the associated data,
- * the clear part and the ciphertext (encrypt, then MAC). All results are the package's error objects: {@link Sealed} or
- * {@link Opened} on success, otherwise {@link Packbin.BadValue}, {@link Packbin.TooLong}, {@link Packbin.BufferFull},
+ * the clear part and the ciphertext (encrypt, then MAC). All results are the package's error objects: {@link FrameSealed}
+ * or {@link FrameOpened} on success, otherwise {@link Packbin.BadValue}, {@link Packbin.TooLong}, {@link Packbin.BufferFull},
  * {@link Packbin.ShortPacket}, {@link Packbin.TagMismatch}, {@link Packbin.Duplicate} or {@link Packbin.TooOld}.
  *
  * <p><b>Uniqueness rule (the caller's duty): for one (key, epoch, direction), a message id is never sealed twice with
@@ -29,36 +29,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * the timing.
  */
 public final class FrameSession implements AutoCloseable {
-    public static final int UP = 1;
-    public static final int DOWN = 2;
-    public static final int GROUP = 3;
-
-    /** Which loaded key opened a frame. */
-    public enum Slot { CURRENT, PREVIOUS }
-
-    /** The result of a successful seal: the body is {@code out[offset, offset + length)}. */
-    public static final class Sealed {
-        public final int length;
-
-        Sealed(int length) {
-            this.length = length;
-        }
-    }
-
-    /** The result of a successful open. */
-    public static final class Opened {
-        public final Slot slot;
-        public final int clearLength;
-        public final int plainLength;
-
-        Opened(Slot slot, int clearLength, int plainLength) {
-            this.slot = slot;
-            this.clearLength = clearLength;
-            this.plainLength = plainLength;
-        }
-    }
-
-    /** The keys of one (key, epoch): encryption and MAC key per loaded direction (index 1 to 3). */
+    /** The keys of one (key, epoch): encryption and MAC key per loaded direction (index: the direction byte, 1 to 3). */
     private static final class Keys {
         final int epoch;
         final byte[][] enc = new byte[4][];
@@ -67,8 +38,9 @@ public final class FrameSession implements AutoCloseable {
         Keys(byte[] key, int epoch, int directions) {
             this.epoch = epoch;
             byte[] salt = FrameCrypto.salt(epoch);
-            for (int d = UP; d <= GROUP; d++) {
-                if ((directions & (1 << d)) != 0) {
+            for (FrameDirection direction : FrameDirection.values()) {
+                if ((directions & bit(direction)) != 0) {
+                    int d = direction.wire;
                     enc[d] = SessionPad.hkdfSha256(key, salt, info(d, "enc"), 32);
                     mac[d] = SessionPad.hkdfSha256(key, salt, info(d, "mac"), 32);
                 }
@@ -76,7 +48,7 @@ public final class FrameSession implements AutoCloseable {
         }
 
         void wipe() {
-            for (int d = UP; d <= GROUP; d++) {
+            for (int d = 1; d < enc.length; d++) {
                 if (enc[d] != null) {
                     Arrays.fill(enc[d], (byte) 0);
                     Arrays.fill(mac[d], (byte) 0);
@@ -103,20 +75,20 @@ public final class FrameSession implements AutoCloseable {
     /**
      * A frame session for the 32-byte {@code key} at {@code epoch} (0 to 0xFFFFFF), with {@code tagLen} 4, 8 or 16 bytes,
      * fixed for the lifetime of the key (one tag length is used per key and epoch across all devices), and the directions
-     * it may seal and open ({@link #UP}, {@link #DOWN}, {@link #GROUP}; a call in another direction is refused). Returns
-     * null for anything out of range (the contract's BadValue); the key is copied.
+     * it may seal and open (a call in another direction is refused; a direction listed twice counts once). Returns null
+     * for anything out of range or a null direction (the contract's BadValue); the key is copied.
      */
-    public static FrameSession load(byte[] key, int epoch, int tagLen, int... directionList) {
+    public static FrameSession load(byte[] key, int epoch, int tagLen, FrameDirection... directions) {
         if (key == null || key.length != 32 || epoch < 0 || epoch > FrameCrypto.MAX_EPOCH
-                || (tagLen != 4 && tagLen != 8 && tagLen != 16) || directionList == null) {
+                || (tagLen != 4 && tagLen != 8 && tagLen != 16) || directions == null) {
             return null;
         }
         int mask = 0;
-        for (int d : directionList) {
-            if (d < UP || d > GROUP) {
+        for (FrameDirection direction : directions) {
+            if (direction == null) {
                 return null;
             }
-            mask |= 1 << d;
+            mask |= bit(direction);
         }
         return new FrameSession(new Keys(key, epoch, mask), tagLen, mask);
     }
@@ -153,25 +125,26 @@ public final class FrameSession implements AutoCloseable {
     }
 
     /**
-     * Seals {@code clear ‖ plain} into {@code out} starting at 0; see {@link #seal(int, MsgContext, byte[], byte[], byte[],
-     * byte[], int)}.
+     * Seals {@code clear ‖ plain} into {@code out} starting at 0; see {@link #seal(FrameDirection, MsgContext, byte[],
+     * byte[], byte[], byte[], int)}.
      */
-    public Object seal(int direction, MsgContext ctx, byte[] ad, byte[] clear, byte[] plain, byte[] out) {
+    public Object seal(FrameDirection direction, MsgContext ctx, byte[] ad, byte[] clear, byte[] plain, byte[] out) {
         return seal(direction, ctx, ad, clear, plain, out, 0);
     }
 
     /**
      * Seals {@code clear ‖ plain} into {@code out} at {@code outOffset} as {@code clear ‖ ciphertext ‖ tag} and returns
-     * {@link Sealed} with the body length. A null array is empty. The same inputs give the same bytes; the session does not
-     * change and the previous key is never used. A closed session, a direction not loaded, a context that is not valid
-     * (id not 8 bytes, {@code kind} outside 0 to 15) or an offset outside {@code out} is {@link Packbin.BadValue}; {@code ad}
-     * above 255 bytes, or {@code clear + plain + tag} above 255 bytes, is {@link Packbin.TooLong}; room for fewer bytes than
-     * the body is {@link Packbin.BufferFull}. On any refusal nothing is written.
+     * {@link FrameSealed} with the body length. A null array is empty. The same inputs give the same bytes; the session does
+     * not change and the previous key is never used. A closed session, a direction not loaded or null, a context that is
+     * not valid (id not 8 bytes, {@code kind} outside 0 to 15) or an offset outside {@code out} is {@link Packbin.BadValue};
+     * {@code ad} above 255 bytes, or {@code clear + plain + tag} above 255 bytes, is {@link Packbin.TooLong}; room for fewer
+     * bytes than the body is {@link Packbin.BufferFull}. On any refusal nothing is written.
      *
      * <p><b>Never seal two different messages with the same message id under one key, epoch and direction.</b> The library
      * cannot check it, and a reused id breaks the confidentiality of both messages.
      */
-    public Object seal(int direction, MsgContext ctx, byte[] ad, byte[] clear, byte[] plain, byte[] out, int outOffset) {
+    public Object seal(FrameDirection direction, MsgContext ctx, byte[] ad, byte[] clear, byte[] plain, byte[] out,
+            int outOffset) {
         Object bad = callChecks(direction, ctx, ad);
         if (bad != null) {
             return bad;
@@ -191,20 +164,20 @@ public final class FrameSession implements AutoCloseable {
             return new Packbin.BufferFull(body);
         }
         Keys keys = current;
-        byte[] nonce = FrameCrypto.nonce(ctx.msgId, ctx.kind, direction, keys.epoch);
+        byte[] nonce = FrameCrypto.nonce(ctx.msgId, ctx.kind, direction.wire, keys.epoch);
         byte[] cipher = plainBytes.clone();
-        SessionPad.xor(keys.enc[direction], nonce, 0, cipher);
-        byte[] tag = tagOver(keys.mac[direction], nonce, adBytes, clearBytes, cipher, 0, cipher.length);
+        SessionPad.xor(keys.enc[direction.wire], nonce, 0, cipher);
+        byte[] tag = tagOver(keys.mac[direction.wire], nonce, adBytes, clearBytes, cipher, 0, cipher.length);
         System.arraycopy(clearBytes, 0, out, outOffset, clearBytes.length);
         System.arraycopy(cipher, 0, out, outOffset + clearBytes.length, cipher.length);
         System.arraycopy(tag, 0, out, outOffset + clearBytes.length + cipher.length, tagLen);
         Arrays.fill(tag, (byte) 0);
-        return new Sealed(body);
+        return new FrameSealed(body);
     }
 
     /** Opens a whole {@code body}; see the ranged form. */
-    public Object open(int direction, MsgContext ctx, byte[] ad, byte[] body, int clearLength, ReplayWindow window,
-            long counter, byte[] out) {
+    public Object open(FrameDirection direction, MsgContext ctx, byte[] ad, byte[] body, int clearLength,
+            ReplayWindow window, long counter, byte[] out) {
         return open(direction, ctx, ad, body, 0, body == null ? 0 : body.length, clearLength, window, counter, out, 0);
     }
 
@@ -213,19 +186,20 @@ public final class FrameSession implements AutoCloseable {
      * {@code clearLength} bytes clear) in the contract's order: argument checks, the replay window (when {@code window} is
      * not null, with the message's {@code counter}: {@link Packbin.Duplicate} or {@link Packbin.TooOld} before any MAC is
      * computed), the tag with the current key and then once with the previous key ({@link Packbin.TagMismatch}), decryption
-     * into {@code out} at {@code outOffset}, and only then the window commit. Returns {@link Opened} with the slot, the clear
-     * length and the plaintext length. A closed session, a direction not loaded, an invalid context or ranges outside the
-     * arrays is {@link Packbin.BadValue}; {@code ad}, the body or {@code clearLength} above 255 is {@link Packbin.TooLong}
+     * into {@code out} at {@code outOffset}, and only then the window commit. Returns {@link FrameOpened} with the slot, the
+     * clear length and the plaintext length. A closed session, a direction not loaded or null, an invalid context or ranges
+     * outside the arrays is {@link Packbin.BadValue}; {@code ad}, the body or {@code clearLength} above 255 is
+     * {@link Packbin.TooLong}
      * (before any MAC); a body shorter than {@code clearLength} plus the tag is {@link Packbin.ShortPacket}; room for fewer
      * bytes than the plaintext is {@link Packbin.BufferFull}. The clear part is not copied: the caller has it in
-     * {@code body}. {@code out} is not written unless the result is {@link Opened}, and a refused open leaves the window as
-     * it was.
+     * {@code body}. {@code out} is not written unless the result is {@link FrameOpened}, and a refused open leaves the window
+     * as it was.
      *
      * <p><b>The counter must come from bytes the tag covers</b> (the message id or the associated data), never from an
      * unauthenticated field of the wire: it is not part of the tag, so a captured frame replayed under a counter the attacker
      * chooses would open and could move the window.
      */
-    public Object open(int direction, MsgContext ctx, byte[] ad, byte[] body, int bodyOffset, int bodyLength,
+    public Object open(FrameDirection direction, MsgContext ctx, byte[] ad, byte[] body, int bodyOffset, int bodyLength,
             int clearLength, ReplayWindow window, long counter, byte[] out, int outOffset) {
         Object bad = callChecks(direction, ctx, ad);
         if (bad != null) {
@@ -254,11 +228,11 @@ public final class FrameSession implements AutoCloseable {
             return new Packbin.BufferFull(plainLen);
         }
         if (window != null) {
-            ReplayWindow.Freshness fresh = window.check(counter);
-            if (fresh == ReplayWindow.Freshness.DUPLICATE) {
+            Freshness fresh = window.check(counter);
+            if (fresh == Freshness.DUPLICATE) {
                 return new Packbin.Duplicate();
             }
-            if (fresh == ReplayWindow.Freshness.TOO_OLD) {
+            if (fresh == Freshness.TOO_OLD) {
                 return new Packbin.TooOld();
             }
         }
@@ -269,12 +243,12 @@ public final class FrameSession implements AutoCloseable {
         int cipherAt = bodyStart + clearLength;
         int tagAt = cipherAt + plainLen;
         byte[] clearBytes = Arrays.copyOfRange(bodyBytes, bodyStart, cipherAt);
-        Slot slot = Slot.CURRENT;
+        FrameSlot slot = FrameSlot.CURRENT;
         Keys keys = current;
         byte[] nonce = matching(keys, direction, ctx, adBytes, clearBytes, bodyBytes, cipherAt, plainLen, tagAt);
         if (nonce == null) {
             keys = previous;
-            slot = Slot.PREVIOUS;
+            slot = FrameSlot.PREVIOUS;
             nonce = keys == null ? null
                     : matching(keys, direction, ctx, adBytes, clearBytes, bodyBytes, cipherAt, plainLen, tagAt);
             if (nonce == null) {
@@ -283,12 +257,12 @@ public final class FrameSession implements AutoCloseable {
         }
         if (plainLen > 0) {
             System.arraycopy(bodyBytes, cipherAt, out, outOffset, plainLen);
-            SessionPad.xor(keys.enc[direction], nonce, 0, out, outOffset, plainLen);
+            SessionPad.xor(keys.enc[direction.wire], nonce, 0, out, outOffset, plainLen);
         }
         if (window != null) {
             window.commit(counter);
         }
-        return new Opened(slot, clearLength, plainLen);
+        return new FrameOpened(slot, clearLength, plainLen);
     }
 
     /** Overwrites the derived keys, the previous slot included (best effort, see the class note). Later calls are BadValue. */
@@ -300,10 +274,10 @@ public final class FrameSession implements AutoCloseable {
     }
 
     /** The nonce when the slot's tag matches the received one, else null. */
-    private byte[] matching(Keys keys, int direction, MsgContext ctx, byte[] ad, byte[] clear, byte[] body, int cipherAt,
-            int cipherLen, int tagAt) {
-        byte[] nonce = FrameCrypto.nonce(ctx.msgId, ctx.kind, direction, keys.epoch);
-        byte[] full = tagOver(keys.mac[direction], nonce, ad, clear, body, cipherAt, cipherLen);
+    private byte[] matching(Keys keys, FrameDirection direction, MsgContext ctx, byte[] ad, byte[] clear, byte[] body,
+            int cipherAt, int cipherLen, int tagAt) {
+        byte[] nonce = FrameCrypto.nonce(ctx.msgId, ctx.kind, direction.wire, keys.epoch);
+        byte[] full = tagOver(keys.mac[direction.wire], nonce, ad, clear, body, cipherAt, cipherLen);
         boolean equal = FrameCrypto.constantTimeEquals(full, 0, body, tagAt, tagLen);
         Arrays.fill(full, (byte) 0);
         return equal ? nonce : null;
@@ -323,15 +297,19 @@ public final class FrameSession implements AutoCloseable {
         return mac.doFinal();
     }
 
-    private Object callChecks(int direction, MsgContext ctx, byte[] ad) {
-        if (closed || ctx == null || !ctx.valid() || direction < UP || direction > GROUP
-                || (directions & (1 << direction)) == 0) {
+    private Object callChecks(FrameDirection direction, MsgContext ctx, byte[] ad) {
+        if (closed || ctx == null || !ctx.valid() || direction == null || (directions & bit(direction)) == 0) {
             return new Packbin.BadValue("direction, kind or message id");
         }
         if (ad != null && ad.length > 255) {
             return new Packbin.TooLong(ad.length, 255);
         }
         return null;
+    }
+
+    /** The bit of {@code direction} in a set of loaded directions. */
+    private static int bit(FrameDirection direction) {
+        return 1 << direction.wire;
     }
 
     private static byte[] orEmpty(byte[] bytes) {
@@ -347,15 +325,15 @@ public final class FrameSession implements AutoCloseable {
     }
 
     /** Test access: the live encryption key of a slot and direction (null when not loaded), to see the wipe. */
-    byte[] encKeyForTest(int direction, boolean previousSlot) {
+    byte[] encKeyForTest(FrameDirection direction, boolean previousSlot) {
         Keys keys = previousSlot ? previous : current;
-        return keys == null ? null : keys.enc[direction];
+        return keys == null ? null : keys.enc[direction.wire];
     }
 
     /** Test access: the live MAC key (the 32-byte HMAC key the pads come from) of a slot and direction. */
-    byte[] macKeyForTest(int direction, boolean previousSlot) {
+    byte[] macKeyForTest(FrameDirection direction, boolean previousSlot) {
         Keys keys = previousSlot ? previous : current;
-        return keys == null ? null : keys.mac[direction];
+        return keys == null ? null : keys.mac[direction.wire];
     }
 
     /** Test-only: the number of HMAC computations this session started so far. */

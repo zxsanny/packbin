@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { describe, it } from "node:test"
 import { BinaryPacker, bits, bytes, eq, i32, list, repeat, scheme, u64, u8, when, type DispatchResult } from "../src/index.ts"
-import { CONSTRUCT, type Outcome, type SessionOutcome } from "./support/hostile-cases.ts"
+import { CONSTRUCT, type Outcome } from "./support/hostile-cases.ts"
 import { PACK } from "./support/hostile-pack.ts"
 import { runJobs, type HangGuards } from "./support/hostile-runner.ts"
 import type { Job } from "./support/hostile-worker.ts"
@@ -18,7 +18,7 @@ const WORKER = new URL("./support/hostile-worker.ts", import.meta.url)
 
 type Row = Record<string, unknown>
 
-type Settled = Outcome | SessionOutcome | Error
+type Settled = Outcome | Error
 
 const allCases = readFileSync(new URL("../../fixtures/hostile/cases.txt", import.meta.url), "utf8")
   .split("\n")
@@ -64,13 +64,12 @@ const jobs: Job[] = [
   ...Object.entries(SPEC).map(([id, hex]) => ({ key: id, id, hex })),
   ...cases.map((c) => ({ key: `vector:${c.id}`, id: c.id, hex: c.hex })),
   ...limitCases.map((c) => ({ key: `limit:${c.id}`, id: c.id, hex: c.hex })),
-  { key: "session", session: true },
 ]
 
 let results: Promise<Map<string, Settled>> | undefined
 
 async function outcome(key: string): Promise<Outcome> {
-  results ??= runJobs<Job, Outcome | SessionOutcome>(WORKER, jobs, GUARDS)
+  results ??= runJobs<Job, Outcome>(WORKER, jobs, GUARDS)
   const got = (await results).get(key)
   if (got instanceof Error) throw got
   return got as Outcome
@@ -178,15 +177,6 @@ describe("hostile packets", () => {
       assertRejected(out)
       assert.equal(kindOf(out), "short_packet", id)
     }
-  })
-
-  it("session unpack of hostile payload", async () => {
-    const out = (await outcome("session")) as SessionOutcome
-    assert.equal(out.threw, undefined, `session threw: ${out.threw}`)
-    assertWithinMs(out.ms, out.limit ?? bound(1), "session unpack")
-    assert.deepEqual(out.first, { ok: false, field: "", needed: 0, left: 1 })
-    // The receive counter advanced by one, so the next pad still matches.
-    assert.deepEqual(out.second, { ok: true })
   })
 
   it("bits count from a u64 field still round trips", () => {

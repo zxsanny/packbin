@@ -2,10 +2,12 @@
 //! seals and opens, so one is enough: a second would only add its 600 bytes to the measured stack);
 //! the MAC-only call tags and verifies the network-check example (E4).
 
-use packbin::nostd::{Direction, Directions, FrameConfig, MacKey, MsgCtx, ReplayWindow, Session};
+use packbin::nostd::{
+    FrameConfig, FrameDirection, FrameDirections, FrameSession, MacKey, MsgContext, ReplayWindow,
+};
 
 const KEY: [u8; 32] = [0x11; 32];
-const CTX: MsgCtx = MsgCtx {
+const CTX: MsgContext = MsgContext {
     msg_id: [0x00, 0x30, 0x10, 0x05, 0xe8, 0x03, 0x00, 0x00],
     kind: 4,
 };
@@ -29,16 +31,16 @@ const NET_TAG: [u8; 4] = [0x56, 0xdb, 0x9b, 0xec];
 pub fn roundtrip() -> i32 {
     let config = FrameConfig {
         tag_len: 4,
-        directions: Directions::NONE.with(Direction::Up),
+        directions: FrameDirections::NONE.with(FrameDirection::Up),
     };
     // Loaded in place: the session is 600 bytes, and a copy of it would put that much more on the stack.
-    let mut node = Session::frame_unloaded();
+    let mut node = FrameSession::frame_unloaded();
     if node.load_frame_in_place(&KEY, 1, config).is_err() {
         return 1;
     }
     let peer = &node;
     let mut wire = [0u8; 32];
-    let n = match node.seal_frame(Direction::Up, &CTX, &AD, &[], &PLAIN, &mut wire) {
+    let n = match node.seal_frame(FrameDirection::Up, &CTX, &AD, &[], &PLAIN, &mut wire) {
         Ok(n) => n,
         Err(fault) => return fault.error as i32 + 10,
     };
@@ -48,7 +50,7 @@ pub fn roundtrip() -> i32 {
     let mut window = ReplayWindow::new();
     let mut plain = [0u8; 32];
     let opened = peer.open_frame(
-        Direction::Up,
+        FrameDirection::Up,
         &CTX,
         &AD,
         &BODY,
@@ -63,7 +65,7 @@ pub fn roundtrip() -> i32 {
     }
     if peer
         .open_frame(
-            Direction::Up,
+            FrameDirection::Up,
             &CTX,
             &AD,
             &BODY,

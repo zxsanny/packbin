@@ -1,15 +1,14 @@
 //! Seal and open of frame mode on caller buffers, in the order of the contract.
 
 use super::{
-    ct_eq, refuse, DirKeys, Direction, FrameState, Freshness, MsgCtx, Opened, ReplayWindow, Slot,
-    SlotKeys, MAX_BODY,
+    ct_eq, refuse, DirKeys, FrameDirection, FrameOpened, FrameSession, FrameSlot, FrameState,
+    Freshness, MsgContext, ReplayWindow, SlotKeys, MAX_BODY,
 };
 use crate::nostd::error::{Error, Fault};
-use crate::nostd::session::Session;
 use crate::session_core::pad;
 
 /// `msg_id ‖ ((kind << 4) | direction) ‖ epoch` as 24 bits.
-fn nonce(ctx: &MsgCtx, direction: Direction, epoch: u32) -> [u8; 12] {
+fn nonce(ctx: &MsgContext, direction: FrameDirection, epoch: u32) -> [u8; 12] {
     let [a, b, c, d, e, f, g, h] = ctx.msg_id;
     let [e0, e1, e2, _] = epoch.to_le_bytes();
     [
@@ -30,8 +29,8 @@ fn nonce(ctx: &MsgCtx, direction: Direction, epoch: u32) -> [u8; 12] {
 
 fn call_checks(
     state: &FrameState,
-    direction: Direction,
-    ctx: &MsgCtx,
+    direction: FrameDirection,
+    ctx: &MsgContext,
     ad: &[u8],
 ) -> Result<(), Fault> {
     if !state.directions.contains(direction) || ctx.kind > 15 {
@@ -84,8 +83,8 @@ fn zero(bytes: &mut [u8]) {
 /// Which slot's tag matches, and the nonce it used.
 fn verify(
     slot: &SlotKeys,
-    direction: Direction,
-    ctx: &MsgCtx,
+    direction: FrameDirection,
+    ctx: &MsgContext,
     ad: &[u8],
     clear: &[u8],
     ciphertext: &[u8],
@@ -97,7 +96,7 @@ fn verify(
     ct_eq(full.get(..tag.len())?, tag).then_some(n)
 }
 
-impl Session {
+impl FrameSession {
     /// Seals `clear ‖ plain` into `out` as `clear ‖ ciphertext ‖ tag` and returns the body length. The same
     /// inputs give the same bytes; the session does not change and the previous key is not used. A direction
     /// the session did not load, or a `kind` above 15, is `BadValue`; `ad` above 255 bytes or a body above
@@ -108,8 +107,8 @@ impl Session {
     /// the library cannot check it, and a reused `msg_id` breaks the confidentiality of both messages.
     pub fn seal_frame(
         &self,
-        direction: Direction,
-        ctx: &MsgCtx,
+        direction: FrameDirection,
+        ctx: &MsgContext,
         ad: &[u8],
         clear: &[u8],
         plain: &[u8],
@@ -168,14 +167,14 @@ impl Session {
     #[allow(clippy::too_many_arguments)]
     pub fn open_frame(
         &self,
-        direction: Direction,
-        ctx: &MsgCtx,
+        direction: FrameDirection,
+        ctx: &MsgContext,
         ad: &[u8],
         body: &[u8],
         clear_len: usize,
         replay: Option<(&mut ReplayWindow, u64)>,
         out: &mut [u8],
-    ) -> Result<Opened, Fault> {
+    ) -> Result<FrameOpened, Fault> {
         let state = self
             .frame_state()
             .ok_or_else(|| refuse(Error::BadValue, 0))?;
@@ -209,14 +208,14 @@ impl Session {
         };
         let (slot, keys, n) =
             match verify(&state.current, direction, ctx, ad, clear, ciphertext, tag) {
-                Some(n) => (Slot::Current, &state.current, n),
+                Some(n) => (FrameSlot::Current, &state.current, n),
                 None => {
                     let previous = state
                         .previous()
                         .ok_or_else(|| refuse(Error::TagMismatch, 0))?;
                     let n = verify(previous, direction, ctx, ad, clear, ciphertext, tag)
                         .ok_or_else(|| refuse(Error::TagMismatch, 0))?;
-                    (Slot::Previous, previous, n)
+                    (FrameSlot::Previous, previous, n)
                 }
             };
         let enc = &keys
@@ -233,7 +232,7 @@ impl Session {
         if let Some((window, counter)) = replay {
             window.commit(counter);
         }
-        Ok(Opened {
+        Ok(FrameOpened {
             slot,
             clear_len,
             plain_len,

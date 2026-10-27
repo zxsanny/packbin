@@ -1,6 +1,5 @@
 import {
   BinaryPacker,
-  PackSession,
   bits,
   bool,
   bytes,
@@ -291,39 +290,6 @@ export function runCase(id: string, hex: string): Outcome {
         out.called = true
       }),
     )
-  } catch (e) {
-    out.threw = String(e)
-  }
-  out.ms = performance.now() - start
-  return out
-}
-
-export type SessionOutcome = { first?: DispatchResult; second?: DispatchResult; threw?: string; ms: number; limit?: Bound }
-
-const sessionSeed = () => Uint8Array.from({ length: 32 }, (_, i) => i + 1)
-const sessionNonce = Uint8Array.from({ length: 16 }, (_, i) => i + 1)
-
-// Clear bytes 01 00 05 (type 1, k = 0, trailing 05), then a valid type-2 message.
-export function runSession(): SessionOutcome {
-  const opener = PackSession.load(sessionSeed())!
-  const waiter = PackSession.load(sessionSeed())!
-  opener.start(sessionNonce)
-  waiter.join(sessionNonce)
-  const sender = scheme<Row>(
-    1,
-    u8(0, (x) => x.k),
-    u8(1, (x) => x.extra),
-  )
-  const receiver = scheme<Row>(1, u8(0, (x) => x.k), repeat(1, emptyRound()))
-  const next = scheme<Row>(2, u8(0, (x) => x.k))
-  const out: SessionOutcome = { ms: 0 }
-  out.limit = bound(1)
-  const start = performance.now()
-  try {
-    const hostile = opener.pack(sender, { k: 0, extra: 5 })!
-    out.first = waiter.unpack(hostile, receiver.on(() => {}))
-    const fine = opener.pack(next, { k: 7 })!
-    out.second = waiter.unpack(fine, next.on(() => {}))
   } catch (e) {
     out.threw = String(e)
   }

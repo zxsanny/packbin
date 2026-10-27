@@ -3,8 +3,8 @@
 //! test. The fixture rows that go through the public API are in `tests/frame_vectors_tests.rs`.
 
 use crate::nostd::{
-    Direction, Directions, Error, FrameConfig, Freshness, MacKey, MsgCtx, Opened, ReplayWindow,
-    Session, Slot,
+    Error, FrameConfig, FrameDirection, FrameDirections, FrameOpened, FrameSession, FrameSlot,
+    Freshness, MacKey, MsgContext, ReplayWindow,
 };
 use crate::session_core::{counters, hmac::Pads};
 
@@ -20,12 +20,12 @@ fn hex(text: &str) -> Vec<u8> {
         .collect()
 }
 
-fn all() -> Directions {
-    Directions::ALL
+fn all() -> FrameDirections {
+    FrameDirections::ALL
 }
 
-fn session(key: &[u8; 32], epoch: u32, tag_len: u8) -> Session {
-    Session::load_frame(
+fn session(key: &[u8; 32], epoch: u32, tag_len: u8) -> FrameSession {
+    FrameSession::load_frame(
         key,
         epoch,
         FrameConfig {
@@ -39,15 +39,15 @@ fn session(key: &[u8; 32], epoch: u32, tag_len: u8) -> Session {
 struct Example {
     key: [u8; 32],
     epoch: u32,
-    dir: Direction,
-    ctx: MsgCtx,
+    dir: FrameDirection,
+    ctx: MsgContext,
     ad: Vec<u8>,
     clear: Vec<u8>,
     plain: Vec<u8>,
 }
 
 fn examples() -> Vec<Example> {
-    let ctx = |id: &str, kind| MsgCtx {
+    let ctx = |id: &str, kind| MsgContext {
         msg_id: hex(id).try_into().unwrap(),
         kind,
     };
@@ -55,7 +55,7 @@ fn examples() -> Vec<Example> {
         Example {
             key: [0x11; 32],
             epoch: 1,
-            dir: Direction::Up,
+            dir: FrameDirection::Up,
             ctx: ctx("00301005e8030000", 4),
             ad: hex("000100301005e803000004"),
             clear: vec![],
@@ -64,7 +64,7 @@ fn examples() -> Vec<Example> {
         Example {
             key: [0x11; 32],
             epoch: 1,
-            dir: Direction::Down,
+            dir: FrameDirection::Down,
             ctx: ctx("00022001e9030000", 5),
             ad: hex("003000022001e903000005"),
             clear: vec![],
@@ -73,7 +73,7 @@ fn examples() -> Vec<Example> {
         Example {
             key: [0x33; 32],
             epoch: 7,
-            dir: Direction::Group,
+            dir: FrameDirection::Group,
             ctx: ctx("00013002ea030000", 6),
             ad: hex("ffff00013002ea03000006"),
             clear: hex("a1b2c3"),
@@ -93,14 +93,14 @@ fn seal(e: &Example, tag_len: u8) -> Vec<u8> {
 }
 
 fn open(
-    s: &Session,
-    dir: Direction,
-    ctx: &MsgCtx,
+    s: &FrameSession,
+    dir: FrameDirection,
+    ctx: &MsgContext,
     ad: &[u8],
     body: &[u8],
     clear_len: usize,
     replay: Option<(&mut ReplayWindow, u64)>,
-) -> (Result<Opened, Error>, Vec<u8>) {
+) -> (Result<FrameOpened, Error>, Vec<u8>) {
     let mut out = vec![SENTINEL; 300];
     let result = s
         .open_frame(dir, ctx, ad, body, clear_len, replay, &mut out)
@@ -133,9 +133,9 @@ fn the_key_rows_of_the_fixture_match() {
             );
         } else {
             let dir = match row["dir"] {
-                "1" => Direction::Up,
-                "2" => Direction::Down,
-                _ => Direction::Group,
+                "1" => FrameDirection::Up,
+                "2" => FrameDirection::Down,
+                _ => FrameDirection::Group,
             };
             let (enc, probe) = session(&key, epoch, 4)
                 .test_material(dir, b"probe")
@@ -187,14 +187,14 @@ fn every_single_bit_flip_and_field_change_is_a_tag_mismatch_and_writes_nothing()
         }
         let mut other_id = e.ctx;
         other_id.msg_id[0] ^= 1;
-        let other_kind = MsgCtx {
+        let other_kind = MsgContext {
             kind: e.ctx.kind ^ 1,
             ..e.ctx
         };
-        let other_dir = if e.dir == Direction::Up {
-            Direction::Down
+        let other_dir = if e.dir == FrameDirection::Up {
+            FrameDirection::Down
         } else {
-            Direction::Up
+            FrameDirection::Up
         };
         for (s2, dir, ctx) in [
             (session(&e.key, e.epoch + 1, 4), e.dir, e.ctx),
@@ -264,7 +264,7 @@ fn a_duplicate_or_old_counter_runs_no_sha_and_a_fresh_valid_one_commits() {
 #[test]
 fn a_session_at_b7_with_previous_a6_opens_both_and_one_slot_refuses_the_old() {
     let (a, b) = ([0xAAu8; 32], [0xBBu8; 32]);
-    let ctx = MsgCtx {
+    let ctx = MsgContext {
         msg_id: [7; 8],
         kind: 5,
     };
@@ -272,25 +272,32 @@ fn a_session_at_b7_with_previous_a6_opens_both_and_one_slot_refuses_the_old() {
     let seal_with = |key: &[u8; 32], epoch: u32| {
         let mut out = [0u8; 64];
         let n = session(key, epoch, 4)
-            .seal_frame(Direction::Down, &ctx, &ad, &[], b"hello frame", &mut out)
+            .seal_frame(
+                FrameDirection::Down,
+                &ctx,
+                &ad,
+                &[],
+                b"hello frame",
+                &mut out,
+            )
             .unwrap();
         out[..n].to_vec()
     };
     let (old, new) = (seal_with(&a, 6), seal_with(&b, 7));
     let mut two = session(&b, 7, 4);
     two.set_previous(&a, 6).unwrap();
-    let (r_old, _) = open(&two, Direction::Down, &ctx, &ad, &old, 0, None);
-    assert_eq!(r_old.unwrap().slot, Slot::Previous);
-    let (r_new, _) = open(&two, Direction::Down, &ctx, &ad, &new, 0, None);
-    assert_eq!(r_new.unwrap().slot, Slot::Current);
+    let (r_old, _) = open(&two, FrameDirection::Down, &ctx, &ad, &old, 0, None);
+    assert_eq!(r_old.unwrap().slot, FrameSlot::Previous);
+    let (r_new, _) = open(&two, FrameDirection::Down, &ctx, &ad, &new, 0, None);
+    assert_eq!(r_new.unwrap().slot, FrameSlot::Current);
     let one = session(&b, 7, 4);
     assert_eq!(
-        open(&one, Direction::Down, &ctx, &ad, &old, 0, None).0,
+        open(&one, FrameDirection::Down, &ctx, &ad, &old, 0, None).0,
         Err(Error::TagMismatch)
     );
     two.clear_previous();
     assert_eq!(
-        open(&two, Direction::Down, &ctx, &ad, &old, 0, None).0,
+        open(&two, FrameDirection::Down, &ctx, &ad, &old, 0, None).0,
         Err(Error::TagMismatch)
     );
 }
@@ -330,7 +337,7 @@ fn mac_only_tags_do_not_depend_on_the_split_and_the_key_is_small() {
 fn seal_open_and_tag_stay_within_four_blocks_and_six_compressions() {
     let key = [0x42u8; 32];
     let s = session(&key, 3, 4);
-    let ctx = MsgCtx {
+    let ctx = MsgContext {
         msg_id: [1; 8],
         kind: 2,
     };
@@ -338,7 +345,7 @@ fn seal_open_and_tag_stay_within_four_blocks_and_six_compressions() {
     let mut out = [0u8; 255];
     counters::take();
     let n = s
-        .seal_frame(Direction::Up, &ctx, &ad, &[], &plain, &mut out)
+        .seal_frame(FrameDirection::Up, &ctx, &ad, &[], &plain, &mut out)
         .unwrap();
     let (sha, blocks) = counters::take();
     assert!(
@@ -347,7 +354,7 @@ fn seal_open_and_tag_stay_within_four_blocks_and_six_compressions() {
     );
     let mut back = [0u8; 255];
     let opened = s
-        .open_frame(Direction::Up, &ctx, &ad, &out[..n], 0, None, &mut back)
+        .open_frame(FrameDirection::Up, &ctx, &ad, &out[..n], 0, None, &mut back)
         .unwrap();
     let (sha, blocks) = counters::take();
     assert!(

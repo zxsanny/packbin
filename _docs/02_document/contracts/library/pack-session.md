@@ -1,71 +1,33 @@
 # Contract: pack session
 
 **Component**: library
-**Producer task**: AZ-2019 — csharp_session
-**Frame mode producer tasks**: AZ-3200 (this text), AZ-3202 (vectors), AZ-3203 (Rust), AZ-3232, AZ-3233, AZ-3234 (C#, Java, Swift); umbrella AZ-3192
-**Consumer tasks**: AZ-2020, AZ-2021, AZ-2022, AZ-2023, AZ-2024, AZ-2025, AZ-2026, AZ-2445 (Go), AZ-2518 (Swift)
-**Version**: 2.0.0
+**Producer task**: AZ-3200 (frame mode text), AZ-3202 (vectors), AZ-3203 (Rust); umbrella AZ-3192; stream session removed by AZ-3280..AZ-3291 (loop 74, ADR 009)
+**Consumer tasks**: AZ-3232, AZ-3233, AZ-3234 (C#, Java, Swift); AZ-3292..AZ-3295 (C++, Go, Python, TypeScript, loop 75)
+**Version**: 3.0.0
 **Status**: current
-**Last Updated**: 2026-10-25
+**Last Updated**: 2026-10-27
 
 ## Purpose
 
-One optional session beside clear pack, in one of two modes chosen by configuration: `stream` (below, unchanged since 1.0.0) and `frame` (Frame mode, below, since 2.0.0).
-
-The stream mode: one optional connection session beside clear pack. The opener sends 16 bytes once. The waiter joins. Later payloads match the clear packed length (a scheme that declares parity bytes adds them after the pad: clear length + `n`, `message-ecc.md`). Each language implements this itself.
-
-## Shape
-
-### Operations
-
-| Operation | Input | Output | Failure |
-|-----------|--------|--------|---------|
-| Load | 32 bytes | a session that is not yet open | length other than 32 creates 0 sessions |
-| Start | the loaded session, or the loaded session and 16 bytes | 16 bytes, and the session is the opener | a nonce length other than 16 opens 0 sessions |
-| Join | the loaded session and 16 bytes | the session is the waiter | length other than 16 joins 0 sessions |
-| Pack | an open session, a scheme, a row | a payload the same length as clear pack | pack before start or join produces 0 payloads |
-| Unpack | an open session and a payload | the row, or the same error clear unpack would return | — |
-
-A seed or nonce of the wrong type is not a length case but opens 0 sessions as well, in the two dynamically typed packages: TypeScript `load` returns `null` for anything that is not a `Uint8Array` (a `Buffer` is one), and Python `load`, `start` and `join` return no session (`None`, `None`, `False`) for anything that is not `bytes`, `bytearray` or `memoryview`, raising nothing (AZ-2243, AZ-2231, AZ-2244). TypeScript `start` and `join` still throw for a nonce that is not a `Uint8Array`. The typed packages refuse such a value at compile time.
-
-C++ shape: `load` and `join` return `bool`, and `start` has two forms, `start(nonce, len)` and `start(random, ctx, nonce_out)`; the second draws the 16 bytes from the caller's `RandomFn` (a host passes `packbin::os_random`, firmware passes its hardware RNG) and writes them to `nonce_out`. If the random function fails, nothing opens. `pack(scheme, row, out, cap)` and `unpack(...)` return a `Result`; before `start` or `join` they return `BadValue`. Unpack removes the pad in place, so it takes a non-const buffer. A failed pack zeroes the bytes before the reported offset and does not advance the send index. The receive index advances for every payload that is unpadded, whether or not it then reads. The bytes on the wire are the same as in the other languages.
-
-The opener's send direction is the waiter's receive direction. A second pack on the same direction uses the next position. Two sessions with different 16-byte values do not recover each other's rows.
-
-Clear pack and unpack stay as they are.
-
-Cost of the pad: the pad is linear in the payload length, and the Python session computes it in pure Python (about 93 us per 64 bytes), so a caller bounds the payload length it hands to `unpack` (a network read limit). The Python session removes the pad of the first byte and checks the type against the handlers before it removes the rest, so a payload of an unknown type costs one block whatever its length (loop 43, AZ-2724; F58). With parity the 254-byte limit bounds it.
-
-Protected schemes (`message-ecc.md`, loop 38): the parity covers the padded bytes, the payload is the clear length + `n`, and unpack repairs before it removes the pad. A scheme with 0 parity bytes is exactly as above.
-
-## Construction
-
-`Load` keeps a 32-byte seed until `Start` or `Join`. `Start()` draws 16 bytes (C++: from the caller's `RandomFn`). `Start(nonce)` opens the same way when the caller already has those 16 bytes. `Join(nonce)` is the other side.
-
-Both sides run HKDF-SHA256. The seed is the input key, the 16 bytes are the salt, the info is the ASCII bytes `packbin`, and the output is 64 bytes. The opener sends with the first 32 and receives with the second 32. The waiter swaps those halves. The seed is wiped after that.
-
-Each direction keeps its own packet counter, starting at 0, and advances it by one call. The counter is not sent. The pad is ChaCha20 (RFC 8439) under that 32-byte key. The 12-byte nonce is the counter as a little-endian integer, and the block counter starts at 0. The pad is XORed onto the clear packed bytes. A payload stays the same length. There is no tag.
+One optional session beside clear pack: frame mode, sealed and authenticated frames for links that lose, reorder and duplicate messages (ADR 008). It is the only session since 3.0.0: the stream mode of 1.0.0 and 2.0.0 (a shared seed, an opener nonce, an implicit packet counter, no tag) is removed (ADR 009). Clear pack and unpack are unchanged. Each language implements frame mode itself, with the type names `FrameSession`, `FrameConfig`, `FrameDirection`, `FrameDirections`, `FrameSlot`, `FrameOpened`, `MsgContext`, `ReplayWindow`, `Freshness` and `MacKey`, spelled the same in every package (Java passes the tag length and the directions to `load` as arguments, so it has no `FrameConfig` or `FrameDirections`, and adds `FrameSealed` for its seal result).
 
 ## Configuration
 
-A session's mode is fixed when it is loaded and never sent.
+A session's settings are fixed when it is loaded and never sent.
 
-| Setting | `stream` (default, 1.0.0) | `frame` |
-|---------|---------------------------|---------|
-| `mode` | `stream` | `frame` |
-| Key input | a 32-byte seed and a 16-byte opener nonce | the caller's 32-byte key and a 32-bit `epoch` of at most 0xFFFFFF; no opener |
-| Directions | send and receive | the directions the caller names at load, any of 1 (up), 2 (down), 3 (group); a call in a direction not loaded is refused |
-| `tag_len` | none | 4, 8 or 16 bytes, fixed for the lifetime of the loaded key (any other value is `BadValue` at load) |
-| Nonce | an internal counter per direction | built per message from the caller's 8-byte `msg_id`, a 4-bit `kind` and the epoch |
-| Associated data | none | caller bytes, 0 to 255, authenticated and not sent by packbin |
-| Previous key | none | an optional second (key, epoch) slot, used by open only |
-| Replay window | none | caller-owned, 64 messages per sender, optional per call |
-
-A frame-mode call on a stream session, or a stream call on a frame session, is refused with `BadValue`. Stream mode text, bytes, operations and results are those of 1.0.0.
+| Setting | Value |
+|---------|-------|
+| Key input | the caller's 32-byte key and a 32-bit `epoch` of at most 0xFFFFFF; no opener, no handshake |
+| Directions | the directions the caller names at load, any of 1 (up), 2 (down), 3 (group); a call in a direction not loaded is refused |
+| `tag_len` | 4, 8 or 16 bytes, fixed for the lifetime of the loaded key (any other value is `BadValue` at load) |
+| Nonce | built per message from the caller's 8-byte `msg_id`, a 4-bit `kind` and the epoch |
+| Associated data | caller bytes, 0 to 255, authenticated and not sent by packbin |
+| Previous key | an optional second (key, epoch) slot, used by open only |
+| Replay window | caller-owned, 64 messages per sender, optional per call |
 
 ## Frame mode
 
-Frame mode is for links that lose, reorder and duplicate messages, have no connection, and can be written to by anyone with a radio. It encrypts and **authenticates**: it is the only part of packbin that does (ADR 008). Stream mode runs inside a protected connection and does not authenticate.
+Frame mode is for links that lose, reorder and duplicate messages, have no connection, and can be written to by anyone with a radio. It encrypts and **authenticates**: it is the only part of packbin that does (ADR 008). It is the only session mode since 3.0.0 (ADR 009).
 
 All integers are little-endian unless a row says otherwise. `‖` is concatenation. `HKDF` is HKDF-SHA256 (RFC 5869) with output length 32. `HMAC` is HMAC-SHA256 (RFC 2104, RFC 4231). `ChaCha20` is the RFC 8439 block function and cipher.
 
@@ -162,7 +124,7 @@ Frame mode reuses `BadValue` (configuration or argument out of range), `TooLong`
 - Forgery odds with a 4-byte tag are 2^-32 per try (about 68 years on average at one try per second). Callers count tag failures per sender as an attack indicator.
 - The compare has no early exit and no secret-dependent branch; SHA-256 and ChaCha20 use no secret-indexed tables.
 - A captured device reveals only its own key; callers rotate shared keys after a loss. The keys are symmetric: any holder of a direction key can forge any source for that direction, and `tag_len` is not in `M`, so one `tag_len` is used per (key, epoch) across all devices.
-- Derived keys and HMAC states are overwritten when the session or key object is dropped (best effort, as the stream session does).
+- Derived keys and HMAC states are overwritten when the session or key object is dropped, closed or disposed (best effort: a managed runtime or a compiler may keep copies the library cannot reach).
 
 ## MAC-only call
 
@@ -187,10 +149,11 @@ The values E1 to E5 of `_docs/02_task_plans/rust-m33f-and-frame-mode/input_data/
 
 | Version | Date | Change |
 |---------|------|--------|
+| 3.0.0 | 2026-10-27 | Removes the stream mode (Shape, Construction, the `stream` column of Configuration and its refusal rule) from every package (ADR 009, loop 74, AZ-3280..AZ-3291); names the frame types, the same in every package (owner D1). The Frame mode and MAC-only sections are unchanged from 2.0.0 apart from two sentences: the intro's stream sentence and the Security note that compared the wipe with the stream session. Frame bytes and `fixtures/frame/vectors.txt` are unchanged, so citations of "2.0.0" for the frame text stay valid. |
 | 2.0.0 (consumers) | 2026-10-25 | C#, Java and Swift implement frame mode and the MAC-only call (AZ-3232, AZ-3233, AZ-3234, loop 71) and pass every row of `fixtures/frame/vectors.txt` and `fixtures/crypto/vectors.txt`; no byte, rule or version changed. |
 | 2.0.0 | 2026-10-25 | Adds the Configuration section, `frame` mode and the MAC-only call (AZ-3192, ADR 008). Stream mode text, bytes, operations and results are unchanged from 1.0.0. |
-| 1.0.0 | 2026-10-14 | Stream session. |
+| 1.0.0 | 2026-10-14 | Stream session (removed in 3.0.0). |
 
 ## Consumers
 
-TypeScript, Python, Rust, C++, Java, Go, Swift, the cross-language session match, and the README. Frame mode: Rust first (AZ-3203), then C#, Java and Swift (loop 71); meshbell (a separate repository) pins the packbin commit; the other packages follow in later tasks. Archangel is not a consumer in this repository.
+Frame mode: Rust (AZ-3203), C#, Java and Swift (loop 71); C++, Go, Python and TypeScript are scheduled for loop 75 (AZ-3292..AZ-3295) and keep verified SHA-256, HMAC-SHA256, HKDF-SHA256 and ChaCha20 for it (27 rows of `fixtures/crypto/vectors.txt`). meshbell (a separate repository) pins the packbin commit and renames its Rust `Session` to `FrameSession` when it moves past loop 74. The README. Archangel is not a consumer in this repository.

@@ -1,14 +1,14 @@
 //! Frame mode against the shared fixture `fixtures/frame/vectors.txt` (AZ-3203): every seal, open, mac and
 //! replay row through the public API. The `keys` rows need the derived keys and run in the crate's own
 //! tests (`src/frame_core_tests.rs`). A row whose direction is 0 or 4 cannot be built in Rust (the
-//! `Direction` type has three values); the refusal is the type, so those rows are checked to expect
+//! `FrameDirection` type has three values); the refusal is the type, so those rows are checked to expect
 //! `BadValue` and nothing else.
 //! Run with `--features frame` and with `--no-default-features --features frame`.
 #![cfg(feature = "frame")]
 
 use packbin::nostd::{
-    Direction, Directions, Error, Fault, FrameConfig, Freshness, MacKey, MsgCtx, ReplayWindow,
-    Session, Slot,
+    Error, Fault, FrameConfig, FrameDirection, FrameDirections, FrameSession, FrameSlot, Freshness,
+    MacKey, MsgContext, ReplayWindow,
 };
 use std::collections::HashMap;
 
@@ -71,34 +71,34 @@ fn int(row: &Row, name: &str) -> u64 {
     row[name].parse().unwrap()
 }
 
-fn direction(n: u64) -> Option<Direction> {
+fn direction(n: u64) -> Option<FrameDirection> {
     match n {
-        1 => Some(Direction::Up),
-        2 => Some(Direction::Down),
-        3 => Some(Direction::Group),
+        1 => Some(FrameDirection::Up),
+        2 => Some(FrameDirection::Down),
+        3 => Some(FrameDirection::Group),
         _ => None,
     }
 }
 
-fn dirs(row: &Row) -> Directions {
-    let mut set = Directions::NONE;
+fn dirs(row: &Row) -> FrameDirections {
+    let mut set = FrameDirections::NONE;
     for c in row.get("dirs").map(String::as_str).unwrap_or("123").chars() {
         set = set.with(direction(u64::from(c.to_digit(10).unwrap())).unwrap());
     }
     set
 }
 
-fn load(row: &Row) -> Result<Session, Fault> {
+fn load(row: &Row) -> Result<FrameSession, Fault> {
     let epoch = u32::try_from(int(row, "epoch")).unwrap();
     let config = FrameConfig {
         tag_len: u8::try_from(int(row, "tag_len")).unwrap(),
         directions: dirs(row),
     };
-    Session::load_frame(&key32(&row["key"]), epoch, config)
+    FrameSession::load_frame(&key32(&row["key"]), epoch, config)
 }
 
-fn ctx(row: &Row) -> MsgCtx {
-    MsgCtx {
+fn ctx(row: &Row) -> MsgContext {
+    MsgContext {
         msg_id: hex(&row["msg_id"]).try_into().unwrap(),
         kind: u8::try_from(int(row, "kind")).unwrap(),
     }
@@ -195,7 +195,7 @@ fn run_open(row: &Row) -> Row {
             out.insert("result".into(), "Ok".into());
             out.insert(
                 "slot".into(),
-                (if opened.slot == Slot::Current {
+                (if opened.slot == FrameSlot::Current {
                     "current"
                 } else {
                     "previous"

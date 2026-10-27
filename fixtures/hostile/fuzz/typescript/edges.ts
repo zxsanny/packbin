@@ -2,8 +2,7 @@
 // The AC-1 and AC-2 edge cases a random run is unlikely to hit, one line each: PASS, FAIL or INFO. Text: varint
 // boundaries, a count far above the bytes present, the 65,535 boundary (compact and raw), ESC cut at every byte, pad,
 // mode, CAP and LOCK rules, duplicate dictionary keys in three byte forms, "__proto__" as a key. ECC: 254/255 bytes,
-// shorter than n, exactly n, the caller's buffer, the check order of a dispatch, and the session receive index after
-// each kind of refused payload, read back by the next payload of the sender.
+// shorter than n, exactly n, the caller's buffer and the check order of a dispatch.
 import os from "node:os"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
@@ -246,72 +245,9 @@ function eccEdges(): void {
   }
 }
 
-function sessionEdges(): void {
-  const seed = Uint8Array.from({ length: 32 }, (_, i) => i + 1)
-  const nonce = Uint8Array.from({ length: 16 }, (_, i) => i)
-  const n = 4
-  const sch = pb.scheme(1, pb.utf8(0, (r: any) => r.s)).withLimits({ parity: n })
-  const h = sch.on(() => {})
-  const other = pb.scheme(1, pb.utf8(0, (r: any) => r.s)).withLimits({ parity: 2 }).on(() => {})
-  const closed = pb.PackSession.load(seed)
-  const c = closed.unpackRepair(B(1), 0, h, h)
-  check("session not open answers first (before the duplicate type)", !c.ok && c.needed === 1 && c.left === 0, JSON.stringify(c))
-  const sender = pb.PackSession.load(seed)
-  const receiver = pb.PackSession.load(seed)
-  sender.start(nonce)
-  receiver.join(nonce)
-  const nextOk = (tag: string) => {
-    const msg = sender.pack(sch, { s: tag })
-    let row: any = null
-    const r = receiver.unpackRepair(msg, 2, sch.on((x: any) => (row = x)))
-    check(`  the next payload is read after ${tag}`, r.ok && row?.s === tag, JSON.stringify(r))
-  }
-  const cases: [string, (msg: Uint8Array) => Uint8Array, (r: any) => boolean, any?][] = [
-    ["too_long (255 bytes)", () => new Uint8Array(255), (r) => r.kind === "too_long"],
-    ["short (3 bytes < n)", () => new Uint8Array(3), (r) => r.field === "parity"],
-    ["uncorrectable (3 wrong bytes)", (m) => {
-      const x = m.slice()
-      for (let p = 0; p < 3; p++) x[p]! ^= 0xa5
-      return x
-    }, (r) => r.kind === "uncorrectable"],
-    ["type mismatch after repair", (m) => m, (r) => r.actual === 1, pb.scheme(2, pb.utf8(0, (x: any) => x.s)).withLimits({ parity: n }).on(() => {})],
-    ["empty payload", () => new Uint8Array(0), (r) => r.field === "parity"],
-  ]
-  for (const [name, make, want, hh] of cases) {
-    const msg = sender.pack(sch, { s: "x" }) as Uint8Array
-    const r = receiver.unpackRepair(make(msg), 2, hh ?? h)
-    check(`session: ${name} refused`, !r.ok && want(r), JSON.stringify(r))
-    nextOk(name)
-  }
-  for (const [name, call] of [
-    ["duplicate type", () => receiver.unpackRepair(B(1), 0, h, h)],
-    ["parity mix", () => receiver.unpackRepair(B(1), 0, h, other)],
-    ["bad limit", () => receiver.unpackRepair(B(1), 3, h)],
-  ] as [string, () => unknown][]) {
-    try {
-      call()
-      check(`session: ${name} refused`, false, "accepted")
-    } catch (e: any) {
-      check(`session: ${name} refused with RangeError`, e instanceof RangeError)
-    }
-  }
-  try {
-    ;(receiver.unpackRepair as any)(B(1), 0)
-    info("session: empty handler list", "accepted?")
-  } catch (e: any) {
-    info("session: empty handler list (JavaScript caller)", `${e?.name}: ${e?.message}`)
-  }
-  nextOk("the caller mistakes")
-  const sr = (receiver.unpackRepair as any)("not bytes", 0, h)
-  info("session: string payload", `${JSON.stringify(sr)} (new Uint8Array("not bytes") is empty; the index moved)`)
-  sender.pack(sch, { s: "lost" })
-  nextOk("a string payload")
-}
-
 console.log(`node ${process.version}, load ${os.loadavg().map((x) => x.toFixed(2)).join(" ")}`)
 textEdges()
 eccEdges()
-sessionEdges()
 console.log(`${fails} FAIL, load ${os.loadavg().map((x) => x.toFixed(2)).join(" ")}`)
 clearTimeout(hardStop)
 process.exitCode = fails ? 1 : 0

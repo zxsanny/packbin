@@ -10,7 +10,8 @@ import java.util.List;
  * its own MAC computations in an instance field.
  */
 public final class FrameStaticStateTest {
-    private static final Class<?>[] GUARDED = {FrameSession.class, MacKey.class, FrameCrypto.class};
+    private static final Class<?>[] GUARDED = {FrameSession.class, MacKey.class, FrameCrypto.class, FrameDirection.class,
+        FrameSlot.class, FrameSealed.class, FrameOpened.class, Freshness.class};
 
     private FrameStaticStateTest() {}
 

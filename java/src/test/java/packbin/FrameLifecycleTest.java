@@ -1,5 +1,7 @@
 package packbin;
 
+import static packbin.FrameDirection.UP;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -34,12 +36,12 @@ public final class FrameLifecycleTest {
         byte[] prevKey = new byte[32];
         Arrays.fill(prevKey, (byte) 0x45);
         MsgContext ctx = new MsgContext(new byte[8], 2);
-        FrameSession s = FrameSession.load(key, 5, 8, 1, 2, 3);
+        FrameSession s = FrameSession.load(key, 5, 8, FrameDirection.values());
         s.setPrevious(prevKey, 4);
         byte[] body = new byte[40];
-        Object sealed = s.seal(1, ctx, null, null, new byte[5], body);
+        Object sealed = s.seal(UP, ctx, null, null, new byte[5], body);
         List<byte[]> live = new ArrayList<>();
-        for (int d = 1; d <= 3; d++) {
+        for (FrameDirection d : FrameDirection.values()) {
             for (boolean previous : new boolean[] {false, true}) {
                 live.add(s.encKeyForTest(d, previous));
                 live.add(s.macKeyForTest(d, previous));
@@ -52,14 +54,14 @@ public final class FrameLifecycleTest {
         s.close();
 
         // Assert
-        PackbinTest.expectTrue("sealed before close", sealed instanceof FrameSession.Sealed);
+        PackbinTest.expectTrue("sealed before close", sealed instanceof FrameSealed);
         PackbinTest.expectEq("12 key arrays held", 12, live.size());
         PackbinTest.expectTrue("keys were not zero before close", nonZeroBefore);
         PackbinTest.expectTrue("derived keys and MAC keys read all zero after close", allZero(live));
-        PackbinTest.expectTrue("seal after close is BadValue", s.seal(1, ctx, null, null, new byte[5], new byte[40]) instanceof Packbin.BadValue);
-        PackbinTest.expectTrue("open after close is BadValue", s.open(1, ctx, null, body, 0, null, 0, new byte[5]) instanceof Packbin.BadValue);
+        PackbinTest.expectTrue("seal after close is BadValue", s.seal(UP, ctx, null, null, new byte[5], new byte[40]) instanceof Packbin.BadValue);
+        PackbinTest.expectTrue("open after close is BadValue", s.open(UP, ctx, null, body, 0, null, 0, new byte[5]) instanceof Packbin.BadValue);
         PackbinTest.expectTrue("setPrevious after close is false", !s.setPrevious(prevKey, 4));
-        PackbinTest.expectTrue("the previous slot is gone", s.encKeyForTest(1, true) == null);
+        PackbinTest.expectTrue("the previous slot is gone", s.encKeyForTest(UP, true) == null);
         PackbinTest.expectTrue("the caller's key array is not retained", !FrameCrypto.isZero(key));
     }
 
@@ -97,8 +99,8 @@ public final class FrameLifecycleTest {
 
     private static byte[] sealOne(FrameSession s, int thread, int i) {
         byte[] out = new byte[255];
-        Object result = s.seal(1, new MsgContext(idFor(thread, i), i & 15), new byte[] {(byte) thread}, null, plainFor(thread, i), out);
-        return result instanceof FrameSession.Sealed sealed ? Arrays.copyOf(out, sealed.length) : null;
+        Object result = s.seal(UP, new MsgContext(idFor(thread, i), i & 15), new byte[] {(byte) thread}, null, plainFor(thread, i), out);
+        return result instanceof FrameSealed sealed ? Arrays.copyOf(out, sealed.length) : null;
     }
 
     private static void concurrentSealEqualsSingleThreadSeal() throws InterruptedException {
@@ -108,7 +110,7 @@ public final class FrameLifecycleTest {
         Timing.Limit limit = Timing.bound(20.0);
         byte[][][] bodies = new byte[THREADS][PER_THREAD][];
         AtomicReference<Throwable> failure = new AtomicReference<>();
-        try (FrameSession s = FrameSession.load(key, 9, 4, 1, 2, 3)) {
+        try (FrameSession s = FrameSession.load(key, 9, 4, FrameDirection.values())) {
             Thread[] threads = new Thread[THREADS];
             long start = System.nanoTime();
 
@@ -139,9 +141,9 @@ public final class FrameLifecycleTest {
                 for (int i = 0; i < PER_THREAD; i++) {
                     byte[] single = sealOne(s, t, i);
                     differing += Arrays.equals(single, bodies[t][i]) ? 0 : 1;
-                    Object opened = s.open(1, new MsgContext(idFor(t, i), i & 15), new byte[] {(byte) t}, bodies[t][i], 0, null, 0,
+                    Object opened = s.open(UP, new MsgContext(idFor(t, i), i & 15), new byte[] {(byte) t}, bodies[t][i], 0, null, 0,
                             new byte[255]);
-                    notOpened += opened instanceof FrameSession.Opened ? 0 : 1;
+                    notOpened += opened instanceof FrameOpened ? 0 : 1;
                 }
             }
             PackbinTest.expectEq("bodies differing from the single-thread seal", 0, differing);

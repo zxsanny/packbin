@@ -15,7 +15,7 @@ fn ac4_each_document_names_the_module_the_features_and_the_ci_job() {
             "README.md",
             vec![
                 "packbin::nostd",
-                "`session`",
+                "`frame`",
                 "`ecc`",
                 "`text`",
                 "embedded-arm",
@@ -26,7 +26,7 @@ fn ac4_each_document_names_the_module_the_features_and_the_ci_job() {
             vec![
                 "rust/src/nostd/",
                 "session_core",
-                "`session`",
+                "`frame`",
                 "`text`",
                 "`ecc`",
                 "rust/embedded/",
@@ -36,7 +36,7 @@ fn ac4_each_document_names_the_module_the_features_and_the_ci_job() {
             "_docs/02_document/components/04_rust_package/description.md",
             vec![
                 "nostd",
-                "`session`",
+                "`frame`",
                 "`text`",
                 "`ecc`",
                 "embedded-arm",

@@ -28,5 +28,15 @@ for lang, (path, tail) in sources.items():
         failed += 1
     else:
         print(f"PASS {lang}: the README example equals {path}")
+# Rust: the example is the doc test of the frame module, the `//!` lines between its ``` fences (AZ-3289).
+path = "rust/src/nostd/frame/mod.rs"
+text = open(f"{root}/{path}", encoding="utf-8").read()
+doc = "".join((l[4:] if l.startswith("//! ") else l[3:]) + "\n" for l in text.splitlines() if l.startswith("//!"))
+m = re.search(r"^```\n(.*?)^```\n", doc, re.S | re.M)
+if not m or f"```rust\n{m.group(1)}```\n" not in readme:
+    print(f"FAIL Rust: the README does not contain the doc test example of {path}")
+    failed += 1
+else:
+    print(f"PASS Rust: the README example equals the doc test of {path}")
 sys.exit(1 if failed else 0)
 PY

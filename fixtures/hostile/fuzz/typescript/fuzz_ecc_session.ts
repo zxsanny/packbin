@@ -1,9 +1,9 @@
-// Run: node fuzz_ecc_session.ts <repo checkout> [seed] [seconds per part]   (AZ-2666 probe (a), TypeScript, ECC + session; Node 22.18+, python3 >= 3.9 on PATH or $PYTHON)
-// ECC: random buffers, code words with k wrong bytes, cut or extended words, fixtures/ecc/vectors.txt rows and protected
+// Run: node fuzz_ecc_session.ts <repo checkout> [seed] [seconds per part]   (AZ-2666 probe (a), TypeScript, ECC; Node 22.18+, python3 >= 3.9 on PATH or $PYTHON)
+// Random buffers, code words with k wrong bytes, cut or extended words, fixtures/ecc/vectors.txt rows and protected
 // corpus packets go through ecc.repair and scripts/ecc/eccfmt.py (a different answer is a mismatch), then through
-// BinaryPacker.unpackRepair with two schemes that share n; the caller's buffer must stay unchanged. Session: hostile
-// payloads on an open session; caller mistakes must be RangeErrors, nothing may throw, and the sender's next payload
-// must still be read. Shared setup is fuzz_common.ts next to this file.
+// BinaryPacker.unpackRepair with two schemes that share n; the caller's buffer must stay unchanged. The stream session
+// part went with the stream session (loop 74, ADR-009); the file name stays for the README and the sibling probes.
+// Shared setup is fuzz_common.ts next to this file.
 import {
   Stats, budget, cat, ecc, eccSeeds, finish, hex, int, mutate, note, packets, pb, pick, randBytes, reference, rnd, start,
 } from "./fuzz_common.ts"
@@ -112,60 +112,6 @@ function runEcc(deadline: number): void {
   console.log(pub.report())
 }
 
-function hostilePayload(good: Uint8Array, n: number): Uint8Array {
-  const r = rnd()
-  if (r < 0.4) return good
-  if (r < 0.7) return mutate(good)
-  if (r < 0.8) return randBytes(pick([0, 1, n, 254, 255, 300]))
-  return flipSome(good, Math.min(good.length, int(1, Math.max(1, n))))
-}
-
-function runSession(deadline: number): void {
-  const st = new Stats("session unpackRepair with hostile payloads (next payload still read)")
-  const seedBytes = Uint8Array.from({ length: 32 }, (_, i) => i + 1)
-  const nonce = new Uint8Array(16)
-  let lostSync = 0
-  while (performance.now() < deadline) {
-    const n = pick([0, 1, 2, 4, 8, 16, 32])
-    const t = int(0, n >> 1)
-    const sender = pb.PackSession.load(seedBytes)
-    const receiver = pb.PackSession.load(seedBytes)
-    sender.start(nonce)
-    receiver.join(nonce)
-    const s1 = pb.scheme(1, pb.utf8(0, (r: any) => r.s)).withLimits({ parity: n })
-    const h = s1.on(() => {})
-    const steps = int(2, 12)
-    for (let step = 0; step < steps; step++) {
-      const payload = hostilePayload(sender.pack(s1, { s: `привіт ${step}` }) as Uint8Array, n)
-      for (const bad of ["dup", "limit"]) {
-        try {
-          if (bad === "dup") receiver.unpackRepair(payload, t, h, h)
-          else receiver.unpackRepair(payload, (n >> 1) + 1, h)
-          note(`session accepted a ${bad} call`)
-        } catch (e: any) {
-          if (!(e instanceof RangeError)) note(`session ${bad} call threw ${e?.name}`)
-        }
-      }
-      try {
-        const res = st.timed(`n=${n} t=${t} N=${payload.length}`, () => receiver.unpackRepair(payload, t, h))
-        if (res.ok) st.accepted++
-        else st.refused++
-      } catch (e: any) {
-        st.exceptions++
-        note(`session unpack threw ${e?.name}: ${e?.message} on n=${n} ${hex(payload).slice(0, 200)}`)
-      }
-    }
-    let row: any = null
-    const res = receiver.unpackRepair(sender.pack(s1, { s: "end" }), t, s1.on((r: any) => (row = r)))
-    if (!res.ok || row?.s !== "end") {
-      lostSync++
-      note(`session lost sync after hostile payloads (n=${n}): ${JSON.stringify(res)}`)
-    }
-  }
-  console.log(st.report() + `, lost sync ${lostSync}`)
-}
-
-const run = start(1.5)
+const run = start(1)
 runEcc(performance.now() + budget)
-runSession(performance.now() + budget / 2)
 finish(run)

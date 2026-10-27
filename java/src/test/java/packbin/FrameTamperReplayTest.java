@@ -1,5 +1,8 @@
 package packbin;
 
+import static packbin.FrameDirection.DOWN;
+import static packbin.FrameDirection.UP;
+
 import java.util.Arrays;
 
 /**
@@ -25,12 +28,12 @@ public final class FrameTamperReplayTest {
         theWindowClearsTheRestoredStateRules();
     }
 
-    private static Object open(FrameSession s, int dir, MsgContext ctx, byte[] ad, byte[] body,
+    private static Object open(FrameSession s, FrameDirection dir, MsgContext ctx, byte[] ad, byte[] body,
             int clearLen, ReplayWindow window, long counter, byte[] out) {
         return s.open(dir, ctx, ad, body, clearLen, window, counter, out);
     }
 
-    private static void expectTagMismatch(String label, FrameSession s, int dir, MsgContext ctx, byte[] ad,
+    private static void expectTagMismatch(String label, FrameSession s, FrameDirection dir, MsgContext ctx, byte[] ad,
             byte[] body, int clearLen) {
         // Arrange
         ReplayWindow window = ReplayWindow.fromParts(100, 1);
@@ -52,28 +55,28 @@ public final class FrameTamperReplayTest {
                 for (int i = 0; i < e.ad.length * 8; i++) {
                     byte[] ad = e.ad.clone();
                     ad[i / 8] ^= (byte) (1 << (i % 8));
-                    expectTagMismatch("E" + e.dir + " ad bit " + i, s, e.dir, e.ctx, ad, body, e.clear.length);
+                    expectTagMismatch("E" + e.dir.wire + " ad bit " + i, s, e.dir, e.ctx, ad, body, e.clear.length);
                 }
                 for (int i = 0; i < body.length * 8; i++) {
                     byte[] changed = body.clone();
                     changed[i / 8] ^= (byte) (1 << (i % 8));
-                    expectTagMismatch("E" + e.dir + " body bit " + i, s, e.dir, e.ctx, e.ad, changed, e.clear.length);
+                    expectTagMismatch("E" + e.dir.wire + " body bit " + i, s, e.dir, e.ctx, e.ad, changed, e.clear.length);
                 }
                 byte[] otherId = e.ctx.msgId.clone();
                 otherId[0] ^= 1;
-                expectTagMismatch("E" + e.dir + " msg_id", s, e.dir, new MsgContext(otherId, e.ctx.kind), e.ad, body,
+                expectTagMismatch("E" + e.dir.wire + " msg_id", s, e.dir, new MsgContext(otherId, e.ctx.kind), e.ad, body,
                         e.clear.length);
-                expectTagMismatch("E" + e.dir + " kind", s, e.dir, new MsgContext(e.ctx.msgId, e.ctx.kind ^ 1), e.ad, body,
+                expectTagMismatch("E" + e.dir.wire + " kind", s, e.dir, new MsgContext(e.ctx.msgId, e.ctx.kind ^ 1), e.ad, body,
                         e.clear.length);
-                expectTagMismatch("E" + e.dir + " direction", s, e.dir == 1 ? 2 : 1, e.ctx, e.ad, body, e.clear.length);
-                expectTagMismatch("E" + e.dir + " clear_len + 1", s, e.dir, e.ctx, e.ad, body, e.clear.length + 1);
-                try (FrameSession otherEpoch = FrameSession.load(e.key, e.epoch + 1, 4, 1, 2, 3)) {
-                    expectTagMismatch("E" + e.dir + " epoch", otherEpoch, e.dir, e.ctx, e.ad, body, e.clear.length);
+                expectTagMismatch("E" + e.dir.wire + " direction", s, e.dir == UP ? DOWN : UP, e.ctx, e.ad, body, e.clear.length);
+                expectTagMismatch("E" + e.dir.wire + " clear_len + 1", s, e.dir, e.ctx, e.ad, body, e.clear.length + 1);
+                try (FrameSession otherEpoch = FrameSession.load(e.key, e.epoch + 1, 4, FrameDirection.values())) {
+                    expectTagMismatch("E" + e.dir.wire + " epoch", otherEpoch, e.dir, e.ctx, e.ad, body, e.clear.length);
                 }
                 byte[] otherKey = e.key.clone();
                 otherKey[0] ^= 1;
-                try (FrameSession other = FrameSession.load(otherKey, e.epoch, 4, 1, 2, 3)) {
-                    expectTagMismatch("E" + e.dir + " key", other, e.dir, e.ctx, e.ad, body, e.clear.length);
+                try (FrameSession other = FrameSession.load(otherKey, e.epoch, 4, FrameDirection.values())) {
+                    expectTagMismatch("E" + e.dir.wire + " key", other, e.dir, e.ctx, e.ad, body, e.clear.length);
                 }
             }
         }
@@ -87,7 +90,7 @@ public final class FrameTamperReplayTest {
                 byte[] body = e.sealed(s);
 
                 // Assert
-                PackbinTest.expectEq("E" + e.dir + " body", e.body4, FrameSupport.unhex(body));
+                PackbinTest.expectEq("E" + e.dir.wire + " body", e.body4, FrameSupport.unhex(body));
             }
         }
     }
@@ -119,9 +122,9 @@ public final class FrameTamperReplayTest {
             Object fresh = open(s, e.dir, e.ctx, e.ad, body, 0, window, 101, out);
 
             // Assert
-            PackbinTest.expectTrue("fresh valid body opens", fresh instanceof FrameSession.Opened);
+            PackbinTest.expectTrue("fresh valid body opens", fresh instanceof FrameOpened);
             PackbinTest.expectTrue("MAC computed for the fresh body", s.macComputationsForTest() > before);
-            PackbinTest.expectEq("committed counter is now a duplicate", ReplayWindow.Freshness.DUPLICATE, window.check(101));
+            PackbinTest.expectEq("committed counter is now a duplicate", Freshness.DUPLICATE, window.check(101));
         }
     }
 
@@ -140,7 +143,7 @@ public final class FrameTamperReplayTest {
             Object old = open(b, e.dir, e.ctx, e.ad, body, 0, windowB, 36, new byte[300]);
 
             // Assert
-            PackbinTest.expectTrue("A opens the body", opened instanceof FrameSession.Opened);
+            PackbinTest.expectTrue("A opens the body", opened instanceof FrameOpened);
             PackbinTest.expectTrue("B refuses the seen counter as Duplicate", dup instanceof Packbin.Duplicate);
             PackbinTest.expectTrue("B refuses the old counter as TooOld", old instanceof Packbin.TooOld);
             PackbinTest.expectEq("A's count rises by the one MAC its open started", 1L,
@@ -164,16 +167,16 @@ public final class FrameTamperReplayTest {
 
             // Assert
             PackbinTest.expectTrue("tampered body is TagMismatch", result instanceof Packbin.TagMismatch);
-            PackbinTest.expectEq("tampered counter stays fresh", ReplayWindow.Freshness.FRESH, window.check(101));
+            PackbinTest.expectEq("tampered counter stays fresh", Freshness.FRESH, window.check(101));
         }
     }
 
     private static byte[] sealUnder(byte fill, int epoch, MsgContext ctx, byte[] ad, byte[] plain) {
         byte[] key = new byte[32];
         Arrays.fill(key, fill);
-        try (FrameSession s = FrameSession.load(key, epoch, 4, FrameSession.DOWN)) {
+        try (FrameSession s = FrameSession.load(key, epoch, 4, DOWN)) {
             byte[] out = new byte[64];
-            FrameSession.Sealed sealed = (FrameSession.Sealed) s.seal(FrameSession.DOWN, ctx, ad, null, plain, out);
+            FrameSealed sealed = (FrameSealed) s.seal(DOWN, ctx, ad, null, plain, out);
             return Arrays.copyOf(out, sealed.length);
         }
     }
@@ -189,23 +192,23 @@ public final class FrameTamperReplayTest {
         Arrays.fill(b, (byte) 0xBB);
         byte[] a = new byte[32];
         Arrays.fill(a, (byte) 0xAA);
-        try (FrameSession two = FrameSession.load(b, 7, 4, FrameSession.DOWN);
-                FrameSession one = FrameSession.load(b, 7, 4, FrameSession.DOWN)) {
+        try (FrameSession two = FrameSession.load(b, 7, 4, DOWN);
+                FrameSession one = FrameSession.load(b, 7, 4, DOWN)) {
             PackbinTest.expectTrue("previous slot set", two.setPrevious(a, 6));
 
             // Act
-            Object rOld = two.open(FrameSession.DOWN, ctx, ad, oldBody, 0, null, 0, new byte[64]);
-            Object rNew = two.open(FrameSession.DOWN, ctx, ad, newBody, 0, null, 0, new byte[64]);
-            Object rNone = one.open(FrameSession.DOWN, ctx, ad, oldBody, 0, null, 0, new byte[64]);
+            Object rOld = two.open(DOWN, ctx, ad, oldBody, 0, null, 0, new byte[64]);
+            Object rNew = two.open(DOWN, ctx, ad, newBody, 0, null, 0, new byte[64]);
+            Object rNone = one.open(DOWN, ctx, ad, oldBody, 0, null, 0, new byte[64]);
 
             // Assert
-            PackbinTest.expectEq("old body slot", FrameSession.Slot.PREVIOUS, ((FrameSession.Opened) rOld).slot);
-            PackbinTest.expectEq("new body slot", FrameSession.Slot.CURRENT, ((FrameSession.Opened) rNew).slot);
+            PackbinTest.expectEq("old body slot", FrameSlot.PREVIOUS, ((FrameOpened) rOld).slot);
+            PackbinTest.expectEq("new body slot", FrameSlot.CURRENT, ((FrameOpened) rNew).slot);
             PackbinTest.expectTrue("no previous slot: old body is TagMismatch", rNone instanceof Packbin.TagMismatch);
 
             // Act
             two.clearPrevious();
-            Object cleared = two.open(FrameSession.DOWN, ctx, ad, oldBody, 0, null, 0, new byte[64]);
+            Object cleared = two.open(DOWN, ctx, ad, oldBody, 0, null, 0, new byte[64]);
 
             // Assert
             PackbinTest.expectTrue("cleared previous: old body is TagMismatch", cleared instanceof Packbin.TagMismatch);
@@ -222,15 +225,15 @@ public final class FrameTamperReplayTest {
         byte[] b = new byte[32];
         Arrays.fill(b, (byte) 0xBB);
         ReplayWindow window = new ReplayWindow();
-        try (FrameSession s = FrameSession.load(b, 7, 4, FrameSession.DOWN)) {
+        try (FrameSession s = FrameSession.load(b, 7, 4, DOWN)) {
             s.setPrevious(a, 6);
 
             // Act
-            Object first = s.open(FrameSession.DOWN, ctx, null, oldBody, 0, window, 5, new byte[8]);
-            Object again = s.open(FrameSession.DOWN, ctx, null, oldBody, 0, window, 5, new byte[8]);
+            Object first = s.open(DOWN, ctx, null, oldBody, 0, window, 5, new byte[8]);
+            Object again = s.open(DOWN, ctx, null, oldBody, 0, window, 5, new byte[8]);
 
             // Assert
-            PackbinTest.expectTrue("previous slot opens", first instanceof FrameSession.Opened);
+            PackbinTest.expectTrue("previous slot opens", first instanceof FrameOpened);
             PackbinTest.expectTrue("same counter again is a duplicate", again instanceof Packbin.Duplicate);
         }
     }
@@ -240,11 +243,11 @@ public final class FrameTamperReplayTest {
         ReplayWindow restored = ReplayWindow.fromParts(1000, 0);
 
         // Act
-        ReplayWindow.Freshness fresh = restored.check(5);
+        Freshness fresh = restored.check(5);
         restored.commit(5);
 
         // Assert
-        PackbinTest.expectEq("bits 0 is empty whatever top is", ReplayWindow.Freshness.FRESH, fresh);
+        PackbinTest.expectEq("bits 0 is empty whatever top is", Freshness.FRESH, fresh);
         PackbinTest.expectEq("commit on an empty window sets top", "5:1", restored.toString());
     }
 }

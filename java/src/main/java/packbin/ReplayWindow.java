@@ -12,9 +12,6 @@ package packbin;
  * lifetime; a frame that opens under the previous key commits into the same window.
  */
 public final class ReplayWindow {
-    /** What the window says about a counter. */
-    public enum Freshness { FRESH, DUPLICATE, TOO_OLD }
-
     private long top;
     private long bits;
 

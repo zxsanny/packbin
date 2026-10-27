@@ -89,6 +89,16 @@ public struct FrameOpened: Sendable, Equatable {
     }
 }
 
+/// What a `ReplayWindow` says about a counter (the same name as C#, Java and Rust).
+public enum Freshness: Sendable, Equatable {
+    /// Not seen, and not older than the window.
+    case fresh
+    /// Already committed.
+    case duplicate
+    /// 64 or more behind the highest committed counter.
+    case tooOld
+}
+
 /// The replay window of one sender, owned by the caller: the highest committed counter (`top`) and a bit per
 /// counter up to 63 below it (`bits`: bit i set means `top - i` was committed). `bits == 0` is an empty window,
 /// where every counter is fresh. `check` never changes the state; `commit` records a counter, and `open` calls
@@ -101,16 +111,6 @@ public struct FrameOpened: Sendable, Equatable {
 /// one key lifetime. One restored from stored `(top, bits)` with `bits == 0` is empty (replay protection is off
 /// until the next commit), so a caller that restores a window checks that bit 0 is set when `bits` is not 0.
 public struct ReplayWindow: Sendable, Equatable {
-    /// What the window says about a counter.
-    public enum Freshness: Sendable, Equatable {
-        /// Not seen, and not older than the window.
-        case fresh
-        /// Already committed.
-        case duplicate
-        /// 64 or more behind the highest committed counter.
-        case tooOld
-    }
-
     public private(set) var top: UInt64
     public private(set) var bits: UInt64
 

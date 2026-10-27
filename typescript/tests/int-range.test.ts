@@ -2,7 +2,6 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
   BinaryPacker,
-  PackSession,
   be,
   dict,
   eq,
@@ -172,18 +171,6 @@ describe("integer range", () => {
 
     const named = scheme<Row>(1, dict((x) => x.m, u8(0, (x) => x.a)))
     refuses(() => BinaryPacker.pack(named, { m: { k: 256 } }), "u8")
-  })
-
-  it("a refused session pack leaves the pad position alone", () => {
-    const layout = single("u8")
-    const seed = Uint8Array.from({ length: 32 }, (_, i) => i + 1)
-    const nonce = Buffer.from("01000000000000000000000000000000", "hex")
-    const refused = PackSession.load(seed)!
-    const fresh = PackSession.load(seed)!
-    assert.ok(refused.start(nonce))
-    assert.ok(fresh.start(nonce))
-    refuses(() => refused.pack(layout, { a: 300 }), "u8")
-    assert.equal(hex(refused.pack(layout, { a: 7 })!), hex(fresh.pack(layout, { a: 7 })!))
   })
 })
 

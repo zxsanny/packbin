@@ -189,19 +189,5 @@ for (const k of [1000, 10000, 65535]) {
 measure("list of 65,535 empty strings", list, cat(Uint8Array.of(1), u16(65535), new Uint8Array(65535)), 3)
 const oneChar = pb.BinaryPacker.pack(one, { s: "я" }).subarray(1) as Uint8Array
 measure("list of 65,535 one-letter strings", list, catAll([Uint8Array.of(1), u16(65535), ...Array.from({ length: 65535 }, () => oneChar)]), 3)
-// session: the pad is removed from the whole payload before anything is parsed (n = 0 has no 254-byte limit)
-for (const size of [254, 65536, 262144, 1048576]) {
-  for (const n of size > 254 ? [0] : [0, 32]) {
-    const receiver = pb.PackSession.load(Uint8Array.from({ length: 32 }, (_, i) => i + 1))
-    receiver.join(new Uint8Array(16))
-    const payload = new Uint8Array(size)
-    for (let i = 0; i < size; i++) payload[i] = (i * 2654435761) >>> 24
-    const sch = one.withLimits({ parity: n })
-    const t0 = performance.now()
-    const r = receiver.unpackRepair(payload, n >> 1, sch.on(() => {}))
-    const dt = performance.now() - t0
-    console.log(`  session unpack of ${String(size).padStart(8)} bytes, n=${String(n).padStart(2)}: ${JSON.stringify(r).slice(0, 50).padEnd(50)} ${dt.toFixed(2).padStart(9)} ms (${((dt / size) * 1e6).toFixed(1)} ns per byte)`)
-  }
-}
 console.log(`max RSS of the run ${(process.resourceUsage().maxRSS / 1024).toFixed(1)} MB, load ${load()}`)
 clearTimeout(hardStop)

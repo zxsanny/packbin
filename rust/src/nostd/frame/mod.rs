@@ -3,8 +3,8 @@
 //! (key, epoch, direction) from HKDF-SHA-256, a nonce built from the caller's 8-byte `msg_id`, the
 //! `kind` nibble, the direction and the epoch, and a tag that is the first 4, 8 or 16 bytes of
 //! HMAC-SHA-256 over the nonce, the associated data, the clear part and the ciphertext (encrypt, then MAC).
-//! [`Session::open_frame`] checks the caller's replay window first (no hashing for a duplicate or an old
-//! counter), then the tag in constant time, then decrypts into the caller's buffer, which is untouched
+//! [`FrameSession::open_frame`] checks the caller's replay window first (no hashing for a duplicate or an
+//! old counter), then the tag in constant time, then decrypts into the caller's buffer, which is untouched
 //! unless the frame opened; a previous (key, epoch) can open frames sealed just before a key change.
 //! [`MacKey`] is the MAC-only call. No heap, no panic path, no `unsafe`.
 //!
@@ -14,34 +14,33 @@
 //! derives new keys and nonces.
 //!
 //! ```
-//! use packbin::nostd::{Direction, Directions, Fault, FrameConfig, MacKey, MsgCtx, ReplayWindow, Session};
+//! use packbin::nostd::{Fault, FrameConfig, FrameDirection, FrameDirections, FrameSession, MacKey, MsgContext, ReplayWindow};
 //!
-//! # fn main() -> Result<(), Fault> {
-//! let key = [0x11u8; 32];
-//! let config = FrameConfig { tag_len: 4, directions: Directions::NONE.with(Direction::Up) };
-//! let node = Session::load_frame(&key, 1, config)?;
-//! let ctx = MsgCtx { msg_id: [0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0], kind: 4 };
-//! let ad = [0u8, 1, 0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0, 4]; // the header: authenticated, not sent
+//! fn main() -> Result<(), Fault> {
+//!     let key = [0x11u8; 32];
+//!     let config = FrameConfig { tag_len: 4, directions: FrameDirections::NONE.with(FrameDirection::Up) };
+//!     let node = FrameSession::load_frame(&key, 1, config)?;
+//!     let ctx = MsgContext { msg_id: [0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0], kind: 4 };
+//!     let ad = [0u8, 1, 0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0, 4]; // the header: authenticated, not sent
 //!
-//! let mut body = [0u8; 255];
-//! let n = node.seal_frame(Direction::Up, &ctx, &ad, &[], b"hello, relay", &mut body)?;
-//! assert_eq!(n, 12 + 4);
+//!     let mut body = [0u8; 255];
+//!     let n = node.seal_frame(FrameDirection::Up, &ctx, &ad, &[], b"hello, relay", &mut body)?;
+//!     assert_eq!(n, 12 + 4); // the plaintext and a 4-byte tag
 //!
-//! let mut window = ReplayWindow::new();
-//! let mut plain = [0u8; 255];
-//! let opened =
-//!     node.open_frame(Direction::Up, &ctx, &ad, &body[..n], 0, Some((&mut window, 7)), &mut plain)?;
-//! assert_eq!(&plain[..opened.plain_len], b"hello, relay");
-//! // the same frame again is a duplicate, and no hashing ran for it
-//! let again = node.open_frame(Direction::Up, &ctx, &ad, &body[..n], 0, Some((&mut window, 7)), &mut plain);
-//! assert!(again.is_err());
+//!     let mut window = ReplayWindow::new();
+//!     let mut plain = [0u8; 255];
+//!     let opened = node.open_frame(FrameDirection::Up, &ctx, &ad, &body[..n], 0, Some((&mut window, 7)), &mut plain)?;
+//!     assert_eq!(&plain[..opened.plain_len], b"hello, relay");
+//!     // the same frame again is a duplicate: refused before any hashing
+//!     assert!(node.open_frame(FrameDirection::Up, &ctx, &ad, &body[..n], 0, Some((&mut window, 7)), &mut plain).is_err());
 //!
-//! let mac = MacKey::derive(&[0x22; 32], 7, b"net")?;
-//! let mut tag = [0u8; 4];
-//! mac.tag(&[b"wave", b"frame bytes"], &mut tag)?;
-//! assert!(mac.verify(&[b"wave", b"frame bytes"], &tag));
-//! # Ok(())
-//! # }
+//!     // the MAC-only call: a 4-byte tag over a message in parts
+//!     let mac = MacKey::derive(&[0x22; 32], 7, b"net")?;
+//!     let mut tag = [0u8; 4];
+//!     mac.tag(&[b"wave", b"frame bytes"], &mut tag)?;
+//!     assert!(mac.verify(&[b"wave", b"frame bytes"], &tag));
+//!     Ok(())
+//! }
 //! ```
 #![forbid(unsafe_code)]
 
@@ -50,7 +49,6 @@ mod seal;
 mod window;
 
 use super::error::{Error, Fault};
-use super::session::Session;
 use crate::session_core::{hkdf, hmac::Pads, wipe::wipe};
 
 pub use mac::MacKey;
@@ -91,44 +89,44 @@ pub(super) fn ct_eq(a: &[u8], b: &[u8]) -> bool {
 
 /// The direction of a frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Direction {
+pub enum FrameDirection {
     Up = 1,
     Down = 2,
     Group = 3,
 }
 
-impl Direction {
+impl FrameDirection {
     pub(super) const fn index(self) -> usize {
         match self {
-            Direction::Up => 0,
-            Direction::Down => 1,
-            Direction::Group => 2,
+            FrameDirection::Up => 0,
+            FrameDirection::Down => 1,
+            FrameDirection::Group => 2,
         }
     }
 
     const fn bit(self) -> u8 {
         match self {
-            Direction::Up => 1,
-            Direction::Down => 2,
-            Direction::Group => 4,
+            FrameDirection::Up => 1,
+            FrameDirection::Down => 2,
+            FrameDirection::Group => 4,
         }
     }
 }
 
 /// The directions a session loaded.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Directions(u8);
+pub struct FrameDirections(u8);
 
-impl Directions {
-    pub const NONE: Directions = Directions(0);
-    pub const ALL: Directions = Directions(7);
+impl FrameDirections {
+    pub const NONE: FrameDirections = FrameDirections(0);
+    pub const ALL: FrameDirections = FrameDirections(7);
 
     /// The set with `direction` added.
-    pub const fn with(self, direction: Direction) -> Directions {
-        Directions(self.0 | direction.bit())
+    pub const fn with(self, direction: FrameDirection) -> FrameDirections {
+        FrameDirections(self.0 | direction.bit())
     }
 
-    pub const fn contains(self, direction: Direction) -> bool {
+    pub const fn contains(self, direction: FrameDirection) -> bool {
         self.0 & direction.bit() != 0
     }
 }
@@ -138,28 +136,28 @@ impl Directions {
 pub struct FrameConfig {
     /// The tag bytes: 4, 8 or 16, fixed for the lifetime of the loaded key.
     pub tag_len: u8,
-    pub directions: Directions,
+    pub directions: FrameDirections,
 }
 
 /// What the caller supplies per message. `msg_id` must be unique per (key, epoch, direction) for every
 /// message ever sealed (see the module note); `kind` is 0 to 15.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct MsgCtx {
+pub struct MsgContext {
     pub msg_id: [u8; 8],
     pub kind: u8,
 }
 
 /// Which loaded key opened a frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Slot {
+pub enum FrameSlot {
     Current,
     Previous,
 }
 
 /// What an opened frame reports.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Opened {
-    pub slot: Slot,
+pub struct FrameOpened {
+    pub slot: FrameSlot,
     pub clear_len: usize,
     pub plain_len: usize,
 }
@@ -179,7 +177,7 @@ impl DirKeys {
     }
 
     /// Fills `self` in place (a 96-byte slot is written where it lives, not built and copied).
-    fn fill(&mut self, key: &[u8; 32], epoch: u32, direction: Direction) {
+    fn fill(&mut self, key: &[u8; 32], epoch: u32, direction: FrameDirection) {
         let salt = salt(epoch);
         let d = direction as u8;
         hkdf::derive(key, &salt, &[d, b'e', b'n', b'c'], &mut self.enc);
@@ -211,9 +209,13 @@ impl SlotKeys {
     }
 
     /// Derives the keys of each loaded direction into `self`.
-    fn fill(&mut self, key: &[u8; 32], epoch: u32, directions: Directions) {
+    fn fill(&mut self, key: &[u8; 32], epoch: u32, directions: FrameDirections) {
         self.epoch = epoch;
-        for direction in [Direction::Up, Direction::Down, Direction::Group] {
+        for direction in [
+            FrameDirection::Up,
+            FrameDirection::Down,
+            FrameDirection::Group,
+        ] {
             if let Some(keys) = self.dirs.get_mut(direction.index()) {
                 if directions.contains(direction) {
                     keys.fill(key, epoch, direction);
@@ -224,7 +226,7 @@ impl SlotKeys {
         }
     }
 
-    fn dir(&self, direction: Direction) -> Option<&DirKeys> {
+    fn dir(&self, direction: FrameDirection) -> Option<&DirKeys> {
         self.dirs.get(direction.index())
     }
 }
@@ -245,11 +247,18 @@ impl Drop for SlotKeys {
     }
 }
 
-/// The frame half of a [`Session`]; `loaded` is false until the keys are derived into it.
+/// A frame-mode session: the keys derived from a shared 32-byte key and epoch
+/// ([`FrameSession::load_frame`]). Not `Clone`, so the keys live in one place; its frame state wipes them
+/// when the session is dropped.
+pub struct FrameSession {
+    frame: FrameState,
+}
+
+/// The keys and settings of a [`FrameSession`]; `loaded` is false until the keys are derived into it.
 pub(super) struct FrameState {
     loaded: bool,
     tag_len: u8,
-    directions: Directions,
+    directions: FrameDirections,
     current: SlotKeys,
     previous: SlotKeys,
     has_previous: bool,
@@ -260,7 +269,7 @@ impl FrameState {
         FrameState {
             loaded: false,
             tag_len: 0,
-            directions: Directions::NONE,
+            directions: FrameDirections::NONE,
             current: SlotKeys::empty(),
             previous: SlotKeys::empty(),
             has_previous: false,
@@ -279,11 +288,13 @@ fn check_load(epoch: u32) -> Result<(), Fault> {
     Ok(())
 }
 
-impl Session {
+impl FrameSession {
     /// A session with no keys: every call on it is refused. A constant, so a caller that is short of stack
-    /// declares it where it lives and loads into it with [`Session::load_frame_in_place`].
-    pub const fn frame_unloaded() -> Session {
-        Session::unloaded()
+    /// declares it where it lives and loads into it with [`FrameSession::load_frame_in_place`].
+    pub const fn frame_unloaded() -> FrameSession {
+        FrameSession {
+            frame: FrameState::empty(),
+        }
     }
 
     /// Derives the keys of each loaded direction into this session, in place (nothing of the 600-byte
@@ -311,9 +322,13 @@ impl Session {
     }
 
     /// A frame-mode session: keys for each loaded direction are derived once, here (see
-    /// [`Session::load_frame_in_place`], which does the same without moving the session).
-    pub fn load_frame(key: &[u8; 32], epoch: u32, config: FrameConfig) -> Result<Session, Fault> {
-        let mut session = Session::unloaded();
+    /// [`FrameSession::load_frame_in_place`], which does the same without moving the session).
+    pub fn load_frame(
+        key: &[u8; 32],
+        epoch: u32,
+        config: FrameConfig,
+    ) -> Result<FrameSession, Fault> {
+        let mut session = FrameSession::frame_unloaded();
         session.load_frame_in_place(key, epoch, config)?;
         Ok(session)
     }
@@ -322,8 +337,8 @@ impl Session {
         self.frame.loaded.then_some(&self.frame)
     }
 
-    /// Keeps a previous (key, epoch) that [`Session::open_frame`] tries when the current key's tag does not
-    /// match (the key just replaced, for frames sealed before the change). Seal never uses it.
+    /// Keeps a previous (key, epoch) that [`FrameSession::open_frame`] tries when the current key's tag does
+    /// not match (the key just replaced, for frames sealed before the change). Seal never uses it.
     pub fn set_previous(&mut self, key: &[u8; 32], epoch: u32) -> Result<(), Fault> {
         check_load(epoch)?;
         if !self.frame.loaded {
@@ -343,7 +358,7 @@ impl Session {
 }
 
 #[cfg(test)]
-impl Session {
+impl FrameSession {
     /// True when no byte of the previous slot's keys is set.
     pub(crate) fn test_previous_is_zero(&self) -> bool {
         let slot = &self.frame.previous;
@@ -357,7 +372,7 @@ impl Session {
     /// The encryption key of `direction` and the HMAC of the probe message `probe` under its MAC key.
     pub(crate) fn test_material(
         &self,
-        direction: Direction,
+        direction: FrameDirection,
         probe: &[u8],
     ) -> Option<([u8; 32], [u8; 32])> {
         let keys = self.frame_state()?.current.dir(direction)?;

@@ -1,5 +1,9 @@
 package packbin;
 
+import static packbin.FrameDirection.DOWN;
+import static packbin.FrameDirection.GROUP;
+import static packbin.FrameDirection.UP;
+
 import java.util.Arrays;
 
 /** AZ-3233 AC-7 (MAC-only), AC-8 (every refusal kind) and AC-9 (tag compare); AZ-3255 AC-3 (per-key MAC count). */
@@ -109,22 +113,22 @@ public final class FrameMacRefusalsTest {
 
     private static void loadRefusals() {
         byte[] key = key(1);
-        PackbinTest.expectTrue("epoch 0x1000000", FrameSession.load(key, 0x1000000, 4, 1) == null);
-        PackbinTest.expectTrue("epoch -1", FrameSession.load(key, -1, 4, 1) == null);
-        PackbinTest.expectTrue("epoch 0xFFFFFF", FrameSession.load(key, 0xFFFFFF, 4, 1) != null);
+        PackbinTest.expectTrue("epoch 0x1000000", FrameSession.load(key, 0x1000000, 4, UP) == null);
+        PackbinTest.expectTrue("epoch -1", FrameSession.load(key, -1, 4, UP) == null);
+        PackbinTest.expectTrue("epoch 0xFFFFFF", FrameSession.load(key, 0xFFFFFF, 4, UP) != null);
         for (int tag : new int[] {0, 5, 32, 3, 17}) {
-            PackbinTest.expectTrue("tag_len " + tag, FrameSession.load(key, 1, tag, 1) == null);
+            PackbinTest.expectTrue("tag_len " + tag, FrameSession.load(key, 1, tag, UP) == null);
         }
         for (int tag : new int[] {4, 8, 16}) {
-            PackbinTest.expectTrue("tag_len " + tag, FrameSession.load(key, 1, tag, 1) != null);
+            PackbinTest.expectTrue("tag_len " + tag, FrameSession.load(key, 1, tag, UP) != null);
         }
-        PackbinTest.expectTrue("direction 0 in the list", FrameSession.load(key, 1, 4, 0) == null);
-        PackbinTest.expectTrue("direction 4 in the list", FrameSession.load(key, 1, 4, 4) == null);
-        PackbinTest.expectTrue("key of 31 bytes", FrameSession.load(new byte[31], 1, 4, 1) == null);
-        PackbinTest.expectTrue("null key", FrameSession.load(null, 1, 4, 1) == null);
+        PackbinTest.expectTrue("null direction in the list", FrameSession.load(key, 1, 4, UP, null) == null);
+        PackbinTest.expectTrue("null direction list", FrameSession.load(key, 1, 4, (FrameDirection[]) null) == null);
+        PackbinTest.expectTrue("key of 31 bytes", FrameSession.load(new byte[31], 1, 4, UP) == null);
+        PackbinTest.expectTrue("null key", FrameSession.load(null, 1, 4, UP) == null);
     }
 
-    private static void expectSealRefusal(String label, Class<?> expected, FrameSession s, int dir, MsgContext ctx,
+    private static void expectSealRefusal(String label, Class<?> expected, FrameSession s, FrameDirection dir, MsgContext ctx,
             byte[] ad, byte[] clear, byte[] plain, int outLen) {
         // Arrange
         byte[] out = FrameSupport.filled(outLen);
@@ -139,54 +143,54 @@ public final class FrameMacRefusalsTest {
 
     private static void sealRefusalsWriteNothing() {
         MsgContext ctx = new MsgContext(new byte[8], 3);
-        try (FrameSession s = FrameSession.load(key(9), 2, 4, 1, 2)) {
-            expectSealRefusal("direction 0", Packbin.BadValue.class, s, 0, ctx, null, null, new byte[3], 300);
-            expectSealRefusal("direction 4", Packbin.BadValue.class, s, 4, ctx, null, null, new byte[3], 300);
-            expectSealRefusal("direction not loaded", Packbin.BadValue.class, s, 3, ctx, null, null, new byte[3], 300);
-            expectSealRefusal("kind 16", Packbin.BadValue.class, s, 1, new MsgContext(new byte[8], 16), null, null, new byte[3], 300);
-            expectSealRefusal("kind -1", Packbin.BadValue.class, s, 1, new MsgContext(new byte[8], -1), null, null, new byte[3], 300);
-            expectSealRefusal("msg_id of 7 bytes", Packbin.BadValue.class, s, 1, new MsgContext(new byte[7], 1), null, null, new byte[3], 300);
-            expectSealRefusal("null context", Packbin.BadValue.class, s, 1, null, null, null, new byte[3], 300);
-            expectSealRefusal("ad of 256 bytes", Packbin.TooLong.class, s, 1, ctx, new byte[256], null, new byte[3], 300);
-            expectSealRefusal("body of 256 bytes", Packbin.TooLong.class, s, 1, ctx, null, new byte[100], new byte[152], 300);
-            expectSealRefusal("buffer one byte short", Packbin.BufferFull.class, s, 1, ctx, null, new byte[2], new byte[3], 8);
-            expectSealRefusal("null buffer", Packbin.BufferFull.class, s, 1, ctx, null, null, new byte[3], 0);
+        try (FrameSession s = FrameSession.load(key(9), 2, 4, UP, DOWN)) {
+            expectSealRefusal("null direction", Packbin.BadValue.class, s, null, ctx, null, null, new byte[3], 300);
+            expectSealRefusal("direction not loaded", Packbin.BadValue.class, s, GROUP, ctx, null, null, new byte[3], 300);
+            expectSealRefusal("kind 16", Packbin.BadValue.class, s, UP, new MsgContext(new byte[8], 16), null, null, new byte[3], 300);
+            expectSealRefusal("kind -1", Packbin.BadValue.class, s, UP, new MsgContext(new byte[8], -1), null, null, new byte[3], 300);
+            expectSealRefusal("msg_id of 7 bytes", Packbin.BadValue.class, s, UP, new MsgContext(new byte[7], 1), null, null, new byte[3], 300);
+            expectSealRefusal("null context", Packbin.BadValue.class, s, UP, null, null, null, new byte[3], 300);
+            expectSealRefusal("ad of 256 bytes", Packbin.TooLong.class, s, UP, ctx, new byte[256], null, new byte[3], 300);
+            expectSealRefusal("body of 256 bytes", Packbin.TooLong.class, s, UP, ctx, null, new byte[100], new byte[152], 300);
+            expectSealRefusal("buffer one byte short", Packbin.BufferFull.class, s, UP, ctx, null, new byte[2], new byte[3], 8);
+            expectSealRefusal("null buffer", Packbin.BufferFull.class, s, UP, ctx, null, null, new byte[3], 0);
             byte[] edge = new byte[255];
             PackbinTest.expectTrue("body of exactly 255 bytes seals",
-                    s.seal(1, ctx, new byte[255], new byte[100], new byte[151], edge) instanceof FrameSession.Sealed);
-            PackbinTest.expectTrue("offset past the buffer", s.seal(1, ctx, null, null, new byte[1], new byte[8], 9) instanceof Packbin.BadValue);
+                    s.seal(UP, ctx, new byte[255], new byte[100], new byte[151], edge) instanceof FrameSealed);
+            PackbinTest.expectTrue("offset past the buffer", s.seal(UP, ctx, null, null, new byte[1], new byte[8], 9) instanceof Packbin.BadValue);
             byte[] shifted = FrameSupport.filled(12);
-            Object placed = s.seal(1, ctx, null, null, new byte[3], shifted, 4);
-            PackbinTest.expectTrue("seal at an offset", placed instanceof FrameSession.Sealed);
+            Object placed = s.seal(UP, ctx, null, null, new byte[3], shifted, 4);
+            PackbinTest.expectTrue("seal at an offset", placed instanceof FrameSealed);
             PackbinTest.expectTrue("bytes before and after the body are untouched",
                     shifted[3] == FrameSupport.SENTINEL && shifted[11] == FrameSupport.SENTINEL);
-            Object rangedOpen = s.open(1, ctx, null, shifted, 4, 7, 0, null, 0, new byte[3], 0);
-            PackbinTest.expectTrue("open of a range", rangedOpen instanceof FrameSession.Opened);
+            Object rangedOpen = s.open(UP, ctx, null, shifted, 4, 7, 0, null, 0, new byte[3], 0);
+            PackbinTest.expectTrue("open of a range", rangedOpen instanceof FrameOpened);
         }
     }
 
     private static void openRefusals() {
         MsgContext ctx = new MsgContext(new byte[8], 3);
-        try (FrameSession s = FrameSession.load(key(9), 2, 4, 1, 2)) {
+        try (FrameSession s = FrameSession.load(key(9), 2, 4, UP, DOWN)) {
             byte[] body = new byte[20];
-            Object sealed = s.seal(1, ctx, null, new byte[2], new byte[14], body);
-            PackbinTest.expectTrue("sealed 20 bytes", sealed instanceof FrameSession.Sealed);
-            expectOpen("direction not loaded", Packbin.BadValue.class, s.open(3, ctx, null, body, 2, null, 0, new byte[14]));
-            expectOpen("kind 16", Packbin.BadValue.class, s.open(1, new MsgContext(new byte[8], 16), null, body, 2, null, 0, new byte[14]));
-            expectOpen("ad 256", Packbin.TooLong.class, s.open(1, ctx, new byte[256], body, 2, null, 0, new byte[14]));
-            expectOpen("body 256", Packbin.TooLong.class, s.open(1, ctx, null, new byte[256], 2, null, 0, new byte[300]));
-            expectOpen("clear_len 256", Packbin.TooLong.class, s.open(1, ctx, null, body, 256, null, 0, new byte[14]));
-            expectOpen("body shorter than clear_len + tag", Packbin.ShortPacket.class, s.open(1, ctx, null, body, 17, null, 0, new byte[14]));
-            expectOpen("empty body", Packbin.ShortPacket.class, s.open(1, ctx, null, new byte[0], 0, null, 0, new byte[14]));
-            expectOpen("null body", Packbin.ShortPacket.class, s.open(1, ctx, null, null, 0, null, 0, new byte[14]));
-            expectOpen("output one byte short", Packbin.BufferFull.class, s.open(1, ctx, null, body, 2, null, 0, new byte[13]));
+            Object sealed = s.seal(UP, ctx, null, new byte[2], new byte[14], body);
+            PackbinTest.expectTrue("sealed 20 bytes", sealed instanceof FrameSealed);
+            expectOpen("direction not loaded", Packbin.BadValue.class, s.open(GROUP, ctx, null, body, 2, null, 0, new byte[14]));
+            expectOpen("null direction", Packbin.BadValue.class, s.open(null, ctx, null, body, 2, null, 0, new byte[14]));
+            expectOpen("kind 16", Packbin.BadValue.class, s.open(UP, new MsgContext(new byte[8], 16), null, body, 2, null, 0, new byte[14]));
+            expectOpen("ad 256", Packbin.TooLong.class, s.open(UP, ctx, new byte[256], body, 2, null, 0, new byte[14]));
+            expectOpen("body 256", Packbin.TooLong.class, s.open(UP, ctx, null, new byte[256], 2, null, 0, new byte[300]));
+            expectOpen("clear_len 256", Packbin.TooLong.class, s.open(UP, ctx, null, body, 256, null, 0, new byte[14]));
+            expectOpen("body shorter than clear_len + tag", Packbin.ShortPacket.class, s.open(UP, ctx, null, body, 17, null, 0, new byte[14]));
+            expectOpen("empty body", Packbin.ShortPacket.class, s.open(UP, ctx, null, new byte[0], 0, null, 0, new byte[14]));
+            expectOpen("null body", Packbin.ShortPacket.class, s.open(UP, ctx, null, null, 0, null, 0, new byte[14]));
+            expectOpen("output one byte short", Packbin.BufferFull.class, s.open(UP, ctx, null, body, 2, null, 0, new byte[13]));
             expectOpen("tag changed", Packbin.TagMismatch.class,
-                    s.open(1, ctx, null, withLast(body), 2, null, 0, new byte[14]));
+                    s.open(UP, ctx, null, withLast(body), 2, null, 0, new byte[14]));
             ReplayWindow window = new ReplayWindow();
             window.commit(100);
-            expectOpen("Duplicate", Packbin.Duplicate.class, s.open(1, ctx, null, body, 2, window, 100, new byte[14]));
-            expectOpen("TooOld", Packbin.TooOld.class, s.open(1, ctx, null, body, 2, window, 36, new byte[14]));
-            expectOpen("range outside the body", Packbin.BadValue.class, s.open(1, ctx, null, body, 10, 20, 2, null, 0, new byte[14], 0));
+            expectOpen("Duplicate", Packbin.Duplicate.class, s.open(UP, ctx, null, body, 2, window, 100, new byte[14]));
+            expectOpen("TooOld", Packbin.TooOld.class, s.open(UP, ctx, null, body, 2, window, 36, new byte[14]));
+            expectOpen("range outside the body", Packbin.BadValue.class, s.open(UP, ctx, null, body, 10, 20, 2, null, 0, new byte[14], 0));
         }
     }
 

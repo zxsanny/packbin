@@ -90,7 +90,7 @@ import Testing
         // Act
         for _ in 0..<2000 {
             let n = seen.isEmpty ? 1000 : UInt64(Int64(top) + Int64.random(in: -80...20, using: &random))
-            let want: ReplayWindow.Freshness = seen.isEmpty || n > top ? .fresh : top - n >= 64 ? .tooOld : seen.contains(n) ? .duplicate : .fresh
+            let want: Freshness = seen.isEmpty || n > top ? .fresh : top - n >= 64 ? .tooOld : seen.contains(n) ? .duplicate : .fresh
             let before = window
             if window.check(n) != want || window != before { wrong += 1 }
             if want == .fresh {

@@ -14,10 +14,7 @@ import { validateRoundBodies, validateRoundNesting } from "./rounds.ts"
 import { bindReferences } from "./ref-scope.ts"
 import { validateElementKinds } from "./element-kinds.ts"
 import type { Value } from "./kinds.ts"
-import { hkdf } from "@noble/hashes/hkdf.js"
-import { sha256 } from "@noble/hashes/sha2.js"
-import { xorPad } from "./session-pad.ts"
-import { checkLimit, checkParity, checkSize, protect, repair, type EccErr } from "./ecc.ts"
+import { checkLimit, checkParity, protect, repair, type EccErr } from "./ecc.ts"
 
 export type { Field, Acc } from "./fields.ts"
 export {
@@ -194,7 +191,7 @@ function isArrayBuffer(v: unknown): v is ArrayBuffer {
   }
 }
 
-// A duplicate type number is refused before any byte is read, so a session's receive index stays put.
+// A duplicate type number is refused before any byte is read.
 function requireDistinct(handlers: SchemeHandler<object>[]): void {
   const seen = new Set<number>()
   for (const h of handlers) {
@@ -235,103 +232,8 @@ function unpackDispatch(
 export type UnpackOk = { ok: true } & Value
 export type UnpackResult = UnpackOk | UnpackErr
 
-const SESSION_INFO = new TextEncoder().encode("packbin")
-
 // The brand, not instanceof: a Uint8Array made in another realm (a vm context, a Jest
 // environment, an iframe) has another prototype. isView runs first so no caller code runs.
 function isUint8Array(v: unknown): v is Uint8Array {
   return ArrayBuffer.isView(v) && Object.prototype.toString.call(v) === "[object Uint8Array]"
-}
-
-export class PackSession {
-  static readonly SeedSize = 32
-  static readonly NonceSize = 16
-
-  #seed: Uint8Array | null
-  #send: Uint8Array | null = null
-  #recv: Uint8Array | null = null
-  #sendCount = 0n
-  #recvCount = 0n
-
-  private constructor(seed: Uint8Array) {
-    this.#seed = seed
-  }
-
-  static load(seed: Uint8Array): PackSession | null {
-    if (!isUint8Array(seed) || seed.length !== PackSession.SeedSize) return null
-    return new PackSession(Uint8Array.from(seed))
-  }
-
-  start(nonce?: Uint8Array): Uint8Array | null {
-    if (nonce === undefined) {
-      if (this.#send !== null || this.#seed === null) return null
-      const drawn = new Uint8Array(PackSession.NonceSize)
-      globalThis.crypto.getRandomValues(drawn)
-      if (!this.#open(drawn, true)) return null
-      return drawn
-    }
-    if (!this.#open(nonce, true)) return null
-    return Uint8Array.from(nonce)
-  }
-
-  join(nonce: Uint8Array): boolean {
-    return this.#open(nonce, false)
-  }
-
-  pack<T extends object>(s: Scheme<T>, row: T): Uint8Array | null {
-    if (this.#send === null) return null
-    const clear = packClear(s, row)
-    checkSize(clear.length, s.parity)
-    xorPad(this.#send, this.#sendCount, clear)
-    this.#sendCount++
-    // The parity covers the padded bytes, so the receiver repairs before it removes the pad.
-    return protect(clear, s.parity)
-  }
-
-  unpack(
-    bytes: Uint8Array | ArrayBuffer,
-    first: SchemeHandler<object>,
-    ...rest: SchemeHandler<object>[]
-  ): DispatchResult {
-    return this.unpackRepair(bytes, 0, first, ...rest)
-  }
-
-  // As `BinaryPacker.unpackRepair`. The receive index advances on every call that reads bytes, a
-  // refused one included, as it does for an unprotected payload.
-  unpackRepair(
-    bytes: Uint8Array | ArrayBuffer,
-    limit: number,
-    first: SchemeHandler<object>,
-    ...rest: SchemeHandler<object>[]
-  ): DispatchResult {
-    if (this.#recv === null) return { ok: false, field: "", needed: 1, left: 0 }
-    const handlers = [first, ...rest]
-    requireDistinct(handlers)
-    const n = sharedParity(handlers, limit)
-    const fixed = repair(toBuf(bytes), n, limit)
-    const index = this.#recvCount++
-    if (!fixed.ok) return fixed
-    const clear = Uint8Array.from(fixed.clear)
-    xorPad(this.#recv, index, clear)
-    return unpackDispatch(clear, handlers, n > 0 ? fixed.repaired : undefined)
-  }
-
-  #open(nonce: Uint8Array, initiator: boolean): boolean {
-    if (
-      this.#seed === null ||
-      this.#send !== null ||
-      nonce.length !== PackSession.NonceSize
-    ) {
-      return false
-    }
-    const both = hkdf(sha256, this.#seed, nonce, SESSION_INFO, PackSession.SeedSize * 2)
-    const first = both.subarray(0, PackSession.SeedSize)
-    const second = both.subarray(PackSession.SeedSize)
-    this.#send = Uint8Array.from(initiator ? first : second)
-    this.#recv = Uint8Array.from(initiator ? second : first)
-    both.fill(0)
-    this.#seed.fill(0)
-    this.#seed = null
-    return true
-  }
 }

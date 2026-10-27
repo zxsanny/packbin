@@ -2,9 +2,7 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import {
   BinaryPacker,
-  PackSession,
   Scheme,
-  bytes,
   scheme,
   u8,
   u16,
@@ -12,27 +10,8 @@ import {
   type DispatchResult,
   type SchemeHandler,
 } from "../src/index.ts"
-import { protect } from "../src/ecc.ts"
 import { random } from "./support/random.ts"
 import { corrupt, hexOf, pick, positionHex, positionScheme, positionValue, type Position } from "./support/ecc.ts"
-
-const nonce = Buffer.from("01000000000000000000000000000000", "hex")
-const cipherHex = "b55d0a29c56c203712b241232e"
-
-function pair(): { opener: PackSession; waiter: PackSession } {
-  const seed = Uint8Array.from({ length: 32 }, (_, i) => i + 1)
-  const opener = PackSession.load(seed)!
-  const waiter = PackSession.load(seed)!
-  assert.ok(opener.start(nonce))
-  assert.equal(waiter.join(nonce), true)
-  return { opener, waiter }
-}
-
-function receive(s: PackSession, message: Uint8Array, limit: number, parity: number): { result: DispatchResult; rows: Position[] } {
-  const rows: Position[] = []
-  const handler = positionScheme(parity).on((r) => rows.push(r)) as SchemeHandler<object>
-  return { result: s.unpackRepair(message, limit, handler), rows }
-}
 
 describe("message ECC scheme setting", () => {
   it("EC-1 a scheme declares no parity bytes unless it is told to, and withLimits keeps the count it was given", () => {
@@ -53,106 +32,6 @@ describe("message ECC scheme setting", () => {
     // Assert
     assert.throws(build, /parity.*33|33.*parity/)
     assert.throws(build, /32/)
-  })
-})
-
-describe("message ECC session", () => {
-  it("EC-10 the payload is the padded clear message plus n bytes; the parity covers the padded bytes", () => {
-    // Arrange
-    const { opener } = pair()
-
-    // Act
-    const payload = opener.pack(positionScheme(4), positionValue)!
-
-    // Assert
-    assert.equal(payload.length, 13 + 4)
-    assert.equal(hexOf(payload.subarray(0, 13)), cipherHex)
-    assert.deepEqual(payload, protect(payload.slice(0, 13), 4))
-  })
-
-  it("EC-10 a session with a scheme of 0 parity bytes keeps the payload as long as the clear message", () => {
-    // Arrange
-    const { opener, waiter } = pair()
-
-    // Act
-    const payload = opener.pack(positionScheme(0), positionValue)!
-    const got = receive(waiter, payload, 0, 0)
-
-    // Assert
-    assert.equal(hexOf(payload), cipherHex)
-    assert.deepEqual(got.result, { ok: true })
-    assert.equal(got.rows.length, 1)
-  })
-
-  it("EC-10 n = 4: two wrong bytes are repaired before the pad is removed and the row is recovered", () => {
-    // Arrange
-    const { opener, waiter } = pair()
-    const payload = opener.pack(positionScheme(4), positionValue)!
-
-    // Act
-    const got = receive(waiter, corrupt(payload, [2, 15], [0x80, 0x21]), 2, 4)
-
-    // Assert
-    assert.deepEqual(got.result, { ok: true, repaired: 2 })
-    assert.deepEqual(got.rows, [positionValue])
-  })
-
-  it("EC-10 n = 4, t = 2: three wrong bytes are refused, then the next payload from the sender is read", () => {
-    // Arrange
-    const { opener, waiter } = pair()
-    const first = opener.pack(positionScheme(4), positionValue)!
-    const second = opener.pack(positionScheme(4), { ...positionValue, sid: 9 })!
-
-    // Act
-    const refused = receive(waiter, corrupt(first, [1, 5, 11], [1, 2, 3]), 2, 4)
-    const next = receive(waiter, second, 2, 4)
-
-    // Assert
-    assert.deepEqual(refused.result, { ok: false, kind: "uncorrectable" })
-    assert.equal(refused.rows.length, 0)
-    assert.deepEqual(next.result, { ok: true, repaired: 0 })
-    assert.equal(next.rows[0]!.sid, 9)
-  })
-
-  it("EC-10 a limit above n / 2 throws before the receive index moves", () => {
-    // Arrange
-    const { opener, waiter } = pair()
-    const payload = opener.pack(positionScheme(4), positionValue)!
-
-    // Act
-    const run = () => receive(waiter, payload, 3, 4)
-    const after = receive(waiter, payload, 2, 4)
-
-    // Assert
-    assert.throws(run, RangeError)
-    assert.deepEqual(after.result, { ok: true, repaired: 0 })
-  })
-
-  it("EC-4 a message above the limit is refused and the send index does not move", () => {
-    // Arrange
-    const { opener } = pair()
-    const big = scheme<{ b: Uint8Array }>(0, bytes(0, (r) => r.b, 222)).withLimits({ parity: 32 })
-
-    // Act
-    const refuse = () => opener.pack(big, { b: new Uint8Array(222) })
-    const first = opener.pack(positionScheme(0), positionValue)!
-
-    // Assert
-    assert.throws(refuse, RangeError)
-    assert.equal(hexOf(first), cipherHex)
-  })
-
-  it("EC-10 the protected payload read by the unprotected session unpack is refused, not thrown", () => {
-    // Arrange
-    const { opener, waiter } = pair()
-    const payload = opener.pack(positionScheme(4), positionValue)!
-
-    // Act
-    const got = receive(waiter, payload, 0, 0)
-
-    // Assert
-    assert.equal(got.result.ok, false)
-    assert.equal(got.rows.length, 0)
   })
 })
 

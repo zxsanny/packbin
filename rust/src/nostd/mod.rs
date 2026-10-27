@@ -15,8 +15,8 @@
 //! the caller's scratch words ([`pack_with`], [`SCRATCH_WORDS_PER_CHAR`] per code point);
 //! [`utf8_wire`] keeps a string as it is on the wire and needs no feature. `ecc` adds parity
 //! bytes after every packet ([`Scheme::with_parity`], [`unpack_repair`], the codec in
-//! [`ecc`]). `frame` adds frame mode, the one session ([`Session`]: sealed, authenticated radio
-//! frames, a replay window and the MAC-only [`MacKey`]; `pack-session.md` 2.0.0).
+//! [`ecc`]). `frame` adds frame mode, the one session ([`FrameSession`]: sealed, authenticated
+//! radio frames, a replay window and the MAC-only [`MacKey`]; `pack-session.md` 2.0.0).
 //!
 //! ```
 //! use packbin::nostd::{i32, pack, u16, u8, unpack, Fault, Num, Row, Scheme};
@@ -71,8 +71,6 @@ mod pack;
 mod present;
 mod row;
 mod scheme;
-#[cfg(feature = "frame")]
-mod session;
 mod strings;
 mod table;
 #[cfg(feature = "text")]
@@ -93,10 +91,9 @@ pub use scheme::{
 pub use text::SCRATCH_WORDS_PER_CHAR;
 #[cfg(feature = "frame")]
 pub use frame::{
-    Direction, Directions, Freshness, FrameConfig, MacKey, MsgCtx, Opened, ReplayWindow, Slot, MAX_BODY,
+    FrameConfig, FrameDirection, FrameDirections, FrameOpened, FrameSession, FrameSlot, Freshness,
+    MacKey, MsgContext, ReplayWindow, MAX_BODY,
 };
-#[cfg(feature = "frame")]
-pub use session::Session;
 pub use walk::{pack, pack_with, unpack};
 #[cfg(feature = "ecc")]
 pub use walk::{unpack_repair, Unpacked};

@@ -27,8 +27,8 @@ public final class FrameHostileTest {
         int opened = 0;
         int unknown = 0;
         int[] counts = new int[16];
-        try (FrameSession s4 = FrameSession.load(key, 3, 4, 1, 2, 3);
-                FrameSession s16 = FrameSession.load(key, 3, 16, 1, 3)) {
+        try (FrameSession s4 = FrameSession.load(key, 3, 4, FrameDirection.values());
+                FrameSession s16 = FrameSession.load(key, 3, 16, FrameDirection.UP, FrameDirection.GROUP)) {
             s4.setPrevious(key, 2);
             ReplayWindow window = new ReplayWindow();
             for (int i = 0; i < ROUNDS; i++) {
@@ -38,7 +38,7 @@ public final class FrameHostileTest {
                 MsgContext ctx = random.nextInt(8) == 0 ? null : new MsgContext(msgId, random.nextInt(20) - 2);
                 byte[] ad = random.nextInt(6) == 0 ? null : randomBytes(random, 300);
                 byte[] body = random.nextInt(8) == 0 ? null : randomBytes(random, 300);
-                int dir = random.nextInt(7) - 1;
+                FrameDirection dir = FrameSupport.direction(random.nextInt(7) - 1); // null outside 1 to 3
                 int clearLen = random.nextInt(320) - 10;
                 int bodyOff = random.nextInt(8) == 0 ? random.nextInt(400) - 20 : 0;
                 int bodyLen = random.nextInt(8) == 0 ? random.nextInt(400) - 20 : (body == null ? 0 : body.length);
@@ -57,7 +57,7 @@ public final class FrameHostileTest {
                         unknown += kind.startsWith("other") ? 1 : 0;
                         counts[Math.min(kind.length(), 15)]++;
                     }
-                    opened += result instanceof FrameSession.Opened ? 1 : 0;
+                    opened += result instanceof FrameOpened ? 1 : 0;
                 } catch (RuntimeException ex) {
                     exceptions++;
                     System.err.println("hostile round " + i + ": " + ex);

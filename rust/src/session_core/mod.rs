@@ -1,5 +1,5 @@
-//! The hash, MAC, key derivation and cipher of frame mode (`nostd::Session`): fixed buffers on the stack,
-//! no allocation, no panic path.
+//! The hash, MAC, key derivation and cipher of frame mode (`nostd::FrameSession`): fixed buffers on
+//! the stack, no allocation, no panic path.
 
 #[cfg(all(test, feature = "std"))]
 pub(crate) mod counters;
