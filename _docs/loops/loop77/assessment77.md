@@ -159,3 +159,143 @@ Some refusals the contract lists cannot reach the package in Rust and C++ becaus
 
 - No `scenarios.md` for this loop (pre-4.7 style task): rows were taken from the ACs and Behavior list.
 - No batch report or implementation report for loop 77 was present, so Step 1 (`## Discovered during implementation`) had no input; the discoveries of d0b8525 (C++ link, TS FrameDirections class, Java private constructor, Swift stderr, run-suite counts, self-test wiring) were taken from its commit message only.
+
+## Round 2
+
+**Date**: 2026-10-27
+**Implement pass**: commit aecb76d (AZ-3341) on top of 1e2bb45 and d0b8525; no batch report or implementation report for loop 77 was given or found (same harness gap as round 1)
+**Verdict**: CLARIFY — 17 covered / 6 out-of-scope / 2 gap-clear / 1 gap-unclear
+
+Read-only review of `git diff d0b8525..aecb76d` and the files it touches. Nothing was run (ring, suites, docker, cargo, dotnet, gradle, swift). Row facts below come from `awk` and `grep` over `fixtures/frame/ring-cases.txt`. Evidence that the real ring passes is the parent's own log in the scratchpad (`smoke-trial.log`, step 3: "64 pairs and 8 x 16 refusals, 0 mismatched"; `ring-frame.log`, an earlier run, shows `refusals typescript: 16 rows, 1 mismatched` before the TypeScript fix). I did not re-run either.
+
+Accepted by the owner on 2026-10-27, counted as out-of-scope and not as gaps: G2 (TooLong, ShortPacket by row, BadValue refusal rows), G3 (direction not loaded, BufferFull), U1 (key and msg_id length refusals), multi-part MAC messages. Still open and not in AZ-3341, not counted: L-1 (lenient hex in ts/swift/cpp/java), L-2 (a writer's non-hex line crashes the readers instead of being blamed), L-3 (Go discards parse errors).
+
+### Answers (short form)
+
+1. Nine of the eleven ACs hold from the code. AC-4 holds for seal rows only: no MAC row uses epoch 0, 65535 or 16777215 (gap G5m). AC-8 holds for "exit 1" and for the refusal path being reached, but the self-test needles do not contain a row id, so "names the row" is true in the code and not asserted (gap N1). AC-11 is a run, not a code line; the parent's log says it passed on the Mac, the CI `ring` job has not been seen.
+2. No vacuous pass for a non-empty row set. One vacuity exists for an empty one: the loader does not require an `open` or a `verify` row (see Q2 below).
+3. Yes for a reader that accepts a tampered body and for a verify that always says valid. No for the `refusals <lang>: N rows, M mismatched` line, which no CI script asserts. A reader with the right count and wrong names is covered by the same equality test; the specific swap "TagMismatch for the ShortPacket row" is not isolated.
+4. New angles are in the matrix: N1 (gap-clear), N2 and N3 (covered), G8e (gap-unclear).
+5. No defect of the kind "the ring passes while a package is wrong". Provable weak points are listed under "Code findings".
+
+### Q1. Per AC: what makes it hold
+
+| AC | Rows / test / code | Holds? |
+|----|--------------------|--------|
+| AC-1 tampered bodies | `fixtures/frame/ring-cases.txt` open rows: E1.ct (97), E1.tag (99), E1.ad (101), E1.id (103), E1.epoch (105), E3.clear (107), E3.ct (109), E3.clearlen (111), clear3.tag (113), t16.tag (115), E3.short (117, body 6 bytes < clear 3 + tag 4, expected ShortPacket). Compared by name at `scripts/frame/ring_frame.py:264-267`; `got != want` ends in `total_wrong` (line 275) and exit 1 (line 283). Each position has a row: clear part (E3.clear), ciphertext (E1.ct, E3.ct), tag (E1.tag, clear3.tag, t16.tag). Not every one of E1, E3, clear3 has all three; the AC wording is met per position. | yes |
+| AC-2 wrong tags | verify rows E4.first (119), E4.last (121), n16.first (123), n16.last (125), plus E4.msg (127). First/last byte changes checked by eye against E4 `56db9bec` and n16 `9f44...aa7d`. Compared at `ring_frame.py:271-274` against the constant `invalid`. | yes |
+| AC-3 body sizes | seal rows p63, p64, p65, p128, p192, p251 (49-59; plaintext 63, 64, 65, 128, 192, 251; the last gives body = 255) and c40p211 (61, body = 255). Pass through the writer-reader matrix: writer compare `ring_frame.py:193-195`, reader plaintext compare `240-243`. | yes |
+| AC-4 epochs | Seal: ep0, ep65535, epmax (63, 65, 67). MAC: the 11 mac rows have epochs 7, 8, 9, 9, 4, 4, 4, 4, 4, 4, 4 (lines 35-44, 79-91). No MAC row with epoch 0, 65535 or 16777215. The AC says "seal and MAC rows". | half: G5m |
+| AC-5 kinds, ids | k0 (69, kind 0, id all 00), k8 (71), k15 (73, kind 15, id all ff). | yes |
+| AC-6 AD, clear | ad0 (75, AD `-`), ad255 (77, AD 255 bytes), c40p211 (61, clear 40 bytes). | yes |
+| AC-7 MAC variants | mac32 (79, n = 32), lab1 (81), lab32 (83), msg0 (85, message `-`), m63, m64, m65 (87-91). Writer compare `ring_frame.py:207-209`; verify chunk `248-251` expects `valid`. | yes |
+| AC-8 permissive driver fails the self-test | `ring-frame.test.sh:62-63` (open-permissive turns TagMismatch/ShortPacket into `00`), `74-75` (verify-permissive), cases `118-119`, `run` asserts the exit code (line 94) and a needle (line 98). Needles are `wanted TagMismatch` and `wanted invalid`; the failure line does carry the row id (`ring_frame.py:267`, `274`: `go: E1.ct open gave 00, wanted TagMismatch`) but no test asserts it. | exit 1: yes; "names the row": not asserted (N1) |
+| AC-9 TypeScript short packet | `handoff-frame.ts:23` (`"field" in result` returns `short`, mapped to `ShortPacket` at line 30); row E3.short (117). Real TS result for a short body is `{ ok: false, field: "body", ... }` (`typescript/src/frame-session.ts:191`). Parent's earlier log shows the row failing without the fix. | yes |
+| AC-10 Swift comment | `swift/Sources/Packbin/PackbinError.swift:4-8` names `short_packet`, `bad_value`, `too_long`, `buffer_full`, `tag_mismatch`, `duplicate`, `too_old` and the Pascal spellings. Matches the AC text. Wording note in "Code findings" (F-6). | yes (literal) |
+| AC-11 ring passes for real | `test.yml:94-95` (ring job step). Parent's `smoke-trial.log` step 3 PASS on the Mac. CI not observed. | not re-run here |
+
+### Q2. Can the refusal comparison pass vacuously?
+
+Slicing, read from `ring_frame.py`:
+
+- `cmd_open_in` (135-151) writes, per writer in `writers` order, exactly `len(rows.seal)` lines: the open lines of a usable writer, or `len(rows.seal)` lines of `open-skip` for an unusable one (140-143). The refusal lines come after the loop (147-149; same indent as `for writer`). So `open.in` = `S * W` writer lines, then `R` refusal lines. Skip lines shift nothing. `verify.in` has the same shape (162-176).
+- A driver prints one line per input line (header of `ring-frame.sh`, lines 8-10). `cmd_check` requires `len(open_lines) == S * W + R` (218-221) and `len(verify_lines) == M * W + R'` (225-228), else it sets the list to `None`, adds a note, and both the pair lines and the refusal block report "no usable ... output" (236-237, 245-246, 261-262, 268-269). Too few and too many lines both fail; a blank line from a driver is dropped by `read_lines` (line 43, `if line.strip()`), which shortens the list and fails the count.
+- With the count exact, `tail = open_lines[S * W:]` has exactly `R` lines and `zip(rows.refuse_open, tail)` loses nothing (264-265, 271-272). The names are compared with `!=` against the name from the file, which the loader has already matched to the reference (101-107).
+
+I could not construct a vacuous pass with a non-empty row set. What exists:
+
+- **Empty set.** The loader requires seal and mac rows (70-73) but no `open` or `verify` row. Concrete input: `ring-cases.txt` with the 11 open and 5 verify rows deleted (or a `RING_FRAME_CASES` file without them). `ring-frame.sh` then prints `refusals <lang>: 0 rows, 0 mismatched` for all eight readers and exits 0 with real drivers. The only guard is `ring-frame.test.sh` cases `open-permissive` and `verify-permissive` (118-119), which run on the real file and would report "exit 0, wanted 1"; that self-test runs in the `scaffold` job (`test.yml:381`), not in `ring`. A partial deletion (one open row and one verify row left) is caught by nothing. Recorded as N1.
+- **Display only.** `refused[:5]` (277-278) shows five lines per reader and the open failures come first, so a reader that is wrong on 5 or more open rows never names a failing verify row. The count in `refusals <lang>: 16 rows, N mismatched` is right.
+- **Latent loader crash, not a vacuity.** `ff.mac_verify(...)` at `ring_frame.py:113` sits outside a `try`; for a verify row whose tag is not 4, 8, 16 or 32 bytes the reference raises `Fault("BadValue")` (`framefmt.py:177-179`, `185-186`), which is not a `FileError`, so the run ends in a Python traceback (exit 1). No current row does this.
+
+### Q3. Does the self-test prove the permissive cases?
+
+| Case | Result |
+|------|--------|
+| Reader accepts tampered body (`open-permissive`, go) | Proves it: `00` instead of the error name on every refusal open row, exit 1, needle `wanted TagMismatch` only appears in the refusal block. |
+| Verify always valid (`verify-permissive`, swift) | Proves it: needle `wanted invalid` only appears in the refusal block. |
+| Right count, wrong names | Covered by the same `!=` (a swap to `00` has the right count). The swap of one name for the other (TagMismatch on the ShortPacket row) is not isolated; no test. Loop-local `smoke77.sh` step 4 covers one real case (TypeScript `error` for E3.short). |
+| Too many lines | Not tested; same `!=` as the tested "too few" case (`ring_frame.py:219`). |
+| `refusals <lang>: N rows, M mismatched` line | Not asserted. The honest case checks only `ring-frame: 64 pairs, ` and `mismatched: 0$` (107-111). Deleting the refusal block from `cmd_check` is caught indirectly (open-permissive would exit 0); changing the printed text is not. |
+| Corrupted new rows | `open-name-changed` (136-137) and `verify-tag-made-valid` (138-139) check that the loader stops with "disagree with the reference". Each `corrupt` call checks that the copy changed (127-130). |
+
+### Coverage matrix (round 2; all rows re-classified)
+
+| id | scenario | status | evidence | source |
+|----|----------|--------|----------|--------|
+| S1 | Seal in directions 1, 2, 3 and open by every language | covered | AZ-3338 AC-2; rows E1, E2, E3, clear3 (dir 1, 2, 3); `ring_frame.py:193-195, 240-243`; 8 drivers | intake |
+| S2 | Tag length 4, 8, 16 | covered | AZ-3338 AC-2; E1, t8, t16, E3t16, p128 (8), p192 (16) | intake |
+| S3 | Clear part absent and present | covered | AZ-3338 AC-2; E3, clear3, t8, t16, c40p211 | intake |
+| S4 | Plaintext of 0, 12, 20, 42 bytes | covered | AZ-3338 AC-2; plain0, E1, E3, E2 | intake |
+| S5 | MAC compute and verify, n = 8 and 16 | covered | AZ-3338 AC-3; E4, E5, n8, n16; `ring_frame.py:207-209, 248-251` | intake |
+| S6 | A wrong, tampered, short or crashing output fails the ring | covered | AZ-3338 AC-4, AC-5; `ring-frame.test.sh:112-121`; `ring_frame.py:153-221` | intake |
+| S7 | A fixture row the reference does not confirm stops the run | covered | AZ-3338 AC-4; `ring-frame.test.sh:132-141`; `ring_frame.py:83-116` | intake |
+| S8 | Ring and self-test wired in CI | covered | AZ-3338 AC-8; `test.yml:94-95, 380-381`; `publish-jobs.test.sh:193, 204` | intake |
+| O1 | Replay window | out-of-scope | problem.md "Out of scope": "Replay-window ring (the replay counter is local state, not cross-language wire format)." | intake |
+| O2 | Key rotation | out-of-scope | problem.md "Out of scope": "Key-rotation ring (epoch changes are local decisions)." | intake |
+| G1 | Tampered body refused alike; wrong tag `invalid` (all 8) | covered | AZ-3341 AC-1, AC-2, AC-8, AC-9; rows 97-127; `ring_frame.py:96-116, 259-278`; `ring-frame.test.sh:118-119, 136-139`; `handoff-frame.ts:23` | assess-round-1 |
+| G2 | Refusal rows TooLong, ShortPacket by row, BadValue | out-of-scope | accepted by the owner 2026-10-27 (deferred to a later loop; `vectors.txt` holds the rows and all 8 packages read it); AZ-3341 `### Excluded` first bullet | assess-round-1 |
+| G3 | Direction not loaded or bad, BufferFull | out-of-scope | same line: "they need `dirs` and `out_len` columns in the rows and drivers that stop aborting on a bad direction" | assess-round-1 |
+| G4 | Body sizes across 64-byte edges and up to 255 | covered | AZ-3341 AC-3; rows p63..p251, c40p211 (49-61) | assess-round-1 |
+| G5 | Epochs 0, 65535, 16777215 in seal | covered | AZ-3341 AC-4 (seal half); rows ep0, ep65535, epmax (63-67) | assess-round-1 |
+| G5m | The same epochs in MAC rows | gap-clear | table below | assess-round-2 |
+| G6 | Kinds 0, 8, 15; ids all 00 and all ff | covered | AZ-3341 AC-5; rows k0, k8, k15 (69-73) | assess-round-1 |
+| G7 | AD empty and 255 bytes; clear part of 40 | covered | AZ-3341 AC-6; rows ad0, ad255, c40p211 | assess-round-1 |
+| G8 | MAC n = 32, labels 1 and 32, empty message, 63/64/65 bytes | covered | AZ-3341 AC-7; rows 79-91 | assess-round-1 |
+| G8m | MAC message in several parts | out-of-scope | AZ-3341 `### Excluded`: "MAC messages in several parts (needs a new driver line format)" | assess-round-1 |
+| G8e | MAC message lengths 55, 56, 119, 120, 255 (SHA-256 padding edges) | gap-unclear | question below | assess-round-2 |
+| G9 | Swift `PackbinError.Kind` comment | covered | AZ-3341 AC-10; `PackbinError.swift:4-8` | assess-round-1 |
+| U1 | Key or msg_id of the wrong length | out-of-scope | owner 2026-10-27, option A; AZ-3341 `### Excluded` second bullet | assess-round-1 |
+| N1 | The self-test pins what AZ-3341 promises: the `refusals` line, the row id in a failure line, a minimum of refusal rows | gap-clear | table below | assess-round-2 |
+| N2 | Readers of the ring output (`pair`, `refusals`, total line) | covered | AZ-3341 Constraints ("The checker line ... keeps its shape"); `ring_frame.py:255, 276, 282`; `ring-frame.test.sh:107-111`; `_docs/loops/loop77/smoke77.sh` step 3 greps `^pair .*, 0 mismatched$` (64) and `^refusals [a-z]*: 16 rows, 0 mismatched$` (8): formats match. `test.yml` and `publish-jobs.test.sh` only run the script and parse nothing. | assess-round-2 |
+| N3 | The two new row kinds in the cases file | covered | AZ-3341 Unit Tests (AC-1, AC-2); `ring_frame.py:96-116`; `ring-frame.test.sh:136-139`; header lines 4-5 of `ring-cases.txt` | assess-round-2 |
+
+### Gaps that need a decision (gap-unclear)
+
+#### G8e: MAC message lengths at the SHA-256 padding edges
+
+**What is not decided**
+Round 1 (G8) listed the MAC message lengths of `vectors.txt` as 0, 5, 55, 56, 63, 64, 119, 120 and 255. AZ-3341 AC-7 took 63, 64 and 65 and dropped the rest without an `### Excluded` line. 63, 64 and 65 are the edges of the 64-byte ChaCha20 block (which the seal rows use). The MAC is HMAC-SHA256 (`scripts/frame/framefmt.py:26-27, 177-182`), whose padding edge for the message is 55/56 and 119/120 (the inner hash starts with a 64-byte key block). No row sits there: MAC messages are 0, 5, 20, 24, 63, 64, 65 bytes, and the seal tag input (`12 + 1 + ad + 1 + clear + ciphertext`, `framefmt.py:76-78`) is 25 to 289 bytes in the current rows, none at 55, 56, 119, 120, 183, 184, 247 or 248. Whether any package hand-rolls SHA-256 was not checked. The per-package tests already read these lengths from `vectors.txt`.
+
+**Options**
+- **A — Add rows for 55, 56, 119, 120 (and 255)**: four to five one-line mac rows, no driver work, `ring_frame.py` unchanged. Trade-off: five more lines in the fixture.
+- **B — Leave as is**: the ring keeps 63/64/65; the edges stay a per-package test. Trade-off: a padding bug in one package is seen only by that package's own tests, not by the cross-language ring.
+
+**Recommendation**: A — it costs a few lines and the ring is where a disagreement between two packages would show.
+
+### Gaps that are clear (gap-clear)
+
+| id | new AC (Given / When / Then) | quoted basis | proposed owner task |
+|----|------------------------------|--------------|---------------------|
+| G5m | Given MAC rows with epochs 0, 65535 and 16777215 (for example `mac ep0`, `mac ep65535`, `mac epmax`, any key, label `net`, n = 8); When every language computes the tag and every language verifies it; Then all tags equal the reference and verify to `valid`. | AZ-3341 AC-4: "Given seal and MAC rows with epochs 0, 65535 and 16777215 / When each language runs them / Then all outputs equal the reference". The MAC key salt is `LABEL_PREFIX + struct.pack("<I", epoch)` (`framefmt.py:40-41`, used by `label_key`, 60-65); each package derives it in its own `MacKey.derive`, so a MAC-only epoch bug is invisible to the seal rows. | AZ-3341 (finish AC-4) |
+| N1 | Given the honest run of `ring-frame.test.sh`; When it ends; Then the output has eight lines `refusals <lang>: N rows, 0 mismatched` with N equal to the number of `open` plus `verify` rows in the cases file (counted with `grep -c`, as `smoke77.sh` step 3 does). Given a failing permissive case; When it fails; Then the output also contains a row id (`E1.ct` for open-permissive, `E4.first` for verify-permissive). Optionally: the loader stops with "no open rows" / "no verify rows" as it does for "no seal rows" (`ring_frame.py:70-73`). | AZ-3341 Scope Included: "prints one line per reader for them"; AC-8: "the ring exits 1 and names the row"; Unit Tests table: "exit 1, output names the row". | AZ-3341 (finish AC-8) |
+
+### Code findings
+
+**Critical, High**: none. Nothing in aecb76d lets the ring pass while a package gives a wrong seal, open, mac or verify result for the 34 positive rows (23 seal, 11 mac), or accepts one of the 16 tampered rows (11 open, 5 verify).
+
+**Medium**
+- F-1. AC-4 stated, not checked for MAC (G5m above). `grep` over `ring-cases.txt`: MAC epochs 7, 8, 9, 4 only.
+
+**Low**
+- F-2. Empty refusal set passes the ring job (Q2, "Empty set"): `ring_frame.py:70-73` requires only seal and mac rows. Guarded only by the self-test in another CI job, and only against deleting all rows of a kind.
+- F-3. `refused[:5]` (`ring_frame.py:277-278`) hides verify failures behind open failures. Display only.
+- F-4. Self-test needles (`ring-frame.test.sh:118-119`) do not contain a row id or the `refusals` line (N1).
+- F-5. Latent loader crash: `ring_frame.py:113` calls `ff.mac_verify` outside a `try`; a verify row with a tag of 3 or 5 bytes ends in a traceback, not a `FileError`. Also the file's expected word for a verify row is dropped (`refuse_verify` has no expected field, line 116) and the check hard-codes `invalid` (line 273): a row written `... valid` is accepted by the loader and then makes every reader fail with "wanted invalid". Loud, not vacuous; no current row.
+- F-6. Swift comment wording (`PackbinError.swift:4-5`): "The pack and unpack kinds match the shared hostile vectors" is read as covering every pack and unpack kind, but `uncorrectable` and `too_long` (thrown by `unpackRepair`, `Ecc.swift:172-186`, `Unpack.swift:18-19`) are not hostile-vector terms (`fixtures/hostile/README.md`, outcome terms). AC-10 as written is met; the original AZ-3338 AC-7 asked for an accurate split, which is still slightly loose.
+
+**Info**
+- I-1. Still open and not in AZ-3341: L-1 (lenient hex), L-2 (a writer's non-hex line crashes the readers). One more fact for L-2: seven drivers answer `open-skip` / `verify-skip` with `skip` (C++ `handoff.cpp:504`, TS `handoff-frame.ts:88`, Java `HandoffFrame.java:114`, C# `HandoffFrame.cs:99`, Go `frame.go:152`, Rust `frame.rs:165`, Swift `Frame.swift:136`); the Python driver does not and raises `ValueError("frame line: open-skip")` (`handoff_frame.py`, `_line`, last `raise`). L-3 (Go discards parse errors).
+- I-2. The pair line now says `34 rows` (23 seal + 11 mac), was 12; nothing parses the number.
+- I-3. The self-test still proves the script and the checker, not the drivers (round 1 I-2); a real permissive package is caught only by the `ring` job.
+
+### Not walked
+
+- Tampered `kind`, tampered direction, tampered `tag_len` on an open row (the writer compare already pins the nonce byte `(kind << 4) | d`, so only an `open` that ignores them would slip through; no spec line asks for them).
+- A verify row with a changed label or epoch.
+- Tampering the clear part or ciphertext of clear3 and the tag of the 4-byte E3 (E3.clear, E3.ct and clear3.tag, t16.tag cover each position once).
+
+### Harness gaps
+
+- No batch report or implementation report for loop 77 (same as round 1).
+- `scenarios.md` rows G2 and G3 are `deferred` and G5 / G8 read as confirmed in full; if the parent wants the file to match this matrix: G2, G3 `out-of-scope (owner 2026-10-27)`, G5 split into seal (confirmed) and MAC (new row G5m), G8 note "63/64/65 only", new rows G8e and N1. Not edited here (read-only run).

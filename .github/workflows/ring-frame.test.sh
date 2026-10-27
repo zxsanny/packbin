@@ -109,14 +109,19 @@ if ! grep -q "mismatched: 0$" "$tmp/out.txt"; then
   echo "FAIL honest: the total does not end in \"mismatched: 0\""
   failures=$((failures + 1))
 fi
+refusal_rows=$(($(grep -c '^open ' "$root/fixtures/frame/ring-cases.txt") + $(grep -c '^verify ' "$root/fixtures/frame/ring-cases.txt")))
+if [ "$(grep -c "^refusals [a-z]*: $refusal_rows rows, 0 mismatched$" "$tmp/out.txt")" -ne 8 ] || [ "$refusal_rows" -lt 2 ]; then
+  echo "FAIL honest: not eight lines \"refusals <lang>: $refusal_rows rows, 0 mismatched\""
+  failures=$((failures + 1))
+fi
 run seal-lies 1 "seal gave" FAKE_LIE=java:seal
 run open-lies 1 "open gave" FAKE_LIE=go:open
 run mac-lies 1 "mac gave" FAKE_LIE=rust:mac
 run verify-lies 1 "verify gave" FAKE_LIE=swift:verify
 run reader-prints-too-few 1 "printed" FAKE_LIE=csharp:short
 # A reader that accepts tampered input, as a package that skips the tag check would (AZ-3341).
-run open-permissive 1 "wanted TagMismatch" FAKE_LIE=go:open-permissive
-run verify-permissive 1 "wanted invalid" FAKE_LIE=swift:verify-permissive
+run open-permissive 1 "go: E1.ct open gave 00, wanted TagMismatch" FAKE_LIE=go:open-permissive
+run verify-permissive 1 "swift: E4.first verify gave valid, wanted invalid" FAKE_LIE=swift:verify-permissive
 run driver-crashes 1 "frame-batch (seal) failed" FAKE_LIE=typescript:crash
 run one-language 0 "ring-frame: 1 pairs" RING_FRAME_LANGS=python
 
@@ -139,6 +144,11 @@ corrupt '/^verify E4.first /s/ [0-9a-f]{8} invalid$/ 56db9bec invalid/'
 run verify-tag-made-valid 1 "disagree with the reference" RING_FRAME_CASES="$tmp/ring-cases.txt"
 { cat "$root/fixtures/frame/ring-cases.txt"; grep -m1 '^seal E1 ' "$root/fixtures/frame/ring-cases.txt"; } > "$tmp/ring-cases.txt"
 run duplicate-id 1 "duplicate id" RING_FRAME_CASES="$tmp/ring-cases.txt"
+# A file without tampered rows would pass every permissive reader: the loader refuses it.
+grep -v '^open ' "$root/fixtures/frame/ring-cases.txt" > "$tmp/ring-cases.txt"
+run no-open-rows 1 "no open rows" RING_FRAME_CASES="$tmp/ring-cases.txt"
+grep -v '^verify ' "$root/fixtures/frame/ring-cases.txt" > "$tmp/ring-cases.txt"
+run no-verify-rows 1 "no verify rows" RING_FRAME_CASES="$tmp/ring-cases.txt"
 
 echo "---"
 if [ "$failures" -gt 0 ]; then

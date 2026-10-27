@@ -59,9 +59,9 @@ When each language seals and each language opens
 Then all bodies equal the reference and all plaintexts come back.
 
 **AC-4: Multi-byte epochs**
-Given seal and MAC rows with epochs 0, 65535 and 16777215
+Given seal rows (ep0, ep65535, epmax) and MAC rows (macep0, macep65535, macepmax) with epochs 0, 65535 and 16777215
 When each language runs them
-Then all outputs equal the reference.
+Then all outputs equal the reference (the MAC key salt is derived apart from the seal keys, so each needs its own rows; assessment round 2, G5m).
 
 **AC-5: Kinds and message ids**
 Given seal rows with kinds 0, 8 and 15 and message ids of all 00 and all ff bytes
@@ -81,7 +81,7 @@ Then all tags equal the reference and verify to `valid`.
 **AC-8: The self-test catches a permissive driver**
 Given a stand-in driver whose `open` returns a plaintext for a tampered body, and one whose `verify` always says `valid`
 When `ring-frame.test.sh` runs the ring with each
-Then the ring exits 1 and names the row.
+Then the ring exits 1 and the output names the row (`go: E1.ct open gave 00, wanted TagMismatch`, `swift: E4.first verify gave valid, wanted invalid`); and the honest run prints eight lines `refusals <lang>: N rows, 0 mismatched` with N the number of `open` plus `verify` rows of the cases file (assessment round 2, N1).
 
 **AC-9: TypeScript short packet**
 Given the short-body row of AC-1
@@ -98,6 +98,11 @@ Given the real drivers of all 8 languages
 When `ring-frame.sh` runs on the Mac and in the CI `ring` job
 Then it prints `64 pairs, mismatched: 0` and exits 0.
 
+**AC-12: A cases file needs tampered rows**
+Given a cases file without any `open` row, or without any `verify` row
+When the ring loads it
+Then it stops with "no open rows" or "no verify rows" (a file without them would pass every permissive reader); a verify row that does not say `invalid`, or that the reference refuses, is a file error, not a traceback (assessment round 2, N1 and F-5).
+
 Inherited project ACs exercised: AZ-3338 AC-1, AC-4, AC-5, AC-8.
 
 ## Unit Tests
@@ -105,7 +110,8 @@ Inherited project ACs exercised: AZ-3338 AC-1, AC-4, AC-5, AC-8.
 | AC Ref | What to Test | Required Outcome |
 |--------|-------------|-----------------|
 | AC-1, AC-2 | the loader derives each new `open` and `verify` row with `framefmt.py` | a row the reference does not confirm stops the run (`ring-frame.test.sh` corrupted-row cases for the new kinds) |
-| AC-8 | `ring-frame.test.sh` scenarios `open-permissive` and `verify-permissive` | exit 1, output names the row |
+| AC-8 | `ring-frame.test.sh` scenarios `open-permissive` and `verify-permissive`; the `refusals` lines of the honest run | exit 1, output names the row id; eight clean `refusals` lines |
+| AC-12 | `ring-frame.test.sh` scenarios `no-open-rows` and `no-verify-rows` | exit 1, "no open rows" / "no verify rows" |
 
 ## Blackbox Tests
 

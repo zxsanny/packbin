@@ -2,7 +2,8 @@
 /// trap on any input.
 public struct PackbinError: Error, Equatable, Sendable, CustomStringConvertible {
     /// What went wrong. The raw value is a stable error kind. The pack and unpack kinds match the shared
-    /// hostile vectors (`fixtures/hostile/README.md`). Frame mode uses `short_packet`, `bad_value` and
+    /// hostile vectors (`fixtures/hostile/README.md`), except `uncorrectable` and `too_long`, which only the message
+    /// error correction throws. Frame mode uses `short_packet`, `bad_value` and
     /// `too_long` as well, and has `buffer_full`, `tag_mismatch`, `duplicate` and `too_old` of its own;
     /// `fixtures/frame/` spells these seven in Pascal case (`ShortPacket`, `BadValue`, `TooLong`,
     /// `BufferFull`, `TagMismatch`, `Duplicate`, `TooOld`).

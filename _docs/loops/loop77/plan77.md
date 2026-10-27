@@ -61,6 +61,7 @@ Run ring-frame.sh locally and verify all 8 languages pass. Run the self-test. Th
 | round | verdict | new specs | report |
 |-------|---------|-----------|--------|
 | 1 | CLARIFY | AZ-3341_frame_ring_tamper_wide | _docs/loops/loop77/assessment77.md |
+| 2 | CLARIFY | AZ-3341 (AC-4 MAC half, AC-8 detail, AC-12); G8e awaits the owner | _docs/loops/loop77/assessment77.md (## Round 2) |
 
 Round 1 owner answers (2026-10-27): U1 = A (key and msg_id length refusals stay out of the ring); scope = tamper rows and wider values now, refusal rows G2 and G3 to leftovers.
 

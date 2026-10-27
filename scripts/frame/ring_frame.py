@@ -71,6 +71,10 @@ class Rows:
             raise FileError("%s: no seal rows" % path)
         if not self.mac:
             raise FileError("%s: no mac rows" % path)
+        if not self.refuse_open:
+            raise FileError("%s: no open rows" % path)
+        if not self.refuse_verify:
+            raise FileError("%s: no verify rows" % path)
 
     def _add(self, w, where):
         kind = w[0]
@@ -110,7 +114,12 @@ class Rows:
             case = w[1]
             key, epoch, label, n = unhex(w[2]), int(w[3]), unhex(w[4]), int(w[5])
             message, tag, expected = unhex(w[6]), unhex(w[7]), w[8]
-            got = "valid" if ff.mac_verify(key, epoch, label, [message], tag) else "invalid"
+            if expected != "invalid":
+                raise FileError("%s: %s a verify row says invalid, not %s" % (where, case, expected))
+            try:
+                got = "valid" if ff.mac_verify(key, epoch, label, [message], tag) else "invalid"
+            except ff.Fault as x:
+                raise FileError("%s: %s the reference refuses the row: %s" % (where, case, x.kind))
             if got != expected:
                 raise FileError("%s: %s expected %s, reference gives %s" % (where, case, expected, got))
             self.refuse_verify.append((case, key, epoch, label, n, message, tag))
