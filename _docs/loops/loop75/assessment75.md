@@ -25,3 +25,7 @@ Gaps (fixed in the same loop, round 1 fix batch):
 Noted, not gaps (documented differences): C++ `open` reads `body` twice (tag, then decrypt), where C#, Go, Python and TypeScript copy the frame first; C++ `seal` requires `ad`, `clear` and `plain` not to overlap `out`; the C++ default `MsgContext` (all-zero id) is valid because the struct is POD.
 
 Owner decision left open: whether C++ `open` copies the body (255 B of stack, about 255 B on the `cpp-m33f` frame pin of 912 B) so a receive ring written by an ISR or DMA cannot change between the tag check and the decrypt. Loop 75 keeps the documented requirement.
+
+## Round 2: COMPLETE
+
+The four gaps were fixed in 5391686 (with the security Lows L1 to L4 and I3, I4): Python returns `BadValue` for a negative counter with a window (3 new tests); the C++ tag compare has a source check and a flipped-byte test through the public API (18 of 18 `TagMismatch` for tag lengths 4, 8, 16); Go checks `len(rows) != 157` and a zero-value `MacKey` refuses; the four spec Flagged-concerns rows are closed. Checked by the parent, not by a second assessor run: the fix diff, the suites of step 11 (all 14 stages ran on 5391686; the publish-gate share 7 failure was a real TypeScript declaration defect, fixed in fc16af4 and rerun green) and smoke75 (10 of 10).

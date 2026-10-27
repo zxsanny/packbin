@@ -44,4 +44,7 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-27_loop74.md
 - [2026-10-27] [estimation] Before a spec refuses a case in one package of a shared API, read how the sibling packages treat it (the Java spec refused an empty direction set that Rust, C# and Swift accept), and diff the public API of all packages when a rename must match everywhere (Swift `Freshness`) (loop 74).
   Source: _docs/06_metrics/retro_2026-10-27_loop74.md
-
+- [2026-10-27] [architecture] A declaration a package emits is part of what a consumer compiles: `declare [Symbol.dispose]` in the TypeScript classes put `Symbol.dispose` into the published `.d.ts`, which a consumer on lib ES2022 cannot type-check; only the publish gate's consumer check (AZ-2103 AC-2) found it, not the package's own tests (loop 75).
+  Source: _docs/loops/loop75/record75.md
+- [2026-10-27] [estimation] Put the 500-line cap and the "no new `lib` requirement for consumers" rule in every worker prompt: a worker test file reached 544 lines and one declaration needed a newer lib, both found after the fact (loop 75).
+  Source: _docs/loops/loop75/record75.md
