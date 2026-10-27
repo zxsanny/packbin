@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # The frame ring (AZ-3338): every language seals every row and every language opens what every language sealed, 8 writers
 # × 8 readers = 64 pairs; then every language computes every MAC and every language verifies every other language's tag.
-# The rows are the seal and mac rows of fixtures/frame/ring-cases.txt; scripts/frame/ring_frame.py checks every result
+# The rows are the seal, mac, open and verify rows of fixtures/frame/ring-cases.txt (the last two are tampered input that every
+# language must refuse alike); scripts/frame/ring_frame.py checks every result
 # against the reference codec (scripts/frame/framefmt.py). Exit 0 only when no row is mismatched.
 #
 # A driver (.github/workflows/drivers) takes `frame-batch <file>`: one result line for each line of the file (seal, open,

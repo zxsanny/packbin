@@ -20,6 +20,7 @@ type FrameErr = { ok: false; kind: string };
 
 function errKind(result: object): string {
   if ("kind" in result) return String((result as FrameErr).kind);
+  if ("field" in result) return "short"; // the short-packet value of the package has a field, not a kind
   return "error";
 }
 
@@ -29,6 +30,8 @@ const KIND_MAP: Record<string, string> = {
   buffer_full: "BufferFull",
   short: "ShortPacket",
   tag_mismatch: "TagMismatch",
+  duplicate: "Duplicate",
+  too_old: "TooOld",
 };
 
 function mapKind(result: object): string {

@@ -55,3 +55,23 @@ Run ring-frame.sh locally and verify all 8 languages pass. Run the self-test. Th
 - D3: Checker uses framefmt.py (existing reference codec) for comparison.
 - D4: Ring-cases.txt uses the 5 worked examples (E1–E5) plus length-variation and tamper cases from vectors.txt.
 - D5: Each driver is a new file (matching ECC pattern), wired from the main handoff entry point.
+
+## Assessment rounds
+
+| round | verdict | new specs | report |
+|-------|---------|-----------|--------|
+| 1 | CLARIFY | AZ-3341_frame_ring_tamper_wide | _docs/loops/loop77/assessment77.md |
+
+Round 1 owner answers (2026-10-27): U1 = A (key and msg_id length refusals stay out of the ring); scope = tamper rows and wider values now, refusal rows G2 and G3 to leftovers.
+
+## Steps
+
+| id | step | name | include | reason |
+|----|------|------|---------|--------|
+| implement | 10 | Implement | yes | AZ-3338 (1e2bb45, d0b8525), AZ-3341 |
+| feature-assess | 10.5 | Feature Assessment | yes | round 1 CLARIFY, round 2 after AZ-3341 |
+| run-tests | 11 | Run Tests | yes | one total run after round 2 |
+| local-deploy | - | Local deploy | yes | no deploy path: CI ring only; smoke runs the ring locally |
+| smoke | - | Smoke acceptance | yes | `smoke77.md` / `smoke77.sh` |
+| update-docs | 13 | Update Docs | no | no public contract changed |
+| security | 14 | Security Audit | no | test code only |

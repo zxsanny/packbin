@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Self-test of ring-frame.sh (AZ-3338): the ring passes when every driver answers as the reference codec does, and fails,
-# naming what is wrong, on a driver that lies, one that crashes or prints too few lines, and a corrupted row file. The
+# naming what is wrong, on a driver that lies, one that accepts tampered input, one that crashes or prints too few lines,
+# and a corrupted row file. The
 # drivers are replaced by a stand-in (RING_FRAME_RUN) that answers with the reference codec, so this needs no toolchain.
 set -euo pipefail
 
@@ -58,6 +59,8 @@ for line in open(path):
             text = x.kind
         if lying and how == "open" and not bent:
             text, bent = "TagMismatch", True
+        if lying and how == "open-permissive" and text in ("TagMismatch", "ShortPacket"):
+            text = "00"
     elif w[0] == "mac":
         key, epoch, label, n, message = unhex(w[1]), int(w[2]), unhex(w[3]), int(w[4]), unhex(w[5])
         text = ff.mac_tag(key, epoch, label, n, [message]).hex()
@@ -68,6 +71,8 @@ for line in open(path):
         text = "valid" if ff.mac_verify(key, epoch, label, [message], tag) else "invalid"
         if lying and how == "verify" and not bent:
             text, bent = "invalid", True
+        if lying and how == "verify-permissive":
+            text = "valid"
     elif w[0] in ("open-skip", "verify-skip"):
         text = "skip"
     else:
@@ -109,6 +114,9 @@ run open-lies 1 "open gave" FAKE_LIE=go:open
 run mac-lies 1 "mac gave" FAKE_LIE=rust:mac
 run verify-lies 1 "verify gave" FAKE_LIE=swift:verify
 run reader-prints-too-few 1 "printed" FAKE_LIE=csharp:short
+# A reader that accepts tampered input, as a package that skips the tag check would (AZ-3341).
+run open-permissive 1 "wanted TagMismatch" FAKE_LIE=go:open-permissive
+run verify-permissive 1 "wanted invalid" FAKE_LIE=swift:verify-permissive
 run driver-crashes 1 "frame-batch (seal) failed" FAKE_LIE=typescript:crash
 run one-language 0 "ring-frame: 1 pairs" RING_FRAME_LANGS=python
 
@@ -125,6 +133,10 @@ corrupt '/^seal E1 /s/37ff$/37fe/'
 run seal-body-changed 1 "disagree with the reference" RING_FRAME_CASES="$tmp/ring-cases.txt"
 corrupt '/^mac E4 /s/9bec$/9bed/'
 run mac-tag-changed 1 "disagree with the reference" RING_FRAME_CASES="$tmp/ring-cases.txt"
+corrupt '/^open E1.ct /s/ TagMismatch$/ ShortPacket/'
+run open-name-changed 1 "disagree with the reference" RING_FRAME_CASES="$tmp/ring-cases.txt"
+corrupt '/^verify E4.first /s/ [0-9a-f]{8} invalid$/ 56db9bec invalid/'
+run verify-tag-made-valid 1 "disagree with the reference" RING_FRAME_CASES="$tmp/ring-cases.txt"
 { cat "$root/fixtures/frame/ring-cases.txt"; grep -m1 '^seal E1 ' "$root/fixtures/frame/ring-cases.txt"; } > "$tmp/ring-cases.txt"
 run duplicate-id 1 "duplicate id" RING_FRAME_CASES="$tmp/ring-cases.txt"
 
