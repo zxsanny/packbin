@@ -52,3 +52,7 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/loops/loop76/record76.md
 - [2026-10-27] [tooling] A CI suite that names its test targets one by one (`--test <name>`) hides a missing feature gate in every other test file; build every feature set with `--no-run` after adding a test file (loop 76).
   Source: _docs/loops/loop76/record76.md
+- [2026-10-27] [process] A self-test that replaces the drivers with a stand-in proves the script and the checker and nothing else: the frame ring was pushed with only that run, CI went red on `dev` and `main` with six defects (Swift 6 on Linux refused `stderr`; a test script still counted 13 cargo runs; the C++ driver did not link `frame.cpp`; the TypeScript and Java drivers called `FrameDirections` wrongly; the self-test ran in no CI job), and the first real run found two of them in 21 s. Run the real ring and every CI step in `test.yml` order before the first push, and read CI on `dev` before `main` (loop 77).
+  Source: _docs/loops/loop77/record77.md
+- [2026-10-27] [process] A comparison harness with only good rows passes a package that accepts forgeries: add rows that must be refused and a stand-in reader that accepts them, and show once that a real defective driver turns the harness red (the TypeScript short-packet name did, loop 77); `vectors.txt` already held the refusals per package, which is why the ring keeps only tamper rows and leaves the refusal-by-name rows to a later loop.
+  Source: _docs/loops/loop77/record77.md
