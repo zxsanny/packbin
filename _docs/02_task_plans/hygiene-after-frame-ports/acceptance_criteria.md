@@ -43,13 +43,13 @@ Then it reports 0 errors.
 
 ## H3: Rust frame-only build (item 3)
 
-**AC-H3.1: Compiles**
-Given `cd rust && cargo test --no-default-features --features frame --no-run`
-When it runs with Cargo 1.79 (the Mac default) and with the Docker toolchain of `docker compose -f docker-compose.test.yml run --rm rust`
-Then it exits 0 in both (6 errors in 1 target today).
+**AC-H3.1: Every feature set compiles its tests**
+Given `cd rust && cargo test --no-default-features --features <set> --no-run` for the 7 non-default sets `(none)`, `alloc`, `text`, `ecc`, `text,ecc`, `frame` and `text,ecc,frame`, and the default set
+When each runs with Cargo 1.79 (the Mac default); the `frame` set also with the Docker toolchain of `docker compose -f docker-compose.test.yml run --rm rust`
+Then all 8 exit 0 (7 of the 8 fail today; the mechanism is the repo's inner `#![cfg(...)]` attribute on the test files that need `std`, 22 files, plus the widened gate of `nostd_dict_tests.rs` and the test-module imports).
 
 **AC-H3.2: The tests that build, pass**
-Given the same feature set
+Given the `frame` set
 When `cargo test --no-default-features --features frame` runs
 Then every test that runs passes; the count is recorded in the report.
 

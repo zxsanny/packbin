@@ -477,3 +477,8 @@ Loop 74 (2026-10-26, ADR-009: remove the stream session; D1 frame names; D2 cryp
 | AZ-3294 | python_frame_mode (loop 75) | 5 | AZ-3283, AZ-3291 | AZ-3199 |
 | AZ-3295 | typescript_frame_mode (loop 75) | 5 | AZ-3288, AZ-3291 | AZ-3199 |
 | AZ-3322 | java_frame_config (assessment round 1, D6) | 2 | AZ-3290 | AZ-3199 |
+| AZ-3329 | probe_fixes (loop 76) | 2 | None | AZ-2645 |
+| AZ-3330 | timing_selftest_no_pipe (loop 76) | 2 | None | AZ-2645 |
+| AZ-3331 | rust_feature_set_tests (loop 76) | 3 | None | AZ-2645 |
+| AZ-3332 | docs_swift_docc_vcpkg_reason (loop 76) | 2 | None | AZ-2645 |
+| AZ-3333 | session_names (loop 76) | 2 | None | AZ-2645 |

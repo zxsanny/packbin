@@ -18,11 +18,15 @@ Figures are from runs on HEAD a50e750, 2026-10-27, Mac arm64, Cargo 1.79.0, dotn
 | `AuditProbe <repo> edges` | 64 PASS, 1 FAIL, exit 1 | |
 | same, keys NFD (`041065cc81`) then NFC (`0310c3a9`) | 65 PASS, 0 FAIL, exit 0 | 65 PASS, 0 FAIL, exit 0 |
 
-## Rust frame-only build (H3)
+## Rust feature sets (H3)
 
-| Run | Today | Required |
+Run: `cd rust && cargo test --no-default-features --features <set> --no-run`, Cargo 1.79.0.
+
+| Set | Today | Required |
 |-----|-------|----------|
-| `cargo test --no-default-features --features frame --no-run` (1.79) | exit 101: 6 errors in `lib test` (`sha256.rs:190,191`, `hkdf.rs:84,85,91,92`: `String`, `Vec`, `format!`) | exit 0 |
+| default | compiles | compiles |
+| (none), alloc, text, ecc, text,ecc, frame, text,ecc,frame | each exit 101: 3 to 8 `could not compile` lines, integration targets (and for `frame` the lib test target first: 6 errors in `sha256.rs:190,191`, `hkdf.rs:84,85,91,92`: `String`, `Vec`, `format!`) | each exit 0 |
+| files of `rust/tests/*.rs` without an inner `#![cfg]` | 24 of 38 (22 use the std API) | the 22 carry `#![cfg(feature = "std")]`; `nostd_dict_tests.rs` gate `all(feature = "std", feature = "text")`; proved on a scratch copy: 8 of 8 exit 0 |
 
 ## Timing selftest (H1)
 
