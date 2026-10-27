@@ -70,12 +70,11 @@ export class MacKey {
     this.#closed = true
     wipe(this.#key)
   }
-
-  declare [Symbol.dispose]: () => void
 }
 
-if (typeof Symbol.dispose === "symbol") {
-  Object.defineProperty(MacKey.prototype, Symbol.dispose, {
+const disposeSymbol = (Symbol as unknown as { dispose?: symbol }).dispose
+if (typeof disposeSymbol === "symbol") {
+  Object.defineProperty(MacKey.prototype, disposeSymbol, {
     value: function (this: MacKey): void {
       this.close()
     },

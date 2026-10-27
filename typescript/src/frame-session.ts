@@ -1,4 +1,3 @@
-/// <reference lib="esnext.disposable" />
 import { chacha20Xor } from "./crypto.ts"
 import { access } from "./frame-access.ts"
 import { epochOk, hmacParts, isBytes, KEY_SIZE, tagsEqual, wipe } from "./frame-crypto.ts"
@@ -229,8 +228,6 @@ export class FrameSession {
     this.#previous?.wipe()
   }
 
-  declare [Symbol.dispose]: () => void
-
   // The message's id when the call is allowed (session open, direction loaded, a valid context with a kind of 0 to 15).
   // `kind` is the value the caller read once with `kindOf`, so validation and the nonce use the same one.
   #callId(direction: number, message: unknown, kind: unknown): Uint8Array | undefined {
@@ -265,9 +262,11 @@ export class FrameSession {
   }
 }
 
-// Symbol.dispose where the runtime has it (Node 20 and later); the type comes from the reference above.
-if (typeof Symbol.dispose === "symbol") {
-  Object.defineProperty(FrameSession.prototype, Symbol.dispose, {
+// Symbol.dispose where the runtime has it (Node 20 and later). It is not in the declared type: a consumer whose `lib` is
+// ES2022 would fail to type-check a `[Symbol.dispose]` member in the emitted declarations (AZ-2103 AC-2).
+const disposeSymbol = (Symbol as unknown as { dispose?: symbol }).dispose
+if (typeof disposeSymbol === "symbol") {
+  Object.defineProperty(FrameSession.prototype, disposeSymbol, {
     value: function (this: FrameSession): void {
       this.close()
     },
