@@ -85,6 +85,8 @@ for line in open(path):
             text = ff.mac_tag(key, epoch, label, n, [message]).hex()
         except ff.Fault as x:
             text = x.kind
+        if lying and how == "mac-word" and not bent:
+            text, bent = "TooLong", True
         if lying and how == "mac" and not bent and text not in KINDS:
             text, bent = text[:-1] + ("0" if text[-1] != "0" else "1"), True
     elif w[0] == "verify":
@@ -150,6 +152,11 @@ run fit-refused 1 "-> go: fit.tag4 open gave BufferFull" FAKE_LIE=go:fit-refused
 run writer-prints-word 1 "java: E1 seal gave TooLong, wanted 53e9dc75fb459d77" FAKE_LIE=java:writer-prints-word
 if grep -q "frame-batch (open) failed" "$tmp/out.txt" || [ "$(grep '^pair ' "$tmp/out.txt" | grep -v '^pair java ' | grep -vc ' 0 mismatched$')" -ne 0 ]; then
   echo "FAIL writer-prints-word: a reader is reported as failed, or a writer other than java has mismatched rows"
+  failures=$((failures + 1))
+fi
+run mac-writer-prints-word 1 "java: E4 mac gave TooLong, wanted 56db9bec" FAKE_LIE=java:mac-word
+if grep -q "frame-batch (verify) failed" "$tmp/out.txt" || [ "$(grep '^pair ' "$tmp/out.txt" | grep -v '^pair java ' | grep -vc ' 0 mismatched$')" -ne 0 ]; then
+  echo "FAIL mac-writer-prints-word: a reader is reported as failed, or a writer other than java has mismatched rows"
   failures=$((failures + 1))
 fi
 run dir0-aborts 1 "typescript frame-batch (seal) failed" FAKE_LIE=typescript:dir0-aborts
