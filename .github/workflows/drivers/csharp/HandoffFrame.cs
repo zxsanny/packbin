@@ -25,6 +25,7 @@ static class HandoffFrame
     static (FrameDirections Directions, int Size) Loaded(string[] w)
     {
         var digits = w.Length > 9 ? w[9] : "123";
+        if (digits.Length == 0 || digits.Any(c => c is < '1' or > '3')) throw new FormatException($"bad dirs: {digits}");
         var size = w.Length > 10 ? int.Parse(w[10]) : 300;
         var mask = 0;
         foreach (var digit in digits) mask |= 1 << (digit - '1');
@@ -102,17 +103,27 @@ static class HandoffFrame
         "mac" => Mac(words[1..]),
         "verify" => Verify(words[1..]),
         "open-skip" or "verify-skip" => "skip",
-        _ => throw new ArgumentException($"frame line: {words[0]}"),
+        _ => throw new ArgumentException($"unknown word {words[0]}"),
     };
 
     public static int Run(string[] args)
     {
         if (args is ["frame-batch", var path])
         {
+            var number = 0;
             foreach (var text in File.ReadAllLines(path))
             {
-                if (!string.IsNullOrWhiteSpace(text))
+                number++;
+                if (string.IsNullOrWhiteSpace(text)) continue;
+                try
+                {
                     Console.WriteLine(Line(text.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)));
+                }
+                catch (Exception x) when (x is FormatException or IndexOutOfRangeException or ArgumentException or OverflowException)
+                {
+                    Console.Error.WriteLine($"frame line {number}: {x.Message}");
+                    return 1;
+                }
             }
             return 0;
         }

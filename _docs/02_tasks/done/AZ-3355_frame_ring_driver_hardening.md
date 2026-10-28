@@ -46,14 +46,14 @@ When the ring runs
 Then `check` prints `<writer>: <case> seal gave TooLong`, exits 1, no line says `frame-batch (open) failed`, and the other 7 writers' pairs print `0 mismatched`.
 
 **AC-2: Malformed lines stop every driver**
-Given a file with a bad hex digit, one with an odd-length hex token, and one with a missing field
+Given a file with a bad hex digit, one with an odd-length hex token, one with a missing field and one with a number that has other characters, each after a good first line
 When each of the 8 real drivers runs on it
-Then it exits non-zero with a message that holds the line number (24 runs, none exits 0).
+Then it exits non-zero, answers line 1 with `skip`, and prints a message that holds `line 2` (32 runs, none exits 0).
 
 **AC-3: Go checks its parses**
-Given a Go driver line with a malformed epoch, direction, tag length or kind, and a line over 1 MiB
+Given a Go driver line with a malformed direction, tag length or kind, and a line over 1 MiB (the malformed epoch is in AC-2)
 When the Go driver runs on it
-Then it exits non-zero (5 runs), and `grep -c ', _ := strconv' frame.go` gives 0.
+Then it exits non-zero (4 runs), and `grep -c ', _ := strconv' frame.go` gives 0.
 
 **AC-4: Python skip**
 Given the lines `open-skip` and `verify-skip`
@@ -63,7 +63,7 @@ Then each prints `skip` (was 7 of 8).
 **AC-5: Wired and green**
 Given `ring-frame-drivers.test.sh`, `ring-frame.test.sh` and `ring-frame.sh`
 When they run in the CI `ring` job and in `scripts/loop-tests.sh --all`
-Then all pass; CI 20 of 20 jobs green on `dev` and `main`.
+Then all pass (the `ring` job runs `ring-frame.sh` and the driver script; `scripts/loop-tests.sh` runs `ring-frame.sh`, `ring-frame-drivers.test.sh` and, in scaffold, `ring-frame.test.sh`, which step 11 did not run before); CI 20 of 20 jobs green on `dev` and `main`.
 
 Inherited project ACs exercised: AZ-3338 AC-1, AC-5.
 
@@ -78,7 +78,7 @@ Inherited project ACs exercised: AZ-3338 AC-1, AC-5.
 
 | AC Ref | Initial Data/Conditions | What to Test | Expected Behavior | NFR References |
 |--------|------------------------|-------------|-------------------|----------------|
-| AC-2, AC-3 | the 8 real drivers | `bash .github/workflows/ring-frame-drivers.test.sh` | 29 runs as listed, all as required | none |
+| AC-2, AC-3, AC-4 | the 8 real drivers | `bash .github/workflows/ring-frame-drivers.test.sh` | 44 runs as listed (8 x 4 malformed, 8 skip, 4 Go), all as required | none |
 | AC-5 | the real drivers | `ring-frame.sh` | `64 pairs, mismatched: 0` | none |
 
 ## Constraints

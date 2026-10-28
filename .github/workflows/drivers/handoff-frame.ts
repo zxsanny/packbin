@@ -10,8 +10,16 @@ import {
   MsgContext,
 } from "../../../typescript/src/index.ts";
 
-const bytesOf = (token: string): Uint8Array =>
-  new Uint8Array(token === "-" ? [] : Buffer.from(token, "hex"));
+// A token that is not hex (a bad digit, an odd length) or a missing field is an error of the line, never a zero or a cut.
+const bytesOf = (token: string | undefined): Uint8Array => {
+  if (token === undefined || !/^([0-9a-fA-F]{2})*$|^-$/.test(token)) throw new Error(`bad hex: ${token}`);
+  return new Uint8Array(token === "-" ? [] : Buffer.from(token, "hex"));
+};
+
+const numberOf = (token: string | undefined): number => {
+  if (token === undefined || !/^[0-9]+$/.test(token)) throw new Error(`bad number: ${token}`);
+  return Number(token);
+};
 
 const hexOf = (b: Uint8Array): string =>
   b.length ? Buffer.from(b).toString("hex") : "-";
@@ -42,13 +50,14 @@ function mapKind(result: object): string {
 // The optional trailing fields of a seal or open line: the directions loaded (digits 1 to 3) and the output buffer size.
 function loaded(words: string[]): [number, number] {
   const digits = words[9] ?? "123";
-  const size = words[10] === undefined ? 300 : Number(words[10]);
+  if (!/^[123]+$/.test(digits)) throw new Error(`bad dirs: ${digits}`);
+  const size = words[10] === undefined ? 300 : numberOf(words[10]);
   return [[...digits].reduce((mask, digit) => mask | (1 << (Number(digit) - 1)), 0), size];
 }
 
 function seal(words: string[]): string {
-  const [key, epoch, d, tagLen] = [bytesOf(words[0]!), Number(words[1]), Number(words[2]), Number(words[3])];
-  const [msgId, kind, ad, clear, plain] = [bytesOf(words[4]!), Number(words[5]), bytesOf(words[6]!), bytesOf(words[7]!), bytesOf(words[8]!)];
+  const [key, epoch, d, tagLen] = [bytesOf(words[0]), numberOf(words[1]), numberOf(words[2]), numberOf(words[3])];
+  const [msgId, kind, ad, clear, plain] = [bytesOf(words[4]), numberOf(words[5]), bytesOf(words[6]), bytesOf(words[7]), bytesOf(words[8])];
   const [directions, size] = loaded(words);
   const session = FrameSession.load(key, epoch, new FrameConfig(tagLen, directions));
   if (session === null) return "BadValue";
@@ -59,8 +68,8 @@ function seal(words: string[]): string {
 }
 
 function open(words: string[]): string {
-  const [key, epoch, d, tagLen] = [bytesOf(words[0]!), Number(words[1]), Number(words[2]), Number(words[3])];
-  const [msgId, kind, ad, clearLen, body] = [bytesOf(words[4]!), Number(words[5]), bytesOf(words[6]!), Number(words[7]), bytesOf(words[8]!)];
+  const [key, epoch, d, tagLen] = [bytesOf(words[0]), numberOf(words[1]), numberOf(words[2]), numberOf(words[3])];
+  const [msgId, kind, ad, clearLen, body] = [bytesOf(words[4]), numberOf(words[5]), bytesOf(words[6]), numberOf(words[7]), bytesOf(words[8])];
   const [directions, size] = loaded(words);
   const session = FrameSession.load(key, epoch, new FrameConfig(tagLen, directions));
   if (session === null) return "BadValue";
@@ -74,7 +83,7 @@ function open(words: string[]): string {
 }
 
 function mac(words: string[]): string {
-  const [key, epoch, label, n, message] = [bytesOf(words[0]!), Number(words[1]), bytesOf(words[2]!), Number(words[3]), bytesOf(words[4]!)];
+  const [key, epoch, label, n, message] = [bytesOf(words[0]), numberOf(words[1]), bytesOf(words[2]), numberOf(words[3]), bytesOf(words[4])];
   const mk = MacKey.derive(key, epoch, label);
   if (mk === null) return "BadValue";
   const result = mk.tag([message], n);
@@ -83,7 +92,7 @@ function mac(words: string[]): string {
 }
 
 function verify(words: string[]): string {
-  const [key, epoch, label, n, message, tag] = [bytesOf(words[0]!), Number(words[1]), bytesOf(words[2]!), Number(words[3]), bytesOf(words[4]!), bytesOf(words[5]!)];
+  const [key, epoch, label, n, message, tag] = [bytesOf(words[0]), numberOf(words[1]), bytesOf(words[2]), numberOf(words[3]), bytesOf(words[4]), bytesOf(words[5])];
   const mk = MacKey.derive(key, epoch, label);
   if (mk === null) return "BadValue";
   return mk.verify([message], tag) ? "valid" : "invalid";
@@ -95,13 +104,20 @@ function line(words: string[]): string {
   if (words[0] === "mac") return mac(words.slice(1));
   if (words[0] === "verify") return verify(words.slice(1));
   if (words[0] === "open-skip" || words[0] === "verify-skip") return "skip";
-  throw new Error(`frame line: ${words[0]}`);
+  throw new Error(`unknown word ${words[0]}`);
 }
 
 export function runFrame(cmd: string, argv: string[]): number {
   if (cmd === "frame-batch" && argv.length === 1) {
-    for (const text of readFileSync(argv[0]!, "utf8").split("\n")) {
-      if (text.trim() !== "") console.log(line(text.trim().split(/\s+/)));
+    const texts = readFileSync(argv[0]!, "utf8").split("\n");
+    for (const [index, text] of texts.entries()) {
+      if (text.trim() === "") continue;
+      try {
+        console.log(line(text.trim().split(/\s+/)));
+      } catch (error) {
+        console.error(`frame line ${index + 1}: ${(error as Error).message}`);
+        return 1;
+      }
     }
     return 0;
   }

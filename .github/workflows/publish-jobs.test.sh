@@ -203,6 +203,8 @@ found = all_runs.call("bash .github/workflows/ring-ecc.sh")
 errors << "the message ECC ring runs in #{found.inspect}, not only in ring" unless found == ["ring"]
 found = all_runs.call("bash .github/workflows/ring-frame.sh")
 errors << "the frame ring runs in #{found.inspect}, not only in ring" unless found == ["ring"]
+found = all_runs.call("bash .github/workflows/ring-frame-drivers.test.sh")
+errors << "the frame driver check runs in #{found.inspect}, not only in ring" unless found == ["ring"]
 
 errors.each { |e| puts e }
 exit(errors.empty? ? 0 : 1)

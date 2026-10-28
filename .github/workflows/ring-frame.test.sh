@@ -55,6 +55,8 @@ for line in open(path):
             text = x.kind
         if lying and how == "seal" and not bent and text not in KINDS:
             text, bent = text[:-1] + ("0" if text[-1] != "0" else "1"), True
+        if lying and how == "writer-prints-word" and not bent:
+            text, bent = "TooLong", True
         if lying and how == "dir0-aborts" and d == 0:
             print("fake driver: direction 0 aborts", file=sys.stderr)
             sys.exit(134)
@@ -144,6 +146,12 @@ run verify-permissive 1 "swift: E4.first verify gave valid, wanted invalid" FAKE
 # A reader that opens with a direction the session did not load, and a writer that aborts on direction 0 (AZ-3354).
 run unloaded-direction-accepted 1 "go: R.open.unloaded open gave 00, wanted BadValue" FAKE_LIE=go:unloaded-accepted
 run fit-refused 1 "-> go: fit.tag4 open gave BufferFull" FAKE_LIE=go:fit-refused
+# A writer that prints a word for a good row is blamed; its readers are not reported as failed (AZ-3355, L-2).
+run writer-prints-word 1 "java: E1 seal gave TooLong, wanted 53e9dc75fb459d77" FAKE_LIE=java:writer-prints-word
+if grep -q "frame-batch (open) failed" "$tmp/out.txt" || [ "$(grep '^pair ' "$tmp/out.txt" | grep -v '^pair java ' | grep -vc ' 0 mismatched$')" -ne 0 ]; then
+  echo "FAIL writer-prints-word: a reader is reported as failed, or a writer other than java has mismatched rows"
+  failures=$((failures + 1))
+fi
 run dir0-aborts 1 "typescript frame-batch (seal) failed" FAKE_LIE=typescript:dir0-aborts
 run driver-crashes 1 "frame-batch (seal) failed" FAKE_LIE=typescript:crash
 run one-language 0 "ring-frame: 1 pairs" RING_FRAME_LANGS=python

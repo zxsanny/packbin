@@ -23,8 +23,11 @@ final class HandoffFrame {
     private HandoffFrame() {
     }
 
+    // A token that is not hex (a bad digit, an odd length) is an error of the line, never a byte of another value.
     private static byte[] bytesOf(String token) {
-        return token.equals("-") ? new byte[0] : Handoff.parse(token);
+        if (token.equals("-")) return new byte[0];
+        if (!token.matches("([0-9a-fA-F]{2})*")) throw new IllegalArgumentException("bad hex: " + token);
+        return Handoff.parse(token);
     }
 
     private static String hexOf(byte[] data) {
@@ -54,6 +57,7 @@ final class HandoffFrame {
     // The optional trailing fields of a seal or open line: the directions loaded (digits 1 to 3) and the output buffer size.
     private static FrameDirections directions(String[] w) {
         String digits = w.length > 9 ? w[9] : "123";
+        if (!digits.matches("[123]+")) throw new IllegalArgumentException("bad dirs: " + digits);
         FrameDirection[] set = new FrameDirection[digits.length()];
         for (int i = 0; i < set.length; i++) {
             set[i] = direction(digits.charAt(i) - '0');
@@ -126,16 +130,23 @@ final class HandoffFrame {
             case "mac" -> mac(java.util.Arrays.copyOfRange(words, 1, words.length));
             case "verify" -> verify(java.util.Arrays.copyOfRange(words, 1, words.length));
             case "open-skip", "verify-skip" -> "skip";
-            default -> throw new IllegalArgumentException("frame line: " + words[0]);
+            default -> throw new IllegalArgumentException("unknown word " + words[0]);
         };
     }
 
     static int run(String cmd, String[] args) {
         if (cmd.equals("frame-batch") && args.length == 2) {
             try {
+                int number = 0;
                 for (String text : Files.readAllLines(Path.of(args[1]), StandardCharsets.UTF_8)) {
+                    number++;
                     if (!text.isBlank()) {
-                        System.out.println(line(text.trim().split("\\s+")));
+                        try {
+                            System.out.println(line(text.trim().split("\\s+")));
+                        } catch (IllegalArgumentException | ArrayIndexOutOfBoundsException e) {
+                            System.err.println("frame line " + number + ": " + e.getMessage());
+                            return 1;
+                        }
                     }
                 }
             } catch (IOException e) {

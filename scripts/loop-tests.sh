@@ -290,6 +290,7 @@ run_stage_command() {
         && bash fixtures/ecc/check-contract.sh \
         && python3 -I scripts/ecc/fuzz_reference.py \
         && bash .github/workflows/ring-ecc.test.sh \
+        && bash .github/workflows/ring-frame.test.sh \
         && bash .github/workflows/run-suite.test.sh \
         && bash cpp/embedded/lib.test.sh \
         && bash cpp/embedded/run-parts.test.sh \
@@ -309,7 +310,9 @@ run_stage_command() {
     go | typescript | csharp | python | rust | java | swift) docker compose -f docker-compose.test.yml run --rm "$1" ;;
     # The message ECC ring (AZ-2689) follows the ring and reuses its C# and C++ driver builds (PACKBIN_RING_WORK).
     ring) env "${ring_env[@]}" PACKBIN_RING_WORK="$logs/ring-work" bash .github/workflows/language-pair.sh \
-        && env "${ring_env[@]}" PACKBIN_RING_WORK="$logs/ring-work" bash .github/workflows/ring-ecc.sh ;;
+        && env "${ring_env[@]}" PACKBIN_RING_WORK="$logs/ring-work" bash .github/workflows/ring-ecc.sh \
+        && env "${ring_env[@]}" PACKBIN_RING_WORK="$logs/ring-work" bash .github/workflows/ring-frame.sh \
+        && env "${ring_env[@]}" PACKBIN_RING_WORK="$logs/ring-work" bash .github/workflows/ring-frame-drivers.test.sh ;;
     ac10) dotnet test csharp -c Release --nologo --filter "FullyQualifiedName~Nfr_PublicTyped" ;;
     # Its own lines are also its summary, which run_group prints in place of the tail of the stage log.
     publish-gate) run_gate_shares | tee "$logs/publish-gate.summary" ;;

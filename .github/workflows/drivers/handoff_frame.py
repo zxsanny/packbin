@@ -4,6 +4,8 @@
 """
 from __future__ import annotations
 
+import sys
+
 from packbin import (
     BadValue,
     BufferFull,
@@ -33,7 +35,9 @@ KINDS = {BadValue: "BadValue", TooLong: "TooLong", BufferFull: "BufferFull",
 
 def _directions(words: list[str]) -> tuple[FrameDirections, int]:
     """The optional trailing fields of a seal or open line: the directions loaded and the output buffer size."""
-    digits, size = (words[9], int(words[10])) if len(words) > 9 else ("123", 300)
+    digits, size = (words[9], int(words[10])) if len(words) > 10 else ("123", 300)
+    if not digits or set(digits) - set("123"):
+        raise ValueError("bad dirs: %s" % digits)
     return FrameDirections(sum(1 << (int(digit) - 1) for digit in digits)), size
 
 
@@ -95,14 +99,20 @@ def _line(words: list[str]) -> str:
         return _mac(words[1:])
     if words[0] == "verify":
         return _verify(words[1:])
-    raise ValueError("frame line: %s" % words[0])
+    if words[0] in ("open-skip", "verify-skip"):
+        return "skip"
+    raise ValueError("unknown word %s" % words[0])
 
 
 def run_frame(cmd: str, argv: list[str]) -> int:
     if cmd == "frame-batch" and len(argv) == 2:
         with open(argv[1], encoding="utf-8") as lines:
-            for line in lines:
+            for number, line in enumerate(lines, 1):
                 if line.strip():
-                    print(_line(line.split()))
+                    try:
+                        print(_line(line.split()))
+                    except (ValueError, IndexError) as x:
+                        print("frame line %d: %s" % (number, x), file=sys.stderr)
+                        return 1
         return 0
     return 2

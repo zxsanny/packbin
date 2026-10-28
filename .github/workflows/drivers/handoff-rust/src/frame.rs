@@ -5,12 +5,25 @@ use packbin::nostd::{
 };
 use std::io::{BufRead, BufReader};
 
-fn bytes_of(token: &str) -> Vec<u8> {
+// A token that is not hex (a bad digit, an odd length), a number with other characters and a missing field are errors of
+// the line, never a zero or a cut; the batch loop reports the line number and stops.
+type Parsed<T> = Result<T, String>;
+
+fn word<'a>(w: &[&'a str], i: usize) -> Parsed<&'a str> {
+    w.get(i).copied().ok_or_else(|| format!("missing field {i}"))
+}
+
+fn bytes_of(w: &[&str], i: usize) -> Parsed<Vec<u8>> {
+    let token = word(w, i)?;
     if token == "-" {
-        Vec::new()
-    } else {
-        from_hex(token).unwrap_or_else(|| panic!("bad hex: {token}"))
+        return Ok(Vec::new());
     }
+    from_hex(token).ok_or_else(|| format!("bad hex: {token}"))
+}
+
+fn num<T: std::str::FromStr>(w: &[&str], i: usize) -> Parsed<T> {
+    let token = word(w, i)?;
+    token.parse().map_err(|_| format!("bad number: {token}"))
 }
 
 fn hex_of(data: &[u8]) -> String {
@@ -45,34 +58,43 @@ fn direction(d: usize) -> Option<FrameDirection> {
 }
 
 // The optional trailing fields of a seal or open line: the directions loaded (digits 1 to 3) and the output buffer size.
-fn loaded(w: &[&str]) -> (FrameDirections, usize) {
+fn loaded(w: &[&str]) -> Parsed<(FrameDirections, usize)> {
     let digits = w.get(9).copied().unwrap_or("123");
-    let size = w.get(10).map_or(300, |token| token.parse().unwrap());
-    let set = digits.chars().fold(FrameDirections::NONE, |set, digit| {
-        set.with(direction(digit.to_digit(10).unwrap() as usize).unwrap())
-    });
-    (set, size)
+    let size = if w.len() > 10 { num(w, 10)? } else { 300 };
+    let mut set = FrameDirections::NONE;
+    for digit in digits.chars() {
+        let d = digit.to_digit(10).map(|d| d as usize).and_then(direction);
+        set = set.with(d.ok_or_else(|| format!("bad dirs: {digits}"))?);
+    }
+    Ok((set, size))
 }
 
-fn key32(raw: &[u8]) -> &[u8; 32] {
-    raw.try_into().expect("key must be 32 bytes")
+fn key32(raw: &[u8]) -> Parsed<&[u8; 32]> {
+    raw.try_into().map_err(|_| "key must be 32 bytes".to_string())
 }
 
-fn seal(w: &[&str]) -> String {
-    let key = bytes_of(w[0]);
-    let epoch: u32 = w[1].parse().unwrap();
-    let d: usize = w[2].parse().unwrap();
-    let tag_len: u8 = w[3].parse().unwrap();
-    let msg_id = bytes_of(w[4]);
-    let kind: u8 = w[5].parse().unwrap();
-    let ad = bytes_of(w[6]);
-    let clear = bytes_of(w[7]);
-    let plain = bytes_of(w[8]);
+fn msg_id8(raw: &[u8]) -> Parsed<[u8; 8]> {
     let mut id = [0u8; 8];
-    id[..msg_id.len()].copy_from_slice(&msg_id);
-    let (directions, size) = loaded(w);
+    if raw.len() > id.len() {
+        return Err("msg_id is longer than 8 bytes".to_string());
+    }
+    id[..raw.len()].copy_from_slice(raw);
+    Ok(id)
+}
+
+fn seal(w: &[&str]) -> Parsed<String> {
+    let key = bytes_of(w, 0)?;
+    let epoch: u32 = num(w, 1)?;
+    let d: usize = num(w, 2)?;
+    let tag_len: u8 = num(w, 3)?;
+    let id = msg_id8(&bytes_of(w, 4)?)?;
+    let kind: u8 = num(w, 5)?;
+    let ad = bytes_of(w, 6)?;
+    let clear = bytes_of(w, 7)?;
+    let plain = bytes_of(w, 8)?;
+    let (directions, size) = loaded(w)?;
     let session = match FrameSession::load_frame(
-        key32(&key),
+        key32(&key)?,
         epoch,
         FrameConfig {
             tag_len,
@@ -80,40 +102,33 @@ fn seal(w: &[&str]) -> String {
         },
     ) {
         Ok(s) => s,
-        Err(f) => return fault_kind(&f).into(),
+        Err(f) => return Ok(fault_kind(&f).into()),
     };
     let Some(dir) = direction(d) else {
-        return "BadValue".into();
+        return Ok("BadValue".into());
     };
     let mut out = vec![0u8; size];
-    match session.seal_frame(
-        dir,
-        &MsgContext { msg_id: id, kind },
-        &ad,
-        &clear,
-        &plain,
-        &mut out,
-    ) {
-        Ok(n) => hex_of(&out[..n]),
-        Err(f) => fault_kind(&f).into(),
-    }
+    Ok(
+        match session.seal_frame(dir, &MsgContext { msg_id: id, kind }, &ad, &clear, &plain, &mut out) {
+            Ok(n) => hex_of(&out[..n]),
+            Err(f) => fault_kind(&f).into(),
+        },
+    )
 }
 
-fn open(w: &[&str]) -> String {
-    let key = bytes_of(w[0]);
-    let epoch: u32 = w[1].parse().unwrap();
-    let d: usize = w[2].parse().unwrap();
-    let tag_len: u8 = w[3].parse().unwrap();
-    let msg_id = bytes_of(w[4]);
-    let kind: u8 = w[5].parse().unwrap();
-    let ad = bytes_of(w[6]);
-    let clear_len: usize = w[7].parse().unwrap();
-    let body = bytes_of(w[8]);
-    let mut id = [0u8; 8];
-    id[..msg_id.len()].copy_from_slice(&msg_id);
-    let (directions, size) = loaded(w);
+fn open(w: &[&str]) -> Parsed<String> {
+    let key = bytes_of(w, 0)?;
+    let epoch: u32 = num(w, 1)?;
+    let d: usize = num(w, 2)?;
+    let tag_len: u8 = num(w, 3)?;
+    let id = msg_id8(&bytes_of(w, 4)?)?;
+    let kind: u8 = num(w, 5)?;
+    let ad = bytes_of(w, 6)?;
+    let clear_len: usize = num(w, 7)?;
+    let body = bytes_of(w, 8)?;
+    let (directions, size) = loaded(w)?;
     let session = match FrameSession::load_frame(
-        key32(&key),
+        key32(&key)?,
         epoch,
         FrameConfig {
             tag_len,
@@ -121,81 +136,93 @@ fn open(w: &[&str]) -> String {
         },
     ) {
         Ok(s) => s,
-        Err(f) => return fault_kind(&f).into(),
+        Err(f) => return Ok(fault_kind(&f).into()),
     };
     let Some(dir) = direction(d) else {
-        return "BadValue".into();
+        return Ok("BadValue".into());
     };
     let mut out = vec![0u8; size];
-    match session.open_frame(
-        dir,
-        &MsgContext { msg_id: id, kind },
-        &ad,
-        &body,
-        clear_len,
-        None,
-        &mut out,
-    ) {
-        Ok(opened) => hex_of(&out[..opened.plain_len]),
-        Err(f) => fault_kind(&f).into(),
-    }
+    Ok(
+        match session.open_frame(dir, &MsgContext { msg_id: id, kind }, &ad, &body, clear_len, None, &mut out) {
+            Ok(opened) => hex_of(&out[..opened.plain_len]),
+            Err(f) => fault_kind(&f).into(),
+        },
+    )
 }
 
-fn mac(w: &[&str]) -> String {
-    let key = bytes_of(w[0]);
-    let epoch: u32 = w[1].parse().unwrap();
-    let label = bytes_of(w[2]);
-    let n: usize = w[3].parse().unwrap();
-    let message = bytes_of(w[4]);
-    let mk = match MacKey::derive(key32(&key), epoch, &label) {
+fn mac(w: &[&str]) -> Parsed<String> {
+    let key = bytes_of(w, 0)?;
+    let epoch: u32 = num(w, 1)?;
+    let label = bytes_of(w, 2)?;
+    let n: usize = num(w, 3)?;
+    let message = bytes_of(w, 4)?;
+    let mk = match MacKey::derive(key32(&key)?, epoch, &label) {
         Ok(m) => m,
-        Err(f) => return fault_kind(&f).into(),
+        Err(f) => return Ok(fault_kind(&f).into()),
     };
     let mut out = vec![0u8; n];
-    match mk.tag(&[&message], &mut out) {
+    Ok(match mk.tag(&[&message], &mut out) {
         Ok(()) => hex_of(&out),
         Err(f) => fault_kind(&f).into(),
-    }
+    })
 }
 
-fn verify(w: &[&str]) -> String {
-    let key = bytes_of(w[0]);
-    let epoch: u32 = w[1].parse().unwrap();
-    let label = bytes_of(w[2]);
-    let _n: usize = w[3].parse().unwrap();
-    let message = bytes_of(w[4]);
-    let tag = bytes_of(w[5]);
-    let mk = match MacKey::derive(key32(&key), epoch, &label) {
+fn verify(w: &[&str]) -> Parsed<String> {
+    let key = bytes_of(w, 0)?;
+    let epoch: u32 = num(w, 1)?;
+    let label = bytes_of(w, 2)?;
+    let _n: usize = num(w, 3)?;
+    let message = bytes_of(w, 4)?;
+    let tag = bytes_of(w, 5)?;
+    let mk = match MacKey::derive(key32(&key)?, epoch, &label) {
         Ok(m) => m,
-        Err(f) => return fault_kind(&f).into(),
+        Err(f) => return Ok(fault_kind(&f).into()),
     };
-    if mk.verify(&[&message], &tag) {
+    Ok(if mk.verify(&[&message], &tag) {
         "valid".into()
     } else {
         "invalid".into()
-    }
+    })
 }
 
-fn frame_line(words: &[&str]) -> String {
+fn frame_line(words: &[&str]) -> Parsed<String> {
     match words[0] {
         "seal" => seal(&words[1..]),
         "open" => open(&words[1..]),
         "mac" => mac(&words[1..]),
         "verify" => verify(&words[1..]),
-        "open-skip" | "verify-skip" => "skip".into(),
-        _ => panic!("frame line: {}", words[0]),
+        "open-skip" | "verify-skip" => Ok("skip".into()),
+        other => Err(format!("unknown word {other}")),
     }
 }
 
 pub fn run(args: &[String]) -> u8 {
     if args.len() == 2 && args[0] == "frame-batch" {
-        let file = std::fs::File::open(&args[1]).unwrap_or_else(|e| panic!("frame-batch: {e}"));
-        let reader = BufReader::new(file);
-        for line in reader.lines() {
-            let text = line.expect("read line");
+        let file = match std::fs::File::open(&args[1]) {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!("frame-batch: {e}");
+                return 1;
+            }
+        };
+        for (index, line) in BufReader::new(file).lines().enumerate() {
+            let text = match line {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!("frame line {}: {e}", index + 1);
+                    return 1;
+                }
+            };
             let words: Vec<&str> = text.split_whitespace().collect();
-            if !words.is_empty() {
-                println!("{}", frame_line(&words));
+            if words.is_empty() {
+                continue;
+            }
+            match frame_line(&words) {
+                Ok(out) => println!("{out}"),
+                Err(e) => {
+                    eprintln!("frame line {}: {e}", index + 1);
+                    return 1;
+                }
             }
         }
         return 0;

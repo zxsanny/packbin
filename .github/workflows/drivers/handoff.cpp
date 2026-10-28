@@ -1,10 +1,12 @@
 #include "packbin/packbin.hpp"
 
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <initializer_list>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -401,6 +403,29 @@ int ecc_main(int argc, char** argv) {
 // The frame commands (AZ-3338; contract pack-session 3.0.0, frame mode).
 //   frame-batch <file>   one line per line of the file: seal, open, mac, verify
 
+// A token that is not hex (a bad digit, an odd length), a number with other characters and a missing field are errors of the
+// line, never a zero, a cut or an unchecked read.
+std::vector<std::uint8_t> frame_bytes(std::string const& token) {
+  std::vector<std::uint8_t> out;
+  if (token == "-")
+    return out;
+  if (token.size() % 2 != 0)
+    throw std::invalid_argument("bad hex: " + token);
+  for (char c : token)
+    if (!std::isxdigit(static_cast<unsigned char>(c)))
+      throw std::invalid_argument("bad hex: " + token);
+  for (std::size_t i = 0; i < token.size(); i += 2)
+    out.push_back(static_cast<std::uint8_t>(std::stoul(token.substr(i, 2), nullptr, 16)));
+  return out;
+}
+
+int frame_int(std::vector<std::string> const& w, std::size_t i) {
+  std::string const& token = w.at(i);
+  if (token.empty() || token.find_first_not_of("0123456789") != std::string::npos)
+    throw std::invalid_argument("bad number: " + token);
+  return std::stoi(token);
+}
+
 std::string frame_hex(std::uint8_t const* data, std::size_t len) {
   return len == 0 ? "-" : hex_of(data, len);
 }
@@ -423,22 +448,24 @@ packbin::FrameDirection frame_dir(int d) {
 
 // The optional trailing fields of a seal or open line: the directions loaded (digits 1 to 3) and the output buffer size.
 packbin::FrameDirections frame_dirs(std::vector<std::string> const& w) {
-  std::string const digits = w.size() > 9 ? w[9] : "123";
+  std::string const digits = w.size() > 9 ? w.at(9) : "123";
+  if (digits.find_first_not_of("123") != std::string::npos)
+    throw std::invalid_argument("bad dirs: " + digits);
   int mask = 0;
   for (char c : digits) mask |= 1 << (c - '1');
   return static_cast<packbin::FrameDirections>(mask);
 }
 
 std::size_t frame_out_len(std::vector<std::string> const& w) {
-  return w.size() > 10 ? static_cast<std::size_t>(std::stoul(w[10])) : 300;
+  return w.size() > 10 ? static_cast<std::size_t>(frame_int(w, 10)) : 300;
 }
 
 std::string frame_seal(std::vector<std::string> const& w) {
-  auto key = ecc_bytes(w[0]);
-  int epoch = std::stoi(w[1]), d = std::stoi(w[2]), tag_len = std::stoi(w[3]);
-  auto msg_id = ecc_bytes(w[4]);
-  int kind = std::stoi(w[5]);
-  auto ad = ecc_bytes(w[6]), clear = ecc_bytes(w[7]), plain = ecc_bytes(w[8]);
+  auto key = frame_bytes(w.at(0));
+  int epoch = frame_int(w, 1), d = frame_int(w, 2), tag_len = frame_int(w, 3);
+  auto msg_id = frame_bytes(w.at(4));
+  int kind = frame_int(w, 5);
+  auto ad = frame_bytes(w.at(6)), clear = frame_bytes(w.at(7)), plain = frame_bytes(w.at(8));
   packbin::FrameSession session;
   auto r = session.load({key.data(), key.size()}, static_cast<std::uint32_t>(epoch),
       {static_cast<std::uint8_t>(tag_len), frame_dirs(w)});
@@ -453,13 +480,13 @@ std::string frame_seal(std::vector<std::string> const& w) {
 }
 
 std::string frame_open(std::vector<std::string> const& w) {
-  auto key = ecc_bytes(w[0]);
-  int epoch = std::stoi(w[1]), d = std::stoi(w[2]), tag_len = std::stoi(w[3]);
-  auto msg_id = ecc_bytes(w[4]);
-  int kind = std::stoi(w[5]);
-  auto ad = ecc_bytes(w[6]);
-  int clear_len = std::stoi(w[7]);
-  auto body = ecc_bytes(w[8]);
+  auto key = frame_bytes(w.at(0));
+  int epoch = frame_int(w, 1), d = frame_int(w, 2), tag_len = frame_int(w, 3);
+  auto msg_id = frame_bytes(w.at(4));
+  int kind = frame_int(w, 5);
+  auto ad = frame_bytes(w.at(6));
+  int clear_len = frame_int(w, 7);
+  auto body = frame_bytes(w.at(8));
   packbin::FrameSession session;
   auto r = session.load({key.data(), key.size()}, static_cast<std::uint32_t>(epoch),
       {static_cast<std::uint8_t>(tag_len), frame_dirs(w)});
@@ -475,11 +502,11 @@ std::string frame_open(std::vector<std::string> const& w) {
 }
 
 std::string frame_mac(std::vector<std::string> const& w) {
-  auto key = ecc_bytes(w[0]);
-  int epoch = std::stoi(w[1]);
-  auto label = ecc_bytes(w[2]);
-  int n = std::stoi(w[3]);
-  auto message = ecc_bytes(w[4]);
+  auto key = frame_bytes(w.at(0));
+  int epoch = frame_int(w, 1);
+  auto label = frame_bytes(w.at(2));
+  int n = frame_int(w, 3);
+  auto message = frame_bytes(w.at(4));
   packbin::MacKey mk;
   auto r = mk.derive({key.data(), key.size()}, static_cast<std::uint32_t>(epoch),
       {label.data(), label.size()});
@@ -491,11 +518,11 @@ std::string frame_mac(std::vector<std::string> const& w) {
 }
 
 std::string frame_verify(std::vector<std::string> const& w) {
-  auto key = ecc_bytes(w[0]);
-  int epoch = std::stoi(w[1]);
-  auto label = ecc_bytes(w[2]);
-  // n = w[3], not used for verify
-  auto message = ecc_bytes(w[4]), tag = ecc_bytes(w[5]);
+  auto key = frame_bytes(w.at(0));
+  int epoch = frame_int(w, 1);
+  auto label = frame_bytes(w.at(2));
+  // n = w.at(3), not used for verify
+  auto message = frame_bytes(w.at(4)), tag = frame_bytes(w.at(5));
   packbin::MacKey mk;
   auto r = mk.derive({key.data(), key.size()}, static_cast<std::uint32_t>(epoch),
       {label.data(), label.size()});
@@ -505,11 +532,11 @@ std::string frame_verify(std::vector<std::string> const& w) {
 }
 
 std::string frame_line(std::vector<std::string> const& w) {
-  if (w[0] == "seal") return frame_seal({w.begin() + 1, w.end()});
-  if (w[0] == "open") return frame_open({w.begin() + 1, w.end()});
-  if (w[0] == "mac") return frame_mac({w.begin() + 1, w.end()});
-  if (w[0] == "verify") return frame_verify({w.begin() + 1, w.end()});
-  if (w[0] == "open-skip" || w[0] == "verify-skip") return "skip";
+  if (w.at(0) == "seal") return frame_seal({w.begin() + 1, w.end()});
+  if (w.at(0) == "open") return frame_open({w.begin() + 1, w.end()});
+  if (w.at(0) == "mac") return frame_mac({w.begin() + 1, w.end()});
+  if (w.at(0) == "verify") return frame_verify({w.begin() + 1, w.end()});
+  if (w.at(0) == "open-skip" || w.at(0) == "verify-skip") return "skip";
   return "";
 }
 
@@ -521,18 +548,26 @@ int frame_main(int argc, char** argv) {
       return 1;
     }
     std::string text;
+    std::size_t number = 0;
     while (std::getline(file, text)) {
+      ++number;
       std::istringstream words(text);
       std::vector<std::string> w;
       for (std::string word; words >> word;)
         w.push_back(word);
       if (!w.empty()) {
-        auto out = frame_line(w);
-        if (out.empty()) {
-          std::fprintf(stderr, "frame line: %s\n", text.c_str());
+        try {
+          auto out = frame_line(w);
+          if (out.empty())
+            throw std::invalid_argument("unknown word " + w.at(0));
+          std::printf("%s\n", out.c_str());
+        } catch (std::invalid_argument const& e) {
+          std::fprintf(stderr, "frame line %zu: %s\n", number, e.what());
+          return 1;
+        } catch (std::out_of_range const& e) {
+          std::fprintf(stderr, "frame line %zu: %s\n", number, e.what());
           return 1;
         }
-        std::printf("%s\n", out.c_str());
       }
     }
     return 0;

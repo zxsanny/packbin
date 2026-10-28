@@ -93,6 +93,8 @@ jobs:
         run: bash .github/workflows/ring-ecc.sh
       - name: frame ring
         run: bash .github/workflows/ring-frame.sh
+      - name: frame drivers refuse malformed lines
+        run: bash .github/workflows/ring-frame-drivers.test.sh
 
   # The suites and the publish gate share nothing (the gate pulls its own images), so they run beside each other and
   # beside scaffold, embedded and ring: the wall time is the longest job, not the sum (AZ-2564). The free plan runs 20 jobs

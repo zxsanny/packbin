@@ -39,6 +39,16 @@ def hx(b):
     return b.hex() if len(b) else "-"
 
 
+def is_hex(token):
+    return token == "-" or (len(token) % 2 == 0 and all(c in "0123456789abcdef" for c in token))
+
+
+def usable(lines, good, extra):
+    """Whether a writer's output can feed the readers: `good + extra` lines, the first `good` of them hex. A writer that
+    printed a word instead (an error name for a good row) is blamed by `check`; its readers get skip lines."""
+    return lines is not None and len(lines) == good + extra and all(is_hex(line) for line in lines[:good])
+
+
 def read_lines(path):
     if not os.path.exists(path):
         return None
@@ -209,7 +219,7 @@ def cmd_open_in(dirname, writers):
     with open(os.path.join(dirname, "open.in"), "w") as f:
         for writer in writers:
             lines = read_lines(os.path.join(dirname, "seal.%s.out" % writer))
-            if lines is None or len(lines) != len(rows.seal) + len(rows.refuse_seal):
+            if not usable(lines, len(rows.seal), len(rows.refuse_seal)):
                 for _ in rows.seal:
                     f.write("open-skip\n")
                 continue
@@ -239,7 +249,7 @@ def cmd_verify_in(dirname, writers):
     with open(os.path.join(dirname, "verify.in"), "w") as f:
         for writer in writers:
             lines = read_lines(os.path.join(dirname, "mac.%s.out" % writer))
-            if lines is None or len(lines) != len(rows.mac) + len(rows.refuse_mac):
+            if not usable(lines, len(rows.mac), len(rows.refuse_mac)):
                 for _ in rows.mac:
                     f.write("verify-skip\n")
                 continue
@@ -259,9 +269,12 @@ def cmd_check(dirname, writers, readers):
 
     # A writer's own refusal rows come after its good rows (seal.in, mac.in); they are counted in its `refusals` line.
     refused_by_writer = {writer: [] for writer in writers}
+    skipped_open, skipped_verify = set(), set()
     bad_seal_writers = {}
     for writer in writers:
         lines = read_lines(os.path.join(dirname, "seal.%s.out" % writer))
+        if not usable(lines, len(rows.seal), len(rows.refuse_seal)):
+            skipped_open.add(writer)
         wanted = len(rows.seal) + len(rows.refuse_seal)
         if lines is None or len(lines) != wanted:
             bad_seal_writers[writer] = ["%s printed %s seal lines, wanted %d" % (
@@ -280,6 +293,8 @@ def cmd_check(dirname, writers, readers):
     bad_mac_writers = {}
     for writer in writers:
         lines = read_lines(os.path.join(dirname, "mac.%s.out" % writer))
+        if not usable(lines, len(rows.mac), len(rows.refuse_mac)):
+            skipped_verify.add(writer)
         wanted = len(rows.mac) + len(rows.refuse_mac)
         if lines is None or len(lines) != wanted:
             bad_mac_writers[writer] = ["%s printed %s mac lines, wanted %d" % (
@@ -320,7 +335,7 @@ def cmd_check(dirname, writers, readers):
 
             if open_lines is None:
                 wrong.append("%s -> %s: no usable open output" % (writer, reader))
-            else:
+            elif writer not in skipped_open:
                 chunk = open_lines[index * len(rows.seal):(index + 1) * len(rows.seal)]
                 for (case, key, epoch, d, tag_len, msg_id, kind, ad, clear, plain, _, _), got in zip(rows.seal, chunk):
                     want = hx(plain)
@@ -329,7 +344,7 @@ def cmd_check(dirname, writers, readers):
 
             if verify_lines is None:
                 wrong.append("%s -> %s: no usable verify output" % (writer, reader))
-            else:
+            elif writer not in skipped_verify:
                 chunk = verify_lines[index * len(rows.mac):(index + 1) * len(rows.mac)]
                 for (case, key, epoch, label, n, message, _), got in zip(rows.mac, chunk):
                     if got != "valid":
