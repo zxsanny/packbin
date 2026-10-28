@@ -127,6 +127,10 @@ run() {
     echo "FAIL $name: the output has no \"$needle\""
     sed -n '1,8p;$p' "$tmp/out.txt" | cut -c1-200
     failures=$((failures + 1))
+  elif grep -q '^Traceback ' "$tmp/out.txt"; then
+    echo "FAIL $name: the output holds a Python traceback"
+    sed -n '1,8p;$p' "$tmp/out.txt" | cut -c1-200
+    failures=$((failures + 1))
   else
     echo "PASS $name"
   fi
@@ -218,6 +222,11 @@ corrupt '/^refuse-mac R.mac.nbad5 /s/ BadValue$/ TooLong/'
 run refuse-mac-name-changed 1 "R.mac.nbad5 expected TooLong, reference gives BadValue" RING_FRAME_CASES="$tmp/ring-cases.txt"
 corrupt '/^verify E4.first /s/ [0-9a-f]{8} invalid$/ 56db9bec invalid/'
 run verify-tag-made-valid 1 "disagree with the reference" RING_FRAME_CASES="$tmp/ring-cases.txt"
+# A seal or mac row the reference refuses (AZ-3369): the file line, the case and the error name, not a traceback.
+corrupt '/^seal E1 /s/ (00301005e8030000) 4 / \1 16 /'
+run seal-refused-by-reference 1 "ring-cases.txt:17: E1 the reference refuses the row: BadValue" RING_FRAME_CASES="$tmp/ring-cases.txt"
+corrupt '/^mac E4 /s/ 6e6574 4 / 6e6574 5 /'
+run mac-refused-by-reference 1 "ring-cases.txt:41: E4 the reference refuses the row: BadValue" RING_FRAME_CASES="$tmp/ring-cases.txt"
 # A number outside the range every driver reads (AZ-3356): the reference would take both rows.
 corrupt '/^refuse-seal R.seal.dir4 /s/ 3 4 4 / 3 256 4 /'
 run row-dir-256 1 "R.seal.dir4 dir 256 is not decimal digits of 0 to 255" RING_FRAME_CASES="$tmp/ring-cases.txt"

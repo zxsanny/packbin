@@ -128,7 +128,10 @@ class Rows:
             ad, clear, plain = unhex(w[8]), unhex(w[9]), unhex(w[10])
             expected = unhex(w[11])
             out_len = number(w, 12, "out_len", where) if len(w) > 12 else None
-            ref = ff.seal(key, epoch, d, tag_len, msg_id, fkind, ad, clear, plain, out_len=out_len)
+            try:
+                ref = ff.seal(key, epoch, d, tag_len, msg_id, fkind, ad, clear, plain, out_len=out_len)
+            except ff.Fault as x:
+                raise FileError("%s: %s the reference refuses the row: %s" % (where, case, x.kind))
             if ref != expected:
                 raise FileError("%s: %s expected %s, reference gives %s" % (where, case, expected.hex(), ref.hex()))
             self.seal.append((case, key, epoch, d, tag_len, msg_id, fkind, ad, clear, plain, expected.hex(), out_len))
@@ -137,7 +140,10 @@ class Rows:
             key, epoch, label = unhex(w[2]), number(w, 3, "epoch", where), unhex(w[4])
             n, message = number(w, 5, "n", where), unhex(w[6])
             expected = unhex(w[7])
-            ref = ff.mac_tag(key, epoch, label, n, [message])
+            try:
+                ref = ff.mac_tag(key, epoch, label, n, [message])
+            except ff.Fault as x:
+                raise FileError("%s: %s the reference refuses the row: %s" % (where, case, x.kind))
             if ref != expected:
                 raise FileError("%s: %s expected %s, reference gives %s" % (where, case, expected.hex(), ref.hex()))
             self.mac.append((case, key, epoch, label, n, message, expected.hex()))
