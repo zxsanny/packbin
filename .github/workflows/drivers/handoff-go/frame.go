@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
 	packbin "github.com/zxsanny/packbin/go"
@@ -41,17 +40,29 @@ func (f *frameFields) bytes(i int) []byte {
 	return b
 }
 
-func (f *frameFields) int(i int) int {
+// The top of each number field: a number is decimal digits only (no sign, space or `_`) and at most its top.
+const (
+	frameByte   = 255
+	frameLength = 65535
+	frameEpoch  = 4294967295
+)
+
+// num reads a number of at most top; no digit string wraps or overflows into another value.
+func (f *frameFields) num(i int, top uint64) int {
 	token := f.word(i)
 	if f.err != nil {
 		return 0
 	}
-	n, err := strconv.Atoi(token)
-	if err != nil || n < 0 || strings.ContainsAny(token, "+-") {
-		f.err = fmt.Errorf("bad number: %s", token)
+	n, bad := uint64(0), token == ""
+	for j := 0; j < len(token) && !bad; j++ {
+		n = n*10 + uint64(token[j]-'0')
+		bad = token[j] < '0' || token[j] > '9' || n > top
+	}
+	if bad {
+		f.err = fmt.Errorf("bad number: %s (digits of 0 to %d)", token, top)
 		return 0
 	}
-	return n
+	return int(n)
 }
 
 func frameHex(data []byte) string {
@@ -79,7 +90,7 @@ func frameKind(err error) string {
 	return "error"
 }
 
-// The package takes the byte as it comes: a direction outside 1 to 3 is its BadValue to give.
+// The package takes the byte as it comes (0 to 255 here): a direction outside 1 to 3 is its BadValue to give.
 func frameDirection(d int) packbin.FrameDirection {
 	return packbin.FrameDirection(uint8(d))
 }
@@ -91,7 +102,7 @@ func frameLoaded(f *frameFields) (packbin.FrameDirections, int) {
 		digits = f.w[9]
 	}
 	if len(f.w) > 10 {
-		size = f.int(10)
+		size = f.num(10, frameLength)
 	}
 	if strings.Trim(digits, "123") != "" || digits == "" {
 		f.err = fmt.Errorf("bad dirs: %s", digits)
@@ -106,8 +117,8 @@ func frameLoaded(f *frameFields) (packbin.FrameDirections, int) {
 
 func frameSeal(w []string) (string, error) {
 	f := &frameFields{w: w}
-	key, epoch, d, tagLen := f.bytes(0), f.int(1), f.int(2), f.int(3)
-	msgID, kind, ad, clear, plain := f.bytes(4), f.int(5), f.bytes(6), f.bytes(7), f.bytes(8)
+	key, epoch, d, tagLen := f.bytes(0), f.num(1, frameEpoch), f.num(2, frameByte), f.num(3, frameByte)
+	msgID, kind, ad, clear, plain := f.bytes(4), f.num(5, frameByte), f.bytes(6), f.bytes(7), f.bytes(8)
 	directions, size := frameLoaded(f)
 	if f.err != nil {
 		return "", f.err
@@ -127,8 +138,8 @@ func frameSeal(w []string) (string, error) {
 
 func frameOpen(w []string) (string, error) {
 	f := &frameFields{w: w}
-	key, epoch, d, tagLen := f.bytes(0), f.int(1), f.int(2), f.int(3)
-	msgID, kind, ad, clearLen, body := f.bytes(4), f.int(5), f.bytes(6), f.int(7), f.bytes(8)
+	key, epoch, d, tagLen := f.bytes(0), f.num(1, frameEpoch), f.num(2, frameByte), f.num(3, frameByte)
+	msgID, kind, ad, clearLen, body := f.bytes(4), f.num(5, frameByte), f.bytes(6), f.num(7, frameLength), f.bytes(8)
 	directions, size := frameLoaded(f)
 	if f.err != nil {
 		return "", f.err
@@ -148,7 +159,7 @@ func frameOpen(w []string) (string, error) {
 
 func frameMac(w []string) (string, error) {
 	f := &frameFields{w: w}
-	key, epoch, label, n, message := f.bytes(0), f.int(1), f.bytes(2), f.int(3), f.bytes(4)
+	key, epoch, label, n, message := f.bytes(0), f.num(1, frameEpoch), f.bytes(2), f.num(3, frameByte), f.bytes(4)
 	if f.err != nil {
 		return "", f.err
 	}
@@ -166,7 +177,7 @@ func frameMac(w []string) (string, error) {
 func frameVerify(w []string) (string, error) {
 	f := &frameFields{w: w}
 	// n is field 3, not used for verify (the tag length comes from the tag)
-	key, epoch, label, _, message, tag := f.bytes(0), f.int(1), f.bytes(2), f.int(3), f.bytes(4), f.bytes(5)
+	key, epoch, label, _, message, tag := f.bytes(0), f.num(1, frameEpoch), f.bytes(2), f.num(3, frameByte), f.bytes(4), f.bytes(5)
 	if f.err != nil {
 		return "", f.err
 	}

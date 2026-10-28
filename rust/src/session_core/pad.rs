@@ -84,8 +84,9 @@ pub fn xor_with_nonce(key: &[u8; 32], nonce: &[u8; 12], data: &mut [u8]) {
     wipe(&mut pad);
 }
 
-/// The ChaCha20 block of any 12-byte nonce and counter, for the reference-vector tests.
-#[cfg(test)]
+/// The ChaCha20 block of any 12-byte nonce and counter, for the reference-vector tests (crypto_vectors_tests,
+/// which has this cfg).
+#[cfg(all(test, feature = "std"))]
 pub(crate) fn block_of(key: &[u8; 32], nonce: &[u8; 12], counter: u32) -> [u8; 64] {
     let mut output = [0u8; 64];
     block(key, nonce, counter, &mut output);

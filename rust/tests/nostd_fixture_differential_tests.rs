@@ -5,10 +5,10 @@
 
 mod nostd_support;
 
-use nostd_support::hostile::{cases, from_hex, nodes_of, CORPUS};
+use nostd_support::hostile::{cases, nodes_of, CORPUS};
 use nostd_support::random::pack_both;
 use nostd_support::tree::{build, compare, std_refuses, Node};
-use nostd_support::{golden, Slots};
+use nostd_support::{from_hex, golden, Slots};
 use packbin::nostd::{bytes, pack, unpack, validate, Kind, Num, Row, Scheme, DEFAULT_MAX_SLOTS};
 
 const TEXT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../fixtures/text/vectors.txt");

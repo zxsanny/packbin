@@ -6,8 +6,8 @@
 
 mod nostd_support;
 
-use nostd_support::hostile::{allows, cases, fields_of, from_hex, scheme_of, term, CORPUS};
-use nostd_support::Slots;
+use nostd_support::hostile::{allows, cases, fields_of, scheme_of, term, CORPUS};
+use nostd_support::{from_hex, Slots};
 use packbin::nostd::{unpack, validate};
 use std::sync::mpsc;
 use std::thread;

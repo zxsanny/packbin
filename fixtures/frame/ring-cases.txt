@@ -10,7 +10,8 @@
 # refuse-mac row go to every writer once, a refuse-open row to every reader; each language must print the name (AZ-3354).
 # The seal and mac rows after the worked examples, and the open and verify rows, were made with framefmt.py (AZ-3341);
 # the loader derives every expected value again on each run, so a row that the reference does not confirm stops the ring.
-# Hex fields have no separators; "-" is empty. epoch, dir, tag_len, kind, n are decimal.
+# Hex fields have no separators; "-" is empty. epoch, dir, tag_len, kind, n, clear_len, out_len are decimal digits only, in
+# the ranges of README.md (the loader stops on a number outside its range).
 
 # E1: dir 1, tag 4, no clear
 seal E1 1111111111111111111111111111111111111111111111111111111111111111 1 1 4 00301005e8030000 4 000100301005e803000004 - 0102030405060708090a0b0c 53e9dc75fb459d775e6205661cdf37ff
@@ -180,3 +181,13 @@ refuse-mac R.mac.label33 26bc9be830cbb55286bb4182cf0ac7f765f273d09b817539ab0e424
 refuse-mac R.mac.nbad0 26bc9be830cbb55286bb4182cf0ac7f765f273d09b817539ab0e424d84d39bbd 9 6e6574 0 1dfc6b77d3ecbe87774e6d9a51b3b6d06e55d8e0 BadValue
 refuse-mac R.mac.nbad2 26bc9be830cbb55286bb4182cf0ac7f765f273d09b817539ab0e424d84d39bbd 9 6e6574 2 1dfc6b77d3ecbe87774e6d9a51b3b6d06e55d8e0 BadValue
 refuse-mac R.mac.nbad5 26bc9be830cbb55286bb4182cf0ac7f765f273d09b817539ab0e424d84d39bbd 9 6e6574 5 1dfc6b77d3ecbe87774e6d9a51b3b6d06e55d8e0 BadValue
+
+# Numbers at the top of their ranges (AZ-3356): a driver hands them to its package unchanged and prints the package's answer
+# (dir, tag_len, kind, n 0 to 255; epoch 0 to 4294967295; out_len, clear_len 0 to 65535). One above the top is a malformed line.
+refuse-seal R.seal.dir255 78db788a04095e5a28e7f9d930d2386a3fe18ec0c2ac58c6889f8b8aa76c1a1e 3 255 4 35dce58d07fae0ab 2 b1ac77721471dcd74d3215 - 84b357fa5b0b53ff90710727 123 300 BadValue
+refuse-seal R.seal.tag255 78db788a04095e5a28e7f9d930d2386a3fe18ec0c2ac58c6889f8b8aa76c1a1e 3 1 255 35dce58d07fae0ab 2 b1ac77721471dcd74d3215 - 84b357fa5b0b53ff90710727 123 300 BadValue
+refuse-seal R.seal.kind255 78db788a04095e5a28e7f9d930d2386a3fe18ec0c2ac58c6889f8b8aa76c1a1e 3 1 4 35dce58d07fae0ab 255 b1ac77721471dcd74d3215 - 84b357fa5b0b53ff90710727 123 300 BadValue
+refuse-seal R.seal.epochffffffff 78db788a04095e5a28e7f9d930d2386a3fe18ec0c2ac58c6889f8b8aa76c1a1e 4294967295 1 4 35dce58d07fae0ab 2 b1ac77721471dcd74d3215 - 84b357fa5b0b53ff90710727 123 300 BadValue
+refuse-mac R.mac.n255 26bc9be830cbb55286bb4182cf0ac7f765f273d09b817539ab0e424d84d39bbd 9 6e6574 255 1dfc6b77d3ecbe87774e6d9a51b3b6d06e55d8e0 BadValue
+# E1 sealed into a buffer of 65535 bytes
+seal E1.out65535 1111111111111111111111111111111111111111111111111111111111111111 1 1 4 00301005e8030000 4 000100301005e803000004 - 0102030405060708090a0b0c 53e9dc75fb459d775e6205661cdf37ff 65535

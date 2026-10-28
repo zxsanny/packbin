@@ -2,8 +2,11 @@
 # The real frame drivers on malformed lines (AZ-3355): each of the 8 drivers must end with a non-zero exit and a message that
 # names the line when a line has a bad hex digit, an odd-length hex token, a missing field or a number with other
 # characters, and must answer `open-skip` / `verify-skip` with `skip`. The Go driver also refuses a bad direction, tag
-# length or kind and a line over its scanner limit. ring-frame.test.sh runs the ring with stand-in drivers; this runs the
-# drivers themselves, built and started as ring-frame.sh does (run_lang of ring-lib.sh).
+# length or kind and a line over its scanner limit. The number ranges (AZ-3356, fixtures/frame/README.md): a number one
+# above its field's top (dir, tag_len, kind, n 255; epoch 4294967295; clear_len, out_len 65535) or with a sign is a
+# malformed line in every driver, and a number at the top goes to the package unchanged (direction 255 and epoch
+# 4294967295 are its BadValue, an out_len of 65535 seals E1). ring-frame.test.sh runs the ring with stand-in drivers;
+# this runs the drivers themselves, built and started as ring-frame.sh does (run_lang of ring-lib.sh).
 #
 # Environment: RING_FRAME_LANGS (default all eight), PACKBIN_RING_WORK (driver builds kept between runs), and the
 # toolchain variables of language-pair.sh (PACKBIN_CXX_SYSROOT, CXX, PACKBIN_SWIFT_RING, RING_GO).
@@ -39,6 +42,8 @@ export -f run_lang
 key="1111111111111111111111111111111111111111111111111111111111111111"
 id="00301005e8030000"
 ad="000100301005e803000004"
+plain="0102030405060708090a0b0c"
+body="53e9dc75fb459d775e6205661cdf37ff" # row E1 of ring-cases.txt
 
 # A good first line, so that the line number in the message is 2 and the output holds the answer to line 1.
 files() {
@@ -51,6 +56,18 @@ files() {
   printf 'open-skip\nseal %s 1 1 x %s 4 %s - 00\n' "$key" "$id" "$ad" > "$io/bad-tag-length.in"
   printf 'open-skip\nseal %s 1 1 4 %s x %s - 00\n' "$key" "$id" "$ad" > "$io/bad-kind.in"
   { printf 'open-skip\nseal '; head -c 2097152 /dev/zero | tr '\0' 'a'; printf '\n'; } > "$io/long-line.in"
+  # One above the top of each range, and a sign (AZ-3356); then the top itself.
+  printf 'open-skip\nseal %s 1 256 4 %s 4 %s - %s 123 300\n' "$key" "$id" "$ad" "$plain" > "$io/dir-256.in"
+  printf 'open-skip\nseal %s 1 -1 4 %s 4 %s - %s 123 300\n' "$key" "$id" "$ad" "$plain" > "$io/dir-minus-1.in"
+  printf 'open-skip\nseal %s 1 1 256 %s 4 %s - %s 123 300\n' "$key" "$id" "$ad" "$plain" > "$io/tag-length-256.in"
+  printf 'open-skip\nopen %s 1 1 4 %s 256 %s 0 %s 123 300\n' "$key" "$id" "$ad" "$body" > "$io/kind-256.in"
+  printf 'open-skip\nopen %s 1 1 4 %s 4 %s 65536 %s 123 300\n' "$key" "$id" "$ad" "$body" > "$io/clear-length-65536.in"
+  printf 'open-skip\nseal %s 1 1 4 %s 4 %s - %s 123 65536\n' "$key" "$id" "$ad" "$plain" > "$io/out-length-65536.in"
+  printf 'open-skip\nmac %s 4294967296 6e6574 4 e803\n' "$key" > "$io/epoch-4294967296.in"
+  printf 'open-skip\nverify %s 7 6e6574 256 e803 56db9bec\n' "$key" > "$io/n-256.in"
+  printf 'open-skip\nseal %s 1 255 4 %s 4 %s - %s 123 300\n' "$key" "$id" "$ad" "$plain" > "$io/dir-255.in"
+  printf 'open-skip\nmac %s 4294967295 6e6574 4 e803\n' "$key" > "$io/epoch-4294967295.in"
+  printf 'open-skip\nseal %s 1 1 4 %s 4 %s - %s 123 65535\n' "$key" "$id" "$ad" "$plain" > "$io/out-length-65535.in"
 }
 
 # run_limited <seconds> <lang> <args...>: run_lang with a time limit (run_lang is a function, so perl starts a bash that has it).
@@ -60,13 +77,14 @@ run_limited() {
   perl -e 'alarm shift; exec @ARGV' "$seconds" bash -c 'run_lang "$@"' _ "$@"
 }
 
-# check <lang> <case> <want: fail|skip>
+# check <lang> <case> <want: fail|skip|=<answer to line 2>>
 check() {
-  local lang="$1" name="$2" want="$3" rc=0 out="$io/$2.$1.out" err="$io/$2.$1.err"
+  local lang="$1" name="$2" want="$3" rc=0 out="$io/$2.$1.out" err="$io/$2.$1.err" answer
   run_limited "$limit_seconds" "$lang" frame-batch "$io/$name.in" > "$out" 2> "$err" < /dev/null || rc=$?
-  if [ "$want" = "skip" ]; then
-    if [ "$rc" -ne 0 ] || [ "$(tr '\n' ' ' < "$out")" != "skip skip " ]; then
-      echo "FAIL $lang $name: exit $rc, wanted 0 and two lines \"skip\""
+  if [ "$want" = "skip" ] || [ "${want#=}" != "$want" ]; then
+    answer="${want#=}"
+    if [ "$rc" -ne 0 ] || [ "$(tr '\n' ' ' < "$out")" != "skip $answer " ]; then
+      echo "FAIL $lang $name: exit $rc, wanted 0 and the lines \"skip\" and \"$answer\""
       sed -n '1,3p' "$out" "$err" | cut -c1-160
       return 1
     fi
@@ -90,6 +108,12 @@ lang_cases() {
     check "$lang" "$name" fail || bad=1
   done
   check "$lang" skip skip || bad=1
+  for name in dir-256 dir-minus-1 tag-length-256 kind-256 clear-length-65536 out-length-65536 epoch-4294967296 n-256; do
+    check "$lang" "$name" fail || bad=1
+  done
+  check "$lang" dir-255 =BadValue || bad=1
+  check "$lang" epoch-4294967295 =BadValue || bad=1
+  check "$lang" out-length-65535 "=$body" || bad=1
   if [ "$lang" = go ]; then
     for name in bad-direction bad-tag-length bad-kind long-line; do
       check "$lang" "$name" fail || bad=1
@@ -116,4 +140,4 @@ if [ -n "$failed" ]; then
   echo "ring-frame-drivers: failed in:$failed"
   exit 1
 fi
-echo "ring-frame-drivers: all passed (${#langs[@]} languages)"
+echo "ring-frame-drivers: all passed (${#langs[@]} languages, $(cat "$io"/result.* | grep -c '^PASS ') checks)"

@@ -16,8 +16,12 @@ const bytesOf = (token: string | undefined): Uint8Array => {
   return new Uint8Array(token === "-" ? [] : Buffer.from(token, "hex"));
 };
 
-const numberOf = (token: string | undefined): number => {
-  if (token === undefined || !/^[0-9]+$/.test(token)) throw new Error(`bad number: ${token}`);
+// A number is decimal digits only (no sign, space or `_`) and at most top, or the line is malformed.
+const BYTE = 255, LENGTH = 65535, EPOCH = 4294967295;
+const numberOf = (token: string | undefined, top: number): number => {
+  if (token === undefined || !/^[0-9]+$/.test(token) || Number(token) > top) {
+    throw new Error(`bad number: ${token} (digits of 0 to ${top})`);
+  }
   return Number(token);
 };
 
@@ -51,13 +55,13 @@ function mapKind(result: object): string {
 function loaded(words: string[]): [number, number] {
   const digits = words[9] ?? "123";
   if (!/^[123]+$/.test(digits)) throw new Error(`bad dirs: ${digits}`);
-  const size = words[10] === undefined ? 300 : numberOf(words[10]);
+  const size = words[10] === undefined ? 300 : numberOf(words[10], LENGTH);
   return [[...digits].reduce((mask, digit) => mask | (1 << (Number(digit) - 1)), 0), size];
 }
 
 function seal(words: string[]): string {
-  const [key, epoch, d, tagLen] = [bytesOf(words[0]), numberOf(words[1]), numberOf(words[2]), numberOf(words[3])];
-  const [msgId, kind, ad, clear, plain] = [bytesOf(words[4]), numberOf(words[5]), bytesOf(words[6]), bytesOf(words[7]), bytesOf(words[8])];
+  const [key, epoch, d, tagLen] = [bytesOf(words[0]), numberOf(words[1], EPOCH), numberOf(words[2], BYTE), numberOf(words[3], BYTE)];
+  const [msgId, kind, ad, clear, plain] = [bytesOf(words[4]), numberOf(words[5], BYTE), bytesOf(words[6]), bytesOf(words[7]), bytesOf(words[8])];
   const [directions, size] = loaded(words);
   const session = FrameSession.load(key, epoch, new FrameConfig(tagLen, directions));
   if (session === null) return "BadValue";
@@ -68,8 +72,8 @@ function seal(words: string[]): string {
 }
 
 function open(words: string[]): string {
-  const [key, epoch, d, tagLen] = [bytesOf(words[0]), numberOf(words[1]), numberOf(words[2]), numberOf(words[3])];
-  const [msgId, kind, ad, clearLen, body] = [bytesOf(words[4]), numberOf(words[5]), bytesOf(words[6]), numberOf(words[7]), bytesOf(words[8])];
+  const [key, epoch, d, tagLen] = [bytesOf(words[0]), numberOf(words[1], EPOCH), numberOf(words[2], BYTE), numberOf(words[3], BYTE)];
+  const [msgId, kind, ad, clearLen, body] = [bytesOf(words[4]), numberOf(words[5], BYTE), bytesOf(words[6]), numberOf(words[7], LENGTH), bytesOf(words[8])];
   const [directions, size] = loaded(words);
   const session = FrameSession.load(key, epoch, new FrameConfig(tagLen, directions));
   if (session === null) return "BadValue";
@@ -83,7 +87,7 @@ function open(words: string[]): string {
 }
 
 function mac(words: string[]): string {
-  const [key, epoch, label, n, message] = [bytesOf(words[0]), numberOf(words[1]), bytesOf(words[2]), numberOf(words[3]), bytesOf(words[4])];
+  const [key, epoch, label, n, message] = [bytesOf(words[0]), numberOf(words[1], EPOCH), bytesOf(words[2]), numberOf(words[3], BYTE), bytesOf(words[4])];
   const mk = MacKey.derive(key, epoch, label);
   if (mk === null) return "BadValue";
   const result = mk.tag([message], n);
@@ -92,7 +96,7 @@ function mac(words: string[]): string {
 }
 
 function verify(words: string[]): string {
-  const [key, epoch, label, n, message, tag] = [bytesOf(words[0]), numberOf(words[1]), bytesOf(words[2]), numberOf(words[3]), bytesOf(words[4]), bytesOf(words[5])];
+  const [key, epoch, label, n, message, tag] = [bytesOf(words[0]), numberOf(words[1], EPOCH), bytesOf(words[2]), numberOf(words[3], BYTE), bytesOf(words[4]), bytesOf(words[5])];
   const mk = MacKey.derive(key, epoch, label);
   if (mk === null) return "BadValue";
   return mk.verify([message], tag) ? "valid" : "invalid";

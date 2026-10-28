@@ -18,7 +18,27 @@ static class HandoffFrame
         _ => "error",
     };
 
-    // The package takes the byte as it comes: a direction outside 1 to 3 is its BadValue to give.
+    const long MaxByte = 255, MaxLength = 65535, MaxEpoch = 4294967295;
+
+    // A number is decimal digits only (no sign, space or `_`) and at most top, or the line is malformed; no digit string
+    // wraps or overflows into another value.
+    static long Number(string token, long top)
+    {
+        var bad = new FormatException($"bad number: {token} (digits of 0 to {top})");
+        if (token.Length == 0) throw bad;
+        long n = 0;
+        foreach (var c in token)
+        {
+            if (c is < '0' or > '9') throw bad;
+            n = n * 10 + (c - '0');
+            if (n > top) throw bad;
+        }
+        return n;
+    }
+
+    static int Small(string token, long top) => (int)Number(token, top);
+
+    // The package takes the byte as it comes (0 to 255 here): a direction outside 1 to 3 is its BadValue to give.
     static FrameDirection Direction(int d) => (FrameDirection)(byte)d;
 
     // The optional trailing fields of a seal or open line: the directions loaded (digits 1 to 3) and the output buffer size.
@@ -26,7 +46,7 @@ static class HandoffFrame
     {
         var digits = w.Length > 9 ? w[9] : "123";
         if (digits.Length == 0 || digits.Any(c => c is < '1' or > '3')) throw new FormatException($"bad dirs: {digits}");
-        var size = w.Length > 10 ? int.Parse(w[10]) : 300;
+        var size = w.Length > 10 ? Small(w[10], MaxLength) : 300;
         var mask = 0;
         foreach (var digit in digits) mask |= 1 << (digit - '1');
         return ((FrameDirections)mask, size);
@@ -35,14 +55,15 @@ static class HandoffFrame
     static string Seal(string[] w)
     {
         var key = BytesOf(w[0]);
-        int epoch = int.Parse(w[1]), d = int.Parse(w[2]), tagLen = int.Parse(w[3]);
+        uint epoch = (uint)Number(w[1], MaxEpoch);
+        int d = Small(w[2], MaxByte), tagLen = Small(w[3], MaxByte);
         var msgId = BytesOf(w[4]);
-        int kind = int.Parse(w[5]);
+        int kind = Small(w[5], MaxByte);
         var ad = BytesOf(w[6]);
         var clear = BytesOf(w[7]);
         var plain = BytesOf(w[8]);
         var (directions, size) = Loaded(w);
-        var session = FrameSession.Load(key, (uint)epoch, new FrameConfig(tagLen, directions));
+        var session = FrameSession.Load(key, epoch, new FrameConfig(tagLen, directions));
         if (session is null) return "BadValue";
         var buf = new byte[size];
         var err = session.Seal(Direction(d), new MsgContext(msgId, kind), ad, clear, plain, buf, out int written);
@@ -53,14 +74,15 @@ static class HandoffFrame
     static string Open(string[] w)
     {
         var key = BytesOf(w[0]);
-        int epoch = int.Parse(w[1]), d = int.Parse(w[2]), tagLen = int.Parse(w[3]);
+        uint epoch = (uint)Number(w[1], MaxEpoch);
+        int d = Small(w[2], MaxByte), tagLen = Small(w[3], MaxByte);
         var msgId = BytesOf(w[4]);
-        int kind = int.Parse(w[5]);
+        int kind = Small(w[5], MaxByte);
         var ad = BytesOf(w[6]);
-        int clearLen = int.Parse(w[7]);
+        int clearLen = Small(w[7], MaxLength);
         var body = BytesOf(w[8]);
         var (directions, size) = Loaded(w);
-        var session = FrameSession.Load(key, (uint)epoch, new FrameConfig(tagLen, directions));
+        var session = FrameSession.Load(key, epoch, new FrameConfig(tagLen, directions));
         if (session is null) return "BadValue";
         var buf = new byte[size];
         var err = session.Open(Direction(d), new MsgContext(msgId, kind), ad, body, clearLen, buf, out var opened);
@@ -71,11 +93,11 @@ static class HandoffFrame
     static string Mac(string[] w)
     {
         var key = BytesOf(w[0]);
-        int epoch = int.Parse(w[1]);
+        uint epoch = (uint)Number(w[1], MaxEpoch);
         var label = BytesOf(w[2]);
-        int n = int.Parse(w[3]);
+        int n = Small(w[3], MaxByte);
         var message = BytesOf(w[4]);
-        var mk = MacKey.Derive(key, (uint)epoch, label);
+        var mk = MacKey.Derive(key, epoch, label);
         if (mk is null) return "BadValue";
         var tag = new byte[n];
         var err = mk.Tag((ReadOnlySpan<byte>)message, tag);
@@ -86,12 +108,12 @@ static class HandoffFrame
     static string Verify(string[] w)
     {
         var key = BytesOf(w[0]);
-        int epoch = int.Parse(w[1]);
+        uint epoch = (uint)Number(w[1], MaxEpoch);
         var label = BytesOf(w[2]);
-        int n = int.Parse(w[3]);
+        _ = Number(w[3], MaxByte); // n: checked, not used (the tag length comes from the tag)
         var message = BytesOf(w[4]);
         var tag = BytesOf(w[5]);
-        var mk = MacKey.Derive(key, (uint)epoch, label);
+        var mk = MacKey.Derive(key, epoch, label);
         if (mk is null) return "BadValue";
         return mk.Verify((ReadOnlySpan<byte>)message, tag) ? "valid" : "invalid";
     }

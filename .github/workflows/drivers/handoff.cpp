@@ -419,11 +419,19 @@ std::vector<std::uint8_t> frame_bytes(std::string const& token) {
   return out;
 }
 
-int frame_int(std::vector<std::string> const& w, std::size_t i) {
+// A number is decimal digits only (no sign, space or `_`) and at most top (255, 65535 or 4294967295 by field); no digit
+// string wraps or overflows into another value.
+std::uint32_t frame_int(std::vector<std::string> const& w, std::size_t i, std::uint32_t top) {
   std::string const& token = w.at(i);
-  if (token.empty() || token.find_first_not_of("0123456789") != std::string::npos)
-    throw std::invalid_argument("bad number: " + token);
-  return std::stoi(token);
+  std::uint64_t n = 0;
+  bool bad = token.empty();
+  for (std::size_t j = 0; j < token.size() && !bad; ++j) {
+    n = n * 10 + static_cast<std::uint64_t>(token[j] - '0');
+    bad = token[j] < '0' || token[j] > '9' || n > top;
+  }
+  if (bad)
+    throw std::invalid_argument("bad number: " + token + " (digits of 0 to " + std::to_string(top) + ")");
+  return static_cast<std::uint32_t>(n);
 }
 
 std::string frame_hex(std::uint8_t const* data, std::size_t len) {
@@ -441,8 +449,8 @@ char const* frame_kind(packbin::Error e) {
   }
 }
 
-// The package takes the byte as it comes: a direction outside 1 to 3 is its BadValue to give.
-packbin::FrameDirection frame_dir(int d) {
+// The package takes the byte as it comes (0 to 255 here): a direction outside 1 to 3 is its BadValue to give.
+packbin::FrameDirection frame_dir(std::uint32_t d) {
   return static_cast<packbin::FrameDirection>(static_cast<std::uint8_t>(d));
 }
 
@@ -457,23 +465,22 @@ packbin::FrameDirections frame_dirs(std::vector<std::string> const& w) {
 }
 
 std::size_t frame_out_len(std::vector<std::string> const& w) {
-  return w.size() > 10 ? static_cast<std::size_t>(frame_int(w, 10)) : 300;
+  return w.size() > 10 ? frame_int(w, 10, 65535) : 300;
 }
 
 std::string frame_seal(std::vector<std::string> const& w) {
   auto key = frame_bytes(w.at(0));
-  int epoch = frame_int(w, 1), d = frame_int(w, 2), tag_len = frame_int(w, 3);
+  std::uint32_t epoch = frame_int(w, 1, 4294967295u), d = frame_int(w, 2, 255), tag_len = frame_int(w, 3, 255);
   auto msg_id = frame_bytes(w.at(4));
-  int kind = frame_int(w, 5);
+  std::uint32_t kind = frame_int(w, 5, 255);
   auto ad = frame_bytes(w.at(6)), clear = frame_bytes(w.at(7)), plain = frame_bytes(w.at(8));
+  std::vector<std::uint8_t> out(frame_out_len(w));
   packbin::FrameSession session;
-  auto r = session.load({key.data(), key.size()}, static_cast<std::uint32_t>(epoch),
-      {static_cast<std::uint8_t>(tag_len), frame_dirs(w)});
+  auto r = session.load({key.data(), key.size()}, epoch, {static_cast<std::uint8_t>(tag_len), frame_dirs(w)});
   if (!r.ok()) return frame_kind(r.error);
   packbin::MsgContext ctx{};
   std::memcpy(ctx.msg_id, msg_id.data(), msg_id.size() < 8 ? msg_id.size() : 8);
   ctx.kind = static_cast<std::uint8_t>(kind);
-  std::vector<std::uint8_t> out(frame_out_len(w));
   r = session.seal(frame_dir(d), ctx, {ad.data(), ad.size()}, {clear.data(), clear.size()},
       {plain.data(), plain.size()}, {out.data(), out.size()});
   return r.ok() ? frame_hex(out.data(), r.offset) : frame_kind(r.error);
@@ -481,51 +488,48 @@ std::string frame_seal(std::vector<std::string> const& w) {
 
 std::string frame_open(std::vector<std::string> const& w) {
   auto key = frame_bytes(w.at(0));
-  int epoch = frame_int(w, 1), d = frame_int(w, 2), tag_len = frame_int(w, 3);
+  std::uint32_t epoch = frame_int(w, 1, 4294967295u), d = frame_int(w, 2, 255), tag_len = frame_int(w, 3, 255);
   auto msg_id = frame_bytes(w.at(4));
-  int kind = frame_int(w, 5);
+  std::uint32_t kind = frame_int(w, 5, 255);
   auto ad = frame_bytes(w.at(6));
-  int clear_len = frame_int(w, 7);
+  std::uint32_t clear_len = frame_int(w, 7, 65535);
   auto body = frame_bytes(w.at(8));
+  std::vector<std::uint8_t> out(frame_out_len(w));
   packbin::FrameSession session;
-  auto r = session.load({key.data(), key.size()}, static_cast<std::uint32_t>(epoch),
-      {static_cast<std::uint8_t>(tag_len), frame_dirs(w)});
+  auto r = session.load({key.data(), key.size()}, epoch, {static_cast<std::uint8_t>(tag_len), frame_dirs(w)});
   if (!r.ok()) return frame_kind(r.error);
   packbin::MsgContext ctx{};
   std::memcpy(ctx.msg_id, msg_id.data(), msg_id.size() < 8 ? msg_id.size() : 8);
   ctx.kind = static_cast<std::uint8_t>(kind);
-  std::vector<std::uint8_t> out(frame_out_len(w));
   packbin::FrameOpened opened;
   r = session.open(frame_dir(d), ctx, {ad.data(), ad.size()}, {body.data(), body.size()},
-      static_cast<std::size_t>(clear_len), {out.data(), out.size()}, opened);
+      clear_len, {out.data(), out.size()}, opened);
   return r.ok() ? frame_hex(out.data(), opened.plain_len) : frame_kind(r.error);
 }
 
 std::string frame_mac(std::vector<std::string> const& w) {
   auto key = frame_bytes(w.at(0));
-  int epoch = frame_int(w, 1);
+  std::uint32_t epoch = frame_int(w, 1, 4294967295u);
   auto label = frame_bytes(w.at(2));
-  int n = frame_int(w, 3);
+  std::uint32_t n = frame_int(w, 3, 255);
   auto message = frame_bytes(w.at(4));
   packbin::MacKey mk;
-  auto r = mk.derive({key.data(), key.size()}, static_cast<std::uint32_t>(epoch),
-      {label.data(), label.size()});
+  auto r = mk.derive({key.data(), key.size()}, epoch, {label.data(), label.size()});
   if (!r.ok()) return frame_kind(r.error);
-  std::uint8_t out[32];
+  std::uint8_t out[255];
   packbin::ByteSpan part{message.data(), message.size()};
-  r = mk.tag(&part, 1, {out, static_cast<std::size_t>(n)});
-  return r.ok() ? frame_hex(out, static_cast<std::size_t>(n)) : frame_kind(r.error);
+  r = mk.tag(&part, 1, {out, n});
+  return r.ok() ? frame_hex(out, n) : frame_kind(r.error);
 }
 
 std::string frame_verify(std::vector<std::string> const& w) {
   auto key = frame_bytes(w.at(0));
-  int epoch = frame_int(w, 1);
+  std::uint32_t epoch = frame_int(w, 1, 4294967295u);
   auto label = frame_bytes(w.at(2));
-  // n = w.at(3), not used for verify
+  frame_int(w, 3, 255);  // n: checked, not used (the tag length comes from the tag)
   auto message = frame_bytes(w.at(4)), tag = frame_bytes(w.at(5));
   packbin::MacKey mk;
-  auto r = mk.derive({key.data(), key.size()}, static_cast<std::uint32_t>(epoch),
-      {label.data(), label.size()});
+  auto r = mk.derive({key.data(), key.size()}, epoch, {label.data(), label.size()});
   if (!r.ok()) return frame_kind(r.error);
   packbin::ByteSpan part{message.data(), message.size()};
   return mk.verify(&part, 1, {tag.data(), tag.size()}) ? "valid" : "invalid";

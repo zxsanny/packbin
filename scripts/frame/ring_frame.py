@@ -16,7 +16,9 @@ built on the writers' output, and must refuse them as the row says (TagMismatch 
 refuse-open row to every reader with the open rows; each must give the error name of the row (`dirs` names the
 directions the session loaded, `out_len` is the caller's output buffer). The environment variable RING_FRAME_CASES
 names another file (the self-test of the ring). A row that the reference codec does not confirm is an error of the file, not of a
-package: the script stops before any driver result is read.
+package: the script stops before any driver result is read. So is a number outside the range every driver reads
+(RANGES, fixtures/frame/README.md). `check` prints at most SHOWN mismatch lines for a pair or a reader, then
+`... and N more`.
 """
 import os
 import sys
@@ -29,6 +31,19 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 
 class FileError(Exception):
     pass
+
+
+# The range of each number field of a row and of a driver line: decimal digits only, 0 to the top (AZ-3356).
+RANGES = {"epoch": 0xFFFFFFFF, "dir": 255, "tag_len": 255, "kind": 255, "n": 255, "clear_len": 0xFFFF, "out_len": 0xFFFF}
+SHOWN = 5
+
+
+def number(w, i, field, where):
+    """Field i of row w: a number of RANGES[field], or the row is refused by name."""
+    token, top = w[i], RANGES[field]
+    if not (token.isascii() and token.isdigit()) or len(token.lstrip("0")) > len(str(top)) or int(token) > top:
+        raise FileError("%s: %s %s %s is not decimal digits of 0 to %d" % (where, w[1], field, token, top))
+    return int(token)
 
 
 def unhex(token):
@@ -99,23 +114,28 @@ class Rows:
             raise FileError("%s: dirs %s is not digits of 1 to 3" % (where, token))
         return tuple(int(c) for c in token)
 
+    @staticmethod
+    def _ends(w, where):
+        """epoch, dir and tag_len of a seal, open, refuse-seal or refuse-open row (fields 3 to 5)."""
+        return number(w, 3, "epoch", where), number(w, 4, "dir", where), number(w, 5, "tag_len", where)
+
     def _add(self, w, where):
         kind = w[0]
         if kind == "seal":
             case = w[1]
-            key, epoch, d = unhex(w[2]), int(w[3]), int(w[4])
-            tag_len, msg_id, fkind = int(w[5]), unhex(w[6]), int(w[7])
+            key, (epoch, d, tag_len) = unhex(w[2]), self._ends(w, where)
+            msg_id, fkind = unhex(w[6]), number(w, 7, "kind", where)
             ad, clear, plain = unhex(w[8]), unhex(w[9]), unhex(w[10])
             expected = unhex(w[11])
-            out_len = int(w[12]) if len(w) > 12 else None
+            out_len = number(w, 12, "out_len", where) if len(w) > 12 else None
             ref = ff.seal(key, epoch, d, tag_len, msg_id, fkind, ad, clear, plain, out_len=out_len)
             if ref != expected:
                 raise FileError("%s: %s expected %s, reference gives %s" % (where, case, expected.hex(), ref.hex()))
             self.seal.append((case, key, epoch, d, tag_len, msg_id, fkind, ad, clear, plain, expected.hex(), out_len))
         elif kind == "mac":
             case = w[1]
-            key, epoch, label = unhex(w[2]), int(w[3]), unhex(w[4])
-            n, message = int(w[5]), unhex(w[6])
+            key, epoch, label = unhex(w[2]), number(w, 3, "epoch", where), unhex(w[4])
+            n, message = number(w, 5, "n", where), unhex(w[6])
             expected = unhex(w[7])
             ref = ff.mac_tag(key, epoch, label, n, [message])
             if ref != expected:
@@ -123,8 +143,9 @@ class Rows:
             self.mac.append((case, key, epoch, label, n, message, expected.hex()))
         elif kind == "open":
             case = w[1]
-            key, epoch, d, tag_len = unhex(w[2]), int(w[3]), int(w[4]), int(w[5])
-            msg_id, fkind, ad, clear_len = unhex(w[6]), int(w[7]), unhex(w[8]), int(w[9])
+            key, (epoch, d, tag_len) = unhex(w[2]), self._ends(w, where)
+            msg_id, fkind, ad = unhex(w[6]), number(w, 7, "kind", where), unhex(w[8])
+            clear_len = number(w, 9, "clear_len", where)
             body, expected = unhex(w[10]), w[11]
             try:
                 ff.open_frame(key, epoch, d, tag_len, msg_id, fkind, ad, clear_len, body)
@@ -137,9 +158,10 @@ class Rows:
                                      "123", None))
         elif kind == "refuse-seal":
             case = w[1]
-            key, epoch, d, tag_len = unhex(w[2]), int(w[3]), int(w[4]), int(w[5])
-            msg_id, fkind, ad, clear, plain = unhex(w[6]), int(w[7]), unhex(w[8]), unhex(w[9]), unhex(w[10])
-            dirs, out_len, expected = self._dirs(w[11], where), int(w[12]), w[13]
+            key, (epoch, d, tag_len) = unhex(w[2]), self._ends(w, where)
+            msg_id, fkind = unhex(w[6]), number(w, 7, "kind", where)
+            ad, clear, plain = unhex(w[8]), unhex(w[9]), unhex(w[10])
+            dirs, out_len, expected = self._dirs(w[11], where), number(w, 12, "out_len", where), w[13]
             try:
                 ff.seal(key, epoch, d, tag_len, msg_id, fkind, ad, clear, plain, dirs=dirs, out_len=out_len)
                 got = "sealed"
@@ -151,9 +173,10 @@ class Rows:
                                      w[11], out_len))
         elif kind == "refuse-open":
             case = w[1]
-            key, epoch, d, tag_len = unhex(w[2]), int(w[3]), int(w[4]), int(w[5])
-            msg_id, fkind, ad, clear_len, body = unhex(w[6]), int(w[7]), unhex(w[8]), int(w[9]), unhex(w[10])
-            dirs, out_len, expected = self._dirs(w[11], where), int(w[12]), w[13]
+            key, (epoch, d, tag_len) = unhex(w[2]), self._ends(w, where)
+            msg_id, fkind, ad = unhex(w[6]), number(w, 7, "kind", where), unhex(w[8])
+            clear_len, body = number(w, 9, "clear_len", where), unhex(w[10])
+            dirs, out_len, expected = self._dirs(w[11], where), number(w, 12, "out_len", where), w[13]
             try:
                 ff.open_frame(key, epoch, d, tag_len, msg_id, fkind, ad, clear_len, body, dirs=dirs, out_len=out_len)
                 got = "opened"
@@ -165,7 +188,8 @@ class Rows:
                                      w[11], out_len))
         elif kind == "refuse-mac":
             case = w[1]
-            key, epoch, label, n, message, expected = unhex(w[2]), int(w[3]), unhex(w[4]), int(w[5]), unhex(w[6]), w[7]
+            key, epoch, label = unhex(w[2]), number(w, 3, "epoch", where), unhex(w[4])
+            n, message, expected = number(w, 5, "n", where), unhex(w[6]), w[7]
             try:
                 ff.mac_tag(key, epoch, label, n, [message])
                 got = "tagged"
@@ -176,7 +200,7 @@ class Rows:
             self.refuse_mac.append((case, key, epoch, label, n, message, expected))
         elif kind == "verify":
             case = w[1]
-            key, epoch, label, n = unhex(w[2]), int(w[3]), unhex(w[4]), int(w[5])
+            key, epoch, label, n = unhex(w[2]), number(w, 3, "epoch", where), unhex(w[4]), number(w, 5, "n", where)
             message, tag, expected = unhex(w[6]), unhex(w[7]), w[8]
             if expected != "invalid":
                 raise FileError("%s: %s a verify row says invalid, not %s" % (where, case, expected))
@@ -189,6 +213,14 @@ class Rows:
             self.refuse_verify.append((case, key, epoch, label, n, message, tag))
         else:
             raise FileError("%s: unknown row kind %s" % (where, kind))
+
+
+def show(lines):
+    """The first SHOWN mismatch lines of a pair or a reader, and a count of the rest: no mismatch is hidden."""
+    for line in lines[:SHOWN]:
+        print("    " + line)
+    if len(lines) > SHOWN:
+        print("    ... and %d more" % (len(lines) - SHOWN))
 
 
 def tail(dirs, out_len):
@@ -353,8 +385,7 @@ def cmd_check(dirname, writers, readers):
             pairs += 1
             total_wrong += len(wrong) - shown
             print("pair %s -> %s: %d rows, %d mismatched" % (writer, reader, seen, len(wrong)))
-            for line in wrong[:5]:
-                print("    " + line)
+            show(wrong)
 
         # The tampered rows come once per reader, after the lines built on the writers' output.
         refused = []
@@ -378,8 +409,7 @@ def cmd_check(dirname, writers, readers):
         print("refusals %s: %d rows, %d mismatched" % (
             reader, len(rows.refuse_open) + len(rows.refuse_verify) + len(rows.refuse_seal) + len(rows.refuse_mac),
             len(refused)))
-        for line in refused[:5]:
-            print("    " + line)
+        show(refused)
 
     for line in notes:
         print("ring-frame: " + line)

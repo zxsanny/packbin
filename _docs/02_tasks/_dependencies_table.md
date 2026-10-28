@@ -486,3 +486,5 @@ Loop 74 (2026-10-26, ADR-009: remove the stream session; D1 frame names; D2 cryp
 | AZ-3341 | frame_ring_tamper_wide (loop 77, assessment round 1) | 3 | AZ-3338 | none |
 | AZ-3354 | frame_ring_refusal_rows (loop 78) | 5 | AZ-3338, AZ-3341 | none |
 | AZ-3355 | frame_ring_driver_hardening (loop 78) | 3 | AZ-3354 | none |
+| AZ-3356 | frame_ring_number_ranges (loop 79) | 3 | AZ-3354, AZ-3355 | none |
+| AZ-3357 | rust_test_build_warnings (loop 79) | 2 | None | none |

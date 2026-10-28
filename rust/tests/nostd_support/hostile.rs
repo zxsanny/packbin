@@ -133,5 +133,3 @@ pub fn scheme_of<'a>(fields: &'a [packbin::nostd::Field], id: &str) -> Scheme<'a
         scheme
     }
 }
-
-pub use super::from_hex;

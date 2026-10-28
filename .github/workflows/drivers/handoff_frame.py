@@ -29,13 +29,23 @@ def _hex(data: bytes | bytearray) -> str:
     return bytes(data).hex() if len(data) else "-"
 
 
+BYTE, LENGTH, EPOCH = 255, 65535, 4294967295
+
+
+def _number(token: str, top: int) -> int:
+    """A number of a line is decimal digits only (no sign, space or `_`) and at most top, or the line is malformed."""
+    if not (token.isascii() and token.isdigit()) or len(token.lstrip("0")) > len(str(top)) or int(token) > top:
+        raise ValueError("bad number: %s (digits of 0 to %d)" % (token, top))
+    return int(token)
+
+
 KINDS = {BadValue: "BadValue", TooLong: "TooLong", BufferFull: "BufferFull",
          ShortPacket: "ShortPacket", TagMismatch: "TagMismatch"}
 
 
 def _directions(words: list[str]) -> tuple[FrameDirections, int]:
     """The optional trailing fields of a seal or open line: the directions loaded and the output buffer size."""
-    digits, size = (words[9], int(words[10])) if len(words) > 10 else ("123", 300)
+    digits, size = (words[9], _number(words[10], LENGTH)) if len(words) > 10 else ("123", 300)
     if not digits or set(digits) - set("123"):
         raise ValueError("bad dirs: %s" % digits)
     return FrameDirections(sum(1 << (int(digit) - 1) for digit in digits)), size
@@ -46,8 +56,9 @@ def _kind(result: object) -> str:
 
 
 def _seal(words: list[str]) -> str:
-    key, epoch, d, tag_len = _bytes(words[0]), int(words[1]), int(words[2]), int(words[3])
-    msg_id, kind, ad, clear, plain = _bytes(words[4]), int(words[5]), _bytes(words[6]), _bytes(words[7]), _bytes(words[8])
+    key, epoch, d, tag_len = _bytes(words[0]), _number(words[1], EPOCH), _number(words[2], BYTE), _number(words[3], BYTE)
+    msg_id, kind, ad = _bytes(words[4]), _number(words[5], BYTE), _bytes(words[6])
+    clear, plain = _bytes(words[7]), _bytes(words[8])
     directions, size = _directions(words)
     session = FrameSession.load(key, epoch, FrameConfig(tag_len, directions))
     if isinstance(session, BadValue):
@@ -60,8 +71,9 @@ def _seal(words: list[str]) -> str:
 
 
 def _open(words: list[str]) -> str:
-    key, epoch, d, tag_len = _bytes(words[0]), int(words[1]), int(words[2]), int(words[3])
-    msg_id, kind, ad, clear_len, body = _bytes(words[4]), int(words[5]), _bytes(words[6]), int(words[7]), _bytes(words[8])
+    key, epoch, d, tag_len = _bytes(words[0]), _number(words[1], EPOCH), _number(words[2], BYTE), _number(words[3], BYTE)
+    msg_id, kind, ad = _bytes(words[4]), _number(words[5], BYTE), _bytes(words[6])
+    clear_len, body = _number(words[7], LENGTH), _bytes(words[8])
     directions, size = _directions(words)
     session = FrameSession.load(key, epoch, FrameConfig(tag_len, directions))
     if isinstance(session, BadValue):
@@ -74,7 +86,8 @@ def _open(words: list[str]) -> str:
 
 
 def _mac(words: list[str]) -> str:
-    key, epoch, label, n, message = _bytes(words[0]), int(words[1]), _bytes(words[2]), int(words[3]), _bytes(words[4])
+    key, epoch, label = _bytes(words[0]), _number(words[1], EPOCH), _bytes(words[2])
+    n, message = _number(words[3], BYTE), _bytes(words[4])
     mac = MacKey.derive(key, epoch, label)
     if isinstance(mac, BadValue):
         return "BadValue"
@@ -83,7 +96,9 @@ def _mac(words: list[str]) -> str:
 
 
 def _verify(words: list[str]) -> str:
-    key, epoch, label, n, message, tag = _bytes(words[0]), int(words[1]), _bytes(words[2]), int(words[3]), _bytes(words[4]), _bytes(words[5])
+    key, epoch, label = _bytes(words[0]), _number(words[1], EPOCH), _bytes(words[2])
+    _number(words[3], BYTE)  # n: checked, not used (the tag length comes from the tag)
+    message, tag = _bytes(words[4]), _bytes(words[5])
     mac = MacKey.derive(key, epoch, label)
     if isinstance(mac, BadValue):
         return "BadValue"

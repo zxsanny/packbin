@@ -15,6 +15,7 @@ pub(crate) fn chacha_block() {
 }
 
 /// (compressions, blocks) since the last call to `take` on this thread.
+#[cfg(feature = "frame")]
 pub(crate) fn take() -> (usize, usize) {
     (SHA.with(|c| c.replace(0)), CHACHA.with(|c| c.replace(0)))
 }

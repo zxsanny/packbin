@@ -7,10 +7,10 @@
 
 mod nostd_support;
 
-use nostd_support::hostile::{cases, from_hex};
+use nostd_support::hostile::cases;
 use nostd_support::random::set_items;
 use nostd_support::tree::{nostd_fields, Node};
-use nostd_support::Slots;
+use nostd_support::{from_hex, Slots};
 use packbin::nostd::{pack, Error, Kind, Num, Row, Scheme};
 
 use Kind::*;

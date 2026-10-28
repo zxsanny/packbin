@@ -40,5 +40,15 @@ Read each non-comment line, split on spaces, then on the first `=`. Build the ca
 
 `ring-cases.txt` is not this file: it holds the rows of the cross-language ring (`.github/workflows/ring-frame.sh`, AZ-3338, AZ-3341, AZ-3354), each checked against the reference on every load. Row kinds: `seal`, `mac` (good rows; a `seal` row may end in an `out_len`, the exact buffer), `open` and `verify` (tampered input), and `refuse-seal`, `refuse-open`, `refuse-mac` (refusals by name). `refuse-seal` and `refuse-open` carry `dirs` (digits 1 to 3, the directions the session loaded) and `out_len` (the caller's buffer) before the expected error kind. The refusal cases are those of `vectors.txt` written out as hex; a driver prints the error kind, never aborts, and answers the next line.
 
-A direction outside 1 to 3 cannot be handed to a package whose type has no such value. Java passes `null` (the package answers `BadValue`), Swift calls `FrameDirection(number:)` (the package throws `BadValue`), and Rust has no value to pass: its driver prints `BadValue` where `direction()` has none, as `rust/tests/frame_vectors_tests.rs` reads the same rows. C#, C++, Go, Python and TypeScript hand the number to the package.
+Every number of a row and of a driver line (`seal`, `open`, `mac`, `verify`) is decimal digits only: no sign, space, `+` or `_`; leading zeros are allowed (AZ-3356). Each lies in its field's range:
+
+| field | range |
+| --- | --- |
+| `dir`, `tag_len`, `kind`, `n` | 0 to 255 |
+| `epoch` | 0 to 4,294,967,295 |
+| `clear_len`, `out_len` | 0 to 65,535 |
+
+A number outside its range, or with any other character, is a malformed line: the driver exits non-zero with a message naming the line (`frame line N`) and prints no result for it, as for a bad hex digit, in all 8 drivers. `scripts/frame/ring_frame.py` refuses a row of `ring-cases.txt` with such a number (exit 1, the row named). A number inside its range goes to the package unchanged, and the package gives the answer (direction 255 is its `BadValue`); the rows `R.seal.dir255`, `R.seal.tag255`, `R.seal.kind255`, `R.seal.epochffffffff`, `R.mac.n255` and `E1.out65535` sit at the top of the ranges.
+
+A direction outside 1 to 3 cannot be handed to a package whose type has no such value. Java passes `null` (the package answers `BadValue`), Swift calls `FrameDirection(number:)` (the package throws `BadValue`), and Rust has no value to pass: its driver prints `BadValue` where `direction()` has none, as `rust/tests/frame_vectors_tests.rs` reads the same rows. C#, C++, Go, Python and TypeScript hand the number to the package. In the same way the Java package takes the epoch as an `int`: for an epoch above 2,147,483,647 the Java driver prints `BadValue` itself, the package's answer to any epoch above 0xFFFFFF.
 

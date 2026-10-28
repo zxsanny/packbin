@@ -30,6 +30,32 @@ final class HandoffFrame {
         return Handoff.parse(token);
     }
 
+    private static final long BYTE = 255, LENGTH = 65535, EPOCH = 4294967295L;
+
+    // A number is decimal digits only (no sign, space or `_`) and at most top, or the line is malformed; no digit string
+    // wraps or overflows into another value.
+    private static long number(String token, long top) {
+        IllegalArgumentException bad = new IllegalArgumentException("bad number: " + token + " (digits of 0 to " + top + ")");
+        if (token.isEmpty()) throw bad;
+        long n = 0;
+        for (char c : token.toCharArray()) {
+            if (c < '0' || c > '9') throw bad;
+            n = n * 10 + (c - '0');
+            if (n > top) throw bad;
+        }
+        return n;
+    }
+
+    private static int small(String token, long top) {
+        return (int) number(token, top);
+    }
+
+    // The package's epoch is an int: an epoch above Integer.MAX_VALUE has no value to pass, so the driver gives the package's
+    // answer for any epoch above 0xFFFFFF (BadValue), as the Rust driver does for a direction it cannot pass (README).
+    private static boolean noEpoch(long epoch) {
+        return epoch > Integer.MAX_VALUE;
+    }
+
     private static String hexOf(byte[] data) {
         return data.length == 0 ? "-" : Handoff.hex(data);
     }
@@ -66,18 +92,21 @@ final class HandoffFrame {
     }
 
     private static int size(String[] w) {
-        return w.length > 10 ? Integer.parseInt(w[10]) : 300;
+        return w.length > 10 ? small(w[10], LENGTH) : 300;
     }
 
     private static String seal(String[] w) {
         byte[] key = bytesOf(w[0]);
-        int epoch = Integer.parseInt(w[1]), d = Integer.parseInt(w[2]), tagLen = Integer.parseInt(w[3]);
+        long epoch = number(w[1], EPOCH);
+        int d = small(w[2], BYTE), tagLen = small(w[3], BYTE);
         byte[] msgId = bytesOf(w[4]);
-        int fkind = Integer.parseInt(w[5]);
+        int fkind = small(w[5], BYTE);
         byte[] ad = bytesOf(w[6]), clear = bytesOf(w[7]), plain = bytesOf(w[8]);
-        FrameSession session = FrameSession.load(key, epoch, new FrameConfig(tagLen, directions(w)));
-        if (session == null) return "BadValue";
+        FrameDirections set = directions(w);
         byte[] out = new byte[size(w)];
+        if (noEpoch(epoch)) return "BadValue";
+        FrameSession session = FrameSession.load(key, (int) epoch, new FrameConfig(tagLen, set));
+        if (session == null) return "BadValue";
         Object result = session.seal(direction(d), new MsgContext(msgId, fkind), ad, clear, plain, out);
         if (result instanceof FrameSealed sealed) return hexOf(java.util.Arrays.copyOf(out, sealed.length));
         return kind(result);
@@ -85,15 +114,18 @@ final class HandoffFrame {
 
     private static String open(String[] w) {
         byte[] key = bytesOf(w[0]);
-        int epoch = Integer.parseInt(w[1]), d = Integer.parseInt(w[2]), tagLen = Integer.parseInt(w[3]);
+        long epoch = number(w[1], EPOCH);
+        int d = small(w[2], BYTE), tagLen = small(w[3], BYTE);
         byte[] msgId = bytesOf(w[4]);
-        int fkind = Integer.parseInt(w[5]);
+        int fkind = small(w[5], BYTE);
         byte[] ad = bytesOf(w[6]);
-        int clearLen = Integer.parseInt(w[7]);
+        int clearLen = small(w[7], LENGTH);
         byte[] body = bytesOf(w[8]);
-        FrameSession session = FrameSession.load(key, epoch, new FrameConfig(tagLen, directions(w)));
-        if (session == null) return "BadValue";
+        FrameDirections set = directions(w);
         byte[] out = new byte[size(w)];
+        if (noEpoch(epoch)) return "BadValue";
+        FrameSession session = FrameSession.load(key, (int) epoch, new FrameConfig(tagLen, set));
+        if (session == null) return "BadValue";
         Object result = session.open(direction(d), new MsgContext(msgId, fkind), ad, body, clearLen, null, 0, out);
         if (result instanceof FrameOpened opened) return hexOf(java.util.Arrays.copyOf(out, opened.plainLength));
         return kind(result);
@@ -101,11 +133,12 @@ final class HandoffFrame {
 
     private static String mac(String[] w) {
         byte[] key = bytesOf(w[0]);
-        int epoch = Integer.parseInt(w[1]);
+        long epoch = number(w[1], EPOCH);
         byte[] label = bytesOf(w[2]);
-        int n = Integer.parseInt(w[3]);
+        int n = small(w[3], BYTE);
         byte[] message = bytesOf(w[4]);
-        MacKey mk = MacKey.derive(key, epoch, label);
+        if (noEpoch(epoch)) return "BadValue";
+        MacKey mk = MacKey.derive(key, (int) epoch, label);
         if (mk == null) return "BadValue";
         byte[] out = new byte[n];
         Object result = mk.tag(out, message);
@@ -114,11 +147,12 @@ final class HandoffFrame {
 
     private static String verify(String[] w) {
         byte[] key = bytesOf(w[0]);
-        int epoch = Integer.parseInt(w[1]);
+        long epoch = number(w[1], EPOCH);
         byte[] label = bytesOf(w[2]);
-        int n = Integer.parseInt(w[3]);
+        number(w[3], BYTE); // n: checked, not used (the tag length comes from the tag)
         byte[] message = bytesOf(w[4]), tag = bytesOf(w[5]);
-        MacKey mk = MacKey.derive(key, epoch, label);
+        if (noEpoch(epoch)) return "BadValue";
+        MacKey mk = MacKey.derive(key, (int) epoch, label);
         if (mk == null) return "BadValue";
         return mk.verify(tag, message) ? "valid" : "invalid";
     }

@@ -21,9 +21,29 @@ fn bytes_of(w: &[&str], i: usize) -> Parsed<Vec<u8>> {
     from_hex(token).ok_or_else(|| format!("bad hex: {token}"))
 }
 
-fn num<T: std::str::FromStr>(w: &[&str], i: usize) -> Parsed<T> {
+// The top of each number field: a number is decimal digits only (no sign, space or `_`; `parse` would take a `+`) and at
+// most its top; no digit string wraps or overflows into another value.
+const BYTE: u64 = 255;
+const LENGTH: u64 = 65535;
+const EPOCH: u64 = 4294967295;
+
+fn num<T: TryFrom<u64>>(w: &[&str], i: usize, top: u64) -> Parsed<T> {
     let token = word(w, i)?;
-    token.parse().map_err(|_| format!("bad number: {token}"))
+    let bad = || format!("bad number: {token} (digits of 0 to {top})");
+    if token.is_empty() {
+        return Err(bad());
+    }
+    let mut n = 0u64;
+    for c in token.bytes() {
+        if !c.is_ascii_digit() {
+            return Err(bad());
+        }
+        n = n * 10 + u64::from(c - b'0');
+        if n > top {
+            return Err(bad());
+        }
+    }
+    T::try_from(n).map_err(|_| bad())
 }
 
 fn hex_of(data: &[u8]) -> String {
@@ -60,7 +80,7 @@ fn direction(d: usize) -> Option<FrameDirection> {
 // The optional trailing fields of a seal or open line: the directions loaded (digits 1 to 3) and the output buffer size.
 fn loaded(w: &[&str]) -> Parsed<(FrameDirections, usize)> {
     let digits = w.get(9).copied().unwrap_or("123");
-    let size = if w.len() > 10 { num(w, 10)? } else { 300 };
+    let size = if w.len() > 10 { num(w, 10, LENGTH)? } else { 300 };
     let mut set = FrameDirections::NONE;
     for digit in digits.chars() {
         let d = digit.to_digit(10).map(|d| d as usize).and_then(direction);
@@ -84,11 +104,11 @@ fn msg_id8(raw: &[u8]) -> Parsed<[u8; 8]> {
 
 fn seal(w: &[&str]) -> Parsed<String> {
     let key = bytes_of(w, 0)?;
-    let epoch: u32 = num(w, 1)?;
-    let d: usize = num(w, 2)?;
-    let tag_len: u8 = num(w, 3)?;
+    let epoch: u32 = num(w, 1, EPOCH)?;
+    let d: usize = num(w, 2, BYTE)?;
+    let tag_len: u8 = num(w, 3, BYTE)?;
     let id = msg_id8(&bytes_of(w, 4)?)?;
-    let kind: u8 = num(w, 5)?;
+    let kind: u8 = num(w, 5, BYTE)?;
     let ad = bytes_of(w, 6)?;
     let clear = bytes_of(w, 7)?;
     let plain = bytes_of(w, 8)?;
@@ -118,13 +138,13 @@ fn seal(w: &[&str]) -> Parsed<String> {
 
 fn open(w: &[&str]) -> Parsed<String> {
     let key = bytes_of(w, 0)?;
-    let epoch: u32 = num(w, 1)?;
-    let d: usize = num(w, 2)?;
-    let tag_len: u8 = num(w, 3)?;
+    let epoch: u32 = num(w, 1, EPOCH)?;
+    let d: usize = num(w, 2, BYTE)?;
+    let tag_len: u8 = num(w, 3, BYTE)?;
     let id = msg_id8(&bytes_of(w, 4)?)?;
-    let kind: u8 = num(w, 5)?;
+    let kind: u8 = num(w, 5, BYTE)?;
     let ad = bytes_of(w, 6)?;
-    let clear_len: usize = num(w, 7)?;
+    let clear_len: usize = num(w, 7, LENGTH)?;
     let body = bytes_of(w, 8)?;
     let (directions, size) = loaded(w)?;
     let session = match FrameSession::load_frame(
@@ -152,9 +172,9 @@ fn open(w: &[&str]) -> Parsed<String> {
 
 fn mac(w: &[&str]) -> Parsed<String> {
     let key = bytes_of(w, 0)?;
-    let epoch: u32 = num(w, 1)?;
+    let epoch: u32 = num(w, 1, EPOCH)?;
     let label = bytes_of(w, 2)?;
-    let n: usize = num(w, 3)?;
+    let n: usize = num(w, 3, BYTE)?;
     let message = bytes_of(w, 4)?;
     let mk = match MacKey::derive(key32(&key)?, epoch, &label) {
         Ok(m) => m,
@@ -169,9 +189,9 @@ fn mac(w: &[&str]) -> Parsed<String> {
 
 fn verify(w: &[&str]) -> Parsed<String> {
     let key = bytes_of(w, 0)?;
-    let epoch: u32 = num(w, 1)?;
+    let epoch: u32 = num(w, 1, EPOCH)?;
     let label = bytes_of(w, 2)?;
-    let _n: usize = num(w, 3)?;
+    let _n: usize = num(w, 3, BYTE)?;
     let message = bytes_of(w, 4)?;
     let tag = bytes_of(w, 5)?;
     let mk = match MacKey::derive(key32(&key)?, epoch, &label) {

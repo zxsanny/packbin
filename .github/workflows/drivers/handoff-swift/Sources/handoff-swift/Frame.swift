@@ -22,14 +22,24 @@ private struct FrameWords {
         return raw
     }
 
-    func int<T: FixedWidthInteger>(_ i: Int) throws -> T {
+    // A number is decimal digits only (no sign, space or `_`) and at most top; no digit string wraps or overflows into
+    // another value.
+    func int<T: FixedWidthInteger>(_ i: Int, top: UInt64) throws -> T {
         let token = try word(i)
-        guard token.allSatisfy(\.isASCII), token.allSatisfy(\.isNumber), let n = T(token) else {
-            throw FrameLineError(message: "bad number: \(token)")
+        let bad = FrameLineError(message: "bad number: \(token) (digits of 0 to \(top))")
+        guard !token.isEmpty else { throw bad }
+        var n: UInt64 = 0
+        for c in token.utf8 {
+            guard c >= 0x30, c <= 0x39 else { throw bad }
+            n = n * 10 + UInt64(c - 0x30)
+            guard n <= top else { throw bad }
         }
-        return n
+        guard let value = T(exactly: n) else { throw bad }
+        return value
     }
 }
+
+private let byteTop: UInt64 = 255, lengthTop: UInt64 = 65535, epochTop: UInt64 = 4294967295
 
 private func frameHex(_ data: [UInt8]) -> String {
     data.isEmpty ? "-" : hexString(data)
@@ -49,7 +59,7 @@ private func frameKind(_ error: PackbinError) -> String {
 // The optional trailing fields of a seal or open line: the directions loaded (digits 1 to 3) and the output buffer size.
 private func frameLoaded(_ f: FrameWords) throws -> (directions: FrameDirections, size: Int) {
     let digits = f.w.count > 9 ? f.w[9] : "123"
-    let size: Int = try f.w.count > 10 ? f.int(10) : 300
+    let size: Int = try f.w.count > 10 ? f.int(10, top: lengthTop) : 300
     guard !digits.isEmpty, digits.allSatisfy({ "123".contains($0) }) else {
         throw FrameLineError(message: "bad dirs: \(digits)")
     }
@@ -60,9 +70,10 @@ private func frameLoaded(_ f: FrameWords) throws -> (directions: FrameDirections
 private func frameSeal(_ w: [String]) throws -> String {
     let f = FrameWords(w: w)
     let key = try f.bytes(0)
-    let epoch: UInt32 = try f.int(1), d: Int = try f.int(2), tagLen: Int = try f.int(3)
+    let epoch: UInt32 = try f.int(1, top: epochTop), d: Int = try f.int(2, top: byteTop)
+    let tagLen: Int = try f.int(3, top: byteTop)
     let msgId = try f.bytes(4)
-    let kind: UInt8 = try f.int(5)
+    let kind: UInt8 = try f.int(5, top: byteTop)
     let ad = try f.bytes(6), clear = try f.bytes(7), plain = try f.bytes(8)
     let (directions, size) = try frameLoaded(f)
     let session: FrameSession
@@ -89,11 +100,12 @@ private func frameSeal(_ w: [String]) throws -> String {
 private func frameOpen(_ w: [String]) throws -> String {
     let f = FrameWords(w: w)
     let key = try f.bytes(0)
-    let epoch: UInt32 = try f.int(1), d: Int = try f.int(2), tagLen: Int = try f.int(3)
+    let epoch: UInt32 = try f.int(1, top: epochTop), d: Int = try f.int(2, top: byteTop)
+    let tagLen: Int = try f.int(3, top: byteTop)
     let msgId = try f.bytes(4)
-    let kind: UInt8 = try f.int(5)
+    let kind: UInt8 = try f.int(5, top: byteTop)
     let ad = try f.bytes(6)
-    let clearLen: Int = try f.int(7)
+    let clearLen: Int = try f.int(7, top: lengthTop)
     let body = try f.bytes(8)
     let (directions, size) = try frameLoaded(f)
     let session: FrameSession
@@ -120,9 +132,9 @@ private func frameOpen(_ w: [String]) throws -> String {
 private func frameMac(_ w: [String]) throws -> String {
     let f = FrameWords(w: w)
     let key = try f.bytes(0)
-    let epoch: UInt32 = try f.int(1)
+    let epoch: UInt32 = try f.int(1, top: epochTop)
     let label = try f.bytes(2)
-    let n: Int = try f.int(3)
+    let n: Int = try f.int(3, top: byteTop)
     let message = try f.bytes(4)
     let mk: MacKey
     do {
@@ -145,9 +157,9 @@ private func frameMac(_ w: [String]) throws -> String {
 private func frameVerify(_ w: [String]) throws -> String {
     let f = FrameWords(w: w)
     let key = try f.bytes(0)
-    let epoch: UInt32 = try f.int(1)
+    let epoch: UInt32 = try f.int(1, top: epochTop)
     let label = try f.bytes(2)
-    _ = try f.word(3)  // n, not used for verify
+    let _: Int = try f.int(3, top: byteTop)  // n: checked, not used (the tag length comes from the tag)
     let message = try f.bytes(4)
     let tag = try f.bytes(5)
     let mk: MacKey

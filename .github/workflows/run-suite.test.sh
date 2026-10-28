@@ -284,7 +284,7 @@ printf '#!/bin/sh\nexit 0\n' > "$present/java/test.sh"
 toolbin="$work/toolbin"
 mkdir -p "$toolbin"
 for tool in dotnet cargo make; do
-  printf '#!/bin/sh\necho "%s $*" >> "$GO_LOG"\ncase "$*" in *--list*) [ -n "${FAKE_NO_SPEED_TEST:-}" ] || echo "text_positions_tests::ac8_one_hundred_thousand_round_trips_of_a_20_character_ukrainian_string: test"; [ -n "${FAKE_NO_ECC_SPEED_TEST:-}" ] || printf "ecc_repair_tests::ec13_repairs_within_the_bound: test\\necc_repair_tests::ec13_packs_within_the_bound: test\\n" ;; esac\nexit "${FAKE_TOOL_EXIT:-0}"\n' "$tool" > "$toolbin/$tool"
+  printf '#!/bin/sh\necho "%s $*" >> "$GO_LOG"\ncase "$*" in *--list*) [ -n "${FAKE_NO_SPEED_TEST:-}" ] || echo "text_positions_tests::ac8_one_hundred_thousand_round_trips_of_a_20_character_ukrainian_string: test"; [ -n "${FAKE_NO_ECC_SPEED_TEST:-}" ] || printf "ecc_repair_tests::ec13_repairs_within_the_bound: test\\necc_repair_tests::ec13_packs_within_the_bound: test\\n" ;; esac\n[ -z "${FAKE_WARN_ON:-}" ] || [ "$*" != "$FAKE_WARN_ON" ] || echo "warning: unused import" >&2\n[ -z "${FAKE_FAIL_ON:-}" ] || [ "$*" != "$FAKE_FAIL_ON" ] || exit 101\nexit "${FAKE_TOOL_EXIT:-0}"\n' "$tool" > "$toolbin/$tool"
   chmod +x "$toolbin/$tool"
 done
 for lang in csharp rust cpp java; do
@@ -330,7 +330,19 @@ grep -q 'cargo test --manifest-path .* --features frame --doc -- --nocapture' "$
   || bad "rust: the frame doc example does not run: $(cat "$work/go.log")"
 grep -q 'cargo test --manifest-path .* --all-features -- --nocapture' "$work/go.log" \
   || bad "rust: the all-features run is missing (AZ-3338 AC-6): $(cat "$work/go.log")"
-[ "$(grep -c '^cargo ' "$work/go.log")" -eq 14 ] || bad "rust: not the debug suite, the nine heap-free API runs, the all-features run, the release list and the two release runs: $(cat "$work/go.log")"
+# the test builds of every target of the 9 feature sets, last, after the release runs (AZ-3357 AC-9)
+manifest="$present/rust/Cargo.toml"
+expected="cargo check --manifest-path $manifest --no-default-features --tests
+cargo check --manifest-path $manifest --no-default-features --features alloc --tests
+cargo check --manifest-path $manifest --no-default-features --features text --tests
+cargo check --manifest-path $manifest --no-default-features --features ecc --tests
+cargo check --manifest-path $manifest --no-default-features --features text,ecc --tests
+cargo check --manifest-path $manifest --no-default-features --features frame --tests
+cargo check --manifest-path $manifest --no-default-features --features text,ecc,frame --tests
+cargo check --manifest-path $manifest --tests
+cargo check --manifest-path $manifest --all-features --tests"
+[ "$(sed -n '15,23p' "$work/go.log")" = "$expected" ] || bad "rust: lines 15 to 23 are not the 9 test builds: $(cat "$work/go.log")"
+[ "$(grep -c '^cargo ' "$work/go.log")" -eq 23 ] || bad "rust: not the debug suite, the nine heap-free API runs, the all-features run, the release list, the two release runs and the 9 test builds: $(cat "$work/go.log")"
 
 # R2. a rust tree without the string speed test fails by name, and the filter is not run (a filter that matches
 # nothing passes) (AZ-2665 AC-3)
@@ -348,6 +360,27 @@ out="$(env SRC_ROOT="$present" FIXTURE="$present/fixtures/golden.hex" TEST_RESUL
 [ "$code" -ne 0 ] || bad "rust: a tree without the message ECC speed tests passed"
 case "$out" in *"rust has fewer than two message ECC speed tests"*) ;; *) bad "rust: no message for the missing ECC speed tests: $out" ;; esac
 if grep -q -- '--release --lib .* -- --nocapture' "$work/go.log"; then bad "rust: a release run started without the ECC speed tests: $(cat "$work/go.log")"; fi
+
+# R4 and R5. a test build that prints a warning (on stderr, as cargo does) or fails stops the suite, the set is named in
+# the output and the report row, and no later set is built (AZ-3357 AC-9)
+for row in "warn frame printed a warning" "fail alloc failed"; do
+  read -r kind set outcome <<< "$row"
+  args="check --manifest-path $manifest --no-default-features --features $set --tests"
+  rm -f "$work/bare.rows"; : > "$work/go.log"
+  # Act
+  if [ "$kind" = warn ]; then fake=(FAKE_WARN_ON="$args"); else fake=(FAKE_FAIL_ON="$args"); fi
+  out="$(env SRC_ROOT="$present" FIXTURE="$present/fixtures/golden.hex" TEST_RESULTS="$work/bare" GO_LOG="$work/go.log" \
+    "${fake[@]}" PATH="$toolbin:$PATH" perl -e 'alarm 60; exec @ARGV' -- bash "$suite_sh" rust </dev/null 2>&1)"; code=$?
+  # Assert
+  [ "$code" -ne 0 ] || bad "rust: a test build of set $set that $outcome passed"
+  case "$out" in *"run-suite: rust test build of feature set $set $outcome"*) ;; *) bad "rust: the set $set is not named: $out" ;; esac
+  if [ "$kind" = warn ]; then
+    case "$out" in *"printed a warning:"*"warning: unused import"*) ;; *) bad "rust: the warning line is not shown: $out" ;; esac
+  fi
+  grep -Eqx "report-row rust rust suite [0-9]+ FAIL rust test build of feature set $set $outcome" "$work/bare.rows" \
+    || bad "rust: the report row does not name the set $set: $(cat "$work/bare.rows" 2>&1)"
+  [ "$(tail -n 1 "$work/go.log")" = "cargo $args" ] || bad "rust: a step ran after set $set $outcome: $(cat "$work/go.log")"
+done
 
 # --- the timing notice (AZ-2607 AC-2) ---
 # On GitHub Actions a run ends with ONE notice on stdout, so the seconds of a CI suite job are readable without a token:
@@ -405,7 +438,7 @@ if grep -qF 'pct%2Ctree' "$work/notice.out"; then bad "go: a raw % of a label is
 notice_run csharp "$bare" GITHUB_ACTIONS=true
 notice_is "csharp suite timing" csharp 0
 notice_run rust "$present" GITHUB_ACTIONS=true
-notice_is "rust suite timing" rust 12
+notice_is "rust suite timing" rust 21
 
 # N5. GITHUB_ACTIONS unset (the Mac), empty or anything but true: no notice, and the plain step lines as before
 for value in unset "" false; do

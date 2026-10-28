@@ -160,6 +160,36 @@ rust_speed() {
   cargo test --manifest-path "$manifest" --release --lib ec13_ -- --nocapture
 }
 
+# Every test target of one feature set ($1: none, default, all or a feature list) compiles, and prints no warning
+# (AZ-3357). The test runs name most no-std targets one by one (`--test <name>`), so a test file without its feature
+# gate built in no run (loop 76: 22 files). `cargo check --tests` gives the same compile errors and lints as
+# `cargo test --no-run` without code generation: the 7 no-std sets cost about 64 s more cold on 4 CPUs with `--no-run`
+# (loop 79), on the job that sets the CI wall. Cargo replays the warnings of a cached check; stdout and stderr are read
+# together.
+rust_test_build() {
+  local set="$1" out
+  local -a features
+  case "$set" in
+    default) features=() ;;
+    all) features=(--all-features) ;;
+    none) features=(--no-default-features) ;;
+    *) features=(--no-default-features --features "$set") ;;
+  esac
+  if ! out="$(cargo check --manifest-path "$root/rust/Cargo.toml" ${features[@]+"${features[@]}"} --tests 2>&1)"; then
+    printf '%s\n' "$out"
+    failure="rust test build of feature set $set failed"
+    printf 'run-suite: %s\n' "$failure" >&2
+    return 1
+  fi
+  printf '%s\n' "$out"
+  if grep -q '^warning:' <<< "$out"; then
+    failure="rust test build of feature set $set printed a warning"
+    printf 'run-suite: %s:\n' "$failure" >&2
+    grep '^warning:' <<< "$out" >&2
+    return 1
+  fi
+}
+
 # SW-8: the speed bound holds for a release build only. A filter that matches nothing passes, so the suite must exist.
 # SW-9: this is the one release build of the suite, with the tests, so it carries the strict flags and the 0 warnings
 # cover the test targets too. The single run has listed the tests of its debug build by now and fails before the
@@ -312,6 +342,11 @@ case "$lang" in
       # all features together (AZ-3338 AC-6)
       run cargo test --manifest-path "$root/rust/Cargo.toml" --all-features -- --nocapture
       run rust_speed
+      # every test target of the 7 no-std sets, the default set and all features builds without a warning (AZ-3357);
+      # last, so a warning does not hide a test result
+      for rust_set in none alloc text ecc text,ecc frame text,ecc,frame default all; do
+        run rust_test_build "$rust_set"
+      done
     else
       missing_manifest "$root/rust/Cargo.toml"
     fi

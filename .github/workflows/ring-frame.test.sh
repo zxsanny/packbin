@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Self-test of ring-frame.sh (AZ-3338): the ring passes when every driver answers as the reference codec does, and fails,
 # naming what is wrong, on a driver that lies, one that accepts tampered input, one that crashes or prints too few lines,
-# and a corrupted row file. The
+# a corrupted row file and a row with a number outside its range; past 5 mismatch lines it counts the rest. The
 # drivers are replaced by a stand-in (RING_FRAME_RUN) that answers with the reference codec, so this needs no toolchain.
 set -euo pipefail
 
@@ -40,7 +40,7 @@ if cmd != "frame-batch":
 if lying and how == "crash":
     print("fake driver crash", file=sys.stderr)
     sys.exit(1)
-out, bent = [], False
+out, bent, bends = [], False, 0
 for line in open(path):
     w = line.split()
     if not w:
@@ -79,6 +79,11 @@ for line in open(path):
             text = "00"
         if lying and how == "fit-refused" and out_len is not None and text not in KINDS:
             text = "BufferFull"
+        # The first N refused lines opened, or the first N opened lines refused: N mismatches of one reader or one pair.
+        if lying and how.startswith("refusals-") and text in KINDS and bends < int(how[9:]):
+            text, bends = "00", bends + 1
+        if lying and how.startswith("opens-") and text not in KINDS and bends < int(how[6:]):
+            text, bends = "TagMismatch", bends + 1
     elif w[0] == "mac":
         key, epoch, label, n, message = unhex(w[1]), int(w[2]), unhex(w[3]), int(w[4]), unhex(w[5])
         try:
@@ -163,6 +168,35 @@ run dir0-aborts 1 "typescript frame-batch (seal) failed" FAKE_LIE=typescript:dir
 run driver-crashes 1 "frame-batch (seal) failed" FAKE_LIE=typescript:crash
 run one-language 0 "ring-frame: 1 pairs" RING_FRAME_LANGS=python
 
+# No mismatch is hidden (AZ-3356): after 5 lines of a pair or a reader, one line counts the rest; the totals are unchanged.
+# shown <header>: the indented lines under the output line that starts with <header>.
+shown() {
+  awk -v h="$1" 'index($0, h) == 1 { on = 1; next } on && /^    / { print; next } on { exit }' "$tmp/out.txt"
+}
+# display <name> <header> <last line, or "" for none> <mismatches>
+display() {
+  local name="$1" header="$2" more="$3" count="$4" lines
+  lines="$(shown "$header")"
+  if [ "$(printf '%s\n' "$lines" | grep -vc '^    \.\.\. and ')" -ne 5 ] \
+    || [ "$(printf '%s\n' "$lines" | grep -c '^    \.\.\. and ')" -ne "$([ -n "$more" ] && echo 1 || echo 0)" ] \
+    || { [ -n "$more" ] && [ "$(printf '%s\n' "$lines" | tail -n 1)" != "$more" ]; } \
+    || ! grep -q "^$header.*, $count mismatched$" "$tmp/out.txt" \
+    || ! grep -qxF "ring-frame: 64 pairs, mismatched: $count" "$tmp/out.txt"; then
+    echo "FAIL $name: wanted $count mismatched, 5 lines under \"$header\"${more:+ and \"$more\"}, the same total:"
+    grep -F -e "$header" -e "mismatched: " "$tmp/out.txt" | grep -v ' 0 mismatched$' | cut -c1-200
+    printf '%s\n' "$lines" | cut -c1-200
+    failures=$((failures + 1))
+  else
+    echo "PASS $name: 5 lines${more:+ and \"$more\"}"
+  fi
+}
+run refusals-7 1 "refusals go: $refusal_rows rows, 7 mismatched" FAKE_LIE=go:refusals-7
+display refusals-7 "refusals go: " "    ... and 2 more" 7
+run pair-6 1 "pair csharp -> go: " FAKE_LIE=go:opens-6
+display pair-6 "pair csharp -> go: " "    ... and 1 more" 6
+run refusals-5 1 "refusals go: $refusal_rows rows, 5 mismatched" FAKE_LIE=go:refusals-5
+display refusals-5 "refusals go: " "" 5
+
 # A corrupted row file.
 corrupt() {
   local expr="$1"
@@ -184,6 +218,11 @@ corrupt '/^refuse-mac R.mac.nbad5 /s/ BadValue$/ TooLong/'
 run refuse-mac-name-changed 1 "R.mac.nbad5 expected TooLong, reference gives BadValue" RING_FRAME_CASES="$tmp/ring-cases.txt"
 corrupt '/^verify E4.first /s/ [0-9a-f]{8} invalid$/ 56db9bec invalid/'
 run verify-tag-made-valid 1 "disagree with the reference" RING_FRAME_CASES="$tmp/ring-cases.txt"
+# A number outside the range every driver reads (AZ-3356): the reference would take both rows.
+corrupt '/^refuse-seal R.seal.dir4 /s/ 3 4 4 / 3 256 4 /'
+run row-dir-256 1 "R.seal.dir4 dir 256 is not decimal digits of 0 to 255" RING_FRAME_CASES="$tmp/ring-cases.txt"
+corrupt '/^seal fit.tag4 /s/ 16$/ 65536/'
+run row-out-len-65536 1 "fit.tag4 out_len 65536 is not decimal digits of 0 to 65535" RING_FRAME_CASES="$tmp/ring-cases.txt"
 { cat "$root/fixtures/frame/ring-cases.txt"; grep -m1 '^seal E1 ' "$root/fixtures/frame/ring-cases.txt"; } > "$tmp/ring-cases.txt"
 run duplicate-id 1 "duplicate id" RING_FRAME_CASES="$tmp/ring-cases.txt"
 # A file without tampered rows would pass every permissive reader: the loader refuses it.

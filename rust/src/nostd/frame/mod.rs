@@ -357,7 +357,8 @@ impl FrameSession {
     }
 }
 
-#[cfg(test)]
+// The cfg of the callers, frame_hostile_tests and frame_core_tests (lib.rs).
+#[cfg(all(test, feature = "std", feature = "frame"))]
 impl FrameSession {
     /// True when no byte of the previous slot's keys is set.
     pub(crate) fn test_previous_is_zero(&self) -> bool {
