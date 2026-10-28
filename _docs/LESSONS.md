@@ -56,3 +56,7 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/loops/loop77/record77.md
 - [2026-10-27] [process] A comparison harness with only good rows passes a package that accepts forgeries: add rows that must be refused and a stand-in reader that accepts them, and show once that a real defective driver turns the harness red (the TypeScript short-packet name did, loop 77); `vectors.txt` already held the refusals per package, which is why the ring keeps only tamper rows and leaves the refusal-by-name rows to a later loop.
   Source: _docs/loops/loop77/record77.md
+- [2026-10-28] [process] A CI step added to `test.yml` also goes into `scripts/loop-tests.sh` in the same commit: step 11 of loop 77 passed 14 stages without running the frame ring or its self-test, because the `ring` and `scaffold` stages list their scripts by hand (found in loop 78 by comparing the two).
+  Source: _docs/loops/loop78/record78.md
+- [2026-10-28] [testing] A new check over real drivers is proven by putting an old defective driver back (`git show <commit>:<file>` in a scratch copy) and seeing it fail: the lenient TypeScript and Swift drivers gave 8 FAIL; 44 of 44 green on the first run proves nothing alone (loop 78).
+  Source: _docs/loops/loop78/record78.md
