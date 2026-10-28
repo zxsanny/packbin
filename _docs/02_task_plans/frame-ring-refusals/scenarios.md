@@ -30,3 +30,11 @@ Source: `problem.md` and the fit walk of loop 78 (new-task Step 4.7). Status val
 | R9 | AZ-3354 AC-6 |
 | R10 | AZ-3355 AC-4 |
 | R11 | AZ-3354 AC-2 |
+
+## Assessment round 1 (loop 78)
+
+| id | scenario | status | AC ref | note |
+|----|----------|--------|--------|------|
+| U1 | Rust has no direction value for 0 and 4; its driver prints `BadValue` | confirmed | AZ-3354 AC-3 | owner 2026-10-28: keep, documented |
+| R4m | a MAC writer that prints a word is blamed | confirmed | AZ-3355 AC-1 | case `mac-writer-prints-word` |
+
