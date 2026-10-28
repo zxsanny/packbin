@@ -23,3 +23,11 @@ Source of rows: `intake` (new-task Step 4.7). Status: confirmed / out-of-scope /
 ## Not walked
 
 - A writer that prints a malformed word (L-2 of loop 78): unchanged, kept green by the existing `ring-frame.test.sh` cases.
+
+## Assessment round 1 (loop 79)
+
+| id | scenario | status | behavior (confirmed) | AC ref | source |
+|----|----------|--------|----------------------|--------|--------|
+| U2 | a ring row holds an epoch above 2,147,483,647 and the Java package's epoch is an `int` | confirmed | the Java driver prints `BadValue` itself (owner, as U1) | AZ-3356 AC-2, AC-5 | assess-round-1 |
+| D3 | the build step of every feature set on the CI wall job | confirmed | `cargo check --tests` (owner) | AZ-3357 AC-9, loop AC-12 | assess-round-1 |
+| D5 | a `seal` or `mac` row the reference refuses | deferred (pre-existing loader crash without the row name; later loop) | — | — | assess-round-1 |
