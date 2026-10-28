@@ -324,8 +324,10 @@ failed=0
 retried=""
 start_all=$(date +%s)
 
+# The autodev position file is tracked and rewritten at every step of a loop: it is not tested code, so it alone does
+# not make the tree dirty (AZ-3369).
 stamp_pass() {
-  if [ -z "$(git status --porcelain)" ]; then git rev-parse HEAD > "$stamps/$1"; fi
+  if [ -z "$(git status --porcelain -- . ':(exclude)_docs/_autodev_state.md')" ]; then git rev-parse HEAD > "$stamps/$1"; fi
 }
 
 # stage_progress <stage>: "<stage>(<log bytes> B) " for the heartbeat. A stage that runs shares (the publish gate) names

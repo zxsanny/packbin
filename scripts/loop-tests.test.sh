@@ -140,6 +140,13 @@ head_sha="$(git -C "$repo" rev-parse HEAD)"
 [ "$(cat "$stamps/rust")" = "$head_sha" ] || bad "execution: rust has no stamp at HEAD"
 [ ! -f "$stamps/java" ] || bad "execution: java got a stamp although it failed"
 [ "$(cat "$tmp/calls/typescript")" -eq 2 ] || bad "execution: typescript ran $(cat "$tmp/calls/typescript") times, expected 2"
+# the autodev position file alone does not block a stamp (AZ-3369)
+rm -rf "$stamps"
+mkdir -p "$repo/_docs"
+echo position > "$repo/_docs/_autodev_state.md"
+PATH="$shims:$PATH" CALLS="$tmp/calls" LOOP_TESTS_ROOT="$repo" LOOP_TESTS_STAMPS="$stamps" bash "$script" --all --only rust < /dev/null > /dev/null || bad "execution: rust failed with the position file untracked"
+[ "$(cat "$stamps/rust" 2> /dev/null)" = "$head_sha" ] || bad "execution: the autodev position file blocked the stamp"
+rm -rf "$repo/_docs"
 # a stamp is not written from a dirty tree
 rm -rf "$stamps"
 echo dirty >> "$repo/README.md"

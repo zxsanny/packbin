@@ -25,6 +25,8 @@ Probe on HEAD 69b02b8 (python 3.14.8): a copy of the cases file with `seal E1` k
 - AC-3: the real rows are unchanged: `ring-frame.test.sh` 34 PASS and 0 FAIL (32 on HEAD, plus the two new cases); `ring-frame.sh` against the 8 real drivers prints `ring-frame: 64 pairs, ... mismatched: 0` and `refusals <lang>: 43 rows, 0 mismatched` for 8 languages.
 - AC-4: both new cases fail on HEAD (the script without the two catches), each with the traceback in its output.
 
+- AC-5 (found in this loop; follows from tracking `_docs/_autodev_state.md`): `scripts/loop-tests.sh` writes a stage stamp when the only dirty path is `_docs/_autodev_state.md` (tracked and rewritten at every step), and still writes none when any other path is dirty. `loop-tests.test.sh` has the case and fails on the loop-start script (probed in a scratch copy: `FAIL: execution: the autodev position file blocked the stamp`). Before it, `git status --porcelain` was never empty during a loop once the file was tracked, so step 11 stamped nothing and the next plan ran every stage.
+
 Out of scope: multi-part MAC rows, key and message-id length refusals, the 8 drivers (no driver changes), the wording of any other message.
 
 ## Expected input and output
