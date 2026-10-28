@@ -35,3 +35,10 @@ python3 scripts/frame/gen_vectors.py            # rewrites vectors.txt (never ed
 ## How a package loads the file
 
 Read each non-comment line, split on spaces, then on the first `=`. Build the call from the input fields, run it, and compare every output field of the row. A row whose output is a `result` other than `Ok` must produce that error kind, nothing written to the output buffer, and (for `open` with a window) a window equal to `window`. The Rust suite (AZ-3203) reads this file through `CARGO_MANIFEST_DIR/../fixtures/frame/vectors.txt`.
+
+## Ring cases
+
+`ring-cases.txt` is not this file: it holds the rows of the cross-language ring (`.github/workflows/ring-frame.sh`, AZ-3338, AZ-3341, AZ-3354), each checked against the reference on every load. Row kinds: `seal`, `mac` (good rows; a `seal` row may end in an `out_len`, the exact buffer), `open` and `verify` (tampered input), and `refuse-seal`, `refuse-open`, `refuse-mac` (refusals by name). `refuse-seal` and `refuse-open` carry `dirs` (digits 1 to 3, the directions the session loaded) and `out_len` (the caller's buffer) before the expected error kind. The refusal cases are those of `vectors.txt` written out as hex; a driver prints the error kind, never aborts, and answers the next line.
+
+A direction outside 1 to 3 cannot be handed to a package whose type has no such value. Java passes `null` (the package answers `BadValue`), Swift calls `FrameDirection(number:)` (the package throws `BadValue`), and Rust has no value to pass: its driver prints `BadValue` where `direction()` has none, as `rust/tests/frame_vectors_tests.rs` reads the same rows. C#, C++, Go, Python and TypeScript hand the number to the package.
+

@@ -20,13 +20,12 @@ private func frameKind(_ error: PackbinError) -> String {
     }
 }
 
-private func direction(_ d: Int) -> FrameDirection {
-    switch d {
-    case 1: return .up
-    case 2: return .down
-    case 3: return .group
-    default: fatalError("direction: \(d)")
-    }
+// The optional trailing fields of a seal or open line: the directions loaded (digits 1 to 3) and the output buffer size.
+private func frameLoaded(_ w: [String]) -> (directions: FrameDirections, size: Int) {
+    let digits = w.count > 9 ? w[9] : "123"
+    let size = w.count > 10 ? Int(w[10])! : 300
+    let mask = digits.reduce(UInt8(0)) { $0 | UInt8(1 << (Int(String($1))! - 1)) }
+    return (FrameDirections(rawValue: mask), size)
 }
 
 private func frameSeal(_ w: [String]) -> String {
@@ -35,18 +34,19 @@ private func frameSeal(_ w: [String]) -> String {
     let msgId = frameBytes(w[4])
     let kind = UInt8(w[5])!
     let ad = frameBytes(w[6]), clear = frameBytes(w[7]), plain = frameBytes(w[8])
+    let (directions, size) = frameLoaded(w)
     let session: FrameSession
     do {
         session = try FrameSession.load(key: key, epoch: epoch,
-            config: FrameConfig(tagLength: tagLen, directions: FrameDirections(rawValue: UInt8(1 << (d - 1)))))
+            config: FrameConfig(tagLength: tagLen, directions: directions))
     } catch let e as PackbinError {
         return frameKind(e)
     } catch {
         return "error"
     }
-    var out = [UInt8](repeating: 0, count: 300)
+    var out = [UInt8](repeating: 0, count: size)
     do {
-        let n = try session.seal(direction: direction(d), context: MsgContext(msgID: msgId, kind: kind),
+        let n = try session.seal(direction: FrameDirection(number: d), context: MsgContext(msgID: msgId, kind: kind),
             ad: ad, clear: clear, plain: plain, into: &out)
         return frameHex(Array(out[..<n]))
     } catch let e as PackbinError {
@@ -64,18 +64,19 @@ private func frameOpen(_ w: [String]) -> String {
     let ad = frameBytes(w[6])
     let clearLen = Int(w[7])!
     let body = frameBytes(w[8])
+    let (directions, size) = frameLoaded(w)
     let session: FrameSession
     do {
         session = try FrameSession.load(key: key, epoch: epoch,
-            config: FrameConfig(tagLength: tagLen, directions: FrameDirections(rawValue: UInt8(1 << (d - 1)))))
+            config: FrameConfig(tagLength: tagLen, directions: directions))
     } catch let e as PackbinError {
         return frameKind(e)
     } catch {
         return "error"
     }
-    var out = [UInt8](repeating: 0, count: 300)
+    var out = [UInt8](repeating: 0, count: size)
     do {
-        let opened = try session.open(direction: direction(d), context: MsgContext(msgID: msgId, kind: kind),
+        let opened = try session.open(direction: FrameDirection(number: d), context: MsgContext(msgID: msgId, kind: kind),
             ad: ad, body: body, clearLength: clearLen, into: &out)
         return frameHex(Array(out[..<opened.plainLength]))
     } catch let e as PackbinError {

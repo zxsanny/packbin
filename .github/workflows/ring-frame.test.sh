@@ -24,6 +24,9 @@ liar, _, how = os.environ.get("FAKE_LIE", ":").partition(":")
 lying = liar == lang
 
 
+KINDS = ("BadValue", "TooLong", "BufferFull", "ShortPacket", "TagMismatch")
+
+
 def unhex(token):
     return b"" if token == "-" else bytes.fromhex(token)
 
@@ -45,15 +48,24 @@ for line in open(path):
     if w[0] == "seal":
         key, epoch, d, tag_len = unhex(w[1]), int(w[2]), int(w[3]), int(w[4])
         msg_id, kind, ad, clear, plain = unhex(w[5]), int(w[6]), unhex(w[7]), unhex(w[8]), unhex(w[9])
-        body = ff.seal(key, epoch, d, tag_len, msg_id, kind, ad, clear, plain)
-        text = body.hex()
-        if lying and how == "seal" and not bent:
+        dirs, out_len = ((tuple(int(c) for c in w[10]), int(w[11])) if len(w) > 10 else ((1, 2, 3), None))
+        try:
+            text = ff.seal(key, epoch, d, tag_len, msg_id, kind, ad, clear, plain, dirs=dirs, out_len=out_len).hex()
+        except ff.Fault as x:
+            text = x.kind
+        if lying and how == "seal" and not bent and text not in KINDS:
             text, bent = text[:-1] + ("0" if text[-1] != "0" else "1"), True
+        if lying and how == "dir0-aborts" and d == 0:
+            print("fake driver: direction 0 aborts", file=sys.stderr)
+            sys.exit(134)
+        if lying and how == "unloaded-accepted" and text == "BadValue" and d not in dirs:
+            text = "00"
     elif w[0] == "open":
         key, epoch, d, tag_len = unhex(w[1]), int(w[2]), int(w[3]), int(w[4])
         msg_id, kind, ad, clear_len, body = unhex(w[5]), int(w[6]), unhex(w[7]), int(w[8]), unhex(w[9])
+        dirs, out_len = ((tuple(int(c) for c in w[10]), int(w[11])) if len(w) > 10 else ((1, 2, 3), None))
         try:
-            _, plain, _ = ff.open_frame(key, epoch, d, tag_len, msg_id, kind, ad, clear_len, body)
+            _, plain, _ = ff.open_frame(key, epoch, d, tag_len, msg_id, kind, ad, clear_len, body, dirs=dirs, out_len=out_len)
             text = hx(plain)
         except ff.Fault as x:
             text = x.kind
@@ -61,10 +73,17 @@ for line in open(path):
             text, bent = "TagMismatch", True
         if lying and how == "open-permissive" and text in ("TagMismatch", "ShortPacket"):
             text = "00"
+        if lying and how == "unloaded-accepted" and text == "BadValue" and d not in dirs:
+            text = "00"
+        if lying and how == "fit-refused" and out_len is not None and text not in KINDS:
+            text = "BufferFull"
     elif w[0] == "mac":
         key, epoch, label, n, message = unhex(w[1]), int(w[2]), unhex(w[3]), int(w[4]), unhex(w[5])
-        text = ff.mac_tag(key, epoch, label, n, [message]).hex()
-        if lying and how == "mac" and not bent:
+        try:
+            text = ff.mac_tag(key, epoch, label, n, [message]).hex()
+        except ff.Fault as x:
+            text = x.kind
+        if lying and how == "mac" and not bent and text not in KINDS:
             text, bent = text[:-1] + ("0" if text[-1] != "0" else "1"), True
     elif w[0] == "verify":
         key, epoch, label, n, message, tag = unhex(w[1]), int(w[2]), unhex(w[3]), int(w[4]), unhex(w[5]), unhex(w[6])
@@ -109,7 +128,7 @@ if ! grep -q "mismatched: 0$" "$tmp/out.txt"; then
   echo "FAIL honest: the total does not end in \"mismatched: 0\""
   failures=$((failures + 1))
 fi
-refusal_rows=$(($(grep -c '^open ' "$root/fixtures/frame/ring-cases.txt") + $(grep -c '^verify ' "$root/fixtures/frame/ring-cases.txt")))
+refusal_rows=$(grep -cE '^(open|verify|refuse-seal|refuse-open|refuse-mac) ' "$root/fixtures/frame/ring-cases.txt")
 if [ "$(grep -c "^refusals [a-z]*: $refusal_rows rows, 0 mismatched$" "$tmp/out.txt")" -ne 8 ] || [ "$refusal_rows" -lt 2 ]; then
   echo "FAIL honest: not eight lines \"refusals <lang>: $refusal_rows rows, 0 mismatched\""
   failures=$((failures + 1))
@@ -122,6 +141,10 @@ run reader-prints-too-few 1 "printed" FAKE_LIE=csharp:short
 # A reader that accepts tampered input, as a package that skips the tag check would (AZ-3341).
 run open-permissive 1 "go: E1.ct open gave 00, wanted TagMismatch" FAKE_LIE=go:open-permissive
 run verify-permissive 1 "swift: E4.first verify gave valid, wanted invalid" FAKE_LIE=swift:verify-permissive
+# A reader that opens with a direction the session did not load, and a writer that aborts on direction 0 (AZ-3354).
+run unloaded-direction-accepted 1 "go: R.open.unloaded open gave 00, wanted BadValue" FAKE_LIE=go:unloaded-accepted
+run fit-refused 1 "-> go: fit.tag4 open gave BufferFull" FAKE_LIE=go:fit-refused
+run dir0-aborts 1 "typescript frame-batch (seal) failed" FAKE_LIE=typescript:dir0-aborts
 run driver-crashes 1 "frame-batch (seal) failed" FAKE_LIE=typescript:crash
 run one-language 0 "ring-frame: 1 pairs" RING_FRAME_LANGS=python
 
@@ -140,6 +163,10 @@ corrupt '/^mac E4 /s/9bec$/9bed/'
 run mac-tag-changed 1 "disagree with the reference" RING_FRAME_CASES="$tmp/ring-cases.txt"
 corrupt '/^open E1.ct /s/ TagMismatch$/ ShortPacket/'
 run open-name-changed 1 "disagree with the reference" RING_FRAME_CASES="$tmp/ring-cases.txt"
+corrupt '/^refuse-seal R.seal.kind16 /s/ BadValue$/ TooLong/'
+run refuse-seal-name-changed 1 "R.seal.kind16 expected TooLong, reference gives BadValue" RING_FRAME_CASES="$tmp/ring-cases.txt"
+corrupt '/^refuse-mac R.mac.nbad5 /s/ BadValue$/ TooLong/'
+run refuse-mac-name-changed 1 "R.mac.nbad5 expected TooLong, reference gives BadValue" RING_FRAME_CASES="$tmp/ring-cases.txt"
 corrupt '/^verify E4.first /s/ [0-9a-f]{8} invalid$/ 56db9bec invalid/'
 run verify-tag-made-valid 1 "disagree with the reference" RING_FRAME_CASES="$tmp/ring-cases.txt"
 { cat "$root/fixtures/frame/ring-cases.txt"; grep -m1 '^seal E1 ' "$root/fixtures/frame/ring-cases.txt"; } > "$tmp/ring-cases.txt"

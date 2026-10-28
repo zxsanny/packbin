@@ -47,16 +47,29 @@ func frameKind(err error) string {
 	return "error"
 }
 
+// The package takes the byte as it comes: a direction outside 1 to 3 is its BadValue to give.
 func frameDirection(d int) packbin.FrameDirection {
-	switch d {
-	case 1:
-		return packbin.FrameUp
-	case 2:
-		return packbin.FrameDown
-	case 3:
-		return packbin.FrameGroup
+	return packbin.FrameDirection(uint8(d))
+}
+
+// The optional trailing fields of a seal or open line: the directions loaded (digits 1 to 3) and the output buffer size.
+func frameLoaded(w []string) (packbin.FrameDirections, int) {
+	digits, size := "123", 300
+	if len(w) > 9 {
+		digits = w[9]
 	}
-	panic(fmt.Sprintf("direction: %d", d))
+	if len(w) > 10 {
+		n, err := strconv.Atoi(w[10])
+		if err != nil {
+			panic(fmt.Sprintf("bad out_len: %s", w[10]))
+		}
+		size = n
+	}
+	var mask packbin.FrameDirections
+	for _, digit := range digits {
+		mask |= 1 << (digit - '1')
+	}
+	return mask, size
 }
 
 func frameSeal(w []string) string {
@@ -69,12 +82,13 @@ func frameSeal(w []string) string {
 	ad := frameBytes(w[6])
 	clear := frameBytes(w[7])
 	plain := frameBytes(w[8])
+	directions, size := frameLoaded(w)
 	session, err := packbin.LoadFrameSession(key, uint32(epoch),
-		packbin.FrameConfig{TagLength: tagLen, Directions: packbin.FrameDirections(1 << (d - 1))})
+		packbin.FrameConfig{TagLength: tagLen, Directions: directions})
 	if err != nil {
 		return frameKind(err)
 	}
-	out := make([]byte, 300)
+	out := make([]byte, size)
 	n, err := session.Seal(frameDirection(d), packbin.NewMsgContext(msgID, kind), ad, clear, plain, out)
 	if err != nil {
 		return frameKind(err)
@@ -92,12 +106,13 @@ func frameOpen(w []string) string {
 	ad := frameBytes(w[6])
 	clearLen, _ := strconv.Atoi(w[7])
 	body := frameBytes(w[8])
+	directions, size := frameLoaded(w)
 	session, err := packbin.LoadFrameSession(key, uint32(epoch),
-		packbin.FrameConfig{TagLength: tagLen, Directions: packbin.FrameDirections(1 << (d - 1))})
+		packbin.FrameConfig{TagLength: tagLen, Directions: directions})
 	if err != nil {
 		return frameKind(err)
 	}
-	out := make([]byte, 300)
+	out := make([]byte, size)
 	opened, err := session.Open(frameDirection(d), packbin.NewMsgContext(msgID, kind), ad, body, clearLen, out, nil, 0)
 	if err != nil {
 		return frameKind(err)

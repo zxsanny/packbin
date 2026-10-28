@@ -40,13 +40,29 @@ final class HandoffFrame {
         return "error";
     }
 
+    // The enum holds no direction outside 1 to 3: null is what the package refuses as BadValue ("a call in another
+    // direction is BadValue"), as its own vector test does.
     private static FrameDirection direction(int d) {
         return switch (d) {
             case 1 -> FrameDirection.UP;
             case 2 -> FrameDirection.DOWN;
             case 3 -> FrameDirection.GROUP;
-            default -> throw new IllegalArgumentException("direction: " + d);
+            default -> null;
         };
+    }
+
+    // The optional trailing fields of a seal or open line: the directions loaded (digits 1 to 3) and the output buffer size.
+    private static FrameDirections directions(String[] w) {
+        String digits = w.length > 9 ? w[9] : "123";
+        FrameDirection[] set = new FrameDirection[digits.length()];
+        for (int i = 0; i < set.length; i++) {
+            set[i] = direction(digits.charAt(i) - '0');
+        }
+        return FrameDirections.of(set);
+    }
+
+    private static int size(String[] w) {
+        return w.length > 10 ? Integer.parseInt(w[10]) : 300;
     }
 
     private static String seal(String[] w) {
@@ -55,10 +71,9 @@ final class HandoffFrame {
         byte[] msgId = bytesOf(w[4]);
         int fkind = Integer.parseInt(w[5]);
         byte[] ad = bytesOf(w[6]), clear = bytesOf(w[7]), plain = bytesOf(w[8]);
-        FrameSession session = FrameSession.load(key, epoch,
-                new FrameConfig(tagLen, FrameDirections.of(direction(d))));
+        FrameSession session = FrameSession.load(key, epoch, new FrameConfig(tagLen, directions(w)));
         if (session == null) return "BadValue";
-        byte[] out = new byte[300];
+        byte[] out = new byte[size(w)];
         Object result = session.seal(direction(d), new MsgContext(msgId, fkind), ad, clear, plain, out);
         if (result instanceof FrameSealed sealed) return hexOf(java.util.Arrays.copyOf(out, sealed.length));
         return kind(result);
@@ -72,10 +87,9 @@ final class HandoffFrame {
         byte[] ad = bytesOf(w[6]);
         int clearLen = Integer.parseInt(w[7]);
         byte[] body = bytesOf(w[8]);
-        FrameSession session = FrameSession.load(key, epoch,
-                new FrameConfig(tagLen, FrameDirections.of(direction(d))));
+        FrameSession session = FrameSession.load(key, epoch, new FrameConfig(tagLen, directions(w)));
         if (session == null) return "BadValue";
-        byte[] out = new byte[300];
+        byte[] out = new byte[size(w)];
         Object result = session.open(direction(d), new MsgContext(msgId, fkind), ad, body, clearLen, null, 0, out);
         if (result instanceof FrameOpened opened) return hexOf(java.util.Arrays.copyOf(out, opened.plainLength));
         return kind(result);

@@ -18,13 +18,18 @@ static class HandoffFrame
         _ => "error",
     };
 
-    static FrameDirection Direction(int d) => d switch
+    // The package takes the byte as it comes: a direction outside 1 to 3 is its BadValue to give.
+    static FrameDirection Direction(int d) => (FrameDirection)(byte)d;
+
+    // The optional trailing fields of a seal or open line: the directions loaded (digits 1 to 3) and the output buffer size.
+    static (FrameDirections Directions, int Size) Loaded(string[] w)
     {
-        1 => FrameDirection.Up,
-        2 => FrameDirection.Down,
-        3 => FrameDirection.Group,
-        _ => throw new ArgumentException($"direction: {d}"),
-    };
+        var digits = w.Length > 9 ? w[9] : "123";
+        var size = w.Length > 10 ? int.Parse(w[10]) : 300;
+        var mask = 0;
+        foreach (var digit in digits) mask |= 1 << (digit - '1');
+        return ((FrameDirections)mask, size);
+    }
 
     static string Seal(string[] w)
     {
@@ -35,10 +40,10 @@ static class HandoffFrame
         var ad = BytesOf(w[6]);
         var clear = BytesOf(w[7]);
         var plain = BytesOf(w[8]);
-        var session = FrameSession.Load(key, (uint)epoch,
-            new FrameConfig(tagLen, (FrameDirections)(1 << (d - 1))));
+        var (directions, size) = Loaded(w);
+        var session = FrameSession.Load(key, (uint)epoch, new FrameConfig(tagLen, directions));
         if (session is null) return "BadValue";
-        var buf = new byte[300];
+        var buf = new byte[size];
         var err = session.Seal(Direction(d), new MsgContext(msgId, kind), ad, clear, plain, buf, out int written);
         if (err is not null) return Kind(err);
         return HexOf(buf[..written]);
@@ -53,10 +58,10 @@ static class HandoffFrame
         var ad = BytesOf(w[6]);
         int clearLen = int.Parse(w[7]);
         var body = BytesOf(w[8]);
-        var session = FrameSession.Load(key, (uint)epoch,
-            new FrameConfig(tagLen, (FrameDirections)(1 << (d - 1))));
+        var (directions, size) = Loaded(w);
+        var session = FrameSession.Load(key, (uint)epoch, new FrameConfig(tagLen, directions));
         if (session is null) return "BadValue";
-        var buf = new byte[300];
+        var buf = new byte[size];
         var err = session.Open(Direction(d), new MsgContext(msgId, kind), ad, body, clearLen, buf, out var opened);
         if (err is not null) return Kind(err);
         return HexOf(buf[..opened.PlainLength]);

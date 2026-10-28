@@ -9,9 +9,12 @@
   ring_frame.py check <dir> <writer>... -- <reader>...   reads all outputs, compares with the reference codec
                                                     (scripts/frame/framefmt.py), prints one line per pair; exit 1 on mismatch
 
-Rows: the seal, mac, open and verify rows of fixtures/frame/ring-cases.txt. The open and verify rows are tampered input:
-every reader gets them once, after the lines built on the writers' output, and must refuse them as the row says
-(TagMismatch or ShortPacket for an open row, `invalid` for a verify row). The environment variable RING_FRAME_CASES
+Rows: the seal, mac, open and verify rows of fixtures/frame/ring-cases.txt, and the refuse-seal, refuse-open and
+refuse-mac rows (AZ-3354). The open and verify rows are tampered input: every reader gets them once, after the lines
+built on the writers' output, and must refuse them as the row says (TagMismatch or ShortPacket for an open row,
+`invalid` for a verify row). A refuse-seal or refuse-mac row is sent to every writer once, after its good rows, and a
+refuse-open row to every reader with the open rows; each must give the error name of the row (`dirs` names the
+directions the session loaded, `out_len` is the caller's output buffer). The environment variable RING_FRAME_CASES
 names another file (the self-test of the ring). A row that the reference codec does not confirm is an error of the file, not of a
 package: the script stops before any driver result is read.
 """
@@ -44,13 +47,17 @@ def read_lines(path):
 
 
 class Rows:
-    """seal: (case, key, epoch, d, tag_len, msg_id, kind, ad, clear, plain, expected_body);
+    """seal: (case, key, epoch, d, tag_len, msg_id, kind, ad, clear, plain, expected_body, out_len); a row with an out_len
+    is sealed into exactly that buffer and opened into a buffer of exactly its plaintext (the boundary of BufferFull);
     mac: (case, key, epoch, label, n, message, expected_tag);
-    refuse_open: (case, key, epoch, d, tag_len, msg_id, kind, ad, clear_len, body, expected_name);
+    refuse_open: (case, key, epoch, d, tag_len, msg_id, kind, ad, clear_len, body, expected_name, dirs, out_len);
+    refuse_seal: (case, key, epoch, d, tag_len, msg_id, kind, ad, clear, plain, expected_name, dirs, out_len);
+    refuse_mac: (case, key, epoch, label, n, message, expected_name);
     refuse_verify: (case, key, epoch, label, n, message, tag)."""
 
     def __init__(self, path):
         self.seal, self.mac, self.refuse_open, self.refuse_verify, ids = [], [], [], [], set()
+        self.refuse_seal, self.refuse_mac = [], []
         with open(path, encoding="utf-8") as f:
             for number, line in enumerate(f, 1):
                 line = line.rstrip("\n")
@@ -71,10 +78,16 @@ class Rows:
             raise FileError("%s: no seal rows" % path)
         if not self.mac:
             raise FileError("%s: no mac rows" % path)
-        if not self.refuse_open:
+        if not any(row[11] == "123" and row[12] is None for row in self.refuse_open):
             raise FileError("%s: no open rows" % path)
         if not self.refuse_verify:
             raise FileError("%s: no verify rows" % path)
+
+    @staticmethod
+    def _dirs(token, where):
+        if not token.isdigit() or any(c not in "123" for c in token):
+            raise FileError("%s: dirs %s is not digits of 1 to 3" % (where, token))
+        return tuple(int(c) for c in token)
 
     def _add(self, w, where):
         kind = w[0]
@@ -84,10 +97,11 @@ class Rows:
             tag_len, msg_id, fkind = int(w[5]), unhex(w[6]), int(w[7])
             ad, clear, plain = unhex(w[8]), unhex(w[9]), unhex(w[10])
             expected = unhex(w[11])
-            ref = ff.seal(key, epoch, d, tag_len, msg_id, fkind, ad, clear, plain)
+            out_len = int(w[12]) if len(w) > 12 else None
+            ref = ff.seal(key, epoch, d, tag_len, msg_id, fkind, ad, clear, plain, out_len=out_len)
             if ref != expected:
                 raise FileError("%s: %s expected %s, reference gives %s" % (where, case, expected.hex(), ref.hex()))
-            self.seal.append((case, key, epoch, d, tag_len, msg_id, fkind, ad, clear, plain, expected.hex()))
+            self.seal.append((case, key, epoch, d, tag_len, msg_id, fkind, ad, clear, plain, expected.hex(), out_len))
         elif kind == "mac":
             case = w[1]
             key, epoch, label = unhex(w[2]), int(w[3]), unhex(w[4])
@@ -109,7 +123,47 @@ class Rows:
                 got = x.kind
             if got != expected:
                 raise FileError("%s: %s expected %s, reference gives %s" % (where, case, expected, got))
-            self.refuse_open.append((case, key, epoch, d, tag_len, msg_id, fkind, ad, clear_len, body, expected))
+            self.refuse_open.append((case, key, epoch, d, tag_len, msg_id, fkind, ad, clear_len, body, expected,
+                                     "123", None))
+        elif kind == "refuse-seal":
+            case = w[1]
+            key, epoch, d, tag_len = unhex(w[2]), int(w[3]), int(w[4]), int(w[5])
+            msg_id, fkind, ad, clear, plain = unhex(w[6]), int(w[7]), unhex(w[8]), unhex(w[9]), unhex(w[10])
+            dirs, out_len, expected = self._dirs(w[11], where), int(w[12]), w[13]
+            try:
+                ff.seal(key, epoch, d, tag_len, msg_id, fkind, ad, clear, plain, dirs=dirs, out_len=out_len)
+                got = "sealed"
+            except ff.Fault as x:
+                got = x.kind
+            if got != expected:
+                raise FileError("%s: %s expected %s, reference gives %s" % (where, case, expected, got))
+            self.refuse_seal.append((case, key, epoch, d, tag_len, msg_id, fkind, ad, clear, plain, expected,
+                                     w[11], out_len))
+        elif kind == "refuse-open":
+            case = w[1]
+            key, epoch, d, tag_len = unhex(w[2]), int(w[3]), int(w[4]), int(w[5])
+            msg_id, fkind, ad, clear_len, body = unhex(w[6]), int(w[7]), unhex(w[8]), int(w[9]), unhex(w[10])
+            dirs, out_len, expected = self._dirs(w[11], where), int(w[12]), w[13]
+            try:
+                ff.open_frame(key, epoch, d, tag_len, msg_id, fkind, ad, clear_len, body, dirs=dirs, out_len=out_len)
+                got = "opened"
+            except ff.Fault as x:
+                got = x.kind
+            if got != expected:
+                raise FileError("%s: %s expected %s, reference gives %s" % (where, case, expected, got))
+            self.refuse_open.append((case, key, epoch, d, tag_len, msg_id, fkind, ad, clear_len, body, expected,
+                                     w[11], out_len))
+        elif kind == "refuse-mac":
+            case = w[1]
+            key, epoch, label, n, message, expected = unhex(w[2]), int(w[3]), unhex(w[4]), int(w[5]), unhex(w[6]), w[7]
+            try:
+                ff.mac_tag(key, epoch, label, n, [message])
+                got = "tagged"
+            except ff.Fault as x:
+                got = x.kind
+            if got != expected:
+                raise FileError("%s: %s expected %s, reference gives %s" % (where, case, expected, got))
+            self.refuse_mac.append((case, key, epoch, label, n, message, expected))
         elif kind == "verify":
             case = w[1]
             key, epoch, label, n = unhex(w[2]), int(w[3]), unhex(w[4]), int(w[5])
@@ -127,6 +181,11 @@ class Rows:
             raise FileError("%s: unknown row kind %s" % (where, kind))
 
 
+def tail(dirs, out_len):
+    """The optional trailing fields of a seal or open line: nothing for the defaults (123, 300)."""
+    return "" if dirs == "123" and out_len is None else " %s %d" % (dirs, 300 if out_len is None else out_len)
+
+
 def load():
     path = os.environ.get("RING_FRAME_CASES") or os.path.join(ROOT, "fixtures", "frame", "ring-cases.txt")
     return Rows(path)
@@ -135,10 +194,14 @@ def load():
 def cmd_seal_in(dirname):
     rows = load()
     with open(os.path.join(dirname, "seal.in"), "w") as f:
-        for case, key, epoch, d, tag_len, msg_id, kind, ad, clear, plain, _ in rows.seal:
-            f.write("seal %s %d %d %d %s %d %s %s %s\n" % (
-                key.hex(), epoch, d, tag_len, msg_id.hex(), kind, hx(ad), hx(clear), hx(plain)))
-    print("ring-frame: %d seal rows" % len(rows.seal))
+        for case, key, epoch, d, tag_len, msg_id, kind, ad, clear, plain, _, out_len in rows.seal:
+            f.write("seal %s %d %d %d %s %d %s %s %s%s\n" % (
+                key.hex(), epoch, d, tag_len, msg_id.hex(), kind, hx(ad), hx(clear), hx(plain),
+                "" if out_len is None else tail("123", out_len)))
+        for case, key, epoch, d, tag_len, msg_id, kind, ad, clear, plain, _, dirs, out_len in rows.refuse_seal:
+            f.write("seal %s %d %d %d %s %d %s %s %s%s\n" % (
+                key.hex(), epoch, d, tag_len, msg_id.hex(), kind, hx(ad), hx(clear), hx(plain), tail(dirs, out_len)))
+    print("ring-frame: %d seal rows and %d refusal rows" % (len(rows.seal), len(rows.refuse_seal)))
 
 
 def cmd_open_in(dirname, writers):
@@ -146,16 +209,17 @@ def cmd_open_in(dirname, writers):
     with open(os.path.join(dirname, "open.in"), "w") as f:
         for writer in writers:
             lines = read_lines(os.path.join(dirname, "seal.%s.out" % writer))
-            if lines is None or len(lines) != len(rows.seal):
+            if lines is None or len(lines) != len(rows.seal) + len(rows.refuse_seal):
                 for _ in rows.seal:
                     f.write("open-skip\n")
                 continue
-            for (case, key, epoch, d, tag_len, msg_id, kind, ad, clear, plain, _), body_hex in zip(rows.seal, lines):
-                f.write("open %s %d %d %d %s %d %s %d %s\n" % (
-                    key.hex(), epoch, d, tag_len, msg_id.hex(), kind, hx(ad), len(clear), body_hex))
-        for case, key, epoch, d, tag_len, msg_id, kind, ad, clear_len, body, _ in rows.refuse_open:
-            f.write("open %s %d %d %d %s %d %s %d %s\n" % (
-                key.hex(), epoch, d, tag_len, msg_id.hex(), kind, hx(ad), clear_len, hx(body)))
+            for (case, key, epoch, d, tag_len, msg_id, kind, ad, clear, plain, _, out_len), body_hex in zip(rows.seal, lines):
+                f.write("open %s %d %d %d %s %d %s %d %s%s\n" % (
+                    key.hex(), epoch, d, tag_len, msg_id.hex(), kind, hx(ad), len(clear), body_hex,
+                    "" if out_len is None else tail("123", len(plain))))
+        for case, key, epoch, d, tag_len, msg_id, kind, ad, clear_len, body, _, dirs, out_len in rows.refuse_open:
+            f.write("open %s %d %d %d %s %d %s %d %s%s\n" % (
+                key.hex(), epoch, d, tag_len, msg_id.hex(), kind, hx(ad), clear_len, hx(body), tail(dirs, out_len)))
     print("ring-frame: %d open rows for each of %d writers, and %d refusal rows" % (
         len(rows.seal), len(writers), len(rows.refuse_open)))
 
@@ -165,7 +229,9 @@ def cmd_mac_in(dirname):
     with open(os.path.join(dirname, "mac.in"), "w") as f:
         for case, key, epoch, label, n, message, _ in rows.mac:
             f.write("mac %s %d %s %d %s\n" % (key.hex(), epoch, label.hex(), n, hx(message)))
-    print("ring-frame: %d mac rows" % len(rows.mac))
+        for case, key, epoch, label, n, message, _ in rows.refuse_mac:
+            f.write("mac %s %d %s %d %s\n" % (key.hex(), epoch, hx(label), n, hx(message)))
+    print("ring-frame: %d mac rows and %d refusal rows" % (len(rows.mac), len(rows.refuse_mac)))
 
 
 def cmd_verify_in(dirname, writers):
@@ -173,7 +239,7 @@ def cmd_verify_in(dirname, writers):
     with open(os.path.join(dirname, "verify.in"), "w") as f:
         for writer in writers:
             lines = read_lines(os.path.join(dirname, "mac.%s.out" % writer))
-            if lines is None or len(lines) != len(rows.mac):
+            if lines is None or len(lines) != len(rows.mac) + len(rows.refuse_mac):
                 for _ in rows.mac:
                     f.write("verify-skip\n")
                 continue
@@ -191,26 +257,33 @@ def cmd_check(dirname, writers, readers):
     pairs = 0
     notes = []
 
+    # A writer's own refusal rows come after its good rows (seal.in, mac.in); they are counted in its `refusals` line.
+    refused_by_writer = {writer: [] for writer in writers}
     bad_seal_writers = {}
     for writer in writers:
         lines = read_lines(os.path.join(dirname, "seal.%s.out" % writer))
-        if lines is None or len(lines) != len(rows.seal):
+        wanted = len(rows.seal) + len(rows.refuse_seal)
+        if lines is None or len(lines) != wanted:
             bad_seal_writers[writer] = ["%s printed %s seal lines, wanted %d" % (
-                writer, "no" if lines is None else len(lines), len(rows.seal))]
+                writer, "no" if lines is None else len(lines), wanted)]
             continue
         wrong = []
-        for (case, key, epoch, d, tag_len, msg_id, kind, ad, clear, plain, want), got in zip(rows.seal, lines):
+        for (case, key, epoch, d, tag_len, msg_id, kind, ad, clear, plain, want, _), got in zip(rows.seal, lines):
             if got != want:
                 wrong.append("%s: %s seal gave %s, wanted %s" % (writer, case, got[:40], want[:40]))
         if wrong:
             bad_seal_writers[writer] = wrong
+        for row, got in zip(rows.refuse_seal, lines[len(rows.seal):]):
+            if got != row[10]:
+                refused_by_writer[writer].append("%s: %s seal gave %s, wanted %s" % (writer, row[0], got[:50], row[10]))
 
     bad_mac_writers = {}
     for writer in writers:
         lines = read_lines(os.path.join(dirname, "mac.%s.out" % writer))
-        if lines is None or len(lines) != len(rows.mac):
+        wanted = len(rows.mac) + len(rows.refuse_mac)
+        if lines is None or len(lines) != wanted:
             bad_mac_writers[writer] = ["%s printed %s mac lines, wanted %d" % (
-                writer, "no" if lines is None else len(lines), len(rows.mac))]
+                writer, "no" if lines is None else len(lines), wanted)]
             continue
         wrong = []
         for (case, key, epoch, label, n, message, want), got in zip(rows.mac, lines):
@@ -218,6 +291,9 @@ def cmd_check(dirname, writers, readers):
                 wrong.append("%s: %s mac gave %s, wanted %s" % (writer, case, got[:40], want[:40]))
         if wrong:
             bad_mac_writers[writer] = wrong
+        for row, got in zip(rows.refuse_mac, lines[len(rows.mac):]):
+            if got != row[6]:
+                refused_by_writer[writer].append("%s: %s mac gave %s, wanted %s" % (writer, row[0], got[:50], row[6]))
 
     total_wrong += sum(len(v) for v in bad_seal_writers.values())
     total_wrong += sum(len(v) for v in bad_mac_writers.values())
@@ -246,7 +322,7 @@ def cmd_check(dirname, writers, readers):
                 wrong.append("%s -> %s: no usable open output" % (writer, reader))
             else:
                 chunk = open_lines[index * len(rows.seal):(index + 1) * len(rows.seal)]
-                for (case, key, epoch, d, tag_len, msg_id, kind, ad, clear, plain, _), got in zip(rows.seal, chunk):
+                for (case, key, epoch, d, tag_len, msg_id, kind, ad, clear, plain, _, _), got in zip(rows.seal, chunk):
                     want = hx(plain)
                     if got != want:
                         wrong.append("%s -> %s: %s open gave %s, wanted %s" % (writer, reader, case, got[:50], want[:50]))
@@ -271,7 +347,8 @@ def cmd_check(dirname, writers, readers):
             refused.append("%s: no usable open output for the refusal rows" % reader)
         else:
             tail = open_lines[len(rows.seal) * len(writers):]
-            for (case, _, _, _, _, _, _, _, _, _, want), got in zip(rows.refuse_open, tail):
+            for row, got in zip(rows.refuse_open, tail):
+                case, want = row[0], row[10]
                 if got != want:
                     refused.append("%s: %s open gave %s, wanted %s" % (reader, case, got[:50], want))
         if verify_lines is None:
@@ -281,8 +358,11 @@ def cmd_check(dirname, writers, readers):
             for (case, _, _, _, _, _, _), got in zip(rows.refuse_verify, tail):
                 if got != "invalid":
                     refused.append("%s: %s verify gave %s, wanted invalid" % (reader, case, got[:50]))
+        refused += refused_by_writer.get(reader, [])
         total_wrong += len(refused)
-        print("refusals %s: %d rows, %d mismatched" % (reader, len(rows.refuse_open) + len(rows.refuse_verify), len(refused)))
+        print("refusals %s: %d rows, %d mismatched" % (
+            reader, len(rows.refuse_open) + len(rows.refuse_verify) + len(rows.refuse_seal) + len(rows.refuse_mac),
+            len(refused)))
         for line in refused[:5]:
             print("    " + line)
 

@@ -33,13 +33,25 @@ fn fault_kind(fault: &Fault) -> &'static str {
     }
 }
 
-fn direction(d: usize) -> FrameDirection {
+// The enum holds no direction outside 1 to 3: the refusal is the type, so `None` is the BadValue of the package, as its
+// own vector test (`rust/tests/frame_vectors_tests.rs`) reads a row with direction 0 or 4.
+fn direction(d: usize) -> Option<FrameDirection> {
     match d {
-        1 => FrameDirection::Up,
-        2 => FrameDirection::Down,
-        3 => FrameDirection::Group,
-        _ => panic!("direction: {d}"),
+        1 => Some(FrameDirection::Up),
+        2 => Some(FrameDirection::Down),
+        3 => Some(FrameDirection::Group),
+        _ => None,
     }
+}
+
+// The optional trailing fields of a seal or open line: the directions loaded (digits 1 to 3) and the output buffer size.
+fn loaded(w: &[&str]) -> (FrameDirections, usize) {
+    let digits = w.get(9).copied().unwrap_or("123");
+    let size = w.get(10).map_or(300, |token| token.parse().unwrap());
+    let set = digits.chars().fold(FrameDirections::NONE, |set, digit| {
+        set.with(direction(digit.to_digit(10).unwrap() as usize).unwrap())
+    });
+    (set, size)
 }
 
 fn key32(raw: &[u8]) -> &[u8; 32] {
@@ -58,20 +70,24 @@ fn seal(w: &[&str]) -> String {
     let plain = bytes_of(w[8]);
     let mut id = [0u8; 8];
     id[..msg_id.len()].copy_from_slice(&msg_id);
+    let (directions, size) = loaded(w);
     let session = match FrameSession::load_frame(
         key32(&key),
         epoch,
         FrameConfig {
             tag_len,
-            directions: FrameDirections::NONE.with(direction(d)),
+            directions,
         },
     ) {
         Ok(s) => s,
         Err(f) => return fault_kind(&f).into(),
     };
-    let mut out = [0u8; 300];
+    let Some(dir) = direction(d) else {
+        return "BadValue".into();
+    };
+    let mut out = vec![0u8; size];
     match session.seal_frame(
-        direction(d),
+        dir,
         &MsgContext { msg_id: id, kind },
         &ad,
         &clear,
@@ -95,20 +111,24 @@ fn open(w: &[&str]) -> String {
     let body = bytes_of(w[8]);
     let mut id = [0u8; 8];
     id[..msg_id.len()].copy_from_slice(&msg_id);
+    let (directions, size) = loaded(w);
     let session = match FrameSession::load_frame(
         key32(&key),
         epoch,
         FrameConfig {
             tag_len,
-            directions: FrameDirections::NONE.with(direction(d)),
+            directions,
         },
     ) {
         Ok(s) => s,
         Err(f) => return fault_kind(&f).into(),
     };
-    let mut out = [0u8; 300];
+    let Some(dir) = direction(d) else {
+        return "BadValue".into();
+    };
+    let mut out = vec![0u8; size];
     match session.open_frame(
-        direction(d),
+        dir,
         &MsgContext { msg_id: id, kind },
         &ad,
         &body,

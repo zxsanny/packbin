@@ -416,13 +416,21 @@ char const* frame_kind(packbin::Error e) {
   }
 }
 
+// The package takes the byte as it comes: a direction outside 1 to 3 is its BadValue to give.
 packbin::FrameDirection frame_dir(int d) {
-  switch (d) {
-    case 1: return packbin::FrameDirection::Up;
-    case 2: return packbin::FrameDirection::Down;
-    case 3: return packbin::FrameDirection::Group;
-    default: return packbin::FrameDirection::Up;
-  }
+  return static_cast<packbin::FrameDirection>(static_cast<std::uint8_t>(d));
+}
+
+// The optional trailing fields of a seal or open line: the directions loaded (digits 1 to 3) and the output buffer size.
+packbin::FrameDirections frame_dirs(std::vector<std::string> const& w) {
+  std::string const digits = w.size() > 9 ? w[9] : "123";
+  int mask = 0;
+  for (char c : digits) mask |= 1 << (c - '1');
+  return static_cast<packbin::FrameDirections>(mask);
+}
+
+std::size_t frame_out_len(std::vector<std::string> const& w) {
+  return w.size() > 10 ? static_cast<std::size_t>(std::stoul(w[10])) : 300;
 }
 
 std::string frame_seal(std::vector<std::string> const& w) {
@@ -433,15 +441,15 @@ std::string frame_seal(std::vector<std::string> const& w) {
   auto ad = ecc_bytes(w[6]), clear = ecc_bytes(w[7]), plain = ecc_bytes(w[8]);
   packbin::FrameSession session;
   auto r = session.load({key.data(), key.size()}, static_cast<std::uint32_t>(epoch),
-      {static_cast<std::uint8_t>(tag_len), static_cast<packbin::FrameDirections>(1 << (d - 1))});
+      {static_cast<std::uint8_t>(tag_len), frame_dirs(w)});
   if (!r.ok()) return frame_kind(r.error);
   packbin::MsgContext ctx{};
   std::memcpy(ctx.msg_id, msg_id.data(), msg_id.size() < 8 ? msg_id.size() : 8);
   ctx.kind = static_cast<std::uint8_t>(kind);
-  std::uint8_t out[300];
+  std::vector<std::uint8_t> out(frame_out_len(w));
   r = session.seal(frame_dir(d), ctx, {ad.data(), ad.size()}, {clear.data(), clear.size()},
-      {plain.data(), plain.size()}, {out, sizeof(out)});
-  return r.ok() ? frame_hex(out, r.offset) : frame_kind(r.error);
+      {plain.data(), plain.size()}, {out.data(), out.size()});
+  return r.ok() ? frame_hex(out.data(), r.offset) : frame_kind(r.error);
 }
 
 std::string frame_open(std::vector<std::string> const& w) {
@@ -454,16 +462,16 @@ std::string frame_open(std::vector<std::string> const& w) {
   auto body = ecc_bytes(w[8]);
   packbin::FrameSession session;
   auto r = session.load({key.data(), key.size()}, static_cast<std::uint32_t>(epoch),
-      {static_cast<std::uint8_t>(tag_len), static_cast<packbin::FrameDirections>(1 << (d - 1))});
+      {static_cast<std::uint8_t>(tag_len), frame_dirs(w)});
   if (!r.ok()) return frame_kind(r.error);
   packbin::MsgContext ctx{};
   std::memcpy(ctx.msg_id, msg_id.data(), msg_id.size() < 8 ? msg_id.size() : 8);
   ctx.kind = static_cast<std::uint8_t>(kind);
-  std::uint8_t out[300];
+  std::vector<std::uint8_t> out(frame_out_len(w));
   packbin::FrameOpened opened;
   r = session.open(frame_dir(d), ctx, {ad.data(), ad.size()}, {body.data(), body.size()},
-      static_cast<std::size_t>(clear_len), {out, sizeof(out)}, opened);
-  return r.ok() ? frame_hex(out, opened.plain_len) : frame_kind(r.error);
+      static_cast<std::size_t>(clear_len), {out.data(), out.size()}, opened);
+  return r.ok() ? frame_hex(out.data(), opened.plain_len) : frame_kind(r.error);
 }
 
 std::string frame_mac(std::vector<std::string> const& w) {

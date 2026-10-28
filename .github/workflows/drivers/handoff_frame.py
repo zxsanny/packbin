@@ -31,6 +31,12 @@ KINDS = {BadValue: "BadValue", TooLong: "TooLong", BufferFull: "BufferFull",
          ShortPacket: "ShortPacket", TagMismatch: "TagMismatch"}
 
 
+def _directions(words: list[str]) -> tuple[FrameDirections, int]:
+    """The optional trailing fields of a seal or open line: the directions loaded and the output buffer size."""
+    digits, size = (words[9], int(words[10])) if len(words) > 9 else ("123", 300)
+    return FrameDirections(sum(1 << (int(digit) - 1) for digit in digits)), size
+
+
 def _kind(result: object) -> str:
     return KINDS.get(type(result), "error")
 
@@ -38,10 +44,11 @@ def _kind(result: object) -> str:
 def _seal(words: list[str]) -> str:
     key, epoch, d, tag_len = _bytes(words[0]), int(words[1]), int(words[2]), int(words[3])
     msg_id, kind, ad, clear, plain = _bytes(words[4]), int(words[5]), _bytes(words[6]), _bytes(words[7]), _bytes(words[8])
-    session = FrameSession.load(key, epoch, FrameConfig(tag_len, FrameDirections(1 << (d - 1))))
+    directions, size = _directions(words)
+    session = FrameSession.load(key, epoch, FrameConfig(tag_len, directions))
     if isinstance(session, BadValue):
         return "BadValue"
-    buf = bytearray(300)
+    buf = bytearray(size)
     result = session.seal(d, MsgContext(msg_id, kind), ad, clear, plain, buf)
     if not isinstance(result, int):
         return _kind(result)
@@ -51,10 +58,11 @@ def _seal(words: list[str]) -> str:
 def _open(words: list[str]) -> str:
     key, epoch, d, tag_len = _bytes(words[0]), int(words[1]), int(words[2]), int(words[3])
     msg_id, kind, ad, clear_len, body = _bytes(words[4]), int(words[5]), _bytes(words[6]), int(words[7]), _bytes(words[8])
-    session = FrameSession.load(key, epoch, FrameConfig(tag_len, FrameDirections(1 << (d - 1))))
+    directions, size = _directions(words)
+    session = FrameSession.load(key, epoch, FrameConfig(tag_len, directions))
     if isinstance(session, BadValue):
         return "BadValue"
-    buf = bytearray(300)
+    buf = bytearray(size)
     result = session.open(d, MsgContext(msg_id, kind), ad, body, clear_len, buf)
     if isinstance(result, FrameOpened):
         return _hex(buf[:result.plain_length])

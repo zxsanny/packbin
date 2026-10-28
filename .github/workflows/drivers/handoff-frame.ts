@@ -39,12 +39,20 @@ function mapKind(result: object): string {
   return KIND_MAP[raw] ?? raw;
 }
 
+// The optional trailing fields of a seal or open line: the directions loaded (digits 1 to 3) and the output buffer size.
+function loaded(words: string[]): [number, number] {
+  const digits = words[9] ?? "123";
+  const size = words[10] === undefined ? 300 : Number(words[10]);
+  return [[...digits].reduce((mask, digit) => mask | (1 << (Number(digit) - 1)), 0), size];
+}
+
 function seal(words: string[]): string {
   const [key, epoch, d, tagLen] = [bytesOf(words[0]!), Number(words[1]), Number(words[2]), Number(words[3])];
   const [msgId, kind, ad, clear, plain] = [bytesOf(words[4]!), Number(words[5]), bytesOf(words[6]!), bytesOf(words[7]!), bytesOf(words[8]!)];
-  const session = FrameSession.load(key, epoch, new FrameConfig(tagLen, 1 << (d - 1)));
+  const [directions, size] = loaded(words);
+  const session = FrameSession.load(key, epoch, new FrameConfig(tagLen, directions));
   if (session === null) return "BadValue";
-  const out = new Uint8Array(300);
+  const out = new Uint8Array(size);
   const result = session.seal(d, new MsgContext(msgId, kind), ad, clear, plain, out);
   if (!result.ok) return mapKind(result);
   return hexOf(out.subarray(0, result.length));
@@ -53,9 +61,10 @@ function seal(words: string[]): string {
 function open(words: string[]): string {
   const [key, epoch, d, tagLen] = [bytesOf(words[0]!), Number(words[1]), Number(words[2]), Number(words[3])];
   const [msgId, kind, ad, clearLen, body] = [bytesOf(words[4]!), Number(words[5]), bytesOf(words[6]!), Number(words[7]), bytesOf(words[8]!)];
-  const session = FrameSession.load(key, epoch, new FrameConfig(tagLen, 1 << (d - 1)));
+  const [directions, size] = loaded(words);
+  const session = FrameSession.load(key, epoch, new FrameConfig(tagLen, directions));
   if (session === null) return "BadValue";
-  const out = new Uint8Array(300);
+  const out = new Uint8Array(size);
   const result = session.open(d, new MsgContext(msgId, kind), ad, body, clearLen, out);
   if (result instanceof FrameOpened || (result as { ok: boolean }).ok) {
     const opened = result as FrameOpened;
