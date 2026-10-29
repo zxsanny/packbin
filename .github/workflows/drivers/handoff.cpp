@@ -468,6 +468,8 @@ std::size_t frame_out_len(std::vector<std::string> const& w) {
   return w.size() > 10 ? frame_int(w, 10, 65535) : 300;
 }
 
+// MsgContext holds an 8-byte id: another length cannot be handed to the package, so BadValue is the driver's to give in
+// frame_seal and frame_open (fixtures/frame/README.md). A key of any length goes to the package, which refuses it.
 std::string frame_seal(std::vector<std::string> const& w) {
   auto key = frame_bytes(w.at(0));
   std::uint32_t epoch = frame_int(w, 1, 4294967295u), d = frame_int(w, 2, 255), tag_len = frame_int(w, 3, 255);
@@ -479,7 +481,8 @@ std::string frame_seal(std::vector<std::string> const& w) {
   auto r = session.load({key.data(), key.size()}, epoch, {static_cast<std::uint8_t>(tag_len), frame_dirs(w)});
   if (!r.ok()) return frame_kind(r.error);
   packbin::MsgContext ctx{};
-  std::memcpy(ctx.msg_id, msg_id.data(), msg_id.size() < 8 ? msg_id.size() : 8);
+  if (msg_id.size() != sizeof ctx.msg_id) return "BadValue";
+  std::memcpy(ctx.msg_id, msg_id.data(), sizeof ctx.msg_id);
   ctx.kind = static_cast<std::uint8_t>(kind);
   r = session.seal(frame_dir(d), ctx, {ad.data(), ad.size()}, {clear.data(), clear.size()},
       {plain.data(), plain.size()}, {out.data(), out.size()});
@@ -499,7 +502,8 @@ std::string frame_open(std::vector<std::string> const& w) {
   auto r = session.load({key.data(), key.size()}, epoch, {static_cast<std::uint8_t>(tag_len), frame_dirs(w)});
   if (!r.ok()) return frame_kind(r.error);
   packbin::MsgContext ctx{};
-  std::memcpy(ctx.msg_id, msg_id.data(), msg_id.size() < 8 ? msg_id.size() : 8);
+  if (msg_id.size() != sizeof ctx.msg_id) return "BadValue";
+  std::memcpy(ctx.msg_id, msg_id.data(), sizeof ctx.msg_id);
   ctx.kind = static_cast<std::uint8_t>(kind);
   packbin::FrameOpened opened;
   r = session.open(frame_dir(d), ctx, {ad.data(), ad.size()}, {body.data(), body.size()},

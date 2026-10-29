@@ -89,17 +89,14 @@ fn loaded(w: &[&str]) -> Parsed<(FrameDirections, usize)> {
     Ok((set, size))
 }
 
-fn key32(raw: &[u8]) -> Parsed<&[u8; 32]> {
-    raw.try_into().map_err(|_| "key must be 32 bytes".to_string())
+// A key that is not 32 bytes and a msg_id that is not 8 bytes cannot be handed to the package (`&[u8; 32]`, `[u8; 8]`): the
+// refusal is the type, so `None` is the BadValue of the package, as for a direction (fixtures/frame/README.md).
+fn key32(raw: &[u8]) -> Option<&[u8; 32]> {
+    raw.try_into().ok()
 }
 
-fn msg_id8(raw: &[u8]) -> Parsed<[u8; 8]> {
-    let mut id = [0u8; 8];
-    if raw.len() > id.len() {
-        return Err("msg_id is longer than 8 bytes".to_string());
-    }
-    id[..raw.len()].copy_from_slice(raw);
-    Ok(id)
+fn msg_id8(raw: &[u8]) -> Option<[u8; 8]> {
+    raw.try_into().ok()
 }
 
 fn seal(w: &[&str]) -> Parsed<String> {
@@ -107,14 +104,17 @@ fn seal(w: &[&str]) -> Parsed<String> {
     let epoch: u32 = num(w, 1, EPOCH)?;
     let d: usize = num(w, 2, BYTE)?;
     let tag_len: u8 = num(w, 3, BYTE)?;
-    let id = msg_id8(&bytes_of(w, 4)?)?;
+    let id = bytes_of(w, 4)?;
     let kind: u8 = num(w, 5, BYTE)?;
     let ad = bytes_of(w, 6)?;
     let clear = bytes_of(w, 7)?;
     let plain = bytes_of(w, 8)?;
     let (directions, size) = loaded(w)?;
+    let (Some(key), Some(id)) = (key32(&key), msg_id8(&id)) else {
+        return Ok("BadValue".into());
+    };
     let session = match FrameSession::load_frame(
-        key32(&key)?,
+        key,
         epoch,
         FrameConfig {
             tag_len,
@@ -141,14 +141,17 @@ fn open(w: &[&str]) -> Parsed<String> {
     let epoch: u32 = num(w, 1, EPOCH)?;
     let d: usize = num(w, 2, BYTE)?;
     let tag_len: u8 = num(w, 3, BYTE)?;
-    let id = msg_id8(&bytes_of(w, 4)?)?;
+    let id = bytes_of(w, 4)?;
     let kind: u8 = num(w, 5, BYTE)?;
     let ad = bytes_of(w, 6)?;
     let clear_len: usize = num(w, 7, LENGTH)?;
     let body = bytes_of(w, 8)?;
     let (directions, size) = loaded(w)?;
+    let (Some(key), Some(id)) = (key32(&key), msg_id8(&id)) else {
+        return Ok("BadValue".into());
+    };
     let session = match FrameSession::load_frame(
-        key32(&key)?,
+        key,
         epoch,
         FrameConfig {
             tag_len,
@@ -176,7 +179,10 @@ fn mac(w: &[&str]) -> Parsed<String> {
     let label = bytes_of(w, 2)?;
     let n: usize = num(w, 3, BYTE)?;
     let message = bytes_of(w, 4)?;
-    let mk = match MacKey::derive(key32(&key)?, epoch, &label) {
+    let Some(key) = key32(&key) else {
+        return Ok("BadValue".into());
+    };
+    let mk = match MacKey::derive(key, epoch, &label) {
         Ok(m) => m,
         Err(f) => return Ok(fault_kind(&f).into()),
     };
@@ -194,7 +200,10 @@ fn verify(w: &[&str]) -> Parsed<String> {
     let _n: usize = num(w, 3, BYTE)?;
     let message = bytes_of(w, 4)?;
     let tag = bytes_of(w, 5)?;
-    let mk = match MacKey::derive(key32(&key)?, epoch, &label) {
+    let Some(key) = key32(&key) else {
+        return Ok("BadValue".into());
+    };
+    let mk = match MacKey::derive(key, epoch, &label) {
         Ok(m) => m,
         Err(f) => return Ok(fault_kind(&f).into()),
     };

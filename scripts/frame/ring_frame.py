@@ -244,11 +244,11 @@ def cmd_seal_in(dirname):
     with open(os.path.join(dirname, "seal.in"), "w") as f:
         for case, key, epoch, d, tag_len, msg_id, kind, ad, clear, plain, _, out_len in rows.seal:
             f.write("seal %s %d %d %d %s %d %s %s %s%s\n" % (
-                key.hex(), epoch, d, tag_len, msg_id.hex(), kind, hx(ad), hx(clear), hx(plain),
+                hx(key), epoch, d, tag_len, hx(msg_id), kind, hx(ad), hx(clear), hx(plain),
                 "" if out_len is None else tail("123", out_len)))
         for case, key, epoch, d, tag_len, msg_id, kind, ad, clear, plain, _, dirs, out_len in rows.refuse_seal:
             f.write("seal %s %d %d %d %s %d %s %s %s%s\n" % (
-                key.hex(), epoch, d, tag_len, msg_id.hex(), kind, hx(ad), hx(clear), hx(plain), tail(dirs, out_len)))
+                hx(key), epoch, d, tag_len, hx(msg_id), kind, hx(ad), hx(clear), hx(plain), tail(dirs, out_len)))
     print("ring-frame: %d seal rows and %d refusal rows" % (len(rows.seal), len(rows.refuse_seal)))
 
 
@@ -263,11 +263,11 @@ def cmd_open_in(dirname, writers):
                 continue
             for (case, key, epoch, d, tag_len, msg_id, kind, ad, clear, plain, _, out_len), body_hex in zip(rows.seal, lines):
                 f.write("open %s %d %d %d %s %d %s %d %s%s\n" % (
-                    key.hex(), epoch, d, tag_len, msg_id.hex(), kind, hx(ad), len(clear), body_hex,
+                    hx(key), epoch, d, tag_len, hx(msg_id), kind, hx(ad), len(clear), body_hex,
                     "" if out_len is None else tail("123", len(plain))))
         for case, key, epoch, d, tag_len, msg_id, kind, ad, clear_len, body, _, dirs, out_len in rows.refuse_open:
             f.write("open %s %d %d %d %s %d %s %d %s%s\n" % (
-                key.hex(), epoch, d, tag_len, msg_id.hex(), kind, hx(ad), clear_len, hx(body), tail(dirs, out_len)))
+                hx(key), epoch, d, tag_len, hx(msg_id), kind, hx(ad), clear_len, hx(body), tail(dirs, out_len)))
     print("ring-frame: %d open rows for each of %d writers, and %d refusal rows" % (
         len(rows.seal), len(writers), len(rows.refuse_open)))
 
@@ -276,9 +276,9 @@ def cmd_mac_in(dirname):
     rows = load()
     with open(os.path.join(dirname, "mac.in"), "w") as f:
         for case, key, epoch, label, n, message, _ in rows.mac:
-            f.write("mac %s %d %s %d %s\n" % (key.hex(), epoch, label.hex(), n, hx(message)))
+            f.write("mac %s %d %s %d %s\n" % (hx(key), epoch, label.hex(), n, hx(message)))
         for case, key, epoch, label, n, message, _ in rows.refuse_mac:
-            f.write("mac %s %d %s %d %s\n" % (key.hex(), epoch, hx(label), n, hx(message)))
+            f.write("mac %s %d %s %d %s\n" % (hx(key), epoch, hx(label), n, hx(message)))
     print("ring-frame: %d mac rows and %d refusal rows" % (len(rows.mac), len(rows.refuse_mac)))
 
 
@@ -292,9 +292,9 @@ def cmd_verify_in(dirname, writers):
                     f.write("verify-skip\n")
                 continue
             for (case, key, epoch, label, n, message, _), tag_hex in zip(rows.mac, lines):
-                f.write("verify %s %d %s %d %s %s\n" % (key.hex(), epoch, label.hex(), n, hx(message), tag_hex))
+                f.write("verify %s %d %s %d %s %s\n" % (hx(key), epoch, label.hex(), n, hx(message), tag_hex))
         for case, key, epoch, label, n, message, tag in rows.refuse_verify:
-            f.write("verify %s %d %s %d %s %s\n" % (key.hex(), epoch, label.hex(), n, hx(message), hx(tag)))
+            f.write("verify %s %d %s %d %s %s\n" % (hx(key), epoch, label.hex(), n, hx(message), hx(tag)))
     print("ring-frame: %d verify rows for each of %d writers, and %d refusal rows" % (
         len(rows.mac), len(writers), len(rows.refuse_verify)))
 

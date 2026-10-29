@@ -3,18 +3,18 @@
 ## Current Step
 flow: existing-code
 kind: product
-step: 9
-name: New Task
+step: 10
+name: Implement
 status: in_progress
 sub_step:
-  phase: 1
-  name: feature-loop
-  detail: "loop 81 intake: ring-key-id-length-refusals, owner chose drivers print BadValue; Phases 2-4 next"
+  phase: 11
+  name: batch-commit
+  detail: "batch 1 of 1 committed; Step 12 tracker, 13 archive next"
 retry_count: 0
 tracker: jira
 loop: 81
 branch:
 plan_artifact: _docs/loops/loop81/plan81.md
-plan_confirmed: false
+plan_confirmed: true
 plan_step_index: 0
 assess_round: 0

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Self-test of ring-frame.sh (AZ-3338): the ring passes when every driver answers as the reference codec does, and fails,
 # naming what is wrong, on a driver that lies, one that accepts tampered input, one that crashes or prints too few lines,
-# a corrupted row file and a row with a number outside its range; past 5 mismatch lines it counts the rest. The
+# a corrupted row file, a row with a number outside its range, a driver that pads the msg_id or ends on a key of the wrong
+# length (AZ-3378); past 5 mismatch lines it counts the rest. The
 # drivers are replaced by a stand-in (RING_FRAME_RUN) that answers with the reference codec, so this needs no toolchain.
 set -euo pipefail
 
@@ -48,6 +49,11 @@ for line in open(path):
     if w[0] == "seal":
         key, epoch, d, tag_len = unhex(w[1]), int(w[2]), int(w[3]), int(w[4])
         msg_id, kind, ad, clear, plain = unhex(w[5]), int(w[6]), unhex(w[7]), unhex(w[8]), unhex(w[9])
+        if lying and how == "id-padded":
+            msg_id = (msg_id + bytes(8))[:8]
+        if lying and how == "key-aborts" and len(key) != 32:
+            print("fake driver: key must be 32 bytes", file=sys.stderr)
+            sys.exit(1)
         dirs, out_len = ((tuple(int(c) for c in w[10]), int(w[11])) if len(w) > 10 else ((1, 2, 3), None))
         try:
             text = ff.seal(key, epoch, d, tag_len, msg_id, kind, ad, clear, plain, dirs=dirs, out_len=out_len).hex()
@@ -65,6 +71,8 @@ for line in open(path):
     elif w[0] == "open":
         key, epoch, d, tag_len = unhex(w[1]), int(w[2]), int(w[3]), int(w[4])
         msg_id, kind, ad, clear_len, body = unhex(w[5]), int(w[6]), unhex(w[7]), int(w[8]), unhex(w[9])
+        if lying and how == "id-padded":
+            msg_id = (msg_id + bytes(8))[:8]
         dirs, out_len = ((tuple(int(c) for c in w[10]), int(w[11])) if len(w) > 10 else ((1, 2, 3), None))
         try:
             _, plain, _ = ff.open_frame(key, epoch, d, tag_len, msg_id, kind, ad, clear_len, body, dirs=dirs, out_len=out_len)
@@ -171,6 +179,24 @@ fi
 run dir0-aborts 1 "typescript frame-batch (seal) failed" FAKE_LIE=typescript:dir0-aborts
 run driver-crashes 1 "frame-batch (seal) failed" FAKE_LIE=typescript:crash
 run one-language 0 "ring-frame: 1 pairs" RING_FRAME_LANGS=python
+# A driver that pads or cuts the msg_id (as the C++ driver did) and one that ends on a key of the wrong length (as the Rust
+# driver did) are caught by the key and msg_id rows (AZ-3378).
+run id-padded 1 "go: R.seal.id7 seal gave" FAKE_LIE=go:id-padded
+run key-aborts 1 "rust frame-batch (seal) failed" FAKE_LIE=rust:key-aborts
+# An empty key or msg_id is written as "-": every seal and mac line the loader writes keeps its field count (AZ-3378).
+mkdir "$tmp/lines"
+python3 -I "$root/scripts/frame/ring_frame.py" seal-in "$tmp/lines" > /dev/null
+python3 -I "$root/scripts/frame/ring_frame.py" mac-in "$tmp/lines" > /dev/null
+if [ "$(awk '$1 == "seal" && NF != 10 && NF != 12' "$tmp/lines/seal.in" | wc -l)" -ne 0 ] \
+  || [ "$(awk '$1 == "mac" && NF != 6' "$tmp/lines/mac.in" | wc -l)" -ne 0 ] \
+  || [ "$(awk '$1 == "seal" && $2 == "-"' "$tmp/lines/seal.in" | wc -l)" -lt 1 ] \
+  || [ "$(awk '$1 == "seal" && $6 == "-"' "$tmp/lines/seal.in" | wc -l)" -lt 1 ] \
+  || [ "$(awk '$1 == "mac" && $2 == "-"' "$tmp/lines/mac.in" | wc -l)" -lt 1 ]; then
+  echo "FAIL empty-key-and-id-keep-fields: a seal or mac line lost a field, or no line holds an empty key or msg_id as \"-\""
+  failures=$((failures + 1))
+else
+  echo "PASS empty-key-and-id-keep-fields"
+fi
 
 # No mismatch is hidden (AZ-3356): after 5 lines of a pair or a reader, one line counts the rest; the totals are unchanged.
 # shown <header>: the indented lines under the output line that starts with <header>.

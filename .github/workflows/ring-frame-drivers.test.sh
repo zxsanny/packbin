@@ -5,7 +5,9 @@
 # length or kind and a line over its scanner limit. The number ranges (AZ-3356, fixtures/frame/README.md): a number one
 # above its field's top (dir, tag_len, kind, n 255; epoch 4294967295; clear_len, out_len 65535) or with a sign is a
 # malformed line in every driver, and a number at the top goes to the package unchanged (direction 255 and epoch
-# 4294967295 are its BadValue, an out_len of 65535 seals E1). ring-frame.test.sh runs the ring with stand-in drivers;
+# 4294967295 are its BadValue, an out_len of 65535 seals E1). A key that is not 32 bytes and a msg_id that is not 8 bytes
+# (0, 7, 9 bytes; AZ-3378) is `BadValue` in every driver, a well-formed line: Rust and C++ cannot hand such a value to their
+# package and answer it themselves (fixtures/frame/README.md). ring-frame.test.sh runs the ring with stand-in drivers;
 # this runs the drivers themselves, built and started as ring-frame.sh does (run_lang of ring-lib.sh).
 #
 # Environment: RING_FRAME_LANGS (default all eight), PACKBIN_RING_WORK (driver builds kept between runs), and the
@@ -68,6 +70,20 @@ files() {
   printf 'open-skip\nseal %s 1 255 4 %s 4 %s - %s 123 300\n' "$key" "$id" "$ad" "$plain" > "$io/dir-255.in"
   printf 'open-skip\nmac %s 4294967295 6e6574 4 e803\n' "$key" > "$io/epoch-4294967295.in"
   printf 'open-skip\nseal %s 1 1 4 %s 4 %s - %s 123 65535\n' "$key" "$id" "$ad" "$plain" > "$io/out-length-65535.in"
+  # A key and a msg_id of the wrong length (AZ-3378): 31, 33 and 0 bytes ("-"), 7, 9 and 0 bytes.
+  local size wrong
+  for size in 31 33 0; do
+    case "$size" in 31) wrong="${key%??}" ;; 33) wrong="${key}aa" ;; *) wrong="-" ;; esac
+    printf 'open-skip\nseal %s 1 1 4 %s 4 %s - %s 123 300\n' "$wrong" "$id" "$ad" "$plain" > "$io/seal-key-$size.in"
+    printf 'open-skip\nopen %s 1 1 4 %s 4 %s 0 %s 123 300\n' "$wrong" "$id" "$ad" "$body" > "$io/open-key-$size.in"
+    printf 'open-skip\nmac %s 7 6e6574 4 e803\n' "$wrong" > "$io/mac-key-$size.in"
+    printf 'open-skip\nverify %s 7 6e6574 4 e803 56db9bec\n' "$wrong" > "$io/verify-key-$size.in"
+  done
+  for size in 7 9 0; do
+    case "$size" in 7) wrong="${id%??}" ;; 9) wrong="${id}aa" ;; *) wrong="-" ;; esac
+    printf 'open-skip\nseal %s 1 1 4 %s 4 %s - %s 123 300\n' "$key" "$wrong" "$ad" "$plain" > "$io/seal-id-$size.in"
+    printf 'open-skip\nopen %s 1 1 4 %s 4 %s 0 %s 123 300\n' "$key" "$wrong" "$ad" "$body" > "$io/open-id-$size.in"
+  done
 }
 
 # run_limited <seconds> <lang> <args...>: run_lang with a time limit (run_lang is a function, so perl starts a bash that has it).
@@ -114,6 +130,10 @@ lang_cases() {
   check "$lang" dir-255 =BadValue || bad=1
   check "$lang" epoch-4294967295 =BadValue || bad=1
   check "$lang" out-length-65535 "=$body" || bad=1
+  for name in seal-key-31 seal-key-33 seal-key-0 open-key-31 open-key-33 open-key-0 mac-key-31 mac-key-33 mac-key-0 \
+    verify-key-31 verify-key-33 verify-key-0 seal-id-7 seal-id-9 seal-id-0 open-id-7 open-id-9 open-id-0; do
+    check "$lang" "$name" =BadValue || bad=1
+  done
   if [ "$lang" = go ]; then
     for name in bad-direction bad-tag-length bad-kind long-line; do
       check "$lang" "$name" fail || bad=1

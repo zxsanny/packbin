@@ -488,3 +488,4 @@ Loop 74 (2026-10-26, ADR-009: remove the stream session; D1 frame names; D2 cryp
 | AZ-3355 | frame_ring_driver_hardening (loop 78) | 3 | AZ-3354 | none |
 | AZ-3356 | frame_ring_number_ranges (loop 79) | 3 | AZ-3354, AZ-3355 | none |
 | AZ-3357 | rust_test_build_warnings (loop 79) | 2 | None | none |
+| AZ-3378 | frame_ring_key_id_length (loop 81) | 3 | AZ-3354, AZ-3355, AZ-3356 | none |

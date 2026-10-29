@@ -191,3 +191,22 @@ refuse-seal R.seal.epochffffffff 78db788a04095e5a28e7f9d930d2386a3fe18ec0c2ac58c
 refuse-mac R.mac.n255 26bc9be830cbb55286bb4182cf0ac7f765f273d09b817539ab0e424d84d39bbd 9 6e6574 255 1dfc6b77d3ecbe87774e6d9a51b3b6d06e55d8e0 BadValue
 # E1 sealed into a buffer of 65535 bytes
 seal E1.out65535 1111111111111111111111111111111111111111111111111111111111111111 1 1 4 00301005e8030000 4 000100301005e803000004 - 0102030405060708090a0b0c 53e9dc75fb459d775e6205661cdf37ff 65535
+
+# Key and msg_id of the wrong length (AZ-3378): the reference answers BadValue for a key that is not 32 bytes and a msg_id that
+# is not 8 bytes. Six packages take a byte string and answer it themselves; Rust (key, msg_id) and C++ (msg_id) cannot be
+# handed the value, so their drivers print BadValue where the type has no value to pass (README.md, as for directions 0 and 4).
+refuse-seal R.seal.key0 - 3 1 4 35dce58d07fae0ab 2 b1ac77721471dcd74d3215 - 84b357fa5b0b53ff90710727 123 300 BadValue
+refuse-seal R.seal.key31 78db788a04095e5a28e7f9d930d2386a3fe18ec0c2ac58c6889f8b8aa76c1a 3 1 4 35dce58d07fae0ab 2 b1ac77721471dcd74d3215 - 84b357fa5b0b53ff90710727 123 300 BadValue
+refuse-seal R.seal.key33 78db788a04095e5a28e7f9d930d2386a3fe18ec0c2ac58c6889f8b8aa76c1a1eaa 3 1 4 35dce58d07fae0ab 2 b1ac77721471dcd74d3215 - 84b357fa5b0b53ff90710727 123 300 BadValue
+refuse-seal R.seal.id0 78db788a04095e5a28e7f9d930d2386a3fe18ec0c2ac58c6889f8b8aa76c1a1e 3 1 4 - 2 b1ac77721471dcd74d3215 - 84b357fa5b0b53ff90710727 123 300 BadValue
+refuse-seal R.seal.id7 78db788a04095e5a28e7f9d930d2386a3fe18ec0c2ac58c6889f8b8aa76c1a1e 3 1 4 35dce58d07fae0 2 b1ac77721471dcd74d3215 - 84b357fa5b0b53ff90710727 123 300 BadValue
+refuse-seal R.seal.id9 78db788a04095e5a28e7f9d930d2386a3fe18ec0c2ac58c6889f8b8aa76c1a1e 3 1 4 35dce58d07fae0abaa 2 b1ac77721471dcd74d3215 - 84b357fa5b0b53ff90710727 123 300 BadValue
+refuse-open R.open.key0 - 3 1 4 35dce58d07fae0ab 2 b1ac77721471dcd74d3215 0 d204762ef03ba6b1247788a7ebb570ac 123 300 BadValue
+refuse-open R.open.key31 78db788a04095e5a28e7f9d930d2386a3fe18ec0c2ac58c6889f8b8aa76c1a 3 1 4 35dce58d07fae0ab 2 b1ac77721471dcd74d3215 0 d204762ef03ba6b1247788a7ebb570ac 123 300 BadValue
+refuse-open R.open.key33 78db788a04095e5a28e7f9d930d2386a3fe18ec0c2ac58c6889f8b8aa76c1a1eaa 3 1 4 35dce58d07fae0ab 2 b1ac77721471dcd74d3215 0 d204762ef03ba6b1247788a7ebb570ac 123 300 BadValue
+refuse-open R.open.id0 78db788a04095e5a28e7f9d930d2386a3fe18ec0c2ac58c6889f8b8aa76c1a1e 3 1 4 - 2 b1ac77721471dcd74d3215 0 d204762ef03ba6b1247788a7ebb570ac 123 300 BadValue
+refuse-open R.open.id7 78db788a04095e5a28e7f9d930d2386a3fe18ec0c2ac58c6889f8b8aa76c1a1e 3 1 4 35dce58d07fae0 2 b1ac77721471dcd74d3215 0 d204762ef03ba6b1247788a7ebb570ac 123 300 BadValue
+refuse-open R.open.id9 78db788a04095e5a28e7f9d930d2386a3fe18ec0c2ac58c6889f8b8aa76c1a1e 3 1 4 35dce58d07fae0abaa 2 b1ac77721471dcd74d3215 0 d204762ef03ba6b1247788a7ebb570ac 123 300 BadValue
+refuse-mac R.mac.key0 - 9 6e6574 4 1dfc6b77d3ecbe87774e6d9a51b3b6d06e55d8e0 BadValue
+refuse-mac R.mac.key31 26bc9be830cbb55286bb4182cf0ac7f765f273d09b817539ab0e424d84d39b 9 6e6574 4 1dfc6b77d3ecbe87774e6d9a51b3b6d06e55d8e0 BadValue
+refuse-mac R.mac.key33 26bc9be830cbb55286bb4182cf0ac7f765f273d09b817539ab0e424d84d39bbdaa 9 6e6574 4 1dfc6b77d3ecbe87774e6d9a51b3b6d06e55d8e0 BadValue
