@@ -246,6 +246,11 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: PyYAML
+        run: 'python3 -m pip install --quiet --only-binary=:all: "pyyaml==$(bash .github/workflows/tool-pin.sh pyyaml)"'
       - name: pull images
         run: docker compose -f docker-compose.test.yml -f docker-compose.publish.yml pull --quiet csharp typescript python rust java
       - name: test results directory
@@ -326,6 +331,11 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: PyYAML
+        run: 'python3 -m pip install --quiet --only-binary=:all: "pyyaml==$(bash .github/workflows/tool-pin.sh pyyaml)"'
       - name: required files and golden row
         run: |
           set -euo pipefail
@@ -355,6 +365,8 @@ jobs:
             test -f "$f"
           done
           grep -qx 4001000065cd1d00a3e1110100 fixtures/golden.hex
+      - name: CI YAML reader
+        run: bash scripts/ci/yaml_get.test.sh
       - name: report columns
         run: bash .github/workflows/report-row.test.sh
       - name: hostile case file

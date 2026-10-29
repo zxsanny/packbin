@@ -452,9 +452,13 @@ done
 # N6. the eight suite services pass the runner's GITHUB_ACTIONS into the container as a bare key: Compose sets it from
 # the host when it is set there and leaves it out when not (a value would make every Mac run write notices)
 # Act
-compose_ga="$(ruby -ryaml -e 'svc = YAML.safe_load(File.read(ARGV[0]))["services"]
-  puts %w[csharp typescript python rust cpp java go swift].reject { |s| e = svc.dig(s, "environment"); e.is_a?(Hash) && e.key?("GITHUB_ACTIONS") && e["GITHUB_ACTIONS"].nil? }.join(" ")' \
-  "${RUN_SUITE_COMPOSE:-$repo/docker-compose.test.yml}" </dev/null)" || bad "docker-compose.test.yml: ruby could not read the suite services"
+compose_ga="$(python3 -I -c 'import sys; sys.path.insert(0, sys.argv[1]); import yaml_get
+svc = yaml_get.load(sys.argv[2])["services"]
+def passes_through(name):
+    env = (svc.get(name) or {}).get("environment")
+    return isinstance(env, dict) and "GITHUB_ACTIONS" in env and env["GITHUB_ACTIONS"] is None
+print(" ".join(s for s in "csharp typescript python rust cpp java go swift".split() if not passes_through(s)))' \
+  "$here/../../scripts/ci" "${RUN_SUITE_COMPOSE:-$repo/docker-compose.test.yml}" </dev/null)" || bad "docker-compose.test.yml: the suite services could not be read"
 # Assert
 [ -z "$compose_ga" ] || bad "docker-compose.test.yml: the suite services '$compose_ga' do not pass GITHUB_ACTIONS through as a bare key"
 

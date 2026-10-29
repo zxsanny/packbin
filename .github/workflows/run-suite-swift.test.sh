@@ -365,7 +365,9 @@ pin="$(bash "$here/tool-pin.sh" "$svc")" || bad "$svc: tool-pins.txt has no $svc
 [ "$(service_line "$repo/docker-compose.test.yml" "$svc" command)" = "[\"exec /src/.github/workflows/run-suite.sh $svc\"]" ] \
   || bad "$svc: the compose service does not run run-suite.sh $svc"
 # AZ-2600, AZ-2607: the suites job is a matrix; its three swift entries run the three parts, no entry runs the whole suite
-swift_entries="$(ruby -ryaml -e 'inc = YAML.safe_load(File.read(ARGV[0]))["jobs"]["suites"]["strategy"]["matrix"]["include"]; puts inc.select { |e| e["lang"] == "swift" }.map { |e| e["part"].to_s }.sort.join(" ")' "$here/test.yml")"
+swift_entries="$(python3 -I -c 'import sys; sys.path.insert(0, sys.argv[1]); import yaml_get
+inc = yaml_get.load(sys.argv[2])["jobs"]["suites"]["strategy"]["matrix"]["include"]
+print(" ".join(sorted(str(e.get("part") or "") for e in inc if e.get("lang") == "swift")))' "$here/../../scripts/ci" "$here/test.yml")"
 [ "$swift_entries" = "gates speed tests" ] || bad "test.yml: the suites matrix does not run the swift parts tests, gates and speed once each: '$swift_entries'"
 
 # S11. the build output is outside the mounted tree, and the publish file mounts the tree read-only

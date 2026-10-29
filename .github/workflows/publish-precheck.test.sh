@@ -38,25 +38,30 @@ run_case() {
     bash "$script" > "$work/stdout" 2>&1 < /dev/null
 }
 
-# run_json <name> <ruby hash merged over a green push run, or nil for no run>: writes $work/<name>.json.
+# run_json <name> <JSON object merged over a green push run, or null for no run>: writes $work/<name>.json.
 run_json() {
-  ruby -rjson - "$work/$1.json" "$2" <<'RUBY'
-run = { "id" => 7, "name" => "test", "path" => ".github/workflows/test.yml", "event" => "push",
-        "status" => "completed", "conclusion" => "success", "head_sha" => ENV.fetch("PACKBIN_CASE_SHA"),
-        "head_branch" => "dev", "head_repository" => { "full_name" => "zxsanny/packbin" } }
-changes = eval(ARGV[1]) # rubocop:disable Security/Eval
-runs = changes.nil? ? [] : [run.merge(changes)]
-File.write(ARGV[0], JSON.dump({ "total_count" => runs.size, "workflow_runs" => runs }))
-RUBY
+  python3 -I - "$work/$1.json" "$sha" "$2" <<'PYTHON'
+import json
+import sys
+
+path, sha, changes = sys.argv[1:4]
+run = {"id": 7, "name": "test", "path": ".github/workflows/test.yml", "event": "push",
+       "status": "completed", "conclusion": "success", "head_sha": sha,
+       "head_branch": "dev", "head_repository": {"full_name": "zxsanny/packbin"}}
+delta = json.loads(changes)
+runs = [] if delta is None else [{**run, **delta}]
+with open(path, "w", encoding="utf-8") as f:
+    json.dump({"total_count": len(runs), "workflow_runs": runs}, f)
+PYTHON
 }
 
 # scenarios <script>: prints one line per scenario that disagrees; returns 1 when there is one.
 scenarios() {
   local script="$1" errs=0 name changes expect
-  # name | change to the green run ("nil" = no run at all) | wanted green
+  # name | change to the green run (null = no run at all) | wanted green
   while IFS='|' read -r name changes expect; do
     [ -n "$name" ] || continue
-    PACKBIN_CASE_SHA="$sha" run_json "$name" "$changes"
+    run_json "$name" "$changes"
     run_case "$script" "$work/$name.json" 0 || { echo "scenario '$name': script exited non-zero"; errs=1; continue; }
     if [ "$(cat "$work/out")" != "green=$expect" ]; then
       echo "scenario '$name': wanted green=$expect, got [$(tr '\n' ' ' < "$work/out")]"
@@ -64,15 +69,15 @@ scenarios() {
     fi
   done <<EOF
 a green push run|{}|true
-no run at all|nil|false
-a failed run|{"conclusion" => "failure"}|false
-a cancelled run|{"conclusion" => "cancelled"}|false
-a run still going|{"status" => "in_progress"}|false
-a pull request run|{"event" => "pull_request"}|false
-another commit|{"head_sha" => "$other"}|false
-another workflow file|{"path" => ".github/workflows/publish.yml"}|false
-another repository|{"head_repository" => {"full_name" => "someone/packbin"}}|false
-a path with a ref suffix|{"path" => ".github/workflows/test.yml@refs/heads/dev"}|true
+no run at all|null|false
+a failed run|{"conclusion": "failure"}|false
+a cancelled run|{"conclusion": "cancelled"}|false
+a run still going|{"status": "in_progress"}|false
+a pull request run|{"event": "pull_request"}|false
+another commit|{"head_sha": "$other"}|false
+another workflow file|{"path": ".github/workflows/publish.yml"}|false
+another repository|{"head_repository": {"full_name": "someone/packbin"}}|false
+a path with a ref suffix|{"path": ".github/workflows/test.yml@refs/heads/dev"}|true
 EOF
   # a failed call, an answer that is not JSON, an answer without workflow_runs
   printf '{}' > "$work/empty.json"
@@ -85,7 +90,7 @@ EOF
   run_case "$script" "$work/empty.json" 0 || { echo "scenario 'no workflow_runs': script exited non-zero"; errs=1; }
   [ "$(cat "$work/out")" = "green=false" ] || { echo "scenario 'no workflow_runs': wanted green=false"; errs=1; }
   # the request names the commit, the push event, the success status and the workflow file; the token is sent, never printed
-  PACKBIN_CASE_SHA="$sha" run_json green "{}"
+  run_json green "{}"
   run_case "$script" "$work/green.json" 0 || errs=1
   for part in "workflows/test.yml/runs" "head_sha=$sha" "event=push" "status=success" "Authorization: Bearer tok-secret"; do
     grep -qF -- "$part" "$work/log" || { echo "request lacks [$part]"; errs=1; }
@@ -127,12 +132,12 @@ else
 fi
 
 # Act and assert: one mutant per condition
-mutant "head_sha not compared" 's#r\["head_sha"\] == ARGV\[2\] \&\& ##'
-mutant "event not compared" 's#r\["event"\] == "push" \&\& ##'
-mutant "status not compared" 's#r\["status"\] == "completed" \&\&#true \&\&#'
-mutant "conclusion not compared" 's#r\["conclusion"\] == "success" \&\& ##'
-mutant "workflow path not compared" 's#r\["path"\].to_s.split("@").first == ".github/workflows/test.yml" \&\&#true \&\&#'
-mutant "repository not compared" 's#r.dig("head_repository", "full_name") == ARGV\[1\]#true#'
+mutant "head_sha not compared" 's#r.get("head_sha") == sha#True#'
+mutant "event not compared" 's#r.get("event") == "push"#True#'
+mutant "status not compared" 's#r.get("status") == "completed"#True#'
+mutant "conclusion not compared" 's#r.get("conclusion") == "success"#True#'
+mutant "workflow path not compared" 's#str(r.get("path")).split("@")\[0\] == ".github/workflows/test.yml"#True#'
+mutant "repository not compared" 's#r\["head_repository"\].get("full_name") == repo#True#'
 mutant "no proof writes green=true" 's#echo "green=false"#echo "green=true"#'
 mutant "a failed call counts as proof" 's#  no_proof "the runs API call failed"#  echo "green=true" >> "$out"; exit 0#'
 mutant "sha filter dropped from the request" 's#head_sha=\$sha\&##'

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Is there a green test run for the commit a v* tag points at? (publish.yml, job `precheck`.)
-# Asks the Actions runs API for runs of test.yml at PACKBIN_SHA and writes green=true to $GITHUB_OUTPUT only for a
-# completed, successful push run of this repository whose workflow path is .github/workflows/test.yml. Anything
+# Asks the Actions runs API for runs of test.yml at PACKBIN_SHA (the answer is read by python3 -I, standard
+# library only) and writes green=true to $GITHUB_OUTPUT only for a completed, successful push run of this
+# repository whose workflow path is .github/workflows/test.yml. Anything
 # else (no run, a red or running one, a failed API call, an answer that is not JSON) writes green=false and says
 # why: the publish workflow then runs the whole test workflow itself. The script never fails a run and never
 # decides to publish; publish.yml does that from the output and the result of the test job.
@@ -43,26 +44,46 @@ if ! curl -fsS --max-time 30 --retry 2 "${auth[@]+"${auth[@]}"}" -H "Accept: app
   no_proof "the runs API call failed"
 fi
 
-read -r -d '' lookup <<'RUBY' || true
-begin
-  data = JSON.parse(File.read(ARGV[0]))
-rescue JSON::ParserError => e
-  puts "bad:the runs API answer is not JSON (#{e.class})"
-  exit 0
-end
-runs = data.is_a?(Hash) && data["workflow_runs"].is_a?(Array) ? data["workflow_runs"] : nil
-if runs.nil?
-  puts "bad:the runs API answer has no workflow_runs"
-  exit 0
-end
-good = runs.find do |r|
-  r.is_a?(Hash) && r["head_sha"] == ARGV[2] && r["event"] == "push" && r["status"] == "completed" &&
-    r["conclusion"] == "success" && r["path"].to_s.split("@").first == ".github/workflows/test.yml" &&
-    r.dig("head_repository", "full_name") == ARGV[1]
-end
-puts good ? "ok:#{good["id"]}:#{good["head_branch"]}" : "none:#{runs.size}"
-RUBY
-verdict="$(ruby -rjson -e "$lookup" "$body" "$repo" "$sha")"
+read -r -d '' lookup <<'PYTHON' || true
+import json
+import sys
+
+body, repo, sha = sys.argv[1:4]
+try:
+    with open(body, "rb") as f:
+        data = json.load(f)
+except OSError as e:
+    print(f"bad:the runs API answer could not be read ({type(e).__name__})")
+    sys.exit(0)
+except (json.JSONDecodeError, UnicodeDecodeError, RecursionError) as e:
+    print(f"bad:the runs API answer is not JSON ({type(e).__name__})")
+    sys.exit(0)
+runs = data.get("workflow_runs") if isinstance(data, dict) else None
+if not isinstance(runs, list):
+    print("bad:the runs API answer has no workflow_runs")
+    sys.exit(0)
+
+
+def is_green(r):
+    return (
+        isinstance(r, dict)
+        and r.get("head_sha") == sha
+        and r.get("event") == "push"
+        and r.get("status") == "completed"
+        and r.get("conclusion") == "success"
+        and str(r.get("path")).split("@")[0] == ".github/workflows/test.yml"
+        and isinstance(r.get("head_repository"), dict)
+        and r["head_repository"].get("full_name") == repo
+    )
+
+
+good = next((r for r in runs if is_green(r)), None)
+if good is None:
+    print(f"none:{len(runs)}")
+else:
+    print(f"ok:{good.get('id') or ''}:{good.get('head_branch') or ''}")
+PYTHON
+verdict="$(python3 -I -c "$lookup" "$body" "$repo" "$sha")"
 
 case "$verdict" in
   ok:*)

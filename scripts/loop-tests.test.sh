@@ -92,6 +92,10 @@ expect "fixtures" "go typescript csharp python rust java cpp swift scaffold ring
 # 9b. test.yml is parsed by the gate's own test and checked by the scaffold: both run, no suite
 change .github/workflows/test.yml; expect "test.yml" "scaffold publish-gate"; stamp_all
 
+# 9c. the CI YAML reader is imported by the scaffold's checks and by the gate's workflow tests: both run, no suite
+mkdir -p "$repo/scripts/ci"; echo "# reader" > "$repo/scripts/ci/yaml_get.py"
+change scripts/ci/yaml_get.py; expect "ci yaml reader" "scaffold publish-gate"; stamp_all
+
 # 10. a tracked change that is not committed
 echo dirty >> "$repo/typescript/a.ts"; expect "dirty tree" "typescript ring"; git -C "$repo" checkout -q typescript/a.ts
 

@@ -12,3 +12,4 @@ setuptools==84.0.0
 pytest==9.1.1
 # Image tag of the Swift suite (docker-compose.test.yml): swift:<swift> runs it. Not a pip package.
 swift==6.3.3
+pyyaml==6.0.3

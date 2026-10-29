@@ -79,7 +79,7 @@ covers() {
       case "$f" in csharp/*) return 0 ;; esac ;;
     publish-gate)
       case "$f" in
-        .github/workflows/publish* | .github/workflows/tool-pin* | docker-compose* | README.md | LICENSE | go/LICENSE) return 0 ;;
+        .github/workflows/publish* | .github/workflows/tool-pin* | scripts/ci/* | docker-compose* | README.md | LICENSE | go/LICENSE) return 0 ;;
         .github/workflows/test.yml | .github/workflows/run-suite.sh | .github/workflows/ring-* | .github/workflows/drivers/*) return 0 ;;
         */package.json | typescript/package-lock.json | csharp/*.csproj | python/pyproject.toml | rust/Cargo.*) return 0 ;;
         java/test.sh | cpp/library.json | cpp/idf_component.yml | cpp/CMakeLists.txt | go/go.mod | go/go.sum | Package.swift | Package.resolved) return 0 ;;

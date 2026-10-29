@@ -11,7 +11,9 @@ for lang in $langs; do
 done
 # The suites job is a matrix whose entries name the eight services (Swift as three parts, AZ-2600, AZ-2607; short suites
 # share an entry, AZ-2627). The entries are listed longest first (AZ-2625), so the languages are compared as a set.
-matrix="$(ruby -ryaml -e 'puts YAML.safe_load(File.read(ARGV[0]))["jobs"]["suites"]["strategy"]["matrix"]["include"].flat_map { |e| e["lang"].to_s.split }.uniq.sort.join(" ")' .github/workflows/test.yml)"
+matrix="$(python3 -I -c 'import sys; sys.path.insert(0, sys.argv[1]); import yaml_get
+inc = yaml_get.load(sys.argv[2])["jobs"]["suites"]["strategy"]["matrix"]["include"]
+print(" ".join(sorted({lang for e in inc for lang in str(e.get("lang") or "").split()})))' scripts/ci .github/workflows/test.yml)"
 sorted_langs="$(tr ' ' '\n' <<< "$langs" | sort | paste -sd ' ' -)"
 [ "$matrix" = "$sorted_langs" ] || { echo "suites matrix runs [$matrix], not [$sorted_langs]" >&2; exit 1; }
 if grep -q 'ports:' docker-compose.test.yml; then
