@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Wiring check for the cross-language ring (AZ-2193 AC-1, AC-6): test.yml must run language-pair.sh from a job that runs
-# on every push (except one that touches only _docs/) and pull request, as its own check, and that a failing ring fails. It parses the workflow with Ruby yaml
-# like the publish gate does, then runs the same check against copies of test.yml that each break one rule: every copy
-# must be rejected. The checks of language-pair.sh itself (PATH shims, the C# element rings, the Go ring) are in
+# on every push (except one that touches only _docs/) and pull request, as its own check, and that a failing ring fails. ring-wiring-check.py
+# parses the workflow with the shared reader (scripts/ci/yaml_get.py), then runs the same check against copies of test.yml
+# that each break one rule: every copy must be rejected (exit status 1, not a reader failure). The checks of language-pair.sh itself (PATH shims, the C# element rings, the Go ring) are in
 # ring-wiring-rows.test.sh.
 set -euo pipefail
 
@@ -13,141 +13,26 @@ test_yml="$here/test.yml"
 compose_yml="$here/../../docker-compose.test.yml"
 
 # Prints the violations of workflow file $1, checked against the suite images in compose file $2 (default: the real
-# one); exit status 1 when there are any.
+# one); exit status 1 when there are any, 2 when a file cannot be read.
 ring_wiring() {
-  ruby -ryaml - "$1" "${2:-$compose_yml}" <<'RUBY'
-workflow = YAML.safe_load(File.read(ARGV.fetch(0)))
-compose = YAML.safe_load(File.read(ARGV.fetch(1)))
-errors = []
-as_list = ->(v) { v.is_a?(Array) ? v : [v].compact }
-steps_of = ->(job) { job.is_a?(Hash) && job["steps"].is_a?(Array) ? job["steps"] : [] }
-code_lines = ->(step) { step["run"].to_s.lines.map(&:strip).reject { |l| l.empty? || l.start_with?("#") } }
-# The exact call, the script as the command word in any other form (|| true, a pipe, &), a set line.
-call = %r{\A(?:bash )?(?:\./)?\.github/workflows/language-pair\.sh\z}
-invokes = %r{\A(?:(?:bash|sh) )?(?:\./)?\.github/workflows/language-pair\.sh\b}
-toolchains = %r{\A(?:bash )?(?:\./)?\.github/workflows/ring-toolchains\.sh\z}
-shell_options = /\Aset -[euo]+( pipefail)?\z/
-wrapper = %r{/\.github/workflows/ring-cxx\.sh\z}
-# The job env versions and the suite images they copy (docker-compose.test.yml service => RING_ variable).
-suites = { "RING_DOTNET" => "csharp", "RING_NODE" => "typescript", "RING_PYTHON" => "python",
-           "RING_RUST" => "rust", "RING_GCC" => "cpp", "RING_JDK" => "java", "RING_GO" => "go" }
-
-on = workflow.key?("on") ? workflow["on"] : workflow[true]
-if on.is_a?(Hash) && on.key?("push") && on.key?("pull_request")
-  push = on["push"]
-  if push.is_a?(Hash)
-    push.each_key do |key|
-      errors << "push has the filter #{key}" unless %w[branches paths-ignore].include?(key)
-    end
-    # The one filter the owner allows (2026-10-23): a push that touches only _docs/ starts no run.
-    if as_list.call(push["paths-ignore"]) != ["_docs/**"]
-      errors << "push ignores the paths #{as_list.call(push['paths-ignore']).inspect}, not exactly _docs/**"
-    end
-    if push.key?("branches") && as_list.call(push["branches"]) != ["**"]
-      errors << "push is limited to the branches #{as_list.call(push['branches']).inspect}"
-    end
-  end
-  if on["pull_request"].is_a?(Hash)
-    on["pull_request"].each_key { |key| errors << "pull_request has the filter #{key}" }
-  end
-else
-  errors << "test.yml does not run on both push and pull_request"
-end
-
-jobs = workflow["jobs"].is_a?(Hash) ? workflow["jobs"] : {}
-callers = {}
-jobs.each do |name, job|
-  steps_of.call(job).each do |step|
-    lines = code_lines.call(step)
-    if lines.any? { |l| l.match?(call) }
-      (callers[name] ||= []) << step
-      lines.each do |l|
-        next if l.match?(call) || l.match?(shell_options)
-        errors << "the ring step of job #{name} runs more than the call, which can skip it: #{l}"
-      end
-    else
-      lines.each do |l|
-        errors << "job #{name} runs language-pair.sh in a form that can hide its failure: #{l}" if l.match?(invokes)
-      end
-    end
-  end
-end
-errors << "test.yml has no job that runs .github/workflows/language-pair.sh" if callers.empty?
-callers.each do |name, ring_steps|
-  job = jobs[name]
-  steps = steps_of.call(job)
-  errors << "job #{name} has an if condition" if job.key?("if")
-  errors << "job #{name} needs another job, so it does not run in parallel" if job.key?("needs")
-  errors << "job #{name} has no timeout-minutes" unless job.key?("timeout-minutes")
-  errors << "job #{name} has continue-on-error" if job.key?("continue-on-error")
-  checks_at = steps.index { |s| code_lines.call(s).any? { |l| l.match?(toolchains) } }
-  ring_at = steps.index { |s| ring_steps.include?(s) }
-  if checks_at.nil? || checks_at > ring_at
-    errors << "job #{name} does not run ring-toolchains.sh before the ring"
-  end
-  steps.each do |step|
-    label = step["name"] || step["uses"] || "unnamed"
-    errors << "step '#{label}' of job #{name} has continue-on-error" if step.key?("continue-on-error")
-    errors << "step '#{label}' of job #{name} has an if condition" if step.key?("if") && !step["uses"].to_s.match?(/\Aactions\/cache@\h{40}\z/) # a cache step runs no check (AZ-2627)
-    # The ring and the version check must both compile through the gcc image, not the runner's GCC.
-    next unless ring_steps.include?(step) || code_lines.call(step).any? { |l| l.match?(toolchains) }
-    env = [job["env"], step["env"]].select { |e| e.is_a?(Hash) }.reduce({}) { |all, e| all.merge(e) }
-    unless env["CXX"].to_s.match?(wrapper)
-      errors << "step '#{label}' of job #{name} does not compile through ring-cxx.sh (CXX is '#{env['CXX']}')"
-    end
-  end
-  # Go: setup-go pinned to a commit SHA at RING_GO; the driver built by ring-go.sh or ring-prepare.sh build (calls it).
-  setup_go = steps.find { |s| s["uses"].to_s.start_with?("actions/setup-go@") }
-  if setup_go.nil?
-    errors << "job #{name} has no actions/setup-go step"
-  else
-    errors << "the setup-go step of job #{name} is not pinned to a commit SHA" unless setup_go["uses"].match?(/@[0-9a-f]{40}\z/)
-    errors << "the setup-go step of job #{name} does not take go-version from RING_GO" unless setup_go.dig("with", "go-version").to_s == "${{ env.RING_GO }}"
-  end
-  go_build = %r{\Abash \.github/workflows/ring-(?:go\.sh|prepare\.sh build) \S+\z}
-  errors << "job #{name} does not build the Go driver through ring-go.sh" unless steps.any? { |s| code_lines.call(s).any? { |l| l.match?(go_build) } }
-  services = compose.is_a?(Hash) && compose["services"].is_a?(Hash) ? compose["services"] : {}
-  used = steps.map { |s| [s["with"], s["run"]].to_s }.join("\n")
-  suites.each do |key, service|
-    image = services.dig(service, "image").to_s
-    version = image.split(":", 2)[1].to_s.sub(/-jdk\z/, "")
-    have = job["env"].is_a?(Hash) ? job["env"][key].to_s : ""
-    if version.empty? || have != version
-      errors << "#{key} is '#{have}' in job #{name}, the #{service} suite image '#{image}' has the version '#{version}'"
-    end
-    errors << "#{key} is not used by any step of job #{name}" unless used.include?(key)
-  end
-end
-
-scaffold = jobs["scaffold"]
-{ "cpp/embedded/lib.test.sh" => "the embedded harness self-test",
-  ".github/workflows/ring-wiring.test.sh" => "the ring wiring check",
-  ".github/workflows/ring-wiring-rows.test.sh" => "the ring row wiring check" }.each do |script, what|
-  step = steps_of.call(scaffold).find { |s| code_lines.call(s).any? { |l| l == "bash #{script}" } }
-  if step.nil?
-    errors << "scaffold does not run #{what} (bash #{script})"
-  elsif step.key?("if") || step.key?("continue-on-error")
-    errors << "the scaffold step for #{script} has an if or continue-on-error"
-  end
-end
-
-errors.each { |e| puts e }
-exit(errors.empty? ? 0 : 1)
-RUBY
+  python3 -I "$here/ring-wiring-check.py" "$1" "${2:-$compose_yml}"
 }
 
 # expect_rejected <label> <copy of test.yml> [<copy of the compose file>]: a copy differs from the real
 # file and the check rejects the pair.
 expect_rejected() {
-  local label="$1" copy="$2" compose="${3:-$compose_yml}" out
+  local label="$1" copy="$2" compose="${3:-$compose_yml}" out status=0
   if cmp -s "$test_yml" "$copy" && cmp -s "$compose_yml" "$compose"; then
     fail "temp copy is unchanged: $label"
     return
   fi
-  if out="$(ring_wiring "$copy" "$compose")"; then
+  out="$(ring_wiring "$copy" "$compose")" || status=$?
+  if [ "$status" -eq 0 ]; then
     fail "the wiring check passed a violating copy: $label"
-  else
+  elif [ "$status" -eq 1 ]; then
     echo "rejects: $label ($out)"
+  else
+    fail "the wiring check failed with status $status, not a rejection: $label ($out)"
   fi
 }
 
@@ -180,9 +65,7 @@ drop_step() {
   awk -v head="      - name: $1" '$0 == head { skip = 1; next } skip { skip = 0; next } { print }' "$test_yml"
 }
 
-if ! command -v ruby > /dev/null; then
-  fail "ruby is required to parse the workflow YAML"
-elif ! out="$(ring_wiring "$test_yml")"; then
+if ! out="$(ring_wiring "$test_yml")"; then
   fail "test.yml: $out"
 else
   sed '/language-pair\.sh/d' "$test_yml" > "$tmp/call-removed.yml"

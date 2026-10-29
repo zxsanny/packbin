@@ -10,7 +10,7 @@ Scripts and what each carries (HEAD 5a78fb8):
 
 | Script | Embedded Ruby | Note for the split |
 |---|---|---|
-| `publish-jobs.test.sh` (384 lines) | 197-line layout checker (lines 20-211) and an 8-line mutant editor (lines 218-226) used by 111 `mutant` calls whose second argument is a Ruby expression on the loaded hash (`jobs`, `step_named`, `gate_step`, `deep`) | Largest piece. The 111 expressions become Python edits; the file ends up over the 500-line cap if Python is longer than Ruby, so plan the split by responsibility (layout checker, mutants) |
+| `publish-jobs.test.sh` (384 lines) | 197-line layout checker (lines 20-211) and an 8-line mutant editor (lines 218-226) used by 110 `mutant` calls whose second argument is a Ruby expression on the loaded hash (`jobs`, `step_named`, `gate_step`, `deep`) | Largest piece. The 110 expressions become Python edits; the file ends up over the 500-line cap if Python is longer than Ruby, so plan the split by responsibility (layout checker, mutants) |
 | `publish-workflow.test.sh` (241) | 128-line structure checker including the `if:` evaluator (`eval` after a character filter) | Evaluator in Python: a small parser for `==`, `!=`, `&&`, `\|\|`, `!`, `needs.<job>.result`, `needs.<job>.outputs.<name>`, `cancelled()`, `always()`, quoted strings; no `eval` |
 | `ring-wiring.test.sh` (278) | 117 lines against `test.yml` and the compose file | |
 | `ring-wiring-swift.test.sh` (425) | 68 lines | 425 lines today; the port must stay at or under 500 |
@@ -43,7 +43,7 @@ The matrix of `scenarios.md` (12 rows, all `confirmed`):
 ## Fit decisions
 
 - **How CI installs PyYAML** (auto-applied, one clear recommendation): `pip install -c`-style install of the single pinned `pyyaml==X.Y.Z` line from `tool-pins.txt` through the existing `tool-pin.sh` reader, in each job that runs a ported script; not the distro package (it would not be the pinned version). The pin value is a decompose fact: use a version at least two weeks old on PyPI; this host has 6.0.3.
-- **Order of work:** the helper and the precheck first (the release path, smallest, no PyYAML), then the one-liners, then the pins and the CI install step, then the four big scripts (`publish-workflow`, `ring-wiring`, `ring-wiring-swift`, `publish-pins`), last `publish-jobs` (111 mutants). Each task keeps its scripts' checks and ends with its own scripts green on this host and failing on one mutation.
+- **Order of work:** the helper and the precheck first (the release path, smallest, no PyYAML), then the one-liners, then the pins and the CI install step, then the four big scripts (`publish-workflow`, `ring-wiring`, `ring-wiring-swift`, `publish-pins`), last `publish-jobs` (110 mutants). Each task keeps its scripts' checks and ends with its own scripts green on this host and failing on one mutation.
 - **No stand-in:** a script that cannot keep a check is reported to the owner, not shipped without it.
 
 ## Flagged concerns

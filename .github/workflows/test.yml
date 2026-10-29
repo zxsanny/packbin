@@ -403,7 +403,7 @@ jobs:
         run: bash .github/workflows/ring-wiring.test.sh
       - name: cross-language ring row wiring
         run: bash .github/workflows/ring-wiring-rows.test.sh
-      # Off the ring job's critical path since AZ-2626: both need only ruby and bash.
+      # Off the ring job's critical path since AZ-2626: both need only bash and python3 with the pinned PyYAML.
       - name: Swift ring wiring
         run: bash .github/workflows/ring-wiring-swift.test.sh
       - name: ring runner split

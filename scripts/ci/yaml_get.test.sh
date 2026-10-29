@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/ci/yaml_get.py reads the CI YAML for the scripts that used to call ruby: the two forms of the `on:` key, the
+# scripts/ci/yaml_get.py reads the CI YAML for the CI scripts: the two forms of the `on:` key, the
 # YAML 1.1 words, anchors and merge keys, and the three ways a read can fail (no PyYAML, no file, not YAML), each of
 # which must exit 2 and name its cause.
 set -euo pipefail
@@ -34,7 +34,7 @@ for name in bare quoted; do
   [ "$got" = "['push', 'pull_request']" ] || bad "on: in $name.yml read as [$got]"
 done
 
-# Act and assert: anchors, merge keys and the YAML 1.1 words read as safe_load reads them (as Ruby's did)
+# Act and assert: anchors, merge keys and the YAML 1.1 words read as safe_load reads them
 got="$(py 'import yaml_get; d = yaml_get.load(sys.argv[2]); print(d["derived"], d["flags"])' "$work/words.yml")"
 [ "$got" = "{'a': 1, 'b': 3} {'x': True, 'y': False, 'z': False}" ] || bad "words.yml read as [$got]"
 

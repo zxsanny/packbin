@@ -3,11 +3,11 @@ loop: 82
 branch: dev
 ---
 
-# publish-jobs.test.sh layout checker and 111 mutants in Python
+# publish-jobs.test.sh layout checker and 110 mutants in Python
 
 **Task**: AZ-3385_publish_jobs_python
-**Name**: publish-jobs.test.sh layout checker and 111 mutants in Python
-**Description**: The job layout checker of `test.yml` and its 111 mutants run in Python with each mutant still refused with a message.
+**Name**: publish-jobs.test.sh layout checker and 110 mutants in Python
+**Description**: The job layout checker of `test.yml` and its 110 mutants run in Python with each mutant still refused with a message.
 **Complexity**: 5 points
 **Dependencies**: AZ-3381
 **Component**: CI scripts (`.github/workflows/`, `test.yml`, `tool-pins.txt`)
@@ -16,17 +16,17 @@ branch: dev
 
 ## Problem
 
-`publish-jobs.test.sh` (384 lines) embeds a 192-line checker (lines 20-211) and a mutant editor (lines 218-226) that runs a Ruby expression over the loaded workflow hash for each of 111 `mutant` calls, plus `gate_mutant` sed variants.
+`publish-jobs.test.sh` (384 lines) embeds a 192-line checker (lines 20-211) and a mutant editor (lines 218-226) that runs a Ruby expression over the loaded workflow hash for each of 110 `mutant` calls, plus `gate_mutant` sed variants.
 
 ## Outcome
 
-- The same layout rules, the same 111 mutants as Python edits of the loaded dict, the same refusals.
+- The same layout rules, the same 110 mutants as Python edits of the loaded dict, the same refusals.
 
 ## Scope
 
 ### Included
 
-- The checker and the mutant editor ported; the 111 expressions rewritten; `gate_mutant` and `refused` kept.
+- The checker and the mutant editor ported; the 110 expressions rewritten; `gate_mutant` and `refused` kept.
 - Split by responsibility so each file is at or under 500 lines (checker, mutants).
 
 ### Excluded
@@ -42,9 +42,9 @@ When the ported checker runs
 Then exit 0 and `job layout of test.yml: ok`
 
 **AC-2: Every mutant is refused**
-Given the 111 mutants of HEAD, each as a Python edit
+Given the 110 `mutant` and 5 `gate_mutant` calls of HEAD (115), each as a Python edit
 When the checker runs on each changed copy
-Then 111 of 111 exit non-zero with a message (0 refused silently, 0 accepted)
+Then 115 of 115 exit non-zero with a message (0 refused silently, 0 accepted)
 
 **AC-3: No Ruby**
 Given a host with no `ruby`
@@ -64,14 +64,14 @@ Then exit 0 and no `ruby` text in the output
 | AC Ref | What to Test | Required Outcome |
 |--------|-------------|-----------------|
 | AC-1 | real `test.yml` | ok |
-| AC-2 | 111 mutants | 111 refused |
+| AC-2 | 115 mutants | 115 refused |
 | AC-3 | no ruby | exit 0 |
 
 ## Blackbox Tests
 
 | AC Ref | Initial Data/Conditions | What to Test | Expected Behavior | NFR References |
 |--------|------------------------|-------------|-------------------|----------------|
-| AC-2 | this host | `bash publish-jobs.test.sh` | passes with `layout check rejects:` for all 111 | - |
+| AC-2 | this host | `bash publish-jobs.test.sh` | passes with `layout check rejects:` for all 115 | - |
 
 ## Constraints
 
@@ -84,7 +84,7 @@ Then exit 0 and no `ruby` text in the output
 ## Risks & Mitigation
 
 **Risk 1: volume**
-- *Risk*: 111 hand-ported expressions; a mutant that no longer changes the file passes unnoticed.
+- *Risk*: 110 hand-ported expressions; a mutant that no longer changes the file passes unnoticed.
 - *Mitigation*: the runner keeps a check that each edited copy differs from `test.yml` (as `gate_mutant` does with `cmp`).
 
 ## Flagged concerns

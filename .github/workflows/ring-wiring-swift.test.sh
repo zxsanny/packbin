@@ -19,6 +19,7 @@ fail() {
   failures=$((failures + 1))
 }
 
+reader_failed="the workflow checker could not run, status"
 swift_kinds="user nested boolflag booltrue bitwhen roundflags roundwhen listgroup dictgroup listflags"
 # The members of each kind's ring (as language-pair.sh runs them), Go included.
 swift_members() {
@@ -39,78 +40,12 @@ swift_expected_lines() {
   done
 }
 
-# Prints the violations of the ring job of workflow $1 (RING_SWIFT against pin $2 and the compose file $3).
+# Prints the violations of the ring job of workflow $1 (RING_SWIFT against pin $2 and the compose file $3); the checker
+# (ring-wiring-swift-check.py) exits 1 for violations and 2 when a file cannot be read.
 swift_job_violations() {
-  ruby -ryaml - "$1" "$2" "$3" <<'RUBY'
-workflow = YAML.safe_load(File.read(ARGV.fetch(0)))
-pin = ARGV.fetch(1)
-compose = YAML.safe_load(File.read(ARGV.fetch(2)))
-errors = []
-jobs = workflow["jobs"].is_a?(Hash) ? workflow["jobs"] : {}
-steps_of = ->(job) { job.is_a?(Hash) && job["steps"].is_a?(Array) ? job["steps"] : [] }
-code_lines = ->(step) { step["run"].to_s.lines.map(&:strip).reject { |l| l.empty? || l.start_with?("#") } }
-ring = %r{\Abash \.github/workflows/language-pair\.sh\z}
-name, job = jobs.find { |_, j| steps_of.call(j).any? { |s| code_lines.call(s).any? { |l| l.match?(ring) } } }
-if job.nil?
-  puts "test.yml has no job that runs .github/workflows/language-pair.sh"
-  exit 1
-end
-steps = steps_of.call(job)
-have = job["env"].is_a?(Hash) ? job["env"]["RING_SWIFT"].to_s : ""
-image = compose.dig("services", "swift", "image").to_s
-errors << "RING_SWIFT is '#{have}' in job #{name}, tool-pins.txt has swift==#{pin}" if have != pin
-errors << "RING_SWIFT is '#{have}' in job #{name}, the swift suite image is '#{image}'" if image != "swift:#{have}"
-at = ->(re) { steps.index { |s| code_lines.call(s).any? { |l| l.match?(re) } } }
-ring_at = at.call(ring)
-# The Swift drivers are built by ring-prepare.sh start in the background, after its pull of "swift:$RING_SWIFT" (it calls
-# ring-swift.sh: ring-prepare.test.sh), and waited for on the same state dir before the ring; else the ring would start
-# a second build (AZ-2626).
-prepare = ->(sub) { %r{\Abash \.github/workflows/ring-prepare\.sh #{sub} (\S+)#{sub == "start" ? '((?: \S+)+)' : ''}\z} }
-start_at, wait_at = at.call(prepare.call("start")), at.call(prepare.call("wait"))
-arg_of = ->(i, sub, n) { code_lines.call(steps[i]).map { |l| l[prepare.call(sub), n] }.compact.first }
-build_at = at.call(prepare.call("build"))
-dirs = [[start_at, "start"], [build_at, "build"], [wait_at, "wait"]].map { |i, sub| i && arg_of.call(i, sub, 1) }
-if start_at.nil? || wait_at.nil? || start_at > wait_at || wait_at > ring_at || dirs.compact.uniq.size != 1
-  errors << "job #{name} does not start the Swift driver build (ring-prepare.sh start) and wait for it on the same dir before the ring"
-elsif build_at && (build_at > wait_at || !code_lines.call(steps[wait_at]).last.match?(prepare.call("wait")))
-  errors << "the ring-prepare.sh wait of job #{name} is not the last line after build, so a failed build could go unreported"
-elsif !arg_of.call(start_at, "start", 2).split.include?('"swift:$RING_SWIFT"')
-  errors << "the ring-prepare.sh start line of job #{name} does not pull \"swift:$RING_SWIFT\" before the Swift driver build"
-end
-# C3 (AZ-2627): the Swift drivers' build output (ring-swift.sh's scratch dir, ring-prepare.sh's default) is kept between
-# runs: restored by exact key before the start step, never on a tag run, and the start step learns hit or miss. That
-# cache step is the only step of the job with an if: any other could skip a check.
-cache_at = steps.index { |s| s["uses"].to_s.match?(/\Aactions\/cache@\h{40}\z/) }
-cache = cache_at && steps[cache_at]
-if cache.nil? || start_at.nil? || cache_at > start_at
-  errors << "job #{name} restores no Swift driver build cache before the ring-prepare.sh start step"
-else
-  key = cache.dig("with", "key").to_s
-  ["${{ env.RING_SWIFT }}", "hashFiles('Package.swift', 'Package.resolved', '.github/workflows/drivers/handoff-swift/Package.swift', '.github/workflows/drivers/handoff-swift/Package.resolved', '.github/workflows/ring-swift.sh')"].each do |part|
-    errors << "the Swift driver build cache key #{key.inspect} does not name #{part}" unless key.include?(part)
-  end
-  errors << "the Swift driver build cache restores by a prefix (restore-keys): a hit must be the exact key" if cache["with"].is_a?(Hash) && cache["with"].key?("restore-keys")
-  errors << "the Swift driver build cache is not ring-swift.sh's scratch dir /tmp/packbin-ring-swift" unless cache.dig("with", "path") == "/tmp/packbin-ring-swift"
-  errors << "the Swift driver build cache also runs on a tag run: #{cache['if'].inspect}" unless cache["if"] == "${{ !startsWith(github.ref, 'refs/tags/') }}"
-  state = "${{ steps.#{cache['id']}.conclusion == 'success' && (steps.#{cache['id']}.outputs.cache-hit == 'true' && 'hit' || 'miss') || '' }}"
-  errors << "the ring-prepare.sh start step does not take the cache state from the cache step" unless steps[start_at].dig("env", "PACKBIN_SWIFT_CACHE") == state
-end
-steps.each { |s| errors << "step '#{s['name'] || s['uses']}' of job #{name} has an if (only the cache step may)" if s.key?("if") && !s.equal?(cache) }
-wiring = %r{\Abash \.github/workflows/ring-wiring-swift\.test\.sh\z}
-errors << "job #{name} runs ring-wiring-swift.test.sh, which belongs in scaffold (off the ring's critical path)" if at.call(wiring)
-check = steps_of.call(jobs["scaffold"]).find { |s| code_lines.call(s).any? { |l| l.match?(wiring) } }
-if check.nil?
-  errors << "scaffold does not run ring-wiring-swift.test.sh"
-elsif check.key?("if") || check.key?("continue-on-error")
-  errors << "the ring-wiring-swift.test.sh step of scaffold has an if or continue-on-error"
-end
-steps.each do |s|
-  next unless s.key?("uses")
-  errors << "#{s['uses']} in job #{name} is not pinned to a commit SHA" unless s["uses"].to_s.match?(/@[0-9a-f]{40}\z/)
-end
-errors.each { |e| puts e }
-exit(errors.empty? ? 0 : 1)
-RUBY
+  local status=0
+  python3 -I "$here/ring-wiring-swift-check.py" "$1" "$2" "$3" || status=$?
+  if [ "$status" -gt 1 ]; then echo "$reader_failed $status"; fi
 }
 
 # swift_violations: one line per missing Swift piece. Each file can be replaced by a copy: SW_SCRIPT, SW_KINDS,
@@ -189,6 +124,8 @@ expect_rejected() {
   out="$(export "$var=$copy"; swift_violations)"
   if [ -z "$out" ]; then
     fail "the Swift ring check passed a copy without: $label"
+  elif grep -qF "$reader_failed" <<< "$out"; then
+    fail "the Swift ring check did not run on the copy without: $label ($out)"
   else
     echo "rejects: $label ($out)"
   fi
@@ -411,11 +348,7 @@ ring_swift_linux_checks() {
   fi
 }
 
-if ! command -v ruby > /dev/null; then
-  fail "ruby is required to parse the workflow YAML"
-else
-  swift_wiring_checks
-fi
+swift_wiring_checks
 ring_swift_checks
 
 if [ "$failures" -ne 0 ]; then

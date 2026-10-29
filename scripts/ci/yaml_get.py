@@ -25,5 +25,5 @@ def load(path):
 
 
 def triggers(workflow):
-    """`on:` is read as the boolean key True by YAML 1.1 (PyYAML, as Ruby's Psych); a quoted "on" stays a string."""
+    """`on:` is read as the boolean key True by YAML 1.1 (PyYAML); a quoted "on" stays a string."""
     return workflow["on"] if "on" in workflow else workflow.get(True)

@@ -10,47 +10,7 @@ PINS_NAMES="npm twine platformio idf-component-manager build setuptools pytest s
 # a non-local `uses:` that is not owner/repo@<40 lowercase hex>, a pinned one without a `# <tag>`
 # comment, one action with two SHAs across the files, and a literal `npm@<digit>` in a run step.
 pins_check_actions() {
-  ruby -ryaml - "$1" <<'RUBY'
-dir = ARGV.fetch(0)
-files = Dir.glob(File.join(dir, "*.{yml,yaml}")).sort
-errors = []
-errors << "#{dir}: no workflow files" if files.empty?
-pinned = /\A[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(\/[^@\s]+)?@[0-9a-f]{40}\z/
-shas = Hash.new { |h, k| h[k] = Hash.new { |g, s| g[s] = [] } }
-count = 0
-files.each do |path|
-  name = File.basename(path)
-  text = File.read(path)
-  workflow = YAML.safe_load(text)
-  jobs = workflow.is_a?(Hash) && workflow["jobs"].is_a?(Hash) ? workflow["jobs"].values : []
-  steps = jobs.flat_map { |job| job["steps"].is_a?(Array) ? job["steps"] : [] }
-  (jobs + steps).each do |node|
-    ref = node["uses"]
-    next if ref.nil? || ref.start_with?("./")
-    count += 1
-    errors << "#{name}: uses '#{ref}' is not owner/repo@<40 lowercase hex commit>" unless ref.match?(pinned)
-  end
-  steps.each do |step|
-    literal = step["run"].to_s[/npm@\d\S*/]
-    errors << "#{name}: run step installs npm at the literal version '#{literal}'" if literal
-  end
-  text.each_line.with_index(1) do |line, number|
-    match = line.match(/^\s*(?:-\s+)?uses:\s*(\S+)(.*)$/)
-    next if match.nil?
-    ref = match[1].delete("\"'")
-    next unless ref.match?(pinned)
-    errors << "#{name}:#{number}: uses '#{ref}' has no tag comment (# <tag>)" unless match[2].match?(/\A\s+#\s*\S/)
-    action, sha = ref.split("@")
-    shas[action][sha] << name
-  end
-end
-shas.each do |action, by_sha|
-  errors << "action #{action} has #{by_sha.size} different SHAs: #{by_sha.keys.join(', ')}" if by_sha.size > 1
-end
-errors.each { |e| puts e }
-puts "ok: #{count} non-local uses, #{shas.size} actions, #{files.size} files" if errors.empty?
-exit(errors.empty? ? 0 : 1)
-RUBY
+  python3 -I "$here/publish-pins-actions.py" "$1"
 }
 
 # Prints the violations of pins file $1 (non-zero exit when there are any): exactly one name==digits.dots
@@ -356,10 +316,52 @@ print(z.read([n for n in z.namelist() if n.endswith(".dist-info/WHEEL")][0]).dec
   assert_eq "$generator" "Generator: setuptools ($(bash "$here/tool-pin.sh" setuptools))" "AZ-2214 AC-6 wheel generator"
 }
 
+# pins_old_reader_mentions <dir>: the lines of the CI scripts, workflows and pins file in <dir> that name the old YAML reader
+# (the pattern is spelled with a bracket so that this file does not match itself); non-zero exit when there are none.
+pins_old_reader_mentions() {
+  grep -rniE 'r[u]by' --include='*.sh' --include='*.yml' --include='*.py' --include='tool-pins.txt' "$1"
+}
+
+# The CI scripts need no second YAML reader (AZ-3386): none names the old one, and a script that does is found. Every job that runs a script
+# reading the CI YAML installs the pinned PyYAML, and a copy of test.yml without that step in its first such job is refused.
+pins_python_checks() {
+  local tmp="$1" out dir first
+  if out="$(pins_old_reader_mentions "$here")"; then
+    fail "AZ-3386 AC-1 the CI scripts name the old YAML reader: $(head -n 3 <<< "$out")"
+  fi
+  dir="$tmp/old-reader-back"
+  mkdir -p "$dir"
+  cp "$here/tool-pin.sh" "$dir/tool-pin.sh"
+  printf 'x="$(%s -e 1)"\n' "r""uby" >> "$dir/tool-pin.sh"
+  pins_old_reader_mentions "$dir" > /dev/null || fail "AZ-3386 AC-2 the scan did not find a script that calls the old reader"
+  if ! out="$(python3 -I "$here/publish-pins-install.py" "$here/test.yml")"; then
+    fail "AZ-3386 AC-3 install step: $out"
+  fi
+  echo "$out"
+  dir="$tmp/no-pyyaml"
+  mkdir -p "$dir"
+  awk '
+    skip > 0 { skip--; next }
+    /^      - name: PyYAML$/ && !done { done = 1; skip = 1; next }
+    { print }
+  ' "$here/test.yml" > "$dir/test.yml"
+  if cmp -s "$here/test.yml" "$dir/test.yml"; then
+    fail "AZ-3386 AC-3 the temp copy of test.yml is unchanged"
+    return
+  fi
+  if out="$(python3 -I "$here/publish-pins-install.py" "$dir/test.yml")"; then
+    fail "AZ-3386 AC-3 a test.yml job without the PyYAML install was accepted"
+  else
+    first="$(head -n 1 <<< "$out")"
+    echo "install check rejects: a job without the PyYAML step ($first)"
+    grep -qF -- 'without setup-python and the pinned PyYAML install' <<< "$out" || fail "AZ-3386 AC-3 the message does not say what is missing: $out"
+  fi
+}
+
 pins_checks() {
   local tmp
-  if ! command -v ruby >/dev/null 2>&1; then
-    fail "AZ-2214 ruby is required to parse the workflow YAML"
+  if ! python3 -I -c 'import yaml'; then
+    fail "AZ-2214 PyYAML is required to parse the workflow YAML"
     return
   fi
   tmp="$(mktemp -d)"
@@ -367,6 +369,7 @@ pins_checks() {
   pins_file_checks "$tmp"
   pins_install_checks "$tmp"
   pins_doc_checks
+  pins_python_checks "$tmp"
   pins_real_checks "$tmp"
   if ! rm -rf "$tmp"; then
     echo "note: could not remove $tmp (files written by a build container)"

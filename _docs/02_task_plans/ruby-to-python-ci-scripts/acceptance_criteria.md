@@ -24,7 +24,7 @@ Then it runs every labelled check of HEAD (0 dropped); a label may be renamed on
 **AC-K2: Each script still fails on a mutation**
 Given a deliberate change to the thing each script guards (one per script: a job renamed in `test.yml`, an `if:` condition flipped, a pin loosened, a ring wiring edge removed, the precheck's `head_sha` comparison dropped, a matrix language removed, and so on)
 When the ported script is run on the changed copy
-Then 10 of 10 scripts exit non-zero and name the failed check; the mutants the scripts already hold (HEAD: 111 `mutant` calls in `publish-jobs.test.sh`, 11 in `publish-precheck.test.sh`, and those of the other scripts) are 0 lost and each still fails.
+Then 10 of 10 scripts exit non-zero and name the failed check; the mutants the scripts already hold (HEAD: 110 `mutant` calls in `publish-jobs.test.sh`, 11 in `publish-precheck.test.sh`, and those of the other scripts) are 0 lost and each still fails.
 
 ## P: the release path
 
