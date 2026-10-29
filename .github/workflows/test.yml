@@ -367,6 +367,8 @@ jobs:
           grep -qx 4001000065cd1d00a3e1110100 fixtures/golden.hex
       - name: CI YAML reader
         run: bash scripts/ci/yaml_get.test.sh
+      - name: CI workflow helpers
+        run: bash scripts/ci/workflow_yaml.test.sh
       - name: report columns
         run: bash .github/workflows/report-row.test.sh
       - name: hostile case file

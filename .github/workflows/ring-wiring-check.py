@@ -11,92 +11,28 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "scripts" / "ci"))
 import yaml_get  # noqa: E402
+from workflow_yaml import (  # noqa: E402
+    CACHE_USES, FLAGS, SHA_PIN, code_lines, dig, first_set, inspect, runs, steps_of, to_s)
 
-FLAGS = re.ASCII
 # The exact call, the script as the command word in any other form (|| true, a pipe, &), a set line.
 CALL = re.compile(r"(?:bash )?(?:\./)?\.github/workflows/language-pair\.sh", FLAGS)
 INVOKES = re.compile(r"(?:(?:bash|sh) )?(?:\./)?\.github/workflows/language-pair\.sh\b", FLAGS)
 TOOLCHAINS = re.compile(r"(?:bash )?(?:\./)?\.github/workflows/ring-toolchains\.sh", FLAGS)
 SHELL_OPTIONS = re.compile(r"set -[euo]+( pipefail)?", FLAGS)
 WRAPPER = re.compile(r"/\.github/workflows/ring-cxx\.sh\Z", FLAGS)
-CACHE_USES = re.compile(r"actions/cache@[0-9a-fA-F]{40}", FLAGS)
-SHA_PIN = re.compile(r"@[0-9a-f]{40}\Z", FLAGS)
 GO_BUILD = re.compile(r"bash \.github/workflows/ring-(?:go\.sh|prepare\.sh build) \S+", FLAGS)
-ASCII_SPACE = "\0\t\n\v\f\r "
 # The job env versions and the suite images they copy (docker-compose.test.yml service => RING_ variable).
 SUITES = {"RING_DOTNET": "csharp", "RING_NODE": "typescript", "RING_PYTHON": "python",
           "RING_RUST": "rust", "RING_GCC": "cpp", "RING_JDK": "java", "RING_GO": "go"}
 SCAFFOLD_SCRIPTS = {"cpp/embedded/lib.test.sh": "the embedded harness self-test",
                     ".github/workflows/ring-wiring.test.sh": "the ring wiring check",
                     ".github/workflows/ring-wiring-rows.test.sh": "the ring row wiring check"}
-STRING_ESCAPES = {'"': '\\"', "\\": "\\\\", "\n": "\\n", "\t": "\\t", "\r": "\\r", "\x1b": "\\e",
-                  "\x07": "\\a", "\x08": "\\b", "\x0b": "\\v", "\x0c": "\\f"}
-
-
-def to_s(value) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    return str(value)
-
-
-def inspect(value) -> str:
-    """The quoted form of a value in a violation message: "text", nil, true, [a, b], {"k" => v}."""
-    if value is None:
-        return "nil"
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, str):
-        out = []
-        for i, ch in enumerate(value):
-            if ch in STRING_ESCAPES:
-                out.append(STRING_ESCAPES[ch])
-            elif ch == "#" and value[i + 1:i + 2] in ("{", "$", "@"):
-                out.append("\\#")
-            elif ch == "\x7f":
-                out.append("\\x7F")
-            elif not ch.isprintable():
-                out.append(f"\\u{ord(ch):04X}" if ord(ch) <= 0xFFFF else f"\\u{{{ord(ch):X}}}")
-            else:
-                out.append(ch)
-        return '"' + "".join(out) + '"'
-    if isinstance(value, list):
-        return "[" + ", ".join(inspect(v) for v in value) + "]"
-    if isinstance(value, dict):
-        return "{" + ", ".join(f"{inspect(k)} => {inspect(v)}" for k, v in value.items()) + "}"
-    return str(value)
-
-
-def first_set(*values):
-    """The first value that is neither None nor False (an empty string counts as set)."""
-    return next((v for v in values if v is not None and v is not False), None)
-
-
-def dig(obj, *keys):
-    for key in keys:
-        obj = obj.get(key) if isinstance(obj, dict) else None
-    return obj
 
 
 def as_list(value) -> list:
     if isinstance(value, list):
         return value
     return [] if value is None else [value]
-
-
-def steps_of(job) -> list:
-    steps = job.get("steps") if isinstance(job, dict) else None
-    return [s for s in steps if isinstance(s, dict)] if isinstance(steps, list) else []
-
-
-def code_lines(step) -> list:
-    lines = (line.strip(ASCII_SPACE) for line in to_s(step.get("run")).split("\n"))
-    return [line for line in lines if line and not line.startswith("#")]
-
-
-def runs(step, pattern) -> bool:
-    return any(pattern.fullmatch(line) for line in code_lines(step))
 
 
 def index_of(items, predicate):

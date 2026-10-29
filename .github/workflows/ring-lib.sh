@@ -43,8 +43,9 @@ run_lang() {
       # run_lang under `if`, where set -e is off, and a stale binary must not stand in for a build that failed.
       if [ -n "${PACKBIN_CPP_HANDOFF:-}" ] || [ ! -x "$bin" ]; then
         "${CXX:-c++}" "${flags[@]}" -o "$bin" \
-          "$drivers/handoff.cpp" "$root/cpp/src/core/values.cpp" "$root/cpp/src/core/pack.cpp" \
-          "$root/cpp/src/core/unpack.cpp" "$root/cpp/src/core/crypto.cpp" "$root/cpp/src/core/frame.cpp" \
+          "$drivers/handoff.cpp" "$drivers/handoff_ecc.cpp" "$drivers/handoff_frame.cpp" \
+          "$root/cpp/src/core/values.cpp" "$root/cpp/src/core/pack.cpp" "$root/cpp/src/core/unpack.cpp" \
+          "$root/cpp/src/core/crypto.cpp" "$root/cpp/src/core/frame.cpp" \
           || return
       fi
       "$bin" "$@"

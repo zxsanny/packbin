@@ -495,3 +495,6 @@ Loop 74 (2026-10-26, ADR-009: remove the stream session; D1 frame names; D2 cryp
 | AZ-3384 | ring_wiring_python (loop 82) | 5 | AZ-3381 | none |
 | AZ-3385 | publish_jobs_python (loop 82) | 5 | AZ-3381 | none |
 | AZ-3386 | publish_pins_guard_and_docs (loop 82) | 5 | AZ-3381, AZ-3382, AZ-3383, AZ-3384, AZ-3385 | none |
+| AZ-3387 | split_handoff_cpp (loop 83) | 3 | None | none |
+| AZ-3388 | ring_wiring_shared_module (loop 83) | 3 | None | none |
+| AZ-3389 | ring_key_id_second_refusal_rows (loop 83) | 3 | AZ-3378 | none |

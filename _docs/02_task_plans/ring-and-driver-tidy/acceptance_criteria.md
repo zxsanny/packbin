@@ -18,7 +18,7 @@ Measured on HEAD dbf9a57. Every count is re-read on HEAD at new-task (`AGENT_GOT
 
 ## T3 - ring rows: wrong-length key or msg_id with a second refusal
 
-- **AC-3.1** `fixtures/frame/ring-cases.txt` gains at least 14 rows: 6 refuse-seal (key33 and id7, each with `ad256`, `body256`, `outshort`) and 8 refuse-open (key33 and id7, each with `ad256`, `body256`, `clear256`, `buffer`), each expecting `BadValue`. Total refuse rows 42 -> at least 56.
+- **AC-3.1** `fixtures/frame/ring-cases.txt` gains 14 rows: 6 refuse-seal (key33 and id7, each with `ad256`, `body256`, `outshort`) and 8 refuse-open (key33 and id7, each with `ad256`, `body256`, `clear256`, `buffer`), each expecting `BadValue`. Total refuse rows 42 -> 56 (27 seal, 20 open, 9 mac); refusal rows per language 58 -> 72.
 - **AC-3.2** The loader derives every expected value again from `framefmt.py`: each new row is confirmed by the reference (a row it does not confirm stops the ring), and the reference answers `BadValue` for all 14.
 - **AC-3.3** `bash .github/workflows/ring-frame.sh` ends with 0 mismatches over the new rows in all 8 drivers; the 6 byte-string packages answer from the package, Rust and C++ print `BadValue` by construction and the row comment says so.
 - **AC-3.4** Sensitivity: in a scratch copy, a package that checks the length after the second refusal (one reordered check) makes the ring fail on at least 1 new row; the copy is discarded and nothing of it is committed.

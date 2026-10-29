@@ -181,7 +181,7 @@ run driver-crashes 1 "frame-batch (seal) failed" FAKE_LIE=typescript:crash
 run one-language 0 "ring-frame: 1 pairs" RING_FRAME_LANGS=python
 # A driver that pads or cuts the msg_id (as the C++ driver did) and one that ends on a key of the wrong length (as the Rust
 # driver did) are caught by the key and msg_id rows (AZ-3378).
-run id-padded 1 "go: R.seal.id7 seal gave" FAKE_LIE=go:id-padded
+run id-padded 1 "go: R.open.id7 open gave TagMismatch" FAKE_LIE=go:id-padded
 run key-aborts 1 "rust frame-batch (seal) failed" FAKE_LIE=rust:key-aborts
 # An empty key or msg_id is written as "-": every seal and mac line the loader writes keeps its field count (AZ-3378).
 mkdir "$tmp/lines"
