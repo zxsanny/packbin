@@ -21,7 +21,7 @@ This host has no `ruby` (step 2 refuses a PATH that has one), so every PASS belo
 
 - Step 7: the publish gate printed NOT RUN for the vcpkg supports and consumer checks and the swift consumer resolve (no vcpkg tool and no swift on PATH on this host), as in earlier loops on this host.
 - The ring stage needs a JDK on PATH on this host (a user-directory tarball); the script sets it. A first `loop-tests.sh --only ring` without it failed in 5 s on `java: command not found` (step 11 of the loop, before the script).
-- NOT done here: the CI run of the push (AZ-3386 AC-6 / AC-C1). It is read from the CI log after the push and put into the first commit of loop 83.
+- CI of the push (AZ-3386 AC-6 / AC-C1), read after the push: `dev` run 40904985660 and `main` run 40904988952 both success in 309 s; the six formerly unrun scripts PASS in the log (details in `record82.md`).
 
 ## Result
 

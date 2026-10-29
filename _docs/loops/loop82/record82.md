@@ -19,11 +19,11 @@ measurements:
   - this host (Linux, python 3.14.4, PyYAML 6.0.3, no ruby, no java on PATH): `loop-tests.sh --only scaffold,ring,publish-gate --all`: scaffold 157 to 163 s, ring 41 s, publish-gate 144 to 145 s (share 7 130 s, swift 73 s); `smoke82.sh` 411 s, 8 of 8
   - the first `--only ring` without a JDK on PATH failed in 5 s on `java: command not found`; with the user-directory JDK on PATH and `RING_GCC=16`, `CXX=ring-cxx.sh` it passed
   - the reader found a YAML error in the first draft of the new `test.yml` step: an unquoted `--only-binary=:all: ` in a plain scalar (a `: ` starts a mapping); quoted
+  - CI of the loop 82 push (dbf9a57, read 2026-10-29): `dev` run 40904985660 and `main` run 40904988952 both success, 309 s wall (loop 81: `dev` 298 s, `main` 465 s as separate runs); every job success; in the `dev` log: `report row tests passed`, `run-suite.test.sh: all checks passed`, `ring wiring checks passed` (x2: ring and swift), `ring row wiring checks passed`, `yaml_get.test.sh: all checks passed`, `job layout checks passed`, `publish-precheck checks passed`, `publish gate tests passed` x8 (publish-gate-rest: workflow 35 s, pins 24 s); 0 FAIL lines, 0 NOT RUN lines, 0 mentions of ruby; scaffold 182 s, publish-gate-rest 169 s, ring 151 s (first run on the pinned Node 24, GCC 16, Rust 1.98: success)
   - CI of the loop 81 push (read at the start of this loop): `dev` success in 4 m 58 s, `main` success in 7 m 45 s
 review: "no per-batch code review (owner preference); feature assessment by the parent: round 1 COMPLETE, 17 covered / 3 out-of-scope (assessment82.md); security lite diff-scoped, 0 findings (_docs/05_security/lite_loop82.md)"
 retro: not due (loops 75 to 79 done in loop 79; next after loop 84)
 leftovers:
-  - CI of the loop 82 push (AZ-3386 AC-6 / AC-C1): read from the CI log after the push, first action of loop 83; the six scripts that never ran on the loop 81 host (`report-row`, `run-suite`, `ring-wiring`, `ring-wiring-swift`, `publish-workflow`, `publish-pins`) must be PASS there
   - owner (unchanged): CS-D5; the first `v*` and `go/v*` tags and F44; close the epic AZ-2750; U24 in the C++ package; whether to drop the M4F row; the release notes of the next 0.x; meshbell renames its Rust `Session` to `FrameSession`; whether the vcpkg port should drop `supports: linux | osx`; a public-key pairing step
   - ring, open: multi-part MAC messages (G8m of loop 77, owner-declined then; needs an owner opt-in like U1); which error comes first for a row that combines a wrong-length key or id with a second refusal (not walked, no such row)
   - Mac: the stage stamps of `scripts/loop-tests.sh` are stale (b7b8140); one clean run on the Mac refreshes them (this Linux clone has none)
@@ -38,6 +38,7 @@ lessons:
   - A count taken with `grep -c '^mutant'` includes the function definition `mutant()`: the specs said 111, HEAD has 110 calls. Count call lines with their argument shape (`^mutant "`) before a number goes into an acceptance criterion.
   - When the original's runtime is absent from the host (no Ruby), a port cannot be compared by running both; the proof is a label inventory per script, deliberate mutations on copies, messages kept byte for byte, and a read of the original, with CI as the first differential run. Say so in the spec instead of promising a differential test.
 smoke: PASS (agent run, owner rule 2026-10-12: 8 of 8 steps)
+ci: PASS (dev and main success, the six scripts PASS in the log; AZ-3386 AC-6 / AC-C1 met)
 smoke_artifact: _docs/loops/loop82/smoke82.md
 assessment_artifact: _docs/loops/loop82/assessment82.md
 loop_end_merge: main

@@ -12,7 +12,7 @@ AZ-3381 to AZ-3386 (28 points, In Testing): no CI script uses Ruby.
 
 ## First actions of loop 83
 
-0. CI of the loop 82 push (`dev`, then `main`): `gh run list --repo zxsanny/packbin --branch dev`. Read any red job's log with `gh api` before calling it a flake. The six scripts that never ran on the loop 81 host (`report-row`, `run-suite`, `ring-wiring`, `ring-wiring-swift`, `publish-workflow`, `publish-pins`) must be PASS in the `scaffold` and `publish-gate-rest` logs, and `ring` is the first run on the pinned toolchains Node 24, GCC 16, Rust 1.98. Put the result into the first commit of loop 83; do not push a record-only commit.
+0. CI of the loop 82 push is already read and green (record82.md, `ci:`): `dev` and `main` success, 309 s, the six formerly unrun scripts PASS, `ring` success on the pinned toolchains. The record and handoff edits that say so are uncommitted; put them into the first commit of loop 83 (do not push a record-only commit). CI of the loop 83 push is the next one to read.
 1. `uptime` and `ps -Ao pcpu,command --sort=-pcpu | head`. A total run is not a result above load 60 from a foreign job.
 2. This Linux host: `ruby` is no longer needed. The JDK is a user-directory tarball (`~/.local/share/packbin-jdk26/bin`), not on PATH by default: the ring stage needs it on PATH.
 
@@ -33,7 +33,7 @@ AZ-3381 to AZ-3386 (28 points, In Testing): no CI script uses Ruby.
 
 ## Risks
 
-- **L82-1**: the six scripts above ran for the first time in CI after this push; the Python checkers were proven on this host by label inventory and deliberate mutations, not against the Ruby originals (no Ruby here).
+- **L82-1** (closed): the six scripts ran for the first time in CI after this push and passed; the Python checkers were proven on this host by label inventory and deliberate mutations, not against the Ruby originals (no Ruby here).
 - **L82-2**: the `if:` evaluator is stricter than the old `eval` (a lone `&`, `|`, `=`, `()` and chained `==` are refused); no workflow uses them.
 - **L82-3**: PyYAML is a new pinned dependency of two CI jobs, without a hash lock (as the other pip tools).
 - **L81-2, L80-1, L80-2, L78-2, L79-1, L79-2, L76-1, L75-1, L74-2, L73-1, L72-1, L71-1, L71-2** (unchanged): see `handoff82.md`, `handoff81.md`, `handoff80.md`, `handoff76.md` and `handoff75.md`.

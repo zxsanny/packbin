@@ -16,3 +16,5 @@ typescript/dist/
 **/.build/
 **/.swiftpm/
 .DS_Store
+
+_docs/_autodev_state.md
