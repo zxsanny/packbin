@@ -131,6 +131,9 @@ else
   bad "publish-precheck.sh: $out"
 fi
 
+# Act and assert: the lookup needs no YAML reader (AZ-3382 AC-5): the script names none, so a host without PyYAML gives the same verdicts
+if grep -niE 'yaml' "$here/publish-precheck.sh"; then bad "publish-precheck.sh names a YAML reader"; fi
+
 # Act and assert: one mutant per condition
 mutant "head_sha not compared" 's#r.get("head_sha") == sha#True#'
 mutant "event not compared" 's#r.get("event") == "push"#True#'

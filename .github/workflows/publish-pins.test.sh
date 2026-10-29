@@ -268,7 +268,7 @@ pins_install_checks() {
 pins_doc_checks() {
   local doc="$root/_docs/04_deploy/ci_cd_pipeline.md" word
   grep -q '^## Pins and how to bump them' "$doc" || fail "AZ-2214 AC-8 the pins section is missing from ci_cd_pipeline.md"
-  for word in 'tool-pins.txt' 'tool-pin.sh' "git ls-remote --tags https://github.com/<owner>/<repo>.git <tag> '<tag>^{}'"; do
+  for word in 'tool-pins.txt' 'tool-pin.sh' 'pyyaml' "git ls-remote --tags https://github.com/<owner>/<repo>.git <tag> '<tag>^{}'"; do
     grep -qF -- "$word" "$doc" || fail "AZ-2214 AC-8 ci_cd_pipeline.md does not name: $word"
   done
 }

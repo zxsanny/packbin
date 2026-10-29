@@ -51,8 +51,14 @@ expect_refusal "no PyYAML" "PyYAML is required to parse the workflow YAML" \
 expect_refusal "no file" "cannot read $work/missing.yml" py 'import yaml_get; yaml_get.load(sys.argv[2])' "$work/missing.yml"
 expect_refusal "not YAML" "$work/malformed.yml is not valid YAML" py 'import yaml_get; yaml_get.load(sys.argv[2])' "$work/malformed.yml"
 
-# Assert: safe_load only, one reader
+# Assert: safe_load only, one reader. Nothing else loads YAML; the one other importer only dumps (the mutants of
+# publish-jobs-mutate.py write a changed copy of test.yml).
 if grep -nE 'yaml\.(load|unsafe_load|full_load)\(' "$here/yaml_get.py"; then bad "yaml_get.py does not use safe_load only"; fi
+root="$(cd "$here/../.." && pwd)"
+loaders="$(grep -rlE '^[[:space:]]*(import|from)[[:space:]]+yaml\b|\byaml\.(safe_load|load|full_load|unsafe_load)\(' \
+  "$root/.github/workflows" "$root/scripts" --include='*.py' --include='*.sh' | grep -v -e '/scripts/ci/yaml_get.py$' -e '/scripts/ci/yaml_get.test.sh$' -e '/publish-jobs-mutate.py$' || true)"
+[ -z "$loaders" ] || bad "YAML is read outside scripts/ci/yaml_get.py: $loaders"
+if grep -nE '\byaml\.(safe_load|load|full_load|unsafe_load)\(' "$root/.github/workflows/publish-jobs-mutate.py"; then bad "publish-jobs-mutate.py reads YAML itself"; fi
 
 if [ "$failures" -eq 0 ]; then echo "yaml_get.test.sh: all checks passed"; fi
 exit "$failures"
