@@ -8,12 +8,6 @@ Downstream skills consume this file:
 - `.cursor/skills/autodev/protocols/bootstrap-lessons.md` (Bootstrap B2 — Surface Recent Lessons)
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
-- [2026-10-26] [estimation] A byte-budget change across feature sets can trade one set against another: the wipe helper out of line cost `session` +16 B and `frame` +152 B, forced inline +128 B and +96 B; compare each form per set and in total against the tightest bound before choosing (loop 73).
-  Source: _docs/06_metrics/retro_2026-10-26_loop73.md
-- [2026-10-27] [architecture] Before hardening a type (wiping the keys of a stream session at destroy), ask what the type is for: no application needed the stream session, and one owner question turned the loop 74 hardening task into a removal of eight packages' worth of code (loop 74).
-  Source: _docs/06_metrics/retro_2026-10-27_loop74.md
-- [2026-10-27] [architecture] When the tests of a removed feature go, list what only they covered: the C++ session vector test was the only check of the crypto on Cortex-M3, M33F and big-endian s390x, and the replacement ran on the host only until the security review found it (loop 74).
-  Source: _docs/06_metrics/retro_2026-10-27_loop74.md
 - [2026-10-27] [estimation] Before a spec refuses a case in one package of a shared API, read how the sibling packages treat it (the Java spec refused an empty direction set that Rust, C# and Swift accept), and diff the public API of all packages when a rename must match everywhere (Swift `Freshness`) (loop 74).
   Source: _docs/06_metrics/retro_2026-10-27_loop74.md
 - [2026-10-27] [architecture] A declaration a package emits is part of what a consumer compiles: `declare [Symbol.dispose]` in the TypeScript classes put `Symbol.dispose` into the published `.d.ts`, which a consumer on lib ES2022 cannot type-check; only the publish gate's consumer check (AZ-2103 AC-2) found it, not the package's own tests (loop 75).
@@ -38,3 +32,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-28_loop79.md
 - [2026-10-28] [estimation] A handoff line names one instance of a defect class, not the class: "a direction above 255 wraps in the C#, C++ and Go drivers" was one field; a probe ring with every number field at its edge also found the C++ tag length and kind and the Go epoch (loop 79).
   Source: _docs/06_metrics/retro_2026-10-28_loop79.md
+- [2026-10-30] [estimation] A zero-margin byte pin makes a no-behaviour file split an owner decision: a second translation unit cost 32 B on the Cortex-M4F image and 40 B on the Cortex-M33F one (shared literal pool, alignment), so run the arm stage at intake when a task touches a pinned image (loop 84).
+  Source: _docs/06_metrics/retro_2026-10-30_loop84.md
+- [2026-10-30] [tooling] A worker told to build the project's own embedded image (`cpp/embedded/Dockerfile`, about 3.5 min) found the M33F pin failure that no host build shows; "NOT RUN, no toolchain" is the wrong stop when the stage has a documented image (loop 84).
+  Source: _docs/06_metrics/retro_2026-10-30_loop84.md
+- [2026-10-30] [process] A review cleanup in a handoff is a lead, not a defect: two of four from loop 83 did not exist on HEAD (`kMax` is read by two parts, `frame_hex` differs on purpose) and the include prune removed nothing, so probe each before it gets a spec line (loop 84).
+  Source: _docs/06_metrics/retro_2026-10-30_loop84.md
