@@ -50,6 +50,6 @@ Details: `_docs/04_deploy/packages.md`.
 ## For the publisher (not part of the release)
 
 - **The version comes from the tag.** The manifests carry a placeholder (`rust/Cargo.toml` says `0.1.0`); the `v*` tag push publishes the registries and pushes `go/v0.4.0` (ADR-002, ADR-004).
-- **Before the tag, decide CS-D5.** The compact text tables are frozen as part of the format. Retraining them on your real messages after 0.4.0 is another wire break for every string field. CS-D5 is deferred until you have 100 to 200 real messages; if you want the tables trained on them, do it before this tag.
+- **CS-D5 is decided: the tables stay (owner, 2026-10-30).** The compact text tables are frozen as part of the format and ship as trained on Tatoeba sentences. The owner gathers statistics from real usage first; retraining them afterwards is another wire break for every string field.
 - **F44.** The repository has no tag ruleset on `v*` (the rulesets API returns none on 2026-10-30), so a moved tag is not guarded outside the publish workflow.
 - **Check before pasting.** The claims were read from the README, the ADRs and the loop records, not from a fresh run of every suite. Read the CI of the commit you tag.
