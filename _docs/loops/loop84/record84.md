@@ -35,7 +35,7 @@ lessons:
   - A review cleanup in a handoff is a lead, not a defect: two of four did not exist on HEAD and the include prune removed nothing.
   - Tree copies for workers (`git archive HEAD`, a pristine `head` and a `work` copy each) worked without disk trouble this time because the copies were deleted before `loop-tests.sh` ran.
 smoke: PASS (agent run, owner rule 2026-10-12: 7 of 7 steps)
-ci: FAIL then fixed (dev run 41042545031 and main run 41042547973 on 8da18d3: 19 of 20 jobs success, `embedded-esp-core` failed in 37 s and 33 s on cpp-esp32s3 and cpp-esp32c3: `cpp/embedded/esp.sh` expected 7 packbin sources and the split made 8, the failure `AGENT_GOTCHAS` line 51 describes from loop 75; fixed by the count 8 in the next commit and proved by `run.sh esp core` in espressif/idf:v5.3.2 on a tree copy: esp32s3 8 sources 0 warnings 187,136 B, esp32c3 8 sources 0 warnings 157,952 B, Arduino example PASS; the CI of the fix push is read first in loop 85; read 2026-10-30)
+ci: FAIL then fixed (dev run 41042545031 and main run 41042547973 on 8da18d3: 19 of 20 jobs success, `embedded-esp-core` failed in 37 s and 33 s on cpp-esp32s3 and cpp-esp32c3: `cpp/embedded/esp.sh` expected 7 packbin sources and the split made 8, the failure `AGENT_GOTCHAS` line 51 describes from loop 75; fixed by the count 8 in the next commit and proved by `run.sh esp core` in espressif/idf:v5.3.2 on a tree copy: esp32s3 8 sources 0 warnings 187,136 B, esp32c3 8 sources 0 warnings 157,952 B, Arduino example PASS; the CI of the fix push a9c2694 is green: dev run 41045067467 success (363 s) and main run 41045070578 success (453 s); read 2026-10-30)
 smoke_artifact: _docs/loops/loop84/smoke84.md
 assessment_artifact: _docs/loops/loop84/assessment84.md
 loop_end_merge: main
