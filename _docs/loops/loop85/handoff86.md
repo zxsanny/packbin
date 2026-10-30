@@ -11,7 +11,7 @@ AZ-3412 and AZ-3413 (2 points, In Testing):
 
 ## First actions of loop 86
 
-0. Read the CI of the loop 85 close push (`dev` and `main` runs); the record is `record85.md`, put any CI fix into the next commit.
+0. The CI of the loop 85 close push (02ffcef) is already read and green (`record85.md`, `ci:`): `dev` run 41048813295 and `main` run 41048816799 success. The `ci:` line of the record and this edit are uncommitted; put them into the first commit of loop 86 (no record-only push). CI of the loop 86 push is the next one to read. GitHub's unauthenticated API hit its rate limit once (wait for `x-ratelimit-reset`).
 1. `uptime`, `df -h /tmp` and `ps -Ao pcpu,command --sort=-pcpu | head`; a foreign `dotnet build` of archangel ran at load 13 during loop 85.
 2. For the ring on this host: JDK on PATH (`~/.local/share/packbin-jdk26/bin`) and `LOOP_TESTS_PYTHON=/usr/bin/python3.14`; `scripts/loop-tests.sh --all --only ring` takes under a minute.
 3. `docker rmi packbin-embedded:w2` frees 4.9 GB when the owner agrees.

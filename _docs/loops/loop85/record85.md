@@ -20,6 +20,7 @@ leftovers:
   - host: `docker rmi packbin-embedded:w2` (4.9 GB) when the owner agrees; `shellcheck` is not installed on this host, so the two edited test scripts were not linted
   - Jira: AZ-3412 and AZ-3413 In Testing
 smoke: PASS (owner, 2026-10-30: 5 checks plus the real 8-language ring)
+ci: PASS (02ffcef: dev run 41048813295 and main run 41048816799 both success, read 2026-10-30)
 smoke_artifact: _docs/loops/loop85/smoke85.md
 assessment_artifact: _docs/loops/loop85/assessment85.md
 loop_end_merge: main
