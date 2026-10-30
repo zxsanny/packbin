@@ -8,12 +8,7 @@ Downstream skills consume this file:
 - `.cursor/skills/autodev/protocols/bootstrap-lessons.md` (Bootstrap B2 — Surface Recent Lessons)
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
-- [2026-10-27] [estimation] Before a spec refuses a case in one package of a shared API, read how the sibling packages treat it (the Java spec refused an empty direction set that Rust, C# and Swift accept), and diff the public API of all packages when a rename must match everywhere (Swift `Freshness`) (loop 74).
-  Source: _docs/06_metrics/retro_2026-10-27_loop74.md
-- [2026-10-27] [architecture] A declaration a package emits is part of what a consumer compiles: `declare [Symbol.dispose]` in the TypeScript classes put `Symbol.dispose` into the published `.d.ts`, which a consumer on lib ES2022 cannot type-check; only the publish gate's consumer check (AZ-2103 AC-2) found it, not the package's own tests (loop 75).
-  Source: _docs/loops/loop75/record75.md
-- [2026-10-27] [estimation] Put the 500-line cap and the "no new `lib` requirement for consumers" rule in every worker prompt: a worker test file reached 544 lines and one declaration needed a newer lib, both found after the fact (loop 75).
-  Source: _docs/loops/loop75/record75.md
+
 - [2026-10-27] [estimation] Probe each handoff candidate on HEAD before writing its spec: in loop 76 three of seven descriptions were wrong or incomplete (a probe that crashed instead of doing an extra compile; a Rust failure in 22 test files and not only the frame set; a probe FAIL that was a key-order error in the probe) and the wrong key order also sat in two more probes the handoff did not list (loop 76).
   Source: _docs/loops/loop76/record76.md
 - [2026-10-27] [tooling] A CI suite that names its test targets one by one (`--test <name>`) hides a missing feature gate in every other test file; build every feature set with `--no-run` after adding a test file (loop 76).
@@ -38,3 +33,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-30_loop84.md
 - [2026-10-30] [process] A review cleanup in a handoff is a lead, not a defect: two of four from loop 83 did not exist on HEAD (`kMax` is read by two parts, `frame_hex` differs on purpose) and the include prune removed nothing, so probe each before it gets a spec line (loop 84).
   Source: _docs/06_metrics/retro_2026-10-30_loop84.md
+- [2026-10-30] [process] A candidate the owner declined can come back: loop 89 took the CI clippy job declined in loops 86 and 87, so the handoff keeps the decline and the numbers measured then (0 warnings, 9 sets) instead of dropping the candidate.
+  Source: _docs/06_metrics/retro_2026-10-30_loop89.md
+- [2026-10-30] [tooling] A gate step added to `run-suite.sh` moves pinned counts in `run-suite.test.sh` (the expected-call block, the step count in the notice row 21 to 22) and needs a fake of its tool (`rustup`): grep `-eq N` and the call lists before the first test run (loop 89).
+  Source: _docs/06_metrics/retro_2026-10-30_loop89.md
+- [2026-10-30] [testing] Prove a failing gate on the real path with one injected defect, reverted at once (a lint in `rust/src/lib.rs` ran through the `rust` compose service: exit 1, set named), besides the stubbed shell case (loop 89).
+  Source: _docs/06_metrics/retro_2026-10-30_loop89.md
