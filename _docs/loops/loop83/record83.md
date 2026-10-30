@@ -36,7 +36,7 @@ lessons:
   - A refactor of a checker is proven by its own mutation tests only if they cover the moved code: the three wiring tests passed with a broken `inspect`; move a helper together with a test that fails when the helper breaks.
   - A smoke step that copies part of the tree must copy what the script imports (`framefmt.py` imports `scripts/crypto`): the trial run found it, as trial runs are for.
 smoke: PASS (agent run, owner rule 2026-10-12: 8 of 8 steps)
-ci: pending (read after the push, `ci_cd_pipeline.md` polling: `dev` and `main`)
+ci: PASS (dev run 41016926661 and main run 41016928653 both success; dev 245 s wall, main about 540 s from the push; 20 of 20 jobs success on dev; the new scaffold step "CI workflow helpers" and the ring job PASS in the log; read 2026-10-30)
 smoke_artifact: _docs/loops/loop83/smoke83.md
 assessment_artifact: _docs/loops/loop83/assessment83.md
 loop_end_merge: main

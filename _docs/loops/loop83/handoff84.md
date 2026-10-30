@@ -11,7 +11,7 @@ AZ-3387 to AZ-3389 (9 points, In Testing):
 
 ## First actions of loop 84
 
-0. Read the CI of the loop 83 push (`dev` and `main`), see `record83.md` `ci:`. Put its result in the first commit of loop 84; do not push a record-only commit.
+0. CI of the loop 83 push is already read and green (`record83.md`, `ci:`): `dev` run 41016926661 and `main` run 41016928653 success, 20 of 20 jobs, the new "CI workflow helpers" step PASS. The record and handoff edits that say so are uncommitted; put them into the first commit of loop 84 (do not push a record-only commit). CI of the loop 84 push is the next one to read.
 1. `uptime`, `df -h /tmp` (the publish gate needs free space; delete any scratchpad tree copies first) and `ps -Ao pcpu,command --sort=-pcpu | head`. A total run is not a result above load 60 from a foreign job.
 2. The JDK is a user-directory tarball (`~/.local/share/packbin-jdk26/bin`), not on PATH by default: the ring stage needs it on PATH.
 
@@ -34,5 +34,5 @@ AZ-3387 to AZ-3389 (9 points, In Testing):
 
 - **L83-1**: the new rows prove the order in 6 of 8 languages; Rust and C++ print `BadValue` by construction (said in `fixtures/frame/README.md`).
 - **L83-2**: `workflow_yaml.test.sh` runs in CI only through its `scaffold` step, which no wiring check requires yet.
-- **L83-3**: the first CI run of the `CI workflow helpers` step is the push of this loop.
+- **L83-3** (closed): the first CI run of the "CI workflow helpers" step passed.
 - **L82-2, L82-3, L81-2, L80-1, L80-2, L78-2, L79-1, L79-2, L76-1, L75-1, L74-2, L73-1, L72-1, L71-1, L71-2** (unchanged): see `handoff83.md`, `handoff82.md`, `handoff81.md`, `handoff80.md`, `handoff76.md` and `handoff75.md`.
