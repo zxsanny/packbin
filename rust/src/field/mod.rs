@@ -265,7 +265,7 @@ pub fn be(mut field: Field) -> Field {
             *big_endian = true;
         }
         FieldKind::FlagBit { inner, .. } => {
-            *inner = Box::new(be((**inner).clone()));
+            **inner = be((**inner).clone());
         }
         _ => {}
     }

@@ -6,11 +6,14 @@ use crate::field::{
 };
 use crate::value::Value;
 
+pub(super) type Getter<T> = Box<dyn Fn(&T) -> Option<Value>>;
+pub(super) type Setter<T> = Box<dyn Fn(&mut T, &Value)>;
+
 pub struct BoundField<T> {
     pub(super) id: Option<u32>,
     pub(super) field: Field,
-    pub(super) get: Box<dyn Fn(&T) -> Option<Value>>,
-    pub(super) set: Box<dyn Fn(&mut T, &Value)>,
+    pub(super) get: Getter<T>,
+    pub(super) set: Setter<T>,
     pub(super) element_ids: Option<(u32, u32)>,
 }
 

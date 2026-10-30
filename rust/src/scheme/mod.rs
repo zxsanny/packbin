@@ -3,6 +3,7 @@ mod bound_collections;
 mod times;
 
 pub use bound::BoundField;
+use bound::{Getter, Setter};
 use times::TimesItem;
 
 use crate::ecc;
@@ -10,14 +11,14 @@ use crate::field::{
     check_order, field_name, flags as layout_flags, nested_element, rename_container, take_id,
     times as layout_times, when as layout_when, Eq, Field, MapScheme,
 };
-use crate::value::{Name, PackError, ShortPacket, UnpackError, Value, Values};
+use crate::value::{Name, PackError, ShortPacket, UnpackError, Values};
 use crate::walk;
 use std::marker::PhantomData;
 
 struct Binder<T> {
     name: Name,
-    get: Box<dyn Fn(&T) -> Option<Value>>,
-    set: Box<dyn Fn(&mut T, &Value)>,
+    get: Getter<T>,
+    set: Setter<T>,
 }
 
 pub struct Scheme<T> {
@@ -142,7 +143,7 @@ fn compile_items<T: 'static>(
                     }
                 }
                 let name = field_name(&bound.field)
-                    .map(|s| crate::value::name_of(s))
+                    .map(crate::value::name_of)
                     .expect("bound field needs a name");
                 fields.push(bound.field);
                 binders.push(Binder {

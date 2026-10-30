@@ -15,7 +15,8 @@ pub(crate) use encode::encode_field;
 pub(crate) use raw::forget_raw;
 pub(crate) use stream::compare_payloads;
 
-#[allow(dead_code)]
+// Loaded again here on purpose: the std and no_std text coders share one table file, so they cannot drift.
+#[allow(dead_code, clippy::duplicate_mod)]
 #[path = "../../walk/text_tables.rs"]
 mod tbl;
 

@@ -234,7 +234,7 @@ pub(crate) fn encode(text: &str) -> Option<Vec<u8>> {
     let total = f[0][start * 2] as usize;
     let size = (6 + total).div_ceil(8);
     let mut out = Vec::with_capacity(3 + size.min(raw.len() + 1));
-    if size >= raw.len() + 1 {
+    if size > raw.len() {
         varint(&mut out, raw.len() + 1);
         out.push(RAW_PREFIX);
         out.extend_from_slice(raw);
@@ -267,13 +267,13 @@ fn write_parse(t: &Tables, f: &[[u32; 8]], chars: &[char], start: usize, w: &mut
         // Candidate: (first symbol, state after, consumes a character, edge).
         let mut pick: Option<(u8, usize, Option<Edge>)> = None;
         for &(sym, bits, target) in &t.controls[s][..t.control_count[s]] {
-            if bits as u32 + f[i][target as usize] == want && pick.map_or(true, |p| sym < p.0) {
+            if bits as u32 + f[i][target as usize] == want && pick.is_none_or(|p| sym < p.0) {
                 pick = Some((sym, target as usize, None));
             }
         }
         let n = edges(t, m, k, chars[i], &mut es);
         for e in &es[..n] {
-            if e.bits + f[i + 1][s] == want && pick.map_or(true, |p| e.first < p.0) {
+            if e.bits + f[i + 1][s] == want && pick.is_none_or(|p| e.first < p.0) {
                 pick = Some((e.first, s, Some(*e)));
             }
         }

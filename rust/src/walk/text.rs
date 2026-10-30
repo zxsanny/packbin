@@ -154,18 +154,18 @@ fn build() -> Tables {
     }
     let mut controls = [[(0, 0, 0); 4]; 8];
     let mut control_count = [0; 8];
-    for m in 0..4 {
+    for (m, mode) in modes.iter().enumerate() {
         for k in 0..2 {
             let s = m * 2 + k;
             for t in (0..4).filter(|&t| t != m) {
                 let sym = sw_symbol(m, t);
-                controls[s][control_count[s]] = (sym as u8, modes[m].len[sym], (t * 2 + k) as u8);
+                controls[s][control_count[s]] = (sym as u8, mode.len[sym], (t * 2 + k) as u8);
                 control_count[s] += 1;
             }
             if m != NUM {
                 let sym = lock_symbol(m);
                 controls[s][control_count[s]] =
-                    (sym as u8, modes[m].len[sym], (m * 2 + 1 - k) as u8);
+                    (sym as u8, mode.len[sym], (m * 2 + 1 - k) as u8);
                 control_count[s] += 1;
             }
         }
