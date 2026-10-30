@@ -6,7 +6,7 @@ From the loop 87 record (`record87.md`). Nothing here is owner-decided unless it
 
 AZ-3430 (2 points, In Testing): `cargo clippy --lib --tests` is at 0 warnings with `--features text,ecc,frame`, default features and `--no-default-features` (HEAD had 6 distinct sites in test code). Six files under `rust/`; 876 Rust tests unchanged. No CI clippy job was added (owner chose cleanup only).
 
-## First actions of loop 87
+## First actions of loop 88
 
 0. Read the CI of the loop 87 close push (`dev` and `main` runs); the record is `record87.md`, put any CI fix into the next commit.
 1. `uptime`, `df -h /tmp` and `ps -Ao pcpu,command --sort=-pcpu | head`.
@@ -18,7 +18,7 @@ AZ-3430 (2 points, In Testing): `cargo clippy --lib --tests` is at 0 warnings wi
 
 - Unchanged: CS-D5; the first `v*` and `go/v*` tags and F44; close the epic AZ-2750; U24 in the C++ package; whether to drop the M4F row; the release notes of the next 0.x; meshbell renames its Rust `Session` to `FrameSession`; whether the vcpkg port drops `supports: linux | osx` and claims Windows; a public-key pairing step.
 - Multi-part MAC rows in the ring (G8m of loop 77) were owner-declined then; they need an opt-in like U1 had.
-- The hopper is empty after four hygiene loops: loop 87 needs an owner decision from the list above or a new feature (retro of loop 84, action 3).
+- The hopper is empty after four hygiene loops: loop 88 needs an owner decision from the list above or a new feature (retro of loop 84, action 3).
 
 ## Candidates (not specs yet; probe each on HEAD first, LESSONS loop 76 and loop 84)
 
