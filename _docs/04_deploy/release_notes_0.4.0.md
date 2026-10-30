@@ -51,5 +51,21 @@ Details: `_docs/04_deploy/packages.md`.
 
 - **The version comes from the tag.** The manifests carry a placeholder (`rust/Cargo.toml` says `0.1.0`); the `v*` tag push publishes the registries and pushes `go/v0.4.0` (ADR-002, ADR-004).
 - **CS-D5 is decided: the tables stay (owner, 2026-10-30).** The compact text tables are frozen as part of the format and ship as trained on Tatoeba sentences. The owner gathers statistics from real usage first; retraining them afterwards is another wire break for every string field.
-- **F44.** The repository has no tag ruleset on `v*` (the rulesets API returns none on 2026-10-30), so a moved tag is not guarded outside the publish workflow.
+- **F44, steps for the owner (repository admin).** The repository has no tag ruleset on `v*` (the rulesets API returns none on 2026-10-30), so a moved or deleted tag is not guarded outside the publish workflow. Apply it before the `v0.4.0` tag. The agent applies nothing, and the command below was not run by the agent.
+  1. In the GitHub UI: Settings, Rules, Rulesets, New tag ruleset. Name `protect-release-tags`, enforcement Active, target `refs/tags/v*`, rules Restrict updates, Restrict deletions and Block force pushes. Leave Restrict creations off (you push the tag) and add no bypass actor. Or run, with a `gh` logged in as admin:
+
+     ```bash
+     gh api -X POST repos/zxsanny/packbin/rulesets --input - <<'EOF'
+     {
+       "name": "protect-release-tags",
+       "target": "tag",
+       "enforcement": "active",
+       "conditions": {"ref_name": {"include": ["refs/tags/v*"], "exclude": []}},
+       "rules": [{"type": "update"}, {"type": "deletion"}, {"type": "non_fast_forward"}]
+     }
+     EOF
+     ```
+
+  2. Check it: `curl -s https://api.github.com/repos/zxsanny/packbin/rulesets` (the repository is public) lists `protect-release-tags` as active. Do not test the block by pushing a throwaway `v*` tag: any `v*` push starts the publish run. The listing, with the three rules, is the check.
+  3. Cautions. The ruleset covers the four existing `v*` tags too (`v0.1.9`, `v0.2.1`, `v0.2.2`, `v0.3.0`). With no bypass actor a mistaken tag cannot be deleted until you disable the ruleset in Settings. `go/v0.4.0` is outside `refs/tags/v*`: the publish workflow creates it with its own token (`publish-go.sh`), and no workflow script creates, moves or deletes a `v*` tag, so the publish run is not blocked. Protecting `go/v*` as well would need the Actions app as a bypass actor on a creation rule: not recommended.
 - **Check before pasting.** The claims were read from the README, the ADRs and the loop records, not from a fresh run of every suite. Read the CI of the commit you tag.
