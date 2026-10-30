@@ -502,3 +502,5 @@ Loop 74 (2026-10-26, ADR-009: remove the stream session; D1 frame names; D2 cryp
 | AZ-3391 | split_all_kinds_cpp (loop 84) | 3 | None | none |
 | AZ-3392 | loop83_review_cleanups (loop 84) | 2 | None | none |
 | AZ-3393 | python_version_one_place (loop 84) | 3 | AZ-3390 | none |
+| AZ-3412 | ring_wiring_job_level_python (loop 85) | 1 | None | none |
+| AZ-3413 | ring_frame_shown_validation (loop 85) | 1 | None | none |

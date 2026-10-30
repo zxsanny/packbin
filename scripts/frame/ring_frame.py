@@ -35,7 +35,14 @@ class FileError(Exception):
 
 # The range of each number field of a row and of a driver line: decimal digits only, 0 to the top (AZ-3356).
 RANGES = {"epoch": 0xFFFFFFFF, "dir": 255, "tag_len": 255, "kind": 255, "n": 255, "clear_len": 0xFFFF, "out_len": 0xFFFF}
-SHOWN = int(os.environ.get("RING_FRAME_SHOWN", "5"))
+SHOWN = 5
+
+
+def shown_from_env() -> int:
+    text = os.environ.get("RING_FRAME_SHOWN", "5")
+    if not (text.isascii() and text.isdigit() and 1 <= int(text) <= 1000000):
+        raise ValueError("ring-frame: RING_FRAME_SHOWN is '%s', it must be a whole number from 1 to 1000000" % text)
+    return int(text)
 
 
 def number(w, i, field, where):
@@ -424,6 +431,12 @@ def cmd_check(dirname, writers, readers):
 
 
 def main(argv):
+    global SHOWN
+    try:
+        SHOWN = shown_from_env()
+    except ValueError as x:
+        print(x)
+        return 2
     try:
         if argv[:1] == ["seal-in"] and len(argv) == 2:
             cmd_seal_in(argv[1])

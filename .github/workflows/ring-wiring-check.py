@@ -61,11 +61,14 @@ def trigger_errors(on) -> list:
     return errors
 
 
-def python_errors(name, steps) -> list:
-    return [f"the setup-python step of job {name} does not take python-version from RING_PYTHON"
-            for step in steps
-            if to_s(step.get("uses")).startswith("actions/setup-python@")
-            and to_s(dig(step, "with", "python-version")) != "${{ env.RING_PYTHON }}"]
+def python_errors(name, job, steps) -> list:
+    errors = [f"the setup-python step of job {name} does not take python-version from RING_PYTHON"
+              for step in steps
+              if to_s(step.get("uses")).startswith("actions/setup-python@")
+              and to_s(dig(step, "with", "python-version")) != "${{ env.RING_PYTHON }}"]
+    if isinstance(job.get("env"), dict) and "RING_PYTHON" in job["env"]:
+        errors.append(f"job {name} sets RING_PYTHON in its env, the version lives in the workflow env")
+    return errors
 
 
 def go_errors(name, steps) -> list:
@@ -174,7 +177,7 @@ def violations(workflow, compose) -> list:
     for name, ring_steps in callers.items():
         errors += ring_job_errors(name, jobs, ring_steps, compose, workflow_env)
     for name, job in jobs.items():
-        errors += python_errors(name, steps_of(job))
+        errors += python_errors(name, job, steps_of(job))
     return errors + scaffold_errors(jobs)
 
 

@@ -183,6 +183,7 @@ run one-language 0 "ring-frame: 1 pairs" RING_FRAME_LANGS=python
 # driver did) are caught by the key and msg_id rows (AZ-3378).
 # RING_FRAME_SHOWN lifts the cap of 5 mismatch lines: the needle stays in the output however many rows sort ahead of it.
 run id-padded 1 "go: R.open.id7 open gave TagMismatch" FAKE_LIE=go:id-padded RING_FRAME_SHOWN=1000
+run shown-not-a-number 2 "RING_FRAME_SHOWN is 'abc', it must be a whole number from 1 to 1000000" RING_FRAME_SHOWN=abc
 run key-aborts 1 "rust frame-batch (seal) failed" FAKE_LIE=rust:key-aborts
 # An empty key or msg_id is written as "-": every seal and mac line the loader writes keeps its field count (AZ-3378).
 mkdir "$tmp/lines"
