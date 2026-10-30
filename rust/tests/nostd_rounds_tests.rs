@@ -138,7 +138,7 @@ fn ac4_random_bytes_are_accepted_or_refused_alike() {
             let mut wire = vec![0x21];
             wire.extend((0..len).map(|_| {
                 let r = rng.next();
-                if r % 3 == 0 {
+                if r.is_multiple_of(3) {
                     (r >> 8) as u8 & 3
                 } else {
                     (r >> 8) as u8

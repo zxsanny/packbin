@@ -153,9 +153,7 @@ fn ac1_a_limit_case_stops_at_the_round_it_would_start() {
     let scheme = scheme_of(&fields, &case.id);
     let mut row = Slots::default();
     // Act
-    let fault = unpack(&scheme, &from_hex(&case.hex), &mut row)
-        .err()
-        .expect("refused");
+    let fault = unpack(&scheme, &from_hex(&case.hex), &mut row).expect_err("refused");
     // Assert
     assert!(matches!(term(fault.error), "too_many" | "bad_value"));
     assert_eq!(fault.needed, 3, "the limit is named, not a short read");

@@ -240,7 +240,9 @@ fn user(name: &str, roles: &[&str], access: &[(&str, &[&str])]) -> User {
     }
 }
 
-fn nested(access: &[(&str, &[&[(&str, &str)]])]) -> Nested {
+type Rows<'a> = &'a [&'a [(&'a str, &'a str)]];
+
+fn nested(access: &[(&str, Rows)]) -> Nested {
     let rows = |rows: &[&[(&str, &str)]]| {
         rows.iter()
             .map(|r| {
