@@ -12,7 +12,7 @@
 #
 # Environment: RING_FRAME_RUN (a command that runs a driver in place of run_lang: `$RING_FRAME_RUN <lang> <args>`; the
 # self-test of this script), PACKBIN_RING_WORK (the driver builds language-pair.sh kept), RING_FRAME_LANGS (the
-# languages, default all eight), RING_FRAME_CASES (another cases file). The rest is language-pair.sh's:
+# languages, default all eight), RING_FRAME_CASES (another cases file), RING_FRAME_SHOWN (mismatch lines shown per pair or reader, default 5). The rest is language-pair.sh's:
 # PACKBIN_CXX_SYSROOT, CXX, PACKBIN_SWIFT_RING, RING_GO.
 set -euo pipefail
 

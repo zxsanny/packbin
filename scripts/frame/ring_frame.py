@@ -17,8 +17,8 @@ refuse-open row to every reader with the open rows; each must give the error nam
 directions the session loaded, `out_len` is the caller's output buffer). The environment variable RING_FRAME_CASES
 names another file (the self-test of the ring). A row that the reference codec does not confirm is an error of the file, not of a
 package: the script stops before any driver result is read. So is a number outside the range every driver reads
-(RANGES, fixtures/frame/README.md). `check` prints at most SHOWN mismatch lines for a pair or a reader, then
-`... and N more`.
+(RANGES, fixtures/frame/README.md). `check` prints at most SHOWN mismatch lines (5, or the number in the environment
+variable RING_FRAME_SHOWN) for a pair or a reader, then `... and N more`.
 """
 import os
 import sys
@@ -35,7 +35,7 @@ class FileError(Exception):
 
 # The range of each number field of a row and of a driver line: decimal digits only, 0 to the top (AZ-3356).
 RANGES = {"epoch": 0xFFFFFFFF, "dir": 255, "tag_len": 255, "kind": 255, "n": 255, "clear_len": 0xFFFF, "out_len": 0xFFFF}
-SHOWN = 5
+SHOWN = int(os.environ.get("RING_FRAME_SHOWN", "5"))
 
 
 def number(w, i, field, where):

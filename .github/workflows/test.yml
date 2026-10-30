@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # The version of the python suite image (docker-compose.test.yml); the setup-python steps of every job and ring-toolchains.sh read it.
+  RING_PYTHON: "3.14"
+
 jobs:
   ring:
     runs-on: ubuntu-latest
@@ -20,7 +24,6 @@ jobs:
       # them and ring-toolchains.sh checks them before the ring runs.
       RING_DOTNET: "10.0"
       RING_NODE: "24"
-      RING_PYTHON: "3.14"
       RING_RUST: "1.98"
       RING_GCC: "16"
       RING_JDK: "26"
@@ -248,7 +251,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.14"
+          python-version: ${{ env.RING_PYTHON }}
       - name: PyYAML
         run: 'python3 -m pip install --quiet --only-binary=:all: "pyyaml==$(bash .github/workflows/tool-pin.sh pyyaml)"'
       - name: pull images
@@ -333,7 +336,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.14"
+          python-version: ${{ env.RING_PYTHON }}
       - name: PyYAML
         run: 'python3 -m pip install --quiet --only-binary=:all: "pyyaml==$(bash .github/workflows/tool-pin.sh pyyaml)"'
       - name: required files and golden row

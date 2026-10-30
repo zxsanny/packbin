@@ -43,6 +43,7 @@ arm_firmware_objects() {
     arm_cxx "$dir" "$cpp/$src" "core-$(basename "${src%.cpp}").o" "$@" -fstack-usage
   done
   arm_cxx "$dir" "$here/common/all_kinds.cpp" all_kinds.o "$@"
+  arm_cxx "$dir" "$here/common/all_kinds_rounds.cpp" all_kinds_rounds.o "$@"
   arm_cxx "$dir" "$here/arm/ac2_main.cpp" ac2_main.o "$@"
   arm_cc "$dir" "$here/arm/startup.c" startup.o "$@"
   arm_cc "$dir" "$here/arm/wrap.c" wrap.o "$@"
@@ -84,8 +85,8 @@ arm_link_ac2() {
   local dir="$1"
   shift
   arm_link "$dir" ac2.elf "$@" "${arm_link_common[@]}" --specs=nano.specs --specs=nosys.specs \
-    "${heap_wraps[@]}" "$dir"/core-*.o "$dir/all_kinds.o" "$dir/ac2_main.o" "$dir/startup.o" \
-    "$dir/wrap.o"
+    "${heap_wraps[@]}" "$dir"/core-*.o "$dir/all_kinds.o" "$dir/all_kinds_rounds.o" \
+    "$dir/ac2_main.o" "$dir/startup.o" "$dir/wrap.o"
 }
 
 # AC-2 / AC-6 link-time checks on one image: exception, heap and OS random references.
@@ -169,7 +170,7 @@ target_m3() {
   arm_link_ac2 "$dir" "${arch[@]}"
   image_checks "$dir" ac2
   arm_link "$dir" vectors.elf "${arch[@]}" "${arm_link_common[@]}" --specs=nano.specs \
-    --specs=rdimon.specs "$dir"/core-*.o "$dir/all_kinds.o" "${objs[@]}" \
+    --specs=rdimon.specs "$dir"/core-*.o "$dir/all_kinds.o" "$dir/all_kinds_rounds.o" "${objs[@]}" \
     "$dir/vectors_main.o" "$dir/startup.o"
   image_checks "$dir" vectors
 
@@ -276,7 +277,7 @@ target_m33f() {
   arm_link_ac2 "$dir" "${arch[@]}"
   image_checks "$dir" ac2
   arm_link "$dir" vectors.elf "${arch[@]}" "${arm_link_common[@]}" --specs=nano.specs \
-    --specs=rdimon.specs "$dir"/core-*.o "$dir/all_kinds.o" "${objs[@]}" \
+    --specs=rdimon.specs "$dir"/core-*.o "$dir/all_kinds.o" "$dir/all_kinds_rounds.o" "${objs[@]}" \
     "$dir/vectors_main.o" "$dir/startup.o"
   image_checks "$dir" vectors
   arm_link "$dir" baseline.elf "${arch[@]}" "${arm_link_common[@]}" --specs=nano.specs \
@@ -347,7 +348,7 @@ target_s390x() {
   listed="$(vector_tests)"
   read -r -a tests <<< "$listed"
   srcs=("${core_srcs[@]/#/$cpp/}" "${tests[@]/#/$cpp/}" "$here/common/all_kinds.cpp"
-    "$here/common/vectors_main.cpp")
+    "$here/common/all_kinds_rounds.cpp" "$here/common/vectors_main.cpp")
   local status=0
   s390x-linux-gnu-g++ "${core_flags[@]}" -static -I"$cpp/include" -I"$cpp/tests/core" \
     -I"$here/common" -o "$dir/vectors" "${srcs[@]}" 2>&1 | tee "$dir/compile.log" || status=$?

@@ -21,12 +21,14 @@ TOOLCHAINS = re.compile(r"(?:bash )?(?:\./)?\.github/workflows/ring-toolchains\.
 SHELL_OPTIONS = re.compile(r"set -[euo]+( pipefail)?", FLAGS)
 WRAPPER = re.compile(r"/\.github/workflows/ring-cxx\.sh\Z", FLAGS)
 GO_BUILD = re.compile(r"bash \.github/workflows/ring-(?:go\.sh|prepare\.sh build) \S+", FLAGS)
-# The job env versions and the suite images they copy (docker-compose.test.yml service => RING_ variable).
+# The workflow and job env versions and the suite images they copy (docker-compose.test.yml service => RING_ variable).
 SUITES = {"RING_DOTNET": "csharp", "RING_NODE": "typescript", "RING_PYTHON": "python",
           "RING_RUST": "rust", "RING_GCC": "cpp", "RING_JDK": "java", "RING_GO": "go"}
 SCAFFOLD_SCRIPTS = {"cpp/embedded/lib.test.sh": "the embedded harness self-test",
                     ".github/workflows/ring-wiring.test.sh": "the ring wiring check",
-                    ".github/workflows/ring-wiring-rows.test.sh": "the ring row wiring check"}
+                    ".github/workflows/ring-wiring-rows.test.sh": "the ring row wiring check",
+                    "scripts/ci/yaml_get.test.sh": "the CI YAML reader self-test",
+                    "scripts/ci/workflow_yaml.test.sh": "the CI workflow helpers self-test"}
 
 
 def as_list(value) -> list:
@@ -59,6 +61,13 @@ def trigger_errors(on) -> list:
     return errors
 
 
+def python_errors(name, steps) -> list:
+    return [f"the setup-python step of job {name} does not take python-version from RING_PYTHON"
+            for step in steps
+            if to_s(step.get("uses")).startswith("actions/setup-python@")
+            and to_s(dig(step, "with", "python-version")) != "${{ env.RING_PYTHON }}"]
+
+
 def go_errors(name, steps) -> list:
     errors = []
     # Go: setup-go pinned to a commit SHA at RING_GO; the driver built by ring-go.sh or ring-prepare.sh build (calls it).
@@ -75,12 +84,12 @@ def go_errors(name, steps) -> list:
     return errors
 
 
-def suite_errors(name, job, steps, compose) -> list:
+def suite_errors(name, job, steps, compose, workflow_env) -> list:
     errors = []
     services = compose.get("services") if isinstance(compose, dict) else None
     services = services if isinstance(services, dict) else {}
     used = "\n".join(str([s.get("with"), s.get("run")]) for s in steps)
-    job_env = job.get("env") if isinstance(job.get("env"), dict) else {}
+    job_env = {**workflow_env, **(job.get("env") if isinstance(job.get("env"), dict) else {})}
     for key, service in SUITES.items():
         image = to_s(dig(services, service, "image"))
         parts = image.split(":", 1)
@@ -93,7 +102,7 @@ def suite_errors(name, job, steps, compose) -> list:
     return errors
 
 
-def ring_job_errors(name, jobs, ring_steps, compose) -> list:
+def ring_job_errors(name, jobs, ring_steps, compose, workflow_env) -> list:
     errors = []
     job = jobs[name]
     steps = steps_of(job)
@@ -125,7 +134,7 @@ def ring_job_errors(name, jobs, ring_steps, compose) -> list:
                 env.update(part)
         if not WRAPPER.search(to_s(env.get("CXX"))):
             errors.append(f"step '{label}' of job {name} does not compile through ring-cxx.sh (CXX is '{to_s(env.get('CXX'))}')")
-    return errors + go_errors(name, steps) + suite_errors(name, job, steps, compose)
+    return errors + go_errors(name, steps) + suite_errors(name, job, steps, compose, workflow_env)
 
 
 def scaffold_errors(jobs) -> list:
@@ -161,8 +170,11 @@ def violations(workflow, compose) -> list:
                         errors.append(f"job {name} runs language-pair.sh in a form that can hide its failure: {line}")
     if not callers:
         errors.append("test.yml has no job that runs .github/workflows/language-pair.sh")
+    workflow_env = workflow.get("env") if isinstance(workflow.get("env"), dict) else {}
     for name, ring_steps in callers.items():
-        errors += ring_job_errors(name, jobs, ring_steps, compose)
+        errors += ring_job_errors(name, jobs, ring_steps, compose, workflow_env)
+    for name, job in jobs.items():
+        errors += python_errors(name, steps_of(job))
     return errors + scaffold_errors(jobs)
 
 

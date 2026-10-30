@@ -13,7 +13,7 @@ CORE_SRCS := src/core/values.cpp src/core/pack.cpp src/core/unpack.cpp src/core/
 # VECTOR_TESTS are shared with the firmware runner; HOST_TESTS need an operating system.
 VECTOR_TESTS := tests/core/scalar_tests.cpp tests/core/scheme_tests.cpp tests/core/grouped_tests.cpp tests/core/counted_tests.cpp tests/core/container_tests.cpp tests/core/crypto_tests.cpp tests/core/ecc_api_tests.cpp tests/core/frame_tests.cpp
 HOST_TESTS := tests/core/main.cpp tests/core/host_tests.cpp tests/core/hostile_host_tests.cpp tests/core/hostile_rule_check_host_tests.cpp tests/core/flag_scope_host_tests.cpp tests/core/source_kinds_host_tests.cpp tests/core/flags_when_member_host_tests.cpp tests/core/flags_times_repeat_member_host_tests.cpp tests/core/split_form_loud_host_tests.cpp tests/core/times_count_zero_host_tests.cpp tests/core/eq_value_checked_host_tests.cpp tests/core/late_source_host_tests.cpp tests/core/held_count_nested_late_host_tests.cpp tests/core/when_skipped_source_host_tests.cpp tests/core/empty_body_rule_host_tests.cpp tests/core/packed_bias_novalue_host_tests.cpp tests/core/novalue_nested_host_tests.cpp tests/core/builder_id_range_host_tests.cpp tests/core/loop25_probe_d1_d7_host_tests.cpp tests/core/text_vectors_host_tests.cpp tests/core/text_codec_host_tests.cpp tests/core/text_api_host_tests.cpp tests/core/ecc_vectors_host_tests.cpp tests/core/ecc_repair_host_tests.cpp tests/core/ecc_api_host_tests.cpp tests/core/crypto_vectors_host_tests.cpp tests/core/dict_order_host_tests.cpp tests/core/text_repeat_host_tests.cpp tests/core/when_chain_host_tests.cpp tests/core/when_flag_bit_host_tests.cpp tests/core/when_group_source_host_tests.cpp tests/core/frame_vectors_host_tests.cpp tests/core/frame_api_host_tests.cpp tests/core/frame_readme_host_tests.cpp tests/core/frame_tag_compare_host_tests.cpp
-IMAGE_SRCS := embedded/common/all_kinds.cpp embedded/common/all_kinds.hpp
+IMAGE_SRCS := embedded/common/all_kinds.cpp embedded/common/all_kinds_rounds.cpp embedded/common/all_kinds.hpp embedded/common/all_kinds_internal.hpp
 TEST_BIN := build/packbin_tests
 EXPECT_FAIL := ./tests/compile-fail/expect-fail.sh "$(CXX) $(CXXFLAGS) $(CORE_FLAGS) -fsyntax-only"
 EXPECT_FAIL_NO_TEXT := ./tests/compile-fail/expect-fail.sh "$(CXX) $(CXXFLAGS) $(CORE_FLAGS) -DPACKBIN_NO_TEXT -fsyntax-only"
@@ -29,7 +29,7 @@ NO_ECC_BIN := build/packbin_no_ecc_tests
 
 $(TEST_BIN): $(HDRS) $(CORE_SRCS) $(VECTOR_TESTS) $(HOST_TESTS) tests/core/check.hpp tests/core/hostile_pack_cases.hpp tests/core/hostile_pack_loop21.hpp tests/core/hostile_rule_check.hpp tests/core/member_cases.hpp tests/core/ecc_support_host.hpp $(IMAGE_SRCS)
 	mkdir -p build
-	$(CXX) $(CXXFLAGS) $(CORE_FLAGS) -Iembedded/common -pthread -o $@ $(CORE_SRCS) $(VECTOR_TESTS) $(HOST_TESTS) embedded/common/all_kinds.cpp
+	$(CXX) $(CXXFLAGS) $(CORE_FLAGS) -Iembedded/common -pthread -o $@ $(CORE_SRCS) $(VECTOR_TESTS) $(HOST_TESTS) embedded/common/all_kinds.cpp embedded/common/all_kinds_rounds.cpp
 
 # The core compiled alone, the way firmware builds it, for the allocation and read-only checks.
 OBJ_DIR := build/obj
