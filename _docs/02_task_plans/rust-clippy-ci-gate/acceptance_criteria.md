@@ -11,3 +11,7 @@
 
 - **AC-5** `cargo test` counts in the Rust suite are unchanged (as HEAD) and `.github/workflows/run-suite.test.sh` passes with a case for AC-2 and AC-3.
 - **AC-6** Library code (`rust/src`), fixtures and embedded images are unchanged, and no `allow(clippy::...)` is added anywhere.
+
+## Size
+
+- **AC-7** After the change no source or test file it touches is longer than 500 lines (`.github/workflows/run-suite.test.sh` is 470 lines on HEAD; `run-suite.sh` is 461).

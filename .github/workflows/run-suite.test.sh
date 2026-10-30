@@ -283,7 +283,7 @@ cp "$goroot/.github/workflows/report-row.sh" "$present/.github/workflows/"
 printf '#!/bin/sh\nexit 0\n' > "$present/java/test.sh"
 toolbin="$work/toolbin"
 mkdir -p "$toolbin"
-for tool in dotnet cargo make; do
+for tool in dotnet cargo make rustup; do
   printf '#!/bin/sh\necho "%s $*" >> "$GO_LOG"\ncase "$*" in *--list*) [ -n "${FAKE_NO_SPEED_TEST:-}" ] || echo "text_positions_tests::ac8_one_hundred_thousand_round_trips_of_a_20_character_ukrainian_string: test"; [ -n "${FAKE_NO_ECC_SPEED_TEST:-}" ] || printf "ecc_repair_tests::ec13_repairs_within_the_bound: test\\necc_repair_tests::ec13_packs_within_the_bound: test\\n" ;; esac\n[ -z "${FAKE_WARN_ON:-}" ] || [ "$*" != "$FAKE_WARN_ON" ] || echo "warning: unused import" >&2\n[ -z "${FAKE_FAIL_ON:-}" ] || [ "$*" != "$FAKE_FAIL_ON" ] || exit 101\nexit "${FAKE_TOOL_EXIT:-0}"\n' "$tool" > "$toolbin/$tool"
   chmod +x "$toolbin/$tool"
 done
@@ -330,19 +330,21 @@ grep -q 'cargo test --manifest-path .* --features frame --doc -- --nocapture' "$
   || bad "rust: the frame doc example does not run: $(cat "$work/go.log")"
 grep -q 'cargo test --manifest-path .* --all-features -- --nocapture' "$work/go.log" \
   || bad "rust: the all-features run is missing (AZ-3338 AC-6): $(cat "$work/go.log")"
-# the test builds of every target of the 9 feature sets, last, after the release runs (AZ-3357 AC-9)
+# the clippy component step, then the clippy runs over the lib and every test target of the 9 feature sets, last, after the
+# release runs (AZ-3357 AC-9, AZ-3443 AC-1)
 manifest="$present/rust/Cargo.toml"
-expected="cargo check --manifest-path $manifest --no-default-features --tests
-cargo check --manifest-path $manifest --no-default-features --features alloc --tests
-cargo check --manifest-path $manifest --no-default-features --features text --tests
-cargo check --manifest-path $manifest --no-default-features --features ecc --tests
-cargo check --manifest-path $manifest --no-default-features --features text,ecc --tests
-cargo check --manifest-path $manifest --no-default-features --features frame --tests
-cargo check --manifest-path $manifest --no-default-features --features text,ecc,frame --tests
-cargo check --manifest-path $manifest --tests
-cargo check --manifest-path $manifest --all-features --tests"
-[ "$(sed -n '15,23p' "$work/go.log")" = "$expected" ] || bad "rust: lines 15 to 23 are not the 9 test builds: $(cat "$work/go.log")"
-[ "$(grep -c '^cargo ' "$work/go.log")" -eq 23 ] || bad "rust: not the debug suite, the nine heap-free API runs, the all-features run, the release list, the two release runs and the 9 test builds: $(cat "$work/go.log")"
+expected="rustup component add clippy
+cargo clippy --manifest-path $manifest --no-default-features --lib --tests
+cargo clippy --manifest-path $manifest --no-default-features --features alloc --lib --tests
+cargo clippy --manifest-path $manifest --no-default-features --features text --lib --tests
+cargo clippy --manifest-path $manifest --no-default-features --features ecc --lib --tests
+cargo clippy --manifest-path $manifest --no-default-features --features text,ecc --lib --tests
+cargo clippy --manifest-path $manifest --no-default-features --features frame --lib --tests
+cargo clippy --manifest-path $manifest --no-default-features --features text,ecc,frame --lib --tests
+cargo clippy --manifest-path $manifest --lib --tests
+cargo clippy --manifest-path $manifest --all-features --lib --tests"
+[ "$(sed -n '15,24p' "$work/go.log")" = "$expected" ] || bad "rust: lines 15 to 24 are not the clippy component step and the 9 clippy runs: $(cat "$work/go.log")"
+[ "$(grep -c '^cargo ' "$work/go.log")" -eq 23 ] || bad "rust: not the debug suite, the nine heap-free API runs, the all-features run, the release list, the two release runs and the 9 clippy runs: $(cat "$work/go.log")"
 
 # R2. a rust tree without the string speed test fails by name, and the filter is not run (a filter that matches
 # nothing passes) (AZ-2665 AC-3)
@@ -365,7 +367,7 @@ if grep -q -- '--release --lib .* -- --nocapture' "$work/go.log"; then bad "rust
 # the output and the report row, and no later set is built (AZ-3357 AC-9)
 for row in "warn frame printed a warning" "fail alloc failed"; do
   read -r kind set outcome <<< "$row"
-  args="check --manifest-path $manifest --no-default-features --features $set --tests"
+  args="clippy --manifest-path $manifest --no-default-features --features $set --lib --tests"
   rm -f "$work/bare.rows"; : > "$work/go.log"
   # Act
   if [ "$kind" = warn ]; then fake=(FAKE_WARN_ON="$args"); else fake=(FAKE_FAIL_ON="$args"); fi
@@ -438,7 +440,7 @@ if grep -qF 'pct%2Ctree' "$work/notice.out"; then bad "go: a raw % of a label is
 notice_run csharp "$bare" GITHUB_ACTIONS=true
 notice_is "csharp suite timing" csharp 0
 notice_run rust "$present" GITHUB_ACTIONS=true
-notice_is "rust suite timing" rust 21
+notice_is "rust suite timing" rust 22
 
 # N5. GITHUB_ACTIONS unset (the Mac), empty or anything but true: no notice, and the plain step lines as before
 for value in unset "" false; do
@@ -461,6 +463,10 @@ print(" ".join(s for s in "csharp typescript python rust cpp java go swift".spli
   "$here/../../scripts/ci" "${RUN_SUITE_COMPOSE:-$repo/docker-compose.test.yml}" </dev/null)" || bad "docker-compose.test.yml: the suite services could not be read"
 # Assert
 [ -z "$compose_ga" ] || bad "docker-compose.test.yml: the suite services '$compose_ga' do not pass GITHUB_ACTIONS through as a bare key"
+
+# --- the clippy component (AZ-3443): in its own file, so neither file passes 500 lines ---
+# shellcheck source=run-suite-rust-clippy.test.sh
+. "$here/run-suite-rust-clippy.test.sh"
 
 # --- swift (AZ-2521): in its own file, so neither file passes 500 lines ---
 # shellcheck source=run-suite-swift.test.sh

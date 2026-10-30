@@ -160,12 +160,22 @@ rust_speed() {
   cargo test --manifest-path "$manifest" --release --lib ec13_ -- --nocapture
 }
 
-# Every test target of one feature set ($1: none, default, all or a feature list) compiles, and prints no warning
-# (AZ-3357). The test runs name most no-std targets one by one (`--test <name>`), so a test file without its feature
-# gate built in no run (loop 76: 22 files). `cargo check --tests` gives the same compile errors and lints as
-# `cargo test --no-run` without code generation: the 7 no-std sets cost about 64 s more cold on 4 CPUs with `--no-run`
-# (loop 79), on the job that sets the CI wall. Cargo replays the warnings of a cached check; stdout and stderr are read
-# together.
+# The suite image (rust:1.98) has no clippy; the component is added before the first use, and a failure to get it fails
+# the suite by name, so a missing clippy is never a pass (AZ-3443 AC-3).
+rust_clippy_component() {
+  if ! rustup component add clippy; then
+    failure="rust clippy component could not be installed"
+    printf 'run-suite: %s\n' "$failure" >&2
+    return 1
+  fi
+}
+
+# The lib and every test target of one feature set ($1: none, default, all or a feature list) compile, and print no
+# rustc or clippy warning (AZ-3357, AZ-3443). The test runs name most no-std targets one by one (`--test <name>`), so a
+# test file without its feature gate built in no run (loop 76: 22 files). `cargo clippy --lib --tests` gives the same
+# compile errors as `cargo test --no-run` without code generation (the 7 no-std sets cost about 64 s more cold on 4 CPUs
+# with `--no-run`, loop 79, on the job that sets the CI wall), plus the clippy lints, in one pass per set. Cargo replays
+# the warnings of a cached check; stdout and stderr are read together. The messages keep the AZ-3357 wording.
 rust_test_build() {
   local set="$1" out
   local -a features
@@ -175,7 +185,7 @@ rust_test_build() {
     none) features=(--no-default-features) ;;
     *) features=(--no-default-features --features "$set") ;;
   esac
-  if ! out="$(cargo check --manifest-path "$root/rust/Cargo.toml" ${features[@]+"${features[@]}"} --tests 2>&1)"; then
+  if ! out="$(cargo clippy --manifest-path "$root/rust/Cargo.toml" ${features[@]+"${features[@]}"} --lib --tests 2>&1)"; then
     printf '%s\n' "$out"
     failure="rust test build of feature set $set failed"
     printf 'run-suite: %s\n' "$failure" >&2
@@ -342,8 +352,9 @@ case "$lang" in
       # all features together (AZ-3338 AC-6)
       run cargo test --manifest-path "$root/rust/Cargo.toml" --all-features -- --nocapture
       run rust_speed
-      # every test target of the 7 no-std sets, the default set and all features builds without a warning (AZ-3357);
-      # last, so a warning does not hide a test result
+      # the lib and every test target of the 7 no-std sets, the default set and all features build without a rustc or
+      # clippy warning (AZ-3357, AZ-3443); last, so a warning does not hide a test result
+      run rust_clippy_component
       for rust_set in none alloc text ecc text,ecc frame text,ecc,frame default all; do
         run rust_test_build "$rust_set"
       done

@@ -505,3 +505,4 @@ Loop 74 (2026-10-26, ADR-009: remove the stream session; D1 frame names; D2 cryp
 | AZ-3412 | ring_wiring_job_level_python (loop 85) | 1 | None | none |
 | AZ-3413 | ring_frame_shown_validation (loop 85) | 1 | None | none |
 | AZ-3430 | rust_test_targets_clippy_clean (loop 87) | 2 | None | none |
+| AZ-3443 | rust_clippy_ci_gate (loop 89) | 3 | None | none |
