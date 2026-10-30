@@ -8,7 +8,7 @@ AZ-3443 (In Testing): the Rust suite adds the clippy component and runs `cargo c
 
 ## First actions of loop 90
 
-0. Read the CI of the loop 89 close push (`dev` and `main`) and record the Rust `suites` job time against the previous green run (AC-4: at most 120 s more). A change of `run-suite.sh` runs every stage in CI.
+0. The CI of the loop 89 close push (`c976db7`) is green on `dev` and `main` (20 of 20 jobs); AC-4 of AZ-3443 is met: the Rust job took 285 s against 290 s before.
 1. `uptime`, `df -h /tmp` and `ps -Ao pcpu,command --sort=-pcpu | head`.
 2. Ring on this host: JDK on PATH (`~/.local/share/packbin-jdk26/bin`) and `LOOP_TESTS_PYTHON=/usr/bin/python3.14`; `scripts/loop-tests.sh --all --only ring` takes under a minute.
 

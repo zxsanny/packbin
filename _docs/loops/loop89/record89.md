@@ -17,8 +17,8 @@ measurements:
 review: "code-review (high): 4 Low, 0 bugs, 1 fixed (comment), 3 kept by design; feature assessment COMPLETE (assessment89.md)"
 retro: _docs/06_metrics/retro_2026-10-30_loop89.md (loops 85 to 89; next retro due after loop 94)
 leftovers:
-  - AC-4 of AZ-3443: read the Rust `suites` job time of the first CI run after the loop 89 push against the previous green run (at most 120 s more); record it in the loop 90 handoff
-  - not run this loop (the change is the Rust branch of `run-suite.sh` and its shell tests): the go, typescript, csharp, python, java, cpp, swift stages, the arm and Rust embedded stages, the ring, ac10 and the publish gate; CI runs them on the push
+  - AC-4 of AZ-3443 read (2026-10-30): CI of the close push `c976db7`, `suites (csharp rust)` 285 s (run 41073084903, `dev`) against 290 s on the previous green run (41059381579, `c79c40b`): no added time, within the 120 s bound; 20 of 20 jobs green on `dev` and on `main`
+  - not run locally this loop (the change is the Rust branch of `run-suite.sh` and its shell tests): the go, typescript, csharp, python, java, cpp, swift stages, the arm and Rust embedded stages, the ring, ac10 and the publish gate; CI ran them on the close push, all green
   - `shellcheck` is not installed on this host (`bash -n` only)
   - owner: tag `v0.4.0` (decide CS-D5 and F44 first); close the epic AZ-2750; U24; the M4F row; meshbell `FrameSession` rename; vcpkg `supports`; a public-key pairing step; multi-part MAC rows in the ring
   - Jira: AZ-3443 In Testing
