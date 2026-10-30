@@ -12,7 +12,7 @@ AZ-3390 to AZ-3393 (11 points, In Testing):
 
 ## First actions of loop 85
 
-0. Read the CI of the loop 84 push (`dev` and `main`; see `record84.md` `ci:`), the first run of `embedded-esp-core` and `embedded-esp-packages` on `all_kinds_rounds.cpp` included. Put its result in the first commit of loop 85; do not push a record-only commit.
+0. The CI of the loop 84 close push (8da18d3) was red on one job, `embedded-esp-core` (`esp.sh` expected 7 packbin sources, found 8); the fix (count 8) is committed after it and was proved locally with the ESP-IDF image. Read the CI of the fix push (`dev` and `main`) first; its result goes into the first commit of loop 85, not into a record-only commit.
 1. `uptime`, `df -h /tmp` (the publish gate needs free space; delete any scratchpad tree copies first) and `ps -Ao pcpu,command --sort=-pcpu | head`. A total run is not a result above load 60 from a foreign job.
 2. The JDK is a user-directory tarball (`~/.local/share/packbin-jdk26/bin`), not on PATH by default: the ring stage needs it on PATH. `LOOP_TESTS_PYTHON` must point to a Python 3.10+ on this Linux host (the script defaults to a Homebrew path).
 3. `docker rmi packbin-embedded:w2` frees 4.9 GB when the owner agrees (a worker built it; `loop-tests.sh` builds its own image).
@@ -33,6 +33,6 @@ AZ-3390 to AZ-3393 (11 points, In Testing):
 ## Risks
 
 - **L84-1**: `m33f_flash_pin` has zero margin again (25,760 B measured = pin); the next edit that adds a byte to the M33F image fails the row by its own bytes.
-- **L84-2**: the ESP-IDF jobs have not run on the new source list; CI is their first run.
+- **L84-2**: the ESP-IDF `core` jobs failed once on the source count (fixed, proved locally); `embedded-esp-packages` passed. The image `espressif/idf:v5.3.2` (pulled this loop) is on the host.
 - **L83-1**: the new ring rows prove the order in 6 of 8 languages; Rust and C++ print `BadValue` by construction (said in `fixtures/frame/README.md`).
 - **L82-2, L82-3, L81-2, L80-1, L80-2, L78-2, L79-1, L79-2, L76-1, L75-1, L74-2, L73-1, L72-1, L71-1, L71-2** (unchanged): see `handoff83.md`, `handoff82.md`, `handoff81.md`, `handoff80.md`, `handoff76.md` and `handoff75.md`.

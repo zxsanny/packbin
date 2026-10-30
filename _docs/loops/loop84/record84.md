@@ -22,19 +22,20 @@ retro: _docs/06_metrics/retro_2026-10-30_loop84.md (loops 80 to 84); next retro 
 leftovers:
   - owner (unchanged): CS-D5; the first `v*` and `go/v*` tags and F44; close the epic AZ-2750; U24 in the C++ package; whether to drop the M4F row; the release notes of the next 0.x; meshbell renames its Rust `Session` to `FrameSession`; whether the vcpkg port drops `supports: linux | osx` and claims Windows; a public-key pairing step
   - ring, open: multi-part MAC rows (G8m of loop 77, owner-declined then; need an owner opt-in like U1)
-  - ESP-IDF stage (`embedded-esp-core`, `embedded-esp-packages`) has not run on the new `all_kinds_rounds.cpp` source list: the first run is the CI of the loop 84 push
+  - ESP-IDF stage: `embedded-esp-core` failed on the close push (count 7 vs 8, see `ci:`); the fix ran locally; `embedded-esp-packages` passed on the close push
   - review, Low, not applied: a job-level `RING_PYTHON` override in a non-ring job is not compared with the compose image; a non-numeric `RING_FRAME_SHOWN` gives a Python traceback; `m33f_flash_pin` again has zero margin
   - host: the worker-built docker image `packbin-embedded:w2` (4.9 GB) is still on this host; `docker rmi packbin-embedded:w2` when the owner agrees
   - candidates left from handoff84: the AVR `chacha20_xor` count-down loop on a 16-bit `size_t` (needs an emulator; complexity check first); stage stamps on the owner's Mac; a Go window floor of 10 s; removing the `item` pointer; `session_core` clippy; a ring driver for `nostd`; a non-secure 128 KiB image; cycle timing on a real part
   - open: L76-1, L74-3 (see handoff82)
   - Jira: AZ-3390 to AZ-3393 In Testing; AZ-3381 to AZ-3389 and earlier In Testing
 lessons:
+  - The ESP source count of `esp.sh` covers the `embedded/common` sources too: AGENT_GOTCHAS line 51 said to run `run.sh host esp core` before a commit that adds or removes a core source, and the loop 84 specs and worker prompts did not list it; a spec that adds a C++ source lists the CI stages that count sources.
   - A zero-margin byte pin makes a no-behaviour file split an owner decision (+32 B on the M4F image, +40 B on the M33F one for a second translation unit): run the arm stage at intake when a task touches a pinned image.
   - A worker told to build the project's own embedded image found the pin failure no host build shows; "NOT RUN, no toolchain" is the wrong stop when the stage has a documented image.
   - A review cleanup in a handoff is a lead, not a defect: two of four did not exist on HEAD and the include prune removed nothing.
   - Tree copies for workers (`git archive HEAD`, a pristine `head` and a `work` copy each) worked without disk trouble this time because the copies were deleted before `loop-tests.sh` ran.
 smoke: PASS (agent run, owner rule 2026-10-12: 7 of 7 steps)
-ci: pending (the CI of the loop 84 push is read after the push; its result goes into the first commit of loop 85)
+ci: FAIL then fixed (dev run 41042545031 and main run 41042547973 on 8da18d3: 19 of 20 jobs success, `embedded-esp-core` failed in 37 s and 33 s on cpp-esp32s3 and cpp-esp32c3: `cpp/embedded/esp.sh` expected 7 packbin sources and the split made 8, the failure `AGENT_GOTCHAS` line 51 describes from loop 75; fixed by the count 8 in the next commit and proved by `run.sh esp core` in espressif/idf:v5.3.2 on a tree copy: esp32s3 8 sources 0 warnings 187,136 B, esp32c3 8 sources 0 warnings 157,952 B, Arduino example PASS; the CI of the fix push is read first in loop 85; read 2026-10-30)
 smoke_artifact: _docs/loops/loop84/smoke84.md
 assessment_artifact: _docs/loops/loop84/assessment84.md
 loop_end_merge: main

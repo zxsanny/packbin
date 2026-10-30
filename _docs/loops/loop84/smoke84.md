@@ -16,7 +16,7 @@ LOCAL_URL: none (scripts, the cpp and ARM stages, the ring and the CI `scaffold`
 
 `smoke84.sh` at 202a6ed (the commit before the close commit), host load below 4: steps 1 to 7 PASS, `smoke84: 7 steps run, 0 failed`. The trial run (steps 1, 2, 4, 6, 7) passed first time; step 3 took 76 s because the embedded image was warm from the earlier loop-tests run.
 
-Not covered here: the ESP-IDF stage (`embedded-esp-core`, `embedded-esp-packages`) has no local image; its source list was read against the parts. The swift consumer resolve is NOT RUN (no swift on PATH), as in loop 83. `shellcheck` is not installed.
+Not covered here (and red in CI afterwards: `esp.sh` source count 7 vs 8, fixed, see `record84.md` `ci:`): the ESP-IDF stage (`embedded-esp-core`, `embedded-esp-packages`) has no local image; its source list was read against the parts. The swift consumer resolve is NOT RUN (no swift on PATH), as in loop 83. `shellcheck` is not installed.
 
 ## Result
 
