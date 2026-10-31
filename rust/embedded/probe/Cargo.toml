@@ -3,7 +3,7 @@ name = "packbin-probe"
 version = "0.0.0"
 edition = "2021"
 publish = false
-description = "Static library for the Cortex-M4F image of the heap-free packbin API (AZ-2751)"
+description = "Static library for the Cortex-M33F image of the heap-free packbin API (AZ-2751)"
 
 [lib]
 crate-type = ["staticlib"]

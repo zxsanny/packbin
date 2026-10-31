@@ -31,7 +31,7 @@ arm_cc() {
   fi
 }
 
-# Core objects (with -fstack-usage), the all-kinds scheme and the AC-2 firmware objects.
+# Core objects, the all-kinds scheme and the AC-2 firmware objects.
 arm_firmware_objects() {
   local dir="$1"
   shift
@@ -40,7 +40,7 @@ arm_firmware_objects() {
   : > "$dir/compile.log"
   local src
   for src in "${core_srcs[@]}"; do
-    arm_cxx "$dir" "$cpp/$src" "core-$(basename "${src%.cpp}").o" "$@" -fstack-usage
+    arm_cxx "$dir" "$cpp/$src" "core-$(basename "${src%.cpp}").o" "$@"
   done
   arm_cxx "$dir" "$here/common/all_kinds.cpp" all_kinds.o "$@"
   arm_cxx "$dir" "$here/common/all_kinds_rounds.cpp" all_kinds_rounds.o "$@"
@@ -51,19 +51,6 @@ arm_firmware_objects() {
   warnings=$(count_warnings "$dir/compile.log")
   echo "compile warnings: $warnings"
   [ "$warnings" -eq 0 ] || fail "$warnings compile warning(s)"
-}
-
-# The core again without the compact text codec (PACKBIN_NO_TEXT), for the size probe only: the
-# all-kinds image and the vector runners keep the codec. Run after arm_firmware_objects (which
-# clears the directory).
-arm_no_text_core_objects() {
-  local dir="$1" src
-  shift
-  mkdir -p "$dir/no-text"
-  for src in "${core_srcs[@]}"; do
-    arm_cxx "$dir" "$cpp/$src" "no-text/core-$(basename "${src%.cpp}").o" "$@" -DPACKBIN_NO_TEXT \
-      -fstack-usage
-  done
 }
 
 arm_link() {
@@ -195,78 +182,13 @@ target_m3() {
     || fail "all-kinds packet differs between the AC-2 firmware and the runner"
 }
 
-# Largest single frame in the core's -fstack-usage files.
-max_frame() {
-  cat "$1"/core-*.su | awk -F'\t' '{ if ($2 + 0 > m) { m = $2 + 0; f = $1 } } END { print m + 0, f }'
-}
-
-target_m4f() {
-  local dir="$build/m4f"
-  local arch=(-mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16)
-  # Cortex-M4F has no room for the message error correction tables (511 B of tables, about 2.2 KB
-  # of code against a 60 B margin), so the whole target builds with PACKBIN_NO_ECC.
-  local ecc_off=(-DPACKBIN_NO_ECC)
-  arm_firmware_objects "$dir" "${arch[@]}" "${ecc_off[@]}"
-  arm_no_text_core_objects "$dir" "${arch[@]}" "${ecc_off[@]}"
-  arm_cxx "$dir" "$here/arm/size_main.cpp" size14.o "${arch[@]}" "${ecc_off[@]}" -DPACKBIN_NO_TEXT
-  arm_cxx "$dir" "$here/arm/size_main.cpp" baseline.o "${arch[@]}" -DPACKBIN_SIZE_BASELINE
-  [ "$(count_warnings "$dir/compile.log")" -eq 0 ] || fail "compile warnings in size probe"
-
-  arm_link_ac2 "$dir" "${arch[@]}"
-  image_checks "$dir" ac2
-  local probe
-  for probe in size14 baseline; do
-    arm_link "$dir" "$probe.elf" "${arch[@]}" "${arm_link_common[@]}" --specs=nano.specs \
-      --specs=nosys.specs "${heap_wraps[@]}" "$dir"/no-text/core-*.o "$dir/$probe.o" \
-      "$dir/startup.o" "$dir/wrap.o"
-    qemu_run mps2-an386 "$dir/$probe.elf" "$dir/$probe.run.log" || fail "$probe exit $?"
-  done
-  qemu_run mps2-an386 "$dir/ac2.elf" "$dir/ac2.run.log" || fail "AC-2 firmware on M4F exit $?"
-
-  local flash14 flash0 delta core_rw raw meter stack frame
-  flash14=$(arm-none-eabi-size "$dir/size14.elf" | awk 'NR == 2 { print $1 + $2 }')
-  flash0=$(arm-none-eabi-size "$dir/baseline.elf" | awk 'NR == 2 { print $1 + $2 }')
-  delta=$((flash14 - flash0))
-  echo "core objects (text data bss):"
-  arm-none-eabi-size "$dir"/core-*.o | tee "$out/m4f-core-size.txt"
-  echo "core objects without the codec, PACKBIN_NO_TEXT (text data bss):"
-  arm-none-eabi-size "$dir"/no-text/core-*.o | tee "$out/m4f-core-no-text-size.txt"
-  core_rw=$(awk 'FNR > 1 { s += $2 + $3 } END { print s + 0 }' "$out/m4f-core-size.txt" \
-    "$out/m4f-core-no-text-size.txt")
-  raw=$(for f in size14 ac2; do
-    log_value PACK_STACK "$dir/$f.run.log"
-    log_value UNPACK_STACK "$dir/$f.run.log"
-  done | sort -n | tail -n 1)
-  # The meter reads its own unpainted guard as used; the baseline image measures an empty
-  # call, so its reading is the meter's overhead.
-  meter=$(log_value PACK_STACK "$dir/baseline.run.log")
-  stack=$((raw - meter))
-  echo "stack raw=$raw meter overhead=$meter"
-  frame=$(max_frame "$dir")
-  cat "$dir"/core-*.su > "$out/m4f-core.su"
-  echo "size14 flash=$flash14 baseline flash=$flash0 delta=$delta budget=$flash_budget"
-  echo "deepest measured pack/unpack stack=$stack budget=$stack_budget (largest core frame: $frame)"
-  echo "core .data+.bss=$core_rw"
-  note "AC-5 flash core (PACKBIN_NO_TEXT) + 14-field table ${delta} B of ${flash_budget} (pin ${flash_pin} B)"
-  note "deepest pack/unpack stack ${stack} B of ${stack_budget} (pin ${stack_pin} B; raw ${raw} B less ${meter} B meter overhead)"
-  note "largest single core frame ${frame%% *} B"
-  note "core data+bss ${core_rw} B; all-kinds image $(arm-none-eabi-size "$dir/ac2.elf" | awk 'NR == 2 { print $1 + $2 }') B flash"
-  [ "$(log_value FAILURES "$dir/size14.run.log")" = 0 ] || fail "size probe round trip"
-  [ "$(log_value FAILURES "$dir/ac2.run.log")" = 0 ] || fail "AC-2 round trip on M4F"
-  [ "$delta" -le "$flash_budget" ] || fail "flash ${delta} B over ${flash_budget} B"
-  [ "$delta" -le "$flash_pin" ] || fail "flash ${delta} B measured is over the pin of ${flash_pin} B (cpp/embedded/lib.sh flash_pin)"
-  [ "$stack" -le "$stack_budget" ] || fail "stack ${stack} B over ${stack_budget} B"
-  [ "$stack" -le "$stack_pin" ] || fail "stack ${stack} B measured is over the pin of ${stack_pin} B (cpp/embedded/lib.sh stack_pin)"
-  [ "$core_rw" -eq 0 ] || fail "core data+bss ${core_rw} B"
-}
-
 # Cortex-M33F, the nRF54L15 core (AZ-3189): the whole core (string codec and message error correction on) and the
 # all-kinds scheme on QEMU mps2-an505, with the vector runner. Flash is the all-kinds image, stack is net of the meter
-# overhead; both are held to the ceilings and pins in lib.sh (m33f_*). Reads and writes nothing of the M4F row.
+# overhead; both are held to the ceilings and pins in lib.sh (m33f_*).
 target_m33f() {
   local dir="$build/m33f"
   local arch=(-mthumb -mcpu=cortex-m33 -mfloat-abi=hard -mfpu=fpv5-sp-d16)
-  # Shadows the global of the M3/M4 images for the link helpers below: the AN505 memory map has its own script.
+  # Shadows the global of the M3 images for the link helpers below: the AN505 memory map has its own script.
   local arm_link_common=(-nostartfiles -T "$here/arm/mps2-an505.ld" -Wl,--gc-sections -Wl,--cref)
   arm_firmware_objects "$dir" "${arch[@]}"
   local t listed objs=()
@@ -278,7 +200,7 @@ target_m33f() {
     objs+=("$dir/test-$(basename "${t%.cpp}").o")
   done
   arm_cxx "$dir" "$here/common/vectors_main.cpp" vectors_main.o "${arch[@]}"
-  arm_cxx "$dir" "$here/arm/size_main.cpp" baseline.o "${arch[@]}" -DPACKBIN_SIZE_BASELINE
+  arm_cxx "$dir" "$here/arm/baseline_main.cpp" baseline.o "${arch[@]}"
   arm_cxx "$dir" "$here/arm/frame_main.cpp" frame_main.o "${arch[@]}"
   [ "$(count_warnings "$dir/compile.log")" -eq 0 ] || fail "compile warnings in the M33F objects"
 

@@ -508,3 +508,4 @@ Loop 74 (2026-10-26, ADR-009: remove the stream session; D1 frame names; D2 cryp
 | AZ-3443 | rust_clippy_ci_gate (loop 89) | 3 | None | none |
 | AZ-3452 | avr_chacha20_runtime_check (loop 92) | 5 | None | none |
 | AZ-3469 | m33f_128k_ram_window (loop 93) | 3 | None | none |
+| AZ-3479 | drop_m4f_rows (loop 94) | 3 | None | none |

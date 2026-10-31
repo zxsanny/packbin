@@ -30,7 +30,6 @@ oracle() {
   printf '%s\n' \
     'arm cpp-m0plus target_m0plus -' \
     'arm cpp-m3-qemu target_m3 -' \
-    'arm cpp-m4f target_m4f -' \
     'arm cpp-m33f target_m33f -' \
     'arm cpp-s390x target_s390x -' \
     'arm cpp-avr-uno target_avr_uno -' \

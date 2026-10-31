@@ -1,4 +1,4 @@
-/* Minimal Cortex-M startup for the QEMU mps2-an385 / mps2-an386 machines: vector table, .data
+/* Minimal Cortex-M startup for the QEMU mps2-an385 and mps2-an505 machines: vector table, .data
  * copy, .bss clear, static constructors, main, then a semihosting exit whose code is main's
  * return value. */
 #include <stdint.h>

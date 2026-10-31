@@ -21,7 +21,7 @@ EXPECT_FAIL_NO_ECC := ./tests/compile-fail/expect-fail.sh "$(CXX) $(CXXFLAGS) $(
 # The core without the codec (embedded builds that define PACKBIN_NO_TEXT) and its own tests.
 NO_TEXT_TESTS := tests/core/no_text_tests.cpp
 NO_TEXT_BIN := build/packbin_no_text_tests
-# The core without message error correction (Cortex-M4F builds define PACKBIN_NO_ECC) and its tests.
+# The core without message error correction (the Uno example defines PACKBIN_NO_ECC) and its tests.
 NO_ECC_TESTS := tests/core/no_ecc_tests.cpp
 NO_ECC_BIN := build/packbin_no_ecc_tests
 

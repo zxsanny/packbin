@@ -46,17 +46,13 @@ within 8192 8192 || { echo "FAIL: 8192 fits 8192" >&2; bad=$((bad + 1)); }
 within 8193 8192 && { echo "FAIL: 8193 fits 8192" >&2; bad=$((bad + 1)); }
 within 99999999 - || { echo "FAIL: no limit rejects" >&2; bad=$((bad + 1)); }
 
-# The owner's limits (2026-10-23): every set of feature-sets.txt has a numeric flash and stack limit.
-expect "every feature set has numeric limits" "" "$(unlimited_sets "$here/limits.txt" "$here/feature-sets.txt")"
-sed 's/^ecc .*/ecc - -/' "$here/limits.txt" > "$tmp/mutant-limits.txt"
-expect "a dash limit is caught" "ecc" "$(unlimited_sets "$tmp/mutant-limits.txt" "$here/feature-sets.txt")"
-grep -v '^frame ' "$here/limits.txt" > "$tmp/missing-limits.txt"
-expect "a set without a line is caught" "frame" "$(unlimited_sets "$tmp/missing-limits.txt" "$here/feature-sets.txt")"
-
-# The Cortex-M33F pins (AZ-3231): a numeric flash and stack for every set, within the chip-scale ceilings of the C++ row.
+# The Cortex-M33F pins (AZ-3231, owner's limits of 2026-10-23 before them): a numeric flash and stack for every set, within
+# the chip-scale ceilings of the C++ row.
 expect "every feature set has numeric M33F pins" "" "$(unlimited_sets "$here/limits-m33f.txt" "$here/feature-sets.txt")"
 sed 's/^frame .*/frame - -/' "$here/limits-m33f.txt" > "$tmp/mutant-m33f.txt"
 expect "a dash M33F pin is caught" "frame" "$(unlimited_sets "$tmp/mutant-m33f.txt" "$here/feature-sets.txt")"
+grep -v '^ecc ' "$here/limits-m33f.txt" > "$tmp/missing-m33f.txt"
+expect "a set without an M33F pin is caught" "ecc" "$(unlimited_sets "$tmp/missing-m33f.txt" "$here/feature-sets.txt")"
 over="$(awk '!/^#/ && NF && ($2 > 65536 || $3 > 8192) { print $1 }' "$here/limits-m33f.txt")"
 expect "no M33F pin is above the ceilings" "" "$over"
 

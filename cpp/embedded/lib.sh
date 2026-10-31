@@ -18,26 +18,11 @@ core_flags=(-std=c++17 -fno-exceptions -fno-rtti -Os -Wall -Wextra -Werror)
 c_flags=(-std=c11 -Os -Wall -Wextra -Werror)
 core_srcs=(src/core/values.cpp src/core/pack.cpp src/core/unpack.cpp src/core/crypto.cpp src/core/frame.cpp)
 
-# Budgets from feature AC-5.
-flash_budget=8192
-# Raised from 512 to 2048 by the owner on 2026-10-23 (loop 65): a flag-byte chain inside a `times` round unpacks
-# in 612 B, and the parts the core targets have 8 KB of RAM or more. The ceiling is loose on purpose; the pin below
-# is the promise.
-stack_budget=2048
-# Pin on the deepest pack/unpack stack of the Cortex-M4F all-kinds image (loop 67: 540 B, a `when` keeps the
-# outer flag bytes in its own `unpack_children` frame), net of the meter: a later edit
-# that deepens the walk fails the stage by its own bytes. Raise it only with a line in _docs/AGENT_GOTCHAS.md saying
-# what the bytes bought.
-stack_pin=540
-# Pin on the Cortex-M4F flash figure (AZ-3154): the figure after loop 67, so a later edit that spends
-# the margin fails the stage by its own bytes instead of passing under 8192. Raise it only with a line
-# in _docs/AGENT_GOTCHAS.md saying what the bytes bought.
-flash_pin=7712
-
 # The Cortex-M33F target (AZ-3189, loop 68): the owner's target part is the nRF54L15 (Cortex-M33F, 256 KB of RAM, about
 # 1.5 MB of NVM, 128 KiB of RAM in a non-secure image), so the ceilings are chip-scale (owner, 2026-10-25) and the whole
-# core is built: string codec and message error correction on. The Cortex-M4F target above stays as the small-part bar.
-# The flash figure is the all-kinds image (text plus data); the stack figure is net of the meter, like the M4F one.
+# core is built: string codec and message error correction on. This is the only size and stack bar of the stage (the
+# Cortex-M4F rows went in loop 94, owner 2026-10-31).
+# The flash figure is the all-kinds image (text plus data); the stack figure is net of the meter.
 m33f_flash_budget=65536
 m33f_stack_budget=8192
 # The M33F images run in a 128 KiB RAM window (AZ-3469): the stack top that mps2-an505.ld gives them, 0x38000000 plus

@@ -31,7 +31,7 @@ if(PACKBIN_NO_TEXT)
 endif()
 
 # Without message error correction: a scheme with parity bytes is refused and no codec table or
-# repair code is linked. The Cortex-M4F flash budget needs it.
+# repair code is linked. A part with little flash needs it (the Uno example builds this way).
 option(PACKBIN_NO_ECC "Build without message error correction (parity bytes)" OFF)
 if(PACKBIN_NO_ECC)
   target_compile_definitions(packbin PUBLIC PACKBIN_NO_ECC)

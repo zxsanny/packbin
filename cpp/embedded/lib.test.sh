@@ -119,8 +119,7 @@ ac1_unchecked_failure_fails_the_target() {
 helper_copy() { cp "$out/does-not-exist" "$out/copy"; note "after cp"; }
 target_m0plus() { false; note "after false"; }
 target_m3() { helper_copy; }
-target_m4f() { false | cat; note "after pipe"; }
-target_m33f() { note "ok"; }
+target_m33f() { false | cat; note "after pipe"; }
 target_s390x() { note "ran after the failures"; }
 target_avr_uno() { note "ok"; }
 EOF
@@ -131,18 +130,18 @@ EOF
   check "AC-1 failing cp in a helper: row FAIL" \
     row_matches cpp-m3-qemu '^cpp-m3-qemu,.*,FAIL,exit 1 \(log: test-results/embedded/cpp-m3-qemu\.log\)$'
   check "AC-1 failing cp in a helper: the command after it did not run" log_lacks cpp-m3-qemu "after cp"
-  check "AC-1 failing pipeline (pipefail): row FAIL" row_matches cpp-m4f ',FAIL,exit 1 \(log:'
-  check "AC-1 failing pipeline (pipefail): the command after it did not run" log_lacks cpp-m4f "after pipe"
+  check "AC-1 failing pipeline (pipefail): row FAIL" row_matches cpp-m33f ',FAIL,exit 1 \(log:'
+  check "AC-1 failing pipeline (pipefail): the command after it did not run" log_lacks cpp-m33f "after pipe"
   check "F3 false: the log names the failed command and its status" \
     log_has cpp-m0plus "target command failed: false (exit 1"
   check "F3 failing cp in a helper: the log names the cp" \
     log_has cpp-m3-qemu "target command failed: cp .*does-not-exist.* (exit 1"
   check "F3 failing pipeline: the log shows the status of every member" \
-    log_has cpp-m4f "(exit 1, pipe 1 0)"
+    log_has cpp-m33f "(exit 1, pipe 1 0)"
   check "AC-1 the stage exit code is 1" rc_is 1
   check "AC-4 the target after the failed ones still ran and passed" \
     row_matches cpp-s390x ',PASS,ran after the failures; $'
-  check "AC-4 one row per target" rows 6
+  check "AC-4 one row per target" rows 5
   check "AC-4 the stage reports 3 failed targets" stage_says "embedded stage arm: 3 target(s) failed"
   show_evidence
 }
@@ -152,8 +151,7 @@ ac2_explicit_checks_continue() {
   cat > "$tree/cpp/embedded/arm.sh" <<'EOF'
 target_m0plus() { fail "budget A"; note "between"; fail "budget B"; note "after"; }
 target_m3() { ( fail "from a subshell" ); note "after the subshell"; }
-target_m4f() { note "before exit"; exit 3; }
-target_m33f() { note "ok"; }
+target_m33f() { note "before exit"; exit 3; }
 target_s390x() { note "ok"; }
 target_avr_uno() { note "ok"; }
 EOF
@@ -166,7 +164,7 @@ EOF
   check "AC-2 a fail inside a subshell still fails the target" \
     row_matches cpp-m3-qemu ',FAIL,FAIL from a subshell; after the subshell; \(log:'
   check "AC-1 an exit status is shown after the notes" \
-    row_matches cpp-m4f ',FAIL,before exit; exit 3 \(log:'
+    row_matches cpp-m33f ',FAIL,before exit; exit 3 \(log:'
   check "AC-2 the stage exit code is 1" rc_is 1
   show_evidence
 }
@@ -176,7 +174,6 @@ ac3_passing_target_passes() {
   cat > "$tree/cpp/embedded/arm.sh" <<'EOF'
 target_m0plus() { note "FAILURES 0"; if false; then :; fi; false || true; [ 1 -eq 2 ] || true; ! false; }
 target_m3() { note "ok"; }
-target_m4f() { note "ok"; }
 target_m33f() { note "ok"; }
 target_s390x() { note "ok"; }
 target_avr_uno() { note "ok"; }
@@ -186,7 +183,7 @@ EOF
     log_lacks cpp-m0plus "target command failed"
   check "AC-3 FAIL in an ordinary note does not fail the target" \
     row_matches cpp-m0plus ',PASS,FAILURES 0; $'
-  check "AC-3 all six rows PASS" rows 6
+  check "AC-3 all five rows PASS" rows 5
   check "AC-3 the stage exit code is 0" rc_is 0
   check "AC-3 the stage reports 0 failed targets" stage_says "embedded stage arm: 0 target(s) failed"
   show_evidence
@@ -198,7 +195,6 @@ earlier_failure_marker_does_not_fail_a_rerun() {
   cat > "$tree/cpp/embedded/arm.sh" <<'EOF'
 target_m0plus() { note "ok"; }
 target_m3() { note "ok"; }
-target_m4f() { note "ok"; }
 target_m33f() { note "ok"; }
 target_s390x() { note "ok"; }
 target_avr_uno() { note "ok"; }

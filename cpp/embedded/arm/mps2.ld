@@ -1,4 +1,4 @@
-/* QEMU mps2-an385 (Cortex-M3) and mps2-an386 (Cortex-M4): code in SSRAM1 at 0, data in SSRAM2. */
+/* QEMU mps2-an385 (Cortex-M3): code in SSRAM1 at 0, data in SSRAM2. */
 MEMORY
 {
   FLASH (rx) : ORIGIN = 0x00000000, LENGTH = 4M

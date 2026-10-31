@@ -1,4 +1,4 @@
-# Embedded CI image: arm-none-eabi GCC 13 + newlib-nano, QEMU system (mps2-an385 / mps2-an386),
+# Embedded CI image: arm-none-eabi GCC 13 + newlib-nano, QEMU system (mps2-an385, mps2-an505),
 # QEMU user for a big-endian host (s390x) and its cross g++, avr-gcc 7.3 + avr-libc. ESP-IDF
 # builds use the official espressif/idf image (docker-compose.test.yml service cpp-embedded-esp).
 FROM ubuntu:24.04
