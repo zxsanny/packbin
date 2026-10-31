@@ -312,3 +312,28 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 **Expected outcome**: both rows pass in the window and fail on an overflow and on a moved window.
 **Not run by**: a TrustZone non-secure image, RRAM, the part's memory map, cycle timing (QEMU `mps2-an505` starts in Secure state)
 **Max execution time**: the arm stage grew by under 2 s
+
+### FT-E-16: the string-free, ECC-free build runs on the M33F (loop 95)
+
+**Summary**: The `cpp-m33f` row builds the core with `PACKBIN_NO_TEXT` and `PACKBIN_NO_ECC` together and runs the two host tests of that build as one image on QEMU `mps2-an505`; run-only, no flash or stack pin (AZ-3483).
+**Traces to**: AZ-3483 AC-1 to AC-10
+**Category**: Bytes
+
+**Preconditions**:
+- The `packbin-embedded` image
+
+**Input data**: `tests/core/no_text_tests.cpp` and `tests/core/no_ecc_tests.cpp` compiled unchanged with `-Dmain=` renamed; `cpp/embedded/arm/small_main.cpp`
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | `bash cpp/embedded/run.sh arm` | the row passes; `object-check` reports 5 core objects clean for each flag; sites run equal asserted (25 of 25, 6 of 6); `FAILURES 0`; the other rows keep 315 of 315, 25,760 B, 724 B, 8,416 B / 912 B |
+| 2 | one expected value in `no_ecc_tests.cpp` changed | the row fails: `FAIL: n = 0 packs the 13-byte fixture without the codec`, `failures on M33F` |
+| 3 | a `malloc` call added to `cpp/src/core/values.cpp` | the row fails: `core-values.o references an allocator or the exception runtime` |
+| 4 | the reduced core objects built without `-DPACKBIN_NO_TEXT` | the row fails: `core-pack.o and core-unpack.o hold a codec table or symbol` |
+
+**Expected outcome**: the row passes on the unchanged tree and fails on each seeded defect.
+**Not run by**: a flash or stack bar for this image (owner: run-only), a TrustZone non-secure image, hardware
+**Max execution time**: the arm stage grew by 2 s (16 s to 18 s)
+
