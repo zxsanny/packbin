@@ -25,6 +25,7 @@ Optional parity bytes per scheme: `n` from 0 to 32, default 0, which keeps the b
 | Name | Meaning |
 |------|---------|
 | `withLimits(maxRounds:maxSlots:maxBytes:parity:)` | `parity` sets `n`; left out it keeps this scheme's count (a limit left out is still the default). A count outside 0 to 32 throws `.schemeError` naming `parity`, the count and 32. `Scheme.parity` reads it |
+| `withLimits(…, parityPercent:)`, `parityPercent` | the parity count is the percentage (0 to 100) of each message's clear length, rounded up, at most 32; replaces a count (and `parity:` a percentage); a percentage outside 0 to 100, or both above 0 in one call, throws `.schemeError`. Under a percentage the limit is 0 to 16 and is lowered to `n / 2`; an impossible received length is `.uncorrectable`; a dispatch needs one setting (message-ecc 1.1.0, ADR-010) |
 | `unpackRepair(_:limit:_:)`, `unpackMapRepair(_:limit:_:)` | repair up to `limit` wrong bytes (0 to `n / 2`) before the type byte picks the scheme; they return `(row, repaired)`; the schemes may also be given as an array. `unpack` and `unpackMap` are limit 0. Another limit, or a mix of counts, throws `.schemeError` before any byte is read |
 | `PackbinError.Kind.uncorrectable` | raw value `uncorrectable`; names no field |
 | `.tooMany` (reused) | a buffer above 254 bytes, `left` the length. A buffer shorter than `n` is `.short` naming `parity` |

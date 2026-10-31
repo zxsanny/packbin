@@ -74,6 +74,7 @@ Optional parity bytes per scheme: `n` from 0 to 32, default 0, which keeps the b
 | Name | Meaning |
 |------|---------|
 | `parity(scheme<Row>(...), n)` | a copy with `n` parity bytes; `scheme.parity` reads it. `n` above 32 or below 0 is `SchemeInvalid` with `needed` 32, and a compile error when the scheme is `constexpr` |
+| `parity_percent(scheme<Row>(...), p)`, `scheme.parity_percent` | the parity count is the percentage `p` (0 to 100) of each message's clear length, rounded up, at most 32, computed in `unsigned` (16-bit safe); replaces a count (and `parity` a percentage); `p` above 100 is `SchemeInvalid` (a compile error in a `constexpr` scheme). Under a percentage the limit is 0 to 16 (`Error::BadValue` outside) and is lowered to `n / 2`; an impossible received length is `Error::Uncorrectable`; a dispatch mix is `SchemeInvalid` (message-ecc 1.1.0, ADR-010). `PACKBIN_NO_ECC` removes it |
 | `unpack_repair(scheme, data, len, row, limit)` | repairs up to `limit` wrong bytes in place (`data` is non-const), then reads; `Result.repaired` is the bytes fixed and `data` equals the packed message. `limit` outside 0 to `n / 2` is `BadValue` with `needed` `n / 2`, before any byte is read |
 | `unpack_repair(data, len, limit, on(...)...)` | the same, then dispatch on the repaired type byte |
 | `Error::Uncorrectable` | the new `Error`; no values, no field; the buffer is left as it was |

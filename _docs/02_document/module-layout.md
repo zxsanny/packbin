@@ -309,3 +309,19 @@ The eight packages are peers. None imports another.
 | Java | `java/` | `java/src/main/java/packbin/` | `java/src/main/java/packbin/Packbin.java` | `java/src/test/` |
 | Go | `go/` | `go/` (one package `packbin`) | exported identifiers in `go/*.go` | `go/*_test.go` |
 | Swift | `swift/` (manifest `Package.swift` at the root) | `swift/Sources/Packbin/` | `public` declarations of module `Packbin` | `swift/Tests/PackbinTests/` |
+
+## Loop 97 — parity percentage (AZ-3499 to AZ-3509, ADR-010, message-ecc 1.1.0)
+
+A scheme may declare a percentage of parity instead of a count. No component changes ownership; the public API of each gains a setter and a reader, and each gains test files:
+
+- Reference and fixtures: `scripts/ecc/eccfmt.py` (`parity_count`, `largest_clear`, `clear_length`, `protect_percent`, `decode_percent`), `scripts/ecc/percent_vectors.py`, `scripts/ecc/gen_percent_vectors.py`, `check_vectors.py --percent`, `fixtures/ecc/percent-vectors.txt`.
+- Python: `_ecc.py` (`parity_count`, `largest_clear`, `clear_length`), `_scheme.py` (`with_limits(parity_percent=)`, `parity_percent`); tests `percent_support.py`, `test_ecc_percent.py`, `test_ecc_percent_vectors.py`.
+- TypeScript: `src/ecc.ts`, `src/index.ts` (`SchemeLimits.parityPercent`, `Scheme.parityPercent`); tests `ecc-percent.test.ts`, `support/ecc-percent.ts`.
+- C#: `Ecc.cs`, `EccRepair.cs`, `Packbin.cs` (`WithParityPercent`, `ParityPercent`); tests `EccPercentTests.cs`, `EccPercentVectorTests.cs`.
+- Rust: `ecc_core.rs`, `ecc.rs`, `scheme/mod.rs`, `field/map_scheme.rs`, `nostd/scheme.rs` (behind `ecc`), `nostd/ecc.rs`, `nostd/walk.rs`; tests `ecc_percent_tests.rs` (module), `tests/ecc_percent_tests.rs`, `tests/nostd_ecc_percent_tests.rs`; the `ecc` pin of `rust/embedded/limits-m33f.txt` moved.
+- C++: `include/packbin/codec.hpp` (`parity_percent`); tests `ecc_percent_host_tests.cpp`, two compile-fail files; the `m33f_*` pins moved. No new core source.
+- Java: `Scheme.java`, `Ecc.java`, `EccRepair.java`, `BinaryPacker.java`; tests `PercentSchemeTest.java`, `PercentVectorsTest.java`.
+- Go: new `ecc_percent.go`, `scheme.go`, `ecc.go`, `pack.go`, `unpack.go`; tests `ecc_percent_test.go`, `ecc_percent_vectors_test.go`.
+- Swift: `Scheme.swift`, `Limits.swift`, `Ecc.swift`, `Pack.swift`, `Unpack.swift`; tests `EccPercentSupport.swift`, `EccPercentTests.swift`, `EccPercentVectorTests.swift`.
+- Ring: `scripts/ecc/ring_ecc.py`, `gen_ring_cases.py`, `fixtures/ecc/ring-cases.txt`, `.github/workflows/ring-ecc.test.sh` and the eight ECC drivers under `.github/workflows/drivers`.
+

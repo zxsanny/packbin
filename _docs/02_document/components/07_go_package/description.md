@@ -50,6 +50,7 @@ Optional parity bytes per scheme: `n` from 0 to 32, default 0, which keeps the b
 | Name | Meaning |
 |------|---------|
 | `(*Scheme).WithParity(n) (*Scheme, error)` | a copy with `n` parity bytes, limits kept (`WithLimits` keeps the count); `n` outside 0 to `MaxParity` (32) is an `*Error` of kind `InvalidScheme` naming `n` and 32. `Parity()` reads it |
+| `(*Scheme).WithParityPercent(p) (*Scheme, error)`, `ParityPercent()`, `MaxParityPercent` | a copy whose parity count is the percentage `p` (0 to 100) of each message's clear length, rounded up, at most 32; replaces a fixed count (and `WithParity` replaces a percentage); `p` outside 0 to 100 is an `*Error` of kind `InvalidScheme`. Under a percentage the limit is 0 to 16 and is lowered to `n / 2`; an impossible received length is `Uncorrectable`; a call needs one setting (message-ecc 1.1.0, ADR-010) |
 | `UnpackRepair(buf, limit, schemes...) (any, int, error)` | repairs up to `limit` wrong bytes (0 to `n / 2`) before the type byte picks the scheme; the `int` is the bytes repaired. `UnpackMapRepair` gives the map; `Unpack` and `UnpackMap` are limit 0. Another limit, or a mix of counts, is `InvalidScheme` before any byte is read |
 | `Uncorrectable`, `ErrUncorrectable` | the new `Kind` (string `uncorrectable`) and its sentinel for `errors.Is`; names no field |
 | `TooMany` (reused) | a buffer above 254 bytes, `Field` `NoField`, `Left` the length. A buffer shorter than `n` is `ShortPacket` naming the field `parity` |

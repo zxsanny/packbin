@@ -51,6 +51,7 @@ Optional parity bytes per scheme: `n` from 0 to 32, default 0, which keeps the b
 | Name | Meaning |
 |------|---------|
 | `Scheme.withParity(int)` | a copy with `n` parity bytes, limits kept; `withLimits` and `withMaxBytes` keep the count. A value outside 0 to 32 throws `IllegalArgumentException`. `parity()` reads it |
+| `Scheme.withParityPercent(int)`, `parityPercent()` | a copy whose parity count is the percentage (0 to 100) of each message's clear length, rounded up, at most 32; replaces a fixed count (and `withParity` replaces a percentage); a value outside 0 to 100 throws `IllegalArgumentException`. Under a percentage the limit is 0 to 16 and is lowered to `n / 2`; an impossible received length is `Uncorrectable`; a dispatch needs one setting (message-ecc 1.1.0, ADR-010) |
 | `BinaryPacker.unpackRepair(byte[], int limit, Scheme.Handler<?>...)` | repairs up to `limit` wrong bytes (0 to `n / 2`) before the type byte picks the handler; `unpack` is limit 0 and returns `null` when it reads. Another limit, or a mix of counts, throws `IllegalArgumentException` before any byte is read |
 | `Packbin.Repaired` | returned by `unpackRepair` when the message reads; `count` is the bytes repaired (0 for an intact or unprotected message) |
 | `Packbin.Uncorrectable` | returned when more bytes are wrong than `limit` allows; names no field |

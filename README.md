@@ -860,7 +860,7 @@ true
 
 ## Error correction
 
-A scheme can declare `n` parity bytes, 0 to 32 (default 0). Pack appends them to the packed message; unpack detects any corruption of up to `n` wrong bytes and can repair up to `t` of them. A wrong byte counts once however many of its bits flipped. The code is Reed-Solomon over GF(256) and also covers the clear length, which is not sent, so a message with one byte more or less is refused. The format is the contract [`message-ecc.md`](_docs/02_document/contracts/library/message-ecc.md) (ADR 007).
+A scheme can declare `n` parity bytes, 0 to 32 (default 0), or a percentage of the message length instead (see below). Pack appends them to the packed message; unpack detects any corruption of up to `n` wrong bytes and can repair up to `t` of them. A wrong byte counts once however many of its bits flipped. The code is Reed-Solomon over GF(256) and also covers the clear length, which is not sent, so a message with one byte more or less is refused. The format is the contract [`message-ecc.md`](_docs/02_document/contracts/library/message-ecc.md) (ADR 007).
 
 - **Off by default.** With `n` = 0 the bytes, the errors and the speed are those of a scheme without the setting.
 - **`n` is not on the wire.** Both sides declare the same `n`, as they share the field list.
@@ -883,6 +883,29 @@ A scheme can declare `n` parity bytes, 0 to 32 (default 0). Pack appends them to
 | C++ | `parity(scheme<Row>(...), n)`, `scheme.parity` | `unpack_repair(scheme, data, len, row, t)`, `unpack_repair(data, len, t, on(...)...)` | `Result.repaired` | `Error::Uncorrectable` (above 254 bytes: `Error::TooMany`) |
 
 A `parity` outside 0 to 32, a limit above `n / 2` and a mix of counts are refused as the package refuses a bad scheme: a `ValueError` (Python), a `RangeError` (TypeScript), an `ArgumentOutOfRangeException` or `ArgumentException` (C#), a panic for `with_parity` and an `UnpackError` for the limit, the mix and a hand-written handler's count above 32 (`BadParity`) (Rust), an `IllegalArgumentException` (Java), an `InvalidScheme` error (Go), a `.schemeError` (Swift), `Error::SchemeInvalid` for `n` and for a mix of counts and `Error::BadValue` for the limit (C++; a `constexpr` scheme with `n` above 32 does not compile). A clear message above `254 - n` bytes at pack is the package's pack refusal (`PackRefused` in Go, `.packError` in Swift, `PackError::Type` in Rust, `Error::TooMany` in C++, with `offset` the clear length, `needed` the limit and the written bytes zeroed).
+
+### A percentage instead of a count
+
+A scheme can declare a whole percentage `p`, 0 to 100, instead of `n`. The count is the percentage of the message's clear length, rounded up, at most 32: `n = min(32, ceil(p × L / 100))`. So 25 % of a 40-byte message is 10 parity bytes, 50 % of it is 20, and 100 % is one parity byte for each data byte up to 32. The receiver finds `L` from the received length alone, so nothing is added to the wire and both sides declare the same `p`. The code, the bytes and the 254-byte limit are those of a fixed `n` (the contract is [`message-ecc.md`](_docs/02_document/contracts/library/message-ecc.md) 1.1.0, ADR 010).
+
+- **A percentage and a count replace each other.** The last one set wins; both above 0 in one constructor or call is refused. `p` 0 is a scheme without parity, with the rules of `n` = 0. A `p` outside 0 to 100 is refused as a bad scheme.
+- **The largest clear message is 251 bytes at 1 %, 230 at 10 % and 222 from 25 % up** (the parity is capped at 32 bytes, so a percentage above 32 % of a 100-byte message adds no protection). A longer message is refused at pack, naming its length and the limit.
+- **A length no message has is refused.** At 100 %, for example, every odd length below 64 bytes is `uncorrectable`, and a buffer above 254 bytes is too long, as with a count.
+- **`t` is 0 to 16, and is lowered to `n / 2` of the message.** A short message gets the repair its parity allows, not an error. A `t` outside 0 to 16 is refused before any byte is read.
+- **One setting per unpack call.** The handlers (or schemes) of one call declare the same percentage, or the same count. A mix, two percentages or a percentage and a count, is refused.
+
+| Package | Declare `p` | Read it |
+|---------|-------------|---------|
+| Python | `scheme.with_limits(parity_percent=p)` | `scheme.parity_percent` |
+| TypeScript | `scheme.withLimits({ parityPercent: p })`, `new Scheme(type, fields, { parityPercent: p })` | `scheme.parityPercent` |
+| C# | `scheme.WithParityPercent(p)` | `scheme.ParityPercent` |
+| Rust | `scheme.with_parity_percent(p)` (the `nostd` scheme takes a `u8`, behind `ecc`) | `scheme.parity_percent()` |
+| Java | `scheme.withParityPercent(p)` | `scheme.parityPercent()` |
+| Go | `s.WithParityPercent(p)` (returns the scheme and an error) | `s.ParityPercent()`, `MaxParityPercent` |
+| Swift | `scheme.withLimits(parityPercent: p)` | `scheme.parityPercent` |
+| C++ | `parity_percent(scheme<Row>(...), p)` | `scheme.parity_percent` |
+
+Unpack, the repaired count and the errors are those of the table above. The package refusals of a bad percentage are the ones of a bad `parity`: a `ValueError`, a `RangeError`, an `ArgumentOutOfRangeException`, a panic in Rust (`SchemeInvalid` in `nostd`), an `IllegalArgumentException`, an `InvalidScheme` error, a `.schemeError`, `Error::SchemeInvalid` (a compile error in a `constexpr` C++ scheme). `PACKBIN_NO_ECC` removes the percentage with the rest of the feature.
 
 Each example packs a 3-byte message (type byte and a `u16`) with `n` = 4, flips one byte and unpacks with `t` = 2. The message is 7 bytes and one byte is repaired.
 

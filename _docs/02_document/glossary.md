@@ -99,6 +99,11 @@ A borrowed view of the payload of a compact string (after its count header), not
 
 The `n` bytes (0 to 32, default 0) that a scheme with error correction appends after the packed fields. A Reed-Solomon code over GF(256) makes them, and they also cover the clear length, which is not sent. `n` is not on the wire: both sides declare the same count. With `n` = 0 the bytes, the errors and the speed are those of a scheme without the setting. A message, parity included, is at most 254 bytes, so the clear message is at most `254 - n`. (source: ADR-007; message-ecc.md)
 
+
+## Parity percentage
+
+A way to choose the parity count without naming it: a scheme declares a whole percentage `p` (0 to 100) and each message carries `min(32, ceil(p × L / 100))` parity bytes for its `L` clear bytes, so 25 % of a 40-byte message is 10 bytes. The receiver finds `L` from the received length, so nothing is added to the wire; both sides declare the same `p`. A percentage and a fixed count replace each other; 0 is a scheme without parity. (source: ADR-010; message-ecc.md 1.1.0)
+
 ## Correction limit
 
 The number `t` of wrong bytes a receiver is willing to repair, 0 to `n / 2`, chosen at each unpack call (default 0, detect only). A `t` above `n / 2` is refused before any byte is read. Repairing gives up detection: corruption of `t + 1` to `n - t` bytes is still refused, but a larger corruption may be repaired to a different message; the contract lists the chance for each `n` and `t`. (source: message-ecc.md, "Detection and the correction limit")

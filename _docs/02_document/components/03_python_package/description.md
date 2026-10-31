@@ -69,6 +69,7 @@ Optional parity bytes per scheme: `n` from 0 to 32, default 0, which keeps the b
 |------|---------|
 | `Scheme.with_limits(..., parity=n)` | sets `n`; `parity` left out keeps this scheme's count (a limit left out is still the default). A value that is not a whole number of 0 to 32 raises `ValueError` naming `n` and 32 |
 | `Scheme.parity` | the count |
+| `Scheme.with_limits(..., parity_percent=p)`, `Scheme.parity_percent` | the parity count is the percentage `p` (0 to 100) of each message's clear length, rounded up, at most 32; replaces a count (and `parity=` a percentage); both above 0 in one call, or `p` that is not a whole number of 0 to 100, raises `ValueError`. Under a percentage `limit` is 0 to 16 and is lowered to `n // 2`; an impossible received length is `Uncorrectable()`; a dispatch needs one setting (message-ecc 1.1.0, ADR-010) |
 | `BinaryPacker.unpack(data, *handlers, limit=t)` | repairs up to `t` wrong bytes (0 to `n / 2`, default 0); another `limit` raises `ValueError` before any byte is read |
 | `UnpackResult.repaired` | the number of bytes repaired, 0 for an intact or unprotected message |
 | `Uncorrectable()` | in `UnpackResult.error` when more bytes are wrong than `t` allows; names no field, `value` is `None` |

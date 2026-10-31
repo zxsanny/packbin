@@ -53,6 +53,7 @@ Optional parity bytes per scheme: `n` from 0 to 32, default 0, which keeps the b
 | Name | Meaning |
 |------|---------|
 | `Scheme<T>.WithParity(int parity)` | a copy with `n` parity bytes, limits kept; a value outside 0 to 32 throws `ArgumentOutOfRangeException` naming `n` and 32. There is no `parity` argument on `WithLimits`: `WithLimits` keeps the count |
+| `Scheme<T>.WithParityPercent(int percent)`, `ParityPercent` | a copy whose parity count is the percentage (0 to 100) of each message's clear length, rounded up, at most 32; replaces a fixed count (and `WithParity` replaces a percentage); a value outside 0 to 100 throws `ArgumentOutOfRangeException`. Under a percentage `limit` is 0 to 16 and is lowered to `n / 2` of the message; an impossible received length is `Uncorrectable`; a dispatch needs one setting (message-ecc 1.1.0, ADR-010) |
 | `Scheme<T>.Parity` | the count |
 | `BinaryPacker.Unpack(bytes, int limit, out int repaired, params SchemeHandler[] handlers)` | repairs up to `limit` wrong bytes (0 to `n / 2`) before the type byte picks the handler; `Unpack(bytes, handlers)` is limit 0. Another `limit` throws `ArgumentOutOfRangeException` before any byte is read |
 | `out int repaired` | the number of bytes repaired, 0 for an intact or unprotected message |
