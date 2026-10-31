@@ -12,6 +12,9 @@ Source of rows: `intake` (new-task Step 4.7, loop 92). Status: confirmed / out-o
 | S6 | Lengths 0 to 129 and the counter at `0xffffffff` and `0xfffffffe` | confirmed | each case matches the stream built from `chacha20_block`, or is refused with the data unchanged | AC-3, AC-4 | intake |
 | S7 | The existing Uno example builds and the budget checks run | confirmed | unchanged figures and budgets; `lib.test.sh` and `run-parts.test.sh` pass unchanged | AC-6 | intake |
 | S8 | The run shows a wrong byte from `chacha20_xor` on AVR | confirmed | the row fails with the case named; the loop stops and reports the defect, no expectation is relaxed | AC-5, AC-6 | intake |
+| D1 | simavr 1.6 console register prints nothing and its header does not compile as C++ | confirmed | the report goes over the UART with no library header | Constraints | assess-round-1 |
+| D2 | The report check needs no separate parser test | confirmed | one `diff` against the expected file, covered by the five real-path failure runs | AC-5 | assess-round-1 |
+| D3 | A buffer near 64 KiB (the wrap the code comment names) | out-of-scope | cannot be reached on a 2 KB part; the Medium concern stays open | — | assess-round-1 |
 
 ## Fit decisions
 

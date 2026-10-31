@@ -264,3 +264,25 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 **Expected outcome**: one report row per target; a failing target fails the workflow.
 **Max execution time**: —
 
+
+### FT-E-14: `chacha20_xor` runs on a 16-bit AVR (loop 92)
+
+**Summary**: One image runs on `simavr` (ATmega328P, 16 MHz) and checks `chacha20_xor` on a 16-bit `int` and `size_t` (AZ-3452).
+**Traces to**: AZ-3452 AC-1 to AC-6
+**Category**: Bytes
+
+**Preconditions**:
+- The `packbin-embedded` image with `simavr`; the core's crypto file built with the Uno flags
+
+**Input data**: key `00..1f`; the RFC 8439 2.4.2 nonce, counter 1 and 114-byte plaintext; lengths 0, 1, 63, 64, 65, 114, 127, 128, 129; the five counter-edge cases of the host test `block_counter_edge`
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | the `cpp-avr-uno` row runs the image on `simavr` | the UART report equals `cpp/embedded/avr/chacha20_expected.txt`: `SIZES size_t=2 int=2`, `RFC 114/114`, `STREAM 9/9`, `RESTORED 9/9`, `EDGE 5/5`, `DONE` |
+| 2 | one expected byte changed; a defect in `chacha20_xor`; an image that never ends; `simavr` missing; `simavr` silent | the row fails and names the cause (diff, 30 s limit, missing tool) |
+
+**Expected outcome**: the row passes with the report above and fails on each of the five defects.
+**Not run by**: a real ATmega328P; a buffer near 64 KiB (the part has 2 KB of RAM)
+**Max execution time**: 30s for the emulator run

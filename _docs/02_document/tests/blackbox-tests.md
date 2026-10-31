@@ -9,7 +9,7 @@ The blackbox scenarios were one file of 1 990 lines. Loop 19 (step 12) split the
 | [blackbox-tests-03-schemes-and-markers.md](blackbox-tests-03-schemes-and-markers.md) | FT-S-01 to FT-S-07, FT-B-01 to FT-B-05 | the scheme type byte, dispatch, field ids, flag-bit accessors |
 | [blackbox-tests-04-counted-and-order.md](blackbox-tests-04-counted-and-order.md) | FT-C-01 to FT-C-05, FT-O-01 to FT-O-06 | borrowed counts, field order and anchors |
 | [blackbox-tests-05-sessions.md](blackbox-tests-05-sessions.md) | FT-K-02 to FT-K-09 (retired) | retired in loop 74 (ADR 009): the stream session over one connection; kept as history. Frame mode is in files 22 and 24 |
-| [blackbox-tests-06-embedded.md](blackbox-tests-06-embedded.md) | FT-E-01 to FT-E-13 | C++ core on microcontrollers (no heap, flash and stack budgets, targets in CI) |
+| [blackbox-tests-06-embedded.md](blackbox-tests-06-embedded.md) | FT-E-01 to FT-E-14 | C++ core on microcontrollers (no heap, flash and stack budgets, targets in CI) |
 | [blackbox-tests-07-hostile-case-file.md](blackbox-tests-07-hostile-case-file.md) | FT-X-01 to FT-X-10 | the hostile case file (40 cases after loop 20; 65 after loop 22, see file 15; unchanged in loops 23 to 26, Go and Swift read it too, see files 17 and 19), C++ scope rules, bool and `eq` rules, the pack stage |
 | [blackbox-tests-08-rounds-and-flags-loop18.md](blackbox-tests-08-rounds-and-flags-loop18.md) | FT-X-11 to FT-X-16 | lone values in a round, `when`/`times`/`repeat` as `flags` members, flag-byte scope, split-bit numbering (loop 18) |
 | [blackbox-tests-09-csharp-typed-rows.md](blackbox-tests-09-csharp-typed-rows.md) | FT-X-17 to FT-X-21 | C# typed rows, `Flags` elements and rings, strict slots, dictionary repack (loop 18) |

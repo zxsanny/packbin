@@ -9,12 +9,6 @@ Downstream skills consume this file:
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
 
-- [2026-10-27] [estimation] Probe each handoff candidate on HEAD before writing its spec: in loop 76 three of seven descriptions were wrong or incomplete (a probe that crashed instead of doing an extra compile; a Rust failure in 22 test files and not only the frame set; a probe FAIL that was a key-order error in the probe) and the wrong key order also sat in two more probes the handoff did not list (loop 76).
-  Source: _docs/loops/loop76/record76.md
-- [2026-10-27] [tooling] A CI suite that names its test targets one by one (`--test <name>`) hides a missing feature gate in every other test file; build every feature set with `--no-run` after adding a test file (loop 76).
-  Source: _docs/loops/loop76/record76.md
-- [2026-10-27] [process] A self-test that replaces the drivers with a stand-in proves the script and the checker and nothing else: the frame ring was pushed with only that run, CI went red on `dev` and `main` with six defects (Swift 6 on Linux refused `stderr`; a test script still counted 13 cargo runs; the C++ driver did not link `frame.cpp`; the TypeScript and Java drivers called `FrameDirections` wrongly; the self-test ran in no CI job), and the first real run found two of them in 21 s. Run the real ring and every CI step in `test.yml` order before the first push, and read CI on `dev` before `main` (loop 77).
-  Source: _docs/loops/loop77/record77.md
 - [2026-10-27] [process] A comparison harness with only good rows passes a package that accepts forgeries: add rows that must be refused and a stand-in reader that accepts them, and show once that a real defective driver turns the harness red (the TypeScript short-packet name did, loop 77); `vectors.txt` already held the refusals per package, which is why the ring keeps only tamper rows and leaves the refusal-by-name rows to a later loop.
   Source: _docs/loops/loop77/record77.md
 - [2026-10-28] [process] A CI step added to `test.yml` also goes into `scripts/loop-tests.sh` in the same commit: step 11 of loop 77 passed 14 stages without running the frame ring or its self-test, because the `ring` and `scaffold` stages list their scripts by hand (found in loop 78 by comparing the two).
@@ -39,3 +33,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-30_loop89.md
 - [2026-10-30] [testing] Prove a failing gate on the real path with one injected defect, reverted at once (a lint in `rust/src/lib.rs` ran through the `rust` compose service: exit 1, set named), besides the stubbed shell case (loop 89).
   Source: _docs/06_metrics/retro_2026-10-30_loop89.md
+- [2026-10-31] [tooling] simavr 1.6 prints nothing for its console register and its `avr_mcu_section.h` does not compile as C++: report over the UART (`UDR0`), strip the colour codes, and treat each line end shown as a dot (loop 92).
+  Source: _docs/06_metrics/retro_2026-10-31_loop92.md
+- [2026-10-31] [testing] An emulator gate that diffs the whole report against an expected file fails on a changed line, a missing line and no output alike; prove it with five injected runs (changed byte, defect, hang, tool missing, silent fake tool), each reverted (loop 92).
+  Source: _docs/06_metrics/retro_2026-10-31_loop92.md
+- [2026-10-31] [estimation] Name the reach limit of a runtime check in the spec first: the 16-bit `size_t` wrap needs a buffer near 64 KiB and an ATmega328P has 2 KB of RAM, so the run checks the arithmetic, not the wrap (loop 92).
+  Source: _docs/06_metrics/retro_2026-10-31_loop92.md
