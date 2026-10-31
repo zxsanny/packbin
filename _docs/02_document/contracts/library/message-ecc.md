@@ -1,12 +1,12 @@
 # Contract: message-ecc
 
 **Component**: library (all 8 packages)
-**Producer task**: AZ-2678 — AZ-2678_ecc_format_spec.md
+**Producer task**: AZ-2678 — AZ-2678_ecc_format_spec.md; 1.1.0: AZ-3499 (parity percentage)
 **Consumer tasks**: AZ-2679, AZ-2680, AZ-2681, AZ-2682, AZ-2683, AZ-2684, AZ-2685, AZ-2686, AZ-2687, AZ-2688, AZ-2689, AZ-2690
-**Version**: 1.0.1
+**Version**: 1.1.0
 **Status**: current
-**Last Updated**: 2026-10-27
-**Reference**: `scripts/ecc/eccfmt.py`; vectors `fixtures/ecc/vectors.txt`; position rows `_docs/02_task_plans/message-error-correction/input_data/expected_results/results_report.md`
+**Last Updated**: 2026-11-01
+**Reference**: `scripts/ecc/eccfmt.py`; vectors `fixtures/ecc/vectors.txt` (fixed count) and `fixtures/ecc/percent-vectors.txt` (percentage); position rows `_docs/02_task_plans/message-error-correction/input_data/expected_results/results_report.md`
 
 ## Purpose
 
@@ -60,6 +60,25 @@ parity    = n bytes, none when n = 0
 
 Refusal names (`kind`), used by `fixtures/ecc/vectors.txt`: `uncorrectable`, `short`, `too_long`, `bad_parity`, `bad_limit`.
 
+### Parity percentage (1.1.0)
+
+A scheme may declare a **percentage** `p`, an integer 0 to 100, instead of a count. The code, the field, the wire order and the 254-byte limit are those above; only the count `n` changes: it is derived from the message.
+
+| Rule | Behavior |
+|------|----------|
+| Count | For a clear message of `L` bytes, `n(p, L) = min(32, (p × L + 99) div 100)`: the percentage of `L`, rounded up, at most 32. Integer arithmetic only. `p` 0 gives 0 for every `L`. |
+| Pack | `p` 0: the clear bytes only, as a scheme without parity (no 254-byte limit). `p` 1 to 100: the clear bytes then `n(p, L)` parity bytes, exactly what a scheme with that fixed count writes. A clear message above the largest clear length of `p` is refused as `too_long` naming its length and that limit, and writes nothing. Largest clear lengths: `p` 1 → 251, 10 → 230, 25 → 222, 50 → 222, 100 → 222. |
+| Unpack | `n` is not on the wire. For `p` 1 to 100 the receiver finds the one `L` with `L + n(p, L) = N` (`N` the received length; it is unique because `L + n(p, L)` is strictly increasing) and reads `n = N - L`. A buffer above 254 bytes is `too_long`. An `N` that no `L` gives is `uncorrectable`, no values, no field named (for `p` 100, every odd `N` below 64; 3, 24, 32, 32 and 32 of the lengths 0 to 254 for `p` 1, 10, 25, 50 and 100). `p` 0 reads the bytes as they are. |
+| Correction limit | `t` is 0 to 16, any `n`. Below 0 or above 16 is `bad_limit` before any byte is read. A `t` above `n / 2` of this message is lowered to `n / 2`; the repaired count is the real one. (A fixed count keeps its exact rule above: `t` above `n / 2` is `bad_limit`.) |
+| Setting | `p` below 0 or above 100, or `p` above 0 together with a fixed count above 0 declared in one constructor, is refused when the scheme is built as `bad_parity` (the package's invalid-scheme error naming the percentage and 100). Setting a percentage on a scheme that has a count replaces the count, and the other way round (the last setter wins); the setters of the other limits keep whichever one the scheme has. |
+| Dispatch | A call that picks the scheme from the type byte accepts handlers only when all declare the same setting: the same percentage, or the same fixed count. A mix (two percentages, or a percentage with a count) is refused when the call is built, before any byte is read, as a mix of counts is. A handler that states its own count (Rust `DispatchHandler`) states its percentage too, 0 by default. |
+| Build flag | C++ `PACKBIN_NO_ECC` removes the percentage with the rest of the feature (a percentage above 0 is then `SchemeInvalid`). |
+| Work bound | The search for `L` adds at most 255 integer steps to the bound above. |
+
+Refusal names are those of the table above; the percentage adds no kind. Vectors: `fixtures/ecc/percent-vectors.txt` (row words `pct`, `encp`, `inv`, `limp`, `fixp`, `badp`, `parp`, `lmtp`; syntax at the top of the file); the reference is `eccfmt.py` (`parity_count`, `largest_clear`, `clear_length`, `protect_percent`, `decode_percent`).
+
+Spelling by package (follows each package's other scheme setting; the README gives the final forms): Python `with_limits(parity_percent=p)`, TypeScript `withLimits({ parityPercent: p })`, C# `WithParityPercent(p)`, Rust `with_parity_percent(p)`, Java `withParityPercent(p)`, Go `WithParityPercent(p)`, Swift `withLimits(parityPercent: p)`, C++ `parity_percent(scheme, p)`.
+
 ### Detection and the correction limit
 
 With `n` parity bytes the code detects any corruption of up to `n` wrong bytes. If a caller allows repair of `t` bytes, it gives up detection: any corruption of `t + 1` to `n - t` bytes is still refused, but a larger corruption may be repaired to a *different* message. The chance that random bytes of the fixture's length (13 clear bytes + `n`) are accepted:
@@ -91,7 +110,7 @@ With `n` parity bytes the code detects any corruption of up to `n` wrong bytes. 
 
 ## Versioning
 
-Any change to the field polynomial, the roots, the length byte, the position of the parity or the limits is a wire break for protected schemes and a new contract version.
+A new setting that only adds a way to choose `n` is a minor version. Any change to the field polynomial, the roots, the length byte, the position of the parity or the limits is a wire break for protected schemes and a new contract version.
 
 ## Change Log
 
@@ -100,3 +119,4 @@ Any change to the field polynomial, the roots, the length byte, the position of 
 | 1.0.0 | 2026-10-18 | First version (loop 38, AZ-2678). |
 | 1.0.0 | 2026-10-19 | Loop 41 audit (AZ-2666): the work bound restated (F55); a handler's count above 32 refused at dispatch (F52). No wire change. |
 | 1.0.1 | 2026-10-27 | Editorial: the Session row is removed with the stream session (ADR 009), and with it the session parts of the Dispatch row (a session that is not open answered first; the receive index); ECC bytes and rules unchanged. |
+| 1.1.0 | 2026-11-01 | Parity percentage (loop 97, AZ-3499): a scheme may declare a percentage of the clear length instead of a count; the count is `min(32, ceil(p × L / 100))` and unpack finds it from the received length. Additive: schemes with a fixed count are unchanged. |

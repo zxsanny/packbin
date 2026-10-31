@@ -6,6 +6,7 @@ not sent: the clear length, placed before the clear message. That makes a lost o
 check (a plain systematic code accepts a clear message with one trailing zero byte more or less). Python 3.9+, standard
 library only.
 """
+from functools import lru_cache
 from math import comb
 from fractions import Fraction
 
@@ -48,8 +49,9 @@ def inv(a):
     return EXP[255 - LOG[a]]
 
 
+@lru_cache(maxsize=None)
 def generator(n):
-    """Monic generator, highest degree first."""
+    """Monic generator, highest degree first (cached: callers only read it)."""
     g = [1]
     for i in range(n):
         out = [0] * (len(g) + 1)
@@ -57,7 +59,7 @@ def generator(n):
             out[j] ^= c
             out[j + 1] ^= mul(c, EXP[i])
         g = out
-    return g
+    return tuple(g)
 
 
 def check_parity(n):
@@ -175,6 +177,78 @@ def decode(received, n, t):
     if any(syndromes(word, n)):
         raise EccError(UNCORRECTABLE, "repair does not verify")
     return bytes(word[:size - n]), deg
+
+
+MAX_PERCENT = 100
+MAX_PERCENT_LIMIT = MAX_PARITY // 2   # the repair limit of a percentage scheme: 0 to 16; a limit above n // 2 of the message is lowered
+
+
+def check_percent(p, n=0):
+    """A scheme declares a percentage 0 to 100, or a fixed count, not both."""
+    if not isinstance(p, int) or p < 0 or p > MAX_PERCENT or (p > 0 and n > 0):
+        raise EccError(BAD_PARITY, "percent=%r count=%r, limit %d" % (p, n, MAX_PERCENT))
+
+
+def parity_count(p, length):
+    """Parity bytes of a clear message of `length` bytes under percentage p: the percentage of the length, rounded up, at most 32."""
+    check_percent(p)
+    return min(MAX_PARITY, (p * length + 99) // 100)
+
+
+def largest_clear(p):
+    """Largest clear length under percentage 1 to 100 (the sent length stays within 254); None for 0, which adds nothing."""
+    check_percent(p)
+    if p == 0:
+        return None
+    length = 0
+    while length + 1 + parity_count(p, length + 1) <= MAX_BLOCK:
+        length += 1
+    return length
+
+
+def clear_length(p, sent):
+    """The one clear length whose protected message is `sent` bytes long, or None when no message has that length."""
+    check_percent(p)
+    if p == 0:
+        return sent
+    for length in range(min(sent, MAX_BLOCK) + 1):
+        if length + parity_count(p, length) == sent:
+            return length
+    return None
+
+
+def protect_percent(clear, p):
+    check_percent(p)
+    if p == 0:
+        return bytes(clear)
+    if len(clear) > largest_clear(p):
+        raise EccError(TOO_LONG, "clear %d, limit %d" % (len(clear), largest_clear(p)))
+    return protect(clear, parity_count(p, len(clear)))
+
+
+def protect_percent_refused(p, length):
+    """The refusal kind of a clear message of `length` zero bytes under p, or None when it is protected."""
+    try:
+        protect_percent(bytes(length), p)
+    except EccError as x:
+        return x.kind
+    return None
+
+
+def decode_percent(received, p, t):
+    """Returns (clear, repaired). The count comes from the received length; a limit above n // 2 of this message is lowered."""
+    check_percent(p)
+    if not isinstance(t, int) or t < 0 or t > MAX_PERCENT_LIMIT:
+        raise EccError(BAD_LIMIT, "t=%r, limit %d" % (t, MAX_PERCENT_LIMIT))
+    if p == 0:
+        return decode(received, 0, 0)
+    if len(received) > MAX_BLOCK:
+        raise EccError(TOO_LONG, "buffer %d, limit %d" % (len(received), MAX_BLOCK))
+    length = clear_length(p, len(received))
+    if length is None:
+        raise EccError(UNCORRECTABLE, "no clear length gives %d sent bytes" % len(received))
+    n = len(received) - length
+    return decode(received, n, min(t, n // 2))
 
 
 def accept_fraction(clear_len, n, t):

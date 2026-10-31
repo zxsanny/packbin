@@ -511,3 +511,14 @@ Loop 74 (2026-10-26, ADR-009: remove the stream session; D1 frame names; D2 cryp
 | AZ-3479 | drop_m4f_rows (loop 94) | 3 | None | none |
 | AZ-3483 | arm_no_text_no_ecc_run (loop 95) | 3 | None | none |
 | AZ-3495 | ring_multipart_mac_rows (loop 96) | 5 | None | none |
+| AZ-3499 | parity_percent_reference (loop 97) | 3 | None | none |
+| AZ-3500 | parity_percent_python (loop 97) | 3 | AZ-3499 | none |
+| AZ-3501 | parity_percent_typescript (loop 97) | 3 | AZ-3499 | none |
+| AZ-3502 | parity_percent_csharp (loop 97) | 3 | AZ-3499 | none |
+| AZ-3503 | parity_percent_java (loop 97) | 3 | AZ-3499 | none |
+| AZ-3504 | parity_percent_go (loop 97) | 3 | AZ-3499 | none |
+| AZ-3505 | parity_percent_swift (loop 97) | 3 | AZ-3499 | none |
+| AZ-3506 | parity_percent_rust (loop 97) | 5 | AZ-3499 | none |
+| AZ-3507 | parity_percent_cpp (loop 97) | 5 | AZ-3499 | none |
+| AZ-3508 | parity_percent_ring (loop 97) | 5 | AZ-3499, AZ-3500, AZ-3501, AZ-3502, AZ-3503, AZ-3504, AZ-3505, AZ-3506, AZ-3507 | none |
+| AZ-3509 | parity_percent_docs (loop 97) | 3 | AZ-3500, AZ-3501, AZ-3502, AZ-3503, AZ-3504, AZ-3505, AZ-3506, AZ-3507 | none |
