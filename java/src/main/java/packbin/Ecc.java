@@ -70,6 +70,43 @@ final class Ecc {
         }
     }
 
+    static void checkPercent(int p) {
+        if (p < 0 || p > 100) {
+            throw new IllegalArgumentException("parity percentage must be 0 to 100, got " + p);
+        }
+    }
+
+    /** The parity count of a clear message of {@code length} bytes under percentage p: integer arithmetic only. */
+    static int percentCount(int p, int length) {
+        return Math.min(MAX_PARITY, (p * length + 99) / 100);
+    }
+
+    /** The largest clear length under percentage 1 to 100: the sent length stays within {@link #MAX_BLOCK}. */
+    static int largestClear(int p) {
+        int length = 0;
+        while (length + 1 + percentCount(p, length + 1) <= MAX_BLOCK) {
+            length++;
+        }
+        return length;
+    }
+
+    /** The one clear length whose protected message is {@code sent} bytes long under p (1 to 100), or -1. */
+    static int clearLength(int p, int sent) {
+        for (int length = 0; length <= Math.min(sent, MAX_BLOCK); length++) {
+            if (length + percentCount(p, length) == sent) {
+                return length;
+            }
+        }
+        return -1;
+    }
+
+    /** The limit of a percentage scheme is 0 to 16 whatever the count; it is lowered to n / 2 once n is known. */
+    static void checkPercentLimit(int t) {
+        if (t < 0 || t > MAX_PARITY / 2) {
+            throw new IllegalArgumentException("correction limit must be 0 to " + MAX_PARITY / 2 + ", got " + t);
+        }
+    }
+
     static void checkLimit(int t, int n) {
         if (t < 0 || t > n / 2) {
             throw new IllegalArgumentException(
@@ -86,23 +123,49 @@ final class Ecc {
     }
 
     /**
-     * The parity every handler declares. Handlers with different counts could not share one repair, so a mix is
-     * refused, naming both counts; the limit is checked against the shared count. Throws before any byte is read.
+     * The scheme of the first handler, whose parity setting (a count or a percentage) every handler declares.
+     * Handlers with different settings could not share one repair, so a mix is refused, naming both; the limit is
+     * checked against the shared setting. Throws before any byte is read.
      */
-    static int sharedParity(Scheme.Handler<?>[] handlers, int limit) {
+    static Scheme<?> sharedSetting(Scheme.Handler<?>[] handlers, int limit) {
         Objects.requireNonNull(handlers, "handlers");
-        int n = 0;
+        Scheme<?> first = null;
         for (int i = 0; i < handlers.length; i++) {
-            int declared = Objects.requireNonNull(handlers[i], "handler").scheme.parity;
+            Scheme<?> declared = Objects.requireNonNull(handlers[i], "handler").scheme;
             if (i == 0) {
-                n = declared;
-            } else if (declared != n) {
-                throw new IllegalArgumentException(
-                        "handlers declare " + n + " and " + declared + " parity bytes; they must declare the same count");
+                first = declared;
+            } else if (declared.parity != first.parity || declared.parityPercent != first.parityPercent) {
+                if (first.parityPercent == 0 && declared.parityPercent == 0) {
+                    throw new IllegalArgumentException("handlers declare " + first.parity + " and " + declared.parity
+                            + " parity bytes; they must declare the same count");
+                }
+                throw new IllegalArgumentException("handlers declare " + describe(first) + " and " + describe(declared)
+                        + "; they must declare the same count or percentage");
             }
         }
-        checkLimit(limit, n);
-        return n;
+        if (first.parityPercent > 0) {
+            checkPercentLimit(limit);
+        } else {
+            checkLimit(limit, first.parity);
+        }
+        return first;
+    }
+
+    private static String describe(Scheme<?> scheme) {
+        return scheme.parityPercent > 0 ? scheme.parityPercent + " percent parity" : scheme.parity + " parity bytes";
+    }
+
+    /** The clear message followed by its parity under percentage p; the clear message itself when p is 0. */
+    static byte[] protectPercent(byte[] clear, int p) {
+        if (p == 0) {
+            return clear;
+        }
+        int n = percentCount(p, clear.length);
+        if (clear.length + n > MAX_BLOCK) {
+            throw new IllegalArgumentException("the packet would be " + clear.length + " bytes, above the limit of "
+                    + largestClear(p) + " bytes for a parity of " + p + " percent");
+        }
+        return protect(clear, n);
     }
 
     /** The clear message followed by its n parity bytes; the clear message itself when n is 0. */

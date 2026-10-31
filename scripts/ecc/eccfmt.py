@@ -241,7 +241,7 @@ def decode_percent(received, p, t):
     if not isinstance(t, int) or t < 0 or t > MAX_PERCENT_LIMIT:
         raise EccError(BAD_LIMIT, "t=%r, limit %d" % (t, MAX_PERCENT_LIMIT))
     if p == 0:
-        return decode(received, 0, 0)
+        return decode(received, 0, t)   # percentage 0 is a scheme without parity: its limit rule is that of count 0
     if len(received) > MAX_BLOCK:
         raise EccError(TOO_LONG, "buffer %d, limit %d" % (len(received), MAX_BLOCK))
     length = clear_length(p, len(received))

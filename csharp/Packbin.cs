@@ -11,6 +11,9 @@ public sealed class Scheme<T> where T : class, new()
     // Parity bytes appended to every packed message (0 to 32); 0 is the unprotected format of every earlier release.
     public int Parity { get; }
 
+    // Parity as a percentage of the clear length (0 to 100); above 0 it replaces the fixed count (message-ecc 1.1.0).
+    public int ParityPercent { get; }
+
     public Scheme(int typeNumber, params Field[] fields)
     {
         if (typeNumber is < 0 or > 255)
@@ -24,7 +27,7 @@ public sealed class Scheme<T> where T : class, new()
     {
     }
 
-    private Scheme(Scheme<T> source, int maxRounds, long maxSlots, long maxBytes, int parity)
+    private Scheme(Scheme<T> source, int maxRounds, long maxSlots, long maxBytes, int parity, int parityPercent)
     {
         if (maxRounds < 1)
             throw new ArgumentOutOfRangeException(nameof(maxRounds), maxRounds, "must be at least 1");
@@ -38,7 +41,9 @@ public sealed class Scheme<T> where T : class, new()
         MaxSlots = maxSlots;
         MaxBytes = maxBytes;
         Ecc.RequireParity(parity);
+        Ecc.RequirePercent(parityPercent);
         Parity = parity;
+        ParityPercent = parityPercent;
     }
 
     // The loop 19 signature, kept so code compiled against it still binds. It sets the round and slot limits and leaves the
@@ -51,10 +56,16 @@ public sealed class Scheme<T> where T : class, new()
         int maxRounds = BinaryPacker.DefaultMaxRounds,
         long maxSlots = BinaryPacker.DefaultMaxSlots,
         long maxBytes = BinaryPacker.DefaultMaxBytes) =>
-        new(this, maxRounds, maxSlots, maxBytes, Parity);
+        new(this, maxRounds, maxSlots, maxBytes, Parity, ParityPercent);
 
     // The same scheme with `parity` bytes of error correction (message-ecc contract). Limits are kept.
-    public Scheme<T> WithParity(int parity) => new(this, MaxRounds, MaxSlots, MaxBytes, parity);
+    public Scheme<T> WithParity(int parity) => new(this, MaxRounds, MaxSlots, MaxBytes, parity, 0);
+
+    // The same scheme with parity of `percent` of the clear length, rounded up, at most 32 bytes. Replaces a fixed count.
+    public Scheme<T> WithParityPercent(int percent) => new(this, MaxRounds, MaxSlots, MaxBytes, 0, percent);
+
+    internal byte[] Protect(byte[] clear) =>
+        ParityPercent > 0 ? Ecc.ProtectPercent(clear, ParityPercent) : Ecc.Protect(clear, Parity);
 
     public SchemeHandler On(Action<T> handler) => new SchemeHandler<T>(this, handler);
 }
@@ -63,6 +74,7 @@ public abstract class SchemeHandler
 {
     internal abstract int TypeNumber { get; }
     internal abstract int Parity { get; }
+    internal abstract int ParityPercent { get; }
     internal abstract object? Dispatch(ReadOnlySpan<byte> fieldBytes);
 }
 
@@ -80,6 +92,8 @@ internal sealed class SchemeHandler<T> : SchemeHandler where T : class, new()
     internal override int TypeNumber => _scheme.TypeNumber;
 
     internal override int Parity => _scheme.Parity;
+
+    internal override int ParityPercent => _scheme.ParityPercent;
 
     internal override object? Dispatch(ReadOnlySpan<byte> fieldBytes)
     {
@@ -167,10 +181,10 @@ public static class BinaryPacker
     public const long DefaultMaxBytes = 16_777_216;
 
     public static byte[] Pack<T>(Scheme<T> scheme, IReadOnlyDictionary<string, object?> values) where T : class, new() =>
-        Ecc.Protect(PackClear(scheme, values), scheme.Parity);
+        scheme.Protect(PackClear(scheme, values));
 
     public static byte[] Pack<T>(Scheme<T> scheme, T? values) where T : class, new() =>
-        Ecc.Protect(PackClear(scheme, values), scheme.Parity);
+        scheme.Protect(PackClear(scheme, values));
 
     // The packed fields without parity: what an unprotected scheme writes.
     internal static byte[] PackClear<T>(Scheme<T> scheme, IReadOnlyDictionary<string, object?> values) where T : class, new()
@@ -199,7 +213,12 @@ public static class BinaryPacker
     {
         repaired = 0;
         RequireHandlers(handlers);
-        var parity = Ecc.SharedParity(handlers, limit);
+        var parity = Ecc.SharedParity(handlers, limit, out var percent);
+        if (percent > 0)
+        {
+            var failure = Ecc.RepairPercent(bytes, percent, limit, out var found, out repaired, out var count);
+            return failure ?? Dispatch(found.AsSpan(0, found.Length - count), handlers);
+        }
         if (parity == 0)
             return Dispatch(bytes, handlers);
         var error = Ecc.Repair(bytes, parity, limit, out var word, out repaired);

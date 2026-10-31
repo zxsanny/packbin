@@ -42,6 +42,42 @@ internal static partial class Ecc
         return null;
     }
 
+    // The one clear length whose protected message is `sent` bytes (L + n(p, L) is strictly increasing), or -1.
+    internal static int ClearLength(int percent, int sent)
+    {
+        if (percent == 0)
+            return sent;
+        for (var length = 0; length <= sent; length++)
+        {
+            if (length + ParityCount(percent, length) == sent)
+                return length;
+        }
+        return -1;
+    }
+
+    // Repair under a percentage: the count comes from the received length; a limit above n / 2 is lowered to it.
+    // `parity` is the real count. A length no clear message has is Uncorrectable.
+    internal static object? RepairPercent(
+        ReadOnlySpan<byte> received, int percent, int limit, out byte[] word, out int repaired, out int parity)
+    {
+        parity = 0;
+        if (received.Length > MaxBlock)
+        {
+            word = [];
+            repaired = 0;
+            return new TooLong(received.Length, MaxBlock);
+        }
+        var length = ClearLength(percent, received.Length);
+        if (length < 0)
+        {
+            word = [];
+            repaired = 0;
+            return new Uncorrectable();
+        }
+        parity = received.Length - length;
+        return Repair(received, parity, Math.Min(limit, parity / 2), out word, out repaired);
+    }
+
     private static byte[] Syndromes(byte[] word, int parity)
     {
         var syndromes = new byte[parity];

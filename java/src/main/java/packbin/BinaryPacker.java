@@ -8,7 +8,8 @@ public final class BinaryPacker {
     private BinaryPacker() {}
 
     public static <T> byte[] pack(Scheme<T> scheme, T row) {
-        return Ecc.protect(packClear(scheme, row), scheme.parity);
+        byte[] clear = packClear(scheme, row);
+        return scheme.parityPercent > 0 ? Ecc.protectPercent(clear, scheme.parityPercent) : Ecc.protect(clear, scheme.parity);
     }
 
     /** The packed fields without parity: what an unprotected scheme writes. */
@@ -36,11 +37,13 @@ public final class BinaryPacker {
     public static Object unpackRepair(byte[] data, int limit, Scheme.Handler<?>... handlers) {
         Objects.requireNonNull(data, "data");
         Map<Integer, Scheme.Handler<?>> byType = byType(handlers);
-        int parity = Ecc.sharedParity(handlers, limit);
+        Scheme<?> shared = Ecc.sharedSetting(handlers, limit);
         int repaired = 0;
         byte[] clear = data;
-        if (parity > 0) {
-            Object checked = EccRepair.repair(data, parity, limit);
+        if (shared.parityPercent > 0 || shared.parity > 0) {
+            Object checked = shared.parityPercent > 0
+                    ? EccRepair.repairPercent(data, shared.parityPercent, limit)
+                    : EccRepair.repair(data, shared.parity, limit);
             if (!(checked instanceof EccRepair.Fixed)) {
                 return checked;
             }

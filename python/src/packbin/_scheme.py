@@ -39,12 +39,33 @@ def _checked_parity(value: Any) -> int:
     return value
 
 
+def _checked_percent(value: Any) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0 or value > 100:
+        raise ValueError(
+            f"parity percentage must be a whole number of 0 to 100, got p = {_shown(value)} (limit 100)"
+        )
+    return value
+
+
+def _checked_percent_limit(limit: Any) -> int:
+    if isinstance(limit, bool) or not isinstance(limit, int) or limit < 0 or limit > _ecc.MAX_PERCENT_LIMIT:
+        raise ValueError(
+            f"limit must be a whole number of 0 to {_ecc.MAX_PERCENT_LIMIT} under a parity percentage, "
+            f"got {_shown(limit)}"
+        )
+    return limit
+
+
 def _checked_correction(limit: Any, parity: int) -> int:
     if isinstance(limit, bool) or not isinstance(limit, int) or limit < 0 or limit > parity // 2:
         raise ValueError(
             f"limit must be a whole number of 0 to {parity // 2} for {parity} parity bytes, got {_shown(limit)}"
         )
     return limit
+
+
+def _setting_text(scheme: Scheme[Any]) -> str:
+    return f"{scheme._percent} percent" if scheme._percent else str(scheme._parity)
 
 
 class Scheme(Generic[T]):
@@ -54,7 +75,16 @@ class Scheme(Generic[T]):
     than `max_bytes`, type byte included. `parity` is the number of parity bytes (0 to 32) pack appends to the
     message, so unpack can detect a corrupted message and repair up to half that many wrong bytes."""
 
-    __slots__ = ("_type_number", "_row_type", "_fields", "_max_rounds", "_max_slots", "_max_bytes", "_parity")
+    __slots__ = (
+        "_type_number",
+        "_row_type",
+        "_fields",
+        "_max_rounds",
+        "_max_slots",
+        "_max_bytes",
+        "_parity",
+        "_percent",
+    )
 
     DEFAULT_MAX_ROUNDS = DEFAULT_MAX_ROUNDS
     DEFAULT_MAX_SLOTS = DEFAULT_MAX_SLOTS
@@ -76,6 +106,7 @@ class Scheme(Generic[T]):
         self._max_slots = DEFAULT_MAX_SLOTS
         self._max_bytes = DEFAULT_MAX_BYTES
         self._parity = 0
+        self._percent = 0
 
     @property
     def max_rounds(self) -> int:
@@ -93,21 +124,38 @@ class Scheme(Generic[T]):
     def parity(self) -> int:
         return self._parity
 
+    @property
+    def parity_percent(self) -> int:
+        return self._percent
+
     def with_limits(
         self,
         max_rounds: int = DEFAULT_MAX_ROUNDS,
         max_slots: int = DEFAULT_MAX_SLOTS,
         max_bytes: int = DEFAULT_MAX_BYTES,
         parity: Optional[int] = None,
+        parity_percent: Optional[int] = None,
     ) -> Scheme[T]:
         """A scheme with these limits and the same fields; this one is unchanged. A limit left out is the
         default, not this scheme's current value; `parity` left out keeps this scheme's count, so setting a limit
-        never drops protection."""
+        never drops protection. `parity_percent` (0 to 100) derives the count from the message length and replaces a
+        count; a count replaces a percentage; both above 0 in one call are refused."""
         limited = copy.copy(self)
         limited._max_rounds = _checked_limit("max_rounds", max_rounds)
         limited._max_slots = _checked_limit("max_slots", max_slots)
         limited._max_bytes = _checked_limit("max_bytes", max_bytes)
-        limited._parity = self._parity if parity is None else _checked_parity(parity)
+        count = None if parity is None else _checked_parity(parity)
+        percent = None if parity_percent is None else _checked_percent(parity_percent)
+        if count and percent:
+            raise ValueError(
+                f"a scheme takes a parity count or a parity percentage, got n = {count} and p = {percent} "
+                f"(percentage limit 100)"
+            )
+        limited._parity, limited._percent = self._parity, self._percent
+        if percent is not None:
+            limited._parity, limited._percent = 0, percent
+        elif count is not None:
+            limited._parity, limited._percent = count, 0
         return limited
 
     def on(self, handler: Callable[[T], None]) -> _Handler[T]:
@@ -135,6 +183,14 @@ class BinaryPacker:
         buf.append(scheme._type_number)
         budget = _PackBudget(scheme._max_rounds, scheme._max_slots, scheme._max_bytes)
         pack_nodes(buf, scheme._fields, row, budget=budget)
+        if scheme._percent:
+            room = _ecc.largest_clear(scheme._percent)
+            if len(buf) > room:
+                raise ValueError(
+                    f"the clear message is {len(buf)} bytes, above the limit of {room} bytes "
+                    f"for {scheme._percent} percent parity"
+                )
+            return _builtin_bytes(buf)
         room = _ecc.MAX_BLOCK - scheme._parity
         if scheme._parity and len(buf) > room:
             raise ValueError(
@@ -146,9 +202,10 @@ class BinaryPacker:
     @staticmethod
     def pack(scheme: Scheme[T], row: T | Mapping[str, Any]) -> bytes:
         clear = BinaryPacker._pack_clear(scheme, row)
-        if scheme._parity == 0:
+        count = _ecc.parity_count(scheme._percent, len(clear)) if scheme._percent else scheme._parity
+        if count == 0:
             return clear
-        return clear + _ecc.parity(clear, scheme._parity)
+        return clear + _ecc.parity(clear, count)
 
     @staticmethod
     def unpack(
@@ -160,9 +217,12 @@ class BinaryPacker:
         0 only detects."""
         if not handlers:
             raise TypeError("unpack() missing handlers")
-        by_type, parity = BinaryPacker._dispatch_table(handlers)
-        _checked_correction(limit, parity)
-        return BinaryPacker._receive(data, by_type, parity, limit)
+        by_type, setting = BinaryPacker._dispatch_table(handlers)
+        if setting._percent:
+            _checked_percent_limit(limit)
+        else:
+            _checked_correction(limit, setting._parity)
+        return BinaryPacker._receive(data, by_type, setting, limit)
 
     @staticmethod
     def _unpack_fields(scheme: Scheme[T], view: memoryview, offset: int, repaired: int = 0) -> UnpackResult[T]:
@@ -177,8 +237,8 @@ class BinaryPacker:
         return UnpackResult(ok=True, value=row, error=None, repaired=repaired)
 
     @staticmethod
-    def _dispatch_table(handlers: tuple[_Handler[Any], ...]) -> tuple[dict[int, _Handler[Any]], int]:
-        """The handlers by type number and their one parity count; a repeated number, then a mix of counts, is
+    def _dispatch_table(handlers: tuple[_Handler[Any], ...]) -> tuple[dict[int, _Handler[Any]], Scheme[Any]]:
+        """The handlers by type number and the first scheme, which holds their one parity setting; a repeated number, then a mix of counts, is
         refused (the order of every package)."""
         by_type: dict[int, _Handler[Any]] = {}
         for handler in handlers:
@@ -188,26 +248,35 @@ class BinaryPacker:
             by_type[number] = handler
         first = handlers[0].scheme
         for handler in handlers:
-            if handler.scheme._parity != first._parity:
+            if (handler.scheme._parity, handler.scheme._percent) != (first._parity, first._percent):
                 raise ValueError(
-                    f"one unpack needs one parity count, got {first._parity} and {handler.scheme._parity} "
+                    f"one unpack needs one parity count, got {_setting_text(first)} and {_setting_text(handler.scheme)} "
                     f"(type numbers {first._type_number} and {handler.scheme._type_number})"
                 )
-        return by_type, first._parity
+        return by_type, first
 
     @staticmethod
     def _receive(
         data: bytes | bytearray | memoryview,
         by_type: dict[int, _Handler[Any]],
-        parity: int,
+        setting: Scheme[Any],
         limit: int,
     ) -> UnpackResult[Any]:
         """Repair a protected message, then dispatch."""
         view = memoryview(data)
         repaired = 0
         body: bytes | memoryview = view
+        parity = setting._parity
+        size = view.nbytes
+        if setting._percent:
+            if size > _ecc.MAX_BLOCK:
+                return UnpackResult(ok=False, value=None, error=TooLong(length=size, limit=_ecc.MAX_BLOCK))
+            length = _ecc.clear_length(setting._percent, size)
+            if length is None:
+                return UnpackResult(ok=False, value=None, error=Uncorrectable())
+            parity = size - length
+            limit = min(limit, parity // 2)
         if parity:
-            size = view.nbytes
             if size > _ecc.MAX_BLOCK:
                 return UnpackResult(ok=False, value=None, error=TooLong(length=size, limit=_ecc.MAX_BLOCK))
             if size < parity:

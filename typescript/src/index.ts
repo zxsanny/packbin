@@ -14,7 +14,17 @@ import { validateRoundBodies, validateRoundNesting } from "./rounds.ts"
 import { bindReferences } from "./ref-scope.ts"
 import { validateElementKinds } from "./element-kinds.ts"
 import type { Value } from "./kinds.ts"
-import { checkLimit, checkParity, protect, repair, type EccErr } from "./ecc.ts"
+import {
+  checkLimit,
+  checkParity,
+  checkPercent,
+  checkPercentLimit,
+  protect,
+  protectPercent,
+  repair,
+  repairPercent,
+  type EccErr,
+} from "./ecc.ts"
 
 export type { Field, Acc } from "./fields.ts"
 export {
@@ -84,8 +94,9 @@ export type SchemeHandler<T> = {
   handler: (row: T) => void
 }
 
-// `parity` is the number of parity bytes pack appends, 0 to 32 (default 0, nothing appended).
-export type SchemeLimits = { maxRounds?: number; maxSlots?: number; maxBytes?: number; parity?: number }
+// `parity` is the number of parity bytes pack appends, 0 to 32 (default 0, nothing appended). `parityPercent`
+// (0 to 100) derives the count from the message length instead; a count and a percentage together are refused.
+export type SchemeLimits = { maxRounds?: number; maxSlots?: number; maxBytes?: number; parity?: number; parityPercent?: number }
 
 function checkedLimit(name: string, value: number | undefined, fallback: number): number {
   if (value === undefined) return fallback
@@ -112,6 +123,7 @@ export class Scheme<T> {
   readonly maxBytes: number
   // Parity bytes pack appends and unpack checks (message-ecc contract); both sides share the number.
   readonly parity: number
+  readonly parityPercent: number
 
   // Every check runs here, so `new Scheme(...)` refuses what `scheme(...)` refuses.
   constructor(typeNumber: number, fields: Field[], limits: SchemeLimits = {}) {
@@ -129,15 +141,26 @@ export class Scheme<T> {
     this.maxBytes = checkedLimit("maxBytes", limits.maxBytes, Scheme.DefaultMaxBytes)
     this.parity = limits.parity ?? 0
     checkParity(this.parity)
+    this.parityPercent = limits.parityPercent ?? 0
+    checkPercent(this.parityPercent)
+    if (this.parityPercent > 0 && this.parity > 0) {
+      throw new RangeError(`parity: a percentage (${this.parityPercent}, 0..100) and ${this.parity} parity bytes cannot both be declared`)
+    }
     this.typeNumber = typeNumber
     this.fields = bindReferences(flat)
     validateElementKinds(this.fields)
   }
 
-  // A limit left out takes the default, not this scheme's value; `parity` left out keeps this scheme's count, so
-  // setting a limit never drops protection. This scheme is unchanged.
+  // A limit left out takes the default, not this scheme's value; the parity setting left out keeps this scheme's
+  // count or percentage, so setting a limit never drops protection. Setting one of the two replaces the other
+  // (the last setter wins). This scheme is unchanged.
   withLimits(limits: SchemeLimits = {}): Scheme<T> {
-    return new Scheme<T>(this.typeNumber, this.fields, { ...limits, parity: limits.parity ?? this.parity })
+    const keep = limits.parity === undefined && limits.parityPercent === undefined
+    return new Scheme<T>(this.typeNumber, this.fields, {
+      ...limits,
+      parity: limits.parity ?? (keep ? this.parity : 0),
+      parityPercent: limits.parityPercent ?? (keep ? this.parityPercent : 0),
+    })
   }
 
   on(handler: (row: T) => void): SchemeHandler<T> {
@@ -164,7 +187,7 @@ function packClear<T extends object>(s: Scheme<T>, row: T): Uint8Array {
 
 export class BinaryPacker {
   static pack<T extends object>(s: Scheme<T>, row: T): Uint8Array {
-    return protect(packClear(s, row), s.parity)
+    return s.parityPercent > 0 ? protectPercent(packClear(s, row), s.parityPercent) : protect(packClear(s, row), s.parity)
   }
 
   // Detect only: a protected message with any wrong byte is refused as `uncorrectable`.
@@ -186,10 +209,10 @@ export class BinaryPacker {
   ): DispatchResult {
     const handlers = [first, ...rest]
     requireDistinct(handlers)
-    const n = sharedParity(handlers, limit)
-    const fixed = repair(toBuf(bytes), n, limit)
+    const { n, p } = sharedParity(handlers, limit)
+    const fixed = p > 0 ? repairPercent(toBuf(bytes), p, limit) : repair(toBuf(bytes), n, limit)
     if (!fixed.ok) return fixed
-    return unpackDispatch(fixed.clear, handlers, n > 0 ? fixed.repaired : undefined)
+    return unpackDispatch(fixed.clear, handlers, n > 0 || p > 0 ? fixed.repaired : undefined)
   }
 }
 
@@ -225,16 +248,20 @@ function requireDistinct(handlers: SchemeHandler<object>[]): void {
   }
 }
 
-// The parity every handler declares. Handlers with different counts could not share one repair.
-function sharedParity(handlers: SchemeHandler<object>[], limit: number): number {
+// The parity setting every handler declares. Handlers with different counts or percentages could not share one repair.
+function sharedParity(handlers: SchemeHandler<object>[], limit: number): { n: number; p: number } {
   const n = handlers[0]!.scheme.parity
+  const p = handlers[0]!.scheme.parityPercent
   for (const h of handlers) {
-    if (h.scheme.parity !== n) {
-      throw new RangeError(`handlers declare ${n} and ${h.scheme.parity} parity bytes; they must declare the same count`)
+    if (h.scheme.parity !== n || h.scheme.parityPercent !== p) {
+      throw new RangeError(
+        `handlers declare ${n} parity bytes and ${p} percent, and ${h.scheme.parity} parity bytes and ${h.scheme.parityPercent} percent; they must declare the same count`,
+      )
     }
   }
-  checkLimit(limit, n)
-  return n
+  if (p > 0) checkPercentLimit(limit)
+  else checkLimit(limit, n)
+  return { n, p }
 }
 
 function unpackDispatch(

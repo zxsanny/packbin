@@ -92,7 +92,6 @@ def rows():
                     if refused(bad, p, t) == "uncorrectable":
                         out.append("badp badp.%s.p%d.t%d.k%d %d %d %s uncorrectable" % (name, p, t, k, p, t, hx(bad)))
     out.append("fixp fixp.p0.pos 0 0 %s %s 0" % (hx(POS), hx(POS)))
-    out.append("fixp fixp.p0.t16 0 16 %s %s 0" % (hx(POS), hx(POS)))
     out.append("fixp fixp.empty.p25 25 0 - - 0")
     out.append("fixp fixp.empty.p100.t16 100 16 - - 0")
     for p, size in ((100, 1), (100, 3), (100, 7), (100, 63), (25, 1), (25, 6), (25, 11), (10, 23), (1, 1), (1, 102), (10, 254)):

@@ -88,6 +88,8 @@ public final class PackbinTest {
         EccSchemeTest.run();
         EccDispatchOrderTest.run();
         EccReverifyTest.run();
+        PercentVectorsTest.run();
+        PercentSchemeTest.run();
         if (failures + PackbinFieldsTest.failures > 0) {
             System.err.println((failures + PackbinFieldsTest.failures) + " failure(s)");
             System.exit(1);

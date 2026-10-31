@@ -87,6 +87,22 @@ final class EccRepair {
         return new Fixed(Arrays.copyOf(word, size - n), degree);
     }
 
+    /**
+     * As {@link #repair} under percentage p (1 to 100): the count comes from the received length, and t is lowered to
+     * n / 2 of this message. A length that no clear message has is Uncorrectable.
+     */
+    static Object repairPercent(byte[] received, int p, int t) {
+        if (received.length > Ecc.MAX_BLOCK) {
+            return new Packbin.TooLong(received.length, Ecc.MAX_BLOCK);
+        }
+        int length = Ecc.clearLength(p, received.length);
+        if (length < 0) {
+            return UNCORRECTABLE;
+        }
+        int n = received.length - length;
+        return repair(received, n, Math.min(t, n / 2));
+    }
+
     /** The syndromes of the code word: the clear length (word length minus n), then the word. */
     private static int[] syndromes(byte[] word, int n) {
         int[] out = new int[n];

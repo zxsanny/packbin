@@ -10,6 +10,9 @@ internal static partial class Ecc
     // Sent bytes of one protected message; the code word is 255, one byte of it (the clear length) is not sent.
     internal const int MaxBlock = 254;
 
+    // The largest correction limit under a percentage (the limit of a message is lowered to n / 2).
+    internal const int MaxPercentLimit = 16;
+
     private const int Polynomial = 0x11D;
 
     // Doubled, so a sum of two logarithms indexes it without a modulo.
@@ -97,20 +100,56 @@ internal static partial class Ecc
         return protectedBytes;
     }
 
-    // The parity every handler of one dispatch shares. A mix is refused naming both counts, and a limit above n / 2
-    // (or below 0) is refused before any byte is read.
-    internal static int SharedParity(SchemeHandler[] handlers, int limit)
+    internal static void RequirePercent(int percent)
+    {
+        if (percent is < 0 or > 100)
+            throw new ArgumentOutOfRangeException(
+                nameof(percent), percent, $"parity percentage p = {percent}, above the limit of 100 (0..100)");
+    }
+
+    // min(32, ceil(p * length / 100)), integer arithmetic.
+    internal static int ParityCount(int percent, int length) => Math.Min(MaxParity, (percent * length + 99) / 100);
+
+    // The largest clear length whose protected message stays within MaxBlock; percent 1 to 100.
+    internal static int LargestClear(int percent)
+    {
+        var length = 0;
+        while (length + 1 + ParityCount(percent, length + 1) <= MaxBlock)
+            length++;
+        return length;
+    }
+
+    // Percentage 0 sends the clear bytes only.
+    internal static byte[] ProtectPercent(byte[] clear, int percent)
+    {
+        if (percent == 0)
+            return clear;
+        var limit = LargestClear(percent);
+        if (clear.Length > limit)
+            throw new ArgumentException(
+                $"the clear message is {clear.Length} bytes, above the limit of {limit} bytes with {percent} percent parity");
+        return Protect(clear, ParityCount(percent, clear.Length));
+    }
+
+    // The parity setting every handler of one dispatch shares: a fixed count, or (percent above 0) a percentage. A mix is
+    // refused naming both, and a limit outside the setting's range is refused before any byte is read.
+    internal static int SharedParity(SchemeHandler[] handlers, int limit, out int percent)
     {
         var parity = handlers.Length == 0 ? 0 : handlers[0].Parity;
+        percent = handlers.Length == 0 ? 0 : handlers[0].ParityPercent;
         foreach (var handler in handlers)
         {
+            if (handler.ParityPercent != percent)
+                throw new ArgumentException(
+                    $"handlers declare different parity percentages: {percent} and {handler.ParityPercent}");
             if (handler.Parity != parity)
                 throw new ArgumentException(
                     $"handlers declare different parity counts: {parity} and {handler.Parity}");
         }
-        if (limit < 0 || limit > parity / 2)
+        var max = percent > 0 ? MaxPercentLimit : parity / 2;
+        if (limit < 0 || limit > max)
             throw new ArgumentOutOfRangeException(
-                nameof(limit), limit, $"correction limit {limit} is outside 0..{parity / 2} for {parity} parity bytes");
+                nameof(limit), limit, $"correction limit {limit} is outside 0..{max} for {(percent > 0 ? $"{percent} percent parity" : $"{parity} parity bytes")}");
         return parity;
     }
 }

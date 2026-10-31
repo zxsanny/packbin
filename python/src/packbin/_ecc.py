@@ -154,3 +154,27 @@ def repair(received: bytes, n: int, limit: int) -> tuple[bytes, int] | None:
     if parity(fixed[: size - n], n) != fixed[size - n :]:
         return None
     return fixed[: size - n], degree
+
+
+MAX_PERCENT_LIMIT = 16
+
+
+def parity_count(percent: int, length: int) -> int:
+    """The parity bytes of a clear message of `length` bytes under `percent`: the percentage rounded up, at most 32."""
+    return min(MAX_PARITY, (percent * length + 99) // 100)
+
+
+def largest_clear(percent: int) -> int:
+    """The largest clear length that stays within `MAX_BLOCK` bytes under `percent` 1 to 100."""
+    length = 0
+    while length + 1 + parity_count(percent, length + 1) <= MAX_BLOCK:
+        length += 1
+    return length
+
+
+def clear_length(percent: int, sent: int) -> int | None:
+    """The one clear length whose protected message is `sent` bytes (`percent` 1 to 100), or `None`."""
+    for length in range(min(sent, MAX_BLOCK) + 1):
+        if length + parity_count(percent, length) == sent:
+            return length
+    return None

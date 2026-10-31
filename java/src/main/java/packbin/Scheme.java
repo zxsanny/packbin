@@ -18,6 +18,7 @@ public final class Scheme<T> {
     final long maxSlots;
     final long maxBytes;
     final int parity;
+    final int parityPercent;
 
     @SafeVarargs
     public Scheme(int typeNumber, Class<T> type, Field... fields) {
@@ -33,10 +34,12 @@ public final class Scheme<T> {
         this.maxSlots = DEFAULT_MAX_SLOTS;
         this.maxBytes = DEFAULT_MAX_BYTES;
         this.parity = 0;
+        this.parityPercent = 0;
         MemberNames.validate(this.fields);
     }
 
-    private Scheme(Scheme<T> base, int maxRounds, long maxSlots, long maxBytes, int parity) {
+    private Scheme(Scheme<T> base, int maxRounds, long maxSlots, long maxBytes, int parity,
+            int parityPercent) {
         if (maxRounds < 1) {
             throw new IllegalArgumentException("maxRounds must be at least 1");
         }
@@ -47,6 +50,7 @@ public final class Scheme<T> {
             throw new IllegalArgumentException("maxBytes must be at least 1");
         }
         Ecc.checkParity(parity);
+        Ecc.checkPercent(parityPercent);
         this.typeNumber = base.typeNumber;
         this.type = base.type;
         this.fields = base.fields;
@@ -54,6 +58,7 @@ public final class Scheme<T> {
         this.maxSlots = maxSlots;
         this.maxBytes = maxBytes;
         this.parity = parity;
+        this.parityPercent = parityPercent;
     }
 
     public int maxRounds() {
@@ -75,7 +80,7 @@ public final class Scheme<T> {
      * {@link #DEFAULT_MAX_BYTES}, not this scheme's maxBytes. Returns a new scheme; this one is unchanged.
      */
     public Scheme<T> withLimits(int maxRounds, long maxSlots) {
-        return new Scheme<>(this, maxRounds, maxSlots, DEFAULT_MAX_BYTES, parity);
+        return new Scheme<>(this, maxRounds, maxSlots, DEFAULT_MAX_BYTES, parity, parityPercent);
     }
 
     /**
@@ -83,7 +88,7 @@ public final class Scheme<T> {
      * write. Keeps this scheme's other limits. Returns a new scheme; this one is unchanged.
      */
     public Scheme<T> withMaxBytes(long maxBytes) {
-        return new Scheme<>(this, maxRounds, maxSlots, maxBytes, parity);
+        return new Scheme<>(this, maxRounds, maxSlots, maxBytes, parity, parityPercent);
     }
 
     /** The parity bytes pack appends and unpack checks (message-ecc contract), 0 to 32; 0 is the unprotected format. */
@@ -97,7 +102,22 @@ public final class Scheme<T> {
      * this one is unchanged.
      */
     public Scheme<T> withParity(int parity) {
-        return new Scheme<>(this, maxRounds, maxSlots, maxBytes, parity);
+        return new Scheme<>(this, maxRounds, maxSlots, maxBytes, parity, 0);
+    }
+
+    /** The parity percentage (message-ecc 1.1.0), 0 to 100; 0 when the scheme has a fixed count or none. */
+    public int parityPercent() {
+        return parityPercent;
+    }
+
+    /**
+     * The same scheme with a parity count derived from each message: {@code min(32, ceil(p * L / 100))} for a clear
+     * length L; the receiver finds L from the received length. A percentage outside 0 to 100 is refused. Replaces a
+     * fixed count (and {@link #withParity} replaces a percentage). Keeps this scheme's limits. Returns a new scheme;
+     * this one is unchanged.
+     */
+    public Scheme<T> withParityPercent(int percent) {
+        return new Scheme<>(this, maxRounds, maxSlots, maxBytes, 0, percent);
     }
 
     public Handler<T> on(Consumer<T> handler) {

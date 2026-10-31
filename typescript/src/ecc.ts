@@ -39,6 +39,42 @@ export function checkParity(n: number): void {
   }
 }
 
+export const MaxPercent = 100
+// A correction limit under a percentage: any n, lowered to n / 2 of the message.
+export const MaxPercentLimit = 16
+
+export function checkPercent(p: number): void {
+  if (!Number.isInteger(p) || p < 0 || p > MaxPercent) {
+    throw new RangeError(`parity percentage: expected 0..${MaxPercent} percent, got ${String(p)}`)
+  }
+}
+
+export function checkPercentLimit(t: number): void {
+  if (!Number.isInteger(t) || t < 0 || t > MaxPercentLimit) {
+    throw new RangeError(`correction limit: expected 0..${MaxPercentLimit} under a parity percentage, got ${String(t)}`)
+  }
+}
+
+// Parity bytes of a clear message of `length` bytes under percentage p: the percentage of the length, rounded up, at most 32.
+export function parityCount(p: number, length: number): number {
+  return Math.min(MaxParity, Math.floor((p * length + 99) / 100))
+}
+
+// Largest clear length under percentage 1 to 100 (the sent length stays within 254).
+export function largestClear(p: number): number {
+  let length = 0
+  while (length + 1 + parityCount(p, length + 1) <= MaxBlock) length++
+  return length
+}
+
+// The one clear length whose protected message is `sent` bytes long, or undefined when no message has that length.
+function clearLength(p: number, sent: number): number | undefined {
+  for (let length = 0; length <= sent; length++) {
+    if (length + parityCount(p, length) === sent) return length
+  }
+  return undefined
+}
+
 export function checkLimit(t: number, n: number): void {
   if (!Number.isInteger(t) || t < 0 || t > n >> 1) {
     throw new RangeError(`correction limit: expected 0..${n >> 1} for ${n} parity bytes, got ${String(t)}`)
@@ -194,4 +230,25 @@ export function repair(received: Uint8Array, n: number, t: number): Repaired | S
   }
   if (syndromes(word, n).some((s) => s !== 0)) return uncorrectable
   return { ok: true, clear: word.subarray(0, size - n), repaired: deg }
+}
+
+// The clear message followed by the parity of percentage p (0 adds nothing and has no length limit).
+export function protectPercent(clear: Uint8Array, p: number): Uint8Array {
+  if (p === 0) return clear
+  const limit = largestClear(p)
+  if (clear.length > limit) {
+    throw new RangeError(`the packet would be ${clear.length} bytes, above the limit of ${limit} bytes for ${p} percent parity`)
+  }
+  return protect(clear, parityCount(p, clear.length))
+}
+
+// As repair, with n found from the received length under percentage p. `t` is 0 to 16 (checkPercentLimit)
+// and is lowered to n / 2 of this message.
+export function repairPercent(received: Uint8Array, p: number, t: number): Repaired | ShortErr | EccErr {
+  if (p === 0) return repair(received, 0, 0)
+  if (received.length > MaxBlock) return { ok: false, kind: "too_long", length: received.length, limit: MaxBlock }
+  const length = clearLength(p, received.length)
+  if (length === undefined) return uncorrectable
+  const n = received.length - length
+  return repair(received, n, Math.min(t, n >> 1))
 }
