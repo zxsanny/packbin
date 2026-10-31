@@ -1,24 +1,34 @@
 // Parity percentage (contract message-ecc.md 1.1.0, AZ-3507): the setting on the scheme, the count
 // and the bytes of pack, the largest clear message, unpack finding the count from the received
-// length, repair with the count of that message, the correction limit, the dispatch rule and every
-// row of fixtures/ecc/percent-vectors.txt. The reference formula is written again here in plain
-// integers, apart from the code under test.
+// length, repair with the count of that message, the correction limit and the dispatch rule. The
+// reference rule is written again in plain integers (ecc_percent_support_host.hpp).
 #include "packbin/codec.hpp"
 
 #include "check.hpp"
+#include "ecc_percent_support_host.hpp"
 #include "ecc_support_host.hpp"
+
 #include "load_factor.hpp"
 
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <fstream>
-#include <sstream>
-#include <string>
 #include <vector>
 
 using check::expect;
+using ecc_percent::base;
+using ecc_percent::corrupt;
+using ecc_percent::msg_of_length;
+using ecc_percent::Msg;
+using ecc_percent::protect_msg;
+using ecc_percent::ref_clear;
+using ecc_percent::ref_count;
+using ecc_percent::ref_largest;
+using ecc_percent::same_msg;
+using ecc_percent::setting_of;
+using ecc_percent::msg_scheme;
+using ecc_percent::kHead;
 using ecc_test::Bytes;
 using ecc_test::from_hex;
 using ecc_test::Rng;
@@ -27,84 +37,6 @@ using packbin::Error;
 namespace {
 
 namespace pd = packbin::detail;
-
-struct Msg {
-  std::uint16_t n = 0;
-  packbin::Blob<260> payload;
-};
-
-template <int Type>
-constexpr auto msg_scheme() {
-  return packbin::scheme<Msg>(Type, packbin::u16<&Msg::n>(0), packbin::sized<&Msg::payload>(1, 0));
-}
-
-constexpr auto base = msg_scheme<0x40>();
-
-// The clear message of the scheme: type byte, u16 count, then the payload.
-constexpr std::size_t kHead = 3;
-
-// The reference rule, in plain integers.
-int ref_count(int p, int len) {
-  int n = (p * len + 99) / 100;
-  return n > 32 ? 32 : n;
-}
-
-int ref_largest(int p) {
-  if (p == 0)
-    return 254;
-  int len = 0;
-  while (len + 1 + ref_count(p, len + 1) <= 254)
-    ++len;
-  return len;
-}
-
-// The clear length whose message is `sent` bytes, or -1.
-int ref_clear(int p, int sent) {
-  if (p == 0)
-    return sent;
-  for (int len = 0; len <= sent && len <= 254; ++len)
-    if (len + ref_count(p, len) == sent)
-      return len;
-  return -1;
-}
-
-int setting_of(int p) { return p == 0 ? 0 : pd::kPercentBase + p; }
-
-Msg msg_of_length(std::size_t clear, Rng& rng) {
-  Msg m;
-  std::size_t k = clear - kHead;
-  m.n = static_cast<std::uint16_t>(k);
-  m.payload.len = static_cast<std::uint16_t>(k);
-  for (std::size_t i = 0; i < k; ++i)
-    m.payload.data[i] = rng.byte();
-  return m;
-}
-
-bool same_msg(Msg const& a, Msg const& b) {
-  return a.n == b.n && a.payload.len == b.payload.len &&
-         std::memcmp(a.payload.data, b.payload.data, a.payload.len) == 0;
-}
-
-template <typename S>
-Bytes protect_msg(S const& s, Msg const& m) {
-  std::uint8_t out[400];
-  auto r = packbin::pack(s, m, out, sizeof(out));
-  return Bytes(out, out + r.offset);
-}
-
-// A copy of `packed` with `count` seeded positions xor-ed with a nonzero byte.
-Bytes corrupt(Bytes packed, int count, Rng& rng) {
-  std::vector<bool> hit(packed.size(), false);
-  for (int done = 0; done < count;) {
-    std::size_t at = rng.below(packed.size());
-    if (hit[at])
-      continue;
-    hit[at] = true;
-    packed[at] = static_cast<std::uint8_t>(packed[at] ^ (1 + rng.below(255)));
-    ++done;
-  }
-  return packed;
-}
 
 // AC-1: the setting.
 void setting() {
@@ -429,187 +361,6 @@ void dispatch() {
   expect(both.ok() && ran == 1 && same_msg(e, m), "AC-7 percentage 0 and count 0 share a setting");
 }
 
-// The rows of fixtures/ecc/percent-vectors.txt.
-struct Row {
-  std::string kind;
-  std::string id;
-  std::vector<std::string> f;
-};
-
-bool read_rows(std::vector<Row>& rows) {
-  for (auto const* path :
-       {"../fixtures/ecc/percent-vectors.txt", "fixtures/ecc/percent-vectors.txt"}) {
-    std::ifstream in(path);
-    if (!in)
-      continue;
-    std::string line;
-    while (std::getline(in, line)) {
-      if (line.empty() || line[0] == '#')
-        continue;
-      std::istringstream fields(line);
-      Row r;
-      fields >> r.kind >> r.id;
-      for (std::string word; fields >> word;)
-        r.f.push_back(word);
-      rows.push_back(r);
-    }
-    return true;
-  }
-  return false;
-}
-
-// pct <id> <p> <L> <n>
-void run_pct(Row const& r) {
-  int p = std::stoi(r.f[0]);
-  int len = std::stoi(r.f[1]);
-  expect(pd::percent_count(p, static_cast<std::size_t>(len)) == std::stoi(r.f[2]) &&
-             ref_count(p, len) == std::stoi(r.f[2]),
-         r.id.c_str());
-}
-
-// encp <id> <p> <clear> <protected>
-void run_encp(Row const& r) {
-  int p = std::stoi(r.f[0]);
-  Bytes clear = from_hex(r.f[1]);
-  Bytes want = from_hex(r.f[2]);
-  Bytes buf(400, 0);
-  if (!clear.empty())
-    std::memcpy(buf.data(), clear.data(), clear.size());
-  int n = -1;
-  auto room = pd::parity_room(buf.data(), buf.size(), clear.size(), setting_of(p), n);
-  auto sealed = pd::seal(buf.data(), clear.size(), n);
-  buf.resize(sealed.offset);
-  expect(room.ok() && sealed.ok() && buf == want, r.id.c_str());
-}
-
-// inv <id> <p> <N> <L|none>
-void run_inv(Row const& r) {
-  int p = std::stoi(r.f[0]);
-  std::size_t sent = static_cast<std::size_t>(std::stoul(r.f[1]));
-  int n = -1;
-  auto res = pd::received_parity(setting_of(p), sent, n);
-  if (r.f[2] == "none")
-    expect(res.error == Error::Uncorrectable, r.id.c_str());
-  else
-    expect(res.ok() && static_cast<int>(sent) - n == std::stoi(r.f[2]), r.id.c_str());
-}
-
-// limp <id> <p> <clear_len> <ok|too_long>
-void run_limp(Row const& r) {
-  int p = std::stoi(r.f[0]);
-  std::size_t len = static_cast<std::size_t>(std::stoul(r.f[1]));
-  Bytes buf(400, 0);
-  int n = -1;
-  auto room = pd::parity_room(buf.data(), buf.size(), len, setting_of(p), n);
-  expect(room.error == (r.f[2] == "ok" ? Error::Ok : Error::TooLong), r.id.c_str());
-}
-
-// fixp <id> <p> <t> <received> <clear> <count>
-void run_fixp(Row const& r) {
-  int p = std::stoi(r.f[0]);
-  int t = std::stoi(r.f[1]);
-  Bytes word = from_hex(r.f[2]);
-  Bytes clear = from_hex(r.f[3]);
-  int count = std::stoi(r.f[4]);
-  std::uint8_t repaired = 99;
-  int n = -1;
-  auto res = pd::repair_setting(word.data(), word.size(), setting_of(p), t, repaired, n);
-  Bytes head(word.begin(), word.end() - n);
-  expect(res.ok() && repaired == count && head == clear, r.id.c_str());
-}
-
-// badp <id> <p> <t> <received> <kind>
-void run_badp(Row const& r) {
-  int p = std::stoi(r.f[0]);
-  int t = std::stoi(r.f[1]);
-  Bytes word = from_hex(r.f[2]);
-  Bytes before = word;
-  std::uint8_t repaired = 0;
-  int n = -1;
-  auto res = pd::repair_setting(word.data(), word.size(), setting_of(p), t, repaired, n);
-  Error want = r.f[3] == "too_long" ? Error::TooLong : Error::Uncorrectable;
-  expect(res.error == want && repaired == 0 && word == before, r.id.c_str());
-}
-
-// parp <id> <p> <n>: a C++ scheme has no constructor that takes both, so the last setter wins.
-void run_parp(Row const& r) {
-  int p = std::stoi(r.f[0]);
-  int n = std::stoi(r.f[1]);
-  bool p_valid = p >= 0 && p <= 100;
-  auto by_percent = packbin::parity_percent(packbin::parity(base, n), p);
-  expect(p_valid ? by_percent.status.ok() && by_percent.parity == 0 &&
-                       by_percent.parity_percent == p
-                 : by_percent.status.error == Error::SchemeInvalid,
-         r.id.c_str());
-  if (p_valid) {
-    auto by_count = packbin::parity(packbin::parity_percent(base, p), n);
-    expect(by_count.status.ok() && by_count.parity == n && by_count.parity_percent == 0,
-           r.id.c_str());
-  }
-}
-
-// lmtp <id> <t>
-void run_lmtp(Row const& r) {
-  int t = std::stoi(r.f[0]);
-  Rng rng(1);
-  auto s = packbin::parity_percent(base, 25);
-  Msg m = msg_of_length(40, rng);
-  Bytes word = protect_msg(s, m);
-  word[5] ^= 0x40;
-  Bytes before = word;
-  Msg back;
-  auto res = packbin::unpack_repair(s, word.data(), word.size(), back, t);
-  std::uint8_t repaired = 9;
-  int n = -1;
-  auto direct = pd::repair_setting(word.data(), 7, setting_of(25), t, repaired, n);
-  expect(res.error == Error::BadValue && word == before && direct.error == Error::BadValue,
-         r.id.c_str());
-}
-
-void vectors() {
-  std::vector<Row> rows;
-  if (!read_rows(rows)) {
-    std::fprintf(stderr, "ecc percent vectors: fixtures/ecc/percent-vectors.txt not found\n");
-    ++check::failures();
-    return;
-  }
-  int seen[8] = {};
-  for (auto const& r : rows) {
-    if (r.kind == "pct") {
-      run_pct(r);
-      ++seen[0];
-    } else if (r.kind == "encp") {
-      run_encp(r);
-      ++seen[1];
-    } else if (r.kind == "inv") {
-      run_inv(r);
-      ++seen[2];
-    } else if (r.kind == "limp") {
-      run_limp(r);
-      ++seen[3];
-    } else if (r.kind == "fixp") {
-      run_fixp(r);
-      ++seen[4];
-    } else if (r.kind == "badp") {
-      run_badp(r);
-      ++seen[5];
-    } else if (r.kind == "parp") {
-      run_parp(r);
-      ++seen[6];
-    } else if (r.kind == "lmtp") {
-      run_lmtp(r);
-      ++seen[7];
-    } else {
-      std::fprintf(stderr, "ecc percent vectors: unknown row kind %s\n", r.kind.c_str());
-      ++check::failures();
-    }
-  }
-  for (int count : seen)
-    expect(count > 0, "ecc percent vectors: every row kind is present");
-  std::printf("ecc percent vectors: pct %d encp %d inv %d limp %d fixp %d badp %d parp %d lmtp %d\n",
-              seen[0], seen[1], seen[2], seen[3], seen[4], seen[5], seen[6], seen[7]);
-}
-
 }  // namespace
 
 int run_core_ecc_percent_host_tests() {
@@ -619,6 +370,5 @@ int run_core_ecc_percent_host_tests() {
   round_trips();
   repair_and_limit();
   dispatch();
-  vectors();
   return check::failures();
 }

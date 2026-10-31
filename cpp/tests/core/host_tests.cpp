@@ -248,7 +248,7 @@ void ac3_no_os_in_core() {
     closedir(dir);
 
   static char const* const headers[] = {"core.hpp",  "table.hpp", "fields.hpp",
-                                        "order.hpp", "codec.hpp", "ecc.hpp"};
+                                        "order.hpp", "codec.hpp", "codec_ecc.hpp", "ecc.hpp"};
   for (char const* h : headers) {
     std::snprintf(path, sizeof(path), "%sinclude/packbin/%s", root, h);
     scanned += scan_core_file(path, dirty);
