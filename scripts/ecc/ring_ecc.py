@@ -37,6 +37,28 @@ def hx(b):
     return b.hex() if len(b) else "-"
 
 
+def setting(token):
+    """The parity setting of a row: a count (int) or `p<N>`, a percentage of the clear length (kept as the text)."""
+    if token.startswith("p"):
+        if not token[1:].isdigit():
+            raise ValueError("percentage %r" % token)
+        return token
+    return int(token)
+
+
+def ref_protect(clear, s):
+    return e.protect_percent(clear, int(s[1:])) if isinstance(s, str) else e.protect(clear, s)
+
+
+def ref_decode(received, s, t):
+    return e.decode_percent(received, int(s[1:]), t) if isinstance(s, str) else e.decode(received, s, t)
+
+
+def limit_refused(s, t):
+    """True when a correction limit t is refused before any byte is read under setting s."""
+    return (t < 0 or t > e.MAX_PERCENT_LIMIT) if isinstance(s, str) else t > s // 2
+
+
 def read_rows(path, pick):
     rows = []
     with open(path, encoding="utf-8") as f:
@@ -71,31 +93,37 @@ class Rows:
             raise FileError("%s: duplicate id %s" % (where, rid))
         ids.add(rid)
         if kind == "enc":
-            n, clear, prot = int(w[2]), unhex(w[3]), unhex(w[4])
-            if clear != POS or e.protect(clear, n) != prot:
+            n, clear, prot = setting(w[2]), unhex(w[3]), unhex(w[4])
+            if clear != POS or ref_protect(clear, n) != prot:
                 raise FileError("%s: %s is not the reference protection of the position message" % (where, rid))
             self.protect.append((rid, n, clear, prot.hex()))
         elif kind == "par":
-            n = int(w[2])
-            if not (n > e.MAX_PARITY):
+            n = setting(w[2])
+            if isinstance(n, str):
+                try:
+                    e.check_percent(int(n[1:]))
+                    raise FileError("%s: %s declares %s, which is allowed" % (where, rid, n))
+                except e.EccError:
+                    pass
+            elif not (n > e.MAX_PARITY):
                 raise FileError("%s: %s declares n = %d, which is allowed" % (where, rid, n))
             self.protect.append((rid, n, POS, e.BAD_PARITY))
         elif kind == "lmt":
-            n, t = int(w[2]), int(w[3])
-            if not (t > n // 2):
-                raise FileError("%s: %s limit %d is allowed for n = %d" % (where, rid, t, n))
-            self.repair.append((rid, n, t, e.protect(POS, n), POS, e.BAD_LIMIT))
+            n, t = setting(w[2]), int(w[3])
+            if not limit_refused(n, t):
+                raise FileError("%s: %s limit %d is allowed for %s" % (where, rid, t, n))
+            self.repair.append((rid, n, t, ref_protect(POS, n), POS, e.BAD_LIMIT))
         elif kind == "fix":
-            n, t, recv, clear, count = int(w[2]), int(w[3]), unhex(w[4]), unhex(w[5]), int(w[6])
+            n, t, recv, clear, count = setting(w[2]), int(w[3]), unhex(w[4]), unhex(w[5]), int(w[6])
             try:
-                got = e.decode(recv, n, t)
+                got = ref_decode(recv, n, t)
             except e.EccError as x:
                 raise FileError("%s: %s is refused as %s by the reference" % (where, rid, x.kind))
             if got != (clear, count):
                 raise FileError("%s: %s gives %s, %d in the reference, the row says %s, %d" % (where, rid, got[0].hex(), got[1], clear.hex(), count))
             self.repair.append((rid, n, t, recv, clear, "%s %d" % (clear.hex(), count)))
         elif kind == "bad":
-            n, t, recv, want = int(w[2]), int(w[3]), unhex(w[4]), w[5]
+            n, t, recv, want = setting(w[2]), int(w[3]), unhex(w[4]), w[5]
             if want not in KINDS:
                 raise FileError("%s: %s names the kind %s" % (where, rid, want))
             if want == "trailing":
@@ -103,7 +131,7 @@ class Rows:
                     raise FileError("%s: %s is a trailing row with n = %d and %d bytes" % (where, rid, n, len(recv)))
             else:
                 try:
-                    got = e.decode(recv, n, t)
+                    got = ref_decode(recv, n, t)
                     raise FileError("%s: %s is accepted by the reference as %s" % (where, rid, got[0].hex()))
                 except e.EccError as x:
                     if x.kind != want:
@@ -121,7 +149,7 @@ def load():
 
 def rebase(recv, n, written):
     """The row's buffer built on the bytes a writer made for the position message instead of the reference's."""
-    ref = e.protect(POS, n)
+    ref = ref_protect(POS, n)
     if written is None or written == ref:
         return recv
     if len(recv) == len(ref):
@@ -156,7 +184,7 @@ def cmd_protect_in(dirname):
     rows = load()
     with open(os.path.join(dirname, "protect.in"), "w") as f:
         for rid, n, clear, want in rows.protect:
-            f.write("protect %d %s\n" % (n, hx(clear)))
+            f.write("protect %s %s\n" % (n, hx(clear)))
     print("ring-ecc: %d protect rows" % len(rows.protect))
 
 
@@ -167,7 +195,7 @@ def cmd_repair_in(dirname, writers):
             made = written_by(dirname, writer, rows) or {}
             for rid, n, t, recv, clear, want in rows.repair:
                 base = made.get(n) if clear == POS or clear is None else None
-                f.write("repair %d %d %s\n" % (n, t, hx(rebase(recv, n, base) if base is not None else recv)))
+                f.write("repair %s %d %s\n" % (n, t, hx(rebase(recv, n, base) if base is not None else recv)))
     print("ring-ecc: %d repair rows for each of %d writers" % (len(rows.repair), len(writers)))
 
 
@@ -202,7 +230,7 @@ def cmd_check(dirname, writers, readers):
                 chunk = lines[index * len(rows.repair):(index + 1) * len(rows.repair)]
                 for (rid, n, t, recv, clear, want), got in zip(rows.repair, chunk):
                     if got != want:
-                        wrong.append("%s -> %s: %s (n=%d t=%d) gave %s, wanted %s" % (writer, reader, rid, n, t, got[:50], want[:50]))
+                        wrong.append("%s -> %s: %s (n=%s t=%d) gave %s, wanted %s" % (writer, reader, rid, n, t, got[:50], want[:50]))
             pairs += 1
             total_rows += seen
             total_wrong += len(wrong) - shown

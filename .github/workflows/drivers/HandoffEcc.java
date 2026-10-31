@@ -11,12 +11,12 @@ import packbin.Scheme;
  * The message ECC commands of {@link Handoff} (AZ-2689; contract message-ecc.md).
  *
  * <pre>
- *   ecc-protect &lt;n&gt; &lt;clear hex&gt;   prints the clear position message packed again with n parity bytes, or the error kind
+ *   ecc-protect &lt;n&gt; &lt;clear hex&gt;   (n is a count, or p&lt;N&gt;: a parity percentage N) prints the clear position message packed again with n parity bytes, or the error kind
  *   ecc-repair &lt;n&gt; &lt;t&gt; &lt;hex&gt;      prints the position message repaired (hex, then the repaired count), or the error kind
  *   ecc-batch &lt;file&gt;              one line per line of the file: `protect &lt;n&gt; &lt;hex&gt;` or `repair &lt;n&gt; &lt;t&gt; &lt;hex&gt;`
  * </pre>
  *
- * "-" is the empty buffer. The kind names are the ones of fixtures/ecc/vectors.txt (uncorrectable, short, too_long,
+ * "-" is the empty buffer. A parity word is an integer count or p&lt;N&gt; (a percentage; AZ-3508); any other word is a malformed line. The kind names are the ones of fixtures/ecc/vectors.txt (uncorrectable, short, too_long,
  * bad_parity, bad_limit) plus trailing, type_mismatch and unpack_failed for the walk of the unprotected fields.
  */
 final class HandoffEcc {
@@ -43,27 +43,46 @@ final class HandoffEcc {
         return error instanceof Packbin.TypeMismatch ? "type_mismatch" : "unpack_failed";
     }
 
+    /** A count word is an integer; p<N> is a percentage (digits beyond int range are out of 0..100 anyway). Null when the package refuses the value. */
+    @SuppressWarnings("rawtypes")
+    private static Scheme<Map> withParityWord(Scheme<Map> position, String word) {
+        if (word.length() > 1 && word.charAt(0) == 'p') {
+            String digits = word.substring(1);
+            if (!digits.chars().allMatch(c -> c >= '0' && c <= '9')) {
+                throw new IllegalStateException("ecc line: bad parity word " + word);
+            }
+            return tryScheme(() -> position.withParityPercent(digits.length() > 9 ? 101 : Integer.parseInt(digits)));
+        }
+        int count = Integer.parseInt(word);
+        return tryScheme(() -> position.withParity(count));
+    }
+
+    @SuppressWarnings("rawtypes")
+    private static Scheme<Map> tryScheme(java.util.function.Supplier<Scheme<Map>> build) {
+        try {
+            return build.get();
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private static String protect(Scheme<Map> position, int n, byte[] clear) {
+    private static String protect(Scheme<Map> position, String n, byte[] clear) {
         Map[] row = new Map[1];
         if (BinaryPacker.unpack(clear, position.on(r -> row[0] = r)) != null || row[0] == null) {
             return "unpack_failed";
         }
-        Scheme<Map> protectedScheme;
-        try {
-            protectedScheme = position.withParity(n);
-        } catch (IllegalArgumentException e) {
+        Scheme<Map> protectedScheme = withParityWord(position, n);
+        if (protectedScheme == null) {
             return "bad_parity";
         }
         return Handoff.hex(BinaryPacker.pack(protectedScheme, row[0]));
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private static String repair(Scheme<Map> position, int n, int t, byte[] received) {
-        Scheme<Map> protectedScheme;
-        try {
-            protectedScheme = position.withParity(n);
-        } catch (IllegalArgumentException e) {
+    private static String repair(Scheme<Map> position, String n, int t, byte[] received) {
+        Scheme<Map> protectedScheme = withParityWord(position, n);
+        if (protectedScheme == null) {
             return "bad_parity";
         }
         Map[] row = new Map[1];
@@ -81,10 +100,10 @@ final class HandoffEcc {
 
     private static String line(Scheme<Map> position, String[] words) {
         if (words.length == 3 && words[0].equals("protect")) {
-            return protect(position, Integer.parseInt(words[1]), bytesOf(words[2]));
+            return protect(position, words[1], bytesOf(words[2]));
         }
         if (words.length == 4 && words[0].equals("repair")) {
-            return repair(position, Integer.parseInt(words[1]), Integer.parseInt(words[2]), bytesOf(words[3]));
+            return repair(position, words[1], Integer.parseInt(words[2]), bytesOf(words[3]));
         }
         throw new IllegalArgumentException("ecc line: " + String.join(" ", words));
     }

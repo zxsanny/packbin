@@ -7,6 +7,8 @@ import Packbin
 //   ecc-repair <n> <t> <hex>      prints the position message repaired (hex, then the repaired count), or the error kind
 //   ecc-batch <file>              one line per line of the file: `protect <n> <hex>` or `repair <n> <t> <hex>`
 //
+// The word in the n place is an integer parity count, or p<N>: a parity percentage N (withLimits(parityPercent:), 0..100).
+//
 // "-" is the empty buffer. The kind names are the ones of fixtures/ecc/vectors.txt (uncorrectable, short, too_long,
 // bad_parity, bad_limit) plus trailing, type_mismatch and unpack_failed for the walk of the unprotected fields.
 
@@ -14,6 +16,31 @@ import Packbin
 func positionScheme() throws -> Scheme {
     try Scheme(0x40, .u16(0, "sid"), .i32(1, "lat"), .i32(2, "lon"), .u8(3, "profile"),
                .flags(4, .u16(4, "heading"), .u8(5, "speed"), .i16(6, "altitude")))
+}
+
+/// The parity setting word: a count, or a percentage (`p<N>`).
+private enum EccSetting {
+    case count(Int)
+    case percent(Int)
+
+    init?(_ word: String) {
+        if word.hasPrefix("p") {
+            let digits = word.dropFirst()
+            guard !digits.isEmpty, digits.allSatisfy({ $0 >= "0" && $0 <= "9" }), let n = Int(digits) else { return nil }
+            self = .percent(n)
+        } else if let n = Int(word) {
+            self = .count(n)
+        } else {
+            return nil
+        }
+    }
+
+    func apply(_ scheme: Scheme) throws -> Scheme {
+        switch self {
+        case .count(let n): return try scheme.withLimits(parity: n)
+        case .percent(let p): return try scheme.withLimits(parityPercent: p)
+        }
+    }
 }
 
 private func eccBytes(_ token: String) -> [UInt8]? {
@@ -31,7 +58,7 @@ private func eccKind(_ error: PackbinError) -> String {
     }
 }
 
-private func eccProtect(_ n: Int, _ clear: [UInt8]) throws -> String {
+private func eccProtect(_ n: EccSetting, _ clear: [UInt8]) throws -> String {
     let position = try positionScheme()
     let row: [String: Any]
     do {
@@ -41,7 +68,7 @@ private func eccProtect(_ n: Int, _ clear: [UInt8]) throws -> String {
     }
     let protected: Scheme
     do {
-        protected = try position.withLimits(parity: n)
+        protected = try n.apply(position)
     } catch is PackbinError {
         return "bad_parity"
     }
@@ -52,11 +79,11 @@ private func eccProtect(_ n: Int, _ clear: [UInt8]) throws -> String {
     }
 }
 
-private func eccRepair(_ n: Int, _ t: Int, _ received: [UInt8]) throws -> String {
+private func eccRepair(_ n: EccSetting, _ t: Int, _ received: [UInt8]) throws -> String {
     let position = try positionScheme()
     let protected: Scheme
     do {
-        protected = try position.withLimits(parity: n)
+        protected = try n.apply(position)
     } catch is PackbinError {
         return "bad_parity"
     }
@@ -74,10 +101,10 @@ private func eccRepair(_ n: Int, _ t: Int, _ received: [UInt8]) throws -> String
 }
 
 private func eccLine(_ words: [String]) throws -> String? {
-    if words.count == 3, words[0] == "protect", let n = Int(words[1]), let clear = eccBytes(words[2]) {
+    if words.count == 3, words[0] == "protect", let n = EccSetting(words[1]), let clear = eccBytes(words[2]) {
         return try eccProtect(n, clear)
     }
-    if words.count == 4, words[0] == "repair", let n = Int(words[1]), let t = Int(words[2]), let received = eccBytes(words[3]) {
+    if words.count == 4, words[0] == "repair", let n = EccSetting(words[1]), let t = Int(words[2]), let received = eccBytes(words[3]) {
         return try eccRepair(n, t, received)
     }
     return nil

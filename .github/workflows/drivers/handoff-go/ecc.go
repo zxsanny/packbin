@@ -18,6 +18,7 @@ import (
 //	ecc-repair <n> <t> <hex>      prints the position message repaired (hex, then the repaired count), or the error kind
 //	ecc-batch <file>              one line per line of the file: `protect <n> <hex>` or `repair <n> <t> <hex>`
 //
+// The word in the n place is an integer parity count, or p<N>: a parity percentage N (WithParityPercent, 0..100).
 // "-" is the empty buffer. The kind names are the ones of fixtures/ecc/vectors.txt (uncorrectable, short, too_long,
 // bad_parity, bad_limit) plus trailing, type_mismatch and unpack_failed for the walk of the unprotected fields.
 
@@ -37,6 +38,31 @@ func position() *packbin.Scheme {
 		os.Exit(1)
 	}
 	return s
+}
+
+// eccSetting is the parity setting word: a count, or a percentage when pct is set.
+type eccSetting struct {
+	pct bool
+	n   int
+}
+
+func parseSetting(word string) (eccSetting, bool) {
+	if digits, ok := strings.CutPrefix(word, "p"); ok {
+		if digits == "" || strings.Trim(digits, "0123456789") != "" {
+			return eccSetting{}, false
+		}
+		n, err := strconv.Atoi(digits)
+		return eccSetting{pct: true, n: n}, err == nil
+	}
+	n, err := strconv.Atoi(word)
+	return eccSetting{n: n}, err == nil
+}
+
+func (s eccSetting) apply(pos *packbin.Scheme) (*packbin.Scheme, error) {
+	if s.pct {
+		return pos.WithParityPercent(s.n)
+	}
+	return pos.WithParity(s.n)
 }
 
 func eccBytes(token string) ([]byte, error) {
@@ -66,13 +92,13 @@ func eccKind(err error) string {
 	return "unpack_failed"
 }
 
-func eccProtect(n int, clear []byte) string {
+func eccProtect(n eccSetting, clear []byte) string {
 	pos := position()
 	row, err := packbin.UnpackMap(clear, pos)
 	if err != nil {
 		return "unpack_failed"
 	}
-	protected, err := pos.WithParity(n)
+	protected, err := n.apply(pos)
 	if err != nil {
 		return "bad_parity"
 	}
@@ -83,9 +109,9 @@ func eccProtect(n int, clear []byte) string {
 	return hex.EncodeToString(raw)
 }
 
-func eccRepair(n, t int, received []byte) string {
+func eccRepair(n eccSetting, t int, received []byte) string {
 	pos := position()
-	protected, err := pos.WithParity(n)
+	protected, err := n.apply(pos)
 	if err != nil {
 		return "bad_parity"
 	}
@@ -107,17 +133,17 @@ func eccRepair(n, t int, received []byte) string {
 func eccLine(words []string) (string, error) {
 	switch {
 	case len(words) == 3 && words[0] == "protect":
-		n, err := strconv.Atoi(words[1])
+		n, ok := parseSetting(words[1])
 		clear, err2 := eccBytes(words[2])
-		if err != nil || err2 != nil {
+		if !ok || err2 != nil {
 			return "", fmt.Errorf("ecc line: %s", strings.Join(words, " "))
 		}
 		return eccProtect(n, clear), nil
 	case len(words) == 4 && words[0] == "repair":
-		n, err := strconv.Atoi(words[1])
+		n, ok := parseSetting(words[1])
 		t, err2 := strconv.Atoi(words[2])
 		received, err3 := eccBytes(words[3])
-		if err != nil || err2 != nil || err3 != nil {
+		if !ok || err2 != nil || err3 != nil {
 			return "", fmt.Errorf("ecc line: %s", strings.Join(words, " "))
 		}
 		return eccRepair(n, t, received), nil

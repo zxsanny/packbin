@@ -4,6 +4,7 @@
 //   ecc-repair <n> <t> <hex>      prints the position message repaired (hex, then the repaired count), or the error kind
 //   ecc-batch <file>              one line per line of the file: `protect <n> <hex>` or `repair <n> <t> <hex>`
 //
+// <n> is a parity byte count (an integer) or `p<N>`, a parity percentage N (digits only; the package refuses N above 100).
 // "-" is the empty buffer. The kind names are the ones of fixtures/ecc/vectors.txt (uncorrectable, short, too_long,
 // bad_parity, bad_limit) plus trailing, type_mismatch and unpack_failed for the walk of the unprotected fields.
 import { readFileSync } from "node:fs";
@@ -21,13 +22,24 @@ function kindOf(result: Record<string, unknown>): string {
   return "actual" in result ? "type_mismatch" : "unpack_failed";
 }
 
-function protect(position: Scheme<object>, n: number, clear: Uint8Array): string {
+type Parity = { parity: number } | { parityPercent: number };
+
+function parityOf(word: string): Parity {
+  if (word.startsWith("p")) {
+    if (!/^[0-9]+$/.test(word.slice(1))) throw new Error(`ecc line: bad parity word ${word}`);
+    return { parityPercent: Number(word.slice(1)) };
+  }
+  if (!/^[+-]?[0-9]+$/.test(word)) throw new Error(`ecc line: bad parity word ${word}`);
+  return { parity: Number(word) };
+}
+
+function protect(position: Scheme<object>, n: Parity, clear: Uint8Array): string {
   let row: object | undefined;
   const read = BinaryPacker.unpack(clear, position.on((r) => (row = r)));
   if (!read.ok || row === undefined) return "unpack_failed";
   let protectedScheme: Scheme<object>;
   try {
-    protectedScheme = position.withLimits({ parity: n });
+    protectedScheme = position.withLimits(n);
   } catch (e) {
     if (e instanceof RangeError) return "bad_parity";
     throw e;
@@ -35,10 +47,10 @@ function protect(position: Scheme<object>, n: number, clear: Uint8Array): string
   return hexOf(BinaryPacker.pack(protectedScheme, row));
 }
 
-function repair(position: Scheme<object>, n: number, t: number, received: Uint8Array): string {
+function repair(position: Scheme<object>, n: Parity, t: number, received: Uint8Array): string {
   let protectedScheme: Scheme<object>;
   try {
-    protectedScheme = position.withLimits({ parity: n });
+    protectedScheme = position.withLimits(n);
   } catch (e) {
     if (e instanceof RangeError) return "bad_parity";
     throw e;
@@ -56,9 +68,9 @@ function repair(position: Scheme<object>, n: number, t: number, received: Uint8A
 }
 
 function line(position: Scheme<object>, words: string[]): string {
-  if (words[0] === "protect" && words.length === 3) return protect(position, Number(words[1]), bytesOf(words[2]!));
+  if (words[0] === "protect" && words.length === 3) return protect(position, parityOf(words[1]!), bytesOf(words[2]!));
   if (words[0] === "repair" && words.length === 4) {
-    return repair(position, Number(words[1]), Number(words[2]), bytesOf(words[3]!));
+    return repair(position, parityOf(words[1]!), Number(words[2]), bytesOf(words[3]!));
   }
   throw new Error(`ecc line: ${words.join(" ")}`);
 }

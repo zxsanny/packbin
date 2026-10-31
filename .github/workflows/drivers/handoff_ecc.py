@@ -4,6 +4,7 @@
   ecc-repair <n> <t> <hex>          prints the position message repaired (hex, then the repaired count), or the error kind
   ecc-batch <file>                  one line per line of the file: `protect <n> <hex>` or `repair <n> <t> <hex>`
 
+<n> is a parity byte count (an integer) or `p<N>`, a parity percentage N (digits only; the package refuses N above 100).
 "-" is the empty buffer. The kind names are the ones of fixtures/ecc/vectors.txt (uncorrectable, short, too_long,
 bad_parity, bad_limit) plus trailing, type_mismatch and unpack_failed for the walk of the unprotected fields.
 """
@@ -14,6 +15,16 @@ from packbin import BinaryPacker, ShortPacket, TooLong, TrailingBytes, TypeMisma
 
 def _bytes(token: str) -> bytes:
     return b"" if token == "-" else bytes.fromhex(token)
+
+
+def _parity(word: str) -> dict:
+    """The with_limits keyword of an <n> word: an integer count, or `p<N>` for a percentage."""
+    if word[:1] == "p":
+        digits = word[1:]
+        if not (digits.isascii() and digits.isdigit()):
+            raise ValueError("ecc line: bad parity word %s" % word)
+        return {"parity_percent": int(digits)}
+    return {"parity": int(word)}
 
 
 def _kind(result) -> str:
@@ -31,20 +42,20 @@ def _kind(result) -> str:
     return "unpack_failed"
 
 
-def _protect(position, n: int, clear: bytes) -> str:
+def _protect(position, n: dict, clear: bytes) -> str:
     row = BinaryPacker.unpack(clear, position.on(lambda _row: None))
     if not row.ok or row.value is None:
         return "unpack_failed"
     try:
-        scheme = position.with_limits(parity=n)
+        scheme = position.with_limits(**n)
     except ValueError:
         return "bad_parity"
     return BinaryPacker.pack(scheme, row.value).hex()
 
 
-def _repair(position, n: int, t: int, received: bytes) -> str:
+def _repair(position, n: dict, t: int, received: bytes) -> str:
     try:
-        scheme = position.with_limits(parity=n)
+        scheme = position.with_limits(**n)
     except ValueError:
         return "bad_parity"
     try:
@@ -58,9 +69,9 @@ def _repair(position, n: int, t: int, received: bytes) -> str:
 
 def _line(position, words: list[str]) -> str:
     if words[:1] == ["protect"] and len(words) == 3:
-        return _protect(position, int(words[1]), _bytes(words[2]))
+        return _protect(position, _parity(words[1]), _bytes(words[2]))
     if words[:1] == ["repair"] and len(words) == 4:
-        return _repair(position, int(words[1]), int(words[2]), _bytes(words[3]))
+        return _repair(position, _parity(words[1]), int(words[2]), _bytes(words[3]))
     raise ValueError("ecc line: %s" % " ".join(words))
 
 

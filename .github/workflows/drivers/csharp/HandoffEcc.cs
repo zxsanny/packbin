@@ -2,11 +2,11 @@ using Packbin;
 
 // The message ECC commands of Handoff (AZ-2689; contract message-ecc.md).
 //
-//   ecc-protect <n> <clear hex>   prints the clear position message packed again with n parity bytes, or the error kind
+//   ecc-protect <n> <clear hex>   (n is a count, or p<N>: a parity percentage N) prints the clear position message packed again with n parity bytes, or the error kind
 //   ecc-repair <n> <t> <hex>      prints the position message repaired (hex, then the repaired count), or the error kind
 //   ecc-batch <file>              one line per line of the file: `protect <n> <hex>` or `repair <n> <t> <hex>`
 //
-// "-" is the empty buffer. The kind names are the ones of fixtures/ecc/vectors.txt (uncorrectable, short, too_long,
+// "-" is the empty buffer. A parity word is an integer count or p<N> (a percentage; AZ-3508); any other word is a malformed line. The kind names are the ones of fixtures/ecc/vectors.txt (uncorrectable, short, too_long,
 // bad_parity, bad_limit) plus trailing, type_mismatch and unpack_failed for the walk of the unprotected fields.
 static class HandoffEcc
 {
@@ -25,7 +25,20 @@ static class HandoffEcc
         _ => "unpack_failed",
     };
 
-    static string Protect<T>(Scheme<T> position, int n, byte[] clear) where T : class, new()
+    // A count word is an integer; p<N> is a percentage (digits beyond int range are out of 0..100 anyway).
+    static Scheme<T> WithParityWord<T>(Scheme<T> position, string word) where T : class, new()
+    {
+        if (word.Length > 1 && word[0] == 'p')
+        {
+            var digits = word[1..];
+            if (!digits.All(char.IsAsciiDigit))
+                throw new ArgumentException($"ecc line: bad parity word {word}");
+            return position.WithParityPercent(digits.Length > 9 ? 101 : int.Parse(digits));
+        }
+        return position.WithParity(int.Parse(word));
+    }
+
+    static string Protect<T>(Scheme<T> position, string n, byte[] clear) where T : class, new()
     {
         T? row = null;
         if (BinaryPacker.Unpack(clear, position.On(v => row = v)) is not null || row is null)
@@ -33,7 +46,7 @@ static class HandoffEcc
         Scheme<T> protectedScheme;
         try
         {
-            protectedScheme = position.WithParity(n);
+            protectedScheme = WithParityWord(position, n);
         }
         catch (ArgumentOutOfRangeException)
         {
@@ -42,12 +55,12 @@ static class HandoffEcc
         return HexOf(BinaryPacker.Pack(protectedScheme, row));
     }
 
-    static string Repair<T>(Scheme<T> position, int n, int t, byte[] received) where T : class, new()
+    static string Repair<T>(Scheme<T> position, string n, int t, byte[] received) where T : class, new()
     {
         Scheme<T> protectedScheme;
         try
         {
-            protectedScheme = position.WithParity(n);
+            protectedScheme = WithParityWord(position, n);
         }
         catch (ArgumentOutOfRangeException)
         {
@@ -71,8 +84,8 @@ static class HandoffEcc
 
     static string Line<T>(Scheme<T> position, string[] words) where T : class, new() => words switch
     {
-        ["protect", var n, var hex] => Protect(position, int.Parse(n), BytesOf(hex)),
-        ["repair", var n, var t, var hex] => Repair(position, int.Parse(n), int.Parse(t), BytesOf(hex)),
+        ["protect", var n, var hex] => Protect(position, n, BytesOf(hex)),
+        ["repair", var n, var t, var hex] => Repair(position, n, int.Parse(t), BytesOf(hex)),
         _ => throw new ArgumentException($"ecc line: {string.Join(' ', words)}"),
     };
 

@@ -30,13 +30,35 @@ def unhex(token):
     return b"" if token == "-" else bytes.fromhex(token)
 
 
-def protect(n):
+def percent(token):
+    return int(token[1:]) if token.startswith("p") else None
+
+
+def protect(token):
+    p = percent(token)
+    if p is not None:
+        if p > e.MAX_PERCENT:
+            return "bad_parity"
+        return e.protect_percent(POS, p).hex()
+    n = int(token)
     if n > e.MAX_PARITY:
         return "bad_parity"
     return e.protect(POS, n).hex()
 
 
-def repair(n, t, received):
+def repair(token, t, received):
+    p = percent(token)
+    if p is not None:
+        if p > e.MAX_PERCENT:
+            return "bad_parity"
+        if t > e.MAX_PERCENT_LIMIT:
+            return "bad_limit"
+        try:
+            clear, count = e.decode_percent(received, p, t)
+        except e.EccError as x:
+            return x.kind
+        return "%s %d" % (clear.hex(), count) if len(clear) == 13 and clear[0] == 0x40 else "unpack_failed"
+    n = int(token)
     if n > e.MAX_PARITY:
         return "bad_parity"
     if t > n // 2:
@@ -50,6 +72,42 @@ def repair(n, t, received):
     return "%s %d" % (clear.hex(), count) if len(clear) == 13 and clear[0] == 0x40 else "unpack_failed"
 
 
+def round_down(token, t, received):
+    """A reader that rounds the count down: it looks for the clear length with floor(p * L / 100) parity bytes."""
+    p = int(token[1:])
+    if p > e.MAX_PERCENT:
+        return "bad_parity"
+    if t > e.MAX_PERCENT_LIMIT:
+        return "bad_limit"
+    for length in range(min(len(received), 254) + 1):
+        n = min(32, p * length // 100)
+        if length + n == len(received):
+            try:
+                clear, count = e.decode(received, n, min(t, n // 2))
+            except e.EccError as x:
+                return x.kind
+            return "%s %d" % (clear.hex(), count)
+    return "uncorrectable"
+
+
+def no_lowering(token, t, received):
+    """A reader that never lowers a limit above n / 2 to n / 2: it passes the limit on, so the codec refuses it."""
+    p = int(token[1:])
+    if p > e.MAX_PERCENT:
+        return "bad_parity"
+    if t > e.MAX_PERCENT_LIMIT:
+        return "bad_limit"
+    for length in range(min(len(received), 254) + 1):
+        n = min(32, (p * length + 99) // 100)
+        if length + n == len(received):
+            try:
+                clear, count = e.decode(received, n, t)
+            except e.EccError as x:
+                return x.kind
+            return "%s %d" % (clear.hex(), count)
+    return "uncorrectable"
+
+
 if cmd != "ecc-batch":
     sys.exit(2)
 if lying and how == "crash":
@@ -61,11 +119,18 @@ for line in open(path):
     if not w:
         continue
     if w[0] == "protect":
-        text = protect(int(w[1]))
+        text = protect(w[1])
+        if lying and how == "percent-protect" and w[1] == "p25" and not bent:
+            text, bent = text[:-1] + ("0" if text[-1] != "0" else "1"), True
         if lying and how == "protect" and w[1] == "4" and not bent:
             text, bent = text[:-1] + ("0" if text[-1] != "0" else "1"), True
     else:
-        text = repair(int(w[1]), int(w[2]), unhex(w[3]))
+        if lying and how == "percent-down" and w[1].startswith("p"):
+            text = round_down(w[1], int(w[2]), unhex(w[3]))
+        elif lying and how == "percent-nolower" and w[1].startswith("p"):
+            text = no_lowering(w[1], int(w[2]), unhex(w[3]))
+        else:
+            text = repair(w[1], int(w[2]), unhex(w[3]))
         if lying and how == "repair" and " " in text and not bent:
             text, bent = "uncorrectable", True
     out.append(text)
@@ -105,6 +170,9 @@ run reader-lies 1 "-> go: " FAKE_LIE=go:repair
 run reader-prints-too-few 1 "swift printed" FAKE_LIE=swift:short
 run driver-crashes 1 "rust ecc-batch (protect) failed" FAKE_LIE=rust:crash
 run one-language 0 "ring-ecc: 1 pairs" RING_ECC_LANGS=python
+run percent-writer-lies 1 "go: ring.p25.enc" FAKE_LIE=go:percent-protect
+run percent-reader-rounds-down 1 "-> swift: ring.p" FAKE_LIE=swift:percent-down
+run percent-reader-never-lowers-limit 1 "-> rust: ring.p25" FAKE_LIE=rust:percent-nolower
 
 # A corrupted row file: the reference does not confirm it, so the run stops before it reads any driver result.
 corrupt_row() { # file id-regex, a sed expression: change a field of the row

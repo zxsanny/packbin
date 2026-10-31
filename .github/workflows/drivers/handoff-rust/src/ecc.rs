@@ -4,6 +4,9 @@
 //   ecc-repair <n> <t> <hex>      prints the position message repaired (hex, then the repaired count), or the error kind
 //   ecc-batch <file>              one line per line of the file: `protect <n> <hex>` or `repair <n> <t> <hex>`
 //
+// n is a count of parity bytes, or `p<N>` for a parity percentage N (0 to 100; p0 is a scheme without parity and keeps
+// the limit rule of count 0). A word that is neither is a malformed line.
+//
 // "-" is the empty buffer. The kind names are the ones of fixtures/ecc/vectors.txt (uncorrectable, short, too_long,
 // bad_parity, bad_limit) plus trailing, type_mismatch and unpack_failed for the walk of the unprotected fields.
 use super::{from_hex, position_scheme, Position};
@@ -15,6 +18,22 @@ fn bytes_of(token: &str) -> Option<Vec<u8>> {
         Some(Vec::new())
     } else {
         from_hex(token)
+    }
+}
+
+#[derive(Clone, Copy)]
+enum Setting {
+    Count(usize),
+    Percent(usize),
+}
+
+fn setting_of(word: &str) -> Option<Setting> {
+    let digits_only = |d: &str| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit());
+    match word.strip_prefix('p') {
+        Some(d) if digits_only(d) => d.parse().ok().map(Setting::Percent),
+        Some(_) => None,
+        None if digits_only(word) => word.parse().ok().map(Setting::Count),
+        None => None,
     }
 }
 
@@ -32,11 +51,16 @@ fn kind_of(error: &UnpackError) -> &'static str {
 }
 
 // `with_parity` panics, naming n and 32, when n is above 32 (the scheme is not built).
-fn protected_scheme(n: usize) -> Option<Scheme<Position>> {
-    catch_unwind(|| position_scheme().with_parity(n)).ok()
+// `with_parity_percent` panics when the percentage is above 100: the range is checked first.
+fn protected_scheme(setting: Setting) -> Option<Scheme<Position>> {
+    match setting {
+        Setting::Count(n) => catch_unwind(|| position_scheme().with_parity(n)).ok(),
+        Setting::Percent(p) if p <= 100 => Some(position_scheme().with_parity_percent(p)),
+        Setting::Percent(_) => None,
+    }
 }
 
-fn protect(n: usize, clear: &[u8]) -> String {
+fn protect(n: Setting, clear: &[u8]) -> String {
     let position = position_scheme();
     let mut got = None;
     if BinaryPacker::unpack_with(clear, &mut [&mut position.on(|row| got = Some(row))]).is_err() {
@@ -54,7 +78,7 @@ fn protect(n: usize, clear: &[u8]) -> String {
     }
 }
 
-fn repair(n: usize, t: usize, received: &[u8]) -> String {
+fn repair(n: Setting, t: usize, received: &[u8]) -> String {
     let Some(scheme) = protected_scheme(n) else {
         return "bad_parity".into();
     };
@@ -73,8 +97,8 @@ fn repair(n: usize, t: usize, received: &[u8]) -> String {
 
 fn line(words: &[&str]) -> Option<String> {
     match words {
-        ["protect", n, hex] => Some(protect(n.parse().ok()?, &bytes_of(hex)?)),
-        ["repair", n, t, hex] => Some(repair(n.parse().ok()?, t.parse().ok()?, &bytes_of(hex)?)),
+        ["protect", n, hex] => Some(protect(setting_of(n)?, &bytes_of(hex)?)),
+        ["repair", n, t, hex] => Some(repair(setting_of(n)?, t.parse().ok()?, &bytes_of(hex)?)),
         _ => None,
     }
 }

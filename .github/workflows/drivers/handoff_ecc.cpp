@@ -32,6 +32,9 @@ constexpr auto position_scheme = packbin::scheme<Position>(
 //   ecc-repair <n> <t> <hex>      prints the position message repaired (hex, then the repaired count), or the error kind
 //   ecc-batch <file>              one line per line of the file: `protect <n> <hex>` or `repair <n> <t> <hex>`
 //
+// n is a count of parity bytes, or `p<N>` for a parity percentage N (0 to 100; p0 is a scheme without parity and keeps
+// the limit rule of count 0). A word that is neither is a malformed line.
+//
 // "-" is the empty buffer. The kind names are the ones of fixtures/ecc/vectors.txt (uncorrectable, short, too_long,
 // bad_parity, bad_limit) plus trailing, type_mismatch and unpack_failed for the walk of the unprotected fields.
 
@@ -44,11 +47,26 @@ std::vector<std::uint8_t> ecc_bytes(std::string const& token) {
   return out;
 }
 
+// A count n >= 0, or a percentage encoded as -1 - N (so p0 is -1).
+bool ecc_setting(std::string const& word, int& out) {
+  bool const percent = word.size() > 1 && word[0] == 'p';
+  std::string const digits = percent ? word.substr(1) : word;
+  if (digits.empty() || digits.size() > 9 || digits.find_first_not_of("0123456789") != std::string::npos)
+    return false;
+  int const v = std::stoi(digits);
+  out = percent ? -1 - v : v;
+  return true;
+}
+
+auto ecc_scheme(int n) {
+  return n < 0 ? packbin::parity_percent(position_scheme, -1 - n) : packbin::parity(position_scheme, n);
+}
+
 std::string ecc_protect(int n, std::vector<std::uint8_t> clear) {
   Position row;
   if (clear.empty() || !packbin::unpack(position_scheme, clear.data(), clear.size(), row).ok())
     return "unpack_failed";
-  auto const protected_scheme = packbin::parity(position_scheme, n);
+  auto const protected_scheme = ecc_scheme(n);
   std::uint8_t out[kMax];
   packbin::Result r = packbin::pack(protected_scheme, row, out, sizeof(out));
   if (r.error == packbin::Error::SchemeInvalid)
@@ -57,7 +75,7 @@ std::string ecc_protect(int n, std::vector<std::uint8_t> clear) {
 }
 
 std::string ecc_repair(int n, int t, std::vector<std::uint8_t> received) {
-  auto const protected_scheme = packbin::parity(position_scheme, n);
+  auto const protected_scheme = ecc_scheme(n);
   received.push_back(0);  // data() of an empty buffer is not a place to write
   std::size_t const len = received.size() - 1;
   Position row;
@@ -77,7 +95,7 @@ std::string ecc_repair(int n, int t, std::vector<std::uint8_t> received) {
     case packbin::Error::TooLong:
       return "too_long";
     case packbin::Error::BadValue:
-      return t < 0 || t > n / 2 ? "bad_limit" : "unpack_failed";
+      return t < 0 || t > (n < 0 ? (n == -1 ? 0 : 16) : n / 2) ? "bad_limit" : "unpack_failed";
     case packbin::Error::ShortPacket:
       return n > 0 && len < static_cast<std::size_t>(n) ? "short" : "unpack_failed";
     case packbin::Error::TrailingBytes:
@@ -91,10 +109,11 @@ std::string ecc_repair(int n, int t, std::vector<std::uint8_t> received) {
 
 bool ecc_line(std::vector<std::string> const& w) {
   std::string out;
-  if (w.size() == 3 && w[0] == "protect")
-    out = ecc_protect(std::stoi(w[1]), ecc_bytes(w[2]));
-  else if (w.size() == 4 && w[0] == "repair")
-    out = ecc_repair(std::stoi(w[1]), std::stoi(w[2]), ecc_bytes(w[3]));
+  int n = 0;
+  if (w.size() == 3 && w[0] == "protect" && ecc_setting(w[1], n))
+    out = ecc_protect(n, ecc_bytes(w[2]));
+  else if (w.size() == 4 && w[0] == "repair" && ecc_setting(w[1], n))
+    out = ecc_repair(n, std::stoi(w[2]), ecc_bytes(w[3]));
   else
     return false;
   std::printf("%s\n", out.c_str());
