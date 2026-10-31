@@ -1,6 +1,10 @@
 #include "values.hpp"
+#include "text_count.hpp"
+#ifndef PACKBIN_NO_TEXT
+#include "text_decode.hpp"
+#endif
 
-#include <cstring>
+#include "packbin/platform.hpp"
 
 namespace packbin {
 namespace detail {
@@ -40,19 +44,15 @@ Result get_u16(Reader& r, std::size_t& out, int id) {
   return res;
 }
 
-// The children of entry i, in order, on the same object.
-Result unpack_children(Walk& w, std::size_t i, void* obj) {
-  for (std::size_t j = i + 1; j < i + w.t[i].span; j += w.t[j].span) {
-    Result res = unpack_one(w, j, obj);
-    if (!res.ok())
-      return res;
-  }
-  return Result{};
+Result unpack_children(Walk& w, std::size_t i, void* obj);
+
+bool flag_bit_set(Walk const& w, Field const& f) {
+  return (w.flag_bytes[w.t[f.ref].size] & (1u << f.bit)) != 0;
 }
 
 // Runs Fn, then brings back the flag bytes of the scope around it, so a flag byte read inside is
-// not seen after it: a `when`, a `flags` member or the child of a flag bit (an error ends the whole
-// unpack).
+// not seen after it: a `flags` member or the child of a flag bit (a `when` does this in
+// unpack_children; an error ends the whole unpack).
 template <Result (*Fn)(Walk&, std::size_t, void*)>
 PACKBIN_NOINLINE
 Result with_outer_flags(Walk& w, std::size_t i, void* obj) {
@@ -63,14 +63,108 @@ Result with_outer_flags(Walk& w, std::size_t i, void* obj) {
   return res;
 }
 
-// Bytes, utf8 (after its u16 length) and sized (length from its count).
+// What a `when` or a flag bit asks of the walker that reaches it; unpack_children and unpack_one
+// both ask here, so the two kinds are decided in one place. Skip: nothing to read. Inline: a `when`
+// that holds and reads no flag byte, whose children are walked as part of the walker's own loop.
+// Scope: a `when` that holds and reads a flag byte, whose children are walked in their own flag
+// scope. Bit: a set flag bit, whose child is walked in the flag scope.
+enum class Held : std::uint8_t { Skip, Inline, Scope, Bit };
+
+PACKBIN_NOINLINE
+Held held_of(Walk const& w, Field const& f, void* obj) {
+  if (f.kind == Kind::When) {
+    if (!when_matches(w.t, f, obj))
+      return Held::Skip;
+    return f.holds_flag_byte() ? Held::Scope : Held::Inline;
+  }
+  return flag_bit_set(w, f) ? Held::Bit : Held::Skip;
+}
+
+// The children of entry i, in order, on the same object. A `when` or a flag bit is entered here and
+// not through unpack_one: an Inline `when` keeps its children in this loop, a Scope `when` is a nested
+// call of this function inside its own flag scope and a flag bit enters its child in the flag scope.
+// A chain of such entries then costs the stack of this function per flag scope: a `when` keeps the
+// outer flag bytes in its own frame, a separate with_outer_flags frame cost 32 B more per level.
+// unpack_table, a `times` round and a flags member still reach these kinds through unpack_one.
+Result unpack_children(Walk& w, std::size_t i, void* obj) {
+  // A `when` is a flag scope, a group is not: only a `when` brings the outer bytes back at its end.
+  std::uint8_t outer[kFlagBytes];
+  std::uint8_t const* keep = nullptr;
+  if (w.t[i].kind == Kind::When) {
+    std::memcpy(outer, w.flag_bytes, sizeof(outer));
+    keep = outer;
+  }
+  std::size_t end = i + w.t[i].span;
+  for (std::size_t j = i + 1; j < end;) {
+    Field const& f = w.t[j];
+    Result res{};
+    if (f.kind == Kind::When || f.kind == Kind::FlagBit) {
+      Held held = held_of(w, f, obj);
+      if (held == Held::Inline) {
+        ++j;
+        continue;
+      }
+      if (held == Held::Scope)
+        res = unpack_children(w, j, obj);
+      else if (held == Held::Bit)
+        res = with_outer_flags<unpack_one>(w, j + 1, obj);
+    } else {
+      res = unpack_one(w, j, obj);
+    }
+    if (!res.ok())
+      return res;
+    j += f.span;
+  }
+  if (keep != nullptr)
+    std::memcpy(w.flag_bytes, keep, sizeof(outer));
+  return Result{};
+}
+
+#ifndef PACKBIN_NO_TEXT
+// A string's payload `p` (`count` bytes, the count at `at`, the payload at `body`) into a Text<N>,
+// or checked and dropped when the field is unbound. A text that does not fit is TooMany with its
+// full size and the member empty.
+PACKBIN_NOINLINE
+Result decode_text(Field const& f, void* m, std::uint8_t const* p, std::size_t count,
+                   std::size_t at, std::size_t body) {
+  if (count == 0) {
+    if (m != nullptr)
+      clear_text(f, m);
+    return Result{};
+  }
+  txt::Sink sink{nullptr, txt::kMaxText};
+  if (m != nullptr && f.fixed()) {
+    sink.out = static_cast<std::uint8_t*>(m) + sizeof(std::uint16_t);
+    sink.cap = f.size;
+  }
+  if (!txt::decode_payload(p, count, sink)) {
+    if (m != nullptr)
+      clear_text(f, m);
+    return fail(Error::BadValue, at, f.id);
+  }
+  if (sink.over) {
+    if (m != nullptr)
+      clear_text(f, m);
+    return fail(Error::TooMany, body, f.id, sink.len);
+  }
+  if (m != nullptr)
+    *static_cast<std::uint16_t*>(m) = static_cast<std::uint16_t>(sink.len);
+  return Result{};
+}
+#endif
+
+// Bytes, sized (length from its count) and utf8 (after its count). A utf8 member takes the
+// decoded text (a Text<N>) or the payload as it is (a Packed, borrowed from the input); an
+// unbound string is checked by the codec, or only skipped by its count in a PACKBIN_NO_TEXT
+// build.
 PACKBIN_NOINLINE
 Result unpack_text(Walk& w, std::size_t i, void* obj) {
   Field const& f = w.t[i];
   Reader& r = w.r;
+  std::size_t at = r.pos;
   std::size_t len = f.size;
   if (f.kind == Kind::Utf8) {
-    Result res = get_u16(r, len, f.id);
+    Result res = txt::get_count(r, len, f.id);
     if (!res.ok())
       return res;
   } else if (f.kind == Kind::Sized) {
@@ -79,12 +173,20 @@ Result unpack_text(Walk& w, std::size_t i, void* obj) {
       return fail(Error::BadValue, r.pos, f.id);
     len = clamp_count(count);
   }
-  std::size_t at = r.pos;
+  std::size_t body = r.pos;
   std::uint8_t const* p = nullptr;
   Result res = get_bytes(r, p, len, f.id);
   if (!res.ok())
     return res;
-  return store_text(f, member(f, obj), p, len, at);
+  void* m = member(f, obj);
+  if (f.kind == Kind::Utf8 && !f.opaque()) {
+#ifdef PACKBIN_NO_TEXT
+    return m == nullptr ? Result{} : fail(Error::SchemeInvalid, at, f.id);
+#else
+    return decode_text(f, m, p, len, at, body);
+#endif
+  }
+  return store_text(f, m, p, len, body);
 }
 
 // Bits (width 1) or packed numbers (width 1 or 2) into an Array<std::uint8_t, N>.
@@ -119,7 +221,7 @@ Result unpack_small(Walk& w, std::size_t i, void* obj) {
     *static_cast<std::uint8_t*>(f.item(m, static_cast<std::size_t>(k))) =
         static_cast<std::uint8_t>((byte >> shift) & mask);
   }
-  *f.count(m) = static_cast<std::uint16_t>(count);
+  *array_count(m) = static_cast<std::uint16_t>(count);
   return res;
 }
 
@@ -154,30 +256,30 @@ Result unpack_flags(Walk& w, std::size_t i, void* obj) {
   return res;
 }
 
-bool same_key(Field const& key, void* a, void* b) {
-  std::uint8_t const* da = nullptr;
-  std::uint8_t const* db = nullptr;
-  std::size_t la = 0, lb = 0;
-  text_bytes(key, member(key, a), da, la);
-  text_bytes(key, member(key, b), db, lb);
-  return la == lb && (la == 0 || std::memcmp(da, db, la) == 0);
+#ifndef PACKBIN_NO_TEXT
+constexpr std::size_t kNoKey = static_cast<std::size_t>(-1);
+
+// The payload of the string whose count starts at `at` (it has been read once, so the count is valid).
+void payload_at(Reader const& r, std::size_t at, std::uint8_t const*& p, std::size_t& n) {
+  Reader s{r.data, r.len, at};
+  txt::get_count(s, n, 0);
+  p = s.data + s.pos;
 }
 
-// A dict entry whose key repeats an earlier entry's key is BadValue at the entry's offset.
+// A dict key must sort after the key before it by its decoded UTF-8 bytes (contract compact-text,
+// invariants): an equal key repeats it, a smaller one is out of order. Both are BadValue at the
+// entry's offset. The keys are compared from their payloads, so a dict that is not bound and a key
+// longer than the bound member are checked the same way, with no storage for the previous key.
 PACKBIN_NOINLINE
-Result check_new_key(Walk const& w, std::size_t i, void* m, std::size_t at) {
-  Field const& f = w.t[i];
-  Field const& key = w.t[i + 1];
-  if (m == nullptr || key.access == nullptr)
-    return Result{};
-  std::uint16_t count = *f.count(m);
-  void* last = f.item(m, count - 1u);
-  for (std::uint16_t k = 0; k + 1u < count; ++k) {
-    if (same_key(key, f.item(m, k), last))
-      return fail(Error::BadValue, at, f.id);
-  }
-  return Result{};
+Result check_key_order(Walk const& w, std::size_t i, std::size_t prev, std::size_t at) {
+  std::uint8_t const* a = nullptr;
+  std::uint8_t const* b = nullptr;
+  std::size_t na = 0, nb = 0;
+  payload_at(w.r, prev, a, na);
+  payload_at(w.r, at, b, nb);
+  return txt::compare_payloads(a, na, b, nb) < 0 ? Result{} : fail(Error::BadValue, at, w.t[i].id);
 }
+#endif
 
 // How many items a times, list or dict holds (read from its count field or the wire). A
 // repeat reads until the packet ends. SIZE_MAX means the unpack already failed with `out`.
@@ -218,12 +320,15 @@ Result unpack_items(Walk& w, std::size_t i, void* m, std::size_t count) {
   // outer values come back when the container ends (an error ends the whole unpack).
   std::uint8_t outer[kFlagBytes];
   std::memcpy(outer, w.flag_bytes, sizeof(outer));
+#ifndef PACKBIN_NO_TEXT
+  std::size_t prev_key = kNoKey;
+#endif
   for (std::size_t k = 0; to_end ? w.r.pos < w.r.len : k < count; ++k) {
     std::size_t at = w.r.pos;
     std::memset(w.flag_bytes, 0, sizeof(w.flag_bytes));
     void* item = nullptr;
     if (m != nullptr) {
-      std::uint16_t filled = *f.count(m);
+      std::uint16_t filled = *array_count(m);
       if (filled >= f.size)
         return fail(Error::TooMany, at, f.id, static_cast<std::size_t>(filled) + 1);
       item = f.item(m, filled);
@@ -242,12 +347,17 @@ Result unpack_items(Walk& w, std::size_t i, void* m, std::size_t count) {
       return Result{};
     }
     if (m != nullptr)
-      ++*f.count(m);
+      ++*array_count(m);
+#ifndef PACKBIN_NO_TEXT
     if (f.kind == Kind::Dict) {
-      Result res = check_new_key(w, i, m, at);
-      if (!res.ok())
-        return res;
+      if (prev_key != kNoKey) {
+        Result res = check_key_order(w, i, prev_key, at);
+        if (!res.ok())
+          return res;
+      }
+      prev_key = at;
     }
+#endif
   }
   std::memcpy(w.flag_bytes, outer, sizeof(outer));
   return Result{};
@@ -266,15 +376,21 @@ Result unpack_one(Walk& w, std::size_t i, void* obj) {
     case Kind::Sized:
       return unpack_text(w, i, obj);
     case Kind::When:
-      return when_matches(w.t, f, obj) ? with_outer_flags<unpack_children>(w, i, obj) : Result{};
+    case Kind::FlagBit:
+      switch (held_of(w, f, obj)) {
+        case Held::Inline:
+        case Held::Scope:
+          return unpack_children(w, i, obj);
+        case Held::Bit:
+          return with_outer_flags<unpack_one>(w, i + 1, obj);
+        case Held::Skip:
+          break;
+      }
+      return Result{};
     case Kind::Flags:
       return unpack_flags(w, i, obj);
     case Kind::FlagByte:
       return get_num<std::uint8_t>(w.r, w.flag_bytes[f.size], false, f.id);
-    case Kind::FlagBit:
-      if (w.flag_bytes[w.t[f.ref].size] & (1u << f.bit))
-        return with_outer_flags<unpack_one>(w, i + 1, obj);
-      return Result{};
     case Kind::Group:
       if (f.span == 1) {
         set_bool(f, member(f, obj));

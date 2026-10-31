@@ -2,12 +2,11 @@
 
 #include "packbin/table.hpp"
 
-#include <cstdint>
-#include <type_traits>
+#include "packbin/platform.hpp"
 
 // Strings, counted bytes, small-number packs and the counted containers. Every variable size
-// lands in caller storage with a fixed maximum: a borrowed View, a Text<N>/Blob<N>, or an
-// Array<T, N>.
+// lands in caller storage with a fixed maximum: a borrowed View (bytes), a Text<N>/Blob<N>, or an
+// Array<T, N>; a string may also stay as it is on the wire in a Packed.
 
 namespace packbin {
 
@@ -23,7 +22,7 @@ template <Kind K, auto M>
 constexpr Node<MemberClass<M>, 1> bind_text(int id) {
   Field f = leaf(K, id);
   f.access = &access<M>;
-  bind_storage<MemberType<M>>(f);
+  bind_storage<K, MemberType<M>>(f);
   return Node<MemberClass<M>, 1>{{f}};
 }
 
@@ -42,7 +41,7 @@ template <auto M, typename T>
 constexpr void bind_small_numbers(Field& f) {
   using Type = MemberType<M>;
   static_assert(IsArray<Type>::value &&
-                    std::is_same<typename Type::value_type, std::uint8_t>::value,
+                    detail::is_same<typename Type::value_type, std::uint8_t>::value,
                 "packbin: bits and packed bind an Array<std::uint8_t, N> member");
   f.access = &access<M>;
   bind_array<Type>(f);
@@ -54,8 +53,8 @@ constexpr auto container(Field head, Ns const&... children) {
   using Type = MemberType<M>;
   static_assert(IsArray<Type>::value, "packbin: repeat and times bind an Array<E, N> member");
   using Element = typename Type::value_type;
-  static_assert(((std::is_void<typename Ns::Class>::value ||
-                  std::is_same<typename Ns::Class, Element>::value) &&
+  static_assert(((detail::is_void<typename Ns::Class>::value ||
+                  detail::is_same<typename Ns::Class, Element>::value) &&
                  ...),
                 "packbin: repeat and times children bind members of the Array element type");
   head.access = &access<M>;
@@ -66,7 +65,9 @@ constexpr auto container(Field head, Ns const&... children) {
 
 }  // namespace detail
 
-// u16 byte length, then UTF-8 bytes. A bound member is a View (borrowed) or a Text<N>.
+// A string in the compact text format (compact-text contract): a count, then the payload. A
+// bound member is a Text<N> (a decoded copy) or a Packed (the payload bytes, no codec); never a
+// View.
 constexpr Node<void, 1> utf8(int id) { return detail::unbound(Kind::Utf8, id); }
 
 template <auto M>
@@ -77,7 +78,7 @@ constexpr Node<detail::MemberClass<M>, 1> utf8(int id) {
 // Fixed-length bytes borrowed into a View member; the View length must equal `n` on pack.
 template <auto M>
 constexpr Node<detail::MemberClass<M>, 1> bytes(int id, int n) {
-  static_assert(std::is_same<detail::MemberType<M>, View>::value,
+  static_assert(detail::is_same<detail::MemberType<M>, View>::value,
                 "packbin: bytes(id, n) binds a View member; use bytes<&Row::m>(id) for "
                 "std::uint8_t[n]");
   Field f = detail::leaf(Kind::Bytes, id);
@@ -97,7 +98,7 @@ template <auto M>
 constexpr Node<detail::MemberClass<M>, 1> sized(int id, int count_id) {
   Field f = detail::counted_leaf<Kind::Sized>(id, count_id);
   f.access = &detail::access<M>;
-  detail::bind_storage<detail::MemberType<M>>(f);
+  detail::bind_storage<Kind::Sized, detail::MemberType<M>>(f);
   return Node<detail::MemberClass<M>, 1>{{f}};
 }
 
@@ -172,13 +173,13 @@ constexpr auto times(int id, int count_id, Ns const&... children) {
 // is bound to each Array item. A list takes no order id.
 template <typename C, std::size_t N>
 constexpr Node<void, N + 1> list(Node<C, N> const& element) {
-  static_assert(std::is_void<C>::value, "packbin: a list element is written unbound");
+  static_assert(detail::is_void<C>::value, "packbin: a list element is written unbound");
   return detail::nest(detail::leaf(Kind::List, -1), element);
 }
 
 template <auto M, typename C, std::size_t N>
 constexpr Node<detail::MemberClass<M>, N + 1> list(Node<C, N> const& element) {
-  static_assert(std::is_void<C>::value, "packbin: a list element is written unbound");
+  static_assert(detail::is_void<C>::value, "packbin: a list element is written unbound");
   static_assert(detail::IsArray<detail::MemberType<M>>::value,
                 "packbin: list binds an Array<T, N> member");
   auto out = detail::nest(detail::leaf(Kind::List, -1), element);
@@ -187,11 +188,12 @@ constexpr Node<detail::MemberClass<M>, N + 1> list(Node<C, N> const& element) {
   return Node<detail::MemberClass<M>, N + 1>{out.f};
 }
 
-// u16 entry count, then per entry a u16-length UTF-8 key and the element. A dict takes no
-// order id. A bound member is Array<Entry<V, Key>, N>; keys keep the caller's order on pack.
+// u16 entry count, then per entry a string key and the element. A dict takes no order id. A
+// bound member is Array<Entry<V, Text<N>>, M>: the key is a Text<N>, never a View or a Packed.
+// Keys must be in strictly ascending order of their UTF-8 bytes; pack refuses any other order.
 template <typename C, std::size_t N>
 constexpr Node<void, N + 2> dict(Node<C, N> const& element) {
-  static_assert(std::is_void<C>::value, "packbin: a dict element is written unbound");
+  static_assert(detail::is_void<C>::value, "packbin: a dict element is written unbound");
   return detail::nest(detail::leaf(Kind::Dict, -1), Node<void, 1>{{detail::leaf(Kind::Utf8, -1)}},
                       element);
 }
