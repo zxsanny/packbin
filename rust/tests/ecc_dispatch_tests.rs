@@ -25,11 +25,14 @@ fn ec16_a_dispatch_of_mixed_parity_counts_is_refused_naming_both() {
     let plain = BinaryPacker::unpack_with(&message, &mut [&mut on_a, &mut on_b]);
 
     // Assert
-    assert_eq!(
-        refused,
-        Err(UnpackError::MixedParity { first: 4, other: 2 })
-    );
-    assert_eq!(plain, Err(UnpackError::MixedParity { first: 4, other: 2 }));
+    let mixed = UnpackError::MixedParity {
+        first: 4,
+        other: 2,
+        first_percent: false,
+        other_percent: false,
+    };
+    assert_eq!(refused, Err(mixed.clone()));
+    assert_eq!(plain, Err(mixed));
 }
 
 // A hand-written handler: `parity()` is required (AZ-2704 AC-4, the compile-fail doc test on the trait).

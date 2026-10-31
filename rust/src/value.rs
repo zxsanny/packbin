@@ -35,7 +35,8 @@ pub struct ShortPacket {
 /// `TooLong`: a protected message above 254 bytes. `BadLimit`: a correction limit above half the
 /// parity count, refused before any byte is read. `BadParity`: a dispatch whose handlers declare
 /// more than 32 parity bytes, refused before any byte is read. `MixedParity`: a dispatch whose
-/// handlers declare different parity counts. `NoHandlers`: a dispatch with an empty handler list.
+/// handlers declare different parity settings, each shown as a percentage (`*_percent` true) or
+/// as a parity byte count (false). `NoHandlers`: a dispatch with an empty handler list.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum UnpackError {
     Short(ShortPacket),
@@ -47,7 +48,12 @@ pub enum UnpackError {
     TooLong { len: usize, limit: usize },
     BadLimit { limit: usize, max: usize },
     BadParity { parity: usize, max: usize },
-    MixedParity { first: usize, other: usize },
+    MixedParity {
+        first: usize,
+        other: usize,
+        first_percent: bool,
+        other_percent: bool,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

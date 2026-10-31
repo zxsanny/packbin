@@ -49,4 +49,6 @@ ship: false
 
 ## Assessment rounds
 
-None yet.
+| round | verdict | new specs | report |
+|-------|---------|-----------|--------|
+| 1 | CLARIFY (owner chose D4 option B), then round 2 COMPLETE | AZ-3511_parity_percent_rust_assess, AZ-3512_parity_percent_tests_pytscsj, AZ-3513_parity_percent_tests_goswcpp | _docs/loops/loop97/assessment97.md |

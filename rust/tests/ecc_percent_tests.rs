@@ -3,8 +3,8 @@ mod ecc_support;
 
 use ecc_support::{position_row, position_scheme, PositionRow};
 use packbin::{
-    bytes, insert, pack, unpack, unpack_repair, BinaryPacker, DispatchHandler, MapScheme,
-    PackError, UnpackError, Value, Values,
+    bytes, flags, insert, pack, unpack, unpack_repair, utf8, BinaryPacker, DispatchHandler,
+    MapScheme, PackError, UnpackError, Value, Values,
 };
 use std::panic::catch_unwind;
 
@@ -299,14 +299,18 @@ fn ac7_a_mix_of_settings_is_refused_when_the_call_is_built_before_any_byte_is_re
         two_percentages,
         Err(UnpackError::MixedParity {
             first: 10,
-            other: 25
+            other: 25,
+            first_percent: true,
+            other_percent: true
         })
     );
     assert_eq!(
         with_count,
         Err(UnpackError::MixedParity {
             first: 25,
-            other: 4
+            other: 4,
+            first_percent: true,
+            other_percent: false
         })
     );
     assert_eq!(limit, Err(UnpackError::BadLimit { limit: 17, max: 16 }));
@@ -370,7 +374,108 @@ fn ac7_a_hand_written_handler_defaults_to_no_percentage_and_may_declare_one() {
         mixed,
         Err(UnpackError::MixedParity {
             first: 0,
-            other: 50
+            other: 50,
+            first_percent: false,
+            other_percent: true
         })
     );
+}
+
+#[test]
+fn ac3_a_percentage_and_a_count_of_the_same_number_are_told_apart_in_the_mix_error() {
+    // Arrange
+    let percent = percent_position(0x40, 25);
+    let counted = position_scheme(0x41, 25);
+
+    // Act
+    let percent_first = BinaryPacker::unpack_with(
+        &[],
+        &mut [
+            &mut percent.on(|_| panic!("handler ran")),
+            &mut counted.on(|_| panic!("handler ran")),
+        ],
+    );
+    let count_first = BinaryPacker::unpack_with(
+        &[],
+        &mut [
+            &mut counted.on(|_| panic!("handler ran")),
+            &mut percent.on(|_| panic!("handler ran")),
+        ],
+    );
+
+    // Assert
+    assert_eq!(
+        percent_first,
+        Err(UnpackError::MixedParity {
+            first: 25,
+            other: 25,
+            first_percent: true,
+            other_percent: false
+        })
+    );
+    assert_eq!(
+        count_first,
+        Err(UnpackError::MixedParity {
+            first: 25,
+            other: 25,
+            first_percent: false,
+            other_percent: true
+        })
+    );
+}
+
+/// 8 bytes, then a presence byte and the optional 3 bytes: 10 clear bytes without, 13 with.
+fn optional_scheme() -> MapScheme {
+    MapScheme::new(
+        1,
+        vec![bytes("b", 8), flags(1, "f", vec![bytes("o", 3)])],
+    )
+    .with_parity_percent(25)
+}
+
+fn optional_values(with: bool) -> Values {
+    let mut values = Values::new();
+    insert(&mut values, "b", Some(Value::Bytes(vec![1, 2, 3, 4, 5, 6, 7, 8])));
+    insert(
+        &mut values,
+        "o",
+        with.then(|| Value::Bytes(vec![9, 10, 11])),
+    );
+    values
+}
+
+#[test]
+fn ac1_a_message_with_an_optional_field_carries_the_count_of_its_own_length() {
+    // Arrange
+    let scheme = optional_scheme();
+
+    for (with, clear, parity) in [(true, 13usize, 4usize), (false, 10, 3)] {
+        let values = optional_values(with);
+
+        // Act
+        let sent = pack(&scheme, &values).expect("pack");
+        let back = unpack(&scheme, &sent).expect("unpack");
+
+        // Assert
+        assert_eq!(sent.len(), clear + parity, "with {with}");
+        assert_eq!(back["b"], values["b"], "with {with}");
+        assert_eq!(back.get("o").cloned().flatten(), values["o"], "with {with}");
+    }
+}
+
+#[test]
+fn ac2_a_string_field_is_read_after_the_repair_of_a_wrong_byte_inside_it() {
+    // Arrange
+    let scheme = MapScheme::new(1, vec![utf8("s")]).with_parity_percent(25);
+    let mut values = Values::new();
+    insert(&mut values, "s", Some(Value::Str("Привіт, світе!".into())));
+    let sent = pack(&scheme, &values).expect("pack");
+    let mut word = sent.clone();
+    word[5] ^= 0x5A;
+
+    // Act
+    let repaired = unpack_repair(&scheme, &word, 1);
+
+    // Assert
+    assert_eq!(repaired, Ok((values, 1)));
 }

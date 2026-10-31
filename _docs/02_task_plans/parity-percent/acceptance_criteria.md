@@ -35,6 +35,12 @@ Baseline: project ACs of `message-ecc` (EC-1 to EC-17) stay true for every schem
 - **AC-14** Contract `message-ecc.md` goes to 1.1.0 with the formula, the unpack rule, the table of AC-4 and the vectors; an ADR (010) records the decision; the README error-correction section shows the percentage in each package's spelling beside `with_parity(n)`, with the rule "25 % of 40 bytes = 10 parity bytes".
 - **AC-15** `fixtures/ecc/percent-vectors.txt` holds the new rows (the row words are in the results report) that all 8 packages read, and the reference `scripts/ecc/eccfmt.py` computes them.
 
+## Assessment round 1 (loop 97, 2026-11-01)
+
+- **AC-17** (S12b) A scheme whose message length varies by an optional field, under a percentage (25 %), carries the count of each message's own length: a message with the field (13 clear bytes, 4 parity bytes) and one without (10 clear bytes, 3 parity bytes) both round trip in every package, and the sent lengths are 17 and 13.
+- **AC-18** (S12c) A string field in a protected message under 25 % is read after the repair: one wrong byte inside the string, unpacked with a limit that repairs it, gives the original string. Where a build has no compact text (`PACKBIN_NO_TEXT`, Rust without `text`) the same holds for a bytes field.
+- **AC-19** (D4, owner decision 2026-11-01: make Rust unambiguous) A refused dispatch mix names which of the two settings is a percentage. Rust `UnpackError::MixedParity` gains the fields `first_percent: bool` and `other_percent: bool`, so a handler with 25 percent mixed with a handler of count 25 is `MixedParity { first: 25, other: 25, first_percent: true, other_percent: false }`; the Rust error type has no text of its own, so the flags carry it. In every other package a test asserts that the refusal text or fields tell a percentage from a count of the same number (Java, Go, Python, TypeScript, C#, Swift by text; C++ by 256 + p).
+
 ## Cross-language
 
 - **AC-16** The ECC ring (`.github/workflows/ring-ecc.sh`) gains rows under a percentage (p 10, 25, 50 and 100; intact, repaired within the message's `n / 2`, and refused beyond it, plus an impossible length). Each of the 8 languages writes them and each of the 8 reads what each wrote: 64 pairs, 0 mismatched, and each language's refusals match the reference.

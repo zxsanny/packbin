@@ -16,3 +16,11 @@ Source: loop 97 intake (`new-task` Step 4.7). Status `confirmed` = proposed beha
 | S10 | undo | A fleet moves from 25 % back to 0 % or to a fixed count | A wire change for both ends, as changing `n` is today; the contract says both ends share the setting | confirmed | AC-9, AC-14 | AZ-3499 AC-5 |
 | S11 | boundaries | L 0, the largest L, the largest L + 1, N 254, N 255 | L 0 sends 0 bytes and unpacks as empty; the largest L fits in 254; one more is `too_long`; N 255 is `too_long` | confirmed | AC-4, AC-6 | AZ-3499 AC-2; each package AC-3, AC-4 |
 | S12 | existing-feature overlap | Dispatch by type byte, optional fields and compact text under a percentage | Dispatch needs one setting on all handlers, repair comes first then dispatch; optional fields only change `L` and so `n`; text is read after the repair | confirmed | AC-10 | AZ-3506 AC-7 (owner of record); the other seven package tasks repeat it as their AC-7 |
+
+Rows added by `feature-assess` round 1 (2026-11-01):
+
+| # | Axis | Actor / trigger / state | Behavior | Status | AC | Owning task AC |
+|---|------|--------------------------|----------|--------|----|---|
+| S12b | existing-feature overlap | A scheme with an optional field under a percentage | Each message carries the count of its own length | confirmed (assess-round-1) | AC-17 | AZ-3511, AZ-3512, AZ-3513 AC-1 |
+| S12c | existing-feature overlap | A string field in a protected message under a percentage | The string is read after the repair | confirmed (assess-round-1) | AC-18 | AZ-3511, AZ-3512, AZ-3513 AC-2 |
+| D4 | invalid input | Handlers with a percentage and a count of the same number are mixed in one unpack call | Refused; the error says which setting is a percentage (owner, 2026-11-01: make Rust unambiguous) | confirmed (assess-round-1) | AC-19 | AZ-3511 AC-3 (Rust); AZ-3512, AZ-3513 AC-3 (the others) |

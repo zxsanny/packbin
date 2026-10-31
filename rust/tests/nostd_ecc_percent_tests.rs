@@ -6,7 +6,9 @@
 mod nostd_support;
 
 use nostd_support::{from_hex, Slots};
-use packbin::nostd::{bytes, pack, unpack, unpack_repair, validate, Error, Field, Row, Scheme};
+use packbin::nostd::{
+    bytes, flags, pack, unpack, unpack_repair, validate, Error, Field, Row, Scheme, Unpacked,
+};
 
 const VECTORS: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -396,4 +398,86 @@ fn pc11_a_message_above_the_largest_clear_length_is_too_long_and_writes_nothing(
             "p {p}: the written bytes are zeroed"
         );
     }
+}
+
+#[test]
+fn pc12_a_message_with_an_optional_field_carries_the_count_of_its_own_length() {
+    // Arrange: 10 clear bytes without the 3 optional ones, 13 with
+    let fields = [bytes(0, 8), flags(1, 1), bytes(1, 3)];
+    let scheme = Scheme::new(1, &fields).with_parity_percent(25);
+
+    for (with, clear, parity) in [(true, 13usize, 4usize), (false, 10, 3)] {
+        let mut row = Slots::default();
+        row.set_bytes(0, &[1, 2, 3, 4, 5, 6, 7, 8]);
+        if with {
+            row.set_bytes(1, &[9, 10, 11]);
+        }
+        let mut out = [0u8; 40];
+
+        // Act
+        let wrote = pack(&scheme, &row, &mut out).expect("pack");
+        let mut back = Slots::default();
+        let used = unpack(&scheme, &out[..wrote], &mut back).expect("unpack");
+
+        // Assert
+        assert_eq!(wrote, clear + parity, "with {with}");
+        assert_eq!(used, wrote, "with {with}");
+        assert_eq!(back.bytes(0), row.bytes(0), "with {with}");
+        assert_eq!(back.bytes(1), row.bytes(1), "with {with}");
+    }
+}
+
+#[test]
+fn pc13_a_bytes_field_is_read_after_the_repair_of_a_wrong_byte_inside_it() {
+    // Arrange: 21 clear bytes at 25 percent carry 6 parity bytes
+    let fields = [bytes(0, 20)];
+    let scheme = Scheme::new(1, &fields).with_parity_percent(25);
+    let mut row = Slots::default();
+    row.set_bytes(0, &(0..20).map(|i| i * 3 + 1).collect::<Vec<u8>>());
+    let mut out = [0u8; 40];
+    let wrote = pack(&scheme, &row, &mut out).expect("pack");
+    let sent = out[..wrote].to_vec();
+    let mut word = sent.clone();
+    word[7] ^= 0x5A;
+    let mut back = Slots::default();
+
+    // Act
+    let read = unpack_repair(&scheme, &mut word, &mut back, 1);
+
+    // Assert
+    assert_eq!(
+        read,
+        Ok(Unpacked {
+            bytes: wrote,
+            repaired: 1
+        })
+    );
+    assert_eq!(word, sent);
+    assert_eq!(back.bytes(0), row.bytes(0));
+}
+
+#[cfg(feature = "text")]
+#[test]
+fn pc14_a_string_field_is_read_after_the_repair_of_a_wrong_byte_inside_it() {
+    use packbin::nostd::{pack_with, utf8, SCRATCH_WORDS_PER_CHAR};
+
+    // Arrange
+    let text = "Привіт, світе!";
+    let fields = [utf8(0)];
+    let scheme = Scheme::new(1, &fields).with_parity_percent(25);
+    let mut row = Slots::default();
+    row.set_bytes(0, text.as_bytes());
+    let mut scratch = vec![0u32; SCRATCH_WORDS_PER_CHAR * text.chars().count()];
+    let mut out = [0u8; 64];
+    let wrote = pack_with(&scheme, &row, &mut out, &mut scratch).expect("pack");
+    let mut word = out[..wrote].to_vec();
+    word[4] ^= 0x5A;
+    let mut back = Slots::default();
+
+    // Act
+    let read = unpack_repair(&scheme, &mut word, &mut back, 1);
+
+    // Assert
+    assert_eq!(read.map(|r| r.repaired), Ok(1));
+    assert_eq!(back.bytes(0), Some(text.as_bytes()));
 }

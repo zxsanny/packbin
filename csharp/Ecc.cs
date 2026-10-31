@@ -131,6 +131,9 @@ internal static partial class Ecc
         return Protect(clear, ParityCount(percent, clear.Length));
     }
 
+    private static string DescribeParity(int parity, int percent) =>
+        percent > 0 ? $"{percent} percent" : $"{parity} parity bytes";
+
     // The parity setting every handler of one dispatch shares: a fixed count, or (percent above 0) a percentage. A mix is
     // refused naming both, and a limit outside the setting's range is refused before any byte is read.
     internal static int SharedParity(SchemeHandler[] handlers, int limit, out int percent)
@@ -139,12 +142,13 @@ internal static partial class Ecc
         percent = handlers.Length == 0 ? 0 : handlers[0].ParityPercent;
         foreach (var handler in handlers)
         {
-            if (handler.ParityPercent != percent)
-                throw new ArgumentException(
-                    $"handlers declare different parity percentages: {percent} and {handler.ParityPercent}");
-            if (handler.Parity != parity)
+            if (percent == 0 && handler.ParityPercent == 0 && handler.Parity != parity)
                 throw new ArgumentException(
                     $"handlers declare different parity counts: {parity} and {handler.Parity}");
+            if (handler.ParityPercent != percent || handler.Parity != parity)
+                throw new ArgumentException(
+                    $"handlers declare different parity settings: {DescribeParity(parity, percent)} and "
+                    + DescribeParity(handler.Parity, handler.ParityPercent));
         }
         var max = percent > 0 ? MaxPercentLimit : parity / 2;
         if (limit < 0 || limit > max)

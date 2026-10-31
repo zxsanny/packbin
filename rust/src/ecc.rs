@@ -161,18 +161,23 @@ pub(crate) fn unprotect(
 }
 
 /// The setting all handlers of one dispatch declare, a fixed count or a percentage, or a refusal
-/// naming two that differ (the count, or the percentage when the handler has one).
+/// naming two that differ (the percentage with its flag set when the handler has one, else the count).
 pub(crate) fn shared_setting(
     settings: impl IntoIterator<Item = (usize, usize)>,
 ) -> Result<(usize, usize), UnpackError> {
     let mut settings = settings.into_iter();
     let first = settings.next().unwrap_or((0, 0));
-    let shown = |(n, p): (usize, usize)| if p > 0 { p } else { n };
+    let shown = |(n, p): (usize, usize)| if p > 0 { (p, true) } else { (n, false) };
     match settings.find(|&other| other != first) {
-        Some(other) => Err(UnpackError::MixedParity {
-            first: shown(first),
-            other: shown(other),
-        }),
+        Some(other) => {
+            let ((first, first_percent), (other, other_percent)) = (shown(first), shown(other));
+            Err(UnpackError::MixedParity {
+                first,
+                other,
+                first_percent,
+                other_percent,
+            })
+        }
         None => Ok(first),
     }
 }

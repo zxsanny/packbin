@@ -522,3 +522,6 @@ Loop 74 (2026-10-26, ADR-009: remove the stream session; D1 frame names; D2 cryp
 | AZ-3507 | parity_percent_cpp (loop 97) | 5 | AZ-3499 | none |
 | AZ-3508 | parity_percent_ring (loop 97) | 5 | AZ-3499, AZ-3500, AZ-3501, AZ-3502, AZ-3503, AZ-3504, AZ-3505, AZ-3506, AZ-3507 | none |
 | AZ-3509 | parity_percent_docs (loop 97) | 3 | AZ-3500, AZ-3501, AZ-3502, AZ-3503, AZ-3504, AZ-3505, AZ-3506, AZ-3507 | none |
+| AZ-3511 | parity_percent_rust_assess (loop 97, assess round 1) | 3 | None | none |
+| AZ-3512 | parity_percent_tests_pytscsj (loop 97, assess round 1) | 3 | None | none |
+| AZ-3513 | parity_percent_tests_goswcpp (loop 97, assess round 1) | 3 | None | none |
