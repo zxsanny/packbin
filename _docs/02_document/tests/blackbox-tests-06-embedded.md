@@ -286,3 +286,27 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 **Expected outcome**: the row passes with the report above and fails on each of the five defects.
 **Not run by**: a real ATmega328P; a buffer near 64 KiB (the part has 2 KB of RAM)
 **Max execution time**: 30s for the emulator run
+
+
+### FT-E-15: the M33F images run in a 128 KiB RAM window (loop 93)
+
+**Summary**: The `cpp-m33f` and `rust-m33f` rows link into a 128 KiB RAM region of QEMU `mps2-an505` and check each image's stack top (AZ-3469).
+**Traces to**: AZ-3469 AC-1 to AC-6
+**Category**: Bytes
+
+**Preconditions**:
+- The `packbin-embedded` image; for `rust-m33f` the libraries built with Rust 1.98 (`rust/embedded/run.sh libs`)
+
+**Input data**: `mps2-an505.ld` with `RAM` of 128 KiB; `m33f_ram_end` 0x38020000 in `cpp/embedded/lib.sh`
+
+**Steps**:
+
+| Step | Consumer Action | Expected System Response |
+|------|----------------|------------------------|
+| 1 | the `cpp-m33f` row links ac2, vectors, baseline and frame; `rust-m33f` links its baseline and four sets | every image has `__stack_top` 0x38020000; both rows pass with the figures of loop 92 (315 of 315 vectors, 25,760 B, 724 B, 8,416 B, 912 B; the pins of `limits-m33f.txt`) |
+| 2 | a 130 KiB array is used by the all-kinds image | the link fails with "region `RAM' overflowed by 3264 bytes"; the row fails |
+| 3 | the script's RAM length is 4 MB | both rows fail naming the expected stack top 38020000 and the one found (38400000) |
+
+**Expected outcome**: both rows pass in the window and fail on an overflow and on a moved window.
+**Not run by**: a TrustZone non-secure image, RRAM, the part's memory map, cycle timing (QEMU `mps2-an505` starts in Secure state)
+**Max execution time**: the arm stage grew by under 2 s
