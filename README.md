@@ -11,7 +11,7 @@
 [![build (main)](https://img.shields.io/github/actions/workflow/status/zxsanny/packbin/test.yml?branch=main&label=build%20(main))](https://github.com/zxsanny/packbin/actions/workflows/test.yml?query=branch%3Amain)
 [![publish](https://img.shields.io/github/actions/workflow/status/zxsanny/packbin/publish.yml?label=publish)](https://github.com/zxsanny/packbin/actions/workflows/publish.yml)
 
-Binary packing and unpacking across languages with an optional encryption, declarative mapping, and zero overhead in the binary data.
+Binary packing and unpacking across languages with optional authenticated encryption (frame mode), declarative mapping, and no overhead in the binary data: a clear packet carries only its fields, and a sealed frame adds a 4, 8 or 16-byte tag.
 
 Both sides keep the same field list. The bytes are only the values. Unpack takes the buffer and handlers. The first byte selects the handler, and that handler's scheme reads the rest.
 
@@ -21,14 +21,14 @@ Supported languages:
 
 - Java: Java 17+, Android API 26+.
 - C#: .NET 10+, and .NET Standard 2.0 for .NET Framework 4.6.2+, Unity, Mono and Xamarin (the .NET Standard build is tested on the .NET 10 runtime). Typed rows are read and written through accessors that `Expression.Compile` builds once, when each field is created. Under AOT or Unity IL2CPP these expression delegates run through the interpreter: the result is the same but slower, and the package has not been run on Unity. A Unity IL2CPP test run is planned before a release that advertises Unity. Under IL2CPP, keep row types from being stripped (`link.xml` or `[Preserve]`).
-- TypeScript: Node.js 22+; browsers through a bundler such as Vite.
+- TypeScript: Node.js 22+; browsers through a bundler such as Vite. One dependency, `@noble/hashes` (SHA-256, HMAC and HKDF for frame mode).
 - Python: 3.10+.
 - Rust: edition 2021.
 - C++: C++17; CMake 3.16+ or vcpkg on Linux and macOS (Windows is not supported: the package is not built or tested there); 32-bit microcontrollers (ESP32, RP2040, nRF52, STM32) through PlatformIO, Arduino and ESP-IDF 5.1+.
-- Go: Go 1.26+; `go get github.com/zxsanny/packbin/go@vX.Y.Z`, fetched from the repository by version tag (no registry). The standard library and `golang.org/x/crypto` (the session only); no cgo. See [Go](#go).
+- Go: Go 1.26+; `go get github.com/zxsanny/packbin/go@vX.Y.Z`, fetched from the repository by version tag (no registry). The standard library and `golang.org/x/crypto` (ChaCha20 for frame mode); no cgo. See [Go](#go).
 - Swift: Swift 6.0+ (Xcode 16+; a 6.0 consumer and an Xcode 16.0 build are unproven, only Swift 6.3.3 is built in CI), iOS 15+, macOS 12+ and Linux; `.package(url: "https://github.com/zxsanny/packbin", from: "X.Y.Z")`, fetched from the repository by the `vX.Y.Z` tag (no registry, no Swift tag). One dependency, `swift-crypto`, linked only off Apple platforms (the session's HKDF). See [Swift](#swift).
 
-Encryption is optional. `PackSession` hides the packed bytes on one connection and adds 0 bytes to each packet. The only extra send is 16 bytes, once, when the connection opens. It does not detect a changed byte, and anyone holding the 32-byte seed can read every session. See [Encrypted session](#encrypted-session).
+Encryption is optional. Frame mode seals each message on its own: it encrypts, authenticates with a 4, 8 or 16-byte tag, and refuses a changed, replayed or misdirected frame, with no handshake, for links that lose and reorder messages (all eight packages). Over a connection such as a WebSocket, use TLS. See [Frame session](#frame-session).
 
 ## Example
 
@@ -145,7 +145,7 @@ BinaryPacker.unpack(
 )
 ```
 
-The npm package ships compiled ES-module JavaScript and `.d.ts` files (`dist/`, built when the package is published), so plain Node 22+ and `tsc` projects import `packbin` without flags. Only the `packbin` entry point is exported: a `packbin/src/...` import no longer resolves. Versions published before this change ship `.ts` sources, which plain Node cannot import from `node_modules`. A TypeScript consumer needs TypeScript 5.0 or newer unless it sets `skipLibCheck`: the `.d.ts` files keep `./x.ts` import specifiers, which TypeScript 4.9 rejects (TS2691). The accessor helpers do not infer the row type, so in a TypeScript project give the accessor parameter its type, `u16(0, (x: Target) => x.sid)`: written as `(x) => x.sid`, `x` is `unknown` (TS18046 under `strict`, TS2339 without it). Under `strict`, `BinaryPacker.unpack` and `PackSession.unpack` also take handlers typed for `object`, so a handler of a typed row is passed `as SchemeHandler<any>` (TS2345 otherwise); both are as the examples here write them, and neither is decided yet.
+The npm package ships compiled ES-module JavaScript and `.d.ts` files (`dist/`, built when the package is published), so plain Node 22+ and `tsc` projects import `packbin` without flags. Only the `packbin` entry point is exported: a `packbin/src/...` import no longer resolves. Versions published before this change ship `.ts` sources, which plain Node cannot import from `node_modules`. A TypeScript consumer needs TypeScript 5.0 or newer unless it sets `skipLibCheck`: the `.d.ts` files keep `./x.ts` import specifiers, which TypeScript 4.9 rejects (TS2691). The accessor helpers do not infer the row type, so in a TypeScript project give the accessor parameter its type, `u16(0, (x: Target) => x.sid)`: written as `(x) => x.sid`, `x` is `unknown` (TS18046 under `strict`, TS2339 without it). Under `strict`, `BinaryPacker.unpack` also takes handlers typed for `object`, so a handler of a typed row is passed `as SchemeHandler<any>` (TS2345 otherwise), as the examples here write it; this is not decided yet.
 
 `flags` is how an optional field takes no space when you have no value for it. `heading`, `speed`, and `altitude` are measurements, so `0` is still a value and has to be written. `None` means the field is not in the packet.
 
@@ -227,9 +227,8 @@ BinaryPacker.Unpack(
 ```
 
 ```
-01 03 00 61 64 61 02 00 04 00 75 73 65 72 05 00 61 64 6d 69 6e
-02 00 03 00 6d 61 70 02 00 04 00 72 65 61 64 04 00 65 64 69 74
-05 00 73 74 6f 72 65 01 00 05 00 77 72 69 74 65
+01 03 a9 28 80 02 00 03 0b a8 18 04 89 29 75 60 02 00 03 6a e9 c8
+02 00 03 2b 01 28 03 48 51 64 04 ca 25 f0 00 01 00 04 8b bc 2c 80
 ```
 
 The first byte is the scheme type number.
@@ -357,21 +356,73 @@ An optional member of `E` (a `BoundField::opt_u16` under `SchemeItem::flags`, or
 
 In a `MapScheme`, `times` unpacks to the per-name lists and also to the rounds, as `Value::Groups` under `__times_<anchor>` (present, and empty for a count of 0). A list holds only the rounds that read its name, so the rounds tell which round a value belongs to. `repeat` gives its rounds under `__repeat__` (since loop 23 a per-name value kept beside them is checked against them as below, `repeat at id 0: list for 'x' disagrees with its rounds`). Pack reads the rounds, and it fails with `PackError::Type("times at id 1: list for '1' disagrees with its rounds")` when a per-name list differs from them. To change a value, edit the rounds and drop or rewrite the per-name lists, or edit the lists and remove the `__times_<anchor>` key. The second way does not work for a member below a `when`: a list cannot say which round holds it, so pack without the `__times_<anchor>` key fails with `PackError::Type("times at id 1: '1' is under a flags or when; give its values per round under '__times_1'")` when a non-empty list or a single value is kept under that member. Edit its rounds instead (an empty list still packs). A member below a `flags` or a flag bit takes a list one entry per round since loop 22, as in TypeScript, Python, Java and C#: item `i` is round `i`, and a short or empty list reads as absent for the rounds it does not reach (`u8 c; times(c, flags(1, u8(1, v)))` with `c` = 2 and `v` = [5] packs `01 02 01 05 00`). Unpack gives a list that holds only the rounds that read the name, so a value of round 3 sits at item 2 of `v`. Do not drop the `__times_<anchor>` rounds and pack from that list: the value moves to an earlier round with no error (`v` = [5, 7] from rounds 1 and 3 repacks as `01 03 01 05 01 07 00`). Edit and pack the rounds instead.
 
+#### Heap-free API for firmware (`packbin::nostd`)
+
+The same crate has a second API for devices with no heap: plain-data schemes, caller buffers and errors as values. It builds with `#![no_std]` and no allocator when you turn the default features off, and the bytes are those of the map API above.
+
+```toml
+packbin = { version = "0.1", default-features = false, features = ["text", "ecc", "frame"] }
+```
+
+| Feature | Adds |
+|---------|------|
+| `std` (default, implies `alloc`) | the map API, `Vec` results |
+| `alloc` | `nostd::pack_vec` |
+| `text` | strings (`utf8`) and dictionaries (`dict`) in the compact text format; `pack_with` takes the encoder's working words |
+| `ecc` | parity bytes after every packet (`Scheme::with_parity`, `unpack_repair`, the codec in `nostd::ecc`) |
+| `frame` | `nostd::FrameSession`: frame mode, the one session (sealed, authenticated frames in your buffers, a `ReplayWindow` you own, `MacKey`; see [Frame session](#frame-session)) |
+
+```rust
+use packbin::nostd::{i32, pack, u16, u8, unpack, Fault, Num, Row, Scheme};
+
+#[derive(Default)]
+struct Position { sid: u16, lat: i32, profile: u8 }
+
+impl Row for Position {
+    fn num(&self, id: u16) -> Option<Num> {
+        match id { 0 => Some(Num::U16(self.sid)), 1 => Some(Num::I32(self.lat)), 2 => Some(Num::U8(self.profile)), _ => None }
+    }
+    fn bytes(&self, _id: u16) -> Option<&[u8]> { None }
+    fn set_num(&mut self, id: u16, value: Num) -> bool {
+        match (id, value) {
+            (0, Num::U16(v)) => { self.sid = v; true }
+            (1, Num::I32(v)) => { self.lat = v; true }
+            (2, Num::U8(v)) => { self.profile = v; true }
+            _ => false,
+        }
+    }
+    fn set_bytes(&mut self, _id: u16, _value: &[u8]) -> bool { false }
+}
+
+const SCHEME: Scheme = Scheme::new(0x40, &[u16(0), i32(1), u8(2)]);
+
+fn main() -> Result<(), Fault> {
+    let mut out = [0u8; 16];
+    let n = pack(&SCHEME, &Position { sid: 1, lat: 500_000_000, profile: 1 }, &mut out)?;
+    let mut back = Position::default();
+    unpack(&SCHEME, &out[..n], &mut back)?;
+    Ok(())
+}
+```
+
+A frame session between nodes: `let node = FrameSession::load_frame(&key, epoch, config)?;`, then `seal_frame` and `open_frame` into your buffers (the [Frame session](#frame-session) example). Every call returns a `Result`; no path reachable from untrusted bytes panics. The CI job `embedded-arm` links the library for a Cortex-M33F (the core of the nRF54L15), runs it in QEMU and fails when a heap or panic symbol is linked (`rust/embedded/`).
+
 ### C++
 
-The C++ package packs into a buffer you own and reads from one. It throws nothing and allocates nothing, so the same code builds for a server and for a microcontroller (`-fno-exceptions -fno-rtti`). Strings and lists land in caller storage: `View` borrows bytes from the input buffer, `Text<N>` and `Array<T, N>` hold up to N, and more than N is the error `TooMany`, never a cut.
+The C++ package packs into a buffer you own and reads from one. It throws nothing and allocates nothing, so the same code builds for a server and for a microcontroller (`-fno-exceptions -fno-rtti`). Strings and lists land in caller storage: `Text<N>` (a decoded copy of up to N UTF-8 bytes) and `Array<T, N>` hold up to N, and more than N is the error `TooMany`, never a cut. A string is compact text (see [UTF-8](#utf-8)), which has to be decoded, so a string member is a `Text<N>` (or a `Packed`, below); a `View` cannot hold one and is a compile error on a `utf8` field. Pack of a string needs working memory for the encoder: pass a `Scratch<Chars>` as the last argument (12 bytes per character of the longest string in the packet); a string that needs more returns `ScratchTooSmall` naming the field and writes nothing for it, never different bytes. A `Scratch` for a long string is large (`Scratch<65535>` is 786 KB): declare it `static` or on the heap, never as a local; the repository's own build refuses a stack frame over 64 KB. Packets without strings need no scratch.
 
 ```cpp
 #include <packbin/packbin.hpp>
 
 using namespace packbin;
 
-using Actions = Array<View, 8>;
+using Name = Text<16>;
+using Actions = Array<Name, 8>;
 
 struct User {
-    View username;
-    Array<View, 8> roles;
-    Array<Entry<Actions>, 8> access;  // keys in unsigned byte order
+    Name username;
+    Array<Name, 8> roles;
+    Array<Entry<Actions, Name>, 8> access;  // keys in unsigned byte order
 };
 
 struct Ping { std::uint8_t code = 0; };
@@ -386,7 +437,8 @@ constexpr auto note = scheme<Note>(3, u16<&Note::id>(0), utf8<&Note::title>(1));
 
 User row;  // fill it like the C# example: "ada", two roles, map and store
 std::uint8_t buf[128];
-Result packed = pack(user, row, buf, sizeof(buf));  // packed.offset is the packet length
+Scratch<16> scratch;  // 12 bytes per character of the longest string
+Result packed = pack(user, row, buf, sizeof(buf), scratch);  // packed.offset is the packet length
 
 User got;
 Ping pinged;
@@ -399,9 +451,15 @@ Result r = unpack(buf, packed.offset,
 
 The first byte picks the scheme; its handler runs only after the whole packet reads. A failure is a value: `r.error` is one of `ShortPacket`, `TrailingBytes`, `TypeMismatch`, `BufferFull`, `TooMany`, `BadValue`, `SchemeInvalid`, with `r.offset` (the byte) and `r.field` (the order id). A `constexpr` scheme with a gap, a repeated id or a wrong anchor does not compile, and the compiler names the id; a scheme built at run time reports it through `validate(scheme)`. A member that may be absent is `Opt<T>`.
 
+#### Strings without the codec: `Packed` and `PACKBIN_NO_TEXT`
+
+A board that only carries packets does not need the text codec. Define `PACKBIN_NO_TEXT` (the embedded builds of this repository do) and the codec is not linked: a field list that binds a `utf8` field to `Text<N>` is refused when it is built, a `utf8` field bound to `Packed` (`data`, `len`: a borrowed view of the payload after the count, valid while the input lives) is skipped by its count header, so the fields after it still read, and the bytes can be forwarded or stored without decoding. Pack of a `Packed` member writes its count and bytes as given and does not decode or validate them. A dictionary key must be a `Text<N>` (it needs the order check), so a bound dictionary of strings needs the codec; an unbound `utf8` is skipped by its count.
+
 #### Microcontrollers
 
 The same package builds for 32-bit microcontrollers — Cortex-M0+/M3/M4/M33, ESP32, RP2040, nRF52, STM32 — with `-std=c++17 -fno-exceptions -fno-rtti`. It references no `malloc`, no `operator new` and no exception runtime, keeps no global state, and the scheme tables live in flash.
+
+The core also builds for 8-bit AVR (ATmega328P, Arduino Uno) with avr-gcc 7.3 and avr-libc, which ship no C++ library: CI compiles it with 0 warnings and links the Uno example (which is not run), and runs one other image on the `simavr` emulator that checks `chacha20_xor` on the part's 16-bit `int` and `size_t` (the RFC 8439 vector, nine lengths and the 32-bit block counter edge). The standard names come from `packbin/platform.hpp`. On AVR constant data, the scheme tables included, sits in RAM, so the example builds with `PACKBIN_NO_TEXT` and `PACKBIN_NO_ECC`, and `double` is 4 bytes, so `f64` does not compile. avr-gcc 7.3 has no `__builtin_is_constant_evaluated`: a constant scheme that breaks a rule is not stopped at compile time there (its `status` is `SchemeInvalid` and `pack`/`unpack` refuse it), and `static_assert(scheme.status.ok())` restores the stop.
 
 | Tool | Add packbin |
 |------|-------------|
@@ -431,9 +489,9 @@ The port builds the static library from the vendored sources of the release. Por
 
 While the version is below 1.0, an installed packbin answers `find_package(packbin <major>.<minor> CONFIG)` only for the same minor (`0.9` finds 0.9.x, not 0.8 or 0.10), and a request that names only the major (`find_package(packbin 0 ...)`) finds nothing; from 1.0 the rule is the same major. A request without a version, as in the install row, is unchanged. A version range that spans minors (`0.9...0.10`, `0.9...<1.0`) is refused too, where a range inside one minor (`0.9...0.9.5`) is found.
 
-Examples: [`cpp/examples/pico`](cpp/examples/pico) (PlatformIO, Raspberry Pi Pico), [`cpp/examples/esp32_arduino`](cpp/examples/esp32_arduino) (Arduino-ESP32), [`cpp/examples/esp_idf`](cpp/examples/esp_idf) (ESP-IDF with the hardware RNG).
+Examples: [`cpp/examples/pico`](cpp/examples/pico) (PlatformIO, Raspberry Pi Pico), [`cpp/examples/esp32_arduino`](cpp/examples/esp32_arduino) (Arduino-ESP32), [`cpp/examples/esp_idf`](cpp/examples/esp_idf) (ESP-IDF), [`cpp/examples/avr_uno`](cpp/examples/avr_uno) (avr-gcc and avr-libc, Arduino Uno, no Arduino core).
 
-`PackSession::start` takes the board's random source as a `RandomFn` (`bool(std::uint8_t* out, std::size_t n, void* ctx)`): `esp_fill_random` on ESP32, the RNG peripheral on STM32 or nRF52. When it returns false, no session opens. Host programs pass `packbin::os_random`. `f64` needs an 8-byte `double`; where `double` is 4 bytes (avr-gcc), a scheme with `f64` does not compile.
+`f64` needs an 8-byte `double`; where `double` is 4 bytes (avr-gcc), a scheme with `f64` does not compile.
 
 Moving from 0.1.x — the C++ API changed; the bytes did not:
 
@@ -444,7 +502,7 @@ Moving from 0.1.x — the C++ API changed; the bytes did not:
 | `Scheme<T>(type, ...)`, `scheme(type, {...})`, `SchemeHandler` | `constexpr auto s = scheme<T>(type, ...)`; `on(s, row, handler)` |
 | `Value`, `Values`, `ValueList`, `ValueMap` (map rows) | struct rows with `Opt<T>`, `View`, `Text<N>`, `Blob<N>`, `Array<T, N>`, `Entry<V>` members |
 | `u16(0, &T::m)`, `bind_scalar`, `bind_optional`, `bind_accessors`, `BoundField<T>` | `u16<&T::m>(0)` (member binding only; no getter/setter) |
-| `std::optional<T>` / `std::string` / `std::vector<T>` members | `Opt<T>` / `View` or `Text<N>` / `Array<T, N>` |
+| `std::optional<T>` / `std::string` / `std::vector<T>` members | `Opt<T>` / `Text<N>` (a `View` for bytes) / `Array<T, N>` |
 | `flags(id, {a, b})`, `when(id, eq, {a})`, `repeat(id, {a})`, `times(id, n, {a})`, `group(id, {a})` | the same without braces: `flags(id, a, b)` …; `repeat` and `times` bind an `Array<E, N>` member: `repeat<&T::m>(id, ...)` |
 | `group(id, "name", {})` | `group<&T::flag>(id)` on a `bool` member |
 | `flag_byte()`, `Field::bit(field)` | `flag_byte(n)`, `flag_bit(n, field)` with n = 0..7 |
@@ -455,10 +513,7 @@ Moving from 0.1.x — the C++ API changed; the bytes did not:
 | `UnpackResult`, `ShortPacket`, `TrailingBytes`, `TypeMismatch`, `std::runtime_error` | `Result` and `Error` |
 | `validate_order(fields)` | `validate(scheme)`, or a compile error for a `constexpr` scheme |
 | `to_hex`, `mismatched_bytes`, `present`, `motion_field_count`, `id_name`, `pack_body`, `unpack_body`, `Field` | removed |
-| `PackSession::load(seed)` → `std::optional` | `PackSession s; s.load(seed, 32)` → `bool` |
-| `start()`, `start(nonce)`, `join(nonce)` | `start(os_random, nullptr, nonce_out)` (or your `RandomFn`), `start(nonce, 16)`, `join(nonce, 16)` |
-| `session.pack(scheme, row)` → `std::optional<std::vector>` | `session.pack(scheme, row, out, cap)` → `Result` |
-| `session.unpack(bytes, handlers...)` | `session.unpack(data, len, ...)`; removes the pad in place |
+| `PackSession` (`load`, `start`, `join`, `pack`, `unpack`) | removed (loop 74, ADR-009); frame mode is the one session in C++ (see [Frame session](#frame-session)) |
 
 Two kinds of scheme fail construction (`SchemeInvalid`, or a compile error for a `constexpr` scheme), because neither can round-trip: a `boolean` or an empty `group` anywhere except directly under `flags(...)` or `flag_bit(...)`, and a `u2` with more than 64 children. The wire bytes of every valid scheme are unchanged.
 
@@ -468,7 +523,7 @@ Go → binary → TypeScript
 
 ### Go
 
-Go has no package registry, so nothing is uploaded: `go get` fetches the module from this repository by version tag. The module is `github.com/zxsanny/packbin/go` and lives in the `go/` folder, which is why Go reads its tag as `go/vX.Y.Z`. The release run pushes that tag at the same commit as the `vX.Y.Z` tag, and only after every language has matched the golden hex (ADR-004: a mismatch publishes no package and no Go tag). Go 1.26 or newer. The package uses the Go standard library and one dependency, `golang.org/x/crypto`, for the ChaCha20 of the session; there is no cgo. A published Go version is never deleted or moved: a bad one is retracted in the `go.mod` of the next version. Go versions start with the first release tag published after the Go package was added.
+Go has no package registry, so nothing is uploaded: `go get` fetches the module from this repository by version tag. The module is `github.com/zxsanny/packbin/go` and lives in the `go/` folder, which is why Go reads its tag as `go/vX.Y.Z`. The release run pushes that tag at the same commit as the `vX.Y.Z` tag, and only after every language has matched the golden hex (ADR-004: a mismatch publishes no package and no Go tag). Go 1.26 or newer. The package uses the Go standard library and one dependency, `golang.org/x/crypto`, for ChaCha20 (ChaCha20, tested on the shared crypto vectors, for frame mode); there is no cgo. A published Go version is never deleted or moved: a bad one is retracted in the `go.mod` of the next version. Go versions start with the first release tag published after the Go package was added.
 
 ```
 go get github.com/zxsanny/packbin/go@vX.Y.Z
@@ -676,7 +731,7 @@ true
 
 **Errors are values.** Every error is an `*packbin.Error` with a `Kind` (`ShortPacket`, `TrailingBytes`, `UnknownType`, `BadValue`, `InvalidScheme`, `PackRefused` or `TooMany`) and, where they apply, the field id and name, `Needed`, `Left`, `Actual` and a reason. `errors.Is(err, packbin.ErrShortPacket)` and the other sentinels match by kind. A refused pack returns nil bytes, never part of a packet. Error messages differ in form from the other packages (`1e+20` where C# prints the long integer, Go type names), so test for the kind and not for the text.
 
-**Concurrency.** A built `Scheme` is immutable and safe for concurrent `Pack` and `Unpack` from any number of goroutines. A `PackSession` is safe for concurrent use; payloads are numbered in the order the `Pack` calls take its lock, so the receiver must `Unpack` them in that order (concurrent senders serialise their sending in the same order, or send the position themselves).
+**Concurrency.** A built `Scheme` is immutable and safe for concurrent `Pack` and `Unpack` from any number of goroutines.
 
 **Schemes Go refuses and TypeScript builds.** `NewScheme` reports a ninth member of one `Flags` (TypeScript throws at `flags()`), and it refuses the two hostile schemes `zero_progress_repeat_bool` (a `bool` outside `flags`) and `zero_progress_repeat_when` (a `when` that names a field outside its `repeat`), which TypeScript builds and unpacks to trailing bytes; both hostile cases accept `scheme_error`.
 
@@ -797,336 +852,537 @@ true
 
 **Errors are thrown.** Every error is a `PackbinError` with a `kind` (`.short`, `.trailing`, `.unknownType`, `.badValue`, `.tooMany`, `.schemeError` or `.packError`) and, where they apply, `field`, `name`, `needed`, `left`, `actual` and `reason`. The functions are declared `throws` with no error type, so catch it with `catch let error as PackbinError`. A refused pack returns no bytes. Unpack never throws `.badValue`: a value it cannot use (a negative count, invalid UTF-8, a count behind a clear flag bit) is `.short` with `needed` 0, as in TypeScript and Go. No input traps: every read is bounds-checked and every size is computed with checked arithmetic. Messages differ in form from the other packages, so test for the kind and not for the text.
 
-**Concurrency.** A built `Scheme` is immutable and `Sendable`: any number of tasks can pack and unpack with one scheme at once. A `PackSession` is a class and not `Sendable`: it is used by one task at a time.
+**Concurrency.** A built `Scheme` is immutable and `Sendable`: any number of tasks can pack and unpack with one scheme at once. A `FrameSession` follows the frame rules of the [Frame session](#frame-session) section.
 
 **Schemes Swift refuses and TypeScript builds.** A `.bytes` with a negative size, a `u2` or a flag byte as a list or dict element, and the two hostile schemes `zero_progress_repeat_bool` and `zero_progress_repeat_when` (both hostile cases accept `scheme_error`). A list or dict whose element writes no byte (`.list("l", .bytes(0, "e", size: 0))`) packs, and unpack refuses the packet, as in TypeScript.
 
-## Encrypted session
+## Error correction
 
-One optional session beside clear pack. Load a 32-byte seed on each side. The opener calls start and sends those 16 bytes once. The waiter calls join with them. After that, pack and unpack use the same schemes as clear pack, and the payload stays the same length. A second client is a second session.
+A scheme can declare `n` parity bytes, 0 to 32 (default 0). Pack appends them to the packed message; unpack detects any corruption of up to `n` wrong bytes and can repair up to `t` of them. A wrong byte counts once however many of its bits flipped. The code is Reed-Solomon over GF(256) and also covers the clear length, which is not sent, so a message with one byte more or less is refused. The format is the contract [`message-ecc.md`](_docs/02_document/contracts/library/message-ecc.md) (ADR 007).
 
-The keys come from HKDF-SHA256 over the seed and the 16 bytes, one key per direction. Each packet is XORed with a ChaCha20 stream at the next counter. The counter is not sent, so the connection must deliver packets in order and drop none. Nothing checks that a byte was changed on the way. The seed never leaves the process. Replace it with a software update.
+- **Off by default.** With `n` = 0 the bytes, the errors and the speed are those of a scheme without the setting.
+- **`n` is not on the wire.** Both sides declare the same `n`, as they share the field list.
+- **`t` is the receiver's choice, 0 to `n / 2`, default 0 (detect only).** A `t` above `n / 2` is refused before any byte is read. Beyond `t` wrong bytes unpack gives an error that names no field and no row, never a wrong row.
+- **Repairing costs detection.** With `t` > 0 corruption of `t + 1` to `n - t` bytes is still refused, but a larger corruption may be repaired to a different message. For the 13-byte fixture with `n` = 4, random bytes pass with a chance of 1 in 4.29e+09 at `t` = 0, 1 in 990,537 at `t` = 1 and 1 in 485 at `t` = 2 (the contract lists every `n` and `t`). Use `t` = 0 unless a lost message costs more than a wrong one.
+- **At most 254 bytes per message, parity included.** Pack refuses a clear message above `254 - n` bytes, writes nothing, and names the length and the limit. Unpack refuses a buffer above 254 bytes and a buffer shorter than `n` (a short-packet error naming the field `parity`).
+- **One `n` per unpack call.** The handlers (or schemes) of one call must declare the same `n`: the type byte can be one of the wrong bytes, so the message is repaired first and then dispatched. A mix is refused, naming both counts.
+
+`withLimits` / `with_limits` keep a scheme's parity count unless `parity` is given. The packages spell the setting and the result differently:
+
+| Package | Declare `n` | Unpack with `t` | Repaired count | Too many wrong bytes |
+|---------|-------------|-----------------|----------------|----------------------|
+| Python | `scheme.with_limits(parity=n)`, `scheme.parity` | `BinaryPacker.unpack(data, *handlers, limit=t)` | `UnpackResult.repaired` | `Uncorrectable()` in `UnpackResult.error` (`TooLong(length, limit)` above 254 bytes) |
+| TypeScript | `scheme.withLimits({ parity: n })`, `new Scheme(type, fields, { parity: n })`, `scheme.parity` | `BinaryPacker.unpackRepair(bytes, t, ...handlers)` | `repaired` in `{ ok: true, repaired }` (protected schemes only) | `{ ok: false, kind: "uncorrectable" }` (`kind: "too_long"` with `length`, `limit`) |
+| C# | `scheme.WithParity(n)`, `scheme.Parity` | `BinaryPacker.Unpack(bytes, t, out repaired, handlers)` | `out int repaired` | `Uncorrectable` returned (`TooLong` with `Length`, `Limit`) |
+| Rust | `scheme.with_parity(n)`, `scheme.parity()`, `MAX_PARITY` | `BinaryPacker::unpack_with_repair(bytes, handlers, t)`, `unpack_repair(&map_scheme, bytes, t)` | the `usize` in `Ok` (beside the values for `unpack_repair`) | `UnpackError::Uncorrectable` (`TooLong { len, limit }`, `BadLimit`, `BadParity { parity, max }`, `MixedParity`, `NoHandlers`) |
+| Java | `scheme.withParity(n)`, `scheme.parity()` | `BinaryPacker.unpackRepair(bytes, t, handlers...)` | `Packbin.Repaired.count` (what `unpackRepair` returns on success) | `Packbin.Uncorrectable` returned (`Packbin.TooLong` with `length`, `limit`) |
+| Go | `s.WithParity(n)`, `s.Parity()`, `MaxParity` | `UnpackRepair(buf, t, schemes...)`, `UnpackMapRepair` | second return value | `*Error` of kind `Uncorrectable`, `ErrUncorrectable` (above 254 bytes: kind `TooMany`) |
+| Swift | `scheme.withLimits(parity: n)`, `scheme.parity` | `unpackRepair(buffer, limit: t, schemes...)`, `unpackMapRepair` | `repaired` in the returned tuple | `PackbinError` of kind `.uncorrectable` (above 254 bytes: `.tooMany`) |
+| C++ | `parity(scheme<Row>(...), n)`, `scheme.parity` | `unpack_repair(scheme, data, len, row, t)`, `unpack_repair(data, len, t, on(...)...)` | `Result.repaired` | `Error::Uncorrectable` (above 254 bytes: `Error::TooMany`) |
+
+A `parity` outside 0 to 32, a limit above `n / 2` and a mix of counts are refused as the package refuses a bad scheme: a `ValueError` (Python), a `RangeError` (TypeScript), an `ArgumentOutOfRangeException` or `ArgumentException` (C#), a panic for `with_parity` and an `UnpackError` for the limit, the mix and a hand-written handler's count above 32 (`BadParity`) (Rust), an `IllegalArgumentException` (Java), an `InvalidScheme` error (Go), a `.schemeError` (Swift), `Error::SchemeInvalid` for `n` and for a mix of counts and `Error::BadValue` for the limit (C++; a `constexpr` scheme with `n` above 32 does not compile). A clear message above `254 - n` bytes at pack is the package's pack refusal (`PackRefused` in Go, `.packError` in Swift, `PackError::Type` in Rust, `Error::TooMany` in C++, with `offset` the clear length, `needed` the limit and the written bytes zeroed).
+
+Each example packs a 3-byte message (type byte and a `u16`) with `n` = 4, flips one byte and unpacks with `t` = 2. The message is 7 bytes and one byte is repaired.
+
+### Python
+
+```python
+from packbin import BinaryPacker, Scheme, u16
+
+class Reading:
+    def __init__(self):
+        self.level = 0
+
+reading = Scheme(2, Reading, u16(0, lambda row: row.level)).with_limits(parity=4)
+
+row = Reading()
+row.level = 7
+raw = bytearray(BinaryPacker.pack(reading, row))   # 7 bytes
+raw[1] ^= 0x55                                     # one wrong byte
+
+got = []
+result = BinaryPacker.unpack(raw, reading.on(got.append), limit=2)
+print(result.ok, result.repaired, got[0].level)    # True 1 7
+```
+
+### TypeScript
+
+```ts
+import { BinaryPacker, scheme, u16, type SchemeHandler } from "packbin"
+
+class Reading {
+  level = 0
+}
+
+const reading = scheme<Reading>(2, u16(0, (x: Reading) => x.level)).withLimits({ parity: 4 })
+
+const row = new Reading()
+row.level = 7
+const raw = BinaryPacker.pack(reading, row) // 7 bytes
+raw[1]! ^= 0x55 // one wrong byte
+
+let got: Reading | undefined
+const result = BinaryPacker.unpackRepair(raw, 2, reading.on((r) => { got = r }) as SchemeHandler<any>)
+console.log(result, got?.level) // { ok: true, repaired: 1 } 7
+```
 
 ### C#
 
 ```csharp
 using Packbin;
 
-byte[] seed = /* 32 bytes shared out of band */;
+sealed class Reading { public ushort Level { get; set; } }
 
-var opener = PackSession.Load(seed)!;
-byte[] nonce = opener.Start()!;
+var reading = new Scheme<Reading>(2, f => [f.U16(0, x => x.Level)]).WithParity(4);
 
-var waiter = PackSession.Load(seed)!;
-waiter.Join(nonce);
+var raw = BinaryPacker.Pack(reading, new Reading { Level = 7 });   // 7 bytes
+raw[1] ^= 0x55;                                                     // one wrong byte
 
-sealed class Ping { public byte Code { get; set; } }
-var ping = new Scheme<Ping>(2, f => [f.U8(0, x => x.Code)]);
-
-var payload = opener.Pack(ping, new Ping { Code = 7 })!;
-
-Ping? got = null;
-waiter.Unpack(payload, ping.On(row => got = row));
+Reading? got = null;
+var error = BinaryPacker.Unpack(raw, 2, out var repaired, reading.On(row => got = row));
+// error is null, repaired is 1, got.Level is 7
 ```
 
-The 16 bytes leave once. There is no second handshake on that connection.
+### Rust
+
+```rust
+use packbin::{BinaryPacker, BoundField, Scheme};
+
+#[derive(Default)]
+struct Reading {
+    level: u16,
+}
+
+let reading = Scheme::new(2, [
+    BoundField::u16(0, |row: &Reading| row.level, |row, value| row.level = value).into(),
+])
+.with_parity(4);
+
+let mut raw = BinaryPacker::pack(&reading, &Reading { level: 7 }).unwrap(); // 7 bytes
+raw[1] ^= 0x55; // one wrong byte
+
+let mut got = Reading::default();
+let repaired =
+    BinaryPacker::unpack_with_repair(&raw, &mut [&mut reading.on(|row| got = row)], 2).unwrap();
+// repaired is 1, got.level is 7
+```
+
+### Java
+
+```java
+import packbin.*;
+
+public final class Reading { public int level; }
+
+Scheme<Reading> reading = new Scheme<>(2, Reading.class,
+        Packbin.u16(0, Access.get((Reading r) -> r.level), Access.set((Reading r, Object v) -> r.level = ((Number) v).intValue())))
+        .withParity(4);
+
+Reading row = new Reading();
+row.level = 7;
+byte[] raw = BinaryPacker.pack(reading, row);   // 7 bytes
+raw[1] ^= 0x55;                                 // one wrong byte
+
+Reading[] got = new Reading[1];
+Object result = BinaryPacker.unpackRepair(raw, 2, reading.on(r -> got[0] = r));
+// result is a Packbin.Repaired with count 1; got[0].level is 7. A failed unpack returns the error value instead.
+```
 
 ### Go
 
 ```go
-ping, err := packbin.NewScheme(2, packbin.U8(0, "code"))
+reading, err := packbin.NewScheme(2, packbin.U16(0, "level"))
 if err != nil {
 	panic(err)
 }
-seed := sharedSeed()
-
-opener, err := packbin.LoadSession(seed)
-if err != nil {
-	panic(err)
-}
-nonce, err := opener.Start()
+reading, err = reading.WithParity(4)
 if err != nil {
 	panic(err)
 }
 
-waiter, err := packbin.LoadSession(seed)
+raw, err := packbin.Pack(reading, map[string]any{"level": 7}) // 7 bytes
 if err != nil {
 	panic(err)
 }
-if err := waiter.Join(nonce); err != nil {
-	panic(err)
-}
+raw[1] ^= 0x55 // one wrong byte
 
-payload, err := opener.Pack(ping, map[string]any{"code": 7})
+row, repaired, err := packbin.UnpackMapRepair(raw, 2, reading)
 if err != nil {
 	panic(err)
 }
-got, err := waiter.UnpackMap(payload, ping)
-if err != nil {
-	panic(err)
-}
-fmt.Println(len(nonce), len(payload), got["code"])
+fmt.Println(repaired, row["level"]) // 1 7
 ```
-
-```
-16 2 7
-```
-
-`sharedSeed` stands for the 32 bytes both sides hold from the out-of-band exchange (the test fills it with a fixed value); `Start` draws the 16 random bytes, and `StartWith(nonce)` opens the opener side with 16 bytes the caller already holds, for tests. The payload has the length of the clear packet: 2 bytes here. `LoadSession` copies the seed, so the slice you pass is not wiped (as in TypeScript); the internal copy and the derived key block are zeroed once the session opens. A seed or value of the wrong length, a second open and a nil session are `BadValue` errors, `Pack` before `Start` or `Join` is a `PackRefused` error, and `Unpack` before `Join` is a `ShortPacket` error (needed 1, left 0). A `Pack` that fails spends no counter position. An `Unpack` spends one for every payload, readable or not, so the next message still unpacks. A packet over 2^38 bytes is refused, because the ChaCha20 counter would overflow. A `PackSession` is safe for concurrent use: payloads are numbered in the order the `Pack` calls take its lock, so the receiver must `Unpack` them in that order (concurrent senders serialise their sending in the same order, or send the position themselves).
 
 ### Swift
 
-`position` and `hex` are the map scheme and the function of the Swift examples above.
-
 ```swift
-let seed: [UInt8] = Array(1...32)   // the 32 bytes both sides hold, shared out of band
-let opener = try PackSession.load(seed)
-let hello = try opener.start([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])   // start() draws them at random
-let waiter = try PackSession.load(seed)
-try waiter.join(hello)
+// Packbin is imported as in the examples above.
+struct Reading: PackbinRow {
+    var level: UInt16 = 0
+}
 
-let payload = try opener.pack(position, ["sid": 1, "lat": 500_000_000, "lon": 300_000_000, "profile": 1])
-print(hex(payload))
+let reading = try Scheme(2,
+    .u16(0, "level").bind(get: { (r: Reading) in r.level }, set: { $0.level = $1 })).withLimits(parity: 4)
 
-let back = try waiter.unpackMap(payload, position)
-if let lat = back["lat"] {
-    print(hello.count, payload.count, lat)
+var raw = try pack(reading, Reading(level: 7))   // 7 bytes
+raw[1] ^= 0x55                                   // one wrong byte
+
+let (row, repaired) = try unpackRepair(raw, limit: 2, reading)   // repaired == 1, (row as? Reading)?.level == 7
+```
+
+### C++
+
+```cpp
+#include <packbin/packbin.hpp>
+
+using namespace packbin;
+
+struct Reading { std::uint16_t level = 0; };
+
+constexpr auto reading = parity(scheme<Reading>(2, u16<&Reading::level>(0)), 4);
+
+Reading row;
+row.level = 7;
+std::uint8_t raw[16];
+Result packed = pack(reading, row, raw, sizeof(raw));  // packed.offset is 7
+raw[1] ^= 0x55;                                        // one wrong byte
+
+Reading got;
+Result r = unpack_repair(reading, raw, packed.offset, got, 2);
+// r.ok(), r.repaired is 1, got.level is 7, and raw is the packed message again
+```
+
+With `t` = 0 (`BinaryPacker.unpack` and the other plain unpack calls) the same buffer is refused as uncorrectable. In C++ `unpack(scheme, data, len, row)` and `unpack(data, len, on(...)...)` are those detect-only calls: they take a read-only buffer, never write it, and give `Error::Uncorrectable` for any wrong byte; `unpack_repair` takes a writable buffer and a limit `t` from 0 to `n / 2` (more is `Error::BadValue` before any byte is read). `PACKBIN_NO_ECC` removes the feature and the 511 bytes of tables, and a scheme with `n` above 0 is then `SchemeInvalid`; a part with little flash defines it (the Uno example does), because the tables and about 2.2 KB of code are flash it may not have (repair uses about 390 bytes of stack at `n` = 32 on a host). Unpack never throws or traps on hostile bytes: its work is at most about 3 x 255 x 32 field operations (under 0.1 ms at 254 bytes and `n` = 32 in the compiled packages) plus the unprotected walk.
+
+## Frame session
+
+One optional session beside clear pack: frame mode, for links that lose, reorder and duplicate messages and that anyone can write to (a radio). Each message carries a caller-supplied 8-byte `msg_id`; the keys come from the caller's 32-byte key and a 24-bit `epoch` with nothing sent first; the body is `clear part, ciphertext, tag` with a tag of 4, 8 or 16 bytes (a truncated HMAC-SHA256, checked before any plaintext is written, with a constant-time compare where the runtime allows); a 64-message replay window the caller owns refuses duplicates and old frames before any hashing; an optional previous key opens frames sealed just before a key change; and a MAC-only call gives a 4-byte tag over a message in parts, for a per-hop check. Clear pack and its bytes do not change; only the frame body carries a tag (ADR-008). Frame mode is the only session (ADR-009): the stream session of earlier releases (`PackSession`, a shared seed and an implicit counter with no tag) was removed in loop 74. Over a connection such as a WebSocket, use TLS (`wss://`).
+
+**For one key, epoch and direction, never seal two different messages with the same `msg_id`.** A reused `msg_id` breaks the confidentiality of both messages, and packbin cannot check it. meshbell builds `msg_id` from the source (2 bytes), the id field (2 bytes) and the creation wave (4 bytes); sequences restart every wave, waves never repeat and source ids are never reissued, so it is unique. A new epoch derives new keys and nonces.
+
+The byte-for-byte definition, the replay rules and the error kinds (`TagMismatch`, `Duplicate`, `TooOld` besides the existing ones) are in `_docs/02_document/contracts/library/pack-session.md` (3.0.0); the shared test rows are in `fixtures/frame/vectors.txt`. Rust is the first package (Cargo feature `frame`, no heap, no panic path, 20,404 B of flash and 1,728 B of stack on a Cortex-M33F); C++, C#, Go, Java, Python, Swift and TypeScript follow below with the same bytes (every package passes the same 157 rows of `fixtures/frame/vectors.txt`). The frame types have the same names in every package: `FrameSession`, `FrameConfig`, `FrameDirection`, `FrameDirections`, `FrameSlot`, `FrameOpened`, `MsgContext`, a `ReplayWindow` you own, `Freshness` and `MacKey` (Java also has a `FrameSealed`, its seal result); `Load` and `Derive` return null (C#, Java, TypeScript), an error (Go, C++), a `BadValue` object (Python) or throw `badValue` (Swift) for an out-of-range key, epoch, tag length or label. In every package except Rust the `MacKey` holds the 32-byte `K_label` and not the precomputed pad states of the contract text (the standard HMAC of that runtime does not expose them): a tag costs two more SHA-256 compressions and is the same bytes. Keys are wiped when you call `Dispose` (C#) or `close()` (Java, Swift) and, in Swift, when the session is released; C# and Java have no finalizer, so a session you never dispose keeps its keys until the garbage collector reuses the memory, and a managed runtime may keep copies as well, and the tag compare uses the platform's fixed-time compare (C# on .NET 10, Java) or a fold without an early exit, but a JIT is not under the library's control, so both are best effort.
+
+### Rust
+
+```rust
+use packbin::nostd::{Fault, FrameConfig, FrameDirection, FrameDirections, FrameSession, MacKey, MsgContext, ReplayWindow};
+
+fn main() -> Result<(), Fault> {
+    let key = [0x11u8; 32];
+    let config = FrameConfig { tag_len: 4, directions: FrameDirections::NONE.with(FrameDirection::Up) };
+    let node = FrameSession::load_frame(&key, 1, config)?;
+    let ctx = MsgContext { msg_id: [0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0], kind: 4 };
+    let ad = [0u8, 1, 0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0, 4]; // the header: authenticated, not sent
+
+    let mut body = [0u8; 255];
+    let n = node.seal_frame(FrameDirection::Up, &ctx, &ad, &[], b"hello, relay", &mut body)?;
+    assert_eq!(n, 12 + 4); // the plaintext and a 4-byte tag
+
+    let mut window = ReplayWindow::new();
+    let mut plain = [0u8; 255];
+    let opened = node.open_frame(FrameDirection::Up, &ctx, &ad, &body[..n], 0, Some((&mut window, 7)), &mut plain)?;
+    assert_eq!(&plain[..opened.plain_len], b"hello, relay");
+    // the same frame again is a duplicate: refused before any hashing
+    assert!(node.open_frame(FrameDirection::Up, &ctx, &ad, &body[..n], 0, Some((&mut window, 7)), &mut plain).is_err());
+
+    // the MAC-only call: a 4-byte tag over a message in parts
+    let mac = MacKey::derive(&[0x22; 32], 7, b"net")?;
+    let mut tag = [0u8; 4];
+    mac.tag(&[b"wave", b"frame bytes"], &mut tag)?;
+    assert!(mac.verify(&[b"wave", b"frame bytes"], &tag));
+    Ok(())
 }
 ```
 
-```
-b5 5d 0a 29 c5 6c 20 37 12 b2 41 23 2e
-16 13 500000000
-```
+The Cargo feature is `frame` (`packbin = { version = "...", default-features = false, features = ["frame"] }` builds `#![no_std]` with frame mode only). The same example runs as a doc test of the crate. A node that is short of stack declares `FrameSession::frame_unloaded()` where it lives and calls `load_frame_in_place` on it. `load_frame` returns the session by value, so a copy of its key state (about 600 bytes) is left in the caller's stack slot, which Rust does not wipe when a value moves; on a device use `load_frame_in_place`.
 
-`start()` draws the 16 bytes at random and returns them: send them to the waiter once. `start(_:)` opens the opener side with 16 bytes the caller already holds, for tests, as here; with this seed and value the payload is the C# ciphertext of the golden row, and it has the length of the clear packet (13 bytes). `load` copies the seed, so the array you pass is not changed; the copy and the derived key block are zeroed when the session opens. A seed or value of another length and a second open throw `.badValue`, `pack` before `start` or `join` throws `.packError`, and `unpack` before `join` throws `.short` (needed 1, left 0). A failed `pack` spends no counter position. Every `unpack` of an open session spends one, readable or not, so the next message still unpacks; an `unpack` with no usable scheme list spends one too (as TypeScript and C#; Go spends none). A `PackSession` is used by one task at a time, and the receiver unpacks the payloads in the order they were packed.
+### C#
 
-### WebSocket: Vue client, C# server
-
-The browser opens the socket, so it is the opener. Its first message is the 16 bytes. The server treats the first message on every socket as those bytes and keeps one session per socket. Every later message in either direction is one packed packet, encrypted.
-
-Both sides share the schemes:
-
-| Type | Scheme | Direction |
-|------|--------|-----------|
-| `0x40` | position: `sid` u16, `lat` i32, `lon` i32, `profile` u8 | client → server |
-| `0x41` | ack: `sid` u16, `accepted` u8 | server → client |
-
-#### Server — ASP.NET Core
+`FrameSession.Seal` and `Open` write into buffers you own and return `null` on success or the error object (`BadValue`, `TooLong`, `BufferFull`, `ShortPacket`, `TagMismatch`, `Duplicate`, `TooOld`). `Seal` is safe from many threads; `SetPrevious`, `ClearPrevious` and `Dispose` must not run beside a `Seal` or `Open`. The library builds for `net10.0` and `netstandard2.0`.
 
 ```csharp
-using System.Net.WebSockets;
-using Packbin;
+// A 32-byte key shared by the nodes, an epoch (0 to 0xFFFFFF) and a tag of 4, 8 or 16 bytes.
+byte[] key = new byte[32]; // use a random key from your key store
+using var node = FrameSession.Load(key, 1, new FrameConfig(4, FrameDirections.Up | FrameDirections.Down))!;
 
-var builder = WebApplication.CreateBuilder(args);
-var app = builder.Build();
+// msg_id: 8 bytes that are unique per (key, epoch, direction) for every message ever sealed.
+var message = new MsgContext(new byte[] { 0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0 }, kind: 4);
+byte[] header = [0, 1, 0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0, 4]; // authenticated, not sent
 
-byte[] seed = Convert.FromHexString(builder.Configuration["Packbin:Seed"]!); // 32 bytes
-var position = new Scheme<Position>(0x40, f => [
-    f.U16(0, x => x.Sid),
-    f.I32(1, x => x.Lat),
-    f.I32(2, x => x.Lon),
-    f.U8(3, x => x.Profile)]);
-var ack = new Scheme<Ack>(0x41, f => [
-    f.U16(0, x => x.Sid),
-    f.U8(1, x => x.Accepted)]);
+var body = new byte[255];
+var error = node.Seal(FrameDirection.Up, message, header, [], "hello, relay"u8, body, out var length);
+// error is null, or BadValue, TooLong or BufferFull; length is the body length (12 + 4 here)
 
-app.UseWebSockets();
-app.Map("/ws", async context =>
-{
-    if (!context.WebSockets.IsWebSocketRequest)
-    {
-        context.Response.StatusCode = StatusCodes.Status400BadRequest;
-        return;
+// The receiver keeps one ReplayWindow per sender and passes a counter that comes from authenticated bytes.
+var window = new ReplayWindow();
+var plain = new byte[255];
+var opened = node.Open(FrameDirection.Up, message, header, body.AsSpan(0, length), 0, plain, out var result, window, counter: 7);
+// opened is null, or TagMismatch, Duplicate, TooOld, ShortPacket, TooLong, BufferFull or BadValue
+// plain[..result.PlainLength] is the text and result.Slot says which key opened it
+var again = node.Open(FrameDirection.Up, message, header, body.AsSpan(0, length), 0, plain, out _, window, counter: 7); // Duplicate
+
+// The MAC-only call: a 4-byte network check over a message given in parts.
+using var network = MacKey.Derive(key, 1, "net"u8)!;
+var tag = new byte[4];
+network.Tag(new ReadOnlyMemory<byte>[] { new byte[] { 1, 2, 3, 4 }, body.AsMemory(0, length) }, tag);
+var valid = network.Verify(new ReadOnlyMemory<byte>[] { new byte[] { 1, 2, 3, 4 }, body.AsMemory(0, length) }, tag);
+```
+
+### Java
+
+`FrameSession.load` takes a `FrameConfig`: the tag length and a `FrameDirections` set (`FrameDirections.of(FrameDirection.UP, ...)` or `FrameDirections.ALL`); a null config, a null set or a tag length other than 4, 8 or 16 gives null. `seal` and `open` take one `FrameDirection` and return a `FrameSealed` or `FrameOpened` result, or an error object (`Packbin.BadValue`, `TooLong`, `BufferFull`, `ShortPacket`, `TagMismatch`, `Duplicate`, `TooOld`); `seal` leaves the output untouched on a refusal. The code stays within Android API level 26.
+
+```java
+byte[] key = new byte[32]; // the shared 32-byte key, from your key store
+byte[] msgId = {0, 0x30, 0x10, 0x05, (byte) 0xe8, 3, 0, 0}; // unique per (key, epoch, direction), never reused
+byte[] header = {0, 1, 0, 0x30, 0x10, 0x05, (byte) 0xe8, 3, 0, 0, 4}; // authenticated, not sent
+
+FrameConfig config = new FrameConfig(4, FrameDirections.of(FrameDirection.UP)); // 4-byte tag; up frames only
+
+try (FrameSession node = FrameSession.load(key, 1, config)) { // epoch 1; null if out of range
+    MsgContext ctx = new MsgContext(msgId, 4);
+    byte[] body = new byte[255];
+    FrameSealed sealed = (FrameSealed) node.seal(FrameDirection.UP, ctx, header, null,
+            "hello, relay".getBytes(StandardCharsets.US_ASCII), body); // body = ciphertext + 4-byte tag
+
+    ReplayWindow window = new ReplayWindow(); // one per sender, yours to keep
+    byte[] plain = new byte[255];
+    long counter = 7; // from bytes the tag covers, e.g. the message id
+    Object opened = node.open(FrameDirection.UP, ctx, header, Arrays.copyOf(body, sealed.length), 0, window, counter, plain);
+    int plainLength = ((FrameOpened) opened).plainLength; // plain[0, plainLength) holds the message
+    Object again = node.open(FrameDirection.UP, ctx, header, Arrays.copyOf(body, sealed.length), 0, window, counter, plain);
+    boolean duplicate = again instanceof Packbin.Duplicate; // refused before any MAC; also TagMismatch, TooOld, ...
+
+    try (MacKey net = MacKey.derive(key, 1, "net".getBytes(StandardCharsets.US_ASCII))) { // MAC-only call
+        byte[] tag = new byte[4];
+        net.tag(tag, new byte[] {1, 0, 0, 0}, body); // the message may be passed in parts
+        boolean valid = net.verify(tag, new byte[] {1, 0, 0, 0}, body); // best-effort constant-time compare
     }
-
-    using var socket = await context.WebSockets.AcceptWebSocketAsync();
-    var ct = context.RequestAborted;
-    var session = PackSession.Load(seed)!;
-
-    var nonce = await ReceiveAsync(socket, ct);
-    if (nonce is null || !session.Join(nonce))
-    {
-        await socket.CloseAsync(WebSocketCloseStatus.PolicyViolation, "handshake", ct);
-        return;
-    }
-
-    while (await ReceiveAsync(socket, ct) is { } packet)
-    {
-        Position? got = null;
-        var err = session.Unpack(packet, position.On(row => got = row));
-        if (err is not null || got is null)
-        {
-            await socket.CloseAsync(WebSocketCloseStatus.InvalidPayloadData, "packet", ct);
-            return;
-        }
-
-        var reply = session.Pack(ack, new Ack { Sid = got.Sid, Accepted = 1 })!;
-        await socket.SendAsync(reply, WebSocketMessageType.Binary, true, ct);
-    }
-});
-
-app.Run();
-
-static async Task<byte[]?> ReceiveAsync(WebSocket socket, CancellationToken ct)
-{
-    var buffer = new byte[4096];
-    using var message = new MemoryStream();
-    while (true)
-    {
-        var result = await socket.ReceiveAsync(buffer, ct);
-        if (result.MessageType == WebSocketMessageType.Close)
-            return null;
-        message.Write(buffer, 0, result.Count);
-        if (result.EndOfMessage)
-            return message.ToArray();
-    }
-}
-
-sealed class Position
-{
-    public ushort Sid { get; set; }
-    public int Lat { get; set; }
-    public int Lon { get; set; }
-    public byte Profile { get; set; }
-}
-
-sealed class Ack
-{
-    public ushort Sid { get; set; }
-    public byte Accepted { get; set; }
 }
 ```
 
-The `while` loop sends and receives on one task, so the send counter advances once per reply. If several tasks write to the same socket, send through one queue: the packets must leave in the order `Pack` numbered them.
+### Swift
 
-#### Client — Vue 3, TypeScript
+`FrameSession.seal` and `open` throw `PackbinError` with the kinds `badValue`, `tooLong`, `short`, `bufferFull`, `tagMismatch`, `duplicate` and `tooOld`; `FrameSession` and `MacKey` are `Sendable` and `seal`, `open`, `tag` and `verify` may run on many threads at once.
 
-`src/live/packets.ts`:
+```swift
+// Load once: the keys of each direction are derived here. One tag length (4, 8 or 16) per key.
+let key = [UInt8](repeating: 0x11, count: 32)
+let node = try FrameSession.load(key: key, epoch: 1, config: FrameConfig(tagLength: 4))
+
+// A message id that is never sealed twice with other contents under one (key, epoch, direction).
+let context = MsgContext(msgID: [0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0], kind: 4)
+let ad: [UInt8] = [0, 1, 0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0, 4]  // authenticated, not sent
+
+// Seal into your own buffer: clear part, then ciphertext, then the 4-byte tag.
+var body = [UInt8](repeating: 0, count: 255)
+let length = try node.seal(direction: .up, context: context, ad: ad, clear: [],
+                           plain: Array("hello, relay".utf8), into: &body)  // 12 + 4 bytes
+
+// Open with the sender's replay window. The counter must come from bytes the tag covers.
+var window = ReplayWindow()
+var plain = [UInt8](repeating: 0, count: 255)
+let opened = try node.open(direction: .up, context: context, ad: ad, body: Array(body[0..<length]),
+                           clearLength: 0, window: &window, counter: 7, into: &plain)
+// opened.slot == .current, String(decoding: plain[0..<opened.plainLength], as: UTF8.self) == "hello, relay"
+
+// The same frame again is refused before any MAC is computed.
+var replayKind: PackbinError.Kind?
+do {
+    _ = try node.open(direction: .up, context: context, ad: ad, body: Array(body[0..<length]), clearLength: 0,
+                      window: &window, counter: 7, into: &plain)
+} catch let error as PackbinError {
+    replayKind = error.kind  // .duplicate
+}
+
+// MAC-only: a 4-byte network check over a wave number and the frame bytes, hashed in parts.
+let net = try MacKey.derive(key: [UInt8](repeating: 0x22, count: 32), epoch: 7, label: Array("net".utf8))
+let wave: [UInt8] = [0xe8, 3, 0, 0]
+let frame: [UInt8] = Array(0xc0...0xd3)
+let tag = try net.tag([wave, frame], length: 4)  // 56db9bec
+let valid = net.verify([wave, frame], tag: tag)
+```
+
+### C++
+
+`FrameSession::load`, `set_previous`, `clear_previous`, `seal` and `open`, and `MacKey::derive`, `tag` and `verify`, return a `packbin::Result` whose `error` is `Ok` or one of `BadValue`, `TooLong`, `BufferFull`, `ShortPacket`, `TagMismatch`, `Duplicate` and `TooOld` (`offset` is the body length after a seal and the plaintext length after an open). Nothing throws and nothing allocates (`packbin/platform.hpp` names only, so the AVR target builds); the destructors wipe the keys. `seal` and `open` are `const` and may run on many threads at once; `load`, `set_previous`, `clear_previous` and the destructor must not run beside any other call, and a `ReplayWindow` is not thread safe. `seal` inputs (`ad`, `clear`, `plain`) must not overlap the output buffer, and nothing checks it (a guard cost 72 B of flash on the Cortex-M33F frame image). **`open` reads `body` twice, for the tag and for the decrypt, so it must not change while the call runs:** copy a receive ring that an interrupt handler or DMA writes before you call `open` (the other packages copy the frame themselves). `open` may decrypt in place over the ciphertext. On a Cortex-M33F the frame image alone is 8,416 B of flash and 912 B of stack (`cpp/embedded/lib.sh` pins both).
+
+```cpp
+#include <packbin/packbin.hpp>
+
+#include <cstdint>
+#include <cstring>
+
+// Frame mode: sealed, authenticated frames. True when every step below gave the answer the comments name.
+bool frame_example() {
+  namespace pb = packbin;
+
+  // A 32-byte key shared by the nodes, an epoch (0 to 0xFFFFFF) and a tag of 4, 8 or 16 bytes.
+  std::uint8_t key[32] = {};  // use a random key from your key store
+  pb::FrameSession node;
+  if (!node.load(key, 1, {4, pb::FrameDirections::Up | pb::FrameDirections::Down}).ok())
+    return false;  // BadValue: the key, the epoch or the tag length is out of range
+
+  // msg_id: 8 bytes that are unique per (key, epoch, direction) for every message ever sealed.
+  // **For one (key, epoch, direction), never seal two different messages with the same msg_id.**
+  // Reuse breaks the confidentiality of both messages, and packbin cannot check it.
+  pb::MsgContext message{{0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0}, 4};
+  std::uint8_t const header[] = {0, 1, 0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0, 4};  // authenticated, not sent
+  std::uint8_t const text[] = {'h', 'e', 'l', 'l', 'o', ',', ' ', 'r', 'e', 'l', 'a', 'y'};
+
+  std::uint8_t body[255];
+  pb::Result sealed = node.seal(pb::FrameDirection::Up, message, header, {}, text, body);
+  // sealed.error is Ok, or BadValue, TooLong or BufferFull; sealed.offset is the body length (12 + 4 here)
+
+  // The receiver keeps one ReplayWindow per sender and passes a counter that comes from authenticated bytes.
+  pb::ReplayWindow window;
+  std::uint8_t plain[255];
+  pb::FrameOpened opened;
+  pb::Result first = node.open(pb::FrameDirection::Up, message, header, {body, sealed.offset}, 0, plain,
+                               opened, &window, 7);
+  // first.error is Ok, or TagMismatch, Duplicate, TooOld, ShortPacket, TooLong, BufferFull or BadValue
+  // plain[0 .. opened.plain_len) is the text and opened.slot says which key opened it
+  pb::Result again = node.open(pb::FrameDirection::Up, message, header, {body, sealed.offset}, 0, plain,
+                               opened, &window, 7);  // Duplicate
+
+  // The MAC-only call: a 4-byte network check over a message given in parts.
+  pb::MacKey network;
+  std::uint8_t const label[] = {'n', 'e', 't'};
+  std::uint8_t const wave[] = {1, 2, 3, 4};
+  pb::ByteSpan parts[] = {wave, {body, sealed.offset}};
+  std::uint8_t tag[4];
+  bool tagged = network.derive(key, 1, label).ok() && network.tag(parts, 2, tag).ok();
+  bool valid = network.verify(parts, 2, tag);
+
+  return sealed.ok() && first.ok() && first.offset == sizeof(text) && std::memcmp(plain, text, sizeof(text)) == 0 &&
+         again.error == pb::Error::Duplicate && tagged && valid;
+}
+```
+
+### Go
+
+`LoadFrameSession` and `DeriveMacKey` return an `error` for an out-of-range key, epoch, tag length or label; `Seal` and `Open` return a `*packbin.Error` of kind `BadValue`, `TooLong`, `BufferFull`, `ShortPacket`, `TagMismatch`, `Duplicate` or `TooOld` (`errors.Is(err, packbin.ErrDuplicate)` works). `Seal` and `Open` are safe from many goroutines; `SetPrevious`, `ClearPrevious` and `Close` wait for the calls in flight. A `ReplayWindow` is not safe for concurrent use. The tag compare is `crypto/subtle.ConstantTimeCompare`; `Close` overwrites the keys, best effort (the standard library's HMAC and HKDF states and the garbage collector may keep copies).
+
+```go
+// A 32-byte key shared by the nodes, an epoch (0 to 0xFFFFFF) and a tag of 4, 8 or 16 bytes.
+key := make([]byte, 32) // use a random key from your key store
+node, err := packbin.LoadFrameSession(key, 1, packbin.FrameConfig{
+	TagLength:  4,
+	Directions: packbin.FrameDirectionsUp | packbin.FrameDirectionsDown,
+})
+if err != nil {
+	panic(err)
+}
+defer node.Close() // overwrites the derived keys, best effort
+
+// **For one (key, epoch, direction), never seal two different messages with the same msg_id.**
+message := packbin.NewMsgContext([]byte{0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0}, 4)
+header := []byte{0, 1, 0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0, 4} // authenticated, not sent
+
+body := make([]byte, 255)
+length, err := node.Seal(packbin.FrameUp, message, header, nil, []byte("hello, relay"), body)
+if err != nil {
+	panic(err) // *packbin.Error of kind BadValue, TooLong or BufferFull
+}
+body = body[:length] // 12 + 4 bytes here
+
+// The receiver keeps one ReplayWindow per sender and passes a counter that comes from authenticated bytes.
+window := &packbin.ReplayWindow{}
+plain := make([]byte, 255)
+opened, err := node.Open(packbin.FrameUp, message, header, body, 0, plain, window, 7)
+if err != nil {
+	panic(err) // kind TagMismatch, Duplicate, TooOld, ShortPacket, TooLong, BufferFull or BadValue
+}
+// plain[:opened.PlainLength] is the text and opened.Slot says which key opened it
+_, again := node.Open(packbin.FrameUp, message, header, body, 0, plain, window, 7) // errors.Is(again, packbin.ErrDuplicate)
+
+// The MAC-only call: a 4-byte network check over a message given in parts.
+network, err := packbin.DeriveMacKey(key, 1, []byte("net"))
+if err != nil {
+	panic(err)
+}
+defer network.Close()
+tag := make([]byte, 4)
+if err := network.Tag(tag, []byte{1, 2, 3, 4}, body); err != nil {
+	panic(err)
+}
+valid := network.Verify(tag, []byte{1, 2, 3, 4}, body)
+```
+
+### Python
+
+`FrameSession.load` and `MacKey.derive` return the object or a `BadValue` object, and both are context managers whose exit overwrites the keys in place (best effort: CPython keeps copies the library cannot reach). `seal` returns the body length or an error object; `open` returns a `FrameOpened` or an error object (`BadValue`, `TooLong`, `BufferFull`, `ShortPacket`, `TagMismatch`, `Duplicate`, `TooOld`). A wrong Python type (a `str` for the associated data, a read-only output buffer) raises `TypeError`. The tag compare is `hmac.compare_digest`. `seal` is safe from many threads; `set_previous`, `clear_previous` and `close` must not run beside a `seal` or `open`.
+
+```python
+from packbin import (
+    Duplicate, FrameConfig, FrameDirection, FrameDirections, FrameOpened, FrameSession, MacKey, MsgContext, ReplayWindow,
+)
+
+# A 32-byte key shared by the nodes, an epoch (0 to 0xFFFFFF) and a tag of 4, 8 or 16 bytes.
+key = bytes(32)  # use a random key from your key store
+config = FrameConfig(tag_len=4, directions=FrameDirections.UP | FrameDirections.DOWN)
+with FrameSession.load(key, 1, config) as node:  # a BadValue object instead of a session when an argument is out of range
+    # msg_id: 8 bytes that are unique per (key, epoch, direction) for every message ever sealed.
+    message = MsgContext(bytes([0, 0x30, 0x10, 0x05, 0xE8, 3, 0, 0]), kind=4)
+    header = bytes([0, 1, 0, 0x30, 0x10, 0x05, 0xE8, 3, 0, 0, 4])  # authenticated, not sent
+
+    body = bytearray(255)
+    length = node.seal(FrameDirection.UP, message, header, b"", b"hello, relay", body)
+    # length is the body length (12 + 4 here), or BadValue, TooLong or BufferFull
+
+    # The receiver keeps one ReplayWindow per sender and passes a counter that comes from authenticated bytes.
+    window = ReplayWindow()
+    plain = bytearray(255)
+    opened = node.open(FrameDirection.UP, message, header, body[:length], 0, plain, window, counter=7)
+    # opened is a FrameOpened (plain[:opened.plain_length] is the text, opened.slot says which key opened it),
+    # or TagMismatch, Duplicate, TooOld, ShortPacket, TooLong, BufferFull or BadValue
+    again = node.open(FrameDirection.UP, message, header, body[:length], 0, plain, window, counter=7)  # Duplicate
+
+# The MAC-only call: a 4-byte network check over a message given in parts.
+with MacKey.derive(key, 1, b"net") as network:
+    tag = network.tag([bytes([1, 2, 3, 4]), body[:length]], 4)
+    valid = network.verify([bytes([1, 2, 3, 4]), body[:length]], tag)
+```
+
+### TypeScript
+
+`FrameSession.load` and `MacKey.derive` return `null` for an out-of-range argument. `seal`, `open` and `tag` return a result object: `ok: true` with `length`, a `FrameOpened` (`slot`, `clearLength`, `plainLength`) or `tag`, or `ok: false` with a `kind` of `"bad_value"`, `"too_long"`, `"buffer_full"`, `"short"`, `"tag_mismatch"`, `"duplicate"` or `"too_old"`. The replay counter is a `bigint`, so the full 64-bit range is exact. The calls are synchronous: do not share one session between workers. `close()` overwrites the keys, best effort (a JavaScript engine may keep copies).
 
 ```ts
-import { i32, scheme, u16, u8 } from "packbin"
+import { FrameConfig, FrameDirection, FrameDirections, FrameSession, MacKey, MsgContext, ReplayWindow } from "packbin"
 
-export class Position {
-  sid = 0
-  lat = 0
-  lon = 0
-  profile = 0
-}
+// A 32-byte key shared by the nodes, an epoch (0 to 0xFFFFFF) and a tag of 4, 8 or 16 bytes.
+const key = new Uint8Array(32) // use a random key from your key store
+const node = FrameSession.load(key, 1, new FrameConfig(4, FrameDirections.Up | FrameDirections.Down))!
 
-export class Ack {
-  sid = 0
-  accepted = 0
-}
+// msg_id: 8 bytes that are unique per (key, epoch, direction) for every message ever sealed.
+const message = new MsgContext(Uint8Array.of(0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0), 4)
+const header = Uint8Array.of(0, 1, 0, 0x30, 0x10, 0x05, 0xe8, 3, 0, 0, 4) // authenticated, not sent
 
-export const position = scheme<Position>(
-  0x40,
-  u16(0, (x: Position) => x.sid),
-  i32(1, (x: Position) => x.lat),
-  i32(2, (x: Position) => x.lon),
-  u8(3, (x: Position) => x.profile),
-)
+const body = new Uint8Array(255)
+const sealed = node.seal(FrameDirection.Up, message, header, new Uint8Array(0), new TextEncoder().encode("hello, relay"), body)
+if (!sealed.ok) throw new Error("seal refused") // sealed.kind is "bad_value", "too_long" or "buffer_full"
+const frame = body.subarray(0, sealed.length) // 12 + 4 bytes here
 
-export const ack = scheme<Ack>(
-  0x41,
-  u16(0, (x: Ack) => x.sid),
-  u8(1, (x: Ack) => x.accepted),
-)
+// The receiver keeps one ReplayWindow per sender and passes a counter that comes from authenticated bytes.
+const window = new ReplayWindow()
+const plain = new Uint8Array(255)
+const opened = node.open(FrameDirection.Up, message, header, frame, 0, plain, window, 7n)
+// opened.ok is true: plain.subarray(0, opened.plainLength) is the text and opened.slot says which key opened it;
+// otherwise opened.kind is "tag_mismatch", "duplicate", "too_old", "too_long", "buffer_full" or "bad_value"
+const again = node.open(FrameDirection.Up, message, header, frame, 0, plain, window, 7n) // { ok: false, kind: "duplicate" }
+
+// The MAC-only call: a 4-byte network check over a message given in parts.
+const network = MacKey.derive(key, 1, new TextEncoder().encode("net"))!
+const wave = Uint8Array.of(1, 2, 3, 4)
+const made = network.tag([wave, frame], 4)
+if (!made.ok) throw new Error("tag refused")
+const valid = network.verify([wave, frame], made.tag)
+
+// Close both when done: the derived keys are overwritten (best effort, see the notes below).
+node.close()
+network.close()
 ```
-
-`src/live/useLiveSocket.ts`:
-
-```ts
-import { onBeforeUnmount, ref } from "vue"
-import { PackSession, type SchemeHandler } from "packbin"
-import { ack, position, type Ack, type Position } from "./packets"
-
-const seed = Uint8Array.from(
-  import.meta.env.VITE_PACKBIN_SEED.match(/../g)!.map((h: string) => parseInt(h, 16)),
-)
-
-export function useLiveSocket(url: string) {
-  const lastAck = ref<Ack | null>(null)
-  const open = ref(false)
-  let socket: WebSocket | null = null
-  let session: PackSession | null = null
-  let retry = 0
-
-  function connect() {
-    session = PackSession.load(seed)
-    socket = new WebSocket(url)
-    socket.binaryType = "arraybuffer"
-
-    socket.onopen = () => {
-      socket!.send(session!.start()!)
-      open.value = true
-    }
-
-    socket.onmessage = (ev: MessageEvent<ArrayBuffer>) => {
-      const result = session!.unpack(ev.data, ack.on((row) => (lastAck.value = row)) as SchemeHandler<any>)
-      if (!result.ok) socket!.close(4000, "packet")
-    }
-
-    socket.onclose = () => {
-      open.value = false
-      socket = null
-      session = null
-      retry = window.setTimeout(connect, 1000)
-    }
-  }
-
-  function sendPosition(row: Position) {
-    if (!open.value || !socket || !session) return false
-    socket.send(session.pack(position, row)!)
-    return true
-  }
-
-  connect()
-  onBeforeUnmount(() => {
-    window.clearTimeout(retry)
-    if (socket) {
-      socket.onclose = null
-      socket.close()
-    }
-  })
-
-  return { open, lastAck, sendPosition }
-}
-```
-
-`src/components/LivePosition.vue`:
-
-```vue
-<script setup lang="ts">
-import { useLiveSocket } from "../live/useLiveSocket"
-
-const { open, lastAck, sendPosition } = useLiveSocket(
-  `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`,
-)
-
-function send() {
-  sendPosition({ sid: 1, lat: 500_000_000, lon: 300_000_000, profile: 1 })
-}
-</script>
-
-<template>
-  <button :disabled="!open" @click="send">Send position</button>
-  <p v-if="lastAck">Server accepted sid {{ lastAck.sid }}</p>
-</template>
-```
-
-Each new socket needs a new session. `connect` loads a fresh one, because `start` and `join` erase the session's copy of the seed and a session opens only once. A reconnect sends new 16 bytes.
-
-What travels for one position:
-
-| Message | Bytes |
-|---------|-------|
-| Handshake, once per socket | 16 |
-| Position, clear pack | 12 |
-| Position, encrypted | 12 |
-| Ack, encrypted | 4 |
-
-`VITE_PACKBIN_SEED` is compiled into the JavaScript bundle, so anyone who downloads the app can read it. The session hides packets from a network observer. It does not hide them from a person who has the app. Change the seed with a release, and keep the old value on the server until clients have updated.
 
 ## Data types
 
@@ -1137,9 +1393,9 @@ What travels for one position:
 | `f32` `f64` | IEEE 754 float |
 | `bytes(n)` | exactly `n` raw bytes |
 | `be(field)` | that number, big-endian |
-| `utf8` | UTF-8 string, `u16` length |
+| `utf8` | text in the compact text format: a varint payload length, then a bit-packed payload (see [UTF-8](#utf-8)) |
 | `list` | `u16` count, then that many elements |
-| `dict` | `u16` pair count; keys in unsigned byte order |
+| `dict` | `u16` pair count; keys in strictly ascending unsigned byte order (unpack refuses a repeated or out-of-order key) |
 | `flags(anchor, fields)` | one `u8`; bit 0 is the first field; a clear bit omits that field; at most 8 fields; the anchor is not written |
 | `bool` | a flag bit with no payload; set only for `true`; allowed only directly under `flags` or a flag-byte bit |
 | `when(anchor, eq(id, value), fields)` | the group only when an earlier field of the same scope equals `value`; the anchor is not written |
@@ -1230,7 +1486,9 @@ BinaryPacker.pack(row, {"n": 1})
 
 ### UTF-8
 
-A `u16` byte count, then the UTF-8 bytes. `"zxsanny"` is 7 bytes. An empty string is `00 00`. More than 65535 bytes is rejected.
+A string is written in the compact text format (loop 35, [ADR 006](_docs/02_document/adr/006_compact-text-format.md); the byte-exact rules are in the [contract](_docs/02_document/contracts/library/compact-text.md)): a varint payload length (1 byte to 127, 2 to 16,383, 3 above), then a bit-packed payload. Ukrainian, Russian and English letters, digits and `, . - : ! ?` are coded with short prefix codes (a table per language and a number mode, a capital shift and a capital lock), anything else is escaped to raw UTF-8, and a payload that would be larger than the plain UTF-8 bytes is written as those bytes. On held-out sentences a Ukrainian string takes about 35 % of the old size, Russian 34 %, English 57 %, coordinates and ids 51 %. `"zxsanny"` is the 7 bytes `06 2b fc fe e1 19 b2` in total (the old format needed 9). The empty string is the single byte `00`. A text of more than 65535 UTF-8 bytes is rejected on pack, naming the field.
+
+The tables are part of the wire format and frozen (`fixtures/text/tables.json`); there is no version byte, so a packet written before this format reads as an error or as other text. A string field is never larger than the old 2-byte count plus UTF-8 up to 126 UTF-8 bytes, and at most 2 bytes larger above that. A flipped bit in the payload damages only the characters of that string (about 7 to 9 % of them on average), never the next field while the count is intact. Unpack refuses a payload that ends inside a code, has a non-zero pad bit, escapes invalid UTF-8, or breaks a capital rule, naming the field. `fixtures/text/vectors.txt` holds the shared test rows that all eight packages pass.
 
 ```python
 row = Scheme(1, dict, utf8(0, lambda row: row["name"]))
@@ -1238,7 +1496,7 @@ BinaryPacker.pack(row, {"name": "zxsanny"})
 ```
 
 ```
-01 07 00 7a 78 73 61 6e 6e 79
+01 06 2b fc fe e1 19 b2
 ```
 
 In Go pack also refuses a string that is not valid UTF-8, naming the field.
@@ -1276,10 +1534,10 @@ BinaryPacker.pack(row, {"m": {"b": 1, "a": 2}})
 ```
 
 ```
-01 02 00 01 00 61 02 01 00 62 01
+01 02 00 02 10 61 02 02 10 62 01
 ```
 
-`02 00` is two pairs. `01 00 61` is the key `"a"`, then value `02`. `01 00 62` is `"b"`, then value `01`.
+`02 00` is two pairs. `02 10 61` is the key `"a"` (count 2, then the raw-text byte `10` and `61`; one letter is smaller raw), then value `02`. `02 10 62` is `"b"`, then value `01`.
 
 In a typed C# row the dict member is a `Dictionary<string, E>`, an `IDictionary<string, E>` or a non-generic `IDictionary`, and each value is a row of the element field's type, under the same rules as a list, including the check at construction (`Dictionary<string, ActionList>` in the first C# example).
 
@@ -1618,9 +1876,11 @@ TypeScript pack and construction changed again. A count (`sized`, `packed`, `tim
 
 TypeScript packaging changed. The npm package now holds compiled JavaScript and `.d.ts` files in `dist/` and no `.ts` sources, and `package.json` exports only the `packbin` entry point: a `packbin/src/index.ts` import fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`. Plain Node 22+ imports the package without flags, and a `tsc` project no longer needs `allowImportingTsExtensions`; it needs TypeScript 5.0 or newer unless `skipLibCheck` is set. In calling code, import from `packbin` only and annotate the accessor parameters in TypeScript files (`(x: Target) => x.sid`); whether the helpers should default the row type is not decided yet.
 
+The stream session is removed (loop 74, ADR-009). `PackSession` (C#, TypeScript, Python, Rust, C++, Java, Go, Swift), the Rust `session` Cargo feature, the Rust heap-free stream calls (`Session::load`, `start`, `join`, `pack`, `unpack` on a seed) and the C++ `RandomFn` and `os_random` are gone; a v0.3.0 caller of them gets a compile or import error. Frame mode is the one session: in Rust, C#, Java and Swift its types are named the same, `FrameSession`, `FrameConfig`, `FrameDirection`, `FrameDirections`, `FrameSlot`, `FrameOpened`, `MsgContext`, `ReplayWindow`, `Freshness`, `MacKey` (Java adds `FrameSealed`), so Rust's `Session`, `Direction`, `Directions`, `Slot`, `Opened` and `MsgCtx`, Swift's `MessageContext` and Java's `FrameSession.Slot`, `Opened`, `Sealed`, `ReplayWindow.Freshness` its int directions (now the `FrameDirection` enum) and its `load(key, epoch, tagLen, directions...)` (now `load(key, epoch, FrameConfig)`) changed, as did Swift's `ReplayWindow.Freshness` (meshbell renames its Rust `Session` to `FrameSession`). Frame bytes did not change. The notes below that name `PackSession` describe releases up to v0.3.0.
+
 TypeScript `PackSession.load` returns `null` for anything that is not a `Uint8Array` or `Buffer` of 32 bytes. A string, a plain array, an object with a `length` of 32, a `Uint16Array`, an `Int8Array` or a `Uint8ClampedArray` used to open a session keyed by zeros or by the low byte of each item (`PackSession.load("a".repeat(32))` was keyed by 32 zero bytes), and `null` or `undefined` threw `TypeError`. In calling code, convert the seed first: `Uint8Array.from(items)`, `new Uint8Array(arrayBuffer)`, `Buffer.from(hex, "hex")`.
 
-Python changed in several places. `PackSession(seed)` raises `ValueError` unless the seed is 32 bytes. `PackSession.load` returns `None` for a seed that is not 32 bytes, and now also for anything that is not a `bytes`, `bytearray` or `memoryview` (a released `memoryview` included), where it opened a session or raised `TypeError`: `PackSession.load(32)` used to open a session keyed by 32 zero bytes, and a list of integers or an `array.array` opened one too, so wrap such a seed in `bytes(...)`. `PackSession.start(nonce)` and `join(nonce)` follow the same rule: a nonce that is not a `bytes`, `bytearray` or `memoryview` of 16 bytes makes `start` return `None` and `join` return `False` and raises nothing, where `start(16)`, a list of 16 integers or an `array.array` opened a session (`start(16)` used 16 zero bytes as the nonce) and a `str`, a float, a released `memoryview` and `join(None)` raised; `start()` and `start(None)` still draw the nonce. `from packbin import *` no longer imports `bool`, `bytes`, `dict` and `list`, which replaced the builtins; import them by name, `from packbin import dict as map_field`, as the examples here do. A `when` or a count that names a later field, an id that does not exist or a field of another scope now raises `ValueError` when the scheme is built, and so does a `repeat` or `times` inside a `repeat` or `times` round. `flag_byte()` and `.bit(...)` now work in a `Scheme`: the flag byte takes no field id, each bit takes the id where it stands, and a bit before its flag byte or outside the scope of its flag byte fails at construction. Bit numbers follow the order in the scheme, as in Rust, C++, TypeScript and Java (see the split-form paragraph below), and a bit that is created and never placed leaves its bit clear. Pack is stricter: a `times` list longer than the count raises `ValueError` (`1: 3 items, times count is 2`; the extra entries were dropped), and a float field takes only an `int` or a `float` (a string raised an unnamed `ValueError` and a `bool` packed as 1.0; both now raise a `TypeError` that names the field, a numpy `float32` is refused too because it is not a Python `float` (convert it with `float(...)`), and a finite value too large for `f32` raises a named `OverflowError`). Unpack of a `repeat` or `times` gives every name one list entry per round, `None` where the round skipped it, and no longer starts from a list the row class carries (it appended to a class-level list in place); pack reads these rows round by round, so `flags`, `when` and a group inside a round pack. A `bool` under `flags` inside a `times` reads its own round (`{"a": 2, "on": [True, False]}` packs `01 02 01 00`; it packed `01 02 00 00`), and a flags group that holds only a `u2` or a nested `flags` now sets its bit (`{"p": 1, "q": 2}` packs `01 01 09`; it packed `01 00`). A member name declared twice in one scope now raises `ValueError` when the scheme is built, unless one of the two sits under a `when`: `u8 x` twice unpacked `01 07 08` to `{x: 8}` and packed it again as `01 08 08`, and `u8 x` beside a `times` holding `u8 x` unpacked to `{x: [7, 8]}` and could not be packed again. A `times` list that is shorter than the count, or empty, now packs for a member under `flags` or a flag bit, a missing entry meaning absent (`{"c": 2, "v": [5]}` packs `01 02 01 05 00`); it raised `IndexError`, and a plain member still does. A `list` or `dict` whose element is a `group`, `flags` or `u2` now raises `ValueError` when the scheme is built if a member uses an attribute accessor; it built before, packed objects, and raised `AttributeError` out of `BinaryPacker.unpack` on a valid packet. Use key accessors in element groups (`lambda p: p["x"]`). This breaks a scheme that only packs, with object elements (`Row.pts = [Pt(1), Pt(2)]` packed to `01 02 00 01 02`): it no longer builds, and must pack `dict` elements instead (`[{"x": 1}, {"x": 2}]` packs the same bytes). In calling code, import the four names explicitly, give `PackSession.load`, `start` and `join` `bytes(...)` values, rename a repeated member, and give element-group members key accessors.
+Python changed in several places. `PackSession(seed)` raises `ValueError` unless the seed is 32 bytes. `PackSession.load` returns `None` for a seed that is not 32 bytes, and now also for anything that is not a `bytes`, `bytearray` or `memoryview` (a released `memoryview` included), where it opened a session or raised `TypeError`: `PackSession.load(32)` used to open a session keyed by 32 zero bytes, and a list of integers or an `array.array` opened one too, so wrap such a seed in `bytes(...)`. `PackSession.start(nonce)` and `join(nonce)` follow the same rule: a nonce that is not a `bytes`, `bytearray` or `memoryview` of 16 bytes makes `start` return `None` and `join` return `False` and raises nothing, where `start(16)`, a list of 16 integers or an `array.array` opened a session (`start(16)` used 16 zero bytes as the nonce) and a `str`, a float, a released `memoryview` and `join(None)` raised; `start()` and `start(None)` still draw the nonce. `from packbin import *` no longer imports `bool`, `bytes`, `dict` and `list`, which replaced the builtins; import them by name, `from packbin import dict as map_field`, as the examples here do. A `when` or a count that names a later field, an id that does not exist or a field of another scope now raises `ValueError` when the scheme is built, and so does a `repeat` or `times` inside a `repeat` or `times` round. `flag_byte()` and `.bit(...)` now work in a `Scheme`: the flag byte takes no field id, each bit takes the id where it stands, and a bit before its flag byte or outside the scope of its flag byte fails at construction. Bit numbers follow the order in the scheme, as in Rust, C++, TypeScript and Java (see the split-form paragraph below), and a bit that is created and never placed leaves its bit clear. Pack is stricter: a `times` list longer than the count raises `ValueError` (`1: 3 items, times count is 2`; the extra entries were dropped), and a float field takes only an `int` or a `float` (a string raised an unnamed `ValueError` and a `bool` packed as 1.0; both now raise a `TypeError` that names the field, a numpy `float32` is refused too because it is not a Python `float` (convert it with `float(...)`), and a finite value too large for `f32` raises a named `OverflowError`). Unpack of a `repeat` or `times` gives every name one list entry per round, `None` where the round skipped it, and no longer starts from a list the row class carries (it appended to a class-level list in place); pack reads these rows round by round, so `flags`, `when` and a group inside a round pack. A `bool` under `flags` inside a `times` reads its own round (`{"a": 2, "on": [True, False]}` packs `01 02 01 00`; it packed `01 02 00 00`), and a flags group that holds only a `u2` or a nested `flags` now sets its bit (`{"p": 1, "q": 2}` packs `01 01 09`; it packed `01 00`). A member name declared twice in one scope now raises `ValueError` when the scheme is built, unless one of the two sits under a `when`: `u8 x` twice unpacked `01 07 08` to `{x: 8}` and packed it again as `01 08 08`, and `u8 x` beside a `times` holding `u8 x` unpacked to `{x: [7, 8]}` and could not be packed again. A `times` list that is shorter than the count, or empty, now packs for a member under `flags` or a flag bit, a missing entry meaning absent (`{"c": 2, "v": [5]}` packs `01 02 01 05 00`); it raised `IndexError`, and a plain member still does. A `list` or `dict` whose element is a `group`, `flags` or `u2` now raises `ValueError` when the scheme is built if a member uses an attribute accessor; it built before, packed objects, and raised `AttributeError` out of `BinaryPacker.unpack` on a valid packet. Use key accessors in element groups (`lambda p: p["x"]`). This breaks a scheme that only packs, with object elements (`Row.pts = [Pt(1), Pt(2)]` packed to `01 02 00 01 02`): it no longer builds, and must pack `dict` elements instead (`[{"x": 1}, {"x": 2}]` packs the same bytes). In calling code, import the four names explicitly, give `PackSession.load`, `start` and `join` `bytes(...)` values, rename a repeated member, and give element-group members key accessors. The Python session removes the pad of the first byte and checks the type before it removes the rest (one block for an unknown type); the pad is pure Python and linear in the payload, so bound the payload length you read from the network.
 
 Rust `PackSession::pack` returns `Result<Vec<u8>, SessionPackError>` instead of `Option<Vec<u8>>`: `NotOpen` before `start` or `join`, and `Pack(PackError)` when the row cannot be packed (the same `PackError` as `BinaryPacker::pack`); a failed pack does not use a pad position. Code that matched `Some` and `None` no longer compiles. A `when` or a count (`sized`, `bits`, `packed`, `times`) must name a field that its own scope declared earlier. A field outside its `repeat` or `times` body, inside an earlier body, a later field or an undeclared one now panics when the scheme is built, by name as well as by number (`when at id 2 names field "1", which is not in the same scope ...`, `the count of "2" names field "1", ...`); a name that no field of the scope carried used to build and never fire, and a number that matches no field name is refused too. A `packed` or `times` count of 2^63 or more returns `PackError::Type("<label>: item count out of range")` (it reported a negative count, and a debug build panicked at 2^63 with bias -1). A map `times` packed without `__times_<anchor>` returns `PackError::Type` when a non-empty list or a single value is kept under a member below a `flags` or `when`; put those values in the rounds. A `flags` group is on when any value inside it is present at any depth (`u2`, `sized`, `bits`, `packed`, a nested group or `flags` count) and is then written in full; a required value that is missing fails with `PackError::Missing` and names it. Those values were dropped before. Rust pack (map form and typed `Scheme<T>`) decides every `when` from the fields it wrote in the same scope, as unpack does from the fields it read. A `when` on a field that an earlier `when` or a clear flag bit skipped no longer matches (`u8 "0"; when(1, eq("0", 1), [u8 "1"]); when(2, eq("1", 4), [u8 "2"])` with `{"0": 0, "1": 4, "2": 9}` packed `01 00 09` and packs `01 00`), and `eq(bool, false)` on a clear bit no longer writes its body. A count (`sized`, `bits`, `packed`, `times`) that names a skipped field returns `PackError::Missing` with the count's field name. A `when` or count that names a `flags` byte or a split flag byte reads the byte pack wrote, not a value kept in the row. A map `times` packed from per-name lists returns `PackError::Type` (`times at id 1: '1' has 3 items, count is 2`) when a list holds more items than the count, before any item error; the extra items used to be dropped, so give lists no longer than the count. A data member name declared twice in one scope now panics when the scheme is built (`u8("x"), u8("x")` packed `01 05 05` and lost the 7 on unpack; a name outside and inside a `times` could not be packed again; one inside a `repeat` round round-tripped and is refused now too). In calling code, rename the repeated member.
 
@@ -1749,7 +2009,7 @@ Loop 26 (Swift). The eighth package is new: `Package.swift` at the repository ro
 
 Limits to keep in mind:
 
-- Round limits (C#, TypeScript, Java, Rust, Python, Go and Swift). A scheme carries two limits on one unpack call (and a third, `maxBytes`, on one pack call: see the loop 20 notes). `maxRounds`, default 65,535, is the most rounds one `repeat` or `times` field may start. `maxSlots`, default 1,048,576 (4,194,304 before loop 22), is the most slots all the rounds of the call may create together. A slot is one entry of a round's lists, one for each name the round can hold, even where the round read nothing, so a round of a 36-name `when` body takes 36 slots. Since loop 21 all six packages count the width of a round the same way: the number of distinct names it can hold. One slot each for a value field (an integer, a float, `utf8`, `bytes`, `bool`), a `sized`, `bits` or `packed` name, a `list` or `dict` name (however many items it holds), each slot name of a `u2`, and an empty group's own name; and one for each name inside a `when` (whether its condition holds in the round or not), a `flags`, a flag bit or a group, at any depth. A non-empty group's own name, a `flags` itself and its flag byte, a split flag byte, and the anchors of `when`, `repeat` and `times` are no slot. A name that the round declares twice (two `when` branches that both declare `k`) is one slot. One counter covers a whole pack call and a whole unpack call, shared by every `repeat` and `times` at any depth (top level, `flags`, groups, `when`, split bits, `list` and `dict` elements). Pack and unpack charge the same width at the same round, so a packet that pack writes at exactly `maxSlots` unpacks, and the round after it is refused by both. The one exception is Java: it counts a nested-row group (a `group(get, set, ...)` row, an empty one too) as one slot, its own name, where the others count the names inside it. A member that has no name (a Java typed accessor or lambda, a Python identity accessor `lambda row: row`) is a slot of its own, so two of those are two slots. A packet that would pass either limit is refused when the round that crosses it starts, before the round's bytes are read and before anything is allocated for it, with the same bad-value error as any other unreadable value (see above): no row, handler not called. On unpack a `times` count above `maxRounds` is not refused up front; a packet that states a huge count and holds few rounds still ends in a short read. Pack refuses a `times` count or a `repeat` list above `maxRounds` before it writes a round, and charges `maxSlots` per round (loops 19 and 20, see the notes above). Raise or lower the limits where you declare the scheme: `scheme.WithLimits(maxRounds: 200_000, maxSlots: 16_000_000)` (C#, `Scheme<T>`), `scheme.withLimits({ maxRounds: 200_000, maxSlots: 16_000_000 })` (TypeScript), `scheme.withLimits(200_000, 16_000_000L)` (Java), `scheme.with_limits(200_000, 16_000_000)` (Rust, on `MapScheme` and the typed `Scheme`; it takes and returns the scheme) and `scheme.with_limits(max_rounds=200_000, max_slots=16_000_000)` (Python; it returns a new scheme, and `scheme.max_rounds` and `scheme.max_slots` read the limits) and `scheme.WithLimits(limits)` (Go; it returns a copy, takes all three values of a `Limits` every time and reads them with `scheme.Limits()`, so start from `DefaultLimits()`) and `scheme.withLimits(maxRounds: 200_000, maxSlots: 16_000_000)` (Swift; it returns a copy, a limit left out takes its default, and `scheme.maxRounds`, `maxSlots` and `maxBytes` read the limits). The defaults are constants (`BinaryPacker.DefaultMaxRounds` and `DefaultMaxSlots`, `Scheme.DefaultMaxRounds` and `DefaultMaxSlots`, `Scheme.DEFAULT_MAX_ROUNDS` and `DEFAULT_MAX_SLOTS` in Java and Python, `packbin::DEFAULT_MAX_ROUNDS` and `DEFAULT_MAX_SLOTS`, `packbin.DefaultMaxRounds`, `DefaultMaxSlots` and `DefaultMaxBytes` in Go, `Scheme.defaultMaxRounds`, `defaultMaxSlots` and `defaultMaxBytes` in Swift). A value below 1 is refused when you call it (an exception in C#, TypeScript and Java, a `ValueError` in Python, which also refuses a value that is not a whole number; a panic in Rust; an `InvalidScheme` error value in Go; a thrown `.schemeError` in Swift). A Go `Nested` row and a Swift nested row (`.group(name, ...)`) are scopes of their own and charge the width of their own members, and Go and Swift refuse a round past a limit with a too-many error (`TooMany`, `.tooMany`) rather than the bad-value error. C++ has no limit and needs none: it unpacks into `Array<T, N>` storage you own, of capacity at most 65,535, and returns `Error::TooMany` for a longer count. Time still grows with the length of the packet, so cap the packet length where you read it from the network as well.
+- Round limits (C#, TypeScript, Java, Rust, Python, Go and Swift). A scheme carries two limits on one unpack call (and a third, `maxBytes`, on one pack call: see the loop 20 notes). `maxRounds`, default 65,535, is the most rounds one `repeat` or `times` field may start. `maxSlots`, default 1,048,576 (4,194,304 before loop 22), is the most slots all the rounds of the call may create together. A slot is one entry of a round's lists, one for each name the round can hold, even where the round read nothing, so a round of a 36-name `when` body takes 36 slots. Since loop 21 all six packages count the width of a round the same way: the number of distinct names it can hold. One slot each for a value field (an integer, a float, `utf8`, `bytes`, `bool`), a `sized`, `bits` or `packed` name, a `list` or `dict` name (however many items it holds), each slot name of a `u2`, and an empty group's own name; and one for each name inside a `when` (whether its condition holds in the round or not), a `flags`, a flag bit or a group, at any depth. A non-empty group's own name, a `flags` itself and its flag byte, a split flag byte, and the anchors of `when`, `repeat` and `times` are no slot. A name that the round declares twice (two `when` branches that both declare `k`) is one slot. One counter covers a whole pack call and a whole unpack call, shared by every `repeat` and `times` at any depth (top level, `flags`, groups, `when`, split bits, `list` and `dict` elements). Pack and unpack charge the same width at the same round, so a packet that pack writes at exactly `maxSlots` unpacks, and the round after it is refused by both. The one exception is Java: it counts a nested-row group (a `group(get, set, ...)` row, an empty one too) as one slot, its own name, where the others count the names inside it. A member that has no name (a Java typed accessor or lambda, a Python identity accessor `lambda row: row`) is a slot of its own, so two of those are two slots. A packet that would pass either limit is refused when the round that crosses it starts, before the round's bytes are read and before anything is allocated for it, with the same bad-value error as any other unreadable value (see above): no row, handler not called. On unpack a `times` count above `maxRounds` is not refused up front; a packet that states a huge count and holds few rounds still ends in a short read. Pack refuses a `times` count or a `repeat` list above `maxRounds` before it writes a round, and charges `maxSlots` per round (loops 19 and 20, see the notes above). Raise or lower the limits where you declare the scheme: `scheme.WithLimits(maxRounds: 200_000, maxSlots: 16_000_000)` (C#, `Scheme<T>`), `scheme.withLimits({ maxRounds: 200_000, maxSlots: 16_000_000 })` (TypeScript), `scheme.withLimits(200_000, 16_000_000L)` (Java), `scheme.with_limits(200_000, 16_000_000)` (Rust, on `MapScheme` and the typed `Scheme`; it takes and returns the scheme) and `scheme.with_limits(max_rounds=200_000, max_slots=16_000_000)` (Python; it returns a new scheme, and `scheme.max_rounds` and `scheme.max_slots` read the limits) and `scheme.WithLimits(limits)` (Go; it returns a copy, takes all three values of a `Limits` every time and reads them with `scheme.Limits()`, so start from `DefaultLimits()`) and `scheme.withLimits(maxRounds: 200_000, maxSlots: 16_000_000)` (Swift; it returns a copy, a limit left out takes its default, and `scheme.maxRounds`, `maxSlots` and `maxBytes` read the limits). The defaults are constants (`BinaryPacker.DefaultMaxRounds` and `DefaultMaxSlots`, `Scheme.DefaultMaxRounds` and `DefaultMaxSlots`, `Scheme.DEFAULT_MAX_ROUNDS` and `DEFAULT_MAX_SLOTS` in Java and Python, `packbin::DEFAULT_MAX_ROUNDS` and `DEFAULT_MAX_SLOTS`, `packbin.DefaultMaxRounds`, `DefaultMaxSlots` and `DefaultMaxBytes` in Go, `Scheme.defaultMaxRounds`, `defaultMaxSlots` and `defaultMaxBytes` in Swift). A value below 1 is refused when you call it (an exception in C#, TypeScript and Java, a `ValueError` in Python, which also refuses a value that is not a whole number; a panic in Rust; an `InvalidScheme` error value in Go; a thrown `.schemeError` in Swift). A Go `Nested` row and a Swift nested row (`.group(name, ...)`) are scopes of their own and charge the width of their own members, and Go and Swift refuse a round past a limit with a too-many error (`TooMany`, `.tooMany`) rather than the bad-value error. C++ has no limit and needs none: it unpacks into `Array<T, N>` storage you own, of capacity at most 65,535, and returns `Error::TooMany` for a longer count. Time still grows with the length of the packet, so cap the packet length where you read it from the network as well. A dict key must sort after the key before it by its UTF-8 bytes on unpack in all eight packages (an equal or smaller key refuses the packet with the package's dict-key error), so the key check is one compare with the previous key and 65,535 keys unpack in well under a second (security report F51, F56).
 - Memory at the defaults of loop 21 (`maxSlots` 4,194,304; since loop 22 the default is 1,048,576, which refuses the 36-name body below after 29,127 rounds (the 29,128th does not fit) instead of at round 65,536, and takes less), for a 1 MiB packet of one-byte rounds in a `repeat` with a 36-name `when` body (resident set, runtime included; measured on a macOS arm64 laptop with Node 22, .NET 10, Java 21 and Rust 1.79 in release mode, three runs each; your figures will differ). Refused at round 65,536: about 86 MiB in TypeScript, 86 MiB in C# and 92 MiB in Java, where an unlimited run took about 400, 530 and 560 MiB, and about 64 MiB in Python 3.14 (one run), where an unlimited run took about 410 MiB; the same body inside 65,535 `list` elements is refused after about 76 MiB in Python. A Rust one-byte round cannot hold 36 names, so Rust is measured on a `times` of one-byte rounds, about 21 MiB (about 310 MiB unlimited), and on rounds that each set eight flag bits, about 64 MiB (about 1.3 to 1.4 GiB unlimited). A packet that stays inside the limits costs up to the limits and no more: 65,535 rounds of the 36-name body, accepted, peaked at about 106 MiB in TypeScript and 86 MiB in Java, and a 64-name body stopped by the slot limit at about 110 MiB in Java and C#. The C# packet that took 1.4 seconds to read is now refused in about 0.1 seconds. The ceiling is higher when the rounds set their names: a 300-name body stopped by the slot limit peaked at about 190 MB in C#, 350 MB in Java and 130 MB in TypeScript (net of the runtime, measured by the security audit), and 64 set flag bits per round in Rust peaked at about 430 MB (all of these measured at the old default of 4,194,304 slots); raise the limits only as far as your memory per concurrent call allows. `maxBytes` is also the memory bound of a pack call: the packet is built in memory, so a call takes about 2 to 3 times the packet while it writes, and a scheme left at the default 16 MiB is bounded accordingly; raise it with the same care. In Python a slot is one entry of a per-name list, so `maxSlots` bounds that memory too. The Python figures above were measured before loop 21, when unpack charged 8 more slots per name for the first round of each run; with that charge gone, many short runs can take more memory than those figures (see the loop 21 measurement below). Measured in loop 21 (resident set, runtime included): a 4.3 MB packet of 65,535 `list` elements, each holding a `times` of one round of 64 names (4,194,240 slots, just under the default limit), peaked at about 1,070 MB in TypeScript and about 550 MB in Python; the worst case at the defaults is therefore the slot limit times the cost of one slot in your runtime, and a service that takes packets from untrusted callers should lower `maxSlots` (the default was 4,194,304 until loop 22, which lowered it to 1,048,576, a quarter). Measured in loop 22 on the same 4.3 MB packet shape, resident set at the old and the new default: TypeScript 1,070 MB to 353 MB, Java 960 MB to 317 MB (`-Xmx4g`), C# 733 MB to 235 MB, Python 550 MB to 162 MB; Rust, on a stand-in shape (a list element cannot hold a `times`: 65,535 rounds of a 64-name `times`), 628 MB to 120 MB, and 64 set flag bits per round took 637 MB at the old default and 117 MB at the new. The peak is a third of the old one rather than a quarter because the runtime and the packet itself do not shrink. A scheme that needs more raises the limit, and then the old worst case applies again. Measured for Go in loop 25 (the heap in use, sampled during the unpack in `golang:1.27`; one run each, about 10 %): the F10 packet (4.26 MB, 4,194,304 slots, limit raised) peaks at about 625 MB, and a 1 MiB packet of 16,128 rounds of 65 one-byte members (1,048,320 slots, the defaults) at about 94 MB. The measurement is a test behind the build tag `packbin_memtest`; its large-packet tests (a 16 MiB packet, a wide raised-limit unpack) pass under the race detector in a 7.6 GiB Docker VM.
 - In C#, a typed `Unpack` of a packet that holds a `repeat` or `times` round returns an error value naming the member when the row cannot hold the list of rounds for it (a scalar member always cannot), instead of throwing `InvalidCastException` (loop 20). A member that can hold the list (`object`, `List<object?>`, `List<List<object?>>`, `object[]`, `IList`, `IList<object?>`) is filled, but no public C# call returns an aligned row yet. Since loop 21 a typed round can bind a collection of rows instead (`E[]`, `List<E>` or `IList<E>`; see Times).
 - In C#, a typed `list` or `dict` member is checked when the scheme is built (see the loop 18 notes). Inside a `repeat` or `times` round a `list` member is checked against the list of rounds it must hold (loop 20 notes) and a `dict` member against the dictionary per round it must hold (loop 21 notes); a `bits`, `packed`, `when` or `times` element is not checked when the scheme is built. The accepted member types are fixed on purpose: a refusal can be relaxed later, an accepted type cannot be withdrawn. The owner kept this refusal in loop 19 (decision 10) and it may be relaxed in a later loop.
@@ -1759,7 +2019,6 @@ Limits to keep in mind:
 - C++ `eq(u8, true)` and `eq(u8, 1.5)` still build: a typed constant is converted to a 64-bit integer before the check. A C++ empty group that is a `when` source takes the id of the field after it, so a field with the same id wins for that `eq`.
 - In TypeScript a decoded dictionary keeps a key named `__proto__` as an ordinary own entry. Copy or merge decoded dictionaries with care: `Object.assign({}, dict)` sets the target's prototype from that entry. Read them with `Object.hasOwn`.
 - In C# every integer field arrives in `UnpackResult.Values` as its exact type (`byte`, `sbyte`, `ushort`, `short`, `uint`, `int`, `ulong`, `long`; an `f32` stays a `double`). Read through the row type and nothing changes for you; code that reads the narrow kinds straight from `Values` as `double` must change, as it had to for `u64` and `i64` before.
-- A session packs from several threads safely in C# and Java (each packet gets its own number). Unpacking on one session must be called in packet order, one caller at a time. A Go `PackSession` is safe for concurrent use too (a lock around the counter and the pad); the receiver must still `Unpack` in the order the sender's `Pack` calls took the lock. A built Go `Scheme` is safe to share. A Swift `PackSession` is not `Sendable` and is used by one task at a time; a built Swift `Scheme` is `Sendable` and safe to share.
 
 ## License
 

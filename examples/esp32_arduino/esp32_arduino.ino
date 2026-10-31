@@ -18,6 +18,9 @@ constexpr auto position = packbin::scheme<Position>(
     packbin::flags(4, packbin::u16<&Position::heading>(4), packbin::u8<&Position::speed>(5),
                    packbin::i16<&Position::altitude>(6)));
 
+// The same row with 4 parity bytes after it: a receiver repairs up to 2 wrong bytes.
+constexpr auto protected_position = packbin::parity(position, 4);
+
 void setup() {
   Serial.begin(115200);
   Position row;
@@ -33,6 +36,14 @@ void setup() {
     Serial.print(hex[buf[i] & 0xf]);
   }
   Serial.println();  // 4001000065cd1d00a3e1110100
+
+  std::uint8_t sent[20];
+  packbin::Result q = packbin::pack(protected_position, row, sent, sizeof(sent));
+  for (std::size_t i = 0; q.ok() && i < q.offset; ++i) {
+    Serial.print(hex[sent[i] >> 4]);
+    Serial.print(hex[sent[i] & 0xf]);
+  }
+  Serial.println();  // 4001000065cd1d00a3e1110100ca856682
 }
 
 void loop() {}

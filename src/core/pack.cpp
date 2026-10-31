@@ -1,6 +1,10 @@
 #include "values.hpp"
+#include "text_count.hpp"
+#ifndef PACKBIN_NO_TEXT
+#include "text_encode.hpp"
+#endif
 
-#include <cstring>
+#include "packbin/platform.hpp"
 
 namespace packbin {
 namespace detail {
@@ -13,39 +17,39 @@ struct Pack {
   Field const* t;
   std::size_t n;
   Writer& w;
+  ScratchRef scratch;
 };
 
 Result pack_one(Pack& p, std::size_t i, void* obj);
 
+// Out of line: inlined at its 13 call sites it costs 52 B more flash on the Cortex-M4F.
+PACKBIN_NOINLINE
 Result bad(Writer const& w, Field const& f) { return fail(Error::BadValue, w.len, f.id); }
 
 Result put_u16(Writer& w, std::size_t value, int id) {
   return put_num<std::uint16_t>(w, static_cast<std::uint16_t>(value), false, id);
 }
 
-// True when a `when` that holds the count of `f` has a false condition: the count is set in the
-// row but never written, so a reader has no count (`bit` links the count to each `when` that
-// holds it, see `mark_held`).
-bool count_skipped(Field const* t, Field const& f, void* obj) {
-  for (Field const* k = t + f.ref; k->bit != 0;) {
-    k -= k->bit;
-    if (!when_matches(t, *k, obj))
-      return true;
-  }
-  return false;
-}
-
 // The value of a count, or false when it is absent or was not written.
 bool ref_value(Field const* t, Field const& f, void* obj, std::int64_t& out) {
-  return f.ref >= 0 && read_int(t[f.ref], obj, out) && !count_skipped(t, f, obj);
+  return f.ref >= 0 && read_int(t[f.ref], obj, out) && !source_skipped(t, f, obj);
 }
 
-// The children of entry i, in order, on the same object.
+// The children of entry i, in order, on the same object. A child `when` that holds is entered in
+// this loop (its children follow it) instead of through pack_one, so a chain of `when`s nested in
+// `when`s costs the stack of one level.
 Result pack_children(Pack& p, std::size_t i, void* obj) {
-  for (std::size_t j = i + 1; j < i + p.t[i].span; j += p.t[j].span) {
+  std::size_t end = i + p.t[i].span;
+  for (std::size_t j = i + 1; j < end;) {
+    Field const& f = p.t[j];
+    if (f.kind == Kind::When) {
+      j += when_matches(p.t, f, obj) ? 1 : f.span;
+      continue;
+    }
     Result r = pack_one(p, j, obj);
     if (!r.ok())
       return r;
+    j += f.span;
   }
   return Result{};
 }
@@ -103,7 +107,8 @@ Result pack_flag_byte(Pack& p, std::size_t i, void* obj) {
   return put_num<std::uint8_t>(p.w, byte, false, t[i].id);
 }
 
-// Bytes, utf8 (with its u16 length) and sized (length checked against its count).
+// Bytes, utf8 (compact text, see text_encode.hpp; a Packed string is written as it is) and sized
+// (length checked against its count).
 PACKBIN_NOINLINE
 Result pack_text(Pack& p, std::size_t i, void* obj) {
   Field const& f = p.t[i];
@@ -122,11 +127,20 @@ Result pack_text(Pack& p, std::size_t i, void* obj) {
       return bad(w, f);
   }
   if (f.kind == Kind::Utf8) {
-    if (len > 65535)
+    if (!f.opaque()) {
+#ifndef PACKBIN_NO_TEXT
+      return txt::encode_field(w, p.scratch, f.id, data, len);
+#else
+      return fail(Error::SchemeInvalid, w.len, f.id);
+#endif
+    }
+    // A Packed string: the count of `len`, then the bytes as given, never decoded or checked.
+    if (txt::over_max_count(len) || (data == nullptr && len != 0))
       return bad(w, f);
-    Result r = put_u16(w, len, f.id);
-    if (!r.ok())
-      return r;
+    std::size_t need = txt::varint_size(len) + len;
+    if (w.cap - w.len < need)
+      return fail(Error::BufferFull, w.len, f.id, need);
+    w.len = static_cast<std::size_t>(txt::put_varint(w.data + w.len, len) - w.data);
   }
   return put_bytes(w, data, len, f.id);
 }
@@ -143,7 +157,7 @@ Result pack_small(Pack& p, std::size_t i, void* obj) {
   unsigned width = f.kind == Kind::Bits ? 1 : f.width;
   if (f.kind == Kind::Packed)
     count += f.bias;
-  if (m == nullptr || count < 0 || *f.count(m) != count)
+  if (m == nullptr || count < 0 || *array_count(m) != count)
     return bad(w, f);
   unsigned per = 8 / width;
   unsigned max = (1u << width) - 1;
@@ -173,9 +187,12 @@ Result pack_u2(Pack& p, std::size_t i, void* obj) {
   std::size_t nbytes = (k + 3) / 4;
   if (w.cap - w.len < nbytes)
     return fail(Error::BufferFull, w.len, f.id, nbytes);
-  std::uint8_t raw[16] = {};
-  if (nbytes > sizeof(raw))
+  if (nbytes > 16)
     return bad(w, f);
+  // Written in place: a local buffer and put_bytes cost 40 B more flash.
+  std::uint8_t* raw = w.data + w.len;
+  for (std::size_t b = 0; b < nbytes; ++b)
+    raw[b] = 0;
   for (std::size_t c = 0; c < k; ++c) {
     Field const& child = t[i + 1 + c];
     std::int64_t value = 0;
@@ -183,7 +200,8 @@ Result pack_u2(Pack& p, std::size_t i, void* obj) {
       return bad(w, child);
     raw[c / 4] = static_cast<std::uint8_t>(raw[c / 4] | (value << ((c % 4) * 2)));
   }
-  return put_bytes(w, raw, nbytes, f.id);
+  w.len += nbytes;
+  return Result{Error::Ok, w.len};
 }
 
 // Dict keys go on the wire in strictly increasing unsigned byte order, as in every package.
@@ -191,15 +209,17 @@ PACKBIN_NOINLINE
 bool keys_ascending(Field const* t, std::size_t i, void* m) {
   Field const& f = t[i];
   Field const& key = t[i + 1];
-  std::size_t count = *f.count(m);
+  std::size_t count = *array_count(m);
   for (std::size_t k = 1; k < count; ++k) {
     std::uint8_t const *a = nullptr, *b = nullptr;
     std::size_t la = 0, lb = 0;
     text_bytes(key, member(key, f.item(m, k - 1)), a, la);
     text_bytes(key, member(key, f.item(m, k)), b, lb);
     std::size_t common = la < lb ? la : lb;
-    int c = common == 0 ? 0 : std::memcmp(a, b, common);
-    if (c > 0 || (c == 0 && la >= lb))
+    std::size_t at = 0;
+    while (at < common && a[at] == b[at])
+      ++at;
+    if (at < common ? a[at] > b[at] : la >= lb)
       return false;
   }
   return true;
@@ -212,11 +232,11 @@ std::size_t item_count(Pack& p, std::size_t i, void* obj, void* m, Result& out) 
   Field const& f = p.t[i];
   constexpr std::size_t stop = static_cast<std::size_t>(-1);
   if (f.kind == Kind::Repeat)
-    return m == nullptr ? 0 : *f.count(m);
+    return m == nullptr ? 0 : *array_count(m);
   if (f.kind == Kind::Times) {
     std::int64_t count = 0;
     if (!ref_value(p.t, f, obj, count) || count < 0 ||
-        (m == nullptr ? count != 0 : *f.count(m) != count)) {
+        (m == nullptr ? count != 0 : *array_count(m) != count)) {
       out = bad(p.w, f);
       return stop;
     }
@@ -226,8 +246,8 @@ std::size_t item_count(Pack& p, std::size_t i, void* obj, void* m, Result& out) 
     out = bad(p.w, f);
     return stop;
   }
-  out = put_u16(p.w, *f.count(m), f.id);
-  return out.ok() ? *f.count(m) : stop;
+  out = put_u16(p.w, *array_count(m), f.id);
+  return out.ok() ? *array_count(m) : stop;
 }
 
 Result pack_one(Pack& p, std::size_t i, void* obj) {
@@ -276,11 +296,14 @@ Result pack_one(Pack& p, std::size_t i, void* obj) {
 }  // namespace
 
 Result pack_table(Field const* t, std::size_t n, std::uint8_t type_number, void const* row,
-                  Writer& w) {
+                  Writer& w, ScratchRef scratch) {
   Result r = put_num<std::uint8_t>(w, type_number, false, -1);
   if (!r.ok())
     return r;
-  Pack p{t, n, w};
+  Pack p{t, n, w, scratch};
+#ifndef PACKBIN_NO_TEXT
+  txt::forget_raw(scratch);
+#endif
   // Pack only reads through the accessors; they return non-const pointers because unpack uses
   // the same table to write.
   void* obj = const_cast<void*>(row);
