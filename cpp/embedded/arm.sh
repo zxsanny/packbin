@@ -109,6 +109,14 @@ image_checks() {
   printf '%s %s %s %s\n' "$throw" "$alloc" "$heap" "$((osrnd + urandom))" > "$dir/$stem.refs"
 }
 
+# The stack top of a linked image is the end of its RAM region: the M33F rows hold it to the 128 KiB window (AZ-3469).
+check_ram_end() {
+  local elf="$1" expected="$2" top
+  top=$(arm-none-eabi-nm "$elf" | awk '$NF == "__stack_top" { print $1 }')
+  [ "$((16#${top:-0}))" -eq "$((expected))" ] \
+    || fail "$(basename "$elf") stack top ${top:-missing} is not the RAM window end $(printf '%x' "$((expected))")"
+}
+
 # Runs an image on a QEMU Cortex-M machine; the exit code is the image's failure count.
 qemu_run() {
   local machine="$1" elf="$2" log="$3" rc=0
@@ -286,6 +294,7 @@ target_m33f() {
   arm_link "$dir" frame.elf "${arch[@]}" "${arm_link_common[@]}" --specs=nano.specs \
     --specs=nosys.specs "${heap_wraps[@]}" "$dir"/core-*.o "$dir/frame_main.o" "$dir/startup.o" "$dir/wrap.o"
   image_checks "$dir" frame
+  for t in ac2 vectors baseline frame; do check_ram_end "$dir/$t.elf" "$m33f_ram_end"; done
 
   qemu_run mps2-an505 "$dir/baseline.elf" "$dir/baseline.run.log" || fail "M33F baseline exit $?"
   qemu_run mps2-an505 "$dir/ac2.elf" "$dir/ac2.run.log" || fail "AC-2 firmware on M33F exit $?"

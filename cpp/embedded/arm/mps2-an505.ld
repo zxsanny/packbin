@@ -1,10 +1,13 @@
 /* QEMU mps2-an505 (Cortex-M33, starts in Secure state): code in SSRAM1 through its secure alias, data in
  * SSRAM2/3 through theirs. Code linked at the non-secure alias 0 locks up on the first fetch (HardFault
- * escalation); RAM at 0x38000000 is the secure alias of 0x28000000. */
+ * escalation); RAM at 0x38000000 is the secure alias of 0x28000000.
+ * RAM is 128 KiB, the RAM of a non-secure image on the nRF54L15 (AZ-3469): .data, .bss and the stack, which
+ * starts at the region end, must fit in it. This is a window in the secure alias, not a TrustZone non-secure
+ * image. The window end is also m33f_ram_end in cpp/embedded/lib.sh; both M33F rows check it. */
 MEMORY
 {
   FLASH (rx) : ORIGIN = 0x10000000, LENGTH = 4M
-  RAM (rwx)  : ORIGIN = 0x38000000, LENGTH = 4M
+  RAM (rwx)  : ORIGIN = 0x38000000, LENGTH = 128K
 }
 
 ENTRY(Reset_Handler)

@@ -74,7 +74,7 @@ target_rust_m33f() {
   local rust_arch=(-mthumb -mcpu=cortex-m33 -mfloat-abi=hard -mfpu=fpv5-sp-d16)
   local rust_machine=mps2-an505 limits_file="$limits_file_m33f"
   local rust_flash_ceiling="$m33f_flash_budget" rust_stack_ceiling="$m33f_stack_budget"
-  local rust_same_as="$build/rust-m4f"
+  local rust_same_as="$build/rust-m4f" rust_ram_end="$m33f_ram_end"
   local arm_link_common=(-nostartfiles -T "$here/arm/mps2-an505.ld" -Wl,--gc-sections -Wl,--cref)
   rust_row "$build/rust-m33f"
 }
@@ -84,6 +84,7 @@ rust_row() {
   local dir="$1" set features lib meter flash0 ram0 ram flash stack raw hits sets=0
   rust_common_objects "$dir"
   rust_link "$dir" baseline.elf baseline.o
+  [ -z "${rust_ram_end:-}" ] || check_ram_end "$dir/baseline.elf" "$rust_ram_end"
   qemu_run "$rust_machine" "$dir/baseline.elf" "$dir/baseline.run.log" || fail "baseline image exit $?"
   # The meter reads its own unpainted guard as used; the baseline measures an empty call.
   meter=$(log_value PACK_STACK "$dir/baseline.run.log")
@@ -102,6 +103,7 @@ rust_row() {
       continue
     fi
     rust_link "$dir" "$set.elf" main.o "$lib"
+    [ -z "${rust_ram_end:-}" ] || check_ram_end "$dir/$set.elf" "$rust_ram_end"
     arm-none-eabi-nm "$dir/$set.elf" > "$dir/$set.nm"
     hits="$(heap_hits "$dir/$set.nm" | tr '\n' ' ')"
     [ -z "$hits" ] || fail "$set: the heap is linked ($hits)"

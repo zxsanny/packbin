@@ -40,6 +40,10 @@ flash_pin=7712
 # The flash figure is the all-kinds image (text plus data); the stack figure is net of the meter, like the M4F one.
 m33f_flash_budget=65536
 m33f_stack_budget=8192
+# The M33F images run in a 128 KiB RAM window (AZ-3469): the stack top that mps2-an505.ld gives them, 0x38000000 plus
+# 128 KiB. The rows read it back from each linked image, so a change of the script's RAM length fails them. The run is a
+# window in the secure alias, not a TrustZone non-secure image.
+m33f_ram_end=0x38020000
 # Pins on the M33F figures (loop 68): a later edit that spends bytes fails the row by its own bytes. Raise them only with
 # a line in _docs/AGENT_GOTCHAS.md saying what the bytes bought.
 m33f_flash_pin=25760
