@@ -54,6 +54,9 @@ func Pack(s *Scheme, row any) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if s.percent > 0 {
+		return protectPercent(plain, s.percent)
+	}
 	return protect(plain, s.parity)
 }
 

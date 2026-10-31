@@ -17,6 +17,9 @@ public struct Scheme: Sendable {
     /// The parity bytes `pack` appends to every packet and `unpack` checks, 0...32 (default 0: nothing
     /// is appended). Both sides share the count; it is not on the wire (see `withLimits`).
     public let parity: Int
+    /// The parity percentage, 0...100 (default 0): the count is derived from the message length. A scheme
+    /// declares a percentage or a count, not both (see `withLimits`).
+    public let parityPercent: Int
 
     /// Builds a scheme from its type number (0...255) and its fields, numbered by order from 0. A
     /// refused scheme throws a `PackbinError` of kind `.schemeError` naming the field id.
@@ -51,10 +54,11 @@ public struct Scheme: Sendable {
         maxSlots = Scheme.defaultMaxSlots
         maxBytes = Scheme.defaultMaxBytes
         parity = 0
+        parityPercent = 0
     }
 
     /// `base` with the given limits, already checked.
-    init(_ base: Scheme, maxRounds: Int, maxSlots: Int, maxBytes: Int, parity: Int) {
+    init(_ base: Scheme, maxRounds: Int, maxSlots: Int, maxBytes: Int, parity: Int, parityPercent: Int) {
         typeNumber = base.typeNumber
         fields = base.fields
         place = base.place
@@ -62,6 +66,7 @@ public struct Scheme: Sendable {
         self.maxSlots = maxSlots
         self.maxBytes = maxBytes
         self.parity = parity
+        self.parityPercent = parityPercent
     }
 }
 

@@ -66,10 +66,12 @@ use crate::value::{PackError, UnpackError, Values};
 /// [`Value::Groups`]: crate::Value::Groups
 ///
 /// A scheme with parity bytes (`MapScheme::with_parity`) appends them to the packet; a clear
-/// packet above `254 - n` bytes is a [`PackError::Type`] naming its length and the limit.
+/// packet above `254 - n` bytes is a [`PackError::Type`] naming its length and the limit. Under a
+/// parity percentage (`MapScheme::with_parity_percent`) `n` is the percentage of the clear length,
+/// rounded up, at most 32.
 pub fn pack(scheme: &MapScheme, values: &Values) -> Result<Vec<u8>, PackError> {
     let mut bytes = pack::pack(scheme, values)?;
-    ecc::append(&mut bytes, scheme.parity)?;
+    ecc::append_for(&mut bytes, scheme.parity, scheme.parity_percent)?;
     Ok(bytes)
 }
 
@@ -114,13 +116,15 @@ pub fn unpack(scheme: &MapScheme, bytes: &[u8]) -> Result<Values, UnpackError> {
 /// [`UnpackError::Uncorrectable`]; a packet above 254 bytes is [`UnpackError::TooLong`]; one
 /// shorter than `n` is a [`UnpackError::Short`] naming the field `"parity"`. A wrong byte counts
 /// once however many of its bits differ. A scheme without parity bytes takes only limit 0 and
-/// reads as `unpack` does.
+/// reads as `unpack` does. Under a parity percentage the count comes from the received length (a
+/// length no clear length gives is [`UnpackError::Uncorrectable`]), `limit` is 0 to 16 and one
+/// above `n / 2` of this message is lowered to it.
 pub fn unpack_repair(
     scheme: &MapScheme,
     bytes: &[u8],
     limit: usize,
 ) -> Result<(Values, usize), UnpackError> {
-    let (clear, repaired) = ecc::unprotect(bytes, scheme.parity, limit)?;
+    let (clear, repaired) = ecc::unprotect_for(bytes, scheme.parity, scheme.parity_percent, limit)?;
     Ok((unpack::unpack(scheme, &clear)?, repaired))
 }
 

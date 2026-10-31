@@ -85,6 +85,7 @@ func (s *Scheme) WithParity(n int) (*Scheme, error) {
 	}
 	c := *s
 	c.parity = n
+	c.percent = 0
 	return &c, nil
 }
 

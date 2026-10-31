@@ -37,8 +37,13 @@ pub fn pack_with(
     let mut writer = Writer::new(out);
     pack_clear(scheme, row, &mut writer, scratch)?;
     #[cfg(feature = "ecc")]
-    if scheme.parity != 0 {
-        super::ecc::seal(&mut writer, usize::from(scheme.parity))?;
+    if scheme.parity != 0 || scheme.parity_percent != 0 {
+        let n = if scheme.parity_percent != 0 {
+            super::ecc::percent_count(&mut writer, usize::from(scheme.parity_percent))?
+        } else {
+            usize::from(scheme.parity)
+        };
+        super::ecc::seal(&mut writer, n)?;
     }
     Ok(writer.len())
 }
@@ -90,8 +95,12 @@ pub fn pack_vec(
 pub fn unpack(scheme: &Scheme<'_>, bytes: &[u8], row: &mut dyn Row) -> Result<usize, Fault> {
     validate(scheme)?;
     #[cfg(feature = "ecc")]
-    if scheme.parity != 0 {
-        let n = usize::from(scheme.parity);
+    if scheme.parity != 0 || scheme.parity_percent != 0 {
+        let n = super::ecc::received_count(
+            bytes.len(),
+            usize::from(scheme.parity),
+            usize::from(scheme.parity_percent),
+        )?;
         super::ecc::detect(bytes, n)?;
         let clear = bytes.get(..bytes.len().saturating_sub(n)).unwrap_or(&[]);
         return read(scheme, clear, row).map(|used| used.saturating_add(n));
@@ -121,8 +130,12 @@ pub fn unpack_repair(
     limit: usize,
 ) -> Result<Unpacked, Fault> {
     validate(scheme)?;
-    let n = usize::from(scheme.parity);
-    let repaired = super::ecc::fix(data, n, limit)?;
+    let (n, repaired) = if scheme.parity_percent != 0 {
+        super::ecc::fix_percent(data, usize::from(scheme.parity_percent), limit)?
+    } else {
+        let n = usize::from(scheme.parity);
+        (n, super::ecc::fix(data, n, limit)?)
+    };
     let clear = data.get(..data.len().saturating_sub(n)).unwrap_or(&[]);
     let used = read(scheme, clear, row)?;
     Ok(Unpacked {

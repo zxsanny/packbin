@@ -25,7 +25,7 @@ public func unpackRepair(_ buffer: [UInt8], limit: Int, _ schemes: Scheme...) th
 /// `unpackRepair` with the schemes as an array.
 public func unpackRepair(_ buffer: [UInt8], limit: Int, _ schemes: [Scheme]) throws -> (row: Any, repaired: Int) {
     try checkSchemes(schemes)
-    let fixed = try Ecc.repair(buffer, parity: try Ecc.sharedParity(schemes, limit: limit), limit: limit)
+    let fixed = try Ecc.repair(buffer, setting: try Ecc.sharedSetting(schemes, limit: limit), limit: limit)
     return (try readRow(fixed.clear, schemes), fixed.repaired)
 }
 
@@ -56,7 +56,7 @@ public func unpackMapRepair(_ buffer: [UInt8], limit: Int, _ schemes: Scheme...)
 public func unpackMapRepair(_ buffer: [UInt8], limit: Int, _ schemes: [Scheme]) throws
     -> (row: [String: Any], repaired: Int) {
     try checkSchemes(schemes)
-    let fixed = try Ecc.repair(buffer, parity: try Ecc.sharedParity(schemes, limit: limit), limit: limit)
+    let fixed = try Ecc.repair(buffer, setting: try Ecc.sharedSetting(schemes, limit: limit), limit: limit)
     return (try readMap(fixed.clear, schemes), fixed.repaired)
 }
 

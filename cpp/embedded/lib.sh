@@ -31,8 +31,8 @@ m33f_stack_budget=8192
 m33f_ram_end=0x38020000
 # Pins on the M33F figures (loop 68): a later edit that spends bytes fails the row by its own bytes. Raise them only with
 # a line in _docs/AGENT_GOTCHAS.md saying what the bytes bought.
-m33f_flash_pin=25760
-m33f_stack_pin=724
+m33f_flash_pin=25948
+m33f_stack_pin=740
 # Pins on the frame image of the same row (AZ-3292, loop 75): the frame session and the MAC-only call alone (no pack or
 # unpack in the image). Flash is the image (text plus data, 8,416 B on HEAD); stack is the deepest call of load,
 # set_previous, seal, open and the MAC-only call at 255-byte bodies, 16-byte tags and 255 bytes of associated data, net of

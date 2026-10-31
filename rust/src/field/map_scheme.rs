@@ -18,6 +18,7 @@ pub struct MapScheme {
     pub(crate) max_slots: usize,
     pub(crate) max_bytes: usize,
     pub(crate) parity: usize,
+    pub(crate) parity_percent: usize,
 }
 
 /// Names and fields counted once, as a capacity hint for the unpacked values.
@@ -120,6 +121,7 @@ impl MapScheme {
             max_slots: DEFAULT_MAX_SLOTS,
             max_bytes: DEFAULT_MAX_BYTES,
             parity: 0,
+            parity_percent: 0,
         }
     }
 
@@ -166,7 +168,29 @@ impl MapScheme {
             );
         }
         self.parity = n;
+        self.parity_percent = 0;
         self
+    }
+
+    /// Returns the scheme with a parity percentage `p`, 0 to 100, instead of a count (clone first
+    /// to keep the original): every message carries the percentage of its clear length as parity
+    /// bytes, rounded up, at most 32, and `unpack` finds the count from the received length.
+    /// Replaces a count set by `with_parity` (the last setter wins); 0 is a scheme without
+    /// parity. Panics, naming `p` and the limit, when `p` is above 100.
+    pub fn with_parity_percent(mut self, p: usize) -> Self {
+        if p > crate::ecc::MAX_PERCENT {
+            panic!(
+                "parity percentage {p} is above the limit of {}",
+                crate::ecc::MAX_PERCENT
+            );
+        }
+        self.parity = 0;
+        self.parity_percent = p;
+        self
+    }
+
+    pub fn parity_percent(&self) -> usize {
+        self.parity_percent
     }
 
     pub fn parity(&self) -> usize {

@@ -22,6 +22,9 @@ pub const MAX_PARITY: usize = 32;
 /// The most bytes a protected message may have: the code word is 255, one byte is not sent.
 pub const MAX_SENT: usize = 254;
 
+/// The most a correction limit under a parity percentage may be.
+pub const MAX_PERCENT_LIMIT: usize = 16;
+
 const POLY: u16 = 0x11D;
 /// A generator or locator has at most `MAX_PARITY + 1` coefficients.
 const WIDTH: usize = MAX_PARITY + 1;
@@ -112,6 +115,35 @@ fn xor_at(a: &mut [u8], i: usize, v: u8) {
     if let Some(slot) = a.get_mut(i) {
         *slot ^= v;
     }
+}
+
+/// The parity bytes of a clear message of `len` bytes under percentage `p`: the percentage of the
+/// length, rounded up, at most 32.
+pub fn parity_count(p: usize, len: usize) -> usize {
+    let count = p.saturating_mul(len).saturating_add(99) / 100;
+    if count > MAX_PARITY {
+        MAX_PARITY
+    } else {
+        count
+    }
+}
+
+/// The largest clear length under percentage `p` (1 to 100) whose sent length stays within 254.
+pub fn largest_clear(p: usize) -> usize {
+    let mut len = 0usize;
+    while len
+        .saturating_add(1)
+        .saturating_add(parity_count(p, len.saturating_add(1)))
+        <= MAX_SENT
+    {
+        len = len.saturating_add(1);
+    }
+    len
+}
+
+/// The one clear length whose protected message under `p` (1 to 100) is `sent` bytes long.
+pub fn clear_length(p: usize, sent: usize) -> Option<usize> {
+    (0..=sent.min(MAX_SENT)).find(|&len| len.saturating_add(parity_count(p, len)) == sent)
 }
 
 /// The monic generator, highest degree first; `n + 1` coefficients.

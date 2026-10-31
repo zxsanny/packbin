@@ -61,16 +61,79 @@ enum Ecc {
         }
     }
 
-    /// The parity every scheme of one unpack declares: schemes with different counts could not share one
-    /// repair. `limit` is checked against it, before any byte is read.
-    static func sharedParity(_ schemes: [Scheme], limit: Int) throws -> Int {
-        let n = schemes.first?.parity ?? 0
-        if let other = schemes.first(where: { $0.parity != n }) {
-            throw PackbinError.scheme(nil, "parity",
-                "schemes declare \(n) and \(other.parity) parity bytes; they must declare the same count")
+    /// The most percentage a scheme declares, and the largest correction limit under one.
+    static let maxPercent = 100
+    static let maxPercentLimit = 16
+
+    static func checkPercent(_ p: Int) throws {
+        guard (0...maxPercent).contains(p) else {
+            throw PackbinError.scheme(nil, "parity", "parity percentage: expected 0..\(maxPercent), got \(p)")
         }
-        try checkLimit(limit, n)
-        return n
+    }
+
+    /// The parity count of a clear message of `length` bytes under percentage `p`: the percentage of the
+    /// length, rounded up, at most 32.
+    static func percentCount(_ p: Int, _ length: Int) -> Int {
+        min(maxParity, (p * length + 99) / 100)
+    }
+
+    /// The largest clear length under percentage `p` 1...100: the sent length stays within 254.
+    static func largestClear(_ p: Int) -> Int {
+        var length = 0
+        while length + 1 + percentCount(p, length + 1) <= maxBlock { length += 1 }
+        return length
+    }
+
+    /// The one clear length whose protected message is `sent` bytes long, or nil.
+    static func clearLength(_ p: Int, _ sent: Int) -> Int? {
+        (0...min(sent, maxBlock)).first { $0 + percentCount(p, $0) == sent }
+    }
+
+    /// The setting every scheme of one unpack declares: schemes with different settings could not share one
+    /// repair. `limit` is checked against it, before any byte is read.
+    static func sharedSetting(_ schemes: [Scheme], limit: Int) throws -> (parity: Int, percent: Int) {
+        let first = schemes.first
+        let (n, p) = (first?.parity ?? 0, first?.parityPercent ?? 0)
+        if let other = schemes.first(where: { $0.parity != n || $0.parityPercent != p }) {
+            let (a, b) = (p > 0 ? "\(p) percent" : "\(n) parity bytes",
+                          other.parityPercent > 0 ? "\(other.parityPercent) percent" : "\(other.parity) parity bytes")
+            throw PackbinError.scheme(nil, "parity", "schemes declare \(a) and \(b); they must declare the same setting")
+        }
+        if p > 0 {
+            guard (0...maxPercentLimit).contains(limit) else {
+                throw PackbinError.scheme(nil, "limit",
+                    "correction limit: expected 0..\(maxPercentLimit) under a parity percentage, got \(limit)")
+            }
+        } else {
+            try checkLimit(limit, n)
+        }
+        return (n, p)
+    }
+
+    /// The packet of `scheme` with its parity: a fixed count, or the count its percentage gives for this length.
+    static func protect(_ clear: [UInt8], _ scheme: Scheme) throws -> [UInt8] {
+        let p = scheme.parityPercent
+        guard p > 0 else { return try protect(clear, parity: scheme.parity) }
+        let largest = largestClear(p)
+        guard clear.count <= largest else {
+            throw PackbinError.pack(nil, "", "the packet would be \(clear.count) bytes, above the limit of \(largest) bytes "
+                + "for a parity of \(p) percent")
+        }
+        return try protect(clear, parity: percentCount(p, clear.count))
+    }
+
+    /// `repair` under a setting from `sharedSetting`: a percentage finds the count from the received length.
+    static func repair(_ received: [UInt8], setting: (parity: Int, percent: Int), limit t: Int) throws
+        -> (clear: [UInt8], repaired: Int) {
+        guard setting.percent > 0 else { return try repair(received, parity: setting.parity, limit: t) }
+        let size = received.count
+        if size > maxBlock {
+            throw PackbinError(.tooLong, field: nil, left: size,
+                               reason: "the message is \(size) bytes, above the limit of \(maxBlock) bytes")
+        }
+        guard let length = clearLength(setting.percent, size) else { throw PackbinError.uncorrectable }
+        let n = size - length
+        return try repair(received, parity: n, limit: min(t, n / 2))
     }
 
     /// A clear message above 254 - n bytes is refused, naming its length and the limit.

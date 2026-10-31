@@ -58,32 +58,33 @@ func UnpackMapRepair(buf []byte, limit int, schemes ...*Scheme) (map[string]any,
 	return r.values, repaired, nil
 }
 
-// sharedParity is the count of parity bytes every scheme of an unpack call declares. Schemes with
-// different counts could not share one repair: the call is refused, naming both counts.
-func sharedParity(schemes []*Scheme) (int, error) {
-	n := schemes[0].parity
+// sharedParity is the parity setting every scheme of an unpack call declares: a count, or a percentage
+// (0 and 0 are the same setting). Schemes with different settings could not share one repair: the call is
+// refused, naming both.
+func sharedParity(schemes []*Scheme) (n, p int, err error) {
+	n, p = schemes[0].parity, schemes[0].percent
 	for _, s := range schemes {
-		if s.parity != n {
-			return 0, schemeErr(NoField, "", "unpack schemes declare %d and %d parity bytes; they must declare the same count",
-				n, s.parity)
+		if s.parity != n || s.percent != p {
+			return 0, 0, schemeErr(NoField, "", "unpack schemes declare %d parity bytes at %d percent and %d at %d percent; they must declare the same setting",
+				n, p, s.parity, s.percent)
 		}
 	}
-	return n, nil
+	return n, p, nil
 }
 
 // checkSchemes refuses an unpack call whose scheme list is unusable and returns the parity count the
 // schemes share.
-func checkSchemes(schemes []*Scheme) (int, error) {
+func checkSchemes(schemes []*Scheme) (int, int, error) {
 	if len(schemes) == 0 {
-		return 0, schemeErr(NoField, "", "unpack needs at least one scheme")
+		return 0, 0, schemeErr(NoField, "", "unpack needs at least one scheme")
 	}
 	var seen [256]bool
 	for _, s := range schemes {
 		if s.unusable() {
-			return 0, schemeErr(NoField, "", "a scheme is invalid: %s", s.notMade())
+			return 0, 0, schemeErr(NoField, "", "a scheme is invalid: %s", s.notMade())
 		}
 		if seen[s.typeNumber] {
-			return 0, schemeErr(NoField, "", "duplicate type number %d", s.typeNumber)
+			return 0, 0, schemeErr(NoField, "", "duplicate type number %d", s.typeNumber)
 		}
 		seen[s.typeNumber] = true
 	}
@@ -92,14 +93,17 @@ func checkSchemes(schemes []*Scheme) (int, error) {
 
 // dispatch repairs buf, then reads it with the scheme its first byte names.
 func dispatch(buf []byte, limit int, schemes []*Scheme) (*Scheme, *reader, int, error) {
-	n, err := checkSchemes(schemes)
+	n, p, err := checkSchemes(schemes)
 	if err != nil {
 		return nil, nil, 0, err
 	}
-	if err := checkLimit(limit, n); err != nil {
-		return nil, nil, 0, err
+	var fixed []byte
+	var repaired int
+	if p > 0 {
+		fixed, repaired, err = repairPercent(buf, p, limit)
+	} else if err = checkLimit(limit, n); err == nil {
+		fixed, repaired, err = repair(buf, n, limit)
 	}
-	fixed, repaired, err := repair(buf, n, limit)
 	if err != nil {
 		return nil, nil, 0, err
 	}

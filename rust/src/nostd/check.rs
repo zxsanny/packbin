@@ -36,11 +36,16 @@ pub fn validate(scheme: &Scheme<'_>) -> Result<(), Fault> {
     parity(scheme)
 }
 
-/// A parity count above 32, or above 0 without the `ecc` feature, is refused.
+/// A parity count above 32, or above 0 without the `ecc` feature, is refused; so is a percentage
+/// above 100 or together with a count.
 fn parity(scheme: &Scheme<'_>) -> Result<(), Fault> {
     let max = if cfg!(feature = "ecc") { MAX_PARITY } else { 0 };
     if usize::from(scheme.parity) > max {
         return Err(Fault::new(Error::SchemeInvalid, 0, -1, max));
+    }
+    #[cfg(feature = "ecc")]
+    if scheme.parity_percent > 100 || (scheme.parity_percent != 0 && scheme.parity != 0) {
+        return Err(Fault::new(Error::SchemeInvalid, 0, -1, 100));
     }
     Ok(())
 }

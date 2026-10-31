@@ -67,11 +67,26 @@ void parity_above_zero_is_refused() {
   expect(r.error == Error::SchemeInvalid && out[0] == 0xaa, "no message is built from it");
 }
 
+void parity_percent_above_zero_is_refused() {
+  auto zero = packbin::parity_percent(plain, 0);
+  std::uint8_t out[32];
+  auto z = packbin::pack(zero, position_row(), out, sizeof(out));
+  expect(zero.status.ok() && z.ok() && z.offset == 13, "percentage 0 is the plain scheme");
+  auto quarter = packbin::parity_percent(plain, 25);
+  expect(quarter.status.error == Error::SchemeInvalid && quarter.parity == 0 &&
+             packbin::validate(quarter).error == Error::SchemeInvalid,
+         "a percentage above 0 is SchemeInvalid in a build without the codec");
+  std::memset(out, 0xaa, sizeof(out));
+  auto r = packbin::pack(quarter, position_row(), out, sizeof(out));
+  expect(r.error == Error::SchemeInvalid && out[0] == 0xaa, "no message is built from it");
+}
+
 }  // namespace
 
 int main() {
   parity_zero_is_the_plain_scheme();
   parity_above_zero_is_refused();
+  parity_percent_above_zero_is_refused();
   if (check::failures() != 0) {
     std::fprintf(stderr, "%d failure(s)\n", check::failures());
     return 1;

@@ -243,6 +243,13 @@ impl<T: 'static> Scheme<T> {
         self
     }
 
+    /// Returns the scheme with a parity percentage 0 to 100 instead of a count (see
+    /// [`MapScheme::with_parity_percent`]). Panics, naming `p` and the limit 100, when above it.
+    pub fn with_parity_percent(mut self, p: usize) -> Self {
+        self.layout = self.layout.with_parity_percent(p);
+        self
+    }
+
     pub fn max_rounds(&self) -> usize {
         self.layout.max_rounds()
     }
@@ -271,6 +278,11 @@ impl<T> Scheme<T> {
     pub fn parity(&self) -> usize {
         self.layout.parity()
     }
+
+    /// The parity percentage (0 unless `with_parity_percent` set it).
+    pub fn parity_percent(&self) -> usize {
+        self.layout.parity_percent()
+    }
 }
 
 pub struct On<'a, T, F> {
@@ -291,7 +303,7 @@ pub struct On<'a, T, F> {
 /// ```
 ///
 /// `parity()` has no default, so a handler of a scheme with parity bytes cannot leave it out and
-/// lose the repair:
+/// lose the repair (`parity_percent()` defaults to 0, a handler without a percentage):
 ///
 /// ```compile_fail
 /// use packbin::{DispatchHandler, UnpackError};
@@ -305,6 +317,11 @@ pub trait DispatchHandler {
     fn type_number(&self) -> u8;
     /// The parity bytes of the handler's scheme; a dispatch takes handlers of one count only.
     fn parity(&self) -> usize;
+    /// The parity percentage of the handler's scheme (0 when it declares none); a dispatch takes
+    /// handlers of one setting only, a count or a percentage.
+    fn parity_percent(&self) -> usize {
+        0
+    }
     fn handle(&mut self, body: &[u8]) -> Result<(), UnpackError>;
 }
 
@@ -315,6 +332,10 @@ impl<'a, T: Default + 'static, F: FnMut(T)> DispatchHandler for On<'a, T, F> {
 
     fn parity(&self) -> usize {
         self.scheme.parity()
+    }
+
+    fn parity_percent(&self) -> usize {
+        self.scheme.parity_percent()
     }
 
     fn handle(&mut self, body: &[u8]) -> Result<(), UnpackError> {
@@ -354,26 +375,34 @@ impl BinaryPacker {
         handlers: &mut [&mut dyn DispatchHandler],
         limit: usize,
     ) -> Result<usize, UnpackError> {
-        let n = checked_parity(handlers, limit)?;
-        let (clear, repaired) = ecc::unprotect(bytes, n, limit)?;
+        let (n, p) = checked_parity(handlers, limit)?;
+        let (clear, repaired) = ecc::unprotect_for(bytes, n, p, limit)?;
         dispatch(&clear, handlers)?;
         Ok(repaired)
     }
 }
 
 /// The parity count of a usable handler list, checked in the order of every package: an empty
-/// list, a duplicate type number, a mix of parity counts, then the limit. None reads a byte.
+/// list, a duplicate type number, a mix of parity settings, then the limit. None reads a byte.
 pub(crate) fn checked_parity(
     handlers: &[&mut dyn DispatchHandler],
     limit: usize,
-) -> Result<usize, UnpackError> {
+) -> Result<(usize, usize), UnpackError> {
     if handlers.is_empty() {
         return Err(UnpackError::NoHandlers);
     }
     check_unique(handlers)?;
-    let n = ecc::shared_parity(handlers.iter().map(|handler| handler.parity()))?;
-    ecc::check_limit(n, limit)?;
-    Ok(n)
+    let (n, p) = ecc::shared_setting(
+        handlers
+            .iter()
+            .map(|handler| (handler.parity(), handler.parity_percent())),
+    )?;
+    if p > 0 {
+        ecc::check_percent_limit(limit)?;
+    } else {
+        ecc::check_limit(n, limit)?;
+    }
+    Ok((n, p))
 }
 
 fn check_unique(handlers: &[&mut dyn DispatchHandler]) -> Result<(), UnpackError> {

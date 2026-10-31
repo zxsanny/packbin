@@ -10,13 +10,13 @@
 /// with `parity` bytes gets them appended; a clear packet above 254 - `parity` bytes is refused as a
 /// `.packError` naming its length and the limit.
 public func pack(_ scheme: Scheme, _ row: [String: Any]) throws -> [UInt8] {
-    try Ecc.protect(try packClear(scheme, row), parity: scheme.parity)
+    try Ecc.protect(try packClear(scheme, row), scheme)
 }
 
 /// Packs a typed row, a value of the type the scheme's fields are bound to with `bind(get:set:)`. A
 /// `[String: Any]` (or any `[String: V]`) is packed as a map row.
 public func pack<Row>(_ scheme: Scheme, _ row: Row) throws -> [UInt8] {
-    try Ecc.protect(try packClear(scheme, row), parity: scheme.parity)
+    try Ecc.protect(try packClear(scheme, row), scheme)
 }
 
 /// The packet of a map row without the parity bytes.

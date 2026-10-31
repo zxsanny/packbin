@@ -67,6 +67,8 @@ mod duplicate_names_kept_tests;
 #[cfg(all(test, feature = "std"))]
 mod duplicate_names_tests;
 #[cfg(all(test, feature = "std"))]
+mod ecc_percent_tests;
+#[cfg(all(test, feature = "std"))]
 mod ecc_repair_tests;
 #[cfg(all(test, feature = "std"))]
 mod ecc_reverify_tests;

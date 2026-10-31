@@ -15,15 +15,24 @@ extension Scheme {
     /// its default, not this scheme's value. A limit below 1 throws a `PackbinError` of kind
     /// `.schemeError` naming the limit. `parity` is the count of parity bytes of message error
     /// correction (0...32); left out it keeps this scheme's count, so setting a limit never drops
-    /// protection; another count throws a `.schemeError` naming `parity`, the count and 32.
+    /// protection; another count throws a `.schemeError` naming `parity`, the count and 32. `parityPercent`
+    /// (0...100) derives the count from the message length and replaces a count, as a count replaces a
+    /// percentage (the last setter wins); both above 0 in one call, or a percentage out of range, throw a
+    /// `.schemeError` naming `parity` and 100.
     public func withLimits(maxRounds: Int? = nil, maxSlots: Int? = nil, maxBytes: Int? = nil,
-                           parity: Int? = nil) throws -> Scheme {
-        let n = parity ?? self.parity
-        try Ecc.checkParity(n)
+                           parity: Int? = nil, parityPercent: Int? = nil) throws -> Scheme {
+        if let parity { try Ecc.checkParity(parity) }
+        if let parityPercent { try Ecc.checkPercent(parityPercent) }
+        if (parity ?? 0) > 0, (parityPercent ?? 0) > 0 {
+            throw PackbinError.scheme(nil, "parity", "parity: a scheme declares a count or a percentage, got "
+                + "\(parity ?? 0) bytes and \(parityPercent ?? 0) percent (percentage limit \(Ecc.maxPercent))")
+        }
+        var (n, p) = (self.parity, self.parityPercent)
+        if let parityPercent { (n, p) = (0, parityPercent) } else if let parity { (n, p) = (parity, 0) }
         return Scheme(self, maxRounds: try checkedLimit("maxRounds", maxRounds, Scheme.defaultMaxRounds),
                       maxSlots: try checkedLimit("maxSlots", maxSlots, Scheme.defaultMaxSlots),
                       maxBytes: try checkedLimit("maxBytes", maxBytes, Scheme.defaultMaxBytes),
-                      parity: n)
+                      parity: n, parityPercent: p)
     }
 }
 

@@ -15,6 +15,8 @@ type Scheme struct {
 	limits Limits
 	// parity is the count of parity bytes pack appends and unpack checks (ecc.go); 0 is no protection.
 	parity int
+	// percent is the parity percentage (ecc_percent.go); 0 means none, and a scheme with percent > 0 has parity 0.
+	percent int
 }
 
 // NewScheme builds a scheme from its type number (0..255) and its fields, numbered by order from 0.

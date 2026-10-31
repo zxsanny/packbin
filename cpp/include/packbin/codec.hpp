@@ -15,6 +15,11 @@ struct Scheme {
   std::uint8_t type_number = 0;
   // Parity bytes appended to every packet (0 to 32, set with `parity(scheme, n)`), see ecc.hpp.
   std::uint8_t parity = 0;
+#ifndef PACKBIN_NO_ECC
+  // Parity as a percentage of the clear length (0 to 100, set with `parity_percent(scheme, p)`);
+  // above 0 it replaces `parity`, which is then 0.
+  std::uint8_t parity_percent = 0;
+#endif
   detail::FixedArray<Field, N> fields{};
   // Ok, or SchemeInvalid with the field id that broke the order or reference rules.
   Result status{};
@@ -28,6 +33,7 @@ namespace detail {
 template <int Id>
 void scheme_field_id_breaks_order() {}
 inline void scheme_type_number_not_0_to_255() {}
+inline void scheme_parity_percent_not_0_to_100_or_ecc_removed() {}
 inline void scheme_parity_not_0_to_32_or_ecc_removed() {}
 
 template <int Id>
@@ -61,6 +67,11 @@ constexpr void invalid_parity() {
     scheme_parity_not_0_to_32_or_ecc_removed();
 }
 
+constexpr void invalid_parity_percent() {
+  if (constant_evaluated())
+    scheme_parity_percent_not_0_to_100_or_ecc_removed();
+}
+
 // Message error correction around the plain walk (ecc.hpp holds the codec). A build with
 // PACKBIN_NO_ECC has no protected scheme: every count is 0 and these collapse to nothing.
 #ifndef PACKBIN_NO_ECC
@@ -71,11 +82,21 @@ inline constexpr bool kEcc = false;
 inline constexpr int kMaxParity = 32;
 inline constexpr std::size_t kMaxSent = 254;
 
-// The parity count a pack or unpack of `s` applies; the field is 0 or at most 32 for a scheme
-// built with `parity`, and a hand-edited one is refused by the codec.
+// The parity setting of `s`: its count (0 to 32), or kPercentBase + p for a percentage p. A
+// setting is the unit a dispatch call compares; the count of one message comes from it by
+// `parity_room` (pack) and `received_parity` (unpack). A hand-edited field is refused there.
+inline constexpr int kPercentBase = 256;
+inline constexpr int kMaxPercent = 100;
+inline constexpr int kMaxPercentLimit = 16;
+
 template <typename Row, std::size_t N>
 constexpr int parity_of(Scheme<Row, N> const& s) {
-  return kEcc ? static_cast<int>(s.parity) : 0;
+#ifndef PACKBIN_NO_ECC
+  return s.parity_percent != 0 ? kPercentBase + s.parity_percent : static_cast<int>(s.parity);
+#else
+  (void)s;
+  return 0;
+#endif
 }
 
 #ifndef PACKBIN_NO_ECC
@@ -114,14 +135,88 @@ inline Result repair_message(std::uint8_t* data, std::size_t len, int n, int lim
   return ecc_error(o.kind, len, n);
 }
 
-// Room for `n` parity bytes after `len` field bytes already in `out`. Fields above 254 - n are
-// `TooLong` and the written bytes are zeroed.
-inline Result parity_room(std::uint8_t* out, std::size_t cap, std::size_t len, int n) {
-  if (n == 0)
+// The parity bytes of `len` clear bytes under a percentage p: the percentage of the length,
+// rounded up, at most 32. `len` is at most 254, so 100 * len + 99 fits a 16-bit unsigned.
+inline int percent_count(int p, std::size_t len) {
+  unsigned n = (static_cast<unsigned>(p) * static_cast<unsigned>(len) + 99u) / 100u;
+  return n > static_cast<unsigned>(kMaxParity) ? kMaxParity : static_cast<int>(n);
+}
+
+// The largest clear length whose protected message stays within 254 bytes under p (1 to 100).
+inline std::size_t percent_limit(int p) {
+  std::size_t len = kMaxSent;
+  while (len + static_cast<std::size_t>(percent_count(p, len)) > kMaxSent)
+    --len;
+  return len;
+}
+
+// The parity count of a received message of `len` bytes under `setting`: the count itself, or
+// for a percentage the one clear length with length + count = len (strictly increasing, so at
+// most 255 steps). A length no clear length gives is `Uncorrectable`.
+inline Result received_parity(int setting, std::size_t len, int& n) {
+  if (setting < kPercentBase) {
+    n = setting;
     return Result{};
-  if (n > kMaxParity)
-    return fail(Error::SchemeInvalid, 0, -1, kMaxParity);
-  std::size_t limit = kMaxSent - static_cast<std::size_t>(n);
+  }
+  if (setting > kPercentBase + kMaxPercent)
+    return fail(Error::SchemeInvalid, 0, -1, kMaxPercent);
+  if (len > kMaxSent)
+    return fail(Error::TooLong, len, -1, kMaxSent);
+  int p = setting - kPercentBase;
+  for (std::size_t clear = 0;; ++clear) {
+    int count = percent_count(p, clear);
+    std::size_t sent = clear + static_cast<std::size_t>(count);
+    if (sent == len) {
+      n = count;
+      return Result{};
+    }
+    if (sent > len)
+      return fail(Error::Uncorrectable, 0, -1);
+  }
+}
+
+// Repairs `data` under `setting`; `n` is the parity count of this message. A percentage takes a
+// limit from 0 to 16 (else `BadValue` before any byte is read) and lowers it to n / 2.
+inline Result repair_setting(std::uint8_t* data, std::size_t len, int setting, int limit,
+                             std::uint8_t& repaired, int& n) {
+  if (setting >= kPercentBase) {
+    if (limit < 0 || limit > kMaxPercentLimit)
+      return fail(Error::BadValue, 0, -1, kMaxPercentLimit);
+    Result found = received_parity(setting, len, n);
+    if (!found.ok())
+      return found;
+    if (limit > n / 2)
+      limit = n / 2;
+  } else {
+    n = setting;
+  }
+  return repair_message(data, len, n, limit, repaired);
+}
+
+// Room for the parity of `len` field bytes already in `out` under `setting`; `n` is the count
+// of this message. Fields above 254 - n (above the largest clear length of a percentage) are
+// `TooLong` and the written bytes are zeroed.
+inline Result parity_room(std::uint8_t* out, std::size_t cap, std::size_t len, int setting,
+                          int& n) {
+  n = 0;
+  if (setting == 0)
+    return Result{};
+  std::size_t limit = 0;
+  if (setting >= kPercentBase) {
+    if (setting > kPercentBase + kMaxPercent)
+      return fail(Error::SchemeInvalid, 0, -1, kMaxPercent);
+    int p = setting - kPercentBase;
+    n = len > kMaxSent ? kMaxParity : percent_count(p, len);
+    if (len + static_cast<std::size_t>(n) > kMaxSent)
+      limit = percent_limit(p);
+    else
+      limit = len;
+  } else {
+    n = setting;
+    if (n > kMaxParity)
+      return fail(Error::SchemeInvalid, 0, -1, kMaxParity);
+    limit = kMaxSent - static_cast<std::size_t>(n);
+  }
   if (len > limit) {
     std::memset(out, 0, len < cap ? len : cap);
     return fail(Error::TooLong, len, -1, limit);
@@ -141,6 +236,23 @@ inline Result seal(std::uint8_t* out, std::size_t len, int n) {
   return Result{Error::Ok, len + static_cast<std::size_t>(n)};
 }
 
+// The parity of a packed message `r` (the field bytes in `out`) under `setting`.
+inline Result protect_packet(Result r, int setting, std::uint8_t* out, std::size_t cap) {
+  if (!r.ok() || setting == 0)
+    return r;
+  int n = 0;
+  Result room = parity_room(out, cap, r.offset, setting, n);
+  if (!room.ok())
+    return room;
+  return seal(out, r.offset, n);
+}
+
+// Detect only: the parity count of a received message under `setting`, then its syndromes.
+inline Result check_received(int setting, std::uint8_t const* data, std::size_t len, int& n) {
+  Result g = received_parity(setting, len, n);
+  return g.ok() ? check_message(data, len, n) : g;
+}
+
 #else
 
 inline Result check_message(std::uint8_t const*, std::size_t, int) { return Result{}; }
@@ -150,9 +262,30 @@ inline Result repair_message(std::uint8_t*, std::size_t, int, int limit, std::ui
   return limit == 0 ? Result{} : fail(Error::BadValue, 0, -1, 0);
 }
 
-inline Result parity_room(std::uint8_t*, std::size_t, std::size_t, int) { return Result{}; }
+inline Result received_parity(int, std::size_t, int& n) {
+  n = 0;
+  return Result{};
+}
+
+inline Result repair_setting(std::uint8_t* data, std::size_t len, int, int limit,
+                             std::uint8_t& repaired, int& n) {
+  n = 0;
+  return repair_message(data, len, 0, limit, repaired);
+}
+
+inline Result parity_room(std::uint8_t*, std::size_t, std::size_t, int, int& n) {
+  n = 0;
+  return Result{};
+}
 
 inline Result seal(std::uint8_t*, std::size_t len, int) { return Result{Error::Ok, len}; }
+
+inline Result protect_packet(Result r, int, std::uint8_t*, std::size_t) { return r; }
+
+inline Result check_received(int, std::uint8_t const*, std::size_t, int& n) {
+  n = 0;
+  return Result{};
+}
 
 #endif
 
@@ -218,6 +351,33 @@ constexpr Scheme<Row, N> parity(Scheme<Row, N> s, int n) {
     return s;
   }
   s.parity = static_cast<std::uint8_t>(n);
+#ifndef PACKBIN_NO_ECC
+  s.parity_percent = 0;
+#endif
+  return s;
+}
+
+// The scheme whose parity count is a percentage `p` (0 to 100) of the clear length, rounded up
+// and at most 32 (contract message-ecc.md 1.1.0): `parity_percent(scheme<Row>(...), 25)`. It
+// replaces a count set before it, and `parity` replaces it. 0 is a scheme without parity.
+// `p` outside 0..100 is SchemeInvalid (a compile error for a `constexpr` scheme); so is any `p`
+// above 0 in a build with PACKBIN_NO_ECC.
+template <typename Row, std::size_t N>
+constexpr Scheme<Row, N> parity_percent(Scheme<Row, N> s, int p) {
+  if (p < 0 || p > detail::kMaxPercent || (!detail::kEcc && p != 0)) {
+    if (s.status.ok())
+      s.status = fail(Error::SchemeInvalid, 0, -1, detail::kEcc ? detail::kMaxPercent : 0);
+    s.parity = 0;
+#ifndef PACKBIN_NO_ECC
+    s.parity_percent = 0;
+#endif
+    detail::invalid_parity_percent();
+    return s;
+  }
+  s.parity = 0;
+#ifndef PACKBIN_NO_ECC
+  s.parity_percent = static_cast<std::uint8_t>(p);
+#endif
   return s;
 }
 
@@ -261,12 +421,10 @@ Result pack(Scheme<Row, N> const& s, Row const& row, std::uint8_t* out, std::siz
             ScratchRef scratch = {}) {
   Result r = detail::pack_clear(s, row, out, cap, scratch);
   if constexpr (detail::kEcc) {
-    if (r.ok() && s.parity != 0) {
-      Result room = detail::parity_room(out, cap, r.offset, s.parity);
-      if (!room.ok())
-        return room;
-      return detail::seal(out, r.offset, s.parity);
-    }
+    // The test stays here, where a constexpr scheme without parity folds it away with the codec.
+    int setting = detail::parity_of(s);
+    if (setting != 0)
+      return detail::protect_packet(r, setting, out, cap);
   }
   return r;
 }
@@ -280,9 +438,10 @@ Result unpack(Scheme<Row, N> const& s, std::uint8_t const* data, std::size_t len
   if (!s.status.ok())
     return s.status;
   if constexpr (detail::kEcc) {
-    int n = s.parity;
-    if (n != 0) {
-      Result g = detail::check_message(data, len, n);
+    int setting = detail::parity_of(s);
+    if (setting != 0) {
+      int n = 0;
+      Result g = detail::check_received(setting, data, len, n);
       if (!g.ok())
         return g;
       std::size_t clear = len - static_cast<std::size_t>(n);
@@ -301,9 +460,9 @@ Result unpack_repair(Scheme<Row, N> const& s, std::uint8_t* data, std::size_t le
                      int limit) {
   if (!s.status.ok())
     return s.status;
-  int n = detail::parity_of(s);
+  int n = 0;
   std::uint8_t repaired = 0;
-  Result g = detail::repair_message(data, len, n, limit, repaired);
+  Result g = detail::repair_setting(data, len, detail::parity_of(s), limit, repaired, n);
   if (!g.ok())
     return g;
   std::size_t clear = len - static_cast<std::size_t>(n);
@@ -350,8 +509,8 @@ bool differs(H const& h, int n, int& other) {
   return true;
 }
 
-// The parity count every handler declares. A mix is `SchemeInvalid`: `offset` is the first
-// handler's count and `needed` the first count that differs.
+// The parity setting every handler declares (a count, or kPercentBase + a percentage). A mix is
+// `SchemeInvalid`: `offset` is the first handler's setting and `needed` the first that differs.
 template <typename H, typename... Hs>
 Result shared_parity(int& n, H const& first, Hs const&... rest) {
   n = parity_of(first.scheme);
@@ -398,12 +557,13 @@ Result unpack(std::uint8_t const* data, std::size_t len, H const& first, Hs cons
   if (!detail::unique_types(first, rest...))
     return fail(Error::SchemeInvalid, 0, -1);
   if constexpr (detail::kEcc) {
-    int n = 0;
-    Result shared = detail::shared_parity(n, first, rest...);
+    int setting = 0;
+    Result shared = detail::shared_parity(setting, first, rest...);
     if (!shared.ok())
       return shared;
-    if (n != 0) {
-      Result g = detail::check_message(data, len, n);
+    if (setting != 0) {
+      int n = 0;
+      Result g = detail::check_received(setting, data, len, n);
       if (!g.ok())
         return g;
       return detail::finish_message(
@@ -421,12 +581,13 @@ Result unpack_repair(std::uint8_t* data, std::size_t len, int limit, H const& fi
                      Hs const&... rest) {
   if (!detail::unique_types(first, rest...))
     return fail(Error::SchemeInvalid, 0, -1);
-  int n = 0;
-  Result shared = detail::shared_parity(n, first, rest...);
+  int setting = 0;
+  Result shared = detail::shared_parity(setting, first, rest...);
   if (!shared.ok())
     return shared;
+  int n = 0;
   std::uint8_t repaired = 0;
-  Result g = detail::repair_message(data, len, n, limit, repaired);
+  Result g = detail::repair_setting(data, len, setting, limit, repaired, n);
   if (!g.ok())
     return g;
   return detail::finish_message(

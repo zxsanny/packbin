@@ -353,6 +353,9 @@ pub struct Scheme<'a> {
     pub max_slots: usize,
     /// Parity bytes after every packet (0 to 32; needs the `ecc` feature when above 0).
     pub parity: u8,
+    /// Parity percentage, 0 to 100, instead of `parity` (the field exists with the `ecc` feature).
+    #[cfg(feature = "ecc")]
+    pub parity_percent: u8,
 }
 
 impl<'a> Scheme<'a> {
@@ -363,6 +366,8 @@ impl<'a> Scheme<'a> {
             max_rounds: DEFAULT_MAX_ROUNDS,
             max_slots: DEFAULT_MAX_SLOTS,
             parity: 0,
+            #[cfg(feature = "ecc")]
+            parity_percent: 0,
         }
     }
 
@@ -370,7 +375,25 @@ impl<'a> Scheme<'a> {
     /// appends them, `unpack` detects wrong bytes and `unpack_repair` fixes them. A count above
     /// 32, or above 0 without the `ecc` feature, is refused by [`validate`](super::validate).
     pub const fn with_parity(self, n: u8) -> Self {
-        Scheme { parity: n, ..self }
+        Scheme {
+            parity: n,
+            #[cfg(feature = "ecc")]
+            parity_percent: 0,
+            ..self
+        }
+    }
+
+    /// The scheme with a parity percentage `p` instead of a count: every packet carries the
+    /// percentage of its clear length as parity bytes, rounded up, at most 32, and unpack finds the
+    /// count from the received length. Replaces a count (the last setter wins). A percentage above
+    /// 100 is refused by [`validate`](super::validate). Needs the `ecc` feature.
+    #[cfg(feature = "ecc")]
+    pub const fn with_parity_percent(self, p: u8) -> Self {
+        Scheme {
+            parity: 0,
+            parity_percent: p,
+            ..self
+        }
     }
 
     pub const fn with_limits(self, max_rounds: usize, max_slots: usize) -> Self {
