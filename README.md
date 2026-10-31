@@ -459,6 +459,8 @@ A board that only carries packets does not need the text codec. Define `PACKBIN_
 
 The same package builds for 32-bit microcontrollers — Cortex-M0+/M3/M4/M33, ESP32, RP2040, nRF52, STM32 — with `-std=c++17 -fno-exceptions -fno-rtti`. It references no `malloc`, no `operator new` and no exception runtime, keeps no global state, and the scheme tables live in flash.
 
+CI also builds the core with `PACKBIN_NO_TEXT` and `PACKBIN_NO_ECC` together for a Cortex-M33F and runs the host tests of that build on it under QEMU (`mps2-an505`); there is no flash or stack bar for that image.
+
 The core also builds for 8-bit AVR (ATmega328P, Arduino Uno) with avr-gcc 7.3 and avr-libc, which ship no C++ library: CI compiles it with 0 warnings and links the Uno example (which is not run), and runs one other image on the `simavr` emulator that checks `chacha20_xor` on the part's 16-bit `int` and `size_t` (the RFC 8439 vector, nine lengths and the 32-bit block counter edge). The standard names come from `packbin/platform.hpp`. On AVR constant data, the scheme tables included, sits in RAM, so the example builds with `PACKBIN_NO_TEXT` and `PACKBIN_NO_ECC`, and `double` is 4 bytes, so `f64` does not compile. avr-gcc 7.3 has no `__builtin_is_constant_evaluated`: a constant scheme that breaks a rule is not stopped at compile time there (its `status` is `SchemeInvalid` and `pack`/`unpack` refuse it), and `static_assert(scheme.status.ok())` restores the stop.
 
 | Tool | Add packbin |

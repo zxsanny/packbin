@@ -182,6 +182,49 @@ target_m3() {
     || fail "all-kinds packet differs between the AC-2 firmware and the runner"
 }
 
+# The string-free, ECC-free build (PACKBIN_NO_TEXT and PACKBIN_NO_ECC together, the build of a board that only carries
+# packets; AZ-3483) on the M33F: the core objects with both flags and the two host tests of that build, unchanged but
+# for the renamed main, run as one image. Run-only: no flash or stack pin. The image links newlib stdio for the tests'
+# output, so the heap and exception checks read the core objects (an allocator or exception reference is an undefined
+# symbol there); the image checks cover OS random and the RAM window. Args: build dir, then the arch flags.
+m33f_small_image() {
+  local dir="$1/small" src t
+  shift
+  local small=(-DPACKBIN_NO_TEXT -DPACKBIN_NO_ECC)
+  rm -rf "$dir"
+  mkdir -p "$dir"
+  : > "$dir/compile.log"
+  for src in "${core_srcs[@]}"; do
+    arm_cxx "$dir" "$cpp/$src" "core-$(basename "${src%.cpp}").o" "$@" "${small[@]}"
+  done
+  arm_cxx "$dir" "$cpp/tests/core/no_text_tests.cpp" no_text_tests.o "$@" "${small[@]}" -Dmain=run_no_text_tests
+  arm_cxx "$dir" "$cpp/tests/core/no_ecc_tests.cpp" no_ecc_tests.o "$@" "${small[@]}" -Dmain=run_no_ecc_tests
+  arm_cxx "$dir" "$here/arm/small_main.cpp" small_main.o "$@" "${small[@]}"
+  arm_cc "$dir" "$here/arm/startup.c" startup.o "$@"
+  [ "$(count_warnings "$dir/compile.log")" -eq 0 ] || fail "compile warnings in the string-free, ECC-free M33F objects"
+
+  NM=arm-none-eabi-nm SIZE=arm-none-eabi-size sh "$cpp/tests/core/check-objects.sh" --no-text "$dir"/core-*.o \
+    || fail "string-free M33F core objects hold a codec symbol, an allocator, an exception reference or writable data"
+  NM=arm-none-eabi-nm SIZE=arm-none-eabi-size sh "$cpp/tests/core/check-objects.sh" --no-ecc "$dir"/core-*.o \
+    || fail "ECC-free M33F core objects hold an ECC symbol, an allocator, an exception reference or writable data"
+
+  arm_link "$dir" small.elf "$@" "${arm_link_common[@]}" --specs=nano.specs --specs=rdimon.specs \
+    "$dir"/core-*.o "$dir/no_text_tests.o" "$dir/no_ecc_tests.o" "$dir/small_main.o" "$dir/startup.o"
+  image_checks "$dir" small
+  check_ram_end "$dir/small.elf" "$m33f_ram_end"
+  qemu_run mps2-an505 "$dir/small.elf" "$dir/small.run.log" || fail "string-free, ECC-free image on M33F exit $?"
+  [ "$(log_value FAILURES "$dir/small.run.log")" = 0 ] || fail "string-free, ECC-free image failures on M33F"
+  local asserted run bad=0
+  for t in no_text_tests.cpp no_ecc_tests.cpp; do
+    asserted=$(count_fixed "expect(" "$cpp/tests/core/$t")
+    run=$(awk -v f="$t" '$1 == "VECTORS_RUN" && $2 == f { v = $3 } END { print v + 0 }' "$dir/small.run.log")
+    echo "small $t asserted=$asserted run=$run"
+    [ "$asserted" -eq "$run" ] || bad=$((bad + 1))
+  done
+  [ "$bad" -eq 0 ] || fail "$bad file(s) of the string-free, ECC-free image with sites run != asserted"
+  note "string-free, ECC-free M33F image: $(arm-none-eabi-size "$dir/small.elf" | awk 'NR == 2 { print $1 + $2 }') B flash (not pinned), core objects clean, sites run = asserted"
+}
+
 # Cortex-M33F, the nRF54L15 core (AZ-3189): the whole core (string codec and message error correction on) and the
 # all-kinds scheme on QEMU mps2-an505, with the vector runner. Flash is the all-kinds image, stack is net of the meter
 # overhead; both are held to the ceilings and pins in lib.sh (m33f_*).
@@ -268,6 +311,8 @@ target_m33f() {
   [ "$frame_flash" -le "$m33f_frame_flash_pin" ] || fail "M33F frame flash ${frame_flash} B measured is over the pin of ${m33f_frame_flash_pin} B (cpp/embedded/lib.sh m33f_frame_flash_pin)"
   [ "$frame_stack" -le "$m33f_stack_budget" ] || fail "M33F frame stack ${frame_stack} B over ${m33f_stack_budget} B"
   [ "$frame_stack" -le "$m33f_frame_stack_pin" ] || fail "M33F frame stack ${frame_stack} B measured is over the pin of ${m33f_frame_stack_pin} B (cpp/embedded/lib.sh m33f_frame_stack_pin)"
+
+  m33f_small_image "$dir" "${arch[@]}"
 }
 
 target_s390x() {
