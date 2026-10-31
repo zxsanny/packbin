@@ -22,6 +22,17 @@ private struct FrameWords {
         return raw
     }
 
+    // A message is its pieces joined by `|`, each hex or `-`; an empty piece (`ab||cd`, `|ab`, `ab|`) is an error of the line.
+    func parts(_ i: Int) throws -> [[UInt8]] {
+        let token = try word(i)
+        return try token.split(separator: "|", omittingEmptySubsequences: false).map { piece in
+            if piece.isEmpty { throw FrameLineError(message: "empty piece: \(token)") }
+            if piece == "-" { return [] }
+            guard let raw = hexBytes(String(piece)) else { throw FrameLineError(message: "bad hex: \(piece)") }
+            return raw
+        }
+    }
+
     // A number is decimal digits only (no sign, space or `_`) and at most top; no digit string wraps or overflows into
     // another value.
     func int<T: FixedWidthInteger>(_ i: Int, top: UInt64) throws -> T {
@@ -135,7 +146,7 @@ private func frameMac(_ w: [String]) throws -> String {
     let epoch: UInt32 = try f.int(1, top: epochTop)
     let label = try f.bytes(2)
     let n: Int = try f.int(3, top: byteTop)
-    let message = try f.bytes(4)
+    let parts = try f.parts(4)
     let mk: MacKey
     do {
         mk = try MacKey.derive(key: key, epoch: epoch, label: label)
@@ -145,7 +156,7 @@ private func frameMac(_ w: [String]) throws -> String {
         return "error"
     }
     do {
-        let tag = try mk.tag([message], length: n)
+        let tag = try mk.tag(parts, length: n)
         return frameHex(tag)
     } catch let e as PackbinError {
         return frameKind(e)
@@ -160,7 +171,7 @@ private func frameVerify(_ w: [String]) throws -> String {
     let epoch: UInt32 = try f.int(1, top: epochTop)
     let label = try f.bytes(2)
     let _: Int = try f.int(3, top: byteTop)  // n: checked, not used (the tag length comes from the tag)
-    let message = try f.bytes(4)
+    let parts = try f.parts(4)
     let tag = try f.bytes(5)
     let mk: MacKey
     do {
@@ -170,7 +181,7 @@ private func frameVerify(_ w: [String]) throws -> String {
     } catch {
         return "error"
     }
-    return mk.verify([message], tag: tag) ? "valid" : "invalid"
+    return mk.verify(parts, tag: tag) ? "valid" : "invalid"
 }
 
 private func frameLine(_ words: [String]) throws -> String {

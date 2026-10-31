@@ -15,7 +15,8 @@ built on the writers' output, and must refuse them as the row says (TagMismatch 
 `invalid` for a verify row). A refuse-seal or refuse-mac row is sent to every writer once, after its good rows, and a
 refuse-open row to every reader with the open rows; each must give the error name of the row (`dirs` names the
 directions the session loaded, `out_len` is the caller's output buffer). The environment variable RING_FRAME_CASES
-names another file (the self-test of the ring). A row that the reference codec does not confirm is an error of the file, not of a
+names another file (the self-test of the ring). The message of a mac, refuse-mac or verify row is its pieces joined by `|`,
+each hex or `-` (an empty piece); a driver line carries it the same way (AZ-3495). A row that the reference codec does not confirm is an error of the file, not of a
 package: the script stops before any driver result is read. So is a number outside the range every driver reads
 (RANGES, fixtures/frame/README.md). `check` prints at most SHOWN mismatch lines (5, or the number in the environment
 variable RING_FRAME_SHOWN) for a pair or a reader, then `... and N more`.
@@ -61,6 +62,19 @@ def hx(b):
     return b.hex() if len(b) else "-"
 
 
+def unhex_parts(token, where, case):
+    """A message field of a mac, refuse-mac or verify row: the pieces joined by `|`, each hex or `-`. An empty piece
+    (`ab||cd`, `|ab`, `ab|`) is a mistake of the file, as the drivers refuse it."""
+    pieces = token.split("|")
+    if "" in pieces:
+        raise FileError("%s: %s an empty piece in the message %s (write an empty piece as -)" % (where, case, token))
+    return [unhex(piece) for piece in pieces]
+
+
+def hx_parts(parts):
+    return "|".join(hx(piece) for piece in parts)
+
+
 def is_hex(token):
     return token == "-" or (len(token) % 2 == 0 and all(c in "0123456789abcdef" for c in token))
 
@@ -81,7 +95,7 @@ def read_lines(path):
 class Rows:
     """seal: (case, key, epoch, d, tag_len, msg_id, kind, ad, clear, plain, expected_body, out_len); a row with an out_len
     is sealed into exactly that buffer and opened into a buffer of exactly its plaintext (the boundary of BufferFull);
-    mac: (case, key, epoch, label, n, message, expected_tag);
+    mac: (case, key, epoch, label, n, message (a list of pieces), expected_tag);
     refuse_open: (case, key, epoch, d, tag_len, msg_id, kind, ad, clear_len, body, expected_name, dirs, out_len);
     refuse_seal: (case, key, epoch, d, tag_len, msg_id, kind, ad, clear, plain, expected_name, dirs, out_len);
     refuse_mac: (case, key, epoch, label, n, message, expected_name);
@@ -145,10 +159,10 @@ class Rows:
         elif kind == "mac":
             case = w[1]
             key, epoch, label = unhex(w[2]), number(w, 3, "epoch", where), unhex(w[4])
-            n, message = number(w, 5, "n", where), unhex(w[6])
+            n, message = number(w, 5, "n", where), unhex_parts(w[6], where, case)
             expected = unhex(w[7])
             try:
-                ref = ff.mac_tag(key, epoch, label, n, [message])
+                ref = ff.mac_tag(key, epoch, label, n, message)
             except ff.Fault as x:
                 raise FileError("%s: %s the reference refuses the row: %s" % (where, case, x.kind))
             if ref != expected:
@@ -202,9 +216,9 @@ class Rows:
         elif kind == "refuse-mac":
             case = w[1]
             key, epoch, label = unhex(w[2]), number(w, 3, "epoch", where), unhex(w[4])
-            n, message, expected = number(w, 5, "n", where), unhex(w[6]), w[7]
+            n, message, expected = number(w, 5, "n", where), unhex_parts(w[6], where, case), w[7]
             try:
-                ff.mac_tag(key, epoch, label, n, [message])
+                ff.mac_tag(key, epoch, label, n, message)
                 got = "tagged"
             except ff.Fault as x:
                 got = x.kind
@@ -214,11 +228,11 @@ class Rows:
         elif kind == "verify":
             case = w[1]
             key, epoch, label, n = unhex(w[2]), number(w, 3, "epoch", where), unhex(w[4]), number(w, 5, "n", where)
-            message, tag, expected = unhex(w[6]), unhex(w[7]), w[8]
+            message, tag, expected = unhex_parts(w[6], where, case), unhex(w[7]), w[8]
             if expected != "invalid":
                 raise FileError("%s: %s a verify row says invalid, not %s" % (where, case, expected))
             try:
-                got = "valid" if ff.mac_verify(key, epoch, label, [message], tag) else "invalid"
+                got = "valid" if ff.mac_verify(key, epoch, label, message, tag) else "invalid"
             except ff.Fault as x:
                 raise FileError("%s: %s the reference refuses the row: %s" % (where, case, x.kind))
             if got != expected:
@@ -283,9 +297,9 @@ def cmd_mac_in(dirname):
     rows = load()
     with open(os.path.join(dirname, "mac.in"), "w") as f:
         for case, key, epoch, label, n, message, _ in rows.mac:
-            f.write("mac %s %d %s %d %s\n" % (hx(key), epoch, label.hex(), n, hx(message)))
+            f.write("mac %s %d %s %d %s\n" % (hx(key), epoch, label.hex(), n, hx_parts(message)))
         for case, key, epoch, label, n, message, _ in rows.refuse_mac:
-            f.write("mac %s %d %s %d %s\n" % (hx(key), epoch, hx(label), n, hx(message)))
+            f.write("mac %s %d %s %d %s\n" % (hx(key), epoch, hx(label), n, hx_parts(message)))
     print("ring-frame: %d mac rows and %d refusal rows" % (len(rows.mac), len(rows.refuse_mac)))
 
 
@@ -299,9 +313,9 @@ def cmd_verify_in(dirname, writers):
                     f.write("verify-skip\n")
                 continue
             for (case, key, epoch, label, n, message, _), tag_hex in zip(rows.mac, lines):
-                f.write("verify %s %d %s %d %s %s\n" % (hx(key), epoch, label.hex(), n, hx(message), tag_hex))
+                f.write("verify %s %d %s %d %s %s\n" % (hx(key), epoch, label.hex(), n, hx_parts(message), tag_hex))
         for case, key, epoch, label, n, message, tag in rows.refuse_verify:
-            f.write("verify %s %d %s %d %s %s\n" % (hx(key), epoch, label.hex(), n, hx(message), hx(tag)))
+            f.write("verify %s %d %s %d %s %s\n" % (hx(key), epoch, label.hex(), n, hx_parts(message), hx(tag)))
     print("ring-frame: %d verify rows for each of %d writers, and %d refusal rows" % (
         len(rows.mac), len(writers), len(rows.refuse_verify)))
 

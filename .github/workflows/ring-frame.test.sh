@@ -2,7 +2,8 @@
 # Self-test of ring-frame.sh (AZ-3338): the ring passes when every driver answers as the reference codec does, and fails,
 # naming what is wrong, on a driver that lies, one that accepts tampered input, one that crashes or prints too few lines,
 # a corrupted row file, a row with a number outside its range, a driver that pads the msg_id or ends on a key of the wrong
-# length (AZ-3378); past 5 mismatch lines it counts the rest. The
+# length (AZ-3378), a driver that tags only the first piece of a message or stops at an empty one (AZ-3495); past 5
+# mismatch lines it counts the rest. The
 # drivers are replaced by a stand-in (RING_FRAME_RUN) that answers with the reference codec, so this needs no toolchain.
 set -euo pipefail
 
@@ -34,6 +35,17 @@ def unhex(token):
 
 def hx(b):
     return b.hex() if len(b) else "-"
+
+
+def pieces(token, how):
+    """The message of a mac or verify line: its pieces joined by `|`. The stand-in liars hand the reference fewer pieces."""
+    parts = [unhex(piece) for piece in token.split("|")]
+    if how == "first-piece":
+        return parts[:1]
+    if how == "stops-at-empty":
+        cut = [i for i, piece in enumerate(parts) if not piece]
+        return parts[:cut[0]] if cut else parts
+    return parts
 
 
 if cmd != "frame-batch":
@@ -93,9 +105,9 @@ for line in open(path):
         if lying and how.startswith("opens-") and text not in KINDS and bends < int(how[6:]):
             text, bends = "TagMismatch", bends + 1
     elif w[0] == "mac":
-        key, epoch, label, n, message = unhex(w[1]), int(w[2]), unhex(w[3]), int(w[4]), unhex(w[5])
+        key, epoch, label, n, message = unhex(w[1]), int(w[2]), unhex(w[3]), int(w[4]), pieces(w[5], how if lying else "")
         try:
-            text = ff.mac_tag(key, epoch, label, n, [message]).hex()
+            text = ff.mac_tag(key, epoch, label, n, message).hex()
         except ff.Fault as x:
             text = x.kind
         if lying and how == "mac-word" and not bent:
@@ -103,8 +115,8 @@ for line in open(path):
         if lying and how == "mac" and not bent and text not in KINDS:
             text, bent = text[:-1] + ("0" if text[-1] != "0" else "1"), True
     elif w[0] == "verify":
-        key, epoch, label, n, message, tag = unhex(w[1]), int(w[2]), unhex(w[3]), int(w[4]), unhex(w[5]), unhex(w[6])
-        text = "valid" if ff.mac_verify(key, epoch, label, [message], tag) else "invalid"
+        key, epoch, label, n, message, tag = unhex(w[1]), int(w[2]), unhex(w[3]), int(w[4]), pieces(w[5], how if lying else ""), unhex(w[6])
+        text = "valid" if ff.mac_verify(key, epoch, label, message, tag) else "invalid"
         if lying and how == "verify" and not bent:
             text, bent = "invalid", True
         if lying and how == "verify-permissive":
@@ -158,6 +170,12 @@ run seal-lies 1 "seal gave" FAKE_LIE=java:seal
 run open-lies 1 "open gave" FAKE_LIE=go:open
 run mac-lies 1 "mac gave" FAKE_LIE=rust:mac
 run verify-lies 1 "verify gave" FAKE_LIE=swift:verify
+# A message in pieces (AZ-3495): a driver that hands the package only the first piece, or stops at an empty piece, is named
+# by the rows made for it, as a writer (mac gave) and as a reader (verify gave).
+run mac-first-piece-only 1 "go: P.two mac gave" FAKE_LIE=go:first-piece
+run mac-stops-at-empty-piece 1 "rust: P.mid0 mac gave" FAKE_LIE=rust:stops-at-empty
+run verify-first-piece-only 1 "-> swift: P.two verify gave invalid, wanted valid" FAKE_LIE=swift:first-piece
+run verify-stops-at-empty-piece 1 "-> java: P.mid0 verify gave invalid, wanted valid" FAKE_LIE=java:stops-at-empty
 run reader-prints-too-few 1 "printed" FAKE_LIE=csharp:short
 # A reader that accepts tampered input, as a package that skips the tag check would (AZ-3341).
 run open-permissive 1 "go: E1.ct open gave 00, wanted TagMismatch" FAKE_LIE=go:open-permissive
@@ -198,6 +216,15 @@ if [ "$(awk '$1 == "seal" && NF != 10 && NF != 12' "$tmp/lines/seal.in" | wc -l)
   failures=$((failures + 1))
 else
   echo "PASS empty-key-and-id-keep-fields"
+fi
+
+# A message in pieces keeps the field count and the bars (AZ-3495): 11 good rows and 2 refusal rows with 2 to 5 pieces.
+if [ "$(awk '$1 == "mac" && $6 ~ /\|/' "$tmp/lines/mac.in" | wc -l)" -ne 13 ] \
+  || [ "$(awk '$1 == "mac" && $6 ~ /(^|\|)-(\||$)/' "$tmp/lines/mac.in" | wc -l)" -lt 4 ]; then
+  echo "FAIL pieces-keep-bars: mac.in has not 13 lines with a message in pieces, or an empty piece is not written as \"-\""
+  failures=$((failures + 1))
+else
+  echo "PASS pieces-keep-bars"
 fi
 
 # No mismatch is hidden (AZ-3356): after 5 lines of a pair or a reader, one line counts the rest; the totals are unchanged.
@@ -252,9 +279,9 @@ corrupt '/^verify E4.first /s/ [0-9a-f]{8} invalid$/ 56db9bec invalid/'
 run verify-tag-made-valid 1 "disagree with the reference" RING_FRAME_CASES="$tmp/ring-cases.txt"
 # A seal or mac row the reference refuses (AZ-3369): the file line, the case and the error name, not a traceback.
 corrupt '/^seal E1 /s/ (00301005e8030000) 4 / \1 16 /'
-run seal-refused-by-reference 1 "ring-cases.txt:17: E1 the reference refuses the row: BadValue" RING_FRAME_CASES="$tmp/ring-cases.txt"
+run seal-refused-by-reference 1 "ring-cases.txt:19: E1 the reference refuses the row: BadValue" RING_FRAME_CASES="$tmp/ring-cases.txt"
 corrupt '/^mac E4 /s/ 6e6574 4 / 6e6574 5 /'
-run mac-refused-by-reference 1 "ring-cases.txt:41: E4 the reference refuses the row: BadValue" RING_FRAME_CASES="$tmp/ring-cases.txt"
+run mac-refused-by-reference 1 "ring-cases.txt:43: E4 the reference refuses the row: BadValue" RING_FRAME_CASES="$tmp/ring-cases.txt"
 # A number outside the range every driver reads (AZ-3356): the reference would take both rows.
 corrupt '/^refuse-seal R.seal.dir4 /s/ 3 4 4 / 3 256 4 /'
 run row-dir-256 1 "R.seal.dir4 dir 256 is not decimal digits of 0 to 255" RING_FRAME_CASES="$tmp/ring-cases.txt"
@@ -267,6 +294,11 @@ grep -v '^open ' "$root/fixtures/frame/ring-cases.txt" > "$tmp/ring-cases.txt"
 run no-open-rows 1 "no open rows" RING_FRAME_CASES="$tmp/ring-cases.txt"
 grep -v '^verify ' "$root/fixtures/frame/ring-cases.txt" > "$tmp/ring-cases.txt"
 run no-verify-rows 1 "no verify rows" RING_FRAME_CASES="$tmp/ring-cases.txt"
+# An empty piece written as nothing is a mistake of the file (AZ-3495): the drivers refuse it, so the loader does too.
+corrupt '/^mac P.mid0 /s/\|-\|/||/'
+run row-empty-piece-bare 1 "P.mid0 an empty piece in the message" RING_FRAME_CASES="$tmp/ring-cases.txt"
+corrupt '/^mac P.two /s/ [0-9a-f]{8}$/ 56db9bed/'
+run mac-pieces-tag-changed 1 "P.two expected 56db9bed, reference gives 56db9bec" RING_FRAME_CASES="$tmp/ring-cases.txt"
 
 echo "---"
 if [ "$failures" -gt 0 ]; then

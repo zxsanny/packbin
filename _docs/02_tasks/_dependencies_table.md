@@ -510,3 +510,4 @@ Loop 74 (2026-10-26, ADR-009: remove the stream session; D1 frame names; D2 cryp
 | AZ-3469 | m33f_128k_ram_window (loop 93) | 3 | None | none |
 | AZ-3479 | drop_m4f_rows (loop 94) | 3 | None | none |
 | AZ-3483 | arm_no_text_no_ecc_run (loop 95) | 3 | None | none |
+| AZ-3495 | ring_multipart_mac_rows (loop 96) | 5 | None | none |

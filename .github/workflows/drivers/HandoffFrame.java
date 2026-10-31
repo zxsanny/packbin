@@ -30,6 +30,17 @@ final class HandoffFrame {
         return Handoff.parse(token);
     }
 
+    // A message is its pieces joined by `|`, each hex or `-`; an empty piece (`ab||cd`, `|ab`, `ab|`) is an error of the line.
+    private static byte[][] partsOf(String token) {
+        String[] pieces = token.split("\\|", -1);
+        byte[][] parts = new byte[pieces.length][];
+        for (int i = 0; i < pieces.length; i++) {
+            if (pieces[i].isEmpty()) throw new IllegalArgumentException("empty piece: " + token);
+            parts[i] = bytesOf(pieces[i]);
+        }
+        return parts;
+    }
+
     private static final long BYTE = 255, LENGTH = 65535, EPOCH = 4294967295L;
 
     // A number is decimal digits only (no sign, space or `_`) and at most top, or the line is malformed; no digit string
@@ -136,12 +147,12 @@ final class HandoffFrame {
         long epoch = number(w[1], EPOCH);
         byte[] label = bytesOf(w[2]);
         int n = small(w[3], BYTE);
-        byte[] message = bytesOf(w[4]);
+        byte[][] parts = partsOf(w[4]);
         if (noEpoch(epoch)) return "BadValue";
         MacKey mk = MacKey.derive(key, (int) epoch, label);
         if (mk == null) return "BadValue";
         byte[] out = new byte[n];
-        Object result = mk.tag(out, message);
+        Object result = mk.tag(out, parts);
         return result == null ? hexOf(out) : kind(result);
     }
 
@@ -150,11 +161,12 @@ final class HandoffFrame {
         long epoch = number(w[1], EPOCH);
         byte[] label = bytesOf(w[2]);
         number(w[3], BYTE); // n: checked, not used (the tag length comes from the tag)
-        byte[] message = bytesOf(w[4]), tag = bytesOf(w[5]);
+        byte[][] parts = partsOf(w[4]);
+        byte[] tag = bytesOf(w[5]);
         if (noEpoch(epoch)) return "BadValue";
         MacKey mk = MacKey.derive(key, (int) epoch, label);
         if (mk == null) return "BadValue";
-        return mk.verify(tag, message) ? "valid" : "invalid";
+        return mk.verify(tag, parts) ? "valid" : "invalid";
     }
 
     private static String line(String[] words) {

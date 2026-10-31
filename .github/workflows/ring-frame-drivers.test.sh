@@ -7,7 +7,10 @@
 # malformed line in every driver, and a number at the top goes to the package unchanged (direction 255 and epoch
 # 4294967295 are its BadValue, an out_len of 65535 seals E1). A key that is not 32 bytes and a msg_id that is not 8 bytes
 # (0, 7, 9 bytes; AZ-3378) is `BadValue` in every driver, a well-formed line: Rust and C++ cannot hand such a value to their
-# package and answer it themselves (fixtures/frame/README.md). ring-frame.test.sh runs the ring with stand-in drivers;
+# package and answer it themselves (fixtures/frame/README.md). The message of a mac or verify line is its pieces joined by
+# `|` (AZ-3495): every piece reaches the package as its own piece (the tags of E4 and E5 over pieces, an empty piece `-`
+# among them), and a piece that is not hex, or is empty (`ab||cd`, `|ab`, `ab|`), is a malformed line in every driver.
+# ring-frame.test.sh runs the ring with stand-in drivers;
 # this runs the drivers themselves, built and started as ring-frame.sh does (run_lang of ring-lib.sh).
 #
 # Environment: RING_FRAME_LANGS (default all eight), PACKBIN_RING_WORK (driver builds kept between runs), and the
@@ -70,6 +73,19 @@ files() {
   printf 'open-skip\nseal %s 1 255 4 %s 4 %s - %s 123 300\n' "$key" "$id" "$ad" "$plain" > "$io/dir-255.in"
   printf 'open-skip\nmac %s 4294967295 6e6574 4 e803\n' "$key" > "$io/epoch-4294967295.in"
   printf 'open-skip\nseal %s 1 1 4 %s 4 %s - %s 123 65535\n' "$key" "$id" "$ad" "$plain" > "$io/out-length-65535.in"
+  # A message in pieces (AZ-3495): E4 as 4|20 bytes and E5 as ch|-|eck (key 22..22), then the same pieces to verify.
+  local key22 e4a e4b
+  key22="2222222222222222222222222222222222222222222222222222222222222222"
+  e4a="e8030000"
+  e4b="c0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3"
+  printf 'open-skip\nmac %s 7 6e6574 4 %s|%s\n' "$key22" "$e4a" "$e4b" > "$io/pieces-two.in"
+  printf 'open-skip\nmac %s 8 6e6574 4 6368|-|65636b\n' "$key22" > "$io/pieces-empty.in"
+  printf 'open-skip\nverify %s 7 6e6574 4 %s|%s 56db9bec\n' "$key22" "$e4a" "$e4b" > "$io/pieces-verify.in"
+  printf 'open-skip\nmac %s 7 6e6574 4 ab|zz\n' "$key22" > "$io/piece-bad-hex.in"
+  printf 'open-skip\nmac %s 7 6e6574 4 ab||cd\n' "$key22" > "$io/piece-empty-mid.in"
+  printf 'open-skip\nmac %s 7 6e6574 4 |ab\n' "$key22" > "$io/piece-empty-first.in"
+  printf 'open-skip\nmac %s 7 6e6574 4 ab|\n' "$key22" > "$io/piece-empty-last.in"
+  printf 'open-skip\nverify %s 7 6e6574 4 ab||cd 56db9bec\n' "$key22" > "$io/piece-empty-verify.in"
   # A key and a msg_id of the wrong length (AZ-3378): 31, 33 and 0 bytes ("-"), 7, 9 and 0 bytes.
   local size wrong
   for size in 31 33 0; do
@@ -133,6 +149,12 @@ lang_cases() {
   for name in seal-key-31 seal-key-33 seal-key-0 open-key-31 open-key-33 open-key-0 mac-key-31 mac-key-33 mac-key-0 \
     verify-key-31 verify-key-33 verify-key-0 seal-id-7 seal-id-9 seal-id-0 open-id-7 open-id-9 open-id-0; do
     check "$lang" "$name" =BadValue || bad=1
+  done
+  check "$lang" pieces-two =56db9bec || bad=1
+  check "$lang" pieces-empty =3cf8e8c5 || bad=1
+  check "$lang" pieces-verify =valid || bad=1
+  for name in piece-bad-hex piece-empty-mid piece-empty-first piece-empty-last piece-empty-verify; do
+    check "$lang" "$name" fail || bad=1
   done
   if [ "$lang" = go ]; then
     for name in bad-direction bad-tag-length bad-kind long-line; do

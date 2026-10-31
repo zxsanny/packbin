@@ -47,6 +47,29 @@ std::uint32_t frame_int(std::vector<std::string> const& w, std::size_t i, std::u
   return static_cast<std::uint32_t>(n);
 }
 
+// A message is its pieces joined by `|`, each hex or `-`; an empty piece (`ab||cd`, `|ab`, `ab|`) is an error of the line.
+std::vector<std::vector<std::uint8_t>> frame_parts(std::string const& token) {
+  std::vector<std::vector<std::uint8_t>> parts;
+  std::size_t from = 0;
+  for (;;) {
+    std::size_t bar = token.find('|', from);
+    std::string piece = token.substr(from, bar == std::string::npos ? std::string::npos : bar - from);
+    if (piece.empty())
+      throw std::invalid_argument("empty piece: " + token);
+    parts.push_back(frame_bytes(piece));
+    if (bar == std::string::npos)
+      return parts;
+    from = bar + 1;
+  }
+}
+
+std::vector<packbin::ByteSpan> frame_spans(std::vector<std::vector<std::uint8_t>> const& parts) {
+  std::vector<packbin::ByteSpan> spans;
+  for (auto const& part : parts)
+    spans.push_back({part.data(), part.size()});
+  return spans;
+}
+
 std::string frame_hex(std::uint8_t const* data, std::size_t len) {
   return len == 0 ? "-" : hex_of(data, len);
 }
@@ -129,13 +152,13 @@ std::string frame_mac(std::vector<std::string> const& w) {
   std::uint32_t epoch = frame_int(w, 1, 4294967295u);
   auto label = frame_bytes(w.at(2));
   std::uint32_t n = frame_int(w, 3, 255);
-  auto message = frame_bytes(w.at(4));
+  auto parts = frame_parts(w.at(4));
   packbin::MacKey mk;
   auto r = mk.derive({key.data(), key.size()}, epoch, {label.data(), label.size()});
   if (!r.ok()) return frame_kind(r.error);
   std::uint8_t out[255];
-  packbin::ByteSpan part{message.data(), message.size()};
-  r = mk.tag(&part, 1, {out, n});
+  auto spans = frame_spans(parts);
+  r = mk.tag(spans.data(), spans.size(), {out, n});
   return r.ok() ? frame_hex(out, n) : frame_kind(r.error);
 }
 
@@ -144,12 +167,13 @@ std::string frame_verify(std::vector<std::string> const& w) {
   std::uint32_t epoch = frame_int(w, 1, 4294967295u);
   auto label = frame_bytes(w.at(2));
   frame_int(w, 3, 255);  // n: checked, not used (the tag length comes from the tag)
-  auto message = frame_bytes(w.at(4)), tag = frame_bytes(w.at(5));
+  auto parts = frame_parts(w.at(4));
+  auto tag = frame_bytes(w.at(5));
   packbin::MacKey mk;
   auto r = mk.derive({key.data(), key.size()}, epoch, {label.data(), label.size()});
   if (!r.ok()) return frame_kind(r.error);
-  packbin::ByteSpan part{message.data(), message.size()};
-  return mk.verify(&part, 1, {tag.data(), tag.size()}) ? "valid" : "invalid";
+  auto spans = frame_spans(parts);
+  return mk.verify(spans.data(), spans.size(), {tag.data(), tag.size()}) ? "valid" : "invalid";
 }
 
 std::string frame_line(std::vector<std::string> const& w) {

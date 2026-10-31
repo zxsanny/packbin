@@ -16,6 +16,15 @@ const bytesOf = (token: string | undefined): Uint8Array => {
   return new Uint8Array(token === "-" ? [] : Buffer.from(token, "hex"));
 };
 
+// A message is its pieces joined by `|`, each hex or `-`; an empty piece (`ab||cd`, `|ab`, `ab|`) is an error of the line.
+const partsOf = (token: string | undefined): Uint8Array[] => {
+  if (token === undefined) throw new Error(`bad hex: ${token}`);
+  return token.split("|").map((piece) => {
+    if (piece === "") throw new Error(`empty piece: ${token}`);
+    return bytesOf(piece);
+  });
+};
+
 // A number is decimal digits only (no sign, space or `_`) and at most top, or the line is malformed.
 const BYTE = 255, LENGTH = 65535, EPOCH = 4294967295;
 const numberOf = (token: string | undefined, top: number): number => {
@@ -87,19 +96,19 @@ function open(words: string[]): string {
 }
 
 function mac(words: string[]): string {
-  const [key, epoch, label, n, message] = [bytesOf(words[0]), numberOf(words[1], EPOCH), bytesOf(words[2]), numberOf(words[3], BYTE), bytesOf(words[4])];
+  const [key, epoch, label, n, parts] = [bytesOf(words[0]), numberOf(words[1], EPOCH), bytesOf(words[2]), numberOf(words[3], BYTE), partsOf(words[4])];
   const mk = MacKey.derive(key, epoch, label);
   if (mk === null) return "BadValue";
-  const result = mk.tag([message], n);
+  const result = mk.tag(parts, n);
   if (!result.ok) return mapKind(result);
   return hexOf(result.tag);
 }
 
 function verify(words: string[]): string {
-  const [key, epoch, label, n, message, tag] = [bytesOf(words[0]), numberOf(words[1], EPOCH), bytesOf(words[2]), numberOf(words[3], BYTE), bytesOf(words[4]), bytesOf(words[5])];
+  const [key, epoch, label, n, parts, tag] = [bytesOf(words[0]), numberOf(words[1], EPOCH), bytesOf(words[2]), numberOf(words[3], BYTE), partsOf(words[4]), bytesOf(words[5])];
   const mk = MacKey.derive(key, epoch, label);
   if (mk === null) return "BadValue";
-  return mk.verify([message], tag) ? "valid" : "invalid";
+  return mk.verify(parts, tag) ? "valid" : "invalid";
 }
 
 function line(words: string[]): string {

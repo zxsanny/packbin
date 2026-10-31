@@ -28,7 +28,24 @@ func (f *frameFields) word(i int) string {
 }
 
 func (f *frameFields) bytes(i int) []byte {
+	return f.piece(f.word(i))
+}
+
+// parts reads a message: its pieces joined by `|`, each hex or `-`. An empty piece (`ab||cd`, `|ab`, `ab|`) is an error
+// of the line.
+func (f *frameFields) parts(i int) [][]byte {
 	token := f.word(i)
+	var out [][]byte
+	for _, piece := range strings.Split(token, "|") {
+		if piece == "" && f.err == nil {
+			f.err = fmt.Errorf("empty piece: %s", token)
+		}
+		out = append(out, f.piece(piece))
+	}
+	return out
+}
+
+func (f *frameFields) piece(token string) []byte {
 	if token == "-" || f.err != nil {
 		return []byte{}
 	}
@@ -159,7 +176,7 @@ func frameOpen(w []string) (string, error) {
 
 func frameMac(w []string) (string, error) {
 	f := &frameFields{w: w}
-	key, epoch, label, n, message := f.bytes(0), f.num(1, frameEpoch), f.bytes(2), f.num(3, frameByte), f.bytes(4)
+	key, epoch, label, n, parts := f.bytes(0), f.num(1, frameEpoch), f.bytes(2), f.num(3, frameByte), f.parts(4)
 	if f.err != nil {
 		return "", f.err
 	}
@@ -168,7 +185,7 @@ func frameMac(w []string) (string, error) {
 		return frameKind(err), nil
 	}
 	tag := make([]byte, n)
-	if err := mk.Tag(tag, message); err != nil {
+	if err := mk.Tag(tag, parts...); err != nil {
 		return frameKind(err), nil
 	}
 	return frameHex(tag), nil
@@ -177,7 +194,7 @@ func frameMac(w []string) (string, error) {
 func frameVerify(w []string) (string, error) {
 	f := &frameFields{w: w}
 	// n is field 3, not used for verify (the tag length comes from the tag)
-	key, epoch, label, _, message, tag := f.bytes(0), f.num(1, frameEpoch), f.bytes(2), f.num(3, frameByte), f.bytes(4), f.bytes(5)
+	key, epoch, label, _, parts, tag := f.bytes(0), f.num(1, frameEpoch), f.bytes(2), f.num(3, frameByte), f.parts(4), f.bytes(5)
 	if f.err != nil {
 		return "", f.err
 	}
@@ -185,7 +202,7 @@ func frameVerify(w []string) (string, error) {
 	if err != nil {
 		return frameKind(err), nil
 	}
-	if mk.Verify(tag, message) {
+	if mk.Verify(tag, parts...) {
 		return "valid", nil
 	}
 	return "invalid", nil

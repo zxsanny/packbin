@@ -5,6 +5,19 @@ static class HandoffFrame
     static byte[] BytesOf(string token) =>
         token == "-" ? [] : Convert.FromHexString(token);
 
+    // A message is its pieces joined by `|`, each hex or `-`; an empty piece (`ab||cd`, `|ab`, `ab|`) is an error of the line.
+    static ReadOnlyMemory<byte>[] PartsOf(string token)
+    {
+        var pieces = token.Split('|');
+        var parts = new ReadOnlyMemory<byte>[pieces.Length];
+        for (int i = 0; i < pieces.Length; i++)
+        {
+            if (pieces[i].Length == 0) throw new FormatException("empty piece: " + token);
+            parts[i] = BytesOf(pieces[i]);
+        }
+        return parts;
+    }
+
     static string HexOf(byte[] data) =>
         data.Length == 0 ? "-" : Convert.ToHexString(data).ToLowerInvariant();
 
@@ -96,11 +109,11 @@ static class HandoffFrame
         uint epoch = (uint)Number(w[1], MaxEpoch);
         var label = BytesOf(w[2]);
         int n = Small(w[3], MaxByte);
-        var message = BytesOf(w[4]);
+        var parts = PartsOf(w[4]);
         var mk = MacKey.Derive(key, epoch, label);
         if (mk is null) return "BadValue";
         var tag = new byte[n];
-        var err = mk.Tag((ReadOnlySpan<byte>)message, tag);
+        var err = mk.Tag(parts, tag);
         if (err is not null) return Kind(err);
         return HexOf(tag);
     }
@@ -111,11 +124,11 @@ static class HandoffFrame
         uint epoch = (uint)Number(w[1], MaxEpoch);
         var label = BytesOf(w[2]);
         _ = Number(w[3], MaxByte); // n: checked, not used (the tag length comes from the tag)
-        var message = BytesOf(w[4]);
+        var parts = PartsOf(w[4]);
         var tag = BytesOf(w[5]);
         var mk = MacKey.Derive(key, epoch, label);
         if (mk is null) return "BadValue";
-        return mk.Verify((ReadOnlySpan<byte>)message, tag) ? "valid" : "invalid";
+        return mk.Verify(parts, tag) ? "valid" : "invalid";
     }
 
     static string Line(string[] words) => words[0] switch

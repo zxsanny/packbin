@@ -25,6 +25,13 @@ def _bytes(token: str) -> bytes:
     return b"" if token == "-" else bytes.fromhex(token)
 
 
+def _parts(token: str) -> list[bytes]:
+    pieces = token.split("|")
+    if "" in pieces:
+        raise ValueError("empty piece: %s" % token)
+    return [_bytes(piece) for piece in pieces]
+
+
 def _hex(data: bytes | bytearray) -> str:
     return bytes(data).hex() if len(data) else "-"
 
@@ -87,22 +94,22 @@ def _open(words: list[str]) -> str:
 
 def _mac(words: list[str]) -> str:
     key, epoch, label = _bytes(words[0]), _number(words[1], EPOCH), _bytes(words[2])
-    n, message = _number(words[3], BYTE), _bytes(words[4])
+    n, parts = _number(words[3], BYTE), _parts(words[4])
     mac = MacKey.derive(key, epoch, label)
     if isinstance(mac, BadValue):
         return "BadValue"
-    tag = mac.tag([message], n)
+    tag = mac.tag(parts, n)
     return _kind(tag) if isinstance(tag, BadValue) else _hex(tag)
 
 
 def _verify(words: list[str]) -> str:
     key, epoch, label = _bytes(words[0]), _number(words[1], EPOCH), _bytes(words[2])
     _number(words[3], BYTE)  # n: checked, not used (the tag length comes from the tag)
-    message, tag = _bytes(words[4]), _bytes(words[5])
+    parts, tag = _parts(words[4]), _bytes(words[5])
     mac = MacKey.derive(key, epoch, label)
     if isinstance(mac, BadValue):
         return "BadValue"
-    return "valid" if mac.verify([message], tag) else "invalid"
+    return "valid" if mac.verify(parts, tag) else "invalid"
 
 
 def _line(words: list[str]) -> str:

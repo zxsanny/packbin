@@ -21,6 +21,23 @@ fn bytes_of(w: &[&str], i: usize) -> Parsed<Vec<u8>> {
     from_hex(token).ok_or_else(|| format!("bad hex: {token}"))
 }
 
+// A message is its pieces joined by `|`, each hex or `-`; an empty piece (`ab||cd`, `|ab`, `ab|`) is an error of the line.
+fn parts_of(w: &[&str], i: usize) -> Parsed<Vec<Vec<u8>>> {
+    let token = word(w, i)?;
+    token
+        .split('|')
+        .map(|piece| {
+            if piece.is_empty() {
+                return Err(format!("empty piece: {token}"));
+            }
+            if piece == "-" {
+                return Ok(Vec::new());
+            }
+            from_hex(piece).ok_or_else(|| format!("bad hex: {piece}"))
+        })
+        .collect()
+}
+
 // The top of each number field: a number is decimal digits only (no sign, space or `_`; `parse` would take a `+`) and at
 // most its top; no digit string wraps or overflows into another value.
 const BYTE: u64 = 255;
@@ -178,7 +195,8 @@ fn mac(w: &[&str]) -> Parsed<String> {
     let epoch: u32 = num(w, 1, EPOCH)?;
     let label = bytes_of(w, 2)?;
     let n: usize = num(w, 3, BYTE)?;
-    let message = bytes_of(w, 4)?;
+    let parts = parts_of(w, 4)?;
+    let pieces: Vec<&[u8]> = parts.iter().map(Vec::as_slice).collect();
     let Some(key) = key32(&key) else {
         return Ok("BadValue".into());
     };
@@ -187,7 +205,7 @@ fn mac(w: &[&str]) -> Parsed<String> {
         Err(f) => return Ok(fault_kind(&f).into()),
     };
     let mut out = vec![0u8; n];
-    Ok(match mk.tag(&[&message], &mut out) {
+    Ok(match mk.tag(&pieces, &mut out) {
         Ok(()) => hex_of(&out),
         Err(f) => fault_kind(&f).into(),
     })
@@ -198,7 +216,8 @@ fn verify(w: &[&str]) -> Parsed<String> {
     let epoch: u32 = num(w, 1, EPOCH)?;
     let label = bytes_of(w, 2)?;
     let _n: usize = num(w, 3, BYTE)?;
-    let message = bytes_of(w, 4)?;
+    let parts = parts_of(w, 4)?;
+    let pieces: Vec<&[u8]> = parts.iter().map(Vec::as_slice).collect();
     let tag = bytes_of(w, 5)?;
     let Some(key) = key32(&key) else {
         return Ok("BadValue".into());
@@ -207,7 +226,7 @@ fn verify(w: &[&str]) -> Parsed<String> {
         Ok(m) => m,
         Err(f) => return Ok(fault_kind(&f).into()),
     };
-    Ok(if mk.verify(&[&message], &tag) {
+    Ok(if mk.verify(&pieces, &tag) {
         "valid".into()
     } else {
         "invalid".into()
