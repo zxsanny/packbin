@@ -12,10 +12,11 @@ RUN apt-get update \
       g++-s390x-linux-gnu \
  && rm -rf /var/lib/apt/lists/*
 
-# AVR (ATmega328P, Arduino Uno): avr-gcc 7.3 with avr-libc, no C++ library (AZ-2068). A layer of its
-# own so the toolchain layer above stays cached.
+# AVR (ATmega328P, Arduino Uno): avr-gcc 7.3 with avr-libc, no C++ library (AZ-2068), and the simavr
+# emulator that runs the chacha20_xor check image (AZ-3452). A layer of its own so the toolchain layer
+# above stays cached.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends gcc-avr avr-libc binutils-avr \
+ && apt-get install -y --no-install-recommends gcc-avr avr-libc binutils-avr simavr \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src

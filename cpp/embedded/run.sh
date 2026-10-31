@@ -9,7 +9,7 @@
 #                                  the arm stage and the two ESP parts as three jobs (AZ-2607)
 #   cpp/embedded/run.sh arm        inside packbin-embedded: Cortex-M0+, Cortex-M4F (size/stack),
 #                                  Cortex-M3 on QEMU mps2-an385, Cortex-M33F (nRF54L15) on mps2-an505, s390x big-endian under QEMU user,
-#                                  the AVR ATmega328P (Uno) build with avr-gcc
+#                                  the AVR ATmega328P (Uno) build with avr-gcc and one chacha20_xor image run on simavr
 #   cpp/embedded/run.sh esp        inside espressif/idf: the ESP32-S3 and ESP32-C3 builds and the three
 #                                  examples; PACKBIN_ESP_PART (core, packages; unset or all = every
 #                                  target) runs one part

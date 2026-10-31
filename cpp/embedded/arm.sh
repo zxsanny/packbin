@@ -373,7 +373,8 @@ target_s390x() {
 }
 
 # AVR: the core on an ATmega328P (Arduino Uno) with avr-gcc 7.3, which has no C++ library and a 4-byte
-# double (AZ-2068). Build only: no AVR emulator runs the image.
+# double (AZ-2068). The Uno example is built only; one other image, avr/chacha20_check.cpp, runs on simavr
+# and checks chacha20_xor on a 16-bit int and size_t (AZ-3452).
 avr_arch=(-mmcu=atmega328p)
 # ATmega328P: 32 KB of flash less the 512 B Uno boot loader, 2 KB of RAM (static data and stack).
 avr_flash_budget=32256
@@ -390,10 +391,48 @@ avr_cxx() {
   fi
 }
 
+# AZ-3452 AC-1 to AC-6: links the check image and runs it on simavr (ATmega328P, 16 MHz). What it prints on
+# the UART, less simavr's colour codes and notices, must equal avr/chacha20_expected.txt line for line: a
+# failing case, a wrong count, a missing line or no output at all fails the row, and so does a run that does
+# not end within 30 s or a missing simavr.
+avr_run_chacha20() {
+  local dir="$1" status=0 elf="$1/avr_chacha20.elf" raw="$1/chacha20.raw" got="$1/chacha20.out"
+  avr-g++ "${core_flags[@]}" "${avr_arch[@]}" -Wl,--gc-sections -o "$elf" \
+    "$dir/chacha20/check.o" "$dir/uno/core-crypto.o" 2>&1 | tee "$dir/chacha20-link.log" || status=$?
+  if [ "$status" -ne 0 ]; then
+    fail "link avr_chacha20.elf exit $status"
+    return 1
+  fi
+  [ "$(count_warnings "$dir/chacha20-link.log")" -eq 0 ] || fail "link warnings in avr_chacha20.elf"
+  local flash ram
+  flash=$(avr-size "$elf" | awk 'NR == 2 { print $1 + $2 }')
+  ram=$(avr-size "$elf" | awk 'NR == 2 { print $2 + $3 }')
+  [ "$flash" -le "$avr_flash_budget" ] || fail "chacha20 image flash $flash B over $avr_flash_budget B"
+  [ "$ram" -le "$avr_ram_budget" ] || fail "chacha20 image static RAM $ram B over $avr_ram_budget B"
+  if ! command -v simavr > /dev/null; then
+    fail "AZ-3452 AC-5 simavr is missing from the image"
+    return 0
+  fi
+  timeout 30 simavr -m atmega328p -f 16000000 "$elf" > "$raw" 2>&1 < /dev/null || status=$?
+  # simavr shows the end of each UART line as a dot and wraps the line in colour codes; its own notices
+  # (`Loaded ...`) do not end in a dot.
+  sed 's/\x1b\[[0-9;]*m//g' "$raw" | sed -n 's/\.$//p' > "$got"
+  if [ "$status" -eq 124 ]; then
+    fail "AZ-3452 AC-5 chacha20 image did not end within 30 s"
+  elif [ "$status" -ne 0 ]; then
+    fail "AZ-3452 AC-5 simavr exit $status"
+  elif ! diff "$here/avr/chacha20_expected.txt" "$got" > "$dir/chacha20.diff"; then
+    cat "$dir/chacha20.diff"
+    fail "AZ-3452 AC-5 chacha20 report differs from avr/chacha20_expected.txt"
+  else
+    note "AZ-3452 AC-1 to AC-4 chacha20_xor on a 16-bit size_t under simavr: $(tr '\n' ',' < "$got" | sed 's/,$//'); image flash $flash B static RAM $ram B"
+  fi
+}
+
 target_avr_uno() {
   local dir="$build/avr" src
   rm -rf "$dir"
-  mkdir -p "$dir/full" "$dir/uno"
+  mkdir -p "$dir/full" "$dir/uno" "$dir/chacha20"
   : > "$dir/compile.log"
   # AC-1: the whole core, string codec and parity included, compiles with 0 warnings.
   for src in "${core_srcs[@]}"; do
@@ -405,6 +444,7 @@ target_avr_uno() {
     avr_cxx "$dir" "$cpp/$src" "uno/core-$(basename "${src%.cpp}").o" "${small[@]}"
   done
   avr_cxx "$dir" "$cpp/examples/avr_uno/avr_uno.cpp" uno/avr_uno.o "${small[@]}"
+  avr_cxx "$dir" "$here/avr/chacha20_check.cpp" chacha20/check.o -I"$cpp/src" "${small[@]}"
   local warnings
   warnings=$(count_warnings "$dir/compile.log")
   echo "compile warnings: $warnings"
@@ -425,6 +465,8 @@ target_avr_uno() {
   [ "$flash" -le "$avr_flash_budget" ] || fail "Uno flash $flash B over $avr_flash_budget B"
   [ "$ram" -le "$avr_ram_budget" ] || fail "Uno static RAM $ram B over $avr_ram_budget B"
   note "AC-1 0 warnings; Uno example flash $flash B of $avr_flash_budget static RAM $ram B of $avr_ram_budget"
+
+  avr_run_chacha20 "$dir"
 
   # AC-2: a scheme with f64 does not compile, and the message names f64.
   status=0
