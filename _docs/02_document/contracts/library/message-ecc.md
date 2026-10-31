@@ -56,7 +56,7 @@ parity    = n bytes, none when n = 0
 | C++ buffer | \`unpack_repair\` takes a writable buffer and repairs it in place; after a successful call the buffer equals the protected message, and a refused call writes nothing. The read-only \`unpack\` stays and, for a protected scheme, only checks (Uncorrectable on a wrong byte). A scheme with \`n\` = 0 is unchanged. |
 | Compact text | A string in a protected message is read after the repair; the compact-text refusals are unchanged. |
 | Hostile bytes | Unpack never throws or traps; its work is at most about 3 x 255 x 32 field operations (two syndrome passes, the locator, the root search and the error values; under 0.1 ms at N = 254, n = 32 in the compiled packages) plus the unprotected walk; it allocates nothing proportional to `n` beyond a few arrays of `n + 1` bytes. |
-| Build flag | C++ `PACKBIN_NO_ECC` removes repair (and the encoder where the target selects it). Cortex-M4F builds with it set. |
+| Build flag | C++ `PACKBIN_NO_ECC` removes repair (and the encoder where the target selects it). Small parts build with it set (the Uno example; the Cortex-M4F stage that did went in loop 94). |
 
 Refusal names (`kind`), used by `fixtures/ecc/vectors.txt`: `uncorrectable`, `short`, `too_long`, `bad_parity`, `bad_limit`.
 

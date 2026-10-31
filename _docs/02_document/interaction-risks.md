@@ -94,7 +94,7 @@ None.
 | Two packages choose differently between equal-cost parses (a switch or LOCK at a tie) and write different bytes for one string | mismatched bytes: 0 on the vectors file and on the ring | CS-7, CS-19 | AZ-2646, AZ-2647 and each package |
 | A flipped bit in a string payload shifts the codes and corrupts the next field | the field after the string is unchanged while the count header is intact; nothing is read past the payload | CS-8 | each package |
 | C++ borrows text from the input (`View`) while the codec has to decode it | `utf8` binds to `Text<N>` only; `TooMany` instead of a cut | CS-18 | AZ-2655, AZ-2656 |
-| The Cortex-M4F size probe links the codec through the string dispatch | `PACKBIN_NO_TEXT` removes it; flash and stack budgets hold | CS-12 | AZ-2656 |
+| (Loop 94: the Cortex-M4F size probe went with its row.) A string-free build links the codec through the string dispatch | `PACKBIN_NO_TEXT` removes it; the host `no-text-test` and the Uno build hold it | CS-12 | AZ-2656 |
 | A protected message loses or gains one byte at the end (a trailing `00`) and still passes a plain systematic check | the code covers the clear length: 0 of 10,000 shifted messages accepted at n = 4, t = 0 | EC-14 | each package |
 | A caller repairs `t` bytes and random bytes decode to a different row | the default is detect only (t = 0); the contract lists the chance for every n and t (n = 2, t = 1 accepts 1 in 17 random buffers) | EC-6, EC-15 | each package, contract |
 | The type byte of a protected message is among the wrong bytes and the scheme is chosen by it | one dispatch accepts handlers of one parity count only; the message is repaired, then dispatched | EC-16 | C++, TypeScript, Rust and any dispatch form |

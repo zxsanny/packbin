@@ -28,7 +28,7 @@
 | R05 | A published Go version cannot be deleted or moved | External | Low | Medium | Low | Go ships as the tag `go/vX.Y.Z` (ADR-004). The tag is pushed last, after the golden gate and every registry, never forced; a re-run finds it at the same commit and pushes nothing, at another commit it fails. `proxy.golang.org` and the checksum database remember the first content, so a bad version is marked `retract` in the `go.mod` of the next patch | Go package | Accepted |
 | R06 | Correcting `t` bytes lowers guaranteed detection to `n - t` bytes, and garbage beyond that can be repaired to a wrong message | Technical | Medium | High | High | The default correction limit is 0 (detect only). A `t` above `n / 2` is refused before any byte is read. The contract (`message-ecc.md`) lists the chance that random bytes are accepted for every `n` and `t`, and the README and the component descriptions point to it | all eight packages with the feature | Mitigated by default, open for a caller who sets `t` above 0 |
 | R07 | A protected message is at most 254 bytes, and a plain code would accept a lost last byte | Technical | Low | Medium | Low | Pack refuses a clear message above `254 - n` bytes with a typed error and writes nothing. The code covers the clear length as a first byte that is not sent, so a message with one byte more or less (a trailing `00`) fails the check | all seven packages with the feature (C++ pending) | Accepted (limit), Mitigated (length hole) |
-| R08 | The Cortex-M4F image has 60 B of flash left, and the correction tables alone are 511 B, so the feature cannot ship on that target | Technical | High | Low | Medium | `PACKBIN_NO_ECC` removes the codec, its tables and `Result.repaired`; `cpp/embedded/arm.sh` builds the whole Cortex-M4F target with it, so flash (8,132 of 8,192 B) and stack (492 B) are unchanged. `parity(scheme, n)` with `n` above 0 is `SchemeInvalid` there, a compile error for a `constexpr` scheme. Cortex-M0+, M3 and ESP32 keep the feature | C++ package | Accepted |
+| R08 | (Loop 94: the Cortex-M4F stage went; the option stays for the Uno and host builds.) The Cortex-M4F image had 60 B of flash left, and the correction tables alone are 511 B, so the feature cannot ship on that target | Technical | High | Low | Medium | `PACKBIN_NO_ECC` removes the codec, its tables and `Result.repaired`; `cpp/embedded/arm.sh` builds the whole Cortex-M4F target with it, so flash (8,132 of 8,192 B) and stack (492 B) are unchanged. `parity(scheme, n)` with `n` above 0 is `SchemeInvalid` there, a compile error for a `constexpr` scheme. Cortex-M0+, M3 and ESP32 keep the feature | C++ package | Accepted |
 
 ## Detailed Risk Analysis
 
@@ -181,6 +181,8 @@ The contract lists every `t` for `n` = 1, 2, 4, 8 and 16. Rows above are a selec
 **Documents updated**: `contracts/library/message-ecc.md`, `adr/007_message-error-correction.md`, README ("Error correction"), `glossary.md` (Parity bytes, Code word), the eight component descriptions
 
 ### R08: Message error correction does not fit the Cortex-M4F flash margin
+
+> Loop 94 (AZ-3479): the Cortex-M4F stage went (owner, 2026-10-31); the text below is history. `PACKBIN_NO_ECC` stays for small parts (Uno example, host `no-ecc-test`).
 
 **Description**: The Cortex-M4F image is 8,132 of 8,192 B, a margin of 60 B. The correction codec is about 2.2 KB of code and 511 B of tables when linked, so it cannot be added to that image.
 

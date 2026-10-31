@@ -17,7 +17,7 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 
 | Step | Consumer Action | Expected System Response |
 |------|----------------|------------------------|
-| 1 | compile for Cortex-M0+, Cortex-M4F, ESP32-S3 and ESP32-C3 | each build: errors 0, warnings 0 |
+| 1 | compile for Cortex-M0+, Cortex-M33F, ESP32-S3 and ESP32-C3 | each build: errors 0, warnings 0 |
 
 **Expected outcome**: each build: errors 0, warnings 0.
 **Max execution time**: 60s
@@ -82,7 +82,9 @@ Part of the blackbox set; the index is [blackbox-tests.md](blackbox-tests.md).
 **Expected outcome**: mismatched bytes 0; mismatched fields 0.
 **Max execution time**: 60s
 
-### FT-E-05: Flash and stack budget
+### FT-E-05: Flash and stack budget (retired, loop 94)
+
+> **Retired in loop 94 (AZ-3479, owner 2026-10-31).** The Cortex-M4F rows (`cpp-m4f`, `rust-m4f`) are gone, so no run holds the 8,192 B flash and 512 B stack budget of the string-free, ECC-free build; the text below is history. The size and stack bar of the stage is the M33F pins (FT-E-15 and `blackbox-tests-23-loop70-rust-m33f.md`).
 
 **Summary**: Flash and stack budget (loop 10, C++ on microcontrollers and the bug-fix epic AZ-2069).
 **Traces to**: cpp-microcontroller AC-5, AZ-2078 AC-5, AZ-2081 AC-5

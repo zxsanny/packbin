@@ -264,4 +264,4 @@ Each side loads a `FrameSession` from the caller's 32-byte key, a 24-bit epoch, 
 |--------|--------|-------|
 | Added bytes | the tag length, 4, 8 or 16 bytes | the clear part and the ciphertext are the caller's bytes, unchanged in length |
 | Packages with frame mode (all eight; C++, Go, Python, TypeScript since loop 75) | the 157 frame rows | mismatched bytes 0 |
-| Rust heap-free core on the M4F image | the `frame` set within its bounds of 20,480 B flash and 1,991 B stack (`rust/embedded/limits.txt`) | measured 20,332 B and 1,728 B with Rust 1.98.1 (loop 74, unchanged by the removal) |
+| Rust heap-free core on the M33F image | the `frame` set within its pins of 20,404 B flash and 1,728 B stack (`rust/embedded/limits-m33f.txt`) | measured 20,404 B and 1,728 B with Rust 1.98.1 (loop 94; the Cortex-M4F row of loop 74 went in loop 94) |

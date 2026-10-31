@@ -468,7 +468,7 @@ See [tests-by-loop.md](tests-by-loop.md) (loop 19 to loop 23 sections, moved in 
 | FT-X-157 | every non-key row of `fixtures/frame/vectors.txt` through the public API, with and without `std` | `tests/frame_vectors_tests.rs` |
 | FT-X-158 | key rows, every single-bit tamper of E1 to E3, replay before crypto (0 compressions), previous slot, MAC-only, cost counters | `src/frame_core_tests.rs` |
 | FT-X-159 | refusals with no partial output, hostile bodies, in-place load, sizes, model of the window (the 2 `session`-gated tests that kept stream and frame calls apart were retired in loop 74, ADR 009: 8 tests to 6) | `src/frame_hostile_tests.rs` |
-| FT-X-160 | the `frame` set on the Cortex-M4F image | `rust/embedded` stage |
+| FT-X-160 | the `frame` set on the Cortex-M4F image (retired in loop 94 with the `rust-m4f` row; FT-X-161 holds the set on the M33F) | `rust/embedded` stage |
 
 Run: `cargo test --features frame --test frame_vectors_tests`, `--no-default-features --features frame --test frame_vectors_tests`, `--features frame --lib frame_`, `--features frame,ecc --lib frame_` (it was `frame,session,ecc` until the `session` feature was retired in loop 74), `--features frame --doc` (all in `run-suite.sh`).
 
@@ -476,7 +476,7 @@ Run: `cargo test --features frame --test frame_vectors_tests`, `--no-default-fea
 
 | Test | What it proves | Where |
 |------|----------------|-------|
-| FT-X-161 | the five sets on the Cortex-M33F image: golden decoded, route packet equal to the M4F run, no heap or panic symbol, 0 B RAM, under 64 KB / 8 KB and under the pins | `rust/embedded` stage, row `rust-m33f` |
+| FT-X-161 | the five sets on the Cortex-M33F image: golden decoded, the sample route unpacked on the device (the comparison with the M4F run went in loop 94), no heap or panic symbol, 0 B RAM, under 64 KB / 8 KB and under the pins | `rust/embedded` stage, row `rust-m33f` |
 | FT-X-162 | the pins bite and the harness holds them: a pin one byte low fails the row; every set has numbers within the ceilings | `PACKBIN_RUST_EMBEDDED_LIMITS_M33F` smoke, `rust/embedded/checks.test.sh` |
 
 Run: `rust/embedded/run.sh host` (libraries for both targets, then the image stage in `packbin-embedded`).

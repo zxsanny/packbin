@@ -1,5 +1,7 @@
 # Traceability Matrix
 
+> Loop 94 (AZ-3479): `FT-E-05` (flash and stack budget on the Cortex-M4F) is retired with the `cpp-m4f` and `rust-m4f` rows; rows below that cite it as Covered are history of their loops. The size and stack bar is the M33F pins (`FT-E-15`, `blackbox-tests-23-loop70-rust-m33f.md`).
+
 ## Acceptance Criteria Coverage
 
 | AC ID | Acceptance Criterion | Test IDs | Coverage |
