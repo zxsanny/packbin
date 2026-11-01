@@ -9,12 +9,6 @@ Downstream skills consume this file:
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
 
-- [2026-10-27] [process] A comparison harness with only good rows passes a package that accepts forgeries: add rows that must be refused and a stand-in reader that accepts them, and show once that a real defective driver turns the harness red (the TypeScript short-packet name did, loop 77); `vectors.txt` already held the refusals per package, which is why the ring keeps only tamper rows and leaves the refusal-by-name rows to a later loop.
-  Source: _docs/loops/loop77/record77.md
-- [2026-10-28] [process] A CI step added to `test.yml` also goes into `scripts/loop-tests.sh` in the same commit: step 11 of loop 77 passed 14 stages without running the frame ring or its self-test, because the `ring` and `scaffold` stages list their scripts by hand (found in loop 78 by comparing the two).
-  Source: _docs/loops/loop78/record78.md
-- [2026-10-28] [testing] A new check over real drivers is proven by putting an old defective driver back (`git show <commit>:<file>` in a scratch copy) and seeing it fail: the lenient TypeScript and Swift drivers gave 8 FAIL; 44 of 44 green on the first run proves nothing alone (loop 78).
-  Source: _docs/loops/loop78/record78.md
 - [2026-10-28] [process] Measure a new CI step cold with the runner's CPU count (`docker run --cpus 4`) and name the job it lands on before agreeing the command with the owner: `cargo test --no-run` for 7 Rust feature sets added 64 s to `suites (csharp rust)`, the job that sets the CI wall, and `cargo check --tests` 8 s (loop 79).
   Source: _docs/06_metrics/retro_2026-10-28_loop79.md
 - [2026-10-28] [testing] An intake probe builds every configuration the ACs will name, not a sample: loop 79's probe built 2 of the 9 Rust feature sets and blamed the default set's warning on `from_hex`; the worker, building all 9, found `take` in `counters.rs` (loop 79).
@@ -39,3 +33,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-31_loop92.md
 - [2026-10-31] [estimation] Name the reach limit of a runtime check in the spec first: the 16-bit `size_t` wrap needs a buffer near 64 KiB and an ATmega328P has 2 KB of RAM, so the run checks the arithmetic, not the wrap (loop 92).
   Source: _docs/06_metrics/retro_2026-10-31_loop92.md
+- [2026-11-01] [process] State the rule for the off or zero value of a new setting in the spec and in every worker prompt: four workers read "percentage 0" four ways, and the unprotected path had no 254-byte limit that the first criteria assumed (loop 97).
+  Source: _docs/06_metrics/retro_2026-11-01_loop97.md
+- [2026-11-01] [testing] A new row word in a shared fixture gets its own file when other loaders read the old file by position: grep every reader first, or the first commit breaks eight suites (loop 97).
+  Source: _docs/06_metrics/retro_2026-11-01_loop97.md
+- [2026-11-01] [estimation] Count the lines of every touched file at the batch gate: adding 160 lines to a 437-line header crossed the 500-line cap and cost a split task; and read `git log -1` after each commit command, a failed `git add` left a no-op commit while Jira had moved (loop 97).
+  Source: _docs/06_metrics/retro_2026-11-01_loop97.md
