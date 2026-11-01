@@ -29,6 +29,7 @@ int run_core_text_api_host_tests();
 int run_core_ecc_vectors_host_tests();
 int run_core_ecc_repair_host_tests();
 int run_core_ecc_api_tests();
+int run_core_ecc_percent_tests();
 int run_core_ecc_api_host_tests();
 int run_core_ecc_percent_host_tests();
 int run_core_ecc_percent_vectors_host_tests();
@@ -74,6 +75,7 @@ int main() {
   run_core_ecc_vectors_host_tests();
   run_core_ecc_repair_host_tests();
   run_core_ecc_api_tests();
+  run_core_ecc_percent_tests();
   run_core_ecc_api_host_tests();
   run_core_ecc_percent_host_tests();
   run_core_ecc_percent_vectors_host_tests();

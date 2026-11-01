@@ -1,7 +1,8 @@
 // Vector runner: the host core test sources (cpp/tests/core, VECTOR_TESTS in cpp/Makefile) run
-// unchanged on the target. Prints every assert site that ran per file, the all-kinds packet
-// and the failure count; run.sh compares the per-file counts with the `expect(` calls asserted
-// in each file. Builds for Cortex-M (newlib-nano + semihosting) and big-endian Linux.
+// unchanged on the target. Prints every assert site that ran per file, the all-kinds packet,
+// the percentage packets and the failure count; run.sh compares the per-file counts with the
+// `expect(` calls asserted in each file. Builds for Cortex-M (newlib-nano + semihosting) and
+// big-endian Linux.
 
 #include "check.hpp"
 #include "all_kinds.hpp"
@@ -16,6 +17,8 @@ int run_core_counted_tests();
 int run_core_crypto_tests();
 int run_core_frame_tests();
 int run_core_ecc_api_tests();
+int run_core_ecc_percent_tests();
+void print_core_ecc_percent_packets();
 
 namespace {
 
@@ -84,7 +87,9 @@ int main() {
   run_core_crypto_tests();
   run_core_frame_tests();
   run_core_ecc_api_tests();
+  run_core_ecc_percent_tests();
   print_files();
+  print_core_ecc_percent_packets();
   int failures = check::failures() + all_kinds_packet();
   std::printf("ENDIAN %s\n", big_endian() ? "big" : "little");
   std::printf("FAILURES %d\n", failures);

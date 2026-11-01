@@ -172,6 +172,35 @@ packet[1] ^= 0x55                             // one wrong byte
 let (row, repaired) = try unpackRepair(packet, limit: 2, guarded)   // repaired == 1
 ```
 
+#### A percentage instead of a count
+
+A scheme can declare a whole percentage `p`, 0 to 100, instead of a count, with `withLimits(parityPercent:)`;
+``Scheme/parityPercent`` reads it. The count is the percentage of the message's clear length, rounded up,
+at most 32: `n = min(32, ceil(p × L / 100))`. So 25 % of a 40-byte message is 10 parity bytes, 50 % of it
+is 20, and 100 % is one parity byte for each data byte up to 32. The receiver finds `L` from the received
+length alone, so nothing is added to the wire and both sides declare the same `p`. The code, the bytes and
+the 254-byte limit are those of a fixed `n`.
+
+- A percentage and a count replace each other: the last one set wins, and both above 0 in one
+  `withLimits` call is refused. `p` 0 is a scheme without parity, with the rules of `parity` 0. A `p`
+  outside 0 to 100 is refused as a bad scheme, a `.schemeError`.
+- The largest clear message is 251 bytes at 1 %, 230 at 10 % and 222 from 25 % up (the parity is capped at
+  32 bytes, so a percentage above 32 % of a 100-byte message adds no protection). A longer message is
+  refused at pack as a `.packError`, naming its length and the limit.
+- A length no message has is refused. At 100 %, for example, every odd length below 64 bytes is
+  `.uncorrectable`, and a buffer above 254 bytes is `.tooLong`, as with a count.
+- `limit` is 0 to 16, and is lowered to `n` / 2 of the message. A short message gets the repair its parity
+  allows, not an error. A `limit` outside 0 to 16 throws a `.schemeError` before any byte is read.
+- One setting per `unpackRepair` call: the schemes of one call declare the same percentage, or the same
+  count. A mix, two percentages or a percentage and a count, throws a `.schemeError`.
+
+```swift
+let share = try Scheme(1, .bytes(0, "b", size: 39)).withLimits(parityPercent: 25)
+var message = try pack(share, ["b": [UInt8](repeating: 7, count: 39)])   // 40 clear bytes and 10 parity bytes
+message[5] ^= 0x55                                                       // one wrong byte
+let (_, fixed) = try unpackRepair(message, limit: 5, share)              // fixed == 1
+```
+
 ### Rows
 
 A row is a `[String: Any]` keyed by field name, or a typed row: a type that conforms to
@@ -223,8 +252,8 @@ scheme at once. ``Field``, ``FlagByte``, ``Condition`` and ``PackbinError`` are 
 The whole API is listed here.
 
 - ``Scheme``: `init(_ typeNumber: Int, _ fields: Field...) throws`, `init(_:_: [Field]) throws`,
-  `typeNumber`, `maxRounds`, `maxSlots`, `maxBytes`, `parity`,
-  `withLimits(maxRounds: Int? = nil, maxSlots: Int? = nil, maxBytes: Int? = nil, parity: Int? = nil) throws -> Scheme`,
+  `typeNumber`, `maxRounds`, `maxSlots`, `maxBytes`, `parity`, `parityPercent`,
+  `withLimits(maxRounds: Int? = nil, maxSlots: Int? = nil, maxBytes: Int? = nil, parity: Int? = nil, parityPercent: Int? = nil) throws -> Scheme`,
   and the defaults `defaultMaxRounds`, `defaultMaxSlots`, `defaultMaxBytes` (see Limits).
 - ``Field`` constructors: `.u8`, `.u16`, `.u32`, `.u64`, `.i8`, `.i16`, `.i32`, `.i64`
   `(_ id: Int, _ name: String)`: integers, little-endian; `.f32`, `.f64(_ id:, _ name:)`: IEEE 754,

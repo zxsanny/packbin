@@ -138,6 +138,16 @@ check_vectors() {
   [ "$(log_value FAILURES "$runlog")" = 0 ] || fail "failures $(log_value FAILURES "$runlog")"
 }
 
+# The percentage packets a vector runner printed (`PERCENT_HEX <name> <hex>` lines, ecc_percent_tests.cpp), one
+# `<name> <hex>` line each, to the file $2. Fewer than the 12 rows the test prints fails the target: an image that
+# printed none must not pass the comparison between machines.
+percent_packets() {
+  local runlog="$1" file="$2" lines
+  awk '$1 == "PERCENT_HEX" { print $2, $3 }' "$runlog" > "$file"
+  lines=$(awk 'END { print NR }' "$file")
+  [ "$lines" -ge 12 ] || fail "$(basename "$runlog") printed $lines percentage packet(s), expected at least 12"
+}
+
 target_m0plus() {
   local dir="$build/m0plus"
   local arch=(-mthumb -mcpu=cortex-m0plus -mfloat-abi=soft)
@@ -180,6 +190,8 @@ target_m3() {
   log_value ALL_KINDS_HEX "$dir/ac2.run.log" > "$out/m3-all-kinds.hex"
   [ "$(log_value ALL_KINDS_HEX "$dir/vectors.run.log")" = "$(cat "$out/m3-all-kinds.hex")" ] \
     || fail "all-kinds packet differs between the AC-2 firmware and the runner"
+  percent_packets "$dir/vectors.run.log" "$out/m3-percent.hex"
+  note "percentage packets printed: $(awk 'END { print NR }' "$out/m3-percent.hex")"
 }
 
 # The string-free, ECC-free build (PACKBIN_NO_TEXT and PACKBIN_NO_ECC together, the build of a board that only carries
@@ -276,6 +288,9 @@ target_m33f() {
     || fail "all-kinds packet differs between the M33F AC-2 firmware and the runner"
   [ -f "$out/m3-all-kinds.hex" ] || fail "no Cortex-M3 packet to compare with ($out/m3-all-kinds.hex: cpp-m3-qemu runs first)"
   cmp -s "$out/m3-all-kinds.hex" "$out/m33f-all-kinds.hex" || fail "all-kinds packet differs between Cortex-M3 and Cortex-M33F"
+  percent_packets "$dir/vectors.run.log" "$out/m33f-percent.hex"
+  [ -f "$out/m3-percent.hex" ] || fail "no Cortex-M3 percentage packets to compare with ($out/m3-percent.hex: cpp-m3-qemu runs first)"
+  cmp -s "$out/m3-percent.hex" "$out/m33f-percent.hex" || fail "percentage packets differ between Cortex-M3 and Cortex-M33F"
 
   local flash raw meter stack core_rw
   flash=$(arm-none-eabi-size "$dir/ac2.elf" | awk 'NR == 2 { print $1 + $2 }')

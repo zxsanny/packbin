@@ -525,3 +525,6 @@ Loop 74 (2026-10-26, ADR-009: remove the stream session; D1 frame names; D2 cryp
 | AZ-3511 | parity_percent_rust_assess (loop 97, assess round 1) | 3 | None | none |
 | AZ-3512 | parity_percent_tests_pytscsj (loop 97, assess round 1) | 3 | None | none |
 | AZ-3513 | parity_percent_tests_goswcpp (loop 97, assess round 1) | 3 | None | none |
+| AZ-3524 | percent_docs_swift_go (loop 98) | 2 | None | none |
+| AZ-3525 | percent_cpp_device_run (loop 98) | 3 | None | none |
+| AZ-3526 | percent_rust_device_run (loop 98) | 3 | None | none |

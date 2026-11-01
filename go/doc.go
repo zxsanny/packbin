@@ -200,6 +200,28 @@
 // A message shorter than n is a ShortPacket naming the field "parity"; one above 254 bytes is a
 // TooLong.
 //
+// A scheme can declare a whole percentage p, 0 to 100, instead of n. The count is the percentage of the
+// message's clear length, rounded up, at most 32: n = min(32, ceil(p x L / 100)). So 25 % of a 40-byte
+// message is 10 parity bytes, 50 % of it is 20, and 100 % is one parity byte for each data byte up to 32.
+// The receiver finds L from the received length alone, so nothing is added to the wire and both sides
+// declare the same p. The code, the bytes and the 254-byte limit are those of a fixed n.
+//
+//	(*Scheme).WithParityPercent(p int) (*Scheme, error)
+//	                                   a copy that declares the percentage p (MaxParityPercent is 100);
+//	                                   another p is refused with InvalidScheme naming p and 100
+//	(*Scheme).ParityPercent() int      the parity percentage of a scheme, 0 if it declares none
+//
+// A percentage and a count replace each other: the last one set (WithParityPercent or WithParity) wins.
+// p 0 is a scheme without parity, with the rules of n 0. The largest clear message is 251 bytes at 1 %,
+// 230 at 10 % and 222 from 25 % up (the parity is capped at 32 bytes, so a percentage above 32 % of a
+// 100-byte message adds no protection); a longer message is not packed (PackRefused), naming its length
+// and the limit. A length no message has is refused: at 100 %, for example, every odd length below 64
+// bytes is Uncorrectable, and a buffer above 254 bytes is too long, as with a count. The limit of
+// UnpackRepair is 0 to 16 under a percentage, and is lowered to n/2 of the message, so a short message
+// gets the repair its parity allows, not an error; a limit outside 0 to 16 is InvalidScheme before any
+// byte is read. The schemes of one Unpack call declare the same percentage, or the same count; a mix,
+// two percentages or a percentage and a count, is InvalidScheme.
+//
 // # Frame mode
 //
 // Sealed, authenticated frames for links that lose, reorder and duplicate messages (pack-session.md 3.0.0):
