@@ -7,9 +7,9 @@ step: 9
 name: New Task
 status: not_started
 sub_step:
-  phase: 0
-  name: awaiting-invocation
-  detail: ""
+  phase: 1
+  name: feature-loop
+  detail: "loop 109 P0: hopper empty, asking owner for the feature"
 retry_count: 0
 tracker: jira
 loop: 108
