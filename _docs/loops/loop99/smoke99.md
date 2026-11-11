@@ -30,4 +30,5 @@ test "$fails" -eq 0
 
 ## Result
 
-(pending)
+Commit ab9774c: 11/11 steps passed (agent run, owner rule 2026-10-12 in `deployment_procedures.md`). Step 2 re-ran 3 stages and passed (338 s). Step 11 of the loop had passed the 15 stages before: typescript, csharp, python, java, go, cpp, rust, swift, dart, scaffold, cpp-embedded-arm, rust-embedded, ring, ac10, publish-gate (vcpkg supports and consumer checks not run: no vcpkg tool here).
+
