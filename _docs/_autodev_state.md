@@ -7,12 +7,12 @@ step: 9
 name: New Task
 status: not_started
 sub_step:
-  phase: 1
-  name: feature-loop
-  detail: "hopper empty at loop 107 start; waiting for the owner's feature (problem Phase 1)"
+  phase: 0
+  name: awaiting-invocation
+  detail: ""
 retry_count: 0
 tracker: jira
-loop: 106
+loop: 107
 branch:
 plan_artifact:
 plan_confirmed: false
