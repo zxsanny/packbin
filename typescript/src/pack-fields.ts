@@ -263,16 +263,22 @@ export function packFields(
         const items = values[f.name]
         if (!isPlainObject(items)) throw new RangeError(`${f.name}: expected dictionary`)
         const enc = new TextEncoder()
-        const keys = Object.keys(items).sort((a, b) => {
-          const ba = enc.encode(a)
-          const bb = enc.encode(b)
+        const byBytes = (ba: Uint8Array, bb: Uint8Array): number => {
           const n = Math.min(ba.length, bb.length)
           for (let i = 0; i < n; i++) {
             const d = ba[i]! - bb[i]!
             if (d !== 0) return d
           }
           return ba.length - bb.length
-        })
+        }
+        const keys = Object.keys(items).sort((a, b) => byBytes(enc.encode(a), enc.encode(b)))
+        // An unpaired surrogate is written as U+FFFD, so two keys that differ only in such halves are one key on the
+        // wire, and unpack refuses a repeated key: refuse them here, so the packet is never one the reader cannot read.
+        for (let i = 1; i < keys.length; i++) {
+          if (byBytes(enc.encode(keys[i - 1]!), enc.encode(keys[i]!)) === 0) {
+            throw new RangeError(`${f.name}: two keys are the same once an unpaired surrogate is written as U+FFFD`)
+          }
+        }
         if (keys.length > 65535) throw new RangeError(`${f.name}: length ${keys.length}`)
         out.append(f.name, [keys.length & 0xff, (keys.length >> 8) & 0xff])
         const record = items as Value

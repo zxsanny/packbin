@@ -2412,7 +2412,7 @@ Loop 99 (Dart). The ninth package is new: `dart/` (pub.dev package `packbin`). N
 
 Loop 100 (Dart). Five Dart choices of loop 99 moved to TypeScript's behaviour before the first publish; no byte of any other package or fixture changed (see [Dart rows](#dart-rows)):
 
-- An unpaired surrogate in a string or a dictionary key is written as U+FFFD (it was refused). Dictionary keys are ordered by their bytes after that swap, and two keys that become one are refused at pack naming the dict; TypeScript writes a packet its own unpack refuses for them, which is open for TypeScript.
+- An unpaired surrogate in a string or a dictionary key is written as U+FFFD (it was refused). Dictionary keys are ordered by their bytes after that swap, and two keys that become one are refused at pack naming the dict. TypeScript refuses them the same way since loop 101 (`RangeError`, the same message); until then it wrote a packet its own unpack refused.
 - A clear message above `254 - n` bytes at pack is a `packError` with TypeScript's text (it was `tooLong`); unpack of more than 254 bytes is still `tooLong`.
 - Invalid UTF-8 in a string or a key and a repeated or out-of-order dictionary key unpack as a short packet with `needed` 0 (they were `badValue`).
 - A map row has no key for the names of a `repeat` or `times` with 0 rounds (it had `[]`); a typed row keeps `[]`, and a group that holds only such rounds stays as `{}`.

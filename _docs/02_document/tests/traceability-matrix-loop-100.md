@@ -6,7 +6,7 @@ The criteria are AL-1 to AL-10 of `_docs/02_task_plans/dart-typescript-alignment
 |----|--------|---------|-------|--------|
 | AL-1 | DT-17 | AZ-4153 AC-1 | `test/collections/lone_surrogate_test.dart` (12 text and 4 key packets, all equal to TypeScript's), `test/text/text_hostile_test.dart` | Covered |
 | AL-2 | DT-17 | AC-1 | `lone_surrogate_test.dart` (3 key orders after the swap, a round trip of every dictionary packed) | Covered |
-| AL-3 | DT-3 | AC-2 | `lone_surrogate_test.dart` `two keys that are the same once the halves are U+FFFD are refused` | Covered (Dart's own rule; TypeScript writes an unreadable packet: open for TypeScript) |
+| AL-3 | DT-3 | AC-2 | `lone_surrogate_test.dart` `two keys that are the same once the halves are U+FFFD are refused` | Covered (TypeScript refuses the same way since loop 101, AZ-4168: `typescript/tests/dict-colliding-keys.test.ts`) |
 | AL-4 | DT-18 | AC-3 | `test/ecc/pack_too_long_test.dart` (3 counts, 4 percentages, at and one over, `maxBytes` first, unpack `too_long`), `count_vectors_test.dart`, `percent_vectors_test.dart`, `scheme_vectors_test.dart` | Covered |
 | AL-5 | DT-3, DT-4 | AC-4 | `test/collections/dict_order_test.dart`, `hostile_collections_test.dart`, `test/hostile/hostile_test.dart` | Covered |
 | AL-6 | DT-12 | AC-6 | `test/rounds/zero_rounds_places_test.dart` (15 places, repack), `zero_and_short_test.dart`, `typed_rounds_test.dart` | Covered |
