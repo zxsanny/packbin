@@ -1,0 +1,61 @@
+name: publish-key
+
+# Puts the public half of the Maven signing key (the key in the secret MAVEN_GPG_PRIVATE_KEY) on the PGP keyservers that
+# Maven Central reads. Central rejects a release whose signing key it cannot find there ("Could not find a public key by
+# the key fingerprint"), and keyservers drop keys: the v0.5.0 run failed on exactly this. Run it by hand (Actions tab,
+# "Run workflow") whenever Central says so, then re-run the failed publish job. It sends only the public key; running it
+# again while the key is there changes nothing.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  key:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Upload the public key and check that a keyserver serves it
+        env:
+          MAVEN_GPG_PRIVATE_KEY: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MAVEN_GPG_PRIVATE_KEY:-}" ]; then
+            echo "::error::the secret MAVEN_GPG_PRIVATE_KEY is not set"
+            exit 1
+          fi
+          GNUPGHOME="$(mktemp -d)"
+          export GNUPGHOME
+          chmod 700 "$GNUPGHOME"
+          printf '%s\n' "$MAVEN_GPG_PRIVATE_KEY" | gpg --batch --import
+          fpr="$(gpg --list-keys --with-colons | awk -F: '/^fpr:/ { print $10; exit }')"
+          if [ -z "$fpr" ]; then
+            echo "::error::the secret holds no key"
+            exit 1
+          fi
+          echo "signing key $fpr"
+          gpg --armor --export "$fpr" > public.asc
+          # keys.openpgp.org (HTTPS API) and keyserver.ubuntu.com (HKP over TLS): Central reads both.
+          jq -Rs '{keytext: .}' public.asc \
+            | curl -sS -m 60 -X POST https://keys.openpgp.org/vks/v1/upload \
+                -H 'Content-Type: application/json' --data @- || echo "::warning::keys.openpgp.org did not take the key"
+          echo
+          gpg --keyserver hkps://keyserver.ubuntu.com --send-keys "$fpr" \
+            || echo "::warning::keyserver.ubuntu.com did not take the key"
+          found=""
+          for attempt in 1 2 3 4 5 6; do
+            for server in "https://keys.openpgp.org/vks/v1/by-fingerprint/$fpr" \
+                          "https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x$fpr"; do
+              code="$(curl -s -m 30 -o /dev/null -w '%{http_code}' "$server" || true)"
+              echo "attempt $attempt: ${server%%\?*} -> $code"
+              if [ "$code" = "200" ]; then found="$found ${server%%/pks*}"; fi
+            done
+            if [ -n "$found" ]; then break; fi
+            sleep 30
+          done
+          if [ -z "$found" ]; then
+            echo "::error::no keyserver serves key $fpr after the upload"
+            exit 1
+          fi
+          echo "key $fpr is served by:$found"
