@@ -3,18 +3,18 @@
 ## Current Step
 flow: existing-code
 kind: product
-step: 17
-name: Retrospective
+step: 9
+name: New Task
 status: not_started
 sub_step:
   phase: 0
   name: awaiting-invocation
-  detail: "step 11 PASS; next smoke, close"
+  detail: ""
 retry_count: 0
 tracker: jira
 loop: 103
 branch:
-plan_artifact: _docs/loops/loop103/plan103.md
-plan_confirmed: true
-plan_step_index: 2
+plan_artifact:
+plan_confirmed: false
+plan_step_index: 0
 assess_round: 0
