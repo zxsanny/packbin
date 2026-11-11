@@ -25,3 +25,7 @@ step "no tag and no upload in this loop (last tag is still v0.4.0)" 'test "$(git
 printf '\n%s of %s steps passed\n' "$((N-fails))" "$N"
 test "$fails" -eq 0
 ```
+
+## Result
+
+Commit f730c9a: 8/8 steps passed (agent run, owner rule 2026-10-12 in `deployment_procedures.md`). No package file changed in the loop, so no test stage was selected.

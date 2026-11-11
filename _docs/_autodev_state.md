@@ -5,11 +5,11 @@ flow: existing-code
 kind: product
 step: 9
 name: New Task
-status: in_progress
+status: not_started
 sub_step:
-  phase: 2
-  name: feature-loop
-  detail: "loop 102 lone-surrogate-key-probe claimed; probe six packages, report, ask the owner what to fix"
+  phase: 0
+  name: awaiting-invocation
+  detail: ""
 retry_count: 0
 tracker: jira
 loop: 102
