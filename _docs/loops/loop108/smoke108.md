@@ -22,3 +22,7 @@ step "the loop 107 push is green on dev (all jobs of its run)" 'gh run list --br
 printf '\n%s of %s steps passed\n' "$((N-fails))" "$N"
 test "$fails" -eq 0
 ```
+
+## Result
+
+Commit 11364e4: 7/7 steps passed (agent run, owner rule 2026-10-12 in `deployment_procedures.md`). No code changed in the loop, so no test stage was selected.
