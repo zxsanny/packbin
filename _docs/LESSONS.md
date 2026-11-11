@@ -12,12 +12,6 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-28_loop79.md
   Source: _docs/06_metrics/retro_2026-10-28_loop79.md
   Source: _docs/06_metrics/retro_2026-10-28_loop79.md
-- [2026-10-30] [estimation] A zero-margin byte pin makes a no-behaviour file split an owner decision: a second translation unit cost 32 B on the Cortex-M4F image and 40 B on the Cortex-M33F one (shared literal pool, alignment), so run the arm stage at intake when a task touches a pinned image (loop 84).
-  Source: _docs/06_metrics/retro_2026-10-30_loop84.md
-- [2026-10-30] [tooling] A worker told to build the project's own embedded image (`cpp/embedded/Dockerfile`, about 3.5 min) found the M33F pin failure that no host build shows; "NOT RUN, no toolchain" is the wrong stop when the stage has a documented image (loop 84).
-  Source: _docs/06_metrics/retro_2026-10-30_loop84.md
-- [2026-10-30] [process] A review cleanup in a handoff is a lead, not a defect: two of four from loop 83 did not exist on HEAD (`kMax` is read by two parts, `frame_hex` differs on purpose) and the include prune removed nothing, so probe each before it gets a spec line (loop 84).
-  Source: _docs/06_metrics/retro_2026-10-30_loop84.md
 - [2026-10-30] [process] A candidate the owner declined can come back: loop 89 took the CI clippy job declined in loops 86 and 87, so the handoff keeps the decline and the numbers measured then (0 warnings, 9 sets) instead of dropping the candidate.
   Source: _docs/06_metrics/retro_2026-10-30_loop89.md
 - [2026-10-30] [tooling] A gate step added to `run-suite.sh` moves pinned counts in `run-suite.test.sh` (the expected-call block, the step count in the notice row 21 to 22) and needs a fake of its tool (`rustup`): grep `-eq N` and the call lists before the first test run (loop 89).
@@ -42,3 +36,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-11-11_loop99.md
 - [2026-11-11] [process] Mint a short-lived credential in the step that uses it and compare its lifetime with the run order (an OIDC token minted before a build and a Maven wait expires before the upload); a Docker `network is unreachable` is an environment fault: restart Docker Desktop (restart policy was no on all 18 containers: start them again) and rerun only the failed stages (loop 99).
   Source: _docs/06_metrics/retro_2026-11-11_loop99.md
+- [2026-11-11] [testing] When a change turns a refused shape into a buildable one, probe every public door that reaches it (`bind`, typed rows, elements) and fuzz hostile bytes over each: a typed `bind` of an empty nested row threw a cast error out of unpack and only an assessment probe found it (loop 100).
+  Source: _docs/06_metrics/retro_2026-11-11_loop100.md
+- [2026-11-11] [process] Run both packages on the premises of a decision list before asking the owner, and print expected packets by running the reference: two premises of the Dart-vs-TypeScript list were wrong and the colliding-key packet exists only because TypeScript was run (loop 100).
+  Source: _docs/06_metrics/retro_2026-11-11_loop100.md
+- [2026-11-11] [tooling] A total `loop-tests.sh` run needs Python 3.13 (the only one with PyYAML), `RUSTUP_TOOLCHAIN=1.98` and `PACKBIN_CXX_SYSROOT` set before it starts; without them `scaffold`, the ring and the publish gate fail in seconds and the run must be stopped and redone for those stages (loop 100).
+  Source: _docs/06_metrics/retro_2026-11-11_loop100.md
