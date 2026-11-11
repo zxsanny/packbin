@@ -272,11 +272,13 @@ final class Packer {
           }
           return v;
         }
-        // The map under its name sets the bit by being given; a typed row's
-        // group is on when a member holds a value.
-        return typed
-            ? _anyOn(member.fields, row)
-            : (row as Map<String, Object?>)[member.name] != null;
+        // The map under its name sets the bit by being given; a group not
+        // given is still on for a `times` whose count is above 0, which must
+        // write its rounds (TypeScript and Go refuse its missing values). A
+        // typed row's group is on when a member holds a value.
+        if (typed) return _anyOn(member.fields, row);
+        return (row as Map<String, Object?>)[member.name] != null ||
+            _anyOn(member.fields, const <String, Object?>{});
     }
   }
 
