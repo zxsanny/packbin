@@ -24,3 +24,7 @@ step "no tag and no upload in this loop (last tag is still v0.4.0)" 'test "$(git
 printf '\n%s of %s steps passed\n' "$((N-fails))" "$N"
 test "$fails" -eq 0
 ```
+
+## Result
+
+Commit 5bbffd6: 8/8 steps passed (agent run, owner rule 2026-10-12 in `deployment_procedures.md`). Step 2 found all 15 stages unchanged since step 11 (3 had passed in the step 11 run: typescript, ring, publish-gate). Run with `SMOKE_PY` set to a directory whose `python3` is Python 3.13.
