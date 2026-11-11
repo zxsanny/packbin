@@ -9,7 +9,7 @@ status: in_progress
 sub_step:
   phase: 1
   name: preconditions
-  detail: "loop 105: release v0.5.0 on 4e9110a; notes committed, next preconditions then the tag"
+  detail: "loop 105: preconditions PASS (tag free, 4e9110a green, no registry has 0.5.0); the tag push was denied by the permission classifier: waiting for the owner to run the tag commands or allow them"
 retry_count: 0
 tracker: jira
 loop: 105
