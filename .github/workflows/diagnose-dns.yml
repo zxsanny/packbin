@@ -51,6 +51,8 @@ jobs:
       - name: Lookups for the stated minutes
         run: |
           set -uo pipefail
+          # Actions starts bash with -e: a failed lookup must be logged, not end the step, and `grep -c` exits 1 on a zero count.
+          set +e
           case "$MINUTES" in
             ''|*[!0-9]*) echo "minutes '$MINUTES' is not a number: using 12"; minutes=12 ;;
             *) minutes="$MINUTES" ;;
