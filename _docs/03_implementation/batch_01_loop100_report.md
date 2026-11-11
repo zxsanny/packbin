@@ -19,8 +19,8 @@ One total review for the loop (owner rule), after this batch; not run per batch.
 
 ## Test Suite
 
-- Total: 1,999 tests (1,919 at the end of loop 99)
-- Passed: 1,999
+- Total: 2,001 tests (1,919 at the end of loop 99)
+- Passed: 2,001
 - Failed: 0
 - Skipped: 0
 - `dart format --set-exit-if-changed` 0 changed in 159 files; `dart analyze --fatal-infos` 0 issues; seeded run seed 343166603, 7,193 inputs, 347,881 unpack calls, 0 failures.
@@ -36,6 +36,7 @@ One total review for the loop (owner rule), after this batch; not run per batch.
 | 4 | TypeScript packs two keys that collide after U+FFFD into an unreadable packet | AC-2 | Dart refuses; TypeScript fix is a follow-up in the loop record | clear (owner decision) |
 | 5 | The byte count of a too long text now counts a lone half as 3 bytes (it counted 2, used only in the refusal detail) | AC-1 | done, `text_hostile_test.dart` `the length of a too long text counts a lone half as U+FFFD` | clear |
 | 6 | The unpack error of a text or key refusal has no `reason` any more (a short packet has none) | AC-5 | done; the hostile rule texts carry `needed` and `left` only | clear (Go and Swift give the same) |
+| 7 | `nested('g', []).bind<Row>(...)` in a typed row built as a mark, and unpack of `010309` threw a `TypeError` out of `unpackRow` (found by a probe at assessment time) | AC-8 | fixed in a second commit: `NestedField.bind` of an empty nested is refused at build; the typed mark is `groupOf(...).bind`; tests `a typed row cannot bind an empty nested...` and `the typed mark is groupOf bound to a bool` | clear (AL-8 and `problem.md`: "a typed mark is groupOf with bind"; unpack never throws on input bytes) |
 
 ## Commit
 

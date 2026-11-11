@@ -15,6 +15,12 @@ const words =
 
 final class Leaf {}
 
+final class Cell {
+  int? h;
+  bool? mark;
+  Map<String, Object?>? g;
+}
+
 Scheme<Row> underFlags() => scheme(1, [
   flags(0, [nested('g', []), u8(0, 'h')]),
 ]);
@@ -24,7 +30,7 @@ Scheme<Row> underFlagBit() {
   return scheme(1, [byte, byte.bit(nested('g', [])), byte.bit(u8(0, 'h'))]);
 }
 
-PackbinException refusal(Scheme<Row> Function() build) {
+PackbinException refusal(Object? Function() build) {
   try {
     build();
   } on PackbinException catch (e) {
@@ -151,6 +157,57 @@ void main() {
         expect(e.name, 'g');
         expect(e.reason, 'empty group g: $words');
       });
+    });
+
+    test(
+      'a typed row cannot bind an empty nested: groupOf is the typed mark',
+      () {
+        // Arrange and Act
+        final e = refusal(
+          () => rowScheme<Cell>(1, Cell.new, [
+            flags(0, [
+              nested(
+                'g',
+                [],
+              ).bind<Cell>(get: (r) => r.g, set: (r, v) => r.g = v),
+              u8(0, 'h').bind<Cell>(get: (r) => r.h, set: (r, v) => r.h = v),
+            ]),
+          ]),
+        );
+
+        // Assert
+        expect(e.kind, ErrorKind.schemeError);
+        expect(e.name, 'g');
+        expect(e.reason, contains('presence mark'));
+      },
+    );
+
+    test('the typed mark is groupOf bound to a bool', () {
+      // Arrange
+      final s = rowScheme<Cell>(1, Cell.new, [
+        flags(0, [
+          groupOf(
+            0,
+            'g',
+            [],
+          ).bind<Cell>(get: (r) => r.mark, set: (r, v) => r.mark = v),
+          u8(0, 'h').bind<Cell>(get: (r) => r.h, set: (r, v) => r.h = v),
+        ]),
+      ]);
+
+      // Act
+      final raw = pack(
+        s,
+        Cell()
+          ..h = 9
+          ..mark = true,
+      );
+      final back = unpackRow(unhex('010309'), s).row!;
+
+      // Assert
+      expect(hex(raw), '010309');
+      expect(back.mark, isTrue);
+      expect(back.h, 9);
     });
 
     test('an empty nestedRow stays refused: it has no member to bind', () {

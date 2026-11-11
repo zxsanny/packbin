@@ -63,19 +63,26 @@ final class NestedField<C extends Object> extends ElementField<C> {
 
   /// This nested row bound to the member of the typed row [R] that holds it:
   /// a [C] made by [nestedRow], null being no value. Not for an element of a
-  /// [list] or [dict]: bind the list or dictionary instead.
+  /// [list] or [dict]: bind the list or dictionary instead. A nested row with
+  /// no member is a presence mark and holds a `bool`, not a [C]; a typed mark
+  /// is `groupOf(anchor, name, []).bind`, so it is refused here.
   Field bind<R extends Object>({
     required C? Function(R row) get,
     required void Function(R row, C value) set,
   }) => _Plain(
-    _node.copy(
-      binding: Binding(
-        (Object row) => get(row as R),
-        (Object row, Object value) => set(row as R, value as C),
-        R,
-        <S>() => <S>[] is List<R>,
-      ),
-    ),
+    _node.isMark
+        ? _node.copy(
+            error:
+                'nested row ${_node.name}: with no member it is a presence mark that holds a bool; bind groupOf(anchor, name, []) instead',
+          )
+        : _node.copy(
+            binding: Binding(
+              (Object row) => get(row as R),
+              (Object row, Object value) => set(row as R, value as C),
+              R,
+              <S>() => <S>[] is List<R>,
+            ),
+          ),
   );
 }
 
