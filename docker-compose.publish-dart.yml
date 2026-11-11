@@ -1,0 +1,12 @@
+# Third compose file of the publish run (publish_container in .github/workflows/publish-lib.sh): the volumes of the dart
+# service, read-only like the others. docker-compose.publish.yml has dropped the ones of the base file (see there). Nothing the
+# publish run starts in this service writes the repository: ring-dart.sh and publish-dart-prepare.sh work on copies.
+services:
+  dart:
+    volumes:
+      - ./:/src:ro
+      - ./fixtures/golden.hex:/fixture/golden.hex:ro
+      - type: tmpfs
+        target: /test-results
+      - type: tmpfs
+        target: /pub-cache

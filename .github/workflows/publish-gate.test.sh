@@ -125,10 +125,10 @@ gate_checks() {
   plan="$out/publish-plan.txt"
   local order
   order="$(paste -sd ' ' "$plan")"
-  assert_eq "$order" "csharp typescript python rust cpp java go swift" "AC-1 call list"
+  assert_eq "$order" "csharp typescript python rust cpp java go swift dart" "AC-1 call list"
   local count
   count="$(grep -c '^pack ' "$out/log.txt" || true)"
-  assert_eq "$count" "8" "AC-1 pack calls"
+  assert_eq "$count" "9" "AC-1 pack calls"
   while read -r _ lang hex; do
     assert_eq "$hex" "$expected" "AC-1 $lang hex"
   done < <(grep '^pack ' "$out/log.txt")
@@ -328,15 +328,17 @@ source "$here/publish-readonly.test.sh"
 source "$here/publish-go.test.sh"
 # shellcheck source=publish-swift.test.sh
 source "$here/publish-swift.test.sh"
+# shellcheck source=publish-dart.test.sh
+source "$here/publish-dart.test.sh"
 # shellcheck source=publish-timing.test.sh
 source "$here/publish-timing.test.sh"
 
-# The 19 check groups, in run order. CI runs them as parallel jobs (test.yml, publish-gate-*), each with --groups
+# The 20 check groups, in run order. CI runs them as parallel jobs (test.yml, publish-gate-*), each with --groups
 # <a,b,..> naming its share (AZ-2600; the read-only checks are five groups since AZ-2607 and AZ-2625, the phase scenarios
 # two since AZ-2625); no argument runs all of them. The Mac runs the CI shares at the same time
 # (scripts/loop-tests.sh). publish-jobs.test.sh reads this list, so a group that no CI job runs, or two jobs run, is
 # refused there.
-gate_groups="static crates-token registry vcpkg gate go swift manifest npm position workflow pins phases phases-rerun readonly readonly-gate-good readonly-gate-bad readonly-gate-nojava readonly-full"
+gate_groups="static crates-token registry vcpkg gate go swift dart manifest npm position workflow pins phases phases-rerun readonly readonly-gate-good readonly-gate-bad readonly-gate-nojava readonly-full"
 selected=" $gate_groups "
 if [ "${1:-}" = "--groups" ]; then
   wanted="${2:-}"
@@ -372,6 +374,7 @@ group vcpkg vcpkg_checks
 group gate gate_checks
 group go go_checks
 group swift swift_checks
+group dart dart_checks
 group manifest manifest_checks
 group npm npm_dist_checks
 group position position_checks

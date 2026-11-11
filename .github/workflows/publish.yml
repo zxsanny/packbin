@@ -66,6 +66,15 @@ jobs:
       - name: crates.io token
         id: crates
         run: bash .github/workflows/crates-token.sh exchange
+      # pub.dev (ADR-011): setup-dart trades the id-token permission of this job for an OIDC token, exports it as
+      # PUB_TOKEN and registers it with `dart pub token add https://pub.dev --env-var PUB_TOKEN`. pub.dev accepts it only
+      # from a run that a tag push started, which this workflow is, and only for a package that already exists.
+      - name: dart pin
+        id: dart-pin
+        run: echo "version=$(bash .github/workflows/tool-pin.sh dart)" >> "$GITHUB_OUTPUT"
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
+        with:
+          sdk: ${{ steps.dart-pin.outputs.version }}
       - name: publish present registries
         if: success()
         env:

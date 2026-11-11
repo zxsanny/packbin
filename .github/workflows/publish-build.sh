@@ -3,7 +3,7 @@
 # publish-check.py and records `build ok <target>` in $PACKBIN_OUT/artifacts/build.log.
 # This script holds no upload or push command; publish-upload.sh runs only after it exits 0.
 # Exit codes: 0 every target built and checked, 1 a build or a check failed, 2 usage.
-# Usage: publish-build.sh <target>...   (csharp typescript python rust vcpkg platformio esp-idf arduino java go-tag swift-check)
+# Usage: publish-build.sh <target>...   (csharp typescript python rust vcpkg platformio esp-idf arduino java pubdev go-tag swift-check)
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,24 +33,25 @@ if [ "${PACKBIN_BUILD_ONLY:-}" = "1" ]; then
   : > "$artifacts/dry-run"
 fi
 
-# Language packages build in their toolchain image; the artifact lands in $artifacts/<lang>.
+# Language packages build in their toolchain image; the artifact lands in $artifacts/<target> (the target is the
+# language except for Dart, whose target pubdev builds in the dart image).
 run_inside() {
-  local lang="$1" mount
+  local lang="$1" target="${2:-$1}" mount
   if [ "${PACKBIN_DOCKER:-1}" = "0" ]; then
-    bash "$here/publish-inside.sh" "$lang"
+    bash "$here/publish-inside.sh" "$lang" "$target"
     return
   fi
   # The repo is read-only in the container; its own artifacts folder is the one writable host path.
   # The host made it (mkdir below), so Docker does not create it as root.
-  mount="$(cd "$artifacts/$lang" && pwd)"
+  mount="$(cd "$artifacts/$target" && pwd)"
   publish_container \
-    -v "$mount:/out/artifacts/$lang" \
+    -v "$mount:/out/artifacts/$target" \
     -e SRC_ROOT=/src \
     -e PACKBIN_VERSION="$version" \
     -e PACKBIN_OUT=/out \
     -e PACKBIN_HOST_UID="$(id -u)" \
     -e PACKBIN_HOST_GID="$(id -g)" \
-    "$lang" "exec /src/.github/workflows/publish-inside.sh $lang"
+    "$lang" "exec /src/.github/workflows/publish-inside.sh $lang $target"
 }
 
 # The commit of the checkout, which go-tag and swift-check ($1) release. It stops when the checkout is not a
@@ -98,6 +99,9 @@ for target in "$@"; do
   case "$target" in
     csharp|typescript|python|rust)
       run_inside "$target"
+      ;;
+    pubdev)
+      run_inside dart pubdev
       ;;
     java)
       run_inside java

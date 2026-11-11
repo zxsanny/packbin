@@ -12,17 +12,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "ci"))
 import yaml_get  # noqa: E402
 
-LANGUAGES = "csharp typescript python rust cpp java go swift".split()
+LANGUAGES = "csharp typescript python rust cpp java go swift dart".split()
 BUILT = "csharp typescript python rust java".split()
 # The suite images each group starts (traced in the code, AZ-2626): the golden gate and the read-only probes run all
-# eight; the nojava gate copy has no java; the phase scenarios, the build of readonly-full and the pins build start
+# nine; the nojava gate copy has no java; the dart group builds the Dart package in the dart image; the phase scenarios, the build of readonly-full and the pins build start
 # the five that publish-build.sh runs in containers (cpp builds on the host); the other groups start none. A job
 # pulls exactly the union for its groups: a missing image would be pulled on first use, inside a timed group, and an
 # extra one costs the pull (swift is 4 GB).
 GROUP_IMAGES = {
     "gate": LANGUAGES, "readonly": LANGUAGES, "readonly-gate-good": LANGUAGES, "readonly-gate-bad": LANGUAGES,
     "readonly-gate-nojava": [lang for lang in LANGUAGES if lang != "java"], "phases": BUILT, "phases-rerun": BUILT,
-    "readonly-full": BUILT, "pins": ["python"],
+    "readonly-full": BUILT, "pins": ["python"], "dart": ["dart"],
 }
 PULL_LINE = re.compile(r"docker compose .*docker-compose\.publish\.yml.* pull\b")
 CACHE_USES = re.compile(r"actions/cache@[0-9a-f]{40}")

@@ -9,11 +9,13 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$here/publish-lib.sh"
 
 lang="${1:?language}"
+# The artifact folder is named after the target, which is not the language for Dart (pubdev).
+target="${2:-$lang}"
 root="$(publish_root)"
 version="${PACKBIN_VERSION:-0.1.0}"
 version="${version#v}"
 out="${PACKBIN_OUT:?PACKBIN_OUT is required}"
-dest="$out/artifacts/$lang"
+dest="$out/artifacts/$target"
 work="${PACKBIN_WORK:-}"
 made_work=0
 if [ -z "$work" ]; then
@@ -130,6 +132,9 @@ case "$lang" in
   </scm>
 </project>
 EOF
+    ;;
+  dart)
+    bash "$here/publish-dart-prepare.sh" "$root" "$version" "$dest"
     ;;
   *)
     echo "unknown language: $lang" >&2

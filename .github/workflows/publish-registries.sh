@@ -12,6 +12,8 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=publish-lib.sh
 source "$here/publish-lib.sh"
+# shellcheck source=publish-query.sh
+source "$here/publish-query.sh"
 
 if [ "${PACKBIN_PUBLISH:-}" != "1" ]; then
   echo "publish refused" >&2
@@ -103,7 +105,16 @@ if [ "$build_only" != "1" ]; then
       rust) require_tool cargo ;;
       go-tag) require_tool go ;;
       swift-check) require_tool swift ;;
+      pubdev) require_tool dart ;;
     esac
+  done
+  # Read-only questions to a registry that can refuse the run, still before anything is built or written.
+  for target in "${targets[@]}"; do
+    if [ "$target" = pubdev ]; then
+      preflight_work="$(mktemp -d)"
+      trap 'rm -rf "$preflight_work"' EXIT
+      work="$preflight_work" pubdev_preflight
+    fi
   done
 fi
 

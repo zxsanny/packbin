@@ -7,7 +7,10 @@
 # answer is never read as "not published".
 #
 # These functions run inside `if`, where `set -e` is off, so every failure here is an explicit exit.
-# Needs: $version, $artifacts, $work from the caller.
+# Needs: $here (the scripts directory), $version, $artifacts, $work from the caller.
+
+# shellcheck source=publish-pubdev-lib.sh disable=SC2154
+source "$here/publish-pubdev-lib.sh"
 
 PACKBIN_QUERY_ATTEMPTS="${PACKBIN_QUERY_ATTEMPTS:-3}"
 query_agent="packbin-publish (https://github.com/zxsanny/packbin)"
@@ -124,6 +127,9 @@ target_published() {
         && answer_is_yes esp-idf
       ;;
     arduino) git_published arduino "$artifacts/arduino/reg" "$(arduino_url)" arduino "arduino-$version" ;;
+    pubdev)
+      registry_fetch pubdev "$(pubdev_api_url)" && answer_is_yes pubdev
+      ;;
     # No registry answer: publish-go.sh asks the remote itself and always re-checks the Go proxy.
     go-tag) return 1 ;;
     # Nothing to publish: publish-swift.sh resolves and builds a consumer of the tag on every run.

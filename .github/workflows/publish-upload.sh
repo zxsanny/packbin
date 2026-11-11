@@ -3,8 +3,8 @@
 # refuses to start unless build.log holds `build ok` for every target given. Before each upload it
 # asks the registry whether the version is already there (publish-query.sh) and skips the target
 # with `already published <target> <version>`, so a re-run finishes a partial publish. Required
-# targets go first, then optional ones, then the final go-tag (publish-go.sh) and swift-check
-# (publish-swift.sh, which uploads nothing and writes no tag); the first failure stops
+# targets go first (pubdev, publish-pubdev.sh, among them), then optional ones, then the final go-tag (publish-go.sh)
+# and swift-check (publish-swift.sh, which uploads nothing and writes no tag); the first failure stops
 # the run. Registry tools run on the host. Cargo is the one tool that archives again: `cargo publish
 # --no-verify` re-archives the staged directory that the build phase already compiled and checked.
 # Usage: publish-upload.sh <target>...
@@ -165,6 +165,7 @@ upload_target() {
         --namespace zxsanny --name packbin --allow-existing
       ;;
     arduino) push_branch "$artifacts/arduino/reg" "$(arduino_url)" arduino "arduino-$version" ;;
+    pubdev) PACKBIN_VERSION="$version" bash "$here/publish-pubdev.sh" ;;
     go-tag) PACKBIN_VERSION="$version" bash "$here/publish-go.sh" ;;
     swift-check) PACKBIN_VERSION="$version" bash "$here/publish-swift.sh" ;;
     *)

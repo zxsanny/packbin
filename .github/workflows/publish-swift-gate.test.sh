@@ -210,7 +210,7 @@ sw_static_checks() {
 printf "%s|%s|%s|%s|%s\n" "$(targets_of_lang swift)" "$(target_tier swift-check)" "$(missing_credentials swift-check)" \
   "${PACKBIN_LANGS[*]}" "$(printf "%s\n" "${PACKBIN_TARGETS[@]}" | sed -n "\$p")"'
   out="$(env -u SWIFT_PACKAGE_URL -u GITHUB_TOKEN bash -c "$script" _ "$sw_wf/publish-lib.sh")"
-  assert_eq "$out" "swift-check|final||csharp typescript python rust cpp java go swift|swift-check swift final" "swift-check table"
+  assert_eq "$out" "swift-check|final||csharp typescript python rust cpp java go swift dart|swift-check swift final" "swift-check table"
   out="$(env -u SWIFT_PACKAGE_URL bash -c 'source "$1"; swift_package_url' _ "$sw_wf/publish-lib.sh")"
   assert_eq "$out" "https://github.com/zxsanny/packbin" "the default Swift package URL"
   grep -q 'ADR-005' "$sw_wf/publish-lib.sh" || fail "publish-lib.sh does not cite ADR-005"
@@ -349,7 +349,7 @@ sw_mutant_checks() {
   sw_mutant "a bad tag line from the build" sw_rerun_checks publish-build.sh $'printf \'v%s %s\\n\' "$version"' $'printf \'x%s %s\\n\' "$version"'
   sw_mutant "no local tag refusal" sw_rerun_checks publish-build.sh '&& [ "$tagged" != "$commit" ]; then' '&& false; then'
   sw_mutant "swift present without swift/" sw_gate_checks publish-lib.sh '[ -f "$root/Package.swift" ] && [ -d "$root/swift" ]' '[ -f "$root/Package.swift" ]'
-  sw_mutant "swift out of PACKBIN_LANGS" sw_gate_checks publish-lib.sh 'java go swift)' 'java go)'
+  sw_mutant "swift out of PACKBIN_LANGS" sw_gate_checks publish-lib.sh 'java go swift dart)' 'java go dart)'
   sw_mutant "no swift-check target" sw_check_checks publish-lib.sh $'  "swift-check swift final"\n' ''
   sw_mutant "swift-check not final" sw_gate_checks publish-lib.sh '"swift-check swift final"' '"swift-check swift required"'
   sw_mutant "no swift tool check" sw_refusal_checks publish-registries.sh $'      swift-check) require_tool swift ;;\n' ''

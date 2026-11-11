@@ -10,6 +10,7 @@ script prints `check failed: <target>: <what>` to stderr and exits 1; on success
 import hashlib
 import io
 import json
+import os
 import posixpath
 import re
 import subprocess
@@ -302,9 +303,75 @@ def check_swift(directory, version):
     need(re.search(r"(?m)^import Packbin$", (directory / "main.swift").read_text()), "the consumer main.swift does not import Packbin")
 
 
-# The five targets built in a container: a symlink in their tree could make the host tools that run
+def pubspec_blocks(text):
+    """The top-level keys of a pubspec: {key: (value on the key's line, [indented lines below it, comments dropped])}."""
+    blocks, current = {}, None
+    for line in text.splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if line[0] not in " \t-":
+            key, _, value = line.partition(":")
+            current = blocks[key.strip()] = (value.split(" #")[0].strip(), [])
+        elif current is not None:
+            current[1].append(line)
+    return blocks
+
+
+def dry_run_result(directory):
+    """(errors, warnings) of the saved `dart pub publish --dry-run`: the output of publish-dart-prepare.sh whose last
+    line is `exit <code>`. Exit 0 means no problem; pub exits 65 for an error and for a warning alike, so the text tells
+    them apart (a failure with neither is an error too)."""
+    lines = (directory / "publish-dry-run.txt").read_text().splitlines()
+    need(lines and re.fullmatch(r"exit \d+", lines[-1]) is not None, "publish-dry-run.txt does not end in an exit line")
+    code, text = int(lines[-1].split()[1]), "\n".join(lines[:-1])
+    if code == 0:
+        return [], []
+    found = re.search(r"(?s)Package validation found the following (?:\d+ potential issues|potential issue):\n(.*?)(?:\nThe server may enforce|\Z)", text)
+    warnings = [m.strip() for m in re.findall(r"(?m)^\* (.+)$", found.group(1))] if found else []
+    problem = re.search(r"(?s)Package validation found the following errors?:\n(.*?)(?:\n\n|\Z)", text)
+    if problem or "missing a requirement" in text or not re.search(r"(?m)^Package has \d+ warnings?\.$", text):
+        shown = problem.group(1).strip() if problem else "\n".join(text.splitlines()[-5:])
+        return [f"exit {code}: {shown}"], warnings
+    return [], warnings
+
+
+@target("pubdev")
+def check_pubdev(directory, version):
+    package = directory / "package"
+    need((package / "pubspec.yaml").is_file(), "package/pubspec.yaml is missing")
+    need(not (package / ".dart_tool").exists() and not (package / "pubspec.lock").exists(), "the prepared package holds .dart_tool or pubspec.lock")
+    blocks = pubspec_blocks((package / "pubspec.yaml").read_text())
+    need(blocks.get("name", ("",))[0] == "packbin", f"pubspec name is {blocks.get('name', ('',))[0]!r}, not packbin")
+    need(blocks.get("version", ("",))[0] == version, f"pubspec version is {blocks.get('version', ('',))[0]!r}, not {version}")
+    need(blocks.get("publish_to", ("",))[0] != "none", "pubspec has publish_to: none")
+    sdk = [line for line in blocks.get("environment", ("", []))[1] if re.match(r"\s+sdk:\s*\S", line)]
+    need(len(sdk) == 1, "pubspec has no environment: sdk: constraint")
+    runtime = blocks.get("dependencies", ("", []))
+    need(runtime[0] in ("", "{}") and not runtime[1], "pubspec has runtime dependencies (dependencies: must be empty)")
+    need("dependency_overrides" not in blocks, "pubspec has dependency_overrides")
+    need((package / "lib" / "packbin.dart").is_file(), "lib/packbin.dart is missing")
+    licence = package / "LICENSE"
+    need(licence.is_file() and licence.read_text().startswith("MIT License\n") and "Permission is hereby granted, free of charge" in licence.read_text(),
+         "LICENSE is missing or is not the MIT license text")
+    strict = os.environ.get("PACKBIN_DART_STRICT", "0") == "1"
+    notes = []
+    changelog = package / "CHANGELOG.md"
+    if not changelog.is_file():
+        notes.append("CHANGELOG.md is absent (AZ-4148 writes it)")
+    elif re.search(rf"(?m)^#+ +v?{re.escape(version)}(?![0-9A-Za-z.+-])", changelog.read_text()) is None:
+        notes.append(f"CHANGELOG.md has no entry for {version}")
+    errors, warnings = dry_run_result(directory)
+    need(not errors, "dart pub publish --dry-run reports errors: " + "; ".join(errors))
+    for warning in warnings:
+        notes.append("dry run warning: " + " ".join(warning.split()))
+    need(not (strict and (notes or warnings)), "PACKBIN_DART_STRICT=1 and the package is not clean: " + "; ".join(notes))
+    for note in notes:
+        print(f"note: pubdev: {note}")
+
+
+# The six targets built in a container: a symlink in their tree could make the host tools that run
 # next (cargo package, publish-sign.sh, publish-upload.sh) read or write a file outside it.
-CONTAINER_TARGETS = ("csharp", "typescript", "python", "rust", "java")
+CONTAINER_TARGETS = ("csharp", "typescript", "python", "rust", "java", "pubdev")
 
 
 def refuse_symlinks(directory):

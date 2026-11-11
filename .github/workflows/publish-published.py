@@ -2,7 +2,7 @@
 """Reads one registry answer saved by publish-query.sh and prints `yes` or `no`.
 
 Usage: publish-published.py <mode> <json file> <version> [file name...]
-Modes: nuget, maven, platformio, esp-idf, pypi (every given file name must be listed), pio-owner.
+Modes: nuget, maven, platformio, esp-idf, pubdev, pypi (every given file name must be listed), pio-owner.
 A body that does not have the expected shape raises, so the caller stops instead of guessing.
 """
 import json
@@ -20,6 +20,8 @@ elif mode == "maven":
 elif mode == "platformio":
     found = any(v["name"] == version for v in data["versions"])
 elif mode == "esp-idf":
+    found = any(v["version"] == version for v in data["versions"])
+elif mode == "pubdev":
     found = any(v["version"] == version for v in data["versions"])
 elif mode == "pypi":
     listed = {u["filename"] for u in data["urls"]}

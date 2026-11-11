@@ -33,3 +33,9 @@ services:
         target: /test-results
       - type: tmpfs
         target: /root/.cache/org.swift.swiftpm
+  # Dart: the base file mounts a named volume over /src/dart/.dart_tool, and a mount point inside the read-only /src cannot
+  # be created when the checkout has no such directory (it never has in CI). A merge cannot remove one mount of a list, so
+  # this file drops them all (!reset) and docker-compose.publish-dart.yml, the third file of publish_container, lists them
+  # again, without that one and with pub's package cache as a tmpfs (the named volume is shared state).
+  dart:
+    volumes: !reset []

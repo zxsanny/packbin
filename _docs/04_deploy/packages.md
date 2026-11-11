@@ -2,7 +2,7 @@
 
 **Path:** `_docs/04_deploy/packages.md`
 
-packbin has no server and no deploy host. Distribution is the GitHub repository plus one public registry per language. Go is the exception since loop 24: it has no registry, and its release is a git tag of this repository (ADR-004). Swift, since loop 26, has neither a registry nor a tag of its own: Swift Package Manager resolves the root `Package.swift` at the `vX.Y.Z` tag (ADR-005).
+packbin has no server and no deploy host. Distribution is the GitHub repository plus one public registry per language. Go is the exception since loop 24: it has no registry, and its release is a git tag of this repository (ADR-004). Swift, since loop 26, has neither a registry nor a tag of its own: Swift Package Manager resolves the root `Package.swift` at the `vX.Y.Z` tag (ADR-005). Dart, since loop 99, publishes to pub.dev from the same tag run through GitHub OIDC (ADR-011).
 
 ## Source
 
@@ -10,7 +10,7 @@ packbin has no server and no deploy host. Distribution is the GitHub repository 
 |--------|------|
 | GitHub repository `packbin` | Source, issues, golden fixtures, tags |
 
-The repository holds the eight language projects (C#, TypeScript, Python, Rust, C++, Java and, since loop 24, Go and, since loop 26, Swift) and the shared hex fixtures. Application packet lists do not live here.
+The repository holds the nine language projects (C#, TypeScript, Python, Rust, C++, Java and, since loop 24, Go, since loop 26, Swift and, since loop 99, Dart) and the shared hex fixtures. Application packet lists do not live here.
 
 License is MIT.
 
@@ -23,6 +23,7 @@ License is MIT.
 | pypi.org | `packbin` | `pip install packbin` | First publish, with the Python package |
 | crates.io | `packbin` | `cargo add packbin` | First publish, with the Rust package |
 | Maven Central | `io.github.zxsanny:packbin` | Gradle / Maven coordinate | First publish, with the Java package |
+| pub.dev | `packbin` | `dart pub add packbin` (Dart 3.13 and newer, native targets) | The first version by the owner by hand, then every tag run (Dart section below) |
 | vcpkg | `packbin` | `vcpkg install packbin`, with this repository's `vcpkg` branch as a git registry in `vcpkg-configuration.json` (README); then `find_package(packbin CONFIG REQUIRED)` and `packbin::packbin`; Linux and macOS only (`supports` is `linux \| osx`) | First publish, with the C++ package |
 
 The Java jar targets Java 17+, Android API 26+.
@@ -35,11 +36,26 @@ The seventh package is the module `github.com/zxsanny/packbin/go` in the `go/` f
 
 The eighth package is the library product `Packbin` of the root `Package.swift` (target `swift/Sources/Packbin`, `swift-tools-version: 6.0`, iOS 15, macOS 12, Linux). An app adds `.package(url: "https://github.com/zxsanny/packbin", from: "X.Y.Z")`; SwiftPM reads the version from the existing tag `vX.Y.Z`, so there is no upload and no `swift/vX.Y.Z` tag. Its one dependency is `swift-crypto` (exactly 4.3.1; HKDF-SHA256 for the session), linked only off Apple platforms, where CryptoKit is used; SwiftPM still resolves and clones it, and `swift-asn1`, on Apple platforms. A tag run proves the release with `swift-check`, a throwaway consumer that resolves and builds the tag (above). Decision and alternatives: `_docs/02_document/adr/005_swift-installs-from-the-version-tag.md`. No tag with Swift in the tree has been pushed yet (loop 26 pushed none).
 
+### Dart (pub.dev, from the tag run)
+
+The ninth package is `packbin` in the `dart/` folder (`environment: sdk: ^3.13.0`, 0 runtime dependencies, MIT). An app runs `dart pub add packbin`. The `pubdev` target is required and uploads with the official mechanism only (ADR-011, https://dart.dev/tools/pub/automated-publishing): the `publish` job has `id-token: write` and is started by the tag push, the `dart-lang/setup-dart` step (pinned by commit) makes the OIDC token and exports it as `PUB_TOKEN`, and `publish-pubdev.sh` runs `dart pub publish --force`. No pub.dev secret exists.
+
+- **Version.** The tag `vX.Y.Z` gives `X.Y.Z`: the build phase (`publish-dart-prepare.sh`) copies `dart/` without `.dart_tool`, `pubspec.lock` and `build`, writes the version into the copy's `pubspec.yaml`, runs `dart pub publish --dry-run` on it (0 errors required; warnings are listed as `note:` lines; `PACKBIN_DART_STRICT=1` makes any warning fail, AZ-4148 turns it on) and `publish-check.py pubdev` checks name, version, SDK constraint, 0 runtime dependencies, the MIT `LICENSE` and the dry run. `dart/pubspec.yaml` keeps the placeholder `0.1.0`.
+- **Plan.** A tree without `dart/pubspec.yaml` plans no `pubdev` target (the gate says `absent dart`). `PUB_TOKEN` missing (the job lacks the OIDC permission or the `setup-dart` step) fails the run before anything is built or written. So does a pub.dev that has no package `packbin`, because automated publishing cannot create one.
+- **Already published.** The version is in `https://pub.dev/api/packages/packbin`: `already published pubdev X.Y.Z`, no upload, the run goes on. pub.dev's answer to a second publish is not documented, so the query is the guard.
+- **A published version stays forever.** Retract it within seven days (`dart pub` or the package's Admin tab) and fix it with the next patch.
+
+Owner steps, once, before the first tag that contains `dart/` (until they are done every release run stops at the plan, for all languages):
+
+1. Publish a first version by hand: `dart pub publish` from the owner's pub.dev account in a checkout of the release commit. If it is the version of the first Dart tag, that tag's run finds it on pub.dev and uploads nothing.
+2. On the package's pub.dev page, Admin tab, "Automated publishing": enable GitHub Actions for `zxsanny/packbin` with the tag pattern `v{{version}}`.
+3. Do not require a GitHub environment there (the `publish` job names none; ADR-011).
+
 Public registries, not GitHub Packages. GitHub Packages asks for a token even for public installs, which fails the "install and import" path.
 
 ## Publish
 
-A version tag on the GitHub repository builds each language in that commit and pushes the matching registry. The C++ publish is a git push of a public vcpkg registry. vcpkg has no upload API. The port vendors `CMakeLists.txt`, `LICENSE`, `include/packbin` and `src` and builds the static library with the vcpkg CMake helpers (AZ-2098); port versions pushed before that only hold headers and sources and do not link. The first tag published all six packages from the same commit, after the golden hex matched on every one of them (AC-13 is that history and does not change). Since the Go release (ADR-004) a tag publishes the six registry packages and one Go tag, `go/vX.Y.Z` at the same commit, after the golden hex matches on all seven languages; a Go mismatch publishes 0 packages and 0 Go tags. Since loop 26 the gate covers eight languages; a Swift mismatch publishes 0 packages and 0 Go tags, and a passing tag ends with the Swift consumer check, which publishes nothing (ADR-005).
+A version tag on the GitHub repository builds each language in that commit and pushes the matching registry. The C++ publish is a git push of a public vcpkg registry. vcpkg has no upload API. The port vendors `CMakeLists.txt`, `LICENSE`, `include/packbin` and `src` and builds the static library with the vcpkg CMake helpers (AZ-2098); port versions pushed before that only hold headers and sources and do not link. The first tag published all six packages from the same commit, after the golden hex matched on every one of them (AC-13 is that history and does not change). Since the Go release (ADR-004) a tag publishes the six registry packages and one Go tag, `go/vX.Y.Z` at the same commit, after the golden hex matches on all seven languages; a Go mismatch publishes 0 packages and 0 Go tags. Since loop 26 the gate covers eight languages; a Swift mismatch publishes 0 packages and 0 Go tags, and a passing tag ends with the Swift consumer check, which publishes nothing (ADR-005). Since loop 99 the gate covers nine: a Dart mismatch publishes 0 packages of any language, and the run names `dart` (ADR-011).
 
 The publish has two phases. The build phase builds every artifact for every planned target (nupkg, npm tarball with compiled `dist/` JavaScript and `.d.ts` files built from the committed lockfile, wheel and sdist, crate, vcpkg port and Arduino library as prepared local clones, PlatformIO and ESP-IDF archives, the signed Maven bundle zip) into `.github/workflows/out/artifacts/<target>/` and checks each one: it carries the tag version, declares MIT and holds its main payload (`publish-check.py`). The Go target has no archive: its build step records the commit of the checkout and the tag line in `artifacts/go-tag/tag.txt`, and `publish-check.py go-tag` checks the tag line, the commit, the module line and that `go/LICENSE` is the MIT text; the build phase refuses before any write for a license that is not MIT, a module path that is not ours, a local `v<version>` tag at another commit or a checkout without `.git`. The upload phase starts only when every planned target logged `build ok`, and it sends those files with the registry tools on the runner (`dotnet`, `npm`, `twine`, `cargo`, `curl`, `git`, `pio`, `compote`; `go` for the proxy check of the Go tag); `pio pkg publish` and `compote component upload --archive` take the prebuilt archive as is. The build containers see the repo read-only (`docker-compose.publish.yml`) and write only their own folder, mounted at `/out/artifacts/<lang>` with `PACKBIN_OUT=/out`; the C# pack runs from a copy, so no build step can change a script the host runs next with the credentials. A failed build or check therefore leaves every registry untouched. Cargo is the exception to "no second pack": `cargo publish --no-verify` re-archives the staged directory that `cargo package` already compiled. A dry run is `PACKBIN_BUILD_ONLY=1 PACKBIN_PUBLISH=1 bash .github/workflows/publish-registries.sh`: it unsets every credential, signs the Maven bundle with a throwaway key, writes to no registry and exits 0. It is for CI tests, not a way to publish.
 
@@ -49,11 +65,11 @@ The target table is in `.github/workflows/publish-lib.sh`; the credential check 
 
 | Tier | Targets | Credential missing | Upload fails |
 |------|---------|--------------------|--------------|
-| Required | NuGet, npm, PyPI, crates.io, Maven Central, vcpkg | The run fails before anything is built or written, naming every missing variable | The run fails |
+| Required | NuGet, npm, PyPI, crates.io, Maven Central, vcpkg, pub.dev (`pubdev`; planned when `dart/pubspec.yaml` is in the tree) | The run fails before anything is built or written, naming every missing variable | The run fails |
 | Optional | PlatformIO, ESP-IDF component registry, Arduino | Skipped with a `::warning::` annotation and a line in the job summary naming the target and the variable | The run fails (the credential shows intent) |
 | Final | `go-tag` (the tag `go/vX.Y.Z`; planned when `go/` is in the tree) | Needs `GITHUB_TOKEN` for a github.com remote only; a remote at another URL needs none. Missing: the run fails before anything is built | Uploaded after every required and optional target, so a failed registry means no Go tag; the run fails if the push or the proxy check fails |
 
-Credentials: `NUGET_TOKEN`; `NPM_TOKEN` or the OIDC id-token; `PYPI_TOKEN` or the OIDC id-token; `CARGO_REGISTRY_TOKEN`; `MAVEN_CENTRAL_TOKEN` and `MAVEN_GPG_PRIVATE_KEY`; `GITHUB_TOKEN` for a vcpkg or Arduino registry on GitHub and for the Go tag push (a registry or remote at another URL needs none); `PLATFORMIO_AUTH_TOKEN`; `IDF_COMPONENT_API_TOKEN`. A language missing from the tag is not planned, so its targets are neither required nor warned about. A build-only run needs no credential and prints no warning.
+Credentials: `NUGET_TOKEN`; `NPM_TOKEN` or the OIDC id-token; `PYPI_TOKEN` or the OIDC id-token; `CARGO_REGISTRY_TOKEN`; `MAVEN_CENTRAL_TOKEN` and `MAVEN_GPG_PRIVATE_KEY`; `GITHUB_TOKEN` for a vcpkg or Arduino registry on GitHub and for the Go tag push (a registry or remote at another URL needs none); `PLATFORMIO_AUTH_TOKEN`; `IDF_COMPONENT_API_TOKEN`; `PUB_TOKEN` for pub.dev, which the `dart-lang/setup-dart` step exports from the job's OIDC permission (never set by hand). A language missing from the tag is not planned, so its targets are neither required nor warned about. A build-only run needs no credential and prints no warning.
 
 ### Re-running a tag
 
@@ -70,6 +86,7 @@ Re-run the tag's `publish.yml` run in Actions ("Re-run jobs") or start a new run
 | Arduino | the remote `arduino` branch and the tag `arduino-<version>` are the prepared commit; a tag that points elsewhere is not published, and the atomic push is refused |
 | PlatformIO | `api.registry.platformio.org/v3/packages/<owner>/library/packbin` lists the version; the owner is the account of `PLATFORMIO_AUTH_TOKEN` (`pio account show`) |
 | ESP-IDF | `components.espressif.com/api/components/zxsanny/packbin` lists the version; `compote component upload --allow-existing` stays as the race guard |
+| pub.dev | `pub.dev/api/packages/packbin` lists the version (a retracted one counts); a plan-time read-only check fails the run when that URL answers 404 (no package: the owner's first publish is missing) |
 | Go | the remote tag `go/vX.Y.Z` (asked first, peeled): at the commit of `vX.Y.Z` nothing is pushed; at another commit the run fails naming both commits (a Go tag never moves and is never deleted); absent, it is pushed without force. The proxy check below runs on every run |
 
 Every query has a 20 s timeout and 3 attempts on a transport error, 5xx or 429. A query that still fails, or answers something unexpected, fails the run with `cannot tell whether <target> <version> is published`; it is never read as "not published". Public queries send no token. Registries stay immutable: nothing is deleted, overwritten or force-pushed.

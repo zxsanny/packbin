@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PACKBIN_LANGS=(csharp typescript python rust cpp java go swift)
+PACKBIN_LANGS=(csharp typescript python rust cpp java go swift dart)
 
 # The publish targets: name, the language whose presence plans it, and its tier. A required target
 # with a missing credential fails the run before any write and a failed upload fails it; an
@@ -11,6 +11,9 @@ PACKBIN_LANGS=(csharp typescript python rust cpp java go swift)
 # (ADR-004) by pushing the tag go/vX.Y.Z, so it waits until every registry accepted the version.
 # swift-check uploads nothing and writes no tag: Swift installs from the vX.Y.Z tag through the root
 # Package.swift (ADR-005), and the check resolves and builds a consumer of that tag, after the Go tag.
+# pubdev uploads the Dart package to pub.dev (ADR-011). pub.dev takes no stored secret from a tag run: setup-dart
+# (publish.yml) trades the job's GitHub OIDC permission for a token and exports it as PUB_TOKEN, which is the credential
+# this target needs, so a run without that permission is refused before any write like any required target.
 # Uploads run required targets first, then optional, then final.
 PACKBIN_TARGETS=(
   "csharp csharp required"
@@ -19,6 +22,7 @@ PACKBIN_TARGETS=(
   "rust rust required"
   "java java required"
   "vcpkg cpp required"
+  "pubdev dart required"
   "platformio cpp optional"
   "esp-idf cpp optional"
   "arduino cpp optional"
@@ -64,6 +68,7 @@ target_credentials() {
     arduino) if [[ "$(arduino_url)" == https://github.com/* ]]; then echo "GITHUB_TOKEN"; fi ;;
     go-tag) if [[ "$(go_tag_url)" == https://github.com/* ]]; then echo "GITHUB_TOKEN"; fi ;;
     swift-check) echo "" ;;
+    pubdev) echo "PUB_TOKEN" ;;
     *)
       echo "unknown target: $1" >&2
       return 1
@@ -95,7 +100,7 @@ missing_credentials() {
 PACKBIN_CREDENTIALS=(
   NUGET_TOKEN NPM_TOKEN PYPI_TOKEN CARGO_REGISTRY_TOKEN MAVEN_CENTRAL_TOKEN MAVEN_GPG_PRIVATE_KEY
   PLATFORMIO_AUTH_TOKEN IDF_COMPONENT_API_TOKEN GITHUB_TOKEN
-  ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_ID_TOKEN_REQUEST_TOKEN
+  ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_ID_TOKEN_REQUEST_TOKEN PUB_TOKEN
 )
 
 # Unsets every name of PACKBIN_CREDENTIALS but the ones given, in the calling shell: call it in a subshell or in a
@@ -120,13 +125,13 @@ publish_root() {
 }
 
 # The one way the publish run starts a container (build phase and golden gate): the repo is mounted
-# read-only by docker-compose.publish.yml, merged over the base file. Arguments go to `compose run`:
+# read-only by docker-compose.publish.yml (and docker-compose.publish-dart.yml for the dart service), merged over the base file. Arguments go to `compose run`:
 # options, then the service and its command. Never add a `run -v` for /src: Compose ignores it
 # for a target the service already mounts.
 publish_container() {
   local root
   root="$(publish_root)"
-  docker compose -f "$root/docker-compose.test.yml" -f "$root/docker-compose.publish.yml" \
+  docker compose -f "$root/docker-compose.test.yml" -f "$root/docker-compose.publish.yml" -f "$root/docker-compose.publish-dart.yml" \
     --project-directory "$root" -p packbin-publish run -T --rm --no-deps "$@"
 }
 
@@ -143,6 +148,7 @@ language_present() {
     java) [ -f "$root/java/test.sh" ] ;;
     go) [ -f "$root/go/go.mod" ] ;;
     swift) [ -f "$root/Package.swift" ] && [ -d "$root/swift" ] ;;
+    dart) [ -f "$root/dart/pubspec.yaml" ] ;;
     *) return 1 ;;
   esac
 }

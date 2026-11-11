@@ -7,8 +7,9 @@
 # runner's Compose) is proven by the first CI run, and the ownership assertion says so here.
 
 # shellcheck disable=SC2154,SC2016
-RO_SERVICES="csharp typescript python rust cpp java go swift"
-RO_BUILD_LANGS="csharp typescript python rust java"
+RO_SERVICES="csharp typescript python rust cpp java go swift dart"
+# The build targets of the containers (the Dart target pubdev builds in the dart service).
+RO_BUILD_LANGS="csharp typescript python rust java pubdev"
 RO_OVERRIDE="docker-compose.publish.yml"
 RO_OPS=7
 
@@ -53,12 +54,17 @@ ro_tree() {
   rm -rf "$1/typescript/node_modules" "$1/csharp/bin" "$1/csharp/obj"
 }
 
-# Prints the problems of the merged compose configuration ($1 = override file, $2 = project directory)
+# Prints the problems of the merged compose configuration ($1 = override file, $2 = project directory; the third
+# file of publish_container, with the volumes of the dart service, follows an override and is left out when $3 is nodart)
 # and exits non-zero when there are any. A failure of the tools themselves exits 2 with no "problem" lines.
 ro_config_errors() {
-  local json
+  local json files
   json="$(mktemp)"
-  docker compose -f "$2/docker-compose.test.yml" -f "$1" --project-directory "$2" config --format json > "$json"
+  files=(-f "$2/docker-compose.test.yml" -f "$1")
+  if [ "$1" != "$2/docker-compose.test.yml" ] && [ "${3:-}" != nodart ]; then
+    files+=(-f "$2/docker-compose.publish-dart.yml")
+  fi
+  docker compose "${files[@]}" --project-directory "$2" config --format json > "$json"
   python3 - "$json" "$2" "$RO_SERVICES" <<'PY'
 import json, sys
 config = json.load(open(sys.argv[1]))
@@ -151,6 +157,12 @@ ro_static_checks() {
     grep -q '^problem: ' "$tmp/writable.out" || fail "AZ-2215 AC-7 the config check failed without naming a problem: $(cat "$tmp/writable.out")"
     echo "config check rejects a writable /src: $(head -n 1 "$tmp/writable.out")"
   fi
+  if ro_config_errors "$root/$RO_OVERRIDE" "$root" nodart > "$tmp/no-dart-file.out"; then
+    fail "AZ-4147 the config check passed without the third compose file (the dart service has no read-only /src)"
+  else
+    grep -q '^problem: dart: ' "$tmp/no-dart-file.out" || fail "AZ-4147 the config check failed without naming dart: $(cat "$tmp/no-dart-file.out")"
+    echo "config check rejects a missing dart volume file: $(head -n 1 "$tmp/no-dart-file.out")"
+  fi
   awk '/^  java:$/ { skip = 1; next } !skip { print }' "$root/$RO_OVERRIDE" > "$tmp/no-java.yml"
   if ro_config_errors "$tmp/no-java.yml" "$root" > "$tmp/no-java.out"; then
     fail "AZ-2215 AC-7 the config check passed an override without the java service"
@@ -174,6 +186,7 @@ ro_static_checks() {
   grep -q 'publish_container' "$here/publish-build.sh" || fail "AZ-2215 AC-7 publish-build.sh does not use publish_container"
   grep -q 'publish_container' "$here/publish-gate.sh" || fail "AZ-2215 AC-7 publish-gate.sh does not use publish_container"
   grep -q -- '-f "\$root/docker-compose.publish.yml"' "$here/publish-lib.sh" || fail "AZ-2215 AC-7 publish_container drops the override file"
+  grep -q -- '-f "\$root/docker-compose.publish-dart.yml"' "$here/publish-lib.sh" || fail "AZ-4147 publish_container drops the dart volumes file"
   if grep -n 'PACKBIN_DOCKER' "$here"/*.yml; then
     fail "AZ-2215 AC-7 a workflow sets PACKBIN_DOCKER"
   fi
@@ -206,7 +219,7 @@ ro_probe_checks() {
     ro_assert_denied "AZ-2215 AC-1 $lang (publish_container)" "$out"
   done
   after="$(ro_manifest "$tree")"
-  ro_assert_same "AZ-2215 AC-1 tree manifest after the eight direct probes" "$before" "$after"
+  ro_assert_same "AZ-2215 AC-1 tree manifest after the nine direct probes" "$before" "$after"
 
   cp "$tree/.github/workflows/ro-probe.sh" "$tree/.github/workflows/publish-inside.sh"
   before="$(ro_manifest "$tree")"
@@ -218,7 +231,7 @@ ro_probe_checks() {
     ro_assert_denied "AZ-2215 AC-1 $lang (publish-build.sh)" "$out"
   done
   after="$(ro_manifest "$tree")"
-  ro_assert_same "AZ-2215 AC-1 tree manifest after the five build probes" "$before" "$after"
+  ro_assert_same "AZ-2215 AC-1 tree manifest after the six build probes" "$before" "$after"
 
   sed 's| -f "\$root/docker-compose.publish.yml"||' "$here/publish-lib.sh" > "$tree/lib-without-override.sh"
   cmp -s "$here/publish-lib.sh" "$tree/lib-without-override.sh" && fail "AZ-2215 AC-7 temp lib is unchanged"
@@ -325,7 +338,7 @@ ro_host_path_check() {
 # AC-5: the gate under the read-only mount, with no node_modules (npm ci runs in the container copy). The three scenarios
 # share nothing (each has its own tree copy, output directory and logs; the publish compose file binds the tree of each run
 # read-only and gives it tmpfs caches), so they are three gate groups, one CI job each (AZ-2625): the gate on the good tree
-# prints the golden bytes in all eight languages and changes nothing outside out/; the bad-fixture and missing-java copies
+# prints the golden bytes in all nine languages and changes nothing outside out/; the bad-fixture and missing-java copies
 # behave as before.
 # ro_gate_run <name> <logs>: copies the tree to <logs>/<name>-tree (the bad scenario with a one-byte golden.hex, the nojava
 # scenario without java/), records its manifest, runs the gate once and leaves <name>.log, .err, .rc and .before in <logs>.
@@ -350,9 +363,9 @@ ro_gate_good_check() {
   tree="$logs/good-tree"
   [ "$(cat "$logs/good.rc")" = "0" ] || fail "AZ-2215 AC-5 the gate failed: $(tail -n 5 "$logs/good.err")"
   count="$(grep -c "^pack [a-z]* $expected\$" "$logs/good.log" || true)"
-  assert_eq "$count" "8" "AZ-2215 AC-5 golden pack lines"
+  assert_eq "$count" "9" "AZ-2215 AC-5 golden pack lines"
   assert_eq "$(grep '^mismatch ' "$logs/good.log")" "mismatch 0" "AZ-2215 AC-5 mismatch"
-  assert_eq "$(paste -sd ' ' "$tree/.github/workflows/out/good/publish-plan.txt")" "csharp typescript python rust cpp java go swift" "AZ-2215 AC-5 plan"
+  assert_eq "$(paste -sd ' ' "$tree/.github/workflows/out/good/publish-plan.txt")" "csharp typescript python rust cpp java go swift dart" "AZ-2215 AC-5 plan"
   grep -q 'added [0-9]* package' "$logs/good.err" || fail "AZ-2215 AC-5 npm ci did not run in the container copy: $(tail -n 5 "$logs/good.err")"
   ro_assert_same "AZ-2215 AC-5 tree manifest after the gate" "$(cat "$logs/good.before")" "$(ro_manifest "$tree")"
   rm -rf "$logs"
@@ -376,7 +389,7 @@ ro_gate_nojava_check() {
   ro_gate_run nojava "$logs"
   tree="$logs/nojava-tree"
   [ "$(cat "$logs/nojava.rc")" = "0" ] || fail "AZ-2215 AC-5 the gate without java failed: $(tail -n 5 "$logs/nojava.err")"
-  assert_eq "$(wc -l < "$tree/.github/workflows/out/nojava/publish-plan.txt" | tr -d ' ')" "7" "AZ-2215 AC-5 seven languages without java"
+  assert_eq "$(wc -l < "$tree/.github/workflows/out/nojava/publish-plan.txt" | tr -d ' ')" "8" "AZ-2215 AC-5 eight languages without java"
   ! grep -qx java "$tree/.github/workflows/out/nojava/publish-plan.txt" || fail "AC-4 java was published"
   grep -q '^absent java$' "$logs/nojava.log" || fail "AC-4 java was not absent"
   ro_assert_same "AZ-2215 AC-5 tree manifest after the missing-java gate" "$(cat "$logs/nojava.before")" "$(ro_manifest "$tree")"
@@ -421,11 +434,11 @@ ro_full_run_check() {
   fi
 }
 
-# A symlink in the tree of a container-built target is refused before any other check, for each of the five.
+# A symlink in the tree of a container-built target is refused before any other check, for each of the six.
 ro_symlink_check() {
   local dir out target
   dir="$(mktemp -d)"
-  for target in csharp typescript python rust java; do
+  for target in csharp typescript python rust java pubdev; do
     mkdir -p "$dir/$target"
     out="$(python3 "$here/publish-check.py" "$target" "$dir/$target" 0.1.9 2>&1)" && fail "AZ-2215 $target: an empty tree passed the check"
     case "$out" in *"is a symlink"*) fail "AZ-2215 $target: the control tree was refused as a symlink: $out" ;; esac

@@ -16,6 +16,7 @@ back, and the original ADR's `Superseded by` field is updated.
 | 008 | Frame mode authenticates; stream mode does not | Accepted | 2026-10-25 | — |
 | 009 | Frame mode is the only session; the stream session is removed | Accepted | 2026-10-26 | — |
 | 010 | A scheme may declare a parity percentage; the count follows the message length | Accepted | 2026-11-01 | — |
+| 011 | Dart publishes to pub.dev from the version tag | Accepted | 2026-11-11 | — |
 
 ADR-004 amends the count of six in ADR-002 (the first tag's six packages stay history); ADR-002 itself is unchanged.
 ADR-005 amends nothing: Swift adds no package and no tag, and ADR-002 and ADR-004 stay as written.
@@ -24,3 +25,4 @@ ADR-007 amends nothing: ADR-001's "the wire size is the sum of the present field
 ADR-008 amends ADR-001's "the wire size is the sum of the present fields" and the "authentication: none" line of the architecture for frame mode only: the body ends with its tag. Stream mode was unchanged then and is removed by ADR-009.
 ADR-009 amends ADR-008: its frame-mode decision stands; the stream mode beside it, and "one session type serves the websocket (stream) and the radio (frame)", are removed. ADR-008 itself is unchanged.
 ADR-010 amends nothing: it adds a second way to choose the parity count of ADR 007 (a percentage of the clear length); ADR-007 is unchanged and its fixed count stays.
+ADR-011 amends nothing: pub.dev is one more required target of the ADR-002 run (a seventh registry); ADR-002, ADR-004 and ADR-005 stay as written, and the golden gate now covers nine languages.

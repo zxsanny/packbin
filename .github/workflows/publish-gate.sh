@@ -29,6 +29,7 @@ last_line() {
 }
 
 mismatch=0
+mismatched=()
 present=()
 for lang in "${PACKBIN_LANGS[@]}"; do
   if ! language_present "$root" "$lang"; then
@@ -39,6 +40,7 @@ for lang in "${PACKBIN_LANGS[@]}"; do
   echo "pack $lang $hex"
   if [ "$hex" != "$expected" ]; then
     mismatch=$((mismatch + $(byte_mismatch "$hex" "$expected")))
+    mismatched+=("$lang")
   fi
   present+=("$lang")
 done
@@ -46,6 +48,7 @@ done
 echo "mismatch $mismatch"
 if [ "$mismatch" -gt 0 ]; then
   echo "publishing 0 packages"
+  echo "golden mismatch in: ${mismatched[*]}" >&2
   exit 1
 fi
 

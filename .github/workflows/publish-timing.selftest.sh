@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # AZ-2563: the timing lines of publish-gate.test.sh. A group prints its seconds, also when it fails; a group that aborts
-# the script is named by the EXIT trap; the gate runs exactly the 19 groups, each through `group` and `timed`; --groups
+# the script is named by the EXIT trap; the gate runs exactly the 20 groups, each through `group` and `timed`; --groups
 # (AZ-2600) selects some of them; each read-only check runs in exactly one of the five read-only groups (AZ-2607,
 # AZ-2625) and each phase check in exactly one of the two phase groups (AZ-2625).
 set -euo pipefail
@@ -69,10 +69,10 @@ grep -q 'not-reached' <<< "$out" && bad_in "$out" "the run went on after an abor
 out="$(GITHUB_ACTIONS=true bash "$work/driver.sh" abort 2>&1 < /dev/null)" || true
 grep -Eq '^::notice title=publish gate timing::.*publish-gate: gamma took [0-9]+ s \(aborted\)$' <<< "$out" || bad_in "$out" "an aborting group has no notice annotation"
 
-# Act and assert: the gate runs the 19 groups, each through `group` (which calls timed), and nothing bare
-expected="static crates-token registry vcpkg gate go swift manifest npm position workflow pins phases phases-rerun readonly readonly-gate-good readonly-gate-bad readonly-gate-nojava readonly-full"
+# Act and assert: the gate runs the 20 groups, each through `group` (which calls timed), and nothing bare
+expected="static crates-token registry vcpkg gate go swift dart manifest npm position workflow pins phases phases-rerun readonly readonly-gate-good readonly-gate-bad readonly-gate-nojava readonly-full"
 got="$(sed -n 's/^group \([a-z-]*\) \([a-z_]*\)$/\1=\2/p' "$here/publish-gate.test.sh" | tr '\n' ' ' | sed 's/ $//')"
-expected_fns="static=static_checks crates-token=crates_token_checks registry=registry_checks vcpkg=vcpkg_checks gate=gate_checks go=go_checks swift=swift_checks manifest=manifest_checks npm=npm_dist_checks position=position_checks workflow=workflow_checks pins=pins_checks phases=phase_checks phases-rerun=phase_rerun_checks readonly=readonly_checks readonly-gate-good=ro_gate_good_check readonly-gate-bad=ro_gate_bad_check readonly-gate-nojava=ro_gate_nojava_check readonly-full=ro_full_run_check"
+expected_fns="static=static_checks crates-token=crates_token_checks registry=registry_checks vcpkg=vcpkg_checks gate=gate_checks go=go_checks swift=swift_checks dart=dart_checks manifest=manifest_checks npm=npm_dist_checks position=position_checks workflow=workflow_checks pins=pins_checks phases=phase_checks phases-rerun=phase_rerun_checks readonly=readonly_checks readonly-gate-good=ro_gate_good_check readonly-gate-bad=ro_gate_bad_check readonly-gate-nojava=ro_gate_nojava_check readonly-full=ro_full_run_check"
 [ "$got" = "$expected_fns" ] || bad "grouped checks are [$got], expected [$expected_fns]"
 listed="$(sed -n 's/^gate_groups="\(.*\)"$/\1/p' "$here/publish-gate.test.sh")"
 [ "$listed" = "$expected" ] || bad "gate_groups is [$listed], expected [$expected]"
@@ -102,7 +102,7 @@ grep -q 'publish-gate: manifest took' <<< "$out" && bad_in "$out" "a group ran a
 rc=0
 bash "$here/publish-gate.test.sh" --groups "" >/dev/null 2>&1 < /dev/null || rc=$?
 [ "$rc" -eq 2 ] || bad "an empty group list exited $rc, expected 2"
-for fn in static_checks crates_token_checks registry_checks vcpkg_checks gate_checks go_checks swift_checks manifest_checks \
+for fn in static_checks crates_token_checks registry_checks vcpkg_checks gate_checks go_checks swift_checks dart_checks manifest_checks \
   npm_dist_checks position_checks workflow_checks pins_checks phase_checks phase_rerun_checks readonly_checks ro_gate_good_check ro_gate_bad_check ro_gate_nojava_check ro_full_run_check; do
   n="$(grep -c "^$fn\$" "$here/publish-gate.test.sh" || true)"
   [ "$n" -eq 0 ] || bad "$fn is called bare, outside timed"
