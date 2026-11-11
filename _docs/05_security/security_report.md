@@ -760,6 +760,6 @@ Review of the session on caller buffers, the shared pad/hash/HKDF, the raw text 
 | F75 (D6) | Low | fixed in loop 99 | `platforms:` lists android, ios, linux, macos and windows; the web is documented as not supported (`unpackRow` of a `u64` throws `UnsupportedError` under dart2js) |
 | F76 (D7) | Low | accepted | `pubspec.lock` is not committed (a library's lock file is not used by its consumers); `test` and `lints` float in CI |
 | F77 (D8) | Low | accepted | `dart:3.13.7` is a tag, not a digest, as the other eight images |
+| F78 | Low | fixed in loop 100 | `nested(name, []).bind(...)` in a typed row built as a mark and unpack threw a cast error; refused at build (`_docs/05_security/security_report_loop100.md`) |
 
 Not verified: the OIDC token lifetime and pub.dev's acceptance of the workflow's token (no tag run); `dart pub audit` on the dev dependency tree.
-

@@ -10,9 +10,9 @@ Dart is the ninth language. The criteria are DT-1 to DT-20 of `_docs/02_task_pla
 | DT-4 | hostile vectors | AZ-4143 | `test/hostile/hostile_test.dart`; `fixtures/hostile/check-cases.sh` | Covered (75 cases) |
 | DT-5 | limits, seeded run | AZ-4139 | `test/limits/` | Covered (the 60 s run is a CI step; a 10 s run passed locally) |
 | DT-6 | `pack-session.md` 3.0.0 | AZ-4142 | `test/frame/` | Covered (157 of 157 rows) |
-| DT-7 | rings | AZ-4146 | `ring-dart.sh`, `drivers/handoff-dart/`, `ring-wiring-dart.test.sh` | Covered on the Mac with all nine languages; the first CI ring run is pending |
+| DT-7 | rings | AZ-4146 | `ring-dart.sh`, `drivers/handoff-dart/`, `ring-wiring-dart.test.sh` | Covered on the Mac with all nine languages; the first CI run (dev and main, 2026-11-11, commit ada1e00) passed |
 | DT-8 | AC-10 | AZ-4134 | `dart/tool/speed.dart`, `test/core/speed_rows_test.dart` | Covered (compiled build: 45 ms for 100,000 round trips) |
-| DT-9 | AC-11 | AZ-4145 | `run-suite-dart.sh`, `run-suite-dart.test.sh` | Covered in the container; the first CI run is pending |
+| DT-9 | AC-11 | AZ-4145 | `run-suite-dart.sh`, `run-suite-dart.test.sh` | Covered in the container; the first CI run (dev and main, 2026-11-11, commit ada1e00) passed |
 | DT-10 | AC-12, AC-14, AC-15, AC-16 | AZ-4147 | `publish-dart.test.sh`, `publish-dart-package.test.sh`, the publish gate tests | Owned by AZ-4147 (ADR-011); the real publish is an owner step |
 | DT-11 | purity | AZ-4134, AZ-4145 | `dart_deps` in `run-suite-dart.sh`, `test/core/purity_test.dart` | Covered |
 | DT-12 | no value | AZ-4138 | `test/core/no_value_test.dart`, `test/rounds/zero_and_short_test.dart`, `test/checks/group_rows_test.dart` | Covered |
