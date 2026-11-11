@@ -528,3 +528,18 @@ Loop 74 (2026-10-26, ADR-009: remove the stream session; D1 frame names; D2 cryp
 | AZ-3524 | percent_docs_swift_go (loop 98) | 2 | None | none |
 | AZ-3525 | percent_cpp_device_run (loop 98) | 3 | None | none |
 | AZ-3526 | percent_rust_device_run (loop 98) | 3 | None | none |
+| AZ-4134 | dart_core (loop 99) | 5 | None | AZ-4133 |
+| AZ-4135 | dart_scheme_checks (loop 99) | 5 | AZ-4134 | AZ-4133 |
+| AZ-4136 | dart_rounds (loop 99) | 5 | AZ-4135 | AZ-4133 |
+| AZ-4137 | dart_text (loop 99) | 3 | AZ-4134 | AZ-4133 |
+| AZ-4138 | dart_collections (loop 99) | 5 | AZ-4136, AZ-4137 | AZ-4133 |
+| AZ-4139 | dart_limits (loop 99) | 3 | AZ-4138 | AZ-4133 |
+| AZ-4140 | dart_ecc (loop 99) | 5 | AZ-4136 | AZ-4133 |
+| AZ-4141 | dart_crypto (loop 99) | 3 | AZ-4134 | AZ-4133 |
+| AZ-4142 | dart_frame (loop 99) | 5 | AZ-4141 | AZ-4133 |
+| AZ-4143 | dart_hostile_vectors (loop 99) | 3 | AZ-4139, AZ-4140 | AZ-4133 |
+| AZ-4144 | dart_parity_rows (loop 99) | 3 | AZ-4143 | AZ-4133 |
+| AZ-4145 | dart_ci_suite (loop 99) | 3 | AZ-4134 | AZ-4133 |
+| AZ-4146 | dart_ring (loop 99) | 5 | AZ-4138, AZ-4140, AZ-4142, AZ-4145 | AZ-4133 |
+| AZ-4147 | dart_release (loop 99) | 5 | AZ-4145, AZ-4146 | AZ-4133 |
+| AZ-4148 | dart_docs (loop 99) | 3 | AZ-4144, AZ-4147 | AZ-4133 |

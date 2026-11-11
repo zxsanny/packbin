@@ -7,7 +7,7 @@ work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 failures=0
 
-for lang in python typescript csharp java rust go swift cpp; do
+for lang in python typescript csharp java rust go swift cpp dart; do
   rel="$(python3 "$here/emit_tables.py" "$lang" --path < /dev/null)"
   mkdir -p "$work/ok/$(dirname "$rel")"
   python3 "$here/emit_tables.py" "$lang" < /dev/null > "$work/ok/$rel"
@@ -19,6 +19,12 @@ cp -R "$work/ok" "$work/changed"
 rel="$(python3 "$here/emit_tables.py" go --path < /dev/null)"
 sed -e 's/1072/1073/' "$work/ok/$rel" > "$work/changed/$rel"
 if bash "$here/check-emitted.sh" "$work/changed" > /dev/null 2>&1; then echo "FAIL: a changed constant was accepted" >&2; failures=$((failures + 1)); else echo "ok: a changed constant is refused"; fi
+
+cp -R "$work/ok" "$work/dart"
+rel="$(python3 "$here/emit_tables.py" dart --path < /dev/null)"
+sed -e 's/1072/1073/' "$work/ok/$rel" > "$work/dart/$rel"
+if cmp -s "$work/ok/$rel" "$work/dart/$rel"; then echo "FAIL: the Dart table entry was not changed" >&2; failures=$((failures + 1)); fi
+if bash "$here/check-emitted.sh" "$work/dart" > /dev/null 2>&1; then echo "FAIL: a changed Dart table entry was accepted" >&2; failures=$((failures + 1)); else echo "ok: a changed Dart table entry is refused"; fi
 
 cp -R "$work/ok" "$work/missing"
 rm "$work/missing/$(python3 "$here/emit_tables.py" swift --path < /dev/null)"

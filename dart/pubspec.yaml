@@ -1,0 +1,17 @@
+name: packbin
+description: >-
+  Compact binary packing with schemes shared by nine languages: the same
+  bytes as the C#, TypeScript, Python, Rust, C++, Java, Go and Swift packages.
+version: 0.1.0
+repository: https://github.com/zxsanny/packbin
+issue_tracker: https://github.com/zxsanny/packbin/issues
+topics:
+  - binary
+  - serialization
+  - codec
+
+environment:
+  sdk: ^3.13.0
+dev_dependencies:
+  lints: ^6.1.0
+  test: ^1.33.0

@@ -16,3 +16,7 @@ typescript/dist/
 **/.build/
 **/.swiftpm/
 .DS_Store
+
+# Dart
+.dart_tool/
+dart/pubspec.lock

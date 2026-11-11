@@ -7,7 +7,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 root="${1:-$(cd "$here/../.." && pwd)}"
 failures=0
 
-for lang in python typescript csharp java rust go swift cpp; do
+for lang in python typescript csharp java rust go swift cpp dart; do
   rel="$(python3 "$here/emit_tables.py" "$lang" --path < /dev/null)"
   if [ ! -f "$root/$rel" ]; then
     echo "check-emitted: $lang: $rel is missing" >&2
