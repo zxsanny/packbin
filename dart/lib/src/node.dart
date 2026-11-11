@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'group_rows.dart';
 import 'round_shape.dart';
 
 /// The number of bits one flag byte holds.
@@ -22,6 +23,10 @@ enum NodeKind {
   packed,
   repeat,
   times,
+  utf8,
+  list,
+  dict,
+  nested,
 }
 
 /// The identity of a split-form flag byte handle.
@@ -105,6 +110,25 @@ final class RoundBinding {
   checkBody;
 }
 
+/// A typed row made by `nestedRow`: how unpack makes one, what the row type
+/// is, and how its members are checked against it.
+final class RowSpec {
+  RowSpec(this.create, this.isRow, this.checkBody);
+
+  /// Makes the row unpack fills.
+  final Object Function() create;
+
+  /// Whether a value is a row of this type.
+  final bool Function(Object value) isRow;
+
+  /// Calls `check` for the members with the row type as its type argument.
+  final void Function(
+    void Function<S extends Object>(List<Node> body) check,
+    List<Node> body,
+  )
+  checkBody;
+}
+
 /// One field. Constructors make it and a scheme makes changed copies, never
 /// changing one, so a field can be shared by any number of schemes.
 final class Node {
@@ -133,6 +157,10 @@ final class Node {
     this.slotHi = 0,
     this.shape,
     this.roundBinding,
+    this.make,
+    this.row,
+    this.place,
+    this.minItem = 1,
   }) : endian = bigEndian ? Endian.big : Endian.little;
 
   final NodeKind kind;
@@ -200,6 +228,20 @@ final class Node {
   /// A `repeat` or `times` bound to a member of a typed row.
   final RoundBinding? roundBinding;
 
+  /// A `list` or `dict`: makes the empty container of its element type that a
+  /// typed row holds (`List<E>` or `Map<String, E>`).
+  final Object Function()? make;
+
+  /// A `nested` made by `nestedRow`: the typed row.
+  final RowSpec? row;
+
+  /// A built `nested` row of a map scheme: the groups of its own map.
+  final GroupPlace? place;
+
+  /// A built `list` or `dict`: the fewest bytes one item takes, at least 1,
+  /// which a count from the wire is compared with the bytes left.
+  final int minItem;
+
   Node copy({
     bool? bigEndian,
     List<Node>? fields,
@@ -216,6 +258,8 @@ final class Node {
     int? slotHi,
     RoundShape? shape,
     RoundBinding? roundBinding,
+    GroupPlace? place,
+    int? minItem,
   }) => Node(
     kind,
     id: id,
@@ -241,6 +285,10 @@ final class Node {
     slotHi: slotHi ?? this.slotHi,
     shape: shape ?? this.shape,
     roundBinding: roundBinding ?? this.roundBinding,
+    make: make,
+    row: row,
+    place: place ?? this.place,
+    minItem: minItem ?? this.minItem,
   );
 
   /// The member a flag bit guards.
@@ -254,7 +302,8 @@ final class Node {
       kind == NodeKind.sized ||
       kind == NodeKind.bits ||
       kind == NodeKind.packed ||
-      kind == NodeKind.slot;
+      kind == NodeKind.slot ||
+      kind == NodeKind.utf8;
 
   /// A `repeat` or `times`.
   bool get isRound => kind == NodeKind.repeat || kind == NodeKind.times;
@@ -268,11 +317,15 @@ final class Node {
   /// A group with no member: a presence mark like a bool, set only by `true`.
   bool get isMark => kind == NodeKind.group && fields.isEmpty;
 
+  /// A `list` or `dict`.
+  bool get isCollection => kind == NodeKind.list || kind == NodeKind.dict;
+
   /// A value field with bytes of its own.
   bool get isLeaf =>
       kind == NodeKind.integer ||
       kind == NodeKind.float ||
-      kind == NodeKind.bytes;
+      kind == NodeKind.bytes ||
+      kind == NodeKind.utf8;
 
   /// The name a field declares; a flag bit is named by its member, and a
   /// flags or when by the first name inside it. A round with no name inside
@@ -309,5 +362,9 @@ final class Node {
     NodeKind.packed => 'packed',
     NodeKind.repeat => 'repeat',
     NodeKind.times => 'times',
+    NodeKind.utf8 => 'utf8',
+    NodeKind.list => 'list',
+    NodeKind.dict => 'dict',
+    NodeKind.nested => 'nested row',
   };
 }

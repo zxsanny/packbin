@@ -52,6 +52,10 @@ void _members(List<Node> nodes, List<Node> out, {bool inRound = false}) {
       case NodeKind.bits:
       case NodeKind.packed:
       case NodeKind.slot:
+      case NodeKind.utf8:
+      case NodeKind.list:
+      case NodeKind.dict:
+      case NodeKind.nested:
         out.add(n);
       case NodeKind.boolean:
       case NodeKind.group:

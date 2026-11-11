@@ -40,6 +40,7 @@ void _resolve(
       case NodeKind.bytes:
       case NodeKind.boolean:
       case NodeKind.slot:
+      case NodeKind.utf8:
         scope[n.id!] = Reference(n, path);
       case NodeKind.sized:
       case NodeKind.bits:
@@ -56,6 +57,9 @@ void _resolve(
         sources[n] = _count(n, scope);
         _resolve(n.fields, {}, const [], typed, sources);
       case NodeKind.repeat:
+      case NodeKind.list:
+      case NodeKind.dict:
+      case NodeKind.nested:
         _resolve(n.fields, {}, const [], typed, sources);
       case NodeKind.group:
         _resolve(

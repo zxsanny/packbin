@@ -6,14 +6,19 @@ library;
 export 'src/errors.dart' show ErrorKind, PackbinError, PackbinException;
 export 'src/fields.dart'
     show
+        DictField,
+        ElementField,
         Field,
         FlagByte,
         GroupField,
+        ListField,
+        NestedField,
         RoundField,
         ValueField,
         be,
         bits,
         bytes,
+        dict,
         eq,
         f32,
         f64,
@@ -25,6 +30,9 @@ export 'src/fields.dart'
         i32,
         i64,
         i8,
+        list,
+        nested,
+        nestedRow,
         packed,
         repeat,
         sized,
@@ -35,6 +43,7 @@ export 'src/fields.dart'
         u32,
         u64,
         u8,
+        utf8Field,
         when;
 export 'src/node.dart' show Condition, flagBits;
 export 'src/scheme.dart'
@@ -46,7 +55,9 @@ export 'src/scheme.dart'
         rowScheme,
         scheme,
         unpack,
-        unpackRow;
+        unpackRepair,
+        unpackRow,
+        unpackRowRepair;
 export 'src/frame/frame_results.dart'
     show
         FrameOpenResult,

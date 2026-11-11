@@ -1,11 +1,13 @@
 import 'dart:typed_data';
 
 import 'build.dart';
+import 'collections_pack.dart';
 import 'counted_pack.dart';
 import 'errors.dart';
 import 'group_rows.dart';
 import 'node.dart';
 import 'rounds_pack.dart';
+import 'text/text.dart';
 import 'writer.dart';
 
 /// The packet of [row]: the type byte, then the fields in order.
@@ -47,6 +49,9 @@ final class Packer {
 
   /// The slots the rounds of this call have charged against the slot limit.
   int charged = 0;
+
+  /// The last text this call encoded, made when the first text is written.
+  TextCache? textCache;
   final bool typed;
   final List<Object?> seen;
   final Int32List? _split;
@@ -85,9 +90,14 @@ final class Packer {
         case NodeKind.integer:
         case NodeKind.float:
         case NodeKind.bytes:
+        case NodeKind.utf8:
           final v = value(n, row);
           if (v == null) throw packFail(n.id, n.name, 'missing ${n.name}');
           write(n, v);
+        case NodeKind.list:
+        case NodeKind.dict:
+        case NodeKind.nested:
+          packCollection(n, row);
         case NodeKind.boolean:
           // Reached only through a set flag bit: the bit is the value.
           if (n.slot >= 0) seen[n.slot] = true;
@@ -207,6 +217,10 @@ final class Packer {
       case NodeKind.bits:
       case NodeKind.packed:
       case NodeKind.slot:
+      case NodeKind.utf8:
+      case NodeKind.list:
+      case NodeKind.dict:
+      case NodeKind.nested:
         return value(member, row) != null;
       case NodeKind.repeat:
         return repeatOn(member, row);
@@ -270,6 +284,10 @@ final class Packer {
       case NodeKind.bits:
       case NodeKind.packed:
       case NodeKind.slot:
+      case NodeKind.utf8:
+      case NodeKind.list:
+      case NodeKind.dict:
+      case NodeKind.nested:
         return value(member, row) != null ? member : null;
       case NodeKind.repeat:
       case NodeKind.times:
@@ -361,6 +379,8 @@ final class Packer {
           );
         }
         out.bytes(v);
+      case NodeKind.utf8:
+        writeText(n.id, n.name, v);
       case NodeKind.boolean:
       case NodeKind.flags:
       case NodeKind.flagByte:
@@ -374,6 +394,9 @@ final class Packer {
       case NodeKind.packed:
       case NodeKind.repeat:
       case NodeKind.times:
+      case NodeKind.list:
+      case NodeKind.dict:
+      case NodeKind.nested:
         throw packFail(n.errorId, n.declaredName, '${n.label} takes no value');
     }
   }

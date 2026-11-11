@@ -170,6 +170,8 @@ void main() {
         'too_many',
         'scheme_error',
         'pack_error',
+        'uncorrectable',
+        'too_long',
       ]);
     });
 

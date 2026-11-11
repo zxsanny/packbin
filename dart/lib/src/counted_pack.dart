@@ -220,6 +220,10 @@ extension CountedPack on Packer {
       case NodeKind.u2:
       case NodeKind.slot:
       case NodeKind.repeat:
+      case NodeKind.utf8:
+      case NodeKind.list:
+      case NodeKind.dict:
+      case NodeKind.nested:
         return;
     }
   }
@@ -252,6 +256,10 @@ extension CountedPack on Packer {
       case NodeKind.bits:
       case NodeKind.packed:
       case NodeKind.repeat:
+      case NodeKind.utf8:
+      case NodeKind.list:
+      case NodeKind.dict:
+      case NodeKind.nested:
         return false;
     }
   }

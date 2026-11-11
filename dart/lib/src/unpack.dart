@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'build.dart';
+import 'collections_unpack.dart';
 import 'errors.dart';
 import 'counted_unpack.dart';
 import 'node.dart';
@@ -47,7 +48,14 @@ final class Reader {
         case NodeKind.integer:
         case NodeKind.float:
         case NodeKind.bytes:
+        case NodeKind.utf8:
           final v = value(n);
+          if (v == null) return false;
+          store(n, row, v);
+        case NodeKind.list:
+        case NodeKind.dict:
+        case NodeKind.nested:
+          final v = collection(n);
           if (v == null) return false;
           store(n, row, v);
         case NodeKind.boolean:
@@ -122,6 +130,7 @@ final class Reader {
   /// The value of an integer, float or fixed bytes field; null when the
   /// buffer ends inside it.
   Object? value(Node n) {
+    if (n.kind == NodeKind.utf8) return readText(n.id, n.name);
     final size = n.size;
     final at = off;
     if (size > end - at) {

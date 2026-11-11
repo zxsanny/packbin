@@ -84,6 +84,12 @@ final builders = <String, (Build, int?)>{
     ]),
     1,
   ),
+  'construct_empty_round_body_list_element': (
+    () => scheme(1, [
+      list('items', nested('item', [u8(0, 'n'), times(1, 0, [])])),
+    ]),
+    1,
+  ),
   'construct_empty_nested_when_body': (
     () => scheme(1, [
       u8(0, 'mode'),
@@ -96,12 +102,9 @@ final builders = <String, (Build, int?)>{
   ),
 };
 
-/// Cases whose scheme needs a field the package gets later: `list` (AZ-4138).
-/// The test fails on a construct case that is neither here nor in
-/// [builders].
-final deferred = <String, String>{
-  'construct_empty_round_body_list_element': 'list and times (AZ-4138)',
-};
+/// Cases a later task builds: none is left, and the test fails on a construct
+/// case that is neither here nor in [builders].
+final deferred = <String, String>{};
 
 /// The `construct` rows of the file: id and the outcome terms accepted.
 List<(String, List<String>)> constructCases() {

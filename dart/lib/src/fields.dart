@@ -2,6 +2,8 @@ import 'dart:typed_data';
 
 import 'node.dart';
 
+part 'collection_fields.dart';
+
 /// One field of a scheme, made by the helpers ([u8], [flags], [when], ...).
 /// A field is immutable and can be shared by any number of schemes.
 sealed class Field {
@@ -20,7 +22,7 @@ final class _Plain extends Field {
 /// `double` for the floats, `Uint8List` for fixed bytes, `bool` for a flag
 /// bool. In a map row the value sits under the field's name; [bind] binds it
 /// to a member of a typed row instead.
-final class ValueField<V extends Object> extends Field {
+final class ValueField<V extends Object> extends ElementField<V> {
   ValueField._(super.node) : super._();
 
   @override
@@ -214,6 +216,10 @@ T be<T extends Field>(T field) {
     case NodeKind.packed:
     case NodeKind.repeat:
     case NodeKind.times:
+    case NodeKind.utf8:
+    case NodeKind.list:
+    case NodeKind.dict:
+    case NodeKind.nested:
       return field;
   }
 }

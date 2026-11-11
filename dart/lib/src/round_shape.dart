@@ -5,7 +5,14 @@ import 'node.dart';
 /// scheme is built. Nothing in it changes after, and nothing is keyed by
 /// identity, so a scheme can be sent to another isolate.
 final class RoundShape {
-  RoundShape._(this.names, this.optional, this.buffers, this.width, this.place);
+  RoundShape._(
+    this.names,
+    this.optional,
+    this.buffers,
+    this.dicts,
+    this.width,
+    this.place,
+  );
 
   /// Builds the shape of a round whose members are [body].
   factory RoundShape.of(List<Node> body) {
@@ -21,6 +28,10 @@ final class RoundShape {
       [
         for (final n in names)
           if (n.kind == NodeKind.bytes || n.isCounted) n,
+      ],
+      [
+        for (final n in names)
+          if (n.kind == NodeKind.dict) n,
       ],
       held.length,
       groupPlaces(body),
@@ -38,6 +49,10 @@ final class RoundShape {
   /// The names whose value is itself a run of bytes or bits: one given for a
   /// round's name would reach every round, so it is refused.
   final List<Node> buffers;
+
+  /// The `dict` names: a dictionary given once for one would reach every
+  /// round, so it is refused.
+  final List<Node> dicts;
 
   /// The slots one round charges against the slot limit: the names unpack
   /// gives one entry a round.
@@ -66,6 +81,10 @@ void _names(List<Node> nodes, List<Node> out, Set<String> seen) {
       case NodeKind.packed:
       case NodeKind.slot:
       case NodeKind.group:
+      case NodeKind.utf8:
+      case NodeKind.list:
+      case NodeKind.dict:
+      case NodeKind.nested:
         if (seen.add(n.name)) out.add(n);
       case NodeKind.flags:
       case NodeKind.flagBit:
@@ -107,6 +126,10 @@ void _optional(
       case NodeKind.packed:
       case NodeKind.slot:
       case NodeKind.group:
+      case NodeKind.utf8:
+      case NodeKind.list:
+      case NodeKind.dict:
+      case NodeKind.nested:
         if (underFlag && seen.add(n.name)) out.add(n);
     }
   }
@@ -125,6 +148,10 @@ void _width(List<Node> nodes, Set<String> names) {
       case NodeKind.bits:
       case NodeKind.packed:
       case NodeKind.slot:
+      case NodeKind.utf8:
+      case NodeKind.list:
+      case NodeKind.dict:
+      case NodeKind.nested:
         names.add(n.name);
       case NodeKind.group:
         if (n.fields.isEmpty) names.add(n.name);

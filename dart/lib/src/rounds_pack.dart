@@ -82,6 +82,10 @@ Node? _bufferIn(List<Node> nodes, Map<String, Object?> map) {
       case NodeKind.slot:
       case NodeKind.repeat:
       case NodeKind.times:
+      case NodeKind.utf8:
+      case NodeKind.list:
+      case NodeKind.dict:
+      case NodeKind.nested:
         break;
     }
   }
@@ -231,10 +235,19 @@ extension RoundPack on Packer {
     }
   }
 
-  /// One byte buffer given for a name of a round would reach every round, so
-  /// it is refused: a buffer per round goes in a list. Inside a group map
-  /// given once for every round it is refused too.
+  /// One byte buffer or dictionary given for a name of a round would reach
+  /// every round, so it is refused: one per round goes in a list. A byte
+  /// buffer inside a group map given once for every round is refused too.
   void _refuseLoneBuffers(Node n, RoundShape shape, Map<String, Object?> map) {
+    for (final m in shape.dicts) {
+      if (map[m.name] is Map) {
+        throw packFail(
+          m.errorId,
+          m.name,
+          '${m.name}: a dictionary in a repeat or times round needs a list with one dictionary per round',
+        );
+      }
+    }
     for (final m in shape.buffers) {
       if (map[m.name] is Uint8List) {
         throw packFail(

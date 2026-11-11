@@ -1,6 +1,7 @@
 import 'checks.dart';
 import 'errors.dart';
 import 'group_rows.dart';
+import 'item_size.dart';
 import 'node.dart';
 import 'references.dart';
 import 'round_shape.dart';
@@ -61,6 +62,7 @@ Plan buildPlan<R extends Object>(
   checkNesting(bound);
   checkBodies(bound);
   final sources = resolveReferences(bound, typed: typed);
+  checkElements(bound);
   final finisher = _Finisher(sources);
   final fields = finisher.all(bound);
   if (typed) _checkBindings<R>(fields);
@@ -113,6 +115,7 @@ final class _FlagBinder {
       case NodeKind.packed:
       case NodeKind.slot:
       case NodeKind.u2:
+      case NodeKind.utf8:
         return n;
       case NodeKind.flagByte:
         final read = _Read(FlagRead(n.name, reads++));
@@ -159,7 +162,11 @@ final class _FlagBinder {
         return n.copy(fields: all(n.fields, _inner(seen)));
       case NodeKind.repeat:
       case NodeKind.times:
-        // A round body is a scope of its own, and its row is the round's.
+      case NodeKind.list:
+      case NodeKind.dict:
+      case NodeKind.nested:
+        // A round body, an element and a nested row are a scope of their own,
+        // and their row is a row of its own.
         final outer = _path.toList();
         _path.clear();
         final fields = all(n.fields, Map.identity());
@@ -205,7 +212,20 @@ final class _Finisher {
       case NodeKind.float:
       case NodeKind.bytes:
       case NodeKind.flagByte:
+      case NodeKind.utf8:
         return n;
+      case NodeKind.list:
+      case NodeKind.dict:
+      case NodeKind.nested:
+        final low = slots.length;
+        final fields = all(n.fields);
+        return n.copy(
+          fields: fields,
+          slotLo: low,
+          slotHi: slots.length,
+          place: n.kind == NodeKind.nested ? groupPlaces(fields) : null,
+          minItem: n.isCollection ? minItemBytes(n.kind, fields[0]) : null,
+        );
       case NodeKind.sized:
       case NodeKind.bits:
       case NodeKind.packed:
@@ -252,6 +272,10 @@ void _checkBindings<R extends Object>(List<Node> nodes) {
       _checkRound<R>(n);
       continue;
     }
+    if (n.isCollection || n.kind == NodeKind.nested) {
+      _checkCollection<R>(n);
+      continue;
+    }
     if (n.isValue || n.isMark) {
       final binding = n.binding;
       if (binding == null) {
@@ -296,4 +320,45 @@ void _checkRound<R extends Object>(Node n) {
   binding.checkBody(<S extends Object>(List<Node> body) {
     _checkBindings<S>(body);
   }, n.fields);
+}
+
+/// A list, dict or nested row of a typed scheme is bound to the member that
+/// holds it, and what it holds is checked for the typed rows it makes.
+void _checkCollection<R extends Object>(Node n) {
+  final binding = n.binding;
+  if (binding == null) {
+    throw schemeFail(
+      null,
+      n.name,
+      '${n.name}: a scheme of $R rows needs every ${n.label} bound with bind',
+    );
+  }
+  if (!binding.fits<R>()) {
+    throw schemeFail(
+      null,
+      n.name,
+      '${n.name}: bound to ${binding.rowType}, but the scheme\'s row is $R',
+    );
+  }
+  _checkItems(n);
+}
+
+/// The rows the items of [n] are: an element that is a nested row is made by
+/// `nestedRow`, and its members are bound to its row type.
+void _checkItems(Node n) {
+  if (n.kind == NodeKind.nested) {
+    final row = n.row;
+    if (row == null) {
+      throw schemeFail(
+        null,
+        n.name,
+        '${n.name}: a typed scheme needs the nested row made with nestedRow',
+      );
+    }
+    row.checkBody(<S extends Object>(List<Node> body) {
+      _checkBindings<S>(body);
+    }, n.fields);
+  } else if (n.isCollection) {
+    _checkItems(n.fields[0]);
+  }
 }

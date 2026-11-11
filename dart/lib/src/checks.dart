@@ -43,6 +43,7 @@ int checkIds(List<Node> nodes, int next) {
       case NodeKind.bits:
       case NodeKind.packed:
       case NodeKind.slot:
+      case NodeKind.utf8:
         if (n.id != next) {
           throw schemeFail(
             n.id,
@@ -67,6 +68,12 @@ int checkIds(List<Node> nodes, int next) {
       case NodeKind.flagBit:
       case NodeKind.u2:
         next = checkIds(n.fields, next);
+      case NodeKind.list:
+      case NodeKind.dict:
+      case NodeKind.nested:
+        // An element or a nested row is a scope of its own: its ids start at
+        // 0 and the row around it gives none to it.
+        checkIds(n.fields, 0);
       case NodeKind.flagByte:
         break;
     }
@@ -89,6 +96,10 @@ void checkNesting(List<Node> nodes, {bool inRound = false}) {
         );
       }
       checkNesting(n.fields, inRound: true);
+    } else if (n.isCollection || n.kind == NodeKind.nested) {
+      // Its items are rows of their own, so a round in them is a round of
+      // that row, not of the round around.
+      checkNesting(n.fields);
     } else {
       checkNesting(n.fields, inRound: inRound);
     }
@@ -134,6 +145,10 @@ bool _holdsMember(List<Node> nodes) {
       case NodeKind.slot:
       case NodeKind.bits:
       case NodeKind.packed:
+      case NodeKind.utf8:
+      case NodeKind.list:
+      case NodeKind.dict:
+      case NodeKind.nested:
         return true;
     }
   }
@@ -197,7 +212,14 @@ void checkNames(List<Node> nodes) {
         case NodeKind.bits:
         case NodeKind.packed:
         case NodeKind.slot:
+        case NodeKind.utf8:
           declare(n, conditional);
+        case NodeKind.list:
+        case NodeKind.dict:
+        case NodeKind.nested:
+          declare(n, conditional);
+          // The names of an element or a nested row are its own.
+          checkNames(n.fields);
         case NodeKind.group:
           declare(n, conditional);
           walk(n.fields, conditional);
@@ -216,4 +238,45 @@ void checkNames(List<Node> nodes) {
   }
 
   walk(nodes, false);
+}
+
+/// A list or dict element is a value of its own: an integer, a float, fixed
+/// bytes, `utf8`, another list or dict, or a nested row. Any other field would
+/// read the row around the element (a `sized`, `bits`, `packed`) or is no
+/// value of its own (a `u2`).
+void checkElements(List<Node> nodes) {
+  for (final n in nodes) {
+    if (n.isCollection) {
+      final e = n.fields[0];
+      switch (e.kind) {
+        case NodeKind.integer:
+        case NodeKind.float:
+        case NodeKind.bytes:
+        case NodeKind.utf8:
+        case NodeKind.list:
+        case NodeKind.dict:
+        case NodeKind.nested:
+          break;
+        case NodeKind.boolean:
+        case NodeKind.flags:
+        case NodeKind.flagByte:
+        case NodeKind.flagBit:
+        case NodeKind.when:
+        case NodeKind.group:
+        case NodeKind.sized:
+        case NodeKind.u2:
+        case NodeKind.slot:
+        case NodeKind.bits:
+        case NodeKind.packed:
+        case NodeKind.repeat:
+        case NodeKind.times:
+          throw schemeFail(
+            null,
+            n.name,
+            '${n.label} ${n.name}: a ${e.label} cannot be an element; use an integer, float, bytes, utf8, list, dict or nested row',
+          );
+      }
+    }
+    checkElements(n.fields);
+  }
 }

@@ -22,7 +22,15 @@ enum ErrorKind {
   schemeError('scheme_error'),
 
   /// Pack cannot write the row; it returns no bytes.
-  packError('pack_error');
+  packError('pack_error'),
+
+  /// A protected message has more wrong bytes than the repair limit allows,
+  /// or its length fits no message of the scheme's parity percentage.
+  uncorrectable('uncorrectable'),
+
+  /// A protected message is above 254 bytes (unpack), or a clear message is
+  /// above `254 - n` bytes (pack, which throws it).
+  tooLong('too_long');
 
   const ErrorKind(this.term);
 
@@ -87,6 +95,8 @@ final class PackbinError {
     ErrorKind.tooMany => 'packbin: too many$_where: $reason',
     ErrorKind.schemeError => 'packbin: invalid scheme$_where: $reason',
     ErrorKind.packError => 'packbin: pack refused$_where: $reason',
+    ErrorKind.uncorrectable => 'packbin: uncorrectable message',
+    ErrorKind.tooLong => 'packbin: too long: $reason',
   };
 
   @override
@@ -105,8 +115,10 @@ final class PackbinError {
       Object.hash(kind, field, name, needed, left, actual, reason);
 }
 
-/// Thrown by pack (kind [ErrorKind.packError]) and by scheme construction and
-/// a refused handler list (kind [ErrorKind.schemeError]).
+/// Thrown by pack (kind [ErrorKind.packError], or [ErrorKind.tooLong] for a
+/// message past the parity bound) and by scheme construction, a parity
+/// setting or a repair limit out of range, and a refused handler list (kind
+/// [ErrorKind.schemeError]).
 final class PackbinException implements Exception {
   /// Wraps [error].
   const PackbinException(this.error);
