@@ -81,6 +81,10 @@ case "$url" in
       printf "%s\n" "{\"deploymentState\":\"PUBLISHED\"}"
     fi ;;
   *publisher/upload*) printf "%s\n" "deployment-1" ;;
+  *keys.openpgp.org/vks/v1/by-fingerprint*)
+    if has key-gone || { has key-missing && [ ! -e "$PACKBIN_SCENARIO.key.sent" ]; }; then printf 404; else printf 200; fi ;;
+  *keys.openpgp.org/vks/v1/upload*)
+    cat > "$PACKBIN_SCENARIO.key.body"; : > "$PACKBIN_SCENARIO.key.sent"; printf "%s\n" "{}" ;;
   *publisher/published*) query java "{\"published\":true}" ;;
   *api.nuget.org/v3-flatcontainer*) query csharp "{\"versions\":[\"0.1.9\"]}" ;;
   *registry.npmjs.org*) query typescript "{}" ;;
@@ -246,6 +250,7 @@ ph_build_only() {
   done
   grep -q '^upload ' "$ph_dir/build-only.out" && fail "AZ-2096 AC-3 build-only printed an upload"
   [ -e "$ph_out/artifacts/dry-run" ] || fail "AZ-2096 AC-3 build-only left no dry-run marker"
+  [ ! -e "$ph_out/artifacts/java/signing-key.asc" ] || fail "AZ-4196 AC-1 a build-only run left a public key (the throwaway one)"
   python3 - "$ph_out/artifacts/java/maven-bundle.zip" <<'PY' || fail "maven bundle layout"
 import sys, zipfile
 names = zipfile.ZipFile(sys.argv[1]).namelist()
@@ -307,6 +312,47 @@ ph_full_publish() {
   git --git-dir="$ph_arduino" show arduino-0.1.9:library.properties | grep -qx 'version=0.1.9' || fail "AZ-2096 AC-5 arduino push"
 }
 
+# AZ-4196: the Maven signing public key. The full publish above (key served by the stub) sent no key; the upload phase
+# then runs again for java alone on the same artifacts with a key that the keyserver lacks, and one it never serves.
+ph_key_upload() {
+  local name="$1" scenario="$2"
+  printf '%s\n' "$scenario" > "$ph_scenario"
+  rm -f "$ph_scenario.key.sent" "$ph_scenario.key.body"
+  ph_log="$ph_dir/$name.log"
+  : > "$ph_log"
+  set +e
+  env PACKBIN_PUBLISH=1 PACKBIN_VERSION=v0.1.9 PACKBIN_OUT="$ph_out" PACKBIN_PUBLISH_LOG="$ph_log" \
+    PACKBIN_SCENARIO="$ph_scenario" PACKBIN_QUERY_PAUSE=0 PACKBIN_KEY_PAUSE=0 MAVEN_CENTRAL_TOKEN=m \
+    PATH="$ph_bin:$PATH" bash "$here/publish-upload.sh" java > "$ph_dir/$name.out" 2>&1
+  ph_code=$?
+  set -e
+  assert_eq "$ph_code" "0" "AZ-4196 $name exit code"
+}
+
+ph_signing_key() {
+  local key="$ph_out/artifacts/java"
+  grep -qx '[0-9A-F]\{40\}' "$key/signing-key.fpr" || fail "AZ-4196 AC-1 signing-key.fpr is not a 40 hex fingerprint"
+  head -n 1 "$key/signing-key.asc" | grep -qx -- '-----BEGIN PGP PUBLIC KEY BLOCK-----' \
+    || fail "AZ-4196 AC-1 signing-key.asc is not a public key"
+  ! grep -q 'PRIVATE KEY' "$key/signing-key.asc" || fail "AZ-4196 AC-1 signing-key.asc holds a secret key"
+  ph_key_upload key-served ""
+  assert_eq "$(grep -c 'by-fingerprint' "$ph_log")" "1" "AZ-4196 AC-2 lookups when the key is served"
+  assert_eq "$(grep -c 'vks/v1/upload' "$ph_log")" "0" "AZ-4196 AC-2 key uploads when the key is served"
+  ph_key_upload key-missing "key-missing"
+  assert_eq "$(grep -c 'by-fingerprint' "$ph_log")" "2" "AZ-4196 AC-3 lookups when the key is missing"
+  assert_eq "$(grep -c 'vks/v1/upload' "$ph_log")" "1" "AZ-4196 AC-3 key uploads when the key is missing"
+  grep -q 'PUBLIC KEY BLOCK' "$ph_scenario.key.body" || fail "AZ-4196 AC-3 the uploaded body is not the public key"
+  ! grep -q 'PRIVATE KEY' "$ph_scenario.key.body" "$ph_log" "$ph_dir/key-missing.out" || fail "AZ-4196 AC-4 a secret key reached a curl call or the log"
+  [ "$(grep -n 'vks/v1/upload' "$ph_log" | head -n 1 | cut -d: -f1)" -lt "$(grep -n 'publisher/upload' "$ph_log" | head -n 1 | cut -d: -f1)" ] \
+    || fail "AZ-4196 AC-3 the key upload came after the bundle upload"
+  ph_key_upload key-gone "key-gone"
+  assert_eq "$(grep -c 'by-fingerprint' "$ph_log")" "7" "AZ-4196 AC-3 lookups when the key never appears"
+  assert_eq "$(grep -c 'vks/v1/upload' "$ph_log")" "1" "AZ-4196 AC-3 key uploads when the key never appears"
+  grep -q '^::warning::keys.openpgp.org does not serve signing key' "$ph_dir/key-gone.out" || fail "AZ-4196 AC-3 no warning when the key never appears"
+  grep -q 'publisher/upload' "$ph_log" || fail "AZ-4196 AC-3 the bundle was not uploaded after the warning"
+  : > "$ph_scenario"
+}
+
 # AC-6: an empty plan (the golden gate failed) builds and uploads nothing.
 ph_empty_plan() {
   : > "$ph_plan"
@@ -339,6 +385,7 @@ phase_checks() {
   ph_empty_plan
   ph_build_only
   ph_full_publish
+  ph_signing_key
   ph_failure_injection
   ph_pipeline_violations
   ph_cleanup

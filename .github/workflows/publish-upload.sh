@@ -102,8 +102,42 @@ upload_pypi() {
   twine upload --non-interactive --skip-existing -u __token__ -p "$token" "$artifacts/python"/*
 }
 
+# Central rejects a bundle whose signing key it cannot find on a keyserver, and keyservers drop keys (the v0.5.0 run). Looks
+# the fingerprint up on keys.openpgp.org (the server Central read for 0.5.0), sends the public key when it is missing and
+# looks again. Central stays the authority: a key that is still not served is a warning, not a stop. Only the public key
+# (publish-sign.sh) is sent.
+ensure_signing_key() {
+  local fpr code attempt
+  local keys_api="https://keys.openpgp.org/vks/v1"
+  if [ ! -s "$artifacts/java/signing-key.fpr" ] || [ ! -s "$artifacts/java/signing-key.asc" ]; then
+    echo "::warning::no signing-key.asc beside the Maven bundle; the public key is not checked"
+    return 0
+  fi
+  fpr="$(tr -d '[:space:]' < "$artifacts/java/signing-key.fpr")"
+  code="$(curl -s -m 30 -o /dev/null -w '%{http_code}' "$keys_api/by-fingerprint/$fpr" || true)"
+  if [ "$code" = "200" ]; then
+    echo "signing key $fpr is served by keys.openpgp.org"
+    return 0
+  fi
+  echo "signing key $fpr is not served by keys.openpgp.org (HTTP ${code:-none}); uploading the public key"
+  python3 -c 'import json, sys; print(json.dumps({"keytext": sys.stdin.read()}))' < "$artifacts/java/signing-key.asc" \
+    | curl -sS -m 60 -X POST -H 'Content-Type: application/json' --data @- "$keys_api/upload" \
+    || echo "::warning::keys.openpgp.org did not take the signing key"
+  echo
+  for attempt in 1 2 3 4 5 6; do
+    code="$(curl -s -m 30 -o /dev/null -w '%{http_code}' "$keys_api/by-fingerprint/$fpr" || true)"
+    echo "signing key lookup $attempt: HTTP ${code:-none}"
+    if [ "$code" = "200" ]; then
+      return 0
+    fi
+    sleep "${PACKBIN_KEY_PAUSE:-10}"
+  done
+  echo "::warning::keys.openpgp.org does not serve signing key $fpr after the upload; Central may reject the bundle (run the publish-key workflow)"
+}
+
 upload_maven() {
   local id state attempt
+  ensure_signing_key
   id="$(curl --fail --silent --show-error \
     -H "Authorization: Bearer ${MAVEN_CENTRAL_TOKEN}" \
     -F "bundle=@${artifacts}/java/maven-bundle.zip" \

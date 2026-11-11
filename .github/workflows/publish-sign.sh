@@ -3,6 +3,9 @@
 # files Central requires and zips it to <dir>/maven-bundle.zip. Runs on the host, in the build phase.
 # The key comes from MAVEN_GPG_PRIVATE_KEY. A build-only run (PACKBIN_BUILD_ONLY=1) has no key and
 # signs with a throwaway one, so its bundle exercises the same steps but can never be accepted.
+# With a real key it also leaves signing-key.asc (the public key, armored) and signing-key.fpr (its fingerprint) beside the
+# bundle: publish-upload.sh sends the public key to keys.openpgp.org when Central could not find it there. Nothing is
+# uploaded here (the build phase writes to no registry).
 # Usage: publish-sign.sh <artifacts/java directory>
 set -euo pipefail
 
@@ -20,6 +23,13 @@ export GNUPGHOME="$ring"
 
 if [ -n "${MAVEN_GPG_PRIVATE_KEY:-}" ]; then
   printf '%s\n' "$MAVEN_GPG_PRIVATE_KEY" | gpg --batch --import
+  fpr="$(gpg --list-keys --with-colons | awk -F: '/^fpr:/ { print $10; exit }')"
+  if ! [[ "$fpr" =~ ^[0-9A-F]{40}$ ]]; then
+    echo "MAVEN_GPG_PRIVATE_KEY holds no usable key" >&2
+    exit 1
+  fi
+  gpg --batch --armor --export "$fpr" > "$dest/signing-key.asc"
+  printf '%s\n' "$fpr" > "$dest/signing-key.fpr"
 elif [ "${PACKBIN_BUILD_ONLY:-}" = "1" ]; then
   gpg --batch --pinentry-mode loopback --passphrase '' \
     --quick-generate-key "packbin-build-only" rsa3072 sign 0
