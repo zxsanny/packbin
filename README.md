@@ -1892,6 +1892,22 @@ A `u16` count, then that many elements. The element is one field, and its id res
 
 In a typed C# row the list member is a one-dimensional array, a `List<E>`, an `IList<E>` or a non-generic `IList`, and each element is a row of the element field's type: `List<Role>` for `Utf8<Role>`, as in the first C# example. An element that is a `group` unpacks to one row per item. Unpack creates these rows, so a row type needs a public parameterless constructor, or the scheme fails when you build it. Any other member type, or an element type that cannot hold the field's values, fails when the scheme is built (loop 18, see the C# upgrade notes below): `Stack<int>`, `HashSet<int>`, `IEnumerable<E>`, `ICollection<E>`, `IReadOnlyList<E>`, `Collection<E>` and a class derived from `List<E>` are refused, and so is `List<int>` for a `u32` field. The element type must be `object`, a row type, or hold the whole range of the field (`List<uint>` or `List<long>` for a `u32`; a `float`, `double` or `decimal` element is accepted for an integer field).
 
+A C# `List` or `Dict` element can also be a row of several required members, written one after another with no flag byte, the same bytes as the nested row of the other packages (`nested(name, [...])` in Dart). Give `List` (a `List<E>` member) or `Dict` (a `Dictionary<string, E>` member) the members of the element row; no wrapper property or class is needed. The members are numbered from 0 in a scope of their own, as in a nested row, and each one must have a value: a null member or a null item fails pack, naming the member. Two items of `Mark` below pack to `01 02 00 01 02 03 04`:
+
+```csharp
+sealed class Mark { public byte Id { get; set; } public byte N { get; set; } }
+sealed class Marked { public List<Mark> Marks { get; set; } = []; }
+
+var scheme = new Scheme<Marked>(1, f => [
+    f.List(x => x.Marks, e => [e.U8(0, m => m.Id), e.U8(1, m => m.N)])]);
+```
+
+```
+01 02 00 01 02 03 04
+```
+
+This differs from a `Flags` element, which writes one flag byte per element (1 byte per element) and is the form to use when a member may be left out. The static `Field.List` and `Field.Dict` take the members as `params Field[]` for the same form.
+
 ```python
 from packbin import list as list_field
 
