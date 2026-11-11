@@ -1,0 +1,9 @@
+[package]
+name = "rustprobe"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+packbin = { path = "/Users/zxsanny/dev/zxsanny/packbin/rust", features = ["text"] }
+
+[workspace]
