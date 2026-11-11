@@ -21,3 +21,7 @@ step "no tag and no upload in this loop (last tag is still v0.4.0)" 'test "$(git
 printf '\n%s of %s steps passed\n' "$((N-fails))" "$N"
 test "$fails" -eq 0
 ```
+
+## Result
+
+Commit 59da870: 6/6 steps passed (agent run, owner rule 2026-10-12 in `deployment_procedures.md`). The first run failed step 3 (three orphan Source lines at the top of `LESSONS.md`, older than this session); they were removed and the whole script passed on the rerun. No code changed in the loop, so no test stage was selected.
