@@ -9,11 +9,8 @@ Downstream skills consume this file:
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
 
-- [2026-10-28] [process] Measure a new CI step cold with the runner's CPU count (`docker run --cpus 4`) and name the job it lands on before agreeing the command with the owner: `cargo test --no-run` for 7 Rust feature sets added 64 s to `suites (csharp rust)`, the job that sets the CI wall, and `cargo check --tests` 8 s (loop 79).
   Source: _docs/06_metrics/retro_2026-10-28_loop79.md
-- [2026-10-28] [testing] An intake probe builds every configuration the ACs will name, not a sample: loop 79's probe built 2 of the 9 Rust feature sets and blamed the default set's warning on `from_hex`; the worker, building all 9, found `take` in `counters.rs` (loop 79).
   Source: _docs/06_metrics/retro_2026-10-28_loop79.md
-- [2026-10-28] [estimation] A handoff line names one instance of a defect class, not the class: "a direction above 255 wraps in the C#, C++ and Go drivers" was one field; a probe ring with every number field at its edge also found the C++ tag length and kind and the Go epoch (loop 79).
   Source: _docs/06_metrics/retro_2026-10-28_loop79.md
 - [2026-10-30] [estimation] A zero-margin byte pin makes a no-behaviour file split an owner decision: a second translation unit cost 32 B on the Cortex-M4F image and 40 B on the Cortex-M33F one (shared literal pool, alignment), so run the arm stage at intake when a task touches a pinned image (loop 84).
   Source: _docs/06_metrics/retro_2026-10-30_loop84.md
@@ -39,3 +36,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-11-01_loop97.md
 - [2026-11-01] [estimation] Count the lines of every touched file at the batch gate: adding 160 lines to a 437-line header crossed the 500-line cap and cost a split task; and read `git log -1` after each commit command, a failed `git add` left a no-op commit while Jira had moved (loop 97).
   Source: _docs/06_metrics/retro_2026-11-01_loop97.md
+- [2026-11-11] [testing] A builder that keys maps by node identity must be tested with one field object used in two places (a shared member list): 1,887 tests missed it and a random differential run against TypeScript found a High; give every new language one reviewer slice of random schemes against the reference (loop 99).
+  Source: _docs/06_metrics/retro_2026-11-11_loop99.md
+- [2026-11-11] [testing] Never assert elapsed time in a unit test that the loop runs under load (624 ms against 500 ms at host load 30): count the operation instead (keyed reads on the map), and keep time bounds for the compiled speed program (loop 99).
+  Source: _docs/06_metrics/retro_2026-11-11_loop99.md
+- [2026-11-11] [process] Mint a short-lived credential in the step that uses it and compare its lifetime with the run order (an OIDC token minted before a build and a Maven wait expires before the upload); a Docker `network is unreachable` is an environment fault: restart Docker Desktop (restart policy was no on all 18 containers: start them again) and rerun only the failed stages (loop 99).
+  Source: _docs/06_metrics/retro_2026-11-11_loop99.md
