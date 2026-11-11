@@ -4,6 +4,9 @@
 FROM ubuntu:24.04
 
 ARG DEBIAN_FRONTEND=noninteractive
+# A name lookup or a download that fails once on a shared runner is tried again (AZ-4191): the job
+# failed three times in a row on "Could not resolve archive.ubuntu.com" with this Dockerfile unchanged.
+RUN printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\n' > /etc/apt/apt.conf.d/80-packbin-retries
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       bash ca-certificates make binutils gawk \
