@@ -26,3 +26,7 @@ step "the position program prints the golden hex for the tagged tree in the lang
 printf '\n%s of %s steps passed\n' "$((N-fails))" "$N"
 test "$fails" -eq 0
 ```
+
+## Result
+
+Commit 9d93358: 9/9 steps passed (agent run, owner rule 2026-10-12 in `deployment_procedures.md`). The first run failed step 8 (my script asked `gh release view` for a JSON field this `gh` version does not have); the check now asks the releases API and the whole script passed on the rerun.
