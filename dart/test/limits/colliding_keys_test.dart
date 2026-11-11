@@ -61,6 +61,42 @@ Map<String, Object?> dictRow(List<String> keys) => {
   'd': SplayTreeMap<String, Object?>.fromIterable(keys, value: (_) => 1),
 };
 
+/// A map that counts the keyed reads made on it: pack reads the values from
+/// the entries, so a map whose keys share one hash is never looked up by key.
+final class _CountingMap extends MapBase<String, Object?> {
+  _CountingMap(List<String> keys)
+    : _inner = SplayTreeMap<String, Object?>.fromIterable(
+        keys,
+        value: (_) => 1,
+      );
+
+  final SplayTreeMap<String, Object?> _inner;
+
+  /// The keyed reads made so far.
+  int lookups = 0;
+
+  @override
+  Object? operator [](Object? key) {
+    lookups++;
+    return _inner[key];
+  }
+
+  @override
+  void operator []=(String key, Object? value) => _inner[key] = value;
+
+  @override
+  void clear() => _inner.clear();
+
+  @override
+  Iterable<String> get keys => _inner.keys;
+
+  @override
+  Iterable<MapEntry<String, Object?>> get entries => _inner.entries;
+
+  @override
+  Object? remove(Object? key) => _inner.remove(key);
+}
+
 Scheme<Map<String, Object?>> dictScheme() => scheme(1, [dict('d', u8(0, 'v'))]);
 
 final class Holder {
@@ -113,21 +149,17 @@ void main() {
 
     test('a hash map of colliding keys packs without a lookup per key', () {
       // Arrange
-      final keys = collidingKeys(14);
-      final row = <String, Object?>{
-        'd': <String, Object?>{for (final k in keys) k: 1},
-      };
+      final keys = collidingKeys(8);
+      final row = <String, Object?>{'d': _CountingMap(keys)};
 
       // Act
-      final watch = Stopwatch()..start();
       final wire = pack(dictScheme(), row);
-      watch.stop();
 
       // Assert
+      final map = row['d']! as _CountingMap;
       final got = unpackRow(wire, dictScheme()).row!['d'] as Map;
-      expect(got.length, keys.length);
+      expect(map.lookups, 0);
       expect(got.keys.toList(), keys);
-      expect(watch.elapsedMilliseconds, lessThan(500));
     });
 
     test('a typed dictionary of colliding keys keeps its element type', () {
