@@ -155,6 +155,10 @@ jobs:
         with:
           path: ${{ runner.temp }}/swift-cache
           key: swift-v2-${{ matrix.part }}-${{ steps.swift-pin.outputs.tag }}-${{ hashFiles('Package.swift', 'Package.resolved', '.github/workflows/run-suite.sh') }}
+      # The runner image's kernel (mmap_rnd_bits 32) is past what the thread sanitizer of the Swift gates part can map
+      # ("ThreadSanitizer: unable to disable ASLR"): the container shares the host kernel, so lower it here (every entry; the checker allows no `if` on these steps).
+      - name: Lower ASLR entropy for the Swift thread sanitizer
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
       - name: suite
         env:
           SUITE: ${{ matrix.lang }}

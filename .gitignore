@@ -1,5 +1,6 @@
 .env
 **/bin/
+!.github/workflows/drivers/handoff-dart/bin/
 **/obj/
 test-results/
 .venv/

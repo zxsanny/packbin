@@ -79,10 +79,15 @@ final class Writer {
     }
   }
 
-  /// Writes [value] as an f32; false when a finite value became an infinity,
+  /// Writes [value] as an f32; a NaN is always the quiet NaN `7fc00000` (the
+  /// bits of a NaN depend on the CPU); false when a finite value became an infinity,
   /// in which case nothing is kept.
   bool float32(double value, Endian endian) {
     final at = _take(4);
+    if (value.isNaN) {
+      _data.setUint32(at, 0x7fc00000, endian);
+      return true;
+    }
     _data.setFloat32(at, value, endian);
     if (value.isFinite && _data.getFloat32(at, endian).isInfinite) {
       _length = at;
@@ -93,6 +98,10 @@ final class Writer {
 
   void float64(double value, Endian endian) {
     final at = _take(8);
+    if (value.isNaN) {
+      _data.setUint64(at, 0x7ff8000000000000, endian);
+      return;
+    }
     _data.setFloat64(at, value, endian);
   }
 
