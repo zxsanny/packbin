@@ -312,6 +312,8 @@ The error shape is interim: a short-packet-style value. Its kind, label, `needed
 - U11 below the top level (AZ-2436, G3): `NoValueCountNestedTests` pins the refusal in the nested positions C# can spell, for three kinds x split bit and combined `flags`; count 0, a left-out count and a holding inner `when` pack the TypeScript hex; a member inside the clear `when` itself is the silent skip. A nested-row group (`Field.Group(x => x.In, ...)`) has its own id scope, so a member in it cannot count by a field of the row around it: refused at build, pinned as observed. The AZ-2437 short count list rows pack the TypeScript hex (`Ac3_Pack_CountListShorterThanTheRoundsWhereTheMissingRoundIsClear_PacksAsTypeScript`).
 - Open (assessment23 U26): a dictionary row reads a nested-row group's names from the outer row, so an inner name shared with the outer row packs the outer value (`u8 Mode; group In { u8 Mode; u8 X }` with `{Mode: 1, X: 3}` packs `01 01 01 03`, the typed row packs `01 01 02 03`); a nested dictionary under the group's name is not read (`'X' (field id 1) has no value`). TypeScript and Java read the nested object.
 
+- Dictionary keys that are the same once an unpaired surrogate is written as U+FFFD (what `Encoding.UTF8.GetBytes` does) are refused at pack with an `ArgumentException` naming the dictionary (loop 103, AZ-4169); before, pack wrote the packet and unpack refused it as a repeated key. A dictionary without such a collision packs the same bytes as before. `[InlineData]` cannot carry a lone surrogate, so the tests of this rule build their keys in the test body (`DictCollidingKeysTests`).
+
 ## 8. Dependency Graph
 
 **Must be implemented after**: the golden fixture file

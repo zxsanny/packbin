@@ -83,6 +83,7 @@ public final class PackbinTest {
         TextConcurrencyTest.run();
         TextRepeatSpeedTest.run();
         DictKeyOrderTest.run();
+        DictCollidingKeysTest.run();
         EccVectorsTest.run();
         EccRepairTest.run();
         EccSchemeTest.run();

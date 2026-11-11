@@ -105,6 +105,14 @@ internal static partial class Walker
             entries.Add((keyBytes, entry.Value));
         }
         entries.Sort(static (a, b) => CompareUtf8Bytes(a.KeyBytes, b.KeyBytes));
+        // An unpaired surrogate is written as U+FFFD, so two keys that differ only in such halves are one key on the
+        // wire, and unpack refuses a repeated key: refuse them here, so the packet is never one the reader cannot read.
+        for (var i = 1; i < entries.Count; i++)
+        {
+            if (CompareUtf8Bytes(entries[i - 1].KeyBytes, entries[i].KeyBytes) == 0)
+                throw new ArgumentException(
+                    $"{field.Name}: two keys are the same once an unpaired surrogate is written as U+FFFD");
+        }
         buffer.Reserve(2, field.Name);
         buffer.AddU16(entries.Count);
         var child = field.Children[0];

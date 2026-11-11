@@ -22,7 +22,7 @@ final class TextPositionsTest {
         absentAndEmptyOptional();
         limitsAndHeaders();
         dictionaryKeys();
-        loneSurrogateKeepsTheLanguageBehavior();
+        loneSurrogateIsWrittenAsFffd();
         randomTextsRoundTrip();
         randomBuffersNeverThrow();
         speed();
@@ -151,11 +151,14 @@ final class TextPositionsTest {
                 got.thrown == null && got.error instanceof Packbin.ShortPacket && got.row == null);
     }
 
-    private static void loneSurrogateKeepsTheLanguageBehavior() {
+    /** Since AZ-4169 a lone surrogate is written as U+FFFD, as the TypeScript, Dart and C# packages write it (it was '?'). */
+    private static void loneSurrogateIsWrittenAsFffd() {
         Scheme<Map> scheme = Maps.scheme(1, utf8(0, "s"));
         byte[] lone = BinaryPacker.pack(scheme, Maps.map("s", "\ud800x"));
-        PackbinTest.expectEq("a lone surrogate packs as the '?' the language writes", PackbinTest.toHex(BinaryPacker.pack(scheme, Maps.map("s", "?x"))),
+        PackbinTest.expectEq("a lone surrogate packs as U+FFFD", PackbinTest.toHex(BinaryPacker.pack(scheme, Maps.map("s", "\ufffdx"))),
                 PackbinTest.toHex(lone));
+        PackbinTest.expectEq("and is not the '?' it was", false,
+                PackbinTest.toHex(lone).equals(PackbinTest.toHex(BinaryPacker.pack(scheme, Maps.map("s", "?x")))));
     }
 
     private static String randomText(Random random) {

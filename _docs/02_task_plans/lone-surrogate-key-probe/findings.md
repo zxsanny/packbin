@@ -16,3 +16,7 @@ Cases D and E of C# and Java are readable but the lone half does not survive: it
 Behaviour of a lone surrogate in a key or text across the packages (the project has no written rule): TypeScript, Dart and C# write U+FFFD; Java writes "?"; Python and Go refuse the string. After loop 100 and 101, TypeScript and Dart also refuse two keys that become one. Open: C# and Java write the unreadable packet; Java's "?" also merges a lone half with a real "?".
 
 Find in the sources: C# `csharp/Walker.Collections.cs:102` (`PackDict`), `Walker.Counted.cs:297` (`PackUtf8`); Java `java/src/main/java/packbin/Containers.java:60-84` (`packDict`), `VarFields.java:268` (text); Python `python/src/packbin/_pack.py:49`, `:317`; Go `go/collections_pack.go:22`, `:78`.
+
+## Update, loop 103 (AZ-4169)
+
+C# and Java now refuse two keys that become one at pack, and Java writes U+FFFD instead of `?` (owner decision 2026-11-11, option A). The rows above are the state at loop 102 HEAD ec86364; after loop 103 no package of the six writes an unreadable packet for these cases (C# and Java: refused; Python and Go: refused; Rust and Swift: cannot be given). `_docs/02_task_plans/csharp-java-lone-surrogate-keys/` has the criteria and the differential.

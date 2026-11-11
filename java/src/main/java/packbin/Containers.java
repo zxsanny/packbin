@@ -1,6 +1,5 @@
 package packbin;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -64,19 +63,27 @@ final class Containers {
         if (items.size() > VarFields.MAX_U16) {
             throw new IllegalArgumentException("dict: length " + items.size());
         }
-        List<String> keys = new ArrayList<>(items.size());
+        List<EncodedKey> keys = new ArrayList<>(items.size());
         for (Object key : items.keySet()) {
             if (!(key instanceof String text)) {
                 throw new IllegalArgumentException("dict: expected string key");
             }
-            keys.add(text);
+            keys.add(new EncodedKey(text, VarFields.utf8Bytes(text)));
         }
-        keys.sort((a, b) -> compareUnsigned(
-                a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8)));
+        keys.sort((a, b) -> compareUnsigned(a.bytes, b.bytes));
+        // An unpaired surrogate is written as U+FFFD, so two keys that differ only in such halves are one key on the
+        // wire, and unpack refuses a repeated key: refuse them here, so the packet is never one the reader cannot read.
+        for (int i = 1; i < keys.size(); i++) {
+            if (compareUnsigned(keys.get(i - 1).bytes, keys.get(i).bytes) == 0) {
+                throw new IllegalArgumentException(
+                        "dict: two keys are the same once an unpaired surrogate is written as U+FFFD");
+            }
+        }
         sink.writeCount(field, keys.size());
         Field child = field.children.get(0);
-        for (String key : keys) {
-            byte[] rawKey = key.getBytes(StandardCharsets.UTF_8);
+        for (EncodedKey encoded : keys) {
+            String key = encoded.text;
+            byte[] rawKey = encoded.bytes;
             if (rawKey.length > VarFields.MAX_U16) {
                 throw new IllegalArgumentException("dict: key length " + rawKey.length);
             }
@@ -86,6 +93,17 @@ final class Containers {
                 throw new IllegalArgumentException("missing dict element \"" + key + "\"");
             }
             packElement(child, value, sink);
+        }
+    }
+
+    /** A dictionary key and the UTF-8 bytes written for it, encoded once for the sort and the write. */
+    private static final class EncodedKey {
+        final String text;
+        final byte[] bytes;
+
+        EncodedKey(String text, byte[] bytes) {
+            this.text = text;
+            this.bytes = bytes;
         }
     }
 

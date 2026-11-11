@@ -258,6 +258,38 @@ final class VarFields {
         return (int) n;
     }
 
+    /**
+     * The UTF-8 bytes of {@code text}. An unpaired surrogate is written as U+FFFD (EF BF BD), as the TypeScript, Dart and
+     * C# packages write it; {@code String.getBytes} would write a '?' for it, which merges it with a real '?'.
+     */
+    static byte[] utf8Bytes(String text) {
+        return replaceLoneSurrogates(text).getBytes(StandardCharsets.UTF_8);
+    }
+
+    /** {@code text} with each unpaired surrogate replaced by U+FFFD; {@code text} itself when it holds none. */
+    static String replaceLoneSurrogates(String text) {
+        StringBuilder out = null;
+        int length = text.length();
+        for (int i = 0; i < length; i++) {
+            char c = text.charAt(i);
+            if (Character.isHighSurrogate(c) && i + 1 < length && Character.isLowSurrogate(text.charAt(i + 1))) {
+                // A valid pair stays as it is; it is copied only once a lone half has made a copy necessary.
+                if (out != null) {
+                    out.append(c).append(text.charAt(i + 1));
+                }
+                i++;
+            } else if (Character.isSurrogate(c)) {
+                if (out == null) {
+                    out = new StringBuilder(length).append(text, 0, i);
+                }
+                out.append('\uFFFD');
+            } else if (out != null) {
+                out.append(c);
+            }
+        }
+        return out == null ? text : out.toString();
+    }
+
     static void packUtf8(
             Field field, Object row, ByteSink sink, Map<Object, Object> seen, Walker.Take take) {
         Object value = take != null ? take.apply(field) : field.get.get(row);
@@ -265,7 +297,7 @@ final class VarFields {
         if (!(value instanceof String text)) {
             throw new IllegalArgumentException(field.id + ": expected string");
         }
-        byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
+        byte[] bytes = utf8Bytes(text);
         if (bytes.length > MAX_U16) {
             throw new IllegalArgumentException(field.id + ": utf-8 length " + bytes.length);
         }

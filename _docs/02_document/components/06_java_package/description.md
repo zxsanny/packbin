@@ -250,6 +250,8 @@ An empty nested row `group(get, set)` is allowed only as a flag bit and carries 
 **Loop 23 changes** (AZ-2436 tests only; no source change; 2540 checks, 2252 at loop 22).
 - U11 below the top level (AZ-2436, G3): `NoValueCountNestedTest` (run from `PackbinTest`) pins the refusal in an anchored group, a nested-row group (counting inside its own row), a bit holding an anchored group, an outer holding `when`, a bit holding a holding `when`, and `times`/`repeat` rounds, for three kinds x split bit and combined `flags`; count 0, a left-out count and a holding inner `when` pack the TypeScript hex. A nested-row group whose member counts by a field of the row around it is refused at construction (its ids start at 0 and see no id outside it): not spellable, pinned as observed. A member inside the clear `when` itself is the silent skip (`010100`).
 
+- An unpaired surrogate in a text or a dictionary key is written as U+FFFD (`EF BF BD`) since loop 103 (AZ-4169), as the TypeScript, Dart and C# packages write it; before, `String.getBytes` wrote a `?` (0x3F) for it, which also merged it with a real `?`. Dictionary keys that are the same once the swap is made are refused at pack with an `IllegalArgumentException` (`dict: two keys are the same once an unpaired surrogate is written as U+FFFD`); each key is encoded once for the sort and the write (`Containers.packDict`, `VarFields.utf8Bytes`). Python and Go refuse such a string; Rust and Swift cannot hold one.
+
 ## 8. Dependency Graph
 
 **Must be implemented after**: the golden fixture file

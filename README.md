@@ -1884,7 +1884,7 @@ BinaryPacker.pack(row, {"name": "zxsanny"})
 01 06 2b fc fe e1 19 b2
 ```
 
-In Go pack also refuses a string that is not valid UTF-8, naming the field. Dart, like TypeScript, writes U+FFFD for each unpaired surrogate and never refuses a string for it.
+In Go pack also refuses a string that is not valid UTF-8, naming the field. Dart, like TypeScript, C# and (since loop 103) Java, writes U+FFFD for each unpaired surrogate and never refuses a string for it; Python also refuses it (`UnicodeEncodeError`), Rust and Swift cannot hold one.
 
 ### List
 
@@ -2412,11 +2412,17 @@ Loop 99 (Dart). The ninth package is new: `dart/` (pub.dev package `packbin`). N
 
 Loop 100 (Dart). Five Dart choices of loop 99 moved to TypeScript's behaviour before the first publish; no byte of any other package or fixture changed (see [Dart rows](#dart-rows)):
 
-- An unpaired surrogate in a string or a dictionary key is written as U+FFFD (it was refused). Dictionary keys are ordered by their bytes after that swap, and two keys that become one are refused at pack naming the dict. TypeScript refuses them the same way since loop 101 (`RangeError`, the same message); until then it wrote a packet its own unpack refused.
+- An unpaired surrogate in a string or a dictionary key is written as U+FFFD (it was refused). Dictionary keys are ordered by their bytes after that swap, and two keys that become one are refused at pack naming the dict. TypeScript refuses them the same way since loop 101 (`RangeError`, the same message), and C# and Java since loop 103; until then they wrote a packet their own unpack refused.
 - A clear message above `254 - n` bytes at pack is a `packError` with TypeScript's text (it was `tooLong`); unpack of more than 254 bytes is still `tooLong`.
 - Invalid UTF-8 in a string or a key and a repeated or out-of-order dictionary key unpack as a short packet with `needed` 0 (they were `badValue`).
 - A map row has no key for the names of a `repeat` or `times` with 0 rounds (it had `[]`); a typed row keeps `[]`, and a group that holds only such rounds stays as `{}`.
 - An empty `nested` row is a presence mark directly under `flags` or a flag bit, as TypeScript's empty group, and is refused elsewhere with TypeScript's words (it was always refused).
+
+Loop 103 (C# and Java). Loop 102 ran each package on two dictionary keys that differ only in unpaired surrogates: C# and Java wrote a packet their own unpack refused (C# writes U+FFFD for each lone half; Java wrote a `?`). Python, Go, Rust and Swift cannot (Python and Go refuse the string; Rust and Swift strings cannot hold a lone surrogate). Owner decision 2026-11-11, no byte changes elsewhere:
+
+- C# and Java refuse two keys that become one at pack, as TypeScript and Dart do (C#: `ArgumentException`, `<field>: two keys are the same once an unpaired surrogate is written as U+FFFD`; Java: `IllegalArgumentException`, `dict: two keys are the same once an unpaired surrogate is written as U+FFFD`).
+- Java writes U+FFFD (`EF BF BD`) for an unpaired surrogate in a text or a key, as TypeScript, Dart and C# (it wrote `?`, `3F`, which merged a lone half with a real `?`). Only a text or key that holds a lone surrogate changes its bytes.
+- TypeScript, C#, Java and Dart agree on 5,000 seeded dictionaries (225 refused). The measurements and probes are in `_docs/02_task_plans/lone-surrogate-key-probe/`, the differential in `_docs/02_task_plans/csharp-java-lone-surrogate-keys/differential/`.
 
 Limits to keep in mind:
 
