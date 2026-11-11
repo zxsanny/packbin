@@ -546,3 +546,4 @@ Loop 74 (2026-10-26, ADR-009: remove the stream session; D1 frame names; D2 cryp
 | AZ-4149 | dart_review_fixes (loop 99, round 1) | 5 | AZ-4134..AZ-4148 | AZ-4133 |
 | AZ-4153 | dart_typescript_alignment (loop 100) | 5 | AZ-4134..AZ-4149 | AZ-4133 |
 | AZ-4168 | typescript_colliding_dict_keys (loop 101) | 2 | AZ-4153 | AZ-4133 |
+| AZ-4169 | csharp_java_lone_surrogate_keys (loop 103) | 5 | AZ-4153, AZ-4168 | AZ-4133 |
