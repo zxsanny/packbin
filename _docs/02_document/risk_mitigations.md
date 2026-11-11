@@ -38,7 +38,7 @@
 
 **Trigger conditions**: A field width, order, or endian differs and the golden check is skipped.
 
-**Affected components**: all six language packages (Go, the seventh since loop 24, and Swift, the eighth since loop 26, are under the same golden check), GitHub Actions
+**Affected components**: all six language packages (Go, the seventh since loop 24, Swift, the eighth since loop 26, and Dart, the ninth since loop 99, are under the same golden check), GitHub Actions
 
 **Mitigation strategy**:
 1. One shared hex fixture is the pass condition for every language

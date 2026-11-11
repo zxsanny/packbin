@@ -88,3 +88,9 @@
 
 **Duration**: one unpack per packet
 **Pass criteria**: `LimitEdgeTests` (`unpack_oldWorstPacket_isRefusedAtTheDefaultAndUnpacksWithMaxSlotsRaised`, `packAndUnpack_wideRoundWithMaxSlotsRaised_packsAndUnpacksAndTheDefaultRefusesIt`, `packAndUnpack_exactly1048576Slots_packAndUnpackAndOneRoundMoreIsRefused`, `packAndUnpack_exactly16MiB_packsAndUnpacksAndOneByteMoreIsRefused`), `RoundLimitTests` (`unpack_hostileLimitCases_areRefusedAsTooManyWithNeeded0`, `unpack_mebibyteOfOneByteRoundsWith37Names_isRefusedAtTheSlotLimitWithinASecond`), `PackRoundCapTests`, `PackBudgetTests`, `SlotWidthTests`, `FuzzTests` (60 s in `run-suite.sh swift`). **Not met, not claimed:** no Swift peak-memory figure exists for the F10 packet or the wide round (Go: about 625 MB and 94 MB, NFT-RES-LIM-05); a loop 27 measurement task.
+
+### NFT-RES-LIM-07: Dart has the same defaults and refuses the same packets (loop 99)
+
+**Summary**: The Dart package (AZ-4139, DT-5) carries the limits of the other packages: 65,535 rounds, 1,048,576 slots and 16,777,216 bytes by default, set per scheme with `withLimits`, which keeps the type number and the parity setting and refuses a value below 1 as a `schemeError`. Unpack refuses a round past a limit before it is read (`ErrorKind.tooMany`, `needed` 0); pack refuses a count or list above `maxRounds`, charges the slots of each round and never grows its buffer past `maxBytes`, naming the field. A nested row in a round charges the width of its own members.
+
+**Pass criteria**: `test/limits/` (`limits_surface_test.dart`, `unpack_limits_test.dart`, `pack_limits_test.dart`, `slot_width_test.dart`) and the raised-limit packet of `test/parity/max_slots_test.dart`, which peaks near 815 MB resident (TypeScript 1,070 MB; the CI container's memory limit is unchecked). Dart's memory for a hostile packet is the scheme's limits, not the packet: a list or dict count is compared with the bytes left before anything is made.

@@ -2,7 +2,7 @@
 
 ## 1. High-Level Overview
 
-**Purpose**: Pack and unpack a caller-owned scheme for Swift programs (iOS, macOS, server-side Swift on Linux), with the same bytes as the other seven packages.
+**Purpose**: Pack and unpack a caller-owned scheme for Swift programs (iOS, macOS, server-side Swift on Linux), with the same bytes as the other packages.
 
 **Architectural Pattern**: stateless clear pack and unpack over an immutable scheme, plus frame mode (`FrameSession`), the one session, which the caller holds (ADR 008, ADR 009). Hand-written walkers, no code generation, no wrapper of the C++ core (ADR-001).
 

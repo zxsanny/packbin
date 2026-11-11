@@ -9,11 +9,11 @@ The ordered description of one packet: widths, endian, and which flag bit includ
 
 ## Bool
 
-A flag bit with no payload. The bit is set only for `true`; `false` and a missing value leave it clear, and unpack gives `true` only for a set bit. A bool stands only directly under `flags` or a flag-byte bit; anywhere else the field list fails when it is built. (source: user decision 2026-10-05; README)
+A flag bit with no payload. The bit is set only for `true`; `false` and a missing value leave it clear, and unpack gives `true` only for a set bit. A bool stands only directly under `flags` or a flag-byte bit; anywhere else the field list fails when it is built. Dart spells it `flagBool` (`bool` is a core type). (source: user decision 2026-10-05; README)
 
 ## Empty group
 
-A group with no fields: a presence bit like a bool, bound to something that can carry `true` (its own value in TypeScript and Rust, a `bool` member in C# and C++, a nested-row accessor in Java). One that could never set its bit (Python and Java `group(anchor)` with no fields, a C++ `group(id)` with no member, a C# empty group on a non-`bool` member) fails when the field list is built. (source: user decision 2026-10-05, loop 12 U3)
+A group with no fields: a presence bit like a bool, bound to something that can carry `true` (its own value in TypeScript and Rust, a `bool` member in C# and C++, a nested-row accessor in Java). One that could never set its bit (Python and Java `group(anchor)` with no fields, a C++ `group(id)` with no member, a C# empty group on a non-`bool` member) fails when the field list is built. In Dart it is a `groupOf` with no member, bound with `bind` to a `bool`. (source: user decision 2026-10-05, loop 12 U3)
 
 ## Flags
 
@@ -29,15 +29,15 @@ The git tag `go/vX.Y.Z` that releases the Go module `github.com/zxsanny/packbin/
 
 ## Limits
 
-Three numbers a scheme carries: the most rounds one `repeat` or `times` field may have (`maxRounds`, 65 535), the most slots one call may charge (`maxSlots`, 1 048 576 since loop 22) and the longest packet pack may write (`maxBytes`, 16 777 216). Unpack refuses the round that would pass the first two before reading it; pack refuses a count or list above `maxRounds`, charges slots per round and checks `maxBytes` before every write. In Go they are `Limits{MaxRounds, MaxSlots, MaxBytes}`, read with `DefaultLimits()` and set with `(*Scheme).WithLimits(Limits)`, which returns a copy, takes all three values and refuses one below 1 as `InvalidScheme`; C#, TypeScript and Python default an omitted value. A refused round is the error kind `TooMany` in Go (the interim short-packet shape with `needed` 0 elsewhere). (source: loop 15 to 22 specs; AZ-2444)
+Three numbers a scheme carries: the most rounds one `repeat` or `times` field may have (`maxRounds`, 65 535), the most slots one call may charge (`maxSlots`, 1 048 576 since loop 22) and the longest packet pack may write (`maxBytes`, 16 777 216). Unpack refuses the round that would pass the first two before reading it; pack refuses a count or list above `maxRounds`, charges slots per round and checks `maxBytes` before every write. In Go they are `Limits{MaxRounds, MaxSlots, MaxBytes}`, read with `DefaultLimits()` and set with `(*Scheme).WithLimits(Limits)`, which returns a copy, takes all three values and refuses one below 1 as `InvalidScheme`; C#, TypeScript and Python default an omitted value. In Dart `scheme.withLimits({maxRounds, maxSlots, maxBytes})` returns a copy, a left-out limit takes its default and a value below 1 throws a `schemeError`. A refused round is the error kind `TooMany` in Go and `ErrorKind.tooMany` in Dart (the interim short-packet shape with `needed` 0 elsewhere). (source: loop 15 to 22 specs; AZ-2444)
 
 ## Nested row
 
-A set of fields with an id and name scope of its own: its ids start at 0, and its references, member names and flag bytes stop at its edge (loop 13). In Go it is `Nested(name, members...)`, given as a nested `map[string]any` in a map row or a struct in a typed row; a `Nested` row in a round is charged the width of its own members against `maxSlots` (Java charges a nested-row group 1 slot, assessment D3, open). The anchored `Group` keeps the outer scope and still refuses a shared name. (source: loop 13; components/07_go_package/description.md)
+A set of fields with an id and name scope of its own: its ids start at 0, and its references, member names and flag bytes stop at its edge (loop 13). In Go it is `Nested(name, members...)`, given as a nested `map[string]any` in a map row or a struct in a typed row; a `Nested` row in a round is charged the width of its own members against `maxSlots` (Java charges a nested-row group 1 slot, assessment D3, open). The anchored `Group` keeps the outer scope and still refuses a shared name. In Dart it is `nested(name, members)` (map rows) or `nestedRow<C>(name, create, members)` (typed rows), and the anchored group is `groupOf`. (source: loop 13; components/07_go_package/description.md)
 
 ## No value
 
-A row that leaves a field out. In Go a nil pointer, a nil slice or a map key that is absent or nil is no value: its flag bit stays clear, and a count behind a clear `when` with no value is refused as in the five (U11). An empty slice is a value with 0 items, so its count 0 is written. (source: Go decision G-5; AZ-2440, AZ-2442)
+A row that leaves a field out. In Go a nil pointer, a nil slice or a map key that is absent or nil is no value: its flag bit stays clear, and a count behind a clear `when` with no value is refused as in the five (U11). An empty slice is a value with 0 items, so its count 0 is written. In Dart `null` (a missing key or a getter that returns `null`) is no value and an empty list is a value with 0 items. (source: Go decision G-5; AZ-2440, AZ-2442)
 
 ## Pack
 
@@ -77,7 +77,7 @@ A group that is written only when an earlier field equals a given value. The tes
 
 ## Compact text
 
-The wire form of every string since loop 35 (ADR-006, contract `compact-text.md`): a varint payload length, then a bit-packed payload coded with a canonical prefix code per mode. All eight packages write the same bytes. The tables in `fixtures/text/tables.json` are part of the format. (source: ADR-006; contracts/library/compact-text.md)
+The wire form of every string since loop 35 (ADR-006, contract `compact-text.md`): a varint payload length, then a bit-packed payload coded with a canonical prefix code per mode. All nine packages write the same bytes. The tables in `fixtures/text/tables.json` are part of the format. (source: ADR-006; contracts/library/compact-text.md)
 
 ## Mode (compact text)
 
@@ -110,7 +110,7 @@ The number `t` of wrong bytes a receiver is willing to repair, 0 to `n / 2`, cho
 
 ## Repaired count
 
-The number of wrong bytes unpack repaired before it read the row: 0 for an intact message, 1 to `t` otherwise. It is the degree of the locator polynomial. Each package returns it beside the row in its own style (a result field, an out parameter, a second return value or a tuple). A wrong byte counts once however many of its bits differ. (source: message-ecc.md)
+The number of wrong bytes unpack repaired before it read the row: 0 for an intact message, 1 to `t` otherwise. It is the degree of the locator polynomial. Each package returns it beside the row in its own style (a result field such as `Unpacked.repaired` in Dart, an out parameter, a second return value or a tuple). A wrong byte counts once however many of its bits differ. (source: message-ecc.md)
 
 ## Code word
 
@@ -118,5 +118,5 @@ The 255-byte word of the error-correcting code: the clear length (1 byte, covere
 
 ## Uncorrectable
 
-The error kind of a protected message with more wrong bytes than the correction limit allows, or that no code word is that close to. It names no field and gives no row. With `t` = 0 any wrong byte is uncorrectable. Spelling: `Uncorrectable` (Python, C#, Java, Rust, Go), `"uncorrectable"` (TypeScript), `.uncorrectable` (Swift). (source: message-ecc.md)
+The error kind of a protected message with more wrong bytes than the correction limit allows, or that no code word is that close to. It names no field and gives no row. With `t` = 0 any wrong byte is uncorrectable. Spelling: `Uncorrectable` (Python, C#, Java, Rust, Go), `"uncorrectable"` (TypeScript), `.uncorrectable` (Swift), `ErrorKind.uncorrectable` (Dart). (source: message-ecc.md)
 

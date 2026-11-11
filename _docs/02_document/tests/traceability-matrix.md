@@ -8,7 +8,7 @@
 |-------|---------------------|----------|----------|
 | AC-1 | Position pack is the 13-byte hex | FT-P-01, SM-01, NFT-RES-01, FT-X-83 (Go, loop 24), FT-X-124 (Swift, loop 26) | Covered |
 | AC-2 | Unpack returns those fields and 0 motion fields | FT-P-02, SM-02, FT-X-83 (Go, loop 24), FT-X-124 (Swift, loop 26) | Covered |
-| AC-3 | All six languages' bytes match (seven since loop 24: Go joins; eight since loop 26: Swift joins) | FT-P-03, FT-X-83, FT-X-90 (Go, loop 24), FT-X-124, FT-X-131 (Swift, loop 26) | Covered |
+| AC-3 | All six languages' bytes match (seven since loop 24: Go joins; eight since loop 26: Swift joins; nine since loop 99: Dart joins, see `traceability-matrix-loop-99.md`) | FT-P-03, FT-X-83, FT-X-90 (Go, loop 24), FT-X-124, FT-X-131 (Swift, loop 26) | Covered |
 | AC-4 | Clear bit adds 0 bytes; flags 0x20 adds 2 | FT-P-04, FT-X-84, FT-X-85 (Go, loop 24), FT-X-125, FT-X-126 (Swift, loop 26) | Covered |
 | AC-5 | A stored 0 is written | FT-P-05, FT-X-84, FT-X-85 (Go, loop 24), FT-X-125, FT-X-126 (Swift, loop 26) | Covered |
 | AC-6 | Conditional group adds 0 bytes or its width | FT-P-06, FT-X-84, FT-X-85 (Go, loop 24), FT-X-125, FT-X-126 (Swift, loop 26) | Covered |
@@ -486,3 +486,4 @@ Moved to [traceability-not-verified-loops-11-18.md](traceability-not-verified-lo
 <!-- autodev-step12-loop-update: loop 75 (AZ-3292 to AZ-3295), 2026-10-27, 13 rows added in traceability-matrix-loop-75.md (blackbox-tests-25) (10 Covered, 3 Open: step 11 suites, the QEMU frame image, hardware and ring candidates) -->
 <!-- loop 74 (AZ-3291, ADR 009), 2026-10-27: the stream session rows (pack-session AC-2 to AC-8, AZ-2019 to AZ-2026 session ACs, cpp-microcontroller AC-10, Assessment26 O3) marked Retired; FT-K-02 to FT-K-09 and FT-E-10 kept as history -->
 <!-- autodev-step12-loop-update: loop 97 (AZ-3499 to AZ-3509, AZ-3511 to AZ-3513), 2026-11-01, 21 rows added in traceability-matrix-loop-97.md (blackbox-tests-26) (19 Covered, 2 Open: percentage on a device image, CI publish gate and ESP stage) -->
+<!-- autodev-step12-loop-update: loop 99 (AZ-4134 to AZ-4148), 2026-11-11, 20 rows added in traceability-matrix-loop-99.md (DT-1 to DT-20: 18 Covered, DT-7 and DT-9 with the first CI run pending, DT-10 owned by the release task AZ-4147) -->

@@ -45,6 +45,7 @@ flowchart TD
 | 4 | AZ-2018 | Pack session | feature | L / 13 | the six packages |
 | 5 | AZ-2222 | Go package (full parity) | component | L / 45 (estimate ~26 in 2026-10-06) | the six packages |
 | 6 | AZ-2223 | Swift package (full parity) | component | L / 47 (estimate ~26 in 2026-10-06) | the six packages |
+| 7 | AZ-4133 | Dart package (full parity, with compact text, error correction and frame mode) | component | L / 61 | the eight packages |
 
 The six language epics are the same order. Each is pack, unpack, and that registry's publish. Full descriptions are on the Jira issues.
 
@@ -85,3 +86,25 @@ Swift (AZ-2223) was built in loop 26 (2026-10-14): implement complete, Jira In T
 | AZ-2524 | README Swift section and the eight-language wording | 2 |
 
 Total 47 points (Go 45; the session grew from 3 to 5 for the in-package ChaCha20). Swift installs from the root `Package.swift` at the existing `vX.Y.Z` tag, with no registry and no Swift tag (ADR-005).
+
+Dart (AZ-4133) was built in loop 99 (2026-11-10 and 2026-11-11): the ninth package, `dart/`, published to pub.dev as `packbin` (ADR-011) with the first version published by the owner by hand. It covers every feature the eight packages have, including compact text, message error correction and frame mode, which did not exist when Swift was added. Its 15 child tasks, 61 points (specs in `_docs/02_tasks/`, plan in `_docs/02_task_plans/dart-package/`, batch reports `_docs/03_implementation/batch_01_loop99_report.md` to `batch_05_loop99_report.md`):
+
+| Key | Task | Points |
+|-----|------|--------|
+| AZ-4134 | Dart core: package, scalars, flags, `when`, errors, dispatch, typed and map rows | 5 |
+| AZ-4135 | Scheme construction checks and the anchored group | 5 |
+| AZ-4136 | Rounds and counted kinds: `repeat`, `times`, `sized`, two-bit slots, `bits`, `packed` | 5 |
+| AZ-4137 | Compact text strings and the generated code tables | 3 |
+| AZ-4138 | Lists, dictionaries and nested rows | 5 |
+| AZ-4139 | Round limits, pack budgets and the seeded unpack run | 3 |
+| AZ-4140 | Message error correction (parity count and percentage) | 5 |
+| AZ-4141 | SHA-256, HMAC, HKDF and ChaCha20 on the shared crypto vectors | 3 |
+| AZ-4142 | Frame mode (`FrameSession`, `MacKey`, replay window, key wipe) | 5 |
+| AZ-4143 | Hostile vectors and the ninth package in the case checker | 3 |
+| AZ-4144 | TypeScript parity rows | 3 |
+| AZ-4145 | Dart in the CI suite | 3 |
+| AZ-4146 | Dart in the language-pair, ECC and frame rings | 5 |
+| AZ-4147 | Release: ADR-011, golden gate and the pub.dev target | 5 |
+| AZ-4148 | README Dart section, runnable examples and the nine-language docs | 3 |
+
+Total 61 points (Swift 47). The owner's decisions D-1 to D-5 and the agent defaults A-1 to A-7 are in `_docs/02_task_plans/dart-package/problem.md`. The first pub.dev version is an owner step (the automated route works only for an existing package); no tag was pushed in loop 99.

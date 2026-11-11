@@ -1,8 +1,8 @@
 # Contract: message-ecc
 
-**Component**: library (all 8 packages)
+**Component**: library (all 9 packages)
 **Producer task**: AZ-2678 — AZ-2678_ecc_format_spec.md; 1.1.0: AZ-3499 (parity percentage)
-**Consumer tasks**: AZ-2679, AZ-2680, AZ-2681, AZ-2682, AZ-2683, AZ-2684, AZ-2685, AZ-2686, AZ-2687, AZ-2688, AZ-2689, AZ-2690
+**Consumer tasks**: AZ-2679, AZ-2680, AZ-2681, AZ-2682, AZ-2683, AZ-2684, AZ-2685, AZ-2686, AZ-2687, AZ-2688, AZ-2689, AZ-2690; AZ-4140 (Dart, loop 99)
 **Version**: 1.1.0
 **Status**: current
 **Last Updated**: 2026-11-01
@@ -78,7 +78,7 @@ A scheme may declare a **percentage** `p`, an integer 0 to 100, instead of a cou
 
 Refusal names are those of the table above; the percentage adds no kind. Vectors: `fixtures/ecc/percent-vectors.txt` (row words `pct`, `encp`, `inv`, `limp`, `fixp`, `badp`, `parp`, `lmtp`; syntax at the top of the file); the reference is `eccfmt.py` (`parity_count`, `largest_clear`, `clear_length`, `protect_percent`, `decode_percent`).
 
-Spelling by package (follows each package's other scheme setting; the README gives the final forms): Python `with_limits(parity_percent=p)`, TypeScript `withLimits({ parityPercent: p })`, C# `WithParityPercent(p)`, Rust `with_parity_percent(p)`, Java `withParityPercent(p)`, Go `WithParityPercent(p)`, Swift `withLimits(parityPercent: p)`, C++ `parity_percent(scheme, p)`.
+Spelling by package (follows each package's other scheme setting; the README gives the final forms): Python `with_limits(parity_percent=p)`, TypeScript `withLimits({ parityPercent: p })`, C# `WithParityPercent(p)`, Rust `with_parity_percent(p)`, Java `withParityPercent(p)`, Go `WithParityPercent(p)`, Swift `withLimits(parityPercent: p)`, C++ `parity_percent(scheme, p)`, Dart `withParityPercent(p)` (and `withParity(n)` for a count, `withParitySettings({parity, parityPercent})` for one declaration that refuses a mix; unpack with repair is `unpackRepair(bytes, handlers, t)` and `unpackRowRepair(bytes, scheme, t)`, the count is `Unpacked.repaired`, the kinds are `ErrorKind.uncorrectable` and `ErrorKind.tooLong`).
 
 ### Detection and the correction limit
 
@@ -120,4 +120,5 @@ A new setting that only adds a way to choose `n` is a minor version. Any change 
 | 1.0.0 | 2026-10-18 | First version (loop 38, AZ-2678). |
 | 1.0.0 | 2026-10-19 | Loop 41 audit (AZ-2666): the work bound restated (F55); a handler's count above 32 refused at dispatch (F52). No wire change. |
 | 1.0.1 | 2026-10-27 | Editorial: the Session row is removed with the stream session (ADR 009), and with it the session parts of the Dispatch row (a session that is not open answered first; the receive index); ECC bytes and rules unchanged. |
+| 1.1.0 (consumers) | 2026-11-11 | Dart is the ninth consumer (AZ-4140, loop 99): count and percentage, repair, `uncorrectable` and `too_long`; it passes every row of `fixtures/ecc/vectors.txt` and `percent-vectors.txt` and joins the ECC ring. No byte, rule or version changed. |
 | 1.1.0 | 2026-11-01 | Parity percentage (loop 97, AZ-3499): a scheme may declare a percentage of the clear length instead of a count; the count is `min(32, ceil(p × L / 100))` and unpack finds it from the received length. Additive: schemes with a fixed count are unchanged. |

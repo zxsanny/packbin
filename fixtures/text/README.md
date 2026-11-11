@@ -1,6 +1,6 @@
 # Compact text fixtures
 
-Shared by all eight packages (AZ-2646, AZ-2647; contract `_docs/02_document/contracts/library/compact-text.md`).
+Shared by all nine packages (AZ-2646, AZ-2647; contract `_docs/02_document/contracts/library/compact-text.md`).
 
 | File | What it is |
 |------|------------|

@@ -57,8 +57,10 @@ sealed class MacTagResult {
 
 /// A sealed frame: [length] body bytes were written to the caller's buffer.
 final class FrameSealed implements FrameSealResult {
+  /// A sealed result of [length] body bytes.
   const FrameSealed(this.length);
 
+  /// The body bytes written to the caller's buffer.
   final int length;
 
   @override
@@ -68,10 +70,16 @@ final class FrameSealed implements FrameSealResult {
 /// An opened frame: which key opened it, the length of its clear part, and
 /// the number of plaintext bytes written to the caller's buffer.
 final class FrameOpened implements FrameOpenResult {
+  /// An opened result.
   const FrameOpened(this.slot, this.clearLength, this.plainLength);
 
+  /// The key that opened the frame.
   final FrameSlot slot;
+
+  /// The length of the clear part of the body.
   final int clearLength;
+
+  /// The plaintext bytes written to the caller's buffer.
   final int plainLength;
 
   @override
@@ -80,8 +88,10 @@ final class FrameOpened implements FrameOpenResult {
 
 /// The tag of a MAC-only call.
 final class MacTag implements MacTagResult {
+  /// A MAC-only result holding [tag].
   const MacTag(this.tag);
 
+  /// The tag bytes.
   final Uint8List tag;
 
   @override
@@ -94,6 +104,7 @@ final class FrameRefusal
     implements FrameSealResult, FrameOpenResult, MacTagResult {
   const FrameRefusal._(this.kind, this.reason, {this.needed, this.length});
 
+  /// Why the call was refused.
   final FrameRefusalKind kind;
 
   /// What was refused, for a log. Test for [kind], not for this text.

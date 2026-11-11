@@ -24,3 +24,4 @@ One directory per package holds the probes of the loop 41 security audit of the 
 | `java/` | `javac --release 17` with the package sources, then `java packbin.AuditProbe` | the same five as C# |
 | `swift/` | `build_swift.sh <checkout> <empty dir> release\|debug\|asan` | text-fuzz, ecc-fuzz, edge, ecc-worst, text-amp, text-long, dictkey (F47 shapes) |
 | `cpp/` | `build_cpp.sh <checkout> <probe dir> <outdir> [both\|asan\|o2]` | text-fuzz, ecc-fuzz, edge under ASan and UBSan; ecc-worst, text-amp, text-long, dict-quad (F51) at -O2 |
+| `dart/` (no probe directory) | `dart test test/limits/seeded_run_test.dart` in `dart/`; CI runs it for `PACKBIN_FUZZ_SECONDS=60` | not an audit probe (loop 99 has no Dart audit): the seeded unpack run of the Dart suite (AZ-4139, DT-5). It reads `corpus.txt` as a packet of every fuzz scheme, of its own kind and of all fuzz schemes at once, then random mutations, and replays from `PACKBIN_FUZZ_SEED` |

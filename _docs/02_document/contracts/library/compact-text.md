@@ -1,8 +1,8 @@
 # Contract: compact-text
 
-**Component**: library (all 8 packages)
+**Component**: library (all 9 packages)
 **Producer task**: AZ-2646 — AZ-2646_compact_text_format_spec.md
-**Consumer tasks**: AZ-2647, AZ-2648, AZ-2649, AZ-2650, AZ-2651, AZ-2652, AZ-2653, AZ-2654, AZ-2655, AZ-2656, AZ-2657, AZ-2658
+**Consumer tasks**: AZ-2647, AZ-2648, AZ-2649, AZ-2650, AZ-2651, AZ-2652, AZ-2653, AZ-2654, AZ-2655, AZ-2656, AZ-2657, AZ-2658; AZ-4137, AZ-4138 (Dart, loop 99)
 **Version**: 1.0.0
 **Status**: frozen
 **Last Updated**: 2026-10-19
@@ -10,7 +10,7 @@
 
 ## Purpose
 
-The wire form of every string packbin writes: a string field, a list element, a dictionary key or value, a string under `repeat`, `times` or `flags`. It replaces the 2-byte count plus UTF-8. All eight packages write the same bytes for the same string. The reference implementation is `scripts/text/textfmt.py`; where this text and the reference disagree, fix the one that is wrong and re-run `fixtures/text/check-vectors.sh`.
+The wire form of every string packbin writes: a string field, a list element, a dictionary key or value, a string under `repeat`, `times` or `flags`. It replaces the 2-byte count plus UTF-8. All nine packages write the same bytes for the same string. The reference implementation is `scripts/text/textfmt.py`; where this text and the reference disagree, fix the one that is wrong and re-run `fixtures/text/check-vectors.sh`.
 
 ## Shape
 
@@ -93,7 +93,7 @@ Costs are integers, so the result does not depend on floating point.
 
 ## Invariants
 
-- Same string, same bytes in all 8 packages (`fixtures/text/vectors.txt`).
+- Same string, same bytes in all 9 packages (`fixtures/text/vectors.txt`).
 - The raw payload is 1 + the UTF-8 bytes, so a field is never larger than 2 + its UTF-8 bytes (today's size) up to 126 UTF-8 bytes, at most 1 byte larger from 127 to 16,382 bytes, and at most 2 bytes larger above (the count header grows to 2 and then 3 bytes).
 - A payload of N bytes decodes to at most 6N + 8 UTF-8 bytes (the worst symbol in the frozen tables is the Russian о: a 3-bit code for 2 UTF-8 bytes, 5.33 bytes per payload byte).
 - Dictionary pairs are sorted by the key's UTF-8 bytes before the keys are encoded (unchanged). On unpack a decoded key must be strictly greater than the key before it, compared as unsigned UTF-8 bytes (a prefix sorts before the longer key; U+FF5E sorts before U+10000, unlike UTF-16 order). An equal key is a repeated key and a smaller key is out of order; both refuse the packet with the package's dict-key error, and a key's several byte forms (compact or raw) count as one key. Every encoder already writes this order, so only hand-made or hostile packets are refused (loop 42, AZ-2713; F51, F56). This refuses packets the earlier decoders accepted, which is free until the first `v*` tag.
@@ -119,6 +119,7 @@ Codes below are the canonical codes of the frozen tables; `bits` counts the symb
 
 | Version | Date | Change | Author |
 |---------|------|--------|--------|
+| 1.0.0 (consumers) | 2026-11-11 | Dart is the ninth package (AZ-4137, AZ-4138, loop 99): its code tables are emitted from `tables.json` by `scripts/text/emit_tables.py dart`, and it passes every row of `fixtures/text/vectors.txt`. The Dart spelling is `utf8Field(id, name)`, `list(name, element)` and `dict(name, element)`; a string with an unpaired surrogate is refused at pack naming the field (TypeScript writes U+FFFD; the contract's bytes are unchanged), and a text unpack refuses is `ErrorKind.badValue` naming the field. No change to bytes or tables | loop 99 |
 | 1.0.0 | 2026-10-19 | Loop 42 (AZ-2713): dict keys must be strictly ascending on unpack in all eight packages; the C++ quadratic key check is gone. No change to packets the encoders write | loop 42 |
 | 1.0.0 | 2026-10-19 | Loop 41 audit (AZ-2666): the C++ dict key cost and the unbound-dict difference documented (F51, F56). No wire change | loop 41 |
 | 1.0.0 | 2026-10-18 | Frozen with tables.json (AZ-2646); owner decisions D1 to D5 and option D. C++ scratch is 12 bytes per code point (corrected in the review) | loop 35 |

@@ -8,6 +8,7 @@
 | F2 Unpack | caller → package | bytes |
 | F3 Publish | the six packages, via the golden fixture | the hex |
 | F3 Publish | Actions → the six registries | one package per language in the tag |
+| F3 Publish | Actions → pub.dev | the Dart package, through a GitHub OIDC token from the run a tag push started (ADR 011) |
 | F4 Session (retired, loop 74, ADR 009) | opener → waiter | nothing: the stream session is removed |
 | F5 Frame session | sender → receiver | one body per message: clear part, ciphertext and a 4, 8 or 16-byte tag, at most 255 bytes |
 
@@ -110,3 +111,18 @@ None.
 | Adding Cargo features changes the std build, the ring driver or the crates.io publish | the default-feature suite and ring stay green; `cargo publish --dry-run` with default and with no default features | AZ-2749 AC-7, AZ-2757 AC-3 | AZ-2749, AZ-2757 |
 | A new CI job name is missing from the job guards | `publish-jobs.test.sh` and the wiring tests list the new job | AZ-2751 (included scope) | AZ-2751 |
 | Shared pure code (ecc tables, sha256) is edited for the core and the std suite moves | the std ecc suites and the 27 crypto rows run unchanged (the std session suite was retired in loop 74, ADR 009) | AZ-2755 AC-4, AZ-2756 AC-1 | AZ-2755, AZ-2756 |
+
+### Dart package (epic AZ-4133, loop 99)
+
+The Dart seams: the 64-bit `int`, the ring drivers, the emitted text tables, the golden gate, the hostile checker, pub.dev, and the README.
+
+| Risk | Outcome | AC | Owner |
+|------|---------|----|-------|
+| A Dart `int` is 64 bits and wraps silently, so a size or count computed from input overflows without an error | every size and index from input is range-checked before use; the hostile vectors and the 60 s seeded unpack run (0 uncaught exceptions, 0 calls over 1 second) cover it; a `u64` count above 2^63 - 1 is `bad_value` | DT-5, DT-16 | AZ-4139 |
+| Dart joins the language-pair, ECC and frame rings through a compiled driver (`ring-dart.sh`, `drivers/handoff-dart/`); a stale or lying driver passes a ring it should fail | the driver builds from a copy of `dart/` and is rebuilt when a source is newer than its stamp; each ring's self-test catches a lying Dart driver | DT-7 | AZ-4146 |
+| The Dart code tables are emitted from `fixtures/text/tables.json`; an edited or stale emit changes the text bytes | `scripts/text/check-emitted.sh` compares all nine emitted files; the 418 text rows run in Dart | DT-17 | AZ-4137 |
+| Dart is the ninth language of the golden gate: a Dart mismatch must stop the whole release | a mismatch publishes 0 packages of any language, 0 Go tags and no Swift check; a tree without `dart/pubspec.yaml` is `absent dart` | DT-10 | AZ-4147 |
+| The hostile checker counts package names in the `Run by` lines; a missing Dart name hides a case that Dart does not run | `check-cases.sh` counts nine names for every pack case, and all 75 cases run in Dart at their stage | DT-4 | AZ-4143 |
+| pub.dev takes an upload only through a GitHub OIDC token from a run a tag push started, and only for a package that already exists; the name `packbin` is not reserved until the first publish | a run without the token, or when pub.dev has no package `packbin`, fails at the plan before any write; the owner publishes the first version by hand and enables automated publishing with the tag pattern `v{{version}}` (ADR-011) | DT-10 | owner, AZ-4147 |
+| The seams of one Dart language: the key buffers cannot be wiped at garbage collection | keys are wiped by `close()` only, best effort, and the docs say so; a session is used by one isolate at a time | DT-6, DT-14 | AZ-4142 |
+| A README example drifts from the code, or a README hex changes without a test noticing | `dart/test/readme/` reads `README.md` and `dart/README.md`, runs every Dart block and compares its output with the block under it; `scripts/frame/readme-examples.sh` compares the frame example with its test | DT-13 | AZ-4148 |

@@ -2,7 +2,7 @@
 
 **Component**: library
 **Producer task**: AZ-3200 (frame mode text), AZ-3202 (vectors), AZ-3203 (Rust); umbrella AZ-3192; stream session removed by AZ-3280..AZ-3291 (loop 74, ADR 009)
-**Consumer tasks**: AZ-3232, AZ-3233, AZ-3234 (C#, Java, Swift); AZ-3292..AZ-3295 (C++, Go, Python, TypeScript, loop 75)
+**Consumer tasks**: AZ-3232, AZ-3233, AZ-3234 (C#, Java, Swift); AZ-3292..AZ-3295 (C++, Go, Python, TypeScript, loop 75); AZ-4141, AZ-4142 (Dart, loop 99)
 **Version**: 3.0.0
 **Status**: current
 **Last Updated**: 2026-10-27
@@ -150,6 +150,7 @@ The values E1 to E5 of `_docs/02_task_plans/rust-m33f-and-frame-mode/input_data/
 | Version | Date | Change |
 |---------|------|--------|
 | 3.0.0 | 2026-10-27 | Removes the stream mode (Shape, Construction, the `stream` column of Configuration and its refusal rule) from every package (ADR 009, loop 74, AZ-3280..AZ-3291); names the frame types, the same in every package (owner D1). The Frame mode and MAC-only sections are unchanged from 2.0.0 apart from two sentences: the intro's stream sentence and the Security note that compared the wipe with the stream session. Frame bytes and `fixtures/frame/vectors.txt` are unchanged, so citations of "2.0.0" for the frame text stay valid. |
+| 3.0.0 (consumers) | 2026-11-11 | Dart implements frame mode and the MAC-only call (AZ-4141, AZ-4142, loop 99) and passes all 157 rows of `fixtures/frame/vectors.txt` and all 27 rows of `fixtures/crypto/vectors.txt`; its refusals are values (`FrameRefusal` with `FrameRefusalKind`), `load` and `derive` return `null` for a bad argument, and the replay counter is a `BigInt`. No byte, rule or version changed. |
 | 3.0.0 (consumers) | 2026-10-27 | C++, Go, Python and TypeScript implement frame mode and the MAC-only call (AZ-3292, AZ-3293, AZ-3294, AZ-3295, loop 75) and pass all 157 rows of `fixtures/frame/vectors.txt` and all 27 rows of `fixtures/crypto/vectors.txt`; no byte, rule or version changed. |
 | 2.0.0 (consumers) | 2026-10-25 | C#, Java and Swift implement frame mode and the MAC-only call (AZ-3232, AZ-3233, AZ-3234, loop 71) and pass every row of `fixtures/frame/vectors.txt` and `fixtures/crypto/vectors.txt`; no byte, rule or version changed. |
 | 2.0.0 | 2026-10-25 | Adds the Configuration section, `frame` mode and the MAC-only call (AZ-3192, ADR 008). Stream mode text, bytes, operations and results are unchanged from 1.0.0. |
@@ -157,4 +158,4 @@ The values E1 to E5 of `_docs/02_task_plans/rust-m33f-and-frame-mode/input_data/
 
 ## Consumers
 
-Frame mode: Rust (AZ-3203), C#, Java and Swift (loop 71); C++, Go, Python and TypeScript (loop 75, AZ-3292..AZ-3295), each on the verified SHA-256, HMAC-SHA256, HKDF-SHA256 and ChaCha20 of its crypto module (27 rows of `fixtures/crypto/vectors.txt`) and all 157 rows of `fixtures/frame/vectors.txt`. In every package except Rust the `MacKey` object holds `K_label` (32 bytes) and not precomputed pad states, because the standard HMAC of those runtimes does not expose them, so a tag costs two more SHA-256 compressions; the bytes are equal. meshbell (a separate repository) pins the packbin commit and renames its Rust `Session` to `FrameSession` when it moves past loop 74. The README. Archangel is not a consumer in this repository.
+Frame mode: Rust (AZ-3203), C#, Java and Swift (loop 71); C++, Go, Python and TypeScript (loop 75, AZ-3292..AZ-3295); Dart (loop 99, AZ-4142), each on the verified SHA-256, HMAC-SHA256, HKDF-SHA256 and ChaCha20 of its crypto module (27 rows of `fixtures/crypto/vectors.txt`) and all 157 rows of `fixtures/frame/vectors.txt`. In every package except Rust the `MacKey` object holds `K_label` (32 bytes) and not precomputed pad states, because the standard HMAC of those runtimes does not expose them, so a tag costs two more SHA-256 compressions; the bytes are equal. meshbell (a separate repository) pins the packbin commit and renames its Rust `Session` to `FrameSession` when it moves past loop 74. The README. Archangel is not a consumer in this repository.

@@ -26,4 +26,6 @@ The blackbox scenarios were one file of 1 990 lines. Loop 19 (step 12) split the
 | [blackbox-tests-24-loop71-frame-mode-managed.md](blackbox-tests-24-loop71-frame-mode-managed.md) | FT-X-163 to FT-X-165 | loop 71: frame mode in C#, Java and Swift: shared vectors, tamper and replay, lifecycle and README examples |
 | [blackbox-tests-25-loop75-frame-mode-ports.md](blackbox-tests-25-loop75-frame-mode-ports.md) | FT-X-166 to FT-X-168 | loop 75: frame mode in C++, Go, Python and TypeScript: shared vectors, open order and refusals, lifecycle, concurrency, README examples and the C++ frame image |
 
+Loop 99 (the Dart package): the scenarios are the DT-1 to DT-20 rows of `traceability-matrix-loop-99.md`, tested as listed in [components/09_dart_package/tests.md](../components/09_dart_package/tests.md); no new FT-X ids.
+
 Non-functional files: [performance-tests.md](performance-tests.md), [resilience-tests.md](resilience-tests.md), [resource-limit-tests.md](resource-limit-tests.md), [security-tests.md](security-tests.md); environment in [environment.md](environment.md).

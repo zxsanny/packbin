@@ -47,6 +47,7 @@ final class FlagRead {
 
 /// The condition of `when`, made by `eq`.
 final class Condition {
+  /// A condition on the field with id [fieldId] equal to [value].
   const Condition(this.fieldId, this.value);
 
   /// The id of the field that is tested.

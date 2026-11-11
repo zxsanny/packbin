@@ -22,7 +22,7 @@ Unlist the NuGet version and deprecate the npm version. Publish a new patch only
 
 ## Checklist
 
-- All eight packages declare MIT (Go: `go/LICENSE`, checked by `publish-check.py go-tag`; Swift: the root `LICENSE`, checked by `publish-check.py swift-check`)
+- All nine packages declare MIT (Go: `go/LICENSE`, checked by `publish-check.py go-tag`; Swift: the root `LICENSE`, checked by `publish-check.py swift-check`; Dart: `dart/LICENSE`, equal to the root `LICENSE`, checked by `publish-check.py pubdev`)
 - The archive contains 0 registry tokens
 - Python, Rust, Java, and C++ are in the tag, so PyPI, crates.io, Maven Central, and vcpkg publish with npm and NuGet; none of them is skipped when its credential is missing
 - Go is in the tag (`go/go.mod`), so the final target `go-tag` pushes `go/vX.Y.Z` at the commit of `vX.Y.Z` after every registry took its version, then checks the module through proxy.golang.org (ADR-004)

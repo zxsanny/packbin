@@ -76,3 +76,16 @@ The library has no authentication. These checks are about secrets and hostile bu
 | 4 | hostile session input (retired in loop 74, ADR 009: `SessionHostileTests`, short, odd, large and random payloads, a seed or value of another length, unpack before join); still run: `ChaCha20Tests.xor_dataThatNeedsABlockAfterTheLast_isRefusedAndUnchanged` and the frame refusals of `FrameRefusalTests` | a thrown error, no trap; the caller's seed and payload are not changed |
 
 **Pass criteria**: traps 0; partial output 0 bytes; the steps ran on the Mac and in the `swift:6.3.3` container at step 11. The "not covered" item of loop 26 (`PackSession.start(_ nonce:)` was public, so a caller could reuse a value; open decision O3, review26 #7) is retired with the stream session (loop 74). The security findings of the Swift package are in `_docs/05_security/` (another step).
+
+### NFT-SEC-06: Hostile input cannot throw out of the Dart package (loop 99)
+
+**Summary**: Dart `unpack` returns an `Unpacked` with an error value for every packet it cannot read and never throws on input bytes; every count and size derived from input is range-checked before use, because a Dart `int` is 64 bits and wraps silently. Pack and scheme construction throw a `PackbinException` that names the field and return no bytes.
+
+| Step | Action | Expected |
+|------|--------|----------|
+| 1 | replay the 75 cases of `fixtures/hostile/cases.txt` in Dart (`test/hostile/hostile_test.dart`: 15 unpack, 2 limit, 15 construct, 43 pack) | an allowed outcome each; unpack within 1 second; 0 uncaught exceptions |
+| 2 | the seeded random unpack run over `fixtures/hostile/fuzz/corpus.txt` and random mutations (`test/limits/seeded_run_test.dart`; CI runs it for 60 s) | 0 uncaught exceptions, 0 calls over 1 second, 0 results above the slot budget |
+| 3 | give an out-of-range getter value, a wrong Dart type or a missing key (`test/core/invalid_values_test.dart`, `test/parity/value_rows_test.dart`) | a thrown pack error naming the field; 0 bytes |
+| 4 | frame calls with a bad argument or hostile wire bytes (`test/frame/frame_refusals_test.dart`) | a `FrameRefusal` value; no throw; the output buffer and the replay window unchanged |
+
+**Pass criteria**: uncaught exceptions 0; partial output 0 bytes. A 10 s run of step 2 made 1.5 million unpack calls with 0 failures (slowest 8.3 ms). Keys are wiped by `close()` only: Dart cannot wipe at garbage collection (documented, accepted).

@@ -1,6 +1,6 @@
 # Message ECC fixtures
 
-Shared by all eight packages (AZ-2678, AZ-2679; contract `_docs/02_document/contracts/library/message-ecc.md`).
+Shared by all nine packages (AZ-2678, AZ-2679; contract `_docs/02_document/contracts/library/message-ecc.md`).
 
 | File | What it is |
 |------|------------|
@@ -30,6 +30,6 @@ A driver line that names a count (`n`) names a percentage instead with the word 
 
 ## The cross-language ring (AZ-2689, EC-9)
 
-`.github/workflows/ring-ecc.sh` has each of the eight languages write the protected position message (n = 0, 1, 2, 4, 8, 16, 32) and then read what each of the eight wrote, intact and corrupted: 8 writers x 8 readers = 64 pairs. The rows are the position rows of `vectors.txt` (the `.pos.` rows, the results report rows 7 to 12, truncation, extension, the unprotected message, the oversize buffer, `par` and `lmt`) and `ring-cases.txt`. A reader gets each corruption applied to the bytes the writer made, so a writer that wrote other bytes shows as a mismatched row. Every result is compared with the reference codec. The drivers (`.github/workflows/drivers`) answer `ecc-protect <n> <clear hex>`, `ecc-repair <n> <t> <hex>` and `ecc-batch <file>` (one result line for each `protect <n> <hex>` or `repair <n> <t> <hex>` line); a result is the hex of the position message and the repaired count, or the kind of the refusal.
+`.github/workflows/ring-ecc.sh` has each of the nine languages write the protected position message (n = 0, 1, 2, 4, 8, 16, 32) and then read what each of the nine wrote, intact and corrupted: 9 writers x 9 readers = 81 pairs (Dart joined in loop 99, AZ-4146; its driver is `.github/workflows/drivers/handoff-dart/`). The rows are the position rows of `vectors.txt` (the `.pos.` rows, the results report rows 7 to 12, truncation, extension, the unprotected message, the oversize buffer, `par` and `lmt`) and `ring-cases.txt`. A reader gets each corruption applied to the bytes the writer made, so a writer that wrote other bytes shows as a mismatched row. Every result is compared with the reference codec. The drivers (`.github/workflows/drivers`) answer `ecc-protect <n> <clear hex>`, `ecc-repair <n> <t> <hex>` and `ecc-batch <file>` (one result line for each `protect <n> <hex>` or `repair <n> <t> <hex>` line); a result is the hex of the position message and the repaired count, or the kind of the refusal.
 
-The hostile-case file `fixtures/hostile/cases.txt` does not take the ECC refusals: its rows are packets of type 1 that each package replays through a loader keyed on the row id, with a README section for every id. The position message has type 0x40 and the packages' loaders would fail on an id they do not know. The refusals of EC-14 and EC-4 are the `ring.hostile.*` rows of `ring-cases.txt`, run in the ring against all eight packages.
+The hostile-case file `fixtures/hostile/cases.txt` does not take the ECC refusals: its rows are packets of type 1 that each package replays through a loader keyed on the row id, with a README section for every id. The position message has type 0x40 and the packages' loaders would fail on an id they do not know. The refusals of EC-14 and EC-4 are the `ring.hostile.*` rows of `ring-cases.txt`, run in the ring against all nine packages.

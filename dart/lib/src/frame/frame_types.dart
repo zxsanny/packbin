@@ -5,8 +5,13 @@ import 'dart:typed_data';
 /// The wire number is 1 (up), 2 (down) or 3 (group). A value built from any
 /// other number is refused by seal and open as a bad value.
 extension type const FrameDirection(int number) {
+  /// Wire number 1.
   static const FrameDirection up = FrameDirection(1);
+
+  /// Wire number 2.
   static const FrameDirection down = FrameDirection(2);
+
+  /// Wire number 3.
   static const FrameDirection group = FrameDirection(3);
 }
 
@@ -15,10 +20,19 @@ extension type const FrameDirection(int number) {
 ///
 /// A value with a bit outside [all] makes load fail.
 extension type const FrameDirections(int bits) {
+  /// No direction.
   static const FrameDirections none = FrameDirections(0);
+
+  /// The up direction.
   static const FrameDirections up = FrameDirections(1);
+
+  /// The down direction.
   static const FrameDirections down = FrameDirections(2);
+
+  /// The group direction.
   static const FrameDirections group = FrameDirections(4);
+
+  /// Up, down and group.
   static const FrameDirections all = FrameDirections(7);
 
   /// The directions of both sets.
@@ -34,19 +48,36 @@ extension type const FrameDirections(int bits) {
 }
 
 /// Which loaded key opened a frame.
-enum FrameSlot { current, previous }
+enum FrameSlot {
+  /// The current key opened the frame.
+  current,
+
+  /// The previous key opened the frame.
+  previous,
+}
 
 /// What a replay window says about a counter.
-enum Freshness { fresh, duplicate, tooOld }
+enum Freshness {
+  /// The counter is newer than every one seen, or unseen inside the window.
+  fresh,
+
+  /// The counter was already committed.
+  duplicate,
+
+  /// The counter is older than the window.
+  tooOld,
+}
 
 /// What a frame session is loaded with besides the key. A [tagLength] other
 /// than 4, 8 or 16 makes load fail.
 final class FrameConfig {
+  /// A configuration with a [tagLength] and the [directions] to load.
   const FrameConfig(this.tagLength, this.directions);
 
   /// The bytes of the tag at the end of every frame body: 4, 8 or 16.
   final int tagLength;
 
+  /// The directions the session loads keys for.
   final FrameDirections directions;
 }
 
@@ -61,6 +92,7 @@ final class FrameConfig {
 /// long, or with a [kind] outside 0 to 15, is refused by seal and open as a
 /// bad value.
 final class MsgContext {
+  /// A context with the 8-byte [msgId] (copied) and the [kind] (0 to 15).
   MsgContext(Uint8List msgId, this.kind)
     : _id = msgId.length == idSize ? Uint8List.fromList(msgId) : null;
 
@@ -69,6 +101,7 @@ final class MsgContext {
 
   final Uint8List? _id;
 
+  /// The 4-bit kind, 0 to 15.
   final int kind;
 }
 
