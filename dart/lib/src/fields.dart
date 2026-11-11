@@ -49,6 +49,69 @@ final class ValueField<V extends Object> extends Field {
   );
 }
 
+/// An anchored group, made by [groupOf].
+final class GroupField extends Field {
+  GroupField._(super.node) : super._();
+
+  /// This group with no member bound to a member of the typed row [R]: [get]
+  /// gives `true` to set the mark's bit, null (or `false`) leaves it clear;
+  /// [set] stores `true` when unpack read the bit set. A group that has
+  /// members binds those instead, so it is refused here.
+  Field bind<R extends Object>({
+    required bool? Function(R row) get,
+    required void Function(R row, bool value) set,
+  }) => _Plain(
+    _node.fields.isNotEmpty
+        ? _node.copy(
+            error:
+                'group ${_node.name}: only a group with no member binds a value; bind its members',
+          )
+        : _node.copy(
+            binding: Binding(
+              (Object row) => get(row as R),
+              (Object row, Object value) => set(row as R, value as bool),
+              R,
+              <S>() => <S>[] is List<R>,
+            ),
+          ),
+  );
+}
+
+/// A `repeat` or `times`, made by [repeat] and [times]. In a map row each name
+/// the round holds is a list with one entry per round; [bind] binds the rounds
+/// of a typed row.
+final class RoundField extends Field {
+  RoundField._(super.node) : super._();
+
+  /// This round bound to the member of the typed row [R] that holds its
+  /// rounds: a `List<E>` with one row of the type [E] a round. [create] makes
+  /// the row of one round that unpack reads; [get] gives the rounds for pack
+  /// (null is no round) and [set] stores the list unpack read. Bind the
+  /// round's own members to [E]:
+  ///
+  /// ```dart
+  /// times(1, 0, [i32(1, 'lat').bind<Point>(...)]).bind<Route, Point>(
+  ///   create: Point.new, get: (r) => r.points, set: (r, v) => r.points = v)
+  /// ```
+  Field bind<R extends Object, E extends Object>({
+    required E Function() create,
+    required List<E>? Function(R row) get,
+    required void Function(R row, List<E> rounds) set,
+  }) => _Plain(
+    _node.copy(
+      roundBinding: RoundBinding(
+        create,
+        (Object row) => get(row as R),
+        (Object row, List<Object> rounds) => set(row as R, rounds as List<E>),
+        () => <E>[],
+        R,
+        <S>() => <S>[] is List<R>,
+        (check, body) => check<E>(body),
+      ),
+    ),
+  );
+}
+
 /// A split-form flag byte: put the handle itself in the field list where the
 /// byte is read, and [bit] puts a member under its next bit. A handle can be
 /// read more than once and shared by schemes.
@@ -143,6 +206,14 @@ T be<T extends Field>(T field) {
     case NodeKind.flags:
     case NodeKind.flagByte:
     case NodeKind.when:
+    case NodeKind.group:
+    case NodeKind.sized:
+    case NodeKind.u2:
+    case NodeKind.slot:
+    case NodeKind.bits:
+    case NodeKind.packed:
+    case NodeKind.repeat:
+    case NodeKind.times:
       return field;
   }
 }
@@ -157,6 +228,29 @@ Field flags(int anchor, List<Field> members) {
       : null;
   return _Plain(Node(NodeKind.flags, id: anchor, fields: nodes, error: error));
 }
+
+/// An anchored group: [members] under the one [name]. It writes no byte of
+/// its own and shares the ids and the scope of the fields around it, so the
+/// [anchor] is the next id and a `when` or a flag byte outside it can name or
+/// read what is inside. In a map row the members are a `Map<String, Object?>`
+/// under [name], on pack and on unpack; a member given in the row around it
+/// while the group is not given is refused. In a typed row the members are
+/// bound to the same row as the fields around the group. Under [flags] or a
+/// flag byte's bit the group's bit is set when the map is given (a typed row:
+/// when a member holds a value). A group with no member is a presence mark:
+/// it stands only directly under [flags] or a flag byte's bit, and `true`
+/// sets its bit.
+///
+/// Named `groupOf` because `group` is taken by `package:test`.
+GroupField groupOf(int anchor, String name, List<Field> members) =>
+    GroupField._(
+      Node(
+        NodeKind.group,
+        id: anchor,
+        name: name,
+        fields: [for (final m in members) m._node],
+      ),
+    );
 
 /// A split-form flag byte named [name].
 FlagByte flagByte(String name) => FlagByte._(name, FlagTag(name));
@@ -173,5 +267,79 @@ Field when(int anchor, Condition condition, List<Field> members) => _Plain(
     id: anchor,
     fields: [for (final m in members) m._node],
     condition: condition,
+  ),
+);
+
+/// Raw bytes whose length is the earlier integer [countId]; there is no
+/// length of its own.
+ValueField<Uint8List> sized(int id, String name, int countId) =>
+    ValueField<Uint8List>._(
+      Node(NodeKind.sized, id: id, name: name, countId: countId),
+    );
+
+/// One 2-bit slot (0 to 3) of a [u2], with the field id [id].
+ValueField<int> slot(int id, String name) =>
+    ValueField<int>._(Node(NodeKind.slot, id: id, name: name));
+
+/// Fixed 2-bit [slots] (made by [slot], bound or not), four to a byte, low
+/// bits first; the last byte's unused bits are 0. Needs at least one slot.
+Field u2(List<Field> slots) {
+  final nodes = [for (final s in slots) s._node];
+  final other = nodes.where((n) => n.kind != NodeKind.slot).firstOrNull;
+  final error = nodes.isEmpty
+      ? 'u2 needs at least one slot'
+      : other != null
+      ? 'u2: ${other.declaredName} is not a slot; make the members with slot'
+      : null;
+  return _Plain(Node(NodeKind.u2, fields: nodes, error: error));
+}
+
+/// A list of 0 and 1 (`List<int>`); the item count is the earlier integer
+/// [countId], and the list holds exactly that many items.
+ValueField<List<int>> bits(int id, String name, int countId) =>
+    ValueField<List<int>>._(
+      Node(NodeKind.bits, id: id, name: name, countId: countId),
+    );
+
+/// A list of small integers [width] bits each (1 or 2), with no length of its
+/// own; the item count is the earlier integer [countId] plus [bias] (0 or -1).
+ValueField<List<int>> packed(
+  int width,
+  int id,
+  String name,
+  int countId, {
+  int bias = 0,
+}) => ValueField<List<int>>._(
+  Node(
+    NodeKind.packed,
+    id: id,
+    name: name,
+    size: width,
+    countId: countId,
+    bias: bias,
+    error: width != 1 && width != 2
+        ? 'packed width $width: expected 1 or 2'
+        : bias != 0 && bias != -1
+        ? 'packed bias $bias: expected 0 or -1'
+        : null,
+  ),
+);
+
+/// The [members] as a round, repeated until the packet ends; there is no
+/// count. A round is one entry of each of its names' lists in a map row. The
+/// [anchor] is the next id and is not written.
+RoundField repeat(int anchor, List<Field> members) => RoundField._(
+  Node(NodeKind.repeat, id: anchor, fields: [for (final m in members) m._node]),
+);
+
+/// The [members] as a round, exactly as many times as the earlier integer
+/// [countId] says, then the next field. The [anchor] is the next id and is
+/// not written.
+RoundField times(int anchor, int countId, List<Field> members) => RoundField._(
+  Node(
+    NodeKind.times,
+    id: anchor,
+    countId: countId,
+    fields: [for (final m in members) m._node],
   ),
 );

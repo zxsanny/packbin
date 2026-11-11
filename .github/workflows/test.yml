@@ -102,7 +102,7 @@ jobs:
   # The suites and the publish gate share nothing (the gate pulls its own images), so they run beside each other and
   # beside scaffold, embedded and ring: the wall time is the longest job, not the sum (AZ-2564). The free plan runs 20 jobs
   # at the same time: this file makes 20 (AZ-2627: with 23, three jobs started 26 to 88 s late in every run, once the
-  # ring), so the short suites share a job: an entry's lang lists the suites it runs one after the other. Swift, the
+  # ring), so the short suites share a job (Dart after Go, AZ-4145): an entry's lang lists the suites it runs one after the other. Swift, the
   # longest suite, runs as three (PACKBIN_SWIFT_PART, run-suite.sh: tests, gates, speed; AZ-2607); the publish gate is
   # the publish-gate-* jobs, each running its share of the check groups (publish-gate.test.sh --groups); the embedded
   # targets are the embedded-* jobs (cpp/embedded/run.sh host <stage>).
@@ -119,7 +119,7 @@ jobs:
             part: gates
           - lang: swift
             part: speed
-          - lang: go
+          - lang: go dart
           - lang: python
           - lang: csharp rust
           - lang: cpp typescript java
@@ -352,9 +352,13 @@ jobs:
           ls go/*_test.go >/dev/null
           test -d swift/Sources/Packbin
           ls swift/Tests/PackbinTests/*.swift >/dev/null
+          test -d dart/lib
+          ls dart/test/*/*_test.dart >/dev/null
           for f in \
             go/go.mod \
             Package.swift \
+            dart/pubspec.yaml \
+            dart/lib/packbin.dart \
             fixtures/golden.hex \
             .github/workflows/test.yml \
             .github/workflows/publish.yml \

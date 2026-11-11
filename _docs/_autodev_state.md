@@ -9,7 +9,7 @@ status: in_progress
 sub_step:
   phase: 1
   name: batch-loop
-  detail: "wave 1 of 7: AZ-4134 dart_core"
+  detail: "wave 1 done (4134, 4137, 4141, 4142 committed); wave 2 running: AZ-4135 scheme checks, AZ-4145 CI suite"
 retry_count: 0
 tracker: jira
 loop: 99

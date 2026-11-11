@@ -12,4 +12,6 @@ setuptools==84.0.0
 pytest==9.1.1
 # Image tag of the Swift suite (docker-compose.test.yml): swift:<swift> runs it. Not a pip package.
 swift==6.3.3
+# Image tag of the Dart suite (docker-compose.test.yml): dart:<dart> runs it. Not a pip package.
+dart==3.13.7
 pyyaml==6.0.3

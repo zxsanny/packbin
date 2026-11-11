@@ -1,5 +1,9 @@
+import 'checks.dart';
 import 'errors.dart';
+import 'group_rows.dart';
 import 'node.dart';
+import 'references.dart';
+import 'round_shape.dart';
 
 /// What a built scheme holds for the walkers. Nothing in it changes after it
 /// is made.
@@ -11,6 +15,7 @@ final class Plan {
     this.create,
     this.isRow,
     this.rowType,
+    this.groups,
   );
 
   final List<Node> fields;
@@ -26,12 +31,17 @@ final class Plan {
   final bool Function(Object row) isRow;
   final String rowType;
 
+  /// The groups and their members' names of a scheme of map rows that has a
+  /// group; null otherwise.
+  final GroupPlace? groups;
+
   bool get typed => create != null;
 }
 
 /// Checks the declared fields and builds the plan. The checks run in
 /// TypeScript's order: constructor refusals, field ids, flag bits, presence
-/// marks, references; then the row bindings.
+/// marks, member names, round nesting and bodies, references; then the row
+/// bindings.
 Plan buildPlan<R extends Object>(
   int typeNumber,
   List<Node> declared,
@@ -40,16 +50,19 @@ Plan buildPlan<R extends Object>(
   if (typeNumber < 0 || typeNumber > 255) {
     throw schemeFail(null, '', 'type number $typeNumber: expected 0..255');
   }
-  _checkErrors(declared);
-  _checkIds(declared, 0);
-  final flagBinder = _FlagBinder();
+  checkErrors(declared);
+  checkSlots(declared);
+  checkIds(declared, 0);
+  final typed = create != null;
+  final flagBinder = _FlagBinder(typed);
   final bound = flagBinder.all(declared, Map.identity());
-  _checkMarks(bound, false);
-  final sources = Map<Node, Node>.identity();
-  _resolve(bound, {}, sources);
+  checkMarks(bound, false);
+  checkNames(bound);
+  checkNesting(bound);
+  checkBodies(bound);
+  final sources = resolveReferences(bound, typed: typed);
   final finisher = _Finisher(sources);
   final fields = finisher.all(bound);
-  final typed = create != null;
   if (typed) _checkBindings<R>(fields);
   return Plan(
     fields,
@@ -60,49 +73,8 @@ Plan buildPlan<R extends Object>(
         ? (Object row) => row is R
         : (Object row) => row is Map<String, Object?>,
     typed ? '$R' : 'Map<String, Object?>',
+    typed ? null : groupPlaces(fields),
   );
-}
-
-void _checkErrors(List<Node> nodes) {
-  for (final n in nodes) {
-    final error = n.error;
-    if (error != null) throw schemeFail(n.errorId, n.declaredName, error);
-    _checkErrors(n.fields);
-  }
-}
-
-int _checkIds(List<Node> nodes, int next) {
-  for (final n in nodes) {
-    switch (n.kind) {
-      case NodeKind.integer:
-      case NodeKind.float:
-      case NodeKind.bytes:
-      case NodeKind.boolean:
-        if (n.id != next) {
-          throw schemeFail(
-            n.id,
-            n.name,
-            'field id: expected $next, got ${n.id}',
-          );
-        }
-        next++;
-      case NodeKind.flags:
-      case NodeKind.when:
-        if (n.id != next) {
-          throw schemeFail(
-            n.id,
-            n.declaredName,
-            'field id: expected $next, got ${n.id}',
-          );
-        }
-        next = _checkIds(n.fields, next);
-      case NodeKind.flagBit:
-        next = _checkIds(n.fields, next);
-      case NodeKind.flagByte:
-        break;
-    }
-  }
-  return next;
 }
 
 /// Gives each read of a split flag byte an identity of its own and numbers
@@ -110,7 +82,14 @@ int _checkIds(List<Node> nodes, int next) {
 /// scope, read before it; a `when` body and each flags or flag-bit member see
 /// the bytes read around them, and a byte read inside them is not seen after.
 final class _FlagBinder {
+  _FlagBinder(this._typed);
+
+  /// A typed scheme has no nested map to name a group's row by.
+  final bool _typed;
   int reads = 0;
+
+  /// The groups with members between the row of the place and the field met.
+  final List<String> _path = [];
 
   /// The bits met so far per handle, in any scope: the number a bit with no
   /// byte to follow is named by.
@@ -129,6 +108,11 @@ final class _FlagBinder {
       case NodeKind.float:
       case NodeKind.bytes:
       case NodeKind.boolean:
+      case NodeKind.sized:
+      case NodeKind.bits:
+      case NodeKind.packed:
+      case NodeKind.slot:
+      case NodeKind.u2:
         return n;
       case NodeKind.flagByte:
         final read = _Read(FlagRead(n.name, reads++));
@@ -157,6 +141,7 @@ final class _FlagBinder {
         return n.copy(
           read: read.read,
           bit: bit,
+          path: _path.isEmpty ? const [] : List.unmodifiable(_path),
           fields: [one(n.member, _inner(seen))],
         );
       case NodeKind.flags:
@@ -172,6 +157,21 @@ final class _FlagBinder {
         );
       case NodeKind.when:
         return n.copy(fields: all(n.fields, _inner(seen)));
+      case NodeKind.repeat:
+      case NodeKind.times:
+        // A round body is a scope of its own, and its row is the round's.
+        final outer = _path.toList();
+        _path.clear();
+        final fields = all(n.fields, Map.identity());
+        _path.addAll(outer);
+        return n.copy(fields: fields);
+      case NodeKind.group:
+        // A group shares the flag byte scope around it.
+        final named = !_typed && n.fields.isNotEmpty;
+        if (named) _path.add(n.name);
+        final fields = all(n.fields, seen);
+        if (named) _path.removeLast();
+        return n.copy(fields: fields);
     }
   }
 }
@@ -182,86 +182,14 @@ final class _Read {
   int taken = 0;
 }
 
-/// A bool is a presence mark: it has no bytes, only a flag bit, so it stands
-/// only as the member of a flag bit. Anywhere else it would always read true.
-void _checkMarks(List<Node> nodes, bool onFlagBit) {
-  for (final n in nodes) {
-    if (n.kind == NodeKind.boolean && !onFlagBit) {
-      throw schemeFail(
-        n.id,
-        n.name,
-        'bool ${n.name}: allowed only directly inside flags or a flag bit; move it into flags',
-      );
-    }
-    _checkMarks(n.fields, n.kind == NodeKind.flagBit);
-  }
-}
-
-String _shown(Object value) {
-  if (value is String) return '"$value"';
-  if (value is num || value is bool) return '$value';
-  return 'a ${value.runtimeType}';
-}
-
-/// An `eq` id names an integer or bool field read earlier in the same scope.
-/// Flags, flag bits and `when` share the scope around them.
-void _resolve(List<Node> nodes, Map<int, Node> scope, Map<Node, Node> sources) {
-  for (final n in nodes) {
-    switch (n.kind) {
-      case NodeKind.integer:
-      case NodeKind.float:
-      case NodeKind.bytes:
-      case NodeKind.boolean:
-        scope[n.id!] = n;
-      case NodeKind.when:
-        sources[n] = _source(n, scope);
-        _resolve(n.fields, scope, sources);
-      case NodeKind.flags:
-      case NodeKind.flagBit:
-        _resolve(n.fields, scope, sources);
-      case NodeKind.flagByte:
-        break;
-    }
-  }
-}
-
-Node _source(Node when, Map<int, Node> scope) {
-  final condition = when.condition!;
-  final id = condition.fieldId;
-  final value = condition.value;
-  final source = scope[id];
-  PackbinException fail(String reason) =>
-      schemeFail(when.id, when.declaredName, 'when ${when.id}$reason');
-  if (source == null) {
-    throw fail(
-      ': eq names field id $id, which is not declared earlier in the same scope',
-    );
-  }
-  if (source.kind == NodeKind.boolean) {
-    if (value != true) {
-      throw fail(
-        ': eq names bool field id $id (${source.name}) and accepts only true, not ${_shown(value)}',
-      );
-    }
-  } else if (source.kind != NodeKind.integer) {
-    throw fail(
-      ': eq names field id $id (${source.name}), which is not an integer or a bool',
-    );
-  } else if (value is! int) {
-    throw fail(
-      ' tests ${source.label} field $id (\'${source.name}\') against ${_shown(value)}; the value must be a whole number',
-    );
-  }
-  return source;
-}
-
 /// Gives each field a `when` tests its slot, each `when` the slot it reads,
 /// and each split flag byte read its bits.
 final class _Finisher {
   _Finisher(this._sources)
-    : _referenced = Set.identity()..addAll(_sources.values);
+    : _referenced = Set.identity()
+        ..addAll([for (final r in _sources.values) r.source]);
 
-  final Map<Node, Node> _sources;
+  final Map<Node, Reference> _sources;
   final Set<Node> _referenced;
   final Map<Node, int> slots = Map.identity();
 
@@ -271,28 +199,60 @@ final class _Finisher {
     switch (n.kind) {
       case NodeKind.integer:
       case NodeKind.boolean:
+      case NodeKind.slot:
         if (!_referenced.contains(n)) return n;
         return n.copy(slot: slots[n] = slots.length);
       case NodeKind.float:
       case NodeKind.bytes:
       case NodeKind.flagByte:
         return n;
+      case NodeKind.sized:
+      case NodeKind.bits:
+      case NodeKind.packed:
+        return _reading(n);
+      case NodeKind.repeat:
+      case NodeKind.times:
+        final low = slots.length;
+        final fields = all(n.fields);
+        return _reading(n).copy(
+          fields: fields,
+          slotLo: low,
+          slotHi: slots.length,
+          shape: RoundShape.of(fields),
+        );
       case NodeKind.flagBit:
         final bit = n.copy(fields: all(n.fields));
         n.read?.bits.add(bit);
         return bit;
       case NodeKind.flags:
+      case NodeKind.group:
+      case NodeKind.u2:
         return n.copy(fields: all(n.fields));
       case NodeKind.when:
-        return n.copy(fields: all(n.fields), refSlot: slots[_sources[n]!]!);
+        return _reading(n).copy(fields: all(n.fields));
     }
+  }
+
+  /// [n] with the slot and the field of what it reads; a `repeat` reads none.
+  Node _reading(Node n) {
+    final reference = _sources[n];
+    if (reference == null) return n;
+    return n.copy(
+      refSlot: slots[reference.source]!,
+      refNode: reference.source,
+      refPath: reference.path,
+    );
   }
 }
 
 /// A typed scheme binds every value field to a member of its row type.
 void _checkBindings<R extends Object>(List<Node> nodes) {
   for (final n in nodes) {
-    if (n.isValue) {
+    if (n.isRound) {
+      _checkRound<R>(n);
+      continue;
+    }
+    if (n.isValue || n.isMark) {
       final binding = n.binding;
       if (binding == null) {
         throw schemeFail(
@@ -311,4 +271,29 @@ void _checkBindings<R extends Object>(List<Node> nodes) {
     }
     _checkBindings<R>(n.fields);
   }
+}
+
+/// A round of a typed scheme is bound to the member that holds its rounds, and
+/// its own members are bound to the row type of one round.
+void _checkRound<R extends Object>(Node n) {
+  final (id, name) = n.shape!.member(n);
+  final label = '${n.label} ${n.id}';
+  final binding = n.roundBinding;
+  if (binding == null) {
+    throw schemeFail(
+      id,
+      name,
+      '$label: a scheme of $R rows needs every round bound with bind',
+    );
+  }
+  if (!binding.fits<R>()) {
+    throw schemeFail(
+      id,
+      name,
+      '$label: bound to ${binding.rowType}, but the scheme\'s row is $R',
+    );
+  }
+  binding.checkBody(<S extends Object>(List<Node> body) {
+    _checkBindings<S>(body);
+  }, n.fields);
 }

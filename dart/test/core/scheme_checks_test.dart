@@ -188,7 +188,7 @@ void main() {
         refused(
           1,
           'a',
-          "when 1 tests u8 field 0 ('mode') against 1.0; the value must be a whole number",
+          "when 1 tests u8 field 0 ('mode') against 1.0; the value must be a whole number from 0 to 255",
         ),
       );
     });

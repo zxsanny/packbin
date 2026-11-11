@@ -16,15 +16,15 @@ bad() { echo "FAIL: $1"; fail=1; }
 git init -q "$repo"
 git -C "$repo" config user.email test@example.com
 git -C "$repo" config user.name test
-mkdir -p "$repo/csharp/tests" "$repo/typescript" "$repo/go" "$repo/swift/Sources" "$repo/swift/Tests" "$repo/cpp/include" "$repo/cpp/tests" "$repo/rust/src" "$repo/rust/tests" "$repo/rust/embedded/probe/src" "$repo/fixtures" "$repo/.github/workflows"
-for f in csharp/A.cs csharp/tests/T.cs typescript/a.ts go/a.go go/a_test.go swift/Sources/a.swift swift/Tests/t.swift Package.swift cpp/include/a.hpp cpp/tests/t.cpp rust/src/lib.rs rust/tests/t.rs rust/embedded/probe/src/lib.rs README.md \
+mkdir -p "$repo/csharp/tests" "$repo/typescript" "$repo/go" "$repo/swift/Sources" "$repo/swift/Tests" "$repo/cpp/include" "$repo/cpp/tests" "$repo/rust/src" "$repo/rust/tests" "$repo/rust/embedded/probe/src" "$repo/dart/lib" "$repo/dart/test/core" "$repo/fixtures" "$repo/.github/workflows"
+for f in csharp/A.cs csharp/tests/T.cs typescript/a.ts go/a.go go/a_test.go swift/Sources/a.swift swift/Tests/t.swift Package.swift cpp/include/a.hpp cpp/tests/t.cpp rust/src/lib.rs rust/tests/t.rs rust/embedded/probe/src/lib.rs dart/pubspec.yaml dart/lib/a.dart dart/test/core/t_test.dart README.md \
   fixtures/golden.hex .github/workflows/publish.yml .github/workflows/language-pair.sh .github/workflows/test.yml; do
   echo "$f" > "$repo/$f"
 done
 git -C "$repo" add -A
 git -C "$repo" commit -q -m base
 
-stages="go typescript csharp python rust java cpp swift scaffold cpp-embedded-arm rust-embedded ring ac10 publish-gate"
+stages="go typescript csharp python rust java cpp swift dart scaffold cpp-embedded-arm rust-embedded ring ac10 publish-gate"
 plan() { LOOP_TESTS_ROOT="$repo" LOOP_TESTS_STAMPS="$stamps" bash "$script" --plan "$@"; }
 stamp_all() {
   mkdir -p "$stamps"
@@ -49,7 +49,7 @@ expect() {
 
 # 1. no stamps: everything runs
 out="$(plan)"
-[ "$(echo "$out" | grep -c ' RUN (no stamp')" -eq 14 ] || bad "no stamps: not all 14 stages run: $out"
+[ "$(echo "$out" | grep -c ' RUN (no stamp')" -eq 15 ] || bad "no stamps: not all 15 stages run: $out"
 
 # 2. stamped at HEAD and nothing changed: everything skips
 stamp_all
@@ -85,9 +85,17 @@ change swift/Tests/t.swift; expect "swift test" "swift"; stamp_all
 change swift/Sources/a.swift; expect "swift source" "swift ring"; stamp_all
 change Package.swift; expect "swift manifest" "swift scaffold ring publish-gate"; stamp_all
 
+# 8c. Dart (AZ-4145): a test file runs the Dart suite only; the package manifest also the scaffold, which checks it exists;
+# the suite script that holds the Dart steps runs the Dart suite and the scaffold (every file of .github is a scaffold file)
+change dart/test/core/t_test.dart; expect "dart test" "dart"; stamp_all
+change dart/pubspec.yaml; expect "dart manifest" "dart scaffold"; stamp_all
+change dart/lib/a.dart; expect "dart source" "dart"; stamp_all
+mkdir -p "$repo/.github/workflows"; echo "# steps" > "$repo/.github/workflows/run-suite-dart.sh"
+change .github/workflows/run-suite-dart.sh; expect "dart suite steps" "dart scaffold"; stamp_all
+
 # 9. the golden row and fixtures: every suite, the scaffold, the ring and the gate
 change fixtures/golden.hex
-expect "fixtures" "go typescript csharp python rust java cpp swift scaffold ring publish-gate"; stamp_all
+expect "fixtures" "go typescript csharp python rust java cpp swift dart scaffold ring publish-gate"; stamp_all
 
 # 9b. test.yml is parsed by the gate's own test and checked by the scaffold: both run, no suite
 change .github/workflows/test.yml; expect "test.yml" "scaffold publish-gate"; stamp_all
@@ -112,9 +120,16 @@ grep -q "^PLAN go RUN (stamp .* is not an ancestor" <<< "$out" || bad "foreign s
 
 # 13. --all runs everything; --only picks the listed stages
 stamp_all
-[ "$(plan --all | grep -c ' RUN (--all)')" -eq 14 ] || bad "--all: not all 14 stages run"
+[ "$(plan --all | grep -c ' RUN (--all)')" -eq 15 ] || bad "--all: not all 15 stages run"
 out="$(plan --only ring,ac10)"
 [ "$(echo "$out" | grep -cE '^PLAN [a-z0-9-]+ (RUN|SKIP)')" -eq 2 ] || bad "--only ring,ac10 did not list exactly two stages: $out"
+
+# 13b. --only dart lists the one stage, and a change touching only dart/test/ makes it run alone
+change dart/test/core/t_test.dart
+out="$(plan --only dart)"
+[ "$(echo "$out" | grep -cE '^PLAN [a-z0-9-]+ (RUN|SKIP)')" -eq 1 ] || bad "--only dart did not list exactly one stage: $out"
+grep -q '^PLAN dart RUN (dart/test/core/t_test.dart changed since' <<< "$out" || bad "--only dart: the dart stage does not run for a change in dart/test: $out"
+stamp_all
 
 # 14. execution with a fake docker: a suite that fails beside the others is re-run alone and both results show; one that
 # fails again fails the run; only a stage that passed on a clean tree gets a stamp
@@ -144,6 +159,10 @@ head_sha="$(git -C "$repo" rev-parse HEAD)"
 [ "$(cat "$stamps/rust")" = "$head_sha" ] || bad "execution: rust has no stamp at HEAD"
 [ ! -f "$stamps/java" ] || bad "execution: java got a stamp although it failed"
 [ "$(cat "$tmp/calls/typescript")" -eq 2 ] || bad "execution: typescript ran $(cat "$tmp/calls/typescript") times, expected 2"
+# the dart stage runs the dart compose service
+rm -rf "$stamps"
+PATH="$shims:$PATH" CALLS="$tmp/calls" LOOP_TESTS_ROOT="$repo" LOOP_TESTS_STAMPS="$stamps" bash "$script" --all --only dart < /dev/null > /dev/null || bad "execution: the dart stage failed"
+[ "$(cat "$tmp/calls/dart" 2> /dev/null)" = 1 ] || bad "execution: the dart stage did not run the dart compose service once"
 # the autodev position file alone does not block a stamp (AZ-3369)
 rm -rf "$stamps"
 mkdir -p "$repo/_docs"

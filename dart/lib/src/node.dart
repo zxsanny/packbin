@@ -1,9 +1,28 @@
 import 'dart:typed_data';
 
+import 'round_shape.dart';
+
 /// The number of bits one flag byte holds.
 const int flagBits = 8;
 
-enum NodeKind { integer, float, bytes, boolean, flags, flagByte, flagBit, when }
+enum NodeKind {
+  integer,
+  float,
+  bytes,
+  boolean,
+  flags,
+  flagByte,
+  flagBit,
+  when,
+  group,
+  sized,
+  u2,
+  slot,
+  bits,
+  packed,
+  repeat,
+  times,
+}
 
 /// The identity of a split-form flag byte handle.
 final class FlagTag {
@@ -47,6 +66,45 @@ final class Binding {
   final bool Function<S>() fits;
 }
 
+/// Binds the member of a typed row that holds the rounds of a `repeat` or
+/// `times`: one element of the row type [rowType]'s element a round.
+final class RoundBinding {
+  RoundBinding(
+    this.create,
+    this.get,
+    this.set,
+    this.newList,
+    this.rowType,
+    this.fits,
+    this.checkBody,
+  );
+
+  /// Makes the row one round unpack read fills.
+  final Object Function() create;
+
+  /// The rounds of the row; null is no value (no round).
+  final List<Object>? Function(Object row) get;
+
+  /// Stores the list [newList] made, filled by unpack.
+  final void Function(Object row, List<Object> rounds) set;
+
+  /// An empty list of the element type, for unpack to fill.
+  final List<Object> Function() newList;
+
+  /// The row type the member belongs to.
+  final Type rowType;
+
+  /// Whether a row of type `S` can be given to `get` and `set`.
+  final bool Function<S>() fits;
+
+  /// Calls `check` for the body with the element type as its type argument.
+  final void Function(
+    void Function<S extends Object>(List<Node> body) check,
+    List<Node> body,
+  )
+  checkBody;
+}
+
 /// One field. Constructors make it and a scheme makes changed copies, never
 /// changing one, so a field can be shared by any number of schemes.
 final class Node {
@@ -66,12 +124,21 @@ final class Node {
     this.refSlot = -1,
     this.binding,
     this.error,
+    this.path = const [],
+    this.countId = -1,
+    this.bias = 0,
+    this.refNode,
+    this.refPath = const [],
+    this.slotLo = 0,
+    this.slotHi = 0,
+    this.shape,
+    this.roundBinding,
   }) : endian = bigEndian ? Endian.big : Endian.little;
 
   final NodeKind kind;
 
-  /// The value id; the anchor of flags and when; null for a split flag byte
-  /// or bit.
+  /// The value id; the anchor of flags, when and group; null for a split flag
+  /// byte or bit.
   final int? id;
   final String name;
 
@@ -106,6 +173,33 @@ final class Node {
   /// A constructor's refusal, reported when the scheme is built.
   final String? error;
 
+  /// A split flag bit of a map scheme: the names of the groups from the row
+  /// of its place down to the row the bit's member is read from.
+  final List<String> path;
+
+  /// The id of the earlier integer a `sized`, `bits`, `packed` or `times`
+  /// counts by.
+  final int countId;
+
+  /// `packed`: the bias added to the count, 0 or -1; `size` is its width.
+  final int bias;
+
+  /// A built `when` or counted kind: the field it reads, and the names of the
+  /// groups from the row of its place down to the row that field sits in.
+  final Node? refNode;
+  final List<String> refPath;
+
+  /// A built round: the slots its body numbers, `slotLo` up to `slotHi`; they
+  /// are cleared when each round starts.
+  final int slotLo;
+  final int slotHi;
+
+  /// A built round: what the map form and the limits ask of its body.
+  final RoundShape? shape;
+
+  /// A `repeat` or `times` bound to a member of a typed row.
+  final RoundBinding? roundBinding;
+
   Node copy({
     bool? bigEndian,
     List<Node>? fields,
@@ -114,6 +208,14 @@ final class Node {
     int? slot,
     int? refSlot,
     Binding? binding,
+    String? error,
+    List<String>? path,
+    Node? refNode,
+    List<String>? refPath,
+    int? slotLo,
+    int? slotHi,
+    RoundShape? shape,
+    RoundBinding? roundBinding,
   }) => Node(
     kind,
     id: id,
@@ -129,7 +231,16 @@ final class Node {
     slot: slot ?? this.slot,
     refSlot: refSlot ?? this.refSlot,
     binding: binding ?? this.binding,
-    error: error,
+    error: error ?? this.error,
+    path: path ?? this.path,
+    countId: countId,
+    bias: bias,
+    refNode: refNode ?? this.refNode,
+    refPath: refPath ?? this.refPath,
+    slotLo: slotLo ?? this.slotLo,
+    slotHi: slotHi ?? this.slotHi,
+    shape: shape ?? this.shape,
+    roundBinding: roundBinding ?? this.roundBinding,
   );
 
   /// The member a flag bit guards.
@@ -139,7 +250,23 @@ final class Node {
       kind == NodeKind.integer ||
       kind == NodeKind.float ||
       kind == NodeKind.bytes ||
-      kind == NodeKind.boolean;
+      kind == NodeKind.boolean ||
+      kind == NodeKind.sized ||
+      kind == NodeKind.bits ||
+      kind == NodeKind.packed ||
+      kind == NodeKind.slot;
+
+  /// A `repeat` or `times`.
+  bool get isRound => kind == NodeKind.repeat || kind == NodeKind.times;
+
+  /// A `sized`, `bits` or `packed`: a value whose length is an earlier integer.
+  bool get isCounted =>
+      kind == NodeKind.sized ||
+      kind == NodeKind.bits ||
+      kind == NodeKind.packed;
+
+  /// A group with no member: a presence mark like a bool, set only by `true`.
+  bool get isMark => kind == NodeKind.group && fields.isEmpty;
 
   /// A value field with bytes of its own.
   bool get isLeaf =>
@@ -148,18 +275,23 @@ final class Node {
       kind == NodeKind.bytes;
 
   /// The name a field declares; a flag bit is named by its member, and a
-  /// flags or when by the first name inside it.
+  /// flags or when by the first name inside it. A round with no name inside
+  /// is named by its kind and anchor, as `repeat 0`.
   String get declaredName {
     if (name.isNotEmpty || kind == NodeKind.flagByte) return name;
     for (final child in fields) {
       final inner = child.declaredName;
       if (inner.isNotEmpty) return inner;
     }
-    return '';
+    return isRound ? '$label $id' : '';
   }
 
   /// The id an error names: the value id or anchor; a flag bit's member's.
-  int? get errorId => kind == NodeKind.flagBit ? member.errorId : id;
+  int? get errorId => switch (kind) {
+    NodeKind.flagBit => member.errorId,
+    NodeKind.u2 => fields.isEmpty ? null : fields[0].id,
+    _ => id,
+  };
 
   String get label => switch (kind) {
     NodeKind.integer => '${signed ? 'i' : 'u'}${size * 8}',
@@ -170,5 +302,12 @@ final class Node {
     NodeKind.flagByte => 'flag byte',
     NodeKind.flagBit => 'flag bit',
     NodeKind.when => 'when',
+    NodeKind.group => 'group',
+    NodeKind.sized => 'sized',
+    NodeKind.u2 || NodeKind.slot => 'u2',
+    NodeKind.bits => 'bits',
+    NodeKind.packed => 'packed',
+    NodeKind.repeat => 'repeat',
+    NodeKind.times => 'times',
   };
 }

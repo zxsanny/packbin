@@ -1,5 +1,8 @@
 import 'dart:typed_data';
 
+import 'errors.dart';
+import 'limits.dart';
+
 /// The bytes one pack call writes, type byte included. The buffer grows by
 /// doubling.
 final class Writer {
@@ -25,6 +28,13 @@ final class Writer {
   }
 
   void _grow(int need) {
+    if (need > defaultMaxBytes) {
+      throw packFail(
+        null,
+        '',
+        'the packet would be $need bytes, above the limit of $defaultMaxBytes bytes',
+      );
+    }
     var capacity = _buf.length * 2;
     while (capacity < need) {
       capacity *= 2;
@@ -74,6 +84,16 @@ final class Writer {
     final at = _take(value.length);
     _buf.setRange(at, at + value.length, value);
   }
+
+  /// Appends [size] zero bytes and returns the index of the first.
+  int reserve(int size) {
+    final at = _take(size);
+    _buf.fillRange(at, at + size, 0);
+    return at;
+  }
+
+  /// Sets [bits] in the byte at [at], which [reserve] made.
+  void or(int at, int bits) => _buf[at] |= bits;
 
   /// A byte already written, set again.
   void patch(int at, int value) => _buf[at] = value;

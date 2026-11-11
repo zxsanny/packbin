@@ -35,7 +35,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-pool_stages="go typescript csharp python rust java cpp swift scaffold"
+pool_stages="go typescript csharp python rust java cpp swift dart scaffold"
 serial_stages="cpp-embedded-arm rust-embedded ring ac10 publish-gate"
 
 is_test_path() {
@@ -58,12 +58,15 @@ covers() {
   local stage="$1" f="$2"
   case "$stage" in
     scaffold)
-      case "$f" in .github/* | fixtures/* | cpp/embedded/* | docker-compose* | scripts/* | go/go.mod | Package.swift) return 0 ;; esac ;;
+      case "$f" in .github/* | fixtures/* | cpp/embedded/* | docker-compose* | scripts/* | go/go.mod | Package.swift | dart/pubspec.yaml) return 0 ;; esac ;;
     csharp | typescript | python | rust | java | go | cpp)
       case "$f" in "$stage"/*) return 0 ;; esac
       suite_shared "$f" && return 0 ;;
     swift)
       case "$f" in swift/* | Package.swift | Package.resolved) return 0 ;; esac
+      suite_shared "$f" && return 0 ;;
+    dart)
+      case "$f" in dart/* | .github/workflows/run-suite-dart.sh) return 0 ;; esac
       suite_shared "$f" && return 0 ;;
     cpp-embedded-arm)
       case "$f" in cpp/include/* | cpp/src/* | cpp/embedded/* | cpp/Makefile | docker-compose.test.yml) return 0 ;; esac ;;
@@ -307,7 +310,7 @@ run_stage_command() {
     cpp-embedded-arm) docker compose -f docker-compose.test.yml run --rm cpp-embedded ;;
     # The heap-free Rust API on a Cortex-M33F (AZ-2751, AZ-3231): static libraries with the host cargo, the image stage in Docker.
     rust-embedded) bash rust/embedded/run.sh host ;;
-    go | typescript | csharp | python | rust | java | swift) docker compose -f docker-compose.test.yml run --rm "$1" ;;
+    go | typescript | csharp | python | rust | java | swift | dart) docker compose -f docker-compose.test.yml run --rm "$1" ;;
     # The message ECC ring (AZ-2689) follows the ring and reuses its C# and C++ driver builds (PACKBIN_RING_WORK).
     ring) env "${ring_env[@]}" PACKBIN_RING_WORK="$logs/ring-work" bash .github/workflows/language-pair.sh \
         && env "${ring_env[@]}" PACKBIN_RING_WORK="$logs/ring-work" bash .github/workflows/ring-ecc.sh \

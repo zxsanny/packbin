@@ -6,7 +6,7 @@
 # run-suite.sh go (AZ-2448): fails without go/go.mod, runs gofmt -l, go vet, go test -race, the
 # FuzzUnpack fuzz step (or says it is skipped) and the one-dependency check in that order, and stops
 # at the first failing step. `go` and `gofmt` are fakes too.
-# run-suite.sh swift (AZ-2521): run-suite-swift.test.sh, sourced at the end.
+# run-suite.sh swift (AZ-2521): run-suite-swift.test.sh, sourced at the end; run-suite.sh dart (AZ-4145): run-suite-dart.test.sh.
 # The timing notice (AZ-2607 AC-2): on GitHub Actions one notice with every step line and the total line, else none.
 # RUN_SUITE_SH runs every row against another copy of run-suite.sh, RUN_SUITE_COMPOSE row N6 against another compose
 # file (the mutation proof of a change to them).
@@ -451,7 +451,7 @@ for value in unset "" false; do
   [ "$(grep -c '^run-suite: go step took [0-9]* s: ' "$work/notice.err")" -eq 6 ] || bad "go: the plain step lines changed with GITHUB_ACTIONS $value: $(cat "$work/notice.err")"
 done
 
-# N6. the eight suite services pass the runner's GITHUB_ACTIONS into the container as a bare key: Compose sets it from
+# N6. the nine suite services pass the runner's GITHUB_ACTIONS into the container as a bare key: Compose sets it from
 # the host when it is set there and leaves it out when not (a value would make every Mac run write notices)
 # Act
 compose_ga="$(python3 -I -c 'import sys; sys.path.insert(0, sys.argv[1]); import yaml_get
@@ -459,7 +459,7 @@ svc = yaml_get.load(sys.argv[2])["services"]
 def passes_through(name):
     env = (svc.get(name) or {}).get("environment")
     return isinstance(env, dict) and "GITHUB_ACTIONS" in env and env["GITHUB_ACTIONS"] is None
-print(" ".join(s for s in "csharp typescript python rust cpp java go swift".split() if not passes_through(s)))' \
+print(" ".join(s for s in "csharp typescript python rust cpp java go swift dart".split() if not passes_through(s)))' \
   "$here/../../scripts/ci" "${RUN_SUITE_COMPOSE:-$repo/docker-compose.test.yml}" </dev/null)" || bad "docker-compose.test.yml: the suite services could not be read"
 # Assert
 [ -z "$compose_ga" ] || bad "docker-compose.test.yml: the suite services '$compose_ga' do not pass GITHUB_ACTIONS through as a bare key"
@@ -471,6 +471,10 @@ print(" ".join(s for s in "csharp typescript python rust cpp java go swift".spli
 # --- swift (AZ-2521): in its own file, so neither file passes 500 lines ---
 # shellcheck source=run-suite-swift.test.sh
 . "$here/run-suite-swift.test.sh"
+
+# --- dart (AZ-4145): in its own file, which also runs on its own ---
+# shellcheck source=run-suite-dart.test.sh
+. "$here/run-suite-dart.test.sh"
 
 if [ "$fail" -eq 0 ]; then echo "run-suite.test.sh: all checks passed"; fi
 exit "$fail"

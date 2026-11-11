@@ -116,6 +116,25 @@ services:
       - ./fixtures/golden.hex:/fixture/golden.hex:ro
       - ./test-results:/test-results
       - swiftpm-cache:/root/.cache/org.swift.swiftpm
+  dart:
+    image: dart:3.13.7
+    working_dir: /src
+    entrypoint: ["bash", "-c"]
+    command: ["exec /src/.github/workflows/run-suite.sh dart"]
+    environment:
+      SRC_ROOT: /src
+      FIXTURE: /fixture/golden.hex
+      TEST_RESULTS: /test-results
+      GITHUB_ACTIONS:
+      PUB_CACHE: /pub-cache
+    volumes:
+      - ./:/src
+      - ./fixtures/golden.hex:/fixture/golden.hex:ro
+      - ./test-results:/test-results
+      # pub's package cache and the package's .dart_tool stay in volumes: .dart_tool/package_config.json holds the
+      # absolute path of the cache, so the container's would break the host's own `dart test` in the mounted tree.
+      - pub-cache:/pub-cache
+      - dart-tool:/src/dart/.dart_tool
   cpp-embedded:
     build:
       context: ./cpp/embedded
@@ -155,3 +174,6 @@ services:
 volumes:
   # The SwiftPM repository and manifest cache: the pinned swift-crypto is fetched once, not on every run.
   swiftpm-cache:
+  # The Dart suite's pub cache (PUB_CACHE) and its .dart_tool: the pinned test and lints packages are fetched once.
+  pub-cache:
+  dart-tool:

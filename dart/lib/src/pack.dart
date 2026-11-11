@@ -1,8 +1,11 @@
 import 'dart:typed_data';
 
 import 'build.dart';
+import 'counted_pack.dart';
 import 'errors.dart';
+import 'group_rows.dart';
 import 'node.dart';
+import 'rounds_pack.dart';
 import 'writer.dart';
 
 /// The packet of [row]: the type byte, then the fields in order.
@@ -15,7 +18,11 @@ Uint8List packRow(Plan plan, int typeNumber, Object row) {
       'the row is a ${row.runtimeType}; this scheme packs a ${plan.rowType}',
     );
   }
-  final packer = Packer(plan, typeNumber);
+  final groups = plan.groups;
+  if (groups != null) {
+    checkGroupRows(groups, row as Map<String, Object?>);
+  }
+  final packer = Packer(plan, typeNumber, row);
   packer.fields(plan.fields, row);
   return packer.out.take();
 }
@@ -23,7 +30,7 @@ Uint8List packRow(Plan plan, int typeNumber, Object row) {
 /// One pack call: the bytes so far, what the scope has written for a `when`
 /// to test, and the split flag bytes written (where each sits, its bits).
 final class Packer {
-  Packer(Plan plan, int typeNumber)
+  Packer(Plan plan, int typeNumber, this.placeRow)
     : out = Writer(typeNumber),
       typed = plan.typed,
       seen = plan.seenCount == 0
@@ -32,6 +39,14 @@ final class Packer {
       _split = plan.splitCount == 0 ? null : Int32List(plan.splitCount * 2);
 
   final Writer out;
+
+  /// The row of the place being packed: the row the groups of a map scheme
+  /// are found from. The split flag bytes of the place read their bits there.
+  /// A round is a place of its own: it is the round's row while it is packed.
+  Object placeRow;
+
+  /// The slots the rounds of this call have charged against the slot limit.
+  int charged = 0;
   final bool typed;
   final List<Object?> seen;
   final Int32List? _split;
@@ -39,6 +54,26 @@ final class Packer {
   /// The value the row gives for [n]; null is no value.
   Object? value(Node n, Object row) =>
       typed ? n.binding!.get(row) : (row as Map<String, Object?>)[n.name];
+
+  /// The row the members of the group [n] are read from: the map under its
+  /// name (an empty one when the row does not give it); a typed row has one
+  /// row for the group and the fields around it.
+  Object groupRow(Node n, Object row) {
+    if (typed) return row;
+    final given = (row as Map<String, Object?>)[n.name];
+    return given is Map<String, Object?> ? given : const <String, Object?>{};
+  }
+
+  /// The row a split bit's member is read from: the row of its place, then
+  /// the maps of the groups the bit sits in.
+  Object bitRow(Node bit) {
+    var row = placeRow;
+    for (final name in bit.path) {
+      final given = (row as Map<String, Object?>)[name];
+      row = given is Map<String, Object?> ? given : const <String, Object?>{};
+    }
+    return row;
+  }
 
   /// Whether the condition of the `when` [n] holds on what was written.
   bool holds(Node n) => seen[n.refSlot] == n.condition!.value;
@@ -64,6 +99,21 @@ final class Packer {
           _splitBit(n, row);
         case NodeKind.when:
           if (holds(n)) fields(n.fields, row);
+        case NodeKind.group:
+          // A mark is reached only through a set flag bit: the bit is the value.
+          if (n.fields.isNotEmpty) fields(n.fields, groupRow(n, row));
+        case NodeKind.sized:
+        case NodeKind.u2:
+        case NodeKind.bits:
+        case NodeKind.packed:
+          packCounted(n, row);
+        case NodeKind.repeat:
+          packRepeat(n, row);
+        case NodeKind.times:
+          packTimes(n, row);
+        case NodeKind.slot:
+          // Reached only inside a u2, which writes its slots itself.
+          break;
       }
     }
   }
@@ -86,6 +136,8 @@ final class Packer {
       } else if (bitOn(member, row)) {
         flags |= 1 << bit.bit;
         fields(bit.fields, row);
+      } else {
+        _refuseWhenOff(member, row);
       }
     }
     out.patch(at, flags);
@@ -96,12 +148,27 @@ final class Packer {
     final read = n.read!;
     var flags = 0;
     for (final bit in read.bits) {
-      if (bitOn(bit.member, row)) flags |= 1 << bit.bit;
+      if (bitOn(bit.member, bitRow(bit))) flags |= 1 << bit.bit;
     }
     final split = _split!;
     split[read.slot * 2] = out.length;
     split[read.slot * 2 + 1] = flags;
     out.byte(flags);
+  }
+
+  /// A clear bit of a combined flags drops nothing silently: a `times` whose
+  /// count is not written, or a count the row gives that no field wrote, is
+  /// refused.
+  void _refuseWhenOff(Node member, Object row) {
+    final held = _held(member, row);
+    if (held != null && countNeverWritten(member, row)) {
+      throw packFail(
+        held.id,
+        held.name,
+        '${held.name}: a value is given, but the count of its times is not written, so its bit is clear; write the count before the times',
+      );
+    }
+    refuseUnwrittenCount(member, row);
   }
 
   void _splitBit(Node n, Object row) {
@@ -122,6 +189,7 @@ final class Packer {
           'before the flag byte, so its bit is clear; write that field before the flag byte',
         );
       }
+      refuseUnwrittenCount(n.member, row);
       return;
     }
     fields(n.fields, row);
@@ -135,7 +203,15 @@ final class Packer {
       case NodeKind.integer:
       case NodeKind.float:
       case NodeKind.bytes:
+      case NodeKind.sized:
+      case NodeKind.bits:
+      case NodeKind.packed:
+      case NodeKind.slot:
         return value(member, row) != null;
+      case NodeKind.repeat:
+        return repeatOn(member, row);
+      case NodeKind.times:
+        return timesOn(member, row);
       case NodeKind.boolean:
         final v = value(member, row);
         if (v == null) return false;
@@ -153,7 +229,26 @@ final class Packer {
         return holds(member) && _anyOn(member.fields, row);
       case NodeKind.flags:
       case NodeKind.flagBit:
+      case NodeKind.u2:
         return _anyOn(member.fields, row);
+      case NodeKind.group:
+        if (member.isMark) {
+          final v = value(member, row);
+          if (v == null) return false;
+          if (v is! bool) {
+            throw packFail(
+              member.id,
+              member.name,
+              'expected a bool for group ${member.name}, got ${v.runtimeType}',
+            );
+          }
+          return v;
+        }
+        // The map under its name sets the bit by being given; a typed row's
+        // group is on when a member holds a value.
+        return typed
+            ? _anyOn(member.fields, row)
+            : (row as Map<String, Object?>)[member.name] != null;
     }
   }
 
@@ -171,7 +266,14 @@ final class Packer {
       case NodeKind.integer:
       case NodeKind.float:
       case NodeKind.bytes:
+      case NodeKind.sized:
+      case NodeKind.bits:
+      case NodeKind.packed:
+      case NodeKind.slot:
         return value(member, row) != null ? member : null;
+      case NodeKind.repeat:
+      case NodeKind.times:
+        return roundHeld(member, row);
       case NodeKind.boolean:
         return value(member, row) == true ? member : null;
       case NodeKind.flagByte:
@@ -179,6 +281,18 @@ final class Packer {
       case NodeKind.flags:
       case NodeKind.flagBit:
       case NodeKind.when:
+      case NodeKind.u2:
+        for (final child in member.fields) {
+          final held = _held(child, row);
+          if (held != null) return held;
+        }
+        return null;
+      case NodeKind.group:
+        if (member.isMark) return value(member, row) == true ? member : null;
+        if (!typed) {
+          if ((row as Map<String, Object?>)[member.name] != null) return member;
+          return null;
+        }
         for (final child in member.fields) {
           final held = _held(child, row);
           if (held != null) return held;
@@ -192,7 +306,8 @@ final class Packer {
   /// skip.
   Node? _dropped(Node member, Object row) {
     final held = _held(member, row);
-    return held != null && bitOn(member, row) ? held : null;
+    if (held == null) return null;
+    return bitOn(member, row) || countNeverWritten(member, row) ? held : null;
   }
 
   void write(Node n, Object v) {
@@ -251,6 +366,14 @@ final class Packer {
       case NodeKind.flagByte:
       case NodeKind.flagBit:
       case NodeKind.when:
+      case NodeKind.group:
+      case NodeKind.sized:
+      case NodeKind.u2:
+      case NodeKind.slot:
+      case NodeKind.bits:
+      case NodeKind.packed:
+      case NodeKind.repeat:
+      case NodeKind.times:
         throw packFail(n.errorId, n.declaredName, '${n.label} takes no value');
     }
   }

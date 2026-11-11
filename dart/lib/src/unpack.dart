@@ -2,7 +2,9 @@ import 'dart:typed_data';
 
 import 'build.dart';
 import 'errors.dart';
+import 'counted_unpack.dart';
 import 'node.dart';
+import 'rounds_unpack.dart';
 
 /// Reads one packet from its second byte. Every read checks the bytes left
 /// first and records a short-packet error, so no input reaches an index out
@@ -22,8 +24,11 @@ final class Reader {
   final int end;
   final bool typed;
 
-  /// What the scope has read so far for a `when` to test.
+  /// What the scope has read so far for a `when` or a count to read.
   final List<Object?> seen;
+
+  /// The slots the rounds read so far have charged against the slot limit.
+  int slots = 0;
   final Uint8List? _split;
 
   /// The next byte to read; never above [end].
@@ -65,6 +70,28 @@ final class Reader {
           if (seen[n.refSlot] == n.condition!.value && !fields(n.fields, row)) {
             return false;
           }
+        case NodeKind.group:
+          if (n.isMark) {
+            // Reached only through a set flag bit.
+            store(n, row, true);
+          } else if (typed) {
+            if (!fields(n.fields, row)) return false;
+          } else {
+            final inner = <String, Object?>{};
+            (row as Map<String, Object?>)[n.name] = inner;
+            if (!fields(n.fields, inner)) return false;
+          }
+        case NodeKind.sized:
+        case NodeKind.bits:
+        case NodeKind.packed:
+        case NodeKind.u2:
+          if (!counted(n, row)) return false;
+        case NodeKind.repeat:
+        case NodeKind.times:
+          if (!readRounds(n, row)) return false;
+        case NodeKind.slot:
+          // Reached only inside a u2, which reads its slots itself.
+          break;
       }
     }
     return true;

@@ -435,6 +435,12 @@ case "$lang" in
       done
     fi
     ;;
+  dart)
+    # Dart (dart:3.13.7, tool-pins.txt): the steps are in run-suite-dart.sh, which keeps this file under 500 lines.
+    # shellcheck source=run-suite-dart.sh
+    . "$(dirname "${BASH_SOURCE[0]}")/run-suite-dart.sh"
+    dart_suite
+    ;;
   *)
     echo "unknown language: $lang" >&2
     ok=1
