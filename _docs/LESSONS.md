@@ -9,9 +9,6 @@ Downstream skills consume this file:
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
 
-  Source: _docs/06_metrics/retro_2026-10-28_loop79.md
-  Source: _docs/06_metrics/retro_2026-10-28_loop79.md
-  Source: _docs/06_metrics/retro_2026-10-28_loop79.md
 - [2026-10-31] [tooling] simavr 1.6 prints nothing for its console register and its `avr_mcu_section.h` does not compile as C++: report over the UART (`UDR0`), strip the colour codes, and treat each line end shown as a dot (loop 92).
   Source: _docs/06_metrics/retro_2026-10-31_loop92.md
 - [2026-10-31] [testing] An emulator gate that diffs the whole report against an expected file fails on a changed line, a missing line and no output alike; prove it with five injected runs (changed byte, defect, hang, tool missing, silent fake tool), each reverted (loop 92).
