@@ -3,18 +3,18 @@
 ## Current Step
 flow: existing-code
 kind: product
-step: 9
-name: New Task
-status: not_started
+step: 10
+name: Implement
+status: in_progress
 sub_step:
-  phase: 1
-  name: feature-loop
-  detail: "loop 109 P0: hopper empty, asking owner for the feature"
+  phase: 0
+  name: awaiting-invocation
+  detail: "AZ-4198 diagnostic workflow"
 retry_count: 0
 tracker: jira
-loop: 108
+loop: 109
 branch:
-plan_artifact:
-plan_confirmed: false
+plan_artifact: _docs/loops/loop109/plan109.md
+plan_confirmed: true
 plan_step_index: 0
 assess_round: 0

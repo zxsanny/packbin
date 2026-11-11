@@ -1,0 +1,126 @@
+name: diagnose-dns
+
+# Manual diagnostic (AZ-4198). On 2026-11-11 the `embedded-arm` image build could not resolve archive.ubuntu.com on a
+# runner (runs 43051226349 and 43051232665) while the same job passed hours earlier on the same runner image; AZ-4191
+# went around it with a host-network build and never found the cause. This run prints what the Docker bridge network
+# uses for names and then looks up the Ubuntu mirror names for `minutes` minutes: from the host, from a bridge
+# container, from a host-network container, and once a minute by a `docker build` whose RUN is `apt-get update` (the
+# step that failed). One line per lookup, `result=ok` or `result=fail`; a failed lookup never stops the run. It reads no
+# secret and sends nothing outside the lookups. Run it by hand (Actions tab, "Run workflow") and read the log.
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "Minutes of lookups, 10 to 20"
+        default: "12"
+
+permissions:
+  contents: read
+
+jobs:
+  dns:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      MINUTES: ${{ inputs.minutes }}
+    steps:
+      - name: Settings of the host resolver, the Docker daemon and a bridge container
+        run: |
+          set -uo pipefail
+          echo "::group::host resolver"
+          echo "runner image: ${ImageOS:-unknown} ${ImageVersion:-unknown}"
+          cat /etc/os-release
+          echo "--- /etc/resolv.conf"
+          cat /etc/resolv.conf
+          echo "--- resolvectl status"
+          resolvectl status || echo "resolvectl failed (exit $?)"
+          echo "--- ip route"
+          ip route
+          echo "::endgroup::"
+          echo "::group::docker daemon"
+          docker version
+          docker info
+          echo "--- /etc/docker/daemon.json"
+          cat /etc/docker/daemon.json || echo "no /etc/docker/daemon.json (exit $?)"
+          echo "--- docker network inspect bridge"
+          docker network inspect bridge
+          echo "::endgroup::"
+          echo "::group::bridge container resolv.conf"
+          docker run --rm ubuntu:24.04 cat /etc/resolv.conf
+          echo "::endgroup::"
+      - name: Lookups for the stated minutes
+        run: |
+          set -uo pipefail
+          case "$MINUTES" in
+            ''|*[!0-9]*) echo "minutes '$MINUTES' is not a number: using 12"; minutes=12 ;;
+            *) minutes="$MINUTES" ;;
+          esac
+          if [ "$minutes" -lt 10 ] || [ "$minutes" -gt 20 ]; then
+            echo "minutes $minutes is outside 10 to 20: using 12"
+            minutes=12
+          fi
+          names="archive.ubuntu.com security.ubuntu.com"
+          log="$RUNNER_TEMP/dns-probe.log"
+          : > "$log"
+          docker run -d --name bridge-probe ubuntu:24.04 sleep infinity
+          docker run -d --name host-probe --network host ubuntu:24.04 sleep infinity
+
+          # probe <path> <name> [command prefix...]: one lookup through the C library, the way apt does it
+          probe() {
+            local path="$1" name="$2" start end out rc ip
+            shift 2
+            start="$(date +%s%N)"
+            out="$("$@" getent ahostsv4 "$name" 2>&1)"
+            rc=$?
+            end="$(date +%s%N)"
+            ip="$(printf '%s\n' "$out" | awk 'NR == 1 { print $1 }')"
+            if [ "$rc" -eq 0 ] && [ -n "$ip" ]; then
+              echo "$(date -u +%H:%M:%S) path=$path name=$name result=ok ms=$(( (end - start) / 1000000 )) ip=$ip" | tee -a "$log"
+            else
+              echo "$(date -u +%H:%M:%S) path=$path name=$name result=fail ms=$(( (end - start) / 1000000 )) exit=$rc text=${out:-none}" | tee -a "$log"
+            fi
+          }
+
+          # build_probe: apt-get update in a image build, judged by its output (apt exits 0 on a failed fetch)
+          build_probe() {
+            local dir start end out rc
+            dir="$(mktemp -d)"
+            printf 'FROM ubuntu:24.04\nARG STAMP\nRUN apt-get update -o Acquire::Retries=0 > /tmp/apt.log 2>&1; cat /tmp/apt.log; ! grep -q "Could not resolve\\|Temporary failure resolving" /tmp/apt.log\n' > "$dir/Dockerfile"
+            start="$(date +%s%N)"
+            out="$(docker build --no-cache --progress=plain --build-arg "STAMP=$(date +%s)" "$dir" 2>&1)"
+            rc=$?
+            end="$(date +%s%N)"
+            if [ "$rc" -eq 0 ]; then
+              echo "$(date -u +%H:%M:%S) path=build name=apt-get-update result=ok ms=$(( (end - start) / 1000000 ))" | tee -a "$log"
+            else
+              echo "$(date -u +%H:%M:%S) path=build name=apt-get-update result=fail ms=$(( (end - start) / 1000000 )) exit=$rc" | tee -a "$log"
+              printf '%s\n' "$out" | grep -E "Could not resolve|Temporary failure|Err:|W: Failed" | head -8
+            fi
+            rm -rf "$dir"
+          }
+
+          deadline=$(( SECONDS + minutes * 60 ))
+          next_build=$SECONDS
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            for name in $names; do
+              probe host "$name"
+              probe bridge "$name" docker exec bridge-probe
+              probe host-network "$name" docker exec host-probe
+            done
+            if [ "$SECONDS" -ge "$next_build" ]; then
+              build_probe
+              next_build=$(( SECONDS + 60 ))
+            fi
+            sleep 5
+          done
+
+          echo "::group::summary"
+          for path in host bridge host-network build; do
+            ok="$(grep -c "path=$path .*result=ok" "$log")"
+            fail="$(grep -c "path=$path .*result=fail" "$log")"
+            echo "path=$path ok=$ok fail=$fail"
+          done
+          echo "::endgroup::"
+      - name: Remove the probe containers
+        if: always()
+        run: docker rm -f bridge-probe host-probe || echo "no probe container to remove (exit $?)"
