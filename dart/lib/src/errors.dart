@@ -3,7 +3,10 @@
 /// only add kinds.
 enum ErrorKind {
   /// The buffer ends inside a field: `field`, `name`, `needed` and `left` are
-  /// set. An empty buffer names no field and needs 1 byte.
+  /// set. An empty buffer names no field and needs 1 byte. A text or a
+  /// dictionary key that breaks a rule of the format, and a dictionary key
+  /// that repeats or is out of order, are also `short`, with `needed` 0 (as in
+  /// the other packages).
   short('short_packet'),
 
   /// Bytes are left after the scheme's last field: `left` is their count.
@@ -12,7 +15,7 @@ enum ErrorKind {
   /// The first byte names no scheme of the call: `actual` is that byte.
   unknownType('type_mismatch'),
 
-  /// Unpack read a value it cannot use.
+  /// Unpack read a count it cannot use: negative, or its source has no value.
   badValue('bad_value'),
 
   /// Unpack refuses a round past a limit of the scheme.

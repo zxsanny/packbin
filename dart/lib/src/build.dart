@@ -285,7 +285,9 @@ void _checkBindings<R extends Object>(List<Node> nodes) {
         throw schemeFail(
           n.id,
           n.name,
-          '${n.name}: a scheme of $R rows needs every value field bound with bind',
+          n.isMark
+              ? '${n.name}: a presence mark in a scheme of $R rows is bound with groupOf(anchor, name, []).bind to a bool'
+              : '${n.name}: a scheme of $R rows needs every value field bound with bind',
         );
       }
       if (!binding.fits<R>()) {

@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:packbin/packbin.dart';
+import 'package:packbin/src/utf8_order.dart';
 import 'package:test/test.dart';
 
 import '../support/hex.dart';
@@ -177,6 +180,58 @@ void main() {
         }
       },
     );
+  });
+
+  group('replaceLoneSurrogates', () {
+    test('returns the text itself when it holds no lone half', () {
+      // Arrange
+      final texts = ['', 'abc', '\u{1F600}', 'x\u{1F600}y\u{10000}', '中文'];
+
+      // Act and Assert
+      for (final t in texts) {
+        expect(identical(replaceLoneSurrogates(t), t), isTrue, reason: t);
+      }
+    });
+
+    test('equals the UTF-8 round trip of every string up to 4 units', () {
+      // Arrange: pair halves, lone halves, the replacement and plain units
+      const units = [0x61, 0xd800, 0xdbff, 0xdc00, 0xdfff, 0xfffd, 0xe000];
+      var checked = 0;
+
+      void walk(List<int> prefix) {
+        final text = String.fromCharCodes(prefix);
+        // Act
+        final got = replaceLoneSurrogates(text);
+        // Assert: what a TextEncoder writes, read back
+        final bytes = <int>[];
+        for (var i = 0; i < prefix.length; i++) {
+          final c = prefix[i];
+          if (c >= 0xd800 &&
+              c <= 0xdbff &&
+              i + 1 < prefix.length &&
+              prefix[i + 1] >= 0xdc00 &&
+              prefix[i + 1] <= 0xdfff) {
+            bytes.addAll(utf8.encode(String.fromCharCodes([c, prefix[++i]])));
+          } else if (c >= 0xd800 && c <= 0xdfff) {
+            bytes.addAll([0xef, 0xbf, 0xbd]);
+          } else {
+            bytes.addAll(utf8.encode(String.fromCharCode(c)));
+          }
+        }
+        expect(got, utf8.decode(bytes), reason: prefix.toString());
+        checked++;
+        if (prefix.length < 4) {
+          for (final u in units) {
+            walk([...prefix, u]);
+          }
+        }
+      }
+
+      walk([]);
+
+      // Assert
+      expect(checked, 1 + 7 + 49 + 343 + 2401);
+    });
   });
 
   group('the byte limit counts a lone half as 3 bytes', () {

@@ -13,14 +13,14 @@
 Library files: `collections_unpack.dart` (D8), `ecc/codec.dart`, `ecc/percent.dart`, `errors.dart`, `scheme.dart` (D7), `text/text_encode.dart`, `text/text_types.dart`, `utf8_order.dart`, `collections_pack.dart`, `collection_fields.dart` (D1, D10), `rounds_unpack.dart` (D6), `checks.dart` (D10).
 New tests: `ecc/pack_too_long_test.dart` (AL-4), `collections/lone_surrogate_test.dart` (AL-1 to AL-3, 16 TypeScript packets), `collections/text_refusal_short_test.dart` (AL-9, 29 fixture rows and 5 hand-made), `collections/empty_nested_test.dart` (AL-7, AL-8), `rounds/zero_rounds_places_test.dart` (AL-6, 15 places).
 
-## Code Review Verdict: deferred
+## Code Review Verdict: PASS_WITH_WARNINGS
 
-One total review for the loop (owner rule), after this batch; not run per batch.
+One independent total review of `git diff 0a678be..HEAD -- dart/lib` (a reviewer given the code and the criteria, not my conclusions): no High or Medium finding; 0 byte mismatches against TypeScript in 6,000 text and dictionary cases, 798 parity limits, 66,430 strings of `replaceLoneSurrogates` against a UTF-8 round trip, and 1.4 million hostile or mutated unpacks with 0 exceptions. Three Low findings, all fixed in the same loop (commit after f955079): the `ErrorKind.short` and `badValue` docs, a needless copy in `replaceLoneSurrogates` for a valid pair, and the message for an unbound mark in a typed scheme (it sent the user to a dead end; one older test pinned the old wording and was updated).
 
 ## Test Suite
 
-- Total: 2,001 tests (1,919 at the end of loop 99)
-- Passed: 2,001
+- Total: 2,004 tests (1,919 at the end of loop 99)
+- Passed: 2,004
 - Failed: 0
 - Skipped: 0
 - `dart format --set-exit-if-changed` 0 changed in 159 files; `dart analyze --fatal-infos` 0 issues; seeded run seed 343166603, 7,193 inputs, 347,881 unpack calls, 0 failures.

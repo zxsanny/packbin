@@ -182,6 +182,27 @@ void main() {
       },
     );
 
+    test(
+      'an unbound mark in a typed scheme points at groupOf bound to a bool',
+      () {
+        // Arrange and Act
+        final e = refusal(
+          () => rowScheme<Cell>(1, Cell.new, [
+            flags(0, [
+              nested('g', []),
+              u8(0, 'h').bind<Cell>(get: (r) => r.h, set: (r, v) => r.h = v),
+            ]),
+          ]),
+        );
+
+        // Assert
+        expect(e.kind, ErrorKind.schemeError);
+        expect(e.name, 'g');
+        expect(e.reason, contains('groupOf(anchor, name, []).bind'));
+        expect(e.reason, isNot(contains('every value field')));
+      },
+    );
+
     test('the typed mark is groupOf bound to a bool', () {
       // Arrange
       final s = rowScheme<Cell>(1, Cell.new, [

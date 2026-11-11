@@ -27,9 +27,14 @@ String replaceLoneSurrogates(String text) {
         i + 1 < text.length &&
         text.codeUnitAt(i + 1) >= 0xdc00 &&
         text.codeUnitAt(i + 1) <= 0xdfff) {
-      (out ??= StringBuffer(text.substring(0, i)))
-        ..writeCharCode(c)
-        ..writeCharCode(text.codeUnitAt(++i));
+      // A valid pair is kept as it is: copy it only once a lone half has made
+      // a copy necessary.
+      if (out != null) {
+        out
+          ..writeCharCode(c)
+          ..writeCharCode(text.codeUnitAt(i + 1));
+      }
+      i++;
     } else {
       (out ??= StringBuffer(text.substring(0, i))).writeCharCode(0xfffd);
     }

@@ -346,7 +346,7 @@ void main() {
       expect(error.name, 'mark');
       expect(
         error.reason,
-        'mark: a scheme of Cell rows needs every value field bound with bind',
+        'mark: a presence mark in a scheme of Cell rows is bound with groupOf(anchor, name, []).bind to a bool',
       );
     });
 

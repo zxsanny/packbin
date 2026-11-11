@@ -3,7 +3,7 @@
 **Date**: 2026-11-11
 **Mode**: lite escalated to a diff-scoped full pass (`git diff 0a678be HEAD -- dart fixtures README.md`; commits 4993aee and f955079; 12 library files, about 205 changed library lines)
 **Scope**: `dart/lib/src/` unpack of text, dictionary keys and rounds; pack of text and dictionary keys; scheme construction of the empty `nested` mark; the ECC pack refusal. No CI, deploy, dependency, crypto or network file changed.
-**Verdict**: PASS
+**Verdict**: PASS (an independent review of the same diff found no security issue; 3 Low wording and copy findings fixed)
 
 ## Lite triggers
 
