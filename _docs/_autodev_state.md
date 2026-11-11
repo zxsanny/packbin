@@ -3,18 +3,18 @@
 ## Current Step
 flow: existing-code
 kind: product
-step: 9
-name: New Task
-status: in_progress
+step: 10
+name: Implement
+status: not_started
 sub_step:
-  phase: 2
-  name: feature-loop
-  detail: "loop 100 dart-typescript-alignment claimed; /problem Phases 2-4 (D1 D6 D7 D8 D10), then new-task"
+  phase: 0
+  name: awaiting-invocation
+  detail: "AZ-4153 spec in todo/; plan confirmed; implement D8, D7, D1, D6, D10 in dart/"
 retry_count: 0
 tracker: jira
 loop: 100
 branch:
 plan_artifact: _docs/loops/loop100/plan100.md
-plan_confirmed: false
+plan_confirmed: true
 plan_step_index: 0
 assess_round: 0

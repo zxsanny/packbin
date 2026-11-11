@@ -1,8 +1,8 @@
 # Dependencies Table
 
 **Date**: 2026-10-04
-**Total Tasks**: 88
-**Total Complexity Points**: 297
+**Total Tasks**: 89
+**Total Complexity Points**: 302
 
 Estimation: `_docs/LESSONS.md` says the six packages stay peers. The session is implemented in each package. No shared walker. Compare the full hex. No point bump.
 
@@ -544,3 +544,4 @@ Loop 74 (2026-10-26, ADR-009: remove the stream session; D1 frame names; D2 cryp
 | AZ-4147 | dart_release (loop 99) | 5 | AZ-4145, AZ-4146 | AZ-4133 |
 | AZ-4148 | dart_docs (loop 99) | 3 | AZ-4144, AZ-4147 | AZ-4133 |
 | AZ-4149 | dart_review_fixes (loop 99, round 1) | 5 | AZ-4134..AZ-4148 | AZ-4133 |
+| AZ-4153 | dart_typescript_alignment (loop 100) | 5 | AZ-4134..AZ-4149 | AZ-4133 |
