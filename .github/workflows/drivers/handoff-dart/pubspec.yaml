@@ -1,0 +1,11 @@
+name: handoff_dart
+description: The Dart member of the cross-language ring (.github/workflows/language-pair.sh); not published.
+publish_to: none
+
+environment:
+  sdk: ^3.13.0
+
+# The package under test, by path, and nothing else: the driver is not part of dart/ and adds no dependency to it.
+dependencies:
+  packbin:
+    path: ../../../../dart

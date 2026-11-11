@@ -112,6 +112,27 @@ case "$lang" in
     bash "$ring" "$scratch" >&2
     "$scratch/release/position"
     ;;
+  dart)
+    # ring-dart.sh compiles the position program of the ring (drivers/handoff-dart, bin/position.dart) with the dart
+    # on PATH, or in the dart image when there is none; its output goes to stderr so only the program's hex reaches
+    # stdout. It builds on a copy of dart/ and the driver inside the scratch dir, so a read-only repo (the gate
+    # mounts it so) is never written; the scratch dir is the ring's own, so the ring job reuses the drivers it built.
+    scratch="${PACKBIN_DART_RING:-/tmp/packbin-ring-dart}"
+    if [ "$root" != "$(cd "$here/../.." && pwd)" ]; then
+      # A SRC_ROOT apart from these scripts: ring-dart.sh builds the tree it sits in, so build from a copy of that tree.
+      work="$(mktemp -d)"
+      mkdir -p "$work/packbin/dart" "$work/packbin/.github/workflows/drivers"
+      cp -R "$root/dart/pubspec.yaml" "$root/dart/lib" "$work/packbin/dart/"
+      cp -R "$here/ring-dart.sh" "$here/tool-pin.sh" "$here/tool-pins.txt" "$work/packbin/.github/workflows/"
+      cp -R "$drivers/handoff-dart" "$work/packbin/.github/workflows/drivers/"
+      chmod -R u+w "$work/packbin"
+      scratch="$work/build"
+      bash "$work/packbin/.github/workflows/ring-dart.sh" "$scratch" >&2
+    else
+      bash "$here/ring-dart.sh" "$scratch" >&2
+    fi
+    "$scratch/position"
+    ;;
   *)
     echo "unknown language: $lang" >&2
     exit 1

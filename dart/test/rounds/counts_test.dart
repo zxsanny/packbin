@@ -74,10 +74,8 @@ void main() {
 
       // Assert
       expect(result.row, isNull);
-      expect(
-        [result.error!.name, result.error!.needed, result.error!.left],
-        ['payload', 0, 1],
-      );
+      expect(result.error!.kind, ErrorKind.badValue);
+      expect(result.error!.name, 'payload');
     });
 
     test('a u64 count above 2^63 - 1 is refused, not wrapped', () {
@@ -88,8 +86,7 @@ void main() {
       final result = unpackRow(unhex('01ffffffffffffffff61'), layout);
 
       // Assert
-      expect(result.error!.kind, ErrorKind.short);
-      expect([result.error!.needed, result.error!.left], [0, 1]);
+      expect(result.error!.kind, ErrorKind.badValue);
     });
 
     test('a u64 count of 2^63 is refused (the int is negative)', () {

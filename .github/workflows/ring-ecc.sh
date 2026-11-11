@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The message ECC ring (AZ-2689, EC-9): every language writes the protected position message and every language reads
-# what every language wrote, intact and corrupted, 8 writers x 8 readers = 64 pairs. The rows are the position rows of
+# what every language wrote, intact and corrupted, 9 writers x 9 readers = 81 pairs. The rows are the position rows of
 # fixtures/ecc/vectors.txt and fixtures/ecc/ring-cases.txt; scripts/ecc/ring_ecc.py checks every result against the
 # reference codec (scripts/ecc/eccfmt.py). Exit 0 only when no row is mismatched.
 #
@@ -11,8 +11,8 @@
 #
 # Environment: RING_ECC_RUN (a command that runs a driver in place of run_lang: `$RING_ECC_RUN <lang> <args>`; the
 # self-test of this script), PACKBIN_RING_WORK (the driver builds language-pair.sh kept), RING_ECC_LANGS (the
-# languages, default all eight), RING_ECC_VECTORS and RING_ECC_CASES (other row files). The rest is language-pair.sh's:
-# PACKBIN_CXX_SYSROOT, CXX, PACKBIN_SWIFT_RING, RING_GO.
+# languages, default all nine), RING_ECC_VECTORS and RING_ECC_CASES (other row files). The rest is language-pair.sh's:
+# PACKBIN_CXX_SYSROOT, CXX, PACKBIN_SWIFT_RING, PACKBIN_DART_RING, RING_GO.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -27,7 +27,9 @@ work="${PACKBIN_RING_WORK:-$io}"
 mkdir -p "$work"
 # shellcheck disable=SC2034 # read by run_lang, see above
 swift_ring="${PACKBIN_SWIFT_RING:-/tmp/packbin-ring-swift}"
-read -r -a langs <<< "${RING_ECC_LANGS:-csharp typescript python rust cpp java go swift}"
+# shellcheck disable=SC2034 # read by run_lang, see above
+dart_ring="${PACKBIN_DART_RING:-/tmp/packbin-ring-dart}"
+read -r -a langs <<< "${RING_ECC_LANGS:-csharp typescript python rust cpp java go swift dart}"
 checker="$root/scripts/ecc/ring_ecc.py"
 
 if [ -n "${RING_ECC_RUN:-}" ]; then

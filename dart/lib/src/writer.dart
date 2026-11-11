@@ -1,16 +1,32 @@
 import 'dart:typed_data';
 
-import 'errors.dart';
-import 'limits.dart';
+/// Thrown by [Writer] when a write would make the packet longer than the byte
+/// limit. The pack loop turns it into a pack error naming the field it was
+/// writing, so the hot path carries no name.
+final class ByteBudgetExceeded implements Exception {
+  /// What the packet would have been, and the limit.
+  const ByteBudgetExceeded(this.need, this.limit);
 
-/// The bytes one pack call writes, type byte included. The buffer grows by
-/// doubling.
+  /// The length the packet would have reached.
+  final int need;
+
+  /// The scheme's `maxBytes`.
+  final int limit;
+}
+
+/// The bytes one pack call writes, type byte included, never more than
+/// [limit]. The buffer grows by doubling, but never past the limit.
 final class Writer {
-  Writer(int typeByte) : this._(Uint8List(64), typeByte);
+  Writer(int typeByte, int limit)
+    : this._(Uint8List(limit < 64 ? limit : 64), typeByte, limit);
 
-  Writer._(this._buf, int typeByte) : _data = ByteData.sublistView(_buf) {
+  Writer._(this._buf, int typeByte, this.limit)
+    : _data = ByteData.sublistView(_buf) {
     _buf[0] = typeByte;
   }
+
+  /// The most bytes the packet may have.
+  final int limit;
 
   Uint8List _buf;
   ByteData _data;
@@ -28,23 +44,21 @@ final class Writer {
   }
 
   void _grow(int need) {
-    if (need > defaultMaxBytes) {
-      throw packFail(
-        null,
-        '',
-        'the packet would be $need bytes, above the limit of $defaultMaxBytes bytes',
-      );
-    }
+    if (need > limit) throw ByteBudgetExceeded(need, limit);
     var capacity = _buf.length * 2;
     while (capacity < need) {
       capacity *= 2;
     }
+    if (capacity > limit) capacity = limit;
     final next = Uint8List(capacity)..setRange(0, _length, _buf);
     _buf = next;
     _data = ByteData.sublistView(next);
   }
 
-  void byte(int value) => _buf[_take(1)] = value;
+  void byte(int value) {
+    final at = _take(1);
+    _buf[at] = value;
+  }
 
   /// The low [size] bytes (1, 2, 4 or 8) of [value], two's complement.
   void integer(int value, int size, bool signed, Endian endian) {
@@ -77,8 +91,10 @@ final class Writer {
     return true;
   }
 
-  void float64(double value, Endian endian) =>
-      _data.setFloat64(_take(8), value, endian);
+  void float64(double value, Endian endian) {
+    final at = _take(8);
+    _data.setFloat64(at, value, endian);
+  }
 
   void bytes(Uint8List value) {
     final at = _take(value.length);

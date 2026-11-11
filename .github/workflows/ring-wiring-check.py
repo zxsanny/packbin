@@ -23,7 +23,7 @@ WRAPPER = re.compile(r"/\.github/workflows/ring-cxx\.sh\Z", FLAGS)
 GO_BUILD = re.compile(r"bash \.github/workflows/ring-(?:go\.sh|prepare\.sh build) \S+", FLAGS)
 # The workflow and job env versions and the suite images they copy (docker-compose.test.yml service => RING_ variable).
 SUITES = {"RING_DOTNET": "csharp", "RING_NODE": "typescript", "RING_PYTHON": "python",
-          "RING_RUST": "rust", "RING_GCC": "cpp", "RING_JDK": "java", "RING_GO": "go"}
+          "RING_RUST": "rust", "RING_GCC": "cpp", "RING_JDK": "java", "RING_GO": "go", "RING_DART": "dart"}
 SCAFFOLD_SCRIPTS = {"cpp/embedded/lib.test.sh": "the embedded harness self-test",
                     ".github/workflows/ring-wiring.test.sh": "the ring wiring check",
                     ".github/workflows/ring-wiring-rows.test.sh": "the ring row wiring check",

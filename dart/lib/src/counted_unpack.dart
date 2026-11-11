@@ -14,10 +14,19 @@ extension CountedUnpack on Reader {
     return raw is int ? countOf(raw, n.bias) : null;
   }
 
-  /// The error of a count that cannot be read: the counted field, nothing more
-  /// needed, the bytes left where it starts.
-  PackbinError unreadable(int? id, String name) =>
+  /// The error of an item or round that reads no byte: nothing more needed,
+  /// the bytes left where it starts.
+  PackbinError emptyItem(int? id, String name) =>
       shortPacket(id, name, 0, left);
+
+  /// The error of a count that has no value (its source is behind a clear bit
+  /// or was never read) or is negative: a bad value of the counted field.
+  PackbinError unreadable(int? id, String name) => PackbinError(
+    ErrorKind.badValue,
+    field: id,
+    name: name,
+    reason: 'the count has no value or is negative',
+  );
 
   /// Reads a `sized`, `bits`, `packed` or `u2` into [row]; false when the
   /// packet is refused. A count is checked against the bytes left before

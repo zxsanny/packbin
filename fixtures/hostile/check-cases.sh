@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Checks the format of the hostile-case file and that README.md describes every id. A pack case also
-# needs Scheme, Row, Run by and Not run by lines that together name each of the eight packages once.
+# needs Scheme, Row, Run by and Not run by lines that together name each of the nine packages once.
 # Usage: check-cases.sh [cases-file] [readme]
 set -euo pipefail
 set -f
@@ -10,7 +10,7 @@ cases="${1:-$here/cases.txt}"
 readme="${2:-$here/README.md}"
 
 terms="short_packet trailing_bytes bad_value too_many type_mismatch scheme_error"
-packages=("C#" "C++" "Go" "Java" "Python" "Rust" "Swift" "TypeScript")
+packages=("C#" "C++" "Dart" "Go" "Java" "Python" "Rust" "Swift" "TypeScript")
 errors=0
 count=0
 seen=" "

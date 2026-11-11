@@ -76,6 +76,7 @@ covers() {
       is_test_path "$f" && return 1
       case "$f" in
         csharp/* | typescript/* | python/* | rust/* | java/* | go/* | swift/* | Package.swift | Package.resolved | cpp/include/* | cpp/src/*) return 0 ;;
+        dart/lib/* | dart/pubspec.yaml) return 0 ;;
         .github/workflows/language-pair.sh | .github/workflows/ring-* | .github/workflows/drivers/* | fixtures/* | scripts/ecc/*) return 0 ;;
       esac ;;
     ac10)
@@ -301,6 +302,7 @@ run_stage_command() {
         && bash .github/workflows/ring-wiring.test.sh \
         && bash .github/workflows/ring-wiring-rows.test.sh \
         && bash .github/workflows/ring-wiring-swift.test.sh \
+        && bash .github/workflows/ring-wiring-dart.test.sh \
         && bash .github/workflows/ring-lib.test.sh \
         && bash .github/workflows/ring-prepare.test.sh \
         && bash scripts/loop-tests.test.sh ;;

@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'counted_pack.dart';
 import 'errors.dart';
 import 'group_rows.dart';
-import 'limits.dart';
 import 'node.dart';
 import 'pack.dart';
 import 'round_shape.dart';
@@ -148,11 +147,11 @@ extension RoundPack on Packer {
     final shape = n.shape!;
     if (typed) {
       final rounds = n.roundBinding!.get(row) ?? const <Object>[];
-      if (rounds.length > defaultMaxRounds) {
+      if (rounds.length > limits.maxRounds) {
         throw _fail(
           n,
           shape,
-          'the repeat count is ${rounds.length}, above the limit of $defaultMaxRounds rounds',
+          'the repeat count is ${rounds.length}, above the limit of ${limits.maxRounds} rounds',
         );
       }
       _typedRounds(n, shape, rounds);
@@ -161,11 +160,11 @@ extension RoundPack on Packer {
     final map = row as Map<String, Object?>;
     for (final m in shape.names) {
       final v = map[m.name];
-      if (isRoundList(v) && (v as List<Object?>).length > defaultMaxRounds) {
+      if (isRoundList(v) && (v as List<Object?>).length > limits.maxRounds) {
         throw packFail(
           m.errorId,
           m.name,
-          '${m.name}: the repeat count is ${v.length}, above the limit of $defaultMaxRounds rounds',
+          '${m.name}: the repeat count is ${v.length}, above the limit of ${limits.maxRounds} rounds',
         );
       }
     }
@@ -190,11 +189,11 @@ extension RoundPack on Packer {
   void packTimes(Node n, Object row) {
     final shape = n.shape!;
     final count = borrowedCount(n);
-    if (count > defaultMaxRounds) {
+    if (count > limits.maxRounds) {
       throw _fail(
         n,
         shape,
-        'the times count is $count, above the limit of $defaultMaxRounds rounds',
+        'the times count is $count, above the limit of ${limits.maxRounds} rounds',
       );
     }
     if (typed) {
@@ -279,11 +278,11 @@ extension RoundPack on Packer {
   /// before its bytes, as unpack charges it.
   void _charge(Node n, RoundShape shape) {
     final width = shape.width;
-    if (width > defaultMaxSlots - charged) {
+    if (width > limits.maxSlots - charged) {
       throw _fail(
         n,
         shape,
-        'the rounds would hold ${charged + width} slots, above the limit of $defaultMaxSlots slots',
+        'the rounds would hold ${charged + width} slots, above the limit of ${limits.maxSlots} slots',
       );
     }
     charged += width;

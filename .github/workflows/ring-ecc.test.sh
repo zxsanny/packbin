@@ -160,7 +160,7 @@ run() {
   fi
 }
 
-run honest 0 "ring-ecc: 64 pairs, "
+run honest 0 "ring-ecc: 81 pairs, "
 if ! grep -q "mismatched rows: 0$" "$tmp/out.txt"; then
   echo "FAIL honest: the total does not end in \"mismatched rows: 0\""
   failures=$((failures + 1))
@@ -170,6 +170,9 @@ run reader-lies 1 "-> go: " FAKE_LIE=go:repair
 run reader-prints-too-few 1 "swift printed" FAKE_LIE=swift:short
 run driver-crashes 1 "rust ecc-batch (protect) failed" FAKE_LIE=rust:crash
 run one-language 0 "ring-ecc: 1 pairs" RING_ECC_LANGS=python
+# AZ-4146: a Dart driver that lies, as a writer (a wrong parity byte) and as a reader (a refusal where the row is repaired).
+run dart-writer-lies 1 "dart: enc.pos.n4" FAKE_LIE=dart:protect
+run dart-reader-lies 1 "-> dart: " FAKE_LIE=dart:repair
 run percent-writer-lies 1 "go: ring.p25.enc" FAKE_LIE=go:percent-protect
 run percent-reader-rounds-down 1 "-> swift: ring.p" FAKE_LIE=swift:percent-down
 run percent-reader-never-lowers-limit 1 "-> rust: ring.p25" FAKE_LIE=rust:percent-nolower

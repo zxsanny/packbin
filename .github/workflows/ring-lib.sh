@@ -9,6 +9,7 @@ drivers="$root/.github/workflows/drivers"
 work="${PACKBIN_RING_WORK:-$(mktemp -d)}" && mkdir -p -m 700 "$work" # PACKBIN_RING_WORK: kept for ring-ecc.sh to reuse the builds
 [ -n "${PACKBIN_RING_WORK:-}" ] || trap 'rm -rf "$work"' EXIT
 swift_ring="${PACKBIN_SWIFT_RING:-/tmp/packbin-ring-swift}" # ring-swift.sh output, kept between runs as Go's
+dart_ring="${PACKBIN_DART_RING:-/tmp/packbin-ring-dart}" # ring-dart.sh output, kept between runs as Swift's
 
 run_lang() {
   local lang="$1"
@@ -76,6 +77,11 @@ run_lang() {
       # ring-swift.sh builds only when a source is newer than the binaries; `|| return` as at the cpp case.
       bash "$root/.github/workflows/ring-swift.sh" "$swift_ring" || return
       "$swift_ring/release/handoff-swift" "$@"
+      ;;
+    dart)
+      # ring-dart.sh compiles only when a source is newer than the stamp; `|| return` as at the cpp case.
+      bash "$root/.github/workflows/ring-dart.sh" "$dart_ring" || return
+      "$dart_ring/handoff-dart" "$@"
       ;;
     *)
       echo "unknown language: $lang" >&2

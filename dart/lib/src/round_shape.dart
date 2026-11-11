@@ -20,8 +20,7 @@ final class RoundShape {
     _names(body, names, <String>{});
     final optional = <Node>[];
     _optional(body, false, optional, <String>{});
-    final held = <String>{};
-    _width(body, held);
+    final width = roundWidth(body);
     return RoundShape._(
       names,
       optional,
@@ -33,7 +32,7 @@ final class RoundShape {
         for (final n in names)
           if (n.kind == NodeKind.dict) n,
       ],
-      held.length,
+      width,
       groupPlaces(body),
     );
   }
@@ -135,9 +134,20 @@ void _optional(
   }
 }
 
-/// The names a round holds as TypeScript counts them: a group's members are
-/// flattened into the round, and an empty group is a name of its own.
-void _width(List<Node> nodes, Set<String> names) {
+/// The slots one round of [body] charges: the distinct names it can hold, a
+/// group's members flattened into the round and an empty group counted as a
+/// name of its own. A nested row is a scope of its own, so it charges the
+/// width of its own members apart from the names around it (as Go and
+/// Swift).
+int roundWidth(List<Node> body) {
+  final names = <String>{};
+  return _width(body, names) + names.length;
+}
+
+/// Collects the names of [nodes] into [names] and returns the slots of the
+/// nested rows among them.
+int _width(List<Node> nodes, Set<String> names) {
+  var nested = 0;
   for (final n in nodes) {
     switch (n.kind) {
       case NodeKind.integer:
@@ -151,20 +161,22 @@ void _width(List<Node> nodes, Set<String> names) {
       case NodeKind.utf8:
       case NodeKind.list:
       case NodeKind.dict:
-      case NodeKind.nested:
         names.add(n.name);
+      case NodeKind.nested:
+        nested += roundWidth(n.fields);
       case NodeKind.group:
         if (n.fields.isEmpty) names.add(n.name);
-        _width(n.fields, names);
+        nested += _width(n.fields, names);
       case NodeKind.flags:
       case NodeKind.flagBit:
       case NodeKind.when:
       case NodeKind.u2:
-        _width(n.fields, names);
+        nested += _width(n.fields, names);
       case NodeKind.flagByte:
       case NodeKind.repeat:
       case NodeKind.times:
         break;
     }
   }
+  return nested;
 }

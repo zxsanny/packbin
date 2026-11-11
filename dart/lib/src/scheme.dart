@@ -4,6 +4,7 @@ import 'build.dart';
 import 'ecc/setting.dart';
 import 'errors.dart';
 import 'fields.dart';
+import 'limits.dart' as lim;
 import 'pack.dart';
 import 'unpack.dart';
 
@@ -17,7 +18,17 @@ final class Scheme<R extends Object> {
     this._plan, [
     this.parity = 0,
     this.parityPercent = 0,
+    this._limits = lim.defaultLimits,
   ]);
+
+  /// The default of [maxRounds].
+  static const int defaultMaxRounds = lim.defaultMaxRounds;
+
+  /// The default of [maxSlots].
+  static const int defaultMaxSlots = lim.defaultMaxSlots;
+
+  /// The default of [maxBytes].
+  static const int defaultMaxBytes = lim.defaultMaxBytes;
 
   /// The first byte of every packet of this scheme.
   final int typeNumber;
@@ -33,13 +44,44 @@ final class Scheme<R extends Object> {
 
   final Plan _plan;
 
+  /// The round, slot and byte limits of this scheme.
+  final lim.Limits _limits;
+
+  /// The most rounds one `repeat` or `times` may start, 65,535 by default.
+  /// Unpack refuses a round past it with [ErrorKind.tooMany]; pack refuses a
+  /// list or count past it.
+  int get maxRounds => _limits.maxRounds;
+
+  /// The most slots all the rounds of one call may create together,
+  /// 1,048,576 by default; unpack and pack both charge it.
+  int get maxSlots => _limits.maxSlots;
+
+  /// The most bytes one pack call may write, type byte included, 16,777,216
+  /// by default.
+  int get maxBytes => _limits.maxBytes;
+
+  /// A copy of this scheme with the given limits, and the parity setting it
+  /// has; this scheme is unchanged. A limit left out takes its default, not
+  /// this scheme's value (as in the other packages), so give every limit you
+  /// change in one call. A limit below 1 throws a [PackbinException] of kind
+  /// [ErrorKind.schemeError] naming it (`maxRounds`, `maxSlots` or
+  /// `maxBytes`).
+  Scheme<R> withLimits({int? maxRounds, int? maxSlots, int? maxBytes}) {
+    final next = lim.Limits(
+      lim.checkedLimit('maxRounds', maxRounds, lim.defaultMaxRounds),
+      lim.checkedLimit('maxSlots', maxSlots, lim.defaultMaxSlots),
+      lim.checkedLimit('maxBytes', maxBytes, lim.defaultMaxBytes),
+    );
+    return Scheme._(typeNumber, _plan, parity, parityPercent, next);
+  }
+
   /// A copy of this scheme that appends [n] parity bytes (0 to 32) and
   /// repairs on unpack, and drops a percentage it had; 0 turns protection
   /// off. Both sides declare the same [n]. An [n] out of range throws a
   /// [PackbinException] of kind [ErrorKind.schemeError] naming `parity`.
   Scheme<R> withParity(int n) {
     checkParity(n);
-    return Scheme._(typeNumber, _plan, n, 0);
+    return Scheme._(typeNumber, _plan, n, 0, _limits);
   }
 
   /// A copy of this scheme that declares the percentage [p] (0 to 100) of the
@@ -48,7 +90,7 @@ final class Scheme<R extends Object> {
   /// [ErrorKind.schemeError] naming `parity`.
   Scheme<R> withParityPercent(int p) {
     checkPercent(p);
-    return Scheme._(typeNumber, _plan, 0, p);
+    return Scheme._(typeNumber, _plan, 0, p, _limits);
   }
 
   /// A copy of this scheme with the given settings, as one declaration: a
@@ -64,7 +106,13 @@ final class Scheme<R extends Object> {
       throw mixedDeclaration(parity!, parityPercent!);
     }
     if (parity == null && parityPercent == null) return this;
-    return Scheme._(typeNumber, _plan, parity ?? 0, parityPercent ?? 0);
+    return Scheme._(
+      typeNumber,
+      _plan,
+      parity ?? 0,
+      parityPercent ?? 0,
+      _limits,
+    );
   }
 
   /// This scheme with the function [unpack] calls with the row of a packet
@@ -136,7 +184,7 @@ final class Unpacked<R extends Object> {
 /// scheme with parity appends it; a clear message above `254 - n` bytes
 /// throws [ErrorKind.tooLong].
 Uint8List pack<R extends Object>(Scheme<R> scheme, R row) => protectWith(
-  packRow(scheme._plan, scheme.typeNumber, row),
+  packRow(scheme._plan, scheme.typeNumber, row, scheme._limits),
   scheme.parity,
   scheme.parityPercent,
 );
@@ -169,7 +217,7 @@ Unpacked<R> unpackRowRepair<R extends Object>(
       PackbinError(ErrorKind.unknownType, actual: clear[0]),
     );
   }
-  final (row, error) = readRow(scheme._plan, clear);
+  final (row, error) = readRow(scheme._plan, clear, scheme._limits);
   return Unpacked._(row as R?, error, error == null ? fixed.count : 0);
 }
 
@@ -213,7 +261,11 @@ Unpacked<Object> unpackRepair(
   for (var i = 0; i < handlers.length; i++) {
     final handler = handlers[i];
     if (handler.scheme.typeNumber != type) continue;
-    final (row, error) = readRow(handler.scheme._plan, clear);
+    final (row, error) = readRow(
+      handler.scheme._plan,
+      clear,
+      handler.scheme._limits,
+    );
     if (row != null) handler._call(row);
     return Unpacked._(row, error, error == null ? fixed.count : 0);
   }

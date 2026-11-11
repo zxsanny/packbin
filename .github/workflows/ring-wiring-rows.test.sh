@@ -219,7 +219,7 @@ go_ring_checks() {
     fi
   done < "$tmp/go-expected.txt"
   echo "rejects: each of the $n Go handoff lines removed alone"
-  sed 's/^\(for lang in .*\) go; do$/\1; do/' "$ring_all" > "$tmp/no-loop-go.sh"
+  sed 's/^\(for lang in .*\) go\( dart\)\{0,1\}; do$/\1\2; do/' "$ring_all" > "$tmp/no-loop-go.sh"
   expect_go_rejected "go in the short packet and position loops" "$tmp/no-loop-go.sh"
   awk '/^    go[)]$/ { sub(/go[)]/, "gox)") } { print }' "$ring_all" > "$tmp/no-go-case.sh"
   expect_go_rejected "the go case of run_lang" "$tmp/no-go-case.sh"

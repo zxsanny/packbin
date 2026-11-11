@@ -54,7 +54,7 @@ extension CollectionUnpack on Reader {
         if (off == before) {
           // An item that reads nothing would be repeated up to 65,535 times
           // for no input.
-          error = unreadable(null, n.name);
+          error = emptyItem(null, n.name);
           return null;
         }
         items.add(v);
@@ -89,7 +89,7 @@ extension CollectionUnpack on Reader {
       final v = _item(e);
       if (v == null) return null;
       if (off == before) {
-        error = unreadable(null, n.name);
+        error = emptyItem(null, n.name);
         return null;
       }
       items[key] = v;

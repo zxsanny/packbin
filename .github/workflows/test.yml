@@ -31,6 +31,9 @@ jobs:
       # The swift:6.3.3 suite image tag (tool-pins.txt `swift`): the runner's Swift builds the Swift drivers, else
       # ring-swift.sh builds them in that image.
       RING_SWIFT: "6.3.3"
+      # The dart:3.13.7 suite image tag (tool-pins.txt `dart`): the runner has no Dart, so ring-dart.sh compiles the Dart
+      # drivers in that image (a compiled executable carries the runtime, so it runs on the runner).
+      RING_DART: "3.13.7"
       # ubuntu-latest has no GCC 16 release (13; 26.04 has 15), so the ring compiles in the gcc:16 image the
       # cpp suite uses, through ring-cxx.sh. The macOS sysroot recipe of language-pair.sh stays off.
       CXX: ${{ github.workspace }}/.github/workflows/ring-cxx.sh
@@ -50,12 +53,22 @@ jobs:
         with:
           path: /tmp/packbin-ring-swift
           key: swift-v2-ring-${{ env.RING_SWIFT }}-${{ hashFiles('Package.swift', 'Package.resolved', '.github/workflows/drivers/handoff-swift/Package.swift', '.github/workflows/drivers/handoff-swift/Package.resolved', '.github/workflows/ring-swift.sh') }}
-      # The gcc and swift image pulls and the Swift driver build need none of the setup actions: they run in the
+      # The Dart driver build's output (ring-dart.sh's scratch dir), kept between runs as the Swift one is. The key names
+      # the manifests the build reads and ring-dart.sh, which sets the build; the stamp of a restored build is older than
+      # the checkout, so a changed source is rebuilt either way. A tag run (publish.yml) builds from nothing.
+      - name: Dart driver build cache
+        id: ring-dart-cache
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /tmp/packbin-ring-dart
+          key: dart-v1-ring-${{ env.RING_DART }}-${{ hashFiles('dart/pubspec.yaml', '.github/workflows/drivers/handoff-dart/pubspec.yaml', '.github/workflows/ring-dart.sh') }}
+      # The gcc, swift and dart image pulls and the Swift driver build need none of the setup actions: they run in the
       # background while the setups run, and the wait below collects them (ring-prepare.sh, AZ-2626).
       - name: start image pulls and the Swift driver build
         env:
           PACKBIN_SWIFT_CACHE: ${{ steps.ring-swift-cache.conclusion == 'success' && (steps.ring-swift-cache.outputs.cache-hit == 'true' && 'hit' || 'miss') || '' }}
-        run: bash .github/workflows/ring-prepare.sh start "$RUNNER_TEMP/ring-prepare" "gcc:$RING_GCC" "swift:$RING_SWIFT"
+        run: bash .github/workflows/ring-prepare.sh start "$RUNNER_TEMP/ring-prepare" "gcc:$RING_GCC" "swift:$RING_SWIFT" "dart:$RING_DART"
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: ${{ env.RING_DOTNET }}.x
@@ -80,8 +93,10 @@ jobs:
           set -euo pipefail
           rustup toolchain install "$RING_RUST" --profile minimal --no-self-update
           rustup default "$RING_RUST"
-      # npm, the Rust driver and the Go driver at the same time, then the wait for the background pulls and Swift build.
+      # npm, the Rust driver, the Go driver and the Dart drivers at the same time, then the wait for the background pulls and Swift build.
       - name: driver dependencies and builds
+        env:
+          PACKBIN_DART_CACHE: ${{ steps.ring-dart-cache.conclusion == 'success' && (steps.ring-dart-cache.outputs.cache-hit == 'true' && 'hit' || 'miss') || '' }}
         run: |
           set -euo pipefail
           bash .github/workflows/ring-prepare.sh build "$RUNNER_TEMP/ring-prepare"
@@ -90,7 +105,7 @@ jobs:
         run: bash .github/workflows/ring-toolchains.sh
       - name: cross-language ring
         run: bash .github/workflows/language-pair.sh
-      # The message ECC ring (AZ-2689, EC-9): 8 writers x 8 readers over the position rows. It reuses the C# and C++ driver
+      # The message ECC ring (AZ-2689, EC-9): 9 writers x 9 readers over the position rows. It reuses the C# and C++ driver
       # builds the ring step above kept in PACKBIN_RING_WORK (under the workspace: the gcc container sees /tmp and the repo).
       - name: message ECC ring
         run: bash .github/workflows/ring-ecc.sh
@@ -412,9 +427,11 @@ jobs:
         run: bash .github/workflows/ring-wiring.test.sh
       - name: cross-language ring row wiring
         run: bash .github/workflows/ring-wiring-rows.test.sh
-      # Off the ring job's critical path since AZ-2626: both need only bash and python3 with the pinned PyYAML.
+      # Off the ring job's critical path since AZ-2626: these need only bash and python3 with the pinned PyYAML.
       - name: Swift ring wiring
         run: bash .github/workflows/ring-wiring-swift.test.sh
+      - name: Dart ring wiring
+        run: bash .github/workflows/ring-wiring-dart.test.sh
       - name: ring runner split
         run: bash .github/workflows/ring-lib.test.sh
       - name: ring preparation

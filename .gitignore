@@ -20,3 +20,4 @@ typescript/dist/
 # Dart
 .dart_tool/
 dart/pubspec.lock
+.github/workflows/drivers/handoff-dart/pubspec.lock

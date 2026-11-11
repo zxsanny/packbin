@@ -102,8 +102,8 @@ def violations(workflow, pin, compose) -> list:
     found, cache = cache_errors(name, steps, start_at)
     errors += found
     for s in steps:
-        if "if" in s and s is not cache:
-            errors.append(f"step '{to_s(first_set(s.get('name'), s.get('uses')))}' of job {name} has an if (only the cache step may)")
+        if "if" in s and s is not cache and not CACHE_USES.fullmatch(to_s(s.get("uses"))):
+            errors.append(f"step '{to_s(first_set(s.get('name'), s.get('uses')))}' of job {name} has an if (only a cache step may)")
     if at(WIRING) is not None:
         errors.append(f"job {name} runs ring-wiring-swift.test.sh, which belongs in scaffold (off the ring's critical path)")
     check = next((s for s in steps_of(jobs.get("scaffold")) if runs(s, WIRING)), None)

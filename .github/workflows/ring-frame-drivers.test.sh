@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The real frame drivers on malformed lines (AZ-3355): each of the 8 drivers must end with a non-zero exit and a message that
+# The real frame drivers on malformed lines (AZ-3355): each of the 9 drivers must end with a non-zero exit and a message that
 # names the line when a line has a bad hex digit, an odd-length hex token, a missing field or a number with other
 # characters, and must answer `open-skip` / `verify-skip` with `skip`. The Go driver also refuses a bad direction, tag
 # length or kind and a line over its scanner limit. The number ranges (AZ-3356, fixtures/frame/README.md): a number one
@@ -13,7 +13,7 @@
 # ring-frame.test.sh runs the ring with stand-in drivers;
 # this runs the drivers themselves, built and started as ring-frame.sh does (run_lang of ring-lib.sh).
 #
-# Environment: RING_FRAME_LANGS (default all eight), PACKBIN_RING_WORK (driver builds kept between runs), and the
+# Environment: RING_FRAME_LANGS (default all nine), PACKBIN_RING_WORK (driver builds kept between runs), and the
 # toolchain variables of language-pair.sh (PACKBIN_CXX_SYSROOT, CXX, PACKBIN_SWIFT_RING, RING_GO).
 set -euo pipefail
 
@@ -28,7 +28,9 @@ work="${PACKBIN_RING_WORK:-$io}"
 mkdir -p "$work"
 # shellcheck disable=SC2034 # read by run_lang, see above
 swift_ring="${PACKBIN_SWIFT_RING:-/tmp/packbin-ring-swift}"
-read -r -a langs <<< "${RING_FRAME_LANGS:-csharp typescript python rust cpp java go swift}"
+# shellcheck disable=SC2034 # read by run_lang, see above
+dart_ring="${PACKBIN_DART_RING:-/tmp/packbin-ring-dart}"
+read -r -a langs <<< "${RING_FRAME_LANGS:-csharp typescript python rust cpp java go swift dart}"
 limit_seconds="${RING_FRAME_DRIVER_LIMIT:-900}"
 
 if [ ! -f "$here/ring-lib.sh" ]; then
@@ -41,7 +43,7 @@ if [ -z "$definition" ]; then
   exit 1
 fi
 eval "$definition"
-export root drivers work swift_ring
+export root drivers work swift_ring dart_ring
 export -f run_lang
 
 key="1111111111111111111111111111111111111111111111111111111111111111"

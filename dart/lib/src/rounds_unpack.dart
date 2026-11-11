@@ -1,6 +1,5 @@
 import 'counted_unpack.dart';
 import 'errors.dart';
-import 'limits.dart';
 import 'node.dart';
 import 'round_shape.dart';
 import 'unpack.dart';
@@ -46,7 +45,7 @@ extension RoundUnpack on Reader {
       if (off == before && count != null) {
         // A times round that reads nothing would repeat up to the count for
         // no input.
-        error = unreadable(id, name);
+        error = emptyItem(id, name);
         return false;
       }
       rounds.add(one);
@@ -76,31 +75,27 @@ extension RoundUnpack on Reader {
   /// the round limit, or one that would take the slots past the slot limit, is
   /// refused.
   bool _charge(Node n, RoundShape shape, int index) {
+    if (index < limits.maxRounds && shape.width <= limits.maxSlots - slots) {
+      slots += shape.width;
+      return true;
+    }
     final (id, name) = shape.member(n);
     final label = name.isEmpty ? '${n.label} ${n.id}' : name;
-    if (index >= defaultMaxRounds) {
-      error = PackbinError(
-        ErrorKind.tooMany,
-        field: id,
-        name: name,
-        left: left,
-        reason:
-            '$label: round ${index + 1} is above the limit of $defaultMaxRounds rounds',
-      );
-      return false;
+    final String reason;
+    if (index >= limits.maxRounds) {
+      reason =
+          '$label: round ${index + 1} is above the limit of ${limits.maxRounds} rounds';
+    } else {
+      reason =
+          '$label: the rounds would hold ${slots + shape.width} slots, above the limit of ${limits.maxSlots} slots';
     }
-    if (shape.width > defaultMaxSlots - slots) {
-      error = PackbinError(
-        ErrorKind.tooMany,
-        field: id,
-        name: name,
-        left: left,
-        reason:
-            '$label: the rounds would hold ${slots + shape.width} slots, above the limit of $defaultMaxSlots slots',
-      );
-      return false;
-    }
-    slots += shape.width;
-    return true;
+    error = PackbinError(
+      ErrorKind.tooMany,
+      field: id,
+      name: name,
+      left: left,
+      reason: reason,
+    );
+    return false;
   }
 }

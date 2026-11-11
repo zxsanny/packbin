@@ -81,16 +81,26 @@ corrupt_readme pack_go_word_in_reason '/^## pack_aligned_round_row$/,/^## /{s/, 
 sed '/^## pack_aligned_round_row$/,/^## /s/^- Not run by: none.*/- Not run by: none (Google, Got and Gone are no package)./' "$here/README.md" >"$tmp/google_reason.md"
 bash "$check" "$here/cases.txt" "$tmp/google_reason.md" >/dev/null
 echo "google_reason: accepted"
-# The same for Swift, the eighth package: missing or doubled fails, and "SwiftUI" in a reason is not Swift.
-corrupt_readme pack_swift_in_neither '/^## pack_aligned_round_row$/,/^## /s/, Swift (map rows)\.$/./' \
+# The same for Swift, the eighth package (Dart, the ninth, follows it in Run by): missing or doubled fails, and "SwiftUI" in a reason is not Swift.
+corrupt_readme pack_swift_in_neither '/^## pack_aligned_round_row$/,/^## /s/, Swift (map rows),/,/' \
   "pack case 'pack_aligned_round_row': package Swift is named 0 times"
 corrupt_readme pack_swift_twice '/^## pack_aligned_round_row$/,/^## /s/^- Not run by: none.*/- Not run by: Swift (made up)./' \
   "pack case 'pack_aligned_round_row': package Swift is named 2 times"
-corrupt_readme pack_swift_word_in_reason '/^## pack_aligned_round_row$/,/^## /{s/, Swift (map rows)\.$/./;s/^- Not run by: none.*/- Not run by: none (SwiftUI, Swifts and Swift_ are no package)./;}' \
+corrupt_readme pack_swift_word_in_reason '/^## pack_aligned_round_row$/,/^## /{s/, Swift (map rows),/,/;s/^- Not run by: none.*/- Not run by: none (SwiftUI, Swifts and Swift_ are no package)./;}' \
   "pack case 'pack_aligned_round_row': package Swift is named 0 times"
 sed '/^## pack_aligned_round_row$/,/^## /s/^- Not run by: none.*/- Not run by: none (SwiftUI and Swifts are no package)./' "$here/README.md" >"$tmp/swiftui_reason.md"
 bash "$check" "$here/cases.txt" "$tmp/swiftui_reason.md" >/dev/null
 echo "swiftui_reason: accepted"
+# The same for Dart, the ninth package: missing or doubled fails, and "Dartmouth" in a reason is not Dart.
+corrupt_readme pack_dart_in_neither '/^## pack_aligned_round_row$/,/^## /s/, Dart (map rows)\.$/./' \
+  "pack case 'pack_aligned_round_row': package Dart is named 0 times"
+corrupt_readme pack_dart_twice '/^## pack_aligned_round_row$/,/^## /s/^- Not run by: none.*/- Not run by: Dart (made up)./' \
+  "pack case 'pack_aligned_round_row': package Dart is named 2 times"
+corrupt_readme pack_dart_word_in_reason '/^## pack_aligned_round_row$/,/^## /{s/, Dart (map rows)\.$/./;s/^- Not run by: none.*/- Not run by: none (Dartmouth, Darts and Dart_ are no package)./;}' \
+  "pack case 'pack_aligned_round_row': package Dart is named 0 times"
+sed '/^## pack_aligned_round_row$/,/^## /s/^- Not run by: none.*/- Not run by: none (Dartmouth and Darts are no package)./' "$here/README.md" >"$tmp/dartmouth_reason.md"
+bash "$check" "$here/cases.txt" "$tmp/dartmouth_reason.md" >/dev/null
+echo "dartmouth_reason: accepted"
 corrupt_readme pack_no_not_run_list '/^## pack_aligned_round_row$/,/^## /{/^- Not run by:/d;}' \
   "pack case 'pack_aligned_round_row': section has no '- Not run by:' line"
 corrupt_readme pack_readme_packet_differs 's/^- Packet `01 0301 0202 0303`/- Packet `01 0301 0202 0304`/' \

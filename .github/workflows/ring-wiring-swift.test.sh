@@ -165,7 +165,7 @@ swift_wiring_checks() {
   expect_rejected "the swift short packet refusal" SW_SCRIPT="$tmp/s6.sh"
   # Only the loop above the publish-position.sh line loses swift.
   awk '{ lines[NR] = $0 } /^for lang in /{ n = NR } index($0, "publish-position.sh") { at = n }
-    END { sub(/ swift go; do$/, " go; do", lines[at]); for (i = 1; i <= NR; i++) print lines[i] }' "$script" > "$tmp/s7.sh"
+    END { sub(/ swift go dart; do$/, " go dart; do", lines[at]); for (i = 1; i <= NR; i++) print lines[i] }' "$script" > "$tmp/s7.sh"
   expect_rejected "swift in the publish-position loop" SW_SCRIPT="$tmp/s7.sh"
   for kind in $swift_kinds; do
     mutate "$driver/Sources/handoff-swift/Kinds.swift" "$tmp/k-$kind.swift" "s/^    case \"$kind\":$/    case \"x$kind\":/"
@@ -200,7 +200,7 @@ swift_wiring_checks() {
   expect_rejected "the swift suite image bumped alone" SW_COMPOSE="$tmp/compose.yml"
   mutate "$here/test.yml" "$tmp/w3.yml" '/^        run: bash \.github\/workflows\/ring-prepare\.sh start /d'
   expect_rejected "the Swift driver build start line" SW_WORKFLOW="$tmp/w3.yml"
-  mutate "$here/test.yml" "$tmp/w11.yml" '/ring-prepare\.sh start /s/ "swift:$RING_SWIFT"$//'
+  mutate "$here/test.yml" "$tmp/w11.yml" '/ring-prepare\.sh start /s/ "swift:$RING_SWIFT"\( "dart:$RING_DART"\)\{0,1\}$/\1/'
   expect_rejected "the swift image left out of the start line" SW_WORKFLOW="$tmp/w11.yml"
   mutate "$here/test.yml" "$tmp/w7.yml" '/^          bash \.github\/workflows\/ring-prepare\.sh wait /d'
   expect_rejected "the wait for the Swift driver build" SW_WORKFLOW="$tmp/w7.yml"

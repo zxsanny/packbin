@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'build.dart';
 import 'collections_unpack.dart';
 import 'errors.dart';
+import 'limits.dart';
 import 'counted_unpack.dart';
 import 'node.dart';
 import 'rounds_unpack.dart';
@@ -11,7 +12,7 @@ import 'rounds_unpack.dart';
 /// first and records a short-packet error, so no input reaches an index out
 /// of range and nothing is thrown.
 final class Reader {
-  Reader(Plan plan, this.buf)
+  Reader(Plan plan, this.buf, this.limits)
     : data = ByteData.sublistView(buf),
       end = buf.length,
       typed = plan.typed,
@@ -24,6 +25,9 @@ final class Reader {
   final ByteData data;
   final int end;
   final bool typed;
+
+  /// The round and slot limits of the scheme.
+  final Limits limits;
 
   /// What the scope has read so far for a `when` or a count to read.
   final List<Object?> seen;
@@ -176,8 +180,8 @@ final class Reader {
 
 /// The row of the packet [buf], whose first byte is already matched to the
 /// scheme of [plan], or the error that refuses it.
-(Object?, PackbinError?) readRow(Plan plan, Uint8List buf) {
-  final reader = Reader(plan, buf);
+(Object?, PackbinError?) readRow(Plan plan, Uint8List buf, Limits limits) {
+  final reader = Reader(plan, buf, limits);
   final create = plan.create;
   final Object row = create == null ? <String, Object?>{} : create();
   if (!reader.fields(plan.fields, row)) return (null, reader.error);

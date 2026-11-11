@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Prepares the drivers of the cross-language ring (language-pair.sh) off the critical path of the ring job (AZ-2626):
 #   ring-prepare.sh start <state dir> <image>...
-#                                      right after checkout: pulls the images (the ring job: gcc:$RING_GCC and
-#                                      swift:$RING_SWIFT) at the same time and builds the Swift drivers (ring-swift.sh)
+#                                      right after checkout: pulls the images (the ring job: gcc:$RING_GCC,
+#                                      swift:$RING_SWIFT and dart:$RING_DART) at the same time and builds the Swift drivers (ring-swift.sh)
 #                                      once the swift image is in, all in the background; returns at once, so the setup
 #                                      actions run meanwhile.
-#   ring-prepare.sh build <state dir>  after the setup actions: npm ci (typescript), the Rust driver (cargo) and the Go
-#                                      driver (ring-go.sh) at the same time; names a failed one, but leaves the verdict
+#   ring-prepare.sh build <state dir>  after the setup actions: npm ci (typescript), the Rust driver (cargo), the Go
+#                                      driver (ring-go.sh) and the Dart drivers (ring-dart.sh) at the same time; names a failed one, but leaves the verdict
 #                                      to wait, so a background failure is reported in the same run.
 #   ring-prepare.sh wait <state dir>   waits for the background builds (at most PACKBIN_RING_WAIT_SECONDS, default 900:
 #                                      below the job's 30-minute timeout), fails naming each build of start or build
@@ -14,13 +14,13 @@
 #                                      build; on GitHub Actions also as ONE notice (annotations need no token to read).
 # Run build, then wait, last in the same step (ring-wiring-swift.test.sh holds the order in test.yml).
 # Each build keeps <name>.log, <name>.s (seconds) and <name>.rc (exit status, written last) in the state dir. The
-# drivers go where ring-lib.sh looks (PACKBIN_GO_HANDOFF, PACKBIN_SWIFT_RING, the same defaults), and it rebuilds
+# drivers go where ring-lib.sh looks (PACKBIN_GO_HANDOFF, PACKBIN_SWIFT_RING, PACKBIN_DART_RING, the same defaults), and it rebuilds
 # one only when a source is newer, so the ring reuses these builds.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(cd "$here/../.." && pwd)"
-foreground="npm cargo go"
+foreground="npm cargo go dart"
 usage="usage: ring-prepare.sh start <state dir> <image>... | build <state dir> | wait <state dir>"
 
 if [ $# -lt 2 ] || { [ "$1" = start ] && [ $# -lt 3 ]; } || { [ "$1" != start ] && [ $# -ne 2 ]; }; then
@@ -116,6 +116,7 @@ case "$1" in
     task npm npm_ci &
     task cargo cargo build --quiet --manifest-path "$here/drivers/handoff-rust/Cargo.toml" &
     task go bash "$here/ring-go.sh" "${PACKBIN_GO_HANDOFF:-/tmp/packbin-handoff-go}" &
+    task dart bash "$here/ring-dart.sh" "${PACKBIN_DART_RING:-/tmp/packbin-ring-dart}" &
     wait
     # shellcheck disable=SC2086 # the names are single words
     if failures $foreground; then echo "ring-prepare: built $foreground"; else echo "ring-prepare: wait fails the step"; fi
@@ -142,16 +143,18 @@ case "$1" in
       echo "$line" >&2
       lines="${lines:+$lines%0A}$line"
     done
-    # The Swift driver build's cache state (ring-swift.sh) when CI keeps its output (AZ-2627): no such line otherwise.
-    if [ -f "$dir/swift-drivers.log" ]; then
+    # The Swift and Dart driver builds' cache state (ring-swift.sh, ring-dart.sh) when CI keeps their output (AZ-2627):
+    # no such line otherwise.
+    for log in swift-drivers dart; do
+      [ -f "$dir/$log.log" ] || continue
       while IFS= read -r line; do
         [ -n "$line" ] || continue
         echo "$line" >&2
         # Escaped as a workflow-command message (% first, then CR): the line comes from a log, not from this script.
         line="${line//"%"/%25}"
         lines="${lines:+$lines%0A}${line//$'\r'/%0D}"
-      done <<< "$(grep '^ring-swift: cache ' "$dir/swift-drivers.log" || true)"
-    fi
+      done <<< "$(grep '^ring-\(swift\|dart\): cache ' "$dir/$log.log" || true)"
+    done
     line="ring-prepare: the wait took $waited s (limit $limit s), $(( $(date +%s) - $(cat "$dir/started") )) s since start"
     echo "$line" >&2
     if [ "${GITHUB_ACTIONS:-}" = true ]; then

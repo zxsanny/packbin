@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# The frame ring (AZ-3338): every language seals every row and every language opens what every language sealed, 8 writers
-# × 8 readers = 64 pairs; then every language computes every MAC and every language verifies every other language's tag.
+# The frame ring (AZ-3338): every language seals every row and every language opens what every language sealed, 9 writers
+# × 9 readers = 81 pairs; then every language computes every MAC and every language verifies every other language's tag.
 # The rows are the seal, mac, open and verify rows of fixtures/frame/ring-cases.txt (the last two are tampered input that every
 # language must refuse alike); scripts/frame/ring_frame.py checks every result
 # against the reference codec (scripts/frame/framefmt.py). Exit 0 only when no row is mismatched.
@@ -12,8 +12,8 @@
 #
 # Environment: RING_FRAME_RUN (a command that runs a driver in place of run_lang: `$RING_FRAME_RUN <lang> <args>`; the
 # self-test of this script), PACKBIN_RING_WORK (the driver builds language-pair.sh kept), RING_FRAME_LANGS (the
-# languages, default all eight), RING_FRAME_CASES (another cases file), RING_FRAME_SHOWN (mismatch lines shown per pair or reader, default 5). The rest is language-pair.sh's:
-# PACKBIN_CXX_SYSROOT, CXX, PACKBIN_SWIFT_RING, RING_GO.
+# languages, default all nine), RING_FRAME_CASES (another cases file), RING_FRAME_SHOWN (mismatch lines shown per pair or reader, default 5). The rest is language-pair.sh's:
+# PACKBIN_CXX_SYSROOT, CXX, PACKBIN_SWIFT_RING, PACKBIN_DART_RING, RING_GO.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -26,7 +26,9 @@ work="${PACKBIN_RING_WORK:-$io}"
 mkdir -p "$work"
 # shellcheck disable=SC2034 # read by run_lang, see above
 swift_ring="${PACKBIN_SWIFT_RING:-/tmp/packbin-ring-swift}"
-read -r -a langs <<< "${RING_FRAME_LANGS:-csharp typescript python rust cpp java go swift}"
+# shellcheck disable=SC2034 # read by run_lang, see above
+dart_ring="${PACKBIN_DART_RING:-/tmp/packbin-ring-dart}"
+read -r -a langs <<< "${RING_FRAME_LANGS:-csharp typescript python rust cpp java go swift dart}"
 checker="$root/scripts/frame/ring_frame.py"
 
 if [ -n "${RING_FRAME_RUN:-}" ]; then

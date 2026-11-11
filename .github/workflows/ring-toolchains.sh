@@ -28,6 +28,8 @@ check java "${RING_JDK:?}" "$(javac --version | awk '{ print $2 }')"
 check go "${RING_GO:?}" "$(go version | awk '{ print $3 }' | sed 's/^go//')"
 # The Swift that builds the Swift drivers: the runner's, else the swift:$RING_SWIFT image (ring-swift.sh).
 check swift "${RING_SWIFT:?}" "$(bash "$(dirname "${BASH_SOURCE[0]}")/ring-swift.sh" --version)"
+# The Dart that builds the Dart drivers: the runner's, else the dart:$RING_DART image (ring-dart.sh).
+check dart "${RING_DART:?}" "$(bash "$(dirname "${BASH_SOURCE[0]}")/ring-dart.sh" --version)"
 
 # The compiler is the one the ring uses: CXX, which is ring-cxx.sh (g++ from the gcc image) in the
 # ring job. Clang also defines __GNUC__ (as 4), so name the compiler family first.

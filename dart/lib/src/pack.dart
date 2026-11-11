@@ -5,13 +5,14 @@ import 'collections_pack.dart';
 import 'counted_pack.dart';
 import 'errors.dart';
 import 'group_rows.dart';
+import 'limits.dart';
 import 'node.dart';
 import 'rounds_pack.dart';
 import 'text/text.dart';
 import 'writer.dart';
 
 /// The packet of [row]: the type byte, then the fields in order.
-Uint8List packRow(Plan plan, int typeNumber, Object row) {
+Uint8List packRow(Plan plan, int typeNumber, Object row, Limits limits) {
   if (!plan.isRow(row)) {
     final first = plan.fields.isEmpty ? null : plan.fields.first;
     throw packFail(
@@ -24,7 +25,7 @@ Uint8List packRow(Plan plan, int typeNumber, Object row) {
   if (groups != null) {
     checkGroupRows(groups, row as Map<String, Object?>);
   }
-  final packer = Packer(plan, typeNumber, row);
+  final packer = Packer(plan, typeNumber, row, limits);
   packer.fields(plan.fields, row);
   return packer.out.take();
 }
@@ -32,8 +33,8 @@ Uint8List packRow(Plan plan, int typeNumber, Object row) {
 /// One pack call: the bytes so far, what the scope has written for a `when`
 /// to test, and the split flag bytes written (where each sits, its bits).
 final class Packer {
-  Packer(Plan plan, int typeNumber, this.placeRow)
-    : out = Writer(typeNumber),
+  Packer(Plan plan, int typeNumber, this.placeRow, this.limits)
+    : out = Writer(typeNumber, limits.maxBytes),
       typed = plan.typed,
       seen = plan.seenCount == 0
           ? const []
@@ -41,6 +42,9 @@ final class Packer {
       _split = plan.splitCount == 0 ? null : Int32List(plan.splitCount * 2);
 
   final Writer out;
+
+  /// The round, slot and byte limits of the scheme.
+  final Limits limits;
 
   /// The row of the place being packed: the row the groups of a map scheme
   /// are found from. The split flag bytes of the place read their bits there.
@@ -84,47 +88,57 @@ final class Packer {
   bool holds(Node n) => seen[n.refSlot] == n.condition!.value;
 
   void fields(List<Node> nodes, Object row) {
-    for (var i = 0; i < nodes.length; i++) {
-      final n = nodes[i];
-      switch (n.kind) {
-        case NodeKind.integer:
-        case NodeKind.float:
-        case NodeKind.bytes:
-        case NodeKind.utf8:
-          final v = value(n, row);
-          if (v == null) throw packFail(n.id, n.name, 'missing ${n.name}');
-          write(n, v);
-        case NodeKind.list:
-        case NodeKind.dict:
-        case NodeKind.nested:
-          packCollection(n, row);
-        case NodeKind.boolean:
-          // Reached only through a set flag bit: the bit is the value.
-          if (n.slot >= 0) seen[n.slot] = true;
-        case NodeKind.flags:
-          _flags(n, row);
-        case NodeKind.flagByte:
-          _splitByte(n, row);
-        case NodeKind.flagBit:
-          _splitBit(n, row);
-        case NodeKind.when:
-          if (holds(n)) fields(n.fields, row);
-        case NodeKind.group:
-          // A mark is reached only through a set flag bit: the bit is the value.
-          if (n.fields.isNotEmpty) fields(n.fields, groupRow(n, row));
-        case NodeKind.sized:
-        case NodeKind.u2:
-        case NodeKind.bits:
-        case NodeKind.packed:
-          packCounted(n, row);
-        case NodeKind.repeat:
-          packRepeat(n, row);
-        case NodeKind.times:
-          packTimes(n, row);
-        case NodeKind.slot:
-          // Reached only inside a u2, which writes its slots itself.
-          break;
+    var i = 0;
+    try {
+      for (; i < nodes.length; i++) {
+        final n = nodes[i];
+        switch (n.kind) {
+          case NodeKind.integer:
+          case NodeKind.float:
+          case NodeKind.bytes:
+          case NodeKind.utf8:
+            final v = value(n, row);
+            if (v == null) throw packFail(n.id, n.name, 'missing ${n.name}');
+            write(n, v);
+          case NodeKind.list:
+          case NodeKind.dict:
+          case NodeKind.nested:
+            packCollection(n, row);
+          case NodeKind.boolean:
+            // Reached only through a set flag bit: the bit is the value.
+            if (n.slot >= 0) seen[n.slot] = true;
+          case NodeKind.flags:
+            _flags(n, row);
+          case NodeKind.flagByte:
+            _splitByte(n, row);
+          case NodeKind.flagBit:
+            _splitBit(n, row);
+          case NodeKind.when:
+            if (holds(n)) fields(n.fields, row);
+          case NodeKind.group:
+            // A mark is reached only through a set flag bit: the bit is the value.
+            if (n.fields.isNotEmpty) fields(n.fields, groupRow(n, row));
+          case NodeKind.sized:
+          case NodeKind.u2:
+          case NodeKind.bits:
+          case NodeKind.packed:
+            packCounted(n, row);
+          case NodeKind.repeat:
+            packRepeat(n, row);
+          case NodeKind.times:
+            packTimes(n, row);
+          case NodeKind.slot:
+            // Reached only inside a u2, which writes its slots itself.
+            break;
+        }
       }
+    } on ByteBudgetExceeded catch (e) {
+      final n = nodes[i];
+      throw packFail(
+        n.errorId,
+        n.declaredName,
+        '${n.declaredName}: the packet would be ${e.need} bytes, above the limit of ${e.limit} bytes',
+      );
     }
   }
 

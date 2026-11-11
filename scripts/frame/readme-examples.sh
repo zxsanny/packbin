@@ -15,10 +15,16 @@ sources = {
     "Go": ("go/frame_readme_test.go", ""),
     "Python": ("python/tests/test_frame_readme_example.py", ""),
     "TypeScript": ("typescript/tests/frame-readme-example.test.ts", ""),
+    "Dart": ("dart/test/readme/frame_readme_test.dart", ""),
 }
 failed = 0
 for lang, (path, tail) in sources.items():
-    text = open(f"{root}/{path}", encoding="utf-8").read()
+    try:
+        text = open(f"{root}/{path}", encoding="utf-8").read()
+    except FileNotFoundError:
+        print(f"FAIL {lang}: {path} does not exist")
+        failed += 1
+        continue
     m = re.search(r"^[ \t]*(?://|#) README-BEGIN\n(.*?)^[ \t]*(?://|#) README-END\n", text, re.S | re.M)
     if not m:
         print(f"FAIL {lang}: no README-BEGIN/END markers in {path}")

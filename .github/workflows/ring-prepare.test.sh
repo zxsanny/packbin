@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Test of ring-prepare.sh (AZ-2626 AC-3 to AC-5) in a temp tree with stand-in docker, npm, cargo, ring-go.sh and
-# ring-swift.sh: start returns while the pulls and the Swift build go on, the second pull and the Swift build follow
-# each other, build runs its three builds at the same time, wait names a failed, skipped or hung build with its log,
+# Test of ring-prepare.sh (AZ-2626 AC-3 to AC-5) in a temp tree with stand-in docker, npm, cargo, ring-go.sh,
+# ring-dart.sh and ring-swift.sh: start returns while the pulls and the Swift build go on, the second pull and the Swift build follow
+# each other, build runs its four builds at the same time, wait names a failed, skipped or hung build with its log,
 # and prints one timing notice on GitHub Actions only. The driver paths are the ones ring-lib.sh (the runner of language-pair.sh) reads. Mutants of
 # the script (no background, serial builds, failures ignored) must each be caught.
 # shellcheck disable=SC2016 # the sed expressions and the mutant checks are single-quoted on purpose
@@ -20,7 +20,7 @@ fail() {
 now_ms() { perl -MTime::HiRes=time -e 'printf "%d\n", time * 1000'; }
 
 # Both defaults must be the paths ring-lib.sh runs the drivers from, or the ring builds them again.
-for default in 'PACKBIN_SWIFT_RING:-/tmp/packbin-ring-swift' 'PACKBIN_GO_HANDOFF:-/tmp/packbin-handoff-go'; do
+for default in 'PACKBIN_SWIFT_RING:-/tmp/packbin-ring-swift' 'PACKBIN_GO_HANDOFF:-/tmp/packbin-handoff-go' 'PACKBIN_DART_RING:-/tmp/packbin-ring-dart'; do
   grep -qF "$default" "$here/ring-lib.sh" || fail "ring-lib.sh does not read $default"
   grep -qF "$default" "$here/ring-prepare.sh" || fail "ring-prepare.sh does not build to $default"
 done
@@ -40,6 +40,7 @@ if [ "${FAKE_HANG:-}" = "$name" ]; then
 fi
 sleep "${FAKE_SLEEP:-0}"
 if [ "$name" = swift-drivers ] && [ -n "${FAKE_SAY:-}" ]; then printf '%s\n' "$FAKE_SAY"; fi
+if [ "$name" = dart ] && [ -n "${FAKE_SAY_DART:-}" ]; then printf '%s\n' "$FAKE_SAY_DART"; fi
 echo "end $name" >> "$FAKE_LOG"
 if [ "${FAKE_FAIL:-}" = "$name" ]; then
   echo "stand-in $name failed on purpose"
@@ -57,6 +58,7 @@ tree() {
   cp "${2:-$here/ring-prepare.sh}" "$t/.github/workflows/ring-prepare.sh"
   stand_in "$t/.github/workflows/ring-swift.sh" swift-drivers
   stand_in "$t/.github/workflows/ring-go.sh" go
+  stand_in "$t/.github/workflows/ring-dart.sh" dart
   stand_in "$t/bin/npm" npm
   stand_in "$t/bin/cargo" cargo
   # shellcheck disable=SC2016 # the stand-in names a pull by its image
@@ -67,10 +69,10 @@ tree() {
 # start_early is yes when start returned before the swift pull finished.
 run_all() {
   local t="$1" s="$1/.github/workflows/ring-prepare.sh" state="$1/state" ms
-  export FAKE_LOG="$t/calls" FAKE_STOP="$tmp/stop" PACKBIN_SWIFT_RING="$t/swift-out" PACKBIN_GO_HANDOFF="$t/go-out"
+  export FAKE_LOG="$t/calls" FAKE_STOP="$tmp/stop" PACKBIN_SWIFT_RING="$t/swift-out" PACKBIN_GO_HANDOFF="$t/go-out" PACKBIN_DART_RING="$t/dart-out"
   ms=$(now_ms)
   start_rc=0
-  PATH="$t/bin:$PATH" bash "$s" start "$state" gcc:16 swift:6.3.3 > "$t/out" 2>&1 < /dev/null || start_rc=$?
+  PATH="$t/bin:$PATH" bash "$s" start "$state" gcc:16 swift:6.3.3 dart:3.13.7 > "$t/out" 2>&1 < /dev/null || start_rc=$?
   start_ms=$(( $(now_ms) - ms ))
   # Whether start returned while the swift pull still ran.
   start_early=yes
@@ -85,28 +87,28 @@ run_all() {
 
 has() { grep -qF -- "$2" "$1/out" || fail "$3: the output has no '$2'"; }
 
-# overlap <tree>: npm, cargo and the Go build all began before the first of them ended.
+# overlap <tree>: npm, cargo, the Go build and the Dart build all began before the first of them ended.
 overlap() {
   local last_begin first_end
-  last_begin="$(grep -nE '^(npm|cargo|ring-go\.sh) ' "$1/calls" | tail -n 1 | cut -d: -f1)"
-  first_end="$(grep -nE '^end (npm|cargo|go)$' "$1/calls" | head -n 1 | cut -d: -f1)"
+  last_begin="$(grep -nE '^(npm|cargo|ring-go\.sh|ring-dart\.sh) ' "$1/calls" | tail -n 1 | cut -d: -f1)"
+  first_end="$(grep -nE '^end (npm|cargo|go|dart)$' "$1/calls" | head -n 1 | cut -d: -f1)"
   [ -n "$last_begin" ] && [ -n "$first_end" ] && [ "$last_begin" -lt "$first_end" ]
 }
 
-# 1. Success, each stand-in 2 s: start returns at once, the three builds overlap, every build is timed.
+# 1. Success, each stand-in 2 s: start returns at once, the four builds overlap, every build is timed.
 t="$tmp/ok"
 tree "$t"
 FAKE_SLEEP=2 GITHUB_ACTIONS=true run_all "$t"
 [ "$start_rc$build_rc$wait_rc" = 000 ] || fail "success: exit statuses $start_rc $build_rc $wait_rc ($(cat "$t/out"))"
 [ "$start_early" = yes ] || fail "success: start returned after the swift pull finished ($start_ms ms)"
-overlap "$t" || fail "success: a build ended before all three began ($(tr '\n' ';' < "$t/calls"))"
-for name in pull-gcc pull-swift swift-drivers npm cargo go; do has "$t" "ring-prepare: $name took " success; done
+overlap "$t" || fail "success: a build ended before all four began ($(tr '\n' ';' < "$t/calls"))"
+for name in pull-gcc pull-swift pull-dart swift-drivers npm cargo go dart; do has "$t" "ring-prepare: $name took " success; done
 [ "$(grep -c '^::notice title=ring preparation timing::' "$t/out")" = 1 ] || fail "success: not exactly one notice"
 grep -q '^::notice .*swift-drivers took [0-9]* s%0A.*%0Aring-prepare: the wait took' "$t/out" \
   || fail "success: the notice does not carry the build lines and the wait line"
-for call in "docker pull --quiet gcc:16 @" "docker pull --quiet swift:6.3.3 @" "ring-swift.sh $t/swift-out @" \
+for call in "docker pull --quiet gcc:16 @" "docker pull --quiet swift:6.3.3 @" "docker pull --quiet dart:3.13.7 @" "ring-swift.sh $t/swift-out @" \
   "npm ci @ $t/typescript" "cargo build --quiet --manifest-path $t/.github/workflows/drivers/handoff-rust/Cargo.toml @" \
-  "ring-go.sh $t/go-out @"; do
+  "ring-go.sh $t/go-out @" "ring-dart.sh $t/dart-out @"; do
   grep -qF -- "$call" "$t/calls" || fail "success: no call '$call' ($(tr '\n' ';' < "$t/calls"))"
 done
 [ "$(grep -n '^end pull-swift$' "$t/calls" | cut -d: -f1)" -lt "$(grep -n '^ring-swift.sh ' "$t/calls" | cut -d: -f1)" ] \
@@ -127,6 +129,15 @@ grep -q '^::notice .*%0Aring-swift: cache hit%0A.*%0Aring-prepare: the wait took
 if grep -q '^::notice .*Compiling' "$t/out"; then fail "cache lines: a compile line went into the notice"; fi
 grep -q '^::notice .*%0Aring-swift: cache x%2541%0A' "$t/out" || fail "cache lines: a % of a log line is not escaped in the notice"
 
+# 1c. The Dart build's cache line goes into the notice too (ring-dart.sh says it when CI keeps its output).
+t="$tmp/cache-dart"
+tree "$t"
+FAKE_SAY_DART=$'ring-dart: cache miss\nResolving dependencies' GITHUB_ACTIONS=true run_all "$t"
+[ "$start_rc$build_rc$wait_rc" = 000 ] || fail "dart cache line: exit statuses $start_rc $build_rc $wait_rc ($(cat "$t/out"))"
+grep -q '^::notice .*%0Aring-dart: cache miss%0Aring-prepare: the wait took' "$t/out" \
+  || fail "dart cache line: the notice does not carry the Dart build's cache line: $(grep '::notice' "$t/out")"
+if grep -q '^::notice .*Resolving' "$t/out"; then fail "dart cache line: a pub line went into the notice"; fi
+
 # 2. No notice outside GitHub Actions.
 t="$tmp/local"
 tree "$t"
@@ -137,7 +148,8 @@ if grep -q '::notice' "$t/out"; then fail "local: a notice annotation outside Gi
 for case in "swift-drivers:wait:ring-prepare: swift-drivers failed (exit 3)" \
   "pull-gcc:wait:ring-prepare: pull-gcc failed (exit 3)" \
   "pull-swift:wait:ring-prepare: swift-drivers did not run" \
-  "cargo:wait:ring-prepare: cargo failed (exit 3)"; do
+  "cargo:wait:ring-prepare: cargo failed (exit 3)" \
+  "dart:wait:ring-prepare: dart failed (exit 3)"; do
   name="${case%%:*}" rest="${case#*:}"
   step="${rest%%:*}" message="${rest#*:}"
   t="$tmp/fail-$name"
@@ -149,7 +161,7 @@ for case in "swift-drivers:wait:ring-prepare: swift-drivers failed (exit 3)" \
   has "$t" "stand-in $name failed on purpose" "$name fails (its log)"
 done
 grep -q 'ring-swift.sh' "$tmp/fail-pull-swift/calls" && fail "pull-swift fails: the Swift build still ran"
-for name in npm go; do
+for name in npm go dart; do
   [ "$(cat "$tmp/fail-cargo/state/$name.rc")" = 0 ] || fail "cargo fails: $name did not finish"
 done
 
@@ -201,7 +213,7 @@ mutant "start in the foreground" 's/^    ) < \/dev\/null > "\$dir\/start.log" 2>
   '[ "$start_early" = no ]'
 mutant "builds one after the other" '/^    task [cgn][a-z]* /s/ &$//' '! overlap "$t"'
 FAKE_SAY='ring-swift: cache hit' GITHUB_ACTIONS=true mutant "wait drops the Swift build's cache line" \
-  's/grep .\^ring-swift: cache . /grep "^none" /' '! grep -q "^::notice .*ring-swift: cache hit" "$t/out"'
+  's/grep .\^ring-.*: cache ./grep "^none"/' '! grep -q "^::notice .*ring-swift: cache hit" "$t/out"'
 MUTANT_FAIL=swift-drivers mutant "wait ignores a failed build" 's/failures \$background \$foreground || rc=1/failures $background $foreground || true/' \
   '[ "$wait_rc" = 0 ]'
 MUTANT_FAIL=cargo mutant "wait ignores a failed build of build" 's/failures \$background \$foreground || rc=1/failures $background || rc=1/' \

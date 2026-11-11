@@ -329,6 +329,22 @@ handoff csharp swift listflags "$listflags_hex"
 handoff swift go listflags "$listflags_hex"
 handoff go swift listflags "$listflags_hex"
 
+# Dart (AZ-4146) joins every kind both ways with each member of that kind's ring (the members above, Go and Swift
+# included; C# only produces the two round kinds, so it has no line with dart as the producer there).
+# ring-wiring-dart.test.sh runs this script against a recording runner and checks every one of these pairs.
+for kind in user nested boolflag booltrue bitwhen roundflags roundwhen listgroup dictgroup listflags; do
+  case "$kind" in
+    roundflags | roundwhen) members="csharp typescript rust java cpp go swift" ;;
+    listgroup | dictgroup | listflags) members="typescript python java csharp go swift" ;;
+    *) members="csharp typescript python rust java cpp go swift" ;;
+  esac
+  hex="${kind}_hex"
+  for member in $members; do
+    case "$kind$member" in roundflagscsharp | roundwhencsharp) ;; *) handoff dart "$member" "$kind" "${!hex}" ;; esac
+    handoff "$member" dart "$kind" "${!hex}"
+  done
+done
+
 # Each participant refuses a packet whose last element is short, and hands no row to its handler.
 for lang in typescript python java csharp go; do
   for row in "listgroup $listgroup_short_hex" "dictgroup $dictgroup_short_hex" "listflags $listflags_short_hex"; do
@@ -348,7 +364,16 @@ for kind in listgroup dictgroup listflags; do
   fi
 done
 
-for lang in csharp typescript python rust cpp java swift go; do
+# Dart refuses them too; its loop is apart for the same reason as Swift's.
+for kind in listgroup dictgroup listflags; do
+  short="${kind}_short_hex"
+  if ! run_lang dart "unpack-$kind-short" "${!short}"; then
+    echo "dart unpack-$kind-short failed: it read a short element or the driver crashed (see the output above)" >&2
+    exit 1
+  fi
+done
+
+for lang in csharp typescript python rust cpp java swift go dart; do
   got="$(bash "$root/.github/workflows/publish-position.sh" "$lang" | tr -d '[:space:]')"
   if [ "$got" != "$position_hex" ]; then
     echo "$lang position mismatch" >&2

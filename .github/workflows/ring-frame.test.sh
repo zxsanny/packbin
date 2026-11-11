@@ -156,17 +156,20 @@ run() {
   fi
 }
 
-run honest 0 "ring-frame: 64 pairs, "
+run honest 0 "ring-frame: 81 pairs, "
 if ! grep -q "mismatched: 0$" "$tmp/out.txt"; then
   echo "FAIL honest: the total does not end in \"mismatched: 0\""
   failures=$((failures + 1))
 fi
 refusal_rows=$(grep -cE '^(open|verify|refuse-seal|refuse-open|refuse-mac) ' "$root/fixtures/frame/ring-cases.txt")
-if [ "$(grep -c "^refusals [a-z]*: $refusal_rows rows, 0 mismatched$" "$tmp/out.txt")" -ne 8 ] || [ "$refusal_rows" -lt 2 ]; then
-  echo "FAIL honest: not eight lines \"refusals <lang>: $refusal_rows rows, 0 mismatched\""
+if [ "$(grep -c "^refusals [a-z]*: $refusal_rows rows, 0 mismatched$" "$tmp/out.txt")" -ne 9 ] || [ "$refusal_rows" -lt 2 ]; then
+  echo "FAIL honest: not nine lines \"refusals <lang>: $refusal_rows rows, 0 mismatched\""
   failures=$((failures + 1))
 fi
 run seal-lies 1 "seal gave" FAKE_LIE=java:seal
+# AZ-4146: a Dart driver that lies, as a writer (a wrong seal body) and as a reader (it opens a tampered body).
+run dart-writer-lies 1 "dart: E1 seal gave" FAKE_LIE=dart:seal
+run dart-reader-lies 1 "dart: E1.ct open gave 00, wanted TagMismatch" FAKE_LIE=dart:open-permissive
 run open-lies 1 "open gave" FAKE_LIE=go:open
 run mac-lies 1 "mac gave" FAKE_LIE=rust:mac
 run verify-lies 1 "verify gave" FAKE_LIE=swift:verify
@@ -240,7 +243,7 @@ display() {
     || [ "$(printf '%s\n' "$lines" | grep -c '^    \.\.\. and ')" -ne "$([ -n "$more" ] && echo 1 || echo 0)" ] \
     || { [ -n "$more" ] && [ "$(printf '%s\n' "$lines" | tail -n 1)" != "$more" ]; } \
     || ! grep -q "^$header.*, $count mismatched$" "$tmp/out.txt" \
-    || ! grep -qxF "ring-frame: 64 pairs, mismatched: $count" "$tmp/out.txt"; then
+    || ! grep -qxF "ring-frame: 81 pairs, mismatched: $count" "$tmp/out.txt"; then
     echo "FAIL $name: wanted $count mismatched, 5 lines under \"$header\"${more:+ and \"$more\"}, the same total:"
     grep -F -e "$header" -e "mismatched: " "$tmp/out.txt" | grep -v ' 0 mismatched$' | cut -c1-200
     printf '%s\n' "$lines" | cut -c1-200

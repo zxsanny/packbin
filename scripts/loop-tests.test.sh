@@ -85,11 +85,11 @@ change swift/Tests/t.swift; expect "swift test" "swift"; stamp_all
 change swift/Sources/a.swift; expect "swift source" "swift ring"; stamp_all
 change Package.swift; expect "swift manifest" "swift scaffold ring publish-gate"; stamp_all
 
-# 8c. Dart (AZ-4145): a test file runs the Dart suite only; the package manifest also the scaffold, which checks it exists;
+# 8c. Dart (AZ-4145, AZ-4146): a test file runs the Dart suite only; the package manifest also the scaffold, which checks it exists, and the ring (its cache key);
 # the suite script that holds the Dart steps runs the Dart suite and the scaffold (every file of .github is a scaffold file)
 change dart/test/core/t_test.dart; expect "dart test" "dart"; stamp_all
-change dart/pubspec.yaml; expect "dart manifest" "dart scaffold"; stamp_all
-change dart/lib/a.dart; expect "dart source" "dart"; stamp_all
+change dart/pubspec.yaml; expect "dart manifest" "dart scaffold ring"; stamp_all
+change dart/lib/a.dart; expect "dart source" "dart ring"; stamp_all
 mkdir -p "$repo/.github/workflows"; echo "# steps" > "$repo/.github/workflows/run-suite-dart.sh"
 change .github/workflows/run-suite-dart.sh; expect "dart suite steps" "dart scaffold"; stamp_all
 
