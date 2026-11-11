@@ -9,7 +9,7 @@ status: in_progress
 sub_step:
   phase: 1
   name: preconditions
-  detail: "loop 105: preconditions PASS (tag free, 4e9110a green, no registry has 0.5.0); the tag push was denied by the permission classifier: waiting for the owner to run the tag commands or allow them"
+  detail: "loop 105: v0.5.0 pushed by the owner (4e9110a), publish run 43041230549 FAILED at Maven Central (signatures: the public key AC576082216B95B9 was not found on a keyserver); npm, PyPI, crates.io and the vcpkg branch published, NuGet uploaded (index lag); Java, the Go tag and the Swift check did not run; waiting for the owner to upload the key, then re-run the failed job"
 retry_count: 0
 tracker: jira
 loop: 105
