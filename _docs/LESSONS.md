@@ -9,12 +9,6 @@ Downstream skills consume this file:
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
 
-- [2026-10-31] [tooling] simavr 1.6 prints nothing for its console register and its `avr_mcu_section.h` does not compile as C++: report over the UART (`UDR0`), strip the colour codes, and treat each line end shown as a dot (loop 92).
-  Source: _docs/06_metrics/retro_2026-10-31_loop92.md
-- [2026-10-31] [testing] An emulator gate that diffs the whole report against an expected file fails on a changed line, a missing line and no output alike; prove it with five injected runs (changed byte, defect, hang, tool missing, silent fake tool), each reverted (loop 92).
-  Source: _docs/06_metrics/retro_2026-10-31_loop92.md
-- [2026-10-31] [estimation] Name the reach limit of a runtime check in the spec first: the 16-bit `size_t` wrap needs a buffer near 64 KiB and an ATmega328P has 2 KB of RAM, so the run checks the arithmetic, not the wrap (loop 92).
-  Source: _docs/06_metrics/retro_2026-10-31_loop92.md
 - [2026-11-01] [process] State the rule for the off or zero value of a new setting in the spec and in every worker prompt: four workers read "percentage 0" four ways, and the unprotected path had no 254-byte limit that the first criteria assumed (loop 97).
   Source: _docs/06_metrics/retro_2026-11-01_loop97.md
 - [2026-11-01] [testing] A new row word in a shared fixture gets its own file when other loaders read the old file by position: grep every reader first, or the first commit breaks eight suites (loop 97).
@@ -39,3 +33,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-11-11_loop104.md
 - [2026-11-11] [tooling] A push that changes only `_docs/**` starts no CI run (`test.yml` has `paths-ignore`): check `git diff --name-only` before arming a CI watcher, and look a run up by commit with `gh run list --commit` (loop 102).
   Source: _docs/06_metrics/retro_2026-11-11_loop104.md
+- [2026-11-11] [tooling] A CI-only failure that the local tool cannot reproduce (Compose 2.24 has no Bake, and CI refused `network: host` twice) is fixed by calling the version-independent command directly (`docker buildx build --allow network.host`), not by a third compose variant (loop 106).
+  Source: _docs/06_metrics/retro_2026-11-11_loop108.md
+- [2026-11-11] [process] Check what a release needs outside the repository before the tag, not at the step that uses it: the first v0.5.0 run published five registries and then failed all four Maven signatures because the public key was on no keyserver; every publish run now uploads it (loops 105 and 107).
+  Source: _docs/06_metrics/retro_2026-11-11_loop108.md
+- [2026-11-11] [testing] A stub that matches a request by prefix lets a mutant pass (`/uploadX` was accepted): mutate to a request the stub rejects (`/up`) and count the failed assertions before trusting the scenarios (loop 107).
+  Source: _docs/06_metrics/retro_2026-11-11_loop108.md
