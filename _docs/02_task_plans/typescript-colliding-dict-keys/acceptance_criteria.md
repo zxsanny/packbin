@@ -1,0 +1,11 @@
+# Loop 101 acceptance criteria — TypeScript refuses colliding dictionary keys
+
+Inherited: AC-1 to AC-16 (`_docs/00_problem/acceptance_criteria.md`), the contract `compact-text.md` (dictionary keys strictly ascending on unpack, loop 42), and the Dart rule of loop 100 (AL-3). Observed values: `input_data/expected_results/results_report.md`, read by running TypeScript on HEAD e02ddc2.
+
+## Criteria
+
+- **TC-1 Collision refused.** Given a dictionary whose keys are the same once each unpaired surrogate is written as U+FFFD (`{"\ud800", "\udc00"}`, `{"�", "\ud800"}`, `{"a", "\ud800", "\udc00"}`, `{"\udc00\ud800", "��"}`), When packed, Then `pack` throws a `RangeError` whose message starts with the dictionary's name and says that two keys are the same once an unpaired surrogate is written as U+FFFD, and no bytes are returned. Collisions packed as before: 0 of 4.
+- **TC-2 Everything else is unchanged.** Given the 3 dictionaries that do not collide (`{"\ud800", "￿"}`, `{"a", "\ud800"}`, `{"\ud800"}`) and the 16 packets of `fixtures/text/` and the loop 100 key rows, When packed, Then the bytes equal the bytes TypeScript wrote before this change (`0102000410efbfbd010410efbfbf02`, `010200021061010410efbfbd02`, `0101000410efbfbd01`). Mismatched bytes: 0. The 957 parity rows and every existing TypeScript test pass.
+- **TC-3 Never unreadable.** Given 20,000 seeded random dictionaries of 1 to 4 keys over the units a, U+D800, U+DBFF, U+DC00, U+DFFF, U+FFFD and a valid pair, When each is packed and the result unpacked, Then every packet `pack` returns unpacks without an error and to the same keys written as U+FFFD, and every dictionary `pack` refuses has two keys that are the same after the swap. Packets pack wrote that unpack refuses: 0.
+- **TC-4 Same as Dart.** Given the dictionaries of TC-1 and TC-2, When packed by Dart and TypeScript, Then both refuse the same set and write the same bytes for the rest. Disagreements: 0 of 7.
+- **TC-5 Docs.** No document says TypeScript writes a packet its own unpack refuses for colliding keys, except dated history (`_docs/loops/`, `_docs/06_metrics/`, `_docs/03_implementation/`); `parity_differences.md` row 43, the README Dart notes, the traceability row AL-3 and the TypeScript component doc say both packages refuse.
