@@ -5,16 +5,16 @@ flow: existing-code
 kind: product
 step: 9
 name: New Task
-status: not_started
+status: in_progress
 sub_step:
-  phase: 0
-  name: awaiting-invocation
-  detail: ""
+  phase: 1
+  name: retrospective
+  detail: "retro of loops 105-107, documents only"
 retry_count: 0
 tracker: jira
 loop: 107
 branch:
-plan_artifact:
-plan_confirmed: false
+plan_artifact: _docs/loops/loop108/plan108.md
+plan_confirmed: true
 plan_step_index: 0
 assess_round: 0
