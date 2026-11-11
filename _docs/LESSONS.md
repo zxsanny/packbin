@@ -12,12 +12,6 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-10-28_loop79.md
   Source: _docs/06_metrics/retro_2026-10-28_loop79.md
   Source: _docs/06_metrics/retro_2026-10-28_loop79.md
-- [2026-10-30] [process] A candidate the owner declined can come back: loop 89 took the CI clippy job declined in loops 86 and 87, so the handoff keeps the decline and the numbers measured then (0 warnings, 9 sets) instead of dropping the candidate.
-  Source: _docs/06_metrics/retro_2026-10-30_loop89.md
-- [2026-10-30] [tooling] A gate step added to `run-suite.sh` moves pinned counts in `run-suite.test.sh` (the expected-call block, the step count in the notice row 21 to 22) and needs a fake of its tool (`rustup`): grep `-eq N` and the call lists before the first test run (loop 89).
-  Source: _docs/06_metrics/retro_2026-10-30_loop89.md
-- [2026-10-30] [testing] Prove a failing gate on the real path with one injected defect, reverted at once (a lint in `rust/src/lib.rs` ran through the `rust` compose service: exit 1, set named), besides the stubbed shell case (loop 89).
-  Source: _docs/06_metrics/retro_2026-10-30_loop89.md
 - [2026-10-31] [tooling] simavr 1.6 prints nothing for its console register and its `avr_mcu_section.h` does not compile as C++: report over the UART (`UDR0`), strip the colour codes, and treat each line end shown as a dot (loop 92).
   Source: _docs/06_metrics/retro_2026-10-31_loop92.md
 - [2026-10-31] [testing] An emulator gate that diffs the whole report against an expected file fails on a changed line, a missing line and no output alike; prove it with five injected runs (changed byte, defect, hang, tool missing, silent fake tool), each reverted (loop 92).
@@ -42,3 +36,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-11-11_loop100.md
 - [2026-11-11] [tooling] A total `loop-tests.sh` run needs Python 3.13 (the only one with PyYAML), `RUSTUP_TOOLCHAIN=1.98` and `PACKBIN_CXX_SYSROOT` set before it starts; without them `scaffold`, the ring and the publish gate fail in seconds and the run must be stopped and redone for those stages (loop 100).
   Source: _docs/06_metrics/retro_2026-11-11_loop100.md
+- [2026-11-11] [process] When one package writes something its own reader refuses, probe every sibling in the same loop with committed probes and give the owner one decision for the class: Dart, then TypeScript, then 2 of 6 others (C# and Java) had the same unreadable dictionary packet (loops 100 to 103).
+  Source: _docs/06_metrics/retro_2026-11-11_loop104.md
+- [2026-11-11] [testing] A test input the framework cannot carry (a lone surrogate in xUnit `[InlineData]` comes back as U+FFFD) is built in the test body or written as code-unit hex, and each new test is run once against the old source: the first C# tests passed for the wrong reason (loop 103).
+  Source: _docs/06_metrics/retro_2026-11-11_loop104.md
+- [2026-11-11] [tooling] A push that changes only `_docs/**` starts no CI run (`test.yml` has `paths-ignore`): check `git diff --name-only` before arming a CI watcher, and look a run up by commit with `gh run list --commit` (loop 102).
+  Source: _docs/06_metrics/retro_2026-11-11_loop104.md
