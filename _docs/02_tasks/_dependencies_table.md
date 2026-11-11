@@ -548,3 +548,4 @@ Loop 74 (2026-10-26, ADR-009: remove the stream session; D1 frame names; D2 cryp
 | AZ-4168 | typescript_colliding_dict_keys (loop 101) | 2 | AZ-4153 | AZ-4133 |
 | AZ-4169 | csharp_java_lone_surrogate_keys (loop 103) | 5 | AZ-4153, AZ-4168 | AZ-4133 |
 | AZ-4198 | embedded_arm_dns_cause (loop 109) | 3 | AZ-4191 | AZ-4133 |
+| AZ-4199 | csharp_list_element_row_without_flag_byte (written from Archangel AR-967) | 3 | None | AZ-4133 |

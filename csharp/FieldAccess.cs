@@ -25,6 +25,11 @@ internal sealed class MemberAccess
         Set = set;
     }
 
+    // The element row itself, not a member of it: reads no value and takes none, so the fields declared for the row read
+    // and write its members directly.
+    public static MemberAccess ElementRow(Type rowType) =>
+        new(string.Empty, rowType, _ => null, (_, _) => { });
+
     public static MemberAccess From<T, TProp>(Expression<Func<T, TProp>> accessor)
     {
         if (accessor.Body is not MemberExpression member

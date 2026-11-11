@@ -66,6 +66,13 @@ public sealed class Fields<T>
     public Field List<TChild>(Expression<Func<T, List<TChild>>> accessor, Func<Fields<TChild>, Field> element) =>
         Field.List(accessor, element(new Fields<TChild>()));
 
+    // An element that is a row of required members, written with no flag byte per element.
+    public Field List<TChild>(Expression<Func<T, List<TChild>>> accessor, Func<Fields<TChild>, Field[]> members) =>
+        Field.List(accessor, members(new Fields<TChild>()));
+
+    public Field Dict<TChild>(Expression<Func<T, Dictionary<string, TChild>>> accessor, Func<Fields<TChild>, Field[]> members) =>
+        Field.Dict(accessor, members(new Fields<TChild>()));
+
     public Field Dict<TProp>(Expression<Func<T, TProp>> accessor, Field element) =>
         Field.Dict(accessor, element);
 

@@ -284,6 +284,25 @@ public sealed class Field
             binding: FieldBinding.OfCollection(access, element, dictionary: true));
     }
 
+    // A list of rows of required members written one after another, with no flag byte per element (a flags element writes
+    // one). The members are declared for the element row type, so no wrapper property is needed.
+    public static Field List<T, TChild>(Expression<Func<T, List<TChild>>> accessor, params Field[] members) =>
+        List(accessor, ElementRow<TChild>(members));
+
+    public static Field Dict<T, TChild>(Expression<Func<T, Dictionary<string, TChild>>> accessor, params Field[] members) =>
+        Dict(accessor, ElementRow<TChild>(members));
+
+    // An anchored group over the element row itself: it numbers its members from 0 in the element's own scope and writes
+    // them in order. Bound to no member, since the element is the row.
+    private static Field ElementRow<TChild>(Field[] members)
+    {
+        if (members.Length == 0)
+            throw new ArgumentException("an element row needs at least one member");
+        return new Field(
+            Kind.Group, 0, string.Empty, children: members, rowType: typeof(TChild),
+            binding: FieldBinding.Of(MemberAccess.ElementRow(typeof(TChild))));
+    }
+
     internal static Field CreateFlagBit(FlagGroup group, int bitIndex, Field inner) =>
         new(Kind.FlagBit, inner.Id, inner.Name, flagOwner: group, bitIndex: bitIndex, inner: inner);
 
