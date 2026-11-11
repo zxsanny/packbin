@@ -150,24 +150,24 @@ void main() {
     }
   });
 
-  test('an unpaired surrogate is refused on encode with its index', () {
+  test('an unpaired surrogate is written as U+FFFD, as TextEncoder does', () {
     // Arrange
     final lone = {
-      'a\ud800b': 1,
-      '\udc00': 0,
-      'x\ud83d': 1,
-      '😀\ud83d': 2,
-      '\ude00\ud83d': 0,
-      '${'a' * 5000}\udfff': 5000,
+      'a\ud800b': 'a\ufffdb',
+      '\udc00': '\ufffd',
+      'x\ud83d': 'x\ufffd',
+      '😀\ud83d': '😀\ufffd',
+      '\ude00\ud83d': '\ufffd\ufffd',
+      '${'a' * 5000}\udfff': '${'a' * 5000}\ufffd',
     };
 
-    for (final MapEntry(key: text, value: index) in lone.entries) {
+    for (final MapEntry(key: text, value: written) in lone.entries) {
       // Act
-      final refusal = refusalOf(text);
+      final field = encodeText(text);
 
       // Assert
-      expect(refusal?.problem, TextEncodeProblem.loneSurrogate, reason: text);
-      expect(refusal?.detail, index);
+      expect(hex(field), hex(encodeText(written)), reason: text);
+      expect((decodeText(field, 0) as TextValue).value, written);
     }
   });
 
@@ -176,12 +176,27 @@ void main() {
     final before = hex(encodeText('привіт'));
 
     // Act
-    final refusal = refusalOf('привіт\ud800');
+    final refusal = refusalOf('я' * 70000);
     final after = hex(encodeText('привіт'));
 
     // Assert
     expect(refusal, isNotNull);
     expect(after, before);
+  });
+
+  test('the length of a too long text counts a lone half as U+FFFD', () {
+    // Arrange
+    final lone = '\ud800' * 65536;
+    final paired = '😀' * 32768;
+
+    // Act
+    final refusals = [refusalOf(lone), refusalOf(paired)];
+
+    // Assert
+    expect(refusals[0]?.problem, TextEncodeProblem.tooLong);
+    expect(refusals[0]?.detail, 65536 * 3);
+    expect(refusals[1]?.problem, TextEncodeProblem.tooLong);
+    expect(refusals[1]?.detail, 32768 * 4);
   });
 
   test('65,535 UTF-8 bytes encode and decode; one more is refused', () {

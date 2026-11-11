@@ -34,6 +34,8 @@ void checkSlots(List<Node> nodes, {bool inU2 = false}) {
 /// group's id.
 int checkIds(List<Node> nodes, int next) {
   for (final n in nodes) {
+    // An empty `nested` is a mark that takes no id of the row around it.
+    if (n.isMark && n.id == null) continue;
     switch (n.kind) {
       case NodeKind.integer:
       case NodeKind.float:

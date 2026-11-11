@@ -52,35 +52,30 @@ void main() {
       expect(error.reason, contains('65536'));
     });
 
-    test('an unpaired surrogate is refused naming the field', () {
+    test('an unpaired surrogate is written as U+FFFD, not refused', () {
       // Arrange
       final layout = scheme(1, [u8(0, 'a'), utf8Field(1, 'name')]);
 
       // Act
-      final lone = packRefusal(() => pack(layout, {'a': 1, 'name': 'x\ud800'}));
-      final low = packRefusal(() => pack(layout, {'a': 1, 'name': '\udc00'}));
+      final lone = pack(layout, {'a': 1, 'name': 'x\ud800'});
+      final low = pack(layout, {'a': 1, 'name': '\udc00'});
 
       // Assert
-      expect(lone.field, 1);
-      expect(lone.name, 'name');
-      expect(lone.reason, contains('unpaired surrogate'));
-      expect(low.name, 'name');
+      expect(readRow(layout, hex(lone))['name'], 'x\ufffd');
+      expect(readRow(layout, hex(low))['name'], '\ufffd');
     });
 
-    test('an unpaired surrogate in a dictionary key names the dictionary', () {
+    test('an unpaired surrogate in a dictionary key is written as U+FFFD', () {
       // Arrange
       final layout = scheme(1, [dict('m', u8(0, 'v'))]);
 
       // Act
-      final error = packRefusal(
-        () => pack(layout, {
-          'm': {'\ud800': 1},
-        }),
-      );
+      final raw = pack(layout, {
+        'm': {'\ud800': 1},
+      });
 
       // Assert
-      expect(error.name, 'm');
-      expect(error.reason, contains('unpaired surrogate'));
+      expect(hex(raw), '0101000410efbfbd01');
     });
 
     test('a null text under flags is no value: its bit is clear', () {

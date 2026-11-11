@@ -12,8 +12,8 @@ const int maxItems = 65535;
 
 extension CollectionPack on Packer {
   /// Writes the text [v] as the compact text field of the field [id] (named
-  /// [name]); a value that is not a `String`, a text with an unpaired surrogate
-  /// and a text over 65,535 UTF-8 bytes are refused.
+  /// [name]); a value that is not a `String` and a text over 65,535 UTF-8
+  /// bytes are refused. An unpaired surrogate is written as U+FFFD.
   void writeText(int? id, String name, Object v) {
     if (v is! String) {
       throw packFail(
@@ -26,12 +26,11 @@ extension CollectionPack on Packer {
     try {
       field = encodeText(v, textCache ??= TextCache());
     } on TextEncodeException catch (e) {
-      throw packFail(id, name, switch (e.problem) {
-        TextEncodeProblem.loneSurrogate =>
-          '$name: the text holds an unpaired surrogate at unit ${e.detail}',
-        TextEncodeProblem.tooLong =>
-          '$name: the text is ${e.detail} UTF-8 bytes, above the limit of $maxTextBytes',
-      });
+      throw packFail(
+        id,
+        name,
+        '$name: the text is ${e.detail} UTF-8 bytes, above the limit of $maxTextBytes',
+      );
     }
     out.bytes(field);
   }
@@ -100,13 +99,26 @@ extension CollectionPack on Packer {
           '${n.name}[$i]: the key is a ${k.runtimeType}, expected a String',
         );
       }
-      pairs.add(MapEntry(k, entry.value));
+      pairs.add(MapEntry(replaceLoneSurrogates(k), entry.value));
       i++;
     }
     // By the bytes of the keys, never String.compareTo: UTF-16 order differs
     // from UTF-8 order above U+FFFF. The values are read from the entries, so
     // a map whose keys share one hash is not looked up key by key.
+    // The keys are as they are written (an unpaired surrogate is U+FFFD), so
+    // the order is the order of the packet; two keys that became one cannot
+    // be told apart on the wire.
     pairs.sort((a, b) => compareUtf8(a.key, b.key));
+    for (var j = 1; j < pairs.length; j++) {
+      if (pairs[j].key == pairs[j - 1].key) {
+        throw packFail(
+          null,
+          n.name,
+          '${n.name}: two keys are the same once an unpaired surrogate is '
+          'written as U+FFFD',
+        );
+      }
+    }
     out.integer(count, 2, false, Endian.little);
     final e = n.fields[0];
     for (final pair in pairs) {

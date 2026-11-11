@@ -97,8 +97,10 @@ ListField<E> list<E extends Object>(String name, ElementField<E> element) =>
 
 /// A dictionary: a u16 pair count (at most 65,535), then the pairs, each a
 /// text key (as [utf8Field]) and an item as for [list]. Keys are written in
-/// ascending order of their UTF-8 bytes, whatever the map's order, and unpack
-/// refuses a repeated or out-of-order key as `bad_value`. In a map row the
+/// ascending order of their UTF-8 bytes, whatever the map's order (an
+/// unpaired surrogate in a key is written as U+FFFD, and two keys that become
+/// one are refused at pack), and unpack refuses a repeated or out-of-order key
+/// as a short packet with `needed` 0. In a map row the
 /// value is a `Map` with `String` keys and unpack gives a
 /// `Map<String, Object?>`; in a typed row it is bound with `bind` to a
 /// `Map<String, E>`.
@@ -117,18 +119,19 @@ DictField<E> dict<E extends Object>(String name, ElementField<E> element) =>
 /// it, and it takes no id of that row (the unanchored `group` of the other
 /// packages). In a map row it is a `Map<String, Object?>` under [name], on
 /// pack and on unpack. Under [flags] or a flag bit its bit is set when it is
-/// given. It is also the element of a [list] or [dict]. It needs at least one
-/// member. A typed scheme uses [nestedRow].
+/// given. It is also the element of a [list] or [dict]. With no member it is a
+/// presence mark, as [groupOf] with no member and TypeScript's empty group: it
+/// stands only directly under [flags] or a flag bit, `true` sets its bit, and
+/// anywhere else the scheme is refused. A typed scheme uses [nestedRow].
 NestedField<Map<String, Object?>> nested(String name, List<Field> members) =>
     NestedField<Map<String, Object?>>._(
-      Node(
-        NodeKind.nested,
-        name: name,
-        fields: [for (final m in members) m._node],
-        error: members.isEmpty
-            ? 'nested row $name: needs at least one member'
-            : null,
-      ),
+      members.isEmpty
+          ? Node(NodeKind.group, name: name)
+          : Node(
+              NodeKind.nested,
+              name: name,
+              fields: [for (final m in members) m._node],
+            ),
     );
 
 /// A nested row of a typed scheme: unpack makes a [C] with [create], and every

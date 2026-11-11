@@ -977,7 +977,7 @@ print('${got['heading']} ${got.containsKey('speed')}');
 90 false
 ```
 
-`unpackRow` gives every value the Dart type of its field: `int` for `u8` to `u64` and `i8` to `i64`, `double` for `f32` and `f64`, `Uint8List` for `bytes` and `sized`, `bool` (`true`) for a set `flagBool`, `String` for `utf8Field`, `List<Object?>` for a `list`, `Map<String, Object?>` for a `dict`, a `nested` row or a `groupOf` (`true` for a `groupOf` with no member), a `Uint8List` for `bits` and `packed`, an `int` (0 to 3) for a `u2` slot, and, for a name in a `repeat` or `times`, a list with one entry a round. A skipped field has no key, so a row it returned packs again to the same bytes.
+`unpackRow` gives every value the Dart type of its field: `int` for `u8` to `u64` and `i8` to `i64`, `double` for `f32` and `f64`, `Uint8List` for `bytes` and `sized`, `bool` (`true`) for a set `flagBool`, `String` for `utf8Field`, `List<Object?>` for a `list`, `Map<String, Object?>` for a `dict`, a `nested` row or a `groupOf` (`true` for a `groupOf` with no member), a `Uint8List` for `bits` and `packed`, an `int` (0 to 3) for a `u2` slot, and, for a name in a `repeat` or `times`, a list with one entry a round (no key when there are no rounds, as in TypeScript). A skipped field has no key, so a row it returned packs again to the same bytes.
 
 #### Dart rows
 
@@ -997,9 +997,9 @@ print('${got['heading']} ${got.containsKey('speed')}');
 
 **Byte arrays.** `bytes` and `sized` take a `Uint8List`. A `Uint8List` is a byte run and never a list: given to a `list` in a map row, or as the list of rounds of a name in a `repeat` or `times`, it is refused. A typed row may hold one in a `List<int>` member, and the items of `bits` and `packed` may be given as one.
 
-**Dictionaries.** Keys are written in ascending order of their UTF-8 bytes, whatever the order of the `Map`. A key that is not a `String` is refused naming the dict, and unpack refuses a repeated or out-of-order key as `ErrorKind.badValue`.
+**Dictionaries.** Keys are written in ascending order of their UTF-8 bytes, whatever the order of the `Map`. A key that is not a `String` is refused naming the dict, and unpack refuses a repeated or out-of-order key as `ErrorKind.short` with `needed` 0, as TypeScript, Go and Swift. An unpaired surrogate in a key is written as U+FFFD, as TypeScript does, and two keys that become one after that are refused at pack naming the dict (TypeScript writes a packet its own unpack refuses).
 
-**Errors are values on unpack and thrown on pack.** `unpackRow`, `unpack` and the repair calls return an `Unpacked` with a `row` or an `error` (a `PackbinError` with a `kind`, and where they apply `field`, `name`, `needed`, `left`, `actual` and `reason`); they never throw on input bytes. The kinds unpack returns are `ErrorKind.short`, `trailing`, `unknownType`, `badValue`, `tooMany`, `uncorrectable` and `tooLong`, and `kind.term` is the name every package shares (`short_packet`, `type_mismatch`, ...). A value unpack cannot use (a negative count, invalid UTF-8, a count behind a clear flag bit, a repeated dict key) is `badValue`, a round past a limit is `tooMany`, and a buffer that ends inside a field is `short` with the bytes `needed`. What throws is a `PackbinException` (it has a `kind`, `field`, `name` and `reason`): `pack` of a row it cannot write (`packError`, or `tooLong` for a clear message above `254 - n` bytes), a scheme that is refused when it is built (`schemeError`), a limit, a parity count or a percentage out of range, and an `unpack` call with no handler, with two handlers of one type number or with handlers of different parity. A refused pack returns no bytes. No input traps: every read is bounds-checked, and a count from the packet is checked against the bytes left or the scheme's limits before anything is made. The frame calls follow their own rule (see [Frame session](#frame-session)).
+**Errors are values on unpack and thrown on pack.** `unpackRow`, `unpack` and the repair calls return an `Unpacked` with a `row` or an `error` (a `PackbinError` with a `kind`, and where they apply `field`, `name`, `needed`, `left`, `actual` and `reason`); they never throw on input bytes. The kinds unpack returns are `ErrorKind.short`, `trailing`, `unknownType`, `badValue`, `tooMany`, `uncorrectable` and `tooLong`, and `kind.term` is the name every package shares (`short_packet`, `type_mismatch`, ...). A value unpack cannot use (a negative count, a count behind a clear flag bit) is `badValue`; invalid UTF-8 in a string or a key and a repeated or out-of-order dict key are `short` with `needed` 0, as in TypeScript, Go and Swift; a round past a limit is `tooMany`, and a buffer that ends inside a field is `short` with the bytes `needed`. What throws is a `PackbinException` (it has a `kind`, `field`, `name` and `reason`): `pack` of a row it cannot write (`packError`, a clear message above `254 - n` bytes included), a scheme that is refused when it is built (`schemeError`), a limit, a parity count or a percentage out of range, and an `unpack` call with no handler, with two handlers of one type number or with handlers of different parity. A refused pack returns no bytes. No input traps: every read is bounds-checked, and a count from the packet is checked against the bytes left or the scheme's limits before anything is made. The frame calls follow their own rule (see [Frame session](#frame-session)).
 
 ```dart
 import 'dart:typed_data';
@@ -1076,7 +1076,7 @@ ErrorKind.schemeError maxBytes
 
 **Concurrency.** A built `Scheme` is immutable: it can be sent to any number of isolates (`Isolate.run`) and used there; 4 isolates times 10,000 round trips on one scheme give no mismatch. A `FrameSession`, a `MacKey` and a `ReplayWindow` are used by one isolate at a time: sending one to another isolate copies it, keys included, and `close()` wipes only the copy it is called on.
 
-**Schemes Dart refuses and TypeScript builds.** A ninth member of one `flags` and a `packed` with a width other than 1 or 2 are refused by `scheme()` (the helper returns, as a Dart field is a plain value built before any scheme; TypeScript throws at the helper), a `u2` with no slot, a `bytes` with a negative size, a `nested` row with no member, and the two hostile schemes `zero_progress_repeat_bool` and `zero_progress_repeat_when` (both hostile cases accept `scheme_error`). The element of a `list` or `dict` is an `ElementField`, so an anchored `groupOf`, a `repeat`, a `times`, a `when`, a `flags` or a flag byte as an element does not compile (write `nested(name, [flags(...)])` for a list of flags).
+**Schemes Dart refuses and TypeScript builds.** A ninth member of one `flags` and a `packed` with a width other than 1 or 2 are refused by `scheme()` (the helper returns, as a Dart field is a plain value built before any scheme; TypeScript throws at the helper), a `u2` with no slot, a `bytes` with a negative size, a `nestedRow` with no member, a `nested` row with no member anywhere but directly under `flags` or a flag bit (there it is a presence mark, as TypeScript's empty group: `true` sets its bit), and the two hostile schemes `zero_progress_repeat_bool` and `zero_progress_repeat_when` (both hostile cases accept `scheme_error`). The element of a `list` or `dict` is an `ElementField`, so an anchored `groupOf`, a `repeat`, a `times`, a `when`, a `flags` or a flag byte as an element does not compile (write `nested(name, [flags(...)])` for a list of flags).
 
 ## Error correction
 
@@ -1103,7 +1103,7 @@ A scheme can declare `n` parity bytes, 0 to 32 (default 0), or a percentage of t
 | Dart | `scheme.withParity(n)`, `scheme.withParitySettings(parity: n)`, `scheme.parity` | `unpackRepair(bytes, handlers, t)`, `unpackRowRepair(bytes, scheme, t)` | `Unpacked.repaired` | `ErrorKind.uncorrectable` in `Unpacked.error` (above 254 bytes: `ErrorKind.tooLong`) |
 | C++ | `parity(scheme<Row>(...), n)`, `scheme.parity` | `unpack_repair(scheme, data, len, row, t)`, `unpack_repair(data, len, t, on(...)...)` | `Result.repaired` | `Error::Uncorrectable` (above 254 bytes: `Error::TooMany`) |
 
-A `parity` outside 0 to 32, a limit above `n / 2` and a mix of counts are refused as the package refuses a bad scheme: a `ValueError` (Python), a `RangeError` (TypeScript), an `ArgumentOutOfRangeException` or `ArgumentException` (C#), a panic for `with_parity` and an `UnpackError` for the limit, the mix and a hand-written handler's count above 32 (`BadParity`) (Rust), an `IllegalArgumentException` (Java), an `InvalidScheme` error (Go), a `.schemeError` (Swift), a `PackbinException` of kind `schemeError` (Dart), `Error::SchemeInvalid` for `n` and for a mix of counts and `Error::BadValue` for the limit (C++; a `constexpr` scheme with `n` above 32 does not compile). A clear message above `254 - n` bytes at pack is the package's pack refusal (`PackRefused` in Go, `.packError` in Swift, `PackError::Type` in Rust, `Error::TooMany` in C++, with `offset` the clear length, `needed` the limit and the written bytes zeroed). In Dart pack throws a `PackbinException` of kind `tooLong` whose `reason` names the clear length and the limit.
+A `parity` outside 0 to 32, a limit above `n / 2` and a mix of counts are refused as the package refuses a bad scheme: a `ValueError` (Python), a `RangeError` (TypeScript), an `ArgumentOutOfRangeException` or `ArgumentException` (C#), a panic for `with_parity` and an `UnpackError` for the limit, the mix and a hand-written handler's count above 32 (`BadParity`) (Rust), an `IllegalArgumentException` (Java), an `InvalidScheme` error (Go), a `.schemeError` (Swift), a `PackbinException` of kind `schemeError` (Dart), `Error::SchemeInvalid` for `n` and for a mix of counts and `Error::BadValue` for the limit (C++; a `constexpr` scheme with `n` above 32 does not compile). A clear message above `254 - n` bytes at pack is the package's pack refusal (`PackRefused` in Go, `.packError` in Swift, `PackError::Type` in Rust, `Error::TooMany` in C++, with `offset` the clear length, `needed` the limit and the written bytes zeroed). In Dart pack throws a `PackbinException` of kind `packError` (no field), whose `reason` is TypeScript's text: `the packet would be 251 bytes, above the limit of 250 bytes for 4 parity bytes`; unpack of more than 254 bytes is `ErrorKind.tooLong`.
 
 ### A percentage instead of a count
 
@@ -1884,7 +1884,7 @@ BinaryPacker.pack(row, {"name": "zxsanny"})
 01 06 2b fc fe e1 19 b2
 ```
 
-In Go pack also refuses a string that is not valid UTF-8, naming the field. Dart does the same for a string with an unpaired surrogate.
+In Go pack also refuses a string that is not valid UTF-8, naming the field. Dart, like TypeScript, writes U+FFFD for each unpaired surrogate and never refuses a string for it.
 
 ### List
 
@@ -2211,7 +2211,7 @@ In Go a typed `Times` refuses a count that differs from the number of elements, 
 
 In Swift a typed `.times` refuses a count that differs from the number of elements too, and unpack gives an empty array for 0 rounds. The map form follows TypeScript.
 
-In Dart a typed `times` refuses a count that differs from the number of rows too (naming its first member), and unpack gives an empty list for 0 rounds, in a map row too (`[]` for every name of the round, never `null`).
+In Dart a typed `times` refuses a count that differs from the number of rows too (naming its first member), and unpack gives an empty list for 0 rounds in a typed row (`[]`, never `null`); a map row has no key for the names of the round (as TypeScript, since loop 100; a group that holds only such rounds stays as `{}`).
 
 `packed` and `times` together are how one scheme holds a route: a header, N two-bit point kinds, N latitude/longitude pairs, then N−1 straight-leg bits only when a flag is set. That packet is
 
@@ -2230,7 +2230,7 @@ Unpack reads bytes from the network, so a packet may be built to hurt. In C#, Ty
 - invalid UTF-8 in a string or a dictionary key
 - a `times` round, or a `list` or `dict` element, that reads no bytes. A `repeat` round that reads none ends the repeat, and the bytes left are trailing bytes
 
-The kind of error for these is not settled yet. Today they come back as a short-packet-style error, so test for failure, not for its exact kind. Go does the same (a short-packet error with `Needed` 0), and reports a round past a limit as `TooMany`; so does Swift (`.short` with `needed` 0, and `.tooMany`). Dart gives a value it cannot use (a negative count, a count behind a clear flag bit, invalid UTF-8 in a string or a dictionary key, a repeated or out-of-order dictionary key) as `ErrorKind.badValue`, a count larger than the bytes left as `short`, and a round past a limit as `tooMany`. The C++ package already reports every failure as a `Result`; it does not check that a string is valid UTF-8.
+The kind of error for these is not settled yet. Today they come back as a short-packet-style error, so test for failure, not for its exact kind. Go does the same (a short-packet error with `Needed` 0), and reports a round past a limit as `TooMany`; so does Swift (`.short` with `needed` 0, and `.tooMany`). Dart gives a value it cannot use (a negative count, a count behind a clear flag bit) as `ErrorKind.badValue`, invalid UTF-8 in a string or a dictionary key and a repeated or out-of-order dictionary key as `short` with `needed` 0 (since loop 100, as TypeScript, Go and Swift), a count larger than the bytes left as `short`, and a round past a limit as `tooMany`. The C++ package already reports every failure as a `Result`; it does not check that a string is valid UTF-8.
 
 These mistakes in a scheme are refused when you build it, not when a packet arrives:
 
@@ -2408,7 +2408,15 @@ Loop 99 (Dart). The ninth package is new: `dart/` (pub.dev package `packbin`). N
 - A non-`bool` value for a `flagBool` or a mark (Go-1), and a `double` (a whole one too), a `BigInt` or an enum case for an integer field (Go-2), are refused.
 - A `u64` is an `int`: `-1` and 2^64 - 1 are the same 64 bits, so `eq(u64, -1)` builds.
 - `withLimits(maxRounds:, maxSlots:, maxBytes:)` gives a left-out limit its default and refuses a value below 1; a parity count and a percentage have their own setters (`withParity`, `withParityPercent`, `withParitySettings`), and a mix is refused.
-- Unpack returns every error as a value; an unusable value is `badValue` (not a short packet with `needed` 0) and a round past a limit is `tooMany`. Pack, scheme construction and a refused handler list throw a `PackbinException`.
+- Unpack returns every error as a value; a negative count or a count behind a clear flag bit is `badValue`, a round past a limit is `tooMany`, and (since loop 100) invalid UTF-8 and a repeated or out-of-order dictionary key are a short packet with `needed` 0, as in the other packages. Pack, scheme construction and a refused handler list throw a `PackbinException`.
+
+Loop 100 (Dart). Five Dart choices of loop 99 moved to TypeScript's behaviour before the first publish; no byte of any other package or fixture changed (see [Dart rows](#dart-rows)):
+
+- An unpaired surrogate in a string or a dictionary key is written as U+FFFD (it was refused). Dictionary keys are ordered by their bytes after that swap, and two keys that become one are refused at pack naming the dict; TypeScript writes a packet its own unpack refuses for them, which is open for TypeScript.
+- A clear message above `254 - n` bytes at pack is a `packError` with TypeScript's text (it was `tooLong`); unpack of more than 254 bytes is still `tooLong`.
+- Invalid UTF-8 in a string or a key and a repeated or out-of-order dictionary key unpack as a short packet with `needed` 0 (they were `badValue`).
+- A map row has no key for the names of a `repeat` or `times` with 0 rounds (it had `[]`); a typed row keeps `[]`, and a group that holds only such rounds stays as `{}`.
+- An empty `nested` row is a presence mark directly under `flags` or a flag bit, as TypeScript's empty group, and is refused elsewhere with TypeScript's words (it was always refused).
 
 Limits to keep in mind:
 

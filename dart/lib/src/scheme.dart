@@ -180,7 +180,7 @@ final class Unpacked<R extends Object> {
 /// cannot be written throws a [PackbinException] of kind
 /// [ErrorKind.packError] naming the field, and no bytes are returned. A
 /// scheme with parity appends it; a clear message above `254 - n` bytes
-/// throws [ErrorKind.tooLong].
+/// throws [ErrorKind.packError].
 Uint8List pack<R extends Object>(Scheme<R> scheme, R row) => protectWith(
   packRow(scheme._plan, scheme.typeNumber, row, scheme._limits),
   scheme.parity,

@@ -278,7 +278,7 @@ void main() {
       final e = thrown(() => pack(s, runRow(254)));
 
       // Assert
-      expect(e.kind, ErrorKind.tooLong);
+      expect(e.kind, ErrorKind.packError);
       expect(e.reason, allOf(contains('255'), contains('253')));
     });
 
@@ -315,7 +315,7 @@ void main() {
       final e = thrown(() => pack(s, runRow(251)));
 
       // Assert
-      expect(e.kind, ErrorKind.tooLong);
+      expect(e.kind, ErrorKind.packError);
     });
   });
 

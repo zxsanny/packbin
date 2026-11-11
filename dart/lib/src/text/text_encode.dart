@@ -5,8 +5,9 @@ import 'text_types.dart';
 
 /// The field bytes of one string: the count, then the payload (the optimal
 /// parse with the contract's tie-break, or raw UTF-8 when that is not
-/// smaller). Throws [TextEncodeException] for an unpaired surrogate and for a
-/// text over 65,535 UTF-8 bytes.
+/// smaller). An unpaired surrogate is written as U+FFFD, as TypeScript's
+/// `TextEncoder` does. Throws [TextEncodeException] for a text over 65,535
+/// UTF-8 bytes.
 Uint8List encodeText(String text, [TextCache? cache]) {
   if (cache != null && text == cache.text) return cache.field;
   final field = text.isEmpty ? Uint8List(1) : _encoder.encode(text);
@@ -69,15 +70,27 @@ final class _Encoder {
     }
   }
 
-  /// The UTF-8 length of [text]; each half of a surrogate pair adds 2.
+  /// The UTF-8 length of [text]: a surrogate pair is 4 bytes, an unpaired
+  /// half is U+FFFD and 3.
   static int _utf8Bytes(String text) {
     var bytes = 0;
     for (var j = 0; j < text.length; j++) {
       final c = text.codeUnitAt(j);
-      bytes += c >= 0xd800 && c <= 0xdfff ? 2 : utf8Length(c);
+      if (c < 0xd800 || c > 0xdfff) {
+        bytes += utf8Length(c);
+      } else if (c < 0xdc00 &&
+          j + 1 < text.length &&
+          _isLow(text.codeUnitAt(j + 1))) {
+        bytes += 4;
+        j++;
+      } else {
+        bytes += 3;
+      }
     }
     return bytes;
   }
+
+  static bool _isLow(int unit) => unit >= 0xdc00 && unit <= 0xdfff;
 
   int _codePoints(String text, Int32List points) {
     final size = text.length;
@@ -87,11 +100,12 @@ final class _Encoder {
       var c = text.codeUnitAt(j++);
       if (c >= 0xd800 && c <= 0xdfff) {
         final low = c < 0xdc00 && j < size ? text.codeUnitAt(j) : 0;
-        if (low < 0xdc00 || low > 0xdfff) {
-          throw TextEncodeException(TextEncodeProblem.loneSurrogate, j - 1);
+        if (_isLow(low)) {
+          c = 0x10000 + ((c - 0xd800) << 10) + (low - 0xdc00);
+          j++;
+        } else {
+          c = 0xfffd;
         }
-        c = 0x10000 + ((c - 0xd800) << 10) + (low - 0xdc00);
-        j++;
       }
       points[n++] = c;
       bytes += utf8Length(c);

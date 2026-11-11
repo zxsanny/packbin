@@ -28,8 +28,8 @@ enum ErrorKind {
   /// or its length fits no message of the scheme's parity percentage.
   uncorrectable('uncorrectable'),
 
-  /// A protected message is above 254 bytes (unpack), or a clear message is
-  /// above `254 - n` bytes (pack, which throws it).
+  /// A protected message is above 254 bytes (unpack). Pack of a clear message
+  /// above `254 - n` bytes throws [packError].
   tooLong('too_long');
 
   const ErrorKind(this.term);
@@ -115,8 +115,8 @@ final class PackbinError {
       Object.hash(kind, field, name, needed, left, actual, reason);
 }
 
-/// Thrown by pack (kind [ErrorKind.packError], or [ErrorKind.tooLong] for a
-/// message past the parity bound) and by scheme construction, a parity
+/// Thrown by pack (kind [ErrorKind.packError], a message past the parity
+/// bound included) and by scheme construction, a parity
 /// setting or a repair limit out of range, and a refused handler list (kind
 /// [ErrorKind.schemeError]).
 final class PackbinException implements Exception {

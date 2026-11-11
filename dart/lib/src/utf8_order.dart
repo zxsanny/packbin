@@ -14,6 +14,29 @@ int compareUtf8(String a, String b) {
   return a.length - b.length;
 }
 
+/// [text] with each unpaired UTF-16 surrogate replaced by U+FFFD, the text
+/// that is written for it (TypeScript's `TextEncoder`); [text] itself when it
+/// holds none.
+String replaceLoneSurrogates(String text) {
+  StringBuffer? out;
+  for (var i = 0; i < text.length; i++) {
+    final c = text.codeUnitAt(i);
+    if (c < 0xd800 || c > 0xdfff) {
+      out?.writeCharCode(c);
+    } else if (c < 0xdc00 &&
+        i + 1 < text.length &&
+        text.codeUnitAt(i + 1) >= 0xdc00 &&
+        text.codeUnitAt(i + 1) <= 0xdfff) {
+      (out ??= StringBuffer(text.substring(0, i)))
+        ..writeCharCode(c)
+        ..writeCharCode(text.codeUnitAt(++i));
+    } else {
+      (out ??= StringBuffer(text.substring(0, i))).writeCharCode(0xfffd);
+    }
+  }
+  return out == null ? text : out.toString();
+}
+
 int _rank(int unit) {
   if (unit < 0xd800) return unit;
   return unit >= 0xe000 ? unit - 0x800 : unit + 0x2000;

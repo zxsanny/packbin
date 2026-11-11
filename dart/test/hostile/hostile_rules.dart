@@ -30,23 +30,13 @@ const Map<String, String> hostileUnpackRules = {
   'oversize_count_times':
       'packbin: short packet at field 1 (v): needed 1, left 0',
   'oversize_list_count': 'packbin: short packet at xs: needed 65535, left 0',
-  'invalid_utf8':
-      'packbin: bad value at field 0 (name): name: the text is refused (utf8)',
-  'invalid_utf8_dict_key':
-      'packbin: bad value at m: m: the text is refused (utf8)',
-  'dict_keys_out_of_order':
-      'packbin: bad value at m: m: the key "a" is not in ascending order of '
-      'its UTF-8 bytes',
-  'dict_keys_repeated':
-      'packbin: bad value at m: m: the key "a" is given twice',
-  'dict_keys_repeated_forms':
-      'packbin: bad value at m: m: the key "a" is given twice',
-  'dict_keys_prefix_descends':
-      'packbin: bad value at m: m: the key "a" is not in ascending order of '
-      'its UTF-8 bytes',
-  'dict_keys_utf16_order':
-      'packbin: bad value at m: m: the key "～" is not in ascending order of '
-      'its UTF-8 bytes',
+  'invalid_utf8': 'packbin: short packet at field 0 (name): needed 0, left 4',
+  'invalid_utf8_dict_key': 'packbin: short packet at m: needed 0, left 4',
+  'dict_keys_out_of_order': 'packbin: short packet at m: needed 0, left 0',
+  'dict_keys_repeated': 'packbin: short packet at m: needed 0, left 0',
+  'dict_keys_repeated_forms': 'packbin: short packet at m: needed 0, left 0',
+  'dict_keys_prefix_descends': 'packbin: short packet at m: needed 0, left 0',
+  'dict_keys_utf16_order': 'packbin: short packet at m: needed 0, left 0',
   'count_behind_clear_flag':
       'packbin: bad value at field 1 (payload): the count has no value or is '
       'negative',

@@ -166,18 +166,23 @@ void main() {
       expect(error.left, 2);
     });
 
-    test('an invalid UTF-8 payload is bad_value naming the field', () {
-      // Arrange: invalid_utf8
-      final layout = scheme(1, [utf8Field(0, 'name')]);
+    test(
+      'an invalid UTF-8 payload is a short read with needed 0 naming the field',
+      () {
+        // Arrange: invalid_utf8
+        final layout = scheme(1, [utf8Field(0, 'name')]);
 
-      // Act
-      final error = unpackError(layout, '01 03 10 c3 28');
+        // Act
+        final error = unpackError(layout, '01 03 10 c3 28');
 
-      // Assert
-      expect(error.kind, ErrorKind.badValue);
-      expect(error.field, 0);
-      expect(error.name, 'name');
-    });
+        // Assert
+        expect(error.kind, ErrorKind.short);
+        expect(error.field, 0);
+        expect(error.name, 'name');
+        expect(error.needed, 0);
+        expect(error.left, 4);
+      },
+    );
   });
 
   group('unpack never throws on the bytes of a collection packet', () {

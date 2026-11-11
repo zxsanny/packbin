@@ -18,7 +18,7 @@ const threePoints = '01 0a000000 14000000 1e000000 28000000 32000000 3c000000';
 
 void main() {
   group('zero rounds (zero value rule)', () {
-    test('an empty list for a times name packs count 0 and no round bytes', () {
+    test('an empty list for a times name packs count 0 and no round bytes; unpack gives no key', () {
       // Arrange
       final layout = pointsTimes();
       final row = {'n': 0, 'lat': <int>[], 'lon': <int>[], 'tail': 7};
@@ -29,8 +29,8 @@ void main() {
 
       // Assert
       expect(hex(raw), '010007');
-      expect(back, {'n': 0, 'lat': <int>[], 'lon': <int>[], 'tail': 7});
-      expect(back['lat'], isNotNull);
+      expect(back, {'n': 0, 'tail': 7});
+      expect(back.containsKey('lat'), isFalse);
     });
 
     test('a times with no list at all packs count 0 too', () {
@@ -44,21 +44,24 @@ void main() {
       expect(hex(raw), '010007');
     });
 
-    test('a repeat with no rounds packs the type byte only and unpacks to empty lists', () {
-      // Arrange
-      final layout = pointsRepeat();
+    test(
+      'a repeat with no rounds packs the type byte only and unpacks to no key',
+      () {
+        // Arrange
+        final layout = pointsRepeat();
 
-      // Act
-      final raw = pack(layout, {'lat': <int>[], 'lon': <int>[]});
-      final back = unpackRow(raw, layout);
+        // Act
+        final raw = pack(layout, {'lat': <int>[], 'lon': <int>[]});
+        final back = unpackRow(raw, layout);
 
-      // Assert
-      expect(hex(raw), '01');
-      expect(hex(pack(layout, <String, Object?>{})), '01');
-      expect(back.row, {'lat': <int>[], 'lon': <int>[]});
-    });
+        // Assert
+        expect(hex(raw), '01');
+        expect(hex(pack(layout, <String, Object?>{})), '01');
+        expect(back.row, <String, Object?>{});
+      },
+    );
 
-    test('empty lists pack again to the same bytes (zero rounds repack)', () {
+    test('a row with no round key packs again to the same bytes (zero rounds repack)', () {
       // Arrange
       final layout = pointsTimes();
       final back = unpackRow(unhex('010007'), layout).row!;

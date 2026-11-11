@@ -8,23 +8,17 @@ import 'utf8_order.dart';
 
 extension CollectionUnpack on Reader {
   /// The text field at the cursor, for the field [id] (named [name]); null
-  /// when it is refused. A buffer that ends inside it is short; a payload that
-  /// breaks a rule of the format is a bad value naming the rule.
+  /// when it is refused. A buffer that ends inside it is short with the bytes
+  /// needed; a payload that breaks a rule of the format is a short packet with
+  /// `needed` 0 (as TypeScript, Go and Swift), `left` the bytes from the start
+  /// of the field.
   String? readText(int? id, String name) {
     switch (decodeText(buf, off)) {
       case TextValue(:final value, :final next):
         off = next;
         return value;
-      case TextFailure(:final kind, :final needed, :final left):
-        error = kind == TextRefusal.short
-            ? shortPacket(id, name, needed, left)
-            : PackbinError(
-                ErrorKind.badValue,
-                field: id,
-                name: name,
-                left: left,
-                reason: '$name: the text is refused (${kind.name})',
-              );
+      case TextFailure(:final needed, :final left):
+        error = shortPacket(id, name, needed, left);
         return null;
     }
   }
@@ -70,20 +64,11 @@ extension CollectionUnpack on Reader {
       final key = readText(null, n.name);
       if (key == null) return null;
       // Strictly ascending by UTF-8 bytes: an equal key is a repeat, a
-      // smaller one is out of order.
-      if (previous != null) {
-        final order = compareUtf8(key, previous);
-        if (order <= 0) {
-          error = PackbinError(
-            ErrorKind.badValue,
-            name: n.name,
-            left: left,
-            reason: order == 0
-                ? '${n.name}: the key "$key" is given twice'
-                : '${n.name}: the key "$key" is not in ascending order of its UTF-8 bytes',
-          );
-          return null;
-        }
+      // smaller one is out of order; both are a short packet with `needed`
+      // and `left` 0, as TypeScript, Go and Swift.
+      if (previous != null && compareUtf8(key, previous) <= 0) {
+        error = shortPacket(null, n.name, 0, 0);
+        return null;
       }
       previous = key;
       final before = off;

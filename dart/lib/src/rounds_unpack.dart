@@ -21,8 +21,9 @@ extension RoundUnpack on Reader {
   /// Reads the rounds of a `repeat` (to the end of the packet) or a `times`
   /// (its count) into [row]; false when the packet is refused. A map row gets
   /// one list for each name a round holds, an entry a round, null where the
-  /// round skipped it, and an empty list when no round was read; a typed row
-  /// gets the list of the rows the rounds made.
+  /// round skipped it, and no key at all when no round was read (as
+  /// TypeScript); a typed row gets the list of the rows the rounds made, empty
+  /// when no round was read.
   bool readRounds(Node n, Object row) {
     final shape = n.shape!;
     final (id, name) = shape.member(n);
@@ -57,6 +58,7 @@ extension RoundUnpack on Reader {
       binding!.set(row, rounds);
       return true;
     }
+    if (rounds.isEmpty) return true;
     final map = row as Map<String, Object?>;
     for (final m in shape.names) {
       final list = <Object?>[

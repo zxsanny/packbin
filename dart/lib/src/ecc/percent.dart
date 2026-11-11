@@ -38,15 +38,14 @@ int? clearLength(int p, int sent) {
 
 /// The clear message followed by the parity of percentage [p] (0 adds
 /// nothing and has no length limit). A clear message above the largest of
-/// [p] throws a [PackbinException] of kind [ErrorKind.tooLong].
+/// [p] throws a [PackbinException] of kind [ErrorKind.packError].
 Uint8List protectPercent(Uint8List clear, int p) {
   if (p == 0) return clear;
   final limit = largestClear(p);
   if (clear.length > limit) {
     throw PackbinException(
       PackbinError(
-        ErrorKind.tooLong,
-        left: clear.length,
+        ErrorKind.packError,
         reason:
             'the packet would be ${clear.length} bytes, above the limit of '
             '$limit bytes for $p percent parity',

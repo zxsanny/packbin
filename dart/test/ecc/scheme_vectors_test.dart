@@ -107,7 +107,8 @@ void main() {
           final out = pack(s, {'raw': Uint8List(length - 1)});
           outcome = out.length == length + r.number(0) ? 'ok' : 'size';
         } on PackbinException catch (e) {
-          outcome = e.kind.term;
+          // The shared rows say too_long; a pack refuses with a pack error.
+          outcome = e.kind == ErrorKind.packError ? 'too_long' : e.kind.term;
         }
         if (outcome != r.args[2]) misses.add('${r.id}: $outcome');
       }
@@ -226,7 +227,8 @@ void main() {
           pack(s, {'raw': Uint8List(length - 1)});
           outcome = 'ok';
         } on PackbinException catch (e) {
-          outcome = e.kind.term;
+          // The shared rows say too_long; a pack refuses with a pack error.
+          outcome = e.kind == ErrorKind.packError ? 'too_long' : e.kind.term;
         }
         if (outcome != r.args[2]) misses.add('${r.id}: $outcome');
       }

@@ -54,15 +54,14 @@ final List<Uint8List> _generators = List<Uint8List>.generate(maxParity + 1, (
 
 /// The clear message followed by its [n] parity bytes ([n] checked, 0 to 32).
 /// A clear message above `254 - n` bytes throws a [PackbinException] of kind
-/// [ErrorKind.tooLong].
+/// [ErrorKind.packError] (TypeScript throws a `RangeError`).
 Uint8List protect(Uint8List clear, int n) {
   if (n == 0) return clear;
   final size = clear.length;
   if (size > maxBlock - n) {
     throw PackbinException(
       PackbinError(
-        ErrorKind.tooLong,
-        left: size,
+        ErrorKind.packError,
         reason:
             'the packet would be $size bytes, above the limit of '
             '${maxBlock - n} bytes for $n parity bytes',

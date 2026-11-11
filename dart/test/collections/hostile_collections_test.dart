@@ -26,7 +26,7 @@ void main() {
   group('the hostile cases that a list, a dict or a text reaches', () {
     final names = scheme(1, [dict('m', u8(0, 'v'))]);
 
-    test('invalid_utf8 is bad_value', () {
+    test('invalid_utf8 is short_packet with needed 0', () {
       // Arrange
       final layout = scheme(1, [utf8Field(0, 'name')]);
 
@@ -34,15 +34,17 @@ void main() {
       final error = unpackError(layout, 'invalid_utf8');
 
       // Assert
-      expect(error.kind.term, 'bad_value');
+      expect(error.kind.term, 'short_packet');
+      expect(error.needed, 0);
     });
 
-    test('invalid_utf8_dict_key is bad_value', () {
+    test('invalid_utf8_dict_key is short_packet with needed 0', () {
       // Arrange and Act
       final error = unpackError(names, 'invalid_utf8_dict_key');
 
       // Assert
-      expect(error.kind.term, 'bad_value');
+      expect(error.kind.term, 'short_packet');
+      expect(error.needed, 0);
     });
 
     for (final id in [
@@ -50,12 +52,14 @@ void main() {
       'dict_keys_repeated',
       'dict_keys_repeated_forms',
     ]) {
-      test('$id is bad_value', () {
+      test('$id is short_packet with needed 0', () {
         // Arrange and Act
         final error = unpackError(names, id);
 
         // Assert
-        expect(error.kind.term, 'bad_value');
+        expect(error.kind.term, 'short_packet');
+        expect(error.needed, 0);
+        expect(error.left, 0);
       });
     }
 

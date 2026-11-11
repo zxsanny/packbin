@@ -115,20 +115,22 @@ void main() {
   });
 
   group('unpack refuses a key that is not strictly ascending', () {
-    test('a key out of order is bad_value', () {
+    test('a key out of order is a short read with needed 0', () {
       // Arrange: key "b" then key "a", the hostile case dict_keys_out_of_order
       const wire = '01 02 00 02 10 62 00 02 10 61 00';
 
       // Act
       final error = unpackError(dictOfU8(), wire);
 
-      // Assert
-      expect(error.kind, ErrorKind.badValue);
-      expect(error.kind.term, 'bad_value');
+      // Assert: TypeScript gives needed 0, left 0 for this packet
+      expect(error.kind, ErrorKind.short);
+      expect(error.kind.term, 'short_packet');
       expect(error.name, 'm');
+      expect(error.needed, 0);
+      expect(error.left, 0);
     });
 
-    test('a key given twice is bad_value', () {
+    test('a key given twice is a short read with needed 0', () {
       // Arrange
       const wire = '01 02 00 02 10 61 00 02 10 61 00';
 
@@ -136,10 +138,12 @@ void main() {
       final error = unpackError(dictOfU8(), wire);
 
       // Assert
-      expect(error.kind, ErrorKind.badValue);
+      expect(error.kind, ErrorKind.short);
+      expect(error.needed, 0);
+      expect(error.left, 0);
     });
 
-    test('the same key in two forms (raw and compact) is bad_value', () {
+    test('the same key in two forms (raw and compact) is a short read', () {
       // Arrange: dict_keys_repeated_forms
       const wire = '01 02 00 02 10 61 00 02 c9 00 00';
 
@@ -147,7 +151,9 @@ void main() {
       final error = unpackError(dictOfU8(), wire);
 
       // Assert
-      expect(error.kind, ErrorKind.badValue);
+      expect(error.kind, ErrorKind.short);
+      expect(error.needed, 0);
+      expect(error.left, 0);
     });
 
     test(
@@ -174,20 +180,24 @@ void main() {
         final error = unpackError(dictOfU8(), wire);
 
         // Assert
-        expect(error.kind, ErrorKind.badValue);
+        expect(error.kind, ErrorKind.short);
+        expect(error.needed, 0);
+        expect(error.left, 0);
       },
     );
 
-    test('an invalid UTF-8 key is bad_value, not an exception', () {
+    test('an invalid UTF-8 key is a short read with needed 0, not an exception', () {
       // Arrange: invalid_utf8_dict_key
       const wire = '01 01 00 02 10 ff 00';
 
       // Act
       final error = unpackError(dictOfU8(), wire);
 
-      // Assert
-      expect(error.kind, ErrorKind.badValue);
+      // Assert: TypeScript gives needed 0, left 4 (the bytes of the key field)
+      expect(error.kind, ErrorKind.short);
       expect(error.name, 'm');
+      expect(error.needed, 0);
+      expect(error.left, 4);
     });
 
     test('a leading U+FEFF in a key is a key, not dropped', () {

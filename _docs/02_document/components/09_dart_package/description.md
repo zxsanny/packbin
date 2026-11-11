@@ -20,14 +20,14 @@ Same shape as TypeScript (`components/02_typescript_package/description.md` §2)
 |------|---------|
 | `scheme(type, fields)` | a `Scheme<Map<String, Object?>>`: a row is a map keyed by the field names |
 | `rowScheme<R>(type, create, fields)` | a `Scheme<R>` of typed rows: each value field is bound with `field.bind<R>(get:, set:)`; every value field must be bound |
-| `pack(scheme, row)` | the bytes (`Uint8List`), or a thrown `PackbinException` (`packError` naming the field; `tooLong` above `254 - n` bytes with parity) |
+| `pack(scheme, row)` | the bytes (`Uint8List`), or a thrown `PackbinException` (`packError` naming the field; a clear message above `254 - n` bytes with parity is a `packError` with TypeScript's text and no field) |
 | `unpackRow(bytes, scheme)`, `unpack(bytes, handlers)` | an `Unpacked` with `row` or `error` (`PackbinError`), never a throw on input bytes; `scheme.on(handler)` makes a `SchemeHandler`; an empty handler list, a duplicate type number or a mix of parity settings throws `schemeError` |
 | `scheme.withLimits({maxRounds, maxSlots, maxBytes})` | a copy; a limit left out takes its default; a value below 1 throws `schemeError`; `Scheme.defaultMaxRounds`, `defaultMaxSlots`, `defaultMaxBytes` |
 | `ErrorKind` | `short`, `trailing`, `unknownType`, `badValue`, `tooMany`, `schemeError`, `packError`, `uncorrectable`, `tooLong`; `kind.term` is the shared outcome term |
 
 Field helpers: `u8` to `u64`, `i8` to `i64`, `f32`, `f64`, `bytes`, `be`, `utf8Field`, `list`, `dict`, `flags`, `flagBool`, `when` with `eq`, `repeat`, `times`, `sized`, `u2` with `slot`, `bits`, `packed`, `groupOf` (the anchored group), `nested` and `nestedRow` (the group without an anchor), `flagByte` with `.bit(field)`. The Dart names differ from the other packages for `utf8` (taken by `dart:convert`), `bool` (a core type) and `group` (a function of `package:test`).
 
-Rows: a typed class bound by getter and setter closures, or `Map<String, Object?>`. `null` is no value; an empty list, map or string is a value with count 0. A `u64` is an `int`: a value above 2^63 - 1 is the negative `int` with the same bits (A-3). A `double` (a whole one too), a `BigInt` and an enum case for an integer field, and a non-`bool` for a `flagBool`, are refused (owner decisions Go-1 and Go-2).
+Rows: a typed class bound by getter and setter closures, or `Map<String, Object?>`. `null` is no value; an empty list, map or string is a value with count 0 (a map row unpacked from 0 rounds has no key for the round's names). An unpaired surrogate in a string or a key is written as U+FFFD. A `u64` is an `int`: a value above 2^63 - 1 is the negative `int` with the same bits (A-3). A `double` (a whole one too), a `BigInt` and an enum case for an integer field, and a non-`bool` for a `flagBool`, are refused (owner decisions Go-1 and Go-2).
 
 ### Interface: Error correction (ADR-007, ADR-010, `contracts/library/message-ecc.md` 1.1.0)
 
@@ -37,7 +37,7 @@ Rows: a typed class bound by getter and setter closures, or `Map<String, Object?
 | `scheme.withParityPercent(p)`, `scheme.parityPercent` | the count is `p` percent (0 to 100) of the clear length, rounded up, at most 32; replaces a count |
 | `scheme.withParitySettings({parity, parityPercent})` | one declaration; both above 0 throws `schemeError`; neither given keeps the settings |
 | `unpackRepair(bytes, handlers, t)`, `unpackRowRepair(bytes, scheme, t)` | repair up to `t` wrong bytes (0 to `n / 2`; 0 to 16 under a percentage) before the type byte picks the handler; `Unpacked.repaired` is the count; `unpack` and `unpackRow` are `t` = 0; a limit out of range throws `schemeError` naming `limit` before any byte is read |
-| `ErrorKind.uncorrectable`, `ErrorKind.tooLong` | too many wrong bytes (names no field); a buffer above 254 bytes (`left` the length), and at pack a clear message above `254 - n` bytes, which throws |
+| `ErrorKind.uncorrectable`, `ErrorKind.tooLong` | too many wrong bytes (names no field); a buffer above 254 bytes (`left` the length); a clear message above `254 - n` bytes at pack throws a `packError` |
 
 The handlers of one `unpack` call declare the same setting; a mix is refused. The check order of a call (no handler, duplicate type, parity mix, limit, then per packet too long, uncorrectable, empty buffer, unknown type, body) is the one of loop 40.
 
@@ -64,7 +64,7 @@ Dart copies TypeScript row for row (A-1), with the owner's Go decisions Go-1 to 
 - A Dart `int` is 64 bits and wraps silently, so every size, count and index computed from input is range-checked before use (the hostile vectors and the seeded run cover it).
 - Groups are nested maps both ways (Go-4): a flat key that names a member of a group whose map is not given is refused.
 - Limits: 65,535 rounds, 1,048,576 slots, 16,777,216 bytes by default, on pack and on unpack; a nested row in a round charges the width of its own members.
-- Unpack refuses a text with a bad code or invalid UTF-8, a repeated or out-of-order dictionary key and a count that is negative or has no value as `badValue`, a round past a limit as `tooMany`, and a count over the bytes left as `short` before anything is made.
+- Unpack refuses a text with a bad code or invalid UTF-8 and a repeated or out-of-order dictionary key as `short` with `needed` 0 (loop 100, as TypeScript), a count that is negative or has no value as `badValue`, a round past a limit as `tooMany`, and a count over the bytes left as `short` before anything is made.
 - Compact text, error correction and frame mode are the contracts' bytes (`compact-text.md`, `message-ecc.md`, `pack-session.md`), run on the shared vectors as files.
 
 ## 4. Decisions

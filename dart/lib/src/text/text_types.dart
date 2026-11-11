@@ -32,7 +32,7 @@ final class TextFailure extends TextRead {
   String toString() => 'TextFailure(${kind.name}, needed $needed, left $left)';
 }
 
-enum TextEncodeProblem { loneSurrogate, tooLong }
+enum TextEncodeProblem { tooLong }
 
 /// Thrown by an encode for a text that has no field bytes.
 final class TextEncodeException implements Exception {
@@ -40,13 +40,11 @@ final class TextEncodeException implements Exception {
 
   final TextEncodeProblem problem;
 
-  /// [TextEncodeProblem.loneSurrogate]: the index of the UTF-16 unit.
   /// [TextEncodeProblem.tooLong]: the UTF-8 length of the text.
   final int detail;
 
   @override
   String toString() => switch (problem) {
-    TextEncodeProblem.loneSurrogate => 'unpaired surrogate at unit $detail',
     TextEncodeProblem.tooLong => 'utf-8 length $detail',
   };
 }

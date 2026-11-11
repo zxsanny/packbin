@@ -104,7 +104,8 @@ void main() {
           final n = parityCount(r.number(0), clear.length);
           outcome = out.length == clear.length + n ? 'ok' : 'size';
         } on PackbinException catch (e) {
-          outcome = e.kind == ErrorKind.tooLong ? 'too_long' : e.kind.term;
+          // The shared rows say too_long; a pack refuses with a pack error.
+          outcome = e.kind == ErrorKind.packError ? 'too_long' : e.kind.term;
         }
         if (outcome != r.args[2]) misses.add('${r.id}: $outcome');
       }
@@ -119,7 +120,7 @@ void main() {
       final e = thrown(() => protectPercent(Uint8List(252), 1));
 
       // Assert
-      expect(e.kind, ErrorKind.tooLong);
+      expect(e.kind, ErrorKind.packError);
       expect(e.reason, contains('252'));
       expect(e.reason, contains('251'));
     });

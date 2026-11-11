@@ -145,9 +145,20 @@ void main() {
       expect(error.name, 'g');
     });
 
-    test('a nested row with no member is refused', () {
+    test('a nested row with no member is a mark, refused outside flags', () {
       // Arrange and Act
       final error = refusal(() => scheme(1, [nested('g', [])]));
+
+      // Assert
+      expect(error.name, 'g');
+      expect(error.reason, startsWith('empty group g: allowed only directly'));
+    });
+
+    test('a nestedRow with no member is refused', () {
+      // Arrange and Act
+      final error = refusal(
+        () => scheme(1, [nestedRow<Object>('g', Object.new, [])]),
+      );
 
       // Assert
       expect(error.name, 'g');
