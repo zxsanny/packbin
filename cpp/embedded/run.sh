@@ -132,6 +132,8 @@ host_run() {
   if [ "$arm" -eq 1 ]; then
     # The image is built on the host network so apt resolves names with the runner's resolver (AZ-4191);
     # BuildKit grants that only with --allow network.host, which `docker compose build` cannot pass.
+    # Why the bridge build could not resolve names on 2026-11-11 is not known: two runs of diagnose-dns.yml
+    # did not reproduce it (_docs/06_metrics/embedded-arm-dns_2026-11-11.md, AZ-4198).
     # The tag is the `image:` of the cpp-embedded and rust-embedded services in docker-compose.test.yml.
     docker buildx build --allow network.host --network host --load --tag packbin-embedded:local "$repo/cpp/embedded"
     "${compose[@]}" run --rm cpp-embedded || status=1
