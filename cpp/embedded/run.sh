@@ -130,9 +130,10 @@ host_run() {
   if [ -f "$host_report" ]; then host_rows_before="$(awk 'END { print NR }' "$host_report")"; fi
   trap host_exit EXIT
   if [ "$arm" -eq 1 ]; then
-    # Compose without Bake: the build service uses `network: host` (AZ-4191), and Bake refuses that
-    # without "--allow=network.host", which `docker compose build` cannot pass.
-    COMPOSE_BAKE=false "${compose[@]}" build cpp-embedded
+    # The image is built on the host network so apt resolves names with the runner's resolver (AZ-4191);
+    # BuildKit grants that only with --allow network.host, which `docker compose build` cannot pass.
+    # The tag is the `image:` of the cpp-embedded and rust-embedded services in docker-compose.test.yml.
+    docker buildx build --allow network.host --network host --load --tag packbin-embedded:local "$repo/cpp/embedded"
     "${compose[@]}" run --rm cpp-embedded || status=1
   fi
   if [ "$esp" -eq 1 ]; then

@@ -237,7 +237,7 @@ targets_are_listed_once_and_match_the_oracle() {
 }
 
 host_forms_call_the_right_compose_commands() {
-  local build="$compose build cpp-embedded" arm="$compose run --rm cpp-embedded"
+  local build="buildx build --allow network.host --network host --load --tag packbin-embedded:local TREE/cpp/embedded" arm="$compose run --rm cpp-embedded"
   local esp="$compose run --rm -e PACKBIN_ESP_PART="
   # Arrange / Act / Assert for each form on its own tree
   new_tree host_arm
@@ -349,7 +349,7 @@ the_notice_also_comes_when_a_stage_fails() {
   fake_fail=build
   run_host host arm
   check "a failing image build: the exit status of the build is kept (3)" rc_is 3
-  check_eq "a failing image build: no stage ran" "$compose build cpp-embedded" "$(docker_calls)"
+  check_eq "a failing image build: no stage ran" "buildx build --allow network.host --network host --load --tag packbin-embedded:local TREE/cpp/embedded" "$(docker_calls)"
   check "a failing image build: one notice with the total only" notice_on_stdout_matches \
     "^::notice title=embedded arm timing::$total 0 targets$"
   show_evidence

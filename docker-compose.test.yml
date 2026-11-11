@@ -138,9 +138,6 @@ services:
   cpp-embedded:
     build:
       context: ./cpp/embedded
-      # The image build resolves names with the host's resolver: the bridge network of the build
-      # container could not resolve archive.ubuntu.com on a CI runner (AZ-4191).
-      network: host
     image: packbin-embedded:local
     working_dir: /src
     entrypoint: ["bash", "-c"]
