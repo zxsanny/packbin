@@ -3,13 +3,13 @@
 ## Current Step
 flow: existing-code
 kind: product
-step: 11
-name: Run Tests
+step: 17
+name: Retrospective
 status: not_started
 sub_step:
   phase: 0
   name: awaiting-invocation
-  detail: "assessment COMPLETE, security lite CLEAN; next step 11"
+  detail: "step 11 PASS; next smoke, close"
 retry_count: 0
 tracker: jira
 loop: 103
