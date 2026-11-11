@@ -26,3 +26,7 @@ step "no tag and no upload in this loop (last tag is still v0.4.0)" 'test "$(git
 printf '\n%s of %s steps passed\n' "$((N-fails))" "$N"
 test "$fails" -eq 0
 ```
+
+## Result
+
+Commit 3d8394b: 10/10 steps passed (agent run, owner rule 2026-10-12 in `deployment_procedures.md`). Step 2 re-ran the 2 stages the review fixes touched (dart and ring) and passed (175 s); the other 13 were unchanged since their pass. Run with `SMOKE_PY` set to a directory whose `python3` is Python 3.13.
