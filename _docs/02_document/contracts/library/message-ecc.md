@@ -10,7 +10,7 @@
 
 ## Purpose
 
-An optional protection layer over a whole packed message. A scheme declares `n` parity bytes (0 to 32, default 0). Pack appends `n` parity bytes. Unpack detects corruption and repairs up to `t` wrong bytes, `t` from 0 to `n / 2`; beyond that it returns an error and never a wrong row. A wrong byte counts once however many of its bits differ. With `n` = 0 nothing changes: the bytes, the errors and the speed are those of the package before this contract.
+An optional protection layer over a whole packed message. A scheme declares `n` parity bytes (0 to 32, default 0). Pack appends `n` parity bytes. Unpack detects corruption and repairs up to `t` wrong bytes, `t` from 0 to `n / 2`; beyond that it returns an error and usually not a wrong row (a corruption of more than `t` bytes can decode to a different message; see Detection and the correction limit). A wrong byte counts once however many of its bits differ. With `n` = 0 nothing changes: the bytes, the errors and the speed are those of the package before this contract.
 
 ## Shape
 
@@ -109,6 +109,8 @@ With `n` parity bytes the code detects any corruption of up to `n` wrong bytes. 
 
 `t = 0` gives the full strength of `n` bytes. A caller who repairs picks `t` knowing this table.
 
+Small parity is the weak case. With `t + 1` wrong bytes, the reviewer's 20,000 random runs (loop 99) accepted a wrong message when `n` = 2 and `t` = 1 with 2 wrong bytes in 1,529 runs (about 1 in 13), and when `n` = 4 and `t` = 2 with 3 wrong bytes in 51 runs (about 1 in 400); `n` = 8 and `n` = 32 with `t + 1` wrong bytes gave none. This is inherent to a Reed-Solomon code, so it is the same in every package; detection with `t` = 0 is not affected.
+
 ## Versioning
 
 A new setting that only adds a way to choose `n` is a minor version. Any change to the field polynomial, the roots, the length byte, the position of the parity or the limits is a wire break for protected schemes and a new contract version.
@@ -120,5 +122,6 @@ A new setting that only adds a way to choose `n` is a minor version. Any change 
 | 1.0.0 | 2026-10-18 | First version (loop 38, AZ-2678). |
 | 1.0.0 | 2026-10-19 | Loop 41 audit (AZ-2666): the work bound restated (F55); a handler's count above 32 refused at dispatch (F52). No wire change. |
 | 1.0.1 | 2026-10-27 | Editorial: the Session row is removed with the stream session (ADR 009), and with it the session parts of the Dispatch row (a session that is not open answered first; the receive index); ECC bytes and rules unchanged. |
+| 1.1.0 (clarification) | 2026-11-11 | Loop 99 review (AZ-4149): "never a wrong row" becomes "usually not a wrong row", and the measured risk of a wrong message with a small parity is stated under Detection and the correction limit. No byte, rule or version changed. |
 | 1.1.0 (consumers) | 2026-11-11 | Dart is the ninth consumer (AZ-4140, loop 99): count and percentage, repair, `uncorrectable` and `too_long`; it passes every row of `fixtures/ecc/vectors.txt` and `percent-vectors.txt` and joins the ECC ring. No byte, rule or version changed. |
 | 1.1.0 | 2026-11-01 | Parity percentage (loop 97, AZ-3499): a scheme may declare a percentage of the clear length instead of a count; the count is `min(32, ceil(p × L / 100))` and unpack finds it from the received length. Additive: schemes with a fixed count are unchanged. |

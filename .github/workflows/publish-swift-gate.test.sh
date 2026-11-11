@@ -40,8 +40,9 @@ sw_gate() {
 }
 
 # AC-1: a wrong Swift byte publishes nothing, tags nothing and runs no Swift check; a matching one plans swift last.
-# AC-4: a tree without Package.swift or without swift/ says `absent swift`, plans the other seven, and the Go tag of a
-# plan without swift is pushed with no Swift check. A plan of go and swift pushes the Go tag before the check runs.
+# AC-4: a tree without Package.swift or without swift/ says `absent swift`, plans the other seven (this synthetic tree
+# has eight languages, no Dart; publish-dart.test.sh holds the nine-language case), and the Go tag of a plan without
+# swift is pushed with no Swift check. A plan of go and swift pushes the Go tag before the check runs.
 sw_gate_checks() {
   local tree missing out code
   sw_setup

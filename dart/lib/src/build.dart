@@ -114,9 +114,12 @@ final class _FlagBinder {
       case NodeKind.bits:
       case NodeKind.packed:
       case NodeKind.slot:
-      case NodeKind.u2:
       case NodeKind.utf8:
-        return n;
+        // Every occurrence is a node of its own: slots and references are
+        // numbered by node, and a field can be declared in several places.
+        return n.copy();
+      case NodeKind.u2:
+        return n.copy(fields: all(n.fields, seen));
       case NodeKind.flagByte:
         final read = _Read(FlagRead(n.name, reads++));
         seen[n.handle!] = read;

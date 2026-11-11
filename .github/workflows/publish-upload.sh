@@ -3,7 +3,7 @@
 # refuses to start unless build.log holds `build ok` for every target given. Before each upload it
 # asks the registry whether the version is already there (publish-query.sh) and skips the target
 # with `already published <target> <version>`, so a re-run finishes a partial publish. Required
-# targets go first (pubdev, publish-pubdev.sh, among them), then optional ones, then the final go-tag (publish-go.sh)
+# targets go first, then optional ones (pubdev, publish-pubdev.sh, among them), then the final go-tag (publish-go.sh)
 # and swift-check (publish-swift.sh, which uploads nothing and writes no tag); the first failure stops
 # the run. Registry tools run on the host. Cargo is the one tool that archives again: `cargo publish
 # --no-verify` re-archives the staged directory that the build phase already compiled and checked.
@@ -26,6 +26,9 @@ version="${version#v}"
 out="${PACKBIN_OUT:?PACKBIN_OUT is required}"
 artifacts="$out/artifacts"
 export PACKBIN_OUT="$out"
+# The early token of dart-lang/setup-dart (ADR-011) is not relied on and no registry tool may see it: publish-pubdev.sh
+# makes its own, right before its upload, and the tools of the other targets run without any PUB_TOKEN.
+unset PUB_TOKEN
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 

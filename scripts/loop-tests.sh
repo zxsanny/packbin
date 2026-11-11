@@ -87,6 +87,8 @@ covers() {
         .github/workflows/test.yml | .github/workflows/run-suite.sh | .github/workflows/ring-* | .github/workflows/drivers/*) return 0 ;;
         */package.json | typescript/package-lock.json | csharp/*.csproj | python/pyproject.toml | rust/Cargo.*) return 0 ;;
         java/test.sh | cpp/library.json | cpp/idf_component.yml | cpp/CMakeLists.txt | go/go.mod | go/go.sum | Package.swift | Package.resolved) return 0 ;;
+        # The files pub.dev publishes besides lib/ (the pubdev build copies and checks them): as Package.swift and go.mod.
+        dart/pubspec.yaml | dart/LICENSE | dart/CHANGELOG.md | dart/README.md | dart/.pubignore | dart/example/*) return 0 ;;
         fixtures/golden.hex) return 0 ;;
       esac ;;
   esac
@@ -96,7 +98,7 @@ covers() {
 # A file added, deleted or renamed in a package changes what the publish gate packs.
 changes_package_files() {
   is_test_path "$1" && return 1
-  case "$1" in csharp/* | typescript/* | python/* | rust/* | java/* | cpp/* | go/* | swift/*) return 0 ;; esac
+  case "$1" in csharp/* | typescript/* | python/* | rust/* | java/* | cpp/* | go/* | swift/* | dart/*) return 0 ;; esac
   return 1
 }
 

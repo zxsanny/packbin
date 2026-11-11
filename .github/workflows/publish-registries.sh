@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Publish entry point: plans the targets from the declared table in publish-lib.sh (a required target
-# without its credential stops the run before any write, an optional one is skipped with a warning),
+# without its credential stops the run before any write, an optional one is skipped with a warning; so is pubdev when
+# pub.dev has no package packbin, ADR-011),
 # builds and checks every one (publish-build.sh), and only then uploads what is not yet published
 # (publish-upload.sh). Re-running a tag finishes whatever an earlier run left out.
 # PACKBIN_BUILD_ONLY=1 runs the build phase alone as a dry run: it needs no credential, unsets every
@@ -28,6 +29,9 @@ out="${PACKBIN_OUT:-$root/.github/workflows/out}"
 build_only="${PACKBIN_BUILD_ONLY:-}"
 mkdir -p "$out"
 export SRC_ROOT="$root" PACKBIN_VERSION="$version" PACKBIN_OUT="$out"
+# A PUB_TOKEN here is the early token of dart-lang/setup-dart: it is not relied on (it can be stale by the upload) and no
+# tool may see it. publish-pubdev.sh makes its own right before its upload.
+unset PUB_TOKEN
 
 if [ ! -s "$plan" ]; then
   echo "publishing 0 packages"
@@ -47,7 +51,7 @@ require_tool() {
 
 # An optional target without its credential is skipped, visibly: a GitHub annotation and a line in the job summary.
 skip_optional() {
-  local message="skipping optional target $1: $2 is not set"
+  local message="skipping optional target $1: $2"
   echo "::warning::$message"
   if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
     printf -- '- %s\n' "$message" >> "$GITHUB_STEP_SUMMARY"
@@ -71,8 +75,10 @@ for lang in "${PACKBIN_LANGS[@]}"; do
       targets+=("$target")
     elif [ "$(target_tier "$target")" != "optional" ]; then
       refused+=("$target is required and lacks: $lacking")
+    elif [ "$target" = pubdev ]; then
+      skip_optional "$target" "$(pubdev_skip_reason token)"
     else
-      skip_optional "$target" "$lacking"
+      skip_optional "$target" "$lacking is not set"
     fi
   done
 done
@@ -83,14 +89,9 @@ if [ "${#refused[@]}" -gt 0 ]; then
   exit 1
 fi
 
-if [ "${#targets[@]}" -eq 0 ]; then
-  echo "publishing 0 packages"
-  exit 0
-fi
-
 # Host tools the build phase needs (signing, git clones, the artifact checker), also in a build-only run.
 require_tool python3
-for target in "${targets[@]}"; do
+for target in ${targets[@]+"${targets[@]}"}; do
   case "$target" in
     java) require_tool gpg ;;
     vcpkg | arduino | go-tag | swift-check) require_tool git ;;
@@ -98,7 +99,25 @@ for target in "${targets[@]}"; do
 done
 if [ "$build_only" != "1" ]; then
   require_tool curl
-  for target in "${targets[@]}"; do
+  # Read-only question to pub.dev, still before anything is built or written: no package packbin skips the optional
+  # pubdev target (the other targets run unchanged); a pub.dev that cannot be asked stops the run.
+  planned=()
+  for target in ${targets[@]+"${targets[@]}"}; do
+    if [ "$target" = pubdev ]; then
+      preflight_work="$(mktemp -d)"
+      trap 'rm -rf "$preflight_work"' EXIT
+      if ! work="$preflight_work" pubdev_preflight; then
+        skip_optional "$target" "$(pubdev_skip_reason package)"
+        continue
+      fi
+    fi
+    planned+=("$target")
+  done
+  targets=()
+  if [ "${#planned[@]}" -gt 0 ]; then
+    targets=("${planned[@]}")
+  fi
+  for target in ${targets[@]+"${targets[@]}"}; do
     case "$target" in
       csharp) require_tool dotnet ;;
       typescript) require_tool npm ;;
@@ -108,14 +127,11 @@ if [ "$build_only" != "1" ]; then
       pubdev) require_tool dart ;;
     esac
   done
-  # Read-only questions to a registry that can refuse the run, still before anything is built or written.
-  for target in "${targets[@]}"; do
-    if [ "$target" = pubdev ]; then
-      preflight_work="$(mktemp -d)"
-      trap 'rm -rf "$preflight_work"' EXIT
-      work="$preflight_work" pubdev_preflight
-    fi
-  done
+fi
+
+if [ "${#targets[@]}" -eq 0 ]; then
+  echo "publishing 0 packages"
+  exit 0
 fi
 
 # The build sees no registry token. Only the signing key, which a real publish needs, passes through.

@@ -381,6 +381,7 @@ jobs:
             .github/workflows/run-suite.sh \
             docker-compose.test.yml \
             docker-compose.publish.yml \
+            docker-compose.publish-dart.yml \
             .dockerignore \
             .env.example \
             LICENSE

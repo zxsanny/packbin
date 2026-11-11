@@ -121,8 +121,6 @@ final class Scheme<R extends Object> {
       SchemeHandler._(this, (Object row) => handler(row as R));
 }
 
-Plan planOf(Scheme<Object> scheme) => scheme._plan;
-
 /// A scheme and what to do with its rows, made by [Scheme.on].
 final class SchemeHandler {
   SchemeHandler._(this.scheme, this._call);

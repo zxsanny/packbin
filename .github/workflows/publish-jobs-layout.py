@@ -218,9 +218,8 @@ def check_matrix(errors, suites):
     for e in hashes:
         if first_set(e.get("part")) is not None and len(to_s(e.get("lang")).split()) > 1:
             errors.append(f"the suites matrix entry {inspect(e)} runs a Swift part beside other suites")
-    # Dart (AZ-4145) has a suite but no publish-gate image yet, so it is in the matrix without being in LANGUAGES.
-    suite_langs = LANGUAGES + [lang for lang in ("dart",) if lang not in LANGUAGES]
-    want = [(lang, None) for lang in suite_langs if lang != "swift"] + [("swift", p) for p in ("tests", "gates", "speed")]
+    # Every language of LANGUAGES (Dart included) has one suite entry; Swift runs as three parts.
+    want = [(lang, None) for lang in LANGUAGES if lang != "swift"] + [("swift", p) for p in ("tests", "gates", "speed")]
     for e in want:
         if e not in got:
             errors.append(f"the suites matrix has no entry for {parts_of(e)}")

@@ -745,3 +745,21 @@ Cost: the C++ Cortex-M4F image is 7,920 B of 8,192 (the order check is built onl
 ## Loop 53 addendum (AZ-2756, AZ-2757)
 
 Review of the session on caller buffers, the shared pad/hash/HKDF, the raw text memo and the stricter presence rule: `_docs/05_security/nostd_review_loop53.md`. Verdict PASS: no Critical, High or Medium. One Low (L53-1, a refused `bits` value left plaintext in the buffer) found by the code review and fixed in the loop. Open observations: the pad is not a MAC (O1), an injected packet shifts the receive position (O2), `session_core/` is outside the clippy deny list (O3), nonce reuse is the caller's duty (O4), L52-1.
+
+## Loop 99 addendum (Dart package and the pub.dev release target, AZ-4133)
+
+2026-11-11: full audit, verdict PASS_WITH_WARNINGS (Critical 0, High 0, Medium 1, Low 7); details in `security_report_loop99.md` (its D1 to D8 are F70 to F77 here). The ninth decoder held up under reading and probes (no exception out of unpack, no allocation from a wire count, no wrap of a negative `u64`, no unbounded nesting); the frame mode, SHA-256, HMAC, HKDF and ChaCha20 written in Dart equal TypeScript and OpenSSL on about 400,000 differential cases; the total review found no defect in the codecs.
+
+| # | Severity | Status | Fix or reason |
+|---|----------|--------|---------------|
+| F70 (D1) | Medium | fixed in loop 99 (AZ-4149) | A `dict` whose keys share one `String.hashCode` cost 20.2 s for 65,535 keys; the unpacked map is now a `SplayTreeMap` ordered by UTF-8 bytes, 130 ms; the pack side reads values from the entries (hostile test `colliding_keys_test.dart`) |
+| F71 (D2) | Low | fixed in loop 99 | The pub.dev OIDC token is minted inside `publish-pubdev.sh` right before the upload, with a 30 s expiry guard |
+| F72 (D3) | Low | fixed in loop 99 | The upload tools run with `PUB_TOKEN` unset; the pubdev upload runs with `unset_credentials` and sees only the token it minted (a test checks the environment of stub tools) |
+| F73 (D4) | Low | accepted | Test hooks (`tagCompareProbe`, key-buffer accessors) are importable through `package:packbin/src/...`; not exported, same pattern as the TypeScript `access` |
+| F74 (D5) | Low | fixed in loop 99 | `dart/.pubignore` keeps `test/` and `tool/` out of the pub package |
+| F75 (D6) | Low | fixed in loop 99 | `platforms:` lists android, ios, linux, macos and windows; the web is documented as not supported (`unpackRow` of a `u64` throws `UnsupportedError` under dart2js) |
+| F76 (D7) | Low | accepted | `pubspec.lock` is not committed (a library's lock file is not used by its consumers); `test` and `lints` float in CI |
+| F77 (D8) | Low | accepted | `dart:3.13.7` is a tag, not a digest, as the other eight images |
+
+Not verified: the OIDC token lifetime and pub.dev's acceptance of the workflow's token (no tag run); `dart pub audit` on the dev dependency tree.
+

@@ -1,0 +1,6 @@
+# Replaces .gitignore for `dart pub publish`: the archive has no tests and no
+# benchmark tool, and none of the build output.
+test/
+tool/
+.dart_tool/
+pubspec.lock

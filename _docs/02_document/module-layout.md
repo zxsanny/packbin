@@ -346,7 +346,7 @@ A scheme may declare a percentage of parity instead of a count. No component cha
 - Java: `Scheme.java`, `Ecc.java`, `EccRepair.java`, `BinaryPacker.java`; tests `PercentSchemeTest.java`, `PercentVectorsTest.java`.
 - Go: new `ecc_percent.go`, `scheme.go`, `ecc.go`, `pack.go`, `unpack.go`; tests `ecc_percent_test.go`, `ecc_percent_vectors_test.go`.
 - Swift: `Scheme.swift`, `Limits.swift`, `Ecc.swift`, `Pack.swift`, `Unpack.swift`; tests `EccPercentSupport.swift`, `EccPercentTests.swift`, `EccPercentVectorTests.swift`.
-- Ring: `scripts/ecc/ring_ecc.py`, `gen_ring_cases.py`, `fixtures/ecc/ring-cases.txt`, `.github/workflows/ring-ecc.test.sh` and the eight ECC drivers under `.github/workflows/drivers`.
+- Ring: `scripts/ecc/ring_ecc.py`, `gen_ring_cases.py`, `fixtures/ecc/ring-cases.txt`, `.github/workflows/ring-ecc.test.sh` and the nine ECC drivers under `.github/workflows/drivers`.
 
 
 ## Loop 99 — Dart package (AZ-4134 to AZ-4148, epic AZ-4133)

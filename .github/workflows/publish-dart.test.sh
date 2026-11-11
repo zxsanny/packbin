@@ -34,6 +34,9 @@ fi
 DT_GOLDEN="4001000065cd1d00a3e1110100"
 DT_WRONG="4001000065cd1d00a3e1110101"
 DT_CREDENTIALS="NUGET_TOKEN NPM_TOKEN PYPI_TOKEN CARGO_REGISTRY_TOKEN MAVEN_CENTRAL_TOKEN MAVEN_GPG_PRIVATE_KEY PLATFORMIO_AUTH_TOKEN IDF_COMPONENT_API_TOKEN GITHUB_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_ID_TOKEN_REQUEST_TOKEN PUB_TOKEN"
+# What the job gives the upload step with id-token: write (ADR-011): the request URL and bearer token of the GitHub OIDC
+# endpoint (the curl stub answers https://oidc.example/...) and the stub's answer. The minted token is DT_MINT_JWT.
+dt_oidc=(ACTIONS_ID_TOKEN_REQUEST_URL="https://oidc.example/req?x=1" ACTIONS_ID_TOKEN_REQUEST_TOKEN=reqtok-123 DT_OIDC=ok)
 # The scripts under test; the mutation checks point it at a mutated copy.
 dt_wf="$here"
 
@@ -45,19 +48,30 @@ part = lambda d: base64.urlsafe_b64encode(json.dumps(d).encode()).rstrip(b"=").d
 print(part({"alg": "none"}) + "." + part({"exp": int(time.time()) + int(sys.argv[1])}) + ".sig")' "$1"
 }
 
-# The stubs. `dart` logs each call and its directory; `pub publish --dry-run` reports a clean package, `pub token list`
-# says pub.dev is registered unless DT_NO_TOKEN is set, `pub publish --force` logs the version it finds (exit DT_PUBLISH_EXIT).
-# `curl` answers only the pub.dev package document, from $DT_PUBDEV: absent (404), has (lists 9.8.7), other (lists 0.0.1),
-# busy (503); it logs every call, and any other URL fails.
+# The stubs. `dart` logs each call and its directory; `pub publish --dry-run` reports a clean package, `pub token add`
+# logs whether PUB_TOKEN is set, `pub token list` says pub.dev is registered unless DT_NO_TOKEN is set, `pub publish
+# --force` logs the version it finds, the credential variables it can see (names only) and whether its PUB_TOKEN is the
+# token the OIDC stub minted (exit DT_PUBLISH_EXIT). `dotnet` logs its call and the credential names it sees.
+# `curl` answers the pub.dev package document, from $DT_PUBDEV: absent (404), has (lists 9.8.7), other (lists 0.0.1),
+# busy (503); the nuget flat container (404); and the GitHub OIDC request (https://oidc.example/...): it logs the content
+# of a header file given as `-H @file` and answers from $DT_OIDC: ok (200, {"value": $DT_MINT_JWT}), down (503), empty
+# (200, {}), unreachable (exit 7). It logs every call; any other URL fails.
 dt_write_stubs() {
   cat > "$1/dart" <<'EOF'
 #!/bin/bash
 printf 'dart %s|cwd=%s\n' "$*" "$PWD" >> "$DT_LOG"
 case "$*" in
   "pub publish --dry-run") echo "Validating package..."; echo "Package has 0 warnings."; exit 0 ;;
+  "pub token add https://pub.dev --env-var PUB_TOKEN") printf 'token-add PUB_TOKEN set=%s\n' "${PUB_TOKEN:+yes}" >> "$DT_LOG"; exit 0 ;;
   "pub token list")
     if [ -n "${DT_NO_TOKEN:-}" ]; then echo "You do not have any secret tokens for package repositories."; else echo "You have secret tokens for 1 package repositories:"; echo "https://pub.dev"; fi ;;
-  "pub publish --force") printf 'published version=%s files=%s\n' "$(sed -n 's/^version: //p' pubspec.yaml)" "$(ls | paste -sd ' ' -)" >> "$DT_LOG"; exit "${DT_PUBLISH_EXIT:-0}" ;;
+  "pub publish --force")
+    printf 'published version=%s files=%s\n' "$(sed -n 's/^version: //p' pubspec.yaml)" "$(ls | paste -sd ' ' -)" >> "$DT_LOG"
+    seen="$(env | grep -E '^(NUGET_TOKEN|NPM_TOKEN|PYPI_TOKEN|CARGO_REGISTRY_TOKEN|MAVEN_CENTRAL_TOKEN|MAVEN_GPG_PRIVATE_KEY|PLATFORMIO_AUTH_TOKEN|IDF_COMPONENT_API_TOKEN|GITHUB_TOKEN|ACTIONS_ID_TOKEN_REQUEST_URL|ACTIONS_ID_TOKEN_REQUEST_TOKEN)=' | cut -d= -f1 | paste -sd ' ' -)"
+    minted=no
+    if [ "${PUB_TOKEN:-}" = "${DT_MINT_JWT:-unset}" ]; then minted=yes; fi
+    printf 'publish-env credentials=[%s] token-is-minted=%s\n' "$seen" "$minted" >> "$DT_LOG"
+    exit "${DT_PUBLISH_EXIT:-0}" ;;
   *) echo "dart stub: unexpected $*" >&2; exit 2 ;;
 esac
 EOF
@@ -67,10 +81,19 @@ printf 'curl %s\n' "$*" >> "$DT_LOG"
 out="" prev="" url=""
 for a in "$@"; do
   if [ "$prev" = "-o" ]; then out="$a"; fi
+  if [ "$prev" = "-H" ] && [ "${a#@}" != "$a" ]; then printf 'curl-header %s\n' "$(cat "${a#@}")" >> "$DT_LOG"; fi
   prev="$a"
   url="$a"
 done
 case "$url" in
+  https://api.nuget.org/v3-flatcontainer/packbin/index.json) printf 404 ;;
+  https://oidc.example/*)
+    case "${DT_OIDC:?}" in
+      ok) printf '{"value":"%s"}' "$DT_MINT_JWT" > "$out"; printf 200 ;;
+      down) printf 503 ;;
+      empty) printf '{}' > "$out"; printf 200 ;;
+      unreachable) exit 7 ;;
+    esac ;;
   https://pub.dev/api/packages/packbin)
     case "${DT_PUBDEV:?}" in
       absent) printf 404 ;;
@@ -81,7 +104,12 @@ case "$url" in
   *) echo "unexpected curl url: $url" >&2; exit 1 ;;
 esac
 EOF
-  chmod +x "$1/dart" "$1/curl"
+  cat > "$1/dotnet" <<'EOF'
+#!/bin/bash
+printf 'dotnet %s\n' "$*" >> "$DT_LOG"
+printf 'dotnet-env credentials=[%s]\n' "$(env | grep -E '^(NUGET_TOKEN|PUB_TOKEN|GITHUB_TOKEN|ACTIONS_ID_TOKEN_REQUEST_URL|ACTIONS_ID_TOKEN_REQUEST_TOKEN)=' | cut -d= -f1 | paste -sd ' ' -)" >> "$DT_LOG"
+EOF
+  chmod +x "$1/dart" "$1/curl" "$1/dotnet"
 }
 
 # dt_setup: $dt_dir with the stubs in bin/ and the log.
@@ -148,7 +176,7 @@ dt_publish() {
   printf '%s\n' $plan > "$dt_dir/$name.plan"
   set +e
   env "${unset_args[@]}" PACKBIN_PUBLISH=1 PACKBIN_DOCKER=0 SRC_ROOT="$tree" PACKBIN_PLAN="$dt_dir/$name.plan" \
-    PACKBIN_OUT="$dt_dir/out-$name" PACKBIN_VERSION=v9.8.7 PACKBIN_QUERY_PAUSE=0 DT_LOG="$dt_log" DT_PUBDEV=other \
+    PACKBIN_OUT="$dt_dir/out-$name" PACKBIN_VERSION=v9.8.7 PACKBIN_QUERY_PAUSE=0 DT_LOG="$dt_log" DT_PUBDEV=other DT_OIDC=ok \
     PATH="$dt_bin:$PATH" "$@" bash "$tree/.github/workflows/publish-registries.sh" > "$dt_dir/$name.out" 2>&1 < /dev/null
   dt_code=$?
   set -e
@@ -194,9 +222,10 @@ dt_gate_checks() {
   rm -rf "$dt_dir"
 }
 
-# AC-4 and AC-5: the targets planned for a plan with and without dart (a build-only run with the build and upload scripts
-# replaced by loggers), and a run that lacks PUB_TOKEN (a required target without its credential) or finds no package on
-# pub.dev: it fails before anything is built or sent, with no call to dart and no write to pub.dev.
+# AC-4 and AC-5 (R9): the targets planned for a plan with and without dart (a build-only run with the build and upload
+# scripts replaced by loggers), and the optional tier of pubdev: a run without the OIDC permission, or one that finds no
+# package on pub.dev, skips pubdev with one warning naming the owner steps, plans the other targets unchanged and calls
+# neither dart nor a write; a pub.dev that cannot be asked still stops the run.
 dt_plan_checks() {
   local tree wf
   dt_setup
@@ -211,25 +240,40 @@ dt_plan_checks() {
   : > "$dt_log"
   dt_publish "$tree" withdart "csharp rust dart" PACKBIN_BUILD_ONLY=1
   assert_eq "$(grep '^planned build' "$dt_log")" "planned build: csharp rust pubdev" "AC-4 targets with dart: the others are unchanged"
-  assert_eq "$(bash -c 'source "$1"; target_tier pubdev; targets_of_lang dart' _ "$wf/publish-lib.sh" | paste -sd ' ' -)" "required pubdev" "pubdev target table"
+  assert_eq "$(bash -c 'source "$1"; target_tier pubdev; targets_of_lang dart; target_credentials pubdev' _ "$wf/publish-lib.sh" | paste -sd ' ' -)" \
+    "optional pubdev ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_ID_TOKEN_REQUEST_TOKEN" "R9 pubdev is optional and its credential is the OIDC permission"
 
   : > "$dt_log"
-  dt_publish "$tree" nopermission "dart"
-  assert_eq "$dt_code" "1" "AC-5 a run without PUB_TOKEN"
-  grep -qx 'pubdev is required and lacks: PUB_TOKEN' "$dt_dir/nopermission.out" || fail "AC-5 the refusal does not name pubdev and PUB_TOKEN: $(cat "$dt_dir/nopermission.out")"
-  grep -q 'nothing was built or written' "$dt_dir/nopermission.out" || fail "AC-5 the refusal does not say that nothing was written: $(cat "$dt_dir/nopermission.out")"
-  assert_eq "$(wc -c < "$dt_log" | tr -d ' ')" "0" "AC-5 calls made after a refusal for the missing permission"
-  [ ! -e "$dt_dir/out-nopermission/artifacts" ] || fail "AC-5 something was built after the refusal"
+  dt_publish "$tree" nopermission "csharp dart" NUGET_TOKEN=n
+  assert_eq "$dt_code" "0" "AC-4 a run without the OIDC permission skips pubdev: $(tail -n 4 "$dt_dir/nopermission.out")"
+  assert_eq "$(grep -c '^::warning::skipping optional target pubdev: the job has no GitHub OIDC token' "$dt_dir/nopermission.out")" "1" \
+    "AC-4 one warning for the missing permission: $(cat "$dt_dir/nopermission.out")"
+  grep -q "owner steps (ADR-011): publish the first version by hand" "$dt_dir/nopermission.out" || fail "AC-4 the warning does not name the owner steps"
+  assert_eq "$(grep '^planned' "$dt_log" | paste -sd '|' -)" "planned build: csharp|planned upload: csharp" "AC-4 the other target runs unchanged"
+  assert_eq "$(dt_calls '^dart ')/$(dt_calls 'pub.dev')/$(dt_calls 'oidc.example')" "0/0/0" "AC-4 dart or pub.dev calls without the permission"
+  : > "$dt_log"
+  dt_publish "$tree" onlydart "dart"
+  assert_eq "$dt_code" "0" "AC-4 a plan of dart alone without the permission"
+  grep -qx 'publishing 0 packages' "$dt_dir/onlydart.out" || fail "AC-4 a skipped dart-only plan: $(cat "$dt_dir/onlydart.out")"
+  assert_eq "$(wc -c < "$dt_log" | tr -d ' ')" "0" "AC-4 calls made after skipping the only target"
 
   : > "$dt_log"
-  dt_publish "$tree" nopackage "dart" PUB_TOKEN="$(dt_jwt 600)" DT_PUBDEV=absent
-  assert_eq "$dt_code" "1" "AC-5 a pub.dev without the package"
-  grep -q "pub.dev has no package packbin" "$dt_dir/nopackage.out" || fail "AC-5 no first-publish message: $(cat "$dt_dir/nopackage.out")"
-  assert_eq "$(dt_calls '^planned')/$(dt_calls '^dart ')/$(dt_calls '^curl .* -X ')" "0/0/0" "AC-5 builds, dart calls and writes after a missing package"
-  dt_publish "$tree" busy "dart" PUB_TOKEN="$(dt_jwt 600)" DT_PUBDEV=busy
-  assert_eq "$dt_code" "1" "AC-5 a pub.dev that cannot be asked"
-  grep -q "cannot tell whether pubdev 9.8.7 is published" "$dt_dir/busy.out" || fail "AC-5 an unknown answer was not reported: $(cat "$dt_dir/busy.out")"
-  assert_eq "$(dt_calls '^planned')" "0" "AC-5 builds after a pub.dev that cannot be asked"
+  dt_publish "$tree" nopackage "csharp dart" NUGET_TOKEN=n "${dt_oidc[@]}" DT_PUBDEV=absent
+  assert_eq "$dt_code" "0" "AC-4 a pub.dev without the package skips pubdev: $(tail -n 4 "$dt_dir/nopackage.out")"
+  assert_eq "$(grep -c '^::warning::skipping optional target pubdev: pub.dev has no package packbin' "$dt_dir/nopackage.out")" "1" \
+    "AC-4 one warning for the missing package: $(cat "$dt_dir/nopackage.out")"
+  grep -q "then enable automated publishing for zxsanny/packbin on pub.dev with the tag pattern v{{version}}" "$dt_dir/nopackage.out" \
+    || fail "AC-4 the warning does not name the owner steps"
+  assert_eq "$(grep '^planned' "$dt_log" | paste -sd '|' -)" "planned build: csharp|planned upload: csharp" "AC-4 the other target after a missing package"
+  assert_eq "$(dt_calls '^dart ')/$(dt_calls '^curl .* -X ')/$(dt_calls 'oidc.example')" "0/0/0" "AC-4 dart calls, writes and token requests after a missing package"
+  : > "$dt_log"
+  dt_publish "$tree" present "csharp dart" NUGET_TOKEN=n "${dt_oidc[@]}" DT_PUBDEV=other
+  assert_eq "$(grep '^planned' "$dt_log" | paste -sd '|' -)" "planned build: csharp pubdev|planned upload: csharp pubdev" "AC-4 a present package plans pubdev after the others"
+  : > "$dt_log"
+  dt_publish "$tree" busy "csharp dart" NUGET_TOKEN=n "${dt_oidc[@]}" DT_PUBDEV=busy
+  assert_eq "$dt_code" "1" "AC-4 a pub.dev that cannot be asked"
+  grep -q "cannot tell whether pubdev 9.8.7 is published" "$dt_dir/busy.out" || fail "AC-4 an unknown answer was not reported: $(cat "$dt_dir/busy.out")"
+  assert_eq "$(dt_calls '^planned')" "0" "AC-4 builds after a pub.dev that cannot be asked"
   rm -rf "$dt_dir"
 }
 
@@ -243,18 +287,20 @@ dt_upload_checks() {
   tree="$(dt_tree upload)"
   token="$(dt_jwt 600)"
 
-  dt_publish "$tree" has "dart" PUB_TOKEN="$token" DT_PUBDEV=has
+  dt_publish "$tree" has "dart" "${dt_oidc[@]}" DT_MINT_JWT="$token" DT_PUBDEV=has
   assert_eq "$dt_code" "0" "AC-3 a version pub.dev has: $(tail -n 4 "$dt_dir/has.out")"
   grep -qx 'already published pubdev 9.8.7' "$dt_dir/has.out" || fail "AC-3 not reported as already published: $(cat "$dt_dir/has.out")"
   assert_eq "$(dt_calls 'pub publish --force')" "0" "AC-3 an upload attempt for a version pub.dev has"
   grep -q '^upload pubdev' "$dt_dir/has.out" && fail "AC-3 an upload line for a version pub.dev has"
   assert_eq "$(grep -c '^curl .*-X \|^curl .*--data\|^curl .* -T ' "$dt_log" || true)" "0" "AC-6 writes to pub.dev through curl"
+  assert_eq "$(dt_calls 'oidc.example')" "0" "AC-4 a token requested for a version pub.dev has"
 
   : > "$dt_log"
-  dt_publish "$tree" fresh "dart" PUB_TOKEN="$token" DT_PUBDEV=other
+  dt_publish "$tree" fresh "dart" "${dt_oidc[@]}" DT_MINT_JWT="$token" PUB_TOKEN=stale-early-token DT_PUBDEV=other
   assert_eq "$dt_code" "0" "AC-6 an upload through the stub: $(tail -n 4 "$dt_dir/fresh.out")"
   grep -qx 'upload pubdev' "$dt_dir/fresh.out" || fail "AC-6 no upload line: $(cat "$dt_dir/fresh.out")"
   assert_eq "$(dt_calls '^dart pub publish --force')" "1" "AC-6 publish calls"
+  assert_eq "$(dt_calls '^dart pub token add https://pub.dev --env-var PUB_TOKEN')" "1" "AC-4 the token is registered once, from the environment"
   assert_eq "$(dt_calls '^dart pub token list')" "1" "AC-6 the registered-token check"
   published="$(grep '^published version=' "$dt_log")"
   assert_eq "${published%% files=*}" "published version=9.8.7" "AC-2 the published package carries the tag version"
@@ -265,24 +311,25 @@ dt_upload_checks() {
   assert_eq "$(grep -c -- '--dry-run' "$dt_log")" "1" "AC-2 one dry run in the build phase"
 
   : > "$dt_log"
-  dt_publish "$tree" expired "dart" PUB_TOKEN="$(dt_jwt -5)" DT_PUBDEV=other
+  dt_publish "$tree" expired "dart" "${dt_oidc[@]}" DT_MINT_JWT="$(dt_jwt -5)" DT_PUBDEV=other
   assert_eq "$dt_code" "1" "AC-6 an expired token"
   grep -q 'expired .* run the tag again' "$dt_dir/expired.out" || fail "AC-6 an expired token is not explained: $(tail -n 3 "$dt_dir/expired.out")"
   assert_eq "$(dt_calls 'pub publish --force')" "0" "AC-6 an upload with an expired token"
-  dt_publish "$tree" notjwt "dart" PUB_TOKEN="not-a-jwt" DT_PUBDEV=other
+  dt_publish "$tree" notjwt "dart" "${dt_oidc[@]}" DT_MINT_JWT="not-a-jwt" DT_PUBDEV=other
   assert_eq "$dt_code" "1" "AC-6 a token that is not a JWT"
   grep -q 'cannot read the OIDC token' "$dt_dir/notjwt.out" || fail "AC-6 a bad token is not explained: $(tail -n 3 "$dt_dir/notjwt.out")"
-  dt_publish "$tree" unregistered "dart" PUB_TOKEN="$token" DT_PUBDEV=other DT_NO_TOKEN=1
-  assert_eq "$dt_code" "1" "AC-6 a token setup-dart did not register"
+  dt_publish "$tree" unregistered "dart" "${dt_oidc[@]}" DT_MINT_JWT="$token" DT_PUBDEV=other DT_NO_TOKEN=1
+  assert_eq "$dt_code" "1" "AC-6 a token that pub did not register"
   grep -q 'did not register a token for https://pub.dev' "$dt_dir/unregistered.out" || fail "AC-6 an unregistered token is not explained: $(tail -n 3 "$dt_dir/unregistered.out")"
-  dt_publish "$tree" refused "dart" PUB_TOKEN="$token" DT_PUBDEV=other DT_PUBLISH_EXIT=65
+  dt_publish "$tree" refused "dart" "${dt_oidc[@]}" DT_MINT_JWT="$token" DT_PUBDEV=other DT_PUBLISH_EXIT=65
   [ "$dt_code" -ne 0 ] || fail "AC-6 a publish that pub.dev refuses did not fail the run"
   rm -rf "$dt_dir"
 }
 
 # AC-6 and the official mechanism, read from the files: `pub publish` without --dry-run appears only in
-# publish-pubdev.sh (with --force, run after setup-dart); publish.yml keeps its permissions, pins setup-dart by commit
-# and runs it after the golden gate and before the registries; no script stores or creates a token of pub.dev.
+# publish-pubdev.sh (with --force); publish.yml keeps its permissions, pins setup-dart by commit (the Dart SDK of the
+# runner) and runs it after the golden gate and before the registries; no script but publish-pubdev.sh registers a
+# token of pub.dev, and that one only from the environment (--env-var), never stored, never printed.
 dt_static_checks() {
   local f line yml="$dt_wf/publish.yml" setup gate registries
   for f in "$dt_wf"/publish*.sh "$dt_wf"/publish*.py "$dt_wf"/publish*.yml; do
@@ -294,10 +341,17 @@ dt_static_checks() {
   grep -q 'dart pub publish --force' "$dt_wf/publish-pubdev.sh" || fail "AC-6 publish-pubdev.sh does not run dart pub publish --force"
   for f in "$dt_wf"/publish*.sh "$dt_wf"/publish*.py "$yml"; do
     case "$f" in *.test.sh) continue ;; esac
+    case "$f" in */publish-pubdev.sh) continue ;; esac
     if grep -vE '^[[:space:]]*#' "$f" | grep -qE 'pub token add|PUB_TOKEN=|credentials\.json'; then
       fail "AC-6 $(basename "$f") stores or creates a pub.dev token"
     fi
   done
+  f="$dt_wf/publish-pubdev.sh"
+  grep -vE '^[[:space:]]*#' "$f" | grep -E '^[[:space:]]*dart pub token add' | grep -vqE 'pub token add https://pub\.dev --env-var PUB_TOKEN( |$)' \
+    && fail "AC-4 publish-pubdev.sh registers a token other than from the environment"
+  grep -vE '^[[:space:]]*#' "$f" | grep -qE 'credentials\.json|set -[a-z]*x|xtrace' && fail "AC-4 publish-pubdev.sh stores a token or traces its commands"
+  grep -vE '^[[:space:]]*#' "$f" | grep -E '(echo|printf)[^|]*(PUB_TOKEN|\$token|request_token)' | grep -vqE '::add-mask::|Authorization: Bearer|printf .%s.n. "\$token"' \
+    && fail "AC-4 publish-pubdev.sh prints a token"
   grep -qE '^[[:space:]]+- uses: dart-lang/setup-dart@[0-9a-f]{40} # v[0-9.]+$' "$yml" || fail "AC-2 setup-dart is not pinned by a commit with its tag"
   setup="$(grep -n 'dart-lang/setup-dart@' "$yml" | head -n 1 | cut -d: -f1)"
   gate="$(grep -n 'publish-gate.sh' "$yml" | head -n 1 | cut -d: -f1)"
@@ -313,9 +367,12 @@ dart_checks() {
   dt_gate_checks
   dt_plan_checks
   dt_upload_checks
+  dart_token_checks
   dart_package_checks
 }
 
+# shellcheck source=publish-pubdev-token.test.sh
+source "$here/publish-pubdev-token.test.sh"
 # shellcheck source=publish-dart-package.test.sh
 source "$here/publish-dart-package.test.sh"
 

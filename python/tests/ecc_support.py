@@ -1,6 +1,6 @@
 """Shared pieces of the message ECC tests (AZ-2680; contract `message-ecc.md`).
 
-The vector rows are `fixtures/ecc/vectors.txt`, the same for the eight packages. The reference codec is
+The vector rows are `fixtures/ecc/vectors.txt`, the same for the nine packages. The reference codec is
 `scripts/ecc/eccfmt.py`; it is loaded by path as the independent side of the byte-for-byte checks.
 """
 

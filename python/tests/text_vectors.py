@@ -1,4 +1,4 @@
-"""Loader of `fixtures/text/vectors.txt` (compact text rows shared by the eight packages).
+"""Loader of `fixtures/text/vectors.txt` (compact text rows shared by the nine packages).
 
 Row syntax is at the top of the file: `enc id text field`, `alt id text field`, `bad id kind buffer`,
 `ref id packet`, `flip id enc-id`; text is the hex of its UTF-8 bytes, `-` is the empty text.

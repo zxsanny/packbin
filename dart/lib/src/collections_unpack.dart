@@ -1,4 +1,5 @@
 import 'counted_unpack.dart';
+import 'dict_map.dart';
 import 'errors.dart';
 import 'node.dart';
 import 'text/text.dart';
@@ -63,7 +64,7 @@ extension CollectionUnpack on Reader {
     }
     final items = typed
         ? n.make!() as Map<String, Object?>
-        : <String, Object?>{};
+        : newDict<Object?>();
     String? previous;
     for (var i = 0; i < count; i++) {
       final key = readText(null, n.name);

@@ -45,7 +45,7 @@ export 'src/fields.dart'
         u8,
         utf8Field,
         when;
-export 'src/node.dart' show Condition, flagBits;
+export 'src/node.dart' show Condition;
 export 'src/scheme.dart'
     show
         Scheme,

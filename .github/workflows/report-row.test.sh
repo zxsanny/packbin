@@ -4,12 +4,12 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$root"
 
-langs="csharp typescript python rust cpp java go swift"
+langs="csharp typescript python rust cpp java go swift dart"
 for lang in $langs; do
   grep -q "^  ${lang}:" docker-compose.test.yml
   grep -q "^  ${lang}:" docker-compose.publish.yml
 done
-# The suites job is a matrix whose entries name the eight services (Swift as three parts, AZ-2600, AZ-2607; short suites
+# The suites job is a matrix whose entries name the nine services (Swift as three parts, AZ-2600, AZ-2607; short suites
 # share an entry, AZ-2627). The entries are listed longest first (AZ-2625), so the languages are compared as a set.
 matrix="$(python3 -I -c 'import sys; sys.path.insert(0, sys.argv[1]); import yaml_get
 inc = yaml_get.load(sys.argv[2])["jobs"]["suites"]["strategy"]["matrix"]["include"]

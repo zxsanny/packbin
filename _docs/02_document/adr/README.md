@@ -25,4 +25,4 @@ ADR-007 amends nothing: ADR-001's "the wire size is the sum of the present field
 ADR-008 amends ADR-001's "the wire size is the sum of the present fields" and the "authentication: none" line of the architecture for frame mode only: the body ends with its tag. Stream mode was unchanged then and is removed by ADR-009.
 ADR-009 amends ADR-008: its frame-mode decision stands; the stream mode beside it, and "one session type serves the websocket (stream) and the radio (frame)", are removed. ADR-008 itself is unchanged.
 ADR-010 amends nothing: it adds a second way to choose the parity count of ADR 007 (a percentage of the clear length); ADR-007 is unchanged and its fixed count stays.
-ADR-011 amends nothing: pub.dev is one more required target of the ADR-002 run (a seventh registry); ADR-002, ADR-004 and ADR-005 stay as written, and the golden gate now covers nine languages.
+ADR-011 amends nothing: pub.dev is one more target of the ADR-002 run (a seventh registry; optional since 2026-11-11, AZ-4149); ADR-002, ADR-004 and ADR-005 stay as written, and the golden gate now covers nine languages.

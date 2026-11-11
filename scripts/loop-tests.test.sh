@@ -88,7 +88,15 @@ change Package.swift; expect "swift manifest" "swift scaffold ring publish-gate"
 # 8c. Dart (AZ-4145, AZ-4146): a test file runs the Dart suite only; the package manifest also the scaffold, which checks it exists, and the ring (its cache key);
 # the suite script that holds the Dart steps runs the Dart suite and the scaffold (every file of .github is a scaffold file)
 change dart/test/core/t_test.dart; expect "dart test" "dart"; stamp_all
-change dart/pubspec.yaml; expect "dart manifest" "dart scaffold ring"; stamp_all
+change dart/pubspec.yaml; expect "dart manifest" "dart scaffold ring publish-gate"; stamp_all
+# R11 (AZ-4149): every file that pub.dev publishes besides lib/ selects the gate (the pubdev build copies and checks them)
+for f in dart/LICENSE dart/CHANGELOG.md dart/README.md dart/.pubignore dart/example/main.dart; do
+  mkdir -p "$(dirname "$repo/$f")"; echo "# $f" > "$repo/$f"
+  change "$f"; expect "dart package file $f" "dart publish-gate"; stamp_all
+done
+# a Dart file added under lib/ changes what the gate packs; a Dart test file added does not
+echo "// new" > "$repo/dart/lib/b.dart"
+change dart/lib/b.dart; expect "dart source added" "dart ring publish-gate"; stamp_all
 change dart/lib/a.dart; expect "dart source" "dart ring"; stamp_all
 mkdir -p "$repo/.github/workflows"; echo "# steps" > "$repo/.github/workflows/run-suite-dart.sh"
 change .github/workflows/run-suite-dart.sh; expect "dart suite steps" "dart scaffold"; stamp_all

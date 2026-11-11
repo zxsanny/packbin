@@ -18,7 +18,7 @@ import timing_support
 from text_vectors import Row
 
 # AZ-2648: every string position uses the compact text format (contract compact-text 1.0.0); the rows are
-# `fixtures/text/vectors.txt`, the same for the eight packages.
+# `fixtures/text/vectors.txt`, the same for the nine packages.
 
 TABLES_JSON = text_vectors.ROOT / "fixtures" / "text" / "tables.json"
 TABLES_PY = Path(_text_tables.__file__)

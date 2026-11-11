@@ -108,7 +108,7 @@ DictField<E> dict<E extends Object>(String name, ElementField<E> element) =>
         NodeKind.dict,
         name: name,
         fields: [element._node],
-        make: () => <String, E>{},
+        make: newDict<E>,
       ),
     );
 

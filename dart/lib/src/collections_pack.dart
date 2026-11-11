@@ -89,9 +89,10 @@ extension CollectionPack on Packer {
         '${n.name}: the dictionary holds $count pairs, above the limit of $maxItems',
       );
     }
-    final keys = <String>[];
+    final pairs = <MapEntry<String, Object?>>[];
     var i = 0;
-    for (final k in v.keys) {
+    for (final entry in v.entries) {
+      final k = entry.key;
       if (k is! String) {
         throw packFail(
           null,
@@ -99,17 +100,18 @@ extension CollectionPack on Packer {
           '${n.name}[$i]: the key is a ${k.runtimeType}, expected a String',
         );
       }
-      keys.add(k);
+      pairs.add(MapEntry(k, entry.value));
       i++;
     }
     // By the bytes of the keys, never String.compareTo: UTF-16 order differs
-    // from UTF-8 order above U+FFFF.
-    keys.sort(compareUtf8);
+    // from UTF-8 order above U+FFFF. The values are read from the entries, so
+    // a map whose keys share one hash is not looked up key by key.
+    pairs.sort((a, b) => compareUtf8(a.key, b.key));
     out.integer(count, 2, false, Endian.little);
     final e = n.fields[0];
-    for (final k in keys) {
-      writeText(null, n.name, k);
-      _item(n, e, v[k], k);
+    for (final pair in pairs) {
+      writeText(null, n.name, pair.key);
+      _item(n, e, pair.value, pair.key);
     }
   }
 

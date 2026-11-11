@@ -11,9 +11,12 @@ PACKBIN_LANGS=(csharp typescript python rust cpp java go swift dart)
 # (ADR-004) by pushing the tag go/vX.Y.Z, so it waits until every registry accepted the version.
 # swift-check uploads nothing and writes no tag: Swift installs from the vX.Y.Z tag through the root
 # Package.swift (ADR-005), and the check resolves and builds a consumer of that tag, after the Go tag.
-# pubdev uploads the Dart package to pub.dev (ADR-011). pub.dev takes no stored secret from a tag run: setup-dart
-# (publish.yml) trades the job's GitHub OIDC permission for a token and exports it as PUB_TOKEN, which is the credential
-# this target needs, so a run without that permission is refused before any write like any required target.
+# pubdev uploads the Dart package to pub.dev (ADR-011). pub.dev takes no stored secret from a tag run: publish-pubdev.sh
+# trades the job's GitHub OIDC permission (ACTIONS_ID_TOKEN_REQUEST_URL and ACTIONS_ID_TOKEN_REQUEST_TOKEN, the
+# credentials of this target) for a token right before the upload. It is optional because pub.dev takes an automated
+# publish only for a package that exists: with no OIDC permission, or no package packbin on pub.dev (publish-registries.sh
+# asks before anything is built), the target is skipped with a warning naming the owner steps, and the other targets
+# run unchanged; a pubdev upload that fails still fails the run.
 # Uploads run required targets first, then optional, then final.
 PACKBIN_TARGETS=(
   "csharp csharp required"
@@ -22,10 +25,10 @@ PACKBIN_TARGETS=(
   "rust rust required"
   "java java required"
   "vcpkg cpp required"
-  "pubdev dart required"
   "platformio cpp optional"
   "esp-idf cpp optional"
   "arduino cpp optional"
+  "pubdev dart optional"
   "go-tag go final"
   "swift-check swift final"
 )
@@ -68,7 +71,7 @@ target_credentials() {
     arduino) if [[ "$(arduino_url)" == https://github.com/* ]]; then echo "GITHUB_TOKEN"; fi ;;
     go-tag) if [[ "$(go_tag_url)" == https://github.com/* ]]; then echo "GITHUB_TOKEN"; fi ;;
     swift-check) echo "" ;;
-    pubdev) echo "PUB_TOKEN" ;;
+    pubdev) echo "ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_ID_TOKEN_REQUEST_TOKEN" ;;
     *)
       echo "unknown target: $1" >&2
       return 1

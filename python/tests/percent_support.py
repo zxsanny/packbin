@@ -1,6 +1,6 @@
 """Shared pieces of the parity percentage tests (AZ-3500; contract `message-ecc.md` 1.1.0).
 
-The vector rows are `fixtures/ecc/percent-vectors.txt`, the same for the eight packages.
+The vector rows are `fixtures/ecc/percent-vectors.txt`, the same for the nine packages.
 """
 
 from __future__ import annotations

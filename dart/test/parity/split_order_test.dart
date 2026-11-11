@@ -2,6 +2,7 @@ import 'package:packbin/packbin.dart';
 import 'package:test/test.dart';
 
 import '../support/hex.dart';
+import '../support/refusal.dart';
 import '../support/repo.dart';
 import 'parity_support.dart';
 
@@ -384,12 +385,23 @@ void main() {
       );
     });
 
-    test('AC-4 a flat key does not reach a nested row: it is not read', () {
-      // Act
-      final wire = outcome(splitBitGroup(), {'c': 2});
+    test(
+      'AC-4 a flat key of a nested row is refused naming the member (R3)',
+      () {
+        // Arrange: TypeScript's flat group refuses this row too (`missing a`)
+        final layout = splitBitGroup();
 
-      // Assert
-      expect(wire, '0100');
-    });
+        // Act
+        final error = packRefusal(() => pack(layout, {'c': 2}));
+
+        // Assert
+        expect(error.name, 'c');
+        expect(error.field, 1);
+        expect(
+          error.reason,
+          startsWith('c is a member of nested row g, which is not given'),
+        );
+      },
+    );
   });
 }

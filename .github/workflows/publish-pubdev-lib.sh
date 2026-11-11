@@ -8,14 +8,25 @@ pubdev_api_url() {
   printf '%s\n' "${PUBDEV_API_URL:-https://pub.dev/api/packages/packbin}"
 }
 
-# Fails when pub.dev has no package packbin: pub.dev takes an automated publish only for a package that exists, so the
-# first version is published by the owner by hand (ADR-011), and the run must say so before it writes anywhere.
-# A pub.dev that cannot be asked stops the run through registry_fetch (an unknown answer is never "exists").
+# Succeeds when pub.dev has the package packbin, fails (quietly) when it answers 404: pub.dev takes an automated publish
+# only for a package that exists, so the owner publishes the first version by hand (ADR-011), and publish-registries.sh
+# then skips the optional pubdev target with pubdev_skip_reason. A pub.dev that cannot be asked stops the run through
+# registry_fetch (an unknown answer is never "exists", and never "absent").
 pubdev_preflight() {
-  if registry_fetch pubdev "$(pubdev_api_url)"; then
-    return 0
-  fi
-  echo "pub.dev has no package packbin: automated publishing works only for an existing package, so the owner" \
-    "publishes the first version by hand with 'dart pub publish' (ADR-011); nothing was built or written" >&2
-  return 1
+  registry_fetch pubdev "$(pubdev_api_url)"
+}
+
+# The one-line reason that the optional pubdev target is skipped: $1 is "token" (no GitHub OIDC token can be requested)
+# or "package" (pub.dev has no package packbin). Both name the owner steps of ADR-011.
+pubdev_skip_reason() {
+  local steps="owner steps (ADR-011): publish the first version by hand with 'dart pub publish', then enable automated"
+  steps="$steps publishing for zxsanny/packbin on pub.dev with the tag pattern v{{version}}"
+  case "$1" in
+    token) printf '%s\n' "the job has no GitHub OIDC token (id-token: write); $steps" ;;
+    package) printf '%s\n' "pub.dev has no package packbin; $steps" ;;
+    *)
+      echo "pubdev_skip_reason: unknown reason $1" >&2
+      return 1
+      ;;
+  esac
 }

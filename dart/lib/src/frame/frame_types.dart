@@ -38,13 +38,6 @@ extension type const FrameDirections(int bits) {
   /// The directions of both sets.
   FrameDirections operator |(FrameDirections other) =>
       FrameDirections(bits | other.bits);
-
-  /// True when the set is valid and holds [direction].
-  bool contains(FrameDirection direction) {
-    final number = direction.number;
-    if (bits < 0 || bits > 7 || number < 1 || number > 3) return false;
-    return bits & (1 << (number - 1)) != 0;
-  }
 }
 
 /// Which loaded key opened a frame.

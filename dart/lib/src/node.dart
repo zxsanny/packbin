@@ -31,8 +31,7 @@ enum NodeKind {
 
 /// The identity of a split-form flag byte handle.
 final class FlagTag {
-  FlagTag(this.name);
-  final String name;
+  FlagTag();
 }
 
 /// One read of a split-form flag byte in a built scheme. `slot` indexes the

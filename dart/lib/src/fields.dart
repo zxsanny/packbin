@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'dict_map.dart';
 import 'node.dart';
 
 part 'collection_fields.dart';
@@ -131,13 +132,6 @@ final class FlagByte extends Field {
 
 Node nodeOf(Field field) => field._node;
 
-/// A field of [node], for the helpers of other files.
-Field fieldOf(Node node) => _Plain(node);
-
-/// A value field of [node], for the helpers of other files.
-ValueField<V> valueFieldOf<V extends Object>(Node node) =>
-    ValueField<V>._(node);
-
 ValueField<int> _int(int id, String name, int size, bool signed) =>
     ValueField<int>._(
       Node(NodeKind.integer, id: id, name: name, size: size, signed: signed),
@@ -259,7 +253,7 @@ GroupField groupOf(int anchor, String name, List<Field> members) =>
     );
 
 /// A split-form flag byte named [name].
-FlagByte flagByte(String name) => FlagByte._(name, FlagTag(name));
+FlagByte flagByte(String name) => FlagByte._(name, FlagTag());
 
 /// True when the integer or bool field [fieldId], read earlier in the same
 /// scope, equals [value] (an `int`, or `true` for a bool field).

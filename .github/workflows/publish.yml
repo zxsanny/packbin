@@ -66,9 +66,10 @@ jobs:
       - name: crates.io token
         id: crates
         run: bash .github/workflows/crates-token.sh exchange
-      # pub.dev (ADR-011): setup-dart trades the id-token permission of this job for an OIDC token, exports it as
-      # PUB_TOKEN and registers it with `dart pub token add https://pub.dev --env-var PUB_TOKEN`. pub.dev accepts it only
-      # from a run that a tag push started, which this workflow is, and only for a package that already exists.
+      # pub.dev (ADR-011): this step puts the pinned Dart SDK on the runner. The OIDC token it makes early (PUB_TOKEN) is
+      # not relied on: publish-pubdev.sh asks GitHub for its own token right before the upload and no other tool sees
+      # one. pub.dev accepts it only from a run that a tag push started, which this workflow is, and only for a package
+      # that already exists; without one the optional pubdev target is skipped with a warning.
       - name: dart pin
         id: dart-pin
         run: echo "version=$(bash .github/workflows/tool-pin.sh dart)" >> "$GITHUB_OUTPUT"

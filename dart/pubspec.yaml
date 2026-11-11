@@ -10,6 +10,13 @@ topics:
   - serialization
   - codec
 
+platforms:
+  android:
+  ios:
+  linux:
+  macos:
+  windows:
+
 environment:
   sdk: ^3.13.0
 dev_dependencies:

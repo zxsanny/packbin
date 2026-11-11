@@ -1,8 +1,8 @@
 import 'errors.dart';
 import 'node.dart';
 
-/// A name declared only inside a group of a place, and the groups from the
-/// place's row down to it.
+/// A name declared only inside a group or nested row of a place, and the
+/// groups and nested rows from the place's row down to it.
 final class Foreign {
   Foreign(this.member, this.path);
   final Node member;
@@ -27,8 +27,8 @@ final class GroupPlace {
   /// the place declares, in scheme order.
   final List<GroupMember> groups;
 
-  /// The names declared inside a group of the place that the place itself
-  /// does not declare.
+  /// The names declared inside a group or nested row of the place that the
+  /// place itself does not declare.
   final List<Foreign> foreign;
 }
 
@@ -74,6 +74,10 @@ void _members(List<Node> nodes, List<Node> out, {bool inRound = false}) {
   }
 }
 
+/// A group with members or a nested row: a map of its own inside the row.
+bool _holdsMembers(Node n) =>
+    n.kind == NodeKind.nested || (n.kind == NodeKind.group && !n.isMark);
+
 int _class(Node n) => n.isMark || n.kind == NodeKind.boolean
     ? 2
     : n.kind == NodeKind.group
@@ -104,21 +108,21 @@ GroupPlace _place(List<Node> nodes) {
       if (!own.contains(x.name) && seen.add(x.name)) {
         foreign.add(Foreign(x, here));
       }
-      if (x.kind == NodeKind.group && !x.isMark) walk(x, here);
+      if (_holdsMembers(x)) walk(x, here);
     }
   }
 
   for (final m in members) {
-    if (m.kind == NodeKind.group && !m.isMark) walk(m, const []);
+    if (_holdsMembers(m)) walk(m, const []);
   }
   return GroupPlace(groups, foreign);
 }
 
 /// Refuses what a map row gives for the groups of [place] that pack could not
 /// read: a group that is not a map, a mark that is not a bool, and a name
-/// declared only inside a group, given in the row around it while the group is
-/// not given (the owner's Go-4 rule: the members of a group are in its map,
-/// never flat beside it).
+/// declared only inside a group or a nested row, given in the row around it
+/// while that group or row is not given (the owner's Go-4 rule: the members of
+/// a group are in its map, never flat beside it).
 void checkGroupRows(GroupPlace place, Map<String, Object?> row) {
   for (final member in place.groups) {
     final g = member.node;
@@ -149,7 +153,9 @@ void checkGroupRows(GroupPlace place, Map<String, Object?> row) {
     throw packFail(
       f.member.id,
       f.member.name,
-      '${f.member.name} is a member of group ${absent.name}, which is not given; give the value in the group\'s Map, not in the row around it',
+      absent.kind == NodeKind.nested
+          ? '${f.member.name} is a member of nested row ${absent.name}, which is not given; give the value in the nested row\'s Map, not in the row around it'
+          : '${f.member.name} is a member of group ${absent.name}, which is not given; give the value in the group\'s Map, not in the row around it',
     );
   }
 }
