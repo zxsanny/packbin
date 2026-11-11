@@ -130,7 +130,9 @@ host_run() {
   if [ -f "$host_report" ]; then host_rows_before="$(awk 'END { print NR }' "$host_report")"; fi
   trap host_exit EXIT
   if [ "$arm" -eq 1 ]; then
-    "${compose[@]}" build cpp-embedded
+    # Compose without Bake: the build service uses `network: host` (AZ-4191), and Bake refuses that
+    # without "--allow=network.host", which `docker compose build` cannot pass.
+    COMPOSE_BAKE=false "${compose[@]}" build cpp-embedded
     "${compose[@]}" run --rm cpp-embedded || status=1
   fi
   if [ "$esp" -eq 1 ]; then
