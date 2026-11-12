@@ -12,7 +12,7 @@ internal static class SchemeOrder
         var next = 0;
         var resolved = new Field[fields.Count];
         for (var i = 0; i < resolved.Length; i++)
-            resolved[i] = Walk(fields[i], row, scope, ref next);
+            resolved[i] = Walk(fields[i], row, scope, ref next, where: TopLevel);
         resolved = FlagScopes.Bind(resolved);
         RoundScopes.Validate(resolved);
         return resolved;
@@ -20,33 +20,39 @@ internal static class SchemeOrder
 
     // Ids number straight through repeat and times bodies, but a reference finds only the fields `scope` already holds:
     // the earlier ones of its own top level, repeat or times body, list or dict element, or nested row.
-    // `row`: the row type every field here must be declared for; null in a list or dict element and a nested row, which
-    // bind their own row types.
+    // `row`: the row type every field here must be declared for, or a base type of it; null in a list or dict element
+    // that is a single field, whose field may be declared for the value rather than a row (`U16<El>` for `ushort[]`).
+    // `where`: how a refusal names that row (the scheme's, a nested row's, or the elements of a list or dict).
     // `flagBit`: the field is a direct child of Flags or the field of a FlagByte bit, the only place a bool or an empty
     // group has a bit to live in.
-    private static Field Walk(Field field, Type? row, Taken scope, ref int next, bool flagBit = false, bool inRound = false)
+    private static Field Walk(
+        Field field, Type? row, Taken scope, ref int next, string where, bool flagBit = false, bool inRound = false)
     {
         RequireFlagBit(field, flagBit);
-        RequireRow(field, row);
+        RequireRow(field, row, where);
         switch (field.Type)
         {
             case Field.Kind.When:
                 RequireAnchor(field.Id, next);
                 var pred = field.Pred!.Resolved(WhenSource(scope, field));
-                return field.With(children: WalkChildren(field, row, scope, ref next, inRound), pred: pred);
+                return field.With(children: WalkChildren(field, row, scope, ref next, where, inRound), pred: pred);
+            case Field.Kind.Group when field.Binding?.Member.IsElementRow == true:
+                // The element row of a list or dict: its members are declared for the element row type.
+                RequireAnchor(field.Id, next);
+                return field.With(children: WalkChildren(field, field.RowType, scope, ref next, where, inRound));
             case Field.Kind.Flags:
             case Field.Kind.Group when !field.NestedRow:
                 RequireAnchor(field.Id, next);
-                return field.With(children: WalkChildren(field, row, scope, ref next, inRound));
+                return field.With(children: WalkChildren(field, row, scope, ref next, where, inRound));
             case Field.Kind.Repeat:
                 RequireAnchor(field.Id, next);
-                return field.With(children: WalkChildren(field, RoundRow(field, row), [], ref next, inRound: true));
+                return field.With(children: WalkRound(field, row, ref next, where));
             case Field.Kind.Times:
                 RequireAnchor(field.Id, next);
                 var count = Count(scope, field.CountId, $"count of times {field.Id}", $"times {field.Id}");
-                return field.With(children: WalkChildren(field, RoundRow(field, row), [], ref next, inRound: true), countName: count);
+                return field.With(children: WalkRound(field, row, ref next, where), countName: count);
             case Field.Kind.FlagBit:
-                return field.With(inner: Walk(field.Inner!, row, scope, ref next, flagBit: true, inRound: inRound));
+                return field.With(inner: Walk(field.Inner!, row, scope, ref next, where, flagBit: true, inRound: inRound));
             case Field.Kind.Group:
             case Field.Kind.List:
             case Field.Kind.Dict:
@@ -70,20 +76,32 @@ internal static class SchemeOrder
         }
     }
 
-    private static Field[] WalkChildren(Field field, Type? row, Taken scope, ref int next, bool inRound = false)
+    private static Field[] WalkChildren(Field field, Type? row, Taken scope, ref int next, string where, bool inRound = false)
     {
         var children = new Field[field.Children.Length];
         for (var i = 0; i < children.Length; i++)
-            children[i] = Walk(field.Children[i], row, scope, ref next, inRound: inRound);
+            children[i] = Walk(field.Children[i], row, scope, ref next, where, inRound: inRound);
         return children;
     }
 
-    // A nested row, list element or dict element numbers its own fields from 0.
+    // The fields of a round bound to a collection are declared for its row type E (RoundRow), named as the scheme's row.
+    private static Field[] WalkRound(Field round, Type? row, ref int next, string where)
+    {
+        var roundRow = RoundRow(round, row);
+        return WalkChildren(round, roundRow, [], ref next, roundRow == row ? where : TopLevel, inRound: true);
+    }
+
+    // A nested row, list element or dict element numbers its own fields from 0. A nested row's fields are declared for
+    // its row type; a list or dict element is checked by its element row, if it is one (Walk).
     private static Field[] WalkFromZero(Field field, bool inRound)
     {
         var next = 0;
-        return WalkChildren(field, null, [], ref next, inRound);
+        return field.Type == Field.Kind.Group
+            ? WalkChildren(field, field.Binding?.NestedType, [], ref next, $"the nested row '{field.Name}' is", inRound)
+            : WalkChildren(field, null, [], ref next, $"the elements of '{field.Name}' are", inRound);
     }
+
+    private const string TopLevel = "this scheme is for";
 
     // The row type the fields of a round are declared for: the enclosing row's, or for a round bound to a collection the
     // collection's row type E. The member must be one typed Unpack can fill (RowRounds.Binds), or the scheme is refused.
@@ -103,11 +121,11 @@ internal static class SchemeOrder
 
     // A value is found by member name, so a field declared for another row type would be silently left out.
     // A field declared for a base type of the row is the row's own member.
-    private static void RequireRow(Field field, Type? row)
+    private static void RequireRow(Field field, Type? row, string where)
     {
         if (row is not null && field.RowType is { } declared && !declared.IsAssignableFrom(row))
             throw new ArgumentException(
-                $"'{field.Name}' is declared for row type {TypeName(declared)}, but this scheme is for {TypeName(row)}");
+                $"'{field.Name}' is declared for row type {TypeName(declared)}, but {where} {TypeName(row)}");
     }
 
     // `List<Int32>` rather than the reflection name `List`1`, so two closed generic rows read apart.

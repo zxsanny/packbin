@@ -289,7 +289,16 @@ public sealed class Field
     public static Field List<T, TChild>(Expression<Func<T, List<TChild>>> accessor, params Field[] members) =>
         List(accessor, ElementRow<TChild>(members));
 
+    public static Field List<T, TChild>(Expression<Func<T, TChild[]>> accessor, params Field[] members) =>
+        List(accessor, ElementRow<TChild>(members));
+
+    public static Field List<T, TChild>(Expression<Func<T, IList<TChild>>> accessor, params Field[] members) =>
+        List(accessor, ElementRow<TChild>(members));
+
     public static Field Dict<T, TChild>(Expression<Func<T, Dictionary<string, TChild>>> accessor, params Field[] members) =>
+        Dict(accessor, ElementRow<TChild>(members));
+
+    public static Field Dict<T, TChild>(Expression<Func<T, IDictionary<string, TChild>>> accessor, params Field[] members) =>
         Dict(accessor, ElementRow<TChild>(members));
 
     // An anchored group over the element row itself: it numbers its members from 0 in the element's own scope and writes

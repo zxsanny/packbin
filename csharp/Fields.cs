@@ -70,7 +70,16 @@ public sealed class Fields<T>
     public Field List<TChild>(Expression<Func<T, List<TChild>>> accessor, Func<Fields<TChild>, Field[]> members) =>
         Field.List(accessor, members(new Fields<TChild>()));
 
+    public Field List<TChild>(Expression<Func<T, TChild[]>> accessor, Func<Fields<TChild>, Field[]> members) =>
+        Field.List(accessor, members(new Fields<TChild>()));
+
+    public Field List<TChild>(Expression<Func<T, IList<TChild>>> accessor, Func<Fields<TChild>, Field[]> members) =>
+        Field.List(accessor, members(new Fields<TChild>()));
+
     public Field Dict<TChild>(Expression<Func<T, Dictionary<string, TChild>>> accessor, Func<Fields<TChild>, Field[]> members) =>
+        Field.Dict(accessor, members(new Fields<TChild>()));
+
+    public Field Dict<TChild>(Expression<Func<T, IDictionary<string, TChild>>> accessor, Func<Fields<TChild>, Field[]> members) =>
         Field.Dict(accessor, members(new Fields<TChild>()));
 
     public Field Dict<TProp>(Expression<Func<T, TProp>> accessor, Field element) =>

@@ -17,18 +17,22 @@ internal sealed class MemberAccess
     // Takes what unpack read: a value of the member's type, or a number Convert.ChangeType can turn into it.
     public Action<object, object?> Set { get; }
 
-    private MemberAccess(string name, Type type, Func<object, object?> get, Action<object, object?> set)
+    // True for the element row itself (ElementRow below): the fields under it are declared for its row type.
+    public bool IsElementRow { get; }
+
+    private MemberAccess(string name, Type type, Func<object, object?> get, Action<object, object?> set, bool isElementRow = false)
     {
         Name = name;
         Type = type;
         Get = get;
         Set = set;
+        IsElementRow = isElementRow;
     }
 
     // The element row itself, not a member of it: reads no value and takes none, so the fields declared for the row read
     // and write its members directly.
     public static MemberAccess ElementRow(Type rowType) =>
-        new(string.Empty, rowType, _ => null, (_, _) => { });
+        new(string.Empty, rowType, _ => null, (_, _) => { }, isElementRow: true);
 
     public static MemberAccess From<T, TProp>(Expression<Func<T, TProp>> accessor)
     {
