@@ -143,51 +143,71 @@ private func holdsMember(_ nodes: [Node]) -> Bool {
 /// holds after a repeat is read as more rounds of it. Refused: a repeat that a field which can write a
 /// byte follows, in its own place or after the when, flags, flag bit, group or nested row that holds
 /// it, up to the top level; and a repeat inside a list or dict element, which the next element
-/// follows. `after` is the first such field after the place `nodes` stand in. A repeat inside a round
-/// is refused by `checkRoundNesting`, so a round body is walked only for the elements it holds.
-func checkRepeatLast(_ nodes: [Node], after: Node? = nil, inElement: Bool = false) throws {
-    for (i, n) in nodes.enumerated() {
+/// follows. One walk in document order, so the first violation of the scheme is the one reported.
+func checkRepeatLast(_ nodes: [Node]) throws {
+    _ = try walkRepeatLast(nodes, open: nil, inElement: false)
+}
+
+/// `open` is the first repeat met in the places walked so far that no field has followed; the repeat
+/// open after `nodes` is returned. A field is looked at only while a repeat is open, so a scheme with
+/// no repeat costs one visit a node. A round body and an element are places of their own, with none
+/// open; a repeat inside a round is refused by `checkRoundNesting`, so a round body is walked only for
+/// the elements it holds.
+private func walkRepeatLast(_ nodes: [Node], open: Node?, inElement: Bool) throws -> Node? {
+    var open = open
+    for n in nodes {
+        if let first = open, let follower = writer(n) {
+            throw PackbinError.scheme(first.id, "", "repeat \(first.id ?? -1): \(writerName(follower)) follows it; "
+                + "a repeat reads to the end of the packet, so nothing can follow it; use times")
+        }
         switch n.kind {
         case .repeatRound:
-            let anchor = n.id ?? -1
             if inElement {
-                throw PackbinError.scheme(n.id, "", "repeat \(anchor) is inside a list or dict element; "
+                throw PackbinError.scheme(n.id, "", "repeat \(n.id ?? -1) is inside a list or dict element; "
                     + "a repeat reads to the end of the packet, so another element cannot follow it; use times")
             }
-            if let follower = firstWriter(nodes[(i + 1)...]) ?? after {
-                throw PackbinError.scheme(n.id, "", "repeat \(anchor): \(writerName(follower)) follows it; "
-                    + "a repeat reads to the end of the packet, so nothing can follow it; use times")
-            }
-            try checkRepeatLast(n.fields)
+            if open == nil { open = n }
+            _ = try walkRepeatLast(n.fields, open: nil, inElement: false)
         case .timesRound:
-            try checkRepeatLast(n.fields)
+            _ = try walkRepeatLast(n.fields, open: nil, inElement: false)
         case .when, .flags, .group, .flagBit:
-            try checkRepeatLast(n.fields, after: firstWriter(nodes[(i + 1)...]) ?? after, inElement: inElement)
+            open = try walkRepeatLast(n.fields, open: open, inElement: inElement)
         case .list, .dict:
-            try checkRepeatLast(n.fields, inElement: true)
+            _ = try walkRepeatLast(n.fields, open: nil, inElement: true)
         case .int, .float, .bytes, .bool, .flagByte, .sized, .u2, .slot, .bits, .packed, .utf8:
             break
         }
     }
+    return open
 }
 
-/// The first of `nodes` that can write a byte for some row, or nil. A bool is a bit of a flag byte
+/// `n` when it is a field that can write a byte for some row, or nil. A bool is a bit of a flag byte
 /// written earlier and a zero-width bytes has no byte. A when, a group and a flag bit write what they
-/// hold, so the field found is the one inside them; a repeat or times whose body can write a byte is
-/// found itself. Everything else writes: a flag byte and a flags, a list and a dict (their count) too.
-private func firstWriter(_ nodes: some Sequence<Node>) -> Node? {
+/// hold, which the walk meets next; a repeat or times is found itself when its body can write a byte.
+/// Everything else writes: a flag byte and a flags, a list and a dict (their count) too.
+private func writer(_ n: Node) -> Node? {
+    switch n.kind {
+    case .bool, .when, .group, .flagBit:
+        return nil
+    case .bytes:
+        return n.size > 0 ? n : nil
+    case .repeatRound, .timesRound:
+        return firstWriter(n.fields) == nil ? nil : n
+    case .int, .float, .flags, .flagByte, .sized, .u2, .slot, .bits, .packed, .utf8, .list, .dict:
+        return n
+    }
+}
+
+/// The first field of `nodes`, at their level or under a when, group or flag bit, that can write a byte.
+private func firstWriter(_ nodes: [Node]) -> Node? {
     for n in nodes {
+        if let found = writer(n) { return found }
         switch n.kind {
-        case .bool:
-            continue
-        case .bytes:
-            if n.size > 0 { return n }
         case .when, .group, .flagBit:
             if let held = firstWriter(n.fields) { return held }
-        case .repeatRound, .timesRound:
-            if firstWriter(n.fields) != nil { return n }
-        case .int, .float, .flags, .flagByte, .sized, .u2, .slot, .bits, .packed, .utf8, .list, .dict:
-            return n
+        case .int, .float, .bytes, .bool, .flags, .flagByte, .sized, .u2, .slot, .bits, .packed, .utf8, .repeatRound,
+             .timesRound, .list, .dict:
+            break
         }
     }
     return nil

@@ -76,8 +76,8 @@ def percent_scheme(percent: int, type_number: int = 0x40) -> Scheme:
 
 def long_percent_scheme(percent: int) -> Scheme:
     """Type number 0 and the list `row["b"]`, with room for a clear message longer than 256 bytes (use `long_row`).
-    Until loop 113 it was five repeats in a row, which no longer builds (a repeat is the last thing a packet
-    reads); one repeat packs the same bytes."""
+    The list is one repeat: a scheme of several repeats in a row does not build, because a repeat is the last thing a
+    packet reads."""
     return support.raw_scheme(0).with_limits(max_bytes=4096, parity_percent=percent)
 
 

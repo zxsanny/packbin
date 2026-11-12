@@ -11,11 +11,10 @@ from hostile_loop22_support import (
     LOOP22_CONSTRUCT_CASES,
     LOOP22_CONSTRUCT_FIELDS,
     LOOP22_PACK_CASES,
-    LOOP113_CONSTRUCT_CASES,
-    LOOP113_PACK_CASES,
 )
 from hostile_refusals import CONSTRUCT_REFUSAL, PACK_REFUSAL
 from hostile_support import LIMIT_SCHEMES, PACK_CASES, VECTOR_SCHEMES, assert_rejected, error_kind, unpack_guarded
+from repeat_last_support import LOOP113_CONSTRUCT_CASES, LOOP113_PACK_CASES
 from test_bool_placement import CONSTRUCT_SCHEMES
 from test_reference_scope import REFERENCE_VECTORS
 

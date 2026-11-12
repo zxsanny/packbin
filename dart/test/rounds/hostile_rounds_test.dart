@@ -41,6 +41,19 @@ Scheme<Map<String, Object?>> flagRounds() => scheme(1, [
   ]),
 ]);
 
+/// A `repeat` under a flag bit with a `flags` in its round: `z` stands before
+/// it, since nothing may follow a `repeat`.
+Scheme<Map<String, Object?>> flagRepeat() => scheme(1, [
+  u8(0, 'k'),
+  flags(1, [
+    u8(1, 'z'),
+    repeat(2, [
+      u8(2, 'w'),
+      flags(3, [u8(3, 'v')]),
+    ]),
+  ]),
+]);
+
 /// Round trips of the route in an isolate; the count of wrong packets.
 int routeTrips(Scheme<Map<String, Object?>> layout, int count) {
   var wrong = 0;
@@ -73,7 +86,7 @@ void main() {
       'random packets on every round scheme give a row or an error value',
       () {
         // Arrange
-        final layouts = [route(), batch(), flagRounds()];
+        final layouts = [route(), batch(), flagRounds(), flagRepeat()];
         final random = Random(4136);
         var thrown = 0;
         var refused = 0;

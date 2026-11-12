@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 /**
- * AZ-4214 (loop 113), contract repeat-last: a repeat has no count, so unpack reads its rounds to the end of the
+ * Contract repeat-last: a repeat has no count, so unpack reads its rounds to the end of the
  * packet and a repeat must be the last thing a packet reads. A scheme is refused when it is built if a field that
  * can write a byte follows a repeat (R1 to R6), if a repeat sits inside a list or dict element (R7, R8) or inside
  * a repeat or times round (R9; NestedRoundTest holds every place of a round). K1 to K5 build and keep their bytes.
@@ -140,6 +140,10 @@ final class RepeatLastTest {
                         Packbin.group(1, Packbin.flags(1, rounds(1)))), u8(2, "x")));
         refusedAtBuild("a repeat whose rounds write nothing still reads to the end", "repeat 0: u8 1" + FOLLOWS,
                 () -> Maps.scheme(1, Packbin.repeat(0, empty(0)), u8(1, "tail")));
+        refusedAtBuild("the first repeat is named when a third field follows two repeats", "repeat 0: repeat 1"
+                + FOLLOWS, () -> Maps.scheme(1, rounds(0), Packbin.repeat(1, u8(1, "w")), u8(2, "x")));
+        refusedAtBuild("the first repeat is named when the second one writes nothing", "repeat 0: u8 2" + FOLLOWS,
+                () -> Maps.scheme(1, rounds(0), Packbin.repeat(1, empty(1)), u8(2, "x")));
     }
 
     /** AC-1 and AC-5: a repeat under both an element and a round is refused for the nearer one. */

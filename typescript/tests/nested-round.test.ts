@@ -139,7 +139,7 @@ describe("nested rounds", () => {
     })
   }
 
-  // The element held a repeat until loop 113; a repeat in an element no longer builds (repeat-last.test.ts).
+  // A list or dict element holds a times, not a repeat: a repeat in an element is refused when the scheme is built (repeat-last.test.ts).
   it("a times in a list element inside a repeat round builds; empty collections round-trip", () => {
     // Arrange
     // The collections stay empty here; list-group-elements.test.ts packs non-empty items per round.
@@ -184,7 +184,7 @@ describe("nested rounds", () => {
     assert.equal(again, wire)
   })
 
-  // The element held a repeat until loop 113; a repeat in an element no longer builds (repeat-last.test.ts).
+  // A list or dict element holds a times, not a repeat: a repeat in an element is refused when the scheme is built (repeat-last.test.ts).
   it("a list element outside a round may hold a times before a repeat round", () => {
     // Arrange
     const layout = scheme<Row>(

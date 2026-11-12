@@ -20,13 +20,11 @@ import java.util.Set;
 final class Rounds {
     private Rounds() {}
 
-    /** {@code outer} is the item lookup of an enclosing round: null, as no built scheme holds a repeat in a round. */
-    static void packRepeat(
-            Field field, Object row, ByteSink sink, Map<Object, Object> seen, Walker.Take outer) {
+    static void packRepeat(Field field, Object row, ByteSink sink, Map<Object, Object> seen) {
         List<Field> values = values(field.children);
         int count = 0;
         for (Field value : values) {
-            Object given = read(value, row, outer);
+            Object given = value.get.get(row);
             if (given instanceof List<?> items && items.size() > sink.maxRounds) {
                 // Unpack refuses round maxRounds + 1, so pack does not write it; no round is written first.
                 throw new IllegalArgumentException(memberName(value) + ": the repeat count is " + items.size()
@@ -34,8 +32,8 @@ final class Rounds {
             }
             count = Math.max(count, entries(given));
         }
-        requireListPerRound(field, row, count, outer);
-        pack(field, values, row, sink, seen, count, outer);
+        requireListPerRound(field, row, count);
+        pack(field, values, row, sink, seen, count, null); // no round around a repeat
     }
 
     /**
@@ -43,11 +41,11 @@ final class Rounds {
      * rounds it does not reach and so hide which round it belongs to: refused before any round, as TypeScript does.
      * An empty list, no list and a lone value are not short. A times keeps reading a short list as absent.
      */
-    private static void requireListPerRound(Field field, Object row, int rounds, Walker.Take outer) {
+    private static void requireListPerRound(Field field, Object row, int rounds) {
         List<Field> optional = new ArrayList<>();
         optionalValues(field.children, false, optional);
         for (Field value : optional) {
-            if (read(value, row, outer) instanceof List<?> items && !items.isEmpty() && items.size() < rounds) {
+            if (value.get.get(row) instanceof List<?> items && !items.isEmpty() && items.size() < rounds) {
                 throw new IllegalArgumentException(memberName(value) + ": " + items.size() + " items, repeat count "
                         + rounds + "; give one entry per round, null where the member is absent");
             }
@@ -73,7 +71,7 @@ final class Rounds {
                         out.addAll(field.children);
                     }
                 }
-                case REPEAT, TIMES, FLAG_BYTE -> { }
+                case TIMES, FLAG_BYTE -> { }
                 default -> {
                     if (underFlag) {
                         out.add(field);
@@ -93,6 +91,7 @@ final class Rounds {
         return false;
     }
 
+    /** {@code outer} is the item lookup of the round around this times, null outside every round. */
     static void packTimes(
             Field field, Object row, ByteSink sink, Map<Object, Object> seen, long count, Walker.Take outer) {
         if (count > sink.maxRounds) {
@@ -197,12 +196,9 @@ final class Rounds {
         return value;
     }
 
-    /** {@code nested} is true inside another round: the entries of every round fold into one entry per outer round. */
-    static Object unpackRepeat(
-            Field field, byte[] data, Cursor cur, Object row, Map<Object, Object> seen, boolean nested) {
+    static Object unpackRepeat(Field field, byte[] data, Cursor cur, Object row, Map<Object, Object> seen) {
         List<Field> values = values(field.children);
         int width = width(values);
-        int[] before = nested ? entryCounts(values, row) : null;
         long started = 0;
         while (cur.pos < data.length) {
             if (!cur.startRound(started++, width)) {
@@ -218,10 +214,10 @@ final class Rounds {
                 return new Packbin.TrailingBytes(data.length - cur.pos);
             }
         }
-        foldIntoOuterRound(values, before, row);
         return null;
     }
 
+    /** {@code nested} is true inside another round: the entries of every round fold into one entry per outer round. */
     static Object unpackTimes(
             Field field, long count, byte[] data, Cursor cur, Object row, Map<Object, Object> seen, boolean nested) {
         List<Field> values = values(field.children);
@@ -334,7 +330,9 @@ final class Rounds {
 
     /**
      * The fields a round reads into its own entries: value fields, lists, dicts and nested rows, looking through
-     * flags, flag bits, when, anchored groups and an inner repeat or times (whose fields hold one list per round).
+     * flags, flag bits, when, anchored groups and an inner times (whose fields hold one list per round). A repeat
+     * is looked through only where {@link #nameOf} and {@link #firstValueName} name a repeat that is a member of
+     * flags or of a flag bit; no round body holds one.
      */
     private static List<Field> values(List<Field> body) {
         List<Field> out = new ArrayList<>();

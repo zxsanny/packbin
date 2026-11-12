@@ -5,11 +5,10 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 /**
- * AZ-4214 AC-3 (loop 113): the Java schemes and rows of the thirteen cases AZ-4210 added to
- * fixtures/hostile/cases.txt, replayed by HostileVectorTest. They are R1 to R9 and K1 to K4 of the contract
- * repeat-last: a repeat that is not the last thing its packet reads is refused when the scheme is built. Java
- * writes all thirteen, with Map rows; a nested row numbers its fields from 0, so {@code x} after the nested row of
- * R4 is id 0.
+ * AC-3: the Java schemes and rows of the thirteen repeat-last cases of fixtures/hostile/cases.txt, replayed by
+ * HostileVectorTest. They are R1 to R9 and K1 to K4 of the contract repeat-last: a repeat that is not the last
+ * thing its packet reads is refused when the scheme is built. Java writes all thirteen, with Map rows; a nested row
+ * numbers its fields from 0, so {@code x} after the nested row of R4 is id 0.
  */
 @SuppressWarnings({"unchecked", "rawtypes"})
 final class HostileLoop113 {

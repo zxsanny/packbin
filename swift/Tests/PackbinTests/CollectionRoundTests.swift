@@ -120,8 +120,8 @@ private let loneDict = "a dictionary in a repeat or times round needs a list wit
         #expect(one == "0102021061021061")
     }
 
-    /// Until loop 113 this scheme built and packed `0101010005` for one item (AZ-4216 AC-4); the row
-    /// "a times in a list item in a round" of `packs` is the scheme to write.
+    /// A repeat in a list item is refused when the scheme is built, in a round as anywhere else (AZ-4216
+    /// AC-4); the row "a times in a list item in a round" of `packs` is the scheme to write.
     @Test func scheme_repeatInAListItemInARound_isRefusedWhenItIsBuilt() {
         // Arrange
         let build = { try Scheme(1, .repeat(0, .u8(0, "k"), .list("rows", .group("row", .repeat(0, .u8(0, "v")))))) }

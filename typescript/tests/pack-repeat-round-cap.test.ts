@@ -13,6 +13,7 @@ import {
   when,
   type DispatchResult,
 } from "../src/index.ts"
+import { inElementText } from "./support/repeat-last-cases.ts"
 
 type Row = Record<string, unknown>
 
@@ -76,7 +77,7 @@ describe("AZ-2355 pack refuses a repeat with more entries than maxRounds", () =>
     }
   })
 
-  // Until loop 113 the cap was checked in a list element too; a repeat there no longer builds (AZ-4211 AC-4).
+  // A repeat in a list or dict element is refused when the scheme is built, so no pack reaches the cap there (AZ-4211 AC-4).
   it("a repeat in a list element is refused when the scheme is built, before any cap", () => {
     // Arrange
     const element = () => group((x: Row) => x.item, [repeat(0, [u8(0, (x: Row) => x.k)])])
@@ -85,10 +86,7 @@ describe("AZ-2355 pack refuses a repeat with more entries than maxRounds", () =>
     const message = refusal(() => new Scheme<Row>(1, [list((x) => x.items, element())], { maxRounds: 3 }))
 
     // Assert
-    assert.equal(
-      message,
-      "repeat 0 is inside a list or dict element; a repeat reads to the end of the packet, so another element cannot follow it; use times",
-    )
+    assert.equal(message, inElementText(0))
   })
 
   it("AC-2 maxRounds entries pack in maxRounds + 1 bytes and round-trip", () => {

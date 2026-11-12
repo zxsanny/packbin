@@ -205,16 +205,28 @@ fn ac1_r9_a_repeat_inside_a_times_round_keeps_the_nesting_rule_and_its_text() {
     );
 }
 
+/// (what, the scheme, the anchor of the repeat, the field that follows it)
+type Case = (&'static str, Vec<Field>, u32, &'static str);
+
+/// Every case refused with the whole text for its repeat and the field that follows it.
+fn assert_each_refused(cases: Vec<Case>) {
+    for (what, fields, anchor, field) in cases {
+        // Act
+        let refused = refusal(|| fields);
+
+        // Assert
+        assert_eq!(refused, followed(anchor, field), "{what}");
+    }
+}
+
 #[test]
-fn ac1_every_place_a_byte_writing_field_can_stand_after_a_repeat_is_refused() {
-    // Arrange (AC-1): (what, the scheme, the anchor of the repeat, the field that follows it)
+fn ac1_a_byte_writing_field_in_any_container_place_after_a_repeat_is_refused() {
+    // Arrange (AC-1): the places a field can stand in: flags, flag bits, a when, behind a field
     let m = flag_byte("m");
-    let after_v = || repeat(0, vec![u8("v")]);
-    type Case = (&'static str, Vec<Field>, u32, &'static str);
     let cases: Vec<Case> = vec![
         (
             "a later member of the same flags",
-            vec![flags(0, "f", vec![after_v(), u8("x")])],
+            vec![flags(0, "f", vec![repeat(0, vec![u8("v")]), u8("x")])],
             0,
             "\"x\"",
         ),
@@ -230,6 +242,34 @@ fn ac1_every_place_a_byte_writing_field_can_stand_after_a_repeat_is_refused() {
             1,
             "\"x\"",
         ),
+        (
+            "a field behind one that writes nothing",
+            vec![repeat(0, vec![u8("v")]), bytes("z", 0), u8("x")],
+            0,
+            "\"x\"",
+        ),
+        (
+            "a field in a group in a when",
+            vec![
+                u8("k"),
+                repeat(1, vec![u8("v")]),
+                when_k(2, 1, vec![group(2, "g", vec![u8("x")])]),
+            ],
+            1,
+            "\"x\"",
+        ),
+    ];
+
+    // Act / Assert
+    assert_each_refused(cases);
+}
+
+#[test]
+fn ac1_every_kind_of_field_that_writes_a_byte_after_a_repeat_is_refused() {
+    // Arrange (AC-1): the kinds of field that write a byte, each right after the repeat
+    let m = flag_byte("m");
+    let after_v = || repeat(0, vec![u8("v")]);
+    let cases: Vec<Case> = vec![
         (
             "a flags of one bool: its byte is written",
             vec![after_v(), flags(1, "f", vec![group(1, "on", vec![])])],
@@ -262,31 +302,10 @@ fn ac1_every_place_a_byte_writing_field_can_stand_after_a_repeat_is_refused() {
             1,
             "\"w\"",
         ),
-        (
-            "a field behind one that writes nothing",
-            vec![after_v(), bytes("z", 0), u8("x")],
-            0,
-            "\"x\"",
-        ),
-        (
-            "a field in a group in a when",
-            vec![
-                u8("k"),
-                repeat(1, vec![u8("v")]),
-                when_k(2, 1, vec![group(2, "g", vec![u8("x")])]),
-            ],
-            1,
-            "\"x\"",
-        ),
     ];
 
-    for (what, fields, anchor, field) in cases {
-        // Act
-        let refused = refusal(|| fields);
-
-        // Assert
-        assert_eq!(refused, followed(anchor, field), "{what}");
-    }
+    // Act / Assert
+    assert_each_refused(cases);
 }
 
 #[derive(Default)]

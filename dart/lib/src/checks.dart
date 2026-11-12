@@ -166,97 +166,121 @@ const _readsToTheEnd = 'a repeat reads to the end of the packet';
 /// group or nested row that holds it, up to the top level; a repeat inside a
 /// list or dict element, which the next element follows; and a repeat inside
 /// a nested row of a round, which the next round follows ([checkNesting] has
-/// refused a repeat that a round holds in any other way). [after] is the first
-/// field that can write a byte after the place [nodes] stand in. It looks at
-/// the scheme only, never at a row.
-void checkRepeatLast(
-  List<Node> nodes, {
-  Node? after,
-  bool inElement = false,
-  bool inRound = false,
-}) {
-  for (var i = 0; i < nodes.length; i++) {
-    final n = nodes[i];
-    switch (n.kind) {
-      case NodeKind.repeat:
-        if (inElement) {
-          throw schemeFail(
-            n.id,
-            n.declaredName,
-            'repeat ${n.id} is inside a list or dict element; $_readsToTheEnd, so another element cannot follow it; use times',
-          );
-        }
-        if (inRound) {
-          throw schemeFail(
-            n.id,
-            n.declaredName,
-            'repeat ${n.id} is inside a repeat or times round; $_readsToTheEnd, so another round cannot follow it; use times',
-          );
-        }
-        final follower = _firstWriter(nodes, i + 1) ?? after;
-        if (follower != null) {
-          throw schemeFail(
-            n.id,
-            n.declaredName,
-            'repeat ${n.id}: ${_writerName(follower)} follows it; $_readsToTheEnd, so nothing can follow it; use times',
-          );
-        }
-        checkRepeatLast(n.fields, inRound: true);
-      case NodeKind.times:
-        checkRepeatLast(n.fields, inRound: true);
-      case NodeKind.when:
-      case NodeKind.flags:
-      case NodeKind.flagBit:
-      case NodeKind.group:
-      case NodeKind.nested:
-        checkRepeatLast(
-          n.fields,
-          after: _firstWriter(nodes, i + 1) ?? after,
-          inElement: inElement,
-          inRound: inRound,
-        );
-      case NodeKind.list:
-      case NodeKind.dict:
-        checkRepeatLast(n.fields, inElement: true);
-      case NodeKind.integer:
-      case NodeKind.float:
-      case NodeKind.bytes:
-      case NodeKind.boolean:
-      case NodeKind.flagByte:
-      case NodeKind.sized:
-      case NodeKind.u2:
-      case NodeKind.slot:
-      case NodeKind.bits:
-      case NodeKind.packed:
-      case NodeKind.utf8:
-        break;
+/// refused a repeat that a round holds in any other way). It looks at the
+/// scheme only, never at a row, and walks it once: the cost follows the size
+/// of the scheme, whatever its shape. A scheme that breaks the rule in two
+/// places is refused for the first one in document order, the body of a repeat
+/// before the field after it.
+void checkRepeatLast(List<Node> nodes) => _RepeatLast().walk(nodes, null);
+
+final class _RepeatLast {
+  /// What each `when`, group, nested row, flag bit and round writes first,
+  /// worked out once: every list above a node asks for it.
+  final Map<Node, Node?> _held = Map.identity();
+
+  /// Walks [nodes]. [after] is the first field that can write a byte after
+  /// the place [nodes] stand in.
+  void walk(
+    List<Node> nodes,
+    Node? after, {
+    bool inElement = false,
+    bool inRound = false,
+  }) {
+    final next = _followers(nodes, after);
+    for (var i = 0; i < nodes.length; i++) {
+      final n = nodes[i];
+      switch (n.kind) {
+        case NodeKind.repeat:
+          _repeat(n, next[i + 1], inElement, inRound);
+        case NodeKind.times:
+          walk(n.fields, null, inRound: true);
+        case NodeKind.when:
+        case NodeKind.flags:
+        case NodeKind.flagBit:
+        case NodeKind.group:
+        case NodeKind.nested:
+          walk(n.fields, next[i + 1], inElement: inElement, inRound: inRound);
+        case NodeKind.list:
+        case NodeKind.dict:
+          walk(n.fields, null, inElement: true);
+        case NodeKind.integer:
+        case NodeKind.float:
+        case NodeKind.bytes:
+        case NodeKind.boolean:
+        case NodeKind.flagByte:
+        case NodeKind.sized:
+        case NodeKind.u2:
+        case NodeKind.slot:
+        case NodeKind.bits:
+        case NodeKind.packed:
+        case NodeKind.utf8:
+          break;
+      }
     }
   }
-}
 
-/// The first of [nodes], from index [from] on, that can write a byte for some
-/// row. A bool is a bit of a flag byte written earlier and a zero-width
-/// `bytes` has no byte. A `when`, a group, a nested row and a flag bit write
-/// what they hold, so the field found is the one inside them; a `repeat` or
-/// `times` whose body can write a byte is found itself. Everything else
-/// writes: a flag byte and a `flags`, a list and a dict (their count) too.
-Node? _firstWriter(List<Node> nodes, [int from = 0]) {
-  for (var i = from; i < nodes.length; i++) {
-    final n = nodes[i];
+  void _repeat(Node n, Node? follower, bool inElement, bool inRound) {
+    if (inElement) {
+      throw schemeFail(
+        n.id,
+        n.declaredName,
+        'repeat ${n.id} is inside a list or dict element; $_readsToTheEnd, so another element cannot follow it; use times',
+      );
+    }
+    if (inRound) {
+      throw schemeFail(
+        n.id,
+        n.declaredName,
+        'repeat ${n.id} is inside a repeat or times round; $_readsToTheEnd, so another round cannot follow it; use times',
+      );
+    }
+    walk(n.fields, null, inRound: true);
+    if (follower != null) {
+      throw schemeFail(
+        n.id,
+        n.declaredName,
+        'repeat ${n.id}: ${_writerName(follower)} follows it; $_readsToTheEnd, so nothing can follow it; use times',
+      );
+    }
+  }
+
+  /// `result[i]` is the first field of [nodes], from index i on, that can
+  /// write a byte for some row, else [after]; `result[nodes.length]` is
+  /// [after].
+  List<Node?> _followers(List<Node> nodes, Node? after) {
+    final next = List<Node?>.filled(nodes.length + 1, after);
+    for (var i = nodes.length - 1; i >= 0; i--) {
+      next[i] = _writer(nodes[i]) ?? next[i + 1];
+    }
+    return next;
+  }
+
+  /// The first field that can write a byte for some row in [n], or null. A
+  /// bool is a bit of a flag byte written earlier and a zero-width `bytes`
+  /// has no byte. A `when`, a group, a nested row and a flag bit write what
+  /// they hold, so the field found is the one inside them; a `repeat` or
+  /// `times` whose body can write a byte is found itself. Everything else
+  /// writes: a flag byte and a `flags`, a list and a dict (their count) too.
+  Node? _writer(Node n) {
     switch (n.kind) {
       case NodeKind.boolean:
-        break;
+        return null;
       case NodeKind.bytes:
-        if (n.size > 0) return n;
+        return n.size > 0 ? n : null;
       case NodeKind.when:
       case NodeKind.group:
       case NodeKind.nested:
       case NodeKind.flagBit:
-        final held = _firstWriter(n.fields);
-        if (held != null) return held;
       case NodeKind.repeat:
       case NodeKind.times:
-        if (_firstWriter(n.fields) != null) return n;
+        if (_held.containsKey(n)) return _held[n];
+        Node? found;
+        for (final child in n.fields) {
+          found = _writer(child);
+          if (found != null) break;
+        }
+        if (n.isRound && found != null) found = n;
+        return _held[n] = found;
       case NodeKind.integer:
       case NodeKind.float:
       case NodeKind.flags:
@@ -272,7 +296,6 @@ Node? _firstWriter(List<Node> nodes, [int from = 0]) {
         return n;
     }
   }
-  return null;
 }
 
 /// The words a refusal names the field after a repeat by: the member name, as

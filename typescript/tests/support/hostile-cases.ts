@@ -23,6 +23,7 @@ import {
   type DispatchResult,
   type Scheme,
 } from "../../src/index.ts"
+import { followedText, inElementText, modeThenRepeat } from "./repeat-last-cases.ts"
 import { bound, type Bound } from "./timing.ts"
 
 type Row = Record<string, unknown>
@@ -59,17 +60,12 @@ const nineU8 = () => [
   u8(8, (x: Row) => x.f8),
 ]
 
-// The whole text of the refusal of a repeat that the field named `field` follows.
-const followed = (anchor: number, field: string) =>
-  new RegExp(
-    `^repeat ${anchor}: ${field} follows it; a repeat reads to the end of the packet, so nothing can follow it; use times$`,
-  )
+// A refusal text, whole: the case passes only for the exact words of the contract.
+const whole = (text: string): RegExp => new RegExp(`^${text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`)
 
-const REPEAT_IN_ELEMENT =
-  /^repeat 1 is inside a list or dict element; a repeat reads to the end of the packet, so another element cannot follow it; use times$/
+const followed = (anchor: number, field: string): RegExp => whole(followedText(anchor, field))
 
-// The element row of the list and dict cases: u8 mode; repeat { u8 v }.
-const modeThenRepeat = () => group((x: Row) => x.item, [u8(0, (x: Row) => x.mode), repeat(1, [u8(1, (x: Row) => x.v)])])
+const REPEAT_IN_ELEMENT = whole(inElementText(1))
 
 // fixtures/hostile/cases.txt, construct stage: each builder must throw RangeError whose
 // message matches `rule`, so an error from a typo in the builder does not pass the case.
@@ -163,7 +159,7 @@ export const CONSTRUCT: Record<string, { build: () => unknown; rule: RegExp }> =
     ),
     rule: /^times 2: the body holds no member; a round of it would charge no slot and write nothing$/,
   },
-  // Loop 113 (contract repeat-last): a repeat that is not the last thing the packet reads, cases R1 to R9.
+  // Contract repeat-last, cases R1 to R9: a repeat that is not the last thing the packet reads.
   construct_repeat_then_field: {
     build: () => scheme<Row>(1, repeat(0, [u8(0, (x) => x.v)]), u8(1, (x) => x.x)),
     rule: followed(0, "x"),
@@ -207,7 +203,7 @@ export const CONSTRUCT: Record<string, { build: () => unknown; rule: RegExp }> =
     build: () => scheme<Row>(1, dict((x) => x.d, modeThenRepeat())),
     rule: REPEAT_IN_ELEMENT,
   },
-  // Refused by the nesting rule, as before loop 113, with its own text.
+  // Refused by the nesting rule, with its own text.
   construct_repeat_in_times_round: {
     build: () => scheme<Row>(1, u8(0, (x) => x.k), times(1, 0, [repeat(1, [u8(1, (x) => x.v)])])),
     rule: /^repeat 1 is inside a repeat or times round; a round cannot hold another repeat or times$/,

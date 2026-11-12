@@ -3,8 +3,8 @@
 **Component**: library
 **Producer task**: AZ-4210 (hostile cases and README text); epic AZ-4209
 **Consumer tasks**: AZ-4211 (TypeScript), AZ-4212 (C#), AZ-4213 (Python), AZ-4214 (Java), AZ-4215 (Go), AZ-4216 (Swift), AZ-4217 (Dart), AZ-4218 (Rust), AZ-4219 (C++)
-**Version**: 1.0.1
-**Status**: frozen (owner decision 2026-11-12, loop 112: "Refuse at build"); not implemented yet
+**Version**: 1.0.2
+**Status**: frozen (owner decision 2026-11-12, loop 112: "Refuse at build"); implemented in all nine packages in loop 113 (AZ-4210 to AZ-4219)
 **Last Updated**: 2026-11-12
 
 ## Purpose
@@ -17,7 +17,7 @@ A scheme is refused when it is built if a `repeat` is not the last thing its pac
 
 1. **Followed.** A field that can write a byte stands after the repeat. "After" means later in the repeat's own place, or later in any place around it: after the `when`, `flags`, flag bit, group or nested row that holds the repeat, and so on up to the top level of the scheme.
 2. **Inside an element.** The repeat sits inside a list or dict element, directly or under a `when`, `flags`, group or nested row of the element. The next element, or the field after the list, follows it.
-3. **Inside a round.** The repeat sits inside a `repeat` or `times` round. The next round follows it. TypeScript, C#, Python, Go, Swift, Dart and Rust refuse this today by their nesting rule and keep that rule and its message; Java and C++ allow it today and refuse it by this contract.
+3. **Inside a round.** The repeat sits inside a `repeat` or `times` round. The next round follows it. TypeScript, C#, Python, Go, Swift and Rust refused this before this contract by their nesting rule and keep that rule and its message. Dart's nesting rule did not look inside a nested row of a round: it keeps its rule and message for the rest and refuses a `repeat` in a nested row of a round by this contract (a `times` there still builds in Dart). Java and C++ allowed it and refuse it by this contract, a group or nested row of the round included.
 
 ### A field that can write a byte
 
@@ -25,7 +25,7 @@ A scheme is refused when it is built if a `repeat` is not the last thing its pac
 |--------|----------------|
 | an integer, a float, `bytes` with a size above 0, `utf8`, `sized`, `bits`, `packed`, `u2` | a `bool` (it is a bit of a flag byte that was written earlier) |
 | a flag byte, a `flags` | `bytes` with size 0 |
-| a `list`, a `dict` | a `when`, group or nested row that holds nothing that counts |
+| a `list`, a `dict` | a `when`, group, nested row, `times` or `repeat` that holds nothing that counts |
 | a `times` or a `repeat` whose body holds something that counts | |
 | a `when`, group, nested row or flag bit that holds something that counts | |
 
@@ -38,7 +38,7 @@ The check is on the scheme, not on a row: a field counts when it can write a byt
 - Text, where the package's scheme errors carry a text: it names the repeat and the first field that follows it, in the words the package's other scheme errors use for a field, and says what to use.
   - Followed: `repeat <anchor>: <field> follows it; a repeat reads to the end of the packet, so nothing can follow it; use times`
   - Inside an element: `repeat <anchor> is inside a list or dict element; a repeat reads to the end of the packet, so another element cannot follow it; use times`
-  - Inside a round (Java only, since C++ reports a status; the other seven keep their text, which also covers a `times` in a round): `repeat <anchor> is inside a repeat or times round; a repeat reads to the end of the packet, so another round cannot follow it; use times`
+  - Inside a round (Java, and Dart inside a nested row of a round; C++ reports a status; the other six keep their text, which also covers a `times` in a round): `repeat <anchor> is inside a repeat or times round; a repeat reads to the end of the packet, so another round cannot follow it; use times`
 - C++ and the Rust heap-free API report a status and a field id, not a text: `SchemeInvalid` with the id of the first field that follows (case 1) or of the repeat (cases 2 and 3). A C++ `constexpr` scheme does not compile.
 
 ## Cases
@@ -76,7 +76,7 @@ K1 to K5 were run in TypeScript on `9cfccda` (loop 112, a scratch run): each pac
 ## Invariants
 
 - No packet changes: a scheme that builds under the rule packs and unpacks the same bytes as before it.
-- The rule never looks at a row and costs nothing per pack or unpack.
+- The rule never looks at a row. It is one linear pass over the scheme: paid once when the scheme is built in every package except the Rust heap-free API, where it is a pass over the scheme table inside `validate`, which every heap-free pack and unpack runs first.
 - All nine packages refuse R1 to R9 (where the package can write them) and build K1 to K5 (where the package can write them).
 - The check runs for a scheme built in any public way; none bypasses it.
 
@@ -106,3 +106,5 @@ K1 to K5 were run in TypeScript on `9cfccda` (loop 112, a scratch run): each pac
 
 - 1.0.0 (2026-11-12, loop 112): first version, from the probe findings and the owner's decision.
 - 1.0.1 (2026-11-12, loop 113, AZ-4210): the Java text of "inside a round" changed from "...; a round cannot hold another repeat or times" to "...; a repeat reads to the end of the packet, so another round cannot follow it; use times". The old sentence is false in Java and C++, where a `times` inside a round builds. No case and no outcome changed.
+- 1.0.2 (2026-11-12, loop 113, AZ-4210, from the code review): rule 3 names Dart's nested row of a round (its nesting rule did not look there, so `k, times(k, nested m { repeat(v) })` built and packed `0102050607`; it is refused now with the Java text, and `times` in a nested row of a round still builds in Dart); C++ refuses a repeat in a group of a round too; the status line says the rule is implemented. No case and no outcome of R1 to R9 and K1 to K5 changed.
+  The pass over the table is paid per call in the Rust heap-free API (`nostd::validate`, 104 to 112 B of flash on the device pins); the Non-Functional wording of the package specs ("nothing per pack or unpack") holds for the map form and for C++ only.

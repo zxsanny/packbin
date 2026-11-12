@@ -187,7 +187,7 @@ var hostileConstructs = map[string]*hostileConstruct{
 		},
 		rule: lit(`packbin: invalid scheme at field 1: repeat 1 is inside a list or dict element; a repeat reads to the end of the packet, so another element cannot follow it; use times`),
 	},
-	// Refused by the nesting rule, as before loop 113, with its own text.
+	// Refused by the nesting rule, with its own text.
 	"construct_repeat_in_times_round": {
 		build: func() (*Scheme, error) { return NewScheme(1, U8(0, "k"), Times(1, 0, Repeat(1, U8(1, "v")))) },
 		rule:  lit(`packbin: invalid scheme at field 1: repeat 1 is inside a repeat or times round; a round cannot hold another repeat or times`),

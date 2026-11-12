@@ -56,9 +56,8 @@ fn refused_at(id: u32, member: &str) -> String {
     )
 }
 
-/// `flags { u8 z; repeat { u8 n } }`. The repeat is the last member: a member after it is refused
-/// when the scheme is built (AZ-4218), so `z`, which stood after it until loop 113, stands first
-/// and the repeat takes bit 1.
+/// `flags { u8 z; repeat { u8 n } }`. The repeat is the last member, since a member after it is
+/// refused when the scheme is built (AZ-4218): `z` stands first and the repeat takes bit 1.
 fn in_flags() -> MapScheme {
     MapScheme::new(
         1,

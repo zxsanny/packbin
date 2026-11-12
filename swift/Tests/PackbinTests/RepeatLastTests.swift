@@ -261,8 +261,8 @@ private let twoRounds = [LastRound(v: 5), LastRound(v: 6)]
         },
     ]
 
-    /// Rule 3 of the contract: a nested row does not hide a round from the nesting rule, which refused
-    /// these before loop 113 and keeps its text (a times in a nested row of a round too).
+    /// Rule 3 of the contract: a nested row does not hide a round from the nesting rule, which refuses
+    /// these with its own text, before the repeat-last check (a times in a nested row of a round too).
     @Test(arguments: nestedRowsOfRounds, LastForm.both)
     func scheme_roundInANestedRowOfARound_isRefusedByTheNestingRule(_ c: LastRefusal, _ form: LastForm) {
         // Arrange

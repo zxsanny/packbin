@@ -8,6 +8,8 @@
 mod nostd_support;
 
 use nostd_support::{from_hex, Slots};
+#[cfg(feature = "text")]
+use packbin::nostd::utf8;
 use packbin::nostd::{
     boolean, bytes, dict, flag_bit, flag_byte, flags, group, key, list, pack, repeat, sized, times,
     u2, u8, unpack, utf8_wire, validate, when, Error, Fault, Field, Num, Row, Scheme,
@@ -194,10 +196,23 @@ fn ac1_r9_a_repeat_inside_a_times_round_keeps_the_nesting_rule() {
     assert_eq!(checked, invalid(2, 1));
 }
 
+/// (what, the table, the index and the order id of the field that follows the repeat)
+type Case = (&'static str, Vec<Field>, usize, i32);
+
+/// Every table is refused naming the field that follows its repeat.
+fn assert_each_invalid(cases: Vec<Case>) {
+    for (what, fields, index, id) in cases {
+        // Act
+        let checked = check(&fields);
+
+        // Assert
+        assert_eq!(checked, invalid(index, id), "{what}");
+    }
+}
+
 #[test]
-fn ac1_every_place_a_byte_writing_field_can_stand_after_a_repeat_is_scheme_invalid() {
-    // Arrange (AC-1): (what, the table, the index and the order id of the field that follows)
-    type Case = (&'static str, Vec<Field>, usize, i32);
+fn ac1_a_byte_writing_field_in_any_container_place_after_a_repeat_is_scheme_invalid() {
+    // Arrange (AC-1): the places a field can stand in: flags, flag bits, a when, behind a field
     let cases: Vec<Case> = vec![
         (
             "a later member of the same flags",
@@ -217,6 +232,35 @@ fn ac1_every_place_a_byte_writing_field_can_stand_after_a_repeat_is_scheme_inval
             4,
             1,
         ),
+        (
+            "a field behind one that writes nothing",
+            vec![repeat(0, 1), u8(0), bytes(1, 0), u8(2)],
+            3,
+            2,
+        ),
+        (
+            "a field in a group in a when",
+            vec![
+                u8(0),
+                repeat(1, 1),
+                u8(1),
+                when(2, 0, 1, 2),
+                group(2, 1),
+                u8(2),
+            ],
+            5,
+            2,
+        ),
+    ];
+
+    // Act / Assert
+    assert_each_invalid(cases);
+}
+
+#[test]
+fn ac1_every_kind_of_field_that_writes_a_byte_after_a_repeat_is_scheme_invalid() {
+    // Arrange (AC-1): the kinds of field that write a byte, each right after the repeat
+    let cases: Vec<Case> = vec![
         (
             "a flags of one bool: its byte is written",
             vec![repeat(0, 1), u8(0), flags(1, 1), boolean(1)],
@@ -249,34 +293,28 @@ fn ac1_every_place_a_byte_writing_field_can_stand_after_a_repeat_is_scheme_inval
             4,
             2,
         ),
+    ];
+
+    // Act / Assert
+    assert_each_invalid(cases);
+}
+
+#[cfg(feature = "text")]
+#[test]
+fn ac1_a_string_or_a_dict_after_a_repeat_is_scheme_invalid() {
+    // Arrange (AC-1): the kinds that need the `text` feature, each right after the repeat
+    let cases: Vec<Case> = vec![
+        ("a string", vec![repeat(0, 1), u8(0), utf8(1)], 2, 1),
         (
-            "a field behind one that writes nothing",
-            vec![repeat(0, 1), u8(0), bytes(1, 0), u8(2)],
-            3,
+            "a dict: the key and the element are its entries",
+            vec![repeat(0, 1), u8(0), dict(1, 2), key(), u8(0)],
             2,
-        ),
-        (
-            "a field in a group in a when",
-            vec![
-                u8(0),
-                repeat(1, 1),
-                u8(1),
-                when(2, 0, 1, 2),
-                group(2, 1),
-                u8(2),
-            ],
-            5,
-            2,
+            1,
         ),
     ];
 
-    for (what, fields, index, id) in cases {
-        // Act
-        let checked = check(&fields);
-
-        // Assert
-        assert_eq!(checked, invalid(index, id), "{what}");
-    }
+    // Act / Assert
+    assert_each_invalid(cases);
 }
 
 // AC-1: a field after the repeat that cannot write a byte

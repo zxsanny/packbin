@@ -280,7 +280,7 @@ fn zero_progress_repeat_round_ends_it_and_the_rest_is_trailing() {
 #[test]
 fn a_repeat_in_flags_whose_rounds_hold_no_value_is_off_like_std() {
     // Arrange: flags { u8; repeat { u8 } } with one round that holds nothing (the repeat is the
-    // last member: a member after it is refused since AZ-4218)
+    // last member: a member after it is refused when the scheme is built)
     let built = build(0x21, &[Flags(vec![n(U8), Repeat(vec![n(U8)])])]);
     let mut empty = Slots::default();
     set_items(&mut empty, 1, vec![Slots::default()]);

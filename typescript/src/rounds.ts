@@ -88,10 +88,26 @@ function holdsMember(fields: Field[]): boolean {
 // A repeat has no count on the wire: unpack reads rounds until the buffer ends, so whatever a packet holds
 // after a repeat is read as more rounds of it. Refused when the scheme is built: a repeat that a field which
 // can write a byte follows, in its own place or after the when, flags, flag bit or group that holds it, up to
-// the top level; and a repeat inside a list or dict element, which the next element follows. `after` is the
-// first such field after the place `fields` stand in. A repeat inside a round is refused by
-// `validateRoundNesting`, so a round body is walked only for the list and dict elements it holds.
-export function validateRepeatLast(fields: Field[], after?: Field, inElement = false): void {
+// the top level; and a repeat inside a list or dict element, which the next element follows. The walk is in
+// document order and names the first refusal: the body of a repeat before the field after it. A repeat inside
+// a round is refused by `validateRoundNesting`, so a round body is walked only for the list and dict elements
+// it holds.
+export function validateRepeatLast(fields: Field[]): void {
+  walkRepeatLast(fields, undefined, false, new Map())
+}
+
+// What a field can write is worked out once per field, so the walk is linear in the size of the scheme.
+type Writers = Map<Field, Field | undefined>
+
+// `after` is the first field that can write a byte after the place `fields` stand in.
+function walkRepeatLast(fields: Field[], after: Field | undefined, inElement: boolean, writers: Writers): void {
+  // follower[i]: the first field after fields[i] that can write a byte, in this place or after it.
+  const follower = new Array<Field | undefined>(fields.length)
+  let next = after
+  for (let i = fields.length - 1; i >= 0; i--) {
+    follower[i] = next
+    next = writerIn(fields[i]!, writers) ?? next
+  }
   fields.forEach((f, i) => {
     switch (f.kind) {
       case "repeat": {
@@ -100,65 +116,75 @@ export function validateRepeatLast(fields: Field[], after?: Field, inElement = f
             `repeat ${f.anchor} is inside a list or dict element; a repeat reads to the end of the packet, so another element cannot follow it; use times`,
           )
         }
-        const follower = firstWriter(fields, i + 1) ?? after
-        if (follower !== undefined) {
+        walkRepeatLast(f.fields, undefined, false, writers)
+        if (follower[i] !== undefined) {
           throw new RangeError(
-            `repeat ${f.anchor}: ${writerName(follower)} follows it; a repeat reads to the end of the packet, so nothing can follow it; use times`,
+            `repeat ${f.anchor}: ${writerName(follower[i]!)} follows it; a repeat reads to the end of the packet, so nothing can follow it; use times`,
           )
         }
-        validateRepeatLast(f.fields)
         break
       }
       case "times":
-        validateRepeatLast(f.fields)
+        walkRepeatLast(f.fields, undefined, false, writers)
         break
       case "when":
       case "flags":
       case "group":
-        validateRepeatLast(f.fields, firstWriter(fields, i + 1) ?? after, inElement)
+        walkRepeatLast(f.fields, follower[i], inElement, writers)
         break
       case "flagBit":
-        validateRepeatLast([f.field], firstWriter(fields, i + 1) ?? after, inElement)
+        walkRepeatLast([f.field], follower[i], inElement, writers)
         break
       case "list":
       case "dict":
-        validateRepeatLast([f.element], undefined, true)
+        walkRepeatLast([f.element], undefined, true, writers)
         break
     }
   })
 }
 
-// The first field of `fields`, from index `from` on, that can write a byte for some row. A bool is a bit of
-// a flag byte written earlier and a zero-width `bytes` has no byte. A `when`, a group and a flag bit write
-// what they hold, so the field found is the one inside them; a repeat or times whose body can write a byte
-// is found itself. Everything else writes: a flag byte and a `flags`, a list and a dict (their count) too.
-function firstWriter(fields: Field[], from = 0): Field | undefined {
-  for (let i = from; i < fields.length; i++) {
-    const f = fields[i]!
-    switch (f.kind) {
-      case "bool":
-        break
-      case "bytes":
-        if (f.size > 0) return f
-        break
-      case "when":
-      case "group": {
-        const held = firstWriter(f.fields)
-        if (held !== undefined) return held
-        break
-      }
-      case "flagBit": {
-        const held = firstWriter([f.field])
-        if (held !== undefined) return held
-        break
-      }
-      case "repeat":
-      case "times":
-        if (firstWriter(f.fields) !== undefined) return f
-        break
-      default:
-        return f
+// The first field of `f`, or of what it holds, that can write a byte for some row. A bool is a bit of a flag
+// byte written earlier and a zero-width `bytes` has no byte. A `when`, a group and a flag bit write what they
+// hold, so the field found is the one inside them; a repeat or times whose body can write a byte is found
+// itself. Everything else writes: a flag byte and a `flags`, a list and a dict (their count) too.
+function writerIn(f: Field, writers: Writers): Field | undefined {
+  switch (f.kind) {
+    case "bool":
+      return undefined
+    case "bytes":
+      return f.size > 0 ? f : undefined
+    case "when":
+    case "group":
+    case "flagBit":
+    case "repeat":
+    case "times": {
+      if (!writers.has(f)) writers.set(f, writerHeld(f, writers))
+      return writers.get(f)
     }
+    default:
+      return f
+  }
+}
+
+function writerHeld(f: Field, writers: Writers): Field | undefined {
+  switch (f.kind) {
+    case "flagBit":
+      return writerIn(f.field, writers)
+    case "repeat":
+    case "times":
+      return firstWriter(f.fields, writers) !== undefined ? f : undefined
+    case "when":
+    case "group":
+      return firstWriter(f.fields, writers)
+    default:
+      return undefined
+  }
+}
+
+function firstWriter(fields: Field[], writers: Writers): Field | undefined {
+  for (const f of fields) {
+    const found = writerIn(f, writers)
+    if (found !== undefined) return found
   }
   return undefined
 }

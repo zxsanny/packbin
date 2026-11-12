@@ -161,8 +161,8 @@ public class PackRepeatRoundCapTests
         Assert.Equal(Words("K", 4, 3), error.Message);
     }
 
-    // AZ-4212 AC-4: this row packed a repeat inside a list element and met the round limit there. Since loop 113 such a
-    // scheme is refused when it is built (contract repeat-last, case 2), so pack never reaches that repeat.
+    // A repeat in a list element is refused when the scheme is built (contract repeat-last, case 2), so pack never
+    // reaches it; the round limit inside an element is pinned for `times` above.
     [Fact]
     public void Build_RepeatInAListElement_IsRefusedBeforeAnyPack()
     {

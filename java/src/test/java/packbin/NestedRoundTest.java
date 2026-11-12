@@ -7,9 +7,8 @@ import java.util.Map;
 /**
  * AZ-2127: a times inside a repeat or times round packs and unpacks one inner list per outer round
  * ({@code v: [[5], [7]]}, null where the outer round skipped the inner group), and a nested row in a round is
- * one map per round. AZ-4214 (loop 113, contract repeat-last): a repeat inside a round, which AZ-2127 built, is
- * refused when the scheme is built, because the next round would follow it; the pack-time refusal of its second
- * round is gone with it.
+ * one map per round. Contract repeat-last: a repeat inside a round is refused when the scheme is built, because the
+ * next round would follow it; a times there has a count and builds.
  */
 @SuppressWarnings({"unchecked", "rawtypes"})
 final class NestedRoundTest {
@@ -52,7 +51,7 @@ final class NestedRoundTest {
         expectUnpackRepack("AC-1 null for the skipped round", skipped, "01" + "010105" + "0201" + "01020607", gaps);
     }
 
-    /** The times -> repeat and repeat -> repeat halves of AC-2 are refused since AZ-4214 (below). */
+    /** A times inside a times round builds, packs and reads back; a repeat inside a round is refused (below). */
     private static void ac2TimesInTimes() {
         Scheme<Map> timesTimes = Maps.scheme(1, u8(0, "a"),
                 Packbin.times(1, 0, u8(1, "m"), Packbin.times(2, 1, u8(2, "v"))));
@@ -89,7 +88,7 @@ final class NestedRoundTest {
         HostileRun cut = HostileRun.of(wide, "010102");
         PackbinTest.expectTrue("AC-4 a cut nested row is an error value, not a throw -> " + cut.kind(), cut.isErrorValue());
 
-        // AZ-4214 AC-4: a repeat in the nested row of a round is refused (below); a times there has a count per row.
+        // A repeat in the nested row of a round is refused (below); a times there has a count per row.
         Scheme<Map> timesInRow = Maps.scheme(1, Packbin.repeat(0,
                 Packbin.group(Access.get("g"), Access.set("g"), u8(0, "n"), Packbin.times(1, 0, u8(1, "v")))));
         Map<String, Object> inner = Maps.map("g",
@@ -99,10 +98,8 @@ final class NestedRoundTest {
     }
 
     /**
-     * AZ-4214 AC-5: a repeat inside a repeat or times round is refused when the scheme is built, directly or under
-     * a when, flags, flag bit, group or nested row: the next round would follow it. Before loop 113 these schemes
-     * built, packed one round and refused a second one at pack ("a repeat has no end marker ..."); that refusal
-     * cannot be reached any more and is removed.
+     * AC-5: a repeat inside a repeat or times round is refused when the scheme is built, directly or under a when,
+     * flags, flag bit, group or nested row: the next round would follow it. No pack or unpack refusal exists for it.
      */
     private static void aRepeatInARoundIsRefusedAtBuild() {
         // Arrange
@@ -136,7 +133,7 @@ final class NestedRoundTest {
                         Packbin.times(2, 1, u8(2, "m"), Packbin.repeat(3, u8(3, "v"))))));
     }
 
-    /** AZ-4214 AC-5: a times has a count, so one inside a round builds and packs as before, under any outer rounds. */
+    /** AC-5: a times has a count, so one inside a round builds and packs, under any outer rounds. */
     private static void aTimesInARoundStillPacks() {
         // Arrange
         Map<String, Object> several = Maps.map("a", 2, "m", List.of(1, 2), "v", List.of(List.of(5), List.of(6, 7)));
@@ -177,8 +174,8 @@ final class NestedRoundTest {
     }
 
     /**
-     * Shapes that SchemeOrder refused until AZ-2127; each builds and round-trips. The repeat inside a when in a
-     * repeat is refused again since AZ-4214 (AC-4, above), so the when holds its times form: a count, then the rounds.
+     * Shapes of a round inside a round that each build and round-trip. A when in a repeat holds the times form (a
+     * count, then the rounds), as a repeat there is refused (above).
      */
     private static void formerlyRefusedShapesBuildAndRoundTrip() {
         Scheme<Map> timesTimes = Maps.scheme(1, u8(0, "n"),

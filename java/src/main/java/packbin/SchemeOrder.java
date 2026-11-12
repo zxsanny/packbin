@@ -54,7 +54,9 @@ final class SchemeOrder {
                     throw new IllegalArgumentException("repeat " + field.id + inside);
                 }
                 repeatLast(field.children, null, IN_ROUND);
-                yield field;
+                // A repeat that reached here writes nothing (one that writes was refused above): the first repeat
+                // stays the one a later field follows.
+                yield open == null ? field : open;
             }
             case TIMES -> {
                 repeatLast(field.children, null, IN_ROUND);
@@ -97,9 +99,14 @@ final class SchemeOrder {
         return null;
     }
 
-    /** Fields carry no names: one is named by its kind and, when it has one, its id ({@code u8 1}, {@code list}). */
+    /** The follower of a repeat, the kind in lower case as in the other messages of this file ({@code u8 1}). */
     private static String kindAndId(Field field) {
         String kind = field.kind == Field.Kind.FLAG_BYTE ? "flagByte" : field.kind.name().toLowerCase(Locale.ROOT);
+        return named(kind, field);
+    }
+
+    /** Fields carry no names: one is named by a kind word and, when it has one, its id (ids restart per scope). */
+    private static String named(String kind, Field field) {
         return field.id >= 0 ? kind + " " + field.id : kind;
     }
 
@@ -141,8 +148,9 @@ final class SchemeOrder {
             case FLAG_BIT -> {
                 FlagGroup read = visible.get(field.group);
                 if (read == null) {
-                    throw new IllegalArgumentException(
-                            "flag bit " + bitName(field.inner) + " has no flagByte before it in the same scope");
+                    // The kind keeps the case of its constant (U8 0): the documented text of this refusal (AZ-2135).
+                    throw new IllegalArgumentException("flag bit " + named(field.inner.kind.toString(), field.inner)
+                            + " has no flagByte before it in the same scope");
                 }
                 int index = read.reserve(field.inner);
                 Field inner = bind(field.inner, new HashMap<>(visible), counts);
@@ -179,11 +187,6 @@ final class SchemeOrder {
                 yield field;
             }
         };
-    }
-
-    /** Fields carry no names, so a bit is named by its kind and, when it has one, its id (ids restart per scope). */
-    private static String bitName(Field inner) {
-        return inner.id >= 0 ? inner.kind + " " + inner.id : inner.kind.toString();
     }
 
     /**
@@ -310,14 +313,15 @@ final class SchemeOrder {
     }
 
     /**
-     * Looking through when, anchored groups, flag bits and an inner repeat or times, a member is any field that is
-     * not a container: a value field (a zero-width bytes included), a list, a dict, a u2, a nested row, a flag byte
-     * or a flags (one without members writes its flag byte).
+     * Looking through when, anchored groups, flag bits and an inner times, a member is any field that is not a
+     * container: a value field (a zero-width bytes included), a list, a dict, a u2, a nested row, a flag byte or a
+     * flags (one without members writes its flag byte). An inner repeat counts as a member without a look: a
+     * round refuses it ({@code repeatLast}), and {@code walk} has already checked that its own body holds a member.
      */
     private static boolean holdsMember(List<Field> body) {
         for (Field field : body) {
             boolean member = switch (field.kind) {
-                case WHEN, REPEAT, TIMES -> holdsMember(field.children);
+                case WHEN, TIMES -> holdsMember(field.children);
                 case GROUP -> field.nestedRow || holdsMember(field.children);
                 case FLAG_BIT -> holdsMember(java.util.Collections.singletonList(field.inner));
                 default -> true;

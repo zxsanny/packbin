@@ -98,9 +98,9 @@ class Scheme(Generic[T]):
         bound = _bind_flag_bits(fields)
         _validate_round_nesting(bound)
         _validate_round_bodies(bound)
-        _validate_repeat_last(bound)
         _validate_names(bound)
         _validate_element_accessors(bound)
+        _validate_repeat_last(bound)
         self._type_number = type_number
         self._row_type = row_type
         self._fields = bound

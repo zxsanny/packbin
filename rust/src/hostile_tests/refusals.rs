@@ -85,7 +85,7 @@ pub(super) const CONSTRUCT_REFUSAL: RuleTable = &[
         "=repeat 1: field \"x\" follows it; a repeat reads to the end of the packet, so nothing \
          can follow it; use times",
     ),
-    // Refused before loop 113 by the nesting rule, which keeps its text.
+    // A repeat in a times round is refused by the nesting rule, which keeps its own text.
     (
         "construct_repeat_in_times_round",
         "=repeat at id 1 is inside a repeat or times round; a round keeps no inner repeat rounds",

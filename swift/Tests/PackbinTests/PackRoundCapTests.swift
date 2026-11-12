@@ -46,8 +46,8 @@ import Testing
         #expect(isPackRefusal(error, "k", "k: the repeat count is 4, above the limit of 3 rounds"))
     }
 
-    /// Until loop 113 the cap was checked in a list element too; a repeat there no longer builds
-    /// (AZ-4216 AC-4).
+    /// A repeat cannot stand in a list element (the next item would follow it), so it is refused when
+    /// the scheme is built, before any cap can apply (AZ-4216 AC-4).
     @Test func scheme_repeatInAListElement_isRefusedWhenItIsBuiltBeforeAnyCap() {
         // Arrange
         let build = { try Scheme(1, .list("items", .group("item", .repeat(0, .u8(0, "k"))))) }
@@ -59,6 +59,20 @@ import Testing
         #expect(error?.kind == .schemeError)
         #expect(error?.description == "packbin: invalid scheme at field 0: repeat 0 is inside a list or dict element; "
             + "a repeat reads to the end of the packet, so another element cannot follow it; use times")
+    }
+
+    /// The round cap of a list element is the cap of its times: the count above `maxRounds` is refused
+    /// before any round (AZ-4216 AC-4).
+    @Test func pack_timesCountOnePastTheLimitInAListElement_isRefusedNamingTheMember() throws {
+        // Arrange
+        let layout = try Scheme(1, .list("items", .group("item", .u8(0, "n"), .times(1, count: 0, .u8(1, "k")))))
+            .withLimits(maxRounds: 3)
+
+        // Act
+        let error = packError(layout, ["items": [["n": 4, "k": 7]]])
+
+        // Assert
+        #expect(isPackRefusal(error, "k", "k: the times count is 4, above the limit of 3 rounds"))
     }
 
     @Test func pack_repeatOfMaxRoundsEntries_packsAndRoundTrips() throws {

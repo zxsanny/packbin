@@ -77,15 +77,21 @@ final class RepeatRoundCapTest {
                 .withLimits(3, SLOTS);
         Scheme<Map> inWhen = Maps.scheme(1, u8(0, "m"), Packbin.when(1, Packbin.eq(0, 1), Packbin.repeat(1, u8(1, "k"))))
                 .withLimits(3, SLOTS);
+        Scheme<Map> inElementTimes = Maps.scheme(1, Packbin.list(Access.get("items"), Access.set("items"),
+                Packbin.group(0, u8(0, "n"), Packbin.times(1, 0, u8(1, "k"))))).withLimits(3, SLOTS);
         // Act and Assert
         refused("AZ-2355 row 7 flags", inFlags, row("k", FOUR), text);
         refused("AZ-2355 row 8 split bit", inSplitBit, row("k", FOUR), text);
         refused("AZ-2355 row 9 when", inWhen, row("m", 1, "k", FOUR), text);
-        // AZ-4214 AC-4: a list element is no place for a repeat any more, so row 10 has no list to cap: the scheme of
-        // the row is refused when it is built.
+        // A repeat in a list element is refused when the scheme is built (contract repeat-last), so pack never reaches
+        // its cap; the cap inside an element is pinned with a times, whose count the element row holds.
         RepeatLastTest.refusedAtBuild("AZ-2355 row 10 list element", "repeat 0" + RepeatLastTest.IN_ELEMENT,
                 () -> Maps.scheme(1, Packbin.list(Access.get("items"), Access.set("items"),
                         Packbin.group(0, Packbin.repeat(0, u8(0, "k"))))));
+        refused("AZ-2355 row 10 list element, times", inElementTimes, row("items", List.of(row("n", 4, "k", FOUR))),
+                "times: count 4 is above the limit of 3 rounds");
+        packs("AZ-2355 row 10 list element, times at the limit", inElementTimes,
+                row("items", List.of(row("n", 3, "k", list(1, 2, 3)))), "01010003010203");
         packs("AZ-2355 row 7 at the limit", inFlags, row("k", list(1, 2, 3)), "0101010203");
     }
 

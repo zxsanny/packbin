@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:packbin/packbin.dart';
 
 import '../support/hex.dart';
+import '../support/repeat_last.dart' show rounds;
 import 'hostile_cases.dart';
 
 part 'hostile_packs_repeat_last.dart';

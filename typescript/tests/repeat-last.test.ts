@@ -19,19 +19,17 @@ import {
   when,
   type Field,
 } from "../src/index.ts"
+import { validateRepeatLast } from "../src/rounds.ts"
+import { followedText as followed, inElementText as inElement, modeThenRepeat, rounds } from "./support/repeat-last-cases.ts"
+import { assertWithin, bound } from "./support/timing.ts"
 
-// AZ-4211, contract repeat-last 1.0.1: a repeat is the last thing a packet reads. A scheme that breaks the
-// rule is refused when it is built; a repeat that is last builds and packs the bytes it packed before.
+// AZ-4211, contract repeat-last: a repeat is the last thing a packet reads. A scheme that breaks the rule is
+// refused when it is built, and the walk that finds it is linear in the size of the scheme; a repeat that is
+// last builds and packs the bytes the contract names.
 
 type Row = Record<string, unknown>
 
 const hex = (b: Uint8Array): string => Buffer.from(b).toString("hex")
-
-// The two texts of the contract, compared whole.
-const followed = (anchor: number, field: string): string =>
-  `repeat ${anchor}: ${field} follows it; a repeat reads to the end of the packet, so nothing can follow it; use times`
-const inElement = (anchor: number): string =>
-  `repeat ${anchor} is inside a list or dict element; a repeat reads to the end of the packet, so another element cannot follow it; use times`
 
 function refusal(build: () => unknown): string {
   let message = ""
@@ -51,12 +49,6 @@ function unpackRow(layout: Scheme<Row>, wire: Uint8Array): Row {
   assert.deepEqual(result, { ok: true })
   return got!
 }
-
-// repeat { u8 v }, with the id the place gives it.
-const rounds = (id: number): Field => repeat(id, [u8(id, (x: Row) => x.v)])
-
-// The element row of the list and dict cases: u8 mode; repeat { u8 v }.
-const modeThenRepeat = (): Field => group((x: Row) => x.item, [u8(0, (x: Row) => x.mode), rounds(1)])
 
 type Refused = { name: string; fields: () => Field[]; text: string }
 
@@ -196,6 +188,16 @@ const IN_ELEMENT: Refused[] = [
     fields: () => [list((x) => x.items, group((x) => x.item, [rounds(0), u8(1, (x) => x.x)]))],
     text: inElement(0),
   },
+  // Two rules broken at once: the first refusal in document order is named. The element inside the repeat's
+  // body comes before the field after the repeat.
+  {
+    name: "in the body of a repeat that a field follows: the element text, not the follower text",
+    fields: () => [
+      repeat(0, [u8(0, (x) => x.k), list((x) => x.rows, group((x) => x.row, [rounds(0)]))]),
+      u8(1, (x) => x.x),
+    ],
+    text: inElement(0),
+  },
 ]
 
 function itRefuses(cases: Refused[]): void {
@@ -320,4 +322,44 @@ describe("AZ-4211 AC-2 a repeat that is the last thing read builds and packs the
 
 describe("AZ-4211 AC-1 a field after the repeat that cannot write a byte does not refuse the scheme", () => {
   itKeeps(NO_BYTE_AFTER)
+})
+
+// N containers that write nothing, one after the other: the first writer after each of them is not found by
+// scanning the rest of the place again for every container. The check is timed by itself, so the bound is about
+// the walk and not about the rest of the build.
+const SIBLINGS = 16_000
+
+const member = (name: string) => new Function("x", `return x.${name}`) as (x: Row) => unknown
+
+function walkWithin(fields: Field[], what: string): void {
+  // Arrange
+  const limit = bound(0.3)
+
+  // Act
+  const started = performance.now()
+  validateRepeatLast(fields)
+  const seconds = (performance.now() - started) / 1000
+
+  // Assert
+  assertWithin(seconds, limit, what)
+}
+
+describe("AZ-4211 AC-1 the check is one walk of the scheme: the time is linear in its size", () => {
+  it(`${SIBLINGS} sibling whens that each hold a zero-width bytes are walked within the bound`, () => {
+    // Arrange
+    const fields: Field[] = [u8(0, (x) => x.k)]
+    for (let i = 0; i < SIBLINGS; i++) fields.push(when(i + 1, eq(0, 1), [bytes(i + 1, member(`z${i}`), 0)]))
+
+    // Act / Assert
+    walkWithin(fields, "whens")
+  })
+
+  it(`${SIBLINGS} sibling repeats that each hold a zero-width bytes are walked within the bound`, () => {
+    // Arrange
+    const fields: Field[] = []
+    for (let i = 0; i < SIBLINGS; i++) fields.push(repeat(i, [bytes(i, member(`z${i}`), 0)]))
+
+    // Act / Assert
+    walkWithin(fields, "repeats")
+  })
 })

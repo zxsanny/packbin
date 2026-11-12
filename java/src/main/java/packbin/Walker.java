@@ -50,7 +50,7 @@ final class Walker {
                     packFields(field.children, row, sink, seen, take);
                 }
             }
-            case REPEAT -> Rounds.packRepeat(field, row, sink, seen, take);
+            case REPEAT -> Rounds.packRepeat(field, row, sink, seen);
             case TIMES -> VarFields.packTimes(field, row, sink, seen, take);
             case BYTES -> packBytes(field, row, sink, seen, take);
             case GROUP -> packGroup(field, row, sink, seen, take);
@@ -94,7 +94,7 @@ final class Walker {
             case FLAG_BYTE -> unpackFlagByte(field, data, cur, seen);
             case FLAG_BIT -> unpackFlagBit(field, data, cur, row, seen, asList);
             case WHEN -> unpackWhen(field, data, cur, row, seen, asList);
-            case REPEAT -> Rounds.unpackRepeat(field, data, cur, row, seen, asList);
+            case REPEAT -> Rounds.unpackRepeat(field, data, cur, row, seen);
             case TIMES -> VarFields.unpackTimes(field, data, cur, row, seen, asList);
             case BYTES -> unpackBytes(field, data, cur, row, seen, asList);
             case GROUP -> unpackGroup(field, data, cur, row, seen, asList);

@@ -144,7 +144,7 @@ private let nested = "is inside a repeat or times round; a round cannot hold ano
                       "sized 1: count names field id 0, which is not declared earlier in the same scope") {
             try Scheme(1, .u8(0, "n"), .repeat(1, .sized(1, "p", count: 0)))
         },
-        // The first round was a repeat until loop 113; a times after a repeat no longer builds (RepeatLastTests).
+        // The first round is a times: a times after a repeat is refused when it is built (RepeatLastTests).
         RefusedScheme("times count names a field of a round", field: 2, "",
                       "times 2: count names field id 1, which is not declared earlier in the same scope") {
             try Scheme(1, .u8(0, "n"), .times(1, count: 0, .u8(1, "c")), .times(2, count: 1, .u8(2, "v")))

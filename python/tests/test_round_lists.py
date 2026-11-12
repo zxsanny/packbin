@@ -281,7 +281,7 @@ def test_repeat_holding_another_round_is_refused_at_construction(place: str):
 
 
 def test_a_round_inside_a_list_element_of_a_round_is_not_nested():
-    # The element held a repeat until loop 113; a repeat in an element no longer builds (test_repeat_last.py).
+    # Arrange: the element holds a times, because a repeat in an element does not build (test_repeat_last.py)
     scheme = Scheme(
         1,
         dict,

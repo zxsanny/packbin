@@ -68,8 +68,8 @@ func TestAC1RepeatCapHoldsInFlagsASplitBitAndAWhen(t *testing.T) {
 	}
 }
 
-// A repeat cannot stand in a list element since AZ-4215 (the next item would follow it), so the round
-// cap of an element is the cap of its times.
+// A repeat cannot stand in a list element (the next item would follow it), so the round cap of an
+// element is the cap of its times.
 func TestAC1TimesCapHoldsInAListElement(t *testing.T) {
 	// Arrange
 	layout := limited(t, mustScheme(t, 1, List("items", Nested("item", U8(0, "n"), Times(1, 0, U8(1, "k"))))),

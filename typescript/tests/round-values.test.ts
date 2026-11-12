@@ -16,6 +16,7 @@ import {
   u8,
   when,
 } from "../src/index.ts"
+import { followedText } from "./support/repeat-last-cases.ts"
 
 type Row = Record<string, unknown>
 
@@ -233,14 +234,13 @@ describe("repeat and times round values are addressed by round index", () => {
     assert.throws(pack, /^RangeError: missing x$/)
   })
 
-  // Until loop 113 this scheme built, and unpack read `tail` after a round that read nothing (AZ-4211 AC-4).
+  // A repeat reads to the end of the packet, so a field after it is refused even when the round reads nothing (AZ-4211 AC-4).
   it("a field after a repeat whose round reads nothing is refused when the scheme is built", () => {
     // Arrange
     const build = () => scheme<Row>(1, repeat(0, [bytes(0, (x) => x.v, 0)]), u8(1, (x) => x.tail))
-    const text = "repeat 0: tail follows it; a repeat reads to the end of the packet, so nothing can follow it; use times"
 
     // Act / Assert
-    assert.throws(build, (e: unknown) => e instanceof RangeError && e.message === text)
+    assert.throws(build, (e: unknown) => e instanceof RangeError && e.message === followedText(0, "tail"))
   })
 
   it("AZ-2188 a repeat member named like an earlier scalar is a duplicate, not a join", () => {

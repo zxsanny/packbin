@@ -82,8 +82,8 @@ final class HostileUnpackTest {
 
         // AZ-2089: a when names only an integer or bool read earlier in its own round, so no times body reads
         // nothing for some packets only. That shape is refused; the zero-width bodies above and below keep the
-        // guard tested. A times body of a repeat was the other such shape (its rounds read the bytes left, so the
-        // next round of the times read nothing): AZ-4214 (AC-4, AC-5) refuses a repeat inside a round at build.
+        // guard tested. A repeat in a times body would be the other such shape (its rounds read the bytes left, so
+        // the next round of the times would read nothing): a repeat inside a round is refused at build.
         PackbinTest.expectThrows("AC-1 times body of a when on an outer field is refused", () -> Maps.scheme(1,
                 Packbin.u8(0, Access.get("mode"), Access.set("mode")),
                 Packbin.u32(1, Access.get("n"), Access.set("n")),

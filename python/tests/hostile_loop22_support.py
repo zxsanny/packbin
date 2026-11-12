@@ -6,7 +6,6 @@ from packbin import (
     BinaryPacker,
     Scheme,
     bits,
-    dict as map_field,
     eq,
     flag_byte,
     flags,
@@ -28,7 +27,6 @@ from packbin._validate import _validate_round_bodies
 # The construct schemes put the `when`s' source field `mode` outside the round, and Python's `Scheme` refuses
 # that first (a `when` must name a field of its own scope), so the empty-body rule they pin is checked on the nodes,
 # as test_empty_round_body.py does for rows 17 and 18; test_hostile_vectors.py also checks that `Scheme` refuses them.
-# The thirteen cases of loop 113 are at the end of the file.
 
 
 def _u8(field_id: int, name: str) -> Any:
@@ -123,47 +121,3 @@ LOOP22_CONSTRUCT_CASES = {
     for case_id, fields in LOOP22_CONSTRUCT_FIELDS.items()
 }
 
-
-# The thirteen cases of loop 113 (AZ-4210; Python: AZ-4213): R1 to R9 and K1 to K4 of the contract `repeat-last.md`,
-# a repeat is the last thing a packet reads. Python runs all thirteen. It has only an anchored group, which shares the
-# ids of the row around it: `x` of construct_repeat_in_group_then_field is id 1, and the element row of the list and
-# dict cases is `group(0, ...)`.
-def _rounds(field_id: int, name: str = "v") -> Any:
-    return repeat(field_id, _u8(field_id, name))
-
-
-def _mode_then_repeat() -> Any:
-    return group(0, _u8(0, "mode"), _rounds(1))
-
-
-# case id -> build call of a `construct` case
-LOOP113_CONSTRUCT_CASES = {
-    "construct_repeat_then_field": lambda: _scheme(_rounds(0), _u8(1, "x")),
-    "construct_repeat_in_when_then_field": lambda: _scheme(_u8(0, "k"), when(1, eq(0, 1), _rounds(1)), _u8(2, "x")),
-    "construct_repeat_in_flags_then_field": lambda: _scheme(flags(0, _rounds(0)), _u8(1, "x")),
-    "construct_repeat_in_group_then_field": lambda: _scheme(group(0, _rounds(0)), _u8(1, "x")),
-    "construct_repeat_then_repeat": lambda: _scheme(_rounds(0), _rounds(1, "w")),
-    "construct_repeat_then_exclusive_when": lambda: _scheme(
-        _u8(0, "k"), when(1, eq(0, 1), _rounds(1)), when(2, eq(0, 2), _u8(2, "x"))
-    ),
-    "construct_repeat_in_list_element": lambda: _scheme(list_field(lambda row: row["items"], _mode_then_repeat())),
-    "construct_repeat_in_dict_element": lambda: _scheme(map_field(lambda row: row["d"], _mode_then_repeat())),
-    "construct_repeat_in_times_round": lambda: _scheme(_u8(0, "k"), times(1, 0, _rounds(1))),
-}
-
-# case id -> (pack call, None: each is a `bytes` case)
-LOOP113_PACK_CASES = {
-    "pack_repeat_last": (lambda: _pack(_scheme(_u8(0, "x"), _rounds(1)), {"x": 9, "v": [5, 6]}), None),
-    "pack_repeat_last_in_when": (
-        lambda: _pack(_scheme(_u8(0, "k"), when(1, eq(0, 1), _rounds(1))), {"k": 1, "v": [5, 6]}),
-        None,
-    ),
-    "pack_repeat_last_in_flags": (
-        lambda: _pack(_scheme(flags(0, _u8(0, "x"), _rounds(1))), {"x": 9, "v": [5, 6]}),
-        None,
-    ),
-    "pack_times_then_field": (
-        lambda: _pack(_scheme(_u8(0, "k"), times(1, 0, _u8(1, "v")), _u8(2, "x")), {"k": 2, "v": [5, 6], "x": 9}),
-        None,
-    ),
-}

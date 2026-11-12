@@ -67,7 +67,7 @@ func TestAC2ReferencesAndFlagBitsStopAtTheElement(t *testing.T) {
 
 // AC-2 (nested-round): a round cannot hold a round, also in a nested row of the round; a list or dict
 // element starts outside any round, so a times in an element builds, also inside a round. A repeat in
-// an element is refused since AZ-4215 (repeat_last_test.go): the next element would follow it.
+// an element is refused (repeat_last_test.go): the next element would follow it.
 func TestAC2RoundsInElements(t *testing.T) {
 	const nested = "is inside a repeat or times round; a round cannot hold another repeat or times"
 	refused := map[string][]Field{

@@ -67,9 +67,9 @@ final class ZeroWidthElementTest {
 
     /**
      * AZ-2089 F4: a when names only an integer or a bool, so the never-matching when on a bytes(0) field is refused
-     * at construction. An element holding a repeat read nothing only when no bytes were left, so it reached the
-     * zero-width element guard for some packets and read normally for others; AZ-4214 (AC-4) refuses a repeat
-     * inside an element when the scheme is built, so no element is zero-width for some packets only.
+     * at construction. An element holding a repeat would read nothing only when no bytes were left, so it would
+     * reach the zero-width element guard for some packets and read normally for others; a repeat inside an element
+     * is refused when the scheme is built, so no element is zero-width for some packets only.
      */
     private static void partlyZeroWidthElementIsError() {
         PackbinTest.expectThrows("AC-3 when on a bytes(0) element field is refused", () -> Maps.scheme(1, Packbin.list(

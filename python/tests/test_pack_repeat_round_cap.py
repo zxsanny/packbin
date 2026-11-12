@@ -4,6 +4,7 @@ import pytest
 
 from packbin import BinaryPacker, Scheme, eq, flag_byte, flags, group, repeat, u8, when
 from packbin import list as list_field
+from repeat_last_support import in_element
 
 # The rows are the AZ-2355 table of the TypeScript reference `_docs/03_implementation/reference_loop20_budget.md`.
 
@@ -129,7 +130,7 @@ def test_row9_a_repeat_in_a_when_is_refused():
 
 
 def test_row10_a_repeat_in_a_list_element_is_refused_when_the_scheme_is_built():
-    # Arrange: until loop 113 the cap was checked in a list element too; a repeat there no longer builds (AZ-4213 AC-4).
+    # Arrange: AZ-4213 AC-4, a repeat in a list element does not build, so the round cap never meets one there
     element = group(0, repeat(0, _u8(0, "k")))
 
     # Act
@@ -137,7 +138,4 @@ def test_row10_a_repeat_in_a_list_element_is_refused_when_the_scheme_is_built():
         Scheme(1, dict, list_field(lambda row: row["items"], element))
 
     # Assert
-    assert str(caught.value) == (
-        "repeat 0 is inside a list or dict element; "
-        "a repeat reads to the end of the packet, so another element cannot follow it; use times"
-    )
+    assert str(caught.value) == in_element(0)

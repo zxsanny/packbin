@@ -95,9 +95,9 @@ fn nested_times_under_when() -> MapScheme {
     )
 }
 
-/// `flags { u8 z; repeat { u8 n; times(n) { u8 w } } }`. The repeat is the last member: a member
-/// after it is refused when the scheme is built (AZ-4218), so `z`, which stood after it until loop
-/// 113, stands first; the repeat is id 1 and bit 1, the nested times id 2.
+/// `flags { u8 z; repeat { u8 n; times(n) { u8 w } } }`. The repeat is the last member, since a
+/// member after it is refused when the scheme is built (AZ-4218): `z` stands first, the repeat is
+/// id 1 and bit 1, the nested times id 2.
 fn nested_times_in_flags() -> MapScheme {
     MapScheme::new(
         1,
@@ -359,6 +359,7 @@ fn ac3_groups_only_and_nothing_given_pack_as_at_head() {
             ok("01"),
             ok("01"),
             ok("01010502"),
+            // Differs from HEAD (01010103): z moved before the repeat, so the repeat is bit 1 (02)
             ok("01020103"),
             ok("0100"),
             ok("01010103"),

@@ -210,6 +210,20 @@ final List<Refused> inElement = [
     ],
     text: inElementText(0),
   ),
+  (
+    name:
+        'in the element of a list inside a repeat that a field follows: the '
+        'first violation in document order, the body of the repeat before '
+        'its follower',
+    fields: () => [
+      repeat(0, [
+        u8(0, 'k'),
+        list('rows', nested('row', [rounds(0)])),
+      ]),
+      u8(1, 'x'),
+    ],
+    text: inElementText(0),
+  ),
 ];
 
 // A nested row is a row of its own, so the nesting rule does not look into

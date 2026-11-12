@@ -8,9 +8,9 @@ import java.util.Map;
  * AZ-2089 review fixes: every repeat or times round packs and unpacks its own values, as C++ per-round items do.
  * F1 flag bits come from the round's value; F2 unpacked lists hold one entry per round (null where the round
  * skipped the field); F3 a round never sees a value read in an earlier round. Round 3: padding a round costs one
- * store, not one per earlier round (#2). The loop 12 refusal of a repeat or times inside a round (#1) was
- * removed by AZ-2127; NestedRoundTest covers those shapes. AZ-4214 (loop 113) refuses a repeat inside a round or a
- * list or dict element again (RepeatLastTest); a times there is not restricted.
+ * store, not one per earlier round (#2). A times inside a round builds (NestedRoundTest covers those shapes); a
+ * repeat inside a round or a list or dict element is refused when the scheme is built (RepeatLastTest), a times
+ * there is not restricted.
  */
 @SuppressWarnings({"unchecked", "rawtypes"})
 final class RepeatRoundTest {
@@ -27,9 +27,9 @@ final class RepeatRoundTest {
     }
 
     /**
-     * A list or dict element is a row of its own, so a times inside it is not inside the enclosing round. The
-     * elements held a repeat until AZ-4214 (AC-4), which refuses a repeat in an element (the next element would
-     * follow it; RepeatLastTest R7 and R8); the same elements with a count and a times read back.
+     * A list or dict element is a row of its own, so a times inside it is not inside the enclosing round. A repeat
+     * in an element is refused when the scheme is built (the next element would follow it; RepeatLastTest R7 and
+     * R8); an element with a count and a times builds and reads back.
      */
     private static void nestedRoundsInsideElementsStillBuild() {
         Scheme<Map> list = Maps.scheme(1, Packbin.list(Access.get("xs"), Access.set("xs"),

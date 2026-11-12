@@ -106,8 +106,8 @@ import Testing
         #expect(canon(named) == canon(["k": u8s([1, 2]), "v": u8s([10, nil])]))
     }
 
-    /// Until loop 113 this scheme built, and unpack read `tail` after a round that read nothing
-    /// (`0105` gave `v = [[]]`, `tail = 5`); AZ-4216 AC-4.
+    /// A field after a repeat is refused when the scheme is built, also when the round of the repeat
+    /// reads nothing: a repeat reads to the end of the packet, so no byte is left for the field (AZ-4216 AC-4).
     @Test func scheme_fieldAfterARepeatWhoseRoundReadsNothing_isRefusedWhenItIsBuilt() {
         // Arrange
         let build = { try Scheme(1, .repeat(0, .bytes(0, "v", size: 0)), .u8(1, "tail")) }

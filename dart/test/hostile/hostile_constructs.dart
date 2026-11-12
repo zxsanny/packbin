@@ -1,5 +1,7 @@
 import 'package:packbin/packbin.dart';
 
+import '../support/repeat_last.dart'
+    show followedText, inElementText, nestingText, rounds;
 import 'hostile_cases.dart';
 
 typedef Build = Object Function();
@@ -20,26 +22,9 @@ class HostileConstruct {
 const _emptyBody =
     'the body holds no member; a round of it would charge no slot and write nothing';
 
-const _endOfPacket = 'a repeat reads to the end of the packet';
-
-/// The refusal of a repeat that [field] follows (contract repeat-last): the
-/// error names the repeat, by its [anchor] and its first member `v`.
-String _followed(int anchor, String field) =>
-    'packbin: invalid scheme at field $anchor (v): repeat $anchor: $field '
-    'follows it; $_endOfPacket, so nothing can follow it; use times';
-
-/// The refusal of a repeat inside a list or dict element.
-String _inElement(int anchor) =>
-    'packbin: invalid scheme at field $anchor (v): repeat $anchor is inside a '
-    'list or dict element; $_endOfPacket, so another element cannot follow '
-    'it; use times';
-
-/// `repeat { u8 v }` with the anchor and id [id].
-Field _rounds(int id) => repeat(id, [u8(id, 'v')]);
-
 /// The element row of the list and dict cases: `u8 mode; repeat { u8 v }`.
 NestedField<Row> _modeThenRepeat() =>
-    nested('item', [_n(0, 'mode'), _rounds(1)]);
+    nested('item', [_n(0, 'mode'), rounds(1)]);
 
 /// The schemes of the `construct` cases of `fixtures/hostile/cases.txt`, by
 /// case id, written by hand from fixtures/hostile/README.md.
@@ -165,72 +150,71 @@ final hostileConstructs = <String, HostileConstruct>{
   ),
   // AZ-4217, contract repeat-last: R1 to R9.
   'construct_repeat_then_field': HostileConstruct(
-    () => scheme(1, [_rounds(0), _n(1, 'x')]),
+    () => scheme(1, [rounds(0), _n(1, 'x')]),
     0,
-    _followed(0, 'x'),
+    followedText(0, 'x'),
   ),
   'construct_repeat_in_when_then_field': HostileConstruct(
     () => scheme(1, [
       _n(0, 'k'),
-      when(1, eq(0, 1), [_rounds(1)]),
+      when(1, eq(0, 1), [rounds(1)]),
       _n(2, 'x'),
     ]),
     1,
-    _followed(1, 'x'),
+    followedText(1, 'x'),
   ),
   'construct_repeat_in_flags_then_field': HostileConstruct(
     () => scheme(1, [
-      flags(0, [_rounds(0)]),
+      flags(0, [rounds(0)]),
       _n(1, 'x'),
     ]),
     0,
-    _followed(0, 'x'),
+    followedText(0, 'x'),
   ),
   // A nested row takes no id of the row around it, so `x` is id 0.
   'construct_repeat_in_group_then_field': HostileConstruct(
     () => scheme(1, [
-      nested('m', [_rounds(0)]),
+      nested('m', [rounds(0)]),
       _n(0, 'x'),
     ]),
     0,
-    _followed(0, 'x'),
+    followedText(0, 'x'),
   ),
   'construct_repeat_then_repeat': HostileConstruct(
     () => scheme(1, [
-      _rounds(0),
+      rounds(0),
       repeat(1, [_n(1, 'w')]),
     ]),
     0,
-    _followed(0, 'repeat 1'),
+    followedText(0, 'repeat 1'),
   ),
   'construct_repeat_then_exclusive_when': HostileConstruct(
     () => scheme(1, [
       _n(0, 'k'),
-      when(1, eq(0, 1), [_rounds(1)]),
+      when(1, eq(0, 1), [rounds(1)]),
       when(2, eq(0, 2), [_n(2, 'x')]),
     ]),
     1,
-    _followed(1, 'x'),
+    followedText(1, 'x'),
   ),
   'construct_repeat_in_list_element': HostileConstruct(
     () => scheme(1, [list('items', _modeThenRepeat())]),
     1,
-    _inElement(1),
+    inElementText(1),
   ),
   'construct_repeat_in_dict_element': HostileConstruct(
     () => scheme(1, [dict('d', _modeThenRepeat())]),
     1,
-    _inElement(1),
+    inElementText(1),
   ),
   // Refused by the nesting rule, which keeps its text.
   'construct_repeat_in_times_round': HostileConstruct(
     () => scheme(1, [
       _n(0, 'k'),
-      times(1, 0, [_rounds(1)]),
+      times(1, 0, [rounds(1)]),
     ]),
     1,
-    'packbin: invalid scheme at field 1 (v): repeat 1 is inside a repeat or '
-    'times round; a round cannot hold another repeat or times',
+    nestingText(1),
   ),
 };
 

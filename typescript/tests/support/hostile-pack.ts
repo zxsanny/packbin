@@ -258,7 +258,7 @@ export const PACK: Record<string, () => Uint8Array> = {
     // Five CJK characters are written raw: 17 bytes a round whatever the tables hold.
     { items: Array.from({ length: 16 }, () => ({ n: 65535, s: "\u4e2d".repeat(5) })) },
   ),
-  // Loop 113 (contract repeat-last), cases K1 to K4: a repeat that is the last thing read, and a times that is not.
+  // Contract repeat-last, cases K1 to K4: a repeat that is the last thing read, and a times that is not.
   pack_repeat_last: () => BinaryPacker.pack(
     scheme<Row>(1, u8(0, (x) => x.x), repeat(1, [u8(1, (x) => x.v)])),
     { x: 9, v: [5, 6] },

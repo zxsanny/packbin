@@ -27,7 +27,7 @@ final class HostileRefusals {
     private static final String NOT_EARLIER = ", which is not an earlier integer or bool field in its scope";
     private static final String EMPTY_BODY = ": the body holds no member; a round of it would charge no slot and write"
             + " nothing";
-    // AZ-4214 (loop 113), contract repeat-last: the whole text of each refusal.
+    // Contract repeat-last: the whole text of each refusal.
     private static final String FOLLOWS = " follows it; a repeat reads to the end of the packet, so nothing can follow"
             + " it; use times";
     private static final String IN_ELEMENT = "repeat 1 is inside a list or dict element; a repeat reads to the end of"
