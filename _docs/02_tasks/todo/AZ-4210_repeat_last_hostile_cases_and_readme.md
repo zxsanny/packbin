@@ -1,3 +1,8 @@
+---
+loop: 113
+branch: dev
+---
+
 # Shared: hostile cases and README text for "a repeat must be last"
 
 **Task**: AZ-4210_repeat_last_hostile_cases_and_readme

@@ -1,3 +1,8 @@
+---
+loop: 113
+branch: dev
+---
+
 # Swift: a repeat that is not the last thing read is refused when the scheme is built
 
 **Task**: AZ-4216_repeat_last_swift
