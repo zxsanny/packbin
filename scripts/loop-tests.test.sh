@@ -112,6 +112,10 @@ change .github/workflows/test.yml; expect "test.yml" "scaffold publish-gate"; st
 mkdir -p "$repo/scripts/ci"; echo "# reader" > "$repo/scripts/ci/yaml_get.py"
 change scripts/ci/yaml_get.py; expect "ci yaml reader" "scaffold publish-gate"; stamp_all
 
+# 9d. no stage covers the loop documents (AZ-4243: a stamp from a tree dirty only under _docs/ relies on it)
+mkdir -p "$repo/_docs/loops"
+change _docs/loops/record.md; expect "_docs only" ""; stamp_all
+
 # 10. a tracked change that is not committed
 echo dirty >> "$repo/typescript/a.ts"; expect "dirty tree" "typescript ring"; git -C "$repo" checkout -q typescript/a.ts
 
@@ -178,11 +182,36 @@ echo position > "$repo/_docs/_autodev_state.md"
 PATH="$shims:$PATH" CALLS="$tmp/calls" LOOP_TESTS_ROOT="$repo" LOOP_TESTS_STAMPS="$stamps" bash "$script" --all --only rust < /dev/null > /dev/null || bad "execution: rust failed with the position file untracked"
 [ "$(cat "$stamps/rust" 2> /dev/null)" = "$head_sha" ] || bad "execution: the autodev position file blocked the stamp"
 rm -rf "$repo/_docs"
+# AZ-4243 AC-1: the loop's documents alone (a tracked file edited, a new one untracked) do not block a stamp
+rm -rf "$stamps"
+mkdir -p "$repo/_docs"
+echo record > "$repo/_docs/record.md"
+git -C "$repo" add _docs/record.md
+git -C "$repo" commit -q -m "a tracked document"
+docs_sha="$(git -C "$repo" rev-parse HEAD)"
+echo edited >> "$repo/_docs/record.md"
+echo notes > "$repo/_docs/notes.md"
+PATH="$shims:$PATH" CALLS="$tmp/calls" LOOP_TESTS_ROOT="$repo" LOOP_TESTS_STAMPS="$stamps" bash "$script" --all --only rust < /dev/null > /dev/null || bad "execution: rust failed with only _docs/ dirty"
+[ "$(cat "$stamps/rust" 2> /dev/null)" = "$docs_sha" ] || bad "execution: a dirty _docs/ blocked the stamp"
+# AZ-4243 AC-3: once the documents are committed, the next plan skips the stage that passed
+git -C "$repo" add -A _docs
+git -C "$repo" commit -q -m "the documents"
+out="$(plan --only rust)"
+grep -q "^PLAN rust SKIP (unchanged since ${docs_sha:0:7})" <<< "$out" || bad "execution: rust not skipped after the documents were committed: $out"
+head_sha="$(git -C "$repo" rev-parse HEAD)"
 # a stamp is not written from a dirty tree
 rm -rf "$stamps"
 echo dirty >> "$repo/README.md"
 PATH="$shims:$PATH" CALLS="$tmp/calls" LOOP_TESTS_ROOT="$repo" LOOP_TESTS_STAMPS="$stamps" bash "$script" --all --only rust < /dev/null > /dev/null || bad "execution: rust failed on the dirty tree"
 [ ! -f "$stamps/rust" ] || bad "execution: a stamp was written from a dirty tree"
+git -C "$repo" checkout -q README.md
+# AZ-4243 AC-2: an untracked file outside _docs/ blocks it, also beside a dirty _docs/
+echo dirty >> "$repo/_docs/notes.md"
+echo new > "$repo/go/new.go"
+PATH="$shims:$PATH" CALLS="$tmp/calls" LOOP_TESTS_ROOT="$repo" LOOP_TESTS_STAMPS="$stamps" bash "$script" --all --only rust < /dev/null > /dev/null || bad "execution: rust failed with an untracked go file"
+[ ! -f "$stamps/rust" ] || bad "execution: a stamp was written beside an untracked file outside _docs/"
+rm "$repo/go/new.go"
+git -C "$repo" checkout -q _docs/notes.md
 
 # 15. the cpp stage does not write cpp/build on the host (AZ-2565). The container mounts the repository, and Docker Desktop
 # shows a container started within about a second of a host `rm -rf` the directory as it was: `mkdir -p build` found the

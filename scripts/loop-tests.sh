@@ -40,7 +40,7 @@ serial_stages="cpp-embedded-arm rust-embedded ring ac10 publish-gate"
 
 is_test_path() {
   case "$1" in
-    */tests/* | */test/* | java/src/test/* | *_test.go | go/testdata/* | swift/Tests/*) return 0 ;;
+    */tests/* | */test/* | *_test.go | go/testdata/* | swift/Tests/*) return 0 ;;
   esac
   return 1
 }
@@ -331,10 +331,11 @@ failed=0
 retried=""
 start_all=$(date +%s)
 
-# The autodev position file is tracked and rewritten at every step of a loop: it is not tested code, so it alone does
-# not make the tree dirty (AZ-3369).
+# A stamp is written only from a tree that is clean apart from `_docs/`. No stage covers a `_docs/` path (`covers`), and
+# step 11 runs with the loop's documents and the autodev position file uncommitted, so they do not block it (AZ-3369,
+# AZ-4243).
 stamp_pass() {
-  if [ -z "$(git status --porcelain -- . ':(exclude)_docs/_autodev_state.md')" ]; then git rev-parse HEAD > "$stamps/$1"; fi
+  if [ -z "$(git status --porcelain -- . ':(exclude)_docs')" ]; then git rev-parse HEAD > "$stamps/$1"; fi
 }
 
 # stage_progress <stage>: "<stage>(<log bytes> B) " for the heartbeat. A stage that runs shares (the publish gate) names
