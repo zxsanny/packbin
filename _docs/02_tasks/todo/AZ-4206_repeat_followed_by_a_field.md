@@ -1,3 +1,8 @@
+---
+loop: 112
+branch: dev
+---
+
 # All packages: a field after a repeat, or a repeat inside a list or dict element, packs bytes its own unpack refuses
 
 **Task**: AZ-4206_repeat_followed_by_a_field
