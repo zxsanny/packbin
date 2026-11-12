@@ -12,6 +12,7 @@ measurements:
   - after the fix (`ccbbadb`): 0 sanitizer reports in three runs; the text speed check (1 s nominal) missed its bound in two of them by 3 to 13 ms (1.015 s / 1.012 s at load 10, 1.017 s / 1.004 s at load 50) and held it in the third (`all tests passed`)
   - Apple clang `make -C cpp test` and `gcc:16` `make test`: exit 0
   - smoke `smoke114.sh` 5/5 PASS at `ccbbadb`, host load 13
+  - CI on the close push `db29957`: `dev` run 43283850701 success, `main` run 43283857971 success (20 of 20 jobs)
 review: "none (one line of test code)"
 leftovers:
   - _docs/02_tasks/backlog/cpp-wall-clock-bounds-under-sanitizers.md
