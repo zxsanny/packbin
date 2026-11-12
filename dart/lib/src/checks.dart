@@ -157,6 +157,135 @@ bool _holdsMember(List<Node> nodes) {
   return false;
 }
 
+const _readsToTheEnd = 'a repeat reads to the end of the packet';
+
+/// A `repeat` has no count on the wire: unpack reads rounds until the buffer
+/// ends, so whatever a packet holds after a repeat is read as more rounds of
+/// it. Refused when the scheme is built: a repeat that a field which can write
+/// a byte follows, in its own place or after the `when`, `flags`, flag bit,
+/// group or nested row that holds it, up to the top level; a repeat inside a
+/// list or dict element, which the next element follows; and a repeat inside
+/// a nested row of a round, which the next round follows ([checkNesting] has
+/// refused a repeat that a round holds in any other way). [after] is the first
+/// field that can write a byte after the place [nodes] stand in. It looks at
+/// the scheme only, never at a row.
+void checkRepeatLast(
+  List<Node> nodes, {
+  Node? after,
+  bool inElement = false,
+  bool inRound = false,
+}) {
+  for (var i = 0; i < nodes.length; i++) {
+    final n = nodes[i];
+    switch (n.kind) {
+      case NodeKind.repeat:
+        if (inElement) {
+          throw schemeFail(
+            n.id,
+            n.declaredName,
+            'repeat ${n.id} is inside a list or dict element; $_readsToTheEnd, so another element cannot follow it; use times',
+          );
+        }
+        if (inRound) {
+          throw schemeFail(
+            n.id,
+            n.declaredName,
+            'repeat ${n.id} is inside a repeat or times round; $_readsToTheEnd, so another round cannot follow it; use times',
+          );
+        }
+        final follower = _firstWriter(nodes, i + 1) ?? after;
+        if (follower != null) {
+          throw schemeFail(
+            n.id,
+            n.declaredName,
+            'repeat ${n.id}: ${_writerName(follower)} follows it; $_readsToTheEnd, so nothing can follow it; use times',
+          );
+        }
+        checkRepeatLast(n.fields, inRound: true);
+      case NodeKind.times:
+        checkRepeatLast(n.fields, inRound: true);
+      case NodeKind.when:
+      case NodeKind.flags:
+      case NodeKind.flagBit:
+      case NodeKind.group:
+      case NodeKind.nested:
+        checkRepeatLast(
+          n.fields,
+          after: _firstWriter(nodes, i + 1) ?? after,
+          inElement: inElement,
+          inRound: inRound,
+        );
+      case NodeKind.list:
+      case NodeKind.dict:
+        checkRepeatLast(n.fields, inElement: true);
+      case NodeKind.integer:
+      case NodeKind.float:
+      case NodeKind.bytes:
+      case NodeKind.boolean:
+      case NodeKind.flagByte:
+      case NodeKind.sized:
+      case NodeKind.u2:
+      case NodeKind.slot:
+      case NodeKind.bits:
+      case NodeKind.packed:
+      case NodeKind.utf8:
+        break;
+    }
+  }
+}
+
+/// The first of [nodes], from index [from] on, that can write a byte for some
+/// row. A bool is a bit of a flag byte written earlier and a zero-width
+/// `bytes` has no byte. A `when`, a group, a nested row and a flag bit write
+/// what they hold, so the field found is the one inside them; a `repeat` or
+/// `times` whose body can write a byte is found itself. Everything else
+/// writes: a flag byte and a `flags`, a list and a dict (their count) too.
+Node? _firstWriter(List<Node> nodes, [int from = 0]) {
+  for (var i = from; i < nodes.length; i++) {
+    final n = nodes[i];
+    switch (n.kind) {
+      case NodeKind.boolean:
+        break;
+      case NodeKind.bytes:
+        if (n.size > 0) return n;
+      case NodeKind.when:
+      case NodeKind.group:
+      case NodeKind.nested:
+      case NodeKind.flagBit:
+        final held = _firstWriter(n.fields);
+        if (held != null) return held;
+      case NodeKind.repeat:
+      case NodeKind.times:
+        if (_firstWriter(n.fields) != null) return n;
+      case NodeKind.integer:
+      case NodeKind.float:
+      case NodeKind.flags:
+      case NodeKind.flagByte:
+      case NodeKind.sized:
+      case NodeKind.u2:
+      case NodeKind.slot:
+      case NodeKind.bits:
+      case NodeKind.packed:
+      case NodeKind.utf8:
+      case NodeKind.list:
+      case NodeKind.dict:
+        return n;
+    }
+  }
+  return null;
+}
+
+/// The words a refusal names the field after a repeat by: the member name, as
+/// the other scheme errors do (a `u2` by its first slot); a `repeat` or
+/// `times` by its kind and anchor; a flag byte by its name, and the byte of a
+/// `flags` as `flags`.
+String _writerName(Node n) => switch (n.kind) {
+  NodeKind.repeat || NodeKind.times => '${n.label} ${n.id}',
+  NodeKind.flags => 'flags',
+  NodeKind.flagByte => 'flag byte "${n.name}"',
+  _ => n.declaredName,
+};
+
 /// A bool or an empty group is a presence mark: it has no bytes, only a flag
 /// bit, so it stands only as the member of a flag bit. Anywhere else it would
 /// always read true.

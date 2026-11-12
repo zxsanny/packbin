@@ -42,6 +42,7 @@ public struct Scheme: Sendable {
         try checkMemberNames(flat)
         try checkRoundNesting(flat, inRound: false)
         try checkRoundBodies(flat)
+        try checkRepeatLast(flat)
         var refs = Set<String>()
         let bound = shapeRounds(markReferenced(try bindReferences(flat, refs: &refs), refs))
         try checkElements(bound)

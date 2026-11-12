@@ -5,6 +5,8 @@ import 'package:packbin/packbin.dart';
 import '../support/hex.dart';
 import 'hostile_cases.dart';
 
+part 'hostile_packs_repeat_last.dart';
+
 /// One pack case: the scheme and the map row its section names
 /// (fixtures/hostile/README.md). The case file says whether bytes or a
 /// refusal comes out.
@@ -437,6 +439,7 @@ final Map<String, HostilePack> hostilePacks = {
     _skippedBoolSource,
     () => _boolRow(1, false),
   ),
+  ..._repeatLastPacks,
 };
 
 /// A pack case: packs the row of its handler; the bytes of the case, or a

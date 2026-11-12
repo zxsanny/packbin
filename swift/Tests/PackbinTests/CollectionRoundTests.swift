@@ -120,15 +120,19 @@ private let loneDict = "a dictionary in a repeat or times round needs a list wit
         #expect(one == "0102021061021061")
     }
 
-    @Test func pack_repeatInAListItemInARound_buildsAndPacksAsTypeScript() throws {
+    /// Until loop 113 this scheme built and packed `0101010005` for one item (AZ-4216 AC-4); the row
+    /// "a times in a list item in a round" of `packs` is the scheme to write.
+    @Test func scheme_repeatInAListItemInARound_isRefusedWhenItIsBuilt() {
         // Arrange
-        let scheme = try Scheme(1, .repeat(0, .u8(0, "k"), .list("rows", .group("row", .repeat(0, .u8(0, "v"))))))
+        let build = { try Scheme(1, .repeat(0, .u8(0, "k"), .list("rows", .group("row", .repeat(0, .u8(0, "v")))))) }
 
         // Act
-        let wire = try packHex(scheme, ["k": [1], "rows": [[["v": [5]]]]])
+        let error = packbinError(build)
 
         // Assert
-        #expect(wire == "0101010005")
+        #expect(error?.kind == .schemeError)
+        #expect(error?.description == "packbin: invalid scheme at field 0: repeat 0 is inside a list or dict element; "
+            + "a repeat reads to the end of the packet, so another element cannot follow it; use times")
     }
 
     @Test func pack_bytesFieldOutsideARound_takesOneBuffer() throws {

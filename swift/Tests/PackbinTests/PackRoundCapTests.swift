@@ -34,10 +34,8 @@ import Testing
         }, { ["k": [1, 2, 3, 4]] }),
         LimitRow("when", { try Scheme(1, .u8(0, "m"), .when(1, .eq(0, 1), .repeat(1, .u8(1, "k")))) },
                 { ["m": 1, "k": [1, 2, 3, 4]] }),
-        LimitRow("list element", { try Scheme(1, .list("items", .group("item", .repeat(0, .u8(0, "k"))))) },
-                { ["items": [["k": [1, 2, 3, 4]]]] }),
     ])
-    func pack_repeatCap_holdsInFlagsASplitBitAWhenAndAListElement(row: LimitRow) throws {
+    func pack_repeatCap_holdsInFlagsASplitBitAndAWhen(row: LimitRow) throws {
         // Arrange
         let layout = try row.scheme().withLimits(maxRounds: 3)
 
@@ -46,6 +44,21 @@ import Testing
 
         // Assert
         #expect(isPackRefusal(error, "k", "k: the repeat count is 4, above the limit of 3 rounds"))
+    }
+
+    /// Until loop 113 the cap was checked in a list element too; a repeat there no longer builds
+    /// (AZ-4216 AC-4).
+    @Test func scheme_repeatInAListElement_isRefusedWhenItIsBuiltBeforeAnyCap() {
+        // Arrange
+        let build = { try Scheme(1, .list("items", .group("item", .repeat(0, .u8(0, "k"))))) }
+
+        // Act
+        let error = packbinError(build)
+
+        // Assert
+        #expect(error?.kind == .schemeError)
+        #expect(error?.description == "packbin: invalid scheme at field 0: repeat 0 is inside a list or dict element; "
+            + "a repeat reads to the end of the packet, so another element cannot follow it; use times")
     }
 
     @Test func pack_repeatOfMaxRoundsEntries_packsAndRoundTrips() throws {

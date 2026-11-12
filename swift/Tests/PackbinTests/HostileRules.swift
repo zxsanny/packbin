@@ -1,7 +1,8 @@
 /// The whole text of each refusal a hostile case must give (the rule, the field id and name, and for an
 /// unpack error the bytes needed and left), so a refusal by some other rule does not pass. The reason
-/// after the field is TypeScript's message at HEAD (pack and construct) but for the two marked texts; an
-/// unpack error carries TypeScript's field name, `needed` and `left`.
+/// after the field is TypeScript's message at HEAD (pack and construct) but for the two marked texts and
+/// the field after a repeat (`hostileConstructs`); an unpack error carries TypeScript's field name,
+/// `needed` and `left`.
 let hostileRules: [String: String] = hostileUnpackRules.merging(hostilePackRules) { a, _ in a }
 
 private let novalue = "the count c is 3 in the row, but no field wrote it (the when that holds it is clear), so the "

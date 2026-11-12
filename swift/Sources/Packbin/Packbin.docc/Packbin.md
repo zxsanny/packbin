@@ -110,9 +110,13 @@ and a lone string goes to every round.
 
 ### Rounds and counted kinds
 
-`.repeat(anchor, members...)` writes its members once a round until the buffer ends (nothing may
-follow it); `.times(anchor, count: id, members...)` exactly as many times as the integer field `id`,
-written earlier in the same scope. A round body is a scope of its own; a repeat or times cannot sit
+`.repeat(anchor, members...)` writes its members once a round until the buffer ends;
+`.times(anchor, count: id, members...)` exactly as many times as the integer field `id`, written
+earlier in the same scope. A repeat has no count, so it is the last thing its packet reads: a scheme is
+refused when a field that can write a byte follows a repeat (in its own place or after the `when`,
+`flags`, flag bit, group or nested row that holds it; a `bool` and a zero-width `bytes` write none) or
+when a repeat sits inside a list or dict element. Use `times` there: it has a count, so fields may
+follow it. A round body is a scope of its own; a repeat or times cannot sit
 inside a round, and a body with no member is refused. In a map row each name a round holds takes an
 array, entry i for round i, `nil` where the round leaves the name out; a value that is not an array
 goes to every round, and a `[UInt8]` is a byte run, never an array of rounds. A group in a round takes

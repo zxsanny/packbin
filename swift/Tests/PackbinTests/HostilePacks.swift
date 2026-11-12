@@ -174,4 +174,12 @@ let hostilePacks: [String: HostilePack] = [
     "pack_when_of_skipped_bool_source": HostilePack(skippedBoolSourceWhen, boolSourceRow(mode: 0, on: true)),
     "pack_when_of_held_bool_source": HostilePack(skippedBoolSourceWhen, boolSourceRow(mode: 1, on: true)),
     "pack_when_of_held_bool_source_clear": HostilePack(skippedBoolSourceWhen, boolSourceRow(mode: 1, on: false)),
+    // Loop 113 (AZ-4216), cases K1 to K4 of the contract repeat-last: schemes that keep building, with their bytes.
+    "pack_repeat_last": HostilePack({ try Scheme(1, .u8(0, "x"), .repeat(1, .u8(1, "v"))) }, { ["x": 9, "v": [5, 6]] }),
+    "pack_repeat_last_in_when": HostilePack(
+        { try Scheme(1, .u8(0, "k"), .when(1, .eq(0, 1), .repeat(1, .u8(1, "v")))) }, { ["k": 1, "v": [5, 6]] }),
+    "pack_repeat_last_in_flags": HostilePack(
+        { try Scheme(1, .flags(0, .u8(0, "x"), .repeat(1, .u8(1, "v")))) }, { ["x": 9, "v": [5, 6]] }),
+    "pack_times_then_field": HostilePack(
+        { try Scheme(1, .u8(0, "k"), .times(1, count: 0, .u8(1, "v")), .u8(2, "x")) }, { ["k": 2, "v": [5, 6], "x": 9] }),
 ]

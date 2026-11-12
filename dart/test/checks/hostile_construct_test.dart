@@ -28,7 +28,7 @@ void main() {
       // Assert
       expect(unknown, isEmpty);
       expect(stale, isEmpty);
-      expect(ids, hasLength(15));
+      expect(ids, hasLength(24));
     });
 
     for (final c in cases) {

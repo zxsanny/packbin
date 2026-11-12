@@ -38,6 +38,14 @@ private func nineU8() -> [Field] { (0..<9).map { Field.u8($0, "f\($0)") } }
 
 private let emptyBody = "the body holds no member; a round of it would charge no slot and write nothing"
 
+/// The two texts of the contract repeat-last (loop 113), after the repeat and the field they name.
+private let followsRepeat = "follows it; a repeat reads to the end of the packet, so nothing can follow it; use times"
+private let repeatInElement = "is inside a list or dict element; a repeat reads to the end of the packet, so another "
+    + "element cannot follow it; use times"
+
+/// The element row of the two element cases: u8 mode; repeat { u8 v }, a nested row with ids of its own.
+private func modeThenRepeat() -> Field { .group("item", .u8(0, "mode"), .repeat(1, .u8(1, "v"))) }
+
 /// One construct case: the scheme, which must be refused, and the whole text of the refusal (the rule
 /// and the field it names), so an error from a typo in the builder does not pass the case.
 struct HostileConstruct: Sendable {
@@ -46,7 +54,9 @@ struct HostileConstruct: Sendable {
 }
 
 /// fixtures/hostile/cases.txt, construct stage. Each text is TypeScript's message after the field it
-/// names (TypeScript at HEAD, probed for every case).
+/// names (TypeScript at HEAD, probed for every case), but for the field after a repeat in the loop 113
+/// cases: Swift names it by its id and name (`field id 1 (x)`), as its count and eq refusals name a
+/// field, where TypeScript writes the member name alone.
 let hostileConstructs: [String: HostileConstruct] = [
     "nine_flag_bits": HostileConstruct(
         build: { try Scheme(1, .flags(0, nineU8())) },
@@ -102,4 +112,37 @@ let hostileConstructs: [String: HostileConstruct] = [
             try Scheme(1, .u8(0, "mode"), .u8(1, "c"), .times(2, count: 1, .when(2, .eq(0, 1), .when(2, .eq(0, 1), []))))
         },
         rule: "packbin: invalid scheme at field 2: times 2: \(emptyBody)"),
+    // Loop 113 (AZ-4216), cases R1 to R9 of the contract repeat-last: a repeat is the last thing a packet reads.
+    "construct_repeat_then_field": HostileConstruct(
+        build: { try Scheme(1, .repeat(0, .u8(0, "v")), .u8(1, "x")) },
+        rule: "packbin: invalid scheme at field 0: repeat 0: field id 1 (x) \(followsRepeat)"),
+    "construct_repeat_in_when_then_field": HostileConstruct(
+        build: { try Scheme(1, .u8(0, "k"), .when(1, .eq(0, 1), .repeat(1, .u8(1, "v"))), .u8(2, "x")) },
+        rule: "packbin: invalid scheme at field 1: repeat 1: field id 2 (x) \(followsRepeat)"),
+    "construct_repeat_in_flags_then_field": HostileConstruct(
+        build: { try Scheme(1, .flags(0, .repeat(0, .u8(0, "v"))), .u8(1, "x")) },
+        rule: "packbin: invalid scheme at field 0: repeat 0: field id 1 (x) \(followsRepeat)"),
+    // A nested row numbers its members from 0 in a scope of its own, so `x` is id 0 of the row around it.
+    "construct_repeat_in_group_then_field": HostileConstruct(
+        build: { try Scheme(1, .group("m", .repeat(0, .u8(0, "v"))), .u8(0, "x")) },
+        rule: "packbin: invalid scheme at field 0: repeat 0: field id 0 (x) \(followsRepeat)"),
+    "construct_repeat_then_repeat": HostileConstruct(
+        build: { try Scheme(1, .repeat(0, .u8(0, "v")), .repeat(1, .u8(1, "w"))) },
+        rule: "packbin: invalid scheme at field 0: repeat 0: repeat 1 \(followsRepeat)"),
+    "construct_repeat_then_exclusive_when": HostileConstruct(
+        build: {
+            try Scheme(1, .u8(0, "k"), .when(1, .eq(0, 1), .repeat(1, .u8(1, "v"))), .when(2, .eq(0, 2), .u8(2, "x")))
+        },
+        rule: "packbin: invalid scheme at field 1: repeat 1: field id 2 (x) \(followsRepeat)"),
+    "construct_repeat_in_list_element": HostileConstruct(
+        build: { try Scheme(1, .list("items", modeThenRepeat())) },
+        rule: "packbin: invalid scheme at field 1: repeat 1 \(repeatInElement)"),
+    "construct_repeat_in_dict_element": HostileConstruct(
+        build: { try Scheme(1, .dict("d", modeThenRepeat())) },
+        rule: "packbin: invalid scheme at field 1: repeat 1 \(repeatInElement)"),
+    // The nesting rule runs first and keeps its text.
+    "construct_repeat_in_times_round": HostileConstruct(
+        build: { try Scheme(1, .u8(0, "k"), .times(1, count: 0, .repeat(1, .u8(1, "v")))) },
+        rule: "packbin: invalid scheme at field 1: repeat 1 is inside a repeat or times round; a round cannot hold "
+            + "another repeat or times"),
 ]

@@ -41,8 +41,8 @@ final class Plan {
 
 /// Checks the declared fields and builds the plan. The checks run in
 /// TypeScript's order: constructor refusals, field ids, flag bits, presence
-/// marks, member names, round nesting and bodies, references; then the row
-/// bindings.
+/// marks, member names, round nesting and bodies, a repeat that is not last,
+/// references; then the row bindings.
 Plan buildPlan<R extends Object>(
   int typeNumber,
   List<Node> declared,
@@ -61,6 +61,7 @@ Plan buildPlan<R extends Object>(
   checkNames(bound);
   checkNesting(bound);
   checkBodies(bound);
+  checkRepeatLast(bound);
   final sources = resolveReferences(bound, typed: typed);
   checkElements(bound);
   final finisher = _Finisher(sources);

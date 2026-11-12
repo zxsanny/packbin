@@ -98,15 +98,27 @@ import Testing
     @Test func unpackMap_nonCanonicalRounds_keepOneEntryARound() throws {
         // Arrange
         let twice = try Scheme(1, .repeat(0, .u8(0, "k"), .when(1, .eq(0, 1), .u8(1, "v")), .when(2, .eq(0, 1), .u8(2, "v"))))
-        let empty = try Scheme(1, .repeat(0, .bytes(0, "v", size: 0)), .u8(1, "tail"))
 
         // Act
         let named = try unpackMap(bytes("0101090a02"), twice)
-        let ended = try unpackMap(bytes("0105"), empty)
 
         // Assert
         #expect(canon(named) == canon(["k": u8s([1, 2]), "v": u8s([10, nil])]))
-        #expect(canon(ended) == canon(["v": [[UInt8]()] as [Any?], "tail": UInt8(5)]))
+    }
+
+    /// Until loop 113 this scheme built, and unpack read `tail` after a round that read nothing
+    /// (`0105` gave `v = [[]]`, `tail = 5`); AZ-4216 AC-4.
+    @Test func scheme_fieldAfterARepeatWhoseRoundReadsNothing_isRefusedWhenItIsBuilt() {
+        // Arrange
+        let build = { try Scheme(1, .repeat(0, .bytes(0, "v", size: 0)), .u8(1, "tail")) }
+
+        // Act
+        let error = packbinError(build)
+
+        // Assert
+        #expect(error?.kind == .schemeError)
+        #expect(error?.description == "packbin: invalid scheme at field 0: repeat 0: field id 1 (tail) follows it; "
+            + "a repeat reads to the end of the packet, so nothing can follow it; use times")
     }
 
     static let refusals: [RoundRefusal] = [

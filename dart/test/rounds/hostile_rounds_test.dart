@@ -28,10 +28,12 @@ Scheme<Map<String, Object?>> batch() => scheme(1, [
   repeat(7, [u16(7, 'tail')]),
 ]);
 
+/// The round is a `times` counted by `k`: `z` follows it, and a `repeat` must
+/// be the last thing a packet reads (AZ-4217).
 Scheme<Map<String, Object?>> flagRounds() => scheme(1, [
   u8(0, 'k'),
   flags(1, [
-    repeat(1, [
+    times(1, 0, [
       u8(1, 'w'),
       flags(2, [u8(2, 'v')]),
     ]),

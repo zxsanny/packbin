@@ -326,8 +326,12 @@ ValueField<List<int>> packed(
 );
 
 /// The [members] as a round, repeated until the packet ends; there is no
-/// count. A round is one entry of each of its names' lists in a map row. The
-/// [anchor] is the next id and is not written.
+/// count, so it must be the last thing the packet reads. A scheme is refused
+/// when it is built if a field that can write a byte stands after the repeat
+/// (also after the `when`, `flags`, flag bit, group or nested row that holds
+/// it), or if the repeat sits inside a [list] or [dict] element or a round;
+/// use [times] there, which has a count. A round is one entry of each of its
+/// names' lists in a map row. The [anchor] is the next id and is not written.
 RoundField repeat(int anchor, List<Field> members) => RoundField._(
   Node(NodeKind.repeat, id: anchor, fields: [for (final m in members) m._node]),
 );
