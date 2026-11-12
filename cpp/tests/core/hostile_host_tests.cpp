@@ -6,6 +6,7 @@
 #include "packbin/packbin.hpp"
 
 #include "check.hpp"
+#include "hostile_repeat_last.hpp"
 #include "hostile_rule_check.hpp"
 #include "load_factor.hpp"
 
@@ -97,8 +98,6 @@ template <typename S>
 char const* construct_term(S const& s) {
   return term(packbin::validate(s));
 }
-
-using Run = char const* (*)(std::uint8_t const*, std::size_t);
 
 // A repeat whose body is a lone bool reads 0 bytes per round.
 struct On {
@@ -349,11 +348,6 @@ char const* construct_empty_nested_when_body(std::uint8_t const*, std::size_t) {
   return construct_term(s);
 }
 
-struct Handler {
-  char const* id;
-  Run run;
-};
-
 constexpr Handler kHandlers[] = {
     {"zero_progress_repeat_bool", zero_progress_repeat_bool},
     {"zero_progress_repeat_when", zero_progress_repeat_when},
@@ -463,7 +457,8 @@ void hostile_cases() {
   for (auto const& c : cases)
     for (auto const* id : kConstructSkips)
       skipped += c.id == id;
-  expect(cases.size() == skipped + sizeof(kHandlers) / sizeof(kHandlers[0]),
+  expect(cases.size() == skipped + sizeof(kHandlers) / sizeof(kHandlers[0]) +
+                             sizeof(hostile_repeat_last::kHandlers) / sizeof(Handler),
          "every case has a scheme or a skip");
   for (auto const& c : cases) {
     if (c.stage == "construct" && skipped != 0 && c.id == kConstructSkips[0]) {
@@ -472,6 +467,9 @@ void hostile_cases() {
     }
     Handler const* match = nullptr;
     for (auto const& h : kHandlers)
+      if (c.id == h.id)
+        match = &h;
+    for (auto const& h : hostile_repeat_last::kHandlers)  // loop 113, AZ-4219
       if (c.id == h.id)
         match = &h;
     if (match == nullptr) {

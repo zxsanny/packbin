@@ -319,6 +319,50 @@ constexpr void check_shape(Field const* t, std::size_t begin, std::size_t end, b
   }
 }
 
+// True when the entry puts a byte on the wire by itself. A bool is a bit of a flag byte written
+// earlier and a zero-width `bytes` has no byte; a `when`, a group, a flag bit and a round write
+// only what they hold, and what they hold are entries of the table too.
+constexpr bool writes_byte(Field const& f) {
+  switch (f.kind) {
+    case Kind::Bool:
+    case Kind::When:
+    case Kind::Group:
+    case Kind::FlagBit:
+    case Kind::Repeat:
+    case Kind::Times:
+      return false;
+    case Kind::Bytes:
+      return f.size != 0;
+    default:
+      return true;
+  }
+}
+
+// A `repeat` is the last thing a packet reads (contract repeat-last.md): it has no count on the
+// wire, so unpack reads rounds until the packet ends and would read whatever is written after it
+// as more rounds. The table is in wire order, so no entry after the first repeat and its members
+// may write a byte, wherever it stands: the first that can is named (a flag byte, a list and a
+// dict have no id, so -1). A repeat inside a list or dict element or inside a `repeat` or `times`
+// round is followed by the next element or round, so it is named itself. A `times` has a count:
+// fields may follow it and it may stand in an element or a round.
+constexpr void check_repeat_last(Field const* t, std::size_t n, Check& c) {
+  // Entries before `held` are inside an element or a round; entries from `after` on come after
+  // a repeat.
+  std::size_t held = 0;
+  std::size_t after = n;
+  for (std::size_t j = 0; j < n && !c.failed; ++j) {
+    Field const& f = t[j];
+    if (f.kind == Kind::Repeat && j < held)
+      c.fail_at(f.id);
+    else if (f.kind == Kind::Repeat && after == n)
+      after = j + f.span;
+    else if (j >= after && writes_byte(f))
+      c.fail_at(f.id);
+    if (is_container(f.kind) && j + f.span > held)
+      held = j + f.span;
+  }
+}
+
 }  // namespace detail
 
 // Checks a whole scheme table and resolves its `when` and count references.
@@ -331,6 +375,8 @@ constexpr Result check_table(Field* t, std::size_t n) {
     detail::check_shape(t, 0, n, false, c);
   if (!c.failed)
     detail::resolve(t, 0, n, 0, c);
+  if (!c.failed)
+    detail::check_repeat_last(t, n, c);
   if (c.failed)
     return fail(Error::SchemeInvalid, 0, c.field);
   return Result{};

@@ -147,7 +147,10 @@ constexpr Node<detail::MemberClass<M>, 1> packed(int width, int id, int count_id
 }
 
 // Groups of the children until the packet ends. The repeat id is the anchor. A repeat or times
-// with no child is SchemeInvalid: it would write nothing in any round.
+// with no child is SchemeInvalid: it would write nothing in any round. A repeat has no count, so
+// it is the last thing a packet reads: a field after it that can write a byte, and a repeat
+// inside a list or dict element or inside a repeat or times round, are SchemeInvalid (a compile
+// error for a constexpr scheme). Use `times` there: it has a count.
 template <typename... Ns>
 constexpr auto repeat(int id, Ns const&... children) {
   return detail::nest(detail::leaf(Kind::Repeat, id), children...);

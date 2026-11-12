@@ -1,7 +1,7 @@
-// The loop 21 pack cases of fixtures/hostile/cases.txt (AZ-2394) for the C++ host test, and the
-// rule table that says which error each refused pack case must carry (AZ-2392). Same contract
-// as hostile_pack_cases.hpp: a handler packs the row its README section gives and answers
-// "pack_error" or the packet as lowercase hex.
+// The loop 21 pack cases of fixtures/hostile/cases.txt (AZ-2394) for the C++ host test, the four
+// of loop 113 (AZ-4219), and the rule table that says which error each refused pack case must
+// carry (AZ-2392). Same contract as hostile_pack_cases.hpp: a handler packs the row its README
+// section gives and answers "pack_error" or the packet as lowercase hex.
 
 #pragma once
 
@@ -187,6 +187,59 @@ std::string pack_when_of_held_bool_source() { return pack_when_of_bool_source(1,
 
 std::string pack_when_of_held_bool_source_clear() { return pack_when_of_bool_source(1, false); }
 
+// Loop 113 (AZ-4219, contract repeat-last.md): a repeat that is the last thing the packet reads
+// still builds and packs the bytes it packed before (K1 to K3), and so does a times with a field
+// after it (K4). One row serves the four: k 1 or 2, x 9 and the rounds 5 and 6.
+struct LastRound {
+  std::uint8_t v = 0;
+};
+struct LastRow {
+  std::uint8_t k = 0;
+  Opt<std::uint8_t> x;
+  Array<LastRound, 4> rounds;
+};
+
+inline LastRow last_row(int k) {
+  LastRow row;
+  row.k = static_cast<std::uint8_t>(k);
+  row.x = 9;
+  row.rounds.count = 2;
+  row.rounds.items[0].v = 5;
+  row.rounds.items[1].v = 6;
+  return row;
+}
+
+// u8 x; repeat { u8 v }.
+std::string pack_repeat_last() {
+  auto s = pb::scheme<LastRow>(1, pb::u8<&LastRow::x>(0),
+                               pb::repeat<&LastRow::rounds>(1, pb::u8<&LastRound::v>(1)));
+  return pack_answer(s, last_row(0));
+}
+
+// u8 k; when eq(k, 1) { repeat { u8 v } }, with k 1.
+std::string pack_repeat_last_in_when() {
+  auto s = pb::scheme<LastRow>(
+      1, pb::u8<&LastRow::k>(0),
+      pb::when(1, pb::eq(0, 1), pb::repeat<&LastRow::rounds>(1, pb::u8<&LastRound::v>(1))));
+  return pack_answer(s, last_row(1));
+}
+
+// flags { u8 x; repeat { u8 v } }: bit 0 for x, bit 1 for the repeat that wrote a round.
+std::string pack_repeat_last_in_flags() {
+  auto s = pb::scheme<LastRow>(
+      1, pb::flags(0, pb::u8<&LastRow::x>(0),
+                   pb::repeat<&LastRow::rounds>(1, pb::u8<&LastRound::v>(1))));
+  return pack_answer(s, last_row(0));
+}
+
+// u8 k; times count = k { u8 v }; u8 x, with k 2.
+std::string pack_times_then_field() {
+  auto s = pb::scheme<LastRow>(
+      1, pb::u8<&LastRow::k>(0), pb::times<&LastRow::rounds>(1, 0, pb::u8<&LastRound::v>(1)),
+      pb::u8<&LastRow::x>(2));
+  return pack_answer(s, last_row(2));
+}
+
 constexpr PackHandler kPackHandlers21[] = {
     {"pack_flags_short_list_filled", pack_flags_short_list_filled},
     {"pack_late_when_in_bit_body", pack_late_when_in_bit_body},
@@ -199,6 +252,11 @@ constexpr PackHandler kPackHandlers21[] = {
     {"pack_when_of_skipped_bool_source", pack_when_of_skipped_bool_source},
     {"pack_when_of_held_bool_source", pack_when_of_held_bool_source},
     {"pack_when_of_held_bool_source_clear", pack_when_of_held_bool_source_clear},
+    // Loop 113 (AZ-4219).
+    {"pack_repeat_last", pack_repeat_last},
+    {"pack_repeat_last_in_when", pack_repeat_last_in_when},
+    {"pack_repeat_last_in_flags", pack_repeat_last_in_flags},
+    {"pack_times_then_field", pack_times_then_field},
 };
 
 // The slot cases need a round budget and a short list needs a list: C++ has neither.

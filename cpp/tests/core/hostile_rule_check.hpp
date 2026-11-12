@@ -4,11 +4,22 @@
 
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
 struct Case {
   std::string id, stage, expected, hex;
+};
+
+// One construct or unpack case: a scheme written by hand and the term it answers for the packet
+// (empty for a construct case), one of the `expected` words of cases.txt.
+using Run = char const* (*)(std::uint8_t const*, std::size_t);
+
+struct Handler {
+  char const* id;
+  Run run;
 };
 
 // Runs every pack case, then the AZ-2418 wrong-rule checks. Reports through check::expect.

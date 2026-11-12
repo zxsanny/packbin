@@ -41,13 +41,18 @@ cells_of() {
 }
 
 # Prints the line of a variant: on stdout when its outcome differs from the line of its shape, else
-# on stderr. The outcome is the same when the cells are equal, or when both schemes are refused at
-# build (a scheme built at run time and a constant one word that refusal differently).
+# on stderr. The outcome is the same when the cells are equal, or when the variant is the constant
+# form and both schemes are refused at build (a scheme built at run time and a constant one word
+# that refusal differently). Two run-time forms refused at different fields are refused by
+# different rules (a bound list refuses its row element, an unbound one the repeat inside it), so
+# both lines are printed.
 print_variant() {
-  local line="$1" other="$2" cells others
+  local line="$1" other="$2" cells others shape
   cells="$(cells_of "$line")"
   others="$(cells_of "$other")"
-  if [[ "$others" == "$cells" || ("$others" == refused:* && "$cells" == refused:*) ]]; then
+  shape="$(printf '%s\n' "$other" | cut -f 2)"
+  if [[ "$others" == "$cells" ||
+    ("$shape" == *-constexpr && "$others" == refused:* && "$cells" == refused:*) ]]; then
     printf 'run.sh: same outcome as its shape, not printed: %s\n' "$other" >&2
   else
     printf '%s\n' "$other"

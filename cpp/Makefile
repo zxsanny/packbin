@@ -12,7 +12,7 @@ HDRS := $(wildcard include/packbin/*.hpp) src/core/values.hpp src/core/text.hpp 
 CORE_SRCS := src/core/values.cpp src/core/pack.cpp src/core/unpack.cpp src/core/crypto.cpp src/core/frame.cpp
 # VECTOR_TESTS are shared with the firmware runner; HOST_TESTS need an operating system.
 VECTOR_TESTS := tests/core/scalar_tests.cpp tests/core/scheme_tests.cpp tests/core/grouped_tests.cpp tests/core/counted_tests.cpp tests/core/container_tests.cpp tests/core/crypto_tests.cpp tests/core/ecc_api_tests.cpp tests/core/ecc_percent_tests.cpp tests/core/frame_tests.cpp
-HOST_TESTS := tests/core/main.cpp tests/core/host_tests.cpp tests/core/hostile_host_tests.cpp tests/core/hostile_rule_check_host_tests.cpp tests/core/flag_scope_host_tests.cpp tests/core/source_kinds_host_tests.cpp tests/core/flags_when_member_host_tests.cpp tests/core/flags_times_repeat_member_host_tests.cpp tests/core/split_form_loud_host_tests.cpp tests/core/times_count_zero_host_tests.cpp tests/core/eq_value_checked_host_tests.cpp tests/core/late_source_host_tests.cpp tests/core/held_count_nested_late_host_tests.cpp tests/core/when_skipped_source_host_tests.cpp tests/core/empty_body_rule_host_tests.cpp tests/core/packed_bias_novalue_host_tests.cpp tests/core/novalue_nested_host_tests.cpp tests/core/builder_id_range_host_tests.cpp tests/core/loop25_probe_d1_d7_host_tests.cpp tests/core/text_vectors_host_tests.cpp tests/core/text_codec_host_tests.cpp tests/core/text_api_host_tests.cpp tests/core/ecc_vectors_host_tests.cpp tests/core/ecc_repair_host_tests.cpp tests/core/ecc_api_host_tests.cpp tests/core/ecc_percent_host_tests.cpp tests/core/ecc_percent_vectors_host_tests.cpp tests/core/ecc_percent_fields_host_tests.cpp tests/core/crypto_vectors_host_tests.cpp tests/core/dict_order_host_tests.cpp tests/core/text_repeat_host_tests.cpp tests/core/when_chain_host_tests.cpp tests/core/when_flag_bit_host_tests.cpp tests/core/when_group_source_host_tests.cpp tests/core/frame_vectors_host_tests.cpp tests/core/frame_api_host_tests.cpp tests/core/frame_readme_host_tests.cpp tests/core/frame_tag_compare_host_tests.cpp
+HOST_TESTS := tests/core/main.cpp tests/core/host_tests.cpp tests/core/hostile_host_tests.cpp tests/core/hostile_rule_check_host_tests.cpp tests/core/flag_scope_host_tests.cpp tests/core/source_kinds_host_tests.cpp tests/core/flags_when_member_host_tests.cpp tests/core/flags_times_repeat_member_host_tests.cpp tests/core/split_form_loud_host_tests.cpp tests/core/times_count_zero_host_tests.cpp tests/core/eq_value_checked_host_tests.cpp tests/core/late_source_host_tests.cpp tests/core/held_count_nested_late_host_tests.cpp tests/core/when_skipped_source_host_tests.cpp tests/core/empty_body_rule_host_tests.cpp tests/core/packed_bias_novalue_host_tests.cpp tests/core/novalue_nested_host_tests.cpp tests/core/builder_id_range_host_tests.cpp tests/core/loop25_probe_d1_d7_host_tests.cpp tests/core/text_vectors_host_tests.cpp tests/core/text_codec_host_tests.cpp tests/core/text_api_host_tests.cpp tests/core/ecc_vectors_host_tests.cpp tests/core/ecc_repair_host_tests.cpp tests/core/ecc_api_host_tests.cpp tests/core/ecc_percent_host_tests.cpp tests/core/ecc_percent_vectors_host_tests.cpp tests/core/ecc_percent_fields_host_tests.cpp tests/core/crypto_vectors_host_tests.cpp tests/core/dict_order_host_tests.cpp tests/core/text_repeat_host_tests.cpp tests/core/when_chain_host_tests.cpp tests/core/when_flag_bit_host_tests.cpp tests/core/when_group_source_host_tests.cpp tests/core/frame_vectors_host_tests.cpp tests/core/frame_api_host_tests.cpp tests/core/frame_readme_host_tests.cpp tests/core/frame_tag_compare_host_tests.cpp tests/core/repeat_last_host_tests.cpp
 IMAGE_SRCS := embedded/common/all_kinds.cpp embedded/common/all_kinds_rounds.cpp embedded/common/all_kinds.hpp embedded/common/all_kinds_internal.hpp
 TEST_BIN := build/packbin_tests
 EXPECT_FAIL := ./tests/compile-fail/expect-fail.sh "$(CXX) $(CXXFLAGS) $(CORE_FLAGS) -fsyntax-only"
@@ -27,7 +27,7 @@ NO_ECC_BIN := build/packbin_no_ecc_tests
 
 .PHONY: test core-test clean compile-fail object-check no-text-test no-ecc-test frame-check
 
-$(TEST_BIN): $(HDRS) $(CORE_SRCS) $(VECTOR_TESTS) $(HOST_TESTS) tests/core/check.hpp tests/core/hostile_pack_cases.hpp tests/core/hostile_pack_loop21.hpp tests/core/hostile_rule_check.hpp tests/core/member_cases.hpp tests/core/ecc_support_host.hpp tests/core/ecc_percent_support_host.hpp $(IMAGE_SRCS)
+$(TEST_BIN): $(HDRS) $(CORE_SRCS) $(VECTOR_TESTS) $(HOST_TESTS) tests/core/check.hpp tests/core/hostile_pack_cases.hpp tests/core/hostile_pack_loop21.hpp tests/core/hostile_repeat_last.hpp tests/core/hostile_rule_check.hpp tests/core/member_cases.hpp tests/core/ecc_support_host.hpp tests/core/ecc_percent_support_host.hpp $(IMAGE_SRCS)
 	mkdir -p build
 	$(CXX) $(CXXFLAGS) $(CORE_FLAGS) -Iembedded/common -pthread -o $@ $(CORE_SRCS) $(VECTOR_TESTS) $(HOST_TESTS) embedded/common/all_kinds.cpp embedded/common/all_kinds_rounds.cpp
 
@@ -95,6 +95,17 @@ compile-fail: $(HDRS)
 	@$(EXPECT_FAIL) tests/compile-fail/flag_byte_in_flag_bit_child.cpp "breaks_order<2>|Id = 2\]"
 	@$(EXPECT_FAIL) tests/compile-fail/when_eq_bool_false.cpp "breaks_order<1>|Id = 1\]"
 	@$(EXPECT_FAIL) tests/compile-fail/when_eq_out_of_range.cpp "breaks_order<1>|Id = 1\]"
+	@$(EXPECT_FAIL) tests/compile-fail/repeat_then_field.cpp "breaks_order<1>|Id = 1\]"
+	@$(EXPECT_FAIL) tests/compile-fail/repeat_in_when_then_field.cpp "breaks_order<2>|Id = 2\]"
+	@$(EXPECT_FAIL) tests/compile-fail/repeat_in_flags_then_field.cpp "breaks_order<1>|Id = 1\]"
+	@$(EXPECT_FAIL) tests/compile-fail/repeat_in_group_then_field.cpp "breaks_order<1>|Id = 1\]"
+	@$(EXPECT_FAIL) tests/compile-fail/repeat_then_repeat.cpp "breaks_order<1>|Id = 1\]"
+	@$(EXPECT_FAIL) tests/compile-fail/repeat_then_exclusive_when.cpp "breaks_order<2>|Id = 2\]"
+	@$(EXPECT_FAIL) tests/compile-fail/repeat_in_list_element.cpp "breaks_order<1>|Id = 1\]"
+	@$(EXPECT_FAIL) tests/compile-fail/repeat_in_dict_element.cpp "breaks_order<1>|Id = 1\]"
+	@$(EXPECT_FAIL) tests/compile-fail/repeat_in_times_round.cpp "breaks_order<1>|Id = 1\]"
+	@$(EXPECT_FAIL) tests/compile-fail/repeat_in_group_in_repeat_round.cpp "breaks_order<1>|Id = 1\]"
+	@$(EXPECT_FAIL) tests/compile-fail/repeat_in_group_in_times_round.cpp "breaks_order<1>|Id = 1\]"
 	@$(EXPECT_FAIL) tests/compile-fail/utf8_view_member.cpp "Text<N>"
 	@$(EXPECT_FAIL) tests/compile-fail/utf8_view_list_element.cpp "utf8_element_must_be_Text_N_or_Packed_not_View"
 	@$(EXPECT_FAIL) tests/compile-fail/utf8_view_dict_key.cpp "utf8_element_must_be_Text_N_or_Packed_not_View"

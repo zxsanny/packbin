@@ -44,6 +44,7 @@ int run_core_frame_vectors_host_tests();
 int run_core_frame_api_host_tests();
 int run_core_frame_readme_host_tests();
 int run_core_frame_tag_compare_host_tests();
+int run_core_repeat_last_host_tests();
 
 int main() {
   run_core_scalar_tests();
@@ -90,6 +91,7 @@ int main() {
   run_core_frame_api_host_tests();
   run_core_frame_readme_host_tests();
   run_core_frame_tag_compare_host_tests();
+  run_core_repeat_last_host_tests();
   if (check::failures() != 0) {
     std::fprintf(stderr, "%d failure(s)\n", check::failures());
     return 1;
