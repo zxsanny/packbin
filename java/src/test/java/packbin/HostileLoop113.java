@@ -5,9 +5,10 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 /**
- * AC-3: the Java schemes and rows of the thirteen repeat-last cases of fixtures/hostile/cases.txt, replayed by
- * HostileVectorTest. They are R1 to R9 and K1 to K4 of the contract repeat-last: a repeat that is not the last
- * thing its packet reads is refused when the scheme is built. Java writes all thirteen, with Map rows; a nested row
+ * AC-3: the Java schemes and rows of the fifteen repeat-last cases of fixtures/hostile/cases.txt, replayed by
+ * HostileVectorTest. They are R1 to R9, the two of AZ-4232 (a repeat in a nested row in a round) and K1 to K4 of the
+ * contract repeat-last: a repeat that is not the last
+ * thing its packet reads is refused when the scheme is built. Java writes all fifteen, with Map rows; a nested row
  * numbers its fields from 0, so {@code x} after the nested row of R4 is id 0.
  */
 @SuppressWarnings({"unchecked", "rawtypes"})
@@ -20,6 +21,7 @@ final class HostileLoop113 {
             "construct_repeat_in_flags_then_field", "construct_repeat_in_group_then_field",
             "construct_repeat_then_repeat", "construct_repeat_then_exclusive_when",
             "construct_repeat_in_list_element", "construct_repeat_in_dict_element", "construct_repeat_in_times_round",
+            "construct_repeat_in_group_in_repeat_round", "construct_repeat_in_group_in_times_round",
             "pack_repeat_last", "pack_repeat_last_in_when", "pack_repeat_last_in_flags", "pack_times_then_field");
 
     static Supplier<byte[]> packFor(String id) {
@@ -54,6 +56,10 @@ final class HostileLoop113 {
             case "construct_repeat_in_dict_element" -> () -> Maps.scheme(1,
                     Packbin.dict(Access.get("d"), Access.set("d"), elementRow()));
             case "construct_repeat_in_times_round" -> () -> Maps.scheme(1, u8(0, "k"), Packbin.times(1, 0, rounds(1)));
+            case "construct_repeat_in_group_in_repeat_round" -> () -> Maps.scheme(1,
+                    Packbin.repeat(0, nestedRepeat()));
+            case "construct_repeat_in_group_in_times_round" -> () -> Maps.scheme(1,
+                    u8(0, "k"), Packbin.times(1, 0, nestedRepeat()));
             default -> null;
         };
     }
@@ -71,6 +77,11 @@ final class HostileLoop113 {
     /** The element row (u8 mode, repeat(u8 v)) of R7 and R8, a nested row: each element is a Map of its own. */
     private static Field elementRow() {
         return Packbin.group(Access.identity(), Access.ignore(), u8(0, "mode"), rounds(1));
+    }
+
+    /** AZ-4232: a nested row m that holds repeat anchor 0 { u8 v }; the nested row numbers its own fields from 0. */
+    private static Field nestedRepeat() {
+        return Packbin.group(Access.get("m"), Access.set("m"), rounds(0));
     }
 
     private static Field u8(int id, String name) {

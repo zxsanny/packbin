@@ -192,6 +192,17 @@ var hostileConstructs = map[string]*hostileConstruct{
 		build: func() (*Scheme, error) { return NewScheme(1, U8(0, "k"), Times(1, 0, Repeat(1, U8(1, "v")))) },
 		rule:  lit(`packbin: invalid scheme at field 1: repeat 1 is inside a repeat or times round; a round cannot hold another repeat or times`),
 	},
+	// AZ-4232: the same nesting rule looks into a Nested, which numbers its members from 0, so the inner repeat is id 0.
+	"construct_repeat_in_group_in_repeat_round": {
+		build: func() (*Scheme, error) { return NewScheme(1, Repeat(0, Nested("m", Repeat(0, U8(0, "v"))))) },
+		rule:  lit(`packbin: invalid scheme at field 0: repeat 0 is inside a repeat or times round; a round cannot hold another repeat or times`),
+	},
+	"construct_repeat_in_group_in_times_round": {
+		build: func() (*Scheme, error) {
+			return NewScheme(1, U8(0, "k"), Times(1, 0, Nested("m", Repeat(0, U8(0, "v")))))
+		},
+		rule: lit(`packbin: invalid scheme at field 0: repeat 0 is inside a repeat or times round; a round cannot hold another repeat or times`),
+	},
 }
 
 // lit matches exactly the text of one error, so the rule and the field id it names are both pinned.

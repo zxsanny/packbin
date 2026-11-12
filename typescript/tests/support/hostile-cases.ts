@@ -208,6 +208,19 @@ export const CONSTRUCT: Record<string, { build: () => unknown; rule: RegExp }> =
     build: () => scheme<Row>(1, u8(0, (x) => x.k), times(1, 0, [repeat(1, [u8(1, (x) => x.v)])])),
     rule: /^repeat 1 is inside a repeat or times round; a round cannot hold another repeat or times$/,
   },
+  // The nesting rule looks into the nested row (a group without an anchor, numbered from 0 in a scope of its own).
+  construct_repeat_in_group_in_repeat_round: {
+    build: () => scheme<Row>(1, repeat(0, [group((x) => x.m, [repeat(0, [u8(0, (x) => x.v)])])])),
+    rule: /^repeat 0 is inside a repeat or times round; a round cannot hold another repeat or times$/,
+  },
+  construct_repeat_in_group_in_times_round: {
+    build: () => scheme<Row>(
+      1,
+      u8(0, (x) => x.k),
+      times(1, 0, [group((x) => x.m, [repeat(0, [u8(0, (x) => x.v)])])]),
+    ),
+    rule: /^repeat 0 is inside a repeat or times round; a round cannot hold another repeat or times$/,
+  },
 }
 
 // Built per case, so a scheme a package refuses is reported for that case alone.

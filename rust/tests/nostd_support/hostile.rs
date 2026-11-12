@@ -131,6 +131,13 @@ pub fn nodes_of(id: &str) -> Option<Vec<Node>> {
             When(0, 2, vec![n(U8)]),
         ],
         "construct_repeat_in_times_round" => vec![n(U8), Times(0, vec![Repeat(vec![n(U8)])])],
+        // AZ-4232: the same rule one container deeper, a repeat in a group of a round.
+        "construct_repeat_in_group_in_repeat_round" => {
+            vec![Repeat(vec![Group(vec![Repeat(vec![n(U8)])])])]
+        }
+        "construct_repeat_in_group_in_times_round" => {
+            vec![n(U8), Times(0, vec![Group(vec![Repeat(vec![n(U8)])])])]
+        }
         _ => return None,
     })
 }

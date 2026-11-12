@@ -1,10 +1,10 @@
-// The loop 113 construct cases of fixtures/hostile/cases.txt (AZ-4219, contract repeat-last.md) for
-// the C++ host test (hostile_host_tests.cpp): a repeat that is not the last thing a packet reads.
-// Each scheme is written by hand from its README section. A handler answers "scheme_error" only
-// when the scheme is refused with SchemeInvalid at the order id its section names (the first field
-// after the repeat, or the repeat itself inside an element or a round), so a refusal by another
-// rule or at another field fails the case. The four pack cases of the loop are in
-// hostile_pack_loop21.hpp.
+// The loop 113 construct cases of fixtures/hostile/cases.txt (AZ-4219, AZ-4232, contract
+// repeat-last.md) for the C++ host test (hostile_host_tests.cpp): a repeat that is not the last
+// thing a packet reads. Each scheme is written by hand from its README section. A handler answers
+// "scheme_error" only when the scheme is refused with SchemeInvalid at the order id its section
+// names (the first field after the repeat, or the repeat itself inside an element, a round or a
+// group of a round), so a refusal by another rule or at another field fails the case. The four
+// pack cases of the loop are in hostile_pack_loop21.hpp.
 
 #pragma once
 
@@ -121,6 +121,27 @@ inline char const* repeat_in_times_round(std::uint8_t const*, std::size_t) {
   return refused_at(s, 1);
 }
 
+// AZ-4232: the same rule one container deeper, a repeat inside a group of a round. A group shares
+// the ids of the row around it, so the group and its repeat carry the id of the round. A group does
+// not hide a repeat from the round: the next round still follows it. Refused at the inner repeat.
+//
+// repeat { group { repeat { v } } }: the inner repeat is id 0.
+inline char const* repeat_in_group_in_repeat_round(std::uint8_t const*, std::size_t) {
+  auto s = pb::scheme<Nested>(
+      1, pb::repeat<&Nested::outer>(
+             0, pb::group(0, pb::repeat<&Outer::inner>(0, pb::u8<&Round::v>(0)))));
+  return refused_at(s, 0);
+}
+
+// k; times count = k { group { repeat { v } } }: the inner repeat is id 1.
+inline char const* repeat_in_group_in_times_round(std::uint8_t const*, std::size_t) {
+  auto s = pb::scheme<Nested>(
+      1, pb::u8<&Nested::k>(0),
+      pb::times<&Nested::outer>(
+          1, 0, pb::group(1, pb::repeat<&Outer::inner>(1, pb::u8<&Round::v>(1)))));
+  return refused_at(s, 1);
+}
+
 constexpr Handler kHandlers[] = {
     {"construct_repeat_then_field", repeat_then_field},
     {"construct_repeat_in_when_then_field", repeat_in_when_then_field},
@@ -131,6 +152,8 @@ constexpr Handler kHandlers[] = {
     {"construct_repeat_in_list_element", repeat_in_list_element},
     {"construct_repeat_in_dict_element", repeat_in_dict_element},
     {"construct_repeat_in_times_round", repeat_in_times_round},
+    {"construct_repeat_in_group_in_repeat_round", repeat_in_group_in_repeat_round},
+    {"construct_repeat_in_group_in_times_round", repeat_in_group_in_times_round},
 };
 
 }  // namespace hostile_repeat_last

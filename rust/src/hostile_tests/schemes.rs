@@ -203,6 +203,24 @@ const SCHEMES: &[(&[&str], Build)] = &[
     (&["construct_repeat_in_times_round"], || {
         MapScheme::new(1, vec![u8("k"), times(1, "k", vec![rounds_of(1, "v")])])
     }),
+    // AZ-4232: the same rule one container deeper, a repeat in an anchored group of a round. The
+    // group shares the ids of the row around it, so the group and the repeat take the anchor of
+    // the round.
+    (&["construct_repeat_in_group_in_repeat_round"], || {
+        MapScheme::new(
+            1,
+            vec![repeat(0, vec![group(0, "m", vec![rounds_of(0, "v")])])],
+        )
+    }),
+    (&["construct_repeat_in_group_in_times_round"], || {
+        MapScheme::new(
+            1,
+            vec![
+                u8("k"),
+                times(1, "k", vec![group(1, "m", vec![rounds_of(1, "v")])]),
+            ],
+        )
+    }),
 ];
 
 /// Rounds the scheme of a `limit` case allows; max_slots stays at its default.
@@ -246,6 +264,8 @@ const OUTCOMES: &[(&[&str], &str)] = &[
             "construct_repeat_then_repeat",
             "construct_repeat_then_exclusive_when",
             "construct_repeat_in_times_round",
+            "construct_repeat_in_group_in_repeat_round",
+            "construct_repeat_in_group_in_times_round",
         ],
         "scheme_error",
     ),

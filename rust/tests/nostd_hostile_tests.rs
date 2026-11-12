@@ -8,7 +8,7 @@ mod nostd_support;
 
 use nostd_support::hostile::{allows, cases, fields_of, scheme_of, term, CORPUS};
 use nostd_support::{from_hex, Slots};
-use packbin::nostd::{unpack, validate};
+use packbin::nostd::{unpack, validate, Error};
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
@@ -151,6 +151,30 @@ fn ac1_each_construct_case_is_a_scheme_error() {
         ran += 1;
     }
     assert!(ran > 0, "cases.txt holds no construct case to run");
+}
+
+#[test]
+fn ac2_a_repeat_in_a_group_of_a_round_is_scheme_invalid_naming_the_inner_repeat() {
+    // Arrange (AZ-4232 AC-2): the table of each case and the index and order id of its inner repeat
+    let cases = [
+        // repeat 0 { group 0 { repeat 0 { u8 0 } } }
+        ("construct_repeat_in_group_in_repeat_round", 2, 0),
+        // u8 0; times 1 over 0 { group 1 { repeat 1 { u8 1 } } }
+        ("construct_repeat_in_group_in_times_round", 3, 1),
+    ];
+    for (id, offset, field) in cases {
+        let fields = fields_of(id).expect("a scheme");
+
+        // Act
+        let fault = validate(&scheme_of(&fields, id)).expect_err("refused");
+
+        // Assert
+        assert_eq!(
+            (fault.error, fault.offset, fault.field, fault.needed),
+            (Error::SchemeInvalid, offset, field, 0),
+            "{id}"
+        );
+    }
 }
 
 #[test]

@@ -90,6 +90,15 @@ pub(super) const CONSTRUCT_REFUSAL: RuleTable = &[
         "construct_repeat_in_times_round",
         "=repeat at id 1 is inside a repeat or times round; a round keeps no inner repeat rounds",
     ),
+    // AZ-4232: the same rule, looking into the group of the round; the id is the inner repeat's.
+    (
+        "construct_repeat_in_group_in_repeat_round",
+        "=repeat at id 0 is inside a repeat or times round; a round keeps no inner repeat rounds",
+    ),
+    (
+        "construct_repeat_in_group_in_times_round",
+        "=repeat at id 1 is inside a repeat or times round; a round keeps no inner repeat rounds",
+    ),
 ];
 
 /// A refusal table: the case id and a fragment of the refusal text it must carry.

@@ -32,8 +32,9 @@ final class HostileRefusals {
             + " it; use times";
     private static final String IN_ELEMENT = "repeat 1 is inside a list or dict element; a repeat reads to the end of"
             + " the packet, so another element cannot follow it; use times";
-    private static final String IN_ROUND = "repeat 1 is inside a repeat or times round; a repeat reads to the end of"
+    private static final String IN_ROUND_TAIL = " is inside a repeat or times round; a repeat reads to the end of"
             + " the packet, so another round cannot follow it; use times";
+    private static final String IN_ROUND = "repeat 1" + IN_ROUND_TAIL;
 
     static final Map<String, Rule> PACK = Map.ofEntries(
             Map.entry("pack_out_of_range_integer", bad("0: 300 does not fit")),
@@ -102,7 +103,10 @@ final class HostileRefusals {
             Map.entry("construct_repeat_then_exclusive_when", bad("repeat 1: u8 2" + FOLLOWS)),
             Map.entry("construct_repeat_in_list_element", bad(IN_ELEMENT)),
             Map.entry("construct_repeat_in_dict_element", bad(IN_ELEMENT)),
-            Map.entry("construct_repeat_in_times_round", bad(IN_ROUND)));
+            Map.entry("construct_repeat_in_times_round", bad(IN_ROUND)),
+            // AZ-4232: the repeat in the nested row is anchor 0 of that row's own numbering.
+            Map.entry("construct_repeat_in_group_in_repeat_round", bad("repeat 0" + IN_ROUND_TAIL)),
+            Map.entry("construct_repeat_in_group_in_times_round", bad("repeat 0" + IN_ROUND_TAIL)));
 
     /** Null when {@code ex} is the refusal {@code rule} names; otherwise what is wrong. */
     static String mismatch(String id, Rule rule, RuntimeException ex) {

@@ -84,6 +84,8 @@ construct_repeat_then_exclusive_when construct scheme_error               -
 construct_repeat_in_list_element  construct  scheme_error                 -
 construct_repeat_in_dict_element  construct  scheme_error                 -
 construct_repeat_in_times_round   construct  scheme_error                 -
+construct_repeat_in_group_in_repeat_round construct scheme_error          -
+construct_repeat_in_group_in_times_round construct scheme_error           -
 pack_repeat_last                  pack       bytes                        01090506
 pack_repeat_last_in_when          pack       bytes                        01010506
 pack_repeat_last_in_flags         pack       bytes                        0103090506

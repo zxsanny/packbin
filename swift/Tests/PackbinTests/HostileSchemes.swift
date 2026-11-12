@@ -46,6 +46,10 @@ private let repeatInElement = "is inside a list or dict element; a repeat reads 
 /// The element row of the two element cases: u8 mode; repeat { u8 v }, a nested row with ids of its own.
 private func modeThenRepeat() -> Field { .group("item", .u8(0, "mode"), .repeat(1, .u8(1, "v"))) }
 
+/// The nesting rule's text for the inner repeat (id 0 of a nested row) of the two AZ-4232 cases.
+private let nestedRepeatInRound = "packbin: invalid scheme at field 0: repeat 0 is inside a repeat or times round; "
+    + "a round cannot hold another repeat or times"
+
 /// One construct case: the scheme, which must be refused, and the whole text of the refusal (the rule
 /// and the field it names), so an error from a typo in the builder does not pass the case.
 struct HostileConstruct: Sendable {
@@ -145,4 +149,12 @@ let hostileConstructs: [String: HostileConstruct] = [
         build: { try Scheme(1, .u8(0, "k"), .times(1, count: 0, .repeat(1, .u8(1, "v")))) },
         rule: "packbin: invalid scheme at field 1: repeat 1 is inside a repeat or times round; a round cannot hold "
             + "another repeat or times"),
+    // AZ-4232: the same rule one container deeper. A nested row numbers its members from 0 in a scope of its
+    // own, so the inner repeat is id 0 whatever the id of the round around the row.
+    "construct_repeat_in_group_in_repeat_round": HostileConstruct(
+        build: { try Scheme(1, .repeat(0, .group("m", .repeat(0, .u8(0, "v"))))) },
+        rule: nestedRepeatInRound),
+    "construct_repeat_in_group_in_times_round": HostileConstruct(
+        build: { try Scheme(1, .u8(0, "k"), .times(1, count: 0, .group("m", .repeat(0, .u8(0, "v"))))) },
+        rule: nestedRepeatInRound),
 ]

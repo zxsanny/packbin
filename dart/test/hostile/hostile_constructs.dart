@@ -1,7 +1,7 @@
 import 'package:packbin/packbin.dart';
 
 import '../support/repeat_last.dart'
-    show followedText, inElementText, nestingText, rounds;
+    show followedText, inElementText, inRoundText, nestingText, rounds;
 import 'hostile_cases.dart';
 
 typedef Build = Object Function();
@@ -215,6 +215,28 @@ final hostileConstructs = <String, HostileConstruct>{
     ]),
     1,
     nestingText(1),
+  ),
+  // AZ-4232: the same one container deeper. The nesting rule does not look
+  // into a nested row, so the repeat-last rule refuses it; the nested row
+  // numbers its members from 0, so the inner repeat is id 0 in both schemes.
+  'construct_repeat_in_group_in_repeat_round': HostileConstruct(
+    () => scheme(1, [
+      repeat(0, [
+        nested('m', [rounds(0)]),
+      ]),
+    ]),
+    0,
+    inRoundText(0),
+  ),
+  'construct_repeat_in_group_in_times_round': HostileConstruct(
+    () => scheme(1, [
+      _n(0, 'k'),
+      times(1, 0, [
+        nested('m', [rounds(0)]),
+      ]),
+    ]),
+    0,
+    inRoundText(0),
   ),
 };
 

@@ -1,7 +1,7 @@
 """The rule "a repeat is the last thing a packet reads" (contract `repeat-last.md`): what the test modules that pin it
-share. The refusal texts, a repeat whose body is one byte, and the thirteen cases of `fixtures/hostile/cases.txt` that
-the rule added (R1 to R9 refused, K1 to K4 kept), each as a scheme that takes the accessor of its fields, so
-`test_repeat_last.py` builds it with dict rows and with class rows and the hostile loader with dict rows.
+share. The refusal texts, a repeat whose body is one byte, and the fifteen cases of `fixtures/hostile/cases.txt` that
+the rule added (R1 to R9 and the two of AZ-4232 refused, K1 to K4 kept), each as a scheme that takes the accessor of
+its fields, so `test_repeat_last.py` builds it with dict rows and with class rows and the hostile loader with dict rows.
 
 Python has only an anchored group, which shares the ids of the row around it: `x` of the group case is id 1, and the
 element row of the list and dict cases is `group(0, ...)`. The row of a list or dict element is always a dict, so an
@@ -90,6 +90,16 @@ REFUSED: dict[str, tuple[Fields, str]] = {
     "construct_repeat_in_dict_element": (lambda acc: [map_field(acc("d"), _element())], in_element(1)),
     "construct_repeat_in_times_round": (
         lambda acc: [u8(0, acc("k")), times(1, 0, rounds(1, acc))],
+        in_round(1),
+    ),
+    # AZ-4232: the same, one container deeper. The anchored group shares the ids of the row around it, so the
+    # inner repeat is id 0 under the repeat and id 1 under the times; the nesting rule looks into the group.
+    "construct_repeat_in_group_in_repeat_round": (
+        lambda acc: [repeat(0, group(0, rounds(0, acc)))],
+        in_round(0),
+    ),
+    "construct_repeat_in_group_in_times_round": (
+        lambda acc: [u8(0, acc("k")), times(1, 0, group(1, rounds(1, acc)))],
         in_round(1),
     ),
 }

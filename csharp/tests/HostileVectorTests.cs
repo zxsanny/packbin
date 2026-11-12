@@ -276,6 +276,12 @@ public class HostileVectorTests
         ["construct_repeat_in_times_round"] = () => _ = new Scheme<LastRow>(1,
             Field.U8<LastRow>(0, x => x.K),
             Field.Times(1, 0, Field.Repeat(1, Field.U8<LastRow>(1, x => x.V)))),
+        // AZ-4232: a repeat in a nested row in a round; the nesting rule looks into the nested row, which numbers from 0.
+        ["construct_repeat_in_group_in_repeat_round"] = () => _ = new Scheme<LastRow>(1,
+            Field.Repeat(0, Field.Group((LastRow x) => x.M, Field.Repeat(0, Field.U8<LastRow>(0, x => x.V))))),
+        ["construct_repeat_in_group_in_times_round"] = () => _ = new Scheme<LastRow>(1,
+            Field.U8<LastRow>(0, x => x.K),
+            Field.Times(1, 0, Field.Group((LastRow x) => x.M, Field.Repeat(0, Field.U8<LastRow>(0, x => x.V))))),
     };
 
     // A message fragment for each case refused at construction, so a refusal by some other rule does not pass.
@@ -311,6 +317,9 @@ public class HostileVectorTests
         ["construct_repeat_in_list_element"] = InElement,
         ["construct_repeat_in_dict_element"] = InElement,
         ["construct_repeat_in_times_round"] = "repeat 1 is inside a repeat or times round; a round cannot hold another repeat or times",
+        // AZ-4232: the repeat in the nested row is anchor 0 of that row's own numbering.
+        ["construct_repeat_in_group_in_repeat_round"] = "repeat 0 is inside a repeat or times round; a round cannot hold another repeat or times",
+        ["construct_repeat_in_group_in_times_round"] = "repeat 0 is inside a repeat or times round; a round cannot hold another repeat or times",
     };
 
     // C# has no bad_value or too_many type yet (C15); ShortPacket stands in for both.

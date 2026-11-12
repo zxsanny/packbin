@@ -62,3 +62,9 @@ Each package: the refusal texts compared whole for R1 to R9, K1 to K5 with the c
 - A package's own tests rely on a refused scheme (TypeScript: 4 in 3 files; the other eight not counted): each worker counts and rewrites them; the count goes into the batch report.
 - The heap-free Rust check and a run-time C++ scheme cost flash: above 256 B of flash or 64 B of stack on a pin the task stops and the owner decides.
 - Host load: four workers each run a suite; timing bounds are load-aware, and the total run waits for a quiet host.
+
+## Assessment rounds
+
+| round | verdict | new specs | report |
+|-------|---------|-----------|--------|
+| 1 | EXTEND | AZ-4232_repeat_last_group_in_round_cases | _docs/loops/loop113/assessment113.md |
