@@ -18,8 +18,9 @@ fn invalid(at: usize, f: &Field) -> Fault {
 }
 
 /// Checks a scheme without reading or writing a byte: the table shape (spans), the order ids (a
-/// duplicate, skipped or out-of-range id is refused), the members each kind allows, and that
-/// every `when`, count and flag bit refers to an earlier field of its scope that it can read.
+/// duplicate, skipped or out-of-range id is refused), the members each kind allows, that every
+/// `when`, count and flag bit refers to an earlier field of its scope that it can read, and that
+/// no field that can write a byte follows a `repeat` (the fault names the first one that does).
 /// [`pack`](super::pack) and [`unpack`](super::unpack) call it first.
 pub fn validate(scheme: &Scheme<'_>) -> Result<(), Fault> {
     let t = scheme.fields;
@@ -33,7 +34,30 @@ pub fn validate(scheme: &Scheme<'_>) -> Result<(), Fault> {
     }
     shape(t, 0, t.len(), false, Round::None)?;
     refs(t, 0, t.len())?;
+    repeat_last(t)?;
     parity(scheme)
+}
+
+/// A `repeat` is the last thing a packet reads: it has no count on the wire, so unpack would read
+/// a field written after it as more rounds. The table is in wire order, so no entry after the
+/// first `repeat` and its members may write a byte, wherever it stands; the first that can is
+/// named. A `boolean` (a bit of a byte written earlier), a zero-width `bytes` and the entries
+/// that only hold members (`when`, group, flag bit, `repeat`, `times`) write none themselves.
+fn repeat_last(t: &[Field]) -> Result<(), Fault> {
+    // Where the entries after the first `repeat` start; a later `repeat` ends later.
+    let mut after = usize::MAX;
+    for (j, f) in t.iter().enumerate() {
+        let silent = matches!(
+            f.kind,
+            Kind::Bool | Kind::When | Kind::Group | Kind::FlagBit | Kind::Times
+        ) || (f.kind == Kind::Bytes && f.size == 0);
+        if f.kind == Kind::Repeat {
+            after = after.min(j.saturating_add(usize::from(f.span)));
+        } else if j >= after && !silent {
+            return Err(invalid(j, f));
+        }
+    }
+    Ok(())
 }
 
 /// A parity count above 32, or above 0 without the `ecc` feature, is refused; so is a percentage

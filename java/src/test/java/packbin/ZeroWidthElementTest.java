@@ -67,8 +67,9 @@ final class ZeroWidthElementTest {
 
     /**
      * AZ-2089 F4: a when names only an integer or a bool, so the never-matching when on a bytes(0) field is refused
-     * at construction. An element holding a repeat reads nothing only when no bytes are left, so it still reaches
-     * the zero-width element guard for some packets and reads normally for others.
+     * at construction. An element holding a repeat read nothing only when no bytes were left, so it reached the
+     * zero-width element guard for some packets and read normally for others; AZ-4214 (AC-4) refuses a repeat
+     * inside an element when the scheme is built, so no element is zero-width for some packets only.
      */
     private static void partlyZeroWidthElementIsError() {
         PackbinTest.expectThrows("AC-3 when on a bytes(0) element field is refused", () -> Maps.scheme(1, Packbin.list(
@@ -78,14 +79,9 @@ final class ZeroWidthElementTest {
                         Packbin.when(1, Packbin.eq(0, new byte[] {1}),
                                 Packbin.u8(1, Access.get("v"), Access.set("v")))))),
                 "when 1 tests field 0, which is not an earlier integer or bool field in its scope");
-        Scheme<Map> list = Maps.scheme(1, Packbin.list(Access.get("xs"), Access.set("xs"),
-                Packbin.group(0, Packbin.repeat(0, Packbin.u8(0, Access.get("v"), Access.set("v"))))));
-        expectEmptyElement("AC-3 element repeat with no bytes left, count 3", list, "010300", 0);
-        Map[] got = new Map[1];
-        Object err = BinaryPacker.unpack(PackbinTest.parseHex("0101000506"), list.on(row -> got[0] = row));
-        PackbinTest.expectTrue("AC-3 element repeat with bytes, count 1 ok", err == null);
-        PackbinTest.expectEq("AC-3 element repeat with bytes, count 1 row",
-                Maps.map("xs", java.util.List.of(Maps.map("v", java.util.List.of(5, 6)))), got[0]);
+        RepeatLastTest.refusedAtBuild("AC-3 an element that holds a repeat", "repeat 0" + RepeatLastTest.IN_ELEMENT,
+                () -> Maps.scheme(1, Packbin.list(Access.get("xs"), Access.set("xs"),
+                        Packbin.group(0, Packbin.repeat(0, Packbin.u8(0, Access.get("v"), Access.set("v")))))));
     }
 
     private static void emptyListOfZeroWidthStillUnpacks() {

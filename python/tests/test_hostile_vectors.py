@@ -7,7 +7,13 @@ import pytest
 from packbin import Scheme
 
 from hostile_loop21_support import LOOP21_CONSTRUCT_CASES, LOOP21_PACK_CASES
-from hostile_loop22_support import LOOP22_CONSTRUCT_CASES, LOOP22_CONSTRUCT_FIELDS, LOOP22_PACK_CASES
+from hostile_loop22_support import (
+    LOOP22_CONSTRUCT_CASES,
+    LOOP22_CONSTRUCT_FIELDS,
+    LOOP22_PACK_CASES,
+    LOOP113_CONSTRUCT_CASES,
+    LOOP113_PACK_CASES,
+)
 from hostile_refusals import CONSTRUCT_REFUSAL, PACK_REFUSAL
 from hostile_support import LIMIT_SCHEMES, PACK_CASES, VECTOR_SCHEMES, assert_rejected, error_kind, unpack_guarded
 from test_bool_placement import CONSTRUCT_SCHEMES
@@ -31,12 +37,13 @@ UNPACK_CASES = _cases("unpack")
 LIMIT_CASES = _cases("limit")
 PACK_VECTORS = _cases("pack")
 CONSTRUCT_VECTORS = _cases("construct")
-ALL_PACK_CASES = {**PACK_CASES, **LOOP21_PACK_CASES, **LOOP22_PACK_CASES}
+ALL_PACK_CASES = {**PACK_CASES, **LOOP21_PACK_CASES, **LOOP22_PACK_CASES, **LOOP113_PACK_CASES}
 ALL_CONSTRUCT_BUILDS = {
     **CONSTRUCT_SCHEMES,
     **{case_id: build for case_id, (build, _names) in REFERENCE_VECTORS.items()},
     **LOOP21_CONSTRUCT_CASES,
     **LOOP22_CONSTRUCT_CASES,
+    **LOOP113_CONSTRUCT_CASES,
 }
 
 

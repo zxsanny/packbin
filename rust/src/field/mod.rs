@@ -228,6 +228,11 @@ pub fn when(anchor: u32, cond: Eq, fields: Vec<Field>) -> Field {
     }
 }
 
+/// Rounds of `fields` until the packet ends. Pack reads them from `Value::Groups` under
+/// `__repeat__`, one `Values` per round. A `repeat` has no count on the wire, so it must be the
+/// last thing the packet reads: `MapScheme::new` refuses a scheme where a field that can write a
+/// byte follows it (use [`times`], which has a count), or where it sits inside a `repeat` or
+/// `times` round.
 pub fn repeat(anchor: u32, fields: Vec<Field>) -> Field {
     Field {
         kind: FieldKind::Repeat {

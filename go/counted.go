@@ -2,11 +2,14 @@ package packbin
 
 import "fmt"
 
-// Repeat writes its members once a round until the buffer ends; there is no count, so nothing may
-// follow it. The anchor is the next id and is not written. In a map row each name the round holds
-// takes one list, entry i for round i (a value that is not a list goes to every round); bound with
-// Bind it takes a slice of a struct (or of a pointer to one), one element a round. Unpack gives each
-// name one entry a round, nil where the round skipped it. The body is a scope of its own.
+// Repeat writes its members once a round until the buffer ends; there is no count, so it must be the
+// last thing the packet reads. NewScheme refuses a scheme in which a field that can write a byte
+// stands after it (in its own place or after the When, Flags, flag bit, Group or Nested that holds
+// it), and one that has it inside a List or Dict element; use Times there. The anchor is the next id
+// and is not written. In a map row each name the round holds takes one list, entry i for round i (a
+// value that is not a list goes to every round); bound with Bind it takes a slice of a struct (or of
+// a pointer to one), one element a round. Unpack gives each name one entry a round, nil where the
+// round skipped it. The body is a scope of its own.
 func Repeat(anchor int, members ...Field) Field {
 	return &node{kind: kindRepeat, id: anchor, fields: nodesOf(members)}
 }
@@ -137,4 +140,99 @@ func holdsMember(nodes []*node) bool {
 		}
 	}
 	return false
+}
+
+// checkRepeatLast refuses a repeat that is not the last thing its packet reads (contract repeat-last):
+// a repeat has no count, so unpack reads rounds until the buffer ends and would read whatever is
+// written after it as more rounds. Refused: a repeat that a field which can write a byte follows, in
+// its own place or after the when, flags, flag bit, group or nested row that holds it, up to the top
+// level; and a repeat inside a list or dict element, which the next element follows. open is the
+// first repeat met in the places walked so far; the repeat open after nodes is returned. A round body
+// and an element are places of their own, with none open; a repeat inside a round is refused by
+// checkRoundNesting, so a round body is walked only for the elements it holds.
+func checkRepeatLast(nodes []*node, open *node, inElement bool) (*node, error) {
+	for _, n := range nodes {
+		if open != nil {
+			if w := firstWriter(n); w != nil {
+				return nil, schemeErr(open.id, "", "repeat %d: %s follows it; a repeat reads to the end of the packet, so nothing can follow it; use times",
+					open.id, writerLabel(w))
+			}
+		}
+		var err error
+		switch n.kind {
+		case kindRepeat:
+			if inElement {
+				return nil, schemeErr(n.id, "", "repeat %d is inside a list or dict element; a repeat reads to the end of the packet, so another element cannot follow it; use times",
+					n.id)
+			}
+			if open == nil {
+				open = n
+			}
+			_, err = checkRepeatLast(n.fields, nil, false)
+		case kindTimes:
+			_, err = checkRepeatLast(n.fields, nil, false)
+		case kindWhen, kindFlags, kindGroup:
+			open, err = checkRepeatLast(n.fields, open, inElement)
+		case kindFlagBit:
+			open, err = checkRepeatLast([]*node{n.field}, open, inElement)
+		case kindList, kindDict:
+			_, err = checkRepeatLast([]*node{n.elem}, nil, true)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	return open, nil
+}
+
+// firstWriter is the first field at or under n that can write a byte for some row, nil when none can.
+// A bool is a bit of a flag byte written earlier and a zero-width Bytes has no byte. A when, a group
+// and a flag bit write what they hold, so the field found is the one inside them; a repeat or times
+// whose body can write a byte is found itself. Everything else writes: a flag byte and a flags, a
+// list and a dict (their count) too.
+func firstWriter(n *node) *node {
+	switch n.kind {
+	case kindBool:
+		return nil
+	case kindBytes:
+		if n.size == 0 {
+			return nil
+		}
+	case kindFlagBit:
+		return firstWriter(n.field)
+	case kindWhen, kindGroup:
+		return firstWriterIn(n.fields)
+	case kindRepeat, kindTimes:
+		if firstWriterIn(n.fields) == nil {
+			return nil
+		}
+	}
+	return n
+}
+
+func firstWriterIn(nodes []*node) *node {
+	for _, n := range nodes {
+		if w := firstWriter(n); w != nil {
+			return w
+		}
+	}
+	return nil
+}
+
+// writerLabel names the field that follows a repeat in the words of the other scheme errors: a value
+// field by its id and name (a u2 by its first slot), a repeat, times or flags by its kind and anchor
+// (the flag byte of a flags is the flags), a split flag byte and a list or dict by name.
+func writerLabel(n *node) string {
+	switch n.kind {
+	case kindRepeat, kindTimes, kindList, kindDict:
+		return ownerLabel(n)
+	case kindFlags:
+		return fmt.Sprintf("flags %d", n.id)
+	case kindFlagByte:
+		if n.inOrder {
+			return fmt.Sprintf("flags %d", n.id)
+		}
+		return fmt.Sprintf("flag byte %q", n.name)
+	}
+	return fmt.Sprintf("field id %d (%s)", n.id, n.name)
 }

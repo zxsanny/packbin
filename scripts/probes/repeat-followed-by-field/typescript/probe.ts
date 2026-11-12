@@ -164,7 +164,8 @@ probe(
   { v: [5], w: [6] },
 )
 
-// TypeScript only: two schemes a "nothing after a repeat" rule also refuses although they read back today.
+// TypeScript only: two schemes that read back for the rows given here before loop 113. The rule of loop 113
+// (AZ-4211) reads the scheme, not a row, so it refuses them too.
 
 // x-one-item: shape b with one item, so the repeat is the last thing read.
 probe(

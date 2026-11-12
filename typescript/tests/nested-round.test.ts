@@ -139,13 +139,14 @@ describe("nested rounds", () => {
     })
   }
 
-  it("a repeat in a list element inside a repeat round builds; empty collections round-trip", () => {
+  // The element held a repeat until loop 113; a repeat in an element no longer builds (repeat-last.test.ts).
+  it("a times in a list element inside a repeat round builds; empty collections round-trip", () => {
     // Arrange
     // The collections stay empty here; list-group-elements.test.ts packs non-empty items per round.
     const fields = () => [
       repeat(0, [
         u8(0, (x) => x.k),
-        list((x) => x.rows, group((x) => x.row, [repeat(0, [u8(0, (x) => x.v)])])),
+        list((x) => x.rows, group((x) => x.row, [u8(0, (x) => x.c), times(1, 0, [u8(1, (x) => x.v)])])),
       ]),
     ]
 
@@ -183,11 +184,12 @@ describe("nested rounds", () => {
     assert.equal(again, wire)
   })
 
-  it("a list element outside a round may hold a repeat before a round that does not", () => {
+  // The element held a repeat until loop 113; a repeat in an element no longer builds (repeat-last.test.ts).
+  it("a list element outside a round may hold a times before a repeat round", () => {
     // Arrange
     const layout = scheme<Row>(
       1,
-      list((x) => x.rows, group((x) => x.row, [repeat(0, [u8(0, (x) => x.v)])])),
+      list((x) => x.rows, group((x) => x.row, [u8(0, (x) => x.c), times(1, 0, [u8(1, (x) => x.v)])])),
       repeat(0, [u8(0, (x) => x.k)]),
     )
 

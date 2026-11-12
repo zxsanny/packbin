@@ -74,6 +74,7 @@ public final class PackbinTest {
         ParityPinsTest.run();
         RoundSlotWidthTest.run();
         EmptyRoundBodyTest.run();
+        RepeatLastTest.run();
         RepeatShortOptionalTest.run();
         ClearBitProbesTest.run();
         NoValueCountNestedTest.run();

@@ -116,9 +116,6 @@ func TestAC2RoundValuesUnpack(t *testing.T) {
 		{"name written twice in one round", func(t testing.TB) *Scheme {
 			return mustScheme(t, 1, Repeat(0, U8(0, "k"), When(1, Eq(0, 1), U8(1, "v")), When(2, Eq(0, 1), U8(2, "v"))))
 		}, "0101090a02", gm("k", u8s(1, 2), "v", u8s(10, nil))},
-		{"round that reads nothing ends the repeat", func(t testing.TB) *Scheme {
-			return mustScheme(t, 1, Repeat(0, Bytes(0, "v", 0)), U8(1, "tail"))
-		}, "0105", gm("v", []any{[]byte{}}, "tail", uint8(5))},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -133,9 +130,8 @@ func TestAC2RoundValuesUnpack(t *testing.T) {
 			if !reflect.DeepEqual(row, c.want) {
 				t.Fatalf("got %#v", row)
 			}
-			// A repeat round that read nothing, or a name read twice in a round, is not a canonical packet.
-			canonical := c.name != "round that reads nothing ends the repeat" && c.name != "name written twice in one round"
-			if canonical && again != c.wire {
+			// A name read twice in a round is not a canonical packet.
+			if c.name != "name written twice in one round" && again != c.wire {
 				t.Fatalf("repack %s", again)
 			}
 		})

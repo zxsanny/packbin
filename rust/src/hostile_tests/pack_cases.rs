@@ -386,8 +386,33 @@ pub(super) fn pack_case(id: &str) -> Result<Vec<u8>, PackError> {
         "pack_when_of_skipped_bool_source" => when_of_bool_source(0, true),
         "pack_when_of_held_bool_source" => when_of_bool_source(1, true),
         "pack_when_of_held_bool_source_clear" => when_of_bool_source(1, false),
+        // K1 to K4 of `repeat-last.md`: a repeat that is last, and a `times` before a field.
+        "pack_repeat_last" => with_two_rounds(vec![u8("x"), repeat(1, vec![u8("v")])], ("x", 9)),
+        "pack_repeat_last_in_when" => {
+            let taken = when(1, eq("k", Value::U8(1)), vec![repeat(1, vec![u8("v")])]);
+            with_two_rounds(vec![u8("k"), taken], ("k", 1))
+        }
+        "pack_repeat_last_in_flags" => with_two_rounds(
+            vec![flags(0, "f", vec![u8("x"), repeat(1, vec![u8("v")])])],
+            ("x", 9),
+        ),
+        "pack_times_then_field" => pack(
+            &MapScheme::new(1, vec![u8("k"), times(1, "k", vec![u8("v")]), u8("x")]),
+            &row(&[
+                ("k", Value::U8(2)),
+                ("v", ints(&[5, 6])),
+                ("x", Value::U8(9)),
+            ]),
+        ),
         other => panic!("no scheme written for hostile pack case {other}"),
     }
+}
+
+/// `fields` packed with one more value and two round rows, `v = 5` and `v = 6`.
+fn with_two_rounds(fields: Vec<crate::Field>, also: (&str, u8)) -> Result<Vec<u8>, PackError> {
+    let mut vals = rounds(vec![vec![("v", Value::U8(5))], vec![("v", Value::U8(6))]]);
+    insert(&mut vals, also.0, Some(Value::U8(also.1)));
+    pack(&MapScheme::new(1, fields), &vals)
 }
 
 /// `u8 mode; when mode = 1 { u16 a; u8 k }; when k = <k> { u8 b }` with `mode = 0` and a row `k`

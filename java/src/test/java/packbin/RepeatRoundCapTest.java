@@ -77,13 +77,15 @@ final class RepeatRoundCapTest {
                 .withLimits(3, SLOTS);
         Scheme<Map> inWhen = Maps.scheme(1, u8(0, "m"), Packbin.when(1, Packbin.eq(0, 1), Packbin.repeat(1, u8(1, "k"))))
                 .withLimits(3, SLOTS);
-        Scheme<Map> inElement = Maps.scheme(1, Packbin.list(Access.get("items"), Access.set("items"),
-                Packbin.group(0, Packbin.repeat(0, u8(0, "k"))))).withLimits(3, SLOTS);
         // Act and Assert
         refused("AZ-2355 row 7 flags", inFlags, row("k", FOUR), text);
         refused("AZ-2355 row 8 split bit", inSplitBit, row("k", FOUR), text);
         refused("AZ-2355 row 9 when", inWhen, row("m", 1, "k", FOUR), text);
-        refused("AZ-2355 row 10 list element", inElement, row("items", List.of(Maps.map("k", FOUR))), text);
+        // AZ-4214 AC-4: a list element is no place for a repeat any more, so row 10 has no list to cap: the scheme of
+        // the row is refused when it is built.
+        RepeatLastTest.refusedAtBuild("AZ-2355 row 10 list element", "repeat 0" + RepeatLastTest.IN_ELEMENT,
+                () -> Maps.scheme(1, Packbin.list(Access.get("items"), Access.set("items"),
+                        Packbin.group(0, Packbin.repeat(0, u8(0, "k"))))));
         packs("AZ-2355 row 7 at the limit", inFlags, row("k", list(1, 2, 3)), "0101010203");
     }
 

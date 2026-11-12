@@ -66,7 +66,8 @@ func TestAC2ReferencesAndFlagBitsStopAtTheElement(t *testing.T) {
 }
 
 // AC-2 (nested-round): a round cannot hold a round, also in a nested row of the round; a list or dict
-// element starts outside any round, so a round in an element builds, also inside a round.
+// element starts outside any round, so a times in an element builds, also inside a round. A repeat in
+// an element is refused since AZ-4215 (repeat_last_test.go): the next element would follow it.
 func TestAC2RoundsInElements(t *testing.T) {
 	const nested = "is inside a repeat or times round; a round cannot hold another repeat or times"
 	refused := map[string][]Field{
@@ -82,14 +83,14 @@ func TestAC2RoundsInElements(t *testing.T) {
 		})
 	}
 	inRepeat := func(t testing.TB) *Scheme {
-		return mustScheme(t, 1, Repeat(0, U8(0, "k"), List("rows", Nested("row", Repeat(0, U8(0, "v"))))))
+		return mustScheme(t, 1, Repeat(0, U8(0, "k"), List("rows", Nested("row", U8(0, "c"), Times(1, 0, U8(1, "v"))))))
 	}
 	inTimes := func(t testing.TB) *Scheme {
 		return mustScheme(t, 1, U8(0, "n"), Times(1, 0, U8(1, "k"),
 			Dict("rows", Nested("row", U8(0, "c"), Times(1, 0, U8(1, "v"))))))
 	}
 	before := func(t testing.TB) *Scheme {
-		return mustScheme(t, 1, List("rows", Nested("row", Repeat(0, U8(0, "v")))), Repeat(0, U8(0, "k")))
+		return mustScheme(t, 1, List("rows", Nested("row", U8(0, "c"), Times(1, 0, U8(1, "v")))), Repeat(0, U8(0, "k")))
 	}
 	cases := []struct {
 		name   string
@@ -97,9 +98,9 @@ func TestAC2RoundsInElements(t *testing.T) {
 		row    map[string]any
 		wire   string
 	}{
-		{"a repeat in a list element inside a repeat round", inRepeat, gm("k", []any{1, 2}, "rows", []any{[]any{}, []any{}}), "01010000020000"},
+		{"a times in a list element inside a repeat round", inRepeat, gm("k", []any{1, 2}, "rows", []any{[]any{}, []any{}}), "01010000020000"},
 		{"a times in a dict element inside a times round", inTimes, gm("n", 2, "k", []any{1, 2}, "rows", []any{gm(), gm()}), "0102010000020000"},
-		{"a repeat in a list element before a round", before, gm("rows", []any{}, "k", []any{3, 4}), "0100000304"},
+		{"a times in a list element before a round", before, gm("rows", []any{}, "k", []any{3, 4}), "0100000304"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -109,12 +110,12 @@ func TestAC2RoundsInElements(t *testing.T) {
 			}
 		})
 	}
-	filled := gm("k", []any{1}, "rows", []any{[]any{gm("v", []any{5, 6})}})
+	filled := gm("k", []any{1}, "rows", []any{[]any{gm("c", 2, "v", []any{5, 6})}})
 	// An item of the element holds its own round: its values are lists of its rounds.
-	if got := mustPack(t, inRepeat(t), filled); got != "0101"+"0100"+"0506" {
+	if got := mustPack(t, inRepeat(t), filled); got != "0101"+"0100"+"020506" {
 		t.Fatalf("a round in an item packs as %s", got)
 	}
-	if back := mustUnpackMap(t, inRepeat(t), "0101"+"0100"+"0506"); !reflect.DeepEqual(back["rows"], []any{[]any{gm("v", []any{uint8(5), uint8(6)})}}) {
+	if back := mustUnpackMap(t, inRepeat(t), "0101"+"0100"+"020506"); !reflect.DeepEqual(back["rows"], []any{[]any{gm("c", uint8(2), "v", []any{uint8(5), uint8(6)})}}) {
 		t.Fatalf("back %#v", back)
 	}
 }

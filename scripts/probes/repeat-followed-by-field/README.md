@@ -25,7 +25,7 @@ One line per shape on stdout, five fields separated by a tab:
 
 Messages are printed on one line, as the package gives them. Anything else a probe prints goes to stderr.
 
-A package that has a second public way to write a scheme prints it under the shape name with a suffix when the outcome can differ: Rust prints every shape again for the heap-free API (`-nostd`) and one more line for the map form (`f-two-groups`, the rounds of the two repeats given one after the other), C++ prints `b-unbound` and `c-unbound` (a list or dict element that is not bound to a member), and TypeScript prints two schemes that read back today although nothing guarantees it (`x-one-item`, `x-exclusive-when`). Second ways that give the same outcome go to stderr (Java typed rows, the C++ `constexpr` form) or were checked once in loop 112 and are in the findings (typed rows in Go, Swift and Dart, a Python class row). C# is the other way round: stdout is the typed form (a repeat bound to a collection of rows, the only form the public `Unpack` reads back), and the dictionary form goes to stderr with the suffix `-map`.
+A package that has a second public way to write a scheme prints it under the shape name with a suffix when the outcome can differ: Rust prints every shape again for the heap-free API (`-nostd`) and one more line for the map form (`f-two-groups`, the rounds of the two repeats given one after the other), C++ prints `b-unbound` and `c-unbound` (a list or dict element that is not bound to a member), and TypeScript prints two schemes that read back in loop 112 although nothing guaranteed it, and that the rule refuses since loop 113 (`x-one-item`, `x-exclusive-when`). Second ways that give the same outcome go to stderr (Java typed rows, the C++ `constexpr` form) or were checked once in loop 112 and are in the findings (typed rows in Go, Swift and Dart, a Python class row). C# is the other way round: stdout is the typed form (a repeat bound to a collection of rows, the only form the public `Unpack` reads back), and the dictionary form goes to stderr with the suffix `-map`.
 
 ## Shapes
 
@@ -57,7 +57,7 @@ Where a package has more than one way to write a scheme (a typed row and a map r
 bash scripts/probes/repeat-followed-by-field/rule-count/run.sh
 ```
 
-It answers "which existing schemes would a build-time rule refuse" for TypeScript: it copies `HEAD` to a temporary directory, adds a logging call (`rule-count/repeat-last-probe.ts`) to the `Scheme` constructor of the copy, runs the whole TypeScript suite and loads the ring drivers, and prints one line per scheme the rule would refuse and the totals. It needs `typescript/node_modules` and takes about 20 s. Once the rule is in the package the count is 0 by construction and the tool has no use.
+It answers "which existing schemes would a build-time rule refuse" for TypeScript: it copies the checkout (the tracked files as they are on disk and the untracked files that git does not ignore) to a temporary directory, adds a logging call (`rule-count/repeat-last-probe.ts`) to the `Scheme` constructor of the copy, runs the whole TypeScript suite and loads the ring drivers, and prints one line per scheme the rule would refuse and the totals. It needs `typescript/node_modules` and takes about 20 s. Once the rule is in the package the count is 0 by construction and the tool has no use.
 
 ## State
 

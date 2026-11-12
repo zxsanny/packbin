@@ -112,6 +112,27 @@ public class HostileVectorTests
         public ushort N { get; set; }
     }
 
+    // Loop 113 (AZ-4212): the rows of the repeat-last cases, with the names of fixtures/hostile/README.md.
+    private sealed class LastRow
+    {
+        public byte K { get; set; }
+        public byte V { get; set; }
+        public byte W { get; set; }
+        public byte X { get; set; }
+        public LastRow? M { get; set; }
+        public List<ModeRow>? Items { get; set; }
+        public Dictionary<string, ModeRow>? D { get; set; }
+    }
+
+    private static Field[] ModeThenRepeat() =>
+        [Field.U8<ModeRow>(0, x => x.Mode), Field.Repeat(1, Field.U8<ModeRow>(1, x => x.V))];
+
+    private static string Follows(int anchor, string field) =>
+        $"repeat {anchor}: {field} follows it; a repeat reads to the end of the packet, so nothing can follow it; use times";
+
+    private const string InElement =
+        "repeat 1 is inside a list or dict element; a repeat reads to the end of the packet, so another element cannot follow it; use times";
+
     private static Field[] NineU8() =>
     [
         Field.U8<NineRow>(0, x => x.F0), Field.U8<NineRow>(1, x => x.F1), Field.U8<NineRow>(2, x => x.F2),
@@ -230,6 +251,31 @@ public class HostileVectorTests
             Field.U8<ModeRow>(0, x => x.Mode),
             Field.U8<ModeRow>(1, x => x.V),
             Field.Times(2, 1, Field.When(2, Condition.Eq(0, 1), Field.When(2, Condition.Eq(0, 1))))),
+        // Loop 113 (AZ-4212, contract repeat-last): R1 to R9, a repeat that is not the last thing the packet reads.
+        ["construct_repeat_then_field"] = () => _ = new Scheme<LastRow>(1,
+            Field.Repeat(0, Field.U8<LastRow>(0, x => x.V)), Field.U8<LastRow>(1, x => x.X)),
+        ["construct_repeat_in_when_then_field"] = () => _ = new Scheme<LastRow>(1,
+            Field.U8<LastRow>(0, x => x.K),
+            Field.When(1, Condition.Eq(0, 1), Field.Repeat(1, Field.U8<LastRow>(1, x => x.V))),
+            Field.U8<LastRow>(2, x => x.X)),
+        ["construct_repeat_in_flags_then_field"] = () => _ = new Scheme<LastRow>(1,
+            Field.Flags(0, Field.Repeat(0, Field.U8<LastRow>(0, x => x.V))), Field.U8<LastRow>(1, x => x.X)),
+        // A nested row numbers its members from 0 itself, so `x` is id 0 of the row around it.
+        ["construct_repeat_in_group_then_field"] = () => _ = new Scheme<LastRow>(1,
+            Field.Group((LastRow x) => x.M, Field.Repeat(0, Field.U8<LastRow>(0, x => x.V))), Field.U8<LastRow>(0, x => x.X)),
+        ["construct_repeat_then_repeat"] = () => _ = new Scheme<LastRow>(1,
+            Field.Repeat(0, Field.U8<LastRow>(0, x => x.V)), Field.Repeat(1, Field.U8<LastRow>(1, x => x.W))),
+        ["construct_repeat_then_exclusive_when"] = () => _ = new Scheme<LastRow>(1,
+            Field.U8<LastRow>(0, x => x.K),
+            Field.When(1, Condition.Eq(0, 1), Field.Repeat(1, Field.U8<LastRow>(1, x => x.V))),
+            Field.When(2, Condition.Eq(0, 2), Field.U8<LastRow>(2, x => x.X))),
+        ["construct_repeat_in_list_element"] = () => _ = new Scheme<LastRow>(1,
+            Field.List<LastRow, ModeRow>(x => x.Items!, ModeThenRepeat())),
+        ["construct_repeat_in_dict_element"] = () => _ = new Scheme<LastRow>(1,
+            Field.Dict<LastRow, ModeRow>(x => x.D!, ModeThenRepeat())),
+        ["construct_repeat_in_times_round"] = () => _ = new Scheme<LastRow>(1,
+            Field.U8<LastRow>(0, x => x.K),
+            Field.Times(1, 0, Field.Repeat(1, Field.U8<LastRow>(1, x => x.V)))),
     };
 
     // A message fragment for each case refused at construction, so a refusal by some other rule does not pass.
@@ -255,6 +301,16 @@ public class HostileVectorTests
         ["construct_empty_when_times_body"] = "not an earlier field in the same scope",
         ["construct_empty_when_repeat_body"] = "not an earlier field in the same scope",
         ["construct_empty_nested_when_body"] = "not an earlier field in the same scope",
+        // Loop 113: the whole text of the contract. R9 keeps the nesting rule of loop 21 and its text.
+        ["construct_repeat_then_field"] = Follows(0, "'X' (field id 1)"),
+        ["construct_repeat_in_when_then_field"] = Follows(1, "'X' (field id 2)"),
+        ["construct_repeat_in_flags_then_field"] = Follows(0, "'X' (field id 1)"),
+        ["construct_repeat_in_group_then_field"] = Follows(0, "'X' (field id 0)"),
+        ["construct_repeat_then_repeat"] = Follows(0, "repeat 1"),
+        ["construct_repeat_then_exclusive_when"] = Follows(1, "'X' (field id 2)"),
+        ["construct_repeat_in_list_element"] = InElement,
+        ["construct_repeat_in_dict_element"] = InElement,
+        ["construct_repeat_in_times_round"] = "repeat 1 is inside a repeat or times round; a round cannot hold another repeat or times",
     };
 
     // C# has no bad_value or too_many type yet (C15); ShortPacket stands in for both.

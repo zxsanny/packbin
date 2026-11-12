@@ -8,7 +8,8 @@
 # ecc re-pinned in loop 97 (AZ-3506): the parity percentage, +376 B of flash and +8 B of stack (see _docs/AGENT_GOTCHAS.md).
 # ecc re-pinned in loop 98 (AZ-3526): the percentage round trip of the probe, +856 B of flash, -88 B of stack (owner, 2026-11-01; see _docs/AGENT_GOTCHAS.md).
 # The session set went with the stream session in loop 74 (AZ-3284).
-base 15132 456
-text 27268 2736
-ecc 19996 664
-frame 20404 1728
+# All four re-pinned in loop 113 (AZ-4218): `validate` refuses a field that can write a byte after a `repeat`, +112 B of flash (base, frame) and +104 B (text, ecc), the stack as it was (see _docs/AGENT_GOTCHAS.md).
+base 15244 456
+text 27372 2736
+ecc 20100 664
+frame 20516 1728

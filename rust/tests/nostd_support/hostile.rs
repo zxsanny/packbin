@@ -116,6 +116,21 @@ pub fn nodes_of(id: &str) -> Option<Vec<Node>> {
         ],
         "repeat_rounds_over_limit" => vec![Repeat(vec![n(U8)])],
         "times_rounds_over_limit" => vec![n(U8), Times(0, vec![n(U8)])],
+        // R1 to R6 and R9 of `repeat-last.md`. R7 and R8 (a repeat inside a list or dict element)
+        // have no spelling: an element is one value, never a row.
+        "construct_repeat_then_field" => vec![Repeat(vec![n(U8)]), n(U8)],
+        "construct_repeat_in_when_then_field" => {
+            vec![n(U8), When(0, 1, vec![Repeat(vec![n(U8)])]), n(U8)]
+        }
+        "construct_repeat_in_flags_then_field" => vec![Flags(vec![Repeat(vec![n(U8)])]), n(U8)],
+        "construct_repeat_in_group_then_field" => vec![Group(vec![Repeat(vec![n(U8)])]), n(U8)],
+        "construct_repeat_then_repeat" => vec![Repeat(vec![n(U8)]), Repeat(vec![n(U8)])],
+        "construct_repeat_then_exclusive_when" => vec![
+            n(U8),
+            When(0, 1, vec![Repeat(vec![n(U8)])]),
+            When(0, 2, vec![n(U8)]),
+        ],
+        "construct_repeat_in_times_round" => vec![n(U8), Times(0, vec![Repeat(vec![n(U8)])])],
         _ => return None,
     })
 }

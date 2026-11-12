@@ -281,10 +281,11 @@ def test_repeat_holding_another_round_is_refused_at_construction(place: str):
 
 
 def test_a_round_inside_a_list_element_of_a_round_is_not_nested():
+    # The element held a repeat until loop 113; a repeat in an element no longer builds (test_repeat_last.py).
     scheme = Scheme(
         1,
         dict,
-        repeat(0, list_field(lambda row: row["xs"], group(0, repeat(0, _u8(0, "v"))))),
+        repeat(0, list_field(lambda row: row["xs"], group(0, _u8(0, "c"), times(1, 0, _u8(1, "v"))))),
     )
 
     assert scheme is not None

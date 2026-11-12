@@ -14,10 +14,20 @@ use std::thread;
 use std::time::Duration;
 
 /// A case with no spelling in the core, and why (the C++ runner skips it for the same reason).
-const SKIPS: [(&str, &str); 1] = [(
-    "construct_empty_round_body_list_element",
-    "a list element holds one field and no times, so the shape has no spelling; the plain empty times of construct_empty_times_body covers the same refusal",
-)];
+const SKIPS: [(&str, &str); 3] = [
+    (
+        "construct_empty_round_body_list_element",
+        "a list element holds one field and no times, so the shape has no spelling; the plain empty times of construct_empty_times_body covers the same refusal",
+    ),
+    (
+        "construct_repeat_in_list_element",
+        "a list element is one value, never a row, so a repeat inside an element has no spelling; a row as the element is SchemeInvalid with or without a repeat (nostd_repeat_last_tests)",
+    ),
+    (
+        "construct_repeat_in_dict_element",
+        "a dict element is one value, never a row, so a repeat inside an element has no spelling; a row as the element is SchemeInvalid with or without a repeat (nostd_repeat_last_tests)",
+    ),
+];
 
 /// Runs `job` on its own thread; a case that does not return in 20 s is a hang (the nominal bound
 /// is 1 s, so this holds on a loaded host).
@@ -124,7 +134,8 @@ fn ac1_each_construct_case_is_a_scheme_error() {
     // Arrange
     let mut ran = 0;
     for c in cases().iter().filter(|c| c.stage == "construct") {
-        if SKIPS.iter().any(|(id, _)| *id == c.id) {
+        if let Some((_, reason)) = SKIPS.iter().find(|(id, _)| *id == c.id) {
+            println!("hostile nostd {} -> skipped: {reason}", c.id);
             continue;
         }
         let id = c.id.clone();

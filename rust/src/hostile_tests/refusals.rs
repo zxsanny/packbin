@@ -53,6 +53,43 @@ pub(super) const CONSTRUCT_REFUSAL: RuleTable = &[
         "construct_empty_nested_when_body",
         "field id 0 is not in the same scope (the container starts at id 2)",
     ),
+    // AZ-4218: a repeat must be the last thing read (`repeat-last.md`); the whole text.
+    (
+        "construct_repeat_then_field",
+        "=repeat 0: field \"x\" follows it; a repeat reads to the end of the packet, so nothing \
+         can follow it; use times",
+    ),
+    (
+        "construct_repeat_in_when_then_field",
+        "=repeat 1: field \"x\" follows it; a repeat reads to the end of the packet, so nothing \
+         can follow it; use times",
+    ),
+    (
+        "construct_repeat_in_flags_then_field",
+        "=repeat 0: field \"x\" follows it; a repeat reads to the end of the packet, so nothing \
+         can follow it; use times",
+    ),
+    (
+        "construct_repeat_in_group_then_field",
+        "=repeat 0: field \"x\" follows it; a repeat reads to the end of the packet, so nothing \
+         can follow it; use times",
+    ),
+    // What follows the first repeat is the second one: its first member is named.
+    (
+        "construct_repeat_then_repeat",
+        "=repeat 0: field \"w\" follows it; a repeat reads to the end of the packet, so nothing \
+         can follow it; use times",
+    ),
+    (
+        "construct_repeat_then_exclusive_when",
+        "=repeat 1: field \"x\" follows it; a repeat reads to the end of the packet, so nothing \
+         can follow it; use times",
+    ),
+    // Refused before loop 113 by the nesting rule, which keeps its text.
+    (
+        "construct_repeat_in_times_round",
+        "=repeat at id 1 is inside a repeat or times round; a round keeps no inner repeat rounds",
+    ),
 ];
 
 /// A refusal table: the case id and a fragment of the refusal text it must carry.

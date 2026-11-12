@@ -223,6 +223,71 @@ def _validate_round_bodies(nodes: Sequence[_Node]) -> None:
             _validate_round_bodies([node.element])
 
 
+def _writes(node: _Node) -> bool:
+    """Whether a field can write a byte for some row. A bool is a bit of a flag byte written earlier and a
+    zero-width `bytes` has no byte; a `when`, a group, a flag bit, a `repeat` and a `times` write what they hold.
+    Everything else writes: a flag byte and `flags` (their byte), a `list` and a `dict` (their count) too."""
+    if isinstance(node, (_When, _Group, _Repeat, _Times)):
+        return any(_writes(held) for held in node.fields)
+    if isinstance(node, _FlagBit):
+        return _writes(node.field)
+    return not (isinstance(node, _Bool) or (isinstance(node, _Bytes) and node.size == 0))
+
+
+def _named(node: _Node) -> str:
+    """The words a refusal names a field that writes by: `field` and its id (the first slot's for `u2`), the
+    kind and anchor of a `repeat`, `times` or `flags`, and the kind alone for what has no id (a flag byte, a
+    `list`, a `dict`)."""
+    if isinstance(node, (_Repeat, _Times, _Flags)):
+        kind = {_Repeat: "repeat", _Times: "times", _Flags: "flags"}[type(node)]
+        return f"{kind} {node.anchor}"
+    if isinstance(node, _FlagByte):
+        return "a flag byte"
+    if isinstance(node, (_List, _Dict)):
+        return f"a {_container(node)}"
+    if isinstance(node, _U2):
+        return f"field {node.slots[0].field_id}"
+    return f"field {node.field_id}"  # type: ignore[attr-defined]
+
+
+def _validate_repeat_last(
+    nodes: Sequence[_Node], before: _Repeat | None = None, in_element: bool = False
+) -> _Repeat | None:
+    """A `repeat` has no count on the wire: unpack reads rounds until the buffer ends, so whatever a packet
+    holds after a repeat is read as more rounds of it. Refused: a repeat that a field which can write a byte
+    follows, in its own place or after the `when`, `flags`, flag bit or group that holds it, up to the top
+    level; and a repeat inside a list or dict element, which the next element follows. One walk in the order
+    the packet is read: `before` is the repeat read before these nodes, and the one read before whatever
+    follows them is returned. A repeat inside a round is refused by `_validate_round_nesting`, so a round body
+    is walked only for the list and dict elements it holds."""
+    for node in nodes:
+        if isinstance(node, (_When, _Group)):
+            before = _validate_repeat_last(node.fields, before, in_element)
+        elif isinstance(node, _FlagBit):
+            before = _validate_repeat_last([node.field], before, in_element)
+        elif before is not None:
+            if _writes(node):
+                raise ValueError(
+                    f"repeat {before.anchor}: {_named(node)} follows it; "
+                    "a repeat reads to the end of the packet, so nothing can follow it; use times"
+                )
+        elif isinstance(node, _Flags):
+            before = _validate_repeat_last(node.fields, None, in_element)
+        elif isinstance(node, _Repeat):
+            if in_element:
+                raise ValueError(
+                    f"repeat {node.anchor} is inside a list or dict element; "
+                    "a repeat reads to the end of the packet, so another element cannot follow it; use times"
+                )
+            _validate_repeat_last(node.fields)
+            before = node
+        elif isinstance(node, _Times):
+            _validate_repeat_last(node.fields)
+        elif isinstance(node, (_List, _Dict)):
+            _validate_repeat_last([node.element], None, True)
+    return before
+
+
 class _Seen:
     """The names declared so far in one scope, as `(kind, key)` pairs. A hashable pair goes in a set, so the check
     is linear in the fields of a scope; a pair with an unhashable key (a list, or a slice before Python 3.12)

@@ -1,4 +1,4 @@
-import { isObjectLike, type Field } from "./fields.ts"
+import { fieldName, isObjectLike, type Field } from "./fields.ts"
 import { present, type Value } from "./kinds.ts"
 
 // A repeat or times round is addressed by index. Pack reads each value list at the round's index;
@@ -83,6 +83,100 @@ function holdsMember(fields: Field[]): boolean {
         return true
     }
   })
+}
+
+// A repeat has no count on the wire: unpack reads rounds until the buffer ends, so whatever a packet holds
+// after a repeat is read as more rounds of it. Refused when the scheme is built: a repeat that a field which
+// can write a byte follows, in its own place or after the when, flags, flag bit or group that holds it, up to
+// the top level; and a repeat inside a list or dict element, which the next element follows. `after` is the
+// first such field after the place `fields` stand in. A repeat inside a round is refused by
+// `validateRoundNesting`, so a round body is walked only for the list and dict elements it holds.
+export function validateRepeatLast(fields: Field[], after?: Field, inElement = false): void {
+  fields.forEach((f, i) => {
+    switch (f.kind) {
+      case "repeat": {
+        if (inElement) {
+          throw new RangeError(
+            `repeat ${f.anchor} is inside a list or dict element; a repeat reads to the end of the packet, so another element cannot follow it; use times`,
+          )
+        }
+        const follower = firstWriter(fields, i + 1) ?? after
+        if (follower !== undefined) {
+          throw new RangeError(
+            `repeat ${f.anchor}: ${writerName(follower)} follows it; a repeat reads to the end of the packet, so nothing can follow it; use times`,
+          )
+        }
+        validateRepeatLast(f.fields)
+        break
+      }
+      case "times":
+        validateRepeatLast(f.fields)
+        break
+      case "when":
+      case "flags":
+      case "group":
+        validateRepeatLast(f.fields, firstWriter(fields, i + 1) ?? after, inElement)
+        break
+      case "flagBit":
+        validateRepeatLast([f.field], firstWriter(fields, i + 1) ?? after, inElement)
+        break
+      case "list":
+      case "dict":
+        validateRepeatLast([f.element], undefined, true)
+        break
+    }
+  })
+}
+
+// The first field of `fields`, from index `from` on, that can write a byte for some row. A bool is a bit of
+// a flag byte written earlier and a zero-width `bytes` has no byte. A `when`, a group and a flag bit write
+// what they hold, so the field found is the one inside them; a repeat or times whose body can write a byte
+// is found itself. Everything else writes: a flag byte and a `flags`, a list and a dict (their count) too.
+function firstWriter(fields: Field[], from = 0): Field | undefined {
+  for (let i = from; i < fields.length; i++) {
+    const f = fields[i]!
+    switch (f.kind) {
+      case "bool":
+        break
+      case "bytes":
+        if (f.size > 0) return f
+        break
+      case "when":
+      case "group": {
+        const held = firstWriter(f.fields)
+        if (held !== undefined) return held
+        break
+      }
+      case "flagBit": {
+        const held = firstWriter([f.field])
+        if (held !== undefined) return held
+        break
+      }
+      case "repeat":
+      case "times":
+        if (firstWriter(f.fields) !== undefined) return f
+        break
+      default:
+        return f
+    }
+  }
+  return undefined
+}
+
+// The words a refusal names the field after a repeat by: the member name, as the other scheme errors do; a
+// repeat or times by its kind and anchor; a flag byte by its name, and the byte of a `flags` as `flags`.
+function writerName(f: Field): string {
+  switch (f.kind) {
+    case "repeat":
+    case "times":
+      return `${f.kind} ${f.anchor}`
+    case "flags":
+      return "flags"
+    case "flagByte":
+      return f.inOrder ? "flags" : `flag byte "${f.name}"`
+    default:
+      return fieldName(f)
+  }
 }
 
 // The names a round can hold: its own fields and the ones under when, flags, flag bits and groups.

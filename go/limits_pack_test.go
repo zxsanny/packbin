@@ -45,7 +45,7 @@ func TestAC1RepeatCapNamesTheListThatPassesTheLimit(t *testing.T) {
 		"b: the repeat count is 4, above the limit of 3 rounds")
 }
 
-func TestAC1RepeatCapHoldsInFlagsASplitBitAWhenAndAListElement(t *testing.T) {
+func TestAC1RepeatCapHoldsInFlagsASplitBitAndAWhen(t *testing.T) {
 	// Arrange
 	fb := FlagByte("m")
 	k := []any{1, 2, 3, 4}
@@ -57,8 +57,6 @@ func TestAC1RepeatCapHoldsInFlagsASplitBitAWhenAndAListElement(t *testing.T) {
 		{"flags", mustScheme(t, 1, Flags(0, Repeat(0, U8(0, "k")))), map[string]any{"k": k}},
 		{"split bit", mustScheme(t, 1, fb, fb.Bit(Repeat(0, U8(0, "k")))), map[string]any{"k": k}},
 		{"when", mustScheme(t, 1, U8(0, "m"), When(1, Eq(0, 1), Repeat(1, U8(1, "k")))), map[string]any{"m": 1, "k": k}},
-		{"list element", mustScheme(t, 1, List("items", Nested("item", Repeat(0, U8(0, "k"))))),
-			map[string]any{"items": []any{map[string]any{"k": k}}}},
 	}
 
 	for _, c := range cases {
@@ -68,6 +66,18 @@ func TestAC1RepeatCapHoldsInFlagsASplitBitAWhenAndAListElement(t *testing.T) {
 				"k: the repeat count is 4, above the limit of 3 rounds")
 		})
 	}
+}
+
+// A repeat cannot stand in a list element since AZ-4215 (the next item would follow it), so the round
+// cap of an element is the cap of its times.
+func TestAC1TimesCapHoldsInAListElement(t *testing.T) {
+	// Arrange
+	layout := limited(t, mustScheme(t, 1, List("items", Nested("item", U8(0, "n"), Times(1, 0, U8(1, "k"))))),
+		func(l *Limits) { l.MaxRounds = 3 })
+
+	// Act / Assert
+	refusedPack(t, layout, map[string]any{"items": []any{map[string]any{"n": 4, "k": []any{1, 2, 3, 4}}}},
+		"k: the times count is 4, above the limit of 3 rounds")
 }
 
 func TestAC1RepeatOfMaxRoundsEntriesPacksAndRoundTrips(t *testing.T) {

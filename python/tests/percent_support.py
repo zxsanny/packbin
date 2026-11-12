@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any, NamedTuple
 
 import ecc_support as support
-from packbin import Scheme, repeat, u8, u16
+from packbin import Scheme
 
 PERCENT_VECTORS = support.ROOT / "fixtures" / "ecc" / "percent-vectors.txt"
 
@@ -75,15 +75,15 @@ def percent_scheme(percent: int, type_number: int = 0x40) -> Scheme:
 
 
 def long_percent_scheme(percent: int) -> Scheme:
-    """A scheme of five lists `b0` to `b4`, so a clear message can be longer than 256 bytes (use `long_row`)."""
-    nodes = [repeat(i, u8(i, lambda row, i=i: row[f"b{i}"])) for i in range(5)]
-    return Scheme(0, dict, *nodes).with_limits(max_bytes=4096, parity_percent=percent)
+    """Type number 0 and the list `row["b"]`, with room for a clear message longer than 256 bytes (use `long_row`).
+    Until loop 113 it was five repeats in a row, which no longer builds (a repeat is the last thing a packet
+    reads); one repeat packs the same bytes."""
+    return support.raw_scheme(0).with_limits(max_bytes=4096, parity_percent=percent)
 
 
 def long_row(length: int) -> dict[str, Any]:
     """The row of `long_percent_scheme` whose clear message is `length` bytes (at least 1)."""
-    rest = length - 1
-    return {f"b{i}": [0] * min(255, max(0, rest - 255 * i)) for i in range(5)}
+    return body_of(bytes(length))
 
 
 def body_of(clear: bytes) -> dict[str, Any]:

@@ -165,8 +165,8 @@ final class Walker {
 
     /**
      * A nested row numbers its field ids from 0 in a scope of its own, so none of them may shadow an id of the row
-     * around it. Takes the id entries out of {@code seen} and returns them; the flag bytes and the repeats written
-     * are keyed by group and by field, not by id, and stay shared by every row of the call.
+     * around it. Takes the id entries out of {@code seen} and returns them; the flag bytes are keyed by group, not
+     * by id, and stay shared by every row of the call.
      */
     private static Map<Object, Object> enterRow(Map<Object, Object> seen) {
         Map<Object, Object> ids = new HashMap<>();

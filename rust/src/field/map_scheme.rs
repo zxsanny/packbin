@@ -97,7 +97,8 @@ impl MapScheme {
     /// flags byte or flag byte, a bool (an empty `group`) not directly inside `flags` or
     /// under a flag bit, a `list` or `dict` element that is not one integer, float, bytes, utf8,
     /// list or dict (a `u2` with one name), a `repeat` or `times` whose body holds no
-    /// member (see `round_body.rs`), or a data name declared twice in one scope (see `names.rs`).
+    /// member, a `repeat` that a field which can write a byte follows (see `round_body.rs` for
+    /// both), or a data name declared twice in one scope (see `names.rs`).
     /// Also refused (see `integrity.rs`): a `when` that tests a float, utf8, bytes
     /// or collection field or compares it with a value that is not an integer, `eq(bool, v)`
     /// with `v` other than true, a count (`sized`, `bits`, `packed`, `times`) that names a bool
@@ -113,6 +114,7 @@ impl MapScheme {
         round_body::check_round_bodies(&fields);
         integrity::check_integrity(&fields);
         names::check_names(&fields);
+        round_body::check_repeat_last(&fields);
         MapScheme {
             type_number: type_number as u8,
             fields,

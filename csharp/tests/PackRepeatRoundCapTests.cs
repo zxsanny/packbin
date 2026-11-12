@@ -161,19 +161,23 @@ public class PackRepeatRoundCapTests
         Assert.Equal(Words("K", 4, 3), error.Message);
     }
 
+    // AZ-4212 AC-4: this row packed a repeat inside a list element and met the round limit there. Since loop 113 such a
+    // scheme is refused when it is built (contract repeat-last, case 2), so pack never reaches that repeat.
     [Fact]
-    public void Pack_RepeatInAListElement_IsRefused()
+    public void Build_RepeatInAListElement_IsRefusedBeforeAnyPack()
     {
         // Arrange
-        var scheme = new Scheme<Bag>(1,
+        Func<object> build = () => new Scheme<Bag>(1,
             Field.List((Bag x) => x.Items,
-                Field.Group(0, (BudgetRow e) => e.G, Field.Repeat(0, Field.U8<BudgetRow>(0, e => e.K))))).WithLimits(3);
-        var item = new Dictionary<string, object?> { ["K"] = new object?[] { (byte)1, (byte)2, (byte)3, (byte)4 } };
+                Field.Group(0, (BudgetRow e) => e.G, Field.Repeat(0, Field.U8<BudgetRow>(0, e => e.K)))));
 
         // Act
-        var error = Refused(scheme, new Dictionary<string, object?> { ["Items"] = new List<object?> { item } });
+        var refused = Record.Exception(build);
 
         // Assert
-        Assert.Equal(Words("K", 4, 3), error.Message);
+        Assert.Equal(
+            "repeat 0 is inside a list or dict element; a repeat reads to the end of the packet, "
+            + "so another element cannot follow it; use times",
+            Assert.IsType<ArgumentException>(refused).Message);
     }
 }

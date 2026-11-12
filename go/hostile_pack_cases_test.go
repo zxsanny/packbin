@@ -105,6 +105,21 @@ var hostilePacks = map[string]func() ([]byte, error){
 	"pack_when_of_skipped_bool_source":    hostilePackOf(hostileWhenOfBoolSource, hostileBoolSourceRow(0, true)),
 	"pack_when_of_held_bool_source":       hostilePackOf(hostileWhenOfBoolSource, hostileBoolSourceRow(1, true)),
 	"pack_when_of_held_bool_source_clear": hostilePackOf(hostileWhenOfBoolSource, hostileBoolSourceRow(1, false)),
+
+	// Loop 113 (AZ-4215, contract repeat-last K1 to K4): a repeat that is the last thing read, and a
+	// times with a field after it, pack the bytes they packed before the rule.
+	"pack_repeat_last": hostilePackOf(
+		hostileScheme(1, U8(0, "x"), Repeat(1, U8(1, "v"))),
+		func() hostileRow { return hostileRow{"x": 9, "v": []any{5, 6}} }),
+	"pack_repeat_last_in_when": hostilePackOf(
+		hostileScheme(1, U8(0, "k"), When(1, Eq(0, 1), Repeat(1, U8(1, "v")))),
+		func() hostileRow { return hostileRow{"k": 1, "v": []any{5, 6}} }),
+	"pack_repeat_last_in_flags": hostilePackOf(
+		hostileScheme(1, Flags(0, U8(0, "x"), Repeat(1, U8(1, "v")))),
+		func() hostileRow { return hostileRow{"x": 9, "v": []any{5, 6}} }),
+	"pack_times_then_field": hostilePackOf(
+		hostileScheme(1, U8(0, "k"), Times(1, 0, U8(1, "v")), U8(2, "x")),
+		func() hostileRow { return hostileRow{"k": 2, "v": []any{5, 6}, "x": 9} }),
 }
 
 // u8 mode; when(eq(mode, 1)) { flags { bool on }; u8 a }; when(eq(on, true)) { u8 b }: the bool source sits inside

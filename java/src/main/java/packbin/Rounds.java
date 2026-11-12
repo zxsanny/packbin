@@ -12,25 +12,17 @@ import java.util.Set;
  * Repeat and times rounds, as C++ per-round items ({@code unpack_items}). A round packs item {@code i} of every
  * body field's list and sees no value of an earlier round ({@code clear_scope}). Unpack keeps one list entry per
  * round for every value field of the body, null where the round skipped it, so packing by round index gives the
- * same bytes back. A repeat or times inside a round is a group of its own: its value fields hold one list per
- * outer round ({@code v: [[5], [7]]}, null where the outer round skipped the group), each list holding that
- * round's inner entries, as C++ keeps one inner array per outer item.
+ * same bytes back. A times inside a round is a group of its own: its value fields hold one list per outer round
+ * ({@code v: [[5], [7]]}, null where the outer round skipped the group), each list holding that round's inner
+ * entries, as C++ keeps one inner array per outer item. A repeat reads to the end of the packet, so no scheme
+ * holds one inside a round or with a field after it: SchemeOrder refuses both when the scheme is built (AZ-4214).
  */
 final class Rounds {
     private Rounds() {}
 
-    /**
-     * {@code outer} is the enclosing round's item lookup, null at the top level. A repeat reads to the end of the
-     * packet, so one that a second round of an enclosing round would write is refused: a reader would take that
-     * round's bytes as more rounds of the first. {@code seen} keeps the repeats this pack call has written, by
-     * field, as it keeps flag bytes by group.
-     */
+    /** {@code outer} is the item lookup of an enclosing round: null, as no built scheme holds a repeat in a round. */
     static void packRepeat(
             Field field, Object row, ByteSink sink, Map<Object, Object> seen, Walker.Take outer) {
-        if (seen.put(field, Boolean.TRUE) != null) {
-            throw new IllegalArgumentException(
-                    field.label() + ": a repeat has no end marker, so it can be written in one round only");
-        }
         List<Field> values = values(field.children);
         int count = 0;
         for (Field value : values) {

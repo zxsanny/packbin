@@ -113,6 +113,7 @@ public class HostilePackVectorTests
     {
         public byte K { get; set; }
         public byte? V { get; set; }
+        public byte X { get; set; }
     }
 
     private sealed class FlagsTimesRow
@@ -365,6 +366,22 @@ public class HostilePackVectorTests
                         Field.Times(1, 0, Field.Utf8<Utf8Item>(1, e => e.S))))),
             Row(("Items", Enumerable.Range(0, 16)
                 .Select(_ => (object?)Row(("N", 65_535u), ("S", new string('\u0001', 16)))).ToList()))),
+        // Loop 113 (AZ-4212, contract repeat-last): K1 to K4, a repeat that is last and a times with a field after it.
+        ["pack_repeat_last"] = () => BinaryPacker.Pack(
+            new Scheme<RepeatWhenRow>(1, Field.U8<RepeatWhenRow>(0, x => x.X), Field.Repeat(1, Field.U8<RepeatWhenRow>(1, x => x.V))),
+            Row(("X", (byte)9), ("V", L((byte)5, (byte)6)))),
+        ["pack_repeat_last_in_when"] = () => BinaryPacker.Pack(
+            new Scheme<RepeatWhenRow>(1, Field.U8<RepeatWhenRow>(0, x => x.K),
+                Field.When(1, Condition.Eq(0, 1), Field.Repeat(1, Field.U8<RepeatWhenRow>(1, x => x.V)))),
+            Row(("K", (byte)1), ("V", L((byte)5, (byte)6)))),
+        ["pack_repeat_last_in_flags"] = () => BinaryPacker.Pack(
+            new Scheme<RepeatWhenRow>(1, Field.Flags(0,
+                Field.U8<RepeatWhenRow>(0, x => x.X), Field.Repeat(1, Field.U8<RepeatWhenRow>(1, x => x.V)))),
+            Row(("X", (byte)9), ("V", L((byte)5, (byte)6)))),
+        ["pack_times_then_field"] = () => BinaryPacker.Pack(
+            new Scheme<RepeatWhenRow>(1, Field.U8<RepeatWhenRow>(0, x => x.K),
+                Field.Times(1, 0, Field.U8<RepeatWhenRow>(1, x => x.V)), Field.U8<RepeatWhenRow>(2, x => x.X)),
+            Row(("K", (byte)2), ("V", L((byte)5, (byte)6)), ("X", (byte)9))),
     };
 
     // The member a loop 19 refusal names, so a refusal by some other rule does not pass.

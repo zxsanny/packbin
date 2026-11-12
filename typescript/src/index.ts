@@ -10,7 +10,7 @@ import { newScope, packFields, type PackState } from "./pack-fields.ts"
 import { PackOut } from "./pack-out.ts"
 import { bindFlagBits, validatePresenceMarks } from "./flag-scope.ts"
 import { validateMemberNames } from "./member-names.ts"
-import { validateRoundBodies, validateRoundNesting } from "./rounds.ts"
+import { validateRepeatLast, validateRoundBodies, validateRoundNesting } from "./rounds.ts"
 import { bindReferences } from "./ref-scope.ts"
 import { validateElementKinds } from "./element-kinds.ts"
 import type { Value } from "./kinds.ts"
@@ -136,6 +136,7 @@ export class Scheme<T> {
     validateMemberNames(flat)
     validateRoundNesting(flat)
     validateRoundBodies(flat)
+    validateRepeatLast(flat)
     this.maxRounds = checkedLimit("maxRounds", limits.maxRounds, Scheme.DefaultMaxRounds)
     this.maxSlots = checkedLimit("maxSlots", limits.maxSlots, Scheme.DefaultMaxSlots)
     this.maxBytes = checkedLimit("maxBytes", limits.maxBytes, Scheme.DefaultMaxBytes)

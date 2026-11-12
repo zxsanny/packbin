@@ -56,7 +56,7 @@ describe("AZ-2355 pack refuses a repeat with more entries than maxRounds", () =>
     assert.equal(message, "b: the repeat count is 4, above the limit of 3 rounds")
   })
 
-  it("AC-1 the cap holds in flags, a split bit, a when and a list element", () => {
+  it("AC-1 the cap holds in flags, a split bit and a when", () => {
     // Arrange
     const fb = flagByte("m")
     const k = [1, 2, 3, 4]
@@ -68,17 +68,27 @@ describe("AZ-2355 pack refuses a repeat with more entries than maxRounds", () =>
         new Scheme<Row>(1, [u8(0, (x) => x.m), when(1, eq(0, 1), [repeat(1, [u8(1, (x) => x.k)])])], { maxRounds: 3 }),
         { m: 1, k },
       ],
-      [
-        "list element",
-        new Scheme<Row>(1, [list((x) => x.items, group((x) => x.item, [repeat(0, [u8(0, (x) => x.k)])]))], { maxRounds: 3 }),
-        { items: [{ k }] },
-      ],
     ]
 
     // Act / Assert
     for (const [where, layout, row] of cases) {
       assert.equal(refusal(() => BinaryPacker.pack(layout, row)), "k: the repeat count is 4, above the limit of 3 rounds", where)
     }
+  })
+
+  // Until loop 113 the cap was checked in a list element too; a repeat there no longer builds (AZ-4211 AC-4).
+  it("a repeat in a list element is refused when the scheme is built, before any cap", () => {
+    // Arrange
+    const element = () => group((x: Row) => x.item, [repeat(0, [u8(0, (x: Row) => x.k)])])
+
+    // Act
+    const message = refusal(() => new Scheme<Row>(1, [list((x) => x.items, element())], { maxRounds: 3 }))
+
+    // Assert
+    assert.equal(
+      message,
+      "repeat 0 is inside a list or dict element; a repeat reads to the end of the packet, so another element cannot follow it; use times",
+    )
   })
 
   it("AC-2 maxRounds entries pack in maxRounds + 1 bytes and round-trip", () => {

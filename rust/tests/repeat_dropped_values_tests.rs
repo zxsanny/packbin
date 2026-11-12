@@ -95,7 +95,9 @@ fn nested_times_under_when() -> MapScheme {
     )
 }
 
-/// `flags { repeat { u8 n; times(n) { u8 w } }; u8 z }`
+/// `flags { u8 z; repeat { u8 n; times(n) { u8 w } } }`. The repeat is the last member: a member
+/// after it is refused when the scheme is built (AZ-4218), so `z`, which stood after it until loop
+/// 113, stands first; the repeat is id 1 and bit 1, the nested times id 2.
 fn nested_times_in_flags() -> MapScheme {
     MapScheme::new(
         1,
@@ -103,8 +105,8 @@ fn nested_times_in_flags() -> MapScheme {
             0,
             "f",
             vec![
-                repeat(0, vec![u8("n"), times(1, "n", vec![u8("w")])]),
                 u8("z"),
+                repeat(1, vec![u8("n"), times(2, "n", vec![u8("w")])]),
             ],
         )],
     )
@@ -122,11 +124,11 @@ fn nested_times_in_split_bit() -> MapScheme {
     )
 }
 
-/// `flags { repeat { u8 n }; u8 z }`
+/// `flags { u8 z; repeat { u8 n } }`, `z` first as in `nested_times_in_flags`.
 fn repeat_in_flags() -> MapScheme {
     MapScheme::new(
         1,
-        vec![flags(0, "f", vec![repeat(0, vec![u8("n")]), u8("z")])],
+        vec![flags(0, "f", vec![u8("z"), repeat(1, vec![u8("n")])])],
     )
 }
 
@@ -191,7 +193,7 @@ fn ac1_two_disagreeing_names_name_the_first_in_name_order() {
 #[test]
 fn ac1_a_list_beside_groups_of_a_repeat_under_flags_or_a_split_bit_is_refused() {
     for (label, scheme, id) in [
-        ("flags", repeat_in_flags(), 0),
+        ("flags", repeat_in_flags(), 1),
         ("split", repeat_in_split_bit(), 1),
     ] {
         // Arrange: the second row's round holds no value, so the bit is clear
@@ -207,7 +209,7 @@ fn ac1_a_list_beside_groups_of_a_repeat_under_flags_or_a_split_bit_is_refused() 
         // Act
         let messages = [text(hex_of(&scheme, &set)), text(hex_of(&scheme, &clear))];
 
-        // Assert: HEAD packed `010101` and `0100`
+        // Assert: HEAD packed `010101` and `0100` (its flags scheme had the repeat on bit 0)
         assert_eq!(
             messages,
             [disagrees(id, "n"), disagrees(id, "n")],
@@ -272,7 +274,7 @@ fn ac2_a_nested_name_of_a_repeat_under_flags_or_a_split_bit_is_refused() {
     ];
 
     // Assert: HEAD packed `0100` for both
-    assert_eq!(messages, [without_groups(0, "w"), without_groups(1, "w")]);
+    assert_eq!(messages, [without_groups(1, "w"), without_groups(1, "w")]);
 }
 
 // ---- AC-3: rows with groups only, agreeing values or no extra names (hex as at b8b2809) ----
@@ -357,7 +359,7 @@ fn ac3_groups_only_and_nothing_given_pack_as_at_head() {
             ok("01"),
             ok("01"),
             ok("01010502"),
-            ok("01010103"),
+            ok("01020103"),
             ok("0100"),
             ok("01010103"),
             ok("0100"),
@@ -418,8 +420,9 @@ fn g5_a_flags_name_without_groups_or_beside_groups_is_refused() {
 
 #[test]
 fn g6_a_nested_times_key_without_groups_or_beside_groups_is_refused() {
-    // Arrange
+    // Arrange: in the flags the nested times is id 2
     let lone = row(&[("__times_1", nested_key(9))]);
+    let lone_in_flags = row(&[("__times_2", nested_key(9))]);
     let beside = row(&[
         (
             "__repeat__",
@@ -431,7 +434,7 @@ fn g6_a_nested_times_key_without_groups_or_beside_groups_is_refused() {
     // Act
     let messages = [
         text(hex_of(&nested_times(), &lone)),
-        text(hex_of(&nested_times_in_flags(), &lone)),
+        text(hex_of(&nested_times_in_flags(), &lone_in_flags)),
         text(hex_of(&nested_times(), &beside)),
     ];
 
@@ -440,7 +443,7 @@ fn g6_a_nested_times_key_without_groups_or_beside_groups_is_refused() {
         messages,
         [
             without_groups(0, "__times_1"),
-            without_groups(0, "__times_1"),
+            without_groups(1, "__times_2"),
             disagrees(0, "__times_1"),
         ]
     );

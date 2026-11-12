@@ -59,6 +59,12 @@
 // E; a nil slice is no value, an empty slice 0 rounds, and a typed Times refuses a count other than
 // the elements. Typed Unpack gives an empty slice for 0 rounds read and nil for a round not read.
 //
+// A Repeat has no count: unpack reads its rounds until the buffer ends, so it must be the last thing
+// the packet reads. NewScheme refuses a scheme in which a field that can write a byte stands after a
+// Repeat (in its own place or after the When, Flags, flag bit, Group or Nested that holds it) and one
+// that has a Repeat inside a List or Dict element. A Times has a count, so fields may follow it and
+// it may stand in an element.
+//
 // # Strings, lists, dictionaries and nested rows
 //
 // A Utf8 value is a string (a *string or a named string type too). A List or Dict element is one
@@ -127,7 +133,9 @@
 //	                                   binds a value field, a slot, a group or a round to a member of
 //	                                   the typed row T
 //	Repeat(anchor int, members ...Field) Field
-//	                                   the members once a round until the buffer ends; no count
+//	                                   the members once a round until the buffer ends; no count, so
+//	                                   nothing that writes a byte may follow it and it stands in no
+//	                                   List or Dict element (NewScheme refuses the scheme)
 //	Times(anchor, countID int, members ...Field) Field
 //	                                   the members count times; count is an earlier integer of the
 //	                                   scope; a round body is a scope of its own, holds no round and

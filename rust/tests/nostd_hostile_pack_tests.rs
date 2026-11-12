@@ -210,8 +210,32 @@ fn run(id: &str) -> Option<Answer> {
         "pack_novalue_count_clear_when_bits" => novalue(Bits(1)),
         "pack_novalue_count_clear_when_packed" => novalue(Packed(1, 1, 0)),
         "pack_novalue_count_clear_when_sized" => novalue(Sized(1)),
+        // K1 to K4 of `repeat-last.md`: a repeat that is last, and a `times` before a field.
+        "pack_repeat_last" => two_rounds(&[n(U8), Repeat(vec![n(U8)])], &[(0, u8n(9))]),
+        "pack_repeat_last_in_when" => two_rounds(
+            &[n(U8), When(0, 1, vec![Repeat(vec![n(U8)])])],
+            &[(0, u8n(1))],
+        ),
+        "pack_repeat_last_in_flags" => {
+            two_rounds(&[Flags(vec![n(U8), Repeat(vec![n(U8)])])], &[(0, u8n(9))])
+        }
+        "pack_times_then_field" => two_rounds(
+            &[n(U8), Times(0, vec![n(U8)]), n(U8)],
+            &[(0, u8n(2)), (2, u8n(9))],
+        ),
         _ => return None,
     })
+}
+
+/// `nodes` packed with `nums` and two rounds under id 1, each with its `v` at id 1: 5, then 6.
+fn two_rounds(nodes: &[Node], nums: &[(u16, Num)]) -> Answer {
+    let mut r = row(nums);
+    set_items(
+        &mut r,
+        1,
+        vec![round(&[(1, u8n(5))]), round(&[(1, u8n(6))])],
+    );
+    answer(nodes, &r)
 }
 
 /// `u8 mode; when mode = 1 { u16 a; u8 k }; when k = <k> { u8 b }` with mode 0: `k` sits in a clear
@@ -266,6 +290,10 @@ fn expected(id: &str) -> Answer {
         | "pack_when_of_skipped_bool_source" => bytes("0100"),
         "pack_when_of_held_bool_source" => bytes("0101010705"),
         "pack_when_of_held_bool_source_clear" => bytes("01010007"),
+        "pack_repeat_last" => bytes("01090506"),
+        "pack_repeat_last_in_when" => bytes("01010506"),
+        "pack_repeat_last_in_flags" => bytes("0103090506"),
+        "pack_times_then_field" => bytes("0102050609"),
         "pack_missing_required_value"
         | "pack_times_list_too_long"
         | "pack_times_list_too_short"

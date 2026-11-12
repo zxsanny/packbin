@@ -145,6 +145,53 @@ var hostileConstructs = map[string]*hostileConstruct{
 		},
 		rule: lit(`packbin: invalid scheme at field 2: times 2: the body holds no member; a round of it would charge no slot and write nothing`),
 	},
+	// Loop 113 (AZ-4215, contract repeat-last): a repeat is the last thing a packet reads.
+	"construct_repeat_then_field": {
+		build: func() (*Scheme, error) { return NewScheme(1, Repeat(0, U8(0, "v")), U8(1, "x")) },
+		rule:  lit(`packbin: invalid scheme at field 0: repeat 0: field id 1 (x) follows it; a repeat reads to the end of the packet, so nothing can follow it; use times`),
+	},
+	"construct_repeat_in_when_then_field": {
+		build: func() (*Scheme, error) {
+			return NewScheme(1, U8(0, "k"), When(1, Eq(0, 1), Repeat(1, U8(1, "v"))), U8(2, "x"))
+		},
+		rule: lit(`packbin: invalid scheme at field 1: repeat 1: field id 2 (x) follows it; a repeat reads to the end of the packet, so nothing can follow it; use times`),
+	},
+	"construct_repeat_in_flags_then_field": {
+		build: func() (*Scheme, error) { return NewScheme(1, Flags(0, Repeat(0, U8(0, "v"))), U8(1, "x")) },
+		rule:  lit(`packbin: invalid scheme at field 0: repeat 0: field id 1 (x) follows it; a repeat reads to the end of the packet, so nothing can follow it; use times`),
+	},
+	// A Nested numbers its members from 0 and takes no id of the row around it, so x is id 0.
+	"construct_repeat_in_group_then_field": {
+		build: func() (*Scheme, error) { return NewScheme(1, Nested("m", Repeat(0, U8(0, "v"))), U8(0, "x")) },
+		rule:  lit(`packbin: invalid scheme at field 0: repeat 0: field id 0 (x) follows it; a repeat reads to the end of the packet, so nothing can follow it; use times`),
+	},
+	"construct_repeat_then_repeat": {
+		build: func() (*Scheme, error) { return NewScheme(1, Repeat(0, U8(0, "v")), Repeat(1, U8(1, "w"))) },
+		rule:  lit(`packbin: invalid scheme at field 0: repeat 0: repeat 1 follows it; a repeat reads to the end of the packet, so nothing can follow it; use times`),
+	},
+	"construct_repeat_then_exclusive_when": {
+		build: func() (*Scheme, error) {
+			return NewScheme(1, U8(0, "k"), When(1, Eq(0, 1), Repeat(1, U8(1, "v"))), When(2, Eq(0, 2), U8(2, "x")))
+		},
+		rule: lit(`packbin: invalid scheme at field 1: repeat 1: field id 2 (x) follows it; a repeat reads to the end of the packet, so nothing can follow it; use times`),
+	},
+	"construct_repeat_in_list_element": {
+		build: func() (*Scheme, error) {
+			return NewScheme(1, List("items", Nested("item", U8(0, "mode"), Repeat(1, U8(1, "v")))))
+		},
+		rule: lit(`packbin: invalid scheme at field 1: repeat 1 is inside a list or dict element; a repeat reads to the end of the packet, so another element cannot follow it; use times`),
+	},
+	"construct_repeat_in_dict_element": {
+		build: func() (*Scheme, error) {
+			return NewScheme(1, Dict("d", Nested("item", U8(0, "mode"), Repeat(1, U8(1, "v")))))
+		},
+		rule: lit(`packbin: invalid scheme at field 1: repeat 1 is inside a list or dict element; a repeat reads to the end of the packet, so another element cannot follow it; use times`),
+	},
+	// Refused by the nesting rule, as before loop 113, with its own text.
+	"construct_repeat_in_times_round": {
+		build: func() (*Scheme, error) { return NewScheme(1, U8(0, "k"), Times(1, 0, Repeat(1, U8(1, "v")))) },
+		rule:  lit(`packbin: invalid scheme at field 1: repeat 1 is inside a repeat or times round; a round cannot hold another repeat or times`),
+	},
 }
 
 // lit matches exactly the text of one error, so the rule and the field id it names are both pinned.

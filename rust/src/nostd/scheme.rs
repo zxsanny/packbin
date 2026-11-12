@@ -287,7 +287,8 @@ pub const fn group(id: u16, entries: u16) -> Field {
 }
 
 /// Rounds of the members until the packet ends; round `k` is item `k` of the row
-/// ([`Row::item`](super::Row::item)). Not inside another `repeat` or `times` round.
+/// ([`Row::item`](super::Row::item)). Not inside another `repeat` or `times` round, and the last
+/// thing the packet reads: no field that can write a byte after it (use [`times`] there).
 pub const fn repeat(id: u16, entries: u16) -> Field {
     parent(Kind::Repeat, id, entries)
 }

@@ -4,7 +4,7 @@
 
 use crate::{
     bits, dict, eq, flag_byte, flags, group, i8, list, repeat, sized, times, u16, u32, u8, utf8,
-    when, MapScheme, Value, DEFAULT_MAX_SLOTS,
+    when, Field, MapScheme, Value, DEFAULT_MAX_SLOTS,
 };
 
 type Build = fn() -> MapScheme;
@@ -58,6 +58,16 @@ fn empty_nested_when_body() -> MapScheme {
             ),
         ],
     )
+}
+
+/// `when k == <k> { ... }` at id `anchor`, for the repeat-last cases (`repeat-last.md`).
+fn when_k(anchor: u32, k: u8, fields: Vec<Field>) -> Field {
+    when(anchor, eq("k", Value::U8(k)), fields)
+}
+
+/// `repeat { u8 <name> }` at id `anchor`.
+fn rounds_of(anchor: u32, name: &str) -> Field {
+    repeat(anchor, vec![u8(name)])
 }
 
 /// The scheme each `unpack` and `construct` case names.
@@ -160,6 +170,39 @@ const SCHEMES: &[(&[&str], Build)] = &[
             vec![u8("a"), when(1, eq("a", Value::U16(300)), vec![u8("v")])],
         )
     }),
+    // R1 to R6 and R9 of `repeat-last.md`, with the names of the contract.
+    (&["construct_repeat_then_field"], || {
+        MapScheme::new(1, vec![rounds_of(0, "v"), u8("x")])
+    }),
+    (&["construct_repeat_in_when_then_field"], || {
+        MapScheme::new(
+            1,
+            vec![u8("k"), when_k(1, 1, vec![rounds_of(1, "v")]), u8("x")],
+        )
+    }),
+    (&["construct_repeat_in_flags_then_field"], || {
+        MapScheme::new(1, vec![flags(0, "f", vec![rounds_of(0, "v")]), u8("x")])
+    }),
+    // Rust has only an anchored group, which shares the ids of the row around it.
+    (&["construct_repeat_in_group_then_field"], || {
+        MapScheme::new(1, vec![group(0, "m", vec![rounds_of(0, "v")]), u8("x")])
+    }),
+    (&["construct_repeat_then_repeat"], || {
+        MapScheme::new(1, vec![rounds_of(0, "v"), rounds_of(1, "w")])
+    }),
+    (&["construct_repeat_then_exclusive_when"], || {
+        MapScheme::new(
+            1,
+            vec![
+                u8("k"),
+                when_k(1, 1, vec![rounds_of(1, "v")]),
+                when_k(2, 2, vec![u8("x")]),
+            ],
+        )
+    }),
+    (&["construct_repeat_in_times_round"], || {
+        MapScheme::new(1, vec![u8("k"), times(1, "k", vec![rounds_of(1, "v")])])
+    }),
 ];
 
 /// Rounds the scheme of a `limit` case allows; max_slots stays at its default.
@@ -196,6 +239,13 @@ const OUTCOMES: &[(&[&str], &str)] = &[
             "when_names_outer_field_in_repeat",
             "when_names_later_field",
             "count_names_later_field",
+            "construct_repeat_then_field",
+            "construct_repeat_in_when_then_field",
+            "construct_repeat_in_flags_then_field",
+            "construct_repeat_in_group_then_field",
+            "construct_repeat_then_repeat",
+            "construct_repeat_then_exclusive_when",
+            "construct_repeat_in_times_round",
         ],
         "scheme_error",
     ),

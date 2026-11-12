@@ -27,6 +27,13 @@ final class HostileRefusals {
     private static final String NOT_EARLIER = ", which is not an earlier integer or bool field in its scope";
     private static final String EMPTY_BODY = ": the body holds no member; a round of it would charge no slot and write"
             + " nothing";
+    // AZ-4214 (loop 113), contract repeat-last: the whole text of each refusal.
+    private static final String FOLLOWS = " follows it; a repeat reads to the end of the packet, so nothing can follow"
+            + " it; use times";
+    private static final String IN_ELEMENT = "repeat 1 is inside a list or dict element; a repeat reads to the end of"
+            + " the packet, so another element cannot follow it; use times";
+    private static final String IN_ROUND = "repeat 1 is inside a repeat or times round; a repeat reads to the end of"
+            + " the packet, so another round cannot follow it; use times";
 
     static final Map<String, Rule> PACK = Map.ofEntries(
             Map.entry("pack_out_of_range_integer", bad("0: 300 does not fit")),
@@ -85,7 +92,17 @@ final class HostileRefusals {
             // the empty-body rule; that rule itself is pinned in EmptyRoundBodyTest rows 15, 16 and 25.
             Map.entry("construct_empty_when_times_body", bad("when 2 tests field 0" + NOT_EARLIER)),
             Map.entry("construct_empty_when_repeat_body", bad("when 1 tests field 0" + NOT_EARLIER)),
-            Map.entry("construct_empty_nested_when_body", bad("when 2 tests field 0" + NOT_EARLIER)));
+            Map.entry("construct_empty_nested_when_body", bad("when 2 tests field 0" + NOT_EARLIER)),
+            Map.entry("construct_repeat_then_field", bad("repeat 0: u8 1" + FOLLOWS)),
+            Map.entry("construct_repeat_in_when_then_field", bad("repeat 1: u8 2" + FOLLOWS)),
+            Map.entry("construct_repeat_in_flags_then_field", bad("repeat 0: u8 1" + FOLLOWS)),
+            // x is id 0: the nested row before it numbers its own fields.
+            Map.entry("construct_repeat_in_group_then_field", bad("repeat 0: u8 0" + FOLLOWS)),
+            Map.entry("construct_repeat_then_repeat", bad("repeat 0: repeat 1" + FOLLOWS)),
+            Map.entry("construct_repeat_then_exclusive_when", bad("repeat 1: u8 2" + FOLLOWS)),
+            Map.entry("construct_repeat_in_list_element", bad(IN_ELEMENT)),
+            Map.entry("construct_repeat_in_dict_element", bad(IN_ELEMENT)),
+            Map.entry("construct_repeat_in_times_round", bad(IN_ROUND)));
 
     /** Null when {@code ex} is the refusal {@code rule} names; otherwise what is wrong. */
     static String mismatch(String id, Rule rule, RuntimeException ex) {

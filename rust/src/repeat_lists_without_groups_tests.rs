@@ -56,6 +56,16 @@ fn refused_at(id: u32, member: &str) -> String {
     )
 }
 
+/// `flags { u8 z; repeat { u8 n } }`. The repeat is the last member: a member after it is refused
+/// when the scheme is built (AZ-4218), so `z`, which stood after it until loop 113, stands first
+/// and the repeat takes bit 1.
+fn in_flags() -> MapScheme {
+    MapScheme::new(
+        1,
+        vec![flags(0, "f", vec![u8("z"), repeat(1, vec![u8("n")])])],
+    )
+}
+
 #[test]
 fn ac1_two_per_name_lists_without_groups_are_refused_naming_the_first_member() {
     // Arrange
@@ -108,17 +118,13 @@ fn ac1_empty_groups_with_a_list_is_refused() {
 #[test]
 fn ac1_lists_for_a_repeat_under_a_clear_flags_bit_are_refused() {
     // Arrange
-    let scheme = MapScheme::new(
-        1,
-        vec![flags(0, "f", vec![repeat(0, vec![u8("n")]), u8("z")])],
-    );
     let vals = row(&[("n", items(&[1, 2]))]);
 
     // Act
-    let message = refusal(&scheme, &vals);
+    let message = refusal(&in_flags(), &vals);
 
     // Assert
-    assert_eq!(message, refused("n"));
+    assert_eq!(message, refused_at(1, "n"));
 }
 
 #[test]
@@ -185,10 +191,7 @@ fn ac2_empty_lists_and_empty_groups_pack_no_rounds() {
 #[test]
 fn ac2_flags_and_split_bits_with_groups_or_nothing_pack_as_at_head() {
     // Arrange
-    let combined = MapScheme::new(
-        1,
-        vec![flags(0, "f", vec![repeat(0, vec![u8("n")]), u8("z")])],
-    );
+    let combined = in_flags();
     let fb = flag_byte("fb");
     let split = MapScheme::new(1, vec![fb.byte(), fb.bit(repeat(1, vec![u8("n")]))]);
     let groups = row(&[(
@@ -204,6 +207,6 @@ fn ac2_flags_and_split_bits_with_groups_or_nothing_pack_as_at_head() {
         hex(&split, &Values::new()),
     ];
 
-    // Assert
-    assert_eq!(bytes, ["01010102", "0100", "01010102", "0100"]);
+    // Assert: in the flags the repeat is bit 1 (`02`), under the split bit it is bit 0 (`01`)
+    assert_eq!(bytes, ["01020102", "0100", "01010102", "0100"]);
 }

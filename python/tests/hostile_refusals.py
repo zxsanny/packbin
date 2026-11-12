@@ -12,6 +12,15 @@ _NO_VALUE = (
     "reads nothing; give the count 0, leave it out, or make the when hold"
 )
 _LATER = "is allowed only if declared earlier in the same scope"
+# Loop 113 (contract `repeat-last.md`): Python names the field after the repeat as its other scheme errors name a
+# field, `field <id>`.
+_FOLLOWED = (
+    "repeat {anchor}: {field} follows it; a repeat reads to the end of the packet, so nothing can follow it; use times"
+)
+_IN_ELEMENT = (
+    "repeat 1 is inside a list or dict element; "
+    "a repeat reads to the end of the packet, so another element cannot follow it; use times"
+)
 
 # id -> (exception type, message)
 PACK_REFUSAL: dict[str, tuple[type[Exception], str]] = {
@@ -106,4 +115,15 @@ CONSTRUCT_REFUSAL: dict[str, str] = {
     "construct_empty_when_times_body": _NO_MEMBER.format(kind="times", anchor=2),
     "construct_empty_when_repeat_body": _NO_MEMBER.format(kind="repeat", anchor=1),
     "construct_empty_nested_when_body": _NO_MEMBER.format(kind="times", anchor=2),
+    "construct_repeat_then_field": _FOLLOWED.format(anchor=0, field="field 1"),
+    "construct_repeat_in_when_then_field": _FOLLOWED.format(anchor=1, field="field 2"),
+    "construct_repeat_in_flags_then_field": _FOLLOWED.format(anchor=0, field="field 1"),
+    "construct_repeat_in_group_then_field": _FOLLOWED.format(anchor=0, field="field 1"),
+    "construct_repeat_then_repeat": _FOLLOWED.format(anchor=0, field="repeat 1"),
+    "construct_repeat_then_exclusive_when": _FOLLOWED.format(anchor=1, field="field 2"),
+    "construct_repeat_in_list_element": _IN_ELEMENT,
+    "construct_repeat_in_dict_element": _IN_ELEMENT,
+    "construct_repeat_in_times_round": (
+        "repeat 1 is inside a repeat or times round; a round cannot hold another repeat or times"
+    ),
 }

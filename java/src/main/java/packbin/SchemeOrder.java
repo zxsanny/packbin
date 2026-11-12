@@ -14,10 +14,93 @@ final class SchemeOrder {
     private static final String ONLY_A_BIT = " is allowed only as a bit of flags or a flagByte";
     private static final String NEVER_SET = " has no fields and no accessor, so its bit can never be set";
     private static final String NEEDS_FACTORY = "nested group on a typed row needs a child factory";
+    private static final String READS_TO_END = "; a repeat reads to the end of the packet, so ";
+    private static final String FOLLOWS = " follows it" + READS_TO_END + "nothing can follow it; use times";
+    private static final String IN_ELEMENT = " is inside a list or dict element" + READS_TO_END
+            + "another element cannot follow it; use times";
+    private static final String IN_ROUND = " is inside a repeat or times round" + READS_TO_END
+            + "another round cannot follow it; use times";
 
     /** {@code typedRow} is true when the scheme's row class is not a Map. */
     static void validate(List<Field> fields, boolean typedRow) {
         walkScope(fields, new int[] {0}, typedRow);
+        repeatLast(fields, null, null);
+    }
+
+    /**
+     * A repeat has no count on the wire: unpack reads its rounds to the end of the packet, so a repeat must be the
+     * last thing a packet reads (contract repeat-last, AZ-4214). Refused here, once, when the scheme is built: a
+     * field that can write a byte after a repeat, in the repeat's own place or after the when, flags, flag bit,
+     * group or nested row that holds it; a repeat inside a list or dict element; a repeat inside a repeat or times
+     * round. A times has a count and is not restricted. The walk follows the order pack writes the fields in.
+     * {@code open} is the repeat read before these fields, null when there is none; {@code inside} is the refusal of
+     * a repeat that stands here, null outside every element and round. Returns the repeat open after the fields.
+     */
+    private static Field repeatLast(List<Field> fields, Field open, String inside) {
+        for (Field field : fields) {
+            open = repeatLast(field, open, inside);
+        }
+        return open;
+    }
+
+    private static Field repeatLast(Field field, Field open, String inside) {
+        Field follower = open == null ? null : firstWriter(field);
+        if (follower != null) {
+            throw new IllegalArgumentException("repeat " + open.id + ": " + kindAndId(follower) + FOLLOWS);
+        }
+        return switch (field.kind) {
+            case REPEAT -> {
+                if (inside != null) {
+                    throw new IllegalArgumentException("repeat " + field.id + inside);
+                }
+                repeatLast(field.children, null, IN_ROUND);
+                yield field;
+            }
+            case TIMES -> {
+                repeatLast(field.children, null, IN_ROUND);
+                yield open;
+            }
+            case LIST, DICT -> {
+                repeatLast(field.children, null, IN_ELEMENT);
+                yield open;
+            }
+            case WHEN, GROUP, FLAGS -> repeatLast(field.children, open, inside);
+            case FLAG_BIT -> repeatLast(field.inner, open, inside);
+            default -> open;
+        };
+    }
+
+    /**
+     * The first field of {@code field} that can write a byte for some row, null when none can. A bool is a bit of a
+     * flag byte written earlier and a bytes of size 0 writes nothing; a when, group, nested row or flag bit writes
+     * what it holds, and so does a repeat or times, which is named itself. Every other field writes: a flags and a
+     * flag byte their byte, a list or dict its count.
+     */
+    private static Field firstWriter(Field field) {
+        return switch (field.kind) {
+            case BOOL -> null;
+            case BYTES -> field.size > 0 ? field : null;
+            case FLAG_BIT -> firstWriter(field.inner);
+            case WHEN, GROUP -> firstWriter(field.children);
+            case REPEAT, TIMES -> firstWriter(field.children) == null ? null : field;
+            default -> field;
+        };
+    }
+
+    private static Field firstWriter(List<Field> fields) {
+        for (Field field : fields) {
+            Field writer = firstWriter(field);
+            if (writer != null) {
+                return writer;
+            }
+        }
+        return null;
+    }
+
+    /** Fields carry no names: one is named by its kind and, when it has one, its id ({@code u8 1}, {@code list}). */
+    private static String kindAndId(Field field) {
+        String kind = field.kind == Field.Kind.FLAG_BYTE ? "flagByte" : field.kind.name().toLowerCase(Locale.ROOT);
+        return field.id >= 0 ? kind + " " + field.id : kind;
     }
 
     /**
@@ -107,9 +190,10 @@ final class SchemeOrder {
      * One reference scope: the top level, a repeat or times round, a list or dict element, or a nested row.
      * A when condition may name only an integer or bool field read earlier in the same scope, a bool only against
      * true; a borrowed count may name only an integer field (AZ-2126). Order ids continue through repeat and times rounds;
-     * {@code next} carries them. A repeat or times inside a round is a group of its own (AZ-2127): its value
-     * fields hold one list per outer round. {@code typed} is true when the row of this scope is not a Map: a
-     * nested row in it needs a child factory (AZ-2101), as one below a nested row that has a factory does.
+     * {@code next} carries them. A times inside a round is a group of its own (AZ-2127): its value fields hold
+     * one list per outer round; a repeat inside a round is refused ({@code repeatLast}). {@code typed} is true when
+     * the row of this scope is not a Map: a nested row in it needs a child factory (AZ-2101), as one below a nested
+     * row that has a factory does.
      */
     private static void walkScope(List<Field> fields, int[] next, boolean typed) {
         Map<Integer, Field> earlier = new HashMap<>();

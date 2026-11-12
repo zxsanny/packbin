@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Counts the existing TypeScript schemes the candidate rule of AZ-4206 would refuse (see ../README.md).
-# It copies HEAD to a temporary directory, adds a logging call to the Scheme constructor of the copy,
-# runs the whole TypeScript suite (the shared hostile cases are part of it) and loads the ring drivers.
-# stdout: one line per scheme the rule would refuse, then the totals. The checkout is not changed.
+# It copies the checkout as it is to a temporary directory, adds a logging call to the Scheme constructor
+# of the copy, runs the whole TypeScript suite (the shared hostile cases are part of it) and loads the ring
+# drivers. stdout: one line per scheme the rule would refuse, then the totals. The checkout is not changed.
+# Since loop 113 (AZ-4211) the package has the rule itself, so a scheme the rule refuses does not build and
+# the count is 0; a line here would be a scheme the package builds and the counting copy of the rule refuses.
 # Exit: 0 the count ran, 1 it could not (no node_modules, the suite failed in the copy, the constructor moved).
 set -euo pipefail
 
@@ -18,7 +20,19 @@ work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 copy="$work/packbin"
 mkdir -p "$copy"
-git -C "$root" archive HEAD | tar -x -C "$copy"
+# The tracked files as they are on disk and the untracked ones git does not ignore, so a change that is not
+# committed yet is counted too (`git archive HEAD` would copy the last commit). A tracked file that is
+# deleted on disk is left out.
+(
+  cd "$root"
+  git ls-files -z --cached --others --exclude-standard |
+    while IFS= read -r -d '' path; do
+      if [ -e "$path" ] || [ -L "$path" ]; then
+        printf '%s\0' "$path"
+      fi
+    done |
+    tar -c -f - --null -T -
+) | tar -x -f - -C "$copy"
 ln -s "$root/typescript/node_modules" "$copy/typescript/node_modules"
 cp "$here/repeat-last-probe.ts" "$copy/typescript/src/repeat-last-probe.ts"
 

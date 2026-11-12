@@ -33,9 +33,11 @@ final class LoneDictRoundTest {
                 BinaryPacker.pack(times(), Maps.map("n", 2, "d", Map.of("a", 1))), REFUSED);
         PackbinTest.expectThrows("AZ-2308 AC-2 repeat, lone dictionary", () ->
                 BinaryPacker.pack(repeat(), Maps.map("d", Map.of("a", 1))), REFUSED);
-        PackbinTest.expectThrows("AZ-2308 AC-2 repeat inside a round, lone dictionary", () ->
+        // AZ-4214 AC-4: a repeat inside a round is refused at build, so the round inside a round is a times.
+        PackbinTest.expectThrows("AZ-2308 AC-2 times inside a round, lone dictionary", () ->
                 BinaryPacker.pack(Maps.scheme(1, Packbin.repeat(0, Packbin.u8(0, Access.get("k"), Access.set("k")),
-                        Packbin.repeat(1, dict()))), Maps.map("k", List.of(1), "d", List.of(Map.of("a", 1)))), REFUSED);
+                        Packbin.times(1, 0, dict()))), Maps.map("k", List.of(1), "d", List.of(Map.of("a", 1)))),
+                REFUSED);
         PackbinTest.expectThrows("AZ-2308 AC-2 typed accessor is named by the kind", () ->
                 BinaryPacker.pack(Maps.scheme(1, Packbin.u8(0, Access.get("n"), Access.set("n")), Packbin.times(1, 0,
                         Packbin.dict(Access.get((Map<String, Object> r) -> r.get("d")),

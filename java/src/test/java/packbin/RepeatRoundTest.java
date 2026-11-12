@@ -9,7 +9,8 @@ import java.util.Map;
  * F1 flag bits come from the round's value; F2 unpacked lists hold one entry per round (null where the round
  * skipped the field); F3 a round never sees a value read in an earlier round. Round 3: padding a round costs one
  * store, not one per earlier round (#2). The loop 12 refusal of a repeat or times inside a round (#1) was
- * removed by AZ-2127; NestedRoundTest covers those shapes.
+ * removed by AZ-2127; NestedRoundTest covers those shapes. AZ-4214 (loop 113) refuses a repeat inside a round or a
+ * list or dict element again (RepeatLastTest); a times there is not restricted.
  */
 @SuppressWarnings({"unchecked", "rawtypes"})
 final class RepeatRoundTest {
@@ -25,12 +26,16 @@ final class RepeatRoundTest {
         az2234Ac8PresenceAndU2AgreeInARound();
     }
 
-    /** A list or dict element is a row of its own, so a repeat inside it is not inside the enclosing round. */
+    /**
+     * A list or dict element is a row of its own, so a times inside it is not inside the enclosing round. The
+     * elements held a repeat until AZ-4214 (AC-4), which refuses a repeat in an element (the next element would
+     * follow it; RepeatLastTest R7 and R8); the same elements with a count and a times read back.
+     */
     private static void nestedRoundsInsideElementsStillBuild() {
         Scheme<Map> list = Maps.scheme(1, Packbin.list(Access.get("xs"), Access.set("xs"),
-                Packbin.group(0, Packbin.repeat(0, u8(0, "v")))));
-        expectUnpackRepack("#1 repeat in a list element", list, "01" + "0100" + "0506",
-                Maps.map("xs", List.of(Maps.map("v", List.of(5, 6)))));
+                Packbin.group(0, u8(0, "n"), Packbin.times(1, 0, u8(1, "v")))));
+        expectUnpackRepack("#1 times in a list element", list, "01" + "0100" + "02" + "0506",
+                Maps.map("xs", List.of(Maps.map("n", 2, "v", List.of(5, 6)))));
         try {
             Maps.scheme(1, Packbin.dict(Access.get("m"), Access.set("m"),
                     Packbin.group(0, u8(0, "n"), Packbin.times(1, 0, u8(1, "v")))));
@@ -38,9 +43,10 @@ final class RepeatRoundTest {
             PackbinTest.fail("#1 times in a dict element: refused with \"" + ex.getMessage() + "\"");
         }
         Scheme<Map> inRound = Maps.scheme(1, Packbin.repeat(0, u8(0, "k"), Packbin.list(Access.get("xs"), Access.set("xs"),
-                Packbin.group(0, Packbin.repeat(0, u8(0, "v"))))));
-        expectUnpackRepack("#1 repeat in a list element inside a repeat round", inRound, "01" + "01" + "0100" + "0506",
-                Maps.map("k", List.of(1), "xs", List.of(List.of(Maps.map("v", List.of(5, 6))))));
+                Packbin.group(0, u8(0, "n"), Packbin.times(1, 0, u8(1, "v"))))));
+        expectUnpackRepack("#1 times in a list element inside a repeat round", inRound,
+                "01" + "01" + "0100" + "02" + "0506",
+                Maps.map("k", List.of(1), "xs", List.of(List.of(Maps.map("n", 2, "v", List.of(5, 6))))));
     }
 
     /** Padding stores one null per round, so a setter that keeps nothing does not make unpack quadratic. */

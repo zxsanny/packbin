@@ -127,7 +127,7 @@ func TestRoundAndCountedConstructionRefusals(t *testing.T) {
 			return []Field{U8(0, "n"), Repeat(1, Sized(1, "p", 0))}
 		}, 1, "not declared earlier in the same scope"},
 		{"times count names a field of the round", func() []Field {
-			return []Field{U8(0, "n"), Repeat(1, U8(1, "c")), Times(2, 1, U8(2, "v"))}
+			return []Field{U8(0, "n"), Times(1, 0, U8(1, "c")), Times(2, 1, U8(2, "v"))}
 		}, 2, "not declared earlier in the same scope"},
 		{"a slot outside u2", func() []Field { return []Field{Slot(0, "a")} }, 0, "allowed only directly inside U2"},
 		{"u2 with no slot", func() []Field { return []Field{U2()} }, NoField, "u2 needs at least one slot"},

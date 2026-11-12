@@ -233,16 +233,14 @@ describe("repeat and times round values are addressed by round index", () => {
     assert.throws(pack, /^RangeError: missing x$/)
   })
 
-  it("a repeat round that reads nothing ends the repeat and keeps its values", () => {
+  // Until loop 113 this scheme built, and unpack read `tail` after a round that read nothing (AZ-4211 AC-4).
+  it("a field after a repeat whose round reads nothing is refused when the scheme is built", () => {
     // Arrange
-    const layout = scheme<Row>(1, repeat(0, [bytes(0, (x) => x.v, 0)]), u8(1, (x) => x.tail))
+    const build = () => scheme<Row>(1, repeat(0, [bytes(0, (x) => x.v, 0)]), u8(1, (x) => x.tail))
+    const text = "repeat 0: tail follows it; a repeat reads to the end of the packet, so nothing can follow it; use times"
 
-    // Act
-    const row = unpackRow(layout, "0105")
-
-    // Assert
-    assert.equal(row.tail, 5)
-    assert.deepEqual(row.v, [new Uint8Array(0)])
+    // Act / Assert
+    assert.throws(build, (e: unknown) => e instanceof RangeError && e.message === text)
   })
 
   it("AZ-2188 a repeat member named like an earlier scalar is a duplicate, not a join", () => {

@@ -59,6 +59,18 @@ const nineU8 = () => [
   u8(8, (x: Row) => x.f8),
 ]
 
+// The whole text of the refusal of a repeat that the field named `field` follows.
+const followed = (anchor: number, field: string) =>
+  new RegExp(
+    `^repeat ${anchor}: ${field} follows it; a repeat reads to the end of the packet, so nothing can follow it; use times$`,
+  )
+
+const REPEAT_IN_ELEMENT =
+  /^repeat 1 is inside a list or dict element; a repeat reads to the end of the packet, so another element cannot follow it; use times$/
+
+// The element row of the list and dict cases: u8 mode; repeat { u8 v }.
+const modeThenRepeat = () => group((x: Row) => x.item, [u8(0, (x: Row) => x.mode), repeat(1, [u8(1, (x: Row) => x.v)])])
+
 // fixtures/hostile/cases.txt, construct stage: each builder must throw RangeError whose
 // message matches `rule`, so an error from a typo in the builder does not pass the case.
 export const CONSTRUCT: Record<string, { build: () => unknown; rule: RegExp }> = {
@@ -150,6 +162,55 @@ export const CONSTRUCT: Record<string, { build: () => unknown; rule: RegExp }> =
       times(2, 1, [when(2, eq(0, 1), [when(2, eq(0, 1), [])])]),
     ),
     rule: /^times 2: the body holds no member; a round of it would charge no slot and write nothing$/,
+  },
+  // Loop 113 (contract repeat-last): a repeat that is not the last thing the packet reads, cases R1 to R9.
+  construct_repeat_then_field: {
+    build: () => scheme<Row>(1, repeat(0, [u8(0, (x) => x.v)]), u8(1, (x) => x.x)),
+    rule: followed(0, "x"),
+  },
+  construct_repeat_in_when_then_field: {
+    build: () => scheme<Row>(
+      1,
+      u8(0, (x) => x.k),
+      when(1, eq(0, 1), [repeat(1, [u8(1, (x) => x.v)])]),
+      u8(2, (x) => x.x),
+    ),
+    rule: followed(1, "x"),
+  },
+  construct_repeat_in_flags_then_field: {
+    build: () => scheme<Row>(1, flags(0, [repeat(0, [u8(0, (x) => x.v)])]), u8(1, (x) => x.x)),
+    rule: followed(0, "x"),
+  },
+  // The nested row is a group without an anchor: it numbers its members from 0, and so does the row around it.
+  construct_repeat_in_group_then_field: {
+    build: () => scheme<Row>(1, group((x) => x.m, [repeat(0, [u8(0, (x) => x.v)])]), u8(0, (x) => x.x)),
+    rule: followed(0, "x"),
+  },
+  construct_repeat_then_repeat: {
+    build: () => scheme<Row>(1, repeat(0, [u8(0, (x) => x.v)]), repeat(1, [u8(1, (x) => x.w)])),
+    rule: followed(0, "repeat 1"),
+  },
+  construct_repeat_then_exclusive_when: {
+    build: () => scheme<Row>(
+      1,
+      u8(0, (x) => x.k),
+      when(1, eq(0, 1), [repeat(1, [u8(1, (x) => x.v)])]),
+      when(2, eq(0, 2), [u8(2, (x) => x.x)]),
+    ),
+    rule: followed(1, "x"),
+  },
+  construct_repeat_in_list_element: {
+    build: () => scheme<Row>(1, list((x) => x.items, modeThenRepeat())),
+    rule: REPEAT_IN_ELEMENT,
+  },
+  construct_repeat_in_dict_element: {
+    build: () => scheme<Row>(1, dict((x) => x.d, modeThenRepeat())),
+    rule: REPEAT_IN_ELEMENT,
+  },
+  // Refused by the nesting rule, as before loop 113, with its own text.
+  construct_repeat_in_times_round: {
+    build: () => scheme<Row>(1, u8(0, (x) => x.k), times(1, 0, [repeat(1, [u8(1, (x) => x.v)])])),
+    rule: /^repeat 1 is inside a repeat or times round; a round cannot hold another repeat or times$/,
   },
 }
 

@@ -55,10 +55,22 @@ fn parse_hex(hex: &str) -> Vec<u8> {
 }
 
 /// Construct cases a Rust scheme cannot spell, with the reason (the README "Expected" line of each).
-const CONSTRUCT_NOT_RUN: &[(&str, &str)] = &[(
-    "construct_empty_round_body_list_element",
-    "a list element cannot hold a `times`; construct_empty_times_body covers the same refusal",
-)];
+const CONSTRUCT_NOT_RUN: &[(&str, &str)] = &[
+    (
+        "construct_empty_round_body_list_element",
+        "a list element cannot hold a `times`; construct_empty_times_body covers the same refusal",
+    ),
+    (
+        "construct_repeat_in_list_element",
+        "a list element is one value, never a row, so a repeat inside an element has no spelling; \
+         a row as the element is refused with or without a repeat (tests/repeat_last_tests.rs)",
+    ),
+    (
+        "construct_repeat_in_dict_element",
+        "a dict element is one value, never a row, so a repeat inside an element has no spelling; \
+         a row as the element is refused with or without a repeat (tests/repeat_last_tests.rs)",
+    ),
+];
 
 #[derive(Default)]
 struct BoolRow {

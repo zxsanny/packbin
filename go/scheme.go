@@ -49,6 +49,9 @@ func NewScheme(typeNumber int, fields ...Field) (*Scheme, error) {
 	if err := checkRoundBodies(flat); err != nil {
 		return nil, err
 	}
+	if _, err := checkRepeatLast(flat, nil, false); err != nil {
+		return nil, err
+	}
 	bound, err := bindReferences(flat, refScope{}, nil)
 	if err != nil {
 		return nil, err

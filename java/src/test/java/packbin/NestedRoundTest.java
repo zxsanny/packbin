@@ -5,9 +5,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * AZ-2127: a repeat or times inside a repeat or times round packs and unpacks one inner list per outer round
+ * AZ-2127: a times inside a repeat or times round packs and unpacks one inner list per outer round
  * ({@code v: [[5], [7]]}, null where the outer round skipped the inner group), and a nested row in a round is
- * one map per round. The loop 12 construction refusal is gone.
+ * one map per round. AZ-4214 (loop 113, contract repeat-last): a repeat inside a round, which AZ-2127 built, is
+ * refused when the scheme is built, because the next round would follow it; the pack-time refusal of its second
+ * round is gone with it.
  */
 @SuppressWarnings({"unchecked", "rawtypes"})
 final class NestedRoundTest {
@@ -15,11 +17,12 @@ final class NestedRoundTest {
 
     static void run() {
         ac1RepeatInTimesAndRepeat();
-        ac2TimesInTimesAndRepeatInRepeat();
+        ac2TimesInTimes();
         threeLevelsNest();
         ac3BytesMatchCpp();
         ac4NestedRowInARound();
-        aRepeatInARoundIsWrittenInOneRoundOnly();
+        aRepeatInARoundIsRefusedAtBuild();
+        aTimesInARoundStillPacks();
         objectRowsAndIgnoringSetters();
         formerlyRefusedShapesBuildAndRoundTrip();
         neverThrowsOnAnyShortPacket();
@@ -49,27 +52,13 @@ final class NestedRoundTest {
         expectUnpackRepack("AC-1 null for the skipped round", skipped, "01" + "010105" + "0201" + "01020607", gaps);
     }
 
-    private static void ac2TimesInTimesAndRepeatInRepeat() {
+    /** The times -> repeat and repeat -> repeat halves of AC-2 are refused since AZ-4214 (below). */
+    private static void ac2TimesInTimes() {
         Scheme<Map> timesTimes = Maps.scheme(1, u8(0, "a"),
                 Packbin.times(1, 0, u8(1, "m"), Packbin.times(2, 1, u8(2, "v"))));
         Map<String, Object> tt = Maps.map("a", 2, "m", List.of(1, 2), "v", List.of(List.of(5), List.of(6, 7)));
         expectPack("AC-2 times -> times", timesTimes, tt, "01" + "02" + "0105" + "02" + "0607");
         expectUnpackRepack("AC-2 times -> times read back", timesTimes, "010201050206" + "07", tt);
-
-        Scheme<Map> timesRepeat = Maps.scheme(1, u8(0, "a"),
-                Packbin.times(1, 0, u8(1, "m"), Packbin.repeat(2, u8(2, "v"))));
-        Map<String, Object> tr = Maps.map("a", 1, "m", List.of(1), "v", List.of(List.of(5, 6)));
-        expectPack("AC-2 times -> repeat, one round", timesRepeat, tr, "01" + "01" + "01" + "0506");
-        expectUnpackRepack("AC-2 times -> repeat read back", timesRepeat, "0101010506", tr);
-
-        Scheme<Map> repeatRepeat = Maps.scheme(1, Packbin.repeat(0, u8(0, "n"), Packbin.repeat(1, u8(1, "v"))));
-        Map<String, Object> rr = Maps.map("n", List.of(1), "v", List.of(List.of(5, 6, 7)));
-        expectPack("AC-2 repeat -> repeat, one round", repeatRepeat, rr, "0101050607");
-        expectUnpackRepack("AC-2 repeat -> repeat read back", repeatRepeat, "0101050607", rr);
-
-        HostileRun swallowed = HostileRun.of(timesRepeat, "0102" + "01" + "05" + "02" + "06");
-        PackbinTest.expectTrue("AC-2 an inner repeat reads to the end, so the second round is short -> "
-                + swallowed.kind(), swallowed.isErrorValue());
     }
 
     private static void threeLevelsNest() {
@@ -100,65 +89,65 @@ final class NestedRoundTest {
         HostileRun cut = HostileRun.of(wide, "010102");
         PackbinTest.expectTrue("AC-4 a cut nested row is an error value, not a throw -> " + cut.kind(), cut.isErrorValue());
 
-        Scheme<Map> repeatInRow = Maps.scheme(1, Packbin.repeat(0,
-                Packbin.group(Access.get("g"), Access.set("g"), Packbin.repeat(0, u8(0, "v")))));
-        Map<String, Object> inner = Maps.map("g", List.of(Maps.map("v", List.of(1, 2))));
-        expectPack("AC-4 a repeat inside the nested row of a round", repeatInRow, inner, "01" + "0102");
-        expectUnpackRepack("AC-4 a repeat inside the nested row read back", repeatInRow, "010102", inner);
+        // AZ-4214 AC-4: a repeat in the nested row of a round is refused (below); a times there has a count per row.
+        Scheme<Map> timesInRow = Maps.scheme(1, Packbin.repeat(0,
+                Packbin.group(Access.get("g"), Access.set("g"), u8(0, "n"), Packbin.times(1, 0, u8(1, "v")))));
+        Map<String, Object> inner = Maps.map("g",
+                List.of(Maps.map("n", 2, "v", List.of(1, 2)), Maps.map("n", 1, "v", List.of(3))));
+        expectPack("AC-4 a times inside the nested row of a round", timesInRow, inner, "01" + "020102" + "0103");
+        expectUnpackRepack("AC-4 a times inside the nested row read back", timesInRow, "01" + "020102" + "0103", inner);
     }
 
-    private static final String ONE_ROUND =
-            ": a repeat has no end marker, so it can be written in one round only";
-
-    private static void expectRefused(String label, Scheme<Map> scheme, Map<String, Object> row, String message) {
-        byte[][] wrote = {null};
-        PackbinTest.expectThrows(label, () -> wrote[0] = BinaryPacker.pack(scheme, row), message);
-        PackbinTest.expectTrue(label + ": no bytes returned", wrote[0] == null);
+    /**
+     * AZ-4214 AC-5: a repeat inside a repeat or times round is refused when the scheme is built, directly or under
+     * a when, flags, flag bit, group or nested row: the next round would follow it. Before loop 113 these schemes
+     * built, packed one round and refused a second one at pack ("a repeat has no end marker ..."); that refusal
+     * cannot be reached any more and is removed.
+     */
+    private static void aRepeatInARoundIsRefusedAtBuild() {
+        // Arrange
+        String inRound = RepeatLastTest.IN_ROUND;
+        Field fb = Packbin.flagByte();
+        Field n = Packbin.u8(0, Access.get((NestedRow r) -> r.n),
+                Access.set((NestedRow r, Object x) -> r.n = (List<Object>) x));
+        Field v = Packbin.u8(1, Access.get((NestedRow r) -> r.v),
+                Access.set((NestedRow r, Object x) -> r.v = (List<Object>) x));
+        // Act and Assert
+        RepeatLastTest.refusedAtBuild("AC-5 repeat in repeat", "repeat 1" + inRound,
+                () -> Maps.scheme(1, Packbin.repeat(0, u8(0, "n"), Packbin.repeat(1, u8(1, "v")))));
+        RepeatLastTest.refusedAtBuild("AC-5 repeat in repeat, typed row", "repeat 1" + inRound,
+                () -> new Scheme<>(1, NestedRow.class, Packbin.repeat(0, n, Packbin.repeat(1, v))));
+        RepeatLastTest.refusedAtBuild("AC-5 repeat in times", "repeat 2" + inRound,
+                () -> Maps.scheme(1, u8(0, "a"), Packbin.times(1, 0, u8(1, "m"), Packbin.repeat(2, u8(2, "v")))));
+        RepeatLastTest.refusedAtBuild("AC-5 under a when", "repeat 1" + inRound,
+                () -> Maps.scheme(1, Packbin.repeat(0, u8(0, "k"),
+                        Packbin.when(1, Packbin.eq(0, 1), Packbin.repeat(1, u8(1, "v"))))));
+        RepeatLastTest.refusedAtBuild("AC-5 under flags", "repeat 0" + inRound,
+                () -> Maps.scheme(1, Packbin.repeat(0, Packbin.flags(0, Packbin.repeat(0, u8(0, "v"))))));
+        RepeatLastTest.refusedAtBuild("AC-5 under a split flag bit", "repeat 0" + inRound,
+                () -> Maps.scheme(1, Packbin.repeat(0, fb, fb.bit(Packbin.repeat(0, u8(0, "v"))))));
+        RepeatLastTest.refusedAtBuild("AC-5 under an anchored group", "repeat 0" + inRound,
+                () -> Maps.scheme(1, Packbin.repeat(0, Packbin.group(0, Packbin.repeat(0, u8(0, "v"))))));
+        RepeatLastTest.refusedAtBuild("AC-5 in the nested row of a round", "repeat 0" + inRound,
+                () -> Maps.scheme(1, Packbin.repeat(0,
+                        Packbin.group(Access.get("g"), Access.set("g"), Packbin.repeat(0, u8(0, "v"))))));
+        RepeatLastTest.refusedAtBuild("AC-5 two rounds deep", "repeat 3" + inRound,
+                () -> Maps.scheme(1, u8(0, "a"), Packbin.times(1, 0, u8(1, "b"),
+                        Packbin.times(2, 1, u8(2, "m"), Packbin.repeat(3, u8(3, "v"))))));
     }
 
-    /** A repeat reads to the end of the packet, so pack refuses one that a second round would write after it. */
-    private static void aRepeatInARoundIsWrittenInOneRoundOnly() {
-        Scheme<Map> repeatRepeat = Maps.scheme(1, Packbin.repeat(0, u8(0, "n"), Packbin.repeat(1, u8(1, "v"))));
-        expectRefused("one-round: repeat in repeat, two rounds", repeatRepeat,
-                Maps.map("n", List.of(1, 1), "v", List.of(List.of(5), List.of(6))), "1" + ONE_ROUND);
-        expectRefused("one-round: repeat in repeat, the first round writes nothing", repeatRepeat,
-                Maps.map("n", List.of(1, 1), "v", List.of(List.of(), List.of(6))), "1" + ONE_ROUND);
-
-        Scheme<Map> inRow = Maps.scheme(1, Packbin.repeat(0,
-                Packbin.group(Access.get("g"), Access.set("g"), Packbin.repeat(0, u8(0, "v")))));
-        expectRefused("one-round: repeat in a nested row, two rounds", inRow,
-                Maps.map("g", List.of(Maps.map("v", List.of(1)), Maps.map("v", List.of(2)))), "0" + ONE_ROUND);
-
-        Scheme<Map> timesRepeat = Maps.scheme(1, u8(0, "a"),
-                Packbin.times(1, 0, u8(1, "m"), Packbin.repeat(2, u8(2, "v"))));
-        expectRefused("one-round: repeat in times, two rounds", timesRepeat,
-                Maps.map("a", 2, "m", List.of(1, 2), "v", List.of(List.of(5), List.of(6))), "2" + ONE_ROUND);
-
-        Scheme<Map> deep = Maps.scheme(1, u8(0, "a"), Packbin.times(1, 0, u8(1, "b"),
-                Packbin.times(2, 1, u8(2, "m"), Packbin.repeat(3, u8(3, "v")))));
-        expectRefused("one-round: repeat under 1 outer round of 2 inner rounds", deep,
-                Maps.map("a", 1, "b", List.of(2), "m", List.of(List.of(1, 2)),
-                        "v", List.of(List.of(List.of(5), List.of(6)))), "3" + ONE_ROUND);
-        expectRefused("one-round: repeat under 2 outer rounds of 1 inner round", deep,
-                Maps.map("a", 2, "b", List.of(1, 1), "m", List.of(List.of(1), List.of(2)),
-                        "v", List.of(List.of(List.of(5)), List.of(List.of(6)))), "3" + ONE_ROUND);
-        expectPack("one-round: repeat under 1 outer round of 1 inner round", deep,
-                Maps.map("a", 1, "b", List.of(1), "m", List.of(List.of(1)), "v", List.of(List.of(List.of(5, 6)))),
-                "01" + "01" + "01" + "01" + "0506");
-
-        expectPack("one-round: outer count 0 packs", repeatRepeat, Maps.map("n", List.of(), "v", List.of()), "01");
-        expectPack("one-round: times count 0 packs", timesRepeat, Maps.map("a", 0), "0100");
-        Scheme<Map> skipped = Maps.scheme(1, Packbin.repeat(0, u8(0, "k"),
-                Packbin.when(1, Packbin.eq(0, 1), Packbin.repeat(1, u8(1, "v")))));
-        expectPack("one-round: only one round holds the repeat", skipped,
-                Maps.map("k", List.of(2, 1), "v", Arrays.asList(null, List.of(5, 6))), "01" + "02" + "010506");
-
+    /** AZ-4214 AC-5: a times has a count, so one inside a round builds and packs as before, under any outer rounds. */
+    private static void aTimesInARoundStillPacks() {
+        // Arrange
         Map<String, Object> several = Maps.map("a", 2, "m", List.of(1, 2), "v", List.of(List.of(5), List.of(6, 7)));
         Scheme<Map> timesTimes = Maps.scheme(1, u8(0, "a"),
                 Packbin.times(1, 0, u8(1, "m"), Packbin.times(2, 1, u8(2, "v"))));
-        expectPack("one-round: an inner times under several outer rounds still packs", timesTimes, several, "010201050206" + "07");
-        expectUnpackRepack("one-round: an inner times under several outer rounds reads back", timesTimes,
+        // Act and Assert
+        expectPack("an inner times under several outer rounds still packs", timesTimes, several, "010201050206" + "07");
+        expectUnpackRepack("an inner times under several outer rounds reads back", timesTimes,
                 "010201050206" + "07", several);
+        expectPack("an outer repeat of no round packs", REPEAT_TIMES, Maps.map("n", List.of(), "v", List.of()), "01");
+        expectPack("an outer times of count 0 packs", timesTimes, Maps.map("a", 0), "0100");
     }
 
     public static final class NestedRow {
@@ -187,17 +176,21 @@ final class NestedRoundTest {
                 run.finished && run.result == null && run.handled);
     }
 
-    /** Shapes that SchemeOrder refused until AZ-2127; each now builds and round-trips. */
+    /**
+     * Shapes that SchemeOrder refused until AZ-2127; each builds and round-trips. The repeat inside a when in a
+     * repeat is refused again since AZ-4214 (AC-4, above), so the when holds its times form: a count, then the rounds.
+     */
     private static void formerlyRefusedShapesBuildAndRoundTrip() {
         Scheme<Map> timesTimes = Maps.scheme(1, u8(0, "n"),
                 Packbin.times(1, 0, u8(1, "m"), Packbin.times(2, 1, u8(2, "v"))));
         PackbinTest.expectTrue("times inside times builds", timesTimes != null);
 
         Scheme<Map> inWhen = Maps.scheme(1, Packbin.repeat(0, u8(0, "k"),
-                Packbin.when(1, Packbin.eq(0, 1), Packbin.repeat(1, u8(1, "v")))));
-        Map<String, Object> skip = Maps.map("k", List.of(2, 1), "v", Arrays.asList(null, List.of(5, 6)));
-        expectPack("repeat inside a when in a repeat", inWhen, skip, "01" + "02" + "010506");
-        expectUnpackRepack("repeat inside a when in a repeat read back", inWhen, "01" + "02" + "010506", skip);
+                Packbin.when(1, Packbin.eq(0, 1), u8(1, "n"), Packbin.times(2, 1, u8(2, "v")))));
+        Map<String, Object> skip = Maps.map("k", List.of(2, 1), "n", Arrays.asList(null, 2),
+                "v", Arrays.asList(null, List.of(5, 6)));
+        expectPack("times inside a when in a repeat", inWhen, skip, "01" + "02" + "01020506");
+        expectUnpackRepack("times inside a when in a repeat read back", inWhen, "01" + "02" + "01020506", skip);
 
         Scheme<Map> inGroup = Maps.scheme(1, Packbin.repeat(0,
                 Packbin.group(0, u8(0, "n"), Packbin.times(1, 0, u8(1, "v")))));
@@ -212,9 +205,9 @@ final class NestedRoundTest {
                 REPEAT_TIMES,
                 Maps.scheme(1, Packbin.repeat(0, Packbin.group(Access.get("g"), Access.set("g"), u8(0, "v"),
                         Packbin.u16(1, Access.get("w"), Access.set("w"))))),
-                Maps.scheme(1, u8(0, "a"), Packbin.times(1, 0, u8(1, "m"), Packbin.repeat(2, u8(2, "v")))),
+                Maps.scheme(1, u8(0, "a"), Packbin.times(1, 0, u8(1, "m"), Packbin.times(2, 1, u8(2, "v")))),
                 Maps.scheme(1, Packbin.repeat(0, Packbin.group(Access.get("g"), Access.set("g"),
-                        Packbin.repeat(0, u8(0, "v")))))};
+                        u8(0, "n"), Packbin.times(1, 0, u8(1, "v")))))};
         int[] alphabet = {0, 1, 2, 255};
         boolean[] done = {false};
         String[] failure = {null};
