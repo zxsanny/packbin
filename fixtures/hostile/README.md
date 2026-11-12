@@ -45,6 +45,8 @@
 
 **New in loop 99 (AZ-4143).** Dart is the ninth package. Its loader (`dart/test/hostile/`) reads `cases.txt` at run time and runs every data line at its stage (15 `unpack`, 2 `limit`, 15 `construct`, 43 `pack`); a line with no handler, or a handler with no line, fails the test, and a case Dart cannot run is named in its `notRun` map and in the `Not run by` line of its section, never skipped silently. Each of the 43 `pack` sections and both `limit` sections name Dart in `Run by` (Dart packs every row in its map form, lists as `List`, `null` where an entry is absent; a group's members sit in a nested map under the group's name, as in Go and Swift). The Dart loader pins the whole text of every refusal, unpack errors included. As in Go and Swift, the two `zero_progress_repeat_*` unpack cases refuse the scheme (`scheme_error`). A count that has no value (its source is behind a clear bit) or is negative is a `bad_value` in Dart, so `count_behind_clear_flag` and `count_behind_clear_flag_bits` give an allowed term; since loop 100 invalid UTF-8 and the dictionary key order cases are `short_packet` with `needed` 0, as in Go and Swift; no case is in `notRun`.
 
+**New in loop 113 (AZ-4210).** Thirteen cases at the end of the file, the shared cases of the contract `_docs/02_document/contracts/library/repeat-last.md` (owner decision 2026-11-12, loop 112): a scheme is refused when it is built if a `repeat` is not the last thing its packet reads. A `repeat` has no count, so unpack reads rounds until the buffer ends and takes whatever the scheme writes after the repeat for more rounds. Nine `construct` cases, R1 to R9 of the contract: `construct_repeat_then_field`, `construct_repeat_in_when_then_field`, `construct_repeat_in_flags_then_field`, `construct_repeat_in_group_then_field`, `construct_repeat_then_repeat`, `construct_repeat_then_exclusive_when`, `construct_repeat_in_list_element`, `construct_repeat_in_dict_element` and `construct_repeat_in_times_round`. Four `pack` cases, K1 to K4 of the contract, schemes that keep building and keep their bytes: `pack_repeat_last`, `pack_repeat_last_in_when`, `pack_repeat_last_in_flags` and `pack_times_then_field`. K5 of the contract (the split flag-byte form) is not a shared case: not every package has that form, so the packages that have it pin it in their own tests. The file asserts `scheme_error` only; the refusal texts are the contract's and each package pins them in its own tests. Where a package's scheme errors carry a text it is `repeat <anchor>: <field> follows it; a repeat reads to the end of the packet, so nothing can follow it; use times` for a field after the repeat and `repeat <anchor> is inside a list or dict element; a repeat reads to the end of the packet, so another element cannot follow it; use times` for a repeat in an element, with the repeat and the field named in the package's own words. C++ and the heap-free Rust API answer `SchemeInvalid` with the id of the first field after the repeat, or of the repeat when it sits in an element or a round; a C++ `constexpr` scheme does not compile. The four packets were run in TypeScript on `9cfccda` (loop 112), `pack_repeat_last` in all nine packages (the `control` line of `scripts/probes/repeat-followed-by-field/`); each package task replays them on its unchanged code first, as the hex provenance rule above says. The 75 older cases are unchanged. The file now holds 88 cases: 15 `unpack`, 2 `limit`, 24 `construct` and 47 `pack`.
+
 ## zero_progress_repeat_bool
 
 - Scheme: id0 `repeat` anchor 0 { id0 `bool on` }.
@@ -681,3 +683,108 @@
 - Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (typed row), Go (map rows), Swift (map rows), Dart (map rows).
 - Not run by: none.
 - Source: loop 55, AZ-3133.
+
+## construct_repeat_then_field
+
+- Scheme: id0 `repeat` anchor 0 { id0 `u8 v` }; id1 `u8 x`. Case R1 of the contract (`repeat-last.md`): a field after the repeat, at the top level.
+- No packet: a `repeat` has no count, so unpack reads rounds until the buffer ends and would read `x` as one more round. Before loop 113 every package built this scheme and packed `01 05 06 09` for `v = [5, 6]`, `x = 9`, and its own unpack refused those bytes (`09` is read as a third round, then `x` is missing: a short packet at `x`). Construction must fail, before any pack or unpack.
+- Expected: `scheme_error`. The refusal names the repeat and `x`, the first field after it (the text is in the loop 113 paragraph above). C++ and the heap-free Rust API: `SchemeInvalid` with the id of `x`.
+- Source: loop 112, probe shape `a` of `scripts/probes/repeat-followed-by-field/` (`_docs/06_metrics/repeat-followed-by-field_2026-11-12.md`, all nine packages); loop 113, AZ-4210.
+
+## construct_repeat_in_when_then_field
+
+- Scheme: id0 `u8 k`; id1 `when` anchor 1, `eq(0, 1)` { id1 `repeat` anchor 1 { id1 `u8 v` } }; id2 `u8 x`. Case R2 of the contract: a field after the `when` that holds the repeat.
+- No packet: when the `when` is taken, `x` follows the repeat and is read as a round (`k = 1`, `v = [5, 6]`, `x = 9` packed `01 01 05 06 09` before loop 113, and the package's own unpack refused it). The check is on the scheme, not on a row: a row with `k = 0` read back, and the scheme is refused all the same.
+- Expected: `scheme_error`, as `construct_repeat_then_field`; the field after the repeat is `x`.
+- Source: loop 112, probe shape `e-when` (all nine packages); loop 113, AZ-4210.
+
+## construct_repeat_in_flags_then_field
+
+- Scheme: id0 `flags` anchor 0 { id0 `repeat` anchor 0 { id0 `u8 v` } }; id1 `u8 x`. Case R3 of the contract: a field after the `flags` that holds the repeat.
+- No packet: `v = [5, 6]`, `x = 9` packed `01 01 05 06 09` before loop 113 (flags byte `01`, two rounds, `x`), and the package's own unpack refused it. A row with no rounds leaves the bit clear and read back; the scheme is refused all the same.
+- Expected: `scheme_error`, as `construct_repeat_then_field`; the field after the repeat is `x`.
+- Source: loop 112, probe shape `e-flags` (all nine packages); loop 113, AZ-4210.
+
+## construct_repeat_in_group_then_field
+
+- Scheme: a nested row `m` (a group without an anchor; its members are numbered from 0 in a scope of their own) { id0 `repeat` anchor 0 { id0 `u8 v` } }; then id0 `u8 x` in the row around it. Python, Rust and C++ have only an anchored group, which shares the ids of the row around it: id0 `group m` anchor 0 { id0 `repeat` anchor 0 { id0 `u8 v` } }; id1 `u8 x`. Case R4 of the contract: a field after the nested row or group that holds the repeat.
+- No packet: `v = [5, 6]` in `m` and `x = 9` packed `01 05 06 09` before loop 113, the bytes of `construct_repeat_then_field`, and the package's own unpack refused them the same way.
+- Expected: `scheme_error`, as `construct_repeat_then_field`; the field after the repeat is `x`.
+- Source: loop 112, probe shape `d` (all nine packages; an anchored group in place of the nested row gives the same bytes); loop 113, AZ-4210.
+
+## construct_repeat_then_repeat
+
+- Scheme: id0 `repeat` anchor 0 { id0 `u8 v` }; id1 `repeat` anchor 1 { id1 `u8 w` }. Case R5 of the contract: a second repeat is a field after the first.
+- No packet: this is the shape that read back wrong values with no error. Before loop 113 `v = [5]`, `w = [6]` packed `01 05 06` and every package unpacked it as `v = [5, 6]` with `w` absent or empty. Construction must fail.
+- Expected: `scheme_error`, as `construct_repeat_then_field`; what follows the first repeat is the second one.
+- Source: loop 112, probe shape `f` (all nine packages); loop 113, AZ-4210.
+
+## construct_repeat_then_exclusive_when
+
+- Scheme: id0 `u8 k`; id1 `when` anchor 1, `eq(0, 1)` { id1 `repeat` anchor 1 { id1 `u8 v` } }; id2 `when` anchor 2, `eq(0, 2)` { id2 `u8 x` }. Case R6 of the contract: the field after the repeat sits under a `when` that cannot be taken together with the repeat's `when`.
+- No packet: no row writes both the repeat and `x`, so every row read back before loop 113 (TypeScript: `k = 1`, `v = [5, 6]` packs `01 01 05 06`; `k = 2`, `x = 9` packs `01 02 09`). The scheme is refused all the same: the rule does not compare the two conditions (owner decision 2026-11-12). The exception can be added later without breaking a scheme, and this case pins today's answer.
+- Expected: `scheme_error`, as `construct_repeat_then_field`; the field after the repeat is `x`.
+- Source: loop 112, the TypeScript probe line `x-exclusive-when` and the scratch run named in the contract; loop 113, AZ-4210.
+
+## construct_repeat_in_list_element
+
+- Scheme: id0 `list items` of an element `group` { id0 `u8 mode`; id1 `repeat` anchor 1 { id1 `u8 v` } }. The element is a row in each package's own spelling (a group without an anchor, a nested row). Case R7 of the contract: a repeat inside a list element.
+- No packet: the repeat of one item reads the bytes of the next item as its rounds. Before loop 113 two items, `{mode 1, v [5]}` and `{mode 2, v []}`, packed `01 02 00 01 05 02`, and the package's own unpack refused it (the `02` of the second item is read as a round of the first: a short packet at `mode`). A list of one item that is the last field read back; the scheme is refused all the same. Construction must fail.
+- Expected: `scheme_error`. The refusal names the repeat and says it is inside a list or dict element (the text is in the loop 113 paragraph above).
+- Cannot be written by: Rust, in the map form and in the heap-free API (a list or dict element is one value, never a row, so there is no spelling of the case; a row as an element is refused with or without a repeat, `list "items" cannot carry element "item": ...` and `SchemeInvalid`), and C++ for a list bound to a member (an element row cannot be bound; `SchemeInvalid`, the same answer for a row without a repeat). The Rust loader names this id as not writable with that reason and keeps its own tests of the row refusal. C++ runs the case in the unbound form `list(element)`, which built before loop 113 (nothing could be packed from it, `BadValue`), and expects `SchemeInvalid` at the id of the repeat, or a compile error for a `constexpr` scheme.
+- Source: loop 112, probe shapes `b` and `b-unbound` (TypeScript, C#, Python, Java, Go, Swift and Dart built and packed it); loop 113, AZ-4210.
+
+## construct_repeat_in_dict_element
+
+- Scheme: id0 `dict d` of an element `group` { id0 `u8 mode`; id1 `repeat` anchor 1 { id1 `u8 v` } }. Case R8 of the contract: a repeat inside a dict element.
+- No packet: as `construct_repeat_in_list_element`. Before loop 113 two entries, `"a": {mode 1, v [5]}` and `"b": {mode 2, v []}`, packed `01 02 00 02 10 61 01 05 02 10 62 02`, and the package's own unpack refused it (the key of the second entry is read as rounds of the first).
+- Expected: `scheme_error`, as `construct_repeat_in_list_element`.
+- Cannot be written by: Rust and C++ for a dict bound to a member, for the reasons given in `construct_repeat_in_list_element`. C++ runs the case in the unbound form `dict(element)`.
+- Source: loop 112, probe shapes `c` and `c-unbound`; loop 113, AZ-4210.
+
+## construct_repeat_in_times_round
+
+- Scheme: id0 `u8 k`; id1 `times` anchor 1, count = id0 { id1 `repeat` anchor 1 { id1 `u8 v` } }. Case R9 of the contract: a repeat inside a round.
+- No packet: the repeat of one round would read the bytes of the next round as its own rounds. Construction must fail.
+- Expected: `scheme_error`. TypeScript, C#, Python, Go, Swift, Dart and Rust refused this scheme before loop 113 by their nesting rule and keep that rule and its text (`repeat 1 is inside a repeat or times round; a round cannot hold another repeat or times`; Rust: `repeat at id 1 is inside a repeat or times round; a round keeps no inner repeat rounds`). Java and C++ built it before loop 113 and refuse it now: Java with `repeat <anchor> is inside a repeat or times round; a repeat reads to the end of the packet, so another round cannot follow it; use times`, C++ with `SchemeInvalid` at the id of the repeat, or a compile error for a `constexpr` scheme. A `times` inside a round keeps building in Java and C++.
+- Source: the contract, rule 3 (agent default of loop 112, which the owner can overrule); the nesting rule of the other seven packages; loop 113, AZ-4210.
+
+## pack_repeat_last
+
+- Scheme: id0 `u8 x`; id1 `repeat` anchor 1 { id1 `u8 v` }. Case K1 of the contract: the repeat is the last thing the packet reads.
+- Row: `x = 9`, `v = [5, 6]`. Where a repeat takes its rounds as rows, two round rows, `v = 5` and `v = 6`.
+- Packet `01 09 05 06`: type `01`; `x` = 9; two one-byte rounds.
+- Expected: `bytes` `01090506`. Nothing follows the repeat, so the rule of loop 113 does not refuse the scheme and the bytes are the ones it packed before.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form, the rounds as `__repeat__` groups), C++ (an `Array` of two rounds), Go (map rows), Swift (map rows), Dart (map rows).
+- Not run by: none.
+- Source: loop 112, probe shape `control` (run in all nine packages on `9cfccda`); loop 113, AZ-4210.
+
+## pack_repeat_last_in_when
+
+- Scheme: id0 `u8 k`; id1 `when` anchor 1, `eq(0, 1)` { id1 `repeat` anchor 1 { id1 `u8 v` } }. Case K2 of the contract: the repeat is the last thing inside a `when`, and nothing follows the `when`.
+- Row: `k = 1`, `v = [5, 6]`. Where a repeat takes its rounds as rows, two round rows.
+- Packet `01 01 05 06`: type `01`; `k` = 1, so the `when` holds; two one-byte rounds.
+- Expected: `bytes` `01010506`. The scheme of `construct_repeat_in_when_then_field` without its last field.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form, the rounds as `__repeat__` groups), C++ (an `Array` of two rounds), Go (map rows), Swift (map rows), Dart (map rows).
+- Not run by: none.
+- Source: the contract, case K2 (run in TypeScript on `9cfccda`, loop 112; the other eight packages replay it on their unchanged code first); loop 113, AZ-4210.
+
+## pack_repeat_last_in_flags
+
+- Scheme: id0 `flags` anchor 0 { id0 `u8 x`; id1 `repeat` anchor 1 { id1 `u8 v` } }. Case K3 of the contract: the repeat is the last member of a `flags`, and nothing follows the `flags`.
+- Row: `x = 9`, `v = [5, 6]`. Where a repeat takes its rounds as rows, two round rows.
+- Packet `01 03 09 05 06`: type `01`; flags byte `03` (bit 0: `x` is present; bit 1: the repeat wrote a round); `x` = 9; two one-byte rounds.
+- Expected: `bytes` `0103090506`. A member before the repeat is fine; a member after it would be refused, as the field of `construct_repeat_in_flags_then_field` is.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form, the rounds as `__repeat__` groups), C++ (a typed row with `x` set and an `Array` of two rounds), Go (map rows), Swift (map rows), Dart (map rows).
+- Not run by: none.
+- Source: the contract, case K3 (run in TypeScript on `9cfccda`, loop 112; the other eight packages replay it on their unchanged code first); loop 113, AZ-4210.
+
+## pack_times_then_field
+
+- Scheme: id0 `u8 k`; id1 `times` anchor 1, count = id0 { id1 `u8 v` }; id2 `u8 x`. Case K4 of the contract: a `times` has a count, so a field may follow it. The rule of loop 113 is about `repeat` only.
+- Row: `k = 2`, `v = [5, 6]`, `x = 9`.
+- Packet `01 02 05 06 09`: type `01`; `k` = 2; two one-byte rounds; `x` = 9.
+- Expected: `bytes` `0102050609`. This is the scheme to write in place of `construct_repeat_then_field`: the count tells unpack where the rounds end.
+- Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of two beside `k = 2`), Go (map rows), Swift (map rows), Dart (map rows).
+- Not run by: none.
+- Source: the contract, case K4 (run in TypeScript on `9cfccda`, loop 112; the other eight packages replay it on their unchanged code first); loop 113, AZ-4210.

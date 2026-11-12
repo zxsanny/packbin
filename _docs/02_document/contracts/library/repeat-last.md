@@ -3,7 +3,7 @@
 **Component**: library
 **Producer task**: AZ-4210 (hostile cases and README text); epic AZ-4209
 **Consumer tasks**: AZ-4211 (TypeScript), AZ-4212 (C#), AZ-4213 (Python), AZ-4214 (Java), AZ-4215 (Go), AZ-4216 (Swift), AZ-4217 (Dart), AZ-4218 (Rust), AZ-4219 (C++)
-**Version**: 1.0.0
+**Version**: 1.0.1
 **Status**: frozen (owner decision 2026-11-12, loop 112: "Refuse at build"); not implemented yet
 **Last Updated**: 2026-11-12
 
@@ -38,7 +38,7 @@ The check is on the scheme, not on a row: a field counts when it can write a byt
 - Text, where the package's scheme errors carry a text: it names the repeat and the first field that follows it, in the words the package's other scheme errors use for a field, and says what to use.
   - Followed: `repeat <anchor>: <field> follows it; a repeat reads to the end of the packet, so nothing can follow it; use times`
   - Inside an element: `repeat <anchor> is inside a list or dict element; a repeat reads to the end of the packet, so another element cannot follow it; use times`
-  - Inside a round (Java, C++ only; the other seven keep their text): `repeat <anchor> is inside a repeat or times round; a round cannot hold another repeat or times`
+  - Inside a round (Java only, since C++ reports a status; the other seven keep their text, which also covers a `times` in a round): `repeat <anchor> is inside a repeat or times round; a repeat reads to the end of the packet, so another round cannot follow it; use times`
 - C++ and the Rust heap-free API report a status and a field id, not a text: `SchemeInvalid` with the id of the first field that follows (case 1) or of the repeat (cases 2 and 3). A C++ `constexpr` scheme does not compile.
 
 ## Cases
@@ -85,6 +85,8 @@ K1 to K5 were run in TypeScript on `9cfccda` (loop 112, a scratch run): each pac
 - Owner, 2026-11-12 (loop 112): refuse at scheme build. The alternatives (allow a field under a `when` that cannot hold together with the repeat's `when`; refuse at pack; keep the README sentence) were not taken. The first can be added later as a relaxation without breaking a scheme; R6 pins today's answer.
 - Agent default, loop 112 (the owner can overrule it): Java and C++ refuse a repeat inside a round at build (case 3), as the other seven do. Today Java packs such a scheme in some rows and refuses others at pack (`a repeat has no end marker, so it can be written in one round only`), and the README warns that the packet reads back differently.
 
+- Agent, loop 113 (the owner can overrule it; `_docs/OPERATOR_TODO.md` D7): the Java text of case 3 does not reuse the sentence of the other seven ("a round cannot hold another repeat or times"), because in Java a round can hold a `times`. It gives the reason of this rule instead, in the shape of the other two texts.
+
 ## Non-Goals
 
 - The wire format of `repeat` does not change; no count is added.
@@ -103,3 +105,4 @@ K1 to K5 were run in TypeScript on `9cfccda` (loop 112, a scratch run): each pac
 ## Change Log
 
 - 1.0.0 (2026-11-12, loop 112): first version, from the probe findings and the owner's decision.
+- 1.0.1 (2026-11-12, loop 113, AZ-4210): the Java text of "inside a round" changed from "...; a round cannot hold another repeat or times" to "...; a repeat reads to the end of the packet, so another round cannot follow it; use times". The old sentence is false in Java and C++, where a `times` inside a round builds. No case and no outcome changed.

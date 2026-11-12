@@ -63,7 +63,7 @@ Then 0 bytes differ; every scheme the rule refuses is rewritten with `times` or 
 **AC-5: A repeat inside a round is refused when the scheme is built**
 Given R9 of the contract, a `repeat` inside a `repeat` or `times` round, directly or under a `when`, `flags` or group
 When the scheme is built
-Then it is refused with `repeat <anchor> is inside a repeat or times round; a round cannot hold another repeat or times`; a `times` inside a round still builds and packs as before; the pack-time refusal `a repeat has no end marker` can no longer be reached and is removed with its tests
+Then it is refused with `repeat <anchor> is inside a repeat or times round; a repeat reads to the end of the packet, so another round cannot follow it; use times`; a `times` inside a round still builds and packs as before; the pack-time refusal `a repeat has no end marker` can no longer be reached and is removed with its tests
 
 **AC-6: The probe shows the refusals**
 Given the committed probe of loop 112
@@ -86,7 +86,7 @@ Then the build column says `refused` for `a`, `b`, `c`, `d`, `e-when`, `e-flags`
 | AC-1 | a field after the repeat that cannot write a byte (a `bool` bit of an earlier flag byte, a zero-width `bytes`), where the package can write it | builds |
 | AC-2 | K1 to K5 | the contract's packet; the values read back |
 | AC-3 | the new hostile cases | the outcome of `cases.txt`; skipped cases named |
-| AC-5 | A repeat inside a round is refused when the scheme is built | it is refused with `repeat <anchor> is inside a repeat or times round; a round cannot hold another repeat or times`; a `times` inside a round still builds and packs as before; the pack-time refusal `a repeat has no end marker` can no longer be reached and is removed with its tests |
+| AC-5 | A repeat inside a round is refused when the scheme is built | it is refused with `repeat <anchor> is inside a repeat or times round; a repeat reads to the end of the packet, so another round cannot follow it; use times`; a `times` inside a round still builds and packs as before; the pack-time refusal `a repeat has no end marker` can no longer be reached and is removed with its tests |
 
 ## Blackbox Tests
 

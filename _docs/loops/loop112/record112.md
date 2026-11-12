@@ -20,14 +20,19 @@ feature_assessment: COMPLETE, round 1 (`assessment112.md`): 13 covered, 1 out of
 security: not in plan (trivial: probes and documents only, no package source, no CI, compose or deploy file, no dependency)
 retro: none (due by loop 113)
 leftovers:
-  - epic AZ-4209 (`todo/`, unclaimed, 29 points): AZ-4210 first (shared hostile cases and README), then AZ-4211 to AZ-4219 (one per package) in waves of four workers (TypeScript, C#, Python, Java; Go, Swift, Dart, Rust; C++ with its embedded rows); `_docs/02_task_plans/repeat-must-be-last/feature-description.md` has the order
-  - owner, before AZ-4214 and AZ-4219 start: say so if Java and C++ should keep building a repeat inside a round (the agent default refuses it)
-  - not measured: the test schemes the rule refuses in the eight packages other than TypeScript (each task counts its own); Archangel's schemes (another repository; check before the upgrade)
-  - process: `scripts/loop-tests.sh` writes a stage's stamp only on a tree that is clean apart from the state file, so the default plan re-ran 9 stages that had passed; step 11 seeded `LOOP_TESTS_STAMPS` with `bb99503` (batch report, discovery 7). `scaffold` takes 362 to 386 s for a change under `scripts/` that no scaffold test reads
-  - from loop 109 (unchanged): `dotnet test csharp` hang without a console logger; the embedded-arm DNS cause (not reproduced); the sibling probe of the AZ-4199 element row in Java, Go, Swift, Rust, Python and C++
-  - owner (unchanged): first `dart pub publish`, then automated publishing; the two README lines that say Dart is installed from the repository
-  - Jira: AZ-4206 In Testing; AZ-4209 (epic) and AZ-4210 to AZ-4219 To Do; AZ-4205, AZ-4198, AZ-4199 In Testing (unchanged); the next tag carries AZ-4205
-  - from loops 98 to 110 (unchanged): U24; vcpkg `supports`; a public-key pairing step; the s390x stage does not compare its percentage packets with the M3 file; root-owned folders under `cpp/build/embedded/rust-m33f` and `rust-mutants`; the open owner questions of loop 99 kept as built; keyserver.ubuntu.com did not answer in loop 105; the autodev rule file `worktree-isolation.md` is outside this repository
+  # converted on 2026-11-12 at the first P0 under the work-queue protocol (loop 113); this list stands for the free-text leftovers of the records of loops 98 to 112
+  - _docs/02_tasks/todo/AZ-4210_repeat_last_hostile_cases_and_readme.md to AZ-4219 (epic AZ-4209; claimed by loop 113)
+  - _docs/02_tasks/backlog/element-row-sibling-probe.md
+  - _docs/02_tasks/backlog/loop-tests-stamp-on-dirty-docs.md
+  - _docs/02_tasks/backlog/csharp-dotnet-test-hang-without-console-logger.md
+  - _docs/02_tasks/backlog/s390x-percentage-packets-vs-m3.md
+  - _docs/02_tasks/backlog/embedded-arm-dns-cause.md
+  - _docs/02_tasks/backlog/dart-readme-install-lines-after-first-publish.md
+  - _docs/OPERATOR_TODO.md N1 (first `dart pub publish`), N2 (vcpkg tool), N3 (Archangel schemes), N4 (autodev skill sentence)
+  - _docs/OPERATOR_TODO.md D1 (Java and C++ refuse a repeat inside a round), D2 (U24), D3 (vcpkg `supports`), D4 (Dart API choices of loop 99), D5 (public-key pairing step), D6 (released tickets to Done)
+notes:
+  - not work, kept for the record: the send branch of the AZ-4196 key upload has not run for real (`publish-key` is the manual fallback); keyserver.ubuntu.com did not answer in loop 105; no physical board was ever used (QEMU `mps2-an505` only); the root-owned folders under `cpp/build/embedded/rust-m33f` and `rust-mutants` are gone (checked 2026-11-12)
+  - Jira at close: AZ-4206 In Testing; AZ-4209 (epic) and AZ-4210 to AZ-4219 To Do; AZ-4205, AZ-4198, AZ-4199 In Testing; the next tag carries AZ-4205
 smoke: PASS (agent run, owner rule 2026-10-12: 8/8 steps passed; checks in smoke112.md)
 smoke_artifact: _docs/loops/loop112/smoke112.md
 assessment_artifact: _docs/loops/loop112/assessment112.md

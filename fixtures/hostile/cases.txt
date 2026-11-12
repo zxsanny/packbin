@@ -75,3 +75,16 @@ pack_when_of_skipped_source_zero pack      bytes                        0100
 pack_when_of_skipped_bool_source pack       bytes                        0100
 pack_when_of_held_bool_source   pack        bytes                        0101010705
 pack_when_of_held_bool_source_clear pack    bytes                        01010007
+construct_repeat_then_field       construct  scheme_error                 -
+construct_repeat_in_when_then_field construct scheme_error                -
+construct_repeat_in_flags_then_field construct scheme_error               -
+construct_repeat_in_group_then_field construct scheme_error               -
+construct_repeat_then_repeat      construct  scheme_error                 -
+construct_repeat_then_exclusive_when construct scheme_error               -
+construct_repeat_in_list_element  construct  scheme_error                 -
+construct_repeat_in_dict_element  construct  scheme_error                 -
+construct_repeat_in_times_round   construct  scheme_error                 -
+pack_repeat_last                  pack       bytes                        01090506
+pack_repeat_last_in_when          pack       bytes                        01010506
+pack_repeat_last_in_flags         pack       bytes                        0103090506
+pack_times_then_field             pack       bytes                        0102050609

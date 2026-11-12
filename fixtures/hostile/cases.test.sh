@@ -118,4 +118,12 @@ if bash "$check" "$here/cases.txt" "$tmp/no_section.md" 2>"$tmp/no_section.err";
 fi
 grep -q "id 'times_rounds_over_limit' has no '## times_rounds_over_limit' section" "$tmp/no_section.err"
 echo "no_section: rejected"
+
+# Loop 113 (AZ-4210): the cases of "a repeat must be last" take the same checks as the older lines.
+corrupt repeat_last_construct_hex "^construct_repeat_then_field  *construct  *scheme_error  *-\$" "construct_repeat_then_field construct scheme_error 01" "a construct case has hex '-'"
+corrupt repeat_last_pack_odd_hex "bytes  *01090506\$" "bytes 0109050" "hex '0109050' must be lowercase, even length, starting with 01"
+corrupt_readme repeat_last_packet_differs 's/^- Packet `01 09 05 06`/- Packet `01 09 05 07`/' \
+  "pack case 'pack_repeat_last': Packet line does not hold the hex 01090506"
+corrupt_readme repeat_last_no_section 's/^## construct_repeat_in_times_round$/## construct_repeat_in_times_round_x/' \
+  "id 'construct_repeat_in_times_round' has no '## construct_repeat_in_times_round' section"
 echo "hostile case tests passed"
