@@ -564,3 +564,5 @@ Loop 74 (2026-10-26, ADR-009: remove the stream session; D1 frame names; D2 cryp
 | AZ-4232 | repeat_last_group_in_round_cases (shared cases for a repeat in a group of a round; nine loaders; added by the loop 113 assessment) | 3 | AZ-4210 | AZ-4209 |
 
 Loop 112 (feature `repeat-must-be-last`, epic AZ-4209, 29 points in 10 tasks): estimation used the loop 104 lesson (probe every sibling, one decision for the class) and the loop 21 precedent of a build-time rule in every package (AZ-2390, AZ-2394); no point bump. The nine package tasks write disjoint directories and depend only on AZ-4210, so they can run as waves of four workers: AZ-4210 first, then TypeScript, C#, Python and Java, then Go, Swift, Dart and Rust, then C++ with its embedded rows.
+
+| AZ-4242 | element_row_sibling_probe (probes in TypeScript, Java, Go, Swift, Rust, Python, C++; findings; no package source; loop 116) | 3 | AZ-4199, AZ-4205 | AZ-4133 |
