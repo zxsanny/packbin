@@ -1,0 +1,16 @@
+[package]
+name = "element-row-probe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "probe"
+path = "src/main.rs"
+
+# `text` is for the heap-free API (its `dict` needs it); the map API always has it.
+[dependencies]
+packbin = { path = "../../../../rust", features = ["text"] }
+
+# A workspace of its own: run.sh builds a copy of this folder outside the repository.
+[workspace]
