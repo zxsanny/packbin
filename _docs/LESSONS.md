@@ -9,12 +9,6 @@ Downstream skills consume this file:
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
 
-- [2026-11-01] [process] State the rule for the off or zero value of a new setting in the spec and in every worker prompt: four workers read "percentage 0" four ways, and the unprotected path had no 254-byte limit that the first criteria assumed (loop 97).
-  Source: _docs/06_metrics/retro_2026-11-01_loop97.md
-- [2026-11-01] [testing] A new row word in a shared fixture gets its own file when other loaders read the old file by position: grep every reader first, or the first commit breaks eight suites (loop 97).
-  Source: _docs/06_metrics/retro_2026-11-01_loop97.md
-- [2026-11-01] [estimation] Count the lines of every touched file at the batch gate: adding 160 lines to a 437-line header crossed the 500-line cap and cost a split task; and read `git log -1` after each commit command, a failed `git add` left a no-op commit while Jira had moved (loop 97).
-  Source: _docs/06_metrics/retro_2026-11-01_loop97.md
 - [2026-11-11] [testing] A builder that keys maps by node identity must be tested with one field object used in two places (a shared member list): 1,887 tests missed it and a random differential run against TypeScript found a High; give every new language one reviewer slice of random schemes against the reference (loop 99).
   Source: _docs/06_metrics/retro_2026-11-11_loop99.md
 - [2026-11-11] [testing] Never assert elapsed time in a unit test that the loop runs under load (624 ms against 500 ms at host load 30): count the operation instead (keyed reads on the map), and keep time bounds for the compiled speed program (loop 99).
@@ -39,3 +33,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-11-11_loop108.md
 - [2026-11-11] [testing] A stub that matches a request by prefix lets a mutant pass (`/uploadX` was accepted): mutate to a request the stub rejects (`/up`) and count the failed assertions before trusting the scenarios (loop 107).
   Source: _docs/06_metrics/retro_2026-11-11_loop108.md
+- [2026-11-12] [process] A probe that decides a class of defects must also run the next-deeper container of each shape the rule will name: loop 112 probed a repeat in a round and not in a group of a round, and two of nine packages (Dart, C++) had the second (loop 113).
+  Source: _docs/06_metrics/retro_2026-11-12_loop113.md
+- [2026-11-12] [testing] A wall-clock test in a new worker task uses the package's load helper from the first run, and the worker prompt says so; a package without one writes it first (Dart did, mid-loop, after a fixed bound failed under host load 50).
+  Source: _docs/06_metrics/retro_2026-11-12_loop113.md
+- [2026-11-12] [process] Read each worker report against the contract the day it arrives: the contract's Java text for "a repeat in a round" was false for Java and went from 1.0.0 to 1.0.2 in one loop; an error text is true or it is not written.
+  Source: _docs/06_metrics/retro_2026-11-12_loop113.md

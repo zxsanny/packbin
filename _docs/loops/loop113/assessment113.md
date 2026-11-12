@@ -2,9 +2,9 @@
 
 loop: 113
 feature: repeat-must-be-last
-rounds: 1
-verdict: EXTEND
-report_of_round: 1
+rounds: 2
+verdict: COMPLETE
+report_of_round: 2
 
 ## Round 1
 
@@ -59,3 +59,13 @@ None.
 ### Harness gaps
 
 - `scripts/loop-tests.sh` writes a stage's stamp only on a tree that is clean apart from the state file (queue item `loop-tests-stamp-on-dirty-docs`).
+
+## Round 2
+
+**Date**: 2026-11-12
+**Implement pass**: AZ-4232 (commit `888a3e8`), batch report `_docs/03_implementation/batch_02_loop113_report.md`
+**Verdict**: COMPLETE — 19 covered / 3 out-of-scope / 0 gap-clear / 0 gap-unclear
+
+D1 is covered now: AC-1 of AZ-4232 (`fixtures/hostile/cases.txt` holds `construct_repeat_in_group_in_repeat_round` and `construct_repeat_in_group_in_times_round`, 90 cases, `check-cases.sh` and `cases.test.sh` pass); AC-2 of AZ-4232 (each of the nine loaders builds both by hand and compares the whole text or the status and id: TypeScript `hostile-cases.ts`, C# `HostileVectorTests.cs`, Python `repeat_last_support.py`, Java `HostileLoop113.java` and `HostileRefusals.java`, Go `hostile_schemes_test.go`, Swift `HostileSchemes.swift`, Dart `hostile_constructs.dart`, Rust `hostile_tests/schemes.rs` and `refusals.rs` and `nostd_hostile_tests.rs`, C++ `hostile_repeat_last.hpp`); the production code path is the scheme check of each package listed above. No new candidate surfaced in round 2 (the discoveries of the extension workers are the anchor numbers of the README sketch, corrected in `fixtures/hostile/README.md`, and a second Dart construct loader with a hard-coded count, updated).
+
+Open questions recorded for the owner, not gaps of this feature (batch report discoveries 10 to 12): a limit for scheme depth (Dart overflows the stack at 5,000 nested `when`s); whether a zero-width `times` body should be refused at build; the load scaling of the Java `AC-8` bound.

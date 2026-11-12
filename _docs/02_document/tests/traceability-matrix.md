@@ -489,3 +489,4 @@ Moved to [traceability-not-verified-loops-11-18.md](traceability-not-verified-lo
 <!-- autodev-step12-loop-update: loop 99 (AZ-4134 to AZ-4148), 2026-11-11, 20 rows added in traceability-matrix-loop-99.md (DT-1 to DT-20: 18 Covered, DT-7 and DT-9 with the first CI run pending, DT-10 owned by the release task AZ-4147) -->
 <!-- autodev-step12-loop-update: loop 100 (AZ-4153), 2026-11-11, 10 rows added in traceability-matrix-loop-100.md (AL-1 to AL-10, all Covered; they amend DT-3, DT-4, DT-12, DT-17 and DT-18) -->
 <!-- autodev-step13: loop 111 (AZ-4205), 2026-11-12, 8 rows added in traceability-matrix-loop-111.md (ER-1 to ER-8, all Covered) -->
+<!-- autodev-step13: loop 113 (epic AZ-4209, AZ-4210 to AZ-4219 and AZ-4232), 2026-11-12, 10 rows added in traceability-matrix-loop-113.md (RL-1 to RL-10, all Covered) -->
