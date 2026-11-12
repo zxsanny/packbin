@@ -294,6 +294,7 @@ Each package adds its codec next to its string walker and keeps the emitted tabl
 - **Purpose**: the loop's test run (AZ-2500, loop 25). `loop-tests.sh` runs the scaffold, the nine language suites in their CI containers (`swift` since loop 26, `dart` since loop 99; its scaffold stage also runs `ring-wiring-swift.test.sh`, and `ring-prepare.test.sh` since loop 33), the ARM stage, the ring, AC-10 and the publish gate; a stage runs only when a file it covers changed since its last stamped pass, the suites run in parallel with a serial retry, and the gate is skipped unless the publish path changed. `loop-tests.test.sh` tests the selection and the execution (a fake `docker`) and is a step of the `scaffold` job.
 - **Owns (exclusive write during implementation)**: `scripts/**`
 - **Consumed by**: step 11 and the loop smoke (`_docs/04_deploy/deployment_procedures.md` § Loop test script)
+- **Probes (loop 112, AZ-4206)**: `scripts/probes/repeat-followed-by-field/` holds one measurement probe per package, a runner and a rule-count tool. They assert nothing, are run by hand and by the loop 112 smoke, and are not part of any suite or CI job.
 
 ### workflows
 

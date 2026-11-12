@@ -550,4 +550,16 @@ Loop 74 (2026-10-26, ADR-009: remove the stream session; D1 frame names; D2 cryp
 | AZ-4198 | embedded_arm_dns_cause (loop 109) | 3 | AZ-4191 | AZ-4133 |
 | AZ-4199 | csharp_list_element_row_without_flag_byte (written from Archangel AR-967) | 3 | None | AZ-4133 |
 | AZ-4205 | csharp_element_row_lows (loop 111) | 3 | AZ-4199 | AZ-4133 |
-| AZ-4206 | repeat_followed_by_a_field (probe and decision; unclaimed) | 3 | None | AZ-4133 |
+| AZ-4206 | repeat_followed_by_a_field (probe and decision, loop 112) | 3 | None | AZ-4133 |
+| AZ-4210 | repeat_last_hostile_cases_and_readme (shared; contract `repeat-last.md`; first) | 2 | None | AZ-4209 |
+| AZ-4211 | repeat_last_typescript (reference package) | 3 | AZ-4210 | AZ-4209 |
+| AZ-4212 | repeat_last_csharp | 3 | AZ-4210 | AZ-4209 |
+| AZ-4213 | repeat_last_python | 2 | AZ-4210 | AZ-4209 |
+| AZ-4214 | repeat_last_java (also the repeat inside a round) | 3 | AZ-4210 | AZ-4209 |
+| AZ-4215 | repeat_last_go | 2 | AZ-4210 | AZ-4209 |
+| AZ-4216 | repeat_last_swift | 2 | AZ-4210 | AZ-4209 |
+| AZ-4217 | repeat_last_dart | 2 | AZ-4210 | AZ-4209 |
+| AZ-4218 | repeat_last_rust (map form and heap-free API; embedded pins) | 5 | AZ-4210 | AZ-4209 |
+| AZ-4219 | repeat_last_cpp (also the unbound element and the repeat inside a round; embedded pins) | 5 | AZ-4210 | AZ-4209 |
+
+Loop 112 (feature `repeat-must-be-last`, epic AZ-4209, 29 points in 10 tasks): estimation used the loop 104 lesson (probe every sibling, one decision for the class) and the loop 21 precedent of a build-time rule in every package (AZ-2390, AZ-2394); no point bump. The nine package tasks write disjoint directories and depend only on AZ-4210, so they can run as waves of four workers: AZ-4210 first, then TypeScript, C#, Python and Java, then Go, Swift, Dart and Rust, then C++ with its embedded rows.

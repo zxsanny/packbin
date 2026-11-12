@@ -126,3 +126,16 @@ The Dart seams: the 64-bit `int`, the ring drivers, the emitted text tables, the
 | pub.dev takes an upload only through a GitHub OIDC token from a run a tag push started, and only for a package that already exists; the name `packbin` is not reserved until the first publish | a run without the token, or when pub.dev has no package `packbin`, fails at the plan before any write; the owner publishes the first version by hand and enables automated publishing with the tag pattern `v{{version}}` (ADR-011) | DT-10 | owner, AZ-4147 |
 | The seams of one Dart language: the key buffers cannot be wiped at garbage collection | keys are wiped by `close()` only, best effort, and the docs say so; a session is used by one isolate at a time | DT-6, DT-14 | AZ-4142 |
 | A README example drifts from the code, or a README hex changes without a test noticing | `dart/test/readme/` reads `README.md` and `dart/README.md`, runs every Dart block and compares its output with the block under it; `scripts/frame/readme-examples.sh` compares the frame example with its test | DT-13 | AZ-4148 |
+
+### A repeat must be last (epic AZ-4209, written in loop 112)
+
+The seams: the shared hostile cases and the nine loaders, the one rule and its nine checks, the README and the tests that read it, the two packages that run on a device.
+
+| Risk | Outcome | AC | Owner |
+|------|---------|----|-------|
+| A case is added to `fixtures/hostile/cases.txt` and a package's loader has no scheme for it, so that suite fails or (worse) skips it silently | every loader replays every new case at its stage; a case a package cannot write is named as skipped with the reason | AC-3 | AZ-4211 to AZ-4219 |
+| The nine checks read "follows" differently (a `when` that is not taken, a `bool` bit, a nested row), so a scheme builds in one package and not in another and the ring cannot hand it over | the refused cases R1 to R9 and the still-building cases K1 to K5 of the contract are tests in every package, with the packets compared whole | AC-1, AC-2 | AZ-4211 to AZ-4219 |
+| A check is too wide and refuses a scheme the ring or a golden vector uses | 0 bytes differ in the fixtures, the golden vectors and the ring; the loop's ring stage runs after the last package | AC-4 | AZ-4211 to AZ-4219 |
+| The README keeps a sentence or an example that the rule now refuses, and the Swift snippet test or the C# example build fails after the package tasks | every README edit of the feature is made by the shared task, and the tests that read the README run in it | AC-4 | AZ-4210 |
+| The check grows the code that runs on a device and a pin fails after the push | the embedded rows run in the Rust and C++ tasks, with a budget above which the owner decides | AC-5, AC-6 | AZ-4218, AZ-4219 |
+

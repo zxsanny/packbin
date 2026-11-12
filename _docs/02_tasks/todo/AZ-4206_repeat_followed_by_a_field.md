@@ -74,4 +74,11 @@ Then the implementation task(s) exist in `todo/` with tracker ids.
 
 | Concern | Policy / owner | Status | Severity |
 |---------|----------------|--------|----------|
-| A build-time refusal may refuse a scheme someone uses only to pack (never unpack) | owner decides with the probe table (AC-2) | open | Medium |
+| A build-time refusal may refuse a scheme someone uses only to pack (never unpack) | owner, 2026-11-12 (loop 112): "Refuse at build", chosen with the probe table and this cost named | resolved | Medium |
+
+## Result (loop 112, 2026-11-12)
+
+- AC-1: nine committed probes and a runner in `scripts/probes/repeat-followed-by-field/` (85 lines in one run, every `control` line `same`); the table is `_docs/06_metrics/repeat-followed-by-field_2026-11-12.md`. A sixth shape was added during the loop: two repeats in a row are read back as other values with no error, in all nine packages.
+- AC-2: one rule proposed with the table; measured in TypeScript it refuses 0 shared fixtures, golden vectors or ring schemes and 4 of TypeScript's own test schemes (`rule-count/run.sh`). The owner chose "Refuse at build" from four options.
+- AC-3: the rule is the contract `_docs/02_document/contracts/library/repeat-last.md`; the implementation is epic AZ-4209 with ten tasks in `todo/`, AZ-4210 (shared cases and README) and AZ-4211 to AZ-4219 (one per package), 29 points; `_docs/02_task_plans/repeat-must-be-last/` has the feature description and the scenarios.
+
