@@ -84,7 +84,7 @@ void bytes_of_every_parity_count() {
 // A buffer too small for the parity is BufferFull naming the parity bytes; the fields are not
 // cut short.
 void pack_into_a_small_buffer() {
-  std::uint8_t out[16];
+  std::uint8_t out[17];
   auto r = packbin::pack(p4, position_row(), out, 16);
   expect(r.error == Error::BufferFull && r.offset == 13 && r.needed == 4 && r.field == -1,
          "pack with room for the fields but not the parity is BufferFull");
