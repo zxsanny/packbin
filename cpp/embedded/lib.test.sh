@@ -242,6 +242,7 @@ s390x_stub_tools() {
   local tool
   printf '#!/usr/bin/env bash\necho tests/core/a.cpp\n' > "$tmp/bin/make"
   printf '#!/usr/bin/env bash\nexit 0\n' > "$tmp/bin/s390x-linux-gnu-g++"
+  # shellcheck disable=SC2016  # the stub's text is written literally; its variables expand when the stub runs
   printf '#!/usr/bin/env bash\ncat "$STUB_QEMU_OUT"\n' > "$tmp/bin/qemu-s390x-static"
   for tool in make s390x-linux-gnu-g++ qemu-s390x-static; do chmod +x "$tmp/bin/$tool"; done
 }
@@ -305,6 +306,7 @@ esp_core_scenario() {
   cp "$here/examples.sh" "$tree/cpp/embedded/"
   cp "$repo/.github/workflows/tool-pin.sh" "$tree/.github/workflows/"
   printf 'arduino-esp32==3.3.12\n' > "$tree/.github/workflows/tool-pins.txt"
+  # shellcheck disable=SC2016  # the stub's text is written literally; its variables expand when the stub runs
   printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "$STUB_LOG"\nif [ "$1 $2" = "core list" ]; then\n  printf "ID Installed Latest Name\\nesp32:esp32 %%s 3.3.13 esp32\\n" "$STUB_CORE"\nfi\n' \
     > "$tmp/bin/arduino-cli"
   chmod +x "$tmp/bin/arduino-cli"
