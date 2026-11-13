@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Self-test of the embedded harness (AZ-2099). Runs the real run.sh, lib.sh and report-row.sh from a
 # temp tree against fake targets and checks the report rows, the logs and the stage exit code.
-# It needs GNU date (lib.sh times a target with date +%s%N), so it runs on the Linux scaffold job; only the
-# find | head scan below it runs everywhere.
+# lib.sh times a target with date +%s%N, which only GNU date has: the scaffold job runs it as is, and on the Mac a
+# `date` shim (below) answers that one call.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -38,15 +38,22 @@ if [ -n "$find_head" ]; then
 fi
 echo "PASS no find | head in the embedded harness scripts"
 
+tmp="$(cd "$(mktemp -d)" && pwd -P)"
+trap 'rm -rf "$tmp"' EXIT
+mkdir -p "$tmp/bin"
 case "$(date +%s%N)" in
   *[!0-9]*)
-    echo "lib.test.sh needs GNU date: lib.sh uses date +%s%N" >&2
-    exit 2
+    cat > "$tmp/bin/date" <<'SHIM'
+#!/usr/bin/env bash
+if [ "${1:-}" = +%s%N ]; then
+  exec perl -MTime::HiRes=gettimeofday -e '($s, $us) = gettimeofday; printf "%d%06d000\n", $s, $us'
+fi
+exec /bin/date "$@"
+SHIM
+    chmod +x "$tmp/bin/date"
     ;;
 esac
-
-tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
+export PATH="$tmp/bin:$PATH"
 failures=0
 scenario_failed=0
 stage_rc=0
@@ -227,7 +234,106 @@ errexit_ignoring_call_is_refused() {
   show_evidence
 }
 
+# The big-endian row against stub tools (AZ-4261): the real target_s390x from arm.sh with a stub make, compiler and
+# QEMU. The QEMU stub prints $tree/qemu.out, a vector run of one file with 12 percentage packets (r1..r12) and the
+# all-kinds packet abcd; the scenario leaves the Cortex-M3 percentage file in the results folder as the variant says:
+# equal, differ (one packet changed) or absent.
+s390x_stub_tools() {
+  local tool
+  printf '#!/usr/bin/env bash\necho tests/core/a.cpp\n' > "$tmp/bin/make"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$tmp/bin/s390x-linux-gnu-g++"
+  printf '#!/usr/bin/env bash\ncat "$STUB_QEMU_OUT"\n' > "$tmp/bin/qemu-s390x-static"
+  for tool in make s390x-linux-gnu-g++ qemu-s390x-static; do chmod +x "$tmp/bin/$tool"; done
+}
+
+s390x_scenario() {
+  local variant="$1" i m3
+  new_tree "s390x_$variant"
+  cp "$here/arm.sh" "$tree/cpp/embedded/"
+  mkdir -p "$tree/cpp/tests/core" "$tree/fixtures" "$tree/results/embedded"
+  m3="$tree/results/embedded/m3-percent.hex"
+  echo deadbeef > "$tree/fixtures/golden.hex"
+  printf '// deadbeef\nexpect(1);\n' > "$tree/cpp/tests/core/a.cpp"
+  {
+    echo "ENDIAN big"
+    echo "VECTORS_RUN a.cpp 1"
+    echo "ALL_KINDS_HEX abcd"
+    for i in 1 2 3 4 5 6 7 8 9 10 11 12; do echo "PERCENT_HEX r$i 0a0b$i"; done
+    echo "FAILURES 0"
+  } > "$tree/qemu.out"
+  echo abcd > "$tree/results/embedded/m3-all-kinds.hex"
+  if [ "$variant" != absent ]; then
+    for i in 1 2 3 4 5 6 7 8 9 10 11 12; do echo "r$i 0a0b$i"; done > "$m3"
+  fi
+  if [ "$variant" = differ ]; then
+    sed 's/^r7 0a0b7$/r7 0a0bff/' "$m3" > "$m3.tmp"
+    mv "$m3.tmp" "$m3"
+  fi
+  s390x_stub_tools
+  stage_rc=0
+  SRC_ROOT="$tree" TEST_RESULTS="$tree/results" STUB_QEMU_OUT="$tree/qemu.out" bash -c '
+    source "$1/cpp/embedded/lib.sh"
+    source "$1/cpp/embedded/arm.sh"
+    run_target cpp-s390x "s390x" target_s390x
+  ' _ "$tree" > "$tree/stage.out" 2>&1 || stage_rc=$?
+}
+
+s390x_percentage_packets_are_compared_with_cortex_m3() {
+  s390x_scenario equal
+  check "s390x equal percentage packets: the row PASSes" row_matches cpp-s390x ',PASS,'
+  check "s390x equal percentage packets: the note says so" log_has cpp-s390x "NOTE percentage packets equal Cortex-M3 bytes"
+  show_evidence
+
+  s390x_scenario differ
+  check "s390x differing percentage packet: the row FAILs" row_matches cpp-s390x ',FAIL,'
+  check "s390x differing percentage packet: the failure names the packets" \
+    log_has cpp-s390x "FAIL percentage packets differ between Cortex-M3 and s390x"
+  show_evidence
+
+  s390x_scenario absent
+  check "s390x without the M3 percentage file: the row PASSes" row_matches cpp-s390x ',PASS,'
+  check "s390x without the M3 percentage file: reported as not done, as the all-kinds check does" \
+    log_has cpp-s390x "NOTE percentage cross-check not done: no Cortex-M3 percentage packets"
+  show_evidence
+}
+
+# The Arduino-ESP32 core pin (AZ-4261): arduino_esp32_core of examples.sh against a stub arduino-cli. The stub logs its
+# arguments to $tree/arduino.log and answers `core list` with the version in $1; the pin is the one tool-pins.txt line
+# of the temp tree (3.3.12).
+esp_core_scenario() {
+  new_tree "esp_core_$1"
+  cp "$here/examples.sh" "$tree/cpp/embedded/"
+  cp "$repo/.github/workflows/tool-pin.sh" "$tree/.github/workflows/"
+  printf 'arduino-esp32==3.3.12\n' > "$tree/.github/workflows/tool-pins.txt"
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "$STUB_LOG"\nif [ "$1 $2" = "core list" ]; then\n  printf "ID Installed Latest Name\\nesp32:esp32 %%s 3.3.13 esp32\\n" "$STUB_CORE"\nfi\n' \
+    > "$tmp/bin/arduino-cli"
+  chmod +x "$tmp/bin/arduino-cli"
+  SRC_ROOT="$tree" TEST_RESULTS="$tree/results" STUB_LOG="$tree/arduino.log" STUB_CORE="$1" bash -c '
+    source "$1/cpp/embedded/lib.sh"
+    source "$1/cpp/embedded/examples.sh"
+    esp_core_target() { arduino_esp32_core; }
+    run_target esp-core "esp core" esp_core_target
+  ' _ "$tree" > "$tree/stage.out" 2>&1 || stage_rc=$?
+}
+
+arduino_esp32_core_is_the_pin() {
+  esp_core_scenario 3.3.12
+  check "esp core at the pin: the row PASSes" row_matches esp-core ',PASS,'
+  check "esp core at the pin: the version in use is printed" log_has esp-core "Arduino-ESP32 core 3.3.12 (pin 3.3.12)"
+  check "esp core at the pin: the install asks for the pinned version" \
+    grep -q '^core install esp32:esp32@3.3.12 ' "$tree/arduino.log"
+  show_evidence
+
+  esp_core_scenario 3.3.13
+  check "esp core newer than the pin: the row FAILs" row_matches esp-core ',FAIL,'
+  check "esp core newer than the pin: the failure names both versions" \
+    log_has esp-core "FAIL Arduino-ESP32 core 3.3.13 differs from the pin 3.3.12"
+  show_evidence
+}
+
 ac1_unchecked_failure_fails_the_target
+arduino_esp32_core_is_the_pin
+s390x_percentage_packets_are_compared_with_cortex_m3
 ac2_explicit_checks_continue
 ac3_passing_target_passes
 earlier_failure_marker_does_not_fail_a_rerun

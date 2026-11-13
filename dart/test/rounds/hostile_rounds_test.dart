@@ -6,6 +6,7 @@ import 'package:packbin/packbin.dart';
 import 'package:test/test.dart';
 
 import '../support/hex.dart';
+import '../support/timing.dart';
 
 Scheme<Map<String, Object?>> route() => scheme(0x34, [
   u16(0, 'sid'),
@@ -157,6 +158,7 @@ void main() {
         ]),
       ];
       final raw = unhex('01ffffffff00');
+      final bound = LoadBound(const Duration(seconds: 1));
       final watch = Stopwatch()..start();
 
       // Act
@@ -164,7 +166,7 @@ void main() {
 
       // Assert
       expect(errors.map((e) => e.kind), everyElement(ErrorKind.short));
-      expect(watch.elapsedMilliseconds, lessThan(1000));
+      expectWithin(watch.elapsed, bound, what: 'four short refusals');
     });
   });
 

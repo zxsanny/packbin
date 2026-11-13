@@ -61,6 +61,7 @@ public final class PackbinTest {
         SplitBitOrderTest.run();
         MissingNestedValueTest.run();
         RowClassTest.run();
+        TopRowClassTest.run();
         CollectionTypeTest.run();
         TypedElementScopeTest.run();
         DuplicateNamesTest.run();
@@ -77,6 +78,8 @@ public final class PackbinTest {
         RoundSlotWidthTest.run();
         EmptyRoundBodyTest.run();
         RepeatLastTest.run();
+        RepeatLastWalkTest.run();
+        MissingMemberNameTest.run();
         RepeatShortOptionalTest.run();
         ClearBitProbesTest.run();
         NoValueCountNestedTest.run();

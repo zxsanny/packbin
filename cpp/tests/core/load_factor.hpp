@@ -6,6 +6,9 @@
 // nominal bound and the work stay as the spec fixed them; a real slowdown of the timed code still fails,
 // because the reference loop does not change with it. Host tests only: the firmware runner does not
 // build this header, and it is used from the main thread alone.
+//
+// A sanitizer build (AZ-4261, decision D15) prints every measurement and asserts none: ASan slows memory work
+// that the integer reference loop does not see, so no factor can track it. Every plain build keeps every bound.
 
 #include "check.hpp"
 
@@ -15,7 +18,21 @@
 #include <cstdint>
 #include <cstdio>
 
+#ifndef __has_feature
+#define __has_feature(feature) 0
+#endif
+
 namespace load_factor {
+
+// True in a build with a sanitizer that slows the timed code (AddressSanitizer, ThreadSanitizer) or checks every
+// operation (UBSan): clang says it with __has_feature, GCC has the two macros for ASan and TSan (and none for UBSan,
+// which adds little time).
+#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer) || \
+    __has_feature(undefined_behavior_sanitizer) || defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
+inline constexpr bool kSanitized = true;
+#else
+inline constexpr bool kSanitized = false;
+#endif
 
 // The smallest of 40 runs of reference_loop() on the owner's Mac (Apple M-series, 10 cores, Apple clang
 // -O2): other work and preemption only add time, so the smallest run is the idle one.
@@ -80,9 +97,14 @@ inline Bound recheck(Bound const& limit) { return Bound{limit.nominal, std::max(
 inline Bound bound(double nominal, double max_age = 0) { return Bound{nominal, factor(max_age)}; }
 
 // Asserts `elapsed` is within `limit`; the failure text names the nominal bound, the factor and the
-// elapsed time.
+// elapsed time. In a sanitizer build it prints the measurement and asserts nothing.
 inline void expect_within(double elapsed, Bound limit, char const* what,
                           char const* file = __builtin_FILE(), int line = __builtin_LINE()) {
+  if (kSanitized) {
+    std::printf("TIMING (sanitizer build, not asserted) %.100s: took %.3f s, bound %.3f s (nominal %.3f s x load factor %.2f)\n",
+                what, elapsed, limit.seconds(), limit.nominal, limit.factor);
+    return;
+  }
   if (!limit.holds(elapsed))
     limit = recheck(limit);
   char msg[256];

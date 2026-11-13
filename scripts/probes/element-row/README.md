@@ -40,7 +40,7 @@ Type number 1 everywhere. Field ids follow each package's own numbering rule; na
 | `times` | element row `(u8 c, times(1, c, u8 v))` | `[{2, [5, 6]}, {0, []}]` | `01020002050600`, reads back |
 | `other-row` | `list-3` scheme whose element members are declared for a row type other than the element's | `[c1]` | n/a (no row types) |
 | `nested-other-row` | a nested row (a group without an anchor) whose member is declared for another row type | one row | n/a (no row types) |
-| `null-member` | `list-1` scheme, `c1` with `text` missing (null / absent / `None`) | `[c1 without text]` | refused: `missing text` |
+| `null-member` | `list-1` scheme, `c1` with `text` missing (null / absent / `None`) | `[c1 without text]` | refused: `missing text` (Java typed rows: `missing utf8 1`, a lambda has no name) |
 | `null-item` | `list-3` scheme, a list holding `c1` and a null element | `[c1, null]` | refused: `items: expected an object for each item` |
 
 `same` compares the values given with the values that came back; a name whose list is empty may be absent on unpack (`times` of zero rounds), as in the repeat probe. `when`'s `{0}` comes back with `speed` absent, null or 0, whichever the package uses for a member a `when` did not write.

@@ -19,6 +19,13 @@ def _name(node: Any) -> str:
     return str(field_id) if field_id is not None else type(node).__name__
 
 
+def refuse_missing(node: Any, value: Any, get_value: Any) -> None:
+    """A member of a row that has no value (none, or not in the dict) is refused by its name. A value read by a
+    getter (a list item, a round entry) is not a member of the row and keeps its own message."""
+    if value is None and get_value is None:
+        raise TypeError(f"missing {_name(node)}")
+
+
 def _first_name(nodes: Sequence[_Node]) -> str | None:
     """The first name `nodes` declare, depth-first through `when`, `repeat`, `times`, groups, flags and flag bits."""
     for node in nodes:

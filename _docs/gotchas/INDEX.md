@@ -1,5 +1,6 @@
 # Gotchas
 
+- [The Arduino-ESP32 core of the ESP core stage is the arduino-esp32 line of tool-pins.txt: move it there, then run the stage](arduino-esp32-core-pin.md) — when a new Arduino-ESP32 release is wanted, the cpp-example-esp32-arduino row fails on the core version, or the ESP core stage got slow or changed with no repository change
 - [Build the embedded image with docker buildx build --allow network.host --network host, not compose network: host](buildkit-host-network-allow.md) — when changing the embedded image build in cpp/embedded/run.sh, or a CI-only Docker build failure
 - [A packer writes the canonical quiet NaN itself; a NaN is not one bit pattern](canonical-quiet-nan.md) — when packing a float NaN, or trusting a bytes test that passed on the Mac
 - [Every worker, reviewer or parent shell command ends on its own: stdin from /dev/null, no bare cat or read, a timeout](commands-end-on-their-own.md) — when running any shell command from a worker, a reviewer or the parent, or writing a file from the shell

@@ -36,6 +36,7 @@ public final class Scheme<T> {
         this.parity = 0;
         this.parityPercent = 0;
         MemberNames.validate(this.fields);
+        RowClassCheck.requireTopRow(type, this.fields);
     }
 
     private Scheme(Scheme<T> base, int maxRounds, long maxSlots, long maxBytes, int parity,

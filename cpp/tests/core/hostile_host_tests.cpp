@@ -426,12 +426,21 @@ std::string run_guarded(Handler const& h, Case const& c) {
     done = true;
   });
   auto start = std::chrono::steady_clock::now();
+  bool overran = false;
   while (!done) {
     double elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     if (!limit.holds(elapsed) && !(limit = load_factor::recheck(limit)).holds(elapsed)) {
-      std::fprintf(stderr, "FAIL: hostile %s did not return within %.3f s (nominal %.3f s x load factor %.2f)\n",
-                   c.id.c_str(), limit.seconds(), limit.nominal, limit.factor);
-      std::_Exit(1);
+      if (!load_factor::kSanitized) {
+        std::fprintf(stderr, "FAIL: hostile %s did not return within %.3f s (nominal %.3f s x load factor %.2f)\n",
+                     c.id.c_str(), limit.seconds(), limit.nominal, limit.factor);
+        std::_Exit(1);
+      }
+      // A sanitizer build prints the overrun and keeps waiting: no wall-clock assertion (AZ-4261, D15).
+      if (!overran) {
+        std::printf("TIMING (sanitizer build, not asserted) hostile %s: past %.3f s (nominal %.3f s x load factor %.2f)\n",
+                    c.id.c_str(), limit.seconds(), limit.nominal, limit.factor);
+        overran = true;
+      }
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }

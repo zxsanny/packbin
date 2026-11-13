@@ -24,7 +24,7 @@ from packbin._nodes import (
     _Utf8,
     _When,
 )
-from packbin._pack_limits import _PackBudget, _name, flags_member, round_member
+from packbin._pack_limits import _PackBudget, _name, flags_member, refuse_missing, round_member
 from packbin._pack_rounds import (
     _RoundValues,
     _at_round,
@@ -286,7 +286,9 @@ def _is_leaf(node: _Node) -> bool:
     return isinstance(node, (_Scalar, _Bytes, _Utf8, _Bool, _Sized, _Bits, _Packed))
 
 
-def _pack_element(buf: bytearray, element: _Node, item: Any, budget: _PackBudget) -> None:
+def _pack_element(buf: bytearray, owner: _Node, element: _Node, item: Any, budget: _PackBudget) -> None:
+    if item is None and not _is_leaf(element) and not isinstance(element, (_List, _Dict)):
+        raise TypeError(f"{_name(owner)}: an item has no value")
     if isinstance(element, _List):
         _pack_list_items(buf, element, element.element, item, budget)
     elif isinstance(element, _Dict):
@@ -306,7 +308,7 @@ def _pack_list_items(buf: bytearray, owner: _Node, element: _Node, items: Any, b
     buf.append(len(items) & 0xFF)
     buf.append((len(items) >> 8) & 0xFF)
     for item in items:
-        _pack_element(buf, element, item, budget)
+        _pack_element(buf, owner, element, item, budget)
 
 
 def _pack_dict_items(buf: bytearray, owner: _Node, element: _Node, mapping: Any, budget: _PackBudget) -> None:
@@ -323,7 +325,7 @@ def _pack_dict_items(buf: bytearray, owner: _Node, element: _Node, mapping: Any,
         field = _text_field("dict", key, budget)
         budget.room(buf, len(field), member)
         buf.extend(field)
-        _pack_element(buf, element, value, budget)
+        _pack_element(buf, owner, element, value, budget)
 
 
 def pack_nodes(
@@ -399,6 +401,7 @@ def pack_nodes(
             if count is None:
                 raise ValueError(f"{node.field_id}: count {node.count} was not written")
             raw = take(node)
+            refuse_missing(node, raw, get_value)
             seen[node.field_id] = raw
             if not isinstance(raw, (_builtin_bytes, bytearray, memoryview)):
                 raise TypeError(f"{node.field_id}: expected bytes")
@@ -413,12 +416,14 @@ def pack_nodes(
             if count is None:
                 raise ValueError(f"{node.field_id}: count {node.count} was not written")
             value = take(node)
+            refuse_missing(node, value, get_value)
             seen[node.field_id] = value
             _write_bits(buf, str(node.field_id), int(count), value, budget, _name(node))
         elif isinstance(node, _Packed):
             label = str(node.field_id)
             item_count = _borrowed(label, seen.get(node.count), node.bias, node.count)
             value = take(node)
+            refuse_missing(node, value, get_value)
             seen[node.field_id] = value
             _write_packed(buf, label, node.width, item_count, value, budget, _name(node))
         elif isinstance(node, _Times):
@@ -472,6 +477,7 @@ def pack_nodes(
                 run(node.fields, {}, _at_round(row, i, node.optional))
         elif isinstance(node, _Utf8):
             value = take(node)
+            refuse_missing(node, value, get_value)
             seen[node.field_id] = value
             field = _text_field(str(node.field_id), value, budget)
             budget.room(buf, len(field), _name(node))

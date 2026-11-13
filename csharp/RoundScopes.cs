@@ -10,7 +10,7 @@ internal static class RoundScopes
         Check(fields, inRound: false);
         CheckBodies(fields);
         Field? open = null;
-        CheckLast(fields, inElement: false, ref open);
+        CheckLast(fields, inElement: false, ref open, new Dictionary<Field, Field?>());
     }
 
     // AZ-4212 (contract repeat-last): a repeat has no count on the wire, so unpack reads its rounds to the end of the
@@ -19,11 +19,13 @@ internal static class RoundScopes
     // nested row that holds it, and it is not inside a list or dict element, where the next element follows it. A repeat
     // inside a round is refused by the nesting check above. Checked once at construction; it never looks at a row.
     // `open`: the first repeat met so far. A round body and an element are places of their own, with none open.
-    private static void CheckLast(IEnumerable<Field> fields, bool inElement, ref Field? open)
+    // `writers`: the first writer under each container, found once (F79: asking again at every level of a chain of nested
+    // when or group containers made the walk quadratic in the depth).
+    private static void CheckLast(IEnumerable<Field> fields, bool inElement, ref Field? open, Dictionary<Field, Field?> writers)
     {
         foreach (var field in fields)
         {
-            if (open is not null && Writer(field) is { } follower)
+            if (open is not null && Writer(field, writers) is { } follower)
                 throw new ArgumentException(
                     $"repeat {open.Id}: {Named(follower)} follows it; a repeat reads to the end of the packet, "
                     + "so nothing can follow it; use times");
@@ -36,22 +38,22 @@ internal static class RoundScopes
                         + "so another element cannot follow it; use times");
                 case Field.Kind.Repeat:
                     open ??= field;
-                    CheckLast(field.Children, inElement, ref none);
+                    CheckLast(field.Children, inElement, ref none, writers);
                     break;
                 case Field.Kind.Times:
-                    CheckLast(field.Children, inElement, ref none);
+                    CheckLast(field.Children, inElement, ref none, writers);
                     break;
                 case Field.Kind.List:
                 case Field.Kind.Dict:
-                    CheckLast(field.Children, inElement: true, ref none);
+                    CheckLast(field.Children, inElement: true, ref none, writers);
                     break;
                 case Field.Kind.FlagBit:
-                    CheckLast([field.Inner!], inElement, ref open);
+                    CheckLast([field.Inner!], inElement, ref open, writers);
                     break;
                 case Field.Kind.Flags:
                 case Field.Kind.When:
                 case Field.Kind.Group:
-                    CheckLast(field.Children, inElement, ref open);
+                    CheckLast(field.Children, inElement, ref open, writers);
                     break;
             }
         }
@@ -60,22 +62,39 @@ internal static class RoundScopes
     // The first field at or under `field` that can write a byte, or null. A bool is a bit of a flag byte written
     // earlier and a zero-width byte run writes nothing; a when, a group and a flag bit count by what they hold, a round
     // by its body. Everything else writes: a value, a flag byte, a `flags` (its flag byte), a list or dict (its count).
-    private static Field? Writer(Field field) =>
+    private static Field? Writer(Field field, Dictionary<Field, Field?> writers)
+    {
+        switch (field.Type)
+        {
+            case Field.Kind.Bool:
+                return null;
+            case Field.Kind.Bytes:
+                return field.ByteCount > 0 ? field : null;
+            case Field.Kind.FlagBit or Field.Kind.When or Field.Kind.Group or Field.Kind.Repeat or Field.Kind.Times:
+                if (!writers.TryGetValue(field, out var held))
+                {
+                    held = Held(field, writers);
+                    writers[field] = held;
+                }
+                return held;
+            default:
+                return field;
+        }
+    }
+
+    private static Field? Held(Field field, Dictionary<Field, Field?> writers) =>
         field.Type switch
         {
-            Field.Kind.Bool => null,
-            Field.Kind.Bytes => field.ByteCount > 0 ? field : null,
-            Field.Kind.FlagBit => Writer(field.Inner!),
-            Field.Kind.When or Field.Kind.Group => FirstWriter(field.Children),
-            Field.Kind.Repeat or Field.Kind.Times => FirstWriter(field.Children) is null ? null : field,
-            _ => field,
+            Field.Kind.FlagBit => Writer(field.Inner!, writers),
+            Field.Kind.Repeat or Field.Kind.Times => FirstWriter(field.Children, writers) is null ? null : field,
+            _ => FirstWriter(field.Children, writers),
         };
 
-    private static Field? FirstWriter(Field[] fields)
+    private static Field? FirstWriter(Field[] fields, Dictionary<Field, Field?> writers)
     {
         foreach (var field in fields)
         {
-            if (Writer(field) is { } writer)
+            if (Writer(field, writers) is { } writer)
                 return writer;
         }
         return null;

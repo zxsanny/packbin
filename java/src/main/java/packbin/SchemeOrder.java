@@ -3,6 +3,7 @@ package packbin;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -24,7 +25,12 @@ final class SchemeOrder {
     /** {@code typedRow} is true when the scheme's row class is not a Map. */
     static void validate(List<Field> fields, boolean typedRow) {
         walkScope(fields, new int[] {0}, typedRow);
-        repeatLast(fields, null, null);
+        checkRepeatLast(fields);
+    }
+
+    /** The repeat-last rule alone, for the tests that compare it with an older walk. */
+    static void checkRepeatLast(List<Field> fields) {
+        new RepeatLast().walk(fields, null, null);
     }
 
     /**
@@ -33,70 +39,85 @@ final class SchemeOrder {
      * field that can write a byte after a repeat, in the repeat's own place or after the when, flags, flag bit,
      * group or nested row that holds it; a repeat inside a list or dict element; a repeat inside a repeat or times
      * round. A times has a count and is not restricted. The walk follows the order pack writes the fields in.
-     * {@code open} is the repeat read before these fields, null when there is none; {@code inside} is the refusal of
-     * a repeat that stands here, null outside every element and round. Returns the repeat open after the fields.
+     * The first writer of a field is worked out once ({@code firstWriters}) however many places above ask for it, so
+     * the walk costs the size of the scheme whatever its shape (AZ-4257; a chain of nested whens was quadratic).
      */
-    private static Field repeatLast(List<Field> fields, Field open, String inside) {
-        for (Field field : fields) {
-            open = repeatLast(field, open, inside);
-        }
-        return open;
-    }
+    private static final class RepeatLast {
+        /** The first writer of each field asked for; a field that writes nothing maps to null. */
+        private final Map<Field, Field> firstWriters = new IdentityHashMap<>();
 
-    private static Field repeatLast(Field field, Field open, String inside) {
-        Field follower = open == null ? null : firstWriter(field);
-        if (follower != null) {
-            throw new IllegalArgumentException("repeat " + open.id + ": " + kindAndId(follower) + FOLLOWS);
+        /**
+         * {@code open} is the repeat read before these fields, null when there is none; {@code inside} is the refusal
+         * of a repeat that stands here, null outside every element and round. Returns the repeat open after the
+         * fields.
+         */
+        Field walk(List<Field> fields, Field open, String inside) {
+            for (Field field : fields) {
+                open = walk(field, open, inside);
+            }
+            return open;
         }
-        return switch (field.kind) {
-            case REPEAT -> {
-                if (inside != null) {
-                    throw new IllegalArgumentException("repeat " + field.id + inside);
+
+        private Field walk(Field field, Field open, String inside) {
+            Field follower = open == null ? null : firstWriter(field);
+            if (follower != null) {
+                throw new IllegalArgumentException("repeat " + open.id + ": " + kindAndId(follower) + FOLLOWS);
+            }
+            return switch (field.kind) {
+                case REPEAT -> {
+                    if (inside != null) {
+                        throw new IllegalArgumentException("repeat " + field.id + inside);
+                    }
+                    walk(field.children, null, IN_ROUND);
+                    // A repeat that reached here writes nothing (one that writes was refused above): the first
+                    // repeat stays the one a later field follows.
+                    yield open == null ? field : open;
                 }
-                repeatLast(field.children, null, IN_ROUND);
-                // A repeat that reached here writes nothing (one that writes was refused above): the first repeat
-                // stays the one a later field follows.
-                yield open == null ? field : open;
-            }
-            case TIMES -> {
-                repeatLast(field.children, null, IN_ROUND);
-                yield open;
-            }
-            case LIST, DICT -> {
-                repeatLast(field.children, null, IN_ELEMENT);
-                yield open;
-            }
-            case WHEN, GROUP, FLAGS -> repeatLast(field.children, open, inside);
-            case FLAG_BIT -> repeatLast(field.inner, open, inside);
-            default -> open;
-        };
-    }
-
-    /**
-     * The first field of {@code field} that can write a byte for some row, null when none can. A bool is a bit of a
-     * flag byte written earlier and a bytes of size 0 writes nothing; a when, group, nested row or flag bit writes
-     * what it holds, and so does a repeat or times, which is named itself. Every other field writes: a flags and a
-     * flag byte their byte, a list or dict its count.
-     */
-    private static Field firstWriter(Field field) {
-        return switch (field.kind) {
-            case BOOL -> null;
-            case BYTES -> field.size > 0 ? field : null;
-            case FLAG_BIT -> firstWriter(field.inner);
-            case WHEN, GROUP -> firstWriter(field.children);
-            case REPEAT, TIMES -> firstWriter(field.children) == null ? null : field;
-            default -> field;
-        };
-    }
-
-    private static Field firstWriter(List<Field> fields) {
-        for (Field field : fields) {
-            Field writer = firstWriter(field);
-            if (writer != null) {
-                return writer;
-            }
+                case TIMES -> {
+                    walk(field.children, null, IN_ROUND);
+                    yield open;
+                }
+                case LIST, DICT -> {
+                    walk(field.children, null, IN_ELEMENT);
+                    yield open;
+                }
+                case WHEN, GROUP, FLAGS -> walk(field.children, open, inside);
+                case FLAG_BIT -> walk(field.inner, open, inside);
+                default -> open;
+            };
         }
-        return null;
+
+        /**
+         * The first field of {@code field} that can write a byte for some row, null when none can. A bool is a bit
+         * of a flag byte written earlier and a bytes of size 0 writes nothing; a when, group, nested row or flag bit
+         * writes what it holds, and so does a repeat or times, which is named itself. Every other field writes: a
+         * flags and a flag byte their byte, a list or dict its count.
+         */
+        private Field firstWriter(Field field) {
+            if (firstWriters.containsKey(field)) {
+                return firstWriters.get(field);
+            }
+            Field writer = switch (field.kind) {
+                case BOOL -> null;
+                case BYTES -> field.size > 0 ? field : null;
+                case FLAG_BIT -> firstWriter(field.inner);
+                case WHEN, GROUP -> firstWriter(field.children);
+                case REPEAT, TIMES -> firstWriter(field.children) == null ? null : field;
+                default -> field;
+            };
+            firstWriters.put(field, writer);
+            return writer;
+        }
+
+        private Field firstWriter(List<Field> fields) {
+            for (Field field : fields) {
+                Field writer = firstWriter(field);
+                if (writer != null) {
+                    return writer;
+                }
+            }
+            return null;
+        }
     }
 
     /** The follower of a repeat, the kind in lower case as in the other messages of this file ({@code u8 1}). */

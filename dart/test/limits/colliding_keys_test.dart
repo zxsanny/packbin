@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:packbin/packbin.dart';
 import 'package:test/test.dart';
 
+import '../support/timing.dart';
+
 /// The VM's string hash (one-at-a-time, unseeded): two blocks that reach the
 /// same state from a given state keep every key that holds either of them in
 /// one bucket. The tests check the premise on the keys they make.
@@ -131,6 +133,7 @@ void main() {
         final wire = pack(dictScheme(), dictRow(keys));
 
         // Act
+        final bound = LoadBound(const Duration(seconds: 1));
         final watch = Stopwatch()..start();
         final got = unpackRow(wire, dictScheme());
         watch.stop();
@@ -143,7 +146,11 @@ void main() {
         expect(d[keys.first], 1);
         expect(d[keys.last], 1);
         expect(d.containsKey('${keys.last}x'), isFalse);
-        expect(watch.elapsedMilliseconds, lessThan(1000));
+        expectWithin(
+          watch.elapsed,
+          bound,
+          what: 'unpack of $count colliding keys',
+        );
       });
     }
 
@@ -168,6 +175,7 @@ void main() {
       final wire = pack(dictScheme(), dictRow(keys));
 
       // Act
+      final bound = LoadBound(const Duration(seconds: 1));
       final watch = Stopwatch()..start();
       final got = unpackRow(wire, typedScheme());
       watch.stop();
@@ -177,7 +185,11 @@ void main() {
       expect(got.row!.d, isA<Map<String, int>>());
       expect(got.row!.d.keys.toList(), keys);
       expect(got.row!.d.values.every((v) => v == 1), isTrue);
-      expect(watch.elapsedMilliseconds, lessThan(1000));
+      expectWithin(
+        watch.elapsed,
+        bound,
+        what: 'typed unpack of colliding keys',
+      );
     });
 
     test('the unpacked map equals an ordinary map and packs again', () {

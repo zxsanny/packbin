@@ -2,6 +2,7 @@ package packbin;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.function.Supplier;
 
 /**
@@ -12,6 +13,8 @@ import java.util.function.Supplier;
  * runs and throws {@code ClassCastException}: refused, naming the member and the child's class. The members seen are
  * those that read this row: through flags, flag bits, when, anchored groups, u2 slots and repeat or times rounds, and
  * the accessors of a nested row, list or dict member (not their insides, which have a factory of their own).
+ * The top-level row of a scheme is checked the same way (AZ-4257, owner decision D14) on one row made with the
+ * no-argument constructor that unpack uses; a row class without one builds as before.
  */
 final class RowClassCheck {
     private RowClassCheck() {}
@@ -24,6 +27,36 @@ final class RowClassCheck {
         }
         for (Field field : fields) {
             check(field, child);
+        }
+    }
+
+    /**
+     * The row of {@code new Scheme<>(n, Row.class, fields)}: one row is made with the no-argument constructor unpack
+     * calls (private ones too), so a constructor runs once when the scheme is built. A Map row, an interface, an
+     * abstract class, a class without that constructor and a constructor that throws build as before: there is no row
+     * to call the accessors on, and unpack reports the same failure where it creates the row.
+     */
+    static void requireTopRow(Class<?> type, List<Field> fields) {
+        Object row = topRow(type);
+        if (row == null) {
+            return;
+        }
+        for (Field field : fields) {
+            check(field, row);
+        }
+    }
+
+    private static Object topRow(Class<?> type) {
+        if (Map.class.isAssignableFrom(type)) {
+            return null;
+        }
+        try {
+            var constructor = type.getDeclaredConstructor();
+            constructor.setAccessible(true);
+            return constructor.newInstance();
+        } catch (ReflectiveOperationException | RuntimeException noRow) {
+            // No accessible no-argument constructor, an abstract class, or a constructor that throws: documented above.
+            return null;
         }
     }
 
@@ -49,10 +82,11 @@ final class RowClassCheck {
         }
     }
 
-    // The documented outcome of each exception: a ClassCastException is the member's lambda casting the row to the
-    // class it was declared for, so it is refused here. Any other exception (a NullPointerException from a field
-    // that is null in a fresh child, an "expected map" from a Map accessor) is not a class mismatch: the scheme
-    // builds as before and pack or unpack reports that failure where it happens.
+    // The documented outcome of each exception: a ClassCastException that says the child cannot be cast is the
+    // member's lambda casting the row to the class it was declared for, so it is refused here. Any other exception
+    // (a NullPointerException from a field that is null in a fresh child, an "expected map" from a Map accessor, a
+    // ClassCastException of a setter about some other object) is not a class mismatch: the scheme builds as before and
+    // pack or unpack reports that failure where it happens.
     private static void call(Field field, Object child) {
         try {
             if (field.get != null) {
@@ -62,11 +96,19 @@ final class RowClassCheck {
                 field.set.set(child, null);
             }
         } catch (ClassCastException mismatch) {
+            if (!castsTheRow(mismatch, child)) {
+                return;
+            }
             throw new IllegalArgumentException(name(field) + ": declared for another row class; this row is "
                     + child.getClass().getSimpleName(), mismatch);
         } catch (RuntimeException notAMismatch) {
             return;
         }
+    }
+
+    private static boolean castsTheRow(ClassCastException failure, Object child) {
+        String message = failure.getMessage();
+        return message != null && message.contains(child.getClass().getName() + " cannot be cast to");
     }
 
     private static String name(Field field) {

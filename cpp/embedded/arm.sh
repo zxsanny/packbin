@@ -361,6 +361,15 @@ target_s390x() {
   else
     note "all-kinds cross-check not done: no Cortex-M3 packet (see cpp-m3-qemu row)"
   fi
+  # The percentage packets (loop 97) are compared with the Cortex-M3 file as target_m33f does; a missing file is
+  # reported the way the all-kinds check reports it, so a single-row run still passes.
+  percent_packets "$dir/run.log" "$out/s390x-percent.hex"
+  if [ -s "$out/m3-percent.hex" ]; then
+    cmp -s "$out/m3-percent.hex" "$out/s390x-percent.hex" || fail "percentage packets differ between Cortex-M3 and s390x"
+    note "percentage packets equal Cortex-M3 bytes"
+  else
+    note "percentage cross-check not done: no Cortex-M3 percentage packets (see cpp-m3-qemu row)"
+  fi
 }
 
 # AVR: the core on an ATmega328P (Arduino Uno) with avr-gcc 7.3, which has no C++ library and a 4-byte

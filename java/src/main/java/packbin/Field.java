@@ -128,6 +128,18 @@ public final class Field {
         return Integer.toString(id);
     }
 
+    /**
+     * The refusal of a required member with no value. Accessors are lambdas, so only a member whose setter is made by
+     * {@code Access.set(String)} has a name ({@code missing text}); any other is named by its kind and id
+     * ({@code missing utf8 1}).
+     */
+    String missingText() {
+        String what = set instanceof Access.KeySetter named
+                ? named.key
+                : kind.name().toLowerCase(java.util.Locale.ROOT) + " " + id;
+        return "missing " + what;
+    }
+
     static boolean isValueBearing(Field field) {
         return switch (field.kind) {
             case U8, U16, U32, U64, I8, I16, I32, I64, F32, F64,

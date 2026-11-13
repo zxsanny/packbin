@@ -294,6 +294,9 @@ final class VarFields {
             Field field, Object row, ByteSink sink, Map<Object, Object> seen, Walker.Take take) {
         Object value = take != null ? take.apply(field) : field.get.get(row);
         seen.put(field.id, value);
+        if (value == null && take == null) {
+            throw new IllegalArgumentException(field.missingText());
+        }
         if (!(value instanceof String text)) {
             throw new IllegalArgumentException(field.id + ": expected string");
         }

@@ -5,6 +5,7 @@ import 'package:packbin/packbin.dart';
 
 import '../support/hex.dart';
 import '../support/repo.dart';
+import '../support/timing.dart';
 import 'fuzz_schemes.dart';
 
 /// One corpus input (fixtures/hostile/fuzz/corpus.txt).
@@ -98,6 +99,9 @@ class FuzzTally {
 /// The most microseconds one unpack may take (project AC-2: 1 second).
 const int unpackBoundMicros = 1000000;
 
+/// The same bound as a [Duration]; a call over it is judged against the load factor.
+const Duration unpackBound = Duration(microseconds: unpackBoundMicros);
+
 /// The schemes of a run and the checks each read must pass: an unpack throws
 /// nothing, takes under a second, gives a row inside the slot budget or a
 /// well-formed error.
@@ -147,7 +151,7 @@ class FuzzRun {
     final micros = watch.elapsedMicroseconds;
     tally.reads++;
     if (micros > tally.slowest) tally.slowest = micros;
-    if (micros >= unpackBoundMicros) {
+    if (overLoadBound(Duration(microseconds: micros), unpackBound)) {
       tally.failures.add(
         'unpack of ${packet.length} bytes took ${micros / 1000} ms',
       );

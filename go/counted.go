@@ -149,11 +149,13 @@ func holdsMember(nodes []*node) bool {
 // level; and a repeat inside a list or dict element, which the next element follows. open is the
 // first repeat met in the places walked so far; the repeat open after nodes is returned. A round body
 // and an element are places of their own, with none open; a repeat inside a round is refused by
-// checkRoundNesting, so a round body is walked only for the elements it holds.
-func checkRepeatLast(nodes []*node, open *node, inElement bool) (*node, error) {
+// checkRoundNesting, so a round body is walked only for the elements it holds. writers keeps the first
+// writer under each container, found once: asking again at every level made a chain of nested when or
+// group containers quadratic in the depth (F79).
+func checkRepeatLast(nodes []*node, open *node, inElement bool, writers writerMemo) (*node, error) {
 	for _, n := range nodes {
 		if open != nil {
-			if w := firstWriter(n); w != nil {
+			if w := firstWriter(n, writers); w != nil {
 				return nil, schemeErr(open.id, "", "repeat %d: %s follows it; a repeat reads to the end of the packet, so nothing can follow it; use times",
 					open.id, writerLabel(w))
 			}
@@ -168,15 +170,15 @@ func checkRepeatLast(nodes []*node, open *node, inElement bool) (*node, error) {
 			if open == nil {
 				open = n
 			}
-			_, err = checkRepeatLast(n.fields, nil, false)
+			_, err = checkRepeatLast(n.fields, nil, false, writers)
 		case kindTimes:
-			_, err = checkRepeatLast(n.fields, nil, false)
+			_, err = checkRepeatLast(n.fields, nil, false, writers)
 		case kindWhen, kindFlags, kindGroup:
-			open, err = checkRepeatLast(n.fields, open, inElement)
+			open, err = checkRepeatLast(n.fields, open, inElement, writers)
 		case kindFlagBit:
-			open, err = checkRepeatLast([]*node{n.field}, open, inElement)
+			open, err = checkRepeatLast([]*node{n.field}, open, inElement, writers)
 		case kindList, kindDict:
-			_, err = checkRepeatLast([]*node{n.elem}, nil, true)
+			_, err = checkRepeatLast([]*node{n.elem}, nil, true, writers)
 		}
 		if err != nil {
 			return nil, err
@@ -185,12 +187,16 @@ func checkRepeatLast(nodes []*node, open *node, inElement bool) (*node, error) {
 	return open, nil
 }
 
+// writerMemo is the first writer under each when, group, flag bit, repeat and times already looked at
+// (nil is an answer too).
+type writerMemo map[*node]*node
+
 // firstWriter is the first field at or under n that can write a byte for some row, nil when none can.
 // A bool is a bit of a flag byte written earlier and a zero-width Bytes has no byte. A when, a group
 // and a flag bit write what they hold, so the field found is the one inside them; a repeat or times
 // whose body can write a byte is found itself. Everything else writes: a flag byte and a flags, a
 // list and a dict (their count) too.
-func firstWriter(n *node) *node {
+func firstWriter(n *node, memo writerMemo) *node {
 	switch n.kind {
 	case kindBool:
 		return nil
@@ -198,21 +204,34 @@ func firstWriter(n *node) *node {
 		if n.size == 0 {
 			return nil
 		}
-	case kindFlagBit:
-		return firstWriter(n.field)
-	case kindWhen, kindGroup:
-		return firstWriterIn(n.fields)
-	case kindRepeat, kindTimes:
-		if firstWriterIn(n.fields) == nil {
-			return nil
+		return n
+	case kindFlagBit, kindWhen, kindGroup, kindRepeat, kindTimes:
+		if w, ok := memo[n]; ok {
+			return w
 		}
+		w := heldWriter(n, memo)
+		memo[n] = w
+		return w
 	}
 	return n
 }
 
-func firstWriterIn(nodes []*node) *node {
+func heldWriter(n *node, memo writerMemo) *node {
+	switch n.kind {
+	case kindFlagBit:
+		return firstWriter(n.field, memo)
+	case kindRepeat, kindTimes:
+		if firstWriterIn(n.fields, memo) == nil {
+			return nil
+		}
+		return n
+	}
+	return firstWriterIn(n.fields, memo)
+}
+
+func firstWriterIn(nodes []*node, memo writerMemo) *node {
 	for _, n := range nodes {
-		if w := firstWriter(n); w != nil {
+		if w := firstWriter(n, memo); w != nil {
 			return w
 		}
 	}

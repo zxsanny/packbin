@@ -4,6 +4,7 @@ import 'package:packbin/packbin.dart';
 
 import '../support/hex.dart';
 import '../support/repo.dart';
+import '../support/timing.dart';
 
 typedef Row = Map<String, Object?>;
 
@@ -66,6 +67,10 @@ HostileRun<T> guarded<T>(T Function() body) {
 /// The most microseconds one unpack of a case may take (1 second).
 const int unpackBoundMicros = 1000000;
 
+/// The same bound as a [Duration]: nominal, scaled by the load factor when a
+/// call goes over it (`support/timing.dart`).
+const Duration unpackBound = Duration(microseconds: unpackBoundMicros);
+
 /// What is wrong with a [run] whose error must be a [PackbinError] (or a
 /// [PackbinException] wrapping one) of a kind the case accepts, with the whole
 /// text [rule], or null. [bounded] adds the 1 second bound of an unpack.
@@ -97,8 +102,9 @@ String? checkRefusal(
   if (error.toString() != rule) {
     return '${c.id}: refused by another rule: "$error", want "$rule"';
   }
-  if (bounded && run.micros >= unpackBoundMicros) {
-    return '${c.id}: took ${run.micros / 1000} ms, bound 1000 ms';
+  if (bounded &&
+      overLoadBound(Duration(microseconds: run.micros), unpackBound)) {
+    return '${c.id}: took ${run.micros / 1000} ms, bound 1000 ms times the load factor';
   }
   return null;
 }

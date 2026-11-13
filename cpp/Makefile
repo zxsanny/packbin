@@ -25,9 +25,19 @@ NO_TEXT_BIN := build/packbin_no_text_tests
 NO_ECC_TESTS := tests/core/no_ecc_tests.cpp
 NO_ECC_BIN := build/packbin_no_ecc_tests
 
-.PHONY: test core-test clean compile-fail object-check no-text-test no-ecc-test frame-check
+# The host suite under AddressSanitizer and UBSan (AZ-4261): its timing checks print the measurement and assert nothing
+# (tests/core/load_factor.hpp, decision D15); every other check runs and any sanitizer report stops it. Not part of test.
+# Use clang (make CXX=clang++ sanitizer-test): GCC 16 cannot constant-evaluate the scheme tables under UBSan, so with
+# GCC pass SAN_FLAGS="-fsanitize=address -fno-omit-frame-pointer -Wno-frame-larger-than".
+# ASan widens stack frames past FRAME_LIMIT, so the frame check stays with the plain build.
+SAN_FLAGS := -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -Wno-frame-larger-than
+SAN_BIN := build/packbin_tests_sanitized
 
-$(TEST_BIN): $(HDRS) $(CORE_SRCS) $(VECTOR_TESTS) $(HOST_TESTS) tests/core/check.hpp tests/core/hostile_pack_cases.hpp tests/core/hostile_pack_loop21.hpp tests/core/hostile_repeat_last.hpp tests/core/hostile_rule_check.hpp tests/core/member_cases.hpp tests/core/ecc_support_host.hpp tests/core/ecc_percent_support_host.hpp $(IMAGE_SRCS)
+.PHONY: test core-test clean compile-fail object-check no-text-test no-ecc-test frame-check sanitizer-test
+
+TEST_DEPS := $(HDRS) $(CORE_SRCS) $(VECTOR_TESTS) $(HOST_TESTS) tests/core/check.hpp tests/core/hostile_pack_cases.hpp tests/core/hostile_pack_loop21.hpp tests/core/hostile_repeat_last.hpp tests/core/hostile_rule_check.hpp tests/core/member_cases.hpp tests/core/ecc_support_host.hpp tests/core/ecc_percent_support_host.hpp $(IMAGE_SRCS)
+
+$(TEST_BIN): $(TEST_DEPS)
 	mkdir -p build
 	$(CXX) $(CXXFLAGS) $(CORE_FLAGS) -Iembedded/common -pthread -o $@ $(CORE_SRCS) $(VECTOR_TESTS) $(HOST_TESTS) embedded/common/all_kinds.cpp embedded/common/all_kinds_rounds.cpp
 
@@ -125,6 +135,13 @@ frame-check: $(HDRS)
 
 test: $(TEST_BIN) compile-fail object-check no-text-test no-ecc-test frame-check
 	./$(TEST_BIN)
+
+$(SAN_BIN): $(TEST_DEPS)
+	mkdir -p build
+	$(CXX) $(CXXFLAGS) $(SAN_FLAGS) $(CORE_FLAGS) -Iembedded/common -pthread -o $@ $(CORE_SRCS) $(VECTOR_TESTS) $(HOST_TESTS) embedded/common/all_kinds.cpp embedded/common/all_kinds_rounds.cpp
+
+sanitizer-test: $(SAN_BIN)
+	./$(SAN_BIN)
 
 core-test: test
 

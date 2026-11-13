@@ -15,3 +15,6 @@ swift==6.3.3
 # Image tag of the Dart suite (docker-compose.test.yml): dart:<dart> runs it. Not a pip package.
 dart==3.13.7
 pyyaml==6.0.3
+# Version of the Arduino-ESP32 core (esp32:esp32) the ESP core stage installs, read by cpp/embedded/examples.sh on the
+# Mac run and in CI job embedded-esp-core. Not a pip package. Pinned 2026-11-13 at the release current on 2026-11-12.
+arduino-esp32==3.3.12

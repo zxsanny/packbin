@@ -93,3 +93,15 @@ void expectWithin(Duration elapsed, LoadBound bound, {String what = ''}) {
         '${factor.toStringAsFixed(2)}, scaled bound ${limit.inMilliseconds} ms',
   );
 }
+
+/// Whether [elapsed] is over the [nominal] bound scaled by the load factor,
+/// for checks that run thousands of times (a fuzz loop, the hostile cases): a
+/// call inside the nominal bound, the usual case, never measures the load;
+/// only a call over it does, as [expectWithin] does.
+bool overLoadBound(Duration elapsed, Duration nominal) {
+  if (elapsed <= nominal) return false;
+  final limit = Duration(
+    microseconds: (nominal.inMicroseconds * loadFactor()).round(),
+  );
+  return elapsed > limit;
+}

@@ -60,23 +60,41 @@ target_example_pico() {
   note "pico example built from $(basename "$archive")"
 }
 
+# The installed Arduino-ESP32 core version, from `arduino-cli core list` (`esp32:esp32 <installed> <latest> ...`).
+arduino_esp32_installed() {
+  arduino-cli core list | awk '$1 == "esp32:esp32" { print $2 }'
+}
+
+# Installs the Arduino-ESP32 core at the version of the `arduino-esp32` line of .github/workflows/tool-pins.txt, the one
+# place the Mac run and the CI job embedded-esp-core (both run this script) read (AZ-4261; before, the newest core was
+# installed on every cold run and took 525 s on 2026-11-12). Prints the version in use and fails when it differs.
+arduino_esp32_core() {
+  local pin used index=https://espressif.github.io/arduino-esp32/package_esp32_index.json
+  pin="$(bash "$root/.github/workflows/tool-pin.sh" arduino-esp32)"
+  arduino-cli core update-index --additional-urls "$index"
+  arduino-cli core install "esp32:esp32@$pin" --additional-urls "$index"
+  used="$(arduino_esp32_installed)"
+  echo "Arduino-ESP32 core $used (pin $pin)"
+  if [ "$used" != "$pin" ]; then
+    fail "Arduino-ESP32 core ${used:-missing} differs from the pin $pin (.github/workflows/tool-pins.txt, arduino-esp32)"
+    return 1
+  fi
+}
+
 # ESP32 Arduino sketch against the staged Arduino library layout.
 target_example_esp32_arduino() {
   local dir="$build/example-esp32-arduino" status=0
   examples_tools
   rm -rf "$dir"
   bash "$root/.github/workflows/stage-arduino.sh" "$dir/packbin" 0.0.0
-  arduino-cli core update-index \
-    --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-  arduino-cli core install esp32:esp32 \
-    --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+  arduino_esp32_core || return 1
   arduino-cli compile --fqbn esp32:esp32:esp32 --library "$dir/packbin" \
     "$dir/packbin/examples/esp32_arduino" 2>&1 | tee "$dir/build.log" || status=$?
   if [ "$status" -ne 0 ]; then
     fail "arduino-cli compile exit $status"
     return 1
   fi
-  note "esp32 arduino example built from the staged library layout"
+  note "esp32 arduino example built from the staged library layout with core $(arduino_esp32_installed)"
 }
 
 # ESP-IDF example against `compote component pack` of cpp/.
