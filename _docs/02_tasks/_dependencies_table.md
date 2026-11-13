@@ -570,3 +570,8 @@ Loop 112 (feature `repeat-must-be-last`, epic AZ-4209, 29 points in 10 tasks): e
 | AZ-4251 | csharp_flags_in_flags_presence (C# sets the bit of a `flags` that is a direct member of a `flags`; nine-package probe; loop 118) | 3 | — | AZ-4133 |
 | AZ-4253 | java_row_class_refused_at_build (an element-row or nested-row member of another row class is refused at build; loop 119) | 3 | AZ-4242 | AZ-4133 |
 | AZ-4255 | java_unpack_collection_type_refused (a list or dict setter that rejects the unpack collection is refused with the package's error; loop 120) | 2 | AZ-4242 | AZ-4133 |
+| AZ-4257 | java_hygiene (linear repeat-last walk, missing member named, top-level row class refused; loop 121) | 3 | — | AZ-4133 |
+| AZ-4258 | python_hygiene (missing member named, None item in a row list refused; loop 121) | 2 | — | AZ-4133 |
+| AZ-4259 | csharp_go_first_writer_memo (linear repeat-last walk in C# and Go; loop 121) | 3 | — | AZ-4133 |
+| AZ-4260 | dart_timing_helper (wall-clock tests use the load-aware helper; loop 121) | 1 | — | AZ-4133 |
+| AZ-4261 | cpp_hygiene (s390x percentage compare, sanitizer-safe timing, pinned ESP core; loop 121) | 5 | — | AZ-4133 |

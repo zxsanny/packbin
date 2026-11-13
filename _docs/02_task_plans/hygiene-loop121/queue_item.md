@@ -6,6 +6,8 @@ origin: agent
 severity: medium
 depends_on: []
 status: ready
+loop: 121
+branch: dev
 blocked_on:
 created: 2026-11-13
 scanned: 2026-11-13
