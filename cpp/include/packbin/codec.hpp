@@ -91,6 +91,16 @@ constexpr bool binds_row() {
   return detail::is_void<C>::value || detail::is_same<C, Row>::value;
 }
 
+// Every member class binds Row; an array, not a fold, so a scheme of 255+ fields builds with clang (AZ-4279).
+template <typename Row, typename... Cs>
+constexpr bool binds_all() {
+  constexpr bool binds[] = {true, binds_row<Row, Cs>()...};
+  for (bool b : binds)
+    if (!b)
+      return false;
+  return true;
+}
+
 Result pack_table(Field const* t, std::size_t n, std::uint8_t type_number, void const* row,
                   Writer& w, ScratchRef scratch);
 Result unpack_table(Field const* t, std::size_t n, void* row, Reader& r);
@@ -99,7 +109,7 @@ Result unpack_table(Field const* t, std::size_t n, void* row, Reader& r);
 
 template <typename Row, typename... Ns>
 constexpr Scheme<Row, detail::total<Ns...>()> scheme(int type_number, Ns const&... nodes) {
-  static_assert((detail::binds_row<Row, typename Ns::Class>() && ...),
+  static_assert(detail::binds_all<Row, typename Ns::Class...>(),
                 "packbin: a scheme field binds a member of another row type");
   Scheme<Row, detail::total<Ns...>()> s{};
   if (type_number < 0 || type_number > 255) {
@@ -109,7 +119,7 @@ constexpr Scheme<Row, detail::total<Ns...>()> scheme(int type_number, Ns const&.
   }
   s.type_number = static_cast<std::uint8_t>(type_number);
   std::size_t at = 0;
-  ((void)(detail::copy_fields(s.fields, at, nodes)), ...);
+  [[maybe_unused]] int const copied[] = {0, detail::copy_fields(s.fields, at, nodes)...};
   s.status = check_table(s.fields.data(), s.fields.size());
   if (!s.status.ok())
     detail::invalid_field_id(s.status.field);

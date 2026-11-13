@@ -261,9 +261,15 @@ struct JoinAll<C, Rest...> {
   using type = typename Join<C, typename JoinAll<Rest...>::type>::type;
 };
 
+// Sums and copies over a group's members use a pack expansion in an array, not a fold: a fold nests one level per
+// member, and clang refuses more than 256 by default, so a `when` of 255 members did not build there (AZ-4279).
 template <typename... Ns>
 constexpr std::size_t total() {
-  return (std::size_t{0} + ... + Ns::size);
+  constexpr std::size_t sizes[] = {std::size_t{0}, Ns::size...};
+  std::size_t sum = 0;
+  for (std::size_t s : sizes)
+    sum += s;
+  return sum;
 }
 
 template <std::size_t M, typename Src>
@@ -282,7 +288,7 @@ constexpr Node<typename JoinAll<typename Ns::Class...>::type, 1 + total<Ns...>()
   head.span = static_cast<std::uint16_t>(1 + total<Ns...>());
   out.f[0] = head;
   [[maybe_unused]] std::size_t at = 1;
-  ((void)copy_fields(out.f, at, children), ...);
+  [[maybe_unused]] int const copied[] = {0, copy_fields(out.f, at, children)...};
   return out;
 }
 

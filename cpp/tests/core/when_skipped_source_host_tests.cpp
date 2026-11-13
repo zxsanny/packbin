@@ -205,6 +205,18 @@ void ac6_source_link_is_limited_to_255_entries() {
                 "AC-6 source 301 entries behind its when is refused");
 }
 
+// AZ-4279: a scheme of 300 top-level fields builds; its size sum, field copy and row check are not folds, which
+// upstream clang refuses past 256 members at its default limits.
+template <std::size_t... Is>
+auto wide_scheme(std::index_sequence<Is...>) {
+  return pb::scheme<Held>(1, pb::u8(static_cast<int>(Is))...);
+}
+
+void az4279_scheme_of_300_top_level_fields_builds() {
+  auto const wide = wide_scheme(std::make_index_sequence<300>());
+  check::expect(pb::validate(wide).ok() && wide.fields.size() == 300, "AZ-4279 a scheme of 300 top-level fields builds");
+}
+
 }  // namespace
 
 int run_core_when_skipped_source_host_tests() {
@@ -215,5 +227,6 @@ int run_core_when_skipped_source_host_tests() {
   ac4_nested_skip();
   ac5_one_when_holds_both();
   ac6_source_link_is_limited_to_255_entries();
+  az4279_scheme_of_300_top_level_fields_builds();
   return check::failures();
 }

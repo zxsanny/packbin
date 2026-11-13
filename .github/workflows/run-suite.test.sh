@@ -305,7 +305,7 @@ done
 # does neither; a failing sanitizer build fails the suite. Fake apt-get and timeout log their arguments.
 cp "$here/tool-pin.sh" "$here/tool-pins.txt" "$present/.github/workflows/"
 clang_pin="$(bash "$here/tool-pin.sh" clang)"
-printf '#!/bin/sh\necho "apt-get $*" >> "$GO_LOG"\n' > "$toolbin/apt-get"
+printf '#!/bin/sh\necho "apt-get $*" >> "$GO_LOG"\n[ -z "${FAKE_APT_FAIL:-}" ] || exit 100\n' > "$toolbin/apt-get"
 printf '#!/bin/sh\necho "timeout $1" >> "$GO_LOG"\nshift\nexec "$@"\n' > "$toolbin/timeout"
 chmod +x "$toolbin/apt-get" "$toolbin/timeout"
 cpp_run() {
@@ -325,6 +325,18 @@ cpp_run PACKBIN_CPP_SANITIZER=1 FAKE_FAIL_ON="-C $present/cpp CXX=clang++-$clang
 [ "$code" -ne 0 ] || bad "cpp sanitizer: a failing sanitizer build passed"
 grep -Eqx "report-row cpp cpp suite [0-9]+ FAIL suite failed" "$work/bare.rows" \
   || bad "cpp sanitizer: a failing sanitizer build has no FAIL row: $(cat "$work/bare.rows" 2>&1)"
+# AZ-4280: a failed install fails the suite with one line naming the pin to move and the image's Debian release; the
+# line is absent when the install passes.
+: > "$work/go.log"
+out="$(env SRC_ROOT="$present" FIXTURE="$present/fixtures/golden.hex" TEST_RESULTS="$work/bare" GO_LOG="$work/go.log" \
+  PATH="$toolbin:$PATH" PACKBIN_CPP_SANITIZER=1 FAKE_APT_FAIL=1 perl -e 'alarm 60; exec @ARGV' -- bash "$suite_sh" cpp </dev/null 2>&1)"; code=$?
+[ "$code" -ne 0 ] || bad "cpp sanitizer: a failed clang install passed"
+case "$out" in *"clang-$clang_pin is not installable on Debian "*"move clang==$clang_pin in .github/workflows/tool-pins.txt"*) ;;
+  *) bad "cpp sanitizer: a failed install does not name the pin to move: $out" ;; esac
+grep -q 'sanitizer-test' "$work/go.log" && bad "cpp sanitizer: the sanitizer build ran after a failed install"
+out="$(env SRC_ROOT="$present" FIXTURE="$present/fixtures/golden.hex" TEST_RESULTS="$work/bare" GO_LOG="$work/go.log" \
+  PATH="$toolbin:$PATH" PACKBIN_CPP_SANITIZER=1 perl -e 'alarm 60; exec @ARGV' -- bash "$suite_sh" cpp </dev/null 2>&1)"
+case "$out" in *"is not installable"*) bad "cpp sanitizer: the install failure line shows after a good install: $out" ;; esac
 cpp_run PACKBIN_CPP_SANITIZER=; code=$?
 [ "$code" -eq 0 ] || bad "cpp: the suite without the sanitizer flag failed (exit $code)"
 grep -Eq 'apt-get|sanitizer-test' "$work/go.log" && bad "cpp: the sanitizer step ran without its flag: $(cat "$work/go.log")"
