@@ -9,12 +9,6 @@ Downstream skills consume this file:
 
 Categories: estimation · architecture · testing · dependencies · tooling · process
 
-- [2026-11-11] [process] Run both packages on the premises of a decision list before asking the owner, and print expected packets by running the reference: two premises of the Dart-vs-TypeScript list were wrong and the colliding-key packet exists only because TypeScript was run (loop 100).
-  Source: _docs/06_metrics/retro_2026-11-11_loop100.md
-- [2026-11-11] [tooling] A total `loop-tests.sh` run needs Python 3.13 (the only one with PyYAML), `RUSTUP_TOOLCHAIN=1.98` and `PACKBIN_CXX_SYSROOT` set before it starts; without them `scaffold`, the ring and the publish gate fail in seconds and the run must be stopped and redone for those stages (loop 100).
-  Source: _docs/06_metrics/retro_2026-11-11_loop100.md
-- [2026-11-11] [process] When one package writes something its own reader refuses, probe every sibling in the same loop with committed probes and give the owner one decision for the class: Dart, then TypeScript, then 2 of 6 others (C# and Java) had the same unreadable dictionary packet (loops 100 to 103).
-  Source: _docs/06_metrics/retro_2026-11-11_loop104.md
 - [2026-11-11] [testing] A test input the framework cannot carry (a lone surrogate in xUnit `[InlineData]` comes back as U+FFFD) is built in the test body or written as code-unit hex, and each new test is run once against the old source: the first C# tests passed for the wrong reason (loop 103).
   Source: _docs/06_metrics/retro_2026-11-11_loop104.md
 - [2026-11-11] [tooling] A push that changes only `_docs/**` starts no CI run (`test.yml` has `paths-ignore`): check `git diff --name-only` before arming a CI watcher, and look a run up by commit with `gh run list --commit` (loop 102).
@@ -39,3 +33,9 @@ Categories: estimation · architecture · testing · dependencies · tooling · 
   Source: _docs/06_metrics/retro_2026-11-13_loop118.md
 - [2026-11-13] [process] A documentation move that rewrites comment lines in CI scripts or pinned files goes in its own commit or is counted in the loop plan: in loop 118 such lines added seven step 11 stages and turned the lite security check into a full audit (T1).
   Source: _docs/06_metrics/retro_2026-11-13_loop118.md
+- [2026-11-13] [tooling] Run a compiler- or sanitizer-dependent change in the CI image (gcc:16 and its Debian clang) before calling it green: Apple's clang on the Mac passed both defects loop 122 found there (a fold nesting limit at 256 members, memcpy from a null empty-vector pointer).
+  Source: _docs/06_metrics/retro_2026-11-13_loop123.md
+- [2026-11-13] [testing] A .test.sh that another script sources proves nothing when run alone; check a change to it through the script that sources it (loop 122: publish-pins.test.sh exited 0 alone, the gate then failed on the missing pin name).
+  Source: _docs/06_metrics/retro_2026-11-13_loop123.md
+- [2026-11-13] [process] When a file reaches the 500-line cap in the change that needs it, the next change there starts with the split, not a squeeze (loop 123: run-suite.sh at 500).
+  Source: _docs/06_metrics/retro_2026-11-13_loop123.md
