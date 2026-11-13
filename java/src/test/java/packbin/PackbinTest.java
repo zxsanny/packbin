@@ -60,6 +60,7 @@ public final class PackbinTest {
         ApiSafeReplacementsTest.run();
         SplitBitOrderTest.run();
         MissingNestedValueTest.run();
+        RowClassTest.run();
         TypedElementScopeTest.run();
         DuplicateNamesTest.run();
         FlagsWhenMemberTest.run();

@@ -128,6 +128,8 @@ final class TypedNestedRowTest {
             created[0]++;
             return new Inner();
         });
+        // The build makes one child to check the members' row class (AZ-4253); unpack is counted after it.
+        created[0] = 0;
         Outer row = new Outer();
         row.inner = inner(3);
         row.tail = 4;
@@ -191,6 +193,9 @@ final class TypedNestedRowTest {
                     created[0]++;
                     return new Inner();
                 }, innerV()));
+        // The build makes one child to check the members' row class (AZ-4253); unpack is counted after it.
+        PackbinTest.expectEq("the build calls the factory once", 1, created[0]);
+        created[0] = 0;
         Preset back = unpackOne("preset member", preset, "0109");
         PackbinTest.expectEq("preset member is filled", 9, back.inner.v);
         PackbinTest.expectEq("the factory is not called for a member the row already has", 0, created[0]);

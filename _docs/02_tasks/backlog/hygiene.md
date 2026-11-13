@@ -8,7 +8,7 @@ depends_on: []
 status: ready
 blocked_on:
 created: 2026-11-13
-scanned:
+scanned: 2026-11-13
 ---
 # Hygiene: seven small agent-found items
 
@@ -166,3 +166,20 @@ none
 
 #### Constraints
 The source count of the stage (`expected N packbin sources`) does not change.
+
+## Java: a top-level typed row member declared for another class still throws at pack
+
+slug `java-top-level-row-class`; severity medium; source: found in loop 119 (review of AZ-4253); created 2026-11-13
+
+#### Problem
+AZ-4253 refuses at build a member of another row class inside a nested row or an element row, using the group's child factory. A top-level `new Scheme<>(1, Row.class, ...)` has no factory, so a member declared for `Other` still builds and pack throws a raw `ClassCastException`. C# refuses it at build (`'Q' is declared for row type Other, but this scheme is for R`).
+
+#### Outcome
+The top-level case is refused at build too, or the README says why it cannot be (no instance to call the accessors on).
+
+#### Code sections
+`java/src/main/java/packbin/Scheme.java` (the constructor has `Class<T> type`), `RowClassCheck.java`.
+
+#### Acceptance checks
+- A top-level member of another class is refused at build with the AZ-4253 text, or the README states the limit.
+- Open point for the operator if it needs one: create the row with its no-argument constructor by reflection (fails for a class without one).

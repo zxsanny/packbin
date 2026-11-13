@@ -117,7 +117,9 @@ public final class Packbin {
      * The fields number their ids from 0 and see no id of the row around it.
      */
     public static Field group(Getter get, Setter set, Supplier<?> create, Field... fields) {
-        return Field.group(get, set, Objects.requireNonNull(create, "create"), fields);
+        Objects.requireNonNull(create, "create");
+        RowClassCheck.requireRowClass(create, java.util.Arrays.asList(fields));
+        return Field.group(get, set, create, fields);
     }
 
     public static Field sized(int id, Getter get, Setter set, int countId) {
