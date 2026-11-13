@@ -33,6 +33,7 @@
 - [Read the language's own documentation and use its official tool before writing or keeping a security or test mechanism](official-mechanism-first.md) — when writing or keeping a security or test mechanism (access for tests, key wipes)
 - [Do not retry a pack-side held_of for flash or stack: it costs flash and saves no pack stack](pack-held-of-not-kept.md) — when refactoring the C++ pack side when / flag bit decision (pack_children, pack_one)
 - [Rerun a failed publish-gate share alone at low load before calling it a regression](publish-gate-load-sensitive-checks.md) — when a publish-gate share fails in scripts/loop-tests.sh, or the host load is high before the gate
+- [A new line in tool-pins.txt also goes into PINS_NAMES of publish-pins.test.sh; running that file alone tests nothing](pin-name-list-of-the-pins-check.md) — when adding or renaming a tool pin in .github/workflows/tool-pins.txt
 - [Read a red CI job's log before calling it a flake](read-ci-job-log.md) — when a CI job is red, or a CI-only failure needs its log
 - [In the embedded Rust probe, do not return a large Session by value through a Result: load it in place](rust-embedded-stack-by-value-copies.md) — when the embedded Rust stage's stack figure moves, or the probe (pb_rs_extra) builds a session
 - [Measure the rust-m33f pins with Rust 1.98.1 after run.sh libs, and record each raise here with what the bytes bought](rust-m33f-pins.md) — when running or re-pinning the rust-m33f row of the Rust embedded stage (rust/embedded/limits-m33f.txt)
