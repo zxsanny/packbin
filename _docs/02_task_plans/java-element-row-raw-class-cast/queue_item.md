@@ -5,6 +5,8 @@ source: found in loop116 (AZ-4242 probe, `_docs/06_metrics/element-row-probe_202
 origin: operator
 depends_on: []
 status: ready
+loop: 119
+branch: dev
 blocked_on:
 scanned: 2026-11-13
 created: 2026-11-12
