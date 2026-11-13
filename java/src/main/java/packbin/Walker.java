@@ -6,7 +6,9 @@ import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -384,6 +386,34 @@ final class Walker {
             list.add(existing);
             list.add(value);
             field.set.set(row, list);
+        }
+    }
+
+    /**
+     * Stores the list or dict that unpack created. Unpack hands the setter an {@code ArrayList} (a list) or a
+     * {@code LinkedHashMap} (a dict); a field declared with another collection type (a {@code LinkedList}, a
+     * {@code TreeMap}) has a setter that casts it and throws a raw {@code ClassCastException}. Java cannot see a field's
+     * declared type at build, so the rejection is refused here instead (AZ-4255, owner decision D12 B). A field has no name
+     * in Java (the accessors are lambdas, and a Map row's setter accepts any collection), so the error names the kind.
+     * Only a failed cast whose source is the class unpack created is the setter's rejection of the collection; a cast
+     * failure of anything else inside the caller's own setter is not hidden. The test reads the message of the
+     * exception ("class java.util.ArrayList cannot be cast to ..."); a message of another shape is rethrown unchanged.
+     */
+    static void storeContainer(Object row, Field field, Object value, boolean asList) {
+        try {
+            store(row, field, value, asList);
+        } catch (ClassCastException ex) {
+            String message = ex.getMessage();
+            boolean rejected = message != null
+                    && (message.startsWith("class " + ArrayList.class.getName() + " cannot be cast")
+                            || message.startsWith("class " + LinkedHashMap.class.getName() + " cannot be cast"));
+            if (!rejected) {
+                throw ex;
+            }
+            String kind = field.kind.name().toLowerCase(Locale.ROOT);
+            String made = field.kind == Field.Kind.DICT ? "a LinkedHashMap" : "an ArrayList";
+            throw new IllegalArgumentException(kind + ": the setter rejected " + made + " that unpack creates; a "
+                    + kind + " field must accept " + made, ex);
         }
     }
 }

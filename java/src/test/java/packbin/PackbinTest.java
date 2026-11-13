@@ -61,6 +61,7 @@ public final class PackbinTest {
         SplitBitOrderTest.run();
         MissingNestedValueTest.run();
         RowClassTest.run();
+        CollectionTypeTest.run();
         TypedElementScopeTest.run();
         DuplicateNamesTest.run();
         FlagsWhenMemberTest.run();
