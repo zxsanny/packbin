@@ -6,6 +6,7 @@ origin: operator
 depends_on: []
 status: ready
 blocked_on:
+scanned: 2026-11-13
 created: 2026-11-13
 ---
 # Java: a `LinkedList` / `TreeMap` field does not throw a raw `ClassCastException` on unpack

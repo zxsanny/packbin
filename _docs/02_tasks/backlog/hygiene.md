@@ -41,7 +41,7 @@ No pin and no core source changes.
 
 slug `dart-colliding-keys-timing-helper`; severity low; source: found in loop113 (AZ-4217 fix round: `dart/test/limits/colliding_keys_test.dart` failed once at host load 50, 1,377 ms against `lessThan(1000)`); created 2026-11-12
 #### Problem
-`dart/test/limits/colliding_keys_test.dart` (65,535 colliding keys, two bounds `lessThan(1000)` at about lines 146 and 180) uses fixed wall-clock bounds. In loop 113 it failed once at host load about 50 (1,377 ms) and passed in the final run. The other eight packages use a load-aware helper for every wall-clock check (`_docs/AGENT_GOTCHAS.md`, lines on timing bounds). Dart had none until loop 113, which added `dart/test/support/timing.dart` for its own new cost test.
+`dart/test/limits/colliding_keys_test.dart` (65,535 colliding keys, two bounds `lessThan(1000)` at about lines 146 and 180) uses fixed wall-clock bounds. In loop 113 it failed once at host load about 50 (1,377 ms) and passed in the final run. The other eight packages use a load-aware helper for every wall-clock check (`_docs/gotchas/timing-bounds-use-load-factor.md`). Dart had none until loop 113, which added `dart/test/support/timing.dart` for its own new cost test.
 
 #### Outcome
 Every wall-clock assertion of the Dart suite calls the helper; a fixed bound does not fail on a busy host.
@@ -151,7 +151,7 @@ slug `esp-core-arduino-pin`; severity medium; source: found in loop113 (AZ-4219 
 `bash cpp/embedded/run.sh host esp core` installs the newest Arduino-ESP32 core at run time (3.3.12 on 2026-11-12) and took 525 s on this host in loop 113 (about 3 minutes expected). A new core release can change the build or the time with no change in this repository, and the CI job `embedded-esp-core` has the same exposure.
 
 #### Outcome
-The core version is pinned in one place that both the Mac run and the CI job read, with a line in `_docs/AGENT_GOTCHAS.md` saying how to move it.
+The core version is pinned in one place that both the Mac run and the CI job read, with a gotcha file under `_docs/gotchas/` (and its line in `_docs/gotchas/INDEX.md`) saying how to move it.
 
 #### Code sections
 `cpp/embedded/esp.sh`, `cpp/embedded/run.sh`, the Docker image or the PlatformIO / arduino-cli configuration it uses, `.github/workflows/test.yml` job `embedded-esp-core`, `cpp/embedded/*.test.sh`.

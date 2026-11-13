@@ -1,0 +1,3 @@
+# Friction notes
+
+- 2026-11-13 | rule-conflict | autodev P0 (status script queue) | `autodev-status.py` listed seven agent-found Low/Medium backlog items as ready on their own (they had no `origin:`/`severity:`, written before the 2026-11-13 hygiene rule); work-queue.md §Agent-made work puts them in one hygiene item. The agent converted them by hand (hygiene.md, 7 entries) | cause: autodev/scripts/autodev-status.py treats a missing `origin:` as operator-made; work-queue.md has no migration step for pre-rule items | fix: the script flags a backlog item with no `origin:` as "unclassified" and the P0 sweep classifies it once (origin from `source:`, severity from the defect)

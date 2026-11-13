@@ -6,6 +6,7 @@ origin: operator
 depends_on: []
 status: ready
 blocked_on:
+scanned: 2026-11-13
 created: 2026-11-12
 ---
 # Java: a field of another row class in an element row or nested row is refused at build

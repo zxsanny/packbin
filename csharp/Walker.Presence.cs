@@ -5,9 +5,9 @@ internal static partial class Walker
 {
     // A bool or an empty group is only a presence bit: on for true, off for false or no value. A group with children is
     // on when its own member or any value-bearing child (or a nested group's, a nested flags' or a flag bit's) has a
-    // value. A `u2` is on when any of its slots has a value. A `when` is on when its condition holds on the values
-    // written so far (`seen`) and its body holds a value; a `times` when its count is above zero; a `repeat` when a
-    // round has a value. The same holds for each of them inside a group.
+    // value. A `u2` is on when any of its slots has a value, a `flags` when any of its members is on. A `when` is on
+    // when its condition holds on the values written so far (`seen`) and its body holds a value; a `times` when its
+    // count is above zero; a `repeat` when a round has a value. The same holds for each of them inside a group.
     public static bool BitOn(IReadOnlyDictionary<string, object?> values, Field inner, Scope seen) =>
         inner.Type switch
         {
@@ -15,6 +15,7 @@ internal static partial class Walker
             Field.Kind.Group when inner.Children.Length == 0 => IsTrue(values, inner.Name),
             Field.Kind.Group => GroupOn(values, inner, seen),
             Field.Kind.U2 => AnyPresent(values, inner.Names),
+            Field.Kind.Flags => AnyChildPresent(values, inner, seen),
             Field.Kind.When => WhenOn(values, inner, seen),
             Field.Kind.Times => TimesOn(values, inner, seen),
             Field.Kind.Repeat => RepeatOn(values, inner),

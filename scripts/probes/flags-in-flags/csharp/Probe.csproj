@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    AZ-4251 probe of the C# package (see ../README.md and run.sh). The package sources are compiled into this console
+    program by their path, so no project of csharp/ is built and nothing is written there. run.sh sends bin and obj
+    to a temporary directory:
+      dotnet build Probe.csproj -o OUT/bin -p:BaseIntermediateOutputPath=OUT/obj/ -p:MSBuildProjectExtensionsPath=OUT/obj/
+    The sources share the probe's assembly, so the compiler does not hold Program.cs to public members; it calls
+    only Field, Scheme<T> and BinaryPacker, which are public. The layout is the one of the repeat probe
+    (scripts/probes/repeat-followed-by-field/csharp), where a ProjectReference to csharp/Packbin.csproj was tried
+    and not taken: with its obj sent elsewhere, the package project compiles the generated files of the csharp/obj
+    folder that earlier builds left.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Probe</AssemblyName>
+    <RootNamespace>FlagsProbe</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <UseAppHost>false</UseAppHost>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <RestoreIgnoreFailedSources>true</RestoreIgnoreFailedSources>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../../../csharp/*.cs" />
+    <Compile Include="Program.cs" />
+  </ItemGroup>
+
+</Project>

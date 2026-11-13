@@ -41,7 +41,7 @@ task() {
   mv "$dir/$name.rc.new" "$dir/$name.rc"
 }
 
-# npm ci after a cd: `npm ci --prefix` refuses the lock file when the path holds a symlink (AGENT_GOTCHAS).
+# npm ci after a cd: `npm ci --prefix` refuses the lock file when the path holds a symlink (_docs/gotchas/npm-ci-prefix-symlink.md).
 npm_ci() { cd "$root/typescript" && npm ci; }
 
 # failures <name>...: prints each named build that failed, did not run or did not finish, with the end of its log;

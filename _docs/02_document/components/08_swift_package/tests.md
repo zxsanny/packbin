@@ -1,6 +1,6 @@
 # Test Specification — Swift package
 
-Added in loop 26 (AZ-2223, AZ-2513 to AZ-2524). Same shape as [the Go tests.md](../07_go_package/tests.md): the project acceptance criteria AC-1 to AC-16 first, then the blackbox, performance, security and acceptance tests, then the Swift-specific criteria SW-1 to SW-16. Scenario ids FT-X-124 to FT-X-155 are in [blackbox-tests-19](../../tests/blackbox-tests-19-loop26-swift-package.md); the SW rows are in [traceability-matrix-loops-24-26.md](../../tests/traceability-matrix-loops-24-26.md) and the AC to test map for all packages is [traceability-matrix.md](../../tests/traceability-matrix.md). Every test below is a swift-testing `@Test` in `swift/Tests/PackbinTests/*.swift`, named `Suite.function`; it runs with `swift test` at the repository root on the owner's Mac (Swift 6.3.3, the flags of `_docs/AGENT_GOTCHAS.md`) and in the `swift` service of `docker-compose.test.yml` (`swift:6.3.3`). The suite is 335 tests in 55 suites.
+Added in loop 26 (AZ-2223, AZ-2513 to AZ-2524). Same shape as [the Go tests.md](../07_go_package/tests.md): the project acceptance criteria AC-1 to AC-16 first, then the blackbox, performance, security and acceptance tests, then the Swift-specific criteria SW-1 to SW-16. Scenario ids FT-X-124 to FT-X-155 are in [blackbox-tests-19](../../tests/blackbox-tests-19-loop26-swift-package.md); the SW rows are in [traceability-matrix-loops-24-26.md](../../tests/traceability-matrix-loops-24-26.md) and the AC to test map for all packages is [traceability-matrix.md](../../tests/traceability-matrix.md). Every test below is a swift-testing `@Test` in `swift/Tests/PackbinTests/*.swift`, named `Suite.function`; it runs with `swift test` at the repository root on the owner's Mac (Swift 6.3.3, the flags of `_docs/gotchas/swift-local-test-flags.md`) and in the `swift` service of `docker-compose.test.yml` (`swift:6.3.3`). The suite is 335 tests in 55 suites.
 
 ## Acceptance Criteria Traceability
 
@@ -109,7 +109,7 @@ See [tests-by-loop.md](tests-by-loop.md) (loop 26 section; loop 74 section: the 
 | session (retired in loop 74, ADR 009); RFC 8439 | seed bytes 1..32, value `01` + 15 zero bytes (retired); RFC 8439 §2.3.2 and §2.4.2 | inline in `ChaCha20Tests.swift` (`SessionTests.swift` deleted) | under 1 KB |
 
 **Setup procedure**:
-1. On the Mac: `swift test` at the repository root with the `-F` and rpath flags of `_docs/AGENT_GOTCHAS.md`; one `swift build` or `swift test` at a time (SwiftPM locks `.build`)
+1. On the Mac: `swift test` at the repository root with the `-F` and rpath flags of `_docs/gotchas/swift-local-test-flags.md`; one `swift build` or `swift test` at a time (SwiftPM locks `.build`)
 2. On Linux: `docker compose -f docker-compose.test.yml run --rm swift` (`swift:6.3.3`; build output in `PACKBIN_SWIFT_SCRATCH` inside the container)
 
 **Teardown procedure**:

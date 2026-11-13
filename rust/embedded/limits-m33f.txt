@@ -2,13 +2,13 @@
 # These are pins: the figures measured on HEAD of loop 70 with Rust 1.98.1 (the toolchain of the embedded-arm job)
 # on QEMU mps2-an505, equal to the measured value, so a later edit that spends bytes fails the row by its own bytes.
 # The row also holds every set to the chip-scale ceilings of cpp/embedded/lib.sh (m33f_flash_budget 65536 B,
-# m33f_stack_budget 8192 B; owner, 2026-10-25). A raise needs a line in _docs/AGENT_GOTCHAS.md saying what the
+# m33f_stack_budget 8192 B; owner, 2026-10-25). A raise needs a line in _docs/gotchas/rust-m33f-pins.md saying what the
 # bytes bought.
 # frame re-pinned in loop 73 (AZ-3275): the volatile wipe of the key temporaries, +168 B of flash, -24 B of stack.
-# ecc re-pinned in loop 97 (AZ-3506): the parity percentage, +376 B of flash and +8 B of stack (see _docs/AGENT_GOTCHAS.md).
-# ecc re-pinned in loop 98 (AZ-3526): the percentage round trip of the probe, +856 B of flash, -88 B of stack (owner, 2026-11-01; see _docs/AGENT_GOTCHAS.md).
+# ecc re-pinned in loop 97 (AZ-3506): the parity percentage, +376 B of flash and +8 B of stack (see _docs/gotchas/rust-m33f-pins.md).
+# ecc re-pinned in loop 98 (AZ-3526): the percentage round trip of the probe, +856 B of flash, -88 B of stack (owner, 2026-11-01; see _docs/gotchas/rust-m33f-pins.md).
 # The session set went with the stream session in loop 74 (AZ-3284).
-# All four re-pinned in loop 113 (AZ-4218): `validate` refuses a field that can write a byte after a `repeat`, +112 B of flash (base, frame) and +104 B (text, ecc), the stack as it was (see _docs/AGENT_GOTCHAS.md).
+# All four re-pinned in loop 113 (AZ-4218): `validate` refuses a field that can write a byte after a `repeat`, +112 B of flash (base, frame) and +104 B (text, ecc), the stack as it was (see _docs/gotchas/rust-m33f-pins.md).
 base 15244 456
 text 27372 2736
 ecc 20100 664

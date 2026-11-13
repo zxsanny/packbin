@@ -17,7 +17,7 @@ On 2026-11-11 the Docker image build of `embedded-arm` failed three times on the
 The cause is named from the `path=` lines of `diagnose-dns`, and the host-network build is kept or dropped on that evidence.
 
 ## Code sections
-`.github/workflows/diagnose-dns.yml`, `cpp/embedded/run.sh` (the `docker buildx build --allow network.host` call), `_docs/AGENT_GOTCHAS.md`.
+`.github/workflows/diagnose-dns.yml`, `cpp/embedded/run.sh` (the `docker buildx build --allow network.host` call), `_docs/gotchas/buildkit-host-network-allow.md`.
 
 ## Acceptance checks
 - When `embedded-arm` fails on a name lookup again: `diagnose-dns` is run at once and its `path=` lines are in the findings (`bridge` and `build` failing with `host-network` ok would be the first evidence).

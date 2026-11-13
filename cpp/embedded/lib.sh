@@ -30,7 +30,7 @@ m33f_stack_budget=8192
 # window in the secure alias, not a TrustZone non-secure image.
 m33f_ram_end=0x38020000
 # Pins on the M33F figures (loop 68): a later edit that spends bytes fails the row by its own bytes. Raise them only with
-# a line in _docs/AGENT_GOTCHAS.md saying what the bytes bought.
+# a line in _docs/gotchas/cpp-m33f-pins.md saying what the bytes bought.
 m33f_flash_pin=25948
 m33f_stack_pin=740
 # Pins on the frame image of the same row (AZ-3292, loop 75): the frame session and the MAC-only call alone (no pack or
@@ -38,7 +38,7 @@ m33f_stack_pin=740
 # set_previous, seal, open and the MAC-only call at 255-byte bodies, 16-byte tags and 255 bytes of associated data, net of
 # the meter (912 B; raw 976 B less 64 B; the MAC-only derive is the deepest call, HKDF inside HMAC above the 328 B
 # SHA-256 compress). A later edit that spends bytes fails the row by its own bytes; raise the pins only with a line in
-# _docs/AGENT_GOTCHAS.md saying what the bytes bought.
+# _docs/gotchas/cpp-m33f-pins.md saying what the bytes bought.
 m33f_frame_flash_pin=8416
 m33f_frame_stack_pin=912
 

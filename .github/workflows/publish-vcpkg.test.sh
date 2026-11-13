@@ -6,7 +6,7 @@
 # vcpkg is the one on GitHub-hosted Ubuntu runners ($VCPKG_INSTALLATION_ROOT), or $VCPKG_ROOT, or the
 # one on PATH. Without vcpkg or cmake a run on GitHub Actions fails; anywhere else it prints
 # `<check> NOT RUN` and the gate says so in its last line: a check that did not run is not a pass.
-# PACKBIN_CXX_SYSROOT (macOS only, see _docs/AGENT_GOTCHAS.md) adds the sysroot flags to the cmake builds
+# PACKBIN_CXX_SYSROOT (macOS only, see _docs/gotchas/mac-host-recipes.md) adds the sysroot flags to the cmake builds
 # and writes an overlay triplet for the vcpkg consumer into the temp dir; unset, nothing of it exists.
 
 # shellcheck disable=SC2154
