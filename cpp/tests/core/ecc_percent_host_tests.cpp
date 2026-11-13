@@ -136,7 +136,9 @@ void round_trips() {
       for (auto& b : clear)
         b = rng.byte();
       std::uint8_t buf[400] = {};
-      std::memcpy(buf, clear.data(), clear.size());
+      // An empty vector's data() may be null, and memcpy from null is undefined even for 0 bytes (UBSan, AZ-4278).
+      if (!clear.empty())
+        std::memcpy(buf, clear.data(), clear.size());
       int setting = setting_of(p);
       int n = -1;
       auto room = pd::parity_room(buf, sizeof(buf), clear.size(), setting, n);
@@ -144,7 +146,7 @@ void round_trips() {
       int want = ref_count(p, len);
       bool bytes_ok = room.ok() && sealed.ok() && n == want &&
                       sealed.offset == clear.size() + static_cast<std::size_t>(want) &&
-                      std::memcmp(buf, clear.data(), clear.size()) == 0;
+                      (clear.empty() || std::memcmp(buf, clear.data(), clear.size()) == 0);
       int found = -1;
       auto got = pd::received_parity(setting, sealed.offset, found);
       std::uint8_t repaired = 9;

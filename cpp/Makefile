@@ -30,7 +30,9 @@ NO_ECC_BIN := build/packbin_no_ecc_tests
 # Use clang (make CXX=clang++ sanitizer-test): GCC 16 cannot constant-evaluate the scheme tables under UBSan, so with
 # GCC pass SAN_FLAGS="-fsanitize=address -fno-omit-frame-pointer -Wno-frame-larger-than".
 # ASan widens stack frames past FRAME_LIMIT, so the frame check stays with the plain build.
-SAN_FLAGS := -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -Wno-frame-larger-than
+# -fbracket-depth: a test builds a `when` of 300 members, whose size is a fold over 302 nodes; clang's default limit is
+# 256 (Apple's clang allows it, Debian's clang 19 does not; AZ-4278). GCC has no such limit and no such flag.
+SAN_FLAGS := -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -Wno-frame-larger-than -fbracket-depth=512
 SAN_BIN := build/packbin_tests_sanitized
 
 .PHONY: test core-test clean compile-fail object-check no-text-test no-ecc-test frame-check sanitizer-test

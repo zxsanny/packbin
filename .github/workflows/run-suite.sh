@@ -50,6 +50,13 @@ missing_manifest() {
   ok=1
 }
 
+# Debian's clang $1 and its sanitizer runtimes, in the gcc image of the cpp suite (AZ-4278).
+cpp_clang_install() {
+  # A mirror that fails once is asked again (Acquire::Retries), so one network blip does not fail the suite.
+  apt-get -o Acquire::Retries=3 update -q && DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 install -y -q \
+    --no-install-recommends "clang-$1" "libclang-rt-$1-dev"
+}
+
 # Go (golang:1.27): every step runs in the module directory $1 through `go -C`.
 go_fmt() {
   local unformatted
@@ -365,6 +372,19 @@ case "$lang" in
   cpp)
     if [ -f "$root/cpp/Makefile" ]; then
       run make -C "$root/cpp" test
+      # The host suite again under clang ASan and UBSan (AZ-4278, decision D17), when the compose cpp service asks for it:
+      # GCC 16 cannot build it with -fsanitize=undefined, so Debian's clang of the major in tool-pins.txt is installed in
+      # this gcc image. A sanitizer build has no hostile hang guard, so the step has its own 10-minute limit. The binary
+      # is removed first: one linked on the Mac would pass make's date check.
+      if [ "${PACKBIN_CPP_SANITIZER:-}" = 1 ]; then
+        if ! clang_major="$(bash "$root/.github/workflows/tool-pin.sh" clang)"; then
+          echo "run-suite: no clang pin in tool-pins.txt; the sanitizer step cannot run" >&2
+          ok=1
+        fi
+        run cpp_clang_install "$clang_major"
+        run rm -f "$root/cpp/build/packbin_tests_sanitized"
+        run timeout 600 make -C "$root/cpp" CXX="clang++-$clang_major" sanitizer-test
+      fi
     else
       missing_manifest "$root/cpp/Makefile"
     fi

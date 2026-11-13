@@ -18,3 +18,6 @@ pyyaml==6.0.3
 # Version of the Arduino-ESP32 core (esp32:esp32) the ESP core stage installs, read by cpp/embedded/examples.sh on the
 # Mac run and in CI job embedded-esp-core. Not a pip package. Pinned 2026-11-13 at the release current on 2026-11-12.
 arduino-esp32==3.3.12
+# Major version of Debian's clang (package clang-<major>) that the cpp suite installs in its gcc image for the
+# sanitizer build (run-suite.sh, AZ-4278, decision D17). Not a pip package.
+clang==19

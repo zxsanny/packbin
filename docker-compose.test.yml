@@ -64,6 +64,8 @@ services:
     command: ["exec /src/.github/workflows/run-suite.sh cpp"]
     environment:
       SRC_ROOT: /src
+      # The suite also runs the host tests under clang ASan and UBSan (run-suite.sh, AZ-4278).
+      PACKBIN_CPP_SANITIZER: "1"
       FIXTURE: /fixture/golden.hex
       TEST_RESULTS: /test-results
       GITHUB_ACTIONS:

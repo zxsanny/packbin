@@ -33,6 +33,30 @@ List<Field> _whensOfRepeats() => [
     ]),
 ];
 
+/// Builds timed per shape: the build allocates, so one build is decided by a
+/// single garbage-collection pause or a lost time slice on a busy host, which
+/// the CPU load factor does not see (loop 121: 869 ms in the pool, under the
+/// bound alone). A quadratic walk is slow in every build, so the best of three
+/// still fails it.
+const _builds = 3;
+
+/// The scheme of the last build and the shortest of [_builds] builds, each
+/// of fields made fresh outside the timed section.
+(Scheme<Map<String, Object?>>, Duration) _bestBuild(
+  List<Field> Function() build,
+) {
+  Scheme<Map<String, Object?>>? layout;
+  Duration? best;
+  for (var i = 0; i < _builds; i++) {
+    final fields = build();
+    final watch = Stopwatch()..start();
+    layout = scheme(1, fields);
+    watch.stop();
+    if (best == null || watch.elapsed < best) best = watch.elapsed;
+  }
+  return (layout!, best!);
+}
+
 void main() {
   group('AZ-4217 performance: the rule is one walk of the scheme', () {
     final shapes = <String, List<Field> Function()>{
@@ -45,17 +69,14 @@ void main() {
     for (final MapEntry(key: name, value: build) in shapes.entries) {
       test('$name build in a time that follows their number', () {
         // Arrange
-        final fields = build();
         final bound = LoadBound(_nominal);
 
         // Act
-        final watch = Stopwatch()..start();
-        final layout = scheme(1, fields);
-        watch.stop();
+        final (layout, best) = _bestBuild(build);
 
         // Assert
         expect(layout.typeNumber, 1);
-        expectWithin(watch.elapsed, bound, what: name);
+        expectWithin(best, bound, what: '$name (best of $_builds builds)');
       });
     }
   });
