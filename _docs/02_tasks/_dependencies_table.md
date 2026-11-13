@@ -575,3 +575,5 @@ Loop 112 (feature `repeat-must-be-last`, epic AZ-4209, 29 points in 10 tasks): e
 | AZ-4259 | csharp_go_first_writer_memo (linear repeat-last walk in C# and Go; loop 121) | 3 | — | AZ-4133 |
 | AZ-4260 | dart_timing_helper (wall-clock tests use the load-aware helper; loop 121) | 1 | — | AZ-4133 |
 | AZ-4261 | cpp_hygiene (s390x percentage compare, sanitizer-safe timing, pinned ESP core; loop 121) | 5 | — | AZ-4133 |
+| AZ-4277 | dart_repeat_last_cost_best_of_three (the repeat-last cost test times the best of three builds; loop 122) | 1 | — | AZ-4133 |
+| AZ-4278 | cpp_sanitizer_ci_job (CI job runs the C++ host suite under clang ASan and UBSan; loop 122) | 3 | — | AZ-4133 |
