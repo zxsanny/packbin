@@ -8,7 +8,9 @@ depends_on: []
 status: ready
 blocked_on:
 created: 2026-11-13
-scanned:
+scanned: 2026-11-13
+loop: 123
+branch: dev
 ---
 # Hygiene: agent-found entries
 
