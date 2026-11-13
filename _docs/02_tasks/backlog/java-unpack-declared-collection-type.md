@@ -2,6 +2,7 @@
 kind: queue-item
 order: 500
 source: found in loop116 (AZ-4242 probe, `_docs/06_metrics/element-row-probe_2026-11-12.md` note 9); split from OPERATOR_TODO D10 on 2026-11-13; D12 decided 2026-11-13: B (refuse at unpack)
+origin: operator
 depends_on: []
 status: ready
 blocked_on:

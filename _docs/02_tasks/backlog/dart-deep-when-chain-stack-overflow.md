@@ -2,6 +2,8 @@
 kind: queue-item
 order: 500
 source: found in loop113 (AZ-4217 fix round)
+origin: agent
+severity: medium
 depends_on: []
 status: ready
 blocked_on:

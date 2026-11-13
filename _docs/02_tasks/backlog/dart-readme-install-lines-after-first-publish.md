@@ -2,6 +2,7 @@
 kind: queue-item
 order: 500
 source: loop99 record (leftovers: owner publishes the first pub.dev version; "After it, edit the two README lines that say Dart is installed from the repository")
+origin: operator
 depends_on: []
 status: blocked
 blocked_on: OPERATOR_TODO N1 (the first `dart pub publish`)

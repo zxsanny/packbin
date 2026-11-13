@@ -2,8 +2,12 @@
 kind: queue-item
 order: 500
 source: found in loop113 (code review of AZ-4212, outside the diff)
+origin: agent
+severity: high
 depends_on: []
 status: ready
+loop: 118
+branch: dev
 blocked_on:
 created: 2026-11-12
 ---

@@ -2,6 +2,7 @@
 kind: queue-item
 order: 500
 source: loop105 and loop109 records (CI job `embedded-arm`: "Could not resolve 'archive.ubuntu.com'" inside the image build; AZ-4198 `diagnose-dns` workflow)
+origin: operator
 depends_on: []
 status: blocked
 blocked_on: the failure has not come back since loop 106 (the image is built on the host network); the cause can only be read from a failing run
