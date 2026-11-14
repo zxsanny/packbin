@@ -5,8 +5,8 @@ source: loop 126 findings (AZ-4300, AZ-4302)
 origin: agent
 severity: low
 depends_on: []
-status: blocked
-blocked_on: holds fewer than five entries and other items are not all done (work-queue.md §Agent-made work)
+status: ready
+blocked_on:
 created: 2026-11-14
 ---
 # Hygiene
