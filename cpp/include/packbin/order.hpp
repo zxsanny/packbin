@@ -34,6 +34,27 @@ constexpr bool is_count_source(Kind k) {
   }
 }
 
+// A scheme is nested at most this many levels (contract scheme-depth.md); `check_table` refuses a
+// deeper one first, with `needed` set to this limit.
+constexpr std::size_t kMaxDepth = 256;
+
+// A level is a `when`, `flags`, group, round, list or dict (its element row). A flag bit or a u2
+// slot holds members without a level of its own.
+constexpr bool is_level(Kind k) {
+  switch (k) {
+    case Kind::When:
+    case Kind::Flags:
+    case Kind::Group:
+    case Kind::Repeat:
+    case Kind::Times:
+    case Kind::List:
+    case Kind::Dict:
+      return true;
+    default:
+      return false;
+  }
+}
+
 struct Check {
   bool failed = false;
   int field = -1;
@@ -46,31 +67,59 @@ struct Check {
   }
 };
 
-constexpr int check_subtree(Field const* t, std::size_t i, int next, Check& c);
-
-constexpr int check_children(Field const* t, std::size_t i, int next, Check& c) {
-  std::size_t end = i + t[i].span;
-  for (std::size_t j = i + 1; j < end && !c.failed; j += t[j].span)
-    next = check_subtree(t, j, next, c);
-  return next;
+// Measures the nesting depth of the preorder table without recursion and without an array: while
+// it runs, the `ref` of an entry that holds children carries the distance back to the entry that
+// holds it (0 at the top), which is how the walk steps out of a container, and every `ref` is -1
+// again when it ends (resolve sets it later). Fails at the first entry deeper than the limit.
+constexpr void check_depth(Field* t, std::size_t n, Check& c) {
+  std::size_t cur = 0;  // innermost entry with children that the walk is inside
+  bool open = false;
+  std::size_t depth = 0;  // levels open, `cur` included
+  std::size_t j = 0;
+  for (; j < n && !c.failed; ++j) {
+    while (open && j >= cur + t[cur].span) {
+      std::size_t up = static_cast<std::uint16_t>(t[cur].ref);
+      if (is_level(t[cur].kind))
+        --depth;
+      open = up != 0;
+      cur -= up;
+    }
+    std::size_t at = depth + (is_level(t[j].kind) ? 1 : 0);
+    if (at > kMaxDepth) {
+      c.fail_at(t[j].id);
+    } else if (t[j].span > 1) {
+      t[j].ref = static_cast<std::int16_t>(open ? j - cur : 0);
+      cur = j;
+      open = true;
+      depth = at;
+    }
+  }
+  for (std::size_t k = 0; k < j; ++k) {
+    if (t[k].span > 1)
+      t[k].ref = -1;
+  }
 }
 
+// One call per level, not two: the compiler evaluating a `constexpr` scheme stops at 512 nested
+// calls, so a scheme of 256 levels must stay well under two calls per level.
 constexpr int check_subtree(Field const* t, std::size_t i, int next, Check& c) {
   Field const& f = t[i];
+  std::size_t first = i + 1;  // the first child
+  bool element = false;       // a list or dict: the element's ids start at 0 and the entry has none
   switch (f.kind) {
     case Kind::FlagByte:
       return next;
     case Kind::FlagBit:
     case Kind::U2:
-      return check_children(t, i, next, c);
+      break;
     case Kind::List:
-      check_children(t, i, 0, c);
-      return next;
+      element = true;
+      break;
     case Kind::Dict:
       // The first child is the entry key, which has no order id.
-      if (f.span > 2)
-        check_subtree(t, i + 2, 0, c);
-      return next;
+      element = true;
+      first = i + 2;
+      break;
     case Kind::Flags:
     case Kind::When:
     case Kind::Repeat:
@@ -80,7 +129,7 @@ constexpr int check_subtree(Field const* t, std::size_t i, int next, Check& c) {
         c.fail_at(f.id);
         return next;
       }
-      return check_children(t, i, next, c);
+      break;
     default:
       if (f.id != next) {
         c.fail_at(f.id);
@@ -88,6 +137,11 @@ constexpr int check_subtree(Field const* t, std::size_t i, int next, Check& c) {
       }
       return next + 1;
   }
+  int inner = element ? 0 : next;
+  std::size_t end = i + f.span;
+  for (std::size_t j = first; j < end && !c.failed; j += t[j].span)
+    inner = check_subtree(t, j, inner, c);
+  return element ? next : inner;
 }
 
 // Index of the bound count source with order id `id` that comes before `before` in the scope
@@ -365,9 +419,14 @@ constexpr void check_repeat_last(Field const* t, std::size_t n, Check& c) {
 
 }  // namespace detail
 
-// Checks a whole scheme table and resolves its `when` and count references.
+// Checks a whole scheme table and resolves its `when` and count references. A scheme nested deeper
+// than 256 levels is refused first, SchemeInvalid with `needed` 256 and the id of the first entry
+// past the limit (-1 for a list or dict).
 constexpr Result check_table(Field* t, std::size_t n) {
   detail::Check c{};
+  detail::check_depth(t, n, c);
+  if (c.failed)
+    return fail(Error::SchemeInvalid, 0, c.field, detail::kMaxDepth);
   int next = 0;
   for (std::size_t j = 0; j < n && !c.failed; j += t[j].span)
     next = detail::check_subtree(t, j, next, c);

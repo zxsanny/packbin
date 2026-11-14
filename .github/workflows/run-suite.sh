@@ -235,6 +235,10 @@ case "$lang" in
     # shellcheck source=run-suite-rust.sh
     . "$(dirname "${BASH_SOURCE[0]}")/run-suite-rust.sh"
     if [ -f "$root/rust/Cargo.toml" ]; then
+      # A debug pack or unpack of the map API uses about 11 KiB of stack per nesting level, so the 256-level round
+      # trips of the depth limit (AZ-4302) need about 3 MiB; a test thread has 2 MiB by default and those cases
+      # would print "skipped". A release build and a main thread (8 MiB) fit without this.
+      export RUST_MIN_STACK=8388608
       run cargo test --manifest-path "$root/rust/Cargo.toml" -- --nocapture
       # the heap-free API builds and passes with `std` and `alloc` off (AZ-2749)
       run cargo test --manifest-path "$root/rust/Cargo.toml" --no-default-features --test nostd_flat_tests -- --nocapture

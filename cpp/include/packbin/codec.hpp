@@ -34,6 +34,7 @@ namespace detail {
 template <int Id>
 void scheme_field_id_breaks_order() {}
 inline void scheme_type_number_not_0_to_255() {}
+inline void scheme_nested_deeper_than_256_levels() {}
 inline void scheme_parity_percent_not_0_to_100_or_ecc_removed() {}
 inline void scheme_parity_not_0_to_32_or_ecc_removed() {}
 
@@ -56,6 +57,11 @@ constexpr void invalid_field_id(int field_id) {
     else
       stop_at_field_id<0>(field_id);
   }
+}
+
+constexpr void invalid_depth() {
+  if (constant_evaluated())
+    scheme_nested_deeper_than_256_levels();
 }
 
 constexpr void invalid_type_number() {
@@ -121,8 +127,12 @@ constexpr Scheme<Row, detail::total<Ns...>()> scheme(int type_number, Ns const&.
   std::size_t at = 0;
   [[maybe_unused]] int const copied[] = {0, detail::copy_fields(s.fields, at, nodes)...};
   s.status = check_table(s.fields.data(), s.fields.size());
-  if (!s.status.ok())
-    detail::invalid_field_id(s.status.field);
+  if (!s.status.ok()) {
+    if (s.status.needed == detail::kMaxDepth)
+      detail::invalid_depth();
+    else
+      detail::invalid_field_id(s.status.field);
+  }
   return s;
 }
 

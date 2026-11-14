@@ -1,6 +1,7 @@
 //! The `pack` stage of the shared hostile cases (fixtures/hostile/cases.txt): the scheme and row of
 //! each case, written by hand from fixtures/hostile/README.md in Rust's map form.
 
+use super::depth_cases;
 use crate::walk::pack;
 use crate::{
     bits, bytes, eq, flag_byte, flags, group, insert, packed, repeat, sized, times, u16, u32, u8,
@@ -193,6 +194,8 @@ pub(super) const PACK_NOT_RUN: &[(&str, &str)] = &[
 /// The scheme and row of a `pack` case, written by hand from fixtures/hostile/README.md (map form).
 pub(super) fn pack_case(id: &str) -> Result<Vec<u8>, PackError> {
     match id {
+        "pack_depth_when_256" => depth_cases::pack_when_256(),
+        "pack_depth_group_256" => depth_cases::pack_group_256(),
         "pack_out_of_range_integer" => pack(
             &MapScheme::new(1, vec![u8("a")]),
             &row(&[("a", Value::U16(300))]),

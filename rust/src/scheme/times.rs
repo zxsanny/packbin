@@ -1,3 +1,4 @@
+use super::depth::item_levels;
 use super::{build_row, compile_items, read_values, Binder, SchemeItem};
 use crate::field::{id_name, times_name, Field};
 use crate::value::{Name, Value};
@@ -9,6 +10,8 @@ type Compile<T> = Box<dyn FnOnce(&mut u32) -> Compiled<T>>;
 pub struct TimesItem<T> {
     pub(super) anchor: u32,
     pub(super) count: Name,
+    /// The nesting of the element items, measured when the item was built.
+    pub(super) depth: usize,
     /// Compiles the element items with the scheme's counter of generated names, so no element
     /// reuses a name of the row or of another element.
     pub(super) compile: Compile<T>,
@@ -33,6 +36,7 @@ impl<T: 'static> TimesItem<T> {
         TimesItem {
             anchor,
             count: id_name(count_id),
+            depth: item_levels(&members),
             compile: Box::new(move |name_seq| {
                 let mut end = anchor;
                 let (fields, element_binders) = compile_items(members, &mut end, name_seq);

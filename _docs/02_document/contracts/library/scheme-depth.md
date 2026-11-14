@@ -3,7 +3,7 @@
 **Component**: library
 **Producer task**: AZ-4294 (hostile cases and README text)
 **Consumer tasks**: AZ-4295 (TypeScript), AZ-4296 (C#), AZ-4297 (Python), AZ-4298 (Java), AZ-4299 (Go), AZ-4300 (Swift), AZ-4301 (Dart), AZ-4302 (Rust), AZ-4303 (C++)
-**Version**: 1.0.1
+**Version**: 1.0.2
 **Status**: frozen (owner decision D18, 2026-11-14: "Shared limit (256)"); implemented in loop 126
 **Last Updated**: 2026-11-14
 
@@ -39,6 +39,8 @@ Examples (type number 1, `u8 a` then the chain, innermost `u8 b`):
 ### What stays
 
 - A scheme at 256 levels builds, packs and unpacks with the bytes it had before: every container kind the package can nest (`when`, group or nested row, list and dict element rows) must do so at 256 with the default stack of the host and no raised recursion limit. A package that cannot is a blocker to report, not a reason to lower the limit alone.
+- Measured in loop 126 (see `_docs/gotchas/deep-scheme-stack-by-build-and-thread.md`): 256 levels of every kind fit the default stack in release builds and on main threads in all nine packages; a debug build on a small thread can overflow in the Rust map API (about 3 MiB for 256 levels) and Swift (640 KiB, `flags` 1.5 MiB). The limit stays 256 (decision D19).
+- A `u2` counts no level (all nine packages).
 - Rust's own `MAX_FIELDS` (32,768) of the heap-free API stays; its refusal text is that API's own.
 - No wire change; the existing tests that use a scheme of up to a handful of levels are unchanged.
 
@@ -52,3 +54,4 @@ Examples (type number 1, `u8 a` then the chain, innermost `u8 b`):
 |---------|------|--------|--------|
 | 1.0.0 | 2026-11-14 | First version: limit 256, refused at build (D18) | loop 126 |
 | 1.0.1 | 2026-11-14 | Counting paragraph: a list or dict counts one level plus its element's own kind; a flag bit adds none | loop 126 |
+| 1.0.2 | 2026-11-14 | Measured default-stack figures (debug builds on small threads), `u2` counts none | loop 126 |

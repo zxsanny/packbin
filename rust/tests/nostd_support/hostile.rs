@@ -68,6 +68,28 @@ fn bit(number: u16, inner: Node) -> Node {
     Node::FlagBit(number, Box::new(inner))
 }
 
+/// `u8 0`, then `depth` `when` (id 0 == 1) inside each other, the innermost holding `u8 1`; a loop,
+/// innermost first (the `construct_depth_when_257` and `pack_depth_when_256` schemes).
+pub fn when_chain(depth: usize) -> Vec<Node> {
+    let mut inner = vec![n(Kind::U8)];
+    for _ in 0..depth {
+        inner = vec![Node::When(0, 1, inner)];
+    }
+    let mut nodes = vec![n(Kind::U8)];
+    nodes.extend(inner);
+    nodes
+}
+
+/// `depth` groups inside each other, the innermost holding `u8 0` (the `construct_depth_group_257`
+/// and `pack_depth_group_256` schemes).
+pub fn group_chain(depth: usize) -> Vec<Node> {
+    let mut inner = vec![n(Kind::U8)];
+    for _ in 0..depth {
+        inner = vec![Node::Group(inner)];
+    }
+    inner
+}
+
 /// The nodes of a case that names a scheme, the same layout the C++ runner writes (order ids are
 /// the C++ ones: a container shares the id of its first member). `None` for a pack case, which
 /// `nostd_hostile_pack_tests` holds, and for a case that has no spelling in the core.
@@ -138,6 +160,9 @@ pub fn nodes_of(id: &str) -> Option<Vec<Node>> {
         "construct_repeat_in_group_in_times_round" => {
             vec![n(U8), Times(0, vec![Group(vec![Repeat(vec![n(U8)])])])]
         }
+        // AZ-4302: a scheme nested more than 256 levels, the shared depth cases.
+        "construct_depth_when_257" => when_chain(257),
+        "construct_depth_group_257" => group_chain(257),
         _ => return None,
     })
 }

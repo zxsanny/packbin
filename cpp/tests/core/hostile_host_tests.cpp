@@ -6,6 +6,7 @@
 #include "packbin/packbin.hpp"
 
 #include "check.hpp"
+#include "hostile_depth.hpp"
 #include "hostile_repeat_last.hpp"
 #include "hostile_rule_check.hpp"
 #include "load_factor.hpp"
@@ -161,9 +162,7 @@ char const* oversize_count(std::uint8_t const* d, std::size_t n) {
   return unpack_term<SizedU32>(s, d, n);
 }
 
-struct TimesU32 {
-  std::uint32_t n = 0;
-};
+struct TimesU32 { std::uint32_t n = 0; };
 
 // The times is unbound, so the packet length (not an Array capacity) is what runs out.
 char const* oversize_count_times(std::uint8_t const* d, std::size_t n) {
@@ -172,18 +171,14 @@ char const* oversize_count_times(std::uint8_t const* d, std::size_t n) {
   return unpack_term<TimesU32>(s, d, n);
 }
 
-struct ListRow {
-  Array<std::uint8_t, 4> xs;
-};
+struct ListRow { Array<std::uint8_t, 4> xs; };
 
 char const* oversize_list_count(std::uint8_t const* d, std::size_t n) {
   auto s = packbin::scheme<ListRow>(1, packbin::list<&ListRow::xs>(packbin::u8(0)));
   return unpack_term<ListRow>(s, d, n);
 }
 
-struct TextRow {
-  packbin::Text<16> name;
-};
+struct TextRow { packbin::Text<16> name; };
 
 // The old rows hold a u16 count and bytes; read as the compact format the codec refuses them
 // (a stream that ends inside a code), so the open-concern exception in check_case no longer
@@ -467,7 +462,8 @@ void hostile_cases() {
     for (auto const* id : kConstructSkips)
       skipped += c.id == id;
   expect(cases.size() == skipped + sizeof(kHandlers) / sizeof(kHandlers[0]) +
-                             sizeof(hostile_repeat_last::kHandlers) / sizeof(Handler),
+                             sizeof(hostile_repeat_last::kHandlers) / sizeof(Handler) +
+                             sizeof(hostile_depth::kHandlers) / sizeof(Handler),
          "every case has a scheme or a skip");
   for (auto const& c : cases) {
     if (c.stage == "construct" && skipped != 0 && c.id == kConstructSkips[0]) {
@@ -479,6 +475,9 @@ void hostile_cases() {
       if (c.id == h.id)
         match = &h;
     for (auto const& h : hostile_repeat_last::kHandlers)  // loop 113, AZ-4219
+      if (c.id == h.id)
+        match = &h;
+    for (auto const& h : hostile_depth::kHandlers)  // loop 126, AZ-4303
       if (c.id == h.id)
         match = &h;
     if (match == nullptr) {

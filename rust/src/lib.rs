@@ -117,6 +117,8 @@ mod repeat_lists_without_groups_tests;
 #[cfg(all(test, feature = "std"))]
 mod round_tests;
 #[cfg(all(test, feature = "std"))]
+mod scheme_depth_tests;
+#[cfg(all(test, feature = "std"))]
 mod scope_tests;
 #[cfg(all(test, feature = "std"))]
 mod split_form_loud_tests;

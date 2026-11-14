@@ -7,6 +7,8 @@ use crate::{
     when, Field, MapScheme, Value, DEFAULT_MAX_SLOTS,
 };
 
+use super::depth_cases::{group_scheme, when_scheme};
+
 type Build = fn() -> MapScheme;
 
 fn zero_progress_when() -> MapScheme {
@@ -132,6 +134,8 @@ const SCHEMES: &[(&[&str], Build)] = &[
         )
     }),
     (&["nine_flag_bits_split"], nine_flag_bits_split),
+    (&["construct_depth_when_257"], || when_scheme(257)),
+    (&["construct_depth_group_257"], || group_scheme(257)),
     (&["construct_empty_times_body"], || {
         MapScheme::new(1, vec![u8("0"), times(1, "0", vec![])])
     }),
@@ -266,6 +270,8 @@ const OUTCOMES: &[(&[&str], &str)] = &[
             "construct_repeat_in_times_round",
             "construct_repeat_in_group_in_repeat_round",
             "construct_repeat_in_group_in_times_round",
+            "construct_depth_when_257",
+            "construct_depth_group_257",
         ],
         "scheme_error",
     ),

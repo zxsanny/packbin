@@ -90,6 +90,15 @@ pub(super) const CONSTRUCT_REFUSAL: RuleTable = &[
         "construct_repeat_in_times_round",
         "=repeat at id 1 is inside a repeat or times round; a round keeps no inner repeat rounds",
     ),
+    // AZ-4302: a scheme nested more than 256 levels, refused first; the whole text.
+    (
+        "construct_depth_when_257",
+        "=scheme nested too deep: more than 256 levels; the limit is 256",
+    ),
+    (
+        "construct_depth_group_257",
+        "=scheme nested too deep: more than 256 levels; the limit is 256",
+    ),
     // AZ-4232: the same rule, looking into the group of the round; the id is the inner repeat's.
     (
         "construct_repeat_in_group_in_repeat_round",

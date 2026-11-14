@@ -1,9 +1,11 @@
+mod depth_cases;
 mod pack_cases;
 mod refusals;
 mod schemes;
 
 use crate::walk::unpack;
 use crate::{to_hex, BoundField, MapScheme, Scheme, UnpackError};
+pub(crate) use depth_cases::walk_fits_stack;
 use pack_cases::{pack_case, PACK_NOT_RUN};
 use refusals::{
     assert_construct_rule, assert_pack_rule, assert_tables_cover, RuleTable, CONSTRUCT_REFUSAL,
@@ -111,7 +113,7 @@ fn assert_refusal_names_the_rule(id: &str, msg: &str) {
     );
 }
 
-fn panic_text(panic: &(dyn std::any::Any + Send)) -> String {
+pub(crate) fn panic_text(panic: &(dyn std::any::Any + Send)) -> String {
     if let Some(s) = panic.downcast_ref::<String>() {
         s.clone()
     } else if let Some(s) = panic.downcast_ref::<&str>() {
@@ -322,6 +324,10 @@ fn run_all_cases(construct_rules: RuleTable, pack_rules: RuleTable) {
             },
             "pack" => {
                 if let Some((_, reason)) = PACK_NOT_RUN.iter().find(|(skipped, _)| *skipped == id) {
+                    outcomes.push(format!("{id} -> skipped: {reason}"));
+                    continue;
+                }
+                if let Some(reason) = depth_cases::stack_skip(id) {
                     outcomes.push(format!("{id} -> skipped: {reason}"));
                     continue;
                 }

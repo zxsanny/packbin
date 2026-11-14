@@ -1,6 +1,31 @@
 /// The construction checks that look at the fields only, in TypeScript's order: a constructor's
 /// refusal, the ids, the presence marks and the member names.
 
+/// The deepest nesting a scheme may have (the contract scheme-depth): 256 containers on one path.
+let maxSchemeDepth = 256
+
+/// Refuses a scheme nested deeper than `maxSchemeDepth` containers, before any walk that recurses. A
+/// `when`, `flags`, group, `repeat`, `times`, `list` and `dict` each count one level; a flag bit, a flag
+/// byte and a u2 count none. It uses an explicit stack, so a scheme of any depth costs no call stack, and
+/// it stops at the first path over the limit, so the stack holds at most the limit times the widest row.
+func checkDepth(_ nodes: [Node]) throws {
+    var pending: [(node: Node, depth: Int)] = nodes.reversed().map { ($0, 0) }
+    while let (node, above) = pending.popLast() {
+        var depth = above
+        switch node.kind {
+        case .flags, .when, .group, .repeatRound, .timesRound, .list, .dict:
+            depth += 1
+            if depth > maxSchemeDepth {
+                throw PackbinError.scheme(nil, "", "scheme nested too deep: more than \(maxSchemeDepth) levels; "
+                    + "the limit is \(maxSchemeDepth)")
+            }
+        case .int, .float, .bytes, .bool, .flagByte, .flagBit, .sized, .u2, .slot, .bits, .packed, .utf8:
+            break
+        }
+        for child in node.fields.reversed() { pending.append((child, depth)) }
+    }
+}
+
 /// Reports a constructor's refusal at any depth.
 func checkNodes(_ nodes: [Node]) throws {
     for n in nodes {

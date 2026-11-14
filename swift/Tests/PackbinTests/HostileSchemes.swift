@@ -116,6 +116,13 @@ let hostileConstructs: [String: HostileConstruct] = [
             try Scheme(1, .u8(0, "mode"), .u8(1, "c"), .times(2, count: 1, .when(2, .eq(0, 1), .when(2, .eq(0, 1), []))))
         },
         rule: "packbin: invalid scheme at field 2: times 2: \(emptyBody)"),
+    // Loop 126 (AZ-4300): a scheme nested deeper than 256 containers is refused when it is built.
+    "construct_depth_when_257": HostileConstruct(
+        build: { try DepthKind.when.chain(257).scheme() },
+        rule: "packbin: invalid scheme: scheme nested too deep: more than 256 levels; the limit is 256"),
+    "construct_depth_group_257": HostileConstruct(
+        build: { try DepthKind.group.chain(257).scheme() },
+        rule: "packbin: invalid scheme: scheme nested too deep: more than 256 levels; the limit is 256"),
     // Loop 113 (AZ-4216), cases R1 to R9 of the contract repeat-last: a repeat is the last thing a packet reads.
     "construct_repeat_then_field": HostileConstruct(
         build: { try Scheme(1, .repeat(0, .u8(0, "v")), .u8(1, "x")) },

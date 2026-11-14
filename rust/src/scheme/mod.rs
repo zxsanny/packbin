@@ -1,9 +1,11 @@
 mod bound;
 mod bound_collections;
+mod depth;
 mod times;
 
 pub use bound::BoundField;
 use bound::{Getter, Setter};
+use depth::check_items;
 use times::TimesItem;
 
 use crate::ecc;
@@ -208,8 +210,8 @@ impl<T: 'static> Scheme<T> {
     pub fn new(type_number: i32, fields: impl IntoIterator<Item = SchemeItem<T>>) -> Self {
         let mut next_id = 0u32;
         let mut name_seq = 0u32;
-        let (layout_fields, binders) =
-            compile_items(fields.into_iter().collect(), &mut next_id, &mut name_seq);
+        let items = check_items(fields.into_iter().collect());
+        let (layout_fields, binders) = compile_items(items, &mut next_id, &mut name_seq);
         Scheme {
             layout: MapScheme::new(type_number, layout_fields),
             binders,

@@ -33,6 +33,7 @@ public struct Scheme: Sendable {
             throw PackbinError.scheme(nil, "", "type number \(typeNumber): expected 0..255")
         }
         let nodes = fields.map(\.node)
+        try checkDepth(nodes)
         try checkNodes(nodes)
         try checkSlots(nodes, inU2: false)
         _ = try checkFieldIDs(nodes, next: 0)

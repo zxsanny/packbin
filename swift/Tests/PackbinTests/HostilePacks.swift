@@ -93,6 +93,8 @@ private let novalueRow: @Sendable () -> [String: Any] = { ["mode": 0, "c": 3] }
 /// fixtures/hostile/cases.txt, pack stage: every row in the map form, a list as an `[Any]` (`[Any?]`
 /// where an entry is absent), a group's members in a nested map under its name.
 let hostilePacks: [String: HostilePack] = [
+    "pack_depth_when_256": HostilePack({ try DepthKind.when.chain(256).scheme() }, { DepthKind.when.chain(256).row }),
+    "pack_depth_group_256": HostilePack({ try DepthKind.group.chain(256).scheme() }, { DepthKind.group.chain(256).row }),
     "pack_out_of_range_integer": HostilePack({ try Scheme(1, .u8(0, "a")) }, { ["a": 300] }),
     "pack_missing_required_value": HostilePack({ try Scheme(1, .u8(0, "a"), .u8(1, "b")) }, { ["a": 1] }),
     "pack_times_list_too_long": HostilePack(timesX, { ["a": 2, "x": [1, 2, 3]] }),

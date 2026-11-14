@@ -4,12 +4,17 @@
 
 use super::error::{Error, Fault};
 use super::scheme::{Field, Kind, Scheme, MAX_FIELDS, MAX_PARITY, NO_ID};
-use super::table::{bit_position, end, flag_byte_of, get, id_of, kind, level, members, source_of};
+use super::table::{
+    bit_position, end, flag_byte_of, get, id_of, is_level, kind, level, members, parent_and_levels,
+    source_of,
+};
 
 /// The most members of one `flags` byte and the most bits of one flag byte.
 const FLAG_BITS: usize = 8;
 /// A `u2` packs into 16 bytes: at most 64 members.
 const MAX_U2: usize = 64;
+/// The most levels a scheme may nest (`_docs/02_document/contracts/library/scheme-depth.md`).
+const MAX_DEPTH: usize = 256;
 /// The largest order id; a `when` or a count naming a larger one can never match.
 const MAX_ID: u16 = 32767;
 
@@ -27,6 +32,7 @@ pub fn validate(scheme: &Scheme<'_>) -> Result<(), Fault> {
     if t.len() > MAX_FIELDS {
         return Err(Fault::new(Error::SchemeInvalid, 0, -1, MAX_FIELDS));
     }
+    depth(t)?;
     spans(t, 0, t.len())?;
     let mut next = 0u32;
     for j in level(t, 0, t.len()) {
@@ -36,6 +42,20 @@ pub fn validate(scheme: &Scheme<'_>) -> Result<(), Fault> {
     refs(t, 0, t.len())?;
     repeat_last(t)?;
     parity(scheme)
+}
+
+/// A scheme nested more than 256 levels is refused first, before the passes that recurse over it.
+/// Each level-opening entry counts the levels around it with one descent from the top of the table
+/// (`parent_and_levels`), so nothing is stored and nothing recurses; the first entry that is the
+/// 257th level is named and `needed` is the limit. A deep table is refused after about 257
+/// descents of about 257 steps.
+fn depth(t: &[Field]) -> Result<(), Fault> {
+    for (j, f) in t.iter().enumerate() {
+        if is_level(f.kind) && parent_and_levels(t, j).1 >= MAX_DEPTH {
+            return Err(Fault::new(Error::SchemeInvalid, j, id_of(f), MAX_DEPTH));
+        }
+    }
+    Ok(())
 }
 
 /// A `repeat` is the last thing a packet reads: it has no count on the wire, so unpack would read

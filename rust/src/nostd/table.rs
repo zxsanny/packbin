@@ -66,16 +66,38 @@ pub(crate) fn members(t: &[Field], i: usize) -> Level<'_> {
 
 /// The entry whose members hold `i` directly, or `None` at the top level.
 pub(crate) fn parent_of(t: &[Field], i: usize) -> Option<usize> {
-    let mut parent = None;
+    parent_and_levels(t, i).0
+}
+
+/// [`parent_of`], and the levels of nesting around `i`: how many of the entries that hold it, at any
+/// depth, are a `when`, `flags`, group, `repeat`, `times`, `list` or `dict`. One descent from the top
+/// of the table, nothing stored.
+pub(crate) fn parent_and_levels(t: &[Field], i: usize) -> (Option<usize>, usize) {
+    let (mut parent, mut levels) = (None, 0);
     let mut cur = level(t, 0, t.len());
     while let Some(s) = cur.find(|s| *s <= i && i < end(t, *s)) {
         if s == i {
-            return parent;
+            return (parent, levels);
         }
+        levels = levels.saturating_add(usize::from(kind(t, s).is_some_and(is_level)));
         parent = Some(s);
         cur = members(t, s);
     }
-    None
+    (None, levels)
+}
+
+/// Kinds that are a level of nesting (`scheme-depth.md`): a flag bit and a `u2` are none.
+pub(crate) fn is_level(kind: Kind) -> bool {
+    matches!(
+        kind,
+        Kind::Flags
+            | Kind::When
+            | Kind::Group
+            | Kind::Repeat
+            | Kind::Times
+            | Kind::List
+            | Kind::Dict
+    )
 }
 
 pub(crate) fn is_container(kind: Kind) -> bool {

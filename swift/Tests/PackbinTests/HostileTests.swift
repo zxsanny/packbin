@@ -22,7 +22,9 @@ import Testing
         #expect(checkHostileConstruct(c, hostileConstructs[c.id]) == nil)
     }
 
-    @Test(arguments: try hostileCases("pack"))
+    /// On the main thread: a pack case of 256 nested levels needs more stack than a debug build has on a thread
+    /// of Swift concurrency (see SchemeDepthTests).
+    @MainActor @Test(arguments: try hostileCases("pack"))
     func packCase_givesItsBytesOrIsRefusedWithItsRule(_ c: HostileCase) {
         #expect(checkHostilePack(c, hostilePacks[c.id], hostileRules) == nil)
     }

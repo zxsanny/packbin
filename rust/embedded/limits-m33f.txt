@@ -9,7 +9,8 @@
 # ecc re-pinned in loop 98 (AZ-3526): the percentage round trip of the probe, +856 B of flash, -88 B of stack (owner, 2026-11-01; see _docs/gotchas/rust-m33f-pins.md).
 # The session set went with the stream session in loop 74 (AZ-3284).
 # All four re-pinned in loop 113 (AZ-4218): `validate` refuses a field that can write a byte after a `repeat`, +112 B of flash (base, frame) and +104 B (text, ecc), the stack as it was (see _docs/gotchas/rust-m33f-pins.md).
-base 15244 456
-text 27372 2736
-ecc 20100 664
-frame 20516 1728
+# All four re-pinned in loop 126 (AZ-4302): `validate` refuses a scheme nested more than 256 levels, +168 B of flash (all four), the stack +16 B (base, ecc) and as it was (text, frame) (see _docs/gotchas/rust-m33f-pins.md).
+base 15412 472
+text 27540 2736
+ecc 20268 680
+frame 20684 1728

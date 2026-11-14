@@ -6,6 +6,7 @@
 #pragma once
 
 #include "hostile_pack_cases.hpp"
+#include "scheme_depth_chains.hpp"
 
 namespace hostile_pack {
 
@@ -240,6 +241,17 @@ std::string pack_times_then_field() {
   return pack_answer(s, last_row(2));
 }
 
+// Loop 126 (AZ-4303): a chain of 256 levels, a table filled by a loop, with `a` = 1 and `b` = 7: the
+// when chain packs 010107, the group chain 0107.
+template <depth_chain::Shape S>
+std::string pack_depth_256() {
+  auto& s = depth_chain::build<S, depth_chain::entries<S, 256>>(256);
+  depth_chain::Row row;
+  row.a = 1;
+  row.b = 7;
+  return pack_answer(s, row);
+}
+
 constexpr PackHandler kPackHandlers21[] = {
     {"pack_flags_short_list_filled", pack_flags_short_list_filled},
     {"pack_late_when_in_bit_body", pack_late_when_in_bit_body},
@@ -257,6 +269,9 @@ constexpr PackHandler kPackHandlers21[] = {
     {"pack_repeat_last_in_when", pack_repeat_last_in_when},
     {"pack_repeat_last_in_flags", pack_repeat_last_in_flags},
     {"pack_times_then_field", pack_times_then_field},
+    // Loop 126 (AZ-4303): 256 levels still pack.
+    {"pack_depth_when_256", pack_depth_256<depth_chain::Shape::When>},
+    {"pack_depth_group_256", pack_depth_256<depth_chain::Shape::Group>},
 };
 
 // The slot cases need a round budget and a short list needs a list: C++ has neither.

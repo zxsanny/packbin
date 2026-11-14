@@ -1,4 +1,4 @@
-use super::{check_order, integrity, names, round_body, shape, Field, FieldKind};
+use super::{check_order, depth, integrity, names, round_body, shape, Field, FieldKind};
 use std::collections::HashSet;
 
 /// The most rounds one `repeat` or `times` field may start in one unpack call.
@@ -92,7 +92,8 @@ fn collect_slot_names<'a>(fields: &'a [Field], names: &mut HashSet<&'a str>) {
 }
 
 impl MapScheme {
-    /// Panics, naming the field, on a scheme that cannot round-trip: a field out of order or
+    /// Panics, naming the field, on a scheme that cannot round-trip: one nested more than 256
+    /// levels (checked first, without recursion), a field out of order or
     /// scope, a flag bit with no flag byte before it in its scope, a 9th member or bit in one
     /// flags byte or flag byte, a bool (an empty `group`) not directly inside `flags` or
     /// under a flag bit, a `list` or `dict` element that is not one integer, float, bytes, utf8,
@@ -104,10 +105,11 @@ impl MapScheme {
     /// with `v` other than true, a count (`sized`, `bits`, `packed`, `times`) that names a bool
     /// or a non-integer field, and a `when` or count that names the `flags` byte of the `flags`
     /// it sits in. Binds each flag bit to its flag byte and numbers it by field order.
-    pub fn new(type_number: i32, mut fields: Vec<Field>) -> Self {
+    pub fn new(type_number: i32, fields: Vec<Field>) -> Self {
         if !(0..=255).contains(&type_number) {
             panic!("type number must be 0..=255");
         }
+        let mut fields = depth::check_depth(fields);
         let field_count = count_fields(&fields);
         check_order(&fields, 0, 0);
         shape::check_shape(&mut fields);

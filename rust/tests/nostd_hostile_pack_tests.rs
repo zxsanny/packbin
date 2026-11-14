@@ -7,7 +7,7 @@
 
 mod nostd_support;
 
-use nostd_support::hostile::cases;
+use nostd_support::hostile::{cases, group_chain, when_chain};
 use nostd_support::random::set_items;
 use nostd_support::tree::{nostd_fields, Node};
 use nostd_support::{from_hex, Slots};
@@ -80,6 +80,8 @@ fn pt_rounds(values: &[u8]) -> Vec<Slots> {
 
 fn run(id: &str) -> Option<Answer> {
     Some(match id {
+        "pack_depth_when_256" => answer(&when_chain(256), &row(&[(0, u8n(1)), (1, u8n(7))])),
+        "pack_depth_group_256" => answer(&group_chain(256), &row(&[(0, u8n(7))])),
         "pack_missing_required_value" => answer(&[n(U8), n(U8)], &row(&[(0, u8n(1))])),
         "pack_times_list_too_long" => counted(2, 3),
         "pack_times_list_too_short" => counted(2, 1),
@@ -281,6 +283,8 @@ fn novalue(member: Node) -> Answer {
 /// The answer each case of the C++ table must give: the packet, or `BadValue` naming this id.
 fn expected(id: &str) -> Answer {
     match id {
+        "pack_depth_when_256" => bytes("010107"),
+        "pack_depth_group_256" => bytes("0107"),
         "pack_aligned_round_row" => bytes("01030102020303"),
         "pack_split_false_condition_silent" => bytes("0100025a00"),
         "pack_flags_short_list_filled" => bytes("010101050200"),
