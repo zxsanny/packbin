@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    AZ-4291 probe of the C# package (see Program.cs and run.sh). The package sources are compiled into this console
+    program by their path, so no project of csharp/ is built and nothing is written there. run.sh sends bin and obj
+    to a temporary directory, as in scripts/probes/repeat-followed-by-field/csharp/Probe.csproj.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>Probe</AssemblyName>
+    <RootNamespace>DepthProbe</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <UseAppHost>false</UseAppHost>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <RestoreIgnoreFailedSources>true</RestoreIgnoreFailedSources>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../../../csharp/*.cs" />
+    <Compile Include="Program.cs" />
+  </ItemGroup>
+
+</Project>
