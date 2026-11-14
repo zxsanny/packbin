@@ -3,13 +3,13 @@
 ## Current Step
 flow: existing-code
 kind: product
-step: 10
-name: Implement
-status: in_progress
+step: 9
+name: New Task
+status: not_started
 sub_step:
-  phase: 1
-  name: batch-loop
-  detail: "short loop on launcher"
+  phase: 0
+  name: awaiting-invocation
+  detail: ""
 retry_count: 0
 tracker: jira
 loop: 124
