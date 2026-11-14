@@ -3,18 +3,18 @@
 ## Current Step
 flow: existing-code
 kind: product
-step: 10
-name: Implement
-status: in_progress
+step: 9
+name: New Task
+status: not_started
 sub_step:
   phase: 0
-  name: workers
+  name: awaiting-invocation
   detail: ""
 retry_count: 0
 tracker: jira
 loop: 127
 branch:
-plan_artifact: _docs/loops/loop127/plan127.md
-plan_confirmed: true
+plan_artifact:
+plan_confirmed: false
 plan_step_index: 0
 assess_round: 0
