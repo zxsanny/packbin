@@ -382,7 +382,19 @@ public class HostilePackVectorTests
             new Scheme<RepeatWhenRow>(1, Field.U8<RepeatWhenRow>(0, x => x.K),
                 Field.Times(1, 0, Field.U8<RepeatWhenRow>(1, x => x.V)), Field.U8<RepeatWhenRow>(2, x => x.X)),
             Row(("K", (byte)2), ("V", L((byte)5, (byte)6)), ("X", (byte)9))),
+        // Loop 126 (AZ-4296, contract scheme-depth): 256 levels build. The chains are built by a loop (SchemeDepthTests).
+        ["pack_depth_when_256"] = () => BinaryPacker.Pack(
+            SchemeDepthTests.WhenScheme(256), Row(("A", (byte)1), ("B", (byte)7))),
+        ["pack_depth_group_256"] = () => BinaryPacker.Pack(SchemeDepthTests.GroupScheme(256), DepthGroupValue(256)),
     };
+
+    private static SchemeDepthTests.Node DepthGroupValue(int depth)
+    {
+        var node = new SchemeDepthTests.Node { B = 7 };
+        for (var i = 0; i < depth; i++)
+            node = new SchemeDepthTests.Node { M = node };
+        return node;
+    }
 
     // The member a loop 19 refusal names, so a refusal by some other rule does not pass.
     private static readonly Dictionary<string, string> NamedMember = new()

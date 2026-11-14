@@ -27,6 +27,9 @@ func NewScheme(typeNumber int, fields ...Field) (*Scheme, error) {
 		return nil, schemeErr(NoField, "", "type number %d: expected 0..255", typeNumber)
 	}
 	nodes := nodesOf(fields)
+	if err := checkDepth(nodes); err != nil {
+		return nil, err
+	}
 	if err := checkNodes(nodes, false); err != nil {
 		return nil, err
 	}

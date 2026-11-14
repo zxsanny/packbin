@@ -282,6 +282,9 @@ public class HostileVectorTests
         ["construct_repeat_in_group_in_times_round"] = () => _ = new Scheme<LastRow>(1,
             Field.U8<LastRow>(0, x => x.K),
             Field.Times(1, 0, Field.Group((LastRow x) => x.M, Field.Repeat(0, Field.U8<LastRow>(0, x => x.V))))),
+        // Loop 126 (AZ-4296, contract scheme-depth): 257 levels of when and of nested rows, built by a loop (SchemeDepthTests).
+        ["construct_depth_when_257"] = () => _ = SchemeDepthTests.WhenScheme(257),
+        ["construct_depth_group_257"] = () => _ = SchemeDepthTests.GroupScheme(257),
     };
 
     // A message fragment for each case refused at construction, so a refusal by some other rule does not pass.
@@ -320,6 +323,8 @@ public class HostileVectorTests
         // AZ-4232: the repeat in the nested row is anchor 0 of that row's own numbering.
         ["construct_repeat_in_group_in_repeat_round"] = "repeat 0 is inside a repeat or times round; a round cannot hold another repeat or times",
         ["construct_repeat_in_group_in_times_round"] = "repeat 0 is inside a repeat or times round; a round cannot hold another repeat or times",
+        ["construct_depth_when_257"] = SchemeDepthTests.Refusal,
+        ["construct_depth_group_257"] = SchemeDepthTests.Refusal,
     };
 
     // C# has no bad_value or too_many type yet (C15); ShortPacket stands in for both.

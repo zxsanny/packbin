@@ -59,11 +59,12 @@ public class RepeatLastWalkTests(ITestOutputHelper output)
     }
 
     // The walk of four times the size of the shape in best of five, against a load-aware bound (the old walk took 1.3 s on
-    // the 16,000 chain); the scheme of the shape's own size builds.
+    // the 16,000 chain). Since AZ-4296 a scheme nested deeper than 256 levels is refused when it is built, so the chain
+    // builds through the Scheme constructor at 250 levels and only the walk (RoundScopes.Validate, called directly) sees 16,000.
     [Theory]
-    [InlineData("a chain of nested whens", 4_000)]
-    [InlineData("sibling whens that write nothing", 16_000)]
-    public void Validate_ShapeAfterARepeat_WalksInTimeLinearInItsSize(string shape, int size)
+    [InlineData("a chain of nested whens", 4_000, 250)]
+    [InlineData("sibling whens that write nothing", 16_000, 16_000)]
+    public void Validate_ShapeAfterARepeat_WalksInTimeLinearInItsSize(string shape, int size, int buildSize)
     {
         // Arrange
         Func<int, Field[]> build = shape.StartsWith("a chain", StringComparison.Ordinal) ? ChainAfterRepeat : SiblingsAfterRepeat;
@@ -74,7 +75,7 @@ public class RepeatLastWalkTests(ITestOutputHelper output)
         // Act
         OnBigStack(() =>
         {
-            Assert.NotNull(new Scheme<Row>(1, build(size)));
+            Assert.NotNull(new Scheme<Row>(1, build(buildSize)));
             for (var run = 0; run < 5; run++)
             {
                 var watch = Stopwatch.StartNew();

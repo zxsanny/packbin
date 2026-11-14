@@ -8,6 +8,7 @@ internal static class SchemeOrder
     // caller's Field and Condition objects are never changed, so one can be reused in many schemes.
     public static Field[] Resolve(Type row, IReadOnlyList<Field> fields)
     {
+        RequireDepth(fields);
         var scope = new Taken();
         var next = 0;
         var resolved = new Field[fields.Count];
@@ -17,6 +18,38 @@ internal static class SchemeOrder
         RoundScopes.Validate(resolved);
         return resolved;
     }
+
+    internal const int MaxDepth = 256;
+
+    // scheme-depth contract: the most containers on one path (when, flags, group or nested row, repeat, times, and a list
+    // or dict with its element row) is MaxDepth. Measured first and without recursion, so no walk below sees a deeper scheme.
+    // A flag bit adds no level of its own; the element row of a list or dict is one level together with its list or dict.
+    private static void RequireDepth(IReadOnlyList<Field> fields)
+    {
+        var pending = new Stack<(Field Field, int Depth)>();
+        for (var i = fields.Count - 1; i >= 0; i--)
+            pending.Push((fields[i], 0));
+        while (pending.Count > 0)
+        {
+            var (field, above) = pending.Pop();
+            var depth = above + LevelsOf(field);
+            if (depth > MaxDepth)
+                throw new ArgumentException($"scheme nested too deep: more than {MaxDepth} levels; the limit is {MaxDepth}");
+            if (field.Inner is { } inner)
+                pending.Push((inner, depth));
+            for (var i = field.Children.Length - 1; i >= 0; i--)
+                pending.Push((field.Children[i], depth));
+        }
+    }
+
+    private static int LevelsOf(Field field) =>
+        field.Type switch
+        {
+            Field.Kind.When or Field.Kind.Flags or Field.Kind.Repeat or Field.Kind.Times
+                or Field.Kind.List or Field.Kind.Dict => 1,
+            Field.Kind.Group => field.Binding?.Member.IsElementRow == true ? 0 : 1,
+            _ => 0,
+        };
 
     // Ids number straight through repeat and times bodies, but a reference finds only the fields `scope` already holds:
     // the earlier ones of its own top level, repeat or times body, list or dict element, or nested row.

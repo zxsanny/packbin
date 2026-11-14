@@ -1,6 +1,7 @@
 package packbin;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
@@ -21,6 +22,50 @@ final class SchemeOrder {
             + "another element cannot follow it; use times";
     private static final String IN_ROUND = " is inside a repeat or times round" + READS_TO_END
             + "another round cannot follow it; use times";
+
+    /** The deepest nesting a scheme may have (contract scheme-depth). */
+    static final int MAX_DEPTH = 256;
+
+    /**
+     * Refuses a scheme nested deeper than {@link #MAX_DEPTH} levels (contract scheme-depth). A when, flags, group,
+     * nested row, repeat, times, list and dict count one level each; a flag bit and a scalar add none. Runs before
+     * any walk that recurses, and itself uses a stack of fields, so a scheme of any depth costs no call stack: it
+     * stops at the first field that is too deep. A field shared by two parents is measured again only when it is
+     * reached deeper than before.
+     */
+    static void checkDepth(List<Field> fields) {
+        ArrayDeque<Field> nodes = new ArrayDeque<>(fields);
+        ArrayDeque<Integer> above = new ArrayDeque<>();
+        for (int i = 0; i < fields.size(); i++) {
+            above.push(0);
+        }
+        Map<Field, Integer> deepest = new IdentityHashMap<>();
+        while (!nodes.isEmpty()) {
+            Field field = nodes.pop();
+            int outer = above.pop();
+            Integer seen = deepest.get(field);
+            if (seen != null && seen >= outer) {
+                continue;
+            }
+            deepest.put(field, outer);
+            int depth = switch (field.kind) {
+                case WHEN, FLAGS, GROUP, REPEAT, TIMES, LIST, DICT -> outer + 1;
+                default -> outer;
+            };
+            if (depth > MAX_DEPTH) {
+                throw new IllegalArgumentException(
+                        "scheme nested too deep: more than " + MAX_DEPTH + " levels; the limit is " + MAX_DEPTH);
+            }
+            for (Field child : field.children) {
+                nodes.push(child);
+                above.push(depth);
+            }
+            if (field.inner != null) {
+                nodes.push(field.inner);
+                above.push(depth);
+            }
+        }
+    }
 
     /** {@code typedRow} is true when the scheme's row class is not a Map. */
     static void validate(List<Field> fields, boolean typedRow) {

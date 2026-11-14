@@ -203,22 +203,26 @@ func walkTime(walk func([]*node) error, nodes []*node, runs int) (time.Duration,
 	return best, err
 }
 
-// AZ-4259: a chain of 4,000 nested whens and 16,000 sibling whens after a repeat build, and the walk of four times
+// AZ-4259: a chain of 4,000 nested whens and 16,000 sibling whens after a repeat, and the walk of four times
 // that size takes a few milliseconds (1.9 ms and 4 ms measured; the old walk took 1.8 s on the 16,000 chain).
+// The walk is timed on the nodes directly. Since AZ-4299 a scheme nested deeper than 256 levels is refused when it
+// is built, so the chain is built through NewScheme at buildSize (250) levels and only the walk sees 16,000.
 func TestAZ4259RepeatLastWalkIsLinearInTheDepthOfAChainAndTheWidthOfASiblingRun(t *testing.T) {
 	shapes := []struct {
 		name  string
 		build func(n int) []Field
 		size  int
+		// buildSize is the size NewScheme must build.
+		buildSize int
 	}{
-		{"a chain of nested whens", chainAfterRepeat, 4000},
-		{"sibling whens that write nothing", siblingsAfterRepeat, 16000},
+		{"a chain of nested whens", chainAfterRepeat, 4000, 250},
+		{"sibling whens that write nothing", siblingsAfterRepeat, 16000, 16000},
 	}
 	for _, shape := range shapes {
 		t.Run(shape.name, func(t *testing.T) {
-			// Arrange: the scheme builds at its size; the walk is timed on four times that.
-			if s, err := NewScheme(1, shape.build(shape.size)...); err != nil || s == nil {
-				t.Fatalf("scheme of %d did not build: %v", shape.size, err)
+			// Arrange: the scheme builds at its build size; the walk is timed on four times its size.
+			if s, err := NewScheme(1, shape.build(shape.buildSize)...); err != nil || s == nil {
+				t.Fatalf("scheme of %d did not build: %v", shape.buildSize, err)
 			}
 			large := nodesOfFields(shape.build(4 * shape.size))
 			factor := loadFactor()

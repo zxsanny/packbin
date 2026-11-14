@@ -106,7 +106,10 @@ final class HostileRefusals {
             Map.entry("construct_repeat_in_times_round", bad(IN_ROUND)),
             // AZ-4232: the repeat in the nested row is anchor 0 of that row's own numbering.
             Map.entry("construct_repeat_in_group_in_repeat_round", bad("repeat 0" + IN_ROUND_TAIL)),
-            Map.entry("construct_repeat_in_group_in_times_round", bad("repeat 0" + IN_ROUND_TAIL)));
+            Map.entry("construct_repeat_in_group_in_times_round", bad("repeat 0" + IN_ROUND_TAIL)),
+            // Contract scheme-depth (AZ-4298): the whole text.
+            Map.entry("construct_depth_when_257", bad(SchemeDepthTest.TOO_DEEP)),
+            Map.entry("construct_depth_group_257", bad(SchemeDepthTest.TOO_DEEP)));
 
     /** Null when {@code ex} is the refusal {@code rule} names; otherwise what is wrong. */
     static String mismatch(String id, Rule rule, RuntimeException ex) {

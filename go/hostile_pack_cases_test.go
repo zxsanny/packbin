@@ -120,6 +120,14 @@ var hostilePacks = map[string]func() ([]byte, error){
 	"pack_times_then_field": hostilePackOf(
 		hostileScheme(1, U8(0, "k"), Times(1, 0, U8(1, "v")), U8(2, "x")),
 		func() hostileRow { return hostileRow{"k": 2, "v": []any{5, 6}, "x": 9} }),
+
+	// Loop 126 (AZ-4299, contract scheme-depth): 256 levels still build and pack their bytes.
+	"pack_depth_when_256": hostilePackOf(
+		func() (*Scheme, error) { return whenChain(256) },
+		func() hostileRow { return hostileRow{"a": 1, "b": 7} }),
+	"pack_depth_group_256": hostilePackOf(
+		func() (*Scheme, error) { return groupChain(256) },
+		func() hostileRow { return nestedRow(256) }),
 }
 
 // u8 mode; when(eq(mode, 1)) { flags { bool on }; u8 a }; when(eq(on, true)) { u8 b }: the bool source sits inside

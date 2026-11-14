@@ -16,6 +16,8 @@ import java.util.function.Supplier;
 @SuppressWarnings({"unchecked", "rawtypes"})
 final class RepeatLastWalkTest {
     private static final int CHAIN = 4_000;
+    /** The deepest chain a scheme may hold is 256 levels (contract scheme-depth): the whole build runs on this one. */
+    private static final int BUILT_CHAIN = 250;
     private static final int SIBLINGS = 16_000;
     private static final int TREES = 30_000;
 
@@ -29,7 +31,8 @@ final class RepeatLastWalkTest {
 
     /** u8 k; repeat(zero-width bytes) leaves a repeat open that no field has followed; then the chain follows it. */
     private static void aChainOfNestedWhensBuildsInLinearTime() {
-        // Arrange: the walk is recursive, so the chain runs on a thread whose stack the platform default does not decide.
+        // Arrange: the walk is recursive, so the chain runs on a thread whose stack the platform default does not
+        // decide. The walk alone takes the chain of CHAIN; a scheme is built only up to the depth limit.
         long[] nanos = new long[2];
         Scheme<Map>[] scheme = new Scheme[1];
         Timing.Limit[] limits = new Timing.Limit[2];
@@ -45,18 +48,23 @@ final class RepeatLastWalkTest {
             long start = System.nanoTime();
             SchemeOrder.checkRepeatLast(fields);
             nanos[0] = System.nanoTime() - start;
+            Field built = empty(2);
+            for (int i = 0; i < BUILT_CHAIN; i++) {
+                built = Packbin.when(2, Packbin.eq(0, 1), built);
+            }
             limits[1] = Timing.bound(0.09);
             start = System.nanoTime();
-            scheme[0] = Maps.scheme(1, fields.toArray(new Field[0]));
+            scheme[0] = Maps.scheme(1, u8(0), Packbin.repeat(1, empty(1)), built);
             nanos[1] = System.nanoTime() - start;
         });
 
         // Assert
-        PackbinTest.expectTrue("AZ-4257 the chain of " + CHAIN + " whens builds", scheme[0] != null);
-        System.out.println("AZ-4257 chain of " + CHAIN + " nested whens: walk " + nanos[0] / 1e9 + " s, build " + nanos[1] / 1e9 + " s");
+        PackbinTest.expectTrue("AZ-4257 the chain of " + BUILT_CHAIN + " whens builds", scheme[0] != null);
+        System.out.println("AZ-4257 chain of " + CHAIN + " nested whens: walk " + nanos[0] / 1e9 + " s; build of "
+                + BUILT_CHAIN + ": " + nanos[1] / 1e9 + " s");
         limits[0].expectWithinNanos("AZ-4257 AC-1 the walk of a chain of " + CHAIN + " nested whens after an open repeat",
                 nanos[0]);
-        limits[1].expectWithinNanos("AZ-4257 AC-1 the build of a chain of " + CHAIN + " nested whens after an open repeat",
+        limits[1].expectWithinNanos("AZ-4257 AC-1 the build of a chain of " + BUILT_CHAIN + " nested whens after an open repeat",
                 nanos[1]);
     }
 

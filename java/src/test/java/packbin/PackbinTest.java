@@ -79,6 +79,7 @@ public final class PackbinTest {
         EmptyRoundBodyTest.run();
         RepeatLastTest.run();
         RepeatLastWalkTest.run();
+        SchemeDepthTest.run();
         MissingMemberNameTest.run();
         RepeatShortOptionalTest.run();
         ClearBitProbesTest.run();

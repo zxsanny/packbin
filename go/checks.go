@@ -5,6 +5,54 @@ import (
 	"strconv"
 )
 
+// maxSchemeDepth is the deepest nesting a scheme may have: the most container fields on one path from the
+// top of the scheme to any field. Contract scheme-depth.md (owner decision D18).
+const maxSchemeDepth = 256
+
+// depthItem is a field on the walk of checkDepth with the number of containers above it.
+type depthItem struct {
+	n     *node
+	depth int
+}
+
+// checkDepth refuses a scheme nested deeper than maxSchemeDepth levels. It is the first thing NewScheme does and
+// it walks with an explicit stack, so a scheme of any depth costs time in its size and no goroutine stack. A
+// when, flags, group, nested row, repeat, times, list and dict each count one level (a list or dict then counts its
+// element by the element's own kind); a flag bit and a u2 add none.
+func checkDepth(nodes []*node) error {
+	stack := make([]depthItem, 0, len(nodes)+1)
+	for i := len(nodes) - 1; i >= 0; i-- {
+		stack = append(stack, depthItem{nodes[i], 0})
+	}
+	for len(stack) > 0 {
+		it := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		n := it.n
+		if n == nil {
+			continue // checkNodes reports a nil field
+		}
+		depth := it.depth
+		switch n.kind {
+		case kindWhen, kindFlags, kindGroup, kindRepeat, kindTimes, kindList, kindDict:
+			depth++
+			if depth > maxSchemeDepth {
+				return schemeErr(NoField, "", "scheme nested too deep: more than %d levels; the limit is %d",
+					maxSchemeDepth, maxSchemeDepth)
+			}
+		}
+		if n.elem != nil {
+			stack = append(stack, depthItem{n.elem, depth})
+		}
+		if n.field != nil {
+			stack = append(stack, depthItem{n.field, depth})
+		}
+		for i := len(n.fields) - 1; i >= 0; i-- {
+			stack = append(stack, depthItem{n.fields[i], depth})
+		}
+	}
+	return nil
+}
+
 // checkPresenceMarks refuses a bool or an empty group anywhere but directly under flags or as the
 // field of a flag bit: it has no bytes, only a bit, so anywhere else it would always read as true.
 func checkPresenceMarks(nodes []*node, onBit bool) error {

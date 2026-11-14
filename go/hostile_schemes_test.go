@@ -203,6 +203,9 @@ var hostileConstructs = map[string]*hostileConstruct{
 		},
 		rule: lit(`packbin: invalid scheme at field 0: repeat 0 is inside a repeat or times round; a round cannot hold another repeat or times`),
 	},
+	// Loop 126 (AZ-4299, contract scheme-depth): 257 levels are refused when the scheme is built, by a chain a loop writes.
+	"construct_depth_when_257":  {build: func() (*Scheme, error) { return whenChain(257) }, rule: lit(depthText)},
+	"construct_depth_group_257": {build: func() (*Scheme, error) { return groupChain(257) }, rule: lit(depthText)},
 }
 
 // lit matches exactly the text of one error, so the rule and the field id it names are both pinned.
