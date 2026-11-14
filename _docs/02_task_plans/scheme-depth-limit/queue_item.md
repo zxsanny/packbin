@@ -2,11 +2,10 @@
 kind: queue-item
 order: 500
 source: loop 125 findings `_docs/06_metrics/scheme-depth-probe_2026-11-14.md` (AZ-4291); queue item `dart-deep-when-chain-stack-overflow`
-origin: agent
-severity: medium
+origin: operator
 depends_on: []
-status: blocked
-blocked_on: OPERATOR_TODO D18 (which limit, or iterative walks, or nothing)
+status: ready
+blocked_on:
 created: 2026-11-14
 ---
 # A deep scheme is refused with the package's own error in all nine packages

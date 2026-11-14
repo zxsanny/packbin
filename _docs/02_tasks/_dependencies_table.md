@@ -581,3 +581,13 @@ Loop 112 (feature `repeat-must-be-last`, epic AZ-4209, 29 points in 10 tasks): e
 | AZ-4280 | cpp_clang_install_failure_message (a failed clang install names the pin and the Debian release; loop 123) | 1 | — | AZ-4133 |
 | AZ-4288 | run_suite_split (Go, Rust and C++ helpers of run-suite.sh in sourced files; loop 124) | 2 | — | AZ-4133 |
 | AZ-4291 | scheme_depth_probe (probes of nested when / group depth in all nine packages; loop 125) | 3 | — | AZ-4133 |
+| AZ-4294 | scheme_depth_hostile_cases_and_readme (shared cases, README, contract text for the 256-level depth limit; loop 126) | 2 | — | AZ-4133 |
+| AZ-4295 | scheme_depth_typescript | 2 | AZ-4294 | AZ-4133 |
+| AZ-4296 | scheme_depth_csharp | 3 | AZ-4294 | AZ-4133 |
+| AZ-4297 | scheme_depth_python | 3 | AZ-4294 | AZ-4133 |
+| AZ-4298 | scheme_depth_java | 3 | AZ-4294 | AZ-4133 |
+| AZ-4299 | scheme_depth_go | 2 | AZ-4294 | AZ-4133 |
+| AZ-4300 | scheme_depth_swift | 3 | AZ-4294 | AZ-4133 |
+| AZ-4301 | scheme_depth_dart | 2 | AZ-4294 | AZ-4133 |
+| AZ-4302 | scheme_depth_rust | 3 | AZ-4294 | AZ-4133 |
+| AZ-4303 | scheme_depth_cpp | 3 | AZ-4294 | AZ-4133 |
