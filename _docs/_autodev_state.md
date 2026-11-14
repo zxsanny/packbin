@@ -5,10 +5,10 @@ flow: existing-code
 kind: product
 step: 9
 name: New Task
-status: in_progress
+status: not_started
 sub_step:
   phase: 0
-  name: new-task
+  name: awaiting-invocation
   detail: ""
 retry_count: 0
 tracker: jira
