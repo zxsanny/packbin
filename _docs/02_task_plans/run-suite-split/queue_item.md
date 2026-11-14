@@ -2,13 +2,15 @@
 kind: queue-item
 order: 900
 source: agent-made items below high, gathered 2026-11-13 (loop 123 close) under work-queue.md §Agent-made work
-origin: agent
+origin: operator
 severity: low
 depends_on: []
 status: ready
 blocked_on:
 created: 2026-11-13
-scanned:
+scanned: 2026-11-14
+loop: 124
+branch: dev
 ---
 # Hygiene: agent-found entries
 

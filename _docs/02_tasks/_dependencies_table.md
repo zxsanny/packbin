@@ -579,3 +579,4 @@ Loop 112 (feature `repeat-must-be-last`, epic AZ-4209, 29 points in 10 tasks): e
 | AZ-4278 | cpp_sanitizer_ci_job (CI job runs the C++ host suite under clang ASan and UBSan; loop 122) | 3 | — | AZ-4133 |
 | AZ-4279 | cpp_fold_depth_upstream_clang (member folds as array expansions, no -fbracket-depth; loop 123) | 2 | — | AZ-4133 |
 | AZ-4280 | cpp_clang_install_failure_message (a failed clang install names the pin and the Debian release; loop 123) | 1 | — | AZ-4133 |
+| AZ-4288 | run_suite_split (Go, Rust and C++ helpers of run-suite.sh in sourced files; loop 124) | 2 | — | AZ-4133 |
