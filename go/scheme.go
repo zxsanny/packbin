@@ -93,13 +93,27 @@ func (s *Scheme) TypeNumber() int {
 	return s.typeNumber
 }
 
+// nodeScope is a node and whether it stands directly in a U2: the two things checkNodes decides by.
+type nodeScope struct {
+	n    *node
+	inU2 bool
+}
+
 // checkNodes refuses a nil field and a Slot outside U2, and reports a constructor's refusal, at any
-// depth.
+// depth. A node that stands in several places (the same Field passed twice) is checked once for each way it stands.
 func checkNodes(nodes []*node, inU2 bool) error {
+	return checkNodesOnce(nodes, inU2, map[nodeScope]bool{})
+}
+
+func checkNodesOnce(nodes []*node, inU2 bool, checked map[nodeScope]bool) error {
 	for _, n := range nodes {
 		if n == nil {
 			return schemeErr(NoField, "", "a field is nil")
 		}
+		if checked[nodeScope{n, inU2}] {
+			continue
+		}
+		checked[nodeScope{n, inU2}] = true
 		if n.kind == kindSlot && !inU2 {
 			return schemeErr(n.id, n.name, "slot %s: allowed only directly inside U2", n.name)
 		}
@@ -111,16 +125,16 @@ func checkNodes(nodes []*node, inU2 bool) error {
 			return schemeErr(fieldID(at), fieldName(at), "%s", n.err)
 		}
 		if n.kind == kindFlagBit {
-			if err := checkNodes([]*node{n.field}, false); err != nil {
+			if err := checkNodesOnce([]*node{n.field}, false, checked); err != nil {
 				return err
 			}
 		}
 		if n.elem != nil {
-			if err := checkNodes([]*node{n.elem}, false); err != nil {
+			if err := checkNodesOnce([]*node{n.elem}, false, checked); err != nil {
 				return err
 			}
 		}
-		if err := checkNodes(n.fields, n.kind == kindU2); err != nil {
+		if err := checkNodesOnce(n.fields, n.kind == kindU2, checked); err != nil {
 			return err
 		}
 	}

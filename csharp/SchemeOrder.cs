@@ -24,14 +24,20 @@ internal static class SchemeOrder
     // scheme-depth contract: the most containers on one path (when, flags, group or nested row, repeat, times, and a list
     // or dict with its element row) is MaxDepth. Measured first and without recursion, so no walk below sees a deeper scheme.
     // A flag bit adds no level of its own; the element row of a list or dict is one level together with its list or dict.
+    // A Field object may stand in several places: one is measured again only when reached deeper than before, so a scheme
+    // that uses the same field twice on every level costs its number of distinct fields, not two to the power of its depth.
     private static void RequireDepth(IReadOnlyList<Field> fields)
     {
         var pending = new Stack<(Field Field, int Depth)>();
+        var deepest = new Dictionary<Field, int>();
         for (var i = fields.Count - 1; i >= 0; i--)
             pending.Push((fields[i], 0));
         while (pending.Count > 0)
         {
             var (field, above) = pending.Pop();
+            if (deepest.TryGetValue(field, out var seen) && seen >= above)
+                continue;
+            deepest[field] = above;
             var depth = above + LevelsOf(field);
             if (depth > MaxDepth)
                 throw new ArgumentException($"scheme nested too deep: more than {MaxDepth} levels; the limit is {MaxDepth}");

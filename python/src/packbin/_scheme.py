@@ -7,13 +7,12 @@ from typing import Any, Generic, Optional, TypeVar
 from packbin import _ecc
 from packbin._errors import ShortPacket, TooLong, TrailingBytes, TypeMismatch, Uncorrectable, UnpackResult
 from packbin._flag_scope import _bind_flag_bits
-from packbin._nodes import _Node
+from packbin._nodes import _Node, _validate_depth
 from packbin._pack import pack_nodes
 from packbin._pack_limits import DEFAULT_MAX_BYTES, _PackBudget
 from packbin._unpack import DEFAULT_MAX_ROUNDS, DEFAULT_MAX_SLOTS, _Budget, unpack_nodes
 from packbin._validate import (
     _shown,
-    _validate_depth,
     _validate_element_accessors,
     _validate_names,
     _validate_order,

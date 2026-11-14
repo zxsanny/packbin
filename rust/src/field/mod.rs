@@ -234,8 +234,9 @@ pub fn when(anchor: u32, cond: Eq, fields: Vec<Field>) -> Field {
 /// `__repeat__`, one `Values` per round. A `repeat` has no count on the wire, so it must be the
 /// last thing the packet reads: `MapScheme::new` refuses a scheme where a field that can write a
 /// byte follows it (use [`times`], which has a count), or where it sits inside a `repeat` or
-/// `times` round.
+/// `times` round. A body nested more than 256 levels panics here, before the width walk recurses.
 pub fn repeat(anchor: u32, fields: Vec<Field>) -> Field {
+    let fields = depth::check_depth(fields);
     Field {
         kind: FieldKind::Repeat {
             anchor,
@@ -299,7 +300,10 @@ pub fn group(anchor: u32, name: impl AsRef<str>, fields: Vec<Field>) -> Field {
 /// `count_field` rounds. Pack reads the rounds from `Value::Groups` under `__times_<anchor>`, or
 /// from one value per member name: a list gives one item per round, any other value is used in
 /// every round, and a lone dictionary for a `dict` member fails pack (give one per round).
+///
+/// A body nested more than 256 levels panics here, before the width walk recurses.
 pub fn times(anchor: u32, count_field: impl FieldKey, fields: Vec<Field>) -> Field {
+    let fields = depth::check_depth(fields);
     Field {
         kind: FieldKind::Times {
             anchor,

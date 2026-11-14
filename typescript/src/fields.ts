@@ -1,4 +1,5 @@
 import type { Value } from "./kinds.ts"
+import { MAX_SCHEME_DEPTH, measureSchemeDepth, tooDeep } from "./scheme-depth.ts"
 
 type EndianField = { littleEndian: boolean }
 
@@ -253,13 +254,21 @@ export function utf8<T>(id: number, acc: Acc<T>): Field {
 
 // A flags element is a flag byte and its bits, not one field, so it is held as an unanchored group of
 // its own: like a group element it packs from and unpacks to one object per item.
-function elementOf(element: Field): Field {
+function elementOf(element: Field): { one: Field; depth: number } {
   // list() and dict() flatten the element, which recurses, so a chain of them would end in a raw stack error
-  // before scheme() runs: the element and the list around it are measured first, as scheme() does.
-  validateSchemeDepth([{ kind: "list", name: "", element }])
-  if (element.kind === "flags") return { kind: "group", name: "", fields: [element] }
-  return flatten([element])[0]!
+  // before scheme() runs: the element and the list around it are measured first, as scheme() does. A list or dict
+  // built here carries the depth it was built with, an upper bound of the depth of what it holds (flatten only ever
+  // removes levels), so a chain of them is walked once, not once per link. A bound that would refuse is checked by
+  // a walk, so what is refused is what a walk of the element refuses.
+  let depth = builtDepth.get(element)
+  if (depth === undefined || depth + 1 > MAX_SCHEME_DEPTH) depth = measureSchemeDepth([element])
+  if (depth + 1 > MAX_SCHEME_DEPTH) throw tooDeep()
+  if (element.kind === "flags") return { one: { kind: "group", name: "", fields: [element] }, depth: depth + 2 }
+  return { one: flatten([element])[0]!, depth: depth + 1 }
 }
+
+// The depth of each list or dict that list() and dict() returned, so the next one around it need not walk it again.
+const builtDepth = new WeakMap<Field, number>()
 
 // The group that holds the members of each item, for a group or flags element; any other element
 // is one value per item.
@@ -268,19 +277,23 @@ export function itemGroup(element: Field): Extract<Field, { kind: "group" }> | n
 }
 
 export function list<T>(acc: Acc<T>, element: Field): Field {
-  const one = elementOf(element)
+  const { one, depth } = elementOf(element)
   if (one.kind === "repeat") {
     throw new RangeError("list element must be one field")
   }
-  return { kind: "list", name: memberName(acc), element: one }
+  const made: Field = { kind: "list", name: memberName(acc), element: one }
+  builtDepth.set(made, depth)
+  return made
 }
 
 export function dict<T>(acc: Acc<T>, element: Field): Field {
-  const one = elementOf(element)
+  const { one, depth } = elementOf(element)
   if (one.kind === "repeat") {
     throw new RangeError("repeat is not a dictionary element")
   }
-  return { kind: "dict", name: memberName(acc), element: one }
+  const made: Field = { kind: "dict", name: memberName(acc), element: one }
+  builtDepth.set(made, depth)
+  return made
 }
 
 export function fieldName(field: Field): string {
@@ -303,52 +316,6 @@ export function fieldName(field: Field): string {
   if (field.kind === "flagBit") return fieldName(field.field)
   if (field.kind === "u2") return field.slots[0]?.name ?? ""
   return ""
-}
-
-// A scheme is refused when it nests deeper than this many containers on one path (contract scheme-depth 1.0.0).
-export const MAX_SCHEME_DEPTH = 256
-
-// The largest number of containers on one path from the top down: a when, flags, repeat, times or group, and the
-// element row of a list or dict. A flag bit is its field, not a level. Run first when a scheme is built, before any
-// walk that recurses, and without recursing itself: an explicit stack, stopped at the first path past the limit.
-export function validateSchemeDepth(fields: Field[]): void {
-  const nodes: Field[] = []
-  const levels: number[] = []
-  for (const f of fields) {
-    nodes.push(f)
-    levels.push(0)
-  }
-  while (nodes.length > 0) {
-    const f = nodes.pop()!
-    const level = levels.pop()!
-    switch (f.kind) {
-      case "when":
-      case "repeat":
-      case "times":
-      case "flags":
-      case "group":
-        if (level + 1 > MAX_SCHEME_DEPTH) throw tooDeep()
-        for (const child of f.fields) {
-          nodes.push(child)
-          levels.push(level + 1)
-        }
-        break
-      case "list":
-      case "dict":
-        if (level + 1 > MAX_SCHEME_DEPTH) throw tooDeep()
-        nodes.push(f.element)
-        levels.push(level + 1)
-        break
-      case "flagBit":
-        nodes.push(f.field)
-        levels.push(level)
-        break
-    }
-  }
-}
-
-function tooDeep(): RangeError {
-  return new RangeError(`scheme nested too deep: more than ${MAX_SCHEME_DEPTH} levels; the limit is ${MAX_SCHEME_DEPTH}`)
 }
 
 export function validateFieldIds(fields: Field[], next = 0): number {

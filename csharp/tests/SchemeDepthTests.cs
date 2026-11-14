@@ -8,7 +8,7 @@ namespace Packbin.Tests;
 // stack. Every chain is built by a loop, innermost first, so no test recurses.
 public class SchemeDepthTests
 {
-    private const int Limit = 256;
+    internal const int Limit = 256;
     internal const string Refusal = "scheme nested too deep: more than 256 levels; the limit is 256";
 
     internal sealed class WhenRow

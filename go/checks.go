@@ -18,9 +18,12 @@ type depthItem struct {
 // checkDepth refuses a scheme nested deeper than maxSchemeDepth levels. It is the first thing NewScheme does and
 // it walks with an explicit stack, so a scheme of any depth costs time in its size and no goroutine stack. A
 // when, flags, group, nested row, repeat, times, list and dict each count one level (a list or dict then counts its
-// element by the element's own kind); a flag bit and a u2 add none.
+// element by the element's own kind); a flag bit and a u2 add none. A node that stands in several places (the same
+// Field passed twice) is measured again only when it is reached deeper than before, so a scheme that holds the next
+// level twice on every level costs its number of distinct nodes, not two to the power of its depth.
 func checkDepth(nodes []*node) error {
 	stack := make([]depthItem, 0, len(nodes)+1)
+	deepest := map[*node]int{}
 	for i := len(nodes) - 1; i >= 0; i-- {
 		stack = append(stack, depthItem{nodes[i], 0})
 	}
@@ -32,6 +35,10 @@ func checkDepth(nodes []*node) error {
 			continue // checkNodes reports a nil field
 		}
 		depth := it.depth
+		if seen, ok := deepest[n]; ok && seen >= depth {
+			continue
+		}
+		deepest[n] = depth
 		switch n.kind {
 		case kindWhen, kindFlags, kindGroup, kindRepeat, kindTimes, kindList, kindDict:
 			depth++

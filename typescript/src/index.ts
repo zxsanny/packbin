@@ -2,9 +2,9 @@ import {
   flatten,
   flattenValues,
   validateFieldIds,
-  validateSchemeDepth,
   type Field,
 } from "./fields.ts"
+import { validateSchemeDepth } from "./scheme-depth.ts"
 import { unpackBody, type UnpackErr } from "./walker.ts"
 import type { PackedFlagByte } from "./flag-bits.ts"
 import { newScope, packFields, type PackState } from "./pack-fields.ts"

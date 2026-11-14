@@ -1,70 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from packbin._accessors import Acc, Get, Set, _pair
 
-Get = Callable[[Any], Any]
-Set = Callable[[Any, Any], None]
-Acc = Callable[[Any], Any]
 _builtin_list = list
 _builtin_dict = dict
-
-
-class _Hit:
-    def __init__(self, kind: str, key: Any) -> None:
-        self.kind = kind
-        self.key = key
-
-    def _bad(self, *_args: Any, **_kwargs: Any) -> Any:
-        raise TypeError("accessor must be a member access")
-
-    __add__ = __radd__ = __sub__ = __rsub__ = __mul__ = __bool__ = __getitem__ = __getattr__ = _bad
-
-
-class _Probe:
-    def __getattr__(self, name: str) -> _Hit:
-        if name.startswith("__"):
-            raise AttributeError(name)
-        return _Hit("attr", name)
-
-    def __getitem__(self, key: Any) -> _Hit:
-        return _Hit("item", key)
-
-
-def _marked(get: Get, set_: Set, access: tuple[str, Any]) -> tuple[Get, Set]:
-    """`access` is the `(kind, key)` of the accessor. It travels with both closures (a node, `be()` and a flag bit
-    reuse them), so the construction checks can name a member and tell attribute access from key access. The
-    identity accessor has none."""
-    get.access = set_.access = access  # type: ignore[attr-defined]
-    return get, set_
-
-
-def _pair(acc: Acc) -> tuple[Get, Set]:
-    probe = _Probe()
-    try:
-        result = acc(probe)
-    except ValueError:
-        raise
-    except Exception as exc:
-        raise ValueError("accessor must be a member access") from exc
-    if result is probe:
-        return (lambda row: row, lambda _row, _value: None)
-    if not isinstance(result, _Hit):
-        raise ValueError("accessor must be a member access")
-    key = result.key
-    if result.kind == "attr":
-        return _marked(
-            lambda row, key=key: getattr(row, key, None),
-            lambda row, value, key=key: setattr(row, key, value),
-            ("attr", key),
-        )
-    return _marked(
-        lambda row, key=key: row.get(key) if isinstance(row, _builtin_dict) else row[key],
-        lambda row, value, key=key: row.__setitem__(key, value),
-        ("item", key),
-    )
 
 
 class _Node:
@@ -475,11 +418,39 @@ def _round_width(leaves: Sequence[Any]) -> int:
     return len(hashed) + len(unhashed)
 
 
+MAX_DEPTH = 256
+
+
+def _validate_depth(nodes: Sequence[_Node]) -> None:
+    """A scheme is refused when it is nested more than `MAX_DEPTH` levels: the most containers (`when`, `flags`,
+    group, `repeat` or `times` body, the element of a `list` or `dict`) on one path. A flag bit holds one field and
+    adds no level of its own. Run first and without recursion, so a very deep scheme costs time in proportion to
+    its size and never the interpreter's recursion limit. A node held by two parents (the same object) is walked
+    again only when reached deeper than before, so a diamond of D levels costs its size, not 2**D."""
+    stack: _builtin_list[tuple[_Node, int]] = [(node, 0) for node in nodes]
+    deepest: _builtin_dict[int, int] = {}
+    while stack:
+        node, above = stack.pop()
+        if deepest.get(id(node), -1) >= above:
+            continue
+        deepest[id(node)] = above
+        if isinstance(node, _FlagBit):
+            stack.append((node.field, above))
+            continue
+        if isinstance(node, (_List, _Dict)):
+            children: Sequence[_Node] = [node.element]
+        elif isinstance(node, (_When, _Flags, _Group, _Repeat, _Times)):
+            children = node.fields
+        else:
+            continue
+        if above == MAX_DEPTH:
+            raise ValueError(f"scheme nested too deep: more than {MAX_DEPTH} levels; the limit is {MAX_DEPTH}")
+        stack.extend((child, above + 1) for child in children)
+
+
 def _finish_round(node: Any) -> Any:
     """Gives a `repeat` or `times` the values it holds, the ones a flag bit can leave absent and its slot width.
     A body nested too deep is refused first, as `Scheme` refuses it, before the walks below recurse over it."""
-    from packbin._validate import _validate_depth  # _validate imports this module
-
     _validate_depth([node])
     node.leaves = _round_leaves(node.fields)
     node.optional = _optional_leaves(node.fields)

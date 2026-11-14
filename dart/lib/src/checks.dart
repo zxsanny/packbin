@@ -26,13 +26,20 @@ bool _isContainer(NodeKind kind) => switch (kind) {
 /// Refuses a scheme nested more than [maxSchemeDepth] levels: the most
 /// containers on one path from the top to a field. It runs first, with a
 /// stack of its own, so every later walk, which recurses once per level,
-/// sees at most [maxSchemeDepth] levels.
+/// sees at most [maxSchemeDepth] levels. A node that two parents share is
+/// measured again only when it is reached deeper than before, so a scheme
+/// that uses one node twice per level costs its size, not 2^depth steps.
 void checkDepth(List<Node> declared) {
   final nodes = [...declared];
   final depths = List<int>.filled(nodes.length, 0, growable: true);
+  final deepest = Map<Node, int>.identity();
   while (nodes.isNotEmpty) {
     final n = nodes.removeLast();
-    final level = depths.removeLast() + (_isContainer(n.kind) ? 1 : 0);
+    final above = depths.removeLast();
+    final seen = deepest[n];
+    if (seen != null && seen >= above) continue;
+    deepest[n] = above;
+    final level = above + (_isContainer(n.kind) ? 1 : 0);
     if (level > maxSchemeDepth) {
       throw schemeFail(
         null,
@@ -48,18 +55,30 @@ void checkDepth(List<Node> declared) {
   }
 }
 
-/// Reports a constructor's refusal at any depth.
-void checkErrors(List<Node> nodes) {
+/// Reports a constructor's refusal at any depth. A node already looked at is
+/// not looked at again (it had no refusal, or this would have thrown), so a
+/// node that two parents share costs one visit.
+void checkErrors(List<Node> nodes, [Set<Node>? seen]) {
+  final done = seen ?? Set<Node>.identity();
   for (final n in nodes) {
+    if (!done.add(n)) continue;
     final error = n.error;
     if (error != null) throw schemeFail(n.errorId, n.declaredName, error);
-    checkErrors(n.fields);
+    checkErrors(n.fields, done);
   }
 }
 
-/// A slot belongs to a [u2]: standing anywhere else it would write nothing.
-void checkSlots(List<Node> nodes, {bool inU2 = false}) {
+/// A slot belongs to a [u2]: standing anywhere else it would write nothing. A
+/// node is looked at once for each answer of [inU2], so a shared node costs
+/// at most two visits.
+void checkSlots(
+  List<Node> nodes, {
+  bool inU2 = false,
+  Set<(Node, bool)>? seen,
+}) {
+  final done = seen ?? <(Node, bool)>{};
   for (final n in nodes) {
+    if (!done.add((n, inU2))) continue;
     if (n.kind == NodeKind.slot && !inU2) {
       throw schemeFail(
         n.id,
@@ -67,7 +86,7 @@ void checkSlots(List<Node> nodes, {bool inU2 = false}) {
         'slot ${n.name}: stands only inside u2; put it in a u2',
       );
     }
-    checkSlots(n.fields, inU2: n.kind == NodeKind.u2);
+    checkSlots(n.fields, inU2: n.kind == NodeKind.u2, seen: done);
   }
 }
 

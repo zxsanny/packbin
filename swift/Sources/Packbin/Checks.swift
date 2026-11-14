@@ -7,10 +7,15 @@ let maxSchemeDepth = 256
 /// Refuses a scheme nested deeper than `maxSchemeDepth` containers, before any walk that recurses. A
 /// `when`, `flags`, group, `repeat`, `times`, `list` and `dict` each count one level; a flag bit, a flag
 /// byte and a u2 count none. It uses an explicit stack, so a scheme of any depth costs no call stack, and
-/// it stops at the first path over the limit, so the stack holds at most the limit times the widest row.
+/// it stops at the first path over the limit, so the stack holds at most the limit times the widest row. A node
+/// that two parents share (the same `Field` used twice) is measured again only when it is reached deeper than
+/// before, so a scheme that uses one field twice per level costs its size, not 2^depth steps.
 func checkDepth(_ nodes: [Node]) throws {
     var pending: [(node: Node, depth: Int)] = nodes.reversed().map { ($0, 0) }
+    var deepest: [ObjectIdentifier: Int] = [:]
     while let (node, above) = pending.popLast() {
+        if let seen = deepest[ObjectIdentifier(node)], seen >= above { continue }
+        deepest[ObjectIdentifier(node)] = above
         var depth = above
         switch node.kind {
         case .flags, .when, .group, .repeatRound, .timesRound, .list, .dict:
@@ -26,14 +31,21 @@ func checkDepth(_ nodes: [Node]) throws {
     }
 }
 
-/// Reports a constructor's refusal at any depth.
+/// Reports a constructor's refusal at any depth. A node already looked at is not looked at again (it had no
+/// refusal, or this would have thrown), so a node that two parents share costs one visit.
 func checkNodes(_ nodes: [Node]) throws {
+    var seen = Set<ObjectIdentifier>()
+    try checkNodes(nodes, seen: &seen)
+}
+
+private func checkNodes(_ nodes: [Node], seen: inout Set<ObjectIdentifier>) throws {
     for n in nodes {
+        guard seen.insert(ObjectIdentifier(n)).inserted else { continue }
         if let error = n.error {
             let at = n.kind == .flags && n.fields.count > flagBits ? n.fields[flagBits] : n
             throw PackbinError.scheme(at.errorID, at.declaredName, error)
         }
-        try checkNodes(n.fields)
+        try checkNodes(n.fields, seen: &seen)
     }
 }
 

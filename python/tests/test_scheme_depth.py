@@ -6,8 +6,10 @@ import time
 import pytest
 
 from packbin import BinaryPacker, Scheme
+from packbin._nodes import _validate_depth
 
 from scheme_depth_support import DEPTH_REFUSAL, KINDS
+from timing_support import assert_within, bound
 
 
 def _scheme(kind: str, depth: int) -> tuple[Scheme[dict], dict, str]:
@@ -78,4 +80,66 @@ def test_a_deep_scheme_is_refused_before_a_shallower_scheme_error_further_down()
         Scheme(1, dict, *inner)
 
     # Assert
+    assert str(caught.value) == DEPTH_REFUSAL
+
+
+def _diamond(levels: int):
+    from packbin import eq, u8, when
+
+    inner = [u8(1, lambda row: row["b"])]
+    for _ in range(levels):
+        inner = [when(1, eq(0, 1), *inner, *inner)]
+    return inner
+
+
+def test_a_diamond_of_60_levels_is_answered_within_a_second_never_a_hang():
+    # AZ-4306 AC-1: each level holds the next level twice (the same object): 2**60 paths as a tree.
+    # Arrange
+    from packbin import u8
+
+    top = _diamond(60)
+    limit = bound(1)
+    started = time.perf_counter()
+
+    # Act: the depth walk alone, then the whole build (the field id rule refuses the repeated u8)
+    _validate_depth(top)
+    with pytest.raises(ValueError):
+        Scheme(1, dict, u8(0, lambda row: row["a"]), *top)
+
+    # Assert
+    assert_within(time.perf_counter() - started, limit, "diamond of 60 levels")
+
+
+def test_a_diamond_of_300_levels_is_still_refused_as_too_deep_within_a_second():
+    # AZ-4306 AC-1
+    # Arrange
+    top = _diamond(300)
+    limit = bound(1)
+    started = time.perf_counter()
+
+    # Act
+    with pytest.raises(ValueError) as caught:
+        _validate_depth(top)
+
+    # Assert
+    assert str(caught.value) == DEPTH_REFUSAL
+    assert_within(time.perf_counter() - started, limit, "diamond of 300 levels")
+
+
+@pytest.mark.parametrize("shared_first", [True, False])
+def test_a_field_reached_shallow_and_again_deeper_is_measured_at_its_deepest(shared_first: bool):
+    # AZ-4306 AC-3: a group held at the top and again at the bottom of a chain of whens.
+    from packbin import eq, group, u8, when
+
+    def build(whens: int) -> list:
+        shared = group(0, u8(0, lambda row: row["v"]))
+        inner = [shared]
+        for _ in range(whens):
+            inner = [when(0, eq(0, 1), *inner)]
+        return [shared, *inner] if shared_first else [*inner, shared]
+
+    # Act and assert: 255 whens and the group make 256 levels, 256 whens make 257
+    _validate_depth(build(255))
+    with pytest.raises(ValueError) as caught:
+        _validate_depth(build(256))
     assert str(caught.value) == DEPTH_REFUSAL

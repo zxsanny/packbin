@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { BinaryPacker, bool, flags, group, list, scheme, Scheme, u8, when, eq, type Field } from "../src/index.ts"
+import { validateSchemeDepth } from "../src/scheme-depth.ts"
 import { CHAINS, DEPTH_REFUSAL, whenChain, type Row } from "./support/scheme-depth.ts"
 import { assertWithinMs, bound } from "./support/timing.ts"
 
@@ -107,5 +108,62 @@ describe("scheme depth limit of 256 levels", () => {
 
     // Assert
     assert.equal(s.fields.length, 2)
+  })
+
+  // AZ-4306: a field held by two parents (the same object) is measured once, so a diamond costs its size, not 2^depth.
+  const diamond = (levels: number): Field[] => {
+    let inner: Field[] = [u8(1, (r: Row) => r.b)]
+    for (let i = 0; i < levels; i++) inner = [when(1, eq(0, 1), [...inner, ...inner])]
+    return inner
+  }
+
+  it("AZ-4306 AC-1: a diamond of 60 levels is answered within one second, never a hang", () => {
+    // Arrange
+    const top = diamond(60)
+    const limit = bound(1)
+    const start = performance.now()
+
+    // Act: the depth walk alone, then the whole build (the field id rule refuses the repeated u8)
+    validateSchemeDepth(top)
+    assert.throws(() => scheme<Row>(1, u8(0, (r: Row) => r.a), ...top), RangeError)
+
+    // Assert
+    assertWithinMs(performance.now() - start, limit, "diamond of 60 levels")
+  })
+
+  it("AZ-4306 AC-1: a diamond of 300 levels is still refused as too deep, within one second", () => {
+    // Arrange
+    const top = diamond(300)
+    const limit = bound(1)
+    const start = performance.now()
+
+    // Act and assert
+    assert.throws(() => validateSchemeDepth(top), refused)
+    assertWithinMs(performance.now() - start, limit, "diamond of 300 levels")
+  })
+
+  for (const sharedFirst of [true, false]) {
+    it(`AZ-4306 AC-3: a field reached shallow and again deeper is measured at its deepest (shared ${sharedFirst ? "first" : "last"})`, () => {
+      // Arrange: a group held at the top and again at the bottom of a chain of whens
+      const build = (whens: number): Field[] => {
+        const shared = group((r: Row) => r.s, [u8(0, (r: Row) => r.v)])
+        let inner: Field[] = [shared]
+        for (let i = 0; i < whens; i++) inner = [when(0, eq(0, 1), inner)]
+        return sharedFirst ? [shared, ...inner] : [...inner, shared]
+      }
+
+      // Act and assert: 255 whens and the group make 256 levels, 256 whens make 257
+      assert.doesNotThrow(() => validateSchemeDepth(build(255)))
+      assert.throws(() => validateSchemeDepth(build(256)), refused)
+    })
+  }
+
+  it("AZ-4307: a chain of 256 nested lists builds, the 257th list() is refused when it is called", () => {
+    // Arrange
+    let element: Field = u8(0, (r: Row) => r.v)
+    for (let i = 0; i < 256; i++) element = list((r: Row) => r.xs, element)
+
+    // Act and assert
+    assert.throws(() => list((r: Row) => r.xs, element), refused)
   })
 })

@@ -48,7 +48,11 @@ pub fn validate(scheme: &Scheme<'_>) -> Result<(), Fault> {
 /// Each level-opening entry counts the levels around it with one descent from the top of the table
 /// (`parent_and_levels`), so nothing is stored and nothing recurses; the first entry that is the
 /// 257th level is named and `needed` is the limit. A deep table is refused after about 257
-/// descents of about 257 steps.
+/// descents of about 257 steps. The cost is quadratic in the entries of one level: measured in
+/// release on the Mac (loop 127, AZ-4308) a table of 32,768 flat entries (empty `when`s or groups,
+/// or one group holding them) takes about 1.07 s, a 256-level chain 0.1 ms. A pass with a stack of
+/// the open ends is linear but costs +496 B of stack on the Cortex-M33F rows, over their pins
+/// (`_docs/gotchas/rust-m33f-pins.md`).
 fn depth(t: &[Field]) -> Result<(), Fault> {
     for (j, f) in t.iter().enumerate() {
         if is_level(f.kind) && parent_and_levels(t, j).1 >= MAX_DEPTH {

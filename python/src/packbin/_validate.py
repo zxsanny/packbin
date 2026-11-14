@@ -26,7 +26,6 @@ from packbin._nodes import (
     _When,
 )
 
-MAX_DEPTH = 256
 _INTEGER_KINDS = frozenset({"u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64"})
 
 
@@ -112,28 +111,6 @@ def _require_eq_value(label: str, condition: _Eq, source: _Node) -> None:
             f"{label}: eq tests {_kind_of(source)} field {condition.field_id} against {value}, "
             f"which is outside {low}..{high}"
         )
-
-
-def _validate_depth(nodes: Sequence[_Node]) -> None:
-    """A scheme is refused when it is nested more than `MAX_DEPTH` levels: the most containers (`when`, `flags`,
-    group, `repeat` or `times` body, the element of a `list` or `dict`) on one path. A flag bit holds one field and
-    adds no level of its own. Run first and without recursion, so a very deep scheme costs time in proportion to
-    its size and never the interpreter's recursion limit."""
-    stack: list[tuple[_Node, int]] = [(node, 0) for node in nodes]
-    while stack:
-        node, above = stack.pop()
-        if isinstance(node, _FlagBit):
-            stack.append((node.field, above))
-            continue
-        if isinstance(node, (_List, _Dict)):
-            children: Sequence[_Node] = [node.element]
-        elif isinstance(node, (_When, _Flags, _Group, _Repeat, _Times)):
-            children = node.fields
-        else:
-            continue
-        if above == MAX_DEPTH:
-            raise ValueError(f"scheme nested too deep: more than {MAX_DEPTH} levels; the limit is {MAX_DEPTH}")
-        stack.extend((child, above + 1) for child in children)
 
 
 def _validate_order(

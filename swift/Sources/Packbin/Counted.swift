@@ -76,12 +76,24 @@ extension Field {
 }
 
 /// A slot stands only directly in `u2`: anywhere else it has no byte to live in.
+/// A node is looked at once for each answer of `inU2`, so a node that two parents share costs at most two visits.
 func checkSlots(_ nodes: [Node], inU2: Bool) throws {
+    var seen = Set<SlotVisit>()
+    try checkSlots(nodes, inU2: inU2, seen: &seen)
+}
+
+private struct SlotVisit: Hashable {
+    let node: ObjectIdentifier
+    let inU2: Bool
+}
+
+private func checkSlots(_ nodes: [Node], inU2: Bool, seen: inout Set<SlotVisit>) throws {
     for n in nodes {
+        guard seen.insert(SlotVisit(node: ObjectIdentifier(n), inU2: inU2)).inserted else { continue }
         if n.kind == .slot && !inU2 {
             throw PackbinError.scheme(n.id, n.name, "slot \(n.name): allowed only directly inside u2")
         }
-        try checkSlots(n.fields, inU2: n.kind == .u2)
+        try checkSlots(n.fields, inU2: n.kind == .u2, seen: &seen)
     }
 }
 

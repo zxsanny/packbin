@@ -18,6 +18,9 @@ final class RepeatLastWalkTest {
     private static final int CHAIN = 4_000;
     /** The deepest chain a scheme may hold is 256 levels (contract scheme-depth): the whole build runs on this one. */
     private static final int BUILT_CHAIN = 250;
+    private static final int BUILD_RUNS = 100;
+    /** About 2.5 times the 0.015 to 0.018 s that BUILD_RUNS whole builds take on the arm64 Mac (AZ-4307); with the old quadratic walk added they take 0.064 to 0.069 s. */
+    private static final double BUILD_SECONDS = 0.04;
     private static final int SIBLINGS = 16_000;
     private static final int TREES = 30_000;
 
@@ -25,6 +28,7 @@ final class RepeatLastWalkTest {
 
     static void run() {
         aChainOfNestedWhensBuildsInLinearTime();
+        aWholeBuildOfTwoHundredFiftyNestedWhensOrGroupsIsLinear();
         sixteenThousandSiblingWhensThatWriteNothingBuildInLinearTime();
         randomTreesGetTheSameDecisionAndTextAsTheOldWalk();
     }
@@ -66,6 +70,53 @@ final class RepeatLastWalkTest {
                 nanos[0]);
         limits[1].expectWithinNanos("AZ-4257 AC-1 the build of a chain of " + BUILT_CHAIN + " nested whens after an open repeat",
                 nanos[1]);
+    }
+
+    /**
+     * AZ-4307 item 4: the whole build (not the walk alone) of the deepest chain a scheme may hold, for nested whens and
+     * for nested groups, each behind a repeat that writes nothing. One build of 250 levels takes about 0.2 ms, too
+     * short to tell from the clock's noise, so {@link #BUILD_RUNS} builds are timed together; the bound is a few times
+     * the total measured on an idle host, so a build step that costs the square of the depth (the old repeat-last walk
+     * did) fails it.
+     */
+    private static void aWholeBuildOfTwoHundredFiftyNestedWhensOrGroupsIsLinear() {
+        // Arrange
+        String[] names = {"whens", "groups"};
+        Field[][] chains = new Field[2][BUILD_RUNS];
+        for (int kind = 0; kind < 2; kind++) {
+            for (int run = 0; run < BUILD_RUNS; run++) {
+                Field inner = empty(kind == 0 ? 2 : 0);
+                for (int i = 0; i < BUILT_CHAIN; i++) {
+                    inner = kind == 0
+                            ? Packbin.when(2, Packbin.eq(0, 1), inner)
+                            : Packbin.group(Access.get("m"), Access.set("m"), inner);
+                }
+                chains[kind][run] = inner;
+            }
+        }
+        Timing.Limit[] limits = new Timing.Limit[2];
+        long[] nanos = new long[2];
+
+        // Act
+        for (int kind = 0; kind < 2; kind++) {
+            limits[kind] = Timing.bound(BUILD_SECONDS);
+            long start = System.nanoTime();
+            for (int run = 0; run < BUILD_RUNS; run++) {
+                Scheme<Map> built = Maps.scheme(1, u8(0), Packbin.repeat(1, empty(1)), chains[kind][run]);
+                if (built == null) {
+                    throw new IllegalStateException("no scheme");
+                }
+            }
+            nanos[kind] = System.nanoTime() - start;
+        }
+
+        // Assert
+        for (int kind = 0; kind < 2; kind++) {
+            System.out.println("AZ-4307 " + BUILD_RUNS + " whole builds of " + BUILT_CHAIN + " nested " + names[kind] + ": "
+                    + nanos[kind] / 1e9 + " s");
+            limits[kind].expectWithinNanos("AZ-4307 AC-4 " + BUILD_RUNS + " whole builds of " + BUILT_CHAIN + " nested "
+                    + names[kind], nanos[kind]);
+        }
     }
 
     private static void onBigStack(Runnable body) {

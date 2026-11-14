@@ -56,3 +56,59 @@ Row groupRow(int depth) {
   }
   return ([field], {depth.isEven ? 'g' : 'item': value});
 }
+
+/// [depth] nested `when(a == 1)` that each hold the next level twice (the
+/// same object): a tree of 2^[depth] paths over [depth] + 1 nodes. The leaf
+/// `u8 b` is held twice, so the scheme is refused by the id rule.
+List<Field> diamondChain(int depth) {
+  Field inner = u8(1, 'b');
+  for (var i = 0; i < depth; i++) {
+    inner = when(1, eq(0, 1), [inner, inner]);
+  }
+  return [u8(0, 'a'), inner];
+}
+
+/// `[shallowFirst]` or the other order of two uses of one shared chain of
+/// [shared] nested rows: at the top level, and at the bottom of a path of
+/// [path] more nested rows. The deepest path holds [path] + [shared] levels.
+List<Field> sharedChain({
+  required int path,
+  required int shared,
+  required bool shallowFirst,
+}) {
+  var chain = nested('g', [u8(0, 'b')]);
+  for (var i = 1; i < shared; i++) {
+    chain = nested('g', [chain]);
+  }
+  Field deep = chain;
+  for (var i = 0; i < path; i++) {
+    deep = nested('p', [deep]);
+  }
+  return shallowFirst ? [chain, deep] : [deep, chain];
+}
+
+/// `u8 a`, then [levels] nested `when(a == 1)`, each holding a split flag byte
+/// read and one bit of it that holds the next level, the innermost a `u8 b`.
+/// A flag bit adds no level. (A `flags` cannot hold a flag byte and its bit:
+/// each member of a `flags` is a scope of its own.)
+List<Field> flagBitWhenChain(int levels) {
+  var inner = <Field>[u8(1, 'b')];
+  for (var i = 0; i < levels; i++) {
+    final byte = flagByte('f$i');
+    inner = [
+      when(1, eq(0, 1), [byte, byte.bit(inner.single)]),
+    ];
+  }
+  return [u8(0, 'a'), ...inner];
+}
+
+/// A flag byte, and its one bit holding [levels] nested `flags`, the
+/// innermost `u8 c`: the bit adds no level to the [levels].
+List<Field> flagBitOverFlags(int levels) {
+  Field inner = u8(0, 'c');
+  for (var i = 0; i < levels; i++) {
+    inner = flags(0, [inner]);
+  }
+  final byte = flagByte('m');
+  return [byte, byte.bit(inner)];
+}
