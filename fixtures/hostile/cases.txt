@@ -90,3 +90,7 @@ pack_repeat_last                  pack       bytes                        010905
 pack_repeat_last_in_when          pack       bytes                        01010506
 pack_repeat_last_in_flags         pack       bytes                        0103090506
 pack_times_then_field             pack       bytes                        0102050609
+construct_depth_when_257          construct  scheme_error                 -
+construct_depth_group_257         construct  scheme_error                 -
+pack_depth_when_256               pack       bytes                        010107
+pack_depth_group_256              pack       bytes                        0107

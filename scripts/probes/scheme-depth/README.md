@@ -38,4 +38,4 @@ Two runs print the same lines except at the edge of a package's limit: Java `gro
 
 ## State
 
-Written in loop 125 (2026-11-14). The findings are in `_docs/06_metrics/scheme-depth-probe_2026-11-14.md`.
+Written in loop 125 (2026-11-14). The findings are in `_docs/06_metrics/scheme-depth-probe_2026-11-14.md`. Loop 126 (AZ-4294 to AZ-4303) added the limit of 256 levels (`_docs/02_document/contracts/library/scheme-depth.md`): after it, the 1,000, 5,000 and 50,000 lines of every package are `refused` (Rust's heap-free API refuses at 50,000 by its own `MAX_FIELDS`).

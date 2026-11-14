@@ -47,6 +47,8 @@
 
 **New in loop 113 (AZ-4210).** Fifteen cases at the end of the file (thirteen of AZ-4210 and two of AZ-4232), the shared cases of the contract `_docs/02_document/contracts/library/repeat-last.md` (owner decision 2026-11-12, loop 112): a scheme is refused when it is built if a `repeat` is not the last thing its packet reads. A `repeat` has no count, so unpack reads rounds until the buffer ends and takes whatever the scheme writes after the repeat for more rounds. Eleven `construct` cases, R1 to R9 of the contract and the two of AZ-4232: `construct_repeat_then_field`, `construct_repeat_in_when_then_field`, `construct_repeat_in_flags_then_field`, `construct_repeat_in_group_then_field`, `construct_repeat_then_repeat`, `construct_repeat_then_exclusive_when`, `construct_repeat_in_list_element`, `construct_repeat_in_dict_element`, `construct_repeat_in_times_round`, `construct_repeat_in_group_in_repeat_round` and `construct_repeat_in_group_in_times_round`. Four `pack` cases, K1 to K4 of the contract, schemes that keep building and keep their bytes: `pack_repeat_last`, `pack_repeat_last_in_when`, `pack_repeat_last_in_flags` and `pack_times_then_field`. K5 of the contract (the split flag-byte form) is not a shared case: not every package has that form, so the packages that have it pin it in their own tests. The file asserts `scheme_error` only; the refusal texts are the contract's and each package pins them in its own tests. Where a package's scheme errors carry a text it is `repeat <anchor>: <field> follows it; a repeat reads to the end of the packet, so nothing can follow it; use times` for a field after the repeat and `repeat <anchor> is inside a list or dict element; a repeat reads to the end of the packet, so another element cannot follow it; use times` for a repeat in an element, with the repeat and the field named in the package's own words. C++ and the heap-free Rust API answer `SchemeInvalid` with the id of the first field after the repeat, or of the repeat when it sits in an element or a round; a C++ `constexpr` scheme does not compile. The four packets were run in TypeScript on `9cfccda` (loop 112), `pack_repeat_last` in all nine packages (the `control` line of `scripts/probes/repeat-followed-by-field/`); each package task replays them on its unchanged code first, as the hex provenance rule above says. The 75 older cases are unchanged. The file now holds 88 cases: 15 `unpack`, 2 `limit`, 24 `construct` and 47 `pack`.
 
+**New in loop 126 (AZ-4294).** Four cases at the end of the file, the shared cases of the contract `_docs/02_document/contracts/library/scheme-depth.md` (owner decision D18, 2026-11-14): a scheme nested deeper than 256 levels is refused when it is built, in all nine packages, before any walk that recurses. Two `construct` cases (257 nested `when`s, 257 nested groups) answer `scheme_error` and two `pack` cases (the same chains at 256) pack their bytes. A chain is written by a loop in each package's loader, innermost first, so no loader recurses; the text of the refusal is `scheme nested too deep: more than 256 levels; the limit is 256` (a package keeps the prefix its other scheme errors carry). Rust's heap-free API refuses the 257-level chains by the same rule and keeps its own `MAX_FIELDS` refusal (32,768 fields) for the larger ones.
+
 ## zero_progress_repeat_bool
 
 - Scheme: id0 `repeat` anchor 0 { id0 `bool on` }.
@@ -803,3 +805,37 @@
 - Run by: TypeScript, Python, Java, C# (dictionary rows), Rust (map form), C++ (an `Array` of two beside `k = 2`), Go (map rows), Swift (map rows), Dart (map rows).
 - Not run by: none.
 - Source: the contract, case K4 (run in TypeScript on `9cfccda`, loop 112; the other eight packages replay it on their unchanged code first); loop 113, AZ-4210.
+
+## construct_depth_when_257
+
+- Scheme: id0 `u8 a`; then 257 `when` anchor 0, `eq(0, 1)`, each holding the next; the innermost holds id1 `u8 b`. The depth is 257 containers on the path to `b`. Contract `scheme-depth.md`.
+- No packet: the scheme must not build. Before loop 126 TypeScript, Python, Dart and Java threw a raw stack error only from 1,000 to 5,000 levels, so 257 built everywhere; the case pins the limit, not a failure that existed at 257.
+- Expected: `scheme_error`, the text of the loop 126 paragraph above (C++ and the heap-free Rust API: `SchemeInvalid`).
+- Source: loop 125, probe shape `when-D` (`scripts/probes/scheme-depth/`, `_docs/06_metrics/scheme-depth-probe_2026-11-14.md`); loop 126, AZ-4294.
+
+## construct_depth_group_257
+
+- Scheme: 257 nested groups, each holding the next, the innermost holds `u8 b`. The form is the package's own, as in the probe: a group without an anchor (a nested row) in C#, Java, Go, Swift and Dart; an unanchored group in TypeScript; an anchored group that shares the row in Python, Rust and C++.
+- No packet: the scheme must not build.
+- Expected: `scheme_error`, the text of the loop 126 paragraph above.
+- Source: loop 125, probe shape `group-D`; loop 126, AZ-4294.
+
+## pack_depth_when_256
+
+- Scheme: id0 `u8 a`; then 256 `when` anchor 0, `eq(0, 1)`, each holding the next; the innermost holds id1 `u8 b`. Case of the contract: 256 levels build.
+- Row: `a = 1`, `b = 7`.
+- Packet `01 01 07`: type `01`; `a` = 1; every `when` is taken; `b` = 7.
+- Expected: `bytes` `010107`.
+- Run by: TypeScript, Python, Java, C# (dictionary rows and typed), Rust (map form and the heap-free API), C++ (a run-time table), Go (map rows), Swift (map rows), Dart (map rows).
+- Not run by: none.
+- Source: the loop 125 probe (all nine packages built `when-1000` and packed `010107`); loop 126, AZ-4294.
+
+## pack_depth_group_256
+
+- Scheme: 256 nested groups, each holding the next; the innermost holds `u8 b` (the form as in `construct_depth_group_257`).
+- Row: `b = 7`, nested one map or row per group where the package nests values, flat where the group shares the row.
+- Packet `01 07`: type `01`; `b` = 7 (a group writes no byte of its own).
+- Expected: `bytes` `0107`.
+- Run by: TypeScript, Python, Java, C# (typed recursive row `Node { Node M; byte B }` and dictionary rows), Rust (map form and the heap-free API), C++ (a run-time table), Go (map rows), Swift (map rows), Dart (map rows).
+- Not run by: none.
+- Source: the loop 125 probe (`group-1000` packed `0107` in all nine packages); loop 126, AZ-4294.
