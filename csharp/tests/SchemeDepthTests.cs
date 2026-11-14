@@ -174,6 +174,8 @@ public class SchemeDepthTests
     public static TheoryData<string> Kinds() => ["when", "group", "flags", "list", "dict", "repeat"];
 
     // The chain is built here, with the caller's own Field calls; the returned action runs only the scheme constructor.
+    // A typed list or dict of rows is two levels (the list and its element row, decision D20), so `depth` levels take
+    // (depth + 1) / 2 of them: 256 builds, 257 is refused.
     private static Action Prepare(string kind, int depth)
     {
         switch (kind)
@@ -181,8 +183,8 @@ public class SchemeDepthTests
             case "when": { var f = WhenFields(depth); return () => _ = new Scheme<WhenRow>(1, f); }
             case "group": { var f = GroupFields(depth); return () => _ = new Scheme<Node>(1, f); }
             case "flags": { var f = FlagsFields(depth); return () => _ = new Scheme<FlagRow>(1, f); }
-            case "list": { var f = ListFields(depth); return () => _ = new Scheme<ListNode>(1, f); }
-            case "dict": { var f = DictFields(depth); return () => _ = new Scheme<DictNode>(1, f); }
+            case "list": { var f = ListFields((depth + 1) / 2); return () => _ = new Scheme<ListNode>(1, f); }
+            case "dict": { var f = DictFields((depth + 1) / 2); return () => _ = new Scheme<DictNode>(1, f); }
             default: { var f = RepeatFields(depth - 1); return () => _ = new Scheme<RoundRow>(1, f); }
         }
     }
@@ -281,6 +283,22 @@ public class SchemeDepthTests
     }
 
     [Fact]
+    public void Ac1_Construct_ATypedListOfRowsIsTwoLevels_D20()
+    {
+        // Arrange / Act: 128 typed list-of-row levels are 256 containers; 129 are 258.
+        var fits = Record.Exception(() => ListScheme(Limit / 2));
+        var refused = Record.Exception(() => ListScheme(Limit / 2 + 1));
+        var dictFits = Record.Exception(() => DictScheme(Limit / 2));
+        var dictRefused = Record.Exception(() => DictScheme(Limit / 2 + 1));
+
+        // Assert: as in the map form, where a list around a group is two levels
+        Assert.Null(fits);
+        Assert.Null(dictFits);
+        Assert.Equal(Refusal, Assert.IsType<ArgumentException>(refused).Message);
+        Assert.Equal(Refusal, Assert.IsType<ArgumentException>(dictRefused).Message);
+    }
+
+    [Fact]
     public void Ac2_FlagBitsAddNoLevel_256FlagsEachHoldingTheNextBuild()
     {
         // Arrange / Act
@@ -366,10 +384,10 @@ public class SchemeDepthTests
     public void Ac2_List256Levels_PacksAndUnpacksTypedAndFromADictionary()
     {
         // Arrange
-        var scheme = ListScheme(Limit);
+        var scheme = ListScheme(Limit / 2);
         var typedValue = new ListNode { B = 7 };
         Dictionary<string, object?> mapped = new() { ["B"] = (byte)7 };
-        for (var i = 0; i < Limit; i++)
+        for (var i = 0; i < Limit / 2; i++)
         {
             typedValue = new ListNode { Kids = [typedValue] };
             mapped = new Dictionary<string, object?> { ["Kids"] = new List<object?> { mapped } };
@@ -382,12 +400,12 @@ public class SchemeDepthTests
         var error = BinaryPacker.Unpack(typed, scheme.On(row => got = row));
 
         // Assert
-        var expected = "01" + Repeated("0100", Limit) + "07";
+        var expected = "01" + Repeated("0100", Limit / 2) + "07";
         Assert.Equal(expected, Hex(typed));
         Assert.Equal(expected, Hex(fromMap));
         Assert.Null(error);
         var level = got;
-        for (var i = 0; i < Limit; i++)
+        for (var i = 0; i < Limit / 2; i++)
             level = level!.Kids![0];
         Assert.Equal((byte)7, level!.B);
     }
@@ -396,10 +414,10 @@ public class SchemeDepthTests
     public void Ac2_Dict256Levels_PacksAndUnpacksTypedAndFromADictionary()
     {
         // Arrange
-        var scheme = DictScheme(Limit);
+        var scheme = DictScheme(Limit / 2);
         var typedValue = new DictNode { B = 7 };
         Dictionary<string, object?> mapped = new() { ["B"] = (byte)7 };
-        for (var i = 0; i < Limit; i++)
+        for (var i = 0; i < Limit / 2; i++)
         {
             typedValue = new DictNode { Kids = new Dictionary<string, DictNode> { ["k"] = typedValue } };
             mapped = new Dictionary<string, object?> { ["Kids"] = new Dictionary<string, object?> { ["k"] = mapped } };
@@ -415,7 +433,7 @@ public class SchemeDepthTests
         Assert.Equal(Hex(typed), Hex(fromMap));
         Assert.Null(error);
         var level = got;
-        for (var i = 0; i < Limit; i++)
+        for (var i = 0; i < Limit / 2; i++)
             level = level!.Kids!["k"];
         Assert.Equal((byte)7, level!.B);
         Assert.Equal(Hex(typed), Hex(BinaryPacker.Pack(scheme, got)));

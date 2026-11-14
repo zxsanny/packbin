@@ -23,7 +23,7 @@ internal static class SchemeOrder
 
     // scheme-depth contract: the most containers on one path (when, flags, group or nested row, repeat, times, and a list
     // or dict with its element row) is MaxDepth. Measured first and without recursion, so no walk below sees a deeper scheme.
-    // A flag bit adds no level of its own; the element row of a list or dict is one level together with its list or dict.
+    // A flag bit adds no level of its own; the element row of a list or dict counts one level of its own, so a list of rows is two levels in every form (decision D20).
     // A Field object may stand in several places: one is measured again only when reached deeper than before, so a scheme
     // that uses the same field twice on every level costs its number of distinct fields, not two to the power of its depth.
     private static void RequireDepth(IReadOnlyList<Field> fields)
@@ -52,8 +52,7 @@ internal static class SchemeOrder
         field.Type switch
         {
             Field.Kind.When or Field.Kind.Flags or Field.Kind.Repeat or Field.Kind.Times
-                or Field.Kind.List or Field.Kind.Dict => 1,
-            Field.Kind.Group => field.Binding?.Member.IsElementRow == true ? 0 : 1,
+                or Field.Kind.List or Field.Kind.Dict or Field.Kind.Group => 1,
             _ => 0,
         };
 
