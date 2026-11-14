@@ -24,6 +24,7 @@ import {
   type Scheme,
 } from "../../src/index.ts"
 import { followedText, inElementText, modeThenRepeat } from "./repeat-last-cases.ts"
+import { DEPTH_REFUSAL, groupChain, whenChain } from "./scheme-depth.ts"
 import { bound, type Bound } from "./timing.ts"
 
 type Row = Record<string, unknown>
@@ -221,6 +222,9 @@ export const CONSTRUCT: Record<string, { build: () => unknown; rule: RegExp }> =
     ),
     rule: /^repeat 0 is inside a repeat or times round; a round cannot hold another repeat or times$/,
   },
+  // Contract scheme-depth (AZ-4295): a chain written by a loop, 257 containers on the path to `b`.
+  construct_depth_when_257: { build: () => whenChain(257), rule: whole(DEPTH_REFUSAL) },
+  construct_depth_group_257: { build: () => groupChain(257), rule: whole(DEPTH_REFUSAL) },
 }
 
 // Built per case, so a scheme a package refuses is reported for that case alone.

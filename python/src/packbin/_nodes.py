@@ -476,7 +476,11 @@ def _round_width(leaves: Sequence[Any]) -> int:
 
 
 def _finish_round(node: Any) -> Any:
-    """Gives a `repeat` or `times` the values it holds, the ones a flag bit can leave absent and its slot width."""
+    """Gives a `repeat` or `times` the values it holds, the ones a flag bit can leave absent and its slot width.
+    A body nested too deep is refused first, as `Scheme` refuses it, before the walks below recurse over it."""
+    from packbin._validate import _validate_depth  # _validate imports this module
+
+    _validate_depth([node])
     node.leaves = _round_leaves(node.fields)
     node.optional = _optional_leaves(node.fields)
     node.width = _round_width(node.leaves)

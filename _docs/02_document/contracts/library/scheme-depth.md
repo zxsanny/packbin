@@ -3,7 +3,7 @@
 **Component**: library
 **Producer task**: AZ-4294 (hostile cases and README text)
 **Consumer tasks**: AZ-4295 (TypeScript), AZ-4296 (C#), AZ-4297 (Python), AZ-4298 (Java), AZ-4299 (Go), AZ-4300 (Swift), AZ-4301 (Dart), AZ-4302 (Rust), AZ-4303 (C++)
-**Version**: 1.0.0
+**Version**: 1.0.1
 **Status**: frozen (owner decision D18, 2026-11-14: "Shared limit (256)"); implemented in loop 126
 **Last Updated**: 2026-11-14
 
@@ -16,6 +16,8 @@ No package limited how deep a scheme may nest. Loop 125 (`_docs/06_metrics/schem
 A scheme is refused when it is built if its nesting depth is above **256**.
 
 **Nesting depth** of a scheme is the largest number of container fields on one path from the top of the scheme down to any field. A container is a `when`, a `flags` (and a flag bit that holds members), a group (anchored, or a nested row without an anchor), the element row of a `list` or `dict`, and the body of a `repeat` or `times` round. A path of 256 containers builds; a path of 257 is refused. An empty innermost container counts as a level, so the depth does not depend on whether the last container holds a field.
+
+**Counting (1.0.1).** A `when`, a `flags`, an anchored or unanchored group, a nested row, a `repeat` and a `times` each count one level. A `list` or `dict` counts one level (its element row); an element that is itself a container counts by its own kind, so `list(group(...))` is two levels and `list(u8)` is one. A flag bit that holds one field or several adds no level of its own (the `flags` above it counted). The rule was set by the TypeScript and Dart tasks of loop 126 and holds in all nine packages; it matters only for chains that mix kinds at the 256 / 257 boundary.
 
 Examples (type number 1, `u8 a` then the chain, innermost `u8 b`):
 
@@ -49,3 +51,4 @@ Examples (type number 1, `u8 a` then the chain, innermost `u8 b`):
 | Version | Date | Change | Author |
 |---------|------|--------|--------|
 | 1.0.0 | 2026-11-14 | First version: limit 256, refused at build (D18) | loop 126 |
+| 1.0.1 | 2026-11-14 | Counting paragraph: a list or dict counts one level plus its element's own kind; a flag bit adds none | loop 126 |

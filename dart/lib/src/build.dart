@@ -40,7 +40,8 @@ final class Plan {
 }
 
 /// Checks the declared fields and builds the plan. The checks run in
-/// TypeScript's order: constructor refusals, field ids, flag bits, presence
+/// TypeScript's order: the nesting depth first (no walk before it may recurse
+/// over a scheme deeper than 256 levels), constructor refusals, field ids, flag bits, presence
 /// marks, member names, round nesting and bodies, a repeat that is not last,
 /// references; then the row bindings.
 Plan buildPlan<R extends Object>(
@@ -51,6 +52,7 @@ Plan buildPlan<R extends Object>(
   if (typeNumber < 0 || typeNumber > 255) {
     throw schemeFail(null, '', 'type number $typeNumber: expected 0..255');
   }
+  checkDepth(declared);
   checkErrors(declared);
   checkSlots(declared);
   checkIds(declared, 0);

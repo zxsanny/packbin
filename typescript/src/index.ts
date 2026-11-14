@@ -2,6 +2,7 @@ import {
   flatten,
   flattenValues,
   validateFieldIds,
+  validateSchemeDepth,
   type Field,
 } from "./fields.ts"
 import { unpackBody, type UnpackErr } from "./walker.ts"
@@ -130,6 +131,8 @@ export class Scheme<T> {
     if (!Number.isInteger(typeNumber) || typeNumber < 0 || typeNumber > 255) {
       throw new RangeError("type number: expected 0..255")
     }
+    // First, before any walk that recurses: a deeper scheme would end a walk in a raw stack error.
+    validateSchemeDepth(fields)
     validateFieldIds(fields)
     const flat = bindFlagBits(flatten(fields))
     validatePresenceMarks(flat)

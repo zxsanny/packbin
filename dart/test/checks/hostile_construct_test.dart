@@ -28,7 +28,7 @@ void main() {
       // Assert
       expect(unknown, isEmpty);
       expect(stale, isEmpty);
-      expect(ids, hasLength(26));
+      expect(ids, hasLength(28));
     });
 
     for (final c in cases) {
@@ -42,7 +42,8 @@ void main() {
         expect(c.accepts('scheme_error'), isTrue);
         expect(error.kind.term, 'scheme_error');
         expect(error.field, entry.field);
-        expect(error.name, isNotEmpty);
+        // A depth refusal names no field: it belongs to the whole scheme.
+        if (entry.field != null) expect(error.name, isNotEmpty);
       });
     }
   });

@@ -13,6 +13,7 @@ from packbin._pack_limits import DEFAULT_MAX_BYTES, _PackBudget
 from packbin._unpack import DEFAULT_MAX_ROUNDS, DEFAULT_MAX_SLOTS, _Budget, unpack_nodes
 from packbin._validate import (
     _shown,
+    _validate_depth,
     _validate_element_accessors,
     _validate_names,
     _validate_order,
@@ -92,6 +93,7 @@ class Scheme(Generic[T]):
     DEFAULT_MAX_BYTES = DEFAULT_MAX_BYTES
 
     def __init__(self, type_number: int, row_type: type[T], *fields: _Node) -> None:
+        _validate_depth(fields)
         if isinstance(type_number, bool) or not isinstance(type_number, int) or type_number < 0 or type_number > 255:
             raise ValueError(f"type number must be 0..255, got {_shown(type_number)}")
         _validate_order(fields)

@@ -1,6 +1,7 @@
 import {
   BinaryPacker, bits, bool, bytes, eq, flagByte, flags, group, list, packed, repeat, scheme, sized, times, u32, u64, u8, u16, utf8, when,
 } from "../../src/index.ts"
+import { groupChain, whenChain } from "./scheme-depth.ts"
 
 type Row = Record<string, unknown>
 
@@ -275,4 +276,7 @@ export const PACK: Record<string, () => Uint8Array> = {
     scheme<Row>(1, u8(0, (x) => x.k), times(1, 0, [u8(1, (x) => x.v)]), u8(2, (x) => x.x)),
     { k: 2, v: [5, 6], x: 9 },
   ),
+  // Contract scheme-depth (AZ-4295): 256 containers on the path still build and pack.
+  pack_depth_when_256: () => BinaryPacker.pack(whenChain(256), { a: 1, b: 7 }),
+  pack_depth_group_256: () => BinaryPacker.pack(groupChain(256), { b: 7 }),
 }

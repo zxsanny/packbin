@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from repeat_last_support import LOOP113_CONSTRUCT_REFUSAL
+from scheme_depth_support import LOOP126_CONSTRUCT_REFUSAL
 
 # The rule each refused case in fixtures/hostile/cases.txt must name (AZ-2392), so a refusal by some other rule
 # does not pass. The error type and the message are Python's own (README: the vector asserts only that pack or
@@ -109,4 +110,5 @@ CONSTRUCT_REFUSAL: dict[str, str] = {
     "construct_empty_when_repeat_body": _NO_MEMBER.format(kind="repeat", anchor=1),
     "construct_empty_nested_when_body": _NO_MEMBER.format(kind="times", anchor=2),
     **LOOP113_CONSTRUCT_REFUSAL,
+    **LOOP126_CONSTRUCT_REFUSAL,
 }

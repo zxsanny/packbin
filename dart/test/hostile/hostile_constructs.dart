@@ -1,5 +1,6 @@
 import 'package:packbin/packbin.dart';
 
+import '../support/depth_schemes.dart' show depthRefusal, groupChain, whenChain;
 import '../support/repeat_last.dart'
     show followedText, inElementText, inRoundText, nestingText, rounds;
 import 'hostile_cases.dart';
@@ -237,6 +238,17 @@ final hostileConstructs = <String, HostileConstruct>{
     ]),
     0,
     inRoundText(0),
+  ),
+  // AZ-4301 (contract scheme-depth): the chains are written by a loop.
+  'construct_depth_when_257': HostileConstruct(
+    () => scheme(1, whenChain(257)),
+    null,
+    depthRefusal,
+  ),
+  'construct_depth_group_257': HostileConstruct(
+    () => scheme(1, groupChain(257)),
+    null,
+    depthRefusal,
   ),
 };
 

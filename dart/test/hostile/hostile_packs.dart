@@ -2,10 +2,12 @@ import 'dart:typed_data';
 
 import 'package:packbin/packbin.dart';
 
+import '../support/depth_schemes.dart' show groupChain, groupRow, whenChain;
 import '../support/hex.dart';
 import '../support/repeat_last.dart' show rounds;
 import 'hostile_cases.dart';
 
+part 'hostile_packs_depth.dart';
 part 'hostile_packs_repeat_last.dart';
 
 /// One pack case: the scheme and the map row its section names
@@ -441,6 +443,7 @@ final Map<String, HostilePack> hostilePacks = {
     () => _boolRow(1, false),
   ),
   ..._repeatLastPacks,
+  ..._depthPacks,
 };
 
 /// A pack case: packs the row of its handler; the bytes of the case, or a

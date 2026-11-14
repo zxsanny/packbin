@@ -15,6 +15,7 @@ from hostile_loop22_support import (
 from hostile_refusals import CONSTRUCT_REFUSAL, PACK_REFUSAL
 from hostile_support import LIMIT_SCHEMES, PACK_CASES, VECTOR_SCHEMES, assert_rejected, error_kind, unpack_guarded
 from repeat_last_support import LOOP113_CONSTRUCT_CASES, LOOP113_PACK_CASES
+from scheme_depth_support import LOOP126_CONSTRUCT_CASES, LOOP126_PACK_CASES
 from test_bool_placement import CONSTRUCT_SCHEMES
 from test_reference_scope import REFERENCE_VECTORS
 
@@ -36,13 +37,14 @@ UNPACK_CASES = _cases("unpack")
 LIMIT_CASES = _cases("limit")
 PACK_VECTORS = _cases("pack")
 CONSTRUCT_VECTORS = _cases("construct")
-ALL_PACK_CASES = {**PACK_CASES, **LOOP21_PACK_CASES, **LOOP22_PACK_CASES, **LOOP113_PACK_CASES}
+ALL_PACK_CASES = {**PACK_CASES, **LOOP21_PACK_CASES, **LOOP22_PACK_CASES, **LOOP113_PACK_CASES, **LOOP126_PACK_CASES}
 ALL_CONSTRUCT_BUILDS = {
     **CONSTRUCT_SCHEMES,
     **{case_id: build for case_id, (build, _names) in REFERENCE_VECTORS.items()},
     **LOOP21_CONSTRUCT_CASES,
     **LOOP22_CONSTRUCT_CASES,
     **LOOP113_CONSTRUCT_CASES,
+    **LOOP126_CONSTRUCT_CASES,
 }
 
 

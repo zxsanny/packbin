@@ -5,6 +5,49 @@ import 'node.dart';
 /// TypeScript's order: a constructor's refusal, the ids, the presence marks
 /// and the member names. The references are checked in `references.dart`.
 
+/// The most containers one path of a scheme may hold (contract
+/// `scheme-depth.md`).
+const int maxSchemeDepth = 256;
+
+/// Whether the nodes of [kind] hold fields of their own: a level of nesting.
+bool _isContainer(NodeKind kind) => switch (kind) {
+  NodeKind.flags ||
+  NodeKind.flagBit ||
+  NodeKind.when ||
+  NodeKind.group ||
+  NodeKind.repeat ||
+  NodeKind.times ||
+  NodeKind.list ||
+  NodeKind.dict ||
+  NodeKind.nested => true,
+  _ => false,
+};
+
+/// Refuses a scheme nested more than [maxSchemeDepth] levels: the most
+/// containers on one path from the top to a field. It runs first, with a
+/// stack of its own, so every later walk, which recurses once per level,
+/// sees at most [maxSchemeDepth] levels.
+void checkDepth(List<Node> declared) {
+  final nodes = [...declared];
+  final depths = List<int>.filled(nodes.length, 0, growable: true);
+  while (nodes.isNotEmpty) {
+    final n = nodes.removeLast();
+    final level = depths.removeLast() + (_isContainer(n.kind) ? 1 : 0);
+    if (level > maxSchemeDepth) {
+      throw schemeFail(
+        null,
+        '',
+        'scheme nested too deep: more than $maxSchemeDepth levels; the limit '
+            'is $maxSchemeDepth',
+      );
+    }
+    for (final child in n.fields) {
+      nodes.add(child);
+      depths.add(level);
+    }
+  }
+}
+
 /// Reports a constructor's refusal at any depth.
 void checkErrors(List<Node> nodes) {
   for (final n in nodes) {

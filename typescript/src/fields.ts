@@ -254,6 +254,9 @@ export function utf8<T>(id: number, acc: Acc<T>): Field {
 // A flags element is a flag byte and its bits, not one field, so it is held as an unanchored group of
 // its own: like a group element it packs from and unpacks to one object per item.
 function elementOf(element: Field): Field {
+  // list() and dict() flatten the element, which recurses, so a chain of them would end in a raw stack error
+  // before scheme() runs: the element and the list around it are measured first, as scheme() does.
+  validateSchemeDepth([{ kind: "list", name: "", element }])
   if (element.kind === "flags") return { kind: "group", name: "", fields: [element] }
   return flatten([element])[0]!
 }
@@ -300,6 +303,52 @@ export function fieldName(field: Field): string {
   if (field.kind === "flagBit") return fieldName(field.field)
   if (field.kind === "u2") return field.slots[0]?.name ?? ""
   return ""
+}
+
+// A scheme is refused when it nests deeper than this many containers on one path (contract scheme-depth 1.0.0).
+export const MAX_SCHEME_DEPTH = 256
+
+// The largest number of containers on one path from the top down: a when, flags, repeat, times or group, and the
+// element row of a list or dict. A flag bit is its field, not a level. Run first when a scheme is built, before any
+// walk that recurses, and without recursing itself: an explicit stack, stopped at the first path past the limit.
+export function validateSchemeDepth(fields: Field[]): void {
+  const nodes: Field[] = []
+  const levels: number[] = []
+  for (const f of fields) {
+    nodes.push(f)
+    levels.push(0)
+  }
+  while (nodes.length > 0) {
+    const f = nodes.pop()!
+    const level = levels.pop()!
+    switch (f.kind) {
+      case "when":
+      case "repeat":
+      case "times":
+      case "flags":
+      case "group":
+        if (level + 1 > MAX_SCHEME_DEPTH) throw tooDeep()
+        for (const child of f.fields) {
+          nodes.push(child)
+          levels.push(level + 1)
+        }
+        break
+      case "list":
+      case "dict":
+        if (level + 1 > MAX_SCHEME_DEPTH) throw tooDeep()
+        nodes.push(f.element)
+        levels.push(level + 1)
+        break
+      case "flagBit":
+        nodes.push(f.field)
+        levels.push(level)
+        break
+    }
+  }
+}
+
+function tooDeep(): RangeError {
+  return new RangeError(`scheme nested too deep: more than ${MAX_SCHEME_DEPTH} levels; the limit is ${MAX_SCHEME_DEPTH}`)
 }
 
 export function validateFieldIds(fields: Field[], next = 0): number {
