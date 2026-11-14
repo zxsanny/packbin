@@ -591,3 +591,6 @@ Loop 112 (feature `repeat-must-be-last`, epic AZ-4209, 29 points in 10 tasks): e
 | AZ-4301 | scheme_depth_dart | 2 | AZ-4294 | AZ-4133 |
 | AZ-4302 | scheme_depth_rust | 3 | AZ-4294 | AZ-4133 |
 | AZ-4303 | scheme_depth_cpp | 3 | AZ-4294 | AZ-4133 |
+| AZ-4306 | depth_shared_field_once (a shared Field is measured once in six depth checks; loop 127) | 3 | AZ-4294 | AZ-4133 |
+| AZ-4307 | depth_followups_tests_tidy (loop 127) | 3 | AZ-4294 | AZ-4133 |
+| AZ-4308 | rust_depth_round_width_linear (loop 127) | 3 | AZ-4302 | AZ-4133 |
