@@ -21,7 +21,7 @@ if grep -q 'ports:' docker-compose.test.yml; then
   exit 1
 fi
 if grep -E 'npmjs|nuget.org|pypi.org|crates.io|central.sonatype.com|github.com' \
-  .github/workflows/run-suite.sh .github/workflows/report-row.sh; then
+  .github/workflows/run-suite.sh .github/workflows/run-suite-{cpp,dart,go,rust}.sh .github/workflows/report-row.sh; then
   echo "suite runner names a registry" >&2
   exit 1
 fi

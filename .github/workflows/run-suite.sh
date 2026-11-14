@@ -50,55 +50,6 @@ missing_manifest() {
   ok=1
 }
 
-# Debian's clang $1 and its sanitizer runtimes, in the gcc image of the cpp suite (AZ-4278); a mirror that fails once is
-# asked again. A failed install names the pin to move (AZ-4280): the gcc:16 tag floats, and a later Debian may not ship it.
-cpp_clang_install() {
-  apt-get -o Acquire::Retries=3 update -q && DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 install -y -q \
-    --no-install-recommends "clang-$1" "libclang-rt-$1-dev" && return 0
-  echo "run-suite: clang-$1 is not installable on Debian $(cat /etc/debian_version 2>&1); move clang==$1 in .github/workflows/tool-pins.txt to a major this image ships" >&2
-  return 1
-}
-
-# Go (golang:1.27): every step runs in the module directory $1 through `go -C`.
-go_fmt() {
-  local unformatted
-  unformatted="$(cd "$1" && gofmt -l .)" || return 1
-  if [ -n "$unformatted" ]; then
-    printf 'run-suite: gofmt -l lists files that are not gofmt-formatted:\n%s\n' "$unformatted" >&2
-    return 1
-  fi
-}
-
-# The 60 s fuzz run of the package that has the FuzzUnpack target (AZ-2444). Until that target
-# exists the step says it is skipped; the line goes away by itself once the target is there.
-go_fuzz() {
-  local listed pkg
-  listed="$(go -C "$1" test -list '^FuzzUnpack$' ./...)" || return 1
-  pkg="$(printf '%s\n' "$listed" | awk '$0 == "FuzzUnpack" { found = 1; next } /^ok[ \t]/ { if (found) { print $2; exit } }')"
-  if [ -z "$pkg" ]; then
-    echo "run-suite: go fuzz step skipped: the package has no FuzzUnpack target yet"
-    return 0
-  fi
-  # -fuzzminimizetime=0: the default minimises every new input for up to 60 s, which left 121k execs in a 60 s run
-  # (1.4M without it, AZ-2444 report).
-  go -C "$1" test -run='^$' -fuzz='^FuzzUnpack$' -fuzztime=60s -fuzzminimizetime=0 "$pkg"
-}
-
-# One dependency at most (GO-11, G-3): go.mod's direct requirements and the modules of every package
-# the package and its tests build are the main module and golang.org/x/crypto. `go list -m all` alone
-# cannot be the check: it always lists x/crypto's own requirements (x/sys, x/net, x/term, x/text).
-go_deps() {
-  local main direct built extra
-  main="$(go -C "$1" list -m)" || return 1
-  direct="$(go -C "$1" list -m -f '{{if not (or .Main .Indirect)}}{{.Path}}{{end}}' all)" || return 1
-  built="$(go -C "$1" list -deps -test -f '{{with .Module}}{{.Path}}{{end}}' ./...)" || return 1
-  extra="$(printf '%s\n%s\n' "$direct" "$built" | grep -vxF -e '' -e "$main" -e 'golang.org/x/crypto' | sort -u)"
-  if [ -n "$extra" ]; then
-    printf 'run-suite: go depends on modules other than golang.org/x/crypto:\n%s\n' "$extra" >&2
-    return 1
-  fi
-}
-
 # Swift (swift:6.3.3): every step runs on the root Package.swift with these options.
 # The compose services put the build output outside the mounted tree (PACKBIN_SWIFT_SCRATCH); --force-resolved-versions
 # builds only what Package.resolved pins and never rewrites it (Go's -mod=readonly).
@@ -145,66 +96,6 @@ swift_fuzz() {
   elapsed=$(( $(date +%s) - start ))
   if [ "$elapsed" -lt "$seconds" ]; then
     printf 'run-suite: the swift fuzz step ran %s s, under the %s s asked for\n' "$elapsed" "$seconds" >&2
-    return 1
-  fi
-}
-
-# CS-11 (AZ-2665): the string speed bound (100,000 round trips in 1 s) holds for a release build only; the test asserts
-# 6 s under debug assertions, which is all `cargo test` above builds. A filter that matches nothing passes, so the
-# test must be in the list of the release build.
-rust_speed() {
-  local manifest="$root/rust/Cargo.toml" listed
-  listed="$(cargo test --manifest-path "$manifest" --release --lib -- --list)" || return 1
-  if ! grep -q 'ac8_one_hundred_thousand_round_trips' <<< "$listed"; then
-    echo "run-suite: rust has no string speed test (ac8_one_hundred_thousand_round_trips); the release-build step has nothing to run" >&2
-    return 1
-  fi
-  # EC-13 (AZ-2689): the message ECC bounds (1,000 repairs and 1,000 packs of a 254-byte block in 1 s) hold for a release
-  # build only, and a debug build is far slower. The listing must hold both ec13_ tests, or the filter runs nothing.
-  if [ "$(grep -c 'ec13_' <<< "$listed")" -lt 2 ]; then
-    echo "run-suite: rust has fewer than two message ECC speed tests (ec13_); the release-build step has nothing to run" >&2
-    return 1
-  fi
-  cargo test --manifest-path "$manifest" --release --lib ac8_one_hundred_thousand_round_trips -- --nocapture || return 1
-  cargo test --manifest-path "$manifest" --release --lib ec13_ -- --nocapture
-}
-
-# The suite image (rust:1.98) has no clippy; the component is added before the first use, and a failure to get it fails
-# the suite by name, so a missing clippy is never a pass (AZ-3443 AC-3).
-rust_clippy_component() {
-  if ! rustup component add clippy; then
-    failure="rust clippy component could not be installed"
-    printf 'run-suite: %s\n' "$failure" >&2
-    return 1
-  fi
-}
-
-# The lib and every test target of one feature set ($1: none, default, all or a feature list) compile, and print no
-# rustc or clippy warning (AZ-3357, AZ-3443). The test runs name most no-std targets one by one (`--test <name>`), so a
-# test file without its feature gate built in no run (loop 76: 22 files). `cargo clippy --lib --tests` gives the same
-# compile errors as `cargo test --no-run` without code generation (the 7 no-std sets cost about 64 s more cold on 4 CPUs
-# with `--no-run`, loop 79, on the job that sets the CI wall), plus the clippy lints, in one pass per set. Cargo replays
-# the warnings of a cached check; stdout and stderr are read together. The messages keep the AZ-3357 wording.
-rust_test_build() {
-  local set="$1" out
-  local -a features
-  case "$set" in
-    default) features=() ;;
-    all) features=(--all-features) ;;
-    none) features=(--no-default-features) ;;
-    *) features=(--no-default-features --features "$set") ;;
-  esac
-  if ! out="$(cargo clippy --manifest-path "$root/rust/Cargo.toml" ${features[@]+"${features[@]}"} --lib --tests 2>&1)"; then
-    printf '%s\n' "$out"
-    failure="rust test build of feature set $set failed"
-    printf 'run-suite: %s\n' "$failure" >&2
-    return 1
-  fi
-  printf '%s\n' "$out"
-  if grep -q '^warning:' <<< "$out"; then
-    failure="rust test build of feature set $set printed a warning"
-    printf 'run-suite: %s:\n' "$failure" >&2
-    grep '^warning:' <<< "$out" >&2
     return 1
   fi
 }
@@ -341,6 +232,8 @@ case "$lang" in
     fi
     ;;
   rust)
+    # shellcheck source=run-suite-rust.sh
+    . "$(dirname "${BASH_SOURCE[0]}")/run-suite-rust.sh"
     if [ -f "$root/rust/Cargo.toml" ]; then
       run cargo test --manifest-path "$root/rust/Cargo.toml" -- --nocapture
       # the heap-free API builds and passes with `std` and `alloc` off (AZ-2749)
@@ -372,6 +265,8 @@ case "$lang" in
     fi
     ;;
   cpp)
+    # shellcheck source=run-suite-cpp.sh
+    . "$(dirname "${BASH_SOURCE[0]}")/run-suite-cpp.sh"
     if [ -f "$root/cpp/Makefile" ]; then
       run make -C "$root/cpp" test
       # The host suite again under clang ASan and UBSan (AZ-4278, decision D17), when the compose cpp service asks for it:
@@ -399,6 +294,8 @@ case "$lang" in
     fi
     ;;
   go)
+    # shellcheck source=run-suite-go.sh
+    . "$(dirname "${BASH_SOURCE[0]}")/run-suite-go.sh"
     # In the CI container Go runs as root on a checkout owned by the runner user, so git refuses it
     # ("dubious ownership") and `go list -test` stops with "error obtaining VCS status" (CI run 38422313279).
     # No step needs the VCS stamp, so every go command here runs with -buildvcs=false.
