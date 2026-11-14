@@ -9,10 +9,10 @@ import 'node.dart';
 /// `scheme-depth.md`).
 const int maxSchemeDepth = 256;
 
-/// Whether the nodes of [kind] hold fields of their own: a level of nesting.
+/// Whether the nodes of [kind] hold fields of their own: a level of nesting. A
+/// flag bit adds none (contract `scheme-depth.md`); the `flags` above it counted.
 bool _isContainer(NodeKind kind) => switch (kind) {
   NodeKind.flags ||
-  NodeKind.flagBit ||
   NodeKind.when ||
   NodeKind.group ||
   NodeKind.repeat ||
