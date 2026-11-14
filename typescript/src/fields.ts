@@ -261,8 +261,10 @@ function elementOf(element: Field): { one: Field; depth: number } {
   // removes levels), so a chain of them is walked once, not once per link. A bound that would refuse is checked by
   // a walk, so what is refused is what a walk of the element refuses.
   let depth = builtDepth.get(element)
-  if (depth === undefined || depth + 1 > MAX_SCHEME_DEPTH) depth = measureSchemeDepth([element])
-  if (depth + 1 > MAX_SCHEME_DEPTH) throw tooDeep()
+  // A flags element is held in a group of its own, one level more than the list around it counts.
+  const wrapped = element.kind === "flags" ? 2 : 1
+  if (depth === undefined || depth + wrapped > MAX_SCHEME_DEPTH) depth = measureSchemeDepth([element])
+  if (depth + wrapped > MAX_SCHEME_DEPTH) throw tooDeep()
   if (element.kind === "flags") return { one: { kind: "group", name: "", fields: [element] }, depth: depth + 2 }
   return { one: flatten([element])[0]!, depth: depth + 1 }
 }
